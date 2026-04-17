@@ -243,7 +243,7 @@ function DrawerPanel({ width, size = 'md', animationDuration = '0.25s', classNam
   return (
     <div
       className={cn(
-        'relative h-full bg-[var(--bg-surface)] dark:bg-[var(--bg-surface)]/95 dark:backdrop-blur-xl shadow-2xl flex flex-col border-l border-[var(--border-default)] dark:border-[var(--glass-border)]',
+        'relative h-full bg-[var(--bg-surface)] dark:bg-[var(--bg-surface)]/95 dark:backdrop-blur-xl shadow-lg dark:shadow-2xl flex flex-col border-l border-[var(--border-default)] dark:border-[var(--glass-border)]',
         width || SIZE_MAP[size],
         className
       )}
@@ -272,7 +272,7 @@ function Drawer({
       <PageOverlay.Backdrop className="bg-black/20 dark:bg-black/40 backdrop-blur-sm" />
       <div
         className={cn(
-          'relative h-full bg-[var(--bg-surface)] dark:bg-[var(--bg-surface)]/95 dark:backdrop-blur-xl shadow-2xl flex flex-col border-l border-[var(--border-default)] dark:border-[var(--glass-border)] dark:shadow-[0_0_80px_rgba(0,0,0,0.5)]',
+          'relative h-full bg-[var(--bg-surface)] dark:bg-[var(--bg-surface)]/95 dark:backdrop-blur-xl shadow-lg dark:shadow-2xl flex flex-col border-l border-[var(--border-default)] dark:border-[var(--glass-border)] dark:shadow-[0_0_80px_rgba(0,0,0,0.5)]',
           SIZE_MAP[size],
           className
         )}

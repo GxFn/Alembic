@@ -74,6 +74,13 @@ export class KnowledgeRepository {
     throw new Error('Not implemented');
   }
 
+  async findByRelationLike(
+    nodeId: string,
+    excludeId: string
+  ): Promise<Array<{ id: string; title: string; relations: string }>> {
+    throw new Error('Not implemented');
+  }
+
   async getStats(): Promise<Record<string, unknown>> {
     throw new Error('Not implemented');
   }

@@ -191,7 +191,11 @@ router.get('/graph/all', async (req: Request, res: Response): Promise<void> => {
   // 仅当显式指定 nodeType 时才过滤（module 类由 /spm/dep-graph 提供）
   const rawNodeType = req.query.nodeType as string | undefined;
   const nodeType = rawNodeType === 'all' ? undefined : rawNodeType || undefined;
-  const edges = await graphService.getAllEdges(limit, nodeType);
+  const allEdges = await graphService.getAllEdges(limit, nodeType);
+
+  // 过滤掉非 UUID 节点（AI 生成的类名引用等幽灵节点）
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const edges = allEdges.filter((e) => UUID_RE.test(e.fromId) && UUID_RE.test(e.toId));
 
   // 收集节点 ID + 类型 → 按类型查标签
   const nodeMap = new Map(); // id → Set<type>

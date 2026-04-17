@@ -353,17 +353,17 @@ const Delivery: React.FC<DeliveryProps> = ({ delivery, language }) => {
   return (
     <div className="px-6 py-4 border-b border-[var(--border-default)]">
       <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-2 block flex items-center gap-1.5">
-        <Layers size={11} className="text-indigo-400" /> Cursor Delivery
+        <Layers size={11} className="text-indigo-500 dark:text-indigo-400" /> Cursor Delivery
       </label>
-      <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-xl p-4 text-xs space-y-1.5">
-        {topicHint && <div><span className="text-indigo-400 font-medium">Topic：</span><span className="text-[var(--fg-primary)]">{topicHint}</span></div>}
-        {whenClause && <div><span className="text-blue-400 font-medium">When：</span><span className="text-[var(--fg-primary)]">{whenClause}</span></div>}
-        {doClause && <div><span className="text-emerald-400 font-medium">Do：</span><span className="text-[var(--fg-primary)]">{doClause}</span></div>}
-        {dontClause && <div><span className="text-red-400 font-medium">Don't：</span><span className="text-[var(--fg-primary)]">{dontClause}</span></div>}
+      <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-gradient-to-br from-indigo-50/60 to-slate-50/40 dark:from-indigo-900/15 dark:to-slate-900/10 p-4 text-xs space-y-2">
+        {topicHint && <div><span className="text-indigo-600 dark:text-indigo-400 font-medium">Topic：</span><span className="text-[var(--fg-primary)]">{topicHint}</span></div>}
+        {whenClause && <div><span className="text-blue-600 dark:text-blue-400 font-medium">When：</span><span className="text-[var(--fg-primary)]">{whenClause}</span></div>}
+        {doClause && <div><span className="text-emerald-600 dark:text-emerald-400 font-medium">Do：</span><span className="text-[var(--fg-primary)]">{doClause}</span></div>}
+        {dontClause && <div><span className="text-red-500 dark:text-red-400 font-medium">Don't：</span><span className="text-[var(--fg-primary)]">{dontClause}</span></div>}
         {coreCode && (
-          <div>
-            <span className="text-purple-400 font-medium">Core Code：</span>
-            <div className="mt-1">
+          <div className="pt-1">
+            <span className="text-purple-600 dark:text-purple-400 font-medium">Core Code：</span>
+            <div className="mt-1.5">
               <CodeBlock code={coreCode} language={lang} />
             </div>
           </div>

@@ -281,7 +281,9 @@ describe('KnowledgeService', () => {
 
       await service.create(
         makeWireData({
-          relations: { extends: [{ target: 'other-id', description: 'base' }] },
+          relations: {
+            extends: [{ target: '00000000-0000-4000-a000-000000000001', description: 'base' }],
+          },
         }),
         { userId: 'user1' }
       );

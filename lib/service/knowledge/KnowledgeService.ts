@@ -425,6 +425,9 @@ export class KnowledgeService {
       // 清除 evolution_proposals（无 ON DELETE CASCADE，需手动删除）
       this._removeRelatedProposals(id);
 
+      // 清除其他 entry 的 relations JSON 中对该 ID 的引用
+      this._removeReverseRelations(id);
+
       await this.repository.delete(id);
 
       await this._audit('delete_knowledge', id, context.userId, {
@@ -979,8 +982,8 @@ export class KnowledgeService {
         }
       }
 
-      // 写入 edges（限制最多 10 条自动关联）
-      for (const c of candidates.slice(0, 10)) {
+      // 写入 edges（限制最多 3 条自动关联，避免图谱噪声）
+      for (const c of candidates.slice(0, 3)) {
         try {
           gs.addEdge(id, 'knowledge', c.target, 'knowledge', c.relation, { weight: c.weight });
         } catch {
@@ -990,7 +993,7 @@ export class KnowledgeService {
 
       // 将发现的关系写回 entry 的 relations 字段
       if (candidates.length > 0) {
-        const relatedItems = candidates.slice(0, 10).map((c) => ({
+        const relatedItems = candidates.slice(0, 3).map((c) => ({
           target: c.target,
           description: 'auto-discovered',
         }));
@@ -1039,6 +1042,9 @@ export class KnowledgeService {
           : relations
       ) as Record<string, unknown[]>;
 
+      // UUID v4 格式：仅同步指向真实知识条目的边，过滤掉类名等非 UUID 目标
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
       for (const [relType, targets] of Object.entries(relObj)) {
         if (!Array.isArray(targets)) {
           continue;
@@ -1047,7 +1053,7 @@ export class KnowledgeService {
           const item = t as Record<string, unknown>;
           const targetId =
             (item.target as string) || (item.id as string) || (typeof t === 'string' ? t : null);
-          if (targetId) {
+          if (targetId && UUID_RE.test(targetId)) {
             gs.addEdge(id, 'knowledge', targetId, 'knowledge', relType, {
               weight: (item.weight as number) || 1.0,
             });
@@ -1088,6 +1094,50 @@ export class KnowledgeService {
       this._proposalRepo.deleteByTargetRecipeId(id);
     } catch (err: unknown) {
       this.logger.warn('Failed to remove related proposals', {
+        id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /** 清除其他 entry 的 relations JSON 中对该 ID 的反向引用 */
+  _removeReverseRelations(id: string) {
+    try {
+      const referrers = this.repository.findByRelationLike(id, id);
+      // findByRelationLike is async but we fire-and-forget for non-blocking cleanup
+      void Promise.resolve(referrers).then(async (rows) => {
+        for (const row of rows) {
+          try {
+            const parsed = JSON.parse(row.relations);
+            let changed = false;
+            for (const bucket of Object.keys(parsed)) {
+              if (!Array.isArray(parsed[bucket])) {
+                continue;
+              }
+              const before = parsed[bucket].length;
+              parsed[bucket] = parsed[bucket].filter((r: unknown) => {
+                if (typeof r === 'string') {
+                  return r !== id;
+                }
+                if (r && typeof r === 'object' && 'target' in r) {
+                  return (r as { target: string }).target !== id;
+                }
+                return true;
+              });
+              if (parsed[bucket].length !== before) {
+                changed = true;
+              }
+            }
+            if (changed) {
+              await this.repository.update(row.id, { relations: JSON.stringify(parsed) });
+            }
+          } catch {
+            // 单条清理失败不阻塞
+          }
+        }
+      });
+    } catch (err: unknown) {
+      this.logger.warn('Failed to remove reverse relations', {
         id,
         error: err instanceof Error ? err.message : String(err),
       });

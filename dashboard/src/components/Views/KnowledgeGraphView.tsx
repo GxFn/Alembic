@@ -33,11 +33,11 @@ interface GraphNode {
 
 // ─── Constants ────────────────────────────────────────
 
-const BASE_R = 28;
-const MIN_R = 22;
-const MAX_R = 50;
-const FONT_SIZE = 11;
-const LABEL_FONT = 10;
+const BASE_R = 24;
+const MIN_R = 18;
+const MAX_R = 42;
+const FONT_SIZE = 10;
+const LABEL_FONT = 9;
 
 /** 关系类型 → 颜色 */
 const RELATION_COLORS: Record<string, string> = {
@@ -426,12 +426,22 @@ const KnowledgeGraphView: React.FC = () => {
     }
   }, [t]);
 
-  // Force-directed layout
+  // Relation type filter
+  // 低信号关系类型默认关闭（auto-discover 生成的 related 边噪声太大）
+  const LOW_SIGNAL_RELATIONS = new Set(['related', 'references']);
+  const [activeRelations, setActiveRelations] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setActiveRelations(new Set(edges.map(e => e.relation).filter(r => !LOW_SIGNAL_RELATIONS.has(r))));
+  }, [edges]);
+
+  const filteredEdges = useMemo(() => edges.filter(e => activeRelations.has(e.relation)), [edges, activeRelations]);
+
+  // Force-directed layout — 基于过滤后的边计算节点
   const nodes = useMemo(() => {
-    if (edges.length === 0) return [];
-    const raw = buildNodes(edges, nodeLabels, nodeTypes, nodeCategories);
-    return forceLayout(raw, edges);
-  }, [edges, nodeLabels, nodeTypes, nodeCategories]);
+    if (filteredEdges.length === 0) return [];
+    const raw = buildNodes(filteredEdges, nodeLabels, nodeTypes, nodeCategories);
+    return forceLayout(raw, filteredEdges);
+  }, [filteredEdges, nodeLabels, nodeTypes, nodeCategories]);
 
   // Compute group hulls for background rendering
   const groupHulls = useMemo(() => {
@@ -522,14 +532,6 @@ const KnowledgeGraphView: React.FC = () => {
     return curvatures;
   }, [edges]);
 
-  // Relation type filter
-  const [activeRelations, setActiveRelations] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    setActiveRelations(new Set(edges.map(e => e.relation)));
-  }, [edges]);
-
-  const filteredEdges = useMemo(() => edges.filter(e => activeRelations.has(e.relation)), [edges, activeRelations]);
-
   const toggleRelation = (rel: string) => {
     setActiveRelations(prev => {
       const next = new Set(prev);
@@ -619,7 +621,7 @@ const KnowledgeGraphView: React.FC = () => {
           {/* Stats badge */}
           {stats && (
             <span className="text-xs px-2 py-0.5 rounded-full whitespace-nowrap text-[var(--fg-secondary)] bg-[var(--bg-subtle)]">
-              {t('knowledgeGraph.statsLabel', { nodes: nodes.length, edges: stats.totalEdges })}
+              {t('knowledgeGraph.statsLabel', { nodes: nodes.length, edges: filteredEdges.length })}
             </span>
           )}
           {/* Inline relation filter */}
@@ -763,7 +765,7 @@ const KnowledgeGraphView: React.FC = () => {
               const isHovered = hoveredEdge === e.id;
               const opacity = hasFocus
                 ? (isHighlighted ? 0.85 : 0.06)
-                : (isHovered ? 0.9 : 0.35);
+                : (isHovered ? 0.9 : 0.5);
 
               const r1 = nodeRadius(from.degree);
               const r2 = nodeRadius(to.degree);

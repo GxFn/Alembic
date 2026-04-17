@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Edit3, Trash2, BookOpen, Shield, Lightbulb, FileText, FileCode, X, BadgeCheck, Eye, Save, Link2, Plus, Search, ArrowUp, ArrowDown, Code2, Layers, Globe, MoreHorizontal, Clock, GitMerge, AlertTriangle, Archive, ArrowUpCircle, CheckCircle2, Sparkles, TrendingDown } from 'lucide-react';
+import { Edit3, Trash2, BookOpen, Shield, Lightbulb, FileText, FileCode, X, BadgeCheck, Eye, Save, Link2, Plus, Search, ArrowUp, ArrowDown, Code2, Layers, Globe, MoreHorizontal, Clock, Dna, AlertTriangle, Archive, ArrowUpCircle, CheckCircle2, Sparkles, TrendingDown } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
 import { Recipe, KnowledgeEntry } from '../../types';
 import { categoryConfigs } from '../../constants';
@@ -330,7 +330,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
 
   const findRecipeByName = (name: string): Recipe | undefined => {
     const normalized = name.replace(/\.md$/i, '').toLowerCase();
-    return recipes.find(r => getDisplayName(r).toLowerCase() === normalized);
+    return recipes.find(r => getDisplayName(r).toLowerCase() === normalized || r.id === name || r.name === name);
   };
 
   // ID → 标题 查找表 (将关联关系中的 UUID 解析为可读标题)
@@ -555,7 +555,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                             <>
                               {ec.proposals > 0 && (
                                 <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 shrink-0" title={t('evolution.proposals')}>
-                                  <GitMerge size={10} /> {ec.proposals}
+                                  <Dna size={10} /> {ec.proposals}
                                 </span>
                               )}
                               {ec.warnings > 0 && (
@@ -646,7 +646,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
 
             {/* ── Evolution side panel ── */}
             {showEvolution && (
-              <Drawer.Panel size="sm" className="mr-0.5">
+              <Drawer.Panel size="sm" className="!border-l-0 !shadow-none border-r border-r-[var(--border-default)]">
                 <Drawer.Header title={t('evolution.title')}>
                   <Drawer.HeaderActions>
                     <Drawer.CloseButton onClose={() => setShowEvolution(false)} />
@@ -695,7 +695,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                         : "text-[var(--fg-muted)] hover:text-[var(--fg-secondary)]"
                     )}
                   >
-                    <GitMerge size={ICON_SIZES.sm} />
+                    <Dna size={ICON_SIZES.sm} />
                     {hasEvolution && !showEvolution && (
                       <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-500 rounded-full" />
                     )}
@@ -995,7 +995,9 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                                 {items.map((r: any, ri: number) => {
                                   const itemName = typeof r === 'string' ? r : r.target || r.id || r.title || JSON.stringify(r);
                                   const found = findRecipeByName(itemName) || (titleLookup.has(itemName) ? findRecipeByName(titleLookup.get(itemName)!) : undefined);
-                                  const displayLabel = found ? getDisplayName(found) : (titleLookup.get(itemName) || itemName);
+                                  const resolvedTitle = titleLookup.get(itemName);
+                                  const isUnresolvedId = !found && !resolvedTitle && /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(itemName);
+                                  const displayLabel = found ? getDisplayName(found) : (resolvedTitle || (isUnresolvedId ? `#${itemName.slice(0, 8)}` : itemName));
                                   return (
                                     <span
                                       key={ri}

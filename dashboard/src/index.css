@@ -352,10 +352,12 @@ html.dark {
   color: #e8e8ed !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
 }
-.dark .go4109123758 {
+/* react-hot-toast wrapper: goober hash 随版本变化，改用 role 选择器 */
+div[role="status"][class] {
   background: transparent !important;
   box-shadow: none !important;
   border: none !important;
+  outline: none !important;
   padding: 0 !important;
 }
 
