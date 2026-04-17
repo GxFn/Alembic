@@ -1937,6 +1937,11 @@ Skill 文档格式要求：
     return res.data?.data;
   },
 
+  /** 开始观察 Proposal（pending → observing） */
+  async observeProposal(id: string): Promise<void> {
+    await http.post(`/evolution/proposals/${encodeURIComponent(id)}/observe`);
+  },
+
   /** 拒绝 Proposal */
   async rejectProposal(id: string, reason?: string): Promise<void> {
     await http.post(`/evolution/proposals/${encodeURIComponent(id)}/reject`, { reason });

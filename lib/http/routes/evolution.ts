@@ -4,6 +4,7 @@
  * GET  /api/v1/evolution/proposals          Proposal 列表
  * GET  /api/v1/evolution/proposals/stats    Proposal 统计
  * POST /api/v1/evolution/proposals/:id/execute  执行 Proposal
+ * POST /api/v1/evolution/proposals/:id/observe  开始观察 Proposal
  * POST /api/v1/evolution/proposals/:id/reject   拒绝 Proposal
  * GET  /api/v1/evolution/warnings           Warning 列表
  * GET  /api/v1/evolution/warnings/stats     Warning 统计
@@ -99,10 +100,36 @@ router.post('/proposals/:id/execute', async (req: Request, res: Response) => {
       return;
     }
 
-    // 直接调用 checkAndExecute — 它会处理该 Proposal
-    const result = await executor.checkAndExecute();
+    // 仅执行指定的单个 Proposal
+    const result = await executor.executeOne(id);
 
     res.json({ success: true, data: result });
+  } catch (err: unknown) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'PROPOSAL_ERROR', message: (err as Error).message },
+    });
+  }
+});
+
+/** POST /proposals/:id/observe — 开始观察 Proposal（pending → observing） */
+router.post('/proposals/:id/observe', (req: Request, res: Response) => {
+  try {
+    const container = getServiceContainer();
+    const repo = container.get('proposalRepository') as ProposalRepository;
+
+    const id = String(req.params.id);
+    const ok = repo.startObserving(id);
+
+    if (!ok) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_STATE', message: 'Proposal not found or not in pending status' },
+      });
+      return;
+    }
+
+    res.json({ success: true });
   } catch (err: unknown) {
     res.status(500).json({
       success: false,

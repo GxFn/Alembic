@@ -5,13 +5,21 @@
  * Proposals（进化提案）和 Warnings（知识警告）。
  */
 import React, { useEffect, useState, useCallback } from 'react';
-import { AlertTriangle, RefreshCw, Check, X, Loader2, GitMerge, Copy, ChevronDown, ChevronRight } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Check, X, Loader2, GitMerge, Play, Eye, ChevronDown, ChevronRight } from 'lucide-react';
 import api from '../../api';
 import type { ProposalRecord, WarningRecord } from '../../types';
 import { useI18n } from '../../i18n';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '../ui/Dialog';
 import { notify } from '../../utils/notification';
 import { getErrorMessage } from '../../utils/error';
 
@@ -49,6 +57,11 @@ const EvolutionPanel: React.FC<EvolutionPanelProps> = ({
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    action: 'execute' | 'observe';
+    proposal: ProposalRecord | null;
+  }>({ open: false, action: 'execute', proposal: null });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -91,6 +104,40 @@ const EvolutionPanel: React.FC<EvolutionPanelProps> = ({
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const handleExecute = async (proposal: ProposalRecord) => {
+    setConfirmDialog({ open: false, action: 'execute', proposal: null });
+    setActionLoading(proposal.id);
+    try {
+      await api.executeProposal(proposal.id);
+      notify(t('evolution.proposalExecuted'), { type: 'success' });
+      await fetchData();
+      onActionComplete?.();
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('common.operationFailed')), { type: 'error' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleObserve = async (proposal: ProposalRecord) => {
+    setConfirmDialog({ open: false, action: 'observe', proposal: null });
+    setActionLoading(proposal.id);
+    try {
+      await api.observeProposal(proposal.id);
+      notify(t('evolution.proposalObserving'), { type: 'success' });
+      await fetchData();
+      onActionComplete?.();
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('common.operationFailed')), { type: 'error' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const openConfirmDialog = (action: 'execute' | 'observe', proposal: ProposalRecord) => {
+    setConfirmDialog({ open: true, action, proposal });
   };
 
   const handleResolve = async (id: string) => {
@@ -180,6 +227,8 @@ const EvolutionPanel: React.FC<EvolutionPanelProps> = ({
                 expanded={expandedIds.has(p.id)}
                 onToggle={() => toggleExpand(p.id)}
                 onReject={() => handleReject(p.id)}
+                onExecute={() => openConfirmDialog('execute', p)}
+                onObserve={p.status === 'pending' ? () => openConfirmDialog('observe', p) : undefined}
                 actionLoading={actionLoading === p.id}
                 resolveTitle={resolveTitle}
                 t={t}
@@ -246,6 +295,24 @@ const EvolutionPanel: React.FC<EvolutionPanelProps> = ({
           </div>
         </section>
       )}
+
+      {/* ═══ Confirm Dialog ═══ */}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        action={confirmDialog.action}
+        proposal={confirmDialog.proposal}
+        onClose={() => setConfirmDialog({ open: false, action: 'execute', proposal: null })}
+        onConfirm={() => {
+          if (!confirmDialog.proposal) { return; }
+          if (confirmDialog.action === 'execute') {
+            handleExecute(confirmDialog.proposal);
+          } else {
+            handleObserve(confirmDialog.proposal);
+          }
+        }}
+        resolveTitle={resolveTitle}
+        t={t}
+      />
     </div>
   );
 };
@@ -259,6 +326,8 @@ interface ProposalCardProps {
   expanded: boolean;
   onToggle: () => void;
   onReject: () => void;
+  onExecute: () => void;
+  onObserve?: () => void;
   actionLoading: boolean;
   resolveTitle: (id: string) => string;
   t: (key: string, params?: Record<string, string | number>) => string;
@@ -269,6 +338,8 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
   expanded,
   onToggle,
   onReject,
+  onExecute,
+  onObserve,
   actionLoading,
   resolveTitle,
   t,
@@ -322,17 +393,79 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
             </details>
           )}
 
+          {/* Confidence indicator */}
+          {p.confidence < 0.5 && (
+            <div className="flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 rounded">
+              <AlertTriangle size={10} />
+              {t('evolution.lowConfidence')}
+            </div>
+          )}
+
+          {/* Observation window status */}
+          {p.status === 'observing' && (
+            <div className="text-[10px] text-[var(--fg-muted)]">
+              {Date.now() >= p.expiresAt
+                ? <span className="text-green-600 font-medium">{t('evolution.observationExpired')}</span>
+                : <span>{t('evolution.observationRemaining')}: {formatRemainingTime(p.expiresAt - Date.now(), t)}</span>
+              }
+            </div>
+          )}
+
+          {/* suggestedChanges preview for update type */}
+          {p.type === 'update' && extractSuggestedChanges(p.evidence).length > 0 && (
+            <details className="text-[10px]">
+              <summary className="cursor-pointer text-[var(--accent)] hover:text-[var(--accent-hover)] font-medium">
+                {t('evolution.suggestedChanges')} ({extractSuggestedChanges(p.evidence).length})
+              </summary>
+              <div className="mt-1 space-y-1">
+                {extractSuggestedChanges(p.evidence).map((change, i) => (
+                  <div key={i} className="flex items-center gap-2 px-2 py-1 bg-[var(--bg-subtle)] rounded">
+                    <Badge variant="blue" className="text-[8px] shrink-0">{change.field}</Badge>
+                    <span className="text-[var(--fg-secondary)] truncate">{change.action}: {change.preview}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
           {/* Actions */}
           {(p.status === 'pending' || p.status === 'observing') && (
             <div className="flex items-center gap-2 pt-1">
+              {/* Execute button */}
               <Button
-                variant="secondary"
+                variant="primary"
                 size="sm"
-                onClick={onReject}
+                onClick={onExecute}
                 disabled={actionLoading}
                 className="text-[11px] h-7"
               >
-                {actionLoading ? <Loader2 size={12} className="animate-spin mr-1" /> : <X size={12} className="mr-1" />}
+                {actionLoading ? <Loader2 size={12} className="animate-spin mr-1" /> : <Play size={12} className="mr-1" />}
+                {p.type === 'deprecate' ? t('evolution.executeDeprecate') : t('evolution.executeMerge')}
+              </Button>
+
+              {/* Observe button — only for pending */}
+              {onObserve && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onObserve}
+                  disabled={actionLoading}
+                  className="text-[11px] h-7"
+                >
+                  <Eye size={12} className="mr-1" />
+                  {t('evolution.startObserving')}
+                </Button>
+              )}
+
+              {/* Reject button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onReject}
+                disabled={actionLoading}
+                className="text-[11px] h-7 text-[var(--fg-muted)]"
+              >
+                <X size={12} className="mr-1" />
                 {t('evolution.reject')}
               </Button>
             </div>
@@ -443,6 +576,183 @@ const WarningCard: React.FC<WarningCardProps> = ({
     </div>
   );
 };
+
+/* ═══════════════════════════════════════════════════════
+ *  Confirm Dialog
+ * ═══════════════════════════════════════════════════════ */
+
+interface ConfirmDialogProps {
+  open: boolean;
+  action: 'execute' | 'observe';
+  proposal: ProposalRecord | null;
+  onClose: () => void;
+  onConfirm: () => void;
+  resolveTitle: (id: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
+}
+
+const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
+  open,
+  action,
+  proposal,
+  onClose,
+  onConfirm,
+  resolveTitle,
+  t,
+}) => {
+  if (!proposal) { return null; }
+
+  const isExecute = action === 'execute';
+  const isDeprecate = proposal.type === 'deprecate';
+  const isPending = proposal.status === 'pending';
+  const changes = extractSuggestedChanges(proposal.evidence);
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); } }}>
+      <DialogContent size="sm">
+        <DialogHeader>
+          <DialogTitle className="text-base">
+            {isExecute
+              ? (isDeprecate ? t('evolution.confirmDeprecateTitle') : t('evolution.confirmExecuteTitle'))
+              : t('evolution.confirmObserveTitle')
+            }
+          </DialogTitle>
+          <DialogDescription>
+            {isExecute
+              ? (isDeprecate
+                  ? t('evolution.confirmDeprecateDesc')
+                  : isPending
+                    ? t('evolution.confirmExecutePendingDesc')
+                    : t('evolution.confirmExecuteDesc'))
+              : t('evolution.confirmObserveDesc')
+            }
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="px-5 py-3 space-y-3">
+          {/* Proposal summary */}
+          <div className="text-xs space-y-1.5">
+            <div className="flex items-center gap-2">
+              <Badge variant={isDeprecate ? 'red' : 'blue'} className="text-[9px] uppercase">{proposal.type}</Badge>
+              <span className="text-[var(--fg-primary)]">{proposal.description}</span>
+            </div>
+            <div className="flex flex-wrap gap-x-3 text-[10px] text-[var(--fg-muted)]">
+              <span>{t('evolution.confidence')}: {Math.round(proposal.confidence * 100)}%</span>
+              <span>{t('evolution.source')}: {proposal.source}</span>
+            </div>
+          </div>
+
+          {/* Low confidence warning */}
+          {proposal.confidence < 0.5 && isExecute && (
+            <div className="flex items-center gap-1.5 text-[11px] text-amber-600 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 rounded-md">
+              <AlertTriangle size={12} />
+              {t('evolution.lowConfidenceWarning')}
+            </div>
+          )}
+
+          {/* Pending skip observation warning */}
+          {isPending && isExecute && (
+            <div className="flex items-center gap-1.5 text-[11px] text-blue-600 bg-blue-50 dark:bg-blue-950/30 px-3 py-2 rounded-md">
+              <Eye size={12} />
+              {t('evolution.skipObservationWarning')}
+            </div>
+          )}
+
+          {/* SuggestedChanges preview for update */}
+          {isExecute && !isDeprecate && changes.length > 0 && (
+            <div className="space-y-1">
+              <span className="text-[10px] font-medium text-[var(--fg-secondary)]">{t('evolution.changesToApply')}:</span>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {changes.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2 text-[10px] px-2 py-1 bg-[var(--bg-subtle)] rounded">
+                    <Badge variant="blue" className="text-[8px] shrink-0">{c.field}</Badge>
+                    <span className="text-[var(--fg-muted)]">{c.action}</span>
+                    <span className="text-[var(--fg-secondary)] truncate">{c.preview}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Deprecate: related recipes */}
+          {isExecute && isDeprecate && proposal.relatedRecipeIds.length > 0 && (
+            <div className="text-[10px] text-[var(--fg-muted)]">
+              <span className="font-medium">{t('evolution.replacedBy')}: </span>
+              {proposal.relatedRecipeIds.map(id => resolveTitle(id)).join(', ')}
+            </div>
+          )}
+
+          {/* Outcome hint */}
+          {isExecute && (
+            <div className="text-[10px] text-[var(--fg-muted)] bg-[var(--bg-subtle)] px-3 py-2 rounded-md">
+              {isDeprecate
+                ? t('evolution.outcomeDeprecate')
+                : t('evolution.outcomeUpdate')
+              }
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" size="sm" onClick={onClose} className="text-[11px]">
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant={isExecute && isDeprecate ? 'danger' : 'primary'}
+            size="sm"
+            onClick={onConfirm}
+            className="text-[11px]"
+          >
+            {isExecute
+              ? (isDeprecate ? t('evolution.confirmDeprecate') : t('evolution.confirmExecute'))
+              : t('evolution.confirmObserve')
+            }
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════
+ *  Helpers
+ * ═══════════════════════════════════════════════════════ */
+
+interface SuggestedChange {
+  field: string;
+  action: string;
+  preview: string;
+}
+
+function extractSuggestedChanges(evidence: Record<string, unknown>[]): SuggestedChange[] {
+  const results: SuggestedChange[] = [];
+  for (const ev of evidence) {
+    const sc = ev.suggestedChanges as Record<string, unknown> | undefined;
+    if (!sc) { continue; }
+    const changes = (sc.changes ?? sc.patches) as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(changes)) { continue; }
+    for (const c of changes) {
+      results.push({
+        field: String(c.field ?? ''),
+        action: String(c.action ?? 'replace'),
+        preview: String(c.newValue ?? c.newContent ?? '').slice(0, 60),
+      });
+    }
+  }
+  return results;
+}
+
+function formatRemainingTime(
+  ms: number,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
+  const hours = Math.floor(ms / (1000 * 60 * 60));
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    return `${days}${t('evolution.days')}`;
+  }
+  return `${hours}${t('evolution.hours')}`;
+}
 
 export default EvolutionPanel;
 

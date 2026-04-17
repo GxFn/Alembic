@@ -83,6 +83,60 @@ export class ProposalExecutor {
   }
 
   /**
+   * 手动执行单个 Proposal（Dashboard 按钮触发）
+   *
+   * 支持 pending / observing 状态：
+   *   - pending → 先转 observing，再执行
+   *   - observing → 直接执行（无论是否到期）
+   *
+   * 跳过到期判断与批量扫描，直接走评估 → 执行流程。
+   */
+  async executeOne(id: string): Promise<ProposalExecutionResult> {
+    const result: ProposalExecutionResult = {
+      executed: [],
+      rejected: [],
+      expired: [],
+      skipped: [],
+    };
+
+    const proposal = this.#repo.findById(id);
+    if (!proposal) {
+      result.skipped.push({ id, type: 'update', reason: 'not found' });
+      return result;
+    }
+
+    if (proposal.status !== 'pending' && proposal.status !== 'observing') {
+      result.skipped.push({
+        id,
+        type: proposal.type,
+        reason: `invalid status: ${proposal.status}`,
+      });
+      return result;
+    }
+
+    // pending → observing（确保 markExecuted 能生效）
+    if (proposal.status === 'pending') {
+      const ok = this.#repo.startObserving(id);
+      if (!ok) {
+        result.skipped.push({ id, type: proposal.type, reason: 'failed to start observing' });
+        return result;
+      }
+    }
+
+    // 复用已有的单 Proposal 处理逻辑
+    await this.#processExpiredProposal(proposal, result);
+
+    if (result.executed.length > 0 || result.rejected.length > 0) {
+      this.#logger.info(
+        `[ProposalExecutor] executeOne(${id}): ` +
+          `executed=${result.executed.length}, rejected=${result.rejected.length}`
+      );
+    }
+
+    return result;
+  }
+
+  /**
    * 定期调用（UiStartupTasks Stage 5）
    *
    * 扫描所有到期 Proposal → 评估 → 执行/拒绝/过期
