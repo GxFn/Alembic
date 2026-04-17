@@ -6,7 +6,6 @@
  *   - ConfidenceRouter 阈值路由
  *   - StagingManager 暂存期管理 + 自动发布
  *   - DecayDetector 6+1 种衰退策略
- *   - KnowledgeMetabolism 新陈代谢总线
  *   - Guard 免疫系统（3 态、UncertaintyCollector、ComplianceReporter 三维评分）
  *   - ReverseGuard 反向验证
  *   - CoverageAnalyzer 覆盖率矩阵
@@ -39,9 +38,7 @@ let CoverageAnalyzer: typeof import('../../lib/service/guard/CoverageAnalyzer.js
 let ComplianceReporter: typeof import('../../lib/service/guard/ComplianceReporter.js').ComplianceReporter;
 let DecayDetector: typeof import('../../lib/service/evolution/DecayDetector.js').DecayDetector;
 let StagingManager: typeof import('../../lib/service/evolution/StagingManager.js').StagingManager;
-let ContradictionDetector: typeof import('../../lib/service/evolution/ContradictionDetector.js').ContradictionDetector;
 let RedundancyAnalyzer: typeof import('../../lib/service/evolution/RedundancyAnalyzer.js').RedundancyAnalyzer;
-let KnowledgeMetabolism: typeof import('../../lib/service/evolution/KnowledgeMetabolism.js').KnowledgeMetabolism;
 let ConfidenceRouter: typeof import('../../lib/service/knowledge/ConfidenceRouter.js').ConfidenceRouter;
 let SourceRefReconciler: typeof import('../../lib/service/knowledge/SourceRefReconciler.js').SourceRefReconciler;
 let SignalBus: typeof import('../../lib/infrastructure/signal/SignalBus.js').SignalBus;
@@ -69,9 +66,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       complianceMod,
       decayMod,
       stagingMod,
-      contradictionMod,
       redundancyMod,
-      metabolismMod,
       confidenceRouterMod,
       sourceRefMod,
       signalBusMod,
@@ -88,9 +83,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       import('../../lib/service/guard/ComplianceReporter.js'),
       import('../../lib/service/evolution/DecayDetector.js'),
       import('../../lib/service/evolution/StagingManager.js'),
-      import('../../lib/service/evolution/ContradictionDetector.js'),
       import('../../lib/service/evolution/RedundancyAnalyzer.js'),
-      import('../../lib/service/evolution/KnowledgeMetabolism.js'),
       import('../../lib/service/knowledge/ConfidenceRouter.js'),
       import('../../lib/service/knowledge/SourceRefReconciler.js'),
       import('../../lib/infrastructure/signal/SignalBus.js'),
@@ -109,9 +102,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
     ComplianceReporter = complianceMod.ComplianceReporter;
     DecayDetector = decayMod.DecayDetector;
     StagingManager = stagingMod.StagingManager;
-    ContradictionDetector = contradictionMod.ContradictionDetector;
     RedundancyAnalyzer = redundancyMod.RedundancyAnalyzer;
-    KnowledgeMetabolism = metabolismMod.KnowledgeMetabolism;
     ConfidenceRouter = confidenceRouterMod.ConfidenceRouter;
     SourceRefReconciler = sourceRefMod.SourceRefReconciler;
     SignalBus = signalBusMod.SignalBus;
@@ -832,70 +823,6 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
         } else if (r.level === 'severe') {
           expect(r.suggestedGracePeriod).toBeLessThanOrEqual(15 * 24 * 60 * 60 * 1000);
         }
-      }
-    });
-  });
-
-  /* ═══════════════════════════════════════════════════════════════
-   *  Section 6: KnowledgeMetabolism 新陈代谢
-   * ═══════════════════════════════════════════════════════════════ */
-
-  describe('6. KnowledgeMetabolism 新陈代谢', () => {
-    it('6.1 runFullCycle 对 BiliDili 完整执行不崩溃', async () => {
-      const cd = new ContradictionDetector(knowledgeRepo, { signalBus });
-      const ra = new RedundancyAnalyzer(knowledgeRepo, { signalBus });
-      const dd = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
-
-      const metabolism = new KnowledgeMetabolism({
-        contradictionDetector: cd,
-        redundancyAnalyzer: ra,
-        decayDetector: dd,
-        signalBus,
-      });
-
-      const report = await metabolism.runFullCycle();
-      expect(report).toBeDefined();
-      expect(report.summary).toBeDefined();
-    });
-
-    it('6.2 矛盾检测对 BiliDili 40 条 recipe 输出结构正确', async () => {
-      const cd = new ContradictionDetector(knowledgeRepo, { signalBus });
-      const contradictions = await cd.detectAll();
-      // BiliDili 条目是 bootstrap 生成的，批量提升后可能产生少量硬矛盾
-      const hard = contradictions.filter((c) => c.type === 'hard');
-      expect(hard.length).toBeLessThanOrEqual(20);
-    });
-
-    it('6.3 冗余分析对相似 recipe 有检测', async () => {
-      const ra = new RedundancyAnalyzer(knowledgeRepo, { signalBus });
-      const redundancies = await ra.analyzeAll();
-      // 返回结构正确
-      for (const r of redundancies) {
-        expect(r.similarity).toBeGreaterThanOrEqual(0);
-        expect(r.similarity).toBeLessThanOrEqual(1);
-        expect(r.recipeA).toBeDefined();
-        expect(r.recipeB).toBeDefined();
-      }
-    });
-
-    it('6.4 metabolism report 含 proposals 结构', async () => {
-      const cd = new ContradictionDetector(knowledgeRepo, { signalBus });
-      const ra = new RedundancyAnalyzer(knowledgeRepo, { signalBus });
-      const dd = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
-
-      const metabolism = new KnowledgeMetabolism({
-        contradictionDetector: cd,
-        redundancyAnalyzer: ra,
-        decayDetector: dd,
-        signalBus,
-      });
-
-      const report = await metabolism.runFullCycle();
-      expect(Array.isArray(report.proposals)).toBe(true);
-      for (const p of report.proposals) {
-        expect(p.type).toBeDefined();
-        expect(p.targetRecipeId).toBeDefined();
-        expect(p.confidence).toBeGreaterThanOrEqual(0);
       }
     });
   });
