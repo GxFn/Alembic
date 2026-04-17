@@ -113,7 +113,7 @@ function configureCursor() {
       asd: {
         command: 'asd-mcp',
         env: {
-          ASD_PROJECT_DIR: projectPath,
+          ASD_PROJECT_DIR: '${workspaceFolder}',
         },
       },
     },
