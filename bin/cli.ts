@@ -1261,48 +1261,52 @@ program
       }
 
       // 启动 SignalCollector 后台 AI 分析服务
-      try {
-        const { SignalCollector } = await import('../lib/service/skills/SignalCollector.js');
-        const { getRealtimeService } = await import(
-          '../lib/infrastructure/realtime/RealtimeService.js'
-        );
-        const db = container.get('database');
-        const agentFactory = container.get('agentFactory');
-        const knowledgeRepo = container.get('knowledgeRepository');
-        const auditRepo = container.get('auditRepository');
-
-        const signalCollector = new SignalCollector({
-          projectRoot,
-          knowledgeRepo: knowledgeRepo as any,
-          auditRepo: auditRepo as any,
-          agentFactory,
-          container,
-          mode: process.env.ASD_SIGNAL_MODE || 'auto',
-          intervalMs: parseInt(process.env.ASD_SIGNAL_INTERVAL || '3600000', 10),
-          onSuggestions: (suggestions: any) => {
-            try {
-              const realtime = getRealtimeService();
-              realtime.broadcastEvent('skill:suggestions', { suggestions });
-            } catch {
-              /* realtime 未就绪 */
-            }
-          },
-        });
-        signalCollector.start();
-        (globalThis as any)._signalCollector = signalCollector;
-
-        // 将 SignalCollector 绑定到 AIRecallStrategy (延迟注入)
+      // [DISABLED] 暂时关闭 AI 调用和 Skills 推荐功能
+      // 恢复时删除 `if (false)` 包裹即可
+      if (false as boolean) {
         try {
-          const aiStrategy = (container.singletons as Record<string, any>)._aiRecallStrategy;
-          if (aiStrategy && typeof aiStrategy.setSignalCollector === 'function') {
-            aiStrategy.setSignalCollector(signalCollector);
+          const { SignalCollector } = await import('../lib/service/skills/SignalCollector.js');
+          const { getRealtimeService } = await import(
+            '../lib/infrastructure/realtime/RealtimeService.js'
+          );
+          const db = container.get('database');
+          const agentFactory = container.get('agentFactory');
+          const knowledgeRepo = container.get('knowledgeRepository');
+          const auditRepo = container.get('auditRepository');
+
+          const signalCollector = new SignalCollector({
+            projectRoot,
+            knowledgeRepo: knowledgeRepo as any,
+            auditRepo: auditRepo as any,
+            agentFactory,
+            container,
+            mode: process.env.ASD_SIGNAL_MODE || 'auto',
+            intervalMs: parseInt(process.env.ASD_SIGNAL_INTERVAL || '3600000', 10),
+            onSuggestions: (suggestions: any) => {
+              try {
+                const realtime = getRealtimeService();
+                realtime.broadcastEvent('skill:suggestions', { suggestions });
+              } catch {
+                /* realtime 未就绪 */
+              }
+            },
+          });
+          signalCollector.start();
+          (globalThis as any)._signalCollector = signalCollector;
+
+          // 将 SignalCollector 绑定到 AIRecallStrategy (延迟注入)
+          try {
+            const aiStrategy = (container.singletons as Record<string, any>)._aiRecallStrategy;
+            if (aiStrategy && typeof aiStrategy.setSignalCollector === 'function') {
+              aiStrategy.setSignalCollector(signalCollector);
+            }
+          } catch {
+            /* recommendation pipeline not yet initialized */
           }
-        } catch {
-          /* recommendation pipeline not yet initialized */
+        } catch (scErr: any) {
+          cli.warn(`⚠️  SignalCollector failed to start: ${scErr.message}`);
+          cli.debug(scErr.stack);
         }
-      } catch (scErr: any) {
-        cli.warn(`⚠️  SignalCollector failed to start: ${scErr.message}`);
-        cli.debug(scErr.stack);
       }
 
       if (opts.apiOnly) {
