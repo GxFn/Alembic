@@ -14,6 +14,8 @@
 
 import type { SignalBus, SignalType } from '#infra/signal/SignalBus.js';
 import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
+import type { Startable } from '../../shared/lifecycle.js';
+import { timerRegistry } from '../../shared/TimerRegistry.js';
 
 /** better-sqlite3 兼容类型（与 GuardCheckEngine 相同模式） */
 interface DatabaseLike {
@@ -62,7 +64,7 @@ const EVENT_TO_SIGNAL_TYPE: Record<HitEventType, SignalType> = {
 
 // ── HitRecorder ─────────────────────────────────────
 
-export class HitRecorder {
+export class HitRecorder implements Startable {
   readonly #bus: SignalBus;
   readonly #db: DatabaseLike;
   readonly #buffer = new Map<string, BufferEntry>();
@@ -90,10 +92,13 @@ export class HitRecorder {
     if (this.#timer) {
       return;
     }
-    this.#timer = setInterval(() => {
-      void this.flush();
-    }, this.#flushIntervalMs);
-    this.#timer.unref(); // 不阻止进程退出
+    this.#timer = timerRegistry.setInterval(
+      () => {
+        void this.flush();
+      },
+      this.#flushIntervalMs,
+      'HitRecorder/flush'
+    );
   }
 
   /**
@@ -102,10 +107,14 @@ export class HitRecorder {
    */
   async stop(): Promise<void> {
     if (this.#timer) {
-      clearInterval(this.#timer);
+      timerRegistry.clear(this.#timer);
       this.#timer = null;
     }
     await this.flush();
+  }
+
+  async dispose(): Promise<void> {
+    await this.stop();
   }
 
   /**

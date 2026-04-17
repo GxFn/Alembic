@@ -3,6 +3,8 @@
  * 记录 API 请求的响应时间、吞吐量和错误率
  */
 
+import type { Disposable } from '../../shared/lifecycle.js';
+import { timerRegistry } from '../../shared/TimerRegistry.js';
 import Logger from '../logging/Logger.js';
 
 interface EndpointStats {
@@ -25,7 +27,7 @@ interface RequestData {
   timestamp: string;
 }
 
-export class PerformanceMonitor {
+export class PerformanceMonitor implements Disposable {
   config: { slowRequestThreshold: number; maxResponseTimeSamples: number; maxSlowRequests: number };
   metrics: {
     requests: { total: number; success: number; errors: number };
@@ -61,11 +63,12 @@ export class PerformanceMonitor {
       maxSlowRequests: 100, // 最多保留慢请求数
     };
 
-    // 定期计算统计数据（unref 避免阻止进程退出）
-    this.statsInterval = setInterval(() => this.calculateStats(true), 30000);
-    if (this.statsInterval.unref) {
-      this.statsInterval.unref();
-    }
+    // 定期计算统计数据（timerRegistry 自动 unref）
+    this.statsInterval = timerRegistry.setInterval(
+      () => this.calculateStats(true),
+      30000,
+      'PerformanceMonitor/stats'
+    );
   }
 
   /** Express 中间件 */
@@ -279,9 +282,13 @@ export class PerformanceMonitor {
   /** 停止监控 */
   shutdown() {
     if (this.statsInterval) {
-      clearInterval(this.statsInterval);
+      timerRegistry.clear(this.statsInterval);
     }
     Logger.info('性能监控已停止');
+  }
+
+  dispose() {
+    this.shutdown();
   }
 }
 

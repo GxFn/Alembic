@@ -33,6 +33,7 @@ import {
   RemoteResultBody,
   RemoteSendBody,
 } from '../../shared/schemas/http-requests.js';
+import { timerRegistry } from '../../shared/TimerRegistry.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 
 /** Lark WS client shape */
@@ -295,55 +296,63 @@ if (_autoId && _autoSecret) {
 
 const HEALTH_CHECK_INTERVAL = 30_000; // 30 秒检查一次
 
-setInterval(async () => {
-  // 没有凭证 → 跳过
-  const cfg = getLarkConfig();
-  if (!cfg.appId || !cfg.appSecret) {
-    return;
-  }
+timerRegistry.setInterval(
+  async () => {
+    // 没有凭证 → 跳过
+    const cfg = getLarkConfig();
+    if (!cfg.appId || !cfg.appSecret) {
+      return;
+    }
 
-  // WSClient 对象存在但 SDK 内部可能已断开 → 尝试探活
-  if (_wsClient && _wsConnected) {
-    // 发一个轻量 API 调用来验证连通性
-    try {
-      if (_larkClient) {
-        await _larkClient.auth.tenantAccessToken.internal({
-          data: { app_id: cfg.appId, app_secret: cfg.appSecret },
-        });
+    // WSClient 对象存在但 SDK 内部可能已断开 → 尝试探活
+    if (_wsClient && _wsConnected) {
+      // 发一个轻量 API 调用来验证连通性
+      try {
+        if (_larkClient) {
+          await _larkClient.auth.tenantAccessToken.internal({
+            data: { app_id: cfg.appId, app_secret: cfg.appSecret },
+          });
+        }
+        // 有响应 → 正常
+        return;
+      } catch {
+        // 调用失败不代表 WS 断了（可能只是 API 暂时不通），保持状态
+        return;
       }
-      // 有响应 → 正常
-      return;
-    } catch {
-      // 调用失败不代表 WS 断了（可能只是 API 暂时不通），保持状态
-      return;
     }
-  }
 
-  // WSClient 不存在或已标记断开 → 自动重连（静默，不打扰用户）
-  if (!_wsClient && !_wsStarting) {
-    logger.info('[Remote/Lark] Connection lost, auto-reconnecting...');
-    const result = await startLarkWS({ silent: true });
-    if (result.success) {
-      logger.info('[Remote/Lark] ✅ Auto-reconnected successfully');
-    } else {
-      logger.warn(`[Remote/Lark] Auto-reconnect failed: ${result.message}`);
+    // WSClient 不存在或已标记断开 → 自动重连（静默，不打扰用户）
+    if (!_wsClient && !_wsStarting) {
+      logger.info('[Remote/Lark] Connection lost, auto-reconnecting...');
+      const result = await startLarkWS({ silent: true });
+      if (result.success) {
+        logger.info('[Remote/Lark] ✅ Auto-reconnected successfully');
+      } else {
+        logger.warn(`[Remote/Lark] Auto-reconnect failed: ${result.message}`);
+      }
     }
-  }
-}, HEALTH_CHECK_INTERVAL);
+  },
+  HEALTH_CHECK_INTERVAL,
+  'remote/lark-health-check'
+);
 
 // ─── 超时清理定时器 ─────────────────────────────────
 
-setInterval(() => {
-  try {
-    const repo = getRepo();
-    const total = repo.cleanupTimeouts(PENDING_TIMEOUT_SEC, RUNNING_TIMEOUT_SEC);
-    if (total > 0) {
-      logger.info(`[Remote] Cleaned ${total} timed-out commands`);
+timerRegistry.setInterval(
+  () => {
+    try {
+      const repo = getRepo();
+      const total = repo.cleanupTimeouts(PENDING_TIMEOUT_SEC, RUNNING_TIMEOUT_SEC);
+      if (total > 0) {
+        logger.info(`[Remote] Cleaned ${total} timed-out commands`);
+      }
+    } catch {
+      /* DB 尚未就绪时静默 */
     }
-  } catch {
-    /* DB 尚未就绪时静默 */
-  }
-}, CLEANUP_INTERVAL_MS);
+  },
+  CLEANUP_INTERVAL_MS,
+  'remote/timeout-cleanup'
+);
 
 // ═══════════════════════════════════════════════════════
 //  LarkTransport — 自然语言意图路由

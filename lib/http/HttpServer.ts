@@ -17,6 +17,7 @@ import { type ErrorTracker, initErrorTracker } from '../infrastructure/monitorin
 import { initPerformanceMonitor } from '../infrastructure/monitoring/PerformanceMonitor.js';
 import { initRealtimeService } from '../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../injection/ServiceContainer.js';
+import { timerRegistry } from '../shared/TimerRegistry.js';
 import apiSpec from './api-spec.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { gatewayMiddleware } from './middleware/gatewayMiddleware.js';
@@ -480,7 +481,7 @@ export class HttpServer {
 
     // 停止定时 Proposal 检查
     if (this.#proposalCheckInterval) {
-      clearInterval(this.#proposalCheckInterval);
+      timerRegistry.clear(this.#proposalCheckInterval);
       this.#proposalCheckInterval = null;
     }
 
@@ -526,12 +527,13 @@ export class HttpServer {
   #startProposalCheckInterval() {
     const INTERVAL_MS = 30 * 60 * 1000; // 30min
 
-    this.#proposalCheckInterval = setInterval(() => {
-      void this.#runProposalCheck();
-    }, INTERVAL_MS);
-
-    // 防止 interval 阻止进程退出
-    this.#proposalCheckInterval.unref();
+    this.#proposalCheckInterval = timerRegistry.setInterval(
+      () => {
+        void this.#runProposalCheck();
+      },
+      INTERVAL_MS,
+      'HttpServer/proposalCheck'
+    );
 
     this.logger.info(
       `[HttpServer] Proposal check interval started (every ${INTERVAL_MS / 60_000}min)`

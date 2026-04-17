@@ -43,7 +43,9 @@ import path from 'node:path';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
 import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import type { Startable } from '../../shared/lifecycle.js';
 import pathGuard from '../../shared/PathGuard.js';
+import { timerRegistry } from '../../shared/TimerRegistry.js';
 import { EventAggregator } from './EventAggregator.js';
 import { SkillAdvisor } from './SkillAdvisor.js';
 
@@ -105,7 +107,7 @@ const MIN_INTERVAL_MS = 5 * 60 * 1000; // 最短 5 分钟
 const MAX_INTERVAL_MS = 24 * 60 * 60 * 1000; // 最长 24 小时
 const SNAPSHOT_FILE = 'signal-snapshot.json';
 
-export class SignalCollector {
+export class SignalCollector implements Startable {
   #projectRoot: string;
   #knowledgeRepo: KnowledgeRepositoryImpl | null;
   #auditRepo: AuditRepositoryImpl | null;
@@ -166,8 +168,12 @@ export class SignalCollector {
       this.#logger.info(`[SignalCollector] aggregated batch: ${key} × ${events.length}`);
       // 有聚合事件时提前触发 tick（取消当前定时器，立即执行）
       if (this.#timer && !this.#running) {
-        clearTimeout(this.#timer);
-        this.#timer = setTimeout(() => this.#tick(), 3000); // 3 秒后执行，留出更多聚合时间
+        timerRegistry.clear(this.#timer);
+        this.#timer = timerRegistry.setTimeout(
+          () => this.#tick(),
+          3000,
+          'SignalCollector/batch-trigger'
+        ); // 3 秒后执行，留出更多聚合时间
       }
     });
 
@@ -207,17 +213,25 @@ export class SignalCollector {
 
     // 首次按正常间隔执行（不立即触发，避免启动时消耗 AI token）
     // 如果有事件推送（EventAggregator batch），会提前触发
-    this.#timer = setTimeout(() => this.#tick(), this.#intervalMs);
+    this.#timer = timerRegistry.setTimeout(
+      () => this.#tick(),
+      this.#intervalMs,
+      'SignalCollector/initial'
+    );
   }
 
   stop() {
     if (this.#timer) {
-      clearTimeout(this.#timer);
+      timerRegistry.clear(this.#timer);
       this.#timer = null;
     }
     this.#running = false;
     this.#aggregator.destroy();
     this.#logger.info('[SignalCollector] stopped');
+  }
+
+  dispose() {
+    this.stop();
   }
 
   /**
@@ -438,7 +452,7 @@ export class SignalCollector {
     if (this.#mode === 'off') {
       return;
     }
-    this.#timer = setTimeout(() => this.#tick(), delayMs);
+    this.#timer = timerRegistry.setTimeout(() => this.#tick(), delayMs, 'SignalCollector/next');
   }
 
   // ═══════════════════════════════════════════════════════

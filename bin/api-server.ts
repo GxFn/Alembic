@@ -12,6 +12,7 @@ import HttpServer from '../lib/http/HttpServer.js';
 import Logger from '../lib/infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
 import { shutdown } from '../lib/shared/shutdown.js';
+import { timerRegistry } from '../lib/shared/TimerRegistry.js';
 
 // ─── Graceful Shutdown 协调器 ──────────────────────────
 shutdown.install();
@@ -92,6 +93,10 @@ async function main() {
     shutdown.register(async () => {
       await httpServer.stop();
     }, 'http-server');
+    // 3. 定时器注册中心 — 清理所有定时器 + Disposable
+    shutdown.register(async () => {
+      await timerRegistry.dispose();
+    }, 'timer-registry');
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     const stack = error instanceof Error ? error.stack : undefined;

@@ -13,6 +13,8 @@
 import Logger from '#infra/logging/Logger.js';
 
 import type { SignalBus } from '#infra/signal/SignalBus.js';
+import type { Disposable } from '../../shared/lifecycle.js';
+import { timerRegistry } from '../../shared/TimerRegistry.js';
 
 /* ────────────────────── Types ────────────────────── */
 
@@ -55,7 +57,7 @@ const CLEANUP_INTERVAL_MS = 60 * 1000; // 60 seconds
 
 /* ────────────────────── Class ────────────────────── */
 
-export class TemporaryToolRegistry {
+export class TemporaryToolRegistry implements Disposable {
   #registry: ToolRegistryLike;
   #tempTools = new Map<string, TemporaryTool>();
   #cleanupTimer: ReturnType<typeof setInterval> | null = null;
@@ -200,7 +202,7 @@ export class TemporaryToolRegistry {
   /** 停止定期清理（用于 shutdown） */
   dispose(): void {
     if (this.#cleanupTimer) {
-      clearInterval(this.#cleanupTimer);
+      timerRegistry.clear(this.#cleanupTimer);
       this.#cleanupTimer = null;
     }
 
@@ -213,17 +215,12 @@ export class TemporaryToolRegistry {
   /* ── Internal ── */
 
   #startCleanup(): void {
-    this.#cleanupTimer = setInterval(() => {
-      this.cleanup();
-    }, CLEANUP_INTERVAL_MS);
-
-    // 允许 Node.js 进程在只剩此 timer 时退出
-    if (
-      this.#cleanupTimer &&
-      typeof this.#cleanupTimer === 'object' &&
-      'unref' in this.#cleanupTimer
-    ) {
-      this.#cleanupTimer.unref();
-    }
+    this.#cleanupTimer = timerRegistry.setInterval(
+      () => {
+        this.cleanup();
+      },
+      CLEANUP_INTERVAL_MS,
+      'TemporaryToolRegistry/cleanup'
+    );
   }
 }

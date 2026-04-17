@@ -25,6 +25,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Logger from '#infra/logging/Logger.js';
 import { CACHE } from '#shared/constants.js';
+import type { Disposable } from '../../shared/lifecycle.js';
+import { timerRegistry } from '../../shared/TimerRegistry.js';
 import type { SessionStoreSerialized } from './session-store-schema.js';
 import { validateSessionStoreShape } from './session-store-schema.js';
 
@@ -160,7 +162,7 @@ interface ToolArgs {
 }
 
 // ═══════════════════════════════════════════════════════════
-export class SessionStore {
+export class SessionStore implements Disposable {
   // ── 子系统 1: DimensionReports (from EpisodicMemory) ──
   #dimensionReports = new Map<string, DimensionReport>();
   /** filePath → Evidence[] */
@@ -189,10 +191,11 @@ export class SessionStore {
     // 定期清理过期缓存条目
     const cleanupInterval = config.cleanupIntervalMs ?? 5 * 60 * 1000;
     if (this.#ttlMs > 0 && cleanupInterval > 0) {
-      this.#cleanupTimer = setInterval(() => this.#evictExpired(), cleanupInterval);
-      if (this.#cleanupTimer.unref) {
-        this.#cleanupTimer.unref();
-      }
+      this.#cleanupTimer = timerRegistry.setInterval(
+        () => this.#evictExpired(),
+        cleanupInterval,
+        'SessionStore/cleanup'
+      );
     }
   }
 
@@ -854,7 +857,7 @@ export class SessionStore {
     this.#tierReflections.length = 0;
     this.#submittedCandidates.clear();
     if (this.#cleanupTimer) {
-      clearInterval(this.#cleanupTimer);
+      timerRegistry.clear(this.#cleanupTimer);
       this.#cleanupTimer = null;
     }
   }

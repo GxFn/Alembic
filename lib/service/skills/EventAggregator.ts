@@ -19,12 +19,13 @@
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';
+import type { Disposable } from '../../shared/lifecycle.js';
 
 const DEFAULT_WINDOW_MS = 5000; // 5 秒聚合窗口
 const DEFAULT_MAX_BATCH = 50; // 单次 batch 最大事件数
 const DEFAULT_DEDUPE_MS = 60_000; // 60 秒去重窗口
 
-export class EventAggregator {
+export class EventAggregator implements Disposable {
   /** >} */
   #buckets = new Map<
     string,
@@ -106,7 +107,7 @@ export class EventAggregator {
   }
 
   /** 停止所有计时器 */
-  destroy() {
+  dispose() {
     for (const [, bucket] of this.#buckets) {
       if (bucket.timer) {
         clearTimeout(bucket.timer);
@@ -115,6 +116,11 @@ export class EventAggregator {
     this.#buckets.clear();
     this.#dedupeMap.clear();
     this.#listeners.clear();
+  }
+
+  /** @deprecated 使用 dispose() 代替 */
+  destroy() {
+    this.dispose();
   }
 
   /** 获取待处理事件数 */

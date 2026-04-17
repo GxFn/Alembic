@@ -6,6 +6,8 @@
  * @module infrastructure/signal/SignalAggregator
  */
 
+import type { Startable } from '../../shared/lifecycle.js';
+import { timerRegistry } from '../../shared/TimerRegistry.js';
 import type { ReportStore } from '../report/ReportStore.js';
 import type { Signal, SignalBus } from './SignalBus.js';
 
@@ -14,7 +16,7 @@ interface SlidingWindow {
   baseline: number;
 }
 
-export class SignalAggregator {
+export class SignalAggregator implements Startable {
   readonly #bus: SignalBus;
   readonly #reportStore: ReportStore;
   readonly #windows: Map<string, SlidingWindow> = new Map();
@@ -42,16 +44,24 @@ export class SignalAggregator {
     if (this.#timer) {
       return;
     }
-    this.#timer = setInterval(() => {
-      void this.#flush();
-    }, this.#intervalMs);
+    this.#timer = timerRegistry.setInterval(
+      () => {
+        void this.#flush();
+      },
+      this.#intervalMs,
+      'SignalAggregator/flush'
+    );
   }
 
   stop(): void {
     if (this.#timer) {
-      clearInterval(this.#timer);
+      timerRegistry.clear(this.#timer);
       this.#timer = null;
     }
+  }
+
+  dispose(): void {
+    this.stop();
   }
 
   #record(signal: Signal): void {

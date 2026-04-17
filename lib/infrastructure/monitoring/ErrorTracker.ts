@@ -5,8 +5,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-
+import type { Disposable } from '../../shared/lifecycle.js';
 import pathGuard from '../../shared/PathGuard.js';
+import { timerRegistry } from '../../shared/TimerRegistry.js';
 import Logger from '../logging/Logger.js';
 
 interface ErrorTrackerConfig {
@@ -32,7 +33,7 @@ interface ErrorData {
   severity: string;
 }
 
-export class ErrorTracker {
+export class ErrorTracker implements Disposable {
   criticalErrors: ErrorData[];
   recentErrors: ErrorData[];
   config: ErrorTrackerConfig;
@@ -70,11 +71,12 @@ export class ErrorTracker {
       this._ensureLogDirectory();
     }
 
-    // 定期生成错误报告（unref 避免阻止进程退出）
-    this.reportInterval = setInterval(() => this._generateReport(), 60000);
-    if (this.reportInterval.unref) {
-      this.reportInterval.unref();
-    }
+    // 定期生成错误报告（timerRegistry 自动 unref）
+    this.reportInterval = timerRegistry.setInterval(
+      () => this._generateReport(),
+      60000,
+      'ErrorTracker/report'
+    );
   }
 
   /** 确保日志目录存在 */
@@ -345,9 +347,13 @@ export class ErrorTracker {
   /** 停止错误追踪 */
   shutdown() {
     if (this.reportInterval) {
-      clearInterval(this.reportInterval);
+      timerRegistry.clear(this.reportInterval);
     }
     Logger.info('错误追踪已停止');
+  }
+
+  dispose() {
+    this.shutdown();
   }
 }
 

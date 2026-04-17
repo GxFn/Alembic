@@ -49,7 +49,13 @@ process.on('unhandledRejection', (reason) => {
 // 使用统一的 shutdown 协调器替代直接 process.exit(0)
 // 确保 DB WAL 刷盘、进行中请求排空、Socket.io 关闭
 const { shutdown } = await import('../lib/shared/shutdown.js');
+const { timerRegistry } = await import('../lib/shared/TimerRegistry.js');
 shutdown.install();
+
+// 定时器注册中心 — 最早注册，LIFO 保证最后执行（在其他组件之后清理）
+shutdown.register(async () => {
+  await timerRegistry.dispose();
+}, 'timer-registry');
 
 const { startMcpServer } = await import('../lib/external/mcp/McpServer.js');
 

@@ -22,7 +22,7 @@ import { baseDimensions } from '../base-dimensions.js';
 
 /**
  * 从统一注册表生成 V3 配置映射
- * dual \u7ef4\u5ea6\u540c\u65f6\u4ea7\u51fa Candidate + Project Skill
+ * dual 维度同时产出 Candidate + Project Skill
  */
 export const DIMENSION_CONFIGS_V3: Record<
   string,
