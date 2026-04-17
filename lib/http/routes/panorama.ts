@@ -250,28 +250,13 @@ router.get('/module/:name', async (req: Request, res: Response): Promise<void> =
  * 执行完整治理周期（矛盾检测 + 冗余分析 + 衰退扫描）
  */
 router.post('/governance/cycle', async (_req: Request, res: Response): Promise<void> => {
-  try {
-    const container = getServiceContainer();
-    const metabolism = container.get('knowledgeMetabolism') as
-      | { runFullCycle(): unknown }
-      | undefined;
-
-    if (!metabolism) {
-      res.status(503).json({
-        success: false,
-        error: { code: 'SERVICE_UNAVAILABLE', message: 'KnowledgeMetabolism not available' },
-      });
-      return;
-    }
-
-    const report = await metabolism.runFullCycle();
-    res.json({ success: true, data: report });
-  } catch (err: unknown) {
-    res.status(500).json({
-      success: false,
-      error: { code: 'GOVERNANCE_ERROR', message: (err as Error).message },
-    });
-  }
+  res.status(410).json({
+    success: false,
+    error: {
+      code: 'REMOVED',
+      message: 'KnowledgeMetabolism has been removed. Use rescan for governance.',
+    },
+  });
 });
 
 /**

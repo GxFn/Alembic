@@ -1,7 +1,7 @@
 /**
  * EvolutionGateway — 统一进化决策入口
  *
- * 所有进化决策（Agent 工具、MCP handler、KnowledgeMetabolism）最终都汇聚到这里。
+ * 所有进化决策（Agent 工具、MCP handler、RelevanceAuditor）最终都汇聚到这里。
  * 三种进化方向：update | deprecate | valid
  *
  * 设计意图：

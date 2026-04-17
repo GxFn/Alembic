@@ -17,19 +17,17 @@ import { HnswVectorAdapter } from '../../infrastructure/vector/HnswVectorAdapter
 import { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
 import { JsonVectorAdapter } from '../../infrastructure/vector/JsonVectorAdapter.js';
 import { LifecycleEventRepository } from '../../repository/evolution/LifecycleEventRepository.js';
-import { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
+import type { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
 import { WarningRepository } from '../../repository/evolution/WarningRepository.js';
 import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 import { ConsolidationAdvisor } from '../../service/evolution/ConsolidationAdvisor.js';
 import { ContentPatcher } from '../../service/evolution/ContentPatcher.js';
-import { ContradictionDetector } from '../../service/evolution/ContradictionDetector.js';
 import { DecayDetector } from '../../service/evolution/DecayDetector.js';
 import { EnhancementSuggester } from '../../service/evolution/EnhancementSuggester.js';
 import { EvolutionGateway } from '../../service/evolution/EvolutionGateway.js';
 import { FileChangeHandler } from '../../service/evolution/FileChangeHandler.js';
-import { KnowledgeMetabolism } from '../../service/evolution/KnowledgeMetabolism.js';
 import { LifecycleStateMachine } from '../../service/evolution/LifecycleStateMachine.js';
 import { ProposalExecutor } from '../../service/evolution/ProposalExecutor.js';
 import { RedundancyAnalyzer } from '../../service/evolution/RedundancyAnalyzer.js';
@@ -251,16 +249,6 @@ export function register(c: ServiceContainer) {
     });
   });
 
-  c.singleton('contradictionDetector', (ct: ServiceContainer) => {
-    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
-    return new ContradictionDetector(knowledgeRepo, {
-      signalBus:
-        (ct.singletons.signalBus as
-          | import('../../infrastructure/signal/SignalBus.js').SignalBus
-          | undefined) || undefined,
-    });
-  });
-
   c.singleton('redundancyAnalyzer', (ct: ServiceContainer) => {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
     return new RedundancyAnalyzer(knowledgeRepo, {
@@ -279,31 +267,6 @@ export function register(c: ServiceContainer) {
           | import('../../infrastructure/signal/SignalBus.js').SignalBus
           | undefined) || undefined,
     });
-  });
-
-  c.singleton('knowledgeMetabolism', (ct: ServiceContainer) => {
-    return new KnowledgeMetabolism({
-      contradictionDetector: ct.get('contradictionDetector') as ContradictionDetector,
-      redundancyAnalyzer: ct.get('redundancyAnalyzer') as RedundancyAnalyzer,
-      decayDetector: ct.get('decayDetector') as DecayDetector,
-      signalBus:
-        (ct.singletons.signalBus as
-          | import('../../infrastructure/signal/SignalBus.js').SignalBus
-          | undefined) || undefined,
-      evolutionGateway: ct.services.evolutionGateway
-        ? (ct.get('evolutionGateway') as EvolutionGateway)
-        : undefined,
-      reportStore: ct.services.reportStore ? (ct.get('reportStore') as ReportStore) : undefined,
-      warningRepository: ct.services.warningRepository
-        ? (ct.get('warningRepository') as WarningRepository)
-        : undefined,
-    });
-  });
-
-  c.singleton('proposalRepository', (ct: ServiceContainer) => {
-    const db = ct.get('database') as unknown as { getDrizzle(): unknown };
-    const drizzle = db.getDrizzle();
-    return new ProposalRepository(drizzle as ConstructorParameters<typeof ProposalRepository>[0]);
   });
 
   c.singleton('warningRepository', (ct: ServiceContainer) => {

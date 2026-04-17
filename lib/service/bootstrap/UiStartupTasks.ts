@@ -6,9 +6,8 @@
  *   2. staging promote:       到期 staging → active 晋升
  *   3. vector reconcile:      向量对账（best-effort）
  *   4. refreshIndex:          BM25 增量刷新
- *   5. metabolismCycle:       知识新陈代谢（矛盾/冗余/衰退扫描 → 新 Proposal）
- *   6. proposalCheck:         启动时兆底清理（过期 Pending + Observing 兆底评估）
- *   7. signalSubscription:    订阅 SignalBus（信号驱动提案评估）
+ *   5. proposalCheck:         启动时兜底清理（过期 Pending + Observing 兜底评估）
+ *   6. signalSubscription:    订阅 SignalBus（信号驱动提案评估）
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';
@@ -31,12 +30,6 @@ export interface UiStartupReport {
   vectorReconcile?: { orphans: number; missing: number };
   indexRefresh?: boolean;
   proposalCheck?: { executed: number; rejected: number; expired: number };
-  metabolismCycle?: {
-    proposalCount: number;
-    contradictions: number;
-    redundancies: number;
-    decaying: number;
-  };
   signalSubscription?: boolean;
   durationMs: number;
   errors: string[];
@@ -147,40 +140,7 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
     logger.warn(`[UiStartupTasks] ${msg}`);
   }
 
-  // ── Stage 5: KnowledgeMetabolism — 知识新陈代谢扫描 ──
-  try {
-    if (ctx.container.services.knowledgeMetabolism) {
-      const metabolism = ctx.container.get('knowledgeMetabolism') as {
-        runFullCycle(): {
-          proposals: unknown[];
-          summary: {
-            contradictionCount: number;
-            redundancyCount: number;
-            decayingCount: number;
-            proposalCount: number;
-          };
-        };
-      };
-      const result = await metabolism.runFullCycle();
-      report.metabolismCycle = {
-        proposalCount: result.summary.proposalCount,
-        contradictions: result.summary.contradictionCount,
-        redundancies: result.summary.redundancyCount,
-        decaying: result.summary.decayingCount,
-      };
-      if (result.summary.proposalCount > 0) {
-        logger.info(
-          `[UiStartupTasks] Stage 5: metabolism cycle — ${result.summary.proposalCount} proposals generated`
-        );
-      }
-    }
-  } catch (err: unknown) {
-    const msg = `metabolism cycle failed: ${(err as Error).message}`;
-    report.errors.push(msg);
-    logger.warn(`[UiStartupTasks] ${msg}`);
-  }
-
-  // ── Stage 6: ProposalExecutor — 启动时兜底清理（过期 Pending + Observing 兜底评估） ──
+  // ── Stage 5: ProposalExecutor — 启动时兜底清理（过期 Pending + Observing 兜底评估） ──
   try {
     if (ctx.container.services.proposalExecutor) {
       const executor = ctx.container.get('proposalExecutor') as {
@@ -199,7 +159,7 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
       const total = result.executed.length + result.rejected.length + result.expired.length;
       if (total > 0) {
         logger.info(
-          `[UiStartupTasks] Stage 6: proposal cleanup — executed=${result.executed.length}, rejected=${result.rejected.length}, expired=${result.expired.length}`
+          `[UiStartupTasks] Stage 5: proposal cleanup — executed=${result.executed.length}, rejected=${result.rejected.length}, expired=${result.expired.length}`
         );
       }
     }
@@ -209,7 +169,7 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
     logger.warn(`[UiStartupTasks] ${msg}`);
   }
 
-  // ── Stage 7: ProposalExecutor — 订阅 SignalBus（信号驱动提案评估） ──
+  // ── Stage 6: ProposalExecutor — 订阅 SignalBus（信号驱动提案评估） ──
   try {
     if (ctx.container.services.proposalExecutor && ctx.container.services.signalBus) {
       const executor = ctx.container.get('proposalExecutor') as {
@@ -217,7 +177,7 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
       };
       const signalBus = ctx.container.get('signalBus');
       executor.subscribeToSignals(signalBus);
-      logger.info('[UiStartupTasks] Stage 7: ProposalExecutor subscribed to SignalBus');
+      logger.info('[UiStartupTasks] Stage 6: ProposalExecutor subscribed to SignalBus');
     }
   } catch (err: unknown) {
     const msg = `signal subscription failed: ${(err as Error).message}`;

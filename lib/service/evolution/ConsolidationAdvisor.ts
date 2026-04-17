@@ -23,7 +23,6 @@ import {
 import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
-import { ContradictionDetector } from './ContradictionDetector.js';
 
 /* ────────────────────── Types ────────────────────── */
 
@@ -631,7 +630,7 @@ export class ConsolidationAdvisor {
    * 从文本中提取关键术语（过滤掉小词和常见停用词）
    */
   static #extractKeyTerms(text: string): Set<string> {
-    const words = ContradictionDetector.extractTopicWords(text);
+    const words = RecipeSimilarity.extractTopicWords(text);
     const STOP = new Set([
       'use',
       'using',

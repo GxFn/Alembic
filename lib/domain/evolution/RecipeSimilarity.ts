@@ -19,7 +19,58 @@
  * @module domain/evolution/RecipeSimilarity
  */
 
-import { ContradictionDetector } from '../../service/evolution/ContradictionDetector.js';
+/* ────────────────────── Stop Words ────────────────────── */
+
+const STOP_WORDS = new Set([
+  '我们',
+  '使用',
+  '项目',
+  '需要',
+  '可以',
+  '应该',
+  '建议',
+  '目前',
+  '已经',
+  '这个',
+  '那个',
+  '一个',
+  '进行',
+  '通过',
+  '对于',
+  'the',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'have',
+  'has',
+  'had',
+  'do',
+  'does',
+  'did',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'can',
+  'this',
+  'that',
+  'these',
+  'those',
+  'for',
+  'and',
+  'but',
+  'with',
+  'not',
+  'from',
+  'use',
+  'all',
+  'any',
+]);
 
 /* ────────────────────── Types ────────────────────── */
 
@@ -118,10 +169,24 @@ export class RecipeSimilarity {
 
   /* ════════════════════ 维度计算（公开静态，供外部直接调用） ════════════════════ */
 
+  /** 提取主题词（过滤停用词和短词） */
+  static extractTopicWords(text: string): Set<string> {
+    if (!text) {
+      return new Set();
+    }
+
+    const tokens = text
+      .toLowerCase()
+      .split(/[\s,;:!?。，；：！？\-_/\\|()[\]{}'"<>·、]+/)
+      .filter((t) => t.length >= 2);
+
+    return new Set(tokens.filter((t) => !STOP_WORDS.has(t)));
+  }
+
   /** 维度 1: 标题关键词 Jaccard */
   static titleJaccard(titleA: string, titleB: string): number {
-    const wordsA = ContradictionDetector.extractTopicWords(titleA);
-    const wordsB = ContradictionDetector.extractTopicWords(titleB);
+    const wordsA = RecipeSimilarity.extractTopicWords(titleA);
+    const wordsB = RecipeSimilarity.extractTopicWords(titleB);
     return RecipeSimilarity.#jaccard(wordsA, wordsB);
   }
 
@@ -135,8 +200,8 @@ export class RecipeSimilarity {
     if (!textA || !textB) {
       return 0;
     }
-    const wordsA = ContradictionDetector.extractTopicWords(textA);
-    const wordsB = ContradictionDetector.extractTopicWords(textB);
+    const wordsA = RecipeSimilarity.extractTopicWords(textA);
+    const wordsB = RecipeSimilarity.extractTopicWords(textB);
     return RecipeSimilarity.#jaccard(wordsA, wordsB);
   }
 
@@ -238,8 +303,8 @@ export class RecipeSimilarity {
     if (!candidateDo || !existingDo) {
       return false;
     }
-    const candidateWords = ContradictionDetector.extractTopicWords(candidateDo);
-    const existingWords = ContradictionDetector.extractTopicWords(existingDo);
+    const candidateWords = RecipeSimilarity.extractTopicWords(candidateDo);
+    const existingWords = RecipeSimilarity.extractTopicWords(existingDo);
     if (candidateWords.size === 0) {
       return false;
     }

@@ -112,22 +112,9 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
 async function handleGovernanceOps(ctx: McpContext, op: string) {
   switch (op) {
     case 'governance_cycle': {
-      const metabolism = ctx.container.get('knowledgeMetabolism') as
-        | { runFullCycle(): unknown }
-        | undefined;
-
-      if (!metabolism) {
-        return envelope({
-          success: false,
-          message: 'Governance service not initialized (knowledgeMetabolism not registered)',
-          meta: { tool: 'asd_panorama' },
-        });
-      }
-
-      const report = await metabolism.runFullCycle();
       return envelope({
-        success: true,
-        data: report,
+        success: false,
+        message: 'KnowledgeMetabolism has been removed. Use rescan for governance.',
         meta: { tool: 'asd_panorama', operation: 'governance_cycle' },
       });
     }

@@ -196,7 +196,7 @@ export class SourceRefReconciler {
 
   /**
    * 为每个有 stale sourceRef 的 Recipe 发射 quality 信号。
-   * KnowledgeMetabolism 订阅 quality → 触发完整治理周期。
+   * 信号可被其他组件订阅处理。
    */
   #emitStaleSignals(): void {
     if (!this.#signalBus) {

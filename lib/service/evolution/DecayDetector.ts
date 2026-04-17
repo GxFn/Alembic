@@ -7,7 +7,7 @@
  *   3. ReverseGuard: coreCode 引用的 API 符号已删除
  *   3b. SourceRefReconciler: 来源文件路径失效（recipe_source_refs.status = stale）
  *   4. 同域新 Recipe 发布且 deprecated_by 关系指向它
- *   5. ContradictionDetector: 与更新的 Recipe 硬矛盾
+ *   5. 矛盾检测: Agent 在 evolve 流程中语义判断
  *
  * 衰退评分 (decayScore 0-100):
  *   freshness(0.3) + usage(0.3) + quality(0.2) + authority(0.2)
