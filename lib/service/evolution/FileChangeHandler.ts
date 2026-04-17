@@ -321,7 +321,8 @@ export class FileChangeHandler implements FileChangeSubscriber {
 
     for (const ref of affected) {
       let title = ref.recipeId;
-      let impactLevel: ImpactLevel = 'pattern';
+      // sourceRefRepo 命中 → 默认 direct（§5.3: path ∈ sourceRefs → direct）
+      let impactLevel: ImpactLevel = 'direct';
       let entry: Record<string, unknown> | null = null;
       try {
         entry = (await this.#knowledgeRepo.findById(ref.recipeId)) as unknown as Record<
@@ -340,12 +341,15 @@ export class FileChangeHandler implements FileChangeSubscriber {
 
       if (entry) {
         title = (typeof entry.title === 'string' ? entry.title : '') || ref.recipeId;
-        impactLevel = this.#analyzeModifiedImpact(modifiedPath, {
-          coreCode: typeof entry.coreCode === 'string' ? entry.coreCode : '',
-          sourceFile: typeof entry.sourceFile === 'string' ? entry.sourceFile : null,
-          reasoning: entry.reasoning,
-          trigger: typeof entry.trigger === 'string' ? entry.trigger : '',
-        });
+        impactLevel = this.#analyzeModifiedImpact(
+          modifiedPath,
+          {
+            coreCode: typeof entry.coreCode === 'string' ? entry.coreCode : '',
+            reasoning: entry.reasoning,
+            trigger: typeof entry.trigger === 'string' ? entry.trigger : '',
+          },
+          true
+        );
       }
 
       report.needsReview++;
@@ -367,26 +371,33 @@ export class FileChangeHandler implements FileChangeSubscriber {
    * 计算改动文件对某 Recipe 的影响级别。
    *
    * 判定顺序（首次命中即返回）：
-   *   1. path ∈ coreCode 显式文本 / Recipe.sourceFile → `direct`
-   *   2. path ∈ reasoning.sources → `reference`
-   *   3. path / basename 命中 trigger → `pattern`
+   *   0. isSourceRef = true（文件在 recipe_source_refs 中精确匹配）→ `direct`
+   *   1. coreCode 中包含文件路径 / 符号名（去掉扩展名后匹配）→ `direct`
+   *   2. reasoning.sources 中包含路径 → `reference`
+   *   3. trigger 片段匹配路径 → `pattern`
    *
-   * 防御性兜底：SourceRefRepo 命中但都不符 → `pattern`（0.2 权重）
+   * 防御性兜底：`pattern`（0.2 权重）。
+   *
+   * @param isSourceRef 该 Recipe 是否通过 SourceRefRepository.findBySourcePath 命中。
+   *   true 时直接返回 `direct`（设计文档 §5.3: path ∈ sourceRefs → direct）。
    */
   #analyzeModifiedImpact(
     modifiedPath: string,
-    entry: { coreCode?: string; sourceFile?: string | null; reasoning?: unknown; trigger?: string }
+    entry: { coreCode?: string; reasoning?: unknown; trigger?: string },
+    isSourceRef = false
   ): ImpactLevel {
-    const coreCode = entry.coreCode ?? '';
-    const sourceFile = entry.sourceFile ?? '';
-    const basename = modifiedPath.split('/').pop() ?? modifiedPath;
+    // Rule 0: sourceRef 精确匹配 → direct（§5.3 表格第一行）
+    if (isSourceRef) {
+      return 'direct';
+    }
 
-    // Rule 1: direct — 路径或 basename 在 coreCode / sourceFile 中显式出现
-    if (
-      sourceFile === modifiedPath ||
-      coreCode.includes(modifiedPath) ||
-      (basename.length >= 4 && coreCode.includes(basename))
-    ) {
+    const coreCode = entry.coreCode ?? '';
+    const basename = modifiedPath.split('/').pop() ?? modifiedPath;
+    // 去掉扩展名后的文件名，用于 coreCode 符号匹配（如 AuthMiddleware.swift → AuthMiddleware）
+    const stem = basename.replace(/\.[^.]+$/, '');
+
+    // Rule 1: direct — 路径或符号名在 coreCode 中显式出现
+    if (coreCode.includes(modifiedPath) || (stem.length >= 4 && coreCode.includes(stem))) {
       return 'direct';
     }
 
@@ -394,18 +405,20 @@ export class FileChangeHandler implements FileChangeSubscriber {
     const reasoning = entry.reasoning as { sources?: unknown } | undefined;
     const sources = reasoning && Array.isArray(reasoning.sources) ? reasoning.sources : [];
     if (
-      sources.some((s) => typeof s === 'string' && (s === modifiedPath || s.endsWith(basename)))
+      sources.some(
+        (s) => typeof s === 'string' && (s === modifiedPath || s.endsWith(`/${basename}`))
+      )
     ) {
       return 'reference';
     }
 
-    // Rule 3: pattern — trigger 匹配（简化：trigger 片段出现在 path 中）
+    // Rule 3: pattern — trigger 匹配（trigger 片段出现在 path 中）
     const trigger = (entry.trigger ?? '').replace(/^@/, '');
     if (trigger.length >= 3 && modifiedPath.toLowerCase().includes(trigger.toLowerCase())) {
       return 'pattern';
     }
 
-    // 防御性兜底：SourceRefRepo 命中但三条规则都不符（路径重命名未同步等 §13.4 B24）
+    // 防御性兜底
     return 'pattern';
   }
 
@@ -413,7 +426,7 @@ export class FileChangeHandler implements FileChangeSubscriber {
   #reasonForImpact(level: ImpactLevel, path: string): string {
     switch (level) {
       case 'direct':
-        return `coreCode / sourceFile 直接引用的文件被修改: ${path}`;
+        return `sourceRefs / coreCode 直接引用的文件被修改: ${path}`;
       case 'reference':
         return `reasoning.sources 引用的文件被修改: ${path}`;
       case 'pattern':
