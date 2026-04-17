@@ -22,7 +22,7 @@ import { baseDimensions } from '../base-dimensions.js';
 
 /**
  * 从统一注册表生成 V3 配置映射
- * 所有维度统一为 candidate-only outputType
+ * dual \u7ef4\u5ea6\u540c\u65f6\u4ea7\u51fa Candidate + Project Skill
  */
 export const DIMENSION_CONFIGS_V3: Record<
   string,
@@ -31,7 +31,7 @@ export const DIMENSION_CONFIGS_V3: Record<
   DIMENSION_REGISTRY.map((dim) => [
     dim.id,
     {
-      outputType: 'candidate',
+      outputType: dim.outputMode === 'dual' ? 'dual' : 'candidate',
       allowedKnowledgeTypes: [...dim.allowedKnowledgeTypes],
     },
   ])
@@ -73,8 +73,8 @@ export function getFullDimensionConfig(dimId: string) {
     guide: base.guide,
     outputType: v3?.outputType || 'candidate',
     allowedKnowledgeTypes: v3?.allowedKnowledgeTypes || base.knowledgeTypes || [],
-    skillWorthy: false,
-    dualOutput: false,
+    skillWorthy: unified?.outputMode === 'dual',
+    dualOutput: unified?.outputMode === 'dual',
     knowledgeTypes: base.knowledgeTypes || [],
     // SOP 结构化分析步骤
     sopSteps: sop?.steps || null,

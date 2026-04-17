@@ -242,7 +242,7 @@ export interface DimensionDef {
   /** 层级 (统一维度注册表新增) */
   layer?: 'universal' | 'language' | 'framework';
   /** 输出模式 (统一维度注册表新增) */
-  outputMode?: 'candidate-only';
+  outputMode?: 'candidate-only' | 'dual';
 }
 
 /** Enhancement Pack 信息，来自 Phase 4 */

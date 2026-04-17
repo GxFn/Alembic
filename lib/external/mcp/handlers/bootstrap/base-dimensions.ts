@@ -46,8 +46,8 @@ function toBaseDimension(dim: UnifiedDimension): BaseDimension {
     label: dim.label,
     guide: dim.extractionGuide,
     knowledgeTypes: [...dim.allowedKnowledgeTypes],
-    skillWorthy: false,
-    dualOutput: false,
+    skillWorthy: dim.outputMode === 'dual',
+    dualOutput: dim.outputMode === 'dual',
     conditions: dim.conditions
       ? {
           languages: dim.conditions.languages ? [...dim.conditions.languages] : undefined,

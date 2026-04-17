@@ -31,8 +31,8 @@ export interface UnifiedDimension {
   readonly extractionGuide: string;
   /** 允许的 knowledgeType */
   readonly allowedKnowledgeTypes: readonly string[];
-  /** 输出模式（当前阶段仅 candidate-only，Skill 后续规划） */
-  readonly outputMode: 'candidate-only';
+  /** 输出模式: candidate-only | dual（同时产出 Candidate + Project Skill） */
+  readonly outputMode: 'candidate-only' | 'dual';
 
   // ── 评估面 (Panorama 使用) ──
   /** 健康评估描述 */
