@@ -86,6 +86,7 @@ function toRecipe(r: RawKnowledgeRecord): Recipe {
     stats,
     trigger,
     source: r.source || '',
+    createdBy: r.createdBy || '',
     sourceFile: r.sourceFile || '',
     moduleName: r.moduleName || '',
     usageGuide: contentObj.markdown || r.doClause || '',
@@ -95,7 +96,15 @@ function toRecipe(r: RawKnowledgeRecord): Recipe {
     complexity: r.complexity || '',
     difficulty: r.difficulty || r.complexity || '',
     version: r.version || '',
+    doClause: r.doClause || '',
+    dontClause: r.dontClause || '',
+    whenClause: r.whenClause || '',
+    coreCode: r.coreCode || contentObj.pattern || '',
+    topicHint: r.topicHint || '',
+    aiInsight: r.aiInsight || null,
+    lifecycleHistory: r.lifecycleHistory,
     headers: r.headers || [],
+    createdAt: r.createdAt || null,
     updatedAt: r.updatedAt || null,
   };
 }

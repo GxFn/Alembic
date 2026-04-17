@@ -2,6 +2,8 @@ import React from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
+const CODE_BLOCK_BG = '#20242d';
+
 /** 支持的语法高亮语言（可扩展） */
 export type CodeLanguage = string;
 
@@ -105,6 +107,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
       lineHeight: 1.5,
       borderRadius: noRadius ? 0 : '0.75rem',
       overflowX: 'auto',
+      backgroundColor: CODE_BLOCK_BG,
     }}
     codeTagProps={{ className: 'language-highlighted', style: { fontFamily: 'ui-monospace, monospace' } }}
     PreTag="div"

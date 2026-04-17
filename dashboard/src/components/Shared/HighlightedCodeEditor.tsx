@@ -2,6 +2,11 @@ import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
+const CODE_BG = '#20242d';
+const CODE_GUTTER_BG = '#1a1e27';
+const CODE_GUTTER_BORDER = '#313847';
+const CODE_GUTTER_TEXT = '#6f7787';
+
 interface HighlightedCodeEditorProps {
   value: string;
   onChange: (value: string) => void;
@@ -12,6 +17,7 @@ interface HighlightedCodeEditorProps {
   placeholder?: string;
   rows?: number;
   showLineNumbers?: boolean;
+  density?: 'default' | 'compact';
 }
 
 // ─── Memoised highlight layer ────────────────────────────
@@ -35,7 +41,7 @@ const MemoHighlight = React.memo<{
       display: 'inline-block',
       minWidth: '100%',
       minHeight: '100%',
-      backgroundColor: '#282c34'
+      backgroundColor: CODE_BG
     }}
     codeTagProps={{
       style: {
@@ -64,15 +70,16 @@ const VirtualLineNumbers: React.FC<{
   viewportHeight: number;
   fontSize: string;
   lineHeight: number;
+  lineHeightPx: number;
   fontFamily: string;
-}> = React.memo(({ totalLines, scrollTop, viewportHeight, fontSize, lineHeight, fontFamily }) => {
+}> = React.memo(({ totalLines, scrollTop, viewportHeight, fontSize, lineHeight, lineHeightPx, fontFamily }) => {
   const overscan = 10;
-  const startLine = Math.max(0, Math.floor(scrollTop / LINE_HEIGHT_PX) - overscan);
-  const visibleCount = Math.ceil(viewportHeight / LINE_HEIGHT_PX) + overscan * 2;
+  const startLine = Math.max(0, Math.floor(scrollTop / lineHeightPx) - overscan);
+  const visibleCount = Math.ceil(viewportHeight / lineHeightPx) + overscan * 2;
   const endLine = Math.min(totalLines, startLine + visibleCount);
 
-  const topPad = startLine * LINE_HEIGHT_PX;
-  const bottomPad = Math.max(0, (totalLines - endLine) * LINE_HEIGHT_PX);
+  const topPad = startLine * lineHeightPx;
+  const bottomPad = Math.max(0, (totalLines - endLine) * lineHeightPx);
 
   const lines: React.ReactNode[] = [];
   for (let i = startLine; i < endLine; i++) {
@@ -107,7 +114,8 @@ const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
   className = '',
   placeholder = '',
   rows,
-  showLineNumbers = true
+  showLineNumbers = true,
+  density = 'default'
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -142,13 +150,35 @@ const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
   const lang = langMap[language?.toLowerCase()] || language?.toLowerCase() || 'text';
 
   // 统一的样式变量
-  const editorStyles = useMemo(() => ({
-    padding: '1rem 1.25rem',
-    fontSize: '0.8125rem',
-    lineHeight: 1.5,
-    fontFamily: 'ui-monospace, monospace',
-    minHeight: '200px'
-  }), []);
+  const editorStyles = useMemo(() => {
+    if (density === 'compact') {
+      return {
+        padding: '0.875rem 0.875rem',
+        fontSize: '0.78125rem',
+        lineHeight: 1.45,
+        lineHeightPx: 18.125,
+        lineNumberWidth: '2.75em',
+        lineNumberPaddingTop: '0.875rem',
+        lineNumberPaddingRight: '0.625em',
+        lineNumberPaddingBottom: '0.875rem',
+        fontFamily: 'ui-monospace, monospace',
+        minHeight: '200px'
+      };
+    }
+
+    return {
+      padding: '1rem 1.25rem',
+      fontSize: '0.8125rem',
+      lineHeight: 1.5,
+      lineHeightPx: LINE_HEIGHT_PX,
+      lineNumberWidth: '3.5em',
+      lineNumberPaddingTop: '1rem',
+      lineNumberPaddingRight: '0.75em',
+      lineNumberPaddingBottom: '1rem',
+      fontFamily: 'ui-monospace, monospace',
+      minHeight: '200px'
+    };
+  }, [density]);
 
   // 处理 textarea 滚动
   const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
@@ -193,7 +223,7 @@ const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         minHeight: editorStyles.minHeight,
         display: 'flex',
         borderRadius: '0',
-        backgroundColor: '#282c34'
+        backgroundColor: CODE_BG
       }}
     >
       {/* 行号列 - 虚拟化渲染 */}
@@ -202,15 +232,15 @@ const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
           ref={lineNumberRef}
           className="flex-shrink-0 overflow-hidden pointer-events-none select-none"
           style={{
-            width: '3.5em',
-            backgroundColor: '#282c34',
-            color: '#5c6370',
+            width: editorStyles.lineNumberWidth as string,
+            backgroundColor: CODE_GUTTER_BG,
+            color: CODE_GUTTER_TEXT,
             textAlign: 'right',
-            paddingTop: '1rem',
-            paddingRight: '0.75em',
-            paddingBottom: '1rem',
+            paddingTop: editorStyles.lineNumberPaddingTop as string,
+            paddingRight: editorStyles.lineNumberPaddingRight as string,
+            paddingBottom: editorStyles.lineNumberPaddingBottom as string,
             borderRadius: '0',
-            borderRight: '1px solid #333842',
+            borderRight: `1px solid ${CODE_GUTTER_BORDER}`,
           }}
         >
           <VirtualLineNumbers
@@ -219,6 +249,7 @@ const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
             viewportHeight={scrollState.height}
             fontSize={editorStyles.fontSize}
             lineHeight={editorStyles.lineHeight}
+            lineHeightPx={editorStyles.lineHeightPx as number}
             fontFamily={editorStyles.fontFamily}
           />
         </div>
@@ -227,7 +258,7 @@ const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
       {/* 代码区域容器 */}
       <div 
         className="relative flex-1"
-        style={{ borderRadius: '0', backgroundColor: '#282c34' }}
+        style={{ borderRadius: '0', backgroundColor: CODE_BG }}
       >
         {/* 高亮显示层 - debounce 更新 */}
         <div

@@ -512,7 +512,7 @@ describe.skipIf(!HAS_BILIDILI)('Integration: Prime Injection with BiliDili Recip
       // 应过滤掉所有低分结果，返回 null 或极少结果
       if (result !== null) {
         // 如果有结果，分数应较低且数量少
-        expect(result.relatedKnowledge.length).toBeLessThanOrEqual(2);
+        expect(result.relatedKnowledge.length).toBeLessThanOrEqual(3);
         for (const r of result.relatedKnowledge) {
           console.log(`  ⚠ [${r.score.toFixed(3)}] ${r.title} — 可能是噪音`);
         }

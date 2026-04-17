@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Edit3, Trash2, BookOpen, Shield, Lightbulb, FileText, FileCode, X, BadgeCheck, Eye, Save, Link2, Plus, Search, ArrowUp, ArrowDown, Code2, Layers, Globe, MoreHorizontal, Clock, GitMerge, AlertTriangle } from 'lucide-react';
+import { Edit3, Trash2, BookOpen, Shield, Lightbulb, FileText, FileCode, X, BadgeCheck, Eye, Save, Link2, Plus, Search, ArrowUp, ArrowDown, Code2, Layers, Globe, MoreHorizontal, Clock, GitMerge, AlertTriangle, Archive, ArrowUpCircle, CheckCircle2, Sparkles, TrendingDown } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
 import { Recipe, KnowledgeEntry } from '../../types';
 import { categoryConfigs } from '../../constants';
@@ -38,6 +38,15 @@ const knowledgeTypeLabelKeys: Record<string, string> = {
   'rule': 'recipes.knowledgeTypes.rule',
 };
 
+const lifecycleBadgeConfig: Record<string, { color: string; bg: string; border: string; icon: React.ElementType; labelKey: string }> = {
+  pending: { color: 'text-gray-600 dark:text-gray-400', bg: 'bg-gray-500/8 dark:bg-gray-500/15', border: 'border-gray-300 dark:border-gray-600', icon: Clock, labelKey: 'knowledge.lifecyclePending' },
+  staging: { color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/8 dark:bg-blue-500/15', border: 'border-blue-300 dark:border-blue-600', icon: ArrowUpCircle, labelKey: 'knowledge.lifecycleStaging' },
+  active: { color: 'text-green-600 dark:text-green-400', bg: 'bg-green-500/8 dark:bg-green-500/15', border: 'border-green-300 dark:border-green-600', icon: CheckCircle2, labelKey: 'knowledge.lifecycleActive' },
+  evolving: { color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-500/8 dark:bg-purple-500/15', border: 'border-purple-300 dark:border-purple-600', icon: Sparkles, labelKey: 'knowledge.lifecycleEvolving' },
+  decaying: { color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-500/8 dark:bg-orange-500/15', border: 'border-orange-300 dark:border-orange-600', icon: TrendingDown, labelKey: 'knowledge.lifecycleDecaying' },
+  deprecated: { color: 'text-red-600 dark:text-red-400', bg: 'bg-red-500/8 dark:bg-red-500/15', border: 'border-red-300 dark:border-red-600', icon: Archive, labelKey: 'knowledge.lifecycleDeprecated' },
+};
+
 /* ── Types ── */
 interface RecipesViewProps {
   recipes: Recipe[];
@@ -67,16 +76,107 @@ function getCodeLang(recipe: Recipe): string {
   return recipe.language || 'text';
 }
 
+function normalizeTimestamp(ts: string | number | null | undefined): number {
+  if (ts == null) {
+    return Number.NaN;
+  }
+  if (typeof ts === 'string') {
+    return new Date(ts).getTime();
+  }
+  return ts < 1e12 ? ts * 1000 : ts;
+}
+
 function isValidTimestamp(ts: string | number | null | undefined): boolean {
-  if (ts == null) return false;
-  const ms = typeof ts === 'string' ? new Date(ts).getTime() : ts;
+  const ms = normalizeTimestamp(ts);
   return !isNaN(ms) && ms > 946684800000;
 }
 
-function formatDate(ts: string | number | null | undefined): string {
+function formatDate(ts: string | number | null | undefined, t: (key: string, vars?: Record<string, string | number>) => string): string {
   if (!isValidTimestamp(ts)) return '';
-  const d = typeof ts === 'string' ? new Date(ts) : new Date(ts as number);
-  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  const ms = normalizeTimestamp(ts);
+  const d = new Date(ms);
+  const now = Date.now();
+  const diffMs = now - ms;
+  if (diffMs < 0) {
+    return d.toLocaleDateString();
+  }
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) {
+    return t('candidates.timeJustNow');
+  }
+  if (diffMin < 60) {
+    return t('candidates.timeMinutesAgo', { n: diffMin });
+  }
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) {
+    return t('candidates.timeHoursAgo', { n: diffHour });
+  }
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay < 7) {
+    return t('candidates.timeDaysAgo', { n: diffDay });
+  }
+  return d.toLocaleDateString();
+}
+
+function parseLifecycleHistory(
+  lifecycleHistory: Recipe['lifecycleHistory']
+): Array<{ from: string; to: string; at: number; by?: string }> {
+  if (Array.isArray(lifecycleHistory)) {
+    return lifecycleHistory;
+  }
+  if (typeof lifecycleHistory !== 'string') {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(lifecycleHistory);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
+
+function formatScopeLabel(scope: string, t: TranslateFn): string {
+  if (scope === 'universal') {
+    return t('knowledge.scopeUniversal');
+  }
+  if (scope === 'project-specific') {
+    return t('knowledge.scopeProject');
+  }
+  if (scope === 'module-level' || scope === 'target-specific') {
+    return t('knowledge.scopeModule');
+  }
+  return scope;
+}
+
+function formatComplexityLabel(complexity: string, t: TranslateFn): string {
+  if (complexity === 'advanced') {
+    return t('knowledge.complexityAdvanced');
+  }
+  if (complexity === 'intermediate') {
+    return t('knowledge.complexityIntermediate');
+  }
+  if (complexity === 'beginner') {
+    return t('knowledge.complexityBeginner');
+  }
+  return complexity;
+}
+
+function formatSourceLabel(source: string, t: TranslateFn): string {
+  if (source === 'bootstrap-scan') {
+    return t('recipes.sourceBootstrap');
+  }
+  if (source === 'agent') {
+    return t('recipes.sourceAiScan');
+  }
+  if (source === 'mcp') {
+    return t('knowledge.sourceMcp');
+  }
+  if (source === 'manual') {
+    return t('knowledge.sourceManual');
+  }
+  return source;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -530,6 +630,12 @@ const RecipesView: React.FC<RecipesViewProps> = ({
         const codePattern = getCodePattern(recipe);
         const codeLang = getCodeLang(recipe);
         const contentV3 = recipe.content;
+        const lifecycleHistory = parseLifecycleHistory(recipe.lifecycleHistory);
+        const lifecycleConfig = recipe.status ? lifecycleBadgeConfig[recipe.status] : null;
+        const markdownLineCount = Math.max(1, editForm.markdown.split('\n').length);
+        const codeLineCount = Math.max(1, editForm.codePattern.split('\n').length);
+        const markdownCharCount = editForm.markdown.trim().length;
+        const codeCharCount = editForm.codePattern.trim().length;
 
         const evoCount = (recipe.id ? evolutionCounts[recipe.id] : undefined) || { proposals: 0, warnings: 0 };
         const hasEvolution = evoCount.proposals > 0 || evoCount.warnings > 0;
@@ -602,96 +708,163 @@ const RecipesView: React.FC<RecipesViewProps> = ({
               {drawerMode === 'edit' ? (
                 <>
                   <Drawer.Body padded>
-                    {/* 标题 */}
-                    <div>
-                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-1.5 block">{t('recipes.recipeDetail')}</label>
-                      <input
-                        type="text"
-                        value={editForm.title}
-                        onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
-                        className="w-full px-3 py-2 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)] focus:border-[var(--accent-emphasis)]"
-                      />
-                    </div>
+                    <div className="space-y-5">
+                      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)] gap-5">
+                        <div className="space-y-5">
+                          <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm">
+                            <div className="flex items-center justify-between gap-3 mb-3">
+                              <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase tracking-wide block">{t('recipes.recipeDetail')}</label>
+                              <span className="text-[10px] text-[var(--fg-muted)]">{t('recipes.charCount', { count: editForm.title.length })}</span>
+                            </div>
+                            <input
+                              type="text"
+                              value={editForm.title}
+                              onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                              className="w-full px-4 py-3 text-base border border-[var(--border-default)] rounded-xl bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)] focus:border-[var(--accent-emphasis)]"
+                            />
+                          </div>
 
-                    {/* 描述 */}
-                    <div>
-                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-1.5 block">{t('recipes.description')}</label>
-                      <textarea
-                        value={editForm.description}
-                        onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                        rows={2}
-                        className="w-full px-3 py-2 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)] resize-none"
-                      />
-                    </div>
+                          <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm">
+                            <div className="flex items-center justify-between gap-3 mb-3">
+                              <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase tracking-wide block">{t('recipes.description')}</label>
+                              <span className="text-[10px] text-[var(--fg-muted)]">{t('recipes.charCount', { count: editForm.description.trim().length })}</span>
+                            </div>
+                            <textarea
+                              value={editForm.description}
+                              onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                              rows={3}
+                              className="w-full px-4 py-3 text-sm border border-[var(--border-default)] rounded-xl bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)] resize-y"
+                            />
+                          </div>
+                        </div>
 
-                    {/* 标签 */}
-                    <div>
-                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-1.5 block">{t('recipes.tags')}</label>
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        {editForm.tags.map((tag, i) => (
-                          <span key={i} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--border-default)] font-medium">
-                            {tag}
-                            <button onClick={() => setEditForm(f => ({ ...f, tags: f.tags.filter((_, idx) => idx !== i) }))} className="text-[var(--fg-muted)] hover:text-[var(--status-error)]"><X size={10} /></button>
-                          </span>
-                        ))}
+                        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm">
+                          <div className="flex items-center justify-between gap-3 mb-3">
+                            <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase tracking-wide block">{t('recipes.tags')}</label>
+                            <span className="text-[10px] text-[var(--fg-muted)]">{t('recipes.tagCount', { count: editForm.tags.length })}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 min-h-[28px] mb-3">
+                            {editForm.tags.map((tag, i) => (
+                              <span key={i} className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--border-default)] font-medium">
+                                {tag}
+                                <button onClick={() => setEditForm(f => ({ ...f, tags: f.tags.filter((_, idx) => idx !== i) }))} className="text-[var(--fg-muted)] hover:text-[var(--status-error)]"><X size={10} /></button>
+                              </span>
+                            ))}
+                            {editForm.tags.length === 0 && (
+                              <span className="text-xs text-[var(--fg-muted)]">{t('recipes.noContent')}</span>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={editForm.tagInput}
+                              onChange={e => setEditForm(f => ({ ...f, tagInput: e.target.value }))}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter' && editForm.tagInput.trim()) {
+                                  e.preventDefault();
+                                  setEditForm(f => ({ ...f, tags: [...f.tags, f.tagInput.trim()], tagInput: '' }));
+                                }
+                              }}
+                              placeholder={t('recipes.tags')}
+                              className="flex-1 px-3 py-2 text-xs border border-[var(--border-default)] rounded-xl bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)]"
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={editForm.tagInput}
-                          onChange={e => setEditForm(f => ({ ...f, tagInput: e.target.value }))}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter' && editForm.tagInput.trim()) {
-                              e.preventDefault();
-                              setEditForm(f => ({ ...f, tags: [...f.tags, f.tagInput.trim()], tagInput: '' }));
-                            }
-                          }}
-                          placeholder={t('recipes.tags')}
-                          className="flex-1 px-3 py-1.5 text-xs border border-[var(--border-default)] rounded-lg bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)]"
+
+                      <div className="rounded-2xl border border-sky-500/25 bg-[var(--bg-surface)] shadow-sm overflow-hidden">
+                        <div className="px-4 py-3 border-b border-sky-500/20 bg-[var(--bg-subtle)]/70 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <FileText size={12} className="text-sky-400" />
+                            <div>
+                              <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase tracking-wide block">{t('recipes.markdown')}</label>
+                              <p className="text-[11px] text-[var(--fg-muted)]">{t('recipes.editorMarkdownHint')}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-[var(--fg-muted)]">
+                            <span className="px-2 py-1 rounded-full bg-sky-500/12 text-sky-300 border border-sky-500/20">{t('recipes.lineCount', { count: markdownLineCount })}</span>
+                            <span className="px-2 py-1 rounded-full bg-[var(--bg-root)] border border-[var(--border-default)]">{t('recipes.charCount', { count: markdownCharCount })}</span>
+                          </div>
+                        </div>
+                        <div className="p-4 bg-[var(--bg-surface)] space-y-3">
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] text-[var(--fg-muted)]">
+                            <span className="px-2 py-1 rounded-full bg-[var(--bg-subtle)] border border-sky-500/20">{t('recipes.editorMarkdownChip1')}</span>
+                            <span className="px-2 py-1 rounded-full bg-[var(--bg-subtle)] border border-sky-500/20">{t('recipes.editorMarkdownChip2')}</span>
+                            <span className="px-2 py-1 rounded-full bg-[var(--bg-subtle)] border border-sky-500/20">{t('recipes.editorMarkdownChip3')}</span>
+                            <span className="px-2 py-1 rounded-full bg-[var(--bg-subtle)] border border-sky-500/20">{t('recipes.editorMarkdownChip4')}</span>
+                          </div>
+                          <div className="rounded-xl overflow-hidden border border-[var(--border-default)] shadow-sm" style={{ minHeight: 360 }}>
+                            <HighlightedCodeEditor
+                              value={editForm.markdown}
+                              onChange={v => setEditForm(f => ({ ...f, markdown: v }))}
+                              language="markdown"
+                              height="360px"
+                              showLineNumbers
+                              density="compact"
+                              placeholder={t('recipes.editorMarkdownPlaceholder')}
+                            />
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-[var(--fg-muted)]">
+                            <div className="rounded-lg border border-sky-500/20 bg-[var(--bg-subtle)] px-3 py-2">{t('recipes.editorMarkdownTip1')}</div>
+                            <div className="rounded-lg border border-sky-500/20 bg-[var(--bg-subtle)] px-3 py-2">{t('recipes.editorMarkdownTip2')}</div>
+                            <div className="rounded-lg border border-sky-500/20 bg-[var(--bg-subtle)] px-3 py-2">{t('recipes.editorMarkdownTip3')}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-emerald-500/25 bg-[var(--bg-surface)] shadow-sm overflow-hidden">
+                        <div className="px-4 py-3 border-b border-emerald-500/20 bg-[var(--bg-subtle)]/70 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <Code2 size={12} className="text-emerald-400" />
+                            <div>
+                              <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase tracking-wide block">{t('recipes.code')}</label>
+                              <p className="text-[11px] text-[var(--fg-muted)]">{t('recipes.editorCodeHint')}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-[var(--fg-muted)]">
+                            <span className="px-2 py-1 rounded-full bg-emerald-500/12 text-emerald-300 border border-emerald-500/20">{codeLang}</span>
+                            <span className="px-2 py-1 rounded-full bg-[var(--bg-root)] border border-[var(--border-default)]">{t('recipes.lineCount', { count: codeLineCount })}</span>
+                            <span className="px-2 py-1 rounded-full bg-[var(--bg-root)] border border-[var(--border-default)]">{t('recipes.charCount', { count: codeCharCount })}</span>
+                          </div>
+                        </div>
+                        <div className="p-4 bg-[var(--bg-surface)] space-y-3">
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] text-[var(--fg-muted)]">
+                            <span className="px-2 py-1 rounded-full bg-[var(--bg-subtle)] border border-emerald-500/20">{t('recipes.editorCodeChip1')}</span>
+                            <span className="px-2 py-1 rounded-full bg-[var(--bg-subtle)] border border-emerald-500/20">{t('recipes.editorCodeChip2')}</span>
+                            <span className="px-2 py-1 rounded-full bg-[var(--bg-subtle)] border border-emerald-500/20">{t('recipes.editorCodeChip3')}</span>
+                          </div>
+                          <div className="rounded-xl overflow-hidden border border-[var(--border-default)] shadow-sm" style={{ minHeight: 360 }}>
+                            <HighlightedCodeEditor
+                              value={editForm.codePattern}
+                              onChange={v => setEditForm(f => ({ ...f, codePattern: v }))}
+                              language={codeLang}
+                              height="360px"
+                              showLineNumbers
+                              density="compact"
+                              placeholder={t('recipes.editorCodePlaceholder')}
+                            />
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-[var(--fg-muted)]">
+                            <div className="rounded-lg border border-emerald-500/20 bg-[var(--bg-subtle)] px-3 py-2">{t('recipes.editorCodeTip1')}</div>
+                            <div className="rounded-lg border border-emerald-500/20 bg-[var(--bg-subtle)] px-3 py-2">{t('recipes.editorCodeTip2')}</div>
+                            <div className="rounded-lg border border-emerald-500/20 bg-[var(--bg-subtle)] px-3 py-2">{t('recipes.editorCodeTip3')}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm">
+                        <div className="flex items-center justify-between gap-3 mb-3">
+                          <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase tracking-wide block">{t('recipes.designRationale')}</label>
+                          <span className="text-[10px] text-[var(--fg-muted)]">{t('recipes.charCount', { count: editForm.rationale.trim().length })}</span>
+                        </div>
+                        <textarea
+                          value={editForm.rationale}
+                          onChange={e => setEditForm(f => ({ ...f, rationale: e.target.value }))}
+                          rows={4}
+                          className="w-full px-4 py-3 text-sm border border-[var(--border-default)] rounded-xl bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)] resize-y"
+                          placeholder={t('recipes.designRationale')}
                         />
                       </div>
-                    </div>
-
-                    {/* Markdown 文档 */}
-                    <div>
-                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-1.5 block flex items-center gap-1.5">
-                        <FileText size={11} className="text-[var(--accent)]" /> {t('recipes.markdown')}
-                      </label>
-                      <textarea
-                        value={editForm.markdown}
-                        onChange={e => setEditForm(f => ({ ...f, markdown: e.target.value }))}
-                        rows={4}
-                        className="w-full px-3 py-2 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)] resize-y font-mono"
-                        placeholder={t('recipes.markdown')}
-                      />
-                    </div>
-
-                    {/* 代码 / 标准用法 */}
-                    <div>
-                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-1.5 block flex items-center gap-1.5">
-                        <Code2 size={11} className="text-[var(--status-success)]" /> {t('recipes.code')}
-                      </label>
-                      <div className="border border-[var(--border-default)] rounded-lg overflow-hidden" style={{ minHeight: 200 }}>
-                        <HighlightedCodeEditor
-                          value={editForm.codePattern}
-                          onChange={v => setEditForm(f => ({ ...f, codePattern: v }))}
-                          language={codeLang}
-                          height="200px"
-                          showLineNumbers
-                        />
-                      </div>
-                    </div>
-
-                    {/* 设计原理 */}
-                    <div>
-                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-1.5 block">{t('recipes.designRationale')}</label>
-                      <textarea
-                        value={editForm.rationale}
-                        onChange={e => setEditForm(f => ({ ...f, rationale: e.target.value }))}
-                        rows={3}
-                        className="w-full px-3 py-2 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)] resize-y"
-                        placeholder={t('recipes.designRationale')}
-                      />
                     </div>
                   </Drawer.Body>
                   <Drawer.Footer>
@@ -725,20 +898,23 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                       const category = recipe.category || 'Utility';
                       const catCfg = categoryConfigs[category] || categoryConfigs['All'];
                       const b: BadgeItem[] = [];
+                      if (lifecycleConfig) {
+                        b.push({ label: t(lifecycleConfig.labelKey), className: `${lifecycleConfig.bg} ${lifecycleConfig.color} ${lifecycleConfig.border}`, icon: lifecycleConfig.icon });
+                      }
                       if (kc) b.push({ label: kc.label, className: `${kc.bg} ${kc.color} ${kc.border}`, icon: kc.icon });
                       b.push({ label: category, className: `font-bold uppercase ${catCfg?.bg || 'bg-[var(--bg-subtle)]'} ${catCfg?.color || 'text-[var(--fg-muted)]'} ${catCfg?.border || 'border-[var(--border-default)]'}` });
                       if (recipe.knowledgeType) b.push({ label: knowledgeTypeLabelKeys[recipe.knowledgeType] ? t(knowledgeTypeLabelKeys[recipe.knowledgeType]) : recipe.knowledgeType, className: 'bg-purple-50 text-purple-700 border-purple-200' });
                       if (recipe.language) b.push({ label: recipe.language, className: 'uppercase font-bold text-[var(--fg-secondary)] bg-[var(--bg-subtle)] border-[var(--border-default)]' });
                       if (recipe.trigger) b.push({ label: recipe.trigger, className: 'font-mono font-bold bg-amber-50 text-amber-700 border-amber-200' });
-                      if (recipe.source && recipe.source !== 'unknown') b.push({ label: recipe.source, className: 'bg-[var(--bg-subtle)] text-[var(--fg-secondary)] border-[var(--border-default)]' });
                       return b;
                     })()}
                     metadata={(() => {
                       const m: MetaItem[] = [];
-                      if (recipe.scope) m.push({ icon: Globe, iconClass: 'text-teal-400', label: t('candidates.path'), value: recipe.scope === 'universal' ? t('common.all') : recipe.scope === 'project-specific' ? t('candidates.category') : recipe.scope });
-                      if (recipe.complexity) m.push({ icon: Layers, iconClass: 'text-orange-400', label: t('knowledge.complexity'), value: recipe.complexity === 'advanced' ? t('knowledge.complexityAdvanced') : recipe.complexity === 'intermediate' ? t('knowledge.complexityIntermediate') : recipe.complexity === 'beginner' ? t('knowledge.complexityBeginner') : recipe.complexity });
-                      if (recipe.source && recipe.source !== 'unknown') m.push({ icon: Globe, iconClass: 'text-violet-400', label: t('recipes.sourceLabel'), value: recipe.source === 'bootstrap-scan' ? t('recipes.sourceBootstrap') : recipe.source === 'agent' ? t('recipes.sourceAiScan') : recipe.source });
-                      if (recipe.updatedAt && isValidTimestamp(recipe.updatedAt)) m.push({ icon: Clock, iconClass: 'text-[var(--fg-muted)]', label: t('candidates.updatedAt'), value: formatDate(recipe.updatedAt) });
+                      if (recipe.scope) m.push({ icon: Globe, iconClass: 'text-teal-400', label: t('knowledge.scope'), value: formatScopeLabel(recipe.scope, t) });
+                      if (recipe.complexity) m.push({ icon: Layers, iconClass: 'text-orange-400', label: t('knowledge.complexity'), value: formatComplexityLabel(recipe.complexity, t) });
+                      if (recipe.source && recipe.source !== 'unknown') m.push({ icon: Globe, iconClass: 'text-violet-400', label: t('recipes.sourceLabel'), value: formatSourceLabel(recipe.source, t) });
+                      if (recipe.createdAt && isValidTimestamp(recipe.createdAt)) m.push({ icon: Clock, iconClass: 'text-[var(--fg-muted)]', label: t('knowledge.createdAt'), value: formatDate(recipe.createdAt, t) });
+                      if (recipe.updatedAt && isValidTimestamp(recipe.updatedAt)) m.push({ icon: Clock, iconClass: 'text-[var(--fg-muted)]', label: t('candidates.updatedAt'), value: formatDate(recipe.updatedAt, t) });
                       return m;
                     })()}
                     tags={recipe.tags}
@@ -874,7 +1050,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                         <div className="text-[10px] text-[var(--fg-muted)] font-medium">{t('recipes.qualitySolid')}</div>
                       </div>
                       <div className="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-default)]">
-                        <div className="text-sm font-bold text-[var(--fg-secondary)]">{formatDate(recipe.stats?.lastUsedAt) || t('recipes.noContent')}</div>
+                        <div className="text-sm font-bold text-[var(--fg-secondary)]">{formatDate(recipe.stats?.lastUsedAt, t) || t('recipes.noContent')}</div>
                         <div className="text-[10px] text-[var(--fg-muted)] font-medium">{t('recipes.qualityGood')}</div>
                       </div>
                     </div>
@@ -911,13 +1087,25 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   {/* 7. Code / 标准用法 */}
                   <DrawerContent.CodePattern label={t('recipes.code')} code={codePattern} language={codeLang} />
 
-                  {/* 8. Rationale */}
+                  {/* 8. Delivery */}
+                  <DrawerContent.Delivery
+                    delivery={{
+                      topicHint: recipe.topicHint,
+                      whenClause: recipe.whenClause,
+                      doClause: recipe.doClause,
+                      dontClause: recipe.dontClause,
+                      coreCode: recipe.coreCode,
+                    }}
+                    language={recipe.language}
+                  />
+
+                  {/* 9. Rationale */}
                   <DrawerContent.Rationale label={t('recipes.designRationale')} text={contentV3?.rationale} />
 
-                  {/* 9. Steps */}
+                  {/* 10. Steps */}
                   <DrawerContent.Steps label={t('recipes.steps')} steps={contentV3?.steps} />
 
-                  {/* 10. Code Changes */}
+                  {/* 11. Code Changes */}
                   {contentV3?.codeChanges && contentV3.codeChanges.length > 0 && (
                     <div className="px-6 py-4 border-b border-[var(--border-default)]">
                       <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-2 block">{t('recipes.codeChanges')}</label>
@@ -943,7 +1131,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                     </div>
                   )}
 
-                  {/* 11. Verification */}
+                  {/* 12. Verification */}
                   {contentV3?.verification && (
                     <div className="px-6 py-4 border-b border-[var(--border-default)]">
                       <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-2 block">{t('recipes.validation')}</label>
@@ -955,8 +1143,42 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                     </div>
                   )}
 
-                  {/* 12. Constraints */}
+                  {/* 13. Constraints */}
                   <DrawerContent.Constraints label={t('recipes.constraints')} constraints={recipe.constraints} />
+
+                  {/* 14. AI 洞察 */}
+                  {recipe.aiInsight && (
+                    <div className="px-6 py-4 border-b border-[var(--border-default)]">
+                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-2 block flex items-center gap-1.5">
+                        <Lightbulb size={11} className="text-cyan-400" /> {t('knowledge.aiInsight')}
+                      </label>
+                      <p className="text-sm text-[var(--fg-secondary)] leading-relaxed">{recipe.aiInsight}</p>
+                    </div>
+                  )}
+
+                  {/* 15. 生命周期历史 */}
+                  {lifecycleHistory.length > 0 && (
+                    <div className="px-6 py-4 border-b border-[var(--border-default)]">
+                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-2 block flex items-center gap-1.5">
+                        <Clock size={11} className="text-[var(--fg-muted)]" /> {t('knowledge.lifecycleHistoryLabel')}
+                      </label>
+                      <div className="space-y-1">
+                        {lifecycleHistory.map((history, index) => {
+                          const fromCfg = lifecycleBadgeConfig[history.from] ?? lifecycleBadgeConfig.pending;
+                          const toCfg = lifecycleBadgeConfig[history.to] ?? lifecycleBadgeConfig.pending;
+                          return (
+                            <div key={`${history.from}-${history.to}-${history.at}-${index}`} className="flex items-center gap-2 text-[10px]">
+                              <span className="text-[var(--fg-muted)] w-20 shrink-0">{formatDate(history.at, t)}</span>
+                              <span className={fromCfg.color}>{t(fromCfg.labelKey)}</span>
+                              <span className="text-[var(--fg-muted)]">→</span>
+                              <span className={`${toCfg.color} font-medium`}>{t(toCfg.labelKey)}</span>
+                              {history.by && <span className="text-[var(--fg-muted)] ml-auto">by {history.by}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* end of view sections */}
 

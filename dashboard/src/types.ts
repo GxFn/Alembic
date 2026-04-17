@@ -44,6 +44,7 @@ export interface Recipe {
   usageGuide?: string;
   /** 来源信息 */
   source?: string;
+  createdBy?: string;
   sourceFile?: string;
   moduleName?: string;
   /** V3 reasoning 推理 */
@@ -67,7 +68,15 @@ export interface Recipe {
   complexity?: string;
   difficulty?: string;
   version?: string;
+  doClause?: string;
+  dontClause?: string;
+  whenClause?: string;
+  coreCode?: string;
+  topicHint?: string;
+  aiInsight?: string | null;
+  lifecycleHistory?: Array<{ from: string; to: string; at: number; by?: string }> | string;
   headers?: string[];
+  createdAt?: string | number | null;
   updatedAt?: string | number | null;
 }
 
