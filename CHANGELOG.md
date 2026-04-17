@@ -4,6 +4,33 @@
 
 ---
 
+## [0.0.3] - 2026-04-17
+
+### Added
+- Evolution 框架重新设计（Phases 1-4）：响应式文件变更检测 + Agent 驱动审计
+- Evolution Proposal 手动合入/观察 Dashboard UI
+- Dashboard Recipe 详情抽屉、编辑模式 UX 和暗色模式优化
+- Dashboard 信号（Signals）UI
+- 统一定时器管理系统（TimerRegistry + 生命周期接口）
+- Bootstrap 跨领域去重管线
+- 宏维度 Skill 生成恢复
+
+### Changed
+- 3 层文件变更检测系统重构
+- 移除 KnowledgeMetabolism 和 ContradictionDetector（由新 Evolution 架构取代）
+- CacheCoordinator 迁移至 timerRegistry + Startable
+- VSCode 扩展通知按钮重命名为 Review / Auto Check
+- 清理 autosnippet 遗留命名，MCP 配置统一使用 ${workspaceFolder}
+
+### Fixed
+- Knowledge Graph 去噪：过滤幽灵节点、低信号关系默认关闭、节点/字体缩小
+- Panorama 维度分类修复：category 优先匹配 dimension ID
+- Guard AST Layer 2 默认阈值放宽（class_bloat 30, method_complexity 20, method_too_long 120）
+- Light mode UI 打磨、孤儿关系清理
+- Evolution #analyzeModifiedImpact sourceRef 匹配修复
+- Cursor MCP 配置路径修复
+- CI：移除已删除模块引用，GitHub Actions 升级 v4 → v5
+
 ## [0.0.1] - 2026-04-15
 
 ### Changed
