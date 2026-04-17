@@ -18,7 +18,7 @@
 import path from 'node:path';
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
-import { RecipeRelevanceAuditor } from '#service/evolution/RecipeRelevanceAuditor.js';
+import { RelevanceAuditor } from '#service/evolution/RelevanceAuditor.js';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
 import type { MissionBriefingResult, ProjectSnapshot } from '#types/project-snapshot.js';
@@ -29,6 +29,7 @@ import { buildMissionBriefing } from './bootstrap/MissionBriefingBuilder.js';
 import { extractCodeEntities, extractDependencyEdges } from './bootstrap/shared/audit-helpers.js';
 import { runAllPhases } from './bootstrap/shared/bootstrap-phases.js';
 import { getOrCreateSessionManager } from './bootstrap/shared/session-helpers.js';
+import { buildEvolutionPrescreen } from './evolution-prescreen.js';
 import { buildLanguageExtension } from './LanguageExtensions.js';
 
 /** MCP handler context */
@@ -161,16 +162,13 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
   // Step 4: Recipe 证据验证 + 快速衰退
   // ═══════════════════════════════════════════════════════════
 
-  const auditor = new RecipeRelevanceAuditor({
+  const auditor = new RelevanceAuditor({
     knowledgeRepo: ctx.container.get(
       'knowledgeRepository'
     ) as import('../../../repository/knowledge/KnowledgeRepository.impl.js').default,
-    proposalRepo: (ctx.container.singletons as Record<string, unknown> | undefined)
-      ?.proposalRepository
-      ? (ctx.container.get(
-          'proposalRepository'
-        ) as import('../../../repository/evolution/ProposalRepository.js').ProposalRepository)
-      : undefined,
+    evolutionGateway: ctx.container.get(
+      'evolutionGateway'
+    ) as import('../../../service/evolution/EvolutionGateway.js').EvolutionGateway,
     logger: ctx.logger,
   });
 
@@ -181,6 +179,17 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
     fileList: allFiles.map((f) => f.relativePath || f.name),
     codeEntities,
     dependencyGraph: dependencyEdges,
+  });
+
+  // ═══════════════════════════════════════════════════════════
+  // Step 4.5: 构建进化前置过滤（Phase A）
+  // ═══════════════════════════════════════════════════════════
+
+  const prescreen = buildEvolutionPrescreen(auditSummary, recipeSnapshot.entries, allDimensions);
+
+  ctx.logger.info('[Rescan] Evolution prescreen built', {
+    needsVerification: prescreen.needsVerification.length,
+    autoResolved: prescreen.autoResolved.length,
   });
 
   // ═══════════════════════════════════════════════════════════
@@ -337,11 +346,16 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
   // occupiedTriggers 包含全量（含 audit-failed 的 staging），防止 trigger 冲突
   const occupiedTriggers = recipeSnapshot.entries.map((e) => e.trigger).filter(Boolean);
 
-  // ── 注入 evidenceHints (allRecipes + evolutionGuide + dimensionGaps) ──
+  // ── 注入 evidenceHints (allRecipes + evolutionGuide + dimensionGaps + prescreen) ──
   (briefing as Record<string, unknown>).evidenceHints = {
     allRecipes,
     rescanMode: true,
     dimensionGaps,
+    evolutionPrescreen: {
+      needsVerification: prescreen.needsVerification,
+      autoResolved: prescreen.autoResolved,
+      dimensionGapsByPrescreen: prescreen.dimensionGaps,
+    },
     evolutionGuide: {
       decayCount,
       totalCount: allRecipes.length,
@@ -364,11 +378,13 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
   const briefingRecord = briefing as Record<string, unknown>;
   if (briefingRecord.executionPlan && typeof briefingRecord.executionPlan === 'object') {
     (briefingRecord.executionPlan as Record<string, unknown>).workflow =
-      '【增量扫描模式 — 按维度 Evolve + Gap-Fill】 ' +
+      '【增量扫描模式 — 进化前置 + 按维度 Gap-Fill】 ' +
+      'Step 0 — 自动前置过滤 (已完成): ' +
+      `healthy 无修改的 Recipe 已自动 skip (${prescreen.autoResolved.length} 条)，` +
+      `仅 ${prescreen.needsVerification.length} 条需要验证。 ` +
       '对每个维度 (按 tiers 顺序): ' +
-      'Step 1 — Evolve (维度级首步): ' +
-      '过滤 allRecipes 中本维度的 Recipe，读 sourceRefs 源码验证 → ' +
-      '调用 asd_evolve({ decisions: [本维度决策] }) → ' +
+      'Step 1 — Evolve (仅 needsVerification 中的 Recipe): ' +
+      '读 sourceRefs 源码验证 → 调用 asd_evolve({ decisions: [本维度决策] }) → ' +
       'Step 2 — Gap-Fill: ' +
       '分析代码发现新模式 → 调用 asd_submit_knowledge 提交 (数量参考 gap 值) → ' +
       'Step 3 — Complete: 调用 asd_dimension_complete 完成维度';

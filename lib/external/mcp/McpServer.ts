@@ -81,6 +81,7 @@ import * as systemHandlers from './handlers/system.js';
 // ─── External Agent Bootstrap 新 handler ──────────────────────
 
 import { bootstrapExternal } from './handlers/bootstrap-external.js';
+import { consolidateHandler } from './handlers/consolidate.js';
 import { dimensionComplete } from './handlers/dimension-complete-external.js';
 import { evolveExternal } from './handlers/evolve-external.js';
 import { panoramaHandler } from './handlers/panorama.js';
@@ -500,6 +501,11 @@ export class McpServer {
           args as Parameters<typeof evolveExternal>[1]
         ),
       asd_dimension_complete: (ctx, args) => dimensionComplete(ctx, args),
+      asd_consolidate: (ctx, args) =>
+        consolidateHandler(
+          ctx as Parameters<typeof consolidateHandler>[0],
+          args as Parameters<typeof consolidateHandler>[1]
+        ),
       asd_wiki: (ctx, args) => wikiRouter(ctx, args),
       // ── Admin 层 (+4) ──
       asd_enrich_candidates: (ctx, args) => candidateHandlers.enrichCandidates(ctx, args),

@@ -10,12 +10,12 @@
  * 综合: weighted_sum(0.2*d1 + 0.3*d2 + 0.3*d3 + 0.2*d4) ≥ 0.65
  */
 
+import { type RecipeLike, RecipeSimilarity } from '../../domain/evolution/RecipeSimilarity.js';
 import { CONSUMABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
-import { ContradictionDetector } from './ContradictionDetector.js';
 
 /* ────────────────────── Types ────────────────────── */
 
@@ -44,7 +44,6 @@ interface RecipeForRedundancy {
 
 const WEIGHTS = { title: 0.2, clause: 0.3, code: 0.3, guard: 0.2 };
 const REDUNDANCY_THRESHOLD = 0.65;
-
 /* ────────────────────── Class ────────────────────── */
 
 export class RedundancyAnalyzer {
@@ -106,16 +105,16 @@ export class RedundancyAnalyzer {
   }
 
   /**
-   * 分析两条 Recipe 的冗余度
+   * 分析两条 Recipe 的冗余度（委托 RecipeSimilarity 统一算法）
    */
   analyzePair(a: RecipeForRedundancy, b: RecipeForRedundancy): RedundancyResult | null {
-    const d1 = RedundancyAnalyzer.#titleJaccard(a.title, b.title);
-    const d2 = this.#clauseSimilarity(a, b);
-    const d3 = RedundancyAnalyzer.#codeSimilarity(a.coreCode, b.coreCode);
-    const d4 = a.guardPattern && b.guardPattern && a.guardPattern === b.guardPattern ? 1.0 : 0;
+    const dims = RecipeSimilarity.computeDimensions(a as RecipeLike, b as RecipeLike);
 
     const similarity =
-      WEIGHTS.title * d1 + WEIGHTS.clause * d2 + WEIGHTS.code * d3 + WEIGHTS.guard * d4;
+      WEIGHTS.title * dims.title +
+      WEIGHTS.clause * dims.clause +
+      WEIGHTS.code * dims.code +
+      WEIGHTS.guard * dims.guard;
 
     if (similarity < REDUNDANCY_THRESHOLD) {
       return null;
@@ -126,10 +125,10 @@ export class RedundancyAnalyzer {
       recipeB: b.id,
       similarity: Math.round(similarity * 100) / 100,
       dimensions: {
-        title: Math.round(d1 * 100) / 100,
-        clause: Math.round(d2 * 100) / 100,
-        code: Math.round(d3 * 100) / 100,
-        guard: d4,
+        title: Math.round(dims.title * 100) / 100,
+        clause: Math.round(dims.clause * 100) / 100,
+        code: Math.round(dims.code * 100) / 100,
+        guard: dims.guard,
       },
     };
   }
@@ -150,120 +149,5 @@ export class RedundancyAnalyzer {
     } catch {
       return [];
     }
-  }
-
-  /** 维度 1: 标题 Jaccard 相似度 */
-  static #titleJaccard(titleA: string, titleB: string): number {
-    const wordsA = ContradictionDetector.extractTopicWords(titleA);
-    const wordsB = ContradictionDetector.extractTopicWords(titleB);
-
-    if (wordsA.size === 0 && wordsB.size === 0) {
-      return 0;
-    }
-
-    let intersection = 0;
-    for (const w of wordsA) {
-      if (wordsB.has(w)) {
-        intersection++;
-      }
-    }
-
-    const union = wordsA.size + wordsB.size - intersection;
-    return union === 0 ? 0 : intersection / union;
-  }
-
-  /** 维度 2: doClause + dontClause 文本相似度 */
-  #clauseSimilarity(a: RecipeForRedundancy, b: RecipeForRedundancy): number {
-    const textA = [a.doClause, a.dontClause].filter(Boolean).join(' ');
-    const textB = [b.doClause, b.dontClause].filter(Boolean).join(' ');
-
-    if (!textA || !textB) {
-      return 0;
-    }
-
-    const wordsA = ContradictionDetector.extractTopicWords(textA);
-    const wordsB = ContradictionDetector.extractTopicWords(textB);
-
-    if (wordsA.size === 0 && wordsB.size === 0) {
-      return 0;
-    }
-
-    let intersection = 0;
-    for (const w of wordsA) {
-      if (wordsB.has(w)) {
-        intersection++;
-      }
-    }
-
-    const union = wordsA.size + wordsB.size - intersection;
-    return union === 0 ? 0 : intersection / union;
-  }
-
-  /** 维度 3: coreCode 去空白后字符级相似度 (简化 Levenshtein → 公共子串比率) */
-  static #codeSimilarity(codeA: string | null, codeB: string | null): number {
-    if (!codeA || !codeB) {
-      return 0;
-    }
-
-    const a = codeA.replace(/\s+/g, '');
-    const b = codeB.replace(/\s+/g, '');
-
-    if (a.length === 0 && b.length === 0) {
-      return 0;
-    }
-
-    // 使用最长公共子串（LCS）比率作为相似度的近似
-    // 对于较长的代码，使用 n-gram 方法避免 O(n²) 开销
-    const maxLen = Math.max(a.length, b.length);
-    if (maxLen > 2000) {
-      return RedundancyAnalyzer.#ngramSimilarity(a, b, 4);
-    }
-
-    const lcsLen = RedundancyAnalyzer.#lcsLength(a, b);
-    return (2 * lcsLen) / (a.length + b.length);
-  }
-
-  /** 最长公共子序列长度（O(n*m) 但只用 2 行空间） */
-  static #lcsLength(a: string, b: string): number {
-    const m = a.length;
-    const n = b.length;
-    let prev = new Uint16Array(n + 1);
-    let curr = new Uint16Array(n + 1);
-
-    for (let i = 1; i <= m; i++) {
-      for (let j = 1; j <= n; j++) {
-        if (a[i - 1] === b[j - 1]) {
-          curr[j] = prev[j - 1] + 1;
-        } else {
-          curr[j] = Math.max(prev[j], curr[j - 1]);
-        }
-      }
-      [prev, curr] = [curr, prev];
-      curr.fill(0);
-    }
-    return prev[n];
-  }
-
-  /** n-gram 相似度（大文本用） */
-  static #ngramSimilarity(a: string, b: string, n: number): number {
-    const ngramsA = new Set<string>();
-    for (let i = 0; i <= a.length - n; i++) {
-      ngramsA.add(a.slice(i, i + n));
-    }
-
-    const ngramsB = new Set<string>();
-    for (let i = 0; i <= b.length - n; i++) {
-      ngramsB.add(b.slice(i, i + n));
-    }
-
-    let intersection = 0;
-    for (const ng of ngramsA) {
-      if (ngramsB.has(ng)) {
-        intersection++;
-      }
-    }
-
-    const union = ngramsA.size + ngramsB.size - intersection;
-    return union === 0 ? 0 : intersection / union;
   }
 }

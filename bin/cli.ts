@@ -600,10 +600,29 @@ program
 
       // ── Step 3: 规则引擎预审计 ──
       const spinnerAudit = ora(`预审计: ${targetRecipes.length} 条 Recipe...`).start();
-      const { RecipeRelevanceAuditor } = await import(
-        '../lib/service/evolution/RecipeRelevanceAuditor.js'
+      const { RelevanceAuditor } = await import('../lib/service/evolution/RelevanceAuditor.js');
+      const { EvolutionGateway } = await import('../lib/service/evolution/EvolutionGateway.js');
+      const { LifecycleStateMachine } = await import(
+        '../lib/service/evolution/LifecycleStateMachine.js'
       );
-      const auditor = new RecipeRelevanceAuditor({ knowledgeRepo, proposalRepo });
+      const { LifecycleEventRepository } = await import(
+        '../lib/repository/evolution/LifecycleEventRepository.js'
+      );
+      const { SignalBus } = await import('../lib/infrastructure/signal/SignalBus.js');
+      const db = container.get('database') as unknown as { getDrizzle(): unknown };
+      const drizzle = db.getDrizzle();
+      const lifecycleEventRepo = new LifecycleEventRepository(
+        drizzle as ConstructorParameters<typeof LifecycleEventRepository>[0]
+      );
+      const signalBus = new SignalBus();
+      const lifecycle = new LifecycleStateMachine(
+        knowledgeRepo,
+        lifecycleEventRepo,
+        signalBus,
+        proposalRepo
+      );
+      const evolutionGateway = new EvolutionGateway(proposalRepo, lifecycle, knowledgeRepo);
+      const auditor = new RelevanceAuditor({ knowledgeRepo, evolutionGateway });
       const auditResult = await auditor.audit(targetRecipes, {
         fileList: allFiles,
         codeEntities: [],

@@ -1,25 +1,25 @@
 /**
- * ProposalExecutor — 到期自动执行引擎
+ * ProposalExecutor — 信号驱动的提案执行引擎
  *
  * 核心职责：
- *   1. 扫描所有 observing 状态的 Proposal，检查是否到期
- *   2. 到期 → 收集观察期表现数据 → 评估执行判据
- *   3. 通过 → 执行操作（update → ContentPatcher / deprecate → 状态转移）
- *   4. 不通过 → 拒绝 Proposal，Recipe 恢复原状态
+ *   1. 订阅 SignalBus（guard / search / decay / quality），当关联 Recipe 有活跃 Proposal 时触发评估
+ *   2. 评估 → 通过 EvolutionPolicy 判定（纯函数）
+ *   3. 通过 → 编排执行（update → ContentPatcher / deprecate → LifecycleStateMachine）
+ *   4. 不通过 → 继续等待下一个信号
  *
- * 触发时机：
- *   - UiStartupTasks Stage 5（启动时）
- *   - evolve-check 完成后
- *   - HttpServer 运行期间 30min interval
+ * 设计原则：
+ *   - 从时间驱动转为信号驱动：不再依赖 expiresAt + 定时轮询，而是每个相关信号到达即评估
+ *   - 决策逻辑全部委托给 EvolutionPolicy（纯函数）
+ *   - 状态转移全部通过 LifecycleStateMachine（唯一权威）
+ *   - lifecycle signal 由 StateMachine 内部自动发射
+ *   - 所有依赖必需（non-nullable），消除降级路径
  *
- * 安全边界：
- *   - Agent 只做分析，ProposalExecutor 做执行
- *   - update 执行后 Recipe → staging（走正常路径）
- *   - 到期无判据 → expired
+ * @module service/evolution/ProposalExecutor
  */
 
+import { EvolutionPolicy } from '../../domain/evolution/EvolutionPolicy.js';
 import Logger from '../../infrastructure/logging/Logger.js';
-import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import type { Signal, SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type {
   ProposalRecord,
   ProposalRepository,
@@ -28,7 +28,7 @@ import type {
 import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import type { ContentPatcher } from './ContentPatcher.js';
-import type { RecipeLifecycleSupervisor } from './RecipeLifecycleSupervisor.js';
+import type { LifecycleStateMachine } from './LifecycleStateMachine.js';
 
 /* ────────────────────── Types ────────────────────── */
 
@@ -48,48 +48,152 @@ interface RecipeMetrics {
   quality: number;
 }
 
-/* ────────────────────── Constants ────────────────────── */
-
-/** 超过此天数未操作的 pending Proposal 自动过期 */
-const PENDING_EXPIRY_DAYS = 14;
+/** 触发评估的信号类型 */
+const TRIGGER_SIGNAL_TYPES = new Set(['guard', 'search', 'decay', 'quality', 'usage', 'lifecycle']);
 
 /* ────────────────────── Class ────────────────────── */
 
 export class ProposalExecutor {
   readonly #knowledgeRepo: KnowledgeRepositoryImpl;
-  readonly #edgeRepo: KnowledgeEdgeRepositoryImpl | null;
   readonly #repo: ProposalRepository;
-  readonly #signalBus: SignalBus | null;
-  readonly #contentPatcher: ContentPatcher | null;
-  readonly #supervisor: RecipeLifecycleSupervisor | null;
+  readonly #lifecycle: LifecycleStateMachine;
+  readonly #contentPatcher: ContentPatcher;
+  readonly #edgeRepo: KnowledgeEdgeRepositoryImpl;
   readonly #logger = Logger.getInstance();
+  #unsubscribe: (() => void) | null = null;
 
   constructor(
     knowledgeRepo: KnowledgeRepositoryImpl,
     repo: ProposalRepository,
-    options: {
-      signalBus?: SignalBus;
-      contentPatcher?: ContentPatcher;
-      supervisor?: RecipeLifecycleSupervisor;
-      knowledgeEdgeRepo?: KnowledgeEdgeRepositoryImpl;
-    } = {}
+    lifecycle: LifecycleStateMachine,
+    contentPatcher: ContentPatcher,
+    edgeRepo: KnowledgeEdgeRepositoryImpl
   ) {
     this.#knowledgeRepo = knowledgeRepo;
     this.#repo = repo;
-    this.#edgeRepo = options.knowledgeEdgeRepo ?? null;
-    this.#signalBus = options.signalBus ?? null;
-    this.#contentPatcher = options.contentPatcher ?? null;
-    this.#supervisor = options.supervisor ?? null;
+    this.#lifecycle = lifecycle;
+    this.#contentPatcher = contentPatcher;
+    this.#edgeRepo = edgeRepo;
+  }
+
+  /* ═══════════════════ Signal Subscription ═══════════════════ */
+
+  /**
+   * 订阅 SignalBus，当信号到达时自动评估关联 Proposal。
+   * 调用方负责在关闭时调用 unsubscribe()。
+   */
+  subscribeToSignals(signalBus: SignalBus): void {
+    if (this.#unsubscribe) {
+      return; // 幂等
+    }
+
+    this.#unsubscribe = signalBus.subscribe(
+      'guard|search|decay|quality|usage|lifecycle',
+      (signal: Signal) => {
+        if (!signal.target) {
+          return;
+        }
+        void this.#onSignal(signal);
+      }
+    );
+
+    this.#logger.info(
+      '[ProposalExecutor] Subscribed to SignalBus for signal-driven proposal evaluation'
+    );
+  }
+
+  /**
+   * 取消信号订阅
+   */
+  unsubscribe(): void {
+    if (this.#unsubscribe) {
+      this.#unsubscribe();
+      this.#unsubscribe = null;
+    }
+  }
+
+  /**
+   * 信号到达时：查找该 Recipe 的活跃 Proposal → 评估是否满足执行条件
+   */
+  async #onSignal(signal: Signal): Promise<void> {
+    if (!TRIGGER_SIGNAL_TYPES.has(signal.type)) {
+      return;
+    }
+
+    const recipeId = signal.target;
+    if (!recipeId) {
+      return;
+    }
+
+    try {
+      // 查找该 Recipe 的 observing Proposals
+      const proposals = this.#repo.findByTarget(recipeId);
+      const activeProposals = proposals.filter((p) => p.status === 'observing');
+
+      if (activeProposals.length === 0) {
+        return;
+      }
+
+      for (const proposal of activeProposals) {
+        await this.#evaluateOnSignal(proposal, signal);
+      }
+    } catch (err: unknown) {
+      this.#logger.warn(
+        `[ProposalExecutor] onSignal error for ${recipeId}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  /**
+   * 信号触发的单个 Proposal 评估
+   */
+  async #evaluateOnSignal(proposal: ProposalRecord, signal: Signal): Promise<void> {
+    const metrics = await this.#collectRecipeMetrics(proposal.targetRecipeId);
+
+    switch (proposal.type) {
+      case 'update': {
+        const verdict = EvolutionPolicy.evaluateUpdate(metrics);
+        if (verdict.pass) {
+          const result = this.#emptyResult();
+          await this.#executeUpdate(proposal, metrics, result);
+          if (result.executed.length > 0) {
+            this.#logger.info(
+              `[ProposalExecutor] Signal-driven update executed: ${proposal.id} (signal=${signal.type})`
+            );
+          }
+        }
+        // 不满足条件 → 静默等待下一个信号
+        break;
+      }
+      case 'deprecate': {
+        const snapshot = this.#extractSnapshot(proposal);
+        const verdict = EvolutionPolicy.evaluateDeprecate(
+          metrics.decayScore,
+          snapshot?.decayScore ?? metrics.decayScore
+        );
+        if (verdict.action !== 'reject') {
+          const result = this.#emptyResult();
+          await this.#executeDeprecate(proposal, metrics, snapshot, result);
+          if (result.executed.length > 0) {
+            this.#logger.info(
+              `[ProposalExecutor] Signal-driven deprecate executed: ${proposal.id} (signal=${signal.type})`
+            );
+          }
+        }
+        // reject (recovered) → 立即拒绝
+        else if (verdict.reason.includes('recovered')) {
+          this.#repo.markRejected(proposal.id, verdict.reason);
+          this.#logger.info(
+            `[ProposalExecutor] Signal-driven deprecate rejected (recovered): ${proposal.id}`
+          );
+        }
+        break;
+      }
+    }
   }
 
   /**
    * 手动执行单个 Proposal（Dashboard 按钮触发）
-   *
-   * 支持 pending / observing 状态：
-   *   - pending → 先转 observing，再执行
-   *   - observing → 直接执行（无论是否到期）
-   *
-   * 跳过到期判断与批量扫描，直接走评估 → 执行流程。
    */
   async executeOne(id: string): Promise<ProposalExecutionResult> {
     const result: ProposalExecutionResult = {
@@ -114,7 +218,6 @@ export class ProposalExecutor {
       return result;
     }
 
-    // pending → observing（确保 markExecuted 能生效）
     if (proposal.status === 'pending') {
       const ok = this.#repo.startObserving(id);
       if (!ok) {
@@ -123,7 +226,6 @@ export class ProposalExecutor {
       }
     }
 
-    // 复用已有的单 Proposal 处理逻辑
     await this.#processExpiredProposal(proposal, result);
 
     if (result.executed.length > 0 || result.rejected.length > 0) {
@@ -137,9 +239,10 @@ export class ProposalExecutor {
   }
 
   /**
-   * 定期调用（UiStartupTasks Stage 5）
+   * 启动时一次性清理 — 清理过期 Pending、对长期 Observing 做兜底评估
    *
-   * 扫描所有到期 Proposal → 评估 → 执行/拒绝/过期
+   * 不再被定时调用，仅在 Dashboard 启动时 / CLI evolve-check 时调用。
+   * 主要流程已由 subscribeToSignals() 接管。
    */
   async checkAndExecute(): Promise<ProposalExecutionResult> {
     const result: ProposalExecutionResult = {
@@ -149,13 +252,12 @@ export class ProposalExecutor {
       skipped: [],
     };
 
-    // 1. 处理到期的 observing Proposal
-    const expiredObserving = this.#repo.findExpiredObserving();
-    for (const proposal of expiredObserving) {
+    // 兜底：对长期处于 observing 但信号始终未满足的 Proposal 做一次评估
+    const observing = this.#repo.find({ status: 'observing' });
+    for (const proposal of observing) {
       await this.#processExpiredProposal(proposal, result);
     }
 
-    // 2. 清理超期未操作的 pending Proposal
     this.#expireOldPending(result);
 
     if (result.executed.length > 0 || result.rejected.length > 0 || result.expired.length > 0) {
@@ -179,7 +281,7 @@ export class ProposalExecutor {
 
     switch (proposal.type) {
       case 'update':
-        await this.#executeUpdate(proposal, metrics, snapshot, result);
+        await this.#executeUpdate(proposal, metrics, result);
         break;
       case 'deprecate':
         await this.#executeDeprecate(proposal, metrics, snapshot, result);
@@ -193,92 +295,98 @@ export class ProposalExecutor {
     }
   }
 
-  /* ── update（合并旧 enhance + correction + merge 逻辑） ── */
+  /* ── update ── */
 
   async #executeUpdate(
     proposal: ProposalRecord,
     metrics: RecipeMetrics,
-    _snapshot: RecipeMetrics | null,
     result: ProposalExecutionResult
   ): Promise<void> {
-    // 执行判据：
-    //   - 目标 Recipe 在观察期内无 FP rate 异常飙升
-    //   - 目标 Recipe 在观察期内仍有使用
-    const fpOk = metrics.ruleFalsePositiveRate < 0.4;
-    const hasUsage = metrics.guardHits > 0 || metrics.searchHits > 0;
+    const verdict = EvolutionPolicy.evaluateUpdate(metrics);
 
-    if (fpOk && hasUsage) {
-      // 通过 → evolving → ContentPatcher → staging（重走 Grace Period）
-      try {
-        await this.#transitionRecipe(
-          proposal.targetRecipeId,
-          'evolving',
-          'proposal-attach',
-          proposal.id
-        );
-        const patchResult = await this.#tryApplyPatch(proposal, 'agent-suggestion');
+    if (!verdict.pass) {
+      this.#repo.markRejected(proposal.id, verdict.reason);
+      result.rejected.push({
+        id: proposal.id,
+        type: proposal.type,
+        reason: verdict.reason,
+      });
+      return;
+    }
 
-        if (patchResult?.skipped || (!patchResult?.success && patchResult !== null)) {
-          await this.#transitionRecipe(
-            proposal.targetRecipeId,
-            'active',
-            'content-patch-complete',
-            proposal.id
-          );
-          const skipInfo = patchResult?.skipReason ? `: ${patchResult.skipReason}` : '';
-          this.#repo.markExecuted(proposal.id, `观察期合格但 patch 未生效${skipInfo}, 回退 active`);
-        } else {
-          await this.#transitionRecipe(
-            proposal.targetRecipeId,
-            'staging',
-            'content-patch-complete',
-            proposal.id
-          );
-          const patchInfo = patchResult?.success
-            ? `, patched=[${patchResult.fieldsPatched.join(',')}]`
-            : '';
-          this.#repo.markExecuted(
-            proposal.id,
-            `观察期表现合格: FP=${(metrics.ruleFalsePositiveRate * 100).toFixed(0)}%, hits=${metrics.guardHits + metrics.searchHits}${patchInfo}`
-          );
-        }
-      } catch (err: unknown) {
-        // 转移或 patch 过程中出错 → 恢复 Recipe 状态，避免卡在 evolving
-        this.#logger.warn(
-          `[ProposalExecutor] #executeUpdate failed for ${proposal.targetRecipeId}, restoring recipe: ${err instanceof Error ? err.message : String(err)}`
-        );
-        await this.#restoreRecipe(proposal.targetRecipeId);
+    // evolving → patch → staging/active
+    const evolveResult = await this.#lifecycle.transition({
+      recipeId: proposal.targetRecipeId,
+      targetState: 'evolving',
+      trigger: 'proposal-attach',
+      proposalId: proposal.id,
+      operatorId: 'system',
+    });
+
+    if (!evolveResult.success) {
+      this.#repo.markRejected(proposal.id, `transition failed: ${evolveResult.error}`);
+      result.rejected.push({
+        id: proposal.id,
+        type: proposal.type,
+        reason: evolveResult.error ?? 'transition to evolving failed',
+      });
+      return;
+    }
+
+    try {
+      const patchResult = await this.#tryApplyPatch(proposal, 'agent-suggestion');
+      const nextState = patchResult?.success ? 'staging' : 'active';
+
+      const nextResult = await this.#lifecycle.transition({
+        recipeId: proposal.targetRecipeId,
+        targetState: nextState,
+        trigger: 'content-patch-complete',
+        proposalId: proposal.id,
+        operatorId: 'system',
+      });
+
+      if (!nextResult.success) {
         this.#repo.markRejected(
           proposal.id,
-          `执行异常, Recipe 已恢复: ${err instanceof Error ? err.message : String(err)}`
+          `transition to ${nextState} failed: ${nextResult.error}`
         );
         result.rejected.push({
           id: proposal.id,
           type: proposal.type,
-          reason: `execution error: ${err instanceof Error ? err.message : String(err)}`,
+          reason: nextResult.error ?? `transition to ${nextState} failed`,
         });
-        this.#emitSignal(proposal, 'rejected');
         return;
       }
+
+      const resolution = patchResult?.success
+        ? `patched=[${patchResult.fieldsPatched.join(',')}]`
+        : 'patch skipped, reverted to active';
+      this.#repo.markExecuted(proposal.id, resolution);
       result.executed.push({
         id: proposal.id,
         type: proposal.type,
         targetRecipeId: proposal.targetRecipeId,
       });
-      this.#emitSignal(proposal, 'executed');
-    } else {
-      // 不通过 → Recipe 恢复原状态
-      await this.#restoreRecipe(proposal.targetRecipeId);
+    } catch (err: unknown) {
+      this.#logger.warn(
+        `[ProposalExecutor] #executeUpdate failed for ${proposal.targetRecipeId}: ${err instanceof Error ? err.message : String(err)}`
+      );
+      // Try to revert to active if stuck in evolving
+      await this.#lifecycle.transition({
+        recipeId: proposal.targetRecipeId,
+        targetState: 'active',
+        trigger: 'timeout-recovery',
+        operatorId: 'system',
+      });
       this.#repo.markRejected(
         proposal.id,
-        `观察期表现不达标: FP=${(metrics.ruleFalsePositiveRate * 100).toFixed(0)}%, hasUsage=${hasUsage}`
+        `execution error: ${err instanceof Error ? err.message : String(err)}`
       );
       result.rejected.push({
         id: proposal.id,
         type: proposal.type,
-        reason: fpOk ? 'no usage during observation' : 'FP rate too high',
+        reason: `execution error: ${err instanceof Error ? err.message : String(err)}`,
       });
-      this.#emitSignal(proposal, 'rejected');
     }
   }
 
@@ -290,93 +398,75 @@ export class ProposalExecutor {
     snapshot: RecipeMetrics | null,
     result: ProposalExecutionResult
   ): Promise<void> {
-    const currentDecay = metrics.decayScore;
-    const snapshotDecay = snapshot?.decayScore ?? currentDecay;
+    const verdict = EvolutionPolicy.evaluateDeprecate(
+      metrics.decayScore,
+      snapshot?.decayScore ?? metrics.decayScore
+    );
 
-    // 观察期内 decayScore 有回升 → 拒绝
-    if (currentDecay > snapshotDecay + 10) {
-      await this.#restoreRecipe(proposal.targetRecipeId);
-      this.#repo.markRejected(
-        proposal.id,
-        `decayScore recovered: ${snapshotDecay} → ${currentDecay}`
-      );
+    if (verdict.action === 'reject') {
+      this.#repo.markRejected(proposal.id, verdict.reason);
       result.rejected.push({
         id: proposal.id,
         type: proposal.type,
-        reason: 'decay score recovered during observation',
+        reason: verdict.reason,
       });
-      this.#emitSignal(proposal, 'rejected');
       return;
     }
 
-    // 无回升 → 根据 decayScore 决定操作
-    if (currentDecay <= 19) {
-      // 死亡 → 直接 deprecated
-      await this.#transitionRecipe(
-        proposal.targetRecipeId,
-        'deprecated',
-        'proposal-execution',
-        proposal.id
-      );
-      this.#repo.markExecuted(proposal.id, `deprecated (dead): decayScore=${currentDecay}`);
-    } else if (currentDecay <= 40) {
-      // 严重 → decaying
-      await this.#transitionRecipe(
-        proposal.targetRecipeId,
-        'decaying',
-        'proposal-execution',
-        proposal.id
-      );
-      this.#repo.markExecuted(proposal.id, `decaying (severe): decayScore=${currentDecay}`);
-    } else {
-      // 衰退减缓 → 拒绝
-      await this.#restoreRecipe(proposal.targetRecipeId);
-      this.#repo.markRejected(
-        proposal.id,
-        `decayScore above threshold (${currentDecay}), not critical enough`
-      );
+    const transResult = await this.#lifecycle.transition({
+      recipeId: proposal.targetRecipeId,
+      targetState: verdict.action, // 'deprecated' | 'decaying'
+      trigger: 'proposal-execution',
+      proposalId: proposal.id,
+      operatorId: 'system',
+    });
+
+    if (!transResult.success) {
+      this.#repo.markRejected(proposal.id, `transition failed: ${transResult.error}`);
       result.rejected.push({
         id: proposal.id,
         type: proposal.type,
-        reason: `decayScore (${currentDecay}) not critical`,
+        reason: transResult.error ?? 'transition failed',
       });
-      this.#emitSignal(proposal, 'rejected');
       return;
     }
 
-    // 如有 replacedByRecipeId → 建立 deprecated_by edge
-    const replacedBy = proposal.relatedRecipeIds[0];
-    if (replacedBy) {
-      await this.#createDeprecatedByEdge(replacedBy, proposal.targetRecipeId);
-    }
-
+    this.#repo.markExecuted(proposal.id, verdict.reason);
     result.executed.push({
       id: proposal.id,
       type: proposal.type,
       targetRecipeId: proposal.targetRecipeId,
     });
-    this.#emitSignal(proposal, 'executed');
+
+    // supersede edge
+    const replacedBy = proposal.relatedRecipeIds[0];
+    if (replacedBy) {
+      await this.#createDeprecatedByEdge(replacedBy, proposal.targetRecipeId);
+    }
   }
 
   /* ── expired pending cleanup ── */
 
   #expireOldPending(result: ProposalExecutionResult): void {
-    const cutoff = Date.now() - PENDING_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
-    const oldPending = this.#repo.find({
-      status: 'pending',
-      expiredBefore: cutoff,
-    });
+    const now = Date.now();
+    const oldPending = this.#repo.find({ status: 'pending' });
 
     for (const proposal of oldPending) {
-      this.#repo.markExpired(proposal.id);
-      result.expired.push({
-        id: proposal.id,
-        type: proposal.type,
-      });
+      if (EvolutionPolicy.shouldExpirePending(proposal.proposedAt, now)) {
+        this.#repo.markExpired(proposal.id);
+        result.expired.push({
+          id: proposal.id,
+          type: proposal.type,
+        });
+      }
     }
   }
 
   /* ═══════════════════ DB Helpers ═══════════════════ */
+
+  #emptyResult(): ProposalExecutionResult {
+    return { executed: [], rejected: [], expired: [], skipped: [] };
+  }
 
   async #collectRecipeMetrics(recipeId: string): Promise<RecipeMetrics> {
     const entry = await this.#knowledgeRepo.findById(recipeId);
@@ -422,58 +512,10 @@ export class ProposalExecutor {
     return null;
   }
 
-  async #getRecipeLifecycle(recipeId: string): Promise<{ lifecycle: string } | null> {
-    const entry = await this.#knowledgeRepo.findById(recipeId);
-    return entry ? { lifecycle: entry.lifecycle } : null;
-  }
-
-  async #transitionRecipe(
-    recipeId: string,
-    newLifecycle: string,
-    trigger:
-      | 'proposal-execution'
-      | 'proposal-attach'
-      | 'content-patch-complete'
-      | 'timeout-recovery' = 'proposal-execution',
-    proposalId?: string
-  ): Promise<void> {
-    if (this.#supervisor) {
-      const result = await this.#supervisor.transition({
-        recipeId,
-        targetState: newLifecycle,
-        trigger,
-        proposalId,
-        operatorId: 'system',
-      });
-      if (!result.success) {
-        this.#logger.warn(
-          `[ProposalExecutor] Supervisor rejected transition ${recipeId} → ${newLifecycle}: ${result.error}`
-        );
-        await this.#knowledgeRepo.updateLifecycle(recipeId, newLifecycle);
-      }
-    } else {
-      await this.#knowledgeRepo.updateLifecycle(recipeId, newLifecycle);
-    }
-  }
-
-  async #restoreRecipe(recipeId: string): Promise<void> {
-    const current = await this.#getRecipeLifecycle(recipeId);
-    if (current && (current.lifecycle === 'evolving' || current.lifecycle === 'decaying')) {
-      await this.#transitionRecipe(recipeId, 'active');
-    }
-  }
-
-  /**
-   * 尝试通过 ContentPatcher 应用 Proposal 中的 suggestedChanges
-   * 降级容忍：无 ContentPatcher 或 patch 失败时返回 null/skipped，不阻塞状态转移
-   */
   async #tryApplyPatch(
     proposal: ProposalRecord,
     patchSource: 'agent-suggestion' | 'correction' | 'merge'
   ): Promise<import('../../types/evolution.js').ContentPatchResult | null> {
-    if (!this.#contentPatcher) {
-      return null;
-    }
     try {
       return await this.#contentPatcher.applyProposal(proposal, patchSource);
     } catch (err: unknown) {
@@ -486,48 +528,16 @@ export class ProposalExecutor {
 
   async #createDeprecatedByEdge(newRecipeId: string, oldRecipeId: string): Promise<void> {
     try {
-      if (this.#edgeRepo) {
-        await this.#edgeRepo.upsertEdge({
-          fromId: newRecipeId,
-          fromType: 'recipe',
-          toId: oldRecipeId,
-          toType: 'recipe',
-          relation: 'deprecated_by',
-          weight: 1.0,
-        });
-      }
+      await this.#edgeRepo.upsertEdge({
+        fromId: newRecipeId,
+        fromType: 'recipe',
+        toId: oldRecipeId,
+        toType: 'recipe',
+        relation: 'deprecated_by',
+        weight: 1.0,
+      });
     } catch {
       // knowledge_edges 表可能不存在（降级容忍）
     }
-  }
-
-  /* ═══════════════════ Signal ═══════════════════ */
-
-  #emitSignal(proposal: ProposalRecord, action: 'executed' | 'rejected'): void {
-    if (!this.#signalBus) {
-      return;
-    }
-    this.#signalBus.send('lifecycle', 'ProposalExecutor', proposal.confidence, {
-      target: proposal.targetRecipeId,
-      metadata: {
-        proposalId: proposal.id,
-        proposalType: proposal.type,
-        action,
-        source: proposal.source,
-      },
-    });
-  }
-}
-
-/* ────────────────────── Util ────────────────────── */
-
-function _safeJsonParse<T>(json: string | null | undefined, fallback: T): T {
-  if (!json) {
-    return fallback;
-  }
-  try {
-    return JSON.parse(json) as T;
-  } catch {
-    return fallback;
   }
 }

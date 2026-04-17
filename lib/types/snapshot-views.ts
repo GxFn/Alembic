@@ -7,6 +7,7 @@
  * @module types/snapshot-views
  */
 
+import type { EvolutionPrescreen } from '../external/mcp/handlers/evolution-prescreen.js';
 import type {
   AstSummary,
   BootstrapSessionShape,
@@ -59,6 +60,8 @@ export interface PipelineFillView {
   readonly projectRoot: string;
   /** 已有 recipes（rescan 去重用） */
   readonly existingRecipes?: ExistingRecipeInfo[];
+  /** 进化前置过滤结果（rescan 模式，Phase A 已完成时提供） */
+  readonly evolutionPrescreen?: EvolutionPrescreen;
 }
 
 // ─── 视图 1: toResponseData ──────────────────────────────────

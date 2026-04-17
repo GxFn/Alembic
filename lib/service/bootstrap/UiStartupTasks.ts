@@ -7,8 +7,8 @@
  *   3. vector reconcile:      向量对账（best-effort）
  *   4. refreshIndex:          BM25 增量刷新
  *   5. metabolismCycle:       知识新陈代谢（矛盾/冗余/衰退扫描 → 新 Proposal）
- *   6. proposalCheck:         到期 Proposal 检查 + 自动执行/拒绝（含 Metabolism 新建的 Proposal）
- *   7. timeoutCheck:          中间态超时兜底（evolving/decaying 超时自动恢复）
+ *   6. proposalCheck:         启动时兆底清理（过期 Pending + Observing 兆底评估）
+ *   7. signalSubscription:    订阅 SignalBus（信号驱动提案评估）
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';
@@ -37,7 +37,7 @@ export interface UiStartupReport {
     redundancies: number;
     decaying: number;
   };
-  timeoutCheck?: { timedOut: number; checked: number };
+  signalSubscription?: boolean;
   durationMs: number;
   errors: string[];
 }
@@ -180,7 +180,7 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
     logger.warn(`[UiStartupTasks] ${msg}`);
   }
 
-  // ── Stage 6: ProposalExecutor — 到期 Proposal 检查 + 自动执行（含 Metabolism 新建的 Proposal） ──
+  // ── Stage 6: ProposalExecutor — 启动时兜底清理（过期 Pending + Observing 兜底评估） ──
   try {
     if (ctx.container.services.proposalExecutor) {
       const executor = ctx.container.get('proposalExecutor') as {
@@ -199,35 +199,28 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
       const total = result.executed.length + result.rejected.length + result.expired.length;
       if (total > 0) {
         logger.info(
-          `[UiStartupTasks] Stage 6: proposal check — executed=${result.executed.length}, rejected=${result.rejected.length}, expired=${result.expired.length}`
+          `[UiStartupTasks] Stage 6: proposal cleanup — executed=${result.executed.length}, rejected=${result.rejected.length}, expired=${result.expired.length}`
         );
       }
     }
   } catch (err: unknown) {
-    const msg = `proposal check failed: ${(err as Error).message}`;
+    const msg = `proposal cleanup failed: ${(err as Error).message}`;
     report.errors.push(msg);
     logger.warn(`[UiStartupTasks] ${msg}`);
   }
 
-  // ── Stage 7: Supervisor — 中间态超时兜底 ──
+  // ── Stage 7: ProposalExecutor — 订阅 SignalBus（信号驱动提案评估） ──
   try {
-    if (ctx.container.services.lifecycleSupervisor) {
-      const supervisor = ctx.container.get('lifecycleSupervisor') as {
-        checkTimeouts(): { timedOut: { recipeId: string }[]; checked: number };
+    if (ctx.container.services.proposalExecutor && ctx.container.services.signalBus) {
+      const executor = ctx.container.get('proposalExecutor') as {
+        subscribeToSignals(bus: unknown): void;
       };
-      const result = await supervisor.checkTimeouts();
-      report.timeoutCheck = {
-        timedOut: result.timedOut.length,
-        checked: result.checked,
-      };
-      if (result.timedOut.length > 0) {
-        logger.info(
-          `[UiStartupTasks] Stage 7: timeout check — ${result.timedOut.length} recipes timed out (checked: ${result.checked})`
-        );
-      }
+      const signalBus = ctx.container.get('signalBus');
+      executor.subscribeToSignals(signalBus);
+      logger.info('[UiStartupTasks] Stage 7: ProposalExecutor subscribed to SignalBus');
     }
   } catch (err: unknown) {
-    const msg = `timeout check failed: ${(err as Error).message}`;
+    const msg = `signal subscription failed: ${(err as Error).message}`;
     report.errors.push(msg);
     logger.warn(`[UiStartupTasks] ${msg}`);
   }

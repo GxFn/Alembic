@@ -331,6 +331,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
   const panoramaResult = snapshot.panorama as Record<string, unknown> | null;
   const callGraphResult = snapshot.callGraph as Record<string, unknown> | null;
   const existingRecipes = view.existingRecipes ?? null;
+  const evolutionPrescreen = view.evolutionPrescreen ?? null;
   const targetFileMap = view.targetFileMap;
 
   // 从 ctx 获取运行时服务
@@ -655,6 +656,8 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
           },
           {} as Record<string, number>
         ),
+        // 进化前置过滤（Phase A 已完成时提供）
+        evolutionPrescreen: evolutionPrescreen ?? undefined,
       }
     : null;
 
@@ -817,8 +820,10 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
             return presetStages[2].promptBuilder?.(ctx);
           },
         };
-        if (hasExistingRecipes) {
-          // 当前维度有旧 Recipe: Evolve→EvolutionGate→Analyze→QualityGate→Produce→RejectionGate
+        // 当进化前置 (prescreen) 已在 pipeline 外完成时，所有维度统一使用简化管线
+        const prescreenDone = rescanContext?.evolutionPrescreen !== undefined;
+        if (hasExistingRecipes && !prescreenDone) {
+          // 当前维度有旧 Recipe 且无前置过滤: Evolve→EvolutionGate→Analyze→QualityGate→Produce→RejectionGate
           stages = [
             evolutionPresetStages[0], // evolve
             evolutionPresetStages[1], // evolution_gate
@@ -828,7 +833,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
             presetStages[3], // rejection_gate
           ];
         } else {
-          // 当前维度无旧 Recipe: Analyze→QualityGate→Produce→RejectionGate
+          // 无旧 Recipe 或已完成进化前置: Analyze→QualityGate→Produce→RejectionGate
           stages = [
             analyzeStage,
             presetStages[1], // quality_gate

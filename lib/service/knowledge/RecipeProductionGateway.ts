@@ -125,6 +125,13 @@ export interface CreateRecipeResult {
   blocked: BlockedRecipeInfo[];
   duplicates: SimilarRecipeInfo[];
   supersedeProposal: { proposalId: string } | null;
+  /** Layer 1.5: 需要语义复核的条目（similarity 0.4-0.65 且字段分析不明确） */
+  pendingSemanticReview?: Array<{
+    index: number;
+    title: string;
+    relatedRecipe?: { id: string; title: string; similarity: number };
+    reason: string;
+  }>;
 }
 
 /* ═══════════════════ Dependencies ═══════════════════ */
@@ -157,8 +164,10 @@ interface GatewayConsolidationAdvisor {
         reorganizeTargets?: { id: string; title: string; similarity: number }[];
         coveredBy?: { id: string; title: string; similarity: number }[];
         mergeDirection?: { addedDimensions: string[]; summary: string };
+        pendingSemanticReview?: boolean;
       };
     }>;
+    internalOverlaps: Array<{ indexA: number; indexB: number; similarity: number }>;
   }>;
 }
 
@@ -384,11 +393,61 @@ export class RecipeProductionGateway {
 
         const batchAdvice = await this.#consolidationAdvisor.analyzeBatch(candidates);
 
+        // ── Step 3.1: 处理批次内部重叠 ──
+        const removedByOverlap = new Set<number>();
+        if (batchAdvice.internalOverlaps && batchAdvice.internalOverlaps.length > 0) {
+          for (const overlap of batchAdvice.internalOverlaps) {
+            if (overlap.similarity >= 0.65) {
+              // 移除指数较大的一方（后面的候选假定较弱）
+              const weaker = overlap.indexB;
+              if (!removedByOverlap.has(weaker)) {
+                removedByOverlap.add(weaker);
+                const weakerEntry = afterSimilarityItems[weaker];
+                if (weakerEntry) {
+                  const strongerEntry = afterSimilarityItems[overlap.indexA];
+                  result.duplicates.push({
+                    index: weakerEntry.index,
+                    title: weakerEntry.item.title || '(untitled)',
+                    similarTo: [
+                      {
+                        file: '',
+                        title: strongerEntry?.item.title || '(unknown)',
+                        similarity: overlap.similarity,
+                      },
+                    ],
+                  });
+                  this.#logger?.info(
+                    `[Gateway] ✗ batch-internal-overlap removed item ${weaker}: "${weakerEntry.item.title}" ≈ item ${overlap.indexA} (${overlap.similarity})`
+                  );
+                }
+              }
+            }
+          }
+        }
+
+        // ── Step 3.2: 收集 pendingSemanticReview ──
+        const pendingReviews: NonNullable<CreateRecipeResult['pendingSemanticReview']> = [];
+
         for (let ai = 0; ai < batchAdvice.items.length; ai++) {
           const { advice } = batchAdvice.items[ai];
           const validEntry = afterSimilarityItems[ai];
           if (!validEntry) {
             continue;
+          }
+
+          // 跳过被批次内重叠移除的候选
+          if (removedByOverlap.has(ai)) {
+            continue;
+          }
+
+          // Layer 1.5: 收集 pendingSemanticReview
+          if (advice.pendingSemanticReview) {
+            pendingReviews.push({
+              index: validEntry.index,
+              title: validEntry.item.title || '(untitled)',
+              relatedRecipe: advice.targetRecipe ?? undefined,
+              reason: advice.reason,
+            });
           }
 
           if (advice.action === 'create') {
@@ -422,6 +481,11 @@ export class RecipeProductionGateway {
               consolidation: advice,
             });
           }
+        }
+
+        // 将 pendingSemanticReview 附加到结果
+        if (pendingReviews.length > 0) {
+          result.pendingSemanticReview = pendingReviews;
         }
       } catch (err: unknown) {
         this.#logger?.warn(
@@ -682,9 +746,48 @@ export class RecipeProductionGateway {
     }
 
     if (advice.action === 'reorganize' && advice.reorganizeTargets?.length) {
-      // reorganize 不再映射为 ProposalType — 仅记录日志
+      // reorganize → 为每个目标 Recipe 创建 update 提案
+      if (this.#evolutionGateway) {
+        let firstProposal: {
+          proposalId: string;
+          type: string;
+          targetRecipeId: string;
+          targetTitle: string;
+          status: string;
+          expiresAt: number;
+          message: string;
+        } | null = null;
+
+        for (const target of advice.reorganizeTargets) {
+          try {
+            const gwResult = await this.#evolutionGateway.submit({
+              recipeId: target.id,
+              action: 'update',
+              source: 'consolidation',
+              confidence: Math.min(0.5, advice.confidence),
+              description: `Reorganize: 候选与 ${advice.reorganizeTargets.length} 条 Recipe 交叉重叠，建议将相关内容拆分到「${target.title}」`,
+              evidence,
+            });
+            if (!gwResult.error && !firstProposal) {
+              const isImmediate = gwResult.outcome === 'immediately-executed';
+              firstProposal = {
+                proposalId: gwResult.proposalId ?? `immediate-${target.id}`,
+                type: 'update',
+                targetRecipeId: target.id,
+                targetTitle: target.title,
+                status: isImmediate ? 'executed' : 'observing',
+                expiresAt: isImmediate ? 0 : Date.now() + 72 * 3600_000,
+                message: `候选与 ${advice.reorganizeTargets.length} 条 Recipe 交叉重叠，已为「${target.title}」等创建重组提案。`,
+              };
+            }
+          } catch {
+            /* best effort — 继续处理其他目标 */
+          }
+        }
+        return firstProposal;
+      }
       this.#logger?.info(
-        `[Gateway] reorganize advice for ${advice.reorganizeTargets.length} recipes — logged only (no proposal created)`
+        `[Gateway] reorganize advice for ${advice.reorganizeTargets.length} recipes — no EvolutionGateway available`
       );
       return null;
     }

@@ -19,7 +19,7 @@
  */
 
 import * as vscode from 'vscode';
-import { ApiClient, type SearchResultItem } from './apiClient';
+import { ApiClient, type SearchResultItem, type FileChangeReport } from './apiClient';
 import { FileChangeCollector } from './FileChangeCollector';
 import { DirectiveCodeLensProvider } from './codeLensProvider';
 import { insertAtCursor, insertAtTriggerLine, flashHighlight } from './codeInserter';
@@ -38,6 +38,87 @@ function toErrorMsg(err: unknown): string {
 let apiClient: ApiClient;
 let statusBar: StatusBar;
 let codeLensProvider: DirectiveCodeLensProvider;
+
+// ─────────────────────────────────────────────
+// Reactive Evolution 弹窗（文档 §5.4 / 策略 C）
+// ─────────────────────────────────────────────
+
+/** 每个 Recipe 上次弹窗时间戳，用于 10 分钟节流（文档 §13.2 C3） */
+const lastPopupTime = new Map<string, number>();
+const POPUP_THROTTLE_MS = 10 * 60 * 1000;
+
+/**
+ * 构造交给 IDE Copilot Chat 的进化 prompt（文档 §5.4.4）
+ */
+function buildEvolvePrompt(report: FileChangeReport): string {
+  const lines: string[] = [];
+  lines.push('Alembic 检测到源码变更可能影响以下 Recipe。请使用 MCP 工具 asd_evolve 评估并提交 propose_evolution / confirm_deprecation 决策：');
+  lines.push('');
+  for (const d of report.details) {
+    if (d.action === 'needs-review' || d.action === 'deprecate') {
+      lines.push(`- ${d.recipeId} (${d.recipeTitle})`);
+      lines.push(`  - 影响级别: ${d.impactLevel ?? 'unknown'}`);
+      lines.push(`  - 变更文件: ${d.modifiedPath ?? 'N/A'}`);
+      lines.push(`  - 原因: ${d.reason}`);
+    }
+  }
+  lines.push('');
+  lines.push('如 Recipe 仍有效，请调用 asd_evolve 传 action=skip, skipReason=still_valid 以刷新验证时间。');
+  return lines.join('\n');
+}
+
+/**
+ * 根据 report 触发弹窗（策略 C：仅 ide-edit + direct 影响）
+ *
+ * 文档 §13.2 C1-C4：
+ *   C1 eventSource === 'ide-edit'（git 事件永不弹窗）
+ *   C2 至少一条 details.impactLevel === 'direct'
+ *   C3 同一 Recipe 10 分钟内不重弹
+ *   C4 按钮: 'Ask Copilot'（外部 Agent 走 MCP）/ 'Run asd evolve-check'（内部 Agent 走 CLI）
+ */
+function handleReactiveReport(report: FileChangeReport): void {
+  if (report.eventSource !== 'ide-edit') { return; }
+  if (!report.suggestReview) { return; }
+
+  const directDetails = report.details.filter(
+    d => d.impactLevel === 'direct' && (d.action === 'needs-review' || d.action === 'deprecate')
+  );
+  if (directDetails.length === 0) { return; }
+
+  // 节流：过滤掉 10 分钟内已弹过窗的 Recipe
+  const now = Date.now();
+  const activeDetails = directDetails.filter(d => {
+    const last = lastPopupTime.get(d.recipeId) ?? 0;
+    return now - last > POPUP_THROTTLE_MS;
+  });
+  if (activeDetails.length === 0) { return; }
+
+  // 更新节流记录
+  for (const d of activeDetails) {
+    lastPopupTime.set(d.recipeId, now);
+  }
+
+  const recipeIds = activeDetails.map(d => d.recipeId);
+  const preview = activeDetails.slice(0, 3).map(d => d.recipeTitle).join('、');
+  const more = activeDetails.length > 3 ? ` 等 ${activeDetails.length} 条` : '';
+  const msg = `Alembic: 检测到 ${preview}${more} 受近期编辑直接影响，建议进化评估。`;
+
+  void vscode.window.showInformationMessage(
+    msg,
+    'Ask Copilot',
+    'Run asd evolve-check',
+  ).then((choice) => {
+    if (choice === 'Ask Copilot') {
+      void vscode.commands.executeCommand('workbench.action.chat.open', {
+        query: buildEvolvePrompt({ ...report, details: activeDetails }),
+      });
+    } else if (choice === 'Run asd evolve-check') {
+      const terminal = vscode.window.createTerminal('Alembic Evolve');
+      terminal.sendText(`asd evolve-check --recipes ${recipeIds.join(',')}`);
+      terminal.show();
+    }
+  });
+}
 let guardDiagnostics: GuardDiagnostics;
 
 // ─────────────────────────────────────────────
@@ -177,7 +258,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   // ─── 文件变更统一采集（FileChangeCollector） ───
   // 5 个信号源 → EventBuffer → HTTP POST，与业务逻辑解耦
-  const fileChangeCollector = new FileChangeCollector(apiClient, context);
+  // 服务端回传 ReactiveEvolutionReport → handleReactiveReport 触发弹窗（策略 C）
+  const fileChangeCollector = new FileChangeCollector(apiClient, context, handleReactiveReport);
   context.subscriptions.push(fileChangeCollector);
 
   } catch (err: unknown) {

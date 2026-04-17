@@ -1,20 +1,23 @@
 /**
- * RecipeLifecycleSupervisor — 统一状态转移管理层
+ * LifecycleStateMachine — 唯一生命周期权威
  *
- * 核心职责：
- *   1. Guard 前置检查 — 验证转移是否合法（VALID_TRANSITIONS + 扩展条件）
- *   2. Entry/Exit Actions — 进入/离开状态的固定副作用
- *   3. Event 记录 — 每次转移记录为不可变 TransitionEvent
- *   4. 超时监控 — 中间态超时自动处理
- *   5. 健康摘要 — 全局状态分布与卡死检测
+ * 所有 Recipe lifecycle 变更必须且只能通过本类的 transition() 方法执行。
+ * 替代旧的 RecipeLifecycleSupervisor（可选增强层 → 必需权威）。
  *
- * 所有状态变更建议通过 Supervisor，目前作为可选增强层存在。
- * 不改变现有 ProposalExecutor/StagingManager 的内部逻辑，
- * 而是在它们之上提供审计、超时检查和健康监控。
+ * 核心职责:
+ *   1. Guard 前置检查（合法状态转移验证）
+ *   2. Exit Action（离开旧状态的副作用）
+ *   3. DB 更新（lifecycle 字段）
+ *   4. Entry Action（进入新状态的副作用）
+ *   5. 记录 TransitionEvent（不可变审计日志）
+ *   6. 发射 lifecycle Signal（集中信号源）
  *
- * 触发时机：UiStartupTasks Stage 6（新增）
+ * 设计原则:
+ *   - 所有依赖必需（non-nullable），消除 `?? null` 分支
+ *   - Guard 拒绝 = 操作失败，调用者不应 fallback 到 updateLifecycle()
+ *   - lifecycle signal 仅从此处发射，服务层不直接操作 SignalBus
  *
- * @module service/evolution/RecipeLifecycleSupervisor
+ * @module service/evolution/LifecycleStateMachine
  */
 
 import { randomUUID } from 'node:crypto';
@@ -28,11 +31,10 @@ import type {
   LifecycleHealthSummary,
   TimeoutCheckResult,
   TransitionEvent,
+  TransitionEvidence,
   TransitionRequest,
   TransitionResult,
 } from '../../types/evolution.js';
-
-/* ────────────────────── Types ────────────────────── */
 
 /* ────────────────────── Constants ────────────────────── */
 
@@ -40,26 +42,24 @@ import type {
 const TIMEOUT_MS = {
   evolving: 7 * 24 * 60 * 60 * 1000, // 7 天
   decaying: 30 * 24 * 60 * 60 * 1000, // 30 天
-  staging: 7 * 24 * 60 * 60 * 1000, // 7 天（安全兜底，正常由 StagingManager 处理）
+  staging: 7 * 24 * 60 * 60 * 1000, // 7 天
   pending: 30 * 24 * 60 * 60 * 1000, // 30 天
 } as const;
 
 /** 超时后的目标状态 */
 const TIMEOUT_TARGET = {
-  evolving: 'active', // 回退到 active（内容不变）
-  decaying: 'deprecated', // 长期衰退 → 废弃
-  pending: 'deprecated', // 30 天未审核 → 废弃
+  evolving: 'active',
+  decaying: 'deprecated',
+  pending: 'deprecated',
 } as const;
 
 /** 卡死告警阈值（毫秒） */
 const STUCK_THRESHOLD_MS = {
-  evolving: 3 * 24 * 60 * 60 * 1000, // > 3天
-  decaying: 15 * 24 * 60 * 60 * 1000, // > 15天
-  staging: 3 * 24 * 60 * 60 * 1000, // > 3天
-  pending: 7 * 24 * 60 * 60 * 1000, // > 7天
+  evolving: 3 * 24 * 60 * 60 * 1000,
+  decaying: 15 * 24 * 60 * 60 * 1000,
+  staging: 3 * 24 * 60 * 60 * 1000,
+  pending: 7 * 24 * 60 * 60 * 1000,
 } as const;
-
-/* ────────────────────── Entry/Exit Action Types ────────────────────── */
 
 /** 进入状态时写入 stats 的元数据键 */
 const ENTRY_META_KEYS: Record<string, string> = {
@@ -71,39 +71,41 @@ const ENTRY_META_KEYS: Record<string, string> = {
 
 /* ────────────────────── Class ────────────────────── */
 
-export class RecipeLifecycleSupervisor {
+export class LifecycleStateMachine {
   readonly #knowledgeRepo: KnowledgeRepositoryImpl;
-  readonly #proposalRepo: ProposalRepository | null;
-  readonly #lifecycleEventRepo: LifecycleEventRepository | null;
-  readonly #signalBus: SignalBus | null;
+  readonly #eventRepo: LifecycleEventRepository;
+  readonly #signalBus: SignalBus;
+  readonly #proposalRepo: ProposalRepository;
   readonly #logger = Logger.getInstance();
 
   constructor(
     knowledgeRepo: KnowledgeRepositoryImpl,
-    options: {
-      signalBus?: SignalBus;
-      lifecycleEventRepo?: LifecycleEventRepository;
-      proposalRepo?: ProposalRepository;
-    } = {}
+    eventRepo: LifecycleEventRepository,
+    signalBus: SignalBus,
+    proposalRepo: ProposalRepository
   ) {
     this.#knowledgeRepo = knowledgeRepo;
-    this.#proposalRepo = options.proposalRepo ?? null;
-    this.#lifecycleEventRepo = options.lifecycleEventRepo ?? null;
-    this.#signalBus = options.signalBus ?? null;
+    this.#eventRepo = eventRepo;
+    this.#signalBus = signalBus;
+    this.#proposalRepo = proposalRepo;
   }
 
   /* ═══════════════════ Core Transition ═══════════════════ */
 
   /**
-   * 执行状态转移 — 统一入口
+   * 执行状态转移 — THE ONLY WAY
    *
-   * 1. 获取当前状态
-   * 2. Guard 检查（合法转移 + 扩展条件）
-   * 3. Exit Action（离开旧状态）
-   * 4. 更新 lifecycle
-   * 5. Entry Action（进入新状态）
-   * 6. 记录 TransitionEvent
-   * 7. 发射信号
+   * 流程:
+   *   1. 读取当前 lifecycle
+   *   2. Guard: isValidTransition(from, to)
+   *   3. Exit Action
+   *   4. DB 更新
+   *   5. Entry Action
+   *   6. 记录 TransitionEvent
+   *   7. 发射 lifecycle signal
+   *
+   * Guard 拒绝 → 返回 { success: false }
+   * 调用者不应 fallback 到 updateLifecycle()
    */
   async transition(request: TransitionRequest): Promise<TransitionResult> {
     const { recipeId, targetState, trigger, evidence, proposalId, operatorId } = request;
@@ -125,7 +127,7 @@ export class RecipeLifecycleSupervisor {
     // 2. Guard 检查
     if (!isValidTransition(fromState, targetState)) {
       this.#logger.warn(
-        `[Supervisor] Invalid transition: ${recipeId} ${fromState} → ${targetState} (trigger: ${trigger})`
+        `[LifecycleStateMachine] Invalid transition: ${recipeId} ${fromState} → ${targetState} (trigger: ${trigger})`
       );
       return {
         success: false,
@@ -157,11 +159,11 @@ export class RecipeLifecycleSupervisor {
       createdAt: now,
     });
 
-    // 7. 发射信号
+    // 7. 发射 lifecycle signal
     this.#emitSignal(recipeId, fromState, targetState, trigger);
 
     this.#logger.info(
-      `[Supervisor] ${recipeId}: ${fromState} → ${targetState} (trigger: ${trigger})`
+      `[LifecycleStateMachine] ${recipeId}: ${fromState} → ${targetState} (trigger: ${trigger})`
     );
 
     return { success: true, fromState, toState: targetState, event };
@@ -169,13 +171,6 @@ export class RecipeLifecycleSupervisor {
 
   /* ═══════════════════ Timeout Check ═══════════════════ */
 
-  /**
-   * 检查中间态超时 + 自动处理
-   *
-   * 处理范围:
-   *   - evolving > 7d → active（回退）
-   *   - decaying > 30d → deprecated
-   */
   async checkTimeouts(): Promise<TimeoutCheckResult> {
     const result: TimeoutCheckResult = { timedOut: [], checked: 0 };
     const now = Date.now();
@@ -220,7 +215,7 @@ export class RecipeLifecycleSupervisor {
 
     if (result.timedOut.length > 0) {
       this.#logger.info(
-        `[Supervisor] Timeout check: ${result.timedOut.length} recipes timed out (checked: ${result.checked})`
+        `[LifecycleStateMachine] Timeout check: ${result.timedOut.length} recipes timed out (checked: ${result.checked})`
       );
     }
 
@@ -229,25 +224,11 @@ export class RecipeLifecycleSupervisor {
 
   /* ═══════════════════ Query ═══════════════════ */
 
-  /**
-   * 查询 Recipe 的转移历史
-   */
-  getTransitionHistory(recipeId: string, limit = 50): TransitionEvent[] {
-    try {
-      if (!this.#lifecycleEventRepo) {
-        return [];
-      }
-      return this.#lifecycleEventRepo.getHistory(recipeId, limit);
-    } catch {
-      // 表可能不存在（migration 未运行）
-      return [];
-    }
+  getHistory(recipeId: string, limit = 50): TransitionEvent[] {
+    return this.#eventRepo.getHistory(recipeId, limit);
   }
 
-  /**
-   * 获取全局状态健康摘要
-   */
-  async getHealthSummary(): Promise<LifecycleHealthSummary> {
+  async getHealth(): Promise<LifecycleHealthSummary> {
     const now = Date.now();
 
     const stateDistribution = await this.#getStateDistribution();
@@ -259,10 +240,7 @@ export class RecipeLifecycleSupervisor {
       stuckPending: await this.#getStuckInfo('pending', STUCK_THRESHOLD_MS.pending, now),
     };
 
-    // 最近转移统计
     const recentTransitions = this.#getRecentTransitionStats(now);
-
-    // Proposal 指标
     const proposalMetrics = this.#getProposalMetrics();
 
     return { stateDistribution, intermediateStates, recentTransitions, proposalMetrics };
@@ -316,7 +294,7 @@ export class RecipeLifecycleSupervisor {
     fromState: string;
     toState: string;
     trigger: string;
-    evidence: import('../../types/evolution.js').TransitionEvidence | null;
+    evidence: TransitionEvidence | null;
     proposalId: string | null;
     operatorId: string;
     createdAt: number;
@@ -335,13 +313,7 @@ export class RecipeLifecycleSupervisor {
     };
 
     try {
-      if (!this.#lifecycleEventRepo) {
-        this.#logger.warn(
-          `[Supervisor] No lifecycleEventRepo available, cannot record transition event`
-        );
-        return event;
-      }
-      this.#lifecycleEventRepo.record({
+      this.#eventRepo.record({
         id,
         recipeId: params.recipeId,
         fromState: params.fromState,
@@ -353,8 +325,9 @@ export class RecipeLifecycleSupervisor {
         createdAt: params.createdAt,
       });
     } catch {
-      // lifecycle_transition_events 表可能不存在（降级容忍）
-      this.#logger.warn(`[Supervisor] Failed to record transition event (table may not exist)`);
+      this.#logger.warn(
+        `[LifecycleStateMachine] Failed to record transition event (table may not exist)`
+      );
     }
 
     return event;
@@ -392,7 +365,7 @@ export class RecipeLifecycleSupervisor {
     try {
       const entries = await this.#knowledgeRepo.findAllByLifecycles([state]);
 
-      let count = 0;
+      let stuckCount = 0;
       let oldestAge = 0;
 
       for (const entry of entries) {
@@ -402,14 +375,14 @@ export class RecipeLifecycleSupervisor {
         const age = enteredAt ? now - enteredAt : now - (entry.updatedAt || now);
 
         if (age > thresholdMs) {
-          count++;
+          stuckCount++;
           if (age > oldestAge) {
             oldestAge = age;
           }
         }
       }
 
-      return { count, oldestAge };
+      return { count: stuckCount, oldestAge };
     } catch {
       return { count: 0, oldestAge: 0 };
     }
@@ -421,16 +394,9 @@ export class RecipeLifecycleSupervisor {
     topTriggers: { trigger: string; count: number }[];
   } {
     try {
-      if (!this.#lifecycleEventRepo) {
-        return { last24h: 0, last7d: 0, topTriggers: [] };
-      }
-
-      const last24hCount = this.#lifecycleEventRepo.countSince(now - 24 * 60 * 60 * 1000);
-      const last7dCount = this.#lifecycleEventRepo.countSince(now - 7 * 24 * 60 * 60 * 1000);
-      const topTriggers = this.#lifecycleEventRepo.topTriggersSince(
-        now - 7 * 24 * 60 * 60 * 1000,
-        5
-      );
+      const last24hCount = this.#eventRepo.countSince(now - 24 * 60 * 60 * 1000);
+      const last7dCount = this.#eventRepo.countSince(now - 7 * 24 * 60 * 60 * 1000);
+      const topTriggers = this.#eventRepo.topTriggersSince(now - 7 * 24 * 60 * 60 * 1000, 5);
 
       return { last24h: last24hCount, last7d: last7dCount, topTriggers };
     } catch {
@@ -440,9 +406,7 @@ export class RecipeLifecycleSupervisor {
 
   #getProposalMetrics(): LifecycleHealthSummary['proposalMetrics'] {
     try {
-      const statusMap = this.#proposalRepo
-        ? this.#proposalRepo.stats()
-        : ({} as Record<string, number>);
+      const statusMap = this.#proposalRepo.stats();
 
       const pending = statusMap.pending ?? 0;
       const observing = statusMap.observing ?? 0;
@@ -453,14 +417,12 @@ export class RecipeLifecycleSupervisor {
 
       let contentPatchRate = 0;
       try {
-        if (this.#lifecycleEventRepo) {
-          const patchCount = this.#lifecycleEventRepo.countByTrigger('content-patch-complete');
-          const execCount = this.#lifecycleEventRepo.countByTriggers([
-            'proposal-execution',
-            'proposal-attach',
-          ]);
-          contentPatchRate = execCount > 0 ? patchCount / execCount : 0;
-        }
+        const patchCount = this.#eventRepo.countByTrigger('content-patch-complete');
+        const execCount = this.#eventRepo.countByTriggers([
+          'proposal-execution',
+          'proposal-attach',
+        ]);
+        contentPatchRate = execCount > 0 ? patchCount / execCount : 0;
       } catch {
         // table may not exist yet
       }
@@ -498,10 +460,7 @@ export class RecipeLifecycleSupervisor {
   /* ═══════════════════ Signal ═══════════════════ */
 
   #emitSignal(recipeId: string, fromState: string, toState: string, trigger: string): void {
-    if (!this.#signalBus) {
-      return;
-    }
-    this.#signalBus.send('lifecycle', 'RecipeLifecycleSupervisor', 0.5, {
+    this.#signalBus.send('lifecycle', 'LifecycleStateMachine', 0.5, {
       target: recipeId,
       metadata: {
         fromState,

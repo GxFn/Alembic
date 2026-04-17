@@ -49,18 +49,28 @@ export interface AuditResponse {
   };
 }
 
+/** 文件变更事件影响级别（与服务端 lib/types/reactive-evolution.ts 对齐） */
+export type ImpactLevel = 'direct' | 'reference' | 'pattern';
+
+/** 文件变更事件来源（与服务端对齐） */
+export type FileChangeEventSource = 'ide-edit' | 'git-head' | 'git-worktree';
+
 /** ReactiveEvolution 文件变更报告 */
 export interface FileChangeReport {
   needsReview: number;
   suggestReview: boolean;
   deprecated: number;
   fixed: number;
+  skipped?: number;
   details: Array<{
     recipeId: string;
     recipeTitle: string;
     action: string;
     reason: string;
+    impactLevel?: ImpactLevel;
+    modifiedPath?: string;
   }>;
+  eventSource?: FileChangeEventSource;
 }
 
 /** Shape of a parsed content block inside a raw search item */
@@ -192,15 +202,46 @@ export class ApiClient {
 
   /**
    * 报告文件变更事件（领域无关）
-   * 由 FileChangeCollector 调用，非阻塞，失败时静默。
+   *
+   * 由 FileChangeCollector 调用。服务端回传 {@link FileChangeReport}
+   * （文档 §5.1 I1），VSCode 扩展据此决定是否弹窗。
+   *
+   * 返回 null 表示：服务端不可用、HTTP 失败、响应 schema 不匹配（文档 §5.1 I4）。
+   * 上层需 null-check 后静默跳过弹窗。
    */
   async reportFileChanges(
-    events: Array<{ type: 'created' | 'modified' | 'renamed' | 'deleted'; path: string; oldPath?: string }>
-  ): Promise<void> {
+    events: Array<{
+      type: 'created' | 'modified' | 'renamed' | 'deleted';
+      path: string;
+      oldPath?: string;
+      eventSource?: FileChangeEventSource;
+    }>
+  ): Promise<FileChangeReport | null> {
     try {
-      await this._post('/file-changes', { events });
+      const res = (await this._post('/file-changes', { events })) as {
+        success?: boolean;
+        data?: Record<string, unknown>;
+      };
+      if (!res || res.success !== true || !res.data || typeof res.data !== 'object') {
+        return null;
+      }
+      const data = res.data;
+      // 基本 schema 校验 + 兜底默认值
+      if (typeof data.needsReview !== 'number' || !Array.isArray(data.details)) {
+        return null;
+      }
+      return {
+        needsReview: data.needsReview as number,
+        suggestReview: (data.suggestReview as boolean) ?? false,
+        deprecated: (data.deprecated as number) ?? 0,
+        fixed: (data.fixed as number) ?? 0,
+        skipped: (data.skipped as number) ?? 0,
+        details: (data.details as FileChangeReport['details']) ?? [],
+        eventSource: (data.eventSource as FileChangeEventSource | undefined) ?? undefined,
+      };
     } catch {
-      // 非阻塞，服务端不可用时静默忽略
+      // 非阻塞，服务端不可用时返回 null
+      return null;
     }
   }
 

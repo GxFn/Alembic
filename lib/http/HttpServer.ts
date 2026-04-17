@@ -17,7 +17,6 @@ import { type ErrorTracker, initErrorTracker } from '../infrastructure/monitorin
 import { initPerformanceMonitor } from '../infrastructure/monitoring/PerformanceMonitor.js';
 import { initRealtimeService } from '../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../injection/ServiceContainer.js';
-import { timerRegistry } from '../shared/TimerRegistry.js';
 import apiSpec from './api-spec.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { gatewayMiddleware } from './middleware/gatewayMiddleware.js';
@@ -73,7 +72,6 @@ export class HttpServer {
   performanceMonitor: { middleware(): express.RequestHandler; shutdown(): void } | null;
   realtimeService: Record<string, unknown> | null;
   server: Server | null;
-  #proposalCheckInterval: ReturnType<typeof setInterval> | null = null;
   constructor(config: Partial<HttpServerConfig> = {}) {
     this.config = {
       port: config.port || 3000,
@@ -443,9 +441,6 @@ export class HttpServer {
           });
         }
 
-        // 启动定时 Proposal 检查（30 分钟间隔）
-        this.#startProposalCheckInterval();
-
         resolve(this.server);
       });
 
@@ -477,12 +472,6 @@ export class HttpServer {
     // 停止性能监控
     if (this.performanceMonitor) {
       this.performanceMonitor.shutdown();
-    }
-
-    // 停止定时 Proposal 检查
-    if (this.#proposalCheckInterval) {
-      timerRegistry.clear(this.#proposalCheckInterval);
-      this.#proposalCheckInterval = null;
     }
 
     // 停止错误追踪
@@ -521,51 +510,6 @@ export class HttpServer {
   /** 获取 Express 应用实例 */
   getApp() {
     return this.app;
-  }
-
-  /** 启动定时 Proposal 检查（30 分钟间隔） */
-  #startProposalCheckInterval() {
-    const INTERVAL_MS = 30 * 60 * 1000; // 30min
-
-    this.#proposalCheckInterval = timerRegistry.setInterval(
-      () => {
-        void this.#runProposalCheck();
-      },
-      INTERVAL_MS,
-      'HttpServer/proposalCheck'
-    );
-
-    this.logger.info(
-      `[HttpServer] Proposal check interval started (every ${INTERVAL_MS / 60_000}min)`
-    );
-  }
-
-  /** 执行一次 Proposal 到期检查 */
-  async #runProposalCheck() {
-    try {
-      const container = getServiceContainer();
-      if (!container.services.proposalExecutor) {
-        return;
-      }
-      const executor = container.get('proposalExecutor') as {
-        checkAndExecute(): Promise<{
-          executed: { id: string }[];
-          rejected: { id: string }[];
-          expired: { id: string }[];
-        }>;
-      };
-      const result = await executor.checkAndExecute();
-      const total = result.executed.length + result.rejected.length + result.expired.length;
-      if (total > 0) {
-        this.logger.info(
-          `[HttpServer] Periodic proposal check — executed=${result.executed.length}, rejected=${result.rejected.length}, expired=${result.expired.length}`
-        );
-      }
-    } catch (err: unknown) {
-      this.logger.warn(
-        `[HttpServer] Periodic proposal check failed: ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
   }
 
   /**

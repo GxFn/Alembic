@@ -16,6 +16,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { and, count, desc, eq, inArray, lte } from 'drizzle-orm';
+import { EvolutionPolicy } from '../../domain/evolution/EvolutionPolicy.js';
 import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
 import { evolutionProposals } from '../../infrastructure/database/drizzle/schema.js';
 
@@ -42,7 +43,13 @@ export type LegacyProposalType =
   | 'correction';
 
 /** Proposal 来源 */
-export type ProposalSource = 'ide-agent' | 'metabolism' | 'decay-scan' | 'consolidation';
+export type ProposalSource =
+  | 'ide-agent'
+  | 'metabolism'
+  | 'decay-scan'
+  | 'consolidation'
+  | 'relevance-audit'
+  | 'file-change';
 
 /** Proposal 状态 */
 export type ProposalStatus = 'pending' | 'observing' | 'executed' | 'rejected' | 'expired';
@@ -98,12 +105,6 @@ const OBSERVATION_WINDOWS: Record<ProposalType, number> = {
   deprecate: 7 * 24 * 60 * 60 * 1000, // 7d (high tier)
 };
 
-/** 自动进入观察状态的置信度阈值 */
-const AUTO_OBSERVE_THRESHOLDS: Record<ProposalType, number> = {
-  update: 0.7,
-  deprecate: 0.0, // decayScore 即可
-};
-
 /* ────────────────────── Drizzle row type ────────────────────── */
 
 type ProposalRow = typeof evolutionProposals.$inferSelect;
@@ -138,7 +139,8 @@ export class ProposalRepository {
     const id = ProposalRepository.#generateId(now);
     const expiresAt =
       input.expiresAt ?? now + (OBSERVATION_WINDOWS[input.type] ?? DEFAULT_OBSERVATION_WINDOW);
-    const status = input.status ?? this.#resolveInitialStatus(input.type, input.confidence);
+    const status =
+      input.status ?? EvolutionPolicy.resolveInitialStatus(input.type, input.confidence);
 
     const record: ProposalRecord = {
       id,
@@ -389,12 +391,6 @@ export class ProposalRepository {
       .limit(1)
       .get();
     return row !== undefined;
-  }
-
-  /** 根据 type + confidence 判断初始状态 */
-  #resolveInitialStatus(type: ProposalType, confidence: number): ProposalStatus {
-    const threshold = AUTO_OBSERVE_THRESHOLDS[type];
-    return confidence >= threshold ? 'observing' : 'pending';
   }
 
   /** 生成 Proposal ID */

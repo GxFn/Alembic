@@ -1,5 +1,5 @@
 /**
- * MCP Tool Definitions — V3 Consolidated (14 agent + 2 admin = 16 tools)
+ * MCP Tool Definitions — V3 Consolidated (15 agent + 2 admin = 17 tools)
  *
  * Each tool declaration contains name, tier (agent/admin), description, and inputSchema.
  * description is the key for Agent tool selection — use bullet list to enumerate all operations and their purposes.
@@ -21,6 +21,7 @@ import { z } from 'zod';
 import {
   BootstrapInput,
   CallContextInput,
+  ConsolidateInput,
   DimensionCompleteInput,
   EnrichCandidatesInput,
   EvolveInput,
@@ -72,6 +73,23 @@ const _EvolveSchema =
       .min(1),
   });
 
+// ConsolidateInput — defensive fallback for Vitest module transform edge case
+const _ConsolidateSchema =
+  ConsolidateInput ??
+  z.object({
+    decisions: z
+      .array(
+        z.object({
+          newRecipeId: z.string(),
+          action: z.enum(['keep', 'merge', 'reject']),
+          mergeTargetId: z.string().optional(),
+          mergeStrategy: z.enum(['absorb', 'complement']).optional(),
+          reasoning: z.string(),
+        })
+      )
+      .min(1),
+  });
+
 // ─── Tier Definitions ────────────────────────────────────────
 export const TIER_ORDER = { agent: 0, admin: 1 };
 
@@ -111,6 +129,8 @@ export const TOOL_GATEWAY_MAP = {
   asd_submit_knowledge: { action: 'knowledge:create', resource: 'knowledge' },
   // evolve — Recipe evolution decisions (propose/deprecate/skip)
   asd_evolve: { action: 'knowledge:evolve', resource: 'knowledge' },
+  // consolidate — Agent semantic review decisions for ambiguous overlaps
+  asd_consolidate: { action: 'knowledge:consolidate', resource: 'knowledge' },
   // task write operations (create/close/fail + record_decision)
   asd_task: {
     resolver: (args: Record<string, unknown>) =>
@@ -276,7 +296,7 @@ export const TOOLS = [
     description:
       'Incremental rescan — preserves existing Recipes and re-analyzes project.\n' +
       '• Snapshots approved Recipes → cleans derived caches → full Phase 1-4 analysis\n' +
-      '• Runs RecipeRelevanceAuditor (5-dimension evidence check, auto-decay stale Recipes)\n' +
+      '• Runs RelevanceAuditor (5-dimension evidence check, auto-decay stale Recipes)\n' +
       '\u2022 Returns Mission Briefing with allRecipes (full content + auditHint per recipe)\n' +
       '\u2022 Per-dimension workflow: evolve (asd_evolve) \u2192 gap-fill (submit_knowledge) \u2192 dimension_complete\n' +
       '\u2022 Optional: dimensions (filter specific dimensions), reason (rescan justification)',
@@ -296,6 +316,20 @@ export const TOOLS = [
       '\u2022 confirm_deprecation \u2014 pattern disappeared, deprecate Recipe immediately\n' +
       '\u2022 skip \u2014 still_valid (refreshes lastVerifiedAt) or insufficient_info',
     inputSchema: zodToMcpSchema(_EvolveSchema),
+  },
+
+  // 11.6. Consolidation Review
+  {
+    name: 'asd_consolidate',
+    tier: 'agent',
+    description:
+      'Semantic consolidation review for ambiguous Recipe overlaps.\n' +
+      'Called after asd_submit_knowledge when pendingSemanticReview items exist (nextAction tail instruction).\n' +
+      'Three decision types per Recipe:\n' +
+      '\u2022 keep \u2014 Recipe is genuinely independent, retain as-is\n' +
+      '\u2022 merge \u2014 merge new Recipe into existing one (requires mergeTargetId)\n' +
+      '\u2022 reject \u2014 Recipe is redundant, deprecate immediately',
+    inputSchema: zodToMcpSchema(_ConsolidateSchema),
   },
 
   // 12. Dimension Complete Notification

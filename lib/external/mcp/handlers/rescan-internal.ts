@@ -20,7 +20,7 @@
 
 import path from 'node:path';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
-import { RecipeRelevanceAuditor } from '#service/evolution/RecipeRelevanceAuditor.js';
+import { RelevanceAuditor } from '#service/evolution/RelevanceAuditor.js';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
 import type {
@@ -44,6 +44,7 @@ import { runAllPhases } from './bootstrap/shared/bootstrap-phases.js';
 import { summarizePanorama } from './bootstrap/shared/panorama-utils.js';
 import { getOrCreateSessionManager } from './bootstrap/shared/session-helpers.js';
 import { buildTargetFileMap } from './bootstrap/shared/target-file-map.js';
+import { buildEvolutionPrescreen } from './evolution-prescreen.js';
 import type { McpContext } from './types.js';
 
 // ── Local types ──────────────────────────────────────────
@@ -178,16 +179,13 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
   // Step 4: Recipe 证据验证 + 快速衰退
   // ═══════════════════════════════════════════════════════════
 
-  const auditor = new RecipeRelevanceAuditor({
+  const auditor = new RelevanceAuditor({
     knowledgeRepo: ctx.container.get(
       'knowledgeRepository'
     ) as import('../../../repository/knowledge/KnowledgeRepository.impl.js').default,
-    proposalRepo: (ctx.container.singletons as Record<string, unknown> | undefined)
-      ?.proposalRepository
-      ? (ctx.container.get(
-          'proposalRepository'
-        ) as import('../../../repository/evolution/ProposalRepository.js').ProposalRepository)
-      : undefined,
+    evolutionGateway: ctx.container.get(
+      'evolutionGateway'
+    ) as import('../../../service/evolution/EvolutionGateway.js').EvolutionGateway,
     logger: ctx.logger,
   });
 
@@ -210,9 +208,20 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
   });
 
   // ═══════════════════════════════════════════════════════════
-  // Step 4.5: ★ Evolution Pass 候选收集
-  // 收集 decay + severe 的 Recipe（dead 已直接 deprecated，不进入 Evolution）
+  // Step 4.5: ★ Evolution Prescreen + Evolution Pass 候选收集
+  // healthy → auto-skip, dead → auto-deprecated, 只保留需要验证的
   // ═══════════════════════════════════════════════════════════
+
+  const prescreen = buildEvolutionPrescreen(
+    auditSummary,
+    recipeSnapshot.entries,
+    allDimensions as Array<{ id: string }>
+  );
+
+  ctx.logger.info('[Rescan-Internal] Evolution prescreen built', {
+    needsVerification: prescreen.needsVerification.length,
+    autoResolved: prescreen.autoResolved.length,
+  });
 
   const evolutionCandidates = auditSummary.results.filter(
     (r: { verdict: string }) => r.verdict === 'decay' || r.verdict === 'severe'
@@ -442,7 +451,7 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
       };
     });
     dispatchPipelineFill(
-      { ...fillView, existingRecipes: allExistingRecipes },
+      { ...fillView, existingRecipes: allExistingRecipes, evolutionPrescreen: prescreen },
       gapDimensions,
       fillDimensionsV3,
       'Rescan-Internal'

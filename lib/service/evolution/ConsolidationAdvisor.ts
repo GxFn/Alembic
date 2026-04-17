@@ -15,6 +15,11 @@
  *   3. 独立价值   — 内容长度、具体性、是否有独立 coreCode
  */
 
+import {
+  type FieldAnalysis,
+  type RecipeLike,
+  RecipeSimilarity,
+} from '../../domain/evolution/RecipeSimilarity.js';
 import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
@@ -62,6 +67,10 @@ export interface ConsolidationAdvice {
   coveredBy?: { id: string; title: string; similarity: number }[];
   /** 需要 Agent 关注的上下文 */
   relatedRecipes?: { id: string; title: string; similarity: number }[];
+  /** Layer 1.5: 字段级分析结果（当相似度在 0.4-0.65 模糊区间时提供） */
+  fieldAnalysis?: FieldAnalysis;
+  /** Layer 1.5: 标记为需要语义复核（similarity 0.4-0.65 且字段分析不明确） */
+  pendingSemanticReview?: boolean;
 }
 
 /** 批量分析结果 — 每个候选一条分析 + 批次内重叠检测 */
@@ -100,8 +109,6 @@ const MAX_CANDIDATES_PER_ANALYSIS = 30;
 
 /** 同域结果数 < 此值时触发全库加载（跨域可见性） */
 const CROSS_DOMAIN_THRESHOLD = 20;
-
-const WEIGHTS = { title: 0.2, clause: 0.3, code: 0.3, guard: 0.2 };
 
 /* ────────────────────── Class ────────────────────── */
 
@@ -228,9 +235,14 @@ export class ConsolidationAdvisor {
       };
     }
 
-    // ── Step 8: 中度重叠 → 判断新建还是融合 ──
+    // ── Step 8: 中度重叠 → Layer 1.5 字段级分析判断 ──
     if (moderateOverlaps.length > 0) {
       const direction = this.#computeMergeDirection(candidate, top.recipe);
+      const fields = RecipeSimilarity.analyzeFields(
+        candidate as RecipeLike,
+        top.recipe as RecipeLike
+      );
+
       if (direction.addedDimensions.length === 0) {
         // 候选不提供任何新维度 → merge
         return {
@@ -246,6 +258,28 @@ export class ConsolidationAdvisor {
             similarity: Math.round(top.similarity * 100) / 100,
           },
           mergeDirection: direction,
+          fieldAnalysis: fields,
+          relatedRecipes: scored.slice(0, 5).map((s) => ({
+            id: s.recipe.id,
+            title: s.recipe.title,
+            similarity: Math.round(s.similarity * 100) / 100,
+          })),
+        };
+      }
+
+      // Layer 1.5: 字段分析不明确 → 标记为需要语义复核
+      const isFieldDefinitive =
+        fields.triggerConflict || fields.doClauseSubset || fields.coreCodeOverlap >= 0.6;
+      if (!isFieldDefinitive) {
+        return {
+          action: 'create',
+          confidence: 0.6,
+          reason:
+            `候选与「${top.recipe.title}」有中度重叠（${(top.similarity * 100).toFixed(0)}%），` +
+            `字段分析不明确（triggerConflict=${fields.triggerConflict}, doClauseSubset=${fields.doClauseSubset}, codeOverlap=${(fields.coreCodeOverlap * 100).toFixed(0)}%），` +
+            `需要语义复核确认是否为独立知识。`,
+          fieldAnalysis: fields,
+          pendingSemanticReview: true,
           relatedRecipes: scored.slice(0, 5).map((s) => ({
             id: s.recipe.id,
             title: s.recipe.title,
@@ -262,6 +296,7 @@ export class ConsolidationAdvisor {
           `候选与「${top.recipe.title}」有中度重叠（${(top.similarity * 100).toFixed(0)}%），` +
           `但提供了新维度（${direction.addedDimensions.join('、')}），允许新建。` +
           `请确保新 Recipe 职责边界清晰。`,
+        fieldAnalysis: fields,
         relatedRecipes: scored.slice(0, 5).map((s) => ({
           id: s.recipe.id,
           title: s.recipe.title,
@@ -506,40 +541,36 @@ export class ConsolidationAdvisor {
     return merged.slice(0, MAX_CANDIDATES_PER_ANALYSIS);
   }
 
-  /* ════════════════════ 结构相似度计算 ════════════════════ */
+  /* ════════════════════ 结构相似度计算（委托 RecipeSimilarity） ════════════════════ */
 
   /**
    * 计算候选与某条 Recipe 的 4 维结构相似度。
-   * 复用 RedundancyAnalyzer 的权重配比。
+   * 委托 RecipeSimilarity 统一算法。
    */
   #computeSimilarity(candidate: CandidateForConsolidation, recipe: RecipeSummary): number {
-    const d1 = ConsolidationAdvisor.#titleJaccard(candidate.title, recipe.title);
-    const d2 = ConsolidationAdvisor.#clauseJaccard(
-      [candidate.doClause, candidate.dontClause],
-      [recipe.doClause, recipe.dontClause]
+    return RecipeSimilarity.compute(
+      {
+        title: candidate.title,
+        doClause: candidate.doClause,
+        dontClause: candidate.dontClause,
+        coreCode: candidate.coreCode,
+        guardPattern: candidate.content?.pattern ?? null,
+      },
+      recipe as RecipeLike
     );
-    const d3 = ConsolidationAdvisor.#codeSimilarity(
-      candidate.coreCode ?? null,
-      recipe.coreCode ?? null
-    );
-    const candidatePattern = candidate.content?.pattern ?? null;
-    const d4 =
-      candidatePattern && recipe.guardPattern && candidatePattern === recipe.guardPattern ? 1.0 : 0;
-
-    return WEIGHTS.title * d1 + WEIGHTS.clause * d2 + WEIGHTS.code * d3 + WEIGHTS.guard * d4;
   }
 
   /**
    * 计算两个候选之间的结构相似度（批次内重叠检测用）。
-   * 复用 title / clause / code 三维，跳过 guardPattern。
+   * 使用 3 维（无 guardPattern），权重重分配: title 0.25 / clause 0.4 / code 0.35
    */
   #computeCandidateSimilarity(a: CandidateForConsolidation, b: CandidateForConsolidation): number {
-    const d1 = ConsolidationAdvisor.#titleJaccard(a.title, b.title);
-    const d2 = ConsolidationAdvisor.#clauseJaccard(
+    const d1 = RecipeSimilarity.titleJaccard(a.title, b.title);
+    const d2 = RecipeSimilarity.clauseJaccard(
       [a.doClause, a.dontClause],
       [b.doClause, b.dontClause]
     );
-    const d3 = ConsolidationAdvisor.#codeSimilarity(a.coreCode ?? null, b.coreCode ?? null);
+    const d3 = RecipeSimilarity.codeSimilarity(a.coreCode ?? null, b.coreCode ?? null);
 
     // 批次内无 guardPattern，权重重分配: title 0.25 / clause 0.4 / code 0.35
     return 0.25 * d1 + 0.4 * d2 + 0.35 * d3;
@@ -595,96 +626,6 @@ export class ConsolidationAdvisor {
   }
 
   /* ════════════════════ 静态工具方法 ════════════════════ */
-
-  static #titleJaccard(titleA: string, titleB: string): number {
-    const wordsA = ContradictionDetector.extractTopicWords(titleA);
-    const wordsB = ContradictionDetector.extractTopicWords(titleB);
-
-    if (wordsA.size === 0 && wordsB.size === 0) {
-      return 0;
-    }
-
-    let intersection = 0;
-    for (const w of wordsA) {
-      if (wordsB.has(w)) {
-        intersection++;
-      }
-    }
-
-    const union = wordsA.size + wordsB.size - intersection;
-    return union === 0 ? 0 : intersection / union;
-  }
-
-  static #clauseJaccard(
-    clausesA: (string | null | undefined)[],
-    clausesB: (string | null | undefined)[]
-  ): number {
-    const textA = clausesA.filter(Boolean).join(' ');
-    const textB = clausesB.filter(Boolean).join(' ');
-
-    if (!textA || !textB) {
-      return 0;
-    }
-
-    const wordsA = ContradictionDetector.extractTopicWords(textA);
-    const wordsB = ContradictionDetector.extractTopicWords(textB);
-
-    if (wordsA.size === 0 && wordsB.size === 0) {
-      return 0;
-    }
-
-    let intersection = 0;
-    for (const w of wordsA) {
-      if (wordsB.has(w)) {
-        intersection++;
-      }
-    }
-
-    const union = wordsA.size + wordsB.size - intersection;
-    return union === 0 ? 0 : intersection / union;
-  }
-
-  static #codeSimilarity(codeA: string | null, codeB: string | null): number {
-    if (!codeA || !codeB) {
-      return 0;
-    }
-
-    const a = codeA.replace(/\s+/g, '');
-    const b = codeB.replace(/\s+/g, '');
-
-    if (a.length === 0 || b.length === 0) {
-      return 0;
-    }
-
-    // n-gram Jaccard (n=3) — 适合中等长度代码比较
-    return ConsolidationAdvisor.#ngramJaccard(a, b, 3);
-  }
-
-  static #ngramJaccard(a: string, b: string, n: number): number {
-    const gramsA = new Set<string>();
-    const gramsB = new Set<string>();
-
-    for (let i = 0; i <= a.length - n; i++) {
-      gramsA.add(a.slice(i, i + n));
-    }
-    for (let i = 0; i <= b.length - n; i++) {
-      gramsB.add(b.slice(i, i + n));
-    }
-
-    if (gramsA.size === 0 && gramsB.size === 0) {
-      return 0;
-    }
-
-    let intersection = 0;
-    for (const g of gramsA) {
-      if (gramsB.has(g)) {
-        intersection++;
-      }
-    }
-
-    const union = gramsA.size + gramsB.size - intersection;
-    return union === 0 ? 0 : intersection / union;
-  }
 
   /**
    * 从文本中提取关键术语（过滤掉小词和常见停用词）

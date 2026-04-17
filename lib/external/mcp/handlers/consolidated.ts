@@ -416,6 +416,25 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     };
   }
 
+  // ── pendingSemanticReview → nextAction tail instruction ──
+  if (gatewayResult.pendingSemanticReview && gatewayResult.pendingSemanticReview.length > 0) {
+    data.pendingSemanticReview = gatewayResult.pendingSemanticReview;
+    data.nextAction = {
+      tool: 'asd_consolidate',
+      args: {
+        decisions: gatewayResult.pendingSemanticReview.map((r) => ({
+          newRecipeId: '',
+          action: 'keep',
+          reasoning: r.reason,
+        })),
+      },
+      required: false,
+      reason:
+        `${gatewayResult.pendingSemanticReview.length} 条候选处于相似度模糊区间（0.4-0.65），` +
+        `字段分析不明确，建议阅读源代码后调用 asd_consolidate 判断是否需要合并。`,
+    };
+  }
+
   // 全部拒绝 → 特殊错误响应
   if (successCount === 0 && gatewayResult.rejected.length === items.length) {
     const allMissing = [...new Set(gatewayResult.rejected.flatMap((it) => it.errors))];

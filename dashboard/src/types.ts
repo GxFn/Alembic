@@ -380,7 +380,7 @@ export type ScanResultItem = Partial<KnowledgeEntry> & {
  * ════════════════════════════════════════════════════════ */
 
 export type ProposalType = 'update' | 'deprecate';
-export type ProposalSource = 'ide-agent' | 'metabolism' | 'decay-scan' | 'consolidation';
+export type ProposalSource = 'ide-agent' | 'metabolism' | 'decay-scan' | 'consolidation' | 'relevance-audit' | 'file-change';
 export type ProposalStatus = 'pending' | 'observing' | 'executed' | 'rejected' | 'expired';
 
 export interface ProposalRecord {

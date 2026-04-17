@@ -6,21 +6,21 @@
  *
  * 设计意图：
  *   - 消除 Agent tools / MCP handler / Metabolism 各自独立的 Proposal 创建逻辑
- *   - 统一 observation window 策略（按风险等级，而非按旧 ProposalType 分）
+ *   - 统一 observation window 策略（按风险等级，由 EvolutionPolicy 集中管理）
  *   - deprecate 路径按来源区分：Agent 高置信 → 立即执行；规则引擎 → 观察窗口
+ *   - lifecycle 变更通过 LifecycleStateMachine 唯一路径，Guard 拒绝 → 降级为 Proposal
  *
  * @module service/evolution/EvolutionGateway
  */
 
+import { EvolutionPolicy } from '../../domain/evolution/EvolutionPolicy.js';
 import Logger from '../../infrastructure/logging/Logger.js';
-import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type {
-  ProposalRecord,
   ProposalRepository,
   ProposalSource,
 } from '../../repository/evolution/ProposalRepository.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
-import type { RecipeLifecycleSupervisor } from './RecipeLifecycleSupervisor.js';
+import type { LifecycleStateMachine } from './LifecycleStateMachine.js';
 
 /* ────────────────────── Types ────────────────────── */
 
@@ -52,35 +52,22 @@ export interface EvolutionResult {
   error?: string;
 }
 
-/* ────────────────────── Constants ────────────────────── */
-
-const OBSERVATION_WINDOWS: Record<RiskTier, number> = {
-  low: 24 * 60 * 60 * 1000, // 24h — 高置信度 update
-  medium: 72 * 60 * 60 * 1000, // 72h — 普通置信度 update
-  high: 7 * 24 * 60 * 60 * 1000, // 7d — deprecate（规则引擎来源）
-};
-
 /* ────────────────────── Class ────────────────────── */
 
 export class EvolutionGateway {
   readonly #proposalRepo: ProposalRepository;
   readonly #knowledgeRepo: KnowledgeRepositoryImpl;
-  readonly #supervisor: RecipeLifecycleSupervisor | null;
-  readonly #signalBus: SignalBus | null;
+  readonly #lifecycle: LifecycleStateMachine;
   readonly #logger = Logger.getInstance();
 
   constructor(
     proposalRepo: ProposalRepository,
-    knowledgeRepo: KnowledgeRepositoryImpl,
-    options?: {
-      supervisor?: RecipeLifecycleSupervisor;
-      signalBus?: SignalBus;
-    }
+    lifecycle: LifecycleStateMachine,
+    knowledgeRepo: KnowledgeRepositoryImpl
   ) {
     this.#proposalRepo = proposalRepo;
+    this.#lifecycle = lifecycle;
     this.#knowledgeRepo = knowledgeRepo;
-    this.#supervisor = options?.supervisor ?? null;
-    this.#signalBus = options?.signalBus ?? null;
   }
 
   /**
@@ -100,7 +87,7 @@ export class EvolutionGateway {
         return this.#handleValid(decision, entry);
 
       case 'update':
-        return this.#handleUpdate(decision);
+        return this.#createProposal(decision);
 
       case 'deprecate':
         return this.#handleDeprecate(decision);
@@ -127,7 +114,6 @@ export class EvolutionGateway {
     decision: EvolutionDecision,
     entry: { id: string; stats?: unknown }
   ): EvolutionResult {
-    // 刷新 lastVerifiedAt
     try {
       const stats = (typeof entry.stats === 'object' ? entry.stats : {}) as Record<string, unknown>;
       stats.lastVerifiedAt = Date.now();
@@ -141,109 +127,33 @@ export class EvolutionGateway {
     return { recipeId: decision.recipeId, action: 'valid', outcome: 'verified' };
   }
 
-  #handleUpdate(decision: EvolutionDecision): EvolutionResult {
-    const tier = resolveRiskTier(decision);
-    const now = Date.now();
-    const expiresAt = now + OBSERVATION_WINDOWS[tier];
-
-    const proposal = this.#proposalRepo.create({
-      type: 'update',
-      targetRecipeId: decision.recipeId,
-      relatedRecipeIds: decision.replacedByRecipeId ? [decision.replacedByRecipeId] : [],
-      confidence: Math.max(0, Math.min(1, decision.confidence)),
-      source: decision.source,
-      description: decision.description ?? '',
-      evidence: decision.evidence ?? [],
-      expiresAt,
-    });
-
-    if (!proposal) {
-      return {
-        recipeId: decision.recipeId,
-        action: 'update',
-        outcome: 'skipped',
-        error: 'Duplicate proposal or creation failed',
-      };
-    }
-
-    this.#emitSignal('proposals-created', decision.recipeId, proposal);
-    this.#logger.info(
-      `[EvolutionGateway] update proposal created: ${proposal.id} (tier=${tier}, expires=${new Date(expiresAt).toISOString()})`
-    );
-
-    return {
-      recipeId: decision.recipeId,
-      action: 'update',
-      outcome: 'proposal-created',
-      proposalId: proposal.id,
-    };
-  }
-
   async #handleDeprecate(decision: EvolutionDecision): Promise<EvolutionResult> {
-    // Agent 高置信度（ide-agent/decay-scan + confidence ≥ 0.8）→ 立即执行
-    if (decision.source !== 'metabolism' && decision.confidence >= 0.8) {
+    if (
+      EvolutionPolicy.shouldImmediateExecute(decision.action, decision.confidence, decision.source)
+    ) {
       return this.#immediateDeprecate(decision);
     }
 
-    // 规则引擎 / 低置信度 → 创建 proposal with 7d 观察窗口
-    const now = Date.now();
-    const expiresAt = now + OBSERVATION_WINDOWS.high;
-
-    const proposal = this.#proposalRepo.create({
-      type: 'deprecate',
-      targetRecipeId: decision.recipeId,
-      relatedRecipeIds: decision.replacedByRecipeId ? [decision.replacedByRecipeId] : [],
-      confidence: Math.max(0, Math.min(1, decision.confidence)),
-      source: decision.source,
-      description: decision.description ?? decision.reason ?? '',
-      evidence: decision.evidence ?? [],
-      expiresAt,
-    });
-
-    if (!proposal) {
-      return {
-        recipeId: decision.recipeId,
-        action: 'deprecate',
-        outcome: 'skipped',
-        error: 'Duplicate proposal or creation failed',
-      };
-    }
-
-    this.#emitSignal('proposals-created', decision.recipeId, proposal);
-    this.#logger.info(
-      `[EvolutionGateway] deprecate proposal created: ${proposal.id} (7d observation)`
-    );
-
-    return {
-      recipeId: decision.recipeId,
-      action: 'deprecate',
-      outcome: 'proposal-created',
-      proposalId: proposal.id,
-    };
+    return this.#createProposal(decision);
   }
 
   async #immediateDeprecate(decision: EvolutionDecision): Promise<EvolutionResult> {
     const reason = decision.reason ?? decision.description ?? 'Agent confirmed deprecation';
 
     try {
-      if (this.#supervisor) {
-        const result = await this.#supervisor.transition({
-          recipeId: decision.recipeId,
-          targetState: 'deprecated',
-          trigger: 'evolution-gateway',
-          evidence: { reason },
-          operatorId: decision.source,
-        });
+      const result = await this.#lifecycle.transition({
+        recipeId: decision.recipeId,
+        targetState: 'deprecated',
+        trigger: 'evolution-gateway',
+        evidence: { reason },
+        operatorId: decision.source,
+      });
 
-        if (!result.success) {
-          // Supervisor 拒绝 → 降级直接更新
-          await this.#knowledgeRepo.updateLifecycle(decision.recipeId, 'deprecated');
-        }
-      } else {
-        await this.#knowledgeRepo.updateLifecycle(decision.recipeId, 'deprecated');
+      if (!result.success) {
+        // Guard 拒绝 → 降级为创建 Proposal（让人类审查）
+        return this.#createProposal(decision);
       }
 
-      // 解决关联的 deprecate proposals
       this.#resolveExistingDeprecateProposals(decision.recipeId, reason, decision.source);
 
       this.#logger.info(
@@ -265,6 +175,43 @@ export class EvolutionGateway {
     }
   }
 
+  /* ═══════════════════ Proposal Creation ═══════════════════ */
+
+  #createProposal(decision: EvolutionDecision): EvolutionResult {
+    const action = decision.action as 'update' | 'deprecate';
+
+    const proposal = this.#proposalRepo.create({
+      type: action,
+      targetRecipeId: decision.recipeId,
+      relatedRecipeIds: decision.replacedByRecipeId ? [decision.replacedByRecipeId] : [],
+      confidence: Math.max(0, Math.min(1, decision.confidence)),
+      source: decision.source,
+      description: decision.description ?? decision.reason ?? '',
+      evidence: decision.evidence ?? [],
+      expiresAt: 0, // 信号驱动：不再依赖时间过期，由 ProposalExecutor 按信号评估
+    });
+
+    if (!proposal) {
+      return {
+        recipeId: decision.recipeId,
+        action: decision.action,
+        outcome: 'skipped',
+        error: 'Duplicate proposal or creation failed',
+      };
+    }
+
+    this.#logger.info(
+      `[EvolutionGateway] ${action} proposal created: ${proposal.id} (signal-driven, no expiry)`
+    );
+
+    return {
+      recipeId: decision.recipeId,
+      action: decision.action,
+      outcome: 'proposal-created',
+      proposalId: proposal.id,
+    };
+  }
+
   /* ═══════════════════ Helpers ═══════════════════ */
 
   #resolveExistingDeprecateProposals(recipeId: string, reason: string, resolvedBy: string): void {
@@ -281,34 +228,4 @@ export class EvolutionGateway {
       );
     }
   }
-
-  #emitSignal(event: string, recipeId: string, proposal: ProposalRecord): void {
-    if (!this.#signalBus) {
-      return;
-    }
-    this.#signalBus.send('lifecycle', 'EvolutionGateway', proposal.confidence, {
-      target: recipeId,
-      metadata: {
-        event,
-        proposalId: proposal.id,
-        proposalType: proposal.type,
-        source: proposal.source,
-      },
-    });
-  }
-}
-
-/* ────────────────────── Util ────────────────────── */
-
-export function resolveRiskTier(decision: {
-  action: EvolutionAction;
-  confidence: number;
-}): RiskTier {
-  if (decision.action === 'deprecate') {
-    return 'high';
-  }
-  if (decision.action === 'update' && decision.confidence >= 0.8) {
-    return 'low';
-  }
-  return 'medium';
 }

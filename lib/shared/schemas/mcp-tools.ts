@@ -429,6 +429,29 @@ export const EvolveInput = z.object({
 });
 export type EvolveInput = z.infer<typeof EvolveInput>;
 
+// ── asd_consolidate ──
+
+const ConsolidateDecisionSchema = z.object({
+  newRecipeId: z.string().describe('新创建的 Recipe ID（pendingSemanticReview 中返回的）'),
+  action: z
+    .enum(['keep', 'merge', 'reject'])
+    .describe('keep=保留为独立 Recipe, merge=合并到已有 Recipe, reject=拒绝（deprecated）'),
+  mergeTargetId: z.string().optional().describe('action=merge 时必填: 合并目标的已有 Recipe ID'),
+  mergeStrategy: z
+    .enum(['absorb', 'complement'])
+    .optional()
+    .describe('absorb=完全吸收, complement=补充新维度'),
+  reasoning: z.string().describe('Agent 解释决策原因'),
+});
+
+export const ConsolidateInput = z.object({
+  decisions: z
+    .array(ConsolidateDecisionSchema)
+    .min(1)
+    .describe('语义融合决策数组，每个元素对应一个 pendingSemanticReview 条目的决策'),
+});
+export type ConsolidateInput = z.infer<typeof ConsolidateInput>;
+
 // ══════════════════════════════════════════════════════
 //  工具名 → Schema 映射表（用于 wrapHandler 自动注入校验）
 // ══════════════════════════════════════════════════════
@@ -452,4 +475,5 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   asd_knowledge_lifecycle: KnowledgeLifecycleInput,
   asd_panorama: PanoramaInput,
   asd_evolve: EvolveInput,
+  asd_consolidate: ConsolidateInput,
 };

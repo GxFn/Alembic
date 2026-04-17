@@ -18,16 +18,23 @@ import * as vscode from 'vscode';
 import * as cp from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { ApiClient } from './apiClient';
+import type { ApiClient, FileChangeReport } from './apiClient';
 import { hasAnyProject } from './projectScope';
 
 /* ═══════════════════ Event Model ═══════════════════ */
+
+export type FileChangeEventSource = 'ide-edit' | 'git-head' | 'git-worktree';
 
 export interface FileChangeEvent {
   type: 'created' | 'modified' | 'renamed' | 'deleted';
   path: string;
   oldPath?: string;
+  /** 事件来源（文档 §5.1 I2）— 仅 'ide-edit' 允许触发弹窗 */
+  eventSource?: FileChangeEventSource;
 }
+
+/** Report 回调签名 —— 由 Collector 触发，extension.ts 订阅以弹窗 */
+export type FileChangeReportListener = (report: FileChangeReport) => void;
 
 /* ═══════════════════ EventBuffer ═══════════════════ */
 
@@ -38,9 +45,11 @@ class EventBuffer {
   private pending = new Map<string, FileChangeEvent>();
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly apiClient: ApiClient;
+  private readonly onReport: FileChangeReportListener | undefined;
 
-  constructor(apiClient: ApiClient) {
+  constructor(apiClient: ApiClient, onReport?: FileChangeReportListener) {
     this.apiClient = apiClient;
+    this.onReport = onReport;
   }
 
   push(event: FileChangeEvent): void {
@@ -101,8 +110,16 @@ class EventBuffer {
     const filtered = events.filter(e => !this.isIgnored(e.path));
     if (filtered.length === 0) { return; }
 
-    // 非阻塞发送，失败静默
-    this.apiClient.reportFileChanges(filtered).catch(() => {});
+    // 发送并处理响应；失败（返回 null）时静默跳过弹窗
+    this.apiClient.reportFileChanges(filtered).then((report) => {
+      if (report && this.onReport) {
+        try {
+          this.onReport(report);
+        } catch {
+          // 监听器异常不影响事件采集主链路
+        }
+      }
+    }).catch(() => {});
   }
 
   private isIgnored(filePath: string): boolean {
@@ -130,8 +147,9 @@ export class FileChangeCollector implements vscode.Disposable {
   constructor(
     private readonly apiClient: ApiClient,
     context: vscode.ExtensionContext,
+    onReport?: FileChangeReportListener,
   ) {
-    this.buffer = new EventBuffer(apiClient);
+    this.buffer = new EventBuffer(apiClient, onReport);
 
     if (!hasAnyProject()) { return; }
 
@@ -162,6 +180,7 @@ export class FileChangeCollector implements vscode.Disposable {
           type: 'renamed',
           path: vscode.workspace.asRelativePath(f.newUri),
           oldPath: vscode.workspace.asRelativePath(f.oldUri),
+          eventSource: 'ide-edit',
         });
       }
     });
@@ -173,6 +192,7 @@ export class FileChangeCollector implements vscode.Disposable {
         this.buffer.push({
           type: 'deleted',
           path: vscode.workspace.asRelativePath(f),
+          eventSource: 'ide-edit',
         });
       }
     });
@@ -184,6 +204,7 @@ export class FileChangeCollector implements vscode.Disposable {
         this.buffer.push({
           type: 'created',
           path: vscode.workspace.asRelativePath(f),
+          eventSource: 'ide-edit',
         });
       }
     });
@@ -245,7 +266,7 @@ export class FileChangeCollector implements vscode.Disposable {
 
     const files = stdout.split('\n').filter(f => f.length > 0);
     for (const f of files) {
-      this.buffer.push({ type: 'modified', path: f });
+      this.buffer.push({ type: 'modified', path: f, eventSource: 'git-head' });
     }
   }
 
@@ -306,6 +327,7 @@ export class FileChangeCollector implements vscode.Disposable {
         this.buffer.push({
           type: untrackedSet.has(f) ? 'created' : 'modified',
           path: f,
+          eventSource: 'git-worktree',
         });
       }
     }

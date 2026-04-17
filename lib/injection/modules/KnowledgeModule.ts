@@ -28,10 +28,10 @@ import { ContradictionDetector } from '../../service/evolution/ContradictionDete
 import { DecayDetector } from '../../service/evolution/DecayDetector.js';
 import { EnhancementSuggester } from '../../service/evolution/EnhancementSuggester.js';
 import { EvolutionGateway } from '../../service/evolution/EvolutionGateway.js';
+import { FileChangeHandler } from '../../service/evolution/FileChangeHandler.js';
 import { KnowledgeMetabolism } from '../../service/evolution/KnowledgeMetabolism.js';
+import { LifecycleStateMachine } from '../../service/evolution/LifecycleStateMachine.js';
 import { ProposalExecutor } from '../../service/evolution/ProposalExecutor.js';
-import { ReactiveEvolutionService } from '../../service/evolution/ReactiveEvolutionService.js';
-import { RecipeLifecycleSupervisor } from '../../service/evolution/RecipeLifecycleSupervisor.js';
 import { RedundancyAnalyzer } from '../../service/evolution/RedundancyAnalyzer.js';
 import { StagingManager } from '../../service/evolution/StagingManager.js';
 import { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
@@ -326,35 +326,23 @@ export function register(c: ServiceContainer) {
     );
   });
 
-  c.singleton('lifecycleSupervisor', (ct: ServiceContainer) => {
+  c.singleton('lifecycleStateMachine', (ct: ServiceContainer) => {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
-    return new RecipeLifecycleSupervisor(knowledgeRepo, {
-      signalBus:
-        (ct.singletons.signalBus as
-          | import('../../infrastructure/signal/SignalBus.js').SignalBus
-          | undefined) || undefined,
-      lifecycleEventRepo: ct.services.lifecycleEventRepository
-        ? (ct.get('lifecycleEventRepository') as LifecycleEventRepository)
-        : undefined,
-      proposalRepo: ct.services.proposalRepository
-        ? (ct.get('proposalRepository') as ProposalRepository)
-        : undefined,
-    });
+    const lifecycleEventRepo = ct.get('lifecycleEventRepository') as LifecycleEventRepository;
+    const signalBus = ct.get(
+      'signalBus'
+    ) as import('../../infrastructure/signal/SignalBus.js').SignalBus;
+    const proposalRepo = ct.get('proposalRepository') as ProposalRepository;
+    return new LifecycleStateMachine(knowledgeRepo, lifecycleEventRepo, signalBus, proposalRepo);
   });
 
   c.singleton('proposalExecutor', (ct: ServiceContainer) => {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
-    return new ProposalExecutor(knowledgeRepo, ct.get('proposalRepository') as ProposalRepository, {
-      signalBus:
-        (ct.singletons.signalBus as
-          | import('../../infrastructure/signal/SignalBus.js').SignalBus
-          | undefined) || undefined,
-      contentPatcher: ct.get('contentPatcher') as ContentPatcher,
-      supervisor: ct.get('lifecycleSupervisor') as RecipeLifecycleSupervisor,
-      knowledgeEdgeRepo: ct.services.knowledgeEdgeRepository
-        ? (ct.get('knowledgeEdgeRepository') as KnowledgeEdgeRepositoryImpl)
-        : undefined,
-    });
+    const proposalRepo = ct.get('proposalRepository') as ProposalRepository;
+    const lifecycle = ct.get('lifecycleStateMachine') as LifecycleStateMachine;
+    const contentPatcher = ct.get('contentPatcher') as ContentPatcher;
+    const edgeRepo = ct.get('knowledgeEdgeRepository') as KnowledgeEdgeRepositoryImpl;
+    return new ProposalExecutor(knowledgeRepo, proposalRepo, lifecycle, contentPatcher, edgeRepo);
   });
 
   c.singleton('consolidationAdvisor', (ct: ServiceContainer) => {
@@ -364,34 +352,29 @@ export function register(c: ServiceContainer) {
 
   c.singleton('evolutionGateway', (ct: ServiceContainer) => {
     const proposalRepo = ct.get('proposalRepository') as ProposalRepository;
+    const lifecycle = ct.get('lifecycleStateMachine') as LifecycleStateMachine;
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
-    return new EvolutionGateway(proposalRepo, knowledgeRepo, {
-      supervisor: ct.get('lifecycleSupervisor') as RecipeLifecycleSupervisor | undefined,
-      signalBus:
-        (ct.singletons.signalBus as
-          | import('../../infrastructure/signal/SignalBus.js').SignalBus
-          | undefined) || undefined,
-    });
+    return new EvolutionGateway(proposalRepo, lifecycle, knowledgeRepo);
   });
 
-  c.singleton('reactiveEvolutionService', (ct: ServiceContainer) => {
+  c.singleton('fileChangeHandler', (ct: ServiceContainer) => {
     const sourceRefRepo = ct.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl;
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
     const contentPatcher = ct.get('contentPatcher') as ContentPatcher;
-    const supervisor = ct.get('lifecycleSupervisor') as RecipeLifecycleSupervisor;
-    return new ReactiveEvolutionService(sourceRefRepo, knowledgeRepo, contentPatcher, supervisor, {
+    const gateway = ct.get('evolutionGateway') as EvolutionGateway;
+    return new FileChangeHandler(sourceRefRepo, knowledgeRepo, contentPatcher, {
       signalBus:
         (ct.singletons.signalBus as
           | import('../../infrastructure/signal/SignalBus.js').SignalBus
           | undefined) || undefined,
+      evolutionGateway: gateway,
     });
   });
 
   c.singleton('fileChangeDispatcher', (ct: ServiceContainer) => {
     const dispatcher = new FileChangeDispatcher();
-    // 注册 ReactiveEvolutionService 作为订阅者
-    const reactiveService = ct.get('reactiveEvolutionService') as ReactiveEvolutionService;
-    dispatcher.register(reactiveService);
+    const handler = ct.get('fileChangeHandler') as FileChangeHandler;
+    dispatcher.register(handler);
     return dispatcher;
   });
 }

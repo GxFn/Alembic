@@ -1,5 +1,5 @@
 /**
- * RecipeLifecycleSupervisor 单元测试
+ * LifecycleStateMachine 单元测试
  *
  * Mock Repo + LifecycleEventRepo + SignalBus，验证:
  *   - 合法/非法转移
@@ -9,7 +9,7 @@
  *   - 健康摘要
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { RecipeLifecycleSupervisor } from '../../lib/service/evolution/RecipeLifecycleSupervisor.js';
+import { LifecycleStateMachine } from '../../lib/service/evolution/LifecycleStateMachine.js';
 
 /* ── Mock factories ── */
 
@@ -120,22 +120,34 @@ function createMockSignalBus() {
   };
 }
 
+function createMockProposalRepo() {
+  return {
+    find: vi.fn(() => []),
+    findByTarget: vi.fn(() => []),
+    stats: vi.fn(() => ({ pending: 0, observing: 0, executed: 0, rejected: 0, expired: 0 })),
+  };
+}
+
 /* ── Tests ── */
 
-describe('RecipeLifecycleSupervisor', () => {
+describe('LifecycleStateMachine', () => {
   let mockRepo: ReturnType<typeof createMockRepo>;
   let mockLifecycleEventRepo: ReturnType<typeof createMockRawDb>;
   let signalBus: ReturnType<typeof createMockSignalBus>;
-  let supervisor: RecipeLifecycleSupervisor;
+  let mockProposalRepo: ReturnType<typeof createMockProposalRepo>;
+  let supervisor: LifecycleStateMachine;
 
   beforeEach(() => {
     mockRepo = createMockRepo();
     mockLifecycleEventRepo = createMockRawDb();
     signalBus = createMockSignalBus();
-    supervisor = new RecipeLifecycleSupervisor(mockRepo as never, {
-      signalBus: signalBus as never,
-      lifecycleEventRepo: mockLifecycleEventRepo as never,
-    });
+    mockProposalRepo = createMockProposalRepo();
+    supervisor = new LifecycleStateMachine(
+      mockRepo as never,
+      mockLifecycleEventRepo as never,
+      signalBus as never,
+      mockProposalRepo as never
+    );
   });
 
   describe('transition — valid transitions', () => {
@@ -264,7 +276,7 @@ describe('RecipeLifecycleSupervisor', () => {
 
       expect(signalBus.send).toHaveBeenCalledWith(
         'lifecycle',
-        'RecipeLifecycleSupervisor',
+        'LifecycleStateMachine',
         0.5,
         expect.objectContaining({
           target: 'r-001',
@@ -288,10 +300,12 @@ describe('RecipeLifecycleSupervisor', () => {
         },
       });
       mockLifecycleEventRepo = createMockRawDb();
-      supervisor = new RecipeLifecycleSupervisor(mockRepo as never, {
-        signalBus: signalBus as never,
-        lifecycleEventRepo: mockLifecycleEventRepo as never,
-      });
+      supervisor = new LifecycleStateMachine(
+        mockRepo as never,
+        mockLifecycleEventRepo as never,
+        signalBus as never,
+        mockProposalRepo as never
+      );
 
       const result = await supervisor.transition({
         recipeId: 'r-002',
@@ -317,10 +331,12 @@ describe('RecipeLifecycleSupervisor', () => {
         },
       });
       mockLifecycleEventRepo = createMockRawDb();
-      supervisor = new RecipeLifecycleSupervisor(mockRepo as never, {
-        signalBus: signalBus as never,
-        lifecycleEventRepo: mockLifecycleEventRepo as never,
-      });
+      supervisor = new LifecycleStateMachine(
+        mockRepo as never,
+        mockLifecycleEventRepo as never,
+        signalBus as never,
+        mockProposalRepo as never
+      );
 
       const result = await supervisor.checkTimeouts();
 
@@ -338,10 +354,12 @@ describe('RecipeLifecycleSupervisor', () => {
         },
       });
       mockLifecycleEventRepo = createMockRawDb();
-      supervisor = new RecipeLifecycleSupervisor(mockRepo as never, {
-        signalBus: signalBus as never,
-        lifecycleEventRepo: mockLifecycleEventRepo as never,
-      });
+      supervisor = new LifecycleStateMachine(
+        mockRepo as never,
+        mockLifecycleEventRepo as never,
+        signalBus as never,
+        mockProposalRepo as never
+      );
 
       const result = await supervisor.checkTimeouts();
 
@@ -349,28 +367,28 @@ describe('RecipeLifecycleSupervisor', () => {
     });
   });
 
-  describe('getTransitionHistory', () => {
+  describe('getHistory', () => {
     it('returns empty array when no events', () => {
-      const history = supervisor.getTransitionHistory('r-001');
+      const history = supervisor.getHistory('r-001');
       expect(history).toEqual([]);
     });
   });
 
-  describe('getHealthSummary', () => {
+  describe('getHealth', () => {
     it('returns state distribution', async () => {
-      const summary = await supervisor.getHealthSummary();
+      const summary = await supervisor.getHealth();
       expect(summary.stateDistribution).toBeDefined();
       expect(summary.stateDistribution.active).toBe(1);
     });
 
     it('returns intermediate state stuck info', async () => {
-      const summary = await supervisor.getHealthSummary();
+      const summary = await supervisor.getHealth();
       expect(summary.intermediateStates).toBeDefined();
       expect(summary.intermediateStates.stuckEvolving).toBeDefined();
     });
 
     it('returns proposal metrics', async () => {
-      const summary = await supervisor.getHealthSummary();
+      const summary = await supervisor.getHealth();
       expect(summary.proposalMetrics).toBeDefined();
       expect(summary.proposalMetrics.executionRate).toBeTypeOf('number');
     });

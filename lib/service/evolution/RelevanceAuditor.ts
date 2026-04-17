@@ -1,26 +1,15 @@
 /**
- * RecipeRelevanceAuditor — 基于代码证据验证 Recipe 当前相关性
+ * RelevanceAuditor — 基于代码证据验证 Recipe 当前相关性
  *
- * Rescan 时主动触发，检查每个保留 Recipe 的代码证据是否仍然存在：
- *   1. 触发模式匹配 (trigger 引用的文件类型/路径模式是否有匹配)
- *   2. 代码符号存活 (content.pattern 引用的类名/函数名是否在 AST 中)
- *   3. 依赖关系完整 (涉及模块依赖是否在依赖图中)
- *   4. 源代码文件存活 (reasoning.sources + content.codeChanges 的文件是否存在)
+ * Rescan 时主动触发，检查每个保留 Recipe 的代码证据是否仍然存在。
+ * 分级判定由 EvolutionPolicy.classifyRelevance() 集中管理。
  *
- * 评分后驱动快速衰退：
- *   - healthy (80-100): 无操作
- *   - watch (60-79): 报告警告
- *   - decay (40-59): active → decaying (7d grace)
- *   - severe (20-39): active → decaying (3d grace)
- *   - dead (0-19): active → deprecated (immediate)
- *
- * 支持 Category 权重豁免：架构/规范类 Recipe 侧重触发模式而非具体符号。
- *
- * @module service/evolution/RecipeRelevanceAuditor
+ * @module service/evolution/RelevanceAuditor
  */
 
-import type { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
+import { EvolutionPolicy } from '../../domain/evolution/EvolutionPolicy.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import type { EvolutionGateway } from './EvolutionGateway.js';
 
 // ── 类型定义 ──────────────────────────────────────────────────
 
@@ -137,24 +126,20 @@ const CATEGORY_WEIGHT_OVERRIDES: Record<string, Partial<EvidenceWeights>> = {
   },
 };
 
-/** Grace Period 常量 */
-const GRACE_PERIOD_DECAY = 7 * 24 * 60 * 60 * 1000; // 7d
-const GRACE_PERIOD_SEVERE = 3 * 24 * 60 * 60 * 1000; // 3d
+// ── RelevanceAuditor ──────────────────────────────────
 
-// ── RecipeRelevanceAuditor ──────────────────────────────────
-
-export class RecipeRelevanceAuditor {
+export class RelevanceAuditor {
   readonly #knowledgeRepo: KnowledgeRepositoryImpl;
-  readonly #proposalRepo: ProposalRepository | null;
+  readonly #gateway: EvolutionGateway;
   readonly #logger: AuditorLogger;
 
   constructor(opts: {
     knowledgeRepo: KnowledgeRepositoryImpl;
-    proposalRepo?: ProposalRepository;
+    evolutionGateway: EvolutionGateway;
     logger?: AuditorLogger;
   }) {
     this.#knowledgeRepo = opts.knowledgeRepo;
-    this.#proposalRepo = opts.proposalRepo ?? null;
+    this.#gateway = opts.evolutionGateway;
     this.#logger = opts.logger || { info() {}, warn() {} };
   }
 
@@ -215,7 +200,7 @@ export class RecipeRelevanceAuditor {
       }
     }
 
-    this.#logger.info('[RecipeRelevanceAuditor] Audit complete', {
+    this.#logger.info('[RelevanceAuditor] Audit complete', {
       total: summary.totalAudited,
       healthy: summary.healthy,
       watch: summary.watch,
@@ -321,19 +306,9 @@ export class RecipeRelevanceAuditor {
         codeFilesExist * weights.codeFilesExist * 100
     );
 
-    // 分级判定
-    let verdict: RelevanceAuditResult['verdict'];
-    if (relevanceScore >= 80) {
-      verdict = 'healthy';
-    } else if (relevanceScore >= 60) {
-      verdict = 'watch';
-    } else if (relevanceScore >= 40) {
-      verdict = 'decay';
-    } else if (relevanceScore >= 20) {
-      verdict = 'severe';
-    } else {
-      verdict = 'dead';
-    }
+    // 分级判定——使用 EvolutionPolicy 集中管理
+    const classification = EvolutionPolicy.classifyRelevance(relevanceScore);
+    const verdict = classification.verdict;
 
     return {
       recipeId: recipe.id,
@@ -546,109 +521,43 @@ export class RecipeRelevanceAuditor {
     return [...new Set(files)];
   }
 
-  /** 执行衰退状态转换 */
+  /** 执行衰退状态转换 — 统一走 EvolutionGateway */
   async #executeDecay(result: RelevanceAuditResult): Promise<boolean> {
     try {
-      const now = Date.now();
+      const description = `[Rescan Relevance Audit] Score: ${result.relevanceScore}. ${result.decayReasons.join('; ')}`;
+      const evidence = [{ relevanceScore: result.relevanceScore, evidence: result.evidence }];
 
-      switch (result.verdict) {
-        case 'dead': {
-          await this.#knowledgeRepo.updateLifecycle(result.recipeId, 'deprecated');
+      // dead → 高置信度 deprecate（Gateway 会立即执行）
+      // severe/decay → 较低置信度 deprecate（Gateway 会创建观察窗口 Proposal）
+      const { confidence } = EvolutionPolicy.classifyRelevance(result.relevanceScore);
 
-          await this.#createProposal({
-            targetRecipeId: result.recipeId,
-            type: 'deprecate',
-            source: 'rescan-relevance-audit',
-            status: 'executed',
-            description: `[Rescan Relevance Audit] Score: ${result.relevanceScore}. ${result.decayReasons.join('; ')}`,
-            evidence: { relevanceScore: result.relevanceScore, evidence: result.evidence },
-            expiresAt: now,
-          });
+      const gatewayResult = await this.#gateway.submit({
+        recipeId: result.recipeId,
+        action: 'deprecate',
+        source: 'relevance-audit',
+        confidence,
+        description,
+        evidence,
+      });
 
-          this.#logger.info(
-            `[RecipeRelevanceAuditor] DEAD: "${result.title}" → deprecated (score: ${result.relevanceScore})`
-          );
-          return true;
-        }
-
-        case 'severe': {
-          await this.#knowledgeRepo.updateLifecycle(result.recipeId, 'decaying');
-
-          await this.#createProposal({
-            targetRecipeId: result.recipeId,
-            type: 'deprecate',
-            source: 'rescan-relevance-audit',
-            status: 'observing',
-            description: `[Rescan Relevance Audit] Score: ${result.relevanceScore}. ${result.decayReasons.join('; ')}`,
-            evidence: { relevanceScore: result.relevanceScore, evidence: result.evidence },
-            expiresAt: now + GRACE_PERIOD_SEVERE,
-          });
-
-          this.#logger.info(
-            `[RecipeRelevanceAuditor] SEVERE: "${result.title}" → decaying (3d grace, score: ${result.relevanceScore})`
-          );
-          return true;
-        }
-
-        case 'decay': {
-          await this.#knowledgeRepo.updateLifecycle(result.recipeId, 'decaying');
-
-          await this.#createProposal({
-            targetRecipeId: result.recipeId,
-            type: 'deprecate',
-            source: 'rescan-relevance-audit',
-            status: 'observing',
-            description: `[Rescan Relevance Audit] Score: ${result.relevanceScore}. ${result.decayReasons.join('; ')}`,
-            evidence: { relevanceScore: result.relevanceScore, evidence: result.evidence },
-            expiresAt: now + GRACE_PERIOD_DECAY,
-          });
-
-          this.#logger.info(
-            `[RecipeRelevanceAuditor] DECAY: "${result.title}" → decaying (7d grace, score: ${result.relevanceScore})`
-          );
-          return true;
-        }
-
-        default:
-          return false;
+      if (gatewayResult.outcome === 'error') {
+        this.#logger.warn(
+          `[RelevanceAuditor] Gateway rejected ${result.recipeId}: ${gatewayResult.error}`
+        );
+        return false;
       }
+
+      this.#logger.info(
+        `[RelevanceAuditor] ${result.verdict.toUpperCase()}: "${result.title}" → ${gatewayResult.outcome} (score: ${result.relevanceScore})`
+      );
+      return true;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.#logger.warn(
-        `[RecipeRelevanceAuditor] executeDecay failed for ${result.recipeId}: ${msg}`
-      );
+      this.#logger.warn(`[RelevanceAuditor] executeDecay failed for ${result.recipeId}: ${msg}`);
       return false;
     }
   }
-
-  /** 创建 evolution proposal */
-  async #createProposal(input: {
-    targetRecipeId: string;
-    type: string;
-    source: string;
-    status: string;
-    description: string;
-    evidence: Record<string, unknown>;
-    expiresAt: number;
-  }): Promise<void> {
-    try {
-      if (this.#proposalRepo) {
-        this.#proposalRepo.create({
-          type: input.type as 'deprecate',
-          targetRecipeId: input.targetRecipeId,
-          relatedRecipeIds: [],
-          confidence: 0.95,
-          source:
-            input.source as import('../../repository/evolution/ProposalRepository.js').ProposalSource,
-          description: input.description,
-          evidence: [input.evidence],
-          status: input.status as 'executed' | 'observing',
-          expiresAt: input.expiresAt,
-        });
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.#logger.warn(`[RecipeRelevanceAuditor] createProposal failed: ${msg}`);
-    }
-  }
 }
+
+/** @deprecated Use RelevanceAuditor instead */
+export { RelevanceAuditor as RecipeRelevanceAuditor };
