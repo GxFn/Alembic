@@ -1182,10 +1182,10 @@ export class GuardCheckEngine {
    * 利用 AstAnalyzer.analyzeFile() 的完整输出产出 violations:
    *
    * --- 方法度量 ---
-   *   - ast_class_bloat: 类方法数过多 (>20)
-   *   - ast_method_complexity: 高圈复杂度 (>15)
-   *   - ast_method_too_long: 方法行数过长 (>80)
-   *   - ast_deep_nesting: 方法嵌套过深 (>5)
+   *   - ast_class_bloat: 类方法数过多 (>30)
+   *   - ast_method_complexity: 高圈复杂度 (>20)
+   *   - ast_method_too_long: 方法行数过长 (>120)
+   *   - ast_deep_nesting: 方法嵌套过深 (>6)
    *
    * --- 继承图检查 ---
    *   - ast_deep_inheritance: 继承链过深 (>4)
@@ -1198,7 +1198,7 @@ export class GuardCheckEngine {
    *   - ast_mutable_public_collection: 公开可变集合属性
    *
    * --- 设计模式/反模式检测 ---
-   *   - ast_god_class: 方法+属性过多的上帝类 (>30 methods + >15 properties)
+   *   - ast_god_class: 方法+属性过多的上帝类 (>40 methods + >20 properties)
    *   - ast_singleton_abuse: 过多单例模式
    *   - ast_missing_weakify: block 内 self 捕获但未使用 weakify
    */
@@ -1265,18 +1265,20 @@ export class GuardCheckEngine {
     // — 阈值配置（可通过 codeLevelThresholds 覆盖） —
     const thresholds = this._guardConfig.codeLevelThresholds || {};
     const classBloatLimit = (
-      typeof thresholds['ast_class_bloat'] === 'number' ? thresholds['ast_class_bloat'] : 20
+      typeof thresholds['ast_class_bloat'] === 'number' ? thresholds['ast_class_bloat'] : 30
     ) as number;
     const complexityLimit = (
       typeof thresholds['ast_method_complexity'] === 'number'
         ? thresholds['ast_method_complexity']
-        : 15
+        : 20
     ) as number;
     const methodLengthLimit = (
-      typeof thresholds['ast_method_too_long'] === 'number' ? thresholds['ast_method_too_long'] : 80
+      typeof thresholds['ast_method_too_long'] === 'number'
+        ? thresholds['ast_method_too_long']
+        : 120
     ) as number;
     const nestingLimit = (
-      typeof thresholds['ast_deep_nesting'] === 'number' ? thresholds['ast_deep_nesting'] : 5
+      typeof thresholds['ast_deep_nesting'] === 'number' ? thresholds['ast_deep_nesting'] : 6
     ) as number;
     const inheritanceDepthLimit = (
       typeof thresholds['ast_deep_inheritance'] === 'number'
@@ -1291,12 +1293,12 @@ export class GuardCheckEngine {
     const godClassMethodLimit = (
       typeof thresholds['ast_god_class_methods'] === 'number'
         ? thresholds['ast_god_class_methods']
-        : 30
+        : 40
     ) as number;
     const godClassPropertyLimit = (
       typeof thresholds['ast_god_class_properties'] === 'number'
         ? thresholds['ast_god_class_properties']
-        : 15
+        : 20
     ) as number;
 
     // ══════════════════════════════════════════════════════════
