@@ -18,12 +18,14 @@
  * @module infrastructure/cache/CacheCoordinator
  */
 
+import type { Startable } from '../../shared/lifecycle.js';
+import { timerRegistry } from '../../shared/TimerRegistry.js';
 import type { SqliteDatabase } from '../database/DatabaseConnection.js';
 import Logger from '../logging/Logger.js';
 
 export type InvalidateHandler = () => void;
 
-export class CacheCoordinator {
+export class CacheCoordinator implements Startable {
   readonly #db: SqliteDatabase;
   #lastVersion: number;
   #interval: ReturnType<typeof setInterval> | null = null;
@@ -41,11 +43,11 @@ export class CacheCoordinator {
     if (this.#interval) {
       return;
     }
-    this.#interval = setInterval(() => this.#check(), this.#pollMs);
-    // unref 避免阻止进程正常退出
-    if (this.#interval.unref) {
-      this.#interval.unref();
-    }
+    this.#interval = timerRegistry.setInterval(
+      () => this.#check(),
+      this.#pollMs,
+      'CacheCoordinator/poll'
+    );
     Logger.info('[CacheCoordinator] Started', {
       pollMs: this.#pollMs,
       subscribers: this.#subscribers.size,
@@ -55,9 +57,13 @@ export class CacheCoordinator {
   /** 停止轮询 */
   stop(): void {
     if (this.#interval) {
-      clearInterval(this.#interval);
+      timerRegistry.clear(this.#interval);
       this.#interval = null;
     }
+  }
+
+  dispose(): void {
+    this.stop();
   }
 
   /**
