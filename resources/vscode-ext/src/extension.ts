@@ -74,7 +74,7 @@ function buildEvolvePrompt(report: FileChangeReport): string {
  *   C1 eventSource === 'ide-edit'（git 事件永不弹窗）
  *   C2 至少一条 details.impactLevel === 'direct'
  *   C3 同一 Recipe 10 分钟内不重弹
- *   C4 按钮: 'Ask Copilot'（外部 Agent 走 MCP）/ 'Run asd evolve-check'（内部 Agent 走 CLI）
+ *   C4 按钮: 'Review'（外部 Agent 走 MCP）/ 'Auto Check'（内部 Agent 走 CLI）
  */
 function handleReactiveReport(report: FileChangeReport): void {
   if (report.eventSource !== 'ide-edit') { return; }
@@ -105,14 +105,14 @@ function handleReactiveReport(report: FileChangeReport): void {
 
   void vscode.window.showInformationMessage(
     msg,
-    'Ask Copilot',
-    'Run asd evolve-check',
+    'Review',
+    'Auto Check',
   ).then((choice) => {
-    if (choice === 'Ask Copilot') {
+    if (choice === 'Review') {
       void vscode.commands.executeCommand('workbench.action.chat.open', {
         query: buildEvolvePrompt({ ...report, details: activeDetails }),
       });
-    } else if (choice === 'Run asd evolve-check') {
+    } else if (choice === 'Auto Check') {
       const terminal = vscode.window.createTerminal('Alembic Evolve');
       terminal.sendText(`asd evolve-check --recipes ${recipeIds.join(',')}`);
       terminal.show();
