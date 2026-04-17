@@ -29,6 +29,7 @@ import candidatesRouter from './routes/candidates.js';
 import commandsRouter from './routes/commands.js';
 import evolutionRouter from './routes/evolution.js';
 import extractRouter from './routes/extract.js';
+import fileChangesRouter from './routes/file-changes.js';
 import guardRouter from './routes/guard.js';
 import guardReportRouter from './routes/guardReport.js';
 import guardRuleRouter from './routes/guardRules.js';
@@ -328,6 +329,9 @@ export class HttpServer {
 
     // 进化路由（文件变更驱动 Recipe 修复/弃用）
     this.app.use(`${apiPrefix}/evolution`, evolutionRouter);
+
+    // 文件变更事件接收（领域无关，由 FileChangeDispatcher 分发）
+    this.app.use(`${apiPrefix}/file-changes`, fileChangesRouter);
 
     // 信号留痕 & 报告路由
     this.app.use(`${apiPrefix}/signals`, signalsRouter);

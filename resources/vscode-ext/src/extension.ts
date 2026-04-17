@@ -19,10 +19,8 @@
  */
 
 import * as vscode from 'vscode';
-import * as cp from 'node:child_process';
-import * as path from 'node:path';
-import * as fs from 'node:fs';
-import { ApiClient, type SearchResultItem, type FileChangeReport } from './apiClient';
+import { ApiClient, type SearchResultItem } from './apiClient';
+import { FileChangeCollector } from './FileChangeCollector';
 import { DirectiveCodeLensProvider } from './codeLensProvider';
 import { insertAtCursor, insertAtTriggerLine, flashHighlight } from './codeInserter';
 import { detectDirectives, detectFirstDirective, type DetectedDirective } from './directiveDetector';
@@ -178,46 +176,10 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // ─── 文件重命名/删除监控 → 驱动 Recipe 实时进化 ───
-
-  context.subscriptions.push(
-    vscode.workspace.onDidRenameFiles((e) => {
-      if (!hasAnyProject()) {
-        return;
-      }
-      const events = e.files
-        .filter((f) => f.oldUri.scheme === 'file')
-        .map((f) => ({
-          type: 'renamed' as const,
-          oldPath: vscode.workspace.asRelativePath(f.oldUri),
-          newPath: vscode.workspace.asRelativePath(f.newUri),
-        }));
-      if (events.length > 0) {
-        apiClient.notifyFileChanges(events).then(showReviewSuggestion).catch(() => {});
-      }
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.workspace.onDidDeleteFiles((e) => {
-      if (!hasAnyProject()) {
-        return;
-      }
-      const events = e.files
-        .filter((f) => f.scheme === 'file')
-        .map((f) => ({
-          type: 'deleted' as const,
-          oldPath: vscode.workspace.asRelativePath(f),
-        }));
-      if (events.length > 0) {
-        apiClient.notifyFileChanges(events).then(showReviewSuggestion).catch(() => {});
-      }
-    })
-  );
-
-  // ─── Git HEAD 变更监控 → 检测 commit/pull/switch 后的 modified 文件 ───
-
-  setupGitHeadWatcher(context);
+  // ─── 文件变更统一采集（FileChangeCollector） ───
+  // 5 个信号源 → EventBuffer → HTTP POST，与业务逻辑解耦
+  const fileChangeCollector = new FileChangeCollector(apiClient, context);
+  context.subscriptions.push(fileChangeCollector);
 
   } catch (err: unknown) {
     console.error('[Alembic] activate() failed:', err);
@@ -227,170 +189,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
   // cleanup handled by disposables
-}
-
-// ─────────────────────────────────────────────
-// Reactive Evolution Helpers
-// ─────────────────────────────────────────────
-
-/**
- * 收到 ReactiveEvolutionReport 后，如果 suggestReview=true 则弹通知建议用户触发进化检查
- * 提供两个按钮：
- *   1. "Copy Prompt" — 复制提示词到剪贴板，用户粘贴给外部 Agent（Copilot/Cursor）处理
- *   2. "Run asd evolve-check" — 在终端执行内部 Agent 轻量级定向审计
- */
-function showReviewSuggestion(report: FileChangeReport): void {
-  if (!report.suggestReview) {
-    return;
-  }
-
-  const parts: string[] = [];
-  if (report.fixed > 0) {
-    parts.push(`${report.fixed} Recipe(s) auto-fixed`);
-  }
-  if (report.deprecated > 0) {
-    parts.push(`${report.deprecated} Recipe(s) deprecated`);
-  }
-  if (report.needsReview > 0) {
-    parts.push(`${report.needsReview} Recipe(s) may need review`);
-  }
-
-  const message = `Alembic: ${parts.join(', ')}. Review affected Recipes?`;
-
-  vscode.window.showInformationMessage(message, 'Ask AI', 'Terminal').then((choice) => {
-    if (choice === 'Ask AI') {
-      const prompt = buildEvolvePrompt(report);
-      vscode.commands.executeCommand('workbench.action.chat.open', {
-        query: prompt,
-        isPartialQuery: false,
-      });
-    } else if (choice === 'Terminal') {
-      const terminal = vscode.window.createTerminal('Alembic Evolve');
-      terminal.sendText('asd evolve-check');
-      terminal.show();
-    }
-  });
-}
-
-/**
- * 构建给外部 Agent 的全量 Recipe 进化审查提示词
- */
-function buildEvolvePrompt(report: FileChangeReport): string {
-  const reviewItems = report.details.filter((d) => d.action === 'needs-review');
-  const deprecatedItems = report.details.filter((d) => d.action === 'deprecate');
-
-  const lines: string[] = [
-    '## Alembic Recipe Evolution Review',
-    '',
-    'Recent project file changes have been detected. Please verify ALL Recipes against current source code and submit evolution decisions.',
-    '',
-    '### Workflow',
-    '1. Call `asd_knowledge({ operation: "list" })` to get all active Recipes',
-    '2. For each Recipe, read its `sourceRefs` files to check if the code pattern still exists and is accurate',
-    '3. Call `asd_evolve({ decisions: [...] })` with your decisions for all Recipes:',
-    '   - `propose_evolution` — code changed, Recipe content needs updating (include evidence with codeSnippet + filePath + suggestedChanges)',
-    '   - `confirm_deprecation` — pattern no longer exists, deprecate the Recipe (include reason)',
-    '   - `skip` — Recipe is still valid (`skipReason: "still_valid"`)',
-    '',
-  ];
-
-  // 附带已知变更信息作为优先检查线索
-  if (deprecatedItems.length > 0 || reviewItems.length > 0) {
-    lines.push('### Priority — Known Impact from File Changes');
-    lines.push('Check these Recipes first:');
-    for (const item of deprecatedItems) {
-      lines.push(`- ⛔ **${item.recipeTitle}** (${item.recipeId}): ${item.reason}`);
-    }
-    for (const item of reviewItems) {
-      lines.push(`- ⚠️ **${item.recipeTitle}** (${item.recipeId}): ${item.reason}`);
-    }
-    lines.push('');
-  }
-
-  return lines.join('\n');
-}
-
-/**
- * 监听 .git/HEAD 变化，检测 commit/pull/branch-switch 后的文件变更
- * 变更时 diff HEAD~1..HEAD 提取 modified 文件，推送给 ReactiveEvolutionService
- */
-function setupGitHeadWatcher(context: vscode.ExtensionContext): void {
-  if (!hasAnyProject()) {
-    return;
-  }
-
-  const folders = vscode.workspace.workspaceFolders;
-  if (!folders) {
-    return;
-  }
-
-  for (const folder of folders) {
-    const gitHeadPath = path.join(folder.uri.fsPath, '.git', 'HEAD');
-
-    // 检查 .git/HEAD 是否存在
-    if (!fs.existsSync(gitHeadPath)) {
-      continue;
-    }
-
-    const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(folder, '.git/HEAD')
-    );
-
-    // 防抖：HEAD 变化后延迟 2s 再 diff（等 git 操作完成）
-    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-
-    const onHeadChange = () => {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-      }
-      debounceTimer = setTimeout(() => {
-        detectGitModifiedFiles(folder).catch(() => {});
-      }, 2000);
-    };
-
-    watcher.onDidChange(onHeadChange);
-    watcher.onDidCreate(onHeadChange);
-
-    context.subscriptions.push(watcher);
-    context.subscriptions.push({ dispose: () => { if (debounceTimer) { clearTimeout(debounceTimer); } } });
-  }
-}
-
-/**
- * 对比最近一次 git 变更，提取 modified 文件列表并推送
- */
-async function detectGitModifiedFiles(folder: vscode.WorkspaceFolder): Promise<void> {
-  if (!hasAnyProject()) {
-    return;
-  }
-
-  return new Promise<void>((resolve) => {
-    // git diff --name-only HEAD~1..HEAD -- 获取最近一次变更的文件
-    cp.exec(
-      'git diff --name-only HEAD~1..HEAD 2>/dev/null',
-      { cwd: folder.uri.fsPath, timeout: 5000 },
-      (err: Error | null, stdout: string) => {
-        if (err || !stdout.trim()) {
-          resolve();
-          return;
-        }
-
-        const files = stdout.trim().split('\n').filter((f: string) => f.length > 0);
-        if (files.length === 0) {
-          resolve();
-          return;
-        }
-
-        const events = files.map((f: string) => ({
-          type: 'modified' as const,
-          oldPath: f,
-        }));
-
-        apiClient.notifyFileChanges(events).then(showReviewSuggestion).catch(() => {});
-        resolve();
-      }
-    );
-  });
 }
 
 // ─────────────────────────────────────────────

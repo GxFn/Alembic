@@ -191,8 +191,21 @@ export class ApiClient {
   }
 
   /**
-   * 通知服务端文件变更事件 — 驱动 Recipe 实时进化
-   * 非阻塞调用，失败时静默。
+   * 报告文件变更事件（领域无关）
+   * 由 FileChangeCollector 调用，非阻塞，失败时静默。
+   */
+  async reportFileChanges(
+    events: Array<{ type: 'created' | 'modified' | 'renamed' | 'deleted'; path: string; oldPath?: string }>
+  ): Promise<void> {
+    try {
+      await this._post('/file-changes', { events });
+    } catch {
+      // 非阻塞，服务端不可用时静默忽略
+    }
+  }
+
+  /**
+   * @deprecated 使用 reportFileChanges 替代。保留兼容旧调用。
    */
   async notifyFileChanges(
     events: Array<{ type: 'renamed' | 'deleted' | 'modified'; oldPath: string; newPath?: string }>

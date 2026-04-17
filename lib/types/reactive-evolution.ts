@@ -7,15 +7,24 @@
 /* ═══════════════════ File Change Events ═══════════════════ */
 
 /** 文件变更类型 */
-export type FileChangeType = 'renamed' | 'deleted' | 'modified';
+export type FileChangeType = 'created' | 'renamed' | 'deleted' | 'modified';
 
-/** 单个文件变更事件 */
+/** 单个文件变更事件（新模型：path 为主键） */
 export interface FileChangeEvent {
   /** 变更类型 */
   type: FileChangeType;
-  /** 变更前路径（相对于 projectRoot） */
+  /** 文件路径（相对于 projectRoot）— 当前路径 */
+  path: string;
+  /** 变更前路径（仅 renamed 时有值） */
+  oldPath?: string;
+}
+
+/**
+ * @deprecated 旧事件模型，保留兼容。新代码请使用 FileChangeEvent。
+ */
+export interface LegacyFileChangeEvent {
+  type: 'renamed' | 'deleted' | 'modified';
   oldPath: string;
-  /** 变更后路径（仅 renamed 时有值） */
   newPath?: string;
 }
 

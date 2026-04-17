@@ -34,6 +34,7 @@ import { ReactiveEvolutionService } from '../../service/evolution/ReactiveEvolut
 import { RecipeLifecycleSupervisor } from '../../service/evolution/RecipeLifecycleSupervisor.js';
 import { RedundancyAnalyzer } from '../../service/evolution/RedundancyAnalyzer.js';
 import { StagingManager } from '../../service/evolution/StagingManager.js';
+import { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 import { CodeEntityGraph } from '../../service/knowledge/CodeEntityGraph.js';
 import { ConfidenceRouter } from '../../service/knowledge/ConfidenceRouter.js';
 import { KnowledgeGraphService } from '../../service/knowledge/KnowledgeGraphService.js';
@@ -384,6 +385,14 @@ export function register(c: ServiceContainer) {
           | import('../../infrastructure/signal/SignalBus.js').SignalBus
           | undefined) || undefined,
     });
+  });
+
+  c.singleton('fileChangeDispatcher', (ct: ServiceContainer) => {
+    const dispatcher = new FileChangeDispatcher();
+    // 注册 ReactiveEvolutionService 作为订阅者
+    const reactiveService = ct.get('reactiveEvolutionService') as ReactiveEvolutionService;
+    dispatcher.register(reactiveService);
+    return dispatcher;
   });
 }
 

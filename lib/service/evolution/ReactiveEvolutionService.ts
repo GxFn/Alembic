@@ -17,12 +17,14 @@ import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 import type { FileChangeEvent, ReactiveEvolutionReport } from '../../types/reactive-evolution.js';
+import type { FileChangeSubscriber } from '../FileChangeDispatcher.js';
 import type { ContentPatcher } from './ContentPatcher.js';
 import type { RecipeLifecycleSupervisor } from './RecipeLifecycleSupervisor.js';
 
 /* ────────────────────── Class ────────────────────── */
 
-export class ReactiveEvolutionService {
+export class ReactiveEvolutionService implements FileChangeSubscriber {
+  readonly name = 'ReactiveEvolutionService';
   readonly #sourceRefRepo: RecipeSourceRefRepositoryImpl;
   readonly #knowledgeRepo: KnowledgeRepositoryImpl;
   readonly #contentPatcher: ContentPatcher;
@@ -45,12 +47,20 @@ export class ReactiveEvolutionService {
   }
 
   /**
+   * FileChangeSubscriber 接口实现 — 适配新事件模型
+   */
+  async onFileChanges(events: FileChangeEvent[]): Promise<void> {
+    await this.handleFileChanges(events);
+  }
+
+  /**
    * 统一入口 — 处理一批文件变更事件
    *
    * 每个事件按类型分派:
    *   renamed  → 自动修复 sourceRef 路径
    *   deleted  → 检查是否还有其他 active ref，无则弃用
    *   modified → 跳过（结构变化由 Agent 增量扫描处理）
+   *   created  → 跳过（新文件不影响已有 Recipe）
    */
   async handleFileChanges(events: FileChangeEvent[]): Promise<ReactiveEvolutionReport> {
     const report: ReactiveEvolutionReport = {
@@ -65,23 +75,30 @@ export class ReactiveEvolutionService {
     for (const event of events) {
       switch (event.type) {
         case 'renamed': {
-          if (!event.newPath) {
+          const oldP = event.oldPath ?? event.path;
+          const newP = event.oldPath ? event.path : undefined;
+          if (!newP) {
             this.#logger.warn(
-              '[ReactiveEvolution] renamed event missing newPath, treating as deleted',
-              { oldPath: event.oldPath }
+              '[ReactiveEvolution] renamed event missing target path, treating as deleted',
+              { oldPath: oldP }
             );
-            await this.#handleDeleted(event.oldPath, report);
+            await this.#handleDeleted(oldP, report);
           } else {
-            await this.#handleRenamed(event.oldPath, event.newPath, report);
+            await this.#handleRenamed(oldP, newP, report);
           }
           break;
         }
         case 'deleted': {
-          await this.#handleDeleted(event.oldPath, report);
+          await this.#handleDeleted(event.path, report);
           break;
         }
         case 'modified': {
-          this.#handleModified(event.oldPath, report);
+          this.#handleModified(event.path, report);
+          break;
+        }
+        case 'created': {
+          // 新文件不影响已有 Recipe，跳过
+          report.skipped++;
           break;
         }
       }
