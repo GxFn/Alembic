@@ -80,11 +80,11 @@ export function activate(context: vscode.ExtensionContext) {
   const remotePoller = new RemoteCommandPoller(apiClient);
   remotePoller.register(context);
 
-  // CodeLens — 传入作用域判断
-  codeLensProvider = new DirectiveCodeLensProvider();
-  context.subscriptions.push(
-    vscode.languages.registerCodeLensProvider({ scheme: 'file' }, codeLensProvider)
-  );
+  // CodeLens — 暂时关闭，待后续处理
+  // codeLensProvider = new DirectiveCodeLensProvider();
+  // context.subscriptions.push(
+  //   vscode.languages.registerCodeLensProvider({ scheme: 'file' }, codeLensProvider)
+  // );
 
   // ─── 注册命令 ───
 
@@ -94,28 +94,27 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('asd.audit', cmdAudit),
     vscode.commands.registerCommand('asd.auditProject', cmdAuditProject),
     vscode.commands.registerCommand('asd.status', cmdStatus),
-    vscode.commands.registerCommand('asd._executeDirective', cmdExecuteDirective),
+    // vscode.commands.registerCommand('asd._executeDirective', cmdExecuteDirective),
   );
 
-  // ─── onSave 指令检测（仅限作用域内文件） ───
+  // ─── onSave 指令检测 — 暂时关闭，待后续处理 ───
 
-  context.subscriptions.push(
-    vscode.workspace.onDidSaveTextDocument(async (document) => {
-      if (!isDocumentInScope(document)) return;
-      if (!config.get<boolean>('enableDirectiveDetection', true)) return;
-
-      const directive = detectFirstDirective(document);
-      if (!directive) return;
-
-      // 查找打开此文件的编辑器
-      const editor = vscode.window.visibleTextEditors.find(
-        (e) => e.document.uri.toString() === document.uri.toString()
-      );
-      if (!editor) return;
-
-      await executeDirective(editor, directive);
-    })
-  );
+  // context.subscriptions.push(
+  //   vscode.workspace.onDidSaveTextDocument(async (document) => {
+  //     if (!isDocumentInScope(document)) return;
+  //     if (!config.get<boolean>('enableDirectiveDetection', true)) return;
+  //
+  //     const directive = detectFirstDirective(document);
+  //     if (!directive) return;
+  //
+  //     const editor = vscode.window.visibleTextEditors.find(
+  //       (e) => e.document.uri.toString() === document.uri.toString()
+  //     );
+  //     if (!editor) return;
+  //
+  //     await executeDirective(editor, directive);
+  //   })
+  // );
 
   // ─── 配置变更 ───
 
@@ -132,18 +131,18 @@ export function activate(context: vscode.ExtensionContext) {
         );
         statusBar.checkNow();
       }
-      if (e.affectsConfiguration('asd.enableCodeLens')) {
-        codeLensProvider.refresh();
-      }
+      // if (e.affectsConfiguration('asd.enableCodeLens')) {
+      //   codeLensProvider.refresh();
+      // }
     })
   );
 
-  // ─── 文档变更刷新 CodeLens ───
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeTextDocument(() => {
-      codeLensProvider.refresh();
-    })
-  );
+  // ─── 文档变更刷新 CodeLens — 暂时关闭 ───
+  // context.subscriptions.push(
+  //   vscode.workspace.onDidChangeTextDocument(() => {
+  //     codeLensProvider.refresh();
+  //   })
+  // );
 
   // ─── 工作区目录变化时重新检测项目 ───
   context.subscriptions.push(
