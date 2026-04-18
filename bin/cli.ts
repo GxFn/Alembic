@@ -72,6 +72,7 @@ program
   .option('-d, --dir <path>', '项目目录', '.')
   .option('--force', '强制覆盖已有配置')
   .option('--seed', '预置示例 Recipe（冷启动推荐）')
+  .option('--ghost', 'Ghost 模式：零项目侵入，所有数据外置到 ~/.asd/workspaces/')
   .option('--repo <url>', 'recipes 子仓库的远程 Git 仓库地址（提供则 clone，不提供则为普通目录）')
   .action(async (opts) => {
     const { SetupService } = await import('../lib/cli/SetupService.js');
@@ -79,6 +80,7 @@ program
       projectRoot: resolve(opts.dir),
       force: opts.force,
       seed: opts.seed,
+      ghost: opts.ghost,
       subRepoUrl: opts.repo,
     });
 
@@ -2074,8 +2076,290 @@ async function initContainer(opts: any = {}) {
     config: bootstrap.components.config,
     skillHooks: bootstrap.components.skillHooks,
     projectRoot,
+    workspaceResolver: bootstrap.components.workspaceResolver,
   });
   return { bootstrap, container };
 }
+
+// ─────────────────────────────────────────────────────
+// ghost 命令 — 管理 Ghost 模式
+// ─────────────────────────────────────────────────────
+program
+  .command('ghost')
+  .description('管理 Ghost 模式（零项目侵入）')
+  .argument('[action]', '操作: status | on | off | clean | list', 'status')
+  .option('-d, --dir <path>', '项目目录', '.')
+  .action(async (action: string, opts: { dir: string }) => {
+    const { ProjectRegistry, getGhostWorkspaceDir } = await import(
+      '../lib/shared/ProjectRegistry.js'
+    );
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const projectRoot = resolve(opts.dir);
+
+    /** 移动目录（同卷 rename，跨卷 copy+delete） */
+    function moveDir(src: string, dest: string) {
+      if (!fs.existsSync(src)) {
+        return;
+      }
+      fs.mkdirSync(dirname(dest), { recursive: true });
+      try {
+        fs.renameSync(src, dest);
+      } catch {
+        fs.cpSync(src, dest, { recursive: true });
+        fs.rmSync(src, { recursive: true, force: true });
+      }
+    }
+
+    /** 清理 .gitignore 中的 Alembic managed section */
+    function removeGitignoreSection(root: string) {
+      const giPath = join(root, '.gitignore');
+      if (!fs.existsSync(giPath)) {
+        return;
+      }
+      const content = fs.readFileSync(giPath, 'utf8');
+      const BEGIN = '# >>> Alembic (managed block — do not edit) >>>';
+      const END = '# <<< Alembic <<<';
+      const beginIdx = content.indexOf(BEGIN);
+      const endIdx = content.indexOf(END);
+      if (beginIdx === -1 || endIdx === -1) {
+        return;
+      }
+      const cleaned = (content.slice(0, beginIdx) + content.slice(endIdx + END.length))
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      if (cleaned.length === 0) {
+        fs.unlinkSync(giPath);
+      } else {
+        fs.writeFileSync(giPath, `${cleaned}\n`);
+      }
+    }
+
+    /** 写 MCP 配置到指定路径 */
+    function writeMcpConfig(dest: string, key: string, entry: Record<string, unknown>) {
+      fs.mkdirSync(dirname(dest), { recursive: true });
+      let config: Record<string, Record<string, unknown>> = {};
+      if (fs.existsSync(dest)) {
+        try {
+          config = JSON.parse(fs.readFileSync(dest, 'utf8'));
+        } catch {
+          /* */
+        }
+      }
+      if (!config[key]) {
+        config[key] = {};
+      }
+      config[key].asd = entry;
+      fs.writeFileSync(dest, JSON.stringify(config, null, 2));
+    }
+
+    /** 移除 MCP 配置中的 asd 条目 */
+    function removeMcpEntry(dest: string, key: string) {
+      if (!fs.existsSync(dest)) {
+        return;
+      }
+      try {
+        const config = JSON.parse(fs.readFileSync(dest, 'utf8'));
+        if (config[key]?.asd) {
+          delete config[key].asd;
+          if (Object.keys(config[key]).length === 0) {
+            delete config[key];
+          }
+          if (Object.keys(config).length === 0) {
+            fs.unlinkSync(dest);
+          } else {
+            fs.writeFileSync(dest, JSON.stringify(config, null, 2));
+          }
+        }
+      } catch {
+        /* */
+      }
+    }
+
+    /** VSCode 全局配置目录 */
+    function vscodeMcpGlobalPath() {
+      const p = process.platform;
+      if (p === 'darwin') {
+        return join(os.homedir(), 'Library', 'Application Support', 'Code', 'User', 'mcp.json');
+      }
+      if (p === 'win32') {
+        return join(process.env.APPDATA || '', 'Code', 'User', 'mcp.json');
+      }
+      return join(os.homedir(), '.config', 'Code', 'User', 'mcp.json');
+    }
+
+    /** Cursor MCP 条目（全局用 ${workspaceFolder}） */
+    const cursorMcpEntry = {
+      command: 'asd-mcp',
+      env: { ASD_PROJECT_DIR: '${workspaceFolder}' },
+    };
+
+    /** VSCode MCP 条目 */
+    function vscodeMcpEntry(absPath: boolean) {
+      return {
+        type: 'stdio',
+        command: 'asd-mcp',
+        env: {
+          ASD_PROJECT_DIR: absPath ? projectRoot : '${workspaceFolder}',
+        },
+      };
+    }
+
+    switch (action) {
+      case 'status': {
+        const entry = ProjectRegistry.get(projectRoot);
+        if (!entry) {
+          console.log('  项目未注册。运行 asd setup 或 asd setup --ghost 初始化。');
+        } else if (entry.ghost) {
+          const wsDir = ProjectRegistry.getWorkspaceDir(projectRoot);
+          console.log(`  👻 Ghost 模式: 已启用`);
+          console.log(`  📁 工作区:     ${wsDir}`);
+          console.log(`  🆔 项目 ID:    ${entry.id}`);
+          console.log(`  📅 注册时间:   ${entry.createdAt}`);
+        } else {
+          console.log(`  📌 标准模式: 数据存储在项目内`);
+          console.log(`  🆔 项目 ID:    ${entry.id}`);
+        }
+        break;
+      }
+
+      case 'on': {
+        // ── 标准 → Ghost ──────────────────────────────
+        const existing = ProjectRegistry.get(projectRoot);
+        if (existing?.ghost) {
+          console.log('  已在 Ghost 模式，无需切换。');
+          break;
+        }
+
+        // 1. 注册为 Ghost
+        const entry = ProjectRegistry.register(projectRoot, true);
+        const wsDir = getGhostWorkspaceDir(entry.id);
+        fs.mkdirSync(wsDir, { recursive: true });
+
+        // 2. 迁移数据目录：项目 → 全局
+        const asdSrc = join(projectRoot, '.asd');
+        const asdDest = join(wsDir, '.asd');
+        const kbSrc = join(projectRoot, 'Alembic');
+        const kbDest = join(wsDir, 'Alembic');
+
+        let migrated = false;
+        if (fs.existsSync(asdSrc)) {
+          moveDir(asdSrc, asdDest);
+          migrated = true;
+        }
+        if (fs.existsSync(kbSrc)) {
+          moveDir(kbSrc, kbDest);
+          migrated = true;
+        }
+
+        // 3. 清理项目内 .gitignore Alembic section
+        removeGitignoreSection(projectRoot);
+
+        // 4. MCP 切换：项目级 → 全局
+        //    Cursor: 项目 .cursor/mcp.json → 全局 ~/.cursor/mcp.json
+        removeMcpEntry(join(projectRoot, '.cursor', 'mcp.json'), 'mcpServers');
+        writeMcpConfig(join(os.homedir(), '.cursor', 'mcp.json'), 'mcpServers', cursorMcpEntry);
+        //    VSCode: 项目 .vscode/mcp.json → 全局（绝对路径）
+        removeMcpEntry(join(projectRoot, '.vscode', 'mcp.json'), 'servers');
+        writeMcpConfig(vscodeMcpGlobalPath(), 'servers', vscodeMcpEntry(true));
+
+        console.log(`  👻 Ghost 模式已启用`);
+        console.log(`  📁 工作区: ${wsDir}`);
+        if (migrated) {
+          console.log('  📦 已迁移 .asd/ 和 Alembic/ 到外置工作区');
+        }
+        console.log('  📌 MCP 配置已切换到全局（~/.cursor/mcp.json + VSCode 全局）');
+        if (!migrated) {
+          console.log('  提示: 运行 asd setup --ghost 完成初始化');
+        }
+        break;
+      }
+
+      case 'off': {
+        // ── Ghost → 标准 ──────────────────────────────
+        const existing = ProjectRegistry.get(projectRoot);
+        if (!existing) {
+          console.log('  项目未注册。运行 asd setup 初始化。');
+          break;
+        }
+        if (!existing.ghost) {
+          console.log('  已在标准模式，无需切换。');
+          break;
+        }
+
+        const wsDir = getGhostWorkspaceDir(existing.id);
+
+        // 1. 迁移数据目录：全局 → 项目
+        const asdSrc = join(wsDir, '.asd');
+        const asdDest = join(projectRoot, '.asd');
+        const kbSrc = join(wsDir, 'Alembic');
+        const kbDest = join(projectRoot, 'Alembic');
+
+        let migrated = false;
+        if (fs.existsSync(asdSrc)) {
+          moveDir(asdSrc, asdDest);
+          migrated = true;
+        }
+        if (fs.existsSync(kbSrc)) {
+          moveDir(kbSrc, kbDest);
+          migrated = true;
+        }
+
+        // 2. 更新注册为标准模式
+        ProjectRegistry.register(projectRoot, false);
+
+        // 3. MCP 切换：全局 → 项目级
+        //    Cursor: 全局 → 项目 .cursor/mcp.json
+        removeMcpEntry(join(os.homedir(), '.cursor', 'mcp.json'), 'mcpServers');
+        writeMcpConfig(join(projectRoot, '.cursor', 'mcp.json'), 'mcpServers', cursorMcpEntry);
+        //    VSCode: 全局 → 项目 .vscode/mcp.json
+        removeMcpEntry(vscodeMcpGlobalPath(), 'servers');
+        writeMcpConfig(join(projectRoot, '.vscode', 'mcp.json'), 'servers', vscodeMcpEntry(false));
+
+        // 4. 清理空的外置工作区目录
+        if (fs.existsSync(wsDir) && fs.readdirSync(wsDir).length === 0) {
+          fs.rmdirSync(wsDir);
+        }
+
+        console.log('  📌 已切换到标准模式');
+        if (migrated) {
+          console.log('  📦 已迁移 .asd/ 和 Alembic/ 回项目内');
+        }
+        console.log('  📌 MCP 配置已切换到项目级（.cursor/mcp.json + .vscode/mcp.json）');
+        console.log('  提示: 运行 asd upgrade 补全 .gitignore 等配置');
+        break;
+      }
+
+      case 'list': {
+        const all = ProjectRegistry.list();
+        if (all.length === 0) {
+          console.log('  暂无已注册项目。');
+        } else {
+          console.log(`  已注册 ${all.length} 个项目：\n`);
+          for (const { projectRoot: root, entry } of all) {
+            const mode = entry.ghost ? '👻 Ghost' : '📌 标准';
+            console.log(`  ${mode}  ${entry.id}  ${root}`);
+          }
+        }
+        break;
+      }
+
+      case 'clean': {
+        const entry = ProjectRegistry.get(projectRoot);
+        if (!entry?.ghost) {
+          console.log('  当前项目不在 Ghost 模式，无需清理。');
+          break;
+        }
+        const wsDir = ProjectRegistry.getWorkspaceDir(projectRoot);
+        console.log(`  将删除外置工作区: ${wsDir}`);
+        console.log('  确认后请手动删除此目录。');
+        break;
+      }
+
+      default:
+        console.error(`  未知操作: ${action}`);
+        console.log('  用法: asd ghost [status|on|off|list|clean]');
+    }
+  });
 
 program.parse(process.argv);

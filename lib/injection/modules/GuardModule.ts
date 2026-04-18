@@ -9,7 +9,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
 import type { GuardViolationRepositoryImpl } from '../../repository/guard/GuardViolationRepository.js';
@@ -52,8 +52,8 @@ export function register(c: ServiceContainer) {
     // 项目级覆盖（.asd/config.json 的 guard 段）
     let projectGuard: Record<string, unknown> = {};
     try {
-      const projectRoot = resolveProjectRoot(ct);
-      const projConfigPath = path.join(projectRoot, '.asd', 'config.json');
+      const dataRoot = resolveDataRoot(ct);
+      const projConfigPath = path.join(dataRoot, '.asd', 'config.json');
       if (fs.existsSync(projConfigPath)) {
         const raw = JSON.parse(fs.readFileSync(projConfigPath, 'utf-8'));
         if (raw.guard && typeof raw.guard === 'object') {
@@ -87,13 +87,13 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('exclusionManager', (ct: ServiceContainer) => {
-    const projectRoot = resolveProjectRoot(ct);
-    return new ExclusionManager(projectRoot);
+    const dataRoot = resolveDataRoot(ct);
+    return new ExclusionManager(dataRoot);
   });
 
   c.singleton('ruleLearner', (ct: ServiceContainer) => {
-    const projectRoot = resolveProjectRoot(ct);
-    return new RuleLearner(projectRoot, {
+    const dataRoot = resolveDataRoot(ct);
+    return new RuleLearner(dataRoot, {
       signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
     });
   });

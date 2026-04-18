@@ -9,7 +9,7 @@
  */
 
 import { DimensionCopy } from '#domain/dimension/DimensionCopy.js';
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { getDiscovererRegistry } from '../../core/discovery/index.js';
 import { getEnhancementRegistry } from '../../core/enhancement/index.js';
 import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
@@ -118,7 +118,7 @@ export function register(c: ServiceContainer) {
   );
 
   c.singleton('vectorStore', (ct: ServiceContainer) => {
-    const projectRoot = resolveProjectRoot(ct);
+    const dataRoot = resolveDataRoot(ct);
     const config =
       ((ct.singletons._config as Record<string, unknown> | undefined)?.vector as
         | Record<string, unknown>
@@ -127,7 +127,7 @@ export function register(c: ServiceContainer) {
 
     // 根据配置选择适配器
     if (adapter === 'json') {
-      const store = new JsonVectorAdapter(projectRoot as string);
+      const store = new JsonVectorAdapter(dataRoot as string);
       store.initSync();
       return store;
     }
@@ -136,7 +136,7 @@ export function register(c: ServiceContainer) {
       try {
         const hnsw = (config.hnsw as Record<string, unknown> | undefined) || {};
         const persistence = (config.persistence as Record<string, unknown> | undefined) || {};
-        const store = new HnswVectorAdapter(projectRoot as string, {
+        const store = new HnswVectorAdapter(dataRoot as string, {
           M: hnsw.M as number | undefined,
           efConstruct: hnsw.efConstruct as number | undefined,
           efSearch: hnsw.efSearch as number | undefined,
@@ -157,14 +157,14 @@ export function register(c: ServiceContainer) {
             adapter,
           }
         );
-        const store = new JsonVectorAdapter(projectRoot as string);
+        const store = new JsonVectorAdapter(dataRoot as string);
         store.initSync();
         return store;
       }
     }
 
     // 未知适配器, 默认 JSON
-    const store = new JsonVectorAdapter(projectRoot as string);
+    const store = new JsonVectorAdapter(dataRoot as string);
     store.initSync();
     return store;
   });

@@ -67,11 +67,11 @@ function _parseSkillMeta(skillName: string, baseDir = SKILLS_DIR) {
 
 /** Skill 适用场景映射 — 帮助 Agent 判断何时该加载哪个 Skill */
 const SKILL_USE_CASES: Record<string, string> = {
-  'alembic-create': '将代码模式/规则/事实提交到知识库',
-  'alembic-guard': '代码规范审计（Guard 规则检查）',
-  'alembic-recipes': '查询/使用项目标准（Recipe 上下文检索）',
-  'alembic-structure': '了解项目结构（Target / 依赖图谱 / 知识图谱）',
-  'alembic-devdocs': '保存开发文档（架构决策、调试报告、设计文档）',
+  'asd-create': '将代码模式/规则/事实提交到知识库',
+  'asd-guard': '代码规范审计（Guard 规则检查）',
+  'asd-recipes': '查询/使用项目标准（Recipe 上下文检索）',
+  'asd-structure': '了解项目结构（Target / 依赖图谱 / 知识图谱）',
+  'asd-devdocs': '保存开发文档（架构决策、调试报告、设计文档）',
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -272,7 +272,7 @@ export function loadSkill(ctx: McpContext | null, args: { skillName?: string; se
 
 /**
  * 创建项目级 Skill — 写入 {projectRoot}/Alembic/skills/<name>/SKILL.md
- * 创建后自动 regenerate 编辑器索引（.cursor/rules/alembic-skills.mdc）
+ * 创建后自动 regenerate 编辑器索引（.cursor/rules/asd-skills.mdc）
  *
  * @param _ctx MCP context
  * @param args { name, description, content, overwrite? }
@@ -422,7 +422,7 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
 }
 
 /**
- * Regenerate .cursor/rules/alembic-skills.mdc 索引文件
+ * Regenerate .cursor/rules/asd-skills.mdc 索引文件
  * 扫描所有项目级 Skills，生成摘要索引供 External Agent 被动发现
  *
  * @returns }
@@ -450,7 +450,7 @@ function _regenerateEditorIndex(ctx?: McpContext) {
 
     if (projectSkills.length === 0) {
       // 没有项目级 Skills 时，删除索引文件（如果存在）
-      const indexPath = path.join(rulesDir, 'alembic-skills.mdc');
+      const indexPath = path.join(rulesDir, 'asd-skills.mdc');
       try {
         fs.unlinkSync(indexPath);
       } catch {
@@ -479,7 +479,7 @@ function _regenerateEditorIndex(ctx?: McpContext) {
     // 写入 .cursor/rules/
     pathGuard.assertProjectWriteSafe(rulesDir);
     fs.mkdirSync(rulesDir, { recursive: true });
-    const indexPath = path.join(rulesDir, 'alembic-skills.mdc');
+    const indexPath = path.join(rulesDir, 'asd-skills.mdc');
     fs.writeFileSync(indexPath, mdcContent, 'utf8');
 
     return { success: true, path: indexPath, skillCount: projectSkills.length };
@@ -807,11 +807,11 @@ function _listExistingProjectSkillNames(ctx?: McpContext | null): Set<string> {
 /** 推荐相关 Skills（基于静态映射） */
 function _getRelatedSkills(skillName: string) {
   const relations = {
-    'alembic-create': ['alembic-recipes'],
-    'alembic-guard': ['alembic-recipes'],
-    'alembic-recipes': ['alembic-guard', 'alembic-structure', 'alembic-create'],
-    'alembic-structure': ['alembic-recipes', 'alembic-create'],
-    'alembic-devdocs': ['alembic-recipes', 'alembic-create'],
+    'asd-create': ['asd-recipes'],
+    'asd-guard': ['asd-recipes'],
+    'asd-recipes': ['asd-guard', 'asd-structure', 'asd-create'],
+    'asd-structure': ['asd-recipes', 'asd-create'],
+    'asd-devdocs': ['asd-recipes', 'asd-create'],
   };
   return (relations as Record<string, string[]>)[skillName] || [];
 }

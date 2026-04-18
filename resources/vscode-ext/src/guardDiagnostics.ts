@@ -62,7 +62,7 @@ export class GuardDiagnostics {
   private outputChannel: vscode.OutputChannel;
 
   constructor() {
-    this.diagnosticCollection = vscode.languages.createDiagnosticCollection('alembic-guard');
+    this.diagnosticCollection = vscode.languages.createDiagnosticCollection('asd-guard');
     this.outputChannel = vscode.window.createOutputChannel('Alembic Guard', { log: true });
   }
 

@@ -16,7 +16,7 @@ import type { Signal } from '../../infrastructure/signal/SignalBus.js';
 import { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { SignalTraceWriter } from '../../infrastructure/signal/SignalTraceWriter.js';
 import { HitRecorder } from '../../service/signal/HitRecorder.js';
-import { resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
+import { resolveDataRoot } from '../../shared/resolveProjectRoot.js';
 import { shutdown } from '../../shared/shutdown.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
@@ -68,8 +68,8 @@ export function register(c: ServiceContainer) {
 
   // Register after signalBus is created — subscribe for JSONL persistence
   const signalBus = c.get('signalBus');
-  const projectRoot = resolveProjectRoot(c);
-  registerIntentPersistence(signalBus, projectRoot);
+  const dataRoot = resolveDataRoot(c);
+  registerIntentPersistence(signalBus, dataRoot);
 
   // ═══ SignalBridge — SignalBus → EventBus 桥接 ═══
 
@@ -85,7 +85,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('signalTraceWriter', (ct: ServiceContainer) => {
     const bus = ct.get('signalBus') as SignalBus;
-    const root = resolveProjectRoot(ct);
+    const root = resolveDataRoot(ct);
     return new SignalTraceWriter(bus, path.join(root, '.asd', 'logs', 'signals'));
   });
 

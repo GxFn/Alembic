@@ -1,5 +1,5 @@
 ---
-name: alembic-devdocs
+name: asd-devdocs
 description: Generate and publish project Wiki documentation using asd_wiki MCP tool (plan → write → finalize). Use when user says "generate wiki/docs", "write documentation", or agent needs to produce structured project documentation from the knowledge base.
 ---
 
@@ -82,6 +82,6 @@ This triggers:
 
 | Skill | When to use |
 |-------|-------------|
-| `alembic-create` | Submitting **code patterns/recipes** to KB (not documents) |
-| `alembic-devdocs` (this) | Generating **Wiki documentation** from KB |
-| `alembic-recipes` | Looking up existing knowledge for reference |
+| `asd-create` | Submitting **code patterns/recipes** to KB (not documents) |
+| `asd-devdocs` (this) | Generating **Wiki documentation** from KB |
+| `asd-recipes` | Looking up existing knowledge for reference |

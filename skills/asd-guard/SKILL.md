@@ -1,5 +1,5 @@
 ---
-name: alembic-guard
+name: asd-guard
 description: Guard checks code against project Recipe standards via MCP tool asd_guard (auto-routes by code/files params). Use when the user wants to audit, lint, or verify code compliance.
 ---
 
@@ -50,4 +50,4 @@ Guard uses **Recipe content** as the standard — no separate config:
 
 ## Related Skills
 
-- **alembic-recipes**: Recipe content IS the Guard standard
+- **asd-recipes**: Recipe content IS the Guard standard

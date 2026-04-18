@@ -449,7 +449,7 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
   // ── 4. 同步 Cursor 端文档（仅检测，不修改 Agent 写的内容）──
   let syncedDocs = 0;
   try {
-    const devdocsDir = path.join(projectRoot, '.cursor', 'skills', 'alembic-devdocs', 'references');
+    const devdocsDir = path.join(projectRoot, '.cursor', 'skills', 'asd-devdocs', 'references');
     if (fs.existsSync(devdocsDir)) {
       const docsDir = path.join(wikiDir, 'documents');
       _ensureDir(docsDir);
@@ -460,7 +460,7 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
         if (!fs.existsSync(dest)) {
           // 只同步 Agent 没写的文档
           const content = fs.readFileSync(src, 'utf-8');
-          const header = `<!-- synced from .cursor/skills/alembic-devdocs/references/${file} -->\n\n`;
+          const header = `<!-- synced from .cursor/skills/asd-devdocs/references/${file} -->\n\n`;
           fs.writeFileSync(dest, header + content);
           syncedDocs++;
         }

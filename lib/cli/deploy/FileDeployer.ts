@@ -26,6 +26,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { injectAutoApprove } from '../../external/mcp/autoApproveInjector.js';
 import { checkWriteSafety, safeCopyFile } from '../../service/delivery/FileProtection.js';
@@ -58,17 +59,25 @@ interface ManifestEntry {
   resolveDest?: string;
   cleanup?: string[];
   requireDir?: string;
+  ghostPolicy?: 'deploy' | 'skip' | 'global';
 }
 
 export class FileDeployer {
   force: boolean;
   projectName: string;
   projectRoot: string;
-  /** @param {{ projectRoot: string, force?: boolean }} options */
-  constructor({ projectRoot, force = false }: { projectRoot: string; force?: boolean }) {
+  /** Ghost 模式 — 部署时跳过 ghostPolicy='skip' 的条目 */
+  ghost: boolean;
+  /** @param {{ projectRoot: string, force?: boolean, ghost?: boolean }} options */
+  constructor({
+    projectRoot,
+    force = false,
+    ghost = false,
+  }: { projectRoot: string; force?: boolean; ghost?: boolean }) {
     this.projectRoot = resolve(projectRoot);
     this.projectName = this.projectRoot.split('/').pop() || '';
     this.force = force;
+    this.ghost = ghost;
   }
 
   /* ═══ 公共入口 ═══════════════════════════════════════ */
@@ -85,6 +94,13 @@ export class FileDeployer {
       }
       if (filter && !filter.includes(entry.category!)) {
         return false;
+      }
+      // Ghost 模式过滤：跳过 ghostPolicy='skip' 和无 ghostPolicy 的条目
+      if (this.ghost) {
+        const policy = entry.ghostPolicy ?? 'skip';
+        if (policy === 'skip') {
+          return false;
+        }
       }
       return true;
     });
@@ -264,7 +280,21 @@ export class FileDeployer {
 
   /** merge-json — 读取现有 JSON，合并 alembic 键 */
   _strategyMergeJson(entry: ManifestEntry) {
-    const dest = join(this.projectRoot, entry.dest!);
+    // Ghost 模式 + global policy → 写入全局配置
+    //   Cursor:  ~/.cursor/mcp.json
+    //   VSCode:  ~/Library/Application Support/Code/User/mcp.json (macOS)
+    //            ~/.config/Code/User/mcp.json (Linux)
+    //            %APPDATA%/Code/User/mcp.json (Windows)
+    let dest: string;
+    if (this.ghost && entry.ghostPolicy === 'global') {
+      if (entry.id === 'vscode-mcp') {
+        dest = join(this._vscodeMcpGlobalDir(), 'mcp.json');
+      } else {
+        dest = join(os.homedir(), entry.dest!);
+      }
+    } else {
+      dest = join(this.projectRoot, entry.dest!);
+    }
     mkdirSync(dirname(dest), { recursive: true });
 
     let config: Record<string, Record<string, unknown>> = {};
@@ -282,7 +312,9 @@ export class FileDeployer {
     }
 
     const ide = entry.id === 'vscode-mcp' ? 'vscode' : 'cursor';
-    config[parentKey].asd = buildMcpServerEntry(this.projectRoot, ide);
+    // 只有 VSCode 全局配置不支持 ${workspaceFolder}，需要绝对路径
+    const useAbsPath = this.ghost && entry.ghostPolicy === 'global' && entry.id === 'vscode-mcp';
+    config[parentKey].asd = buildMcpServerEntry(this.projectRoot, ide, useAbsPath);
 
     writeFileSync(dest, JSON.stringify(config, null, 2));
     return true;
@@ -471,10 +503,23 @@ export class FileDeployer {
     return fn.call(this);
   }
 
+  /** 获取 VSCode 全局用户配置目录 */
+  _vscodeMcpGlobalDir(): string {
+    const platform = process.platform;
+    if (platform === 'darwin') {
+      return join(os.homedir(), 'Library', 'Application Support', 'Code', 'User');
+    }
+    if (platform === 'win32') {
+      return join(process.env.APPDATA || join(os.homedir(), 'AppData', 'Roaming'), 'Code', 'User');
+    }
+    // Linux
+    return join(process.env.XDG_CONFIG_HOME || join(os.homedir(), '.config'), 'Code', 'User');
+  }
+
   /* ═══ 自定义生成器 ═══════════════════════════════════ */
 
   _generators: Record<string, (this: FileDeployer) => boolean | void> = {
-    /** .cursor/rules/alembic-conventions.mdc — 读 conventions.md + YAML frontmatter */
+    /** .cursor/rules/asd-conventions.mdc — 读 conventions.md + YAML frontmatter */
     generateConventionsMdc() {
       const tpl = join(TEMPLATES_DIR, 'instructions/conventions.md');
       if (!existsSync(tpl)) {
@@ -494,7 +539,7 @@ export class FileDeployer {
         '',
       ].join('\n');
 
-      const dest = join(this.projectRoot, '.cursor/rules/alembic-conventions.mdc');
+      const dest = join(this.projectRoot, '.cursor/rules/asd-conventions.mdc');
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, content);
       return true;
@@ -575,7 +620,10 @@ export class FileDeployer {
 
     /** 安装 Cursor Skills */
     installSkills() {
-      const installScript = join(REPO_ROOT, 'scripts', 'install-cursor-skill.js');
+      // 编译产物在 dist/scripts/，源码在 scripts/ — 优先用 dist
+      const distScript = join(REPO_ROOT, 'dist', 'scripts', 'install-cursor-skill.js');
+      const srcScript = join(REPO_ROOT, 'scripts', 'install-cursor-skill.js');
+      const installScript = existsSync(distScript) ? distScript : srcScript;
       if (!existsSync(installScript)) {
         return false;
       }
@@ -670,21 +718,7 @@ export class FileDeployer {
 
   /* ═══ Destination Resolvers ══════════════════════════ */
 
-  _resolvers: Record<string, (this: FileDeployer) => string | null> = {
-    /** 解析 pre-commit hook 的目标路径 */
-    resolvePreCommitDest() {
-      const huskyDir = join(this.projectRoot, '.husky');
-      if (existsSync(huskyDir)) {
-        return join(huskyDir, 'pre-commit');
-      }
-      if (existsSync(join(this.projectRoot, '.git'))) {
-        const hooksDir = join(this.projectRoot, '.git', 'hooks');
-        mkdirSync(hooksDir, { recursive: true });
-        return join(hooksDir, 'pre-commit');
-      }
-      return null;
-    },
-  };
+  _resolvers: Record<string, (this: FileDeployer) => string | null> = {};
 
   /* ═══ Helpers ════════════════════════════════════════ */
 

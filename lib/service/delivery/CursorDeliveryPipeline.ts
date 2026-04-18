@@ -3,10 +3,10 @@
  *
  * 读取知识库 → 筛选 + 分类 + 排序 + 压缩 → 写入 6 个通道
  *
- * Channel A: .cursor/rules/alembic-project-rules.mdc (alwaysApply rules)
- * Channel B: .cursor/rules/alembic-patterns-{topic}.mdc (smart rules)
+ * Channel A: .cursor/rules/asd-project-rules.mdc (alwaysApply rules)
+ * Channel B: .cursor/rules/asd-patterns-{topic}.mdc (smart rules)
  * Channel C: .cursor/skills/ (project skills sync)
- * Channel D: .cursor/skills/alembic-devdocs/ (dev documents)
+ * Channel D: .cursor/skills/asd-devdocs/ (dev documents)
  * Channel F: AGENTS.md + CLAUDE.md + .github/copilot-instructions.md (agent instructions)
  * + Mirror: .qoder/ .trae/ (IDE mirror)
  *
@@ -645,7 +645,7 @@ export class CursorDeliveryPipeline {
   /**
    * Channel D — Dev Documents 生成
    * 将 knowledgeType='dev-document' 的条目以原始 MD 写入
-   * .cursor/skills/alembic-devdocs/references/ 目录
+   * .cursor/skills/asd-devdocs/references/ 目录
    */
   _generateChannelD(documents: KnowledgeEntryProps[]) {
     const result = { documentsCount: 0, filesWritten: 0, filePaths: [] as string[] };
@@ -653,14 +653,14 @@ export class CursorDeliveryPipeline {
       return result;
     }
 
-    const devdocsDir = path.join(this.projectRoot, '.cursor', 'skills', 'alembic-devdocs');
+    const devdocsDir = path.join(this.projectRoot, '.cursor', 'skills', 'asd-devdocs');
     const refsDir = path.join(devdocsDir, 'references');
     fs.mkdirSync(refsDir, { recursive: true });
 
     // 生成 SKILL.md（索引页）
     const skillLines = [
       '---',
-      'name: alembic-devdocs',
+      'name: asd-devdocs',
       `description: "Development documents and knowledge artifacts for ${this.projectName}. Use when looking up architecture decisions, debug reports, design docs, or analysis notes."`,
       '---',
       '',

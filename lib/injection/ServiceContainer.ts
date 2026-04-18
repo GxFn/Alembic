@@ -1,6 +1,6 @@
 import { type Dirent, readdirSync, statSync } from 'node:fs';
 import { extname as pathExtname, join as pathJoin, relative as pathRelative } from 'node:path';
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 // ─── v3.0: AST ProjectGraph ──────────────────────────
 import ProjectGraph from '../core/ast/ProjectGraph.js';
 // ─── v3.1: Multi-Language Discovery + Enhancement ────────
@@ -103,6 +103,10 @@ export class ServiceContainer {
 
       if (bootstrapComponents.projectRoot) {
         this.singletons._projectRoot = bootstrapComponents.projectRoot;
+      }
+
+      if (bootstrapComponents.workspaceResolver) {
+        this.singletons._workspaceResolver = bootstrapComponents.workspaceResolver;
       }
 
       if (bootstrapComponents.config) {
@@ -343,7 +347,9 @@ export class ServiceContainer {
       return this.singletons.projectGraph;
     }
 
-    const cache = new GraphCache(projectRoot);
+    // GraphCache 使用 dataRoot 存储缓存（Ghost 模式下写到外置工作区）
+    const cacheRoot = resolveDataRoot(this);
+    const cache = new GraphCache(cacheRoot);
     const startTime = Date.now();
 
     try {

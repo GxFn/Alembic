@@ -22,7 +22,7 @@ import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ValidationError } from '../../shared/errors/index.js';
-import { resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import {
   AiChatBody,
   AiConfigBody,
@@ -318,8 +318,8 @@ router.post('/chat', validate(AiChatBody), async (req: Request, res: Response): 
   let effectiveHistory = history;
   let effectiveConvId = conversationId || null;
   try {
-    const projectRoot = resolveProjectRoot(container);
-    convStore = new ConversationStore(projectRoot);
+    const dataRoot = resolveDataRoot(container);
+    convStore = new ConversationStore(dataRoot);
     if (effectiveConvId) {
       effectiveHistory = convStore.load(effectiveConvId);
       convStore.append(effectiveConvId, { role: 'user', content: prompt });

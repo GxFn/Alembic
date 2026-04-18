@@ -189,9 +189,7 @@ describe('PathGuard', () => {
         pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.cursor/mcp.json'))
       ).not.toThrow();
       expect(() =>
-        pathGuard.assertProjectWriteSafe(
-          path.join(PROJECT_ROOT, '.cursor/rules/alembic-skills.mdc')
-        )
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.cursor/rules/asd-skills.mdc'))
       ).not.toThrow();
     });
 

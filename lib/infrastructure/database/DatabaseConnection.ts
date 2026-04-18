@@ -7,6 +7,7 @@ export type SqliteDatabase = InstanceType<typeof Database>;
 
 import { isExcludedProject } from '../../shared/isOwnDevRepo.js';
 import pathGuard from '../../shared/PathGuard.js';
+import type { WorkspaceResolver } from '../../shared/WorkspaceResolver.js';
 import { type DrizzleDB, initDrizzle } from './drizzle/index.js';
 
 const __dirname = import.meta.dirname;
@@ -21,19 +22,26 @@ export class DatabaseConnection {
   config: { path: string; verbose?: boolean };
   db: SqliteDatabase | null;
   drizzle: DrizzleDB | null;
-  constructor(config: { path: string; verbose?: boolean }) {
+  /** 可选的 WorkspaceResolver，Ghost 模式下用于重定向 DB 路径 */
+  #workspaceResolver: WorkspaceResolver | null;
+  constructor(
+    config: { path: string; verbose?: boolean },
+    workspaceResolver?: WorkspaceResolver | null
+  ) {
     this.config = config;
     this.db = null;
     this.drizzle = null;
+    this.#workspaceResolver = workspaceResolver ?? null;
   }
 
   /** 连接数据库 */
   async connect(): Promise<SqliteDatabase> {
     const dbPath = this.config.path;
 
-    // 使用 projectRoot（PathGuard 已配置）优先解析相对路径，
-    // 而非 path.resolve()（依赖 cwd，MCP 场景下 cwd 可能是用户主目录）
-    const projectRoot = pathGuard.projectRoot;
+    // Ghost 模式：直接使用 WorkspaceResolver 提供的 DB 路径
+    // 标准模式 / 无 resolver：使用 projectRoot 解析相对路径
+    const dataRoot = this.#workspaceResolver?.dataRoot ?? null;
+    const projectRoot = dataRoot ?? pathGuard.projectRoot;
     let resolvedDbPath =
       projectRoot && !path.isAbsolute(dbPath)
         ? path.resolve(projectRoot, dbPath)

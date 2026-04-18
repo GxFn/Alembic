@@ -70,6 +70,7 @@ async function main() {
       config: components.config,
       skillHooks: components.skillHooks,
       projectRoot,
+      workspaceResolver: components.workspaceResolver,
     });
     logger.info('Service container initialized successfully');
 

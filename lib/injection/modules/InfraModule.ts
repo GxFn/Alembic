@@ -8,7 +8,7 @@
  */
 
 import path from 'node:path';
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { KnowledgeSyncService } from '../../cli/KnowledgeSyncService.js';
 import Gateway from '../../core/gateway/Gateway.js';
 import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
@@ -168,16 +168,16 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('knowledgeFileWriter', (ct: ServiceContainer) => {
-    const projectRoot = resolveProjectRoot(ct);
-    return new KnowledgeFileWriter(projectRoot);
+    const dataRoot = resolveDataRoot(ct);
+    return new KnowledgeFileWriter(dataRoot);
   });
 
   c.singleton('knowledgeSyncService', (ct: ServiceContainer) => {
-    const projectRoot = resolveProjectRoot(ct);
+    const dataRoot = resolveDataRoot(ct);
     const sourceRefReconciler = ct.singletons.sourceRefReconciler as
       | import('../../service/knowledge/SourceRefReconciler.js').SourceRefReconciler
       | undefined;
-    return new KnowledgeSyncService(projectRoot, {
+    return new KnowledgeSyncService(dataRoot, {
       sourceRefReconciler: sourceRefReconciler || undefined,
     });
   });
@@ -185,7 +185,7 @@ export function register(c: ServiceContainer) {
   // ═══ ReportStore ═══
 
   c.singleton('reportStore', (ct: ServiceContainer) => {
-    const projectRoot = resolveProjectRoot(ct);
-    return new ReportStore(path.join(projectRoot, '.asd', 'logs', 'reports'));
+    const dataRoot = resolveDataRoot(ct);
+    return new ReportStore(path.join(dataRoot, '.asd', 'logs', 'reports'));
   });
 }

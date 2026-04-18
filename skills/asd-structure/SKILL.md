@@ -1,5 +1,5 @@
 ---
-name: alembic-structure
+name: asd-structure
 description: Discover project structure (targets, files, dependency graph) and browse the knowledge graph (relations between Recipes). Use when the user asks about module structure, project targets, dependency relationships, or knowledge graph navigation.
 ---
 
@@ -51,5 +51,5 @@ SPM dependency structure: `Alembic/Alembic.spmmap.json`
 
 ## Related Skills
 
-- **alembic-recipes**: Recipe content used as project standards
-- **alembic-create**: After understanding structure, submit knowledge candidates
+- **asd-recipes**: Recipe content used as project standards
+- **asd-create**: After understanding structure, submit knowledge candidates

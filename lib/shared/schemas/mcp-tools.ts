@@ -242,7 +242,7 @@ export const SkillInput = z.object({
     .describe(
       'list=列表 | load=加载内容(name) | create=创建 | update=更新 | delete=删除 | suggest=推荐'
     ),
-  name: z.string().optional().describe('Skill 名称（kebab-case，如 alembic-create）'),
+  name: z.string().optional().describe('Skill 名称（kebab-case，如 asd-create）'),
   skillName: z.string().optional().describe('name 的别名，与 name 等价'),
   section: z.string().optional().describe('load 时过滤指定章节'),
   description: z.string().optional().describe('create/update 时的简短描述'),

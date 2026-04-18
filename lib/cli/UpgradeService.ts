@@ -12,20 +12,24 @@ import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../shared/ProjectMarkers.js';
+import { ProjectRegistry } from '../shared/ProjectRegistry.js';
 import { FileDeployer } from './deploy/FileDeployer.js';
 
 export class UpgradeService {
   projectRoot: string;
   projectName: string;
+  ghost: boolean;
   constructor(options: { projectRoot: string }) {
     this.projectRoot = resolve(options.projectRoot);
     this.projectName = this.projectRoot.split('/').pop() || '';
+    this.ghost = ProjectRegistry.isGhost(this.projectRoot);
   }
 
   async run({ skillsOnly = false, mcpOnly = false } = {}) {
     const deployer = new FileDeployer({
       projectRoot: this.projectRoot,
       force: false,
+      ghost: this.ghost,
     });
 
     let filter: string[] | undefined;

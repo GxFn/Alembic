@@ -1,5 +1,5 @@
 ---
-name: alembic-create
+name: asd-create
 description: Submit knowledge to Alembic. Covers single/batch MCP submission, V3 field requirements, quality validation, and lifecycle. Use when user says "submit knowledge / add to KB / create recipe" or agent needs to persist code patterns, rules, or facts.
 ---
 
@@ -9,7 +9,7 @@ description: Submit knowledge to Alembic. Covers single/batch MCP submission, V3
 
 This Skill guides the Agent to submit code patterns, rules, and facts to the Alembic knowledge base. Submitted entries enter **Candidates** (pending status); users review and publish them via the Dashboard.
 
-Related Skill: **alembic-recipes** (search existing knowledge).
+Related Skill: **asd-recipes** (search existing knowledge).
 
 ---
 

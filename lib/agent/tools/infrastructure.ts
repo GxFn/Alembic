@@ -97,13 +97,13 @@ export const queryAuditLog = {
 export const loadSkill = {
   name: 'load_skill',
   description:
-    '加载指定的 Agent Skill 文档，获取领域操作指南和最佳实践参考。如知识提交 (alembic-create)、规范审计 (alembic-guard)、项目标准 (alembic-recipes) 等。',
+    '加载指定的 Agent Skill 文档，获取领域操作指南和最佳实践参考。如知识提交 (asd-create)、规范审计 (asd-guard)、项目标准 (asd-recipes) 等。',
   parameters: {
     type: 'object',
     properties: {
       skillName: {
         type: 'string',
-        description: 'Skill 目录名（如 alembic-create, alembic-guard, alembic-recipes 等）',
+        description: 'Skill 目录名（如 asd-create, asd-guard, asd-recipes 等）',
       },
     },
     required: ['skillName'],

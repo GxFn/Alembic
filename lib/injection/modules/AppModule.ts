@@ -8,7 +8,7 @@
  *   - primeSearchPipeline (for prime multi-query search — no DB dependency)
  */
 
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
 import { TokenUsageStore } from '../../repository/token/TokenUsageStore.js';
 import { CursorDeliveryPipeline } from '../../service/delivery/CursorDeliveryPipeline.js';
@@ -30,8 +30,8 @@ export function register(c: ServiceContainer) {
   c.register('recipeExtractor', () => c.singletons._recipeExtractor || null);
 
   c.singleton('feedbackCollector', (ct: ServiceContainer) => {
-    const projectRoot = resolveProjectRoot(ct);
-    return new FeedbackCollector(projectRoot as ConstructorParameters<typeof FeedbackCollector>[0]);
+    const dataRoot = resolveDataRoot(ct);
+    return new FeedbackCollector(dataRoot as ConstructorParameters<typeof FeedbackCollector>[0]);
   });
 
   c.singleton('tokenUsageStore', (ct: ServiceContainer) => {

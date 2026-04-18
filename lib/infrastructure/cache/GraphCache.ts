@@ -18,7 +18,10 @@ export class GraphCache {
   #cacheDir;
   #logger;
 
-  /** @param projectRoot 项目根目录 */
+  /**
+   * @param projectRoot 项目根目录（或 dataRoot — Ghost 模式下为外置工作区路径）
+   * 缓存目录: {projectRoot}/.asd/cache/
+   */
   constructor(projectRoot: string) {
     this.#cacheDir = join(projectRoot, '.asd', 'cache');
     this.#logger = Logger.getInstance();

@@ -6,7 +6,7 @@
  *   - feedbackStore, recommendationPipeline, recommendationMetrics
  */
 
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { AgentFactory } from '../../agent/AgentFactory.js';
 import { ToolForge } from '../../agent/forge/ToolForge.js';
 import { ALL_TOOLS } from '../../agent/tools/index.js';
@@ -56,8 +56,8 @@ export function register(c: ServiceContainer) {
   // ── Recommendation 子系统 ──
 
   c.singleton('feedbackStore', () => {
-    const projectRoot = resolveProjectRoot(c);
-    return new FeedbackStore(projectRoot);
+    const dataRoot = resolveDataRoot(c);
+    return new FeedbackStore(dataRoot);
   });
 
   c.singleton('recommendationPipeline', (ct: ServiceContainer) => {

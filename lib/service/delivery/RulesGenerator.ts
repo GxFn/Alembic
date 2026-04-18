@@ -2,8 +2,8 @@
  * RulesGenerator — .mdc 文件生成器
  *
  * 生成 Cursor Rules 格式的 .mdc 文件到 .cursor/rules/ 目录：
- *   - Channel A: alembic-project-rules.mdc (alwaysApply: true)
- *   - Channel B: alembic-patterns-{topic}.mdc (alwaysApply: false)
+ *   - Channel A: asd-project-rules.mdc (alwaysApply: true)
+ *   - Channel B: asd-patterns-{topic}.mdc (alwaysApply: false)
  */
 
 import fs from 'node:fs';
@@ -48,7 +48,7 @@ export class RulesGenerator {
     }
 
     const content = this._renderChannelA(kept);
-    const filePath = path.join(this.rulesDir, 'alembic-project-rules.mdc');
+    const filePath = path.join(this.rulesDir, 'asd-project-rules.mdc');
     fs.writeFileSync(filePath, content, 'utf8');
 
     return {
@@ -87,7 +87,7 @@ export class RulesGenerator {
     }
 
     const content = this._renderChannelB(topic, body, description);
-    const fileName = `alembic-patterns-${topic}.mdc`;
+    const fileName = `asd-patterns-${topic}.mdc`;
     const filePath = path.join(this.rulesDir, fileName);
     fs.writeFileSync(filePath, content, 'utf8');
 
@@ -99,14 +99,14 @@ export class RulesGenerator {
 
   /**
    * 清理旧的动态生成文件
-   * 保留静态模板文件（alembic-conventions.mdc, alembic-skills.mdc）
+   * 保留静态模板文件（asd-conventions.mdc, asd-skills.mdc）
    */
   cleanDynamicFiles() {
     if (!fs.existsSync(this.rulesDir)) {
       return;
     }
 
-    const dynamicPrefixes = ['alembic-project-rules', 'alembic-patterns-'];
+    const dynamicPrefixes = ['asd-project-rules', 'asd-patterns-'];
     const files = fs.readdirSync(this.rulesDir);
     for (const file of files) {
       if (dynamicPrefixes.some((p) => file.startsWith(p))) {
@@ -166,7 +166,7 @@ export class RulesGenerator {
     this._ensureDir();
 
     const content = this._renderBaseline();
-    const filePath = path.join(this.rulesDir, 'alembic-project-rules.mdc');
+    const filePath = path.join(this.rulesDir, 'asd-project-rules.mdc');
     fs.writeFileSync(filePath, content, 'utf8');
 
     return {

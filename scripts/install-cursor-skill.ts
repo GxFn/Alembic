@@ -267,7 +267,7 @@ for (const name of skillDirs) {
   // 合并模式：只覆盖源文件中存在的文件，保留用户在 skill 目录下自己添加的文件
   fs.cpSync(src, dest, { recursive: true, force: true });
 
-  if (name === 'alembic-recipes') {
+  if (name === 'asd-recipes') {
     // V2: 生成轻量 Recipe 索引（替代 V1 全文拼接 + by-category 切片）
     const context = buildProjectRecipesContext(projectRoot);
     const refDir = path.join(dest, 'references');
@@ -292,7 +292,7 @@ for (const name of skillDirs) {
       fs.unlinkSync(oldIndexJson);
     }
   }
-  if (name === 'alembic-structure') {
+  if (name === 'asd-structure') {
     // spmmap 摘要注入到 structure skill（替代已删除的 dep-graph skill）
     const summary = buildSpmmapSummary(projectRoot);
     const refDir = path.join(dest, 'references');
@@ -308,7 +308,7 @@ for (const name of skillDirs) {
       }
     }
   }
-  if (name === 'alembic-guard') {
+  if (name === 'asd-guard') {
     // V2: Guard 索引（同 recipes 索引），Agent 主路径走 MCP guard_check
     const context = buildProjectRecipesContext(projectRoot);
     const refDir = path.join(dest, 'references');

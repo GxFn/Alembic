@@ -1,5 +1,5 @@
 ---
-name: alembic-recipes
+name: asd-recipes
 description: Provides this project's Recipe-based context to the agent. Recipes are the project's standard knowledge (code patterns + usage guides + structured relations). Use when answering about project standards, Guard, conventions, or when suggesting code. Supports in-context lookup, terminal search (asd search), and on-demand semantic search via MCP tool asd_search (mode=context).
 ---
 
@@ -64,6 +64,6 @@ This skill provides the agent with this project's context from Alembic Recipes. 
 
 ## Related Skills
 
-- **alembic-create**: Submit knowledge candidates (V3 fields, validation, lifecycle)
-- **alembic-guard**: Code compliance checking against Recipe standards
-- **alembic-structure**: Project structure and knowledge graph
+- **asd-create**: Submit knowledge candidates (V3 fields, validation, lifecycle)
+- **asd-guard**: Code compliance checking against Recipe standards
+- **asd-structure**: Project structure and knowledge graph

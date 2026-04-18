@@ -128,20 +128,16 @@ export class Logger {
   static getInstance(
     config: { level?: string; console?: boolean; file?: { enabled?: boolean; path?: string } } = {}
   ) {
+    // 如果 Bootstrap 传入了 file 配置，强制重建 Logger 实例以添加 file transports
+    // 这允许模块级的 Logger.getInstance() 先创建轻量级 console-only logger，
+    // Bootstrap 初始化后再升级为完整的 file+console logger
+    const hasFileConfig = config.file && config.file.enabled !== false;
+    if (this.instance && hasFileConfig) {
+      this.instance.close();
+      this.instance = null;
+    }
+
     if (!this.instance) {
-      const rawLogsDir = config.file?.path || './.asd/logs';
-      // 与 DatabaseConnection 一致：相对路径按 PathGuard.projectRoot 解析，避免 MCP cwd 非项目目录时写到错误位置
-      const projectRoot = pathGuard.projectRoot;
-      const logsDir =
-        projectRoot && !path.isAbsolute(rawLogsDir)
-          ? path.resolve(projectRoot, rawLogsDir)
-          : path.resolve(rawLogsDir);
-
-      // 确保日志目录存在
-      if (!fs.existsSync(logsDir)) {
-        fs.mkdirSync(logsDir, { recursive: true });
-      }
-
       const isMcpMode = process.env.ASD_MCP_MODE === '1';
       const logLevel = process.env.ASD_LOG_LEVEL || config.level || 'info';
       const transports: winston.transport[] = [];
@@ -160,8 +156,22 @@ export class Logger {
         );
       }
 
-      // File transports
-      if (config.file?.enabled !== false) {
+      // File transports — 仅在明确提供 file 配置时启用
+      // 避免模块级 Logger.getInstance() 在 Bootstrap 之前就创建项目内日志目录
+      if (config.file && config.file.enabled !== false) {
+        const rawLogsDir = config.file.path || './.asd/logs';
+        // 与 DatabaseConnection 一致：相对路径按 PathGuard.projectRoot 解析，避免 MCP cwd 非项目目录时写到错误位置
+        const projectRoot = pathGuard.projectRoot;
+        const logsDir =
+          projectRoot && !path.isAbsolute(rawLogsDir)
+            ? path.resolve(projectRoot, rawLogsDir)
+            : path.resolve(rawLogsDir);
+
+        // 确保日志目录存在
+        if (!fs.existsSync(logsDir)) {
+          fs.mkdirSync(logsDir, { recursive: true });
+        }
+
         transports.push(
           new winston.transports.File({
             filename: path.join(logsDir, 'error.log'),

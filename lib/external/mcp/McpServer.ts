@@ -93,7 +93,7 @@ import { wikiRouter } from './handlers/wiki-external.js';
 
 export class McpServer {
   container: McpServiceContainer | null;
-  logger: ReturnType<typeof Logger.getInstance>;
+  logger: ReturnType<typeof Logger.getInstance> | null;
   _autoApproveMarked: boolean;
   _capabilityProbe: CapabilityProbe | null;
   _lastTaskOperation: string;
@@ -102,7 +102,8 @@ export class McpServer {
   bootstrap: BootstrapLike | null;
   sdkServer: SdkMcpServer | null;
   constructor(options: McpServerOptions = {}) {
-    this.logger = Logger.getInstance();
+    // Logger 延迟到 initialize() 之后获取，避免在 Bootstrap 之前触发单例初始化
+    this.logger = null;
     this.container = options.container || null;
     this.bootstrap = options.bootstrap || null;
     this.sdkServer = null;
@@ -122,11 +123,11 @@ export class McpServer {
     };
   }
 
-  /** 共享上下文对象，传给所有 handler */
+  /** 共享上下文对象，传给所有 handler（仅在 initialize() 之后使用） */
   get _ctx() {
     return {
       container: this.container,
-      logger: this.logger,
+      logger: this.logger!,
       startedAt: this._startedAt,
       session: this._session,
     };
@@ -148,9 +149,12 @@ export class McpServer {
       }
 
       // ── 排除项目检查 — 防止误配置 ASD_PROJECT_DIR 到不该创建运行时数据的目录 ──
+      // Ghost 模式下跳过排除检查（数据不写入项目目录）
       const { isExcludedProject } = await import('../../shared/isOwnDevRepo.js');
+      const { ProjectRegistry } = await import('../../shared/ProjectRegistry.js');
+      const isGhost = ProjectRegistry.isGhost(projectRoot);
       const exclusion = isExcludedProject(projectRoot);
-      if (exclusion.excluded) {
+      if (exclusion.excluded && !isGhost) {
         const msg =
           `[MCP] projectRoot "${projectRoot}" 是排除项目（${exclusion.reason}），` +
           `MCP server 拒绝在此目录创建运行时数据。\n` +
@@ -182,6 +186,7 @@ export class McpServer {
         config: components.config,
         skillHooks: components.skillHooks,
         projectRoot,
+        workspaceResolver: components.workspaceResolver,
       });
 
       // 注册 Gateway action handlers
@@ -191,6 +196,9 @@ export class McpServer {
         registerGatewayActions(gateway, this.container);
       }
     }
+
+    // Bootstrap 完成后获取 Logger 单例（此时已带 ghost 路径配置）
+    this.logger = Logger.getInstance();
 
     this.sdkServer = new SdkMcpServer(
       { name: 'alembic-v3', version: '3.0.0' },
@@ -232,7 +240,7 @@ export class McpServer {
         };
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        this.logger.error(`MCP tool error: ${name}`, { error: errMsg });
+        this.logger?.error(`MCP tool error: ${name}`, { error: errMsg });
         const env = envelope({
           success: false,
           message: errMsg,
@@ -277,7 +285,7 @@ export class McpServer {
       this._autoApproveMarked = true;
       try {
         const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
-        markAutoApproveNeeded(projectRoot, this.logger);
+        markAutoApproveNeeded(projectRoot, this.logger!);
       } catch {
         /* non-blocking */
       }
@@ -587,11 +595,11 @@ export class McpServer {
       if (!result.success) {
         const code = result.error?.code || 'PERMISSION_DENIED';
         const msg = result.error?.message || 'Gateway permission check failed';
-        this.logger.warn(`MCP Gateway gating denied: ${toolName}`, { code, msg, actor });
+        this.logger?.warn(`MCP Gateway gating denied: ${toolName}`, { code, msg, actor });
         throw new Error(`[${code}] ${msg}`);
       }
 
-      this.logger.debug(`MCP Gateway gating passed: ${toolName}`, {
+      this.logger?.debug(`MCP Gateway gating passed: ${toolName}`, {
         requestId: result.requestId,
         actor,
       });
@@ -605,7 +613,7 @@ export class McpServer {
         throw err;
       }
       // Gateway 内部故障不应阻断业务（降级放行 + 记录）
-      this.logger.error(`MCP Gateway gating error (degraded): ${toolName}`, { error: errMsg });
+      this.logger?.error(`MCP Gateway gating error (degraded): ${toolName}`, { error: errMsg });
     }
   }
 
@@ -617,7 +625,7 @@ export class McpServer {
     // 首次 bootstrap 成功后的标记 → 注入 autoApprove（在连接建立前，安全写入 mcp.json）
     const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
     try {
-      applyPendingAutoApprove(projectRoot, this.logger);
+      applyPendingAutoApprove(projectRoot, this.logger!);
     } catch {
       /* non-blocking */
     }
@@ -631,7 +639,7 @@ export class McpServer {
       (t) => ((TIER_ORDER as Record<string, number>)[t.tier || 'agent'] ?? 0) <= maxTier
     ).length;
 
-    this.logger.info(`MCP Server started (stdio) — ${visibleCount} tools [tier=${tierName}]`);
+    this.logger?.info(`MCP Server started (stdio) — ${visibleCount} tools [tier=${tierName}]`);
     process.stderr.write(`Alembic MCP ready — ${visibleCount} tools [tier=${tierName}]\n`);
   }
 

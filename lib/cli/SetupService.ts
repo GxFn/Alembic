@@ -63,7 +63,9 @@ import {
   DEFAULT_SUB_REPO_DIR,
   isGitRepo,
 } from '../shared/ProjectMarkers.js';
+import { ProjectRegistry } from '../shared/ProjectRegistry.js';
 import { PACKAGE_ROOT } from '../shared/package-root.js';
+import { WorkspaceResolver } from '../shared/WorkspaceResolver.js';
 import { FileDeployer } from './deploy/FileDeployer.js';
 
 /** Alembic 源码仓库根目录（定位 templates/ 等资源） */
@@ -75,6 +77,10 @@ export class SetupService {
   force: boolean;
   projectName: string;
   projectRoot: string;
+  /** Ghost 模式：所有数据写到 ~/.asd/workspaces/<id>/ */
+  ghost: boolean;
+  /** WorkspaceResolver — Ghost 模式感知的路径解析 */
+  resolver: WorkspaceResolver | null;
   _results: Array<{ step: number; label: string; ok: boolean; error?: string }> | null = null;
   candidatesDir: string;
   coreDir: string;
@@ -96,6 +102,8 @@ export class SetupService {
     projectRoot: string;
     force?: boolean;
     seed?: boolean;
+    /** Ghost 模式：零项目侵入，数据外置到 ~/.asd/workspaces/ */
+    ghost?: boolean;
     /** 自定义子仓库相对路径（默认 'Alembic/recipes'） */
     subRepoDir?: string;
     /** 子仓库远程仓库 URL（提供则 clone，不提供则 recipes/ 为普通目录） */
@@ -105,31 +113,46 @@ export class SetupService {
     this.projectName = this.projectRoot.split('/').pop() || '';
     this.force = options.force || false;
     this.seed = options.seed || false;
+    this.ghost = options.ghost || false;
     this.subRepoDir = options.subRepoDir || DEFAULT_SUB_REPO_DIR;
     this.subRepoUrl = options.subRepoUrl;
 
     // ── 排除项目保护 ──────────────────────────────────
     const exclusion = isExcludedProject(this.projectRoot);
-    if (exclusion.excluded) {
+    if (exclusion.excluded && !this.ghost) {
       throw new Error(
         `[SetupService] 检测到当前目录是排除项目（${exclusion.reason}），` +
           '拒绝执行 setup 以避免创建 .asd/ 和 Alembic/ 运行时数据。' +
-          '\n提示: 请在用户项目目录中运行 asd setup。'
+          '\n提示: 请在用户项目目录中运行 asd setup，或使用 asd setup --ghost。'
       );
     }
 
-    // 运行时目录（gitignored）
-    this.runtimeDir = join(this.projectRoot, '.asd');
-    this.dbPath = join(this.runtimeDir, 'alembic.db');
+    // ── Ghost 模式：注册项目 + 创建外置工作区 ──
+    if (this.ghost) {
+      const entry = ProjectRegistry.register(this.projectRoot, true);
+      this.resolver = new WorkspaceResolver({
+        projectRoot: this.projectRoot,
+        ghost: true,
+        projectId: entry.id,
+      });
+    } else {
+      // 标准模式也注册（ghost=false）
+      ProjectRegistry.register(this.projectRoot, false);
+      this.resolver = new WorkspaceResolver({ projectRoot: this.projectRoot, ghost: false });
+    }
 
-    // 知识库根目录
-    this.coreDir = join(this.projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR);
-    this.recipesDir = join(this.coreDir, 'recipes');
-    this.candidatesDir = join(this.coreDir, 'candidates');
-    this.skillsDir = join(this.coreDir, 'skills');
+    // 使用 resolver 统一计算路径
+    this.runtimeDir = this.resolver.runtimeDir;
+    this.dbPath = this.resolver.databasePath;
+    this.coreDir = this.resolver.knowledgeDir;
+    this.recipesDir = this.resolver.recipesDir;
+    this.candidatesDir = this.resolver.candidatesDir;
+    this.skillsDir = this.resolver.skillsDir;
 
-    // 子仓库绝对路径
-    this.subRepoPath = join(this.projectRoot, this.subRepoDir);
+    // 子仓库绝对路径（Ghost 模式下也在外置工作区内）
+    this.subRepoPath = this.ghost
+      ? join(this.resolver.dataRoot, this.subRepoDir)
+      : join(this.projectRoot, this.subRepoDir);
   }
 
   /* ═══ 公共入口 ═══════════════════════════════════════ */
@@ -196,6 +219,9 @@ export class SetupService {
       console.log(`  ✅ Setup 完成（${ok} 步骤全部成功）`);
     } else {
       console.log(`  ⚠️  Setup 完成（${ok} 成功，${fail} 失败）`);
+    }
+    if (this.ghost) {
+      console.log(`  👻 Ghost 模式已启用 — 数据存储在: ${this.resolver?.dataRoot}`);
     }
     console.log('');
     console.log('  下一步：');
@@ -545,6 +571,7 @@ export class SetupService {
     const deployer = new FileDeployer({
       projectRoot: this.projectRoot,
       force: this.force,
+      ghost: this.ghost,
     });
     const { deployed, skipped: _skipped, errors } = deployer.deployAll('setup');
 

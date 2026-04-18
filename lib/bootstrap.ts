@@ -13,6 +13,7 @@ import { unwrapRawDb } from './repository/search/SearchRepoAdapter.js';
 import { SkillHooks } from './service/skills/SkillHooks.js';
 import pathGuard from './shared/PathGuard.js';
 import { CONFIG_DIR, PACKAGE_ROOT } from './shared/package-root.js';
+import { WorkspaceResolver } from './shared/WorkspaceResolver.js';
 
 /** Bootstrap - 应用程序启动器 */
 /** Bootstrap 初始化选项 */
@@ -35,6 +36,7 @@ interface BootstrapComponents {
   auditLogger?: InstanceType<typeof AuditLogger>;
   gateway?: InstanceType<typeof Gateway>;
   skillHooks?: InstanceType<typeof SkillHooks>;
+  workspaceResolver?: WorkspaceResolver;
   [key: string]: unknown;
 }
 
@@ -82,6 +84,9 @@ export class Bootstrap {
         }
         Bootstrap.configurePathGuard(projectRoot);
       }
+
+      // 0.8 创建 WorkspaceResolver（Ghost 模式感知的路径解析器）
+      this.initializeWorkspaceResolver();
 
       // 1. 加载配置
       await this.loadConfig();
@@ -146,6 +151,11 @@ export class Bootstrap {
     const config = this.components.config!.get('logging') as Parameters<
       typeof Logger.getInstance
     >[0];
+    // Ghost 模式：将日志路径重定向到外置工作区
+    const resolver = this.components.workspaceResolver;
+    if (resolver?.ghost && config?.file) {
+      config.file.path = resolver.logsDir;
+    }
     const logger = Logger.getInstance(config);
     this.components.logger = logger;
   }
@@ -155,7 +165,7 @@ export class Bootstrap {
     const dbConfig = this.components.config!.get('database') as ConstructorParameters<
       typeof DatabaseConnection
     >[0];
-    const db = new DatabaseConnection(dbConfig);
+    const db = new DatabaseConnection(dbConfig, this.components.workspaceResolver);
     await db.connect();
     await db.runMigrations();
     this.components.db = db;
@@ -215,6 +225,24 @@ export class Bootstrap {
 
     this.components.gateway = gateway;
     this.components.logger!.info('Gateway initialized');
+  }
+
+  /**
+   * 初始化 WorkspaceResolver
+   * 从 ProjectRegistry 自动检测 Ghost 模式，配置路径解析器
+   */
+  initializeWorkspaceResolver() {
+    const projectRoot = pathGuard.projectRoot;
+    if (!projectRoot) {
+      return; // PathGuard 未配置时跳过
+    }
+    const resolver = WorkspaceResolver.fromProject(projectRoot);
+    this.components.workspaceResolver = resolver;
+
+    // Ghost 模式：将外置工作区目录加入 PathGuard 白名单
+    if (resolver.ghost) {
+      pathGuard.addAllowPath(resolver.dataRoot);
+    }
   }
 
   /** 关闭应用程序 */

@@ -26,7 +26,7 @@ import type {
   RemoteCommandRepository,
   StatusCounts,
 } from '../../repository/remote/RemoteCommandRepository.js';
-import { resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import {
   RemoteHistoryQuery,
   RemoteNotifyBody,
@@ -391,7 +391,7 @@ function getLarkTransport() {
         meta: Record<string, unknown>
       ) => Promise<{ id: string }>,
       isUserAllowed,
-      projectRoot: resolveProjectRoot(container),
+      projectRoot: resolveDataRoot(container),
     } as unknown as ConstructorParameters<typeof LarkTransport>[0]);
 
     logger.info('[Remote/Lark] LarkTransport initialized');

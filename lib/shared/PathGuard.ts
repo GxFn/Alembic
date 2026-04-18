@@ -338,6 +338,16 @@ class PathGuard {
     this.#isDevRepo = false;
   }
 
+  /**
+   * 动态添加白名单路径（Ghost 模式外置工作区目录）
+   * 仅接受绝对路径
+   */
+  addAllowPath(absolutePath: string) {
+    if (path.isAbsolute(absolutePath)) {
+      this.#allowList.add(path.resolve(absolutePath));
+    }
+  }
+
   /** resolved 是否在 base 目录下 */
   #isUnder(resolved: string, base: string) {
     return resolved === base || resolved.startsWith(base + path.sep);

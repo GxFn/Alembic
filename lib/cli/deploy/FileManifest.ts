@@ -27,6 +27,12 @@ import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
  *   'backup-overwrite'  — 备份旧文件后覆盖
  *   'generate'          — 自定义生成逻辑（由 generate 函数处理）
  *   'inject-marker'     — 在 <!-- asd:begin/end --> 标记间注入/替换
+ *
+ * ghostPolicy（Ghost 模式部署行为）：
+ *   'deploy'    — 仍然部署到项目内（如 AGENTS.md, copilot-instructions）
+ *   'skip'      — Ghost 模式下跳过（如 .gitignore, .cursor/rules）
+ *   'global'    — 部署到全局配置而非项目（如 MCP config）
+ *   undefined   — 默认行为同 'skip'
  */
 
 export const MANIFEST = [
@@ -38,6 +44,7 @@ export const MANIFEST = [
     on: 'both',
     category: 'mcp',
     jsonKey: 'mcpServers',
+    ghostPolicy: 'global' as const,
   },
   {
     id: 'vscode-mcp',
@@ -46,6 +53,7 @@ export const MANIFEST = [
     on: 'both',
     category: 'mcp',
     jsonKey: 'servers',
+    ghostPolicy: 'global' as const,
   },
 
   // ═══ Cursor Rules（Alembic 完全拥有） ═══════════
@@ -53,46 +61,19 @@ export const MANIFEST = [
     id: 'cursor-conventions',
     strategy: 'generate',
     generate: 'generateConventionsMdc',
-    dest: '.cursor/rules/alembic-conventions.mdc',
+    dest: '.cursor/rules/asd-conventions.mdc',
     on: 'both',
     category: 'cursor-rules',
+    ghostPolicy: 'deploy' as const,
   },
   {
     id: 'cursor-skills-template',
-    src: 'cursor-rules/alembic-skills.mdc',
-    dest: '.cursor/rules/alembic-skills.mdc',
+    src: 'cursor-rules/asd-skills.mdc',
+    dest: '.cursor/rules/asd-skills.mdc',
     strategy: 'overwrite',
     on: 'both',
     category: 'cursor-rules',
-  },
-
-  // ═══ Cursor Hooks ═════════════════════════════════════
-  {
-    id: 'cursor-hooks-json',
-    src: 'cursor-hooks/hooks.json',
-    dest: '.cursor/hooks.json',
-    strategy: 'overwrite',
-    on: 'both',
-    category: 'cursor-hooks',
-  },
-  {
-    id: 'cursor-hooks-dir',
-    src: 'cursor-hooks/hooks/',
-    dest: '.cursor/hooks/',
-    strategy: 'overwrite-dir',
-    on: 'both',
-    category: 'cursor-hooks',
-    chmod: true,
-  },
-
-  // ═══ Cursor Commands ══════════════════════════════════
-  {
-    id: 'cursor-commands',
-    src: 'cursor-hooks/commands/',
-    dest: '.cursor/commands/',
-    strategy: 'overwrite-dir',
-    on: 'both',
-    category: 'cursor-commands',
+    ghostPolicy: 'deploy' as const,
   },
 
   // ═══ Agent Instructions（全部从模板生成）═══════════════
@@ -103,6 +84,7 @@ export const MANIFEST = [
     dest: '.github/copilot-instructions.md',
     on: 'both',
     category: 'copilot-instructions',
+    ghostPolicy: 'deploy' as const,
   },
   {
     id: 'agents-md',
@@ -111,26 +93,7 @@ export const MANIFEST = [
     dest: 'AGENTS.md',
     on: 'setup',
     category: 'agent-instructions',
-  },
-
-  // ═══ CI/CD ════════════════════════════════════════════
-  {
-    id: 'guard-ci',
-    src: 'guard-ci.yml',
-    dest: '.github/workflows/alembic-guard.yml',
-    strategy: 'signature-safe',
-    on: 'both',
-    category: 'guard-ci',
-  },
-  {
-    id: 'pre-commit',
-    src: 'pre-commit-guard.sh',
-    dest: null, // 动态决定：.husky/pre-commit 或 .git/hooks/pre-commit
-    strategy: 'create-only',
-    on: 'manual', // 暂不在 setup 中强制安装 git 工作流
-    category: 'pre-commit-hook',
-    chmod: true,
-    resolveDest: 'resolvePreCommitDest',
+    ghostPolicy: 'deploy' as const,
   },
 
   // ═══ Constitution ═════════════════════════════════════
@@ -144,6 +107,7 @@ export const MANIFEST = [
     on: 'upgrade',
     category: 'constitution',
     requireDir: DEFAULT_KNOWLEDGE_BASE_DIR,
+    ghostPolicy: 'skip' as const,
   },
 
   // ═══ Gitignore ════════════════════════════════════════
@@ -153,6 +117,7 @@ export const MANIFEST = [
     dest: '.gitignore',
     on: 'both',
     category: 'gitignore',
+    ghostPolicy: 'skip' as const,
   },
 
   // ═══ Skills ═══════════════════════════════════════════
@@ -162,6 +127,7 @@ export const MANIFEST = [
     generate: 'installSkills',
     on: 'both',
     category: 'skills',
+    ghostPolicy: 'deploy' as const,
   },
   {
     id: 'skills-ensure-dir',
@@ -169,6 +135,7 @@ export const MANIFEST = [
     generate: 'ensureSkillsDir',
     on: 'both',
     category: 'skills',
+    ghostPolicy: 'deploy' as const,
   },
 
   // ═══ Dynamic Agent Instructions (requires DB) ════════
@@ -178,6 +145,7 @@ export const MANIFEST = [
     generate: 'triggerCursorDelivery',
     on: 'upgrade',
     category: 'agent-instructions',
+    ghostPolicy: 'skip' as const,
   },
 
   // ═══ Auto-approve injection ═══════════════════════════
@@ -189,6 +157,7 @@ export const MANIFEST = [
     generate: 'injectAutoApprove',
     on: 'upgrade',
     category: 'mcp',
+    ghostPolicy: 'global' as const,
   },
 
   // ═══ VSCode Extension ═════════════════════════════════
@@ -198,6 +167,7 @@ export const MANIFEST = [
     generate: 'installVSCodeExtension',
     on: 'setup',
     category: 'vscode-extension',
+    ghostPolicy: 'deploy' as const,
   },
 ];
 
@@ -232,11 +202,11 @@ export const GITIGNORE_RULES = [
 export const GITIGNORE_MIGRATIONS: { find: RegExp; replace: string }[] = [];
 
 /** MCP Server 配置生成器 */
-export function buildMcpServerEntry(_projectRoot: string, ide: 'cursor' | 'vscode') {
-  // Cursor / VSCode 均为 VSCode 内核，支持 ${workspaceFolder} 变量
+export function buildMcpServerEntry(projectRoot: string, ide: 'cursor' | 'vscode', global = false) {
+  // 项目级配置支持 ${workspaceFolder}；全局配置必须用绝对路径
   const base = {
     command: 'asd-mcp',
-    env: { ASD_PROJECT_DIR: '${workspaceFolder}' },
+    env: { ASD_PROJECT_DIR: global ? projectRoot : '${workspaceFolder}' },
   };
   if (ide === 'vscode') {
     return { type: 'stdio', ...base };
