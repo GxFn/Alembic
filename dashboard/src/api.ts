@@ -1816,6 +1816,29 @@ Skill 文档格式要求：
     return res.data?.data ?? { logs: [], total: 0 };
   },
 
+  // ── Logs ──────────────────────
+
+  /** 读取日志文件 */
+  async getLogs(filters?: {
+    file?: 'combined' | 'error' | 'audit';
+    limit?: number;
+    level?: string;
+    search?: string;
+  }): Promise<{
+    file: string;
+    total: number;
+    entries: {
+      timestamp?: string;
+      level?: string;
+      message?: string;
+      tag?: string;
+      raw: string;
+    }[];
+  }> {
+    const res = await http.get('/logs', { params: filters });
+    return res.data?.data ?? { file: 'combined', total: 0, entries: [] };
+  },
+
   // ── Guard Report ──────────────
 
   /** 获取合规性报告 */

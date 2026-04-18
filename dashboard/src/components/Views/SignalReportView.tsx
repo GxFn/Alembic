@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
-  BarChart3,
-  Clock,
   FileText,
   Filter,
   Loader2,
   Radio,
   RefreshCw,
+  ScrollText,
+  Search,
   Zap,
 } from 'lucide-react';
 
@@ -43,7 +43,7 @@ const REPORT_CATEGORY_COLORS: Record<string, string> = {
 const TIME_RANGE_KEYS = ['time1h', 'time6h', 'time24h', 'time7d', 'timeAll'] as const;
 const TIME_RANGE_MS = [3600_000, 21600_000, 86400_000, 604800_000, 0] as const;
 
-type ViewMode = 'signals' | 'reports' | 'stats';
+type ViewMode = 'signals' | 'reports' | 'logs';
 
 /* ═══ Helpers ═══ */
 
@@ -141,18 +141,54 @@ function ReportCard({ report }: { report: ReportEntry }) {
   );
 }
 
-function StatsBar({ label, value, max }: { label: string; value: number; max: number }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+/* ═══ Log Entry Types ═══ */
+
+interface LogEntry {
+  timestamp?: string;
+  level?: string;
+  message?: string;
+  tag?: string;
+  raw: string;
+}
+
+const LOG_LEVEL_COLORS: Record<string, string> = {
+  error: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  warn: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  info: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  debug: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+};
+
+function LogEntryRow({ entry }: { entry: LogEntry }) {
+  const [expanded, setExpanded] = useState(false);
+  const ts = entry.timestamp ? new Date(entry.timestamp) : null;
+  const timeStr = ts
+    ? `${String(ts.getMonth() + 1).padStart(2, '0')}-${String(ts.getDate()).padStart(2, '0')} ${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')}:${String(ts.getSeconds()).padStart(2, '0')}`
+    : '';
+
   return (
-    <div className="flex items-center gap-2 text-sm">
-      <span className="w-24 truncate text-[var(--fg-subtle)]">{label}</span>
-      <div className="flex-1 h-2 rounded-full bg-[var(--bg-muted)] overflow-hidden">
-        <div
-          className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
-          style={{ width: `${pct}%` }}
-        />
+    <div
+      className="border border-[var(--border-default)] rounded-lg px-3 py-2 hover:bg-[var(--bg-muted)]/40 transition-colors cursor-pointer font-mono text-xs"
+      onClick={() => { setExpanded(!expanded); }}
+    >
+      <div className="flex items-center gap-2">
+        {timeStr && (
+          <span className="shrink-0 text-[var(--fg-subtle)] tabular-nums">{timeStr}</span>
+        )}
+        {entry.level && (
+          <span className={`px-1.5 py-0.5 rounded text-xs font-medium uppercase ${LOG_LEVEL_COLORS[entry.level] ?? LOG_LEVEL_COLORS.debug}`}>
+            {entry.level}
+          </span>
+        )}
+        {entry.tag && (
+          <span className="text-[var(--fg-secondary)] shrink-0">[{entry.tag}]</span>
+        )}
+        <span className="text-[var(--fg-default)] truncate">{entry.message || entry.raw}</span>
       </div>
-      <span className="w-12 text-right text-xs tabular-nums text-[var(--fg-subtle)]">{value}</span>
+      {expanded && (
+        <pre className="mt-2 text-xs text-[var(--fg-secondary)] bg-[var(--bg-muted)] rounded p-2.5 overflow-x-auto whitespace-pre-wrap">
+          {entry.raw}
+        </pre>
+      )}
     </div>
   );
 }
@@ -173,11 +209,10 @@ const SignalReportView: React.FC = () => {
   const [signalTotal, setSignalTotal] = useState(0);
   const [reports, setReports] = useState<ReportEntry[]>([]);
   const [reportTotal, setReportTotal] = useState(0);
-  const [stats, setStats] = useState<{
-    total: number;
-    byType: Record<string, number>;
-    bySource: Record<string, number>;
-  } | null>(null);
+  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  const [logTotal, setLogTotal] = useState(0);
+  const [logLevel, setLogLevel] = useState<string>('');
+  const [logSearch, setLogSearch] = useState<string>('');
 
   const timeOpts = useMemo(() => {
     const ms = TIME_RANGE_MS[timeRange];
@@ -199,23 +234,22 @@ const SignalReportView: React.FC = () => {
         setReports(result.reports);
         setReportTotal(result.total);
       } else {
-        const result = await api.getSignalStats(timeOpts);
-        setStats(result);
+        const result = await api.getLogs({
+          limit: 200,
+          level: logLevel || undefined,
+          search: logSearch || undefined,
+        });
+        setLogEntries(result.entries);
+        setLogTotal(result.total);
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [viewMode, timeOpts, typeFilter]);
+  }, [viewMode, timeOpts, typeFilter, logLevel, logSearch]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-
-  const maxStatValue = useMemo(() => {
-    if (!stats) { return 1; }
-    const vals = Object.values(stats.byType);
-    return Math.max(...vals, 1);
-  }, [stats]);
 
   return (
     <div className="space-y-4">
@@ -241,12 +275,40 @@ const SignalReportView: React.FC = () => {
             </div>
           )}
 
+          {/* Logs filters */}
+          {viewMode === 'logs' && (
+            <>
+              <select
+                value={logLevel}
+                onChange={(e) => { setLogLevel(e.target.value); }}
+                className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--fg-default)] pr-7 appearance-none bg-[length:16px] bg-[right_0.4rem_center] bg-no-repeat bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23888%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')]"
+              >
+                <option value="">{t('signals.logAllLevels')}</option>
+                <option value="error">error</option>
+                <option value="warn">warn</option>
+                <option value="info">info</option>
+                <option value="debug">debug</option>
+              </select>
+              <div className="relative">
+                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fg-subtle)]" />
+                <input
+                  type="text"
+                  placeholder={t('signals.logSearchPlaceholder')}
+                  value={logSearch}
+                  onChange={(e) => { setLogSearch(e.target.value); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { fetchData(); } }}
+                  className="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--fg-default)] w-44"
+                />
+              </div>
+            </>
+          )}
+
           {/* View mode tabs */}
           <div className="flex items-center gap-1">
             {([
               ['signals', <Zap key="s" size={13} />, t('signals.tabSignals')],
               ['reports', <FileText key="r" size={13} />, t('signals.tabReports')],
-              ['stats', <BarChart3 key="st" size={13} />, t('signals.tabStats')],
+              ['logs', <ScrollText key="l" size={13} />, t('signals.tabLogs')],
             ] as [ViewMode, React.ReactNode, string][]).map(([mode, icon, label]) => (
               <button
                 key={mode}
@@ -303,7 +365,7 @@ const SignalReportView: React.FC = () => {
       )}
 
       {/* ── Content ── */}
-      {loading && !signals.length && !reports.length && !stats ? (
+      {loading && !signals.length && !reports.length && !logEntries.length ? (
         <div className="flex items-center justify-center py-20 text-[var(--fg-subtle)]">
           <Loader2 size={24} className="animate-spin mr-2" />
           {t('signals.loading')}
@@ -345,52 +407,21 @@ const SignalReportView: React.FC = () => {
           )}
         </div>
       ) : (
-        /* Stats view */
-        <div className="space-y-6">
-          {stats ? (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="border border-[var(--border-default)] rounded-lg p-4">
-                  <div className="text-xs text-[var(--fg-subtle)] mb-1">{t('signals.totalSignals')}</div>
-                  <div className="text-2xl font-bold text-[var(--fg-default)] tabular-nums">{stats.total}</div>
-                </div>
-                <div className="border border-[var(--border-default)] rounded-lg p-4">
-                  <div className="text-xs text-[var(--fg-subtle)] mb-1">{t('signals.signalTypes')}</div>
-                  <div className="text-2xl font-bold text-[var(--fg-default)] tabular-nums">{Object.keys(stats.byType).length}</div>
-                </div>
-                <div className="border border-[var(--border-default)] rounded-lg p-4">
-                  <div className="text-xs text-[var(--fg-subtle)] mb-1">{t('signals.sources')}</div>
-                  <div className="text-2xl font-bold text-[var(--fg-default)] tabular-nums">{Object.keys(stats.bySource).length}</div>
-                </div>
-              </div>
-
-              <div className="border border-[var(--border-default)] rounded-lg p-4">
-                <h3 className="text-sm font-medium text-[var(--fg-default)] mb-3">{t('signals.byType')}</h3>
-                <div className="space-y-2">
-                  {Object.entries(stats.byType)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([type, count]) => (
-                      <StatsBar key={type} label={type} value={count} max={maxStatValue} />
-                    ))}
-                </div>
-              </div>
-
-              <div className="border border-[var(--border-default)] rounded-lg p-4">
-                <h3 className="text-sm font-medium text-[var(--fg-default)] mb-3">{t('signals.bySource')}</h3>
-                <div className="space-y-2">
-                  {Object.entries(stats.bySource)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 15)
-                    .map(([source, count]) => (
-                      <StatsBar key={source} label={source} value={count} max={maxStatValue} />
-                    ))}
-                </div>
-              </div>
-            </>
-          ) : (
+        /* Logs view */
+        <div className="space-y-2">
+          <div className="text-xs text-[var(--fg-subtle)]">
+            {t('signals.showingLogs', { count: logTotal })}
+          </div>
+          {logEntries.length === 0 ? (
             <div className="text-center py-12 text-[var(--fg-subtle)]">
-              <BarChart3 size={32} className="mx-auto mb-2 opacity-40" />
-              <p>{t('signals.noStats')}</p>
+              <ScrollText size={32} className="mx-auto mb-2 opacity-40" />
+              <p>{t('signals.noLogs')}</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {logEntries.map((entry, i) => (
+                <LogEntryRow key={`${entry.timestamp}-${i}`} entry={entry} />
+              ))}
             </div>
           )}
         </div>

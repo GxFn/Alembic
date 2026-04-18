@@ -35,6 +35,7 @@ import guardReportRouter from './routes/guardReport.js';
 import guardRuleRouter from './routes/guardRules.js';
 import healthRouter from './routes/health.js';
 import knowledgeRouter from './routes/knowledge.js';
+import logsRouter from './routes/logs.js';
 import modulesRouter from './routes/modules.js';
 import monitoringRouter from './routes/monitoring.js';
 import panoramaRouter from './routes/panorama.js';
@@ -337,6 +338,9 @@ export class HttpServer {
 
     // 审计日志路由
     this.app.use(`${apiPrefix}/audit`, auditRouter);
+
+    // 日志文件路由
+    this.app.use(`${apiPrefix}/logs`, logsRouter);
 
     // 根路径 — 返回 API 元信息（避免外部探测产生无意义 404）
     this.app.all('/', (_req: Request, res: Response) => {
