@@ -17,6 +17,7 @@ import { type ErrorTracker, initErrorTracker } from '../infrastructure/monitorin
 import { initPerformanceMonitor } from '../infrastructure/monitoring/PerformanceMonitor.js';
 import { initRealtimeService } from '../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../injection/ServiceContainer.js';
+import { resolveDataRoot } from '../shared/resolveProjectRoot.js';
 import apiSpec from './api-spec.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { gatewayMiddleware } from './middleware/gatewayMiddleware.js';
@@ -132,8 +133,11 @@ export class HttpServer {
         this.performanceMonitor = initPerformanceMonitor();
         this.logger.info('Performance monitor initialized');
 
-        // 初始化错误追踪
-        this.errorTracker = initErrorTracker();
+        // 初始化错误追踪（Ghost-aware）
+        const dataRoot = resolveDataRoot(getServiceContainer());
+        this.errorTracker = initErrorTracker({
+          logDirectory: join(dataRoot, '.asd', 'logs', 'errors'),
+        });
         this.logger.info('Error tracker initialized');
       }
     } catch (error: unknown) {

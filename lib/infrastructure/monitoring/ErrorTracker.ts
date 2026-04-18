@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Disposable } from '../../shared/lifecycle.js';
-import pathGuard from '../../shared/PathGuard.js';
+import { resolveDataRoot } from '../../shared/resolveProjectRoot.js';
 import { timerRegistry } from '../../shared/TimerRegistry.js';
 import Logger from '../logging/Logger.js';
 
@@ -52,9 +52,7 @@ export class ErrorTracker implements Disposable {
     > = {}
   ) {
     this.config = {
-      logDirectory:
-        options.logDirectory ||
-        path.join(pathGuard.projectRoot ?? process.cwd(), '.asd', 'logs', 'errors'),
+      logDirectory: options.logDirectory || path.join(resolveDataRoot(), '.asd', 'logs', 'errors'),
       maxErrorsInMemory: options.maxErrorsInMemory || 500,
       enableFileLogging: options.enableFileLogging !== false,
       enableConsoleLogging: options.enableConsoleLogging !== false,

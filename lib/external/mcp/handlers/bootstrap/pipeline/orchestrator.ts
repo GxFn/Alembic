@@ -28,6 +28,7 @@ import { PRESETS } from '#agent/presets.js';
 import { getDimensionFocusKeywords } from '#domain/dimension/DimensionSop.js';
 import Logger from '#infra/logging/Logger.js';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
+import { resolveDataRoot } from '#shared/resolveProjectRoot.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import type { IncrementalPlan } from '../../types.js';
@@ -321,6 +322,9 @@ function buildPanoramaContext(
 export async function fillDimensionsV3(view: PipelineFillView, dimensions: DimensionDef[]) {
   const { snapshot, projectRoot } = view;
   const ctx = view.ctx as OrchestratorContext;
+  // Ghost-aware: .asd/ 写入使用 dataRoot（Ghost 模式下指向外置工作区）
+  const dataRoot =
+    resolveDataRoot(ctx.container as { singletons?: Record<string, unknown> }) || projectRoot;
 
   // 从 snapshot 提取 orchestrator 所需字段
   const depGraphData = snapshot.dependencyGraph;
@@ -492,7 +496,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       semanticMemory = new PersistentMemory(db, {
         logger,
         embeddingFn,
-        embeddingStore: new MemoryEmbeddingStore(projectRoot),
+        embeddingStore: new MemoryEmbeddingStore(dataRoot),
       });
       const smStats = semanticMemory.getStats();
       if (smStats.total > 0) {
@@ -575,7 +579,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
   );
 
   // ── P3: 断点续传 — 加载有效 checkpoints ──
-  const completedCheckpoints = await loadCheckpoints(projectRoot);
+  const completedCheckpoints = await loadCheckpoints(dataRoot);
   const skippedDims: string[] = [];
   for (const [dimId, checkpoint] of completedCheckpoints) {
     if (activeDimIds.includes(dimId)) {
@@ -1237,7 +1241,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       if (analysisReport.analysisText.length >= 50) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- digest shape compatible at runtime
         await saveDimensionCheckpoint(
-          projectRoot,
+          dataRoot,
           sessionId,
           dimId,
           dimResult,
@@ -1505,7 +1509,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
     if (db) {
       const semanticMemory = new PersistentMemory(db, {
         logger,
-        embeddingStore: new MemoryEmbeddingStore(projectRoot),
+        embeddingStore: new MemoryEmbeddingStore(dataRoot),
       });
       const consolidator = new EpisodicConsolidator(semanticMemory, { logger });
 
@@ -1686,7 +1690,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       /* non-blocking */
     }
 
-    const reportDir = path.join(projectRoot, '.asd');
+    const reportDir = path.join(dataRoot, '.asd');
     await fs.mkdir(reportDir, { recursive: true });
     await fs.writeFile(
       path.join(reportDir, 'bootstrap-report.json'),
@@ -1700,7 +1704,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
   }
 
   // P3: 成功完成后清理 checkpoints
-  await clearCheckpoints(projectRoot);
+  await clearCheckpoints(dataRoot);
 
   // v5.0: 保存 Bootstrap 快照 (用于下次增量 Bootstrap)
   try {

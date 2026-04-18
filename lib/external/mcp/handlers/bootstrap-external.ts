@@ -18,7 +18,7 @@
 import path from 'node:path';
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { MissionBriefingResult, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import { toSessionCache } from '#types/snapshot-views.js';
@@ -53,6 +53,7 @@ interface McpContext {
 export async function bootstrapExternal(ctx: McpContext) {
   const t0 = Date.now();
   const projectRoot = resolveProjectRoot(ctx.container);
+  const dataRoot = resolveDataRoot(ctx.container);
 
   // ═══════════════════════════════════════════════════════════
   // Step 1: 全量清理 (CleanupService.fullReset)
@@ -60,7 +61,7 @@ export async function bootstrapExternal(ctx: McpContext) {
 
   const db = ctx.container.get('database');
   const cleanupService = new CleanupService({
-    projectRoot,
+    projectRoot: dataRoot,
     db,
     logger: ctx.logger,
   });

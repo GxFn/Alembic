@@ -514,9 +514,11 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
         if (db && session.sessionStore) {
           const { PersistentMemory } = await import('#agent/memory/PersistentMemory.js');
           const { MemoryEmbeddingStore } = await import('#agent/memory/MemoryEmbeddingStore.js');
+          const { resolveDataRoot } = await import('#shared/resolveProjectRoot.js');
+          const dataRoot = resolveDataRoot(ctx.container);
           const semanticMemory = new PersistentMemory(db, {
             logger,
-            embeddingStore: new MemoryEmbeddingStore(projectRoot),
+            embeddingStore: new MemoryEmbeddingStore(dataRoot),
           });
           const consolidator = new EpisodicConsolidator(semanticMemory, { logger });
           const result = await consolidator.consolidate(session.sessionStore, {

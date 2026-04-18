@@ -19,7 +19,7 @@ import path from 'node:path';
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import { RelevanceAuditor } from '#service/evolution/RelevanceAuditor.js';
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
 import type { MissionBriefingResult, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
@@ -57,6 +57,7 @@ function truncate(s: string | undefined | null, max: number): string {
 export async function rescanExternal(ctx: McpContext, args: RescanInput) {
   const t0 = Date.now();
   const projectRoot = resolveProjectRoot(ctx.container);
+  const dataRoot = resolveDataRoot(ctx.container);
   const db = ctx.container.get('database');
 
   // ═══════════════════════════════════════════════════════════
@@ -64,7 +65,7 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
   // ═══════════════════════════════════════════════════════════
 
   const cleanupService = new CleanupService({
-    projectRoot,
+    projectRoot: dataRoot,
     db,
     logger: ctx.logger,
   });

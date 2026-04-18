@@ -21,7 +21,7 @@
 import path from 'node:path';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import { RelevanceAuditor } from '#service/evolution/RelevanceAuditor.js';
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
 import type {
   AstSummary,
@@ -77,6 +77,7 @@ const TARGET_PER_DIM = 5;
 export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternalArgs) {
   const t0 = Date.now();
   const projectRoot = resolveProjectRoot(ctx.container);
+  const dataRoot = resolveDataRoot(ctx.container);
   const db = ctx.container.get('database');
 
   // ═══════════════════════════════════════════════════════════
@@ -84,7 +85,7 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
   // ═══════════════════════════════════════════════════════════
 
   const cleanupService = new CleanupService({
-    projectRoot,
+    projectRoot: dataRoot,
     db,
     logger: ctx.logger,
   });

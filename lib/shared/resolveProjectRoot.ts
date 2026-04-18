@@ -10,7 +10,7 @@
  * 替代散落在各处的裸 `process.cwd()` 调用。
  */
 
-import type { WorkspaceResolver } from './WorkspaceResolver.js';
+import { WorkspaceResolver } from './WorkspaceResolver.js';
 
 /** ServiceContainer 最小类型，避免循环依赖 */
 interface ContainerLike {
@@ -48,8 +48,13 @@ export function resolveDataRoot(container?: ContainerLike | null): string {
   if (resolver) {
     return resolver.dataRoot;
   }
-  // fallback: 无 WorkspaceResolver 时等同于 projectRoot
-  return resolveProjectRoot(container);
+
+  // fallback: 即使没有 container，也尝试根据 projectRoot 自动恢复 Ghost 模式 dataRoot
+  try {
+    return WorkspaceResolver.fromProject(resolveProjectRoot(container)).dataRoot;
+  } catch {
+    return resolveProjectRoot(container);
+  }
 }
 
 /**

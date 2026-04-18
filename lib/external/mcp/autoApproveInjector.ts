@@ -17,7 +17,9 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import WorkspaceResolver from '#shared/WorkspaceResolver.js';
 
 /** Minimal logger interface for auto-approve operations */
 interface AutoApproveLogger {
@@ -47,9 +49,26 @@ const AUTO_APPROVE_TOOLS = [
   'asd_wiki_finalize',
 ];
 
-/** 标记文件路径 */
+/** 标记文件路径（Ghost 模式下写入外置工作区） */
 function _markerPath(projectRoot: string) {
-  return path.join(projectRoot, '.asd', '.auto-approve-pending');
+  try {
+    return WorkspaceResolver.fromProject(projectRoot).autoApprovePendingPath;
+  } catch {
+    return path.join(projectRoot, '.asd', '.auto-approve-pending');
+  }
+}
+
+/** Cursor MCP 配置路径（Ghost 模式下使用全局配置） */
+function _cursorMcpPath(projectRoot: string) {
+  try {
+    const resolver = WorkspaceResolver.fromProject(projectRoot);
+    if (resolver.ghost) {
+      return path.join(os.homedir(), '.cursor', 'mcp.json');
+    }
+  } catch {
+    /* fall through */
+  }
+  return path.join(projectRoot, '.cursor', 'mcp.json');
 }
 
 /**
@@ -85,7 +104,7 @@ export function markAutoApproveNeeded(projectRoot: string, logger?: AutoApproveL
  * @returns 是否成功写入（false = 文件不存在或无 alembic 配置）
  */
 export function injectAutoApprove(projectRoot: string, logger?: AutoApproveLogger) {
-  const configPath = path.join(projectRoot, '.cursor', 'mcp.json');
+  const configPath = _cursorMcpPath(projectRoot);
 
   // 如果 .cursor/mcp.json 不存在，不做任何操作（不创建文件）
   if (!fs.existsSync(configPath)) {

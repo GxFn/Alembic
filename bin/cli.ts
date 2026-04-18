@@ -1415,15 +1415,17 @@ program
       cli.log('  AI Provider:  通过 IDE Agent（无需配置）');
     }
 
-    // 检查数据库
-    const dbPath = join(process.cwd(), '.asd', 'alembic.db');
+    // 检查数据库 (Ghost-aware)
+    const { WorkspaceResolver } = await import('../lib/shared/WorkspaceResolver.js');
+    const resolver = WorkspaceResolver.fromProject(process.cwd());
+    const dbPath = join(resolver.dataRoot, '.asd', 'alembic.db');
     const dbExists = existsSync(dbPath);
     cli.log(`  Database:     ${dbExists ? `✅ ${dbPath}` : '❌ not found'}`);
 
     // 检查 .asd 目录
-    const asdDir = join(process.cwd(), '.asd');
+    const asdDir = join(resolver.dataRoot, '.asd');
     cli.log(
-      `  Workspace:    ${existsSync(asdDir) ? '✅ .asd/' : '❌ not initialized (run asd setup)'}`
+      `  Workspace:    ${existsSync(asdDir) ? `✅ ${resolver.ghost ? '👻 Ghost' : '.asd/'}` : '❌ not initialized (run asd setup)'}`
     );
 
     // 检查依赖
@@ -1494,10 +1496,12 @@ program
     const projectRoot = resolve(opts.dir);
 
     const { getAiConfigInfo } = await import('../lib/external/ai/AiFactory.js');
+    const { WorkspaceResolver } = await import('../lib/shared/WorkspaceResolver.js');
+    const resolver = WorkspaceResolver.fromProject(projectRoot);
     const aiInfo = getAiConfigInfo();
     const aiOk = !!(aiInfo.provider && aiInfo.provider !== 'none');
 
-    const dbPath = join(projectRoot, '.asd', 'alembic.db');
+    const dbPath = join(resolver.dataRoot, '.asd', 'alembic.db');
     const dbExists = existsSync(dbPath);
 
     let dbSizeMB = 0;

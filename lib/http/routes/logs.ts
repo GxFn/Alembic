@@ -10,7 +10,8 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { type Request, type Response, Router } from 'express';
 
-import pathGuard from '../../shared/PathGuard.js';
+import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { resolveDataRoot } from '../../shared/resolveProjectRoot.js';
 
 const router = Router();
 
@@ -48,8 +49,8 @@ async function tailLines(filePath: string, maxLines: number): Promise<string[]> 
  */
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    const projectRoot = pathGuard.projectRoot;
-    if (!projectRoot) {
+    const dataRoot = resolveDataRoot(getServiceContainer());
+    if (!dataRoot) {
       res.status(503).json({
         success: false,
         error: { code: 'NO_PROJECT', message: 'No project root configured' },
@@ -65,7 +66,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     const levelFilter = req.query.level as string | undefined;
     const searchFilter = req.query.search as string | undefined;
 
-    const logsDir = path.resolve(projectRoot, '.asd/logs');
+    const logsDir = path.resolve(dataRoot, '.asd/logs');
     const filePath = path.join(logsDir, `${fileName}.log`);
 
     // 路径遍历防护
