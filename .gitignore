@@ -1,5 +1,5 @@
 # ============================================================
-# AutoSnippet — .gitignore
+# Alembic — .gitignore
 # ============================================================
 
 # ─── Dependencies ────────────────────────────────────
@@ -35,6 +35,7 @@ resources/native-ui/screenshot
 
 # ─── Alembic runtime (dev repo protection) ──────────
 # isOwnDevRepo() already prevents creation; belt-and-suspenders
+.asd/
 Alembic/
 
 # ─── Testing ─────────────────────────────────────────

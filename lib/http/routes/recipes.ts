@@ -120,8 +120,15 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
         (result.relations as { from: string; to: string; type: string; evidence?: string }[]) || [];
       const analyzed = (result.analyzed as number) || 0;
 
+      logger.info('AI discover-relations result', {
+        analyzed,
+        relationsCount: relations.length,
+        sample: relations.slice(0, 3).map((r) => `${r.from} → ${r.to} (${r.type})`),
+      });
+
       // 将 AI 发现的关系写入知识图谱
-      // AI 返回的 from/to 是 Recipe 标题，需要解析为实际 ID
+      // AI 返回的 from/to 可能是 Recipe ID（UUID）、标题、trigger 或被改写的标题
+      // 预加载全部 Recipe，通过 token 相似度做最佳匹配
       let written = 0;
       if (relations.length > 0) {
         try {
@@ -129,32 +136,137 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
             'knowledgeGraphService'
           ) as import('../../service/knowledge/KnowledgeGraphService.js').KnowledgeGraphService;
           const knowledgeRepo = container.get('knowledgeRepository') as {
-            findByTitle(title: string): Promise<{ id: string } | null>;
+            findAllByLifecycles(
+              lifecycles: readonly string[]
+            ): Promise<Array<{ id: string; title: string; trigger: string }>>;
           };
 
-          // 缓存标题 → ID 映射，避免重复查询
-          const titleToId = new Map<string, string | null>();
-          const resolveId = async (title: string): Promise<string | null> => {
-            if (titleToId.has(title)) {
-              return titleToId.get(title)!;
+          // 预加载全部活跃 Recipe
+          const allRecipes = await knowledgeRepo.findAllByLifecycles(COUNTABLE_LIFECYCLES);
+          const idSet = new Set(allRecipes.map((r) => r.id));
+
+          // 构建查找索引
+          const byTitle = new Map<string, string>(); // lower(title) → id
+          const byTrigger = new Map<string, string>(); // lower(trigger) → id
+          for (const r of allRecipes) {
+            if (r.title) {
+              byTitle.set(r.title.toLowerCase(), r.id);
             }
-            try {
-              const entry = await knowledgeRepo.findByTitle(title);
-              const id = entry?.id ?? null;
-              titleToId.set(title, id);
-              return id;
-            } catch {
-              titleToId.set(title, null);
+            if (r.trigger) {
+              byTrigger.set(r.trigger.toLowerCase(), r.id);
+            }
+          }
+
+          /** 将字符串拆分为 token 集合（中文按字符、英文按单词） */
+          const tokenize = (s: string): Set<string> => {
+            const lower = s.toLowerCase();
+            const tokens = new Set<string>();
+            // 英文/数字单词
+            for (const m of lower.matchAll(/[a-z0-9_]+/g)) {
+              tokens.add(m[0]);
+            }
+            // 中文字符（每个字作为 token）
+            for (const ch of lower) {
+              if (ch.charCodeAt(0) > 0x4e00) {
+                tokens.add(ch);
+              }
+            }
+            return tokens;
+          };
+
+          /** Jaccard 相似度 */
+          const similarity = (a: Set<string>, b: Set<string>): number => {
+            if (a.size === 0 || b.size === 0) {
+              return 0;
+            }
+            let intersection = 0;
+            for (const t of a) {
+              if (b.has(t)) {
+                intersection++;
+              }
+            }
+            return intersection / (a.size + b.size - intersection);
+          };
+
+          // 预计算 Recipe token
+          const recipeTokens = allRecipes.map((r) => ({
+            id: r.id,
+            tokens: tokenize(`${r.title} ${r.trigger}`),
+          }));
+
+          const cache = new Map<string, string | null>();
+          const resolveId = (nameOrId: string): string | null => {
+            const key = nameOrId.trim();
+            if (!key) {
               return null;
             }
+            if (cache.has(key)) {
+              return cache.get(key)!;
+            }
+
+            let id: string | null = null;
+            const keyLower = key.toLowerCase();
+
+            // 1) 直接 UUID
+            if (idSet.has(key)) {
+              id = key;
+            }
+
+            // 2) 精确标题匹配
+            if (!id) {
+              id = byTitle.get(keyLower) ?? null;
+            }
+
+            // 3) 精确 trigger 匹配
+            if (!id) {
+              id = byTrigger.get(keyLower) ?? null;
+            }
+
+            // 4) 标题包含/被包含
+            if (!id) {
+              for (const [title, rid] of byTitle) {
+                if (title.includes(keyLower) || keyLower.includes(title)) {
+                  id = rid;
+                  break;
+                }
+              }
+            }
+
+            // 5) Token 相似度匹配（阈值 0.3）
+            if (!id) {
+              const inputTokens = tokenize(key);
+              let bestScore = 0;
+              let bestId: string | null = null;
+              for (const rt of recipeTokens) {
+                const score = similarity(inputTokens, rt.tokens);
+                if (score > bestScore) {
+                  bestScore = score;
+                  bestId = rt.id;
+                }
+              }
+              if (bestScore >= 0.3 && bestId) {
+                id = bestId;
+                logger.info('resolveId fuzzy match', {
+                  input: key,
+                  matchedId: id,
+                  score: bestScore.toFixed(2),
+                });
+              }
+            }
+
+            cache.set(key, id);
+            if (!id) {
+              logger.warn('resolveId failed', { input: key });
+            }
+            return id;
           };
 
           for (const rel of relations) {
             if (!rel.from || !rel.to || !rel.type) {
               continue;
             }
-            const fromId = await resolveId(rel.from);
-            const toId = await resolveId(rel.to);
+            const fromId = resolveId(rel.from);
+            const toId = resolveId(rel.to);
             if (!fromId || !toId) {
               continue;
             }
