@@ -301,6 +301,7 @@ const KnowledgeGraphView: React.FC = () => {
   const [discoverIsError, setDiscoverIsError] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [focusedGroup, setFocusedGroup] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isPanning = useRef(false);
@@ -428,10 +429,13 @@ const KnowledgeGraphView: React.FC = () => {
 
   // Relation type filter
   // 低信号关系类型默认关闭（auto-discover 生成的 related 边噪声太大）
+  // 但当过滤后为空时回退到显示全部，避免有边却看不见
   const LOW_SIGNAL_RELATIONS = new Set(['related', 'references']);
   const [activeRelations, setActiveRelations] = useState<Set<string>>(new Set());
   useEffect(() => {
-    setActiveRelations(new Set(edges.map(e => e.relation).filter(r => !LOW_SIGNAL_RELATIONS.has(r))));
+    const allTypes = new Set(edges.map(e => e.relation));
+    const highSignal = new Set([...allTypes].filter(r => !LOW_SIGNAL_RELATIONS.has(r)));
+    setActiveRelations(highSignal.size > 0 ? highSignal : allTypes);
   }, [edges]);
 
   const filteredEdges = useMemo(() => edges.filter(e => activeRelations.has(e.relation)), [edges, activeRelations]);
@@ -492,6 +496,23 @@ const KnowledgeGraphView: React.FC = () => {
     return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
   }, [nodes]);
 
+  // Effective viewBox: zoom into a specific group when focused
+  const effectiveViewBox = useMemo(() => {
+    if (focusedGroup) {
+      const hull = groupHulls.find(h => h.group === focusedGroup);
+      if (hull) {
+        const pad = 50;
+        return {
+          x: hull.cx - hull.rx - pad,
+          y: hull.cy - hull.ry - pad,
+          w: 2 * (hull.rx + pad),
+          h: 2 * (hull.ry + pad),
+        };
+      }
+    }
+    return viewBox;
+  }, [focusedGroup, groupHulls, viewBox]);
+
   // Node map for edge rendering
   const nodeMap = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes]);
 
@@ -501,7 +522,7 @@ const KnowledgeGraphView: React.FC = () => {
     if (!focusId) return { connectedEdgeIds: new Set<number>(), connectedNodeIds: new Set<string>() };
     const eids = new Set<number>();
     const nids = new Set<string>([focusId]);
-    for (const e of edges) {
+    for (const e of filteredEdges) {
       if (e.fromId === focusId || e.toId === focusId) {
         eids.add(e.id);
         nids.add(e.fromId);
@@ -509,20 +530,20 @@ const KnowledgeGraphView: React.FC = () => {
       }
     }
     return { connectedEdgeIds: eids, connectedNodeIds: nids };
-  }, [selectedNode, hoveredNode, edges]);
+  }, [selectedNode, hoveredNode, filteredEdges]);
 
   // Detect duplicate edges for curving
   const edgeCurvature = useMemo(() => {
     const pairCount = new Map<string, number>();
     const pairIndex = new Map<number, number>();
-    for (const e of edges) {
+    for (const e of filteredEdges) {
       const pairKey = [e.fromId, e.toId].sort().join('|');
       const idx = pairCount.get(pairKey) || 0;
       pairIndex.set(e.id, idx);
       pairCount.set(pairKey, idx + 1);
     }
     const curvatures = new Map<number, number>();
-    for (const e of edges) {
+    for (const e of filteredEdges) {
       const pairKey = [e.fromId, e.toId].sort().join('|');
       const total = pairCount.get(pairKey) || 1;
       if (total <= 1) { curvatures.set(e.id, 0); continue; }
@@ -530,7 +551,7 @@ const KnowledgeGraphView: React.FC = () => {
       curvatures.set(e.id, (idx - (total - 1) / 2) * 40);
     }
     return curvatures;
-  }, [edges]);
+  }, [filteredEdges]);
 
   const toggleRelation = (rel: string) => {
     setActiveRelations(prev => {
@@ -653,7 +674,7 @@ const KnowledgeGraphView: React.FC = () => {
             <ZoomOut size={ICON_SIZES.sm} />
           </button>
           <span className="text-[10px] text-[var(--fg-muted)] min-w-[3em] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.resetView')}>
+          <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); setFocusedGroup(null); }} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.resetView')}>
             <Maximize2 size={ICON_SIZES.sm} />
           </button>
           <button onClick={fetchGraph} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.refresh')}>
@@ -685,12 +706,12 @@ const KnowledgeGraphView: React.FC = () => {
           ref={svgRef}
           width="100%"
           height="100%"
-          viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
+          viewBox={`${effectiveViewBox.x} ${effectiveViewBox.y} ${effectiveViewBox.w} ${effectiveViewBox.h}`}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)` }}
+          style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`, transition: 'viewBox 0.3s' }}
         >
           <defs>
             {/* Arrow markers */}
@@ -724,18 +745,29 @@ const KnowledgeGraphView: React.FC = () => {
           <g>
             {groupHulls.map(h => {
               const color = groupColorMap[h.group] || GROUP_COLORS[0];
+              const isFocused = focusedGroup === h.group;
               return (
-                <g key={h.group}>
+                <g
+                  key={h.group}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const next = isFocused ? null : h.group;
+                    setFocusedGroup(next);
+                    setZoom(1);
+                    setPan({ x: 0, y: 0 });
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
                   <ellipse
                     cx={h.cx}
                     cy={h.cy}
                     rx={h.rx}
                     ry={h.ry}
                     fill={color.bg}
-                    stroke={color.border}
-                    strokeWidth={1.5}
-                    strokeDasharray="6,4"
-                    opacity={0.6}
+                    stroke={isFocused ? color.text : color.border}
+                    strokeWidth={isFocused ? 2.5 : 1.5}
+                    strokeDasharray={isFocused ? undefined : '6,4'}
+                    opacity={isFocused ? 0.85 : 0.6}
                   />
                   <text
                     x={h.cx}
@@ -889,6 +921,16 @@ const KnowledgeGraphView: React.FC = () => {
             })}
           </g>
         </svg>
+
+        {/* Back to overview when focused on a group */}
+        {focusedGroup && (
+          <button
+            className="absolute top-2 left-2 text-xs px-2 py-1 rounded-md shadow-sm border text-[var(--fg-muted)] hover:text-[var(--fg-secondary)] bg-[var(--bg-surface)] border-[var(--border-default)] z-10"
+            onClick={() => { setFocusedGroup(null); setZoom(1); setPan({ x: 0, y: 0 }); }}
+          >
+            ← {t('knowledgeGraph.resetView')}
+          </button>
+        )}
 
         {/* Click away to deselect */}
         {selectedNode && (
