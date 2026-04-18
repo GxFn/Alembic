@@ -159,8 +159,9 @@ const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         lineHeightPx: 18.125,
         lineNumberWidth: '2.75em',
         lineNumberPaddingTop: '0.875rem',
-        lineNumberPaddingRight: '0.625em',
+        lineNumberPaddingRight: '0.5em',
         lineNumberPaddingBottom: '0.875rem',
+        lineNumberPaddingLeft: '0',
         fontFamily: 'ui-monospace, monospace',
         minHeight: '200px'
       };
@@ -171,10 +172,11 @@ const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
       fontSize: '0.8125rem',
       lineHeight: 1.5,
       lineHeightPx: LINE_HEIGHT_PX,
-      lineNumberWidth: '3.5em',
+      lineNumberWidth: '3em',
       lineNumberPaddingTop: '1rem',
-      lineNumberPaddingRight: '0.75em',
+      lineNumberPaddingRight: '0.5em',
       lineNumberPaddingBottom: '1rem',
+      lineNumberPaddingLeft: '0',
       fontFamily: 'ui-monospace, monospace',
       minHeight: '200px'
     };
@@ -239,6 +241,7 @@ const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
             paddingTop: editorStyles.lineNumberPaddingTop as string,
             paddingRight: editorStyles.lineNumberPaddingRight as string,
             paddingBottom: editorStyles.lineNumberPaddingBottom as string,
+            paddingLeft: editorStyles.lineNumberPaddingLeft as string,
             borderRadius: '0',
             borderRight: `1px solid ${CODE_GUTTER_BORDER}`,
           }}
