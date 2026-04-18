@@ -94,7 +94,7 @@ export interface ServiceMap {
   // ═══ InfraModule ═══
   database: DatabaseConnection;
   logger: ReturnType<typeof Logger.getInstance>;
-  writeZone: WriteZone;
+  writeZone: WriteZone | null;
   auditStore: AuditStore;
   auditLogger: AuditLogger;
   gateway: Gateway;

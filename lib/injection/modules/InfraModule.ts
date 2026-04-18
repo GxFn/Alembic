@@ -88,7 +88,7 @@ export function register(c: ServiceContainer) {
       | import('../../shared/WorkspaceResolver.js').WorkspaceResolver
       | undefined;
     if (!resolver) {
-      throw new Error('[WriteZone] WorkspaceResolver not initialized');
+      return null;
     }
     return new WriteZone(resolver);
   });
@@ -202,7 +202,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('reportStore', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
-    const wz = ct.get('writeZone') as WriteZone;
-    return new ReportStore(path.join(dataRoot, '.asd', 'logs', 'reports'), wz);
+    const wz = ct.get('writeZone') as WriteZone | null;
+    return new ReportStore(path.join(dataRoot, '.asd', 'logs', 'reports'), wz ?? undefined);
   });
 }

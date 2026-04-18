@@ -81,8 +81,8 @@ export function register(c: ServiceContainer) {
   // Register after signalBus is created — subscribe for JSONL persistence
   const signalBus = c.get('signalBus');
   const dataRoot = resolveDataRoot(c);
-  const wz = c.get('writeZone') as import('../../infrastructure/io/WriteZone.js').WriteZone;
-  registerIntentPersistence(signalBus, dataRoot, wz);
+  const wz = c.get('writeZone') as import('../../infrastructure/io/WriteZone.js').WriteZone | null;
+  registerIntentPersistence(signalBus, dataRoot, wz ?? undefined);
 
   // ═══ SignalBridge — SignalBus → EventBus 桥接 ═══
 
@@ -99,8 +99,10 @@ export function register(c: ServiceContainer) {
   c.singleton('signalTraceWriter', (ct: ServiceContainer) => {
     const bus = ct.get('signalBus') as SignalBus;
     const root = resolveDataRoot(ct);
-    const wz = ct.get('writeZone') as import('../../infrastructure/io/WriteZone.js').WriteZone;
-    return new SignalTraceWriter(bus, path.join(root, '.asd', 'logs', 'signals'), wz);
+    const wz = ct.get('writeZone') as
+      | import('../../infrastructure/io/WriteZone.js').WriteZone
+      | null;
+    return new SignalTraceWriter(bus, path.join(root, '.asd', 'logs', 'signals'), wz ?? undefined);
   });
 
   // ═══ SignalAggregator — 滑窗统计 + 异常检测 ═══
