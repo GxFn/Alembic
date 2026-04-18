@@ -191,6 +191,18 @@ export class RoleRefiner {
       source: 'regex-baseline',
     });
 
+    // 5.5. 项目同名模块 → 主 App 目标（强信号）
+    // 当模块名与项目根目录同名时，几乎一定是主 App Target
+    const projectDirName = this.#projectRoot.replace(/\/+$/, '').split('/').pop() ?? '';
+    if (projectDirName && module.name.toLowerCase() === projectDirName.toLowerCase()) {
+      signals.push({
+        role: 'app',
+        confidence: 0.95,
+        weight: WEIGHTS.ast, // 0.30，与 AST 同级
+        source: 'project-name-match',
+      });
+    }
+
     // 加权投票
     const roleScores: Record<string, number> = {};
     for (const signal of signals) {
