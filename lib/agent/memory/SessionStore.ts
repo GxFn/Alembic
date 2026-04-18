@@ -23,6 +23,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { WriteZone } from '#infra/io/WriteZone.js';
 import Logger from '#infra/logging/Logger.js';
 import { CACHE } from '#shared/constants.js';
 import type { Disposable } from '../../shared/lifecycle.js';
@@ -675,10 +676,9 @@ export class SessionStore implements Disposable {
   // §9: 持久化 (断点续传)
   // ═══════════════════════════════════════════════════════
 
-  async saveCheckpoint(projectRoot: string) {
+  async saveCheckpoint(projectRoot: string, wz?: WriteZone) {
     const checkpointDir = path.join(projectRoot, '.asd', 'bootstrap-checkpoint');
     try {
-      fs.mkdirSync(checkpointDir, { recursive: true });
       const data = {
         version: 2,
         savedAt: Date.now(),
@@ -696,11 +696,13 @@ export class SessionStore implements Disposable {
         submittedCandidates: Object.fromEntries(this.#submittedCandidates),
         evidenceIndex: [...this.#evidenceStore.keys()],
       };
-      fs.writeFileSync(
-        path.join(checkpointDir, 'session-store.json'),
-        JSON.stringify(data, null, 2),
-        'utf-8'
-      );
+      const content = JSON.stringify(data, null, 2);
+      if (wz) {
+        wz.writeFile(wz.data('.asd/bootstrap-checkpoint/session-store.json'), content);
+      } else {
+        fs.mkdirSync(checkpointDir, { recursive: true });
+        fs.writeFileSync(path.join(checkpointDir, 'session-store.json'), content, 'utf-8');
+      }
       this.#logger.info(`[SessionStore] Checkpoint saved: ${this.#dimensionReports.size} reports`);
     } catch (err: unknown) {
       this.#logger.warn(`[SessionStore] Failed to save checkpoint: ${(err as Error).message}`);

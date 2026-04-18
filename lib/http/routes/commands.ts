@@ -272,9 +272,17 @@ router.post(
       });
     }
 
-    const fs = await import('node:fs');
     try {
-      fs.default.writeFileSync(resolved, content, 'utf8');
+      const wz = container.singletons?.writeZone as
+        | import('../../infrastructure/io/WriteZone.js').WriteZone
+        | undefined;
+      if (wz) {
+        const rel = resolved.replace(wz.projectRoot, '').replace(/^\//, '');
+        wz.writeFile(wz.project(rel), content);
+      } else {
+        const fs = await import('node:fs');
+        fs.default.writeFileSync(resolved, content, 'utf8');
+      }
       res.json({ success: true });
     } catch (err: unknown) {
       res.status(500).json({

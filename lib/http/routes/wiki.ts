@@ -26,6 +26,7 @@ import {
   type WikiProjectGraph,
 } from '../../service/wiki/WikiGenerator.js';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
+import { resolveDataRoot } from '../../shared/resolveProjectRoot.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();
@@ -75,6 +76,7 @@ function createGenerator(container: ReturnType<typeof getServiceContainer>) {
     (container.singletons?._projectRoot as string | undefined) ||
     process.env.ASD_PROJECT_DIR ||
     process.cwd();
+  const dataRoot = resolveDataRoot(container as any) || projectRoot;
 
   // 尝试获取可用的服务（非必须的优雅降级）
   let moduleService: unknown = null;
@@ -113,6 +115,7 @@ function createGenerator(container: ReturnType<typeof getServiceContainer>) {
 
   const generator = new WikiGenerator({
     projectRoot,
+    dataRoot,
     moduleService: moduleService as WikiModuleService | null,
     knowledgeService: knowledgeService as WikiKnowledgeService | null,
     projectGraph: projectGraph as WikiProjectGraph | null,

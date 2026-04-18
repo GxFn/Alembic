@@ -12,19 +12,23 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import type { DataPath, WriteZone } from '#infra/io/WriteZone.js';
 import Logger from '../logging/Logger.js';
 
 export class GraphCache {
   #cacheDir;
   #logger;
+  #wz: WriteZone | null;
 
   /**
    * @param projectRoot 项目根目录（或 dataRoot — Ghost 模式下为外置工作区路径）
+   * @param writeZone WriteZone 实例（可选，提供后写入操作走 WriteZone 管控）
    * 缓存目录: {projectRoot}/.asd/cache/
    */
-  constructor(projectRoot: string) {
+  constructor(projectRoot: string, writeZone?: WriteZone) {
     this.#cacheDir = join(projectRoot, '.asd', 'cache');
     this.#logger = Logger.getInstance();
+    this.#wz = writeZone ?? null;
   }
 
   /**
@@ -35,9 +39,6 @@ export class GraphCache {
    */
   save(key: string, data: unknown, meta: Record<string, unknown> = {}) {
     try {
-      if (!existsSync(this.#cacheDir)) {
-        mkdirSync(this.#cacheDir, { recursive: true });
-      }
       const payload = {
         version: 1,
         savedAt: new Date().toISOString(),
@@ -45,8 +46,18 @@ export class GraphCache {
         data,
       };
       const filePath = join(this.#cacheDir, `${key}.json`);
-      writeFileSync(filePath, JSON.stringify(payload), 'utf-8');
-      this.#logger.debug(`[GraphCache] saved: ${key} (${JSON.stringify(payload).length} bytes)`);
+      const content = JSON.stringify(payload);
+
+      if (this.#wz) {
+        this.#wz.ensureDir(this.#wz.runtime('cache'));
+        this.#wz.writeFile(this.#wz.runtime(`cache/${key}.json`), content);
+      } else {
+        if (!existsSync(this.#cacheDir)) {
+          mkdirSync(this.#cacheDir, { recursive: true });
+        }
+        writeFileSync(filePath, content, 'utf-8');
+      }
+      this.#logger.debug(`[GraphCache] saved: ${key} (${content.length} bytes)`);
     } catch (err: unknown) {
       this.#logger.warn(`[GraphCache] save failed for ${key}: ${(err as Error).message}`);
     }
@@ -87,10 +98,18 @@ export class GraphCache {
   /** 删除缓存 */
   invalidate(key: string) {
     try {
-      const filePath = join(this.#cacheDir, `${key}.json`);
-      if (existsSync(filePath)) {
-        unlinkSync(filePath);
-        this.#logger.debug(`[GraphCache] invalidated: ${key}`);
+      if (this.#wz) {
+        const target = this.#wz.runtime(`cache/${key}.json`);
+        if (existsSync(target.absolute)) {
+          this.#wz.remove(target);
+          this.#logger.debug(`[GraphCache] invalidated: ${key}`);
+        }
+      } else {
+        const filePath = join(this.#cacheDir, `${key}.json`);
+        if (existsSync(filePath)) {
+          unlinkSync(filePath);
+          this.#logger.debug(`[GraphCache] invalidated: ${key}`);
+        }
       }
     } catch (err: unknown) {
       this.#logger.warn(`[GraphCache] invalidate failed for ${key}: ${(err as Error).message}`);

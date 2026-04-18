@@ -47,14 +47,24 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
 
   // ── Stage 1: syncAll (.md → DB + sourceRefs reconcile) ──
   try {
-    const { KnowledgeSyncService } = await import('../../cli/KnowledgeSyncService.js');
-    const { SourceRefReconciler } = await import('../../service/knowledge/SourceRefReconciler.js');
-    const sourceRefReconciler = ctx.container.singletons.sourceRefReconciler as
-      | InstanceType<typeof SourceRefReconciler>
-      | undefined;
-    const syncService = new KnowledgeSyncService(ctx.projectRoot, {
-      sourceRefReconciler: sourceRefReconciler || undefined,
-    });
+    // 优先使用容器中已注入的 service（Ghost 模式下 dataRoot 已正确配置）
+    let syncService = ctx.container.services.knowledgeSyncService
+      ? (ctx.container.get(
+          'knowledgeSyncService'
+        ) as import('../../cli/KnowledgeSyncService.js').KnowledgeSyncService)
+      : null;
+
+    if (!syncService) {
+      const { KnowledgeSyncService } = await import('../../cli/KnowledgeSyncService.js');
+      const { resolveDataRoot } = await import('../../shared/resolveProjectRoot.js');
+      const dataRoot = resolveDataRoot(ctx.container as any) || ctx.projectRoot;
+      const sourceRefReconciler = ctx.container.singletons.sourceRefReconciler as
+        | import('../../service/knowledge/SourceRefReconciler.js').SourceRefReconciler
+        | undefined;
+      syncService = new KnowledgeSyncService(dataRoot, {
+        sourceRefReconciler: sourceRefReconciler || undefined,
+      });
+    }
 
     const db = ctx.container.get('database');
 

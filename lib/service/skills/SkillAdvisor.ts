@@ -33,6 +33,7 @@ export interface SkillSuggestion {
 interface SkillAdvisorOpts {
   knowledgeRepo?: KnowledgeRepositoryImpl | null;
   auditRepo?: AuditRepositoryImpl | null;
+  dataRoot?: string;
 }
 
 interface InsightResult {
@@ -42,11 +43,13 @@ interface InsightResult {
 
 export class SkillAdvisor {
   #projectRoot;
+  #dataRoot;
   #knowledgeRepo;
   #auditRepo;
 
-  constructor(projectRoot: string, { knowledgeRepo, auditRepo }: SkillAdvisorOpts = {}) {
+  constructor(projectRoot: string, { knowledgeRepo, auditRepo, dataRoot }: SkillAdvisorOpts = {}) {
     this.#projectRoot = projectRoot;
+    this.#dataRoot = dataRoot || projectRoot;
     this.#knowledgeRepo = knowledgeRepo || null;
     this.#auditRepo = auditRepo || null;
   }
@@ -166,7 +169,7 @@ export class SkillAdvisor {
 
   #analyzeMemoryPatterns(): InsightResult {
     const suggestions: SkillSuggestion[] = [];
-    const memoryPath = path.join(this.#projectRoot, '.asd', 'memory.jsonl');
+    const memoryPath = path.join(this.#dataRoot, '.asd', 'memory.jsonl');
 
     if (!fs.existsSync(memoryPath)) {
       return { summary: '无 Memory 记录', suggestions };
@@ -310,7 +313,7 @@ export class SkillAdvisor {
   /** 列出已有的项目级 Skill 名称集合（避免重复推荐） */
   #listExistingProjectSkills() {
     const names = new Set();
-    const dir = getProjectSkillsPath(this.#projectRoot);
+    const dir = getProjectSkillsPath(this.#dataRoot);
     try {
       fs.readdirSync(dir, { withFileTypes: true })
         .filter((d) => d.isDirectory())

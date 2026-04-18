@@ -1,29 +1,64 @@
 /**
  * ProjectScope — 判断文件是否属于 Alembic 项目
  *
- * 检测逻辑（与核心库 ProjectMarkers.ts 保持一致）：
- *   扫描所有 workspaceFolders，检查根目录下是否存在
- *   `Alembic/` 或 `.asd/` 目录。
- *   只有属于这些目录的文件才会触发扩展功能。
+ * 检测逻辑：
+ *   1. 标准模式：项目根目录存在 `Alembic/` 或 `.asd/` 目录
+ *   2. Ghost 模式：`~/.asd/projects.json` 注册表中包含该项目路径
  *
  * 非 Alembic 项目零开销：不扫描指令、不触发 CodeLens、不显示状态栏。
  *
- * ⚠️  探测标记目录必须与核心库 `lib/shared/ProjectMarkers.ts` 中的
+ * ⚠️  标记目录列表与核心库 `lib/shared/ProjectMarkers.ts` 的
  *     `PROJECT_MARKER_DIRS` 保持同步。
  */
 
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as os from 'node:os';
 
-/**
- * 项目标记目录（任一存在即视为 Alembic 项目）
- * ⚠️  与核心库 PROJECT_MARKER_DIRS 保持同步
- */
 const PROJECT_MARKER_DIRS = ['Alembic', '.asd'] as const;
+
+const REGISTRY_PATH = path.join(os.homedir(), '.asd', 'projects.json');
 
 /** 缓存：workspaceFolder fsPath → boolean */
 const _cache = new Map<string, boolean>();
+
+/** Ghost 注册表缓存（整份文件，首次访问时加载） */
+let _registryCache: Record<string, { ghost?: boolean }> | null = null;
+let _registryCacheTime = 0;
+const REGISTRY_CACHE_TTL = 60_000;
+
+function loadGhostRegistry(): Record<string, { ghost?: boolean }> {
+  const now = Date.now();
+  if (_registryCache && now - _registryCacheTime < REGISTRY_CACHE_TTL) {
+    return _registryCache;
+  }
+  try {
+    if (fs.existsSync(REGISTRY_PATH)) {
+      const raw = fs.readFileSync(REGISTRY_PATH, 'utf-8');
+      const data = JSON.parse(raw) as { version?: number; projects?: Record<string, { ghost?: boolean }> };
+      if (data.version === 1 && data.projects) {
+        _registryCache = data.projects;
+        _registryCacheTime = now;
+        return _registryCache;
+      }
+    }
+  } catch { /* corrupt or missing — ignore */ }
+  _registryCache = {};
+  _registryCacheTime = now;
+  return _registryCache;
+}
+
+function isGhostRegistered(folderPath: string): boolean {
+  const registry = loadGhostRegistry();
+  let normalized: string;
+  try {
+    normalized = fs.realpathSync(folderPath);
+  } catch {
+    normalized = path.resolve(folderPath);
+  }
+  return normalized in registry;
+}
 
 /**
  * 判断某个 workspace folder 是否为 Alembic 项目
@@ -32,9 +67,10 @@ function isAlembicProject(folderPath: string): boolean {
   const cached = _cache.get(folderPath);
   if (cached !== undefined) return cached;
 
-  const result = PROJECT_MARKER_DIRS.some((dir) =>
+  const hasMarker = PROJECT_MARKER_DIRS.some((dir) =>
     fs.existsSync(path.join(folderPath, dir))
   );
+  const result = hasMarker || isGhostRegistered(folderPath);
   _cache.set(folderPath, result);
   return result;
 }
@@ -78,4 +114,5 @@ export function isDocumentInScope(document: vscode.TextDocument): boolean {
  */
 export function invalidateCache(): void {
   _cache.clear();
+  _registryCache = null;
 }

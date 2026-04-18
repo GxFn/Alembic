@@ -8,20 +8,24 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
 import { BUDGET, estimateTokens } from './TokenBudget.js';
 
 export class RulesGenerator {
   projectName: string;
   projectRoot: string;
   rulesDir: string;
+  wz: WriteZone | null;
   /**
    * @param projectRoot 用户项目根目录
    * @param projectName 项目名称（用于 description/标题）
+   * @param [wz] WriteZone 实例（可选，提供后写入操作走 WriteZone 管控）
    */
-  constructor(projectRoot: string, projectName = 'Project') {
+  constructor(projectRoot: string, projectName = 'Project', wz?: WriteZone) {
     this.projectRoot = projectRoot;
     this.projectName = projectName;
     this.rulesDir = path.join(projectRoot, '.cursor', 'rules');
+    this.wz = wz ?? null;
   }
 
   /**
@@ -49,7 +53,11 @@ export class RulesGenerator {
 
     const content = this._renderChannelA(kept);
     const filePath = path.join(this.rulesDir, 'asd-project-rules.mdc');
-    fs.writeFileSync(filePath, content, 'utf8');
+    if (this.wz) {
+      this.wz.writeFile(this.wz.project('.cursor/rules/asd-project-rules.mdc'), content);
+    } else {
+      fs.writeFileSync(filePath, content, 'utf8');
+    }
 
     return {
       filePath,
@@ -89,7 +97,11 @@ export class RulesGenerator {
     const content = this._renderChannelB(topic, body, description);
     const fileName = `asd-patterns-${topic}.mdc`;
     const filePath = path.join(this.rulesDir, fileName);
-    fs.writeFileSync(filePath, content, 'utf8');
+    if (this.wz) {
+      this.wz.writeFile(this.wz.project(`.cursor/rules/${fileName}`), content);
+    } else {
+      fs.writeFileSync(filePath, content, 'utf8');
+    }
 
     return {
       filePath,
@@ -112,7 +124,11 @@ export class RulesGenerator {
       if (dynamicPrefixes.some((p) => file.startsWith(p))) {
         const filePath = path.join(this.rulesDir, file);
         try {
-          fs.unlinkSync(filePath);
+          if (this.wz) {
+            this.wz.remove(this.wz.project(`.cursor/rules/${file}`));
+          } else {
+            fs.unlinkSync(filePath);
+          }
         } catch {
           /* ignore */
         }
@@ -167,7 +183,11 @@ export class RulesGenerator {
 
     const content = this._renderBaseline();
     const filePath = path.join(this.rulesDir, 'asd-project-rules.mdc');
-    fs.writeFileSync(filePath, content, 'utf8');
+    if (this.wz) {
+      this.wz.writeFile(this.wz.project('.cursor/rules/asd-project-rules.mdc'), content);
+    } else {
+      fs.writeFileSync(filePath, content, 'utf8');
+    }
 
     return {
       filePath,
@@ -207,7 +227,9 @@ export class RulesGenerator {
   }
 
   _ensureDir() {
-    if (!fs.existsSync(this.rulesDir)) {
+    if (this.wz) {
+      this.wz.ensureDir(this.wz.project('.cursor/rules'));
+    } else if (!fs.existsSync(this.rulesDir)) {
       fs.mkdirSync(this.rulesDir, { recursive: true });
     }
   }

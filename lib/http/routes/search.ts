@@ -368,7 +368,14 @@ router.post(
   validate(SimilarityBody),
   async (req: Request, res: Response): Promise<void> => {
     const { code, targetName, candidateId, candidate } = req.body;
-    const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+    let dataRoot: string;
+    try {
+      const { resolveDataRoot } = await import('#shared/resolveProjectRoot.js');
+      const container = getServiceContainer();
+      dataRoot = resolveDataRoot(container) || process.env.ASD_PROJECT_DIR || process.cwd();
+    } catch {
+      dataRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+    }
 
     let candidateObj:
       | { title: string; summary: string; code: string; usageGuide: string }
@@ -412,7 +419,7 @@ router.post(
 
     try {
       const { findSimilarRecipes } = await import('../../service/candidate/SimilarityService.js');
-      const similar = findSimilarRecipes(projectRoot, candidateObj, { threshold: 0.3, topK: 10 });
+      const similar = findSimilarRecipes(dataRoot, candidateObj, { threshold: 0.3, topK: 10 });
 
       // 映射为前端期望格式
       const mapped = similar.map((s) => ({

@@ -21,6 +21,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { WriteZone } from '#infra/io/WriteZone.js';
 import Logger from '#infra/logging/Logger.js';
 import pathGuard from '#shared/PathGuard.js';
 import { estimateTokens as _estimateTokens } from '#shared/token-utils.js';
@@ -55,12 +56,14 @@ export class ConversationStore {
   #dir;
   #indexPath;
   #logger;
+  readonly #wz: WriteZone | null;
 
   /** @param projectRoot 用户项目根目录 */
-  constructor(projectRoot: string) {
+  constructor(projectRoot: string, wz?: WriteZone) {
     this.#dir = path.join(projectRoot, '.asd', 'conversations');
     this.#indexPath = path.join(this.#dir, 'index.json');
     this.#logger = Logger.getInstance();
+    this.#wz = wz ?? null;
     // 路径安全检查
     pathGuard.assertProjectWriteSafe(this.#dir);
   }
@@ -109,14 +112,18 @@ export class ConversationStore {
    */
   append(conversationId: string, message: ConversationMessage) {
     try {
-      fs.mkdirSync(this.#dir, { recursive: true });
-      const filePath = this.#conversationPath(conversationId);
       const line = JSON.stringify({
         role: message.role,
         content: message.content,
         ts: new Date().toISOString(),
       });
-      fs.appendFileSync(filePath, `${line}\n`, 'utf-8');
+      if (this.#wz) {
+        this.#wz.appendFile(this.#wz.runtime(`conversations/${conversationId}.jsonl`), `${line}\n`);
+      } else {
+        fs.mkdirSync(this.#dir, { recursive: true });
+        const filePath = this.#conversationPath(conversationId);
+        fs.appendFileSync(filePath, `${line}\n`, 'utf-8');
+      }
 
       // 更新索引
       const index = this.#loadIndex();
@@ -261,11 +268,12 @@ export class ConversationStore {
         ...toKeep,
       ];
 
-      fs.writeFileSync(
-        filePath,
-        `${newMessages.map((m) => JSON.stringify(m)).join('\n')}\n`,
-        'utf-8'
-      );
+      const newContent = `${newMessages.map((m) => JSON.stringify(m)).join('\n')}\n`;
+      if (this.#wz) {
+        this.#wz.writeFile(this.#wz.runtime(`conversations/${conversationId}.jsonl`), newContent);
+      } else {
+        fs.writeFileSync(filePath, newContent, 'utf-8');
+      }
 
       // 更新索引
       const index = this.#loadIndex();
@@ -396,9 +404,16 @@ export class ConversationStore {
 
   #deleteConversationFile(id: string) {
     try {
-      const filePath = this.#conversationPath(id);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+      if (this.#wz) {
+        const target = this.#wz.runtime(`conversations/${id}.jsonl`);
+        if (fs.existsSync(target.absolute)) {
+          this.#wz.remove(target);
+        }
+      } else {
+        const filePath = this.#conversationPath(id);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
       }
     } catch {
       /* ignore */
@@ -418,8 +433,15 @@ export class ConversationStore {
 
   #saveIndex(index: ConversationEntry[]) {
     try {
-      fs.mkdirSync(this.#dir, { recursive: true });
-      fs.writeFileSync(this.#indexPath, JSON.stringify(index, null, 2), 'utf-8');
+      if (this.#wz) {
+        this.#wz.writeFile(
+          this.#wz.runtime('conversations/index.json'),
+          JSON.stringify(index, null, 2)
+        );
+      } else {
+        fs.mkdirSync(this.#dir, { recursive: true });
+        fs.writeFileSync(this.#indexPath, JSON.stringify(index, null, 2), 'utf-8');
+      }
     } catch (err: unknown) {
       this.#logger.warn(`[ConversationStore] index save failed: ${(err as Error).message}`);
     }

@@ -11,18 +11,20 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../shared/ProjectMarkers.js';
 import { ProjectRegistry } from '../shared/ProjectRegistry.js';
+import { WorkspaceResolver } from '../shared/WorkspaceResolver.js';
 import { FileDeployer } from './deploy/FileDeployer.js';
 
 export class UpgradeService {
   projectRoot: string;
   projectName: string;
   ghost: boolean;
+  readonly #resolver: WorkspaceResolver;
   constructor(options: { projectRoot: string }) {
     this.projectRoot = resolve(options.projectRoot);
     this.projectName = this.projectRoot.split('/').pop() || '';
     this.ghost = ProjectRegistry.isGhost(this.projectRoot);
+    this.#resolver = WorkspaceResolver.fromProject(this.projectRoot);
   }
 
   async run({ skillsOnly = false, mcpOnly = false } = {}) {
@@ -58,13 +60,13 @@ export class UpgradeService {
   /* ═══ Skills 路径迁移 ═══════════════════════════════ */
 
   _migrateSkillsPath() {
-    const oldSkillsDir = join(this.projectRoot, '.asd', 'skills');
-    const newSkillsDir = join(this.projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'skills');
+    const oldSkillsDir = this.#resolver.runtimeSkillsDir;
+    const newSkillsDir = this.#resolver.skillsDir;
 
     if (!existsSync(oldSkillsDir)) {
       return;
     }
-    if (!existsSync(join(this.projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR))) {
+    if (!existsSync(this.#resolver.knowledgeDir)) {
       return;
     }
 
@@ -82,7 +84,6 @@ export class UpgradeService {
         if (existsSync(dest)) {
           continue;
         }
-        // 复制目录
         execSync(`cp -r "${src}" "${dest}"`, { stdio: 'pipe' });
         migrated++;
       }

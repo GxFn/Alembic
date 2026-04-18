@@ -15,11 +15,12 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { WriteZone } from '#infra/io/WriteZone.js';
 import Logger from '#infra/logging/Logger.js';
 import { WikiGenerator } from '#service/wiki/WikiGenerator.js';
 import { dedup } from '#service/wiki/WikiUtils.js';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '#shared/ProjectMarkers.js';
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { envelope } from '../envelope.js';
 import { getActiveSession } from './bootstrap-external.js';
 import type { McpContext, McpServiceContainer } from './types.js';
@@ -138,6 +139,7 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
   const language = args.language || 'zh';
   const container = ctx.container;
   const projectRoot = resolveProjectRoot(container);
+  const dataRoot = resolveDataRoot(container as never) || projectRoot;
 
   // ── 优先复用 bootstrap 已有的分析缓存 ──
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- getActiveSession accepts ServiceContainer, container is McpServiceContainer
@@ -233,11 +235,12 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
     logger.info('[wiki-plan] No bootstrap cache, running fresh scan...');
     const generator = new WikiGenerator({
       projectRoot,
+      dataRoot,
       moduleService: tryGet(container, 'moduleService') as WikiGenerator['moduleService'],
       knowledgeService: tryGet(container, 'knowledgeService') as WikiGenerator['knowledgeService'],
       projectGraph: tryGet(container, 'projectGraph') as WikiGenerator['projectGraph'],
       codeEntityGraph: tryGet(container, 'codeEntityGraph') as WikiGenerator['codeEntityGraph'],
-      aiProvider: null, // 不需要 AI — 只做规划
+      aiProvider: null,
       options: { language },
     });
 
@@ -250,6 +253,7 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
   // ── 主题发现（复用 WikiGenerator._discoverTopics） ──
   const generator = new WikiGenerator({
     projectRoot,
+    dataRoot,
     moduleService: tryGet(container, 'moduleService') as WikiGenerator['moduleService'],
     knowledgeService: tryGet(container, 'knowledgeService') as WikiGenerator['knowledgeService'],
     projectGraph: tryGet(container, 'projectGraph') as WikiGenerator['projectGraph'],
@@ -296,16 +300,17 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
   });
 
   // ── 确保 Wiki 目录存在 ──
-  const wikiDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
-  _ensureDir(wikiDir);
+  const wz = _getWriteZone(ctx);
+  const wikiDir = path.join(dataRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
+  _ensureDir(wikiDir, wz, dataRoot);
   if (topics.some((t) => t.path.startsWith('modules/'))) {
-    _ensureDir(path.join(wikiDir, 'modules'));
+    _ensureDir(path.join(wikiDir, 'modules'), wz, dataRoot);
   }
   if (topics.some((t) => t.path.startsWith('patterns/'))) {
-    _ensureDir(path.join(wikiDir, 'patterns'));
+    _ensureDir(path.join(wikiDir, 'patterns'), wz, dataRoot);
   }
   if (topics.some((t) => t.path.startsWith('folders/'))) {
-    _ensureDir(path.join(wikiDir, 'folders'));
+    _ensureDir(path.join(wikiDir, 'folders'), wz, dataRoot);
   }
 
   return envelope({
@@ -356,7 +361,8 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
 
   const container = ctx.container;
   const projectRoot = resolveProjectRoot(container);
-  const wikiDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
+  const dataRoot = resolveDataRoot(container as never) || projectRoot;
+  const wikiDir = path.join(dataRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
 
   // ── 1. 验证文件存在性 ──
   const missingFiles: string[] = [];
@@ -402,7 +408,8 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
       hash: f.hash,
       size: f.size,
     }));
-    dedupResult = dedup(files, wikiDir, () => {});
+    const wzDedup = _getWriteZone(ctx);
+    dedupResult = dedup(files, wikiDir, () => {}, wzDedup);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     logger.warn(`[wiki-finalize] Dedup check failed: ${msg}`);
@@ -415,6 +422,7 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
   try {
     const generator = new WikiGenerator({
       projectRoot,
+      dataRoot,
       options: { language: 'zh' },
     });
     sourceHash = generator._computeSourceHash();
@@ -434,8 +442,14 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
   };
 
   try {
-    _ensureDir(wikiDir);
-    fs.writeFileSync(path.join(wikiDir, 'meta.json'), JSON.stringify(meta, null, 2));
+    const wzF = _getWriteZone(ctx);
+    _ensureDir(wikiDir, wzF, dataRoot);
+    if (wzF) {
+      const rel = path.join(DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki', 'meta.json');
+      wzF.writeFile(wzF.data(rel), JSON.stringify(meta, null, 2));
+    } else {
+      fs.writeFileSync(path.join(wikiDir, 'meta.json'), JSON.stringify(meta, null, 2));
+    }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     return envelope({
@@ -449,19 +463,24 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
   // ── 4. 同步 Cursor 端文档（仅检测，不修改 Agent 写的内容）──
   let syncedDocs = 0;
   try {
+    const wzSync = _getWriteZone(ctx);
     const devdocsDir = path.join(projectRoot, '.cursor', 'skills', 'asd-devdocs', 'references');
     if (fs.existsSync(devdocsDir)) {
       const docsDir = path.join(wikiDir, 'documents');
-      _ensureDir(docsDir);
+      _ensureDir(docsDir, wzSync, dataRoot);
       const mdFiles = fs.readdirSync(devdocsDir).filter((f) => f.endsWith('.md'));
       for (const file of mdFiles) {
         const src = path.join(devdocsDir, file);
         const dest = path.join(docsDir, file);
         if (!fs.existsSync(dest)) {
-          // 只同步 Agent 没写的文档
           const content = fs.readFileSync(src, 'utf-8');
           const header = `<!-- synced from .cursor/skills/asd-devdocs/references/${file} -->\n\n`;
-          fs.writeFileSync(dest, header + content);
+          if (wzSync) {
+            const rel = path.join(DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki', 'documents', file);
+            wzSync.writeFile(wzSync.data(rel), header + content);
+          } else {
+            fs.writeFileSync(dest, header + content);
+          }
           syncedDocs++;
         }
       }
@@ -496,8 +515,15 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
 //  内部辅助函数
 // ════════════════════════════════════════════════════════════
 
-function _ensureDir(dir: string) {
-  if (!fs.existsSync(dir)) {
+function _getWriteZone(ctx?: McpContext): WriteZone | undefined {
+  return ctx?.container?.singletons?.writeZone as WriteZone | undefined;
+}
+
+function _ensureDir(dir: string, wz?: WriteZone, dataRoot?: string) {
+  if (wz && dataRoot && dir.startsWith(dataRoot)) {
+    const rel = dir.replace(dataRoot, '').replace(/^\//, '');
+    wz.ensureDir(wz.data(rel));
+  } else if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }

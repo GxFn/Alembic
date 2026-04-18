@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import * as Paths from '#infra/config/Paths.js';
 import { LanguageService } from '#shared/LanguageService.js';
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { envelope } from '../envelope.js';
 import type { McpContext } from './types.js';
 
@@ -335,7 +335,8 @@ export async function getTargetMetadata(ctx: McpContext, args: StructureArgs) {
 
   // ── SPM 图谱 (spmmap.json) ──
   try {
-    const knowledgeDir = Paths.getProjectKnowledgePath(projectRoot);
+    const dataRoot = resolveDataRoot(ctx?.container as never) || projectRoot;
+    const knowledgeDir = Paths.getProjectKnowledgePath(dataRoot);
     const mapPath = path.join(knowledgeDir, 'Alembic.spmmap.json');
     if (fs.existsSync(mapPath)) {
       const raw = await readFile(mapPath, 'utf8');

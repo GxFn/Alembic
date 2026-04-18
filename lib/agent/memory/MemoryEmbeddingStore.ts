@@ -17,6 +17,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { WriteZone } from '#infra/io/WriteZone.js';
 
 /** debounce flush 延迟 (ms) */
 const FLUSH_DELAY_MS = 2000;
@@ -34,13 +35,17 @@ export class MemoryEmbeddingStore {
   /** dirty flag */
   #dirty = false;
 
+  readonly #wz: WriteZone | null;
+
   /**
    * @param projectRoot 项目根目录
    * @param opts.filePath 覆盖默认文件路径 (测试用)
+   * @param opts.wz WriteZone 实例 (DI 注入)
    */
-  constructor(projectRoot: string, opts?: { filePath?: string }) {
+  constructor(projectRoot: string, opts?: { filePath?: string; wz?: WriteZone }) {
     this.#filePath =
       opts?.filePath ?? join(projectRoot, '.asd', 'context', 'memory_embeddings.json');
+    this.#wz = opts?.wz ?? null;
     this.#load();
   }
 
@@ -148,15 +153,19 @@ export class MemoryEmbeddingStore {
 
   #writeFile(): void {
     try {
-      const dir = dirname(this.#filePath);
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
-      }
       const obj: Record<string, number[]> = {};
       for (const [id, vec] of this.#cache) {
         obj[id] = vec;
       }
-      writeFileSync(this.#filePath, JSON.stringify(obj), 'utf-8');
+      if (this.#wz) {
+        this.#wz.writeFile(this.#wz.runtime('context/memory_embeddings.json'), JSON.stringify(obj));
+      } else {
+        const dir = dirname(this.#filePath);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+        writeFileSync(this.#filePath, JSON.stringify(obj), 'utf-8');
+      }
     } catch {
       // 写入失败不阻塞运行时；下次 flush 或 backfill 会重试
     }

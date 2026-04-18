@@ -79,6 +79,7 @@ export async function bootstrapExternal(ctx: McpContext) {
     clearOldData: true,
     generateReport: true,
     incremental: false,
+    dataRoot,
   });
 
   // 空项目 fast-path

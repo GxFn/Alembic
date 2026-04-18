@@ -1690,12 +1690,19 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       /* non-blocking */
     }
 
-    const reportDir = path.join(dataRoot, '.asd');
-    await fs.mkdir(reportDir, { recursive: true });
-    await fs.writeFile(
-      path.join(reportDir, 'bootstrap-report.json'),
-      JSON.stringify(report, null, 2)
-    );
+    const wz = ctx?.container?.singletons?.writeZone as
+      | import('#infra/io/WriteZone.js').WriteZone
+      | undefined;
+    if (wz) {
+      await wz.writeFileAsync(wz.runtime('bootstrap-report.json'), JSON.stringify(report, null, 2));
+    } else {
+      const reportDir = path.join(dataRoot, '.asd');
+      await fs.mkdir(reportDir, { recursive: true });
+      await fs.writeFile(
+        path.join(reportDir, 'bootstrap-report.json'),
+        JSON.stringify(report, null, 2)
+      );
+    }
     logger.info(`[Insight-v3] 📊 Bootstrap report saved to .asd/bootstrap-report.json`);
   } catch (reportErr: unknown) {
     logger.warn(
@@ -1817,9 +1824,10 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
 
     const wiki = new WikiGenerator({
       projectRoot,
+      dataRoot,
       moduleService,
       knowledgeService,
-      projectGraph, // 来自 Step 0.5 构建的 ProjectGraph
+      projectGraph,
       codeEntityGraph,
       aiProvider: wikiContainer.singletons?.aiProvider || null,
       onProgress: (phase: string, progress: number, message: string) => {

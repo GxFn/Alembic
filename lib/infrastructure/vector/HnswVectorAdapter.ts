@@ -16,8 +16,9 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import pathGuard from '../../shared/PathGuard.js';
+import type { WriteZone } from '../io/WriteZone.js';
 import { AsyncPersistence, WAL_OP } from './AsyncPersistence.js';
 import { BinaryPersistence } from './BinaryPersistence.js';
 import { HnswIndex } from './HnswIndex.js';
@@ -48,6 +49,7 @@ export class HnswVectorAdapter extends VectorStore {
   #config;
   #indexDir;
   #indexPath; // .asvec 文件路径
+  #wz: WriteZone | null;
 
   /**
    * @param [options.quantize='auto'] 'auto' | 'sq8' | 'none'
@@ -65,6 +67,7 @@ export class HnswVectorAdapter extends VectorStore {
       flushIntervalMs?: number;
       flushBatchSize?: number;
       walEnabled?: boolean;
+      writeZone?: WriteZone;
     } = {}
   ) {
     super();
@@ -83,6 +86,7 @@ export class HnswVectorAdapter extends VectorStore {
     this.#metadata = new Map();
     this.#contents = new Map();
     this.#quantizer = null;
+    this.#wz = options.writeZone ?? null;
 
     this.#index = new HnswIndex({
       M: this.#config.M,
@@ -96,12 +100,15 @@ export class HnswVectorAdapter extends VectorStore {
    * 自动检测 JSON 旧索引并迁移
    */
   async init() {
-    // 路径安全检查 — 阻止在开发仓库内创建向量索引目录
-    pathGuard.assertProjectWriteSafe(this.#indexDir);
-
     // 确保目录存在
-    if (!existsSync(this.#indexDir)) {
-      mkdirSync(this.#indexDir, { recursive: true });
+    if (this.#wz) {
+      const rel = relative(this.#wz.dataRoot, this.#indexDir);
+      this.#wz.ensureDir(this.#wz.data(rel));
+    } else {
+      pathGuard.assertProjectWriteSafe(this.#indexDir);
+      if (!existsSync(this.#indexDir)) {
+        mkdirSync(this.#indexDir, { recursive: true });
+      }
     }
 
     // 尝试加载二进制索引
@@ -162,11 +169,14 @@ export class HnswVectorAdapter extends VectorStore {
    * 注意: 同步路径无法执行 async 迁移, 但会尝试同步加载 JSON
    */
   initSync() {
-    // 路径安全检查 — 阻止在开发仓库内创建向量索引目录
-    pathGuard.assertProjectWriteSafe(this.#indexDir);
-
-    if (!existsSync(this.#indexDir)) {
-      mkdirSync(this.#indexDir, { recursive: true });
+    if (this.#wz) {
+      const rel = relative(this.#wz.dataRoot, this.#indexDir);
+      this.#wz.ensureDir(this.#wz.data(rel));
+    } else {
+      pathGuard.assertProjectWriteSafe(this.#indexDir);
+      if (!existsSync(this.#indexDir)) {
+        mkdirSync(this.#indexDir, { recursive: true });
+      }
     }
 
     // 尝试加载二进制索引
@@ -190,13 +200,16 @@ export class HnswVectorAdapter extends VectorStore {
         const { replayed } = this.#wal?.recover() || { replayed: 0 };
         if (replayed > 0) {
           this.#dirty = true;
-          // 同步 persist (WAL 已 replay 到内存, 需要落盘)
-          BinaryPersistence.save(this.#indexPath, {
-            index: this.#index,
-            quantizer: this.#quantizer,
-            metadata: this.#metadata,
-            contents: this.#contents,
-          });
+          BinaryPersistence.save(
+            this.#indexPath,
+            {
+              index: this.#index,
+              quantizer: this.#quantizer,
+              metadata: this.#metadata,
+              contents: this.#contents,
+            },
+            this.#wz ?? undefined
+          );
           this.#dirty = false;
         }
         return;
@@ -213,12 +226,16 @@ export class HnswVectorAdapter extends VectorStore {
     const { replayed } = this.#wal?.recover() || { replayed: 0 };
     if (replayed > 0) {
       this.#dirty = true;
-      BinaryPersistence.save(this.#indexPath, {
-        index: this.#index,
-        quantizer: this.#quantizer,
-        metadata: this.#metadata,
-        contents: this.#contents,
-      });
+      BinaryPersistence.save(
+        this.#indexPath,
+        {
+          index: this.#index,
+          quantizer: this.#quantizer,
+          metadata: this.#metadata,
+          contents: this.#contents,
+        },
+        this.#wz ?? undefined
+      );
       this.#dirty = false;
     }
   }
@@ -256,17 +273,27 @@ export class HnswVectorAdapter extends VectorStore {
       }
 
       // 同步保存二进制索引
-      BinaryPersistence.save(this.#indexPath, {
-        index: this.#index,
-        quantizer: this.#quantizer,
-        metadata: this.#metadata,
-        contents: this.#contents,
-      });
+      BinaryPersistence.save(
+        this.#indexPath,
+        {
+          index: this.#index,
+          quantizer: this.#quantizer,
+          metadata: this.#metadata,
+          contents: this.#contents,
+        },
+        this.#wz ?? undefined
+      );
       this.#dirty = false;
 
       // 重命名旧文件
       try {
-        renameSync(jsonPath, `${jsonPath}.bak`);
+        if (this.#wz) {
+          const relSrc = relative(this.#wz.dataRoot, jsonPath);
+          const relDest = relative(this.#wz.dataRoot, `${jsonPath}.bak`);
+          this.#wz.rename(this.#wz.data(relSrc), this.#wz.data(relDest));
+        } else {
+          renameSync(jsonPath, `${jsonPath}.bak`);
+        }
       } catch {
         /* ignore */
       }
@@ -671,6 +698,7 @@ export class HnswVectorAdapter extends VectorStore {
       flushBatchSize: this.#config.flushBatchSize,
       onPersist: () => this.#persist(),
       onReplay: (op: Record<string, unknown>) => this.#replayOp(op),
+      writeZone: this.#wz ?? undefined,
     });
   }
 
@@ -767,12 +795,16 @@ export class HnswVectorAdapter extends VectorStore {
 
   async #persist() {
     try {
-      await BinaryPersistence.saveAsync(this.#indexPath, {
-        index: this.#index,
-        quantizer: this.#quantizer,
-        metadata: this.#metadata,
-        contents: this.#contents,
-      });
+      await BinaryPersistence.saveAsync(
+        this.#indexPath,
+        {
+          index: this.#index,
+          quantizer: this.#quantizer,
+          metadata: this.#metadata,
+          contents: this.#contents,
+        },
+        this.#wz ?? undefined
+      );
       this.#dirty = false;
     } catch {
       /* 写入失败暂时忽略, 下次重试 */
@@ -862,12 +894,16 @@ export class HnswVectorAdapter extends VectorStore {
     // 同步最后一次 persist
     if (this.#dirty) {
       try {
-        BinaryPersistence.save(this.#indexPath, {
-          index: this.#index,
-          quantizer: this.#quantizer,
-          metadata: this.#metadata,
-          contents: this.#contents,
-        });
+        BinaryPersistence.save(
+          this.#indexPath,
+          {
+            index: this.#index,
+            quantizer: this.#quantizer,
+            metadata: this.#metadata,
+            contents: this.#contents,
+          },
+          this.#wz ?? undefined
+        );
         this.#dirty = false;
       } catch {
         /* ignore */

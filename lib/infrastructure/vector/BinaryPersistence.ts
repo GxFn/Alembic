@@ -37,7 +37,8 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, relative } from 'node:path';
+import type { WriteZone } from '../io/WriteZone.js';
 import type { ScalarQuantizer } from './ScalarQuantizer.js';
 
 const MAGIC = 'ASVEC';
@@ -77,14 +78,20 @@ export class BinaryPersistence {
       quantizer: ScalarQuantizer | null;
       metadata: Map<string, unknown>;
       contents: Map<string, string>;
-    }
+    },
+    wz?: WriteZone
   ) {
     const buffer = BinaryPersistence.encode(data);
-    const dir = dirname(filePath);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
+    if (wz) {
+      const rel = relative(wz.dataRoot, filePath);
+      wz.writeFile(wz.data(rel), buffer);
+    } else {
+      const dir = dirname(filePath);
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
+      writeFileSync(filePath, buffer);
     }
-    writeFileSync(filePath, buffer);
   }
 
   /** 异步保存 */
@@ -95,14 +102,20 @@ export class BinaryPersistence {
       quantizer: ScalarQuantizer | null;
       metadata: Map<string, unknown>;
       contents: Map<string, string>;
-    }
+    },
+    wz?: WriteZone
   ) {
     const buffer = BinaryPersistence.encode(data);
-    const dir = dirname(filePath);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
+    if (wz) {
+      const rel = relative(wz.dataRoot, filePath);
+      await wz.writeFileAsync(wz.data(rel), buffer);
+    } else {
+      const dir = dirname(filePath);
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
+      await writeFile(filePath, buffer);
     }
-    await writeFile(filePath, buffer);
   }
 
   /**

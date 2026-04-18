@@ -42,10 +42,38 @@ export const PROJECT_MARKER_DIRS = [DEFAULT_KNOWLEDGE_BASE_DIR, RUNTIME_DIR] as 
 
 /**
  * 判断一个目录是否是 Alembic 项目
- * 条件：存在 `Alembic/` 或 `.asd/` 子目录
+ * 条件：存在 `Alembic/` 或 `.asd/` 子目录，或在 Ghost 注册表中
  */
 export function isAlembicProject(folderPath: string): boolean {
-  return PROJECT_MARKER_DIRS.some((dir) => fs.existsSync(path.join(folderPath, dir)));
+  const hasMarker = PROJECT_MARKER_DIRS.some((dir) => fs.existsSync(path.join(folderPath, dir)));
+  if (hasMarker) {
+    return true;
+  }
+
+  try {
+    const registryPath = path.join(
+      process.env.HOME || process.env.USERPROFILE || '',
+      '.asd',
+      'projects.json'
+    );
+    if (fs.existsSync(registryPath)) {
+      const raw = fs.readFileSync(registryPath, 'utf-8');
+      const data = JSON.parse(raw) as { version?: number; projects?: Record<string, unknown> };
+      if (data.version === 1 && data.projects) {
+        let normalized: string;
+        try {
+          normalized = fs.realpathSync(folderPath);
+        } catch {
+          normalized = path.resolve(folderPath);
+        }
+        return normalized in data.projects;
+      }
+    }
+  } catch {
+    /* registry unreadable — fall through */
+  }
+
+  return false;
 }
 
 /**

@@ -113,9 +113,12 @@ export class SetupService {
     this.projectName = this.projectRoot.split('/').pop() || '';
     this.force = options.force || false;
     this.seed = options.seed || false;
-    this.ghost = options.ghost || false;
     this.subRepoDir = options.subRepoDir || DEFAULT_SUB_REPO_DIR;
     this.subRepoUrl = options.subRepoUrl;
+
+    // Ghost 模式：显式 --ghost 优先；否则自动继承注册表中已有的 Ghost 状态
+    const existingEntry = ProjectRegistry.get(this.projectRoot);
+    this.ghost = options.ghost || (existingEntry?.ghost ?? false);
 
     // ── 排除项目保护 ──────────────────────────────────
     const exclusion = isExcludedProject(this.projectRoot);

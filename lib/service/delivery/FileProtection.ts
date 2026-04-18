@@ -14,6 +14,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { type WriteZone, Zone } from '../../infrastructure/io/WriteZone.js';
 
 /**
  * Alembic 文件签名模式（case-insensitive）
@@ -68,19 +69,31 @@ export function checkWriteSafety(filePath: string) {
 export function safeWriteFile(
   filePath: string,
   content: string,
-  options: { force?: boolean; logger?: { info?: (...args: unknown[]) => void } } = {}
+  options: {
+    force?: boolean;
+    logger?: { info?: (...args: unknown[]) => void };
+    wz?: WriteZone;
+  } = {}
 ) {
-  const { force = false, logger } = options;
+  const { force = false, logger, wz } = options;
+
+  const doWrite = () => {
+    if (wz) {
+      wz.writeFile({ zone: Zone.Project, absolute: filePath }, content);
+    } else {
+      fs.writeFileSync(filePath, content, 'utf8');
+    }
+  };
 
   if (force) {
-    fs.writeFileSync(filePath, content, 'utf8');
+    doWrite();
     return { written: true, reason: 'force', filePath };
   }
 
   const { canWrite, reason } = checkWriteSafety(filePath);
 
   if (canWrite) {
-    fs.writeFileSync(filePath, content, 'utf8');
+    doWrite();
     return { written: true, reason, filePath };
   }
 
@@ -103,19 +116,31 @@ export function safeWriteFile(
 export function safeCopyFile(
   srcPath: string,
   destPath: string,
-  options: { force?: boolean; logger?: { info?: (...args: unknown[]) => void } } = {}
+  options: {
+    force?: boolean;
+    logger?: { info?: (...args: unknown[]) => void };
+    wz?: WriteZone;
+  } = {}
 ) {
-  const { force = false, logger } = options;
+  const { force = false, logger, wz } = options;
+
+  const doCopy = () => {
+    if (wz) {
+      wz.copyFile(srcPath, { zone: Zone.Project, absolute: destPath });
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  };
 
   if (force) {
-    fs.copyFileSync(srcPath, destPath);
+    doCopy();
     return { written: true, reason: 'force', filePath: destPath };
   }
 
   const { canWrite, reason } = checkWriteSafety(destPath);
 
   if (canWrite) {
-    fs.copyFileSync(srcPath, destPath);
+    doCopy();
     return { written: true, reason, filePath: destPath };
   }
 
@@ -148,10 +173,27 @@ export function mergeSection(
   options: {
     header?: string;
     logger?: { info?: (...args: unknown[]) => void };
+    wz?: WriteZone;
   } = {}
 ): { written: boolean; strategy: MergeStrategy; filePath: string } {
-  const { header = '', logger } = options;
+  const { header = '', logger, wz } = options;
   const fileName = path.basename(filePath);
+
+  const _writeFile = (fp: string, data: string) => {
+    if (wz) {
+      wz.writeFile({ zone: Zone.Project, absolute: fp }, data);
+    } else {
+      fs.writeFileSync(fp, data, 'utf8');
+    }
+  };
+
+  const _ensureDir = (dir: string) => {
+    if (wz) {
+      wz.ensureDir({ zone: Zone.Project, absolute: dir });
+    } else {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  };
 
   // 确保 section 包含 begin/end 标记
   const wrappedSection = section.includes(SECTION_BEGIN)
@@ -161,8 +203,8 @@ export function mergeSection(
   // Case 1: 文件不存在 → 创建完整文件
   if (!fs.existsSync(filePath)) {
     const content = header ? `${header}\n${wrappedSection}\n` : `${wrappedSection}\n`;
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, content, 'utf8');
+    _ensureDir(path.dirname(filePath));
+    _writeFile(filePath, content);
     logger?.info?.(`[FileProtection] Created "${fileName}" (new file)`);
     return { written: true, strategy: 'create', filePath };
   }
@@ -176,7 +218,7 @@ export function mergeSection(
       logger?.info?.(`[FileProtection] "${fileName}" — section unchanged, skipped write`);
       return { written: false, strategy: 'replace-section', filePath };
     }
-    fs.writeFileSync(filePath, updated, 'utf8');
+    _writeFile(filePath, updated);
     logger?.info?.(`[FileProtection] Updated "${fileName}" (replaced marker section)`);
     return { written: true, strategy: 'replace-section', filePath };
   }
@@ -184,14 +226,14 @@ export function mergeSection(
   // Case 3: 文件有 Alembic 签名但无标记 → 旧版格式，重写并加标记
   if (SIGNATURE_PATTERN.test(existing.slice(0, 1024))) {
     const content = header ? `${header}\n${wrappedSection}\n` : `${wrappedSection}\n`;
-    fs.writeFileSync(filePath, content, 'utf8');
+    _writeFile(filePath, content);
     logger?.info?.(`[FileProtection] Rewrote "${fileName}" (legacy → marker format)`);
     return { written: true, strategy: 'rewrite-legacy', filePath };
   }
 
   // Case 4: 用户自有文件 → 追加标记区段到末尾
   const separator = existing.endsWith('\n') ? '\n' : '\n\n';
-  fs.writeFileSync(filePath, `${existing}${separator}${wrappedSection}\n`, 'utf8');
+  _writeFile(filePath, `${existing}${separator}${wrappedSection}\n`);
   logger?.info?.(
     `[FileProtection] Appended Alembic section to "${fileName}" (user-owned file preserved)`
   );

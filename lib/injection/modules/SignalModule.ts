@@ -24,19 +24,31 @@ import type { ServiceContainer } from '../ServiceContainer.js';
  * Register intent signal subscriber for JSONL persistence.
  * Replaces standalone SignalLogger — writes IntentChainRecord to .asd/logs/signals/YYYY-MM-DD.jsonl.
  */
-function registerIntentPersistence(signalBus: SignalBus, projectRoot: string): void {
+function registerIntentPersistence(
+  signalBus: SignalBus,
+  projectRoot: string,
+  writeZone?: import('../../infrastructure/io/WriteZone.js').WriteZone
+): void {
   signalBus.subscribe('intent', (signal: Signal) => {
     try {
       const chain = signal.metadata?.chain;
       if (!chain) {
         return;
       }
-      const dir = path.join(projectRoot, '.asd', 'logs', 'signals');
-      fs.mkdirSync(dir, { recursive: true });
+      const line = `${JSON.stringify(chain)}\n`;
       const d = new Date(signal.timestamp);
       const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const filePath = path.join(dir, `${dateStr}.jsonl`);
-      fs.appendFileSync(filePath, `${JSON.stringify(chain)}\n`, 'utf8');
+
+      if (writeZone) {
+        const target = writeZone.runtime(`logs/signals/${dateStr}.jsonl`);
+        writeZone.ensureDir(writeZone.runtime('logs/signals'));
+        writeZone.appendFile(target, line);
+      } else {
+        const dir = path.join(projectRoot, '.asd', 'logs', 'signals');
+        fs.mkdirSync(dir, { recursive: true });
+        const filePath = path.join(dir, `${dateStr}.jsonl`);
+        fs.appendFileSync(filePath, line, 'utf8');
+      }
     } catch {
       // Write failure is non-blocking
     }
@@ -69,7 +81,8 @@ export function register(c: ServiceContainer) {
   // Register after signalBus is created — subscribe for JSONL persistence
   const signalBus = c.get('signalBus');
   const dataRoot = resolveDataRoot(c);
-  registerIntentPersistence(signalBus, dataRoot);
+  const wz = c.get('writeZone') as import('../../infrastructure/io/WriteZone.js').WriteZone;
+  registerIntentPersistence(signalBus, dataRoot, wz);
 
   // ═══ SignalBridge — SignalBus → EventBus 桥接 ═══
 
@@ -86,7 +99,8 @@ export function register(c: ServiceContainer) {
   c.singleton('signalTraceWriter', (ct: ServiceContainer) => {
     const bus = ct.get('signalBus') as SignalBus;
     const root = resolveDataRoot(ct);
-    return new SignalTraceWriter(bus, path.join(root, '.asd', 'logs', 'signals'));
+    const wz = ct.get('writeZone') as import('../../infrastructure/io/WriteZone.js').WriteZone;
+    return new SignalTraceWriter(bus, path.join(root, '.asd', 'logs', 'signals'), wz);
   });
 
   // ═══ SignalAggregator — 滑窗统计 + 异常检测 ═══

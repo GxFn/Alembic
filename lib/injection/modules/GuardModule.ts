@@ -88,13 +88,20 @@ export function register(c: ServiceContainer) {
 
   c.singleton('exclusionManager', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
-    return new ExclusionManager(dataRoot);
+    const wz = ct.singletons.writeZone as
+      | import('../../infrastructure/io/WriteZone.js').WriteZone
+      | undefined;
+    return new ExclusionManager(dataRoot, { wz });
   });
 
   c.singleton('ruleLearner', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
+    const wz = ct.singletons.writeZone as
+      | import('../../infrastructure/io/WriteZone.js').WriteZone
+      | undefined;
     return new RuleLearner(dataRoot, {
       signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
+      wz,
     });
   });
 

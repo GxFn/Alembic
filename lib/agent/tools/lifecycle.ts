@@ -190,7 +190,7 @@ export const submitCandidate = {
 
     const gateway = new RecipeProductionGateway({
       knowledgeService: ctx.container.get('knowledgeService'),
-      projectRoot: ctx.projectRoot,
+      projectRoot: ctx.dataRoot || ctx.projectRoot,
       logger: ctx.logger as { info(msg: string): void; warn(msg: string): void } | undefined,
       proposalRepository: ctx.container.get('proposalRepository') ?? null,
       evolutionGateway: ctx.container.get('evolutionGateway') ?? null,

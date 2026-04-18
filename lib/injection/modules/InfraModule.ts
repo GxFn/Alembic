@@ -14,6 +14,7 @@ import Gateway from '../../core/gateway/Gateway.js';
 import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../infrastructure/audit/AuditStore.js';
 import { EventBus } from '../../infrastructure/event/EventBus.js';
+import { WriteZone } from '../../infrastructure/io/WriteZone.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService as _getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { ReportStore } from '../../infrastructure/report/ReportStore.js';
@@ -78,6 +79,18 @@ export function register(c: ServiceContainer) {
       eventBus,
       getRealtimeService: getRS,
     } as ConstructorParameters<typeof BootstrapTaskManager>[0]);
+  });
+
+  // ═══ WriteZone ═══
+
+  c.singleton('writeZone', (ct: ServiceContainer) => {
+    const resolver = ct.singletons._workspaceResolver as
+      | import('../../shared/WorkspaceResolver.js').WorkspaceResolver
+      | undefined;
+    if (!resolver) {
+      throw new Error('[WriteZone] WorkspaceResolver not initialized');
+    }
+    return new WriteZone(resolver);
   });
 
   // ═══ Repositories ═══
@@ -169,7 +182,10 @@ export function register(c: ServiceContainer) {
 
   c.singleton('knowledgeFileWriter', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
-    return new KnowledgeFileWriter(dataRoot);
+    const wz = ct.singletons.writeZone as
+      | import('../../infrastructure/io/WriteZone.js').WriteZone
+      | undefined;
+    return new KnowledgeFileWriter(dataRoot, wz);
   });
 
   c.singleton('knowledgeSyncService', (ct: ServiceContainer) => {
@@ -186,6 +202,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('reportStore', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
-    return new ReportStore(path.join(dataRoot, '.asd', 'logs', 'reports'));
+    const wz = ct.get('writeZone') as WriteZone;
+    return new ReportStore(path.join(dataRoot, '.asd', 'logs', 'reports'), wz);
   });
 }

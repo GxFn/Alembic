@@ -8,6 +8,7 @@
  * 支持用户偏好持久化: 当匹配模糊时，保存/加载用户选择。
  */
 
+import { WorkspaceResolver } from '../../shared/WorkspaceResolver.js';
 import type { ConflictResult, DetectMatch } from './DiscovererPreference.js';
 import { detectConflict, loadPreference } from './DiscovererPreference.js';
 import type { ProjectDiscoverer } from './ProjectDiscoverer.js';
@@ -72,8 +73,8 @@ export class DiscovererRegistry {
       .sort((a, b) => b.result.confidence - a.result.confidence)
       .map((r) => ({ discoverer: r.discoverer, confidence: r.result.confidence }));
 
-    // 如果有用户持久化偏好，将偏好 Discoverer 提升到首位
-    const preference = loadPreference(projectRoot);
+    const dataRoot = WorkspaceResolver.fromProject(projectRoot).dataRoot;
+    const preference = loadPreference(dataRoot);
     if (preference?.userConfirmed) {
       const prefIdx = matched.findIndex((m) => m.discoverer.id === preference.selectedDiscoverer);
       if (prefIdx > 0) {
@@ -108,8 +109,8 @@ export class DiscovererRegistry {
         confidence: r.result.confidence,
       }));
 
-    // 如果有用户偏好，直接信任
-    const preference = loadPreference(projectRoot);
+    const dataRoot = WorkspaceResolver.fromProject(projectRoot).dataRoot;
+    const preference = loadPreference(dataRoot);
     if (preference?.userConfirmed) {
       return { ambiguous: false, matches, recommended: matches[0] };
     }

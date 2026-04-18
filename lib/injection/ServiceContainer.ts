@@ -286,10 +286,12 @@ export class ServiceContainer {
    * @returns 工具执行上下文
    */
   buildToolContext(extras: Record<string, unknown> = {}): Record<string, unknown> {
+    const projectRoot = resolveProjectRoot(this);
     return {
       container: this,
       aiProvider: this.singletons.aiProvider || null,
-      projectRoot: resolveProjectRoot(this),
+      projectRoot,
+      dataRoot: resolveDataRoot(this) || projectRoot,
       logger: this.logger,
       source: extras.source || 'system',
       lang: extras.lang || this.singletons._lang || null,
@@ -349,7 +351,10 @@ export class ServiceContainer {
 
     // GraphCache 使用 dataRoot 存储缓存（Ghost 模式下写到外置工作区）
     const cacheRoot = resolveDataRoot(this);
-    const cache = new GraphCache(cacheRoot);
+    const wz = this.singletons.writeZone as
+      | import('../infrastructure/io/WriteZone.js').WriteZone
+      | undefined;
+    const cache = new GraphCache(cacheRoot, wz ?? undefined);
     const startTime = Date.now();
 
     try {

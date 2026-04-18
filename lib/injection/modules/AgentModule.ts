@@ -55,9 +55,12 @@ export function register(c: ServiceContainer) {
 
   // ── Recommendation 子系统 ──
 
-  c.singleton('feedbackStore', () => {
-    const dataRoot = resolveDataRoot(c);
-    return new FeedbackStore(dataRoot);
+  c.singleton('feedbackStore', (ct: ServiceContainer) => {
+    const dataRoot = resolveDataRoot(ct);
+    const wz = ct.singletons.writeZone as
+      | import('../../infrastructure/io/WriteZone.js').WriteZone
+      | undefined;
+    return new FeedbackStore(dataRoot, wz);
   });
 
   c.singleton('recommendationPipeline', (ct: ServiceContainer) => {

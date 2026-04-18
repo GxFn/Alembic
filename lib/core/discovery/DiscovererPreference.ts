@@ -33,7 +33,6 @@ export interface ConflictResult {
 
 // ── Constants ───────────────────────────────────────
 
-const PREFERENCE_DIR = '.asd';
 const PREFERENCE_FILE = 'discoverer-preference.json';
 
 /** 两个 Discoverer confidence 差值低于此阈值视为模糊 */
@@ -93,17 +92,19 @@ export function detectConflict(matches: DetectMatch[]): ConflictResult {
 
 /**
  * 获取偏好文件路径
+ * @param root dataRoot（Ghost 模式下为外置工作区）或 projectRoot
  */
-function getPreferencePath(projectRoot: string): string {
-  return join(projectRoot, PREFERENCE_DIR, PREFERENCE_FILE);
+function getPreferencePath(root: string): string {
+  return join(root, '.asd', PREFERENCE_FILE);
 }
 
 /**
  * 加载已保存的 Discoverer 偏好
+ * @param dataRoot dataRoot（Ghost 模式下为外置工作区）或 projectRoot
  * @returns 偏好数据，或 null（无偏好/文件不存在/损坏）
  */
-export function loadPreference(projectRoot: string): DiscovererPreferenceData | null {
-  const prefPath = getPreferencePath(projectRoot);
+export function loadPreference(dataRoot: string): DiscovererPreferenceData | null {
+  const prefPath = getPreferencePath(dataRoot);
 
   if (!existsSync(prefPath)) {
     return null;
@@ -126,15 +127,16 @@ export function loadPreference(projectRoot: string): DiscovererPreferenceData | 
 
 /**
  * 保存 Discoverer 偏好
+ * @param dataRoot dataRoot（Ghost 模式下为外置工作区）或 projectRoot
  */
 export function savePreference(
-  projectRoot: string,
+  dataRoot: string,
   discovererId: string,
   alternatives: string[],
   userConfirmed: boolean
 ): void {
-  const prefPath = getPreferencePath(projectRoot);
-  const prefDir = join(projectRoot, PREFERENCE_DIR);
+  const prefPath = getPreferencePath(dataRoot);
+  const prefDir = join(dataRoot, '.asd');
 
   if (!existsSync(prefDir)) {
     mkdirSync(prefDir, { recursive: true });

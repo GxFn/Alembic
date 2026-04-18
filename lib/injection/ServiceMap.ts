@@ -28,6 +28,7 @@ import type AuditStore from '../infrastructure/audit/AuditStore.js';
 import type { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
 import type DatabaseConnection from '../infrastructure/database/DatabaseConnection.js';
 import type { EventBus } from '../infrastructure/event/EventBus.js';
+import type { WriteZone } from '../infrastructure/io/WriteZone.js';
 import type Logger from '../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../infrastructure/signal/SignalBus.js';
 import type { IndexingPipeline } from '../infrastructure/vector/IndexingPipeline.js';
@@ -93,6 +94,7 @@ export interface ServiceMap {
   // ═══ InfraModule ═══
   database: DatabaseConnection;
   logger: ReturnType<typeof Logger.getInstance>;
+  writeZone: WriteZone;
   auditStore: AuditStore;
   auditLogger: AuditLogger;
   gateway: Gateway;

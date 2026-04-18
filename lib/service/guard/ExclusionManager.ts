@@ -6,6 +6,7 @@
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { WriteZone } from '#infra/io/WriteZone.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import pathGuard from '../../shared/PathGuard.js';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
@@ -52,15 +53,16 @@ interface ExclusionConfig {
 export class ExclusionManager {
   #exclusionsPath;
   #data: ExclusionData;
+  readonly #wz: WriteZone | null;
 
   constructor(
     projectRoot: string,
-    options: { knowledgeBaseDir?: string; internalDir?: string } = {}
+    options: { knowledgeBaseDir?: string; internalDir?: string; wz?: WriteZone } = {}
   ) {
     const kbDir = options.knowledgeBaseDir || DEFAULT_KNOWLEDGE_BASE_DIR;
     this.#exclusionsPath = join(projectRoot, kbDir, 'guard-exclusions.json');
     pathGuard.assertProjectWriteSafe(this.#exclusionsPath);
-    // 迁移旧路径
+    this.#wz = options.wz ?? null;
     this.#migrateOldPath(projectRoot, options.internalDir || '.asd');
     this.#data = this.#load();
   }
@@ -263,11 +265,18 @@ export class ExclusionManager {
 
   #save() {
     try {
-      const dir = dirname(this.#exclusionsPath);
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
+      if (this.#wz) {
+        this.#wz.writeFile(
+          this.#wz.knowledge('guard-exclusions.json'),
+          JSON.stringify(this.#data, null, 2)
+        );
+      } else {
+        const dir = dirname(this.#exclusionsPath);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+        writeFileSync(this.#exclusionsPath, JSON.stringify(this.#data, null, 2));
       }
-      writeFileSync(this.#exclusionsPath, JSON.stringify(this.#data, null, 2));
     } catch (err: unknown) {
       Logger.getInstance().warn('ExclusionManager: failed to persist exclusions', {
         error: (err as Error).message,
@@ -281,11 +290,15 @@ export class ExclusionManager {
       const oldPath = join(projectRoot, internalDir, 'guard-exclusions.json');
       if (existsSync(oldPath) && !existsSync(this.#exclusionsPath)) {
         const content = readFileSync(oldPath, 'utf-8');
-        const dir = dirname(this.#exclusionsPath);
-        if (!existsSync(dir)) {
-          mkdirSync(dir, { recursive: true });
+        if (this.#wz) {
+          this.#wz.writeFile(this.#wz.knowledge('guard-exclusions.json'), content);
+        } else {
+          const dir = dirname(this.#exclusionsPath);
+          if (!existsSync(dir)) {
+            mkdirSync(dir, { recursive: true });
+          }
+          writeFileSync(this.#exclusionsPath, content);
         }
-        writeFileSync(this.#exclusionsPath, content);
         unlinkSync(oldPath);
         Logger.getInstance().info(
           'ExclusionManager: migrated guard-exclusions.json to knowledge base dir'

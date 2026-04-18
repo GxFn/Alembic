@@ -6,6 +6,7 @@
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { WriteZone } from '#infra/io/WriteZone.js';
 import pathGuard from '../../shared/PathGuard.js';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 
@@ -20,18 +21,21 @@ interface FeedbackCollectorOptions {
   knowledgeBaseDir?: string;
   maxEvents?: number;
   internalDir?: string;
+  wz?: WriteZone;
 }
 
 export class FeedbackCollector {
   #feedbackPath;
   #events: FeedbackEvent[];
   #maxEvents;
+  readonly #wz: WriteZone | null;
 
   constructor(projectRoot: string, options: FeedbackCollectorOptions = {}) {
     const kbDir = options.knowledgeBaseDir || DEFAULT_KNOWLEDGE_BASE_DIR;
     this.#feedbackPath = join(projectRoot, kbDir, 'feedback.json');
     pathGuard.assertProjectWriteSafe(this.#feedbackPath);
     this.#maxEvents = options.maxEvents || 1000;
+    this.#wz = options.wz ?? null;
     this.#migrateOldPath(projectRoot, options.internalDir || '.asd');
     this.#events = this.#load();
   }
@@ -125,11 +129,18 @@ export class FeedbackCollector {
 
   #save() {
     try {
-      const dir = dirname(this.#feedbackPath);
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
+      if (this.#wz) {
+        this.#wz.writeFile(
+          this.#wz.knowledge('feedback.json'),
+          JSON.stringify(this.#events, null, 2)
+        );
+      } else {
+        const dir = dirname(this.#feedbackPath);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+        writeFileSync(this.#feedbackPath, JSON.stringify(this.#events, null, 2));
       }
-      writeFileSync(this.#feedbackPath, JSON.stringify(this.#events, null, 2));
     } catch {
       /* silent */
     }
@@ -140,11 +151,15 @@ export class FeedbackCollector {
       const oldPath = join(projectRoot, internalDir, 'feedback.json');
       if (existsSync(oldPath) && !existsSync(this.#feedbackPath)) {
         const content = readFileSync(oldPath, 'utf-8');
-        const dir = dirname(this.#feedbackPath);
-        if (!existsSync(dir)) {
-          mkdirSync(dir, { recursive: true });
+        if (this.#wz) {
+          this.#wz.writeFile(this.#wz.knowledge('feedback.json'), content);
+        } else {
+          const dir = dirname(this.#feedbackPath);
+          if (!existsSync(dir)) {
+            mkdirSync(dir, { recursive: true });
+          }
+          writeFileSync(this.#feedbackPath, content);
         }
-        writeFileSync(this.#feedbackPath, content);
         unlinkSync(oldPath);
       }
     } catch {

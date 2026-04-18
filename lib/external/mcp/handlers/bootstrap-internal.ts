@@ -50,7 +50,7 @@
 import path from 'node:path';
 import { getInternalAgentRequiredFields } from '#domain/knowledge/FieldSpec.js';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type {
   BootstrapSessionShape,
   DimensionDef,
@@ -136,8 +136,10 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
   // 冷启动需要干净的初始状态：清除 DB + 文件系统缓存
   // ═══════════════════════════════════════════════════════════
   const db = ctx.container.get('database');
+  const dataRoot = resolveDataRoot(ctx.container as any) || projectRoot;
   const cleanupService = new CleanupService({
     projectRoot,
+    dataRoot,
     db,
     logger: ctx.logger,
   });

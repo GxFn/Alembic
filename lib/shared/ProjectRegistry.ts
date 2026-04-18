@@ -13,6 +13,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { WriteZone } from '../infrastructure/io/WriteZone.js';
 
 const USER_HOME = process.env.HOME || process.env.USERPROFILE || '';
 const REGISTRY_DIR = path.join(USER_HOME, '.asd');
@@ -58,11 +59,15 @@ function loadRegistry(): RegistryData {
   return { version: 1, projects: {} };
 }
 
-function saveRegistry(data: RegistryData): void {
-  if (!fs.existsSync(REGISTRY_DIR)) {
-    fs.mkdirSync(REGISTRY_DIR, { recursive: true, mode: 0o700 });
+function saveRegistry(data: RegistryData, wz?: WriteZone): void {
+  if (wz) {
+    wz.writeFile(wz.global('projects.json'), JSON.stringify(data, null, 2));
+  } else {
+    if (!fs.existsSync(REGISTRY_DIR)) {
+      fs.mkdirSync(REGISTRY_DIR, { recursive: true, mode: 0o700 });
+    }
+    fs.writeFileSync(REGISTRY_PATH, JSON.stringify(data, null, 2), { mode: 0o600 });
   }
-  fs.writeFileSync(REGISTRY_PATH, JSON.stringify(data, null, 2), { mode: 0o600 });
 }
 
 /** 获取 Ghost 模式的外置工作区根目录 */
@@ -85,14 +90,14 @@ export const ProjectRegistry = {
    * 注册项目（幂等）
    * 如果已注册，更新 ghost 状态
    */
-  register(projectRoot: string, ghost: boolean): ProjectEntry {
+  register(projectRoot: string, ghost: boolean, writeZone?: WriteZone): ProjectEntry {
     const data = loadRegistry();
     const normalized = normalizePath(projectRoot);
 
     const existing = data.projects[normalized];
     if (existing) {
       existing.ghost = ghost;
-      saveRegistry(data);
+      saveRegistry(data, writeZone);
       return existing;
     }
 
@@ -102,19 +107,19 @@ export const ProjectRegistry = {
       createdAt: new Date().toISOString(),
     };
     data.projects[normalized] = entry;
-    saveRegistry(data);
+    saveRegistry(data, writeZone);
     return entry;
   },
 
   /**
    * 移除项目注册
    */
-  unregister(projectRoot: string): boolean {
+  unregister(projectRoot: string, writeZone?: WriteZone): boolean {
     const data = loadRegistry();
     const normalized = normalizePath(projectRoot);
     if (data.projects[normalized]) {
       delete data.projects[normalized];
-      saveRegistry(data);
+      saveRegistry(data, writeZone);
       return true;
     }
     return false;

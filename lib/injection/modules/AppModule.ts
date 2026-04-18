@@ -31,7 +31,12 @@ export function register(c: ServiceContainer) {
 
   c.singleton('feedbackCollector', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
-    return new FeedbackCollector(dataRoot as ConstructorParameters<typeof FeedbackCollector>[0]);
+    const wz = ct.singletons.writeZone as
+      | import('../../infrastructure/io/WriteZone.js').WriteZone
+      | undefined;
+    return new FeedbackCollector(dataRoot as ConstructorParameters<typeof FeedbackCollector>[0], {
+      wz,
+    });
   });
 
   c.singleton('tokenUsageStore', (ct: ServiceContainer) => {
@@ -65,8 +70,12 @@ export function register(c: ServiceContainer) {
       new CursorDeliveryPipeline({
         knowledgeService: ct.get('knowledgeService'),
         projectRoot: resolveProjectRoot(ct),
+        dataRoot: resolveDataRoot(ct),
         database: ct.get('database'),
         logger: ct.logger,
+        wz: ct.singletons.writeZone as
+          | import('../../infrastructure/io/WriteZone.js').WriteZone
+          | undefined,
       } as unknown as ConstructorParameters<typeof CursorDeliveryPipeline>[0])
   );
 

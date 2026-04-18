@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
 import { CANDIDATES_DIR, RECIPES_DIR } from '../../infrastructure/config/Defaults.js';
+import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { KnowledgeFileStore } from '../../repository/knowledge/KnowledgeFileStore.js';
 import pathGuard from '../../shared/PathGuard.js';
@@ -72,12 +73,13 @@ export class KnowledgeFileWriter implements KnowledgeFileStore {
   logger: ReturnType<typeof Logger.getInstance>;
   projectRoot: string;
   recipesDir: string;
-  /** @param projectRoot 项目根目录 */
-  constructor(projectRoot: string) {
+  readonly #wz: WriteZone | null;
+  constructor(projectRoot: string, writeZone?: WriteZone) {
     this.projectRoot = projectRoot;
     this.recipesDir = path.join(projectRoot, RECIPES_DIR);
     this.candidatesDir = path.join(projectRoot, CANDIDATES_DIR);
     this.logger = Logger.getInstance();
+    this.#wz = writeZone ?? null;
   }
 
   /* ═══ 序列化 ═══════════════════════════════════════════ */
@@ -256,20 +258,24 @@ export class KnowledgeFileWriter implements KnowledgeFileStore {
       }
 
       const { dir, filename } = this._resolveFilePath(entry);
-
-      // 路径安全检查
-      pathGuard.assertProjectWriteSafe(dir);
-
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
+      const filePath = path.join(dir, filename);
 
       // 清理旧文件（lifecycle 切换或 category 变更场景）
-      this._cleanupOldFile(entry, path.join(dir, filename));
+      this._cleanupOldFile(entry, filePath);
 
-      const filePath = path.join(dir, filename);
       const markdown = this.serialize(entry);
-      fs.writeFileSync(filePath, markdown, 'utf8');
+      if (this.#wz) {
+        const rel = dir.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+        this.#wz.ensureDir(this.#wz.data(rel));
+        const fileRel = filePath.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+        this.#wz.writeFile(this.#wz.data(fileRel), markdown);
+      } else {
+        pathGuard.assertProjectWriteSafe(dir);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(filePath, markdown, 'utf8');
+      }
 
       // 更新 entry 的 sourceFile 溯源
       entry.sourceFile = path.relative(this.projectRoot, filePath);
@@ -300,8 +306,13 @@ export class KnowledgeFileWriter implements KnowledgeFileStore {
     if (entry.sourceFile) {
       const fullPath = path.join(this.projectRoot, entry.sourceFile);
       if (fs.existsSync(fullPath)) {
-        pathGuard.assertSafe(fullPath);
-        fs.unlinkSync(fullPath);
+        if (this.#wz) {
+          const rel = fullPath.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+          this.#wz.remove(this.#wz.data(rel));
+        } else {
+          pathGuard.assertSafe(fullPath);
+          fs.unlinkSync(fullPath);
+        }
         this.logger.info('Knowledge entry file removed', {
           entryId: entry.id,
           path: entry.sourceFile,
@@ -320,8 +331,13 @@ export class KnowledgeFileWriter implements KnowledgeFileStore {
     for (const dir of searchDirs) {
       const fp = path.join(dir, filename);
       if (fs.existsSync(fp)) {
-        pathGuard.assertSafe(fp);
-        fs.unlinkSync(fp);
+        if (this.#wz) {
+          const rel = fp.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+          this.#wz.remove(this.#wz.data(rel));
+        } else {
+          pathGuard.assertSafe(fp);
+          fs.unlinkSync(fp);
+        }
         this.logger.info('Knowledge entry file removed', { entryId: entry.id, path: fp });
         return true;
       }
@@ -350,8 +366,13 @@ export class KnowledgeFileWriter implements KnowledgeFileStore {
 
     // 删除旧文件
     if (oldPath && fs.existsSync(oldPath)) {
-      pathGuard.assertSafe(oldPath);
-      fs.unlinkSync(oldPath);
+      if (this.#wz) {
+        const rel = oldPath.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+        this.#wz.remove(this.#wz.data(rel));
+      } else {
+        pathGuard.assertSafe(oldPath);
+        fs.unlinkSync(oldPath);
+      }
       this.logger.info('Removed old knowledge entry file on lifecycle change', {
         entryId: entry.id,
         oldPath: entry.sourceFile,
@@ -418,22 +439,26 @@ export class KnowledgeFileWriter implements KnowledgeFileStore {
       return;
     }
 
-    pathGuard.assertSafe(oldPath);
-    fs.unlinkSync(oldPath);
+    if (this.#wz) {
+      const rel = oldPath.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+      this.#wz.remove(this.#wz.data(rel));
+    } else {
+      pathGuard.assertSafe(oldPath);
+      fs.unlinkSync(oldPath);
+    }
     this.logger.info('Cleaned up old knowledge entry file', {
       entryId: entry.id,
       oldPath: entry.sourceFile,
     });
   }
 
-  /** 通过 id 扫描所有 .md 文件来删除 */
   _removeByIdScan(id: string): boolean {
     for (const baseDir of [this.candidatesDir, this.recipesDir]) {
       if (!fs.existsSync(baseDir)) {
         continue;
       }
       try {
-        const found = _walkAndRemoveById(baseDir, id);
+        const found = _walkAndRemoveById(baseDir, id, this.#wz);
         if (found) {
           this.logger.info('Knowledge entry file removed by id scan', { id });
           return true;
@@ -676,22 +701,26 @@ function _yamlValue(key: string, val: string | number | boolean): string {
   return str;
 }
 
-/** 递归扫描目录，删除包含指定 id 的 .md 文件 */
-function _walkAndRemoveById(dir: string, id: string): boolean {
+function _walkAndRemoveById(dir: string, id: string, wz?: WriteZone | null): boolean {
   if (!fs.existsSync(dir)) {
     return false;
   }
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (_walkAndRemoveById(full, id)) {
+      if (_walkAndRemoveById(full, id, wz)) {
         return true;
       }
     } else if (entry.name.endsWith('.md') && !entry.name.startsWith('_')) {
       const head = fs.readFileSync(full, 'utf8').slice(0, 500);
       if (head.includes(`id: ${id}`)) {
-        pathGuard.assertSafe(full);
-        fs.unlinkSync(full);
+        if (wz) {
+          const rel = full.replace(wz.dataRoot, '').replace(/^\//, '');
+          wz.remove(wz.data(rel));
+        } else {
+          pathGuard.assertSafe(full);
+          fs.unlinkSync(full);
+        }
         return true;
       }
     }

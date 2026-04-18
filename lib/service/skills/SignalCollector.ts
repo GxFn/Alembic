@@ -40,6 +40,7 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
 import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
@@ -59,6 +60,7 @@ interface SignalCollectorOpts {
   mode?: string;
   intervalMs?: number;
   onSuggestions?: ((suggestions: Record<string, unknown>[]) => void) | null;
+  writeZone?: WriteZone | null;
 }
 
 interface AgentResult {
@@ -121,9 +123,8 @@ export class SignalCollector implements Startable {
   #snapshotPath;
   #snapshot: SignalSnapshot;
   #onSuggestions: ((suggestions: Record<string, unknown>[]) => void) | null;
-  /** 信号聚类引擎 */
+  #wz: WriteZone | null;
   #aggregator;
-  /** 各维度最新信号快照（由 SignalBus 实时更新） */
   #dimensionSignals: Record<string, unknown> = {};
 
   /**
@@ -146,6 +147,7 @@ export class SignalCollector implements Startable {
     mode = 'auto',
     intervalMs = DEFAULT_INTERVAL_MS,
     onSuggestions = null as ((suggestions: Record<string, unknown>[]) => void) | null,
+    writeZone = null,
   }: SignalCollectorOpts) {
     this.#projectRoot = projectRoot;
     this.#knowledgeRepo = knowledgeRepo;
@@ -156,6 +158,7 @@ export class SignalCollector implements Startable {
     this.#intervalMs = Math.max(Math.min(intervalMs, MAX_INTERVAL_MS), MIN_INTERVAL_MS);
     this.#logger = Logger.getInstance();
     this.#onSuggestions = onSuggestions;
+    this.#wz = writeZone || null;
 
     const dotDir = path.join(projectRoot, '.asd');
     this.#snapshotPath = path.join(dotDir, SNAPSHOT_FILE);
@@ -771,7 +774,6 @@ ${JSON.stringify(signals.codeChanges, null, 2)}
 
   #saveSnapshot() {
     try {
-      // 自动截断无限增长的数组
       const MAX_PUSHED = 200;
       const MAX_AUTO_CREATED = 100;
       if (this.#snapshot.pushedNames.length > MAX_PUSHED) {
@@ -781,12 +783,17 @@ ${JSON.stringify(signals.codeChanges, null, 2)}
         this.#snapshot.autoCreated = this.#snapshot.autoCreated.slice(-MAX_AUTO_CREATED);
       }
 
-      const dir = path.dirname(this.#snapshotPath);
-      pathGuard.assertProjectWriteSafe(dir);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+      const content = JSON.stringify(this.#snapshot, null, 2);
+      if (this.#wz) {
+        this.#wz.writeFile(this.#wz.data(`.asd/${SNAPSHOT_FILE}`), content);
+      } else {
+        const dir = path.dirname(this.#snapshotPath);
+        pathGuard.assertProjectWriteSafe(dir);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(this.#snapshotPath, content, 'utf-8');
       }
-      fs.writeFileSync(this.#snapshotPath, JSON.stringify(this.#snapshot, null, 2), 'utf-8');
     } catch (err: unknown) {
       this.#logger.warn(
         `[SignalCollector] snapshot save failed: ${err instanceof Error ? err.message : String(err)}`

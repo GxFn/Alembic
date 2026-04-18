@@ -16,7 +16,8 @@
  */
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, relative } from 'node:path';
+import type { WriteZone } from '../io/WriteZone.js';
 
 // ── WAL 操作类型 ──
 export const WAL_OP = Object.freeze({
@@ -73,6 +74,7 @@ export class AsyncPersistence {
   #onReplay;
   /** WAL 是否启用 */
   #enabled;
+  #wz: WriteZone | null;
 
   /**
    * @param options.indexPath 主索引文件路径 (.asvec)
@@ -87,6 +89,7 @@ export class AsyncPersistence {
     enabled?: boolean;
     flushIntervalMs?: number;
     flushBatchSize?: number;
+    writeZone?: WriteZone;
   }) {
     this.#indexPath = options.indexPath;
     this.#walPath = options.indexPath.replace(/\.asvec$/, '.wal');
@@ -95,11 +98,17 @@ export class AsyncPersistence {
     this.#enabled = options.enabled !== false;
     this.#flushIntervalMs = options.flushIntervalMs || 2000;
     this.#flushBatchSize = options.flushBatchSize || 100;
+    this.#wz = options.writeZone ?? null;
 
     // 确保目录存在
-    const dir = dirname(this.#walPath);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
+    if (this.#wz) {
+      const rel = relative(this.#wz.dataRoot, dirname(this.#walPath));
+      this.#wz.ensureDir(this.#wz.data(rel));
+    } else {
+      const dir = dirname(this.#walPath);
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
     }
   }
 
@@ -148,7 +157,12 @@ export class AsyncPersistence {
       const json = JSON.stringify(op);
       const checksum = crc32(json);
       const entry = `${json}\t${checksum}\n`;
-      appendFileSync(this.#walPath, entry, 'utf-8');
+      if (this.#wz) {
+        const rel = relative(this.#wz.dataRoot, this.#walPath);
+        this.#wz.appendFile(this.#wz.data(rel), entry);
+      } else {
+        appendFileSync(this.#walPath, entry, 'utf-8');
+      }
     } catch {
       // 写入失败非致命: 操作已在内存队列, flush 时会写入完整文件
     }
@@ -278,7 +292,10 @@ export class AsyncPersistence {
   /** 清理 WAL 文件 */
   #clearWal() {
     try {
-      if (existsSync(this.#walPath)) {
+      if (this.#wz) {
+        const rel = relative(this.#wz.dataRoot, this.#walPath);
+        this.#wz.remove(this.#wz.data(rel));
+      } else if (existsSync(this.#walPath)) {
         unlinkSync(this.#walPath);
       }
     } catch {

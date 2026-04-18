@@ -18,6 +18,7 @@
 import Logger from '#infra/logging/Logger.js';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
 import { getDeveloperIdentity } from '#shared/developer-identity.js';
+import { resolveDataRoot } from '#shared/resolveProjectRoot.js';
 import { envelope } from '../envelope.js';
 import { saveDimensionCheckpoint } from './bootstrap/pipeline/checkpoint.js';
 import { BOOTSTRAP_COMPLETE_ACTIONS } from './bootstrap/shared/dimension-text.js';
@@ -132,6 +133,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
   }
 
   const projectRoot = session.projectRoot;
+  const dataRoot = resolveDataRoot(ctx.container as never) || projectRoot;
 
   // ── referencedFiles 自动补全 ──
   // 外部 Agent 常常忘记传 referencedFiles，从 SubmissionTracker 的 reasoning.sources 中恢复
@@ -336,7 +338,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
   // ═══════════════════════════════════════════════════════════
 
   try {
-    await saveDimensionCheckpoint(projectRoot, session.id, dimensionId, {
+    await saveDimensionCheckpoint(dataRoot, session.id, dimensionId, {
       candidateCount: candidateCount || submittedRecipeIds.length,
       analysisChars: analysisText.length,
       referencedFiles: referencedFiles.length,
@@ -429,9 +431,10 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
     // R4+: DeliveryVerifier — 交付完整性检查
     try {
       const { DeliveryVerifier } = await import('#service/bootstrap/DeliveryVerifier.js');
-      const { resolveProjectRoot } = await import('#shared/resolveProjectRoot.js');
+      const { resolveDataRoot, resolveProjectRoot } = await import('#shared/resolveProjectRoot.js');
       const projectRoot = resolveProjectRoot(ctx.container);
-      const verifier = new DeliveryVerifier(projectRoot);
+      const dataRoot = resolveDataRoot(ctx.container as never) || projectRoot;
+      const verifier = new DeliveryVerifier(projectRoot, dataRoot);
       const verification = verifier.verify();
       if (!verification.allPassed) {
         logger.warn('[DimensionComplete] Delivery verification incomplete', {

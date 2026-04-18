@@ -16,7 +16,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot } from '#shared/resolveProjectRoot.js';
 import { getProjectSkillsPath } from '../../infrastructure/config/Paths.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { SKILLS_DIR } from '../../shared/package-root.js';
@@ -78,8 +78,8 @@ const DEFAULT_HANDLER_PRIORITY = 100;
  * 路径: {projectRoot}/Alembic/skills/
  */
 function _getProjectSkillsDir(container?: { singletons?: { _projectRoot?: unknown } }) {
-  const projectRoot = resolveProjectRoot(container);
-  return getProjectSkillsPath(projectRoot);
+  const dataRoot = resolveDataRoot(container);
+  return getProjectSkillsPath(dataRoot);
 }
 
 /** 带超时的 Promise 包装 */

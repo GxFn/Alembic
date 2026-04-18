@@ -6,6 +6,7 @@
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { WriteZone } from '#infra/io/WriteZone.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { RULE_LEARNER } from '../../shared/constants.js';
@@ -35,14 +36,21 @@ export class RuleLearner {
   #learnerPath;
   #data: LearnerData;
   #signalBus: SignalBus | null;
+  readonly #wz: WriteZone | null;
 
   constructor(
     projectRoot: string,
-    options: { knowledgeBaseDir?: string; internalDir?: string; signalBus?: SignalBus } = {}
+    options: {
+      knowledgeBaseDir?: string;
+      internalDir?: string;
+      signalBus?: SignalBus;
+      wz?: WriteZone;
+    } = {}
   ) {
     const kbDir = options.knowledgeBaseDir || DEFAULT_KNOWLEDGE_BASE_DIR;
     this.#learnerPath = join(projectRoot, kbDir, 'guard-learner.json');
     pathGuard.assertProjectWriteSafe(this.#learnerPath);
+    this.#wz = options.wz ?? null;
     this.#migrateOldPath(projectRoot, options.internalDir || '.asd');
     this.#data = this.#load();
     this.#signalBus = options.signalBus || null;
@@ -355,11 +363,18 @@ export class RuleLearner {
 
   #save() {
     try {
-      const dir = dirname(this.#learnerPath);
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
+      if (this.#wz) {
+        this.#wz.writeFile(
+          this.#wz.knowledge('guard-learner.json'),
+          JSON.stringify(this.#data, null, 2)
+        );
+      } else {
+        const dir = dirname(this.#learnerPath);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+        writeFileSync(this.#learnerPath, JSON.stringify(this.#data, null, 2));
       }
-      writeFileSync(this.#learnerPath, JSON.stringify(this.#data, null, 2));
     } catch (err: unknown) {
       Logger.getInstance().warn('RuleLearner: failed to persist learner data', {
         error: (err as Error).message,
@@ -372,11 +387,15 @@ export class RuleLearner {
       const oldPath = join(projectRoot, internalDir, 'guard-learner.json');
       if (existsSync(oldPath) && !existsSync(this.#learnerPath)) {
         const content = readFileSync(oldPath, 'utf-8');
-        const dir = dirname(this.#learnerPath);
-        if (!existsSync(dir)) {
-          mkdirSync(dir, { recursive: true });
+        if (this.#wz) {
+          this.#wz.writeFile(this.#wz.knowledge('guard-learner.json'), content);
+        } else {
+          const dir = dirname(this.#learnerPath);
+          if (!existsSync(dir)) {
+            mkdirSync(dir, { recursive: true });
+          }
+          writeFileSync(this.#learnerPath, content);
         }
-        writeFileSync(this.#learnerPath, content);
         unlinkSync(oldPath);
       }
     } catch {

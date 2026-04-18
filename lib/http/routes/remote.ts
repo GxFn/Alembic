@@ -234,17 +234,21 @@ async function startLarkWS({ silent = false } = {}) {
 
     // 向飞书发送上线通知（仅首次启动，重连时静默）
     if (!silent) {
-      setTimeout(() => {
-        sendLarkNotification(
-          [
-            '🟢 IDE 桥接已上线',
-            `时间: ${new Date().toLocaleString('zh-CN')}`,
-            `平台: macOS | Node ${process.version}`,
-            '',
-            '发送任意文字即可远程编程，/help 查看命令。',
-          ].join('\n')
-        ).catch(() => {});
-      }, 1000);
+      timerRegistry.setTimeout(
+        () => {
+          sendLarkNotification(
+            [
+              '🟢 IDE 桥接已上线',
+              `时间: ${new Date().toLocaleString('zh-CN')}`,
+              `平台: macOS | Node ${process.version}`,
+              '',
+              '发送任意文字即可远程编程，/help 查看命令。',
+            ].join('\n')
+          ).catch(() => {});
+        },
+        1000,
+        'remote/lark-online-notify'
+      );
     }
 
     return { success: true, message: 'Connected via WebSocket' };
@@ -277,20 +281,24 @@ function stopLarkWS() {
 
 // ─── 自动启动（路由加载时） ─────────────────────────
 
-const { appId: _autoId, appSecret: _autoSecret } = getLarkConfig();
-if (_autoId && _autoSecret) {
-  // 延迟启动：setImmediate 确保路由注册、DB init 全部完成后，再等 8s 启动飞书连接
-  // 不阻塞主服务启动流程
-  setImmediate(() =>
-    setTimeout(async () => {
-      logger.info('[Remote/Lark] Auto-starting WebSocket connection...');
-      const result = await startLarkWS();
-      if (!result.success) {
-        logger.warn(`[Remote/Lark] Auto-start failed: ${result.message}`);
-      }
-    }, 8000)
-  );
-}
+// 延迟启动：等 8s 确保 Bootstrap.loadDotEnv() + DB init 完成后再读取环境变量
+// 注意：模块级代码在 ESM import 时执行，此时 .env 尚未加载，
+// 所以凭证检查必须在回调内部而非外部
+timerRegistry.setTimeout(
+  async () => {
+    const { appId, appSecret } = getLarkConfig();
+    if (!appId || !appSecret) {
+      return;
+    }
+    logger.info('[Remote/Lark] Auto-starting WebSocket connection...');
+    const result = await startLarkWS();
+    if (!result.success) {
+      logger.warn(`[Remote/Lark] Auto-start failed: ${result.message}`);
+    }
+  },
+  8000,
+  'remote/lark-auto-start'
+);
 
 // ─── 连接健康检查 & 自动重连 ────────────────────────
 

@@ -6,7 +6,7 @@
  *       (asd_submit_knowledge / submit_knowledge_batch / knowledge_lifecycle)
  */
 
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { envelope } from '../envelope.js';
 import type {
   CandidateInput,
@@ -111,14 +111,14 @@ export async function validateCandidate(ctx: McpContext, args: ValidateCandidate
 export async function checkDuplicate(ctx: McpContext, args: CheckDuplicateArgs) {
   // SimilarityService 直接读磁盘 .md 文件，不依赖 Repository
   const { findSimilarRecipes } = await import('#service/candidate/SimilarityService.js');
-  const projectRoot = resolveProjectRoot(ctx.container);
+  const dataRoot = resolveDataRoot(ctx.container as never) || resolveProjectRoot(ctx.container);
   const candidate = (args.candidate ?? {}) as {
     title: string;
     code: string;
     summary?: string;
     [key: string]: unknown;
   };
-  const similar = findSimilarRecipes(projectRoot, candidate, {
+  const similar = findSimilarRecipes(dataRoot, candidate, {
     threshold: args.threshold ?? 0.7,
     topK: args.topK ?? 5,
   });

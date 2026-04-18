@@ -13,17 +13,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getProjectSkillsPath } from '#infra/config/Paths.js';
+import type { WriteZone } from '#infra/io/WriteZone.js';
 import pathGuard from '#shared/PathGuard.js';
 import { SKILLS_DIR } from '#shared/package-root.js';
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { McpContext } from './types.js';
+
+function _getWriteZone(ctx?: McpContext | null): WriteZone | undefined {
+  return ctx?.container?.singletons?.writeZone as WriteZone | undefined;
+}
 
 /**
  * 获取项目级 Skills 目录（运行时动态解析）
- * 路径: {projectRoot}/Alembic/skills/ — 跟随项目走
+ * Ghost 模式下指向外置工作区: ~/.asd/workspaces/<id>/Alembic/skills/
+ * 标准模式: {projectRoot}/Alembic/skills/
  */
 function _getProjectSkillsDir(ctx?: McpContext) {
-  return getProjectSkillsPath(resolveProjectRoot(ctx?.container));
+  return getProjectSkillsPath(resolveDataRoot(ctx?.container));
 }
 
 /**
@@ -344,9 +350,7 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
 
   // ── 写入 SKILL.md ──
   try {
-    // 路径安全检查 — name 来自用户输入，可能含路径字符
-    pathGuard.assertProjectWriteSafe(skillDir);
-    fs.mkdirSync(skillDir, { recursive: true });
+    const wz = _getWriteZone(ctx);
 
     // 自动推断 title: 优先使用传入参数，否则从 content 的第一个 # heading 提取
     const resolvedTitle =
@@ -369,7 +373,16 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
     );
     const frontmatter = fmLines.join('\n');
 
-    fs.writeFileSync(skillPath, frontmatter + content, 'utf8');
+    if (wz) {
+      const dataRelSkillDir = skillDir.replace(wz.dataRoot, '').replace(/^\//, '');
+      const dataRelSkillPath = skillPath.replace(wz.dataRoot, '').replace(/^\//, '');
+      wz.ensureDir(wz.data(dataRelSkillDir));
+      wz.writeFile(wz.data(dataRelSkillPath), frontmatter + content);
+    } else {
+      pathGuard.assertProjectWriteSafe(skillDir);
+      fs.mkdirSync(skillDir, { recursive: true });
+      fs.writeFileSync(skillPath, frontmatter + content, 'utf8');
+    }
   } catch (err: unknown) {
     return JSON.stringify({
       success: false,
@@ -445,21 +458,23 @@ function _regenerateEditorIndex(ctx?: McpContext) {
       /* no project skills dir */
     }
 
+    const wz = _getWriteZone(ctx);
     const projectRoot = resolveProjectRoot(ctx?.container);
     const rulesDir = path.join(projectRoot, '.cursor', 'rules');
 
     if (projectSkills.length === 0) {
-      // 没有项目级 Skills 时，删除索引文件（如果存在）
-      const indexPath = path.join(rulesDir, 'asd-skills.mdc');
       try {
-        fs.unlinkSync(indexPath);
+        if (wz) {
+          wz.remove(wz.project('.cursor/rules/asd-skills.mdc'));
+        } else {
+          fs.unlinkSync(path.join(rulesDir, 'asd-skills.mdc'));
+        }
       } catch {
         /* not exists */
       }
       return { success: true, skillCount: 0 };
     }
 
-    // 生成 .mdc 内容
     const skillLines = projectSkills.map((s) => `- **${s.name}**: ${s.summary}`).join('\n');
 
     const mdcContent = [
@@ -476,11 +491,15 @@ function _regenerateEditorIndex(ctx?: McpContext) {
       '',
     ].join('\n');
 
-    // 写入 .cursor/rules/
-    pathGuard.assertProjectWriteSafe(rulesDir);
-    fs.mkdirSync(rulesDir, { recursive: true });
+    if (wz) {
+      wz.ensureDir(wz.project('.cursor/rules'));
+      wz.writeFile(wz.project('.cursor/rules/asd-skills.mdc'), mdcContent);
+    } else {
+      pathGuard.assertProjectWriteSafe(rulesDir);
+      fs.mkdirSync(rulesDir, { recursive: true });
+      fs.writeFileSync(path.join(rulesDir, 'asd-skills.mdc'), mdcContent, 'utf8');
+    }
     const indexPath = path.join(rulesDir, 'asd-skills.mdc');
-    fs.writeFileSync(indexPath, mdcContent, 'utf8');
 
     return { success: true, path: indexPath, skillCount: projectSkills.length };
   } catch (err: unknown) {
@@ -535,19 +554,16 @@ export function deleteSkill(ctx: McpContext | null, args: { name?: string }) {
     });
   }
 
-  // ── 路径安全检查 ──
-  try {
-    pathGuard.assertProjectWriteSafe(skillDir);
-  } catch (err: unknown) {
-    return JSON.stringify({
-      success: false,
-      error: { code: 'PATH_GUARD', message: err instanceof Error ? err.message : String(err) },
-    });
-  }
-
   // ── 删除目录 ──
   try {
-    fs.rmSync(skillDir, { recursive: true, force: true });
+    const wz = _getWriteZone(ctx);
+    if (wz) {
+      const dataRel = skillDir.replace(wz.dataRoot, '').replace(/^\//, '');
+      wz.remove(wz.data(dataRel), { recursive: true });
+    } else {
+      pathGuard.assertProjectWriteSafe(skillDir);
+      fs.rmSync(skillDir, { recursive: true, force: true });
+    }
   } catch (err: unknown) {
     return JSON.stringify({
       success: false,
@@ -688,8 +704,15 @@ export function updateSkill(ctx: McpContext | null, args: UpdateSkillArgs) {
       ''
     );
 
-    pathGuard.assertProjectWriteSafe(path.join(projectSkillsDir, name));
-    fs.writeFileSync(skillPath, fmLines.join('\n') + newBody, 'utf8');
+    const wz = _getWriteZone(ctx);
+    const fileContent = fmLines.join('\n') + newBody;
+    if (wz) {
+      const dataRel = skillPath.replace(wz.dataRoot, '').replace(/^\//, '');
+      wz.writeFile(wz.data(dataRel), fileContent);
+    } else {
+      pathGuard.assertProjectWriteSafe(path.join(projectSkillsDir, name));
+      fs.writeFileSync(skillPath, fileContent, 'utf8');
+    }
   } catch (err: unknown) {
     return JSON.stringify({
       success: false,
@@ -737,9 +760,11 @@ export async function suggestSkills(ctx: McpContext) {
     if (pipeline && typeof pipeline.recommend === 'function') {
       const database = ctx?.container?.get?.('database');
       const projectRoot = resolveProjectRoot(ctx?.container);
+      const dataRoot = resolveDataRoot(ctx?.container as never) || projectRoot;
       const existingSkills = _listExistingProjectSkillNames(ctx);
       const recommendations = await pipeline.recommend({
         projectRoot,
+        dataRoot,
         database: database?.getDb?.() || database || null,
         container: ctx?.container,
         existingSkills,
@@ -771,9 +796,10 @@ export async function suggestSkills(ctx: McpContext) {
     // ── Fallback: 直接使用 SkillAdvisor ──
     const { SkillAdvisor } = await import('#service/skills/SkillAdvisor.js');
     const projectRoot = resolveProjectRoot(ctx?.container);
+    const dataRoot = resolveDataRoot(ctx?.container as never) || projectRoot;
     const knowledgeRepo = ctx?.container?.get?.('knowledgeRepository') || null;
     const auditRepo = ctx?.container?.get?.('auditRepository') || null;
-    const advisor = new SkillAdvisor(projectRoot, { knowledgeRepo, auditRepo });
+    const advisor = new SkillAdvisor(projectRoot, { knowledgeRepo, auditRepo, dataRoot });
     const result = await advisor.suggest();
 
     return JSON.stringify({

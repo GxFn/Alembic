@@ -66,9 +66,11 @@ export interface DeliveryVerification {
 
 export class DeliveryVerifier {
   readonly #projectRoot: string;
+  readonly #dataRoot: string;
 
-  constructor(projectRoot: string) {
+  constructor(projectRoot: string, dataRoot?: string) {
     this.#projectRoot = projectRoot;
+    this.#dataRoot = dataRoot || projectRoot;
   }
 
   /**
@@ -173,7 +175,7 @@ export class DeliveryVerifier {
   }
 
   #verifyWiki(): ChannelVerification {
-    const kbPath = getProjectKnowledgePath(this.#projectRoot);
+    const kbPath = getProjectKnowledgePath(this.#dataRoot);
     const metaPath = path.join(kbPath, 'wiki', 'meta.json');
     if (fs.existsSync(metaPath)) {
       try {
@@ -192,7 +194,7 @@ export class DeliveryVerifier {
   }
 
   #verifySkills(): ChannelVerification {
-    const skillsDir = getProjectSkillsPath(this.#projectRoot);
+    const skillsDir = getProjectSkillsPath(this.#dataRoot);
     if (!fs.existsSync(skillsDir)) {
       return { generated: false, skillCount: 0 };
     }
@@ -205,7 +207,7 @@ export class DeliveryVerifier {
   }
 
   #verifyVectorIndex(): ChannelVerification {
-    const indexDir = getContextIndexPath(this.#projectRoot);
+    const indexDir = getContextIndexPath(this.#dataRoot);
     if (!fs.existsSync(indexDir)) {
       return { generated: false, rebuilt: false, documentCount: 0 };
     }

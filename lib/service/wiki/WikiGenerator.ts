@@ -33,6 +33,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { LanguageService } from '../../shared/LanguageService.js';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
@@ -69,6 +70,8 @@ interface WikiOptions {
 /** WikiGenerator constructor dependencies */
 export interface WikiDeps {
   projectRoot: string;
+  /** Ghost 模式下的数据根目录（Wiki 文件写入此处），不传则默认 projectRoot */
+  dataRoot?: string;
   moduleService?: WikiModuleService | null;
   knowledgeService?: WikiKnowledgeService | null;
   projectGraph?: WikiProjectGraph | null;
@@ -76,6 +79,7 @@ export interface WikiDeps {
   aiProvider?: WikiAiProvider | null;
   onProgress?: (phase: string, progress: number, message: string) => void;
   options?: Partial<WikiOptions>;
+  writeZone?: WriteZone | null;
   [key: string]: unknown;
 }
 
@@ -201,12 +205,14 @@ export class WikiGenerator {
   onProgress: (phase: string, progress: number, message: string) => void;
   options: WikiOptions;
   projectGraph: WikiProjectGraph | null;
+  #wz: WriteZone | null;
   /**
    * @param [deps.spmService] 向后兼容
    * @param [deps.onProgress] (phase, progress, message) => void
    */
   constructor(deps: WikiDeps) {
     this.projectRoot = deps.projectRoot;
+    const dataRoot = deps.dataRoot || deps.projectRoot;
     this.moduleService = deps.moduleService || null;
     this.knowledgeService = deps.knowledgeService || null;
     this.projectGraph = deps.projectGraph || null;
@@ -214,8 +220,9 @@ export class WikiGenerator {
     this.aiProvider = deps.aiProvider || null;
     this.onProgress = deps.onProgress || (() => {});
     this.options = { ...DEFAULTS, ...deps.options } as WikiOptions;
+    this.#wz = deps.writeZone || null;
 
-    this.wikiDir = path.join(this.projectRoot, this.options.wikiDir);
+    this.wikiDir = path.join(dataRoot, this.options.wikiDir);
     this.metaPath = path.join(this.wikiDir, 'meta.json');
 
     this._aborted = false;
@@ -291,7 +298,7 @@ export class WikiGenerator {
 
       // Phase 9: Dedup
       this._emit(WikiPhase.DEDUP, 90, '去重检查...');
-      const dedupResult = dedup(files, this.wikiDir, this._emit.bind(this));
+      const dedupResult = dedup(files, this.wikiDir, this._emit.bind(this), this.#wz);
 
       // Phase 10: Finalize
       this._emit(WikiPhase.FINALIZE, 95, '写入元数据...');
@@ -1086,15 +1093,23 @@ export class WikiGenerator {
   }
 
   _ensureDir(dir: string) {
-    if (!fs.existsSync(dir)) {
+    if (this.#wz) {
+      const rel = dir.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+      this.#wz.ensureDir(this.#wz.data(rel));
+    } else if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
   }
 
   _writeFile(relativePath: string, content: string): WikiFileResult {
     const fullPath = path.join(this.wikiDir, relativePath);
-    this._ensureDir(path.dirname(fullPath));
-    fs.writeFileSync(fullPath, content, 'utf-8');
+    if (this.#wz) {
+      const rel = fullPath.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+      this.#wz.writeFile(this.#wz.data(rel), content);
+    } else {
+      this._ensureDir(path.dirname(fullPath));
+      fs.writeFileSync(fullPath, content, 'utf-8');
+    }
 
     const hash = createHash('sha256').update(content).digest('hex').slice(0, 12);
     return { path: relativePath, hash, size: Buffer.byteLength(content) };
@@ -1122,7 +1137,12 @@ export class WikiGenerator {
       sourceHash: this._computeSourceHash(),
       ...(dedupResult ? { dedup: dedupResult } : {}),
     };
-    fs.writeFileSync(this.metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+    if (this.#wz) {
+      const rel = this.metaPath.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+      this.#wz.writeFile(this.#wz.data(rel), JSON.stringify(meta, null, 2));
+    } else {
+      fs.writeFileSync(this.metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+    }
     return meta;
   }
 

@@ -260,8 +260,9 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
 
   // ── Step 1: 限流 ──
   const { checkRecipeSave } = await import('#http/middleware/RateLimiter.js');
-  const { resolveProjectRoot } = await import('#shared/resolveProjectRoot.js');
+  const { resolveDataRoot, resolveProjectRoot } = await import('#shared/resolveProjectRoot.js');
   const projectRoot = resolveProjectRoot(ctx.container);
+  const dataRoot = resolveDataRoot(ctx.container as never) || projectRoot;
   const limitCheck = checkRecipeSave(projectRoot, clientId || process.env.USER || 'mcp-client');
   if (!limitCheck.allowed) {
     return envelope({
@@ -318,7 +319,7 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
 
   const gateway = new RecipeProductionGateway({
     knowledgeService,
-    projectRoot,
+    projectRoot: dataRoot,
     consolidationAdvisor: consolidationAdvisor ?? null,
     proposalRepository: proposalRepository ?? null,
     evolutionGateway: evolutionGateway ?? null,

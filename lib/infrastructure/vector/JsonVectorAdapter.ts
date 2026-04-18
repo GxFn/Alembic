@@ -5,22 +5,28 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import pathGuard from '../../shared/PathGuard.js';
 import { cosineSimilarity } from '../../shared/similarity.js';
+import type { WriteZone } from '../io/WriteZone.js';
 import { VectorStore } from './VectorStore.js';
 
 export class JsonVectorAdapter extends VectorStore {
   #indexPath;
   #data; // Map<id, { id, content, vector, metadata }>
   #dirty;
+  #wz: WriteZone | null;
 
-  constructor(projectRoot: string, options: { contextDir?: string; indexPath?: string } = {}) {
+  constructor(
+    projectRoot: string,
+    options: { contextDir?: string; indexPath?: string; writeZone?: WriteZone } = {}
+  ) {
     super();
     const contextDir = options.contextDir || '.asd/context/index';
     this.#indexPath = options.indexPath || join(projectRoot, contextDir, 'vector_index.json');
     this.#data = new Map();
     this.#dirty = false;
+    this.#wz = options.writeZone ?? null;
   }
 
   async init() {
@@ -285,13 +291,20 @@ export class JsonVectorAdapter extends VectorStore {
       return;
     }
     try {
-      const dir = dirname(this.#indexPath);
-      pathGuard.assertProjectWriteSafe(dir);
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
-      }
       const items = [...this.#data.values()];
-      writeFileSync(this.#indexPath, JSON.stringify(items, null, 2));
+      const content = JSON.stringify(items, null, 2);
+
+      if (this.#wz) {
+        const rel = relative(this.#wz.dataRoot, this.#indexPath);
+        this.#wz.writeFile(this.#wz.data(rel), content);
+      } else {
+        const dir = dirname(this.#indexPath);
+        pathGuard.assertProjectWriteSafe(dir);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+        writeFileSync(this.#indexPath, content);
+      }
       this.#dirty = false;
     } catch {
       /* silent */

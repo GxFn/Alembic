@@ -134,9 +134,14 @@ export class HttpServer {
         this.logger.info('Performance monitor initialized');
 
         // 初始化错误追踪（Ghost-aware）
-        const dataRoot = resolveDataRoot(getServiceContainer());
+        const container = getServiceContainer();
+        const dataRoot = resolveDataRoot(container);
+        const wz = container.get(
+          'writeZone'
+        ) as import('../infrastructure/io/WriteZone.js').WriteZone;
         this.errorTracker = initErrorTracker({
           logDirectory: join(dataRoot, '.asd', 'logs', 'errors'),
+          writeZone: wz,
         });
         this.logger.info('Error tracker initialized');
       }

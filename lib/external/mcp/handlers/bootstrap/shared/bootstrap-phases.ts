@@ -175,6 +175,7 @@ interface AllPhasesOptions {
   skipGuard?: boolean;
   sourceTag?: string;
   summaryPrefix?: string;
+  dataRoot?: string;
   [key: string]: unknown;
 }
 
@@ -860,10 +861,11 @@ export async function runAllPhases(
   // ── 清除旧数据 (if requested) ──
   if (options.clearOldData) {
     try {
+      const clearRoot = options.dataRoot || projectRoot;
       const { clearCheckpoints, clearSnapshots } = await import('../pipeline/orchestrator.js');
-      await clearCheckpoints(projectRoot);
+      await clearCheckpoints(clearRoot);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- AllPhasesContext structurally compatible with clearSnapshots param
-      await clearSnapshots(projectRoot, ctx as Parameters<typeof clearSnapshots>[1]);
+      await clearSnapshots(clearRoot, ctx as Parameters<typeof clearSnapshots>[1]);
       ctx.logger.info('[Bootstrap] Cleared old checkpoints and snapshots');
     } catch (err: unknown) {
       warnings.push(

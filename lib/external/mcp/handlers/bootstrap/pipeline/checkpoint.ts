@@ -26,14 +26,14 @@ const CHECKPOINT_TTL_MS = 3600_000; // 1小时内有效
  * @param [digest] DimensionDigest
  */
 export async function saveDimensionCheckpoint(
-  projectRoot: string,
+  dataRoot: string,
   sessionId: string,
   dimId: string,
   result: Record<string, unknown>,
   digest = null
 ) {
   try {
-    const checkpointDir = path.join(projectRoot, '.asd', 'bootstrap-checkpoint');
+    const checkpointDir = path.join(dataRoot, '.asd', 'bootstrap-checkpoint');
     await fs.mkdir(checkpointDir, { recursive: true });
     await fs.writeFile(
       path.join(checkpointDir, `${dimId}.json`),
@@ -50,10 +50,10 @@ export async function saveDimensionCheckpoint(
  * 加载有效的 checkpoints
  * @returns dimId → checkpoint data
  */
-export async function loadCheckpoints(projectRoot: string) {
+export async function loadCheckpoints(dataRoot: string) {
   const checkpoints = new Map();
   try {
-    const checkpointDir = path.join(projectRoot, '.asd', 'bootstrap-checkpoint');
+    const checkpointDir = path.join(dataRoot, '.asd', 'bootstrap-checkpoint');
     const files = await fs.readdir(checkpointDir).catch(() => []);
     const now = Date.now();
     for (const file of files) {
@@ -77,9 +77,9 @@ export async function loadCheckpoints(projectRoot: string) {
 }
 
 /** 清理 checkpoint 目录 */
-export async function clearCheckpoints(projectRoot: string) {
+export async function clearCheckpoints(dataRoot: string) {
   try {
-    const checkpointDir = path.join(projectRoot, '.asd', 'bootstrap-checkpoint');
+    const checkpointDir = path.join(dataRoot, '.asd', 'bootstrap-checkpoint');
     pathGuard.assertSafe(checkpointDir);
     await fs.rm(checkpointDir, { recursive: true, force: true });
   } catch (err: unknown) {

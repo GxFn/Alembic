@@ -119,6 +119,9 @@ export function register(c: ServiceContainer) {
 
   c.singleton('vectorStore', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
+    const wz = ct.singletons.writeZone as
+      | import('../../infrastructure/io/WriteZone.js').WriteZone
+      | undefined;
     const config =
       ((ct.singletons._config as Record<string, unknown> | undefined)?.vector as
         | Record<string, unknown>
@@ -127,7 +130,7 @@ export function register(c: ServiceContainer) {
 
     // 根据配置选择适配器
     if (adapter === 'json') {
-      const store = new JsonVectorAdapter(dataRoot as string);
+      const store = new JsonVectorAdapter(dataRoot as string, { writeZone: wz });
       store.initSync();
       return store;
     }
@@ -144,6 +147,7 @@ export function register(c: ServiceContainer) {
           quantizeThreshold: config.quantizeThreshold as number | undefined,
           flushIntervalMs: persistence.flushIntervalMs as number | undefined,
           flushBatchSize: persistence.flushBatchSize as number | undefined,
+          writeZone: wz,
         });
         store.initSync();
         return store;
@@ -157,14 +161,14 @@ export function register(c: ServiceContainer) {
             adapter,
           }
         );
-        const store = new JsonVectorAdapter(dataRoot as string);
+        const store = new JsonVectorAdapter(dataRoot as string, { writeZone: wz });
         store.initSync();
         return store;
       }
     }
 
     // 未知适配器, 默认 JSON
-    const store = new JsonVectorAdapter(dataRoot as string);
+    const store = new JsonVectorAdapter(dataRoot as string, { writeZone: wz });
     store.initSync();
     return store;
   });

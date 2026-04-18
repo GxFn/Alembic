@@ -12,6 +12,7 @@ import Logger from './infrastructure/logging/Logger.js';
 import { unwrapRawDb } from './repository/search/SearchRepoAdapter.js';
 import { SkillHooks } from './service/skills/SkillHooks.js';
 import pathGuard from './shared/PathGuard.js';
+import { getGhostWorkspaceDir, ProjectRegistry } from './shared/ProjectRegistry.js';
 import { CONFIG_DIR, PACKAGE_ROOT } from './shared/package-root.js';
 import { WorkspaceResolver } from './shared/WorkspaceResolver.js';
 
@@ -124,12 +125,22 @@ export class Bootstrap {
   /** 加载 .env 文件（dotenv），不覆盖已有环境变量 */
   async loadDotEnv() {
     try {
-      // 沿目录树向上查找 .env：cwd → Alembic 包根 → 用户项目根
-      const candidates = [path.resolve(process.cwd(), '.env'), path.resolve(PACKAGE_ROOT, '.env')];
+      const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+      const candidates = [path.resolve(projectRoot, '.env'), path.resolve(PACKAGE_ROOT, '.env')];
+
+      // Ghost 模式：.env 在 ~/.asd/workspaces/<id>/.env
+      try {
+        const entry = ProjectRegistry.get(projectRoot);
+        if (entry?.ghost) {
+          candidates.unshift(path.join(getGhostWorkspaceDir(entry.id), '.env'));
+        }
+      } catch {
+        /* registry unreadable — continue with standard candidates */
+      }
+
       for (const envPath of candidates) {
         if (existsSync(envPath)) {
           const dotenv = await import('dotenv');
-          // quiet: true — 禁止 dotenv v17 的 stdout banner，避免污染 MCP stdio 传输
           dotenv.config({ path: envPath, override: false, quiet: true });
           break;
         }

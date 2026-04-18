@@ -20,6 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
+import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
 import {
   type CallGraphRepo,
   RawDbCallGraphAdapter,
@@ -54,11 +55,13 @@ export class CursorDeliveryPipeline {
   rulesGenerator: RulesGenerator;
   skillsSyncer: SkillsSyncer;
   topicClassifier: TopicClassifier;
+  wz: WriteZone | null;
   /**
    * @param options.knowledgeService KnowledgeService 实例
    * @param options.projectRoot 用户项目根目录
    * @param [options.projectName] 项目名称
    * @param [options.logger] 日志器
+   * @param [options.wz] WriteZone 实例（可选，提供后写入操作走 WriteZone 管控）
    */
   constructor({
     knowledgeService,
@@ -66,6 +69,8 @@ export class CursorDeliveryPipeline {
     projectName,
     logger,
     database,
+    dataRoot,
+    wz,
   }: {
     knowledgeService: {
       list: (
@@ -81,18 +86,29 @@ export class CursorDeliveryPipeline {
       error?: (...args: unknown[]) => void;
     };
     database?: Record<string, unknown> | null;
+    /** Ghost 模式下的数据根目录 */
+    dataRoot?: string;
+    /** WriteZone 实例 */
+    wz?: WriteZone;
   }) {
     this.knowledgeService = knowledgeService;
     this.projectRoot = projectRoot;
     this.projectName = projectName || this._inferProjectName(projectRoot);
     this.logger = logger || console;
     this.database = database || null;
+    this.wz = wz ?? null;
 
     // 子模块
     this.compressor = new KnowledgeCompressor();
     this.topicClassifier = new TopicClassifier(this.projectName);
-    this.rulesGenerator = new RulesGenerator(projectRoot, this.projectName);
-    this.skillsSyncer = new SkillsSyncer(projectRoot, this.projectName, knowledgeService);
+    this.rulesGenerator = new RulesGenerator(projectRoot, this.projectName, wz);
+    this.skillsSyncer = new SkillsSyncer(
+      projectRoot,
+      this.projectName,
+      knowledgeService,
+      dataRoot,
+      wz
+    );
     this.agentInstructions = new AgentInstructionsGenerator(projectRoot, this.projectName, logger);
   }
 
@@ -655,7 +671,11 @@ export class CursorDeliveryPipeline {
 
     const devdocsDir = path.join(this.projectRoot, '.cursor', 'skills', 'asd-devdocs');
     const refsDir = path.join(devdocsDir, 'references');
-    fs.mkdirSync(refsDir, { recursive: true });
+    if (this.wz) {
+      this.wz.ensureDir(this.wz.project('.cursor/skills/asd-devdocs/references'));
+    } else {
+      fs.mkdirSync(refsDir, { recursive: true });
+    }
 
     // 生成 SKILL.md（索引页）
     const skillLines = [
@@ -706,7 +726,11 @@ export class CursorDeliveryPipeline {
         .join('\n');
 
       const docPath = path.join(refsDir, `${slug}.md`);
-      fs.writeFileSync(docPath, docContent, 'utf8');
+      if (this.wz) {
+        this.wz.writeFile(this.wz.project(path.relative(this.projectRoot, docPath)), docContent);
+      } else {
+        fs.writeFileSync(docPath, docContent, 'utf8');
+      }
       result.filePaths.push(docPath);
       result.filesWritten++;
     }
@@ -717,7 +741,12 @@ export class CursorDeliveryPipeline {
     skillLines.push('For full-text search across all documents:');
     skillLines.push('- `asd_search("your query")`');
 
-    fs.writeFileSync(path.join(devdocsDir, 'SKILL.md'), `${skillLines.join('\n')}\n`, 'utf8');
+    const skillMdContent = `${skillLines.join('\n')}\n`;
+    if (this.wz) {
+      this.wz.writeFile(this.wz.project('.cursor/skills/asd-devdocs/SKILL.md'), skillMdContent);
+    } else {
+      fs.writeFileSync(path.join(devdocsDir, 'SKILL.md'), skillMdContent, 'utf8');
+    }
     result.documentsCount = documents.length;
 
     this.logger.info?.(
@@ -801,7 +830,11 @@ export class CursorDeliveryPipeline {
       const cursorRulesDir = path.join(cursorDir, 'rules');
       if (fs.existsSync(cursorRulesDir)) {
         const targetRulesDir = path.join(targetDir, 'rules');
-        fs.mkdirSync(targetRulesDir, { recursive: true });
+        if (this.wz) {
+          this.wz.ensureDir(this.wz.project(path.relative(this.projectRoot, targetRulesDir)));
+        } else {
+          fs.mkdirSync(targetRulesDir, { recursive: true });
+        }
         for (const file of fs.readdirSync(cursorRulesDir)) {
           if (!file.startsWith('alembic-')) {
             continue;
@@ -812,7 +845,12 @@ export class CursorDeliveryPipeline {
           }
           // .mdc → .md
           const destName = file.endsWith('.mdc') ? file.replace(/\.mdc$/, '.md') : file;
-          fs.copyFileSync(src, path.join(targetRulesDir, destName));
+          const dest = path.join(targetRulesDir, destName);
+          if (this.wz) {
+            this.wz.copyFile(src, this.wz.project(path.relative(this.projectRoot, dest)));
+          } else {
+            fs.copyFileSync(src, dest);
+          }
         }
       }
 
@@ -826,7 +864,8 @@ export class CursorDeliveryPipeline {
           }
           this._copyDirRecursive(
             path.join(cursorSkillsDir, entry.name),
-            path.join(targetSkillsDir, entry.name)
+            path.join(targetSkillsDir, entry.name),
+            this.wz
           );
         }
       }
@@ -842,13 +881,19 @@ export class CursorDeliveryPipeline {
   /**
    * 递归复制目录
    */
-  _copyDirRecursive(src: string, dest: string) {
-    fs.mkdirSync(dest, { recursive: true });
+  _copyDirRecursive(src: string, dest: string, wz?: WriteZone | null) {
+    if (wz) {
+      wz.ensureDir(wz.project(path.relative(this.projectRoot, dest)));
+    } else {
+      fs.mkdirSync(dest, { recursive: true });
+    }
     for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
       const srcPath = path.join(src, entry.name);
       const destPath = path.join(dest, entry.name);
       if (entry.isDirectory()) {
-        this._copyDirRecursive(srcPath, destPath);
+        this._copyDirRecursive(srcPath, destPath, wz);
+      } else if (wz) {
+        wz.copyFile(srcPath, wz.project(path.relative(this.projectRoot, destPath)));
       } else {
         fs.copyFileSync(srcPath, destPath);
       }

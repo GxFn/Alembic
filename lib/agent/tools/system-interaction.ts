@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import type { WriteZone } from '#infra/io/WriteZone.js';
 import type { ToolHandlerContext } from './_shared.js';
 
 const execFileAsync = promisify(execFile);
@@ -363,16 +364,26 @@ export const writeProjectFile = {
 
     // ── 写入文件 ──
     try {
-      // 确保目录存在
-      const dir = path.dirname(resolved);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-
-      if (append) {
-        fs.appendFileSync(resolved, content, 'utf-8');
+      const wz = ctx.container?.get?.('writeZone') as WriteZone | undefined;
+      if (wz) {
+        const target = resolved.startsWith(wz.dataRoot)
+          ? wz.data(resolved.replace(wz.dataRoot, '').replace(/^\//, ''))
+          : wz.project(relPath);
+        if (append) {
+          wz.appendFile(target, content);
+        } else {
+          wz.writeFile(target, content);
+        }
       } else {
-        fs.writeFileSync(resolved, content, 'utf-8');
+        const dir = path.dirname(resolved);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        if (append) {
+          fs.appendFileSync(resolved, content, 'utf-8');
+        } else {
+          fs.writeFileSync(resolved, content, 'utf-8');
+        }
       }
 
       const stat = fs.statSync(resolved);

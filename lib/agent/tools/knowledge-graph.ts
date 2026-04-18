@@ -37,7 +37,7 @@ export const checkDuplicate = {
           [key: string]: unknown;
         }
       | undefined;
-    const projectRoot = (params.projectRoot as string) || ctx.projectRoot;
+    const dataRoot = (params.projectRoot as string) || ctx.dataRoot || ctx.projectRoot;
     const threshold = (params.threshold as number) ?? 0.5;
 
     // 如果提供 candidateId，从数据库读取条目信息
@@ -63,7 +63,7 @@ export const checkDuplicate = {
       return { similar: [], message: 'No candidate provided' };
     }
 
-    const similar = findSimilarRecipes(projectRoot, cand, {
+    const similar = findSimilarRecipes(dataRoot, cand, {
       threshold,
       topK: 10,
     });

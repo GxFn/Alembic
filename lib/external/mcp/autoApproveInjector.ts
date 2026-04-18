@@ -19,6 +19,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { WriteZone } from '#infra/io/WriteZone.js';
 import WorkspaceResolver from '#shared/WorkspaceResolver.js';
 
 /** Minimal logger interface for auto-approve operations */
@@ -79,14 +80,22 @@ function _cursorMcpPath(projectRoot: string) {
  *
  * @param projectRoot 项目根目录
  */
-export function markAutoApproveNeeded(projectRoot: string, logger?: AutoApproveLogger) {
+export function markAutoApproveNeeded(
+  projectRoot: string,
+  logger?: AutoApproveLogger,
+  wz?: WriteZone
+) {
   const marker = _markerPath(projectRoot);
   try {
-    const dir = path.dirname(marker);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    if (wz) {
+      wz.writeFile(wz.data('.asd/.auto-approve-pending'), `${new Date().toISOString()}\n`);
+    } else {
+      const dir = path.dirname(marker);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(marker, `${new Date().toISOString()}\n`);
     }
-    fs.writeFileSync(marker, `${new Date().toISOString()}\n`);
     logger?.info?.('[AutoApprove] Marked for injection on next MCP startup');
     return true;
   } catch (e: unknown) {
@@ -103,10 +112,9 @@ export function markAutoApproveNeeded(projectRoot: string, logger?: AutoApproveL
  * @param [logger] 日志实例（可选）
  * @returns 是否成功写入（false = 文件不存在或无 alembic 配置）
  */
-export function injectAutoApprove(projectRoot: string, logger?: AutoApproveLogger) {
+export function injectAutoApprove(projectRoot: string, logger?: AutoApproveLogger, wz?: WriteZone) {
   const configPath = _cursorMcpPath(projectRoot);
 
-  // 如果 .cursor/mcp.json 不存在，不做任何操作（不创建文件）
   if (!fs.existsSync(configPath)) {
     return false;
   }
@@ -124,22 +132,25 @@ export function injectAutoApprove(projectRoot: string, logger?: AutoApproveLogge
     return false;
   }
 
-  // 幂等检查：已有完整 autoApprove 则跳过
   const existing = serverConfig.autoApprove;
   if (Array.isArray(existing)) {
     const existingSet = new Set(existing);
     const allPresent = AUTO_APPROVE_TOOLS.every((t) => existingSet.has(t));
     if (allPresent) {
-      return true; // 已完整，无需写入
+      return true;
     }
   }
 
-  // 合并（保留用户手动添加的其他工具）
   const merged = new Set([...(existing || []), ...AUTO_APPROVE_TOOLS]);
   serverConfig.autoApprove = [...merged].sort();
 
   try {
-    fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    const content = `${JSON.stringify(config, null, 2)}\n`;
+    if (wz) {
+      wz.writeFile(wz.project('.cursor/mcp.json'), content);
+    } else {
+      fs.writeFileSync(configPath, content);
+    }
     logger?.info?.(
       `[AutoApprove] Injected ${AUTO_APPROVE_TOOLS.length} tools into .cursor/mcp.json autoApprove`
     );
@@ -157,17 +168,24 @@ export function injectAutoApprove(projectRoot: string, logger?: AutoApproveLogge
  * 注入发生在 MCP 连接建立之前，写入 mcp.json 不影响当前启动。
  * Cursor 下次读取 mcp.json 时（重启或新窗口）即生效。
  */
-export function applyPendingAutoApprove(projectRoot: string, logger?: AutoApproveLogger) {
+export function applyPendingAutoApprove(
+  projectRoot: string,
+  logger?: AutoApproveLogger,
+  wz?: WriteZone
+) {
   const marker = _markerPath(projectRoot);
   if (!fs.existsSync(marker)) {
     return;
   }
 
-  const injected = injectAutoApprove(projectRoot, logger);
+  const injected = injectAutoApprove(projectRoot, logger, wz);
   if (injected) {
-    // 清除标记
     try {
-      fs.unlinkSync(marker);
+      if (wz) {
+        wz.remove(wz.data('.asd/.auto-approve-pending'));
+      } else {
+        fs.unlinkSync(marker);
+      }
     } catch {
       /* ignore */
     }

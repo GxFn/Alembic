@@ -705,7 +705,15 @@ router.post(
       }
     }
 
-    writeFileSync(envPath, content);
+    const container = getServiceContainer();
+    const wz = container.singletons?.writeZone as
+      | import('../../infrastructure/io/WriteZone.js').WriteZone
+      | undefined;
+    if (wz) {
+      wz.writeFile(wz.project('.env'), content);
+    } else {
+      writeFileSync(envPath, content);
+    }
     logger.info('LLM env config updated', { provider, model });
 
     // 同步到当前进程环境变量（热生效）

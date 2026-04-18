@@ -5,6 +5,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { DataPath, WriteZone } from '#infra/io/WriteZone.js';
 import type { Disposable } from '../../shared/lifecycle.js';
 import { resolveDataRoot } from '../../shared/resolveProjectRoot.js';
 import { timerRegistry } from '../../shared/TimerRegistry.js';
@@ -16,6 +17,7 @@ interface ErrorTrackerConfig {
   enableFileLogging: boolean;
   enableConsoleLogging: boolean;
   alertThreshold: number;
+  writeZone?: WriteZone;
 }
 
 interface ErrorData {
@@ -40,6 +42,7 @@ export class ErrorTracker implements Disposable {
   errorCounts: Map<string, number>;
   errors: ErrorData[];
   reportInterval: ReturnType<typeof setInterval>;
+  #wz: WriteZone | null;
   constructor(
     options: Partial<
       ErrorTrackerConfig & {
@@ -48,6 +51,7 @@ export class ErrorTracker implements Disposable {
         enableFileLogging: boolean;
         enableConsoleLogging: boolean;
         alertThreshold: number;
+        writeZone?: WriteZone;
       }
     > = {}
   ) {
@@ -56,20 +60,19 @@ export class ErrorTracker implements Disposable {
       maxErrorsInMemory: options.maxErrorsInMemory || 500,
       enableFileLogging: options.enableFileLogging !== false,
       enableConsoleLogging: options.enableConsoleLogging !== false,
-      alertThreshold: options.alertThreshold || 10, // 每分钟错误数阈值
+      alertThreshold: options.alertThreshold || 10,
     };
+    this.#wz = options.writeZone ?? null;
 
     this.errors = [];
-    this.errorCounts = new Map(); // 错误类型计数
-    this.recentErrors = []; // 最近错误
-    this.criticalErrors = []; // 关键错误
+    this.errorCounts = new Map();
+    this.recentErrors = [];
+    this.criticalErrors = [];
 
-    // 确保日志目录存在
     if (this.config.enableFileLogging) {
       this._ensureLogDirectory();
     }
 
-    // 定期生成错误报告（timerRegistry 自动 unref）
     this.reportInterval = timerRegistry.setInterval(
       () => this._generateReport(),
       60000,
@@ -80,7 +83,9 @@ export class ErrorTracker implements Disposable {
   /** 确保日志目录存在 */
   _ensureLogDirectory() {
     try {
-      if (!fs.existsSync(this.config.logDirectory)) {
+      if (this.#wz) {
+        this.#wz.ensureDir(this.#runtimePath(this.config.logDirectory));
+      } else if (!fs.existsSync(this.config.logDirectory)) {
         fs.mkdirSync(this.config.logDirectory, { recursive: true });
       }
     } catch (error: unknown) {
@@ -192,10 +197,20 @@ export class ErrorTracker implements Disposable {
         _timestamp: Date.now(),
       })}\n`;
 
-      fs.appendFileSync(filePath, logEntry, 'utf8');
+      if (this.#wz) {
+        this.#wz.appendFile(this.#runtimePath(filePath), logEntry);
+      } else {
+        fs.appendFileSync(filePath, logEntry, 'utf8');
+      }
     } catch (error: unknown) {
       Logger.error('写入错误日志文件失败', { error: (error as Error).message });
     }
+  }
+
+  /** 将绝对路径转换为 WriteZone runtime DataPath */
+  #runtimePath(absPath: string): DataPath {
+    const asdRoot = path.join(this.#wz!.dataRoot, '.asd');
+    return this.#wz!.runtime(path.relative(asdRoot, absPath));
   }
 
   /** 检查告警阈值 */

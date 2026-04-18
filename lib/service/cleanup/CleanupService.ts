@@ -31,6 +31,7 @@ import {
   getProjectRecipesPath,
   getProjectSkillsPath,
 } from '#infra/config/Paths.js';
+import type { WriteZone } from '#infra/io/WriteZone.js';
 import { CONSUMABLE_LIFECYCLES, lifecycleInSql } from '../../domain/knowledge/Lifecycle.js';
 
 // ── 类型定义 ────────────────────────────────────────────────
@@ -161,16 +162,22 @@ const RESCAN_CLEAN_TABLES = [
 
 export class CleanupService {
   readonly #projectRoot: string;
+  readonly #dataRoot: string;
   readonly #logger: CleanupLogger;
+  readonly #wz: WriteZone | null;
   #db: SqliteDb | null;
 
   constructor(opts: {
     projectRoot: string;
+    dataRoot?: string;
     db?: unknown;
     logger?: CleanupLogger;
+    writeZone?: WriteZone | null;
   }) {
     this.#projectRoot = opts.projectRoot;
+    this.#dataRoot = opts.dataRoot || opts.projectRoot;
     this.#logger = opts.logger || { info() {}, warn() {} };
+    this.#wz = opts.writeZone || null;
     this.#db = opts.db
       ? typeof (opts.db as DbWrapper)?.getDb === 'function'
         ? (opts.db as DbWrapper).getDb!()
@@ -225,11 +232,12 @@ export class CleanupService {
     let dbSnapshotRows = 0;
 
     // 2. 将知识目录移入垃圾桶（move 而非 copy，速度快）
-    const kbPath = getProjectKnowledgePath(this.#projectRoot);
+    // Ghost 模式下操作外置工作区的知识目录
+    const kbPath = getProjectKnowledgePath(this.#dataRoot);
     const dirsToTrash: Array<{ src: string; name: string }> = [
-      { src: path.join(this.#projectRoot, CANDIDATES_DIR), name: 'candidates' },
-      { src: getProjectRecipesPath(this.#projectRoot), name: 'recipes' },
-      { src: getProjectSkillsPath(this.#projectRoot), name: 'skills' },
+      { src: path.join(this.#dataRoot, CANDIDATES_DIR), name: 'candidates' },
+      { src: getProjectRecipesPath(this.#dataRoot), name: 'recipes' },
+      { src: getProjectSkillsPath(this.#dataRoot), name: 'skills' },
       { src: path.join(kbPath, 'wiki'), name: 'wiki' },
     ];
 
@@ -271,21 +279,29 @@ export class CleanupService {
       result.errors.push('DB reference is null, database tables were not cleared');
     }
 
-    // 5. 重建被移走的空目录（bootstrap 后续步骤需要）
     for (const { src } of dirsToTrash) {
       if (!fs.existsSync(src)) {
-        fs.mkdirSync(src, { recursive: true });
+        if (this.#wz) {
+          const rel = src.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+          this.#wz.ensureDir(this.#wz.data(rel));
+        } else {
+          fs.mkdirSync(src, { recursive: true });
+        }
       }
     }
 
     // 6. 清除向量索引
-    result.deletedFiles += this.#clearDirectory(getContextIndexPath(this.#projectRoot));
+    result.deletedFiles += this.#clearDirectory(getContextIndexPath(this.#dataRoot));
 
     // 7. 删除 bootstrap-report.json
-    result.deletedFiles += this.#deleteFile(path.join(kbPath, '.asd', 'bootstrap-report.json'));
+    result.deletedFiles += this.#deleteFile(
+      path.join(this.#dataRoot, '.asd', 'bootstrap-report.json')
+    );
 
     // 8. 清除 logs/signals/
-    result.deletedFiles += this.#clearDirectory(path.join(kbPath, '.asd', 'logs', 'signals'));
+    result.deletedFiles += this.#clearDirectory(
+      path.join(this.#dataRoot, '.asd', 'logs', 'signals')
+    );
 
     result.deletedFiles += movedItems;
     result.trash = { folder: trashFolder, movedItems, dbSnapshotRows };
@@ -359,22 +375,22 @@ export class CleanupService {
     }
 
     // 2. 清空 candidates/ 目录
-    result.deletedFiles += this.#clearDirectory(path.join(this.#projectRoot, CANDIDATES_DIR));
+    result.deletedFiles += this.#clearDirectory(path.join(this.#dataRoot, CANDIDATES_DIR));
 
     // 3. 清空 skills/ 目录
-    result.deletedFiles += this.#clearDirectory(getProjectSkillsPath(this.#projectRoot));
+    result.deletedFiles += this.#clearDirectory(getProjectSkillsPath(this.#dataRoot));
 
     // 4. 清空 wiki/ 目录
     result.deletedFiles += this.#clearDirectory(
-      path.join(getProjectKnowledgePath(this.#projectRoot), 'wiki')
+      path.join(getProjectKnowledgePath(this.#dataRoot), 'wiki')
     );
 
     // 5. 删除向量索引
-    result.deletedFiles += this.#clearDirectory(getContextIndexPath(this.#projectRoot));
+    result.deletedFiles += this.#clearDirectory(getContextIndexPath(this.#dataRoot));
 
     // 6. 删除 bootstrap-report.json
     result.deletedFiles += this.#deleteFile(
-      path.join(getProjectKnowledgePath(this.#projectRoot), '.asd', 'bootstrap-report.json')
+      path.join(getProjectKnowledgePath(this.#dataRoot), '.asd', 'bootstrap-report.json')
     );
 
     this.#logger.info('[CleanupService] rescanClean complete', {
@@ -504,16 +520,20 @@ export class CleanupService {
 
   // ─── 内部工具方法 ─────────────────────────────────────
 
-  /** 获取垃圾桶根目录 (.asd/.trash/) */
+  /** 获取垃圾桶根目录 (.asd/.trash/) — Ghost 模式下在外置工作区 */
   #getTrashRoot(): string {
-    return path.join(this.#projectRoot, '.asd', TRASH_DIR);
+    return path.join(this.#dataRoot, '.asd', TRASH_DIR);
   }
 
-  /** 创建时间戳垃圾桶文件夹，返回绝对路径 */
   #createTrashFolder(): string {
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
     const trashFolder = path.join(this.#getTrashRoot(), ts);
-    fs.mkdirSync(trashFolder, { recursive: true });
+    if (this.#wz) {
+      const rel = trashFolder.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+      this.#wz.ensureDir(this.#wz.data(rel));
+    } else {
+      fs.mkdirSync(trashFolder, { recursive: true });
+    }
     return trashFolder;
   }
 
@@ -531,16 +551,26 @@ export class CleanupService {
       return 0;
     }
 
-    fs.mkdirSync(trashSubDir, { recursive: true });
+    if (this.#wz) {
+      const trashRel = trashSubDir.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+      this.#wz.ensureDir(this.#wz.data(trashRel));
+    } else {
+      fs.mkdirSync(trashSubDir, { recursive: true });
+    }
     let count = 0;
     for (const entry of entries) {
       const src = path.join(srcDir, entry);
       const dest = path.join(trashSubDir, entry);
       try {
-        fs.renameSync(src, dest);
+        if (this.#wz) {
+          const srcRel = src.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+          const destRel = dest.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+          this.#wz.rename(this.#wz.data(srcRel), this.#wz.data(destRel));
+        } else {
+          fs.renameSync(src, dest);
+        }
         count++;
       } catch {
-        // rename 可能跨设备失败，fallback 到 copy+delete
         try {
           fs.cpSync(src, dest, { recursive: true });
           fs.rmSync(src, { recursive: true, force: true });
@@ -589,7 +619,13 @@ export class CleanupService {
     }
 
     if (lines.length > 0) {
-      fs.writeFileSync(snapshotPath, `${lines.join('\n')}\n`, 'utf-8');
+      const content = `${lines.join('\n')}\n`;
+      if (this.#wz) {
+        const rel = snapshotPath.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+        this.#wz.writeFile(this.#wz.data(rel), content);
+      } else {
+        fs.writeFileSync(snapshotPath, content, 'utf-8');
+      }
       this.#logger.info(`[CleanupService] DB snapshot: ${totalRows} rows → ${DB_SNAPSHOT_FILE}`);
     }
 
@@ -685,11 +721,16 @@ export class CleanupService {
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry);
         try {
-          const stat = fs.statSync(fullPath);
-          if (stat.isDirectory()) {
-            fs.rmSync(fullPath, { recursive: true });
+          if (this.#wz) {
+            const rel = fullPath.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+            this.#wz.remove(this.#wz.data(rel), { recursive: true });
           } else {
-            fs.unlinkSync(fullPath);
+            const stat = fs.statSync(fullPath);
+            if (stat.isDirectory()) {
+              fs.rmSync(fullPath, { recursive: true });
+            } else {
+              fs.unlinkSync(fullPath);
+            }
           }
           count++;
         } catch (err: unknown) {
@@ -711,7 +752,12 @@ export class CleanupService {
   #deleteFile(filePath: string): number {
     try {
       if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+        if (this.#wz) {
+          const rel = filePath.replace(this.#wz.dataRoot, '').replace(/^\//, '');
+          this.#wz.remove(this.#wz.data(rel));
+        } else {
+          fs.unlinkSync(filePath);
+        }
         return 1;
       }
     } catch (err: unknown) {

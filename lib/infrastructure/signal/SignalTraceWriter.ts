@@ -9,6 +9,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { DataPath, WriteZone } from '#infra/io/WriteZone.js';
 import type { Signal, SignalBus } from './SignalBus.js';
 
 export interface SignalTraceQueryOptions {
@@ -23,10 +24,17 @@ export interface SignalTraceQueryOptions {
 
 export class SignalTraceWriter {
   readonly #baseDir: string;
+  readonly #wz: WriteZone | null;
 
-  constructor(signalBus: SignalBus, baseDir: string) {
+  constructor(signalBus: SignalBus, baseDir: string, writeZone?: WriteZone) {
     this.#baseDir = baseDir;
-    fs.mkdirSync(baseDir, { recursive: true });
+    this.#wz = writeZone ?? null;
+
+    if (this.#wz) {
+      this.#wz.ensureDir(this.#runtimePath(baseDir));
+    } else {
+      fs.mkdirSync(baseDir, { recursive: true });
+    }
 
     signalBus.subscribe('*', (signal) => {
       this.#write(signal);
@@ -36,18 +44,20 @@ export class SignalTraceWriter {
   #write(signal: Signal): void {
     try {
       const fileName = this.#resolveFile(signal.type);
-      fs.appendFileSync(
-        fileName,
-        `${JSON.stringify({
-          type: signal.type,
-          source: signal.source,
-          value: signal.value,
-          target: signal.target,
-          metadata: signal.metadata,
-          timestamp: signal.timestamp,
-        })}\n`,
-        'utf8'
-      );
+      const line = `${JSON.stringify({
+        type: signal.type,
+        source: signal.source,
+        value: signal.value,
+        target: signal.target,
+        metadata: signal.metadata,
+        timestamp: signal.timestamp,
+      })}\n`;
+
+      if (this.#wz) {
+        this.#wz.appendFile(this.#runtimePath(fileName), line);
+      } else {
+        fs.appendFileSync(fileName, line, 'utf8');
+      }
     } catch {
       // 写入失败不阻断信号分发
     }
@@ -127,6 +137,11 @@ export class SignalTraceWriter {
   }
 
   // ── Private ───────────────────────────────────────
+
+  #runtimePath(absPath: string): DataPath {
+    const asdRoot = path.join(this.#wz!.dataRoot, '.asd');
+    return this.#wz!.runtime(path.relative(asdRoot, absPath));
+  }
 
   #resolveFile(type: string): string {
     return path.join(this.#baseDir, `${type}.jsonl`);

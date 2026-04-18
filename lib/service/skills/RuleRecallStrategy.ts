@@ -24,6 +24,7 @@ export class RuleRecallStrategy implements RecallStrategy {
     const advisor = new SkillAdvisor(context.projectRoot, {
       knowledgeRepo,
       auditRepo,
+      dataRoot: context.dataRoot,
     });
 
     const result = await advisor.suggest();

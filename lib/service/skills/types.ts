@@ -126,6 +126,7 @@ export interface ScoredRecommendation extends RecommendationCandidate {
 /** 推荐管线上下文 */
 export interface RecommendationContext {
   projectRoot: string;
+  dataRoot?: string;
   database?: unknown;
   container?: unknown;
   agentFactory?: unknown;

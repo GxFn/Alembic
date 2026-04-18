@@ -332,7 +332,8 @@ export function getInheritanceRoots(
 export function dedup(
   files: { path: string; hash: string }[],
   wikiDir: string,
-  emit: (phase: string, progress: number, message: string) => void
+  emit: (phase: string, progress: number, message: string) => void,
+  wz?: import('../../infrastructure/io/WriteZone.js').WriteZone | null
 ) {
   const removed: string[] = [];
 
@@ -350,7 +351,12 @@ export function dedup(
           continue;
         }
         try {
-          fs.unlinkSync(fullPath);
+          if (wz) {
+            const rel = fullPath.replace(wz.dataRoot, '').replace(/^\//, '');
+            wz.remove(wz.data(rel));
+          } else {
+            fs.unlinkSync(fullPath);
+          }
         } catch {
           /* skip */
         }
@@ -376,14 +382,18 @@ export function dedup(
       const isCurrentSynced = file.path.startsWith('documents/') || file.path.startsWith('skills/');
 
       if (isCurrentSynced && !isFirstSynced) {
-        // 当前是 synced，first 是 codegen → 删除 synced
         const fullPath = path.join(wikiDir, file.path);
         if (!fullPath.startsWith(path.resolve(wikiDir) + path.sep)) {
           logger.warn(`[WikiGenerator] Dedup: path escape blocked — ${file.path}`);
           continue;
         }
         try {
-          fs.unlinkSync(fullPath);
+          if (wz) {
+            const rel = fullPath.replace(wz.dataRoot, '').replace(/^\//, '');
+            wz.remove(wz.data(rel));
+          } else {
+            fs.unlinkSync(fullPath);
+          }
         } catch {
           /* skip */
         }

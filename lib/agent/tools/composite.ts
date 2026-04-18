@@ -276,6 +276,7 @@ export const submitWithCheck = {
   },
   handler: async (params: SubmitWithCheckParams, ctx: ToolHandlerContext) => {
     const projectRoot = ctx.projectRoot;
+    const dataRoot = ctx.dataRoot || projectRoot;
 
     // ── 标题正规化：剥离冗余的项目名前缀 ──
     if (params.title) {
@@ -326,7 +327,7 @@ export const submitWithCheck = {
       );
       const gateway = new RecipeProductionGateway({
         knowledgeService: ctx.container.get('knowledgeService'),
-        projectRoot,
+        projectRoot: dataRoot,
         logger: ctx.logger as { info(msg: string): void; warn(msg: string): void } | undefined,
         proposalRepository: ctx.container.get('proposalRepository') ?? null,
         evolutionGateway: ctx.container.get('evolutionGateway') ?? null,
@@ -403,7 +404,7 @@ export const submitWithCheck = {
           summary: params.description || '',
           code: contentObj2.markdown || contentObj2.pattern || '',
         };
-        const similar = findSimilarRecipes(projectRoot, cand, { threshold: 0.5, topK: 5 });
+        const similar = findSimilarRecipes(dataRoot, cand, { threshold: 0.5, topK: 5 });
 
         return {
           submitted: true,

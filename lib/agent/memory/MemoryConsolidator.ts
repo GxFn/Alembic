@@ -12,6 +12,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { WriteZone } from '#infra/io/WriteZone.js';
 import type { MemoryInput } from './MemoryStore.js';
 import { MemoryStore } from './MemoryStore.js';
 
@@ -176,7 +177,8 @@ export class MemoryConsolidator {
    * @returns >}
    */
   async migrateFromLegacy(
-    projectRoot: string
+    projectRoot: string,
+    wz?: WriteZone
   ): Promise<{ migrated: number; skipped: number; error?: string }> {
     const legacyPath = path.join(projectRoot, '.asd', 'memory.jsonl');
 
@@ -216,9 +218,12 @@ export class MemoryConsolidator {
         bootstrapSession: 'legacy-migration',
       });
 
-      // 迁移成功 → 重命名旧文件
       try {
-        fs.renameSync(legacyPath, `${legacyPath}.migrated`);
+        if (wz) {
+          wz.rename(wz.data('.asd/memory.jsonl'), wz.data('.asd/memory.jsonl.migrated'));
+        } else {
+          fs.renameSync(legacyPath, `${legacyPath}.migrated`);
+        }
       } catch {
         /* rename failure non-critical */
       }

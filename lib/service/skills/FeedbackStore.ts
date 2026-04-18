@@ -13,6 +13,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { WriteZone } from '#infra/io/WriteZone.js';
 import { RUNTIME_DIR } from '#shared/ProjectMarkers.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type {
@@ -39,12 +40,14 @@ interface FeedbackEntry extends RecommendationFeedback {
 export class FeedbackStore {
   readonly #filePath: string;
   readonly #logger: ReturnType<typeof Logger.getInstance>;
+  readonly #wz: WriteZone | null;
   #entries: FeedbackEntry[] = [];
   #loaded = false;
 
-  constructor(projectRoot: string) {
+  constructor(projectRoot: string, wz?: WriteZone) {
     this.#filePath = path.join(projectRoot, RUNTIME_DIR, FEEDBACK_FILE);
     this.#logger = Logger.getInstance();
+    this.#wz = wz ?? null;
   }
 
   // ─── 公共 API ──────────────────────────────────────────
@@ -68,11 +71,15 @@ export class FeedbackStore {
 
     // 追加写入 JSONL
     try {
-      const dir = path.dirname(this.#filePath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+      if (this.#wz) {
+        this.#wz.appendFile(this.#wz.runtime(FEEDBACK_FILE), `${JSON.stringify(entry)}\n`);
+      } else {
+        const dir = path.dirname(this.#filePath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.appendFileSync(this.#filePath, `${JSON.stringify(entry)}\n`, 'utf-8');
       }
-      fs.appendFileSync(this.#filePath, `${JSON.stringify(entry)}\n`, 'utf-8');
     } catch (err: unknown) {
       this.#logger.warn('FeedbackStore: failed to persist feedback', {
         error: err instanceof Error ? err.message : String(err),

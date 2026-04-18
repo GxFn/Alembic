@@ -10,6 +10,7 @@
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { DataPath, WriteZone } from '#infra/io/WriteZone.js';
 
 // ── Types ───────────────────────────────────────────
 
@@ -50,9 +51,11 @@ const VALID_CATEGORIES: ReadonlySet<string> = new Set<ReportCategory>([
 
 export class ReportStore {
   readonly #baseDir: string;
+  readonly #wz: WriteZone | null;
 
-  constructor(baseDir: string) {
+  constructor(baseDir: string, writeZone?: WriteZone) {
     this.#baseDir = baseDir;
+    this.#wz = writeZone ?? null;
   }
 
   /** 写入一条报告（追加 JSONL） */
@@ -60,9 +63,16 @@ export class ReportStore {
     const id = ReportStore.#generateId(entry.timestamp);
     const full: ReportEntry = { id, ...entry };
     const filePath = this.#resolveFile(entry.category, entry.timestamp);
-    const dir = path.dirname(filePath);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.appendFileSync(filePath, `${JSON.stringify(full)}\n`, 'utf8');
+
+    if (this.#wz) {
+      const target = this.#runtimePath(filePath);
+      this.#wz.ensureDir(this.#runtimePath(path.dirname(filePath)));
+      this.#wz.appendFile(target, `${JSON.stringify(full)}\n`);
+    } else {
+      const dir = path.dirname(filePath);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.appendFileSync(filePath, `${JSON.stringify(full)}\n`, 'utf8');
+    }
     return full;
   }
 
@@ -144,6 +154,12 @@ export class ReportStore {
   }
 
   // ── Private ───────────────────────────────────────
+
+  /** 将绝对路径转换为 WriteZone runtime DataPath */
+  #runtimePath(absPath: string): DataPath {
+    const asdRoot = path.join(this.#wz!.dataRoot, '.asd');
+    return this.#wz!.runtime(path.relative(asdRoot, absPath));
+  }
 
   #resolveFile(category: string, timestamp: number): string {
     const d = new Date(timestamp);

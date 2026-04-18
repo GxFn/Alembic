@@ -11,6 +11,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 import { SKILLS_DIR as BUILTIN_SKILLS_DIR } from '../../shared/package-root.js';
 
@@ -71,10 +72,13 @@ export class SkillsSyncer {
   projectRoot: string;
   sourceDir: string;
   targetDir: string;
+  wz: WriteZone | null;
   /**
    * @param projectRoot 用户项目根目录
    * @param projectName 项目名称
    * @param [knowledgeService] 可选，用于生成 references/RECIPES.md
+   * @param [dataRoot] Ghost 模式下的数据根目录（Skills 源目录）
+   * @param [wz] WriteZone 实例（可选，提供后写入操作走 WriteZone 管控）
    */
   constructor(
     projectRoot: string,
@@ -84,13 +88,16 @@ export class SkillsSyncer {
         filter: Record<string, unknown>,
         pagination: { page: number; pageSize: number }
       ) => Promise<unknown>;
-    } | null = null
+    } | null = null,
+    dataRoot?: string,
+    wz?: WriteZone
   ) {
     this.projectRoot = projectRoot;
     this.projectName = projectName;
     this.knowledgeService = knowledgeService;
-    this.sourceDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'skills');
+    this.sourceDir = path.join(dataRoot || projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'skills');
     this.targetDir = path.join(projectRoot, '.cursor', 'skills');
+    this.wz = wz ?? null;
   }
 
   /**
@@ -168,7 +175,11 @@ export class SkillsSyncer {
         const targetSkillDir = path.join(this.targetDir, targetName);
 
         // 创建目标目录
-        fs.mkdirSync(targetSkillDir, { recursive: true });
+        if (this.wz) {
+          this.wz.ensureDir(this.wz.project(path.relative(this.projectRoot, targetSkillDir)));
+        } else {
+          fs.mkdirSync(targetSkillDir, { recursive: true });
+        }
 
         // 读取源 SKILL.md
         const sourceContent = fs.readFileSync(sourceSkillPath, 'utf8');
@@ -177,7 +188,15 @@ export class SkillsSyncer {
         const targetContent = this._convertSkillMd(sourceContent, targetName, dirName);
 
         // 写入目标 SKILL.md
-        fs.writeFileSync(path.join(targetSkillDir, 'SKILL.md'), targetContent, 'utf8');
+        const skillMdPath = path.join(targetSkillDir, 'SKILL.md');
+        if (this.wz) {
+          this.wz.writeFile(
+            this.wz.project(path.relative(this.projectRoot, skillMdPath)),
+            targetContent
+          );
+        } else {
+          fs.writeFileSync(skillMdPath, targetContent, 'utf8');
+        }
 
         // 生成 references/RECIPES.md
         await this._generateRecipes(targetSkillDir, dirName);
@@ -237,7 +256,11 @@ export class SkillsSyncer {
    */
   async _generateRecipes(targetSkillDir: string, sourceDirName: string) {
     const refsDir = path.join(targetSkillDir, 'references');
-    fs.mkdirSync(refsDir, { recursive: true });
+    if (this.wz) {
+      this.wz.ensureDir(this.wz.project(path.relative(this.projectRoot, refsDir)));
+    } else {
+      fs.mkdirSync(refsDir, { recursive: true });
+    }
 
     // 如果有 knowledgeService，查询该维度的 recipes
     let recipes: Record<string, unknown>[] = [];
@@ -287,7 +310,15 @@ export class SkillsSyncer {
     lines.push('');
     lines.push(`For full content, use: \`asd_search("${dimensionLabel}")\``);
 
-    fs.writeFileSync(path.join(refsDir, 'RECIPES.md'), `${lines.join('\n')}\n`, 'utf8');
+    const recipePath = path.join(refsDir, 'RECIPES.md');
+    if (this.wz) {
+      this.wz.writeFile(
+        this.wz.project(path.relative(this.projectRoot, recipePath)),
+        `${lines.join('\n')}\n`
+      );
+    } else {
+      fs.writeFileSync(recipePath, `${lines.join('\n')}\n`, 'utf8');
+    }
   }
 
   /**

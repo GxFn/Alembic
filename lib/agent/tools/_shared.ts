@@ -61,6 +61,7 @@ export interface DimensionMeta {
 export interface ToolHandlerContext {
   container: ServiceContainer;
   projectRoot: string;
+  dataRoot?: string;
   logger?: {
     info(msg: string, ...args: unknown[]): void;
     debug(msg: string, ...args: unknown[]): void;
