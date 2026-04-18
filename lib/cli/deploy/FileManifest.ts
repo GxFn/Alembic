@@ -29,8 +29,8 @@ import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
  *   'inject-marker'     — 在 <!-- asd:begin/end --> 标记间注入/替换
  *
  * ghostPolicy（Ghost 模式部署行为）：
- *   'deploy'    — 仍然部署到项目内（如 AGENTS.md, copilot-instructions）
- *   'skip'      — Ghost 模式下跳过（如 .gitignore, .cursor/rules）
+ *   'deploy'    — 仍然部署到项目内（如 AGENTS.md, copilot-instructions, .gitignore）
+ *   'skip'      — Ghost 模式下跳过（如 .cursor/rules）
  *   'global'    — 部署到全局配置而非项目（如 MCP config）
  *   undefined   — 默认行为同 'skip'
  */
@@ -117,7 +117,7 @@ export const MANIFEST = [
     dest: '.gitignore',
     on: 'both',
     category: 'gitignore',
-    ghostPolicy: 'skip' as const,
+    ghostPolicy: 'deploy' as const,
   },
 
   // ═══ Skills ═══════════════════════════════════════════

@@ -36,8 +36,8 @@ Your code  →  AI extracts patterns  →  You review  →  Knowledge base
 npm install -g alembic
 
 cd your-project
-asd setup     # Initialize workspace + database + MCP config (auto-detects Cursor / VS Code / Trae / Qoder)
-asd ui        # Start background service (MCP Server + Dashboard) — IDE and MCP tools depend on this
+asd setup --ghost   # Initialize workspace + database + MCP config (auto-detects Cursor / VS Code / Trae / Qoder)
+asd ui              # Start background service (MCP Server + Dashboard) — IDE and MCP tools depend on this
 ```
 
 > **Trae / Qoder users:** After `asd setup`, run `asd mirror` to sync `.cursor/` config to `.trae/` / `.qoder/`.

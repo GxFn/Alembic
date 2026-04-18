@@ -2256,8 +2256,7 @@ program
           migrated = true;
         }
 
-        // 3. 清理项目内 .gitignore Alembic section
-        removeGitignoreSection(projectRoot);
+        // 3. .gitignore Alembic section 保留 — 作为安全网防止意外产物被 git 追踪
 
         // 4. MCP 切换：项目级 → 全局
         //    Cursor: 项目 .cursor/mcp.json → 全局 ~/.cursor/mcp.json
