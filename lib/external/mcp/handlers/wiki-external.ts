@@ -300,24 +300,42 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
   });
 
   // ── 确保 Wiki 目录存在 ──
+  // Agent 始终在 projectRoot 下写文件（IDE Agent 只能操作工作区内文件）
+  // Ghost 模式下 wikiFinalize 会将文件迁移到 dataRoot
   const wz = _getWriteZone(ctx);
-  const wikiDir = path.join(dataRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
-  _ensureDir(wikiDir, wz, dataRoot);
+  const isGhost = dataRoot !== projectRoot;
+  const agentWikiDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
+  const finalWikiDir = path.join(dataRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
+  _ensureDirRaw(agentWikiDir);
   if (topics.some((t) => t.path.startsWith('modules/'))) {
-    _ensureDir(path.join(wikiDir, 'modules'), wz, dataRoot);
+    _ensureDirRaw(path.join(agentWikiDir, 'modules'));
   }
   if (topics.some((t) => t.path.startsWith('patterns/'))) {
-    _ensureDir(path.join(wikiDir, 'patterns'), wz, dataRoot);
+    _ensureDirRaw(path.join(agentWikiDir, 'patterns'));
   }
   if (topics.some((t) => t.path.startsWith('folders/'))) {
-    _ensureDir(path.join(wikiDir, 'folders'), wz, dataRoot);
+    _ensureDirRaw(path.join(agentWikiDir, 'folders'));
+  }
+  // Ghost 模式下也确保 dataRoot 目标目录存在
+  if (isGhost) {
+    _ensureDir(finalWikiDir, wz, dataRoot);
+    if (topics.some((t) => t.path.startsWith('modules/'))) {
+      _ensureDir(path.join(finalWikiDir, 'modules'), wz, dataRoot);
+    }
+    if (topics.some((t) => t.path.startsWith('patterns/'))) {
+      _ensureDir(path.join(finalWikiDir, 'patterns'), wz, dataRoot);
+    }
+    if (topics.some((t) => t.path.startsWith('folders/'))) {
+      _ensureDir(path.join(finalWikiDir, 'folders'), wz, dataRoot);
+    }
   }
 
   return envelope({
     success: true,
     data: {
       wikiDir: path.join(DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki'),
-      absoluteWikiDir: wikiDir,
+      absoluteWikiDir: agentWikiDir,
+      ghost: isGhost,
       topicCount: topics.length,
       topics,
       writingGuidelines: _buildWritingGuidelines(isZh),
@@ -362,7 +380,44 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
   const container = ctx.container;
   const projectRoot = resolveProjectRoot(container);
   const dataRoot = resolveDataRoot(container as never) || projectRoot;
+  const isGhost = dataRoot !== projectRoot;
   const wikiDir = path.join(dataRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
+  const projectWikiDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
+
+  // ── 0. Ghost 模式：将 Agent 写在项目内的文件迁移到 dataRoot ──
+  let migratedCount = 0;
+  if (isGhost) {
+    const wz = _getWriteZone(ctx);
+    _ensureDir(wikiDir, wz, dataRoot);
+    for (const relPath of articlesWritten) {
+      const srcPath = path.join(projectWikiDir, relPath);
+      const destPath = path.join(wikiDir, relPath);
+      // 安全检查
+      const resolvedSrc = path.resolve(srcPath);
+      if (!resolvedSrc.startsWith(path.resolve(projectWikiDir))) {
+        continue;
+      }
+      if (fs.existsSync(srcPath)) {
+        const destDir = path.dirname(destPath);
+        _ensureDir(destDir, wz, dataRoot);
+        const content = fs.readFileSync(srcPath, 'utf-8');
+        if (wz) {
+          const rel = path.join(DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki', relPath);
+          wz.writeFile(wz.data(rel), content);
+        } else {
+          fs.writeFileSync(destPath, content);
+        }
+        // 删除项目内的源文件
+        fs.unlinkSync(srcPath);
+        migratedCount++;
+      }
+    }
+    // 清理项目内的空 wiki 目录
+    _cleanEmptyDirs(projectWikiDir);
+    logger.info(
+      `[wiki-finalize] Ghost mode: migrated ${migratedCount} files from project to dataRoot`
+    );
+  }
 
   // ── 1. 验证文件存在性 ──
   const missingFiles: string[] = [];
@@ -501,6 +556,7 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
         thinFiles,
         passed: missingFiles.length === 0,
       },
+      ...(isGhost ? { ghost: true, migratedCount } : {}),
       syncedDocs,
       meta,
     },
@@ -525,6 +581,30 @@ function _ensureDir(dir: string, wz?: WriteZone, dataRoot?: string) {
     wz.ensureDir(wz.data(rel));
   } else if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+/** 确保目录存在（直接文件系统操作，用于 projectRoot 内的目录） */
+function _ensureDirRaw(dir: string) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+/** 递归清理空目录（从叶子到根） */
+function _cleanEmptyDirs(dir: string) {
+  if (!fs.existsSync(dir)) {
+    return;
+  }
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      _cleanEmptyDirs(path.join(dir, entry.name));
+    }
+  }
+  // 如果目录已空（或只剩 meta.json），尝试删除
+  const remaining = fs.readdirSync(dir);
+  if (remaining.length === 0) {
+    fs.rmdirSync(dir);
   }
 }
 

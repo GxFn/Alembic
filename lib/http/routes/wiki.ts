@@ -296,8 +296,10 @@ router.get('/status', async (req: Request, res: Response): Promise<void> => {
 /* ═══ GET /api/v1/wiki/files ═══════════════════════ */
 
 router.get('/files', async (req: Request, res: Response): Promise<void> => {
+  const container = getServiceContainer();
   const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
-  const wikiDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
+  const dataRoot = resolveDataRoot(container as any) || projectRoot;
+  const wikiDir = path.join(dataRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
 
   if (!fs.existsSync(wikiDir)) {
     return void res.json({
@@ -335,8 +337,10 @@ router.get('/files', async (req: Request, res: Response): Promise<void> => {
 /* ═══ GET /api/v1/wiki/file/:path(*) ═══════════════ */
 
 router.get('/file/{*path}', async (req: Request, res: Response): Promise<void> => {
+  const container = getServiceContainer();
   const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
-  const wikiDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
+  const dataRoot = resolveDataRoot(container as any) || projectRoot;
+  const wikiDir = path.join(dataRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
   const rawPath = req.params.path;
   const requestedPath = Array.isArray(rawPath) ? rawPath.join('/') : String(rawPath ?? '');
 

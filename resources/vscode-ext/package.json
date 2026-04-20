@@ -100,6 +100,11 @@
           "type": "boolean",
           "default": false,
           "description": "Enable remote command polling (飞书/Lark Bot → IDE bridge). When enabled, the extension polls for remote commands and injects them into Copilot Chat."
+        },
+        "alembic.enableReactivePopup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable reactive evolution popups when file changes impact Recipes. Disable to suppress all evolution review notifications."
         }
       }
     },

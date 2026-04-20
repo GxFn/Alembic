@@ -281,7 +281,8 @@ export class SourceRefReconciler {
   }
 
   /**
-   * 将 renamed 条目的 new_path 写回 Recipe .md 文件的 _reasoning.sources。
+   * 将 renamed 条目的 new_path 写回 Recipe .md 文件和 DB。
+   * 同时更新 _reasoning.sources 和 _content.markdown 中的路径引用。
    * 完成后 status → active。
    */
   async applyRepairs(): Promise<ApplyReport> {
@@ -319,8 +320,8 @@ export class SourceRefReconciler {
           continue;
         }
 
-        // 读取并修改 .md 文件中的 reasoning.sources
-        const _content = fs.readFileSync(mdPath, 'utf8');
+        // 读取 .md 文件
+        let mdContent = fs.readFileSync(mdPath, 'utf8');
         let reasoning: Record<string, unknown>;
         try {
           reasoning = JSON.parse(entry.reasoning);
@@ -338,21 +339,58 @@ export class SourceRefReconciler {
             sources[idx] = rename.newPath;
             modified = true;
           }
+          // 替换 .md 文件中所有旧路径引用（_reasoning、_content、正文）
+          mdContent = mdContent.replaceAll(rename.sourcePath, rename.newPath);
         }
 
         if (modified) {
           reasoning.sources = sources;
-
-          // 更新 .md 文件中的 reasoning frontmatter
-          // 查找 YAML frontmatter 中的 reasoning 并替换
           const updatedReasoning = JSON.stringify(reasoning);
+
+          // 写回 .md 文件
+          fs.writeFileSync(mdPath, mdContent, 'utf8');
+
           // 更新 DB reasoning 列
           await this.#knowledgeRepo.updateReasoning(recipeId, updatedReasoning, now);
+
+          // 更新 DB content.markdown 和 coreCode 中的路径引用
+          const fullEntry = await this.#knowledgeRepo.findById(recipeId);
+          if (fullEntry) {
+            const updates: Record<string, unknown> = {};
+            const content = fullEntry.content;
+            let updatedMarkdown = content?.markdown ?? '';
+            let updatedCoreCode = fullEntry.coreCode ?? '';
+            let contentModified = false;
+
+            for (const rename of renames) {
+              if (updatedMarkdown.includes(rename.sourcePath)) {
+                updatedMarkdown = updatedMarkdown.replaceAll(rename.sourcePath, rename.newPath);
+                contentModified = true;
+              }
+              if (updatedCoreCode.includes(rename.sourcePath)) {
+                updatedCoreCode = updatedCoreCode.replaceAll(rename.sourcePath, rename.newPath);
+                updates.coreCode = updatedCoreCode;
+              }
+            }
+            if (contentModified && content) {
+              const contentJson = content.toJSON();
+              contentJson.markdown = updatedMarkdown;
+              updates.content = contentJson;
+            }
+            if (Object.keys(updates).length > 0) {
+              await this.#knowledgeRepo.update(recipeId, updates);
+            }
+          }
 
           // 更新 recipe_source_refs 状态
           for (const rename of renames) {
             this.#sourceRefRepo.replaceSourcePath(recipeId, rename.sourcePath, rename.newPath, now);
           }
+
+          this.#logger.info('SourceRefReconciler: repaired recipe file', {
+            recipeId,
+            renames: renames.map((r) => `${r.sourcePath} → ${r.newPath}`),
+          });
 
           report.applied += renames.length;
         } else {

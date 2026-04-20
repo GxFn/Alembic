@@ -11,9 +11,11 @@ export interface PatchChange {
   /** 目标字段路径（如 'content.markdown', 'coreCode', 'doClause'） */
   field: string;
   /** 操作类型 */
-  action: 'replace' | 'replace-section' | 'append';
-  /** 新值（replace / append 时必填） */
+  action: 'replace' | 'replace-item' | 'replace-section' | 'append';
+  /** 新值（replace / replace-item / append 时必填） */
   newValue?: string;
+  /** 旧值（replace-item 时必填，用于数组内单元素定位替换） */
+  oldValue?: string;
   /** 目标 section 标题（replace-section 时必填） */
   section?: string;
   /** 新 section 内容（replace-section 时必填） */

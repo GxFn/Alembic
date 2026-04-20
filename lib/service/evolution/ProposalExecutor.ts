@@ -146,9 +146,15 @@ export class ProposalExecutor {
 
   /**
    * 信号触发的单个 Proposal 评估
+   *
+   * §9.1 增强：source_modified + direct 信号对 deprecate 提案视为恢复证据。
    */
   async #evaluateOnSignal(proposal: ProposalRecord, signal: Signal): Promise<void> {
     const metrics = await this.#collectRecipeMetrics(proposal.targetRecipeId);
+
+    // §9.1: source_modified + direct → 源文件仍在被积极编辑
+    const isDirectModification =
+      signal.metadata?.reason === 'source_modified' && signal.metadata?.impactLevel === 'direct';
 
     switch (proposal.type) {
       case 'update': {
@@ -166,6 +172,18 @@ export class ProposalExecutor {
         break;
       }
       case 'deprecate': {
+        // §9.1: 源文件被直接修改 → Recipe 仍在被使用，拒绝废弃
+        if (isDirectModification) {
+          this.#repo.markRejected(
+            proposal.id,
+            `Source file directly modified (${signal.metadata?.modifiedPath ?? 'unknown'}), recipe likely still relevant`
+          );
+          this.#logger.info(
+            `[ProposalExecutor] Deprecate rejected — source directly modified: ${proposal.id} (path=${signal.metadata?.modifiedPath})`
+          );
+          break;
+        }
+
         const snapshot = this.#extractSnapshot(proposal);
         const verdict = EvolutionPolicy.evaluateDeprecate(
           metrics.decayScore,

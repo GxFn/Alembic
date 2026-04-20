@@ -47,6 +47,13 @@ let codeLensProvider: DirectiveCodeLensProvider;
 const lastPopupTime = new Map<string, number>();
 const POPUP_THROTTLE_MS = 10 * 60 * 1000;
 
+/** 全局弹窗冷却：任意两次弹窗之间至少 2 分钟 */
+let lastGlobalPopupTime = 0;
+const GLOBAL_POPUP_COOLDOWN_MS = 2 * 60 * 1000;
+
+/** Session 级静默：用户点击"不再提醒"后本次 session 内不再弹窗 */
+let popupMutedForSession = false;
+
 /**
  * 构造交给 IDE Copilot Chat 的进化 prompt（文档 §5.4.4）
  */
@@ -77,6 +84,12 @@ function buildEvolvePrompt(report: FileChangeReport): string {
  *   C4 按钮: 'Review'（外部 Agent 走 MCP）/ 'Auto Check'（内部 Agent 走 CLI）
  */
 function handleReactiveReport(report: FileChangeReport): void {
+  // G0: 用户通过设置或 session 内按钮关闭了弹窗
+  if (popupMutedForSession) { return; }
+  const popupEnabled = vscode.workspace.getConfiguration('alembic').get<boolean>('enableReactivePopup', true);
+  if (!popupEnabled) { return; }
+
+  // C1: 仅 ide-edit 来源允许弹窗
   if (report.eventSource !== 'ide-edit') { return; }
   if (!report.suggestReview) { return; }
 
@@ -85,8 +98,12 @@ function handleReactiveReport(report: FileChangeReport): void {
   );
   if (directDetails.length === 0) { return; }
 
-  // 节流：过滤掉 10 分钟内已弹过窗的 Recipe
   const now = Date.now();
+
+  // G1: 全局冷却 — 任意两次弹窗之间至少 2 分钟
+  if (now - lastGlobalPopupTime < GLOBAL_POPUP_COOLDOWN_MS) { return; }
+
+  // C3: per-Recipe 10 分钟节流
   const activeDetails = directDetails.filter(d => {
     const last = lastPopupTime.get(d.recipeId) ?? 0;
     return now - last > POPUP_THROTTLE_MS;
@@ -94,6 +111,7 @@ function handleReactiveReport(report: FileChangeReport): void {
   if (activeDetails.length === 0) { return; }
 
   // 更新节流记录
+  lastGlobalPopupTime = now;
   for (const d of activeDetails) {
     lastPopupTime.set(d.recipeId, now);
   }
@@ -107,6 +125,7 @@ function handleReactiveReport(report: FileChangeReport): void {
     msg,
     'Review',
     'Auto Check',
+    "Don't Show Again",
   ).then((choice) => {
     if (choice === 'Review') {
       void vscode.commands.executeCommand('workbench.action.chat.open', {
@@ -116,6 +135,11 @@ function handleReactiveReport(report: FileChangeReport): void {
       const terminal = vscode.window.createTerminal('Alembic Evolve');
       terminal.sendText(`asd evolve-check --recipes ${recipeIds.join(',')}`);
       terminal.show();
+    } else if (choice === "Don't Show Again") {
+      popupMutedForSession = true;
+      void vscode.window.showInformationMessage(
+        'Alembic: 已关闭本次 session 的进化弹窗。如需永久关闭，请在设置中禁用 alembic.enableReactivePopup。'
+      );
     }
   });
 }

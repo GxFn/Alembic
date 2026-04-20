@@ -15,6 +15,8 @@
  * @module service/evolution/FileChangeHandler
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
@@ -44,19 +46,21 @@ export class FileChangeHandler implements FileChangeSubscriber {
   readonly #contentPatcher: ContentPatcher;
   readonly #signalBus: SignalBus | null;
   readonly #gateway: EvolutionGateway;
+  readonly #dataRoot: string;
   readonly #logger = Logger.getInstance();
 
   constructor(
     sourceRefRepo: RecipeSourceRefRepositoryImpl,
     knowledgeRepo: KnowledgeRepositoryImpl,
     contentPatcher: ContentPatcher,
-    options: { signalBus?: SignalBus; evolutionGateway: EvolutionGateway }
+    options: { signalBus?: SignalBus; evolutionGateway: EvolutionGateway; dataRoot?: string }
   ) {
     this.#sourceRefRepo = sourceRefRepo;
     this.#knowledgeRepo = knowledgeRepo;
     this.#contentPatcher = contentPatcher;
     this.#signalBus = options.signalBus ?? null;
     this.#gateway = options.evolutionGateway;
+    this.#dataRoot = options.dataRoot ?? process.cwd();
   }
 
   /**
@@ -175,7 +179,8 @@ export class FileChangeHandler implements FileChangeSubscriber {
                   changes: [
                     {
                       field: 'sourceRefs',
-                      action: 'replace',
+                      action: 'replace-item',
+                      oldValue: oldPath,
                       newValue: newPath,
                     },
                   ],
@@ -190,8 +195,8 @@ export class FileChangeHandler implements FileChangeSubscriber {
         // 更新 recipe_source_refs 桥接表
         this.#sourceRefRepo.replaceSourcePath(ref.recipeId, oldPath, newPath, Date.now());
 
-        // 同步更新 reasoning.sources
-        await this.#updateReasoningSources(ref.recipeId, oldPath, newPath);
+        // 全量替换 DB 文本字段 + .md 文件中的路径引用
+        await this.#updateAllTextReferences(ref.recipeId, oldPath, newPath);
 
         const title = await this.#getRecipeTitle(ref.recipeId);
         report.fixed++;
@@ -270,6 +275,7 @@ export class FileChangeHandler implements FileChangeSubscriber {
               recipeTitle: title,
               action: 'deprecate',
               reason,
+              impactLevel: 'direct',
             });
           } else {
             this.#logger.warn('[FileChangeHandler] Gateway deprecation failed', {
@@ -465,25 +471,78 @@ export class FileChangeHandler implements FileChangeSubscriber {
 
   /* ═══════════════════ Helpers ═══════════════════ */
 
-  /** 更新 Recipe 的 reasoning.sources（替换旧路径为新路径） */
-  async #updateReasoningSources(recipeId: string, oldPath: string, newPath: string): Promise<void> {
+  /**
+   * 全量替换 Recipe 中所有文本引用（reasoning.sources、content.markdown、coreCode）+ .md 文件
+   */
+  async #updateAllTextReferences(
+    recipeId: string,
+    oldPath: string,
+    newPath: string
+  ): Promise<void> {
     try {
-      const entry = await this.#knowledgeRepo.findSourceFileAndReasoning(recipeId);
-      if (!entry?.reasoning) {
+      const entry = await this.#knowledgeRepo.findById(recipeId);
+      if (!entry) {
         return;
       }
 
-      const reasoning = JSON.parse(entry.reasoning) as Record<string, unknown>;
-      const sources = Array.isArray(reasoning.sources) ? [...(reasoning.sources as string[])] : [];
+      const updates: Record<string, unknown> = {};
+      const updatedFields: string[] = [];
 
-      const idx = sources.indexOf(oldPath);
-      if (idx >= 0) {
-        sources[idx] = newPath;
-        reasoning.sources = sources;
-        await this.#knowledgeRepo.updateReasoning(recipeId, JSON.stringify(reasoning), Date.now());
+      // 1. reasoning.sources 数组替换
+      const reasoning = entry.reasoning;
+      if (reasoning) {
+        const sources = [...reasoning.sources];
+        const srcIdx = sources.indexOf(oldPath);
+        if (srcIdx >= 0) {
+          sources[srcIdx] = newPath;
+          updates.reasoning = { ...reasoning.toJSON(), sources };
+          updatedFields.push('reasoning.sources');
+        }
+      }
+
+      // 2. content.markdown 全文替换
+      const content = entry.content;
+      if (content && content.markdown.includes(oldPath)) {
+        const contentJson = content.toJSON();
+        contentJson.markdown = content.markdown.replaceAll(oldPath, newPath);
+        updates.content = contentJson;
+        updatedFields.push('content.markdown');
+      }
+
+      // 3. coreCode 全文替换
+      if (entry.coreCode && entry.coreCode.includes(oldPath)) {
+        updates.coreCode = entry.coreCode.replaceAll(oldPath, newPath);
+        updatedFields.push('coreCode');
+      }
+
+      // 写回 DB
+      if (updatedFields.length > 0) {
+        await this.#knowledgeRepo.update(recipeId, updates);
+        this.#logger.info('[FileChangeHandler] Updated recipe text references in DB', {
+          recipeId,
+          fields: updatedFields,
+          rename: `${oldPath} → ${newPath}`,
+        });
+      }
+
+      // 4. 同步更新 .md 文件：替换所有旧路径引用
+      if (entry.sourceFile) {
+        const mdPath = path.resolve(this.#dataRoot, entry.sourceFile);
+        if (fs.existsSync(mdPath)) {
+          const mdContent = fs.readFileSync(mdPath, 'utf8');
+          const mdUpdated = mdContent.replaceAll(oldPath, newPath);
+          if (mdUpdated !== mdContent) {
+            fs.writeFileSync(mdPath, mdUpdated, 'utf8');
+            this.#logger.info('[FileChangeHandler] Updated recipe .md file', {
+              recipeId,
+              mdPath: entry.sourceFile,
+              rename: `${oldPath} → ${newPath}`,
+            });
+          }
+        }
       }
     } catch {
-      // reasoning 更新失败不阻塞主流程
+      // 文本引用更新失败不阻塞主流程
     }
   }
 

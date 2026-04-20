@@ -310,6 +310,23 @@ export class ContentPatcher {
       }
       return false;
     }
+
+    // replace-item: 数组内单元素替换（rename 场景）
+    if (
+      change.action === 'replace-item' &&
+      change.oldValue !== undefined &&
+      change.newValue !== undefined
+    ) {
+      const arr = safeJsonParse<string[]>(recipe[field], []);
+      const idx = arr.indexOf(change.oldValue);
+      if (idx >= 0) {
+        arr[idx] = change.newValue;
+        recipe[field] = JSON.stringify(arr);
+        return true;
+      }
+      return false;
+    }
+
     return false;
   }
 

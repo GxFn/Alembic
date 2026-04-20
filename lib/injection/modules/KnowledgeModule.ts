@@ -329,12 +329,14 @@ export function register(c: ServiceContainer) {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
     const contentPatcher = ct.get('contentPatcher') as ContentPatcher;
     const gateway = ct.get('evolutionGateway') as EvolutionGateway;
+    const dataRoot = resolveDataRoot(ct) as string;
     return new FileChangeHandler(sourceRefRepo, knowledgeRepo, contentPatcher, {
       signalBus:
         (ct.singletons.signalBus as
           | import('../../infrastructure/signal/SignalBus.js').SignalBus
           | undefined) || undefined,
       evolutionGateway: gateway,
+      dataRoot,
     });
   });
 

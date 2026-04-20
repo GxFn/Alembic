@@ -1,17 +1,18 @@
 /**
  * FileChangeCollector — 统一文件变更采集器
  *
- * 5 个信号源 → EventBuffer → HTTP POST /api/v1/file-changes
+ * 6 个信号源 → EventBuffer → HTTP POST /api/v1/file-changes
  *
  * 完全与业务逻辑解耦：不知道 Recipe / Evolution 的存在。
  * 只负责"发生了什么文件变更"，批量推送给服务端。
  *
  * 信号源：
- *   1. onDidRenameFiles  — IDE 内重命名（实时）
- *   2. onDidDeleteFiles  — IDE 内删除（实时）
- *   3. onDidCreateFiles  — IDE 内创建（实时）
- *   4. Git HEAD Diff     — commit/pull/switch（HEAD 变化后 2s）
- *   5. Working Tree Diff — 窗口聚焦 / 5min 定时（覆盖未 commit 的 AI/人工编辑）
+ *   1.  onDidRenameFiles        — IDE 内重命名（实时）
+ *   1b. onDidSaveTextDocument   — IDE 内保存（实时 modified）
+ *   2.  onDidDeleteFiles        — IDE 内删除（实时）
+ *   3.  onDidCreateFiles        — IDE 内创建（实时）
+ *   4.  Git HEAD Diff           — commit/pull/switch（HEAD 变化后 2s）
+ *   5.  Working Tree Diff       — 窗口聚焦 / 5min 定时（覆盖未 commit 的 AI/人工编辑）
  */
 
 import * as vscode from 'vscode';
@@ -19,7 +20,7 @@ import * as cp from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { ApiClient, FileChangeReport } from './apiClient';
-import { hasAnyProject } from './projectScope';
+import { hasAnyProject, isDocumentInScope } from './projectScope';
 
 /* ═══════════════════ Event Model ═══════════════════ */
 
@@ -47,6 +48,10 @@ class EventBuffer {
   private readonly apiClient: ApiClient;
   private readonly onReport: FileChangeReportListener | undefined;
 
+  /** 同一文件的 modified 冷却期 — 避免 auto-save 场景下每 3s 一次 POST */
+  private lastModifiedFlush = new Map<string, number>();
+  private static readonly MODIFIED_COOLDOWN_MS = 30_000;
+
   constructor(apiClient: ApiClient, onReport?: FileChangeReportListener) {
     this.apiClient = apiClient;
     this.onReport = onReport;
@@ -55,24 +60,41 @@ class EventBuffer {
   push(event: FileChangeEvent): void {
     const pathKey = event.type === 'renamed' ? (event.oldPath ?? event.path) : event.path;
 
-    // 合并规则
-    const existing = this.pending.get(pathKey);
-    if (existing) {
-      // created + deleted → 抵消
-      if (existing.type === 'created' && event.type === 'deleted') {
-        this.pending.delete(pathKey);
+    // ── per-path 冷却：同一文件 30s 内只报告一次 modified ──
+    if (event.type === 'modified') {
+      const now = Date.now();
+      const lastTime = this.lastModifiedFlush.get(pathKey);
+      if (lastTime && now - lastTime < EventBuffer.MODIFIED_COOLDOWN_MS) {
         return;
       }
-      // created + modified → 保留 created
-      if (existing.type === 'created' && event.type === 'modified') {
+      this.lastModifiedFlush.set(pathKey, now);
+    }
+
+    // ── 跨类型合并规则（key 前缀不同，需显式查找） ──
+    const createdKey = `created:${pathKey}`;
+    const existingCreated = this.pending.get(createdKey);
+    if (existingCreated) {
+      // created + deleted → 抵消（同一 flush 周期内创建再删除 = 无事发生）
+      if (event.type === 'deleted') {
+        this.pending.delete(createdKey);
+        return;
+      }
+      // created + modified → 保留 created（创建后立刻修改仍算 created）
+      if (event.type === 'modified') {
         return;
       }
     }
 
-    // renamed 用 oldPath 作 key，防止和后续 modified 冲突
+    // ── 同类型 eventSource 优先级：ide-edit > git-worktree/git-head ──
+    // 防止 3s 窗口内 git 扫描覆盖更有价值的 ide-edit 事件
     const key = event.type === 'renamed'
       ? `renamed:${event.oldPath}:${event.path}`
       : `${event.type}:${pathKey}`;
+
+    const existingSameType = this.pending.get(key);
+    if (existingSameType && existingSameType.eventSource === 'ide-edit' && event.eventSource !== 'ide-edit') {
+      return; // 保留 ide-edit，丢弃 git 来源的同路径同类型事件
+    }
 
     this.pending.set(key, event);
     this.scheduleFlush();
@@ -209,8 +231,20 @@ export class FileChangeCollector implements vscode.Disposable {
       }
     });
 
-    context.subscriptions.push(renameDisposable, deleteDisposable, createDisposable);
-    this.disposables.push(renameDisposable, deleteDisposable, createDisposable);
+    // Signal 1b: Save (modified) — 设计文档 §5.4.5
+    // IDE 内保存文件 → 'modified' + 'ide-edit'，是 popup 弹窗链路的入口
+    const saveDisposable = vscode.workspace.onDidSaveTextDocument((document) => {
+      if (document.uri.scheme !== 'file') { return; }
+      if (!isDocumentInScope(document)) { return; }
+      this.buffer.push({
+        type: 'modified',
+        path: vscode.workspace.asRelativePath(document.uri),
+        eventSource: 'ide-edit',
+      });
+    });
+
+    context.subscriptions.push(renameDisposable, deleteDisposable, createDisposable, saveDisposable);
+    this.disposables.push(renameDisposable, deleteDisposable, createDisposable, saveDisposable);
   }
 
   /* ═══ Signal 4: Git HEAD Diff ═══ */
