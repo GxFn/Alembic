@@ -140,7 +140,7 @@ function configureVSCodeSettings() {
     if (!config.servers) {
       config.servers = {};
     }
-    config.servers.asd = mcpServerConfig;
+    config.servers.alembic = mcpServerConfig;
 
     if (writeJsonFile(mcpConfigPath, config)) {
       log(`✅ 工作区 MCP 配置完成: ${mcpConfigPath}`, 'green');
@@ -226,7 +226,7 @@ function verifyConfiguration() {
     const mcpConfigPath = path.join(projectPath, '.vscode/mcp.json');
     if (fs.existsSync(mcpConfigPath)) {
       const config = readJsonFile(mcpConfigPath, {});
-      if (config.servers?.asd) {
+      if (config.servers?.alembic) {
         log(`✅ VSCode 工作区 MCP 配置验证成功 (.vscode/mcp.json)`, 'green');
       } else {
         log(`⚠️  .vscode/mcp.json 中未找到 alembic 服务器`, 'yellow');

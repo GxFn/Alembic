@@ -127,7 +127,7 @@ export function injectAutoApprove(projectRoot: string, logger?: AutoApproveLogge
     return false;
   }
 
-  const serverConfig = config?.mcpServers?.asd;
+  const serverConfig = config?.mcpServers?.alembic;
   if (!serverConfig) {
     return false;
   }

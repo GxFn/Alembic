@@ -81,7 +81,7 @@ function configureVSCode() {
     config.servers = {};
   }
 
-  config.servers.asd = {
+  config.servers.alembic = {
     type: 'stdio',
     command: 'alembic-mcp',
     env: {

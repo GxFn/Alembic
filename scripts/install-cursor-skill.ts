@@ -361,7 +361,7 @@ if (addMcp && fs.existsSync(mcpServerScript)) {
     } catch (_: any) {}
   }
   // @ts-expect-error TS migration: TS2339
-  mcp.mcpServers.asd = {
+  mcp.mcpServers.alembic = {
     type: 'stdio',
     command: 'node',
     args: [mcpServerScript],

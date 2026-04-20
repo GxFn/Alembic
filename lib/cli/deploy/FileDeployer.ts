@@ -314,7 +314,7 @@ export class FileDeployer {
     const ide = entry.id === 'vscode-mcp' ? 'vscode' : 'cursor';
     // 只有 VSCode 全局配置不支持 ${workspaceFolder}，需要绝对路径
     const useAbsPath = this.ghost && entry.ghostPolicy === 'global' && entry.id === 'vscode-mcp';
-    config[parentKey].asd = buildMcpServerEntry(this.projectRoot, ide, useAbsPath);
+    config[parentKey].alembic = buildMcpServerEntry(this.projectRoot, ide, useAbsPath);
 
     writeFileSync(dest, JSON.stringify(config, null, 2));
     return true;
