@@ -13,15 +13,15 @@ Alembic 支持多种 IDE 的深度集成。核心协议是 MCP（Model Context P
 | **Trae** | MCP Server | MCP 配置 |
 | **Qoder** | MCP Server | MCP 配置 |
 | **Claude Code** | MCP Server | MCP 配置 |
-| **Xcode** | File Watcher + Snippet Sync | `asd watch` |
+| **Xcode** | File Watcher + Snippet Sync | `alembic watch` |
 
 ---
 
 ## 一键安装
 
 ```bash
-asd setup          # 自动检测已安装的 IDE，配置 MCP
-asd upgrade        # 更新到最新版本的 IDE 配置
+alembic setup          # 自动检测已安装的 IDE，配置 MCP
+alembic upgrade        # 更新到最新版本的 IDE 配置
 ```
 
 `SetupService` 自动探测 IDE 安装路径：
@@ -35,7 +35,7 @@ asd upgrade        # 更新到最新版本的 IDE 配置
 
 ### MCP 配置
 
-`asd setup` 自动生成 `.cursor/mcp.json`：
+`alembic setup` 自动生成 `.cursor/mcp.json`：
 
 ```json
 {
@@ -44,7 +44,7 @@ asd upgrade        # 更新到最新版本的 IDE 配置
       "command": "node",
       "args": ["/usr/local/lib/node_modules/alembic/bin/mcp-server.js"],
       "env": {
-        "ASD_PROJECT_ROOT": "/path/to/your-project"
+        "ALEMBIC_PROJECT_ROOT": "/path/to/your-project"
       }
     }
   }
@@ -53,7 +53,7 @@ asd upgrade        # 更新到最新版本的 IDE 配置
 
 ### Cursor Rules
 
-`asd cursor-rules` 生成 4 通道交付物料：
+`alembic cursor-rules` 生成 4 通道交付物料：
 
 1. **Rules 文件** — `.cursor/rules/` 下的规则文件，包含 Recipe 摘要
 2. **Agent Skills** — 项目级 Skill 定义，指导 AI 行为
@@ -85,7 +85,7 @@ skills/
 
 ### MCP 配置
 
-`asd setup` 自动生成 `.vscode/mcp.json`：
+`alembic setup` 自动生成 `.vscode/mcp.json`：
 
 ```json
 {
@@ -94,7 +94,7 @@ skills/
       "command": "node",
       "args": ["/usr/local/lib/node_modules/alembic/bin/mcp-server.js"],
       "env": {
-        "ASD_PROJECT_ROOT": "/path/to/your-project"
+        "ALEMBIC_PROJECT_ROOT": "/path/to/your-project"
       }
     }
   }
@@ -103,7 +103,7 @@ skills/
 
 ### Copilot Instructions
 
-`asd setup` 和 `asd upgrade` 自动生成 `.github/copilot-instructions.md`，内容包括：
+`alembic setup` 和 `alembic upgrade` 自动生成 `.github/copilot-instructions.md`，内容包括：
 
 - 项目概览
 - 知识库结构说明
@@ -140,7 +140,7 @@ npm run install:vscode-copilot     # 生成 Copilot Instructions
 ### File Watcher
 
 ```bash
-asd watch -d /path/to/ios-project --ext swift,m,h
+alembic watch -d /path/to/ios-project --ext swift,m,h
 ```
 
 监控 Swift / ObjC 文件变更，自动：
@@ -173,7 +173,7 @@ macOS: ~/Library/Developer/Xcode/UserData/CodeSnippets/
 
 ## 文件指令
 
-在任何源文件中写入指令，IDE 扩展或 `asd watch` 自动处理：
+在任何源文件中写入指令，IDE 扩展或 `alembic watch` 自动处理：
 
 ### as:s — 搜索并插入
 
@@ -220,11 +220,11 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node bin/mcp-server.js
 
 | 问题 | 解决方案 |
 |------|---------|
-| MCP 服务器启动失败 | 检查 Node.js ≥ 22，运行 `asd status` |
-| 找不到 mcp-server.js | 运行 `npm install -g alembic` 重新安装 |
+| MCP 服务器启动失败 | 检查 Node.js ≥ 22，运行 `alembic status` |
+| 找不到 mcp-server.js | 运行 `npm install -g alembic-ai` 重新安装 |
 | 权限错误 | 检查 `.env` 中的 API Key 配置 |
 | IDE 未检测到工具 | 重启 IDE，检查 MCP 配置文件路径 |
-| 知识库为空 | 运行 `asd coldstart` 生成初始知识 |
+| 知识库为空 | 运行 `alembic coldstart` 生成初始知识 |
 
 ---
 
@@ -251,11 +251,11 @@ npm run install:full
 npm update -g alembic
 
 # 更新 IDE 配置
-asd upgrade
+alembic upgrade
 
 # 仅更新 Skills
-asd upgrade --skills-only
+alembic upgrade --skills-only
 
 # 仅更新 MCP 配置
-asd upgrade --mcp-only
+alembic upgrade --mcp-only
 ```

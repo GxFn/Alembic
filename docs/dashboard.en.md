@@ -1,6 +1,6 @@
 # Dashboard
 
-> Alembic's visual management interface. Start with `asd ui`.
+> Alembic's visual management interface. Start with `alembic ui`.
 >
 > [中文](dashboard.md)
 

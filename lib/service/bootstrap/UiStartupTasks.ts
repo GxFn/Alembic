@@ -1,5 +1,5 @@
 /**
- * UiStartupTasks — asd ui 启动后异步后台刷新任务
+ * UiStartupTasks — alembic ui 启动后异步后台刷新任务
  *
  * 在 Dashboard 启动后异步执行，不阻塞 UI:
  *   1. syncAll:               .md → DB 全量同步 + sourceRefs 对账

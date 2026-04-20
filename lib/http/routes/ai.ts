@@ -88,10 +88,10 @@ router.post('/lang', validate(AiLangBody), async (req: Request, res: Response): 
 router.get('/providers', async (req: Request, res: Response): Promise<void> => {
   // API Key 环境变量映射（与 AiFactory.autoDetectProvider 保持一致）
   const KEY_ENVS = {
-    google: 'ASD_GOOGLE_API_KEY',
-    openai: 'ASD_OPENAI_API_KEY',
-    deepseek: 'ASD_DEEPSEEK_API_KEY',
-    claude: 'ASD_CLAUDE_API_KEY',
+    google: 'ALEMBIC_GOOGLE_API_KEY',
+    openai: 'ALEMBIC_OPENAI_API_KEY',
+    deepseek: 'ALEMBIC_DEEPSEEK_API_KEY',
+    claude: 'ALEMBIC_CLAUDE_API_KEY',
   };
 
   const providers = [
@@ -552,24 +552,24 @@ function _getProjectEnvPath() {
   const container = getServiceContainer();
   const projectRoot =
     (container.singletons?._projectRoot as string | undefined) ||
-    process.env.ASD_PROJECT_DIR ||
+    process.env.ALEMBIC_PROJECT_DIR ||
     process.cwd();
   return join(projectRoot, '.env');
 }
 
 /** LLM 相关的 env 变量名 → 标签映射 */
 const LLM_ENV_KEYS = [
-  'ASD_AI_PROVIDER',
-  'ASD_AI_MODEL',
-  'ASD_GOOGLE_API_KEY',
-  'ASD_OPENAI_API_KEY',
-  'ASD_CLAUDE_API_KEY',
-  'ASD_DEEPSEEK_API_KEY',
-  'ASD_AI_PROXY',
-  'ASD_EMBED_PROVIDER',
-  'ASD_EMBED_MODEL',
-  'ASD_EMBED_BASE_URL',
-  'ASD_EMBED_API_KEY',
+  'ALEMBIC_AI_PROVIDER',
+  'ALEMBIC_AI_MODEL',
+  'ALEMBIC_GOOGLE_API_KEY',
+  'ALEMBIC_OPENAI_API_KEY',
+  'ALEMBIC_CLAUDE_API_KEY',
+  'ALEMBIC_DEEPSEEK_API_KEY',
+  'ALEMBIC_AI_PROXY',
+  'ALEMBIC_EMBED_PROVIDER',
+  'ALEMBIC_EMBED_MODEL',
+  'ALEMBIC_EMBED_BASE_URL',
+  'ALEMBIC_EMBED_API_KEY',
 ];
 
 /**
@@ -606,12 +606,12 @@ function parseLlmEnv(envPath: string) {
   }
 
   // 判断 LLM 是否可用：有 provider + 对应的 API Key
-  const provider = vars.ASD_AI_PROVIDER || '';
+  const provider = vars.ALEMBIC_AI_PROVIDER || '';
   const keyMap = {
-    google: 'ASD_GOOGLE_API_KEY',
-    openai: 'ASD_OPENAI_API_KEY',
-    claude: 'ASD_CLAUDE_API_KEY',
-    deepseek: 'ASD_DEEPSEEK_API_KEY',
+    google: 'ALEMBIC_GOOGLE_API_KEY',
+    openai: 'ALEMBIC_OPENAI_API_KEY',
+    claude: 'ALEMBIC_CLAUDE_API_KEY',
+    deepseek: 'ALEMBIC_DEEPSEEK_API_KEY',
     ollama: '', // ollama 不需要 key
     mock: '', // mock 不需要 key
   };
@@ -649,21 +649,21 @@ router.post(
 
     // 构建 key-value 更新列表
     const updates: Record<string, string> = {
-      ASD_AI_PROVIDER: provider,
+      ALEMBIC_AI_PROVIDER: provider,
     };
     if (model) {
-      updates.ASD_AI_MODEL = model;
+      updates.ALEMBIC_AI_MODEL = model;
     }
     if (proxy) {
-      updates.ASD_AI_PROXY = proxy;
+      updates.ALEMBIC_AI_PROXY = proxy;
     }
 
     // 根据 provider 决定写入哪个 API Key 变量
     const providerKeyMap = {
-      google: 'ASD_GOOGLE_API_KEY',
-      openai: 'ASD_OPENAI_API_KEY',
-      claude: 'ASD_CLAUDE_API_KEY',
-      deepseek: 'ASD_DEEPSEEK_API_KEY',
+      google: 'ALEMBIC_GOOGLE_API_KEY',
+      openai: 'ALEMBIC_OPENAI_API_KEY',
+      claude: 'ALEMBIC_CLAUDE_API_KEY',
+      deepseek: 'ALEMBIC_DEEPSEEK_API_KEY',
     };
     const keyName = (providerKeyMap as Record<string, string>)[provider];
     if (keyName && apiKey) {
@@ -672,15 +672,15 @@ router.post(
 
     // Embedding 独立配置
     if (embedProvider) {
-      updates.ASD_EMBED_PROVIDER = embedProvider;
+      updates.ALEMBIC_EMBED_PROVIDER = embedProvider;
       if (embedModel) {
-        updates.ASD_EMBED_MODEL = embedModel;
+        updates.ALEMBIC_EMBED_MODEL = embedModel;
       }
       if (embedBaseUrl) {
-        updates.ASD_EMBED_BASE_URL = embedBaseUrl;
+        updates.ALEMBIC_EMBED_BASE_URL = embedBaseUrl;
       }
       if (embedApiKey) {
-        updates.ASD_EMBED_API_KEY = embedApiKey;
+        updates.ALEMBIC_EMBED_API_KEY = embedApiKey;
       }
     }
 

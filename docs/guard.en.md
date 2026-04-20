@@ -27,18 +27,18 @@ Core components of the Guard system:
 
 ```bash
 # Check a single file
-asd guard src/utils/helper.ts
+alembic guard src/utils/helper.ts
 
 # Check entire project (CI mode)
-asd guard:ci --report markdown --output guard-report.md
+alembic guard:ci --report markdown --output guard-report.md
 
 # Check git staged files (pre-commit)
-asd guard:staged
+alembic guard:staged
 ```
 
 ### File Directives
 
-Add a directive in source code, automatically triggered by VS Code extension or `asd watch`:
+Add a directive in source code, automatically triggered by VS Code extension or `alembic watch`:
 
 ```javascript
 // as:a  ← Run Guard audit on current file
@@ -46,11 +46,11 @@ Add a directive in source code, automatically triggered by VS Code extension or 
 
 ### MCP Tool
 
-AI assistants call via the `asd_guard` tool:
+AI assistants call via the `alembic_guard` tool:
 
 ```json
 {
-  "tool": "asd_guard",
+  "tool": "alembic_guard",
   "arguments": {
     "files": ["src/utils/helper.ts"],
     "scope": "file"
@@ -276,8 +276,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install -g alembic
-      - run: asd guard:ci --report markdown --output guard-report.md
+      - run: npm install -g alembic-ai
+      - run: alembic guard:ci --report markdown --output guard-report.md
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -299,7 +299,7 @@ Or configure manually:
 
 ```bash
 #!/bin/sh
-asd guard:staged --fail-on-error
+alembic guard:staged --fail-on-error
 ```
 
 ---

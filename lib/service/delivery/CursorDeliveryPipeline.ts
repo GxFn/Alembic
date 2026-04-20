@@ -3,18 +3,18 @@
  *
  * 读取知识库 → 筛选 + 分类 + 排序 + 压缩 → 写入 6 个通道
  *
- * Channel A: .cursor/rules/asd-project-rules.mdc (alwaysApply rules)
- * Channel B: .cursor/rules/asd-patterns-{topic}.mdc (smart rules)
+ * Channel A: .cursor/rules/alembic-project-rules.mdc (alwaysApply rules)
+ * Channel B: .cursor/rules/alembic-patterns-{topic}.mdc (smart rules)
  * Channel C: .cursor/skills/ (project skills sync)
- * Channel D: .cursor/skills/asd-devdocs/ (dev documents)
+ * Channel D: .cursor/skills/alembic-devdocs/ (dev documents)
  * Channel F: AGENTS.md + CLAUDE.md + .github/copilot-instructions.md (agent instructions)
  * + Mirror: .qoder/ .trae/ (IDE mirror)
  *
  * 触发时机：
  *   1. bootstrap 完成后自动触发
- *   2. `asd cursor-rules` CLI 命令手动触发
+ *   2. `alembic cursor-rules` CLI 命令手动触发
  *   3. Recipe 状态变更（pending → active）后触发
- *   4. `asd upgrade` 时作为升级步骤执行
+ *   4. `alembic upgrade` 时作为升级步骤执行
  */
 
 import fs from 'node:fs';
@@ -190,7 +190,7 @@ export class CursorDeliveryPipeline {
       const channelF = this._generateChannelF(rules, patterns);
       stats.channelF = channelF;
 
-      // NOTE: .qoder/ .trae/ 镜像不再自动执行，由 `asd mirror` 按需触发
+      // NOTE: .qoder/ .trae/ 镜像不再自动执行，由 `alembic mirror` 按需触发
 
       stats.totalTokensUsed =
         channelA.tokensUsed + channelB.totalTokens + (channelF.totalTokens || 0);
@@ -661,7 +661,7 @@ export class CursorDeliveryPipeline {
   /**
    * Channel D — Dev Documents 生成
    * 将 knowledgeType='dev-document' 的条目以原始 MD 写入
-   * .cursor/skills/asd-devdocs/references/ 目录
+   * .cursor/skills/alembic-devdocs/references/ 目录
    */
   _generateChannelD(documents: KnowledgeEntryProps[]) {
     const result = { documentsCount: 0, filesWritten: 0, filePaths: [] as string[] };
@@ -669,10 +669,10 @@ export class CursorDeliveryPipeline {
       return result;
     }
 
-    const devdocsDir = path.join(this.projectRoot, '.cursor', 'skills', 'asd-devdocs');
+    const devdocsDir = path.join(this.projectRoot, '.cursor', 'skills', 'alembic-devdocs');
     const refsDir = path.join(devdocsDir, 'references');
     if (this.wz) {
-      this.wz.ensureDir(this.wz.project('.cursor/skills/asd-devdocs/references'));
+      this.wz.ensureDir(this.wz.project('.cursor/skills/alembic-devdocs/references'));
     } else {
       fs.mkdirSync(refsDir, { recursive: true });
     }
@@ -680,7 +680,7 @@ export class CursorDeliveryPipeline {
     // 生成 SKILL.md（索引页）
     const skillLines = [
       '---',
-      'name: asd-devdocs',
+      'name: alembic-devdocs',
       `description: "Development documents and knowledge artifacts for ${this.projectName}. Use when looking up architecture decisions, debug reports, design docs, or analysis notes."`,
       '---',
       '',
@@ -739,11 +739,11 @@ export class CursorDeliveryPipeline {
     skillLines.push('## Deeper Knowledge');
     skillLines.push('');
     skillLines.push('For full-text search across all documents:');
-    skillLines.push('- `asd_search("your query")`');
+    skillLines.push('- `alembic_search("your query")`');
 
     const skillMdContent = `${skillLines.join('\n')}\n`;
     if (this.wz) {
-      this.wz.writeFile(this.wz.project('.cursor/skills/asd-devdocs/SKILL.md'), skillMdContent);
+      this.wz.writeFile(this.wz.project('.cursor/skills/alembic-devdocs/SKILL.md'), skillMdContent);
     } else {
       fs.writeFileSync(path.join(devdocsDir, 'SKILL.md'), skillMdContent, 'utf8');
     }

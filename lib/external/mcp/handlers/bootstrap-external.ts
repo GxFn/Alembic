@@ -1,7 +1,7 @@
 /**
  * MCP Handler — 外部 Agent 驱动的 Bootstrap (External-Agent-Driven)
  *
- * `asd_bootstrap` 的主入口（无参数）：
+ * `alembic_bootstrap` 的主入口（无参数）：
  *   Phase 1-4 同步执行（文件收集 / AST / 依赖图 / Guard）
  *   → 构建 Mission Briefing 一次性返回
  *   → 不启动 Phase 5 异步 AI pipeline
@@ -87,7 +87,7 @@ export async function bootstrapExternal(ctx: McpContext) {
     return envelope({
       success: true,
       data: { message: 'No source files found. Nothing to bootstrap.' },
-      meta: { tool: 'asd_bootstrap', responseTimeMs: Date.now() - t0 },
+      meta: { tool: 'alembic_bootstrap', responseTimeMs: Date.now() - t0 },
     });
   }
 
@@ -190,10 +190,10 @@ export async function bootstrapExternal(ctx: McpContext) {
       `⚠️ Bootstrap 仅完成第一步（项目扫描），你必须继续完成全部 ${dimensions.length} 个维度的分析。` +
       `请立即按 executionPlan.tiers 的顺序，对每个维度执行：` +
       `(1) 用你的代码阅读能力分析该维度相关文件 → ` +
-      `(2) 调用 asd_submit_knowledge_batch 提交候选知识（**每维度最少 3 条，目标 5 条**，不同关注点拆为独立候选） → ` +
-      `(3) 调用 asd_dimension_complete 标记维度完成。` +
+      `(2) 调用 alembic_submit_knowledge_batch 提交候选知识（**每维度最少 3 条，目标 5 条**，不同关注点拆为独立候选） → ` +
+      `(3) 调用 alembic_dimension_complete 标记维度完成。` +
       `不要停下来等待用户确认，直接开始第一个维度。`,
-    meta: { tool: 'asd_bootstrap', responseTimeMs: Date.now() - t0 },
+    meta: { tool: 'alembic_bootstrap', responseTimeMs: Date.now() - t0 },
   });
 }
 

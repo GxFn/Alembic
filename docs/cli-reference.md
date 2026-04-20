@@ -1,10 +1,10 @@
 # CLI 命令参考
 
-Alembic 的命令行工具名为 `asd`，基于 [commander](https://github.com/tj/commander.js) 构建。
+Alembic 的命令行工具名为 `alembic`，基于 [commander](https://github.com/tj/commander.js) 构建。
 
 ```bash
-npm install -g alembic
-asd --help
+npm install -g alembic-ai
+alembic --help
 ```
 
 ---
@@ -13,30 +13,30 @@ asd --help
 
 | 命令 | 描述 |
 |------|------|
-| [`asd setup`](#asd-setup) | 初始化项目工作空间 |
-| [`asd coldstart`](#asd-coldstart) | 冷启动知识库 |
-| [`asd ais`](#asd-ais-target) | AI 扫描目标模块 |
-| [`asd search`](#asd-search-query) | 搜索知识库 |
-| [`asd guard`](#asd-guard-file) | Guard 规则检查 |
-| [`asd guard:ci`](#asd-guardci-path) | CI 模式 Guard 检查 |
-| [`asd guard:staged`](#asd-guardstaged) | Pre-commit Guard 检查 |
-| [`asd watch`](#asd-watch) | 文件监控 |
-| [`asd server`](#asd-server) | 启动 API 服务器 |
-| [`asd ui`](#asd-ui) | 启动 Dashboard |
-| [`asd status`](#asd-status) | 环境状态检查 |
-| [`asd upgrade`](#asd-upgrade) | 升级 IDE 集成 |
-| [`asd cursor-rules`](#asd-cursor-rules) | 生成 Cursor 交付物料 |
-| [`asd task`](#asd-task) | 任务管理（TaskGraph） |
-| [`asd sync`](#asd-sync) | 同步 Markdown ↔ DB |
+| [`alembic setup`](#alembic-setup) | 初始化项目工作空间 |
+| [`alembic coldstart`](#alembic-coldstart) | 冷启动知识库 |
+| [`alembic ais`](#alembic-ais-target) | AI 扫描目标模块 |
+| [`alembic search`](#alembic-search-query) | 搜索知识库 |
+| [`alembic guard`](#alembic-guard-file) | Guard 规则检查 |
+| [`alembic guard:ci`](#alembic-guardci-path) | CI 模式 Guard 检查 |
+| [`alembic guard:staged`](#alembic-guardstaged) | Pre-commit Guard 检查 |
+| [`alembic watch`](#alembic-watch) | 文件监控 |
+| [`alembic server`](#alembic-server) | 启动 API 服务器 |
+| [`alembic ui`](#alembic-ui) | 启动 Dashboard |
+| [`alembic status`](#alembic-status) | 环境状态检查 |
+| [`alembic upgrade`](#alembic-upgrade) | 升级 IDE 集成 |
+| [`alembic cursor-rules`](#alembic-cursor-rules) | 生成 Cursor 交付物料 |
+| [`alembic task`](#alembic-task) | 任务管理（TaskGraph） |
+| [`alembic sync`](#alembic-sync) | 同步 Markdown ↔ DB |
 
 ---
 
-## asd setup
+## alembic setup
 
 初始化项目工作空间。创建目录结构、SQLite 数据库、IDE 集成配置（Cursor / VS Code / Trae / Qoder MCP 配置）、模板文件。
 
 ```bash
-asd setup [options]
+alembic setup [options]
 ```
 
 **选项：**
@@ -65,12 +65,12 @@ your-project/
 
 ---
 
-## asd coldstart
+## alembic coldstart
 
 冷启动知识库。对项目源码进行多维度分析，通过 AI 提取代码模式，生成 Candidate 草稿供审核。
 
 ```bash
-asd coldstart [options]
+alembic coldstart [options]
 ```
 
 **选项：**
@@ -106,12 +106,12 @@ asd coldstart [options]
 
 ---
 
-## asd ais [target]
+## alembic ais [target]
 
 AI 扫描指定目标（模块/目录/文件），提取代码模式并生成 Recipes。
 
 ```bash
-asd ais [target] [options]
+alembic ais [target] [options]
 ```
 
 **参数：**
@@ -131,12 +131,12 @@ asd ais [target] [options]
 
 ---
 
-## asd search \<query\>
+## alembic search \<query\>
 
 搜索知识库中的 Recipes 和知识条目。
 
 ```bash
-asd search <query> [options]
+alembic search <query> [options]
 ```
 
 **选项：**
@@ -157,12 +157,12 @@ asd search <query> [options]
 
 ---
 
-## asd guard \<file\>
+## alembic guard \<file\>
 
 对文件运行 Guard 规则检查。
 
 ```bash
-asd guard <file> [options]
+alembic guard <file> [options]
 ```
 
 **选项：**
@@ -174,12 +174,12 @@ asd guard <file> [options]
 
 ---
 
-## asd guard:ci [path]
+## alembic guard:ci [path]
 
 CI/CD 模式的全项目 Guard 检查，适合集成到持续集成管线。
 
 ```bash
-asd guard:ci [path] [options]
+alembic guard:ci [path] [options]
 ```
 
 **选项：**
@@ -203,12 +203,12 @@ asd guard:ci [path] [options]
 
 ---
 
-## asd guard:staged
+## alembic guard:staged
 
 检查 git staged 文件，适合作为 pre-commit hook。
 
 ```bash
-asd guard:staged [options]
+alembic guard:staged [options]
 ```
 
 **选项：**
@@ -223,19 +223,19 @@ asd guard:staged [options]
 ```bash
 # .git/hooks/pre-commit
 #!/bin/sh
-asd guard:staged --fail-on-error
+alembic guard:staged --fail-on-error
 ```
 
 或使用安装模板：`templates/pre-commit-guard.sh`
 
 ---
 
-## asd watch
+## alembic watch
 
 启动文件监控模式。自动检测文件变更，执行 Guard 规则检查和指令处理。
 
 ```bash
-asd watch [options]
+alembic watch [options]
 ```
 
 **选项：**
@@ -256,12 +256,12 @@ asd watch [options]
 
 ---
 
-## asd server
+## alembic server
 
 启动 HTTP API 服务器（不含 Dashboard 前端）。
 
 ```bash
-asd server [options]
+alembic server [options]
 ```
 
 **选项：**
@@ -273,12 +273,12 @@ asd server [options]
 
 ---
 
-## asd ui
+## alembic ui
 
 启动 Dashboard UI，同时包含 API 服务器和前端页面。
 
 ```bash
-asd ui [options]
+alembic ui [options]
 ```
 
 **选项：**
@@ -293,12 +293,12 @@ asd ui [options]
 
 ---
 
-## asd status
+## alembic status
 
 检查当前环境状态，包括 AI 配置、数据库连接、依赖项等。
 
 ```bash
-asd status
+alembic status
 ```
 
 输出包含：
@@ -309,12 +309,12 @@ asd status
 
 ---
 
-## asd upgrade
+## alembic upgrade
 
 升级 IDE 集成配置。更新 MCP 配置、Skills、Cursor Rules、Copilot Instructions 到最新版本。
 
 ```bash
-asd upgrade [options]
+alembic upgrade [options]
 ```
 
 **选项：**
@@ -327,12 +327,12 @@ asd upgrade [options]
 
 ---
 
-## asd cursor-rules
+## alembic cursor-rules
 
 生成 Cursor 4 通道交付物料（Rules 文件、Skills 定义、Token 预算规划、主题分类）。
 
 ```bash
-asd cursor-rules [options]
+alembic cursor-rules [options]
 ```
 
 **选项：**
@@ -344,12 +344,12 @@ asd cursor-rules [options]
 
 ---
 
-## asd task
+## alembic task
 
 任务图（TaskGraph）管理。查看任务状态、统计信息、任务列表。
 
 ```bash
-asd task <subcommand> [options]
+alembic task <subcommand> [options]
 ```
 
 **子命令：**
@@ -370,12 +370,12 @@ asd task <subcommand> [options]
 
 ---
 
-## asd sync
+## alembic sync
 
 增量同步 `Alembic/recipes/*.md` 和 `Alembic/candidates/*.md` 到 SQLite 数据库。
 
 ```bash
-asd sync [options]
+alembic sync [options]
 ```
 
 **选项：**
@@ -400,18 +400,18 @@ CLI 命令从项目根目录的 `.env` 文件读取环境变量：
 
 ```env
 # AI Provider (至少配置一个，多个同时存在时自动 fallback)
-ASD_GOOGLE_API_KEY=...
-ASD_OPENAI_API_KEY=...
-ASD_CLAUDE_API_KEY=...
-ASD_DEEPSEEK_API_KEY=...
+ALEMBIC_GOOGLE_API_KEY=...
+ALEMBIC_OPENAI_API_KEY=...
+ALEMBIC_CLAUDE_API_KEY=...
+ALEMBIC_DEEPSEEK_API_KEY=...
 
 # 本地模型
-ASD_AI_PROVIDER=ollama
-ASD_AI_MODEL=llama3
+ALEMBIC_AI_PROVIDER=ollama
+ALEMBIC_AI_MODEL=llama3
 
 # 服务器
-ASD_PORT=3000
-ASD_HOST=127.0.0.1
+ALEMBIC_PORT=3000
+ALEMBIC_HOST=127.0.0.1
 ```
 
 ---
@@ -421,8 +421,8 @@ ASD_HOST=127.0.0.1
 开发者可通过 npm scripts 调用 CLI：
 
 ```bash
-npm run cli -- <command>        # 等同于 asd <command>
-npm run dashboard               # 等同于 asd ui
+npm run cli -- <command>        # 等同于 alembic <command>
+npm run dashboard               # 等同于 alembic ui
 npm run mcp                     # 启动 MCP 服务器
 npm run dev:link                # 全局链接开发版本
 npm run dev:verify              # 验证全局安装

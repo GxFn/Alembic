@@ -21,7 +21,7 @@ npm install
 npm run dev:link
 
 # Verify installation
-npm run dev:verify    # → which asd && asd -v
+npm run dev:verify    # → which alembic && alembic -v
 ```
 
 ---
@@ -31,7 +31,7 @@ npm run dev:verify    # → which asd && asd -v
 ```
 Alembic/
 ├── bin/                    # Entry scripts
-│   ├── cli.js              # CLI entry (asd command)
+│   ├── cli.js              # CLI entry (alembic command)
 │   ├── mcp-server.js       # MCP stdio server
 │   └── api-server.js       # HTTP API server
 ├── lib/                    # Core source (layered architecture)
@@ -254,7 +254,7 @@ npm run dev           # Vite dev server (HMR)
 npm run build:dashboard    # Or: cd dashboard && npm run build
 ```
 
-Build output goes to `dashboard/dist/`, served as static files by `asd ui`'s Express server.
+Build output goes to `dashboard/dist/`, served as static files by `alembic ui`'s Express server.
 
 ### Directory Structure
 
@@ -348,8 +348,8 @@ The `prepublishOnly` script auto-builds native UI (macOS), but Dashboard require
 
 ## Important Development Notes
 
-1. **Do not run asd user commands in this repo** (e.g., `asd setup`, `asd embed`) — this repo is Alembic source code, not a user project
-2. **To test asd commands** — first run `npm run dev:link` to deploy globally, then execute in a separate test project
+1. **Do not run asd user commands in this repo** (e.g., `alembic setup`, `alembic embed`) — this repo is Alembic source code, not a user project
+2. **To test alembic commands** — first run `npm run dev:link` to deploy globally, then execute in a separate test project
 3. **ESM compatibility** — All imports must include the `.js` extension
 4. **DI registration** — New services must be registered in `ServiceContainer.js`
 5. **Gateway Action** — New API operations must be registered in `GatewayActionRegistry`

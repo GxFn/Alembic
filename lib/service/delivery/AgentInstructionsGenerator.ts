@@ -33,40 +33,40 @@ const AGENT_BUDGET = Object.freeze({
 /** MCP 工具清单 — 精简版（跟随实际 MCP handler 注册名称） */
 const MCP_TOOLS_SUMMARY = [
   {
-    name: 'asd_task',
+    name: 'alembic_task',
     desc: 'Task & decision management: prime (CALL FIRST every message) / create/claim/close/fail/defer/progress/decompose / record_decision/revise_decision',
   },
   {
-    name: 'asd_search',
+    name: 'alembic_search',
     desc: 'Search knowledge base (mode: auto/context/keyword/semantic)',
   },
   {
-    name: 'asd_knowledge',
+    name: 'alembic_knowledge',
     desc: 'Knowledge CRUD (operation: list/get/insights/confirm_usage)',
   },
   {
-    name: 'asd_submit_knowledge',
+    name: 'alembic_submit_knowledge',
     desc: 'Submit a knowledge candidate (strict validation)',
   },
-  { name: 'asd_guard', desc: 'Code compliance check (single file or batch audit)' },
-  { name: 'asd_structure', desc: 'Project structure discovery (targets/files/metadata)' },
-  { name: 'asd_graph', desc: 'Knowledge graph query (query/impact/path/stats)' },
-  { name: 'asd_skill', desc: 'Skill management (list/load/create/update/delete)' },
-  { name: 'asd_bootstrap', desc: 'Project cold-start & scan' },
+  { name: 'alembic_guard', desc: 'Code compliance check (single file or batch audit)' },
+  { name: 'alembic_structure', desc: 'Project structure discovery (targets/files/metadata)' },
+  { name: 'alembic_graph', desc: 'Knowledge graph query (query/impact/path/stats)' },
+  { name: 'alembic_skill', desc: 'Skill management (list/load/create/update/delete)' },
+  { name: 'alembic_bootstrap', desc: 'Project cold-start & scan' },
   {
-    name: 'asd_rescan',
+    name: 'alembic_rescan',
     desc: 'Incremental rescan: preserves Recipes, cleans caches, re-analyzes project, runs relevance audit',
   },
   {
-    name: 'asd_evolve',
+    name: 'alembic_evolve',
     desc: 'Batch Recipe evolution decisions (propose_evolution/confirm_deprecation/skip), used per-dimension during rescan or standalone',
   },
   {
-    name: 'asd_panorama',
+    name: 'alembic_panorama',
     desc: 'Project panorama (operation: overview/module/gaps/health)',
   },
-  { name: 'asd_health', desc: 'Service health & KB statistics' },
-  { name: 'asd_capabilities', desc: 'List all available MCP tools (self-discovery)' },
+  { name: 'alembic_health', desc: 'Service health & KB statistics' },
+  { name: 'alembic_capabilities', desc: 'List all available MCP tools (self-discovery)' },
 ];
 
 export class AgentInstructionsGenerator {
@@ -249,7 +249,7 @@ export class AgentInstructionsGenerator {
       sectionLines.push(
         '## Skills',
         '',
-        'Load with `asd_skill({ operation: "load", name: "<skill>" })`:',
+        'Load with `alembic_skill({ operation: "load", name: "<skill>" })`:',
         '',
         ...sections.skillLines,
         ''
@@ -344,13 +344,13 @@ export class AgentInstructionsGenerator {
   }) {
     const body = this._loadConventionsTemplate();
     const section = [
-      '<!-- asd:begin -->',
+      '<!-- alembic:begin -->',
       '',
       '# Alembic Conventions',
       '',
       body,
       '',
-      '<!-- asd:end -->',
+      '<!-- alembic:end -->',
     ].join('\n');
 
     const filePath = path.join(this.projectRoot, '.github', 'copilot-instructions.md');

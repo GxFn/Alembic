@@ -13,15 +13,15 @@ Alembic supports deep integration with multiple IDEs. The core protocol is MCP (
 | **Trae** | MCP Server | MCP config |
 | **Qoder** | MCP Server | MCP config |
 | **Claude Code** | MCP Server | MCP config |
-| **Xcode** | File Watcher + Snippet Sync | `asd watch` |
+| **Xcode** | File Watcher + Snippet Sync | `alembic watch` |
 
 ---
 
 ## One-Click Setup
 
 ```bash
-asd setup          # Auto-detect installed IDEs, configure MCP
-asd upgrade        # Update to the latest IDE configuration
+alembic setup          # Auto-detect installed IDEs, configure MCP
+alembic upgrade        # Update to the latest IDE configuration
 ```
 
 `SetupService` auto-detects IDE installation paths:
@@ -35,7 +35,7 @@ asd upgrade        # Update to the latest IDE configuration
 
 ### MCP Configuration
 
-`asd setup` auto-generates `.cursor/mcp.json`:
+`alembic setup` auto-generates `.cursor/mcp.json`:
 
 ```json
 {
@@ -44,7 +44,7 @@ asd upgrade        # Update to the latest IDE configuration
       "command": "node",
       "args": ["/usr/local/lib/node_modules/alembic/bin/mcp-server.js"],
       "env": {
-        "ASD_PROJECT_ROOT": "/path/to/your-project"
+        "ALEMBIC_PROJECT_ROOT": "/path/to/your-project"
       }
     }
   }
@@ -53,7 +53,7 @@ asd upgrade        # Update to the latest IDE configuration
 
 ### Cursor Rules
 
-`asd cursor-rules` generates 4-channel delivery materials:
+`alembic cursor-rules` generates 4-channel delivery materials:
 
 1. **Rules Files** — Rule files under `.cursor/rules/`, containing Recipe summaries
 2. **Agent Skills** — Project-level Skill definitions guiding AI behavior
@@ -85,7 +85,7 @@ skills/
 
 ### MCP Configuration
 
-`asd setup` auto-generates `.vscode/mcp.json`:
+`alembic setup` auto-generates `.vscode/mcp.json`:
 
 ```json
 {
@@ -94,7 +94,7 @@ skills/
       "command": "node",
       "args": ["/usr/local/lib/node_modules/alembic/bin/mcp-server.js"],
       "env": {
-        "ASD_PROJECT_ROOT": "/path/to/your-project"
+        "ALEMBIC_PROJECT_ROOT": "/path/to/your-project"
       }
     }
   }
@@ -103,7 +103,7 @@ skills/
 
 ### Copilot Instructions
 
-`asd setup` and `asd upgrade` auto-generate `.github/copilot-instructions.md`, which includes:
+`alembic setup` and `alembic upgrade` auto-generate `.github/copilot-instructions.md`, which includes:
 
 - Project overview
 - Knowledge base structure description
@@ -140,7 +140,7 @@ npm run install:vscode-copilot     # Generate Copilot Instructions
 ### File Watcher
 
 ```bash
-asd watch -d /path/to/ios-project --ext swift,m,h
+alembic watch -d /path/to/ios-project --ext swift,m,h
 ```
 
 Monitors Swift / ObjC file changes and automatically:
@@ -173,7 +173,7 @@ macOS: ~/Library/Developer/Xcode/UserData/CodeSnippets/
 
 ## File Directives
 
-Write directives in any source file; IDE extensions or `asd watch` process them automatically:
+Write directives in any source file; IDE extensions or `alembic watch` process them automatically:
 
 ### as:s — Search and Insert
 
@@ -220,11 +220,11 @@ Common issues:
 
 | Problem | Solution |
 |---------|----------|
-| MCP server fails to start | Verify Node.js ≥ 22, run `asd status` |
-| Cannot find mcp-server.js | Run `npm install -g alembic` to reinstall |
+| MCP server fails to start | Verify Node.js ≥ 22, run `alembic status` |
+| Cannot find mcp-server.js | Run `npm install -g alembic-ai` to reinstall |
 | Permission error | Check API Key configuration in `.env` |
 | IDE not detecting tools | Restart IDE, verify MCP config file path |
-| Knowledge base is empty | Run `asd coldstart` to generate initial knowledge |
+| Knowledge base is empty | Run `alembic coldstart` to generate initial knowledge |
 
 ---
 
@@ -251,11 +251,11 @@ Equivalent to:
 npm update -g alembic
 
 # Update IDE configuration
-asd upgrade
+alembic upgrade
 
 # Update Skills only
-asd upgrade --skills-only
+alembic upgrade --skills-only
 
 # Update MCP configuration only
-asd upgrade --mcp-only
+alembic upgrade --mcp-only
 ```

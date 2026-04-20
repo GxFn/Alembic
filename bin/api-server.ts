@@ -5,7 +5,7 @@
  * 用于开发和测试 REST API
  */
 
-process.env.ASD_API_SERVER = '1';
+process.env.ALEMBIC_API_SERVER = '1';
 
 import Bootstrap from '../lib/bootstrap.js';
 import HttpServer from '../lib/http/HttpServer.js';
@@ -46,7 +46,7 @@ async function main() {
     });
 
     // 配置路径安全守卫 — 阻止写操作逃逸到项目外
-    const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+    const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
 
     // 切换工作目录到项目根 — 确保 DB 等相对路径正确解析
     if (projectRoot !== process.cwd()) {

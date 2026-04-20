@@ -1,5 +1,5 @@
 /**
- * MCP Handler — asd_panorama
+ * MCP Handler — alembic_panorama
  *
  * Project panorama query tool with 8 operations:
  *   overview — project skeleton + layers + module roles
@@ -23,7 +23,7 @@ interface PanoramaArgs {
 }
 
 /**
- * asd_panorama — unified panorama query
+ * alembic_panorama — unified panorama query
  */
 export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
   const op = args.operation || 'overview';
@@ -42,7 +42,7 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
     return envelope({
       success: false,
       message: 'Panorama service not initialized',
-      meta: { tool: 'asd_panorama' },
+      meta: { tool: 'alembic_panorama' },
     });
   }
 
@@ -55,7 +55,7 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
       return envelope({
         success: true,
         data: overview,
-        meta: { tool: 'asd_panorama' },
+        meta: { tool: 'alembic_panorama' },
       });
     }
 
@@ -65,7 +65,7 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
         return envelope({
           success: false,
           message: 'operation=module requires the "module" parameter (module name)',
-          meta: { tool: 'asd_panorama' },
+          meta: { tool: 'alembic_panorama' },
         });
       }
       const detail = await panoramaService.getModule(moduleName);
@@ -73,13 +73,13 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
         return envelope({
           success: false,
           message: `Module not found: ${moduleName}`,
-          meta: { tool: 'asd_panorama' },
+          meta: { tool: 'alembic_panorama' },
         });
       }
       return envelope({
         success: true,
         data: detail,
-        meta: { tool: 'asd_panorama' },
+        meta: { tool: 'alembic_panorama' },
       });
     }
 
@@ -88,7 +88,7 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
       return envelope({
         success: true,
         data: { gaps },
-        meta: { tool: 'asd_panorama' },
+        meta: { tool: 'alembic_panorama' },
       });
     }
 
@@ -97,7 +97,7 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
       return envelope({
         success: true,
         data: health,
-        meta: { tool: 'asd_panorama' },
+        meta: { tool: 'alembic_panorama' },
       });
     }
 
@@ -115,7 +115,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
       return envelope({
         success: false,
         message: 'KnowledgeMetabolism has been removed. Use rescan for governance.',
-        meta: { tool: 'asd_panorama', operation: 'governance_cycle' },
+        meta: { tool: 'alembic_panorama', operation: 'governance_cycle' },
       });
     }
 
@@ -128,7 +128,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
         return envelope({
           success: false,
           message: 'Decay detector not initialized (decayDetector not registered)',
-          meta: { tool: 'asd_panorama' },
+          meta: { tool: 'alembic_panorama' },
         });
       }
 
@@ -136,7 +136,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
       return envelope({
         success: true,
         data: { results },
-        meta: { tool: 'asd_panorama', operation: 'decay_report' },
+        meta: { tool: 'alembic_panorama', operation: 'decay_report' },
       });
     }
 
@@ -149,7 +149,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
         return envelope({
           success: false,
           message: 'Staging manager not initialized (stagingManager not registered)',
-          meta: { tool: 'asd_panorama' },
+          meta: { tool: 'alembic_panorama' },
         });
       }
 
@@ -158,7 +158,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
       return envelope({
         success: true,
         data: { checkResult, currentStaging },
-        meta: { tool: 'asd_panorama', operation: 'staging_check' },
+        meta: { tool: 'alembic_panorama', operation: 'staging_check' },
       });
     }
 
@@ -171,7 +171,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
         return envelope({
           success: false,
           message: 'Enhancement suggester not initialized (enhancementSuggester not registered)',
-          meta: { tool: 'asd_panorama' },
+          meta: { tool: 'alembic_panorama' },
         });
       }
 
@@ -179,7 +179,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
       return envelope({
         success: true,
         data: { suggestions },
-        meta: { tool: 'asd_panorama', operation: 'enhancement_suggestions' },
+        meta: { tool: 'alembic_panorama', operation: 'enhancement_suggestions' },
       });
     }
 

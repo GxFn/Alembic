@@ -6,7 +6,7 @@ Alembic configuration is organized in three tiers: project-level `.env` file, gl
 
 ## Environment Variables (.env)
 
-The `.env` file in the project root is the most common configuration method. `asd setup` generates a template.
+The `.env` file in the project root is the most common configuration method. `alembic setup` generates a template.
 
 ### AI Provider
 
@@ -14,32 +14,32 @@ Configure at least one API Key. When multiple Keys are present, automatic fallba
 
 ```env
 # Google Gemini (recommended, supports embedding)
-ASD_GOOGLE_API_KEY=AIza...
+ALEMBIC_GOOGLE_API_KEY=AIza...
 
 # OpenAI
-ASD_OPENAI_API_KEY=sk-...
+ALEMBIC_OPENAI_API_KEY=sk-...
 
 # Claude
-ASD_CLAUDE_API_KEY=sk-ant-...
+ALEMBIC_CLAUDE_API_KEY=sk-ant-...
 
 # DeepSeek
-ASD_DEEPSEEK_API_KEY=sk-...
+ALEMBIC_DEEPSEEK_API_KEY=sk-...
 
 # Local model (Ollama)
-ASD_AI_PROVIDER=ollama
-ASD_AI_MODEL=llama3
-ASD_OLLAMA_HOST=http://127.0.0.1:11434
+ALEMBIC_AI_PROVIDER=ollama
+ALEMBIC_AI_MODEL=llama3
+ALEMBIC_OLLAMA_HOST=http://127.0.0.1:11434
 ```
 
 ### Provider Selection Priority
 
 When multiple API Keys are present, `AiFactory` auto-detects in this order:
 
-1. `ASD_AI_PROVIDER` environment variable (if explicitly set)
-2. Google Gemini (`ASD_GOOGLE_API_KEY`)
-3. OpenAI (`ASD_OPENAI_API_KEY`)
-4. Claude (`ASD_CLAUDE_API_KEY`)
-5. DeepSeek (`ASD_DEEPSEEK_API_KEY`)
+1. `ALEMBIC_AI_PROVIDER` environment variable (if explicitly set)
+2. Google Gemini (`ALEMBIC_GOOGLE_API_KEY`)
+3. OpenAI (`ALEMBIC_OPENAI_API_KEY`)
+4. Claude (`ALEMBIC_CLAUDE_API_KEY`)
+5. DeepSeek (`ALEMBIC_DEEPSEEK_API_KEY`)
 6. Ollama (checks local service availability)
 7. MockProvider (no-AI mode, knowledge base still works)
 
@@ -53,18 +53,18 @@ If the primary Provider doesn't support embedding (e.g., Claude), the system aut
 ### Server
 
 ```env
-ASD_PORT=3000
-ASD_HOST=127.0.0.1
+ALEMBIC_PORT=3000
+ALEMBIC_HOST=127.0.0.1
 ```
 
 ### Other
 
 ```env
 # Log level
-ASD_LOG_LEVEL=info          # debug / info / warn / error
+ALEMBIC_LOG_LEVEL=info          # debug / info / warn / error
 
 # Project root (required in MCP mode)
-ASD_PROJECT_ROOT=/path/to/your-project
+ALEMBIC_PROJECT_ROOT=/path/to/your-project
 ```
 
 ---
@@ -332,7 +332,7 @@ rules:
 
 ## Dashboard LLM Configuration
 
-Through the Dashboard UI (`asd ui` → LLM Config), you can switch AI Provider and model at runtime without restarting the service.
+Through the Dashboard UI (`alembic ui` → LLM Config), you can switch AI Provider and model at runtime without restarting the service.
 
 Configurable options:
 - Provider selection (Gemini / OpenAI / Claude / DeepSeek / Ollama)
@@ -347,7 +347,7 @@ Changes are applied via `ServiceContainer.reloadAiProvider()` hot-reload, automa
 
 ## Project Directory Structure
 
-Standard directory structure created by `asd setup`:
+Standard directory structure created by `alembic setup`:
 
 ```
 your-project/
@@ -366,6 +366,6 @@ your-project/
 
 **Key principles:**
 - Markdown files are the Source of Truth
-- SQLite is a read cache; `asd sync` can rebuild it
+- SQLite is a read cache; `alembic sync` can rebuild it
 - `Alembic/` directory is tracked by Git
 - `.asd/` directory is in `.gitignore`

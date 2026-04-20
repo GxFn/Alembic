@@ -1,5 +1,5 @@
 /**
- * MCP Handler — asd_evolve (批量 Recipe 进化决策)
+ * MCP Handler — alembic_evolve (批量 Recipe 进化决策)
  *
  * 所有决策统一通过 EvolutionGateway 提交：
  *   - propose_evolution → gateway.submit({ action: 'update' })
@@ -56,7 +56,7 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
         errors: [],
       },
       message: '⚠️ 没有提交任何 evolve 决策',
-      meta: { tool: 'asd_evolve', responseTimeMs: Date.now() - t0 },
+      meta: { tool: 'alembic_evolve', responseTimeMs: Date.now() - t0 },
     });
   }
 
@@ -76,7 +76,7 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
       success: false,
       data: result,
       message: '❌ EvolutionGateway not available',
-      meta: { tool: 'asd_evolve', responseTimeMs: Date.now() - t0 },
+      meta: { tool: 'alembic_evolve', responseTimeMs: Date.now() - t0 },
     });
   }
 
@@ -211,6 +211,6 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
     message:
       `✅ 处理了 ${result.processed} 个 Recipe: ${summary}` +
       (result.errors.length > 0 ? ` (${result.errors.length} 个错误)` : ''),
-    meta: { tool: 'asd_evolve', responseTimeMs: Date.now() - t0 },
+    meta: { tool: 'alembic_evolve', responseTimeMs: Date.now() - t0 },
   });
 }

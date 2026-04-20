@@ -6,7 +6,7 @@ Alembic 的配置分为三层：项目级 `.env` 文件、全局 `config/default
 
 ## 环境变量（.env）
 
-项目根目录的 `.env` 文件是最常用的配置方式。`asd setup` 会生成模板。
+项目根目录的 `.env` 文件是最常用的配置方式。`alembic setup` 会生成模板。
 
 ### AI Provider
 
@@ -14,32 +14,32 @@ Alembic 的配置分为三层：项目级 `.env` 文件、全局 `config/default
 
 ```env
 # Google Gemini（推荐，支持 embedding）
-ASD_GOOGLE_API_KEY=AIza...
+ALEMBIC_GOOGLE_API_KEY=AIza...
 
 # OpenAI
-ASD_OPENAI_API_KEY=sk-...
+ALEMBIC_OPENAI_API_KEY=sk-...
 
 # Claude
-ASD_CLAUDE_API_KEY=sk-ant-...
+ALEMBIC_CLAUDE_API_KEY=sk-ant-...
 
 # DeepSeek
-ASD_DEEPSEEK_API_KEY=sk-...
+ALEMBIC_DEEPSEEK_API_KEY=sk-...
 
 # 本地模型（Ollama）
-ASD_AI_PROVIDER=ollama
-ASD_AI_MODEL=llama3
-ASD_OLLAMA_HOST=http://127.0.0.1:11434
+ALEMBIC_AI_PROVIDER=ollama
+ALEMBIC_AI_MODEL=llama3
+ALEMBIC_OLLAMA_HOST=http://127.0.0.1:11434
 ```
 
 ### Provider 选择优先级
 
 当多个 API Key 存在时，`AiFactory` 按以下顺序自动探测：
 
-1. `ASD_AI_PROVIDER` 环境变量（如果明确指定）
-2. Google Gemini（`ASD_GOOGLE_API_KEY`）
-3. OpenAI（`ASD_OPENAI_API_KEY`）
-4. Claude（`ASD_CLAUDE_API_KEY`）
-5. DeepSeek（`ASD_DEEPSEEK_API_KEY`）
+1. `ALEMBIC_AI_PROVIDER` 环境变量（如果明确指定）
+2. Google Gemini（`ALEMBIC_GOOGLE_API_KEY`）
+3. OpenAI（`ALEMBIC_OPENAI_API_KEY`）
+4. Claude（`ALEMBIC_CLAUDE_API_KEY`）
+5. DeepSeek（`ALEMBIC_DEEPSEEK_API_KEY`）
 6. Ollama（检测本地服务可用性）
 7. MockProvider（无 AI 模式，知识库仍可工作）
 
@@ -53,18 +53,18 @@ ASD_OLLAMA_HOST=http://127.0.0.1:11434
 ### 服务器
 
 ```env
-ASD_PORT=3000
-ASD_HOST=127.0.0.1
+ALEMBIC_PORT=3000
+ALEMBIC_HOST=127.0.0.1
 ```
 
 ### 其他
 
 ```env
 # 日志级别
-ASD_LOG_LEVEL=info          # debug / info / warn / error
+ALEMBIC_LOG_LEVEL=info          # debug / info / warn / error
 
 # 项目根目录（MCP 模式下必需）
-ASD_PROJECT_ROOT=/path/to/your-project
+ALEMBIC_PROJECT_ROOT=/path/to/your-project
 ```
 
 ---
@@ -332,7 +332,7 @@ rules:
 
 ## Dashboard LLM 配置
 
-通过 Dashboard UI（`asd ui` → LLM Config）可以在运行时切换 AI Provider 和模型，无需重启服务。
+通过 Dashboard UI（`alembic ui` → LLM Config）可以在运行时切换 AI Provider 和模型，无需重启服务。
 
 支持配置：
 - Provider 选择（Gemini / OpenAI / Claude / DeepSeek / Ollama）
@@ -347,7 +347,7 @@ rules:
 
 ## 项目目录结构
 
-`asd setup` 创建的标准目录结构：
+`alembic setup` 创建的标准目录结构：
 
 ```
 your-project/
@@ -366,6 +366,6 @@ your-project/
 
 **重要原则：**
 - Markdown 文件是 Source of Truth
-- SQLite 是读缓存，`asd sync` 可重建
+- SQLite 是读缓存，`alembic sync` 可重建
 - `Alembic/` 目录跟随 Git
 - `.asd/` 目录列入 `.gitignore`

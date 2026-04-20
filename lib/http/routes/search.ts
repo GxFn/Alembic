@@ -372,9 +372,9 @@ router.post(
     try {
       const { resolveDataRoot } = await import('#shared/resolveProjectRoot.js');
       const container = getServiceContainer();
-      dataRoot = resolveDataRoot(container) || process.env.ASD_PROJECT_DIR || process.cwd();
+      dataRoot = resolveDataRoot(container) || process.env.ALEMBIC_PROJECT_DIR || process.cwd();
     } catch {
-      dataRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+      dataRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
     }
 
     let candidateObj:

@@ -545,8 +545,8 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
   // ═══════════════════════════════════════════════════════════
   // Step 2: 按维度分层执行 (Analyst → Gate → Producer)
   // ═══════════════════════════════════════════════════════════
-  const concurrency = parseInt(process.env.ASD_PARALLEL_CONCURRENCY || '3', 10);
-  const enableParallel = process.env.ASD_PARALLEL_BOOTSTRAP !== 'false';
+  const concurrency = parseInt(process.env.ALEMBIC_PARALLEL_CONCURRENCY || '3', 10);
+  const enableParallel = process.env.ALEMBIC_PARALLEL_BOOTSTRAP !== 'false';
   const scheduler = new TierScheduler();
 
   // 包含所有维度（含 Enhancement Pack 动态追加的维度）
@@ -1847,7 +1847,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
           }
         }
       },
-      options: { language: process.env.ASD_WIKI_LANG || 'zh' },
+      options: { language: process.env.ALEMBIC_WIKI_LANG || 'zh' },
     } as ConstructorParameters<typeof WikiGenerator>[0]);
     const wikiResult = (await wiki.generate()) as Record<string, unknown>;
     if (wikiResult.success) {

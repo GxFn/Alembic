@@ -64,7 +64,7 @@ export function hasMacOSBrowserControlGranted() {
  */
 export function openBrowserReuseTab(url: string, baseUrlForLookup?: string) {
   const skipReuse =
-    process.env.ASD_UI_NO_REUSE_TAB === '1' || process.env.ASD_UI_OPEN_REUSE === '0';
+    process.env.ALEMBIC_UI_NO_REUSE_TAB === '1' || process.env.ALEMBIC_UI_OPEN_REUSE === '0';
 
   if (skipReuse) {
     _fallbackOpen(url);
@@ -104,7 +104,7 @@ export function openBrowserReuseTab(url: string, baseUrlForLookup?: string) {
         });
         return;
       } catch (_err: unknown) {
-        if (process.env.ASD_DEBUG === '1') {
+        if (process.env.ALEMBIC_DEBUG === '1') {
           console.error(
             `[OpenBrowser] AppleScript failed for ${browser}:`,
             (_err as Error).message

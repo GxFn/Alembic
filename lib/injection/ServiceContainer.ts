@@ -245,8 +245,8 @@ export class ServiceContainer {
       });
 
       // 长驻进程自动启动轮询（CLI 不启动）
-      const isMcp = process.env.ASD_MCP_MODE === '1';
-      const isApiServer = process.env.ASD_API_SERVER === '1';
+      const isMcp = process.env.ALEMBIC_MCP_MODE === '1';
+      const isApiServer = process.env.ALEMBIC_API_SERVER === '1';
       if (isMcp || isApiServer) {
         coordinator.start();
       }

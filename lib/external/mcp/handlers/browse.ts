@@ -162,7 +162,7 @@ export async function listByKind(ctx: McpContext, kind: string, args: BrowseList
   return envelope({
     success: true,
     data: { kind, count: items.length, total: result?.pagination?.total || items.length, items },
-    meta: { tool: `asd_list_${kind}s` },
+    meta: { tool: `alembic_list_${kind}s` },
   });
 }
 
@@ -192,7 +192,7 @@ export async function listRecipes(ctx: McpContext, args: BrowseListArgs) {
   return envelope({
     success: true,
     data: { count: items.length, total: result?.pagination?.total || items.length, items },
-    meta: { tool: 'asd_list_recipes' },
+    meta: { tool: 'alembic_list_recipes' },
   });
 }
 
@@ -208,7 +208,7 @@ export async function getRecipe(ctx: McpContext, args: BrowseGetArgs) {
   const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
   // Agent 投影：去除运营/审计/统计噪音，只交付可操作字段
   const projected = _projectForAgent(json);
-  return envelope({ success: true, data: projected, meta: { tool: 'asd_get_recipe' } });
+  return envelope({ success: true, data: projected, meta: { tool: 'alembic_get_recipe' } });
 }
 
 export async function recipeInsights(ctx: McpContext, args: BrowseGetArgs) {
@@ -281,7 +281,7 @@ export async function recipeInsights(ctx: McpContext, args: BrowseGetArgs) {
     updatedAt: json.updatedAt,
   };
 
-  return envelope({ success: true, data: insights, meta: { tool: 'asd_recipe_insights' } });
+  return envelope({ success: true, data: insights, meta: { tool: 'alembic_recipe_insights' } });
 }
 
 export async function confirmUsage(ctx: McpContext, args: ConfirmUsageArgs) {
@@ -316,6 +316,6 @@ export async function confirmUsage(ctx: McpContext, args: ConfirmUsageArgs) {
     success: true,
     data: { recipeId: args.recipeId, usageType, feedback },
     message: `已记录使用 ${args.recipeId} 的${usageType === 'adoption' ? '采纳' : '应用'}`,
-    meta: { tool: 'asd_confirm_usage' },
+    meta: { tool: 'alembic_confirm_usage' },
   });
 }

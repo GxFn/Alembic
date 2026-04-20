@@ -26,7 +26,7 @@ import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
  *   'merge-gitignore'   — 增量追加缺失的 gitignore 规则
  *   'backup-overwrite'  — 备份旧文件后覆盖
  *   'generate'          — 自定义生成逻辑（由 generate 函数处理）
- *   'inject-marker'     — 在 <!-- asd:begin/end --> 标记间注入/替换
+ *   'inject-marker'     — 在 <!-- alembic:begin/end --> 标记间注入/替换
  *
  * ghostPolicy（Ghost 模式部署行为）：
  *   'deploy'    — 仍然部署到项目内（如 AGENTS.md, copilot-instructions, .gitignore）
@@ -61,15 +61,15 @@ export const MANIFEST = [
     id: 'cursor-conventions',
     strategy: 'generate',
     generate: 'generateConventionsMdc',
-    dest: '.cursor/rules/asd-conventions.mdc',
+    dest: '.cursor/rules/alembic-conventions.mdc',
     on: 'both',
     category: 'cursor-rules',
     ghostPolicy: 'deploy' as const,
   },
   {
     id: 'cursor-skills-template',
-    src: 'cursor-rules/asd-skills.mdc',
-    dest: '.cursor/rules/asd-skills.mdc',
+    src: 'cursor-rules/alembic-skills.mdc',
+    dest: '.cursor/rules/alembic-skills.mdc',
     strategy: 'overwrite',
     on: 'both',
     category: 'cursor-rules',
@@ -192,7 +192,7 @@ export const GITIGNORE_RULES = [
   { pattern: '.asd/*', comment: '运行时缓存（不入库）' },
   { pattern: '!.asd/config.json', negation: true },
 
-  // Environment (contains API keys created by `asd setup`)
+  // Environment (contains API keys created by `alembic setup`)
   { pattern: '.env', comment: '环境变量（含 API Key）' },
 
   // Logs（已收纳到 .asd/ 下，由 .asd/* 统一覆盖）
@@ -205,8 +205,8 @@ export const GITIGNORE_MIGRATIONS: { find: RegExp; replace: string }[] = [];
 export function buildMcpServerEntry(projectRoot: string, ide: 'cursor' | 'vscode', global = false) {
   // 项目级配置支持 ${workspaceFolder}；全局配置必须用绝对路径
   const base = {
-    command: 'asd-mcp',
-    env: { ASD_PROJECT_DIR: global ? projectRoot : '${workspaceFolder}' },
+    command: 'alembic-mcp',
+    env: { ALEMBIC_PROJECT_DIR: global ? projectRoot : '${workspaceFolder}' },
   };
   if (ide === 'vscode') {
     return { type: 'stdio', ...base };

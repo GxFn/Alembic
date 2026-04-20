@@ -27,18 +27,18 @@ Guard 系统的核心组件：
 
 ```bash
 # 检查单个文件
-asd guard src/utils/helper.ts
+alembic guard src/utils/helper.ts
 
 # 检查整个项目（CI 模式）
-asd guard:ci --report markdown --output guard-report.md
+alembic guard:ci --report markdown --output guard-report.md
 
 # 检查 git staged 文件（pre-commit）
-asd guard:staged
+alembic guard:staged
 ```
 
 ### 文件指令
 
-在源代码中添加指令，VS Code 扩展或 `asd watch` 自动触发：
+在源代码中添加指令，VS Code 扩展或 `alembic watch` 自动触发：
 
 ```javascript
 // as:a  ← 对当前文件运行 Guard 审计
@@ -46,11 +46,11 @@ asd guard:staged
 
 ### MCP 工具
 
-AI 助手通过 `asd_guard` 工具调用：
+AI 助手通过 `alembic_guard` 工具调用：
 
 ```json
 {
-  "tool": "asd_guard",
+  "tool": "alembic_guard",
   "arguments": {
     "files": ["src/utils/helper.ts"],
     "scope": "file"
@@ -276,8 +276,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install -g alembic
-      - run: asd guard:ci --report markdown --output guard-report.md
+      - run: npm install -g alembic-ai
+      - run: alembic guard:ci --report markdown --output guard-report.md
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -299,7 +299,7 @@ chmod +x .git/hooks/pre-commit
 
 ```bash
 #!/bin/sh
-asd guard:staged --fail-on-error
+alembic guard:staged --fail-on-error
 ```
 
 ---

@@ -1,5 +1,5 @@
 /**
- * MCP Handler — asd_consolidate (语义融合审查决策)
+ * MCP Handler — alembic_consolidate (语义融合审查决策)
  *
  * 处理 Agent 对 pendingSemanticReview 条目的决策：
  *   - keep    → 无操作（Recipe 保留原样）
@@ -52,7 +52,7 @@ export async function consolidateHandler(ctx: McpContext, args: ConsolidateInput
         errors: [],
       },
       message: '⚠️ 没有提交任何 consolidate 决策',
-      meta: { tool: 'asd_consolidate', responseTimeMs: Date.now() - t0 },
+      meta: { tool: 'alembic_consolidate', responseTimeMs: Date.now() - t0 },
     });
   }
 
@@ -63,7 +63,7 @@ export async function consolidateHandler(ctx: McpContext, args: ConsolidateInput
       errorCode: 'SERVICE_UNAVAILABLE',
       message: 'EvolutionGateway 不可用，无法处理 consolidate 决策。',
       data: { processed: 0, kept: 0, merged: 0, rejected: 0, errors: [] },
-      meta: { tool: 'asd_consolidate', responseTimeMs: Date.now() - t0 },
+      meta: { tool: 'alembic_consolidate', responseTimeMs: Date.now() - t0 },
     });
   }
 
@@ -188,6 +188,6 @@ export async function consolidateHandler(ctx: McpContext, args: ConsolidateInput
       `${result.kept} 保留, ${result.merged} 合并, ${result.rejected} 拒绝` +
       (hasErrors ? `, ${result.errors.length} 错误` : '') +
       '。',
-    meta: { tool: 'asd_consolidate', responseTimeMs: Date.now() - t0 },
+    meta: { tool: 'alembic_consolidate', responseTimeMs: Date.now() - t0 },
   });
 }

@@ -12,7 +12,7 @@
  *   merge-json       — 读取现有 JSON，合并 alembic 键，写回
  *   merge-gitignore  — 增量追加缺失规则 + 迁移旧格式
  *   backup-overwrite — 备份旧文件再覆盖
- *   inject-marker    — 在 <!-- asd:begin/end --> 标记间注入
+ *   inject-marker    — 在 <!-- alembic:begin/end --> 标记间注入
  *   generate         — 调用自定义生成函数
  */
 
@@ -452,10 +452,10 @@ export class FileDeployer {
     return true;
   }
 
-  /** inject-marker — 在 asd:begin/end 标记间注入 */
+  /** inject-marker — 在 alembic:begin/end 标记间注入 */
   _strategyInjectMarker(entry: ManifestEntry) {
-    const BEGIN_MARKER = '<!-- asd:begin -->';
-    const END_MARKER = '<!-- asd:end -->';
+    const BEGIN_MARKER = '<!-- alembic:begin -->';
+    const END_MARKER = '<!-- alembic:end -->';
 
     const src = join(TEMPLATES_DIR, entry.src!);
     if (!existsSync(src)) {
@@ -519,7 +519,7 @@ export class FileDeployer {
   /* ═══ 自定义生成器 ═══════════════════════════════════ */
 
   _generators: Record<string, (this: FileDeployer) => boolean | void> = {
-    /** .cursor/rules/asd-conventions.mdc — 读 conventions.md + YAML frontmatter */
+    /** .cursor/rules/alembic-conventions.mdc — 读 conventions.md + YAML frontmatter */
     generateConventionsMdc() {
       const tpl = join(TEMPLATES_DIR, 'instructions/conventions.md');
       if (!existsSync(tpl)) {
@@ -539,7 +539,7 @@ export class FileDeployer {
         '',
       ].join('\n');
 
-      const dest = join(this.projectRoot, '.cursor/rules/asd-conventions.mdc');
+      const dest = join(this.projectRoot, '.cursor/rules/alembic-conventions.mdc');
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, content);
       return true;
@@ -554,13 +554,13 @@ export class FileDeployer {
 
       const body = readFileSync(tpl, 'utf8').trimEnd();
       const content = [
-        '<!-- asd:begin -->',
+        '<!-- alembic:begin -->',
         '',
         '# Alembic Conventions',
         '',
         body,
         '',
-        '<!-- asd:end -->',
+        '<!-- alembic:end -->',
         '',
       ].join('\n');
 
@@ -571,8 +571,8 @@ export class FileDeployer {
       // 如果文件已存在且包含 begin/end markers，仅替换标记间内容
       if (existsSync(dest)) {
         const existing = readFileSync(dest, 'utf8');
-        const BEGIN = '<!-- asd:begin -->';
-        const END = '<!-- asd:end -->';
+        const BEGIN = '<!-- alembic:begin -->';
+        const END = '<!-- alembic:end -->';
         if (existing.includes(BEGIN) && existing.includes(END)) {
           const snippet = content.trimEnd();
           const updated = existing.replace(new RegExp(`${BEGIN}[\\s\\S]*?${END}`), snippet);

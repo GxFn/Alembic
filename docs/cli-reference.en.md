@@ -1,10 +1,10 @@
 # CLI Reference
 
-Alembic's command-line tool is called `asd`, built on [commander](https://github.com/tj/commander.js).
+Alembic's command-line tool is called `alembic`, built on [commander](https://github.com/tj/commander.js).
 
 ```bash
-npm install -g alembic
-asd --help
+npm install -g alembic-ai
+alembic --help
 ```
 
 ---
@@ -13,30 +13,30 @@ asd --help
 
 | Command | Description |
 |---------|-------------|
-| [`asd setup`](#asd-setup) | Initialize project workspace |
-| [`asd coldstart`](#asd-coldstart) | Coldstart knowledge base |
-| [`asd ais`](#asd-ais-target) | AI scan a target module |
-| [`asd search`](#asd-search-query) | Search knowledge base |
-| [`asd guard`](#asd-guard-file) | Run Guard rule checks |
-| [`asd guard:ci`](#asd-guardci-path) | CI mode Guard check |
-| [`asd guard:staged`](#asd-guardstaged) | Pre-commit Guard check |
-| [`asd watch`](#asd-watch) | File watcher |
-| [`asd server`](#asd-server) | Start API server |
-| [`asd ui`](#asd-ui) | Start Dashboard |
-| [`asd status`](#asd-status) | Check environment status |
-| [`asd upgrade`](#asd-upgrade) | Upgrade IDE integrations |
-| [`asd cursor-rules`](#asd-cursor-rules) | Generate Cursor delivery artifacts |
-| [`asd task`](#asd-task) | Task management (TaskGraph) |
-| [`asd sync`](#asd-sync) | Sync Markdown ↔ DB |
+| [`alembic setup`](#alembic-setup) | Initialize project workspace |
+| [`alembic coldstart`](#alembic-coldstart) | Coldstart knowledge base |
+| [`alembic ais`](#alembic-ais-target) | AI scan a target module |
+| [`alembic search`](#alembic-search-query) | Search knowledge base |
+| [`alembic guard`](#alembic-guard-file) | Run Guard rule checks |
+| [`alembic guard:ci`](#alembic-guardci-path) | CI mode Guard check |
+| [`alembic guard:staged`](#alembic-guardstaged) | Pre-commit Guard check |
+| [`alembic watch`](#alembic-watch) | File watcher |
+| [`alembic server`](#alembic-server) | Start API server |
+| [`alembic ui`](#alembic-ui) | Start Dashboard |
+| [`alembic status`](#alembic-status) | Check environment status |
+| [`alembic upgrade`](#alembic-upgrade) | Upgrade IDE integrations |
+| [`alembic cursor-rules`](#alembic-cursor-rules) | Generate Cursor delivery artifacts |
+| [`alembic task`](#alembic-task) | Task management (TaskGraph) |
+| [`alembic sync`](#alembic-sync) | Sync Markdown ↔ DB |
 
 ---
 
-## asd setup
+## alembic setup
 
 Initialize the project workspace. Creates directory structure, SQLite database, IDE integration configs (Cursor / VS Code / Trae / Qoder MCP configs), and template files.
 
 ```bash
-asd setup [options]
+alembic setup [options]
 ```
 
 **Options:**
@@ -65,12 +65,12 @@ your-project/
 
 ---
 
-## asd coldstart
+## alembic coldstart
 
 Coldstart the knowledge base. Performs multi-dimensional analysis of project source code, uses AI to extract code patterns, and generates Candidate drafts for review.
 
 ```bash
-asd coldstart [options]
+alembic coldstart [options]
 ```
 
 **Options:**
@@ -106,12 +106,12 @@ Conditional dimensions (activated by language/framework):
 
 ---
 
-## asd ais [target]
+## alembic ais [target]
 
 AI scan a specific target (module/directory/file), extract code patterns, and generate Recipes.
 
 ```bash
-asd ais [target] [options]
+alembic ais [target] [options]
 ```
 
 **Arguments:**
@@ -131,12 +131,12 @@ asd ais [target] [options]
 
 ---
 
-## asd search \<query\>
+## alembic search \<query\>
 
 Search for Recipes and knowledge entries in the knowledge base.
 
 ```bash
-asd search <query> [options]
+alembic search <query> [options]
 ```
 
 **Options:**
@@ -157,12 +157,12 @@ asd search <query> [options]
 
 ---
 
-## asd guard \<file\>
+## alembic guard \<file\>
 
 Run Guard rule checks on a file.
 
 ```bash
-asd guard <file> [options]
+alembic guard <file> [options]
 ```
 
 **Options:**
@@ -174,12 +174,12 @@ asd guard <file> [options]
 
 ---
 
-## asd guard:ci [path]
+## alembic guard:ci [path]
 
 CI/CD mode full-project Guard check, designed for continuous integration pipelines.
 
 ```bash
-asd guard:ci [path] [options]
+alembic guard:ci [path] [options]
 ```
 
 **Options:**
@@ -203,12 +203,12 @@ asd guard:ci [path] [options]
 
 ---
 
-## asd guard:staged
+## alembic guard:staged
 
 Check git staged files, suitable as a pre-commit hook.
 
 ```bash
-asd guard:staged [options]
+alembic guard:staged [options]
 ```
 
 **Options:**
@@ -223,19 +223,19 @@ asd guard:staged [options]
 ```bash
 # .git/hooks/pre-commit
 #!/bin/sh
-asd guard:staged --fail-on-error
+alembic guard:staged --fail-on-error
 ```
 
 Or use the provided template: `templates/pre-commit-guard.sh`
 
 ---
 
-## asd watch
+## alembic watch
 
 Start file watcher mode. Automatically detects file changes, runs Guard rule checks, and processes directives.
 
 ```bash
-asd watch [options]
+alembic watch [options]
 ```
 
 **Options:**
@@ -256,12 +256,12 @@ asd watch [options]
 
 ---
 
-## asd server
+## alembic server
 
 Start the HTTP API server (without Dashboard frontend).
 
 ```bash
-asd server [options]
+alembic server [options]
 ```
 
 **Options:**
@@ -273,12 +273,12 @@ asd server [options]
 
 ---
 
-## asd ui
+## alembic ui
 
 Start the Dashboard UI, including both API server and frontend.
 
 ```bash
-asd ui [options]
+alembic ui [options]
 ```
 
 **Options:**
@@ -293,12 +293,12 @@ asd ui [options]
 
 ---
 
-## asd status
+## alembic status
 
 Check current environment status, including AI configuration, database connection, dependencies, etc.
 
 ```bash
-asd status
+alembic status
 ```
 
 Output includes:
@@ -309,12 +309,12 @@ Output includes:
 
 ---
 
-## asd upgrade
+## alembic upgrade
 
 Upgrade IDE integration configs. Updates MCP configs, Skills, Cursor Rules, and Copilot Instructions to the latest version.
 
 ```bash
-asd upgrade [options]
+alembic upgrade [options]
 ```
 
 **Options:**
@@ -327,12 +327,12 @@ asd upgrade [options]
 
 ---
 
-## asd cursor-rules
+## alembic cursor-rules
 
 Generate Cursor 4-channel delivery artifacts (Rules files, Skills definitions, Token budget planning, Topic classification).
 
 ```bash
-asd cursor-rules [options]
+alembic cursor-rules [options]
 ```
 
 **Options:**
@@ -344,12 +344,12 @@ asd cursor-rules [options]
 
 ---
 
-## asd task
+## alembic task
 
 TaskGraph management. View task status, statistics, and task lists.
 
 ```bash
-asd task <subcommand> [options]
+alembic task <subcommand> [options]
 ```
 
 **Subcommands:**
@@ -370,12 +370,12 @@ asd task <subcommand> [options]
 
 ---
 
-## asd sync
+## alembic sync
 
 Incrementally sync `Alembic/recipes/*.md` and `Alembic/candidates/*.md` to the SQLite database.
 
 ```bash
-asd sync [options]
+alembic sync [options]
 ```
 
 **Options:**
@@ -400,18 +400,18 @@ CLI commands read environment variables from the `.env` file in the project root
 
 ```env
 # AI Provider (configure at least one; multiple keys enable auto-fallback)
-ASD_GOOGLE_API_KEY=...
-ASD_OPENAI_API_KEY=...
-ASD_CLAUDE_API_KEY=...
-ASD_DEEPSEEK_API_KEY=...
+ALEMBIC_GOOGLE_API_KEY=...
+ALEMBIC_OPENAI_API_KEY=...
+ALEMBIC_CLAUDE_API_KEY=...
+ALEMBIC_DEEPSEEK_API_KEY=...
 
 # Local model
-ASD_AI_PROVIDER=ollama
-ASD_AI_MODEL=llama3
+ALEMBIC_AI_PROVIDER=ollama
+ALEMBIC_AI_MODEL=llama3
 
 # Server
-ASD_PORT=3000
-ASD_HOST=127.0.0.1
+ALEMBIC_PORT=3000
+ALEMBIC_HOST=127.0.0.1
 ```
 
 ---
@@ -421,8 +421,8 @@ ASD_HOST=127.0.0.1
 Developers can invoke CLI via npm scripts:
 
 ```bash
-npm run cli -- <command>        # Equivalent to asd <command>
-npm run dashboard               # Equivalent to asd ui
+npm run cli -- <command>        # Equivalent to alembic <command>
+npm run dashboard               # Equivalent to alembic ui
 npm run mcp                     # Start MCP server
 npm run dev:link                # Global-link development version
 npm run dev:verify              # Verify global installation

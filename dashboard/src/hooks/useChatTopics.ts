@@ -4,10 +4,10 @@ import { useState, useCallback, useRef, useEffect } from 'react';
  * useChatTopics — 聊天话题本地化持久存储
  *
  * 每个话题包含 id、标题、消息列表、创建/更新时间。
- * 数据存储在 localStorage 的 `asd-chat-topics` 键中。
+ * 数据存储在 localStorage 的 `alembic-chat-topics` 键中。
  * ═══════════════════════════════════════════════════════════ */
 
-const STORAGE_KEY = 'asd-chat-topics';
+const STORAGE_KEY = 'alembic-chat-topics';
 const MAX_TOPICS = 50; // 最多保留 50 个话题
 
 export interface ChatMessage {

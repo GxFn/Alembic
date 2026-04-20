@@ -2,14 +2,14 @@
 
 /**
  * 验证 context API 可触达性
- * 需先启动 asd ui，再执行: node scripts/verify-context-api.js
- * 或: ASD_UI_URL=http://localhost:3001 node scripts/verify-context-api.js
+ * 需先启动 alembic ui，再执行: node scripts/verify-context-api.js
+ * 或: ALEMBIC_UI_URL=http://localhost:3001 node scripts/verify-context-api.js
  */
 
 import http from 'node:http';
 import https from 'node:https';
 
-const baseUrl = process.env.ASD_UI_URL || 'http://localhost:3000';
+const baseUrl = process.env.ALEMBIC_UI_URL || 'http://localhost:3000';
 const url = new URL('/api/context/search', baseUrl);
 
 const body = JSON.stringify({ query: '网络请求', limit: 3 });
@@ -53,7 +53,7 @@ const req = client.request(opts, (res) => {
 
 req.on('error', (e) => {
   console.error('❌ 请求失败:', e.message);
-  console.error('   请确保 asd ui 已启动，或设置 ASD_UI_URL');
+  console.error('   请确保 alembic ui 已启动，或设置 ALEMBIC_UI_URL');
   process.exit(1);
 });
 

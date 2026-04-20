@@ -1,7 +1,7 @@
 /**
  * MCP Handlers — Guard 审计 & 项目扫描
  *
- * 统一入口：asd_guard
+ * 统一入口：alembic_guard
  *   无参数         → review 模式（自动 git diff 增量文件 + inline recipe）
  *   files: string[] → 指定文件检查（+ inline recipe）
  *   code: string    → 单文件内联检查
@@ -176,7 +176,7 @@ export async function guardCheck(ctx: McpContext, args: GuardCheckArgs) {
         violations: [],
         summary: { total: 0, errors: 0, warnings: 0 },
       },
-      meta: { tool: 'asd_guard', note: 'Empty code — skipped' },
+      meta: { tool: 'alembic_guard', note: 'Empty code — skipped' },
     });
   }
 
@@ -221,7 +221,7 @@ export async function guardCheck(ctx: McpContext, args: GuardCheckArgs) {
       },
       ...(warnings.length ? { warnings } : {}),
     },
-    meta: { tool: 'asd_guard' },
+    meta: { tool: 'alembic_guard' },
   });
 }
 
@@ -309,7 +309,7 @@ export async function guardAuditFiles(ctx: McpContext, args: GuardAuditArgs) {
           }
         : {}),
     },
-    meta: { tool: 'asd_guard' },
+    meta: { tool: 'alembic_guard' },
   });
 }
 
@@ -350,7 +350,7 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
         maxRoundsReached: true,
       },
       message: `⚠️ Guard review round ${round} exceeds max ${MAX_REVIEW_ROUNDS}. Force-passing. Remaining issues should be tracked as follow-up.`,
-      meta: { tool: 'asd_guard', mode: 'review' },
+      meta: { tool: 'alembic_guard', mode: 'review' },
     });
   }
 
@@ -379,7 +379,7 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
       success: true,
       data: { passed: true, files: [], totalViolations: 0, reviewRound: round, fileSource },
       message: '✅ No changed source files detected. Guard review passed.',
-      meta: { tool: 'asd_guard', mode: 'review' },
+      meta: { tool: 'alembic_guard', mode: 'review' },
     });
   }
 
@@ -502,7 +502,7 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
       'Each violation includes inline `recipe` with doClause + coreCode — apply fixes directly.',
       round >= MAX_REVIEW_ROUNDS - 1
         ? `⚠️ Next round is the last (max ${MAX_REVIEW_ROUNDS}). Unresolved issues will be force-passed.`
-        : `Fix and call asd_guard again (round ${round + 1}).`,
+        : `Fix and call alembic_guard again (round ${round + 1}).`,
     ].join('\n');
   }
 
@@ -533,7 +533,7 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
         : {}),
     },
     message,
-    meta: { tool: 'asd_guard', mode: 'review' },
+    meta: { tool: 'alembic_guard', mode: 'review' },
   });
 }
 
@@ -650,7 +650,7 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
     return envelope({
       success: false,
       data: { targets: [], files: [], guardAudit: null, message: 'ModuleService not available' },
-      meta: { tool: 'asd_bootstrap' },
+      meta: { tool: 'alembic_bootstrap' },
     });
   }
   await service.load();
@@ -660,7 +660,7 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
     return envelope({
       success: true,
       data: { targets: [], files: [], guardAudit: null, message: 'No module targets found' },
-      meta: { tool: 'asd_bootstrap' },
+      meta: { tool: 'alembic_bootstrap' },
     });
   }
 
@@ -798,7 +798,7 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
           }
         : null,
     },
-    meta: { tool: 'asd_bootstrap' },
+    meta: { tool: 'alembic_bootstrap' },
   });
 }
 
@@ -936,7 +936,7 @@ export async function guardReverseAudit(ctx: McpContext, args: ReverseAuditArgs)
         signalCount: r.signals.length,
       })),
     },
-    meta: { tool: 'asd_guard', operation: 'reverse_audit' },
+    meta: { tool: 'alembic_guard', operation: 'reverse_audit' },
   });
 }
 
@@ -980,7 +980,7 @@ export async function guardCoverageMatrix(ctx: McpContext, _args: CoverageMatrix
       lowModules: matrix.lowModules,
       modules: matrix.modules,
     },
-    meta: { tool: 'asd_guard', operation: 'coverage_matrix' },
+    meta: { tool: 'alembic_guard', operation: 'coverage_matrix' },
   });
 }
 
@@ -1050,7 +1050,7 @@ export async function guardComplianceReport(ctx: McpContext, _args: ComplianceRe
       topViolations: (report.topViolations || []).slice(0, 10),
       trend: report.trend || null,
     },
-    meta: { tool: 'asd_guard', operation: 'compliance_report' },
+    meta: { tool: 'alembic_guard', operation: 'compliance_report' },
   });
 }
 

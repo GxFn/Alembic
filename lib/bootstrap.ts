@@ -75,12 +75,13 @@ export class Bootstrap {
       // 0.5 确保 PathGuard 已配置（如果调用方未提前配置）
       // MCP 服务器会在 initialize() 之前配置，但 CLI/测试可能跳过
       if (!pathGuard.configured) {
-        const isMcpMode = process.env.ASD_MCP_MODE === '1';
-        const projectRoot = process.env.ASD_PROJECT_DIR || (isMcpMode ? undefined : process.cwd());
+        const isMcpMode = process.env.ALEMBIC_MCP_MODE === '1';
+        const projectRoot =
+          process.env.ALEMBIC_PROJECT_DIR || (isMcpMode ? undefined : process.cwd());
         if (!projectRoot) {
           throw new Error(
-            '[Bootstrap] MCP 模式下缺少 ASD_PROJECT_DIR 环境变量，' +
-              '且 PathGuard 未提前配置。请在 .vscode/mcp.json 中设置 ASD_PROJECT_DIR。'
+            '[Bootstrap] MCP 模式下缺少 ALEMBIC_PROJECT_DIR 环境变量，' +
+              '且 PathGuard 未提前配置。请在 .vscode/mcp.json 中设置 ALEMBIC_PROJECT_DIR。'
           );
         }
         Bootstrap.configurePathGuard(projectRoot);
@@ -125,7 +126,7 @@ export class Bootstrap {
   /** 加载 .env 文件（dotenv），不覆盖已有环境变量 */
   async loadDotEnv() {
     try {
-      const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+      const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
       const candidates = [path.resolve(projectRoot, '.env'), path.resolve(PACKAGE_ROOT, '.env')];
 
       // Ghost 模式：.env 在 ~/.asd/workspaces/<id>/.env

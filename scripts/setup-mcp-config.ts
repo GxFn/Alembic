@@ -22,12 +22,12 @@ const editor = args.editor || args.e || 'vscode';
 const projectPath = args.path || args.p || process.cwd();
 const isVSCode = editor === 'vscode';
 const isCursor = editor === 'cursor';
-const isQuiet = process.env.ASD_QUIET === 'true';
+const isQuiet = process.env.ALEMBIC_QUIET === 'true';
 
 // 检测是否在 Alembic 仓库内执行
 const isAlembicRepo =
   fs.existsSync(path.join(projectPath, 'bin/mcp-server.js')) &&
-  fs.existsSync(path.join(projectPath, 'bin/asd')) &&
+  fs.existsSync(path.join(projectPath, 'bin/alembic')) &&
   fs.existsSync(path.join(projectPath, 'package.json'));
 
 if (isAlembicRepo && !args.path) {
@@ -83,9 +83,9 @@ function configureVSCode() {
 
   config.servers.asd = {
     type: 'stdio',
-    command: 'asd-mcp',
+    command: 'alembic-mcp',
     env: {
-      ASD_PROJECT_DIR: '${workspaceFolder}',
+      ALEMBIC_PROJECT_DIR: '${workspaceFolder}',
     },
   };
 
@@ -110,10 +110,10 @@ function configureCursor() {
   // 创建配置
   const config = {
     mcpServers: {
-      asd: {
-        command: 'asd-mcp',
+      alembic: {
+        command: 'alembic-mcp',
         env: {
-          ASD_PROJECT_DIR: '${workspaceFolder}',
+          ALEMBIC_PROJECT_DIR: '${workspaceFolder}',
         },
       },
     },

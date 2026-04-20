@@ -73,9 +73,9 @@ class CliLogger {
     process.stderr.write(`${msg}\n`);
   }
 
-  /** 调试信息 → stderr（仅 ASD_DEBUG=1 时输出） */
+  /** 调试信息 → stderr（仅 ALEMBIC_DEBUG=1 时输出） */
   debug(msg: string) {
-    if (process.env.ASD_DEBUG === '1') {
+    if (process.env.ALEMBIC_DEBUG === '1') {
       process.stderr.write(`${msg}\n`);
     }
   }

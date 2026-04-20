@@ -1,5 +1,5 @@
 /**
- * MCP Handler — asd_rescan (增量知识更新)
+ * MCP Handler — alembic_rescan (增量知识更新)
  *
  * 保留已审核 Recipe，清理衍生缓存，全量/指定维度重新扫描，
  * 新知识通过批量提交走正常的进化架构。
@@ -132,7 +132,7 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
     return envelope({
       success: true,
       data: { message: 'No source files found. Nothing to rescan.' },
-      meta: { tool: 'asd_rescan', responseTimeMs: Date.now() - t0 },
+      meta: { tool: 'alembic_rescan', responseTimeMs: Date.now() - t0 },
     });
   }
 
@@ -385,10 +385,10 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
       `仅 ${prescreen.needsVerification.length} 条需要验证。 ` +
       '对每个维度 (按 tiers 顺序): ' +
       'Step 1 — Evolve (仅 needsVerification 中的 Recipe): ' +
-      '读 sourceRefs 源码验证 → 调用 asd_evolve({ decisions: [本维度决策] }) → ' +
+      '读 sourceRefs 源码验证 → 调用 alembic_evolve({ decisions: [本维度决策] }) → ' +
       'Step 2 — Gap-Fill: ' +
-      '分析代码发现新模式 → 调用 asd_submit_knowledge 提交 (数量参考 gap 值) → ' +
-      'Step 3 — Complete: 调用 asd_dimension_complete 完成维度';
+      '分析代码发现新模式 → 调用 alembic_submit_knowledge 提交 (数量参考 gap 值) → ' +
+      'Step 3 — Complete: 调用 alembic_dimension_complete 完成维度';
   }
 
   const dimGapLog = dimensionGaps
@@ -436,10 +436,10 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
       `${coveredDims}/${dimensions.length} 个维度已充分覆盖。` +
       `${gapSummary}` +
       `对每个维度执行三步：` +
-      `(1) asd_evolve — 过滤 allRecipes 中本维度 Recipe，读源码验证后提交决策 → ` +
-      `(2) asd_submit_knowledge — 分析代码，发现未覆盖的新模式 → ` +
-      `(3) asd_dimension_complete — 标记维度完成。` +
+      `(1) alembic_evolve — 过滤 allRecipes 中本维度 Recipe，读源码验证后提交决策 → ` +
+      `(2) alembic_submit_knowledge — 分析代码，发现未覆盖的新模式 → ` +
+      `(3) alembic_dimension_complete — 标记维度完成。` +
       `注意: evidenceHints.constraints.occupiedTriggers 中的 trigger 已被占用，请勿重复。`,
-    meta: { tool: 'asd_rescan', responseTimeMs: Date.now() - t0 },
+    meta: { tool: 'alembic_rescan', responseTimeMs: Date.now() - t0 },
   });
 }

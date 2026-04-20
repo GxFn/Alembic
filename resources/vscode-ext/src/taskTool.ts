@@ -12,7 +12,7 @@ import * as vscode from 'vscode';
 import * as http from 'http';
 
 export function registerTaskTool(context: vscode.ExtensionContext) {
-  const tool = vscode.lm.registerTool<TaskToolInput>('asd', {
+  const tool = vscode.lm.registerTool<TaskToolInput>('alembic', {
 
     async prepareInvocation(
       options: vscode.LanguageModelToolInvocationPrepareOptions<TaskToolInput>,
@@ -88,7 +88,7 @@ function textResult(data: Record<string, unknown>): vscode.LanguageModelToolResu
 }
 
 function forwardToServer(args: Record<string, unknown> | undefined): Promise<Record<string, unknown>> {
-  const config = vscode.workspace.getConfiguration('asd');
+  const config = vscode.workspace.getConfiguration('alembic');
   const host = config.get<string>('serverHost', 'localhost');
   const port = config.get<number>('serverPort', 3000);
   const body = JSON.stringify(args || {});

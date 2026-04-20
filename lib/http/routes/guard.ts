@@ -268,7 +268,7 @@ function _buildDiagnosticMessage(violation: Record<string, unknown>) {
   }
 
   // Agent 指引：嵌入 MCP 搜索建议
-  msg += `\n搜 asd_search('${ruleId}') 查找正确写法。`;
+  msg += `\n搜 alembic_search('${ruleId}') 查找正确写法。`;
 
   return msg;
 }

@@ -79,7 +79,7 @@ export async function bootstrapRefine(ctx: McpContext, args: BootstrapRefineArgs
     return envelope({
       success: true,
       data: { refined: 0, total: 0, errors: [], results: [] },
-      meta: { tool: 'asd_bootstrap', responseTimeMs: Date.now() - t0 },
+      meta: { tool: 'alembic_bootstrap', responseTimeMs: Date.now() - t0 },
     });
   }
 
@@ -393,6 +393,6 @@ ${refineInstruction}
       results,
       message: `Phase 6 AI 润色完成: ${refined}/${entries.length} 条知识条目已更新${args.dryRun ? '（预览模式）' : ''}`,
     },
-    meta: { tool: 'asd_bootstrap', responseTimeMs: Date.now() - t0 },
+    meta: { tool: 'alembic_bootstrap', responseTimeMs: Date.now() - t0 },
   });
 }

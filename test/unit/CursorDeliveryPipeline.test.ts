@@ -346,7 +346,7 @@ describe('RulesGenerator', () => {
   let generator;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'asd-rules-test-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-rules-test-'));
     generator = new RulesGenerator(tmpDir, 'TestProject');
   });
 
@@ -369,7 +369,7 @@ describe('RulesGenerator', () => {
       expect(content).toContain('alwaysApply: true');
       expect(content).toContain('TestProject');
       expect(content).toContain('dispatch_once');
-      expect(content).toContain('asd_search');
+      expect(content).toContain('alembic_search');
     });
 
     test('respects max rules budget', () => {
@@ -394,7 +394,7 @@ describe('RulesGenerator', () => {
 
     test('file name includes topic', () => {
       const result = generator.writeSmartRules('networking', 'body', 'desc');
-      expect(path.basename(result.filePath)).toBe('asd-patterns-networking.mdc');
+      expect(path.basename(result.filePath)).toBe('alembic-patterns-networking.mdc');
     });
   });
 
@@ -402,15 +402,15 @@ describe('RulesGenerator', () => {
     test('removes dynamic files, keeps static', () => {
       const rulesDir = path.join(tmpDir, '.cursor', 'rules');
       fs.mkdirSync(rulesDir, { recursive: true });
-      fs.writeFileSync(path.join(rulesDir, 'asd-project-rules.mdc'), 'dynamic');
-      fs.writeFileSync(path.join(rulesDir, 'asd-patterns-ui.mdc'), 'dynamic');
-      fs.writeFileSync(path.join(rulesDir, 'asd-conventions.mdc'), 'static');
+      fs.writeFileSync(path.join(rulesDir, 'alembic-project-rules.mdc'), 'dynamic');
+      fs.writeFileSync(path.join(rulesDir, 'alembic-patterns-ui.mdc'), 'dynamic');
+      fs.writeFileSync(path.join(rulesDir, 'alembic-conventions.mdc'), 'static');
 
       generator.cleanDynamicFiles();
 
-      expect(fs.existsSync(path.join(rulesDir, 'asd-project-rules.mdc'))).toBe(false);
-      expect(fs.existsSync(path.join(rulesDir, 'asd-patterns-ui.mdc'))).toBe(false);
-      expect(fs.existsSync(path.join(rulesDir, 'asd-conventions.mdc'))).toBe(true);
+      expect(fs.existsSync(path.join(rulesDir, 'alembic-project-rules.mdc'))).toBe(false);
+      expect(fs.existsSync(path.join(rulesDir, 'alembic-patterns-ui.mdc'))).toBe(false);
+      expect(fs.existsSync(path.join(rulesDir, 'alembic-conventions.mdc'))).toBe(true);
     });
   });
 });
@@ -424,7 +424,7 @@ describe('SkillsSyncer', () => {
   let syncer;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'asd-skills-test-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-skills-test-'));
     syncer = new SkillsSyncer(tmpDir, 'TestProject');
   });
 
@@ -469,7 +469,7 @@ describe('SkillsSyncer', () => {
     expect(content).toContain('name: alembic-architecture');
     expect(content).toContain('TestProject');
     expect(content).toContain('modular architecture');
-    expect(content).toContain('asd_search');
+    expect(content).toContain('alembic_search');
 
     // Check references/RECIPES.md exists
     const recipesPath = path.join(
@@ -574,7 +574,7 @@ describe('CursorDeliveryPipeline', () => {
   ];
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'asd-pipeline-test-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-pipeline-test-'));
     mockKnowledgeService = {
       list: vi.fn().mockImplementation(async (filters) => {
         const entries = makeEntries();
@@ -605,7 +605,7 @@ describe('CursorDeliveryPipeline', () => {
     expect(result.channelA.tokensUsed).toBeGreaterThan(0);
     expect(result.channelA.tokensUsed).toBeLessThanOrEqual(BUDGET.CHANNEL_A_MAX);
 
-    const filePath = path.join(tmpDir, '.cursor', 'rules', 'asd-project-rules.mdc');
+    const filePath = path.join(tmpDir, '.cursor', 'rules', 'alembic-project-rules.mdc');
     expect(fs.existsSync(filePath)).toBe(true);
     const content = fs.readFileSync(filePath, 'utf8');
     expect(content).toContain('alwaysApply: true');
@@ -618,7 +618,7 @@ describe('CursorDeliveryPipeline', () => {
 
     // Check at least one pattern file exists
     const rulesDir = path.join(tmpDir, '.cursor', 'rules');
-    const files = fs.readdirSync(rulesDir).filter((f) => f.startsWith('asd-patterns-'));
+    const files = fs.readdirSync(rulesDir).filter((f) => f.startsWith('alembic-patterns-'));
     expect(files.length).toBeGreaterThan(0);
 
     const content = fs.readFileSync(path.join(rulesDir, files[0]), 'utf8');
@@ -719,14 +719,14 @@ describe('CursorDeliveryPipeline', () => {
     expect(result.channelA.rulesCount).toBeGreaterThan(0);
 
     // SKILL.md index should exist
-    const skillPath = path.join(tmpDir, '.cursor', 'skills', 'asd-devdocs', 'SKILL.md');
+    const skillPath = path.join(tmpDir, '.cursor', 'skills', 'alembic-devdocs', 'SKILL.md');
     expect(fs.existsSync(skillPath)).toBe(true);
     const skillContent = fs.readFileSync(skillPath, 'utf8');
-    expect(skillContent).toContain('asd-devdocs');
+    expect(skillContent).toContain('alembic-devdocs');
     expect(skillContent).toContain('BiliDemo');
 
     // Reference MD files should exist
-    const refsDir = path.join(tmpDir, '.cursor', 'skills', 'asd-devdocs', 'references');
+    const refsDir = path.join(tmpDir, '.cursor', 'skills', 'alembic-devdocs', 'references');
     const refFiles = fs.readdirSync(refsDir);
     expect(refFiles.length).toBe(2);
   });

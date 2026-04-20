@@ -1,14 +1,14 @@
 /**
  * TriggerSymbol - Snippet 触发符配置
  *
- * 默认使用 @，可通过环境变量 ASD_TRIGGER_SYMBOL 覆盖（单字符）。
+ * 默认使用 @，可通过环境变量 ALEMBIC_TRIGGER_SYMBOL 覆盖（单字符）。
  * V2 ESM 版本，对应 V1 TriggerSymbol.js
  */
 
 const DEFAULT_SYMBOL = '@';
 
 function fromEnv() {
-  const raw = process.env.ASD_TRIGGER_SYMBOL;
+  const raw = process.env.ALEMBIC_TRIGGER_SYMBOL;
   if (raw != null && String(raw).length === 1) {
     return String(raw);
   }

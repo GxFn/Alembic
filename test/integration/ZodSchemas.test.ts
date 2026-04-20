@@ -319,21 +319,21 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
   describe('TOOL_SCHEMAS mapping', () => {
     test('should have schema for every MCP tool', () => {
       const expectedTools = [
-        'asd_health',
-        'asd_search',
-        'asd_knowledge',
-        'asd_structure',
-        'asd_graph',
-        'asd_call_context',
-        'asd_guard',
-        'asd_submit_knowledge',
-        'asd_skill',
-        'asd_bootstrap',
-        'asd_dimension_complete',
-        'asd_wiki',
-        'asd_task',
-        'asd_enrich_candidates',
-        'asd_knowledge_lifecycle',
+        'alembic_health',
+        'alembic_search',
+        'alembic_knowledge',
+        'alembic_structure',
+        'alembic_graph',
+        'alembic_call_context',
+        'alembic_guard',
+        'alembic_submit_knowledge',
+        'alembic_skill',
+        'alembic_bootstrap',
+        'alembic_dimension_complete',
+        'alembic_wiki',
+        'alembic_task',
+        'alembic_enrich_candidates',
+        'alembic_knowledge_lifecycle',
       ];
       for (const tool of expectedTools) {
         expect(TOOL_SCHEMAS[tool]).toBeDefined();

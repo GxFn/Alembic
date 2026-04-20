@@ -122,7 +122,7 @@ export class RemoteCommandPoller implements vscode.Disposable {
     );
 
     // 读设置 — 若开启则直接启动
-    const config = vscode.workspace.getConfiguration('asd');
+    const config = vscode.workspace.getConfiguration('alembic');
     if (config.get<boolean>('enableRemotePoller', false)) {
       this.start();
     } else {

@@ -153,7 +153,7 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
     return envelope({
       success: true,
       data: { message: 'No source files found. Nothing to rescan.' },
-      meta: { tool: 'asd_rescan', responseTimeMs: Date.now() - t0 },
+      meta: { tool: 'alembic_rescan', responseTimeMs: Date.now() - t0 },
     });
   }
 
@@ -492,6 +492,6 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
       gapDimensions.length > 0
         ? `增量扫描骨架已创建：保留 ${recipeSnapshot.count} 个 Recipe，${gapDimensions.length} 个维度需要补齐，正在后台填充...`
         : `增量扫描完成：保留 ${recipeSnapshot.count} 个 Recipe，所有维度已充分覆盖。`,
-    meta: { tool: 'asd_rescan', responseTimeMs: Date.now() - t0 },
+    meta: { tool: 'alembic_rescan', responseTimeMs: Date.now() - t0 },
   });
 }

@@ -1,12 +1,12 @@
 /**
  * MCP 整合 Handler — 参数路由层
  *
- * 将整合后的工具（asd_search / knowledge / structure / graph / guard / skill）
+ * 将整合后的工具（alembic_search / knowledge / structure / graph / guard / skill）
  * 按 operation / mode 参数路由到已有 handler 实现。
  *
  * 不包含业务逻辑，仅做参数解构 → 路由 → 转发。
  *
- * asd_bootstrap 已迁移到 bootstrap-external.js（外部 Agent 路径）。
+ * alembic_bootstrap 已迁移到 bootstrap-external.js（外部 Agent 路径）。
  */
 
 import { getRequiredFieldsDescription } from '#domain/knowledge/FieldSpec.js';
@@ -27,7 +27,7 @@ import type {
   McpContext,
 } from './types.js';
 
-// ─── asd_search (整合 4 → 1) ────────────────────────
+// ─── alembic_search (整合 4 → 1) ────────────────────────
 
 /**
  * 统合搜索：根据 mode 参数路由到对应搜索 handler
@@ -50,7 +50,7 @@ export async function consolidatedSearch(ctx: McpContext, args: ConsolidatedSear
   }
 }
 
-// ─── asd_knowledge (整合 7 → 1) ─────────────────────
+// ─── alembic_knowledge (整合 7 → 1) ─────────────────────
 
 /**
  * 知识浏览：根据 operation 参数路由
@@ -87,7 +87,7 @@ export async function consolidatedKnowledge(ctx: McpContext, args: ConsolidatedK
   }
 }
 
-// ─── asd_structure (整合 3 → 1) ─────────────────────
+// ─── alembic_structure (整合 3 → 1) ─────────────────────
 
 /**
  * 项目结构：根据 operation 参数路由
@@ -109,14 +109,14 @@ export async function consolidatedStructure(ctx: McpContext, args: ConsolidatedS
   }
 }
 
-// ─── asd_call_context (Phase 5) ─────────────────────
+// ─── alembic_call_context (Phase 5) ─────────────────────
 
 /** 调用链上下文查询：直接转发到 structure.callContext */
 export async function consolidatedCallContext(ctx: McpContext, args: ConsolidatedStructureArgs) {
   return structureHandlers.callContext(ctx, args);
 }
 
-// ─── asd_graph (整合 4 → 1) ─────────────────────────
+// ─── alembic_graph (整合 4 → 1) ─────────────────────────
 
 /**
  * 知识图谱：根据 operation 参数路由
@@ -144,7 +144,7 @@ export async function consolidatedGraph(ctx: McpContext, args: ConsolidatedGraph
   }
 }
 
-// ─── asd_guard (整合 3 → 1) ─────────────────────────
+// ─── alembic_guard (整合 3 → 1) ─────────────────────────
 
 /**
  * Guard 检查：按参数自动路由
@@ -175,7 +175,7 @@ export async function consolidatedGuard(ctx: McpContext, args: ConsolidatedGuard
   return guardHandlers.guardReview(ctx, args);
 }
 
-// ─── asd_skill (整合 6 → 1) ─────────────────────────
+// ─── alembic_skill (整合 6 → 1) ─────────────────────────
 
 /**
  * Skill 管理：根据 operation 参数路由
@@ -221,7 +221,7 @@ export async function consolidatedSkill(ctx: McpContext, args: ConsolidatedSkill
   }
 }
 
-// ─── asd_submit_knowledge (unified pipeline) ──────────────────────
+// ─── alembic_submit_knowledge (unified pipeline) ──────────────────────
 
 /**
  * 统一提交管线：单条与批量走同一代码路径。
@@ -248,7 +248,7 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
       success: false,
       errorCode: 'INVALID_INPUT',
       message: 'items 数组是必需的且不能为空。请传入 items: [{ title, language, ... }]',
-      meta: { tool: 'asd_submit_knowledge' },
+      meta: { tool: 'alembic_submit_knowledge' },
     });
   }
 
@@ -269,7 +269,7 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
       success: false,
       message: `提交过于频繁，请 ${limitCheck.retryAfter}s 后再试。`,
       errorCode: 'RATE_LIMIT',
-      meta: { tool: 'asd_submit_knowledge' },
+      meta: { tool: 'alembic_submit_knowledge' },
     });
   }
 
@@ -421,7 +421,7 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
   if (gatewayResult.pendingSemanticReview && gatewayResult.pendingSemanticReview.length > 0) {
     data.pendingSemanticReview = gatewayResult.pendingSemanticReview;
     data.nextAction = {
-      tool: 'asd_consolidate',
+      tool: 'alembic_consolidate',
       args: {
         decisions: gatewayResult.pendingSemanticReview.map((r) => ({
           newRecipeId: '',
@@ -432,7 +432,7 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
       required: false,
       reason:
         `${gatewayResult.pendingSemanticReview.length} 条候选处于相似度模糊区间（0.4-0.65），` +
-        `字段分析不明确，建议阅读源代码后调用 asd_consolidate 判断是否需要合并。`,
+        `字段分析不明确，建议阅读源代码后调用 alembic_consolidate 判断是否需要合并。`,
     };
   }
 
@@ -448,7 +448,7 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
         requiredFields: getRequiredFieldsDescription(),
         commonErrors: allMissing,
       },
-      meta: { tool: 'asd_submit_knowledge' },
+      meta: { tool: 'alembic_submit_knowledge' },
     });
   }
 
@@ -459,7 +459,7 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     message: allOk
       ? `已提交 ${successCount} 条知识条目。`
       : `已提交 ${successCount}/${items.length} 条知识条目。`,
-    meta: { tool: 'asd_submit_knowledge' },
+    meta: { tool: 'alembic_submit_knowledge' },
   });
 }
 

@@ -3,7 +3,7 @@
  *
  * 三级 fallback:
  *   1. ServiceContainer.singletons._projectRoot（最可靠，Bootstrap 后一定有值）
- *   2. process.env.ASD_PROJECT_DIR（MCP/HTTP Server 启动时设置）
+ *   2. process.env.ALEMBIC_PROJECT_DIR（MCP/HTTP Server 启动时设置）
  *   3. process.cwd()（CLI 模式下通常正确；MCP 模式下可能是 $HOME）
  *
  * 用于 MCP handler / HTTP route / Service 内部获取项目根目录，
@@ -31,7 +31,7 @@ export function resolveProjectRoot(container?: ContainerLike | null): string {
   if (typeof fromContainer === 'string' && fromContainer) {
     return fromContainer;
   }
-  return process.env.ASD_PROJECT_DIR || process.cwd();
+  return process.env.ALEMBIC_PROJECT_DIR || process.cwd();
 }
 
 /**

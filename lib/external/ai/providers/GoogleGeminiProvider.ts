@@ -31,11 +31,13 @@ export class GoogleGeminiProvider extends AiProvider {
       ...config,
       maxConcurrency:
         config.maxConcurrency ||
-        Number(process.env.ASD_GEMINI_MAX_CONCURRENCY || process.env.ASD_AI_MAX_CONCURRENCY || 2),
+        Number(
+          process.env.ALEMBIC_GEMINI_MAX_CONCURRENCY || process.env.ALEMBIC_AI_MAX_CONCURRENCY || 2
+        ),
     });
     this.name = 'google-gemini';
     this.model = config.model || 'gemini-3-flash-preview';
-    this.apiKey = config.apiKey || process.env.ASD_GOOGLE_API_KEY || '';
+    this.apiKey = config.apiKey || process.env.ALEMBIC_GOOGLE_API_KEY || '';
     this.#embedModel = config.embedModel
       ? `models/${config.embedModel.replace(/^models\//, '')}`
       : DEFAULT_EMBED_MODEL;
@@ -457,7 +459,7 @@ export class GoogleGeminiProvider extends AiProvider {
   ): Promise<ApiResponse> {
     if (!this.apiKey) {
       const err = new Error(
-        'Google Gemini API Key 未配置。请在 .env 中设置 ASD_GOOGLE_API_KEY，或运行 asd setup 完成配置。'
+        'Google Gemini API Key 未配置。请在 .env 中设置 ALEMBIC_GOOGLE_API_KEY，或运行 alembic setup 完成配置。'
       );
       (err as Error & { code: string }).code = 'API_KEY_MISSING';
       throw err;

@@ -2,8 +2,8 @@
  * RulesGenerator — .mdc 文件生成器
  *
  * 生成 Cursor Rules 格式的 .mdc 文件到 .cursor/rules/ 目录：
- *   - Channel A: asd-project-rules.mdc (alwaysApply: true)
- *   - Channel B: asd-patterns-{topic}.mdc (alwaysApply: false)
+ *   - Channel A: alembic-project-rules.mdc (alwaysApply: true)
+ *   - Channel B: alembic-patterns-{topic}.mdc (alwaysApply: false)
  */
 
 import fs from 'node:fs';
@@ -52,9 +52,9 @@ export class RulesGenerator {
     }
 
     const content = this._renderChannelA(kept);
-    const filePath = path.join(this.rulesDir, 'asd-project-rules.mdc');
+    const filePath = path.join(this.rulesDir, 'alembic-project-rules.mdc');
     if (this.wz) {
-      this.wz.writeFile(this.wz.project('.cursor/rules/asd-project-rules.mdc'), content);
+      this.wz.writeFile(this.wz.project('.cursor/rules/alembic-project-rules.mdc'), content);
     } else {
       fs.writeFileSync(filePath, content, 'utf8');
     }
@@ -95,7 +95,7 @@ export class RulesGenerator {
     }
 
     const content = this._renderChannelB(topic, body, description);
-    const fileName = `asd-patterns-${topic}.mdc`;
+    const fileName = `alembic-patterns-${topic}.mdc`;
     const filePath = path.join(this.rulesDir, fileName);
     if (this.wz) {
       this.wz.writeFile(this.wz.project(`.cursor/rules/${fileName}`), content);
@@ -111,14 +111,14 @@ export class RulesGenerator {
 
   /**
    * 清理旧的动态生成文件
-   * 保留静态模板文件（asd-conventions.mdc, asd-skills.mdc）
+   * 保留静态模板文件（alembic-conventions.mdc, alembic-skills.mdc）
    */
   cleanDynamicFiles() {
     if (!fs.existsSync(this.rulesDir)) {
       return;
     }
 
-    const dynamicPrefixes = ['asd-project-rules', 'asd-patterns-'];
+    const dynamicPrefixes = ['alembic-project-rules', 'alembic-patterns-'];
     const files = fs.readdirSync(this.rulesDir);
     for (const file of files) {
       if (dynamicPrefixes.some((p) => file.startsWith(p))) {
@@ -151,8 +151,8 @@ export class RulesGenerator {
       ...ruleLines,
       '',
       'For detailed patterns and recipes, Alembic MCP tools are available:',
-      '- `asd_search({ query })` — search knowledge base (auto mode: BM25 + semantic)',
-      '- `asd_search({ query, mode: "context" })` — context-aware search with history',
+      '- `alembic_search({ query })` — search knowledge base (auto mode: BM25 + semantic)',
+      '- `alembic_search({ query, mode: "context" })` — context-aware search with history',
     ];
     return `${lines.join('\n')}\n`;
   }
@@ -169,7 +169,7 @@ export class RulesGenerator {
       '',
       body,
       '',
-      `For full code examples: \`asd_search("${topic}")\``,
+      `For full code examples: \`alembic_search("${topic}")\``,
     ];
     return `${lines.join('\n')}\n`;
   }
@@ -182,9 +182,9 @@ export class RulesGenerator {
     this._ensureDir();
 
     const content = this._renderBaseline();
-    const filePath = path.join(this.rulesDir, 'asd-project-rules.mdc');
+    const filePath = path.join(this.rulesDir, 'alembic-project-rules.mdc');
     if (this.wz) {
-      this.wz.writeFile(this.wz.project('.cursor/rules/asd-project-rules.mdc'), content);
+      this.wz.writeFile(this.wz.project('.cursor/rules/alembic-project-rules.mdc'), content);
     } else {
       fs.writeFileSync(filePath, content, 'utf8');
     }
@@ -210,18 +210,18 @@ export class RulesGenerator {
       '',
       '## Available MCP Tools',
       '',
-      '- `asd_bootstrap` — Cold-start: analyze the project and generate initial knowledge entries',
-      '- `asd_search({ query })` — Search knowledge base (BM25 + semantic)',
-      '- `asd_submit_knowledge` — Submit a knowledge candidate (strict validation)',
-      '- `asd_guard` — Run compliance review on current changes',
-      '- `asd_task` — Task & decision management (prime/create/claim/close/record_decision)',
-      '- `asd_panorama` — Project panorama (overview/module/gaps/health)',
+      '- `alembic_bootstrap` — Cold-start: analyze the project and generate initial knowledge entries',
+      '- `alembic_search({ query })` — Search knowledge base (BM25 + semantic)',
+      '- `alembic_submit_knowledge` — Submit a knowledge candidate (strict validation)',
+      '- `alembic_guard` — Run compliance review on current changes',
+      '- `alembic_task` — Task & decision management (prime/create/claim/close/record_decision)',
+      '- `alembic_panorama` — Project panorama (overview/module/gaps/health)',
       '',
       '## Recommended First Steps',
       '',
-      '1. Run `asd_bootstrap` to analyze the codebase and generate initial recipes',
-      '2. Use `asd_search` to query knowledge while coding',
-      '3. Run `asd_guard` before committing to check compliance',
+      '1. Run `alembic_bootstrap` to analyze the codebase and generate initial recipes',
+      '2. Use `alembic_search` to query knowledge while coding',
+      '3. Run `alembic_guard` before committing to check compliance',
     ];
     return `${lines.join('\n')}\n`;
   }

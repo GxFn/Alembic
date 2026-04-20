@@ -30,7 +30,7 @@ const DEEPSEEK_BASE = 'https://api.deepseek.com/v1';
  * @param options {provider, model, apiKey, baseUrl}
  */
 export function createProvider(options: Record<string, unknown> = {}) {
-  const provider = (options.provider as string) || process.env.ASD_AI_PROVIDER || 'google';
+  const provider = (options.provider as string) || process.env.ALEMBIC_AI_PROVIDER || 'google';
   const ProviderClass = (
     PROVIDER_MAP as Record<
       string,
@@ -54,13 +54,13 @@ export function createProvider(options: Record<string, unknown> = {}) {
     case 'deepseek':
       config.name = 'deepseek';
       config.baseUrl = config.baseUrl || DEEPSEEK_BASE;
-      config.apiKey = config.apiKey || process.env.ASD_DEEPSEEK_API_KEY || '';
+      config.apiKey = config.apiKey || process.env.ALEMBIC_DEEPSEEK_API_KEY || '';
       config.model = config.model || 'deepseek-chat';
       break;
     case 'ollama':
       config.name = 'ollama';
       config.baseUrl =
-        config.baseUrl || process.env.ASD_OLLAMA_BASE_URL || 'http://localhost:11434/v1';
+        config.baseUrl || process.env.ALEMBIC_OLLAMA_BASE_URL || 'http://localhost:11434/v1';
       config.apiKey = config.apiKey || 'ollama';
       config.model = config.model || 'llama3';
       config.embedModel = config.embedModel || 'qwen3-embedding:0.6b';
@@ -74,29 +74,29 @@ export function createProvider(options: Record<string, unknown> = {}) {
 
 /**
  * 从环境变量自动探测并创建 Provider
- * 优先级: ASD_AI_PROVIDER 指定 > 有 key 的第一个
+ * 优先级: ALEMBIC_AI_PROVIDER 指定 > 有 key 的第一个
  */
 export function autoDetectProvider() {
   const logger = Logger.getInstance();
-  const explicit = process.env.ASD_AI_PROVIDER;
+  const explicit = process.env.ALEMBIC_AI_PROVIDER;
 
   if (explicit && explicit.toLowerCase() !== 'auto') {
     // 验证显式指定的 provider 是否有对应 API Key
     const keyEnvMap = {
-      google: 'ASD_GOOGLE_API_KEY',
-      'google-gemini': 'ASD_GOOGLE_API_KEY',
-      gemini: 'ASD_GOOGLE_API_KEY',
-      openai: 'ASD_OPENAI_API_KEY',
-      deepseek: 'ASD_DEEPSEEK_API_KEY',
-      claude: 'ASD_CLAUDE_API_KEY',
-      anthropic: 'ASD_CLAUDE_API_KEY',
+      google: 'ALEMBIC_GOOGLE_API_KEY',
+      'google-gemini': 'ALEMBIC_GOOGLE_API_KEY',
+      gemini: 'ALEMBIC_GOOGLE_API_KEY',
+      openai: 'ALEMBIC_OPENAI_API_KEY',
+      deepseek: 'ALEMBIC_DEEPSEEK_API_KEY',
+      claude: 'ALEMBIC_CLAUDE_API_KEY',
+      anthropic: 'ALEMBIC_CLAUDE_API_KEY',
       ollama: null, // Ollama 不需要 key
       mock: null,
     };
     const requiredKeyEnv = (keyEnvMap as Record<string, string | null>)[explicit.toLowerCase()];
     if (requiredKeyEnv && !process.env[requiredKeyEnv]) {
       logger.warn(
-        `[AiFactory] ASD_AI_PROVIDER=${explicit} 但 ${requiredKeyEnv} 未配置，尝试自动探测其他可用 provider…`
+        `[AiFactory] ALEMBIC_AI_PROVIDER=${explicit} 但 ${requiredKeyEnv} 未配置，尝试自动探测其他可用 provider…`
       );
       // 降级到自动探测，不直接 return
     } else {
@@ -106,25 +106,25 @@ export function autoDetectProvider() {
   }
 
   // 按优先级探测
-  if (process.env.ASD_GOOGLE_API_KEY) {
+  if (process.env.ALEMBIC_GOOGLE_API_KEY) {
     logger.debug('Auto-detected Google Gemini provider');
     return createProvider({ provider: 'google' });
   }
-  if (process.env.ASD_OPENAI_API_KEY) {
+  if (process.env.ALEMBIC_OPENAI_API_KEY) {
     logger.debug('Auto-detected OpenAI provider');
     return createProvider({ provider: 'openai' });
   }
-  if (process.env.ASD_CLAUDE_API_KEY) {
+  if (process.env.ALEMBIC_CLAUDE_API_KEY) {
     logger.debug('Auto-detected Claude provider');
     return createProvider({ provider: 'claude' });
   }
-  if (process.env.ASD_DEEPSEEK_API_KEY) {
+  if (process.env.ALEMBIC_DEEPSEEK_API_KEY) {
     logger.debug('Auto-detected DeepSeek provider');
     return createProvider({ provider: 'deepseek' });
   }
 
   logger.info(
-    '[AiFactory] 未找到任何 AI API Key，AI 功能已跳过。请在 .env 中配置 ASD_GOOGLE_API_KEY 等。'
+    '[AiFactory] 未找到任何 AI API Key，AI 功能已跳过。请在 .env 中配置 ALEMBIC_GOOGLE_API_KEY 等。'
   );
   return createProvider({ provider: 'mock' });
 }
@@ -132,10 +132,10 @@ export function autoDetectProvider() {
 // ─── Fallback 机制 ──────────────────────────────────────────
 
 const PROVIDER_KEY_MAP = {
-  google: 'ASD_GOOGLE_API_KEY',
-  openai: 'ASD_OPENAI_API_KEY',
-  deepseek: 'ASD_DEEPSEEK_API_KEY',
-  claude: 'ASD_CLAUDE_API_KEY',
+  google: 'ALEMBIC_GOOGLE_API_KEY',
+  openai: 'ALEMBIC_OPENAI_API_KEY',
+  deepseek: 'ALEMBIC_DEEPSEEK_API_KEY',
+  claude: 'ALEMBIC_CLAUDE_API_KEY',
 };
 
 /** 获取可用的 fallback provider 列表（排除当前 provider） */
@@ -175,7 +175,7 @@ export async function getProviderWithFallback() {
     return null;
   }
 
-  const currentProvider = (process.env.ASD_AI_PROVIDER || 'google').toLowerCase();
+  const currentProvider = (process.env.ALEMBIC_AI_PROVIDER || 'google').toLowerCase();
 
   // 用 probe 测试 primary 是否可用
   try {
@@ -217,7 +217,7 @@ export async function getProviderWithFallback() {
 /**
  * 创建独立的 Embedding Provider
  *
- * 当 ASD_EMBED_PROVIDER 被设置时，创建一个专用于 embedding 的 provider 实例，
+ * 当 ALEMBIC_EMBED_PROVIDER 被设置时，创建一个专用于 embedding 的 provider 实例，
  * 使 embedding 和 LLM 生成可以使用不同的提供商/模型。
  *
  * 典型场景：LLM 用 Google Gemini，Embedding 用本地 Ollama + qwen3-embedding
@@ -225,7 +225,7 @@ export async function getProviderWithFallback() {
  * @returns 独立的 embed provider，或 null（未配置时）
  */
 export function createEmbedProvider(): ReturnType<typeof createProvider> | null {
-  const embedProviderName = process.env.ASD_EMBED_PROVIDER;
+  const embedProviderName = process.env.ALEMBIC_EMBED_PROVIDER;
   if (!embedProviderName) {
     return null;
   }
@@ -235,23 +235,23 @@ export function createEmbedProvider(): ReturnType<typeof createProvider> | null 
 
   return createProvider({
     provider: embedProviderName,
-    model: process.env.ASD_EMBED_MODEL || undefined,
-    baseUrl: process.env.ASD_EMBED_BASE_URL || undefined,
-    apiKey: process.env.ASD_EMBED_API_KEY || undefined,
-    embedModel: process.env.ASD_EMBED_MODEL || undefined,
+    model: process.env.ALEMBIC_EMBED_MODEL || undefined,
+    baseUrl: process.env.ALEMBIC_EMBED_BASE_URL || undefined,
+    apiKey: process.env.ALEMBIC_EMBED_API_KEY || undefined,
+    embedModel: process.env.ALEMBIC_EMBED_MODEL || undefined,
   });
 }
 
 /** 获取当前 AI 配置信息（同步，用于 UI 展示） */
 export function getAiConfigInfo() {
-  const provider = process.env.ASD_AI_PROVIDER || 'auto';
-  const model = process.env.ASD_AI_MODEL || '';
-  const embedProvider = process.env.ASD_EMBED_PROVIDER || '';
-  const embedModel = process.env.ASD_EMBED_MODEL || '';
-  const hasGoogleKey = !!process.env.ASD_GOOGLE_API_KEY;
-  const hasOpenAiKey = !!process.env.ASD_OPENAI_API_KEY;
-  const hasClaudeKey = !!process.env.ASD_CLAUDE_API_KEY;
-  const hasDeepSeekKey = !!process.env.ASD_DEEPSEEK_API_KEY;
+  const provider = process.env.ALEMBIC_AI_PROVIDER || 'auto';
+  const model = process.env.ALEMBIC_AI_MODEL || '';
+  const embedProvider = process.env.ALEMBIC_EMBED_PROVIDER || '';
+  const embedModel = process.env.ALEMBIC_EMBED_MODEL || '';
+  const hasGoogleKey = !!process.env.ALEMBIC_GOOGLE_API_KEY;
+  const hasOpenAiKey = !!process.env.ALEMBIC_OPENAI_API_KEY;
+  const hasClaudeKey = !!process.env.ALEMBIC_CLAUDE_API_KEY;
+  const hasDeepSeekKey = !!process.env.ALEMBIC_DEEPSEEK_API_KEY;
 
   return {
     provider,

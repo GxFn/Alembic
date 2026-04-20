@@ -9,51 +9,51 @@
   },
   "imports": {
     "#shared/*": {
-      "asd-dev": "./lib/shared/*",
+      "alembic-dev": "./lib/shared/*",
       "default": "./dist/lib/shared/*"
     },
     "#infra/*": {
-      "asd-dev": "./lib/infrastructure/*",
+      "alembic-dev": "./lib/infrastructure/*",
       "default": "./dist/lib/infrastructure/*"
     },
     "#service/*": {
-      "asd-dev": "./lib/service/*",
+      "alembic-dev": "./lib/service/*",
       "default": "./dist/lib/service/*"
     },
     "#agent/*": {
-      "asd-dev": "./lib/agent/*",
+      "alembic-dev": "./lib/agent/*",
       "default": "./dist/lib/agent/*"
     },
     "#domain/*": {
-      "asd-dev": "./lib/domain/*",
+      "alembic-dev": "./lib/domain/*",
       "default": "./dist/lib/domain/*"
     },
     "#inject/*": {
-      "asd-dev": "./lib/injection/*",
+      "alembic-dev": "./lib/injection/*",
       "default": "./dist/lib/injection/*"
     },
     "#core/*": {
-      "asd-dev": "./lib/core/*",
+      "alembic-dev": "./lib/core/*",
       "default": "./dist/lib/core/*"
     },
     "#external/*": {
-      "asd-dev": "./lib/external/*",
+      "alembic-dev": "./lib/external/*",
       "default": "./dist/lib/external/*"
     },
     "#platform/*": {
-      "asd-dev": "./lib/platform/*",
+      "alembic-dev": "./lib/platform/*",
       "default": "./dist/lib/platform/*"
     },
     "#repo/*": {
-      "asd-dev": "./lib/repository/*",
+      "alembic-dev": "./lib/repository/*",
       "default": "./dist/lib/repository/*"
     },
     "#types/*": {
-      "asd-dev": "./lib/types/*",
+      "alembic-dev": "./lib/types/*",
       "default": "./dist/lib/types/*"
     },
     "#http/*": {
-      "asd-dev": "./lib/http/*",
+      "alembic-dev": "./lib/http/*",
       "default": "./dist/lib/http/*"
     }
   },
@@ -77,7 +77,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "dev:link": "npm run build && npm install -g .",
-    "dev:verify": "which asd && asd -v",
+    "dev:verify": "which alembic && alembic -v",
     "release:check": "node dist/scripts/release.js check",
     "release:patch": "node dist/scripts/release.js patch",
     "release:minor": "node dist/scripts/release.js minor",
@@ -96,8 +96,8 @@
   "author": "gaoxuefeng",
   "license": "MIT",
   "bin": {
-    "asd": "dist/bin/cli.js",
-    "asd-mcp": "dist/bin/mcp-server.js"
+    "alembic": "dist/bin/cli.js",
+    "alembic-mcp": "dist/bin/mcp-server.js"
   },
   "keywords": [
     "knowledge-base",

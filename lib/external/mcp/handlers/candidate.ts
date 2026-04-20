@@ -3,7 +3,7 @@
  * validateCandidate, checkDuplicate, enrichCandidates
  *
  * 注意: submitSingle, submitBatch, submitDrafts 已移至 V3 knowledge handlers
- *       (asd_submit_knowledge / submit_knowledge_batch / knowledge_lifecycle)
+ *       (alembic_submit_knowledge / submit_knowledge_batch / knowledge_lifecycle)
  */
 
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
@@ -104,7 +104,7 @@ export async function validateCandidate(ctx: McpContext, args: ValidateCandidate
   return envelope({
     success: ok,
     data: { ok, errors, warnings, suggestions },
-    meta: { tool: 'asd_validate_candidate' },
+    meta: { tool: 'alembic_validate_candidate' },
   });
 }
 
@@ -125,7 +125,7 @@ export async function checkDuplicate(ctx: McpContext, args: CheckDuplicateArgs) 
   return envelope({
     success: true,
     data: { similar },
-    meta: { tool: 'asd_check_duplicate' },
+    meta: { tool: 'alembic_check_duplicate' },
   });
 }
 
@@ -256,6 +256,6 @@ export async function enrichCandidates(ctx: McpContext, args: EnrichCandidatesAr
           ? '请 Agent 根据 missingFields（语义）和 recipeReadyMissing（必填）自行补全后重新提交'
           : '所有条目字段完整',
     },
-    meta: { tool: 'asd_enrich_candidates' },
+    meta: { tool: 'alembic_enrich_candidates' },
   });
 }

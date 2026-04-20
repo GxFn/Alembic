@@ -28,7 +28,7 @@
 
 // 标记 MCP 模式 — 必须在任何模块加载前设置
 // 使用动态 import() 避免 ESM static import hoisting 导致 env 未就绪
-process.env.ASD_MCP_MODE = '1';
+process.env.ALEMBIC_MCP_MODE = '1';
 
 // ─── 进程级错误兜底 ────────────────────────────────────
 process.on('uncaughtException', (error) => {

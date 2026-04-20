@@ -270,7 +270,7 @@ export class HttpServer {
       const role = req.resolvedRole || 'visitor';
       const user = req.resolvedUser || 'anonymous';
       const mode =
-        process.env.VITE_AUTH_ENABLED === 'true' || process.env.ASD_AUTH_ENABLED === 'true'
+        process.env.VITE_AUTH_ENABLED === 'true' || process.env.ALEMBIC_AUTH_ENABLED === 'true'
           ? 'token'
           : 'probe';
       const probeCache = this.capabilityProbe ? this.capabilityProbe.getCacheStatus() : null;

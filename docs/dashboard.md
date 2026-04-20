@@ -1,6 +1,6 @@
 # Dashboard
 
-> Alembic 的可视化管理界面。通过 `asd ui` 启动。
+> Alembic 的可视化管理界面。通过 `alembic ui` 启动。
 >
 > [English](dashboard.en.md)
 

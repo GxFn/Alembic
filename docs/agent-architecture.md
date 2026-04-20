@@ -246,7 +246,7 @@ c.singleton('agentFactory', (ct) =>
 ```json
 // package.json
 "#agent/*": {
-  "asd-dev": "./lib/agent/*",
+  "alembic-dev": "./lib/agent/*",
   "default": "./dist/lib/agent/*"
 }
 ```

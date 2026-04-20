@@ -7,18 +7,18 @@ Access the knowledge base through MCP tools.
 
 ## MCP Tools
 
-- `asd_task` — Task & decision management (prime/create/close/fail/record_decision)
-- `asd_search` — Search knowledge (mode: auto/context/keyword/semantic)
-- `asd_knowledge` — Knowledge CRUD (operation: list/get/insights)
-- `asd_submit_knowledge` — Submit knowledge candidate
-- `asd_guard` — Code compliance check
-- `asd_skill` — Skill management (list/load)
-- `asd_structure` — Project structure discovery
-- `asd_bootstrap` — Project cold-start & scan
-- `asd_rescan` — Incremental rescan: preserves Recipes, cleans caches, re-analyzes project, runs relevance audit
-- `asd_evolve` — Batch Recipe evolution decisions (propose_evolution/confirm_deprecation/skip), used per-dimension during rescan or standalone
-- `asd_panorama` — Project panorama (operation: overview/module/gaps/health)
-- `asd_health` — Service health & KB stats
+- `alembic_task` — Task & decision management (prime/create/close/fail/record_decision)
+- `alembic_search` — Search knowledge (mode: auto/context/keyword/semantic)
+- `alembic_knowledge` — Knowledge CRUD (operation: list/get/insights)
+- `alembic_submit_knowledge` — Submit knowledge candidate
+- `alembic_guard` — Code compliance check
+- `alembic_skill` — Skill management (list/load)
+- `alembic_structure` — Project structure discovery
+- `alembic_bootstrap` — Project cold-start & scan
+- `alembic_rescan` — Incremental rescan: preserves Recipes, cleans caches, re-analyzes project, runs relevance audit
+- `alembic_evolve` — Batch Recipe evolution decisions (propose_evolution/confirm_deprecation/skip), used per-dimension during rescan or standalone
+- `alembic_panorama` — Project panorama (operation: overview/module/gaps/health)
+- `alembic_health` — Service health & KB stats
 
 ## Constraints
 

@@ -7,7 +7,7 @@ if [[ "$1" == "--brief" ]]; then
   # Brief mode — survives compaction, minimal context
   cat <<'EOF'
 📋 Alembic Task Rules (MANDATORY):
-• Prime EVERY message: asd_task({ operation: "prime" }) FIRST.
+• Prime EVERY message: alembic_task({ operation: "prime" }) FIRST.
 • Create task for non-trivial work (≥2 files OR ≥10 lines). Create → code → close.
 • Handle in-progress tasks before new work. Close/fail ALL on session end.
 • You are the task operator — user speaks naturally, you run task operations.
@@ -19,10 +19,10 @@ else
   cat <<'EOF'
 [Alembic Task Rules]
 
-⚡ FIRST: Call asd_task({ "operation": "prime" }) on EVERY message. No exceptions.
+⚡ FIRST: Call alembic_task({ "operation": "prime" }) on EVERY message. No exceptions.
 
-🔑 CRITICAL: YOU Operate asd_task — The User Doesn't
-• WRONG: "You can run asd_task to create a task"
+🔑 CRITICAL: YOU Operate alembic_task — The User Doesn't
+• WRONG: "You can run alembic_task to create a task"
 • RIGHT: (you run create yourself and tell the user "Created task asd-42")
 
 📋 MUST:
@@ -45,14 +45,14 @@ else
 
 💡 When in doubt → create a task.
 
-📌 User agrees/disagrees with plan → asd_task({ operation: "record_decision" }) immediately
+📌 User agrees/disagrees with plan → alembic_task({ operation: "record_decision" }) immediately
 
 ✅ Session end checklist:
   [ ] Close every task with reason
   [ ] Fail incomplete tasks with notes
   [ ] Verify zero in_progress
 
-🔎 Search knowledge: asd_search({ query: "..." })
+🔎 Search knowledge: alembic_search({ query: "..." })
 📚 Do NOT modify Alembic/recipes/ or .asd/ directly
 EOF
 fi

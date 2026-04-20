@@ -74,7 +74,7 @@ export function patchWikiTask(patch: Record<string, unknown>) {
 function createGenerator(container: ReturnType<typeof getServiceContainer>) {
   const projectRoot =
     (container.singletons?._projectRoot as string | undefined) ||
-    process.env.ASD_PROJECT_DIR ||
+    process.env.ALEMBIC_PROJECT_DIR ||
     process.cwd();
   const dataRoot = resolveDataRoot(container as any) || projectRoot;
 
@@ -141,7 +141,7 @@ function createGenerator(container: ReturnType<typeof getServiceContainer>) {
       }
     },
     options: {
-      language: process.env.ASD_WIKI_LANG || 'zh',
+      language: process.env.ALEMBIC_WIKI_LANG || 'zh',
     },
   });
 
@@ -296,7 +296,7 @@ router.get('/status', async (req: Request, res: Response): Promise<void> => {
 /* ═══ GET /api/v1/wiki/files ═══════════════════════ */
 
 router.get('/files', async (req: Request, res: Response): Promise<void> => {
-  const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+  const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
   const wikiDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
 
   if (!fs.existsSync(wikiDir)) {
@@ -335,7 +335,7 @@ router.get('/files', async (req: Request, res: Response): Promise<void> => {
 /* ═══ GET /api/v1/wiki/file/:path(*) ═══════════════ */
 
 router.get('/file/{*path}', async (req: Request, res: Response): Promise<void> => {
-  const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+  const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
   const wikiDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
   const rawPath = req.params.path;
   const requestedPath = Array.isArray(rawPath) ? rawPath.join('/') : String(rawPath ?? '');

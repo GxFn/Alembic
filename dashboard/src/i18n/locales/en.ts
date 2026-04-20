@@ -1201,7 +1201,7 @@ export const en: DeepString<typeof zh> = {
     mcpToolHeader: 'Tool',
     mcpDescHeader: 'Description',
     mcpAgentLayerHeader: 'Agent Layer (18) — exposed by default',
-    mcpAdminLayerHeader: 'Admin Layer (4) — requires ASD_MCP_TIER=admin',
+    mcpAdminLayerHeader: 'Admin Layer (4) — requires ALEMBIC_MCP_TIER=admin',
     mcpHealthDesc: 'Service health check',
     mcpCapabilitiesDesc: 'Service capabilities list (Agent self-discovery)',
     mcpGuardDesc: 'code=single file audit / files=batch audit',

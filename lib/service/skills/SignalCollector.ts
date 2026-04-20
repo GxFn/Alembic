@@ -1,7 +1,7 @@
 /**
  * SignalCollector — AI 驱动的后台行为分析与 Skill 推荐引擎
  *
- * 在 `asd ui` 运行时作为后台守护进程运行，周期性收集多维度信号并
+ * 在 `alembic ui` 运行时作为后台守护进程运行，周期性收集多维度信号并
  * 通过 AgentFactory（统一 Agent 系统）进行深度分析，生成 Skill 推荐。
  *
  * 三种工作模式：

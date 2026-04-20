@@ -31,7 +31,7 @@
  *
  * 数据流
  * ─────
- *   写入：编辑子仓库文件 → git push（需权限）→ asd sync → 更新 DB 缓存
+ *   写入：编辑子仓库文件 → git push（需权限）→ alembic sync → 更新 DB 缓存
  *   读取：查询 SQLite（快速索引）
  *   核心数据（统一 Recipe 实体）修改必须经过 git，普通用户无法绕过
  *
@@ -126,7 +126,7 @@ export class SetupService {
       throw new Error(
         `[SetupService] 检测到当前目录是排除项目（${exclusion.reason}），` +
           '拒绝执行 setup 以避免创建 .asd/ 和 Alembic/ 运行时数据。' +
-          '\n提示: 请在用户项目目录中运行 asd setup，或使用 asd setup --ghost。'
+          '\n提示: 请在用户项目目录中运行 alembic setup，或使用 alembic setup --ghost。'
       );
     }
 
@@ -228,7 +228,7 @@ export class SetupService {
     }
     console.log('');
     console.log('  下一步：');
-    console.log('    1. 运行 asd ui 启动后台服务');
+    console.log('    1. 运行 alembic ui 启动后台服务');
     console.log('    2. 打开 IDE Agent Mode，告诉它「帮我冷启动」');
     console.log('    3. 所有分析和知识提取都通过 IDE 完成，无需额外配置');
     console.log('');
@@ -253,7 +253,7 @@ export class SetupService {
           subRepoDir: this.subRepoDir,
           ...(this.subRepoUrl ? { subRepoUrl: this.subRepoUrl } : {}),
         },
-        ai: { provider: process.env.ASD_AI_PROVIDER || 'auto' },
+        ai: { provider: process.env.ALEMBIC_AI_PROVIDER || 'auto' },
         guard: { enabled: true },
         watch: {
           enabled: false,
@@ -557,7 +557,7 @@ export class SetupService {
               '`recipes/` 目录随主仓库提交。如需独立管理（团队权限控制），运行：',
               '',
               '```bash',
-              'asd remote <your-recipes-repo-url>',
+              'alembic remote <your-recipes-repo-url>',
               '```',
             ]),
         '',
@@ -656,12 +656,12 @@ export class SetupService {
       writeFileSync(
         envPath,
         [
-          '# Alembic AI 配置（由 asd setup 自动生成）',
+          '# Alembic AI 配置（由 alembic setup 自动生成）',
           '# 完整配置说明见 .env.example',
           '',
-          'ASD_AI_PROVIDER=google',
-          'ASD_AI_MODEL=gemini-3-flash-preview',
-          '# ASD_GOOGLE_API_KEY=',
+          'ALEMBIC_AI_PROVIDER=google',
+          'ALEMBIC_AI_MODEL=gemini-3-flash-preview',
+          '# ALEMBIC_GOOGLE_API_KEY=',
           '',
         ].join('\n')
       );
@@ -755,7 +755,7 @@ export class SetupService {
 
   /**
    * 尝试初始化向量索引: 检查 embedding provider 可用性，
-   * 若可用则自动构建初始索引；否则提示用户手动运行 asd embed。
+   * 若可用则自动构建初始索引；否则提示用户手动运行 alembic embed。
    *
    * 此步骤为 best-effort: 失败不阻塞 setup 流程。
    */
@@ -769,7 +769,7 @@ export class SetupService {
         return {
           status: 'skipped',
           reason: 'vectorService 未注册（AI Provider 未配置或容器未完全初始化）',
-          hint: '运行 `asd embed` 构建语义向量索引',
+          hint: '运行 `alembic embed` 构建语义向量索引',
         };
       }
 
@@ -782,7 +782,7 @@ export class SetupService {
         return {
           status: 'skipped',
           reason: '未配置 AI API Key',
-          hint: '配置 API Key 后运行 `asd embed` 启用语义搜索',
+          hint: '配置 API Key 后运行 `alembic embed` 启用语义搜索',
         };
       }
 
@@ -807,7 +807,7 @@ export class SetupService {
       return {
         status: 'warning',
         error: err instanceof Error ? err.message : String(err),
-        hint: '运行 `asd embed` 手动构建向量索引',
+        hint: '运行 `alembic embed` 手动构建向量索引',
       };
     }
   }

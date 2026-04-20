@@ -1022,7 +1022,7 @@ export class WikiGenerator {
    * 同步 Cursor 端保存的 MD 到 wiki 目录
    *
    * 同步源:
-   *   1. .cursor/skills/asd-devdocs/references/ (*.md)  → wiki/documents/
+   *   1. .cursor/skills/alembic-devdocs/references/ (*.md)  → wiki/documents/
    *
    * @returns >}
    */
@@ -1035,7 +1035,7 @@ export class WikiGenerator {
       this.projectRoot,
       '.cursor',
       'skills',
-      'asd-devdocs',
+      'alembic-devdocs',
       'references'
     );
     if (fs.existsSync(devdocsDir)) {
@@ -1044,7 +1044,7 @@ export class WikiGenerator {
       for (const file of files) {
         try {
           const content = fs.readFileSync(path.join(devdocsDir, file), 'utf-8');
-          const header = `<!-- synced from .cursor/skills/asd-devdocs/references/${file} -->\n\n`;
+          const header = `<!-- synced from .cursor/skills/alembic-devdocs/references/${file} -->\n\n`;
           const result: WikiFileResult = this._writeFile(`documents/${file}`, header + content);
           result.source = 'cursor-devdocs';
           synced.push(result);

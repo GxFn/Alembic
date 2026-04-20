@@ -97,15 +97,15 @@ export async function health(ctx: McpContext) {
   const actionHints: string[] = [];
   if (!checks.database) {
     actionHints.push(
-      'DB 不可用不影响冷启动：asd_bootstrap 不依赖数据库（纯文件系统分析），可直接调用。DB 会在首次 submit_knowledge 时自动重试初始化。'
+      'DB 不可用不影响冷启动：alembic_bootstrap 不依赖数据库（纯文件系统分析），可直接调用。DB 会在首次 submit_knowledge 时自动重试初始化。'
     );
   }
   if (!knowledgeBase || knowledgeBase.recipes.total === 0) {
     actionHints.push(
-      '知识库为空，建议执行冷启动：(1) 调用 asd_bootstrap 获取 Mission Briefing → (2) 按维度分析代码并提交知识 → (3) 调用 asd_dimension_complete 完成每个维度。'
+      '知识库为空，建议执行冷启动：(1) 调用 alembic_bootstrap 获取 Mission Briefing → (2) 按维度分析代码并提交知识 → (3) 调用 alembic_dimension_complete 完成每个维度。'
     );
     actionHints.push(
-      '💡 冷启动指引：调用 asd_bootstrap 获取 Mission Briefing → 按维度分析代码 → 调用 asd_dimension_complete 完成每个维度'
+      '💡 冷启动指引：调用 alembic_bootstrap 获取 Mission Briefing → 按维度分析代码 → 调用 alembic_dimension_complete 完成每个维度'
     );
   }
 
@@ -135,7 +135,7 @@ export async function health(ctx: McpContext) {
       ...(issues.length ? { issues } : {}),
       ...(actionHints.length ? { actionHints } : {}),
     },
-    meta: { tool: 'asd_health' },
+    meta: { tool: 'alembic_health' },
   });
 }
 

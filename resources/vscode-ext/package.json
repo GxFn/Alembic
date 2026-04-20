@@ -1,9 +1,9 @@
 {
-  "name": "asd",
+  "name": "alembic",
   "displayName": "Alembic",
   "description": "Knowledge-driven code snippets — search, insert, create, and audit directly in your editor",
   "version": "0.1.0",
-  "publisher": "asd",
+  "publisher": "alembic",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -21,7 +21,7 @@
     "snippet",
     "knowledge",
     "code-search",
-    "asd"
+    "alembic"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -30,73 +30,73 @@
   "contributes": {
     "commands": [
       {
-        "command": "asd.search",
+        "command": "alembic.search",
         "title": "Alembic: Search Knowledge Base",
         "icon": "$(search)"
       },
       {
-        "command": "asd.create",
+        "command": "alembic.create",
         "title": "Alembic: Create Candidate from Selection"
       },
       {
-        "command": "asd.audit",
+        "command": "alembic.audit",
         "title": "Alembic: Audit Current File"
       },
       {
-        "command": "asd.auditProject",
+        "command": "alembic.auditProject",
         "title": "Alembic: Audit Entire Project"
       },
       {
-        "command": "asd.status",
+        "command": "alembic.status",
         "title": "Alembic: Show Connection Status"
       },
       {
-        "command": "asd.toggleRemotePoller",
+        "command": "alembic.toggleRemotePoller",
         "title": "Alembic: Toggle Remote Command Poller"
       },
       {
-        "command": "asd.startRemotePoller",
+        "command": "alembic.startRemotePoller",
         "title": "Alembic: Start Remote Command Poller"
       },
       {
-        "command": "asd.stopRemotePoller",
+        "command": "alembic.stopRemotePoller",
         "title": "Alembic: Stop Remote Command Poller"
       }
     ],
     "configuration": {
       "title": "Alembic",
       "properties": {
-        "asd.serverPort": {
+        "alembic.serverPort": {
           "type": "number",
           "default": 3000,
           "description": "Port of the Alembic API server (asd ui / asd start)"
         },
-        "asd.serverHost": {
+        "alembic.serverHost": {
           "type": "string",
           "default": "localhost",
           "description": "Host of the Alembic API server"
         },
-        "asd.enableDirectiveDetection": {
+        "alembic.enableDirectiveDetection": {
           "type": "boolean",
           "default": true,
           "description": "Enable automatic detection of Alembic directives in code"
         },
-        "asd.enableCodeLens": {
+        "alembic.enableCodeLens": {
           "type": "boolean",
           "default": true,
           "description": "Show CodeLens actions above Alembic directives"
         },
-        "asd.enableGuardDiagnostics": {
+        "alembic.enableGuardDiagnostics": {
           "type": "boolean",
           "default": true,
           "description": "Enable Guard diagnostics on file save (shows violations as editor warnings)"
         },
-        "asd.insertHighlightDuration": {
+        "alembic.insertHighlightDuration": {
           "type": "number",
           "default": 2000,
           "description": "Duration (ms) to highlight inserted code"
         },
-        "asd.enableRemotePoller": {
+        "alembic.enableRemotePoller": {
           "type": "boolean",
           "default": false,
           "description": "Enable remote command polling (飞书/Lark Bot → IDE bridge). When enabled, the extension polls for remote commands and injects them into Copilot Chat."
@@ -105,16 +105,16 @@
     },
     "keybindings": [
       {
-        "command": "asd.search",
+        "command": "alembic.search",
         "key": "ctrl+shift+f5",
         "mac": "cmd+shift+f5"
       }
     ],
     "languageModelTools": [
       {
-        "name": "asd",
+        "name": "alembic",
         "displayName": "Alembic",
-        "toolReferenceName": "asd",
+        "toolReferenceName": "alembic",
         "canBeReferencedInPrompt": true,
         "modelDescription": "Project persistent memory. Stores team decisions and tracks tasks across sessions.\n\nWorkflow: 1) prime → load decisions & tasks. 2) Respect ALL returned decisions. 3) record_decision when user agrees/disagrees on something. 4) create/close to track work.\n\nKey operations: prime (load memory), record_decision (save agreement), create (new task), close (finish task), list/show/stats (query).",
         "icon": "$(database)",

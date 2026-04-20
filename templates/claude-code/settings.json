@@ -1,9 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(asd *)",
+      "Bash(alembic *)",
       "Bash(curl -s * localhost:3000/*)",
-      "mcp__asd__*"
+      "mcp__alembic__*"
     ]
   },
   "hooks": {

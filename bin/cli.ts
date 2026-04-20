@@ -4,21 +4,21 @@
  * Alembic V2 CLI
  *
  * Usage:
- *   asd setup           - 初始化项目（--repo 指定子仓库远程地址）
- *   asd remote <url>    - 将 recipes 目录转为独立子仓库并关联远程仓库
- *   asd coldstart       - 冷启动知识库（9 维度分析 + AI 填充）
- *   asd rescan          - 增量知识更新（保留 Recipe，重新扫描）
- *   asd evolve-check    - 定向 Recipe 进化审计（轻量级）
- *   asd ais [Target]    - AI 扫描 Target → 直接发布 Recipes
- *   asd search <query>  - 搜索知识库
- *   asd guard <file>    - Guard 检查
- *   asd guard:ci [path] - CI/CD Guard 合规检查
- *   asd server          - 启动 API 服务
- *   asd ui              - 启动 Dashboard UI
- *   asd upgrade         - 升级 IDE 集成
- *   asd mirror          - 镜像 .cursor/ → .qoder/ .trae/
- *   asd status          - 环境状态
- *   asd health          - 综合健康报告
+ *   alembic setup           - 初始化项目（--repo 指定子仓库远程地址）
+ *   alembic remote <url>    - 将 recipes 目录转为独立子仓库并关联远程仓库
+ *   alembic coldstart       - 冷启动知识库（9 维度分析 + AI 填充）
+ *   alembic rescan          - 增量知识更新（保留 Recipe，重新扫描）
+ *   alembic evolve-check    - 定向 Recipe 进化审计（轻量级）
+ *   alembic ais [Target]    - AI 扫描 Target → 直接发布 Recipes
+ *   alembic search <query>  - 搜索知识库
+ *   alembic guard <file>    - Guard 检查
+ *   alembic guard:ci [path] - CI/CD Guard 合规检查
+ *   alembic server          - 启动 API 服务
+ *   alembic ui              - 启动 Dashboard UI
+ *   alembic upgrade         - 升级 IDE 集成
+ *   alembic mirror          - 镜像 .cursor/ → .qoder/ .trae/
+ *   alembic status          - 环境状态
+ *   alembic health          - 综合健康报告
  */
 
 import {
@@ -40,7 +40,7 @@ const pkg = existsSync(pkgPath) ? JSON.parse(readFileSync(pkgPath, 'utf8')) : { 
 
 // ─── 进程级错误兜底 ────────────────────────────────────
 process.on('uncaughtException', (error) => {
-  process.stderr.write(`[asd] Uncaught Exception: ${error.message}\n`);
+  process.stderr.write(`[alembic] Uncaught Exception: ${error.message}\n`);
   if (error.stack) {
     process.stderr.write(`${error.stack}\n`);
   }
@@ -50,7 +50,7 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason) => {
   const msg = reason instanceof Error ? reason.message : String(reason);
   const stack = reason instanceof Error ? reason.stack : undefined;
-  process.stderr.write(`[asd] Unhandled Rejection: ${msg}\n`);
+  process.stderr.write(`[alembic] Unhandled Rejection: ${msg}\n`);
   if (stack) {
     process.stderr.write(`${stack}\n`);
   }
@@ -61,7 +61,7 @@ process.on('unhandledRejection', (reason) => {
 shutdown.install();
 
 const program = new Command();
-program.name('asd').description('Alembic V2 - AI 知识库管理工具').version(pkg.version);
+program.name('alembic').description('Alembic V2 - AI 知识库管理工具').version(pkg.version);
 
 // ─────────────────────────────────────────────────────
 // setup 命令
@@ -105,7 +105,7 @@ program
 
     // 1. 校验目录存在
     if (!existsSync(subRepoPath)) {
-      cli.error('recipes/ 目录不存在，请先运行 asd setup');
+      cli.error('recipes/ 目录不存在，请先运行 alembic setup');
       process.exit(1);
     }
 
@@ -1214,10 +1214,10 @@ program
     const { spawn } = await import('node:child_process');
 
     // 标记为长驻 API 服务进程（CacheCoordinator 用于判断是否启动轮询）
-    process.env.ASD_API_SERVER = '1';
+    process.env.ALEMBIC_API_SERVER = '1';
 
-    // 项目根目录：-d 选项 > 环境变量 ASD_CWD > 当前目录
-    const projectRoot = opts.dir || process.env.ASD_CWD || process.cwd();
+    // 项目根目录：-d 选项 > 环境变量 ALEMBIC_CWD > 当前目录
+    const projectRoot = opts.dir || process.env.ALEMBIC_CWD || process.cwd();
     const port = opts.port;
     const host = '127.0.0.1';
     process.env.PORT = port;
@@ -1301,8 +1301,8 @@ program
             auditRepo: auditRepo as any,
             agentFactory,
             container,
-            mode: process.env.ASD_SIGNAL_MODE || 'auto',
-            intervalMs: parseInt(process.env.ASD_SIGNAL_INTERVAL || '3600000', 10),
+            mode: process.env.ALEMBIC_SIGNAL_MODE || 'auto',
+            intervalMs: parseInt(process.env.ALEMBIC_SIGNAL_INTERVAL || '3600000', 10),
             onSuggestions: (suggestions: any) => {
               try {
                 const realtime = getRealtimeService();
@@ -1425,7 +1425,7 @@ program
     // 检查 .asd 目录
     const asdDir = join(resolver.dataRoot, '.asd');
     cli.log(
-      `  Workspace:    ${existsSync(asdDir) ? `✅ ${resolver.ghost ? '👻 Ghost' : '.asd/'}` : '❌ not initialized (run asd setup)'}`
+      `  Workspace:    ${existsSync(asdDir) ? `✅ ${resolver.ghost ? '👻 Ghost' : '.asd/'}` : '❌ not initialized (run alembic setup)'}`
     );
 
     // 检查依赖
@@ -1798,18 +1798,18 @@ program
 
 // ─────────────────────────────────────────────────────
 // task 命令 — Task 系统已迁移到 MCP (零 DB，纯内存 + JSONL)
-// CLI task 子命令已废弃，通过 MCP asd_task 操作
+// CLI task 子命令已废弃，通过 MCP alembic_task 操作
 // ─────────────────────────────────────────────────────
 const taskCmd = program
   .command('task')
-  .description('Task 管理（已迁移到 MCP — 通过 asd_task 操作）');
+  .description('Task 管理（已迁移到 MCP — 通过 alembic_task 操作）');
 
 taskCmd
   .command('list')
   .description('[已废弃] Task 系统不再使用数据库。通过 MCP prime 操作获取上下文。')
   .action(() => {
     cli.log('\n  ⚠️ Task 系统已迁移到 MCP（零 DB，纯内存 + JSONL）。');
-    cli.log('  使用 asd_task({ operation: "prime" }) 加载上下文。\n');
+    cli.log('  使用 alembic_task({ operation: "prime" }) 加载上下文。\n');
   });
 
 // ─────────────────────────────────────────────────────
@@ -1826,7 +1826,7 @@ program
 
     const cursorDir = join(projectRoot, '.cursor');
     if (!existsSync(cursorDir)) {
-      cli.error('❌ 未找到 .cursor/ 目录，请先运行 asd setup 或 asd cursor-rules');
+      cli.error('❌ 未找到 .cursor/ 目录，请先运行 alembic setup 或 alembic cursor-rules');
       process.exit(1);
     }
 
@@ -1928,7 +1928,7 @@ program
     const { bootstrap, container } = await initContainer({ projectRoot });
     const db = container.get('database')?.getDb?.();
     if (!db) {
-      cli.error('❌ 无法打开数据库，请先运行 asd setup');
+      cli.error('❌ 无法打开数据库，请先运行 alembic setup');
       process.exit(1);
     }
 
@@ -2157,7 +2157,7 @@ program
       fs.writeFileSync(dest, JSON.stringify(config, null, 2));
     }
 
-    /** 移除 MCP 配置中的 asd 条目 */
+    /** 移除 MCP 配置中的 alembic 条目 */
     function removeMcpEntry(dest: string, key: string) {
       if (!fs.existsSync(dest)) {
         return;
@@ -2194,17 +2194,17 @@ program
 
     /** Cursor MCP 条目（全局用 ${workspaceFolder}） */
     const cursorMcpEntry = {
-      command: 'asd-mcp',
-      env: { ASD_PROJECT_DIR: '${workspaceFolder}' },
+      command: 'alembic-mcp',
+      env: { ALEMBIC_PROJECT_DIR: '${workspaceFolder}' },
     };
 
     /** VSCode MCP 条目 */
     function vscodeMcpEntry(absPath: boolean) {
       return {
         type: 'stdio',
-        command: 'asd-mcp',
+        command: 'alembic-mcp',
         env: {
-          ASD_PROJECT_DIR: absPath ? projectRoot : '${workspaceFolder}',
+          ALEMBIC_PROJECT_DIR: absPath ? projectRoot : '${workspaceFolder}',
         },
       };
     }
@@ -2213,7 +2213,7 @@ program
       case 'status': {
         const entry = ProjectRegistry.get(projectRoot);
         if (!entry) {
-          console.log('  项目未注册。运行 asd setup 或 asd setup --ghost 初始化。');
+          console.log('  项目未注册。运行 alembic setup 或 alembic setup --ghost 初始化。');
         } else if (entry.ghost) {
           const wsDir = ProjectRegistry.getWorkspaceDir(projectRoot);
           console.log(`  👻 Ghost 模式: 已启用`);
@@ -2273,7 +2273,7 @@ program
         }
         console.log('  📌 MCP 配置已切换到全局（~/.cursor/mcp.json + VSCode 全局）');
         if (!migrated) {
-          console.log('  提示: 运行 asd setup --ghost 完成初始化');
+          console.log('  提示: 运行 alembic setup --ghost 完成初始化');
         }
         break;
       }
@@ -2282,7 +2282,7 @@ program
         // ── Ghost → 标准 ──────────────────────────────
         const existing = ProjectRegistry.get(projectRoot);
         if (!existing) {
-          console.log('  项目未注册。运行 asd setup 初始化。');
+          console.log('  项目未注册。运行 alembic setup 初始化。');
           break;
         }
         if (!existing.ghost) {
@@ -2329,7 +2329,7 @@ program
           console.log('  📦 已迁移 .asd/ 和 Alembic/ 回项目内');
         }
         console.log('  📌 MCP 配置已切换到项目级（.cursor/mcp.json + .vscode/mcp.json）');
-        console.log('  提示: 运行 asd upgrade 补全 .gitignore 等配置');
+        console.log('  提示: 运行 alembic upgrade 补全 .gitignore 等配置');
         break;
       }
 
@@ -2361,7 +2361,7 @@ program
 
       default:
         console.error(`  未知操作: ${action}`);
-        console.log('  用法: asd ghost [status|on|off|list|clean]');
+        console.log('  用法: alembic ghost [status|on|off|list|clean]');
     }
   });
 

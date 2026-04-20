@@ -702,7 +702,7 @@ export const queryCodeGraph = {
         if (!entityRepo || !edgeRepo) {
           return '代码实体图谱不可用: 数据库未初始化';
         }
-        const projectRoot = ctx?.projectRoot || process.env.ASD_PROJECT_DIR || '';
+        const projectRoot = ctx?.projectRoot || process.env.ALEMBIC_PROJECT_DIR || '';
         ceg = new CodeEntityGraph(entityRepo, edgeRepo, { projectRoot });
       }
       const maxDepth = params.max_depth || 3;
@@ -881,7 +881,7 @@ export const queryCallGraph = {
         if (!entityRepo || !edgeRepo) {
           return '调用图查询不可用: 数据库未初始化。';
         }
-        const projectRoot = ctx?.projectRoot || process.env.ASD_PROJECT_DIR || '';
+        const projectRoot = ctx?.projectRoot || process.env.ALEMBIC_PROJECT_DIR || '';
         ceg = new CodeEntityGraph(entityRepo, edgeRepo, { projectRoot });
       }
 

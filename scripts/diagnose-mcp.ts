@@ -13,7 +13,7 @@ import https from 'node:https';
 import * as Defaults from '../lib/infrastructure/config/Defaults.js';
 
 function getBaseUrl() {
-  return process.env.ASD_UI_URL || Defaults.DEFAULT_ASD_UI_URL || 'http://localhost:3000';
+  return process.env.ALEMBIC_UI_URL || Defaults.DEFAULT_ALEMBIC_UI_URL || 'http://localhost:3000';
 }
 
 function request(method: any, urlStr: any) {
@@ -48,8 +48,8 @@ function request(method: any, urlStr: any) {
   const base = getBaseUrl();
   const healthUrl = new URL('/api/health', base).toString();
   const env = {
-    ASD_UI_URL: process.env.ASD_UI_URL || null,
-    ASD_MCP_TOKEN: process.env.ASD_MCP_TOKEN ? 'set' : 'unset',
+    ALEMBIC_UI_URL: process.env.ALEMBIC_UI_URL || null,
+    ALEMBIC_MCP_TOKEN: process.env.ALEMBIC_MCP_TOKEN ? 'set' : 'unset',
   };
 
   let health: any = null;
@@ -74,8 +74,8 @@ function request(method: any, urlStr: any) {
       env,
     },
     next: [
-      '在 MCP 客户端调用 asd_health 进行能力自检',
-      '如需鉴权，请在 MCP 服务器环境设置 ASD_MCP_TOKEN',
+      '在 MCP 客户端调用 alembic_health 进行能力自检',
+      '如需鉴权，请在 MCP 服务器环境设置 ALEMBIC_MCP_TOKEN',
       '提交候选时传入 clientId 以启用限流（避免短时间批量提交）',
     ],
   };

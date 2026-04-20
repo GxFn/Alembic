@@ -10,7 +10,7 @@
  *
  * Guard 工作方式：
  *   - **用户手动**：写 `// as:a` 后保存 → 波浪线显示 violations
- *   - **Agent MCP**：调 `asd_task({ operation: "guard_review" })` → 返回 violations
+ *   - **Agent MCP**：调 `alembic_task({ operation: "guard_review" })` → 返回 violations
  *   - 不再在每次保存时自动检查（避免干扰开发流程）
  *
  * 架构：
@@ -52,7 +52,7 @@ const POPUP_THROTTLE_MS = 10 * 60 * 1000;
  */
 function buildEvolvePrompt(report: FileChangeReport): string {
   const lines: string[] = [];
-  lines.push('Alembic 检测到源码变更可能影响以下 Recipe。请使用 MCP 工具 asd_evolve 评估并提交 propose_evolution / confirm_deprecation 决策：');
+  lines.push('Alembic 检测到源码变更可能影响以下 Recipe。请使用 MCP 工具 alembic_evolve 评估并提交 propose_evolution / confirm_deprecation 决策：');
   lines.push('');
   for (const d of report.details) {
     if (d.action === 'needs-review' || d.action === 'deprecate') {
@@ -63,7 +63,7 @@ function buildEvolvePrompt(report: FileChangeReport): string {
     }
   }
   lines.push('');
-  lines.push('如 Recipe 仍有效，请调用 asd_evolve 传 action=skip, skipReason=still_valid 以刷新验证时间。');
+  lines.push('如 Recipe 仍有效，请调用 alembic_evolve 传 action=skip, skipReason=still_valid 以刷新验证时间。');
   return lines.join('\n');
 }
 
@@ -135,7 +135,7 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   try {
-  const config = vscode.workspace.getConfiguration('asd');
+  const config = vscode.workspace.getConfiguration('alembic');
   const host = config.get<string>('serverHost', 'localhost');
   const port = config.get<number>('serverPort', 3000);
 
@@ -170,12 +170,12 @@ export function activate(context: vscode.ExtensionContext) {
   // ─── 注册命令 ───
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('asd.search', cmdSearch),
-    vscode.commands.registerCommand('asd.create', cmdCreate),
-    vscode.commands.registerCommand('asd.audit', cmdAudit),
-    vscode.commands.registerCommand('asd.auditProject', cmdAuditProject),
-    vscode.commands.registerCommand('asd.status', cmdStatus),
-    // vscode.commands.registerCommand('asd._executeDirective', cmdExecuteDirective),
+    vscode.commands.registerCommand('alembic.search', cmdSearch),
+    vscode.commands.registerCommand('alembic.create', cmdCreate),
+    vscode.commands.registerCommand('alembic.audit', cmdAudit),
+    vscode.commands.registerCommand('alembic.auditProject', cmdAuditProject),
+    vscode.commands.registerCommand('alembic.status', cmdStatus),
+    // vscode.commands.registerCommand('alembic._executeDirective', cmdExecuteDirective),
   );
 
   // ─── onSave 指令检测 — 暂时关闭，待后续处理 ───
@@ -202,17 +202,17 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (
-        e.affectsConfiguration('asd.serverHost') ||
-        e.affectsConfiguration('asd.serverPort')
+        e.affectsConfiguration('alembic.serverHost') ||
+        e.affectsConfiguration('alembic.serverPort')
       ) {
-        const cfg = vscode.workspace.getConfiguration('asd');
+        const cfg = vscode.workspace.getConfiguration('alembic');
         apiClient.updateConfig(
           cfg.get<string>('serverHost', 'localhost'),
           cfg.get<number>('serverPort', 3000)
         );
         statusBar.checkNow();
       }
-      // if (e.affectsConfiguration('asd.enableCodeLens')) {
+      // if (e.affectsConfiguration('alembic.enableCodeLens')) {
       //   codeLensProvider.refresh();
       // }
     })
@@ -367,7 +367,7 @@ async function cmdAuditProject() {
  */
 async function cmdStatus() {
   const connected = await statusBar.checkNow();
-  const config = vscode.workspace.getConfiguration('asd');
+  const config = vscode.workspace.getConfiguration('alembic');
   const host = config.get<string>('serverHost', 'localhost');
   const port = config.get<number>('serverPort', 3000);
 
@@ -451,7 +451,7 @@ async function doSearch(
   const selected = await showSearchQuickPick(results, query, editor);
   if (!selected) return;
 
-  const config = vscode.workspace.getConfiguration('asd');
+  const config = vscode.workspace.getConfiguration('alembic');
   const highlightDuration = config.get<number>('insertHighlightDuration', 2000);
 
   // ── 1. 头文件自动插入到 import 区域（TODO: 以后再做）──
@@ -611,7 +611,7 @@ async function doCreate(
     }
   } else {
     // 打开 Dashboard
-    const config = vscode.workspace.getConfiguration('asd');
+    const config = vscode.workspace.getConfiguration('alembic');
     const host = config.get<string>('serverHost', 'localhost');
     const port = config.get<number>('serverPort', 3000);
     const url = `http://${host}:${port}/?action=create`;

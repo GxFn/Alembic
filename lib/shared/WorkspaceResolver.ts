@@ -45,7 +45,9 @@ export class WorkspaceResolver {
       // Ghost 模式：从 ProjectRegistry 查 ID 或用显式传入的 ID
       this.projectId = opts.projectId ?? ProjectRegistry.get(this.projectRoot)?.id ?? null;
       if (!this.projectId) {
-        throw new Error(`[WorkspaceResolver] Ghost 模式需要项目已注册。请先运行 asd setup --ghost`);
+        throw new Error(
+          `[WorkspaceResolver] Ghost 模式需要项目已注册。请先运行 alembic setup --ghost`
+        );
       }
       this.dataRoot = getGhostWorkspaceDir(this.projectId);
     } else {

@@ -3,7 +3,7 @@
 **重要**：本项目是 Alembic 的核心开发仓库，不是用户项目环境。
 
 ### 禁止操作
-- **不要执行面向用户的 asd 命令**：如 `asd setup`、`asd embed`、`asd search` 等（这些是为用户项目设计的）
+- **不要执行面向用户的 asd 命令**：如 `alembic setup`、`alembic embed`、`alembic search` 等（这些是为用户项目设计的）
 - **不要在本项目启动测试性前端服务**：如 Dashboard UI 测试、开发服务器等
 - **不要把 Alembic/ 目录当做用户的 Knowledge Base**：它是源代码库，不是某个用户的项目数据
 - **不要在项目根目录创建 `.asd/` 或 `Alembic/candidates/`**：这些是用户项目的运行时目录，代码中有 `isOwnDevRepo()` 保护机制会阻止创建

@@ -1,6 +1,6 @@
 ---
-name: asd-guard
-description: Guard checks code against project Recipe standards via MCP tool asd_guard (auto-routes by code/files params). Use when the user wants to audit, lint, or verify code compliance.
+name: alembic-guard
+description: Guard checks code against project Recipe standards via MCP tool alembic_guard (auto-routes by code/files params). Use when the user wants to audit, lint, or verify code compliance.
 ---
 
 # Alembic Guard — Code Compliance Checking
@@ -9,7 +9,7 @@ description: Guard checks code against project Recipe standards via MCP tool asd
 
 ---
 
-## MCP Tool: `asd_guard`
+## MCP Tool: `alembic_guard`
 
 **Single code check** (`code` param):
 ```json
@@ -37,17 +37,17 @@ Guard uses **Recipe content** as the standard — no separate config:
 ## Agent Workflow
 
 ### Quick Check ("检查这段代码")
-1. `asd_guard` with code → present violations + fix suggestions
+1. `alembic_guard` with code → present violations + fix suggestions
 
 ### Module Audit ("审查网络模块")
-1. `asd_structure(operation=files)` → get file list
-2. `asd_guard` with file paths → summarize by severity
+1. `alembic_structure(operation=files)` → get file list
+2. `alembic_guard` with file paths → summarize by severity
 
 ### Project-wide
-1. `asd_bootstrap` → full project scan including Guard audit
+1. `alembic_bootstrap` → full project scan including Guard audit
 
 ---
 
 ## Related Skills
 
-- **asd-recipes**: Recipe content IS the Guard standard
+- **alembic-recipes**: Recipe content IS the Guard standard

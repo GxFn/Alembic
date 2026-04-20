@@ -73,11 +73,11 @@ function _parseSkillMeta(skillName: string, baseDir = SKILLS_DIR) {
 
 /** Skill 适用场景映射 — 帮助 Agent 判断何时该加载哪个 Skill */
 const SKILL_USE_CASES: Record<string, string> = {
-  'asd-create': '将代码模式/规则/事实提交到知识库',
-  'asd-guard': '代码规范审计（Guard 规则检查）',
-  'asd-recipes': '查询/使用项目标准（Recipe 上下文检索）',
-  'asd-structure': '了解项目结构（Target / 依赖图谱 / 知识图谱）',
-  'asd-devdocs': '保存开发文档（架构决策、调试报告、设计文档）',
+  'alembic-create': '将代码模式/规则/事实提交到知识库',
+  'alembic-guard': '代码规范审计（Guard 规则检查）',
+  'alembic-recipes': '查询/使用项目标准（Recipe 上下文检索）',
+  'alembic-structure': '了解项目结构（Target / 依赖图谱 / 知识图谱）',
+  'alembic-devdocs': '保存开发文档（架构决策、调试报告、设计文档）',
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -278,7 +278,7 @@ export function loadSkill(ctx: McpContext | null, args: { skillName?: string; se
 
 /**
  * 创建项目级 Skill — 写入 {projectRoot}/Alembic/skills/<name>/SKILL.md
- * 创建后自动 regenerate 编辑器索引（.cursor/rules/asd-skills.mdc）
+ * 创建后自动 regenerate 编辑器索引（.cursor/rules/alembic-skills.mdc）
  *
  * @param _ctx MCP context
  * @param args { name, description, content, overwrite? }
@@ -429,13 +429,13 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
       path: skillPath,
       overwritten: fs.existsSync(skillPath) && overwrite,
       editorIndex: indexResult,
-      hint: `Skill "${name}" created. Use asd_skill({ operation: "load", name: "${name}" }) to verify content.`,
+      hint: `Skill "${name}" created. Use alembic_skill({ operation: "load", name: "${name}" }) to verify content.`,
     },
   });
 }
 
 /**
- * Regenerate .cursor/rules/asd-skills.mdc 索引文件
+ * Regenerate .cursor/rules/alembic-skills.mdc 索引文件
  * 扫描所有项目级 Skills，生成摘要索引供 External Agent 被动发现
  *
  * @returns }
@@ -465,9 +465,9 @@ function _regenerateEditorIndex(ctx?: McpContext) {
     if (projectSkills.length === 0) {
       try {
         if (wz) {
-          wz.remove(wz.project('.cursor/rules/asd-skills.mdc'));
+          wz.remove(wz.project('.cursor/rules/alembic-skills.mdc'));
         } else {
-          fs.unlinkSync(path.join(rulesDir, 'asd-skills.mdc'));
+          fs.unlinkSync(path.join(rulesDir, 'alembic-skills.mdc'));
         }
       } catch {
         /* not exists */
@@ -485,7 +485,7 @@ function _regenerateEditorIndex(ctx?: McpContext) {
       '',
       '# Alembic Project Skills',
       '',
-      `本项目已注册 ${projectSkills.length} 个自定义 Skill。使用 \`asd_skill({ operation: "load", name })\` 加载完整内容。`,
+      `本项目已注册 ${projectSkills.length} 个自定义 Skill。使用 \`alembic_skill({ operation: "load", name })\` 加载完整内容。`,
       '',
       skillLines,
       '',
@@ -493,13 +493,13 @@ function _regenerateEditorIndex(ctx?: McpContext) {
 
     if (wz) {
       wz.ensureDir(wz.project('.cursor/rules'));
-      wz.writeFile(wz.project('.cursor/rules/asd-skills.mdc'), mdcContent);
+      wz.writeFile(wz.project('.cursor/rules/alembic-skills.mdc'), mdcContent);
     } else {
       pathGuard.assertProjectWriteSafe(rulesDir);
       fs.mkdirSync(rulesDir, { recursive: true });
-      fs.writeFileSync(path.join(rulesDir, 'asd-skills.mdc'), mdcContent, 'utf8');
+      fs.writeFileSync(path.join(rulesDir, 'alembic-skills.mdc'), mdcContent, 'utf8');
     }
-    const indexPath = path.join(rulesDir, 'asd-skills.mdc');
+    const indexPath = path.join(rulesDir, 'alembic-skills.mdc');
 
     return { success: true, path: indexPath, skillCount: projectSkills.length };
   } catch (err: unknown) {
@@ -658,7 +658,7 @@ export function updateSkill(ctx: McpContext | null, args: UpdateSkillArgs) {
       success: false,
       error: {
         code: 'SKILL_NOT_FOUND',
-        message: `Project skill "${name}" not found. Use asd_skill({ operation: "create" }) to create it first.`,
+        message: `Project skill "${name}" not found. Use alembic_skill({ operation: "create" }) to create it first.`,
       },
     });
   }
@@ -735,7 +735,7 @@ export function updateSkill(ctx: McpContext | null, args: UpdateSkillArgs) {
         Boolean
       ),
       editorIndex: indexResult,
-      hint: `Skill "${name}" updated. Use asd_skill({ operation: "load", name: "${name}" }) to verify content.`,
+      hint: `Skill "${name}" updated. Use alembic_skill({ operation: "load", name: "${name}" }) to verify content.`,
     },
   });
 }
@@ -833,11 +833,11 @@ function _listExistingProjectSkillNames(ctx?: McpContext | null): Set<string> {
 /** 推荐相关 Skills（基于静态映射） */
 function _getRelatedSkills(skillName: string) {
   const relations = {
-    'asd-create': ['asd-recipes'],
-    'asd-guard': ['asd-recipes'],
-    'asd-recipes': ['asd-guard', 'asd-structure', 'asd-create'],
-    'asd-structure': ['asd-recipes', 'asd-create'],
-    'asd-devdocs': ['asd-recipes', 'asd-create'],
+    'alembic-create': ['alembic-recipes'],
+    'alembic-guard': ['alembic-recipes'],
+    'alembic-recipes': ['alembic-guard', 'alembic-structure', 'alembic-create'],
+    'alembic-structure': ['alembic-recipes', 'alembic-create'],
+    'alembic-devdocs': ['alembic-recipes', 'alembic-create'],
   };
   return (relations as Record<string, string[]>)[skillName] || [];
 }

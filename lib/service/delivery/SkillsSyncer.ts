@@ -4,8 +4,8 @@
  * Channel C: 将内置 Skills 和项目级 Skills 统一同步到
  * .cursor/skills/ 目录，适配 Cursor Agent Skills 标准格式。
  *
- * - 内置 Skills：从 Alembic 包 skills/ 目录直接复制（asd-create 等）
- * - 项目级 Skills：从 Alembic/skills/ 转换格式后写入（project-* → asd-*）
+ * - 内置 Skills：从 Alembic 包 skills/ 目录直接复制（alembic-create 等）
+ * - 项目级 Skills：从 Alembic/skills/ 转换格式后写入（project-* → alembic-*）
  * - 同时为项目级 Skill 生成 references/RECIPES.md（相关 Recipe 摘要）
  */
 
@@ -242,7 +242,7 @@ export class SkillsSyncer {
       '## Deeper Knowledge',
       '',
       `For detailed recipes and code examples:`,
-      `- \`asd_search("${dimensionLabel}")\``,
+      `- \`alembic_search("${dimensionLabel}")\``,
       '',
       '## Referenced Files',
       '',
@@ -304,11 +304,11 @@ export class SkillsSyncer {
         lines.push(`| ${title} | ${trigger} | ${kind} | ${lang} | ${summary} |`);
       }
     } else {
-      lines.push('No recipes available yet. Run `asd bootstrap` to generate knowledge.');
+      lines.push('No recipes available yet. Run `alembic bootstrap` to generate knowledge.');
     }
 
     lines.push('');
-    lines.push(`For full content, use: \`asd_search("${dimensionLabel}")\``);
+    lines.push(`For full content, use: \`alembic_search("${dimensionLabel}")\``);
 
     const recipePath = path.join(refsDir, 'RECIPES.md');
     if (this.wz) {

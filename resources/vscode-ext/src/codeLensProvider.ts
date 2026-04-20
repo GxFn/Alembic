@@ -24,7 +24,7 @@ export class DirectiveCodeLensProvider implements vscode.CodeLensProvider {
       return [];
     }
 
-    const config = vscode.workspace.getConfiguration('asd');
+    const config = vscode.workspace.getConfiguration('alembic');
     if (!config.get<boolean>('enableCodeLens', true)) {
       return [];
     }

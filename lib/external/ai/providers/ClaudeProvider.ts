@@ -28,7 +28,7 @@ export class ClaudeProvider extends AiProvider {
     super(config);
     this.name = 'claude';
     this.model = config.model || 'claude-sonnet-4-20250514';
-    this.apiKey = config.apiKey || process.env.ASD_CLAUDE_API_KEY || '';
+    this.apiKey = config.apiKey || process.env.ALEMBIC_CLAUDE_API_KEY || '';
     this.maxRetries = 0; // Claude 不做重试
     this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
   }
@@ -303,7 +303,7 @@ export class ClaudeProvider extends AiProvider {
   ): Promise<ApiResponse> {
     if (!this.apiKey) {
       const err = new Error(
-        'Claude API Key 未配置。请在 .env 中设置 ASD_CLAUDE_API_KEY，或运行 asd setup 完成配置。'
+        'Claude API Key 未配置。请在 .env 中设置 ALEMBIC_CLAUDE_API_KEY，或运行 alembic setup 完成配置。'
       ) as Error & { code: string };
       err.code = 'API_KEY_MISSING';
       throw err;

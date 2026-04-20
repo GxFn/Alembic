@@ -17,7 +17,7 @@ Alembic CLI must be installed and the API server running:
 ```bash
 npm install -g alembic-ai
 cd your-project
-asd ui   # starts API server + dashboard
+alembic ui   # starts API server + dashboard
 ```
 
 ## Extension Settings

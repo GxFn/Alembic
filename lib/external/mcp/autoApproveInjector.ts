@@ -7,7 +7,7 @@
  *      （不碰 mcp.json，避免 Cursor 检测配置变更重启 MCP Server 中断当前 session）
  *   2. 下次 MCP Server 启动 → 检查标记 → 注入 autoApprove → 删标记
  *      （写入发生在连接建立前，安全无副作用）
- *   3. `asd upgrade` → 直接注入（不在 MCP session 中执行，无中断风险）
+ *   3. `alembic upgrade` → 直接注入（不在 MCP session 中执行，无中断风险）
  *
  * 为什么不在 bootstrap 期间直接写 mcp.json？
  *   Cursor 监听 .cursor/mcp.json 变更，可能触发 MCP Server 重启，
@@ -34,20 +34,20 @@ interface AutoApproveLogger {
  * 不加入自动授权 — 保留对高级操作的手动确认。
  */
 const AUTO_APPROVE_TOOLS = [
-  'asd_health',
-  'asd_capabilities',
-  'asd_search',
-  'asd_knowledge',
-  'asd_structure',
-  'asd_graph',
-  'asd_guard',
-  'asd_submit_knowledge',
-  'asd_skill',
-  'asd_task',
-  'asd_bootstrap',
-  'asd_dimension_complete',
-  'asd_wiki_plan',
-  'asd_wiki_finalize',
+  'alembic_health',
+  'alembic_capabilities',
+  'alembic_search',
+  'alembic_knowledge',
+  'alembic_structure',
+  'alembic_graph',
+  'alembic_guard',
+  'alembic_submit_knowledge',
+  'alembic_skill',
+  'alembic_task',
+  'alembic_bootstrap',
+  'alembic_dimension_complete',
+  'alembic_wiki_plan',
+  'alembic_wiki_finalize',
 ];
 
 /** 标记文件路径（Ghost 模式下写入外置工作区） */

@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   resolve: {
-    conditions: ['asd-dev'],
+    conditions: ['alembic-dev'],
   },
   test: {
     include: ['test/**/*.test.ts'],

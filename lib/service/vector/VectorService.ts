@@ -8,7 +8,7 @@
  *   1. 单一职责 — 统一管理向量生命周期（构建、更新、查询、维护）
  *   2. 事件驱动 — 知识 CRUD → EventBus → 增量同步
  *   3. 渐进增强 — 无 EmbedProvider 时 graceful degrade
- *   4. CLI-first  — `asd embed` 与 API 同等一等公民
+ *   4. CLI-first  — `alembic embed` 与 API 同等一等公民
  *
  * @module service/vector/VectorService
  */
@@ -240,7 +240,7 @@ export class VectorService {
 
       // 检查索引是否有数据
       if ((storeStats.count as number) === 0) {
-        issues.push('Vector index is empty. Run `asd embed` to build the index.');
+        issues.push('Vector index is empty. Run `alembic embed` to build the index.');
       }
 
       // 检查维度是否已设置

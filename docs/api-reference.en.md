@@ -5,8 +5,8 @@ Alembic provides a RESTful API for the Dashboard and external integrations.
 **Start:**
 
 ```bash
-asd server -p 3000          # API only
-asd ui -p 3000              # API + Dashboard
+alembic server -p 3000          # API only
+alembic ui -p 3000              # API + Dashboard
 ```
 
 **Base URL:** `http://127.0.0.1:3000/api/v1`

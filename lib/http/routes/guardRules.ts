@@ -345,7 +345,7 @@ router.post(
 router.get('/compliance', async (req: Request, res: Response) => {
   const container = getServiceContainer();
   const reporter = container.get('complianceReporter');
-  const projectRoot = String(req.query.path || process.env.ASD_PROJECT_DIR || process.cwd());
+  const projectRoot = String(req.query.path || process.env.ALEMBIC_PROJECT_DIR || process.cwd());
 
   const report = await reporter.generate(projectRoot, {
     qualityGate: {

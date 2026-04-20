@@ -9,7 +9,7 @@ Alembic uses a Layered Domain-Driven Design (DDD) architecture. Its core purpose
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    Entry Points                         │
-│  bin/cli.js (asd)   bin/mcp-server.js   bin/api-server  │
+│  bin/cli.js (alembic)   bin/mcp-server.js   bin/api-server  │
 └──────────┬─────────────────┬──────────────┬─────────────┘
            │                 │              │
 ┌──────────▼─────────────────▼──────────────▼─────────────┐
@@ -71,7 +71,7 @@ Alembic uses a Layered Domain-Driven Design (DDD) architecture. Its core purpose
 
 | Entry | File | Purpose |
 |-------|------|---------|
-| CLI | `bin/cli.js` | `asd` command-line tool, built on commander, 14 subcommands |
+| CLI | `bin/cli.js` | `alembic` command-line tool, built on commander, 14 subcommands |
 | MCP Server | `bin/mcp-server.js` | MCP stdio server for Cursor / VS Code / Claude Code |
 | API Server | `bin/api-server.js` | HTTP REST API server for Dashboard and external integrations |
 
@@ -195,11 +195,11 @@ React, Vue, Next.js, Node Server, Django, FastAPI, Spring, Android, Go Web, Go g
 
 | Provider | Environment Variable |
 |----------|---------------------|
-| Google Gemini | `ASD_GOOGLE_API_KEY` |
-| OpenAI | `ASD_OPENAI_API_KEY` |
-| Claude | `ASD_CLAUDE_API_KEY` |
-| DeepSeek | `ASD_DEEPSEEK_API_KEY` |
-| Ollama (local) | `ASD_AI_PROVIDER=ollama` |
+| Google Gemini | `ALEMBIC_GOOGLE_API_KEY` |
+| OpenAI | `ALEMBIC_OPENAI_API_KEY` |
+| Claude | `ALEMBIC_CLAUDE_API_KEY` |
+| DeepSeek | `ALEMBIC_DEEPSEEK_API_KEY` |
+| Ollama (local) | `ALEMBIC_AI_PROVIDER=ollama` |
 
 When multiple API Keys are present, automatic fallback is applied.
 
@@ -256,7 +256,7 @@ Three-tier permission architecture:
 ## Key Design Decisions
 
 1. **ESM Only** — The entire project uses ES Modules, Node.js ≥ 22
-2. **SQLite as Cache** — Markdown files are the Source of Truth; SQLite is a read cache; `asd sync` can rebuild it
+2. **SQLite as Cache** — Markdown files are the Source of Truth; SQLite is a read cache; `alembic sync` can rebuild it
 3. **No Build Step** — Pure JavaScript, no TypeScript compilation needed (except Dashboard)
 4. **DI without Framework** — Lightweight self-implemented DI container, no external DI framework dependency
 5. **WASM AST** — `web-tree-sitter` replaces native `tree-sitter`, eliminating C++ compilation dependency

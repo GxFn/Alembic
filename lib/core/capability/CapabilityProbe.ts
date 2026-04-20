@@ -169,7 +169,7 @@ export class CapabilityProbe {
     // Case 2: 检查是否是 git 仓库
     const isGitRepo = this._isGitRepo(this.subRepoPath);
     if (!isGitRepo) {
-      // 有目录但不是 git 仓库 → 本地个人项目（asd setup 创建），给全权限
+      // 有目录但不是 git 仓库 → 本地个人项目（alembic setup 创建），给全权限
       this.logger.debug(
         'CapabilityProbe: directory exists but not a git repo — local project, granting admin'
       );

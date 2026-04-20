@@ -16,7 +16,7 @@ Lark Notification  ←  Write Result  ←  VSCode Extension Polls  ←  Inject C
 
 - Node.js ≥ 22
 - VS Code + GitHub Copilot (Agent Mode)
-- Alembic installed (`npm install -g alembic`, then `asd setup` in your project)
+- Alembic installed (`npm install -g alembic-ai`, then `alembic setup` in your project)
 - Feishu Open Platform account
 
 ## Step 1: Create a Feishu Custom App
@@ -38,13 +38,13 @@ Add to your project's `.env` file:
 
 ```env
 # Feishu Bot credentials
-ASD_LARK_APP_ID=cli_xxxxxxxx
-ASD_LARK_APP_SECRET=xxxxxxxxxxxx
+ALEMBIC_LARK_APP_ID=cli_xxxxxxxx
+ALEMBIC_LARK_APP_SECRET=xxxxxxxxxxxx
 
 # Security whitelist (strongly recommended)
 # Only allow specific Feishu users to send commands, comma-separated
 # You can skip this initially, send a message, then look up your user_id
-ASD_LARK_ALLOWED_USERS=ou_xxxxxxxxxxxx
+ALEMBIC_LARK_ALLOWED_USERS=ou_xxxxxxxxxxxx
 ```
 
 ### Finding Your user_id
@@ -60,13 +60,13 @@ rows.forEach(r => console.log(r.user_id, '|', r.command));
 "
 ```
 
-Copy the `ou_xxxx` value into `ASD_LARK_ALLOWED_USERS`.
+Copy the `ou_xxxx` value into `ALEMBIC_LARK_ALLOWED_USERS`.
 
 ## Step 3: Start the Server
 
 ```bash
 cd your-project
-asd start          # or: node bin/api-server.js
+alembic start          # or: node bin/api-server.js
 ```
 
 The API server will automatically:
@@ -84,7 +84,7 @@ You should see `"connected": true`.
 
 ## Step 4: Install the VS Code Extension
 
-If `asd setup` didn't install it automatically:
+If `alembic setup` didn't install it automatically:
 
 ```bash
 cd your-project
@@ -169,7 +169,7 @@ Capture the IDE window anytime via the `/screen` command or HTTP API. Under the 
 
 ### Access Control
 
-- **`ASD_LARK_ALLOWED_USERS`** — Sender whitelist; unauthorized users get a "🔒 Access denied" response
+- **`ALEMBIC_LARK_ALLOWED_USERS`** — Sender whitelist; unauthorized users get a "🔒 Access denied" response
 - **localhost binding** — API server listens on `localhost:3000` only, not reachable from the network
 
 ### Trust Boundary
@@ -204,8 +204,8 @@ In addition to Lark messages, you can also use the HTTP API directly:
 
 ```bash
 # Check credentials
-echo $ASD_LARK_APP_ID
-echo $ASD_LARK_APP_SECRET
+echo $ALEMBIC_LARK_APP_ID
+echo $ALEMBIC_LARK_APP_SECRET
 
 # Manually trigger connection
 curl -s -X POST http://localhost:3000/api/v1/remote/lark/start | python3 -m json.tool
@@ -220,7 +220,7 @@ Common causes:
 
 1. Check if API server is running: `curl http://localhost:3000/api/v1/health`
 2. Check Lark connection: `curl http://localhost:3000/api/v1/remote/lark/status`
-3. Check whitelist: is your user_id in `ASD_LARK_ALLOWED_USERS`?
+3. Check whitelist: is your user_id in `ALEMBIC_LARK_ALLOWED_USERS`?
 4. Check server logs (terminal output)
 
 ### VS Code Extension Not Polling

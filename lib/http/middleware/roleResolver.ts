@@ -16,7 +16,7 @@ import Logger from '../../infrastructure/logging/Logger.js';
 const logger = Logger.getInstance();
 
 const AUTH_ENABLED =
-  process.env.VITE_AUTH_ENABLED === 'true' || process.env.ASD_AUTH_ENABLED === 'true';
+  process.env.VITE_AUTH_ENABLED === 'true' || process.env.ALEMBIC_AUTH_ENABLED === 'true';
 
 /**
  * 验证 token 并提取 payload

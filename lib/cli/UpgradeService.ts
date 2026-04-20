@@ -1,7 +1,7 @@
 /**
  * UpgradeService — IDE 集成升级服务
  *
- * 当 Alembic 发布新版本后，老用户执行 `asd upgrade` 即可更新所有 IDE 集成文件。
+ * 当 Alembic 发布新版本后，老用户执行 `alembic upgrade` 即可更新所有 IDE 集成文件。
  * 底层委托 FileDeployer 按 MANIFEST 定义的策略执行，确保与 SetupService 使用同一套部署逻辑。
  *
  * 额外职责：

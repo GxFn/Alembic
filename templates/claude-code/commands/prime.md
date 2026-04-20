@@ -1,9 +1,9 @@
 ---
 description: "MANDATORY: Load Alembic project context — decisions, tasks, knowledge"
-allowed-tools: ["mcp__asd__asd_task"]
+allowed-tools: ["mcp__alembic__alembic_task"]
 ---
 
-Call asd_task with `{ "operation": "prime" }` to load the current project context.
+Call alembic_task with `{ "operation": "prime" }` to load the current project context.
 
 **You MUST call this on EVERY user message BEFORE doing anything else.**
 

@@ -85,7 +85,7 @@ export async function initialize(c: ServiceContainer) {
   // recorder 注入放到 register() 之后（tokenUsageStore 需先注册）
 
   // Embedding fallback: manager 的 embedFallbackInit 回调已绑定，初始化时主动触发一次
-  // 优先使用独立的 embed provider（ASD_EMBED_PROVIDER），其次 fallback 机制
+  // 优先使用独立的 embed provider（ALEMBIC_EMBED_PROVIDER），其次 fallback 机制
   let initialEmbed: ManagedAiProvider | null = null;
 
   try {
@@ -95,7 +95,7 @@ export async function initialize(c: ServiceContainer) {
     if (typeof aiFactory?.createEmbedProvider === 'function') {
       initialEmbed = aiFactory.createEmbedProvider();
       if (initialEmbed) {
-        logger.info('Dedicated embed provider created from ASD_EMBED_PROVIDER', {
+        logger.info('Dedicated embed provider created from ALEMBIC_EMBED_PROVIDER', {
           provider: initialEmbed.name,
         });
       }

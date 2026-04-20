@@ -193,7 +193,7 @@ export class AiProvider {
     // ── Provider 级全局并发闸门 + 429 冷却窗 ──
     this._maxConcurrency = Math.max(
       1,
-      Number(config.maxConcurrency || process.env.ASD_AI_MAX_CONCURRENCY || 4)
+      Number(config.maxConcurrency || process.env.ALEMBIC_AI_MAX_CONCURRENCY || 4)
     );
     this._activeRequests = 0;
     this._requestQueue = [];
@@ -674,14 +674,14 @@ ${items}`;
   /**
    * 解析当前 Provider 应使用的代理 URL。
    * 优先级（从高到低）:
-   *   1. Provider 专属: ASD_{PROVIDER}_PROXY_HTTPS / ASD_{PROVIDER}_PROXY_HTTP
-   *   2. 全局 ASD 专属: ASD_AI_PROXY
+   *   1. Provider 专属: ALEMBIC_{PROVIDER}_PROXY_HTTPS / ALEMBIC_{PROVIDER}_PROXY_HTTP
+   *   2. 全局 ASD 专属: ALEMBIC_AI_PROXY
    *   3. 系统通用: HTTPS_PROXY / HTTP_PROXY / ALL_PROXY
    *
    * Provider 名称映射: google-gemini → GOOGLE, openai → OPENAI, claude → CLAUDE, deepseek → DEEPSEEK
    */
   _resolveProxyUrl() {
-    // Provider-specific vars: ASD_GOOGLE_PROXY_HTTPS, ASD_OPENAI_PROXY_HTTPS, etc.
+    // Provider-specific vars: ALEMBIC_GOOGLE_PROXY_HTTPS, ALEMBIC_OPENAI_PROXY_HTTPS, etc.
     const tag = (this.name || '')
       .replace(/-gemini$/, '') // google-gemini → google
       .replace(/-/g, '_') // 其他连字符 → 下划线
@@ -689,14 +689,14 @@ ${items}`;
 
     if (tag) {
       const specific =
-        process.env[`ASD_${tag}_PROXY_HTTPS`] || process.env[`ASD_${tag}_PROXY_HTTP`];
+        process.env[`ALEMBIC_${tag}_PROXY_HTTPS`] || process.env[`ALEMBIC_${tag}_PROXY_HTTP`];
       if (specific) {
         return specific;
       }
     }
 
     return (
-      process.env.ASD_AI_PROXY ||
+      process.env.ALEMBIC_AI_PROXY ||
       process.env.HTTPS_PROXY ||
       process.env.https_proxy ||
       process.env.HTTP_PROXY ||

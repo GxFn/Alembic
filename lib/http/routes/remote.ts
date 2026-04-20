@@ -88,17 +88,17 @@ function genId() {
 
 function getLarkConfig() {
   return {
-    appId: process.env.ASD_LARK_APP_ID || '',
-    appSecret: process.env.ASD_LARK_APP_SECRET || '',
-    verificationToken: process.env.ASD_LARK_VERIFICATION_TOKEN || '',
-    encryptKey: process.env.ASD_LARK_ENCRYPT_KEY || '',
+    appId: process.env.ALEMBIC_LARK_APP_ID || '',
+    appSecret: process.env.ALEMBIC_LARK_APP_SECRET || '',
+    verificationToken: process.env.ALEMBIC_LARK_VERIFICATION_TOKEN || '',
+    encryptKey: process.env.ALEMBIC_LARK_ENCRYPT_KEY || '',
   };
 }
 
 // ─── 发送者白名单 ──────────────────────────────────
 
 /** 允许发送指令的飞书 user_id 列表（逗号分隔） */
-const _allowedUserIds = (process.env.ASD_LARK_ALLOWED_USERS || '')
+const _allowedUserIds = (process.env.ALEMBIC_LARK_ALLOWED_USERS || '')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
@@ -192,7 +192,7 @@ async function startLarkWS({ silent = false } = {}) {
 
   const config = getLarkConfig();
   if (!config.appId || !config.appSecret) {
-    return { success: false, message: 'Missing ASD_LARK_APP_ID / ASD_LARK_APP_SECRET' };
+    return { success: false, message: 'Missing ALEMBIC_LARK_APP_ID / ALEMBIC_LARK_APP_SECRET' };
   }
 
   _wsStarting = true;

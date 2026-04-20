@@ -152,7 +152,7 @@ SignalBus 统一 12 种信号类型（guard / search / usage / lifecycle / quali
 
 ## Recipe 远程仓库
 
-`asd remote <url>` 将知识库目录转为独立 git 子仓库。多项目共享同一套 Recipe，独立控制读写权限。Constitution 通过 `git push --dry-run` 探测写权限，86400s 缓存 TTL。
+`alembic remote <url>` 将知识库目录转为独立 git 子仓库。多项目共享同一套 Recipe，独立控制读写权限。Constitution 通过 `git push --dry-run` 探测写权限，86400s 缓存 TTL。
 
 ---
 

@@ -38,14 +38,14 @@ const projectPath = args.path || args.p || process.cwd();
 // 检测是否在 Alembic 仓库内执行
 const isAlembicRepo =
   fs.existsSync(path.join(projectPath, 'bin/mcp-server.js')) &&
-  fs.existsSync(path.join(projectPath, 'bin/asd')) &&
+  fs.existsSync(path.join(projectPath, 'bin/alembic')) &&
   fs.existsSync(path.join(projectPath, 'package.json'));
 
 // 默认只做工作区配置，不做全局配置
 // 如果在 Alembic 仓库内执行且未明确指定 --path，跳过所有配置
 const configWorkspace = !args.global && !isAlembicRepo && (args.path || !isAlembicRepo);
 const skipVerify = args['skip-verify'];
-const isQuiet = args.quiet || process.env.ASD_QUIET === 'true';
+const isQuiet = args.quiet || process.env.ALEMBIC_QUIET === 'true';
 
 // ============ 颜色定义 ============
 const colors = {
@@ -115,9 +115,9 @@ function configureVSCodeSettings() {
 
   const mcpServerConfig = {
     type: 'stdio',
-    command: 'asd-mcp',
+    command: 'alembic-mcp',
     env: {
-      ASD_PROJECT_DIR: '${workspaceFolder}',
+      ALEMBIC_PROJECT_DIR: '${workspaceFolder}',
     },
   };
 
@@ -191,13 +191,13 @@ function createCopilotInstructions() {
 
   const body = fs.readFileSync(templatePath, 'utf8').trimEnd();
   const content = [
-    '<!-- asd:begin -->',
+    '<!-- alembic:begin -->',
     '',
     '# Alembic Conventions',
     '',
     body,
     '',
-    '<!-- asd:end -->',
+    '<!-- alembic:end -->',
     '',
   ].join('\n');
 
@@ -259,7 +259,7 @@ function printQuickStart() {
   log('\n⚡ 3 步快速启动：\n', 'blue');
 
   log('1️⃣  启动 Dashboard');
-  log('   $ asd ui', 'yellow');
+  log('   $ alembic ui', 'yellow');
   log('   确认输出: ✓ Server running on http://localhost:3000\n');
 
   log('2️⃣  重启 VSCode');

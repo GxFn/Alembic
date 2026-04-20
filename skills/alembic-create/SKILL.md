@@ -1,15 +1,15 @@
 ---
-name: asd-create
+name: alembic-create
 description: Submit knowledge to Alembic. Covers single/batch MCP submission, V3 field requirements, quality validation, and lifecycle. Use when user says "submit knowledge / add to KB / create recipe" or agent needs to persist code patterns, rules, or facts.
 ---
 
 # Alembic Create — Knowledge Submission
 
-> Prerequisite: MCP tools return a unified JSON Envelope `{ success, errorCode?, message?, data?, meta }`. Call `asd_health` before operations to confirm service availability.
+> Prerequisite: MCP tools return a unified JSON Envelope `{ success, errorCode?, message?, data?, meta }`. Call `alembic_health` before operations to confirm service availability.
 
 This Skill guides the Agent to submit code patterns, rules, and facts to the Alembic knowledge base. Submitted entries enter **Candidates** (pending status); users review and publish them via the Dashboard.
 
-Related Skill: **asd-recipes** (search existing knowledge).
+Related Skill: **alembic-recipes** (search existing knowledge).
 
 ---
 
@@ -17,15 +17,15 @@ Related Skill: **asd-recipes** (search existing knowledge).
 
 | Path | Tool | Use Case |
 |------|------|----------|
-| **Single** | `asd_submit_knowledge` | Agent carefully constructs one complete entry |
-| **Batch** | `asd_submit_knowledge` (items array) | Cold-start dimension analysis, batch scans |
+| **Single** | `alembic_submit_knowledge` | Agent carefully constructs one complete entry |
+| **Batch** | `alembic_submit_knowledge` (items array) | Cold-start dimension analysis, batch scans |
 | **Dashboard** | Browser `http://localhost:3000` | User manual paste/file scan |
 
 **Agent prefers MCP submission** — no browser needed.
 
 ---
 
-## Single Submission — asd_submit_knowledge
+## Single Submission — alembic_submit_knowledge
 
 Submit one complete V3 knowledge entry at a time. Even if some fields fail validation, the entry is still stored; the response includes `recipeReadyHints` indicating missing fields.
 
@@ -78,7 +78,7 @@ Optional sections: Dependencies & Prerequisites, Error Handling, Performance & R
 
 ---
 
-## Batch Submission — asd_submit_knowledge (items array)
+## Batch Submission — alembic_submit_knowledge (items array)
 
 Submit multiple entries at once. Each is validated independently; failures are rejected without blocking others.
 
@@ -111,11 +111,11 @@ Submit multiple entries at once. Each is validated independently; failures are r
 
 ```
 1. Analyze code → construct V3 fields
-2. asd_submit_knowledge → stored as pending
+2. alembic_submit_knowledge → stored as pending
 3. Check response:
    - Success → inform user "Submitted. Review in Dashboard Candidates."
    - Has rejectedItems → fill in missing fields per rejectedSummary.commonMissingFields, retry
-4. [Optional] asd_enrich_candidates → diagnose candidate field completeness
+4. [Optional] alembic_enrich_candidates → diagnose candidate field completeness
 ```
 
 ### One Entry Per Scenario
@@ -140,10 +140,10 @@ Splitting principle: different use cases, different API endpoints, different con
 
 | Need | Tool |
 |------|------|
-| Check candidate status | `asd_knowledge(operation=list)` |
-| Diagnose missing fields | `asd_enrich_candidates` |
-| Review/publish | `asd_knowledge_lifecycle(operation=approve/publish/fast_track)` |
-| Search existing knowledge to avoid duplicates | `asd_search(mode=context, query=...)` |
+| Check candidate status | `alembic_knowledge(operation=list)` |
+| Diagnose missing fields | `alembic_enrich_candidates` |
+| Review/publish | `alembic_knowledge_lifecycle(operation=approve/publish/fast_track)` |
+| Search existing knowledge to avoid duplicates | `alembic_search(mode=context, query=...)` |
 
 ---
 

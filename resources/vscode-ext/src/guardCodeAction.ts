@@ -3,7 +3,7 @@
  *
  * 当编辑器显示 Alembic Guard 诊断时，在灯泡菜单提供：
  *   1. "搜索 Alembic 知识库修复" → 触发 asd.search 命令
- *   2. "忽略此规则" → 在行首添加 // asd-disable-next-line: <ruleId>
+ *   2. "忽略此规则" → 在行首添加 // alembic-disable-next-line: <ruleId>
  *
  * Agent 可通过 Code Action 获取修复建议（部分 IDE Agent 支持读取 Code Actions）。
  */
@@ -61,7 +61,7 @@ export class GuardCodeActionProvider implements vscode.CodeActionProvider {
       disableAction.edit.insert(
         document.uri,
         new vscode.Position(disableLine, 0),
-        `${indent}// asd-disable-next-line: ${ruleId}\n`
+        `${indent}// alembic-disable-next-line: ${ruleId}\n`
       );
       disableAction.diagnostics = [diagnostic];
       actions.push(disableAction);

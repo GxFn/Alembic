@@ -187,7 +187,7 @@ Agent Layer
 
 ```json
 "#agent/*": {
-  "asd-dev": "./lib/agent/*",
+  "alembic-dev": "./lib/agent/*",
   "default": "./dist/lib/agent/*"
 }
 ```

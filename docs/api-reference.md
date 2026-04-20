@@ -5,8 +5,8 @@ Alembic 提供 RESTful API 供 Dashboard 和外部集成使用。
 **启动方式：**
 
 ```bash
-asd server -p 3000          # 仅 API
-asd ui -p 3000              # API + Dashboard
+alembic server -p 3000          # 仅 API
+alembic ui -p 3000              # API + Dashboard
 ```
 
 **Base URL:** `http://127.0.0.1:3000/api/v1`

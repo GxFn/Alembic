@@ -1198,7 +1198,7 @@ export const zh = {
     mcpToolHeader: '工具',
     mcpDescHeader: '说明',
     mcpAgentLayerHeader: 'Agent 层（18 个）— 默认对外暴露',
-    mcpAdminLayerHeader: 'Admin 层（4 个）— 需设置 ASD_MCP_TIER=admin',
+    mcpAdminLayerHeader: 'Admin 层（4 个）— 需设置 ALEMBIC_MCP_TIER=admin',
     mcpHealthDesc: '服务健康检查',
     mcpCapabilitiesDesc: '服务能力清单（Agent 自发现）',
     mcpGuardDesc: 'code=单文件审查 / files=批量审查',

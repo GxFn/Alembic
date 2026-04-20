@@ -152,7 +152,7 @@ Send a message on Lark from your phone — intent recognition auto-routes to Bot
 
 ## Recipe Remote Repository
 
-`asd remote <url>` converts the recipe directory to an independent git sub-repository. Share Recipes across projects with independent read/write control. Constitution probes write permission via `git push --dry-run`, 86400s cache TTL.
+`alembic remote <url>` converts the recipe directory to an independent git sub-repository. Share Recipes across projects with independent read/write control. Constitution probes write permission via `git push --dry-run`, 86400s cache TTL.
 
 ---
 

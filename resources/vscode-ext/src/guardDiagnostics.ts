@@ -62,7 +62,7 @@ export class GuardDiagnostics {
   private outputChannel: vscode.OutputChannel;
 
   constructor() {
-    this.diagnosticCollection = vscode.languages.createDiagnosticCollection('asd-guard');
+    this.diagnosticCollection = vscode.languages.createDiagnosticCollection('alembic-guard');
     this.outputChannel = vscode.window.createOutputChannel('Alembic Guard', { log: true });
   }
 
@@ -151,7 +151,7 @@ export class GuardDiagnostics {
   ): Promise<GuardFileResponse> {
     // 使用 apiClient 的私有 HTTP 方法不太合适，
     // 直接用 node:http 或 fetch
-    const config = vscode.workspace.getConfiguration('asd');
+    const config = vscode.workspace.getConfiguration('alembic');
     const host = config.get<string>('serverHost', 'localhost');
     const port = config.get<number>('serverPort', 3000);
 

@@ -10,7 +10,7 @@
  *  - 同时扫描 Alembic/candidates/ 和 Alembic/recipes/ 两个目录
  *
  * 使用方式：
- *  - CLI: `asd sync` 委托调用
+ *  - CLI: `alembic sync` 委托调用
  *  - 内部: SetupService.stepDatabase() 委托调用（skipViolations = true）
  */
 
@@ -62,7 +62,7 @@ export class KnowledgeSyncService {
   /**
    * 完整同步入口 — sync + reconcile + repair
    *
-   * asd sync CLI 和 asd ui 启动都调用此方法。
+   * alembic sync CLI 和 alembic ui 启动都调用此方法。
    *
    * @param db better-sqlite3 原始句柄
    * @param opts 同步选项

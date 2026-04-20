@@ -2,8 +2,8 @@
  * 认证 API 路由
  *
  * 提供简单的用户名/密码登录。凭证通过环境变量配置：
- *   ASD_AUTH_USERNAME (默认 admin)
- *   ASD_AUTH_PASSWORD (默认 alembic)
+ *   ALEMBIC_AUTH_USERNAME (默认 admin)
+ *   ALEMBIC_AUTH_PASSWORD (默认 alembic)
  *
  * 仅在前端 VITE_AUTH_ENABLED=true 时由 Dashboard 调用。
  * 使用 HMAC-SHA256 签发简单 JWT-like token（无第三方依赖）。
@@ -20,24 +20,24 @@ const router = express.Router();
 //  Configuration
 // ═══════════════════════════════════════════════════════
 
-const AUTH_USERNAME = process.env.ASD_AUTH_USERNAME || 'admin';
-const AUTH_PASSWORD = process.env.ASD_AUTH_PASSWORD || 'alembic';
-const TOKEN_SECRET = process.env.ASD_AUTH_SECRET || crypto.randomBytes(32).toString('hex');
+const AUTH_USERNAME = process.env.ALEMBIC_AUTH_USERNAME || 'admin';
+const AUTH_PASSWORD = process.env.ALEMBIC_AUTH_PASSWORD || 'alembic';
+const TOKEN_SECRET = process.env.ALEMBIC_AUTH_SECRET || crypto.randomBytes(32).toString('hex');
 
 // 安全警告：仅在认证启用且使用默认凭据时提示
 const authEnabled =
-  process.env.VITE_AUTH_ENABLED === 'true' || process.env.ASD_AUTH_ENABLED === 'true';
-if (authEnabled && (!process.env.ASD_AUTH_USERNAME || !process.env.ASD_AUTH_PASSWORD)) {
+  process.env.VITE_AUTH_ENABLED === 'true' || process.env.ALEMBIC_AUTH_ENABLED === 'true';
+if (authEnabled && (!process.env.ALEMBIC_AUTH_USERNAME || !process.env.ALEMBIC_AUTH_PASSWORD)) {
   console.warn(
     '[auth] WARNING: Using default credentials (admin/alembic). ' +
-      'Set ASD_AUTH_USERNAME and ASD_AUTH_PASSWORD environment variables for production.'
+      'Set ALEMBIC_AUTH_USERNAME and ALEMBIC_AUTH_PASSWORD environment variables for production.'
   );
 }
 const TOKEN_TTL = 7 * 24 * 60 * 60 * 1000; // 7 天
 
 // 将 secret 写回环境变量，供 roleResolver 等模块共享
-if (!process.env.ASD_AUTH_SECRET) {
-  process.env.ASD_AUTH_SECRET = TOKEN_SECRET;
+if (!process.env.ALEMBIC_AUTH_SECRET) {
+  process.env.ALEMBIC_AUTH_SECRET = TOKEN_SECRET;
 }
 
 // ═══════════════════════════════════════════════════════

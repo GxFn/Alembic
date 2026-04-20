@@ -1,11 +1,11 @@
 ---
-name: asd-devdocs
-description: Generate and publish project Wiki documentation using asd_wiki MCP tool (plan → write → finalize). Use when user says "generate wiki/docs", "write documentation", or agent needs to produce structured project documentation from the knowledge base.
+name: alembic-devdocs
+description: Generate and publish project Wiki documentation using alembic_wiki MCP tool (plan → write → finalize). Use when user says "generate wiki/docs", "write documentation", or agent needs to produce structured project documentation from the knowledge base.
 ---
 
 # Alembic — Wiki Documentation Generation
 
-This skill guides the agent through generating structured **Wiki documentation** from the Alembic knowledge base using the `asd_wiki` MCP tool.
+This skill guides the agent through generating structured **Wiki documentation** from the Alembic knowledge base using the `alembic_wiki` MCP tool.
 
 ## When to use this skill
 
@@ -18,10 +18,10 @@ This skill guides the agent through generating structured **Wiki documentation**
 
 | Tool | Operation | Description |
 |------|-----------|-------------|
-| `asd_wiki` | `plan` | Plan topics + data packages (returns topic list + per-topic data for writing) |
-| `asd_wiki` | `finalize` | Complete generation (write meta.json, dedup check, validate completeness) |
-| `asd_search` | — | Search knowledge for additional context during writing |
-| `asd_knowledge` | `get` | Retrieve full Recipe content for reference |
+| `alembic_wiki` | `plan` | Plan topics + data packages (returns topic list + per-topic data for writing) |
+| `alembic_wiki` | `finalize` | Complete generation (write meta.json, dedup check, validate completeness) |
+| `alembic_search` | — | Search knowledge for additional context during writing |
+| `alembic_knowledge` | `get` | Retrieve full Recipe content for reference |
 
 ## Workflow
 
@@ -82,6 +82,6 @@ This triggers:
 
 | Skill | When to use |
 |-------|-------------|
-| `asd-create` | Submitting **code patterns/recipes** to KB (not documents) |
-| `asd-devdocs` (this) | Generating **Wiki documentation** from KB |
-| `asd-recipes` | Looking up existing knowledge for reference |
+| `alembic-create` | Submitting **code patterns/recipes** to KB (not documents) |
+| `alembic-devdocs` (this) | Generating **Wiki documentation** from KB |
+| `alembic-recipes` | Looking up existing knowledge for reference |

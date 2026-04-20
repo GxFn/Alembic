@@ -92,7 +92,7 @@ function _enrichToV3(args: EnrichInput, container: McpServiceContainer | null): 
 // ─── V3 wire format → KnowledgeService.create() ────────────
 
 /**
- * 单条知识提交 (asd_submit_knowledge)
+ * 单条知识提交 (alembic_submit_knowledge)
  *
  * MCP wire format → V3 增强 → KnowledgeService.create()
  * 增强包括：source='mcp'、reasoning 默认值、Delivery 字段补齐、QualityScorer、语义标签。
@@ -102,7 +102,7 @@ export async function submitKnowledge(
   args: Record<string, unknown> & { client_id?: string }
 ) {
   // 限流
-  const blocked = await _checkRateLimit('asd_submit_knowledge', args.client_id, ctx.container);
+  const blocked = await _checkRateLimit('alembic_submit_knowledge', args.client_id, ctx.container);
   if (blocked) {
     return blocked;
   }
@@ -150,11 +150,11 @@ export async function submitKnowledge(
   return envelope({
     success: true,
     data,
-    meta: { tool: 'asd_submit_knowledge' },
+    meta: { tool: 'alembic_submit_knowledge' },
   });
 }
 
-/** 批量知识提交 (asd_submit_knowledge_batch) */
+/** 批量知识提交 (alembic_submit_knowledge_batch) */
 interface KnowledgeItemInput {
   title?: string;
   content?: { pattern?: string; [key: string]: unknown };
@@ -179,7 +179,7 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
 
   // 限流
   const blocked = await _checkRateLimit(
-    'asd_submit_knowledge_batch',
+    'alembic_submit_knowledge_batch',
     args.client_id,
     ctx.container
   );
@@ -347,12 +347,12 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
     success: true,
     data,
     message: `已提交 ${count}/${items.length} 条知识条目。`,
-    meta: { tool: 'asd_submit_knowledge_batch' },
+    meta: { tool: 'alembic_submit_knowledge_batch' },
   });
 }
 
 /**
- * 知识条目生命周期操作 (asd_knowledge_lifecycle)
+ * 知识条目生命周期操作 (alembic_knowledge_lifecycle)
  *
  * 简化为 3 状态: pending / active / deprecated
  * 外部 Agent 允许 reactivate（废弃 → 待审核）；发布/废弃由开发者在 Dashboard 操作
@@ -371,7 +371,7 @@ export async function knowledgeLifecycle(
 
   if (!MCP_ALLOWED_LIFECYCLE_ACTIONS.has(action)) {
     throw new Error(
-      `[PERMISSION_DENIED] 外部 Agent 不允许执行 "${action}" 操作，仅支持: reactivate。发布、废弃等操作请在 Dashboard 中完成。提交新知识请使用 asd_submit_knowledge 工具。`
+      `[PERMISSION_DENIED] 外部 Agent 不允许执行 "${action}" 操作，仅支持: reactivate。发布、废弃等操作请在 Dashboard 中完成。提交新知识请使用 alembic_submit_knowledge 工具。`
     );
   }
 
@@ -388,7 +388,7 @@ export async function knowledgeLifecycle(
       title: entry.title,
       action,
     },
-    meta: { tool: 'asd_knowledge_lifecycle' },
+    meta: { tool: 'alembic_knowledge_lifecycle' },
   });
 }
 

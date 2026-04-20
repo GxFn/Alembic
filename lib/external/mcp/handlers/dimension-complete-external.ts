@@ -80,7 +80,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
       success: false,
       message: 'Missing required parameter: dimensionId',
       errorCode: 'VALIDATION_ERROR',
-      meta: { tool: 'asd_dimension_complete' },
+      meta: { tool: 'alembic_dimension_complete' },
     });
   }
   if (!analysisText || analysisText.length < 10) {
@@ -88,7 +88,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
       success: false,
       message: 'analysisText is required and must be at least 10 characters',
       errorCode: 'VALIDATION_ERROR',
-      meta: { tool: 'asd_dimension_complete' },
+      meta: { tool: 'alembic_dimension_complete' },
     });
   }
   if (!Array.isArray(submittedRecipeIds)) {
@@ -96,7 +96,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
       success: false,
       message: 'submittedRecipeIds must be an array of recipe ID strings',
       errorCode: 'VALIDATION_ERROR',
-      meta: { tool: 'asd_dimension_complete' },
+      meta: { tool: 'alembic_dimension_complete' },
     });
   }
 
@@ -110,9 +110,9 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
       success: false,
       message: sessionId
         ? `No active bootstrap session found with id: ${sessionId}`
-        : 'No active bootstrap session. Call asd_bootstrap first.',
+        : 'No active bootstrap session. Call alembic_bootstrap first.',
       errorCode: 'SESSION_NOT_FOUND',
-      meta: { tool: 'asd_dimension_complete' },
+      meta: { tool: 'alembic_dimension_complete' },
     });
   }
 
@@ -128,7 +128,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
       success: false,
       message: `Unknown dimensionId: "${dimensionId}". Valid dimensions: ${session.dimensions.map((d: { id: string }) => d.id).join(', ')}`,
       errorCode: 'VALIDATION_ERROR',
-      meta: { tool: 'asd_dimension_complete' },
+      meta: { tool: 'alembic_dimension_complete' },
     });
   }
 
@@ -684,7 +684,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
       nextActions,
     },
     meta: {
-      tool: 'asd_dimension_complete',
+      tool: 'alembic_dimension_complete',
       responseTimeMs: Date.now() - t0,
     },
   });

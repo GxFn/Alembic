@@ -16,7 +16,7 @@
 
 - Node.js ≥ 22
 - VS Code + GitHub Copilot（Agent Mode）
-- Alembic 已安装（`npm install -g alembic`，然后在项目里 `asd setup`）
+- Alembic 已安装（`npm install -g alembic-ai`，然后在项目里 `alembic setup`）
 - 飞书开放平台账号
 
 ## 第一步：创建飞书自建应用
@@ -38,13 +38,13 @@
 
 ```env
 # 飞书 Bot 凭证
-ASD_LARK_APP_ID=cli_xxxxxxxx
-ASD_LARK_APP_SECRET=xxxxxxxxxxxx
+ALEMBIC_LARK_APP_ID=cli_xxxxxxxx
+ALEMBIC_LARK_APP_SECRET=xxxxxxxxxxxx
 
 # 安全白名单（强烈建议设置）
 # 只允许指定飞书用户发送指令，逗号分隔
 # 第一次不设也行，发一条消息后从数据库查 user_id 再填
-ASD_LARK_ALLOWED_USERS=ou_xxxxxxxxxxxx
+ALEMBIC_LARK_ALLOWED_USERS=ou_xxxxxxxxxxxx
 ```
 
 ### 获取你的 user_id
@@ -60,13 +60,13 @@ rows.forEach(r => console.log(r.user_id, '|', r.command));
 "
 ```
 
-把看到的 `ou_xxxx` 填入 `ASD_LARK_ALLOWED_USERS`。
+把看到的 `ou_xxxx` 填入 `ALEMBIC_LARK_ALLOWED_USERS`。
 
 ## 第三步：启动服务
 
 ```bash
 cd your-project
-asd start          # 或 node bin/api-server.js
+alembic start          # 或 node bin/api-server.js
 ```
 
 API Server 启动后会自动：
@@ -84,7 +84,7 @@ curl -s http://localhost:3000/api/v1/remote/lark/status | python3 -m json.tool
 
 ## 第四步：安装 VS Code 扩展
 
-如果 `asd setup` 没有自动安装扩展，手动安装：
+如果 `alembic setup` 没有自动安装扩展，手动安装：
 
 ```bash
 cd your-project
@@ -169,7 +169,7 @@ code --install-extension .asd/alembic-*.vsix --force
 
 ### 访问控制
 
-- **`ASD_LARK_ALLOWED_USERS`** — 发送者白名单，未授权用户的消息被拒绝并收到"🔒 权限不足"提示
+- **`ALEMBIC_LARK_ALLOWED_USERS`** — 发送者白名单，未授权用户的消息被拒绝并收到"🔒 权限不足"提示
 - **localhost 绑定** — API Server 默认只监听 `localhost:3000`，外网无法直接访问
 
 ### 信任边界
@@ -204,8 +204,8 @@ code --install-extension .asd/alembic-*.vsix --force
 
 ```bash
 # 检查凭证
-echo $ASD_LARK_APP_ID
-echo $ASD_LARK_APP_SECRET
+echo $ALEMBIC_LARK_APP_ID
+echo $ALEMBIC_LARK_APP_SECRET
 
 # 手动触发连接
 curl -s -X POST http://localhost:3000/api/v1/remote/lark/start | python3 -m json.tool
@@ -220,7 +220,7 @@ curl -s -X POST http://localhost:3000/api/v1/remote/lark/start | python3 -m json
 
 1. 检查 API Server 是否在运行：`curl http://localhost:3000/api/v1/health`
 2. 检查飞书连接：`curl http://localhost:3000/api/v1/remote/lark/status`
-3. 检查白名单：你的 user_id 是否在 `ASD_LARK_ALLOWED_USERS` 里
+3. 检查白名单：你的 user_id 是否在 `ALEMBIC_LARK_ALLOWED_USERS` 里
 4. 查看服务端日志（终端输出）
 
 ### VS Code 扩展没有轮询

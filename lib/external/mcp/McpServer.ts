@@ -5,7 +5,7 @@
  * 提供给 IDE AI Agent (Cursor/VSCode Copilot) 的工具集
  *
  * V3.3 整合：39 → 16 工具（14 agent + 2 admin）
- * 通过 ASD_MCP_TIER 环境变量控制可见工具集（agent/admin）
+ * 通过 ALEMBIC_MCP_TIER 环境变量控制可见工具集（agent/admin）
  *
  * 冷启动双路径:
  *   - 外部 Agent 路径: bootstrap (Mission Briefing) → dimension_complete × N → wiki(plan) → wiki(finalize)
@@ -138,17 +138,17 @@ export class McpServer {
       const { default: Bootstrap } = await import('../../bootstrap.js');
 
       // MCP 模式必须显式指定项目目录 — process.cwd() 在多根工作区中不可靠
-      const projectRoot = process.env.ASD_PROJECT_DIR;
+      const projectRoot = process.env.ALEMBIC_PROJECT_DIR;
       if (!projectRoot) {
         const msg =
-          `[MCP] 缺少 ASD_PROJECT_DIR 环境变量。MCP server 拒绝启动。\n` +
+          `[MCP] 缺少 ALEMBIC_PROJECT_DIR 环境变量。MCP server 拒绝启动。\n` +
           `在多根工作区中 process.cwd() 可能指向任意子目录，不能作为项目根目录。\n` +
-          `请在 .vscode/mcp.json 的 env 中设置 ASD_PROJECT_DIR 为目标项目的绝对路径。`;
+          `请在 .vscode/mcp.json 的 env 中设置 ALEMBIC_PROJECT_DIR 为目标项目的绝对路径。`;
         process.stderr.write(`${msg}\n`);
         throw new Error(msg);
       }
 
-      // ── 排除项目检查 — 防止误配置 ASD_PROJECT_DIR 到不该创建运行时数据的目录 ──
+      // ── 排除项目检查 — 防止误配置 ALEMBIC_PROJECT_DIR 到不该创建运行时数据的目录 ──
       // Ghost 模式下跳过排除检查（数据不写入项目目录）
       const { isExcludedProject } = await import('../../shared/isOwnDevRepo.js');
       const { ProjectRegistry } = await import('../../shared/ProjectRegistry.js');
@@ -158,7 +158,7 @@ export class McpServer {
         const msg =
           `[MCP] projectRoot "${projectRoot}" 是排除项目（${exclusion.reason}），` +
           `MCP server 拒绝在此目录创建运行时数据。\n` +
-          `提示: 在 .vscode/mcp.json 的 env 中设置正确的 ASD_PROJECT_DIR。`;
+          `提示: 在 .vscode/mcp.json 的 env 中设置正确的 ALEMBIC_PROJECT_DIR。`;
         process.stderr.write(`${msg}\n`);
         throw new Error(msg);
       }
@@ -211,12 +211,12 @@ export class McpServer {
 
   /**
    * 注册 ListTools / CallTool 请求处理器
-   * ListTools 基于 ASD_MCP_TIER 过滤可见工具
+   * ListTools 基于 ALEMBIC_MCP_TIER 过滤可见工具
    */
   _registerHandlers() {
     // ── ListTools: 按 tier 过滤 ──
     this.sdkServer!.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      const tierName = process.env.ASD_MCP_TIER || 'agent';
+      const tierName = process.env.ALEMBIC_MCP_TIER || 'agent';
       const maxTier = (TIER_ORDER as Record<string, number>)[tierName] ?? TIER_ORDER.agent;
       const visible = TOOLS.filter(
         (t) => ((TIER_ORDER as Record<string, number>)[t.tier || 'agent'] ?? 0) <= maxTier
@@ -267,7 +267,7 @@ export class McpServer {
     const wrapped = wrapHandler(name, handler as Parameters<typeof wrapHandler>[1]);
 
     // Track task operation for _injectDecisions
-    if (name === 'asd_task') {
+    if (name === 'alembic_task') {
       this._lastTaskOperation = (args.operation as string) || '';
     }
 
@@ -284,7 +284,7 @@ export class McpServer {
     if (!this._autoApproveMarked) {
       this._autoApproveMarked = true;
       try {
-        const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+        const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
         markAutoApproveNeeded(projectRoot, this.logger!);
       } catch {
         /* non-blocking */
@@ -310,7 +310,7 @@ export class McpServer {
     this._session.lastActivityAt = Date.now();
 
     // Task handler manages IntentState internally — skip behavior tracking
-    if (toolName === 'asd_task') {
+    if (toolName === 'alembic_task') {
       return;
     }
 
@@ -328,7 +328,7 @@ export class McpServer {
     });
 
     // Auto-collect search queries
-    if (toolName === 'asd_search') {
+    if (toolName === 'alembic_search') {
       const query = this._extractSearchQuery(result);
       if (query) {
         intent.searchQueries.push(query);
@@ -358,7 +358,7 @@ export class McpServer {
    * Currently deferred — enable by uncommenting the call in _handleToolCall.
    */
   async _injectDecisions(toolName: string, result: unknown) {
-    if (toolName === 'asd_task') {
+    if (toolName === 'alembic_task') {
       return result;
     }
 
@@ -401,7 +401,7 @@ export class McpServer {
         }
       }
     }
-    if (toolName === 'asd_search' && intent.searchQueries.length > 0) {
+    if (toolName === 'alembic_search' && intent.searchQueries.length > 0) {
       const latestQuery = intent.searchQueries[intent.searchQueries.length - 1]!;
       const overlap = this._computeKeywordOverlap(latestQuery, intent.primeQuery);
       if (overlap < 0.3) {
@@ -484,40 +484,41 @@ export class McpServer {
   _resolveHandler(name: string): ToolHandlerFn | null {
     const HANDLER_MAP: Record<string, ToolHandlerFn> = {
       // ── Agent 层 ──
-      asd_health: (ctx) => systemHandlers.health(ctx),
-      asd_search: (ctx, args) =>
+      alembic_health: (ctx) => systemHandlers.health(ctx),
+      alembic_search: (ctx, args) =>
         consolidated.consolidatedSearch(
           ctx,
           args as Parameters<typeof consolidated.consolidatedSearch>[1]
         ),
-      asd_knowledge: (ctx, args) => consolidated.consolidatedKnowledge(ctx, args),
-      asd_structure: (ctx, args) => consolidated.consolidatedStructure(ctx, args),
-      asd_call_context: (ctx, args) => consolidated.consolidatedCallContext(ctx, args),
-      asd_graph: (ctx, args) => consolidated.consolidatedGraph(ctx, args),
-      asd_guard: (ctx, args) => consolidated.consolidatedGuard(ctx, args),
-      asd_submit_knowledge: (ctx, args) => consolidated.enhancedSubmitKnowledge(ctx, args),
-      asd_skill: (ctx, args) => consolidated.consolidatedSkill(ctx, args),
-      asd_task: (ctx, args) => taskHandler(ctx, args),
-      asd_panorama: (ctx, args) => panoramaHandler(ctx, args),
+      alembic_knowledge: (ctx, args) => consolidated.consolidatedKnowledge(ctx, args),
+      alembic_structure: (ctx, args) => consolidated.consolidatedStructure(ctx, args),
+      alembic_call_context: (ctx, args) => consolidated.consolidatedCallContext(ctx, args),
+      alembic_graph: (ctx, args) => consolidated.consolidatedGraph(ctx, args),
+      alembic_guard: (ctx, args) => consolidated.consolidatedGuard(ctx, args),
+      alembic_submit_knowledge: (ctx, args) => consolidated.enhancedSubmitKnowledge(ctx, args),
+      alembic_skill: (ctx, args) => consolidated.consolidatedSkill(ctx, args),
+      alembic_task: (ctx, args) => taskHandler(ctx, args),
+      alembic_panorama: (ctx, args) => panoramaHandler(ctx, args),
       // ── External Agent Bootstrap (v3.1) ──
-      asd_bootstrap: (ctx, _args) =>
+      alembic_bootstrap: (ctx, _args) =>
         bootstrapExternal(ctx as Parameters<typeof bootstrapExternal>[0]),
-      asd_rescan: (ctx, args) => rescanExternal(ctx as Parameters<typeof rescanExternal>[0], args),
-      asd_evolve: (ctx, args) =>
+      alembic_rescan: (ctx, args) =>
+        rescanExternal(ctx as Parameters<typeof rescanExternal>[0], args),
+      alembic_evolve: (ctx, args) =>
         evolveExternal(
           ctx as Parameters<typeof evolveExternal>[0],
           args as Parameters<typeof evolveExternal>[1]
         ),
-      asd_dimension_complete: (ctx, args) => dimensionComplete(ctx, args),
-      asd_consolidate: (ctx, args) =>
+      alembic_dimension_complete: (ctx, args) => dimensionComplete(ctx, args),
+      alembic_consolidate: (ctx, args) =>
         consolidateHandler(
           ctx as Parameters<typeof consolidateHandler>[0],
           args as Parameters<typeof consolidateHandler>[1]
         ),
-      asd_wiki: (ctx, args) => wikiRouter(ctx, args),
+      alembic_wiki: (ctx, args) => wikiRouter(ctx, args),
       // ── Admin 层 (+4) ──
-      asd_enrich_candidates: (ctx, args) => candidateHandlers.enrichCandidates(ctx, args),
-      asd_knowledge_lifecycle: (ctx, args) => knowledgeHandlers.knowledgeLifecycle(ctx, args),
+      alembic_enrich_candidates: (ctx, args) => candidateHandlers.enrichCandidates(ctx, args),
+      alembic_knowledge_lifecycle: (ctx, args) => knowledgeHandlers.knowledgeLifecycle(ctx, args),
     };
     return HANDLER_MAP[name] ?? null;
   }
@@ -623,7 +624,7 @@ export class McpServer {
     await this.initialize();
 
     // 首次 bootstrap 成功后的标记 → 注入 autoApprove（在连接建立前，安全写入 mcp.json）
-    const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+    const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
     try {
       applyPendingAutoApprove(projectRoot, this.logger!);
     } catch {
@@ -633,7 +634,7 @@ export class McpServer {
     const transport = new StdioServerTransport();
     await this.sdkServer!.connect(transport);
 
-    const tierName = process.env.ASD_MCP_TIER || 'agent';
+    const tierName = process.env.ALEMBIC_MCP_TIER || 'agent';
     const maxTier = (TIER_ORDER as Record<string, number>)[tierName] ?? TIER_ORDER.agent;
     const visibleCount = TOOLS.filter(
       (t) => ((TIER_ORDER as Record<string, number>)[t.tier || 'agent'] ?? 0) <= maxTier

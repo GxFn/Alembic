@@ -5,7 +5,7 @@
  *    双 Agent AI pipeline 自动完成知识提取。需要配置 AI Provider (API Key)。
  *
  * 调用方:
- *   - CLI: `asd bootstrap --knowledge`
+ *   - CLI: `alembic bootstrap --knowledge`
  *   - AgentRuntime: `bootstrapKnowledgeTool` (infrastructure.js)
  *   - Dashboard HTTP: POST /api/bootstrap/knowledge
  *
@@ -168,7 +168,7 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
     return envelope({
       success: true,
       data: { report: phaseResults.report, message: 'No source files found, nothing to bootstrap' },
-      meta: { tool: 'asd_bootstrap', responseTimeMs: Date.now() - t0 },
+      meta: { tool: 'alembic_bootstrap', responseTimeMs: Date.now() - t0 },
     });
   }
 
@@ -392,7 +392,7 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
       skillWorthyDimensions: dimensions.filter((d) => d.skillWorthy).map((d) => d.id),
       candidateOnlyDimensions: dimensions.filter((d) => !d.skillWorthy).map((d) => d.id),
       candidateRequiredFields: getInternalAgentRequiredFields(),
-      submissionTool: 'asd_submit_knowledge_batch',
+      submissionTool: 'alembic_submit_knowledge_batch',
       expectedOutput: `候选知识（微观代码维度：code-pattern/best-practice/event-and-data-flow + 语言条件扫描）+ Project Skills（宏观叙事维度：code-standard/architecture/project-profile/agent-guidelines + 语言条件扫描）— 共 ${dimensions.length} 个维度`,
     },
 
@@ -552,7 +552,7 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
   return envelope({
     success: true,
     data: responseData,
-    meta: { tool: 'asd_bootstrap', responseTimeMs: Date.now() - t0 },
+    meta: { tool: 'alembic_bootstrap', responseTimeMs: Date.now() - t0 },
   });
 }
 

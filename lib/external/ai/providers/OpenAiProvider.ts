@@ -29,9 +29,10 @@ export class OpenAiProvider extends AiProvider {
     super(config);
     this.name = config.name || 'openai';
     this.model = config.model || 'gpt-5.4-mini';
-    this.apiKey = config.apiKey || process.env.ASD_OPENAI_API_KEY || '';
+    this.apiKey = config.apiKey || process.env.ALEMBIC_OPENAI_API_KEY || '';
     this.baseUrl = config.baseUrl || OPENAI_BASE;
-    this.embedModel = config.embedModel || process.env.ASD_EMBED_MODEL || 'text-embedding-3-small';
+    this.embedModel =
+      config.embedModel || process.env.ALEMBIC_EMBED_MODEL || 'text-embedding-3-small';
     this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
   }
 
@@ -320,9 +321,10 @@ export class OpenAiProvider extends AiProvider {
   ): Promise<ApiResponse> {
     // Ollama 使用固定 dummy key，不需要校验
     if (!this.apiKey && this.name !== 'ollama') {
-      const envKey = this.name === 'deepseek' ? 'ASD_DEEPSEEK_API_KEY' : 'ASD_OPENAI_API_KEY';
+      const envKey =
+        this.name === 'deepseek' ? 'ALEMBIC_DEEPSEEK_API_KEY' : 'ALEMBIC_OPENAI_API_KEY';
       const err = new Error(
-        `${this.name} API Key 未配置。请在 .env 中设置 ${envKey}，或运行 asd setup 完成配置。`
+        `${this.name} API Key 未配置。请在 .env 中设置 ${envKey}，或运行 alembic setup 完成配置。`
       ) as Error & { code: string };
       err.code = 'API_KEY_MISSING';
       throw err;

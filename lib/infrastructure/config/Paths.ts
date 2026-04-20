@@ -37,12 +37,12 @@ export function ensureDir(dirPath: string) {
 
 /**
  * Xcode CodeSnippets 输出目录 (macOS only)
- * 可通过 ASD_SNIPPETS_PATH 环境变量覆盖
+ * 可通过 ALEMBIC_SNIPPETS_PATH 环境变量覆盖
  * 非 macOS 返回全局缓存下的 snippets/ 子目录
  */
 export function getSnippetsPath() {
-  if (process.env.ASD_SNIPPETS_PATH) {
-    return process.env.ASD_SNIPPETS_PATH;
+  if (process.env.ALEMBIC_SNIPPETS_PATH) {
+    return process.env.ALEMBIC_SNIPPETS_PATH;
   }
   if (process.platform === 'darwin') {
     return ensureDir(path.join(USER_HOME, 'Library/Developer/Xcode/UserData/CodeSnippets'));
@@ -58,11 +58,11 @@ export function getVSCodeSnippetsPath(projectRoot: string) {
 
 /**
  * Alembic 全局缓存目录 ~/.asd/cache
- * 可通过 ASD_CACHE_PATH 环境变量覆盖
+ * 可通过 ALEMBIC_CACHE_PATH 环境变量覆盖
  */
 export function getCachePath() {
-  if (process.env.ASD_CACHE_PATH) {
-    return process.env.ASD_CACHE_PATH;
+  if (process.env.ALEMBIC_CACHE_PATH) {
+    return process.env.ALEMBIC_CACHE_PATH;
   }
   return ensureDir(path.join(USER_HOME, '.asd', 'cache'));
 }

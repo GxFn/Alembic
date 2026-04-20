@@ -13,7 +13,7 @@
  *
  * 典型场景：
  *   - MCP Server 冷启动写入 33 条 Recipe → HTTP Server 的 data_version 变化
- *   - 用户 CLI 执行 `asd embed` → Dashboard API 的缓存自动失效
+ *   - 用户 CLI 执行 `alembic embed` → Dashboard API 的缓存自动失效
  *
  * @module infrastructure/cache/CacheCoordinator
  */

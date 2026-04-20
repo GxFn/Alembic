@@ -1,5 +1,5 @@
 /**
- * MCP Handler — asd_task (Intent Lifecycle + Signal Collection)
+ * MCP Handler — alembic_task (Intent Lifecycle + Signal Collection)
  *
  * 5 Operations:
  *   prime            — Load knowledge context + initialize intent
@@ -56,7 +56,7 @@ let _taskCounter = 0;
 
 function _generateTaskId(): string {
   _taskCounter++;
-  return `asd-${Date.now().toString(36)}-${_taskCounter}`;
+  return `alembic-${Date.now().toString(36)}-${_taskCounter}`;
 }
 
 // ─── Task Rules Reminder ─────────────────────────────────
@@ -111,7 +111,7 @@ export async function taskHandler(ctx: McpContext, args: TaskArgs) {
       return envelope({
         success: false,
         message: `Unknown operation: ${args.operation}. Valid: prime, create, close, fail, record_decision.`,
-        meta: { tool: 'asd_task' },
+        meta: { tool: 'alembic_task' },
       });
   }
 
@@ -218,7 +218,7 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
       _taskRules,
     },
     message: lines.join('\n'),
-    meta: { tool: 'asd_task' },
+    meta: { tool: 'alembic_task' },
   });
 }
 
@@ -229,7 +229,7 @@ async function _create(ctx: McpContext, args: TaskArgs) {
     return envelope({
       success: false,
       message: 'title is required',
-      meta: { tool: 'asd_task' },
+      meta: { tool: 'alembic_task' },
     });
   }
 
@@ -246,7 +246,7 @@ async function _create(ctx: McpContext, args: TaskArgs) {
     success: true,
     data: { id: taskId, title: args.title },
     message: `📌 Created: ${taskId} — ${args.title}`,
-    meta: { tool: 'asd_task' },
+    meta: { tool: 'alembic_task' },
   });
 }
 
@@ -260,7 +260,7 @@ async function _close(ctx: McpContext, args: TaskArgs) {
     return envelope({
       success: false,
       message: 'id is required (pass id or ensure a task was created in this session)',
-      meta: { tool: 'asd_task' },
+      meta: { tool: 'alembic_task' },
     });
   }
 
@@ -279,7 +279,7 @@ async function _close(ctx: McpContext, args: TaskArgs) {
   const lines = [`✅ Closed: ${id} — ${reason}`];
   lines.push('');
   lines.push(
-    '⚠️ REQUIRED: You MUST call asd_guard (no args) NOW to review changed files for compliance violations.'
+    '⚠️ REQUIRED: You MUST call alembic_guard (no args) NOW to review changed files for compliance violations.'
   );
 
   return envelope({
@@ -287,14 +287,14 @@ async function _close(ctx: McpContext, args: TaskArgs) {
     data: {
       closed: { id, reason, closedAt: Date.now() },
       nextAction: {
-        tool: 'asd_guard',
+        tool: 'alembic_guard',
         args: {},
         required: true,
         reason: 'Post-close compliance review — check diff for violations before moving on.',
       },
     },
     message: lines.join('\n'),
-    meta: { tool: 'asd_task' },
+    meta: { tool: 'alembic_task' },
   });
 }
 
@@ -308,7 +308,7 @@ async function _fail(ctx: McpContext, args: TaskArgs) {
     return envelope({
       success: false,
       message: 'id is required (pass id or ensure a task was created in this session)',
-      meta: { tool: 'asd_task' },
+      meta: { tool: 'alembic_task' },
     });
   }
 
@@ -330,7 +330,7 @@ async function _fail(ctx: McpContext, args: TaskArgs) {
       failed: { id, reason, failedAt: Date.now() },
     },
     message: `❌ Failed: ${id} — ${reason}`,
-    meta: { tool: 'asd_task' },
+    meta: { tool: 'alembic_task' },
   });
 }
 
@@ -341,14 +341,14 @@ async function _recordDecision(ctx: McpContext, args: TaskArgs) {
     return envelope({
       success: false,
       message: 'title is required',
-      meta: { tool: 'asd_task' },
+      meta: { tool: 'alembic_task' },
     });
   }
   if (!args.description) {
     return envelope({
       success: false,
       message: 'description is required',
-      meta: { tool: 'asd_task' },
+      meta: { tool: 'alembic_task' },
     });
   }
 
@@ -372,7 +372,7 @@ async function _recordDecision(ctx: McpContext, args: TaskArgs) {
     success: true,
     data: { decision: { id: decisionId, title: args.title } },
     message: `📌 Decision recorded: ${args.title}`,
-    meta: { tool: 'asd_task' },
+    meta: { tool: 'alembic_task' },
   });
 }
 

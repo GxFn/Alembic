@@ -252,7 +252,7 @@ describe('Integration: roleResolver middleware', () => {
 
   test('Path B: 使用 CapabilityProbe（无子仓库 → admin）', () => {
     setEnv('VITE_AUTH_ENABLED', undefined);
-    setEnv('ASD_AUTH_ENABLED', undefined);
+    setEnv('ALEMBIC_AUTH_ENABLED', undefined);
 
     // 使用不存在的路径，确保走 "无子仓库 = admin" 路径，避免 _detectSubRepo 命中真实仓库
     const probe = new CapabilityProbe({ subRepoPath: `/tmp/nonexistent-probe-test-${Date.now()}` });
@@ -268,7 +268,7 @@ describe('Integration: roleResolver middleware', () => {
 
   test('Path B: 无 CapabilityProbe 实例 → 默认 developer（向后兼容）', () => {
     setEnv('VITE_AUTH_ENABLED', undefined);
-    setEnv('ASD_AUTH_ENABLED', undefined);
+    setEnv('ALEMBIC_AUTH_ENABLED', undefined);
 
     const middleware = roleResolverMiddleware({});
     const { req, res, next } = mockExpress({});

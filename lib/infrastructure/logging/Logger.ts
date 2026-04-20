@@ -115,10 +115,10 @@ const compactConsoleFormat = winston.format.printf(({ level, message, timestamp,
  * Logger - 统一日志系统
  *
  * 环境变量:
- *   ASD_LOG_LEVEL — 覆盖日志级别 (debug/info/warn/error)
- *   ASD_MCP_MODE=1 — MCP 模式下禁用 Console transport
+ *   ALEMBIC_LOG_LEVEL — 覆盖日志级别 (debug/info/warn/error)
+ *   ALEMBIC_MCP_MODE=1 — MCP 模式下禁用 Console transport
  *
- * MCP 模式（ASD_MCP_MODE=1）下 Console transport 输出到 stderr 并禁用彩色，
+ * MCP 模式（ALEMBIC_MCP_MODE=1）下 Console transport 输出到 stderr 并禁用彩色，
  * 避免污染 stdout JSON-RPC 通道。
  */
 
@@ -134,14 +134,14 @@ export class Logger {
       // 就地重配置 — 保持同一实例引用，避免模块级捕获的 logger 变量失效
       // （close() + 重建会使旧引用指向无 transport 的已关闭实例）
       this.instance.clear();
-      const logLevel = process.env.ASD_LOG_LEVEL || config.level || 'info';
+      const logLevel = process.env.ALEMBIC_LOG_LEVEL || config.level || 'info';
       this.instance.level = logLevel;
       this._addTransports(this.instance, config);
       return this.instance;
     }
 
     if (!this.instance) {
-      const logLevel = process.env.ASD_LOG_LEVEL || config.level || 'info';
+      const logLevel = process.env.ALEMBIC_LOG_LEVEL || config.level || 'info';
       this.instance = winston.createLogger({
         level: logLevel,
         format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
@@ -157,7 +157,7 @@ export class Logger {
     logger: winston.Logger,
     config: { console?: boolean; file?: { enabled?: boolean; path?: string } }
   ) {
-    const isMcpMode = process.env.ASD_MCP_MODE === '1';
+    const isMcpMode = process.env.ALEMBIC_MCP_MODE === '1';
 
     if (config.console !== false && !isMcpMode) {
       logger.add(

@@ -7,7 +7,7 @@
 
 import { useState, useCallback } from 'react';
 
-const STORAGE_KEY = 'asd-drawer-wide';
+const STORAGE_KEY = 'alembic-drawer-wide';
 
 function readPref(): boolean {
   try {

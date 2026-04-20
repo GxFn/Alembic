@@ -30,7 +30,7 @@ describe('ToolRequirementAnalyzer', () => {
     });
 
     it('should fuzzy-match tool name containing action + target', () => {
-      const reg = createMockRegistry(['asd_search_knowledge', 'list_files']);
+      const reg = createMockRegistry(['alembic_search_knowledge', 'list_files']);
       const analyzer = new ToolRequirementAnalyzer(reg);
 
       const result = analyzer.analyze({
@@ -41,7 +41,7 @@ describe('ToolRequirementAnalyzer', () => {
 
       expect(result.mode).toBe('reuse');
       expect(result.confidence).toBe(0.85);
-      expect(result.matchedTool).toBe('asd_search_knowledge');
+      expect(result.matchedTool).toBe('alembic_search_knowledge');
     });
 
     it('should hint-match using ACTION_TOOL_HINTS', () => {

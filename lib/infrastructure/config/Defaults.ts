@@ -39,7 +39,7 @@ export const CHARS_PER_TOKEN = 3;
 export const README_NAMES = ['README.md', 'README_CN.md', 'readme.md'];
 
 // ─── MCP / 连接层 ───────────────────────────────────────────
-export const DEFAULT_ASD_UI_URL = 'http://localhost:3000';
+export const DEFAULT_ALEMBIC_UI_URL = 'http://localhost:3000';
 
 // ─── Guard ───────────────────────────────────────────────────
 export const GUARD_CONTEXT_EXCERPT_LIMIT = 12000;
@@ -93,7 +93,7 @@ export default {
   DEFAULT_OVERLAP_TOKENS,
   CHARS_PER_TOKEN,
   README_NAMES,
-  DEFAULT_ASD_UI_URL,
+  DEFAULT_ALEMBIC_UI_URL,
   GUARD_CONTEXT_EXCERPT_LIMIT,
   CATEGORY_RULES,
   DEFAULT_CATEGORY,

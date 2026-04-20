@@ -124,7 +124,7 @@ export class SkillAdvisor {
       analysisContext,
       hint:
         suggestions.length > 0
-          ? `发现 ${suggestions.length} 个 Skill 创建建议。你可以使用 asd_skill({ operation: "create" }) 直接创建，也可以根据 rationale 自行判断是否需要。`
+          ? `发现 ${suggestions.length} 个 Skill 创建建议。你可以使用 alembic_skill({ operation: "create" }) 直接创建，也可以根据 rationale 自行判断是否需要。`
           : '当前项目使用模式暂无明确的 Skill 创建建议。继续使用后会积累更多信号。',
     };
   }

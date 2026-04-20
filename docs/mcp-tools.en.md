@@ -18,7 +18,7 @@ All tools pass through the Gateway pipeline (validate → guard → route → au
 
 ## Agent Tier Tools
 
-### 1. asd_health
+### 1. alembic_health
 
 Service health status and knowledge base statistics.
 
@@ -37,7 +37,7 @@ Service health status and knowledge base statistics.
 
 ---
 
-### 2. asd_search
+### 2. alembic_search
 
 Unified knowledge base search. Supports multiple search modes with automatic strategy selection.
 
@@ -63,7 +63,7 @@ Unified knowledge base search. Supports multiple search modes with automatic str
 
 ---
 
-### 3. asd_knowledge
+### 3. alembic_knowledge
 
 Knowledge browsing. Get, list, or confirm knowledge entry usage.
 
@@ -88,7 +88,7 @@ Knowledge browsing. Get, list, or confirm knowledge entry usage.
 
 ---
 
-### 4. asd_structure
+### 4. alembic_structure
 
 Project structure exploration. Helps AI understand project organization.
 
@@ -109,7 +109,7 @@ Project structure exploration. Helps AI understand project organization.
 
 ---
 
-### 5. asd_graph
+### 5. alembic_graph
 
 Knowledge graph queries. Analyze relationships between entries.
 
@@ -132,7 +132,7 @@ Knowledge graph queries. Analyze relationships between entries.
 
 ---
 
-### 6. asd_guard
+### 6. alembic_guard
 
 Code compliance check. Check code snippets or file lists against Guard rules. Outputs 3-state results (pass / violation / uncertain) with a 3-dimensional report (compliance + coverage + confidence). ReverseGuard reverse-validates that API symbols referenced in Recipes still exist in code.
 
@@ -147,7 +147,7 @@ Code compliance check. Check code snippets or file lists against Guard rules. Ou
 
 ---
 
-### 7. asd_submit_knowledge
+### 7. alembic_submit_knowledge
 
 Unified knowledge submission (single/batch/document). Pass 1~N entries via `items` array.
 
@@ -188,7 +188,7 @@ Unified knowledge submission (single/batch/document). Pass 1~N entries via `item
 
 ---
 
-### 8. asd_skill
+### 8. alembic_skill
 
 Skill management. Create, load, update, and delete project Skills.
 
@@ -202,13 +202,13 @@ Skill management. Create, load, update, and delete project Skills.
 
 ---
 
-### 9. asd_bootstrap
+### 9. alembic_bootstrap
 
 Coldstart — No parameters required. Automatically analyzes the project (AST, dependency graph, Guard audit) and returns a Mission Briefing.
 
 ---
 
-### 9b. asd_rescan
+### 9b. alembic_rescan
 
 Incremental rescan — Preserves approved Recipes, cleans derived caches, re-runs Phase 1-4 analysis, and executes RecipeRelevanceAuditor 5-dimension evidence audit. Returns Mission Briefing with allRecipes (full content + auditHint) and evolutionGuide.
 
@@ -221,7 +221,7 @@ Incremental rescan — Preserves approved Recipes, cleans derived caches, re-run
 
 ---
 
-### 9c. asd_evolve
+### 9c. alembic_evolve
 
 Batch Recipe evolution decisions. Dual-entry tool:
 - **Rescan mode**: called per-dimension before gap-fill (evolve → submit_knowledge → dimension_complete)
@@ -245,7 +245,7 @@ Three decision types:
 
 ---
 
-### 10. asd_dimension_complete
+### 10. alembic_dimension_complete
 
 Dimension analysis completion notification — Called after the Agent finishes analyzing a coldstart dimension. Handles Recipe association, Skill generation, checkpoint saving, and progress push.
 
@@ -262,7 +262,7 @@ Dimension analysis completion notification — Called after the Agent finishes a
 
 ---
 
-### 11. asd_wiki
+### 11. alembic_wiki
 
 Wiki document generation.
 
@@ -277,7 +277,7 @@ Wiki document generation.
 
 ---
 
-### 12. asd_panorama
+### 12. alembic_panorama
 
 Project panorama queries.
 
@@ -303,7 +303,7 @@ Project panorama queries.
 
 ---
 
-### 13. asd_task
+### 13. alembic_task
 
 Task and decision management (5 operations). Call `prime` at the start of every conversation to load knowledge context.
 
@@ -326,7 +326,7 @@ Task and decision management (5 operations). Call `prime` at the start of every 
 
 ## Admin Tier Tools
 
-### 14. asd_enrich_candidates
+### 14. alembic_enrich_candidates
 
 Candidate field completeness diagnosis (pure logic check, no AI).
 
@@ -338,7 +338,7 @@ Candidate field completeness diagnosis (pure logic check, no AI).
 
 ---
 
-### 15. asd_knowledge_lifecycle
+### 15. alembic_knowledge_lifecycle
 
 Knowledge entry lifecycle operations.
 
@@ -370,16 +370,16 @@ Mapping between MCP tools and Gateway Actions:
 
 | Tool | Gateway Action | Role Requirement |
 |------|---------------|-----------------|
-| `asd_search` | `read:recipes` | All roles |
-| `asd_knowledge` (list/get) | `read:recipes` | All roles |
-| `asd_submit_knowledge` | `submit:knowledge` | `external_agent` / `developer` |
-| `asd_guard` | `read:guard_rules` | All roles |
-| `asd_skill` (create) | `create:skills` | `external_agent` / `developer` |
-| `asd_bootstrap` | `knowledge:bootstrap` | `external_agent` / `developer` |
-| `asd_rescan` | `knowledge:bootstrap` | `external_agent` / `developer` |
-| `asd_evolve` | `knowledge:evolve` | `external_agent` / `developer` |
-| `asd_task` | `task:create` / `task:update` (routed by operation) | `external_agent` / `developer` |
-| `asd_knowledge_lifecycle` | Dynamic by action | `developer` |
+| `alembic_search` | `read:recipes` | All roles |
+| `alembic_knowledge` (list/get) | `read:recipes` | All roles |
+| `alembic_submit_knowledge` | `submit:knowledge` | `external_agent` / `developer` |
+| `alembic_guard` | `read:guard_rules` | All roles |
+| `alembic_skill` (create) | `create:skills` | `external_agent` / `developer` |
+| `alembic_bootstrap` | `knowledge:bootstrap` | `external_agent` / `developer` |
+| `alembic_rescan` | `knowledge:bootstrap` | `external_agent` / `developer` |
+| `alembic_evolve` | `knowledge:evolve` | `external_agent` / `developer` |
+| `alembic_task` | `task:create` / `task:update` (routed by operation) | `external_agent` / `developer` |
+| `alembic_knowledge_lifecycle` | Dynamic by action | `developer` |
 
 ---
 
@@ -394,7 +394,7 @@ Mapping between MCP tools and Gateway Actions:
     "alembic": {
       "command": "node",
       "args": ["/path/to/alembic/bin/mcp-server.js"],
-      "env": { "ASD_PROJECT_ROOT": "/path/to/your-project" }
+      "env": { "ALEMBIC_PROJECT_ROOT": "/path/to/your-project" }
     }
   }
 }
@@ -409,10 +409,10 @@ Mapping between MCP tools and Gateway Actions:
     "alembic": {
       "command": "node",
       "args": ["/path/to/alembic/bin/mcp-server.js"],
-      "env": { "ASD_PROJECT_ROOT": "/path/to/your-project" }
+      "env": { "ALEMBIC_PROJECT_ROOT": "/path/to/your-project" }
     }
   }
 }
 ```
 
-These configs are auto-generated by `asd setup`.
+These configs are auto-generated by `alembic setup`.

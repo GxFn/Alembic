@@ -346,7 +346,7 @@ export const PRESETS = Object.freeze({
         }),
       () =>
         new SafetyPolicy({
-          allowedSenders: process.env.ASD_LARK_ALLOWED_USERS?.split(',').filter(Boolean) || [],
+          allowedSenders: process.env.ALEMBIC_LARK_ALLOWED_USERS?.split(',').filter(Boolean) || [],
         }),
     ],
     persona: {
@@ -377,8 +377,8 @@ export const PRESETS = Object.freeze({
         }),
       () =>
         new SafetyPolicy({
-          allowedSenders: process.env.ASD_LARK_ALLOWED_USERS?.split(',').filter(Boolean) || [],
-          fileScope: process.env.ASD_PROJECT_ROOT,
+          allowedSenders: process.env.ALEMBIC_LARK_ALLOWED_USERS?.split(',').filter(Boolean) || [],
+          fileScope: process.env.ALEMBIC_PROJECT_ROOT,
         }),
     ],
     persona: {

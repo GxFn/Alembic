@@ -21,7 +21,7 @@ npm install
 npm run dev:link
 
 # 验证安装
-npm run dev:verify    # → which asd && asd -v
+npm run dev:verify    # → which alembic && alembic -v
 ```
 
 ---
@@ -31,7 +31,7 @@ npm run dev:verify    # → which asd && asd -v
 ```
 Alembic/
 ├── bin/                    # 入口脚本
-│   ├── cli.js              # CLI 入口 (asd 命令)
+│   ├── cli.js              # CLI 入口 (alembic 命令)
 │   ├── mcp-server.js       # MCP stdio 服务器
 │   └── api-server.js       # HTTP API 服务器
 ├── lib/                    # 核心源码（分层架构）
@@ -254,7 +254,7 @@ npm run dev           # Vite 开发服务器（HMR）
 npm run build:dashboard    # 或 cd dashboard && npm run build
 ```
 
-构建产物输出到 `dashboard/dist/`，由 `asd ui` 的 Express 静态文件服务提供。
+构建产物输出到 `dashboard/dist/`，由 `alembic ui` 的 Express 静态文件服务提供。
 
 ### 目录结构
 
@@ -348,8 +348,8 @@ npm run build:dashboard    # 必须在 npm publish 前执行
 
 ## 关键开发注意事项
 
-1. **不在本项目执行 asd 用户命令**（如 `asd setup`、`asd embed`），本仓库是 Alembic 源码，不是用户项目
-2. **测试 asd 命令** 先运行 `npm run dev:link` 部署到全局，然后在独立的测试项目中执行
+1. **不在本项目执行 asd 用户命令**（如 `alembic setup`、`alembic embed`），本仓库是 Alembic 源码，不是用户项目
+2. **测试 alembic 命令** 先运行 `npm run dev:link` 部署到全局，然后在独立的测试项目中执行
 3. **ESM 兼容** — 所有 import 必须带 `.js` 扩展名
 4. **DI 注册** — 新增服务必须在 `ServiceContainer.js` 中注册
 5. **Gateway Action** — 新增 API 操作必须在 `GatewayActionRegistry` 中注册路由

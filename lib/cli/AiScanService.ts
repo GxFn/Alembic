@@ -1,5 +1,5 @@
 /**
- * AiScanService — `asd ais [Target]` 的核心逻辑
+ * AiScanService — `alembic ais [Target]` 的核心逻辑
  *
  * 按文件粒度扫描 Target 源码，通过 AgentFactory.scanKnowledge 提取 Recipe，
  * 创建后自动发布（PENDING → ACTIVE），无需 Dashboard 人工审核。
@@ -63,7 +63,7 @@ export class AiScanService {
       }
     } catch (err: unknown) {
       throw new Error(
-        `AI Provider 不可用: ${(err as Error).message}\n请在 .env 中配置 ASD_GOOGLE_API_KEY / ASD_OPENAI_API_KEY 等`
+        `AI Provider 不可用: ${(err as Error).message}\n请在 .env 中配置 ALEMBIC_GOOGLE_API_KEY / ALEMBIC_OPENAI_API_KEY 等`
       );
     }
 

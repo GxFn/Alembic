@@ -191,8 +191,8 @@ export interface PhaseReport {
 
 // ── R13: Alembic 生成物黑名单 ─────────────────────────
 
-const ASD_GENERATED_BASENAMES = new Set(['AGENTS.md', 'CLAUDE.md', 'copilot-instructions.md']);
-const ASD_GENERATED_PATH_SEGMENTS = [
+const ALEMBIC_GENERATED_BASENAMES = new Set(['AGENTS.md', 'CLAUDE.md', 'copilot-instructions.md']);
+const ALEMBIC_GENERATED_PATH_SEGMENTS = [
   `${path.sep}.cursor${path.sep}`, // .cursor/rules/*.mdc
   `${path.sep}.github${path.sep}copilot-instructions.md`,
 ];
@@ -200,10 +200,10 @@ const ASD_GENERATED_PATH_SEGMENTS = [
 /** 判断文件是否为 Alembic 生成物（用于排除自引用循环知识） */
 export function isAlembicGenerated(filePath: string) {
   const base = path.basename(filePath);
-  if (ASD_GENERATED_BASENAMES.has(base)) {
+  if (ALEMBIC_GENERATED_BASENAMES.has(base)) {
     return true;
   }
-  for (const seg of ASD_GENERATED_PATH_SEGMENTS) {
+  for (const seg of ALEMBIC_GENERATED_PATH_SEGMENTS) {
     if (filePath.includes(seg)) {
       return true;
     }

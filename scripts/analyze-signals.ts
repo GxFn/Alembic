@@ -215,7 +215,7 @@ function formatMs(ms: number): string {
 
 // ── Main ────────────────────────────────────────────
 
-const projectRoot = process.argv[2] || process.env.ASD_PROJECT_DIR || process.cwd();
+const projectRoot = process.argv[2] || process.env.ALEMBIC_PROJECT_DIR || process.cwd();
 const signalDir = path.join(projectRoot, '.asd', 'logs', 'signals');
 
 console.log(`Reading signals from: ${signalDir}`);

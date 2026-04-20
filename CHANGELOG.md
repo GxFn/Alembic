@@ -37,7 +37,7 @@
 
 - **品牌重命名**: AutoSnippet → Alembic (Auto Source Distill)
 - npm 包名: `autosnippet` → `alembic`
-- MCP 工具前缀: `autosnippet_*` → `asd_*`
+- MCP 工具前缀: `autosnippet_*` → `alembic_*`
 - 运行时目录: `.autosnippet/` → `.asd/`
 - 知识库目录: `AutoSnippet/` → `Alembic/`
 - 数据库文件: `autosnippet.db` → `alembic.db`
@@ -98,9 +98,9 @@
 
 ### 修复
 
-- **MCP projectRoot 安全加固**：MCP 模式下不再 fallback `process.cwd()`，必须显式设置 `ASD_PROJECT_DIR` 环境变量，彻底解决多根工作区中 MCP server 误在非目标目录创建 `.autosnippet/` 的问题
-  - McpServer：启动时校验 `ASD_PROJECT_DIR` 存在性，缺失则拒绝启动并给出配置提示
-  - Bootstrap：MCP 模式 + PathGuard 未配置时同样要求 `ASD_PROJECT_DIR`，防止绕过 McpServer 入口
+- **MCP projectRoot 安全加固**：MCP 模式下不再 fallback `process.cwd()`，必须显式设置 `ALEMBIC_PROJECT_DIR` 环境变量，彻底解决多根工作区中 MCP server 误在非目标目录创建 `.autosnippet/` 的问题
+  - McpServer：启动时校验 `ALEMBIC_PROJECT_DIR` 存在性，缺失则拒绝启动并给出配置提示
+  - Bootstrap：MCP 模式 + PathGuard 未配置时同样要求 `ALEMBIC_PROJECT_DIR`，防止绕过 McpServer 入口
 - **Mock 数据不再污染生产数据库**：`mock-pipeline` 不再调用 `knowledgeService.create()`，候选项仅在内存中生成
 - **Delivery 过滤 mock 条目**：`CursorDeliveryPipeline._loadEntries()` 过滤 `source=mock-bootstrap|mock-pipeline` 和 `createdBy=mock-ai` 的条目
 
@@ -297,7 +297,7 @@
 ### 新增
 
 - **FileManifest + FileDeployer 统一部署引擎**：20 条 MANIFEST 项 + 9 种部署策略，SetupService 从 1350→559 行（-59%）、UpgradeService 从 504→100 行（-80%）
-- **CliLogger 轻量 CLI 日志模块**：替换 bin/cli.js 全部 108 处 `console.log/error/warn`，stdout/stderr 分流 + `ASD_DEBUG` 调试模式
+- **CliLogger 轻量 CLI 日志模块**：替换 bin/cli.js 全部 108 处 `console.log/error/warn`，stdout/stderr 分流 + `ALEMBIC_DEBUG` 调试模式
 - **MCP 工具合并 ready/decide → task**：`autosnippet_ready` + `autosnippet_decide` 合入 `autosnippet_task`（prime/record_decision/revise_decision/unpin_decision/list_decisions），工具数从 22→20
 - **Guard 增量检查模式**：`autosnippet_guard` 无参数时自动检测 git diff 增量文件并检查，violation 内联 recipe 修复指南
 - **Claude Code Hooks 模板**：`templates/claude-code/`（commands + hooks + settings.json）替代已废弃的 `claude-hooks.yaml`
@@ -335,7 +335,7 @@
 - **MCP 通道 Decision 自动注入（P0）**：非 ready/decide/task 工具的响应自动附带 `_activeDecisions` 摘要，Agent 即使跳过 ready 也能看到团队决策
 - **VS Code Decision 缓存（P1）**：taskTool.ts 增加 30s TTL 缓存 + 防并发 pending promise，连续操作从双倍 HTTP 降至 1 次 prime + N 次缓存命中
 - **Result Compaction 三层响应（P1）**：decisions 按 summary/compact/full 三层级返回，ready 返回 compact（120字摘要），注入仅 id+title，decide(list) 返回完整数据
-- **决策过期检测（P2）**：prime() 运行时按 createdAt + 阈值检测 stale decisions（默认 30 天，`ASD_DECISION_STALE_DAYS` 环境变量可覆盖），过期决策单独返回并提示清理
+- **决策过期检测（P2）**：prime() 运行时按 createdAt + 阈值检测 stale decisions（默认 30 天，`ALEMBIC_DECISION_STALE_DAYS` 环境变量可覆盖），过期决策单独返回并提示清理
 - **Session 管理（P3）**：MCP 连接级 session 追踪（id/readyCalled/toolCallCount/toolsUsed），未调 ready 时注入更强决策提醒，health 响应包含 session 信息
 
 ### 改进
@@ -923,7 +923,7 @@
 
 ### Bug Fixes — 候选项不可见 & 路径解析
 
-- **fix(cli/mcp/api-server):** 当 projectRoot 与 cwd 不同时（如 `asd ui -d <path>` 或 `ASD_PROJECT_DIR` 环境变量），自动 `process.chdir(projectRoot)`，确保 DB 路径 `./.autosnippet/autosnippet.db` 正确解析到目标项目而非执行目录
+- **fix(cli/mcp/api-server):** 当 projectRoot 与 cwd 不同时（如 `asd ui -d <path>` 或 `ALEMBIC_PROJECT_DIR` 环境变量），自动 `process.chdir(projectRoot)`，确保 DB 路径 `./.autosnippet/autosnippet.db` 正确解析到目标项目而非执行目录
 - **fix(candidates route):** `GET /api/v1/candidates` 的 `pageSize` 上限从 100 提升到 1000，与前端 `limit=1000` 请求一致，避免候选项超过 100 条时分页截断
 
 ---
@@ -1021,7 +1021,7 @@
 - **PROJECT_SNAPSHOT_STYLE_GUIDE**：「项目特写」风格定义（选择了什么 / 为什么 / 禁止什么 / 怎么写）
 - **Few-shot 范例**：候选类 + 深度扫描类两种范例模板
 - 新增 4 个 Agent 工具：`search_project_code` / `read_project_file` / `plan_task` / `review_my_output`
-- 默认模式从 `full-signal` 切换到 `minimal-prompt`，`ASD_PROMPT_MODE='full-signal'` 可回退
+- 默认模式从 `full-signal` 切换到 `minimal-prompt`，`ALEMBIC_PROMPT_MODE='full-signal'` 可回退
 
 #### Pipeline 完整性修复（v9 Bug Fix）
 
@@ -1324,7 +1324,7 @@
 - **Swift 解析器**：移除 `tools/parse-package/` 全部代码；V2 内置 AST-lite 解析器（`lib/service/spm/PackageSwiftParser.js`）已完全覆盖所有字段，无需外部 Swift 编译
 - `postinstall-safe.js` 中 `checkSwiftParser()` 检查
 - `package.json` 中 `build:parser` 脚本及 `files` 中 4 条 `tools/parse-package/*` 条目
-- `.env.example` 中 `ASD_SWIFT_PARSER_*` / `ASD_USE_DUMP_PACKAGE` 环境变量
+- `.env.example` 中 `ALEMBIC_SWIFT_PARSER_*` / `ALEMBIC_USE_DUMP_PACKAGE` 环境变量
 - README "Swift 解析器（可选）" 章节及 `--parser` 参数说明
 
 ### 修复
@@ -1481,7 +1481,7 @@
   - 统一 JSON Envelope 格式（`{ success, errorCode, message, data, meta }`）
   - 新增工具：`autosnippet_health`, `autosnippet_capabilities`, `autosnippet_context_analyze`, `autosnippet_validate_candidate`, `autosnippet_check_duplicate`, `autosnippet_get_target_metadata`
   - 完整的 20+ 错误码支持（SEARCH_FAILED、RATE_LIMIT、ELICIT_FAILED 等）
-  - 鉴权支持（ASD_MCP_TOKEN）
+  - 鉴权支持（ALEMBIC_MCP_TOKEN）
   - 限流保护（提交频率控制）
   - OpenAI Provider 支持 Target 类型检测与专用提示
 
@@ -1560,14 +1560,14 @@
 
 - **日志系统优化**：
   - 将 AI Provider（DeepSeek）的冗余日志改为条件输出
-  - 仅在 `ASD_DEBUG=1` 环境变量设置时显示调试信息
+  - 仅在 `ALEMBIC_DEBUG=1` 环境变量设置时显示调试信息
   - 减少测试执行时的日志噪声
 
 ### 改进
 
 - **测试框架稳定性**：
   - 修正跨项目测试中的路径判断逻辑
-  - 增加对环境变量的灵活支持（ASD_TEST_PROJECT_ROOT、ASD_TEST_PROJECT_BASENAME）
+  - 增加对环境变量的灵活支持（ALEMBIC_TEST_PROJECT_ROOT、ALEMBIC_TEST_PROJECT_BASENAME）
   - 所有 39 个集成测试保持 100% 通过率
 
 - **开发体验**：
@@ -1600,8 +1600,8 @@
 ### 修复
 
 - **GitHub Actions CI 集成测试支持**：修复集成测试在 CI 环境下的兼容性问题：
-  - 新增 `ASD_DISABLE_WRITE_GUARD` 环境变量，允许 CI 环境跳过 git push --dry-run 权限检查
-  - 新增 `ASD_DISABLE_RATE_LIMIT` 环境变量，允许测试环境跳过速率限制
+  - 新增 `ALEMBIC_DISABLE_WRITE_GUARD` 环境变量，允许 CI 环境跳过 git push --dry-run 权限检查
+  - 新增 `ALEMBIC_DISABLE_RATE_LIMIT` 环境变量，允许测试环境跳过速率限制
   - Recipe API 接口规范化：record-usage 支持 `name` 参数，get 接口返回一致的错误格式
   - Recipe 名称验证：拒绝路径遍历攻击（`..`、`/`、`\`）
   - 更新 `.github/workflows/ci.yml` 配置，确保 Dashboard 在后台启动并通过健康检查
@@ -1653,13 +1653,13 @@
 
 ### 修复
 
-- **asd status 项目根未找到**：CMD_PATH 改为优先使用 `process.env.ASD_CWD`（asd 脚本传入的调用目录），避免 dev:link 等场景下 process.cwd() 与用户所在目录不一致导致找不到 AutoSnippet.boxspec.json。
+- **asd status 项目根未找到**：CMD_PATH 改为优先使用 `process.env.ALEMBIC_CWD`（asd 脚本传入的调用目录），避免 dev:link 等场景下 process.cwd() 与用户所在目录不一致导致找不到 AutoSnippet.boxspec.json。
 - **asd ui 端口占用**：asd-verify 收到 SIGINT/SIGTERM 时转发给 Node 子进程，避免 Ctrl+C 后仅 Swift 退出、Node 成为孤儿进程占用 3000 端口。
 
 ### 测试
 
 - **Swift 二进制**：`test/unit/checksums-verify.test.js` 新增 `testSwiftVerifyBinary()`，在存在 bin/asd-verify 时运行 `asd-verify -v` 并断言通过。
-- **Node 回退路径**：新增 `testNodeFallbackStatus()`，验证无 asd-verify 时 ASD_CWD 仍生效、status 能正确找到项目根。
+- **Node 回退路径**：新增 `testNodeFallbackStatus()`，验证无 asd-verify 时 ALEMBIC_CWD 仍生效、status 能正确找到项目根。
 
 ---
 
@@ -1675,7 +1675,7 @@
 
 ### 新增
 
-- **Recipe 保存频率限制**：按「项目根 + 客户端 IP」固定窗口限流，防止短时间内多次保存；超限返回 429，前端提示「保存过于频繁，请稍后再试」。配置：`ASD_RECIPE_SAVE_RATE_LIMIT`（默认 20）、`ASD_RECIPE_SAVE_RATE_WINDOW_SECONDS`（默认 60），设为 0 表示不限制。
+- **Recipe 保存频率限制**：按「项目根 + 客户端 IP」固定窗口限流，防止短时间内多次保存；超限返回 429，前端提示「保存过于频繁，请稍后再试」。配置：`ALEMBIC_RECIPE_SAVE_RATE_LIMIT`（默认 20）、`ALEMBIC_RECIPE_SAVE_RATE_WINDOW_SECONDS`（默认 60），设为 0 表示不限制。
 - **Recipe 保存防重复点击**：编辑 Recipe 弹窗「Save Changes」、SPM 审核页「保存为 Recipe」、对比弹窗「审核候选」在请求进行中禁用按钮并显示「保存中...」，避免重复提交。
 - **完整性校验入口（Swift）**：原生入口为 Swift 实现（`resources/asd-entry/main.swift`），仅 macOS 构建为 `bin/asd-verify`；使用 CryptoKit 做 SHA-256 校验。`bin/asd` 优先执行 `asd-verify`，不存在则回退 `node bin/asd-cli.js`。项目仅在 macOS 运行，故保留 Swift 入口。
 
@@ -1683,12 +1683,12 @@
 
 - **提交前检查清单**：`docs/提交前检查清单.md`，用于发布前自检。
 - **权限设置说明重写**：精简为「写权限探针、频率控制、完整性校验」配置与行为；明确探针目的为「保证管理员能够正确提交 Recipe」；适用场景改为「Recipe 上传由 Git 服务端权限拦截」。
-- **README / 权限表述**：Knowledge 与 Git 小节强调上传由 Git 拦截；`ASD_RECIPES_WRITE_DIR` 表述为「保证管理员能够正确提交 Recipe」。
+- **README / 权限表述**：Knowledge 与 Git 小节强调上传由 Git 拦截；`ALEMBIC_RECIPES_WRITE_DIR` 表述为「保证管理员能够正确提交 Recipe」。
 - **context 配置说明**：新增「为什么 .autosnippet 里有两个 vector_index.json」「manifest.json 有什么用处」两节。
 
 ### 测试
 
-- **完整性入口校验**：`test/unit/checksums-verify.test.js` 新增 `testEntryCheck()`，覆盖存在 checksums 时「无 ASD_VERIFIED 警告且 exit 0」「ASD_STRICT_ENTRY=1 拒跑」「ASD_VERIFIED/ASD_SKIP 无警告」四种场景。
+- **完整性入口校验**：`test/unit/checksums-verify.test.js` 新增 `testEntryCheck()`，覆盖存在 checksums 时「无 ALEMBIC_VERIFIED 警告且 exit 0」「ALEMBIC_STRICT_ENTRY=1 拒跑」「ALEMBIC_VERIFIED/ALEMBIC_SKIP 无警告」四种场景。
 
 ---
 
@@ -1696,7 +1696,7 @@
 
 ### 新增
 
-- **写权限探针（阶段一）**：保存/删除 Recipe、保存/删除 Snippet 前在配置的探针目录（如子仓库 `auth-data`）执行 `git push --dry-run`，非零退出则返回 403（`RECIPE_WRITE_FORBIDDEN`）；探针通过后仍写主项目原路径。配置：`ASD_RECIPES_WRITE_DIR` 或 rootSpec `recipes.writeDir`，未设则不启用；`ASD_PROBE_TTL_SECONDS` 默认 24h，进程内缓存。
+- **写权限探针（阶段一）**：保存/删除 Recipe、保存/删除 Snippet 前在配置的探针目录（如子仓库 `auth-data`）执行 `git push --dry-run`，非零退出则返回 403（`RECIPE_WRITE_FORBIDDEN`）；探针通过后仍写主项目原路径。配置：`ALEMBIC_RECIPES_WRITE_DIR` 或 rootSpec `recipes.writeDir`，未设则不启用；`ALEMBIC_PROBE_TTL_SECONDS` 默认 24h，进程内缓存。
 - **完整性校验（阶段二）**：`bin/asd` 优先执行原生入口 `bin/asd-verify`（Swift），存在 `checksums.json` 时对关键文件做 SHA-256 校验，不通过则 exit(1)，通过则 spawn `node bin/asd-cli.js`；无 checksums 或未构建 asd-verify 时回退到 `node bin/asd-cli.js`。发布前 `prepublishOnly` 自动生成 `checksums.json`。
 - **Node 校验脚本**：`npm run verify-checksums` 复现 Swift 校验逻辑（无 Swift 环境/CI 可用）；拒绝 `..`、绝对路径与路径逃逸。
 - **单元测试**：`test/unit/checksums-verify.test.js` 覆盖合法清单通过、错误哈希/无效 JSON/路径逃逸/缺失文件失败；已加入 `test/unit/run-all.js`。
