@@ -27,15 +27,21 @@ import type {
   ReactiveEvolutionReport,
 } from '../../types/reactive-evolution.js';
 import type { FileChangeSubscriber } from '../FileChangeDispatcher.js';
-import { assessContentImpact, readProjectFile } from './ContentImpactAnalyzer.js';
+import { assessFileImpact, extractRecipeTokens } from './ContentImpactAnalyzer.js';
 import type { ContentPatcher } from './ContentPatcher.js';
 import type { EvolutionGateway } from './EvolutionGateway.js';
 
-/** impactLevel → quality signal 权重映射（文档 §5.3） */
+/** impactLevel → quality signal 权重映射（文档 §5.3）
+ *
+ * v3 语义：
+ *   - direct: 文件删除且无其他引用 → 最高权重
+ *   - pattern: diff 动到了 30%+ 的 Recipe 关键标识符 → 高权重
+ *   - reference: diff 有少量 Recipe 标识符命中 → 低权重
+ */
 const IMPACT_WEIGHTS: Record<ImpactLevel, number> = {
-  direct: 0.7,
-  reference: 0.4,
-  pattern: 0.2,
+  direct: 0.8,
+  pattern: 0.6,
+  reference: 0.3,
 };
 
 /* ────────────────────── Class ────────────────────── */
@@ -142,11 +148,12 @@ export class FileChangeHandler implements FileChangeSubscriber {
     }
 
     // 结构性变动较大时建议用户触发进化检查。
-    // 按文档 §5.4.1 Strategy C：只要有 'direct' 影响就建议；或 deprecated 发生。
-    const hasDirectImpact = report.details.some(
-      (d) => d.action === 'needs-review' && d.impactLevel === 'direct'
+    // 按文档 §5.4.1 Strategy C：'direct'（删除）或 'pattern'（30%+ token 命中）→ 建议；或 deprecated 发生。
+    const hasHighImpact = report.details.some(
+      (d) =>
+        d.action === 'needs-review' && (d.impactLevel === 'direct' || d.impactLevel === 'pattern')
     );
-    report.suggestReview = hasDirectImpact || report.deprecated > 0;
+    report.suggestReview = hasHighImpact || report.deprecated > 0;
 
     return report;
   }
@@ -315,19 +322,15 @@ export class FileChangeHandler implements FileChangeSubscriber {
   /* ═══════════════════ Modified ═══════════════════ */
 
   /**
-   * 文件内容变更 → 读取文件，与每条关联 Recipe 的 coreCode 做内容级比对。
+   * 文件内容变更 → 获取 diff，与每条关联 Recipe 做 diff-based 内容影响评估。
    *
-   * 核心原则：**只有 Recipe 描述的代码模式在文件中发生了实质变化，才算 direct 影响。**
-   * 文件在 sourceRefs 里只是查询入口，不等于影响级别。
+   * v3 流程：
+   *   1. `SourceRefRepository.findBySourcePath(path)` → 找到关联 Recipe
+   *   2. `getFileDiff` 获取行级变更
+   *   3. 解析 diff，提取变更行标识符
+   *   4. 与 Recipe 全字段 token 做交集 → 分级
    *
-   * 流程：
-   *   1. `SourceRefRepository.findBySourcePath(path)` → 找到关联 Recipe（查询入口）
-   *   2. 读取文件当前内容
-   *   3. 对每条 Recipe：提取 coreCode 中的关键锚点，检查是否仍存在于文件中
-   *   4. 锚点缺失 → Recipe 真正受影响 → `direct`（弹窗 + 强信号）
-   *   5. 锚点仍在 → 修改未触及 Recipe 描述的模式 → `reference`（仅信号，不弹窗）
-   *
-   * 非 active 状态（staging / deprecated）的 Recipe 不参与。
+   * 不支持 git 的场景直接跳过，不做降级。
    */
   async #handleModified(modifiedPath: string, report: ReactiveEvolutionReport): Promise<void> {
     const affected = this.#sourceRefRepo.findBySourcePath(modifiedPath);
@@ -336,9 +339,6 @@ export class FileChangeHandler implements FileChangeSubscriber {
       report.skipped++;
       return;
     }
-
-    // 读取文件当前内容（一次读取，所有 Recipe 共享）
-    const fileContent = readProjectFile(this.#projectRoot, modifiedPath);
 
     for (const ref of affected) {
       let title = ref.recipeId;
@@ -362,36 +362,50 @@ export class FileChangeHandler implements FileChangeSubscriber {
         title = (typeof entry.title === 'string' ? entry.title : '') || ref.recipeId;
       }
 
-      const coreCode = entry && typeof entry.coreCode === 'string' ? entry.coreCode : '';
-      const impactLevel = assessContentImpact(fileContent, coreCode);
+      // 提取 Recipe 全字段 token
+      const recipeTokens = extractRecipeTokens(entry ?? {});
 
-      // reference / pattern 级别只发信号，不进入 report.details，不触发弹窗
-      if (impactLevel === 'direct') {
+      // diff-based 影响评估
+      const result = assessFileImpact(this.#projectRoot, modifiedPath, recipeTokens);
+
+      // 无法获取 diff（无 git / untracked / 无变更）→ 跳过
+      if (!result) {
+        report.skipped++;
+        continue;
+      }
+
+      const { level: impactLevel, score, matchedTokens } = result;
+
+      // pattern 级别：diff 动到了 30%+ 的 Recipe 关键标识符 → 弹窗 + 持久化提案
+      if (impactLevel === 'pattern') {
         report.needsReview++;
+        const reason = `Recipe 描述的 API/模式被修改 (score=${score.toFixed(2)}, tokens: ${matchedTokens.join(', ')})`;
         report.details.push({
           recipeId: ref.recipeId,
           recipeTitle: title,
           action: 'needs-review',
-          reason: this.#reasonForImpact(impactLevel, modifiedPath),
+          reason,
           impactLevel,
           modifiedPath,
         });
+
+        // 通过 Gateway 持久化为 update 提案，确保即使弹窗被忽略也不丢失
+        try {
+          await this.#gateway.submit({
+            recipeId: ref.recipeId,
+            action: 'update',
+            source: 'file-change',
+            confidence: Math.min(0.5 + score, 0.9),
+            description: reason,
+            evidence: [{ modifiedPath, score, matchedTokens, detectedAt: Date.now() }],
+          });
+        } catch {
+          // 提案创建失败不影响主流程（signal 仍然发射）
+        }
       }
 
       // 所有级别都发射信号（ProposalExecutor 消费）
       this.#emitSourceModifiedSignal(ref.recipeId, modifiedPath, impactLevel);
-    }
-  }
-
-  /** 根据 impactLevel 生成可读的 reason 文本。 */
-  #reasonForImpact(level: ImpactLevel, path: string): string {
-    switch (level) {
-      case 'direct':
-        return `sourceRefs / coreCode 直接引用的文件被修改: ${path}`;
-      case 'reference':
-        return `reasoning.sources 引用的文件被修改: ${path}`;
-      case 'pattern':
-        return `trigger 匹配到的文件被修改: ${path}`;
     }
   }
 

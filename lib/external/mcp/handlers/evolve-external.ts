@@ -110,10 +110,10 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
             ],
           });
 
-          if (gResult.outcome === 'proposal-created') {
+          if (gResult.outcome === 'proposal-created' || gResult.outcome === 'proposal-upgraded') {
             result.proposed++;
             ctx.logger.info(
-              `[Evolve] propose_evolution: ${decision.recipeId} → proposal ${gResult.proposalId}`
+              `[Evolve] propose_evolution: ${decision.recipeId} → ${gResult.outcome} ${gResult.proposalId}`
             );
           } else {
             result.errors.push({

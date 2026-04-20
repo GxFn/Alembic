@@ -47,7 +47,13 @@ export interface EvolutionDecision {
 export interface EvolutionResult {
   recipeId: string;
   action: EvolutionAction;
-  outcome: 'proposal-created' | 'immediately-executed' | 'verified' | 'skipped' | 'error';
+  outcome:
+    | 'proposal-created'
+    | 'proposal-upgraded'
+    | 'immediately-executed'
+    | 'verified'
+    | 'skipped'
+    | 'error';
   proposalId?: string;
   error?: string;
 }
@@ -192,12 +198,8 @@ export class EvolutionGateway {
     });
 
     if (!proposal) {
-      return {
-        recipeId: decision.recipeId,
-        action: decision.action,
-        outcome: 'skipped',
-        error: 'Duplicate proposal or creation failed',
-      };
+      // Dedup 触发 — 尝试升级已有 Proposal 的 evidence
+      return this.#tryUpgradeExistingProposal(decision);
     }
 
     this.#logger.info(
@@ -210,6 +212,81 @@ export class EvolutionGateway {
       outcome: 'proposal-created',
       proposalId: proposal.id,
     };
+  }
+
+  /**
+   * Dedup 后尝试升级已有 Proposal 的 evidence。
+   *
+   * 典型场景：FileChangeHandler 先创建了仅含检测元数据的 update Proposal（无 suggestedChanges），
+   * 之后 Agent 增量扫描产出了带 suggestedChanges 的更丰富 evidence。
+   * 此时将新 evidence 追加到已有 Proposal，确保 ContentPatcher 能正常消费。
+   */
+  #tryUpgradeExistingProposal(decision: EvolutionDecision): EvolutionResult {
+    const newEvidence = decision.evidence ?? [];
+    if (newEvidence.length === 0) {
+      return {
+        recipeId: decision.recipeId,
+        action: decision.action,
+        outcome: 'skipped',
+        error: 'Duplicate proposal or creation failed',
+      };
+    }
+
+    try {
+      const existing = this.#proposalRepo.findByTarget(decision.recipeId);
+      const match = existing.find((p) => p.type === (decision.action as 'update' | 'deprecate'));
+
+      if (!match) {
+        return {
+          recipeId: decision.recipeId,
+          action: decision.action,
+          outcome: 'skipped',
+          error: 'Duplicate proposal or creation failed',
+        };
+      }
+
+      // 检查新 evidence 是否比已有的更有价值（含 suggestedChanges）
+      const newHasChanges = newEvidence.some(
+        (e) => typeof (e as Record<string, unknown>).suggestedChanges === 'string'
+      );
+      const existingHasChanges = match.evidence.some(
+        (e) => typeof (e as Record<string, unknown>).suggestedChanges === 'string'
+      );
+
+      if (newHasChanges && !existingHasChanges) {
+        // 追加 Agent 的 evidence（保留原始检测记录）
+        const merged = [...match.evidence, ...newEvidence];
+        this.#proposalRepo.updateEvidence(match.id, merged);
+
+        this.#logger.info(
+          `[EvolutionGateway] Upgraded evidence for existing proposal ${match.id} (source=${decision.source})`
+        );
+
+        return {
+          recipeId: decision.recipeId,
+          action: decision.action,
+          outcome: 'proposal-upgraded',
+          proposalId: match.id,
+        };
+      }
+
+      return {
+        recipeId: decision.recipeId,
+        action: decision.action,
+        outcome: 'skipped',
+        error: 'Duplicate proposal (evidence not richer)',
+      };
+    } catch (err: unknown) {
+      this.#logger.warn(
+        `[EvolutionGateway] Failed to upgrade existing proposal: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return {
+        recipeId: decision.recipeId,
+        action: decision.action,
+        outcome: 'skipped',
+        error: 'Duplicate proposal or creation failed',
+      };
+    }
   }
 
   /* ═══════════════════ Helpers ═══════════════════ */

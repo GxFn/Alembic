@@ -3,6 +3,18 @@ import { FileChangeHandler } from '../../lib/service/evolution/FileChangeHandler
 import type { FileChangeEvent, ImpactLevel } from '../../lib/types/reactive-evolution.js';
 
 /* ════════════════════════════════════════════
+ *  Mock ContentImpactAnalyzer — 控制 diff 返回
+ * ════════════════════════════════════════════ */
+
+const mockAssessFileImpact = vi.fn();
+const mockExtractRecipeTokens = vi.fn(() => ({ tokens: new Set(), sources: new Map() }));
+
+vi.mock('../../lib/service/evolution/ContentImpactAnalyzer.js', () => ({
+  assessFileImpact: (...args: unknown[]) => mockAssessFileImpact(...args),
+  extractRecipeTokens: (...args: unknown[]) => mockExtractRecipeTokens(...args),
+}));
+
+/* ════════════════════════════════════════════
  *  Mock 工厂
  * ════════════════════════════════════════════ */
 
@@ -95,14 +107,18 @@ function createHandler(overrides: Record<string, unknown> = {}) {
  * ════════════════════════════════════════════ */
 
 describe('FileChangeHandler', () => {
+  beforeEach(() => {
+    mockAssessFileImpact.mockReset();
+    mockExtractRecipeTokens.mockReset();
+    mockExtractRecipeTokens.mockReturnValue({ tokens: new Set(), sources: new Map() });
+    // 默认：diff 返回 reference 级别（模拟有 git 环境）
+    mockAssessFileImpact.mockReturnValue({ level: 'reference', score: 0, matchedTokens: [] });
+  });
+
   /* ─── #handleModified → impactLevel ─── */
 
   describe('modified 事件 — impactLevel 判定', () => {
-    // 注意：测试环境没有真实项目文件，readProjectFile 返回 null
-    // → assessContentImpact 返回 'reference'（不触发弹窗，仅发射信号）
-    // 内容级分析的具体逻辑在 ContentImpactAnalyzer.test.ts 中测试
-
-    test('sourceRef 匹配但文件不可读 → reference（仅信号，不进 details）', async () => {
+    test('sourceRef 匹配 + diff 返回 reference → 仅信号，不进 details', async () => {
       const { handler, sourceRefRepo, knowledgeRepo, signalBus } = createHandler();
       sourceRefRepo._seed('r1', 'Sources/Networking/AuthMiddleware.swift');
       knowledgeRepo._seed('r1', {
@@ -179,7 +195,7 @@ describe('FileChangeHandler', () => {
   /* ─── Signal 发射验证 ─── */
 
   describe('modified 事件 — signal 发射', () => {
-    test('sourceRef 匹配发射 quality signal（文件不可读 → reference, weight=0.4）', async () => {
+    test('sourceRef 匹配发射 quality signal（reference, weight=0.3）', async () => {
       const { handler, sourceRefRepo, knowledgeRepo, signalBus } = createHandler();
       sourceRefRepo._seed('r1', 'Sources/A.swift');
       knowledgeRepo._seed('r1', { title: 'Recipe A', coreCode: '' });
@@ -189,7 +205,7 @@ describe('FileChangeHandler', () => {
       expect(signalBus.send).toHaveBeenCalledWith(
         'quality',
         'FileChangeHandler',
-        0.4, // reference weight
+        0.3, // reference weight
         expect.objectContaining({
           target: 'r1',
           metadata: expect.objectContaining({
@@ -215,6 +231,42 @@ describe('FileChangeHandler', () => {
       ]);
 
       expect(report.suggestReview).toBe(false);
+    });
+
+    test('modified pattern 级别 → suggestReview=true', async () => {
+      mockAssessFileImpact.mockReturnValue({
+        level: 'pattern',
+        score: 0.5,
+        matchedTokens: ['fetchPopular'],
+      });
+      const { handler, sourceRefRepo, knowledgeRepo } = createHandler();
+      sourceRefRepo._seed('r1', 'Sources/A.swift');
+      knowledgeRepo._seed('r1', { title: 'Recipe A', coreCode: '' });
+
+      const report = await handler.handleFileChanges([
+        { type: 'modified', path: 'Sources/A.swift' },
+      ]);
+
+      expect(report.suggestReview).toBe(true);
+      expect(report.needsReview).toBe(1);
+    });
+
+    test('modified reference 级别 → suggestReview=false', async () => {
+      mockAssessFileImpact.mockReturnValue({
+        level: 'reference',
+        score: 0.1,
+        matchedTokens: ['client'],
+      });
+      const { handler, sourceRefRepo, knowledgeRepo } = createHandler();
+      sourceRefRepo._seed('r1', 'Sources/A.swift');
+      knowledgeRepo._seed('r1', { title: 'Recipe A', coreCode: '' });
+
+      const report = await handler.handleFileChanges([
+        { type: 'modified', path: 'Sources/A.swift' },
+      ]);
+
+      expect(report.suggestReview).toBe(false);
+      expect(report.needsReview).toBe(0);
     });
 
     test('deleted 事件 → suggestReview=true', async () => {
@@ -300,10 +352,10 @@ describe('FileChangeHandler', () => {
     });
   });
 
-  /* ─── #analyzeModifiedImpact 独立路径验证（未来扩展 isSourceRef=false 场景） ─── */
+  /* ─── diff-based 影响分析集成 ─── */
 
-  describe('modified 事件 — 内容级分析集成', () => {
-    test('文件不可读 → reference，不进入 details', async () => {
+  describe('modified 事件 — diff-based 分析集成', () => {
+    test('diff 返回 reference → 不进入 details', async () => {
       const { handler, sourceRefRepo, knowledgeRepo } = createHandler();
       sourceRefRepo._seed('r1', 'Sources/A.swift');
       knowledgeRepo._seed('r1', { title: 'Recipe', coreCode: '' });
@@ -312,9 +364,74 @@ describe('FileChangeHandler', () => {
         { type: 'modified', path: 'Sources/A.swift' },
       ]);
 
-      // reference 不进 details
       expect(report.details).toHaveLength(0);
       expect(report.needsReview).toBe(0);
+    });
+
+    test('diff 返回 null（无 git）→ 跳过，不发射信号', async () => {
+      mockAssessFileImpact.mockReturnValue(null);
+      const { handler, sourceRefRepo, knowledgeRepo, signalBus } = createHandler();
+      sourceRefRepo._seed('r1', 'Sources/A.swift');
+      knowledgeRepo._seed('r1', { title: 'Recipe', coreCode: '' });
+
+      const report = await handler.handleFileChanges([
+        { type: 'modified', path: 'Sources/A.swift' },
+      ]);
+
+      expect(report.skipped).toBe(1);
+      expect(report.details).toHaveLength(0);
+      expect(signalBus.send).not.toHaveBeenCalled();
+    });
+
+    test('diff 返回 pattern → 进入 details + needsReview + 创建 update 提案', async () => {
+      mockAssessFileImpact.mockReturnValue({
+        level: 'pattern',
+        score: 0.5,
+        matchedTokens: ['fetchPopular', 'VideoModel'],
+      });
+      const { handler, sourceRefRepo, knowledgeRepo, signalBus, gateway } = createHandler();
+      sourceRefRepo._seed('r1', 'Sources/A.swift');
+      knowledgeRepo._seed('r1', { title: 'Recipe', coreCode: '' });
+
+      const report = await handler.handleFileChanges([
+        { type: 'modified', path: 'Sources/A.swift' },
+      ]);
+
+      expect(report.needsReview).toBe(1);
+      expect(report.details).toHaveLength(1);
+      expect(report.details[0].action).toBe('needs-review');
+      expect(report.details[0].impactLevel).toBe('pattern');
+      expect(report.details[0].reason).toContain('fetchPopular');
+      expect(signalBus.send).toHaveBeenCalledWith(
+        'quality',
+        'FileChangeHandler',
+        expect.any(Number),
+        expect.objectContaining({
+          target: 'r1',
+          metadata: expect.objectContaining({ impactLevel: 'pattern' }),
+        })
+      );
+
+      // pattern 级别应通过 Gateway 持久化为 update 提案
+      expect(gateway.submit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipeId: 'r1',
+          action: 'update',
+          source: 'file-change',
+          confidence: expect.any(Number),
+        })
+      );
+    });
+
+    test('diff 返回 reference → 不创建提案', async () => {
+      const { handler, sourceRefRepo, knowledgeRepo, gateway } = createHandler();
+      sourceRefRepo._seed('r1', 'Sources/A.swift');
+      knowledgeRepo._seed('r1', { title: 'Recipe', coreCode: '' });
+
+      await handler.handleFileChanges([{ type: 'modified', path: 'Sources/A.swift' }]);
+
+      // reference 级别不应创建提案
+      expect(gateway.submit).not.toHaveBeenCalled();
     });
   });
 

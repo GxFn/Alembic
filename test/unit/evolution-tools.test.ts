@@ -139,6 +139,43 @@ describe('proposeEvolution', () => {
     );
     expect(result.status).toBe('error');
   });
+
+  it('should return skipped when gateway returns skipped outcome', async () => {
+    const gateway = createMockGateway('skipped');
+    const ctx = makeContext({ evolutionGateway: gateway });
+
+    const result = await proposeEvolution.handler(
+      {
+        recipeId: 'recipe-dup',
+        type: 'enhance',
+        description: 'test',
+        evidence: { sourceStatus: 'modified', suggestedChanges: 'changes' },
+        confidence: 0.8,
+      },
+      ctx
+    );
+    expect(result.status).toBe('skipped');
+    expect(result.recipeId).toBe('recipe-dup');
+  });
+
+  it('should return upgraded when gateway returns proposal-upgraded outcome', async () => {
+    const gateway = createMockGateway('proposal-upgraded', 'prop-existing');
+    const ctx = makeContext({ evolutionGateway: gateway });
+
+    const result = await proposeEvolution.handler(
+      {
+        recipeId: 'recipe-upg',
+        type: 'enhance',
+        description: 'richer evidence',
+        evidence: { sourceStatus: 'modified', suggestedChanges: 'detailed changes' },
+        confidence: 0.9,
+      },
+      ctx
+    );
+    expect(result.status).toBe('upgraded');
+    expect(result.proposalId).toBe('prop-existing');
+    expect(result.recipeId).toBe('recipe-upg');
+  });
 });
 
 describe('confirmDeprecation', () => {

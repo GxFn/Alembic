@@ -1,9 +1,12 @@
 import {
-  assessContentImpact,
+  assessDiffImpact,
   extractApiTokens,
+  extractRecipeTokens,
+  type RecipeTokens,
   tokenizeIdentifiers,
-  tokenPresenceRate,
 } from '../../lib/service/evolution/ContentImpactAnalyzer.js';
+import { parseDiffHunks, tokenizeDiffLines } from '../../lib/shared/diff-parser.js';
+import { extractCodeBlocksFromMarkdown } from '../../lib/shared/markdown-utils.js';
 
 describe('ContentImpactAnalyzer', () => {
   /* ─── tokenizeIdentifiers ─── */
@@ -80,100 +83,271 @@ describe('ContentImpactAnalyzer', () => {
     });
   });
 
-  /* ─── tokenPresenceRate ─── */
+  /* ─── parseDiffHunks ─── */
 
-  describe('tokenPresenceRate', () => {
-    test('所有 token 都在 → 1.0', () => {
-      const rate = tokenPresenceRate(
-        ['ServiceRegistry', 'shared', 'register'],
-        'class ServiceRegistry { static let shared = ServiceRegistry(); func register() {} }'
-      );
-      expect(rate).toBe(1.0);
+  describe('parseDiffHunks', () => {
+    test('解析标准 unified diff', () => {
+      const diff = `diff --git a/file.swift b/file.swift
+index abc..def 100644
+--- a/file.swift
++++ b/file.swift
+@@ -12 +12 @@
+-    func fetchPopular(page: Int) async throws -> [VideoModel]
++    func fetchTrending(page: Int) async throws -> [VideoModel]
+@@ -45 +45 @@
+-    // Old comment
++    // New comment`;
+
+      const hunks = parseDiffHunks(diff);
+      expect(hunks).toHaveLength(2);
+      expect(hunks[0].removedLines).toEqual([
+        '    func fetchPopular(page: Int) async throws -> [VideoModel]',
+      ]);
+      expect(hunks[0].addedLines).toEqual([
+        '    func fetchTrending(page: Int) async throws -> [VideoModel]',
+      ]);
+      expect(hunks[1].removedLines).toEqual(['    // Old comment']);
+      expect(hunks[1].addedLines).toEqual(['    // New comment']);
     });
 
-    test('无 token 匹配 → 0.0', () => {
-      const rate = tokenPresenceRate(
-        ['ServiceRegistry', 'resolve'],
-        'class NetworkManager { func request() {} }'
-      );
-      expect(rate).toBe(0.0);
+    test('空 diff 返回空数组', () => {
+      expect(parseDiffHunks('')).toEqual([]);
     });
 
-    test('部分匹配 → 正确比率', () => {
-      const rate = tokenPresenceRate(
-        ['ServiceRegistry', 'shared', 'resolve', 'register'],
-        'class ServiceRegistry { static let shared = ServiceRegistry() }'
-      );
-      // ServiceRegistry + shared = 2/4 = 0.5
-      expect(rate).toBe(0.5);
-    });
-
-    test('空 sourceTokens → 0', () => {
-      expect(tokenPresenceRate([], 'anything')).toBe(0);
+    test('多行新增', () => {
+      const diff = `@@ -100,0 +101,3 @@
++    func newMethod() {
++        print("hello")
++    }`;
+      const hunks = parseDiffHunks(diff);
+      expect(hunks).toHaveLength(1);
+      expect(hunks[0].removedLines).toEqual([]);
+      expect(hunks[0].addedLines).toHaveLength(3);
     });
   });
 
-  /* ─── assessContentImpact ─── */
+  /* ─── tokenizeDiffLines ─── */
 
-  describe('assessContentImpact', () => {
-    test('文件为 null → reference', () => {
-      expect(assessContentImpact(null, 'some coreCode here long enough')).toBe('reference');
+  describe('tokenizeDiffLines', () => {
+    test('从 diff hunks 提取标识符', () => {
+      const hunks = [
+        {
+          removedLines: ['    func fetchPopular(page: Int) async throws -> [VideoModel]'],
+          addedLines: ['    func fetchTrending(page: Int) async throws -> [VideoModel]'],
+        },
+      ];
+      const tokens = tokenizeDiffLines(hunks);
+      expect(tokens.has('fetchPopular')).toBe(true);
+      expect(tokens.has('fetchTrending')).toBe(true);
+      expect(tokens.has('VideoModel')).toBe(true);
     });
 
-    test('coreCode 为空 → reference', () => {
-      expect(assessContentImpact('file content', '')).toBe('reference');
+    test('空 hunks 返回空集合', () => {
+      expect(tokenizeDiffLines([])).toEqual(new Set());
+    });
+  });
+
+  /* ─── extractCodeBlocksFromMarkdown ─── */
+
+  describe('extractCodeBlocksFromMarkdown', () => {
+    test('提取代码块及语言标识', () => {
+      const md = `Some text
+
+\`\`\`swift
+func fetchPopular() async throws -> [VideoModel] {
+    let response = try await client.send(.popular)
+    return response.data ?? []
+}
+\`\`\`
+
+More text
+
+\`\`\`typescript
+const x = 1;
+\`\`\``;
+
+      const blocks = extractCodeBlocksFromMarkdown(md);
+      expect(blocks).toHaveLength(2);
+      expect(blocks[0].language).toBe('swift');
+      expect(blocks[0].code).toContain('fetchPopular');
+      expect(blocks[1].language).toBe('typescript');
     });
 
-    test('coreCode 太短 → reference', () => {
-      expect(assessContentImpact('file content', 'short')).toBe('reference');
+    test('无代码块返回空数组', () => {
+      expect(extractCodeBlocksFromMarkdown('just plain text')).toEqual([]);
+    });
+  });
+
+  /* ─── extractRecipeTokens ─── */
+
+  describe('extractRecipeTokens', () => {
+    test('从 coreCode 提取 token', () => {
+      const result = extractRecipeTokens({
+        coreCode: 'ServiceRegistry.shared.register(Protocol.self)',
+      });
+      expect(result.tokens.has('ServiceRegistry')).toBe(true);
+      expect(result.tokens.has('shared')).toBe(true);
+      expect(result.tokens.has('register')).toBe(true);
     });
 
-    test('coreCode 全是占位符 → reference（无有效 token）', () => {
-      const coreCode = 'class MyService { MyProtocol.resolve() }';
-      expect(assessContentImpact('any file content', coreCode)).toBe('reference');
+    test('从 content.markdown 代码块提取 token', () => {
+      const result = extractRecipeTokens({
+        coreCode: '',
+        content: {
+          markdown: `说明文字
+
+\`\`\`swift
+class NetworkClient {
+    func sendRequest(endpoint: Endpoint) async throws -> Response {
+        return try await session.data(for: endpoint.urlRequest)
+    }
+}
+\`\`\``,
+        },
+      });
+      expect(result.tokens.has('NetworkClient')).toBe(true);
+      expect(result.tokens.has('sendRequest')).toBe(true);
+      expect(result.tokens.has('endpoint')).toBe(true);
+      expect(result.tokens.has('Endpoint')).toBe(true);
     });
 
-    test('高存在率 → pattern', () => {
-      const coreCode = `
-        ServiceRegistry.shared.register(Protocol.self, scope: .singleton) {
-            Implementation()
-        }
-      `;
-      const fileContent = `
-        import Foundation
-        class ServiceRegistry {
-          static let shared = ServiceRegistry()
-          func register<T>(_ type: T.Type, scope: Scope, factory: () -> T) {}
-          func resolve<T>(_ type: T.Type) -> T { fatalError() }
-          var services: [String: Any] = [:]
-        }
-        enum Scope { case singleton, transient }
-      `;
-      expect(assessContentImpact(fileContent, coreCode)).toBe('pattern');
+    test('从 content.pattern 提取 token', () => {
+      const result = extractRecipeTokens({
+        content: {
+          pattern: 'class VideoRepository { func fetchAll() {} }',
+        },
+      });
+      expect(result.tokens.has('VideoRepository')).toBe(true);
+      expect(result.tokens.has('fetchAll')).toBe(true);
     });
 
-    test('低存在率（coreCode 与文件无关）→ reference', () => {
-      const coreCode = `
-        NetworkManager.shared.request(endpoint: .userProfile) { result in
-            switch result { case .success(let data): handleData(data) }
-        }
-      `;
-      const fileContent = `
-        class ServiceRegistry {
-          static let shared = ServiceRegistry()
-          func register<T>(_ type: T.Type) {}
-          func resolve<T>(_ type: T.Type) -> T { fatalError() }
-        }
-      `;
-      expect(assessContentImpact(fileContent, coreCode)).toBe('reference');
+    test('从 content.steps[].code 提取 token', () => {
+      const result = extractRecipeTokens({
+        content: {
+          steps: [{ code: 'let manager = CacheManager.shared' }],
+        },
+      });
+      expect(result.tokens.has('CacheManager')).toBe(true);
+      expect(result.tokens.has('manager')).toBe(true);
     });
 
-    test('modified 事件从不返回 direct', () => {
-      // 即使文件内容完全不包含 coreCode 的任何标识符，也只返回 reference
-      const coreCode = 'class UniqueClassName1234 { func uniqueMethod5678() {} }';
-      const fileContent = 'class TotallyDifferent { func nothingInCommon() {} }';
-      const result = assessContentImpact(fileContent, coreCode);
-      expect(result).not.toBe('direct');
+    test('空 entry 返回空 tokens', () => {
+      const result = extractRecipeTokens({});
+      expect(result.tokens.size).toBe(0);
+    });
+  });
+
+  /* ─── assessDiffImpact ─── */
+
+  describe('assessDiffImpact', () => {
+    test('高交集 → pattern', () => {
+      const diffTokens = new Set(['fetchPopular', 'VideoModel', 'client', 'send', 'popular']);
+      const recipeTokens: RecipeTokens = {
+        tokens: new Set([
+          'fetchPopular',
+          'VideoModel',
+          'client',
+          'send',
+          'popular',
+          'response',
+          'data',
+        ]),
+        sources: new Map(),
+      };
+      const result = assessDiffImpact(diffTokens, recipeTokens);
+      // 5/7 ≈ 0.71 → pattern
+      expect(result.level).toBe('pattern');
+      expect(result.score).toBeCloseTo(5 / 7);
+      expect(result.matchedTokens).toContain('fetchPopular');
+    });
+
+    test('低交集 → reference', () => {
+      const diffTokens = new Set(['client', 'newUnrelatedMethod']);
+      const recipeTokens: RecipeTokens = {
+        tokens: new Set([
+          'fetchPopular',
+          'VideoModel',
+          'client',
+          'send',
+          'popular',
+          'response',
+          'data',
+        ]),
+        sources: new Map(),
+      };
+      const result = assessDiffImpact(diffTokens, recipeTokens);
+      // 1/7 ≈ 0.14 → reference
+      expect(result.level).toBe('reference');
+      expect(result.score).toBeCloseTo(1 / 7);
+    });
+
+    test('无交集 → reference（兜底）', () => {
+      const diffTokens = new Set(['totallyUnrelated', 'nothingInCommon']);
+      const recipeTokens: RecipeTokens = {
+        tokens: new Set(['fetchPopular', 'VideoModel']),
+        sources: new Map(),
+      };
+      const result = assessDiffImpact(diffTokens, recipeTokens);
+      expect(result.level).toBe('reference');
+      expect(result.score).toBe(0);
+      expect(result.matchedTokens).toEqual([]);
+    });
+
+    test('空 recipe tokens → reference', () => {
+      const diffTokens = new Set(['something']);
+      const recipeTokens: RecipeTokens = {
+        tokens: new Set(),
+        sources: new Map(),
+      };
+      const result = assessDiffImpact(diffTokens, recipeTokens);
+      expect(result.level).toBe('reference');
+      expect(result.score).toBe(0);
+    });
+
+    test('恰好 30% 交集 → pattern', () => {
+      // 10 tokens, 3 matched = 0.3 → pattern
+      const recipeTokens: RecipeTokens = {
+        tokens: new Set(['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9', 't10']),
+        sources: new Map(),
+      };
+      const diffTokens = new Set(['t1', 't2', 't3']);
+      const result = assessDiffImpact(diffTokens, recipeTokens);
+      expect(result.level).toBe('pattern');
+      expect(result.score).toBeCloseTo(0.3);
+    });
+
+    test('场景：改了注释不动 API → unrelated/reference', () => {
+      // diff 只有注释内容，tokenizeIdentifiers 会过滤注释
+      const commentDiff = [
+        { removedLines: ['// Old architecture doc'], addedLines: ['// New architecture doc'] },
+      ];
+      const diffTokens = tokenizeDiffLines(commentDiff);
+      const recipeTokens: RecipeTokens = {
+        tokens: new Set(['fetchPopular', 'VideoModel', 'client']),
+        sources: new Map(),
+      };
+      const result = assessDiffImpact(diffTokens, recipeTokens);
+      expect(result.level).toBe('reference');
+      expect(result.score).toBe(0);
+    });
+
+    test('场景：API 改名 → pattern', () => {
+      const renameDiff = [
+        {
+          removedLines: ['    func fetchPopular(page: Int) async throws -> [VideoModel]'],
+          addedLines: ['    func fetchTrending(page: Int) async throws -> [VideoModel]'],
+        },
+      ];
+      const diffTokens = tokenizeDiffLines(renameDiff);
+      const recipeTokens: RecipeTokens = {
+        tokens: new Set(['fetchPopular', 'VideoModel', 'async', 'throws']),
+        sources: new Map(),
+      };
+      // fetchPopular + VideoModel matched → 2/4 = 0.5 → pattern
+      const result = assessDiffImpact(diffTokens, recipeTokens);
+      expect(result.level).toBe('pattern');
+      expect(result.matchedTokens).toContain('fetchPopular');
+      expect(result.matchedTokens).toContain('VideoModel');
     });
   });
 });

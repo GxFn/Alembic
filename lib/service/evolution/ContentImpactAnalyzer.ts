@@ -1,99 +1,189 @@
 /**
- * ContentImpactAnalyzer — 基于内容的 Recipe 影响评估
+ * ContentImpactAnalyzer — Diff-Based Recipe 影响评估 (v3)
  *
- * 从 coreCode 提取 API 标识符，与文件内容做 token 级比对，
- * 判断文件变更是否实质影响了 Recipe 描述的代码模式。
+ * 核心思想：影响评估分析「这次改了什么」（diff），而非「文件整体和 Recipe 有多像」。
  *
- * 拆分自 FileChangeHandler，单一职责：纯内容分析，无 I/O 或副作用。
+ * 流程：
+ *   1. git diff -U0 获取文件行级变更
+ *   2. 从变更行提取代码标识符（diff tokens）
+ *   3. 从 Recipe 全字段提取特征标识符（recipe tokens）
+ *   4. 计算加权交集：impact = |T_R ∩ T_Δ| / |T_R|
+ *
+ * 不支持 git 的场景直接跳过，不做降级。
  *
  * @module service/evolution/ContentImpactAnalyzer
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
+import { getFileDiff, parseDiffHunks, tokenizeDiffLines } from '../../shared/diff-parser.js';
 import { LanguageService } from '../../shared/LanguageService.js';
+import { extractCodeBlocksFromMarkdown } from '../../shared/markdown-utils.js';
 import type { ImpactLevel } from '../../types/reactive-evolution.js';
 
 const LANGUAGE_KEYWORDS = LanguageService.languageKeywords;
 
+/* ────────────── Types ────────────── */
+
+/** Recipe 的特征标识符集合 */
+export interface RecipeTokens {
+  /** 所有去重后的特征标识符 */
+  tokens: Set<string>;
+  /** 来源映射（用于调试） */
+  sources: Map<string, 'coreCode' | 'markdown' | 'pattern' | 'steps'>;
+}
+
+/** Diff 影响评估结果 */
+export interface DiffImpactResult {
+  level: ImpactLevel;
+  score: number;
+  matchedTokens: string[];
+}
+
 /* ────────────── Public API ────────────── */
 
 /**
- * 评估文件修改对 Recipe 的影响级别。
+ * 评估文件 diff 对 Recipe 的影响级别。
  *
- * 对 modified 事件，此函数**从不**返回 `direct`：
- *   - 没有 before/after diff 无法确定"破坏性变更"
- *   - `direct` 专属于 deleted / renamed 事件
+ * 完整流程入口：获取 diff → 解析 → 提取 token → 与 Recipe token 交集计算。
  *
- * @param fileContent 文件当前内容（null = 文件不可读）
- * @param coreCode    Recipe 的 coreCode 字段
- * @returns impactLevel: 'pattern' | 'reference'
+ * @param projectRoot 项目根目录绝对路径
+ * @param relativePath 相对于项目根的文件路径
+ * @param recipeTokens 预提取的 Recipe 特征标识符
+ * @returns 影响评估结果，或 null（无法获取 diff 时）
  */
-export function assessContentImpact(fileContent: string | null, coreCode: string): ImpactLevel {
-  // 文件不可读（被删除、权限等）→ reference
-  if (fileContent === null) {
-    return 'reference';
+export function assessFileImpact(
+  projectRoot: string,
+  relativePath: string,
+  recipeTokens: RecipeTokens
+): DiffImpactResult | null {
+  const diffText = getFileDiff(projectRoot, relativePath);
+  if (!diffText) {
+    return null;
   }
 
-  // coreCode 为空或太短 → 无法分析
-  if (!coreCode || coreCode.trim().length < 15) {
-    return 'reference';
+  const hunks = parseDiffHunks(diffText);
+  if (hunks.length === 0) {
+    return null;
   }
 
-  const apiTokens = extractApiTokens(coreCode);
-  if (apiTokens.length === 0) {
-    return 'reference';
-  }
-
-  const presenceRate = tokenPresenceRate(apiTokens, fileContent);
-
-  // 高存在率（≥40%）：文件包含 coreCode 描述的模式，且模式仍完好 → pattern
-  // 低存在率（<40%）：coreCode 模式不在该文件中（最常见），或被删除 → reference
-  if (presenceRate >= 0.4) {
-    return 'pattern';
-  }
-
-  return 'reference';
+  const diffTokens = tokenizeDiffLines(hunks);
+  return assessDiffImpact(diffTokens, recipeTokens);
 }
 
 /**
- * 计算 apiTokens 在目标代码中的存在率（单向包含率）。
+ * 计算 diff tokens 与 Recipe tokens 的加权交集，返回影响级别。
  *
- * 与 shared/similarity.ts 的 jaccardSimilarity 区别：
- *   - Jaccard = |A∩B| / |A∪B|（对称，受 B 集合大小影响）
- *   - presenceRate = |A∩B| / |A|（单向：只关心 A 中有多少在 B 中出现）
+ * 分级：
+ *   - score ≥ 0.3 → `pattern`（diff 动到了 30%+ 的 Recipe 关键标识符）
+ *   - score > 0   → `reference`（diff 动到了部分 Recipe 标识符）
+ *   - score === 0 → `reference`（兜底：至少有 sourceRef 关联）
  *
- * @param sourceTokens 要查找的 token 列表
- * @param targetCode   目标代码文本
- * @returns 0.0 - 1.0
+ * @param diffTokens  diff 变更行中的标识符集合
+ * @param recipeTokens Recipe 的特征标识符
  */
-export function tokenPresenceRate(sourceTokens: string[], targetCode: string): number {
-  if (sourceTokens.length === 0) {
-    return 0;
-  }
-  const targetTokenSet = new Set(tokenizeIdentifiers(targetCode));
-  let count = 0;
-  for (const token of sourceTokens) {
-    if (targetTokenSet.has(token)) {
-      count++;
+export function assessDiffImpact(
+  diffTokens: Set<string>,
+  recipeTokens: RecipeTokens
+): DiffImpactResult {
+  const matched: string[] = [];
+  let matchedWeight = 0;
+  let totalWeight = 0;
+
+  for (const token of recipeTokens.tokens) {
+    const w = 1; // Phase 1: 等权。Phase 2 可引入 IDF
+    totalWeight += w;
+    if (diffTokens.has(token)) {
+      matchedWeight += w;
+      matched.push(token);
     }
   }
-  return count / sourceTokens.length;
+
+  if (totalWeight === 0) {
+    return { level: 'reference', score: 0, matchedTokens: [] };
+  }
+
+  const score = matchedWeight / totalWeight;
+
+  const level: ImpactLevel = score >= 0.3 ? 'pattern' : 'reference';
+
+  return { level, score, matchedTokens: matched };
 }
 
 /**
- * 从 coreCode 中提取有意义的 API 标识符。
+ * 从 Recipe 的所有代码字段提取特征标识符。
+ *
+ * 提取来源（优先级从低到高）：
+ *   1. coreCode — 教学模板，含占位符前缀
+ *   2. content.markdown 中的代码块 — 真实代码，最高价值
+ *   3. content.pattern — 代码片段
+ *   4. content.steps[].code — 实施步骤代码
+ */
+export function extractRecipeTokens(entry: {
+  coreCode?: string;
+  language?: string;
+  content?: {
+    markdown?: string;
+    pattern?: string;
+    steps?: Array<{ code?: string }>;
+  };
+}): RecipeTokens {
+  const tokens = new Set<string>();
+  const sources = new Map<string, 'coreCode' | 'markdown' | 'pattern' | 'steps'>();
+
+  // 1. coreCode
+  if (entry.coreCode) {
+    for (const t of extractApiTokens(entry.coreCode)) {
+      tokens.add(t);
+      sources.set(t, 'coreCode');
+    }
+  }
+
+  // 2. content.markdown 中的代码块
+  if (entry.content?.markdown) {
+    const codeBlocks = extractCodeBlocksFromMarkdown(entry.content.markdown);
+    for (const block of codeBlocks) {
+      for (const t of extractApiTokens(block.code)) {
+        tokens.add(t);
+        sources.set(t, 'markdown');
+      }
+    }
+  }
+
+  // 3. content.pattern
+  if (entry.content?.pattern) {
+    for (const t of extractApiTokens(entry.content.pattern)) {
+      tokens.add(t);
+      sources.set(t, 'pattern');
+    }
+  }
+
+  // 4. content.steps[].code
+  if (entry.content?.steps) {
+    for (const step of entry.content.steps) {
+      if (step.code) {
+        for (const t of extractApiTokens(step.code)) {
+          tokens.add(t);
+          sources.set(t, 'steps');
+        }
+      }
+    }
+  }
+
+  return { tokens, sources };
+}
+
+/**
+ * 从代码文本中提取有意义的 API 标识符。
  *
  * 过滤规则：
  *   - 长度 < 4 → 排除（for, let, var 等）
  *   - 占位符前缀（My*, Example*, Sample*...）→ 排除
  *   - 语言关键字 → 排除
  *
- * @param coreCode Recipe 的 coreCode
+ * @param code 任意代码文本
  * @returns 去重后的标识符数组
  */
-export function extractApiTokens(coreCode: string): string[] {
-  const allIdents = tokenizeIdentifiers(coreCode);
+export function extractApiTokens(code: string): string[] {
+  const allIdents = tokenizeIdentifiers(code);
 
   const filtered = allIdents.filter((id) => {
     if (id.length < 4) {
@@ -129,22 +219,4 @@ export function tokenizeIdentifiers(code: string): string[] {
 
   const matches = cleaned.match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g);
   return matches ?? [];
-}
-
-/* ────────────── 文件读取 ────────────── */
-
-/**
- * 从磁盘读取项目源文件内容。
- *
- * @param projectRoot 项目根目录绝对路径
- * @param relativePath 相对于项目根的文件路径
- * @returns 文件内容，不可读时返回 null
- */
-export function readProjectFile(projectRoot: string, relativePath: string): string | null {
-  try {
-    const fullPath = path.resolve(projectRoot, relativePath);
-    return fs.readFileSync(fullPath, 'utf8');
-  } catch {
-    return null;
-  }
 }

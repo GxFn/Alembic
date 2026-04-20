@@ -544,4 +544,105 @@ describe('ProposalExecutor', () => {
       expect(result.rejected[0].reason).toContain('recovered');
     });
   });
+
+  /* ─── Signal-driven deprecate rejection (§9.1) ─── */
+
+  describe('signal-driven deprecate rejection', () => {
+    /** 触发信号处理并等待 async #onSignal 完成 */
+    async function emitAndFlush(signal: Record<string, unknown>): Promise<void> {
+      const handler = signalBus.subscribe.mock.calls[0]?.[1];
+      expect(handler).toBeDefined();
+      handler(signal);
+      // #onSignal 是 fire-and-forget (void this.#onSignal)，需要 flush microtasks
+      await new Promise((r) => {
+        setTimeout(r, 10);
+      });
+    }
+
+    it('rejects deprecate when source_modified + direct signal arrives', async () => {
+      const proposal = makeProposal({ type: 'deprecate', targetRecipeId: 'r-001' });
+      repo.findByTarget.mockReturnValue([proposal]);
+      executor.subscribeToSignals(signalBus as never);
+
+      await emitAndFlush({
+        type: 'quality',
+        source: 'FileChangeHandler',
+        value: 0.8,
+        target: 'r-001',
+        metadata: { reason: 'source_modified', impactLevel: 'direct', modifiedPath: 'A.swift' },
+        timestamp: Date.now(),
+      });
+
+      expect(repo.markRejected).toHaveBeenCalledWith(
+        proposal.id,
+        expect.stringContaining('actively modified')
+      );
+    });
+
+    it('rejects deprecate when source_modified + pattern signal arrives', async () => {
+      const proposal = makeProposal({ type: 'deprecate', targetRecipeId: 'r-001' });
+      repo.findByTarget.mockReturnValue([proposal]);
+      executor.subscribeToSignals(signalBus as never);
+
+      await emitAndFlush({
+        type: 'quality',
+        source: 'FileChangeHandler',
+        value: 0.6,
+        target: 'r-001',
+        metadata: { reason: 'source_modified', impactLevel: 'pattern', modifiedPath: 'B.swift' },
+        timestamp: Date.now(),
+      });
+
+      expect(repo.markRejected).toHaveBeenCalledWith(
+        proposal.id,
+        expect.stringContaining('actively modified')
+      );
+    });
+
+    it('does NOT reject deprecate on source_modified + reference signal', async () => {
+      knowledgeRepo = createMockKnowledgeRepo({
+        'r-001': {
+          stats: {
+            guardHits: 0,
+            searchHits: 0,
+            hitsLast30d: 0,
+            decayScore: 10,
+            ruleFalsePositiveRate: 0,
+          },
+          quality: { overall: 0.3 },
+          lifecycle: 'decaying',
+        },
+      });
+      executor = new ProposalExecutor(
+        knowledgeRepo as never,
+        repo as unknown as ProposalRepository,
+        lifecycle as never,
+        contentPatcher as never,
+        edgeRepo as never
+      );
+
+      const proposal = makeProposal({
+        type: 'deprecate',
+        targetRecipeId: 'r-001',
+        evidence: [{ snapshotAt: Date.now() - 7_000_000, metrics: { decayScore: 10 } }],
+      });
+      repo.findByTarget.mockReturnValue([proposal]);
+      executor.subscribeToSignals(signalBus as never);
+
+      await emitAndFlush({
+        type: 'quality',
+        source: 'FileChangeHandler',
+        value: 0.3,
+        target: 'r-001',
+        metadata: { reason: 'source_modified', impactLevel: 'reference', modifiedPath: 'C.swift' },
+        timestamp: Date.now(),
+      });
+
+      // reference 级别不应因 "actively modified" 被 reject
+      expect(repo.markRejected).not.toHaveBeenCalledWith(
+        proposal.id,
+        expect.stringContaining('actively modified')
+      );
+    });
+  });
 });

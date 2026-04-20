@@ -136,8 +136,17 @@ export const proposeEvolution = {
       };
     }
 
+    if (result.outcome === 'skipped') {
+      return {
+        status: 'skipped' as const,
+        message: result.error ?? 'Duplicate proposal exists',
+        recipeId,
+      };
+    }
+
     return {
-      status: 'proposed' as const,
+      status:
+        result.outcome === 'proposal-upgraded' ? ('upgraded' as const) : ('proposed' as const),
       proposalId: result.proposalId,
       recipeId,
       type: 'update',

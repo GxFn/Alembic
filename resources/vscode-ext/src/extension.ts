@@ -43,9 +43,11 @@ let codeLensProvider: DirectiveCodeLensProvider;
 // Reactive Evolution 弹窗（文档 §5.4 / 策略 C）
 // ─────────────────────────────────────────────
 
-/** 每个 Recipe 上次弹窗时间戳，用于 10 分钟节流（文档 §13.2 C3） */
+/** 每个 Recipe 的连续忽略次数 → 退避天数 = dismissCount（1天、2天、3天…） */
+const dismissCount = new Map<string, number>();
+
+/** 每个 Recipe 上次弹窗时间戳 */
 const lastPopupTime = new Map<string, number>();
-const POPUP_THROTTLE_MS = 10 * 60 * 1000;
 
 /** 全局弹窗冷却：任意两次弹窗之间至少 2 分钟 */
 let lastGlobalPopupTime = 0;
@@ -53,6 +55,9 @@ const GLOBAL_POPUP_COOLDOWN_MS = 2 * 60 * 1000;
 
 /** Session 级静默：用户点击"不再提醒"后本次 session 内不再弹窗 */
 let popupMutedForSession = false;
+
+/** 一天的毫秒数 */
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * 构造交给 IDE Copilot Chat 的进化 prompt（文档 §5.4.4）
@@ -75,13 +80,12 @@ function buildEvolvePrompt(report: FileChangeReport): string {
 }
 
 /**
- * 根据 report 触发弹窗（策略 C：仅 ide-edit + direct 影响）
+ * 根据 report 触发弹窗（策略 C：仅 ide-edit + direct/pattern 影响）
  *
- * 文档 §13.2 C1-C4：
- *   C1 eventSource === 'ide-edit'（git 事件永不弹窗）
- *   C2 至少一条 details.impactLevel === 'direct'
- *   C3 同一 Recipe 10 分钟内不重弹
- *   C4 按钮: 'Review'（外部 Agent 走 MCP）/ 'Auto Check'（内部 Agent 走 CLI）
+ * 退避策略：用户每次不点击 Review/Auto Check → 该 Recipe 静默天数 +1。
+ *   首次忽略 → 1天后才可再弹；第2次忽略 → 2天；第N次 → N天（上限7天）。
+ *   点击 Review 或 Auto Check → 重置该 Recipe 退避计数为 0。
+ *   未处理的 Recipe 由增量扫描统一处理，不依赖弹窗。
  */
 function handleReactiveReport(report: FileChangeReport): void {
   // G0: 用户通过设置或 session 内按钮关闭了弹窗
@@ -93,24 +97,30 @@ function handleReactiveReport(report: FileChangeReport): void {
   if (report.eventSource !== 'ide-edit') { return; }
   if (!report.suggestReview) { return; }
 
-  const directDetails = report.details.filter(
-    d => d.impactLevel === 'direct' && (d.action === 'needs-review' || d.action === 'deprecate')
+  // C2: direct（文件删除）或 pattern（30%+ Recipe token 被 diff 修改）
+  const impactDetails = report.details.filter(
+    d => (d.impactLevel === 'direct' || d.impactLevel === 'pattern') &&
+         (d.action === 'needs-review' || d.action === 'deprecate')
   );
-  if (directDetails.length === 0) { return; }
+  if (impactDetails.length === 0) { return; }
 
   const now = Date.now();
 
   // G1: 全局冷却 — 任意两次弹窗之间至少 2 分钟
   if (now - lastGlobalPopupTime < GLOBAL_POPUP_COOLDOWN_MS) { return; }
 
-  // C3: per-Recipe 10 分钟节流
-  const activeDetails = directDetails.filter(d => {
+  // C3: per-Recipe 递增退避 — dismissCount 次忽略 → 需等 dismissCount 天
+  const activeDetails = impactDetails.filter(d => {
     const last = lastPopupTime.get(d.recipeId) ?? 0;
-    return now - last > POPUP_THROTTLE_MS;
+    const count = dismissCount.get(d.recipeId) ?? 0;
+    const cooldown = count === 0
+      ? GLOBAL_POPUP_COOLDOWN_MS           // 首次：仅受全局冷却约束
+      : Math.min(count, 7) * ONE_DAY_MS;  // 已忽略 N 次 → N 天（上限 7 天）
+    return now - last > cooldown;
   });
   if (activeDetails.length === 0) { return; }
 
-  // 更新节流记录
+  // 更新弹窗时间（退避计数在用户响应后更新）
   lastGlobalPopupTime = now;
   for (const d of activeDetails) {
     lastPopupTime.set(d.recipeId, now);
@@ -119,7 +129,7 @@ function handleReactiveReport(report: FileChangeReport): void {
   const recipeIds = activeDetails.map(d => d.recipeId);
   const preview = activeDetails.slice(0, 3).map(d => d.recipeTitle).join('、');
   const more = activeDetails.length > 3 ? ` 等 ${activeDetails.length} 条` : '';
-  const msg = `Alembic: 检测到 ${preview}${more} 受近期编辑直接影响，建议进化评估。`;
+  const msg = `Alembic: 检测到 ${preview}${more} 受近期编辑影响，建议进化评估。`;
 
   void vscode.window.showInformationMessage(
     msg,
@@ -128,10 +138,14 @@ function handleReactiveReport(report: FileChangeReport): void {
     "Don't Show Again",
   ).then((choice) => {
     if (choice === 'Review') {
+      // 用户主动处理 → 重置退避
+      for (const id of recipeIds) { dismissCount.delete(id); }
       void vscode.commands.executeCommand('workbench.action.chat.open', {
         query: buildEvolvePrompt({ ...report, details: activeDetails }),
       });
     } else if (choice === 'Auto Check') {
+      // 用户主动处理 → 重置退避
+      for (const id of recipeIds) { dismissCount.delete(id); }
       const terminal = vscode.window.createTerminal('Alembic Evolve');
       terminal.sendText(`asd evolve-check --recipes ${recipeIds.join(',')}`);
       terminal.show();
@@ -140,6 +154,11 @@ function handleReactiveReport(report: FileChangeReport): void {
       void vscode.window.showInformationMessage(
         'Alembic: 已关闭本次 session 的进化弹窗。如需永久关闭，请在设置中禁用 alembic.enableReactivePopup。'
       );
+    } else {
+      // 用户关闭/忽略弹窗 → 递增退避，Recipe 等待增量扫描统一处理
+      for (const id of recipeIds) {
+        dismissCount.set(id, (dismissCount.get(id) ?? 0) + 1);
+      }
     }
   });
 }
