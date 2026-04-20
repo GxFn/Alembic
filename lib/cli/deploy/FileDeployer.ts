@@ -280,21 +280,7 @@ export class FileDeployer {
 
   /** merge-json — 读取现有 JSON，合并 alembic 键 */
   _strategyMergeJson(entry: ManifestEntry) {
-    // Ghost 模式 + global policy → 写入全局配置
-    //   Cursor:  ~/.cursor/mcp.json
-    //   VSCode:  ~/Library/Application Support/Code/User/mcp.json (macOS)
-    //            ~/.config/Code/User/mcp.json (Linux)
-    //            %APPDATA%/Code/User/mcp.json (Windows)
-    let dest: string;
-    if (this.ghost && entry.ghostPolicy === 'global') {
-      if (entry.id === 'vscode-mcp') {
-        dest = join(this._vscodeMcpGlobalDir(), 'mcp.json');
-      } else {
-        dest = join(os.homedir(), entry.dest!);
-      }
-    } else {
-      dest = join(this.projectRoot, entry.dest!);
-    }
+    const dest = join(this.projectRoot, entry.dest!);
     mkdirSync(dirname(dest), { recursive: true });
 
     let config: Record<string, Record<string, unknown>> = {};
@@ -312,9 +298,7 @@ export class FileDeployer {
     }
 
     const ide = entry.id === 'vscode-mcp' ? 'vscode' : 'cursor';
-    // 只有 VSCode 全局配置不支持 ${workspaceFolder}，需要绝对路径
-    const useAbsPath = this.ghost && entry.ghostPolicy === 'global' && entry.id === 'vscode-mcp';
-    config[parentKey].alembic = buildMcpServerEntry(this.projectRoot, ide, useAbsPath);
+    config[parentKey].alembic = buildMcpServerEntry(this.projectRoot, ide, false);
 
     writeFileSync(dest, JSON.stringify(config, null, 2));
     return true;

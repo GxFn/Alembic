@@ -44,7 +44,7 @@ export const MANIFEST = [
     on: 'both',
     category: 'mcp',
     jsonKey: 'mcpServers',
-    ghostPolicy: 'global' as const,
+    ghostPolicy: 'deploy' as const,
   },
   {
     id: 'vscode-mcp',
@@ -53,7 +53,7 @@ export const MANIFEST = [
     on: 'both',
     category: 'mcp',
     jsonKey: 'servers',
-    ghostPolicy: 'global' as const,
+    ghostPolicy: 'deploy' as const,
   },
 
   // ═══ Cursor Rules（Alembic 完全拥有） ═══════════
