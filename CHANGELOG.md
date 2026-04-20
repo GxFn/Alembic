@@ -4,6 +4,13 @@
 
 ---
 
+## [0.0.6] - 2026-04-20
+
+### Changed
+- 全局品牌重命名：`asd` → `alembic`（CLI 命令、MCP 工具前缀、运行时目录、package.json imports 条件、Skills、Cursor rules 等）
+
+---
+
 ## [0.0.3] - 2026-04-17
 
 ### Added
