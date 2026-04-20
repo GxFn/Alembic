@@ -307,7 +307,121 @@ const SCAN_SKIP_DIRS = Object.freeze(
 );
 
 // ═══════════════════════════════════════════════════════════
-// 7.5) 通用测试目录模式（路径中包含典型测试目录名）
+// 8) 编程语言通用关键字（代码分析时排除保留字用）
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 各语言通用关键字，用于代码标识符提取时排除保留字。
+ * 与 search/tokenizer 的 EN_STOPWORDS 用途不同：
+ *   - EN_STOPWORDS 过滤自然语言虚词（the, is, are）
+ *   - LANGUAGE_KEYWORDS 过滤编程语言保留字（class, func, def）
+ */
+const LANGUAGE_KEYWORDS = Object.freeze(
+  new Set([
+    // JS/TS
+    'const',
+    'function',
+    'return',
+    'class',
+    'interface',
+    'type',
+    'export',
+    'import',
+    'from',
+    'async',
+    'await',
+    'this',
+    'super',
+    'null',
+    'undefined',
+    'true',
+    'false',
+    'void',
+    'number',
+    'string',
+    'boolean',
+    'extends',
+    'implements',
+    'static',
+    'private',
+    'public',
+    'protected',
+    'readonly',
+    'throw',
+    'catch',
+    'finally',
+    'typeof',
+    'instanceof',
+    'delete',
+    'yield',
+    'switch',
+    'case',
+    'default',
+    'break',
+    'continue',
+    'while',
+    'else',
+    // Swift
+    'func',
+    'self',
+    'init',
+    'deinit',
+    'struct',
+    'enum',
+    'protocol',
+    'guard',
+    'weak',
+    'strong',
+    'lazy',
+    'mutating',
+    'override',
+    'final',
+    'some',
+    'where',
+    'associatedtype',
+    'typealias',
+    'throws',
+    'rethrows',
+    'inout',
+    // Python
+    'def',
+    'lambda',
+    'nonlocal',
+    'global',
+    'with',
+    'elif',
+    'pass',
+    'raise',
+    'except',
+    'assert',
+    'None',
+    'True',
+    'False',
+    'print',
+    'range',
+    'list',
+    // Common
+    'that',
+    'then',
+    'else',
+    'each',
+    'when',
+    'with',
+    'have',
+    'from',
+    'into',
+    'require',
+    'module',
+    'exports',
+    'include',
+    'using',
+    'namespace',
+    'auto',
+  ])
+);
+
+// ═══════════════════════════════════════════════════════════
+// 9) 通用测试目录模式（路径中包含典型测试目录名）
 // ═══════════════════════════════════════════════════════════
 
 const TEST_DIR_PATTERN =
@@ -530,6 +644,11 @@ export class LanguageService {
   /** 获取所有已知编程语言 ID（不可变） */
   static get knownLangs() {
     return KNOWN_PROGRAMMING_LANGS;
+  }
+
+  /** 编程语言通用关键字集合（代码标识符提取时排除保留字） */
+  static get languageKeywords() {
+    return LANGUAGE_KEYWORDS;
   }
 
   /** 获取完整的 ext→lang 映射（不可变） */

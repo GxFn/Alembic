@@ -27,6 +27,7 @@ import type {
   ReactiveEvolutionReport,
 } from '../../types/reactive-evolution.js';
 import type { FileChangeSubscriber } from '../FileChangeDispatcher.js';
+import { assessContentImpact, readProjectFile } from './ContentImpactAnalyzer.js';
 import type { ContentPatcher } from './ContentPatcher.js';
 import type { EvolutionGateway } from './EvolutionGateway.js';
 
@@ -47,13 +48,19 @@ export class FileChangeHandler implements FileChangeSubscriber {
   readonly #signalBus: SignalBus | null;
   readonly #gateway: EvolutionGateway;
   readonly #dataRoot: string;
+  readonly #projectRoot: string;
   readonly #logger = Logger.getInstance();
 
   constructor(
     sourceRefRepo: RecipeSourceRefRepositoryImpl,
     knowledgeRepo: KnowledgeRepositoryImpl,
     contentPatcher: ContentPatcher,
-    options: { signalBus?: SignalBus; evolutionGateway: EvolutionGateway; dataRoot?: string }
+    options: {
+      signalBus?: SignalBus;
+      evolutionGateway: EvolutionGateway;
+      dataRoot?: string;
+      projectRoot?: string;
+    }
   ) {
     this.#sourceRefRepo = sourceRefRepo;
     this.#knowledgeRepo = knowledgeRepo;
@@ -61,6 +68,7 @@ export class FileChangeHandler implements FileChangeSubscriber {
     this.#signalBus = options.signalBus ?? null;
     this.#gateway = options.evolutionGateway;
     this.#dataRoot = options.dataRoot ?? process.cwd();
+    this.#projectRoot = options.projectRoot ?? process.cwd();
   }
 
   /**
@@ -307,15 +315,19 @@ export class FileChangeHandler implements FileChangeSubscriber {
   /* ═══════════════════ Modified ═══════════════════ */
 
   /**
-   * 文件内容变更 → 为每条关联 Recipe 计算影响级别并发射结构化 signal。
+   * 文件内容变更 → 读取文件，与每条关联 Recipe 的 coreCode 做内容级比对。
    *
-   * 查询链：
-   *   1. `SourceRefRepository.findBySourcePath(path)` → 拿到关联 Recipe
-   *   2. 对每条 Recipe 调用 `#analyzeModifiedImpact()` → direct/reference/pattern
-   *   3. 为每条发射一条 `quality` signal，附 `{ reason: 'source_modified', modifiedPath, impactLevel }`
-   *   4. 填充 `report.details` 的 `impactLevel` + `modifiedPath` 字段
+   * 核心原则：**只有 Recipe 描述的代码模式在文件中发生了实质变化，才算 direct 影响。**
+   * 文件在 sourceRefs 里只是查询入口，不等于影响级别。
    *
-   * 非 active 状态（staging / deprecated）的 Recipe 不参与（避免对临时态打扰）。
+   * 流程：
+   *   1. `SourceRefRepository.findBySourcePath(path)` → 找到关联 Recipe（查询入口）
+   *   2. 读取文件当前内容
+   *   3. 对每条 Recipe：提取 coreCode 中的关键锚点，检查是否仍存在于文件中
+   *   4. 锚点缺失 → Recipe 真正受影响 → `direct`（弹窗 + 强信号）
+   *   5. 锚点仍在 → 修改未触及 Recipe 描述的模式 → `reference`（仅信号，不弹窗）
+   *
+   * 非 active 状态（staging / deprecated）的 Recipe 不参与。
    */
   async #handleModified(modifiedPath: string, report: ReactiveEvolutionReport): Promise<void> {
     const affected = this.#sourceRefRepo.findBySourcePath(modifiedPath);
@@ -325,10 +337,11 @@ export class FileChangeHandler implements FileChangeSubscriber {
       return;
     }
 
+    // 读取文件当前内容（一次读取，所有 Recipe 共享）
+    const fileContent = readProjectFile(this.#projectRoot, modifiedPath);
+
     for (const ref of affected) {
       let title = ref.recipeId;
-      // sourceRefRepo 命中 → 默认 direct（§5.3: path ∈ sourceRefs → direct）
-      let impactLevel: ImpactLevel = 'direct';
       let entry: Record<string, unknown> | null = null;
       try {
         entry = (await this.#knowledgeRepo.findById(ref.recipeId)) as unknown as Record<
@@ -339,7 +352,7 @@ export class FileChangeHandler implements FileChangeSubscriber {
         entry = null;
       }
 
-      // 非 active 的 Recipe 不进入 details（避免对 staging/deprecated 打扰，文档 §13.1 B5）
+      // 非 active 的 Recipe 不进入 details（文档 §13.1 B5）
       if (entry && typeof entry.lifecycle === 'string' && entry.lifecycle !== 'active') {
         report.skipped++;
         continue;
@@ -347,85 +360,27 @@ export class FileChangeHandler implements FileChangeSubscriber {
 
       if (entry) {
         title = (typeof entry.title === 'string' ? entry.title : '') || ref.recipeId;
-        impactLevel = this.#analyzeModifiedImpact(
-          modifiedPath,
-          {
-            coreCode: typeof entry.coreCode === 'string' ? entry.coreCode : '',
-            reasoning: entry.reasoning,
-            trigger: typeof entry.trigger === 'string' ? entry.trigger : '',
-          },
-          true
-        );
       }
 
-      report.needsReview++;
-      report.details.push({
-        recipeId: ref.recipeId,
-        recipeTitle: title,
-        action: 'needs-review',
-        reason: this.#reasonForImpact(impactLevel, modifiedPath),
-        impactLevel,
-        modifiedPath,
-      });
+      const coreCode = entry && typeof entry.coreCode === 'string' ? entry.coreCode : '';
+      const impactLevel = assessContentImpact(fileContent, coreCode);
 
-      // 为每条受影响 Recipe 发射一条精细化 signal（文档 §5.2）
+      // reference / pattern 级别只发信号，不进入 report.details，不触发弹窗
+      if (impactLevel === 'direct') {
+        report.needsReview++;
+        report.details.push({
+          recipeId: ref.recipeId,
+          recipeTitle: title,
+          action: 'needs-review',
+          reason: this.#reasonForImpact(impactLevel, modifiedPath),
+          impactLevel,
+          modifiedPath,
+        });
+      }
+
+      // 所有级别都发射信号（ProposalExecutor 消费）
       this.#emitSourceModifiedSignal(ref.recipeId, modifiedPath, impactLevel);
     }
-  }
-
-  /**
-   * 计算改动文件对某 Recipe 的影响级别。
-   *
-   * 判定顺序（首次命中即返回）：
-   *   0. isSourceRef = true（文件在 recipe_source_refs 中精确匹配）→ `direct`
-   *   1. coreCode 中包含文件路径 / 符号名（去掉扩展名后匹配）→ `direct`
-   *   2. reasoning.sources 中包含路径 → `reference`
-   *   3. trigger 片段匹配路径 → `pattern`
-   *
-   * 防御性兜底：`pattern`（0.2 权重）。
-   *
-   * @param isSourceRef 该 Recipe 是否通过 SourceRefRepository.findBySourcePath 命中。
-   *   true 时直接返回 `direct`（设计文档 §5.3: path ∈ sourceRefs → direct）。
-   */
-  #analyzeModifiedImpact(
-    modifiedPath: string,
-    entry: { coreCode?: string; reasoning?: unknown; trigger?: string },
-    isSourceRef = false
-  ): ImpactLevel {
-    // Rule 0: sourceRef 精确匹配 → direct（§5.3 表格第一行）
-    if (isSourceRef) {
-      return 'direct';
-    }
-
-    const coreCode = entry.coreCode ?? '';
-    const basename = modifiedPath.split('/').pop() ?? modifiedPath;
-    // 去掉扩展名后的文件名，用于 coreCode 符号匹配（如 AuthMiddleware.swift → AuthMiddleware）
-    const stem = basename.replace(/\.[^.]+$/, '');
-
-    // Rule 1: direct — 路径或符号名在 coreCode 中显式出现
-    if (coreCode.includes(modifiedPath) || (stem.length >= 4 && coreCode.includes(stem))) {
-      return 'direct';
-    }
-
-    // Rule 2: reference — 路径在 reasoning.sources 中
-    const reasoning = entry.reasoning as { sources?: unknown } | undefined;
-    const sources = reasoning && Array.isArray(reasoning.sources) ? reasoning.sources : [];
-    if (
-      sources.some(
-        (s) => typeof s === 'string' && (s === modifiedPath || s.endsWith(`/${basename}`))
-      )
-    ) {
-      return 'reference';
-    }
-
-    // Rule 3: pattern — trigger 匹配（trigger 片段出现在 path 中）
-    const trigger = (entry.trigger ?? '').replace(/^@/, '');
-    if (trigger.length >= 3 && modifiedPath.toLowerCase().includes(trigger.toLowerCase())) {
-      return 'pattern';
-    }
-
-    // 防御性兜底
-    return 'pattern';
   }
 
   /** 根据 impactLevel 生成可读的 reason 文本。 */
