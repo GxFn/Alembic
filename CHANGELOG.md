@@ -4,6 +4,14 @@
 
 ---
 
+## [0.0.7] - 2026-04-20
+
+### Fixed
+- MCP server key 从 `asd` 重命名为 `alembic`（FileDeployer、autoApproveInjector、安装脚本）
+- Ghost 模式 MCP 配置改为部署到项目目录（`.cursor/mcp.json`、`.vscode/mcp.json`），不再写入全局配置
+
+---
+
 ## [0.0.6] - 2026-04-20
 
 ### Changed
