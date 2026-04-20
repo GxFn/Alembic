@@ -18,6 +18,7 @@ import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
+import { rewriteRecipePaths } from './RecipePathRewriter.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -282,8 +283,8 @@ export class SourceRefReconciler {
 
   /**
    * 将 renamed 条目的 new_path 写回 Recipe .md 文件和 DB。
-   * 同时更新 _reasoning.sources 和 _content.markdown 中的路径引用。
-   * 完成后 status → active。
+   * 同时更新 reasoning.sources、content.markdown、coreCode 中的路径引用。
+   * 完成后 status → active（通过 replaceSourcePath）。
    */
   async applyRepairs(): Promise<ApplyReport> {
     const report: ApplyReport = { applied: 0, failed: 0 };
@@ -303,94 +304,23 @@ export class SourceRefReconciler {
       byRecipe.get(row.recipeId)?.push({ sourcePath: row.sourcePath, newPath: row.newPath! });
     }
 
-    // 获取 recipe 的 sourceFile 以定位 .md 文件
     const now = Date.now();
     for (const [recipeId, renames] of byRecipe) {
       try {
-        const entry = await this.#knowledgeRepo.findSourceFileAndReasoning(recipeId);
+        // 统一路径重写（DB 字段 + .md 文件）
+        const pathRenames = renames.map((r) => ({ oldPath: r.sourcePath, newPath: r.newPath }));
+        const rewriteResult = await rewriteRecipePaths(
+          this.#knowledgeRepo,
+          recipeId,
+          pathRenames,
+          this.#projectRoot
+        );
 
-        if (!entry?.sourceFile || !entry.reasoning) {
-          report.failed += renames.length;
-          continue;
-        }
-
-        const mdPath = path.resolve(this.#projectRoot, entry.sourceFile);
-        if (!fs.existsSync(mdPath)) {
-          report.failed += renames.length;
-          continue;
-        }
-
-        // 读取 .md 文件
-        let mdContent = fs.readFileSync(mdPath, 'utf8');
-        let reasoning: Record<string, unknown>;
-        try {
-          reasoning = JSON.parse(entry.reasoning);
-        } catch {
-          report.failed += renames.length;
-          continue;
-        }
-
-        const sources = Array.isArray(reasoning.sources) ? [...reasoning.sources] : [];
-        let modified = false;
-
-        for (const rename of renames) {
-          const idx = sources.indexOf(rename.sourcePath);
-          if (idx >= 0) {
-            sources[idx] = rename.newPath;
-            modified = true;
-          }
-          // 替换 .md 文件中所有旧路径引用（_reasoning、_content、正文）
-          mdContent = mdContent.replaceAll(rename.sourcePath, rename.newPath);
-        }
-
-        if (modified) {
-          reasoning.sources = sources;
-          const updatedReasoning = JSON.stringify(reasoning);
-
-          // 写回 .md 文件
-          fs.writeFileSync(mdPath, mdContent, 'utf8');
-
-          // 更新 DB reasoning 列
-          await this.#knowledgeRepo.updateReasoning(recipeId, updatedReasoning, now);
-
-          // 更新 DB content.markdown 和 coreCode 中的路径引用
-          const fullEntry = await this.#knowledgeRepo.findById(recipeId);
-          if (fullEntry) {
-            const updates: Record<string, unknown> = {};
-            const content = fullEntry.content;
-            let updatedMarkdown = content?.markdown ?? '';
-            let updatedCoreCode = fullEntry.coreCode ?? '';
-            let contentModified = false;
-
-            for (const rename of renames) {
-              if (updatedMarkdown.includes(rename.sourcePath)) {
-                updatedMarkdown = updatedMarkdown.replaceAll(rename.sourcePath, rename.newPath);
-                contentModified = true;
-              }
-              if (updatedCoreCode.includes(rename.sourcePath)) {
-                updatedCoreCode = updatedCoreCode.replaceAll(rename.sourcePath, rename.newPath);
-                updates.coreCode = updatedCoreCode;
-              }
-            }
-            if (contentModified && content) {
-              const contentJson = content.toJSON();
-              contentJson.markdown = updatedMarkdown;
-              updates.content = contentJson;
-            }
-            if (Object.keys(updates).length > 0) {
-              await this.#knowledgeRepo.update(recipeId, updates);
-            }
-          }
-
-          // 更新 recipe_source_refs 状态
+        if (rewriteResult.updatedFields.length > 0 || rewriteResult.mdFileUpdated) {
+          // 更新 recipe_source_refs 桥接表状态
           for (const rename of renames) {
             this.#sourceRefRepo.replaceSourcePath(recipeId, rename.sourcePath, rename.newPath, now);
           }
-
-          this.#logger.info('SourceRefReconciler: repaired recipe file', {
-            recipeId,
-            renames: renames.map((r) => `${r.sourcePath} → ${r.newPath}`),
-          });
 
           report.applied += renames.length;
         } else {

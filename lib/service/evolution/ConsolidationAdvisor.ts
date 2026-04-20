@@ -90,6 +90,11 @@ export interface RecipeSummary {
   trigger: string | null;
   whenClause: string | null;
   guardPattern: string | null;
+  content?: {
+    markdown?: string;
+    pattern?: string;
+    steps?: Array<{ code?: string }>;
+  } | null;
 }
 
 /* ────────────────────── Constants ────────────────────── */
@@ -461,7 +466,7 @@ export class ConsolidationAdvisor {
         category: string;
         trigger: string;
         whenClause: string;
-        content?: { pattern?: string };
+        content?: { pattern?: string; markdown?: string; steps?: Array<{ code?: string }> };
       }): RecipeSummary => ({
         id: e.id,
         title: e.title,
@@ -472,6 +477,13 @@ export class ConsolidationAdvisor {
         trigger: e.trigger || null,
         whenClause: e.whenClause || null,
         guardPattern: e.content?.pattern || null,
+        content: e.content
+          ? {
+              markdown: e.content.markdown || undefined,
+              pattern: e.content.pattern || undefined,
+              steps: e.content.steps,
+            }
+          : null,
       });
 
       if (category) {
@@ -543,7 +555,7 @@ export class ConsolidationAdvisor {
   /* ════════════════════ 结构相似度计算（委托 RecipeSimilarity） ════════════════════ */
 
   /**
-   * 计算候选与某条 Recipe 的 4 维结构相似度。
+   * 计算候选与某条 Recipe 的 5 维结构相似度。
    * 委托 RecipeSimilarity 统一算法。
    */
   #computeSimilarity(candidate: CandidateForConsolidation, recipe: RecipeSummary): number {
@@ -554,6 +566,12 @@ export class ConsolidationAdvisor {
         dontClause: candidate.dontClause,
         coreCode: candidate.coreCode,
         guardPattern: candidate.content?.pattern ?? null,
+        content: candidate.content
+          ? {
+              markdown: candidate.content.markdown,
+              pattern: candidate.content.pattern,
+            }
+          : null,
       },
       recipe as RecipeLike
     );
@@ -570,9 +588,21 @@ export class ConsolidationAdvisor {
       [b.doClause, b.dontClause]
     );
     const d3 = RecipeSimilarity.codeSimilarity(a.coreCode ?? null, b.coreCode ?? null);
+    const d4 = RecipeSimilarity.contentTokenSimilarity(
+      {
+        title: a.title,
+        coreCode: a.coreCode,
+        content: a.content ? { markdown: a.content.markdown, pattern: a.content.pattern } : null,
+      },
+      {
+        title: b.title,
+        coreCode: b.coreCode,
+        content: b.content ? { markdown: b.content.markdown, pattern: b.content.pattern } : null,
+      }
+    );
 
-    // 批次内无 guardPattern，权重重分配: title 0.25 / clause 0.4 / code 0.35
-    return 0.25 * d1 + 0.4 * d2 + 0.35 * d3;
+    // 批次内无 guardPattern，权重重分配: title 0.2 / clause 0.3 / code 0.15 / content 0.35
+    return 0.2 * d1 + 0.3 * d2 + 0.15 * d3 + 0.35 * d4;
   }
 
   /* ════════════════════ 融合方向分析 ════════════════════ */

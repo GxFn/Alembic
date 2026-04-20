@@ -1,12 +1,14 @@
 import {
   assessDiffImpact,
-  extractApiTokens,
-  extractRecipeTokens,
   type RecipeTokens,
-  tokenizeIdentifiers,
 } from '../../lib/service/evolution/ContentImpactAnalyzer.js';
 import { parseDiffHunks, tokenizeDiffLines } from '../../lib/shared/diff-parser.js';
 import { extractCodeBlocksFromMarkdown } from '../../lib/shared/markdown-utils.js';
+import {
+  extractApiTokens,
+  extractRecipeTokens,
+  tokenizeIdentifiers,
+} from '../../lib/shared/recipe-tokens.js';
 
 describe('ContentImpactAnalyzer', () => {
   /* ─── tokenizeIdentifiers ─── */

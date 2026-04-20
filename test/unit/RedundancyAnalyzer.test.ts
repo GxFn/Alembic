@@ -18,6 +18,7 @@ function makeRecipe(overrides: Record<string, unknown> = {}) {
     dontClause: null,
     coreCode: null,
     guardPattern: null,
+    content: null,
     ...overrides,
   } as Parameters<RedundancyAnalyzer['analyzePair']>[0];
 }

@@ -8,7 +8,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { tokenizeIdentifiers } from '../service/evolution/ContentImpactAnalyzer.js';
+import { tokenizeIdentifiers } from './recipe-tokens.js';
 
 /* ────────────── Types ────────────── */
 

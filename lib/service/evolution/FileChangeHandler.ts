@@ -15,8 +15,6 @@
  * @module service/evolution/FileChangeHandler
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
@@ -27,6 +25,7 @@ import type {
   ReactiveEvolutionReport,
 } from '../../types/reactive-evolution.js';
 import type { FileChangeSubscriber } from '../FileChangeDispatcher.js';
+import { rewriteRecipePaths } from '../knowledge/RecipePathRewriter.js';
 import { assessFileImpact, extractRecipeTokens } from './ContentImpactAnalyzer.js';
 import type { ContentPatcher } from './ContentPatcher.js';
 import type { EvolutionGateway } from './EvolutionGateway.js';
@@ -211,7 +210,12 @@ export class FileChangeHandler implements FileChangeSubscriber {
         this.#sourceRefRepo.replaceSourcePath(ref.recipeId, oldPath, newPath, Date.now());
 
         // 全量替换 DB 文本字段 + .md 文件中的路径引用
-        await this.#updateAllTextReferences(ref.recipeId, oldPath, newPath);
+        const rewriteResult = await rewriteRecipePaths(
+          this.#knowledgeRepo,
+          ref.recipeId,
+          [{ oldPath, newPath }],
+          this.#dataRoot
+        );
 
         const title = await this.#getRecipeTitle(ref.recipeId);
         report.fixed++;
@@ -219,7 +223,7 @@ export class FileChangeHandler implements FileChangeSubscriber {
           recipeId: ref.recipeId,
           recipeTitle: title,
           action: 'fix-rename',
-          reason: `sourceRef path updated: ${oldPath} → ${newPath} (patch: ${patchResult.success ? 'ok' : 'skipped'})`,
+          reason: `sourceRef path updated: ${oldPath} → ${newPath} (patch: ${patchResult.success ? 'ok' : 'skipped'}, fields: ${rewriteResult.updatedFields.join(',') || 'none'})`,
         });
       } catch (err: unknown) {
         this.#logger.warn('[FileChangeHandler] rename fix failed', {
@@ -439,81 +443,6 @@ export class FileChangeHandler implements FileChangeSubscriber {
   }
 
   /* ═══════════════════ Helpers ═══════════════════ */
-
-  /**
-   * 全量替换 Recipe 中所有文本引用（reasoning.sources、content.markdown、coreCode）+ .md 文件
-   */
-  async #updateAllTextReferences(
-    recipeId: string,
-    oldPath: string,
-    newPath: string
-  ): Promise<void> {
-    try {
-      const entry = await this.#knowledgeRepo.findById(recipeId);
-      if (!entry) {
-        return;
-      }
-
-      const updates: Record<string, unknown> = {};
-      const updatedFields: string[] = [];
-
-      // 1. reasoning.sources 数组替换
-      const reasoning = entry.reasoning;
-      if (reasoning) {
-        const sources = [...reasoning.sources];
-        const srcIdx = sources.indexOf(oldPath);
-        if (srcIdx >= 0) {
-          sources[srcIdx] = newPath;
-          updates.reasoning = { ...reasoning.toJSON(), sources };
-          updatedFields.push('reasoning.sources');
-        }
-      }
-
-      // 2. content.markdown 全文替换
-      const content = entry.content;
-      if (content && content.markdown.includes(oldPath)) {
-        const contentJson = content.toJSON();
-        contentJson.markdown = content.markdown.replaceAll(oldPath, newPath);
-        updates.content = contentJson;
-        updatedFields.push('content.markdown');
-      }
-
-      // 3. coreCode 全文替换
-      if (entry.coreCode && entry.coreCode.includes(oldPath)) {
-        updates.coreCode = entry.coreCode.replaceAll(oldPath, newPath);
-        updatedFields.push('coreCode');
-      }
-
-      // 写回 DB
-      if (updatedFields.length > 0) {
-        await this.#knowledgeRepo.update(recipeId, updates);
-        this.#logger.info('[FileChangeHandler] Updated recipe text references in DB', {
-          recipeId,
-          fields: updatedFields,
-          rename: `${oldPath} → ${newPath}`,
-        });
-      }
-
-      // 4. 同步更新 .md 文件：替换所有旧路径引用
-      if (entry.sourceFile) {
-        const mdPath = path.resolve(this.#dataRoot, entry.sourceFile);
-        if (fs.existsSync(mdPath)) {
-          const mdContent = fs.readFileSync(mdPath, 'utf8');
-          const mdUpdated = mdContent.replaceAll(oldPath, newPath);
-          if (mdUpdated !== mdContent) {
-            fs.writeFileSync(mdPath, mdUpdated, 'utf8');
-            this.#logger.info('[FileChangeHandler] Updated recipe .md file', {
-              recipeId,
-              mdPath: entry.sourceFile,
-              rename: `${oldPath} → ${newPath}`,
-            });
-          }
-        }
-      }
-    } catch {
-      // 文本引用更新失败不阻塞主流程
-    }
-  }
 
   /** 获取 Recipe 标题（用于报告） */
   async #getRecipeTitle(recipeId: string): Promise<string> {

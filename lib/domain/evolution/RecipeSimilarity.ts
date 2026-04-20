@@ -1,14 +1,19 @@
 /**
- * RecipeSimilarity — 统一 4 维相似度算法
+ * RecipeSimilarity — 统一 5 维相似度算法
  *
  * 从 ConsolidationAdvisor 与 RedundancyAnalyzer 中提取共享的相似度计算，
  * 消除两套独立实现的偏差（文档 §7.3.1）。
  *
- * 4 个维度及权重:
- *   title   (0.2) — 标题关键词 Jaccard
- *   clause  (0.3) — doClause + dontClause 关键词 Jaccard
- *   code    (0.3) — coreCode 去空白后 3-gram Jaccard
- *   guard   (0.2) — guardPattern 精确匹配 (0 | 1)
+ * 5 个维度及权重:
+ *   title   (0.15) — 标题关键词 Jaccard
+ *   clause  (0.25) — doClause + dontClause 关键词 Jaccard
+ *   code    (0.15) — coreCode 去空白后 3-gram Jaccard（结构相似度）
+ *   content (0.30) — 全字段代码标识符 token Jaccard（语义相似度）
+ *   guard   (0.15) — guardPattern 精确匹配 (0 | 1)
+ *
+ * content 维度复用 shared/recipe-tokens 的 extractRecipeTokens()，
+ * 从 coreCode + content.markdown 代码块 + content.pattern + content.steps
+ * 提取 API 标识符，做 Jaccard 集合比对。
  *
  * 额外提供 Layer 1.5 字段级分析（文档 §7.4.3）：
  *   triggerConflict  — trigger 是否语义冲突
@@ -18,6 +23,8 @@
  *
  * @module domain/evolution/RecipeSimilarity
  */
+
+import { extractRecipeTokens } from '../../shared/recipe-tokens.js';
 
 /* ────────────────────── Stop Words ────────────────────── */
 
@@ -83,13 +90,19 @@ export interface RecipeLike {
   category?: string | null;
   trigger?: string | null;
   guardPattern?: string | null;
+  content?: {
+    markdown?: string | null;
+    pattern?: string | null;
+    steps?: Array<{ code?: string }>;
+  } | null;
 }
 
-/** 4 维分解得分 */
+/** 5 维分解得分 */
 export interface SimilarityDimensions {
   title: number;
   clause: number;
   code: number;
+  content: number;
   guard: number;
 }
 
@@ -103,13 +116,19 @@ export interface FieldAnalysis {
 
 /* ────────────────────── Constants ────────────────────── */
 
-export const WEIGHTS = { title: 0.2, clause: 0.3, code: 0.3, guard: 0.2 } as const;
+export const WEIGHTS = {
+  title: 0.15,
+  clause: 0.25,
+  code: 0.15,
+  content: 0.3,
+  guard: 0.15,
+} as const;
 
 /* ────────────────────── Class ────────────────────── */
 
 export class RecipeSimilarity {
   /**
-   * 计算两条 Recipe（或候选）之间的 4 维加权相似度 (0-1)
+   * 计算两条 Recipe（或候选）之间的 5 维加权相似度 (0-1)
    */
   static compute(a: RecipeLike, b: RecipeLike): number {
     const dims = RecipeSimilarity.computeDimensions(a, b);
@@ -117,6 +136,7 @@ export class RecipeSimilarity {
       WEIGHTS.title * dims.title +
       WEIGHTS.clause * dims.clause +
       WEIGHTS.code * dims.code +
+      WEIGHTS.content * dims.content +
       WEIGHTS.guard * dims.guard
     );
   }
@@ -132,6 +152,7 @@ export class RecipeSimilarity {
         [b.doClause, b.dontClause]
       ),
       code: RecipeSimilarity.codeSimilarity(a.coreCode ?? null, b.coreCode ?? null),
+      content: RecipeSimilarity.contentTokenSimilarity(a, b),
       guard: RecipeSimilarity.guardMatch(a.guardPattern ?? null, b.guardPattern ?? null),
     };
   }
@@ -224,6 +245,41 @@ export class RecipeSimilarity {
       return 0;
     }
     return patternA === patternB ? 1.0 : 0;
+  }
+
+  /**
+   * 维度 5: 全字段代码标识符 token Jaccard（语义相似度）
+   *
+   * 使用 shared/recipe-tokens.extractRecipeTokens() 从两条 Recipe 的
+   * coreCode + content.markdown 代码块 + content.pattern + content.steps
+   * 提取 API 标识符集合，计算 Jaccard 相似度。
+   *
+   * 与 codeSimilarity（3-gram 结构比对）互补：
+   *   - codeSimilarity 捕获字符级排列顺序
+   *   - contentTokenSimilarity 捕获语义级 API 标识符重叠
+   */
+  static contentTokenSimilarity(a: RecipeLike, b: RecipeLike): number {
+    const tokensA = extractRecipeTokens({
+      coreCode: a.coreCode ?? undefined,
+      content: a.content
+        ? {
+            markdown: a.content.markdown ?? undefined,
+            pattern: a.content.pattern ?? undefined,
+            steps: a.content.steps,
+          }
+        : undefined,
+    });
+    const tokensB = extractRecipeTokens({
+      coreCode: b.coreCode ?? undefined,
+      content: b.content
+        ? {
+            markdown: b.content.markdown ?? undefined,
+            pattern: b.content.pattern ?? undefined,
+            steps: b.content.steps,
+          }
+        : undefined,
+    });
+    return RecipeSimilarity.#jaccard(tokensA.tokens, tokensB.tokens);
   }
 
   /* ════════════════════ 内部工具 ════════════════════ */

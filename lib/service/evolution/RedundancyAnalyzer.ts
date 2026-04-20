@@ -27,6 +27,7 @@ export interface RedundancyResult {
     title: number;
     clause: number;
     code: number;
+    content: number;
     guard: number;
   };
 }
@@ -38,11 +39,16 @@ interface RecipeForRedundancy {
   dontClause: string | null;
   coreCode: string | null;
   guardPattern: string | null;
+  content: {
+    markdown?: string;
+    pattern?: string;
+    steps?: Array<{ code?: string }>;
+  } | null;
 }
 
 /* ────────────────────── Constants ────────────────────── */
 
-const WEIGHTS = { title: 0.2, clause: 0.3, code: 0.3, guard: 0.2 };
+const WEIGHTS = { title: 0.15, clause: 0.25, code: 0.15, content: 0.3, guard: 0.15 };
 const REDUNDANCY_THRESHOLD = 0.65;
 /* ────────────────────── Class ────────────────────── */
 
@@ -114,6 +120,7 @@ export class RedundancyAnalyzer {
       WEIGHTS.title * dims.title +
       WEIGHTS.clause * dims.clause +
       WEIGHTS.code * dims.code +
+      WEIGHTS.content * dims.content +
       WEIGHTS.guard * dims.guard;
 
     if (similarity < REDUNDANCY_THRESHOLD) {
@@ -128,6 +135,7 @@ export class RedundancyAnalyzer {
         title: Math.round(dims.title * 100) / 100,
         clause: Math.round(dims.clause * 100) / 100,
         code: Math.round(dims.code * 100) / 100,
+        content: Math.round(dims.content * 100) / 100,
         guard: dims.guard,
       },
     };
@@ -145,6 +153,13 @@ export class RedundancyAnalyzer {
         dontClause: e.dontClause || null,
         coreCode: e.coreCode || null,
         guardPattern: e.content?.pattern || null,
+        content: e.content
+          ? {
+              markdown: e.content.markdown || undefined,
+              pattern: e.content.pattern || undefined,
+              steps: e.content.steps,
+            }
+          : null,
       }));
     } catch {
       return [];
