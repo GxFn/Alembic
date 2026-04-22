@@ -9,7 +9,11 @@
  */
 
 import { DimensionCopy } from '#domain/dimension/DimensionCopy.js';
-import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import {
+  resolveDataRoot,
+  resolveKnowledgeScanDirs,
+  resolveProjectRoot,
+} from '#shared/resolveProjectRoot.js';
 import { getDiscovererRegistry } from '../../core/discovery/index.js';
 import { getEnhancementRegistry } from '../../core/enhancement/index.js';
 import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
@@ -178,7 +182,10 @@ export function register(c: ServiceContainer) {
     (ct: ServiceContainer) => {
       const aiProvider = ct.singletons.aiProvider || null;
       const embedProvider = ct.singletons._embedProvider || aiProvider;
+      const dataRoot = resolveDataRoot(ct);
       return new IndexingPipeline({
+        projectRoot: dataRoot,
+        scanDirs: resolveKnowledgeScanDirs(ct),
         vectorStore: ct.get('vectorStore'),
         aiProvider: embedProvider,
       } as ConstructorParameters<typeof IndexingPipeline>[0]);

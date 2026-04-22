@@ -10,6 +10,7 @@
  * 替代散落在各处的裸 `process.cwd()` 调用。
  */
 
+import { relative } from 'node:path';
 import { WorkspaceResolver } from './WorkspaceResolver.js';
 
 /** ServiceContainer 最小类型，避免循环依赖 */
@@ -55,6 +56,37 @@ export function resolveDataRoot(container?: ContainerLike | null): string {
   } catch {
     return resolveProjectRoot(container);
   }
+}
+
+/**
+ * 解析知识库扫描目录（Ghost 感知）
+ *
+ * 返回相对于 dataRoot 的目录列表，优先使用 WorkspaceResolver 中的知识库目录，
+ * 同时保留 legacy recipes/candidates 兼容路径。
+ */
+export function resolveKnowledgeScanDirs(container?: ContainerLike | null): string[] {
+  const dataRoot = resolveDataRoot(container);
+  const dirs = new Set<string>(['recipes', 'candidates']);
+
+  const resolver =
+    (container?.singletons?._workspaceResolver as WorkspaceResolver | undefined) ??
+    (() => {
+      try {
+        return WorkspaceResolver.fromProject(resolveProjectRoot(container));
+      } catch {
+        return null;
+      }
+    })();
+
+  if (!resolver) {
+    dirs.add('Alembic/recipes');
+    dirs.add('Alembic/candidates');
+    return [...dirs];
+  }
+
+  dirs.add(relative(dataRoot, resolver.recipesDir));
+  dirs.add(relative(dataRoot, resolver.candidatesDir));
+  return [...dirs];
 }
 
 /**
