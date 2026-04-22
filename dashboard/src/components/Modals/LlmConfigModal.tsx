@@ -11,10 +11,10 @@ interface LlmConfigModalProps {
 }
 
 const PROVIDERS = [
-  { id: 'google', labelKey: 'llmConfig.providers.gemini' as const, defaultModel: 'gemini-3-flash-preview', keyEnv: 'ASD_GOOGLE_API_KEY' },
-  { id: 'openai', labelKey: 'llmConfig.providers.openai' as const, defaultModel: 'gpt-5.4', keyEnv: 'ASD_OPENAI_API_KEY' },
-  { id: 'deepseek', labelKey: 'llmConfig.providers.deepseek' as const, defaultModel: 'deepseek-chat', keyEnv: 'ASD_DEEPSEEK_API_KEY' },
-  { id: 'claude', labelKey: 'llmConfig.providers.claude' as const, defaultModel: 'claude-sonnet-4-20250514', keyEnv: 'ASD_CLAUDE_API_KEY' },
+  { id: 'google', labelKey: 'llmConfig.providers.gemini' as const, defaultModel: 'gemini-3-flash-preview', keyEnv: 'ALEMBIC_GOOGLE_API_KEY' },
+  { id: 'openai', labelKey: 'llmConfig.providers.openai' as const, defaultModel: 'gpt-5.4', keyEnv: 'ALEMBIC_OPENAI_API_KEY' },
+  { id: 'deepseek', labelKey: 'llmConfig.providers.deepseek' as const, defaultModel: 'deepseek-chat', keyEnv: 'ALEMBIC_DEEPSEEK_API_KEY' },
+  { id: 'claude', labelKey: 'llmConfig.providers.claude' as const, defaultModel: 'claude-sonnet-4-20250514', keyEnv: 'ALEMBIC_CLAUDE_API_KEY' },
   { id: 'ollama', labelKey: 'llmConfig.providers.ollama' as const, defaultModel: 'llama3', keyEnv: '' },
 ];
 
@@ -51,14 +51,14 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
       const data = await api.getLlmEnvConfig();
       setHasEnvFile(data.hasEnvFile);
       const vars = data.vars || {};
-      if (vars.ASD_AI_PROVIDER) setProvider(vars.ASD_AI_PROVIDER);
-      if (vars.ASD_AI_MODEL) setModel(vars.ASD_AI_MODEL);
-      if (vars.ASD_AI_PROXY) setProxy(vars.ASD_AI_PROXY);
-      if (vars.ASD_EMBED_PROVIDER) {
-        setEmbedProvider(vars.ASD_EMBED_PROVIDER);
+      if (vars.ALEMBIC_AI_PROVIDER) setProvider(vars.ALEMBIC_AI_PROVIDER);
+      if (vars.ALEMBIC_AI_MODEL) setModel(vars.ALEMBIC_AI_MODEL);
+      if (vars.ALEMBIC_AI_PROXY) setProxy(vars.ALEMBIC_AI_PROXY);
+      if (vars.ALEMBIC_EMBED_PROVIDER) {
+        setEmbedProvider(vars.ALEMBIC_EMBED_PROVIDER);
         setEmbedExpanded(true);
       }
-      if (vars.ASD_EMBED_MODEL) setEmbedModel(vars.ASD_EMBED_MODEL);
+      if (vars.ALEMBIC_EMBED_MODEL) setEmbedModel(vars.ALEMBIC_EMBED_MODEL);
       setExistingKeys(vars);
     } catch {
       // ignore
