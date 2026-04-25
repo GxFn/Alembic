@@ -15,6 +15,7 @@ import Logger from '#infra/logging/Logger.js';
 
 interface ToolRegistryLike {
   has(name: string): boolean;
+  getToolMetadata?(name: string): { composable?: boolean; sideEffect?: boolean } | null;
   execute(
     name: string,
     params: Record<string, unknown>,
@@ -53,6 +54,12 @@ export interface CompositionResult {
   error?: string;
 }
 
+interface CompositionValidation {
+  valid: boolean;
+  missingTools: string[];
+  blockedTools: string[];
+}
+
 /* ────────────────────── Class ────────────────────── */
 
 export class DynamicComposer {
@@ -64,18 +71,28 @@ export class DynamicComposer {
   }
 
   /**
-   * 验证组合 spec 的可行性（所有工具是否存在）
+   * 验证组合 spec 的可行性（所有工具是否存在，且不包含副作用步骤）
    */
-  validate(spec: CompositionSpec): { valid: boolean; missingTools: string[] } {
+  validate(spec: CompositionSpec): CompositionValidation {
     const missing: string[] = [];
+    const blocked: string[] = [];
 
     for (const step of spec.steps) {
       if (!this.#registry.has(step.tool)) {
         missing.push(step.tool);
+        continue;
+      }
+      const metadata = this.#registry.getToolMetadata?.(step.tool);
+      if (metadata?.sideEffect === true || metadata?.composable === false) {
+        blocked.push(step.tool);
       }
     }
 
-    return { valid: missing.length === 0, missingTools: missing };
+    return {
+      valid: missing.length === 0 && blocked.length === 0,
+      missingTools: missing,
+      blockedTools: blocked,
+    };
   }
 
   /**
@@ -83,8 +100,14 @@ export class DynamicComposer {
    */
   compose(spec: CompositionSpec): CompositionResult {
     // 验证
-    const { valid, missingTools } = this.validate(spec);
+    const { valid, missingTools, blockedTools } = this.validate(spec);
     if (!valid) {
+      if (blockedTools.length > 0) {
+        return {
+          success: false,
+          error: `Blocked tools cannot be composed: ${blockedTools.join(', ')}`,
+        };
+      }
       return {
         success: false,
         error: `Missing tools: ${missingTools.join(', ')}`,

@@ -6,8 +6,8 @@ import { PermissionDenied } from '../../lib/shared/errors/BaseError.js';
 const __dirname = import.meta.dirname;
 
 describe('PermissionManager', () => {
-  let constitution;
-  let permissionManager;
+  let constitution: Constitution;
+  let permissionManager: PermissionManager;
 
   beforeAll(() => {
     const configPath = path.join(__dirname, '../../config/constitution.yaml');
@@ -24,6 +24,24 @@ describe('PermissionManager', () => {
     test('external_agent should be able to read recipes', () => {
       const result = permissionManager.check('external_agent', 'read', '/recipes');
       expect(result.allowed).toBe(true);
+    });
+
+    test('external_agent should be able to read project context surfaces', () => {
+      expect(permissionManager.check('external_agent', 'read', 'project').allowed).toBe(true);
+      expect(permissionManager.check('external_agent', 'read', 'skills').allowed).toBe(true);
+      expect(permissionManager.check('external_agent', 'read', 'environment').allowed).toBe(true);
+      expect(permissionManager.check('external_agent', 'read', 'agent_tools').allowed).toBe(true);
+      expect(permissionManager.check('external_agent', 'validate', 'candidates').allowed).toBe(
+        true
+      );
+    });
+
+    test('visitor should not be able to read project context surfaces', () => {
+      expect(permissionManager.check('visitor', 'read', 'project').allowed).toBe(false);
+      expect(permissionManager.check('visitor', 'read', 'skills').allowed).toBe(false);
+      expect(permissionManager.check('visitor', 'read', 'environment').allowed).toBe(false);
+      expect(permissionManager.check('visitor', 'read', 'agent_tools').allowed).toBe(false);
+      expect(permissionManager.check('visitor', 'validate', 'candidates').allowed).toBe(false);
     });
 
     test('external_agent should be able to create candidates', () => {

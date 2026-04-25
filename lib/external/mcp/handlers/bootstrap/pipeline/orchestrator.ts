@@ -17,9 +17,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { AgentMessage } from '#agent/AgentMessage.js';
+import type { ContextWindow } from '#agent/context/ContextWindow.js';
 import { ExplorationTracker } from '#agent/context/ExplorationTracker.js';
+import { createSystemRunContext, projectSystemRunContext } from '#agent/core/SystemRunContext.js';
 import { EpisodicConsolidator } from '#agent/domain/EpisodicConsolidator.js';
-import { ANALYST_BUDGET, computeAnalystBudget } from '#agent/domain/insight-analyst.js';
+import { computeAnalystBudget } from '#agent/domain/insight-analyst.js';
 import { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import { MemoryEmbeddingStore } from '#agent/memory/MemoryEmbeddingStore.js';
 import { PersistentMemory } from '#agent/memory/PersistentMemory.js';
@@ -125,7 +127,7 @@ interface TaskManagerLike {
 /** Agent factory minimal shape */
 interface AgentFactoryLike {
   createRuntime(preset: string, overrides?: Record<string, unknown>): AgentRuntimeLike;
-  createContextWindow(opts?: { isSystem?: boolean }): unknown;
+  createContextWindow(opts?: { isSystem?: boolean }): ContextWindow;
   [key: string]: unknown;
 }
 
@@ -868,94 +870,97 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
         phase: 'bootstrap',
       });
 
-      const strategyContext = {
-        dimConfig,
-        projectInfo,
-        dimContext,
-        sessionStore,
-        semanticMemory,
-        codeEntityGraph: codeEntityGraphInst,
-        projectGraph: null, // ProjectGraph 在 orchestrator 级别可用时注入
-        dimId,
+      const dimensionMeta = {
+        id: dimId,
+        outputType: dimConfig.outputType || 'candidate',
+        allowedKnowledgeTypes: dimConfig.allowedKnowledgeTypes || [],
+      };
+      const systemRunContext = createSystemRunContext({
+        memoryCoordinator,
+        scopeId: analystScopeId,
         activeContext: memoryCoordinator.getActiveContext(analystScopeId),
-        outputType: dimConfig.outputType || 'analysis',
-        // §M1: Panorama 全景上下文 (Phase 1.8 数据注入)
-        panorama: buildPanoramaContext(panoramaResult, dimConfig),
-        // §ES: Evidence Starters — 从 Phase 1-4 数据提取维度级证据启发
-        evidenceStarters: buildEvidenceStarters(dimConfig, {
-          astData: astProjectSummary,
-          guardAudit,
-          depGraphData,
-          callGraphResult,
-          panoramaResult,
-        }),
-        // §R1: Rescan 模式 — 已有 recipe 上下文 (避免重复分析/创建)
-        rescanContext: rescanContext
-          ? {
-              existingRecipes: rescanContext.existingRecipes.filter(
-                (r) => r.knowledgeType === dimId
-              ),
-              decayingRecipes: rescanContext.decayingRecipes.filter(
-                (r) => r.knowledgeType === dimId
-              ),
-              occupiedTriggers: rescanContext.occupiedTriggers,
-              gap: Math.max(0, 5 - (rescanContext.coverageByDim[dimId] || 0)),
-              existing: rescanContext.coverageByDim[dimId] || 0,
-            }
-          : null,
-        // §EVO: Evolution Stage — 当前维度全部现有 Recipe（healthy + decaying），附带 audit hint
-        existingRecipes: dimExistingRecipes.map((r) => ({
-          id: r.id,
-          title: r.title,
-          trigger: r.trigger,
-          content: r.content,
-          sourceRefs: r.sourceRefs,
-          auditHint:
-            'auditScore' in r && r.auditScore != null
-              ? {
-                  relevanceScore: r.auditScore as number,
-                  verdict: (r as Record<string, unknown>).status === 'decaying' ? 'decay' : 'watch',
-                  evidence: (r as Record<string, unknown>).auditEvidence ?? {},
-                  decayReasons: (r as Record<string, unknown>).decayReason
-                    ? [String((r as Record<string, unknown>).decayReason)]
-                    : [],
-                }
-              : null,
-        })),
-        // Evolution 上下文字段 — buildEvolverPrompt 直接从 strategyContext 读取
-        dimensionId: dimId,
-        dimensionLabel: dimConfig.label,
-        projectOverview: {
-          primaryLang: primaryLang || projectInfo.lang || 'unknown',
-          fileCount: projectInfo.fileCount || 0,
-          modules: Object.keys(targetFileMap || {}),
-        },
-        // ── 引擎增强参数 (PipelineStrategy → reactLoop 透传) ──
-        contextWindow: agentFactory?.createContextWindow({ isSystem: true }),
+        contextWindow: agentFactory?.createContextWindow({ isSystem: true }) || null,
         // B1 fix: 分析阶段使用 analyst 策略 (SCAN→EXPLORE→VERIFY→SUMMARIZE)
-        // B3 fix: 透传完整 ANALYST_BUDGET
+        // B3 fix: 透传完整 analyst budget
         // B4 fix: 自适应预算 — 根据项目文件数缩放 maxIterations (24~40)
         tracker: ExplorationTracker.resolve(
           { source: 'system', strategy: 'analyst' },
           computeAnalystBudget(projectInfo.fileCount || 0)
         ),
-        trace: memoryCoordinator.getActiveContext(analystScopeId),
-        memoryCoordinator,
+        source: 'system',
+        outputType: dimConfig.outputType || 'analysis',
+        dimId,
+        dimensionId: dimId,
+        dimensionLabel: dimConfig.label,
+        projectLanguage: primaryLang || projectInfo.lang || null,
+        dimensionMeta,
         sharedState: {
           submittedTitles: globalSubmittedTitles,
           submittedPatterns: globalSubmittedPatterns,
           submittedTriggers: globalSubmittedTriggers,
           _bootstrapDedup: bootstrapDedup,
-          _dimensionMeta: {
-            id: dimId,
-            outputType: dimConfig.outputType || 'candidate',
-            allowedKnowledgeTypes: dimConfig.allowedKnowledgeTypes || [],
-          },
-          _projectLanguage: primaryLang || projectInfo.lang || null,
-          _dimensionScopeId: analystScopeId,
         },
-        source: 'system',
-      };
+        extraFields: {
+          dimConfig,
+          projectInfo,
+          dimContext,
+          sessionStore,
+          semanticMemory,
+          codeEntityGraph: codeEntityGraphInst,
+          projectGraph: null, // ProjectGraph 在 orchestrator 级别可用时注入
+          // §M1: Panorama 全景上下文 (Phase 1.8 数据注入)
+          panorama: buildPanoramaContext(panoramaResult, dimConfig),
+          // §ES: Evidence Starters — 从 Phase 1-4 数据提取维度级证据启发
+          evidenceStarters: buildEvidenceStarters(dimConfig, {
+            astData: astProjectSummary,
+            guardAudit,
+            depGraphData,
+            callGraphResult,
+            panoramaResult,
+          }),
+          // §R1: Rescan 模式 — 已有 recipe 上下文 (避免重复分析/创建)
+          rescanContext: rescanContext
+            ? {
+                existingRecipes: rescanContext.existingRecipes.filter(
+                  (r) => r.knowledgeType === dimId
+                ),
+                decayingRecipes: rescanContext.decayingRecipes.filter(
+                  (r) => r.knowledgeType === dimId
+                ),
+                occupiedTriggers: rescanContext.occupiedTriggers,
+                gap: Math.max(0, 5 - (rescanContext.coverageByDim[dimId] || 0)),
+                existing: rescanContext.coverageByDim[dimId] || 0,
+              }
+            : null,
+          // §EVO: Evolution Stage — 当前维度全部现有 Recipe（healthy + decaying），附带 audit hint
+          existingRecipes: dimExistingRecipes.map((r) => ({
+            id: r.id,
+            title: r.title,
+            trigger: r.trigger,
+            content: r.content,
+            sourceRefs: r.sourceRefs,
+            auditHint:
+              'auditScore' in r && r.auditScore != null
+                ? {
+                    relevanceScore: r.auditScore as number,
+                    verdict:
+                      (r as Record<string, unknown>).status === 'decaying' ? 'decay' : 'watch',
+                    evidence: (r as Record<string, unknown>).auditEvidence ?? {},
+                    decayReasons: (r as Record<string, unknown>).decayReason
+                      ? [String((r as Record<string, unknown>).decayReason)]
+                      : [],
+                  }
+                : null,
+          })),
+          // Evolution 上下文字段 — buildEvolverPrompt 直接从 strategyContext 读取
+          projectOverview: {
+            primaryLang: primaryLang || projectInfo.lang || 'unknown',
+            fileCount: projectInfo.fileCount || 0,
+            modules: Object.keys(targetFileMap || {}),
+          },
+        },
+      });
+      const strategyContext = projectSystemRunContext(systemRunContext);
 
       // ── 执行 ──
       // 外层超时 = 安全网 (各阶段已有独立超时: Analyst 300s + Producer 180s + 硬缓冲 60s)

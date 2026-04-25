@@ -118,6 +118,8 @@ const FALLBACK_SAFE_PREFIXES = [
   'printenv',
 ];
 
+const SHELL_META_PATTERN = /[;&|<>`]|\$\(/;
+
 /** 命令执行超时 (ms) */
 const COMMAND_TIMEOUT = 30_000;
 
@@ -141,8 +143,58 @@ function _isHardBlacklisted(command: string) {
 
 /** 无 SafetyPolicy 时的白名单兜底 */
 function _isFallbackSafe(command: string) {
-  const trimmed = command.trim();
-  return FALLBACK_SAFE_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
+  const tokens = _tokenizeCommand(command);
+  if (!tokens) {
+    return false;
+  }
+  return FALLBACK_SAFE_PREFIXES.some((prefix) => {
+    const prefixTokens = prefix.split(/\s+/);
+    return prefixTokens.every((token, index) => tokens[index] === token);
+  });
+}
+
+function _tokenizeCommand(command: string): string[] | null {
+  if (SHELL_META_PATTERN.test(command)) {
+    return null;
+  }
+
+  const tokens: string[] = [];
+  let current = '';
+  let quote: 'single' | 'double' | null = null;
+
+  for (const char of command.trim()) {
+    if (char === "'" && quote !== 'double') {
+      quote = quote === 'single' ? null : 'single';
+      continue;
+    }
+    if (char === '"' && quote !== 'single') {
+      quote = quote === 'double' ? null : 'double';
+      continue;
+    }
+    if (/\s/.test(char) && !quote) {
+      if (current) {
+        tokens.push(current);
+        current = '';
+      }
+      continue;
+    }
+    current += char;
+  }
+
+  if (quote) {
+    return null;
+  }
+  if (current) {
+    tokens.push(current);
+  }
+  return tokens.length > 0 ? tokens : null;
+}
+
+function _isWithinDirectory(target: string, scope: string) {
+  const relative = path.relative(path.resolve(scope), path.resolve(target));
+  return (
+    relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative))
+  );
 }
 
 /** 截断过长输出 */
@@ -169,7 +221,7 @@ export const runSafeCommand = {
     '命令受安全策略约束: 危险命令(sudo/rm -rf/shutdown 等)被自动拦截。' +
     '适用于: 查看 git 状态、运行测试、检查依赖版本、执行构建等。' +
     '超时 30 秒, 输出超过 16KB 会被截断。' +
-    '如果需要管道或重定向, 请用 sh -c "..." 包装。',
+    '不支持管道、重定向、分号、命令替换等 shell 复合语法。',
   parameters: {
     type: 'object',
     properties: {
@@ -201,6 +253,11 @@ export const runSafeCommand = {
       return { error: `安全拦截: 命令 "${command}" 匹配危险模式, 已被阻止执行` };
     }
 
+    const commandTokens = _tokenizeCommand(command);
+    if (!commandTokens) {
+      return { error: '安全拦截: 不允许使用 shell 复合语法、管道、重定向或命令替换' };
+    }
+
     // ── 安全检查 Layer 2: SafetyPolicy (如果注入) ──
     const safetyPolicy = ctx.safetyPolicy || null;
     if (safetyPolicy) {
@@ -224,7 +281,7 @@ export const runSafeCommand = {
     if (cwd) {
       workDir = path.isAbsolute(cwd) ? cwd : path.resolve(projectRoot, cwd);
       // 范围检查
-      if (!workDir.startsWith(path.resolve(projectRoot))) {
+      if (!_isWithinDirectory(workDir, projectRoot)) {
         return { error: `工作目录 "${cwd}" 超出项目范围 "${projectRoot}"` };
       }
     }
@@ -237,7 +294,8 @@ export const runSafeCommand = {
     const effectiveTimeout = timeout || COMMAND_TIMEOUT;
 
     try {
-      const { stdout, stderr } = await execFileAsync('sh', ['-c', command], {
+      const [bin, ...args] = commandTokens;
+      const { stdout, stderr } = await execFileAsync(bin, args, {
         cwd: workDir,
         timeout: effectiveTimeout,
         maxBuffer: 1024 * 1024, // 1MB 缓冲

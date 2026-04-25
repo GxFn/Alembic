@@ -19,9 +19,11 @@ import Logger from '#infra/logging/Logger.js';
 import { AgentMessage } from './AgentMessage.js';
 import { AgentRouter, PresetName } from './AgentRouter.js';
 import { AgentRuntime } from './AgentRuntime.js';
+import type { AgentDiagnostics } from './AgentRuntimeTypes.js';
 import { CapabilityRegistry } from './capabilities.js';
 import { ContextWindow } from './context/ContextWindow.js';
 import { ExplorationTracker } from './context/ExplorationTracker.js';
+import { createSystemRunContext, projectSystemRunContext } from './core/SystemRunContext.js';
 import {
   buildRelationsPipelineStages,
   buildScanPipelineStages,
@@ -80,6 +82,10 @@ interface ScanKnowledgeOptions {
   comprehensive?: boolean;
 }
 
+interface ScanKnowledgeResult extends Record<string, unknown> {
+  error?: string;
+}
+
 /** Scan task config entry */
 interface ScanTaskConfig {
   producePrompt: string;
@@ -106,6 +112,12 @@ interface ScanRecipe {
   tags?: string[];
   trigger?: string;
   [key: string]: unknown;
+}
+
+interface ParseJsonWithDiagnosticsResult {
+  value: Record<string, unknown>;
+  usedFallback: boolean;
+  error?: string;
 }
 
 export class AgentFactory {
@@ -254,39 +266,29 @@ export class AgentFactory {
     lang,
   }: SystemContextOptions = {}) {
     // 创建轻量级 MemoryCoordinator (scan 场景无 PersistentMemory/SessionStore)
-    const mc = new MemoryCoordinator({ mode: 'bootstrap' });
+    const memoryCoordinator = new MemoryCoordinator({ mode: 'bootstrap' });
     const scopeId = `scan:${label}`;
-    mc.createDimensionScope(scopeId);
-
-    const activeContext = mc.getActiveContext(scopeId);
-
-    return {
+    const activeContext = memoryCoordinator.createDimensionScope(scopeId);
+    const systemRunContext = createSystemRunContext({
+      memoryCoordinator,
+      scopeId,
+      activeContext,
       contextWindow: this.createContextWindow({ isSystem: true }),
       tracker: ExplorationTracker.resolve(
         { source: 'system', strategy: trackerStrategy },
         budget || {}
       ),
-      // trace & activeContext 是同一个 ActiveContext 实例
-      // trace: AgentRuntime reactLoop 使用 (startRound/setThought/endRound)
-      // activeContext: insightGateEvaluator 检查此字段决定 artifact 路径
-      trace: activeContext,
-      activeContext,
-      memoryCoordinator: mc,
-      // outputType: bootstrap orchestrator 设为 'candidate'（insightGateEvaluator 的评判标准）
+      source: 'system',
       outputType: 'candidate',
-      // dimId: buildAnalysisArtifact 的 dimensionId 参数
       dimId: label,
+      projectLanguage: lang || null,
       sharedState: {
         submittedTitles: new Set(),
         submittedPatterns: new Set(),
-        // G6: _projectLanguage — ToolExecutionPipeline 透传给工具 handler 上下文
-        _projectLanguage: lang || null,
-        // G7: _dimensionScopeId — ToolExecutionPipeline 透传给工具 handler (note_finding scope)
-        _dimensionScopeId: scopeId,
       },
-      source: 'system',
-      scopeId,
-    };
+    });
+
+    return projectSystemRunContext(systemRunContext);
   }
 
   /**
@@ -349,7 +351,7 @@ export class AgentFactory {
     task = 'extract',
     lang,
     comprehensive,
-  }: ScanKnowledgeOptions = {}) {
+  }: ScanKnowledgeOptions = {}): Promise<ScanKnowledgeResult> {
     const taskConfig = (SCAN_TASK_CONFIGS as Record<string, ScanTaskConfig>)[task];
     if (!taskConfig) {
       throw new Error(
@@ -421,6 +423,12 @@ export class AgentFactory {
       .filter((r): r is ScanRecipe => Boolean(r));
 
     if (recipes.length > 0) {
+      const diagnostics = this.#buildScanDiagnostics({
+        label,
+        task,
+        result,
+        recipesFound: recipes.length,
+      });
       // summarize 向后兼容: 扁平化首个 recipe 为 { title, summary, usageGuide, ... }
       if (task === 'summarize') {
         const first = recipes[0];
@@ -434,15 +442,27 @@ export class AgentFactory {
           trigger: first.trigger || '',
           recipes,
           extracted: recipes.length,
+          diagnostics,
         };
       }
-      return { targetName: label, extracted: recipes.length, recipes };
+      return { targetName: label, extracted: recipes.length, recipes, diagnostics };
     }
 
     // Fallback: 工具未被调用时，尝试从文本解析
     const phases = result.phases as Record<string, Record<string, unknown>> | undefined;
     const produceReply = (phases?.produce?.reply as string) || result.reply;
-    return this.#parseJsonResponse(produceReply, fallback(label as string));
+    const parsed = this.#parseJsonResponseWithDiagnostics(produceReply, fallback(label as string));
+    return {
+      ...parsed.value,
+      diagnostics: this.#buildScanDiagnostics({
+        label,
+        task,
+        result,
+        recipesFound: 0,
+        usedFallback: parsed.usedFallback,
+        parseError: parsed.error || null,
+      }),
+    };
   }
 
   /**
@@ -657,6 +677,82 @@ export class AgentFactory {
       this.#logger.warn('[AgentFactory] Failed to parse JSON from Agent response');
       return fallback;
     }
+  }
+
+  #parseJsonResponseWithDiagnostics(
+    text: string | null | undefined,
+    fallback: Record<string, unknown>
+  ): ParseJsonWithDiagnosticsResult {
+    if (!text) {
+      return { value: fallback, usedFallback: true, error: 'empty_response' };
+    }
+    try {
+      const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        return { value: JSON.parse(codeBlockMatch[1].trim()), usedFallback: false };
+      }
+      const objMatch = text.match(/(\{[\s\S]*\})/);
+      if (objMatch) {
+        return { value: JSON.parse(objMatch[1].trim()), usedFallback: false };
+      }
+      return { value: JSON.parse(text.trim()), usedFallback: false };
+    } catch (err: unknown) {
+      this.#logger.warn('[AgentFactory] Failed to parse JSON from scanKnowledge fallback');
+      return {
+        value: fallback,
+        usedFallback: true,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  #buildScanDiagnostics({
+    label,
+    task,
+    result,
+    recipesFound,
+    usedFallback = false,
+    parseError = null,
+  }: {
+    label?: string;
+    task: 'extract' | 'summarize';
+    result: {
+      toolCalls?: ToolCallRecord[];
+      phases?: unknown;
+      iterations?: number;
+      durationMs?: number;
+      diagnostics?: AgentDiagnostics;
+    };
+    recipesFound: number;
+    usedFallback?: boolean;
+    parseError?: string | null;
+  }) {
+    const phases = result.phases as
+      | Record<string, { reply?: string; toolCalls?: ToolCallRecord[] }>
+      | undefined;
+    const toolCalls = result.toolCalls || [];
+    const collectCalls = toolCalls.filter((tc) => (tc.tool || tc.name) === 'collect_scan_recipe');
+    return {
+      label: label || '',
+      task,
+      recipesFound,
+      usedFallback,
+      parseError,
+      toolCallCount: toolCalls.length,
+      collectScanRecipeCallCount: collectCalls.length,
+      iterations: result.iterations || 0,
+      durationMs: result.durationMs || 0,
+      runtimeDiagnostics: result.diagnostics || null,
+      phases: Object.fromEntries(
+        Object.entries(phases || {}).map(([phaseName, phase]) => [
+          phaseName,
+          {
+            replyLength: phase.reply?.length || 0,
+            toolCallCount: phase.toolCalls?.length || 0,
+          },
+        ])
+      ),
+    };
   }
 
   /** 构建工具 handler 执行所需的上下文对象 */

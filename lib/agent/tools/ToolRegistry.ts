@@ -14,13 +14,39 @@ import Logger from '#infra/logging/Logger.js';
 
 // ─── 本地类型 ──────────────────────────────────────────
 
+export type ToolSurface = 'runtime' | 'http' | 'mcp' | 'dashboard';
+export type ToolPolicyProfile = 'read' | 'analysis' | 'write' | 'system' | 'admin';
+export type ToolAuditLevel = 'none' | 'checkOnly' | 'full';
+export type ToolAbortMode = 'none' | 'preStart' | 'cooperative' | 'hardTimeout';
+
+export interface ToolMetadata {
+  /** 工具暴露面；由 ALL_TOOLS 投影到 Runtime/HTTP/MCP/Dashboard 等入口 */
+  surface?: ToolSurface[];
+  /** 是否允许通过 HTTP /agent/tool 或未知 /agent/task 直通调用 */
+  directCallable?: boolean;
+  /** 工具是否会写入状态、执行命令或触发外部副作用 */
+  sideEffect?: boolean;
+  /** 是否允许作为 DynamicComposer 等组合工具的内部步骤 */
+  composable?: boolean;
+  /** 未来接入 Gateway 时可映射到的动作名 */
+  gatewayAction?: string;
+  /** Gateway 权限检查使用的资源名或路径 */
+  gatewayResource?: string;
+  /** 权限与安全策略画像，用于跨入口投影 */
+  policyProfile?: ToolPolicyProfile;
+  /** HTTP/MCP 入口的审计强度 */
+  auditLevel?: ToolAuditLevel;
+  /** 中止信号支持方式 */
+  abortMode?: ToolAbortMode;
+}
+
 /** 工具定义输入 */
-interface ToolDefinition {
+export interface ToolDefinition {
   name: string;
   description: string;
   parameters?: Record<string, unknown>;
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  handler: Function;
+  metadata?: ToolMetadata;
+  handler: (...args: never[]) => unknown;
 }
 
 /** 内部存储的工具条目（parameters 已默认化） */
@@ -28,12 +54,17 @@ interface StoredToolEntry {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  metadata: ToolMetadata;
   handler: (params: Record<string, unknown>, context: Record<string, unknown>) => Promise<unknown>;
 }
 
 /** JSON Schema 参数定义 */
 interface ToolParameterSchema {
+  type?: string | string[];
   properties?: Record<string, unknown>;
+  required?: string[];
+  enum?: unknown[];
+  items?: unknown;
 }
 
 /**
@@ -84,7 +115,7 @@ export class ToolRegistry {
    * @param toolDef.handler async (params, context) => result
    */
   register(toolDef: ToolDefinition) {
-    const { name, description, handler, parameters = {} } = toolDef;
+    const { name, description, handler, parameters = {}, metadata = {} } = toolDef;
     if (!name || !handler) {
       throw new Error('Tool must have name and handler');
     }
@@ -92,6 +123,7 @@ export class ToolRegistry {
       name,
       description,
       parameters,
+      metadata,
       handler: handler as StoredToolEntry['handler'],
     });
   }
@@ -125,6 +157,14 @@ export class ToolRegistry {
     return schemas;
   }
 
+  getToolMetadata(name: string) {
+    return this.#tools.get(name)?.metadata || null;
+  }
+
+  isDirectCallable(name: string) {
+    return this.#tools.get(name)?.metadata.directCallable === true;
+  }
+
   /**
    * 直接执行某个工具
    * @param context { container, aiProvider, projectRoot, ... }
@@ -142,6 +182,12 @@ export class ToolRegistry {
     // 参数归一化: AI 可能用 snake_case / 不同命名传参，
     // 将其映射到 tool schema 中定义的 camelCase 参数名
     const normalized = this.#normalizeParams(params, tool.parameters);
+    const validationErrors = this.#validateParams(normalized, tool.parameters);
+    if (validationErrors.length > 0) {
+      const message = `Tool '${name}' 参数校验失败: ${validationErrors.join('; ')}`;
+      this.#logger.warn(message);
+      return { error: message };
+    }
 
     this.#logger.debug(`Tool execute: ${name}`, { params: Object.keys(normalized) });
     try {
@@ -157,6 +203,88 @@ export class ToolRegistry {
       }
       return { error: e.message };
     }
+  }
+
+  #validateParams(params: Record<string, unknown>, schema: ToolParameterSchema) {
+    const errors: string[] = [];
+    const properties = schema?.properties || {};
+
+    for (const key of schema?.required || []) {
+      if (!(key in params) || params[key] === undefined || params[key] === null) {
+        errors.push(`缺少必填参数 "${key}"`);
+      }
+    }
+
+    for (const [key, value] of Object.entries(params)) {
+      const propSchema = properties[key] as ToolParameterSchema | undefined;
+      if (!propSchema) {
+        continue;
+      }
+      errors.push(...this.#validateValue(value, propSchema, key));
+    }
+
+    return errors;
+  }
+
+  #validateValue(value: unknown, schema: ToolParameterSchema, fieldPath: string): string[] {
+    const errors: string[] = [];
+    const allowedTypes = Array.isArray(schema.type)
+      ? schema.type
+      : schema.type
+        ? [schema.type]
+        : [];
+
+    if (allowedTypes.length > 0 && !allowedTypes.some((type) => this.#matchesType(value, type))) {
+      errors.push(`参数 "${fieldPath}" 类型应为 ${allowedTypes.join('|')}`);
+      return errors;
+    }
+
+    if (schema.enum && !schema.enum.some((candidate) => Object.is(candidate, value))) {
+      errors.push(`参数 "${fieldPath}" 必须是: ${schema.enum.map(String).join(', ')}`);
+    }
+
+    if (schema.properties && value && typeof value === 'object' && !Array.isArray(value)) {
+      const objectValue = value as Record<string, unknown>;
+      for (const key of schema.required || []) {
+        if (!(key in objectValue) || objectValue[key] === undefined || objectValue[key] === null) {
+          errors.push(`缺少必填参数 "${fieldPath}.${key}"`);
+        }
+      }
+      for (const [key, childValue] of Object.entries(objectValue)) {
+        const childSchema = schema.properties[key] as ToolParameterSchema | undefined;
+        if (childSchema) {
+          errors.push(...this.#validateValue(childValue, childSchema, `${fieldPath}.${key}`));
+        }
+      }
+    }
+
+    if (schema.items && Array.isArray(value)) {
+      const itemSchema = schema.items as ToolParameterSchema;
+      value.forEach((item, index) => {
+        errors.push(...this.#validateValue(item, itemSchema, `${fieldPath}[${index}]`));
+      });
+    }
+
+    return errors;
+  }
+
+  #matchesType(value: unknown, type: string) {
+    if (type === 'array') {
+      return Array.isArray(value);
+    }
+    if (type === 'object') {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    }
+    if (type === 'integer') {
+      return Number.isInteger(value);
+    }
+    if (type === 'number') {
+      return typeof value === 'number' && Number.isFinite(value);
+    }
+    if (type === 'null') {
+      return value === null;
+    }
+    return typeof value === type;
   }
 
   /**

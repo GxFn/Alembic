@@ -10,6 +10,10 @@
  *   - PolicyEngine 组合多策略
  */
 
+import { vi } from 'vitest';
+import { createSystemRunContext } from '../../lib/agent/core/SystemRunContext.js';
+import { MemoryCoordinator } from '../../lib/agent/memory/MemoryCoordinator.js';
+import { PipelineStrategy } from '../../lib/agent/PipelineStrategy.js';
 import {
   BudgetPolicy,
   Policy,
@@ -17,7 +21,7 @@ import {
   QualityGatePolicy,
   SafetyPolicy,
 } from '../../lib/agent/policies.js';
-import { PipelineStrategy, SingleStrategy, Strategy } from '../../lib/agent/strategies.js';
+import { SingleStrategy, Strategy } from '../../lib/agent/strategies.js';
 
 describe('Integration: Agent Strategies', () => {
   describe('SingleStrategy', () => {
@@ -46,7 +50,7 @@ describe('Integration: Agent Strategies', () => {
         metadata: { context: {} },
       };
 
-      const result = await strategy.execute(mockRuntime as any, mockMessage as any);
+      const result = await strategy.execute(mockRuntime as never, mockMessage as never);
 
       expect(result.reply).toContain('Processed');
       expect(result.iterations).toBe(1);
@@ -61,7 +65,125 @@ describe('Integration: Agent Strategies', () => {
 
     test('should throw on unimplemented execute', async () => {
       const s = new Strategy();
-      await expect(s.execute({} as any, {} as any)).rejects.toThrow('Subclass must implement');
+      await expect(s.execute({} as never, {} as never)).rejects.toThrow('Subclass must implement');
+    });
+  });
+
+  describe('PipelineStrategy', () => {
+    test('should alias trace to activeContext before quality gate evaluator', async () => {
+      const trace = { distill: () => ({ keyFindings: [], toolCallSummary: [] }) };
+      const evaluator = vi.fn((_source, _phaseResults, strategyContext) => ({
+        action: strategyContext.activeContext === trace ? 'pass' : 'retry',
+        pass: strategyContext.activeContext === trace,
+      }));
+      const strategy = new PipelineStrategy({
+        stages: [{ name: 'analyze' }, { name: 'quality_gate', gate: { evaluator } }],
+      });
+      const runtime = {
+        id: 'runtime-test',
+        logger: { info: vi.fn() },
+        reactLoop: vi.fn().mockResolvedValue({
+          reply: 'analysis with evidence',
+          toolCalls: [],
+          tokenUsage: { input: 1, output: 1 },
+          iterations: 1,
+        }),
+      };
+      const message = {
+        role: 'user',
+        content: 'Analyze',
+        history: [],
+        metadata: { context: {} },
+      };
+
+      const result = await strategy.execute(runtime as never, message as never, {
+        strategyContext: { trace },
+      });
+
+      expect(evaluator).toHaveBeenCalled();
+      expect(result.phases.quality_gate).toMatchObject({ pass: true, action: 'pass' });
+      expect(result.phases._diagnostics).toMatchObject({
+        warnings: [
+          expect.objectContaining({
+            stage: 'quality_gate',
+            warning: expect.stringContaining('aliased'),
+          }),
+        ],
+      });
+      expect(result.diagnostics).toMatchObject({
+        warnings: [
+          expect.objectContaining({
+            code: 'pipeline_context_warning',
+            stage: 'quality_gate',
+          }),
+        ],
+      });
+    });
+
+    test('should project SystemRunContext into stage and gate execution', async () => {
+      const memoryCoordinator = new MemoryCoordinator({ mode: 'bootstrap' });
+      const activeContext = memoryCoordinator.createDimensionScope('dimension-a:analyst');
+      const contextWindow = { resetForNewStage: vi.fn(), tokenCount: 0 };
+      const systemRunContext = createSystemRunContext({
+        memoryCoordinator,
+        scopeId: 'dimension-a:analyst',
+        activeContext,
+        contextWindow: contextWindow as never,
+        source: 'system',
+        outputType: 'candidate',
+        dimId: 'dimension-a',
+        projectLanguage: 'swift',
+        sharedState: { submittedTitles: new Set(), customFlag: true },
+      });
+      const evaluator = vi.fn((_source, _phaseResults, strategyContext) => ({
+        action: strategyContext.activeContext === activeContext ? 'pass' : 'retry',
+        pass: strategyContext.sharedState?._dimensionScopeId === 'dimension-a:analyst',
+      }));
+      const strategy = new PipelineStrategy({
+        stages: [{ name: 'analyze' }, { name: 'quality_gate', gate: { evaluator } }],
+      });
+      let capturedLoopOpts: Record<string, unknown> | null = null;
+      const runtime = {
+        id: 'runtime-test',
+        logger: { info: vi.fn() },
+        reactLoop: vi.fn().mockImplementation(async (_prompt, opts) => {
+          capturedLoopOpts = opts;
+          return {
+            reply: 'analysis with evidence',
+            toolCalls: [],
+            tokenUsage: { input: 1, output: 1 },
+            iterations: 1,
+          };
+        }),
+      };
+      const message = {
+        role: 'user',
+        content: 'Analyze',
+        history: [],
+        metadata: { context: {} },
+      };
+
+      const result = await strategy.execute(runtime as never, message as never, {
+        systemRunContext,
+      });
+
+      expect(result.phases.quality_gate).toMatchObject({ pass: true, action: 'pass' });
+      expect(evaluator).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ activeContext, trace: activeContext, memoryCoordinator })
+      );
+      expect(capturedLoopOpts).toMatchObject({
+        contextWindow,
+        trace: activeContext,
+        memoryCoordinator,
+        sharedState: expect.objectContaining({
+          _dimensionScopeId: 'dimension-a:analyst',
+          _projectLanguage: 'swift',
+          customFlag: true,
+        }),
+        source: 'system',
+      });
     });
   });
 });
@@ -145,6 +267,24 @@ describe('Integration: Agent Policies', () => {
         message: { sender: { id: 'anyone' } },
       });
       expect(result.ok).toBe(true);
+    });
+
+    test('should reject paths that only share the fileScope prefix', () => {
+      const policy = new SafetyPolicy({ fileScope: '/tmp/project/app' });
+
+      expect(policy.checkFilePath('/tmp/project/app/src/index.ts').safe).toBe(true);
+      expect(policy.checkFilePath('/tmp/project/app2/src/index.ts').safe).toBe(false);
+    });
+
+    test('should validate batch read_project_file paths', () => {
+      const engine = new PolicyEngine([new SafetyPolicy({ fileScope: '/tmp/project/app' })]);
+
+      const result = engine.validateToolCall('read_project_file', {
+        filePaths: ['/tmp/project/app/src/a.ts', '/tmp/project/app2/src/b.ts'],
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.reason).toContain('路径拦截');
     });
   });
 

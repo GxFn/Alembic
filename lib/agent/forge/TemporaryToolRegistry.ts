@@ -23,7 +23,7 @@ interface ToolRegistryLike {
     name: string;
     description: string;
     parameters?: Record<string, unknown>;
-    handler: Function;
+    handler: (...args: never[]) => unknown;
   }): void;
   unregister(name: string): boolean;
   has(name: string): boolean;
@@ -87,6 +87,12 @@ export class TemporaryToolRegistry implements Disposable {
     // 如果已存在同名临时工具，先移除
     if (this.#tempTools.has(tool.name)) {
       this.revoke(tool.name);
+    }
+
+    if (this.#registry.has(tool.name)) {
+      throw new Error(
+        `Temporary tool "${tool.name}" conflicts with an existing static tool. Use a unique forge namespace.`
+      );
     }
 
     // 注册到主 ToolRegistry

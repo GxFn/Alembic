@@ -4,9 +4,13 @@ import { DynamicComposer } from '../../lib/agent/forge/DynamicComposer.js';
 
 /* ────────── Mock ToolRegistry ────────── */
 
-function createMockRegistry(tools: Record<string, (params: Record<string, unknown>) => unknown>) {
+function createMockRegistry(
+  tools: Record<string, (params: Record<string, unknown>) => unknown>,
+  metadata: Record<string, { composable?: boolean; sideEffect?: boolean }> = {}
+) {
   return {
     has: (name: string) => name in tools,
+    getToolMetadata: (name: string) => metadata[name] || null,
     execute: vi.fn(async (name: string, params: Record<string, unknown>) => {
       if (!(name in tools)) {
         throw new Error(`Tool '${name}' not found`);
@@ -86,6 +90,50 @@ describe('DynamicComposer', () => {
       expect(result.error).toContain('Missing tools');
     });
 
+    it('should reject side-effect tools in composition steps', () => {
+      const reg = createMockRegistry(
+        {
+          search: () => ({ items: [] }),
+          submit_knowledge: () => ({ ok: true }),
+        },
+        { submit_knowledge: { sideEffect: true } }
+      );
+      const composer = new DynamicComposer(reg);
+
+      const result = composer.compose({
+        name: 'unsafe_submit_flow',
+        description: 'unsafe submit flow',
+        steps: [
+          { tool: 'search', args: {} },
+          { tool: 'submit_knowledge', args: {} },
+        ],
+        mergeStrategy: 'sequential',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Blocked tools cannot be composed');
+    });
+
+    it('should reject non-composable data-only tools in composition steps', () => {
+      const reg = createMockRegistry(
+        {
+          get_tool_details: () => ({ parameters: {} }),
+        },
+        { get_tool_details: { composable: false } }
+      );
+      const composer = new DynamicComposer(reg);
+
+      const result = composer.compose({
+        name: 'meta_lookup_flow',
+        description: 'meta lookup flow',
+        steps: [{ tool: 'get_tool_details', args: { toolName: 'search_recipes' } }],
+        mergeStrategy: 'sequential',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Blocked tools cannot be composed');
+    });
+
     describe('sequential', () => {
       it('should chain tool executions', async () => {
         const reg = createMockRegistry({
@@ -106,8 +154,11 @@ describe('DynamicComposer', () => {
 
         expect(result.success).toBe(true);
         expect(result.handler).toBeDefined();
+        if (!result.handler) {
+          throw new Error('Expected composed handler');
+        }
 
-        const output = await result.handler!({}, {});
+        const output = await result.handler({}, {});
         expect(output).toEqual({ value: 20 });
       });
 
@@ -129,7 +180,10 @@ describe('DynamicComposer', () => {
         });
 
         expect(result.success).toBe(true);
-        const output = await result.handler!({}, {});
+        if (!result.handler) {
+          throw new Error('Expected composed handler');
+        }
+        const output = await result.handler({}, {});
         expect(output).toEqual({ count: 3 });
       });
     });
@@ -153,7 +207,10 @@ describe('DynamicComposer', () => {
         });
 
         expect(result.success).toBe(true);
-        const output = (await result.handler!({}, {})) as Record<string, unknown>;
+        if (!result.handler) {
+          throw new Error('Expected composed handler');
+        }
+        const output = (await result.handler({}, {})) as Record<string, unknown>;
         expect(output).toHaveProperty('get_name');
         expect(output).toHaveProperty('get_age');
         expect(output.get_name).toEqual({ name: 'Alice' });
@@ -180,7 +237,10 @@ describe('DynamicComposer', () => {
         });
 
         expect(result.success).toBe(true);
-        const output = (await result.handler!({}, {})) as Record<string, unknown>;
+        if (!result.handler) {
+          throw new Error('Expected composed handler');
+        }
+        const output = (await result.handler({}, {})) as Record<string, unknown>;
         expect(output.ok_tool).toEqual({ data: 'ok' });
         // 失败的 step 应产生 error 条目
         const errorKeys = Object.keys(output).filter((k) => k.startsWith('error_'));

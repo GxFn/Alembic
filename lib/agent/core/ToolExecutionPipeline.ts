@@ -41,6 +41,10 @@ interface ToolExecContext {
   iteration: number;
 }
 
+interface ToolForgeLike {
+  temporaryRegistry?: { isTemporary(name: string): boolean };
+}
+
 /** 工具执行元数据 */
 interface ToolMetadata {
   cacheHit: boolean;
@@ -57,6 +61,13 @@ interface BeforeVerdict {
   result?: unknown;
 }
 
+function diagnosticReason(result: unknown) {
+  if (result && typeof result === 'object' && 'error' in result) {
+    return String((result as { error?: unknown }).error || 'blocked');
+  }
+  return 'blocked';
+}
+
 /** 工具中间件 */
 interface ToolMiddleware {
   name: string;
@@ -64,7 +75,7 @@ interface ToolMiddleware {
     call: ToolCall,
     ctx: ToolExecContext,
     metadata: ToolMetadata
-  ) => BeforeVerdict | undefined | void | Promise<BeforeVerdict | undefined | void>;
+  ) => BeforeVerdict | undefined | Promise<BeforeVerdict | undefined>;
   after?: (
     call: ToolCall,
     result: unknown,
@@ -105,6 +116,7 @@ export class ToolExecutionPipeline {
         if (verdict?.blocked) {
           toolResult = verdict.result;
           metadata.blocked = true;
+          context.loopCtx.diagnostics?.recordBlockedTool(call.name, diagnosticReason(toolResult));
           break;
         }
         if (verdict?.result !== undefined) {
@@ -120,28 +132,35 @@ export class ToolExecutionPipeline {
       const t0 = Date.now();
       try {
         const { runtime, loopCtx } = context;
-        const safetyPolicy = runtime.policies.get?.(SafetyPolicy) || null;
-        toolResult = await runtime.toolRegistry.execute(call.name, call.args, {
-          agentId: runtime.id,
-          source: loopCtx.source || runtime.presetName,
-          container: runtime.container,
-          safetyPolicy,
-          projectRoot: runtime.projectRoot,
-          fileCache: runtime.fileCache,
-          lang: runtime.lang,
-          logger: runtime.logger || null,
-          aiProvider: runtime.aiProvider || null,
-          // ── bootstrap 维度上下文 (从 sharedState 透传) ──
-          _submittedTitles: loopCtx.sharedState?.submittedTitles || null,
-          _submittedPatterns: loopCtx.sharedState?.submittedPatterns || null,
-          _sharedState: loopCtx.sharedState || null,
-          _dimensionMeta: loopCtx.sharedState?._dimensionMeta || null,
-          _projectLanguage: loopCtx.sharedState?._projectLanguage || null,
-          _bootstrapDedup: loopCtx.sharedState?._bootstrapDedup || null,
-          _memoryCoordinator: loopCtx.memoryCoordinator || null,
-          _dimensionScopeId: loopCtx.sharedState?._dimensionScopeId || null,
-          _currentRound: loopCtx.iteration || 0,
-        });
+        if (loopCtx.abortSignal?.aborted) {
+          toolResult = { error: 'Tool execution aborted before start' };
+          metadata.blocked = true;
+          loopCtx.diagnostics?.recordBlockedTool(call.name, 'Tool execution aborted before start');
+        } else {
+          const safetyPolicy = runtime.policies.get?.(SafetyPolicy) || null;
+          toolResult = await runtime.toolRegistry.execute(call.name, call.args, {
+            agentId: runtime.id,
+            source: loopCtx.source || runtime.presetName,
+            abortSignal: loopCtx.abortSignal || null,
+            container: runtime.container,
+            safetyPolicy,
+            projectRoot: runtime.projectRoot,
+            fileCache: runtime.fileCache,
+            lang: runtime.lang,
+            logger: runtime.logger || null,
+            aiProvider: runtime.aiProvider || null,
+            // ── bootstrap 维度上下文 (从 sharedState 透传) ──
+            _submittedTitles: loopCtx.sharedState?.submittedTitles || null,
+            _submittedPatterns: loopCtx.sharedState?.submittedPatterns || null,
+            _sharedState: loopCtx.sharedState || null,
+            _dimensionMeta: loopCtx.sharedState?._dimensionMeta || null,
+            _projectLanguage: loopCtx.sharedState?._projectLanguage || null,
+            _bootstrapDedup: loopCtx.sharedState?._bootstrapDedup || null,
+            _memoryCoordinator: loopCtx.memoryCoordinator || null,
+            _dimensionScopeId: loopCtx.sharedState?._dimensionScopeId || null,
+            _currentRound: loopCtx.iteration || 0,
+          });
+        }
       } catch (err: unknown) {
         toolResult = { error: (err as Error).message };
       }
@@ -185,10 +204,13 @@ export const allowlistGate = {
 
     const allowedNames = new Set(schemas.map((s: ToolSchema) => s.name || s.function?.name));
     if (!allowedNames.has(call.name)) {
-      // Forge fallback: 不在白名单但已注册到 ToolRegistry（如锻造的临时工具）则放行
-      if (ctx.runtime.toolRegistry?.has(call.name)) {
+      const container = ctx.runtime.container as { get?: (name: string) => unknown } | null;
+      const toolForge = container?.get?.('toolForge') as ToolForgeLike | undefined;
+      const isTemporaryTool = toolForge?.temporaryRegistry?.isTemporary(call.name) === true;
+      // Forge fallback: 仅允许确认为 TemporaryToolRegistry 管理的动态工具放行。
+      if (isTemporaryTool) {
         ctx.runtime.logger.info(
-          `[ToolPipeline] Tool "${call.name}" not in allowlist but exists in registry (forged?) — allowed`
+          `[ToolPipeline] Tool "${call.name}" not in allowlist but is a temporary forged tool — allowed`
         );
         return undefined;
       }

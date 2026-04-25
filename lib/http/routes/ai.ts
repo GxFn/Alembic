@@ -22,7 +22,7 @@ import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ValidationError } from '../../shared/errors/index.js';
-import { resolveDataRoot, resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
+import { resolveDataRoot } from '../../shared/resolveProjectRoot.js';
 import {
   AiChatBody,
   AiConfigBody,
@@ -41,6 +41,44 @@ import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js'
 const router = express.Router();
 const logger = Logger.getInstance();
 
+const SECRET_ENV_KEYS = new Set([
+  'ALEMBIC_GOOGLE_API_KEY',
+  'ALEMBIC_OPENAI_API_KEY',
+  'ALEMBIC_CLAUDE_API_KEY',
+  'ALEMBIC_DEEPSEEK_API_KEY',
+  'ALEMBIC_EMBED_API_KEY',
+]);
+
+const AI_CONFIG_GATEWAY_ACTION = 'update:config';
+const AI_CONFIG_GATEWAY_RESOURCE = 'ai_config';
+
+interface DirectToolRegistryLike {
+  has?(name: string): boolean;
+  isDirectCallable?(name: string): boolean;
+  getToolMetadata?(name: string): DirectToolMetadata | null;
+}
+
+interface DirectToolMetadata {
+  directCallable?: boolean;
+  sideEffect?: boolean;
+  gatewayAction?: string;
+  gatewayResource?: string;
+}
+
+interface GatewayCheckOnlyLike {
+  checkOnly?(request: {
+    actor: string;
+    action: string;
+    resource?: string;
+    data?: Record<string, unknown>;
+    session?: string;
+  }): Promise<{
+    success: boolean;
+    requestId?: string;
+    error?: { message: string; statusCode?: number; code?: string };
+  }>;
+}
+
 /** 获取 DI 容器 */
 function getContainer() {
   return getServiceContainer();
@@ -54,6 +92,153 @@ function requireAiReady() {
     throw new ValidationError('AI Provider 未配置，当前为 Mock 模式。请先在 .env 中配置 API Key。');
   }
   return container;
+}
+
+function hasDeveloperRole(req: Request) {
+  return ['admin', 'developer', 'owner'].includes(req.resolvedRole || '');
+}
+
+function requireDeveloperRole(req: Request, res: Response) {
+  if (hasDeveloperRole(req)) {
+    return true;
+  }
+  res.status(403).json({
+    success: false,
+    error: { code: 'FORBIDDEN', message: '需要 developer 权限才能修改 AI 配置' },
+  });
+  return false;
+}
+
+export async function ensureAiConfigUpdateAllowed(
+  req: Request,
+  res: Response,
+  gateway?: GatewayCheckOnlyLike | null,
+  updates: Record<string, string> = {}
+) {
+  if (!gateway?.checkOnly) {
+    res.status(503).json({
+      success: false,
+      error: {
+        code: 'GATEWAY_UNAVAILABLE',
+        message: 'AI 配置写入需要 Gateway 权限检查，但 Gateway 不可用',
+      },
+    });
+    return false;
+  }
+
+  const result = await gateway.checkOnly({
+    actor: req.resolvedRole || 'anonymous',
+    action: AI_CONFIG_GATEWAY_ACTION,
+    resource: AI_CONFIG_GATEWAY_RESOURCE,
+    data: {
+      keys: Object.keys(updates),
+      _ip: req.ip,
+      _userAgent: req.headers['user-agent'] || '',
+      _resolvedUser: req.resolvedUser || undefined,
+    },
+    session: req.headers['x-session-id'] as string | undefined,
+  });
+
+  if (result.success) {
+    return true;
+  }
+
+  res.status(result.error?.statusCode || 403).json({
+    success: false,
+    error: {
+      code: result.error?.code || 'GATEWAY_DENIED',
+      message: result.error?.message || 'AI 配置写入未通过 Gateway 权限检查',
+      requestId: result.requestId,
+    },
+  });
+  return false;
+}
+
+export async function ensureDirectToolAllowed(
+  toolRegistry: DirectToolRegistryLike,
+  tool: string,
+  req: Request,
+  res: Response,
+  gateway?: GatewayCheckOnlyLike | null,
+  params: Record<string, unknown> = {}
+) {
+  const metadata = toolRegistry.getToolMetadata?.(tool) || null;
+  if (toolRegistry.has?.(tool) !== true) {
+    return true;
+  }
+  if (toolRegistry.isDirectCallable?.(tool) === true) {
+    return await ensureGatewayAllowsDirectTool(tool, metadata, req, res, gateway, params);
+  }
+  const reason = metadata?.sideEffect ? '具有副作用' : '未声明为 data-only';
+  res.status(403).json({
+    success: false,
+    error: {
+      code: 'TOOL_NOT_DIRECTLY_CALLABLE',
+      message: `工具 "${tool}" ${reason}，不能通过 HTTP 直通入口调用`,
+    },
+  });
+  return false;
+}
+
+async function ensureGatewayAllowsDirectTool(
+  tool: string,
+  metadata: DirectToolMetadata | null,
+  req: Request,
+  res: Response,
+  gateway?: GatewayCheckOnlyLike | null,
+  params: Record<string, unknown> = {}
+) {
+  if (!metadata?.gatewayAction) {
+    return true;
+  }
+  if (!gateway?.checkOnly) {
+    res.status(503).json({
+      success: false,
+      error: {
+        code: 'GATEWAY_UNAVAILABLE',
+        message: `工具 "${tool}" 需要 Gateway 权限检查，但 Gateway 不可用`,
+      },
+    });
+    return false;
+  }
+
+  const result = await gateway.checkOnly({
+    actor: req.resolvedRole || 'anonymous',
+    action: metadata.gatewayAction,
+    resource: metadata.gatewayResource || 'agent_tools',
+    data: {
+      tool,
+      params,
+      _ip: req.ip,
+      _userAgent: req.headers['user-agent'] || '',
+      _resolvedUser: req.resolvedUser || undefined,
+    },
+    session: req.headers['x-session-id'] as string | undefined,
+  });
+
+  if (result.success) {
+    return true;
+  }
+
+  res.status(result.error?.statusCode || 403).json({
+    success: false,
+    error: {
+      code: result.error?.code || 'GATEWAY_DENIED',
+      message: result.error?.message || `工具 "${tool}" 未通过 Gateway 权限检查`,
+      requestId: result.requestId,
+    },
+  });
+  return false;
+}
+
+function maskSecret(value: string) {
+  if (!value) {
+    return '';
+  }
+  if (value.length <= 8) {
+    return '********';
+  }
+  return `${value.slice(0, 2)}...${value.slice(-4)}`;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -431,6 +616,12 @@ router.post(
     const { tool, params } = req.body;
 
     const container = requireAiReady();
+    const toolRegistry = container.get('toolRegistry') as DirectToolRegistryLike;
+    const gateway = container.get('gateway') as GatewayCheckOnlyLike;
+    if (!(await ensureDirectToolAllowed(toolRegistry, tool, req, res, gateway, params))) {
+      return;
+    }
+
     const factory = container.get('agentFactory');
     const result = await factory.invokeAgent(tool, params);
 
@@ -463,6 +654,8 @@ router.post(
 
     const container = requireAiReady();
     const factory = container.get('agentFactory');
+    const toolRegistry = container.get('toolRegistry') as DirectToolRegistryLike;
+    const gateway = container.get('gateway') as GatewayCheckOnlyLike;
 
     // 优先尝试 DAG 任务
     const dagHandler = (
@@ -481,6 +674,9 @@ router.post(
     }
 
     // 回退到 Agent 工具执行
+    if (!(await ensureDirectToolAllowed(toolRegistry, task, req, res, gateway, params))) {
+      return;
+    }
     const result = await factory.invokeAgent(task, params);
 
     res.json({ success: true, data: result });
@@ -583,6 +779,7 @@ function parseLlmEnv(envPath: string) {
   }
 
   const raw = readFileSync(envPath, 'utf8');
+  const rawVars: Record<string, string> = {};
   const vars: Record<string, string> = {};
 
   for (const line of raw.split('\n')) {
@@ -601,12 +798,13 @@ function parseLlmEnv(envPath: string) {
       .trim()
       .replace(/^["']|["']$/g, '');
     if (LLM_ENV_KEYS.includes(key)) {
-      vars[key] = val;
+      rawVars[key] = val;
+      vars[key] = SECRET_ENV_KEYS.has(key) ? maskSecret(val) : val;
     }
   }
 
   // 判断 LLM 是否可用：有 provider + 对应的 API Key
-  const provider = vars.ALEMBIC_AI_PROVIDER || '';
+  const provider = rawVars.ALEMBIC_AI_PROVIDER || '';
   const keyMap = {
     google: 'ALEMBIC_GOOGLE_API_KEY',
     openai: 'ALEMBIC_OPENAI_API_KEY',
@@ -616,7 +814,7 @@ function parseLlmEnv(envPath: string) {
     mock: '', // mock 不需要 key
   };
   const neededKey = (keyMap as Record<string, string>)[provider] || '';
-  const llmReady = !!provider && (!neededKey || !!vars[neededKey]);
+  const llmReady = !!provider && (!neededKey || !!rawVars[neededKey]);
 
   return { vars, hasEnvFile: true, llmReady };
 }
@@ -641,6 +839,10 @@ router.post(
   '/env-config',
   validate(AiEnvConfigBody),
   async (req: Request, res: Response): Promise<void> => {
+    if (!requireDeveloperRole(req, res)) {
+      return;
+    }
+
     const { provider, model, apiKey, proxy, embedProvider, embedModel, embedBaseUrl, embedApiKey } =
       req.body;
 
@@ -684,6 +886,12 @@ router.post(
       }
     }
 
+    const container = getServiceContainer();
+    const gateway = container.get('gateway') as GatewayCheckOnlyLike;
+    if (!(await ensureAiConfigUpdateAllowed(req, res, gateway, updates))) {
+      return;
+    }
+
     // 逐条合并到 .env 内容
     for (const [k, v] of Object.entries(updates)) {
       // 匹配已有行（包括被注释的行）
@@ -705,7 +913,6 @@ router.post(
       }
     }
 
-    const container = getServiceContainer();
     const wz = container.singletons?.writeZone as
       | import('../../infrastructure/io/WriteZone.js').WriteZone
       | undefined;

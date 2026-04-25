@@ -22,6 +22,8 @@ import { AgentEventBus, AgentEvents } from './AgentEventBus.js';
 import type { AgentMessage } from './AgentMessage.js';
 import { ExplorationTracker } from './context/ExplorationTracker.js';
 import type { PipelineType } from './context/exploration/ExplorationStrategies.js';
+import { DiagnosticsCollector } from './core/DiagnosticsCollector.js';
+import { expandSystemRunContext } from './core/SystemRunContext.js';
 import { Strategy, StrategyRegistry } from './strategies.js';
 
 // ───── Local Types for PipelineStrategy ──────────────────
@@ -102,6 +104,7 @@ interface PipelineContext {
   totalIterations: number;
   gateArtifact: unknown;
   degraded: boolean;
+  diagnostics: DiagnosticsCollector;
   execStageCount: number;
   lastExecutedStageName: string | null;
 }
@@ -140,14 +143,27 @@ export class PipelineStrategy extends Strategy {
     opts: Record<string, unknown> = {}
   ) {
     const bus = AgentEventBus.getInstance();
+    const rawStrategyContext = {
+      ...(opts.systemRunContext ? { systemRunContext: opts.systemRunContext } : {}),
+      ...((opts.strategyContext || {}) as Record<string, unknown>),
+    };
+    const incomingStrategyContext = expandSystemRunContext(rawStrategyContext);
+    const diagnostics = DiagnosticsCollector.from(
+      opts.diagnostics || incomingStrategyContext.diagnostics
+    );
     const ctx: PipelineContext = {
       phaseResults: {} as Record<string, unknown>,
-      strategyContext: (opts.strategyContext || {}) as Record<string, unknown>,
+      strategyContext: {
+        ...incomingStrategyContext,
+        ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
+        diagnostics,
+      },
       totalToolCalls: [] as Array<Record<string, unknown>>,
       totalTokenUsage: { input: 0, output: 0 },
       totalIterations: 0,
       gateArtifact: null,
       degraded: false,
+      diagnostics,
       execStageCount: 0,
       lastExecutedStageName: null,
     };
@@ -194,6 +210,7 @@ export class PipelineStrategy extends Strategy {
       iterations: ctx.totalIterations,
       phases: ctx.phaseResults,
       degraded: ctx.degraded,
+      diagnostics: ctx.diagnostics.toJSON(),
     };
   }
 
@@ -218,6 +235,7 @@ export class PipelineStrategy extends Strategy {
 
     // v3: 自定义评估器 (Bootstrap 用)
     if (typeof gate.evaluator === 'function') {
+      this.#ensureGateActiveContext(stage, strategyContext, phaseResults, bus, ctx.diagnostics);
       gateResult = gate.evaluator(source, phaseResults, strategyContext) as typeof gateResult;
       if (!gateResult.action) {
         gateResult.action = gateResult.pass ? 'pass' : 'retry';
@@ -251,6 +269,10 @@ export class PipelineStrategy extends Strategy {
       ctx.gateArtifact = gateResult.artifact;
     }
 
+    if (gateResult.action !== 'pass') {
+      ctx.diagnostics.recordGateFailure(stage.name || 'gate', gateResult.action, gateResult.reason);
+    }
+
     // 三态处理
     if (gateResult.action === 'pass') {
       return 'continue';
@@ -258,6 +280,7 @@ export class PipelineStrategy extends Strategy {
 
     if (gateResult.action === 'degrade') {
       ctx.degraded = true;
+      ctx.diagnostics.markDegraded();
       return 'break';
     }
 
@@ -290,6 +313,40 @@ export class PipelineStrategy extends Strategy {
       return 'break';
     }
     return 'continue';
+  }
+
+  #ensureGateActiveContext(
+    stage: PipelineStage,
+    strategyContext: Record<string, unknown>,
+    phaseResults: Record<string, unknown>,
+    bus: AgentEventBus,
+    diagnostics: DiagnosticsCollector
+  ) {
+    if (!stage.name?.includes('quality') || strategyContext.activeContext) {
+      return;
+    }
+
+    const warning = strategyContext.trace
+      ? 'quality gate missing activeContext; aliased strategyContext.trace to activeContext'
+      : 'quality gate missing activeContext and trace; evaluator may fall back to text-only analysis';
+    if (strategyContext.trace) {
+      strategyContext.activeContext = strategyContext.trace;
+    }
+    diagnostics.warn({ code: 'pipeline_context_warning', message: warning, stage: stage.name });
+
+    const phaseDiagnostics = (phaseResults._diagnostics || {}) as { warnings?: unknown[] };
+    phaseResults._diagnostics = {
+      ...phaseDiagnostics,
+      warnings: [
+        ...(Array.isArray(phaseDiagnostics.warnings) ? phaseDiagnostics.warnings : []),
+        { stage: stage.name, warning },
+      ],
+    };
+    bus.publish(AgentEvents.PROGRESS, {
+      type: 'pipeline_context_warning',
+      stage: stage.name,
+      warning,
+    });
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -536,6 +593,17 @@ export class PipelineStrategy extends Strategy {
   ): Promise<StageResult> {
     // 创建 AbortController — hard timeout 时取消进行中的 LLM 请求
     const abortController = new AbortController();
+    const parentAbortSignal =
+      strategyContext.abortSignal &&
+      typeof (strategyContext.abortSignal as AbortSignal).aborted === 'boolean'
+        ? (strategyContext.abortSignal as AbortSignal)
+        : null;
+    const onParentAbort = () => abortController.abort();
+    if (parentAbortSignal?.aborted) {
+      abortController.abort();
+    } else {
+      parentAbortSignal?.addEventListener('abort', onParentAbort, { once: true });
+    }
 
     const reactPromise = runtime.reactLoop(stagePrompt, {
       history: message.history,
@@ -555,11 +623,14 @@ export class PipelineStrategy extends Strategy {
       sharedState: strategyContext.sharedState || null,
       source: strategyContext.source || null,
       abortSignal: abortController.signal,
+      diagnostics: strategyContext.diagnostics as DiagnosticsCollector,
     });
 
     const stageTimeoutMs = effectiveBudget?.timeoutMs;
     if (!stageTimeoutMs) {
-      return reactPromise;
+      return reactPromise.finally(() => {
+        parentAbortSignal?.removeEventListener('abort', onParentAbort);
+      });
     }
 
     // 硬超时 = budget.timeoutMs + 30s 缓冲
@@ -586,6 +657,9 @@ export class PipelineStrategy extends Strategy {
             stage: stage.name,
             timeoutMs: hardLimitMs,
           });
+          (strategyContext.diagnostics as DiagnosticsCollector | undefined)?.recordTimedOutStage(
+            stage.name
+          );
           return {
             reply: '',
             toolCalls: [],
@@ -596,7 +670,10 @@ export class PipelineStrategy extends Strategy {
         }
         throw err;
       })
-      .finally(() => clearTimeout(hardTimer));
+      .finally(() => {
+        clearTimeout(hardTimer);
+        parentAbortSignal?.removeEventListener('abort', onParentAbort);
+      });
   }
 
   /** 质量门控评估 (向后兼容: 阈值模式) */

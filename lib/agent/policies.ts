@@ -18,6 +18,15 @@
 
 import _path from 'node:path';
 
+function isWithinPathScope(filePath: string, scopePath: string) {
+  const resolved = _path.resolve(filePath);
+  const scope = _path.resolve(scopePath);
+  const relative = _path.relative(scope, resolved);
+  return (
+    relative === '' || (!!relative && !relative.startsWith('..') && !_path.isAbsolute(relative))
+  );
+}
+
 // ─── Policy Type Definitions ─────────────────
 
 /** 执行前校验的上下文 */
@@ -278,9 +287,7 @@ export class SafetyPolicy extends Policy {
     if (!this.#fileScope) {
       return { safe: true };
     }
-    const resolved = _path.resolve(filePath);
-    const scope = _path.resolve(this.#fileScope);
-    if (!resolved.startsWith(scope)) {
+    if (!isWithinPathScope(filePath, this.#fileScope)) {
       return {
         safe: false,
         reason: `File path "${filePath}" outside allowed scope "${this.#fileScope}"`,
@@ -492,9 +499,21 @@ export class PolicyEngine {
       }
     }
 
+    const filePathsToCheck: string[] = [];
+    if (toolName === 'read_project_file' || toolName === 'get_file_summary') {
+      if (typeof args?.filePath === 'string') {
+        filePathsToCheck.push(args.filePath);
+      }
+      if (Array.isArray(args?.filePaths)) {
+        filePathsToCheck.push(
+          ...args.filePaths.filter((filePath): filePath is string => typeof filePath === 'string')
+        );
+      }
+    }
+
     // 文件读取路径检查
-    if (toolName === 'read_project_file' && args?.filePath) {
-      const check = safety.checkFilePath(args.filePath as string);
+    for (const filePath of filePathsToCheck) {
+      const check = safety.checkFilePath(filePath);
       if (!check.safe) {
         return { ok: false, reason: `[SafetyPolicy] 路径拦截: ${check.reason}` };
       }

@@ -17,6 +17,7 @@ const logger = Logger.getInstance();
 
 const AUTH_ENABLED =
   process.env.VITE_AUTH_ENABLED === 'true' || process.env.ALEMBIC_AUTH_ENABLED === 'true';
+const TRUST_X_USER_ID = process.env.ALEMBIC_TRUST_X_USER_ID === 'true';
 
 /**
  * 验证 token 并提取 payload
@@ -37,6 +38,33 @@ async function getVerifyToken() {
   return _verifyToken;
 }
 
+function getHeaderValue(value: string | string[] | undefined) {
+  if (Array.isArray(value)) {
+    return value[0] || '';
+  }
+  return value || '';
+}
+
+function hasTrustedInternalToken(req: Request) {
+  const expected = process.env.ALEMBIC_INTERNAL_TOKEN;
+  if (!expected) {
+    return false;
+  }
+  return getHeaderValue(req.headers['x-alembic-internal-token']) === expected;
+}
+
+function getTrustedHeaderRole(req: Request) {
+  const role = getHeaderValue(req.headers['x-user-id']);
+  if (!role || role === 'anonymous' || role === 'dashboard') {
+    return null;
+  }
+  if (!TRUST_X_USER_ID && !hasTrustedInternalToken(req)) {
+    logger.warn('roleResolver: ignored untrusted x-user-id header', { role });
+    return null;
+  }
+  return role;
+}
+
 /** 创建双路径角色解析中间件 */
 export function roleResolverMiddleware(options: { capabilityProbe?: CapabilityProbe } = {}) {
   const { capabilityProbe } = options;
@@ -45,13 +73,11 @@ export function roleResolverMiddleware(options: { capabilityProbe?: CapabilityPr
   const verifyTokenPromise = getVerifyToken();
 
   return (req: Request, _res: Response, next: NextFunction) => {
-    // 已有 x-user-id header（MCP / 内部调用）→ 直接信任
-    if (
-      req.headers['x-user-id'] &&
-      req.headers['x-user-id'] !== 'anonymous' &&
-      req.headers['x-user-id'] !== 'dashboard'
-    ) {
-      req.resolvedRole = req.headers['x-user-id'] as string;
+    // x-user-id 仅在显式可信内部通道中生效，避免外部 HTTP 客户端自报身份。
+    const trustedHeaderRole = getTrustedHeaderRole(req);
+    if (trustedHeaderRole) {
+      req.resolvedRole = trustedHeaderRole;
+      req.resolvedUser = `header:${trustedHeaderRole}`;
       next();
       return;
     }

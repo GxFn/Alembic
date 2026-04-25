@@ -76,6 +76,13 @@ describe('TemporaryToolRegistry', () => {
       const list = tempReg.list();
       expect(list.filter((t) => t.name === 'dup')).toHaveLength(1);
     });
+
+    it('should reject a temporary tool that conflicts with an existing static tool', () => {
+      registry.register({ name: 'read_project_file' });
+      expect(() => {
+        tempReg.registerTemporary({ ...TOOL_BASE, name: 'read_project_file' });
+      }).toThrow('conflicts with an existing static tool');
+    });
   });
 
   describe('revoke', () => {
@@ -115,7 +122,7 @@ describe('TemporaryToolRegistry', () => {
       expect(renewed).toBe(true);
 
       const after = tempReg.list().find((t) => t.name === 'ren');
-      expect(after!.remainingMs).toBeGreaterThan(4000);
+      expect(after?.remainingMs).toBeGreaterThan(4000);
     });
 
     it('should return false for non-existent tool', () => {
@@ -149,7 +156,7 @@ describe('TemporaryToolRegistry', () => {
       const list = tempReg.list();
       expect(list).toHaveLength(2);
       expect(list.map((t) => t.name).sort()).toEqual(['a', 'b']);
-      expect(list.find((t) => t.name === 'a')!.forgeMode).toBe('compose');
+      expect(list.find((t) => t.name === 'a')?.forgeMode).toBe('compose');
     });
   });
 

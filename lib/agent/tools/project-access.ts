@@ -38,6 +38,7 @@ export interface ToolContext extends ToolSharedState {
   container?: { get(name: string): unknown } | null;
   _sharedState?: ToolSharedState;
   source?: string;
+  abortSignal?: AbortSignal | null;
 }
 
 /** 搜索缓存条目 */
@@ -116,6 +117,13 @@ interface VectorStoreLike {
 /** AI Provider（精简接口） */
 interface AIProviderLike {
   generateEmbedding?(text: string): Promise<number[]>;
+}
+
+function isWithinProjectPath(targetPath: string, projectRoot: string) {
+  const relative = path.relative(path.resolve(projectRoot), path.resolve(targetPath));
+  return (
+    relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative))
+  );
 }
 
 /** SearchEngine（精简接口） */
@@ -219,6 +227,14 @@ function _scoreSearchLine(line: string) {
   return 0;
 }
 
+function isAbortRequested(ctx: ToolContext) {
+  return ctx.abortSignal?.aborted === true;
+}
+
+function abortedResult(tool: string) {
+  return { error: `${tool} aborted`, aborted: true };
+}
+
 /**
  * 收集项目文件列表 — 抽取为公用函数，供单次和批量搜索复用。
  * 优先使用内存缓存（bootstrap 场景），否则从磁盘递归读取。
@@ -239,6 +255,9 @@ async function _getProjectFiles(params: FileFilterParams, ctx: ToolContext) {
 
   if (fileCache && Array.isArray(fileCache)) {
     files = fileCache.filter((f) => {
+      if (isAbortRequested(ctx)) {
+        return false;
+      }
       const p = f.relativePath || f.path || '';
       if (THIRD_PARTY_RE.test(p)) {
         skippedThirdParty++;
@@ -256,9 +275,15 @@ async function _getProjectFiles(params: FileFilterParams, ctx: ToolContext) {
     files = [];
     const MAX_FILE_SIZE = 512 * 1024;
     const walk = (dir: string, relBase = '') => {
+      if (isAbortRequested(ctx)) {
+        return;
+      }
       try {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
+          if (isAbortRequested(ctx)) {
+            return;
+          }
           const relPath = relBase ? `${relBase}/${entry.name}` : entry.name;
           const fullPath = path.join(dir, entry.name);
           const isDir =
@@ -354,6 +379,10 @@ export const searchProjectCode = {
     required: [],
   },
   handler: async (params: SearchCodeParams, ctx: ToolContext) => {
+    if (isAbortRequested(ctx)) {
+      return abortedResult('search_project_code');
+    }
+
     // ── 去重缓存初始化 ──
     const state = ctx._sharedState || ctx;
     if (!state._searchCache) {
@@ -366,6 +395,9 @@ export const searchProjectCode = {
       const batchResults: Record<string, SearchCacheEntry> = {};
       let dedupCount = 0;
       for (const p of batchPatterns) {
+        if (isAbortRequested(ctx)) {
+          return { ...abortedResult('search_project_code'), batchResults };
+        }
         const cacheKey = `${p}|${params.isRegex || false}|${params.fileFilter || ''}`;
         const cached = state._searchCache.get(cacheKey);
         if (cached) {
@@ -429,12 +461,18 @@ export const searchProjectCode = {
     }
 
     const { files, skippedThirdParty } = await _getProjectFiles(params, ctx);
+    if (isAbortRequested(ctx)) {
+      return abortedResult('search_project_code');
+    }
 
     // 搜索匹配
     const matches: SearchMatch[] = [];
     let total = 0;
 
     for (const f of files) {
+      if (isAbortRequested(ctx)) {
+        return { ...abortedResult('search_project_code'), matches, total };
+      }
       if (!f.content) {
         continue;
       }
@@ -447,6 +485,9 @@ export const searchProjectCode = {
       searchRe.lastIndex = 0;
 
       for (let i = 0; i < lines.length; i++) {
+        if (isAbortRequested(ctx)) {
+          return { ...abortedResult('search_project_code'), matches, total };
+        }
         searchRe.lastIndex = 0;
         if (!searchRe.test(lines[i])) {
           continue;
@@ -614,7 +655,7 @@ export const readProjectFile = {
     // 降级: 从磁盘读取
     if (content === null) {
       const fullPath = path.resolve(projectRoot, normalized);
-      if (!fullPath.startsWith(projectRoot)) {
+      if (!isWithinProjectPath(fullPath, projectRoot)) {
         return { error: 'Path traversal not allowed.' };
       }
       try {
@@ -683,7 +724,7 @@ export const listProjectStructure = {
       return { error: 'Path traversal not allowed. Use relative paths within the project.' };
     }
     const targetDir = directory ? path.resolve(projectRoot, normalized) : projectRoot;
-    if (!targetDir.startsWith(projectRoot)) {
+    if (!isWithinProjectPath(targetDir, projectRoot)) {
       return { error: 'Path traversal not allowed.' };
     }
 
@@ -892,7 +933,7 @@ export const getFileSummary = {
 
     if (content === null) {
       const fullPath = path.resolve(projectRoot, normalized);
-      if (!fullPath.startsWith(projectRoot)) {
+      if (!isWithinProjectPath(fullPath, projectRoot)) {
         return { error: 'Path traversal not allowed.' };
       }
       try {

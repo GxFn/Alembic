@@ -198,7 +198,7 @@ export class FanOutStrategy extends Strategy {
    */
   async execute(runtime: StrategyRuntime, message: AgentMessage, opts: FanOutExecuteOpts = {}) {
     const { items = [] } = opts;
-    const bus = AgentEventBus.getInstance()!;
+    const bus = AgentEventBus.getInstance();
 
     if (items.length === 0) {
       return {
@@ -251,6 +251,7 @@ export class FanOutStrategy extends Strategy {
             try {
               const result = await this.#itemStrategy.execute(runtime, itemMessage, {
                 dimension: item,
+                abortSignal: opts.abortSignal,
               });
               return { id: item.id, label: item.label, status: 'completed' as const, ...result };
             } catch (err: unknown) {
@@ -352,7 +353,7 @@ export class AdaptiveStrategy extends Strategy {
 
   async execute(runtime: StrategyRuntime, message: AgentMessage, opts: StrategyExecuteOpts = {}) {
     const complexity = this.#assessComplexity(message, opts);
-    const bus = AgentEventBus.getInstance()!;
+    const bus = AgentEventBus.getInstance();
 
     bus.publish(AgentEvents.PROGRESS, {
       type: 'adaptive_classification',

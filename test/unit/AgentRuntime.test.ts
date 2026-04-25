@@ -4,8 +4,8 @@
  * 覆盖核心 ReAct 循环：execute 入口、Policy 校验、超时保护、
  * reactLoop 迭代、工具调用处理、文本响应、中止、错误恢复
  */
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { AgentRuntime } from '../../lib/agent/AgentRuntime.js';
+import { describe, expect, test, vi } from 'vitest';
+import { AgentRuntime, MAX_TOOL_CALLS_PER_ITER } from '../../lib/agent/AgentRuntime.js';
 
 /* ══════════════════════════════════════════════════════
  *  Mock Factories
@@ -148,6 +148,11 @@ describe('AgentRuntime', () => {
       expect(result.reply).toBeDefined();
       expect(result.state).toBeDefined();
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
+      expect(result.diagnostics).toMatchObject({
+        aiErrorCount: 0,
+        blockedTools: [],
+        degraded: false,
+      });
     });
 
     test('should reject when policy validateBefore fails', async () => {
@@ -160,6 +165,9 @@ describe('AgentRuntime', () => {
       expect(result.reply).toContain('Forbidden');
       expect(result.iterations).toBe(0);
       expect(result.toolCalls).toEqual([]);
+      expect(result.diagnostics?.warnings).toEqual([
+        expect.objectContaining({ code: 'policy_rejected' }),
+      ]);
     });
 
     test('should add qualityWarning when policy validateAfter fails', async () => {
@@ -170,6 +178,9 @@ describe('AgentRuntime', () => {
       const result = await rt.execute(mockMessage());
 
       expect(result.qualityWarning).toBe('Low quality output');
+      expect(result.diagnostics?.warnings).toEqual([
+        expect.objectContaining({ code: 'quality_warning' }),
+      ]);
     });
 
     test('should handle timeout', async () => {
@@ -190,6 +201,29 @@ describe('AgentRuntime', () => {
       const rt = createRuntime({ strategy: slowStrategy, policies });
 
       await expect(rt.execute(mockMessage())).rejects.toThrow(/timeout/i);
+    });
+
+    test('should abort strategy signal when top-level timeout fires', async () => {
+      let capturedSignal: AbortSignal | null = null;
+      const slowStrategy = mockStrategy({
+        execute: vi.fn().mockImplementation(async (_runtime, _message, opts) => {
+          capturedSignal = (opts?.abortSignal as AbortSignal) || null;
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          return {
+            reply: 'too late',
+            toolCalls: [],
+            tokenUsage: { input: 0, output: 0 },
+            iterations: 0,
+          };
+        }),
+      });
+      const policies = mockPolicies({
+        getBudget: vi.fn().mockReturnValue({ timeoutMs: 50 }),
+      });
+      const rt = createRuntime({ strategy: slowStrategy, policies });
+
+      await expect(rt.execute(mockMessage())).rejects.toThrow(/timeout/i);
+      expect(capturedSignal?.aborted).toBe(true);
     });
   });
 
@@ -252,6 +286,41 @@ describe('AgentRuntime', () => {
 
       expect(result.tokenUsage.input).toBe(300);
       expect(result.tokenUsage.output).toBe(150);
+    });
+
+    test('should tell the model when tool calls are truncated', async () => {
+      const functionCalls = Array.from({ length: MAX_TOOL_CALLS_PER_ITER + 2 }, (_, index) => ({
+        id: `c${index}`,
+        name: 'search_knowledge',
+        args: { query: `q${index}` },
+      }));
+      const chatWithTools = vi
+        .fn()
+        .mockResolvedValueOnce({
+          type: 'function_call',
+          functionCalls,
+          usage: { inputTokens: 100, outputTokens: 50 },
+        })
+        .mockResolvedValueOnce({
+          type: 'text',
+          text: 'Final answer',
+          usage: { inputTokens: 100, outputTokens: 50 },
+        });
+      const aiProvider = mockAiProvider({ chatWithTools });
+      const toolRegistry = mockToolRegistry();
+      const rt = createRuntime({ aiProvider, toolRegistry });
+
+      const result = await rt.reactLoop('query');
+      const secondCallOptions = chatWithTools.mock.calls[1][1] as {
+        messages: Array<{ content?: string }>;
+      };
+
+      expect(result.toolCalls).toHaveLength(MAX_TOOL_CALLS_PER_ITER);
+      expect(result.diagnostics?.truncatedToolCalls).toBe(2);
+      expect(toolRegistry.execute).toHaveBeenCalledTimes(MAX_TOOL_CALLS_PER_ITER);
+      expect(
+        secondCallOptions.messages.some((msg) => msg.content?.includes('工具调用数量超限'))
+      ).toBe(true);
     });
 
     test('should respect history parameter', async () => {

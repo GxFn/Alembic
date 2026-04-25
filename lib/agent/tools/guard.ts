@@ -119,11 +119,18 @@ export const guardCheckCode = {
     required: ['code'],
   },
   handler: async (params: GuardCheckCodeParams, ctx: ToolHandlerContext) => {
+    if (ctx.abortSignal?.aborted) {
+      return { error: 'guard_check_code aborted', aborted: true };
+    }
+
     const { code, language, scope = 'file' } = params;
 
     // 优先用 GuardCheckEngine（内置 + DB 规则）
     try {
       const engine = ctx.container.get('guardCheckEngine');
+      if (ctx.abortSignal?.aborted) {
+        return { error: 'guard_check_code aborted', aborted: true };
+      }
       const violations = engine.checkCode(code, language || 'unknown', { scope });
       // reasoning 已由 GuardCheckEngine.checkCode() 内置附加
       return { violationCount: violations.length, violations };
@@ -134,6 +141,9 @@ export const guardCheckCode = {
     // 降级到 GuardService.checkCode（仅 DB 规则）
     try {
       const guardService = ctx.container.get('guardService');
+      if (ctx.abortSignal?.aborted) {
+        return { error: 'guard_check_code aborted', aborted: true };
+      }
       const matches = await guardService.checkCode(code, { language });
       return { violationCount: matches.length, violations: matches };
     } catch (err: unknown) {

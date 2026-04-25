@@ -17,11 +17,12 @@ import type { ContextWindow } from '../context/ContextWindow.js';
 import type { ExplorationTracker } from '../context/ExplorationTracker.js';
 import type { ActiveContext } from '../memory/ActiveContext.js';
 import type { MemoryCoordinator } from '../memory/MemoryCoordinator.js';
+import type { DiagnosticsCollector } from './DiagnosticsCollector.js';
 import type { MessageAdapter } from './MessageAdapter.js';
 
 /** Tool call hook type */
 type ToolCallHook = (name: string, params: Record<string, unknown>, result: unknown) => void;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept various hook signatures from callers; unknown[] breaks contravariant param checks
+// biome-ignore lint/suspicious/noExplicitAny: accept various hook signatures from callers; unknown[] breaks contravariant param checks.
 type ToolCallHookLike = (...args: any[]) => void;
 
 /** Token usage returned by AI providers */
@@ -67,6 +68,7 @@ interface LoopContextConfig {
   contextWindow?: ContextWindow | null;
   toolChoiceOverride?: string | null;
   abortSignal?: AbortSignal | null;
+  diagnostics?: DiagnosticsCollector | null;
 }
 
 export class LoopContext {
@@ -96,7 +98,7 @@ export class LoopContext {
   lastReply = '';
 
   /** 本轮工具调用记录 */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tool call entries have varying shapes (ToolCallEntry, ToolCallRecord, etc.) across callers; no common structural type satisfies all consumers
+  // biome-ignore lint/suspicious/noExplicitAny: tool call entries have varying shapes across callers; no common structural type satisfies all consumers.
   toolCalls: any[] = [];
 
   /** } 本轮 token 用量 */
@@ -147,6 +149,9 @@ export class LoopContext {
   /** 外部中止信号 — hard timeout 时取消进行中的 LLM 调用 */
   abortSignal: AbortSignal | null;
 
+  /** 统一诊断收集器 */
+  diagnostics: DiagnosticsCollector | null;
+
   constructor(config: LoopContextConfig) {
     this.messages = config.messages;
     this.tracker = (config.tracker || null) as ExplorationTracker | null;
@@ -164,6 +169,7 @@ export class LoopContext {
     this.contextWindow = config.contextWindow || null;
     this.toolChoiceOverride = config.toolChoiceOverride || null;
     this.abortSignal = (config.abortSignal || null) as AbortSignal | null;
+    this.diagnostics = config.diagnostics || null;
     this.loopStartTime = Date.now();
   }
 
@@ -207,6 +213,7 @@ export class LoopContext {
       toolCalls: [...this.toolCalls],
       tokenUsage: { ...this.tokenUsage },
       iterations: this.iteration,
+      ...(this.diagnostics ? { diagnostics: this.diagnostics.toJSON() } : {}),
     };
   }
 }

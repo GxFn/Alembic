@@ -47,6 +47,7 @@ import {
 import { AgentState } from './AgentState.js';
 import { Capability, CapabilityRegistry } from './capabilities.js';
 import { cleanFinalAnswer } from './core/ChatAgentPrompts.js';
+import { DiagnosticsCollector } from './core/DiagnosticsCollector.js';
 import { continueResult, LLMResultType } from './core/LLMResultType.js';
 import { LoopContext } from './core/LoopContext.js';
 import { createMessageAdapter } from './core/MessageAdapter.js';
@@ -57,6 +58,8 @@ import { PolicyEngine } from './policies.js';
 
 // ── Re-exports for backward compatibility ──
 export type {
+  AgentDiagnostics,
+  AgentDiagnosticWarning,
   AgentResult,
   AiError,
   FileCacheEntry,
@@ -157,17 +160,23 @@ export class AgentRuntime {
     this.iterationCount = 0;
     this.toolCallHistory = [];
     this.tokenUsage = { input: 0, output: 0 };
+    const diagnostics = DiagnosticsCollector.from(opts.diagnostics);
 
     // ── Policy: 执行前校验 ──
     const beforeCheck = this.policies.validateBefore({ message, capabilities: this.capabilities });
     if (!beforeCheck.ok) {
       this.logger.warn(`[AgentRuntime] Policy rejected: ${beforeCheck.reason}`);
+      diagnostics.warn({
+        code: 'policy_rejected',
+        message: beforeCheck.reason || 'Policy rejected the request',
+      });
       return {
         reply: `⚠️ ${beforeCheck.reason}`,
         toolCalls: [],
         tokenUsage: { input: 0, output: 0 },
         iterations: 0,
         durationMs: 0,
+        diagnostics: diagnostics.toJSON(),
         state: this.state.toJSON(),
       };
     }
@@ -175,20 +184,42 @@ export class AgentRuntime {
     // ── 超时保护 ──
     const budget = this.policies.getBudget();
     const timeoutMs = budget?.timeoutMs || 300_000;
+    const abortController = new AbortController();
+    const parentAbortSignal =
+      opts.abortSignal && typeof (opts.abortSignal as AbortSignal).aborted === 'boolean'
+        ? (opts.abortSignal as AbortSignal)
+        : null;
+    const onParentAbort = () => abortController.abort();
+    if (parentAbortSignal?.aborted) {
+      abortController.abort();
+    } else {
+      parentAbortSignal?.addEventListener('abort', onParentAbort, { once: true });
+    }
+    const cleanupExecutionGuards = () => {
+      clearTimeout(timeoutId);
+      parentAbortSignal?.removeEventListener('abort', onParentAbort);
+    };
 
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(
-        () => reject(new Error(`Agent timeout after ${timeoutMs}ms`)),
-        timeoutMs
-      );
+      timeoutId = setTimeout(() => {
+        abortController.abort();
+        reject(new Error(`Agent timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
     });
 
     try {
       // ── 委托给 Strategy ──
-      const resultPromise = this.strategy.execute(this, message, opts);
+      const resultPromise = this.strategy.execute(this, message, {
+        ...opts,
+        abortSignal: abortController.signal,
+        diagnostics,
+      });
       const result = (await Promise.race([resultPromise, timeoutPromise])) as AgentResult;
-      clearTimeout(timeoutId);
+      cleanupExecutionGuards();
+      if (diagnostics.isEmpty()) {
+        diagnostics.merge(result.diagnostics);
+      }
 
       // ── Policy: 执行后校验 ──
       const afterCheck = this.policies.validateAfter(
@@ -197,6 +228,10 @@ export class AgentRuntime {
       if (!afterCheck.ok) {
         this.logger.warn(`[AgentRuntime] Quality check: ${afterCheck.reason}`);
         result.qualityWarning = afterCheck.reason;
+        diagnostics.warn({
+          code: 'quality_warning',
+          message: afterCheck.reason || 'Policy quality check failed',
+        });
       }
 
       // 状态完成
@@ -209,6 +244,10 @@ export class AgentRuntime {
 
       result.state = this.state.toJSON();
       result.durationMs = Date.now() - this.startTime;
+      if (result.degraded) {
+        diagnostics.markDegraded();
+      }
+      result.diagnostics = diagnostics.toJSON();
 
       this.bus.publish(
         AgentEvents.AGENT_COMPLETED,
@@ -223,7 +262,7 @@ export class AgentRuntime {
 
       return result;
     } catch (err: unknown) {
-      clearTimeout(timeoutId);
+      cleanupExecutionGuards();
       this.state.send('error', { error: (err as Error).message });
       this.bus.publish(
         AgentEvents.AGENT_FAILED,
@@ -346,7 +385,9 @@ export class AgentRuntime {
       source,
       toolChoiceOverride,
       abortSignal,
+      diagnostics,
     } = opts;
+    const diagnosticsCollector = DiagnosticsCollector.from(diagnostics);
 
     // 解析 capabilities
     const caps = capabilityOverride
@@ -422,6 +463,7 @@ export class AgentRuntime {
       contextWindow: contextWindow || null,
       toolChoiceOverride: toolChoiceOverride || null,
       abortSignal: (abortSignal as AbortSignal) || null,
+      diagnostics: diagnosticsCollector,
     });
   }
 
@@ -433,6 +475,7 @@ export class AgentRuntime {
     // 外部中止信号 — 立即退出
     if (ctx.abortSignal?.aborted) {
       this.logger.info('[AgentRuntime] ⛔ abortSignal fired — exiting loop');
+      ctx.diagnostics?.warn({ code: 'aborted', message: 'AbortSignal fired before iteration' });
       return true;
     }
 
@@ -463,6 +506,10 @@ export class AgentRuntime {
       this.logger.info(
         `[AgentRuntime] ⏰ Stage budget timeout: ${ctx.budget.timeoutMs}ms exceeded (elapsed: ${Date.now() - ctx.loopStartTime}ms)`
       );
+      ctx.diagnostics?.warn({
+        code: 'stage_budget_timeout',
+        message: `Stage budget timeout after ${ctx.budget.timeoutMs}ms`,
+      });
       return true;
     }
 
@@ -479,6 +526,10 @@ export class AgentRuntime {
     });
     if (!duringCheck.ok) {
       this.logger.info(`[AgentRuntime] Policy stop: ${duringCheck.reason}`);
+      ctx.diagnostics?.warn({
+        code: 'policy_stop',
+        message: duringCheck.reason || 'Policy stopped the run',
+      });
       return true;
     }
 
@@ -622,6 +673,7 @@ export class AgentRuntime {
 
     // 空响应重试
     if (!llmResult.text && !llmResult.functionCalls?.length) {
+      ctx.diagnostics?.recordEmptyResponse();
       // B4 fix: SUMMARIZE 阶段也允许重试 — force_exit nudge 刚注入时 LLM 可能
       // 需要额外一轮才能生成有效输出。与 ExplorationTracker 的 2 轮 grace 对齐，
       // 避免 grace 机制被架空。重试次数由 tracker.phaseRounds 控制而非独立计数。
@@ -667,6 +719,10 @@ export class AgentRuntime {
       this.logger.warn(
         `[AgentRuntime] ⚠ AI returned ${llmResult.functionCalls.length} tool calls despite toolChoice=none (graceful exit) — ignoring`
       );
+      ctx.diagnostics?.warn({
+        code: 'tool_choice_violation',
+        message: `AI returned ${llmResult.functionCalls.length} tool calls despite toolChoice=none`,
+      });
       if (llmResult.text) {
         ctx.lastReply = cleanFinalAnswer(llmResult.text);
         return null; // 退出
@@ -685,10 +741,12 @@ export class AgentRuntime {
     // AbortError — 外部中止信号已触发，不计入错误计数，立即退出
     if (ctx.abortSignal?.aborted) {
       this.logger.info('[AgentRuntime] ⛔ abortSignal fired during LLM call — exiting');
+      ctx.diagnostics?.warn({ code: 'aborted', message: 'AbortSignal fired during LLM call' });
       return null;
     }
 
     ctx.consecutiveAiErrors++;
+    ctx.diagnostics?.recordAiError(aiErr.message);
     this.logger.warn(
       `[AgentRuntime] AI call failed (attempt ${ctx.consecutiveAiErrors}): ${aiErr.message}`
     );
@@ -728,12 +786,15 @@ export class AgentRuntime {
     const { tracker, trace, messages } = ctx;
 
     // 工具调用数量限制
-    let activeCalls = llmResult.functionCalls!;
+    let activeCalls = llmResult.functionCalls || [];
+    let truncatedCalls: typeof activeCalls = [];
     if (activeCalls.length > MAX_TOOL_CALLS_PER_ITER) {
       this.logger.warn(
         `[AgentRuntime] ⚠ ${activeCalls.length} tool calls, capping to ${MAX_TOOL_CALLS_PER_ITER}`
       );
       tracker?.recordTruncatedCalls?.(activeCalls.length - MAX_TOOL_CALLS_PER_ITER);
+      ctx.diagnostics?.recordTruncatedToolCalls(activeCalls.length - MAX_TOOL_CALLS_PER_ITER);
+      truncatedCalls = activeCalls.slice(MAX_TOOL_CALLS_PER_ITER);
       activeCalls = activeCalls.slice(0, MAX_TOOL_CALLS_PER_ITER);
     }
 
@@ -806,8 +867,9 @@ export class AgentRuntime {
       let resultStr = messages.formatToolResult(fc.name, toolResult);
 
       // 提交去重: pipeline 中间件已标记 metadata
-      if ((metadata as ToolMetadata).dedupMessage) {
-        resultStr = (metadata as ToolMetadata).dedupMessage!;
+      const dedupMessage = (metadata as ToolMetadata).dedupMessage;
+      if (dedupMessage) {
+        resultStr = dedupMessage;
       } else if ((metadata as ToolMetadata).isSubmit) {
         roundSubmitCount++;
       }
@@ -823,6 +885,16 @@ export class AgentRuntime {
 
       // 追加 tool result
       messages.appendToolResult(fc.id, fc.name, resultStr);
+    }
+
+    if (truncatedCalls.length > 0) {
+      const truncatedNames = truncatedCalls
+        .map((call) => call.name)
+        .slice(0, 5)
+        .join(', ');
+      messages.appendUserNudge(
+        `工具调用数量超限：本轮只执行前 ${MAX_TOOL_CALLS_PER_ITER} 个工具调用，另有 ${truncatedCalls.length} 个未执行${truncatedNames ? `（${truncatedNames}${truncatedCalls.length > 5 ? '...' : ''}）` : ''}。请基于已返回结果继续，必要时分批重新请求未执行的工具。`
+      );
     }
 
     // ExplorationTracker: endRound → 检查阶段转换
@@ -919,10 +991,12 @@ export class AgentRuntime {
 
       if (textResult.needsDigestNudge) {
         messages.appendAssistantText(llmResult.text || '');
-        messages.appendUserNudge(textResult.nudge!);
+        if (textResult.nudge) {
+          messages.appendUserNudge(textResult.nudge);
+        }
         this.logger.info('[AgentRuntime] 📝 injected SUMMARIZE nudge (text-triggered transition)');
         const _dimD = ctx.sharedState?._dimensionMeta?.id || '';
-        if (process.env.ALEMBIC_MCP_MODE !== '1') {
+        if (textResult.nudge && process.env.ALEMBIC_MCP_MODE !== '1') {
           process.stderr.write(
             `\n\x1b[34m━━━ Digest Nudge [SUMMARIZE]${_dimD ? ` dim=${_dimD}` : ''} ━━━\x1b[0m\n`
           );
@@ -994,6 +1068,11 @@ export class AgentRuntime {
         this.logger.warn(
           `[AgentRuntime] ⚠ finalize: no reply, no tool calls (iter=${ctx.iteration}) — fallback message`
         );
+        ctx.diagnostics?.markFallbackUsed();
+        ctx.diagnostics?.warn({
+          code: 'fallback_reply',
+          message: 'Finalized with fallback message because no reply or tool calls were produced',
+        });
       }
     }
 

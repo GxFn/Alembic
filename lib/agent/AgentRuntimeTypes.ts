@@ -45,6 +45,25 @@ export interface ProgressEvent {
   [key: string]: unknown;
 }
 
+export interface AgentDiagnosticWarning {
+  code: string;
+  message: string;
+  stage?: string;
+  tool?: string;
+}
+
+export interface AgentDiagnostics {
+  degraded: boolean;
+  fallbackUsed: boolean;
+  warnings: AgentDiagnosticWarning[];
+  timedOutStages: string[];
+  blockedTools: Array<{ tool: string; reason: string }>;
+  truncatedToolCalls: number;
+  emptyResponses: number;
+  aiErrorCount: number;
+  gateFailures: Array<{ stage: string; action: string; reason?: string }>;
+}
+
 /** Tool execution pipeline metadata */
 export interface ToolMetadata {
   cacheHit: boolean;
@@ -94,6 +113,7 @@ export interface AgentResult {
   iterations: number;
   durationMs: number;
   phases?: Record<string, unknown>;
+  diagnostics?: AgentDiagnostics;
   state: Record<string, unknown>;
   qualityWarning?: string;
   [key: string]: unknown;
@@ -115,6 +135,7 @@ export interface ReactLoopOpts {
   toolChoiceOverride?: string | null;
   /** 外部中止信号 — PipelineStrategy hard timeout 时取消进行中的 LLM 调用 */
   abortSignal?: AbortSignal;
+  diagnostics?: unknown;
   [key: string]: unknown;
 }
 

@@ -46,7 +46,7 @@ export function checkDimensionType(
 
 /** DI container service lookup (returns dynamic service instances) */
 export interface ServiceContainer {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DI container returns dynamic services
+  // biome-ignore lint/suspicious/noExplicitAny: DI container returns dynamic services consumed by many tool modules.
   get(name: string): any;
 }
 
@@ -68,6 +68,7 @@ export interface ToolHandlerContext {
     warn(msg: string, ...args: unknown[]): void;
     error?(msg: string, ...args: unknown[]): void;
   };
+  abortSignal?: AbortSignal | null;
   source?: string;
   _dimensionMeta?: DimensionMeta;
   _projectLanguage?: string;

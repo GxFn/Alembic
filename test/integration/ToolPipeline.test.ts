@@ -10,7 +10,14 @@
  *   - 中间件拦截（blocked / cacheHit）
  */
 
-import { ToolExecutionPipeline } from '../../lib/agent/core/ToolExecutionPipeline.js';
+import { vi } from 'vitest';
+
+import { DiagnosticsCollector } from '../../lib/agent/core/DiagnosticsCollector.js';
+import {
+  allowlistGate,
+  ToolExecutionPipeline,
+} from '../../lib/agent/core/ToolExecutionPipeline.js';
+import { ALL_TOOLS } from '../../lib/agent/tools/index.js';
 import { ToolRegistry } from '../../lib/agent/tools/ToolRegistry.js';
 
 describe('Integration: ToolRegistry', () => {
@@ -51,7 +58,7 @@ describe('Integration: ToolRegistry', () => {
 
     test('should throw on tool without handler', () => {
       expect(() => {
-        registry.register({ name: 'orphan', description: 'no handler' } as any);
+        registry.register({ name: 'orphan', description: 'no handler' } as never);
       }).toThrow();
     });
   });
@@ -84,6 +91,64 @@ describe('Integration: ToolRegistry', () => {
 
       const result = await registry.execute('broken', {});
       expect(result).toEqual({ error: 'Internal failure' });
+    });
+
+    test('should expose direct-call governance metadata', () => {
+      registry.register({
+        name: 'safe_lookup',
+        description: 'Safe lookup',
+        metadata: { directCallable: true, sideEffect: false },
+        handler: async () => ({ ok: true }),
+      });
+
+      expect(registry.isDirectCallable('safe_lookup')).toBe(true);
+      expect(registry.getToolMetadata('safe_lookup')).toMatchObject({
+        directCallable: true,
+        sideEffect: false,
+      });
+    });
+
+    test('should validate required parameters before handler execution', async () => {
+      let executed = false;
+      registry.register({
+        name: 'needs_name',
+        description: 'Requires name',
+        parameters: {
+          type: 'object',
+          properties: { name: { type: 'string' } },
+          required: ['name'],
+        },
+        handler: async () => {
+          executed = true;
+          return { ok: true };
+        },
+      });
+
+      const result = await registry.execute('needs_name', {});
+      expect(executed).toBe(false);
+      expect(result).toEqual({ error: expect.stringContaining('缺少必填参数 "name"') });
+    });
+
+    test('should validate parameter type and enum before handler execution', async () => {
+      registry.register({
+        name: 'typed_tool',
+        description: 'Typed tool',
+        parameters: {
+          type: 'object',
+          properties: {
+            count: { type: 'number' },
+            mode: { type: 'string', enum: ['fast', 'safe'] },
+          },
+          required: ['count', 'mode'],
+        },
+        handler: async () => ({ ok: true }),
+      });
+
+      const badType = await registry.execute('typed_tool', { count: '1', mode: 'fast' });
+      expect(badType).toEqual({ error: expect.stringContaining('参数 "count" 类型应为 number') });
+
+      const badEnum = await registry.execute('typed_tool', { count: 1, mode: 'turbo' });
+      expect(badEnum).toEqual({ error: expect.stringContaining('参数 "mode" 必须是: fast, safe') });
     });
   });
 
@@ -139,6 +204,101 @@ describe('Integration: ToolRegistry', () => {
       await registry.execute('flex', { known: 1, extra: 2 });
       expect(received.known).toBe(1);
       expect(received.extra).toBe(2);
+    });
+  });
+
+  describe('Tool governance metadata', () => {
+    test('should mark HTTP direct tools explicitly', () => {
+      const byName = new Map(ALL_TOOLS.map((tool) => [tool.name, tool]));
+
+      expect(byName.get('search_project_code')?.metadata).toMatchObject({
+        abortMode: 'cooperative',
+        auditLevel: 'checkOnly',
+        composable: true,
+        directCallable: true,
+        policyProfile: 'read',
+        sideEffect: false,
+        surface: ['runtime', 'http'],
+      });
+      expect(byName.get('submit_knowledge')?.metadata).toMatchObject({
+        auditLevel: 'full',
+        composable: false,
+        directCallable: false,
+        policyProfile: 'write',
+        sideEffect: true,
+        surface: ['runtime'],
+      });
+      expect(byName.get('run_safe_command')?.metadata).toMatchObject({
+        abortMode: 'hardTimeout',
+        auditLevel: 'full',
+        directCallable: false,
+        policyProfile: 'system',
+        sideEffect: true,
+      });
+      expect(byName.get('read_project_file')?.metadata).toMatchObject({
+        directCallable: true,
+        sideEffect: false,
+        gatewayAction: 'read:project',
+        gatewayResource: 'project',
+      });
+      expect(byName.get('search_recipes')?.metadata).toMatchObject({
+        directCallable: true,
+        sideEffect: false,
+        gatewayAction: 'read:recipes',
+        gatewayResource: 'recipes',
+      });
+      expect(byName.get('query_audit_log')?.metadata).toMatchObject({
+        directCallable: true,
+        sideEffect: false,
+        gatewayAction: 'read:audit_logs',
+        gatewayResource: '/audit_logs/self',
+      });
+      expect(byName.get('get_recommendations')?.metadata).toMatchObject({
+        directCallable: true,
+        sideEffect: false,
+        gatewayAction: 'read:recipes',
+        gatewayResource: 'recipes',
+      });
+      expect(byName.get('load_skill')?.metadata).toMatchObject({
+        directCallable: true,
+        sideEffect: false,
+        gatewayAction: 'read:skills',
+        gatewayResource: 'skills',
+      });
+      expect(byName.get('get_environment_info')?.metadata).toMatchObject({
+        auditLevel: 'checkOnly',
+        composable: false,
+        directCallable: true,
+        sideEffect: false,
+        gatewayAction: 'read:environment',
+        gatewayResource: 'environment',
+      });
+      expect(byName.get('get_tool_details')?.metadata).toMatchObject({
+        composable: false,
+        directCallable: true,
+        gatewayAction: 'read:agent_tools',
+        gatewayResource: 'agent_tools',
+      });
+      expect(byName.get('validate_candidate')?.metadata).toMatchObject({
+        directCallable: true,
+        gatewayAction: 'validate:candidates',
+        gatewayResource: 'candidates',
+        policyProfile: 'analysis',
+      });
+    });
+
+    test('should provide capability metadata for every tool', () => {
+      for (const tool of ALL_TOOLS) {
+        expect(tool.metadata).toMatchObject({
+          abortMode: expect.any(String),
+          auditLevel: expect.any(String),
+          composable: expect.any(Boolean),
+          directCallable: expect.any(Boolean),
+          policyProfile: expect.any(String),
+          sideEffect: expect.any(Boolean),
+          surface: expect.any(Array),
+        });
+      }
     });
   });
 
@@ -238,7 +398,7 @@ describe('Integration: ToolExecutionPipeline', () => {
 
       const result = await pipeline.execute(
         { name: 'test_tool', args: {}, id: 'call-1' },
-        { runtime: mockRuntime as any, loopCtx: mockLoopCtx as any, iteration: 0 }
+        { runtime: mockRuntime as never, loopCtx: mockLoopCtx as never, iteration: 0 }
       );
 
       expect(order).toEqual([
@@ -283,8 +443,8 @@ describe('Integration: ToolExecutionPipeline', () => {
             policies: { get: () => null },
             toolRegistry: mockRegistry,
             container: {},
-          } as any,
-          loopCtx: { source: 'test', sharedState: {} } as any,
+          } as never,
+          loopCtx: { source: 'test', sharedState: {} } as never,
           iteration: 0,
         }
       );
@@ -307,14 +467,132 @@ describe('Integration: ToolExecutionPipeline', () => {
       const result = await pipeline.execute(
         { name: 'any_tool', args: {}, id: 'call-3' },
         {
-          runtime: { id: 'r', policies: { get: () => null } } as any,
-          loopCtx: { source: 'test' } as any,
+          runtime: { id: 'r', policies: { get: () => null } } as never,
+          loopCtx: { source: 'test' } as never,
           iteration: 0,
         }
       );
 
       expect(result.metadata.cacheHit).toBe(true);
       expect(result.result).toEqual({ cached: true });
+    });
+
+    test('should pass abortSignal to tool handler context', async () => {
+      const pipeline = new ToolExecutionPipeline();
+      const mockRegistry = new ToolRegistry();
+      const abortController = new AbortController();
+      let capturedSignal: AbortSignal | null = null;
+      mockRegistry.register({
+        name: 'signal_aware_tool',
+        description: 'Signal aware tool',
+        handler: async (_params, context) => {
+          capturedSignal = (context.abortSignal as AbortSignal) || null;
+          return { ok: true };
+        },
+      });
+
+      const result = await pipeline.execute(
+        { name: 'signal_aware_tool', args: {}, id: 'call-signal' },
+        {
+          runtime: {
+            id: 'r',
+            presetName: 'test',
+            policies: { get: () => null },
+            toolRegistry: mockRegistry,
+            container: {},
+          } as never,
+          loopCtx: {
+            source: 'test',
+            sharedState: {},
+            abortSignal: abortController.signal,
+          } as never,
+          iteration: 0,
+        }
+      );
+
+      expect(result.result).toEqual({ ok: true });
+      expect(capturedSignal).toBe(abortController.signal);
+    });
+
+    test('should not start tool handler when abortSignal is already aborted', async () => {
+      const pipeline = new ToolExecutionPipeline();
+      const mockRegistry = new ToolRegistry();
+      const abortController = new AbortController();
+      abortController.abort();
+      let executed = false;
+      mockRegistry.register({
+        name: 'slow_tool',
+        description: 'Slow tool',
+        handler: async () => {
+          executed = true;
+          return { ok: true };
+        },
+      });
+
+      const result = await pipeline.execute(
+        { name: 'slow_tool', args: {}, id: 'call-aborted' },
+        {
+          runtime: {
+            id: 'r',
+            presetName: 'test',
+            policies: { get: () => null },
+            toolRegistry: mockRegistry,
+            container: {},
+          } as never,
+          loopCtx: {
+            source: 'test',
+            sharedState: {},
+            abortSignal: abortController.signal,
+          } as never,
+          iteration: 0,
+        }
+      );
+
+      expect(executed).toBe(false);
+      expect(result.metadata.blocked).toBe(true);
+      expect(result.result).toEqual({ error: expect.stringContaining('aborted') });
+    });
+
+    test('should block registered static tools missing from the active allowlist', async () => {
+      const pipeline = new ToolExecutionPipeline();
+      const mockRegistry = new ToolRegistry();
+      const diagnostics = new DiagnosticsCollector();
+      let executed = false;
+      mockRegistry.register({
+        name: 'static_tool',
+        description: 'Static tool',
+        handler: async () => {
+          executed = true;
+          return { ok: true };
+        },
+      });
+
+      const result = await pipeline.use(allowlistGate).execute(
+        { name: 'static_tool', args: {}, id: 'call-static' },
+        {
+          runtime: {
+            id: 'r',
+            policies: { get: () => null },
+            toolRegistry: mockRegistry,
+            container: { get: () => ({ temporaryRegistry: { isTemporary: () => false } }) },
+            logger: { info: vi.fn(), warn: vi.fn() },
+          } as never,
+          loopCtx: {
+            source: 'test',
+            toolSchemas: [{ name: 'allowed_tool' }],
+            sharedState: {},
+            diagnostics,
+          } as never,
+          iteration: 0,
+        }
+      );
+
+      expect(executed).toBe(false);
+      expect(result.metadata.blocked).toBe(true);
+      expect(result.result).toEqual({ error: expect.stringContaining('不可用') });
+      expect(diagnostics.toJSON().blockedTools).toEqual([
+        expect.objectContaining({ tool: 'static_tool', reason: expect.stringContaining('不可用') }),
+      ]);
     });
   });
 });
