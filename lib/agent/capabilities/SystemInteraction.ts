@@ -24,7 +24,10 @@ export class SystemInteraction extends Capability {
 1. **终端命令**: terminal_run 执行结构化命令，参数为 { bin, args, env, cwd, timeoutMs, network, filesystem, interactive, session }
    - interactive 默认为 "never"；当前不开放需要人工输入的交互式命令
    - env 默认为单次命令作用域；只有 persistent session 显式声明 envPersistence="explicit" 时才复用显式 env metadata
-   - terminal_session_close / terminal_session_cleanup 可显式关闭或清理 persistent session metadata
+   - terminal_script 执行非交互 /bin/sh 脚本；脚本会先写入 artifact，并且每次都需要确认
+   - terminal_shell 执行受治理的 /bin/sh -lc 命令字符串；适合必须使用管道/重定向/命令替换的场景
+   - terminal_pty 通过 PTY wrapper 观察一次性 shell 命令 transcript；可提供有限的一次性 stdin，发送后立即关闭，不开放持续交互
+   - terminal_session_status / terminal_session_close / terminal_session_cleanup 可查看、关闭或清理 persistent session metadata
 2. **文件写入**: write_project_file 创建/覆盖项目内文件
 3. **环境探测**: get_environment_info 获取 OS/Node/Git/项目信息
 4. **项目探索**: 搜索代码、读取文件、列出目录结构
@@ -35,6 +38,7 @@ export class SystemInteraction extends Capability {
 安全规则:
 - 所有操作限制在项目目录 (${this.#projectRoot}) 内
 - 终端命令必须拆成 bin + args，不接受自由 shell、管道、重定向或命令替换
+- 多行脚本只能通过 terminal_script 执行；交互式显示需求使用 terminal_pty，但只支持一次性 bounded stdin，持续交互 shell 暂不开放
 - 危险可执行文件 (sudo, dd, mkfs, shutdown 等) 和 rm -rf 会被自动拦截
 - 受保护文件 (.git/, node_modules/, .env) 不可写入
 - SafetyPolicy 可进一步约束可执行命令和可访问路径
@@ -50,7 +54,11 @@ export class SystemInteraction extends Capability {
   get tools() {
     return [
       'terminal_run',
+      'terminal_script',
+      'terminal_shell',
+      'terminal_pty',
       'terminal_session_close',
+      'terminal_session_status',
       'terminal_session_cleanup',
       'mac_system_info',
       'mac_permission_status',

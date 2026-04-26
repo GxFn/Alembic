@@ -4,9 +4,13 @@ import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import { TerminalAdapter } from '../../lib/tools/adapters/TerminalAdapter.js';
 import {
+  TERMINAL_PTY_CAPABILITY,
   TERMINAL_RUN_CAPABILITY,
+  TERMINAL_SCRIPT_CAPABILITY,
   TERMINAL_SESSION_CLEANUP_CAPABILITY,
   TERMINAL_SESSION_CLOSE_CAPABILITY,
+  TERMINAL_SESSION_STATUS_CAPABILITY,
+  TERMINAL_SHELL_CAPABILITY,
 } from '../../lib/tools/adapters/TerminalCapabilities.js';
 import { InMemoryTerminalSessionManager } from '../../lib/tools/adapters/TerminalSessionManager.js';
 import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
@@ -516,6 +520,344 @@ describe('TerminalAdapter', () => {
       },
     });
     expect(sessionManager.snapshot('session-to-close')).toBeNull();
+  });
+
+  test('reports one or all persistent terminal session metadata records', async () => {
+    const sessionManager = new InMemoryTerminalSessionManager();
+    const adapter = new TerminalAdapter({ sessionManager });
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'terminal-status-'));
+
+    await adapter.execute(
+      request(
+        {
+          bin: process.execPath,
+          args: ['-e', 'process.stdout.write("status")'],
+          session: { mode: 'persistent', id: 'status-session', envPersistence: 'explicit' },
+          env: { ALEMBIC_STATUS_ENV: 'hidden-status-value' },
+        },
+        { projectRoot }
+      )
+    );
+
+    const one = await adapter.execute(
+      request(
+        { id: 'status-session' },
+        {
+          projectRoot,
+          manifest: TERMINAL_SESSION_STATUS_CAPABILITY,
+          services: { terminalSessionManager: sessionManager },
+        }
+      )
+    );
+    const all = await adapter.execute(
+      request(
+        {},
+        {
+          projectRoot,
+          manifest: TERMINAL_SESSION_STATUS_CAPABILITY,
+          services: { terminalSessionManager: sessionManager },
+        }
+      )
+    );
+
+    expect(one).toMatchObject({
+      ok: true,
+      toolId: 'terminal_session_status',
+      structuredContent: {
+        action: 'status',
+        id: 'status-session',
+        found: true,
+        sessionRecord: {
+          id: 'status-session',
+          status: 'idle',
+          envKeys: ['ALEMBIC_STATUS_ENV'],
+          commandCount: 1,
+        },
+      },
+    });
+    expect(all).toMatchObject({
+      ok: true,
+      toolId: 'terminal_session_status',
+      structuredContent: {
+        action: 'status',
+        count: 1,
+        sessions: [
+          {
+            id: 'status-session',
+            envKeys: ['ALEMBIC_STATUS_ENV'],
+          },
+        ],
+      },
+    });
+    expect(JSON.stringify(one)).not.toContain('hidden-status-value');
+    expect(JSON.stringify(all)).not.toContain('hidden-status-value');
+  });
+
+  test('executes terminal_script through an artifact-backed non-interactive shell', async () => {
+    const adapter = new TerminalAdapter();
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'terminal-script-'));
+
+    const result = await adapter.execute(
+      request(
+        {
+          script: 'printf "script:%s" "$ALEMBIC_SCRIPT_ENV"',
+          env: { ALEMBIC_SCRIPT_ENV: 'ok' },
+          filesystem: 'project-write',
+        },
+        { projectRoot, manifest: TERMINAL_SCRIPT_CAPABILITY }
+      )
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      toolId: 'terminal_script',
+      status: 'success',
+      structuredContent: {
+        stdout: 'script:ok',
+        stderr: '',
+        bin: '/bin/sh',
+        cwd: projectRoot,
+        env: {
+          keys: ['ALEMBIC_SCRIPT_ENV'],
+          persistence: 'none',
+        },
+        script: {
+          shell: '/bin/sh',
+          scriptHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+          verificationHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+          lineCount: 1,
+        },
+        policy: {
+          allowed: true,
+          risk: 'high',
+        },
+      },
+      artifacts: [
+        {
+          id: 'call-terminal:script',
+          kind: 'file',
+          mimeType: 'text/x-shellscript; charset=utf-8',
+        },
+      ],
+    });
+    expect(JSON.stringify(result.structuredContent)).not.toContain('ALEMBIC_SCRIPT_ENV=ok');
+
+    const scriptArtifact = result.artifacts?.find(
+      (artifact) => artifact.id === 'call-terminal:script'
+    );
+    if (!scriptArtifact) {
+      throw new Error('script artifact was not created');
+    }
+    expect(fs.readFileSync(new URL(scriptArtifact.uri), 'utf8')).toBe(
+      'printf "script:%s" "$ALEMBIC_SCRIPT_ENV"\n'
+    );
+  });
+
+  test('blocks terminal_script when script policy rejects content', async () => {
+    const adapter = new TerminalAdapter();
+
+    const result = await adapter.execute(
+      request(
+        {
+          script: 'rm -rf ./dist',
+          filesystem: 'project-write',
+        },
+        { manifest: TERMINAL_SCRIPT_CAPABILITY }
+      )
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      toolId: 'terminal_script',
+      status: 'blocked',
+      structuredContent: {
+        policy: {
+          allowed: false,
+          matchedRule: 'script-rm-recursive-force',
+        },
+      },
+      diagnostics: {
+        blockedTools: [
+          { tool: 'terminal_script', reason: expect.stringContaining('Recursive force remove') },
+        ],
+      },
+    });
+  });
+
+  test('executes terminal_shell through governed /bin/sh -lc', async () => {
+    const adapter = new TerminalAdapter();
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'terminal-shell-'));
+
+    const result = await adapter.execute(
+      request(
+        {
+          command: 'printf "shell:%s" "$ALEMBIC_SHELL_ENV" | cat',
+          env: { ALEMBIC_SHELL_ENV: 'ok' },
+          filesystem: 'project-write',
+        },
+        { projectRoot, manifest: TERMINAL_SHELL_CAPABILITY }
+      )
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      toolId: 'terminal_shell',
+      status: 'success',
+      structuredContent: {
+        stdout: 'shell:ok',
+        bin: '/bin/sh',
+        args: ['-lc', '<command-redacted>'],
+        cwd: projectRoot,
+        env: {
+          keys: ['ALEMBIC_SHELL_ENV'],
+          persistence: 'none',
+        },
+        shell: {
+          shell: '/bin/sh',
+          commandHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+          verificationHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        },
+        policy: {
+          allowed: true,
+          risk: 'high',
+        },
+      },
+    });
+    expect(JSON.stringify(result.structuredContent)).not.toContain('printf "shell:%s"');
+    expect(JSON.stringify(result.structuredContent)).not.toContain('ALEMBIC_SHELL_ENV=ok');
+  });
+
+  test('blocks terminal_shell when policy rejects shell content', async () => {
+    const adapter = new TerminalAdapter();
+
+    const result = await adapter.execute(
+      request(
+        {
+          command: 'rm -rf ./dist',
+          filesystem: 'project-write',
+        },
+        { manifest: TERMINAL_SHELL_CAPABILITY }
+      )
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      toolId: 'terminal_shell',
+      status: 'blocked',
+      structuredContent: {
+        policy: {
+          allowed: false,
+          matchedRule: 'shell-rm-recursive-force',
+        },
+      },
+    });
+  });
+
+  test('executes terminal_pty through a PTY transcript wrapper', async () => {
+    const adapter = new TerminalAdapter();
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'terminal-pty-'));
+
+    const result = await adapter.execute(
+      request(
+        {
+          command: 'printf "pty-ok"',
+          rows: 30,
+          cols: 100,
+        },
+        { projectRoot, manifest: TERMINAL_PTY_CAPABILITY }
+      )
+    );
+
+    if (!result.ok) {
+      expect(result).toMatchObject({
+        toolId: 'terminal_pty',
+        status: 'error',
+        structuredContent: {
+          stderr: expect.stringMatching(/out of pty devices|No such file|not found|not available/i),
+          pty: {
+            stdin: 'disabled',
+            wrapper: 'python-pty',
+          },
+        },
+      });
+      return;
+    }
+
+    expect(result).toMatchObject({
+      ok: true,
+      toolId: 'terminal_pty',
+      status: 'success',
+      structuredContent: {
+        stdout: expect.stringContaining('pty-ok'),
+        bin: 'python3',
+        cwd: projectRoot,
+        interactive: 'allowed',
+        shell: {
+          shell: '/bin/sh',
+          commandHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        },
+        pty: {
+          rows: 30,
+          cols: 100,
+          stdin: 'disabled',
+          wrapper: 'python-pty',
+        },
+        policy: {
+          allowed: true,
+          risk: 'high',
+        },
+      },
+    });
+    expect(JSON.stringify(result.structuredContent)).not.toContain('printf "pty-ok"');
+  });
+
+  test('executes terminal_pty with bounded one-shot stdin without auditing raw stdin', async () => {
+    const adapter = new TerminalAdapter();
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'terminal-pty-stdin-'));
+
+    const result = await adapter.execute(
+      request(
+        {
+          command: 'cat',
+          stdin: 'pty-stdin-ok\n',
+          rows: 24,
+          cols: 80,
+        },
+        { projectRoot, manifest: TERMINAL_PTY_CAPABILITY }
+      )
+    );
+
+    if (!result.ok) {
+      expect(result).toMatchObject({
+        toolId: 'terminal_pty',
+        status: 'error',
+        structuredContent: {
+          stderr: expect.stringMatching(/out of pty devices|No such file|not found|not available/i),
+          pty: {
+            stdin: 'provided',
+            stdinHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+          },
+        },
+      });
+      return;
+    }
+
+    expect(result).toMatchObject({
+      ok: true,
+      toolId: 'terminal_pty',
+      status: 'success',
+      structuredContent: {
+        stdout: expect.stringContaining('pty-stdin-ok'),
+        pty: {
+          stdin: 'provided',
+          stdinHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+          stdinByteLength: 13,
+        },
+      },
+    });
+    expect(JSON.stringify((result.structuredContent as Record<string, unknown>).pty)).not.toContain(
+      'pty-stdin-ok'
+    );
   });
 
   test('records terminal audit events without including raw output', async () => {

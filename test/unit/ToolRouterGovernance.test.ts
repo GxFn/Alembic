@@ -2,7 +2,12 @@ import { describe, expect, test, vi } from 'vitest';
 import { PolicyEngine, SafetyPolicy } from '../../lib/agent/policies/index.js';
 import { InternalToolAdapter } from '../../lib/tools/adapters/InternalToolAdapter.js';
 import { TerminalAdapter } from '../../lib/tools/adapters/TerminalAdapter.js';
-import { TERMINAL_RUN_CAPABILITY } from '../../lib/tools/adapters/TerminalCapabilities.js';
+import {
+  TERMINAL_PTY_CAPABILITY,
+  TERMINAL_RUN_CAPABILITY,
+  TERMINAL_SCRIPT_CAPABILITY,
+  TERMINAL_SHELL_CAPABILITY,
+} from '../../lib/tools/adapters/TerminalCapabilities.js';
 import { CapabilityCatalog } from '../../lib/tools/catalog/CapabilityCatalog.js';
 import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
 import { buildInternalToolCapabilities } from '../../lib/tools/catalog/CapabilityProjection.js';
@@ -208,6 +213,94 @@ describe('ToolRouter + GovernanceEngine', () => {
         },
       },
     });
+  });
+
+  test('requires confirmation for terminal_script and returns hash-only preview', async () => {
+    const router = new ToolRouter({
+      catalog: new CapabilityCatalog([TERMINAL_SCRIPT_CAPABILITY]),
+      adapters: [new TerminalAdapter()],
+      projectRoot: process.cwd(),
+    });
+
+    const result = await router.execute(
+      baseRequest({
+        toolId: 'terminal_script',
+        args: { script: 'printf "needs-confirmation"', filesystem: 'project-write' },
+      })
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      status: 'needs-confirmation',
+      structuredContent: {
+        preview: {
+          kind: 'terminal-script',
+          risk: 'high',
+          details: {
+            shell: '/bin/sh',
+            scriptHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+            allowed: true,
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(result.structuredContent)).not.toContain('needs-confirmation');
+  });
+
+  test('requires confirmation for terminal_shell and terminal_pty previews', async () => {
+    const router = new ToolRouter({
+      catalog: new CapabilityCatalog([TERMINAL_SHELL_CAPABILITY, TERMINAL_PTY_CAPABILITY]),
+      adapters: [new TerminalAdapter()],
+      projectRoot: process.cwd(),
+    });
+
+    const shell = await router.execute(
+      baseRequest({
+        toolId: 'terminal_shell',
+        args: { command: 'printf "shell-preview" | cat', filesystem: 'project-write' },
+      })
+    );
+    const pty = await router.execute(
+      baseRequest({
+        toolId: 'terminal_pty',
+        args: { command: 'printf "pty-preview"', rows: 24, cols: 80 },
+      })
+    );
+
+    expect(shell).toMatchObject({
+      ok: false,
+      status: 'needs-confirmation',
+      structuredContent: {
+        preview: {
+          kind: 'terminal-shell',
+          risk: 'high',
+          details: {
+            commandHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+            allowed: true,
+          },
+        },
+      },
+    });
+    expect(pty).toMatchObject({
+      ok: false,
+      status: 'needs-confirmation',
+      structuredContent: {
+        preview: {
+          kind: 'terminal-pty',
+          risk: 'high',
+          details: {
+            commandHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+            pty: {
+              stdin: 'disabled',
+              wrapper: 'python-pty',
+            },
+            allowed: true,
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(shell.structuredContent)).not.toContain('shell-preview');
+    expect(JSON.stringify(pty.structuredContent)).not.toContain('pty-preview');
   });
 
   test('applies runtime SafetyPolicy to terminal_run before adapter execution', async () => {

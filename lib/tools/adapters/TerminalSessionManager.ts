@@ -39,6 +39,7 @@ export interface TerminalSessionManager {
     request: TerminalSessionAcquireRequest
   ): { ok: true; lease: TerminalSessionLease } | { ok: false; error: string };
   snapshot(id: string): TerminalSessionRecord | null;
+  list(): TerminalSessionRecord[];
   close(id: string, now?: Date): boolean;
   cleanup(now?: Date): number;
 }
@@ -112,6 +113,10 @@ export class InMemoryTerminalSessionManager implements TerminalSessionManager {
   snapshot(id: string): TerminalSessionRecord | null {
     const record = this.#sessions.get(id);
     return record ? cloneRecord(record) : null;
+  }
+
+  list(): TerminalSessionRecord[] {
+    return [...this.#sessions.values()].map(cloneRecord).sort((a, b) => a.id.localeCompare(b.id));
   }
 
   close(id: string, now = new Date()): boolean {

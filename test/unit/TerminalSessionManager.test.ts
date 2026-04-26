@@ -86,6 +86,41 @@ describe('InMemoryTerminalSessionManager', () => {
     });
   });
 
+  test('lists persistent session records without exposing env values', () => {
+    const manager = new InMemoryTerminalSessionManager();
+    const first = manager.acquire(
+      {
+        mode: 'persistent',
+        id: 'b-session',
+        cwdPersistence: 'none',
+        envPersistence: 'explicit',
+        processPersistence: 'none',
+      },
+      { callId: 'call-1', projectRoot: '/repo', cwd: '/repo' }
+    );
+    const second = manager.acquire(
+      {
+        mode: 'persistent',
+        id: 'a-session',
+        cwdPersistence: 'none',
+        envPersistence: 'none',
+        processPersistence: 'none',
+      },
+      { callId: 'call-2', projectRoot: '/repo', cwd: '/repo' }
+    );
+    if (!first.ok || !second.ok) {
+      throw new Error('failed to acquire sessions');
+    }
+    first.lease.release({ env: { ALEMBIC_LIST_ENV: 'hidden-value' } });
+    second.lease.release();
+
+    expect(manager.list()).toMatchObject([
+      { id: 'a-session', status: 'idle', envKeys: [] },
+      { id: 'b-session', status: 'idle', envKeys: ['ALEMBIC_LIST_ENV'] },
+    ]);
+    expect(JSON.stringify(manager.list())).not.toContain('hidden-value');
+  });
+
   test('cleans up expired persistent sessions', () => {
     const manager = new InMemoryTerminalSessionManager({ persistentTtlMs: 1000 });
     const acquired = manager.acquire(

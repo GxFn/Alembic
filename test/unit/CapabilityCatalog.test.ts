@@ -111,7 +111,11 @@ describe('CapabilityCatalog', () => {
     const schemas = catalog.toToolSchemas(capability.tools);
 
     expect(capability.tools).toContain('terminal_run');
+    expect(capability.tools).toContain('terminal_script');
+    expect(capability.tools).toContain('terminal_shell');
+    expect(capability.tools).toContain('terminal_pty');
     expect(capability.tools).toContain('terminal_session_close');
+    expect(capability.tools).toContain('terminal_session_status');
     expect(capability.tools).toContain('terminal_session_cleanup');
     expect(capability.tools).toContain('mac_system_info');
     expect(capability.tools).toContain('mac_permission_status');
@@ -119,7 +123,11 @@ describe('CapabilityCatalog', () => {
     expect(capability.tools).toContain('mac_screenshot');
     expect(capability.tools).not.toContain('run_safe_command');
     expect(schemas.map((schema) => schema.name)).toContain('terminal_run');
+    expect(schemas.map((schema) => schema.name)).toContain('terminal_script');
+    expect(schemas.map((schema) => schema.name)).toContain('terminal_shell');
+    expect(schemas.map((schema) => schema.name)).toContain('terminal_pty');
     expect(schemas.map((schema) => schema.name)).toContain('terminal_session_close');
+    expect(schemas.map((schema) => schema.name)).toContain('terminal_session_status');
     expect(schemas.map((schema) => schema.name)).toContain('terminal_session_cleanup');
     expect(schemas.map((schema) => schema.name)).toContain('mac_screenshot');
     expect(catalog.getManifest('terminal_run')).toMatchObject({
@@ -127,10 +135,34 @@ describe('CapabilityCatalog', () => {
       execution: { adapter: 'terminal', artifactMode: 'file-ref' },
       governance: { policyProfile: 'system', approvalPolicy: 'explain-then-run' },
     });
+    expect(catalog.getManifest('terminal_script')).toMatchObject({
+      kind: 'terminal-profile',
+      execution: { adapter: 'terminal', artifactMode: 'file-ref' },
+      governance: { policyProfile: 'system', approvalPolicy: 'confirm-every-time' },
+      risk: { requiresHumanConfirmation: 'always' },
+    });
+    expect(catalog.getManifest('terminal_shell')).toMatchObject({
+      kind: 'terminal-profile',
+      execution: { adapter: 'terminal', artifactMode: 'file-ref' },
+      governance: { policyProfile: 'system', approvalPolicy: 'confirm-every-time' },
+      risk: { requiresHumanConfirmation: 'always' },
+    });
+    expect(catalog.getManifest('terminal_pty')).toMatchObject({
+      kind: 'terminal-profile',
+      execution: { adapter: 'terminal', artifactMode: 'file-ref' },
+      governance: { policyProfile: 'system', approvalPolicy: 'confirm-every-time' },
+      risk: { requiresHumanConfirmation: 'always' },
+    });
     expect(catalog.getManifest('terminal_session_close')).toMatchObject({
       kind: 'terminal-profile',
       execution: { adapter: 'terminal', artifactMode: 'inline' },
       governance: { policyProfile: 'system', approvalPolicy: 'auto' },
+    });
+    expect(catalog.getManifest('terminal_session_status')).toMatchObject({
+      kind: 'terminal-profile',
+      risk: { sideEffect: false },
+      execution: { adapter: 'terminal', artifactMode: 'inline' },
+      governance: { policyProfile: 'read', approvalPolicy: 'auto' },
     });
   });
 
