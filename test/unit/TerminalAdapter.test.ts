@@ -2,15 +2,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, test } from 'vitest';
-import { TerminalAdapter } from '../../lib/agent/adapters/TerminalAdapter.js';
+import { TerminalAdapter } from '../../lib/tools/adapters/TerminalAdapter.js';
 import {
   TERMINAL_RUN_CAPABILITY,
   TERMINAL_SESSION_CLEANUP_CAPABILITY,
   TERMINAL_SESSION_CLOSE_CAPABILITY,
-} from '../../lib/agent/adapters/TerminalCapabilities.js';
-import { InMemoryTerminalSessionManager } from '../../lib/agent/adapters/TerminalSessionManager.js';
-import type { ToolExecutionRequest } from '../../lib/agent/core/ToolContracts.js';
-import type { ToolCapabilityManifest } from '../../lib/agent/tools/CapabilityManifest.js';
+} from '../../lib/tools/adapters/TerminalCapabilities.js';
+import { InMemoryTerminalSessionManager } from '../../lib/tools/adapters/TerminalSessionManager.js';
+import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
+import type { ToolExecutionRequest } from '../../lib/tools/core/ToolContracts.js';
 
 function request(
   args: Record<string, unknown>,

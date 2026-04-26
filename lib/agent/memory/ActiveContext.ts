@@ -21,7 +21,7 @@
  */
 
 import Logger from '#infra/logging/Logger.js';
-import type { ToolResultEnvelope } from '../core/ToolResultEnvelope.js';
+import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
 import type { DistilledContext } from './memory-flush-contract.js';
 
 // ═══════════════════════════════════════════════════════════

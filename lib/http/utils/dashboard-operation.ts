@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
-import type { ToolRouterContract } from '../../agent/core/ToolContracts.js';
-import type { ToolResultEnvelope } from '../../agent/core/ToolResultEnvelope.js';
+import type { ToolRouterContract } from '#tools/core/ToolContracts.js';
+import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
 import { sendToolEnvelopeResponse } from './tool-envelope-response.js';
 
 export interface DashboardOperationContainer {

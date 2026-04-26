@@ -458,7 +458,7 @@ describe('L3: Go Enhancement Pack (go-web)', () => {
 describe('L5: Go Infrastructure Support', () => {
   it('SUMMARY_EXTRACTORS should have go entry', async () => {
     // Import the module and access the handler
-    const toolsMod = await import('../../lib/agent/tools/index.js');
+    const toolsMod = await import('../../lib/tools/handlers/index.js');
     const allTools = toolsMod.ALL_TOOLS || toolsMod.default;
     const getFileSummary = Array.isArray(allTools)
       ? allTools.find((t) => t.name === 'get_file_summary')

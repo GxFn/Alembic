@@ -8,8 +8,8 @@
  * @module bootstrap/shared/target-file-map
  */
 
-import { inferLang } from '../../LanguageExtensions.js';
-import { inferFilePriority } from '../../TargetClassifier.js';
+import { inferLang } from '#external/mcp/handlers/LanguageExtensions.js';
+import { inferFilePriority } from '#external/mcp/handlers/TargetClassifier.js';
 import type { TargetFile } from './handler-types.js';
 
 /** Minimal file shape required by buildTargetFileMap */

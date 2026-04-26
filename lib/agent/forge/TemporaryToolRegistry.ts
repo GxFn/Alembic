@@ -13,10 +13,13 @@
 import Logger from '#infra/logging/Logger.js';
 
 import type { SignalBus } from '#infra/signal/SignalBus.js';
+import type {
+  ForgedInternalToolStore,
+  InternalToolHandler,
+} from '#tools/core/InternalToolHandler.js';
+import type { WorkflowHandler } from '#tools/workflow/WorkflowRegistry.js';
 import type { Disposable } from '../../shared/lifecycle.js';
 import { timerRegistry } from '../../shared/TimerRegistry.js';
-import type { ForgedInternalToolStore, InternalToolHandler } from '../core/InternalToolHandler.js';
-import type { WorkflowHandler } from '../workflow/WorkflowRegistry.js';
 
 /* ────────────────────── Types ────────────────────── */
 

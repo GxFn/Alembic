@@ -12,7 +12,7 @@
  *   - data update
  */
 
-import { AgentPhase, AgentState } from '../../lib/agent/AgentState.js';
+import { AgentPhase, AgentState } from '../../lib/agent/runtime/AgentState.js';
 
 describe('Integration: AgentState', () => {
   describe('Default transitions', () => {

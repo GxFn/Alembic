@@ -6,23 +6,6 @@
  *   - feedbackStore, recommendationPipeline, recommendationMetrics
  */
 
-import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
-import { DashboardOperationAdapter } from '../../agent/adapters/DashboardOperationAdapter.js';
-import { InternalToolAdapter } from '../../agent/adapters/InternalToolAdapter.js';
-import { MacSystemAdapter } from '../../agent/adapters/MacSystemAdapter.js';
-import { MAC_SYSTEM_CAPABILITY_MANIFESTS } from '../../agent/adapters/MacSystemCapabilities.js';
-import { SkillAdapter } from '../../agent/adapters/SkillAdapter.js';
-import { SKILL_CAPABILITY_MANIFESTS } from '../../agent/adapters/SkillCapabilities.js';
-import { TerminalAdapter } from '../../agent/adapters/TerminalAdapter.js';
-import { TERMINAL_CAPABILITY_MANIFESTS } from '../../agent/adapters/TerminalCapabilities.js';
-import { InMemoryTerminalSessionManager } from '../../agent/adapters/TerminalSessionManager.js';
-import { WorkflowAdapter } from '../../agent/adapters/WorkflowAdapter.js';
-import { ToolRouter } from '../../agent/core/ToolRouter.js';
-import {
-  DASHBOARD_OPERATION_HANDLERS,
-  DASHBOARD_OPERATION_MANIFESTS,
-} from '../../agent/dashboard/DashboardOperations.js';
-import { ToolForge } from '../../agent/forge/ToolForge.js';
 import {
   AgentProfileCompiler,
   AgentProfileRegistry,
@@ -31,11 +14,28 @@ import {
   AgentService,
   AgentStageFactoryRegistry,
   SystemRunContextFactory,
-} from '../../agent/service/index.js';
-import { CapabilityCatalog } from '../../agent/tools/CapabilityCatalog.js';
-import { ALL_TOOLS, TOOL_CAPABILITY_MANIFESTS } from '../../agent/tools/index.js';
-import { ToolRegistry } from '../../agent/tools/ToolRegistry.js';
-import { WorkflowRegistry } from '../../agent/workflow/WorkflowRegistry.js';
+} from '#agent/service/index.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { DashboardOperationAdapter } from '#tools/adapters/DashboardOperationAdapter.js';
+import {
+  DASHBOARD_OPERATION_HANDLERS,
+  DASHBOARD_OPERATION_MANIFESTS,
+} from '#tools/adapters/DashboardOperations.js';
+import { InternalToolAdapter } from '#tools/adapters/InternalToolAdapter.js';
+import { MacSystemAdapter } from '#tools/adapters/MacSystemAdapter.js';
+import { MAC_SYSTEM_CAPABILITY_MANIFESTS } from '#tools/adapters/MacSystemCapabilities.js';
+import { SkillAdapter } from '#tools/adapters/SkillAdapter.js';
+import { SKILL_CAPABILITY_MANIFESTS } from '#tools/adapters/SkillCapabilities.js';
+import { TerminalAdapter } from '#tools/adapters/TerminalAdapter.js';
+import { TERMINAL_CAPABILITY_MANIFESTS } from '#tools/adapters/TerminalCapabilities.js';
+import { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
+import { WorkflowAdapter } from '#tools/adapters/WorkflowAdapter.js';
+import { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
+import { ToolRegistry } from '#tools/catalog/ToolRegistry.js';
+import { ToolRouter } from '#tools/core/ToolRouter.js';
+import { ALL_TOOLS, TOOL_CAPABILITY_MANIFESTS } from '#tools/handlers/index.js';
+import { WorkflowRegistry } from '#tools/workflow/WorkflowRegistry.js';
+import { ToolForge } from '../../agent/forge/ToolForge.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { AIRecallStrategy } from '../../service/skills/AIRecallStrategy.js';
 import { FeedbackStore } from '../../service/skills/FeedbackStore.js';

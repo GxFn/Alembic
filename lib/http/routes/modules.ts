@@ -13,7 +13,7 @@ import {
   ScanProjectBody,
   ScanTargetBody,
 } from '#shared/schemas/http-requests.js';
-import { DASHBOARD_OPERATION_IDS } from '../../agent/dashboard/DashboardOperations.js';
+import { DASHBOARD_OPERATION_IDS } from '#tools/adapters/DashboardOperations.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';

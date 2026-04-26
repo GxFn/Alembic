@@ -11,20 +11,23 @@
  */
 
 import { vi } from 'vitest';
-
-import { InternalToolAdapter } from '../../lib/agent/adapters/InternalToolAdapter.js';
-import { DiagnosticsCollector } from '../../lib/agent/core/DiagnosticsCollector.js';
+import { DiagnosticsCollector } from '../../lib/agent/runtime/DiagnosticsCollector.js';
 import {
   allowlistGate,
   observationRecord,
   ToolExecutionPipeline,
-} from '../../lib/agent/core/ToolExecutionPipeline.js';
-import { ToolRouter } from '../../lib/agent/core/ToolRouter.js';
-import { CapabilityCatalog } from '../../lib/agent/tools/CapabilityCatalog.js';
-import { createInternalToolManifest } from '../../lib/agent/tools/CapabilityProjection.js';
-import { ALL_TOOLS, getToolDetails, TOOL_CAPABILITY_CATALOG } from '../../lib/agent/tools/index.js';
-import type { ToolDefinition } from '../../lib/agent/tools/ToolDefinition.js';
-import { ToolRegistry } from '../../lib/agent/tools/ToolRegistry.js';
+} from '../../lib/agent/runtime/ToolExecutionPipeline.js';
+import { InternalToolAdapter } from '../../lib/tools/adapters/InternalToolAdapter.js';
+import { CapabilityCatalog } from '../../lib/tools/catalog/CapabilityCatalog.js';
+import { createInternalToolManifest } from '../../lib/tools/catalog/CapabilityProjection.js';
+import type { ToolDefinition } from '../../lib/tools/catalog/ToolDefinition.js';
+import { ToolRegistry } from '../../lib/tools/catalog/ToolRegistry.js';
+import { ToolRouter } from '../../lib/tools/core/ToolRouter.js';
+import {
+  ALL_TOOLS,
+  getToolDetails,
+  TOOL_CAPABILITY_CATALOG,
+} from '../../lib/tools/handlers/index.js';
 
 async function executeRegisteredTool(
   registry: ToolRegistry,

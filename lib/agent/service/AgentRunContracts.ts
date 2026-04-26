@@ -1,11 +1,11 @@
-import type { AgentMessage } from '../AgentMessage.js';
+import type { AgentMessage } from '../runtime/AgentMessage.js';
 import type {
   AgentDiagnostics,
   FileCacheEntry,
   ProgressEvent,
   ToolCallEntry,
-} from '../AgentRuntimeTypes.js';
-import type { SystemRunContext } from '../core/SystemRunContext.js';
+} from '../runtime/AgentRuntimeTypes.js';
+import type { SystemRunContext } from '../runtime/SystemRunContext.js';
 
 export type BuiltinAgentPreset = 'chat' | 'insight' | 'evolution' | 'lark' | 'remote-exec';
 

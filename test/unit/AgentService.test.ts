@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { AgentMessage } from '../../lib/agent/AgentMessage.js';
+import type { AgentMessage } from '../../lib/agent/runtime/AgentMessage.js';
 import { type AgentRunInput, AgentService } from '../../lib/agent/service/index.js';
 
 function makeInput(overrides: Partial<AgentRunInput> = {}): AgentRunInput {

@@ -9,9 +9,9 @@
  */
 
 import express, { type Request, type Response } from 'express';
+import type { McpContext } from '#external/mcp/handlers/types.js';
 import { TaskDispatchBody } from '#shared/schemas/http-requests.js';
 import { taskHandler } from '../../external/mcp/handlers/task.js';
-import type { McpContext } from '../../external/mcp/handlers/types.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';
 

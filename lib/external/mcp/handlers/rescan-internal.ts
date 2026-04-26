@@ -32,15 +32,15 @@ import type {
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import { toSessionCache } from '#types/snapshot-views.js';
+import { runAllPhases } from '#workflows/bootstrap/phases/BootstrapPhaseRunner.js';
+import { fillDimensionsV3 } from '../../../workflows/bootstrap/BootstrapWorkflow.js';
 import { envelope } from '../envelope.js';
-import { fillDimensionsV3 } from './bootstrap/pipeline/orchestrator.js';
 import {
   buildTaskDefs,
   dispatchPipelineFill,
   startTaskManagerSession,
 } from './bootstrap/shared/async-fill-helpers.js';
 import { extractCodeEntities, extractDependencyEdges } from './bootstrap/shared/audit-helpers.js';
-import { runAllPhases } from './bootstrap/shared/bootstrap-phases.js';
 import { summarizePanorama } from './bootstrap/shared/panorama-utils.js';
 import { getOrCreateSessionManager } from './bootstrap/shared/session-helpers.js';
 import { buildTargetFileMap } from './bootstrap/shared/target-file-map.js';

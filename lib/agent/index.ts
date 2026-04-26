@@ -43,13 +43,6 @@
  *   | remote-exec  | Conv+Analysis+System | Single      | Budget+Safety    |
  */
 
-export { AgentEventBus, AgentEvents } from './AgentEventBus.js';
-export { AgentMessage, Channel } from './AgentMessage.js';
-export { AgentRouter, PresetName } from './AgentRouter.js';
-// ── Core ──
-export { AgentRuntime } from './AgentRuntime.js';
-// ── Infrastructure ──
-export { AgentPhase, AgentState } from './AgentState.js';
 // ── Capabilities ──
 export {
   Capability,
@@ -58,8 +51,7 @@ export {
   Conversation,
   KnowledgeProduction,
   SystemInteraction,
-} from './capabilities.js';
-export { PipelineStrategy } from './PipelineStrategy.js';
+} from './capabilities/index.js';
 // ── Policies ──
 export {
   BudgetPolicy,
@@ -67,9 +59,16 @@ export {
   PolicyEngine,
   QualityGatePolicy,
   SafetyPolicy,
-} from './policies.js';
+} from './policies/index.js';
 // ── Presets ──
-export { getPreset, PRESETS, resolveStrategy } from './presets.js';
+export { getPreset, PRESETS, resolveStrategy } from './profiles/presets.js';
+export { AgentEventBus, AgentEvents } from './runtime/AgentEventBus.js';
+export { AgentMessage, Channel } from './runtime/AgentMessage.js';
+// ── Core ──
+export { AgentRuntime } from './runtime/AgentRuntime.js';
+// ── Infrastructure ──
+export { AgentPhase, AgentState } from './runtime/AgentState.js';
+export { AgentRouter, PresetName } from './service/AgentRouter.js';
 export * from './service/index.js';
 // ── Strategies ──
 export {
@@ -78,4 +77,5 @@ export {
   SingleStrategy,
   Strategy,
   StrategyRegistry,
-} from './strategies.js';
+} from './strategies/index.js';
+export { PipelineStrategy } from './strategies/PipelineStrategy.js';

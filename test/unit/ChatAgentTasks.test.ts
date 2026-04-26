@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { ToolResultEnvelope } from '../../lib/agent/core/ToolResultEnvelope.js';
-import { taskCheckAndSubmit, taskQualityAudit } from '../../lib/agent/domain/ChatAgentTasks.js';
+import { taskCheckAndSubmit, taskQualityAudit } from '../../lib/agent/runs/chat/ChatAgentTasks.js';
+import type { ToolResultEnvelope } from '../../lib/tools/core/ToolResultEnvelope.js';
 
 function envelope<T>(toolId: string, structuredContent: T): ToolResultEnvelope<T> {
   return {

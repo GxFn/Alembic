@@ -22,9 +22,9 @@ import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.
 import type { MissionBriefingResult, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import { toSessionCache } from '#types/snapshot-views.js';
+import { buildMissionBriefing } from '#workflows/bootstrap/briefing/MissionBriefingBuilder.js';
+import { runAllPhases } from '#workflows/bootstrap/phases/BootstrapPhaseRunner.js';
 import { envelope } from '../envelope.js';
-import { buildMissionBriefing } from './bootstrap/MissionBriefingBuilder.js';
-import { runAllPhases } from './bootstrap/shared/bootstrap-phases.js';
 import { getOrCreateSessionManager } from './bootstrap/shared/session-helpers.js';
 import { buildLanguageExtension } from './LanguageExtensions.js';
 

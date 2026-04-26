@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
-import { guardCheckCode } from '../../lib/agent/tools/guard.js';
-import { searchProjectCode } from '../../lib/agent/tools/project-access.js';
+import { guardCheckCode } from '../../lib/tools/handlers/guard.js';
+import { searchProjectCode } from '../../lib/tools/handlers/project-access.js';
 
 describe('tool abort cooperation', () => {
   test('search_project_code returns early when handler sees an aborted signal', async () => {

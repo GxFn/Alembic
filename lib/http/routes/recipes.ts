@@ -7,7 +7,7 @@
  */
 
 import express, { type Request, type Response } from 'express';
-import { type AgentService, runRelationDiscovery } from '../../agent/service/index.js';
+import { type AgentService, runRelationDiscovery } from '#agent/service/index.js';
 import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';

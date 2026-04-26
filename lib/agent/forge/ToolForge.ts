@@ -12,12 +12,12 @@
 import Logger from '#infra/logging/Logger.js';
 
 import type { SignalBus } from '#infra/signal/SignalBus.js';
-import type { ForgedInternalToolStore } from '../core/InternalToolHandler.js';
-import type { CapabilityCatalog } from '../tools/CapabilityCatalog.js';
-import type { ToolCapabilityManifest } from '../tools/CapabilityManifest.js';
-import { createInternalToolManifest } from '../tools/CapabilityProjection.js';
-import type { ToolDefinition } from '../tools/ToolDefinition.js';
-import type { WorkflowHandler, WorkflowRegistry } from '../workflow/WorkflowRegistry.js';
+import type { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
+import type { ToolCapabilityManifest } from '#tools/catalog/CapabilityManifest.js';
+import { createInternalToolManifest } from '#tools/catalog/CapabilityProjection.js';
+import type { ToolDefinition } from '#tools/catalog/ToolDefinition.js';
+import type { ForgedInternalToolStore } from '#tools/core/InternalToolHandler.js';
+import type { WorkflowHandler, WorkflowRegistry } from '#tools/workflow/WorkflowRegistry.js';
 import type { CompositionSpec } from './DynamicComposer.js';
 import { DynamicComposer } from './DynamicComposer.js';
 import type { SandboxTestCase } from './SandboxRunner.js';

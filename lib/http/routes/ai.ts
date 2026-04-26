@@ -6,25 +6,25 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import express, { type Request, type Response } from 'express';
-import { ConversationStore } from '../../agent/ConversationStore.js';
-import { buildProjectBriefing } from '../../agent/core/ChatAgentPrompts.js';
-import type { ToolResultEnvelope } from '../../agent/core/ToolResultEnvelope.js';
-import {
-  taskCheckAndSubmit,
-  taskDiscoverAllRelations,
-  taskFullEnrich,
-  taskGuardFullScan,
-  taskQualityAudit,
-} from '../../agent/domain/ChatAgentTasks.js';
-import { PRESETS } from '../../agent/presets.js';
 import {
   type AgentRunInput,
   type AgentService,
   runScanAgentTask,
   runTranslationJson,
   type SystemRunContextFactory,
-} from '../../agent/service/index.js';
-import type { ToolCapabilityManifest } from '../../agent/tools/CapabilityManifest.js';
+} from '#agent/service/index.js';
+import type { ToolCapabilityManifest } from '#tools/catalog/CapabilityManifest.js';
+import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
+import { ConversationStore } from '../../agent/context/ConversationStore.js';
+import { PRESETS } from '../../agent/profiles/presets.js';
+import { buildProjectBriefing } from '../../agent/prompts/ChatAgentPrompts.js';
+import {
+  taskCheckAndSubmit,
+  taskDiscoverAllRelations,
+  taskFullEnrich,
+  taskGuardFullScan,
+  taskQualityAudit,
+} from '../../agent/runs/chat/ChatAgentTasks.js';
 import { createProvider } from '../../external/ai/AiFactory.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';

@@ -18,10 +18,10 @@
  * @module LarkTransport
  */
 
-import { ConversationStore } from '#agent/ConversationStore.js';
-import { Intent, IntentClassifier } from '#agent/IntentClassifier.js';
 import type { AgentService } from '#agent/service/index.js';
 import Logger from '#infra/logging/Logger.js';
+import { ConversationStore } from '../../agent/context/ConversationStore.js';
+import { Intent, IntentClassifier } from './IntentClassifier.js';
 
 // ── Interfaces ──────────────────────────────────
 

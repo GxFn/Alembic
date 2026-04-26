@@ -11,17 +11,17 @@
  */
 
 import { vi } from 'vitest';
-import { createSystemRunContext } from '../../lib/agent/core/SystemRunContext.js';
 import { MemoryCoordinator } from '../../lib/agent/memory/MemoryCoordinator.js';
-import { PipelineStrategy } from '../../lib/agent/PipelineStrategy.js';
 import {
   BudgetPolicy,
   Policy,
   PolicyEngine,
   QualityGatePolicy,
   SafetyPolicy,
-} from '../../lib/agent/policies.js';
-import { SingleStrategy, Strategy } from '../../lib/agent/strategies.js';
+} from '../../lib/agent/policies/index.js';
+import { createSystemRunContext } from '../../lib/agent/runtime/SystemRunContext.js';
+import { SingleStrategy, Strategy } from '../../lib/agent/strategies/index.js';
+import { PipelineStrategy } from '../../lib/agent/strategies/PipelineStrategy.js';
 
 describe('Integration: Agent Strategies', () => {
   describe('SingleStrategy', () => {

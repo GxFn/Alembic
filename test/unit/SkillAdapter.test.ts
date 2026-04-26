@@ -2,15 +2,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, test } from 'vitest';
-import { SkillAdapter } from '../../lib/agent/adapters/SkillAdapter.js';
+import { SkillAdapter } from '../../lib/tools/adapters/SkillAdapter.js';
 import {
   SKILL_LOAD_CAPABILITY,
   SKILL_LOAD_RESOURCE_CAPABILITY,
   SKILL_SEARCH_CAPABILITY,
   SKILL_VALIDATE_CAPABILITY,
-} from '../../lib/agent/adapters/SkillCapabilities.js';
-import type { ToolExecutionRequest } from '../../lib/agent/core/ToolContracts.js';
-import type { ToolCapabilityManifest } from '../../lib/agent/tools/CapabilityManifest.js';
+} from '../../lib/tools/adapters/SkillCapabilities.js';
+import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
+import type { ToolExecutionRequest } from '../../lib/tools/core/ToolContracts.js';
 
 function request(
   manifest: ToolCapabilityManifest,

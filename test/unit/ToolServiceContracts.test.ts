@@ -1,16 +1,16 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { InternalToolHandlerContext } from '../../lib/agent/core/InternalToolHandler.js';
-import { resolveGuardServicesFromContext } from '../../lib/agent/core/ToolGuardServices.js';
-import { resolveInfraServicesFromContext } from '../../lib/agent/core/ToolInfraServices.js';
+import type { InternalToolHandlerContext } from '../../lib/tools/core/InternalToolHandler.js';
+import { resolveGuardServicesFromContext } from '../../lib/tools/core/ToolGuardServices.js';
+import { resolveInfraServicesFromContext } from '../../lib/tools/core/ToolInfraServices.js';
 import {
   requireKnowledgeService,
   resolveKnowledgeServicesFromContext,
-} from '../../lib/agent/core/ToolKnowledgeServices.js';
-import { resolveLifecycleServicesFromContext } from '../../lib/agent/core/ToolLifecycleServices.js';
+} from '../../lib/tools/core/ToolKnowledgeServices.js';
+import { resolveLifecycleServicesFromContext } from '../../lib/tools/core/ToolLifecycleServices.js';
 import {
   getFeedbackCollector,
   resolveQualityServicesFromContext,
-} from '../../lib/agent/core/ToolQualityServices.js';
+} from '../../lib/tools/core/ToolQualityServices.js';
 
 describe('tool service contract resolution', () => {
   test('does not rebuild internal service contracts from the raw container', () => {

@@ -18,7 +18,7 @@ import {
   type AgentService,
   runScanAgentTask,
   type SystemRunContextFactory,
-} from '../../agent/service/index.js';
+} from '#agent/service/index.js';
 import { getDiscovererRegistry } from '../../core/discovery/index.js';
 import { inferLang } from '../../external/mcp/handlers/LanguageExtensions.js';
 import Logger from '../../infrastructure/logging/Logger.js';

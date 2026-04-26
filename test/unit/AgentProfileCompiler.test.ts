@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { BudgetPolicy } from '../../lib/agent/policies.js';
+import { BudgetPolicy } from '../../lib/agent/policies/index.js';
 import {
   AgentProfileCompiler,
   AgentProfileRegistry,

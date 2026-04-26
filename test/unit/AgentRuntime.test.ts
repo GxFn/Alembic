@@ -5,7 +5,7 @@
  * reactLoop 迭代、工具调用处理、文本响应、中止、错误恢复
  */
 import { describe, expect, test, vi } from 'vitest';
-import { AgentRuntime, MAX_TOOL_CALLS_PER_ITER } from '../../lib/agent/AgentRuntime.js';
+import { AgentRuntime, MAX_TOOL_CALLS_PER_ITER } from '../../lib/agent/runtime/AgentRuntime.js';
 
 /* ══════════════════════════════════════════════════════
  *  Mock Factories
@@ -123,7 +123,7 @@ function mockMessage(text = 'Hello, help me understand the codebase') {
     replyFn: null as ((text: string) => Promise<void>) | null,
     reply: vi.fn(),
     // Partial mock — only fields used by AgentRuntime.execute()
-  } as unknown as import('../../lib/agent/AgentMessage.js').AgentMessage;
+  } as unknown as import('../../lib/agent/runtime/AgentMessage.js').AgentMessage;
 }
 
 function createRuntime(overrides: Record<string, unknown> = {}) {

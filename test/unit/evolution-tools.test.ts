@@ -8,12 +8,12 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import type { ToolHandlerContext } from '../../lib/agent/tools/_shared.js';
+import type { ToolHandlerContext } from '../../lib/tools/handlers/_shared.js';
 import {
   confirmDeprecation,
   proposeEvolution,
   skipEvolution,
-} from '../../lib/agent/tools/evolution-tools.js';
+} from '../../lib/tools/handlers/evolution-tools.js';
 
 function createMockGateway(outcome = 'proposal-created', proposalId = 'prop-001') {
   return {

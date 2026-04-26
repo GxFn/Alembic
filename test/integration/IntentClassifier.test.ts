@@ -10,7 +10,7 @@
  *   - LLM 降级场景（无 AI provider）
  */
 
-import { Intent, IntentClassifier } from '../../lib/agent/IntentClassifier.js';
+import { Intent, IntentClassifier } from '../../lib/external/lark/IntentClassifier.js';
 
 describe('Integration: IntentClassifier', () => {
   let classifier: IntentClassifier;

@@ -1,11 +1,11 @@
 import { describe, expect, test, vi } from 'vitest';
-import { ToolRouter } from '../../lib/agent/core/ToolRouter.js';
-import { CapabilityCatalog } from '../../lib/agent/tools/CapabilityCatalog.js';
 import { envelope } from '../../lib/external/mcp/envelope.js';
 import { buildMcpToolCapabilities } from '../../lib/external/mcp/McpCapabilityProjection.js';
 import { McpServer } from '../../lib/external/mcp/McpServer.js';
 import { McpToolAdapter } from '../../lib/external/mcp/McpToolAdapter.js';
 import { TOOLS } from '../../lib/external/mcp/tools.js';
+import { CapabilityCatalog } from '../../lib/tools/catalog/CapabilityCatalog.js';
+import { ToolRouter } from '../../lib/tools/core/ToolRouter.js';
 
 function createServer(gateway: unknown = null) {
   const server = new McpServer({

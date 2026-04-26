@@ -1,18 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
-import { MAC_SYSTEM_CAPABILITY_MANIFESTS } from '../../lib/agent/adapters/MacSystemCapabilities.js';
-import { SKILL_CAPABILITY_MANIFESTS } from '../../lib/agent/adapters/SkillCapabilities.js';
-import { TERMINAL_CAPABILITY_MANIFESTS } from '../../lib/agent/adapters/TerminalCapabilities.js';
-import { SystemInteraction } from '../../lib/agent/capabilities.js';
-import { CapabilityCatalog } from '../../lib/agent/tools/CapabilityCatalog.js';
-import { createInternalToolManifest } from '../../lib/agent/tools/CapabilityProjection.js';
+import { SystemInteraction } from '../../lib/agent/capabilities/index.js';
+import { MAC_SYSTEM_CAPABILITY_MANIFESTS } from '../../lib/tools/adapters/MacSystemCapabilities.js';
+import { SKILL_CAPABILITY_MANIFESTS } from '../../lib/tools/adapters/SkillCapabilities.js';
+import { TERMINAL_CAPABILITY_MANIFESTS } from '../../lib/tools/adapters/TerminalCapabilities.js';
+import { CapabilityCatalog } from '../../lib/tools/catalog/CapabilityCatalog.js';
+import { createInternalToolManifest } from '../../lib/tools/catalog/CapabilityProjection.js';
+import type { ToolDefinition } from '../../lib/tools/catalog/ToolDefinition.js';
 import {
   ALL_TOOLS,
   TOOL_CAPABILITY_CATALOG,
   TOOL_CAPABILITY_MANIFESTS,
-} from '../../lib/agent/tools/index.js';
-import type { ToolDefinition } from '../../lib/agent/tools/ToolDefinition.js';
+} from '../../lib/tools/handlers/index.js';
 
 describe('CapabilityCatalog', () => {
   test('registers one manifest per internal tool', () => {
@@ -349,7 +349,7 @@ describe('CapabilityCatalog', () => {
   });
 
   test('keeps governance tables out of tools/index.ts', () => {
-    const indexSource = readFileSync(join(process.cwd(), 'lib/agent/tools/index.ts'), 'utf-8');
+    const indexSource = readFileSync(join(process.cwd(), 'lib/tools/handlers/index.ts'), 'utf-8');
 
     expect(indexSource).not.toContain('HTTP_DIRECT_TOOL_NAMES');
     expect(indexSource).not.toContain('SIDE_EFFECT_TOOL_NAMES');
@@ -357,9 +357,9 @@ describe('CapabilityCatalog', () => {
   });
 
   test('keeps ToolRegistry out of tool definition and manifest projection type boundaries', () => {
-    const indexSource = readFileSync(join(process.cwd(), 'lib/agent/tools/index.ts'), 'utf-8');
+    const indexSource = readFileSync(join(process.cwd(), 'lib/tools/handlers/index.ts'), 'utf-8');
     const projectionSource = readFileSync(
-      join(process.cwd(), 'lib/agent/tools/CapabilityProjection.ts'),
+      join(process.cwd(), 'lib/tools/catalog/CapabilityProjection.ts'),
       'utf-8'
     );
 

@@ -55,6 +55,14 @@
     "#http/*": {
       "alembic-dev": "./lib/http/*",
       "default": "./dist/lib/http/*"
+    },
+    "#workflows/*": {
+      "alembic-dev": "./lib/workflows/*",
+      "default": "./dist/lib/workflows/*"
+    },
+    "#tools/*": {
+      "alembic-dev": "./lib/tools/*",
+      "default": "./dist/lib/tools/*"
     }
   },
   "scripts": {

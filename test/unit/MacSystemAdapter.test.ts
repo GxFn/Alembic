@@ -3,15 +3,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test, vi } from 'vitest';
-import { MacSystemAdapter } from '../../lib/agent/adapters/MacSystemAdapter.js';
+import { MacSystemAdapter } from '../../lib/tools/adapters/MacSystemAdapter.js';
 import {
   MAC_PERMISSION_STATUS_CAPABILITY,
   MAC_SCREENSHOT_CAPABILITY,
   MAC_SYSTEM_INFO_CAPABILITY,
   MAC_WINDOW_LIST_CAPABILITY,
-} from '../../lib/agent/adapters/MacSystemCapabilities.js';
-import type { ToolExecutionRequest } from '../../lib/agent/core/ToolContracts.js';
-import type { ToolCapabilityManifest } from '../../lib/agent/tools/CapabilityManifest.js';
+} from '../../lib/tools/adapters/MacSystemCapabilities.js';
+import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
+import type { ToolExecutionRequest } from '../../lib/tools/core/ToolContracts.js';
 
 function request(
   manifest: ToolCapabilityManifest,

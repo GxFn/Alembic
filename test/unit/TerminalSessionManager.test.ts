@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { InMemoryTerminalSessionManager } from '../../lib/agent/adapters/TerminalSessionManager.js';
+import { InMemoryTerminalSessionManager } from '../../lib/tools/adapters/TerminalSessionManager.js';
 
 describe('InMemoryTerminalSessionManager', () => {
   test('leases ephemeral sessions without retaining them', () => {

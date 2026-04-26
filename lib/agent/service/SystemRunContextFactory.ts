@@ -1,12 +1,12 @@
 import type { AiProvider } from '#external/ai/AiProvider.js';
 import { ContextWindow } from '../context/ContextWindow.js';
 import { ExplorationTracker } from '../context/ExplorationTracker.js';
+import { MemoryCoordinator } from '../memory/MemoryCoordinator.js';
 import {
   createSystemRunContext,
   projectSystemRunContext,
   type SystemRunContext,
-} from '../core/SystemRunContext.js';
-import { MemoryCoordinator } from '../memory/MemoryCoordinator.js';
+} from '../runtime/SystemRunContext.js';
 
 export interface BuildSystemContextOptions {
   budget?: Record<string, unknown>;

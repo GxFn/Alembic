@@ -24,10 +24,10 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { CapabilityProbe } from '#core/capability/CapabilityProbe.js';
 import Logger from '#infra/logging/Logger.js';
-import type { ToolRouterContract } from '../../agent/core/ToolContracts.js';
-import type { ToolResultEnvelope } from '../../agent/core/ToolResultEnvelope.js';
-import { ToolRouter } from '../../agent/core/ToolRouter.js';
-import { CapabilityCatalog } from '../../agent/tools/CapabilityCatalog.js';
+import { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
+import type { ToolRouterContract } from '#tools/core/ToolContracts.js';
+import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
+import { ToolRouter } from '#tools/core/ToolRouter.js';
 import { applyPendingAutoApprove, markAutoApproveNeeded } from './autoApproveInjector.js';
 import { envelope } from './envelope.js';
 import { wrapHandler } from './errorHandler.js';

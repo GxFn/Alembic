@@ -1,12 +1,12 @@
 import { describe, expect, test, vi } from 'vitest';
-import { DashboardOperationAdapter } from '../../lib/agent/adapters/DashboardOperationAdapter.js';
-import { ToolRouter } from '../../lib/agent/core/ToolRouter.js';
+import { DashboardOperationAdapter } from '../../lib/tools/adapters/DashboardOperationAdapter.js';
 import {
   DASHBOARD_OPERATION_HANDLERS,
   DASHBOARD_OPERATION_IDS,
   DASHBOARD_OPERATION_MANIFESTS,
-} from '../../lib/agent/dashboard/DashboardOperations.js';
-import { CapabilityCatalog } from '../../lib/agent/tools/CapabilityCatalog.js';
+} from '../../lib/tools/adapters/DashboardOperations.js';
+import { CapabilityCatalog } from '../../lib/tools/catalog/CapabilityCatalog.js';
+import { ToolRouter } from '../../lib/tools/core/ToolRouter.js';
 
 function createRouter(container: Record<string, unknown>) {
   return new ToolRouter({

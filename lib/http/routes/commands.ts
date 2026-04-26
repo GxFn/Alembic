@@ -4,7 +4,7 @@
  */
 
 import express, { type Request, type Response } from 'express';
-import { DASHBOARD_OPERATION_IDS } from '../../agent/dashboard/DashboardOperations.js';
+import { DASHBOARD_OPERATION_IDS } from '#tools/adapters/DashboardOperations.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { FileReadQuery, FileSaveBody } from '../../shared/schemas/http-requests.js';
 import { validate, validateQuery } from '../middleware/validate.js';

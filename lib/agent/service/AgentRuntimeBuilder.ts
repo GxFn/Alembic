@@ -1,10 +1,10 @@
 import Logger from '#infra/logging/Logger.js';
-import { AgentRuntime } from '../AgentRuntime.js';
-import { CapabilityRegistry } from '../capabilities.js';
-import { type Policy, PolicyEngine } from '../policies.js';
-import { getPreset } from '../presets.js';
-import type { Strategy } from '../strategies.js';
-import type { ToolRegistry } from '../tools/ToolRegistry.js';
+import type { ToolRegistry } from '#tools/catalog/ToolRegistry.js';
+import { CapabilityRegistry } from '../capabilities/index.js';
+import { type Policy, PolicyEngine } from '../policies/index.js';
+import { getPreset } from '../profiles/presets.js';
+import { AgentRuntime } from '../runtime/AgentRuntime.js';
+import type { Strategy } from '../strategies/index.js';
 import type {
   AgentProfileOverride,
   AgentProfileRef,

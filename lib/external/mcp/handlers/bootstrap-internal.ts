@@ -61,16 +61,16 @@ import type {
 } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import { toSessionCache } from '#types/snapshot-views.js';
+import { buildInternalNextSteps } from '#workflows/bootstrap/briefing/BootstrapDimensionText.js';
+import { runAllPhases } from '#workflows/bootstrap/phases/BootstrapPhaseRunner.js';
+import { fillDimensionsV3 } from '../../../workflows/bootstrap/BootstrapWorkflow.js';
 import { envelope } from '../envelope.js';
-import { fillDimensionsV3 } from './bootstrap/pipeline/orchestrator.js';
 import { bootstrapRefine } from './bootstrap/refine.js';
 import {
   buildTaskDefs,
   dispatchPipelineFill,
   startTaskManagerSession,
 } from './bootstrap/shared/async-fill-helpers.js';
-import { runAllPhases } from './bootstrap/shared/bootstrap-phases.js';
-import { buildInternalNextSteps } from './bootstrap/shared/dimension-text.js';
 import type { TargetFile } from './bootstrap/shared/handler-types.js';
 import { summarizePanorama } from './bootstrap/shared/panorama-utils.js';
 import { getOrCreateSessionManager } from './bootstrap/shared/session-helpers.js';

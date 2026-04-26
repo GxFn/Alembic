@@ -1,21 +1,21 @@
 import { describe, expect, test, vi } from 'vitest';
-import { InternalToolAdapter } from '../../lib/agent/adapters/InternalToolAdapter.js';
-import { TerminalAdapter } from '../../lib/agent/adapters/TerminalAdapter.js';
-import { TERMINAL_RUN_CAPABILITY } from '../../lib/agent/adapters/TerminalCapabilities.js';
-import { GovernanceEngine } from '../../lib/agent/core/GovernanceEngine.js';
+import { PolicyEngine, SafetyPolicy } from '../../lib/agent/policies/index.js';
+import { InternalToolAdapter } from '../../lib/tools/adapters/InternalToolAdapter.js';
+import { TerminalAdapter } from '../../lib/tools/adapters/TerminalAdapter.js';
+import { TERMINAL_RUN_CAPABILITY } from '../../lib/tools/adapters/TerminalCapabilities.js';
+import { CapabilityCatalog } from '../../lib/tools/catalog/CapabilityCatalog.js';
+import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
+import { buildInternalToolCapabilities } from '../../lib/tools/catalog/CapabilityProjection.js';
+import { ToolRegistry } from '../../lib/tools/catalog/ToolRegistry.js';
+import { GovernanceEngine } from '../../lib/tools/core/GovernanceEngine.js';
 import type {
   ToolCallRequest,
   ToolExecutionAdapter,
   ToolExecutionRequest,
-} from '../../lib/agent/core/ToolContracts.js';
-import type { ToolResultEnvelope } from '../../lib/agent/core/ToolResultEnvelope.js';
-import { ToolRouter } from '../../lib/agent/core/ToolRouter.js';
-import { PolicyEngine, SafetyPolicy } from '../../lib/agent/policies.js';
-import { CapabilityCatalog } from '../../lib/agent/tools/CapabilityCatalog.js';
-import type { ToolCapabilityManifest } from '../../lib/agent/tools/CapabilityManifest.js';
-import { buildInternalToolCapabilities } from '../../lib/agent/tools/CapabilityProjection.js';
-import { TOOL_CAPABILITY_CATALOG } from '../../lib/agent/tools/index.js';
-import { ToolRegistry } from '../../lib/agent/tools/ToolRegistry.js';
+} from '../../lib/tools/core/ToolContracts.js';
+import type { ToolResultEnvelope } from '../../lib/tools/core/ToolResultEnvelope.js';
+import { ToolRouter } from '../../lib/tools/core/ToolRouter.js';
+import { TOOL_CAPABILITY_CATALOG } from '../../lib/tools/handlers/index.js';
 
 function baseRequest(overrides: Partial<ToolCallRequest> = {}): ToolCallRequest {
   return {

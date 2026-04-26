@@ -1,9 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
-import { WorkflowAdapter } from '../../lib/agent/adapters/WorkflowAdapter.js';
-import { ToolRouter } from '../../lib/agent/core/ToolRouter.js';
-import { CapabilityCatalog } from '../../lib/agent/tools/CapabilityCatalog.js';
-import type { ToolCapabilityManifest } from '../../lib/agent/tools/CapabilityManifest.js';
-import { WorkflowRegistry } from '../../lib/agent/workflow/WorkflowRegistry.js';
+import { WorkflowAdapter } from '../../lib/tools/adapters/WorkflowAdapter.js';
+import { CapabilityCatalog } from '../../lib/tools/catalog/CapabilityCatalog.js';
+import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
+import { ToolRouter } from '../../lib/tools/core/ToolRouter.js';
+import { WorkflowRegistry } from '../../lib/tools/workflow/WorkflowRegistry.js';
 
 describe('WorkflowAdapter', () => {
   test('passes a typed workflow handler context', async () => {

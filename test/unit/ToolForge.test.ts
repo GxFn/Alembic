@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-
-import { WorkflowAdapter } from '../../lib/agent/adapters/WorkflowAdapter.js';
-import { DiagnosticsCollector } from '../../lib/agent/core/DiagnosticsCollector.js';
-import { ToolRouter } from '../../lib/agent/core/ToolRouter.js';
 import { ToolForge } from '../../lib/agent/forge/ToolForge.js';
-import { CapabilityCatalog } from '../../lib/agent/tools/CapabilityCatalog.js';
-import type { ToolCapabilityManifest } from '../../lib/agent/tools/CapabilityManifest.js';
-import { WorkflowRegistry } from '../../lib/agent/workflow/WorkflowRegistry.js';
+import { DiagnosticsCollector } from '../../lib/agent/runtime/DiagnosticsCollector.js';
+import { WorkflowAdapter } from '../../lib/tools/adapters/WorkflowAdapter.js';
+import { CapabilityCatalog } from '../../lib/tools/catalog/CapabilityCatalog.js';
+import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
+import { ToolRouter } from '../../lib/tools/core/ToolRouter.js';
+import { WorkflowRegistry } from '../../lib/tools/workflow/WorkflowRegistry.js';
 
 /* ────────── Mock ToolRegistry ────────── */
 

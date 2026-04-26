@@ -1,5 +1,5 @@
 import type { Response } from 'express';
-import type { ToolResultEnvelope, ToolResultStatus } from '../../agent/core/ToolResultEnvelope.js';
+import type { ToolResultEnvelope, ToolResultStatus } from '#tools/core/ToolResultEnvelope.js';
 
 export function httpStatusForToolEnvelope(status: ToolResultStatus) {
   switch (status) {

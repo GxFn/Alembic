@@ -9,7 +9,8 @@
 
 import type DimensionCopy from '#domain/dimension/DimensionCopy.js';
 // ── Service Types ──
-import type { InMemoryTerminalSessionManager } from '../agent/adapters/TerminalSessionManager.js';
+import type { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
+import type { ToolRegistry } from '#tools/catalog/ToolRegistry.js';
 import type {
   AgentProfileCompiler,
   AgentProfileRegistry,
@@ -19,7 +20,6 @@ import type {
   AgentStageFactoryRegistry,
   SystemRunContextFactory,
 } from '../agent/service/index.js';
-import type { ToolRegistry } from '../agent/tools/ToolRegistry.js';
 // ── CLI Types ──
 import type { KnowledgeSyncService } from '../cli/KnowledgeSyncService.js';
 // ── Core AST / Discovery / Enhancement ──

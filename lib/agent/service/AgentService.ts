@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { AgentMessage, Channel } from '../AgentMessage.js';
-import { AgentProfileCompiler } from './AgentProfileCompiler.js';
-import { AgentProfileRegistry } from './AgentProfileRegistry.js';
+import { AgentRunCoordinator } from '../coordination/AgentRunCoordinator.js';
+import { AgentProfileCompiler } from '../profiles/AgentProfileCompiler.js';
+import { AgentProfileRegistry } from '../profiles/AgentProfileRegistry.js';
+import { AgentStageFactoryRegistry } from '../profiles/AgentStageFactoryRegistry.js';
+import { AgentMessage, Channel } from '../runtime/AgentMessage.js';
 import type {
   AgentProfileOverride,
   AgentProfileRef,
@@ -14,9 +16,7 @@ import type {
   AgentRuntimeSource,
   CompiledAgentProfile,
 } from './AgentRunContracts.js';
-import { AgentRunCoordinator } from './AgentRunCoordinator.js';
 import type { AgentRuntimeBuilder } from './AgentRuntimeBuilder.js';
-import { AgentStageFactoryRegistry } from './AgentStageFactoryRegistry.js';
 
 interface AgentRuntimeBuilderLike {
   build(

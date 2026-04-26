@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { writeProjectFile } from '../../lib/agent/tools/system-interaction.js';
+import { writeProjectFile } from '../../lib/tools/handlers/system-interaction.js';
 
 describe('system-interaction tools', () => {
   let projectRoot: string;

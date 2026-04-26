@@ -9,8 +9,8 @@
  * @module bootstrap/shared/session-helpers
  */
 
+import { BootstrapSessionManager } from '#workflows/bootstrap/session/BootstrapSession.js';
 import type { McpContext } from '../../types.js';
-import { BootstrapSessionManager } from '../BootstrapSession.js';
 
 // ── Process-level singleton ──────────────────────────────
 

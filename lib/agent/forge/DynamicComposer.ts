@@ -10,9 +10,9 @@
  */
 
 import Logger from '#infra/logging/Logger.js';
-import type { ToolRouterContract } from '../core/ToolContracts.js';
-import { resolveToolRouterFromContext } from '../core/ToolRoutingServices.js';
-import type { WorkflowHandler, WorkflowHandlerContext } from '../workflow/WorkflowRegistry.js';
+import type { ToolRouterContract } from '#tools/core/ToolContracts.js';
+import { resolveToolRouterFromContext } from '#tools/core/ToolRoutingServices.js';
+import type { WorkflowHandler, WorkflowHandlerContext } from '#tools/workflow/WorkflowRegistry.js';
 
 /* ────────────────────── Types ────────────────────── */
 

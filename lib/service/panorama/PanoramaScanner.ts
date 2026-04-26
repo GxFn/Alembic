@@ -109,7 +109,7 @@ export class PanoramaScanner {
         runPhase1_7_CallGraph,
         runPhase2_DependencyGraph,
         runPhase2_1_ModuleEntities,
-      } = await import('../../external/mcp/handlers/bootstrap/shared/bootstrap-phases.js');
+      } = await import('#workflows/bootstrap/phases/BootstrapPhaseRunner.js');
 
       // Phase 1: 文件收集
       const phase1 = await runPhase1_FileCollection(this.#projectRoot, this.#logger, {

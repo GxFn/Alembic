@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { evolutionGateEvaluator } from '../../lib/agent/domain/insight-gate.js';
+import { evolutionGateEvaluator } from '../../lib/agent/prompts/insight-gate.js';
 
 // ── Helpers ──────────────────────────────────────────────
 

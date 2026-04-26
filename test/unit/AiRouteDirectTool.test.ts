@@ -1,13 +1,13 @@
 import type { Request, Response } from 'express';
 import { describe, expect, test, vi } from 'vitest';
-import type { ToolResultEnvelope } from '../../lib/agent/core/ToolResultEnvelope.js';
-import type { ToolCapabilityManifest } from '../../lib/agent/tools/CapabilityManifest.js';
 import {
   createHttpChatAgentRunInput,
   ensureAiConfigUpdateAllowed,
   ensureDirectToolAllowed,
   sendToolEnvelopeResponse,
 } from '../../lib/http/routes/ai.js';
+import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
+import type { ToolResultEnvelope } from '../../lib/tools/core/ToolResultEnvelope.js';
 
 function mockResponse() {
   const res = {

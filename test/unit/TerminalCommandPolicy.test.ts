@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   buildTerminalCommandPolicyInput,
   evaluateTerminalCommandPolicy,
-} from '../../lib/agent/adapters/TerminalCommandPolicy.js';
+} from '../../lib/tools/adapters/TerminalCommandPolicy.js';
 
 function policyInput(overrides = {}) {
   return {
