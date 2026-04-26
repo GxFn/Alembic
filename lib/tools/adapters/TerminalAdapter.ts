@@ -1,4 +1,16 @@
 import {
+  InMemoryTerminalSessionManager,
+  type TerminalSessionManager,
+} from '#tools/adapters/TerminalSessionManager.js';
+import type {
+  ToolExecutionAdapter,
+  ToolExecutionPreviewRequest,
+  ToolExecutionRequest,
+} from '#tools/core/ToolContracts.js';
+import type { ToolExecutionPreview } from '#tools/core/ToolDecision.js';
+import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
+import { executeTerminalRequest } from './terminal-adapter/TerminalExecutors.js';
+import {
   buildTerminalCommandPolicyInput,
   buildTerminalPtyPolicyInput,
   buildTerminalScriptPolicyInput,
@@ -7,19 +19,7 @@ import {
   evaluateTerminalPtyPolicy,
   evaluateTerminalScriptPolicy,
   evaluateTerminalShellPolicy,
-} from '#tools/adapters/TerminalCommandPolicy.js';
-import {
-  InMemoryTerminalSessionManager,
-  type TerminalSessionManager,
-} from '#tools/adapters/TerminalSessionManager.js';
-import { executeTerminalRequest } from '#tools/adapters/terminal-adapter/TerminalExecutors.js';
-import type {
-  ToolExecutionAdapter,
-  ToolExecutionPreviewRequest,
-  ToolExecutionRequest,
-} from '#tools/core/ToolContracts.js';
-import type { ToolExecutionPreview } from '#tools/core/ToolDecision.js';
-import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
+} from './terminal-policy/index.js';
 
 export class TerminalAdapter implements ToolExecutionAdapter {
   readonly kind = 'terminal-profile' as const;

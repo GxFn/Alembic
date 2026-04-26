@@ -1,10 +1,10 @@
-import {
-  buildTerminalScriptPolicyInput,
-  evaluateTerminalScriptPolicy,
-} from '#tools/adapters/TerminalCommandPolicy.js';
 import type { TerminalScriptPolicyInput } from '#tools/adapters/terminal-policy/index.js';
 import type { ToolExecutionRequest } from '#tools/core/ToolContracts.js';
 import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
+import {
+  buildTerminalScriptPolicyInput,
+  evaluateTerminalScriptPolicy,
+} from '../terminal-policy/index.js';
 import {
   fileUriToPath,
   materializeScriptArtifact,

@@ -1,10 +1,10 @@
-import {
-  buildTerminalShellPolicyInput,
-  evaluateTerminalShellPolicy,
-} from '#tools/adapters/TerminalCommandPolicy.js';
 import type { TerminalShellPolicyInput } from '#tools/adapters/terminal-policy/index.js';
 import type { ToolExecutionRequest } from '#tools/core/ToolContracts.js';
 import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
+import {
+  buildTerminalShellPolicyInput,
+  evaluateTerminalShellPolicy,
+} from '../terminal-policy/index.js';
 import { materializeTerminalOutput } from './TerminalArtifacts.js';
 import {
   envelopeForError,

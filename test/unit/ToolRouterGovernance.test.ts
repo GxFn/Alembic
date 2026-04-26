@@ -7,7 +7,7 @@ import {
   TERMINAL_RUN_CAPABILITY,
   TERMINAL_SCRIPT_CAPABILITY,
   TERMINAL_SHELL_CAPABILITY,
-} from '../../lib/tools/adapters/TerminalCapabilities.js';
+} from '../../lib/tools/adapters/terminal-capabilities/index.js';
 import { CapabilityCatalog } from '../../lib/tools/catalog/CapabilityCatalog.js';
 import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
 import { buildInternalToolCapabilities } from '../../lib/tools/catalog/CapabilityProjection.js';

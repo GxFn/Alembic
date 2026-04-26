@@ -27,8 +27,8 @@ import { MAC_SYSTEM_CAPABILITY_MANIFESTS } from '#tools/adapters/MacSystemCapabi
 import { SkillAdapter } from '#tools/adapters/SkillAdapter.js';
 import { SKILL_CAPABILITY_MANIFESTS } from '#tools/adapters/SkillCapabilities.js';
 import { TerminalAdapter } from '#tools/adapters/TerminalAdapter.js';
-import { TERMINAL_CAPABILITY_MANIFESTS } from '#tools/adapters/TerminalCapabilities.js';
 import { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
+import { TERMINAL_CAPABILITY_MANIFESTS } from '#tools/adapters/terminal-capabilities/index.js';
 import { WorkflowAdapter } from '#tools/adapters/WorkflowAdapter.js';
 import { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
 import { ToolRegistry } from '#tools/catalog/ToolRegistry.js';

@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import { TerminalAdapter } from '../../lib/tools/adapters/TerminalAdapter.js';
+import { InMemoryTerminalSessionManager } from '../../lib/tools/adapters/TerminalSessionManager.js';
 import {
   TERMINAL_PTY_CAPABILITY,
   TERMINAL_RUN_CAPABILITY,
@@ -11,8 +12,7 @@ import {
   TERMINAL_SESSION_CLOSE_CAPABILITY,
   TERMINAL_SESSION_STATUS_CAPABILITY,
   TERMINAL_SHELL_CAPABILITY,
-} from '../../lib/tools/adapters/TerminalCapabilities.js';
-import { InMemoryTerminalSessionManager } from '../../lib/tools/adapters/TerminalSessionManager.js';
+} from '../../lib/tools/adapters/terminal-capabilities/index.js';
 import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
 import type { ToolExecutionRequest } from '../../lib/tools/core/ToolContracts.js';
 

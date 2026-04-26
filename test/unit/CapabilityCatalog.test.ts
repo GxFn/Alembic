@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest';
 import { SystemInteraction } from '../../lib/agent/capabilities/index.js';
 import { MAC_SYSTEM_CAPABILITY_MANIFESTS } from '../../lib/tools/adapters/MacSystemCapabilities.js';
 import { SKILL_CAPABILITY_MANIFESTS } from '../../lib/tools/adapters/SkillCapabilities.js';
-import { TERMINAL_CAPABILITY_MANIFESTS } from '../../lib/tools/adapters/TerminalCapabilities.js';
+import { TERMINAL_CAPABILITY_MANIFESTS } from '../../lib/tools/adapters/terminal-capabilities/index.js';
 import { CapabilityCatalog } from '../../lib/tools/catalog/CapabilityCatalog.js';
 import { createInternalToolManifest } from '../../lib/tools/catalog/CapabilityProjection.js';
 import type { ToolDefinition } from '../../lib/tools/catalog/ToolDefinition.js';
