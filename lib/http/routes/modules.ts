@@ -13,9 +13,14 @@ import {
   ScanProjectBody,
   ScanTargetBody,
 } from '#shared/schemas/http-requests.js';
+import { DASHBOARD_OPERATION_IDS } from '../../agent/dashboard/DashboardOperations.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';
+import {
+  executeDashboardOperation,
+  sendDashboardOperationResponse,
+} from '../utils/dashboard-operation.js';
 import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
 
 const router = express.Router();
@@ -460,16 +465,13 @@ router.post(
     const { options = {} } = req.body;
 
     const container = getServiceContainer();
-    const moduleService = container.get('moduleService');
-
-    await moduleService.load();
-    logger.info('Full project scan started via dashboard (ModuleService)');
-    const result = await moduleService.scanProject(options);
-
-    res.json({
-      success: true,
-      data: result,
-    });
+    const envelope = await executeDashboardOperation(
+      container,
+      req,
+      DASHBOARD_OPERATION_IDS.scanProject,
+      { options }
+    );
+    sendDashboardOperationResponse(res, envelope);
   }
 );
 
@@ -479,17 +481,13 @@ router.post(
  */
 router.post('/update-map', async (req: Request, res: Response): Promise<void> => {
   const container = getServiceContainer();
-  const moduleService = container.get('moduleService');
-
-  const result = await moduleService.updateModuleMap({
-    aggressive: true,
-  });
-
-  logger.info('Module map updated via dashboard', { result });
-  res.json({
-    success: true,
-    data: result,
-  });
+  const envelope = await executeDashboardOperation(
+    container,
+    req,
+    DASHBOARD_OPERATION_IDS.updateModuleMap,
+    { aggressive: true }
+  );
+  sendDashboardOperationResponse(res, envelope);
 });
 
 /**
@@ -520,30 +518,13 @@ router.post(
     const { maxFiles, skipGuard, contentMaxLines } = req.body || {};
 
     const container = getServiceContainer();
-
-    logger.info('Bootstrap cold start initiated (ModuleService path)');
-
-    // 直接调用 bootstrap-internal handler（统一编排管线）
-    const { bootstrapKnowledge } = await import('#external/mcp/handlers/bootstrap-internal.js');
-    const raw = await bootstrapKnowledge(
-      { container, logger },
-      {
-        maxFiles: maxFiles || 500,
-        skipGuard: skipGuard || false,
-        contentMaxLines: contentMaxLines || 120,
-        loadSkills: true,
-      }
+    const envelope = await executeDashboardOperation(
+      container,
+      req,
+      DASHBOARD_OPERATION_IDS.bootstrapProject,
+      { maxFiles, skipGuard, contentMaxLines }
     );
-    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    const bootstrapResult = parsed?.data || parsed;
-
-    res.json({
-      success: true,
-      data: {
-        ...bootstrapResult,
-        asyncFill: true,
-      },
-    });
+    sendDashboardOperationResponse(res, envelope);
   }
 );
 
@@ -579,36 +560,15 @@ router.get('/bootstrap/status', async (req: Request, res: Response): Promise<voi
  */
 router.post('/bootstrap/cancel', async (req: Request, res: Response): Promise<void> => {
   const container = getServiceContainer();
-
-  let taskManager: {
-    isRunning: boolean;
-    abortSession(reason: string): void;
-    getSessionStatus(): Record<string, unknown>;
-  } | null = null;
-  try {
-    taskManager = container.get('bootstrapTaskManager');
-  } catch {
-    /* not registered */
-  }
-
-  if (!taskManager) {
-    return void res.json({ success: true, message: 'No bootstrap task manager initialized' });
-  }
-
-  if (!taskManager.isRunning) {
-    return void res.json({ success: true, message: 'No active bootstrap session' });
-  }
-
   const reason =
     ((req.body as Record<string, unknown>)?.reason as string) || 'Cancelled by user via Dashboard';
-  taskManager.abortSession(reason);
-
-  logger.info('Bootstrap session cancelled via HTTP', { reason });
-
-  res.json({
-    success: true,
-    data: taskManager.getSessionStatus(),
-  });
+  const envelope = await executeDashboardOperation(
+    container,
+    req,
+    DASHBOARD_OPERATION_IDS.cancelBootstrap,
+    { reason }
+  );
+  sendDashboardOperationResponse(res, envelope);
 });
 
 /**
@@ -623,22 +583,13 @@ router.post(
     const { reason, dimensions } = req.body || {};
 
     const container = getServiceContainer();
-
-    logger.info('Rescan (internal) initiated from Dashboard', { reason, dimensions });
-
-    // 直接调用 rescan-internal handler（统一编排管线）
-    const { rescanInternal } = await import('#external/mcp/handlers/rescan-internal.js');
-    const raw = await rescanInternal(
-      { container, logger },
-      { reason: reason || 'dashboard-rescan', dimensions }
+    const envelope = await executeDashboardOperation(
+      container,
+      req,
+      DASHBOARD_OPERATION_IDS.rescanProject,
+      { reason, dimensions }
     );
-    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    const result = parsed?.data || parsed;
-
-    res.json({
-      success: true,
-      data: result,
-    });
+    sendDashboardOperationResponse(res, envelope);
   }
 );
 

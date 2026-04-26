@@ -19,6 +19,19 @@ import {
 } from '#domain/knowledge/FieldSpec.js';
 import type { BootstrapDedup } from '#service/bootstrap/BootstrapDedup.js';
 import type { GatewayDeps } from '#service/knowledge/RecipeProductionGateway.js';
+import {
+  getConsolidationAdvisor,
+  getEvolutionGateway,
+  getProposalRepository,
+  requireKnowledgeLifecycleService,
+  resolveLifecycleServicesFromContext,
+} from '../core/ToolLifecycleServices.js';
+import {
+  requireFeedbackCollector,
+  requireQualityScorer,
+  requireRecipeCandidateValidator,
+  resolveQualityServicesFromContext,
+} from '../core/ToolQualityServices.js';
 
 import {
   checkDimensionType,
@@ -181,19 +194,19 @@ export const submitCandidate = {
 
     // Bootstrap 模式: 启用去重（ConsolidationAdvisor + BootstrapDedup）
     const isBootstrap = !!(dimMeta && ctx.source === 'system');
-    const bootstrapDedup = isBootstrap
-      ? ((ctx as Record<string, unknown>)._bootstrapDedup ?? null)
-      : null;
-    const consolidationAdvisor = isBootstrap
-      ? (ctx.container.get('consolidationAdvisor') ?? null)
-      : null;
+    const bootstrapDedup = isBootstrap ? (ctx._bootstrapDedup ?? null) : null;
+    const lifecycleServices = resolveLifecycleServicesFromContext(ctx);
+    const consolidationAdvisor = isBootstrap ? getConsolidationAdvisor(lifecycleServices) : null;
+    const knowledgeLifecycleService = requireKnowledgeLifecycleService(lifecycleServices);
 
     const gateway = new RecipeProductionGateway({
-      knowledgeService: ctx.container.get('knowledgeService'),
+      knowledgeService: knowledgeLifecycleService,
       projectRoot: ctx.dataRoot || ctx.projectRoot,
       logger: ctx.logger as { info(msg: string): void; warn(msg: string): void } | undefined,
-      proposalRepository: ctx.container.get('proposalRepository') ?? null,
-      evolutionGateway: ctx.container.get('evolutionGateway') ?? null,
+      proposalRepository: getProposalRepository(
+        lifecycleServices
+      ) as GatewayDeps['proposalRepository'],
+      evolutionGateway: getEvolutionGateway(lifecycleServices) as GatewayDeps['evolutionGateway'],
       consolidationAdvisor: consolidationAdvisor as GatewayDeps['consolidationAdvisor'],
     });
 
@@ -255,7 +268,9 @@ export const approveCandidate = {
     required: ['candidateId'],
   },
   handler: async (params: { candidateId: string }, ctx: ToolHandlerContext) => {
-    const knowledgeService = ctx.container.get('knowledgeService');
+    const knowledgeService = requireKnowledgeLifecycleService(
+      resolveLifecycleServicesFromContext(ctx)
+    );
     return knowledgeService.approve(params.candidateId, { userId: 'agent' });
   },
 };
@@ -275,7 +290,9 @@ export const rejectCandidate = {
     required: ['candidateId', 'reason'],
   },
   handler: async (params: { candidateId: string; reason: string }, ctx: ToolHandlerContext) => {
-    const knowledgeService = ctx.container.get('knowledgeService');
+    const knowledgeService = requireKnowledgeLifecycleService(
+      resolveLifecycleServicesFromContext(ctx)
+    );
     return knowledgeService.reject(params.candidateId, params.reason, { userId: 'agent' });
   },
 };
@@ -294,7 +311,9 @@ export const publishRecipe = {
     required: ['recipeId'],
   },
   handler: async (params: { recipeId: string }, ctx: ToolHandlerContext) => {
-    const knowledgeService = ctx.container.get('knowledgeService');
+    const knowledgeService = requireKnowledgeLifecycleService(
+      resolveLifecycleServicesFromContext(ctx)
+    );
     return knowledgeService.publish(params.recipeId, { userId: 'agent' });
   },
 };
@@ -314,7 +333,9 @@ export const deprecateRecipe = {
     required: ['recipeId', 'reason'],
   },
   handler: async (params: { recipeId: string; reason: string }, ctx: ToolHandlerContext) => {
-    const knowledgeService = ctx.container.get('knowledgeService');
+    const knowledgeService = requireKnowledgeLifecycleService(
+      resolveLifecycleServicesFromContext(ctx)
+    );
     return knowledgeService.deprecate(params.recipeId, params.reason, { userId: 'agent' });
   },
 };
@@ -337,7 +358,9 @@ export const updateRecipe = {
     params: { recipeId: string; updates: Record<string, unknown> },
     ctx: ToolHandlerContext
   ) => {
-    const knowledgeService = ctx.container.get('knowledgeService');
+    const knowledgeService = requireKnowledgeLifecycleService(
+      resolveLifecycleServicesFromContext(ctx)
+    );
     return knowledgeService.update(params.recipeId, params.updates, { userId: 'agent' });
   },
 };
@@ -357,7 +380,9 @@ export const recordUsage = {
     required: ['recipeId'],
   },
   handler: async (params: { recipeId: string; type?: string }, ctx: ToolHandlerContext) => {
-    const knowledgeService = ctx.container.get('knowledgeService');
+    const knowledgeService = requireKnowledgeLifecycleService(
+      resolveLifecycleServicesFromContext(ctx)
+    );
     const type = params.type || 'adoption';
     await knowledgeService.incrementUsage(params.recipeId, type);
     return { success: true, recipeId: params.recipeId, type };
@@ -385,14 +410,16 @@ export const qualityScore = {
     params: { recipeId?: string; recipe?: Record<string, unknown> },
     ctx: ToolHandlerContext
   ) => {
-    const qualityScorer = ctx.container.get('qualityScorer');
+    const qualityScorer = requireQualityScorer(resolveQualityServicesFromContext(ctx));
     let recipe = params.recipe;
 
     if (!recipe && params.recipeId) {
-      const knowledgeService = ctx.container.get('knowledgeService');
+      const knowledgeService = requireKnowledgeLifecycleService(
+        resolveLifecycleServicesFromContext(ctx)
+      );
       try {
         const entry = await knowledgeService.get(params.recipeId);
-        recipe = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
+        recipe = hasToJSON(entry) ? entry.toJSON() : toRecord(entry);
       } catch {
         return { error: `Knowledge entry '${params.recipeId}' not found` };
       }
@@ -404,6 +431,18 @@ export const qualityScore = {
     return qualityScorer.score(recipe);
   },
 };
+
+function hasToJSON(value: unknown): value is { toJSON(): Record<string, unknown> } {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    typeof (value as { toJSON?: unknown }).toJSON === 'function'
+  );
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
 
 // ────────────────────────────────────────────────────────────
 // 24. validate_candidate
@@ -423,7 +462,7 @@ export const validateCandidate = {
     required: ['candidate'],
   },
   handler: async (params: { candidate: Record<string, unknown> }, ctx: ToolHandlerContext) => {
-    const validator = ctx.container.get('recipeCandidateValidator');
+    const validator = requireRecipeCandidateValidator(resolveQualityServicesFromContext(ctx));
     return validator.validate(params.candidate);
   },
 };
@@ -442,7 +481,7 @@ export const getFeedbackStats = {
     },
   },
   handler: async (params: { recipeId?: string; topN?: number }, ctx: ToolHandlerContext) => {
-    const feedbackCollector = ctx.container.get('feedbackCollector');
+    const feedbackCollector = requireFeedbackCollector(resolveQualityServicesFromContext(ctx));
     const result: Record<string, unknown> = {};
 
     result.global = feedbackCollector.getGlobalStats();

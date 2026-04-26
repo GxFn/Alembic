@@ -644,9 +644,11 @@ program
       }
 
       // ── Step 4: Agent 驱动的深度验证（evolution 管线）──
-      const agentFactory = container.get('agentFactory');
-      if (!agentFactory) {
-        cli.error('AgentFactory not available (需要配置 AI Provider)');
+      const agentService = container.get(
+        'agentService'
+      ) as import('../lib/agent/service/index.js').AgentService;
+      if (!agentService) {
+        cli.error('AgentService not available (需要配置 AI Provider)');
         await bootstrap.shutdown();
         process.exit(1);
       }
@@ -685,7 +687,9 @@ program
 
       const spinnerAgent = ora('Agent 正在读取源码验证 Recipe...').start();
 
-      const agentResult = await agentFactory.evolveCheck({
+      const { runEvolutionAudit } = await import('../lib/agent/service/index.js');
+      const agentResult = await runEvolutionAudit({
+        agentService,
         recipes: recipesWithHints,
         projectOverview: {
           primaryLang: 'unknown',
@@ -1274,7 +1278,7 @@ program
             '../lib/infrastructure/realtime/RealtimeService.js'
           );
           const db = container.get('database');
-          const agentFactory = container.get('agentFactory');
+          const agentService = container.get('agentService');
           const knowledgeRepo = container.get('knowledgeRepository');
           const auditRepo = container.get('auditRepository');
 
@@ -1282,7 +1286,7 @@ program
             projectRoot,
             knowledgeRepo: knowledgeRepo as any,
             auditRepo: auditRepo as any,
-            agentFactory,
+            agentService: agentService as any,
             container,
             mode: process.env.ALEMBIC_SIGNAL_MODE || 'auto',
             intervalMs: parseInt(process.env.ALEMBIC_SIGNAL_INTERVAL || '3600000', 10),

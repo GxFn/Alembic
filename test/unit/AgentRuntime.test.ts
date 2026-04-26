@@ -34,16 +34,52 @@ function mockAiProvider(overrides: Record<string, unknown> = {}) {
 /** 模拟 ToolRegistry — 最小化接口 */
 function mockToolRegistry() {
   return {
-    getToolSchemas: vi.fn().mockReturnValue([
+    has: vi.fn().mockReturnValue(true),
+  };
+}
+
+function mockToolRouter(overrides: Record<string, unknown> = {}) {
+  return {
+    execute: vi.fn().mockResolvedValue({
+      ok: true,
+      toolId: 'search_knowledge',
+      callId: 'router-call-default',
+      startedAt: new Date().toISOString(),
+      durationMs: 1,
+      status: 'success',
+      text: 'Routed tool result',
+      structuredContent: { result: 'tool result' },
+      diagnostics: {
+        degraded: false,
+        fallbackUsed: false,
+        warnings: [],
+        timedOutStages: [],
+        blockedTools: [],
+        truncatedToolCalls: 0,
+        emptyResponses: 0,
+        aiErrorCount: 0,
+        gateFailures: [],
+      },
+      trust: {
+        source: 'internal',
+        sanitized: true,
+        containsUntrustedText: false,
+        containsSecrets: false,
+      },
+    }),
+    ...overrides,
+  };
+}
+
+function mockCapabilityCatalog() {
+  return {
+    toToolSchemas: vi.fn().mockReturnValue([
       {
         name: 'search_knowledge',
         description: 'Search the knowledge base',
         parameters: { type: 'object', properties: { query: { type: 'string' } } },
       },
     ]),
-    execute: vi.fn().mockResolvedValue({ result: 'tool result' }),
-    getToolNames: vi.fn().mockReturnValue(['search_knowledge']),
-    has: vi.fn().mockReturnValue(true),
   };
 }
 
@@ -96,7 +132,11 @@ function createRuntime(overrides: Record<string, unknown> = {}) {
     toolRegistry: mockToolRegistry(),
     strategy: mockStrategy(),
     policies: mockPolicies(),
+    toolRouter: mockToolRouter(),
     capabilities: [],
+    container: {
+      get: (name: string) => (name === 'capabilityCatalog' ? mockCapabilityCatalog() : null),
+    },
     projectRoot: '/tmp/test-project',
     ...overrides,
     // eslint-disable-next-line -- partial mock intentionally omits AiProvider internals
@@ -130,6 +170,19 @@ describe('AgentRuntime', () => {
     test('should have accessible projectRoot', () => {
       const rt = createRuntime({ projectRoot: '/my/project' });
       expect(rt.projectRoot).toBe('/my/project');
+    });
+
+    test('should require ToolRouter for runtime tool execution', () => {
+      expect(
+        () =>
+          new AgentRuntime({
+            aiProvider: mockAiProvider(),
+            toolRegistry: mockToolRegistry(),
+            strategy: mockStrategy(),
+            policies: mockPolicies(),
+            capabilities: [],
+          } as unknown as ConstructorParameters<typeof AgentRuntime>[0])
+      ).toThrow(/requires ToolRouter/);
     });
   });
 
@@ -239,8 +292,39 @@ describe('AgentRuntime', () => {
       expect(result.iterations).toBeGreaterThanOrEqual(1);
     });
 
+    test('does not expand an empty skill tool list into all tool schemas', async () => {
+      const toToolSchemas = vi.fn().mockReturnValue([]);
+      const aiProvider = mockAiProvider();
+      const rt = createRuntime({
+        aiProvider,
+        capabilities: [
+          {
+            name: 'empty_skill',
+            promptFragment: '',
+            tools: [],
+            buildContext: () => null,
+            onBeforeStep: () => {},
+            onAfterStep: () => {},
+          },
+        ],
+        container: {
+          get: (name: string) => (name === 'capabilityCatalog' ? { toToolSchemas } : null),
+        },
+      });
+
+      await rt.reactLoop('no tools');
+
+      expect(toToolSchemas).toHaveBeenCalledWith([]);
+      expect(aiProvider.chatWithTools).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          toolSchemas: undefined,
+          toolChoice: undefined,
+        })
+      );
+    });
+
     test('should execute tool calls when AI returns function calls', async () => {
-      const toolRegistry = mockToolRegistry();
       const aiProvider = mockAiProvider({
         chatWithTools: vi
           .fn()
@@ -259,11 +343,87 @@ describe('AgentRuntime', () => {
             usage: { inputTokens: 200, outputTokens: 100 },
           }),
       });
-      const rt = createRuntime({ aiProvider, toolRegistry });
+      const rt = createRuntime({ aiProvider });
       const result = await rt.reactLoop('Search for patterns');
 
       expect(result.toolCalls.length).toBeGreaterThanOrEqual(1);
       expect(result.tokenUsage.input).toBeGreaterThan(0);
+    });
+
+    test('should keep tool result envelopes in tool call history when routed', async () => {
+      const toolRouter = {
+        execute: vi.fn().mockResolvedValue({
+          ok: true,
+          toolId: 'search_knowledge',
+          callId: 'router-call-1',
+          startedAt: new Date().toISOString(),
+          durationMs: 3,
+          status: 'success',
+          text: 'Routed search result summary',
+          structuredContent: { result: 'routed result' },
+          diagnostics: {
+            degraded: false,
+            fallbackUsed: false,
+            warnings: [],
+            timedOutStages: [],
+            blockedTools: [],
+            truncatedToolCalls: 0,
+            emptyResponses: 0,
+            aiErrorCount: 0,
+            gateFailures: [],
+          },
+          trust: {
+            source: 'internal',
+            sanitized: true,
+            containsUntrustedText: false,
+            containsSecrets: false,
+          },
+        }),
+      };
+      const aiProvider = mockAiProvider({
+        chatWithTools: vi
+          .fn()
+          .mockResolvedValueOnce({
+            type: 'function_call',
+            text: null,
+            functionCalls: [
+              { id: 'call_1', name: 'search_knowledge', args: { query: 'patterns' } },
+            ],
+            usage: { inputTokens: 100, outputTokens: 50 },
+          })
+          .mockResolvedValueOnce({
+            type: 'text',
+            text: 'Done',
+            functionCalls: null,
+            usage: { inputTokens: 200, outputTokens: 100 },
+          }),
+      });
+      const policies = mockPolicies();
+      const rt = createRuntime({ aiProvider, toolRouter, policies });
+
+      const result = await rt.reactLoop('Search for patterns');
+
+      expect(toolRouter.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolId: 'search_knowledge',
+          surface: 'runtime',
+          runtime: expect.objectContaining({
+            agentId: rt.id,
+            policyValidator: policies,
+            aiProvider,
+            logger: rt.logger,
+          }),
+        })
+      );
+      expect(policies.validateToolCall).not.toHaveBeenCalled();
+      expect(result.toolCalls[0]).toMatchObject({
+        result: { result: 'routed result' },
+        envelope: {
+          ok: true,
+          status: 'success',
+          text: 'Routed search result summary',
+        },
+      });
     });
 
     test('should accumulate token usage across iterations', async () => {
@@ -307,8 +467,8 @@ describe('AgentRuntime', () => {
           usage: { inputTokens: 100, outputTokens: 50 },
         });
       const aiProvider = mockAiProvider({ chatWithTools });
-      const toolRegistry = mockToolRegistry();
-      const rt = createRuntime({ aiProvider, toolRegistry });
+      const toolRouter = mockToolRouter();
+      const rt = createRuntime({ aiProvider, toolRouter });
 
       const result = await rt.reactLoop('query');
       const secondCallOptions = chatWithTools.mock.calls[1][1] as {
@@ -317,7 +477,7 @@ describe('AgentRuntime', () => {
 
       expect(result.toolCalls).toHaveLength(MAX_TOOL_CALLS_PER_ITER);
       expect(result.diagnostics?.truncatedToolCalls).toBe(2);
-      expect(toolRegistry.execute).toHaveBeenCalledTimes(MAX_TOOL_CALLS_PER_ITER);
+      expect(toolRouter.execute).toHaveBeenCalledTimes(MAX_TOOL_CALLS_PER_ITER);
       expect(
         secondCallOptions.messages.some((msg) => msg.content?.includes('工具调用数量超限'))
       ).toBe(true);

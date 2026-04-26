@@ -1,11 +1,11 @@
 /**
- * TemporaryToolRegistry — TTL 临时工具注册
+ * TemporaryToolRegistry — TTL 临时能力注册
  *
- * 在 ToolRegistry 之上增加 TTL 自动回收机制。
- * 锻造的工具默认 30 分钟有效，到期自动从 ToolRegistry 中移除。
+ * 为 Forge 产物增加 TTL 自动回收机制。
+ * 生成工具会投影到内部工具 handler store；组合 workflow 只保留 TTL/allowlist 追踪。
  *
  * 设计：
- *   - 装饰器模式，不修改 ToolRegistry 核心逻辑
+ *   - 装饰器模式，不修改内部 handler store 核心逻辑
  *   - 定期检查（60s 间隔）清理过期工具
  *   - 支持手动续期和提前回收
  */
@@ -15,25 +15,27 @@ import Logger from '#infra/logging/Logger.js';
 import type { SignalBus } from '#infra/signal/SignalBus.js';
 import type { Disposable } from '../../shared/lifecycle.js';
 import { timerRegistry } from '../../shared/TimerRegistry.js';
+import type { ForgedInternalToolStore, InternalToolHandler } from '../core/InternalToolHandler.js';
+import type { WorkflowHandler } from '../workflow/WorkflowRegistry.js';
 
 /* ────────────────────── Types ────────────────────── */
 
-interface ToolRegistryLike {
-  register(toolDef: {
-    name: string;
-    description: string;
-    parameters?: Record<string, unknown>;
-    handler: (...args: never[]) => unknown;
-  }): void;
-  unregister(name: string): boolean;
-  has(name: string): boolean;
+interface TemporaryToolRegistryOptions {
+  signalBus?: SignalBus;
+  onRevokeTemporary?: (tool: TemporaryTool) => void;
+}
+
+interface TemporaryRegistrationOptions {
+  projectIntoInternalToolStore?: boolean;
 }
 
 export interface TemporaryTool {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
-  handler: (params: Record<string, unknown>, context: Record<string, unknown>) => Promise<unknown>;
+  handler:
+    | WorkflowHandler
+    | ((params: Record<string, unknown>, context: Record<string, unknown>) => Promise<unknown>);
   /** 锻造模式 */
   forgeMode: 'reuse' | 'compose' | 'generate';
   /** 注册时间 (ms) */
@@ -42,12 +44,17 @@ export interface TemporaryTool {
   expiresAt: number;
 }
 
+interface TemporaryToolEntry extends TemporaryTool {
+  projectedIntoInternalToolStore: boolean;
+}
+
 export interface TemporaryToolInfo {
   name: string;
   forgeMode: string;
   registeredAt: number;
   expiresAt: number;
   remainingMs: number;
+  projectedIntoInternalToolStore: boolean;
 }
 
 /* ────────────────────── Constants ────────────────────── */
@@ -58,15 +65,20 @@ const CLEANUP_INTERVAL_MS = 60 * 1000; // 60 seconds
 /* ────────────────────── Class ────────────────────── */
 
 export class TemporaryToolRegistry implements Disposable {
-  #registry: ToolRegistryLike;
-  #tempTools = new Map<string, TemporaryTool>();
+  #forgedToolStore: ForgedInternalToolStore;
+  #tempTools = new Map<string, TemporaryToolEntry>();
   #cleanupTimer: ReturnType<typeof setInterval> | null = null;
   #signalBus: SignalBus | null;
+  #onRevokeTemporary: TemporaryToolRegistryOptions['onRevokeTemporary'];
   #logger = Logger.getInstance();
 
-  constructor(registry: ToolRegistryLike, options: { signalBus?: SignalBus } = {}) {
-    this.#registry = registry;
+  constructor(
+    forgedToolStore: ForgedInternalToolStore,
+    options: TemporaryToolRegistryOptions = {}
+  ) {
+    this.#forgedToolStore = forgedToolStore;
     this.#signalBus = options.signalBus ?? null;
+    this.#onRevokeTemporary = options.onRevokeTemporary;
     this.#startCleanup();
   }
 
@@ -75,13 +87,16 @@ export class TemporaryToolRegistry implements Disposable {
    */
   registerTemporary(
     tool: Omit<TemporaryTool, 'registeredAt' | 'expiresAt'>,
-    ttlMs: number = DEFAULT_TTL_MS
+    ttlMs: number = DEFAULT_TTL_MS,
+    options: TemporaryRegistrationOptions = {}
   ): void {
     const now = Date.now();
-    const entry: TemporaryTool = {
+    const projectIntoInternalToolStore = options.projectIntoInternalToolStore ?? true;
+    const entry: TemporaryToolEntry = {
       ...tool,
       registeredAt: now,
       expiresAt: ttlMs > 0 ? now + ttlMs : 0,
+      projectedIntoInternalToolStore: projectIntoInternalToolStore,
     };
 
     // 如果已存在同名临时工具，先移除
@@ -89,19 +104,27 @@ export class TemporaryToolRegistry implements Disposable {
       this.revoke(tool.name);
     }
 
-    if (this.#registry.has(tool.name)) {
+    if (projectIntoInternalToolStore && tool.forgeMode !== 'generate') {
+      throw new Error(
+        `Temporary ${tool.forgeMode} tool "${tool.name}" cannot be projected as a forged internal tool.`
+      );
+    }
+
+    if (projectIntoInternalToolStore && this.#forgedToolStore.hasInternalTool(tool.name)) {
       throw new Error(
         `Temporary tool "${tool.name}" conflicts with an existing static tool. Use a unique forge namespace.`
       );
     }
 
-    // 注册到主 ToolRegistry
-    this.#registry.register({
-      name: tool.name,
-      description: `[Forged:${tool.forgeMode}] ${tool.description}`,
-      parameters: tool.parameters,
-      handler: tool.handler,
-    });
+    if (projectIntoInternalToolStore) {
+      this.#forgedToolStore.projectForgedTool({
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+        forgeMode: 'generate',
+        handler: tool.handler as InternalToolHandler,
+      });
+    }
 
     this.#tempTools.set(tool.name, entry);
 
@@ -126,8 +149,11 @@ export class TemporaryToolRegistry implements Disposable {
       return false;
     }
 
-    this.#registry.unregister(name);
+    if (tool.projectedIntoInternalToolStore) {
+      this.#forgedToolStore.revokeForgedTool(name);
+    }
     this.#tempTools.delete(name);
+    this.#onRevokeTemporary?.(tool);
 
     if (this.#signalBus) {
       this.#signalBus.send('forge', 'TemporaryToolRegistry', 0, {
@@ -162,8 +188,11 @@ export class TemporaryToolRegistry implements Disposable {
 
     for (const [name, tool] of this.#tempTools) {
       if (tool.expiresAt > 0 && tool.expiresAt <= now) {
-        this.#registry.unregister(name);
+        if (tool.projectedIntoInternalToolStore) {
+          this.#forgedToolStore.revokeForgedTool(name);
+        }
         this.#tempTools.delete(name);
+        this.#onRevokeTemporary?.(tool);
         cleaned++;
 
         this.#logger.debug(`TemporaryToolRegistry: expired "${name}"`);
@@ -187,6 +216,7 @@ export class TemporaryToolRegistry implements Disposable {
         registeredAt: tool.registeredAt,
         expiresAt: tool.expiresAt,
         remainingMs: tool.expiresAt > 0 ? Math.max(0, tool.expiresAt - now) : -1,
+        projectedIntoInternalToolStore: tool.projectedIntoInternalToolStore,
       });
     }
 

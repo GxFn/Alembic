@@ -7,12 +7,11 @@
  * 每个中间件负责一个横切关注点:
  *   1. EventBusPublisher — 事件发布
  *   2. ProgressEmitter — 进度回调
- *   3. SafetyGate — SafetyPolicy 安全拦截
- *   4. CacheCheck — MemoryCoordinator 缓存命中
- *   5. ObservationRecord — 记忆记录
- *   6. TrackerSignal — ExplorationTracker 信号收集
- *   7. TraceRecord — ActiveContext 推理链记录
- *   8. SubmitDedup — 提交去重
+ *   3. AllowlistGate — 当前 capability 白名单拦截
+ *   4. ObservationRecord — 记忆记录
+ *   5. TrackerSignal — ExplorationTracker 信号收集
+ *   6. TraceRecord — ActiveContext 推理链记录
+ *   7. SubmitDedup — 提交去重
  *
  * @module core/ToolExecutionPipeline
  */
@@ -20,6 +19,7 @@
 import type { AgentRuntime } from '../AgentRuntime.js';
 import { SafetyPolicy } from '../policies.js';
 import type { LoopContext } from './LoopContext.js';
+import type { ToolResultEnvelope } from './ToolResultEnvelope.js';
 
 /** 工具调用描述 */
 interface ToolCall {
@@ -53,6 +53,7 @@ interface ToolMetadata {
   durationMs: number;
   dedupMessage?: string;
   isSubmit?: boolean;
+  envelope?: ToolResultEnvelope;
 }
 
 /** before 钩子返回值 */
@@ -98,7 +99,7 @@ export class ToolExecutionPipeline {
    *
    * 执行流:
    *   1. 依次调用 before 钩子 — 任一返回 blocked/result 则短路
-   *   2. 实际执行工具 (toolRegistry.execute)
+   *   2. 实际执行工具 (ToolRouter only)
    *   3. 依次调用 after 钩子
    *
    * @param call { name, args, id }
@@ -132,35 +133,69 @@ export class ToolExecutionPipeline {
       const t0 = Date.now();
       try {
         const { runtime, loopCtx } = context;
-        if (loopCtx.abortSignal?.aborted) {
-          toolResult = { error: 'Tool execution aborted before start' };
-          metadata.blocked = true;
-          loopCtx.diagnostics?.recordBlockedTool(call.name, 'Tool execution aborted before start');
-        } else {
-          const safetyPolicy = runtime.policies.get?.(SafetyPolicy) || null;
-          toolResult = await runtime.toolRegistry.execute(call.name, call.args, {
+        const safetyPolicy = runtime.policies.get?.(SafetyPolicy) || null;
+        const envelope = await runtime.toolRouter.execute({
+          toolId: call.name,
+          args: call.args,
+          surface: 'runtime',
+          actor: { role: 'runtime', user: runtime.id },
+          source: { kind: 'runtime', name: loopCtx.source || runtime.presetName },
+          abortSignal: loopCtx.abortSignal || null,
+          runtime: {
             agentId: runtime.id,
-            source: loopCtx.source || runtime.presetName,
-            abortSignal: loopCtx.abortSignal || null,
-            container: runtime.container,
+            presetName: runtime.presetName,
+            iteration: loopCtx.iteration || 0,
+            policyValidator: runtime.policies,
+            cache: loopCtx.memoryCoordinator || null,
+            diagnostics: loopCtx.diagnostics || null,
             safetyPolicy,
-            projectRoot: runtime.projectRoot,
             fileCache: runtime.fileCache,
+            dataRoot: runtime.projectRoot,
             lang: runtime.lang,
             logger: runtime.logger || null,
             aiProvider: runtime.aiProvider || null,
-            // ── bootstrap 维度上下文 (从 sharedState 透传) ──
-            _submittedTitles: loopCtx.sharedState?.submittedTitles || null,
-            _submittedPatterns: loopCtx.sharedState?.submittedPatterns || null,
-            _sharedState: loopCtx.sharedState || null,
-            _dimensionMeta: loopCtx.sharedState?._dimensionMeta || null,
-            _projectLanguage: loopCtx.sharedState?._projectLanguage || null,
-            _bootstrapDedup: loopCtx.sharedState?._bootstrapDedup || null,
-            _memoryCoordinator: loopCtx.memoryCoordinator || null,
-            _dimensionScopeId: loopCtx.sharedState?._dimensionScopeId || null,
-            _currentRound: loopCtx.iteration || 0,
-          });
+            sharedState: loopCtx.sharedState || null,
+            dimensionMeta: loopCtx.sharedState?._dimensionMeta || null,
+            projectLanguage:
+              typeof loopCtx.sharedState?._projectLanguage === 'string'
+                ? loopCtx.sharedState._projectLanguage
+                : null,
+            submittedTitles: loopCtx.sharedState?.submittedTitles || null,
+            submittedPatterns: loopCtx.sharedState?.submittedPatterns || null,
+            submittedTriggers: loopCtx.sharedState?.submittedTriggers || null,
+            sessionToolCalls: Array.isArray(loopCtx.toolCalls)
+              ? loopCtx.toolCalls.map((entry: { tool?: string; args?: unknown }) => ({
+                  tool: String(entry.tool || ''),
+                  params:
+                    entry.args && typeof entry.args === 'object'
+                      ? (entry.args as Record<string, unknown>)
+                      : undefined,
+                }))
+              : null,
+            bootstrapDedup: loopCtx.sharedState?._bootstrapDedup || null,
+            memoryCoordinator: loopCtx.memoryCoordinator || null,
+            dimensionScopeId:
+              typeof loopCtx.sharedState?._dimensionScopeId === 'string'
+                ? loopCtx.sharedState._dimensionScopeId
+                : null,
+            currentRound: loopCtx.iteration || 0,
+          },
+        });
+        metadata.envelope = envelope;
+        metadata.cacheHit = envelope.cache?.hit === true;
+        if (
+          !envelope.ok &&
+          ['blocked', 'needs-confirmation', 'aborted', 'timeout'].includes(envelope.status)
+        ) {
+          metadata.blocked = true;
+          loopCtx.diagnostics?.recordBlockedTool(call.name, envelope.text);
         }
+        toolResult =
+          envelope.structuredContent !== undefined
+            ? envelope.structuredContent
+            : envelope.ok
+              ? { success: true, message: envelope.text }
+              : { error: envelope.text };
       } catch (err: unknown) {
         toolResult = { error: (err as Error).message };
       }
@@ -230,46 +265,6 @@ export const allowlistGate = {
 };
 
 /**
- * SafetyGate — SafetyPolicy 安全拦截
- *
- * before: 如果策略拒绝则短路返回 error
- */
-export const safetyGate = {
-  name: 'safetyGate',
-  before(call: ToolCall, ctx: ToolExecContext): BeforeVerdict | undefined {
-    const check = ctx.runtime.policies.validateToolCall(call.name, call.args);
-    if (!check.ok) {
-      ctx.runtime.logger.warn(
-        `[ToolPipeline] Tool blocked by Policy: ${call.name} — ${check.reason}`
-      );
-      return { blocked: true, result: { error: check.reason } };
-    }
-    return undefined;
-  },
-};
-
-/**
- * CacheCheck — MemoryCoordinator 缓存命中
- *
- * before: 如果缓存命中则短路返回缓存值
- */
-export const cacheCheck = {
-  name: 'cacheCheck',
-  before(call: ToolCall, ctx: ToolExecContext): BeforeVerdict | undefined {
-    const mc = ctx.loopCtx.memoryCoordinator;
-    if (!mc) {
-      return undefined;
-    }
-    const cached = mc.getCachedResult?.(call.name, call.args);
-    if (cached !== null && cached !== undefined) {
-      ctx.runtime.logger.info(`[ToolPipeline] 🔧 CACHE HIT: ${call.name} → skipped execution`);
-      return { result: cached };
-    }
-    return undefined;
-  },
-};
-
-/**
  * ObservationRecord — MemoryCoordinator 观察记录
  *
  * after: 记录工具执行观察
@@ -280,9 +275,9 @@ export const observationRecord = {
     ctx.loopCtx.memoryCoordinator?.recordObservation?.(
       call.name,
       call.args,
-      result,
+      meta.envelope || result,
       ctx.iteration,
-      meta.cacheHit
+      meta.envelope ? true : meta.cacheHit
     );
   },
 };
@@ -310,7 +305,7 @@ export const trackerSignal = {
 export const traceRecord = {
   name: 'traceRecord',
   after(call: ToolCall, result: unknown, ctx: ToolExecContext, meta: ToolMetadata) {
-    ctx.loopCtx.trace?.recordToolCall(call.name, call.args, result, meta.isNew);
+    ctx.loopCtx.trace?.recordToolCall(call.name, call.args, meta.envelope || result, meta.isNew);
   },
 };
 
@@ -445,12 +440,13 @@ export const eventBusPublisher = {
  * 创建预配置的工具执行管道
  *
  * 中间件顺序:
- *   1. safetyGate (安全拦截 — 可短路)
- *   2. cacheCheck (缓存检查 — 可短路)
- *   3. observationRecord (记忆记录)
- *   4. trackerSignal (信号收集)
- *   5. traceRecord (推理链)
- *   6. submitDedup (提交去重)
+ *   1. allowlistGate (当前 capability 白名单 — 可短路)
+ *   2. observationRecord (记忆记录)
+ *   3. trackerSignal (信号收集)
+ *   4. traceRecord (推理链)
+ *   5. submitDedup (提交去重)
+ *
+ * Runtime SafetyPolicy 已迁入 ToolRouter/GovernanceEngine 的 approve 阶段。
  *
  * NOTE: eventBusPublisher 和 progressEmitter 不在默认管道中，
  * 由 #processToolCalls 直接处理，以保持与原始 reactLoop 完全一致的事件顺序
@@ -459,8 +455,6 @@ export const eventBusPublisher = {
 export function createToolPipeline() {
   return new ToolExecutionPipeline()
     .use(allowlistGate)
-    .use(safetyGate)
-    .use(cacheCheck)
     .use(observationRecord)
     .use(trackerSignal)
     .use(traceRecord)

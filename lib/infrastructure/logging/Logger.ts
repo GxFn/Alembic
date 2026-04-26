@@ -7,7 +7,6 @@ import pathGuard from '../../shared/PathGuard.js';
 // Agent 系统相关标签 — 终端高亮显示
 const AGENT_TAGS = [
   'AgentRuntime',
-  'AgentFactory',
   'ToolRegistry',
   'SignalCollector',
   'SkillAdvisor',

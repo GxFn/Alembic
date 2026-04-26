@@ -379,16 +379,22 @@ function getLarkTransport() {
 
   try {
     const container = getServiceContainer();
-    const agentFactory = container.get('agentFactory');
+    const agentService = container.get('agentService');
     const aiProvider = container.get('aiProvider');
 
-    if (!agentFactory) {
-      logger.warn('[Remote/Lark] AgentFactory not available, transport not ready');
+    if (!agentService) {
+      logger.warn('[Remote/Lark] Agent service not available, transport not ready');
       return null;
     }
 
     _larkTransport = new LarkTransport({
-      agentFactory,
+      agentService,
+      aiProviderInfo: {
+        getAiProviderInfo: () => ({
+          name: (aiProvider as { name?: string } | null | undefined)?.name || 'unknown',
+          model: (aiProvider as { model?: string } | null | undefined)?.model,
+        }),
+      },
       aiProvider: aiProvider ?? undefined,
       replyFn: replyLark,
       sendFn: sendLarkNotification,
@@ -720,7 +726,7 @@ function wakeWaiters() {
 
 router.get('/wait', (req, res) => {
   _lastPollAt = Date.now();
-  const timeout = Math.min(parseInt(req.query.timeout as string) || 25000, 60000);
+  const timeout = Math.min(parseInt(req.query.timeout as string, 10) || 25000, 60000);
   let resolved = false;
 
   const resolve = (data: Record<string, unknown>) => {

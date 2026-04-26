@@ -301,13 +301,13 @@ export class KnowledgeProduction extends Capability {
 // ─── SystemInteraction — 系统交互能力 ────────────
 
 /**
- * 系统交互能力: 终端命令执行、文件写入、环境探测、项目探索
+ * 系统交互能力: 结构化终端执行、文件写入、环境探测、项目探索
  *
  * 核心工具: 终端执行 + 文件写入 + 环境信息 + 项目读取
  * 用于: 飞书远程执行、自动化脚本、任何需要操作本地系统的场景
  *
  * ⚙️ 安全设计 (3 层防护):
- *   1. 工具层: run_safe_command / write_project_file 内置硬编码黑名单
+ *   1. 工具层: terminal_run / write_project_file 内置硬编码安全边界
  *   2. Policy 层: SafetyPolicy.checkCommand() / checkFilePath() 动态拦截
  *   3. Runtime 层: reactLoop 工具执行前自动调用 PolicyEngine.validateToolCall()
  *
@@ -328,32 +328,46 @@ export class SystemInteraction extends Capability {
 
   get promptFragment() {
     return `## 系统交互能力
-你可以在本地环境中执行终端命令、写入文件、探索项目。
+你可以在本地环境中执行结构化终端命令、写入文件、探索项目，并读取受治理的本机 macOS 状态。
 
 能力:
-1. **终端命令**: run_safe_command 执行 shell 命令 (git, npm, ls, grep 等)
+1. **终端命令**: terminal_run 执行结构化命令，参数为 { bin, args, env, cwd, timeoutMs, network, filesystem, interactive, session }
+   - interactive 默认为 "never"；当前不开放需要人工输入的交互式命令
+   - env 默认为单次命令作用域；只有 persistent session 显式声明 envPersistence="explicit" 时才复用显式 env metadata
+   - terminal_session_close / terminal_session_cleanup 可显式关闭或清理 persistent session metadata
 2. **文件写入**: write_project_file 创建/覆盖项目内文件
 3. **环境探测**: get_environment_info 获取 OS/Node/Git/项目信息
 4. **项目探索**: 搜索代码、读取文件、列出目录结构
+5. **macOS 本机能力**: mac_system_info / mac_permission_status / mac_window_list / mac_screenshot
+   - permission status 只报告已知状态，不触发 TCC 授权请求，不绕过系统权限
+   - window list 和 screenshot 使用 ScreenCaptureKit helper；窗口标题和图片按敏感 artifact/resource ref 处理
 
 安全规则:
 - 所有操作限制在项目目录 (${this.#projectRoot}) 内
-- 危险命令 (sudo, rm -rf /, shutdown 等) 被自动拦截
+- 终端命令必须拆成 bin + args，不接受自由 shell、管道、重定向或命令替换
+- 危险可执行文件 (sudo, dd, mkfs, shutdown 等) 和 rm -rf 会被自动拦截
 - 受保护文件 (.git/, node_modules/, .env) 不可写入
 - SafetyPolicy 可进一步约束可执行命令和可访问路径
 
 最佳实践:
 - 执行命令前先 get_environment_info 了解环境
 - git 命令用于查看状态、diff、log，不建议执行 push/commit
-- 需要管道/重定向时用 sh -c "命令" 包装
+- 需要执行命令时优先使用明确的 bin 和 args，例如 { "bin": "git", "args": ["status"] }
 
 项目路径: ${this.#projectRoot}`;
   }
 
   get tools() {
     return [
-      // 终端执行
-      'run_safe_command',
+      // 结构化终端执行
+      'terminal_run',
+      'terminal_session_close',
+      'terminal_session_cleanup',
+      // macOS 本机能力
+      'mac_system_info',
+      'mac_permission_status',
+      'mac_window_list',
+      'mac_screenshot',
       // 文件写入
       'write_project_file',
       // 环境探测

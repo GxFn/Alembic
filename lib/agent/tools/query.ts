@@ -9,6 +9,12 @@
  * 6. get_related_recipes  知识图谱关联查询
  */
 
+import {
+  getSearchEngine,
+  requireKnowledgeGraphService,
+  requireKnowledgeService,
+  resolveKnowledgeServicesFromContext,
+} from '../core/ToolKnowledgeServices.js';
 import type { ToolHandlerContext } from './_shared.js';
 
 // ─── Tool handler param types ──────────────────────────────
@@ -41,6 +47,10 @@ interface SearchResultEntry {
   [key: string]: unknown;
 }
 
+interface JsonLikeEntry {
+  toJSON?: () => unknown;
+}
+
 // ────────────────────────────────────────────────────────────
 // 3. search_recipes
 // ────────────────────────────────────────────────────────────
@@ -66,25 +76,25 @@ export const searchRecipes = {
   },
   handler: async (params: SearchRecipesParams, ctx: ToolHandlerContext) => {
     const { keyword, category, language, knowledgeType, limit = 10 } = params;
+    const knowledgeServices = resolveKnowledgeServicesFromContext(ctx);
 
     if (keyword) {
       // 使用 SearchEngine（BM25 + SQL LIKE 降级），消除与 KnowledgeService.search 的双路径
-      try {
-        const searchEngine = ctx.container.get('searchEngine');
+      const searchEngine = getSearchEngine(knowledgeServices);
+      if (searchEngine) {
         const result = await searchEngine.search(keyword, {
           mode: 'keyword',
           limit,
         });
-        const items = result?.items || [];
+        const items = extractSearchItems(result);
         return { items, total: items.length };
-      } catch {
-        // SearchEngine 不可用，降级到 KnowledgeService
-        const knowledgeService = ctx.container.get('knowledgeService');
-        return knowledgeService.search(keyword, { page: 1, pageSize: limit });
       }
+      // SearchEngine 不可用，降级到 KnowledgeService
+      const knowledgeService = requireKnowledgeService(knowledgeServices);
+      return knowledgeService.search(keyword, { page: 1, pageSize: limit });
     }
 
-    const knowledgeService = ctx.container.get('knowledgeService');
+    const knowledgeService = requireKnowledgeService(knowledgeServices);
     const filters: Record<string, string> = { lifecycle: 'active' };
     if (category) {
       filters.category = category;
@@ -118,25 +128,25 @@ export const searchCandidates = {
   },
   handler: async (params: SearchCandidatesParams, ctx: ToolHandlerContext) => {
     const { keyword, status, language, category, limit = 10 } = params;
+    const knowledgeServices = resolveKnowledgeServicesFromContext(ctx);
 
     if (keyword) {
       // 使用 SearchEngine（BM25 + SQL LIKE 降级），消除与 KnowledgeService.search 的双路径
-      try {
-        const searchEngine = ctx.container.get('searchEngine');
+      const searchEngine = getSearchEngine(knowledgeServices);
+      if (searchEngine) {
         const result = await searchEngine.search(keyword, {
           mode: 'keyword',
           limit,
         });
-        const items = result?.items || [];
+        const items = extractSearchItems(result);
         return { items, total: items.length };
-      } catch {
-        // SearchEngine 不可用，降级到 KnowledgeService
-        const knowledgeService = ctx.container.get('knowledgeService');
-        return knowledgeService.search(keyword, { page: 1, pageSize: limit });
       }
+      // SearchEngine 不可用，降级到 KnowledgeService
+      const knowledgeService = requireKnowledgeService(knowledgeServices);
+      return knowledgeService.search(keyword, { page: 1, pageSize: limit });
     }
 
-    const knowledgeService = ctx.container.get('knowledgeService');
+    const knowledgeService = requireKnowledgeService(knowledgeServices);
     // V3: status 映射为 lifecycle
     const filters: Record<string, string> = {};
     if (status) {
@@ -167,10 +177,10 @@ export const getRecipeDetail = {
     required: ['recipeId'],
   },
   handler: async (params: { recipeId: string }, ctx: ToolHandlerContext) => {
-    const knowledgeService = ctx.container.get('knowledgeService');
+    const knowledgeService = requireKnowledgeService(resolveKnowledgeServicesFromContext(ctx));
     try {
-      const entry = await knowledgeService.get(params.recipeId);
-      return typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
+      const entry = (await knowledgeService.get(params.recipeId)) as JsonLikeEntry | unknown;
+      return hasToJSON(entry) ? entry.toJSON() : entry;
     } catch {
       return { error: `Knowledge entry '${params.recipeId}' not found` };
     }
@@ -186,14 +196,15 @@ export const getProjectStats = {
     '获取项目知识库的整体统计：Recipe 数量/分类分布、候选项数量/状态分布、知识图谱节点/边数。',
   parameters: { type: 'object', properties: {} },
   handler: async (_params: Record<string, never>, ctx: ToolHandlerContext) => {
-    const knowledgeService = ctx.container.get('knowledgeService');
+    const knowledgeServices = resolveKnowledgeServicesFromContext(ctx);
+    const knowledgeService = requireKnowledgeService(knowledgeServices);
     const stats = await knowledgeService.getStats();
 
     // 尝试获取知识图谱统计
     let graphStats: Record<string, unknown> | null = null;
     try {
-      const kgService = ctx.container.get('knowledgeGraphService');
-      graphStats = kgService.getStats();
+      const kgService = requireKnowledgeGraphService(knowledgeServices);
+      graphStats = toRecord(kgService.getStats());
     } catch {
       /* KG not available */
     }
@@ -221,16 +232,17 @@ export const searchKnowledge = {
   },
   handler: async (params: SearchKnowledgeParams, ctx: ToolHandlerContext) => {
     const { query, topK = 5 } = params;
+    const knowledgeServices = resolveKnowledgeServicesFromContext(ctx);
 
     // 优先使用 SearchEngine（有 BM25 + 向量搜索 + Ranking Pipeline）
-    try {
-      const searchEngine = ctx.container.get('searchEngine');
+    const searchEngine = getSearchEngine(knowledgeServices);
+    if (searchEngine) {
       const results = await searchEngine.search(query, {
         limit: topK,
         mode: 'auto',
         rank: true,
       });
-      const items = results?.items || (Array.isArray(results) ? results : []);
+      const items = extractSearchItems(results);
       if (items.length > 0) {
         const enriched = items.slice(0, topK).map((r: SearchResultEntry, i: number) => ({
           ...r,
@@ -252,8 +264,6 @@ export const searchKnowledge = {
           },
         };
       }
-    } catch {
-      /* SearchEngine not available */
     }
 
     return {
@@ -287,7 +297,7 @@ export const getRelatedRecipes = {
     required: ['recipeId'],
   },
   handler: async (params: { recipeId: string; relation?: string }, ctx: ToolHandlerContext) => {
-    const kgService = ctx.container.get('knowledgeGraphService');
+    const kgService = requireKnowledgeGraphService(resolveKnowledgeServicesFromContext(ctx));
     const { recipeId, relation } = params;
 
     if (relation) {
@@ -295,7 +305,37 @@ export const getRelatedRecipes = {
       return { recipeId, relation, edges };
     }
 
-    const edges = kgService.getEdges(recipeId, 'recipe', 'both');
+    const edges = toRecord(kgService.getEdges(recipeId, 'recipe', 'both'));
     return { recipeId, ...edges };
   },
 };
+
+function extractSearchItems(result: unknown): SearchResultEntry[] {
+  if (Array.isArray(result)) {
+    return result.filter(isSearchResultEntry);
+  }
+  if (
+    result &&
+    typeof result === 'object' &&
+    Array.isArray((result as { items?: unknown }).items)
+  ) {
+    return (result as { items: unknown[] }).items.filter(isSearchResultEntry);
+  }
+  return [];
+}
+
+function isSearchResultEntry(value: unknown): value is SearchResultEntry {
+  return !!value && typeof value === 'object';
+}
+
+function hasToJSON(value: unknown): value is { toJSON: () => unknown } {
+  return (
+    !!value && typeof value === 'object' && typeof (value as JsonLikeEntry).toJSON === 'function'
+  );
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}

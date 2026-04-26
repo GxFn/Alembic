@@ -11,9 +11,9 @@ import Logger from '#infra/logging/Logger.js';
 
 /* ────────────────────── Types ────────────────────── */
 
-interface ToolRegistryLike {
+export interface ToolRequirementDirectory {
   has(name: string): boolean;
-  getToolNames(): string[];
+  list(): string[];
 }
 
 export interface ToolRequirement {
@@ -59,11 +59,11 @@ const ACTION_TOOL_HINTS: Record<string, string[]> = {
 /* ────────────────────── Class ────────────────────── */
 
 export class ToolRequirementAnalyzer {
-  #registry: ToolRegistryLike;
+  #directory: ToolRequirementDirectory;
   #logger = Logger.getInstance();
 
-  constructor(registry: ToolRegistryLike) {
-    this.#registry = registry;
+  constructor(directory: ToolRequirementDirectory) {
+    this.#directory = directory;
   }
 
   /**
@@ -95,7 +95,7 @@ export class ToolRequirementAnalyzer {
   #tryExactMatch(req: ToolRequirement): AnalysisResult | null {
     // 直接检查 action_target 形式的工具名
     const directName = `${req.action}_${req.target}`.toLowerCase();
-    if (this.#registry.has(directName)) {
+    if (this.#directory.has(directName)) {
       return {
         mode: 'reuse',
         confidence: 1.0,
@@ -105,7 +105,7 @@ export class ToolRequirementAnalyzer {
     }
 
     // 模糊匹配：遍历已注册工具，看名称是否同时包含 action 和 target 关键词
-    const allTools = this.#registry.getToolNames();
+    const allTools = this.#directory.list();
     const actionLower = req.action.toLowerCase();
     const targetLower = req.target.toLowerCase();
 
@@ -142,7 +142,7 @@ export class ToolRequirementAnalyzer {
   }
 
   #tryComposeMatch(req: ToolRequirement): AnalysisResult | null {
-    const allTools = this.#registry.getToolNames();
+    const allTools = this.#directory.list();
     const actionLower = req.action.toLowerCase();
     const targetLower = req.target.toLowerCase();
 

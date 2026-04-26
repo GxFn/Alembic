@@ -18,23 +18,15 @@
  * @module LarkTransport
  */
 
-import { AgentMessage } from '#agent/AgentMessage.js';
-import type { AgentRuntime } from '#agent/AgentRuntime.js';
 import { ConversationStore } from '#agent/ConversationStore.js';
 import { Intent, IntentClassifier } from '#agent/IntentClassifier.js';
+import type { AgentService } from '#agent/service/index.js';
 import Logger from '#infra/logging/Logger.js';
 
 // ── Interfaces ──────────────────────────────────
 
-interface AgentFactory {
-  createLark(opts: RuntimeOverrides): AgentRuntime;
-  createRemoteExec(opts: RuntimeOverrides): AgentRuntime;
+interface AiProviderInfoProvider {
   getAiProviderInfo(): { name: string; model?: string };
-}
-
-interface RuntimeOverrides {
-  lang?: string;
-  onProgress?: (event: ProgressEvent) => void;
 }
 
 interface ProgressEvent {
@@ -44,7 +36,8 @@ interface ProgressEvent {
 }
 
 interface LarkTransportConfig {
-  agentFactory: AgentFactory;
+  agentService: AgentService;
+  aiProviderInfo: AiProviderInfoProvider;
   replyFn: (messageId: string, text: string) => Promise<void>;
   sendFn: (text: string) => Promise<undefined | boolean>;
   sendImageFn?: (caption: string) => Promise<{ success: boolean; message: string }>;
@@ -94,19 +87,9 @@ interface SystemClassification {
   action: string;
 }
 
-interface AgentResult {
-  reply?: string;
-  text?: string;
-  toolCalls?: unknown[];
-  tokenUsage?: { input: number; output: number };
-  iterations?: number;
-  durationMs?: number;
-  state?: Record<string, unknown>;
-  [key: string]: unknown;
-}
-
 export class LarkTransport {
-  #agentFactory: AgentFactory;
+  #agentService: AgentService;
+  #aiProviderInfo: AiProviderInfoProvider;
   #classifier: IntentClassifier;
   #logger: ReturnType<typeof Logger.getInstance>;
   #replyFn: LarkTransportConfig['replyFn'] | null;
@@ -132,7 +115,8 @@ export class LarkTransport {
   static DEDUP_TTL = 5 * 60 * 1000;
 
   constructor(config: LarkTransportConfig) {
-    this.#agentFactory = config.agentFactory;
+    this.#agentService = config.agentService;
+    this.#aiProviderInfo = config.aiProviderInfo;
     this.#replyFn = config.replyFn ?? null;
     this.#sendFn = config.sendFn ?? null;
     this.#sendImageFn = config.sendImageFn || null;
@@ -235,7 +219,7 @@ export class LarkTransport {
         return;
       }
       this.#logger.info(`[LarkTransport] Prefix $: remote-exec — "${cmd.slice(0, 60)}"`);
-      await this.#handleRemoteExec(cmd, messageId, chatId, senderId, senderName);
+      await this.#handleRemoteExec(cmd, messageId, chatId, senderId);
       return;
     }
 
@@ -276,7 +260,7 @@ export class LarkTransport {
         await this.#handleIdeAgent(effectiveCommand, messageId, chatId, senderId, senderName);
         break;
       default:
-        await this.#handleBotAgent(effectiveCommand, messageId, chatId, senderId, senderName);
+        await this.#handleBotAgent(effectiveCommand, messageId, chatId, senderId);
         break;
     }
   }
@@ -410,14 +394,8 @@ export class LarkTransport {
   }
 
   /** 远程命令执行 — 使用 remote-exec preset（含 SafetyPolicy 命令白名单） */
-  async #handleRemoteExec(
-    command: string,
-    messageId: string,
-    chatId: string,
-    senderId: string,
-    senderName: string
-  ) {
-    if (this.#agentFactory.getAiProviderInfo().name === 'mock') {
+  async #handleRemoteExec(command: string, messageId: string, chatId: string, senderId: string) {
+    if (this.#aiProviderInfo.getAiProviderInfo().name === 'mock') {
       await this.#reply(messageId, '⚠️ AI 服务未配置，当前为 Mock 模式。请先配置 API Key。');
       return;
     }
@@ -427,31 +405,32 @@ export class LarkTransport {
     try {
       const history = this.#getHistory(chatId);
 
-      const agentMessage = AgentMessage.fromLark(
-        {
-          text: command,
-          chatId,
-          senderId,
-          senderName,
-          messageId,
-          messageType: 'text',
+      const result = await this.#agentService.run({
+        profile: { preset: 'remote-exec' },
+        message: {
+          content: command,
+          history,
+          sessionId: chatId,
+          metadata: { messageId, messageType: 'text' },
         },
-        null
-      );
-      agentMessage.session.history = history;
-
-      // 使用 remote-exec preset — 包含 SafetyPolicy 命令白名单 + fileScope
-      const runtime = this.#agentFactory.createRemoteExec({
-        lang: 'zh',
-        onProgress: (event: ProgressEvent) => {
-          if (event.type === 'tool_call') {
-            this.#send(`🔧 执行: ${event.tool || 'unknown'}...`).catch(() => {});
-          }
+        context: {
+          source: 'lark',
+          lang: 'zh',
+          actor: {
+            user: senderId,
+            role: 'lark-user',
+            sessionId: chatId,
+          },
+        },
+        execution: {
+          onProgress: (event: ProgressEvent) => {
+            if (event.type === 'tool_call') {
+              this.#send(`🔧 执行: ${event.tool || 'unknown'}...`).catch(() => {});
+            }
+          },
         },
       });
-
-      const result: AgentResult = await runtime.execute(agentMessage);
-      const reply = result?.reply || result?.text || '命令执行完成，无输出。';
+      const reply = result.reply || '命令执行完成，无输出。';
 
       this.#appendHistory(chatId, 'user', `> ${command}`);
       this.#appendHistory(chatId, 'assistant', reply);
@@ -471,14 +450,8 @@ export class LarkTransport {
   }
 
   /** Bot Agent 知识任务 — 服务端 AgentRuntime 直接处理 */
-  async #handleBotAgent(
-    text: string,
-    messageId: string,
-    chatId: string,
-    senderId: string,
-    senderName: string
-  ) {
-    if (this.#agentFactory.getAiProviderInfo().name === 'mock') {
+  async #handleBotAgent(text: string, messageId: string, chatId: string, senderId: string) {
+    if (this.#aiProviderInfo.getAiProviderInfo().name === 'mock') {
       await this.#reply(messageId, '⚠️ AI 服务未配置，当前为 Mock 模式。请先配置 API Key。');
       return;
     }
@@ -490,39 +463,35 @@ export class LarkTransport {
       // 获取对话历史
       const history = this.#getHistory(chatId);
 
-      // 构建 AgentMessage
-      // 注意: 不传 replyFn — AgentRuntime.execute() 会自动调用 message.reply()，
-      // 但我们需要在外层处理截断逻辑，所以由下面的 #send 手动发送最终回复。
-      const agentMessage = AgentMessage.fromLark(
-        {
-          text,
-          chatId,
-          senderId,
-          senderName,
-          messageId,
-          messageType: 'text',
+      const result = await this.#agentService.run({
+        profile: { preset: 'lark' },
+        message: {
+          content: text,
+          history,
+          sessionId: chatId,
+          metadata: { messageId, messageType: 'text' },
         },
-        null // 不设 replyFn — 避免 AgentRuntime 自动回复导致重复发送
-      );
-
-      // 注入对话历史
-      agentMessage.session.history = history;
-
-      // 创建 Lark Runtime 并执行 — 使用 lark preset（含 SafetyPolicy 鉴权）
-      const runtime = this.#agentFactory.createLark({
-        lang: 'zh',
-        onProgress: (event: ProgressEvent) => {
-          // 工具调用时发送进度
-          if (event.type === 'tool_call') {
-            this.#send(`🔧 调用工具: ${event.tool || 'unknown'}...`).catch(() => {});
-          }
+        context: {
+          source: 'lark',
+          lang: 'zh',
+          actor: {
+            user: senderId,
+            role: 'lark-user',
+            sessionId: chatId,
+          },
+        },
+        execution: {
+          onProgress: (event: ProgressEvent) => {
+            // 工具调用时发送进度
+            if (event.type === 'tool_call') {
+              this.#send(`🔧 调用工具: ${event.tool || 'unknown'}...`).catch(() => {});
+            }
+          },
         },
       });
 
-      const result: AgentResult = await runtime.execute(agentMessage);
-
       // 提取回复
-      const reply = result?.reply || result?.text || '抱歉，没有生成有效回复。';
+      const reply = result.reply || '抱歉，没有生成有效回复。';
 
       // 记录对话历史
       this.#appendHistory(chatId, 'user', text);
@@ -639,7 +608,8 @@ export class LarkTransport {
     if (!this.#conversationHistory.has(chatId)) {
       this.#conversationHistory.set(chatId, []);
     }
-    const history = this.#conversationHistory.get(chatId)!;
+    const history = this.#conversationHistory.get(chatId) || [];
+    this.#conversationHistory.set(chatId, history);
     history.push({ role, content });
     // 限制内存历史长度
     if (history?.length > LarkTransport.MAX_HISTORY * 2) {

@@ -55,6 +55,7 @@ import { SystemPromptBuilder } from './core/SystemPromptBuilder.js';
 import { createToolPipeline } from './core/ToolExecutionPipeline.js';
 import { produceForcedSummary } from './forced-summary.js';
 import { PolicyEngine } from './policies.js';
+import type { ToolSchemaProjection } from './tools/CapabilityManifest.js';
 
 // ── Re-exports for backward compatibility ──
 export type {
@@ -82,6 +83,7 @@ export class AgentRuntime {
   bus;
   aiProvider;
   toolRegistry;
+  toolRouter;
   container;
   capabilities;
   strategy;
@@ -110,6 +112,19 @@ export class AgentRuntime {
     this.presetName = config.presetName || 'custom';
     this.aiProvider = config.aiProvider;
     this.toolRegistry = config.toolRegistry;
+    const toolRouter =
+      config.toolRouter ||
+      config.toolRegistry.getRouter?.() ||
+      ((config.container as { get?: (name: string) => unknown } | null)?.get?.('toolRouter') as
+        | RuntimeConfig['toolRouter']
+        | undefined) ||
+      null;
+    if (!toolRouter) {
+      throw new Error(
+        'AgentRuntime requires ToolRouter. Runtime tool execution must use the unified router path.'
+      );
+    }
+    this.toolRouter = toolRouter;
     this.container = config.container || null;
     this.capabilities = config.capabilities || [];
     this.strategy = config.strategy;
@@ -397,12 +412,9 @@ export class AgentRuntime {
     // 构建基础系统提示词 (委托 SystemPromptBuilder)
     let baseSystemPrompt = systemPromptOverride || this.#promptBuilder.build(caps, context);
 
-    // 收集工具 (caps 为空数组时 = 明确无工具)
+    // 收集工具 (空列表是明确无工具，不再隐式展开为全量工具)
     const allowedTools = this.#collectTools(caps);
-    const noToolsExplicit = Array.isArray(capabilityOverride) && capabilityOverride.length === 0;
-    const toolSchemas = noToolsExplicit
-      ? []
-      : this.toolRegistry.getToolSchemas(allowedTools.length > 0 ? allowedTools : null);
+    const toolSchemas = this.#getToolSchemas(allowedTools);
 
     // 创建统一消息适配器 (消除 useCtxWin 双模式)
     const messages = createMessageAdapter(contextWindow);
@@ -826,10 +838,12 @@ export class AgentRuntime {
       });
 
       const durationMs = metadata.durationMs;
+      const envelope = (metadata as ToolMetadata).envelope;
       const toolEntry: ToolCallEntry = {
         tool: fc.name,
         args: fc.args,
         result: toolResult,
+        envelope,
         durationMs,
       };
       (ctx.toolCalls as ToolCallEntry[]).push(toolEntry);
@@ -851,6 +865,7 @@ export class AgentRuntime {
       }
 
       const toolResultObj = toolResult as Record<string, unknown> | null;
+      const toolSucceeded = envelope ? envelope.ok : !toolResultObj?.error;
 
       this.bus.publish(
         AgentEvents.TOOL_CALL_END,
@@ -858,13 +873,13 @@ export class AgentRuntime {
           agentId: this.id,
           tool: fc.name,
           durationMs,
-          success: !toolResultObj?.error,
+          success: toolSucceeded,
         },
         { source: this.id }
       );
 
       // 工具结果格式化 (统一通过 MessageAdapter)
-      let resultStr = messages.formatToolResult(fc.name, toolResult);
+      let resultStr = messages.formatToolResult(fc.name, envelope || toolResult);
 
       // 提交去重: pipeline 中间件已标记 metadata
       const dedupMessage = (metadata as ToolMetadata).dedupMessage;
@@ -878,8 +893,11 @@ export class AgentRuntime {
       this.#emitProgress('tool_end', {
         tool: fc.name,
         duration: durationMs,
-        status: toolResultObj?.error ? 'error' : 'ok',
-        error: (toolResultObj?.error as string | undefined) || undefined,
+        status: toolSucceeded ? 'ok' : 'error',
+        error:
+          envelope && !envelope.ok
+            ? envelope.text
+            : (toolResultObj?.error as string | undefined) || undefined,
         resultSize: resultStr.length,
       });
 
@@ -1136,17 +1154,15 @@ export class AgentRuntime {
   }
 
   /**
-   * 收集所有 Capability 的工具白名单
-   * 如果任一 Capability tools 为空数组, 返回空 (使用全部工具)
+   * 收集所有 Agent Skill 的工具白名单。
+   * 空 tools 表示该技能不开放工具；全量工具必须通过显式 action space 表达。
    */
   #collectTools(caps: Capability[]) {
     const toolSet = new Set();
-    let hasUnlimited = false;
     for (const cap of caps) {
       const tools = cap.tools;
       if (!tools || tools.length === 0) {
-        hasUnlimited = true;
-        break;
+        continue;
       }
       for (const t of tools) {
         toolSet.add(t);
@@ -1156,7 +1172,18 @@ export class AgentRuntime {
     for (const t of this.#additionalTools) {
       toolSet.add(t);
     }
-    return hasUnlimited ? [] : [...toolSet];
+    return [...toolSet];
+  }
+
+  #getToolSchemas(allowedTools: unknown[]): ToolSchemaProjection[] {
+    const ids = allowedTools.map(String);
+    const catalog = (this.container as { get?: (name: string) => unknown } | null)?.get?.(
+      'capabilityCatalog'
+    ) as { toToolSchemas(ids?: readonly string[] | null): ToolSchemaProjection[] } | undefined;
+    if (catalog?.toToolSchemas) {
+      return catalog.toToolSchemas(ids);
+    }
+    return [];
   }
 
   /** 解析 capability 名称为实例 (Pipeline 阶段覆盖时调用) */

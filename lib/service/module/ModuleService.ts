@@ -14,6 +14,11 @@ import {
   join as _pathJoin,
   relative,
 } from 'node:path';
+import {
+  type AgentService,
+  runScanAgentTask,
+  type SystemRunContextFactory,
+} from '../../agent/service/index.js';
 import { getDiscovererRegistry } from '../../core/discovery/index.js';
 import { inferLang } from '../../external/mcp/handlers/LanguageExtensions.js';
 import Logger from '../../infrastructure/logging/Logger.js';
@@ -88,7 +93,8 @@ export class ModuleService {
   #logger;
 
   // AI pipeline deps
-  #agentFactory;
+  #agentService;
+  #systemRunContextFactory;
   #container;
   #qualityScorer;
   #recipeExtractor;
@@ -98,7 +104,8 @@ export class ModuleService {
   constructor(
     projectRoot: string,
     options: {
-      agentFactory?: Record<string, unknown> | null;
+      agentService?: AgentService | null;
+      systemRunContextFactory?: SystemRunContextFactory | null;
       container?: Record<string, unknown> | null;
       qualityScorer?: Record<string, unknown> | null;
       recipeExtractor?: Record<string, unknown> | null;
@@ -109,7 +116,8 @@ export class ModuleService {
     this.#projectRoot = projectRoot;
     this.#registry = getDiscovererRegistry();
     this.#logger = Logger.getInstance();
-    this.#agentFactory = options.agentFactory || null;
+    this.#agentService = options.agentService || null;
+    this.#systemRunContextFactory = options.systemRunContextFactory || null;
     this.#container = options.container || null;
     this.#qualityScorer = options.qualityScorer || null;
     this.#recipeExtractor = options.recipeExtractor || null;
@@ -438,10 +446,10 @@ export class ModuleService {
     const scannedFiles = files.map((f) => ({ name: f.name, path: f.relativePath }));
     this.#logger.info(`[ModuleService] scanTarget: ${targetName}, ${files.length} files`);
 
-    // 3. AI 提取 — mock 模式或无 agentFactory 时直接跳过
+    // 3. AI 提取 — mock 模式或无 AgentService 时直接跳过
     const aiManager = (this.#container?.singletons as Record<string, unknown> | undefined)
       ?._aiProviderManager as { isMock: boolean } | undefined;
-    if (!this.#agentFactory || aiManager?.isMock) {
+    if (!this.#agentService || !this.#systemRunContextFactory || aiManager?.isMock) {
       return {
         recipes: [],
         scannedFiles,
@@ -572,7 +580,7 @@ export class ModuleService {
     const scanAiMgr = (this.#container?.singletons as Record<string, unknown> | undefined)
       ?._aiProviderManager as { isMock: boolean } | undefined;
 
-    if (this.#agentFactory && !scanAiMgr?.isMock) {
+    if (this.#agentService && this.#systemRunContextFactory && !scanAiMgr?.isMock) {
       const BATCH_SIZE = options.batchSize || 20;
 
       for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
@@ -768,23 +776,25 @@ export class ModuleService {
   }
 
   /**
-   * AI 提取 Recipes — 委托 AgentFactory.scanKnowledge
+   * AI 提取 Recipes — 委托 AgentService.run(scan-extract)
    *
-   * AgentFactory.scanKnowledge 内部创建 insight Agent，
    * Agent(LLM) 直接分析代码 + 使用 AST 工具，输出 Recipe JSON。
    */
   async #aiExtractRecipes(targetName: string, files: Record<string, unknown>[]) {
-    if (!this.#agentFactory) {
+    if (!this.#agentService || !this.#systemRunContextFactory) {
       return [];
     }
 
     try {
-      const factory = this.#agentFactory as {
-        scanKnowledge(opts: Record<string, unknown>): Promise<Record<string, unknown>>;
-      };
-      const result = await factory.scanKnowledge({
+      const result = await runScanAgentTask({
+        agentService: this.#agentService,
+        systemRunContextFactory: this.#systemRunContextFactory,
         label: targetName,
-        files,
+        files: files.map((file) => ({
+          name: (file.name || file.relativePath || file.path) as string | undefined,
+          relativePath: (file.relativePath || file.path || file.name) as string | undefined,
+          content: (file.content || '') as string,
+        })),
         task: 'extract',
       });
       const recipes = (result.recipes || []) as Record<string, unknown>[];

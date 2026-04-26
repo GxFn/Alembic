@@ -13,6 +13,7 @@
 
 import type { ContextWindow } from '../context/ContextWindow.js';
 import { limitToolResult } from '../context/ContextWindow.js';
+import { isToolResultEnvelope } from './ToolResultPresenter.js';
 
 /** 工具调用记录 */
 interface ToolCallRecord {
@@ -99,6 +100,9 @@ export class MessageAdapter {
    */
   formatToolResult(toolName: string, rawResult: unknown) {
     const quota = this.getToolResultQuota();
+    if (isToolResultEnvelope(rawResult)) {
+      return limitToolResult(toolName, rawResult.text, quota);
+    }
     return limitToolResult(toolName, rawResult, quota);
   }
 }

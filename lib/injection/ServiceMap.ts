@@ -9,7 +9,16 @@
 
 import type DimensionCopy from '#domain/dimension/DimensionCopy.js';
 // ── Service Types ──
-import type { AgentFactory } from '../agent/AgentFactory.js';
+import type { InMemoryTerminalSessionManager } from '../agent/adapters/TerminalSessionManager.js';
+import type {
+  AgentProfileCompiler,
+  AgentProfileRegistry,
+  AgentRunCoordinator,
+  AgentRuntimeBuilder,
+  AgentService,
+  AgentStageFactoryRegistry,
+  SystemRunContextFactory,
+} from '../agent/service/index.js';
 import type { ToolRegistry } from '../agent/tools/ToolRegistry.js';
 // ── CLI Types ──
 import type { KnowledgeSyncService } from '../cli/KnowledgeSyncService.js';
@@ -114,6 +123,7 @@ export interface ServiceMap {
   recipeSourceRefRepository: RecipeSourceRefRepositoryImpl;
   knowledgeFileWriter: KnowledgeFileWriter;
   knowledgeSyncService: KnowledgeSyncService;
+  terminalSessionManager: InMemoryTerminalSessionManager;
 
   // ═══ AppModule ═══
   qualityScorer: QualityScorer;
@@ -159,7 +169,13 @@ export interface ServiceMap {
 
   // ═══ AgentModule ═══
   toolRegistry: ToolRegistry;
-  agentFactory: AgentFactory;
+  agentProfileRegistry: AgentProfileRegistry;
+  agentStageFactoryRegistry: AgentStageFactoryRegistry;
+  agentProfileCompiler: AgentProfileCompiler;
+  agentRunCoordinator: AgentRunCoordinator;
+  systemRunContextFactory: SystemRunContextFactory;
+  agentRuntimeBuilder: AgentRuntimeBuilder;
+  agentService: AgentService;
   skillHooks: SkillHooks;
 
   // ═══ SignalModule ═══

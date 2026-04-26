@@ -129,7 +129,6 @@ export interface RecommendationContext {
   dataRoot?: string;
   database?: unknown;
   container?: unknown;
-  agentFactory?: unknown;
   /** 已有的项目级 Skill 名称集合 (用于去重) */
   existingSkills?: Set<string>;
   /** 用户偏好 (来自 FeedbackStore) */

@@ -5,6 +5,11 @@
 
 import { basename } from 'node:path';
 import express, { type Request, type Response } from 'express';
+import {
+  type AgentService,
+  runScanAgentTask,
+  type SystemRunContextFactory,
+} from '../../agent/service/index.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { LanguageService } from '../../shared/LanguageService.js';
@@ -13,6 +18,33 @@ import { validate } from '../middleware/validate.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();
+
+async function runAiExtract({
+  container,
+  label,
+  content,
+  lang,
+}: {
+  container: { get(name: string): unknown };
+  label: string;
+  content: string;
+  lang?: string | null;
+}) {
+  const agentService = container.get('agentService') as AgentService;
+  const systemRunContextFactory = container.get(
+    'systemRunContextFactory'
+  ) as SystemRunContextFactory;
+  return runScanAgentTask({
+    agentService,
+    systemRunContextFactory,
+    label,
+    task: 'extract',
+    comprehensive: true,
+    lang,
+    files: [{ name: label, relativePath: label, content }],
+    onParseError: () => logger.warn('extract: AI extraction failed to parse fallback JSON'),
+  });
+}
 
 /**
  * POST /api/v1/extract/path
@@ -54,14 +86,12 @@ router.post(
     if (isRawFallback) {
       // 3. 尝试 AI 提取
       try {
-        const agentFactory = container.get('agentFactory');
         const file = items[0];
         const fileName = basename(relativePath); // 保留扩展名: BDMineViewController.m
-        const aiResult = await agentFactory.scanKnowledge({
+        const aiResult = await runAiExtract({
+          container,
           label: fileName,
-          files: [{ name: fileName, content: file.code || '' }],
-          task: 'extract',
-          comprehensive: true,
+          content: file.code || '',
         });
 
         if (
@@ -135,41 +165,38 @@ router.post(
 
     // 2. Recipe MD 解析失败 → 尝试 AI 提取
     try {
-      const agentFactory = container.get('agentFactory');
-      if (agentFactory) {
-        const lang =
-          language ||
-          (relativePath ? LanguageService.inferLang(relativePath) || 'unknown' : 'unknown');
-        const ext = LanguageService.extForLang(lang) || '.txt';
-        const fileName = relativePath ? basename(relativePath) : `clipboard${ext}`;
-        const aiResult = await agentFactory.scanKnowledge({
-          label: fileName,
-          files: [{ name: fileName, content: text }],
-          task: 'extract',
-          comprehensive: true,
-        });
+      const lang =
+        language ||
+        (relativePath ? LanguageService.inferLang(relativePath) || 'unknown' : 'unknown');
+      const ext = LanguageService.extForLang(lang) || '.txt';
+      const fileName = relativePath ? basename(relativePath) : `clipboard${ext}`;
+      const aiResult = await runAiExtract({
+        container,
+        label: fileName,
+        content: text,
+        lang,
+      });
 
-        if (
-          aiResult &&
-          !aiResult.error &&
-          Array.isArray(aiResult.recipes) &&
-          aiResult.recipes.length > 0
-        ) {
-          logger.info('extract/text: AI extraction succeeded', { count: aiResult.recipes.length });
+      if (
+        aiResult &&
+        !aiResult.error &&
+        Array.isArray(aiResult.recipes) &&
+        aiResult.recipes.length > 0
+      ) {
+        logger.info('extract/text: AI extraction succeeded', { count: aiResult.recipes.length });
 
-          // 多条 Recipe 时在第一条上标记总数（供前端提示）
-          if (aiResult.recipes.length > 1) {
-            aiResult.recipes[0]._multipleCount = aiResult.recipes.length;
-          }
-
-          return void res.json({
-            success: true,
-            data: {
-              result: aiResult.recipes,
-              source: 'text',
-            },
-          });
+        // 多条 Recipe 时在第一条上标记总数（供前端提示）
+        if (aiResult.recipes.length > 1) {
+          aiResult.recipes[0]._multipleCount = aiResult.recipes.length;
         }
+
+        return void res.json({
+          success: true,
+          data: {
+            result: aiResult.recipes,
+            source: 'text',
+          },
+        });
       }
     } catch (err: unknown) {
       logger.debug('extract/text: AI extraction failed, using basic fallback', {

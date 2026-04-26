@@ -12,32 +12,28 @@
 import Logger from '#infra/logging/Logger.js';
 
 import type { SignalBus } from '#infra/signal/SignalBus.js';
-
+import type { ForgedInternalToolStore } from '../core/InternalToolHandler.js';
+import type { CapabilityCatalog } from '../tools/CapabilityCatalog.js';
+import type { ToolCapabilityManifest } from '../tools/CapabilityManifest.js';
+import { createInternalToolManifest } from '../tools/CapabilityProjection.js';
+import type { ToolDefinition } from '../tools/ToolDefinition.js';
+import type { WorkflowHandler, WorkflowRegistry } from '../workflow/WorkflowRegistry.js';
 import type { CompositionSpec } from './DynamicComposer.js';
 import { DynamicComposer } from './DynamicComposer.js';
 import type { SandboxTestCase } from './SandboxRunner.js';
 import { SandboxRunner } from './SandboxRunner.js';
 import { TemporaryToolRegistry } from './TemporaryToolRegistry.js';
-import type { AnalysisResult, ToolRequirement } from './ToolRequirementAnalyzer.js';
+import type {
+  AnalysisResult,
+  ToolRequirement,
+  ToolRequirementDirectory,
+} from './ToolRequirementAnalyzer.js';
 import { ToolRequirementAnalyzer } from './ToolRequirementAnalyzer.js';
 
 /* ────────────────────── Types ────────────────────── */
 
-interface ToolRegistryLike {
+interface ToolRegistryLike extends ForgedInternalToolStore {
   has(name: string): boolean;
-  getToolNames(): string[];
-  execute(
-    name: string,
-    params: Record<string, unknown>,
-    context?: Record<string, unknown>
-  ): Promise<unknown>;
-  register(toolDef: {
-    name: string;
-    description: string;
-    parameters?: Record<string, unknown>;
-    handler: Function;
-  }): void;
-  unregister(name: string): boolean;
 }
 
 export interface ForgeRequest {
@@ -83,6 +79,8 @@ export interface ForgeResult {
 
 export interface ToolForgeOptions {
   signalBus?: SignalBus;
+  capabilityCatalog?: CapabilityCatalog;
+  workflowRegistry?: WorkflowRegistry;
   /** 生成工具的默认 TTL（ms），默认 30 分钟 */
   defaultTtlMs?: number;
   /** compose 模式下的组合 spec 生成器 */
@@ -101,6 +99,8 @@ export class ToolForge {
   #sandbox: SandboxRunner;
   #tempRegistry: TemporaryToolRegistry;
   #signalBus: SignalBus | null;
+  #capabilityCatalog: CapabilityCatalog | null;
+  #workflowRegistry: WorkflowRegistry | null;
   #logger = Logger.getInstance();
   #defaultTtlMs: number;
   #compositionSpecBuilder: ToolForgeOptions['compositionSpecBuilder'];
@@ -108,14 +108,24 @@ export class ToolForge {
   constructor(registry: ToolRegistryLike, options: ToolForgeOptions = {}) {
     this.#registry = registry;
     this.#signalBus = options.signalBus ?? null;
+    this.#capabilityCatalog = options.capabilityCatalog ?? null;
+    this.#workflowRegistry = options.workflowRegistry ?? null;
     this.#defaultTtlMs = options.defaultTtlMs ?? 30 * 60 * 1000;
     this.#compositionSpecBuilder = options.compositionSpecBuilder;
 
-    this.#analyzer = new ToolRequirementAnalyzer(registry);
+    this.#analyzer = new ToolRequirementAnalyzer(
+      createRequirementDirectory(registry, this.#capabilityCatalog)
+    );
     this.#composer = new DynamicComposer(registry);
     this.#sandbox = new SandboxRunner();
     this.#tempRegistry = new TemporaryToolRegistry(registry, {
       signalBus: this.#signalBus ?? undefined,
+      onRevokeTemporary: (tool) => {
+        if (tool.forgeMode === 'compose') {
+          this.#workflowRegistry?.unregister(tool.name);
+        }
+        this.#capabilityCatalog?.unregister(tool.name);
+      },
     });
   }
 
@@ -273,17 +283,23 @@ export class ToolForge {
       return null;
     }
 
-    // 注册为临时工具
-    this.#tempRegistry.registerTemporary(
-      {
-        name: spec.name,
-        description: spec.description,
-        parameters: spec.parameters ?? {},
-        handler: result.handler,
-        forgeMode: 'compose',
-      },
-      this.#defaultTtlMs
-    );
+    const temporaryTool = {
+      name: spec.name,
+      description: spec.description,
+      parameters: spec.parameters ?? {},
+      handler: result.handler,
+      forgeMode: 'compose' as const,
+    };
+
+    this.#tempRegistry.registerTemporary(temporaryTool, this.#defaultTtlMs, {
+      projectIntoInternalToolStore: false,
+    });
+    try {
+      this.#registerWorkflowCapability(spec, result.handler);
+    } catch (err) {
+      this.#tempRegistry.revoke(spec.name);
+      throw err;
+    }
 
     this.#logger.info(`ToolForge: composed tool "${spec.name}" from ${spec.steps.length} steps`);
 
@@ -295,6 +311,28 @@ export class ToolForge {
     };
   }
 
+  #registerWorkflowCapability(spec: CompositionSpec, handler: WorkflowHandler) {
+    if (!this.#workflowRegistry || !this.#capabilityCatalog) {
+      return;
+    }
+    this.#workflowRegistry.register({
+      id: spec.name,
+      description: spec.description,
+      parameters: spec.parameters ?? {},
+      handler,
+    });
+    this.#capabilityCatalog.register(buildWorkflowManifest(spec));
+  }
+
+  #registerGeneratedCapability(tool: GeneratedTool) {
+    if (!this.#capabilityCatalog) {
+      throw new Error(
+        `Generated tool "${tool.name}" cannot be registered without CapabilityCatalog.`
+      );
+    }
+    this.#capabilityCatalog.register(buildGeneratedToolManifest(tool));
+  }
+
   async #tryGenerate(
     analysis: AnalysisResult,
     requirement: ToolRequirement,
@@ -303,6 +341,15 @@ export class ToolForge {
     if (!codeGenerator) {
       this.#logger.debug('ToolForge: generate mode skipped (no codeGenerator provided)');
       return null;
+    }
+    if (!this.#capabilityCatalog) {
+      return {
+        success: false,
+        mode: 'generate',
+        analysis,
+        error:
+          'Generate mode requires CapabilityCatalog so forged tools can be routed by manifest.',
+      };
     }
 
     // 调用 LLM 生成工具
@@ -346,17 +393,24 @@ export class ToolForge {
     // 构建 handler 包装
     const handler = this.#sandbox.createHandler(generated.code);
 
-    // 注册为临时工具
-    this.#tempRegistry.registerTemporary(
-      {
-        name: generated.name,
-        description: generated.description,
-        parameters: generated.parameters,
-        handler,
-        forgeMode: 'generate',
-      },
-      this.#defaultTtlMs
-    );
+    try {
+      this.#registerGeneratedCapability(generated);
+      // 注册为临时工具
+      this.#tempRegistry.registerTemporary(
+        {
+          name: generated.name,
+          description: generated.description,
+          parameters: generated.parameters,
+          handler,
+          forgeMode: 'generate',
+        },
+        this.#defaultTtlMs
+      );
+    } catch (err) {
+      this.#capabilityCatalog?.unregister(generated.name);
+      this.#tempRegistry.revoke(generated.name);
+      throw err;
+    }
 
     this.#logger.info(`ToolForge: generated and registered tool "${generated.name}"`);
 
@@ -377,4 +431,94 @@ export class ToolForge {
       });
     }
   }
+}
+
+function buildGeneratedToolManifest(tool: GeneratedTool): ToolCapabilityManifest {
+  return createInternalToolManifest({
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters,
+    metadata: {
+      owner: 'agent-forge',
+      lifecycle: 'experimental',
+      sideEffect: true,
+      policyProfile: 'write',
+      auditLevel: 'full',
+      abortMode: 'preStart',
+      surface: ['runtime'],
+      composable: false,
+    },
+    handler: async () => {
+      throw new Error('Generated tool manifest handler must be resolved by InternalToolAdapter.');
+    },
+  } satisfies ToolDefinition);
+}
+
+function buildWorkflowManifest(spec: CompositionSpec): ToolCapabilityManifest {
+  return {
+    id: spec.name,
+    title: spec.name,
+    kind: 'workflow',
+    description: spec.description,
+    owner: 'agent-forge',
+    lifecycle: 'experimental',
+    surfaces: ['runtime', 'internal'],
+    inputSchema: spec.parameters ?? {},
+    risk: {
+      sideEffect: true,
+      dataAccess: 'workspace',
+      writeScope: 'workspace',
+      network: 'allowlisted',
+      credentialAccess: 'masked',
+      requiresHumanConfirmation: 'on-risk',
+      owaspTags: ['excessive-agency'],
+    },
+    execution: {
+      adapter: 'workflow',
+      timeoutMs: 120_000,
+      maxOutputBytes: 64_000,
+      abortMode: 'cooperative',
+      cachePolicy: 'none',
+      concurrency: 'single',
+      artifactMode: 'inline',
+    },
+    governance: {
+      auditLevel: 'full',
+      policyProfile: 'write',
+      approvalPolicy: 'explain-then-run',
+      allowedRoles: ['admin', 'developer'],
+      allowInComposer: false,
+      allowInRemoteMcp: false,
+      allowInNonInteractive: false,
+    },
+    evals: {
+      required: false,
+      cases: [],
+    },
+  };
+}
+
+function createRequirementDirectory(
+  registry: ToolRegistryLike,
+  catalog: CapabilityCatalog | null
+): ToolRequirementDirectory {
+  if (catalog) {
+    return {
+      has(name: string) {
+        return catalog.has(name);
+      },
+      list() {
+        return catalog.list().map((manifest) => manifest.id);
+      },
+    };
+  }
+
+  return {
+    has(name: string) {
+      return registry.has(name);
+    },
+    list() {
+      return [];
+    },
+  };
 }

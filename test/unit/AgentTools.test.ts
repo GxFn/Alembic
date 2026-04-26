@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 /* ────────────────────────────────────────────
  *  动态导入
  * ──────────────────────────────────────────── */
-let ALL_TOOLS;
+let ALL_TOOLS = [];
 
 beforeAll(async () => {
   const toolsMod = await import('../../lib/agent/tools/index.js');
@@ -21,7 +21,7 @@ function findTool(name) {
 }
 
 // 创建临时项目目录结构用于工具测试
-let tmpDir;
+let tmpDir = '';
 beforeAll(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'asd-v10-test-'));
   // 创建目录结构
@@ -340,8 +340,8 @@ describe('P1: semantic_search_code', () => {
  *  P2: Tool count & ALL_TOOLS integrity
  * ════════════════════════════════════════════════════════════ */
 describe('P2: ALL_TOOLS integrity', () => {
-  test('contains 60 tools', () => {
-    expect(ALL_TOOLS.length).toBe(60);
+  test('contains the current internal tool set', () => {
+    expect(ALL_TOOLS.length).toBe(59);
   });
 
   test('all new tools have name, description, parameters, handler', () => {
@@ -361,6 +361,555 @@ describe('P2: ALL_TOOLS integrity', () => {
     expect(unique.size).toBe(names.length);
   });
 });
+
+/* ════════════════════════════════════════════════════════════
+ *  P6: Knowledge service contract
+ * ════════════════════════════════════════════════════════════ */
+describe('P6: knowledge service contract', () => {
+  test('search_recipes uses named knowledge service contract instead of container lookup', async () => {
+    const tool = findTool('search_recipes');
+    const searchEngine = {
+      search: vi.fn().mockResolvedValue({ items: [{ id: 'r1', title: 'Recipe 1' }] }),
+    };
+    const context = knowledgeContractContext({
+      searchEngine,
+    });
+
+    const result = await tool.handler({ keyword: 'recipe', limit: 5 }, context);
+
+    expect(result).toEqual({ items: [{ id: 'r1', title: 'Recipe 1' }], total: 1 });
+    expect(searchEngine.search).toHaveBeenCalledWith('recipe', { mode: 'keyword', limit: 5 });
+  });
+
+  test('get_related_recipes uses named knowledge graph contract', async () => {
+    const tool = findTool('get_related_recipes');
+    const knowledgeGraphService = {
+      getStats: vi.fn(),
+      getRelated: vi.fn().mockReturnValue([{ toId: 'r2' }]),
+      getEdges: vi.fn(),
+    };
+    const context = knowledgeContractContext({
+      knowledgeGraphService,
+    });
+
+    const result = await tool.handler({ recipeId: 'r1', relation: 'requires' }, context);
+
+    expect(result).toEqual({
+      recipeId: 'r1',
+      relation: 'requires',
+      edges: [{ toId: 'r2' }],
+    });
+    expect(knowledgeGraphService.getRelated).toHaveBeenCalledWith('r1', 'recipe', 'requires');
+  });
+
+  test('analyze_code uses named search engine contract for related recipes', async () => {
+    const tool = findTool('analyze_code');
+    const searchEngine = {
+      search: vi.fn().mockResolvedValue([{ id: 'r1', title: 'Related Recipe' }]),
+    };
+
+    const result = await tool.handler(
+      { code: 'function example() {}', language: 'typescript' },
+      knowledgeContractContext({ searchEngine })
+    );
+
+    expect(result.relatedRecipes).toEqual({
+      results: [{ id: 'r1', title: 'Related Recipe' }],
+      total: 1,
+    });
+    expect(searchEngine.search).toHaveBeenCalledWith('function example() {}', { limit: 5 });
+  });
+
+  test('check_duplicate reads candidate through named knowledge service contract', async () => {
+    const tool = findTool('check_duplicate');
+    const knowledgeService = {
+      search: vi.fn(),
+      list: vi.fn(),
+      get: vi.fn().mockResolvedValue({
+        toJSON: () => ({
+          title: 'Candidate Recipe',
+          description: 'Candidate summary',
+          content: { pattern: 'let value = optional!' },
+        }),
+      }),
+      getStats: vi.fn(),
+    };
+
+    const result = await tool.handler(
+      { candidateId: 'cand-1', threshold: 0.9 },
+      knowledgeContractContext({ knowledgeService })
+    );
+
+    expect(result).toMatchObject({
+      hasDuplicate: expect.any(Boolean),
+      highestSimilarity: expect.any(Number),
+    });
+    expect(Array.isArray(result.similar)).toBe(true);
+    expect(knowledgeService.get).toHaveBeenCalledWith('cand-1');
+  });
+
+  test('add_graph_edge uses named knowledge graph mutation contract', async () => {
+    const tool = findTool('add_graph_edge');
+    const knowledgeGraphService = {
+      addEdge: vi.fn().mockReturnValue({ id: 'edge-1' }),
+    };
+
+    const result = await tool.handler(
+      {
+        fromId: 'r1',
+        fromType: 'recipe',
+        toId: 'r2',
+        toType: 'recipe',
+        relation: 'requires',
+        weight: 0.7,
+      },
+      knowledgeContractContext({ knowledgeGraphService })
+    );
+
+    expect(result).toEqual({ id: 'edge-1' });
+    expect(knowledgeGraphService.addEdge).toHaveBeenCalledWith(
+      'r1',
+      'recipe',
+      'r2',
+      'recipe',
+      'requires',
+      { weight: 0.7, source: 'manual' }
+    );
+  });
+});
+
+/* ════════════════════════════════════════════════════════════
+ *  P6: Guard service contract
+ * ════════════════════════════════════════════════════════════ */
+describe('P6: guard service contract', () => {
+  test('list_guard_rules uses named guard service contract instead of container lookup', async () => {
+    const tool = findTool('list_guard_rules');
+    const guardService = {
+      listRules: vi.fn().mockResolvedValue({ data: [{ id: 'db-rule', source: 'database' }] }),
+      checkCode: vi.fn(),
+    };
+    const guardCheckEngine = {
+      getRules: vi.fn().mockReturnValue([
+        { id: 'builtin-rule', source: 'built-in' },
+        { id: 'custom-engine-rule', source: 'database' },
+      ]),
+      checkCode: vi.fn(),
+    };
+
+    const result = await tool.handler(
+      { language: 'swift', limit: 10 },
+      guardContractContext({ guardService, guardCheckEngine })
+    );
+
+    expect(result).toEqual({
+      total: 2,
+      rules: [
+        { id: 'db-rule', source: 'database' },
+        { id: 'builtin-rule', source: 'built-in' },
+      ],
+    });
+    expect(guardService.listRules).toHaveBeenCalledWith({}, { page: 1, pageSize: 10 });
+    expect(guardCheckEngine.getRules).toHaveBeenCalledWith('swift');
+  });
+
+  test('guard_check_code uses named guard check engine contract', async () => {
+    const tool = findTool('guard_check_code');
+    const guardCheckEngine = {
+      getRules: vi.fn(),
+      checkCode: vi.fn().mockReturnValue([{ ruleId: 'no-force-unwrap' }]),
+    };
+
+    const result = await tool.handler(
+      { code: 'let value = optional!', language: 'swift', scope: 'file' },
+      guardContractContext({ guardCheckEngine })
+    );
+
+    expect(result).toEqual({
+      violationCount: 1,
+      violations: [{ ruleId: 'no-force-unwrap' }],
+    });
+    expect(guardCheckEngine.checkCode).toHaveBeenCalledWith('let value = optional!', 'swift', {
+      scope: 'file',
+    });
+  });
+
+  test('query_violations uses named violations store contract', async () => {
+    const tool = findTool('query_violations');
+    const violationsStore = {
+      getStats: vi.fn(),
+      getRunsByFile: vi.fn(),
+      list: vi.fn().mockReturnValue({ items: [{ id: 'run-1' }] }),
+    };
+
+    const result = await tool.handler({ limit: 3 }, guardContractContext({ violationsStore }));
+
+    expect(result).toEqual({ items: [{ id: 'run-1' }] });
+    expect(violationsStore.list).toHaveBeenCalledWith({}, { page: 1, limit: 3 });
+  });
+
+  test('analyze_code uses named guard contract for its guard branch', async () => {
+    const tool = findTool('analyze_code');
+    const guardCheckEngine = {
+      getRules: vi.fn(),
+      checkCode: vi.fn().mockReturnValue([{ ruleId: 'unsafe-call' }]),
+    };
+
+    const result = await tool.handler(
+      { code: 'dangerousCall()', language: 'typescript' },
+      guardContractContext({ guardCheckEngine })
+    );
+
+    expect(result.guard).toEqual({
+      violationCount: 1,
+      violations: [{ ruleId: 'unsafe-call' }],
+    });
+    expect(guardCheckEngine.checkCode).toHaveBeenCalledWith('dangerousCall()', 'typescript', {
+      scope: 'file',
+    });
+  });
+});
+
+/* ════════════════════════════════════════════════════════════
+ *  P6: Lifecycle service contract
+ * ════════════════════════════════════════════════════════════ */
+describe('P6: lifecycle service contract', () => {
+  test('approve_candidate uses named lifecycle contract instead of container lookup', async () => {
+    const tool = findTool('approve_candidate');
+    const knowledgeLifecycleService = createKnowledgeLifecycleService({
+      approve: vi.fn().mockResolvedValue({ id: 'cand-1', lifecycle: 'active' }),
+    });
+
+    const result = await tool.handler(
+      { candidateId: 'cand-1' },
+      lifecycleContractContext({ knowledgeLifecycleService })
+    );
+
+    expect(result).toEqual({ id: 'cand-1', lifecycle: 'active' });
+    expect(knowledgeLifecycleService.approve).toHaveBeenCalledWith('cand-1', { userId: 'agent' });
+  });
+
+  test('update_recipe uses named lifecycle contract', async () => {
+    const tool = findTool('update_recipe');
+    const knowledgeLifecycleService = createKnowledgeLifecycleService({
+      update: vi.fn().mockResolvedValue({ id: 'recipe-1', title: 'Updated' }),
+    });
+
+    const result = await tool.handler(
+      { recipeId: 'recipe-1', updates: { title: 'Updated' } },
+      lifecycleContractContext({ knowledgeLifecycleService })
+    );
+
+    expect(result).toEqual({ id: 'recipe-1', title: 'Updated' });
+    expect(knowledgeLifecycleService.update).toHaveBeenCalledWith(
+      'recipe-1',
+      { title: 'Updated' },
+      { userId: 'agent' }
+    );
+  });
+
+  test('record_usage uses named lifecycle contract', async () => {
+    const tool = findTool('record_usage');
+    const knowledgeLifecycleService = createKnowledgeLifecycleService({
+      incrementUsage: vi.fn().mockResolvedValue({ ok: true }),
+    });
+
+    const result = await tool.handler(
+      { recipeId: 'recipe-1', type: 'application' },
+      lifecycleContractContext({ knowledgeLifecycleService })
+    );
+
+    expect(result).toEqual({ success: true, recipeId: 'recipe-1', type: 'application' });
+    expect(knowledgeLifecycleService.incrementUsage).toHaveBeenCalledWith(
+      'recipe-1',
+      'application'
+    );
+  });
+});
+
+/* ════════════════════════════════════════════════════════════
+ *  P6: Infra service contract
+ * ════════════════════════════════════════════════════════════ */
+describe('P6: infra service contract', () => {
+  test('graph_impact_analysis uses named infra knowledge graph contract', async () => {
+    const tool = findTool('graph_impact_analysis');
+    const knowledgeGraphService = {
+      getImpactAnalysis: vi.fn().mockReturnValue([{ id: 'downstream-1' }]),
+    };
+
+    const result = await tool.handler(
+      { recipeId: 'recipe-1', maxDepth: 2 },
+      infraContractContext({ knowledgeGraphService })
+    );
+
+    expect(result).toEqual({
+      recipeId: 'recipe-1',
+      impactedCount: 1,
+      impacted: [{ id: 'downstream-1' }],
+    });
+    expect(knowledgeGraphService.getImpactAnalysis).toHaveBeenCalledWith('recipe-1', 'recipe', 2);
+  });
+
+  test('rebuild_index uses named infra indexing contract', async () => {
+    const tool = findTool('rebuild_index');
+    const indexingPipeline = {
+      run: vi.fn().mockResolvedValue({ rebuilt: true }),
+    };
+
+    const result = await tool.handler(
+      { force: true, dryRun: true },
+      infraContractContext({ indexingPipeline })
+    );
+
+    expect(result).toEqual({ rebuilt: true });
+    expect(indexingPipeline.run).toHaveBeenCalledWith({ force: true, dryRun: true });
+  });
+
+  test('query_audit_log uses named infra audit contract', async () => {
+    const tool = findTool('query_audit_log');
+    const auditLogger = {
+      getByActor: vi.fn().mockReturnValue([{ id: 'audit-1' }]),
+      getByAction: vi.fn(),
+      getStats: vi.fn(),
+    };
+
+    const result = await tool.handler(
+      { actor: 'agent', limit: 5 },
+      infraContractContext({ auditLogger })
+    );
+
+    expect(result).toEqual([{ id: 'audit-1' }]);
+    expect(auditLogger.getByActor).toHaveBeenCalledWith('agent', 5);
+  });
+});
+
+/* ════════════════════════════════════════════════════════════
+ *  P6: Quality service contract
+ * ════════════════════════════════════════════════════════════ */
+describe('P6: quality service contract', () => {
+  test('quality_score uses named quality scorer contract', async () => {
+    const tool = findTool('quality_score');
+    const qualityScorer = {
+      score: vi.fn().mockReturnValue({ score: 92, grade: 'A' }),
+    };
+    const recipe = { id: 'recipe-1', title: 'Recipe' };
+
+    const result = await tool.handler({ recipe }, qualityContractContext({ qualityScorer }));
+
+    expect(result).toEqual({ score: 92, grade: 'A' });
+    expect(qualityScorer.score).toHaveBeenCalledWith(recipe);
+  });
+
+  test('validate_candidate uses named candidate validator contract', async () => {
+    const tool = findTool('validate_candidate');
+    const recipeCandidateValidator = {
+      validate: vi.fn().mockReturnValue({ ok: true, warnings: [] }),
+    };
+    const candidate = { title: 'Candidate' };
+
+    const result = await tool.handler(
+      { candidate },
+      qualityContractContext({ recipeCandidateValidator })
+    );
+
+    expect(result).toEqual({ ok: true, warnings: [] });
+    expect(recipeCandidateValidator.validate).toHaveBeenCalledWith(candidate);
+  });
+
+  test('get_feedback_stats uses named feedback collector contract', async () => {
+    const tool = findTool('get_feedback_stats');
+    const feedbackCollector = createFeedbackCollector({
+      getRecipeStats: vi.fn().mockReturnValue({ recipeId: 'recipe-1', views: 3 }),
+    });
+
+    const result = await tool.handler(
+      { recipeId: 'recipe-1', topN: 2 },
+      qualityContractContext({ feedbackCollector })
+    );
+
+    expect(result).toEqual({
+      global: { total: 10 },
+      topRecipes: [{ id: 'top-1' }],
+      recipeStats: { recipeId: 'recipe-1', views: 3 },
+    });
+    expect(feedbackCollector.getGlobalStats).toHaveBeenCalledWith();
+    expect(feedbackCollector.getTopRecipes).toHaveBeenCalledWith(2);
+    expect(feedbackCollector.getRecipeStats).toHaveBeenCalledWith('recipe-1');
+  });
+
+  test('knowledge_overview uses named quality feedback contract for top recipes', async () => {
+    const tool = findTool('knowledge_overview');
+    const feedbackCollector = createFeedbackCollector();
+
+    const result = await tool.handler(
+      { includeTopRecipes: true, limit: 1 },
+      qualityContractContext({ feedbackCollector })
+    );
+
+    expect(result.topRecipes).toEqual([{ id: 'top-1' }]);
+    expect(feedbackCollector.getTopRecipes).toHaveBeenCalledWith(1);
+  });
+
+  test('knowledge_overview uses named knowledge contracts for stats and graph', async () => {
+    const tool = findTool('knowledge_overview');
+    const knowledgeService = {
+      search: vi.fn(),
+      list: vi.fn(),
+      get: vi.fn(),
+      getStats: vi.fn().mockReturnValue({ recipes: { total: 3 } }),
+    };
+    const knowledgeGraphService = {
+      getStats: vi.fn().mockReturnValue({ nodes: 4, edges: 5 }),
+      getRelated: vi.fn(),
+      getEdges: vi.fn(),
+    };
+
+    const result = await tool.handler(
+      { includeTopRecipes: false },
+      knowledgeContractContext({ knowledgeService, knowledgeGraphService })
+    );
+
+    expect(result.knowledge).toEqual({ recipes: { total: 3 } });
+    expect(result.knowledgeGraph).toEqual({ nodes: 4, edges: 5 });
+    expect(knowledgeService.getStats).toHaveBeenCalledWith();
+    expect(knowledgeGraphService.getStats).toHaveBeenCalledWith();
+  });
+});
+
+function knowledgeContractContext({
+  knowledgeService = null,
+  searchEngine = null,
+  knowledgeGraphService = null,
+} = {}) {
+  return {
+    projectRoot: tmpDir,
+    container: {
+      get() {
+        throw new Error('query tools should use the named knowledge service contract');
+      },
+    },
+    serviceContracts: {
+      knowledge: {
+        getKnowledgeService: () => knowledgeService,
+        getSearchEngine: () => searchEngine,
+        getKnowledgeGraphService: () => knowledgeGraphService,
+      },
+    },
+  };
+}
+
+function qualityContractContext({
+  qualityScorer = null,
+  recipeCandidateValidator = null,
+  feedbackCollector = null,
+} = {}) {
+  return {
+    projectRoot: tmpDir,
+    container: {
+      get() {
+        throw new Error('quality tools should use the named quality service contract');
+      },
+    },
+    serviceContracts: {
+      quality: {
+        getQualityScorer: () => qualityScorer,
+        getRecipeCandidateValidator: () => recipeCandidateValidator,
+        getFeedbackCollector: () => feedbackCollector,
+      },
+    },
+  };
+}
+
+function createFeedbackCollector(overrides = {}) {
+  return {
+    getGlobalStats: vi.fn().mockReturnValue({ total: 10 }),
+    getTopRecipes: vi.fn().mockReturnValue([{ id: 'top-1' }]),
+    getRecipeStats: vi.fn(),
+    ...overrides,
+  };
+}
+
+function infraContractContext({
+  knowledgeGraphService = null,
+  indexingPipeline = null,
+  auditLogger = null,
+} = {}) {
+  return {
+    projectRoot: tmpDir,
+    container: {
+      get() {
+        throw new Error('infra tools should use the named infra service contract');
+      },
+    },
+    serviceContracts: {
+      infra: {
+        getKnowledgeGraphService: () => knowledgeGraphService,
+        getIndexingPipeline: () => indexingPipeline,
+        getAuditLogger: () => auditLogger,
+      },
+    },
+  };
+}
+
+function lifecycleContractContext({
+  knowledgeLifecycleService = null,
+  proposalRepository = null,
+  evolutionGateway = null,
+  consolidationAdvisor = null,
+} = {}) {
+  return {
+    projectRoot: tmpDir,
+    container: {
+      get() {
+        throw new Error('lifecycle tools should use the named lifecycle service contract');
+      },
+    },
+    serviceContracts: {
+      lifecycle: {
+        getKnowledgeLifecycleService: () => knowledgeLifecycleService,
+        getProposalRepository: () => proposalRepository,
+        getEvolutionGateway: () => evolutionGateway,
+        getConsolidationAdvisor: () => consolidationAdvisor,
+      },
+    },
+  };
+}
+
+function createKnowledgeLifecycleService(overrides = {}) {
+  return {
+    create: vi.fn().mockResolvedValue({ id: 'created-1', title: 'Created', lifecycle: 'pending' }),
+    updateQuality: vi.fn(),
+    approve: vi.fn(),
+    reject: vi.fn(),
+    publish: vi.fn(),
+    deprecate: vi.fn(),
+    update: vi.fn(),
+    incrementUsage: vi.fn(),
+    get: vi.fn(),
+    ...overrides,
+  };
+}
+
+function guardContractContext({
+  guardService = null,
+  guardCheckEngine = null,
+  violationsStore = null,
+} = {}) {
+  return {
+    projectRoot: tmpDir,
+    container: {
+      get() {
+        throw new Error('guard tools should use the named guard service contract');
+      },
+    },
+    serviceContracts: {
+      guard: {
+        getGuardService: () => guardService,
+        getGuardCheckEngine: () => guardCheckEngine,
+        getViolationsStore: () => violationsStore,
+      },
+    },
+  };
+}
 
 /* ════════════════════════════════════════════════════════════
  *  P3: query_call_graph tool structure & edge cases

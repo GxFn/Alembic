@@ -2,15 +2,40 @@
  * AgentModule — Agent 架构服务注册
  *
  * 负责注册:
- *   - agentFactory, toolRegistry, toolForge, skillHooks
+ *   - agentService, toolRegistry, toolForge, skillHooks
  *   - feedbackStore, recommendationPipeline, recommendationMetrics
  */
 
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
-import { AgentFactory } from '../../agent/AgentFactory.js';
+import { DashboardOperationAdapter } from '../../agent/adapters/DashboardOperationAdapter.js';
+import { InternalToolAdapter } from '../../agent/adapters/InternalToolAdapter.js';
+import { MacSystemAdapter } from '../../agent/adapters/MacSystemAdapter.js';
+import { MAC_SYSTEM_CAPABILITY_MANIFESTS } from '../../agent/adapters/MacSystemCapabilities.js';
+import { SkillAdapter } from '../../agent/adapters/SkillAdapter.js';
+import { SKILL_CAPABILITY_MANIFESTS } from '../../agent/adapters/SkillCapabilities.js';
+import { TerminalAdapter } from '../../agent/adapters/TerminalAdapter.js';
+import { TERMINAL_CAPABILITY_MANIFESTS } from '../../agent/adapters/TerminalCapabilities.js';
+import { InMemoryTerminalSessionManager } from '../../agent/adapters/TerminalSessionManager.js';
+import { WorkflowAdapter } from '../../agent/adapters/WorkflowAdapter.js';
+import { ToolRouter } from '../../agent/core/ToolRouter.js';
+import {
+  DASHBOARD_OPERATION_HANDLERS,
+  DASHBOARD_OPERATION_MANIFESTS,
+} from '../../agent/dashboard/DashboardOperations.js';
 import { ToolForge } from '../../agent/forge/ToolForge.js';
-import { ALL_TOOLS } from '../../agent/tools/index.js';
+import {
+  AgentProfileCompiler,
+  AgentProfileRegistry,
+  AgentRunCoordinator,
+  AgentRuntimeBuilder,
+  AgentService,
+  AgentStageFactoryRegistry,
+  SystemRunContextFactory,
+} from '../../agent/service/index.js';
+import { CapabilityCatalog } from '../../agent/tools/CapabilityCatalog.js';
+import { ALL_TOOLS, TOOL_CAPABILITY_MANIFESTS } from '../../agent/tools/index.js';
 import { ToolRegistry } from '../../agent/tools/ToolRegistry.js';
+import { WorkflowRegistry } from '../../agent/workflow/WorkflowRegistry.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { AIRecallStrategy } from '../../service/skills/AIRecallStrategy.js';
 import { FeedbackStore } from '../../service/skills/FeedbackStore.js';
@@ -21,27 +46,106 @@ import { SkillHooks } from '../../service/skills/SkillHooks.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {
-  c.singleton('toolRegistry', () => {
+  c.singleton(
+    'capabilityCatalog',
+    () =>
+      new CapabilityCatalog([
+        ...TOOL_CAPABILITY_MANIFESTS,
+        ...DASHBOARD_OPERATION_MANIFESTS,
+        ...TERMINAL_CAPABILITY_MANIFESTS,
+        ...SKILL_CAPABILITY_MANIFESTS,
+        ...MAC_SYSTEM_CAPABILITY_MANIFESTS,
+      ])
+  );
+
+  c.singleton('workflowRegistry', () => new WorkflowRegistry());
+  c.singleton('terminalSessionManager', () => new InMemoryTerminalSessionManager());
+
+  c.singleton('toolRegistry', (ct: ServiceContainer) => {
     const registry = new ToolRegistry();
     registry.registerAll(ALL_TOOLS);
+    registry.setRouter(
+      new ToolRouter({
+        catalog: ct.get('capabilityCatalog') as CapabilityCatalog,
+        adapters: [
+          new InternalToolAdapter(registry),
+          new DashboardOperationAdapter(DASHBOARD_OPERATION_HANDLERS),
+          new TerminalAdapter({
+            sessionManager: ct.get('terminalSessionManager') as InMemoryTerminalSessionManager,
+          }),
+          new SkillAdapter(),
+          new MacSystemAdapter(),
+          new WorkflowAdapter(ct.get('workflowRegistry') as WorkflowRegistry),
+        ],
+        projectRoot: resolveProjectRoot(ct),
+        services: ct,
+      })
+    );
     return registry;
+  });
+
+  c.singleton('toolRouter', (ct: ServiceContainer) => {
+    const registry = ct.get('toolRegistry') as ToolRegistry;
+    return registry.getRouter();
   });
 
   c.singleton('toolForge', (ct: ServiceContainer) => {
     const registry = ct.get('toolRegistry');
     const signalBus = ct.singletons.signalBus as SignalBus | undefined;
-    return new ToolForge(registry, { signalBus });
+    return new ToolForge(registry, {
+      signalBus,
+      capabilityCatalog: ct.get('capabilityCatalog') as CapabilityCatalog,
+      workflowRegistry: ct.get('workflowRegistry') as WorkflowRegistry,
+    });
+  });
+
+  c.singleton('agentProfileRegistry', () => new AgentProfileRegistry(), { aiDependent: false });
+
+  c.singleton('agentStageFactoryRegistry', () => new AgentStageFactoryRegistry(), {
+    aiDependent: false,
   });
 
   c.singleton(
-    'agentFactory',
+    'agentProfileCompiler',
     (ct: ServiceContainer) =>
-      new AgentFactory({
-        container: ct,
+      new AgentProfileCompiler({
+        profileRegistry: ct.get('agentProfileRegistry') as AgentProfileRegistry,
+        stageFactoryRegistry: ct.get('agentStageFactoryRegistry') as AgentStageFactoryRegistry,
+      }),
+    { aiDependent: false }
+  );
+
+  c.singleton('agentRunCoordinator', () => new AgentRunCoordinator(), { aiDependent: false });
+
+  c.singleton(
+    'systemRunContextFactory',
+    (ct: ServiceContainer) =>
+      new SystemRunContextFactory({
+        aiProvider: (ct.singletons.aiProvider || null) as { model: string } | null,
+      }),
+    { aiDependent: true }
+  );
+
+  c.singleton(
+    'agentRuntimeBuilder',
+    (ct: ServiceContainer) =>
+      new AgentRuntimeBuilder({
+        container: ct as unknown as Record<string, unknown>,
         toolRegistry: ct.get('toolRegistry'),
         aiProvider: ct.singletons.aiProvider || null,
         projectRoot: resolveProjectRoot(ct),
-      } as unknown as ConstructorParameters<typeof AgentFactory>[0]),
+      }),
+    { aiDependent: true }
+  );
+
+  c.singleton(
+    'agentService',
+    (ct: ServiceContainer) =>
+      new AgentService({
+        runtimeBuilder: ct.get('agentRuntimeBuilder') as AgentRuntimeBuilder,
+        profileCompiler: ct.get('agentProfileCompiler') as AgentProfileCompiler,
+        runCoordinator: ct.get('agentRunCoordinator') as AgentRunCoordinator,
+      }),
     { aiDependent: true }
   );
 

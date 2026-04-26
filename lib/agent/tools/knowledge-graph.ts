@@ -9,6 +9,11 @@
  */
 
 import { findSimilarRecipes } from '#service/candidate/SimilarityService.js';
+import {
+  requireKnowledgeGraphMutationService,
+  requireKnowledgeService,
+  resolveKnowledgeServicesFromContext,
+} from '../core/ToolKnowledgeServices.js';
 import type { ToolHandlerContext } from './_shared.js';
 
 // ────────────────────────────────────────────────────────────
@@ -43,14 +48,14 @@ export const checkDuplicate = {
     // 如果提供 candidateId，从数据库读取条目信息
     if (!cand && params.candidateId) {
       try {
-        const knowledgeService = ctx.container.get('knowledgeService');
+        const knowledgeService = requireKnowledgeService(resolveKnowledgeServicesFromContext(ctx));
         const found = await knowledgeService.get(params.candidateId as string);
         if (found) {
-          const json = typeof found.toJSON === 'function' ? found.toJSON() : found;
+          const json = hasToJSON(found) ? found.toJSON() : toRecord(found);
           cand = {
-            title: json.title || '',
-            summary: json.description || '',
-            code: json.content?.pattern || '',
+            title: typeof json.title === 'string' ? json.title : '',
+            summary: typeof json.description === 'string' ? json.description : '',
+            code: extractPattern(json.content),
             usageGuide: '',
           };
         }
@@ -108,7 +113,9 @@ export const addGraphEdge = {
     required: ['fromId', 'fromType', 'toId', 'toType', 'relation'],
   },
   handler: async (params: Record<string, unknown>, ctx: ToolHandlerContext) => {
-    const kgService = ctx.container.get('knowledgeGraphService');
+    const kgService = requireKnowledgeGraphMutationService(
+      resolveKnowledgeServicesFromContext(ctx)
+    );
     return kgService.addEdge(
       params.fromId as string,
       params.fromType as string,
@@ -119,3 +126,23 @@ export const addGraphEdge = {
     );
   },
 };
+
+function hasToJSON(value: unknown): value is { toJSON(): Record<string, unknown> } {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    typeof (value as { toJSON?: unknown }).toJSON === 'function'
+  );
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function extractPattern(content: unknown): string {
+  if (!content || typeof content !== 'object') {
+    return '';
+  }
+  const pattern = (content as { pattern?: unknown }).pattern;
+  return typeof pattern === 'string' ? pattern : '';
+}

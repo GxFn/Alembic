@@ -10,8 +10,10 @@
  *
  * @module agent/tools/evolution-tools
  */
-
-import type { EvolutionGateway } from '../../service/evolution/EvolutionGateway.js';
+import {
+  getEvolutionGateway,
+  resolveLifecycleServicesFromContext,
+} from '../core/ToolLifecycleServices.js';
 import type { ToolHandlerContext } from './_shared.js';
 
 // ── Param types ──────────────────────────────────────────
@@ -39,10 +41,23 @@ interface SkipEvolutionParams {
   reason: string;
 }
 
+interface EvolutionSubmitResult {
+  outcome: string;
+  proposalId?: string;
+  error?: string;
+}
+
 // ── Helper ──────────────────────────────────────────────
 
-function getGateway(ctx: ToolHandlerContext): EvolutionGateway | null {
-  return ctx.container.get('evolutionGateway') as EvolutionGateway | null;
+function getGateway(ctx: ToolHandlerContext) {
+  return getEvolutionGateway(resolveLifecycleServicesFromContext(ctx));
+}
+
+async function submitEvolutionDecision(
+  gateway: NonNullable<ReturnType<typeof getGateway>>,
+  decision: Record<string, unknown>
+): Promise<EvolutionSubmitResult> {
+  return (await gateway.submit(decision)) as EvolutionSubmitResult;
 }
 
 // ──────────────────────────────────────────────────────────
@@ -110,7 +125,7 @@ export const proposeEvolution = {
       };
     }
 
-    const result = await gateway.submit({
+    const result = await submitEvolutionDecision(gateway, {
       recipeId,
       action: 'update',
       source: 'decay-scan',
@@ -182,7 +197,7 @@ export const confirmDeprecation = {
       };
     }
 
-    const result = await gateway.submit({
+    const result = await submitEvolutionDecision(gateway, {
       recipeId,
       action: 'deprecate',
       source: 'decay-scan',
@@ -223,7 +238,7 @@ export const skipEvolution = {
       return { status: 'skipped', recipeId, reason };
     }
 
-    const result = await gateway.submit({
+    const result = await submitEvolutionDecision(gateway, {
       recipeId,
       action: 'valid',
       source: 'decay-scan',

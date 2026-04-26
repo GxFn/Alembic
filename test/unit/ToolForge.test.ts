@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { WorkflowAdapter } from '../../lib/agent/adapters/WorkflowAdapter.js';
+import { DiagnosticsCollector } from '../../lib/agent/core/DiagnosticsCollector.js';
+import { ToolRouter } from '../../lib/agent/core/ToolRouter.js';
 import { ToolForge } from '../../lib/agent/forge/ToolForge.js';
+import { CapabilityCatalog } from '../../lib/agent/tools/CapabilityCatalog.js';
+import type { ToolCapabilityManifest } from '../../lib/agent/tools/CapabilityManifest.js';
+import { WorkflowRegistry } from '../../lib/agent/workflow/WorkflowRegistry.js';
 
 /* ────────── Mock ToolRegistry ────────── */
 
@@ -8,18 +14,83 @@ function createMockRegistry(tools: Record<string, (p: Record<string, unknown>) =
   const toolMap = new Map(Object.entries(tools));
   return {
     has: (name: string) => toolMap.has(name),
-    getToolNames: () => [...toolMap.keys()],
-    execute: vi.fn(async (name: string, params: Record<string, unknown>) => {
-      const fn = toolMap.get(name);
-      if (!fn) {
-        throw new Error(`Tool '${name}' not found`);
-      }
-      return fn(params);
-    }),
-    register: vi.fn((def: { name: string }) => {
+    hasInternalTool: (name: string) => toolMap.has(name),
+    projectForgedTool: vi.fn((def: { name: string }) => {
       toolMap.set(def.name, async () => ({}));
     }),
-    unregister: vi.fn((name: string) => toolMap.delete(name)),
+    revokeForgedTool: vi.fn((name: string) => toolMap.delete(name)),
+  };
+}
+
+function testManifest(id: string): ToolCapabilityManifest {
+  return {
+    id,
+    title: id,
+    kind: 'internal-tool',
+    description: id,
+    owner: 'test',
+    lifecycle: 'active',
+    surfaces: ['runtime', 'internal'],
+    inputSchema: {},
+    risk: {
+      sideEffect: false,
+      dataAccess: 'none',
+      writeScope: 'none',
+      network: 'none',
+      credentialAccess: 'none',
+      requiresHumanConfirmation: 'never',
+      owaspTags: [],
+    },
+    execution: {
+      adapter: 'internal',
+      timeoutMs: 0,
+      maxOutputBytes: 10_000,
+      abortMode: 'none',
+      cachePolicy: 'none',
+      concurrency: 'parallel-safe',
+      artifactMode: 'inline',
+    },
+    governance: {
+      auditLevel: 'none',
+      policyProfile: 'read',
+      approvalPolicy: 'auto',
+      allowedRoles: ['runtime'],
+      allowInComposer: true,
+      allowInRemoteMcp: false,
+      allowInNonInteractive: true,
+    },
+    evals: { required: false, cases: [] },
+  };
+}
+
+function createToolEnvelope(toolId: string, structuredContent: unknown, parentCallId: string) {
+  return {
+    ok: true,
+    toolId,
+    callId: `child-${toolId}`,
+    parentCallId,
+    startedAt: new Date().toISOString(),
+    durationMs: 0,
+    status: 'success' as const,
+    text: 'ok',
+    structuredContent,
+    diagnostics: {
+      degraded: false,
+      fallbackUsed: false,
+      warnings: [],
+      timedOutStages: [],
+      blockedTools: [],
+      truncatedToolCalls: 0,
+      emptyResponses: 0,
+      aiErrorCount: 0,
+      gateFailures: [],
+    },
+    trust: {
+      source: 'internal' as const,
+      sanitized: true,
+      containsUntrustedText: false,
+      containsSecrets: false,
+    },
   };
 }
 
@@ -44,7 +115,8 @@ describe('ToolForge', () => {
 
     it('should reuse tool with fuzzy match', async () => {
       const reg = createMockRegistry({ alembic_search_knowledge: () => ({ results: [] }) });
-      const forge = new ToolForge(reg);
+      const catalog = new CapabilityCatalog([testManifest('alembic_search_knowledge')]);
+      const forge = new ToolForge(reg, { capabilityCatalog: catalog });
 
       const result = await forge.forge({
         intent: 'search knowledge',
@@ -67,7 +139,12 @@ describe('ToolForge', () => {
         transform_data: (p) => ({ transformed: true }),
         load_data: (p) => ({ raw: 'data' }),
       });
-      const forge = new ToolForge(reg);
+      const catalog = new CapabilityCatalog([
+        testManifest('validate_data'),
+        testManifest('transform_data'),
+        testManifest('load_data'),
+      ]);
+      const forge = new ToolForge(reg, { capabilityCatalog: catalog });
 
       const result = await forge.forge({
         intent: 'validate and transform data',
@@ -82,12 +159,136 @@ describe('ToolForge', () => {
 
       forge.dispose();
     });
+
+    it('registers composed tools as workflow capabilities and executes them through ToolRouter', async () => {
+      const reg = createMockRegistry({
+        stage_data: (p) => ({ value: Number(p.value ?? 1) + 1 }),
+        normalize_data: (p) => ({ value: Number(p.value ?? 0) * 2 }),
+      });
+      const catalog = new CapabilityCatalog([
+        testManifest('stage_data'),
+        testManifest('normalize_data'),
+      ]);
+      const workflowRegistry = new WorkflowRegistry();
+      const diagnostics = new DiagnosticsCollector();
+      const childExecute = vi.fn(async (request) => {
+        const fn = {
+          stage_data: (p: Record<string, unknown>) => ({ value: Number(p.value ?? 1) + 1 }),
+          normalize_data: (p: Record<string, unknown>) => ({ value: Number(p.value ?? 0) * 2 }),
+        }[request.manifest.id as 'stage_data' | 'normalize_data'];
+        return createToolEnvelope(
+          request.manifest.id,
+          fn(request.args),
+          request.context.parentCallId
+        );
+      });
+      const router = new ToolRouter({
+        catalog,
+        adapters: [
+          new WorkflowAdapter(workflowRegistry),
+          { kind: 'internal-tool' as const, execute: childExecute },
+        ],
+        services: {
+          get() {
+            throw new Error('workflow execution should use the tool routing service contract');
+          },
+        },
+      });
+      const forge = new ToolForge(reg, {
+        capabilityCatalog: catalog,
+        workflowRegistry,
+        compositionSpecBuilder: () => ({
+          name: 'stage_then_normalize',
+          description: 'Stage then normalize data',
+          steps: [
+            { tool: 'stage_data', args: { value: 2 } },
+            {
+              tool: 'normalize_data',
+              args: (prev) => prev as Record<string, unknown>,
+            },
+          ],
+          mergeStrategy: 'sequential',
+          parameters: {
+            type: 'object',
+            properties: { value: { type: 'number' } },
+          },
+        }),
+      });
+
+      const result = await forge.forge({
+        intent: 'blend data through two existing steps',
+        action: 'blend',
+        target: 'data',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.mode).toBe('compose');
+      expect(catalog.getManifest('stage_then_normalize')).toMatchObject({
+        id: 'stage_then_normalize',
+        kind: 'workflow',
+      });
+      expect(workflowRegistry.has('stage_then_normalize')).toBe(true);
+      expect(reg.projectForgedTool).not.toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'stage_then_normalize' })
+      );
+
+      const envelope = await router.execute({
+        toolId: 'stage_then_normalize',
+        args: { value: 2 },
+        surface: 'runtime',
+        actor: { role: 'runtime' },
+        source: { kind: 'runtime', name: 'test' },
+        runtime: { diagnostics },
+      });
+
+      expect(envelope.ok).toBe(true);
+      expect(envelope.structuredContent).toEqual({ value: 6 });
+      expect(childExecute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          manifest: expect.objectContaining({ id: 'stage_data' }),
+          context: expect.objectContaining({ surface: 'composer' }),
+        })
+      );
+      expect(childExecute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          manifest: expect.objectContaining({ id: 'normalize_data' }),
+          context: expect.objectContaining({ surface: 'composer' }),
+        })
+      );
+      expect(diagnostics.toJSON().toolCalls).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            tool: 'stage_data',
+            parentCallId: envelope.callId,
+            surface: 'composer',
+            kind: 'internal-tool',
+          }),
+          expect.objectContaining({
+            tool: 'normalize_data',
+            parentCallId: envelope.callId,
+            surface: 'composer',
+            kind: 'internal-tool',
+          }),
+          expect.objectContaining({
+            tool: 'stage_then_normalize',
+            callId: envelope.callId,
+            surface: 'runtime',
+            kind: 'workflow',
+          }),
+        ])
+      );
+
+      forge.dispose();
+      expect(catalog.getManifest('stage_then_normalize')).toBeNull();
+      expect(workflowRegistry.has('stage_then_normalize')).toBe(false);
+    });
   });
 
   describe('forge — generate mode', () => {
     it('should generate tool when codeGenerator provided', async () => {
       const reg = createMockRegistry({});
-      const forge = new ToolForge(reg);
+      const catalog = new CapabilityCatalog();
+      const forge = new ToolForge(reg, { capabilityCatalog: catalog });
 
       const result = await forge.forge({
         intent: 'generate thumbnail',
@@ -113,19 +314,60 @@ describe('ToolForge', () => {
       expect(result.toolName).toBe('generate_thumbnail');
 
       // 验证临时工具已注册
-      expect(reg.register).toHaveBeenCalledWith(
+      expect(reg.projectForgedTool).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'generate_thumbnail',
-          description: expect.stringContaining('[Forged:generate]'),
+          description: 'Generate thumbnail',
+          forgeMode: 'generate',
         })
       );
+      expect(catalog.getManifest('generate_thumbnail')).toMatchObject({
+        id: 'generate_thumbnail',
+        kind: 'internal-tool',
+        owner: 'agent-forge',
+        lifecycle: 'experimental',
+        surfaces: ['runtime'],
+        governance: {
+          policyProfile: 'write',
+          approvalPolicy: 'explain-then-run',
+          allowInComposer: false,
+        },
+      });
+
+      forge.dispose();
+      expect(catalog.getManifest('generate_thumbnail')).toBeNull();
+    });
+
+    it('should reject generate mode without CapabilityCatalog', async () => {
+      const reg = createMockRegistry({});
+      const forge = new ToolForge(reg);
+
+      const result = await forge.forge({
+        intent: 'generate thumbnail',
+        action: 'generate',
+        target: 'thumbnail',
+        codeGenerator: async () => ({
+          name: 'generate_thumbnail',
+          description: 'Generate thumbnail',
+          parameters: {},
+          code: `function toolHandler(params) { return params; }`,
+          testCases: [],
+        }),
+      });
+
+      expect(result).toMatchObject({
+        success: false,
+        mode: 'generate',
+        error: expect.stringContaining('requires CapabilityCatalog'),
+      });
+      expect(reg.projectForgedTool).not.toHaveBeenCalled();
 
       forge.dispose();
     });
 
     it('should fail generate if code fails safety check', async () => {
       const reg = createMockRegistry({});
-      const forge = new ToolForge(reg);
+      const forge = new ToolForge(reg, { capabilityCatalog: new CapabilityCatalog() });
 
       const result = await forge.forge({
         intent: 'evil tool',
@@ -148,7 +390,7 @@ describe('ToolForge', () => {
 
     it('should fail generate if tests fail', async () => {
       const reg = createMockRegistry({});
-      const forge = new ToolForge(reg);
+      const forge = new ToolForge(reg, { capabilityCatalog: new CapabilityCatalog() });
 
       const result = await forge.forge({
         intent: 'buggy tool',
@@ -194,7 +436,8 @@ describe('ToolForge', () => {
         subscribe: vi.fn(),
       } as unknown as import('../../lib/infrastructure/signal/SignalBus.js').SignalBus;
       const reg = createMockRegistry({ search_knowledge: () => ({}) });
-      const forge = new ToolForge(reg, { signalBus });
+      const catalog = new CapabilityCatalog([testManifest('search_knowledge')]);
+      const forge = new ToolForge(reg, { signalBus, capabilityCatalog: catalog });
 
       await forge.forge({
         intent: 'search knowledge',
@@ -216,7 +459,8 @@ describe('ToolForge', () => {
   describe('dispose', () => {
     it('should clean up temporary registry', async () => {
       const reg = createMockRegistry({});
-      const forge = new ToolForge(reg);
+      const catalog = new CapabilityCatalog();
+      const forge = new ToolForge(reg, { capabilityCatalog: catalog });
 
       // Generate a tool
       await forge.forge({
@@ -233,8 +477,10 @@ describe('ToolForge', () => {
       });
 
       // Dispose should clean up
+      expect(catalog.getManifest('disposable')).not.toBeNull();
       forge.dispose();
       expect(forge.temporaryRegistry.list()).toHaveLength(0);
+      expect(catalog.getManifest('disposable')).toBeNull();
     });
   });
 

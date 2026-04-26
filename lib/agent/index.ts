@@ -3,41 +3,36 @@
  *
  * @module agent
  *
- * 统一架构: ONE Runtime, 多种配置
+ * 统一架构: Surface -> AgentService -> Runtime -> Action Layer
  *
- *   ┌──────── Transport ────────┐
- *   │  HTTP│Lark│CLI│MCP│...    │  ← 渠道适配 (AgentMessage)
- *   └──────────┬────────────────┘
+ *   ┌──────── Surface Layer ─────────┐
+ *   │  HTTP│Lark│CLI│MCP│Workflow    │  ← 只构造 AgentRunInput
+ *   └──────────────┬─────────────────┘
  *              │
- *   ┌──────────▼────────────────┐
- *   │       AgentRouter         │  ← 意图 → Preset
- *   └──────────┬────────────────┘
+ *   ┌──────────▼─────────────────────┐
+ *   │          AgentService          │  ← 统一服务入口 + profile 编译
+ *   └──────────────┬─────────────────┘
  *              │
- *   ┌──────────▼────────────────┐
- *   │       AgentFactory        │  ← Preset + DI → Runtime
- *   └──────────┬────────────────┘
+ *   ┌──────────▼─────────────────────┐
+ *   │      AgentRuntimeBuilder       │  ← Profile + DI → Runtime
+ *   └──────────────┬─────────────────┘
  *              │
  *   ┌──────────▼────────────────────────────────────────┐
  *   │              AgentRuntime                          │
  *   │                                                    │
- *   │  ┌──────────┐  ┌───────────┐  ┌────────────────┐ │
- *   │  │Capability│  │ Strategy  │  │    Policy       │ │
- *   │  │ 技能模块 │  │ 执行策略  │  │    约束引擎    │ │
- *   │  ├──────────┤  ├───────────┤  ├────────────────┤ │
- *   │  │• 对话    │  │• Single   │  │• Budget 预算   │ │
- *   │  │• 代码分析│  │• Pipeline │  │• Safety 安全   │ │
- *   │  │• 知识生产│  │• FanOut   │  │• Quality 质量  │ │
- *   │  │• 系统交互│  │• Adaptive │  │                │ │
- *   │  └──────────┘  └───────────┘  └────────────────┘ │
+ *   │  ┌────────────┐ ┌───────────┐ ┌────────────────┐ │
+ *   │  │Agent Skill │ │ Strategy  │ │    Policy       │ │
+ *   │  │ 运行时技能 │ │ 工程编排  │ │    约束引擎    │ │
+ *   │  └────────────┘ └───────────┘ └────────────────┘ │
  *   │                                                    │
  *   │  ┌─────────────────────────────────────────┐      │
  *   │  │  ReAct Loop  (Thought→Action→Observe)   │      │
  *   │  └─────────────────────────────────────────┘      │
  *   └───────────────────────────────────────────────────┘
  *              │
- *   ┌──────────▼────────────────┐
- *   │   AgentState + EventBus   │  ← 状态机 + 事件通信
- *   └──────────────────────────-┘
+ *   ┌──────────▼─────────────────────┐
+ *   │ Action Layer: ToolRouter        │  ← 执行动作，不选择 Agent profile
+ *   └────────────────────────────────┘
  *
  * Preset 配置表:
  *   | Preset       | Capabilities         | Strategy    | Policies         |
@@ -49,14 +44,12 @@
  */
 
 export { AgentEventBus, AgentEvents } from './AgentEventBus.js';
-export { AgentFactory } from './AgentFactory.js';
 export { AgentMessage, Channel } from './AgentMessage.js';
 export { AgentRouter, PresetName } from './AgentRouter.js';
 // ── Core ──
 export { AgentRuntime } from './AgentRuntime.js';
 // ── Infrastructure ──
 export { AgentPhase, AgentState } from './AgentState.js';
-
 // ── Capabilities ──
 export {
   Capability,
@@ -77,6 +70,7 @@ export {
 } from './policies.js';
 // ── Presets ──
 export { getPreset, PRESETS, resolveStrategy } from './presets.js';
+export * from './service/index.js';
 // ── Strategies ──
 export {
   AdaptiveStrategy,

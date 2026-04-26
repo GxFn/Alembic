@@ -1,7 +1,7 @@
 /**
  * AiScanService — `alembic ais [Target]` 的核心逻辑
  *
- * 按文件粒度扫描 Target 源码，通过 AgentFactory.scanKnowledge 提取 Recipe，
+ * 按文件粒度扫描 Target 源码，通过 AgentService.run(scan-extract) 提取 Recipe，
  * 创建后自动发布（PENDING → ACTIVE），无需 Dashboard 人工审核。
  *
  * Agent(LLM) 直接分析代码 + 使用 AST 工具，输出 Recipe 结构化 JSON。
@@ -10,15 +10,19 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  type AgentService,
+  runScanAgentTask,
+  type SystemRunContextFactory,
+} from '../agent/service/index.js';
 import Logger from '../infrastructure/logging/Logger.js';
 import { LanguageService } from '../shared/LanguageService.js';
 
 export class AiScanService {
-  agentFactory: {
-    scanKnowledge: (opts: Record<string, unknown>) => Promise<Record<string, unknown>>;
-  } | null;
+  agentService: AgentService | null;
+  systemRunContextFactory: SystemRunContextFactory | null;
   container: {
-    get: (name: string) => Record<string, unknown>;
+    get: (name: string) => unknown;
     singletons?: Record<string, unknown>;
   };
   logger: ReturnType<typeof Logger.getInstance>;
@@ -32,7 +36,7 @@ export class AiScanService {
     projectRoot,
   }: {
     container: {
-      get: (name: string) => Record<string, unknown>;
+      get: (name: string) => unknown;
       singletons?: Record<string, unknown>;
     };
     projectRoot: string;
@@ -40,7 +44,8 @@ export class AiScanService {
     this.container = container;
     this.projectRoot = projectRoot;
     this.logger = Logger.getInstance();
-    this.agentFactory = null;
+    this.agentService = null;
+    this.systemRunContextFactory = null;
   }
 
   /**
@@ -53,9 +58,12 @@ export class AiScanService {
     const { maxFiles = 200, dryRun = false } = opts;
     const report = { published: 0, files: 0, errors: [] as string[], skipped: 0 };
 
-    // 1. 初始化 AgentFactory (内置 AI Provider + ToolExecutionPipeline + 中间件)
+    // 1. 初始化 AgentService (统一 AgentRuntime 入口)
     try {
-      this.agentFactory = this.container.get('agentFactory') as typeof this.agentFactory;
+      this.agentService = this.container.get('agentService') as AgentService;
+      this.systemRunContextFactory = this.container.get(
+        'systemRunContextFactory'
+      ) as SystemRunContextFactory;
       // 通过 AiProviderManager 统一检查 AI 可用性
       const manager = this.container.singletons?._aiProviderManager as { isMock: boolean };
       if (manager.isMock) {
@@ -103,12 +111,12 @@ export class AiScanService {
             ? `${content.split('\n').slice(0, 500).join('\n')}\n// ... (truncated)`
             : content;
 
-        const fileData = [{ name: file.name, content: truncated }];
-
-        // 委托 AgentFactory.scanKnowledge — Agent(LLM) 直接分析
-        const extractResult = await this.agentFactory!.scanKnowledge({
+        // 委托统一 AgentService.run(scan-extract) — Agent(LLM) 直接分析
+        const extractResult = await runScanAgentTask({
+          agentService: this.agentService!,
+          systemRunContextFactory: this.systemRunContextFactory!,
           label: file.targetName,
-          files: fileData,
+          files: [{ name: file.name, relativePath: file.relativePath, content: truncated }],
           task: 'extract',
         });
         const recipes = extractResult.recipes || [];

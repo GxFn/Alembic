@@ -6,6 +6,16 @@
  * 13. guard_check_code    Guard 检查代码
  * 14. query_violations    查询违规历史
  */
+import {
+  getGuardCheckEngine,
+  getGuardService,
+  requireViolationsStore,
+  resolveGuardServicesFromContext,
+} from '../core/ToolGuardServices.js';
+import {
+  requireKnowledgeService,
+  resolveKnowledgeServicesFromContext,
+} from '../core/ToolKnowledgeServices.js';
 import type { ToolHandlerContext } from './_shared.js';
 
 // ─── 类型定义 ────────────────────────────────────────
@@ -53,27 +63,33 @@ export const listGuardRules = {
   },
   handler: async (params: ListGuardRulesParams, ctx: ToolHandlerContext) => {
     const { language, includeBuiltIn = true, limit = 50 } = params;
+    const guardServices = resolveGuardServicesFromContext(ctx);
     const results: GuardRule[] = [];
 
     // 数据库自定义规则
-    try {
-      const guardService = ctx.container.get('guardService');
-      const dbRules = await guardService.listRules({}, { page: 1, pageSize: limit });
-      results.push(...(dbRules.data || dbRules.items || []));
-    } catch {
-      /* not available */
+    const guardService = getGuardService(guardServices);
+    if (guardService) {
+      try {
+        const dbRules = await guardService.listRules({}, { page: 1, pageSize: limit });
+        results.push(...extractListItems(dbRules));
+      } catch {
+        /* not available */
+      }
     }
 
     // 内置规则
     if (includeBuiltIn) {
-      try {
-        const guardCheckEngine = ctx.container.get('guardCheckEngine');
-        const builtIn = guardCheckEngine
-          .getRules(language || null)
-          .filter((r: GuardRule) => r.source === 'built-in');
-        results.push(...builtIn);
-      } catch {
-        /* not available */
+      const guardCheckEngine = getGuardCheckEngine(guardServices);
+      if (guardCheckEngine) {
+        try {
+          const builtIn = guardCheckEngine
+            .getRules(language || null)
+            .filter(isGuardRule)
+            .filter((r) => r.source === 'built-in');
+          results.push(...builtIn);
+        } catch {
+          /* not available */
+        }
       }
     }
 
@@ -94,7 +110,7 @@ export const getRecommendations = {
     },
   },
   handler: async (params: GetRecommendationsParams, ctx: ToolHandlerContext) => {
-    const knowledgeService = ctx.container.get('knowledgeService');
+    const knowledgeService = requireKnowledgeService(resolveKnowledgeServicesFromContext(ctx));
     // V3: 推荐 = 活跃条目按使用量排序
     return knowledgeService.list(
       { lifecycle: 'active' },
@@ -124,28 +140,35 @@ export const guardCheckCode = {
     }
 
     const { code, language, scope = 'file' } = params;
+    const guardServices = resolveGuardServicesFromContext(ctx);
 
     // 优先用 GuardCheckEngine（内置 + DB 规则）
-    try {
-      const engine = ctx.container.get('guardCheckEngine');
-      if (ctx.abortSignal?.aborted) {
-        return { error: 'guard_check_code aborted', aborted: true };
+    const engine = getGuardCheckEngine(guardServices);
+    if (engine) {
+      try {
+        if (ctx.abortSignal?.aborted) {
+          return { error: 'guard_check_code aborted', aborted: true };
+        }
+        const violations = engine.checkCode(code, language || 'unknown', { scope });
+        // reasoning 已由 GuardCheckEngine.checkCode() 内置附加
+        return { violationCount: violations.length, violations };
+      } catch {
+        /* not available */
       }
-      const violations = engine.checkCode(code, language || 'unknown', { scope });
-      // reasoning 已由 GuardCheckEngine.checkCode() 内置附加
-      return { violationCount: violations.length, violations };
-    } catch {
-      /* not available */
     }
 
     // 降级到 GuardService.checkCode（仅 DB 规则）
+    const guardService = getGuardService(guardServices);
     try {
-      const guardService = ctx.container.get('guardService');
+      if (!guardService) {
+        throw new Error('Guard service is not available in internal tool context');
+      }
       if (ctx.abortSignal?.aborted) {
         return { error: 'guard_check_code aborted', aborted: true };
       }
       const matches = await guardService.checkCode(code, { language });
-      return { violationCount: matches.length, violations: matches };
+      const violations = Array.isArray(matches) ? matches : [];
+      return { violationCount: violations.length, violations };
     } catch (err: unknown) {
       return { error: (err as Error).message };
     }
@@ -168,7 +191,7 @@ export const queryViolations = {
   },
   handler: async (params: QueryViolationsParams, ctx: ToolHandlerContext) => {
     const { file, limit = 20, statsOnly = false } = params;
-    const store = ctx.container.get('violationsStore');
+    const store = requireViolationsStore(resolveGuardServicesFromContext(ctx));
 
     if (statsOnly) {
       return store.getStats();
@@ -181,3 +204,21 @@ export const queryViolations = {
     return store.list({}, { page: 1, limit });
   },
 };
+
+function extractListItems(value: unknown): GuardRule[] {
+  if (!value || typeof value !== 'object') {
+    return [];
+  }
+  const record = value as { data?: unknown; items?: unknown };
+  if (Array.isArray(record.data)) {
+    return record.data.filter(isGuardRule);
+  }
+  if (Array.isArray(record.items)) {
+    return record.items.filter(isGuardRule);
+  }
+  return [];
+}
+
+function isGuardRule(value: unknown): value is GuardRule {
+  return !!value && typeof value === 'object';
+}

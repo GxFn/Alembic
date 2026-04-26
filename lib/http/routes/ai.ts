@@ -6,9 +6,9 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import express, { type Request, type Response } from 'express';
-import { AgentMessage, Channel } from '../../agent/AgentMessage.js';
 import { ConversationStore } from '../../agent/ConversationStore.js';
 import { buildProjectBriefing } from '../../agent/core/ChatAgentPrompts.js';
+import type { ToolResultEnvelope } from '../../agent/core/ToolResultEnvelope.js';
 import {
   taskCheckAndSubmit,
   taskDiscoverAllRelations,
@@ -17,12 +17,20 @@ import {
   taskQualityAudit,
 } from '../../agent/domain/ChatAgentTasks.js';
 import { PRESETS } from '../../agent/presets.js';
+import {
+  type AgentRunInput,
+  type AgentService,
+  runScanAgentTask,
+  runTranslationJson,
+  type SystemRunContextFactory,
+} from '../../agent/service/index.js';
+import type { ToolCapabilityManifest } from '../../agent/tools/CapabilityManifest.js';
 import { createProvider } from '../../external/ai/AiFactory.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ValidationError } from '../../shared/errors/index.js';
-import { resolveDataRoot } from '../../shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import {
   AiChatBody,
   AiConfigBody,
@@ -37,6 +45,12 @@ import {
 } from '../../shared/schemas/http-requests.js';
 import { validate } from '../middleware/validate.js';
 import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
+import { sendToolEnvelopeResponse } from '../utils/tool-envelope-response.js';
+
+export {
+  httpStatusForToolEnvelope,
+  sendToolEnvelopeResponse,
+} from '../utils/tool-envelope-response.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();
@@ -52,17 +66,48 @@ const SECRET_ENV_KEYS = new Set([
 const AI_CONFIG_GATEWAY_ACTION = 'update:config';
 const AI_CONFIG_GATEWAY_RESOURCE = 'ai_config';
 
-interface DirectToolRegistryLike {
-  has?(name: string): boolean;
-  isDirectCallable?(name: string): boolean;
-  getToolMetadata?(name: string): DirectToolMetadata | null;
+export function createHttpChatAgentRunInput(
+  req: Request,
+  options: {
+    prompt: string;
+    history?: Array<{ role: string; content: string }>;
+    lang?: string | null;
+    conversationId?: string | null;
+    source?: 'http-chat' | 'http-stream';
+    stream?: boolean;
+    onProgress?: ((event: Record<string, unknown>) => void) | null;
+  }
+): AgentRunInput {
+  const source = options.source || 'http-chat';
+  return {
+    profile: { preset: 'chat' },
+    message: {
+      content: options.prompt,
+      history: options.history || [],
+      sessionId: options.conversationId || undefined,
+      metadata: {
+        lang: options.lang,
+        stream: options.stream || false,
+      },
+    },
+    context: {
+      source,
+      lang: options.lang,
+      actor: {
+        role: req.resolvedRole || 'user',
+        user: req.resolvedUser || req.ip || 'http-user',
+        sessionId: options.conversationId || undefined,
+      },
+    },
+    presentation: { stream: options.stream || false },
+    execution: {
+      onProgress: options.onProgress || null,
+    },
+  };
 }
 
-interface DirectToolMetadata {
-  directCallable?: boolean;
-  sideEffect?: boolean;
-  gatewayAction?: string;
-  gatewayResource?: string;
+interface DirectCapabilityCatalogLike {
+  getManifest?(id: string): ToolCapabilityManifest | null;
 }
 
 interface GatewayCheckOnlyLike {
@@ -77,6 +122,17 @@ interface GatewayCheckOnlyLike {
     requestId?: string;
     error?: { message: string; statusCode?: number; code?: string };
   }>;
+}
+
+interface ToolRouterLike {
+  execute(request: {
+    toolId: string;
+    args: Record<string, unknown>;
+    surface: 'http' | 'system';
+    actor: { role?: string; user?: string; sessionId?: string };
+    source: { kind: 'http' | 'system'; name: string };
+    runtime?: Record<string, unknown>;
+  }): Promise<ToolResultEnvelope>;
 }
 
 /** 获取 DI 容器 */
@@ -155,77 +211,25 @@ export async function ensureAiConfigUpdateAllowed(
 }
 
 export async function ensureDirectToolAllowed(
-  toolRegistry: DirectToolRegistryLike,
+  capabilityCatalog: DirectCapabilityCatalogLike,
   tool: string,
-  req: Request,
+  _req: Request,
   res: Response,
-  gateway?: GatewayCheckOnlyLike | null,
-  params: Record<string, unknown> = {}
+  _gateway?: GatewayCheckOnlyLike | null
 ) {
-  const metadata = toolRegistry.getToolMetadata?.(tool) || null;
-  if (toolRegistry.has?.(tool) !== true) {
+  const manifest = capabilityCatalog.getManifest?.(tool) || null;
+  if (!manifest) {
     return true;
   }
-  if (toolRegistry.isDirectCallable?.(tool) === true) {
-    return await ensureGatewayAllowsDirectTool(tool, metadata, req, res, gateway, params);
+  if (manifest.surfaces.includes('http')) {
+    return true;
   }
-  const reason = metadata?.sideEffect ? '具有副作用' : '未声明为 data-only';
+  const reason = manifest.risk.sideEffect ? '具有副作用' : '未声明 http 暴露面';
   res.status(403).json({
     success: false,
     error: {
       code: 'TOOL_NOT_DIRECTLY_CALLABLE',
       message: `工具 "${tool}" ${reason}，不能通过 HTTP 直通入口调用`,
-    },
-  });
-  return false;
-}
-
-async function ensureGatewayAllowsDirectTool(
-  tool: string,
-  metadata: DirectToolMetadata | null,
-  req: Request,
-  res: Response,
-  gateway?: GatewayCheckOnlyLike | null,
-  params: Record<string, unknown> = {}
-) {
-  if (!metadata?.gatewayAction) {
-    return true;
-  }
-  if (!gateway?.checkOnly) {
-    res.status(503).json({
-      success: false,
-      error: {
-        code: 'GATEWAY_UNAVAILABLE',
-        message: `工具 "${tool}" 需要 Gateway 权限检查，但 Gateway 不可用`,
-      },
-    });
-    return false;
-  }
-
-  const result = await gateway.checkOnly({
-    actor: req.resolvedRole || 'anonymous',
-    action: metadata.gatewayAction,
-    resource: metadata.gatewayResource || 'agent_tools',
-    data: {
-      tool,
-      params,
-      _ip: req.ip,
-      _userAgent: req.headers['user-agent'] || '',
-      _resolvedUser: req.resolvedUser || undefined,
-    },
-    session: req.headers['x-session-id'] as string | undefined,
-  });
-
-  if (result.success) {
-    return true;
-  }
-
-  res.status(result.error?.statusCode || 403).json({
-    success: false,
-    error: {
-      code: result.error?.code || 'GATEWAY_DENIED',
-      message: result.error?.message || `工具 "${tool}" 未通过 Gateway 权限检查`,
-      requestId: result.requestId,
     },
   });
   return false;
@@ -419,11 +423,18 @@ router.post(
     const { code, language } = req.body;
 
     const container = requireAiReady();
-    const factory = container.get('agentFactory');
-    const result = await factory.scanKnowledge({
+    const agentService = container.get('agentService') as AgentService;
+    const systemRunContextFactory = container.get(
+      'systemRunContextFactory'
+    ) as SystemRunContextFactory;
+    const result = await runScanAgentTask({
+      agentService,
+      systemRunContextFactory,
       label: 'code',
-      files: [{ name: 'code', content: code, language }],
       task: 'summarize',
+      lang: language,
+      files: [{ name: 'code', content: code, language }],
+      onParseError: () => logger.warn('AI summarize failed to parse fallback JSON'),
     });
 
     if (result?.error) {
@@ -453,8 +464,13 @@ router.post(
 
     try {
       const container = requireAiReady();
-      const factory = container.get('agentFactory');
-      const result = await factory.translateToEnglish(summary, usageGuide);
+      const agentService = container.get('agentService') as AgentService;
+      const result = await runTranslationJson({
+        agentService,
+        summary,
+        usageGuide,
+        onParseError: () => logger.warn('AI translate failed to parse JSON, returning fallback'),
+      });
 
       if (result?.error) {
         // AI 不可用，降级返回原文
@@ -496,7 +512,7 @@ router.post('/chat', validate(AiChatBody), async (req: Request, res: Response): 
   const { prompt, history, lang, conversationId } = req.body;
 
   const container = requireAiReady();
-  const factory = container.get('agentFactory');
+  const agentService = container.get('agentService') as AgentService;
 
   // ── 对话持久化: 从 ConversationStore 加载历史 ──
   let convStore: ConversationStore | null = null;
@@ -524,34 +540,28 @@ router.post('/chat', validate(AiChatBody), async (req: Request, res: Response): 
     /* 静默降级 */
   }
 
-  // ── 创建 ContextWindow ──
-  const _contextWindow = factory.createContextWindow({ isSystem: false });
-
-  // ── 创建 Runtime 并注入 onProgress ──
-  const message = AgentMessage.fromHttp(req);
-  // 加载持久化历史到 message
-  if (effectiveHistory.length > 0) {
-    message.session.history = effectiveHistory;
-  }
-
-  const runtime = factory.createChat({
-    lang,
-    onProgress: (event: Record<string, unknown>) => {
-      // SSE 流式进度 (如果前端通过 SSE 建立了连接)
-      try {
-        const sessionId = req.body.sseSessionId;
-        if (sessionId) {
-          const session = getStreamSession(sessionId);
-          if (session) {
-            session.send(event);
+  const result = await agentService.run(
+    createHttpChatAgentRunInput(req, {
+      prompt,
+      history: effectiveHistory,
+      lang,
+      conversationId: effectiveConvId,
+      onProgress: (event: Record<string, unknown>) => {
+        // SSE 流式进度 (如果前端通过 SSE 建立了连接)
+        try {
+          const sessionId = req.body.sseSessionId;
+          if (sessionId) {
+            const session = getStreamSession(sessionId);
+            if (session) {
+              session.send(event);
+            }
           }
+        } catch {
+          /* SSE 不可用时静默 */
         }
-      } catch {
-        /* SSE 不可用时静默 */
-      }
-    },
-  });
-  const result = await runtime.execute(message);
+      },
+    })
+  );
 
   // ── 持久化 assistant 回复 ──
   if (convStore && effectiveConvId && result.reply) {
@@ -565,7 +575,7 @@ router.post('/chat', validate(AiChatBody), async (req: Request, res: Response): 
   // ── Token 用量持久化 ──
   try {
     const tokenStore = container.get('tokenUsageStore');
-    if (tokenStore && result.tokenUsage) {
+    if (tokenStore && result.usage) {
       const aiProvider = container.singletons?.aiProvider as
         | { name?: string; model?: string }
         | undefined;
@@ -574,10 +584,10 @@ router.post('/chat', validate(AiChatBody), async (req: Request, res: Response): 
         dimension: undefined,
         provider: aiProvider?.name ?? undefined,
         model: aiProvider?.model ?? undefined,
-        inputTokens: result.tokenUsage.input || 0,
-        outputTokens: result.tokenUsage.output || 0,
-        durationMs: result.durationMs || 0,
-        toolCalls: result.toolCalls?.length || 0,
+        inputTokens: result.usage.inputTokens || 0,
+        outputTokens: result.usage.outputTokens || 0,
+        durationMs: result.usage.durationMs || 0,
+        toolCalls: result.toolCalls.length,
         sessionId: effectiveConvId,
       });
       // 通知前端 token 用量变化
@@ -597,9 +607,12 @@ router.post('/chat', validate(AiChatBody), async (req: Request, res: Response): 
     data: {
       reply: result.reply,
       toolCalls: result.toolCalls,
-      iterations: result.iterations || null,
+      iterations: result.usage.iterations || null,
       conversationId: effectiveConvId,
-      tokenUsage: result.tokenUsage || null,
+      tokenUsage: {
+        input: result.usage.inputTokens,
+        output: result.usage.outputTokens,
+      },
     },
   });
 });
@@ -616,16 +629,26 @@ router.post(
     const { tool, params } = req.body;
 
     const container = requireAiReady();
-    const toolRegistry = container.get('toolRegistry') as DirectToolRegistryLike;
-    const gateway = container.get('gateway') as GatewayCheckOnlyLike;
-    if (!(await ensureDirectToolAllowed(toolRegistry, tool, req, res, gateway, params))) {
+    const capabilityCatalog = container.get('capabilityCatalog') as DirectCapabilityCatalogLike;
+    if (!(await ensureDirectToolAllowed(capabilityCatalog, tool, req, res))) {
       return;
     }
 
-    const factory = container.get('agentFactory');
-    const result = await factory.invokeAgent(tool, params);
+    const toolRouter = container.get('toolRouter') as ToolRouterLike;
+    const result = await toolRouter.execute({
+      toolId: tool,
+      args: params,
+      surface: 'http',
+      actor: {
+        role: req.resolvedRole || 'anonymous',
+        user: req.resolvedUser || undefined,
+        sessionId: req.headers['x-session-id'] as string | undefined,
+      },
+      source: { kind: 'http', name: '/api/v1/ai/agent/tool' },
+      runtime: createHttpToolRuntimeContext(container),
+    });
 
-    res.json({ success: true, data: result });
+    sendToolEnvelopeResponse(res, result);
   }
 );
 
@@ -653,9 +676,8 @@ router.post(
     const { task, params } = req.body;
 
     const container = requireAiReady();
-    const factory = container.get('agentFactory');
-    const toolRegistry = container.get('toolRegistry') as DirectToolRegistryLike;
-    const gateway = container.get('gateway') as GatewayCheckOnlyLike;
+    const capabilityCatalog = container.get('capabilityCatalog') as DirectCapabilityCatalogLike;
+    const toolRouter = container.get('toolRouter') as ToolRouterLike;
 
     // 优先尝试 DAG 任务
     const dagHandler = (
@@ -664,7 +686,15 @@ router.post(
     if (dagHandler) {
       const aiProvider = container.singletons?.aiProvider;
       const taskContext = {
-        invokeAgent: (name: string, p: Record<string, unknown>) => factory.invokeAgent(name, p),
+        invokeToolEnvelope: (name: string, p: Record<string, unknown>) =>
+          toolRouter.execute({
+            toolId: name,
+            args: p,
+            surface: 'system',
+            actor: { role: 'internal', user: 'agent-task' },
+            source: { kind: 'system', name: '/api/v1/ai/agent/task' },
+            runtime: createHttpToolRuntimeContext(container),
+          }),
         aiProvider,
         container,
         logger,
@@ -674,12 +704,23 @@ router.post(
     }
 
     // 回退到 Agent 工具执行
-    if (!(await ensureDirectToolAllowed(toolRegistry, task, req, res, gateway, params))) {
+    if (!(await ensureDirectToolAllowed(capabilityCatalog, task, req, res))) {
       return;
     }
-    const result = await factory.invokeAgent(task, params);
+    const result = await toolRouter.execute({
+      toolId: task,
+      args: params,
+      surface: 'http',
+      actor: {
+        role: req.resolvedRole || 'anonymous',
+        user: req.resolvedUser || undefined,
+        sessionId: req.headers['x-session-id'] as string | undefined,
+      },
+      source: { kind: 'http', name: '/api/v1/ai/agent/task' },
+      runtime: createHttpToolRuntimeContext(container),
+    });
 
-    res.json({ success: true, data: result });
+    sendToolEnvelopeResponse(res, result);
   }
 );
 
@@ -689,8 +730,14 @@ router.post(
  */
 router.get('/agent/capabilities', async (req: Request, res: Response): Promise<void> => {
   const container = getContainer();
-  const toolRegistry = container.get('toolRegistry');
-  const tools = toolRegistry.getToolSchemas();
+  const capabilityCatalog = container.get('capabilityCatalog') as {
+    toToolSchemas(): Array<{
+      name: string;
+      description: string;
+      parameters: Record<string, unknown>;
+    }>;
+  };
+  const tools = capabilityCatalog.toToolSchemas();
   const presets = Object.entries(PRESETS).map(([name, p]) => ({
     name,
     description: p.description,
@@ -712,6 +759,14 @@ router.get('/agent/capabilities', async (req: Request, res: Response): Promise<v
     },
   });
 });
+
+function createHttpToolRuntimeContext(container: ReturnType<typeof getContainer>) {
+  return {
+    aiProvider: container.singletons?.aiProvider || null,
+    dataRoot: resolveProjectRoot(container),
+    logger,
+  };
+}
 
 /**
  * POST /api/v1/ai/format-usage-guide
@@ -982,7 +1037,7 @@ router.post(
     const { prompt, history, lang } = req.body;
 
     const container = requireAiReady();
-    const factory = container.get('agentFactory');
+    const agentService = container.get('agentService') as AgentService;
     const session = createStreamSession('chat');
 
     logger.debug('SSE session created', { sessionId: session.sessionId });
@@ -990,53 +1045,48 @@ router.post(
     // 立即返回 sessionId（不等待 Agent 执行）
     res.json({ success: true, sessionId: session.sessionId });
 
-    // AgentMessage 构建
-    const message = new AgentMessage({
-      content: prompt,
-      channel: Channel.HTTP,
-      session: { id: session.sessionId, history },
-      sender: { id: req.ip || 'http-user', type: 'user' },
-      metadata: { lang, stream: true },
-    });
-
-    // 创建 Runtime — 挂载 onProgress 回调映射到 SSE 事件
-    const runtime = factory.createChat({
-      lang,
-      onProgress: (event: Record<string, unknown>) => {
-        // 将 AgentRuntime 内部事件映射到前端 SSE 协议
-        switch (event.type) {
-          case 'thinking':
-            session.send({
-              type: 'step:start',
-              step: event.iteration,
-              maxSteps: event.maxIterations,
-              phase: 'thinking',
-            });
-            break;
-          case 'tool_call':
-            session.send({ type: 'tool:start', tool: event.tool, args: event.args });
-            break;
-          case 'tool_end':
-            session.send({
-              type: 'tool:end',
-              tool: event.tool,
-              status: event.status,
-              resultSize: event.resultSize,
-              duration: event.duration,
-              error: event.error,
-            });
-            break;
-          default:
-            session.send(event);
-        }
-      },
-    });
-
-    // 后台执行 AgentRuntime
-    runtime
-      .execute(message)
-      .then((result: Record<string, unknown>) => {
-        const replyText = (result.reply as string) || '';
+    // 后台执行 AgentService — 挂载 onProgress 回调映射到 SSE 事件
+    agentService
+      .run(
+        createHttpChatAgentRunInput(req, {
+          prompt,
+          history,
+          lang,
+          conversationId: session.sessionId,
+          source: 'http-stream',
+          stream: true,
+          onProgress: (event: Record<string, unknown>) => {
+            // 将 AgentRuntime 内部事件映射到前端 SSE 协议
+            switch (event.type) {
+              case 'thinking':
+                session.send({
+                  type: 'step:start',
+                  step: event.iteration,
+                  maxSteps: event.maxIterations,
+                  phase: 'thinking',
+                });
+                break;
+              case 'tool_call':
+                session.send({ type: 'tool:start', tool: event.tool, args: event.args });
+                break;
+              case 'tool_end':
+                session.send({
+                  type: 'tool:end',
+                  tool: event.tool,
+                  status: event.status,
+                  resultSize: event.resultSize,
+                  duration: event.duration,
+                  error: event.error,
+                });
+                break;
+              default:
+                session.send(event);
+            }
+          },
+        })
+      )
+      .then((result) => {
+        const replyText = result.reply || '';
 
         // 发送最终文本
         if (replyText) {
@@ -1047,20 +1097,19 @@ router.post(
         } else {
           logger.warn('SSE session: empty reply from AgentRuntime', {
             sessionId: session.sessionId,
-            iterations: result.iterations,
-            toolCalls: (result.toolCalls as unknown[] | undefined)?.length || 0,
+            iterations: result.usage.iterations,
+            toolCalls: result.toolCalls.length,
           });
         }
         session.end({
           text: replyText || '抱歉，AI 未能生成有效回复。请重试或换个问题。',
-          toolCalls: result.toolCalls || [],
-          iterations: result.iterations || 0,
+          toolCalls: result.toolCalls,
+          iterations: result.usage.iterations || 0,
         });
 
         // ── Token 用量持久化（streaming） ──
         try {
-          const tokenUsage = result.tokenUsage as { input?: number; output?: number } | undefined;
-          if (tokenUsage) {
+          if (result.usage) {
             const tokenStore = container.get('tokenUsageStore');
             const aiProvider = container.singletons?.aiProvider as
               | { name?: string; model?: string }
@@ -1069,10 +1118,10 @@ router.post(
               source: 'user',
               provider: aiProvider?.name ?? undefined,
               model: aiProvider?.model ?? undefined,
-              inputTokens: tokenUsage.input || 0,
-              outputTokens: tokenUsage.output || 0,
-              durationMs: (result.durationMs as number | undefined) || 0,
-              toolCalls: (result.toolCalls as unknown[] | undefined)?.length || 0,
+              inputTokens: result.usage.inputTokens || 0,
+              outputTokens: result.usage.outputTokens || 0,
+              durationMs: result.usage.durationMs || 0,
+              toolCalls: result.toolCalls.length,
             });
             try {
               const realtime = getRealtimeService();

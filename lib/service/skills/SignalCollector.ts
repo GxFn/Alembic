@@ -2,7 +2,7 @@
  * SignalCollector — AI 驱动的后台行为分析与 Skill 推荐引擎
  *
  * 在 `alembic ui` 运行时作为后台守护进程运行，周期性收集多维度信号并
- * 通过 AgentFactory（统一 Agent 系统）进行深度分析，生成 Skill 推荐。
+ * 通过 AgentService（统一 AgentRuntime 入口）进行深度分析，生成 Skill 推荐。
  *
  * 三种工作模式：
  *   - off      — 不收集，不推荐
@@ -10,7 +10,7 @@
  *   - auto     — 收集信号 → AI 分析 → 推送推荐 + AI 自动创建 Skill
  *
  * 核心架构：
- *   每次 tick → 收集 6 维度信号 → 构造分析 prompt → AgentFactory.createChat()
+ *   每次 tick → 收集 6 维度信号 → 构造分析 prompt → AgentService.run(signal-analysis)
  *   → Agent 执行（可调用 suggest_skills / create_skill 等工具）
  *   → 解析 AI 响应（suggestions + nextIntervalMinutes + summary）
  *   → 推送建议 → 动态调整下次执行间隔
@@ -40,6 +40,7 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { AgentService } from '../../agent/service/index.js';
 import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
@@ -54,24 +55,13 @@ interface SignalCollectorOpts {
   projectRoot: string;
   knowledgeRepo?: KnowledgeRepositoryImpl | null;
   auditRepo?: AuditRepositoryImpl | null;
-  agentFactory?: AgentFactoryLike | null;
+  agentService?: AgentService | null;
   container?: ContainerLike | null;
   signalBus?: import('../../infrastructure/signal/SignalBus.js').SignalBus | null;
   mode?: string;
   intervalMs?: number;
   onSuggestions?: ((suggestions: Record<string, unknown>[]) => void) | null;
   writeZone?: WriteZone | null;
-}
-
-interface AgentResult {
-  reply?: string;
-  text?: string;
-  toolCalls?: Array<{ tool: string; params?: Record<string, unknown> }>;
-  [key: string]: unknown;
-}
-
-interface AgentFactoryLike {
-  createChat(opts: Record<string, unknown>): { execute(msg: unknown): Promise<AgentResult> };
 }
 
 interface ContainerService {
@@ -81,7 +71,7 @@ interface ContainerService {
 }
 
 interface ContainerLike {
-  get(name: string): ContainerService | null;
+  get(name: string): unknown;
   singletons?: Record<string, unknown>;
 }
 
@@ -113,7 +103,7 @@ export class SignalCollector implements Startable {
   #projectRoot: string;
   #knowledgeRepo: KnowledgeRepositoryImpl | null;
   #auditRepo: AuditRepositoryImpl | null;
-  #agentFactory: AgentFactoryLike | null;
+  #agentService: AgentService | null;
   #container: ContainerLike | null;
   #mode: string;
   #intervalMs;
@@ -130,7 +120,7 @@ export class SignalCollector implements Startable {
   /**
    * @param opts.projectRoot 用户项目根目录
    * @param [opts.database] better-sqlite3 实例
-   * @param [opts.agentFactory] AgentFactory 实例
+   * @param [opts.agentService] AgentService 实例
    * @param [opts.container] ServiceContainer 实例
    * @param [opts.signalBus] SignalBus 实例（实时信号订阅）
    * @param [opts.mode] 'off' | 'suggest' | 'auto'
@@ -141,7 +131,7 @@ export class SignalCollector implements Startable {
     projectRoot,
     knowledgeRepo = null,
     auditRepo = null,
-    agentFactory = null,
+    agentService = null,
     container = null,
     signalBus = null,
     mode = 'auto',
@@ -152,8 +142,9 @@ export class SignalCollector implements Startable {
     this.#projectRoot = projectRoot;
     this.#knowledgeRepo = knowledgeRepo;
     this.#auditRepo = auditRepo;
-    this.#agentFactory = agentFactory;
     this.#container = container;
+    this.#agentService =
+      agentService || ((container?.get('agentService') as AgentService | null | undefined) ?? null);
     this.#mode = ['off', 'suggest', 'auto'].includes(mode) ? mode : 'auto';
     this.#intervalMs = Math.max(Math.min(intervalMs, MAX_INTERVAL_MS), MIN_INTERVAL_MS);
     this.#logger = Logger.getInstance();
@@ -334,7 +325,7 @@ export class SignalCollector implements Startable {
       const isMock =
         (this.#container?.singletons?._aiProviderManager as { isMock: boolean } | undefined)
           ?.isMock ?? true;
-      if (!this.#agentFactory || isMock) {
+      if (!this.#agentService || isMock) {
         this.#logger.info('[SignalCollector] AI unavailable, falling back to rule-based analysis');
         return await this.#ruleFallback();
       }
@@ -344,11 +335,22 @@ export class SignalCollector implements Startable {
 
       // 3. 调用 Agent 系统进行 AI 分析
       this.#logger.debug('[SignalCollector] invoking Agent for analysis...');
-      const agent = this.#agentFactory?.createChat({ lang: 'en' });
-      const { AgentMessage } = await import('#agent/AgentMessage.js');
-      const message = AgentMessage.internal(prompt, { source: 'signal_collector' });
-      const result = await agent.execute(message);
-      const reply = result?.reply ?? result?.text ?? '';
+      const result = await this.#agentService.run({
+        profile: { id: 'signal-analysis' },
+        params: { mode: this.#mode },
+        message: {
+          role: 'internal',
+          content: prompt,
+          metadata: { source: 'signal_collector', mode: this.#mode },
+        },
+        context: {
+          source: 'internal',
+          runtimeSource: 'system',
+          lang: 'en',
+        },
+        presentation: { responseShape: 'system-task-result' },
+      });
+      const reply = result?.reply ?? '';
       const toolCalls = result?.toolCalls ?? [];
 
       // 4. 解析 AI 响应 — 使用 AiProvider.extractJSON 统一 structured output 解析
@@ -401,16 +403,14 @@ export class SignalCollector implements Startable {
 
         // 检测 AI 是否在 auto 模式下自主调用了 create_skill
         if (this.#mode === 'auto' && toolCalls?.length) {
-          const created = toolCalls.filter(
-            (tc: Record<string, unknown>) => tc.tool === 'create_skill'
-          );
+          const created = toolCalls.filter((tc) => (tc.tool || tc.name) === 'create_skill');
           if (created.length > 0) {
             if (!this.#snapshot.autoCreated) {
               this.#snapshot.autoCreated = [];
             }
             for (const tc of created) {
               this.#snapshot.autoCreated.push({
-                name: ((tc.params as Record<string, unknown>)?.name as string) || 'unknown',
+                name: (tc.args?.name as string) || 'unknown',
                 createdAt: new Date().toISOString(),
               });
             }
@@ -708,7 +708,7 @@ ${JSON.stringify(signals.codeChanges, null, 2)}
 
     try {
       // 策略 1: 通过 AiProvider.extractJSON 统一解析
-      const aiProvider = this.#container?.get('aiProvider');
+      const aiProvider = this.#container?.get('aiProvider') as ContainerService | null | undefined;
       if (aiProvider && typeof aiProvider.extractJSON === 'function') {
         const obj = aiProvider.extractJSON(reply, '{', '}');
         if (obj && Array.isArray(obj.suggestions)) {

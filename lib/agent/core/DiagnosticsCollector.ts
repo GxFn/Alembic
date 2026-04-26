@@ -1,4 +1,10 @@
-import type { AgentDiagnostics, AgentDiagnosticWarning } from '../AgentRuntimeTypes.js';
+import type {
+  AgentDiagnostics,
+  AgentDiagnosticWarning,
+  ToolCallDiagnostic,
+} from '../AgentRuntimeTypes.js';
+import type { ToolDiagnosticsRecorder } from './ToolCallContext.js';
+import type { ToolResultEnvelope } from './ToolResultEnvelope.js';
 
 function emptyDiagnostics(): AgentDiagnostics {
   return {
@@ -18,7 +24,7 @@ function isDiagnostics(value: unknown): value is Partial<AgentDiagnostics> {
   return !!value && typeof value === 'object';
 }
 
-export class DiagnosticsCollector {
+export class DiagnosticsCollector implements ToolDiagnosticsRecorder {
   #diagnostics: AgentDiagnostics;
 
   constructor(seed?: Partial<AgentDiagnostics>) {
@@ -79,6 +85,35 @@ export class DiagnosticsCollector {
     }
   }
 
+  recordToolCallEnvelope(
+    envelope: ToolResultEnvelope,
+    context: {
+      kind?: string;
+      surface?: string;
+      source?: string;
+    } = {}
+  ) {
+    const calls = (this.#diagnostics.toolCalls ??= []);
+    const entry: ToolCallDiagnostic = {
+      tool: envelope.toolId,
+      callId: envelope.callId,
+      ...(envelope.parentCallId ? { parentCallId: envelope.parentCallId } : {}),
+      status: envelope.status,
+      ok: envelope.ok,
+      ...(context.surface ? { surface: context.surface } : {}),
+      ...(context.source ? { source: context.source } : {}),
+      ...(context.kind ? { kind: context.kind } : {}),
+      startedAt: envelope.startedAt,
+      durationMs: envelope.durationMs,
+    };
+    const existingIndex = calls.findIndex((call) => call.callId === envelope.callId);
+    if (existingIndex >= 0) {
+      calls[existingIndex] = entry;
+    } else {
+      calls.push(entry);
+    }
+  }
+
   merge(input: unknown) {
     if (!isDiagnostics(input)) {
       return;
@@ -109,6 +144,12 @@ export class DiagnosticsCollector {
     for (const gateFailure of input.gateFailures || []) {
       this.recordGateFailure(gateFailure.stage, gateFailure.action, gateFailure.reason);
     }
+    for (const toolCall of input.toolCalls || []) {
+      const calls = (this.#diagnostics.toolCalls ??= []);
+      if (!calls.some((call) => call.callId === toolCall.callId)) {
+        calls.push({ ...toolCall });
+      }
+    }
   }
 
   isEmpty() {
@@ -121,7 +162,8 @@ export class DiagnosticsCollector {
       this.#diagnostics.truncatedToolCalls === 0 &&
       this.#diagnostics.emptyResponses === 0 &&
       this.#diagnostics.aiErrorCount === 0 &&
-      this.#diagnostics.gateFailures.length === 0
+      this.#diagnostics.gateFailures.length === 0 &&
+      (this.#diagnostics.toolCalls?.length || 0) === 0
     );
   }
 
@@ -136,6 +178,9 @@ export class DiagnosticsCollector {
       emptyResponses: this.#diagnostics.emptyResponses,
       aiErrorCount: this.#diagnostics.aiErrorCount,
       gateFailures: [...this.#diagnostics.gateFailures],
+      ...(this.#diagnostics.toolCalls
+        ? { toolCalls: this.#diagnostics.toolCalls.map((call) => ({ ...call })) }
+        : {}),
     };
   }
 }

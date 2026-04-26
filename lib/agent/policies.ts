@@ -470,7 +470,7 @@ export class PolicyEngine {
   /**
    * 工具执行前的安全校验 — 在 reactLoop 中每次工具调用前自动触发
    *
-   * 对有副作用的工具 (run_safe_command, write_project_file) 执行安全检查。
+   * 对有副作用的工具 (terminal_run, write_project_file) 执行安全检查。
    * 委托给 SafetyPolicy，如果没有加载 SafetyPolicy 则放行。
    *
    * @param toolName 工具名称
@@ -483,9 +483,8 @@ export class PolicyEngine {
       return { ok: true };
     }
 
-    // 终端命令安全检查
-    if (toolName === 'run_safe_command' && args?.command) {
-      const check = safety.checkCommand(args.command as string);
+    if (toolName === 'terminal_run' && typeof args?.bin === 'string') {
+      const check = safety.checkCommand(formatTerminalRunForSafetyPolicy(args));
       if (!check.safe) {
         return { ok: false, reason: `[SafetyPolicy] 命令拦截: ${check.reason}` };
       }
@@ -529,3 +528,10 @@ export class PolicyEngine {
 }
 
 export default { Policy, BudgetPolicy, SafetyPolicy, QualityGatePolicy, PolicyEngine };
+
+function formatTerminalRunForSafetyPolicy(args: Record<string, unknown>) {
+  const commandArgs = Array.isArray(args.args)
+    ? args.args.filter((arg): arg is string => typeof arg === 'string')
+    : [];
+  return [args.bin as string, ...commandArgs].join(' ');
+}

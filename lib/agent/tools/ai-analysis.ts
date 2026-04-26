@@ -7,6 +7,7 @@
  * 注意: summarize_code / extract_recipes 已删除。
  * 代码摘要和 Recipe 提取由 Agent LLM 直接推理完成，不再需要专用工具。
  */
+import type { McpContext } from '#external/mcp/handlers/types.js';
 import type { ToolHandlerContext } from './_shared.js';
 // ────────────────────────────────────────────────────────────
 // 9. enrich_candidate
@@ -32,7 +33,9 @@ export const enrichCandidate = {
     }
     // V3: 使用 MCP handler enrichCandidates 的逻辑
     const { enrichCandidates: enrichFn } = await import('#external/mcp/handlers/candidate.js');
-    const result = await enrichFn(ctx, { candidateIds: params.candidateIds as string[] });
+    const result = await enrichFn(toMcpContext(ctx), {
+      candidateIds: params.candidateIds as string[],
+    });
     return result?.data || result;
   },
 };
@@ -65,7 +68,7 @@ export const refineBootstrapCandidates = {
     }
     // V3: 委托给 bootstrap handler 的 refine 逻辑
     const { bootstrapRefine } = await import('#external/mcp/handlers/bootstrap-internal.js');
-    const result = await bootstrapRefine(ctx, {
+    const result = await bootstrapRefine(toMcpContext(ctx), {
       candidateIds: params.candidateIds as string[] | undefined,
       userPrompt: params.userPrompt as string | undefined,
       dryRun: params.dryRun as boolean | undefined,
@@ -73,3 +76,7 @@ export const refineBootstrapCandidates = {
     return result?.data || result;
   },
 };
+
+function toMcpContext(ctx: ToolHandlerContext): McpContext {
+  return ctx as unknown as McpContext;
+}

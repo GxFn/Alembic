@@ -283,6 +283,57 @@ describe('ActiveContext', () => {
       const json = ctx.toJSON();
       expect(json.rounds[0].actions).toHaveLength(1);
     });
+
+    test('记录 ToolResultEnvelope 的调用关系元数据', () => {
+      const ctx = new ActiveContext();
+      ctx.startRound(1);
+
+      ctx.recordToolCall(
+        'stage_then_normalize',
+        { value: 2 },
+        {
+          ok: true,
+          toolId: 'stage_then_normalize',
+          callId: 'parent-call',
+          startedAt: new Date().toISOString(),
+          durationMs: 12,
+          status: 'success',
+          text: 'ok',
+          structuredContent: { value: 6 },
+          diagnostics: {
+            degraded: false,
+            fallbackUsed: false,
+            warnings: [],
+            timedOutStages: [],
+            blockedTools: [],
+            truncatedToolCalls: 0,
+            emptyResponses: 0,
+            aiErrorCount: 0,
+            gateFailures: [],
+          },
+          trust: {
+            source: 'internal',
+            sanitized: true,
+            containsUntrustedText: false,
+            containsSecrets: false,
+          },
+        },
+        true
+      );
+
+      ctx.endRound();
+      const json = ctx.toJSON();
+      expect(json.rounds[0].observations[0]).toMatchObject({
+        tool: 'stage_then_normalize',
+        resultType: 'success',
+        toolCall: {
+          callId: 'parent-call',
+          status: 'success',
+          ok: true,
+          durationMs: 12,
+        },
+      });
+    });
   });
 
   // ── startRound / endRound / setThought ───────────────
@@ -816,8 +867,10 @@ describe('SessionStore', () => {
 // ══════════════════════════════════════════════════════════
 
 describe('PersistentMemory', () => {
-  let PersistentMemory;
-  let Database;
+  let PersistentMemory:
+    | typeof import('../../lib/agent/memory/PersistentMemory.js')['PersistentMemory']
+    | null = null;
+  let Database: typeof import('better-sqlite3')['default'] | null = null;
 
   beforeAll(async () => {
     try {
@@ -842,7 +895,7 @@ describe('PersistentMemory', () => {
 
   // 使用 in-memory SQLite 测试核心功能
   const createInMemoryPM = (opts?: { withEmbeddingStore?: boolean }) => {
-    if (!Database) {
+    if (!Database || !PersistentMemory) {
       return null;
     }
     const db = new Database(':memory:');

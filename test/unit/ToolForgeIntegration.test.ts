@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ToolForge } from '../../lib/agent/forge/ToolForge.js';
+import { CapabilityCatalog } from '../../lib/agent/tools/CapabilityCatalog.js';
+import type { ToolCapabilityManifest } from '../../lib/agent/tools/CapabilityManifest.js';
 
 /**
  * Tool Forge 集成测试
@@ -21,18 +23,13 @@ function createFullRegistry(
 
   return {
     has: (name: string) => tools.has(name),
-    getToolNames: () => [...tools.keys()],
-    execute: vi.fn(async (name: string, params: Record<string, unknown>) => {
-      const entry = tools.get(name);
-      if (!entry) {
-        throw new Error(`Tool '${name}' not found`);
+    hasInternalTool: (name: string) => tools.has(name),
+    projectForgedTool: vi.fn(
+      (def: { name: string; handler: (p: Record<string, unknown>) => unknown }) => {
+        tools.set(def.name, { handler: def.handler as (p: Record<string, unknown>) => unknown });
       }
-      return entry.handler(params);
-    }),
-    register: vi.fn((def: { name: string; handler: Function }) => {
-      tools.set(def.name, { handler: def.handler as (p: Record<string, unknown>) => unknown });
-    }),
-    unregister: vi.fn((name: string) => tools.delete(name)),
+    ),
+    revokeForgedTool: vi.fn((name: string) => tools.delete(name)),
     _tools: tools,
   };
 }
@@ -43,7 +40,8 @@ describe('ToolForge Integration', () => {
     const reg = createFullRegistry({
       read_file: (p) => ({ content: `file: ${p.path}`, path: p.path }),
     });
-    const forge = new ToolForge(reg);
+    const catalog = new CapabilityCatalog([testManifest('read_file')]);
+    const forge = new ToolForge(reg, { capabilityCatalog: catalog });
 
     // Step 1: Reuse — tool exists
     const reuseResult = await forge.forge({
@@ -77,8 +75,16 @@ describe('ToolForge Integration', () => {
     expect(genResult.mode).toBe('generate');
     expect(genResult.toolName).toBe('reverse_string');
 
-    // Step 3: Verify the generated tool was registered
-    expect(reg.register).toHaveBeenCalledWith(expect.objectContaining({ name: 'reverse_string' }));
+    // Step 3: Verify the generated tool was projected
+    expect(reg.projectForgedTool).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'reverse_string' })
+    );
+    expect(catalog.getManifest('reverse_string')).toMatchObject({
+      id: 'reverse_string',
+      kind: 'internal-tool',
+      owner: 'agent-forge',
+      lifecycle: 'experimental',
+    });
 
     // Step 4: Verify temporary registry tracks it
     const tempList = forge.temporaryRegistry.list();
@@ -87,6 +93,7 @@ describe('ToolForge Integration', () => {
     // Step 5: Cleanup
     forge.dispose();
     expect(forge.temporaryRegistry.list()).toHaveLength(0);
+    expect(catalog.getManifest('reverse_string')).toBeNull();
   });
 
   it('should fallback from reuse → compose when exact match unavailable but composable tools exist', async () => {
@@ -95,8 +102,13 @@ describe('ToolForge Integration', () => {
       validate_schema: (p) => ({ valid: true, data: p }),
       transform_records: (p) => ({ transformed: true }),
     });
+    const catalog = new CapabilityCatalog([
+      testManifest('fetch_data'),
+      testManifest('validate_schema'),
+      testManifest('transform_records'),
+    ]);
 
-    const forge = new ToolForge(reg);
+    const forge = new ToolForge(reg, { capabilityCatalog: catalog });
 
     const result = await forge.forge({
       intent: 'validate data pipeline',
@@ -113,7 +125,7 @@ describe('ToolForge Integration', () => {
 
   it('security: should block code with forbidden patterns in generate mode', async () => {
     const reg = createFullRegistry({});
-    const forge = new ToolForge(reg);
+    const forge = new ToolForge(reg, { capabilityCatalog: new CapabilityCatalog() });
 
     const dangerousCodes = [
       `const fs = require('fs'); function toolHandler(p) { return fs.readFileSync(p.path); }`,
@@ -144,7 +156,8 @@ describe('ToolForge Integration', () => {
 
   it('should properly dispose and not leak timers', async () => {
     const reg = createFullRegistry({});
-    const forge = new ToolForge(reg);
+    const catalog = new CapabilityCatalog();
+    const forge = new ToolForge(reg, { capabilityCatalog: catalog });
 
     // Generate a tool
     await forge.forge({
@@ -161,10 +174,53 @@ describe('ToolForge Integration', () => {
     });
 
     expect(forge.temporaryRegistry.list()).toHaveLength(1);
+    expect(catalog.getManifest('temp_tool')).not.toBeNull();
 
     // Dispose
     forge.dispose();
     expect(forge.temporaryRegistry.list()).toHaveLength(0);
-    expect(reg.unregister).toHaveBeenCalledWith('temp_tool');
+    expect(reg.revokeForgedTool).toHaveBeenCalledWith('temp_tool');
+    expect(catalog.getManifest('temp_tool')).toBeNull();
   });
 });
+
+function testManifest(id: string): ToolCapabilityManifest {
+  return {
+    id,
+    title: id,
+    kind: 'internal-tool',
+    description: id,
+    owner: 'test',
+    lifecycle: 'active',
+    surfaces: ['runtime', 'internal'],
+    inputSchema: {},
+    risk: {
+      sideEffect: false,
+      dataAccess: 'none',
+      writeScope: 'none',
+      network: 'none',
+      credentialAccess: 'none',
+      requiresHumanConfirmation: 'never',
+      owaspTags: [],
+    },
+    execution: {
+      adapter: 'internal',
+      timeoutMs: 0,
+      maxOutputBytes: 10_000,
+      abortMode: 'none',
+      cachePolicy: 'none',
+      concurrency: 'parallel-safe',
+      artifactMode: 'inline',
+    },
+    governance: {
+      auditLevel: 'none',
+      policyProfile: 'read',
+      approvalPolicy: 'auto',
+      allowedRoles: ['runtime'],
+      allowInComposer: true,
+      allowInRemoteMcp: false,
+      allowInNonInteractive: true,
+    },
+    evals: { required: false, cases: [] },
+  };
+}

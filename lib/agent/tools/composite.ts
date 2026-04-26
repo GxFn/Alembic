@@ -14,14 +14,36 @@ import {
   getSystemInjectedFields,
 } from '#domain/knowledge/FieldSpec.js';
 import { findSimilarRecipes } from '#service/candidate/SimilarityService.js';
+import type { GatewayDeps } from '#service/knowledge/RecipeProductionGateway.js';
 
+import {
+  getGuardCheckEngine,
+  getGuardService,
+  resolveGuardServicesFromContext,
+} from '../core/ToolGuardServices.js';
+import {
+  getSearchEngine,
+  requireKnowledgeGraphService,
+  requireKnowledgeService,
+  resolveKnowledgeServicesFromContext,
+} from '../core/ToolKnowledgeServices.js';
+import {
+  getEvolutionGateway,
+  getProposalRepository,
+  requireKnowledgeLifecycleService,
+  resolveLifecycleServicesFromContext,
+} from '../core/ToolLifecycleServices.js';
+import {
+  getFeedbackCollector,
+  resolveQualityServicesFromContext,
+} from '../core/ToolQualityServices.js';
 import {
   checkDimensionType,
   DIMENSION_DISPLAY_GROUP,
   stripProjectNamePrefix,
   type ToolHandlerContext,
-  type ToolSchemaEntry,
 } from './_shared.js';
+import type { ToolCapabilityManifest } from './CapabilityManifest.js';
 
 // ─── Tool handler param types ──────────────────────────────
 
@@ -105,27 +127,39 @@ export const analyzeCode = {
     // 并行执行 Guard 检查 + Recipe 搜索
     const [guardResult, searchResult] = await Promise.all([
       (async () => {
-        try {
-          const engine = ctx.container.get('guardCheckEngine');
-          const violations = engine.checkCode(code, language || 'unknown', { scope: 'file' });
-          return { violationCount: violations.length, violations };
-        } catch {
+        const guardServices = resolveGuardServicesFromContext(ctx);
+        const engine = getGuardCheckEngine(guardServices);
+        if (engine) {
           try {
-            const guardService = ctx.container.get('guardService');
-            const matches = await guardService.checkCode(code, { language });
-            return { violationCount: matches.length, violations: matches };
+            const violations = engine.checkCode(code, language || 'unknown', { scope: 'file' });
+            return { violationCount: violations.length, violations };
           } catch {
-            return { violationCount: 0, violations: [] };
+            /* fall through to GuardService */
           }
         }
+        const guardService = getGuardService(guardServices);
+        if (guardService) {
+          try {
+            const matches = await guardService.checkCode(code, { language });
+            const violations = Array.isArray(matches) ? matches : [];
+            return { violationCount: violations.length, violations };
+          } catch {
+            /* not available */
+          }
+        }
+        return { violationCount: 0, violations: [] };
       })(),
       (async () => {
+        const searchEngine = getSearchEngine(resolveKnowledgeServicesFromContext(ctx));
+        if (!searchEngine) {
+          return { results: [], total: 0 };
+        }
         try {
-          const searchEngine = ctx.container.get('searchEngine');
           // 取代码首段作为搜索词
           const query = code.substring(0, 200).replace(/\n/g, ' ');
           const rawResults = await searchEngine.search(query, { limit: 5 });
-          return { results: rawResults || [], total: rawResults?.length || 0 };
+          const results = extractResultItems(rawResults);
+          return { results, total: results.length };
         } catch {
           return { results: [], total: 0 };
         }
@@ -170,7 +204,9 @@ export const knowledgeOverview = {
     const [statsResult, feedbackResult] = await Promise.all([
       (async () => {
         try {
-          const knowledgeService = ctx.container.get('knowledgeService');
+          const knowledgeService = requireKnowledgeService(
+            resolveKnowledgeServicesFromContext(ctx)
+          );
           return knowledgeService.getStats();
         } catch {
           return null;
@@ -180,12 +216,11 @@ export const knowledgeOverview = {
         if (!includeTopRecipes) {
           return null;
         }
-        try {
-          const feedbackCollector = ctx.container.get('feedbackCollector');
-          return feedbackCollector.getTopRecipes(limit);
-        } catch {
+        const feedbackCollector = getFeedbackCollector(resolveQualityServicesFromContext(ctx));
+        if (!feedbackCollector) {
           return null;
         }
+        return feedbackCollector.getTopRecipes(limit);
       })(),
     ]);
 
@@ -195,7 +230,7 @@ export const knowledgeOverview = {
 
     // 知识图谱统计
     try {
-      const kgService = ctx.container.get('knowledgeGraphService');
+      const kgService = requireKnowledgeGraphService(resolveKnowledgeServicesFromContext(ctx));
       result.knowledgeGraph = kgService.getStats();
     } catch {
       /* KG not available */
@@ -215,6 +250,22 @@ export const knowledgeOverview = {
     return result;
   },
 };
+
+function extractResultItems(value: unknown): unknown[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (value && typeof value === 'object') {
+    const record = value as { items?: unknown; results?: unknown };
+    if (Array.isArray(record.items)) {
+      return record.items;
+    }
+    if (Array.isArray(record.results)) {
+      return record.results;
+    }
+  }
+  return [];
+}
 
 // ────────────────────────────────────────────────────────────
 // 36. submit_with_check — 组合工具 (查重 + 提交)
@@ -325,12 +376,15 @@ export const submitWithCheck = {
       const { RecipeProductionGateway } = await import(
         '#service/knowledge/RecipeProductionGateway.js'
       );
+      const lifecycleServices = resolveLifecycleServicesFromContext(ctx);
       const gateway = new RecipeProductionGateway({
-        knowledgeService: ctx.container.get('knowledgeService'),
+        knowledgeService: requireKnowledgeLifecycleService(lifecycleServices),
         projectRoot: dataRoot,
         logger: ctx.logger as { info(msg: string): void; warn(msg: string): void } | undefined,
-        proposalRepository: ctx.container.get('proposalRepository') ?? null,
-        evolutionGateway: ctx.container.get('evolutionGateway') ?? null,
+        proposalRepository: getProposalRepository(
+          lifecycleServices
+        ) as GatewayDeps['proposalRepository'],
+        evolutionGateway: getEvolutionGateway(lifecycleServices) as GatewayDeps['evolutionGateway'],
         findSimilarRecipes,
       });
 
@@ -455,15 +509,20 @@ export const getToolDetails = {
     required: ['toolName'],
   },
   handler: async ({ toolName }: { toolName: string }, context: ToolHandlerContext) => {
-    const registry = context.container?.get('toolRegistry');
-    if (!registry) {
-      return { error: 'ToolRegistry not available' };
+    const catalog = context.container?.get('capabilityCatalog') as
+      | {
+          getManifest?(id: string): ToolCapabilityManifest | null;
+          list?(): ToolCapabilityManifest[];
+        }
+      | null
+      | undefined;
+    if (!catalog) {
+      return { error: 'CapabilityCatalog not available' };
     }
 
-    const schemas = registry.getToolSchemas();
-    const found = schemas.find((t: ToolSchemaEntry) => t.name === toolName);
+    const found = catalog.getManifest?.(toolName) || null;
     if (!found) {
-      const allNames = schemas.map((t: ToolSchemaEntry) => t.name);
+      const allNames = catalog.list?.().map((manifest) => manifest.id) || [];
       return {
         error: `Tool "${toolName}" not found`,
         availableTools: allNames,
@@ -471,9 +530,9 @@ export const getToolDetails = {
     }
 
     return {
-      name: found.name,
+      name: found.id,
       description: found.description,
-      parameters: found.parameters,
+      parameters: found.inputSchema,
     };
   },
 };

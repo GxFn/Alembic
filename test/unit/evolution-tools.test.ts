@@ -28,8 +28,35 @@ function createMockGateway(outcome = 'proposal-created', proposalId = 'prop-001'
 function makeContext(services: Record<string, unknown> = {}): ToolHandlerContext {
   return {
     container: {
-      get(name: string) {
-        return services[name] ?? null;
+      get() {
+        throw new Error('evolution tools should use named lifecycle service contracts');
+      },
+    },
+    serviceContracts: {
+      lifecycle: {
+        getKnowledgeLifecycleService: () => null,
+        getProposalRepository: () => null,
+        getEvolutionGateway: () => services.evolutionGateway ?? null,
+        getConsolidationAdvisor: () => null,
+      },
+    },
+    projectRoot: '/test/project',
+  };
+}
+
+function makeLifecycleContractContext(evolutionGateway: unknown): ToolHandlerContext {
+  return {
+    container: {
+      get() {
+        throw new Error('evolution tools should use the named lifecycle service contract');
+      },
+    },
+    serviceContracts: {
+      lifecycle: {
+        getKnowledgeLifecycleService: () => null,
+        getProposalRepository: () => null,
+        getEvolutionGateway: () => evolutionGateway,
+        getConsolidationAdvisor: () => null,
       },
     },
     projectRoot: '/test/project',
@@ -76,6 +103,30 @@ describe('proposeEvolution', () => {
     expect(result.status).toBe('proposed');
     expect(result.proposalId).toBe('prop-001');
     expect(result.recipeId).toBe('recipe-abc');
+  });
+
+  it('should use lifecycle service contract before container lookup', async () => {
+    const gateway = createMockGateway();
+    const ctx = makeLifecycleContractContext(gateway);
+
+    const result = await proposeEvolution.handler(
+      {
+        recipeId: 'recipe-contract',
+        type: 'enhance',
+        description: '通过 contract 提交进化提案',
+        evidence: { sourceStatus: 'modified', suggestedChanges: '更新描述' },
+        confidence: 0.7,
+      },
+      ctx
+    );
+
+    expect(result.status).toBe('proposed');
+    expect(gateway.submit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipeId: 'recipe-contract',
+        action: 'update',
+      })
+    );
   });
 
   it('should clamp confidence to 0-1 range', async () => {

@@ -10,17 +10,14 @@
  */
 
 import Logger from '#infra/logging/Logger.js';
+import type { ToolRouterContract } from '../core/ToolContracts.js';
+import { resolveToolRouterFromContext } from '../core/ToolRoutingServices.js';
+import type { WorkflowHandler, WorkflowHandlerContext } from '../workflow/WorkflowRegistry.js';
 
 /* ────────────────────── Types ────────────────────── */
 
 interface ToolRegistryLike {
   has(name: string): boolean;
-  getToolMetadata?(name: string): { composable?: boolean; sideEffect?: boolean } | null;
-  execute(
-    name: string,
-    params: Record<string, unknown>,
-    context?: Record<string, unknown>
-  ): Promise<unknown>;
 }
 
 export interface CompositionStep {
@@ -49,7 +46,7 @@ export interface CompositionResult {
   /** 是否成功 */
   success: boolean;
   /** 组合工具 handler */
-  handler?: (params: Record<string, unknown>, context: Record<string, unknown>) => Promise<unknown>;
+  handler?: WorkflowHandler;
   /** 失败原因 */
   error?: string;
 }
@@ -71,27 +68,24 @@ export class DynamicComposer {
   }
 
   /**
-   * 验证组合 spec 的可行性（所有工具是否存在，且不包含副作用步骤）
+   * 验证组合 spec 的可行性。
+   *
+   * P5 起 composer 只做发现层校验；side-effect / non-composable / risk
+   * 交由 child ToolCallRequest 的 GovernanceEngine 决策。
    */
   validate(spec: CompositionSpec): CompositionValidation {
     const missing: string[] = [];
-    const blocked: string[] = [];
 
     for (const step of spec.steps) {
       if (!this.#registry.has(step.tool)) {
         missing.push(step.tool);
-        continue;
-      }
-      const metadata = this.#registry.getToolMetadata?.(step.tool);
-      if (metadata?.sideEffect === true || metadata?.composable === false) {
-        blocked.push(step.tool);
       }
     }
 
     return {
-      valid: missing.length === 0 && blocked.length === 0,
+      valid: missing.length === 0,
       missingTools: missing,
-      blockedTools: blocked,
+      blockedTools: [],
     };
   }
 
@@ -100,14 +94,8 @@ export class DynamicComposer {
    */
   compose(spec: CompositionSpec): CompositionResult {
     // 验证
-    const { valid, missingTools, blockedTools } = this.validate(spec);
+    const { valid, missingTools } = this.validate(spec);
     if (!valid) {
-      if (blockedTools.length > 0) {
-        return {
-          success: false,
-          error: `Blocked tools cannot be composed: ${blockedTools.join(', ')}`,
-        };
-      }
       return {
         success: false,
         error: `Missing tools: ${missingTools.join(', ')}`,
@@ -121,14 +109,13 @@ export class DynamicComposer {
       };
     }
 
-    const registry = this.#registry;
     const logger = this.#logger;
 
     // 根据策略构建 handler
     const handler =
       spec.mergeStrategy === 'parallel'
-        ? this.#buildParallelHandler(spec, registry, logger)
-        : this.#buildSequentialHandler(spec, registry, logger);
+        ? this.#buildParallelHandler(spec, logger)
+        : this.#buildSequentialHandler(spec, logger);
 
     return { success: true, handler };
   }
@@ -137,9 +124,8 @@ export class DynamicComposer {
 
   #buildSequentialHandler(
     spec: CompositionSpec,
-    registry: ToolRegistryLike,
     logger: ReturnType<typeof Logger.getInstance>
-  ): (params: Record<string, unknown>, context: Record<string, unknown>) => Promise<unknown> {
+  ): WorkflowHandler {
     return async (params, context) => {
       let prevResult: unknown = params;
 
@@ -149,7 +135,7 @@ export class DynamicComposer {
 
         logger.debug(`DynamicComposer [${spec.name}]: executing step "${step.tool}"`);
 
-        const result = await registry.execute(step.tool, args, context);
+        const result = await executeCompositionStep(step.tool, args, context);
 
         if (step.extractKey && typeof result === 'object' && result !== null) {
           prevResult = (result as Record<string, unknown>)[step.extractKey];
@@ -164,9 +150,8 @@ export class DynamicComposer {
 
   #buildParallelHandler(
     spec: CompositionSpec,
-    registry: ToolRegistryLike,
     logger: ReturnType<typeof Logger.getInstance>
-  ): (params: Record<string, unknown>, context: Record<string, unknown>) => Promise<unknown> {
+  ): WorkflowHandler {
     return async (params, context) => {
       logger.debug(
         `DynamicComposer [${spec.name}]: executing ${spec.steps.length} steps in parallel`
@@ -176,7 +161,7 @@ export class DynamicComposer {
         const args =
           typeof step.args === 'function' ? step.args(params) : { ...step.args, ...params };
 
-        const result = await registry.execute(step.tool, args, context);
+        const result = await executeCompositionStep(step.tool, args, context);
 
         if (step.extractKey && typeof result === 'object' && result !== null) {
           return { tool: step.tool, result: (result as Record<string, unknown>)[step.extractKey] };
@@ -198,4 +183,54 @@ export class DynamicComposer {
       return merged;
     };
   }
+}
+
+async function executeCompositionStep(
+  tool: string,
+  args: Record<string, unknown>,
+  context: WorkflowHandlerContext
+) {
+  const parentContext = context.toolCallContext;
+  const router = resolveToolRouter(context);
+  if (!router || !parentContext) {
+    return {
+      error: 'DynamicComposer child execution requires ToolRouter context',
+      status: 'error',
+      tool,
+    };
+  }
+
+  const envelope = await router.executeChildCall({
+    toolId: tool,
+    args,
+    surface: 'composer',
+    actor: parentContext.actor,
+    source: {
+      kind: 'composer',
+      name: parentContext.toolId,
+    },
+    parentCallId: parentContext.callId,
+    abortSignal: parentContext.abortSignal || null,
+    runtime: parentContext.runtime,
+  });
+
+  if (envelope.ok) {
+    return envelope.structuredContent !== undefined
+      ? envelope.structuredContent
+      : { success: true, message: envelope.text };
+  }
+
+  return {
+    error: envelope.text,
+    status: envelope.status,
+    tool,
+    envelope,
+  };
+}
+
+function resolveToolRouter(context: WorkflowHandlerContext): ToolRouterContract | null {
+  if (context.toolRouter) {
+    return context.toolRouter;
+  }
+  return resolveToolRouterFromContext(context.toolCallContext);
 }

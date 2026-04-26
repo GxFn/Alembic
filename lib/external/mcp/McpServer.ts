@@ -24,11 +24,17 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { CapabilityProbe } from '#core/capability/CapabilityProbe.js';
 import Logger from '#infra/logging/Logger.js';
+import type { ToolRouterContract } from '../../agent/core/ToolContracts.js';
+import type { ToolResultEnvelope } from '../../agent/core/ToolResultEnvelope.js';
+import { ToolRouter } from '../../agent/core/ToolRouter.js';
+import { CapabilityCatalog } from '../../agent/tools/CapabilityCatalog.js';
 import { applyPendingAutoApprove, markAutoApproveNeeded } from './autoApproveInjector.js';
 import { envelope } from './envelope.js';
 import { wrapHandler } from './errorHandler.js';
 import type { IntentState, McpContext, McpServiceContainer } from './handlers/types.js';
 import { createIdleIntent } from './handlers/types.js';
+import { buildMcpToolCapabilities } from './McpCapabilityProjection.js';
+import { McpToolAdapter } from './McpToolAdapter.js';
 import { TIER_ORDER, TOOL_GATEWAY_MAP, TOOLS } from './tools.js';
 
 // ─── TypeScript Interfaces ──────────────────────────────────
@@ -97,6 +103,7 @@ export class McpServer {
   _autoApproveMarked: boolean;
   _capabilityProbe: CapabilityProbe | null;
   _lastTaskOperation: string;
+  _toolRouter: ToolRouterContract | null;
   _session: McpSession;
   _startedAt: number;
   bootstrap: BootstrapLike | null;
@@ -111,6 +118,7 @@ export class McpServer {
     this._autoApproveMarked = false;
     this._capabilityProbe = null;
     this._lastTaskOperation = '';
+    this._toolRouter = null;
 
     // ── Session 管理 (with intent lifecycle) ──
     this._session = {
@@ -127,7 +135,7 @@ export class McpServer {
   get _ctx() {
     return {
       container: this.container,
-      logger: this.logger!,
+      logger: this.logger || Logger.getInstance(),
       startedAt: this._startedAt,
       session: this._session,
     };
@@ -214,8 +222,13 @@ export class McpServer {
    * ListTools 基于 ALEMBIC_MCP_TIER 过滤可见工具
    */
   _registerHandlers() {
+    if (!this.sdkServer) {
+      throw new Error('MCP SDK server is not initialized');
+    }
+    const server = this.sdkServer.server;
+
     // ── ListTools: 按 tier 过滤 ──
-    this.sdkServer!.server.setRequestHandler(ListToolsRequestSchema, async () => {
+    server.setRequestHandler(ListToolsRequestSchema, async () => {
       const tierName = process.env.ALEMBIC_MCP_TIER || 'agent';
       const maxTier = (TIER_ORDER as Record<string, number>)[tierName] ?? TIER_ORDER.agent;
       const visible = TOOLS.filter(
@@ -225,7 +238,7 @@ export class McpServer {
     });
 
     // ── CallTool: 路由到 handler ──
-    this.sdkServer!.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
       const t0 = Date.now();
       try {
@@ -234,9 +247,10 @@ export class McpServer {
           content: [
             {
               type: 'text',
-              text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+              text: JSON.stringify(result, null, 2),
             },
           ],
+          isError: result.ok ? undefined : true,
         };
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
@@ -252,10 +266,52 @@ export class McpServer {
     });
   }
 
-  async _handleToolCall(name: string, args: Record<string, unknown>) {
-    // ── Gateway 权限 gating（写操作） ──
-    await this._gatewayGate(name, args);
+  async _handleToolCall(name: string, args: Record<string, unknown>): Promise<ToolResultEnvelope> {
+    const router = this._getToolRouter();
+    const gatewayMapping = this._resolveMcpGatewayMapping(name, args);
+    const actorRole = this._resolveMcpActorRole();
+    return router.execute({
+      toolId: name,
+      args,
+      surface: 'mcp',
+      actor: {
+        role: actorRole,
+        user: process.env.USER || undefined,
+        sessionId: this._session.id,
+      },
+      source: { kind: 'mcp', name: 'tools/call' },
+      governance: gatewayMapping
+        ? {
+            gatewayAction: gatewayMapping.action,
+            gatewayResource: gatewayMapping.resource,
+            gatewayData: args || {},
+          }
+        : undefined,
+    });
+  }
 
+  _getToolRouter() {
+    if (!this._toolRouter) {
+      const { manifests } = buildMcpToolCapabilities(TOOLS);
+      const catalog = new CapabilityCatalog(manifests);
+      this._toolRouter = new ToolRouter({
+        catalog,
+        adapters: [new McpToolAdapter((toolName, args) => this._executeMcpHandler(toolName, args))],
+        projectRoot: process.env.ALEMBIC_PROJECT_DIR || process.cwd(),
+        services: {
+          get: <T = unknown>(serviceName: string) => {
+            if (!this.container) {
+              throw new Error(`Service '${serviceName}' is not available before MCP initialize()`);
+            }
+            return this.container.get(serviceName) as T;
+          },
+        },
+      });
+    }
+    return this._toolRouter;
+  }
+
+  async _executeMcpHandler(name: string, args: Record<string, unknown>) {
     const ctx = this._ctx;
 
     // 查找 handler 并通过 wrapHandler 统一错误处理
@@ -285,7 +341,7 @@ export class McpServer {
       this._autoApproveMarked = true;
       try {
         const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
-        markAutoApproveNeeded(projectRoot, this.logger!);
+        markAutoApproveNeeded(projectRoot, this.logger || undefined);
       } catch {
         /* non-blocking */
       }
@@ -402,7 +458,10 @@ export class McpServer {
       }
     }
     if (toolName === 'alembic_search' && intent.searchQueries.length > 0) {
-      const latestQuery = intent.searchQueries[intent.searchQueries.length - 1]!;
+      const latestQuery = intent.searchQueries.at(-1);
+      if (!latestQuery) {
+        return;
+      }
       const overlap = this._computeKeywordOverlap(latestQuery, intent.primeQuery);
       if (overlap < 0.3) {
         intent.driftEvents.push({
@@ -543,78 +602,36 @@ export class McpServer {
     return this._capabilityProbe;
   }
 
-  /**
-   * Gateway 权限 gating — 写操作验证权限/宪法/审计
-   * 只读工具直接跳过（不在 TOOL_GATEWAY_MAP 中）
-   * 支持动态 resolver（operation-based 工具按参数解析 action/resource）
-   *
-   * actor 解析：使用 CapabilityProbe 探测本地用户的子仓库权限
-   *   - admin  → 'developer'    全权限
-   *   - contributor → 'contributor' 只读，写操作被拒绝
-   *   - visitor → 'visitor'      最小权限
-   * 探测失败时降级为 'external_agent'（向后兼容）
-   */
-  async _gatewayGate(toolName: string, args: Record<string, unknown>) {
+  _resolveMcpGatewayMapping(toolName: string, args: Record<string, unknown>) {
     let mapping = (TOOL_GATEWAY_MAP as Record<string, GatewayMappingEntry | undefined>)[toolName] as
       | GatewayMappingEntry
       | null
       | undefined;
     if (!mapping) {
-      return; // 只读工具，跳过
+      return null;
     }
 
-    // 动态 resolver：根据 args 计算实际 action/resource
     if (typeof mapping.resolver === 'function') {
       mapping = mapping.resolver(args);
       if (!mapping) {
-        return; // resolver 返回 null 表示只读操作
+        return null;
       }
     }
 
+    if (!mapping.action) {
+      return null;
+    }
+    return {
+      action: mapping.action,
+      resource: mapping.resource,
+    };
+  }
+
+  _resolveMcpActorRole() {
     try {
-      const gateway = this.container?.get('gateway');
-      if (!gateway) {
-        return; // Gateway 未初始化，降级放行
-      }
-
-      // 用 CapabilityProbe 确定本地用户角色
-      let actor = 'external_agent';
-      try {
-        const probe = this._getCapabilityProbe();
-        actor = probe.probeRole();
-      } catch {
-        // 探测失败降级为 external_agent
-      }
-
-      const result = await gateway.checkOnly({
-        actor,
-        action: mapping.action,
-        resource: mapping.resource,
-        data: args || {},
-      });
-
-      if (!result.success) {
-        const code = result.error?.code || 'PERMISSION_DENIED';
-        const msg = result.error?.message || 'Gateway permission check failed';
-        this.logger?.warn(`MCP Gateway gating denied: ${toolName}`, { code, msg, actor });
-        throw new Error(`[${code}] ${msg}`);
-      }
-
-      this.logger?.debug(`MCP Gateway gating passed: ${toolName}`, {
-        requestId: result.requestId,
-        actor,
-      });
-    } catch (err: unknown) {
-      // 区分 Gateway 自身错误 vs 权限拒绝
-      const errMsg = err instanceof Error ? err.message : String(err);
-      if (
-        errMsg.startsWith('[PERMISSION_DENIED]') ||
-        errMsg.startsWith('[CONSTITUTION_VIOLATION]')
-      ) {
-        throw err;
-      }
-      // Gateway 内部故障不应阻断业务（降级放行 + 记录）
-      this.logger?.error(`MCP Gateway gating error (degraded): ${toolName}`, { error: errMsg });
+      return this._getCapabilityProbe().probeRole();
+    } catch {
+      return 'external_agent';
     }
   }
 
@@ -626,13 +643,16 @@ export class McpServer {
     // 首次 bootstrap 成功后的标记 → 注入 autoApprove（在连接建立前，安全写入 mcp.json）
     const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
     try {
-      applyPendingAutoApprove(projectRoot, this.logger!);
+      applyPendingAutoApprove(projectRoot, this.logger || undefined);
     } catch {
       /* non-blocking */
     }
 
     const transport = new StdioServerTransport();
-    await this.sdkServer!.connect(transport);
+    if (!this.sdkServer) {
+      throw new Error('MCP SDK server is not initialized');
+    }
+    await this.sdkServer.connect(transport);
 
     const tierName = process.env.ALEMBIC_MCP_TIER || 'agent';
     const maxTier = (TIER_ORDER as Record<string, number>)[tierName] ?? TIER_ORDER.agent;

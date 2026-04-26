@@ -16,8 +16,6 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { AgentMessage } from '#agent/AgentMessage.js';
-import type { ContextWindow } from '#agent/context/ContextWindow.js';
 import { ExplorationTracker } from '#agent/context/ExplorationTracker.js';
 import { createSystemRunContext, projectSystemRunContext } from '#agent/core/SystemRunContext.js';
 import { EpisodicConsolidator } from '#agent/domain/EpisodicConsolidator.js';
@@ -26,7 +24,14 @@ import { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import { MemoryEmbeddingStore } from '#agent/memory/MemoryEmbeddingStore.js';
 import { PersistentMemory } from '#agent/memory/PersistentMemory.js';
 import { SessionStore } from '#agent/memory/SessionStore.js';
-import { PRESETS } from '#agent/presets.js';
+import type {
+  AgentRunInput,
+  AgentRunResult,
+  AgentService,
+  BootstrapSessionChildRunPlan,
+  SystemRunContextFactory,
+} from '#agent/service/index.js';
+import { buildBootstrapSessionRunInput } from '#agent/service/index.js';
 import { getDimensionFocusKeywords } from '#domain/dimension/DimensionSop.js';
 import Logger from '#infra/logging/Logger.js';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
@@ -69,7 +74,8 @@ interface OrchestratorSingletons {
 
 /** Services orchestrator accesses via container.get() */
 interface OrchestratorServiceKeys {
-  agentFactory: AgentFactoryLike;
+  agentService: AgentService;
+  systemRunContextFactory: SystemRunContextFactory;
   bootstrapTaskManager: TaskManagerLike;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB type varies (SqliteDatabase|DbWrapper|CeDbLike) across consumers
   database: any;
@@ -124,21 +130,6 @@ interface TaskManagerLike {
   [key: string]: unknown;
 }
 
-/** Agent factory minimal shape */
-interface AgentFactoryLike {
-  createRuntime(preset: string, overrides?: Record<string, unknown>): AgentRuntimeLike;
-  createContextWindow(opts?: { isSystem?: boolean }): ContextWindow;
-  [key: string]: unknown;
-}
-
-/** Agent runtime minimal shape */
-interface AgentRuntimeLike {
-  execute(message: unknown, opts?: Record<string, unknown>): Promise<AgentResultLike>;
-  setFileCache(files: unknown[] | null): void;
-  aiProvider: { name?: string; model?: string; [key: string]: unknown };
-  [key: string]: unknown;
-}
-
 /** Agent execution result */
 interface AgentResultLike {
   reply?: string;
@@ -148,6 +139,94 @@ interface AgentResultLike {
   phases?: Record<string, { reply?: string; artifact?: Record<string, any>; [key: string]: any }>;
   degraded?: boolean;
   [key: string]: unknown;
+}
+
+function projectAgentRunResult(result: AgentRunResult): AgentResultLike {
+  return {
+    reply: result.reply,
+    toolCalls: result.toolCalls as unknown as ToolCallRecord[],
+    tokenUsage: {
+      input: result.usage.inputTokens,
+      output: result.usage.outputTokens,
+    },
+    phases: result.phases as AgentResultLike['phases'],
+    degraded: result.diagnostics?.degraded || false,
+    diagnostics: result.diagnostics,
+    iterations: result.usage.iterations,
+    durationMs: result.usage.durationMs,
+  };
+}
+
+function buildBootstrapDimensionRunInput({
+  dimId,
+  dimConfig,
+  needsCandidates,
+  hasExistingRecipes,
+  prescreenDone,
+  sessionId,
+  primaryLang,
+  projectLang,
+  allFiles,
+  systemRunContext,
+  strategyContext,
+  memoryCoordinator,
+  sessionAbortSignal,
+}: {
+  dimId: string;
+  dimConfig: { label?: string };
+  needsCandidates: boolean;
+  hasExistingRecipes: boolean;
+  prescreenDone: boolean;
+  sessionId: string;
+  primaryLang?: string | null;
+  projectLang?: string | null;
+  allFiles: BootstrapFileEntry[] | null;
+  systemRunContext: ReturnType<typeof createSystemRunContext>;
+  strategyContext: Record<string, unknown>;
+  memoryCoordinator: MemoryCoordinator;
+  sessionAbortSignal?: AbortSignal | null;
+}): AgentRunInput {
+  const analystScopeId = systemRunContext.scopeId || `${dimId}:analyst`;
+  return {
+    profile: { id: 'bootstrap-dimension' },
+    params: {
+      dimId,
+      needsCandidates,
+      hasExistingRecipes,
+      prescreenDone,
+    },
+    message: {
+      role: 'internal',
+      content: `Bootstrap dimension: ${dimConfig.label || dimId}`,
+      sessionId,
+      metadata: {
+        sessionId,
+        dimension: dimId,
+        phase: 'bootstrap',
+      },
+    },
+    context: {
+      source: 'bootstrap',
+      runtimeSource: 'system',
+      lang: primaryLang || projectLang || null,
+      fileCache: allFiles,
+      systemRunContext,
+      strategyContext,
+      contextWindow: systemRunContext.contextWindow,
+      trace: systemRunContext.trace,
+      memoryCoordinator,
+      sharedState: systemRunContext.sharedState,
+      promptContext: {
+        dimensionScopeId: analystScopeId,
+        dimId,
+        dimensionId: dimId,
+      },
+    },
+    execution: {
+      abortSignal: sessionAbortSignal || undefined,
+    },
+    presentation: { responseShape: 'system-task-result' },
+  };
 }
 
 /** Tool call record from runtime */
@@ -203,6 +282,437 @@ interface DimensionCandidateData {
     reply?: string;
     tokenUsage?: { input: number; output: number };
   };
+}
+
+interface BootstrapDimensionProjection {
+  analyzeResult?: { reply?: string; [key: string]: unknown };
+  gateResult?: { action?: string; artifact?: Record<string, any>; [key: string]: unknown };
+  produceResult?: { reply?: string; toolCalls?: ToolCallRecord[]; [key: string]: unknown };
+  analysisText: string;
+  artifact: Record<string, any>;
+  runtimeToolCalls: ToolCallRecord[];
+  combinedTokenUsage: { input: number; output: number };
+  analysisReport: DimensionCandidateData['analysisReport'];
+  producerResult: DimensionCandidateData['producerResult'];
+  submitCalls: ToolCallRecord[];
+  successCount: number;
+  rejectedCount: number;
+}
+
+interface BootstrapSessionProjection {
+  dimensionResults: Record<string, AgentRunResult>;
+  completedDimensions: number;
+  failedDimensionIds: string[];
+  abortedDimensionIds: string[];
+  missingDimensionIds: string[];
+  parentStatus: AgentRunResult['status'];
+}
+
+function projectBootstrapDimensionAgentOutput({
+  dimId,
+  needsCandidates,
+  runResult,
+}: {
+  dimId: string;
+  needsCandidates: boolean;
+  runResult: AgentResultLike;
+}): BootstrapDimensionProjection {
+  const analyzeResult = runResult?.phases?.analyze;
+  const gateResult = runResult?.phases?.quality_gate;
+  const produceResult = runResult?.phases?.produce;
+  const analysisText = (analyzeResult?.reply || runResult?.reply || '').trim();
+  const artifact = gateResult?.artifact || {
+    analysisText,
+    referencedFiles: [],
+    findings: [],
+    metadata: { toolCallCount: 0 },
+  };
+
+  const runtimeToolCalls = runResult?.toolCalls || [];
+  const combinedTokenUsage = runResult?.tokenUsage || { input: 0, output: 0 };
+  const referencedFiles =
+    artifact.referencedFiles?.length > 0
+      ? artifact.referencedFiles
+      : [
+          ...new Set(
+            runtimeToolCalls.flatMap((tc: ToolCallRecord) => {
+              const a = tc?.args || tc?.params || {};
+              const files: string[] = [];
+              if (typeof a.filePath === 'string' && a.filePath.trim()) {
+                files.push(a.filePath.trim());
+              }
+              if (Array.isArray(a.filePaths)) {
+                for (const f of a.filePaths) {
+                  if (typeof f === 'string' && f.trim()) {
+                    files.push(f.trim());
+                  }
+                }
+              }
+              return files;
+            })
+          ),
+        ];
+
+  const analysisReport = {
+    dimensionId: dimId,
+    analysisText: artifact.analysisText || analysisText,
+    findings: artifact.findings || [],
+    referencedFiles,
+    evidenceMap: artifact.evidenceMap || null,
+    negativeSignals: artifact.negativeSignals || [],
+    metadata: {
+      toolCallCount: runtimeToolCalls.length,
+      tokenUsage: combinedTokenUsage,
+      artifactVersion: artifact.metadata?.artifactVersion || 1,
+    },
+  };
+
+  const submitCalls = runtimeToolCalls.filter((tc: ToolCallRecord) => {
+    const tool = tc?.tool || tc?.name;
+    return tool === 'submit_knowledge' || tool === 'submit_with_check';
+  });
+  const successCount = submitCalls.filter((tc: ToolCallRecord) => {
+    const res = tc?.result;
+    if (!res) {
+      return true;
+    }
+    if (typeof res === 'string') {
+      return !res.includes('rejected') && !res.includes('error');
+    }
+    return (
+      (res as Record<string, unknown>).status !== 'rejected' &&
+      (res as Record<string, unknown>).status !== 'error'
+    );
+  }).length;
+  const rejectedCount = submitCalls.length - successCount;
+
+  return {
+    analyzeResult,
+    gateResult,
+    produceResult,
+    analysisText,
+    artifact,
+    runtimeToolCalls,
+    combinedTokenUsage,
+    analysisReport,
+    producerResult: {
+      candidateCount: needsCandidates ? successCount : 0,
+      rejectedCount: needsCandidates ? rejectedCount : 0,
+      toolCalls: runtimeToolCalls,
+      reply: produceResult?.reply || analysisText,
+      tokenUsage: combinedTokenUsage,
+    },
+    submitCalls,
+    successCount,
+    rejectedCount,
+  };
+}
+
+function projectBootstrapSessionResult({
+  parentRunResult,
+  activeDimIds,
+  skippedDimIds,
+}: {
+  parentRunResult: AgentRunResult;
+  activeDimIds: string[];
+  skippedDimIds: string[];
+}): BootstrapSessionProjection {
+  const dimensionResults = toBootstrapSessionDimensionResults(parentRunResult);
+  const skipped = new Set(skippedDimIds);
+  const runnableDimIds = activeDimIds.filter((dimId) => !skipped.has(dimId));
+  const failedStatuses = new Set<AgentRunResult['status']>(['error', 'blocked', 'timeout']);
+  const failedDimensionIds = Object.entries(dimensionResults)
+    .filter(([, result]) => failedStatuses.has(result.status))
+    .map(([dimId]) => dimId);
+  const abortedDimensionIds = Object.entries(dimensionResults)
+    .filter(([, result]) => result.status === 'aborted')
+    .map(([dimId]) => dimId);
+  const missingDimensionIds = runnableDimIds.filter((dimId) => !dimensionResults[dimId]);
+  return {
+    dimensionResults,
+    completedDimensions: Object.keys(dimensionResults).length,
+    failedDimensionIds,
+    abortedDimensionIds,
+    missingDimensionIds,
+    parentStatus: parentRunResult.status,
+  };
+}
+
+function toBootstrapSessionDimensionResults(parentRunResult: AgentRunResult) {
+  const dimensionResults = parentRunResult.phases?.dimensionResults;
+  if (
+    !dimensionResults ||
+    typeof dimensionResults !== 'object' ||
+    Array.isArray(dimensionResults)
+  ) {
+    return {};
+  }
+  return dimensionResults as Record<string, AgentRunResult>;
+}
+
+function normalizeDimensionFindings(
+  findings: Array<DimensionFinding | string> | undefined
+): DimensionFinding[] {
+  return (findings || [])
+    .map((finding) => {
+      if (typeof finding === 'string') {
+        return finding.trim() ? { finding } : null;
+      }
+      return finding;
+    })
+    .filter((finding): finding is DimensionFinding => !!finding);
+}
+
+async function consumeBootstrapDimensionResult({
+  ctx,
+  dimId,
+  dimConfig,
+  needsCandidates,
+  projection,
+  runResult,
+  dimStartTime,
+  analystScopeId,
+  memoryCoordinator,
+  sessionStore,
+  dimContext,
+  candidateResults,
+  dimensionCandidates,
+  dimensionStats,
+  emitter,
+  dataRoot,
+  sessionId,
+}: {
+  ctx: OrchestratorContext;
+  dimId: string;
+  dimConfig: { label?: string };
+  needsCandidates: boolean;
+  projection: BootstrapDimensionProjection;
+  runResult: AgentResultLike;
+  dimStartTime: number;
+  analystScopeId: string;
+  memoryCoordinator: MemoryCoordinator;
+  sessionStore: SessionStore;
+  dimContext: DimensionContext;
+  candidateResults: CandidateResults;
+  dimensionCandidates: Record<string, DimensionCandidateData>;
+  dimensionStats: Record<string, DimensionStat>;
+  emitter: BootstrapEventEmitter;
+  dataRoot: string;
+  sessionId: string;
+}): Promise<DimensionStat> {
+  const {
+    gateResult,
+    produceResult,
+    analysisText,
+    artifact,
+    runtimeToolCalls,
+    combinedTokenUsage,
+    analysisReport,
+    producerResult,
+    submitCalls,
+    successCount,
+    rejectedCount,
+  } = projection;
+
+  candidateResults.created += producerResult.candidateCount;
+  dimensionCandidates[dimId] = { analysisReport, producerResult };
+
+  if (needsCandidates) {
+    const producerToolCalls = produceResult?.toolCalls || [];
+    const producerToolNames = producerToolCalls.map(
+      (tc: ToolCallRecord) => tc?.tool || tc?.name || 'unknown'
+    );
+    const toolBreakdown: Record<string, number> = {};
+    for (const name of producerToolNames) {
+      toolBreakdown[name] = (toolBreakdown[name] || 0) + 1;
+    }
+    const breakdownStr = Object.entries(toolBreakdown)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(', ');
+
+    logger.info(
+      `[Producer] "${dimId}": submitted=${submitCalls.length}, accepted=${successCount}, rejected=${rejectedCount}, ` +
+        `producerToolCalls=${producerToolCalls.length} (${breakdownStr || 'none'}), ` +
+        `analysisInput=${analysisText.length} chars`
+    );
+
+    if (successCount === 0 && submitCalls.length === 0) {
+      logger.warn(
+        `[Producer] "${dimId}": ⚠ Producer 未提交任何候选。` +
+          `分析文本=${analysisText.length} chars, findings=${(analysisReport.findings || []).length}, ` +
+          `producerIterations=${producerToolCalls.length}, degraded=${runResult?.degraded || false}`
+      );
+    }
+  }
+
+  const ac = memoryCoordinator.getActiveContext(analystScopeId);
+  const distilled = ac
+    ? ac.distill()
+    : { keyFindings: [], totalObservations: 0, toolCallSummary: [] };
+  sessionStore.storeDimensionReport(dimId, {
+    analysisText: analysisReport.analysisText,
+    findings:
+      analysisReport.findings.length > 0
+        ? normalizeDimensionFindings(analysisReport.findings)
+        : distilled.keyFindings,
+    referencedFiles: analysisReport.referencedFiles || [],
+    candidatesSummary: [],
+    workingMemoryDistilled: distilled,
+  });
+
+  logger.info(
+    `[Insight-v3] Dimension "${dimId}": analysis=${analysisReport.analysisText.length} chars, ` +
+      `files=${analysisReport.referencedFiles.length}, findings=${(analysisReport.findings || distilled.keyFindings).length}, ` +
+      `toolCalls=${runtimeToolCalls.length}, degraded=${runResult?.degraded || false} (${Date.now() - dimStartTime}ms)`
+  );
+
+  try {
+    const tokenStore = ctx.container?.get?.('tokenUsageStore');
+    if (tokenStore) {
+      const aiProv = ctx.container.singletons?.aiProvider as
+        | { name?: string; model?: string }
+        | undefined;
+      tokenStore.record({
+        source: 'system',
+        dimension: dimId,
+        provider: aiProv?.name || null,
+        model: aiProv?.model || null,
+        inputTokens: combinedTokenUsage.input || 0,
+        outputTokens: combinedTokenUsage.output || 0,
+        durationMs: Date.now() - dimStartTime,
+        toolCalls: runtimeToolCalls.length,
+        sessionId: sessionId || null,
+      });
+      try {
+        const realtime = ctx.container?.get?.('realtimeService');
+        realtime?.broadcastTokenUsageUpdated?.();
+      } catch {
+        /* optional */
+      }
+    }
+  } catch {
+    /* token logging should never break execution */
+  }
+
+  if (needsCandidates && analysisReport.analysisText.length < 100) {
+    const findings = analysisReport.findings || [];
+    if (findings.length >= 3) {
+      const dimLabel = dimConfig.label || dimId;
+      const synthesized = [
+        `## ${dimLabel}`,
+        '',
+        analysisReport.analysisText.trim(),
+        '',
+        '### 关键发现',
+        '',
+        ...findings.slice(0, 10).map((f: DimensionFinding | string, i: number) => {
+          const text = typeof f === 'string' ? f : f.finding;
+          return `${i + 1}. ${text}`;
+        }),
+      ];
+      const memDistilled = distilled;
+      if (memDistilled?.toolCallSummary?.length > 0) {
+        synthesized.push('', '### 探索记录', '');
+        for (const s of memDistilled.toolCallSummary.slice(0, 10)) {
+          synthesized.push(`- ${s}`);
+        }
+      }
+      const originalLen = analysisReport.analysisText.length;
+      analysisReport.analysisText = synthesized.join('\n');
+      logger.info(
+        `[Insight-v3] analysisText 补强 "${dimId}": ${originalLen} → ${analysisReport.analysisText.length} chars ` +
+          `(from ${findings.length} findings)`
+      );
+    }
+  }
+
+  const digest = parseDimensionDigest(producerResult.reply) || {
+    summary: `v3 分析: ${analysisReport.analysisText.substring(0, 200)}...`,
+    candidateCount: producerResult.candidateCount,
+    keyFindings: [] as string[],
+    crossRefs: {},
+    gaps: [] as string[],
+  };
+  dimContext.addDimensionDigest(
+    dimId,
+    digest as Parameters<typeof dimContext.addDimensionDigest>[1]
+  );
+  sessionStore.addDimensionDigest(
+    dimId,
+    digest as Parameters<typeof sessionStore.addDimensionDigest>[1]
+  );
+
+  for (const tc of producerResult.toolCalls || []) {
+    const tool = tc.tool || tc.name;
+    if (tool === 'submit_knowledge' || tool === 'submit_with_check') {
+      const args = tc.params || tc.args || {};
+      const candidateSummary = {
+        title: String(args.title || ''),
+        subTopic: String(args.category || ''),
+        summary: String(args.summary || ''),
+      };
+      dimContext.addSubmittedCandidate(
+        dimId,
+        candidateSummary as Parameters<typeof dimContext.addSubmittedCandidate>[1]
+      );
+      sessionStore.addSubmittedCandidate(
+        dimId,
+        candidateSummary as Parameters<typeof sessionStore.addSubmittedCandidate>[1]
+      );
+    }
+  }
+
+  emitter.emitDimensionComplete(dimId, {
+    type: needsCandidates ? 'candidate' : 'skill',
+    extracted: producerResult.candidateCount,
+    created: producerResult.candidateCount,
+    status: 'v3-pipeline-complete',
+    degraded: runResult?.degraded || false,
+    durationMs: Date.now() - dimStartTime,
+    toolCallCount: runtimeToolCalls.length,
+    source: 'enhanced-pipeline-strategy',
+  });
+
+  const qualityScores = (artifact as Record<string, unknown>).qualityReport as
+    | { scores: Record<string, number>; totalScore: number; suggestions: string[] }
+    | undefined;
+  const dimResult = {
+    candidateCount: producerResult.candidateCount,
+    rejectedCount: producerResult.rejectedCount || 0,
+    analysisChars: analysisReport.analysisText.length,
+    referencedFiles: analysisReport.referencedFiles.length,
+    durationMs: Date.now() - dimStartTime,
+    toolCallCount: runtimeToolCalls.length,
+    tokenUsage: combinedTokenUsage,
+    analysisText: analysisReport.analysisText,
+    referencedFilesList: analysisReport.referencedFiles || [],
+    qualityGate: qualityScores
+      ? {
+          totalScore: qualityScores.totalScore,
+          scores: qualityScores.scores,
+          action: gateResult?.action || (runResult?.degraded ? 'degrade' : 'pass'),
+        }
+      : null,
+  };
+
+  dimensionStats[dimId] = dimResult;
+
+  if (analysisReport.analysisText.length >= 50) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- digest shape compatible at runtime
+    await saveDimensionCheckpoint(
+      dataRoot,
+      sessionId,
+      dimId,
+      dimResult,
+      digest as unknown as Parameters<typeof saveDimensionCheckpoint>[4]
+    );
+  } else {
+    logger.warn(
+      `[Insight-v3] ⚠ 跳过 checkpoint 保存: "${dimId}" analysisText 过短 (${analysisReport.analysisText.length} chars)`
+    );
+  }
+
+  return dimResult;
 }
 
 /** Skill generation results */
@@ -361,22 +871,24 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
     | null;
 
   // ═══════════════════════════════════════════════════════════
-  // Step 0: AI 可用性检查 (v7.2: 使用 AgentFactory + AiProviderManager)
+  // Step 0: AI 可用性检查 (v7.2: 使用 AgentService + AiProviderManager)
   // ═══════════════════════════════════════════════════════════
-  let agentFactory: AgentFactoryLike | null = null;
+  let agentService: AgentService | null = null;
+  let systemRunContextFactory: SystemRunContextFactory | null = null;
   let isMockMode = false;
   try {
     // 通过 AiProviderManager 统一检查 mock 模式
     const manager = ctx.container.singletons?._aiProviderManager as { isMock: boolean } | undefined;
     isMockMode = manager?.isMock ?? false;
     if (!isMockMode) {
-      agentFactory = ctx.container.get('agentFactory');
+      agentService = ctx.container.get('agentService');
+      systemRunContextFactory = ctx.container.get('systemRunContextFactory');
     }
   } catch {
     /* not available */
   }
 
-  if (!agentFactory && !isMockMode) {
+  if ((!agentService || !systemRunContextFactory) && !isMockMode) {
     logger.error('[Insight-v3] AI Provider not available — bootstrap requires AI');
     emitter.emitProgress('bootstrap:ai-unavailable', {
       message:
@@ -603,6 +1115,74 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
   const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
   const dimensionCandidates: Record<string, DimensionCandidateData> = {};
   const dimensionStats: Record<string, DimensionStat> = {}; // P4.2: 维度级统计
+  const childExecutionState = new Map<string, { dimStartTime: number; analystScopeId: string }>();
+
+  function restoreIncrementalSkippedDimension(dimId: string) {
+    const report = sessionStore.getDimensionReport(dimId);
+    const dimResult = {
+      candidateCount: report?.candidatesSummary?.length || 0,
+      rejectedCount: 0,
+      analysisChars: report?.analysisText?.length || 0,
+      referencedFiles: report?.referencedFiles?.length || 0,
+      referencedFilesList: report?.referencedFiles || [],
+      durationMs: 0,
+      toolCallCount: 0,
+      tokenUsage: { input: 0, output: 0 },
+      skipped: true,
+      restoredFromIncremental: true,
+    };
+    dimensionStats[dimId] = dimResult;
+    logger.info(`[Insight-v3] ⏩ "${dimId}" — incremental skip (historical result)`);
+  }
+
+  function restoreCheckpointDimension(dimId: string) {
+    const cp = completedCheckpoints.get(dimId);
+    const cpResult = {
+      candidateCount: cp?.candidateCount || 0,
+      rejectedCount: cp?.rejectedCount || 0,
+      analysisChars: cp?.analysisChars || 0,
+      referencedFiles: cp?.referencedFiles || 0,
+      durationMs: cp?.durationMs || 0,
+      toolCallCount: cp?.toolCallCount || 0,
+      tokenUsage: cp?.tokenUsage || { input: 0, output: 0 },
+      skipped: true,
+      restoredFromCheckpoint: true,
+    };
+    dimensionStats[dimId] = cpResult;
+    candidateResults.created += cpResult.candidateCount;
+
+    // P3+: 恢复 analysisText 到 dimensionCandidates + EpisodicMemory 供 Skill 生成
+    if (cp?.analysisText) {
+      const restoredFiles = cp.referencedFilesList || [];
+      dimensionCandidates[dimId] = {
+        analysisReport: {
+          analysisText: cp.analysisText,
+          referencedFiles: restoredFiles,
+          findings: [],
+          metadata: {},
+        },
+        producerResult: { candidateCount: cp.candidateCount || 0, toolCalls: [] },
+      };
+      sessionStore.storeDimensionReport(dimId, {
+        analysisText: cp.analysisText,
+        findings: [],
+        referencedFiles: restoredFiles,
+        candidatesSummary: [],
+      });
+      logger.info(
+        `[Insight-v3] ✅ Checkpoint "${dimId}": analysisText restored (${cp.analysisText.length} chars) — Skill generation enabled`
+      );
+    }
+  }
+
+  for (const dimId of incrementalSkippedDims) {
+    restoreIncrementalSkippedDimension(dimId);
+  }
+  for (const dimId of skippedDims) {
+    if (!incrementalSkippedDims.includes(dimId)) {
+      restoreCheckpointDimension(dimId);
+    }
+  }
 
   // ── 跨维度去重集合 (实例级持久化，等效旧 ChatAgent.#globalSubmittedTitles/Patterns) ──
   const globalSubmittedTitles = new Set<string>();
@@ -667,75 +1247,10 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       }
     : null;
 
-  /** 执行单个维度: Analyst → Gate → Producer */
-  async function executeDimension(dimId: string) {
-    // v5.0: 增量模式 — 跳过未受影响的维度 (使用历史 EpisodicMemory)
-    if (incrementalSkippedDims.includes(dimId)) {
-      const report = sessionStore.getDimensionReport(dimId);
-      const dimResult = {
-        candidateCount: report?.candidatesSummary?.length || 0,
-        rejectedCount: 0,
-        analysisChars: report?.analysisText?.length || 0,
-        referencedFiles: report?.referencedFiles?.length || 0,
-        referencedFilesList: report?.referencedFiles || [],
-        durationMs: 0,
-        toolCallCount: 0,
-        tokenUsage: { input: 0, output: 0 },
-        skipped: true,
-        restoredFromIncremental: true,
-      };
-      dimensionStats[dimId] = dimResult;
-      logger.info(`[Insight-v3] ⏩ "${dimId}" — incremental skip (historical result)`);
-      return dimResult;
-    }
-
-    // P3: 跳过已有 checkpoint 的维度
-    if (skippedDims.includes(dimId)) {
-      const cp = completedCheckpoints.get(dimId);
-      const cpResult = {
-        candidateCount: cp?.candidateCount || 0,
-        rejectedCount: cp?.rejectedCount || 0,
-        analysisChars: cp?.analysisChars || 0,
-        referencedFiles: cp?.referencedFiles || 0,
-        durationMs: cp?.durationMs || 0,
-        toolCallCount: cp?.toolCallCount || 0,
-        tokenUsage: cp?.tokenUsage || { input: 0, output: 0 },
-        skipped: true,
-        restoredFromCheckpoint: true,
-      };
-      // P4.2: 将恢复的维度也记入统计
-      dimensionStats[dimId] = cpResult;
-      candidateResults.created += cpResult.candidateCount;
-
-      // P3+: 恢复 analysisText 到 dimensionCandidates + EpisodicMemory 供 Skill 生成
-      if (cp?.analysisText) {
-        const restoredFiles = cp.referencedFilesList || [];
-        dimensionCandidates[dimId] = {
-          analysisReport: {
-            analysisText: cp.analysisText,
-            referencedFiles: restoredFiles,
-            findings: [],
-            metadata: {},
-          },
-          producerResult: { candidateCount: cp.candidateCount || 0, toolCalls: [] },
-        };
-        sessionStore.storeDimensionReport(dimId, {
-          analysisText: cp.analysisText,
-          findings: [],
-          referencedFiles: restoredFiles,
-          candidatesSummary: [],
-        });
-        logger.info(
-          `[Insight-v3] ✅ Checkpoint "${dimId}": analysisText restored (${cp.analysisText.length} chars) — Skill generation enabled`
-        );
-      }
-
-      return cpResult;
-    }
-
+  function resolveBootstrapDimensionPlan(dimId: string) {
     const dim = dimensions.find((d: DimensionDef) => d.id === dimId);
     if (!dim) {
-      return { candidateCount: 0, error: 'dimension not found' };
+      return null;
     }
 
     // 合并 v3 配置和原始维度配置 — 优先使用 getFullDimensionConfig()
@@ -772,557 +1287,322 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
             skillMeta: dim.skillMeta,
             knowledgeTypes: dim.knowledgeTypes || [],
           };
+    const v3OutputType = (DIMENSION_CONFIGS_V3 as Record<string, DimConfigV3Entry | undefined>)[
+      dimId
+    ]?.outputType;
+    const needsCandidates = Boolean(
+      v3OutputType ? v3OutputType !== 'skill' : !dimConfig.skillWorthy || dimConfig.dualOutput
+    );
+    const dimExistingRecipes = [
+      ...(rescanContext?.existingRecipes?.filter((r) => r.knowledgeType === dimId) ?? []),
+      ...(rescanContext?.decayingRecipes?.filter((r) => r.knowledgeType === dimId) ?? []),
+    ];
+    return {
+      dim,
+      dimConfig,
+      needsCandidates,
+      dimExistingRecipes,
+      hasExistingRecipes: dimExistingRecipes.length > 0,
+      prescreenDone: rescanContext?.evolutionPrescreen !== undefined,
+    };
+  }
 
-    // Session 有效性检查
-    if (taskManager && !taskManager.isSessionValid(sessionId)) {
-      logger.warn(`[Insight-v3] Session superseded — skipping "${dimId}"`);
-      return { candidateCount: 0, error: 'session-superseded' };
-    }
-
-    emitter.emitDimensionStart(dimId);
-    logger.info(`[Insight-v3] ── Dimension "${dimId}" (${dimConfig.label}) ──`);
-
-    const dimStartTime = Date.now();
-
-    try {
-      // ═══ v3.0: 增强 PipelineStrategy 驱动 ═══
-      const analystScopeId = `${dimId}:analyst`;
-      memoryCoordinator.createDimensionScope(analystScopeId);
-
-      const v3OutputType = (DIMENSION_CONFIGS_V3 as Record<string, DimConfigV3Entry | undefined>)[
-        dimId
-      ]?.outputType;
-      const needsCandidates = v3OutputType
-        ? v3OutputType !== 'skill'
-        : !dimConfig.skillWorthy || dimConfig.dualOutput;
-
-      // ── 获取 Preset 的标准 stages 配置作为基础 ──
-      const presetStages = PRESETS.insight.strategy.stages;
-      const evolutionPresetStages = PRESETS.evolution.strategy.stages;
-
-      // ── 判断当前维度是否有现有 Recipe（按维度过滤后） ──
-      const dimExistingRecipes = [
-        ...(rescanContext?.existingRecipes?.filter((r) => r.knowledgeType === dimId) ?? []),
-        ...(rescanContext?.decayingRecipes?.filter((r) => r.knowledgeType === dimId) ?? []),
-      ];
-      const hasExistingRecipes = dimExistingRecipes.length > 0;
-
-      // ── 构建 per-dimension 的 stages ──
-      // NOTE: onToolCall 不再注入 ac.recordToolCall — ToolExecutionPipeline 的
-      // traceRecord 中间件已通过 loopCtx.trace 统一记录,避免同一 AC 上双重记录。
-      const analyzeStage = {
-        ...presetStages[0],
-      };
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pipeline stage shapes from PRESETS; needs PipelineStage interface (T4)
-      let stages: Record<string, any>[];
-      if (needsCandidates) {
-        const produceStage = {
-          ...presetStages[2],
-          promptBuilder: (ctx: Record<string, unknown>) => {
-            (memoryCoordinator as { allocateBudget(role: string): void }).allocateBudget(
-              'producer'
-            );
-            return presetStages[2].promptBuilder?.(ctx);
-          },
-        };
-        // 当进化前置 (prescreen) 已在 pipeline 外完成时，所有维度统一使用简化管线
-        const prescreenDone = rescanContext?.evolutionPrescreen !== undefined;
-        if (hasExistingRecipes && !prescreenDone) {
-          // 当前维度有旧 Recipe 且无前置过滤: Evolve→EvolutionGate→Analyze→QualityGate→Produce→RejectionGate
-          stages = [
-            evolutionPresetStages[0], // evolve
-            evolutionPresetStages[1], // evolution_gate
-            analyzeStage,
-            presetStages[1], // quality_gate
-            produceStage,
-            presetStages[3], // rejection_gate
-          ];
-        } else {
-          // 无旧 Recipe 或已完成进化前置: Analyze→QualityGate→Produce→RejectionGate
-          stages = [
-            analyzeStage,
-            presetStages[1], // quality_gate
-            produceStage,
-            presetStages[3], // rejection_gate
-          ];
-        }
-      } else {
-        // Skill-only 维度: 仅 Analyze
-        stages = [analyzeStage];
-      }
-
-      // ── 创建 Runtime (使用增强 PipelineStrategy) ──
-      const runtime = agentFactory!.createRuntime('insight', {
-        lang: primaryLang || projectInfo.lang || null,
-        strategy: {
-          type: 'pipeline',
-          maxRetries: 1,
-          stages,
-        },
-      });
-      runtime.setFileCache(allFiles);
-
-      // ── 构建消息 + strategyContext ──
-      const message = AgentMessage.internal(`Bootstrap dimension: ${dimConfig.label}`, {
-        sessionId,
-        dimension: dimId,
-        phase: 'bootstrap',
-      });
-
-      const dimensionMeta = {
-        id: dimId,
-        outputType: dimConfig.outputType || 'candidate',
-        allowedKnowledgeTypes: dimConfig.allowedKnowledgeTypes || [],
-      };
-      const systemRunContext = createSystemRunContext({
-        memoryCoordinator,
-        scopeId: analystScopeId,
-        activeContext: memoryCoordinator.getActiveContext(analystScopeId),
-        contextWindow: agentFactory?.createContextWindow({ isSystem: true }) || null,
-        // B1 fix: 分析阶段使用 analyst 策略 (SCAN→EXPLORE→VERIFY→SUMMARIZE)
-        // B3 fix: 透传完整 analyst budget
-        // B4 fix: 自适应预算 — 根据项目文件数缩放 maxIterations (24~40)
-        tracker: ExplorationTracker.resolve(
-          { source: 'system', strategy: 'analyst' },
-          computeAnalystBudget(projectInfo.fileCount || 0)
-        ),
-        source: 'system',
-        outputType: dimConfig.outputType || 'analysis',
-        dimId,
-        dimensionId: dimId,
-        dimensionLabel: dimConfig.label,
-        projectLanguage: primaryLang || projectInfo.lang || null,
-        dimensionMeta,
-        sharedState: {
-          submittedTitles: globalSubmittedTitles,
-          submittedPatterns: globalSubmittedPatterns,
-          submittedTriggers: globalSubmittedTriggers,
-          _bootstrapDedup: bootstrapDedup,
-        },
-        extraFields: {
-          dimConfig,
-          projectInfo,
-          dimContext,
-          sessionStore,
-          semanticMemory,
-          codeEntityGraph: codeEntityGraphInst,
-          projectGraph: null, // ProjectGraph 在 orchestrator 级别可用时注入
-          // §M1: Panorama 全景上下文 (Phase 1.8 数据注入)
-          panorama: buildPanoramaContext(panoramaResult, dimConfig),
-          // §ES: Evidence Starters — 从 Phase 1-4 数据提取维度级证据启发
-          evidenceStarters: buildEvidenceStarters(dimConfig, {
-            astData: astProjectSummary,
-            guardAudit,
-            depGraphData,
-            callGraphResult,
-            panoramaResult,
-          }),
-          // §R1: Rescan 模式 — 已有 recipe 上下文 (避免重复分析/创建)
-          rescanContext: rescanContext
-            ? {
-                existingRecipes: rescanContext.existingRecipes.filter(
-                  (r) => r.knowledgeType === dimId
-                ),
-                decayingRecipes: rescanContext.decayingRecipes.filter(
-                  (r) => r.knowledgeType === dimId
-                ),
-                occupiedTriggers: rescanContext.occupiedTriggers,
-                gap: Math.max(0, 5 - (rescanContext.coverageByDim[dimId] || 0)),
-                existing: rescanContext.coverageByDim[dimId] || 0,
-              }
-            : null,
-          // §EVO: Evolution Stage — 当前维度全部现有 Recipe（healthy + decaying），附带 audit hint
-          existingRecipes: dimExistingRecipes.map((r) => ({
-            id: r.id,
-            title: r.title,
-            trigger: r.trigger,
-            content: r.content,
-            sourceRefs: r.sourceRefs,
-            auditHint:
-              'auditScore' in r && r.auditScore != null
-                ? {
-                    relevanceScore: r.auditScore as number,
-                    verdict:
-                      (r as Record<string, unknown>).status === 'decaying' ? 'decay' : 'watch',
-                    evidence: (r as Record<string, unknown>).auditEvidence ?? {},
-                    decayReasons: (r as Record<string, unknown>).decayReason
-                      ? [String((r as Record<string, unknown>).decayReason)]
-                      : [],
-                  }
-                : null,
-          })),
-          // Evolution 上下文字段 — buildEvolverPrompt 直接从 strategyContext 读取
-          projectOverview: {
-            primaryLang: primaryLang || projectInfo.lang || 'unknown',
-            fileCount: projectInfo.fileCount || 0,
-            modules: Object.keys(targetFileMap || {}),
-          },
-        },
-      });
-      const strategyContext = projectSystemRunContext(systemRunContext);
-
-      // ── 执行 ──
-      // 外层超时 = 安全网 (各阶段已有独立超时: Analyst 300s + Producer 180s + 硬缓冲 60s)
-      const outerTimeoutMs = 3_600_000; // 1 小时——维度分析本身耗时长
-      const runResult = await Promise.race([
-        runtime.execute(message, { strategyContext, abortSignal: sessionAbortSignal }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`Bootstrap runtime timeout for "${dimId}"`)),
-            outerTimeoutMs
-          )
-        ),
-      ]);
-
-      // ── 提取结果 ──
-      const analyzeResult = runResult?.phases?.analyze;
-      const gateResult = runResult?.phases?.quality_gate;
-      const produceResult = runResult?.phases?.produce;
-      const analysisText = (analyzeResult?.reply || runResult?.reply || '').trim();
-      const artifact = gateResult?.artifact || {
-        analysisText,
-        referencedFiles: [],
-        findings: [],
-        metadata: { toolCallCount: 0 },
-      };
-
-      const runtimeToolCalls = runResult?.toolCalls || [];
-      const combinedTokenUsage = runResult?.tokenUsage || { input: 0, output: 0 };
-
-      // 引用文件: 优先从 artifact 取, 回退从 toolCalls 提取
-      const referencedFiles =
-        artifact.referencedFiles?.length > 0
-          ? artifact.referencedFiles
-          : [
-              ...new Set(
-                runtimeToolCalls.flatMap((tc: ToolCallRecord) => {
-                  const a = tc?.args || tc?.params || {};
-                  const files: string[] = [];
-                  if (typeof a.filePath === 'string' && a.filePath.trim()) {
-                    files.push(a.filePath.trim());
-                  }
-                  if (Array.isArray(a.filePaths)) {
-                    for (const f of a.filePaths) {
-                      if (typeof f === 'string' && f.trim()) {
-                        files.push(f.trim());
-                      }
-                    }
-                  }
-                  return files;
-                })
-              ),
-            ];
-
-      const analysisReport = {
-        dimensionId: dimId,
-        analysisText: artifact.analysisText || analysisText,
-        findings: artifact.findings || [],
-        referencedFiles,
-        evidenceMap: artifact.evidenceMap || null,
-        negativeSignals: artifact.negativeSignals || [],
-        metadata: {
-          toolCallCount: runtimeToolCalls.length,
-          tokenUsage: combinedTokenUsage,
-          artifactVersion: artifact.metadata?.artifactVersion || 1,
-        },
-      };
-
-      // ── Producer 结果统计 ──
-      const submitCalls = runtimeToolCalls.filter((tc: ToolCallRecord) => {
-        const tool = tc?.tool || tc?.name;
-        return tool === 'submit_knowledge' || tool === 'submit_with_check';
-      });
-      const successCount = submitCalls.filter((tc: ToolCallRecord) => {
-        const res = tc?.result;
-        if (!res) {
-          return true;
-        }
-        if (typeof res === 'string') {
-          return !res.includes('rejected') && !res.includes('error');
-        }
-        return (
-          (res as Record<string, unknown>).status !== 'rejected' &&
-          (res as Record<string, unknown>).status !== 'error'
-        );
-      }).length;
-      const rejectedCount = submitCalls.length - successCount;
-
-      const producerResult = {
-        candidateCount: needsCandidates ? successCount : 0,
-        rejectedCount: needsCandidates ? rejectedCount : 0,
-        toolCalls: runtimeToolCalls,
-        reply: produceResult?.reply || analysisText,
-        tokenUsage: combinedTokenUsage,
-      };
-
-      candidateResults.created += producerResult.candidateCount;
-      dimensionCandidates[dimId] = { analysisReport, producerResult };
-
-      // ── Producer 阶段详细日志 ──
-      if (needsCandidates) {
-        const producerToolCalls = produceResult?.toolCalls || [];
-        const producerToolNames = producerToolCalls.map(
-          (tc: ToolCallRecord) => tc?.tool || tc?.name || 'unknown'
-        );
-        const toolBreakdown: Record<string, number> = {};
-        for (const name of producerToolNames) {
-          toolBreakdown[name] = (toolBreakdown[name] || 0) + 1;
-        }
-        const breakdownStr = Object.entries(toolBreakdown)
-          .map(([k, v]) => `${k}=${v}`)
-          .join(', ');
-
-        logger.info(
-          `[Producer] "${dimId}": submitted=${submitCalls.length}, accepted=${successCount}, rejected=${rejectedCount}, ` +
-            `producerToolCalls=${producerToolCalls.length} (${breakdownStr || 'none'}), ` +
-            `analysisInput=${analysisText.length} chars`
-        );
-
-        if (successCount === 0 && submitCalls.length === 0) {
-          logger.warn(
-            `[Producer] "${dimId}": ⚠ Producer 未提交任何候选。` +
-              `分析文本=${analysisText.length} chars, findings=${(analysisReport.findings || []).length}, ` +
-              `producerIterations=${producerToolCalls.length}, degraded=${runResult?.degraded || false}`
-          );
-        }
-      }
-
-      // ── Memory Update ──
-      const ac = memoryCoordinator.getActiveContext(analystScopeId);
-      const distilled = ac
-        ? ac.distill()
-        : { keyFindings: [], totalObservations: 0, toolCallSummary: [] };
-      sessionStore.storeDimensionReport(dimId, {
-        analysisText: analysisReport.analysisText,
-        findings:
-          analysisReport.findings.length > 0 ? analysisReport.findings : distilled.keyFindings,
-        referencedFiles: analysisReport.referencedFiles || [],
-        candidatesSummary: [],
-        workingMemoryDistilled: distilled,
-      });
-
-      logger.info(
-        `[Insight-v3] Dimension "${dimId}": analysis=${analysisReport.analysisText.length} chars, ` +
-          `files=${analysisReport.referencedFiles.length}, findings=${(analysisReport.findings || distilled.keyFindings).length}, ` +
-          `toolCalls=${runtimeToolCalls.length}, degraded=${runResult?.degraded || false} (${Date.now() - dimStartTime}ms)`
-      );
-
-      // ── Token 用量持久化 (fire-and-forget) ──
-      try {
-        const tokenStore = ctx.container?.get?.('tokenUsageStore');
-        if (tokenStore) {
-          const aiProv = runtime.aiProvider;
-          tokenStore.record({
-            source: 'system',
-            dimension: dimId,
-            provider: aiProv?.name || null,
-            model: aiProv?.model || null,
-            inputTokens: combinedTokenUsage.input || 0,
-            outputTokens: combinedTokenUsage.output || 0,
-            durationMs: Date.now() - dimStartTime,
-            toolCalls: runtimeToolCalls.length,
-            sessionId: sessionId || null,
-          });
-          try {
-            const realtime = ctx.container?.get?.('realtimeService');
-            realtime?.broadcastTokenUsageUpdated?.();
-          } catch {
-            /* optional */
-          }
-        }
-      } catch {
-        /* token logging should never break execution */
-      }
-
-      // ── v5.1: analysisText 过短补强 ──
-      if (needsCandidates && analysisReport.analysisText.length < 100) {
-        const findings = analysisReport.findings || [];
-        if (findings.length >= 3) {
-          const dimLabel = dimConfig.label || dimId;
-          const synthesized = [
-            `## ${dimLabel}`,
-            '',
-            analysisReport.analysisText.trim(),
-            '',
-            '### 关键发现',
-            '',
-            ...findings.slice(0, 10).map((f: DimensionFinding | string, i: number) => {
-              const text = typeof f === 'string' ? f : f.finding;
-              return `${i + 1}. ${text}`;
-            }),
-          ];
-          const memDistilled = distilled;
-          if (memDistilled?.toolCallSummary?.length > 0) {
-            synthesized.push('', '### 探索记录', '');
-            for (const s of memDistilled.toolCallSummary.slice(0, 10)) {
-              synthesized.push(`- ${s}`);
-            }
-          }
-          const originalLen = analysisReport.analysisText.length;
-          analysisReport.analysisText = synthesized.join('\n');
-          logger.info(
-            `[Insight-v3] analysisText 补强 "${dimId}": ${originalLen} → ${analysisReport.analysisText.length} chars ` +
-              `(from ${findings.length} findings)`
-          );
-        }
-      }
-
-      // ── DimensionDigest ──
-      const digest = parseDimensionDigest(producerResult.reply) || {
-        summary: `v3 分析: ${analysisReport.analysisText.substring(0, 200)}...`,
-        candidateCount: producerResult.candidateCount,
-        keyFindings: [] as string[],
-        crossRefs: {},
-        gaps: [] as string[],
-      };
-      dimContext.addDimensionDigest(
-        dimId,
-        digest as Parameters<typeof dimContext.addDimensionDigest>[1]
-      );
-      sessionStore.addDimensionDigest(
-        dimId,
-        digest as Parameters<typeof sessionStore.addDimensionDigest>[1]
-      );
-
-      // 候选摘要记录到 DimensionContext + SessionStore
-      for (const tc of producerResult.toolCalls || []) {
-        const tool = tc.tool || tc.name;
-        if (tool === 'submit_knowledge' || tool === 'submit_with_check') {
-          const args = tc.params || tc.args || {};
-          const candidateSummary = {
-            title: String(args.title || ''),
-            subTopic: String(args.category || ''),
-            summary: String(args.summary || ''),
-          };
-          dimContext.addSubmittedCandidate(
-            dimId,
-            candidateSummary as Parameters<typeof dimContext.addSubmittedCandidate>[1]
-          );
-          sessionStore.addSubmittedCandidate(
-            dimId,
-            candidateSummary as Parameters<typeof sessionStore.addSubmittedCandidate>[1]
-          );
-        }
-      }
-
-      emitter.emitDimensionComplete(dimId, {
-        type: needsCandidates ? 'candidate' : 'skill',
-        extracted: producerResult.candidateCount,
-        created: producerResult.candidateCount,
-        status: 'v3-pipeline-complete',
-        degraded: runResult?.degraded || false,
-        durationMs: Date.now() - dimStartTime,
-        toolCallCount: runtimeToolCalls.length,
-        source: 'enhanced-pipeline-strategy',
-      });
-
-      const dimTokenUsage = combinedTokenUsage;
-      const qualityScores = (artifact as Record<string, unknown>).qualityReport as
-        | { scores: Record<string, number>; totalScore: number; suggestions: string[] }
-        | undefined;
-      const dimResult = {
-        candidateCount: producerResult.candidateCount,
-        rejectedCount: producerResult.rejectedCount || 0,
-        analysisChars: analysisReport.analysisText.length,
-        referencedFiles: analysisReport.referencedFiles.length,
-        durationMs: Date.now() - dimStartTime,
-        toolCallCount: runtimeToolCalls.length,
-        tokenUsage: dimTokenUsage,
-        analysisText: analysisReport.analysisText,
-        referencedFilesList: analysisReport.referencedFiles || [],
-        qualityGate: qualityScores
+  function createBootstrapDimensionRunInput(
+    dimId: string,
+    plan: NonNullable<ReturnType<typeof resolveBootstrapDimensionPlan>>
+  ) {
+    const { dimConfig, needsCandidates, dimExistingRecipes, hasExistingRecipes, prescreenDone } =
+      plan;
+    const analystScopeId = `${dimId}:analyst`;
+    memoryCoordinator.createDimensionScope(analystScopeId);
+    const dimensionMeta = {
+      id: dimId,
+      outputType: dimConfig.outputType || 'candidate',
+      allowedKnowledgeTypes: dimConfig.allowedKnowledgeTypes || [],
+    };
+    const systemRunContext = createSystemRunContext({
+      memoryCoordinator,
+      scopeId: analystScopeId,
+      activeContext: memoryCoordinator.getActiveContext(analystScopeId),
+      contextWindow: systemRunContextFactory!.createContextWindow({ isSystem: true }),
+      // B1 fix: 分析阶段使用 analyst 策略 (SCAN→EXPLORE→VERIFY→SUMMARIZE)
+      // B3 fix: 透传完整 analyst budget
+      // B4 fix: 自适应预算 — 根据项目文件数缩放 maxIterations (24~40)
+      tracker: ExplorationTracker.resolve(
+        { source: 'system', strategy: 'analyst' },
+        computeAnalystBudget(projectInfo.fileCount || 0)
+      ),
+      source: 'system',
+      outputType: dimConfig.outputType || 'analysis',
+      dimId,
+      dimensionId: dimId,
+      dimensionLabel: dimConfig.label,
+      projectLanguage: primaryLang || projectInfo.lang || null,
+      dimensionMeta,
+      sharedState: {
+        submittedTitles: globalSubmittedTitles,
+        submittedPatterns: globalSubmittedPatterns,
+        submittedTriggers: globalSubmittedTriggers,
+        _bootstrapDedup: bootstrapDedup,
+      },
+      extraFields: {
+        dimConfig,
+        projectInfo,
+        dimContext,
+        sessionStore,
+        semanticMemory,
+        codeEntityGraph: codeEntityGraphInst,
+        projectGraph: null, // ProjectGraph 在 orchestrator 级别可用时注入
+        // §M1: Panorama 全景上下文 (Phase 1.8 数据注入)
+        panorama: buildPanoramaContext(panoramaResult, dimConfig),
+        // §ES: Evidence Starters — 从 Phase 1-4 数据提取维度级证据启发
+        evidenceStarters: buildEvidenceStarters(dimConfig, {
+          astData: astProjectSummary,
+          guardAudit,
+          depGraphData,
+          callGraphResult,
+          panoramaResult,
+        }),
+        // §R1: Rescan 模式 — 已有 recipe 上下文 (避免重复分析/创建)
+        rescanContext: rescanContext
           ? {
-              totalScore: qualityScores.totalScore,
-              scores: qualityScores.scores,
-              action: gateResult?.action || (runResult?.degraded ? 'degrade' : 'pass'),
+              existingRecipes: rescanContext.existingRecipes.filter(
+                (r) => r.knowledgeType === dimId
+              ),
+              decayingRecipes: rescanContext.decayingRecipes.filter(
+                (r) => r.knowledgeType === dimId
+              ),
+              occupiedTriggers: rescanContext.occupiedTriggers,
+              gap: Math.max(0, 5 - (rescanContext.coverageByDim[dimId] || 0)),
+              existing: rescanContext.coverageByDim[dimId] || 0,
             }
           : null,
-      };
-
-      dimensionStats[dimId] = dimResult;
-
-      // P3: 保存 checkpoint — 仅当有实质分析内容时（避免 degraded/空结果污染后续 run）
-      if (analysisReport.analysisText.length >= 50) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- digest shape compatible at runtime
-        await saveDimensionCheckpoint(
-          dataRoot,
-          sessionId,
-          dimId,
-          dimResult,
-          digest as unknown as Parameters<typeof saveDimensionCheckpoint>[4]
-        );
-      } else {
-        logger.warn(
-          `[Insight-v3] ⚠ 跳过 checkpoint 保存: "${dimId}" analysisText 过短 (${analysisReport.analysisText.length} chars)`
-        );
-      }
-
-      return dimResult;
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Insight-v3] Dimension "${dimId}" failed: ${errMsg}`);
-      candidateResults.errors.push({ dimId, error: errMsg });
-      emitter.emitDimensionComplete(dimId, { type: 'error', reason: errMsg });
-      return { candidateCount: 0, error: errMsg };
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // Step 3: 执行 (并行 or 串行)
-  // ═══════════════════════════════════════════════════════════
-  const t0 = Date.now();
-
-  // tierHints: Enhancement Pack 维度通过 tierHint 字段声明首选 Tier
-  const tierHints: Record<string, number> = {};
-  for (const dim of dimensions) {
-    if (typeof dim.tierHint === 'number') {
-      tierHints[dim.id] = dim.tierHint;
-    }
-  }
-
-  if (enableParallel) {
-    const results = await scheduler.execute(executeDimension, {
-      concurrency,
-      activeDimIds,
-      tierHints,
-      shouldAbort: () => !!(taskManager && !taskManager.isSessionValid(sessionId)),
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- DimensionStat structurally compatible with scheduler's DimensionResult
-      onTierComplete: (tierIndex, tierResults) => {
-        const tierStats = [...tierResults.values()];
-        const totalCandidates = tierStats.reduce((s, r) => s + (r.candidateCount || 0), 0);
-        logger.info(
-          `[Insight-v3] Tier ${tierIndex + 1} complete: ${tierResults.size} dimensions, ${totalCandidates} candidates`
-        );
-
-        // v4.0: Tier 级 Reflection — 综合本 Tier 所有维度的发现
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- SessionStore structurally compatible
-          const reflection = buildTierReflection(
-            tierIndex,
-            tierResults as Parameters<typeof buildTierReflection>[1],
-            sessionStore as Parameters<typeof buildTierReflection>[2]
-          );
-          sessionStore.addTierReflection(
-            tierIndex,
-            reflection as Parameters<typeof sessionStore.addTierReflection>[1]
-          );
-          logger.info(
-            `[Insight-v3] Tier ${tierIndex + 1} reflection: ` +
-              `${reflection.topFindings.length} top findings, ` +
-              `${reflection.crossDimensionPatterns.length} patterns`
-          );
-        } catch (refErr: unknown) {
-          logger.warn(
-            `[Insight-v3] Tier ${tierIndex + 1} reflection failed: ${refErr instanceof Error ? refErr.message : String(refErr)}`
-          );
-        }
+        // §EVO: Evolution Stage — 当前维度全部现有 Recipe（healthy + decaying），附带 audit hint
+        existingRecipes: dimExistingRecipes.map((r) => ({
+          id: r.id,
+          title: r.title,
+          trigger: r.trigger,
+          content: r.content,
+          sourceRefs: r.sourceRefs,
+          auditHint:
+            'auditScore' in r && r.auditScore != null
+              ? {
+                  relevanceScore: r.auditScore as number,
+                  verdict: (r as Record<string, unknown>).status === 'decaying' ? 'decay' : 'watch',
+                  evidence: (r as Record<string, unknown>).auditEvidence ?? {},
+                  decayReasons: (r as Record<string, unknown>).decayReason
+                    ? [String((r as Record<string, unknown>).decayReason)]
+                    : [],
+                }
+              : null,
+        })),
+        // Evolution 上下文字段 — buildEvolverPrompt 直接从 strategyContext 读取
+        projectOverview: {
+          primaryLang: primaryLang || projectInfo.lang || 'unknown',
+          fileCount: projectInfo.fileCount || 0,
+          modules: Object.keys(targetFileMap || {}),
+        },
       },
     });
+    const strategyContext = projectSystemRunContext(systemRunContext);
+    return {
+      analystScopeId,
+      runInput: buildBootstrapDimensionRunInput({
+        dimId,
+        dimConfig,
+        needsCandidates,
+        hasExistingRecipes,
+        prescreenDone,
+        sessionId,
+        primaryLang,
+        projectLang: projectInfo.lang || null,
+        allFiles,
+        systemRunContext,
+        strategyContext,
+        memoryCoordinator,
+        sessionAbortSignal,
+      }),
+    };
+  }
 
+  function beginBootstrapDimensionExecution(dimId: string, dimConfig: { label?: string }) {
+    emitter.emitDimensionStart(dimId);
+    logger.info(`[Insight-v3] ── Dimension "${dimId}" (${dimConfig.label}) ──`);
+    return Date.now();
+  }
+
+  async function consumeBootstrapDimensionAgentResult({
+    dimId,
+    plan,
+    agentRunResult,
+    dimStartTime,
+    analystScopeId,
+  }: {
+    dimId: string;
+    plan: NonNullable<ReturnType<typeof resolveBootstrapDimensionPlan>>;
+    agentRunResult: AgentRunResult;
+    dimStartTime: number;
+    analystScopeId: string;
+  }) {
+    const runResult = projectAgentRunResult(agentRunResult);
+    const projection = projectBootstrapDimensionAgentOutput({
+      dimId,
+      needsCandidates: plan.needsCandidates,
+      runResult,
+    });
+    return consumeBootstrapDimensionResult({
+      ctx,
+      dimId,
+      dimConfig: plan.dimConfig,
+      needsCandidates: plan.needsCandidates,
+      projection,
+      runResult,
+      dimStartTime,
+      analystScopeId,
+      memoryCoordinator,
+      sessionStore,
+      dimContext,
+      candidateResults,
+      dimensionCandidates,
+      dimensionStats,
+      emitter,
+      dataRoot,
+      sessionId,
+    });
+  }
+
+  function consumeBootstrapDimensionError({ dimId, err }: { dimId: string; err: unknown }) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    logger.error(`[Insight-v3] Dimension "${dimId}" failed: ${errMsg}`);
+    candidateResults.errors.push({ dimId, error: errMsg });
+    emitter.emitDimensionComplete(dimId, { type: 'error', reason: errMsg });
+    const dimResult = { candidateCount: 0, durationMs: 0, error: errMsg };
+    dimensionStats[dimId] = dimResult;
+    return dimResult;
+  }
+
+  function buildBootstrapDimensionChildPlan(dimId: string): BootstrapSessionChildRunPlan | null {
+    const plan = resolveBootstrapDimensionPlan(dimId);
+    if (!plan) {
+      return null;
+    }
+    return {
+      id: dimId,
+      label: plan.dimConfig.label || plan.dim.label || dimId,
+      tier: resolveBootstrapDimensionTier(dimId, plan.dim),
+      input: {
+        profile: { id: 'bootstrap-dimension' },
+        params: {
+          dimId,
+          needsCandidates: plan.needsCandidates,
+          hasExistingRecipes: plan.hasExistingRecipes,
+          prescreenDone: plan.prescreenDone,
+        },
+        message: {
+          role: 'internal',
+          content: `Bootstrap dimension: ${plan.dimConfig.label || dimId}`,
+          sessionId,
+          metadata: {
+            sessionId,
+            dimension: dimId,
+            phase: 'bootstrap',
+          },
+        },
+        context: {
+          source: 'bootstrap',
+          runtimeSource: 'system',
+          lang: primaryLang || projectInfo.lang || null,
+          promptContext: {
+            dimId,
+            dimensionId: dimId,
+          },
+        },
+        execution: {
+          abortSignal: sessionAbortSignal || undefined,
+        },
+        presentation: { responseShape: 'system-task-result' },
+      },
+      lazyInputFactory: () => {
+        const dimStartTime = beginBootstrapDimensionExecution(dimId, plan.dimConfig);
+        const { analystScopeId, runInput } = createBootstrapDimensionRunInput(dimId, plan);
+        childExecutionState.set(dimId, { dimStartTime, analystScopeId });
+        return runInput;
+      },
+    };
+  }
+
+  function resolveBootstrapDimensionTier(dimId: string, dim: DimensionDef) {
+    if (typeof dim.tierHint === 'number') {
+      return Math.max(0, dim.tierHint - 1);
+    }
+    const tierIndex = scheduler.getTierIndex(dimId);
+    return tierIndex >= 0 ? tierIndex : 0;
+  }
+
+  function consumeBootstrapSessionTierResult(
+    tierIndex: number,
+    tierResults: Map<string, DimensionStat>
+  ) {
+    const tierStats = [...tierResults.values()];
+    const totalCandidates = tierStats.reduce((s, r) => s + (r.candidateCount || 0), 0);
     logger.info(
-      `[Insight-v3] All tiers complete: ${results.size} dimensions in ${Date.now() - t0}ms`
+      `[Insight-v3] Tier ${tierIndex + 1} complete: ${tierResults.size} dimensions, ${totalCandidates} candidates`
     );
+
+    // v4.0: Tier 级 Reflection — 综合本 Tier 所有维度的发现
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- SessionStore structurally compatible
+      const reflection = buildTierReflection(
+        tierIndex,
+        tierResults as Parameters<typeof buildTierReflection>[1],
+        sessionStore as Parameters<typeof buildTierReflection>[2]
+      );
+      sessionStore.addTierReflection(
+        tierIndex,
+        reflection as Parameters<typeof sessionStore.addTierReflection>[1]
+      );
+      logger.info(
+        `[Insight-v3] Tier ${tierIndex + 1} reflection: ` +
+          `${reflection.topFindings.length} top findings, ` +
+          `${reflection.crossDimensionPatterns.length} patterns`
+      );
+    } catch (refErr: unknown) {
+      logger.warn(
+        `[Insight-v3] Tier ${tierIndex + 1} reflection failed: ${refErr instanceof Error ? refErr.message : String(refErr)}`
+      );
+    }
+  }
+
+  function consumeBootstrapSessionResult({
+    parentRunResult,
+    durationMs,
+  }: {
+    parentRunResult: AgentRunResult;
+    durationMs: number;
+  }) {
+    const projection = projectBootstrapSessionResult({
+      parentRunResult,
+      activeDimIds,
+      skippedDimIds: [...incrementalSkippedDims, ...skippedDims],
+    });
+    consumeMissingBootstrapDimensions(projection.missingDimensionIds);
+    logger.info(
+      `[Insight-v3] All tiers complete: ${projection.completedDimensions} dimensions in ${durationMs}ms`
+    );
+    if (
+      projection.parentStatus !== 'success' ||
+      projection.failedDimensionIds.length > 0 ||
+      projection.abortedDimensionIds.length > 0
+    ) {
+      logger.warn(
+        `[Insight-v3] Bootstrap session completed with ${projection.failedDimensionIds.length} failed, ${projection.abortedDimensionIds.length} aborted dimensions (status=${projection.parentStatus})`
+      );
+    }
+    if (projection.missingDimensionIds.length > 0) {
+      logger.warn(
+        `[Insight-v3] Bootstrap session missing dimension results: [${projection.missingDimensionIds.join(', ')}]`
+      );
+    }
     // v4.0: 记录 SessionStore 统计
     const emStats = sessionStore.getStats();
     logger.info(
@@ -1336,21 +1616,86 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
           `${emStats.cache.searchCacheSize} searches, ${emStats.cache.fileCacheSize} files`
       );
     }
-  } else {
-    // 串行: 按 TierScheduler 内部顺序逐个执行
-    for (const tier of scheduler.getTiers()) {
-      for (const dimId of tier) {
-        if (!activeDimIds.includes(dimId)) {
-          continue;
-        }
-        if (taskManager && !taskManager.isSessionValid(sessionId)) {
-          break;
-        }
-        await executeDimension(dimId);
-      }
-    }
-    logger.info(`[Insight-v3] Serial execution complete in ${Date.now() - t0}ms`);
   }
+
+  function consumeMissingBootstrapDimensions(missingDimensionIds: string[]) {
+    for (const dimId of missingDimensionIds) {
+      if (dimensionStats[dimId]) {
+        continue;
+      }
+      consumeBootstrapDimensionError({ dimId, err: 'missing child result' });
+    }
+  }
+
+  const bootstrapSessionInput = buildBootstrapSessionRunInput({
+    sessionId,
+    children: activeDimIds
+      .filter((dimId) => !incrementalSkippedDims.includes(dimId) && !skippedDims.includes(dimId))
+      .map((dimId) => buildBootstrapDimensionChildPlan(dimId))
+      .filter((plan): plan is BootstrapSessionChildRunPlan => !!plan),
+    params: {
+      concurrency: enableParallel ? concurrency : 1,
+    },
+    message: {
+      content: 'Bootstrap session',
+      metadata: { sessionId },
+    },
+    context: {
+      lang: primaryLang || projectInfo.lang || null,
+      coordination: {
+        onChildResult: async ({ childInput, result }) => {
+          const dimId =
+            typeof childInput.params?.dimId === 'string' ? childInput.params.dimId : null;
+          if (!dimId) {
+            return;
+          }
+          if (result.status === 'error' || result.status === 'aborted') {
+            consumeBootstrapDimensionError({ dimId, err: result.reply || 'child-run-error' });
+            return;
+          }
+          const plan = resolveBootstrapDimensionPlan(dimId);
+          const state = childExecutionState.get(dimId);
+          if (!plan || !state) {
+            return;
+          }
+          await consumeBootstrapDimensionAgentResult({
+            dimId,
+            plan,
+            agentRunResult: result,
+            dimStartTime: state.dimStartTime,
+            analystScopeId: state.analystScopeId,
+          });
+        },
+        onTierComplete: ({ tierIndex, childInputs }) => {
+          const tierResults = new Map<string, DimensionStat>();
+          for (const childInput of childInputs) {
+            const dimId =
+              typeof childInput.params?.dimId === 'string' ? childInput.params.dimId : null;
+            if (!dimId || !dimensionStats[dimId]) {
+              continue;
+            }
+            tierResults.set(dimId, dimensionStats[dimId]);
+          }
+          consumeBootstrapSessionTierResult(tierIndex, tierResults);
+        },
+      },
+    },
+    execution: {
+      abortSignal: sessionAbortSignal || undefined,
+      shouldAbort: () => !!(taskManager && !taskManager.isSessionValid(sessionId)),
+    },
+    presentation: { responseShape: 'system-task-result' },
+  });
+  logger.debug?.(
+    `[Insight-v3] Prepared bootstrap-session parent input: ${(bootstrapSessionInput.params?.dimensions as unknown[] | undefined)?.length || 0} child runs`
+  );
+
+  // ═══════════════════════════════════════════════════════════
+  // Step 3: 统一 parent run 执行 (并行或串行由 params.concurrency 决定)
+  // ═══════════════════════════════════════════════════════════
+  const t0 = Date.now();
+  const parentRunResult = await agentService!.run(bootstrapSessionInput);
+  consumeBootstrapSessionResult({ parentRunResult, durationMs: Date.now() - t0 });
 
   // ── Bootstrap Dedup 统计 + 清理 ──
   if (bootstrapDedup.count > 0) {

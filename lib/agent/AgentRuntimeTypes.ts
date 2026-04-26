@@ -13,6 +13,7 @@ export interface ToolCallEntry {
   name?: string;
   args: Record<string, unknown>;
   result: unknown;
+  envelope?: import('./core/ToolResultEnvelope.js').ToolResultEnvelope;
   durationMs: number;
 }
 
@@ -52,6 +53,19 @@ export interface AgentDiagnosticWarning {
   tool?: string;
 }
 
+export interface ToolCallDiagnostic {
+  tool: string;
+  callId: string;
+  parentCallId?: string;
+  status: string;
+  ok: boolean;
+  surface?: string;
+  source?: string;
+  kind?: string;
+  startedAt: string;
+  durationMs: number;
+}
+
 export interface AgentDiagnostics {
   degraded: boolean;
   fallbackUsed: boolean;
@@ -62,6 +76,7 @@ export interface AgentDiagnostics {
   emptyResponses: number;
   aiErrorCount: number;
   gateFailures: Array<{ stage: string; action: string; reason?: string }>;
+  toolCalls?: ToolCallDiagnostic[];
 }
 
 /** Tool execution pipeline metadata */
@@ -72,6 +87,7 @@ export interface ToolMetadata {
   durationMs: number;
   dedupMessage?: string;
   isSubmit?: boolean;
+  envelope?: import('./core/ToolResultEnvelope.js').ToolResultEnvelope;
 }
 
 /** File cache entry */
@@ -86,6 +102,7 @@ export interface RuntimeConfig {
   presetName?: string;
   aiProvider: import('#external/ai/AiProvider.js').AiProvider;
   toolRegistry: import('./tools/ToolRegistry.js').ToolRegistry;
+  toolRouter?: import('./core/ToolContracts.js').ToolRouterContract | null;
   container?: Record<string, unknown> | null;
   capabilities?: import('./capabilities.js').Capability[];
   strategy: import('./strategies.js').Strategy;

@@ -174,7 +174,7 @@ content.markdown 字段必须是「项目特写」：
  *   - produce 使用 promptBuilder (而非 promptTransform)，
  *     从 gateArtifact 注入结构化发现和代码证据到 prompt
  *   - strategyContext 需要包含 activeContext / outputType / dimId
- *     (由 AgentFactory.buildSystemContext 设置)
+ *     (由 SystemRunContextFactory / AgentRunInput.context 设置)
  *
  * @param opts.task 任务类型
  * @param opts.producePrompt Produce 阶段 systemPrompt

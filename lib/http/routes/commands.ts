@@ -4,13 +4,16 @@
  */
 
 import express, { type Request, type Response } from 'express';
-import Logger from '../../infrastructure/logging/Logger.js';
+import { DASHBOARD_OPERATION_IDS } from '../../agent/dashboard/DashboardOperations.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { FileReadQuery, FileSaveBody } from '../../shared/schemas/http-requests.js';
 import { validate, validateQuery } from '../middleware/validate.js';
+import {
+  executeDashboardOperation,
+  sendDashboardOperationResponse,
+} from '../utils/dashboard-operation.js';
 
 const router = express.Router();
-const logger = Logger.getInstance();
 
 /**
  * POST /api/v1/commands/spm-map
@@ -18,15 +21,13 @@ const logger = Logger.getInstance();
  */
 router.post('/spm-map', async (req: Request, res: Response) => {
   const container = getServiceContainer();
-
-  const moduleService = container.get('moduleService');
-  const result = await moduleService.updateModuleMap({ aggressive: true });
-
-  logger.info('Module map updated via dashboard', { result });
-  res.json({
-    success: true,
-    data: result,
-  });
+  const envelope = await executeDashboardOperation(
+    container,
+    req,
+    DASHBOARD_OPERATION_IDS.updateModuleMap,
+    { aggressive: true }
+  );
+  sendDashboardOperationResponse(res, envelope);
 });
 
 /**
@@ -35,58 +36,13 @@ router.post('/spm-map', async (req: Request, res: Response) => {
  */
 router.post('/embed', async (req: Request, res: Response) => {
   const container = getServiceContainer();
-
-  // Mock 模式下向量构建需要 embedding — 拒绝执行
-  const manager = container.singletons?._aiProviderManager as { isMock: boolean } | undefined;
-  if (manager?.isMock) {
-    res.status(400).json({
-      success: false,
-      message: 'AI Provider 未配置，当前为 Mock 模式。Embedding 不可用。',
-    });
-    return;
-  }
-
-  // 优先使用 VectorService (新架构), 降级到 indexingPipeline (旧架构)
-  const vectorService = container.services.vectorService ? container.get('vectorService') : null;
-
-  let result: Record<string, unknown>;
-
-  if (vectorService) {
-    const clearFirst = req.body?.clear !== false;
-    if (clearFirst) {
-      await vectorService.clear();
-    }
-    const buildResult = await vectorService.fullBuild({
-      force: req.body?.force ?? false,
-    });
-    result = {
-      scanned: buildResult.scanned,
-      chunked: buildResult.chunked,
-      embedded: buildResult.embedded,
-      upserted: buildResult.upserted,
-      skipped: buildResult.skipped,
-      errors: buildResult.errors,
-    };
-  } else {
-    const indexingPipeline = container.get('indexingPipeline');
-    result = await indexingPipeline.run({
-      clear: req.body?.clear !== false,
-      force: req.body?.force ?? false,
-    });
-  }
-
-  logger.info('Semantic index rebuilt via dashboard', { result });
-  res.json({
-    success: true,
-    data: {
-      scanned: result.scanned || 0,
-      chunked: result.chunked || 0,
-      embedded: result.embedded || 0,
-      upserted: result.upserted || 0,
-      skipped: result.skipped || 0,
-      errors: result.errors || 0,
-    },
-  });
+  const envelope = await executeDashboardOperation(
+    container,
+    req,
+    DASHBOARD_OPERATION_IDS.rebuildSemanticIndex,
+    req.body || {}
+  );
+  sendDashboardOperationResponse(res, envelope);
 });
 
 /**

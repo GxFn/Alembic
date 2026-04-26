@@ -54,7 +54,8 @@ export function register(c: ServiceContainer) {
     return new ModuleService(
       projectRoot as ConstructorParameters<typeof ModuleService>[0],
       {
-        agentFactory: ct.get('agentFactory'),
+        agentService: ct.get('agentService'),
+        systemRunContextFactory: ct.get('systemRunContextFactory'),
         container: ct,
         qualityScorer: ct.get('qualityScorer'),
         recipeExtractor: ct.singletons._recipeExtractor || null,

@@ -7,11 +7,11 @@ import { TemporaryToolRegistry } from '../../lib/agent/forge/TemporaryToolRegist
 function createMockRegistry() {
   const tools = new Map<string, unknown>();
   return {
-    register: vi.fn((def: { name: string }) => {
+    projectForgedTool: vi.fn((def: { name: string }) => {
       tools.set(def.name, def);
     }),
-    unregister: vi.fn((name: string) => tools.delete(name)),
-    has: vi.fn((name: string) => tools.has(name)),
+    revokeForgedTool: vi.fn((name: string) => tools.delete(name)),
+    hasInternalTool: vi.fn((name: string) => tools.has(name)),
     _tools: tools,
   };
 }
@@ -49,12 +49,13 @@ describe('TemporaryToolRegistry', () => {
   });
 
   describe('registerTemporary', () => {
-    it('should register tool to main registry with forged prefix', () => {
+    it('should project generated tool to forged internal store', () => {
       tempReg.registerTemporary({ ...TOOL_BASE, name: 'my_tool' });
-      expect(registry.register).toHaveBeenCalledWith(
+      expect(registry.projectForgedTool).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'my_tool',
-          description: expect.stringContaining('[Forged:generate]'),
+          description: 'test tool',
+          forgeMode: 'generate',
         })
       );
     });
@@ -72,25 +73,62 @@ describe('TemporaryToolRegistry', () => {
     it('should replace existing temp tool with same name', () => {
       tempReg.registerTemporary({ ...TOOL_BASE, name: 'dup' });
       tempReg.registerTemporary({ ...TOOL_BASE, name: 'dup' });
-      expect(registry.unregister).toHaveBeenCalledWith('dup');
+      expect(registry.revokeForgedTool).toHaveBeenCalledWith('dup');
       const list = tempReg.list();
       expect(list.filter((t) => t.name === 'dup')).toHaveLength(1);
     });
 
     it('should reject a temporary tool that conflicts with an existing static tool', () => {
-      registry.register({ name: 'read_project_file' });
+      registry._tools.set('read_project_file', {});
       expect(() => {
         tempReg.registerTemporary({ ...TOOL_BASE, name: 'read_project_file' });
       }).toThrow('conflicts with an existing static tool');
     });
+
+    it('should reject non-generated temporary tools from internal-store projection', () => {
+      expect(() => {
+        tempReg.registerTemporary({ ...TOOL_BASE, name: 'workflow_tool', forgeMode: 'compose' });
+      }).toThrow('cannot be projected as a forged internal tool');
+    });
+
+    it('should track temporary capability without projecting it to the internal store', () => {
+      tempReg.registerTemporary(
+        { ...TOOL_BASE, name: 'workflow_tool', forgeMode: 'compose' },
+        1000,
+        {
+          projectIntoInternalToolStore: false,
+        }
+      );
+
+      expect(tempReg.isTemporary('workflow_tool')).toBe(true);
+      expect(registry.projectForgedTool).not.toHaveBeenCalled();
+      expect(tempReg.list()).toEqual([
+        expect.objectContaining({
+          name: 'workflow_tool',
+          forgeMode: 'compose',
+          projectedIntoInternalToolStore: false,
+        }),
+      ]);
+    });
   });
 
   describe('revoke', () => {
-    it('should remove temp tool and unregister from main registry', () => {
+    it('should remove temp tool and revoke from forged internal store', () => {
       tempReg.registerTemporary({ ...TOOL_BASE, name: 'rev_tool' });
       const result = tempReg.revoke('rev_tool');
       expect(result).toBe(true);
-      expect(registry.unregister).toHaveBeenCalledWith('rev_tool');
+      expect(registry.revokeForgedTool).toHaveBeenCalledWith('rev_tool');
+      expect(tempReg.list()).toHaveLength(0);
+    });
+
+    it('should revoke tracked-only temporary capability without touching internal store', () => {
+      tempReg.registerTemporary({ ...TOOL_BASE, name: 'workflow_rev' }, 1000, {
+        projectIntoInternalToolStore: false,
+      });
+      const result = tempReg.revoke('workflow_rev');
+
+      expect(result).toBe(true);
+      expect(registry.revokeForgedTool).not.toHaveBeenCalledWith('workflow_rev');
       expect(tempReg.list()).toHaveLength(0);
     });
 
@@ -138,7 +176,17 @@ describe('TemporaryToolRegistry', () => {
       // 推进时间到过期
       vi.advanceTimersByTime(60_000 + 2001);
       expect(tempReg.list()).toHaveLength(0);
-      expect(registry.unregister).toHaveBeenCalledWith('exp_tool');
+      expect(registry.revokeForgedTool).toHaveBeenCalledWith('exp_tool');
+    });
+
+    it('should expire tracked-only capability without revoking from internal store', () => {
+      tempReg.registerTemporary({ ...TOOL_BASE, name: 'exp_workflow' }, 2000, {
+        projectIntoInternalToolStore: false,
+      });
+
+      vi.advanceTimersByTime(60_000 + 2001);
+      expect(tempReg.list()).toHaveLength(0);
+      expect(registry.revokeForgedTool).not.toHaveBeenCalledWith('exp_workflow');
     });
 
     it('should not remove tool with TTL=0 (never expires)', () => {
@@ -150,7 +198,9 @@ describe('TemporaryToolRegistry', () => {
 
   describe('list', () => {
     it('should return info for all temporary tools', () => {
-      tempReg.registerTemporary({ ...TOOL_BASE, name: 'a', forgeMode: 'compose' });
+      tempReg.registerTemporary({ ...TOOL_BASE, name: 'a', forgeMode: 'compose' }, undefined, {
+        projectIntoInternalToolStore: false,
+      });
       tempReg.registerTemporary({ ...TOOL_BASE, name: 'b', forgeMode: 'generate' });
 
       const list = tempReg.list();
@@ -166,8 +216,8 @@ describe('TemporaryToolRegistry', () => {
       tempReg.registerTemporary({ ...TOOL_BASE, name: 'y' });
       tempReg.dispose();
       expect(tempReg.list()).toHaveLength(0);
-      expect(registry.unregister).toHaveBeenCalledWith('x');
-      expect(registry.unregister).toHaveBeenCalledWith('y');
+      expect(registry.revokeForgedTool).toHaveBeenCalledWith('x');
+      expect(registry.revokeForgedTool).toHaveBeenCalledWith('y');
     });
   });
 });

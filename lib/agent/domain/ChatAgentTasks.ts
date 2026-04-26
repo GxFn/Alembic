@@ -1,12 +1,15 @@
 /**
  * ChatAgentTasks — Agent 预定义任务方法
  *
- * 每个任务接收 context 对象: { invokeAgent, aiProvider, container, logger }
- * - invokeAgent(toolName, params) — 直接执行工具 handler（纯数据工具）
+ * 每个任务接收 context 对象: { invokeToolEnvelope, aiProvider, container, logger }
+ * - invokeToolEnvelope(toolName, params) — 通过 ToolRouter 执行并返回标准 envelope
  * - aiProvider — AI Provider 实例
  * - container — ServiceContainer
  * - logger — Logger 实例
  */
+
+import type { ToolResultEnvelope } from '../core/ToolResultEnvelope.js';
+import { type AgentService, runRelationDiscovery } from '../service/index.js';
 
 // ── Local Type Definitions ──
 
@@ -18,7 +21,10 @@ interface TaskAiProvider {
 
 /** Task execution context provided by the ChatAgent framework */
 interface TaskContext {
-  invokeAgent(toolName: string, params: Record<string, unknown>): Promise<Record<string, unknown>>;
+  invokeToolEnvelope(
+    toolName: string,
+    params: Record<string, unknown>
+  ): Promise<ToolResultEnvelope>;
   aiProvider?: TaskAiProvider;
   container: { get(name: string): unknown };
   logger?: unknown;
@@ -59,12 +65,6 @@ interface KnowledgeServiceLike {
   ): Promise<{ items?: KnowledgeItem[]; data?: KnowledgeItem[] }>;
 }
 
-/** Agent factory interface for relation discovery */
-interface AgentFactoryLike {
-  discoverRelations(opts: { batchSize?: number }): Promise<unknown>;
-  getAiProviderInfo?(): { name: string } | undefined;
-}
-
 /** Guard violation entry */
 interface GuardViolation {
   severity?: string;
@@ -84,14 +84,18 @@ export async function taskCheckAndSubmit(
   context: TaskContext,
   { candidate, projectRoot }: { candidate: CandidateInput; projectRoot?: string }
 ) {
-  const { invokeAgent, aiProvider } = context;
+  const { aiProvider } = context;
 
   // Step 1: 查重
-  const duplicates = (await invokeAgent('check_duplicate', {
-    candidate,
-    projectRoot,
-    threshold: 0.5,
-  })) as { similar?: DuplicateEntry[] };
+  const duplicates = await invokeTaskTool<{ similar?: DuplicateEntry[] }>(
+    context,
+    'check_duplicate',
+    {
+      candidate,
+      projectRoot,
+      threshold: 0.5,
+    }
+  );
 
   // Step 2: 如果有高相似度，使用 AI 分析是否真正重复
   const highSim = (duplicates.similar || []).filter((d: DuplicateEntry) => d.similarity >= 0.7);
@@ -131,18 +135,20 @@ ${highSim.map((s: DuplicateEntry) => `- ${s.title} (相似度: ${s.similarity})`
 
 /**
  * 任务: 批量发现 Recipe 间的知识图谱关系
- * 委托给 AgentFactory.discoverRelations (独立 Explore → Synthesize 管线)
+ * 委托给 AgentService.run(relation-discovery) (独立 Explore → Synthesize 管线)
  */
 export async function taskDiscoverAllRelations(context: TaskContext, { batchSize = 20 } = {}) {
   const { container } = context;
-  const agentFactory = container.get('agentFactory') as AgentFactoryLike;
+  const agentService = container.get('agentService') as AgentService;
 
   // Mock 模式下跳过 AI 关系发现
-  if (agentFactory.getAiProviderInfo?.()?.name === 'mock') {
+  const aiManager = (container as unknown as { singletons?: Record<string, unknown> }).singletons
+    ?._aiProviderManager as { isMock?: boolean } | undefined;
+  if (aiManager?.isMock) {
     return { discovered: 0, message: 'AI Provider 未配置（Mock 模式），跳过关系发现。' };
   }
 
-  return agentFactory.discoverRelations({ batchSize });
+  return runRelationDiscovery({ agentService, batchSize });
 }
 
 /** 任务: 批量 AI 补全候选语义字段 */
@@ -150,7 +156,7 @@ export async function taskFullEnrich(
   context: TaskContext,
   { status = 'pending', maxCount = 50 } = {}
 ) {
-  const { invokeAgent, container } = context;
+  const { container } = context;
 
   const knowledgeService = container.get('knowledgeService') as KnowledgeServiceLike;
 
@@ -173,7 +179,7 @@ export async function taskFullEnrich(
     return { enriched: 0, message: 'All candidates already enriched' };
   }
 
-  const result = await invokeAgent('enrich_candidate', {
+  const result = await invokeTaskTool(context, 'enrich_candidate', {
     candidateIds: needEnrich.map((c: KnowledgeItem) => c.id).slice(0, 20),
   });
 
@@ -188,7 +194,7 @@ export async function taskQualityAudit(
   context: TaskContext,
   { threshold = 0.6, maxCount = 100 } = {}
 ) {
-  const { invokeAgent, container } = context;
+  const { container } = context;
 
   const knowledgeService = container.get('knowledgeService') as KnowledgeServiceLike;
 
@@ -211,11 +217,11 @@ export async function taskQualityAudit(
   const gradeDistribution = { A: 0, B: 0, C: 0, D: 0, F: 0 };
 
   for (const recipe of recipes) {
-    const scoreResult = (await invokeAgent('quality_score', { recipe })) as {
+    const scoreResult = await invokeTaskTool<{
       score: number;
       grade: string;
       dimensions: unknown;
-    };
+    }>(context, 'quality_score', { recipe });
     if (scoreResult.grade) {
       (gradeDistribution as Record<string, number>)[scoreResult.grade] =
         ((gradeDistribution as Record<string, number>)[scoreResult.grade] || 0) + 1;
@@ -250,18 +256,21 @@ export async function taskGuardFullScan(
   context: TaskContext,
   { code, language, filePath }: { code?: string; language?: string; filePath?: string } = {}
 ) {
-  const { invokeAgent, aiProvider } = context;
+  const { aiProvider } = context;
 
   if (!code) {
     return { error: 'code is required' };
   }
 
   // Step 1: 静态检查
-  const checkResult = (await invokeAgent('guard_check_code', {
+  const checkResult = await invokeTaskTool<{
+    violationCount: number;
+    violations?: GuardViolation[];
+  }>(context, 'guard_check_code', {
     code,
     language: language || 'unknown',
     scope: 'project',
-  })) as { violationCount: number; violations?: GuardViolation[] };
+  });
 
   // Step 2: 如果有违规且 AI 可用，生成修复建议
   let suggestions: unknown = null;
@@ -305,4 +314,19 @@ ${code.substring(0, 3000)}
     violations: checkResult.violations,
     suggestions,
   };
+}
+
+async function invokeTaskTool<T = Record<string, unknown>>(
+  context: TaskContext,
+  toolName: string,
+  params: Record<string, unknown>
+): Promise<T> {
+  return projectTaskToolEnvelope(await context.invokeToolEnvelope(toolName, params)) as T;
+}
+
+function projectTaskToolEnvelope(envelope: ToolResultEnvelope): unknown {
+  if (envelope.structuredContent !== undefined) {
+    return envelope.structuredContent;
+  }
+  return envelope.ok ? { success: true, message: envelope.text } : { error: envelope.text };
 }

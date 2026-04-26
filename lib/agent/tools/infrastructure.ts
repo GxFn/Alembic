@@ -13,6 +13,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Logger from '#infra/logging/Logger.js';
+import {
+  requireAuditLogger,
+  requireIndexingPipeline,
+  requireKnowledgeGraphImpactService,
+  resolveInfraServicesFromContext,
+} from '../core/ToolInfraServices.js';
 import type { ToolHandlerContext } from './_shared.js';
 import { PROJECT_SKILLS_DIR, SKILLS_DIR } from './_shared.js';
 
@@ -31,7 +37,7 @@ export const graphImpactAnalysis = {
     required: ['recipeId'],
   },
   handler: async (params: { recipeId: string; maxDepth?: number }, ctx: ToolHandlerContext) => {
-    const kgService = ctx.container.get('knowledgeGraphService');
+    const kgService = requireKnowledgeGraphImpactService(resolveInfraServicesFromContext(ctx));
     const impacted = kgService.getImpactAnalysis(params.recipeId, 'recipe', params.maxDepth || 3);
     return { recipeId: params.recipeId, impactedCount: impacted.length, impacted };
   },
@@ -52,7 +58,7 @@ export const rebuildIndex = {
     },
   },
   handler: async (params: { force?: boolean; dryRun?: boolean }, ctx: ToolHandlerContext) => {
-    const pipeline = ctx.container.get('indexingPipeline');
+    const pipeline = requireIndexingPipeline(resolveInfraServicesFromContext(ctx));
     return pipeline.run({ force: params.force || false, dryRun: params.dryRun || false });
   },
 };
@@ -78,7 +84,7 @@ export const queryAuditLog = {
     params: { action?: string; actor?: string; limit?: number },
     ctx: ToolHandlerContext
   ) => {
-    const auditLogger = ctx.container.get('auditLogger');
+    const auditLogger = requireAuditLogger(resolveInfraServicesFromContext(ctx));
     const { action, actor, limit = 20 } = params;
 
     if (actor) {
@@ -193,7 +199,7 @@ export const suggestSkills = {
   handler: async (_params: Record<string, never>, ctx: ToolHandlerContext) => {
     const { SkillAdvisor } = await import('#service/skills/SkillAdvisor.js');
     const projectRoot = ctx?.projectRoot || process.cwd();
-    const dataRoot = ((ctx as Record<string, unknown>)?.dataRoot as string) || projectRoot;
+    const dataRoot = ctx?.dataRoot || projectRoot;
     const knowledgeRepo = ctx?.container?.get?.('knowledgeRepository') || null;
     const auditRepo = ctx?.container?.get?.('auditRepository') || null;
     const advisor = new SkillAdvisor(projectRoot, { knowledgeRepo, auditRepo, dataRoot });

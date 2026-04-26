@@ -1,6 +1,13 @@
 import type { Request, Response } from 'express';
 import { describe, expect, test, vi } from 'vitest';
-import { ensureAiConfigUpdateAllowed, ensureDirectToolAllowed } from '../../lib/http/routes/ai.js';
+import type { ToolResultEnvelope } from '../../lib/agent/core/ToolResultEnvelope.js';
+import type { ToolCapabilityManifest } from '../../lib/agent/tools/CapabilityManifest.js';
+import {
+  createHttpChatAgentRunInput,
+  ensureAiConfigUpdateAllowed,
+  ensureDirectToolAllowed,
+  sendToolEnvelopeResponse,
+} from '../../lib/http/routes/ai.js';
 
 function mockResponse() {
   const res = {
@@ -23,11 +30,118 @@ function mockRequest(overrides: Partial<Request> = {}) {
   } as Request;
 }
 
+function toolEnvelope(overrides: Partial<ToolResultEnvelope> = {}): ToolResultEnvelope {
+  return {
+    ok: true,
+    toolId: 'search_knowledge',
+    callId: 'call-1',
+    startedAt: new Date().toISOString(),
+    durationMs: 2,
+    status: 'success',
+    text: 'ok',
+    structuredContent: { result: 'ok' },
+    diagnostics: {
+      degraded: false,
+      fallbackUsed: false,
+      warnings: [],
+      timedOutStages: [],
+      blockedTools: [],
+      truncatedToolCalls: 0,
+      emptyResponses: 0,
+      aiErrorCount: 0,
+      gateFailures: [],
+    },
+    trust: {
+      source: 'internal',
+      sanitized: true,
+      containsUntrustedText: false,
+      containsSecrets: false,
+    },
+    ...overrides,
+  };
+}
+
+function manifest(overrides: Partial<ToolCapabilityManifest> = {}): ToolCapabilityManifest {
+  return {
+    id: 'search_recipes',
+    title: 'Search Recipes',
+    kind: 'internal-tool',
+    description: 'Search recipes',
+    owner: 'test',
+    lifecycle: 'active',
+    surfaces: ['runtime', 'http'],
+    inputSchema: {},
+    risk: {
+      sideEffect: false,
+      dataAccess: 'workspace',
+      writeScope: 'none',
+      network: 'none',
+      credentialAccess: 'none',
+      requiresHumanConfirmation: 'never',
+      owaspTags: [],
+    },
+    execution: {
+      adapter: 'internal',
+      timeoutMs: 0,
+      maxOutputBytes: 10_000,
+      abortMode: 'none',
+      cachePolicy: 'none',
+      concurrency: 'parallel-safe',
+      artifactMode: 'inline',
+    },
+    governance: {
+      auditLevel: 'none',
+      policyProfile: 'read',
+      approvalPolicy: 'auto',
+      allowedRoles: ['developer'],
+      allowInComposer: true,
+      allowInRemoteMcp: false,
+      allowInNonInteractive: true,
+    },
+    evals: { required: false, cases: [] },
+    ...overrides,
+  };
+}
+
+function catalog(entry: ToolCapabilityManifest | null) {
+  return {
+    getManifest: vi.fn(() => entry),
+  };
+}
+
 describe('AI route direct tool governance', () => {
+  test('builds chat AgentRunInput without route-level runtime construction fields', () => {
+    const input = createHttpChatAgentRunInput(
+      mockRequest({
+        body: { mode: 'remote-exec' },
+        resolvedRole: 'developer',
+        resolvedUser: 'local-user',
+      }),
+      {
+        prompt: 'hello',
+        history: [{ role: 'user', content: 'previous' }],
+        lang: 'zh-CN',
+        conversationId: 'conv-1',
+      }
+    );
+
+    expect(input.profile).toEqual({ preset: 'chat' });
+    expect(input.message).toMatchObject({
+      content: 'hello',
+      sessionId: 'conv-1',
+      history: [{ role: 'user', content: 'previous' }],
+    });
+    expect(input.context).toMatchObject({
+      source: 'http-chat',
+      actor: { role: 'developer', user: 'local-user', sessionId: 'conv-1' },
+    });
+    expect(input.message.metadata).not.toHaveProperty('mode');
+  });
+
   test('allows unregistered tools to fall through to existing not-found handling', async () => {
     const res = mockResponse();
     const allowed = await ensureDirectToolAllowed(
-      { has: () => false, isDirectCallable: () => false, getToolMetadata: () => null },
+      catalog(null),
       'missing_tool',
       mockRequest(),
       res
@@ -40,11 +154,18 @@ describe('AI route direct tool governance', () => {
   test('rejects registered side-effect tools before execution', async () => {
     const res = mockResponse();
     const allowed = await ensureDirectToolAllowed(
-      {
-        has: () => true,
-        isDirectCallable: () => false,
-        getToolMetadata: () => ({ sideEffect: true }),
-      },
+      catalog(
+        manifest({
+          id: 'submit_knowledge',
+          surfaces: ['runtime'],
+          risk: {
+            ...manifest().risk,
+            sideEffect: true,
+            writeScope: 'workspace',
+            requiresHumanConfirmation: 'on-risk',
+          },
+        })
+      ),
       'submit_knowledge',
       mockRequest(),
       res
@@ -59,136 +180,103 @@ describe('AI route direct tool governance', () => {
     );
   });
 
-  test('runs Gateway checkOnly for direct tools with gatewayAction metadata', async () => {
+  test('leaves Gateway checks to ToolRouter governance for direct tools', async () => {
     const res = mockResponse();
     const checkOnly = vi.fn().mockResolvedValue({ success: true, requestId: 'gw-1' });
     const allowed = await ensureDirectToolAllowed(
-      {
-        has: () => true,
-        isDirectCallable: () => true,
-        getToolMetadata: () => ({
-          directCallable: true,
-          sideEffect: false,
-          gatewayAction: 'read:recipes',
-          gatewayResource: 'recipes',
-        }),
-      },
+      catalog(manifest({ id: 'search_recipes' })),
       'search_recipes',
       mockRequest({ resolvedRole: 'external_agent', headers: { 'x-session-id': 's1' } }),
       res,
-      { checkOnly },
-      { keyword: 'runtime' }
+      { checkOnly }
     );
 
     expect(allowed).toBe(true);
-    expect(checkOnly).toHaveBeenCalledWith({
-      actor: 'external_agent',
-      action: 'read:recipes',
-      resource: 'recipes',
-      data: expect.objectContaining({
-        tool: 'search_recipes',
-        params: { keyword: 'runtime' },
-        _resolvedUser: 'local',
-      }),
-      session: 's1',
-    });
+    expect(checkOnly).not.toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  test('fails closed when a mapped direct tool has no Gateway available', async () => {
+  test('allows direct tools when Gateway is unavailable because Governance owns the check', async () => {
     const res = mockResponse();
     const allowed = await ensureDirectToolAllowed(
-      {
-        has: () => true,
-        isDirectCallable: () => true,
-        getToolMetadata: () => ({
-          directCallable: true,
-          sideEffect: false,
-          gatewayAction: 'read:project',
-          gatewayResource: 'project',
-        }),
-      },
+      catalog(manifest({ id: 'read_project_file' })),
       'read_project_file',
       mockRequest({ resolvedRole: 'external_agent' }),
       res,
-      null,
-      { filePath: 'README.md' }
-    );
-
-    expect(allowed).toBe(false);
-    expect(res.status).toHaveBeenCalledWith(503);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        error: expect.objectContaining({ code: 'GATEWAY_UNAVAILABLE' }),
-      })
-    );
-  });
-
-  test('maps agent meta tools through Gateway checkOnly', async () => {
-    const res = mockResponse();
-    const checkOnly = vi.fn().mockResolvedValue({ success: true, requestId: 'gw-tools' });
-    const allowed = await ensureDirectToolAllowed(
-      {
-        has: () => true,
-        isDirectCallable: () => true,
-        getToolMetadata: () => ({
-          directCallable: true,
-          sideEffect: false,
-          gatewayAction: 'read:agent_tools',
-          gatewayResource: 'agent_tools',
-        }),
-      },
-      'get_tool_details',
-      mockRequest({ resolvedRole: 'external_agent' }),
-      res,
-      { checkOnly },
-      { toolName: 'search_recipes' }
+      null
     );
 
     expect(allowed).toBe(true);
-    expect(checkOnly).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'read:agent_tools',
-        resource: 'agent_tools',
-      })
-    );
+    expect(res.status).not.toHaveBeenCalled();
   });
 
-  test('blocks direct tools when Gateway checkOnly denies access', async () => {
+  test('allows agent meta direct tools without route-level Gateway checks', async () => {
     const res = mockResponse();
+    const checkOnly = vi.fn().mockResolvedValue({ success: true, requestId: 'gw-tools' });
     const allowed = await ensureDirectToolAllowed(
-      {
-        has: () => true,
-        isDirectCallable: () => true,
-        getToolMetadata: () => ({
-          directCallable: true,
-          sideEffect: false,
-          gatewayAction: 'read:audit_logs',
-          gatewayResource: '/audit_logs/self',
-        }),
-      },
+      catalog(manifest({ id: 'get_tool_details' })),
+      'get_tool_details',
+      mockRequest({ resolvedRole: 'external_agent' }),
+      res,
+      { checkOnly }
+    );
+
+    expect(allowed).toBe(true);
+    expect(checkOnly).not.toHaveBeenCalled();
+  });
+
+  test('does not block direct tools at route layer when Gateway would deny later', async () => {
+    const res = mockResponse();
+    const checkOnly = vi.fn().mockResolvedValue({
+      success: false,
+      requestId: 'gw-denied',
+      error: { code: 'PERMISSION_DENIED', statusCode: 403, message: 'Permission denied' },
+    });
+    const allowed = await ensureDirectToolAllowed(
+      catalog(manifest({ id: 'query_audit_log' })),
       'query_audit_log',
       mockRequest({ resolvedRole: 'visitor' }),
       res,
-      {
-        checkOnly: vi.fn().mockResolvedValue({
-          success: false,
-          requestId: 'gw-denied',
-          error: { code: 'PERMISSION_DENIED', statusCode: 403, message: 'Permission denied' },
-        }),
-      }
+      { checkOnly }
     );
 
-    expect(allowed).toBe(false);
+    expect(allowed).toBe(true);
+    expect(checkOnly).not.toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('returns successful direct tool envelopes as data', () => {
+    const res = mockResponse();
+    const envelope = toolEnvelope({ text: 'project summary' });
+
+    sendToolEnvelopeResponse(res, envelope);
+
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: envelope });
+  });
+
+  test('maps blocked direct tool envelopes to HTTP errors', () => {
+    const res = mockResponse();
+    const envelope = toolEnvelope({
+      ok: false,
+      status: 'blocked',
+      text: 'Tool not exposed on http surface',
+      structuredContent: undefined,
+    });
+
+    sendToolEnvelopeResponse(res, envelope);
+
     expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        error: expect.objectContaining({
-          code: 'PERMISSION_DENIED',
-          requestId: 'gw-denied',
-        }),
-      })
-    );
+    expect(res.json).toHaveBeenCalledWith({
+      success: false,
+      error: expect.objectContaining({
+        code: 'TOOL_BLOCKED',
+        message: 'Tool not exposed on http surface',
+        status: 'blocked',
+        toolId: 'search_knowledge',
+      }),
+      data: envelope,
+    });
   });
 
   test('runs Gateway checkOnly before AI env config writes', async () => {

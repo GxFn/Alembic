@@ -21,6 +21,7 @@
  */
 
 import Logger from '#infra/logging/Logger.js';
+import type { ToolResultEnvelope } from '../core/ToolResultEnvelope.js';
 import type { DistilledContext } from './memory-flush-contract.js';
 
 // ═══════════════════════════════════════════════════════════
@@ -774,6 +775,7 @@ export class ActiveContext {
 
     const resultObj =
       typeof result === 'object' && result !== null ? (result as Record<string, unknown>) : null;
+    const envelope = isToolResultEnvelope(result) ? result : null;
 
     switch (toolName) {
       case 'search_project_code': {
@@ -846,6 +848,24 @@ export class ActiveContext {
         meta.resultType = 'other';
         meta.keyFacts.push(toolName);
       }
+    }
+
+    if (envelope) {
+      meta.resultType = envelope.status;
+      meta.keyFacts.push(
+        envelope.parentCallId
+          ? `${toolName} ${envelope.status} (${envelope.callId} child of ${envelope.parentCallId})`
+          : `${toolName} ${envelope.status} (${envelope.callId})`
+      );
+      Object.assign(meta, {
+        toolCall: {
+          callId: envelope.callId,
+          ...(envelope.parentCallId ? { parentCallId: envelope.parentCallId } : {}),
+          status: envelope.status,
+          ok: envelope.ok,
+          durationMs: envelope.durationMs,
+        },
+      });
     }
 
     return meta;
@@ -997,6 +1017,16 @@ export class ActiveContext {
 
     return planLines.join('\n').trim();
   }
+}
+
+function isToolResultEnvelope(value: unknown): value is ToolResultEnvelope {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    typeof (value as ToolResultEnvelope).toolId === 'string' &&
+    typeof (value as ToolResultEnvelope).callId === 'string' &&
+    typeof (value as ToolResultEnvelope).status === 'string'
+  );
 }
 
 export default ActiveContext;

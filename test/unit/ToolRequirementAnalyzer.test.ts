@@ -2,21 +2,21 @@ import { describe, expect, it } from 'vitest';
 
 import { ToolRequirementAnalyzer } from '../../lib/agent/forge/ToolRequirementAnalyzer.js';
 
-/* ────────── Mock ToolRegistry ────────── */
+/* ────────── Mock capability directory ────────── */
 
-function createMockRegistry(names: string[]) {
+function createMockDirectory(names: string[]) {
   const nameSet = new Set(names);
   return {
     has: (name: string) => nameSet.has(name),
-    getToolNames: () => names,
+    list: () => names,
   };
 }
 
 describe('ToolRequirementAnalyzer', () => {
   describe('analyze — reuse mode', () => {
     it('should exact-match action_target name', () => {
-      const reg = createMockRegistry(['read_file', 'search_knowledge', 'write_config']);
-      const analyzer = new ToolRequirementAnalyzer(reg);
+      const directory = createMockDirectory(['read_file', 'search_knowledge', 'write_config']);
+      const analyzer = new ToolRequirementAnalyzer(directory);
 
       const result = analyzer.analyze({
         intent: 'read the file',
@@ -30,8 +30,8 @@ describe('ToolRequirementAnalyzer', () => {
     });
 
     it('should fuzzy-match tool name containing action + target', () => {
-      const reg = createMockRegistry(['alembic_search_knowledge', 'list_files']);
-      const analyzer = new ToolRequirementAnalyzer(reg);
+      const directory = createMockDirectory(['alembic_search_knowledge', 'list_files']);
+      const analyzer = new ToolRequirementAnalyzer(directory);
 
       const result = analyzer.analyze({
         intent: 'search knowledge base',
@@ -45,8 +45,8 @@ describe('ToolRequirementAnalyzer', () => {
     });
 
     it('should hint-match using ACTION_TOOL_HINTS', () => {
-      const reg = createMockRegistry(['get_config', 'list_files']);
-      const analyzer = new ToolRequirementAnalyzer(reg);
+      const directory = createMockDirectory(['get_config', 'list_files']);
+      const analyzer = new ToolRequirementAnalyzer(directory);
 
       // 'read' action has hints: ['read', 'get', 'fetch', 'load', 'file']
       const result = analyzer.analyze({
@@ -63,13 +63,13 @@ describe('ToolRequirementAnalyzer', () => {
 
   describe('analyze — compose mode', () => {
     it('should suggest compose when multiple related tools found', () => {
-      const reg = createMockRegistry([
+      const directory = createMockDirectory([
         'read_data',
         'transform_data',
         'validate_schema',
         'export_csv',
       ]);
-      const analyzer = new ToolRequirementAnalyzer(reg);
+      const analyzer = new ToolRequirementAnalyzer(directory);
 
       const result = analyzer.analyze({
         intent: 'validate and transform data',
@@ -80,14 +80,14 @@ describe('ToolRequirementAnalyzer', () => {
       expect(result.mode).toBe('compose');
       expect(result.confidence).toBe(0.65);
       expect(result.composableTools).toBeDefined();
-      expect(result.composableTools!.length).toBeGreaterThanOrEqual(2);
+      expect(result.composableTools?.length).toBeGreaterThanOrEqual(2);
     });
   });
 
   describe('analyze — generate mode', () => {
     it('should fallback to generate when nothing matches', () => {
-      const reg = createMockRegistry(['read_file', 'search_knowledge']);
-      const analyzer = new ToolRequirementAnalyzer(reg);
+      const directory = createMockDirectory(['read_file', 'search_knowledge']);
+      const analyzer = new ToolRequirementAnalyzer(directory);
 
       const result = analyzer.analyze({
         intent: 'generate thumbnail',
@@ -103,8 +103,8 @@ describe('ToolRequirementAnalyzer', () => {
 
   describe('analyze — priority order', () => {
     it('should prefer reuse over compose', () => {
-      const reg = createMockRegistry(['search_file', 'find_pattern', 'search_results']);
-      const analyzer = new ToolRequirementAnalyzer(reg);
+      const directory = createMockDirectory(['search_file', 'find_pattern', 'search_results']);
+      const analyzer = new ToolRequirementAnalyzer(directory);
 
       const result = analyzer.analyze({
         intent: 'search file',

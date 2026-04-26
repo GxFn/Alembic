@@ -135,7 +135,7 @@ export const PRESETS = Object.freeze({
   //   - Rejection Gate 监控 Producer 拒绝率
   //   - promptBuilder 通过 strategyContext 获取运行时数据 (dimConfig/sessionStore/...)
   //
-  // orchestrator 通过 createRuntime('insight', { strategy: {...} }) 按需覆盖
+  // bootstrap-dimension profile 通过 AgentStageFactoryRegistry 按需覆盖
   // onToolCall 由 orchestrator 按维度注入 (闭包引用 ActiveContext)
 
   insight: {

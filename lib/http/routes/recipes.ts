@@ -7,6 +7,7 @@
  */
 
 import express, { type Request, type Response } from 'express';
+import { type AgentService, runRelationDiscovery } from '../../agent/service/index.js';
 import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
@@ -68,20 +69,21 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
     });
   }
 
-  // 检查 ToolRegistry 是否可用
+  // 检查统一 AgentService 是否可用
   const container = getServiceContainer();
-  let agentFactory: import('../../agent/AgentFactory.js').AgentFactory;
+  let agentService: AgentService;
   try {
-    agentFactory = container.get('agentFactory');
+    agentService = container.get('agentService') as AgentService;
   } catch {
     return void res.json({
       success: true,
-      data: { status: 'error', error: 'AgentFactory 不可用，请检查 AI Provider 配置' },
+      data: { status: 'error', error: 'AgentService 不可用，请检查 AI Provider 配置' },
     });
   }
 
   // Mock 模式下跳过 AI 关系发现
-  if (agentFactory.getAiProviderInfo?.()?.name === 'mock') {
+  const aiManager = container.singletons?._aiProviderManager as { isMock?: boolean } | undefined;
+  if (aiManager?.isMock) {
     return void res.json({
       success: true,
       data: { status: 'error', error: 'AI Provider 未配置，当前为 Mock 模式。请先配置 API Key。' },
@@ -115,7 +117,7 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
   // 异步执行，不 await
   (async () => {
     try {
-      const result = await agentFactory.discoverRelations();
+      const result = await runRelationDiscovery({ agentService, batchSize: _batchSize });
       const relations =
         (result.relations as { from: string; to: string; type: string; evidence?: string }[]) || [];
       const analyzed = (result.analyzed as number) || 0;

@@ -277,13 +277,10 @@ export class ServiceContainer {
   // ─── 工具执行上下文构建器 ─────────────────────
 
   /**
-   * 构建 ToolRegistry.execute() 所需的上下文对象。
+   * 构建 internal tool handler 所需的 legacy context projection。
    *
-   * 工具执行上下文构建
-   * 迁移后: 所有直接调用 ToolRegistry 的站点都使用此方法
-   *
-   * @param [extras] 合并到上下文的额外字段
-   * @returns 工具执行上下文
+   * Router/Adapter 路径会将其折叠到 InternalToolHandlerContext；旧 fallback
+   * 调用方仍可在迁移期间复用同一上下文来源。
    */
   buildToolContext(extras: Record<string, unknown> = {}): Record<string, unknown> {
     const projectRoot = resolveProjectRoot(this);
@@ -395,7 +392,10 @@ export class ServiceContainer {
         // 写回缓存
         cache.save('project-graph', graph.toJSON(), { fileHashes: newHashes });
 
-        const overview = (await graph.getOverview())!;
+        const overview = await graph.getOverview();
+        if (!overview) {
+          throw new Error('ProjectGraph overview unavailable after incremental update');
+        }
         this.logger.info(
           `[ServiceContainer] ProjectGraph 增量更新: +${diff.added} ~${diff.updated} -${diff.deleted} ` +
             `(${overview.totalClasses} classes, ${Date.now() - startTime}ms)`
@@ -406,7 +406,10 @@ export class ServiceContainer {
       // ── 无缓存，全量构建 ──
       const graph = await ProjectGraph.build(projectRoot, options);
       this.singletons.projectGraph = graph;
-      const overview = (await graph.getOverview())!;
+      const overview = await graph.getOverview();
+      if (!overview) {
+        throw new Error('ProjectGraph overview unavailable after full build');
+      }
 
       // 计算文件 hash 并写入缓存
       const currentFiles = this.#collectSourceFilePaths(projectRoot, options);

@@ -605,12 +605,21 @@ export class PipelineStrategy extends Strategy {
       parentAbortSignal?.addEventListener('abort', onParentAbort, { once: true });
     }
 
+    const dimensionScopeId =
+      typeof (strategyContext.sharedState as Record<string, unknown> | undefined)
+        ?._dimensionScopeId === 'string'
+        ? ((strategyContext.sharedState as Record<string, unknown>)._dimensionScopeId as string)
+        : typeof strategyContext.scopeId === 'string'
+          ? strategyContext.scopeId
+          : undefined;
+
     const reactPromise = runtime.reactLoop(stagePrompt, {
       history: message.history,
       context: {
         ...((message.metadata.context as Record<string, unknown>) || {}),
         pipelinePhase: stage.name,
         previousPhases: phaseResults,
+        ...(dimensionScopeId ? { dimensionScopeId } : {}),
       },
       capabilityOverride: stage.capabilities,
       budgetOverride: effectiveBudget,

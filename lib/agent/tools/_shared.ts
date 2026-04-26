@@ -3,6 +3,7 @@
 import path from 'node:path';
 import type { UnifiedValidator } from '#domain/knowledge/UnifiedValidator.js';
 import { SKILLS_DIR as _SKILLS_DIR, PACKAGE_ROOT } from '#shared/package-root.js';
+import type { InternalToolHandlerContext } from '../core/InternalToolHandler.js';
 
 export const PROJECT_ROOT = PACKAGE_ROOT;
 /** skills/ 目录绝对路径 */
@@ -57,33 +58,12 @@ export interface DimensionMeta {
   allowedKnowledgeTypes?: string[];
 }
 
-/** Common tool handler context provided by ToolRegistry.execute() */
-export interface ToolHandlerContext {
+/** Common tool handler context provided by InternalToolAdapter/ToolRegistry fallback. */
+export interface ToolHandlerContext extends InternalToolHandlerContext {
   container: ServiceContainer;
   projectRoot: string;
-  dataRoot?: string;
-  logger?: {
-    info(msg: string, ...args: unknown[]): void;
-    debug(msg: string, ...args: unknown[]): void;
-    warn(msg: string, ...args: unknown[]): void;
-    error?(msg: string, ...args: unknown[]): void;
-  };
-  abortSignal?: AbortSignal | null;
-  source?: string;
   _dimensionMeta?: DimensionMeta;
-  _projectLanguage?: string;
   _validator?: UnifiedValidator;
-  _submittedTitles?: Set<string>;
-  _submittedPatterns?: Set<string>;
-  _sessionToolCalls?: Array<{ tool: string; params?: Record<string, unknown> }>;
-  [key: string]: unknown;
-}
-
-/** Tool schema entry returned by ToolRegistry.getToolSchemas() */
-export interface ToolSchemaEntry {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
 }
 
 /**

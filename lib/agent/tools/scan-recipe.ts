@@ -5,7 +5,7 @@
  * 但不入库 — 仅做本地验证 + 内存收集。
  *
  * 扫描 Produce 阶段 LLM 调用此工具逐个提交 Recipe，
- * 执行完成后由 AgentFactory.scanKnowledge() 从 toolCalls 中提取。
+ * 执行完成后由 scan result projection 从 toolCalls 中提取。
  *
  * 设计原因:
  *   - 冷启动 Producer 通过 submit_knowledge 工具逐个提交候选（工具驱动）
@@ -118,7 +118,7 @@ export const collectScanRecipe = {
    * Handler — 本地验证 + 内存收集（不入库）
    *
    * 验证通过后返回 { status: 'collected', recipe: {...} }，
-   * AgentFactory.scanKnowledge() 从 toolCalls 结果中提取 recipes。
+   * scan result projection 从 toolCalls 结果中提取 recipes。
    */
   handler: async (params: Record<string, unknown>, _ctx: unknown) => {
     // Cast to a shape matching the tool schema for convenient access
