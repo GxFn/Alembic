@@ -6,6 +6,7 @@ const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
+      '#agent': `${projectRoot}lib/agent`,
       '#tools': `${projectRoot}lib/tools`,
       '#workflows': `${projectRoot}lib/workflows`,
     },

@@ -212,12 +212,14 @@ describe('Integration: roleResolver middleware', () => {
     restoreEnv();
   });
 
-  // ── x-user-id 直接信任 ──
+  // ── x-user-id 可信内部通道 ──
 
-  test('x-user-id header 直接信任（MCP 场景）', () => {
+  test('x-user-id header 在可信内部通道中生效（MCP 场景）', () => {
+    setEnv('ALEMBIC_INTERNAL_TOKEN', 'test-internal-token');
     const middleware = roleResolverMiddleware({});
     const { req, res, next, wasNextCalled } = mockExpress({
       'x-user-id': 'external_agent',
+      'x-alembic-internal-token': 'test-internal-token',
     });
 
     middleware(req as never, res as never, next as never);

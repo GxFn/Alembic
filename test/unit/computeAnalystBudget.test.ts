@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ANALYST_BUDGET, computeAnalystBudget } from '#agent/domain/insight-analyst.js';
+import { ANALYST_BUDGET, computeAnalystBudget } from '#agent/prompts/insight-analyst.js';
 
 describe('computeAnalystBudget', () => {
   it('returns baseline budget for ≤40 files', () => {
