@@ -399,7 +399,12 @@ describe('AgentRuntime', () => {
           }),
       });
       const policies = mockPolicies();
-      const rt = createRuntime({ aiProvider, toolRouter, policies });
+      const rt = createRuntime({
+        aiProvider,
+        toolRouter,
+        policies,
+        additionalTools: ['search_knowledge'],
+      });
 
       const result = await rt.reactLoop('Search for patterns');
 
@@ -468,7 +473,7 @@ describe('AgentRuntime', () => {
         });
       const aiProvider = mockAiProvider({ chatWithTools });
       const toolRouter = mockToolRouter();
-      const rt = createRuntime({ aiProvider, toolRouter });
+      const rt = createRuntime({ aiProvider, toolRouter, additionalTools: ['search_knowledge'] });
 
       const result = await rt.reactLoop('query');
       const secondCallOptions = chatWithTools.mock.calls[1][1] as {

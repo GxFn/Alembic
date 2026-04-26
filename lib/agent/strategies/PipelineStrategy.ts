@@ -76,6 +76,7 @@ interface PipelineStage {
   name: string;
   gate?: GateConfig;
   capabilities?: CapabilityRef[];
+  additionalTools?: string[];
   promptBuilder?: (ctx: Record<string, unknown>) => Promise<string> | string;
   retryPromptBuilder?: (
     retryCtx: { reason?: string; artifact?: unknown },
@@ -620,9 +621,19 @@ export class PipelineStrategy extends Strategy {
         ...((message.metadata.context as Record<string, unknown>) || {}),
         pipelinePhase: stage.name,
         previousPhases: phaseResults,
+        terminalTest: strategyContext.terminalTest === true,
+        terminalToolset:
+          typeof strategyContext.terminalToolset === 'string'
+            ? strategyContext.terminalToolset
+            : null,
+        allowedTerminalModes: Array.isArray(strategyContext.allowedTerminalModes)
+          ? strategyContext.allowedTerminalModes
+          : [],
+        toolPolicyHints: strategyContext.toolPolicyHints || null,
         ...(dimensionScopeId ? { dimensionScopeId } : {}),
       },
       capabilityOverride: stage.capabilities,
+      additionalToolsOverride: stage.additionalTools,
       budgetOverride: effectiveBudget,
       systemPromptOverride: stage.systemPrompt,
       onToolCall: stage.onToolCall,

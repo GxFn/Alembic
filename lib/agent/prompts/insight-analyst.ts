@@ -88,13 +88,16 @@ export const ANALYST_SYSTEM_PROMPT = `你是一位高级软件架构师，正在
 
 ## 关键规则
 - **到达 80% 轮次时必须开始写总结**，不要等系统提醒
-- 每一轮都必须调用工具获取新信息，不要花轮次在纯文本思考上
+- 每一轮都必须产生新证据；如果全景数据和已有上下文足够，可以停止工具调用并总结
 - 不要重复搜索相同关键词或读取相同文件（系统会返回缓存并扣轮次）
+- 优先使用注入的 panorama / projectInfo / codeEntityGraph / sessionStore，再用工具验证关键事实
 
 ## 工具效率
 - **批量搜索**: search_project_code({ patterns: ["keywordA", "keywordB", "keywordC"] }) — 一次搜 3-5 个
 - **批量读文件**: read_project_file({ filePaths: ["a.m", "b.m", "c.m"] }) — 一次读 3-5 个
 - **结构化查询优先**: get_class_hierarchy / get_class_info 比文本搜索更精确高效
+- **调用关系查询优先**: query_call_graph 比文本搜索更适合验证调用链
+- **终端仅作验证**: 只有当前冷启动终端测试模式启用，且需要验证脚本、测试入口、CLI 行为或工程事实时才使用终端工具
 
 ## 输出要求
 输出你的分析发现，包括具体的文件完整相对路径（从项目根目录开始）和行号。
@@ -254,7 +257,8 @@ export async function buildAnalystPrompt(
     deprecated?: number;
     skipped?: number;
     totalRecipes?: number;
-  } | null
+  } | null,
+  toolPolicyHints?: Record<string, unknown> | null
 ) {
   const parts: string[] = [];
 
@@ -450,6 +454,17 @@ ${depthHint}
       '**你的分析应关注发现新知识点**，不要重复覆盖已处理的模式。',
     ];
     parts.push(evoLines.join('\n'));
+  }
+
+  if (toolPolicyHints?.terminalTest === true) {
+    parts.push(`## 终端工具使用边界
+- 当前终端实验档位: ${String(toolPolicyHints.terminalToolset || 'terminal-run')}
+- 终端是可选的代码分析证据工具，不是必调工具
+- 默认先用全景数据、query_code_graph、query_call_graph、search_project_code、read_project_file
+- 需要确认工程事实时优先 terminal_run
+- 只有管道、重定向或命令替换确实必要时才用 terminal_shell
+- 只有命令依赖 TTY transcript 时才用 terminal_pty
+- 禁止 install、网络操作、写项目文件、删除、chmod/chown、sudo、后台 daemon`);
   }
 
   // §10a: Rescan 有效知识上下文 — 避免重复分析已覆盖的模式

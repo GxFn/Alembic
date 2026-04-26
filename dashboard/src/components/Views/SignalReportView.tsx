@@ -12,7 +12,12 @@ import {
   Zap,
 } from 'lucide-react';
 
-import api, { type ReportEntry, type SignalEntry } from '../../api';
+import api, {
+  type BootstrapReport,
+  type BootstrapReportSummary,
+  type ReportEntry,
+  type SignalEntry,
+} from '../../api';
 import { useI18n } from '../../i18n';
 import { getErrorMessage } from '../../utils/error';
 
@@ -44,6 +49,7 @@ const TIME_RANGE_KEYS = ['time1h', 'time6h', 'time24h', 'time7d', 'timeAll'] as 
 const TIME_RANGE_MS = [3600_000, 21600_000, 86400_000, 604800_000, 0] as const;
 
 type ViewMode = 'signals' | 'reports' | 'logs';
+type ReportTypeFilter = 'all' | 'bootstrap' | 'pipeline';
 
 /* ═══ Helpers ═══ */
 
@@ -141,6 +147,87 @@ function ReportCard({ report }: { report: ReportEntry }) {
   );
 }
 
+function BootstrapReportCard({
+  summary,
+  detail,
+  onLoadDetail,
+}: {
+  summary: BootstrapReportSummary;
+  detail?: BootstrapReport | null;
+  onLoadDetail(sessionId: string): void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const timestamp = summary.timestamp ? new Date(summary.timestamp).getTime() : Date.now();
+  const successRate = ((summary.terminalSuccessRate || 0) * 100).toFixed(0);
+
+  return (
+    <div
+      className="border border-[var(--border-default)] rounded-lg p-3 hover:bg-[var(--bg-muted)]/40 transition-colors cursor-pointer"
+      onClick={() => {
+        const next = !expanded;
+        setExpanded(next);
+        if (next && summary.sessionId && detail === undefined) {
+          onLoadDetail(summary.sessionId);
+        }
+      }}
+    >
+      <div className="flex items-center gap-2 text-sm">
+        <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+          bootstrap
+        </span>
+        <span className="text-[var(--fg-default)] font-medium truncate">
+          {summary.terminalToolset || 'baseline'}
+        </span>
+        <span className="text-[var(--fg-subtle)] text-xs truncate">
+          candidates={summary.candidates ?? 0}
+        </span>
+        <span className="text-[var(--fg-subtle)] text-xs truncate">
+          tools={summary.toolCalls ?? 0}
+        </span>
+        <span className="text-[var(--fg-subtle)] text-xs truncate">
+          terminal={summary.terminalEnabled ? `${successRate}%` : 'off'}
+        </span>
+        <span className="ml-auto shrink-0 text-xs text-[var(--fg-subtle)] tabular-nums">
+          {formatTime(timestamp)}
+        </span>
+      </div>
+      {expanded && (
+        <div className="mt-2 space-y-2 text-xs">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <Metric label="duration" value={`${summary.durationMs ?? 0}ms`} />
+            <Metric label="mode" value={String(summary.mode || 'full')} />
+            <Metric label="terminal" value={summary.terminalEnabled ? 'enabled' : 'baseline'} />
+            <Metric label="session" value={summary.sessionId || '-'} />
+          </div>
+          {detail ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <Metric label="stage toolsets" value={String(detail.stageToolsets?.length || 0)} />
+                <Metric label="blocked" value={String(detail.toolUsage?.blocked || 0)} />
+                <Metric label="timeouts" value={String(detail.toolUsage?.timeouts || 0)} />
+              </div>
+              <pre className="text-xs text-[var(--fg-secondary)] bg-[var(--bg-muted)] rounded p-2.5 overflow-x-auto whitespace-pre-wrap max-h-80">
+                {JSON.stringify(detail, null, 2)}
+              </pre>
+            </>
+          ) : (
+            <div className="text-[var(--fg-subtle)]">Loading report detail...</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded bg-[var(--bg-muted)] p-2">
+      <div className="text-[var(--fg-subtle)]">{label}</div>
+      <div className="font-medium text-[var(--fg-default)] truncate">{value}</div>
+    </div>
+  );
+}
+
 /* ═══ Log Entry Types ═══ */
 
 interface LogEntry {
@@ -209,6 +296,9 @@ const SignalReportView: React.FC = () => {
   const [signalTotal, setSignalTotal] = useState(0);
   const [reports, setReports] = useState<ReportEntry[]>([]);
   const [reportTotal, setReportTotal] = useState(0);
+  const [reportTypeFilter, setReportTypeFilter] = useState<ReportTypeFilter>('all');
+  const [bootstrapReports, setBootstrapReports] = useState<BootstrapReportSummary[]>([]);
+  const [bootstrapDetails, setBootstrapDetails] = useState<Record<string, BootstrapReport | null>>({});
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   const [logTotal, setLogTotal] = useState(0);
   const [logLevel, setLogLevel] = useState<string>('');
@@ -230,9 +320,20 @@ const SignalReportView: React.FC = () => {
         setSignals(result.signals);
         setSignalTotal(result.total);
       } else if (viewMode === 'reports') {
-        const result = await api.getReports({ ...timeOpts, limit: 50 });
-        setReports(result.reports);
-        setReportTotal(result.total);
+        if (reportTypeFilter !== 'bootstrap') {
+          const result = await api.getReports({ ...timeOpts, limit: 50 });
+          setReports(result.reports);
+          setReportTotal(result.total);
+        } else {
+          setReports([]);
+          setReportTotal(0);
+        }
+        if (reportTypeFilter !== 'pipeline') {
+          const result = await api.listBootstrapReports();
+          setBootstrapReports(result.reports || []);
+        } else {
+          setBootstrapReports([]);
+        }
       } else {
         const result = await api.getLogs({
           limit: 200,
@@ -247,7 +348,22 @@ const SignalReportView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [viewMode, timeOpts, typeFilter, logLevel, logSearch]);
+  }, [viewMode, timeOpts, typeFilter, logLevel, logSearch, reportTypeFilter]);
+
+  const loadBootstrapDetail = useCallback(async (sessionId: string) => {
+    if (!sessionId) { return; }
+    setBootstrapDetails((prev) =>
+      Object.prototype.hasOwnProperty.call(prev, sessionId)
+        ? prev
+        : { ...prev, [sessionId]: null }
+    );
+    try {
+      const detail = await api.getBootstrapReport(sessionId);
+      setBootstrapDetails((prev) => ({ ...prev, [sessionId]: detail }));
+    } catch {
+      setBootstrapDetails((prev) => ({ ...prev, [sessionId]: null }));
+    }
+  }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -273,6 +389,18 @@ const SignalReportView: React.FC = () => {
                 className="pl-7 pr-2 py-1.5 text-xs rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--fg-default)] w-40"
               />
             </div>
+          )}
+
+          {viewMode === 'reports' && (
+            <select
+              value={reportTypeFilter}
+              onChange={(e) => { setReportTypeFilter(e.target.value as ReportTypeFilter); }}
+              className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--fg-default)] pr-7"
+            >
+              <option value="all">all reports</option>
+              <option value="bootstrap">bootstrap</option>
+              <option value="pipeline">pipeline</option>
+            </select>
           )}
 
           {/* Logs filters */}
@@ -391,15 +519,26 @@ const SignalReportView: React.FC = () => {
       ) : viewMode === 'reports' ? (
         <div className="space-y-2">
           <div className="text-xs text-[var(--fg-subtle)]">
-            {t('signals.showingReports', { shown: reports.length, total: reportTotal })}
+            {t('signals.showingReports', {
+              shown: reports.length + bootstrapReports.length,
+              total: reportTotal + bootstrapReports.length,
+            })}
           </div>
-          {reports.length === 0 ? (
+          {reports.length === 0 && bootstrapReports.length === 0 ? (
             <div className="text-center py-12 text-[var(--fg-subtle)]">
               <FileText size={32} className="mx-auto mb-2 opacity-40" />
               <p>{t('signals.noReports')}</p>
             </div>
           ) : (
             <div className="space-y-1.5">
+              {bootstrapReports.map((summary) => (
+                <BootstrapReportCard
+                  key={summary.sessionId}
+                  summary={summary}
+                  detail={bootstrapDetails[summary.sessionId]}
+                  onLoadDetail={loadBootstrapDetail}
+                />
+              ))}
               {reports.map((r) => (
                 <ReportCard key={r.id} report={r} />
               ))}

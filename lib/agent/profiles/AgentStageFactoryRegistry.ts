@@ -1,3 +1,8 @@
+import {
+  buildBootstrapTerminalPolicyHints,
+  getBootstrapStageTerminalTools,
+  resolveBootstrapTerminalToolset,
+} from '#workflows/bootstrap/config/BootstrapTerminalToolset.js';
 import { PRESETS } from '../profiles/presets.js';
 import {
   buildRelationsPipelineStages,
@@ -67,11 +72,30 @@ export class AgentStageFactoryRegistry {
       const needsCandidates = params.needsCandidates !== false;
       const hasExistingRecipes = params.hasExistingRecipes === true;
       const prescreenDone = params.prescreenDone === true;
+      const terminalToolset = resolveBootstrapTerminalToolset({
+        terminalTest: params.terminalTest ?? context?.terminalTest,
+        terminalToolset: params.terminalToolset ?? context?.terminalToolset,
+        allowedTerminalModes: params.allowedTerminalModes ?? context?.allowedTerminalModes,
+      });
+      const terminalPolicyHints = buildBootstrapTerminalPolicyHints(terminalToolset);
       const memoryCoordinator = context?.memoryCoordinator as
         | { allocateBudget?: (role: string) => void }
         | undefined;
 
-      const analyzeStage = { ...presetStages[0] };
+      const withTerminalPromptContext = (ctx: Record<string, unknown>) => ({
+        ...ctx,
+        terminalTest: terminalToolset.terminalTest,
+        terminalToolset: terminalToolset.terminalToolset,
+        allowedTerminalModes: terminalToolset.allowedTerminalModes,
+        toolPolicyHints: terminalPolicyHints,
+      });
+
+      const analyzeStage = {
+        ...presetStages[0],
+        additionalTools: getBootstrapStageTerminalTools('analyze', terminalToolset),
+        promptBuilder: (ctx: Record<string, unknown>) =>
+          presetStages[0].promptBuilder?.(withTerminalPromptContext(ctx)),
+      };
       if (!needsCandidates) {
         return [analyzeStage] as Record<string, unknown>[];
       }
@@ -80,13 +104,21 @@ export class AgentStageFactoryRegistry {
         ...presetStages[2],
         promptBuilder: (ctx: Record<string, unknown>) => {
           memoryCoordinator?.allocateBudget?.('producer');
-          return presetStages[2].promptBuilder?.(ctx);
+          return presetStages[2].promptBuilder?.(withTerminalPromptContext(ctx));
         },
       };
 
       if (hasExistingRecipes && !prescreenDone) {
         return [
-          evolutionPresetStages[0],
+          {
+            ...evolutionPresetStages[0],
+            additionalTools: getBootstrapStageTerminalTools(
+              evolutionPresetStages[0].name || 'evolve',
+              terminalToolset
+            ),
+            promptBuilder: (ctx: Record<string, unknown>) =>
+              evolutionPresetStages[0].promptBuilder?.(withTerminalPromptContext(ctx)),
+          },
           evolutionPresetStages[1],
           analyzeStage,
           presetStages[1],

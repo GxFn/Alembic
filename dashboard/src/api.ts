@@ -1930,6 +1930,35 @@ Skill 文档格式要求：
     return res.data?.data;
   },
 
+  async listBootstrapReports(): Promise<{ reports: BootstrapReportSummary[] }> {
+    const res = await http.get('/modules/bootstrap/reports');
+    const data = res.data?.data || { reports: [] };
+    return {
+      ...data,
+      reports: Array.isArray(data.reports)
+        ? data.reports.filter((report: BootstrapReportSummary) => !!report.sessionId)
+        : [],
+    };
+  },
+
+  async getBootstrapReportLatest(): Promise<BootstrapReport | null> {
+    const res = await http.get('/modules/bootstrap/report/latest');
+    return res.data?.data || null;
+  },
+
+  async getBootstrapReport(sessionId: string): Promise<BootstrapReport | null> {
+    const res = await http.get(`/modules/bootstrap/reports/${encodeURIComponent(sessionId)}`);
+    return res.data?.data || null;
+  },
+
+  async diffBootstrapReports(sessionId: string, baseSessionId: string): Promise<Record<string, unknown> | null> {
+    const res = await http.get(
+      `/modules/bootstrap/reports/${encodeURIComponent(sessionId)}/diff`,
+      { params: { base: baseSessionId } },
+    );
+    return res.data?.data || null;
+  },
+
   /* ════════════════════════════════════════════════════════
    *  Evolution — Proposals & Warnings
    * ════════════════════════════════════════════════════════ */
@@ -2037,6 +2066,34 @@ export interface ReportEntry {
   data: Record<string, unknown>;
   timestamp: number;
   duration_ms?: number;
+}
+
+export interface BootstrapReportSummary {
+  sessionId: string;
+  timestamp: string;
+  project?: Record<string, unknown>;
+  mode?: string | null;
+  terminalToolset?: string;
+  durationMs?: number;
+  candidates?: number;
+  toolCalls?: number;
+  terminalEnabled?: boolean;
+  terminalSuccessRate?: number;
+}
+
+export interface BootstrapReport {
+  version?: string;
+  timestamp?: string;
+  session?: Record<string, unknown>;
+  project?: Record<string, unknown>;
+  duration?: Record<string, unknown>;
+  totals?: Record<string, unknown>;
+  stageToolsets?: Array<Record<string, unknown>>;
+  toolUsage?: Record<string, unknown>;
+  terminal?: Record<string, unknown>;
+  dimensions?: Record<string, Record<string, unknown>>;
+  comparisonHints?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export default api;

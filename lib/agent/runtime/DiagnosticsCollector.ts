@@ -3,6 +3,7 @@ import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
 import type {
   AgentDiagnostics,
   AgentDiagnosticWarning,
+  StageToolsetDiagnostic,
   ToolCallDiagnostic,
 } from './AgentRuntimeTypes.js';
 
@@ -85,6 +86,17 @@ export class DiagnosticsCollector implements ToolDiagnosticsRecorder {
     }
   }
 
+  recordStageToolset(toolset: StageToolsetDiagnostic) {
+    const entries = (this.#diagnostics.stageToolsets ??= []);
+    entries.push({
+      stage: toolset.stage,
+      capabilities: [...toolset.capabilities],
+      allowedToolIds: [...toolset.allowedToolIds],
+      toolSchemaCount: toolset.toolSchemaCount,
+      ...(toolset.source ? { source: toolset.source } : {}),
+    });
+  }
+
   recordToolCallEnvelope(
     envelope: ToolResultEnvelope,
     context: {
@@ -150,6 +162,9 @@ export class DiagnosticsCollector implements ToolDiagnosticsRecorder {
         calls.push({ ...toolCall });
       }
     }
+    for (const toolset of input.stageToolsets || []) {
+      this.recordStageToolset(toolset);
+    }
   }
 
   isEmpty() {
@@ -163,7 +178,8 @@ export class DiagnosticsCollector implements ToolDiagnosticsRecorder {
       this.#diagnostics.emptyResponses === 0 &&
       this.#diagnostics.aiErrorCount === 0 &&
       this.#diagnostics.gateFailures.length === 0 &&
-      (this.#diagnostics.toolCalls?.length || 0) === 0
+      (this.#diagnostics.toolCalls?.length || 0) === 0 &&
+      (this.#diagnostics.stageToolsets?.length || 0) === 0
     );
   }
 
@@ -180,6 +196,15 @@ export class DiagnosticsCollector implements ToolDiagnosticsRecorder {
       gateFailures: [...this.#diagnostics.gateFailures],
       ...(this.#diagnostics.toolCalls
         ? { toolCalls: this.#diagnostics.toolCalls.map((call) => ({ ...call })) }
+        : {}),
+      ...(this.#diagnostics.stageToolsets
+        ? {
+            stageToolsets: this.#diagnostics.stageToolsets.map((toolset) => ({
+              ...toolset,
+              capabilities: [...toolset.capabilities],
+              allowedToolIds: [...toolset.allowedToolIds],
+            })),
+          }
         : {}),
     };
   }

@@ -21,6 +21,7 @@ import {
   resolveIncrementalSkippedDimensions,
   restoreCheckpointDimensions,
 } from '#workflows/bootstrap/checkpoint/BootstrapRestoreState.js';
+import { resolveBootstrapTerminalToolset } from '#workflows/bootstrap/config/BootstrapTerminalToolset.js';
 import { TierScheduler } from '#workflows/bootstrap/config/TierScheduler.js';
 import { consumeBootstrapCandidateRelations } from '#workflows/bootstrap/consumers/BootstrapCandidateRelationConsumer.js';
 import {
@@ -128,6 +129,11 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
   }
   const sessionId = view.bootstrapSession?.id ?? '';
   const sessionAbortSignal = taskManager?.getSessionAbortSignal?.() ?? null;
+  const terminalToolsetConfig = resolveBootstrapTerminalToolset({
+    terminalTest: view.terminalTest,
+    terminalToolset: view.terminalToolset,
+    allowedTerminalModes: view.allowedTerminalModes,
+  });
 
   const isIncremental = incrementalPlan?.canIncremental && incrementalPlan?.mode === 'incremental';
   const emitter = new BootstrapEventEmitter(ctx.container);
@@ -205,7 +211,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
   });
 
   logger.info(
-    `[Insight-v3] Active dimensions: [${activeDimIds.join(', ')}], concurrency=${enableParallel ? concurrency : 1}${isIncremental ? `, incremental skip: [${incrementalSkippedDims.join(', ')}]` : ''}`
+    `[Insight-v3] Active dimensions: [${activeDimIds.join(', ')}], concurrency=${enableParallel ? concurrency : 1}, terminalToolset=${terminalToolsetConfig.terminalToolset}${isIncremental ? `, incremental skip: [${incrementalSkippedDims.join(', ')}]` : ''}`
   );
 
   const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
@@ -267,6 +273,9 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       sessionId,
       allFiles,
       sessionAbortSignal,
+      terminalTest: terminalToolsetConfig.terminalTest,
+      terminalToolset: terminalToolsetConfig.terminalToolset,
+      allowedTerminalModes: terminalToolsetConfig.allowedTerminalModes,
     });
   }
 
@@ -357,6 +366,9 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
     concurrency: enableParallel ? concurrency : 1,
     primaryLang,
     projectLang: projectInfo.lang || null,
+    terminalTest: terminalToolsetConfig.terminalTest,
+    terminalToolset: terminalToolsetConfig.terminalToolset,
+    allowedTerminalModes: terminalToolsetConfig.allowedTerminalModes,
     sessionAbortSignal,
     taskManager,
     scheduler,

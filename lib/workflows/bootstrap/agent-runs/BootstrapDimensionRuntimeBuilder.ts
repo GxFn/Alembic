@@ -19,6 +19,10 @@ import {
   buildBootstrapDimensionRunInput,
 } from '#workflows/bootstrap/agent-runs/BootstrapDimensionInputBuilder.js';
 import { buildEvidenceStarters } from '#workflows/bootstrap/briefing/MissionBriefingBuilder.js';
+import type {
+  BootstrapTerminalMode,
+  BootstrapTerminalToolset,
+} from '#workflows/bootstrap/config/BootstrapTerminalToolset.js';
 import {
   DIMENSION_CONFIGS_V3,
   getFullDimensionConfig,
@@ -150,6 +154,9 @@ export function createBootstrapDimensionRuntimeInput({
   sessionId,
   allFiles,
   sessionAbortSignal,
+  terminalTest,
+  terminalToolset,
+  allowedTerminalModes,
 }: {
   dimId: string;
   plan: BootstrapDimensionPlan;
@@ -175,6 +182,9 @@ export function createBootstrapDimensionRuntimeInput({
   sessionId: string;
   allFiles: BootstrapFileEntry[] | null;
   sessionAbortSignal?: AbortSignal | null;
+  terminalTest?: boolean;
+  terminalToolset?: BootstrapTerminalToolset;
+  allowedTerminalModes?: BootstrapTerminalMode[];
 }): BootstrapDimensionRuntimeBuildResult {
   const { dimConfig, needsCandidates, dimExistingRecipes, hasExistingRecipes, prescreenDone } =
     plan;
@@ -225,6 +235,9 @@ export function createBootstrapDimensionRuntimeInput({
       }),
       rescanContext: projectBootstrapDimensionRescanContext({ rescanContext, dimId }),
       existingRecipes: projectBootstrapExistingRecipesForPrompt(dimExistingRecipes),
+      terminalTest,
+      terminalToolset,
+      allowedTerminalModes,
       projectOverview: {
         primaryLang: primaryLang || projectInfo.lang || 'unknown',
         fileCount: projectInfo.fileCount || 0,
@@ -233,6 +246,9 @@ export function createBootstrapDimensionRuntimeInput({
     },
   });
   const strategyContext = projectSystemRunContext(systemRunContext);
+  strategyContext.terminalTest = terminalTest === true;
+  strategyContext.terminalToolset = terminalToolset || 'baseline';
+  strategyContext.allowedTerminalModes = allowedTerminalModes || [];
   return {
     analystScopeId,
     runInput: buildBootstrapDimensionRunInput({
@@ -241,6 +257,9 @@ export function createBootstrapDimensionRuntimeInput({
       needsCandidates,
       hasExistingRecipes,
       prescreenDone,
+      terminalTest,
+      terminalToolset,
+      allowedTerminalModes,
       sessionId,
       primaryLang,
       projectLang: projectInfo.lang || null,

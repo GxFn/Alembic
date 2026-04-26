@@ -66,6 +66,14 @@ export interface ToolCallDiagnostic {
   durationMs: number;
 }
 
+export interface StageToolsetDiagnostic {
+  stage: string;
+  capabilities: string[];
+  allowedToolIds: string[];
+  toolSchemaCount: number;
+  source?: string;
+}
+
 export interface AgentDiagnostics {
   degraded: boolean;
   fallbackUsed: boolean;
@@ -77,6 +85,7 @@ export interface AgentDiagnostics {
   aiErrorCount: number;
   gateFailures: Array<{ stage: string; action: string; reason?: string }>;
   toolCalls?: ToolCallDiagnostic[];
+  stageToolsets?: StageToolsetDiagnostic[];
 }
 
 /** Tool execution pipeline metadata */
@@ -140,6 +149,7 @@ export interface ReactLoopOpts {
   history?: Array<{ role: string; content: string }>;
   context?: Record<string, unknown>;
   capabilityOverride?: string[];
+  additionalToolsOverride?: string[];
   budgetOverride?: Record<string, unknown>;
   systemPromptOverride?: string;
   onToolCall?: ToolCallHook | null;

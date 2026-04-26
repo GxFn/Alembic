@@ -99,6 +99,9 @@ interface BootstrapKnowledgeArgs {
   contentMaxLines?: number;
   incremental?: boolean;
   skipAsyncFill?: boolean;
+  terminalTest?: boolean;
+  terminalToolset?: string;
+  allowedTerminalModes?: string[];
   loadSkills?: boolean;
   /** 仅运行指定维度（传维度 id 数组），不传则运行全部活跃维度 */
   dimensions?: string[];
@@ -130,6 +133,12 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
   const skipGuard = args.skipGuard || false;
   const contentMaxLines = args.contentMaxLines || 120;
   const skipAsyncFill = args.skipAsyncFill || false;
+  const terminalTest = args.terminalTest === true;
+  const terminalToolset =
+    typeof args.terminalToolset === 'string' ? args.terminalToolset : undefined;
+  const allowedTerminalModes = Array.isArray(args.allowedTerminalModes)
+    ? args.allowedTerminalModes.filter((mode): mode is string => typeof mode === 'string')
+    : undefined;
 
   // ═══════════════════════════════════════════════════════════
   // Step 0: 全量清理 (与 bootstrap-external 对齐)
@@ -519,6 +528,9 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
         bootstrapSession,
         targetFileMap,
         projectRoot,
+        terminalTest,
+        terminalToolset,
+        allowedTerminalModes,
       },
       dimensions,
       fillDimensionsV3,

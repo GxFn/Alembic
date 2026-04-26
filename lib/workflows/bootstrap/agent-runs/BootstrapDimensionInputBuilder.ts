@@ -16,6 +16,9 @@ export interface BuildBootstrapDimensionRunInputOptions {
   needsCandidates: boolean;
   hasExistingRecipes: boolean;
   prescreenDone: boolean;
+  terminalTest?: boolean;
+  terminalToolset?: string;
+  allowedTerminalModes?: string[];
   sessionId: string;
   primaryLang?: string | null;
   projectLang?: string | null;
@@ -32,6 +35,9 @@ export function buildBootstrapDimensionRunInput({
   needsCandidates,
   hasExistingRecipes,
   prescreenDone,
+  terminalTest,
+  terminalToolset,
+  allowedTerminalModes,
   sessionId,
   primaryLang,
   projectLang,
@@ -49,6 +55,9 @@ export function buildBootstrapDimensionRunInput({
       needsCandidates,
       hasExistingRecipes,
       prescreenDone,
+      terminalTest,
+      terminalToolset,
+      allowedTerminalModes,
     },
     message: {
       role: 'internal',

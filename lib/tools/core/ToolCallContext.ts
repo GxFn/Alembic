@@ -109,6 +109,9 @@ export interface ToolRuntimeCallContext {
   memoryCoordinator?: unknown;
   currentRound?: number;
   dimensionScopeId?: string | null;
+  terminalTest?: boolean;
+  terminalToolset?: string | null;
+  allowedTerminalModes?: string[];
 }
 
 export interface ToolCallContext {

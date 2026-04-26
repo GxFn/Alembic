@@ -143,6 +143,12 @@ export class GovernanceEngine {
     }
 
     if (manifest.governance.approvalPolicy === 'confirm-every-time') {
+      if (isBootstrapTerminalTestRequest(request)) {
+        return allowToolDecision('approve', {
+          policyProfile: manifest.governance.policyProfile,
+          auditLevel: manifest.governance.auditLevel,
+        });
+      }
       return allowToolDecision('approve', {
         requiresConfirmation: true,
         confirmationMessage: `Confirm execution of ${manifest.id}`,
@@ -251,6 +257,23 @@ export class GovernanceEngine {
       { requestId: result.requestId }
     );
   }
+}
+
+function isBootstrapTerminalTestRequest(request: ToolCallRequest) {
+  if (request.surface !== 'runtime' || request.runtime?.terminalTest !== true) {
+    return false;
+  }
+  const modes = new Set(request.runtime.allowedTerminalModes || []);
+  if (request.toolId === 'terminal_run') {
+    return modes.has('run');
+  }
+  if (request.toolId === 'terminal_shell') {
+    return modes.has('shell');
+  }
+  if (request.toolId === 'terminal_pty') {
+    return modes.has('pty');
+  }
+  return false;
 }
 
 function getOptionalService<T>(

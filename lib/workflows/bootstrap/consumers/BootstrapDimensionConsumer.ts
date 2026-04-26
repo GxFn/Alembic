@@ -282,6 +282,8 @@ export async function consumeBootstrapDimensionResult({
     durationMs: Date.now() - dimStartTime,
     toolCallCount: runtimeToolCalls.length,
     tokenUsage: combinedTokenUsage,
+    diagnostics: runResult.diagnostics || null,
+    stages: summarizeDimensionStages(runResult),
     analysisText: analysisReport.analysisText,
     referencedFilesList: analysisReport.referencedFiles || [],
     qualityGate: qualityScores
@@ -311,6 +313,31 @@ export async function consumeBootstrapDimensionResult({
   }
 
   return dimResult;
+}
+
+function summarizeDimensionStages(runResult: AgentResultLike) {
+  const phases = runResult.phases || {};
+  return Object.fromEntries(
+    Object.entries(phases)
+      .filter(([, value]) => value && typeof value === 'object')
+      .map(([stage, value]) => {
+        const phase = value as {
+          toolCalls?: ToolCallRecord[];
+          tokenUsage?: { input?: number; output?: number };
+          iterations?: number;
+          timedOut?: boolean;
+        };
+        return [
+          stage,
+          {
+            toolCallCount: phase.toolCalls?.length || 0,
+            tokenUsage: phase.tokenUsage || { input: 0, output: 0 },
+            iterations: phase.iterations || 0,
+            timedOut: phase.timedOut === true,
+          },
+        ];
+      })
+  );
 }
 
 export function consumeBootstrapDimensionError({

@@ -26,6 +26,9 @@ export interface BuildBootstrapSessionExecutionInputOptions {
   concurrency: number;
   primaryLang?: string | null;
   projectLang?: string | null;
+  terminalTest?: boolean;
+  terminalToolset?: string;
+  allowedTerminalModes?: string[];
   sessionAbortSignal?: AbortSignal | null;
   taskManager?: BootstrapTaskManagerLike | null;
   scheduler: { getTierIndex(dimId: string): number };
@@ -54,6 +57,9 @@ export function buildBootstrapSessionExecutionInput({
   concurrency,
   primaryLang,
   projectLang,
+  terminalTest,
+  terminalToolset,
+  allowedTerminalModes,
   sessionAbortSignal,
   taskManager,
   scheduler,
@@ -74,6 +80,9 @@ export function buildBootstrapSessionExecutionInput({
         sessionId,
         primaryLang,
         projectLang,
+        terminalTest,
+        terminalToolset,
+        allowedTerminalModes,
         sessionAbortSignal,
         scheduler,
         resolvePlan,
@@ -163,6 +172,9 @@ function buildBootstrapDimensionChildPlan({
   sessionId,
   primaryLang,
   projectLang,
+  terminalTest,
+  terminalToolset,
+  allowedTerminalModes,
   sessionAbortSignal,
   scheduler,
   resolvePlan,
@@ -174,6 +186,9 @@ function buildBootstrapDimensionChildPlan({
   sessionId: string;
   primaryLang?: string | null;
   projectLang?: string | null;
+  terminalTest?: boolean;
+  terminalToolset?: string;
+  allowedTerminalModes?: string[];
   sessionAbortSignal?: AbortSignal | null;
   scheduler: { getTierIndex(dimId: string): number };
   resolvePlan(dimId: string): BootstrapDimensionPlan | null;
@@ -198,6 +213,9 @@ function buildBootstrapDimensionChildPlan({
       sessionId,
       primaryLang,
       projectLang,
+      terminalTest,
+      terminalToolset,
+      allowedTerminalModes,
       sessionAbortSignal,
     }),
     lazyInputFactory: () => {
@@ -219,6 +237,9 @@ function buildBootstrapDimensionPlannedInput({
   sessionId,
   primaryLang,
   projectLang,
+  terminalTest,
+  terminalToolset,
+  allowedTerminalModes,
   sessionAbortSignal,
 }: {
   dimId: string;
@@ -226,6 +247,9 @@ function buildBootstrapDimensionPlannedInput({
   sessionId: string;
   primaryLang?: string | null;
   projectLang?: string | null;
+  terminalTest?: boolean;
+  terminalToolset?: string;
+  allowedTerminalModes?: string[];
   sessionAbortSignal?: AbortSignal | null;
 }): AgentRunInput {
   return {
@@ -235,6 +259,9 @@ function buildBootstrapDimensionPlannedInput({
       needsCandidates: plan.needsCandidates,
       hasExistingRecipes: plan.hasExistingRecipes,
       prescreenDone: plan.prescreenDone,
+      terminalTest,
+      terminalToolset,
+      allowedTerminalModes,
     },
     message: {
       role: 'internal',

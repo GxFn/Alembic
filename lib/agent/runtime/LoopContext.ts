@@ -61,6 +61,7 @@ interface LoopContextConfig {
   budget: BudgetConfig;
   capabilities: Capability[];
   baseSystemPrompt: string;
+  allowedToolIds: string[];
   toolSchemas: Array<Record<string, unknown>>;
   prompt: string;
   onToolCall?: ToolCallHook | ToolCallHookLike | null;
@@ -131,6 +132,9 @@ export class LoopContext {
   /** 工具 schemas */
   toolSchemas: Array<Record<string, unknown>>;
 
+  /** 当前 loop 明确允许调用的工具 ID */
+  allowedToolIds: string[];
+
   /** 原始用户提示 */
   prompt: string;
 
@@ -162,6 +166,7 @@ export class LoopContext {
     this.budget = config.budget;
     this.capabilities = config.capabilities;
     this.baseSystemPrompt = config.baseSystemPrompt;
+    this.allowedToolIds = config.allowedToolIds;
     this.toolSchemas = config.toolSchemas;
     this.prompt = config.prompt;
     this.onToolCall = (config.onToolCall || null) as ToolCallHook | null;

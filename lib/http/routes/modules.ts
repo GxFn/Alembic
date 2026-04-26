@@ -5,6 +5,8 @@
  * 所有端点通过 container.get('moduleService') 获取 ModuleService 实例
  */
 
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import express, { type Request, type Response } from 'express';
 import {
   ModuleBootstrapBody,
@@ -16,6 +18,7 @@ import {
 import { DASHBOARD_OPERATION_IDS } from '#tools/adapters/DashboardOperations.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { resolveDataRoot } from '../../shared/resolveProjectRoot.js';
 import { validate } from '../middleware/validate.js';
 import {
   executeDashboardOperation,
@@ -25,6 +28,7 @@ import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js'
 
 const router = express.Router();
 const logger = Logger.getInstance();
+const SAFE_REPORT_ID = /^[a-zA-Z0-9_.:-]+$/;
 
 /**
  * GET /api/v1/modules/targets
@@ -515,18 +519,94 @@ router.post(
   '/bootstrap',
   validate(ModuleBootstrapBody),
   async (req: Request, res: Response): Promise<void> => {
-    const { maxFiles, skipGuard, contentMaxLines } = req.body || {};
+    const {
+      maxFiles,
+      skipGuard,
+      contentMaxLines,
+      terminalTest,
+      terminalToolset,
+      allowedTerminalModes,
+    } = req.body || {};
 
     const container = getServiceContainer();
     const envelope = await executeDashboardOperation(
       container,
       req,
       DASHBOARD_OPERATION_IDS.bootstrapProject,
-      { maxFiles, skipGuard, contentMaxLines }
+      { maxFiles, skipGuard, contentMaxLines, terminalTest, terminalToolset, allowedTerminalModes }
     );
     sendDashboardOperationResponse(res, envelope);
   }
 );
+
+router.get('/bootstrap/report/latest', async (_req: Request, res: Response): Promise<void> => {
+  const dataRoot = getModulesDataRoot();
+  const report = await readJsonFile(path.join(dataRoot, '.asd', 'bootstrap-report.json'));
+  res.json({ success: true, data: report });
+});
+
+router.get('/bootstrap/reports', async (_req: Request, res: Response): Promise<void> => {
+  const dataRoot = getModulesDataRoot();
+  const index = await readJsonFile(path.join(dataRoot, '.asd', 'bootstrap-reports', 'index.json'));
+  const reports = Array.isArray(index?.reports)
+    ? index.reports.filter((entry) => typeof entry.sessionId === 'string' && entry.sessionId)
+    : [];
+  res.json({ success: true, data: { ...(index || {}), reports } });
+});
+
+router.get(
+  '/bootstrap/reports/:sessionId/diff',
+  async (req: Request, res: Response): Promise<void> => {
+    const sessionId = singleParam(req.params.sessionId);
+    const base = typeof req.query.base === 'string' ? req.query.base : '';
+    if (!isSafeReportId(sessionId) || !isSafeReportId(base)) {
+      return void res.status(400).json({ success: false, error: 'Invalid report id' });
+    }
+    const dataRoot = getModulesDataRoot();
+    const current = await readBootstrapHistoryReport(dataRoot, sessionId);
+    const baseline = await readBootstrapHistoryReport(dataRoot, base);
+    if (!current || !baseline) {
+      return void res.status(404).json({ success: false, error: 'Report not found' });
+    }
+    res.json({ success: true, data: diffBootstrapReports(current, baseline) });
+  }
+);
+
+router.get(
+  '/bootstrap/reports/:sessionId/artifacts/:artifactId',
+  async (req: Request, res: Response): Promise<void> => {
+    const sessionId = singleParam(req.params.sessionId);
+    const artifactId = singleParam(req.params.artifactId);
+    if (!isSafeReportId(sessionId) || !isSafeReportId(artifactId)) {
+      return void res.status(400).json({ success: false, error: 'Invalid artifact id' });
+    }
+    const dataRoot = getModulesDataRoot();
+    const artifactRoot = path.join(dataRoot, '.asd', 'bootstrap-reports', 'artifacts', sessionId);
+    const artifactPath = path.join(artifactRoot, artifactId);
+    if (!artifactPath.startsWith(artifactRoot + path.sep)) {
+      return void res.status(400).json({ success: false, error: 'Invalid artifact path' });
+    }
+    try {
+      const content = await fs.readFile(artifactPath, 'utf8');
+      res.type('text/plain').send(content);
+    } catch {
+      res.status(404).json({ success: false, error: 'Artifact not found' });
+    }
+  }
+);
+
+router.get('/bootstrap/reports/:sessionId', async (req: Request, res: Response): Promise<void> => {
+  const sessionId = singleParam(req.params.sessionId);
+  if (!isSafeReportId(sessionId)) {
+    return void res.status(400).json({ success: false, error: 'Invalid report id' });
+  }
+  const dataRoot = getModulesDataRoot();
+  const report = await readBootstrapHistoryReport(dataRoot, sessionId);
+  if (!report) {
+    return void res.status(404).json({ success: false, error: 'Report not found' });
+  }
+  res.json({ success: true, data: report });
+});
 
 /**
  * GET /api/v1/modules/bootstrap/status
@@ -592,5 +672,67 @@ router.post(
     sendDashboardOperationResponse(res, envelope);
   }
 );
+
+function getModulesDataRoot() {
+  const container = getServiceContainer();
+  return resolveDataRoot(container as { singletons?: Record<string, unknown> }) || process.cwd();
+}
+
+function singleParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] || '' : value || '';
+}
+
+async function readBootstrapHistoryReport(dataRoot: string, sessionId: string) {
+  return readJsonFile(path.join(dataRoot, '.asd', 'bootstrap-reports', `${sessionId}.json`));
+}
+
+async function readJsonFile(filePath: string) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, 'utf8')) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function isSafeReportId(value: string) {
+  return value.length > 0 && SAFE_REPORT_ID.test(value);
+}
+
+function diffBootstrapReports(current: Record<string, unknown>, baseline: Record<string, unknown>) {
+  return {
+    sessionId: (current.session as { id?: unknown } | undefined)?.id || null,
+    baseSessionId: (baseline.session as { id?: unknown } | undefined)?.id || null,
+    duration: diffNumber(current, baseline, ['duration', 'totalMs']),
+    candidates: diffNumber(current, baseline, ['totals', 'candidates']),
+    toolCalls: diffNumber(current, baseline, ['toolUsage', 'total']),
+    terminal: {
+      enabled: getNested(current, ['terminal', 'enabled']) === true,
+      baseEnabled: getNested(baseline, ['terminal', 'enabled']) === true,
+      successRate: diffNumber(current, baseline, ['terminal', 'successRate']),
+      blocked: diffNumber(current, baseline, ['terminal', 'blocked']),
+    },
+  };
+}
+
+function diffNumber(
+  current: Record<string, unknown>,
+  baseline: Record<string, unknown>,
+  pathKeys: string[]
+) {
+  const currentValue = Number(getNested(current, pathKeys) || 0);
+  const baselineValue = Number(getNested(baseline, pathKeys) || 0);
+  return { current: currentValue, base: baselineValue, delta: currentValue - baselineValue };
+}
+
+function getNested(input: Record<string, unknown>, pathKeys: string[]) {
+  let current: unknown = input;
+  for (const key of pathKeys) {
+    if (!current || typeof current !== 'object') {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
 
 export default router;

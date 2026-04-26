@@ -28,12 +28,6 @@ interface ToolCall {
   id: string;
 }
 
-/** 工具 Schema 定义 */
-interface ToolSchema {
-  name?: string;
-  function?: { name: string };
-}
-
 /** 工具执行上下文 */
 interface ToolExecContext {
   runtime: AgentRuntime;
@@ -139,7 +133,13 @@ export class ToolExecutionPipeline {
           args: call.args,
           surface: 'runtime',
           actor: { role: 'runtime', user: runtime.id },
-          source: { kind: 'runtime', name: loopCtx.source || runtime.presetName },
+          source: {
+            kind: 'runtime',
+            name:
+              typeof loopCtx.context?.pipelinePhase === 'string'
+                ? loopCtx.context.pipelinePhase
+                : loopCtx.source || runtime.presetName,
+          },
           abortSignal: loopCtx.abortSignal || null,
           runtime: {
             agentId: runtime.id,
@@ -179,6 +179,16 @@ export class ToolExecutionPipeline {
                 ? loopCtx.sharedState._dimensionScopeId
                 : null,
             currentRound: loopCtx.iteration || 0,
+            terminalTest: loopCtx.context?.terminalTest === true,
+            terminalToolset:
+              typeof loopCtx.context?.terminalToolset === 'string'
+                ? loopCtx.context.terminalToolset
+                : null,
+            allowedTerminalModes: Array.isArray(loopCtx.context?.allowedTerminalModes)
+              ? loopCtx.context.allowedTerminalModes.filter(
+                  (mode): mode is string => typeof mode === 'string'
+                )
+              : [],
           },
         });
         metadata.envelope = envelope;
@@ -221,8 +231,8 @@ export class ToolExecutionPipeline {
  * AllowlistGate — 工具白名单守卫
  *
  * 防止 LLM hallucinate 不在当前 capability 允许列表中的工具调用。
- * 从 LoopContext.toolSchemas 中提取允许的工具名列表，
- * 拒绝不在列表中的调用（返回 error 提示）。
+ * 从 LoopContext.allowedToolIds 中提取允许的工具名列表，
+ * 拒绝不在列表中的调用（返回 error 提示）。空数组表示严格禁用所有 capability 工具。
  *
  * Forge 集成：不在白名单的工具如果已由 ToolForge 锻造（存在于 ToolRegistry），则放行。
  *
@@ -231,13 +241,7 @@ export class ToolExecutionPipeline {
 export const allowlistGate = {
   name: 'allowlistGate',
   before(call: ToolCall, ctx: ToolExecContext): BeforeVerdict | undefined {
-    const schemas: ToolSchema[] | undefined = ctx.loopCtx?.toolSchemas;
-    // 如果没有 schema 列表（全工具模式），跳过检查
-    if (!schemas || schemas.length === 0) {
-      return undefined;
-    }
-
-    const allowedNames = new Set(schemas.map((s: ToolSchema) => s.name || s.function?.name));
+    const allowedNames = new Set(ctx.loopCtx?.allowedToolIds || []);
     if (!allowedNames.has(call.name)) {
       const container = ctx.runtime.container as { get?: (name: string) => unknown } | null;
       const toolForge = container?.get?.('toolForge') as ToolForgeLike | undefined;
@@ -253,10 +257,14 @@ export const allowlistGate = {
       ctx.runtime.logger.warn(
         `[ToolPipeline] ⛔ Tool "${call.name}" not in allowlist — blocked (hallucinated call)`
       );
+      const availableTools = [...allowedNames].slice(0, 5).join(', ');
       return {
         blocked: true,
         result: {
-          error: `工具 "${call.name}" 不可用。当前可用工具: ${[...allowedNames].slice(0, 5).join(', ')}${allowedNames.size > 5 ? '...' : ''}`,
+          error:
+            allowedNames.size === 0
+              ? `工具 "${call.name}" 不可用。当前阶段未开放任何工具。`
+              : `工具 "${call.name}" 不可用。当前可用工具: ${availableTools}${allowedNames.size > 5 ? '...' : ''}`,
         },
       };
     }

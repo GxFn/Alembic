@@ -19,11 +19,26 @@ export class KnowledgeProduction extends Capability {
 工作流:
 1. 识别分析中的知识点
 2. read_project_file 批量获取代码片段 (如需)
-3. submit_knowledge 或 submit_with_check 提交
-4. 提交优先于完美 — 文件读取失败时用已有信息直接提交`;
+3. check_duplicate 检查重复风险
+4. validate_candidate 做提交前字段校验
+5. submit_with_check 优先提交，必要时才直接 submit_knowledge
+6. review_my_output / quality_score 做轻量自检
+
+关键规则:
+- 不使用终端工具
+- 不做新的代码探索
+- 不执行发布、废弃、更新等知识生命周期操作`;
   }
 
   get tools() {
-    return ['submit_knowledge', 'submit_with_check', 'read_project_file'];
+    return [
+      'read_project_file',
+      'check_duplicate',
+      'validate_candidate',
+      'submit_with_check',
+      'submit_knowledge',
+      'review_my_output',
+      'quality_score',
+    ];
   }
 }

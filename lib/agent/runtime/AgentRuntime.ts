@@ -389,6 +389,7 @@ export class AgentRuntime {
       history = [],
       context = {},
       capabilityOverride,
+      additionalToolsOverride,
       budgetOverride,
       systemPromptOverride,
       onToolCall,
@@ -413,8 +414,15 @@ export class AgentRuntime {
     let baseSystemPrompt = systemPromptOverride || this.#promptBuilder.build(caps, context);
 
     // 收集工具 (空列表是明确无工具，不再隐式展开为全量工具)
-    const allowedTools = this.#collectTools(caps);
-    const toolSchemas = this.#getToolSchemas(allowedTools);
+    const allowedToolIds = this.#collectTools(caps, additionalToolsOverride).map(String);
+    const toolSchemas = this.#getToolSchemas(allowedToolIds);
+    diagnosticsCollector.recordStageToolset({
+      stage: typeof context.pipelinePhase === 'string' ? context.pipelinePhase : 'react_loop',
+      capabilities: caps.map((c: Capability) => c.name),
+      allowedToolIds,
+      toolSchemaCount: toolSchemas.length,
+      ...(source ? { source } : {}),
+    });
 
     // 创建统一消息适配器 (消除 useCtxWin 双模式)
     const messages = createMessageAdapter(contextWindow);
@@ -468,6 +476,7 @@ export class AgentRuntime {
       budget,
       capabilities: caps,
       baseSystemPrompt,
+      allowedToolIds,
       toolSchemas,
       prompt,
       onToolCall: onToolCall || null,
@@ -1157,7 +1166,7 @@ export class AgentRuntime {
    * 收集所有 Agent Skill 的工具白名单。
    * 空 tools 表示该技能不开放工具；全量工具必须通过显式 action space 表达。
    */
-  #collectTools(caps: Capability[]) {
+  #collectTools(caps: Capability[], additionalToolsOverride?: string[]) {
     const toolSet = new Set();
     for (const cap of caps) {
       const tools = cap.tools;
@@ -1170,6 +1179,9 @@ export class AgentRuntime {
     }
     // 合并调用方按需注入的额外工具 (不经 Capability，避免污染共享能力)
     for (const t of this.#additionalTools) {
+      toolSet.add(t);
+    }
+    for (const t of additionalToolsOverride || []) {
       toolSet.add(t);
     }
     return [...toolSet];
