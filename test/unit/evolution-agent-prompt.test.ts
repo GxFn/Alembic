@@ -250,8 +250,20 @@ describe('EVOLVER_SYSTEM_PROMPT', () => {
 });
 
 describe('EVOLVER_TOOLS', () => {
-  it('should contain exactly 5 tools', () => {
-    expect(EVOLVER_TOOLS).toHaveLength(5);
+  it('should contain the full verification and decision toolset', () => {
+    expect(EVOLVER_TOOLS).toEqual([
+      'read_project_file',
+      'search_project_code',
+      'semantic_search_code',
+      'query_code_graph',
+      'query_call_graph',
+      'search_recipes',
+      'get_recipe_detail',
+      'quality_score',
+      'propose_evolution',
+      'confirm_deprecation',
+      'skip_evolution',
+    ]);
   });
 
   it('should include proposal-based tools (no submit_knowledge)', () => {
