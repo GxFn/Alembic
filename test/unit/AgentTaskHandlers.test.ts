@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { taskCheckAndSubmit, taskQualityAudit } from '../../lib/agent/runs/chat/ChatAgentTasks.js';
+import { taskCheckAndSubmit, taskQualityAudit } from '../../lib/agent/tasks/AgentTaskHandlers.js';
 import type { ToolResultEnvelope } from '../../lib/tools/core/ToolResultEnvelope.js';
 
 function envelope<T>(toolId: string, structuredContent: T): ToolResultEnvelope<T> {
@@ -32,7 +32,7 @@ function envelope<T>(toolId: string, structuredContent: T): ToolResultEnvelope<T
   };
 }
 
-describe('ChatAgentTasks envelope boundary', () => {
+describe('AgentTaskHandlers envelope boundary', () => {
   test('check_and_submit consumes ToolResultEnvelope results explicitly', async () => {
     const invokeToolEnvelope = vi.fn().mockResolvedValue(
       envelope('check_duplicate', {

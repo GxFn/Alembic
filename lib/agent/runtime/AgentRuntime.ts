@@ -33,7 +33,6 @@ import Logger from '#infra/logging/Logger.js';
 import type { ToolSchemaProjection } from '#tools/catalog/CapabilityManifest.js';
 import { Capability, CapabilityRegistry } from '../capabilities/index.js';
 import { PolicyEngine } from '../policies/index.js';
-import { cleanFinalAnswer } from '../prompts/ChatAgentPrompts.js';
 import { AgentEventBus, AgentEvents } from './AgentEventBus.js';
 import type { AgentMessage } from './AgentMessage.js';
 import {
@@ -50,6 +49,7 @@ import {
 } from './AgentRuntimeTypes.js';
 import { AgentState } from './AgentState.js';
 import { DiagnosticsCollector } from './DiagnosticsCollector.js';
+import { cleanFinalAnswer } from './final-answer.js';
 import { produceForcedSummary } from './forced-summary.js';
 import { continueResult, LLMResultType } from './LLMResultType.js';
 import { LoopContext } from './LoopContext.js';

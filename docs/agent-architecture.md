@@ -64,7 +64,7 @@ lib/agent/
 ├── forced-summary.ts           # 强制总结机制
 │
 ├── core/                       # ── Agent 核心运行时 ──
-│   ├── ChatAgentPrompts.ts     # Prompt 模板库
+│   ├── final-answer.ts         # 最终回答清理工具
 │   ├── SystemPromptBuilder.ts  # 系统 Prompt 动态构建器
 │   ├── ToolExecutionPipeline.ts # 工具执行管线 + 安全策略
 │   ├── MessageAdapter.ts       # 消息格式适配
@@ -91,7 +91,7 @@ lib/agent/
 │       └── SignalDetector.ts   # 完成信号检测
 │
 ├── domain/                     # ── Agent 领域逻辑 ──
-│   ├── ChatAgentTasks.ts       # 预定义任务 (dedup/enrich/score/guard)
+│   ├── AgentTaskHandlers.ts    # 预定义任务流 (dedup/enrich/score/guard)
 │   ├── EpisodicConsolidator.ts # 记忆片段整合
 │   ├── EvidenceCollector.ts    # 证据收集器
 │   ├── insight-analyst.ts      # 洞察分析

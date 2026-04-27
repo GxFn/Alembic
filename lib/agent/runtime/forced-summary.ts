@@ -14,7 +14,7 @@
 
 import type { AiProvider } from '#external/ai/AiProvider.js';
 import Logger from '#infra/logging/Logger.js';
-import { cleanFinalAnswer } from '../prompts/ChatAgentPrompts.js';
+import { cleanFinalAnswer } from './final-answer.js';
 
 /* ── Local types ────────────────────────────────────────── */
 

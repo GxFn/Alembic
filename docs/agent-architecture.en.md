@@ -64,7 +64,7 @@ lib/agent/
 ├── forced-summary.ts           # Forced summary mechanism
 │
 ├── core/                       # ── Core Runtime ──
-│   ├── ChatAgentPrompts.ts     # Prompt template library
+│   ├── final-answer.ts         # Final answer cleanup helper
 │   ├── SystemPromptBuilder.ts  # Dynamic system prompt builder
 │   ├── ToolExecutionPipeline.ts # Tool execution + safety
 │   ├── MessageAdapter.ts       # Message format adapter
@@ -91,7 +91,7 @@ lib/agent/
 │       └── SignalDetector.ts
 │
 ├── domain/                     # ── Agent Domain Logic ──
-│   ├── ChatAgentTasks.ts       # Predefined tasks
+│   ├── AgentTaskHandlers.ts    # Predefined task flows
 │   ├── EpisodicConsolidator.ts # Episode consolidation
 │   ├── EvidenceCollector.ts    # Evidence collector
 │   ├── insight-analyst.ts      # Insight analysis

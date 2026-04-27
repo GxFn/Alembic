@@ -1,25 +1,18 @@
 /**
- * ChatAgentTasks — Agent 预定义任务方法
+ * AgentTaskHandlers — predefined task flows for /api/v1/ai/agent/task.
  *
- * 每个任务接收 context 对象: { invokeToolEnvelope, aiProvider, container, logger }
- * - invokeToolEnvelope(toolName, params) — 通过 ToolRouter 执行并返回标准 envelope
- * - aiProvider — AI Provider 实例
- * - container — ServiceContainer
- * - logger — Logger 实例
+ * These handlers are not chat runtime logic. They orchestrate direct ToolRouter
+ * calls and, for relation discovery, delegate to AgentService.run().
  */
 
 import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
-import { type AgentService, runRelationDiscovery } from '../../service/index.js';
+import { type AgentService, runRelationDiscovery } from '../service/index.js';
 
-// ── Local Type Definitions ──
-
-/** AI provider interface subset used by task functions */
 interface TaskAiProvider {
   chat(prompt: string, opts?: Record<string, unknown>): Promise<string>;
   chatWithStructuredOutput(prompt: string, opts?: Record<string, unknown>): Promise<unknown>;
 }
 
-/** Task execution context provided by the ChatAgent framework */
 interface TaskContext {
   invokeToolEnvelope(
     toolName: string,
@@ -30,21 +23,18 @@ interface TaskContext {
   logger?: unknown;
 }
 
-/** Candidate input shape for check-and-submit */
 interface CandidateInput {
   title?: string;
   code?: string;
   [key: string]: unknown;
 }
 
-/** Duplicate search result entry */
 interface DuplicateEntry {
   title?: string;
   similarity: number;
   [key: string]: unknown;
 }
 
-/** Knowledge item from knowledge service list() */
 interface KnowledgeItem {
   id: string;
   title?: string;
@@ -57,7 +47,6 @@ interface KnowledgeItem {
   [key: string]: unknown;
 }
 
-/** Knowledge service interface for list operations */
 interface KnowledgeServiceLike {
   list(
     filter: Record<string, unknown>,
@@ -65,7 +54,6 @@ interface KnowledgeServiceLike {
   ): Promise<{ items?: KnowledgeItem[]; data?: KnowledgeItem[] }>;
 }
 
-/** Guard violation entry */
 interface GuardViolation {
   severity?: string;
   message?: string;
@@ -75,18 +63,12 @@ interface GuardViolation {
   [key: string]: unknown;
 }
 
-/**
- * 任务: 提交前查重 + 质量预评
- * 1. check_duplicate → 若发现相似 ≥ 0.7 则建议合并
- * 2. 顺便返回质量评估建议
- */
 export async function taskCheckAndSubmit(
   context: TaskContext,
   { candidate, projectRoot }: { candidate: CandidateInput; projectRoot?: string }
 ) {
   const { aiProvider } = context;
 
-  // Step 1: 查重
   const duplicates = await invokeTaskTool<{ similar?: DuplicateEntry[] }>(
     context,
     'check_duplicate',
@@ -97,7 +79,6 @@ export async function taskCheckAndSubmit(
     }
   );
 
-  // Step 2: 如果有高相似度，使用 AI 分析是否真正重复
   const highSim = (duplicates.similar || []).filter((d: DuplicateEntry) => d.similarity >= 0.7);
   let aiVerdict: string | null = null;
   if (highSim.length > 0 && aiProvider) {
@@ -116,7 +97,7 @@ ${highSim.map((s: DuplicateEntry) => `- ${s.title} (相似度: ${s.similarity})`
       const raw = await aiProvider.chat(verdictPrompt, { temperature: 0, maxTokens: 20 });
       aiVerdict = (raw || '').trim().toUpperCase().split(/\s/)[0];
     } catch {
-      /* ignore */
+      /* optional AI verdict */
     }
   }
 
@@ -133,15 +114,10 @@ ${highSim.map((s: DuplicateEntry) => `- ${s.title} (相似度: ${s.similarity})`
   };
 }
 
-/**
- * 任务: 批量发现 Recipe 间的知识图谱关系
- * 委托给 AgentService.run(relation-discovery) (独立 Explore → Synthesize 管线)
- */
 export async function taskDiscoverAllRelations(context: TaskContext, { batchSize = 20 } = {}) {
   const { container } = context;
   const agentService = container.get('agentService') as AgentService;
 
-  // Mock 模式下跳过 AI 关系发现
   const aiManager = (container as unknown as { singletons?: Record<string, unknown> }).singletons
     ?._aiProviderManager as { isMock?: boolean } | undefined;
   if (aiManager?.isMock) {
@@ -151,13 +127,11 @@ export async function taskDiscoverAllRelations(context: TaskContext, { batchSize
   return runRelationDiscovery({ agentService, batchSize });
 }
 
-/** 任务: 批量 AI 补全候选语义字段 */
 export async function taskFullEnrich(
   context: TaskContext,
   { status = 'pending', maxCount = 50 } = {}
 ) {
   const { container } = context;
-
   const knowledgeService = container.get('knowledgeService') as KnowledgeServiceLike;
 
   const { items = [], data = [] } = await knowledgeService.list(
@@ -169,33 +143,25 @@ export async function taskFullEnrich(
     return { enriched: 0, message: 'No candidates to enrich' };
   }
 
-  // 筛选缺失语义字段的候选
-  const needEnrich = candidates.filter((c: KnowledgeItem) => {
-    const m = c.metadata || {};
-    return !m.rationale || !m.knowledgeType || !m.complexity;
+  const needEnrich = candidates.filter((candidate: KnowledgeItem) => {
+    const metadata = candidate.metadata || {};
+    return !metadata.rationale || !metadata.knowledgeType || !metadata.complexity;
   });
 
   if (needEnrich.length === 0) {
     return { enriched: 0, message: 'All candidates already enriched' };
   }
 
-  const result = await invokeTaskTool(context, 'enrich_candidate', {
-    candidateIds: needEnrich.map((c: KnowledgeItem) => c.id).slice(0, 20),
+  return invokeTaskTool(context, 'enrich_candidate', {
+    candidateIds: needEnrich.map((candidate: KnowledgeItem) => candidate.id).slice(0, 20),
   });
-
-  return result;
 }
 
-/**
- * 任务: 批量质量审计全部 Recipe
- * 对活跃 Recipe 逐个评分，返回低于阈值的列表
- */
 export async function taskQualityAudit(
   context: TaskContext,
   { threshold = 0.6, maxCount = 100 } = {}
 ) {
   const { container } = context;
-
   const knowledgeService = container.get('knowledgeService') as KnowledgeServiceLike;
 
   const { items = [], data = [] } = await knowledgeService.list(
@@ -248,21 +214,15 @@ export async function taskQualityAudit(
   };
 }
 
-/**
- * 任务: Guard 完整扫描
- * 对代码运行全部 Guard 规则 + 生成修复建议
- */
 export async function taskGuardFullScan(
   context: TaskContext,
   { code, language, filePath }: { code?: string; language?: string; filePath?: string } = {}
 ) {
   const { aiProvider } = context;
-
   if (!code) {
     return { error: 'code is required' };
   }
 
-  // Step 1: 静态检查
   const checkResult = await invokeTaskTool<{
     violationCount: number;
     violations?: GuardViolation[];
@@ -272,15 +232,14 @@ export async function taskGuardFullScan(
     scope: 'project',
   });
 
-  // Step 2: 如果有违规且 AI 可用，生成修复建议
   let suggestions: unknown = null;
   if (checkResult.violationCount > 0 && aiProvider) {
     try {
       const violationSummary = (checkResult.violations || [])
         .slice(0, 5)
         .map(
-          (v: GuardViolation) =>
-            `- [${v.severity}] ${v.message || v.ruleName} (line ${v.line || v.matches?.[0]?.line || '?'})`
+          (violation: GuardViolation) =>
+            `- [${violation.severity}] ${violation.message || violation.ruleName} (line ${violation.line || violation.matches?.[0]?.line || '?'})`
         )
         .join('\n');
 
@@ -303,7 +262,7 @@ ${code.substring(0, 3000)}
           temperature: 0.3,
         })) || [];
     } catch {
-      /* AI suggestions optional */
+      /* AI suggestions are optional */
     }
   }
 

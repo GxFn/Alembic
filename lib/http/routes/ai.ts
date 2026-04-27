@@ -17,14 +17,13 @@ import type { ToolCapabilityManifest } from '#tools/catalog/CapabilityManifest.j
 import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
 import { ConversationStore } from '../../agent/context/ConversationStore.js';
 import { PRESETS } from '../../agent/profiles/presets.js';
-import { buildProjectBriefing } from '../../agent/prompts/ChatAgentPrompts.js';
 import {
   taskCheckAndSubmit,
   taskDiscoverAllRelations,
   taskFullEnrich,
   taskGuardFullScan,
   taskQualityAudit,
-} from '../../agent/runs/chat/ChatAgentTasks.js';
+} from '../../agent/tasks/AgentTaskHandlers.js';
 import { createProvider } from '../../external/ai/AiFactory.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
@@ -504,7 +503,6 @@ router.post(
  *   - 对话持久化 (ConversationStore)
  *   - ContextWindow 上下文窗口管理
  *   - Token 用量持久化
- *   - 项目概况注入 (buildProjectBriefing)
  *   - SSE 流式最终回答 (text:start/delta/end)
  *   - MemoryCoordinator 记忆提取
  */
@@ -530,14 +528,6 @@ router.post('/chat', validate(AiChatBody), async (req: Request, res: Response): 
     }
   } catch {
     /* ConversationStore 不可用时静默降级 */
-  }
-
-  // ── 项目概况刷新 ──
-  let _projectBriefing = '';
-  try {
-    _projectBriefing = await buildProjectBriefing({ container });
-  } catch {
-    /* 静默降级 */
   }
 
   const result = await agentService.run(
@@ -659,7 +649,7 @@ router.post(
  *
  * 支持两种任务类型:
  *   1. ToolRegistry 注册的工具 (直接通过 toolName 调用)
- *   2. ChatAgentTasks 的 5 个预定义 DAG 任务
+ *   2. AgentTaskHandlers 的 5 个预定义任务流
  */
 const DAG_TASK_HANDLERS = {
   check_and_submit: taskCheckAndSubmit,
