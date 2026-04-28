@@ -70,20 +70,20 @@ export function startTaskManagerSession(
 // ── Pipeline Fill View dispatch (Phase D-2) ──────────────
 
 /**
- * Dispatch fillDimensionsV3 from a PipelineFillView.
+ * Dispatch a dimension fill pipeline from a PipelineFillView.
  *
  * Passes the view directly to orchestrator (no more flat-context expansion).
  * Fires via setImmediate (fire-and-forget).
  *
  * @param view - Typed PipelineFillView from handler
  * @param dimensions - Active dimensions for this run (may differ from snapshot.activeDimensions for rescan gap-only)
- * @param fillDimensionsV3 - The pipeline function to invoke
+ * @param runFillPipeline - The pipeline function to invoke
  * @param logPrefix - Log prefix (e.g. 'Bootstrap', 'Rescan-Internal')
  */
 export function dispatchPipelineFill(
   view: PipelineFillView,
   dimensions: DimensionDef[],
-  fillDimensionsV3: (view: PipelineFillView, dimensions: DimensionDef[]) => Promise<void>,
+  runFillPipeline: (view: PipelineFillView, dimensions: DimensionDef[]) => Promise<unknown>,
   logPrefix: string
 ): void {
   const ctxLogger = view.ctx.logger as
@@ -91,7 +91,7 @@ export function dispatchPipelineFill(
     | undefined;
   setImmediate(() => {
     ctxLogger?.info(`[${logPrefix}] Dispatching v3 AI-First pipeline`);
-    fillDimensionsV3(view, dimensions).catch((e: unknown) => {
+    runFillPipeline(view, dimensions).catch((e: unknown) => {
       ctxLogger?.error(
         `[${logPrefix}] Async fill failed: ${e instanceof Error ? e.message : String(e)}`
       );

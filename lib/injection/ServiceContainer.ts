@@ -18,6 +18,7 @@ import * as GuardModule from './modules/GuardModule.js';
 import * as InfraModule from './modules/InfraModule.js';
 import * as KnowledgeModule from './modules/KnowledgeModule.js';
 import { PanoramaModule } from './modules/PanoramaModule.js';
+import * as ScanModule from './modules/ScanModule.js';
 import * as SignalModule from './modules/SignalModule.js';
 import * as VectorModule from './modules/VectorModule.js';
 import type { ServiceMap } from './ServiceMap.js';
@@ -144,6 +145,7 @@ export class ServiceContainer {
       VectorModule.register(this);
       GuardModule.register(this);
       AgentModule.register(this);
+      ScanModule.register(this);
       AiModule.register(this);
       PanoramaModule.register(this);
 

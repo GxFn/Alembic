@@ -57,6 +57,32 @@ describe('AgentProfileCompiler', () => {
     expect(profile.runtimeOverrides.policies?.[0]).toBeInstanceOf(BudgetPolicy);
   });
 
+  test('compiles deep-scan as a dedicated scan profile', () => {
+    const compiler = createCompiler();
+
+    const profile = compiler.compile({
+      id: 'deep-scan',
+      params: { label: 'Architecture', files: [{ name: 'A.ts', content: 'export const a = 1;' }] },
+    });
+
+    expect(profile.id).toBe('deep-scan');
+    expect(profile.basePreset).toBe('insight');
+    expect(profile.params).toMatchObject({ task: 'deep-scan', comprehensive: true });
+    const strategy = profile.runtimeOverrides.strategy as unknown as {
+      stages: Array<{ name: string; budget?: { maxIterations?: number } }>;
+    };
+    expect(strategy.stages.map((stage) => stage.name)).toEqual([
+      'analyze',
+      'quality_gate',
+      'produce',
+      'rejection_gate',
+    ]);
+    expect(strategy.stages[0].budget?.maxIterations).toBe(36);
+    const policy = profile.runtimeOverrides.policies?.[0] as BudgetPolicy;
+    expect(policy).toBeInstanceOf(BudgetPolicy);
+    expect(policy.maxIterations).toBe(42);
+  });
+
   test('rejects profile definitions that contain non-serializable functions', () => {
     const registry = new AgentProfileRegistry([]);
 

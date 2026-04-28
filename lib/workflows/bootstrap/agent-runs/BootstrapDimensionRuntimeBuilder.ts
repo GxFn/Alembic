@@ -34,6 +34,7 @@ import {
   projectBootstrapDimensionRescanContext,
   projectBootstrapExistingRecipesForPrompt,
 } from '#workflows/bootstrap/context/BootstrapRescanState.js';
+import type { KnowledgeEvidencePack, ScanPlan } from '#workflows/scan/ScanTypes.js';
 
 interface DimConfigV3Entry {
   outputType: string;
@@ -153,6 +154,8 @@ export function createBootstrapDimensionRuntimeInput({
   bootstrapDedup,
   sessionId,
   allFiles,
+  scanPlan,
+  scanEvidencePack,
   sessionAbortSignal,
   terminalTest,
   terminalToolset,
@@ -181,6 +184,8 @@ export function createBootstrapDimensionRuntimeInput({
   bootstrapDedup: unknown;
   sessionId: string;
   allFiles: BootstrapFileEntry[] | null;
+  scanPlan?: ScanPlan | null;
+  scanEvidencePack?: KnowledgeEvidencePack | null;
   sessionAbortSignal?: AbortSignal | null;
   terminalTest?: boolean;
   terminalToolset?: BootstrapTerminalToolset;
@@ -195,6 +200,15 @@ export function createBootstrapDimensionRuntimeInput({
     outputType: dimConfig.outputType || 'candidate',
     allowedKnowledgeTypes: dimConfig.allowedKnowledgeTypes || [],
   };
+  const phaseEvidenceStarters = buildEvidenceStarters(plan.dim, {
+    astData: astProjectSummary,
+    guardAudit,
+    depGraphData,
+    callGraphResult,
+    panoramaResult,
+  });
+  const scanEvidenceStarters = buildScanEvidenceStarters(dimId, scanEvidencePack);
+  const evidenceStarters = mergeEvidenceStarters(phaseEvidenceStarters, scanEvidenceStarters);
   const systemRunContext = createSystemRunContext({
     memoryCoordinator,
     scopeId: analystScopeId,
@@ -226,13 +240,8 @@ export function createBootstrapDimensionRuntimeInput({
       codeEntityGraph: codeEntityGraphInst,
       projectGraph: null,
       panorama: buildPanoramaContext(panoramaResult),
-      evidenceStarters: buildEvidenceStarters(plan.dim, {
-        astData: astProjectSummary,
-        guardAudit,
-        depGraphData,
-        callGraphResult,
-        panoramaResult,
-      }),
+      evidenceStarters,
+      scanPlan: projectBootstrapScanPlan(scanPlan),
       rescanContext: projectBootstrapDimensionRescanContext({ rescanContext, dimId }),
       existingRecipes: projectBootstrapExistingRecipesForPrompt(dimExistingRecipes),
       terminalTest,
@@ -269,6 +278,94 @@ export function createBootstrapDimensionRuntimeInput({
       memoryCoordinator,
       sessionAbortSignal,
     }),
+  };
+}
+
+function mergeEvidenceStarters(
+  phaseEvidenceStarters:
+    | Record<string, { hint: string; data: unknown; strength?: number }>
+    | undefined,
+  scanEvidenceStarters:
+    | Record<string, { hint: string; data: unknown; strength?: number }>
+    | undefined
+): Record<string, { hint: string; data: unknown; strength?: number }> | undefined {
+  const merged = {
+    ...(phaseEvidenceStarters ?? {}),
+    ...(scanEvidenceStarters ?? {}),
+  };
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function buildScanEvidenceStarters(
+  dimId: string,
+  pack: KnowledgeEvidencePack | null | undefined
+): Record<string, { hint: string; data: unknown; strength: number }> | undefined {
+  if (!pack) {
+    return undefined;
+  }
+
+  const starters: Record<string, { hint: string; data: unknown; strength: number }> = {};
+  const dimensionGaps = pack.gaps.filter((gap) => gap.dimension === dimId);
+  if (dimensionGaps.length > 0) {
+    starters.scanGaps = {
+      hint: '公共扫描规划检测到本维度存在覆盖缺口，优先围绕这些缺口补证据',
+      data: dimensionGaps.slice(0, 6),
+      strength: 88,
+    };
+  }
+
+  if (pack.files.length > 0) {
+    starters.scanFiles = {
+      hint: '公共检索层裁剪出的优先阅读文件，可作为本维度分析入口',
+      data: pack.files.slice(0, 8).map((file) => ({
+        path: file.relativePath,
+        language: file.language,
+        role: file.role,
+      })),
+      strength: 72,
+    };
+  }
+
+  if (pack.knowledge.length > 0) {
+    starters.scanKnowledge = {
+      hint: '公共检索层召回的相关已有知识，用于避免重复提交和识别增量补洞方向',
+      data: pack.knowledge.slice(0, 6).map((item) => ({
+        id: item.id,
+        title: item.title,
+        trigger: item.trigger,
+        reason: item.reason,
+      })),
+      strength: 68,
+    };
+  }
+
+  if (pack.graph.entities.length > 0 || pack.graph.edges.length > 0) {
+    starters.scanGraph = {
+      hint: '公共检索层汇总的实体/关系证据，优先核对跨文件调用、依赖与模块边界',
+      data: {
+        entities: pack.graph.entities.slice(0, 8),
+        edges: pack.graph.edges.slice(0, 10),
+      },
+      strength: 76,
+    };
+  }
+
+  return Object.keys(starters).length > 0 ? starters : undefined;
+}
+
+function projectBootstrapScanPlan(
+  plan: ScanPlan | null | undefined
+): Record<string, unknown> | null {
+  if (!plan) {
+    return null;
+  }
+  return {
+    mode: plan.mode,
+    depth: plan.depth,
+    reason: plan.reason,
+    activeDimensions: plan.activeDimensions,
+    skippedDimensions: plan.skippedDimensions,
+    budgets: plan.budgets,
   };
 }
 

@@ -2,7 +2,7 @@
  * rescan-internal.ts — 内部 Agent 增量扫描
  *
  * 与 rescan-external.ts（为外部 IDE Agent 生成 Mission Briefing）不同，
- * 本文件由内置 AI pipeline（fillDimensionsV3）在服务端自动完成知识补齐。
+ * 本文件由 scan lifecycle runner 在服务端自动完成知识补齐。
  *
  * 流程:
  *   1. snapshotRecipes — 快照保留知识
@@ -12,7 +12,7 @@
  *   4. RecipeRelevanceAuditor — 证据验证 + 快速衰退
  *   5. 计算 gap 维度（需要补齐的维度）
  *   5.5 BootstrapSessionManager — 缓存 Phase 结果供复用
- *   6. 快速返回骨架 → 异步 fillDimensionsV3 填充 gap 维度
+ *   6. 快速返回骨架 → 异步 deep-mining gap-fill 填充 gap 维度
  *   7. 前端通过 Socket.io 接收维度完成进度
  *
  * @module handlers/rescan-internal
@@ -23,17 +23,15 @@ import { CleanupService } from '#service/cleanup/CleanupService.js';
 import { RelevanceAuditor } from '#service/evolution/RelevanceAuditor.js';
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
-import type {
-  AstSummary,
-  DimensionDef,
-  GuardAudit,
-  ProjectSnapshot,
-} from '#types/project-snapshot.js';
-import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
+import type { AstSummary, DimensionDef, GuardAudit } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import { toSessionCache } from '#types/snapshot-views.js';
-import { runAllPhases } from '#workflows/bootstrap/phases/BootstrapPhaseRunner.js';
-import { fillDimensionsV3 } from '../../../workflows/bootstrap/BootstrapWorkflow.js';
+import { runBootstrapProjectAnalysis } from '#workflows/bootstrap/pipeline/BootstrapProjectAnalysisPipeline.js';
+import {
+  type ScanDimensionFillContext,
+  ScanLifecycleBaselineRequiredError,
+  ScanLifecycleRunner,
+} from '#workflows/scan/lifecycle/ScanLifecycleRunner.js';
 import { envelope } from '../envelope.js';
 import {
   buildTaskDefs,
@@ -72,7 +70,7 @@ const TARGET_PER_DIM = 5;
  * rescanInternal — 内部 Agent 增量扫描
  *
  * 同步返回骨架（含 audit 摘要 + 异步会话 ID），
- * 后台通过 fillDimensionsV3 对 gap 维度执行 AI 补齐。
+ * 后台通过 scan lifecycle runner 对 gap 维度执行 AI 补齐。
  */
 export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternalArgs) {
   const t0 = Date.now();
@@ -138,18 +136,22 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
   // ═══════════════════════════════════════════════════════════
 
   const contentMaxLines = 120;
-  const phaseResults = await runAllPhases(projectRoot, ctx, {
-    maxFiles: 500,
-    contentMaxLines,
+  const { phaseResults, snapshot } = await runBootstrapProjectAnalysis({
+    projectRoot,
+    ctx,
     sourceTag: 'rescan-internal',
-    summaryPrefix: 'Rescan-Internal scan',
-    clearOldData: false, // 已由 rescanClean 清理
-    generateReport: true,
-    generateAstContext: true,
-    incremental: false,
+    phaseOptions: {
+      maxFiles: 500,
+      contentMaxLines,
+      summaryPrefix: 'Rescan-Internal scan',
+      clearOldData: false, // 已由 rescanClean 清理
+      generateReport: true,
+      generateAstContext: true,
+      incremental: false,
+    },
   });
 
-  if (phaseResults.isEmpty) {
+  if (snapshot.isEmpty) {
     return envelope({
       success: true,
       data: { message: 'No source files found. Nothing to rescan.' },
@@ -167,14 +169,6 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
     activeDimensions: allDimensions,
     incrementalPlan: _incrementalPlan,
   } = phaseResults;
-
-  // ── Build immutable ProjectSnapshot ──
-  const snapshot: ProjectSnapshot = buildProjectSnapshot({
-    projectRoot,
-    sourceTag: 'rescan-internal',
-    ...phaseResults,
-    report: phaseResults.report,
-  });
 
   // ═══════════════════════════════════════════════════════════
   // Step 4: Recipe 证据验证 + 快速衰退
@@ -286,6 +280,32 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
       gap: TARGET_PER_DIM - (coverageByDim[d.id] || 0),
     })),
   });
+
+  const scanLifecycleRunner = ScanLifecycleRunner.fromContainer(ctx.container, ctx.logger);
+  let deepMiningScanContext: ScanDimensionFillContext | null = null;
+  let deepMiningScanSummary: Record<string, unknown> | null = null;
+  let deepMiningBlockedReason: string | null = null;
+  const shouldRunAsyncFill = gapDimensions.length > 0 && !args.skipAsyncFill;
+
+  if (shouldRunAsyncFill) {
+    try {
+      const prepared = await scanLifecycleRunner.prepareDeepMiningGapFillContext(snapshot, {
+        dimensions: gapDimensions.map((dimension) => dimension.id),
+        reason: args.reason || 'Rescan gap-fill deep mining',
+        retrieveEvidence: true,
+      });
+      deepMiningScanContext = prepared.scanContext;
+      deepMiningScanSummary = prepared.summary;
+    } catch (err: unknown) {
+      if (!(err instanceof ScanLifecycleBaselineRequiredError)) {
+        throw err;
+      }
+      deepMiningBlockedReason = err.message;
+      ctx.logger.warn('[Rescan-Internal] Deep-mining gap fill blocked', {
+        reason: deepMiningBlockedReason,
+      });
+    }
+  }
 
   // ═══════════════════════════════════════════════════════════
   // Step 5.5: BootstrapSessionManager — 缓存 Phase 结果供复用
@@ -405,8 +425,19 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
     panorama: snapshot.panorama ? summarizePanorama(snapshot.panorama) : null,
     bootstrapSession: bootstrapSession ? bootstrapSession.toJSON() : null,
     sessionId,
-    asyncFill: gapDimensions.length > 0,
-    status: gapDimensions.length > 0 ? 'filling' : 'complete',
+    scanContext:
+      deepMiningScanSummary ??
+      (deepMiningBlockedReason
+        ? { mode: 'deep-mining', status: 'blocked', reason: deepMiningBlockedReason }
+        : null),
+    asyncFill: shouldRunAsyncFill && !deepMiningBlockedReason,
+    status: deepMiningBlockedReason
+      ? 'blocked'
+      : shouldRunAsyncFill
+        ? 'filling'
+        : gapDimensions.length > 0
+          ? 'pending'
+          : 'complete',
     files: allFiles.length,
     targets: allTargets.length,
   };
@@ -415,14 +446,17 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
   // Step 7: 异步后台填充 gap 维度
   // ═══════════════════════════════════════════════════════════
 
-  if (gapDimensions.length > 0 && !args.skipAsyncFill) {
-    const fillView: PipelineFillView = {
-      snapshot,
-      ctx: ctx as RescanMcpContext & { logger: RescanLogger },
-      bootstrapSession,
-      targetFileMap,
-      projectRoot,
-    };
+  if (shouldRunAsyncFill && deepMiningScanContext) {
+    const fillView: PipelineFillView = scanLifecycleRunner.bindScanDimensionFillView(
+      {
+        snapshot,
+        ctx: ctx as RescanMcpContext & { logger: RescanLogger },
+        bootstrapSession,
+        targetFileMap,
+        projectRoot,
+      },
+      deepMiningScanContext
+    );
 
     // 构建 existingRecipes（含审计状态 + 完整内容），供管线内 Evolution Stage 使用
     const allExistingRecipes = recipeSnapshot.entries.map((e) => {
@@ -454,9 +488,13 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
     dispatchPipelineFill(
       { ...fillView, existingRecipes: allExistingRecipes, evolutionPrescreen: prescreen },
       gapDimensions,
-      fillDimensionsV3,
+      (view, activeDimensions) => scanLifecycleRunner.runDeepMiningFill(view, activeDimensions),
       'Rescan-Internal'
     );
+  } else if (deepMiningBlockedReason) {
+    ctx.logger.warn('[Rescan-Internal] Gap fill skipped until a cold-start baseline exists', {
+      reason: deepMiningBlockedReason,
+    });
   } else if (gapDimensions.length === 0) {
     ctx.logger.info('[Rescan-Internal] All dimensions fully covered — no async fill needed');
   }
@@ -488,8 +526,9 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
   return envelope({
     success: true,
     data: responseData,
-    message:
-      gapDimensions.length > 0
+    message: deepMiningBlockedReason
+      ? `增量扫描已完成审计，但深度补洞需要先建立 cold-start baseline：${deepMiningBlockedReason}`
+      : gapDimensions.length > 0
         ? `增量扫描骨架已创建：保留 ${recipeSnapshot.count} 个 Recipe，${gapDimensions.length} 个维度需要补齐，正在后台填充...`
         : `增量扫描完成：保留 ${recipeSnapshot.count} 个 Recipe，所有维度已充分覆盖。`,
     meta: { tool: 'alembic_rescan', responseTimeMs: Date.now() - t0 },

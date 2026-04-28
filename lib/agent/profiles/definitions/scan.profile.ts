@@ -15,6 +15,19 @@ const scanDefaults = {
   actionSpace: { mode: 'none' as const },
 };
 
+const deepScanDefaults = {
+  ...scanDefaults,
+  policies: [
+    {
+      type: 'budget' as const,
+      maxIterations: 42,
+      maxTokens: 12_288,
+      temperature: 0.3,
+      timeoutMs: 3_600_000,
+    },
+  ],
+};
+
 export const SCAN_PROFILES: AgentProfileDefinition[] = [
   {
     id: 'scan-extract',
@@ -23,6 +36,16 @@ export const SCAN_PROFILES: AgentProfileDefinition[] = [
     lifecycle: 'active',
     basePreset: 'insight',
     defaults: scanDefaults,
+    strategy: { type: 'pipeline', factory: 'scanPipeline' },
+    projection: 'scan-recipes',
+  },
+  {
+    id: 'deep-scan',
+    title: 'Deep Scan',
+    serviceKind: 'knowledge-production',
+    lifecycle: 'active',
+    basePreset: 'insight',
+    defaults: deepScanDefaults,
     strategy: { type: 'pipeline', factory: 'scanPipeline' },
     projection: 'scan-recipes',
   },

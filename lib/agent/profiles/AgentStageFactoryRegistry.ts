@@ -50,7 +50,12 @@ export class AgentStageFactoryRegistry {
 
   private registerDefaults() {
     this.register('scanPipeline', ({ params }) => {
-      const task = params.task === 'summarize' ? 'summarize' : 'extract';
+      const task =
+        params.task === 'summarize'
+          ? 'summarize'
+          : params.task === 'deep-scan'
+            ? 'deep-scan'
+            : 'extract';
       const taskConfig = SCAN_TASK_CONFIGS[task];
       const files = Array.isArray(params.files)
         ? (params.files as Array<{ name?: string; relativePath?: string; content?: string }>)
@@ -61,7 +66,7 @@ export class AgentStageFactoryRegistry {
         analyzeCaps: ['code_analysis'],
         produceCaps: ['scan_production'],
         files,
-        analyzeMaxIter: task === 'summarize' ? 12 : 24,
+        analyzeMaxIter: task === 'summarize' ? 12 : task === 'deep-scan' ? 36 : 24,
       }) as Record<string, unknown>[];
     });
 

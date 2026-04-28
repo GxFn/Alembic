@@ -15,14 +15,42 @@
 import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import type { ScanRunRecord } from '../../repository/scan/ScanRunRepository.js';
 import type { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
-import type { FileChangeEvent, FileChangeEventSource } from '../../types/reactive-evolution.js';
+import type { FileChangeEvent, ReactiveEvolutionReport } from '../../types/reactive-evolution.js';
+import {
+  ScanLifecycleRunner,
+  ScanLifecycleServiceUnavailableError,
+} from '../../workflows/scan/lifecycle/ScanLifecycleRunner.js';
+import { normalizeFileChangeEvents } from '../../workflows/scan/normalization/ScanChangeSetNormalizer.js';
+import type {
+  IncrementalCorrectionResult,
+  ScanBudget,
+  ScanDepth,
+} from '../../workflows/scan/ScanTypes.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();
 
-const VALID_TYPES = new Set(['created', 'renamed', 'deleted', 'modified']);
-const VALID_SOURCES = new Set<FileChangeEventSource>(['ide-edit', 'git-head', 'git-worktree']);
+const VALID_SCAN_DEPTHS = new Set<ScanDepth>(['light', 'standard', 'deep', 'exhaustive']);
+
+interface ServiceContainerLike {
+  singletons?: Record<string, unknown>;
+  get?: (name: string) => unknown;
+}
+
+interface FileChangesScanOptions {
+  enabled: boolean;
+  projectRoot: string;
+  runAgent: boolean;
+  depth: ScanDepth;
+  budget?: ScanBudget;
+  primaryLang?: string;
+}
+
+type FileChangesScanResponse =
+  | { success: true; data: IncrementalCorrectionResult; run: ScanRunRecord | null }
+  | { success: false; error: { code: string; message: string }; run?: ScanRunRecord | null };
 
 /**
  * POST /api/v1/file-changes
@@ -36,9 +64,10 @@ const VALID_SOURCES = new Set<FileChangeEventSource>(['ide-edit', 'git-head', 'g
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { events } = req.body as { events?: unknown };
+    const body = asRecord(req.body);
+    const normalizedEvents = normalizeFileChangeEvents(body.events);
 
-    if (!Array.isArray(events) || events.length === 0) {
+    if (!normalizedEvents.wasArray || normalizedEvents.inputCount === 0) {
       res.status(400).json({
         success: false,
         error: { code: 'INVALID_INPUT', message: 'events must be a non-empty array' },
@@ -46,34 +75,7 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const validEvents: FileChangeEvent[] = [];
-
-    for (const event of events) {
-      if (
-        typeof event !== 'object' ||
-        event === null ||
-        !VALID_TYPES.has((event as Record<string, unknown>).type as string) ||
-        typeof (event as Record<string, unknown>).path !== 'string'
-      ) {
-        continue;
-      }
-      const obj = event as Record<string, unknown>;
-      const normalized: FileChangeEvent = {
-        type: obj.type as FileChangeEvent['type'],
-        path: obj.path as string,
-      };
-      if (typeof obj.oldPath === 'string') {
-        normalized.oldPath = obj.oldPath;
-      }
-      // 向后兼容：旧版客户端不传 eventSource，服务端透传 undefined，由 Dispatcher 统计推断
-      if (
-        typeof obj.eventSource === 'string' &&
-        VALID_SOURCES.has(obj.eventSource as FileChangeEventSource)
-      ) {
-        normalized.eventSource = obj.eventSource as FileChangeEventSource;
-      }
-      validEvents.push(normalized);
-    }
+    const validEvents = normalizedEvents.events;
 
     if (validEvents.length === 0) {
       res.json({
@@ -90,11 +92,14 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const container = getServiceContainer();
-    const dispatcher = container.get('fileChangeDispatcher') as FileChangeDispatcher;
+    const container = getServiceContainer() as ServiceContainerLike;
+    const dispatcher = container.get?.('fileChangeDispatcher') as FileChangeDispatcher | undefined;
+    if (!dispatcher) {
+      throw new Error('fileChangeDispatcher unavailable');
+    }
 
     // 同步分发 — FileChangeHandler 是纯代码路径毫秒级（文档 §5.1 备注）
-    let report;
+    let report: ReactiveEvolutionReport;
     try {
       report = await dispatcher.dispatch(validEvents);
     } catch (err: unknown) {
@@ -110,13 +115,19 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     logger.info('[file-changes] handled', {
-      total: events.length,
+      total: normalizedEvents.inputCount,
       valid: validEvents.length,
       needsReview: report.needsReview,
       eventSource: report.eventSource,
     });
 
-    res.json({ success: true, data: report });
+    const response: Record<string, unknown> = { success: true, data: report };
+    const scanOptions = readScanOptions(body.scan, body, container);
+    if (scanOptions.enabled) {
+      response.scan = await runIncrementalScan(container, validEvents, report, scanOptions);
+    }
+
+    res.json(response);
   } catch (err: unknown) {
     logger.warn('[file-changes] error', {
       error: (err as Error).message,
@@ -127,5 +138,116 @@ router.post('/', async (req: Request, res: Response) => {
     });
   }
 });
+
+async function runIncrementalScan(
+  container: ServiceContainerLike,
+  events: FileChangeEvent[],
+  reactiveReport: ReactiveEvolutionReport,
+  options: FileChangesScanOptions
+): Promise<FileChangesScanResponse> {
+  try {
+    const { result, run } = await resolveScanLifecycleRunner(container).runIncrementalCorrection(
+      {
+        projectRoot: options.projectRoot,
+        events,
+        reactiveReport,
+        runDeterministic: false,
+        runAgent: options.runAgent,
+        depth: options.depth,
+        budget: options.budget,
+        primaryLang: options.primaryLang,
+      },
+      { reason: 'HTTP file changes incremental scan' }
+    );
+    return { success: true, data: result, run };
+  } catch (err: unknown) {
+    logger.warn('[file-changes] incremental scan failed', {
+      error: toErrorMessage(err),
+    });
+    return {
+      success: false,
+      error: {
+        code:
+          err instanceof ScanLifecycleServiceUnavailableError
+            ? 'SCAN_UNAVAILABLE'
+            : 'SCAN_INCREMENTAL_ERROR',
+        message: toErrorMessage(err),
+      },
+    };
+  }
+}
+
+function resolveScanLifecycleRunner(container: ServiceContainerLike): ScanLifecycleRunner {
+  const runner = container.get?.('scanLifecycleRunner') as ScanLifecycleRunner | undefined;
+  return runner && typeof runner.runIncrementalCorrection === 'function'
+    ? runner
+    : ScanLifecycleRunner.fromContainer(container, logger);
+}
+
+function readScanOptions(
+  value: unknown,
+  body: Record<string, unknown>,
+  container: ServiceContainerLike
+): FileChangesScanOptions {
+  const options = asRecord(value);
+  const projectRoot =
+    readString(options.projectRoot) || readString(body.projectRoot) || readProjectRoot(container);
+  return {
+    enabled: options.enabled === true,
+    projectRoot,
+    runAgent: readBoolean(options.runAgent, false),
+    depth: readScanDepth(options.depth) ?? 'standard',
+    budget: readBudget(options.budget),
+    primaryLang: readOptionalString(options.primaryLang),
+  };
+}
+
+function readProjectRoot(container: ServiceContainerLike): string {
+  return readString(container.singletons?._projectRoot) || process.cwd();
+}
+
+function readBudget(value: unknown): ScanBudget | undefined {
+  const record = asRecord(value);
+  if (Object.keys(record).length === 0) {
+    return undefined;
+  }
+  return {
+    maxFiles: readOptionalNumber(record.maxFiles),
+    maxFileChars: readOptionalNumber(record.maxFileChars),
+    maxKnowledgeItems: readOptionalNumber(record.maxKnowledgeItems),
+    maxGraphEdges: readOptionalNumber(record.maxGraphEdges),
+    maxTotalChars: readOptionalNumber(record.maxTotalChars),
+  };
+}
+
+function readScanDepth(value: unknown): ScanDepth | undefined {
+  return typeof value === 'string' && VALID_SCAN_DEPTHS.has(value as ScanDepth)
+    ? (value as ScanDepth)
+    : undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function readString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function readOptionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function readBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function toErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
 export default router;

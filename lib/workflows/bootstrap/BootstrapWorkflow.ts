@@ -1,8 +1,4 @@
-import type {
-  AgentRunResult,
-  AgentService,
-  SystemRunContextFactory,
-} from '#agent/service/index.js';
+import type { AgentService, SystemRunContextFactory } from '#agent/service/index.js';
 import type { IncrementalPlan } from '#external/mcp/handlers/types.js';
 import Logger from '#infra/logging/Logger.js';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
@@ -10,49 +6,14 @@ import { resolveDataRoot } from '#shared/resolveProjectRoot.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import type { BootstrapFileEntry } from '#workflows/bootstrap/agent-runs/BootstrapDimensionInputBuilder.js';
-import {
-  type BootstrapDimensionPlan,
-  createBootstrapDimensionRuntimeInput,
-  resolveBootstrapDimensionPlan as resolveBootstrapDimensionPlanData,
-} from '#workflows/bootstrap/agent-runs/BootstrapDimensionRuntimeBuilder.js';
-import { buildBootstrapSessionExecutionInput } from '#workflows/bootstrap/agent-runs/BootstrapSessionExecutionBuilder.js';
-import {
-  applyRestoredDimensionState,
-  resolveIncrementalSkippedDimensions,
-  restoreCheckpointDimensions,
-} from '#workflows/bootstrap/checkpoint/BootstrapRestoreState.js';
 import { resolveBootstrapTerminalToolset } from '#workflows/bootstrap/config/BootstrapTerminalToolset.js';
-import { TierScheduler } from '#workflows/bootstrap/config/TierScheduler.js';
-import { consumeBootstrapCandidateRelations } from '#workflows/bootstrap/consumers/BootstrapCandidateRelationConsumer.js';
-import {
-  type CandidateResults,
-  consumeBootstrapDimensionError as consumeBootstrapDimensionErrorSideEffects,
-  consumeBootstrapDimensionResult,
-  type DimensionCandidateData,
-  type DimensionStat,
-} from '#workflows/bootstrap/consumers/BootstrapDimensionConsumer.js';
-import {
-  type ConsolidationResult,
-  consumeBootstrapSemanticMemory,
-} from '#workflows/bootstrap/consumers/BootstrapSemanticMemoryConsumer.js';
-import { consumeBootstrapSessionResult as consumeBootstrapSessionResultSideEffects } from '#workflows/bootstrap/consumers/BootstrapSessionConsumer.js';
-import {
-  consumeBootstrapSkills,
-  type SkillResults,
-} from '#workflows/bootstrap/consumers/BootstrapSkillConsumer.js';
-import { consumeBootstrapTierReflection } from '#workflows/bootstrap/consumers/BootstrapTierReflectionConsumer.js';
-import { prepareBootstrapRescanState } from '#workflows/bootstrap/context/BootstrapRescanState.js';
 import {
   type BootstrapProjectGraphLike,
   initializeBootstrapRuntime,
 } from '#workflows/bootstrap/context/BootstrapRuntimeInitializer.js';
-import { consumeBootstrapDeliveryAndWiki } from '#workflows/bootstrap/delivery/BootstrapDeliveryConsumer.js';
 import { fillDimensionsMock } from '#workflows/bootstrap/mock/MockBootstrapPipeline.js';
-import {
-  projectAgentRunResult,
-  projectBootstrapDimensionAgentOutput,
-} from '#workflows/bootstrap/projections/BootstrapDimensionProjection.js';
-import { consumeBootstrapReportAndSnapshot } from '#workflows/bootstrap/reports/BootstrapReportSnapshotConsumer.js';
+import { completeBootstrapPipeline } from '#workflows/bootstrap/pipeline/BootstrapCompletionPipeline.js';
+import { runBootstrapDimensionSession } from '#workflows/bootstrap/pipeline/BootstrapDimensionSessionPipeline.js';
 
 const logger = Logger.getInstance();
 
@@ -75,14 +36,12 @@ interface BootstrapWorkflowServiceKeys {
   agentService: AgentService;
   systemRunContextFactory: SystemRunContextFactory;
   bootstrapTaskManager: BootstrapTaskManagerLike;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB type varies (SqliteDatabase|DbWrapper|CeDbLike) across consumers
-  database: any;
+  database: unknown;
 }
 
 export interface BootstrapWorkflowContainer {
   get<K extends keyof BootstrapWorkflowServiceKeys>(name: K): BootstrapWorkflowServiceKeys[K];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- fallback for services not in BootstrapWorkflowServiceKeys
-  get(name: string): any;
+  get(name: string): unknown;
   singletons: BootstrapWorkflowSingletons;
   buildProjectGraph?(
     projectRoot: string,
@@ -93,8 +52,7 @@ export interface BootstrapWorkflowContainer {
 
 export interface BootstrapWorkflowContext {
   container: BootstrapWorkflowContainer;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ctx shape from various McpContext subtypes
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface BootstrapTaskManagerLike {
@@ -104,7 +62,17 @@ interface BootstrapTaskManagerLike {
   [key: string]: unknown;
 }
 
-export async function fillDimensionsV3(view: PipelineFillView, dimensions: DimensionDef[]) {
+export type BootstrapDimensionFillStatus = 'completed' | 'mock' | 'ai-unavailable';
+
+export interface BootstrapDimensionFillResult {
+  status: BootstrapDimensionFillStatus;
+  summary: Record<string, unknown>;
+}
+
+export async function fillDimensionsV3(
+  view: PipelineFillView,
+  dimensions: DimensionDef[]
+): Promise<BootstrapDimensionFillResult> {
   const { snapshot, projectRoot } = view;
   const ctx = view.ctx as BootstrapWorkflowContext;
   const dataRoot =
@@ -134,6 +102,8 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
     terminalToolset: view.terminalToolset,
     allowedTerminalModes: view.allowedTerminalModes,
   });
+  const scanPlan = view.scanPlan ?? null;
+  const scanEvidencePack = view.scanEvidencePack ?? null;
 
   const isIncremental = incrementalPlan?.canIncremental && incrementalPlan?.mode === 'incremental';
   const emitter = new BootstrapEventEmitter(ctx.container);
@@ -141,7 +111,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
     `[Insight-v3] ═══ fillDimensionsV3 entered — ${isIncremental ? 'INCREMENTAL' : 'FULL'} pipeline`
   );
 
-  let allFiles: BootstrapFileEntry[] | null = snapshot.allFiles as unknown as
+  const allFiles: BootstrapFileEntry[] | null = snapshot.allFiles as unknown as
     | BootstrapFileEntry[]
     | null;
 
@@ -168,24 +138,26 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
     for (const dim of dimensions) {
       emitter.emitDimensionComplete(dim.id, { type: 'skipped', reason: 'ai-unavailable' });
     }
-    return;
+    return {
+      status: 'ai-unavailable',
+      summary: { stage: 'bootstrap-ai-provider', dimensions: dimensions.length },
+    };
   }
 
   if (isMockMode) {
     logger.info('[Insight-v3] Mock AI detected — routing to mock-pipeline');
     await fillDimensionsMock(view, dimensions);
-    return;
+    return { status: 'mock', summary: { mock: true, dimensions: dimensions.length } };
   }
 
-  const {
-    projectGraph,
-    projectInfo,
-    dimContext,
-    sessionStore,
-    semanticMemory,
-    codeEntityGraphInst,
-    memoryCoordinator,
-  } = await initializeBootstrapRuntime({
+  if (!agentService || !systemRunContextFactory) {
+    return {
+      status: 'ai-unavailable',
+      summary: { stage: 'bootstrap-ai-provider', dimensions: dimensions.length },
+    };
+  }
+
+  const runtime = await initializeBootstrapRuntime({
     container: ctx.container,
     projectRoot,
     dataRoot,
@@ -198,243 +170,50 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
     isIncremental,
     incrementalPlan,
   });
-
-  const concurrency = parseInt(process.env.ALEMBIC_PARALLEL_CONCURRENCY || '3', 10);
-  const enableParallel = process.env.ALEMBIC_PARALLEL_BOOTSTRAP !== 'false';
-  const scheduler = new TierScheduler();
-  const activeDimIds = dimensions.map((d: DimensionDef) => d.id);
-  const incrementalSkippedDims = resolveIncrementalSkippedDimensions({
-    isIncremental,
-    incrementalPlan,
-    activeDimIds,
-    emitter,
-  });
-
-  logger.info(
-    `[Insight-v3] Active dimensions: [${activeDimIds.join(', ')}], concurrency=${enableParallel ? concurrency : 1}, terminalToolset=${terminalToolsetConfig.terminalToolset}${isIncremental ? `, incremental skip: [${incrementalSkippedDims.join(', ')}]` : ''}`
-  );
-
-  const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
-  const dimensionCandidates: Record<string, DimensionCandidateData> = {};
-  const dimensionStats: Record<string, DimensionStat> = {};
-
-  const { completedCheckpoints, skippedDims } = await restoreCheckpointDimensions({
+  const dimensionSession = await runBootstrapDimensionSession({
+    ctx,
     dataRoot,
-    activeDimIds,
-    dimContext,
-    sessionStore,
+    dimensions,
+    runtime,
+    agentService,
+    systemRunContextFactory,
     emitter,
-  });
-  applyRestoredDimensionState({
-    incrementalSkippedDims,
-    checkpointSkippedDims: skippedDims,
-    completedCheckpoints,
-    sessionStore,
-    dimensionStats,
-    candidateResults,
-    dimensionCandidates,
-  });
-
-  const {
-    globalSubmittedTitles,
-    globalSubmittedPatterns,
-    globalSubmittedTriggers,
-    bootstrapDedup,
-    rescanContext,
-  } = prepareBootstrapRescanState({ existingRecipes, evolutionPrescreen });
-
-  function resolveBootstrapDimensionPlan(dimId: string) {
-    return resolveBootstrapDimensionPlanData({ dimId, dimensions, rescanContext });
-  }
-
-  function createBootstrapDimensionRunInput(dimId: string, plan: BootstrapDimensionPlan) {
-    return createBootstrapDimensionRuntimeInput({
-      dimId,
-      plan,
-      memoryCoordinator,
-      systemRunContextFactory: systemRunContextFactory!,
-      projectInfo,
-      primaryLang,
-      dimContext,
-      sessionStore,
-      semanticMemory,
-      codeEntityGraphInst,
-      panoramaResult,
-      astProjectSummary,
-      guardAudit,
-      depGraphData,
-      callGraphResult,
-      rescanContext,
-      targetFileMap,
-      globalSubmittedTitles,
-      globalSubmittedPatterns,
-      globalSubmittedTriggers,
-      bootstrapDedup,
-      sessionId,
-      allFiles,
-      sessionAbortSignal,
-      terminalTest: terminalToolsetConfig.terminalTest,
-      terminalToolset: terminalToolsetConfig.terminalToolset,
-      allowedTerminalModes: terminalToolsetConfig.allowedTerminalModes,
-    });
-  }
-
-  async function consumeBootstrapDimensionAgentResult({
-    dimId,
-    plan,
-    agentRunResult,
-    dimStartTime,
-    analystScopeId,
-  }: {
-    dimId: string;
-    plan: NonNullable<ReturnType<typeof resolveBootstrapDimensionPlan>>;
-    agentRunResult: AgentRunResult;
-    dimStartTime: number;
-    analystScopeId: string;
-  }) {
-    const runResult = projectAgentRunResult(agentRunResult);
-    const projection = projectBootstrapDimensionAgentOutput({
-      dimId,
-      needsCandidates: plan.needsCandidates,
-      runResult,
-    });
-    return consumeBootstrapDimensionResult({
-      ctx,
-      dimId,
-      dimConfig: plan.dimConfig,
-      needsCandidates: plan.needsCandidates,
-      projection,
-      runResult,
-      dimStartTime,
-      analystScopeId,
-      memoryCoordinator,
-      sessionStore,
-      dimContext,
-      candidateResults,
-      dimensionCandidates,
-      dimensionStats,
-      emitter,
-      dataRoot,
-      sessionId,
-    });
-  }
-
-  function consumeBootstrapDimensionError({ dimId, err }: { dimId: string; err: unknown }) {
-    return consumeBootstrapDimensionErrorSideEffects({
-      dimId,
-      err,
-      candidateResults,
-      dimensionStats,
-      emitter,
-    });
-  }
-
-  function consumeBootstrapSessionTierResult(
-    tierIndex: number,
-    tierResults: Map<string, DimensionStat>
-  ) {
-    return consumeBootstrapTierReflection({
-      tierIndex,
-      tierResults,
-      sessionStore,
-    });
-  }
-
-  function consumeBootstrapSessionResult({
-    parentRunResult,
-    durationMs,
-  }: {
-    parentRunResult: AgentRunResult;
-    durationMs: number;
-  }) {
-    return consumeBootstrapSessionResultSideEffects({
-      parentRunResult,
-      activeDimIds,
-      skippedDimIds: [...incrementalSkippedDims, ...skippedDims],
-      durationMs,
-      sessionStore,
-      dimensionStats,
-      consumeMissingDimension: (dimId) =>
-        consumeBootstrapDimensionError({ dimId, err: 'missing child result' }),
-    });
-  }
-
-  const { input: bootstrapSessionInput } = buildBootstrapSessionExecutionInput({
     sessionId,
-    activeDimIds,
-    skippedDimIds: [...incrementalSkippedDims, ...skippedDims],
-    concurrency: enableParallel ? concurrency : 1,
-    primaryLang,
-    projectLang: projectInfo.lang || null,
-    terminalTest: terminalToolsetConfig.terminalTest,
-    terminalToolset: terminalToolsetConfig.terminalToolset,
-    allowedTerminalModes: terminalToolsetConfig.allowedTerminalModes,
     sessionAbortSignal,
     taskManager,
-    scheduler,
-    dimensionStats,
-    resolvePlan: resolveBootstrapDimensionPlan,
-    createDimensionRunInput: createBootstrapDimensionRunInput,
-    emitDimensionStart: (dimId) => emitter.emitDimensionStart(dimId),
-    consumeDimensionResult: consumeBootstrapDimensionAgentResult,
-    consumeDimensionError: consumeBootstrapDimensionError,
-    consumeTierResult: consumeBootstrapSessionTierResult,
-  });
-
-  const t0 = Date.now();
-  const parentRunResult = await agentService!.run(bootstrapSessionInput);
-  consumeBootstrapSessionResult({ parentRunResult, durationMs: Date.now() - t0 });
-
-  if (bootstrapDedup.count > 0) {
-    logger.info(
-      `[Insight-v3] BootstrapDedup: ${bootstrapDedup.count} entries registered during session`
-    );
-  }
-  bootstrapDedup.clear();
-
-  const skillResults: SkillResults = await consumeBootstrapSkills({
-    ctx,
-    dimensions,
-    dimensionCandidates,
-    sessionStore,
-    emitter,
-    shouldAbort: () => !!(taskManager && !taskManager.isSessionValid(sessionId)),
-  });
-
-  await consumeBootstrapCandidateRelations({ ctx, projectRoot, dimensionCandidates });
-
-  const consolidationResult: ConsolidationResult | null = consumeBootstrapSemanticMemory({
-    ctx,
-    dataRoot,
-    sessionId,
-    sessionStore,
-  });
-
-  const { totalTimeMs } = await consumeBootstrapReportAndSnapshot({
-    ctx,
-    dataRoot,
-    projectRoot,
-    projectInfo,
-    sessionId,
+    terminalToolsetConfig,
+    primaryLang,
     allFiles,
-    sessionStore,
-    dimensionStats,
-    candidateResults,
-    skillResults,
-    consolidationResult,
-    skippedDims,
-    incrementalSkippedDims,
+    scanPlan,
+    scanEvidencePack,
+    targetFileMap,
+    depGraphData,
+    astProjectSummary,
+    guardAudit,
+    panoramaResult,
+    callGraphResult,
     isIncremental,
     incrementalPlan,
-    enableParallel,
-    concurrency,
-    startedAtMs: t0,
+    existingRecipes,
+    evolutionPrescreen,
   });
 
-  allFiles = null;
-  ctx.container.singletons._fileCache = null;
+  const completion = await completeBootstrapPipeline({
+    ctx,
+    projectRoot,
+    dataRoot,
+    dimensions,
+    runtime,
+    dimensionSession,
+    emitter,
+    sessionId,
+    taskManager,
+    allFiles,
+    isIncremental,
+    incrementalPlan,
+  });
 
-  await consumeBootstrapDeliveryAndWiki({ projectRoot, dataRoot, projectGraph });
+  return { status: 'completed', summary: completion.summary };
 }
 
 export async function clearSnapshots(
