@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import type { ScanRunRecord } from '../../lib/repository/scan/ScanRunRepository.js';
 import type { ProjectSnapshot } from '../../lib/types/project-snapshot.js';
 import type { PipelineFillView } from '../../lib/types/snapshot-views.js';
-import type { RunBootstrapProjectAnalysisOptions } from '../../lib/workflows/bootstrap/pipeline/BootstrapProjectAnalysisPipeline.js';
+import type { RunBootstrapProjectAnalysisOptions } from '../../lib/workflows/deprecated-cold-start/pipeline/BootstrapProjectAnalysisPipeline.js';
 import {
   ScanLifecycleBaselineRequiredError,
   ScanLifecycleRunner,
@@ -307,6 +307,55 @@ describe('ScanLifecycleRunner', () => {
     );
     expect(scanEvidencePackRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ runId: 'scan-1', packKind: 'incremental-correction' })
+    );
+  });
+
+  test('runs incremental correction through the unified lifecycle request', async () => {
+    const running = makeRun();
+    const completed = makeRun({ status: 'completed', summary: { needsReview: 0 } });
+    const incrementalCorrectionWorkflow = {
+      run: vi.fn(async () => ({
+        mode: 'incremental-correction' as const,
+        reactiveReport: {
+          fixed: 0,
+          deprecated: 0,
+          skipped: 0,
+          needsReview: 0,
+          suggestReview: false,
+          details: [],
+        },
+        evidencePack: makePack(),
+        auditResult: null,
+      })),
+    };
+    const runner = ScanLifecycleRunner.fromContainer(
+      makeContainer({
+        incrementalCorrectionWorkflow,
+        scanRunRepository: {
+          create: vi.fn(() => running),
+          complete: vi.fn(() => completed),
+        },
+        scanEvidencePackRepository: { create: vi.fn(() => ({ id: 'pack-1' })) },
+      })
+    );
+
+    const lifecycle = await runner.run({
+      projectRoot: '/repo',
+      source: 'test',
+      requestedMode: 'incremental-correction',
+      events: [{ type: 'modified', path: 'src/api.ts' }],
+      execution: { runAgent: false, runDeterministic: true },
+    });
+
+    expect(lifecycle.plan.mode).toBe('incremental-correction');
+    expect(lifecycle.run).toBe(completed);
+    expect(lifecycle.evidencePack).toEqual(makePack());
+    expect(incrementalCorrectionWorkflow.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectRoot: '/repo',
+        runAgent: false,
+        runDeterministic: true,
+      })
     );
   });
 

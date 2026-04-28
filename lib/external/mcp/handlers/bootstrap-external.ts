@@ -21,7 +21,7 @@ import { CleanupService } from '#service/cleanup/CleanupService.js';
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { MissionBriefingResult } from '#types/project-snapshot.js';
 import { toSessionCache } from '#types/snapshot-views.js';
-import { buildMissionBriefing } from '#workflows/bootstrap/briefing/MissionBriefingBuilder.js';
+import { buildMissionBriefing } from '#workflows/deprecated-cold-start/briefing/MissionBriefingBuilder.js';
 import { ScanLifecycleRunner } from '#workflows/scan/lifecycle/ScanLifecycleRunner.js';
 import { envelope } from '../envelope.js';
 import { getOrCreateSessionManager } from './bootstrap/shared/session-helpers.js';

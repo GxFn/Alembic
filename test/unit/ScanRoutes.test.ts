@@ -3,7 +3,25 @@ import express from 'express';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const mockScanPlanService = {
-  plan: vi.fn(() => ({ mode: 'maintenance', depth: 'light', reason: 'test plan' })),
+  plan: vi.fn((request: Record<string, unknown> = {}) => {
+    const mode =
+      request.requestedMode ?? (request.intent === 'deep-mining' ? 'deep-mining' : 'maintenance');
+    return {
+      mode,
+      depth: mode === 'maintenance' ? 'light' : mode === 'deep-mining' ? 'deep' : 'standard',
+      reason: 'test plan',
+      activeDimensions: request.dimensions ?? [],
+      skippedDimensions: [],
+      scope: {
+        dimensions: request.dimensions,
+        modules: request.modules,
+        query: request.query,
+      },
+      changeSet: request.changeSet,
+      fallback: null,
+      budgets: {},
+    };
+  }),
 };
 const mockKnowledgeRetrievalPipeline = {
   retrieve: vi.fn(async () => ({

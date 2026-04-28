@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import {
   type BootstrapRuntimeContainer,
   initializeBootstrapRuntime,
-} from '#workflows/bootstrap/context/BootstrapRuntimeInitializer.js';
+} from '#workflows/deprecated-cold-start/context/BootstrapRuntimeInitializer.js';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 import type { IncrementalPlan } from '../../lib/external/mcp/handlers/types.js';
 

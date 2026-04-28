@@ -1,5 +1,9 @@
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
-import { IncrementalBootstrap } from '#workflows/bootstrap/incremental/IncrementalBootstrap.js';
+import { ColdStartWorkflow } from '#workflows/cold-start/dimension-execution/ColdStartWorkflow.js';
+import { DeepMiningWorkflow } from '#workflows/deep-mining/DeepMiningPipeline.js';
+import { IncrementalBootstrap } from '#workflows/deprecated-cold-start/incremental/IncrementalBootstrap.js';
+import { IncrementalCorrectionWorkflow } from '#workflows/incremental-correction/IncrementalCorrectionPipeline.js';
+import { MaintenanceWorkflow } from '#workflows/maintenance/MaintenancePipeline.js';
 import { ColdStartBaselinePipeline } from '#workflows/scan/lifecycle/ColdStartBaselinePipeline.js';
 import { ScanLifecycleRunner } from '#workflows/scan/lifecycle/ScanLifecycleRunner.js';
 import { EvidenceBudgeter } from '#workflows/scan/retrieval/EvidenceBudgeter.js';
@@ -7,10 +11,6 @@ import { KnowledgeRetrievalPipeline } from '#workflows/scan/retrieval/KnowledgeR
 import { ScanJobQueue } from '#workflows/scan/ScanJobQueue.js';
 import { ScanOrchestrator } from '#workflows/scan/ScanOrchestrator.js';
 import { ScanPlanService } from '#workflows/scan/ScanPlanService.js';
-import { ColdStartWorkflow } from '#workflows/scan/workflows/ColdStartWorkflow.js';
-import { DeepMiningWorkflow } from '#workflows/scan/workflows/DeepMiningWorkflow.js';
-import { IncrementalCorrectionWorkflow } from '#workflows/scan/workflows/IncrementalCorrectionWorkflow.js';
-import { MaintenanceWorkflow } from '#workflows/scan/workflows/MaintenanceWorkflow.js';
 import { ScanEvidencePackRepository } from '../../repository/scan/ScanEvidencePackRepository.js';
 import { ScanRecommendationRepository } from '../../repository/scan/ScanRecommendationRepository.js';
 import { ScanRunRepository } from '../../repository/scan/ScanRunRepository.js';

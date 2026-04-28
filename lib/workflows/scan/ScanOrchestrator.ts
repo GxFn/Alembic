@@ -1,15 +1,15 @@
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type { FileChangeEvent } from '#types/reactive-evolution.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
-import type { ScanPlanService } from '#workflows/scan/ScanPlanService.js';
-import type { ScanPlan, ScanPlanRequest } from '#workflows/scan/ScanTypes.js';
 import type {
   ColdStartWorkflow,
   ColdStartWorkflowResult,
-} from '#workflows/scan/workflows/ColdStartWorkflow.js';
-import type { DeepMiningWorkflow } from '#workflows/scan/workflows/DeepMiningWorkflow.js';
-import type { IncrementalCorrectionWorkflow } from '#workflows/scan/workflows/IncrementalCorrectionWorkflow.js';
-import type { MaintenanceWorkflow } from '#workflows/scan/workflows/MaintenanceWorkflow.js';
+} from '#workflows/cold-start/dimension-execution/ColdStartWorkflow.js';
+import type { DeepMiningWorkflow } from '#workflows/deep-mining/DeepMiningPipeline.js';
+import type { IncrementalCorrectionWorkflow } from '#workflows/incremental-correction/IncrementalCorrectionPipeline.js';
+import type { MaintenanceWorkflow } from '#workflows/maintenance/MaintenancePipeline.js';
+import type { ScanPlanService } from '#workflows/scan/ScanPlanService.js';
+import type { ScanPlan, ScanPlanRequest } from '#workflows/scan/ScanTypes.js';
 import type {
   DeepMiningRequest,
   DeepMiningResult,

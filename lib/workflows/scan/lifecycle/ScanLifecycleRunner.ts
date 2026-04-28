@@ -3,11 +3,14 @@ import type { ScanRecommendationRecord } from '#repo/scan/ScanRecommendationRepo
 import type { ScanRunRecord } from '#repo/scan/ScanRunRepository.js';
 import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
-import { fillDimensionsV3 } from '#workflows/bootstrap/BootstrapWorkflow.js';
+import type { DeepMiningWorkflow } from '#workflows/deep-mining/DeepMiningPipeline.js';
+import { fillDimensionsV3 } from '#workflows/deprecated-cold-start/BootstrapWorkflow.js';
 import type {
   BootstrapProjectAnalysisResult,
   RunBootstrapProjectAnalysisOptions,
-} from '#workflows/bootstrap/pipeline/BootstrapProjectAnalysisPipeline.js';
+} from '#workflows/deprecated-cold-start/pipeline/BootstrapProjectAnalysisPipeline.js';
+import type { IncrementalCorrectionWorkflow } from '#workflows/incremental-correction/IncrementalCorrectionPipeline.js';
+import type { MaintenanceWorkflow } from '#workflows/maintenance/MaintenancePipeline.js';
 import { ColdStartBaselinePipeline } from '#workflows/scan/lifecycle/ColdStartBaselinePipeline.js';
 import {
   type ColdStartLifecycleResult,
@@ -36,6 +39,12 @@ import {
 } from '#workflows/scan/normalization/ScanChangeSetNormalizer.js';
 import type { ScanJobQueue, ScanJobRecord } from '#workflows/scan/ScanJobQueue.js';
 import type {
+  ScanLifecyclePlanResult,
+  ScanLifecycleRequest,
+  ScanLifecycleResult,
+} from '#workflows/scan/ScanLifecycleTypes.js';
+import { ScanPlanService } from '#workflows/scan/ScanPlanService.js';
+import type {
   DeepMiningRequest,
   DeepMiningResult,
   IncrementalCorrectionResult,
@@ -50,9 +59,6 @@ import type {
   ScanPlan,
   ScanScope,
 } from '#workflows/scan/ScanTypes.js';
-import type { DeepMiningWorkflow } from '#workflows/scan/workflows/DeepMiningWorkflow.js';
-import type { IncrementalCorrectionWorkflow } from '#workflows/scan/workflows/IncrementalCorrectionWorkflow.js';
-import type { MaintenanceWorkflow } from '#workflows/scan/workflows/MaintenanceWorkflow.js';
 import type { KnowledgeRetrievalPipeline } from '../retrieval/KnowledgeRetrievalPipeline.js';
 
 export interface ScanLifecycleRunnerContainer {
@@ -211,6 +217,67 @@ export class ScanLifecycleRunner {
     scanContext: ColdStartScanContext | null
   ): Record<string, unknown> | null {
     return projectColdStartScanContextSummary(scanContext);
+  }
+
+  plan(request: ScanLifecycleRequest): ScanLifecyclePlanResult {
+    return {
+      request,
+      plan: this.#planLifecycleRequest(request),
+    };
+  }
+
+  async run<T = unknown>(
+    request: ScanLifecycleRequest,
+    options: ScanLifecycleRunOptions = {}
+  ): Promise<ScanLifecycleResult<T>> {
+    const plan = this.#planLifecycleRequest(request);
+    switch (plan.mode) {
+      case 'incremental-correction': {
+        const tracked = await this.runIncrementalCorrection(toIncrementalRunInput(request), {
+          reason: options.reason ?? request.execution?.reason,
+          signal: options.signal,
+        });
+        return projectTrackedLifecycleResult(request, plan, tracked) as ScanLifecycleResult<T>;
+      }
+      case 'deep-mining': {
+        const tracked = await this.runDeepMining(toDeepMiningRunInput(request), {
+          reason: options.reason ?? request.execution?.reason,
+          signal: options.signal,
+        });
+        return projectTrackedLifecycleResult(request, plan, tracked) as ScanLifecycleResult<T>;
+      }
+      case 'maintenance': {
+        const tracked = await this.runMaintenance(toMaintenanceRunInput(request), {
+          reason: options.reason ?? request.execution?.reason,
+          signal: options.signal,
+        });
+        return projectTrackedLifecycleResult(request, plan, tracked) as ScanLifecycleResult<T>;
+      }
+      case 'cold-start':
+        throw new ScanLifecycleServiceUnavailableError('cold-start lifecycle request execution');
+    }
+  }
+
+  enqueue(
+    request: ScanLifecycleRequest,
+    options: ScanLifecycleQueueOptions = {}
+  ): ScanJobRecord<unknown, unknown> {
+    const plan = this.#planLifecycleRequest(request);
+    const queueOptions = {
+      label: options.label ?? request.execution?.label,
+      reason: options.reason ?? request.execution?.reason,
+      maxAttempts: options.maxAttempts ?? request.execution?.maxAttempts,
+    };
+    switch (plan.mode) {
+      case 'incremental-correction':
+        return this.enqueueIncrementalCorrection(toIncrementalRunInput(request), queueOptions);
+      case 'deep-mining':
+        return this.enqueueDeepMining(toDeepMiningRunInput(request), queueOptions);
+      case 'maintenance':
+        return this.enqueueMaintenance(toMaintenanceRunInput(request), queueOptions);
+      case 'cold-start':
+        throw new ScanLifecycleServiceUnavailableError('cold-start lifecycle request queueing');
+    }
   }
 
   runColdStartFill(
@@ -545,6 +612,28 @@ export class ScanLifecycleRunner {
     });
   }
 
+  #planLifecycleRequest(request: ScanLifecycleRequest): ScanPlan {
+    const planner =
+      readService<ScanPlanService>(this.#container, 'scanPlanService') ?? new ScanPlanService();
+    return planner.plan({
+      projectRoot: request.projectRoot,
+      intent: request.intent,
+      requestedMode: request.requestedMode,
+      force: request.force,
+      hasBaseline: request.hasBaseline,
+      baselineRunId: request.baseline?.runId ?? undefined,
+      baselineSnapshotId: request.baseline?.snapshotId ?? undefined,
+      dimensions: request.dimensions ?? request.scope?.dimensions,
+      modules: request.modules ?? request.scope?.modules,
+      recipeIds: request.scope?.recipeIds,
+      query: request.query ?? request.scope?.query,
+      changeSet:
+        request.changeSet ?? (request.events ? eventsToChangeSet(request.events) : undefined),
+      impactedRecipeIds: request.impactedRecipeIds,
+      budget: request.budget,
+    });
+  }
+
   #tracker(): ScanRunTracker {
     return ScanRunTracker.fromContainer(this.#container, this.#logger);
   }
@@ -604,6 +693,75 @@ export class ScanLifecycleRunner {
       throw err;
     }
   }
+}
+
+function toIncrementalRunInput(request: ScanLifecycleRequest): IncrementalCorrectionRunInput {
+  if (!request.events?.length) {
+    throw new Error('incremental-correction lifecycle request requires events');
+  }
+  return {
+    projectRoot: request.projectRoot,
+    events: request.events,
+    reactiveReport: request.reactiveReport,
+    runDeterministic: request.execution?.runDeterministic,
+    runAgent: request.execution?.runAgent,
+    depth: request.depth,
+    budget: request.budget,
+    primaryLang: request.primaryLang,
+  };
+}
+
+function toDeepMiningRunInput(request: ScanLifecycleRequest): DeepMiningRequest {
+  return {
+    projectRoot: request.projectRoot,
+    baselineRunId: request.baseline?.runId ?? undefined,
+    baselineSnapshotId: request.baseline?.snapshotId ?? undefined,
+    dimensions: request.dimensions ?? request.scope?.dimensions,
+    modules: request.modules ?? request.scope?.modules,
+    query: request.query ?? request.scope?.query,
+    depth: request.depth === 'exhaustive' ? 'exhaustive' : 'deep',
+    maxNewCandidates: request.budget?.maxKnowledgeItems,
+    files: request.files,
+    runAgent: request.execution?.runAgent,
+    primaryLang: request.primaryLang,
+  };
+}
+
+function toMaintenanceRunInput(request: ScanLifecycleRequest): MaintenanceWorkflowOptions {
+  return {
+    projectRoot: request.projectRoot,
+    forceSourceRefReconcile: request.maintenance?.forceSourceRefReconcile,
+    refreshSearchIndex: request.maintenance?.refreshSearchIndex,
+    includeDecay: request.maintenance?.includeDecay,
+    includeEnhancements: request.maintenance?.includeEnhancements,
+    includeRedundancy: request.maintenance?.includeRedundancy,
+  };
+}
+
+function projectTrackedLifecycleResult<T>(
+  request: ScanLifecycleRequest,
+  plan: ScanPlan,
+  tracked: ScanLifecycleTrackedResult<T>
+): ScanLifecycleResult<T> {
+  return {
+    run: tracked.run,
+    plan,
+    evidencePack: readEvidencePack(tracked.result),
+    evidencePackRecord: tracked.evidencePackRecord,
+    result: tracked.result,
+    summary: tracked.run?.summary ?? { mode: plan.mode, source: request.source },
+    recommendations: tracked.recommendations,
+  };
+}
+
+function readEvidencePack(result: unknown): KnowledgeEvidencePack | null {
+  if (!result || typeof result !== 'object') {
+    return null;
+  }
+  const evidencePack = (result as { evidencePack?: unknown }).evidencePack;
+  return evidencePack && typeof evidencePack === 'object'
+    ? (evidencePack as KnowledgeEvidencePack)
+    : null;
 }
 
 export function summarizeIncrementalResult(

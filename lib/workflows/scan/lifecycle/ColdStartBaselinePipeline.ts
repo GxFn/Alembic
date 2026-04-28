@@ -1,21 +1,21 @@
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
-import type { BootstrapDimensionFillResult } from '#workflows/bootstrap/BootstrapWorkflow.js';
+import {
+  ColdStartWorkflow,
+  type ColdStartWorkflowResult,
+} from '#workflows/cold-start/dimension-execution/ColdStartWorkflow.js';
+import type { BootstrapDimensionFillResult } from '#workflows/deprecated-cold-start/BootstrapWorkflow.js';
 import {
   type BootstrapProjectAnalysisResult,
   type RunBootstrapProjectAnalysisOptions,
   runBootstrapProjectAnalysis,
-} from '#workflows/bootstrap/pipeline/BootstrapProjectAnalysisPipeline.js';
+} from '#workflows/deprecated-cold-start/pipeline/BootstrapProjectAnalysisPipeline.js';
 import {
   type ColdStartBaselineResult,
   projectColdStartBaselineResult,
 } from '#workflows/scan/lifecycle/ColdStartBaselineProjection.js';
 import type { ColdStartScanContext } from '#workflows/scan/lifecycle/ColdStartScanContext.js';
 import type { ScanPlan } from '#workflows/scan/ScanTypes.js';
-import {
-  ColdStartWorkflow,
-  type ColdStartWorkflowResult,
-} from '#workflows/scan/workflows/ColdStartWorkflow.js';
 
 export interface ColdStartDimensionExecutionInput {
   view: PipelineFillView;

@@ -23,8 +23,8 @@ import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
 import type { MissionBriefingResult } from '#types/project-snapshot.js';
 import { toSessionCache } from '#types/snapshot-views.js';
-import { buildMissionBriefing } from '#workflows/bootstrap/briefing/MissionBriefingBuilder.js';
-import { runBootstrapProjectAnalysis } from '#workflows/bootstrap/pipeline/BootstrapProjectAnalysisPipeline.js';
+import { buildMissionBriefing } from '#workflows/deprecated-cold-start/briefing/MissionBriefingBuilder.js';
+import { runBootstrapProjectAnalysis } from '#workflows/deprecated-cold-start/pipeline/BootstrapProjectAnalysisPipeline.js';
 import {
   ScanLifecycleBaselineRequiredError,
   ScanLifecycleRunner,

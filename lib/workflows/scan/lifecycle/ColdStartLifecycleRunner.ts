@@ -1,6 +1,10 @@
 import type { ScanRunRecord } from '#repo/scan/ScanRunRepository.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
+import {
+  ColdStartWorkflow,
+  type ColdStartWorkflowResult,
+} from '#workflows/cold-start/dimension-execution/ColdStartWorkflow.js';
 import { ColdStartBaselinePipeline } from '#workflows/scan/lifecycle/ColdStartBaselinePipeline.js';
 import type { ColdStartBaselineResult } from '#workflows/scan/lifecycle/ColdStartBaselineProjection.js';
 import type { ColdStartScanContext } from '#workflows/scan/lifecycle/ColdStartScanContext.js';
@@ -8,10 +12,6 @@ import {
   ScanRunTracker,
   type ScanRunTrackerContainer,
 } from '#workflows/scan/lifecycle/ScanRunTracker.js';
-import {
-  ColdStartWorkflow,
-  type ColdStartWorkflowResult,
-} from '#workflows/scan/workflows/ColdStartWorkflow.js';
 
 interface ColdStartLifecycleContext {
   container?: ScanRunTrackerContainer;

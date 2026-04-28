@@ -19,6 +19,11 @@ export {
   normalizeFileChangeEvents,
   normalizeScanChangeSet,
 } from './normalization/ScanChangeSetNormalizer.js';
+export type * from './normalization/ScanRequestNormalizer.js';
+export {
+  hasValidFileChangeEvents,
+  ScanRequestNormalizer,
+} from './normalization/ScanRequestNormalizer.js';
 export { ChangeLens } from './retrieval/ChangeLens.js';
 export { CodeEntityLens } from './retrieval/CodeEntityLens.js';
 export { EvidenceBudgeter } from './retrieval/EvidenceBudgeter.js';
@@ -28,10 +33,7 @@ export { KnowledgeRetrievalPipeline } from './retrieval/KnowledgeRetrievalPipeli
 export { ProjectSnapshotLens } from './retrieval/ProjectSnapshotLens.js';
 export type * from './retrieval/RetrievalTypes.js';
 export { ScanJobQueue } from './ScanJobQueue.js';
+export type * from './ScanLifecycleTypes.js';
 export { ScanOrchestrator } from './ScanOrchestrator.js';
 export { ScanPlanService } from './ScanPlanService.js';
 export type * from './ScanTypes.js';
-export { ColdStartWorkflow } from './workflows/ColdStartWorkflow.js';
-export { DeepMiningWorkflow } from './workflows/DeepMiningWorkflow.js';
-export { IncrementalCorrectionWorkflow } from './workflows/IncrementalCorrectionWorkflow.js';
-export { MaintenanceWorkflow } from './workflows/MaintenanceWorkflow.js';

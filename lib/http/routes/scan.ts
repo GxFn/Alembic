@@ -22,25 +22,15 @@ import {
   ScanLifecycleRunner,
 } from '#workflows/scan/lifecycle/ScanLifecycleRunner.js';
 import { ScanRecommendationScheduler } from '#workflows/scan/lifecycle/ScanRecommendationScheduler.js';
-import {
-  normalizeFileChangeEvents,
-  normalizeScanChangeSet,
-} from '#workflows/scan/normalization/ScanChangeSetNormalizer.js';
+import { normalizeFileChangeEvents } from '#workflows/scan/normalization/ScanChangeSetNormalizer.js';
+import { ScanRequestNormalizer } from '#workflows/scan/normalization/ScanRequestNormalizer.js';
 import type { KnowledgeRetrievalPipeline } from '#workflows/scan/retrieval/KnowledgeRetrievalPipeline.js';
 import type { ScanJobQueue, ScanJobStatus } from '#workflows/scan/ScanJobQueue.js';
 import type { ScanPlanService } from '#workflows/scan/ScanPlanService.js';
 import type {
-  DeepMiningRequest,
-  KnowledgeRetrievalInput,
-  MaintenanceWorkflowOptions,
-  ScanBudget,
-  ScanDepth,
-  ScanFileEvidenceInput,
   ScanMode,
-  ScanPlanRequest,
   ScanRecommendationStatus,
   ScanRecommendedRun,
-  ScanScope,
 } from '#workflows/scan/ScanTypes.js';
 
 const router = express.Router();
@@ -52,7 +42,6 @@ const VALID_SCAN_MODES = new Set<ScanMode>([
   'incremental-correction',
   'maintenance',
 ]);
-const VALID_SCAN_DEPTHS = new Set<ScanDepth>(['light', 'standard', 'deep', 'exhaustive']);
 const VALID_RUN_STATUSES = new Set<ScanRunStatus>(['running', 'completed', 'failed', 'cancelled']);
 const VALID_RECOMMENDATION_STATUSES = new Set<ScanRecommendationStatus>([
   'pending',
@@ -273,7 +262,8 @@ router.post('/plan', (req: Request, res: Response): void => {
   try {
     const container = getServiceContainer();
     const planner = container.get('scanPlanService') as ScanPlanService;
-    const plan = planner.plan(toScanPlanRequest(req.body));
+    const normalizer = resolveScanRequestNormalizer(container);
+    const plan = planner.plan(normalizer.toScanPlanRequest(req.body));
     res.json({ success: true, data: plan });
   } catch (err: unknown) {
     respondError(res, 'SCAN_PLAN_ERROR', err);
@@ -284,7 +274,8 @@ router.post('/retrieve', async (req: Request, res: Response): Promise<void> => {
   try {
     const container = getServiceContainer();
     const retrieval = container.get('knowledgeRetrievalPipeline') as KnowledgeRetrievalPipeline;
-    const pack = await retrieval.retrieve(toKnowledgeRetrievalInput(req.body));
+    const normalizer = resolveScanRequestNormalizer(container);
+    const pack = await retrieval.retrieve(normalizer.toKnowledgeRetrievalInput(req.body));
     res.json({ success: true, data: pack });
   } catch (err: unknown) {
     respondError(res, 'SCAN_RETRIEVE_ERROR', err);
@@ -304,21 +295,11 @@ router.post('/incremental-correction', async (req: Request, res: Response): Prom
     }
 
     const container = getServiceContainer();
-    const projectRoot = readString(body.projectRoot) || readProjectRootFromContainer(container);
-    const depth = readScanDepth(body.depth) ?? 'standard';
-    const budget = readBudget(body.budget);
-    const request = {
-      projectRoot,
-      events,
-      runDeterministic: readBoolean(body.runDeterministic, true),
-      runAgent: readBoolean(body.runAgent, false),
-      depth,
-      budget,
-      primaryLang: readOptionalString(body.primaryLang),
-    };
+    const normalizer = resolveScanRequestNormalizer(container);
+    const request = normalizer.toIncrementalCorrectionLifecycleRequest(body, events);
     const runner = resolveScanLifecycleRunner(container);
     if (readBoolean(body.async, false)) {
-      const job = runner.enqueueIncrementalCorrection(request, {
+      const job = runner.enqueue(request, {
         label: 'HTTP incremental correction scan',
         maxAttempts: readPositiveInteger(body.maxAttempts, 1),
         reason: 'HTTP incremental correction scan',
@@ -326,7 +307,7 @@ router.post('/incremental-correction', async (req: Request, res: Response): Prom
       res.status(202).json({ success: true, job });
       return;
     }
-    const { result, run } = await runner.runIncrementalCorrection(request, {
+    const { result, run } = await runner.run(request, {
       reason: 'HTTP incremental correction scan',
     });
     res.json({ success: true, data: result, run });
@@ -339,9 +320,9 @@ router.post('/deep-mining', async (req: Request, res: Response): Promise<void> =
   try {
     const container = getServiceContainer();
     const runner = resolveScanLifecycleRunner(container);
-    const request = toDeepMiningRequest(req.body, readProjectRootFromContainer(container));
+    const request = resolveScanRequestNormalizer(container).toDeepMiningLifecycleRequest(req.body);
     if (readBoolean(asRecord(req.body).async, false)) {
-      const job = runner.enqueueDeepMining(request, {
+      const job = runner.enqueue(request, {
         label: 'HTTP deep mining scan',
         maxAttempts: readPositiveInteger(asRecord(req.body).maxAttempts, 1),
         reason: 'HTTP deep mining scan',
@@ -349,7 +330,7 @@ router.post('/deep-mining', async (req: Request, res: Response): Promise<void> =
       res.status(202).json({ success: true, job });
       return;
     }
-    const { result, run } = await runner.runDeepMining(request, {
+    const { result, run } = await runner.run(request, {
       reason: 'HTTP deep mining scan',
     });
     res.json({ success: true, data: result, run });
@@ -372,9 +353,9 @@ router.post('/maintenance', async (req: Request, res: Response): Promise<void> =
   try {
     const container = getServiceContainer();
     const runner = resolveScanLifecycleRunner(container);
-    const options = toMaintenanceOptions(req.body, readProjectRootFromContainer(container));
+    const request = resolveScanRequestNormalizer(container).toMaintenanceLifecycleRequest(req.body);
     if (readBoolean(asRecord(req.body).async, false)) {
-      const job = runner.enqueueMaintenance(options, {
+      const job = runner.enqueue(request, {
         label: 'HTTP maintenance scan',
         maxAttempts: readPositiveInteger(asRecord(req.body).maxAttempts, 1),
         reason: 'HTTP maintenance scan',
@@ -382,7 +363,7 @@ router.post('/maintenance', async (req: Request, res: Response): Promise<void> =
       res.status(202).json({ success: true, job });
       return;
     }
-    const { result, run, recommendations } = await runner.runMaintenance(options, {
+    const { result, run, recommendations } = await runner.run(request, {
       reason: 'HTTP maintenance scan',
     });
     res.json({ success: true, data: result, run, recommendations });
@@ -489,197 +470,15 @@ function resolveScanLifecycleRunner(container: {
     : ScanLifecycleRunner.fromContainer(container, logger);
 }
 
-function toScanPlanRequest(value: unknown): ScanPlanRequest {
-  const body = asRecord(value);
-  const baseline = readBaseline(body.baseline);
-  return {
-    projectRoot:
-      readString(body.projectRoot) || readProjectRootFromContainer(getServiceContainer()),
-    intent: readIntent(body.intent),
-    requestedMode: readScanMode(body.requestedMode),
-    force: readOptionalBoolean(body.force),
-    hasBaseline: readOptionalBoolean(body.hasBaseline),
-    baselineRunId: readOptionalString(body.baselineRunId) ?? baseline.runId,
-    baselineSnapshotId: readOptionalString(body.baselineSnapshotId) ?? baseline.snapshotId,
-    totalFileCount: readOptionalNumber(body.totalFileCount),
-    allDimensionIds: readStringArray(body.allDimensionIds),
-    currentFiles: readFileInputs(body.currentFiles),
-    dimensions: readStringArray(body.dimensions),
-    modules: readStringArray(body.modules),
-    recipeIds: readStringArray(body.recipeIds),
-    query: readOptionalString(body.query),
-    changeSet: readChangeSet(body.changeSet),
-    impactedRecipeIds: readStringArray(body.impactedRecipeIds),
-    budget: readBudget(body.budget),
-  };
-}
-
-function toKnowledgeRetrievalInput(value: unknown): KnowledgeRetrievalInput {
-  const body = asRecord(value);
-  const mode = readScanMode(body.mode) ?? 'maintenance';
-  return {
-    projectRoot:
-      readString(body.projectRoot) || readProjectRootFromContainer(getServiceContainer()),
-    mode,
-    intent: readRetrievalIntent(body.intent) ?? intentForMode(mode),
-    depth: readScanDepth(body.depth),
-    scope: readScope(body.scope ?? body),
-    changeSet: readChangeSet(body.changeSet),
-    files: readFileInputs(body.files),
-    budget: readBudget(body.budget),
-    primaryLang: readOptionalString(body.primaryLang),
-  };
-}
-
-function toDeepMiningRequest(value: unknown, defaultProjectRoot: string): DeepMiningRequest {
-  const body = asRecord(value);
-  const depth = readScanDepth(body.depth);
-  const baseline = readBaseline(body.baseline);
-  return {
-    projectRoot: readString(body.projectRoot) || defaultProjectRoot,
-    baselineRunId: readOptionalString(body.baselineRunId) ?? baseline.runId,
-    baselineSnapshotId: readOptionalString(body.baselineSnapshotId) ?? baseline.snapshotId,
-    dimensions: readStringArray(body.dimensions),
-    modules: readStringArray(body.modules),
-    query: readOptionalString(body.query),
-    depth: depth === 'exhaustive' ? 'exhaustive' : 'deep',
-    maxNewCandidates: readOptionalNumber(body.maxNewCandidates),
-    files: readFileInputs(body.files),
-    runAgent: readBoolean(body.runAgent, false),
-    primaryLang: readOptionalString(body.primaryLang),
-  };
-}
-
-function readBaseline(value: unknown): { runId: string | null; snapshotId: string | null } {
-  const baseline = asRecord(value);
-  return {
-    runId: readOptionalString(baseline.runId) ?? null,
-    snapshotId: readOptionalString(baseline.snapshotId) ?? null,
-  };
-}
-
-function toMaintenanceOptions(
-  value: unknown,
-  defaultProjectRoot: string
-): MaintenanceWorkflowOptions {
-  const body = asRecord(value);
-  return {
-    projectRoot: readString(body.projectRoot) || defaultProjectRoot,
-    forceSourceRefReconcile: readOptionalBoolean(body.forceSourceRefReconcile),
-    refreshSearchIndex: readOptionalBoolean(body.refreshSearchIndex),
-    includeDecay: readOptionalBoolean(body.includeDecay),
-    includeEnhancements: readOptionalBoolean(body.includeEnhancements),
-    includeRedundancy: readOptionalBoolean(body.includeRedundancy),
-  };
-}
-
-function readScope(value: unknown): ScanScope {
-  const body = asRecord(value);
-  return {
-    dimensions: readStringArray(body.dimensions),
-    files: readStringArray(body.files),
-    modules: readStringArray(body.modules),
-    symbols: readStringArray(body.symbols),
-    recipeIds: readStringArray(body.recipeIds),
-    query: readOptionalString(body.query),
-  };
-}
-
-const readChangeSet = normalizeScanChangeSet;
-
-function readFileInputs(value: unknown): ScanFileEvidenceInput[] | undefined {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-  return value.flatMap((item) => {
-    const record = asRecord(item);
-    const relativePath = readString(record.relativePath) || readString(record.path);
-    if (!relativePath) {
-      return [];
-    }
-
-    const file: ScanFileEvidenceInput = { relativePath };
-    const path = readOptionalString(record.path);
-    const name = readOptionalString(record.name);
-    const language = readOptionalString(record.language);
-    const content = readOptionalString(record.content);
-    const hash = readOptionalString(record.hash);
-
-    if (path) {
-      file.path = path;
-    }
-    if (name) {
-      file.name = name;
-    }
-    if (language) {
-      file.language = language;
-    }
-    if (content) {
-      file.content = content;
-    }
-    if (hash) {
-      file.hash = hash;
-    }
-
-    return [file];
+function resolveScanRequestNormalizer(container: { singletons?: Record<string, unknown> }) {
+  return new ScanRequestNormalizer({
+    defaultProjectRoot: readProjectRootFromContainer(container),
   });
-}
-
-function readBudget(value: unknown): ScanBudget | undefined {
-  const body = asRecord(value);
-  if (Object.keys(body).length === 0) {
-    return undefined;
-  }
-  return {
-    maxFiles: readOptionalNumber(body.maxFiles),
-    maxFileChars: readOptionalNumber(body.maxFileChars),
-    maxKnowledgeItems: readOptionalNumber(body.maxKnowledgeItems),
-    maxGraphEdges: readOptionalNumber(body.maxGraphEdges),
-    maxTotalChars: readOptionalNumber(body.maxTotalChars),
-  };
-}
-
-function readIntent(value: unknown): ScanPlanRequest['intent'] {
-  return value === 'bootstrap' ||
-    value === 'change-set' ||
-    value === 'deep-mining' ||
-    value === 'maintenance'
-    ? value
-    : undefined;
-}
-
-function readRetrievalIntent(value: unknown): KnowledgeRetrievalInput['intent'] | undefined {
-  return value === 'build-baseline' ||
-    value === 'fill-coverage-gap' ||
-    value === 'repair-stale-knowledge' ||
-    value === 'audit-impacted-recipes' ||
-    value === 'maintain-health'
-    ? value
-    : undefined;
-}
-
-function intentForMode(mode: ScanMode): KnowledgeRetrievalInput['intent'] {
-  switch (mode) {
-    case 'cold-start':
-      return 'build-baseline';
-    case 'deep-mining':
-      return 'fill-coverage-gap';
-    case 'incremental-correction':
-      return 'audit-impacted-recipes';
-    case 'maintenance':
-      return 'maintain-health';
-  }
 }
 
 function readScanMode(value: unknown): ScanMode | undefined {
   return typeof value === 'string' && VALID_SCAN_MODES.has(value as ScanMode)
     ? (value as ScanMode)
-    : undefined;
-}
-
-function readScanDepth(value: unknown): ScanDepth | undefined {
-  return typeof value === 'string' && VALID_SCAN_DEPTHS.has(value as ScanDepth)
-    ? (value as ScanDepth)
     : undefined;
 }
 
@@ -728,13 +527,6 @@ function readOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-function readStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-  return value.filter((item): item is string => typeof item === 'string' && item.length > 0);
-}
-
 function readOptionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
@@ -745,10 +537,6 @@ function readPositiveInteger(value: unknown, fallback: number): number {
     return fallback;
   }
   return Math.floor(parsed);
-}
-
-function readOptionalBoolean(value: unknown): boolean | undefined {
-  return typeof value === 'boolean' ? value : undefined;
 }
 
 function readBoolean(value: unknown, fallback: boolean): boolean {

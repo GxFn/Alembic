@@ -33,13 +33,13 @@ describe('agent module boundaries', () => {
       'lib/external/mcp/handlers/bootstrap/shared/bootstrap-phases.ts',
       'lib/external/mcp/handlers/bootstrap/shared/dimension-text.ts',
       'lib/external/mcp/handlers/bootstrap/pipeline/orchestrator.ts',
-      'lib/workflows/bootstrap/checkpoint.ts',
-      'lib/workflows/bootstrap/BootstrapSnapshot.ts',
-      'lib/workflows/bootstrap/IncrementalBootstrap.ts',
-      'lib/workflows/bootstrap/dimension-configs.ts',
-      'lib/workflows/bootstrap/dimension-context.ts',
-      'lib/workflows/bootstrap/tier-scheduler.ts',
-      'lib/workflows/bootstrap/mock-pipeline.ts',
+      'lib/workflows/deprecated-cold-start/checkpoint.ts',
+      'lib/workflows/deprecated-cold-start/BootstrapSnapshot.ts',
+      'lib/workflows/deprecated-cold-start/IncrementalBootstrap.ts',
+      'lib/workflows/deprecated-cold-start/dimension-configs.ts',
+      'lib/workflows/deprecated-cold-start/dimension-context.ts',
+      'lib/workflows/deprecated-cold-start/tier-scheduler.ts',
+      'lib/workflows/deprecated-cold-start/mock-pipeline.ts',
     ];
 
     expect(retiredFiles.filter((file) => existsSync(join(repoRoot, file)))).toEqual([]);

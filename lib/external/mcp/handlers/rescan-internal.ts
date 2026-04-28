@@ -26,7 +26,7 @@ import type { RescanInput } from '#shared/schemas/mcp-tools.js';
 import type { AstSummary, DimensionDef, GuardAudit } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import { toSessionCache } from '#types/snapshot-views.js';
-import { runBootstrapProjectAnalysis } from '#workflows/bootstrap/pipeline/BootstrapProjectAnalysisPipeline.js';
+import { runBootstrapProjectAnalysis } from '#workflows/deprecated-cold-start/pipeline/BootstrapProjectAnalysisPipeline.js';
 import {
   type ScanDimensionFillContext,
   ScanLifecycleBaselineRequiredError,

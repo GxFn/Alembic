@@ -102,6 +102,10 @@ import type { ContextualEnricher } from '../service/vector/ContextualEnricher.js
 import type { VectorService } from '../service/vector/VectorService.js';
 // ── Shared Types ──
 import type { LanguageService } from '../shared/LanguageService.js';
+import type { ColdStartWorkflow } from '../workflows/cold-start/dimension-execution/ColdStartWorkflow.js';
+import type { DeepMiningWorkflow } from '../workflows/deep-mining/DeepMiningPipeline.js';
+import type { IncrementalCorrectionWorkflow } from '../workflows/incremental-correction/IncrementalCorrectionPipeline.js';
+import type { MaintenanceWorkflow } from '../workflows/maintenance/MaintenancePipeline.js';
 import type { ColdStartBaselinePipeline } from '../workflows/scan/lifecycle/ColdStartBaselinePipeline.js';
 import type { ScanLifecycleRunner } from '../workflows/scan/lifecycle/ScanLifecycleRunner.js';
 import type { EvidenceBudgeter } from '../workflows/scan/retrieval/EvidenceBudgeter.js';
@@ -109,10 +113,6 @@ import type { KnowledgeRetrievalPipeline } from '../workflows/scan/retrieval/Kno
 import type { ScanJobQueue } from '../workflows/scan/ScanJobQueue.js';
 import type { ScanOrchestrator } from '../workflows/scan/ScanOrchestrator.js';
 import type { ScanPlanService } from '../workflows/scan/ScanPlanService.js';
-import type { ColdStartWorkflow } from '../workflows/scan/workflows/ColdStartWorkflow.js';
-import type { DeepMiningWorkflow } from '../workflows/scan/workflows/DeepMiningWorkflow.js';
-import type { IncrementalCorrectionWorkflow } from '../workflows/scan/workflows/IncrementalCorrectionWorkflow.js';
-import type { MaintenanceWorkflow } from '../workflows/scan/workflows/MaintenanceWorkflow.js';
 
 /**
  * 类型安全的服务映射表

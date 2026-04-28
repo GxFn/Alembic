@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { consumeBootstrapDeliveryAndWiki } from '#workflows/bootstrap/delivery/BootstrapDeliveryConsumer.js';
+import { consumeBootstrapDeliveryAndWiki } from '#workflows/deprecated-cold-start/delivery/BootstrapDeliveryConsumer.js';
 
 describe('bootstrap delivery consumer', () => {
   test('runs cursor delivery and wiki generation through injected boundaries', async () => {

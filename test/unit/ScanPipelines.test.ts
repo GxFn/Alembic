@@ -1,13 +1,13 @@
 import { describe, expect, test, vi } from 'vitest';
+import { DeepMiningWorkflow } from '../../lib/workflows/deep-mining/DeepMiningPipeline.js';
+import { IncrementalCorrectionWorkflow } from '../../lib/workflows/incremental-correction/IncrementalCorrectionPipeline.js';
+import { MaintenanceWorkflow } from '../../lib/workflows/maintenance/MaintenancePipeline.js';
 import { ChangeLens } from '../../lib/workflows/scan/retrieval/ChangeLens.js';
 import { CodeEntityLens } from '../../lib/workflows/scan/retrieval/CodeEntityLens.js';
 import { KnowledgeRetrievalPipeline } from '../../lib/workflows/scan/retrieval/KnowledgeRetrievalPipeline.js';
 import { ProjectSnapshotLens } from '../../lib/workflows/scan/retrieval/ProjectSnapshotLens.js';
 import { ScanPlanService } from '../../lib/workflows/scan/ScanPlanService.js';
 import type { KnowledgeEvidencePack } from '../../lib/workflows/scan/ScanTypes.js';
-import { DeepMiningWorkflow } from '../../lib/workflows/scan/workflows/DeepMiningWorkflow.js';
-import { IncrementalCorrectionWorkflow } from '../../lib/workflows/scan/workflows/IncrementalCorrectionWorkflow.js';
-import { MaintenanceWorkflow } from '../../lib/workflows/scan/workflows/MaintenanceWorkflow.js';
 
 function emptyEvidencePack(): KnowledgeEvidencePack {
   return {

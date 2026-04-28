@@ -57,7 +57,7 @@ import type {
   LanguageProfile,
 } from '#types/project-snapshot.js';
 import { toSessionCache } from '#types/snapshot-views.js';
-import { buildInternalNextSteps } from '#workflows/bootstrap/briefing/BootstrapDimensionText.js';
+import { buildInternalNextSteps } from '#workflows/deprecated-cold-start/briefing/BootstrapDimensionText.js';
 import { ScanLifecycleRunner } from '#workflows/scan/lifecycle/ScanLifecycleRunner.js';
 import { envelope } from '../envelope.js';
 import { bootstrapRefine } from './bootstrap/refine.js';

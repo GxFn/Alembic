@@ -1,11 +1,11 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { AgentRunInput, AgentRunResult } from '#agent/service/index.js';
-import type { BootstrapDimensionPlan } from '#workflows/bootstrap/agent-runs/BootstrapDimensionRuntimeBuilder.js';
+import type { BootstrapDimensionPlan } from '#workflows/deprecated-cold-start/agent-runs/BootstrapDimensionRuntimeBuilder.js';
 import {
   buildBootstrapSessionExecutionInput,
   getBootstrapChildDimensionId,
   resolveBootstrapDimensionTier,
-} from '#workflows/bootstrap/agent-runs/BootstrapSessionExecutionBuilder.js';
+} from '#workflows/deprecated-cold-start/agent-runs/BootstrapSessionExecutionBuilder.js';
 
 function createPlan(
   id: string,

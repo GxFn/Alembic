@@ -1,4 +1,4 @@
-import type { BootstrapDimensionFillResult } from '#workflows/bootstrap/BootstrapWorkflow.js';
+import type { BootstrapDimensionFillResult } from '#workflows/deprecated-cold-start/BootstrapWorkflow.js';
 import type { ColdStartScanContext } from '#workflows/scan/lifecycle/ColdStartScanContext.js';
 
 export interface ColdStartBaselineCoverageSummary extends Record<string, unknown> {

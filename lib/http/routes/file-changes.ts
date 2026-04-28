@@ -23,29 +23,18 @@ import {
   ScanLifecycleServiceUnavailableError,
 } from '../../workflows/scan/lifecycle/ScanLifecycleRunner.js';
 import { normalizeFileChangeEvents } from '../../workflows/scan/normalization/ScanChangeSetNormalizer.js';
-import type {
-  IncrementalCorrectionResult,
-  ScanBudget,
-  ScanDepth,
-} from '../../workflows/scan/ScanTypes.js';
+import {
+  type FileChangesScanOptions,
+  ScanRequestNormalizer,
+} from '../../workflows/scan/normalization/ScanRequestNormalizer.js';
+import type { IncrementalCorrectionResult } from '../../workflows/scan/ScanTypes.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();
 
-const VALID_SCAN_DEPTHS = new Set<ScanDepth>(['light', 'standard', 'deep', 'exhaustive']);
-
 interface ServiceContainerLike {
   singletons?: Record<string, unknown>;
   get?: (name: string) => unknown;
-}
-
-interface FileChangesScanOptions {
-  enabled: boolean;
-  projectRoot: string;
-  runAgent: boolean;
-  depth: ScanDepth;
-  budget?: ScanBudget;
-  primaryLang?: string;
 }
 
 type FileChangesScanResponse =
@@ -146,19 +135,29 @@ async function runIncrementalScan(
   options: FileChangesScanOptions
 ): Promise<FileChangesScanResponse> {
   try {
-    const { result, run } = await resolveScanLifecycleRunner(container).runIncrementalCorrection(
+    const request = new ScanRequestNormalizer({
+      defaultProjectRoot: readProjectRoot(container),
+    }).toFileChangesLifecycleRequest(
       {
+        enabled: true,
         projectRoot: options.projectRoot,
-        events,
-        reactiveReport,
-        runDeterministic: false,
         runAgent: options.runAgent,
         depth: options.depth,
         budget: options.budget,
         primaryLang: options.primaryLang,
       },
-      { reason: 'HTTP file changes incremental scan' }
+      {},
+      events,
+      reactiveReport
     );
+    if (!request) {
+      throw new Error('file changes scan request was not enabled');
+    }
+    const { result, run } = await resolveScanLifecycleRunner(
+      container
+    ).run<IncrementalCorrectionResult>(request, {
+      reason: 'HTTP file changes incremental scan',
+    });
     return { success: true, data: result, run };
   } catch (err: unknown) {
     logger.warn('[file-changes] incremental scan failed', {
@@ -189,41 +188,13 @@ function readScanOptions(
   body: Record<string, unknown>,
   container: ServiceContainerLike
 ): FileChangesScanOptions {
-  const options = asRecord(value);
-  const projectRoot =
-    readString(options.projectRoot) || readString(body.projectRoot) || readProjectRoot(container);
-  return {
-    enabled: options.enabled === true,
-    projectRoot,
-    runAgent: readBoolean(options.runAgent, false),
-    depth: readScanDepth(options.depth) ?? 'standard',
-    budget: readBudget(options.budget),
-    primaryLang: readOptionalString(options.primaryLang),
-  };
+  return new ScanRequestNormalizer({
+    defaultProjectRoot: readProjectRoot(container),
+  }).toFileChangesScanOptions(value, body);
 }
 
 function readProjectRoot(container: ServiceContainerLike): string {
   return readString(container.singletons?._projectRoot) || process.cwd();
-}
-
-function readBudget(value: unknown): ScanBudget | undefined {
-  const record = asRecord(value);
-  if (Object.keys(record).length === 0) {
-    return undefined;
-  }
-  return {
-    maxFiles: readOptionalNumber(record.maxFiles),
-    maxFileChars: readOptionalNumber(record.maxFileChars),
-    maxKnowledgeItems: readOptionalNumber(record.maxKnowledgeItems),
-    maxGraphEdges: readOptionalNumber(record.maxGraphEdges),
-    maxTotalChars: readOptionalNumber(record.maxTotalChars),
-  };
-}
-
-function readScanDepth(value: unknown): ScanDepth | undefined {
-  return typeof value === 'string' && VALID_SCAN_DEPTHS.has(value as ScanDepth)
-    ? (value as ScanDepth)
-    : undefined;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -232,18 +203,6 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function readString(value: unknown): string {
   return typeof value === 'string' ? value : '';
-}
-
-function readOptionalString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function readOptionalNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function readBoolean(value: unknown, fallback: boolean): boolean {
-  return typeof value === 'boolean' ? value : fallback;
 }
 
 function toErrorMessage(err: unknown): string {
