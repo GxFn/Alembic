@@ -1,13 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
-import type { CandidateResults } from '#workflows/deprecated-cold-start/consumers/BootstrapDimensionConsumer.js';
-import type { SkillResults } from '#workflows/deprecated-cold-start/consumers/BootstrapSkillConsumer.js';
+import type { CandidateResults } from '#workflows/bootstrap/consumers/BootstrapDimensionConsumer.js';
+import type { SkillResults } from '#workflows/bootstrap/consumers/BootstrapSkillConsumer.js';
 import {
   buildBootstrapReport,
   consumeBootstrapReportAndSnapshot,
   summarizeBootstrapDimensionStats,
-} from '#workflows/deprecated-cold-start/reports/BootstrapReportSnapshotConsumer.js';
+} from '#workflows/bootstrap/reports/BootstrapReportSnapshotConsumer.js';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 import type { IncrementalPlan } from '../../lib/external/mcp/handlers/types.js';
 

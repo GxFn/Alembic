@@ -258,9 +258,6 @@ function defaultParamsForProfile(profileId: string) {
   if (profileId === 'scan-extract') {
     return { task: 'extract' };
   }
-  if (profileId === 'deep-scan') {
-    return { task: 'deep-scan', comprehensive: true };
-  }
   return {};
 }
 

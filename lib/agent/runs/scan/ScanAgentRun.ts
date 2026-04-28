@@ -1,4 +1,3 @@
-import type { ScanTask } from '../../prompts/scan-prompts.js';
 import { SCAN_TASK_CONFIGS } from '../../prompts/scan-prompts.js';
 import type { FileCacheEntry } from '../../runtime/AgentRuntimeTypes.js';
 import type { AgentRunInput, AgentRunSource } from '../../service/AgentRunContracts.js';
@@ -22,7 +21,7 @@ export interface RunScanAgentTaskOptions {
   systemRunContextFactory: SystemRunContextFactory;
   label?: string;
   files?: ScanAgentFileInput[] | null;
-  task?: ScanTask;
+  task?: 'extract' | 'summarize';
   lang?: string | null;
   comprehensive?: boolean;
   source?: AgentRunSource;
@@ -49,7 +48,7 @@ export async function runScanAgentTask({
 
   const runLabel = label || 'code';
   const fileCache = toScanFileCache(files);
-  const analyzeMaxIter = task === 'summarize' ? 12 : task === 'deep-scan' ? 36 : 24;
+  const analyzeMaxIter = task === 'summarize' ? 12 : 24;
   const systemCtx = systemRunContextFactory.createSystemContext({
     budget: { maxIterations: analyzeMaxIter },
     trackerStrategy: 'analyst',
@@ -58,7 +57,7 @@ export async function runScanAgentTask({
   });
 
   const runResult = await agentService.run({
-    profile: { id: profileIdForTask(task) },
+    profile: { id: task === 'summarize' ? 'scan-summarize' : 'scan-extract' },
     params: { task, label: runLabel, comprehensive, files: fileCache },
     message: {
       role: 'internal',
@@ -84,16 +83,6 @@ export async function runScanAgentTask({
     fallback: taskConfig.fallback,
     onParseError,
   });
-}
-
-function profileIdForTask(task: ScanTask): string {
-  if (task === 'summarize') {
-    return 'scan-summarize';
-  }
-  if (task === 'deep-scan') {
-    return 'deep-scan';
-  }
-  return 'scan-extract';
 }
 
 export function toScanFileCache(files?: ScanAgentFileInput[] | null): FileCacheEntry[] | null {

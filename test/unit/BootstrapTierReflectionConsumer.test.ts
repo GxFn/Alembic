@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { DimensionStat } from '#workflows/deprecated-cold-start/consumers/BootstrapDimensionConsumer.js';
-import { consumeBootstrapTierReflection } from '#workflows/deprecated-cold-start/consumers/BootstrapTierReflectionConsumer.js';
+import type { DimensionStat } from '#workflows/bootstrap/consumers/BootstrapDimensionConsumer.js';
+import { consumeBootstrapTierReflection } from '#workflows/bootstrap/consumers/BootstrapTierReflectionConsumer.js';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 
 describe('bootstrap tier reflection consumer', () => {

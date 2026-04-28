@@ -21,14 +21,11 @@ import { CleanupService } from '#service/cleanup/CleanupService.js';
 import { RelevanceAuditor } from '#service/evolution/RelevanceAuditor.js';
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
-import type { MissionBriefingResult } from '#types/project-snapshot.js';
+import type { MissionBriefingResult, ProjectSnapshot } from '#types/project-snapshot.js';
+import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import { toSessionCache } from '#types/snapshot-views.js';
-import { buildMissionBriefing } from '#workflows/deprecated-cold-start/briefing/MissionBriefingBuilder.js';
-import { runBootstrapProjectAnalysis } from '#workflows/deprecated-cold-start/pipeline/BootstrapProjectAnalysisPipeline.js';
-import {
-  ScanLifecycleBaselineRequiredError,
-  ScanLifecycleRunner,
-} from '#workflows/scan/lifecycle/ScanLifecycleRunner.js';
+import { buildMissionBriefing } from '#workflows/bootstrap/briefing/MissionBriefingBuilder.js';
+import { runAllPhases } from '#workflows/bootstrap/phases/BootstrapPhaseRunner.js';
 import { envelope } from '../envelope.js';
 import { extractCodeEntities, extractDependencyEdges } from './bootstrap/shared/audit-helpers.js';
 import { getOrCreateSessionManager } from './bootstrap/shared/session-helpers.js';
@@ -120,22 +117,18 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
   // Step 3: Phase 1-4 全量分析
   // ═══════════════════════════════════════════════════════════
 
-  const { phaseResults, snapshot } = await runBootstrapProjectAnalysis({
-    projectRoot,
-    ctx,
+  const phaseResults = await runAllPhases(projectRoot, ctx, {
+    maxFiles: 500,
+    contentMaxLines: 120,
     sourceTag: 'rescan-external',
-    phaseOptions: {
-      maxFiles: 500,
-      contentMaxLines: 120,
-      summaryPrefix: 'Rescan scan',
-      clearOldData: false, // 已由 rescanClean 清理
-      generateReport: true,
-      incremental: false,
-    },
+    summaryPrefix: 'Rescan scan',
+    clearOldData: false, // 已由 rescanClean 清理
+    generateReport: true,
+    incremental: false,
   });
 
   // 空项目 fast-path
-  if (snapshot.isEmpty) {
+  if (phaseResults.isEmpty) {
     return envelope({
       success: true,
       data: { message: 'No source files found. Nothing to rescan.' },
@@ -157,6 +150,14 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
     localPackageModules,
     langProfile,
   } = phaseResults;
+
+  // ── Build immutable ProjectSnapshot ──
+  const snapshot: ProjectSnapshot = buildProjectSnapshot({
+    projectRoot,
+    sourceTag: 'rescan-external',
+    ...phaseResults,
+    report: phaseResults.report,
+  });
 
   // ═══════════════════════════════════════════════════════════
   // Step 4: Recipe 证据验证 + 快速衰退
@@ -345,51 +346,11 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
   const totalGap = dimensionGaps.reduce((sum, g) => sum + g.gap, 0);
   // occupiedTriggers 包含全量（含 audit-failed 的 staging），防止 trigger 冲突
   const occupiedTriggers = recipeSnapshot.entries.map((e) => e.trigger).filter(Boolean);
-  const gapDimensionIds = dimensionGaps.filter((gap) => gap.gap > 0).map((gap) => gap.dimensionId);
-
-  const scanLifecycleRunner = ScanLifecycleRunner.fromContainer(ctx.container, ctx.logger);
-  let deepMiningScanSummary: Record<string, unknown> | null = null;
-  let deepMiningBlockedReason: string | null = null;
-
-  if (gapDimensionIds.length > 0) {
-    try {
-      const prepared = await scanLifecycleRunner.prepareDeepMiningGapFillContext(snapshot, {
-        dimensions: gapDimensionIds,
-        reason: args.reason || 'Rescan external mission briefing deep mining',
-        retrieveEvidence: true,
-      });
-      const completed = scanLifecycleRunner.completeDeepMiningBriefingRun(prepared.scanContext, {
-        missionBriefing: true,
-        externalAgent: true,
-        sessionId: session.id,
-        dimensions: dimensions.length,
-        gapDimensions: gapDimensionIds.length,
-        totalGap,
-        files: allFiles.length,
-      });
-      deepMiningScanSummary = completed.summary;
-    } catch (err: unknown) {
-      if (!(err instanceof ScanLifecycleBaselineRequiredError)) {
-        throw err;
-      }
-      deepMiningBlockedReason = err.message;
-      ctx.logger.warn('[Rescan] Deep-mining mission briefing blocked', {
-        reason: deepMiningBlockedReason,
-      });
-    }
-  }
-
-  const scanLifecycleSummary =
-    deepMiningScanSummary ??
-    (deepMiningBlockedReason
-      ? { mode: 'deep-mining', status: 'blocked', reason: deepMiningBlockedReason }
-      : null);
 
   // ── 注入 evidenceHints (allRecipes + evolutionGuide + dimensionGaps + prescreen) ──
   (briefing as Record<string, unknown>).evidenceHints = {
     allRecipes,
     rescanMode: true,
-    scanContext: scanLifecycleSummary,
     dimensionGaps,
     evolutionPrescreen: {
       needsVerification: prescreen.needsVerification,
@@ -414,26 +375,20 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
     },
   };
 
-  if (scanLifecycleSummary) {
-    briefing.meta = briefing.meta || {};
-    briefing.meta.scanContext = scanLifecycleSummary;
-  }
-
   // ── 覆盖 executionPlan.workflow 为 rescan 专属版本 (per-dimension evolve + gap-fill) ──
   const briefingRecord = briefing as Record<string, unknown>;
   if (briefingRecord.executionPlan && typeof briefingRecord.executionPlan === 'object') {
-    (briefingRecord.executionPlan as Record<string, unknown>).workflow = deepMiningBlockedReason
-      ? `【增量扫描阻塞 — 需要 cold-start baseline】本次已完成清理、项目分析和 Recipe 审计，但 deep-mining 补洞不能在缺少 baseline 时继续。原因: ${deepMiningBlockedReason}`
-      : '【增量扫描模式 — 进化前置 + 按维度 Gap-Fill】 ' +
-        'Step 0 — 自动前置过滤 (已完成): ' +
-        `healthy 无修改的 Recipe 已自动 skip (${prescreen.autoResolved.length} 条)，` +
-        `仅 ${prescreen.needsVerification.length} 条需要验证。 ` +
-        '对每个维度 (按 tiers 顺序): ' +
-        'Step 1 — Evolve (仅 needsVerification 中的 Recipe): ' +
-        '读 sourceRefs 源码验证 → 调用 alembic_evolve({ decisions: [本维度决策] }) → ' +
-        'Step 2 — Gap-Fill: ' +
-        '分析代码发现新模式 → 调用 alembic_submit_knowledge 提交 (数量参考 gap 值) → ' +
-        'Step 3 — Complete: 调用 alembic_dimension_complete 完成维度';
+    (briefingRecord.executionPlan as Record<string, unknown>).workflow =
+      '【增量扫描模式 — 进化前置 + 按维度 Gap-Fill】 ' +
+      'Step 0 — 自动前置过滤 (已完成): ' +
+      `healthy 无修改的 Recipe 已自动 skip (${prescreen.autoResolved.length} 条)，` +
+      `仅 ${prescreen.needsVerification.length} 条需要验证。 ` +
+      '对每个维度 (按 tiers 顺序): ' +
+      'Step 1 — Evolve (仅 needsVerification 中的 Recipe): ' +
+      '读 sourceRefs 源码验证 → 调用 alembic_evolve({ decisions: [本维度决策] }) → ' +
+      'Step 2 — Gap-Fill: ' +
+      '分析代码发现新模式 → 调用 alembic_submit_knowledge 提交 (数量参考 gap 值) → ' +
+      'Step 3 — Complete: 调用 alembic_dimension_complete 完成维度';
   }
 
   const dimGapLog = dimensionGaps
@@ -476,16 +431,15 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
       },
       ...briefing,
     },
-    message: deepMiningBlockedReason
-      ? `Rescan 已完成审计，但深度补洞需要先建立 cold-start baseline：${deepMiningBlockedReason}`
-      : `✅ Rescan 完成项目扫描，保留 ${recipeSnapshot.count} 个 Recipe（衰退 ${decayCount} 个），` +
-        `${coveredDims}/${dimensions.length} 个维度已充分覆盖。` +
-        `${gapSummary}` +
-        `对每个维度执行三步：` +
-        `(1) alembic_evolve — 过滤 allRecipes 中本维度 Recipe，读源码验证后提交决策 → ` +
-        `(2) alembic_submit_knowledge — 分析代码，发现未覆盖的新模式 → ` +
-        `(3) alembic_dimension_complete — 标记维度完成。` +
-        `注意: evidenceHints.constraints.occupiedTriggers 中的 trigger 已被占用，请勿重复。`,
+    message:
+      `✅ Rescan 完成项目扫描，保留 ${recipeSnapshot.count} 个 Recipe（衰退 ${decayCount} 个），` +
+      `${coveredDims}/${dimensions.length} 个维度已充分覆盖。` +
+      `${gapSummary}` +
+      `对每个维度执行三步：` +
+      `(1) alembic_evolve — 过滤 allRecipes 中本维度 Recipe，读源码验证后提交决策 → ` +
+      `(2) alembic_submit_knowledge — 分析代码，发现未覆盖的新模式 → ` +
+      `(3) alembic_dimension_complete — 标记维度完成。` +
+      `注意: evidenceHints.constraints.occupiedTriggers 中的 trigger 已被占用，请勿重复。`,
     meta: { tool: 'alembic_rescan', responseTimeMs: Date.now() - t0 },
   });
 }

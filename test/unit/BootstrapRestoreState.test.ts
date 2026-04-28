@@ -8,13 +8,13 @@ import {
   resolveIncrementalSkippedDimensions,
   restoreCheckpointDimensions,
   syncRestoredSessionStoreDigests,
-} from '#workflows/deprecated-cold-start/checkpoint/BootstrapRestoreState.js';
+} from '#workflows/bootstrap/checkpoint/BootstrapRestoreState.js';
 import type {
   CandidateResults,
   DimensionCandidateData,
   DimensionStat,
-} from '#workflows/deprecated-cold-start/consumers/BootstrapDimensionConsumer.js';
-import type { DimensionContext } from '#workflows/deprecated-cold-start/context/DimensionContext.js';
+} from '#workflows/bootstrap/consumers/BootstrapDimensionConsumer.js';
+import type { DimensionContext } from '#workflows/bootstrap/context/DimensionContext.js';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 import type { IncrementalPlan } from '../../lib/external/mcp/handlers/types.js';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';

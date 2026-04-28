@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import {
   type ConsolidationResult,
   consumeBootstrapSemanticMemory,
-} from '#workflows/deprecated-cold-start/consumers/BootstrapSemanticMemoryConsumer.js';
+} from '#workflows/bootstrap/consumers/BootstrapSemanticMemoryConsumer.js';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 
 function makeResult(partial: Partial<ConsolidationResult> = {}): ConsolidationResult {

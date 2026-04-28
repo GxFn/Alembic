@@ -53,20 +53,11 @@ import type { KnowledgeEdgeRepositoryImpl } from '../repository/knowledge/Knowle
 import type { KnowledgeRepositoryImpl } from '../repository/knowledge/KnowledgeRepository.impl.js';
 import type { MemoryRepositoryImpl } from '../repository/memory/MemoryRepository.js';
 import type { RemoteCommandRepository } from '../repository/remote/RemoteCommandRepository.js';
-import type { ScanEvidencePackRepository } from '../repository/scan/ScanEvidencePackRepository.js';
-import type { ScanRecommendationRepository } from '../repository/scan/ScanRecommendationRepository.js';
-import type { ScanRunRepository } from '../repository/scan/ScanRunRepository.js';
 import type { SessionRepositoryImpl } from '../repository/session/SessionRepository.js';
 import type { RecipeSourceRefRepositoryImpl } from '../repository/sourceref/RecipeSourceRefRepository.js';
 import type { TokenUsageStore } from '../repository/token/TokenUsageStore.js';
 import type { BootstrapTaskManager } from '../service/bootstrap/BootstrapTaskManager.js';
 import type { CursorDeliveryPipeline } from '../service/delivery/CursorDeliveryPipeline.js';
-import type { DecayDetector } from '../service/evolution/DecayDetector.js';
-import type { EnhancementSuggester } from '../service/evolution/EnhancementSuggester.js';
-import type { FileChangeHandler } from '../service/evolution/FileChangeHandler.js';
-import type { ProposalExecutor } from '../service/evolution/ProposalExecutor.js';
-import type { RedundancyAnalyzer } from '../service/evolution/RedundancyAnalyzer.js';
-import type { FileChangeDispatcher } from '../service/FileChangeDispatcher.js';
 import type { ComplianceReporter } from '../service/guard/ComplianceReporter.js';
 import type { ExclusionManager } from '../service/guard/ExclusionManager.js';
 import type { GuardCheckEngine } from '../service/guard/GuardCheckEngine.js';
@@ -81,7 +72,6 @@ import type { KnowledgeGraphService } from '../service/knowledge/KnowledgeGraphS
 import type { KnowledgeService } from '../service/knowledge/KnowledgeService.js';
 // ── Context Types ──
 import type { RecipeExtractor } from '../service/knowledge/RecipeExtractor.js';
-import type { SourceRefReconciler } from '../service/knowledge/SourceRefReconciler.js';
 import type { ModuleService } from '../service/module/ModuleService.js';
 import type { CouplingAnalyzer } from '../service/panorama/CouplingAnalyzer.js';
 import type { LayerInferrer } from '../service/panorama/LayerInferrer.js';
@@ -102,17 +92,6 @@ import type { ContextualEnricher } from '../service/vector/ContextualEnricher.js
 import type { VectorService } from '../service/vector/VectorService.js';
 // ── Shared Types ──
 import type { LanguageService } from '../shared/LanguageService.js';
-import type { ColdStartWorkflow } from '../workflows/cold-start/dimension-execution/ColdStartWorkflow.js';
-import type { DeepMiningWorkflow } from '../workflows/deep-mining/DeepMiningPipeline.js';
-import type { IncrementalCorrectionWorkflow } from '../workflows/incremental-correction/IncrementalCorrectionPipeline.js';
-import type { MaintenanceWorkflow } from '../workflows/maintenance/MaintenancePipeline.js';
-import type { ColdStartBaselinePipeline } from '../workflows/scan/lifecycle/ColdStartBaselinePipeline.js';
-import type { ScanLifecycleRunner } from '../workflows/scan/lifecycle/ScanLifecycleRunner.js';
-import type { EvidenceBudgeter } from '../workflows/scan/retrieval/EvidenceBudgeter.js';
-import type { KnowledgeRetrievalPipeline } from '../workflows/scan/retrieval/KnowledgeRetrievalPipeline.js';
-import type { ScanJobQueue } from '../workflows/scan/ScanJobQueue.js';
-import type { ScanOrchestrator } from '../workflows/scan/ScanOrchestrator.js';
-import type { ScanPlanService } from '../workflows/scan/ScanPlanService.js';
 
 /**
  * 类型安全的服务映射表
@@ -174,13 +153,6 @@ export interface ServiceMap {
   aiProvider: AiProvider | null;
   aiProviderManager: AiProviderManager;
   projectGraph: ProjectGraph | null;
-  sourceRefReconciler: SourceRefReconciler;
-  decayDetector: DecayDetector;
-  redundancyAnalyzer: RedundancyAnalyzer;
-  enhancementSuggester: EnhancementSuggester;
-  proposalExecutor: ProposalExecutor;
-  fileChangeHandler: FileChangeHandler;
-  fileChangeDispatcher: FileChangeDispatcher;
 
   // ═══ VectorModule ═══
   vectorService: VectorService;
@@ -205,22 +177,6 @@ export interface ServiceMap {
   agentRuntimeBuilder: AgentRuntimeBuilder;
   agentService: AgentService;
   skillHooks: SkillHooks;
-
-  // ═══ ScanModule ═══
-  evidenceBudgeter: EvidenceBudgeter;
-  scanJobQueue: ScanJobQueue;
-  scanRunRepository: ScanRunRepository;
-  scanEvidencePackRepository: ScanEvidencePackRepository;
-  scanRecommendationRepository: ScanRecommendationRepository;
-  scanLifecycleRunner: ScanLifecycleRunner;
-  scanPlanService: ScanPlanService;
-  knowledgeRetrievalPipeline: KnowledgeRetrievalPipeline;
-  coldStartBaselinePipeline: ColdStartBaselinePipeline;
-  coldStartWorkflow: ColdStartWorkflow;
-  deepMiningWorkflow: DeepMiningWorkflow;
-  incrementalCorrectionWorkflow: IncrementalCorrectionWorkflow;
-  maintenanceWorkflow: MaintenanceWorkflow;
-  scanOrchestrator: ScanOrchestrator;
 
   // ═══ SignalModule ═══
   signalBus: SignalBus;

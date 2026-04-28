@@ -17,7 +17,15 @@
  * 注: Task 系统为纯内存 + JSONL 信号架构，不使用数据库表。
  */
 
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  blob,
+  index,
+  integer,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 // ═══════════════════════════════════════════════════════════════
 // 内部 — schema_migrations
@@ -491,90 +499,5 @@ export const recipeWarnings = sqliteTable(
     index('idx_rw_type').on(table.type),
     index('idx_rw_status').on(table.status),
     index('idx_rw_detected').on(table.detectedAt),
-  ]
-);
-
-// ═══════════════════════════════════════════════════════════════
-// 20. scan_runs — 扫描生命周期运行记录 (migration 009)
-// ═══════════════════════════════════════════════════════════════
-
-export const scanRuns = sqliteTable(
-  'scan_runs',
-  {
-    id: text('id').primaryKey(),
-    projectRoot: text('project_root').notNull(),
-    mode: text('mode').notNull(),
-    depth: text('depth').notNull(),
-    status: text('status').notNull().default('running'),
-    reason: text('reason').notNull().default(''),
-    activeDimensionsJson: text('active_dimensions_json').notNull().default('[]'),
-    scopeJson: text('scope_json').notNull().default('{}'),
-    changeSetJson: text('change_set_json'),
-    budgetsJson: text('budgets_json').notNull().default('{}'),
-    summaryJson: text('summary_json').notNull().default('{}'),
-    errorMessage: text('error_message'),
-    parentSnapshotId: text('parent_snapshot_id'),
-    baselineSnapshotId: text('baseline_snapshot_id'),
-    startedAt: integer('started_at').notNull(),
-    completedAt: integer('completed_at'),
-    durationMs: integer('duration_ms'),
-  },
-  (table) => [
-    index('idx_scan_runs_project_started').on(table.projectRoot, table.startedAt),
-    index('idx_scan_runs_mode').on(table.mode),
-    index('idx_scan_runs_status').on(table.status),
-    index('idx_scan_runs_completed').on(table.completedAt),
-  ]
-);
-
-// ═══════════════════════════════════════════════════════════════
-// 21. scan_evidence_packs — 扫描证据包持久化 (migration 010)
-// ═══════════════════════════════════════════════════════════════
-
-export const scanEvidencePacks = sqliteTable(
-  'scan_evidence_packs',
-  {
-    id: text('id').primaryKey(),
-    runId: text('run_id').notNull(),
-    packKind: text('pack_kind').notNull().default('retrieval'),
-    packJson: text('pack_json').notNull(),
-    summaryJson: text('summary_json').notNull().default('{}'),
-    charCount: integer('char_count').notNull().default(0),
-    truncated: integer('truncated').notNull().default(0),
-    createdAt: integer('created_at').notNull(),
-  },
-  (table) => [
-    index('idx_scan_evidence_run').on(table.runId),
-    index('idx_scan_evidence_kind').on(table.packKind),
-    index('idx_scan_evidence_created').on(table.createdAt),
-  ]
-);
-
-// ═══════════════════════════════════════════════════════════════
-// 22. scan_recommendations — 扫描推荐状态 (migration 011)
-// ═══════════════════════════════════════════════════════════════
-
-export const scanRecommendations = sqliteTable(
-  'scan_recommendations',
-  {
-    id: text('id').primaryKey(),
-    projectRoot: text('project_root').notNull(),
-    sourceRunId: text('source_run_id'),
-    targetMode: text('target_mode').notNull(),
-    status: text('status').notNull().default('pending'),
-    reason: text('reason').notNull().default(''),
-    scopeJson: text('scope_json').notNull().default('{}'),
-    priority: text('priority').notNull().default('medium'),
-    queuedJobId: text('queued_job_id'),
-    executedRunId: text('executed_run_id'),
-    dismissedReason: text('dismissed_reason'),
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
-  },
-  (table) => [
-    index('idx_scan_recommendations_project_status').on(table.projectRoot, table.status),
-    index('idx_scan_recommendations_source_run').on(table.sourceRunId),
-    index('idx_scan_recommendations_mode').on(table.targetMode),
-    index('idx_scan_recommendations_created').on(table.createdAt),
   ]
 );

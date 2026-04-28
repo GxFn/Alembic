@@ -42,7 +42,6 @@ import monitoringRouter from './routes/monitoring.js';
 import panoramaRouter from './routes/panorama.js';
 import recipesRouter from './routes/recipes.js';
 import remoteRouter from './routes/remote.js';
-import scanRouter from './routes/scan.js';
 import searchRouter from './routes/search.js';
 import signalsRouter from './routes/signals.js';
 import skillsRouter from './routes/skills.js';
@@ -300,9 +299,6 @@ export class HttpServer {
 
     // 搜索路由
     this.app.use(`${apiPrefix}/search`, searchRouter);
-
-    // 扫描生命周期路由（规划、检索、增量修正、维护）
-    this.app.use(`${apiPrefix}/scan`, scanRouter);
 
     // AI 路由
     this.app.use(`${apiPrefix}/ai`, aiRouter);

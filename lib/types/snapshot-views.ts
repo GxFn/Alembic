@@ -8,7 +8,6 @@
  */
 
 import type { EvolutionPrescreen } from '../external/mcp/handlers/evolution-prescreen.js';
-import type { KnowledgeEvidencePack, ScanPlan } from '../workflows/scan/ScanTypes.js';
 import type {
   AstSummary,
   BootstrapSessionShape,
@@ -67,12 +66,6 @@ export interface PipelineFillView {
   readonly terminalTest?: boolean;
   readonly terminalToolset?: string;
   readonly allowedTerminalModes?: string[];
-  /** 统一扫描规划上下文（cold-start/deep-mining/incremental/maintenance 共用契约） */
-  readonly scanPlan?: ScanPlan | null;
-  /** 与本次 cold-start 关联的 scan_runs.id，由 scan lifecycle wrapper 更新状态 */
-  readonly scanRunId?: string | null;
-  /** 统一检索层产出的冷启动证据包，供内部 Agent 作为分析起点 */
-  readonly scanEvidencePack?: KnowledgeEvidencePack | null;
 }
 
 // ─── 视图 1: toResponseData ──────────────────────────────────

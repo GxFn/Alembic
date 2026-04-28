@@ -9,7 +9,7 @@
  * @module bootstrap/shared/session-helpers
  */
 
-import { BootstrapSessionManager } from '#workflows/deprecated-cold-start/session/BootstrapSession.js';
+import { BootstrapSessionManager } from '#workflows/bootstrap/session/BootstrapSession.js';
 import type { McpContext } from '../../types.js';
 
 // ── Process-level singleton ──────────────────────────────

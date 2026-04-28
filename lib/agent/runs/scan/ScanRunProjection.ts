@@ -1,4 +1,3 @@
-import type { ScanTask } from '../../prompts/scan-prompts.js';
 import type { AgentDiagnostics, ToolCallEntry } from '../../runtime/AgentRuntimeTypes.js';
 import type { AgentRunResult } from '../../service/AgentRunContracts.js';
 
@@ -15,7 +14,7 @@ export interface ScanRecipe extends Record<string, unknown> {
 
 export interface ScanProjectionOptions {
   label?: string;
-  task: ScanTask;
+  task: 'extract' | 'summarize';
   result: AgentRunResult;
   fallback: (label: string) => Record<string, unknown>;
   onParseError?: (err: unknown) => void;
@@ -134,7 +133,7 @@ function buildScanDiagnostics({
   parseError = null,
 }: {
   label?: string;
-  task: ScanTask;
+  task: 'extract' | 'summarize';
   result: AgentRunResult;
   recipesFound: number;
   usedFallback?: boolean;

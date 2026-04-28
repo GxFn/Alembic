@@ -52,15 +52,13 @@ interface GateArtifact {
 
 /** Parameters for buildScanPipelineStages */
 interface ScanPipelineOpts {
-  task: ScanTask;
+  task: 'extract' | 'summarize';
   producePrompt: string;
   analyzeCaps: string[];
   produceCaps: string[];
   files?: ScanSourceFile[];
   analyzeMaxIter?: number;
 }
-
-export type ScanTask = 'extract' | 'summarize' | 'deep-scan';
 
 /** Prompt builder context (from PipelineContext) */
 interface ProducerPromptContext {
@@ -120,41 +118,6 @@ content.markdown 字段必须是「项目特写」：
 - 文件读取失败时，直接使用分析文本中已有的代码和描述来提交候选
 - 永远不要因为文件读取失败而跳过知识点 — 分析文本已经包含足够信息
 - 先提交候选，再考虑是否需要读取更多代码（提交优先于验证）`,
-    fallback: (label: string) => ({ targetName: label, extracted: 0, recipes: [] }),
-  },
-
-  // ─── deep-scan: 专题深挖（面向模块/维度/缺口的多轮补洞） ─────
-
-  'deep-scan': {
-    producePrompt: `你是负责项目知识深度挖掘的专家。你会收到一段针对模块、维度或主题的深度代码分析，需要将其中高价值、可复用、可维护的知识点转化为 collect_scan_recipe 调用。
-
-核心原则: 深挖不是泛泛摘要，而是补齐项目知识库缺口。请优先提交能帮助后续开发者做出正确决策的规则、模式和事实。
-
-每个候选必须:
-1. 聚焦一个明确的工程决策、架构约束、跨文件协作模式或容易遗漏的领域事实
-2. 使用项目真实类名/模块名命名，不要使用抽象营销式标题
-3. content.markdown 必须包含项目特写、关键代码块和完整来源标注
-4. reasoning.sources 必须是非空数组，路径从项目根目录开始
-5. 明确说明适用场景和不要使用的场景，避免生成宽泛常识
-
-## 深挖优先级
-1. 跨模块调用链、依赖边界、生命周期边界、错误处理边界
-2. 多文件协作形成的稳定模式，而不是单个函数的局部实现
-3. 新增模块、低覆盖维度、decaying/stale 知识附近的补洞点
-4. 与现有知识不同的新增视角；不要重复提交同义候选
-
-## 工作流程
-1. 阅读分析文本和 evidence，识别最值得沉淀的 1-8 个知识点
-2. 如需验证关键代码，用 read_project_file 批量读取相关文件
-3. 对每个知识点调用 collect_scan_recipe
-4. 如果证据不足，宁可跳过，不要猜测
-
-## 输出质量要求
-- content.markdown 必须 ≥ 200 字符，并包含代码块
-- content.rationale 必须解释为什么这是项目标准做法或重要事实
-- usageGuide 必须说明何时使用、如何迁移/扩展、常见误用
-- tags 包含模块、架构/调用链/依赖/生命周期等语义标签
-- doClause / dontClause 用英文祈使句表达清晰约束`,
     fallback: (label: string) => ({ targetName: label, extracted: 0, recipes: [] }),
   },
 
@@ -268,7 +231,7 @@ export function buildScanPipelineStages(
 
   // ── Stage 3: Produce ──
   // extract 和 summarize 都是工具驱动 (collect_scan_recipe)
-  const isToolDriven = task === 'extract' || task === 'summarize' || task === 'deep-scan';
+  const isToolDriven = task === 'extract' || task === 'summarize';
   const isSummarize = task === 'summarize';
   const submitToolNames = isToolDriven ? ['collect_scan_recipe'] : [];
 
@@ -384,7 +347,7 @@ export function buildScanPipelineStages(
 function buildScanProducerPrompt(
   ctx: ProducerPromptContext,
   files: ScanSourceFile[] | undefined,
-  task: ScanTask
+  task: 'extract' | 'summarize'
 ) {
   const artifact = ctx.gateArtifact;
   const analysis = ctx.phaseResults?.analyze?.reply || '';

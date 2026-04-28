@@ -19,10 +19,11 @@ import path from 'node:path';
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
-import type { MissionBriefingResult } from '#types/project-snapshot.js';
+import type { MissionBriefingResult, ProjectSnapshot } from '#types/project-snapshot.js';
+import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import { toSessionCache } from '#types/snapshot-views.js';
-import { buildMissionBriefing } from '#workflows/deprecated-cold-start/briefing/MissionBriefingBuilder.js';
-import { ScanLifecycleRunner } from '#workflows/scan/lifecycle/ScanLifecycleRunner.js';
+import { buildMissionBriefing } from '#workflows/bootstrap/briefing/MissionBriefingBuilder.js';
+import { runAllPhases } from '#workflows/bootstrap/phases/BootstrapPhaseRunner.js';
 import { envelope } from '../envelope.js';
 import { getOrCreateSessionManager } from './bootstrap/shared/session-helpers.js';
 import { buildLanguageExtension } from './LanguageExtensions.js';
@@ -65,36 +66,24 @@ export async function bootstrapExternal(ctx: McpContext) {
     logger: ctx.logger,
   });
   const cleanupResult = await cleanupService.fullReset();
-  const scanLifecycleRunner = ScanLifecycleRunner.fromContainer(ctx.container, ctx.logger);
 
   // ═══════════════════════════════════════════════════════════
   // Phase 1-4: 共享数据收集管线（永远全量，无增量检测）
   // ═══════════════════════════════════════════════════════════
 
-  const { phaseResults, snapshot, scanContext } =
-    await scanLifecycleRunner.prepareColdStartBaseline(
-      {
-        projectRoot,
-        ctx,
-        sourceTag: 'bootstrap-external',
-        phaseOptions: {
-          maxFiles: 500,
-          contentMaxLines: 120,
-          summaryPrefix: 'Bootstrap-external scan',
-          clearOldData: true,
-          generateReport: true,
-          incremental: false,
-          dataRoot,
-        },
-      },
-      {
-        enabled: true,
-        retrieveEvidence: true,
-      }
-    );
+  const phaseResults = await runAllPhases(projectRoot, ctx, {
+    maxFiles: 500,
+    contentMaxLines: 120,
+    sourceTag: 'bootstrap-external',
+    summaryPrefix: 'Bootstrap-external scan',
+    clearOldData: true,
+    generateReport: true,
+    incremental: false,
+    dataRoot,
+  });
 
   // 空项目 fast-path
-  if (snapshot.isEmpty) {
+  if (phaseResults.isEmpty) {
     return envelope({
       success: true,
       data: { message: 'No source files found. Nothing to bootstrap.' },
@@ -116,6 +105,14 @@ export async function bootstrapExternal(ctx: McpContext) {
     localPackageModules,
     langProfile,
   } = phaseResults;
+
+  // ── Build immutable ProjectSnapshot ──
+  const snapshot: ProjectSnapshot = buildProjectSnapshot({
+    projectRoot,
+    sourceTag: 'bootstrap-external',
+    ...phaseResults,
+    report: phaseResults.report,
+  });
 
   // ═══════════════════════════════════════════════════════════
   // Phase 4: 构建 Mission Briefing
@@ -170,15 +167,6 @@ export async function bootstrapExternal(ctx: McpContext) {
     briefing.meta = briefing.meta || {};
     briefing.meta.warnings = [...(briefing.meta.warnings || []), ...phaseResults.warnings];
   }
-
-  const completed = scanLifecycleRunner.completeAndProjectColdStartRun(scanContext, {
-    missionBriefing: true,
-    dimensions: dimensions.length,
-    files: allFiles.length,
-    targets: targetsSummary.length,
-  });
-  briefing.meta = briefing.meta || {};
-  briefing.meta.scanContext = completed.summary;
 
   ctx.logger.info(
     `[BootstrapExternal] Mission Briefing ready: ${allFiles.length} files, ${dimensions.length} dims, ` +

@@ -15,31 +15,14 @@
 import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import type { ScanRunRecord } from '../../repository/scan/ScanRunRepository.js';
 import type { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
-import type { FileChangeEvent, ReactiveEvolutionReport } from '../../types/reactive-evolution.js';
-import {
-  ScanLifecycleRunner,
-  ScanLifecycleServiceUnavailableError,
-} from '../../workflows/scan/lifecycle/ScanLifecycleRunner.js';
-import { normalizeFileChangeEvents } from '../../workflows/scan/normalization/ScanChangeSetNormalizer.js';
-import {
-  type FileChangesScanOptions,
-  ScanRequestNormalizer,
-} from '../../workflows/scan/normalization/ScanRequestNormalizer.js';
-import type { IncrementalCorrectionResult } from '../../workflows/scan/ScanTypes.js';
+import type { FileChangeEvent, FileChangeEventSource } from '../../types/reactive-evolution.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();
 
-interface ServiceContainerLike {
-  singletons?: Record<string, unknown>;
-  get?: (name: string) => unknown;
-}
-
-type FileChangesScanResponse =
-  | { success: true; data: IncrementalCorrectionResult; run: ScanRunRecord | null }
-  | { success: false; error: { code: string; message: string }; run?: ScanRunRecord | null };
+const VALID_TYPES = new Set(['created', 'renamed', 'deleted', 'modified']);
+const VALID_SOURCES = new Set<FileChangeEventSource>(['ide-edit', 'git-head', 'git-worktree']);
 
 /**
  * POST /api/v1/file-changes
@@ -53,10 +36,9 @@ type FileChangesScanResponse =
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const body = asRecord(req.body);
-    const normalizedEvents = normalizeFileChangeEvents(body.events);
+    const { events } = req.body as { events?: unknown };
 
-    if (!normalizedEvents.wasArray || normalizedEvents.inputCount === 0) {
+    if (!Array.isArray(events) || events.length === 0) {
       res.status(400).json({
         success: false,
         error: { code: 'INVALID_INPUT', message: 'events must be a non-empty array' },
@@ -64,7 +46,34 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const validEvents = normalizedEvents.events;
+    const validEvents: FileChangeEvent[] = [];
+
+    for (const event of events) {
+      if (
+        typeof event !== 'object' ||
+        event === null ||
+        !VALID_TYPES.has((event as Record<string, unknown>).type as string) ||
+        typeof (event as Record<string, unknown>).path !== 'string'
+      ) {
+        continue;
+      }
+      const obj = event as Record<string, unknown>;
+      const normalized: FileChangeEvent = {
+        type: obj.type as FileChangeEvent['type'],
+        path: obj.path as string,
+      };
+      if (typeof obj.oldPath === 'string') {
+        normalized.oldPath = obj.oldPath;
+      }
+      // 向后兼容：旧版客户端不传 eventSource，服务端透传 undefined，由 Dispatcher 统计推断
+      if (
+        typeof obj.eventSource === 'string' &&
+        VALID_SOURCES.has(obj.eventSource as FileChangeEventSource)
+      ) {
+        normalized.eventSource = obj.eventSource as FileChangeEventSource;
+      }
+      validEvents.push(normalized);
+    }
 
     if (validEvents.length === 0) {
       res.json({
@@ -81,14 +90,11 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const container = getServiceContainer() as ServiceContainerLike;
-    const dispatcher = container.get?.('fileChangeDispatcher') as FileChangeDispatcher | undefined;
-    if (!dispatcher) {
-      throw new Error('fileChangeDispatcher unavailable');
-    }
+    const container = getServiceContainer();
+    const dispatcher = container.get('fileChangeDispatcher') as FileChangeDispatcher;
 
     // 同步分发 — FileChangeHandler 是纯代码路径毫秒级（文档 §5.1 备注）
-    let report: ReactiveEvolutionReport;
+    let report;
     try {
       report = await dispatcher.dispatch(validEvents);
     } catch (err: unknown) {
@@ -104,19 +110,13 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     logger.info('[file-changes] handled', {
-      total: normalizedEvents.inputCount,
+      total: events.length,
       valid: validEvents.length,
       needsReview: report.needsReview,
       eventSource: report.eventSource,
     });
 
-    const response: Record<string, unknown> = { success: true, data: report };
-    const scanOptions = readScanOptions(body.scan, body, container);
-    if (scanOptions.enabled) {
-      response.scan = await runIncrementalScan(container, validEvents, report, scanOptions);
-    }
-
-    res.json(response);
+    res.json({ success: true, data: report });
   } catch (err: unknown) {
     logger.warn('[file-changes] error', {
       error: (err as Error).message,
@@ -127,86 +127,5 @@ router.post('/', async (req: Request, res: Response) => {
     });
   }
 });
-
-async function runIncrementalScan(
-  container: ServiceContainerLike,
-  events: FileChangeEvent[],
-  reactiveReport: ReactiveEvolutionReport,
-  options: FileChangesScanOptions
-): Promise<FileChangesScanResponse> {
-  try {
-    const request = new ScanRequestNormalizer({
-      defaultProjectRoot: readProjectRoot(container),
-    }).toFileChangesLifecycleRequest(
-      {
-        enabled: true,
-        projectRoot: options.projectRoot,
-        runAgent: options.runAgent,
-        depth: options.depth,
-        budget: options.budget,
-        primaryLang: options.primaryLang,
-      },
-      {},
-      events,
-      reactiveReport
-    );
-    if (!request) {
-      throw new Error('file changes scan request was not enabled');
-    }
-    const { result, run } = await resolveScanLifecycleRunner(
-      container
-    ).run<IncrementalCorrectionResult>(request, {
-      reason: 'HTTP file changes incremental scan',
-    });
-    return { success: true, data: result, run };
-  } catch (err: unknown) {
-    logger.warn('[file-changes] incremental scan failed', {
-      error: toErrorMessage(err),
-    });
-    return {
-      success: false,
-      error: {
-        code:
-          err instanceof ScanLifecycleServiceUnavailableError
-            ? 'SCAN_UNAVAILABLE'
-            : 'SCAN_INCREMENTAL_ERROR',
-        message: toErrorMessage(err),
-      },
-    };
-  }
-}
-
-function resolveScanLifecycleRunner(container: ServiceContainerLike): ScanLifecycleRunner {
-  const runner = container.get?.('scanLifecycleRunner') as ScanLifecycleRunner | undefined;
-  return runner && typeof runner.runIncrementalCorrection === 'function'
-    ? runner
-    : ScanLifecycleRunner.fromContainer(container, logger);
-}
-
-function readScanOptions(
-  value: unknown,
-  body: Record<string, unknown>,
-  container: ServiceContainerLike
-): FileChangesScanOptions {
-  return new ScanRequestNormalizer({
-    defaultProjectRoot: readProjectRoot(container),
-  }).toFileChangesScanOptions(value, body);
-}
-
-function readProjectRoot(container: ServiceContainerLike): string {
-  return readString(container.singletons?._projectRoot) || process.cwd();
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
-
-function readString(value: unknown): string {
-  return typeof value === 'string' ? value : '';
-}
-
-function toErrorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 export default router;

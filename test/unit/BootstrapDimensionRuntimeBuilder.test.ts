@@ -5,8 +5,8 @@ import {
   buildPanoramaContext,
   createBootstrapDimensionRuntimeInput,
   resolveBootstrapDimensionPlan,
-} from '#workflows/deprecated-cold-start/agent-runs/BootstrapDimensionRuntimeBuilder.js';
-import { prepareBootstrapRescanState } from '#workflows/deprecated-cold-start/context/BootstrapRescanState.js';
+} from '#workflows/bootstrap/agent-runs/BootstrapDimensionRuntimeBuilder.js';
+import { prepareBootstrapRescanState } from '#workflows/bootstrap/context/BootstrapRescanState.js';
 
 const dimensions = [
   {

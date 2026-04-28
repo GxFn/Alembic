@@ -52,13 +52,18 @@ import { getInternalAgentRequiredFields } from '#domain/knowledge/FieldSpec.js';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type {
+  BootstrapSessionShape,
   DimensionDef,
   GuardAuditFileEntry,
   LanguageProfile,
+  PhaseReport,
+  ProjectSnapshot,
 } from '#types/project-snapshot.js';
+import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import { toSessionCache } from '#types/snapshot-views.js';
-import { buildInternalNextSteps } from '#workflows/deprecated-cold-start/briefing/BootstrapDimensionText.js';
-import { ScanLifecycleRunner } from '#workflows/scan/lifecycle/ScanLifecycleRunner.js';
+import { buildInternalNextSteps } from '#workflows/bootstrap/briefing/BootstrapDimensionText.js';
+import { runAllPhases } from '#workflows/bootstrap/phases/BootstrapPhaseRunner.js';
+import { fillDimensionsV3 } from '../../../workflows/bootstrap/BootstrapWorkflow.js';
 import { envelope } from '../envelope.js';
 import { bootstrapRefine } from './bootstrap/refine.js';
 import {
@@ -66,6 +71,7 @@ import {
   dispatchPipelineFill,
   startTaskManagerSession,
 } from './bootstrap/shared/async-fill-helpers.js';
+import type { TargetFile } from './bootstrap/shared/handler-types.js';
 import { summarizePanorama } from './bootstrap/shared/panorama-utils.js';
 import { getOrCreateSessionManager } from './bootstrap/shared/session-helpers.js';
 import { buildTargetFileMap } from './bootstrap/shared/target-file-map.js';
@@ -139,7 +145,7 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
   // 冷启动需要干净的初始状态：清除 DB + 文件系统缓存
   // ═══════════════════════════════════════════════════════════
   const db = ctx.container.get('database');
-  const dataRoot = resolveDataRoot(ctx.container) || projectRoot;
+  const dataRoot = resolveDataRoot(ctx.container as any) || projectRoot;
   const cleanupService = new CleanupService({
     projectRoot,
     dataRoot,
@@ -154,40 +160,36 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
     errors: cleanupResult.errors.length,
   });
 
-  const scanLifecycleRunner = ScanLifecycleRunner.fromContainer(ctx.container, ctx.logger);
-
   // ═══════════════════════════════════════════════════════════
   // Phase 1-4: 共享管线（文件收集→AST→依赖→Guard→维度解析）
   // ═══════════════════════════════════════════════════════════
-  const { phaseResults, snapshot, scanContext, scanSummary } =
-    await scanLifecycleRunner.prepareColdStartBaseline(
-      {
-        projectRoot,
-        ctx,
-        sourceTag: 'bootstrap',
-        phaseOptions: {
-          maxFiles,
-          skipGuard,
-          clearOldData: true,
-          generateReport: true,
-          generateAstContext: true,
-          incremental: enableIncremental,
-        },
-      },
-      {
-        enabled: true,
-        retrieveEvidence: true,
-        dimensions: args.dimensions,
-      }
-    );
+  const phaseResults = await runAllPhases(projectRoot, ctx, {
+    maxFiles,
+    skipGuard,
+    clearOldData: true,
+    generateReport: true,
+    generateAstContext: true,
+    incremental: enableIncremental,
+    sourceTag: 'bootstrap',
+  });
 
-  if (snapshot.isEmpty) {
+  if (phaseResults.isEmpty) {
     return envelope({
       success: true,
       data: { report: phaseResults.report, message: 'No source files found, nothing to bootstrap' },
       meta: { tool: 'alembic_bootstrap', responseTimeMs: Date.now() - t0 },
     });
   }
+
+  // ═══════════════════════════════════════════════════════════
+  // 构建 ProjectSnapshot — 统一数据来源
+  // ═══════════════════════════════════════════════════════════
+  const snapshot: ProjectSnapshot = buildProjectSnapshot({
+    projectRoot,
+    sourceTag: 'bootstrap',
+    ...phaseResults,
+    report: phaseResults.report,
+  });
 
   // 从 snapshot 派生局部别名（兼容既有 responseData 构建逻辑）
   const {
@@ -215,11 +217,6 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
   const langStats = language.stats;
   const primaryLang = language.primaryLang;
   const langProfile = language;
-  const callGraphPhase = phaseReport?.phases?.callGraph;
-  const callGraphPhaseResult =
-    callGraphPhase?.result && typeof callGraphPhase.result === 'object'
-      ? (callGraphPhase.result as Record<string, unknown>)
-      : null;
 
   // 构建兼容的 report 对象（保持原有 API 格式）
   const report = {
@@ -255,22 +252,20 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
         categories: astProjectSummary?.categories?.length || 0,
         patterns: Object.keys(astProjectSummary?.patternStats || {}),
       },
-      codeEntityGraph: phaseReport?.phases?.entityGraph || {
+      codeEntityGraph: (phaseReport as PhaseReport)?.phases?.entityGraph || {
         entityCount: 0,
         edgeCount: 0,
         ms: 0,
       },
-      callGraph: callGraphPhase
+      callGraph: (phaseReport as PhaseReport)?.phases?.callGraph
         ? {
             entities:
-              typeof callGraphPhaseResult?.entitiesUpserted === 'number'
-                ? callGraphPhaseResult.entitiesUpserted
-                : 0,
+              ((phaseReport as PhaseReport).phases!.callGraph!.result as Record<string, unknown>)
+                ?.entitiesUpserted || 0,
             edges:
-              typeof callGraphPhaseResult?.edgesCreated === 'number'
-                ? callGraphPhaseResult.edgesCreated
-                : 0,
-            ms: callGraphPhase.ms || 0,
+              ((phaseReport as PhaseReport).phases!.callGraph!.result as Record<string, unknown>)
+                ?.edgesCreated || 0,
+            ms: (phaseReport as PhaseReport).phases!.callGraph!.ms || 0,
           }
         : { entities: 0, edges: 0, ms: 0 },
       dependencyGraph: { edgesWritten: depEdgesWritten || 0 },
@@ -329,7 +324,6 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
       trash: cleanupResult.trash ?? null,
       purgedTrash: cleanupResult.purgedTrash ?? null,
     },
-    scanContext: scanSummary,
     report,
     targets:
       targetsSummary ||
@@ -528,32 +522,22 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
   // skipAsyncFill: CLI 非 --wait 模式跳过异步填充，避免进程退出后 DB 断连
   if (!skipAsyncFill) {
     dispatchPipelineFill(
-      scanLifecycleRunner.bindColdStartFillView(
-        {
-          snapshot,
-          ctx: ctx as BootstrapMcpContext & { logger: BootstrapLogger },
-          bootstrapSession,
-          targetFileMap,
-          projectRoot,
-          terminalTest,
-          terminalToolset,
-          allowedTerminalModes,
-        },
-        scanContext
-      ),
+      {
+        snapshot,
+        ctx: ctx as BootstrapMcpContext & { logger: BootstrapLogger },
+        bootstrapSession,
+        targetFileMap,
+        projectRoot,
+        terminalTest,
+        terminalToolset,
+        allowedTerminalModes,
+      },
       dimensions,
-      (view, activeDimensions) => scanLifecycleRunner.runColdStartFill(view, activeDimensions),
+      fillDimensionsV3,
       'Bootstrap'
     );
   } else {
     ctx.logger.info(`[Bootstrap] Async fill skipped (skipAsyncFill=true)`);
-    const completed = scanLifecycleRunner.completeAndProjectColdStartRun(scanContext, {
-      asyncFillSkipped: true,
-      dimensions: dimensions.length,
-      files: allFiles.length,
-      targets: allTargets.length,
-    });
-    responseData.scanContext = completed.summary;
   }
 
   // ── SkillHooks: onBootstrapStarted (fire-and-forget) ──
