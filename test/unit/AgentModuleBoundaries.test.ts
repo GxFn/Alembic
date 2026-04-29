@@ -48,6 +48,7 @@ describe('agent module boundaries', () => {
       'lib/external/mcp/handlers/bootstrap/pipeline',
       join('lib', 'workflows', 'bootstrap'),
       join('lib', 'workflows', 'common-capabilities'),
+      join('lib', 'workflows', 'incremental-scan'),
     ];
 
     const leftoverModules = retiredDirs.flatMap((dir) =>
@@ -123,14 +124,10 @@ describe('agent module boundaries', () => {
     expect(offenders).toEqual([]);
   });
 
-  test('keeps knowledge rescan implementation off incremental-scan lifecycle names', () => {
-    const compatibilityRoot = join(repoRoot, 'lib', 'workflows', 'incremental-scan');
+  test('does not restore incremental-scan lifecycle names', () => {
     const offenders: Array<{ file: string; token: string }> = [];
 
     for (const file of collectTypeScriptFiles(join(repoRoot, 'lib', 'workflows'))) {
-      if (file.startsWith(compatibilityRoot)) {
-        continue;
-      }
       const relFile = relative(repoRoot, file);
       const source = readFileSync(file, 'utf8');
       for (const token of ['#workflows/incremental-scan/', 'IncrementalScan']) {
