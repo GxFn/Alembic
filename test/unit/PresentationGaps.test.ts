@@ -3,8 +3,8 @@
  *
  * 测试文档与实现差异补齐的新代码
  */
-import http from 'node:http';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getRouter } from '../helpers/express.js';
 
 /* ═══ Mock data ════════════════════════════════════════════ */
 
@@ -62,60 +62,24 @@ vi.mock('../../lib/injection/ServiceContainer.js', () => ({
 
 /* ═══ Import routes (after mocks) ═════════════════════════ */
 
-import express from 'express';
 import knowledgeRouter from '../../lib/http/routes/knowledge.js';
 
 /* ═══ Test helper ═════════════════════════════════════════ */
 
-function makeApp() {
-  const app = express();
-  app.use(express.json());
-  app.use('/api/v1/knowledge', knowledgeRouter);
-  return app;
-}
-
-async function testGet(
-  app: express.Application,
-  path: string
-): Promise<{ status: number; body: Record<string, unknown> }> {
-  return new Promise((resolve, reject) => {
-    const server = app.listen(0, '127.0.0.1', () => {
-      const addr = server.address() as { port: number };
-      http
-        .get(`http://127.0.0.1:${addr.port}${path}`, (res) => {
-          let data = '';
-          res.on('data', (chunk: string) => {
-            data += chunk;
-          });
-          res.on('end', () => {
-            server.close();
-            try {
-              resolve({ status: res.statusCode ?? 500, body: JSON.parse(data) });
-            } catch {
-              resolve({ status: res.statusCode ?? 500, body: {} });
-            }
-          });
-        })
-        .on('error', (err: Error) => {
-          server.close();
-          reject(err);
-        });
-    });
-  });
+async function testGet(path: string): Promise<{ status: number; body: Record<string, unknown> }> {
+  return getRouter(knowledgeRouter, path, { mountPath: '/api/v1/knowledge' });
 }
 
 /* ═══ Tests ═════════════════════════════════════════════════ */
 
 describe('Knowledge Stats 6-State', () => {
-  let app: express.Application;
   beforeEach(() => {
     vi.clearAllMocks();
     mockKnowledgeService.getStats.mockResolvedValue(mockStats);
-    app = makeApp();
   });
 
   it('GET /stats returns all 6 lifecycle states', async () => {
-    const { status, body } = await testGet(app, '/api/v1/knowledge/stats');
+    const { status, body } = await testGet('/api/v1/knowledge/stats');
     expect(status).toBe(200);
     expect(body.success).toBe(true);
     const data = body.data as Record<string, number>;
@@ -129,15 +93,13 @@ describe('Knowledge Stats 6-State', () => {
 });
 
 describe('Knowledge Lifecycle Route', () => {
-  let app: express.Application;
   beforeEach(() => {
     vi.clearAllMocks();
     mockKnowledgeService.getStats.mockResolvedValue(mockStats);
-    app = makeApp();
   });
 
   it('GET /lifecycle returns counts for all 6 states', async () => {
-    const { status, body } = await testGet(app, '/api/v1/knowledge/lifecycle');
+    const { status, body } = await testGet('/api/v1/knowledge/lifecycle');
     expect(status).toBe(200);
     expect(body.success).toBe(true);
 
@@ -154,7 +116,7 @@ describe('Knowledge Lifecycle Route', () => {
   });
 
   it('GET /lifecycle returns transitional state entries', async () => {
-    const { status, body } = await testGet(app, '/api/v1/knowledge/lifecycle');
+    const { status, body } = await testGet('/api/v1/knowledge/lifecycle');
     expect(status).toBe(200);
 
     const data = body.data as { entries: Record<string, unknown[]> };
@@ -172,7 +134,7 @@ describe('Knowledge Lifecycle Route', () => {
       decaying: 0,
     });
 
-    const { body } = await testGet(app, '/api/v1/knowledge/lifecycle');
+    const { body } = await testGet('/api/v1/knowledge/lifecycle');
     const data = body.data as { entries: Record<string, unknown[]> };
     expect(data.entries.staging).toEqual([]);
     expect(data.entries.evolving).toEqual([]);

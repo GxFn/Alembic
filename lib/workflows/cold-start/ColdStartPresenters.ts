@@ -10,12 +10,10 @@ import type {
   ProjectSnapshot,
 } from '#types/project-snapshot.js';
 import { buildInternalNextSteps } from '#workflows/capabilities/execution/external-agent/mission-briefing/BootstrapDimensionText.js';
+import { buildLanguageExtension as buildProjectLanguageExtension } from '#workflows/capabilities/presentation/LanguageExtensionBuilder.js';
+import { summarizePanorama as summarizeProjectPanorama } from '#workflows/capabilities/presentation/PanoramaSummaryPresenter.js';
 import { inferTargetRole } from '#workflows/capabilities/presentation/TargetClassifier.js';
-import {
-  buildProjectLanguageExtension,
-  buildProjectTargetFileMap,
-  summarizeProjectPanorama,
-} from '#workflows/capabilities/project-intelligence/ProjectIntelligenceViews.js';
+import { buildTargetFileMap as buildProjectTargetFileMap } from '#workflows/capabilities/presentation/TargetFileMapBuilder.js';
 
 export type ColdStartTargetFileMap = Record<string, Array<Record<string, unknown>>>;
 

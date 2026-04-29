@@ -16,6 +16,8 @@ export default defineConfig({
     include: ['test/**/*.test.ts'],
     globals: true,
     testTimeout: 30000,
+    hookTimeout: 30000,
+    teardownTimeout: 10000,
     setupFiles: ['test/setup.ts'],
     coverage: {
       include: ['lib/**/*.ts'],

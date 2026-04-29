@@ -239,7 +239,7 @@ describe('AgentRuntime', () => {
     test('should handle timeout', async () => {
       const slowStrategy = mockStrategy({
         execute: vi.fn().mockImplementation(async () => {
-          await new Promise((r) => setTimeout(r, 5000));
+          await new Promise<never>(() => {});
           return {
             reply: 'too late',
             toolCalls: [],
@@ -261,7 +261,7 @@ describe('AgentRuntime', () => {
       const slowStrategy = mockStrategy({
         execute: vi.fn().mockImplementation(async (_runtime, _message, opts) => {
           capturedSignal = (opts?.abortSignal as AbortSignal) || null;
-          await new Promise((resolve) => setTimeout(resolve, 5000));
+          await new Promise<never>(() => {});
           return {
             reply: 'too late',
             toolCalls: [],

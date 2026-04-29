@@ -3,8 +3,8 @@
  *
  * 测试 panorama / guardReport / audit 三个新路由对 DI 服务的调用
  */
-import http from 'node:http';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getRouter } from '../helpers/express.js';
 
 /* ═══ Mock data ═══════════════════════════════════════════ */
 
@@ -157,64 +157,34 @@ vi.mock('../../lib/shared/resolveProjectRoot.js', () => ({
 
 /* ═══ Import routes (after mocks) ═════════════════════════ */
 
-import express from 'express';
 import auditRouter from '../../lib/http/routes/audit.js';
 import guardReportRouter from '../../lib/http/routes/guardReport.js';
 import panoramaRouter from '../../lib/http/routes/panorama.js';
 
 /* ═══ Test helper ═════════════════════════════════════════ */
 
-function makeApp() {
-  const app = express();
-  app.use(express.json());
-  app.use('/api/v1/panorama', panoramaRouter);
-  app.use('/api/v1/guard/report', guardReportRouter);
-  app.use('/api/v1/audit', auditRouter);
-  return app;
-}
-
-async function testGet(
-  app: express.Application,
-  path: string
-): Promise<{ status: number; body: Record<string, unknown> }> {
-  return new Promise((resolve, reject) => {
-    const server = app.listen(0, '127.0.0.1', () => {
-      const addr = server.address() as { port: number };
-      http
-        .get(`http://127.0.0.1:${addr.port}${path}`, (res) => {
-          let data = '';
-          res.on('data', (chunk: string) => {
-            data += chunk;
-          });
-          res.on('end', () => {
-            server.close();
-            try {
-              resolve({ status: res.statusCode ?? 500, body: JSON.parse(data) });
-            } catch {
-              resolve({ status: res.statusCode ?? 500, body: {} });
-            }
-          });
-        })
-        .on('error', (err: Error) => {
-          server.close();
-          reject(err);
-        });
-    });
-  });
+async function testGet(path: string): Promise<{ status: number; body: Record<string, unknown> }> {
+  if (path.startsWith('/api/v1/panorama')) {
+    return getRouter(panoramaRouter, path, { mountPath: '/api/v1/panorama' });
+  }
+  if (path.startsWith('/api/v1/guard/report')) {
+    return getRouter(guardReportRouter, path, { mountPath: '/api/v1/guard/report' });
+  }
+  if (path.startsWith('/api/v1/audit')) {
+    return getRouter(auditRouter, path, { mountPath: '/api/v1/audit' });
+  }
+  throw new Error(`Unknown route under test: ${path}`);
 }
 
 /* ═══ Tests ════════════════════════════════════════════════ */
 
 describe('Phase 5: Panorama Route', () => {
-  let app: express.Application;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    app = makeApp();
   });
 
   it('GET /panorama returns overview', async () => {
-    const { status, body } = await testGet(app, '/api/v1/panorama');
+    const { status, body } = await testGet('/api/v1/panorama');
     expect(status).toBe(200);
     expect(body.success).toBe(true);
     expect((body.data as Record<string, unknown>).moduleCount).toBe(5);
@@ -222,43 +192,40 @@ describe('Phase 5: Panorama Route', () => {
   });
 
   it('GET /panorama/health returns health', async () => {
-    const { status, body } = await testGet(app, '/api/v1/panorama/health');
+    const { status, body } = await testGet('/api/v1/panorama/health');
     expect(status).toBe(200);
     expect((body.data as Record<string, unknown>).healthScore).toBe(65);
     expect(mockPanoramaService.getHealth).toHaveBeenCalled();
   });
 
   it('GET /panorama/gaps returns gaps', async () => {
-    const { status, body } = await testGet(app, '/api/v1/panorama/gaps');
+    const { status, body } = await testGet('/api/v1/panorama/gaps');
     expect(status).toBe(200);
     expect(Array.isArray(body.data)).toBe(true);
     expect((body.data as unknown[]).length).toBe(2);
   });
 
   it('GET /panorama/module/:name returns detail', async () => {
-    const { status, body } = await testGet(app, '/api/v1/panorama/module/Utils');
+    const { status, body } = await testGet('/api/v1/panorama/module/Utils');
     expect(status).toBe(200);
     expect((body.data as Record<string, unknown>).layerName).toBe('Foundation');
     expect(mockPanoramaService.getModule).toHaveBeenCalledWith('Utils');
   });
 
   it('GET /panorama/module/:name 404 for unknown', async () => {
-    const { status, body } = await testGet(app, '/api/v1/panorama/module/Unknown');
+    const { status, body } = await testGet('/api/v1/panorama/module/Unknown');
     expect(status).toBe(404);
     expect(body.success).toBe(false);
   });
 });
 
 describe('Phase 5: Guard Report Route', () => {
-  let app: express.Application;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    app = makeApp();
   });
 
   it('GET /guard/report returns compliance report', async () => {
-    const { status, body } = await testGet(app, '/api/v1/guard/report');
+    const { status, body } = await testGet('/api/v1/guard/report');
     expect(status).toBe(200);
     expect(body.success).toBe(true);
     expect((body.data as Record<string, unknown>).complianceScore).toBe(85);
@@ -266,7 +233,7 @@ describe('Phase 5: Guard Report Route', () => {
   });
 
   it('GET /guard/report passes query params', async () => {
-    await testGet(app, '/api/v1/guard/report?minScore=80&maxFiles=100');
+    await testGet('/api/v1/guard/report?minScore=80&maxFiles=100');
     expect(mockComplianceReporter.generate).toHaveBeenCalledWith(
       '/test',
       expect.objectContaining({
@@ -278,15 +245,12 @@ describe('Phase 5: Guard Report Route', () => {
 });
 
 describe('Phase 5: Audit Route', () => {
-  let app: express.Application;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    app = makeApp();
   });
 
   it('GET /audit returns logs', async () => {
-    const { status, body } = await testGet(app, '/api/v1/audit');
+    const { status, body } = await testGet('/api/v1/audit');
     expect(status).toBe(200);
     expect(body.success).toBe(true);
     const data = body.data as { logs: unknown[]; total: number };
@@ -295,14 +259,14 @@ describe('Phase 5: Audit Route', () => {
   });
 
   it('GET /audit passes filter params', async () => {
-    await testGet(app, '/api/v1/audit?actor=agent&action=check&limit=50');
+    await testGet('/api/v1/audit?actor=agent&action=check&limit=50');
     expect(mockAuditStore.query).toHaveBeenCalledWith(
       expect.objectContaining({ actor: 'agent', action: 'check', limit: 50 })
     );
   });
 
   it('GET /audit caps limit at 500', async () => {
-    await testGet(app, '/api/v1/audit?limit=999');
+    await testGet('/api/v1/audit?limit=999');
     expect(mockAuditStore.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 500 }));
   });
 });

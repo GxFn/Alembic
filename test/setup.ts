@@ -1,4 +1,5 @@
-/** Jest 测试环境设置 */
+/** Vitest 测试环境设置 */
 
-// 设置测试超时
+process.env.NODE_ENV = 'test';
+
 export default {};

@@ -6,10 +6,8 @@ import type {
   ExternalRescanEvidencePlan,
   InternalRescanGapPlan,
 } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
-import {
-  buildProjectTargetFileMap,
-  summarizeProjectPanorama,
-} from '#workflows/capabilities/project-intelligence/ProjectIntelligenceViews.js';
+import { summarizePanorama as summarizeProjectPanorama } from '#workflows/capabilities/presentation/PanoramaSummaryPresenter.js';
+import { buildTargetFileMap as buildProjectTargetFileMap } from '#workflows/capabilities/presentation/TargetFileMapBuilder.js';
 
 export type KnowledgeRescanTargetFileMap = Record<string, Array<Record<string, unknown>>>;
 

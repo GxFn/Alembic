@@ -263,7 +263,7 @@ describe('SkillHooks v2', () => {
 
   describe('超时处理', () => {
     test('handler 超时被跳过 (bail 模式)', async () => {
-      hooks.tap('onKnowledgeSubmit', () => new Promise((resolve) => setTimeout(resolve, 5000)), {
+      hooks.tap('onKnowledgeSubmit', () => new Promise<never>(() => {}), {
         name: 'slow',
         timeout: 50,
       });

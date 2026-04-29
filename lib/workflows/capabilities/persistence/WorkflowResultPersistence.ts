@@ -1,7 +1,7 @@
 import Logger from '#infra/logging/Logger.js';
 import type { IncrementalPlan } from '#types/workflows.js';
 import type { DimensionStat } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
-import { cleanupDimensionCheckpoints } from '#workflows/capabilities/persistence/checkpoint/DimensionCheckpointCleanup.js';
+import { clearDimensionCheckpoints } from '#workflows/capabilities/persistence/checkpoint/DimensionCheckpointStore.js';
 import type {
   PersistWorkflowResultOptions,
   WorkflowResultPersistenceResult,
@@ -71,7 +71,7 @@ export async function persistWorkflowResult({
     totalToolCalls,
   });
 
-  await cleanupDimensionCheckpoints(dataRoot);
+  await clearDimensionCheckpoints(dataRoot);
 
   const snapshotId = saveWorkflowSnapshot({
     ctx,

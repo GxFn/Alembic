@@ -2,16 +2,16 @@ import Logger from '#infra/logging/Logger.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/context/BootstrapRuntimeInitializer.js';
-import { finalizeInternalDimensionExecution } from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionFinalizer.js';
+import { finalizeInternalDimensionFill as finalizeInternalDimensionExecution } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
 import {
-  emitInternalDimensionExecutionAiUnavailable,
-  prepareInternalDimensionExecutionRun,
-} from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionPreparation.js';
-import { runInternalDimensionAgentSession } from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionSessionRunner.js';
+  emitInternalDimensionFillAiUnavailable as emitInternalDimensionExecutionAiUnavailable,
+  prepareInternalDimensionFillRun as prepareInternalDimensionExecutionRun,
+} from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillPreparation.js';
+import { runInternalDimensionAgentSession } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillSessionRunner.js';
 import type {
-  InternalDimensionExecutionContainer,
-  InternalDimensionExecutionContext,
-} from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionTypes.js';
+  BootstrapWorkflowContainer as InternalDimensionExecutionContainer,
+  BootstrapWorkflowContext as InternalDimensionExecutionContext,
+} from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillTypes.js';
 import { fillDimensionsMock } from '#workflows/capabilities/execution/internal-agent/mock/MockBootstrapPipeline.js';
 
 const logger = Logger.getInstance();
