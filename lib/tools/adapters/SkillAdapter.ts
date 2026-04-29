@@ -339,7 +339,9 @@ function extractSection(content: string, section: string) {
 }
 
 function projectSkillsDir(request: ToolExecutionRequest) {
-  return getProjectSkillsPath(request.context.projectRoot);
+  return getProjectSkillsPath(
+    request.context.dataRoot || request.context.runtime?.dataRoot || request.context.projectRoot
+  );
 }
 
 function normalizeOptionalString(value: unknown) {

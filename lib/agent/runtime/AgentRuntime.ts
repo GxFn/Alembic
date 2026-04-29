@@ -94,6 +94,7 @@ export class AgentRuntime {
   lang;
   logger;
   #projectRoot;
+  #dataRoot;
   /** 文件缓存 (bootstrap 场景注入) */
   #fileCache: FileCacheEntry[] | null = null;
   /** 额外工具白名单 (调用方按需注入，不经 Capability) */
@@ -137,6 +138,7 @@ export class AgentRuntime {
     this.logger = Logger.getInstance();
     this.bus = AgentEventBus.getInstance();
     this.#projectRoot = config.projectRoot || process.cwd();
+    this.#dataRoot = config.dataRoot || this.#projectRoot;
     this.#additionalTools = config.additionalTools || [];
     this.#toolPipeline = createToolPipeline();
     this.#promptBuilder = new SystemPromptBuilder({
@@ -1133,6 +1135,11 @@ export class AgentRuntime {
   /** 项目根目录 (供 ToolExecutionPipeline 等访问) */
   get projectRoot() {
     return this.#projectRoot;
+  }
+
+  /** 数据根目录 (Ghost 模式下指向外置工作区) */
+  get dataRoot() {
+    return this.#dataRoot;
   }
 
   /** 文件缓存 (供 ToolExecutionPipeline 等访问) */

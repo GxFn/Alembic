@@ -172,6 +172,12 @@ describe('AgentRuntime', () => {
       expect(rt.projectRoot).toBe('/my/project');
     });
 
+    test('should expose dataRoot separately from projectRoot', () => {
+      const rt = createRuntime({ projectRoot: '/my/project', dataRoot: '/ghost/workspace' });
+      expect(rt.projectRoot).toBe('/my/project');
+      expect(rt.dataRoot).toBe('/ghost/workspace');
+    });
+
     test('should require ToolRouter for runtime tool execution', () => {
       expect(
         () =>
@@ -486,6 +492,38 @@ describe('AgentRuntime', () => {
       expect(
         secondCallOptions.messages.some((msg) => msg.content?.includes('工具调用数量超限'))
       ).toBe(true);
+    });
+
+    test('passes ghost dataRoot to routed tool calls', async () => {
+      const chatWithTools = vi
+        .fn()
+        .mockResolvedValueOnce({
+          type: 'function_call',
+          functionCalls: [{ id: 'c1', name: 'search_knowledge', args: { query: 'ghost' } }],
+          usage: { inputTokens: 10, outputTokens: 5 },
+        })
+        .mockResolvedValueOnce({
+          type: 'text',
+          text: 'Final answer',
+          usage: { inputTokens: 10, outputTokens: 5 },
+        });
+      const aiProvider = mockAiProvider({ chatWithTools });
+      const toolRouter = mockToolRouter();
+      const rt = createRuntime({
+        aiProvider,
+        toolRouter,
+        projectRoot: '/real/project',
+        dataRoot: '/ghost/workspace',
+        additionalTools: ['search_knowledge'],
+      });
+
+      await rt.reactLoop('query');
+
+      expect(toolRouter.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runtime: expect.objectContaining({ dataRoot: '/ghost/workspace' }),
+        })
+      );
     });
 
     test('should respect history parameter', async () => {

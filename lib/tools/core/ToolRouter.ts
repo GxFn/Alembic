@@ -31,6 +31,7 @@ export interface ToolRouterOptions {
   governance?: GovernanceEngine;
   adapters?: ToolExecutionAdapter[];
   projectRoot?: string;
+  dataRoot?: string;
   services?: ToolServiceLocator;
 }
 
@@ -39,6 +40,7 @@ export class ToolRouter implements ToolRouterContract {
   #governance: GovernanceEngine;
   #adapters = new Map<CapabilityKind, ToolExecutionAdapter>();
   #projectRoot: string;
+  #dataRoot: string;
   #services: ToolServiceLocator;
   #activeExecutionCount = 0;
   #activeByTool = new Map<string, number>();
@@ -48,6 +50,7 @@ export class ToolRouter implements ToolRouterContract {
     this.#catalog = options.catalog;
     this.#governance = options.governance || new GovernanceEngine();
     this.#projectRoot = options.projectRoot || process.cwd();
+    this.#dataRoot = options.dataRoot || this.#projectRoot;
     this.#services = options.services || {
       get(name: string) {
         throw new Error(`Service '${name}' is not available in ToolRouter context`);
@@ -118,6 +121,7 @@ export class ToolRouter implements ToolRouterContract {
       runtime: plannedRequest.runtime,
       abortSignal: signalScope.signal,
       projectRoot: this.#projectRoot,
+      dataRoot: plannedRequest.runtime?.dataRoot || this.#dataRoot,
       services: this.#services,
       serviceContracts: {
         toolRouting: createToolRoutingServiceContract(this),

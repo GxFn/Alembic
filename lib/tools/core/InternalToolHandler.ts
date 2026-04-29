@@ -79,6 +79,7 @@ export function contextFromToolCall(requestContext: ToolCallContext): InternalTo
     container: toServiceLocator(requestContext.services),
     serviceContracts: requestContext.serviceContracts,
     projectRoot: requestContext.projectRoot || process.cwd(),
+    dataRoot: requestContext.dataRoot || requestContext.projectRoot || process.cwd(),
     ...(runtime && isLogger(runtime.logger) ? { logger: runtime.logger } : {}),
     ...(requestContext.abortSignal ? { abortSignal: requestContext.abortSignal } : {}),
     ...(requestContext.source?.name ? { source: requestContext.source.name } : {}),

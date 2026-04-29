@@ -125,6 +125,7 @@ export interface ToolCallContext {
   systemRunContext?: unknown;
   abortSignal?: AbortSignal | null;
   projectRoot: string;
+  dataRoot?: string | null;
   services: ToolServiceLocator;
   serviceContracts?: ToolServiceContracts;
 }

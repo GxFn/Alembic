@@ -19,6 +19,7 @@ interface AgentRuntimeBuilderOptions {
   memoryCoordinator?: unknown;
   projectBriefing?: string | null;
   projectRoot?: string;
+  dataRoot?: string;
 }
 
 export class AgentRuntimeBuilder {
@@ -30,6 +31,7 @@ export class AgentRuntimeBuilder {
     memoryCoordinator: unknown;
     projectBriefing: string | null;
     projectRoot: string;
+    dataRoot: string;
   };
 
   constructor({
@@ -39,6 +41,7 @@ export class AgentRuntimeBuilder {
     memoryCoordinator = null,
     projectBriefing = null,
     projectRoot = process.cwd(),
+    dataRoot = projectRoot,
   }: AgentRuntimeBuilderOptions) {
     this.#container = container;
     this.#toolRegistry = toolRegistry;
@@ -47,6 +50,7 @@ export class AgentRuntimeBuilder {
       memoryCoordinator,
       projectBriefing,
       projectRoot,
+      dataRoot,
     };
   }
 
@@ -84,6 +88,7 @@ export class AgentRuntimeBuilder {
       lang: options.lang || null,
       additionalTools: resolveActionSpaceAdditionalTools(profileRef),
       projectRoot: this.#sharedOpts.projectRoot,
+      dataRoot: this.#sharedOpts.dataRoot,
     });
   }
 

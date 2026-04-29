@@ -150,7 +150,7 @@ export class ToolExecutionPipeline {
             diagnostics: loopCtx.diagnostics || null,
             safetyPolicy,
             fileCache: runtime.fileCache,
-            dataRoot: runtime.projectRoot,
+            dataRoot: runtime.dataRoot,
             lang: runtime.lang,
             logger: runtime.logger || null,
             aiProvider: runtime.aiProvider || null,

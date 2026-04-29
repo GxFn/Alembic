@@ -12,6 +12,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { getProjectSkillsPath } from '#infra/config/Paths.js';
 import Logger from '#infra/logging/Logger.js';
 import {
   requireAuditLogger,
@@ -20,7 +21,7 @@ import {
   resolveInfraServicesFromContext,
 } from '#tools/core/ToolInfraServices.js';
 import type { ToolHandlerContext } from './_shared.js';
-import { PROJECT_SKILLS_DIR, SKILLS_DIR } from './_shared.js';
+import { SKILLS_DIR } from './_shared.js';
 
 // ────────────────────────────────────────────────────────────
 // 29. graph_impact_analysis
@@ -114,9 +115,10 @@ export const loadSkill = {
     },
     required: ['skillName'],
   },
-  handler: async (params: { skillName: string }) => {
+  handler: async (params: { skillName: string }, ctx: ToolHandlerContext) => {
     // 项目级 Skills 优先（覆盖同名内置 Skill）
-    const projectSkillPath = path.join(PROJECT_SKILLS_DIR, params.skillName, 'SKILL.md');
+    const projectSkillsDir = getProjectSkillsPath(ctx.dataRoot || ctx.projectRoot);
+    const projectSkillPath = path.join(projectSkillsDir, params.skillName, 'SKILL.md');
     const builtinSkillPath = path.join(SKILLS_DIR, params.skillName, 'SKILL.md');
     const skillPath = fs.existsSync(projectSkillPath) ? projectSkillPath : builtinSkillPath;
     try {
@@ -135,7 +137,7 @@ export const loadSkill = {
         /* skip: SKILLS_DIR may not exist */
       }
       try {
-        fs.readdirSync(PROJECT_SKILLS_DIR, { withFileTypes: true })
+        fs.readdirSync(projectSkillsDir, { withFileTypes: true })
           .filter((d) => d.isDirectory())
           .forEach((d) => {
             available.add(d.name);
@@ -175,7 +177,10 @@ export const createSkillTool = {
     const { createSkill } = await import('#external/mcp/handlers/skill.js');
     // 根据 Agent 的 source 推断 createdBy
     const createdBy = ctx?.source === 'system' ? 'system-ai' : 'user-ai';
-    const raw = createSkill(null, { ...params, createdBy });
+    const raw = createSkill(ctx as unknown as Parameters<typeof createSkill>[0], {
+      ...params,
+      createdBy,
+    });
     try {
       return JSON.parse(raw);
     } catch {

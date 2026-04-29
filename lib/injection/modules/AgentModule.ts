@@ -78,6 +78,7 @@ export function register(c: ServiceContainer) {
           new WorkflowAdapter(ct.get('workflowRegistry') as WorkflowRegistry),
         ],
         projectRoot: resolveProjectRoot(ct),
+        dataRoot: resolveDataRoot(ct),
         services: ct,
       })
     );
@@ -134,6 +135,7 @@ export function register(c: ServiceContainer) {
         toolRegistry: ct.get('toolRegistry'),
         aiProvider: ct.singletons.aiProvider || null,
         projectRoot: resolveProjectRoot(ct),
+        dataRoot: resolveDataRoot(ct),
       }),
     { aiDependent: true }
   );

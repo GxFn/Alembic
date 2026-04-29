@@ -106,7 +106,14 @@ function writeArtifact(
   const writeZone = getWriteZone(request);
   return writeZone
     ? writeWithZone(writeZone, relativePath, content, mode)
-    : writeLocalArtifact(request.context.projectRoot, relativePath, content, mode);
+    : writeLocalArtifact(
+        request.context.dataRoot ||
+          request.context.runtime?.dataRoot ||
+          request.context.projectRoot,
+        relativePath,
+        content,
+        mode
+      );
 }
 
 function getWriteZone(request: ToolExecutionRequest): WriteZoneLike | null {
@@ -145,12 +152,12 @@ function writeWithZone(
 }
 
 function writeLocalArtifact(
-  projectRoot: string,
+  dataRoot: string,
   relativePath: string,
   content: string,
   mode?: number
 ) {
-  const absolutePath = path.join(projectRoot, '.asd', relativePath);
+  const absolutePath = path.join(dataRoot, '.asd', relativePath);
   fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
   fs.writeFileSync(absolutePath, content, { encoding: 'utf8', mode });
   return absolutePath;

@@ -24,6 +24,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { CapabilityProbe } from '#core/capability/CapabilityProbe.js';
 import Logger from '#infra/logging/Logger.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
 import type { ToolRouterContract } from '#tools/core/ToolContracts.js';
 import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
@@ -297,7 +298,8 @@ export class McpServer {
       this._toolRouter = new ToolRouter({
         catalog,
         adapters: [new McpToolAdapter((toolName, args) => this._executeMcpHandler(toolName, args))],
-        projectRoot: process.env.ALEMBIC_PROJECT_DIR || process.cwd(),
+        projectRoot: resolveProjectRoot(this.container),
+        dataRoot: resolveDataRoot(this.container),
         services: {
           get: <T = unknown>(serviceName: string) => {
             if (!this.container) {

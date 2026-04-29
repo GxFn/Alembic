@@ -753,7 +753,7 @@ router.get('/agent/capabilities', async (req: Request, res: Response): Promise<v
 function createHttpToolRuntimeContext(container: ReturnType<typeof getContainer>) {
   return {
     aiProvider: container.singletons?.aiProvider || null,
-    dataRoot: resolveProjectRoot(container),
+    dataRoot: resolveDataRoot(container),
     logger,
   };
 }

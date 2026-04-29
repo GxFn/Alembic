@@ -122,6 +122,7 @@ export interface RuntimeConfig {
   onToolCall?: ToolCallHook | null;
   lang?: string | null;
   projectRoot?: string;
+  dataRoot?: string;
   additionalTools?: string[];
 }
 

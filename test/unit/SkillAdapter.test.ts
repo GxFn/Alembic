@@ -15,7 +15,8 @@ import type { ToolExecutionRequest } from '../../lib/tools/core/ToolContracts.js
 function request(
   manifest: ToolCapabilityManifest,
   args: Record<string, unknown>,
-  projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-adapter-project-'))
+  projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-adapter-project-')),
+  dataRoot?: string
 ): ToolExecutionRequest {
   return {
     manifest,
@@ -28,6 +29,7 @@ function request(
       actor: { role: 'developer' },
       source: { kind: 'runtime', name: 'skill-adapter-test' },
       projectRoot,
+      ...(dataRoot ? { dataRoot } : {}),
       services: {
         get(name: string) {
           throw new Error(`Unexpected service lookup: ${name}`);
@@ -100,6 +102,30 @@ describe('SkillAdapter', () => {
         },
       },
     });
+  });
+
+  test('loads project skills from ghost dataRoot when it differs from projectRoot', async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-project-root-'));
+    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-ghost-root-'));
+    createProjectSkill(dataRoot, 'ghost-demo');
+    const adapter = new SkillAdapter();
+
+    const result = await adapter.execute(
+      request(SKILL_LOAD_CAPABILITY, { name: 'ghost-demo' }, projectRoot, dataRoot)
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      structuredContent: {
+        success: true,
+        data: {
+          name: 'ghost-demo',
+          source: 'project',
+          content: expect.stringContaining('# Project Demo'),
+        },
+      },
+    });
+    expect(fs.existsSync(path.join(projectRoot, 'Alembic', 'skills', 'ghost-demo'))).toBe(false);
   });
 
   test('loads skill content and optional sections', async () => {
