@@ -16,6 +16,8 @@
  * @module service/evolution/ContentImpactAnalyzer
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { getFileDiff, parseDiffHunks, tokenizeDiffLines } from '../../shared/diff-parser.js';
 import type { ImpactLevel } from '../../types/reactive-evolution.js';
 
@@ -28,6 +30,7 @@ export {
 } from '../../shared/recipe-tokens.js';
 
 import type { RecipeTokens } from '../../shared/recipe-tokens.js';
+import { tokenizeIdentifiers } from '../../shared/recipe-tokens.js';
 
 /** Diff 影响评估结果 */
 export interface DiffImpactResult {
@@ -104,4 +107,55 @@ export function assessDiffImpact(
   const level: ImpactLevel = score >= 0.3 ? 'pattern' : 'reference';
 
   return { level, score, matchedTokens: matched };
+}
+
+/* ────────────── Unified Entry ────────────── */
+
+/** Full-content token 降级阈值：全文 token 交集精度低，需要更高阈值补偿 */
+const FULL_CONTENT_PATTERN_THRESHOLD = 0.5;
+
+/**
+ * 统一影响评估入口 — 自动选择最佳 diff token 来源。
+ *
+ * 策略（按优先级）:
+ *   1. git diff HEAD -U0 → 行级变更 token（最精确，实时变更场景）
+ *   2. 文件全文 tokenize → 全文 token（hash diff 场景的降级）
+ *
+ * 两者最终都调用同一个 assessDiffImpact(diffTokens, recipeTokens)。
+ * 全文模式精度较低（分母是整个文件），阈值从 0.3 提升到 0.5。
+ *
+ * @param projectRoot 项目根目录绝对路径
+ * @param relativePath 相对于项目根的文件路径
+ * @param recipeTokens 预提取的 Recipe 特征标识符
+ * @returns 影响评估结果，或 null（文件不存在时）
+ */
+export function assessImpactUnified(
+  projectRoot: string,
+  relativePath: string,
+  recipeTokens: RecipeTokens
+): DiffImpactResult | null {
+  const gitResult = assessFileImpact(projectRoot, relativePath, recipeTokens);
+  if (gitResult) {
+    return gitResult;
+  }
+
+  const absPath = path.resolve(projectRoot, relativePath);
+  if (!fs.existsSync(absPath)) {
+    return null;
+  }
+
+  let content: string;
+  try {
+    content = fs.readFileSync(absPath, 'utf-8');
+  } catch {
+    return null;
+  }
+
+  const fileTokens = new Set(tokenizeIdentifiers(content));
+  const result = assessDiffImpact(fileTokens, recipeTokens);
+
+  return {
+    ...result,
+    level: result.score >= FULL_CONTENT_PATTERN_THRESHOLD ? 'pattern' : 'reference',
+  };
 }

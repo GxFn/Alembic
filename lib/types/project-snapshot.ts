@@ -285,7 +285,7 @@ export interface ExistingRecipeInfo {
   status?: 'healthy' | 'decaying' | 'evolved' | 'deprecated';
   /** 衰退原因（仅 decaying 状态） */
   decayReason?: string;
-  /** 审计分数 0-100（来自 RecipeRelevanceAuditor） */
+  /** 审计分数 0-100（来自证据审计） */
   auditScore?: number;
 
   /** Recipe 完整内容 — Evolution Agent 读取以验证真实性 */

@@ -1,10 +1,10 @@
 import { envelope } from '#external/mcp/envelope.js';
 import type { CleanupResult, RecipeSnapshot } from '#service/cleanup/CleanupService.js';
-import type { RelevanceAuditSummary } from '#service/evolution/RelevanceAuditor.js';
 import type { DimensionDef, GuardAudit, ProjectSnapshot } from '#types/project-snapshot.js';
 import type {
   ExternalRescanEvidencePlan,
   InternalRescanGapPlan,
+  RelevanceAuditSummary,
 } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
 import { summarizePanorama as summarizeProjectPanorama } from '#workflows/capabilities/presentation/PanoramaSummaryPresenter.js';
 import { buildTargetFileMap as buildProjectTargetFileMap } from '#workflows/capabilities/presentation/TargetFileMapBuilder.js';

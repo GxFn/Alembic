@@ -1,7 +1,7 @@
 import type {
   RelevanceAuditResult,
   RelevanceAuditSummary,
-} from '#service/evolution/RelevanceAuditor.js';
+} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
 
 export interface PrescreenNeedsVerification {
   recipeId: string;

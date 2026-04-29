@@ -158,6 +158,20 @@ const RESCAN_CLEAN_TABLES = [
   'remote_state',
 ];
 
+/**
+ * forceRescanClean 时清除的 DB 表
+ * 保留增量证据（bootstrap_snapshots, bootstrap_dim_files, recipe_source_refs）
+ */
+const FORCE_RESCAN_CLEAN_TABLES = [
+  'code_entities',
+  'guard_violations',
+  'semantic_memories',
+  'sessions',
+  'audit_logs',
+  'remote_commands',
+  'remote_state',
+];
+
 // ── CleanupService ──────────────────────────────────────────
 
 export class CleanupService {
@@ -394,6 +408,92 @@ export class CleanupService {
     );
 
     this.#logger.info('[CleanupService] rescanClean complete', {
+      tables: result.clearedTables.length,
+      files: result.deletedFiles,
+      errors: result.errors.length,
+    });
+
+    return result;
+  }
+
+  // ─── 需求 C：强制 Rescan 清理（保留增量证据） ──────────
+
+  /**
+   * 强制 Rescan 清理 — 清除会话态缓存，但保留增量证据
+   *
+   * 与 rescanClean 的区别：不清 bootstrap_snapshots / bootstrap_dim_files / recipe_source_refs
+   * 这些表是增量管线的核心状态，保留以支持后续增量 diff 计算。
+   *
+   * 清除: 衍生 DB 表（code_entities 等）、pending/rejected/deprecated 知识条目、
+   *       candidates/、skills/、wiki/、向量索引、bootstrap-report
+   * 保留: recipes/、active/published/staging/evolving 知识条目、
+   *       knowledge_edges、evolution_proposals、bootstrap_snapshots、recipe_source_refs
+   */
+  async forceRescanClean(): Promise<CleanupResult> {
+    const result: CleanupResult = {
+      deletedFiles: 0,
+      clearedTables: [],
+      preservedRecipes: 0,
+      errors: [],
+    };
+
+    this.#logger.info('[CleanupService] Starting forceRescanClean...');
+
+    // 1. 清除衍生 DB 表（不含增量证据表）
+    if (this.#db) {
+      for (const table of FORCE_RESCAN_CLEAN_TABLES) {
+        try {
+          this.#db.exec(`DELETE FROM ${table}`);
+          result.clearedTables.push(table);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!msg.includes('no such table')) {
+            result.errors.push(`Failed to clear ${table}: ${msg}`);
+          }
+        }
+      }
+
+      // 清除旧候选/废弃条目，保留活跃知识
+      try {
+        this.#db.exec(
+          `DELETE FROM knowledge_entries WHERE lifecycle IN ('pending', 'rejected', 'deprecated')`
+        );
+        result.clearedTables.push('knowledge_entries (pending/rejected/deprecated)');
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        result.errors.push(`Failed to clean old entries: ${msg}`);
+      }
+
+      for (const table of ['tasks', 'task_dependencies', 'task_events']) {
+        try {
+          this.#db.exec(`DELETE FROM ${table}`);
+          result.clearedTables.push(table);
+        } catch {
+          /* table may not exist */
+        }
+      }
+    }
+
+    // 2. 清空 candidates/ 目录
+    result.deletedFiles += this.#clearDirectory(path.join(this.#dataRoot, CANDIDATES_DIR));
+
+    // 3. 清空 skills/ 目录
+    result.deletedFiles += this.#clearDirectory(getProjectSkillsPath(this.#dataRoot));
+
+    // 4. 清空 wiki/ 目录
+    result.deletedFiles += this.#clearDirectory(
+      path.join(getProjectKnowledgePath(this.#dataRoot), 'wiki')
+    );
+
+    // 5. 删除向量索引
+    result.deletedFiles += this.#clearDirectory(getContextIndexPath(this.#dataRoot));
+
+    // 6. 删除 bootstrap-report.json
+    result.deletedFiles += this.#deleteFile(
+      path.join(getProjectKnowledgePath(this.#dataRoot), '.asd', 'bootstrap-report.json')
+    );
+
+    this.#logger.info('[CleanupService] forceRescanClean complete', {
       tables: result.clearedTables.length,
       files: result.deletedFiles,
       errors: result.errors.length,

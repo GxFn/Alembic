@@ -376,6 +376,7 @@ program
   .option('-m, --max-files <n>', '最大扫描文件数', '500')
   .option('--dims <ids...>', '仅扫描指定维度（逗号分隔或多次指定）')
   .option('--reason <text>', '重扫原因（记录到日志）')
+  .option('--force', '强制全量重扫（清会话态缓存，但保留增量快照）')
   .option('--wait', '等待 AI 异步填充完成（默认骨架完成即退出）')
   .option('--json', '以 JSON 格式输出')
   .action(async (opts) => {
@@ -395,6 +396,7 @@ program
         {
           reason: opts.reason || 'cli-rescan',
           dimensions: opts.dims,
+          force: opts.force ?? false,
           skipAsyncFill: !opts.wait,
         }
       );
@@ -600,22 +602,34 @@ program
         return;
       }
 
-      // ── Step 3: 规则引擎预审计 ──
+      // ── Step 3: 规则引擎预审计（已废弃，返回空结果）──
       const spinnerAudit = ora(`预审计: ${targetRecipes.length} 条 Recipe...`).start();
-      const { RelevanceAuditor } = await import('../lib/service/evolution/RelevanceAuditor.js');
-      const { EvolutionGateway } = await import('../lib/service/evolution/EvolutionGateway.js');
-      const evolutionGateway = container.get('evolutionGateway') as InstanceType<
-        typeof EvolutionGateway
-      >;
-      const auditor = new RelevanceAuditor({ knowledgeRepo, evolutionGateway });
-      const auditResult = await auditor.audit(targetRecipes, {
-        fileList: allFiles,
-        codeEntities: [],
-        dependencyGraph: [],
-      });
+      const auditResult = {
+        totalAudited: 0,
+        healthy: 0,
+        watch: 0,
+        decay: 0,
+        severe: 0,
+        dead: 0,
+        results: [] as Array<{
+          recipeId: string;
+          title: string;
+          relevanceScore: number;
+          verdict: string;
+          evidence: {
+            triggerStillMatches: boolean;
+            symbolsAlive: number;
+            depsIntact: boolean;
+            codeFilesExist: number;
+          };
+          decayReasons: string[];
+        }>,
+        proposalsCreated: 0,
+        immediateDeprecated: 0,
+      };
       spinnerAudit.stop();
 
-      cli.log('\n📊 规则预审计结果');
+      cli.log('\n📊 规则预审计结果（RelevanceAuditor 已移除，跳过）');
       cli.log(`${'─'.repeat(50)}`);
       cli.log(
         `  总计: ${auditResult.totalAudited} | 健康: ${auditResult.healthy} | 观察: ${auditResult.watch} | 衰退: ${auditResult.decay} | 严重: ${auditResult.severe} | 死亡: ${auditResult.dead}`

@@ -53,6 +53,11 @@ function getGateway(ctx: ToolHandlerContext) {
   return getEvolutionGateway(resolveLifecycleServicesFromContext(ctx));
 }
 
+function resolveProposalSource(ctx: ToolHandlerContext): string {
+  const shared = ctx._sharedState as Record<string, unknown> | undefined;
+  return (shared?.evolutionProposalSource as string) ?? 'decay-scan';
+}
+
 async function submitEvolutionDecision(
   gateway: NonNullable<ReturnType<typeof getGateway>>,
   decision: Record<string, unknown>
@@ -128,7 +133,7 @@ export const proposeEvolution = {
     const result = await submitEvolutionDecision(gateway, {
       recipeId,
       action: 'update',
-      source: 'decay-scan',
+      source: resolveProposalSource(ctx),
       confidence: Math.max(0, Math.min(1, confidence)),
       description,
       evidence: [
@@ -200,8 +205,8 @@ export const confirmDeprecation = {
     const result = await submitEvolutionDecision(gateway, {
       recipeId,
       action: 'deprecate',
-      source: 'decay-scan',
-      confidence: 0.9, // Agent 已验证，高置信度 → Gateway 会立即执行
+      source: resolveProposalSource(ctx),
+      confidence: 0.9,
       reason,
     });
 
@@ -241,7 +246,7 @@ export const skipEvolution = {
     const result = await submitEvolutionDecision(gateway, {
       recipeId,
       action: 'valid',
-      source: 'decay-scan',
+      source: resolveProposalSource(ctx),
       confidence: 0.5,
       reason,
     });

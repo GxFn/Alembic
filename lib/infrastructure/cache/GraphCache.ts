@@ -9,10 +9,10 @@
  * 缓存位置: {projectRoot}/.asd/cache/
  */
 
-import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { DataPath, WriteZone } from '#infra/io/WriteZone.js';
+import { computeContentHash } from '#shared/content-hash.js';
 import Logger from '../logging/Logger.js';
 
 export class GraphCache {
@@ -135,7 +135,7 @@ export class GraphCache {
    * @returns sha256 hex (前 16 字符)
    */
   computeContentHash(content: string) {
-    return createHash('sha256').update(content).digest('hex').substring(0, 16);
+    return computeContentHash(content);
   }
 
   /**

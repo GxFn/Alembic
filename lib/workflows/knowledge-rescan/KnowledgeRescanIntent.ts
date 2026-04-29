@@ -21,8 +21,8 @@ export interface InternalKnowledgeRescanExecutionIntent {
 export interface KnowledgeRescanWorkflowIntent {
   kind: 'knowledge-rescan';
   executor: KnowledgeRescanExecutor;
-  analysisMode: 'full';
-  cleanupPolicy: 'rescan-clean';
+  analysisMode: 'incremental' | 'full';
+  cleanupPolicy: 'none' | 'force-rescan' | 'rescan-clean';
   completionPolicy: 'auto-fill' | 'external-dimension-complete';
   projectAnalysis: KnowledgeRescanProjectAnalysisIntent;
   dimensionIds?: string[];
@@ -33,11 +33,12 @@ export interface KnowledgeRescanWorkflowIntent {
 export function createInternalKnowledgeRescanIntent(
   args: InternalKnowledgeRescanArgs
 ): KnowledgeRescanWorkflowIntent {
+  const forceMode = args.force ?? false;
   return {
     kind: 'knowledge-rescan',
     executor: 'internal-agent',
-    analysisMode: 'full',
-    cleanupPolicy: 'rescan-clean',
+    analysisMode: forceMode ? 'full' : 'incremental',
+    cleanupPolicy: forceMode ? 'force-rescan' : 'none',
     completionPolicy: 'auto-fill',
     projectAnalysis: {
       maxFiles: 500,
@@ -57,11 +58,12 @@ export function createInternalKnowledgeRescanIntent(
 export function createExternalKnowledgeRescanIntent(
   args: RescanInput
 ): KnowledgeRescanWorkflowIntent {
+  const forceMode = args.force ?? false;
   return {
     kind: 'knowledge-rescan',
     executor: 'external-agent',
-    analysisMode: 'full',
-    cleanupPolicy: 'rescan-clean',
+    analysisMode: forceMode ? 'full' : 'incremental',
+    cleanupPolicy: forceMode ? 'force-rescan' : 'none',
     completionPolicy: 'external-dimension-complete',
     projectAnalysis: {
       maxFiles: 500,

@@ -296,7 +296,7 @@ export const TOOLS = [
     description:
       'Incremental rescan — preserves existing Recipes and re-analyzes project.\n' +
       '• Snapshots approved Recipes → cleans derived caches → full Phase 1-4 analysis\n' +
-      '• Runs RelevanceAuditor (5-dimension evidence check, auto-decay stale Recipes)\n' +
+      '• Runs relevance audit (evidence check, auto-decay stale Recipes)\n' +
       '\u2022 Returns Mission Briefing with allRecipes (full content + auditHint per recipe)\n' +
       '\u2022 Per-dimension workflow: evolve (alembic_evolve) \u2192 gap-fill (submit_knowledge) \u2192 dimension_complete\n' +
       '\u2022 Optional: dimensions (filter specific dimensions), reason (rescan justification)',

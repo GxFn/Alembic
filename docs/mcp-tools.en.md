@@ -210,7 +210,7 @@ Coldstart — No parameters required. Automatically analyzes the project (AST, d
 
 ### 9b. alembic_rescan
 
-Incremental rescan — Preserves approved Recipes, cleans derived caches, re-runs Phase 1-4 analysis, and executes RecipeRelevanceAuditor 5-dimension evidence audit. Returns Mission Briefing with allRecipes (full content + auditHint) and evolutionGuide.
+Incremental rescan — Preserves approved Recipes, cleans derived caches, re-runs Phase 1-4 analysis, and runs relevance evidence audit. Returns Mission Briefing with allRecipes (full content + auditHint) and evolutionGuide.
 
 **Parameters:**
 

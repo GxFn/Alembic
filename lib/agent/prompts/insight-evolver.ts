@@ -17,7 +17,7 @@
 // Local types
 // ──────────────────────────────────────────────────────────────────
 
-/** 静态审计 hint（可选）— 来自 RecipeRelevanceAuditor */
+/** 静态审计 hint（可选）— 来自证据审计 */
 export interface AuditHint {
   relevanceScore: number;
   verdict: string; // healthy | watch | decay | severe

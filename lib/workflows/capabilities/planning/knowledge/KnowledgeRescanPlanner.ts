@@ -1,17 +1,9 @@
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
-import {
-  RelevanceAuditor,
-  type RelevanceAuditSummary,
-} from '#service/evolution/RelevanceAuditor.js';
 import type { AstSummary, DependencyGraph, DimensionDef } from '#types/project-snapshot.js';
 import {
   buildEvolutionPrescreen,
   type EvolutionPrescreen,
 } from '#workflows/capabilities/planning/knowledge/EvolutionPrescreen.js';
-import {
-  extractCodeEntities,
-  extractDependencyEdges,
-} from '#workflows/capabilities/planning/knowledge/RecipeAuditEvidence.js';
 import {
   type AuditVerdict,
   type BuildKnowledgeRescanPlanOptions,
@@ -31,6 +23,36 @@ import {
   projectInternalRescanPromptRecipes,
   projectInternalRescanPromptRecipesFromParts,
 } from './RescanEvidenceProjectors.js';
+
+// ── RelevanceAudit 类型定义（原 RelevanceAuditor.ts）──────────
+
+/** 单个 Recipe 的审计结果 */
+export interface RelevanceAuditResult {
+  recipeId: string;
+  title: string;
+  relevanceScore: number;
+  verdict: 'healthy' | 'watch' | 'decay' | 'severe' | 'dead';
+  evidence: {
+    triggerStillMatches: boolean;
+    symbolsAlive: number;
+    depsIntact: boolean;
+    codeFilesExist: number;
+  };
+  decayReasons: string[];
+}
+
+/** 审计汇总 */
+export interface RelevanceAuditSummary {
+  totalAudited: number;
+  healthy: number;
+  watch: number;
+  decay: number;
+  severe: number;
+  dead: number;
+  results: RelevanceAuditResult[];
+  proposalsCreated: number;
+  immediateDeprecated: number;
+}
 
 export {
   buildKnowledgeRescanPlan,
@@ -106,27 +128,21 @@ export function syncKnowledgeStoreForRescan(opts: KnowledgeSyncOptions): void {
   }
 }
 
+/** @deprecated RelevanceAuditor 已移除，此函数保留为空操作桩。进化入口改为 RecipeImpactPlanner + Evolution Agent。 */
 export async function auditRecipesForRescan(
-  opts: RecipeAuditOptions
+  _opts: RecipeAuditOptions
 ): Promise<RelevanceAuditSummary> {
-  const auditor = new RelevanceAuditor({
-    knowledgeRepo: opts.container.get(
-      'knowledgeRepository'
-    ) as import('#repo/knowledge/KnowledgeRepository.impl.js').default,
-    evolutionGateway: opts.container.get(
-      'evolutionGateway'
-    ) as import('#service/evolution/EvolutionGateway.js').EvolutionGateway,
-    logger: opts.logger,
-  });
-
-  const codeEntities = extractCodeEntities(opts.astProjectSummary);
-  const dependencyEdges = extractDependencyEdges(opts.depGraphData);
-
-  return auditor.audit(opts.recipeEntries, {
-    fileList: opts.allFiles.map((file) => file.relativePath || file.name),
-    codeEntities,
-    dependencyGraph: dependencyEdges,
-  });
+  return {
+    totalAudited: 0,
+    healthy: 0,
+    watch: 0,
+    decay: 0,
+    severe: 0,
+    dead: 0,
+    results: [],
+    proposalsCreated: 0,
+    immediateDeprecated: 0,
+  };
 }
 
 export function buildRescanPrescreen(

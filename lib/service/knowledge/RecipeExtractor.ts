@@ -6,6 +6,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
+import { computeContentHash } from '../../shared/content-hash.js';
 import { LanguageService } from '../../shared/LanguageService.js';
 
 interface ExtractorOptions {
@@ -72,9 +73,7 @@ export class RecipeExtractor {
       : {};
 
     // 8. 内容 hash
-    const contentHash = this.#options.contentHashEnabled
-      ? createHash('sha256').update(content).digest('hex').slice(0, 16)
-      : null;
+    const contentHash = this.#options.contentHashEnabled ? computeContentHash(content) : null;
 
     return {
       id: (frontmatter.id as string) || this.#generateId(filePath || filename),

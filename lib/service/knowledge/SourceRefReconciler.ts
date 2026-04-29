@@ -33,6 +33,8 @@ export interface ReconcileReport {
   skipped: number;
   /** 处理的 recipe 数 */
   recipesProcessed: number;
+  /** 反向清理的旧行（不再被 reasoning.sources 引用） */
+  cleaned?: number;
 }
 
 export interface RepairReport {
@@ -118,6 +120,17 @@ export class SourceRefReconciler {
       }
 
       report.recipesProcessed++;
+
+      const sourcesSet = new Set(sources);
+
+      // 反向清理：删除不再出现在 reasoning.sources 中的旧行
+      const existingRefs = this.#sourceRefRepo.findByRecipeId(row.id);
+      for (const ref of existingRefs) {
+        if (!sourcesSet.has(ref.sourcePath)) {
+          this.#sourceRefRepo.deleteOne(row.id, ref.sourcePath);
+          report.cleaned = (report.cleaned ?? 0) + 1;
+        }
+      }
 
       for (const sourcePath of sources) {
         // 检查是否已有记录

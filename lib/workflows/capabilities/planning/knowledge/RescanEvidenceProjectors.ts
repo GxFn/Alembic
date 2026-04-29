@@ -1,11 +1,11 @@
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
-import type { RelevanceAuditSummary } from '#service/evolution/RelevanceAuditor.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type {
   AuditVerdict,
   KnowledgeRescanPlan,
   RescanExecutionReason,
 } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
+import type { RelevanceAuditSummary } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
 
 export interface InternalRescanGapPlan {
   requestedDimensions: DimensionDef[];

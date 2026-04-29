@@ -13,13 +13,14 @@
  * @module file-diff/FileDiffSnapshotStore
  */
 
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { relative } from 'node:path';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { DrizzleDB } from '#infra/database/drizzle/index.js';
 import { getDrizzle } from '#infra/database/drizzle/index.js';
 import { bootstrapDimFiles, bootstrapSnapshots } from '#infra/database/drizzle/schema.js';
+import { computeContentHash } from '#shared/content-hash.js';
 import type { LoggerLike } from '#types/workflows.js';
 
 // ──────────────────────────────────────────────────────────────────
@@ -579,10 +580,7 @@ export class FileDiffSnapshotStore {
   // ─── 内部方法 ─────────────────────────────────────────
 
   #computeContentHash(content: string): string {
-    return createHash('sha256')
-      .update(content || '')
-      .digest('hex')
-      .substring(0, 16);
+    return computeContentHash(content);
   }
 
   #readFileContent(filePath: string): string {

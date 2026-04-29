@@ -266,6 +266,10 @@ export type BootstrapInput = z.infer<typeof BootstrapInput>;
 export const RescanInput = z.object({
   dimensions: z.array(z.string()).optional().describe('指定维度列表，空 = 全部活跃维度'),
   reason: z.string().optional().describe('触发原因（记录到报告）'),
+  force: z
+    .boolean()
+    .optional()
+    .describe('强制全量重扫（清会话态缓存 + 全量 Phase 1-4，但保留增量快照）'),
 });
 export type RescanInput = z.infer<typeof RescanInput>;
 

@@ -619,23 +619,30 @@ export function evolutionGateEvaluator(
     .length;
   const toolCalls = source?.toolCalls || [];
 
-  // 统计各决策数
-  const evolved = toolCalls.filter((tc) => {
-    const tool = tc.tool || tc.name;
-    return tool === 'submit_knowledge' && tc.args?.supersedes;
-  }).length;
+  // 按 recipeId 去重统计已处理 Recipe 数（跨 tool 类型去重）
+  const processedIds = new Set<string>();
 
-  const deprecated = toolCalls.filter((tc) => {
+  for (const tc of toolCalls) {
     const tool = tc.tool || tc.name;
-    return tool === 'confirm_deprecation';
-  }).length;
 
-  const skipped = toolCalls.filter((tc) => {
-    const tool = tc.tool || tc.name;
-    return tool === 'skip_evolution';
-  }).length;
+    if (tool === 'submit_knowledge' && tc.args?.supersedes) {
+      processedIds.add(String(tc.args.supersedes));
+    }
 
-  const processed = evolved + deprecated + skipped;
+    if (tool === 'propose_evolution' && tc.args?.recipeId) {
+      processedIds.add(String(tc.args.recipeId));
+    }
+
+    if (tool === 'confirm_deprecation' && tc.args?.recipeId) {
+      processedIds.add(String(tc.args.recipeId));
+    }
+
+    if (tool === 'skip_evolution' && tc.args?.recipeId) {
+      processedIds.add(String(tc.args.recipeId));
+    }
+  }
+
+  const processed = processedIds.size;
 
   if (totalRecipes > 0 && processed < totalRecipes) {
     return {
@@ -646,7 +653,7 @@ export function evolutionGateEvaluator(
 
   return {
     action: 'pass',
-    artifact: { evolved, deprecated, skipped, totalRecipes },
+    artifact: { processed, totalRecipes },
   };
 }
 

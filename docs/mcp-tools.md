@@ -210,7 +210,7 @@ Skill 管理。创建、加载、更新、删除项目 Skills。
 
 ### 9b. alembic_rescan
 
-增量重扫描 — 保留已审核 Recipe，清理衍生缓存，重新执行 Phase 1-4 分析，运行 RecipeRelevanceAuditor 5 维证据审计。返回 Mission Briefing（含 allRecipes 完整内容 + auditHint + evolutionGuide）。
+增量重扫描 — 保留已审核 Recipe，清理衍生缓存，重新执行 Phase 1-4 分析，运行证据审计。返回 Mission Briefing（含 allRecipes 完整内容 + auditHint + evolutionGuide）。
 
 **参数：**
 

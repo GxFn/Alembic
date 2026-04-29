@@ -46,3 +46,16 @@ export async function runRescanCleanPolicy(
   const cleanResult = await cleanupService.rescanClean();
   return { recipeSnapshot, cleanResult };
 }
+
+/**
+ * 强制 Rescan 清理策略 — 清除会话态缓存但保留增量证据
+ * (bootstrap_snapshots, bootstrap_dim_files, recipe_source_refs 不被清除)
+ */
+export async function runForceRescanCleanPolicy(
+  ctx: CleanupPolicyContext
+): Promise<RescanCleanupResult> {
+  const cleanupService = createCleanupService(ctx);
+  const recipeSnapshot = await cleanupService.snapshotRecipes();
+  const cleanResult = await cleanupService.forceRescanClean();
+  return { recipeSnapshot, cleanResult };
+}

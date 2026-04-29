@@ -1,3 +1,4 @@
+import type { EvolutionCandidateReason } from '../../../service/evolution/RecipeImpactPlanner.js';
 import type { ToolCallEntry } from '../../runtime/AgentRuntimeTypes.js';
 import type { AgentService } from '../../service/AgentService.js';
 
@@ -18,6 +19,13 @@ export interface EvolutionAuditRecipe {
     };
     decayReasons: string[];
   } | null;
+  /** diff-based 影响证据（增量 rescan 管线提供） */
+  impactEvidence?: {
+    reason: EvolutionCandidateReason;
+    affectedFiles: string[];
+    impactScore: number;
+    matchedTokens: string[];
+  };
 }
 
 export interface EvolutionAuditProjectOverview {
@@ -41,15 +49,23 @@ export async function runEvolutionAudit({
   projectOverview,
   dimensionId = 'all',
   dimensionLabel = '全量进化审计',
+  proposalSource,
 }: {
   agentService: AgentService;
   recipes: EvolutionAuditRecipe[];
   projectOverview: EvolutionAuditProjectOverview;
   dimensionId?: string;
   dimensionLabel?: string;
+  /** 传给 evolution-tools 的 source 字段（通过 sharedState 透传） */
+  proposalSource?: string;
 }): Promise<EvolutionAuditResult> {
   if (recipes.length === 0) {
     return { proposed: 0, deprecated: 0, skipped: 0, toolCalls: 0, iterations: 0, reply: '' };
+  }
+
+  const sharedState: Record<string, unknown> = {};
+  if (proposalSource) {
+    sharedState.evolutionProposalSource = proposalSource;
   }
 
   const strategyContext = {
@@ -57,6 +73,7 @@ export async function runEvolutionAudit({
     dimensionId,
     dimensionLabel,
     projectOverview,
+    sharedState,
   };
   const result = await agentService.run({
     profile: { id: 'evolution-audit' },

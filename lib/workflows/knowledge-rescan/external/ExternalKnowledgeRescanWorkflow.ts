@@ -8,7 +8,7 @@
  *   1. snapshotRecipes — 快照保留知识
  *   2. rescanClean — 清理衍生缓存
  *   3. Phase 1-4 全量分析
- *   4. RecipeRelevanceAuditor — 证据验证 + 快速衰退
+ *   4. 证据审计 — 验证 + 快速衰退（桩函数，RelevanceAuditor 已移除）
  *   5. 构建 Mission Briefing（含 allRecipes + evolutionGuide）
  *   6. 返回给 Agent 按维度执行: evolve → gap-fill → dimension_complete
  *
@@ -20,7 +20,10 @@ import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
 import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
-import { runRescanCleanPolicy } from '#workflows/capabilities/cleanup/WorkflowCleanupPolicies.js';
+import {
+  runForceRescanCleanPolicy,
+  runRescanCleanPolicy,
+} from '#workflows/capabilities/cleanup/WorkflowCleanupPolicies.js';
 import {
   buildExternalMissionBriefing,
   createExternalWorkflowSession,
@@ -62,16 +65,46 @@ export async function runExternalKnowledgeRescanWorkflow(ctx: McpContext, args: 
   const plan = buildKnowledgeRescanWorkflowPlan({ intent, projectRoot, dataRoot });
 
   // ═══════════════════════════════════════════════════════════
-  // Step 1: 快照现有知识
+  // Step 0: 清理策略（根据 intent 决定）
   // ═══════════════════════════════════════════════════════════
 
-  const { recipeSnapshot, cleanResult } = await runRescanCleanPolicy({
-    projectRoot: plan.cleanup.projectRoot,
-    db,
-    logger: ctx.logger,
-  });
+  let recipeSnapshot;
+  let cleanResult;
+
+  if (intent.cleanupPolicy === 'force-rescan') {
+    const result = await runForceRescanCleanPolicy({
+      projectRoot: plan.cleanup.projectRoot,
+      db,
+      logger: ctx.logger,
+    });
+    recipeSnapshot = result.recipeSnapshot;
+    cleanResult = result.cleanResult;
+  } else if (intent.cleanupPolicy === 'rescan-clean') {
+    const result = await runRescanCleanPolicy({
+      projectRoot: plan.cleanup.projectRoot,
+      db,
+      logger: ctx.logger,
+    });
+    recipeSnapshot = result.recipeSnapshot;
+    cleanResult = result.cleanResult;
+  } else {
+    const { CleanupService } = await import('#service/cleanup/CleanupService.js');
+    const cleanupService = new CleanupService({
+      projectRoot: plan.cleanup.projectRoot,
+      db,
+      logger: ctx.logger,
+    });
+    recipeSnapshot = await cleanupService.snapshotRecipes();
+    cleanResult = {
+      deletedFiles: 0,
+      clearedTables: [],
+      preservedRecipes: recipeSnapshot.count,
+      errors: [],
+    };
+  }
 
   ctx.logger.info(`[Rescan] Preserved ${recipeSnapshot.count} recipes`, {
+    cleanupPolicy: intent.cleanupPolicy,
     coverageByDimension: recipeSnapshot.coverageByDimension,
   });
 

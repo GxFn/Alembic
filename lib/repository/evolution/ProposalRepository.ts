@@ -49,7 +49,8 @@ export type ProposalSource =
   | 'decay-scan'
   | 'consolidation'
   | 'relevance-audit'
-  | 'file-change';
+  | 'file-change'
+  | 'rescan-evolution';
 
 /** Proposal 状态 */
 export type ProposalStatus = 'pending' | 'observing' | 'executed' | 'rejected' | 'expired';

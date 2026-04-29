@@ -1,9 +1,9 @@
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
+import type { DimensionDef } from '#types/project-snapshot.js';
 import type {
   RelevanceAuditResult,
   RelevanceAuditSummary,
-} from '#service/evolution/RelevanceAuditor.js';
-import type { DimensionDef } from '#types/project-snapshot.js';
+} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
 
 export const TARGET_RECIPES_PER_DIMENSION = 5;
 

@@ -9,9 +9,9 @@
  * - 新增 chunking 配置透传 (strategy, maxChunkTokens, overlapTokens, useAST)
  */
 
-import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
+import { computeContentHash } from '../../shared/content-hash.js';
 import { LanguageService } from '../../shared/LanguageService.js';
 import { CANDIDATES_DIR, KNOWLEDGE_BASE_DIR } from '../config/Defaults.js';
 import { BatchEmbedder } from './BatchEmbedder.js';
@@ -340,7 +340,7 @@ export class IndexingPipeline {
 
   /** 计算内容 hash */
   hashContent(content: string) {
-    return createHash('sha256').update(content).digest('hex').slice(0, 16);
+    return computeContentHash(content);
   }
 
   #walkDir(

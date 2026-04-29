@@ -9,7 +9,7 @@ import type { KnowledgeRescanWorkflowIntent } from './KnowledgeRescanIntent.js';
 export interface KnowledgeRescanWorkflowPlan {
   intent: KnowledgeRescanWorkflowIntent;
   cleanup: {
-    policy: 'rescan-clean';
+    policy: 'none' | 'force-rescan' | 'rescan-clean';
     projectRoot: string;
   };
   projectAnalysis: {
@@ -40,7 +40,7 @@ export function buildKnowledgeRescanWorkflowPlan({
     summaryPrefix: intent.projectAnalysis.summaryPrefix,
     generateReport: true,
     generateAstContext: intent.projectAnalysis.generateAstContext,
-    incremental: false,
+    incremental: intent.analysisMode === 'incremental',
   };
   const materialize: ProjectAnalysisMaterializationPlan = {
     codeEntityGraph: true,
@@ -54,7 +54,7 @@ export function buildKnowledgeRescanWorkflowPlan({
   return {
     intent,
     cleanup: {
-      policy: 'rescan-clean',
+      policy: intent.cleanupPolicy,
       projectRoot: dataRoot,
     },
     projectAnalysis: {

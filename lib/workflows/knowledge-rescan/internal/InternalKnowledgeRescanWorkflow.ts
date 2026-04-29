@@ -9,7 +9,7 @@
  *   2. rescanClean — 清理衍生缓存
  *   2.5 Recipe 文件 ↔ DB 一致性恢复
  *   3. Phase 1-4 全量分析（文件收集→AST→依赖→Guard→维度）
- *   4. RecipeRelevanceAuditor — 证据验证 + 快速衰退
+ *   4. 证据审计 — 验证 + 快速衰退（桩函数，RelevanceAuditor 已移除）
  *   5. 计算 gap 维度（需要补齐的维度）
  *   5.5 BootstrapSessionManager — 缓存 Phase 结果供复用
  *   6. 快速返回骨架 → 异步 internal dimension execution 填充 gap 维度
@@ -23,7 +23,10 @@ import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '#types/workflows.js';
-import { runRescanCleanPolicy } from '#workflows/capabilities/cleanup/WorkflowCleanupPolicies.js';
+import {
+  runForceRescanCleanPolicy,
+  runRescanCleanPolicy,
+} from '#workflows/capabilities/cleanup/WorkflowCleanupPolicies.js';
 import { cacheProjectAnalysisSession } from '#workflows/capabilities/execution/external-agent/session/WorkflowSessionCache.js';
 import {
   dispatchInternalDimensionExecution,
@@ -48,6 +51,13 @@ import {
   presentInternalKnowledgeRescanResponse,
 } from '#workflows/knowledge-rescan/KnowledgeRescanPresenters.js';
 import { buildKnowledgeRescanWorkflowPlan } from '#workflows/knowledge-rescan/KnowledgeRescanWorkflowPlan.js';
+import { runEvolutionAudit } from '../../../agent/runs/evolution/EvolutionAgentRun.js';
+import {
+  type EvolutionCandidatePlan,
+  RecipeImpactPlanner,
+  toEvolutionAuditRecipe,
+} from '../../../service/evolution/RecipeImpactPlanner.js';
+import { SourceRefReconciler } from '../../../service/knowledge/SourceRefReconciler.js';
 
 // ── Local types ──────────────────────────────────────────
 
@@ -81,21 +91,51 @@ export async function runInternalKnowledgeRescanWorkflow(
   const plan = buildKnowledgeRescanWorkflowPlan({ intent, projectRoot, dataRoot });
 
   // ═══════════════════════════════════════════════════════════
-  // Step 1: 快照现有知识
+  // Step 0: 清理策略（根据 intent 决定）
   // ═══════════════════════════════════════════════════════════
 
-  const { recipeSnapshot, cleanResult } = await runRescanCleanPolicy({
-    projectRoot: plan.cleanup.projectRoot,
-    db,
-    logger: ctx.logger,
-  });
+  let recipeSnapshot;
+  let cleanResult;
+
+  if (intent.cleanupPolicy === 'force-rescan') {
+    const result = await runForceRescanCleanPolicy({
+      projectRoot: plan.cleanup.projectRoot,
+      db,
+      logger: ctx.logger,
+    });
+    recipeSnapshot = result.recipeSnapshot;
+    cleanResult = result.cleanResult;
+  } else if (intent.cleanupPolicy === 'rescan-clean') {
+    const result = await runRescanCleanPolicy({
+      projectRoot: plan.cleanup.projectRoot,
+      db,
+      logger: ctx.logger,
+    });
+    recipeSnapshot = result.recipeSnapshot;
+    cleanResult = result.cleanResult;
+  } else {
+    const { CleanupService } = await import('#service/cleanup/CleanupService.js');
+    const cleanupService = new CleanupService({
+      projectRoot: plan.cleanup.projectRoot,
+      db,
+      logger: ctx.logger,
+    });
+    recipeSnapshot = await cleanupService.snapshotRecipes();
+    cleanResult = {
+      deletedFiles: 0,
+      clearedTables: [],
+      preservedRecipes: recipeSnapshot.count,
+      errors: [],
+    };
+  }
 
   ctx.logger.info(`[Rescan-Internal] Preserved ${recipeSnapshot.count} recipes`, {
+    cleanupPolicy: intent.cleanupPolicy,
     coverageByDimension: recipeSnapshot.coverageByDimension,
   });
 
   // ═══════════════════════════════════════════════════════════
-  // Step 2.5: Recipe 文件 ↔ DB 一致性恢复
+  // Step 0.5: Recipe 文件 ↔ DB 一致性恢复
   // ═══════════════════════════════════════════════════════════
 
   syncKnowledgeStoreForRescan({
@@ -106,7 +146,47 @@ export async function runInternalKnowledgeRescanWorkflow(
   });
 
   // ═══════════════════════════════════════════════════════════
-  // Step 3: Phase 1-4 全量分析
+  // Step 1: SourceRef 校验 + 反向清理
+  // ═══════════════════════════════════════════════════════════
+
+  let reconcileReport;
+  try {
+    const sourceRefRepo = ctx.container.get('sourceRefRepository');
+    const knowledgeRepo = ctx.container.get('knowledgeRepository');
+    const signalBus = ctx.container.get('signalBus');
+    if (sourceRefRepo && knowledgeRepo) {
+      const reconciler = new SourceRefReconciler(
+        projectRoot,
+        sourceRefRepo as InstanceType<
+          typeof import('../../../repository/sourceref/RecipeSourceRefRepository.js').RecipeSourceRefRepositoryImpl
+        >,
+        knowledgeRepo as InstanceType<
+          typeof import('../../../repository/knowledge/KnowledgeRepository.impl.js').default
+        >,
+        {
+          signalBus: signalBus as
+            | import('../../../infrastructure/signal/SignalBus.js').SignalBus
+            | undefined,
+        }
+      );
+      reconcileReport = await reconciler.reconcile({ force: true });
+      await reconciler.repairRenames();
+      await reconciler.applyRepairs();
+      ctx.logger.info('[Rescan-Internal] SourceRef reconcile complete', {
+        inserted: reconcileReport.inserted,
+        active: reconcileReport.active,
+        stale: reconcileReport.stale,
+        cleaned: reconcileReport.cleaned ?? 0,
+      });
+    }
+  } catch (err: unknown) {
+    ctx.logger.warn('[Rescan-Internal] SourceRef reconcile failed, continuing', {
+      error: (err as Error).message,
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // Step 2: Phase 1-4 项目分析（含增量 diff 计算）
   // ═══════════════════════════════════════════════════════════
 
   const phaseResults = await ProjectIntelligenceCapability.run({
@@ -139,7 +219,78 @@ export async function runInternalKnowledgeRescanWorkflow(
   });
 
   // ═══════════════════════════════════════════════════════════
-  // Step 4: Recipe 证据验证 + 快速衰退
+  // Step 2.5: 构建进化候选（基于增量 diff）
+  // ═══════════════════════════════════════════════════════════
+
+  let candidatePlan: EvolutionCandidatePlan | null = null;
+  try {
+    const sourceRefRepo = ctx.container.get('sourceRefRepository');
+    const knowledgeRepo = ctx.container.get('knowledgeRepository');
+    if (sourceRefRepo && knowledgeRepo) {
+      const diff = _incrementalPlan?.diff ?? null;
+      const impactPlanner = new RecipeImpactPlanner(
+        projectRoot,
+        sourceRefRepo as InstanceType<
+          typeof import('../../../repository/sourceref/RecipeSourceRefRepository.js').RecipeSourceRefRepositoryImpl
+        >,
+        knowledgeRepo as InstanceType<
+          typeof import('../../../repository/knowledge/KnowledgeRepository.impl.js').default
+        >
+      );
+      candidatePlan = await impactPlanner.plan(diff);
+      ctx.logger.info('[Rescan-Internal] Impact planning complete', candidatePlan.summary);
+    }
+  } catch (err: unknown) {
+    ctx.logger.warn('[Rescan-Internal] Impact planning failed, continuing', {
+      error: (err as Error).message,
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // Step 3: Evolution Agent 验证
+  // ═══════════════════════════════════════════════════════════
+
+  if (candidatePlan && candidatePlan.candidates.length > 0) {
+    try {
+      const agentService = ctx.container.get('agentService');
+      const knowledgeRepo = ctx.container.get('knowledgeRepository');
+      if (agentService && knowledgeRepo) {
+        const auditRecipes = await Promise.all(
+          candidatePlan.candidates.map((c) =>
+            toEvolutionAuditRecipe(
+              c,
+              knowledgeRepo as InstanceType<
+                typeof import('../../../repository/knowledge/KnowledgeRepository.impl.js').default
+              >
+            )
+          )
+        );
+        const evolutionResult = await runEvolutionAudit({
+          agentService:
+            agentService as import('../../../agent/service/AgentService.js').AgentService,
+          recipes: auditRecipes,
+          projectOverview: {
+            primaryLang: primaryLang || 'unknown',
+            fileCount: allFiles.length,
+            modules: depGraphData?.nodes?.map((n: { name?: string }) => n.name || '') || [],
+          },
+          proposalSource: 'rescan-evolution',
+        });
+        ctx.logger.info('[Rescan-Internal] Evolution audit complete', {
+          proposed: evolutionResult.proposed,
+          deprecated: evolutionResult.deprecated,
+          skipped: evolutionResult.skipped,
+        });
+      }
+    } catch (err: unknown) {
+      ctx.logger.warn('[Rescan-Internal] Evolution audit failed, continuing', {
+        error: (err as Error).message,
+      });
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // Step 4: Recipe 证据验证 + 快速衰退（保留用于 gap analysis）
   // ═══════════════════════════════════════════════════════════
 
   const auditSummary = await auditRecipesForRescan({

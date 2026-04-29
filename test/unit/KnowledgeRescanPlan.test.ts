@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest';
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
+import type { DimensionDef } from '#types/project-snapshot.js';
+import { buildKnowledgeRescanPlan } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
 import type {
   RelevanceAuditResult,
   RelevanceAuditSummary,
-} from '#service/evolution/RelevanceAuditor.js';
-import type { DimensionDef } from '#types/project-snapshot.js';
-import { buildKnowledgeRescanPlan } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
+} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
 import {
   projectExternalRescanEvidencePlan,
   projectInternalRescanGapPlan,
