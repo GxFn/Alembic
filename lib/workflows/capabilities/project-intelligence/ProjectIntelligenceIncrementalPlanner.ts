@@ -12,6 +12,11 @@ interface ProjectAnalysisIncrementalContext {
   logger: ProjectAnalysisIncrementalLogger;
 }
 
+interface ProjectAnalysisIncrementalContainer {
+  get?: (name: string) => unknown;
+  resolve?: (name: string) => unknown;
+}
+
 export interface ProjectAnalysisIncrementalEvaluationInput {
   enabled: boolean;
   projectRoot: string;
@@ -68,9 +73,31 @@ export async function evaluateProjectAnalysisIncrementalPlan({
 
 function resolveIncrementalDatabase(ctx: ProjectAnalysisIncrementalContext): unknown {
   const container = ctx.container;
-  if (container && typeof container === 'object' && 'resolve' in container) {
-    const resolve = (container as { resolve?: (name: string) => unknown }).resolve;
-    return resolve?.('db') ?? ctx.db;
+  if (container && typeof container === 'object') {
+    const containerLike = container as ProjectAnalysisIncrementalContainer;
+    return (
+      resolveContainerService(containerLike.get, 'database') ??
+      resolveContainerService(containerLike.get, 'db') ??
+      resolveContainerService(containerLike.resolve, 'database') ??
+      resolveContainerService(containerLike.resolve, 'db') ??
+      ctx.db
+    );
   }
   return ctx.db;
+}
+
+function resolveContainerService(
+  resolver:
+    | ProjectAnalysisIncrementalContainer['get']
+    | ProjectAnalysisIncrementalContainer['resolve'],
+  name: string
+) {
+  if (typeof resolver !== 'function') {
+    return undefined;
+  }
+  try {
+    return resolver(name);
+  } catch {
+    return undefined;
+  }
 }

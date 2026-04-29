@@ -75,8 +75,8 @@ export async function finalizeInternalDimensionFill({
     incrementalSkippedDims: sessionResult.incrementalSkippedDims,
     isIncremental: preparation.isIncremental,
     incrementalPlan: preparation.incrementalPlan,
-    enableParallel: process.env.ALEMBIC_PARALLEL_BOOTSTRAP !== 'false',
-    concurrency: parseInt(process.env.ALEMBIC_PARALLEL_CONCURRENCY || '3', 10),
+    enableParallel: sessionResult.enableParallel,
+    concurrency: sessionResult.concurrency,
     startedAtMs,
   });
 

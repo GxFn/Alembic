@@ -89,13 +89,17 @@ describe('bootstrap dimension runtime builder', () => {
       dimensions,
       rescanContext,
     });
-    expect(plan?.hasExistingRecipes).toBe(true);
-    expect(plan?.prescreenDone).toBe(true);
+    expect(plan).not.toBeNull();
+    if (!plan) {
+      throw new Error('expected custom-dual-dim plan');
+    }
+    expect(plan.hasExistingRecipes).toBe(true);
+    expect(plan.prescreenDone).toBe(true);
 
     const memoryCoordinator = new MemoryCoordinator({ mode: 'bootstrap' });
     const result = createBootstrapDimensionRuntimeInput({
       dimId: 'custom-dual-dim',
-      plan: plan!,
+      plan,
       memoryCoordinator,
       systemRunContextFactory: createContextFactory(),
       projectInfo: { name: 'repo', lang: 'typescript', fileCount: 10 },
@@ -104,6 +108,7 @@ describe('bootstrap dimension runtime builder', () => {
       sessionStore: {},
       semanticMemory: {},
       codeEntityGraphInst: {},
+      projectGraph: { getOverview: () => ({ totalClasses: 0, totalProtocols: 0 }) },
       panoramaResult: null,
       astProjectSummary: null,
       guardAudit: null,
@@ -147,6 +152,7 @@ describe('bootstrap dimension runtime builder', () => {
       fileCount: 10,
       modules: ['src'],
     });
+    expect(strategyContext.projectGraph).toBeTruthy();
   });
 
   test('builds compact panorama context defensively', () => {

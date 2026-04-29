@@ -47,6 +47,8 @@ export interface InternalDimensionFillSessionResult {
   dimensionCandidates: Record<string, DimensionCandidateData>;
   dimensionStats: Record<string, DimensionStat>;
   bootstrapDedup: { count: number; clear(): void };
+  enableParallel: boolean;
+  concurrency: number;
 }
 
 export async function runInternalDimensionAgentSession({
@@ -58,8 +60,7 @@ export async function runInternalDimensionAgentSession({
 }): Promise<InternalDimensionFillSessionResult> {
   const services = resolveInternalDimensionServices(preparation);
 
-  const concurrency = parseInt(process.env.ALEMBIC_PARALLEL_CONCURRENCY || '3', 10);
-  const enableParallel = process.env.ALEMBIC_PARALLEL_BOOTSTRAP !== 'false';
+  const { enableParallel, concurrency } = resolveInternalDimensionExecutionConcurrency();
   const scheduler = new TierScheduler();
   const activeDimIds = preparation.dimensions.map((dimension: DimensionDef) => dimension.id);
   const incrementalSkippedDims = resolveIncrementalSkippedDimensions({
@@ -125,6 +126,7 @@ export async function runInternalDimensionAgentSession({
       sessionStore: runtime.sessionStore,
       semanticMemory: runtime.semanticMemory,
       codeEntityGraphInst: runtime.codeEntityGraphInst,
+      projectGraph: runtime.projectGraph,
       panoramaResult: preparation.panoramaResult,
       astProjectSummary: preparation.astProjectSummary,
       guardAudit: preparation.guardAudit,
@@ -229,7 +231,7 @@ export async function runInternalDimensionAgentSession({
     sessionId: preparation.sessionId,
     activeDimIds,
     skippedDimIds: [...incrementalSkippedDims, ...skippedDims],
-    concurrency: enableParallel ? concurrency : 1,
+    concurrency,
     primaryLang: preparation.primaryLang,
     projectLang: runtime.projectInfo.lang || null,
     terminalTest: preparation.terminalToolsetConfig.terminalTest,
@@ -265,6 +267,21 @@ export async function runInternalDimensionAgentSession({
     dimensionCandidates,
     dimensionStats,
     bootstrapDedup,
+    enableParallel,
+    concurrency,
+  };
+}
+
+export function resolveInternalDimensionExecutionConcurrency(env: NodeJS.ProcessEnv = process.env) {
+  const enableParallel = env.ALEMBIC_PARALLEL_BOOTSTRAP !== 'false';
+  const rawConcurrency =
+    env.ALEMBIC_PARALLEL_CONCURRENCY ?? env.ALEMBIC_BOOTSTRAP_CONCURRENCY ?? '3';
+  const parsedConcurrency = Number.parseInt(rawConcurrency, 10);
+  const configuredConcurrency =
+    Number.isFinite(parsedConcurrency) && parsedConcurrency > 0 ? Math.floor(parsedConcurrency) : 3;
+  return {
+    enableParallel,
+    concurrency: enableParallel ? configuredConcurrency : 1,
   };
 }
 

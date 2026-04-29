@@ -26,6 +26,7 @@ import {
   projectBootstrapDimensionRescanContext,
   projectBootstrapExistingRecipesForPrompt,
 } from '#workflows/capabilities/execution/internal-agent/context/BootstrapRescanState.js';
+import type { BootstrapProjectGraphLike } from '#workflows/capabilities/execution/internal-agent/context/BootstrapRuntimeInitializer.js';
 import type {
   BootstrapTerminalMode,
   BootstrapTerminalToolset,
@@ -140,6 +141,7 @@ export function createBootstrapDimensionRuntimeInput({
   sessionStore,
   semanticMemory,
   codeEntityGraphInst,
+  projectGraph,
   panoramaResult,
   astProjectSummary,
   guardAudit,
@@ -168,6 +170,7 @@ export function createBootstrapDimensionRuntimeInput({
   sessionStore: unknown;
   semanticMemory: unknown;
   codeEntityGraphInst: unknown;
+  projectGraph: BootstrapProjectGraphLike | null;
   panoramaResult?: Record<string, unknown> | null;
   astProjectSummary?: AstSummary | null;
   guardAudit?: GuardAudit | null;
@@ -224,7 +227,7 @@ export function createBootstrapDimensionRuntimeInput({
       sessionStore,
       semanticMemory,
       codeEntityGraph: codeEntityGraphInst,
-      projectGraph: null,
+      projectGraph,
       panorama: buildPanoramaContext(panoramaResult),
       evidenceStarters: buildEvidenceStarters(plan.dim, {
         astData: astProjectSummary,
