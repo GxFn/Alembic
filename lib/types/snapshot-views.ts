@@ -7,7 +7,7 @@
  * @module types/snapshot-views
  */
 
-import type { EvolutionPrescreen } from '../external/mcp/handlers/evolution-prescreen.js';
+import type { EvolutionPrescreen } from '#workflows/common-capabilities/knowledge-rescan/EvolutionPrescreen.js';
 import type {
   AstSummary,
   BootstrapSessionShape,

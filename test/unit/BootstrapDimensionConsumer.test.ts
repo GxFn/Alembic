@@ -5,9 +5,9 @@ import {
   consumeBootstrapDimensionResult,
   type DimensionCandidateData,
   type DimensionStat,
-} from '#workflows/bootstrap/consumers/BootstrapDimensionConsumer.js';
-import type { DimensionContext } from '#workflows/bootstrap/context/DimensionContext.js';
-import type { BootstrapDimensionProjection } from '#workflows/bootstrap/projections/BootstrapDimensionProjection.js';
+} from '#workflows/common-capabilities/agent-execution/internal/consumers/BootstrapDimensionConsumer.js';
+import type { DimensionContext } from '#workflows/common-capabilities/agent-execution/internal/context/DimensionContext.js';
+import type { BootstrapDimensionProjection } from '#workflows/common-capabilities/agent-execution/internal/projections/BootstrapDimensionProjection.js';
 import type { MemoryCoordinator } from '../../lib/agent/memory/MemoryCoordinator.js';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';

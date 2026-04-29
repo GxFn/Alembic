@@ -33,13 +33,6 @@ describe('agent module boundaries', () => {
       'lib/external/mcp/handlers/bootstrap/shared/bootstrap-phases.ts',
       'lib/external/mcp/handlers/bootstrap/shared/dimension-text.ts',
       'lib/external/mcp/handlers/bootstrap/pipeline/orchestrator.ts',
-      'lib/workflows/bootstrap/checkpoint.ts',
-      'lib/workflows/bootstrap/BootstrapSnapshot.ts',
-      'lib/workflows/bootstrap/IncrementalBootstrap.ts',
-      'lib/workflows/bootstrap/dimension-configs.ts',
-      'lib/workflows/bootstrap/dimension-context.ts',
-      'lib/workflows/bootstrap/tier-scheduler.ts',
-      'lib/workflows/bootstrap/mock-pipeline.ts',
     ];
 
     expect(retiredFiles.filter((file) => existsSync(join(repoRoot, file)))).toEqual([]);
@@ -53,6 +46,7 @@ describe('agent module boundaries', () => {
       'lib/agent/workflow',
       'lib/agent/dashboard',
       'lib/external/mcp/handlers/bootstrap/pipeline',
+      join('lib', 'workflows', 'bootstrap'),
     ];
 
     const leftoverModules = retiredDirs.flatMap((dir) =>
@@ -92,6 +86,263 @@ describe('agent module boundaries', () => {
     expect(existsSync(join(repoRoot, 'lib/tools/core/tool-envelope-response.ts'))).toBe(false);
     expect(readFileSync(mcpAdapterPath, 'utf8')).not.toContain('#agent/');
     expect(readFileSync(httpPresenterPath, 'utf8')).not.toContain('#agent/');
+  });
+
+  test('keeps workflow layer independent from handler internals', () => {
+    const offenders: Array<{ file: string; specifier: string }> = [];
+    for (const file of collectTypeScriptFiles(join(repoRoot, 'lib', 'workflows'))) {
+      const relFile = relative(repoRoot, file);
+      for (const specifier of extractImportSpecifiers(readFileSync(file, 'utf8'))) {
+        if (isHandlerInternalImport(specifier)) {
+          offenders.push({ file: relFile, specifier });
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  test('keeps internal dimension execution off retired fill entrypoints', () => {
+    const compatibilityFiles = new Set([
+      join(
+        'lib',
+        'workflows',
+        'common-capabilities',
+        'agent-execution',
+        'InternalDimensionFillWorkflow.ts'
+      ),
+      join(
+        'lib',
+        'workflows',
+        'common-capabilities',
+        'agent-execution',
+        'internal',
+        'InternalDimensionFillPipeline.ts'
+      ),
+    ]);
+    const offenders: Array<{ file: string; token: string }> = [];
+
+    for (const file of collectTypeScriptFiles(join(repoRoot, 'lib', 'workflows'))) {
+      const relFile = relative(repoRoot, file);
+      if (compatibilityFiles.has(relFile)) {
+        continue;
+      }
+      const source = readFileSync(file, 'utf8');
+      for (const token of [
+        'fillDimensionsV3',
+        'InternalDimensionFillWorkflow.js',
+        'InternalDimensionFillPipeline.js',
+      ]) {
+        if (source.includes(token)) {
+          offenders.push({ file: relFile, token });
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  test('keeps knowledge rescan implementation off incremental-scan lifecycle names', () => {
+    const compatibilityRoot = join(repoRoot, 'lib', 'workflows', 'incremental-scan');
+    const offenders: Array<{ file: string; token: string }> = [];
+
+    for (const file of collectTypeScriptFiles(join(repoRoot, 'lib', 'workflows'))) {
+      if (file.startsWith(compatibilityRoot)) {
+        continue;
+      }
+      const relFile = relative(repoRoot, file);
+      const source = readFileSync(file, 'utf8');
+      for (const token of ['#workflows/incremental-scan/', 'IncrementalScan']) {
+        if (source.includes(token)) {
+          offenders.push({ file: relFile, token });
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  test('does not restore D6 retired Bootstrap compatibility modules', () => {
+    const retiredFiles = [
+      join(
+        'lib',
+        'workflows',
+        'common-capabilities',
+        'progress',
+        'checkpoint',
+        'BootstrapCheckpointStore.ts'
+      ),
+      join(
+        'lib',
+        'workflows',
+        'common-capabilities',
+        'progress',
+        'checkpoint',
+        'BootstrapRestoreState.ts'
+      ),
+      join(
+        'lib',
+        'workflows',
+        'common-capabilities',
+        'progress',
+        'reports',
+        'BootstrapCheckpointCleanup.ts'
+      ),
+      join(
+        'lib',
+        'workflows',
+        'common-capabilities',
+        'progress',
+        'reports',
+        'BootstrapReportHistoryStore.ts'
+      ),
+      join(
+        'lib',
+        'workflows',
+        'common-capabilities',
+        'progress',
+        'reports',
+        'BootstrapReportSnapshotConsumer.ts'
+      ),
+      join(
+        'lib',
+        'workflows',
+        'common-capabilities',
+        'progress',
+        'reports',
+        'BootstrapReportSnapshotWorkflow.ts'
+      ),
+      join(
+        'lib',
+        'workflows',
+        'common-capabilities',
+        'progress',
+        'reports',
+        'BootstrapReportTypes.ts'
+      ),
+      join(
+        'lib',
+        'workflows',
+        'common-capabilities',
+        'progress',
+        'reports',
+        'BootstrapReportWriter.ts'
+      ),
+      join(
+        'lib',
+        'workflows',
+        'common-capabilities',
+        'progress',
+        'reports',
+        'BootstrapSnapshotStore.ts'
+      ),
+      join('lib', 'workflows', 'common-capabilities', 'delivery', 'BootstrapDeliveryConsumer.ts'),
+      join(
+        'lib',
+        'workflows',
+        'common-capabilities',
+        'agent-execution',
+        'internal',
+        'consumers',
+        'BootstrapSemanticMemoryConsumer.ts'
+      ),
+      join('lib', 'external', 'mcp', 'handlers', 'bootstrap', 'shared', 'async-fill-helpers.ts'),
+      join('lib', 'external', 'mcp', 'handlers', 'bootstrap', 'shared', 'audit-helpers.ts'),
+      join('lib', 'external', 'mcp', 'handlers', 'bootstrap', 'shared', 'handler-types.ts'),
+      join('lib', 'external', 'mcp', 'handlers', 'bootstrap', 'shared', 'panorama-utils.ts'),
+      join('lib', 'external', 'mcp', 'handlers', 'bootstrap', 'shared', 'session-helpers.ts'),
+      join('lib', 'external', 'mcp', 'handlers', 'bootstrap', 'shared', 'skill-generator.ts'),
+      join('lib', 'external', 'mcp', 'handlers', 'bootstrap', 'shared', 'target-file-map.ts'),
+    ];
+    expect(retiredFiles.filter((file) => existsSync(join(repoRoot, file)))).toEqual([]);
+
+    const retiredSpecifiers = new Set([
+      '#workflows/common-capabilities/progress/checkpoint/BootstrapCheckpointStore.js',
+      '#workflows/common-capabilities/progress/checkpoint/BootstrapRestoreState.js',
+      '#workflows/common-capabilities/progress/reports/BootstrapCheckpointCleanup.js',
+      '#workflows/common-capabilities/progress/reports/BootstrapReportHistoryStore.js',
+      '#workflows/common-capabilities/progress/reports/BootstrapReportSnapshotConsumer.js',
+      '#workflows/common-capabilities/progress/reports/BootstrapReportSnapshotWorkflow.js',
+      '#workflows/common-capabilities/progress/reports/BootstrapReportTypes.js',
+      '#workflows/common-capabilities/progress/reports/BootstrapReportWriter.js',
+      '#workflows/common-capabilities/progress/reports/BootstrapSnapshotStore.js',
+      '#workflows/common-capabilities/delivery/BootstrapDeliveryConsumer.js',
+      '#workflows/common-capabilities/agent-execution/internal/consumers/BootstrapSemanticMemoryConsumer.js',
+      '#external/mcp/handlers/bootstrap/shared/async-fill-helpers.js',
+      '#external/mcp/handlers/bootstrap/shared/audit-helpers.js',
+      '#external/mcp/handlers/bootstrap/shared/handler-types.js',
+      '#external/mcp/handlers/bootstrap/shared/panorama-utils.js',
+      '#external/mcp/handlers/bootstrap/shared/session-helpers.js',
+      '#external/mcp/handlers/bootstrap/shared/skill-generator.js',
+      '#external/mcp/handlers/bootstrap/shared/target-file-map.js',
+    ]);
+    const offenders: Array<{ file: string; specifier: string }> = [];
+
+    for (const file of [
+      ...collectTypeScriptFiles(join(repoRoot, 'lib')),
+      ...collectTypeScriptFiles(join(repoRoot, 'test')),
+    ]) {
+      const relFile = relative(repoRoot, file);
+      if (file === thisFile) {
+        continue;
+      }
+      for (const specifier of extractImportSpecifiers(readFileSync(file, 'utf8'))) {
+        if (
+          retiredSpecifiers.has(specifier) ||
+          isRetiredBootstrapSharedRelativeImport(specifier, relFile)
+        ) {
+          offenders.push({ file: relFile, specifier });
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  test('keeps file diff implementation on workflow naming', () => {
+    const bootstrapSnapshotCompatibilityFile = join(
+      'lib',
+      'workflows',
+      'common-capabilities',
+      'file-diff',
+      'BootstrapSnapshot.ts'
+    );
+    const incrementalBootstrapCompatibilityFile = join(
+      'lib',
+      'workflows',
+      'common-capabilities',
+      'file-diff',
+      'IncrementalBootstrap.ts'
+    );
+    const compatibilityFiles = new Set([
+      bootstrapSnapshotCompatibilityFile,
+      incrementalBootstrapCompatibilityFile,
+    ]);
+    const retiredSpecifiers = new Set([
+      '#workflows/common-capabilities/file-diff/BootstrapSnapshot.js',
+      '#workflows/common-capabilities/file-diff/IncrementalBootstrap.js',
+    ]);
+    const offenders: Array<{ file: string; specifier: string }> = [];
+
+    for (const file of collectTypeScriptFiles(join(repoRoot, 'lib', 'workflows'))) {
+      const relFile = relative(repoRoot, file);
+      if (compatibilityFiles.has(relFile)) {
+        continue;
+      }
+      for (const specifier of extractImportSpecifiers(readFileSync(file, 'utf8'))) {
+        if (retiredSpecifiers.has(specifier)) {
+          offenders.push({ file: relFile, specifier });
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+    expect(readFileSync(join(repoRoot, bootstrapSnapshotCompatibilityFile), 'utf8')).not.toContain(
+      'class BootstrapSnapshot'
+    );
+    expect(
+      readFileSync(join(repoRoot, incrementalBootstrapCompatibilityFile), 'utf8')
+    ).not.toContain('class IncrementalBootstrap');
   });
 });
 
@@ -150,5 +401,25 @@ function isRetiredImportSpecifier(specifier: string, relFile: string) {
     (specifier.startsWith('./pipeline/') ||
       specifier.startsWith('../pipeline/') ||
       specifier.includes('bootstrap/pipeline/'))
+  );
+}
+
+function isHandlerInternalImport(specifier: string) {
+  return (
+    specifier === '#external/mcp/handlers/types.js' ||
+    specifier === '#external/mcp/handlers/evolution-prescreen.js' ||
+    specifier === '#external/mcp/handlers/LanguageExtensions.js' ||
+    specifier === '#external/mcp/handlers/TargetClassifier.js' ||
+    specifier.startsWith('#external/mcp/handlers/bootstrap/shared/')
+  );
+}
+
+function isRetiredBootstrapSharedRelativeImport(specifier: string, relFile: string) {
+  return (
+    specifier.includes('/bootstrap/shared/') ||
+    specifier.startsWith('./bootstrap/shared/') ||
+    specifier.startsWith('../bootstrap/shared/') ||
+    ((specifier.startsWith('./shared/') || specifier.startsWith('../shared/')) &&
+      relFile.startsWith('lib/external/mcp/handlers/bootstrap/'))
   );
 }

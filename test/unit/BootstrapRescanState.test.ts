@@ -5,7 +5,7 @@ import {
   prepareBootstrapRescanState,
   projectBootstrapDimensionRescanContext,
   projectBootstrapExistingRecipesForPrompt,
-} from '#workflows/bootstrap/context/BootstrapRescanState.js';
+} from '#workflows/common-capabilities/agent-execution/internal/context/BootstrapRescanState.js';
 
 const recipes: BootstrapExistingRecipe[] = [
   {

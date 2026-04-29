@@ -14,6 +14,8 @@
  * @module types/project-snapshot
  */
 
+import type { FileDiffPlan } from '#types/workflows.js';
+
 // ── Phase 1: 文件发现 ────────────────────────────────────────
 
 /** 项目级别的文件信息，来自 Phase 1 扫描 */
@@ -264,26 +266,10 @@ export interface PhaseReport {
   [key: string]: unknown;
 }
 
-// ── 增量扫描相关 ─────────────────────────────────────────────
+// ── 文件快照增量相关 ─────────────────────────────────────────
 
-/** 增量计划（rescan 场景） */
-export interface IncrementalPlan {
-  mode?: string;
-  canIncremental?: boolean;
-  affectedDimensions?: string[];
-  skippedDimensions?: string[];
-  reason?: string;
-  diff?: {
-    added: unknown[];
-    modified: unknown[];
-    deleted: unknown[];
-    unchanged: unknown[];
-    changeRatio?: number;
-  };
-  dimensions?: Array<{ id: string; status?: string }>;
-  changedFiles?: string[];
-  [key: string]: unknown;
-}
+/** 兼容旧命名；真实语义是文件快照 diff 计划，不是 knowledge rescan plan。 */
+export type IncrementalPlan = FileDiffPlan;
 
 /** 已有 Recipe 信息（rescan 去重 + lifecycle 感知） */
 export interface ExistingRecipeInfo {

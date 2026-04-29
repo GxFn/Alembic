@@ -3,7 +3,13 @@
  * Runtime-free — only interfaces and type aliases.
  */
 
-import type { SessionStore } from '#agent/memory/SessionStore.js';
+import type {
+  BootstrapFile,
+  DimensionCheckpointResult,
+  IncrementalPlan,
+  LoggerLike,
+  SaveSnapshotParams,
+} from '#types/workflows.js';
 
 // ─── DI Container (minimal shape) ────────────────────────
 
@@ -421,60 +427,15 @@ export interface EnrichResultEntry {
 
 // ─── Bootstrap / Incremental ─────────────────────────────
 
-export interface BootstrapFile {
-  path: string;
-  relativePath: string;
-  content: string;
-}
-
-export interface IncrementalPlan {
-  canIncremental: boolean;
-  mode: 'incremental' | 'full';
-  affectedDimensions: string[];
-  skippedDimensions: string[];
-  previousSnapshot: Record<string, unknown> | null;
-  diff: {
-    added: string[];
-    modified: string[];
-    deleted: string[];
-    unchanged: string[];
-    changeRatio: number;
-  } | null;
-  reason: string;
-  restoredEpisodic: SessionStore | null;
-}
-
-export interface SaveSnapshotParams {
-  sessionId: string;
-  allFiles: BootstrapFile[];
-  dimensionStats: Record<string, Record<string, unknown>>;
-  episodicMemory?: {
-    toJSON(): unknown;
-    getCompletedDimensions(): string[];
-    getDimensionReport?(dimId: string): { referencedFiles?: string[] } | null;
-  } | null;
-  meta?: Record<string, unknown>;
-  plan?: IncrementalPlan | null;
-}
+export type { BootstrapFile, IncrementalPlan, SaveSnapshotParams };
 
 // ─── Dimension checkpoint ────────────────────────────────
 
-export interface DimensionCheckpointResult {
-  dimId?: string;
-  sessionId?: string;
-  completedAt?: number;
-  digest?: unknown;
-  [key: string]: unknown;
-}
+export type { DimensionCheckpointResult };
 
 // ─── Logger-like interface ───────────────────────────────
 
-export interface LoggerLike {
-  info?(...args: unknown[]): void;
-  warn?(...args: unknown[]): void;
-  error?(...args: unknown[]): void;
-  debug?(...args: unknown[]): void;
-}
+export type { LoggerLike };
 
 // ─── Duplicate check result ──────────────────────────────
 
