@@ -28,10 +28,12 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
       - run: npm ci
-      - run: npm run build
-      - run: npm run lint
       - run: cd dashboard && npm ci
+      - run: npm run install:vscode-ext
+      - run: npm run build
+      - run: npm run lint -- --diagnostic-level=error
       - run: npm run build:dashboard
+      - run: npm run build:vscode-ext
 
   api-smoke:
     name: API Smoke Test
@@ -46,7 +48,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: cd dashboard && npm ci
+      - run: npm run install:vscode-ext
       - run: npm run build:dashboard
+      - run: npm run build:vscode-ext
 
       - name: Start API Server
         run: |
@@ -126,7 +130,9 @@ jobs:
         run: node -v && npm -v
 
       - name: Run integration tests
-        run: npm run test:integration 2>&1 | tee /tmp/integration-test.log
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee /tmp/integration-test.log
         env:
           ASD_DISABLE_WRITE_GUARD: '1'
           ASD_DISABLE_RATE_LIMIT: '1'

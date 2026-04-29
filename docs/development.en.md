@@ -316,21 +316,24 @@ npm run release:major      # Major version (+1.0.0)
 ```
 
 `release.js` automatically:
-1. Runs tests
-2. Updates `package.json` version
-3. Updates `CHANGELOG.md`
-4. Git commit + tag
-5. `npm publish`
+1. Runs local preflight checks, builds, and tests
+2. Updates `package.json` / `package-lock.json`
+3. Prompts maintainers to update `CHANGELOG.md`
+4. Creates a Git commit + `v*` tag
+5. Pushes to GitHub and triggers the Release Action
+
+The npm package is published by `.github/workflows/release.yml` after the tag is pushed. Do not run `npm publish` locally.
 
 ### Dashboard Build
 
-Dashboard must be built before publishing:
+The release script and Release Action both build the Dashboard and VS Code extension:
 
 ```bash
-npm run build:dashboard    # Must run before npm publish
+npm run build:dashboard
+npm run build:vscode-ext
 ```
 
-The `prepublishOnly` script auto-builds native UI (macOS), but Dashboard requires manual building.
+The Release Action runs `npm pack --dry-run`, `npm run package:vscode-ext -- --out /tmp/alembic-vscode.vsix`, and `npm publish --provenance --access public --ignore-scripts`, so the already verified build artifacts are published without triggering duplicate `prepublishOnly` builds.
 
 ---
 

@@ -2,18 +2,17 @@
 
 /**
  * Alembic 发布辅助脚本
- * 用途：自动化发布前检查和发布流程
- * 使用：node scripts/release.js [patch|minor|major]
+ * 用途：自动化发布前检查、版本提交和 tag 推送
+ * 使用：node dist/scripts/release.js [check|patch|minor|major]
+ *
+ * npm 包发布由 .github/workflows/release.yml 在 v* tag 推送后完成。
  */
-
-import { DASHBOARD_DIR, PACKAGE_ROOT, RESOURCES_DIR } from '../lib/shared/package-root.js';
-
-const __dirname = import.meta.dirname;
 
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-root.js';
 
 const require = createRequire(import.meta.url);
 // 颜色输出
@@ -26,7 +25,10 @@ const _colors = {
   bold: '\x1b[1m',
 };
 
-function log(message: any, color = 'reset') {}
+function log(message: any, color = 'reset') {
+  const code = _colors[color as keyof typeof _colors] ?? '';
+  console.log(`${code}${message}${_colors.reset}`);
+}
 
 function success(message: any) {
   log(`✅ ${message}`, 'green');
@@ -65,6 +67,10 @@ function exec(command: any, options: any = {}) {
   }
 }
 
+function readPackageJson() {
+  return JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8'));
+}
+
 // 检查项
 class ReleaseChecker {
   errors: any;
@@ -99,13 +105,13 @@ class ReleaseChecker {
     // 检查远程同步
     try {
       exec('git fetch origin', { silent: true });
-      const behind = exec('git rev-list HEAD..origin/main --count', {
+      const behind = exec(`git rev-list HEAD..origin/${branch} --count`, {
         silent: true,
         ignoreError: true,
       })?.trim();
       if (behind && parseInt(behind) > 0) {
         this.warnings.push(`本地落后远程 ${behind} 个提交`);
-        warning(`需要先 pull: git pull origin main`);
+        warning(`需要先 pull: git pull origin ${branch}`);
       } else {
         success('与远程同步');
       }
@@ -121,65 +127,45 @@ class ReleaseChecker {
     const nodeVersion = process.version;
     const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0]);
 
-    if (majorVersion < 16) {
-      this.errors.push(`Node.js 版本过低: ${nodeVersion} (需要 >=16)`);
+    if (majorVersion < 22) {
+      this.errors.push(`Node.js 版本过低: ${nodeVersion} (需要 >=22)`);
       error(`Node.js: ${nodeVersion}`);
     } else {
       success(`Node.js: ${nodeVersion}`);
     }
 
-    // 检查环境变量配置
+    // 检查环境变量配置。发布不再改写 .env；CI 会在 tag 推送后独立构建和发布。
     const envPath = path.join(PACKAGE_ROOT, '.env');
     if (!fs.existsSync(envPath)) {
-      this.errors.push('.env 文件不存在');
-      error('.env: 不存在');
+      warning('.env: 不存在（发布流程不依赖本地 .env）');
     } else {
       const envContent = fs.readFileSync(envPath, 'utf8');
       const nodeEnv = envContent.match(/NODE_ENV=(\w+)/)?.[1];
 
       if (nodeEnv === 'production') {
-        this.errors.push('.env 已是生产环境，发布前应该是开发环境');
-        error(`环境: ${nodeEnv} (应该是 development)`);
+        warning(`环境: ${nodeEnv}（发布流程不会改写 .env）`);
       } else {
         success(`环境: ${nodeEnv || 'development'}`);
       }
 
-      // 检查是否有备份
       const backupPath = path.join(PACKAGE_ROOT, '.env.backup');
       if (fs.existsSync(backupPath)) {
-        warning('.env.backup 已存在，可能有未完成的发布');
+        warning('.env.backup 已存在，请确认是否为旧发布流程遗留');
       }
     }
   }
 
-  // 检查并构建前端（生产环境）
-  buildFrontend() {
-    header('构建前端（生产环境）');
+  // 本地构建校验。真正的发布构建会在 GitHub Actions 中再次执行。
+  buildArtifacts() {
+    header('构建发布产物');
 
-    // 备份 .env
-    info('备份 .env 文件...');
-    const envPath = path.join(PACKAGE_ROOT, '.env');
-    const backupPath = path.join(PACKAGE_ROOT, '.env.backup');
-
-    if (fs.existsSync(envPath)) {
-      fs.copyFileSync(envPath, backupPath);
-      success('.env 已备份');
-    }
-
-    // 切换到生产环境
-    info('切换到生产环境...');
-    const envContent = fs.readFileSync(envPath, 'utf8');
-    const productionEnv = envContent
-      .replace(/NODE_ENV=.*/g, 'NODE_ENV=production')
-      .replace(/VITE_API_BASE_URL=.*/g, 'VITE_API_BASE_URL=https://your-production-api.com');
-
-    fs.writeFileSync(envPath, productionEnv);
-    success('已切换到生产环境');
-
-    // 构建 Dashboard
     try {
+      info('构建 TypeScript...');
+      exec('npm run build');
+      success('TypeScript 构建成功');
+
       info('构建 Dashboard...');
-      exec('cd dashboard && npm run build');
+      exec('npm run build:dashboard');
 
       const distPath = path.join(DASHBOARD_DIR, 'dist/index.html');
       if (fs.existsSync(distPath)) {
@@ -187,35 +173,14 @@ class ReleaseChecker {
       } else {
         throw new Error('dist/index.html 不存在');
       }
+
+      info('构建 VS Code 扩展...');
+      exec('npm run build:vscode-ext');
+      success('VS Code 扩展构建成功');
     } catch (err: any) {
-      this.errors.push('Dashboard 构建失败');
-      error('Dashboard 构建失败');
-
-      // 恢复环境
-      warning('恢复开发环境...');
-      fs.copyFileSync(backupPath, envPath);
-      fs.unlinkSync(backupPath);
-
+      this.errors.push('发布产物构建失败');
+      error('发布产物构建失败');
       throw err;
-    }
-
-    // 恢复开发环境（稍后在发布完成后再恢复）
-    info('⚠️  记得在发布完成后恢复开发环境');
-  }
-
-  // 恢复开发环境
-  restoreEnvironment() {
-    header('恢复开发环境');
-
-    const envPath = path.join(PACKAGE_ROOT, '.env');
-    const backupPath = path.join(PACKAGE_ROOT, '.env.backup');
-
-    if (fs.existsSync(backupPath)) {
-      fs.copyFileSync(backupPath, envPath);
-      fs.unlinkSync(backupPath);
-      success('已恢复开发环境');
-    } else {
-      warning('未找到 .env.backup，请手动检查环境变量');
     }
   }
 
@@ -240,7 +205,13 @@ class ReleaseChecker {
 
     try {
       info('运行集成测试...');
-      exec('npm run test:integration');
+      exec('npm run test:integration', {
+        env: {
+          ...process.env,
+          ASD_DISABLE_WRITE_GUARD: '1',
+          ASD_DISABLE_RATE_LIMIT: '1',
+        },
+      });
       success('集成测试通过');
     } catch (_err: any) {
       this.errors.push('集成测试失败');
@@ -259,12 +230,16 @@ class ReleaseChecker {
 
     if (this.errors.length > 0) {
       error(`发现 ${this.errors.length} 个错误：`);
-      this.errors.forEach((err: any, i: any) => {});
+      this.errors.forEach((err: any, i: any) => {
+        error(`  ${i + 1}. ${err}`);
+      });
     }
 
     if (this.warnings.length > 0) {
       warning(`发现 ${this.warnings.length} 个警告：`);
-      this.warnings.forEach((warn: any, i: any) => {});
+      this.warnings.forEach((warn: any, i: any) => {
+        warning(`  ${i + 1}. ${warn}`);
+      });
     }
 
     return this.errors.length === 0;
@@ -276,22 +251,23 @@ function release(versionType: any, checker: any) {
   header(`开始发布流程 (${versionType})`);
 
   // 读取当前版本
-  const packageJson = require('../package.json');
+  const packageJson = readPackageJson();
   const currentVersion = packageJson.version;
   info(`当前版本: ${currentVersion}`);
 
-  // 构建前端（生产环境）
+  // 构建产物（本地预检；GitHub Actions 会在 tag 推送后再次构建）
   try {
-    checker.buildFrontend();
+    checker.buildArtifacts();
   } catch (_err: any) {
-    error('前端构建失败，发布中止');
+    error('构建失败，发布中止');
     process.exit(1);
   }
 
   // 执行版本升级
   try {
-    info(`执行 npm version ${versionType}...`);
-    const newVersion = exec(`npm version ${versionType}`, { silent: true })?.trim();
+    info(`执行 npm version ${versionType} --no-git-tag-version...`);
+    exec(`npm version ${versionType} --no-git-tag-version`, { silent: true });
+    const newVersion = `v${readPackageJson().version}`;
     success(`版本已更新: ${currentVersion} → ${newVersion}`);
 
     info('请手动编辑 CHANGELOG.md，然后按回车继续...');
@@ -301,33 +277,21 @@ function release(versionType: any, checker: any) {
       shell: true,
     });
 
-    // 修正 commit（包含 dist/ 文件）
-    info('提交所有变更（包括构建产物）...');
-    exec('git add .');
-    exec(`git commit --amend -m "chore: release ${newVersion}"`);
-    exec(`git tag -f ${newVersion}`);
-    success('Commit 和 tag 已更新');
+    info('提交版本文件...');
+    exec('git add package.json package-lock.json CHANGELOG.md');
+    exec(`git commit -m "chore: release ${newVersion}"`);
+    exec(`git tag ${newVersion}`);
+    success('Release commit 和 tag 已创建');
 
-    // 推送到 GitHub
-    info('推送到 GitHub（触发自动发布）...');
-    exec('git push origin main --tags');
-    success('已推送到 GitHub，等待 Actions 自动发布');
-
-    // 恢复开发环境
-    checker.restoreEnvironment();
+    info('推送到 GitHub（触发 Release Action 自动发布 npm 包）...');
+    exec('git push origin HEAD');
+    exec(`git push origin ${newVersion}`);
+    success('已推送到 GitHub，等待 Actions 构建、测试并发布 npm 包');
 
     header('🎉 发布流程完成！');
   } catch (err: any) {
     error('发布失败！');
     console.error(err.message);
-
-    // 尝试恢复环境
-    try {
-      checker.restoreEnvironment();
-    } catch (_restoreErr: any) {
-      error('恢复环境失败，请手动检查 .env 文件');
-    }
-
     process.exit(1);
   }
 }

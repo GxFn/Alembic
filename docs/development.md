@@ -316,21 +316,24 @@ npm run release:major      # 主版本 (+1.0.0)
 ```
 
 `release.js` 自动执行：
-1. 运行测试
-2. 更新 `package.json` 版本号
-3. 更新 `CHANGELOG.md`
-4. Git commit + tag
-5. `npm publish`
+1. 运行本地预检、构建和测试
+2. 更新 `package.json` / `package-lock.json` 版本号
+3. 提示维护者更新 `CHANGELOG.md`
+4. 创建 Git commit + `v*` tag
+5. 推送到 GitHub，触发 Release Action
+
+npm 包发布由 `.github/workflows/release.yml` 在 tag 推送后自动完成。不要在本地单独执行 `npm publish`。
 
 ### Dashboard 构建
 
-发布前需要构建 Dashboard：
+发布脚本和 Release Action 都会构建 Dashboard 与 VS Code 扩展：
 
 ```bash
-npm run build:dashboard    # 必须在 npm publish 前执行
+npm run build:dashboard
+npm run build:vscode-ext
 ```
 
-`prepublishOnly` 脚本会自动构建原生 UI（macOS），但 Dashboard 需手动构建。
+Release Action 会在发布前执行 `npm pack --dry-run`、`npm run package:vscode-ext -- --out /tmp/alembic-vscode.vsix` 和 `npm publish --provenance --access public --ignore-scripts`，避免重复触发 `prepublishOnly` 构建。
 
 ---
 
