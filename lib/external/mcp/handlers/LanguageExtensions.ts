@@ -1,1 +1,1 @@
-export * from '#workflows/common-capabilities/presentation/LanguageExtensionBuilder.js';
+export * from '#workflows/capabilities/presentation/LanguageExtensionBuilder.js';

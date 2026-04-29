@@ -3,7 +3,7 @@ import type {
   ProjectAnalysisMaterializationPlan,
   ProjectAnalysisPreparationOptions,
   ProjectAnalysisScanOptions,
-} from '#workflows/common-capabilities/project-analysis/ProjectAnalysisWorkflow.js';
+} from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
 import type { ColdStartWorkflowIntent } from './ColdStartIntent.js';
 
 export interface ColdStartWorkflowPlan {

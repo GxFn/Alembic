@@ -109,7 +109,7 @@ export class PanoramaScanner {
         runPhase1_7_CallGraph,
         runPhase2_DependencyGraph,
         runPhase2_1_ModuleEntities,
-      } = await import('#workflows/common-capabilities/project-analysis/ProjectAnalysisRunner.js');
+      } = await import('#workflows/capabilities/project-intelligence/ProjectIntelligenceRunner.js');
 
       // Phase 1: 文件收集
       const phase1 = await runPhase1_FileCollection(this.#projectRoot, this.#logger, {

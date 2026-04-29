@@ -9,13 +9,13 @@ import type {
   PhaseReport,
   ProjectSnapshot,
 } from '#types/project-snapshot.js';
-import { buildInternalNextSteps } from '#workflows/common-capabilities/agent-execution/mission-briefing/BootstrapDimensionText.js';
-import { inferTargetRole } from '#workflows/common-capabilities/presentation/TargetClassifier.js';
+import { buildInternalNextSteps } from '#workflows/capabilities/execution/external-agent/mission-briefing/BootstrapDimensionText.js';
+import { inferTargetRole } from '#workflows/capabilities/presentation/TargetClassifier.js';
 import {
   buildProjectLanguageExtension,
   buildProjectTargetFileMap,
   summarizeProjectPanorama,
-} from '#workflows/common-capabilities/project-analysis/ProjectAnalysisViews.js';
+} from '#workflows/capabilities/project-intelligence/ProjectIntelligenceViews.js';
 
 export type ColdStartTargetFileMap = Record<string, Array<Record<string, unknown>>>;
 

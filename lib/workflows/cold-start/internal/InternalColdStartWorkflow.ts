@@ -51,6 +51,13 @@ import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.
 import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '#types/workflows.js';
+import { runFullResetPolicy } from '#workflows/capabilities/cleanup/WorkflowCleanupPolicies.js';
+import { cacheProjectAnalysisSession } from '#workflows/capabilities/execution/external-agent/session/WorkflowSessionCache.js';
+import {
+  dispatchInternalDimensionExecution,
+  startInternalDimensionExecutionSession,
+} from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
+import { ProjectIntelligenceCapability } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
 import {
   createInternalColdStartIntent,
   type InternalColdStartArgs,
@@ -65,13 +72,6 @@ import {
   presentInternalColdStartEmptyProject,
   presentInternalColdStartResponse,
 } from '#workflows/cold-start/ColdStartPresenters.js';
-import {
-  dispatchInternalDimensionExecution,
-  startInternalDimensionExecutionSession,
-} from '#workflows/common-capabilities/agent-execution/InternalDimensionExecutionWorkflow.js';
-import { runFullResetPolicy } from '#workflows/common-capabilities/cleanup/CleanupPolicies.js';
-import { cacheProjectAnalysisSession } from '#workflows/common-capabilities/progress/WorkflowSessionCache.js';
-import { ProjectAnalysisCapability } from '#workflows/common-capabilities/project-analysis/ProjectAnalysisWorkflow.js';
 
 // ─── Local type definitions (bootstrap-internal) ─────
 
@@ -136,7 +136,7 @@ export async function runInternalColdStartWorkflow(
   // ═══════════════════════════════════════════════════════════
   // Phase 1-4: 共享管线（文件收集→AST→依赖→Guard→维度解析）
   // ═══════════════════════════════════════════════════════════
-  const phaseResults = await ProjectAnalysisCapability.run({
+  const phaseResults = await ProjectIntelligenceCapability.run({
     projectRoot: plan.projectAnalysis.projectRoot,
     ctx,
     prepare: plan.projectAnalysis.prepare,

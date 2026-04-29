@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
 import type { WriteZone } from '#infra/io/WriteZone.js';
-import { generateSkill } from '#workflows/common-capabilities/agent-execution/skills/WorkflowSkillCompletionCapability.js';
+import { generateSkill } from '#workflows/capabilities/execution/skills/WorkflowSkillCompletionCapability.js';
 
 describe('WorkflowSkillCompletionCapability', () => {
   test('rejects skill generation when analysis text is below quality threshold', async () => {

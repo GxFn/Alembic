@@ -2,8 +2,8 @@ import { describe, expect, test, vi } from 'vitest';
 import {
   consolidateSemanticMemory,
   type SemanticMemoryCompletionDependencies,
-} from '#workflows/common-capabilities/completion/SemanticMemoryCompletionStep.js';
-import type { WorkflowSemanticMemoryConsolidationResult } from '#workflows/common-capabilities/completion/WorkflowCompletionTypes.js';
+} from '#workflows/capabilities/completion/SemanticMemoryCompletionStep.js';
+import type { WorkflowSemanticMemoryConsolidationResult } from '#workflows/capabilities/completion/WorkflowCompletionTypes.js';
 
 function makeResult(
   partial: Partial<WorkflowSemanticMemoryConsolidationResult> = {}

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { runCursorDelivery } from '#workflows/common-capabilities/completion/DeliveryCompletionStep.js';
+import { runCursorDelivery } from '#workflows/capabilities/completion/DeliveryCompletionStep.js';
 
 describe('DeliveryCompletionStep', () => {
   test('runs cursor delivery through the workflow completion boundary', async () => {

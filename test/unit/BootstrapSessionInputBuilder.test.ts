@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   type BootstrapSessionChildRunPlan,
   buildBootstrapSessionRunInput,
-} from '#workflows/common-capabilities/agent-execution/internal/agent-runs/BootstrapSessionInputBuilder.js';
+} from '#workflows/capabilities/execution/internal-agent/agent-runs/BootstrapSessionInputBuilder.js';
 import type { AgentRunInput } from '../../lib/agent/service/index.js';
 
 function makeChild(id: string, tier: number): BootstrapSessionChildRunPlan {

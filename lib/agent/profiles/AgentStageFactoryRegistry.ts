@@ -2,7 +2,7 @@ import {
   buildBootstrapTerminalPolicyHints,
   getBootstrapStageTerminalTools,
   resolveBootstrapTerminalToolset,
-} from '#workflows/common-capabilities/dimension-planning/BootstrapTerminalToolset.js';
+} from '#workflows/capabilities/planning/dimensions/BootstrapTerminalToolset.js';
 import { PRESETS } from '../profiles/presets.js';
 import {
   buildRelationsPipelineStages,

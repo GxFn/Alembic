@@ -5,7 +5,7 @@ import {
   resolveProjectAnalysisMaterialization,
   runPhase1_7_CallGraph,
   runPhase2_DependencyGraph,
-} from '#workflows/common-capabilities/project-analysis/ProjectAnalysisRunner.js';
+} from '#workflows/capabilities/project-intelligence/ProjectIntelligenceRunner.js';
 
 describe('ProjectAnalysis materialization plan', () => {
   test('defaults to all current side effects enabled', () => {

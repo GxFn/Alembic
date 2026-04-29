@@ -5,12 +5,12 @@ import type {
   RelevanceAuditSummary,
 } from '#service/evolution/RelevanceAuditor.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
-import { buildKnowledgeRescanPlan } from '#workflows/common-capabilities/knowledge-rescan/KnowledgeRescanPlanBuilder.js';
+import { buildKnowledgeRescanPlan } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
 import {
   projectExternalRescanEvidencePlan,
   projectInternalRescanGapPlan,
   projectInternalRescanPromptRecipes,
-} from '#workflows/common-capabilities/knowledge-rescan/RescanEvidenceProjectors.js';
+} from '#workflows/capabilities/planning/knowledge/RescanEvidenceProjectors.js';
 
 const dimensions: DimensionDef[] = [
   { id: 'api', label: 'API' },

@@ -1,10 +1,10 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { DimensionCandidateData } from '#workflows/common-capabilities/agent-execution/internal/consumers/BootstrapDimensionConsumer.js';
+import type { DimensionCandidateData } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
 import {
   buildEffectiveSkillAnalysisText,
   consumeBootstrapSkills,
   extractSkillKeyFindings,
-} from '#workflows/common-capabilities/agent-execution/internal/consumers/BootstrapSkillConsumer.js';
+} from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapSkillConsumer.js';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
 

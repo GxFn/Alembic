@@ -6,15 +6,15 @@ import type {
   CandidateResults,
   DimensionCandidateData,
   DimensionStat,
-} from '#workflows/common-capabilities/agent-execution/internal/consumers/BootstrapDimensionConsumer.js';
-import type { DimensionContext } from '#workflows/common-capabilities/agent-execution/internal/context/DimensionContext.js';
+} from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
+import type { DimensionContext } from '#workflows/capabilities/execution/internal-agent/context/DimensionContext.js';
 import {
   applyRestoredDimensionState,
   type DimensionCheckpoint,
   resolveIncrementalSkippedDimensions,
   restoreCheckpointDimensions,
   syncRestoredSessionStoreDigests,
-} from '#workflows/common-capabilities/progress/checkpoint/DimensionRestoreState.js';
+} from '#workflows/capabilities/persistence/checkpoint/DimensionRestoreState.js';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 import type { IncrementalPlan } from '../../lib/external/mcp/handlers/types.js';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';

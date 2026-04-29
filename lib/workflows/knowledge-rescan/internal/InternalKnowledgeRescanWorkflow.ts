@@ -23,11 +23,12 @@ import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '#types/workflows.js';
+import { runRescanCleanPolicy } from '#workflows/capabilities/cleanup/WorkflowCleanupPolicies.js';
+import { cacheProjectAnalysisSession } from '#workflows/capabilities/execution/external-agent/session/WorkflowSessionCache.js';
 import {
   dispatchInternalDimensionExecution,
   startInternalDimensionExecutionSession,
-} from '#workflows/common-capabilities/agent-execution/InternalDimensionExecutionWorkflow.js';
-import { runRescanCleanPolicy } from '#workflows/common-capabilities/cleanup/CleanupPolicies.js';
+} from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
 import {
   auditRecipesForRescan,
   buildKnowledgeRescanPlan,
@@ -35,9 +36,8 @@ import {
   projectInternalRescanGapPlan,
   projectInternalRescanPromptRecipes,
   syncKnowledgeStoreForRescan,
-} from '#workflows/common-capabilities/knowledge-rescan/KnowledgeRescanPlanner.js';
-import { cacheProjectAnalysisSession } from '#workflows/common-capabilities/progress/WorkflowSessionCache.js';
-import { ProjectAnalysisCapability } from '#workflows/common-capabilities/project-analysis/ProjectAnalysisWorkflow.js';
+} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
+import { ProjectIntelligenceCapability } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
 import {
   createInternalKnowledgeRescanIntent,
   type InternalKnowledgeRescanArgs,
@@ -109,7 +109,7 @@ export async function runInternalKnowledgeRescanWorkflow(
   // Step 3: Phase 1-4 全量分析
   // ═══════════════════════════════════════════════════════════
 
-  const phaseResults = await ProjectAnalysisCapability.run({
+  const phaseResults = await ProjectIntelligenceCapability.run({
     projectRoot: plan.projectAnalysis.projectRoot,
     ctx,
     prepare: plan.projectAnalysis.prepare,

@@ -2,13 +2,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
 import type { IncrementalPlan } from '#types/workflows.js';
-import type { CandidateResults } from '#workflows/common-capabilities/agent-execution/internal/consumers/BootstrapDimensionConsumer.js';
-import type { SkillResults } from '#workflows/common-capabilities/agent-execution/internal/consumers/BootstrapSkillConsumer.js';
-import { buildWorkflowReport } from '#workflows/common-capabilities/progress/reports/WorkflowReportWriter.js';
+import type { CandidateResults } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
+import type { SkillResults } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapSkillConsumer.js';
+import { buildWorkflowReport } from '#workflows/capabilities/persistence/reports/WorkflowReportWriter.js';
 import {
   persistWorkflowResult,
   summarizeWorkflowDimensionStats,
-} from '#workflows/common-capabilities/progress/reports/WorkflowResultPersistence.js';
+} from '#workflows/capabilities/persistence/WorkflowResultPersistence.js';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 
 const candidateResults: CandidateResults = { created: 2, failed: 0, errors: [] };

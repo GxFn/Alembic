@@ -5,11 +5,11 @@ import type { DimensionDef, GuardAudit, ProjectSnapshot } from '#types/project-s
 import type {
   ExternalRescanEvidencePlan,
   InternalRescanGapPlan,
-} from '#workflows/common-capabilities/knowledge-rescan/KnowledgeRescanPlanner.js';
+} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
 import {
   buildProjectTargetFileMap,
   summarizeProjectPanorama,
-} from '#workflows/common-capabilities/project-analysis/ProjectAnalysisViews.js';
+} from '#workflows/capabilities/project-intelligence/ProjectIntelligenceViews.js';
 
 export type KnowledgeRescanTargetFileMap = Record<string, Array<Record<string, unknown>>>;
 

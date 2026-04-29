@@ -20,19 +20,19 @@ import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
 import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
+import { runRescanCleanPolicy } from '#workflows/capabilities/cleanup/WorkflowCleanupPolicies.js';
 import {
   buildExternalMissionBriefing,
   createExternalWorkflowSession,
-} from '#workflows/common-capabilities/agent-execution/ExternalMissionWorkflow.js';
-import { runRescanCleanPolicy } from '#workflows/common-capabilities/cleanup/CleanupPolicies.js';
+} from '#workflows/capabilities/execution/external-agent/ExternalMissionWorkflow.js';
 import {
   auditRecipesForRescan,
   buildKnowledgeRescanPlan,
   buildRescanPrescreen,
   projectExternalRescanEvidencePlan,
   syncKnowledgeStoreForRescan,
-} from '#workflows/common-capabilities/knowledge-rescan/KnowledgeRescanPlanner.js';
-import { ProjectAnalysisCapability } from '#workflows/common-capabilities/project-analysis/ProjectAnalysisWorkflow.js';
+} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
+import { ProjectIntelligenceCapability } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
 import { createExternalKnowledgeRescanIntent } from '#workflows/knowledge-rescan/KnowledgeRescanIntent.js';
 import {
   presentExternalKnowledgeRescanEmptyProject,
@@ -98,7 +98,7 @@ export async function runExternalKnowledgeRescanWorkflow(ctx: McpContext, args: 
   // Step 3: Phase 1-4 全量分析
   // ═══════════════════════════════════════════════════════════
 
-  const phaseResults = await ProjectAnalysisCapability.run({
+  const phaseResults = await ProjectIntelligenceCapability.run({
     projectRoot: plan.projectAnalysis.projectRoot,
     ctx,
     prepare: plan.projectAnalysis.prepare,

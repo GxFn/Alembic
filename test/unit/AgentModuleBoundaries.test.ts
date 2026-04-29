@@ -47,6 +47,7 @@ describe('agent module boundaries', () => {
       'lib/agent/dashboard',
       'lib/external/mcp/handlers/bootstrap/pipeline',
       join('lib', 'workflows', 'bootstrap'),
+      join('lib', 'workflows', 'common-capabilities'),
     ];
 
     const leftoverModules = retiredDirs.flatMap((dir) =>
@@ -103,30 +104,10 @@ describe('agent module boundaries', () => {
   });
 
   test('keeps internal dimension execution off retired fill entrypoints', () => {
-    const compatibilityFiles = new Set([
-      join(
-        'lib',
-        'workflows',
-        'common-capabilities',
-        'agent-execution',
-        'InternalDimensionFillWorkflow.ts'
-      ),
-      join(
-        'lib',
-        'workflows',
-        'common-capabilities',
-        'agent-execution',
-        'internal',
-        'InternalDimensionFillPipeline.ts'
-      ),
-    ]);
     const offenders: Array<{ file: string; token: string }> = [];
 
     for (const file of collectTypeScriptFiles(join(repoRoot, 'lib', 'workflows'))) {
       const relFile = relative(repoRoot, file);
-      if (compatibilityFiles.has(relFile)) {
-        continue;
-      }
       const source = readFileSync(file, 'utf8');
       for (const token of [
         'fillDimensionsV3',
@@ -257,17 +238,17 @@ describe('agent module boundaries', () => {
     expect(retiredFiles.filter((file) => existsSync(join(repoRoot, file)))).toEqual([]);
 
     const retiredSpecifiers = new Set([
-      '#workflows/common-capabilities/progress/checkpoint/BootstrapCheckpointStore.js',
-      '#workflows/common-capabilities/progress/checkpoint/BootstrapRestoreState.js',
-      '#workflows/common-capabilities/progress/reports/BootstrapCheckpointCleanup.js',
-      '#workflows/common-capabilities/progress/reports/BootstrapReportHistoryStore.js',
-      '#workflows/common-capabilities/progress/reports/BootstrapReportSnapshotConsumer.js',
-      '#workflows/common-capabilities/progress/reports/BootstrapReportSnapshotWorkflow.js',
-      '#workflows/common-capabilities/progress/reports/BootstrapReportTypes.js',
-      '#workflows/common-capabilities/progress/reports/BootstrapReportWriter.js',
-      '#workflows/common-capabilities/progress/reports/BootstrapSnapshotStore.js',
+      '#workflows/capabilities/persistence/checkpoint/BootstrapCheckpointStore.js',
+      '#workflows/capabilities/persistence/checkpoint/BootstrapRestoreState.js',
+      '#workflows/capabilities/persistence/reports/BootstrapCheckpointCleanup.js',
+      '#workflows/capabilities/persistence/reports/BootstrapReportHistoryStore.js',
+      '#workflows/capabilities/persistence/reports/BootstrapReportSnapshotConsumer.js',
+      '#workflows/capabilities/persistence/reports/BootstrapReportSnapshotWorkflow.js',
+      '#workflows/capabilities/persistence/reports/BootstrapReportTypes.js',
+      '#workflows/capabilities/persistence/reports/BootstrapReportWriter.js',
+      '#workflows/capabilities/persistence/reports/BootstrapSnapshotStore.js',
       '#workflows/common-capabilities/delivery/BootstrapDeliveryConsumer.js',
-      '#workflows/common-capabilities/agent-execution/internal/consumers/BootstrapSemanticMemoryConsumer.js',
+      '#workflows/capabilities/execution/internal-agent/consumers/BootstrapSemanticMemoryConsumer.js',
       '#external/mcp/handlers/bootstrap/shared/async-fill-helpers.js',
       '#external/mcp/handlers/bootstrap/shared/audit-helpers.js',
       '#external/mcp/handlers/bootstrap/shared/handler-types.js',
@@ -300,24 +281,6 @@ describe('agent module boundaries', () => {
   });
 
   test('keeps file diff implementation on workflow naming', () => {
-    const bootstrapSnapshotCompatibilityFile = join(
-      'lib',
-      'workflows',
-      'common-capabilities',
-      'file-diff',
-      'BootstrapSnapshot.ts'
-    );
-    const incrementalBootstrapCompatibilityFile = join(
-      'lib',
-      'workflows',
-      'common-capabilities',
-      'file-diff',
-      'IncrementalBootstrap.ts'
-    );
-    const compatibilityFiles = new Set([
-      bootstrapSnapshotCompatibilityFile,
-      incrementalBootstrapCompatibilityFile,
-    ]);
     const retiredSpecifiers = new Set([
       '#workflows/common-capabilities/file-diff/BootstrapSnapshot.js',
       '#workflows/common-capabilities/file-diff/IncrementalBootstrap.js',
@@ -326,9 +289,6 @@ describe('agent module boundaries', () => {
 
     for (const file of collectTypeScriptFiles(join(repoRoot, 'lib', 'workflows'))) {
       const relFile = relative(repoRoot, file);
-      if (compatibilityFiles.has(relFile)) {
-        continue;
-      }
       for (const specifier of extractImportSpecifiers(readFileSync(file, 'utf8'))) {
         if (retiredSpecifiers.has(specifier)) {
           offenders.push({ file: relFile, specifier });
@@ -337,12 +297,16 @@ describe('agent module boundaries', () => {
     }
 
     expect(offenders).toEqual([]);
-    expect(readFileSync(join(repoRoot, bootstrapSnapshotCompatibilityFile), 'utf8')).not.toContain(
-      'class BootstrapSnapshot'
-    );
     expect(
-      readFileSync(join(repoRoot, incrementalBootstrapCompatibilityFile), 'utf8')
-    ).not.toContain('class IncrementalBootstrap');
+      existsSync(
+        join(repoRoot, 'lib/workflows/capabilities/project-intelligence/FileDiffPlanner.ts')
+      )
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(repoRoot, 'lib/workflows/capabilities/project-intelligence/FileDiffSnapshotStore.ts')
+      )
+    ).toBe(true);
   });
 });
 

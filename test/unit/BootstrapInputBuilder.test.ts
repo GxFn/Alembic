@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   type BootstrapFileEntry,
   buildBootstrapDimensionRunInput,
-} from '#workflows/common-capabilities/agent-execution/internal/agent-runs/BootstrapDimensionInputBuilder.js';
+} from '#workflows/capabilities/execution/internal-agent/agent-runs/BootstrapDimensionInputBuilder.js';
 import type { MemoryCoordinator } from '../../lib/agent/memory/MemoryCoordinator.js';
 import type { SystemRunContext } from '../../lib/agent/runtime/SystemRunContext.js';
 

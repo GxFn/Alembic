@@ -19,19 +19,19 @@ import type { ServiceContainer } from '#inject/ServiceContainer.js';
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
+import { runFullResetPolicy } from '#workflows/capabilities/cleanup/WorkflowCleanupPolicies.js';
+import {
+  buildExternalMissionBriefing,
+  createExternalWorkflowSession,
+  getActiveExternalWorkflowSession,
+} from '#workflows/capabilities/execution/external-agent/ExternalMissionWorkflow.js';
+import { ProjectIntelligenceCapability } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
 import { createExternalColdStartIntent } from '#workflows/cold-start/ColdStartIntent.js';
 import { buildColdStartWorkflowPlan } from '#workflows/cold-start/ColdStartPlan.js';
 import {
   presentExternalColdStartEmptyProject,
   presentExternalColdStartResponse,
 } from '#workflows/cold-start/ColdStartPresenters.js';
-import {
-  buildExternalMissionBriefing,
-  createExternalWorkflowSession,
-  getActiveExternalWorkflowSession,
-} from '#workflows/common-capabilities/agent-execution/ExternalMissionWorkflow.js';
-import { runFullResetPolicy } from '#workflows/common-capabilities/cleanup/CleanupPolicies.js';
-import { ProjectAnalysisCapability } from '#workflows/common-capabilities/project-analysis/ProjectAnalysisWorkflow.js';
 
 /** MCP handler context passed from McpServer */
 interface McpContext {
@@ -77,7 +77,7 @@ export async function runExternalColdStartWorkflow(ctx: McpContext) {
   // Phase 1-4: 共享数据收集管线（永远全量，无增量检测）
   // ═══════════════════════════════════════════════════════════
 
-  const phaseResults = await ProjectAnalysisCapability.run({
+  const phaseResults = await ProjectIntelligenceCapability.run({
     projectRoot: plan.projectAnalysis.projectRoot,
     ctx,
     prepare: plan.projectAnalysis.prepare,

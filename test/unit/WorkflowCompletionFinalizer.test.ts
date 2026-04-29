@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
-import { runWorkflowCompletionFinalizer } from '#workflows/common-capabilities/completion/WorkflowCompletionFinalizer.js';
+import { runWorkflowCompletionFinalizer } from '#workflows/capabilities/completion/WorkflowCompletionFinalizer.js';
 
 describe('WorkflowCompletionFinalizer', () => {
   test('runs delivery and panorama before scheduling wiki and immediate semantic memory', async () => {
@@ -47,7 +47,7 @@ describe('WorkflowCompletionFinalizer', () => {
     const source = readFileSync(
       join(
         process.cwd(),
-        'lib/workflows/common-capabilities/agent-execution/internal/InternalDimensionFillFinalizer.ts'
+        'lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.ts'
       ),
       'utf8'
     );
@@ -59,10 +59,7 @@ describe('WorkflowCompletionFinalizer', () => {
 
   test('keeps completion side effects in dedicated step modules', () => {
     const source = readFileSync(
-      join(
-        process.cwd(),
-        'lib/workflows/common-capabilities/completion/WorkflowCompletionFinalizer.ts'
-      ),
+      join(process.cwd(), 'lib/workflows/capabilities/completion/WorkflowCompletionFinalizer.ts'),
       'utf8'
     );
 
