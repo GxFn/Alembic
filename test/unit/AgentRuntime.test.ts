@@ -158,7 +158,7 @@ describe('AgentRuntime', () => {
       expect(rt.presetName).toBe('custom');
       expect(rt.iterationCount).toBe(0);
       expect(rt.toolCallHistory).toEqual([]);
-      expect(rt.tokenUsage).toEqual({ input: 0, output: 0 });
+      expect(rt.tokenUsage).toEqual({ input: 0, output: 0, reasoning: 0, cacheHit: 0 });
     });
 
     test('should accept custom id and presetName', () => {
