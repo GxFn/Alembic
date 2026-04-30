@@ -285,7 +285,7 @@ router.get('/providers', async (req: Request, res: Response): Promise<void> => {
   const providers = [
     { id: 'google', label: 'Google Gemini', defaultModel: 'gemini-3-flash-preview' },
     { id: 'openai', label: 'OpenAI', defaultModel: 'gpt-5.4' },
-    { id: 'deepseek', label: 'DeepSeek', defaultModel: 'deepseek-chat' },
+    { id: 'deepseek', label: 'DeepSeek', defaultModel: 'deepseek-v4-flash' },
     { id: 'claude', label: 'Claude', defaultModel: 'claude-sonnet-4-20250514' },
     { id: 'ollama', label: 'Ollama', defaultModel: 'llama3' },
     { id: 'mock', label: 'Mock (测试)', defaultModel: 'mock-l3' },
@@ -681,7 +681,7 @@ router.post(
             toolId: name,
             args: p,
             surface: 'system',
-            actor: { role: 'internal', user: 'agent-task' },
+            actor: { role: 'chat_agent', user: 'agent-task' },
             source: { kind: 'system', name: '/api/v1/ai/agent/task' },
             runtime: createHttpToolRuntimeContext(container),
           }),

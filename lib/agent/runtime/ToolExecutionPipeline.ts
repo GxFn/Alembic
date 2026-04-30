@@ -132,7 +132,7 @@ export class ToolExecutionPipeline {
           toolId: call.name,
           args: call.args,
           surface: 'runtime',
-          actor: { role: 'runtime', user: runtime.id },
+          actor: { role: 'developer', user: runtime.id },
           source: {
             kind: 'runtime',
             name:
