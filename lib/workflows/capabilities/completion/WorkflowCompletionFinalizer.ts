@@ -9,6 +9,7 @@ import type {
   CompletionLogger,
   CompletionSessionLike,
   ServiceContainerLike,
+  ShouldAbortFn,
   WorkflowCompletionFinalizerDependencies,
   WorkflowCompletionFinalizerResult,
   WorkflowSemanticMemoryMode,
@@ -31,6 +32,7 @@ export async function runWorkflowCompletionFinalizer({
   log = logger,
   dependencies = {},
   semanticMemory = {},
+  shouldAbort,
 }: {
   ctx: CompletionContextLike;
   session: CompletionSessionLike;
@@ -39,23 +41,36 @@ export async function runWorkflowCompletionFinalizer({
   log?: CompletionLogger;
   dependencies?: WorkflowCompletionFinalizerDependencies;
   semanticMemory?: { mode?: WorkflowSemanticMemoryMode };
+  shouldAbort?: ShouldAbortFn;
 }): Promise<WorkflowCompletionFinalizerResult> {
   const getServiceContainer = dependencies.getServiceContainer ?? defaultGetServiceContainer;
   const scheduleTask = dependencies.scheduleTask ?? defaultScheduleTask;
   const semanticMemoryMode = semanticMemory.mode ?? 'scheduled';
 
+  if (shouldAbort?.()) {
+    log.info('[CompletionFinalizer] Aborted before delivery — user cancelled');
+    return { deliveryVerification: null, semanticMemoryResult: null };
+  }
   await runCursorDelivery({ getServiceContainer, log });
   const deliveryVerification = await verifyDelivery({ ctx, log });
   await refreshPanorama({ getServiceContainer, log });
 
+  if (shouldAbort?.()) {
+    log.info('[CompletionFinalizer] Aborted before wiki/memory — user cancelled');
+    return { deliveryVerification, semanticMemoryResult: null };
+  }
   scheduleTask(() => generateWiki({ getServiceContainer, projectRoot, log }));
   let semanticMemoryResult: WorkflowCompletionFinalizerResult['semanticMemoryResult'] = null;
   if (semanticMemoryMode === 'immediate') {
-    semanticMemoryResult = await consolidateSemanticMemory({ ctx, session, dataRoot, log });
+    if (!shouldAbort?.()) {
+      semanticMemoryResult = await consolidateSemanticMemory({ ctx, session, dataRoot, log });
+    }
   } else if (semanticMemoryMode === 'scheduled') {
-    scheduleTask(async () => {
-      await consolidateSemanticMemory({ ctx, session, dataRoot, log });
-    });
+    if (!shouldAbort?.()) {
+      scheduleTask(async () => {
+        await consolidateSemanticMemory({ ctx, session, dataRoot, log });
+      });
+    }
   }
 
   return { deliveryVerification, semanticMemoryResult };

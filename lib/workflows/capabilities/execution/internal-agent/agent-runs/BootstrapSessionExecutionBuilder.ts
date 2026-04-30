@@ -17,6 +17,7 @@ export interface BootstrapDimensionExecutionState {
 
 export interface BootstrapTaskManagerLike {
   isSessionValid(sessionId: string): boolean;
+  isUserCancelled?(sessionId: string): boolean;
 }
 
 export interface BuildBootstrapSessionExecutionInputOptions {
@@ -155,7 +156,11 @@ export function buildBootstrapSessionExecutionInput({
     },
     execution: {
       abortSignal: sessionAbortSignal || undefined,
-      shouldAbort: () => !!(taskManager && !taskManager.isSessionValid(sessionId)),
+      shouldAbort: () =>
+        !!(
+          taskManager &&
+          (!taskManager.isSessionValid(sessionId) || taskManager.isUserCancelled?.(sessionId))
+        ),
     },
     presentation: { responseShape: 'system-task-result' },
   });

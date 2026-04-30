@@ -67,6 +67,7 @@ class BootstrapSession {
   status: string;
   summary: Record<string, unknown> | null;
   tasks: Map<string, TaskInfo>;
+  userCancelled: boolean;
   constructor(sessionId: string) {
     this.id = sessionId;
     this.startedAt = Date.now();
@@ -74,6 +75,7 @@ class BootstrapSession {
     this.status = 'running'; // running | completed | failed
     this.tasks = new Map(); // taskId → TaskInfo
     this.summary = null; // 完成后的摘要
+    this.userCancelled = false;
   }
 
   addTask(taskId: string, meta: TaskMeta) {
@@ -239,6 +241,8 @@ export class BootstrapTaskManager {
       }
     }
 
+    session.userCancelled = true;
+
     // 触发 AbortController，中断正在执行的 AI 调用
     if (this.#sessionAbortController) {
       this.#sessionAbortController.abort(reason);
@@ -304,6 +308,30 @@ export class BootstrapTaskManager {
         this.#currentSession?.status === 'completed' ||
         this.#currentSession?.status === 'completed_with_errors')
     );
+  }
+
+  /**
+   * 标记当前 session 为用户已取消（即使 session 不在 running 状态）
+   *
+   * 用于 LLM 失败后 session 已进入 completed_with_errors 但 finalize 链仍在执行的场景。
+   * 此时 abortSession 因 status !== 'running' 无法生效，但用户点击了取消。
+   */
+  markCancelled() {
+    if (this.#currentSession) {
+      this.#currentSession.userCancelled = true;
+      this.#sessionAbortController?.abort('User cancelled');
+      Logger.info(`[Bootstrap] Session ${this.#currentSession.id} marked as user-cancelled`);
+    }
+  }
+
+  /**
+   * 查询指定 session 是否被用户手动取消
+   *
+   * finalize 链中的 shouldAbort 应组合此标志：
+   *   shouldAbort = !isSessionValid(id) || isUserCancelled(id)
+   */
+  isUserCancelled(sessionId: string): boolean {
+    return this.#currentSession?.id === sessionId && this.#currentSession?.userCancelled === true;
   }
 
   /** 标记单个任务开始填充 */

@@ -70,6 +70,8 @@ export type PersistentMemoryDb =
   | import('#agent/memory/MemoryStore.js').SqliteDatabase
   | { getDb(): import('#agent/memory/MemoryStore.js').SqliteDatabase };
 
+export type ShouldAbortFn = () => boolean;
+
 export interface WorkflowCompletionFinalizerDependencies {
   getServiceContainer?: LoadServiceContainer;
   scheduleTask?: ScheduleTask;

@@ -1,3 +1,4 @@
+import Logger from '#infra/logging/Logger.js';
 import {
   runWorkflowCompletionFinalizer,
   type WorkflowSemanticMemoryConsolidationResult,
@@ -35,28 +36,45 @@ export async function finalizeInternalDimensionFill({
 }): Promise<InternalDimensionFillFinalizationResult> {
   sessionResult.bootstrapDedup.clear();
 
+  const shouldAbort = () =>
+    !!(
+      preparation.taskManager &&
+      (!preparation.taskManager.isSessionValid(preparation.sessionId) ||
+        preparation.taskManager.isUserCancelled?.(preparation.sessionId))
+    );
+
   const skillResults: SkillResults = await consumeBootstrapSkills({
     ctx: preparation.ctx,
     dimensions: preparation.dimensions,
     dimensionCandidates: sessionResult.dimensionCandidates,
     sessionStore: runtime.sessionStore,
     emitter: preparation.emitter,
-    shouldAbort: () =>
-      !!(preparation.taskManager && !preparation.taskManager.isSessionValid(preparation.sessionId)),
+    shouldAbort,
   });
 
   await consumeInternalDimensionCandidateRelations({ preparation, sessionResult });
 
-  const workflowCompletion = await runWorkflowCompletionFinalizer({
-    ctx: preparation.ctx,
-    session: { id: preparation.sessionId, sessionStore: runtime.sessionStore },
-    projectRoot: preparation.projectRoot,
-    dataRoot: preparation.dataRoot,
-    dependencies: {
-      getServiceContainer: () => preparation.ctx.container,
-    },
-    semanticMemory: { mode: 'immediate' },
-  });
+  const pipelineMode = preparation.view.mode ?? 'bootstrap';
+  let workflowCompletion: Awaited<ReturnType<typeof runWorkflowCompletionFinalizer>>;
+
+  if (pipelineMode === 'rescan') {
+    Logger.info(
+      '[InternalDimensionFill] rescan mode — skipping delivery/wiki/memory (pipeline isolation)'
+    );
+    workflowCompletion = { deliveryVerification: null, semanticMemoryResult: null };
+  } else {
+    workflowCompletion = await runWorkflowCompletionFinalizer({
+      ctx: preparation.ctx,
+      session: { id: preparation.sessionId, sessionStore: runtime.sessionStore },
+      projectRoot: preparation.projectRoot,
+      dataRoot: preparation.dataRoot,
+      dependencies: {
+        getServiceContainer: () => preparation.ctx.container,
+      },
+      semanticMemory: { mode: 'immediate' },
+      shouldAbort,
+    });
+  }
   const consolidationResult = workflowCompletion.semanticMemoryResult;
 
   const { totalTimeMs } = await persistWorkflowResult({

@@ -46,6 +46,9 @@ export interface SessionCacheShape {
 
 // ─── 视图 0: PipelineFillView ────────────────────────────────
 
+/** 管线执行模式：冷启动走全量 finalize，增量扫描走轻量收尾 */
+export type PipelineMode = 'bootstrap' | 'rescan';
+
 /** handler → dispatchPipelineFill → orchestrator 的统一入参 */
 export interface PipelineFillView {
   /** 完整的项目快照（类型化、不可变） */
@@ -62,6 +65,8 @@ export interface PipelineFillView {
   readonly existingRecipes?: ExistingRecipeInfo[];
   /** 进化前置过滤结果（rescan 模式，Phase A 已完成时提供） */
   readonly evolutionPrescreen?: EvolutionPrescreen;
+  /** 管线模式：'bootstrap'（默认）全量 finalize | 'rescan' 轻量收尾 */
+  readonly mode?: PipelineMode;
   /** 冷启动终端工具集实验开关 */
   readonly terminalTest?: boolean;
   readonly terminalToolset?: string;

@@ -42,6 +42,7 @@ export interface BootstrapWorkflowContext {
 
 export interface BootstrapTaskManagerLike {
   isSessionValid(sessionId: string): boolean;
+  isUserCancelled?(sessionId: string): boolean;
   getSessionAbortSignal?(): AbortSignal | null;
   emitProgress?(event: string, data: Record<string, unknown>): void;
   [key: string]: unknown;

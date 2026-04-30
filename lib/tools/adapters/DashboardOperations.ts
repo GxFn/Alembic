@@ -211,18 +211,20 @@ async function cancelBootstrap(request: ToolExecutionRequest) {
   const taskManager = getOptionalService<{
     isRunning: boolean;
     abortSession(reason: string): void;
+    markCancelled(): void;
     getSessionStatus(): Record<string, unknown>;
   }>(container, 'bootstrapTaskManager');
 
   if (!taskManager) {
     return { message: 'No bootstrap task manager initialized' };
   }
-  if (!taskManager.isRunning) {
-    return { message: 'No active bootstrap session' };
-  }
 
   const reason = (request.args.reason as string | undefined) || 'Cancelled by user via Dashboard';
-  taskManager.abortSession(reason);
+  if (taskManager.isRunning) {
+    taskManager.abortSession(reason);
+  } else {
+    taskManager.markCancelled();
+  }
   logger.info('Bootstrap session cancelled via dashboard router', { reason });
   return taskManager.getSessionStatus();
 }
