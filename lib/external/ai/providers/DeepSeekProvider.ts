@@ -4,11 +4,13 @@
  * 使用 DeepSeek Chat Completions API（OpenAI 兼容格式），独立实现。
  *
  * V4 thinking 模式完整支持 (基于官方文档 2026-04):
- *   - V4 默认开启 thinking (reasoning_effort="high")
  *   - chat() / chatWithStructuredOutput(): 单轮调用，关闭 thinking 节省 token
- *   - chatWithTools(): 多轮 Agent 循环，开启 thinking
+ *   - chatWithTools() 智能 thinking 策略:
+ *     - 有 tools: 开启 thinking + reasoning_effort，帮助工具决策
+ *     - 无 tools (SUMMARIZE/forced-summary): 关闭 thinking，纯文本生成
  *     - 有 tool_calls 的 assistant 消息: reasoning_content 必须回传（否则 400）
- *     - 纯文本 assistant 消息: reasoning_content 不回传（API 会忽略，省 token）
+ *     - 纯文本 assistant 消息: reasoning_content 不回传（省 token）
+ *     - V4 thinking 模式不支持 tool_choice，由模型自主决策
  *   - 支持 reasoning_effort: "high"(默认) / "max"(复杂 Agent 任务)
  */
 
@@ -147,6 +149,8 @@ export class DeepSeekProvider extends AiProvider {
         }
       }
 
+      const hasTools = toolSchemas && toolSchemas.length > 0;
+
       const body: Record<string, unknown> = {
         model: this.model,
         messages,
@@ -154,13 +158,23 @@ export class DeepSeekProvider extends AiProvider {
         max_tokens: maxTokens,
       };
 
-      // V4 thinking 模式: chatWithTools 开启 thinking + reasoning_effort
       if (this.#isV4()) {
-        body.reasoning_effort = this.#reasoningEffort;
+        if (hasTools) {
+          // 有工具: 开启 thinking（V4 默认），设置 reasoning_effort
+          // thinking 帮助模型决策何时/如何调用工具
+          body.reasoning_effort = this.#reasoningEffort;
+          // thinking 的 reasoning_content 也占 output token，确保留够空间
+          if (maxTokens < 16384) {
+            body.max_tokens = 16384;
+          }
+        } else {
+          // 无工具: 关闭 thinking 节省 token（纯文本生成/总结场景）
+          body.thinking = { type: 'disabled' };
+        }
       }
 
-      if (toolSchemas && toolSchemas.length > 0) {
-        body.tools = toolSchemas.map((s: ToolSchema) => ({
+      if (hasTools) {
+        body.tools = toolSchemas!.map((s: ToolSchema) => ({
           type: 'function',
           function: {
             name: s.name,
@@ -170,12 +184,15 @@ export class DeepSeekProvider extends AiProvider {
         }));
       }
 
-      if (toolChoice === 'required') {
-        body.tool_choice = 'required';
-      } else if (toolChoice === 'none') {
-        body.tool_choice = 'none';
-      } else {
-        body.tool_choice = 'auto';
+      // V4 thinking 模式下 API 不支持 tool_choice（内部走 reasoner 后端）
+      if (!this.#isV4()) {
+        if (toolChoice === 'required') {
+          body.tool_choice = 'required';
+        } else if (toolChoice === 'none') {
+          body.tool_choice = 'none';
+        } else {
+          body.tool_choice = 'auto';
+        }
       }
 
       const data = await this.#post(`${this.baseUrl}/chat/completions`, body, opts.abortSignal);
