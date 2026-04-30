@@ -30,6 +30,8 @@ export interface LLMResult {
   text?: string | null;
   functionCalls?: FunctionCall[] | null;
   usage?: { inputTokens?: number; outputTokens?: number };
+  /** DeepSeek V4 thinking 推理内容，需原样回传 */
+  reasoningContent?: string | null;
 }
 
 /** AI error with optional circuit breaker code */

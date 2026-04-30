@@ -26,6 +26,7 @@ interface ToolCallRecord {
 interface ChatMessage {
   role: 'user' | 'assistant' | 'tool';
   content: string | null;
+  reasoningContent?: string | null;
   toolCalls?: ToolCallRecord[];
   toolCallId?: string;
   name?: string;
@@ -43,15 +44,20 @@ export class MessageAdapter {
   }
 
   /** 追加助手纯文本回复 */
-  appendAssistantText(_text: string) {
+  appendAssistantText(_text: string, _reasoningContent?: string | null) {
     throw new Error('not implemented');
   }
 
   /**
    * 追加助手带工具调用的回复
    * @param _calls functionCalls 数组
+   * @param _reasoningContent DeepSeek V4 推理内容（可选）
    */
-  appendAssistantWithToolCalls(_text: string | null, _calls: ToolCallRecord[]) {
+  appendAssistantWithToolCalls(
+    _text: string | null,
+    _calls: ToolCallRecord[],
+    _reasoningContent?: string | null
+  ) {
     throw new Error('not implemented');
   }
 
@@ -134,12 +140,16 @@ export class ContextWindowAdapter extends MessageAdapter {
     this.#ctxWin.appendUserMessage(text);
   }
 
-  appendAssistantText(text: string) {
-    this.#ctxWin.appendAssistantText(text);
+  appendAssistantText(text: string, reasoningContent?: string | null) {
+    this.#ctxWin.appendAssistantText(text, reasoningContent);
   }
 
-  appendAssistantWithToolCalls(text: string | null, calls: ToolCallRecord[]) {
-    this.#ctxWin.appendAssistantWithToolCalls(text, calls);
+  appendAssistantWithToolCalls(
+    text: string | null,
+    calls: ToolCallRecord[],
+    reasoningContent?: string | null
+  ) {
+    this.#ctxWin.appendAssistantWithToolCalls(text, calls, reasoningContent);
   }
 
   appendToolResult(callId: string, name: string, content: string) {
@@ -184,12 +194,24 @@ export class SimpleArrayAdapter extends MessageAdapter {
     this.#messages.push({ role: 'user', content: text });
   }
 
-  appendAssistantText(text: string) {
-    this.#messages.push({ role: 'assistant', content: text });
+  appendAssistantText(text: string, reasoningContent?: string | null) {
+    const msg: ChatMessage = { role: 'assistant', content: text };
+    if (reasoningContent) {
+      msg.reasoningContent = reasoningContent;
+    }
+    this.#messages.push(msg);
   }
 
-  appendAssistantWithToolCalls(text: string | null, calls: ToolCallRecord[]) {
-    this.#messages.push({ role: 'assistant', content: text, toolCalls: calls });
+  appendAssistantWithToolCalls(
+    text: string | null,
+    calls: ToolCallRecord[],
+    reasoningContent?: string | null
+  ) {
+    const msg: ChatMessage = { role: 'assistant', content: text, toolCalls: calls };
+    if (reasoningContent) {
+      msg.reasoningContent = reasoningContent;
+    }
+    this.#messages.push(msg);
   }
 
   appendToolResult(callId: string, name: string, content: string) {

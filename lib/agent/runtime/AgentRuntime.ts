@@ -821,8 +821,12 @@ export class AgentRuntime {
       activeCalls = activeCalls.slice(0, MAX_TOOL_CALLS_PER_ITER);
     }
 
-    // 追加 assistant 消息
-    messages.appendAssistantWithToolCalls(llmResult.text || null, activeCalls);
+    // 追加 assistant 消息（含 DeepSeek V4 reasoningContent 透传）
+    messages.appendAssistantWithToolCalls(
+      llmResult.text || null,
+      activeCalls,
+      llmResult.reasoningContent
+    );
 
     let roundSubmitCount = 0;
     let roundHasNewInfo = false;
@@ -1019,7 +1023,7 @@ export class AgentRuntime {
       }
 
       if (textResult.needsDigestNudge) {
-        messages.appendAssistantText(llmResult.text || '');
+        messages.appendAssistantText(llmResult.text || '', llmResult.reasoningContent);
         if (textResult.nudge) {
           messages.appendUserNudge(textResult.nudge);
         }
@@ -1036,7 +1040,7 @@ export class AgentRuntime {
       }
 
       if (textResult.shouldContinue) {
-        messages.appendAssistantText(llmResult.text || '');
+        messages.appendAssistantText(llmResult.text || '', llmResult.reasoningContent);
         if (textResult.nudge) {
           messages.appendUserNudge(textResult.nudge);
           const _dimC = ctx.sharedState?._dimensionMeta?.id || '';

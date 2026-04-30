@@ -44,6 +44,8 @@ export interface ChatContext {
 export interface UnifiedMessage {
   role: 'user' | 'assistant' | 'tool';
   content?: string | null;
+  /** DeepSeek V4 thinking / 推理内容，多轮对话需原样回传 */
+  reasoningContent?: string | null;
   toolCalls?: Array<{
     id: string;
     name: string;
@@ -86,6 +88,8 @@ export interface ChatWithToolsResult {
   text: string | null;
   functionCalls: FunctionCallResult[] | null;
   usage?: TokenUsage | null;
+  /** DeepSeek V4 thinking 模式返回的推理内容 */
+  reasoningContent?: string | null;
 }
 
 /** Token 用量 */

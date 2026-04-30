@@ -37,6 +37,8 @@ interface ToolCallInfo {
 export interface ContextMessage {
   role: 'user' | 'assistant' | 'tool';
   content?: string | null;
+  /** DeepSeek V4 thinking / 推理内容，多轮对话需原样回传 */
+  reasoningContent?: string | null;
   toolCalls?: ToolCallInfo[];
   toolCallId?: string;
   name?: string;
@@ -124,6 +126,7 @@ export class ContextWindow {
     [/claude-3/i, 200_000],
     [/claude/i, 200_000], // 未知 claude 回退
     // ── DeepSeek ──
+    [/deepseek-v4/i, 1_000_000],
     [/deepseek/i, 64_000],
     // ── 本地 Ollama ──
     [/llama3[.-]?[23]/i, 128_000],
@@ -207,13 +210,22 @@ export class ContextWindow {
    * 追加 assistant 消息（含工具调用）
    * @param text assistant 文本
    * @param toolCalls [{id, name, args}]
+   * @param reasoningContent DeepSeek V4 推理内容（可选）
    */
-  appendAssistantWithToolCalls(text: string | null, toolCalls: ToolCallInfo[]) {
-    this.#messages.push({
+  appendAssistantWithToolCalls(
+    text: string | null,
+    toolCalls: ToolCallInfo[],
+    reasoningContent?: string | null
+  ) {
+    const msg: ContextMessage = {
       role: 'assistant',
       content: text || null,
       toolCalls,
-    });
+    };
+    if (reasoningContent) {
+      msg.reasoningContent = reasoningContent;
+    }
+    this.#messages.push(msg);
   }
 
   /**
@@ -231,11 +243,15 @@ export class ContextWindow {
   }
 
   /** 追加 assistant 纯文本消息（无工具调用） */
-  appendAssistantText(text: string) {
-    this.#messages.push({
+  appendAssistantText(text: string, reasoningContent?: string | null) {
+    const msg: ContextMessage = {
       role: 'assistant',
       content: text,
-    });
+    };
+    if (reasoningContent) {
+      msg.reasoningContent = reasoningContent;
+    }
+    this.#messages.push(msg);
   }
 
   // ─── 压缩 API ─────────────────────────────────────────
@@ -264,38 +280,45 @@ export class ContextWindow {
   }
 
   /**
-   * L1 压缩: 截断旧轮次的工具结果内容
-   * 仅缩短 text 长度，不删除消息
+   * L1 压缩: 截断旧轮次的工具结果内容 + 清理无用 reasoningContent
+   *
+   * DeepSeek V4 优化: 官方文档明确指出，纯文本 assistant 消息的 reasoningContent
+   * 不需要回传（会被忽略）。L1 阶段清理这些无用的 reasoningContent 可节省大量 token。
+   * 有 toolCalls 的 assistant 消息的 reasoningContent 必须保留。
    */
   #compactL1() {
-    const TRUNCATE_THRESHOLD = 2000; // 超过此长度的 tool result 截断
+    const TRUNCATE_THRESHOLD = 2000;
     const TRUNCATE_TO = 500;
     let truncated = 0;
+    let reasoningCleaned = 0;
 
-    // 找到最后一个 assistant-with-toolCalls 的位置
     const lastRoundStart = this.#findLastToolRoundStart();
     if (lastRoundStart < 0) {
       return { level: 1, removed: 0 };
     }
 
-    // 只截断 lastRoundStart 之前的 tool results
     for (let i = 1; i < lastRoundStart; i++) {
       const msg = this.#messages[i];
       if (msg.role === 'tool' && msg.content && msg.content.length > TRUNCATE_THRESHOLD) {
         msg.content = `${msg.content.substring(0, TRUNCATE_TO)}\n... [truncated from ${msg.content.length} chars]`;
         truncated++;
       }
+      // 纯文本 assistant 消息的 reasoningContent 不需要回传，清理释放空间
+      if (msg.role === 'assistant' && msg.reasoningContent && !msg.toolCalls?.length) {
+        msg.reasoningContent = null;
+        reasoningCleaned++;
+      }
     }
 
-    if (truncated > 0) {
+    if (truncated > 0 || reasoningCleaned > 0) {
       const afterTokens = this.estimateTokens();
       const ratio = this.getTokenUsageRatio();
       this.#logger.info(
-        `[ContextWindow] L1 compact: truncated ${truncated} tool results | ` +
+        `[ContextWindow] L1 compact: truncated ${truncated} tool results, cleaned ${reasoningCleaned} reasoning | ` +
           `tokens≈${afterTokens}/${this.#tokenBudget} (${(ratio * 100).toFixed(1)}%)`
       );
     }
-    return { level: 1, removed: truncated };
+    return { level: 1, removed: truncated + reasoningCleaned };
   }
 
   /**
@@ -417,6 +440,9 @@ export class ContextWindow {
     for (const m of this.#messages) {
       if (m.content) {
         total += estimateTokensFast(m.content);
+      }
+      if (m.reasoningContent) {
+        total += estimateTokensFast(m.reasoningContent);
       }
       if (m.toolCalls) {
         total += estimateTokensFast(JSON.stringify(m.toolCalls));
