@@ -29,6 +29,8 @@ type ToolCallHookLike = (...args: any[]) => void;
 interface TokenUsage {
   inputTokens?: number;
   outputTokens?: number;
+  reasoningTokens?: number;
+  cacheHitTokens?: number;
 }
 
 /** Shared state between pipeline stages */
@@ -102,8 +104,8 @@ export class LoopContext {
   // biome-ignore lint/suspicious/noExplicitAny: tool call entries have varying shapes across callers; no common structural type satisfies all consumers.
   toolCalls: any[] = [];
 
-  /** } 本轮 token 用量 */
-  tokenUsage = { input: 0, output: 0 };
+  /** 本轮 token 用量 */
+  tokenUsage = { input: 0, output: 0, reasoning: 0, cacheHit: 0 };
 
   /** 循环开始时间戳 */
   loopStartTime = 0;
@@ -200,10 +202,10 @@ export class LoopContext {
     if (!usage) {
       return;
     }
-    const inTok = usage.inputTokens || 0;
-    const outTok = usage.outputTokens || 0;
-    this.tokenUsage.input += inTok;
-    this.tokenUsage.output += outTok;
+    this.tokenUsage.input += usage.inputTokens || 0;
+    this.tokenUsage.output += usage.outputTokens || 0;
+    this.tokenUsage.reasoning += usage.reasoningTokens || 0;
+    this.tokenUsage.cacheHit += usage.cacheHitTokens || 0;
   }
 
   // ─── 结果构建 ───

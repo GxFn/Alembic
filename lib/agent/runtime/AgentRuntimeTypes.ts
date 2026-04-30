@@ -29,7 +29,12 @@ export interface LLMResult {
   type?: string;
   text?: string | null;
   functionCalls?: FunctionCall[] | null;
-  usage?: { inputTokens?: number; outputTokens?: number };
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    reasoningTokens?: number;
+    cacheHitTokens?: number;
+  };
   /** DeepSeek V4 thinking 推理内容，需原样回传 */
   reasoningContent?: string | null;
 }
@@ -138,7 +143,7 @@ export type ToolCallHook = (
 export interface AgentResult {
   reply: string;
   toolCalls: ToolCallEntry[];
-  tokenUsage: { input: number; output: number };
+  tokenUsage: { input: number; output: number; reasoning?: number; cacheHit?: number };
   iterations: number;
   durationMs: number;
   phases?: Record<string, unknown>;

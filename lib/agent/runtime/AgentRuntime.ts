@@ -105,7 +105,7 @@ export class AgentRuntime {
   // ── 执行统计 ──
   iterationCount = 0;
   toolCallHistory: ToolCallEntry[] = [];
-  tokenUsage = { input: 0, output: 0 };
+  tokenUsage = { input: 0, output: 0, reasoning: 0, cacheHit: 0 };
   startTime = 0;
 
   constructor(config: RuntimeConfig) {
@@ -176,7 +176,7 @@ export class AgentRuntime {
     this.startTime = Date.now();
     this.iterationCount = 0;
     this.toolCallHistory = [];
-    this.tokenUsage = { input: 0, output: 0 };
+    this.tokenUsage = { input: 0, output: 0, reasoning: 0, cacheHit: 0 };
     const diagnostics = DiagnosticsCollector.from(opts.diagnostics);
 
     // ── Policy: 执行前校验 ──
@@ -680,6 +680,8 @@ export class AgentRuntime {
     if (llmResult.usage) {
       this.tokenUsage.input += llmResult.usage.inputTokens || 0;
       this.tokenUsage.output += llmResult.usage.outputTokens || 0;
+      this.tokenUsage.reasoning += llmResult.usage.reasoningTokens || 0;
+      this.tokenUsage.cacheHit += llmResult.usage.cacheHitTokens || 0;
       ctx.addTokenUsage(llmResult.usage);
     }
 
@@ -990,6 +992,8 @@ export class AgentRuntime {
       if (summary.usage) {
         this.tokenUsage.input += summary.usage.inputTokens || 0;
         this.tokenUsage.output += summary.usage.outputTokens || 0;
+        this.tokenUsage.reasoning += summary.usage.reasoningTokens || 0;
+        this.tokenUsage.cacheHit += summary.usage.cacheHitTokens || 0;
         ctx.addTokenUsage(summary.usage);
       }
       ctx.lastReply = cleanFinalAnswer(summary.text || '');

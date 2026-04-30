@@ -97,6 +97,10 @@ export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  /** V4 thinking 模式消耗的推理 token (包含在 outputTokens 内) */
+  reasoningTokens?: number;
+  /** V4 prompt 缓存命中 token 数 */
+  cacheHitTokens?: number;
 }
 
 /** chatWithStructuredOutput 选项 */

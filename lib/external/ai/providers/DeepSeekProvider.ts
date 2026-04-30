@@ -3,15 +3,21 @@
  *
  * 使用 DeepSeek Chat Completions API（OpenAI 兼容格式），独立实现。
  *
- * V4 thinking 模式完整支持 (基于官方文档 2026-04):
- *   - chat() / chatWithStructuredOutput(): 单轮调用，关闭 thinking 节省 token
- *   - chatWithTools() 智能 thinking 策略:
- *     - 有 tools: 开启 thinking + reasoning_effort，帮助工具决策
- *     - 无 tools (SUMMARIZE/forced-summary): 关闭 thinking，纯文本生成
- *     - 有 tool_calls 的 assistant 消息: reasoning_content 必须回传（否则 400）
- *     - 纯文本 assistant 消息: reasoning_content 不回传（省 token）
- *     - V4 thinking 模式不支持 tool_choice，由模型自主决策
- *   - 支持 reasoning_effort: "high"(默认) / "max"(复杂 Agent 任务)
+ * V4 thinking 模式完整支持 (基于官方文档 2026-04-24):
+ *
+ * 官方参数约束:
+ *   - thinking 模式下 temperature / top_p / presence_penalty / frequency_penalty 无效
+ *     (accepted for compatibility, no effect)
+ *   - thinking 模式下 tool_choice 不支持，由模型内部 reasoner 自主决策
+ *   - reasoning_content 在有 tool_calls 的 assistant 消息中必须回传（否则 400）
+ *   - reasoning_content 在纯文本 assistant 消息中不需要回传（会被忽略）
+ *
+ * 调用策略:
+ *   - chat() / chatWithStructuredOutput(): 关闭 thinking 节省 token
+ *   - chatWithTools() + 有 tools: 显式启用 thinking + reasoning_effort
+ *   - chatWithTools() + 无 tools (SUMMARIZE): 关闭 thinking，纯文本生成
+ *   - reasoning_effort: "high"(默认) / "max"(复杂 Agent 任务)
+ *   - max_tokens 在 thinking+tools 场景自动提升（reasoning_content 占 output token）
  */
 
 import Logger from '#infra/logging/Logger.js';
@@ -150,25 +156,31 @@ export class DeepSeekProvider extends AiProvider {
       }
 
       const hasTools = toolSchemas && toolSchemas.length > 0;
+      const v4 = this.#isV4();
+      const v4Thinking = v4 && hasTools;
 
       const body: Record<string, unknown> = {
         model: this.model,
         messages,
-        temperature,
         max_tokens: maxTokens,
       };
 
-      if (this.#isV4()) {
+      // V4 thinking 模式下 temperature/top_p 无效 (官方: accepted, no effect)
+      // 非 thinking 场景正常传递
+      if (!v4Thinking) {
+        body.temperature = temperature;
+      }
+
+      if (v4) {
         if (hasTools) {
-          // 有工具: 开启 thinking（V4 默认），设置 reasoning_effort
-          // thinking 帮助模型决策何时/如何调用工具
+          body.thinking = { type: 'enabled' };
           body.reasoning_effort = this.#reasoningEffort;
-          // thinking 的 reasoning_content 也占 output token，确保留够空间
-          if (maxTokens < 16384) {
-            body.max_tokens = 16384;
+          // Think High ~2x output token, Think Max ~4x
+          const minTokens = this.#reasoningEffort === 'max' ? 32768 : 16384;
+          if (maxTokens < minTokens) {
+            body.max_tokens = minTokens;
           }
         } else {
-          // 无工具: 关闭 thinking 节省 token（纯文本生成/总结场景）
           body.thinking = { type: 'disabled' };
         }
       }
@@ -196,7 +208,16 @@ export class DeepSeekProvider extends AiProvider {
       }
 
       const data = await this.#post(`${this.baseUrl}/chat/completions`, body, opts.abortSignal);
-      return this.#parseToolResponse(data);
+      const result = this.#parseToolResponse(data);
+
+      if (this.#isV4() && result.usage) {
+        const u = result.usage;
+        this.logger?.debug(
+          `[DeepSeek V4] tokens: in=${u.inputTokens} out=${u.outputTokens} reasoning=${u.reasoningTokens || 0} cache_hit=${u.cacheHitTokens || 0}`
+        );
+      }
+
+      return result;
     });
   }
 
@@ -285,6 +306,11 @@ export class DeepSeekProvider extends AiProvider {
           inputTokens: data.usage.prompt_tokens || 0,
           outputTokens: data.usage.completion_tokens || 0,
           totalTokens: data.usage.total_tokens || 0,
+          reasoningTokens: data.usage.completion_tokens_details?.reasoning_tokens || 0,
+          cacheHitTokens:
+            data.usage.prompt_cache_hit_tokens ||
+            data.usage.prompt_tokens_details?.cached_tokens ||
+            0,
         }
       : null;
 
@@ -330,6 +356,11 @@ export class DeepSeekProvider extends AiProvider {
         inputTokens: data.usage.prompt_tokens || 0,
         outputTokens: data.usage.completion_tokens || 0,
         totalTokens: data.usage.total_tokens || 0,
+        reasoningTokens: data.usage.completion_tokens_details?.reasoning_tokens || 0,
+        cacheHitTokens:
+          data.usage.prompt_cache_hit_tokens ||
+          data.usage.prompt_tokens_details?.cached_tokens ||
+          0,
       });
     }
   }
