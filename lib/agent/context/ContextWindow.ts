@@ -222,7 +222,9 @@ export class ContextWindow {
       content: text || null,
       toolCalls,
     };
-    if (reasoningContent) {
+    // V4 要求: 带 tool_calls 的 assistant 消息的 reasoning_content 必须保留
+    // 即使是空字符串也不能丢弃，否则后续 API 调用会 400
+    if (reasoningContent != null) {
       msg.reasoningContent = reasoningContent;
     }
     this.#messages.push(msg);

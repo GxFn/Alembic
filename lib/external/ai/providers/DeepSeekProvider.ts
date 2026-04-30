@@ -132,9 +132,10 @@ export class DeepSeekProvider extends AiProvider {
         } else if (msg.role === 'assistant') {
           const m: Record<string, unknown> = { role: 'assistant', content: msg.content || null };
           const hasToolCalls = msg.toolCalls && msg.toolCalls.length > 0;
-          // 官方要求: 只有带 tool_calls 的 assistant 消息才必须回传 reasoning_content
-          if (hasToolCalls && msg.reasoningContent) {
-            m.reasoning_content = msg.reasoningContent;
+          // 官方要求: 带 tool_calls 的 assistant 消息必须回传 reasoning_content
+          // 即使值为空字符串/null 也必须包含此字段，否则 API 返回 400
+          if (hasToolCalls) {
+            m.reasoning_content = msg.reasoningContent ?? '';
           }
           if (hasToolCalls) {
             m.tool_calls = msg.toolCalls!.map(
@@ -320,7 +321,8 @@ export class DeepSeekProvider extends AiProvider {
 
     const message = choice.message;
     const text = message?.content || null;
-    const reasoningContent = message?.reasoning_content || null;
+    // 保留原始值: 空字符串也是合法的 reasoning_content，不能转成 null
+    const reasoningContent = message?.reasoning_content ?? null;
 
     if (message?.tool_calls?.length > 0) {
       const functionCalls = message.tool_calls

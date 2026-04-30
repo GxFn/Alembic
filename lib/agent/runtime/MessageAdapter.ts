@@ -208,7 +208,7 @@ export class SimpleArrayAdapter extends MessageAdapter {
     reasoningContent?: string | null
   ) {
     const msg: ChatMessage = { role: 'assistant', content: text, toolCalls: calls };
-    if (reasoningContent) {
+    if (reasoningContent != null) {
       msg.reasoningContent = reasoningContent;
     }
     this.#messages.push(msg);
