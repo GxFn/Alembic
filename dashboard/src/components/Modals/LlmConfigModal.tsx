@@ -13,7 +13,7 @@ interface LlmConfigModalProps {
 const PROVIDERS = [
   { id: 'google', labelKey: 'llmConfig.providers.gemini' as const, defaultModel: 'gemini-3-flash-preview', keyEnv: 'ALEMBIC_GOOGLE_API_KEY' },
   { id: 'openai', labelKey: 'llmConfig.providers.openai' as const, defaultModel: 'gpt-5.4', keyEnv: 'ALEMBIC_OPENAI_API_KEY' },
-  { id: 'deepseek', labelKey: 'llmConfig.providers.deepseek' as const, defaultModel: 'deepseek-chat', keyEnv: 'ALEMBIC_DEEPSEEK_API_KEY' },
+  { id: 'deepseek', labelKey: 'llmConfig.providers.deepseek' as const, defaultModel: 'deepseek-v4-flash', keyEnv: 'ALEMBIC_DEEPSEEK_API_KEY' },
   { id: 'claude', labelKey: 'llmConfig.providers.claude' as const, defaultModel: 'claude-sonnet-4-20250514', keyEnv: 'ALEMBIC_CLAUDE_API_KEY' },
   { id: 'ollama', labelKey: 'llmConfig.providers.ollama' as const, defaultModel: 'llama3', keyEnv: '' },
 ];

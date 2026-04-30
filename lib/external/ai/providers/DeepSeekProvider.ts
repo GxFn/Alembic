@@ -1,8 +1,15 @@
 /**
- * OpenAiProvider - OpenAI 提供商
+ * DeepSeekProvider - DeepSeek AI 提供商
  *
- * 纯 OpenAI Chat Completions API 实现，不兼容其他厂商。
- * 支持原生 Function Calling（结构化工具调用）。
+ * 使用 DeepSeek Chat Completions API（OpenAI 兼容格式），独立实现。
+ *
+ * V4 thinking 模式完整支持 (基于官方文档 2026-04):
+ *   - V4 默认开启 thinking (reasoning_effort="high")
+ *   - chat() / chatWithStructuredOutput(): 单轮调用，关闭 thinking 节省 token
+ *   - chatWithTools(): 多轮 Agent 循环，开启 thinking
+ *     - 有 tool_calls 的 assistant 消息: reasoning_content 必须回传（否则 400）
+ *     - 纯文本 assistant 消息: reasoning_content 不回传（API 会忽略，省 token）
+ *   - 支持 reasoning_effort: "high"(默认) / "max"(复杂 Agent 任务)
  */
 
 import Logger from '#infra/logging/Logger.js';
@@ -18,26 +25,39 @@ import {
   type UnifiedMessage,
 } from '../AiProvider.js';
 
-const OPENAI_BASE = 'https://api.openai.com/v1';
+const DEEPSEEK_BASE = 'https://api.deepseek.com';
+const V4_PATTERN = /deepseek-v4/i;
+const VALID_EFFORTS = new Set(['high', 'max']);
 
-export class OpenAiProvider extends AiProvider {
-  embedModel: string;
+export class DeepSeekProvider extends AiProvider {
+  /** V4 推理力度: "high"(默认) 或 "max"(复杂 Agent 任务) */
+  #reasoningEffort: string;
 
   constructor(config: AiProviderConfig = {}) {
     super(config);
-    this.name = 'openai';
-    this.model = config.model || 'gpt-5.4-mini';
-    this.apiKey = config.apiKey || process.env.ALEMBIC_OPENAI_API_KEY || '';
-    this.baseUrl = config.baseUrl || OPENAI_BASE;
-    this.embedModel =
-      config.embedModel || process.env.ALEMBIC_EMBED_MODEL || 'text-embedding-3-small';
+    this.name = 'deepseek';
+    this.model = config.model || process.env.ALEMBIC_AI_MODEL || 'deepseek-v4-flash';
+    this.apiKey = config.apiKey || process.env.ALEMBIC_DEEPSEEK_API_KEY || '';
+    this.baseUrl = config.baseUrl || process.env.ALEMBIC_DEEPSEEK_BASE_URL || DEEPSEEK_BASE;
     this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
+
+    const effort =
+      (config.reasoningEffort as string) || process.env.ALEMBIC_DEEPSEEK_REASONING_EFFORT || 'high';
+    this.#reasoningEffort = VALID_EFFORTS.has(effort) ? effort : 'high';
+  }
+
+  #isV4() {
+    return V4_PATTERN.test(this.model);
   }
 
   get supportsNativeToolCalling() {
     return true;
   }
 
+  /**
+   * chat() 是单轮调用，无多轮 reasoning_content 回传需求。
+   * V4 关闭 thinking 以节省 token。
+   */
   async chat(prompt: string, context: ChatContext = {}) {
     return this._withRetry(async () => {
       const { history = [], temperature = 0.7, maxTokens = 4096 } = context;
@@ -54,6 +74,9 @@ export class OpenAiProvider extends AiProvider {
         temperature,
         max_tokens: maxTokens,
       };
+      if (this.#isV4()) {
+        body.thinking = { type: 'disabled' };
+      }
 
       const data = await this.#post(`${this.baseUrl}/chat/completions`, body);
       this.#emitUsage(data);
@@ -61,6 +84,14 @@ export class OpenAiProvider extends AiProvider {
     });
   }
 
+  /**
+   * chatWithTools() 是多轮 Agent 循环的核心。
+   *
+   * V4 thinking 模式策略 (遵循官方文档):
+   *   - 开启 thinking，reasoning_effort 默认 "high"
+   *   - 有 tool_calls 的 assistant 消息: 回传 reasoning_content（必须）
+   *   - 纯文本 assistant 消息: 不回传 reasoning_content（省 token）
+   */
   async chatWithTools(
     prompt: string,
     opts: ChatWithToolsOptions = {}
@@ -92,8 +123,13 @@ export class OpenAiProvider extends AiProvider {
           messages.push({ role: 'user', content: msg.content });
         } else if (msg.role === 'assistant') {
           const m: Record<string, unknown> = { role: 'assistant', content: msg.content || null };
-          if (msg.toolCalls && msg.toolCalls.length > 0) {
-            m.tool_calls = msg.toolCalls.map(
+          const hasToolCalls = msg.toolCalls && msg.toolCalls.length > 0;
+          // 官方要求: 只有带 tool_calls 的 assistant 消息才必须回传 reasoning_content
+          if (hasToolCalls && msg.reasoningContent) {
+            m.reasoning_content = msg.reasoningContent;
+          }
+          if (hasToolCalls) {
+            m.tool_calls = msg.toolCalls!.map(
               (tc: { id: string; name: string; args: Record<string, unknown> }) => ({
                 id: tc.id,
                 type: 'function',
@@ -117,6 +153,11 @@ export class OpenAiProvider extends AiProvider {
         temperature,
         max_tokens: maxTokens,
       };
+
+      // V4 thinking 模式: chatWithTools 开启 thinking + reasoning_effort
+      if (this.#isV4()) {
+        body.reasoning_effort = this.#reasoningEffort;
+      }
 
       if (toolSchemas && toolSchemas.length > 0) {
         body.tools = toolSchemas.map((s: ToolSchema) => ({
@@ -152,6 +193,9 @@ export class OpenAiProvider extends AiProvider {
     );
   }
 
+  /**
+   * chatWithStructuredOutput() 是单轮调用，关闭 thinking 节省 token。
+   */
   async chatWithStructuredOutput(prompt: string, opts: StructuredOutputOptions = {}) {
     return this._withRetry(async () => {
       const { temperature = 0.3, maxTokens = 32768, systemPrompt } = opts;
@@ -169,6 +213,9 @@ export class OpenAiProvider extends AiProvider {
         max_tokens: maxTokens,
         response_format: { type: 'json_object' },
       };
+      if (this.#isV4()) {
+        body.thinking = { type: 'disabled' };
+      }
 
       const data = await this.#post(`${this.baseUrl}/chat/completions`, body);
       this.#emitUsage(data);
@@ -191,7 +238,7 @@ export class OpenAiProvider extends AiProvider {
     const texts = Array.isArray(text) ? text : [text];
     try {
       const body = {
-        model: this.embedModel,
+        model: 'deepseek-embedding',
         input: texts.map((t) => t.slice(0, 8000)),
       };
       const data = await this.#post(`${this.baseUrl}/embeddings`, body);
@@ -204,7 +251,7 @@ export class OpenAiProvider extends AiProvider {
       }
       return Array.isArray(text) ? embeddings : embeddings[0];
     } catch (err: unknown) {
-      this.logger?.warn(`OpenAI embed failed, returning empty`, {
+      this.logger?.warn(`DeepSeek embed failed, returning empty`, {
         error: (err as Error).message,
       });
       return Array.isArray(text) ? texts.map(() => []) : [];
@@ -213,7 +260,7 @@ export class OpenAiProvider extends AiProvider {
 
   // ─── 响应解析 ──────────────────────────────────────────
 
-  #parseToolResponse(data: ApiResponse) {
+  #parseToolResponse(data: ApiResponse): ChatWithToolsResult {
     const choice = data?.choices?.[0];
 
     const usage = data?.usage
@@ -230,6 +277,7 @@ export class OpenAiProvider extends AiProvider {
 
     const message = choice.message;
     const text = message?.content || null;
+    const reasoningContent = message?.reasoning_content || null;
 
     if (message?.tool_calls?.length > 0) {
       const functionCalls = message.tool_calls
@@ -250,13 +298,13 @@ export class OpenAiProvider extends AiProvider {
 
       if (functionCalls.length > 0) {
         this.logger?.debug(
-          `[OpenAI] native function calls: ${functionCalls.map((fc: { name: string }) => fc.name).join(', ')}`
+          `[DeepSeek] native function calls: ${functionCalls.map((fc: { name: string }) => fc.name).join(', ')}`
         );
-        return { text, functionCalls, usage };
+        return { text, functionCalls, usage, reasoningContent };
       }
     }
 
-    return { text, functionCalls: null, usage };
+    return { text, functionCalls: null, usage, reasoningContent };
   }
 
   #emitUsage(data: ApiResponse) {
@@ -278,7 +326,7 @@ export class OpenAiProvider extends AiProvider {
   ): Promise<ApiResponse> {
     if (!this.apiKey) {
       const err = new Error(
-        'OpenAI API Key 未配置。请在 .env 中设置 ALEMBIC_OPENAI_API_KEY，或运行 alembic setup 完成配置。'
+        'DeepSeek API Key 未配置。请在 .env 中设置 ALEMBIC_DEEPSEEK_API_KEY，或运行 alembic setup 完成配置。'
       ) as Error & { code: string };
       err.code = 'API_KEY_MISSING';
       throw err;
@@ -310,7 +358,7 @@ export class OpenAiProvider extends AiProvider {
           /* best effort */
         }
         const err = new Error(
-          `OpenAI API error: ${res.status}${detail ? ` — ${detail}` : ''}`
+          `DeepSeek API error: ${res.status}${detail ? ` — ${detail}` : ''}`
         ) as Error & { status: number };
         err.status = res.status;
         throw err;
@@ -323,4 +371,4 @@ export class OpenAiProvider extends AiProvider {
   }
 }
 
-export default OpenAiProvider;
+export default DeepSeekProvider;

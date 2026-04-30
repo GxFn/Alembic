@@ -1,8 +1,9 @@
 /**
- * OpenAiProvider - OpenAI 提供商
+ * OllamaProvider - Ollama 本地 AI 提供商
  *
- * 纯 OpenAI Chat Completions API 实现，不兼容其他厂商。
- * 支持原生 Function Calling（结构化工具调用）。
+ * 连接本地 Ollama 服务（OpenAI 兼容 API 格式），独立实现。
+ * 无需 API Key，使用固定 dummy key。
+ * 支持本地部署的 LLM 和 Embedding 模型。
  */
 
 import Logger from '#infra/logging/Logger.js';
@@ -18,19 +19,19 @@ import {
   type UnifiedMessage,
 } from '../AiProvider.js';
 
-const OPENAI_BASE = 'https://api.openai.com/v1';
+const OLLAMA_DEFAULT_BASE = 'http://localhost:11434/v1';
+const OLLAMA_DUMMY_KEY = 'ollama';
 
-export class OpenAiProvider extends AiProvider {
+export class OllamaProvider extends AiProvider {
   embedModel: string;
 
   constructor(config: AiProviderConfig = {}) {
     super(config);
-    this.name = 'openai';
-    this.model = config.model || 'gpt-5.4-mini';
-    this.apiKey = config.apiKey || process.env.ALEMBIC_OPENAI_API_KEY || '';
-    this.baseUrl = config.baseUrl || OPENAI_BASE;
-    this.embedModel =
-      config.embedModel || process.env.ALEMBIC_EMBED_MODEL || 'text-embedding-3-small';
+    this.name = 'ollama';
+    this.model = config.model || 'llama3';
+    this.apiKey = config.apiKey || OLLAMA_DUMMY_KEY;
+    this.baseUrl = config.baseUrl || process.env.ALEMBIC_OLLAMA_BASE_URL || OLLAMA_DEFAULT_BASE;
+    this.embedModel = config.embedModel || 'qwen3-embedding:0.6b';
     this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
   }
 
@@ -204,7 +205,7 @@ export class OpenAiProvider extends AiProvider {
       }
       return Array.isArray(text) ? embeddings : embeddings[0];
     } catch (err: unknown) {
-      this.logger?.warn(`OpenAI embed failed, returning empty`, {
+      this.logger?.warn(`Ollama embed failed, returning empty`, {
         error: (err as Error).message,
       });
       return Array.isArray(text) ? texts.map(() => []) : [];
@@ -250,7 +251,7 @@ export class OpenAiProvider extends AiProvider {
 
       if (functionCalls.length > 0) {
         this.logger?.debug(
-          `[OpenAI] native function calls: ${functionCalls.map((fc: { name: string }) => fc.name).join(', ')}`
+          `[Ollama] native function calls: ${functionCalls.map((fc: { name: string }) => fc.name).join(', ')}`
         );
         return { text, functionCalls, usage };
       }
@@ -276,14 +277,6 @@ export class OpenAiProvider extends AiProvider {
     body: Record<string, unknown>,
     externalSignal?: AbortSignal
   ): Promise<ApiResponse> {
-    if (!this.apiKey) {
-      const err = new Error(
-        'OpenAI API Key 未配置。请在 .env 中设置 ALEMBIC_OPENAI_API_KEY，或运行 alembic setup 完成配置。'
-      ) as Error & { code: string };
-      err.code = 'API_KEY_MISSING';
-      throw err;
-    }
-
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeout);
     const onExternalAbort = () => controller.abort();
@@ -310,7 +303,7 @@ export class OpenAiProvider extends AiProvider {
           /* best effort */
         }
         const err = new Error(
-          `OpenAI API error: ${res.status}${detail ? ` — ${detail}` : ''}`
+          `Ollama API error: ${res.status}${detail ? ` — ${detail}` : ''}`
         ) as Error & { status: number };
         err.status = res.status;
         throw err;
@@ -323,4 +316,4 @@ export class OpenAiProvider extends AiProvider {
   }
 }
 
-export default OpenAiProvider;
+export default OllamaProvider;

@@ -1,14 +1,18 @@
 /**
  * AiFactory - AI 提供商工厂
  *
- * 根据配置/环境变量创建对应的 AI Provider 实例
+ * 根据配置/环境变量创建对应的 AI Provider 实例。
+ * 每个 AI 厂商都有独立的 Provider 类，互不继承。
+ *
  * 支持: google-gemini, openai, deepseek, claude, ollama, mock
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';
 import { ClaudeProvider } from './providers/ClaudeProvider.js';
+import { DeepSeekProvider } from './providers/DeepSeekProvider.js';
 import { GoogleGeminiProvider } from './providers/GoogleGeminiProvider.js';
 import { MockProvider } from './providers/MockProvider.js';
+import { OllamaProvider } from './providers/OllamaProvider.js';
 import { OpenAiProvider } from './providers/OpenAiProvider.js';
 
 const PROVIDER_MAP = {
@@ -16,14 +20,20 @@ const PROVIDER_MAP = {
   'google-gemini': GoogleGeminiProvider,
   gemini: GoogleGeminiProvider,
   openai: OpenAiProvider,
-  deepseek: OpenAiProvider,
+  deepseek: DeepSeekProvider,
   claude: ClaudeProvider,
   anthropic: ClaudeProvider,
-  ollama: OpenAiProvider,
+  ollama: OllamaProvider,
   mock: MockProvider,
 };
 
-const DEEPSEEK_BASE = 'https://api.deepseek.com/v1';
+type ProviderClass =
+  | typeof GoogleGeminiProvider
+  | typeof OpenAiProvider
+  | typeof DeepSeekProvider
+  | typeof ClaudeProvider
+  | typeof OllamaProvider
+  | typeof MockProvider;
 
 /**
  * 创建 AI Provider 实例
@@ -31,15 +41,7 @@ const DEEPSEEK_BASE = 'https://api.deepseek.com/v1';
  */
 export function createProvider(options: Record<string, unknown> = {}) {
   const provider = (options.provider as string) || process.env.ALEMBIC_AI_PROVIDER || 'google';
-  const ProviderClass = (
-    PROVIDER_MAP as Record<
-      string,
-      | typeof GoogleGeminiProvider
-      | typeof OpenAiProvider
-      | typeof ClaudeProvider
-      | typeof MockProvider
-    >
-  )[provider.toLowerCase()];
+  const ProviderClass = (PROVIDER_MAP as Record<string, ProviderClass>)[provider.toLowerCase()];
 
   if (!ProviderClass) {
     throw new Error(
@@ -47,29 +49,7 @@ export function createProvider(options: Record<string, unknown> = {}) {
     );
   }
 
-  const config = { ...options };
-
-  // 针对不同 provider 设置默认值
-  switch (provider.toLowerCase()) {
-    case 'deepseek':
-      config.name = 'deepseek';
-      config.baseUrl = config.baseUrl || DEEPSEEK_BASE;
-      config.apiKey = config.apiKey || process.env.ALEMBIC_DEEPSEEK_API_KEY || '';
-      config.model = config.model || 'deepseek-chat';
-      break;
-    case 'ollama':
-      config.name = 'ollama';
-      config.baseUrl =
-        config.baseUrl || process.env.ALEMBIC_OLLAMA_BASE_URL || 'http://localhost:11434/v1';
-      config.apiKey = config.apiKey || 'ollama';
-      config.model = config.model || 'llama3';
-      config.embedModel = config.embedModel || 'qwen3-embedding:0.6b';
-      break;
-    default:
-      break;
-  }
-
-  return new ProviderClass(config);
+  return new ProviderClass({ ...options });
 }
 
 /**
@@ -81,8 +61,7 @@ export function autoDetectProvider() {
   const explicit = process.env.ALEMBIC_AI_PROVIDER;
 
   if (explicit && explicit.toLowerCase() !== 'auto') {
-    // 验证显式指定的 provider 是否有对应 API Key
-    const keyEnvMap = {
+    const keyEnvMap: Record<string, string | null> = {
       google: 'ALEMBIC_GOOGLE_API_KEY',
       'google-gemini': 'ALEMBIC_GOOGLE_API_KEY',
       gemini: 'ALEMBIC_GOOGLE_API_KEY',
@@ -90,22 +69,21 @@ export function autoDetectProvider() {
       deepseek: 'ALEMBIC_DEEPSEEK_API_KEY',
       claude: 'ALEMBIC_CLAUDE_API_KEY',
       anthropic: 'ALEMBIC_CLAUDE_API_KEY',
-      ollama: null, // Ollama 不需要 key
+      ollama: null,
       mock: null,
     };
-    const requiredKeyEnv = (keyEnvMap as Record<string, string | null>)[explicit.toLowerCase()];
+    const requiredKeyEnv = keyEnvMap[explicit.toLowerCase()];
     if (requiredKeyEnv && !process.env[requiredKeyEnv]) {
       logger.warn(
         `[AiFactory] ALEMBIC_AI_PROVIDER=${explicit} 但 ${requiredKeyEnv} 未配置，尝试自动探测其他可用 provider…`
       );
-      // 降级到自动探测，不直接 return
     } else {
       logger.debug(`AI provider explicitly set: ${explicit}`);
-      return createProvider({ provider: explicit });
+      const envModel = process.env.ALEMBIC_AI_MODEL;
+      return createProvider({ provider: explicit, ...(envModel ? { model: envModel } : {}) });
     }
   }
 
-  // 按优先级探测
   if (process.env.ALEMBIC_GOOGLE_API_KEY) {
     logger.debug('Auto-detected Google Gemini provider');
     return createProvider({ provider: 'google' });
@@ -177,7 +155,6 @@ export async function getProviderWithFallback() {
 
   const currentProvider = (process.env.ALEMBIC_AI_PROVIDER || 'google').toLowerCase();
 
-  // 用 probe 测试 primary 是否可用
   try {
     if (typeof primary.probe === 'function') {
       await primary.probe();
@@ -185,7 +162,6 @@ export async function getProviderWithFallback() {
     return primary;
   } catch (probeErr: unknown) {
     if (!isGeoOrProviderError(probeErr)) {
-      // 非地理限制，可能是临时网络问题，仍返回 primary
       return primary;
     }
     logger.warn(
@@ -193,7 +169,6 @@ export async function getProviderWithFallback() {
     );
   }
 
-  // Primary 确认不可用，尝试 fallback
   const fallbacks = getAvailableFallbacks(currentProvider);
   if (fallbacks.length === 0) {
     logger.warn(`[AiFactory] No fallback providers available. Primary: ${currentProvider}`);
@@ -219,8 +194,6 @@ export async function getProviderWithFallback() {
  *
  * 当 ALEMBIC_EMBED_PROVIDER 被设置时，创建一个专用于 embedding 的 provider 实例，
  * 使 embedding 和 LLM 生成可以使用不同的提供商/模型。
- *
- * 典型场景：LLM 用 Google Gemini，Embedding 用本地 Ollama + qwen3-embedding
  *
  * @returns 独立的 embed provider，或 null（未配置时）
  */
@@ -271,8 +244,10 @@ export function getAiConfigInfo() {
 // 所有提供商的集中导出
 export { AiProvider } from './AiProvider.js';
 export { ClaudeProvider } from './providers/ClaudeProvider.js';
+export { DeepSeekProvider } from './providers/DeepSeekProvider.js';
 export { GoogleGeminiProvider } from './providers/GoogleGeminiProvider.js';
 export { MockProvider } from './providers/MockProvider.js';
+export { OllamaProvider } from './providers/OllamaProvider.js';
 export { OpenAiProvider } from './providers/OpenAiProvider.js';
 
 export default {
