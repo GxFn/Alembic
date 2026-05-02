@@ -157,7 +157,7 @@ export const ANALYST_BUDGET = {
  *   - >200 文件: 封顶 40 轮（避免单维度成本失控）
  *
  * searchBudget 按比例随 maxIterations 缩放（保持 75%）。
- * timeoutMs 按比例随 maxIterations 缩放（基线 300s 对应 24 轮）。
+ * timeoutMs 按比例随 maxIterations 缩放（基线 480s 对应 24 轮）。
  */
 export function computeAnalystBudget(
   fileCount: number
@@ -181,8 +181,8 @@ export function computeAnalystBudget(
     ...ANALYST_BUDGET,
     maxIterations: maxIter,
     searchBudget: Math.round(maxIter * 0.75),
-    // 超时随轮次等比缩放: 24轮→300s, 40轮→500s
-    timeoutMs: Math.round((maxIter / 24) * 300_000),
+    // 超时随轮次等比缩放: 24轮→480s, 40轮→800s
+    timeoutMs: Math.round((maxIter / 24) * 480_000),
   };
 }
 

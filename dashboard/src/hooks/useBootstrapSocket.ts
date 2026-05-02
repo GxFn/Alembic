@@ -51,6 +51,13 @@ const INITIAL_REVIEW_STATE: ReviewState = {
   round3: { status: 'idle' },
 };
 
+/** 测试模式配置 */
+export interface TestModeConfig {
+  enabled: boolean;
+  bootstrapDims: string[];
+  rescanDims: string[];
+}
+
 export interface BootstrapSession {
   id: string;
   status: 'running' | 'completed' | 'completed_with_errors' | 'idle';
@@ -70,6 +77,8 @@ export interface BootstrapSession {
   totalToolCalls?: number;
   /** 后端计算的已用毫秒 */
   elapsedMs?: number;
+  /** 测试模式 */
+  testMode?: TestModeConfig | null;
 }
 
 interface UseBootstrapSocketReturn {
@@ -138,9 +147,9 @@ export function useBootstrapSocket(): UseBootstrapSocketReturn {
 
     // ── Bootstrap progress events ──
 
-    const onStarted = (data: { tasks: Array<{ id: string } & BootstrapTaskMeta>; total: number; sessionId: string; startedAt?: number }) => {
+    const onStarted = (data: { tasks: Array<{ id: string } & BootstrapTaskMeta>; total: number; sessionId: string; startedAt?: number; testMode?: TestModeConfig }) => {
       sessionIdRef.current = data.sessionId;
-      setReviewState(INITIAL_REVIEW_STATE); // 新 session 重置 AI 审查状态
+      setReviewState(INITIAL_REVIEW_STATE);
       setSession({
         id: data.sessionId,
         status: 'running',
@@ -153,6 +162,7 @@ export function useBootstrapSocket(): UseBootstrapSocketReturn {
         startedAt: data.startedAt || Date.now(),
         totalToolCalls: 0,
         elapsedMs: 0,
+        testMode: data.testMode || null,
         tasks: data.tasks.map(t => ({
           id: t.id,
           status: 'skeleton' as const,

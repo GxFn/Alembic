@@ -645,4 +645,70 @@ describe('AgentRuntime', () => {
       expect(result.reply).toContain('[Custom]');
     });
   });
+
+  /* ──── text-only round 正确处理 ──── */
+
+  describe('text-only round handling', () => {
+    test('should return a reply when AI produces only text (no tool calls)', async () => {
+      const aiProvider = mockAiProvider({
+        chatWithTools: vi.fn().mockResolvedValueOnce({
+          type: 'text',
+          text: 'Here is my analysis of the code patterns.',
+          functionCalls: null,
+          usage: { inputTokens: 100, outputTokens: 200 },
+        }),
+      });
+      const rt = createRuntime({ aiProvider });
+      const result = await rt.reactLoop('Analyze code patterns');
+
+      expect(result.reply).toContain('analysis');
+      expect(result.toolCalls).toHaveLength(0);
+      expect(result.iterations).toBe(1);
+    });
+
+    test('should accumulate iterations correctly across mixed tool/text rounds', async () => {
+      const aiProvider = mockAiProvider({
+        chatWithTools: vi
+          .fn()
+          .mockResolvedValueOnce({
+            type: 'function_call',
+            text: null,
+            functionCalls: [{ id: 'c1', name: 'search_knowledge', args: { query: 'test' } }],
+            usage: { inputTokens: 100, outputTokens: 50 },
+          })
+          .mockResolvedValueOnce({
+            type: 'text',
+            text: 'Based on what I found, the patterns are clear.',
+            functionCalls: null,
+            usage: { inputTokens: 200, outputTokens: 100 },
+          }),
+      });
+      const rt = createRuntime({ aiProvider });
+      const result = await rt.reactLoop('Search and analyze');
+
+      expect(result.iterations).toBe(2);
+      expect(result.toolCalls).toHaveLength(1);
+      expect(result.reply).toContain('patterns');
+    });
+  });
+
+  /* ──── graceful exit protection ──── */
+
+  describe('graceful exit protection', () => {
+    test('should return text reply even when AI erroneously includes function calls in final response', async () => {
+      const aiProvider = mockAiProvider({
+        chatWithTools: vi.fn().mockResolvedValueOnce({
+          type: 'text',
+          text: 'This is my final analysis summary.',
+          functionCalls: null,
+          usage: { inputTokens: 100, outputTokens: 200 },
+        }),
+      });
+      const rt = createRuntime({ aiProvider });
+      const result = await rt.reactLoop('Summarize findings');
+
+      expect(result.reply).toBeTruthy();
+      expect(result.iterations).toBe(1);
+    });
+  });
 });

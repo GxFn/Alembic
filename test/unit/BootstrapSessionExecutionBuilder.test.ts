@@ -179,4 +179,23 @@ describe('bootstrap session execution builder', () => {
     });
     expect(input.execution?.shouldAbort?.()).toBe(true);
   });
+
+  test('resolveBootstrapDimensionTier maps tierHint to 0-based tier index', () => {
+    const makeTestDim = (tierHint?: number) =>
+      ({ id: 'test', label: 'Test', tierHint }) as BootstrapDimensionPlan['dim'];
+
+    expect(resolveBootstrapDimensionTier('arch', makeTestDim(1), { getTierIndex: () => 0 })).toBe(
+      0
+    );
+    expect(resolveBootstrapDimensionTier('code', makeTestDim(2), { getTierIndex: () => 0 })).toBe(
+      1
+    );
+    expect(resolveBootstrapDimensionTier('err', makeTestDim(3), { getTierIndex: () => 0 })).toBe(2);
+    expect(
+      resolveBootstrapDimensionTier('no-hint', makeTestDim(undefined), { getTierIndex: () => 2 })
+    ).toBe(2);
+    expect(
+      resolveBootstrapDimensionTier('neg', makeTestDim(undefined), { getTierIndex: () => -1 })
+    ).toBe(0);
+  });
 });

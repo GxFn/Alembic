@@ -323,6 +323,63 @@ describe('Integration: Agent Policies', () => {
       expect(policy.validateAfter({ reply: 'All good', toolCalls: [] }).ok).toBe(true);
       expect(policy.validateAfter({ reply: 'Found an error', toolCalls: [] }).ok).toBe(false);
     });
+
+    test('should skip file ref check when toolCalls contain submit_knowledge', () => {
+      const policy = new QualityGatePolicy({
+        minEvidenceLength: 0,
+        minFileRefs: 3,
+        minToolCalls: 0,
+      });
+
+      const result = policy.validateAfter({
+        reply: 'Short reply without any file refs',
+        toolCalls: [{ tool: 'submit_knowledge' }, { tool: 'submit_with_check' }],
+      });
+      expect(result.ok).toBe(true);
+    });
+
+    test('should skip file ref check when toolCalls contain collect_scan_recipe', () => {
+      const policy = new QualityGatePolicy({
+        minEvidenceLength: 0,
+        minFileRefs: 3,
+        minToolCalls: 0,
+      });
+
+      const result = policy.validateAfter({
+        reply: 'No file references here',
+        toolCalls: [{ name: 'collect_scan_recipe' }],
+      });
+      expect(result.ok).toBe(true);
+    });
+
+    test('should still check file refs when toolCalls are non-submit tools', () => {
+      const policy = new QualityGatePolicy({
+        minEvidenceLength: 0,
+        minFileRefs: 3,
+        minToolCalls: 0,
+      });
+
+      const result = policy.validateAfter({
+        reply: 'Analysis without file refs',
+        toolCalls: [{ tool: 'search_code' }, { tool: 'read_file' }],
+      });
+      expect(result.ok).toBe(false);
+      expect(result.reason).toContain('文件引用不足');
+    });
+
+    test('should expose gate config via toGateConfig', () => {
+      const policy = new QualityGatePolicy({
+        minEvidenceLength: 100,
+        minFileRefs: 5,
+        minToolCalls: 3,
+      });
+      const config = policy.toGateConfig();
+      expect(config).toMatchObject({
+        minEvidenceLength: 100,
+        minFileRefs: 5,
+        minToolCalls: 3,
+      });
+    });
   });
 
   describe('PolicyEngine', () => {

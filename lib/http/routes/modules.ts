@@ -628,9 +628,12 @@ router.get('/bootstrap/status', async (req: Request, res: Response): Promise<voi
     });
   }
 
+  const { getTestModeConfig } = await import('#shared/test-mode.js');
+  const sessionStatus = taskManager.getSessionStatus();
+  const testMode = getTestModeConfig();
   res.json({
     success: true,
-    data: taskManager.getSessionStatus(),
+    data: { ...sessionStatus, ...(testMode.enabled ? { testMode } : {}) },
   });
 });
 

@@ -160,28 +160,39 @@ export function createBootstrapStrategy(isSkillOnly = false) {
 /**
  * Analyst 策略（纯探索，无 submit 阶段）
  * 4 阶段: SCAN → EXPLORE → VERIFY → SUMMARIZE
+ *
+ * v2 改进: 支持探索饱和后的自然退出，避免耗尽全部轮次才进入总结：
+ *   - EXPLORE 阶段在 40% 预算后从 required 降级为 auto，允许 LLM 自然输出文本
+ *   - EXPLORE→VERIFY 新增 onTextResponse=true，文本回复即可触发转换
+ *   - EXPLORE→VERIFY 新增 consecutiveIdleRounds 检测（LLM 连续无工具调用=分析完成）
+ *   - VERIFY→SUMMARIZE 阈值从 80% 降至 75%
  */
 export const STRATEGY_ANALYST = {
   name: 'analyst',
   phases: ['SCAN', 'EXPLORE', 'VERIFY', 'SUMMARIZE'],
   transitions: {
     'SCAN→EXPLORE': {
-      // 2 轮结构扫描足够获取项目骨架（目录 + 关键文件列表），将 1 轮还给 EXPLORE
       onMetrics: (m: ExplorationMetrics) => m.iteration >= 2,
       onTextResponse: false,
     },
     'EXPLORE→VERIFY': {
       onMetrics: (m: ExplorationMetrics, b: ExplorationBudget) =>
-        m.searchRoundsInPhase >= Math.floor(b.maxIterations * 0.6) || m.roundsSinceNewInfo >= 3,
-      onTextResponse: false,
+        m.searchRoundsInPhase >= Math.floor(b.maxIterations * 0.6) ||
+        m.roundsSinceNewInfo >= 3 ||
+        (m.iteration >= Math.floor(b.maxIterations * 0.4) && m.roundsSinceNewInfo >= 2) ||
+        m.consecutiveIdleRounds >= 2,
+      onTextResponse: (m: ExplorationMetrics, b: ExplorationBudget) =>
+        m.iteration >= Math.floor(b.maxIterations * 0.4),
     },
     'VERIFY→SUMMARIZE': {
       onMetrics: (m: ExplorationMetrics, b: ExplorationBudget) =>
-        m.iteration >= Math.floor(b.maxIterations * 0.8) || m.roundsSinceNewInfo >= 2,
+        m.iteration >= Math.floor(b.maxIterations * 0.75) ||
+        m.roundsSinceNewInfo >= 2 ||
+        m.consecutiveIdleRounds >= 1,
       onTextResponse: true,
     },
   },
-  getToolChoice: (phase: ExplorationPhase) => {
+  getToolChoice: (phase: ExplorationPhase, m: ExplorationMetrics, b: ExplorationBudget) => {
     if (phase === 'SUMMARIZE') {
       return 'none';
     }
@@ -189,7 +200,7 @@ export const STRATEGY_ANALYST = {
       return 'required';
     }
     if (phase === 'EXPLORE') {
-      return 'required';
+      return m.iteration >= Math.floor(b.maxIterations * 0.4) ? 'auto' : 'required';
     }
     return 'auto'; // VERIFY
   },

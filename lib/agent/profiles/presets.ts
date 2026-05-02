@@ -159,7 +159,7 @@ export const PRESETS = Object.freeze({
           budget: {
             maxIterations: ANALYST_BUDGET.maxIterations,
             temperature: 0.4,
-            timeoutMs: 300_000,
+            timeoutMs: 480_000,
           },
           systemPrompt: ANALYST_SYSTEM_PROMPT,
           promptBuilder: (ctx: Record<string, unknown>) =>
@@ -203,7 +203,7 @@ export const PRESETS = Object.freeze({
           capabilities: ['knowledge_production'],
           // 透传完整 PRODUCER_BUDGET (searchBudget/maxSubmits/softSubmitLimit/idleRoundsToExit)
           // 供 ExplorationTracker 精确控制 PRODUCE→SUMMARIZE 转换时机
-          budget: { ...PRODUCER_BUDGET, temperature: 0.3, timeoutMs: 180_000 },
+          budget: { ...PRODUCER_BUDGET, temperature: 0.3, timeoutMs: 360_000 },
           systemPrompt: PRODUCER_SYSTEM_PROMPT,
           promptBuilder: (ctx: Record<string, unknown>) =>
             buildProducerPromptV2(

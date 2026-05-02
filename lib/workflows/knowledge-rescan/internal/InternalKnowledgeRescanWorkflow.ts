@@ -9,7 +9,7 @@
  *   2. rescanClean — 清理衍生缓存
  *   2.5 Recipe 文件 ↔ DB 一致性恢复
  *   3. Phase 1-4 全量分析（文件收集→AST→依赖→Guard→维度）
- *   4. 证据审计 — 验证 + 快速衰退（桩函数，RelevanceAuditor 已移除）
+ *   4. 覆盖分类 — RecipeImpactPlanner + SourceRef + lifecycle 三层评估
  *   5. 计算 gap 维度（需要补齐的维度）
  *   5.5 BootstrapSessionManager — 缓存 Phase 结果供复用
  *   6. 快速返回骨架 → 异步 internal dimension execution 填充 gap 维度
@@ -19,6 +19,7 @@
  */
 
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { applyTestDimensionFilter } from '#shared/test-mode.js';
 import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
@@ -151,7 +152,7 @@ export async function runInternalKnowledgeRescanWorkflow(
 
   let reconcileReport;
   try {
-    const sourceRefRepo = ctx.container.get('sourceRefRepository');
+    const sourceRefRepo = ctx.container.get('recipeSourceRefRepository');
     const knowledgeRepo = ctx.container.get('knowledgeRepository');
     const signalBus = ctx.container.get('signalBus');
     if (sourceRefRepo && knowledgeRepo) {
@@ -224,7 +225,7 @@ export async function runInternalKnowledgeRescanWorkflow(
 
   let candidatePlan: EvolutionCandidatePlan | null = null;
   try {
-    const sourceRefRepo = ctx.container.get('sourceRefRepository');
+    const sourceRefRepo = ctx.container.get('recipeSourceRefRepository');
     const knowledgeRepo = ctx.container.get('knowledgeRepository');
     if (sourceRefRepo && knowledgeRepo) {
       const diff = _incrementalPlan?.diff ?? null;
@@ -247,46 +248,53 @@ export async function runInternalKnowledgeRescanWorkflow(
   }
 
   // ═══════════════════════════════════════════════════════════
-  // Step 3: Evolution Agent 验证
+  // Step 3: Evolution Agent 验证 (fire-and-forget，不阻塞 HTTP 响应)
   // ═══════════════════════════════════════════════════════════
 
   if (candidatePlan && candidatePlan.candidates.length > 0) {
-    try {
-      const agentService = ctx.container.get('agentService');
-      const knowledgeRepo = ctx.container.get('knowledgeRepository');
-      if (agentService && knowledgeRepo) {
-        const auditRecipes = await Promise.all(
-          candidatePlan.candidates.map((c) =>
-            toEvolutionAuditRecipe(
-              c,
-              knowledgeRepo as InstanceType<
-                typeof import('../../../repository/knowledge/KnowledgeRepository.impl.js').default
-              >
+    const _candidatePlanRef = candidatePlan;
+    const dispatchEvolutionAudit = async () => {
+      try {
+        const agentService = ctx.container.get('agentService');
+        const knowledgeRepo = ctx.container.get('knowledgeRepository');
+        if (agentService && knowledgeRepo) {
+          const auditRecipes = await Promise.all(
+            _candidatePlanRef.candidates.map((c) =>
+              toEvolutionAuditRecipe(
+                c,
+                knowledgeRepo as InstanceType<
+                  typeof import('../../../repository/knowledge/KnowledgeRepository.impl.js').default
+                >
+              )
             )
-          )
-        );
-        const evolutionResult = await runEvolutionAudit({
-          agentService:
-            agentService as import('../../../agent/service/AgentService.js').AgentService,
-          recipes: auditRecipes,
-          projectOverview: {
-            primaryLang: primaryLang || 'unknown',
-            fileCount: allFiles.length,
-            modules: depGraphData?.nodes?.map((n: { name?: string }) => n.name || '') || [],
-          },
-          proposalSource: 'rescan-evolution',
-        });
-        ctx.logger.info('[Rescan-Internal] Evolution audit complete', {
-          proposed: evolutionResult.proposed,
-          deprecated: evolutionResult.deprecated,
-          skipped: evolutionResult.skipped,
+          );
+          const evolutionResult = await runEvolutionAudit({
+            agentService:
+              agentService as import('../../../agent/service/AgentService.js').AgentService,
+            recipes: auditRecipes,
+            projectOverview: {
+              primaryLang: primaryLang || 'unknown',
+              fileCount: allFiles.length,
+              modules: depGraphData?.nodes?.map((n: { name?: string }) => n.name || '') || [],
+            },
+            proposalSource: 'rescan-evolution',
+          });
+          ctx.logger.info('[Rescan-Internal] Evolution audit complete', {
+            proposed: evolutionResult.proposed,
+            deprecated: evolutionResult.deprecated,
+            skipped: evolutionResult.skipped,
+          });
+        }
+      } catch (err: unknown) {
+        ctx.logger.warn('[Rescan-Internal] Evolution audit failed (async)', {
+          error: (err as Error).message,
         });
       }
-    } catch (err: unknown) {
-      ctx.logger.warn('[Rescan-Internal] Evolution audit failed, continuing', {
-        error: (err as Error).message,
-      });
-    }
+    };
+    dispatchEvolutionAudit().catch(() => {});
+    ctx.logger.info('[Rescan-Internal] Evolution audit dispatched async', {
+      candidates: candidatePlan.candidates.length,
+    });
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -298,8 +306,7 @@ export async function runInternalKnowledgeRescanWorkflow(
     logger: ctx.logger,
     recipeEntries: recipeSnapshot.entries,
     allFiles,
-    astProjectSummary,
-    depGraphData,
+    candidatePlan,
   });
 
   ctx.logger.info('[Rescan-Internal] Relevance audit complete', {
@@ -314,8 +321,18 @@ export async function runInternalKnowledgeRescanWorkflow(
   const knowledgeRescanPlan = buildKnowledgeRescanPlan({
     recipeEntries: recipeSnapshot.entries,
     auditSummary,
-    dimensions: allDimensions as DimensionDef[],
+    dimensions: applyTestDimensionFilter(allDimensions as DimensionDef[], 'rescan'),
     requestedDimensionIds: intent.dimensionIds,
+    fileDiff: _incrementalPlan?.diff
+      ? {
+          affectedDimensionIds: _incrementalPlan.affectedDimensions,
+          changedFiles: [
+            ...(_incrementalPlan.diff.added || []),
+            ...(_incrementalPlan.diff.modified || []),
+            ...(_incrementalPlan.diff.deleted || []),
+          ],
+        }
+      : null,
   });
 
   // ═══════════════════════════════════════════════════════════

@@ -763,14 +763,16 @@ export class AgentRuntime {
       ctx.consecutiveEmptyResponses = 0;
     }
 
-    // Graceful exit 保护
+    // Graceful exit 保护 — 在 SUMMARIZE 阶段或 gracefulExit 状态下，
+    // toolChoice=none 但部分 LLM (DeepSeek 等) 可能仍然返回 tool calls，需要忽略
+    const isTerminalPhase = ctx.tracker?.phase === 'SUMMARIZE' || ctx.tracker?.phase === 'FINALIZE';
     if (
-      ctx.tracker?.isGracefulExit &&
+      (ctx.tracker?.isGracefulExit || isTerminalPhase) &&
       llmResult.functionCalls?.length &&
       llmResult.functionCalls.length > 0
     ) {
       this.logger.warn(
-        `[AgentRuntime] ⚠ AI returned ${llmResult.functionCalls.length} tool calls despite toolChoice=none (graceful exit) — ignoring`
+        `[AgentRuntime] ⚠ AI returned ${llmResult.functionCalls.length} tool calls despite toolChoice=none (${isTerminalPhase ? 'terminal phase' : 'graceful exit'}) — ignoring`
       );
       ctx.diagnostics?.warn({
         code: 'tool_choice_violation',
@@ -1052,9 +1054,37 @@ export class AgentRuntime {
     const { tracker, trace, messages } = ctx;
 
     if (tracker) {
-      // (setThought + extractAndSetPlan 已在主循环中统一处理)
+      // 文本轮次也需要更新 tracker 指标 — 否则 roundsSinceNewInfo / consecutiveIdleRounds
+      // 不递增，metrics 驱动的阶段转换永远不触发（根因: 工具路径 endRound 被调用但文本路径被跳过）
+      const phaseBefore = tracker.phase;
+      tracker.endRound({
+        hasNewInfo: false,
+        submitCount: 0,
+        toolNames: [],
+      });
+      const metricsTransitionedToTerminal =
+        phaseBefore !== tracker.phase &&
+        (tracker.phase === 'SUMMARIZE' || tracker.phase === 'FINALIZE');
 
       const textResult = tracker.onTextResponse();
+
+      // 如果 endRound 的 metrics 转换刚推进到终结阶段，则强制走 needsDigestNudge 路径，
+      // 给 Agent 一轮机会输出完整总结，而不是把当前文本当作最终回复
+      if (metricsTransitionedToTerminal && textResult.isFinalAnswer) {
+        const digestNudge =
+          tracker.pipelineType === 'analyst'
+            ? `请**停止调用工具**，直接输出你的完整分析报告。用 Markdown 格式，包含具体文件路径、类名和代码模式。至少涵盖 3 个核心发现。\n\n**现在开始输出你的分析报告。**\n⚠️ 严禁在回复中复制本条指令文字，只输出你自己的分析。`
+            : null;
+        if (digestNudge) {
+          messages.appendAssistantText(llmResult.text || '', llmResult.reasoningContent);
+          messages.appendUserNudge(digestNudge);
+          this.logger.info(
+            '[AgentRuntime] 📝 metrics-transition to terminal — injecting digest nudge'
+          );
+          trace?.endRound?.();
+          return false; // continue — let agent produce a full summary
+        }
+      }
 
       if (textResult.isFinalAnswer) {
         ctx.lastReply = cleanFinalAnswer(llmResult.text || '');

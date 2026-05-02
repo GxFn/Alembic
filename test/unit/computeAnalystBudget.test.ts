@@ -38,10 +38,10 @@ describe('computeAnalystBudget', () => {
 
   it('scales timeoutMs proportionally to maxIterations', () => {
     const base = computeAnalystBudget(0);
-    expect(base.timeoutMs).toBe(300_000);
+    expect(base.timeoutMs).toBe(480_000);
 
     const large = computeAnalystBudget(200);
-    expect(large.timeoutMs).toBe(Math.round((40 / 24) * 300_000));
+    expect(large.timeoutMs).toBe(Math.round((40 / 24) * 480_000));
   });
 
   it('preserves non-scaled fields from ANALYST_BUDGET', () => {

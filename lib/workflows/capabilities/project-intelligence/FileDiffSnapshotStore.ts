@@ -144,7 +144,7 @@ export class FileDiffSnapshotStore {
       throw new Error('FileDiffSnapshotStore requires a database instance');
     }
     const wrappedDrizzle = (db as DbWrapper).getDrizzle;
-    this.#drizzle = typeof wrappedDrizzle === 'function' ? wrappedDrizzle() : getDrizzle();
+    this.#drizzle = typeof wrappedDrizzle === 'function' ? wrappedDrizzle.call(db) : getDrizzle();
     this.#logger = logger || null;
   }
 

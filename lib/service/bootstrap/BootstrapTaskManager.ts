@@ -18,6 +18,7 @@
  *   bootstrap:all-completed — 全部任务完成
  */
 
+import { getTestModeConfig } from '#shared/test-mode.js';
 import type { EventBus } from '../../infrastructure/event/EventBus.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
@@ -207,12 +208,25 @@ export class BootstrapTaskManager {
       this.#currentSession.addTask(id, meta);
     }
 
-    Logger.info(`[Bootstrap] Session ${sessionId} started with ${taskDefs.length} tasks`);
+    let testModePayload: Record<string, unknown> | undefined;
+    try {
+      const cfg = getTestModeConfig();
+      if (cfg.enabled) {
+        testModePayload = cfg;
+      }
+    } catch {
+      /* best effort */
+    }
+
+    Logger.info(
+      `[Bootstrap] Session ${sessionId} started with ${taskDefs.length} tasks${testModePayload ? ' [TEST MODE]' : ''}`
+    );
     this.#emit('bootstrap:started', {
       sessionId,
       tasks: taskDefs.map((t: TaskDef) => ({ id: t.id, ...t.meta })),
       total: taskDefs.length,
       startedAt: this.#currentSession.startedAt,
+      ...(testModePayload ? { testMode: testModePayload } : {}),
     });
 
     return this.#currentSession;

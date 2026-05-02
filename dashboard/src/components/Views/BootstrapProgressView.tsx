@@ -331,8 +331,24 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h2 className="text-lg font-semibold text-[var(--fg-primary)]">{t('bootstrap.title')}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-[var(--fg-primary)]">{t('bootstrap.title')}</h2>
+            {session.testMode?.enabled && (
+              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                <Filter size={10} />
+                {t('bootstrap.testMode')}
+              </span>
+            )}
+          </div>
           {statusText && <p className="text-sm text-[var(--fg-secondary)] mt-0.5">{statusText}</p>}
+          {session.testMode?.enabled && (
+            <p className="text-xs text-amber-600 mt-0.5">
+              {t('bootstrap.testModeHint', {
+                bootstrap: session.testMode.bootstrapDims.length > 0 ? session.testMode.bootstrapDims.join(', ') : t('bootstrap.testModeAll'),
+                rescan: session.testMode.rescanDims.length > 0 ? session.testMode.rescanDims.join(', ') : t('bootstrap.testModeAll'),
+              })}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {/* Cancel button — only when running */}

@@ -38,9 +38,20 @@ export class QualityGatePolicy extends Policy {
     }
 
     if (result.reply) {
-      const fileRefCount = (result.reply.match(/[\w/-]+\.\w{1,6}/g) || []).length;
-      if (fileRefCount < this.#minFileRefs) {
-        reasons.push(`文件引用不足: ${fileRefCount} < ${this.#minFileRefs}`);
+      const hasSubmitCalls = (result.toolCalls || []).some((tc: unknown) => {
+        const obj = tc as Record<string, unknown>;
+        const name = (obj.tool || obj.name) as string;
+        return (
+          name === 'submit_knowledge' ||
+          name === 'submit_with_check' ||
+          name === 'collect_scan_recipe'
+        );
+      });
+      if (!hasSubmitCalls) {
+        const fileRefCount = (result.reply.match(/[\w/-]+\.\w{1,6}/g) || []).length;
+        if (fileRefCount < this.#minFileRefs) {
+          reasons.push(`文件引用不足: ${fileRefCount} < ${this.#minFileRefs}`);
+        }
       }
     }
 

@@ -15,6 +15,7 @@ import { DiagnosticsCollector } from '../../lib/agent/runtime/DiagnosticsCollect
 import {
   allowlistGate,
   observationRecord,
+  submitDedup,
   ToolExecutionPipeline,
 } from '../../lib/agent/runtime/ToolExecutionPipeline.js';
 import { InternalToolAdapter } from '../../lib/tools/adapters/InternalToolAdapter.js';
@@ -943,6 +944,150 @@ describe('Integration: ToolExecutionPipeline', () => {
       expect(diagnostics.toJSON().blockedTools).toEqual([
         expect.objectContaining({ tool: 'static_tool', reason: expect.stringContaining('不可用') }),
       ]);
+    });
+  });
+
+  describe('submitDedup middleware', () => {
+    function makeCtx(sharedState: Record<string, unknown> = {}) {
+      return {
+        runtime: { logger: { info: vi.fn(), warn: vi.fn() } },
+        loopCtx: { sharedState },
+        iteration: 0,
+      } as never;
+    }
+
+    test('before: should block duplicate title submissions', () => {
+      const titles = new Set(['my knowledge entry']);
+      const ctx = makeCtx({ submittedTitles: titles, submittedTriggers: new Set() });
+      const call = { name: 'submit_knowledge', args: { title: 'My Knowledge Entry' }, id: 'c1' };
+
+      const verdict = submitDedup.before(call, ctx);
+
+      expect(verdict).toBeDefined();
+      expect(verdict?.blocked).toBe(true);
+      expect((verdict?.result as Record<string, unknown>)?.status).toBe('duplicate');
+    });
+
+    test('before: should block duplicate trigger submissions', () => {
+      const ctx = makeCtx({
+        submittedTitles: new Set(),
+        submittedTriggers: new Set(['singleton']),
+      });
+      const call = {
+        name: 'submit_with_check',
+        args: { title: 'New Entry', trigger: 'Singleton' },
+        id: 'c2',
+      };
+
+      const verdict = submitDedup.before(call, ctx);
+
+      expect(verdict).toBeDefined();
+      expect(verdict?.blocked).toBe(true);
+      expect((verdict?.result as Record<string, unknown>)?.reason).toContain('trigger');
+    });
+
+    test('before: should allow new unique submissions', () => {
+      const ctx = makeCtx({
+        submittedTitles: new Set(),
+        submittedTriggers: new Set(),
+      });
+      const call = {
+        name: 'submit_knowledge',
+        args: { title: 'Brand New Entry' },
+        id: 'c3',
+      };
+
+      const verdict = submitDedup.before(call, ctx);
+      expect(verdict).toBeUndefined();
+    });
+
+    test('before: should ignore non-submit tools', () => {
+      const ctx = makeCtx({ submittedTitles: new Set(['test']) });
+      const call = { name: 'search_code', args: { query: 'test' }, id: 'c4' };
+
+      const verdict = submitDedup.before(call, ctx);
+      expect(verdict).toBeUndefined();
+    });
+
+    test('after: should register title and trigger on successful submit', () => {
+      const titles = new Set<string>();
+      const triggers = new Set<string>();
+      const patterns = new Set<string>();
+      const ctx = makeCtx({
+        submittedTitles: titles,
+        submittedTriggers: triggers,
+        submittedPatterns: patterns,
+      });
+      const meta = {} as Record<string, unknown>;
+      const call = {
+        name: 'submit_knowledge',
+        args: { title: 'My Entry', trigger: 'my-trigger' },
+        id: 'c5',
+      };
+
+      submitDedup.after(call, { status: 'created' }, ctx, meta as never);
+
+      expect(titles.has('my entry')).toBe(true);
+      expect(triggers.has('my-trigger')).toBe(true);
+      expect(meta.isSubmit).toBe(true);
+    });
+
+    test('after: should not register on rejected result', () => {
+      const titles = new Set<string>();
+      const ctx = makeCtx({
+        submittedTitles: titles,
+        submittedTriggers: new Set(),
+      });
+      const meta = {} as Record<string, unknown>;
+      const call = {
+        name: 'submit_knowledge',
+        args: { title: 'Rejected Entry' },
+        id: 'c6',
+      };
+
+      submitDedup.after(call, { status: 'rejected' }, ctx, meta as never);
+
+      expect(titles.size).toBe(0);
+      expect(meta.isSubmit).toBeUndefined();
+    });
+
+    test('after: should not register on error result', () => {
+      const titles = new Set<string>();
+      const ctx = makeCtx({
+        submittedTitles: titles,
+        submittedTriggers: new Set(),
+      });
+      const meta = {} as Record<string, unknown>;
+      const call = {
+        name: 'submit_knowledge',
+        args: { title: 'Error Entry' },
+        id: 'c7',
+      };
+
+      submitDedup.after(call, { error: 'some error' }, ctx, meta as never);
+
+      expect(titles.size).toBe(0);
+    });
+
+    test('after: should register pattern fingerprint for long patterns', () => {
+      const patterns = new Set<string>();
+      const ctx = makeCtx({
+        submittedTitles: new Set(),
+        submittedTriggers: new Set(),
+        submittedPatterns: patterns,
+      });
+      const meta = {} as Record<string, unknown>;
+      const longPattern =
+        'class ViewController: UIViewController { override func viewDidLoad() { super.viewDidLoad() } }';
+      const call = {
+        name: 'submit_knowledge',
+        args: { title: 'VC Pattern', content: { pattern: longPattern } },
+        id: 'c8',
+      };
+
+      submitDedup.after(call, { status: 'created' }, ctx, meta as never);
+
+      expect(patterns.size).toBe(1);
     });
   });
 });

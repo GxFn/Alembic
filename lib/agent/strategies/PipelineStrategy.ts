@@ -654,8 +654,8 @@ export class PipelineStrategy extends Strategy {
       });
     }
 
-    // 硬超时 = budget.timeoutMs + 30s 缓冲
-    const hardLimitMs = stageTimeoutMs + 30_000;
+    // 硬超时 = budget.timeoutMs + 60s 缓冲（ForcedSummary AI 调用需要 ~30s）
+    const hardLimitMs = stageTimeoutMs + 60_000;
     let hardTimer: ReturnType<typeof setTimeout> | undefined;
 
     return Promise.race([
