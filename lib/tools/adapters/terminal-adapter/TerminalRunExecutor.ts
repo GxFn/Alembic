@@ -18,9 +18,9 @@ import {
 } from './TerminalEnvironment.js';
 import {
   type ExecFailure,
-  execFileAsync,
   getTerminalSessionManager,
   recordAndReturn,
+  sandboxedExecFile,
   statusForFailure,
 } from './TerminalExecutorShared.js';
 
@@ -76,14 +76,27 @@ export async function executeStructuredCommand(
   const envSummary = summarizeTerminalEnv(commandEnv, terminal.session.envPersistence);
 
   try {
-    const { stdout, stderr } = await execFileAsync(terminal.bin, terminal.args, {
-      cwd: executionCwd,
-      timeout: terminal.timeoutMs,
-      maxBuffer: 1024 * 1024,
-      signal: request.context.abortSignal || undefined,
-      env: buildTerminalEnvironment(process.env, commandEnv),
+    const execResult = await sandboxedExecFile(
+      terminal.bin,
+      terminal.args,
+      {
+        cwd: executionCwd,
+        timeout: terminal.timeoutMs,
+        maxBuffer: 1024 * 1024,
+        signal: request.context.abortSignal || undefined,
+        env: buildTerminalEnvironment(process.env, commandEnv),
+      },
+      {
+        network: terminal.network,
+        filesystem: terminal.filesystem,
+        projectRoot: request.context.projectRoot,
+        env: commandEnv,
+      }
+    );
+    const output = materializeTerminalOutput(request, {
+      stdout: execResult.stdout,
+      stderr: execResult.stderr,
     });
-    const output = materializeTerminalOutput(request, { stdout, stderr });
     const sessionRecord = acquired.lease.release({ cwd: executionCwd, env: persistedEnv });
     return recordAndReturn(
       request,
@@ -109,12 +122,13 @@ export async function executeStructuredCommand(
           session: terminal.session,
           sessionRecord,
           policy,
+          sandbox: execResult.sandbox,
         },
         output.artifacts
       )
     );
   } catch (err) {
-    const failure = err as ExecFailure;
+    const failure = err as ExecFailure & { _sandboxMeta?: Record<string, unknown> };
     const output = materializeTerminalOutput(request, {
       stdout: failure.stdout || '',
       stderr: failure.stderr || failure.message || '',
@@ -144,6 +158,7 @@ export async function executeStructuredCommand(
           session: terminal.session,
           sessionRecord,
           policy,
+          sandbox: failure._sandboxMeta,
         },
         output.artifacts
       )

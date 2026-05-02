@@ -14,8 +14,8 @@ import {
 import { buildTerminalEnvironment, summarizeTerminalEnv } from './TerminalEnvironment.js';
 import {
   type ExecFailure,
-  execFileAsync,
   recordAndReturn,
+  sandboxedExecFile,
   shellAuditData,
   statusForFailure,
 } from './TerminalExecutorShared.js';
@@ -43,14 +43,27 @@ export async function executeShell(
   }
   const envSummary = summarizeTerminalEnv(shell.env, 'none');
   try {
-    const { stdout, stderr } = await execFileAsync(shell.shell, ['-lc', shell.command], {
-      cwd: shell.cwd,
-      timeout: shell.timeoutMs,
-      maxBuffer: 1024 * 1024,
-      signal: request.context.abortSignal || undefined,
-      env: buildTerminalEnvironment(process.env, shell.env),
+    const execResult = await sandboxedExecFile(
+      shell.shell,
+      ['-lc', shell.command],
+      {
+        cwd: shell.cwd,
+        timeout: shell.timeoutMs,
+        maxBuffer: 1024 * 1024,
+        signal: request.context.abortSignal || undefined,
+        env: buildTerminalEnvironment(process.env, shell.env),
+      },
+      {
+        network: shell.network,
+        filesystem: shell.filesystem,
+        projectRoot: shell.projectRoot,
+        env: shell.env,
+      }
+    );
+    const output = materializeTerminalOutput(request, {
+      stdout: execResult.stdout,
+      stderr: execResult.stderr,
     });
-    const output = materializeTerminalOutput(request, { stdout, stderr });
     return recordAndReturn(
       request,
       envelopeForTerminalResult(
@@ -58,12 +71,15 @@ export async function executeShell(
         startedAt,
         startedMs,
         'success',
-        shellStructuredContent(shell, output, 0, envSummary, policy),
+        {
+          ...shellStructuredContent(shell, output, 0, envSummary, policy),
+          sandbox: execResult.sandbox,
+        },
         output.artifacts
       )
     );
   } catch (err) {
-    const failure = err as ExecFailure;
+    const failure = err as ExecFailure & { _sandboxMeta?: Record<string, unknown> };
     const output = materializeTerminalOutput(request, {
       stdout: failure.stdout || '',
       stderr: failure.stderr || failure.message || '',
@@ -75,7 +91,10 @@ export async function executeShell(
         startedAt,
         startedMs,
         statusForFailure(request, failure),
-        shellStructuredContent(shell, output, failure.code ?? 1, envSummary, policy),
+        {
+          ...shellStructuredContent(shell, output, failure.code ?? 1, envSummary, policy),
+          sandbox: failure._sandboxMeta,
+        },
         output.artifacts
       )
     );

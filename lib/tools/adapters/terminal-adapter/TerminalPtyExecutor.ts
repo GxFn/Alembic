@@ -18,9 +18,9 @@ import {
 import { buildTerminalEnvironment, summarizeTerminalEnv } from './TerminalEnvironment.js';
 import {
   type ExecFailure,
-  execFileAsync,
-  execFileWithInput,
   recordAndReturn,
+  sandboxedExecFile,
+  sandboxedExecFileWithInput,
   shellAuditData,
   statusForFailure,
 } from './TerminalExecutorShared.js';
@@ -73,11 +73,26 @@ export async function executePty(
       signal: request.context.abortSignal || undefined,
       env: buildTerminalEnvironment(process.env, ptyEnv),
     };
-    const { stdout, stderr } =
+    const sandboxInput = {
+      network: pty.network,
+      filesystem: pty.filesystem,
+      projectRoot: pty.projectRoot,
+      env: ptyEnv,
+    };
+    const execResult =
       pty.pty.stdin === 'provided'
-        ? await execFileWithInput(command.bin, command.args, pty.stdin, execOptions)
-        : await execFileAsync(command.bin, command.args, execOptions);
-    const output = materializeTerminalOutput(request, { stdout, stderr });
+        ? await sandboxedExecFileWithInput(
+            command.bin,
+            command.args,
+            pty.stdin,
+            execOptions,
+            sandboxInput
+          )
+        : await sandboxedExecFile(command.bin, command.args, execOptions, sandboxInput);
+    const output = materializeTerminalOutput(request, {
+      stdout: execResult.stdout,
+      stderr: execResult.stderr,
+    });
     return recordAndReturn(
       request,
       envelopeForTerminalResult(
@@ -85,12 +100,15 @@ export async function executePty(
         startedAt,
         startedMs,
         'success',
-        ptyStructuredContent(pty, output, 0, command, envSummary, policy),
+        {
+          ...ptyStructuredContent(pty, output, 0, command, envSummary, policy),
+          sandbox: execResult.sandbox,
+        },
         [runnerArtifact, ...output.artifacts]
       )
     );
   } catch (err) {
-    const failure = err as ExecFailure;
+    const failure = err as ExecFailure & { _sandboxMeta?: Record<string, unknown> };
     const output = materializeTerminalOutput(request, {
       stdout: failure.stdout || '',
       stderr: failure.stderr || failure.message || '',
@@ -102,7 +120,10 @@ export async function executePty(
         startedAt,
         startedMs,
         statusForFailure(request, failure),
-        ptyStructuredContent(pty, output, failure.code ?? 1, command, envSummary, policy),
+        {
+          ...ptyStructuredContent(pty, output, failure.code ?? 1, command, envSummary, policy),
+          sandbox: failure._sandboxMeta,
+        },
         [runnerArtifact, ...output.artifacts]
       )
     );

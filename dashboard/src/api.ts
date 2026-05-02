@@ -809,9 +809,21 @@ export const api = {
   },
 
   /** 查询当前测试模式配置 */
-  async getTestModeConfig(): Promise<{ enabled: boolean; bootstrapDims: string[]; rescanDims: string[]; terminal: { enabled: boolean; toolset: string } }> {
+  async getTestModeConfig(): Promise<{
+    enabled: boolean;
+    bootstrapDims: string[];
+    rescanDims: string[];
+    terminal: { enabled: boolean; toolset: string };
+    sandbox: { mode: string; available: boolean };
+  }> {
     const res = await http.get('/modules/test-mode');
-    return res.data?.data || { enabled: false, bootstrapDims: [], rescanDims: [], terminal: { enabled: false, toolset: 'baseline' } };
+    return res.data?.data || {
+      enabled: false,
+      bootstrapDims: [],
+      rescanDims: [],
+      terminal: { enabled: false, toolset: 'baseline' },
+      sandbox: { mode: 'enforce', available: false },
+    };
   },
 
   /** 取消正在运行的 bootstrap / rescan 异步填充 */

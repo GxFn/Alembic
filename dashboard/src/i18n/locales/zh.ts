@@ -926,6 +926,18 @@ export const zh = {
     candidatesOnly: '✓ {extracted} 条候选',
   },
 
+  /* ═══════════════════════════════ sandbox ═══════════════════════════════ */
+  sandbox: {
+    enforce: '沙箱',
+    enforceHint: '终端命令在 macOS Seatbelt 沙箱中隔离执行',
+    audit: '审计模式',
+    auditHint: '沙箱已启用（审计模式: violation 记录但不阻断）',
+    disabled: '无沙箱',
+    disabledHint: '终端沙箱已关闭，命令直接执行',
+    unavailable: '沙箱不可用',
+    unavailableHint: '当前系统不支持 sandbox-exec，沙箱功能已降级',
+  },
+
   /* ═══════════════════════════════ wiki ═════════════════════════════════ */
   wiki: {
     title: 'Repo Wiki',

@@ -929,6 +929,18 @@ export const en: DeepString<typeof zh> = {
     candidatesOnly: '✓ {extracted} candidates',
   },
 
+  /* ═══════════════════════════════ sandbox ═══════════════════════════════ */
+  sandbox: {
+    enforce: 'Sandbox',
+    enforceHint: 'Terminal commands run in macOS Seatbelt sandbox isolation',
+    audit: 'Audit Mode',
+    auditHint: 'Sandbox enabled (audit mode: violations logged but not blocked)',
+    disabled: 'No Sandbox',
+    disabledHint: 'Terminal sandbox is disabled, commands run directly',
+    unavailable: 'Sandbox N/A',
+    unavailableHint: 'sandbox-exec is not available on this system, sandbox degraded',
+  },
+
   /* ═══════════════════════════════ wiki ═════════════════════════════════ */
   wiki: {
     title: 'Repo Wiki',

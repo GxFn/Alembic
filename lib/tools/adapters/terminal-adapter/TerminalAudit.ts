@@ -109,6 +109,7 @@ function buildTerminalAuditData(
     session: structured.session,
     sessionRecord: structured.sessionRecord,
     policy: pickPolicyAuditData(toRecord(structured.policy)),
+    sandbox: pickSandboxAuditData(toRecord(structured.sandbox)),
     lifecycle: pickLifecycleAuditData(structured),
     artifactCount: envelope.artifacts?.length || 0,
   };
@@ -145,6 +146,21 @@ function pickPolicyAuditData(policy: Record<string, unknown>) {
     risk: policy.risk,
     reason: policy.reason,
     matchedRule: policy.matchedRule,
+  };
+}
+
+function pickSandboxAuditData(sandbox: Record<string, unknown>) {
+  if (!Object.keys(sandbox).length) {
+    return undefined;
+  }
+  return {
+    mode: sandbox.mode,
+    sandboxed: sandbox.sandboxed,
+    degradeReason: sandbox.degradeReason,
+    violations: sandbox.violations,
+    networkDenied: sandbox.networkDenied,
+    filesystemMode: sandbox.filesystemMode,
+    envStripped: sandbox.envStripped,
   };
 }
 

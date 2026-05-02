@@ -52,12 +52,19 @@ export interface TestTerminalConfig {
   toolset: string;
 }
 
+/** 沙箱状态信息 */
+export interface SandboxStatusConfig {
+  mode: string;
+  available: boolean;
+}
+
 /** 完整测试模式配置 */
 export interface TestModeConfig {
   enabled: boolean;
   bootstrapDims: string[];
   rescanDims: string[];
   terminal: TestTerminalConfig;
+  sandbox: SandboxStatusConfig;
 }
 
 /**
@@ -75,6 +82,13 @@ function resolveTerminalTestConfig(): TestTerminalConfig {
   return { enabled, toolset };
 }
 
+function resolveSandboxStatus(): SandboxStatusConfig {
+  const v = (process.env.ALEMBIC_SANDBOX_MODE ?? '').trim().toLowerCase();
+  const mode =
+    v === 'disabled' || v === '0' || v === 'off' ? 'disabled' : v === 'audit' ? 'audit' : 'enforce';
+  return { mode, available: process.platform === 'darwin' };
+}
+
 /** 获取测试模式完整配置（供 API / 前端展示 / 终端工具集解析） */
 export function getTestModeConfig(): TestModeConfig {
   return {
@@ -82,6 +96,7 @@ export function getTestModeConfig(): TestModeConfig {
     bootstrapDims: envList('ALEMBIC_TEST_BOOTSTRAP_DIMS'),
     rescanDims: envList('ALEMBIC_TEST_RESCAN_DIMS'),
     terminal: resolveTerminalTestConfig(),
+    sandbox: resolveSandboxStatus(),
   };
 }
 

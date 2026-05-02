@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Cpu, ChevronDown, ChevronRight, MessageSquare, Settings, Search, Zap, Radio, FlaskConical, FlaskRound, TerminalSquare } from 'lucide-react';
+import { Plus, Cpu, ChevronDown, ChevronRight, MessageSquare, Settings, Search, Zap, Radio, FlaskConical, FlaskRound, TerminalSquare, ShieldCheck, ShieldAlert, Eye } from 'lucide-react';
 import api from '../../api';
 import { getSocket } from '../../lib/socket';
 import { useGlobalChat } from '../Shared/GlobalChatDrawer';
@@ -86,10 +86,16 @@ const Header: React.FC<HeaderProps> = ({
   const [aiSwitching, setAiSwitching] = useState(false);
 
   /* ── 测试模式标识（全局持久展示） ── */
-  const [testMode, setTestMode] = useState<{ enabled: boolean; bootstrapDims: string[]; rescanDims: string[]; terminal: { enabled: boolean; toolset: string } } | null>(null);
+  const [testMode, setTestMode] = useState<{
+    enabled: boolean;
+    bootstrapDims: string[];
+    rescanDims: string[];
+    terminal: { enabled: boolean; toolset: string };
+    sandbox: { mode: string; available: boolean };
+  } | null>(null);
   useEffect(() => {
     api.getTestModeConfig().then(cfg => {
-      if (cfg.enabled || cfg.terminal.enabled) {
+      if (cfg.enabled || cfg.terminal.enabled || cfg.sandbox.mode !== 'disabled') {
         setTestMode(cfg);
       }
     }).catch(() => { /* best-effort */ });
@@ -216,6 +222,58 @@ const Header: React.FC<HeaderProps> = ({
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="text-xs">
                     Toolset: {testMode.terminal.toolset}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {testMode.sandbox && !testMode.sandbox.available && testMode.sandbox.mode !== 'disabled' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-500/10 text-gray-500 border border-gray-300/40 cursor-default">
+                      <ShieldAlert size={10} />
+                      {t('sandbox.unavailable')}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    {t('sandbox.unavailableHint')}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {testMode.sandbox && testMode.sandbox.available && testMode.sandbox.mode === 'enforce' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-300/40 cursor-default">
+                      <ShieldCheck size={10} />
+                      {t('sandbox.enforce')}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    {t('sandbox.enforceHint')}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {testMode.sandbox && testMode.sandbox.available && testMode.sandbox.mode === 'audit' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 border border-blue-300/40 cursor-default">
+                      <Eye size={10} />
+                      {t('sandbox.audit')}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    {t('sandbox.auditHint')}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {testMode.sandbox && testMode.sandbox.mode === 'disabled' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-600 border border-red-300/40 cursor-default">
+                      <ShieldAlert size={10} />
+                      {t('sandbox.disabled')}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    {t('sandbox.disabledHint')}
                   </TooltipContent>
                 </Tooltip>
               )}

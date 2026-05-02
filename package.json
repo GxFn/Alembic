@@ -63,6 +63,10 @@
     "#tools/*": {
       "alembic-dev": "./lib/tools/*",
       "default": "./dist/lib/tools/*"
+    },
+    "#sandbox/*": {
+      "alembic-dev": "./lib/sandbox/*",
+      "default": "./dist/lib/sandbox/*"
     }
   },
   "scripts": {
