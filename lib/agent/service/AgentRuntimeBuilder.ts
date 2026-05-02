@@ -1,5 +1,5 @@
 import Logger from '#infra/logging/Logger.js';
-import type { ToolRegistry } from '#tools/catalog/ToolRegistry.js';
+import type { ToolRouterContract } from '#tools/core/ToolContracts.js';
 import { CapabilityRegistry } from '../capabilities/index.js';
 import { type Policy, PolicyEngine } from '../policies/index.js';
 import { getPreset } from '../profiles/presets.js';
@@ -12,9 +12,14 @@ import type {
   CompiledAgentProfile,
 } from './AgentRunContracts.js';
 
+/** Duck-typed tool registry — compatible with both ToolRegistry and UnifiedToolCatalog */
+interface ToolRegistryLike {
+  getRouter?(): ToolRouterContract | null;
+}
+
 interface AgentRuntimeBuilderOptions {
   container: Record<string, unknown>;
-  toolRegistry: ToolRegistry;
+  toolRegistry: ToolRegistryLike;
   aiProvider: unknown;
   memoryCoordinator?: unknown;
   projectBriefing?: string | null;
@@ -24,7 +29,7 @@ interface AgentRuntimeBuilderOptions {
 
 export class AgentRuntimeBuilder {
   #container: Record<string, unknown>;
-  #toolRegistry: ToolRegistry;
+  #toolRegistry: ToolRegistryLike;
   #aiProvider: unknown;
   #logger = Logger.getInstance();
   #sharedOpts: {
@@ -75,7 +80,7 @@ export class AgentRuntimeBuilder {
     return new AgentRuntime({
       presetName,
       aiProvider: this.#aiProvider as never,
-      toolRegistry: this.#toolRegistry,
+      toolRegistry: this.#toolRegistry as never,
       toolRouter: this.#toolRegistry.getRouter?.() || null,
       container: this.#container,
       capabilities,

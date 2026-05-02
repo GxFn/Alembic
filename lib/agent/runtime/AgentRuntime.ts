@@ -53,6 +53,7 @@ import { DiagnosticsCollector } from './DiagnosticsCollector.js';
 import { createExitController } from './ExitController.js';
 import { cleanFinalAnswer } from './final-answer.js';
 import { produceForcedSummary } from './forced-summary.js';
+import { HookSystem, registerDefaultHooks } from './HookSystem.js';
 import { continueResult, LLMResultType } from './LLMResultType.js';
 import { LoopContext } from './LoopContext.js';
 import { createMessageAdapter } from './MessageAdapter.js';
@@ -106,6 +107,8 @@ export class AgentRuntime {
   /** 可选 Gateway — 启用后走 Gateway 路径替代 aiProvider 直接调用 */
   #gateway: LLMGateway | null;
   #modelRef: string;
+  /** 统一事件钩子系统 */
+  #hookSystem: HookSystem;
 
   // ── 执行统计 ──
   iterationCount = 0;
@@ -150,6 +153,8 @@ export class AgentRuntime {
       config.modelRef ||
       `${config.aiProvider.name}:${(config.aiProvider as { model?: string }).model || 'unknown'}`;
     this.#toolPipeline = createToolPipeline();
+    this.#hookSystem = (config as { hookSystem?: HookSystem }).hookSystem ?? new HookSystem();
+    registerDefaultHooks(this.#hookSystem, this.id, this.bus);
     this.#promptBuilder = new SystemPromptBuilder({
       persona: this.persona,
       fileCache: this.#fileCache,
@@ -346,6 +351,11 @@ export class AgentRuntime {
       // ActiveContext: 开始新轮次 (必须在 #shouldExit 前, 保证 endRound 有配对)
       ctx.trace?.startRound(ctx.iteration);
 
+      this.#hookSystem.emitSync('agent:iteration:before', {
+        iteration: ctx.iteration,
+        phase: ctx.tracker?.phase,
+      });
+
       // 退出判定 (tracker + policy)
       if (this.#shouldExit(ctx)) {
         break;
@@ -377,6 +387,11 @@ export class AgentRuntime {
       // 分支: 有 Tool Call
       if ((llmResult.functionCalls?.length ?? 0) > 0) {
         const exitAfterTools = await this.#processToolCalls(ctx, llmResult, effectiveSystemPrompt);
+        this.#hookSystem.emitSync('agent:iteration:after', {
+          iteration: ctx.iteration,
+          hadToolCalls: true,
+          hadText: !!llmResult.text,
+        });
         if (exitAfterTools) {
           break;
         }
@@ -384,6 +399,11 @@ export class AgentRuntime {
       }
 
       // 分支: 纯文本回复
+      this.#hookSystem.emitSync('agent:iteration:after', {
+        iteration: ctx.iteration,
+        hadToolCalls: false,
+        hadText: true,
+      });
       if (this.#processTextResponse(ctx, llmResult)) {
         break;
       }
@@ -662,7 +682,7 @@ export class AgentRuntime {
             : undefined;
 
       const unifiedMessages =
-        ctx.messages.toMessages() as import('#external/ai/AiProvider.js').UnifiedMessage[];
+        ctx.messages.toProjectedMessages() as import('#external/ai/AiProvider.js').UnifiedMessage[];
       const unifiedTools = effectiveToolSchemas as
         | import('#external/ai/AiProvider.js').ToolSchema[]
         | undefined;
@@ -867,6 +887,13 @@ export class AgentRuntime {
         { source: this.id }
       );
 
+      // HookSystem: tool:execute:before
+      this.#hookSystem.emitSync('tool:execute:before', {
+        toolId: fc.name,
+        args: fc.args,
+        callId: fc.id,
+      });
+
       // 通过 Pipeline 执行 (safety → cache → execute → observe → track → trace → dedup)
       const { result: toolResult, metadata } = await this.#toolPipeline.execute(fc, {
         runtime: this,
@@ -915,6 +942,14 @@ export class AgentRuntime {
         { source: this.id }
       );
 
+      // HookSystem: tool:execute:after
+      this.#hookSystem.emitSync('tool:execute:after', {
+        toolId: fc.name,
+        ok: toolSucceeded,
+        durationMs,
+        callId: fc.id,
+      });
+
       // 工具结果格式化 (统一通过 MessageAdapter)
       let resultStr = messages.formatToolResult(fc.name, envelope || toolResult);
 
@@ -950,6 +985,11 @@ export class AgentRuntime {
       messages.appendUserNudge(
         `工具调用数量超限：本轮只执行前 ${MAX_TOOL_CALLS_PER_ITER} 个工具调用，另有 ${truncatedCalls.length} 个未执行${truncatedNames ? `（${truncatedNames}${truncatedCalls.length > 5 ? '...' : ''}）` : ''}。请基于已返回结果继续，必要时分批重新请求未执行的工具。`
       );
+    }
+
+    // Lazy Loading: mark used tools as expanded for future rounds
+    if (roundToolNames.length > 0) {
+      this.#markToolsExpanded(roundToolNames);
     }
 
     // ExplorationTracker: endRound → 检查阶段转换
@@ -1172,6 +1212,12 @@ export class AgentRuntime {
       }
     }
 
+    this.#hookSystem.emitSync('agent:finalize', {
+      reply: ctx.lastReply,
+      iterations: ctx.iteration,
+      toolCallCount: ctx.toolCalls.length,
+    });
+
     return ctx.buildResult();
   }
 
@@ -1197,6 +1243,11 @@ export class AgentRuntime {
   setFileCache(files: FileCacheEntry[] | null) {
     this.#fileCache = files;
     this.#promptBuilder.setFileCache(files);
+  }
+
+  /** HookSystem 实例（供外部桥接 AgentEventBus / SignalBus） */
+  get hookSystem(): HookSystem {
+    return this.#hookSystem;
   }
 
   /** 项目根目录 (供 ToolExecutionPipeline 等访问) */
@@ -1272,8 +1323,19 @@ export class AgentRuntime {
             ids?: readonly string[] | null,
             model?: string
           ): ToolSchemaProjection[];
+          toMixedSchemas?(
+            ids?: readonly string[] | null,
+            model?: string,
+            firstRound?: boolean
+          ): ToolSchemaProjection[];
         }
       | undefined;
+    // Lazy Loading: use mixed schemas (lightweight for unused tools)
+    // firstRound = true when no tools have been expanded yet (first stage or fresh session)
+    if (catalog?.toMixedSchemas) {
+      const expandedCount = (catalog as { expandedCount?: number }).expandedCount ?? 0;
+      return catalog.toMixedSchemas(ids, model, expandedCount === 0);
+    }
     if (model && catalog?.toToolSchemasForModel) {
       return catalog.toToolSchemasForModel(ids, model);
     }
@@ -1281,6 +1343,18 @@ export class AgentRuntime {
       return catalog.toToolSchemas(ids);
     }
     return [];
+  }
+
+  /** Mark tools as expanded after use (for lazy loading) */
+  #markToolsExpanded(toolNames: string[]): void {
+    const catalog = (this.container as { get?: (name: string) => unknown } | null)?.get?.(
+      'capabilityCatalog'
+    ) as { markExpanded?(id: string): void } | undefined;
+    if (catalog?.markExpanded) {
+      for (const name of toolNames) {
+        catalog.markExpanded(name);
+      }
+    }
   }
 
   /** 解析 capability 名称为实例 (Pipeline 阶段覆盖时调用) */

@@ -22,18 +22,35 @@ import {
   v2ToSchemaProjection,
 } from '#tools/catalog/ToolDefinitionV2.js';
 import type {
+  ForgedInternalToolDefinition,
+  ForgedInternalToolStore,
   InternalToolHandler,
   InternalToolHandlerEntry,
   InternalToolHandlerStore,
 } from '#tools/core/InternalToolHandler.js';
+import type { ToolRouterContract } from '#tools/core/ToolContracts.js';
 
-export class UnifiedToolCatalog extends CapabilityCatalog implements InternalToolHandlerStore {
+export class UnifiedToolCatalog
+  extends CapabilityCatalog
+  implements InternalToolHandlerStore, ForgedInternalToolStore
+{
   readonly #defs = new Map<string, ToolDefinitionV2>();
   readonly #temporary = new Map<string, ToolDefinitionV2>();
+  #router: ToolRouterContract | null = null;
 
   constructor(defs: ToolDefinitionV2[] = []) {
     super([]);
     this.registerV2All(defs);
+  }
+
+  // ── Router binding (replaces ToolRegistry.setRouter/getRouter) ──
+
+  setRouter(router: ToolRouterContract | null): void {
+    this.#router = router;
+  }
+
+  getRouter(): ToolRouterContract | null {
+    return this.#router;
   }
 
   // ── V2 Registration ──
@@ -76,7 +93,7 @@ export class UnifiedToolCatalog extends CapabilityCatalog implements InternalToo
   // ── Handler Access ──
 
   getHandler(id: string): ToolHandler | null {
-    return this.#defs.get(id)?.handler ?? this.#temporary.get(id)?.handler ?? null;
+    return this.#defs.get(id)?.handler ?? null;
   }
 
   getDefinitionV2(id: string): ToolDefinitionV2 | null {
@@ -108,6 +125,56 @@ export class UnifiedToolCatalog extends CapabilityCatalog implements InternalToo
 
   hasInternalTool(name: string): boolean {
     return this.#defs.has(name);
+  }
+
+  // ── ForgedInternalToolStore compatibility ──
+
+  projectForgedTool(tool: ForgedInternalToolDefinition): void {
+    if (this.#defs.has(tool.name) && !this.#temporary.has(tool.name)) {
+      throw new Error(
+        `Forged tool "${tool.name}" conflicts with an existing internal tool. Use a unique forge namespace.`
+      );
+    }
+    const v2Def: ToolDefinitionV2 = {
+      id: tool.name,
+      title: tool.name,
+      description: `[Forged:${tool.forgeMode}] ${tool.description}`,
+      kind: 'internal-tool',
+      inputSchema: tool.parameters ?? { type: 'object', properties: {} },
+      handler: tool.handler as unknown as ToolHandler,
+      risk: {
+        sideEffect: true,
+        dataAccess: 'project',
+        writeScope: 'project',
+        network: 'none',
+        credentialAccess: 'none',
+        requiresHumanConfirmation: 'never',
+        owaspTags: [],
+      },
+      governance: {
+        policyProfile: 'write',
+        auditLevel: 'full',
+        approvalPolicy: 'auto',
+        allowedRoles: ['developer'],
+        allowInComposer: false,
+        allowInRemoteMcp: false,
+        allowInNonInteractive: true,
+      },
+      execution: {
+        adapter: 'internal',
+        timeoutMs: 30_000,
+        maxOutputBytes: 100_000,
+        abortMode: 'cooperative',
+        cachePolicy: 'none',
+        concurrency: 'single',
+        artifactMode: 'inline',
+      },
+    };
+    this.registerTemporary(v2Def);
+  }
+
+  revokeForgedTool(name: string): boolean {
+    return this.unregisterTemporary(name);
   }
 
   // ── Per-model Schema Projection ──

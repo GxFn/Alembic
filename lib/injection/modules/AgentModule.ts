@@ -30,10 +30,11 @@ import { TerminalAdapter } from '#tools/adapters/TerminalAdapter.js';
 import { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
 import { TERMINAL_CAPABILITY_MANIFESTS } from '#tools/adapters/terminal-capabilities/index.js';
 import { WorkflowAdapter } from '#tools/adapters/WorkflowAdapter.js';
-import { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
-import { ToolRegistry } from '#tools/catalog/ToolRegistry.js';
+import type { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
+import { toolDefV1ToV2 } from '#tools/catalog/ToolDefinitionV2.js';
+import { UnifiedToolCatalog } from '#tools/catalog/UnifiedToolCatalog.js';
 import { ToolRouter } from '#tools/core/ToolRouter.js';
-import { ALL_TOOLS, TOOL_CAPABILITY_MANIFESTS } from '#tools/handlers/index.js';
+import { ALL_TOOLS } from '#tools/handlers/index.js';
 import { WorkflowRegistry } from '#tools/workflow/WorkflowRegistry.js';
 import { ToolForge } from '../../agent/forge/ToolForge.js';
 import {
@@ -41,6 +42,7 @@ import {
   type McpToolDeclaration,
 } from '../../external/mcp/McpCapabilityProjection.js';
 import { McpToolAdapter, type McpToolExecutor } from '../../external/mcp/McpToolAdapter.js';
+import { McpToolDiscovery } from '../../external/mcp/McpToolDiscovery.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { AIRecallStrategy } from '../../service/skills/AIRecallStrategy.js';
 import { FeedbackStore } from '../../service/skills/FeedbackStore.js';
@@ -51,28 +53,41 @@ import { SkillHooks } from '../../service/skills/SkillHooks.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {
-  c.singleton(
-    'capabilityCatalog',
-    () =>
-      new CapabilityCatalog([
-        ...TOOL_CAPABILITY_MANIFESTS,
-        ...DASHBOARD_OPERATION_MANIFESTS,
-        ...TERMINAL_CAPABILITY_MANIFESTS,
-        ...SKILL_CAPABILITY_MANIFESTS,
-        ...MAC_SYSTEM_CAPABILITY_MANIFESTS,
-      ])
-  );
+  // UnifiedToolCatalog: 单源真相 — 合并 CapabilityCatalog + ToolRegistry
+  c.singleton('capabilityCatalog', () => {
+    const catalog = new UnifiedToolCatalog();
+
+    // V1 内部工具 → V2 桥接注册
+    catalog.registerV2All(ALL_TOOLS.map(toolDefV1ToV2));
+
+    // 非内部工具 manifest 直接注册（Dashboard/Terminal/Skill/Mac）
+    for (const m of [
+      ...DASHBOARD_OPERATION_MANIFESTS,
+      ...TERMINAL_CAPABILITY_MANIFESTS,
+      ...SKILL_CAPABILITY_MANIFESTS,
+      ...MAC_SYSTEM_CAPABILITY_MANIFESTS,
+    ]) {
+      catalog.register(m);
+    }
+
+    return catalog;
+  });
 
   c.singleton('workflowRegistry', () => new WorkflowRegistry());
   c.singleton('terminalSessionManager', () => new InMemoryTerminalSessionManager());
 
-  c.singleton('mcpToolDeclarations', (): McpToolDeclaration[] => []);
+  c.singleton('mcpToolDeclarations', (ct: ServiceContainer): McpToolDeclaration[] => {
+    try {
+      const discovery = new McpToolDiscovery();
+      return discovery.discover(resolveProjectRoot(ct));
+    } catch {
+      return [];
+    }
+  });
 
+  // toolRegistry: 返回 UnifiedToolCatalog（兼容 InternalToolHandlerStore + ForgedInternalToolStore）
   c.singleton('toolRegistry', (ct: ServiceContainer) => {
-    const registry = new ToolRegistry();
-    registry.registerAll(ALL_TOOLS);
-
-    const catalog = ct.get('capabilityCatalog') as CapabilityCatalog;
+    const catalog = ct.get('capabilityCatalog') as UnifiedToolCatalog;
 
     // MCP tools: register manifests into main catalog + build adapter
     const mcpDeclarations = ct.get('mcpToolDeclarations') as McpToolDeclaration[];
@@ -90,11 +105,11 @@ export function register(c: ServiceContainer) {
         throw new Error('MCP tool executor not configured');
       });
 
-    registry.setRouter(
+    catalog.setRouter(
       new ToolRouter({
         catalog,
         adapters: [
-          new InternalToolAdapter(registry),
+          new InternalToolAdapter(catalog),
           new DashboardOperationAdapter(DASHBOARD_OPERATION_HANDLERS),
           new TerminalAdapter({
             sessionManager: ct.get('terminalSessionManager') as InMemoryTerminalSessionManager,
@@ -109,18 +124,18 @@ export function register(c: ServiceContainer) {
         services: ct,
       })
     );
-    return registry;
+    return catalog;
   });
 
   c.singleton('toolRouter', (ct: ServiceContainer) => {
-    const registry = ct.get('toolRegistry') as ToolRegistry;
-    return registry.getRouter();
+    const catalog = ct.get('toolRegistry') as UnifiedToolCatalog;
+    return catalog.getRouter();
   });
 
   c.singleton('toolForge', (ct: ServiceContainer) => {
-    const registry = ct.get('toolRegistry');
+    const catalog = ct.get('toolRegistry') as UnifiedToolCatalog;
     const signalBus = ct.singletons.signalBus as SignalBus | undefined;
-    return new ToolForge(registry, {
+    return new ToolForge(catalog, {
       signalBus,
       capabilityCatalog: ct.get('capabilityCatalog') as CapabilityCatalog,
       workflowRegistry: ct.get('workflowRegistry') as WorkflowRegistry,

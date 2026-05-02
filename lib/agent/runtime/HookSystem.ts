@@ -58,7 +58,7 @@ export interface HookPayloadMap {
 
 export type HookHandler<E extends HookEvent> = (
   payload: HookPayloadMap[E]
-) => undefined | boolean | Promise<undefined | boolean>;
+) => void | undefined | boolean | Promise<void | undefined | boolean>;
 
 interface HookEntry<E extends HookEvent = HookEvent> {
   event: E;
@@ -224,9 +224,54 @@ export class HookSystem {
 /**
  * Register default hooks that bridge HookSystem events to existing subsystems.
  * Call this during AgentRuntime initialization.
+ *
+ * Bridges HookSystem → AgentEventBus for backward compatibility.
+ * Pipeline middleware (allowlistGate, observationRecord, trackerSignal,
+ * traceRecord, submitDedup) remain in ToolExecutionPipeline — they use
+ * blocking semantics that don't fit fire-and-forget hooks.
  */
-export function registerDefaultHooks(_hookSystem: HookSystem): void {
-  // Placeholder: bridge hooks will be added incrementally as Pipeline middleware
-  // is migrated to HookSystem. Current middleware (allowlistGate, observationRecord,
-  // trackerSignal, traceRecord, submitDedup) remain in ToolExecutionPipeline.
+export function registerDefaultHooks(
+  hookSystem: HookSystem,
+  agentId?: string,
+  bus?: { publish(type: string, payload: unknown, opts?: { source?: string }): void } | null
+): void {
+  if (!bus) {
+    return;
+  }
+
+  hookSystem.on('llm:call:before', (p) => {
+    bus.publish(
+      'llm:call:start',
+      { iteration: p.iteration, toolChoice: p.toolChoice },
+      { source: agentId }
+    );
+  });
+
+  hookSystem.on('llm:call:after', (p) => {
+    bus.publish(
+      'llm:call:end',
+      {
+        hasToolCalls: p.hasToolCalls,
+        hasText: p.hasText,
+        usage: { inputTokens: p.inputTokens, outputTokens: p.outputTokens },
+      },
+      { source: agentId }
+    );
+  });
+
+  hookSystem.on('agent:exit', (p) => {
+    bus.publish(
+      'step:completed',
+      {
+        reason: p.reason,
+        iteration: p.iteration,
+        detail: p.detail,
+      },
+      { source: agentId }
+    );
+  });
+
+  // tool:execute:before/after are NOT bridged to AgentEventBus here
+  // because AgentRuntime.#processToolCalls already publishes
+  // TOOL_CALL_START/END directly. Bridging would cause duplicates.
 }

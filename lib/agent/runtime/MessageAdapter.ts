@@ -79,6 +79,14 @@ export class MessageAdapter {
     throw new Error('not implemented');
   }
 
+  /**
+   * 导出压缩后的消息列表 (L3 collapse 读时投影)
+   * 默认等同于 toMessages()；ContextWindowAdapter 会使用 toProjectedMessages 投影。
+   */
+  toProjectedMessages(): unknown[] {
+    return this.toMessages();
+  }
+
   /** 重置到仅保留初始 prompt (错误恢复) */
   resetToPromptOnly() {
     throw new Error('not implemented');
@@ -162,6 +170,10 @@ export class ContextWindowAdapter extends MessageAdapter {
 
   toMessages() {
     return this.#ctxWin.toMessages();
+  }
+
+  toProjectedMessages() {
+    return this.#ctxWin.toProjectedMessages();
   }
 
   resetToPromptOnly() {

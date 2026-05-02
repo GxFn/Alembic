@@ -138,11 +138,12 @@ export class ExitController {
       totalInputTokens: runtimeTokenUsage.input,
     } as StepState);
     if (!duringCheck.ok) {
+      const reasonStr = typeof duringCheck.reason === 'string' ? duringCheck.reason : '';
       return {
         action: 'exit',
-        reason: duringCheck.reason?.includes('token') ? 'token_budget_exhausted' : 'policy_stop',
+        reason: reasonStr.includes('token') ? 'token_budget_exhausted' : 'policy_stop',
         needsSummary: true,
-        detail: duringCheck.reason || 'Policy stopped the run',
+        detail: reasonStr || 'Policy stopped the run',
       };
     }
 

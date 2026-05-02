@@ -10,7 +10,7 @@
 import type DimensionCopy from '#domain/dimension/DimensionCopy.js';
 // ── Service Types ──
 import type { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
-import type { ToolRegistry } from '#tools/catalog/ToolRegistry.js';
+import type { UnifiedToolCatalog } from '#tools/catalog/UnifiedToolCatalog.js';
 import type {
   AgentProfileCompiler,
   AgentProfileRegistry,
@@ -168,7 +168,7 @@ export interface ServiceMap {
   guardFeedbackLoop: GuardFeedbackLoop;
 
   // ═══ AgentModule ═══
-  toolRegistry: ToolRegistry;
+  toolRegistry: UnifiedToolCatalog;
   agentProfileRegistry: AgentProfileRegistry;
   agentStageFactoryRegistry: AgentStageFactoryRegistry;
   agentProfileCompiler: AgentProfileCompiler;

@@ -145,6 +145,10 @@ export const ANALYST_BUDGET = {
   maxSubmits: 0,
   softSubmitLimit: 0,
   idleRoundsToExit: 2,
+  /** Session-level total token cap (input + output). ~5000 tokens/round average. */
+  maxSessionTokens: 24 * 5000,
+  /** Session-level input token cap. ~3500 tokens/round average. */
+  maxSessionInputTokens: 24 * 3500,
 };
 
 /**
@@ -183,6 +187,8 @@ export function computeAnalystBudget(
     searchBudget: Math.round(maxIter * 0.75),
     // 超时随轮次等比缩放: 24轮→480s, 40轮→800s
     timeoutMs: Math.round((maxIter / 24) * 480_000),
+    maxSessionTokens: maxIter * 5000,
+    maxSessionInputTokens: maxIter * 3500,
   };
 }
 

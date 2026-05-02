@@ -597,6 +597,20 @@ export class ContextWindow {
   }
 
   /**
+   * Full-context token estimation including system prompt and tool schemas.
+   * Used for more accurate budget decisions.
+   *
+   * @param systemPromptChars - Character length of the system prompt
+   * @param toolSchemaCount - Number of tool schemas in the current context
+   */
+  estimateFullContextTokens(systemPromptChars?: number, toolSchemaCount?: number): number {
+    const messageTokens = this.estimateTokens();
+    const promptTokens = systemPromptChars ? Math.ceil(systemPromptChars / 3.5) : 1500;
+    const toolTokens = (toolSchemaCount ?? 0) * 100;
+    return messageTokens + promptTokens + toolTokens;
+  }
+
+  /**
    * 获取动态工具结果配额
    * 根据当前 token 使用率返回工具结果的大小限制
    * @returns }

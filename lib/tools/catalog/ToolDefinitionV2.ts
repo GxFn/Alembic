@@ -79,8 +79,51 @@ export function toolDefV1ToV2(def: ToolDefinition): ToolDefinitionV2 {
     governance: manifest.governance,
     execution: manifest.execution,
     handler: def.handler as unknown as ToolHandler,
+    modelOverrides: MODEL_OVERRIDES[def.name],
   };
 }
+
+/**
+ * Per-model description overrides for high-frequency tools.
+ *
+ * DeepSeek: direct imperative style, simplified parameter hints.
+ * Applied via v2ToSchemaProjection when model matches the glob pattern.
+ */
+const MODEL_OVERRIDES: Record<
+  string,
+  Record<string, { description?: string; inputSchema?: Record<string, unknown> }> | undefined
+> = {
+  search_project_code: {
+    'deepseek-*': {
+      description:
+        '搜索项目代码。参数: pattern(正则表达式,必填), fileFilter(可选,glob如*.ts), maxResults(可选,默认20)。返回匹配行及文件路径。',
+    },
+  },
+  read_project_file: {
+    'deepseek-*': {
+      description:
+        '读取项目文件内容。参数: filePath(必填,相对路径), startLine/endLine(可选,行范围)。返回文件文本。',
+    },
+  },
+  submit_with_check: {
+    'deepseek-*': {
+      description:
+        '提交知识条目并自动质量检查。参数: title(必填), content(必填,对象{markdown,rationale,pattern}), trigger(必填,@kebab-case), kind(必填,rule/pattern/fact)。',
+    },
+  },
+  list_project_structure: {
+    'deepseek-*': {
+      description:
+        '列出项目目录结构。参数: path(可选,子目录), depth(可选,递归深度,默认3)。返回树形结构文本。',
+    },
+  },
+  semantic_search_code: {
+    'deepseek-*': {
+      description:
+        '语义搜索代码。参数: query(必填,自然语言描述), topK(可选,结果数,默认5)。返回语义相关代码片段。',
+    },
+  },
+};
 
 // ── V2 → Manifest Projection (for CapabilityCatalog compatibility) ──
 
@@ -135,13 +178,17 @@ function matchGlob(value: string, pattern: string): boolean {
   if (pattern === '*') {
     return true;
   }
-  if (pattern.endsWith('*')) {
-    return value.startsWith(pattern.slice(0, -1));
+  const starIdx = pattern.indexOf('*');
+  if (starIdx < 0) {
+    return value === pattern;
   }
-  if (pattern.startsWith('*')) {
-    return value.endsWith(pattern.slice(1));
-  }
-  return value === pattern;
+  const prefix = pattern.slice(0, starIdx);
+  const suffix = pattern.slice(starIdx + 1);
+  return (
+    value.startsWith(prefix) &&
+    value.endsWith(suffix) &&
+    value.length >= prefix.length + suffix.length
+  );
 }
 
 function inferSurfacesFromGovernance(def: ToolDefinitionV2) {

@@ -160,6 +160,8 @@ export const PRESETS = Object.freeze({
             maxIterations: ANALYST_BUDGET.maxIterations,
             temperature: 0.4,
             timeoutMs: 480_000,
+            maxSessionTokens: ANALYST_BUDGET.maxSessionTokens,
+            maxSessionInputTokens: ANALYST_BUDGET.maxSessionInputTokens,
           },
           systemPrompt: ANALYST_SYSTEM_PROMPT,
           promptBuilder: (ctx: Record<string, unknown>) =>
@@ -268,6 +270,8 @@ export const PRESETS = Object.freeze({
           maxTokens: config?.maxTokens ?? 4096,
           temperature: config?.temperature ?? 0.3,
           timeoutMs: config?.timeoutMs ?? 3_600_000,
+          maxSessionTokens: ANALYST_BUDGET.maxSessionTokens,
+          maxSessionInputTokens: ANALYST_BUDGET.maxSessionInputTokens,
         }),
       (config?: PolicyFactoryConfig) =>
         new QualityGatePolicy({
