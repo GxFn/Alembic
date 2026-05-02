@@ -28,7 +28,7 @@ import {
 import {
   type DimensionContext,
   parseDimensionDigest,
-} from '#workflows/capabilities/execution/internal-agent/context/DimensionContext.js';
+} from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
 import { generateSkill } from '#workflows/capabilities/execution/WorkflowSkillCompletionCapability.js';
 import { saveDimensionCheckpoint } from '#workflows/capabilities/persistence/DimensionCheckpoint.js';
 import { buildTierReflection } from '#workflows/capabilities/planning/dimensions/bootstrapDimensionConfigs.js';
