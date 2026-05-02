@@ -225,6 +225,7 @@ export async function runInternalColdStartWorkflow(
         bootstrapSession,
         targetFileMap,
         projectRoot,
+        mode: 'bootstrap',
         terminalTest: intent.internalExecution?.terminalTest,
         terminalToolset: intent.internalExecution?.terminalToolset,
         allowedTerminalModes: intent.internalExecution?.allowedTerminalModes,

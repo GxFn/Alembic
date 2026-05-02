@@ -429,7 +429,12 @@ export async function runInternalKnowledgeRescanWorkflow(
 
     const allExistingRecipes = projectInternalRescanPromptRecipes(knowledgeRescanPlan);
     dispatchInternalDimensionExecution({
-      view: { ...fillView, existingRecipes: allExistingRecipes, evolutionPrescreen: prescreen },
+      view: {
+        ...fillView,
+        existingRecipes: allExistingRecipes,
+        evolutionPrescreen: prescreen,
+        mode: 'rescan',
+      },
       dimensions: executionDimensions,
       logPrefix: 'Rescan-Internal',
     });

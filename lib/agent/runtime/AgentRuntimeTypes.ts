@@ -22,6 +22,8 @@ export interface FunctionCall {
   id: string;
   name: string;
   args: Record<string, unknown>;
+  /** Gemini 3+ thought signature — 必须原样回传 */
+  thoughtSignature?: string;
 }
 
 /** chatWithTools result from the AI provider */
@@ -131,6 +133,10 @@ export interface RuntimeConfig {
   projectRoot?: string;
   dataRoot?: string;
   additionalTools?: string[];
+  /** 可选: LLMGateway 实例 — 启用后走 Gateway 路径替代 aiProvider 直接调用 */
+  gateway?: import('#external/ai/gateway/LLMGateway.js').LLMGateway;
+  /** Gateway 使用的模型引用 (provider:model)，不设则从 aiProvider 推导 */
+  modelRef?: string;
 }
 
 export type ToolCallHook = (

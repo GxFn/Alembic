@@ -32,6 +32,8 @@ import {
   type ToolSchema,
   type UnifiedMessage,
 } from '../AiProvider.js';
+import { ParameterGuard } from '../guard/ParameterGuard.js';
+import { getModelRegistry } from '../registry/ModelRegistry.js';
 
 const DEEPSEEK_BASE = 'https://api.deepseek.com';
 const V4_PATTERN = /deepseek-v4/i;
@@ -114,8 +116,8 @@ export class DeepSeekProvider extends AiProvider {
         temperature = 0.7,
         maxTokens = 4096,
       } = opts;
-      const unifiedMessages = rawMessages as UnifiedMessage[] | undefined;
-      const toolSchemas = rawToolSchemas as ToolSchema[] | undefined;
+      const unifiedMessages = rawMessages;
+      const toolSchemas = rawToolSchemas;
 
       const hasTools = toolSchemas && toolSchemas.length > 0;
       const v4 = this.#isV4();
@@ -206,15 +208,11 @@ export class DeepSeekProvider extends AiProvider {
         }));
       }
 
-      // V4 thinking 模式下 API 不支持 tool_choice（内部走 reasoner 后端）
-      if (!this.#isV4()) {
-        if (toolChoice === 'required') {
-          body.tool_choice = 'required';
-        } else if (toolChoice === 'none') {
-          body.tool_choice = 'none';
-        } else {
-          body.tool_choice = 'auto';
-        }
+      // 通过 ParameterGuard 决定是否发送 tool_choice
+      const modelDef = getModelRegistry().resolveOrCreate('deepseek', this.model);
+      const guarded = ParameterGuard.guard(modelDef, { toolChoice });
+      if (guarded.toolChoice) {
+        body.tool_choice = guarded.toolChoice;
       }
 
       const data = await this.#post(`${this.baseUrl}/chat/completions`, body, opts.abortSignal);

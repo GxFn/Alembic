@@ -65,8 +65,8 @@ export interface ToolSchema {
 
 /** chatWithTools 选项 */
 export interface ChatWithToolsOptions {
-  messages?: unknown[];
-  toolSchemas?: unknown[];
+  messages?: UnifiedMessage[];
+  toolSchemas?: ToolSchema[];
   toolChoice?: string;
   systemPrompt?: string;
   temperature?: number;

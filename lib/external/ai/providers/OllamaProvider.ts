@@ -75,8 +75,8 @@ export class OllamaProvider extends AiProvider {
         temperature = 0.7,
         maxTokens = 4096,
       } = opts;
-      const unifiedMessages = rawMessages as UnifiedMessage[] | undefined;
-      const toolSchemas = rawToolSchemas as ToolSchema[] | undefined;
+      const unifiedMessages = rawMessages;
+      const toolSchemas = rawToolSchemas;
 
       const messages: Array<Record<string, unknown>> = [];
       if (systemPrompt) {

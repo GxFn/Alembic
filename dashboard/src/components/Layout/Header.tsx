@@ -135,7 +135,10 @@ const Header: React.FC<HeaderProps> = ({
     setAiSwitching(true);
     try {
       onBeforeAiSwitch?.();
-      await api.setAiConfig(provider.id, provider.defaultModel);
+      await api.saveLlmEnvConfig({
+        provider: provider.id,
+        model: provider.defaultModel,
+      });
       if (onAiConfigChange) {
         onAiConfigChange();
       }
@@ -268,16 +271,19 @@ const Header: React.FC<HeaderProps> = ({
                         p.hasKey === false && "opacity-50"
                       )}
                     >
-                      <span className="flex items-center gap-2 flex-1">
+                      <span className="flex items-center gap-2 flex-1 min-w-0">
                         <span
                           className={cn(
                             "inline-block w-1.5 h-1.5 rounded-full shrink-0",
                             p.hasKey !== false ? "bg-emerald-500" : "bg-[var(--fg-subtle)]"
                           )}
                         />
-                        {p.label}
+                        <span className="flex flex-col min-w-0">
+                          <span className="truncate">{p.label}</span>
+                          <span className="text-[10px] text-[var(--fg-subtle)] truncate">{p.defaultModel}</span>
+                        </span>
                       </span>
-                      {aiConfig.provider === p.id && <span className="text-xs">✓</span>}
+                      {aiConfig.provider === p.id && <span className="text-xs shrink-0">✓</span>}
                     </DropdownMenuItem>
                   ))
                 )}

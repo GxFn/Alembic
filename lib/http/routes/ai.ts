@@ -25,6 +25,8 @@ import {
   taskQualityAudit,
 } from '../../agent/tasks/AgentTaskHandlers.js';
 import { createProvider } from '../../external/ai/AiFactory.js';
+import { getModelRegistry } from '../../external/ai/registry/ModelRegistry.js';
+import { PROVIDER_CONFIGS } from '../../external/ai/registry/ProviderConfig.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
@@ -271,32 +273,117 @@ router.post('/lang', validate(AiLangBody), async (req: Request, res: Response): 
 
 /**
  * GET /api/v1/ai/providers
- * 获取可用的 AI 提供商列表
+ * 获取可用的 AI 提供商列表（增强版 — 含模型能力、约束、连接状态）
  */
 router.get('/providers', async (req: Request, res: Response): Promise<void> => {
-  // API Key 环境变量映射（与 AiFactory.autoDetectProvider 保持一致）
-  const KEY_ENVS = {
-    google: 'ALEMBIC_GOOGLE_API_KEY',
-    openai: 'ALEMBIC_OPENAI_API_KEY',
-    deepseek: 'ALEMBIC_DEEPSEEK_API_KEY',
-    claude: 'ALEMBIC_CLAUDE_API_KEY',
-  };
+  const registry = getModelRegistry();
+
+  const container = getServiceContainer();
+  const manager = container.singletons?._aiProviderManager as
+    | {
+        name?: string;
+        model?: string;
+      }
+    | undefined;
+  const activeProvider = manager?.name || process.env.ALEMBIC_AI_PROVIDER || '';
+  const activeModel = manager?.model || process.env.ALEMBIC_AI_MODEL || '';
 
   const providers = [
-    { id: 'google', label: 'Google Gemini', defaultModel: 'gemini-3-flash-preview' },
-    { id: 'openai', label: 'OpenAI', defaultModel: 'gpt-5.4' },
-    { id: 'deepseek', label: 'DeepSeek', defaultModel: 'deepseek-v4-flash' },
-    { id: 'claude', label: 'Claude', defaultModel: 'claude-sonnet-4-20250514' },
-    { id: 'ollama', label: 'Ollama', defaultModel: 'llama3' },
-    { id: 'mock', label: 'Mock (测试)', defaultModel: 'mock-l3' },
-  ].map((p) => ({
-    ...p,
-    hasKey: (KEY_ENVS as Record<string, string>)[p.id]
-      ? !!process.env[(KEY_ENVS as Record<string, string>)[p.id]]
-      : true, // ollama / mock 不需要 key，始终可用
-  }));
+    ...PROVIDER_CONFIGS.map((cfg) => {
+      const hasKey = cfg.keyEnvVar ? !!process.env[cfg.keyEnvVar] : true;
+      const models = registry.listByProvider(cfg.id).map((m) => ({
+        id: m.apiModelId,
+        name: m.displayName,
+        contextWindow: m.contextWindow,
+        maxOutputTokens: m.maxOutputTokens,
+        deprecated: !!m.deprecated,
+        capabilities: m.capabilities,
+        reasoning: {
+          supported: m.reasoning.supported,
+          mode: m.reasoning.mode,
+          defaultEffort: m.reasoning.defaultEffort,
+          effortLevels: m.reasoning.effortLevels,
+        },
+      }));
+      return {
+        id: cfg.id,
+        label: cfg.displayName,
+        defaultModel:
+          registry.get(cfg.defaultModelId)?.apiModelId ?? cfg.defaultModelId.split(':')[1],
+        models,
+        hasKey,
+        isActive: cfg.id === activeProvider,
+        keyEnvVar: cfg.keyEnvVar,
+        baseUrl: cfg.baseUrl,
+      };
+    }),
+    {
+      id: 'mock',
+      label: 'Mock (测试)',
+      defaultModel: 'mock-l3',
+      models: [],
+      hasKey: true,
+      isActive: activeProvider === 'mock',
+      keyEnvVar: '',
+      baseUrl: '',
+    },
+  ];
 
-  res.json({ success: true, data: providers });
+  res.json({
+    success: true,
+    data: {
+      providers,
+      active: { provider: activeProvider, model: activeModel },
+    },
+  });
+});
+
+/**
+ * POST /api/v1/ai/probe
+ * 探测指定 Provider 的连通性（发送简单 ping 请求）
+ * Body: { provider: string, apiKey?: string }
+ */
+router.post('/probe', async (req: Request, res: Response): Promise<void> => {
+  const { provider: providerName, apiKey } = req.body;
+  if (!providerName) {
+    return void res
+      .status(400)
+      .json({ success: false, error: { message: 'provider is required' } });
+  }
+
+  try {
+    const opts: Record<string, unknown> = { provider: providerName.toLowerCase() };
+    if (apiKey) {
+      opts.apiKey = apiKey;
+    }
+    const provider = createProvider(opts);
+
+    const start = Date.now();
+    await provider.probe();
+    const latencyMs = Date.now() - start;
+
+    res.json({
+      success: true,
+      data: {
+        provider: providerName,
+        status: 'connected',
+        latencyMs,
+        model: provider.model,
+      },
+    });
+  } catch (err: unknown) {
+    const errMsg = (err as Error).message || 'Unknown error';
+    const statusCode = (err as { status?: number }).status;
+    res.json({
+      success: true,
+      data: {
+        provider: providerName,
+        status: 'error',
+        error: errMsg,
+        statusCode,
+      },
+    });
+  }
 });
 
 /**
@@ -807,6 +894,7 @@ const LLM_ENV_KEYS = [
   'ALEMBIC_CLAUDE_API_KEY',
   'ALEMBIC_DEEPSEEK_API_KEY',
   'ALEMBIC_AI_PROXY',
+  'ALEMBIC_AI_REASONING_EFFORT',
   'ALEMBIC_EMBED_PROVIDER',
   'ALEMBIC_EMBED_MODEL',
   'ALEMBIC_EMBED_BASE_URL',
@@ -888,13 +976,22 @@ router.post(
       return;
     }
 
-    const { provider, model, apiKey, proxy, embedProvider, embedModel, embedBaseUrl, embedApiKey } =
-      req.body;
+    const {
+      provider,
+      model,
+      apiKey,
+      proxy,
+      reasoningEffort,
+      embedProvider,
+      embedModel,
+      embedBaseUrl,
+      embedApiKey,
+      providerKeys,
+    } = req.body;
 
     const envPath = _getProjectEnvPath();
     let content = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
 
-    // 构建 key-value 更新列表
     const updates: Record<string, string> = {
       ALEMBIC_AI_PROVIDER: provider,
     };
@@ -904,20 +1001,33 @@ router.post(
     if (proxy) {
       updates.ALEMBIC_AI_PROXY = proxy;
     }
+    if (reasoningEffort) {
+      updates.ALEMBIC_AI_REASONING_EFFORT = reasoningEffort;
+    }
 
-    // 根据 provider 决定写入哪个 API Key 变量
-    const providerKeyMap = {
+    const providerKeyMap: Record<string, string> = {
       google: 'ALEMBIC_GOOGLE_API_KEY',
       openai: 'ALEMBIC_OPENAI_API_KEY',
       claude: 'ALEMBIC_CLAUDE_API_KEY',
       deepseek: 'ALEMBIC_DEEPSEEK_API_KEY',
     };
-    const keyName = (providerKeyMap as Record<string, string>)[provider];
+
+    // 多 provider key 同时保存
+    if (providerKeys && typeof providerKeys === 'object') {
+      for (const [pid, key] of Object.entries(providerKeys as Record<string, string>)) {
+        const envKey = providerKeyMap[pid];
+        if (envKey && key) {
+          updates[envKey] = String(key);
+        }
+      }
+    }
+
+    // 兼容旧模式: 单个 apiKey 写入当前 provider 的 env key
+    const keyName = providerKeyMap[provider];
     if (keyName && apiKey) {
       updates[keyName] = apiKey;
     }
 
-    // Embedding 独立配置
     if (embedProvider) {
       updates.ALEMBIC_EMBED_PROVIDER = embedProvider;
       if (embedModel) {

@@ -12,7 +12,7 @@
  * @module forced-summary
  */
 
-import type { AiProvider } from '#external/ai/AiProvider.js';
+import type { AiProvider, ChatWithToolsResult } from '#external/ai/AiProvider.js';
 import Logger from '#infra/logging/Logger.js';
 import { cleanFinalAnswer } from './final-answer.js';
 
@@ -43,13 +43,6 @@ interface ToolCallRecord {
   result?: unknown;
   durationMs?: number;
   name?: string;
-}
-
-/** chatWithTools result (providers may attach usage) */
-interface ChatWithToolsResult {
-  text: string | null;
-  functionCalls?: Array<{ id: string; name: string; args: Record<string, unknown> }> | null;
-  usage?: { inputTokens?: number; outputTokens?: number };
 }
 
 /** Token usage accumulator */

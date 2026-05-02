@@ -370,10 +370,14 @@ export const AiEnvConfigBody = z.object({
   model: z.string().optional(),
   apiKey: z.string().optional(),
   proxy: z.string().optional(),
+  /** 推理深度: none/low/medium/high/xhigh/max (模型相关) */
+  reasoningEffort: z.string().optional(),
   embedProvider: z.string().optional(),
   embedModel: z.string().optional(),
   embedBaseUrl: z.string().optional(),
   embedApiKey: z.string().optional(),
+  /** 多 provider API key 同时保存: { google: 'key1', openai: 'key2', ... } */
+  providerKeys: z.record(z.string(), z.string()).optional(),
 });
 
 // ═══ Extract Routes ══════════════════════════════

@@ -345,15 +345,61 @@ export interface SearchResultItem {
   [key: string]: unknown;
 }
 
+/** 模型能力声明 */
+export interface ModelCapabilities {
+  toolCalling: boolean;
+  vision: boolean;
+  embedding: boolean;
+  jsonMode: boolean;
+  streaming: boolean;
+}
+
+/** 模型推理能力声明 */
+export interface ModelReasoning {
+  supported: boolean;
+  mode?: string;
+  defaultEffort?: string;
+  effortLevels?: string[];
+}
+
+/** AI 模型信息 */
+export interface AiProviderModelInfo {
+  id: string;
+  name: string;
+  contextWindow: number;
+  maxOutputTokens?: number;
+  deprecated?: boolean;
+  capabilities?: ModelCapabilities;
+  reasoning?: ModelReasoning;
+}
+
 /** AI 服务商信息 */
 export interface AiProviderInfo {
   id: string;
-  name: string;
   label: string;
   defaultModel: string;
   hasKey?: boolean;
-  models?: string[];
+  isActive?: boolean;
+  keyEnvVar?: string;
+  baseUrl?: string;
+  models?: AiProviderModelInfo[];
   [key: string]: unknown;
+}
+
+/** /ai/providers 接口返回 */
+export interface AiProvidersResponse {
+  providers: AiProviderInfo[];
+  active: { provider: string; model: string };
+}
+
+/** /ai/probe 探测结果 */
+export interface AiProbeResult {
+  provider: string;
+  status: 'connected' | 'error';
+  latencyMs?: number;
+  model?: string;
+  error?: string;
+  statusCode?: number;
 }
 
 /** Skill 元信息 */
@@ -1041,7 +1087,25 @@ export const api = {
 
   async getAiProviders(): Promise<AiProviderInfo[]> {
     const res = await http.get('/ai/providers');
-    return res.data?.data || [];
+    const data = res.data?.data;
+    if (data?.providers) {
+      return data.providers;
+    }
+    return Array.isArray(data) ? data : [];
+  },
+
+  async getAiProvidersEnhanced(): Promise<AiProvidersResponse> {
+    const res = await http.get('/ai/providers');
+    const data = res.data?.data;
+    if (data?.providers) {
+      return data;
+    }
+    return { providers: Array.isArray(data) ? data : [], active: { provider: '', model: '' } };
+  },
+
+  async probeProvider(provider: string, apiKey?: string): Promise<AiProbeResult> {
+    const res = await http.post('/ai/probe', { provider, apiKey });
+    return res.data?.data || { provider, status: 'error', error: 'Unknown error' };
   },
 
   async setAiConfig(
@@ -1531,10 +1595,12 @@ Skill 文档格式要求：
     model?: string;
     apiKey?: string;
     proxy?: string;
+    reasoningEffort?: string;
     embedProvider?: string;
     embedModel?: string;
     embedBaseUrl?: string;
     embedApiKey?: string;
+    providerKeys?: Record<string, string>;
   }): Promise<{
     vars: Record<string, string>;
     hasEnvFile: boolean;

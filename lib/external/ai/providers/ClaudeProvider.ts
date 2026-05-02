@@ -1,10 +1,16 @@
 /**
  * ClaudeProvider - Anthropic Claude AI 提供商
  *
- * v2: 支持原生 Function Calling（结构化工具调用）
- *     - 使用 Anthropic Messages API 的 tools + tool_choice 参数
- *     - 响应中的 tool_use content blocks → 结构化 functionCall
- *     - tool_result content blocks 用于回传工具执行结果
+ * 支持原生 Function Calling（结构化工具调用）:
+ *   - 使用 Anthropic Messages API 的 tools + tool_choice 参数
+ *   - 响应中的 tool_use content blocks → 结构化 functionCall
+ *   - tool_result content blocks 用于回传工具执行结果
+ *
+ * 模型兼容性 (2026-04):
+ *   - Opus 4.7:  1M ctx, 128K out, adaptive thinking only, 禁止非默认 temperature
+ *   - Sonnet 4.6: 1M ctx, 64K out, extended thinking + adaptive thinking
+ *   - Haiku 4.5:  200K ctx, 64K out, extended thinking
+ *   - Sonnet 4 / Opus 4 已废弃, 2026-06-15 下线
  */
 
 import Logger from '#infra/logging/Logger.js';
@@ -15,10 +21,11 @@ import {
   type ChatContext,
   type ChatWithToolsOptions,
   type ChatWithToolsResult,
-  type StructuredOutputOptions,
   type ToolSchema,
   type UnifiedMessage,
 } from '../AiProvider.js';
+import { ParameterGuard } from '../guard/ParameterGuard.js';
+import { getModelRegistry } from '../registry/ModelRegistry.js';
 
 const CLAUDE_BASE = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -27,10 +34,16 @@ export class ClaudeProvider extends AiProvider {
   constructor(config: AiProviderConfig = {}) {
     super(config);
     this.name = 'claude';
-    this.model = config.model || 'claude-sonnet-4-20250514';
+    this.model = config.model || process.env.ALEMBIC_AI_MODEL || 'claude-sonnet-4-6';
     this.apiKey = config.apiKey || process.env.ALEMBIC_CLAUDE_API_KEY || '';
-    this.maxRetries = 0; // Claude 不做重试
+    this.baseUrl = config.baseUrl || process.env.ALEMBIC_CLAUDE_BASE_URL || CLAUDE_BASE;
+    this.maxRetries = 0;
     this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
+  }
+
+  #getModelDef() {
+    const registry = getModelRegistry();
+    return registry.resolveOrCreate('claude', this.model);
   }
 
   /** 是否支持原生结构化函数调用 */
@@ -47,18 +60,24 @@ export class ClaudeProvider extends AiProvider {
     }
     messages.push({ role: 'user', content: prompt });
 
+    const modelDef = this.#getModelDef();
+    const guarded = ParameterGuard.guard(modelDef, { temperature, maxTokens });
+
     const body: Record<string, unknown> = {
       model: this.model,
       messages,
-      max_tokens: maxTokens,
-      temperature,
+      max_tokens: guarded.maxTokens ?? maxTokens,
     };
+
+    if (guarded.temperature !== undefined) {
+      body.temperature = guarded.temperature;
+    }
 
     if (context.systemPrompt) {
       body.system = context.systemPrompt;
     }
 
-    const data = await this._post(`${CLAUDE_BASE}/messages`, body);
+    const data = await this._post(`${this.baseUrl}/messages`, body);
 
     // 提取 token 用量
     if (data?.usage) {
@@ -100,8 +119,8 @@ export class ClaudeProvider extends AiProvider {
       temperature = 0.7,
       maxTokens = 4096,
     } = opts;
-    const unifiedMessages = rawMessages as UnifiedMessage[] | undefined;
-    const toolSchemas = rawToolSchemas as ToolSchema[] | undefined;
+    const unifiedMessages = rawMessages;
+    const toolSchemas = rawToolSchemas;
 
     // 统一消息 → Anthropic Messages 格式
     const srcMessages: UnifiedMessage[] =
@@ -111,35 +130,41 @@ export class ClaudeProvider extends AiProvider {
 
     const messages = this.#convertMessages(srcMessages);
 
+    const modelDef = this.#getModelDef();
+    const guarded = ParameterGuard.guard(modelDef, { temperature, maxTokens, toolChoice });
+
     const body: Record<string, unknown> = {
       model: this.model,
       messages,
-      max_tokens: maxTokens,
-      temperature,
+      max_tokens: guarded.maxTokens ?? maxTokens,
     };
 
-    // system prompt → 顶层字段
+    if (guarded.temperature !== undefined) {
+      body.temperature = guarded.temperature;
+    }
+
     if (systemPrompt) {
       body.system = systemPrompt;
     }
 
     // 工具声明 + tool_choice
-    // toolChoice='none' 时不传 tools（Anthropic 没有 'none' tool_choice）
-    if (toolChoice !== 'none' && toolSchemas && toolSchemas.length > 0) {
+    // guard 已验证 toolChoice 合法性；Anthropic 没有 'none' tool_choice，不传 tools 即可
+    const effectiveToolChoice = guarded.toolChoice ?? toolChoice;
+    if (effectiveToolChoice !== 'none' && toolSchemas && toolSchemas.length > 0) {
       body.tools = toolSchemas.map((s: ToolSchema) => ({
         name: s.name,
         description: s.description || '',
         input_schema: s.parameters || { type: 'object', properties: {} },
       }));
 
-      if (toolChoice === 'required') {
+      if (effectiveToolChoice === 'required') {
         body.tool_choice = { type: 'any' };
       } else {
         body.tool_choice = { type: 'auto' };
       }
     }
 
-    const data = await this._post(`${CLAUDE_BASE}/messages`, body, opts.abortSignal);
+    const data = await this._post(`${this.baseUrl}/messages`, body, opts.abortSignal);
     return this.#parseToolResponse(data);
   }
 

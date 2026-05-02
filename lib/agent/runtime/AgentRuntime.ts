@@ -29,6 +29,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import type { LLMGateway } from '#external/ai/gateway/LLMGateway.js';
 import Logger from '#infra/logging/Logger.js';
 import type { ToolSchemaProjection } from '#tools/catalog/CapabilityManifest.js';
 import { Capability, CapabilityRegistry } from '../capabilities/index.js';
@@ -101,6 +102,9 @@ export class AgentRuntime {
   #additionalTools: string[] = [];
   #toolPipeline;
   #promptBuilder;
+  /** 可选 Gateway — 启用后走 Gateway 路径替代 aiProvider 直接调用 */
+  #gateway: LLMGateway | null;
+  #modelRef: string;
 
   // ── 执行统计 ──
   iterationCount = 0;
@@ -140,6 +144,10 @@ export class AgentRuntime {
     this.#projectRoot = config.projectRoot || process.cwd();
     this.#dataRoot = config.dataRoot || this.#projectRoot;
     this.#additionalTools = config.additionalTools || [];
+    this.#gateway = config.gateway || null;
+    this.#modelRef =
+      config.modelRef ||
+      `${config.aiProvider.name}:${(config.aiProvider as { model?: string }).model || 'unknown'}`;
     this.#toolPipeline = createToolPipeline();
     this.#promptBuilder = new SystemPromptBuilder({
       persona: this.persona,
@@ -662,15 +670,35 @@ export class AgentRuntime {
           : ctx.toolSchemas.length > 0
             ? ctx.toolSchemas
             : undefined;
-      llmResult = (await this.aiProvider.chatWithTools(effectivePrompt, {
-        messages: ctx.messages.toMessages(),
-        toolSchemas: effectiveToolSchemas,
-        toolChoice: effectiveToolSchemas ? toolChoice : undefined,
-        systemPrompt: effectiveSystemPrompt,
-        temperature: ctx.budget.temperature ?? (ctx.isSystem ? 0.3 : 0.7),
-        maxTokens: ctx.budget.maxTokens ?? (ctx.isSystem ? 8192 : 4096),
-        abortSignal: ctx.abortSignal ?? undefined,
-      })) as LLMResult;
+
+      const unifiedMessages =
+        ctx.messages.toMessages() as import('#external/ai/AiProvider.js').UnifiedMessage[];
+      const unifiedTools = effectiveToolSchemas as
+        | import('#external/ai/AiProvider.js').ToolSchema[]
+        | undefined;
+
+      if (this.#gateway) {
+        llmResult = (await this.#gateway.chatWithTools({
+          modelRef: this.#modelRef,
+          messages: unifiedMessages,
+          tools: unifiedTools,
+          toolChoice: unifiedTools ? toolChoice : undefined,
+          systemPrompt: effectiveSystemPrompt,
+          temperature: ctx.budget.temperature ?? (ctx.isSystem ? 0.3 : 0.7),
+          maxTokens: ctx.budget.maxTokens ?? (ctx.isSystem ? 8192 : 4096),
+          abortSignal: ctx.abortSignal ?? undefined,
+        })) as LLMResult;
+      } else {
+        llmResult = (await this.aiProvider.chatWithTools(effectivePrompt, {
+          messages: unifiedMessages,
+          toolSchemas: unifiedTools,
+          toolChoice: unifiedTools ? toolChoice : undefined,
+          systemPrompt: effectiveSystemPrompt,
+          temperature: ctx.budget.temperature ?? (ctx.isSystem ? 0.3 : 0.7),
+          maxTokens: ctx.budget.maxTokens ?? (ctx.isSystem ? 8192 : 4096),
+          abortSignal: ctx.abortSignal ?? undefined,
+        })) as LLMResult;
+      }
       ctx.consecutiveAiErrors = 0;
     } catch (aiErr: unknown) {
       return this.#handleAiError(ctx, aiErr as AiError);
@@ -982,13 +1010,24 @@ export class AgentRuntime {
 
     // 检查预算 (非 tracker 模式)
     if (!tracker && ctx.iteration >= ctx.maxIterations) {
-      const summary = (await this.aiProvider.chatWithTools(ctx.prompt, {
-        messages: messages.toMessages(),
-        systemPrompt: effectiveSystemPrompt,
-        toolChoice: 'none',
-        temperature: ctx.budget.temperature ?? 0.7,
-        maxTokens: ctx.budget.maxTokens ?? 4096,
-      })) as LLMResult;
+      const summaryMessages =
+        messages.toMessages() as import('#external/ai/AiProvider.js').UnifiedMessage[];
+      const summary: LLMResult = this.#gateway
+        ? ((await this.#gateway.chatWithTools({
+            modelRef: this.#modelRef,
+            messages: summaryMessages,
+            systemPrompt: effectiveSystemPrompt,
+            toolChoice: 'none',
+            temperature: ctx.budget.temperature ?? 0.7,
+            maxTokens: ctx.budget.maxTokens ?? 4096,
+          })) as LLMResult)
+        : ((await this.aiProvider.chatWithTools(ctx.prompt, {
+            messages: summaryMessages,
+            systemPrompt: effectiveSystemPrompt,
+            toolChoice: 'none',
+            temperature: ctx.budget.temperature ?? 0.7,
+            maxTokens: ctx.budget.maxTokens ?? 4096,
+          })) as LLMResult);
       if (summary.usage) {
         this.tokenUsage.input += summary.usage.inputTokens || 0;
         this.tokenUsage.output += summary.usage.outputTokens || 0;

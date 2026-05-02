@@ -17,6 +17,8 @@ import {
   type ToolSchema,
   type UnifiedMessage,
 } from '../AiProvider.js';
+import { ParameterGuard } from '../guard/ParameterGuard.js';
+import { getModelRegistry } from '../registry/ModelRegistry.js';
 
 const OPENAI_BASE = 'https://api.openai.com/v1';
 
@@ -26,12 +28,16 @@ export class OpenAiProvider extends AiProvider {
   constructor(config: AiProviderConfig = {}) {
     super(config);
     this.name = 'openai';
-    this.model = config.model || 'gpt-5.4-mini';
+    this.model = config.model || process.env.ALEMBIC_AI_MODEL || 'gpt-5.5';
     this.apiKey = config.apiKey || process.env.ALEMBIC_OPENAI_API_KEY || '';
     this.baseUrl = config.baseUrl || OPENAI_BASE;
     this.embedModel =
       config.embedModel || process.env.ALEMBIC_EMBED_MODEL || 'text-embedding-3-small';
     this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
+  }
+
+  #getModelDef() {
+    return getModelRegistry().resolveOrCreate('openai', this.model);
   }
 
   get supportsNativeToolCalling() {
@@ -48,12 +54,18 @@ export class OpenAiProvider extends AiProvider {
       }
       messages.push({ role: 'user', content: prompt });
 
+      const modelDef = this.#getModelDef();
+      const guarded = ParameterGuard.guard(modelDef, { temperature, maxTokens });
+
       const body: Record<string, unknown> = {
         model: this.model,
         messages,
-        temperature,
-        max_tokens: maxTokens,
+        max_tokens: guarded.maxTokens ?? maxTokens,
       };
+
+      if (guarded.temperature !== undefined) {
+        body.temperature = guarded.temperature;
+      }
 
       const data = await this.#post(`${this.baseUrl}/chat/completions`, body);
       this.#emitUsage(data);
@@ -74,8 +86,8 @@ export class OpenAiProvider extends AiProvider {
         temperature = 0.7,
         maxTokens = 4096,
       } = opts;
-      const unifiedMessages = rawMessages as UnifiedMessage[] | undefined;
-      const toolSchemas = rawToolSchemas as ToolSchema[] | undefined;
+      const unifiedMessages = rawMessages;
+      const toolSchemas = rawToolSchemas;
 
       const messages: Array<Record<string, unknown>> = [];
       if (systemPrompt) {
@@ -111,12 +123,18 @@ export class OpenAiProvider extends AiProvider {
         }
       }
 
+      const modelDef = this.#getModelDef();
+      const guarded = ParameterGuard.guard(modelDef, { temperature, maxTokens, toolChoice });
+
       const body: Record<string, unknown> = {
         model: this.model,
         messages,
-        temperature,
-        max_tokens: maxTokens,
+        max_tokens: guarded.maxTokens ?? maxTokens,
       };
+
+      if (guarded.temperature !== undefined) {
+        body.temperature = guarded.temperature;
+      }
 
       if (toolSchemas && toolSchemas.length > 0) {
         body.tools = toolSchemas.map((s: ToolSchema) => ({
@@ -129,7 +147,9 @@ export class OpenAiProvider extends AiProvider {
         }));
       }
 
-      if (toolChoice === 'required') {
+      if (guarded.toolChoice) {
+        body.tool_choice = guarded.toolChoice;
+      } else if (toolChoice === 'required') {
         body.tool_choice = 'required';
       } else if (toolChoice === 'none') {
         body.tool_choice = 'none';

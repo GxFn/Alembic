@@ -19,6 +19,8 @@ import {
   type ToolSchema,
   type UnifiedMessage,
 } from '../AiProvider.js';
+import { ParameterGuard } from '../guard/ParameterGuard.js';
+import { getModelRegistry } from '../registry/ModelRegistry.js';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_EMBED_MODEL = 'models/gemini-embedding-001';
@@ -35,13 +37,17 @@ export class GoogleGeminiProvider extends AiProvider {
           process.env.ALEMBIC_GEMINI_MAX_CONCURRENCY || process.env.ALEMBIC_AI_MAX_CONCURRENCY || 2
         ),
     });
-    this.name = 'google-gemini';
+    this.name = 'google';
     this.model = config.model || 'gemini-3-flash-preview';
     this.apiKey = config.apiKey || process.env.ALEMBIC_GOOGLE_API_KEY || '';
     this.#embedModel = config.embedModel
       ? `models/${config.embedModel.replace(/^models\//, '')}`
       : DEFAULT_EMBED_MODEL;
     this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
+  }
+
+  #getModelDef() {
+    return getModelRegistry().resolveOrCreate('google', this.model);
   }
 
   /** 是否支持原生结构化函数调用 */
@@ -62,15 +68,17 @@ export class GoogleGeminiProvider extends AiProvider {
       }
       contents.push({ role: 'user', parts: [{ text: prompt }] });
 
+      const modelDef = this.#getModelDef();
+      const guarded = ParameterGuard.guard(modelDef, { temperature, maxTokens });
+
       const body: Record<string, unknown> = {
         contents,
         generationConfig: {
-          temperature,
-          maxOutputTokens: maxTokens,
+          temperature: guarded.temperature ?? temperature,
+          maxOutputTokens: guarded.maxTokens ?? maxTokens,
         },
       };
 
-      // systemInstruction 支持（chat 也可用 systemPrompt）
       if (systemPrompt) {
         body.systemInstruction = { parts: [{ text: systemPrompt }] };
       }
@@ -117,8 +125,8 @@ export class GoogleGeminiProvider extends AiProvider {
         temperature = 0.7,
         maxTokens = 8192,
       } = opts;
-      const messages = rawMessages as UnifiedMessage[] | undefined;
-      const toolSchemas = rawToolSchemas as ToolSchema[] | undefined;
+      const messages = rawMessages;
+      const toolSchemas = rawToolSchemas;
 
       // 统一消息 → Gemini contents
       const contents =
@@ -126,11 +134,14 @@ export class GoogleGeminiProvider extends AiProvider {
           ? this.#convertMessages(messages)
           : [{ role: 'user', parts: [{ text: prompt }] }];
 
+      const modelDef = this.#getModelDef();
+      const guarded = ParameterGuard.guard(modelDef, { temperature, maxTokens });
+
       const body: Record<string, unknown> = {
         contents,
         generationConfig: {
-          temperature,
-          maxOutputTokens: maxTokens,
+          temperature: guarded.temperature ?? temperature,
+          maxOutputTokens: guarded.maxTokens ?? maxTokens,
         },
       };
 

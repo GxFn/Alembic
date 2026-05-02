@@ -23,6 +23,7 @@
 
 import Logger from '#infra/logging/Logger.js';
 import { estimateTokensFast } from '#shared/token-utils.js';
+import { getModelRegistry } from '../../external/ai/registry/ModelRegistry.js';
 
 // ─── 类型定义 ──────────────────────────────────────────
 
@@ -102,32 +103,37 @@ export class ContextWindow {
    */
   static MODEL_CONTEXT_WINDOWS = [
     // ── Google Gemini ──
-    [/gemini-3/i, 1_000_000],
-    [/gemini-2\.5/i, 1_000_000],
-    [/gemini-2/i, 1_000_000],
-    [/gemini-1\.5-pro/i, 1_000_000],
-    [/gemini-1\.5-flash/i, 1_000_000],
+    [/gemini-3/i, 1_048_576],
+    [/gemini-2\.5/i, 1_048_576],
+    [/gemini-2/i, 1_048_576],
+    [/gemini-1\.5/i, 1_048_576],
     [/gemini-1\.0/i, 32_000],
-    [/gemini/i, 1_000_000], // 未知版本回退
+    [/gemini/i, 1_048_576],
     // ── OpenAI ──
+    [/gpt-5\.5/i, 1_100_000],
     [/gpt-5\.4-(?:mini|nano)/i, 400_000],
-    [/gpt-5/i, 1_000_000],
+    [/gpt-5\.4/i, 1_050_000],
+    [/gpt-5-(?:mini|nano)/i, 400_000],
+    [/gpt-5/i, 400_000],
     [/gpt-4o/i, 128_000],
     [/gpt-4-turbo/i, 128_000],
     [/gpt-4-(?!turbo)/i, 8_192],
     [/gpt-3\.5-turbo-16k/i, 16_384],
     [/gpt-3\.5/i, 4_096],
-    [/o1|o3|o4/i, 200_000], // OpenAI reasoning models
+    [/o1|o3|o4/i, 200_000],
     // ── Anthropic ──
-    [/claude-(?:opus|sonnet)-4[.-]6/i, 1_000_000], // Opus 4.6 / Sonnet 4.6
-    [/claude-.*sonnet-4/i, 200_000],
+    [/claude-opus-4-7/i, 1_000_000],
+    [/claude-(?:opus|sonnet)-4[.-]6/i, 1_000_000],
+    [/claude-(?:opus|sonnet)-4[.-]5/i, 200_000],
+    [/claude-opus-4[.-]1/i, 200_000],
+    [/claude-haiku-4/i, 200_000],
+    [/claude-.*(?:sonnet|opus)-4/i, 200_000],
     [/claude-3[.-]5/i, 200_000],
-    [/claude-3[.-]opus/i, 200_000],
     [/claude-3/i, 200_000],
-    [/claude/i, 200_000], // 未知 claude 回退
+    [/claude/i, 200_000],
     // ── DeepSeek ──
     [/deepseek-v4/i, 1_000_000],
-    [/deepseek/i, 64_000],
+    [/deepseek/i, 1_000_000],
     // ── 本地 Ollama ──
     [/llama3[.-]?[23]/i, 128_000],
     [/llama3/i, 8_192],
@@ -153,16 +159,27 @@ export class ContextWindow {
    * @param [opts] - isSystem 为 true 时给予更高预算
    * @returns 建议的 token 预算
    */
-  static resolveTokenBudget(modelName: string, opts: { isSystem?: boolean } = {}) {
-    const { isSystem = false } = opts;
+  static resolveTokenBudget(
+    modelName: string,
+    opts: { isSystem?: boolean; provider?: string } = {}
+  ) {
+    const { isSystem = false, provider } = opts;
 
     // 1. 查找模型上下文窗口大小
-    let contextSize = 32_000; // 默认回退值
+    //    优先从 ModelRegistry 查询（声明式数据源），回退到旧的正则匹配
+    let contextSize = 32_000;
     if (modelName) {
-      for (const [pattern, size] of ContextWindow.MODEL_CONTEXT_WINDOWS) {
-        if ((pattern as RegExp).test(modelName)) {
-          contextSize = size as number;
-          break;
+      const registry = getModelRegistry();
+      const providerHint = provider || process.env.ALEMBIC_AI_PROVIDER || '';
+      const regDef = providerHint ? registry.resolve(providerHint, modelName) : undefined;
+      if (regDef) {
+        contextSize = regDef.contextWindow;
+      } else {
+        for (const [pattern, size] of ContextWindow.MODEL_CONTEXT_WINDOWS) {
+          if ((pattern as RegExp).test(modelName)) {
+            contextSize = size as number;
+            break;
+          }
         }
       }
     }
