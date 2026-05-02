@@ -50,6 +50,7 @@ import {
 } from './AgentRuntimeTypes.js';
 import { AgentState } from './AgentState.js';
 import { DiagnosticsCollector } from './DiagnosticsCollector.js';
+import { createExitController } from './ExitController.js';
 import { cleanFinalAnswer } from './final-answer.js';
 import { produceForcedSummary } from './forced-summary.js';
 import { continueResult, LLMResultType } from './LLMResultType.js';
@@ -425,7 +426,7 @@ export class AgentRuntime {
 
     // 收集工具 (空列表是明确无工具，不再隐式展开为全量工具)
     const allowedToolIds = this.#collectTools(caps, additionalToolsOverride).map(String);
-    const toolSchemas = this.#getToolSchemas(allowedToolIds);
+    const toolSchemas = this.#getToolSchemas(allowedToolIds, this.#modelRef);
     diagnosticsCollector.recordStageToolset({
       stage: typeof context.pipelinePhase === 'string' ? context.pipelinePhase : 'react_loop',
       capabilities: caps.map((c: Capability) => c.name),
@@ -476,7 +477,7 @@ export class AgentRuntime {
       { source: this.id }
     );
 
-    return new LoopContext({
+    const ctx = new LoopContext({
       messages,
       tracker: tracker || null,
       trace: trace || null,
@@ -496,72 +497,61 @@ export class AgentRuntime {
       abortSignal: (abortSignal as AbortSignal) || null,
       diagnostics: diagnosticsCollector,
     });
+
+    ctx.exitController = createExitController(ctx, this.policies);
+    return ctx;
   }
 
   /**
-   * 退出判定 — 合并 tracker/policy 退出检查
+   * 退出判定 — 委托 ExitController，保留 Capability 前置钩子
    * @returns true = 应退出循环
    */
   #shouldExit(ctx: LoopContext): boolean {
-    // 外部中止信号 — 立即退出
-    if (ctx.abortSignal?.aborted) {
-      this.logger.info('[AgentRuntime] ⛔ abortSignal fired — exiting loop');
-      ctx.diagnostics?.warn({ code: 'aborted', message: 'AbortSignal fired before iteration' });
-      return true;
-    }
-
-    // ExplorationTracker: tick + 退出检查
-    if (ctx.tracker) {
-      ctx.tracker.tick();
-      if (ctx.tracker.shouldExit()) {
+    const ec = ctx.exitController;
+    if (ec) {
+      const signal = ec.checkBeforeIteration(ctx, this.tokenUsage);
+      if (signal.action !== 'continue') {
         this.logger.info(
-          `[AgentRuntime] tracker exit: phase=${ctx.tracker.phase}, iter=${ctx.tracker.iteration}, submits=${ctx.tracker.totalSubmits}`
+          `[AgentRuntime] ExitController: ${signal.reason} — ${signal.detail || ''}`
         );
+        ctx.diagnostics?.warn({
+          code: signal.reason || 'exit',
+          message: signal.detail || signal.reason || 'ExitController stopped the run',
+        });
+        return true;
+      }
+    } else {
+      // Legacy fallback (no ExitController — should not happen in normal flow)
+      if (ctx.abortSignal?.aborted) {
+        return true;
+      }
+      if (ctx.tracker) {
+        ctx.tracker.tick();
+        if (ctx.tracker.shouldExit()) {
+          return true;
+        }
+      }
+      if (ctx.budget?.timeoutMs && Date.now() - ctx.loopStartTime > ctx.budget.timeoutMs) {
+        return true;
+      }
+      const duringCheck = this.policies.validateDuring({
+        iteration: ctx.tracker ? 0 : ctx.iteration,
+        startTime: ctx.loopStartTime,
+        totalTokens: this.tokenUsage.input + this.tokenUsage.output,
+        totalInputTokens: this.tokenUsage.input,
+      });
+      if (!duringCheck.ok) {
         return true;
       }
     }
 
-    // Capability 前置钩子
+    // Capability 前置钩子 (always executed regardless of exit controller)
     for (const cap of ctx.capabilities) {
       cap.onBeforeStep({
         iteration: ctx.iteration,
         messages: ctx.messages.toMessages(),
         prompt: ctx.prompt,
       });
-    }
-
-    // ── Per-stage budget timeout (从 budgetOverride 注入) ──
-    // 与 BudgetPolicy 的全局 timeoutMs (600s) 不同，此处使用阶段级 budget.timeoutMs
-    // 保证 Analyst/Producer 各自有独立的超时边界，避免一个阶段消耗完所有时长
-    if (ctx.budget?.timeoutMs && Date.now() - ctx.loopStartTime > ctx.budget.timeoutMs) {
-      this.logger.info(
-        `[AgentRuntime] ⏰ Stage budget timeout: ${ctx.budget.timeoutMs}ms exceeded (elapsed: ${Date.now() - ctx.loopStartTime}ms)`
-      );
-      ctx.diagnostics?.warn({
-        code: 'stage_budget_timeout',
-        message: `Stage budget timeout after ${ctx.budget.timeoutMs}ms`,
-      });
-      return true;
-    }
-
-    // Policy 实时校验
-    // 当 ExplorationTracker 存在时，由 tracker 自己管理 maxIterations + grace 轮次，
-    // 跳过 BudgetPolicy 的 iteration 限制，避免竞争（tracker 给了 grace 但 policy 立即杀掉循环）。
-    // tracker 内部有硬上限 (maxIterations + 2) 保证不会无限循环。
-    const skipPolicyIterCheck = !!ctx.tracker;
-    const duringCheck = this.policies.validateDuring({
-      iteration: skipPolicyIterCheck ? 0 : ctx.iteration, // tracker 模式下用 0 绕过 iteration 检查
-      toolCalls: this.toolCallHistory,
-      tokenUsage: this.tokenUsage,
-      startTime: ctx.loopStartTime,
-    });
-    if (!duringCheck.ok) {
-      this.logger.info(`[AgentRuntime] Policy stop: ${duringCheck.reason}`);
-      ctx.diagnostics?.warn({
-        code: 'policy_stop',
-        message: duringCheck.reason || 'Policy stopped the run',
-      });
-      return true;
     }
 
     return false;
@@ -1271,11 +1261,22 @@ export class AgentRuntime {
     return [...toolSet];
   }
 
-  #getToolSchemas(allowedTools: unknown[]): ToolSchemaProjection[] {
+  #getToolSchemas(allowedTools: unknown[], model?: string): ToolSchemaProjection[] {
     const ids = allowedTools.map(String);
     const catalog = (this.container as { get?: (name: string) => unknown } | null)?.get?.(
       'capabilityCatalog'
-    ) as { toToolSchemas(ids?: readonly string[] | null): ToolSchemaProjection[] } | undefined;
+    ) as
+      | {
+          toToolSchemas(ids?: readonly string[] | null): ToolSchemaProjection[];
+          toToolSchemasForModel?(
+            ids?: readonly string[] | null,
+            model?: string
+          ): ToolSchemaProjection[];
+        }
+      | undefined;
+    if (model && catalog?.toToolSchemasForModel) {
+      return catalog.toToolSchemasForModel(ids, model);
+    }
     if (catalog?.toToolSchemas) {
       return catalog.toToolSchemas(ids);
     }

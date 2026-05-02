@@ -84,6 +84,16 @@ interface ToolResultQuota {
  * - 或单独的 user/assistant 文本消息
  */
 
+/** Compaction configuration — per-pipeline overrides */
+export interface CompactionConfig {
+  /** [L0, L1, L2, L3, L4] usage ratio thresholds */
+  thresholds?: [number, number, number, number, number];
+  /** Whether to enable L4 LLM-based summary (scan pipelines may disable) */
+  enableL4LLM?: boolean;
+}
+
+const DEFAULT_THRESHOLDS: [number, number, number, number, number] = [0.4, 0.55, 0.7, 0.82, 0.92];
+
 export class ContextWindow {
   /** 统一格式消息 */
   #messages: ContextMessage[] = [];
@@ -95,6 +105,12 @@ export class ContextWindow {
   #compactedSubmits = new Set();
   /** 日志器 */
   #logger;
+  /** L3 collapse threshold: messages before this index are collapsed in projection. -1 = inactive. */
+  #collapseThreshold = -1;
+  /** 5-layer compaction thresholds */
+  #thresholds: [number, number, number, number, number];
+  /** Whether L4 LLM summary is enabled */
+  #enableL4LLM: boolean;
 
   /**
    * 模型名 → 上下文窗口大小映射（token 数）。
@@ -202,9 +218,11 @@ export class ContextWindow {
   }
 
   /** @param [tokenBudget=24000] token 预算上限 */
-  constructor(tokenBudget = 24000) {
+  constructor(tokenBudget = 24000, compactionConfig?: CompactionConfig) {
     this.#tokenBudget = tokenBudget;
     this.#logger = Logger.getInstance();
+    this.#thresholds = compactionConfig?.thresholds ?? DEFAULT_THRESHOLDS;
+    this.#enableL4LLM = compactionConfig?.enableL4LLM ?? true;
   }
 
   // ─── 消息添加 API ──────────────────────────────────────
@@ -274,26 +292,117 @@ export class ContextWindow {
   // ─── 压缩 API ─────────────────────────────────────────
 
   /**
-   * 在每次 AI 调用前调用 — 根据 token 使用率执行分级压缩
+   * 在每次 AI 调用前调用 — 根据 token 使用率执行 5 层递进压缩
+   *
+   * 5 层策略:
+   *   L0 (≥0.40): Budget Reduction — getToolResultQuota 降档（隐式，不在此处执行）
+   *   L1 (≥0.55): Snip — 截断旧 tool result
+   *   L2 (≥0.70): Merge — 合并同角色消息、去重 submit 记录
+   *   L3 (≥0.82): Collapse — 读时投影 (#collapseThreshold)
+   *   L4 (≥0.92): Auto-compact — 需 LLM 调用，由 compactL4() 单独处理
+   *
+   * 单次调用可递进（如从 L1 升级到 L3），但不进入 L4（异步）。
    *
    * @returns } 压缩结果
    */
   compactIfNeeded() {
-    const usage = this.getTokenUsageRatio();
+    const [, t1, t2, t3] = this.#thresholds;
+    let usage = this.getTokenUsageRatio();
 
-    if (usage < 0.6 || this.#messages.length <= 4) {
+    if (usage < t1 || this.#messages.length <= 4) {
       return { level: 0, removed: 0 };
     }
 
-    if (usage < 0.8) {
-      return this.#compactL1();
+    // L1: Snip
+    let result = this.#compactL1();
+    usage = this.getTokenUsageRatio();
+    if (usage < t2) {
+      return result;
     }
 
-    if (usage < 0.95) {
-      return this.#compactL2();
+    // L2: Merge
+    const l2 = this.#compactL2Merge();
+    result = { level: Math.max(result.level, l2.level), removed: result.removed + l2.removed };
+    usage = this.getTokenUsageRatio();
+    if (usage < t3) {
+      return result;
     }
 
-    return this.#compactL3();
+    // L3: Collapse (set threshold for read-time projection)
+    const l3 = this.#compactL3Collapse();
+    return { level: Math.max(result.level, l3.level), removed: result.removed + l3.removed };
+  }
+
+  /**
+   * Check if L4 compaction is needed (async LLM summary).
+   * Should be called by AgentRuntime after compactIfNeeded() when usage is still high.
+   */
+  needsL4Compaction(): boolean {
+    const [, , , , t4] = this.#thresholds;
+    return this.#enableL4LLM && this.getTokenUsageRatio() >= t4;
+  }
+
+  /**
+   * L4 Auto-compact — LLM-based summary (async, called separately by AgentRuntime).
+   *
+   * Replaces old messages with a summary while preserving the last 2 rounds
+   * and key findings extracted from compacted submits.
+   */
+  async compactL4(aiProvider: {
+    chatWithTools: (
+      prompt: string,
+      opts: Record<string, unknown>
+    ) => Promise<{ text?: string; usage?: Record<string, unknown> }>;
+  }): Promise<{ level: 4; removed: number; usage?: Record<string, unknown> }> {
+    const recentCount = 6;
+    const recentMessages = this.#messages.slice(-recentCount);
+    if (recentMessages.length === 0) {
+      return { level: 4, removed: 0 };
+    }
+
+    const keyFindings = [...this.#compactedSubmits];
+    const summaryPrompt = [
+      '请将以下对话历史压缩为一段简洁的摘要。',
+      '保留关键的分析发现、文件路径和工具调用结果。',
+      keyFindings.length > 0 ? `已提交的候选: ${keyFindings.join(', ')}` : '',
+      '用中文输出摘要，不超过 500 字。',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    try {
+      const summary = await aiProvider.chatWithTools(summaryPrompt, {
+        messages: recentMessages,
+        toolChoice: 'none',
+      });
+
+      const oldLen = this.#messages.length;
+      const spliceEnd = Math.max(1, oldLen - recentCount);
+
+      if (spliceEnd <= 1) {
+        return { level: 4, removed: 0, usage: summary.usage };
+      }
+
+      this.#messages.splice(1, spliceEnd - 1);
+      this.#messages.splice(1, 0, {
+        role: 'user',
+        content: `[L4 Auto-compact summary]\n${summary.text || '[summary generation failed]'}`,
+      });
+
+      const removed = spliceEnd - 1;
+      this.#compactionLog.push(`L4: LLM summary replaced ${removed} messages`);
+      this.#logger.info(
+        `[ContextWindow] L4 auto-compact: removed ${removed} messages, ` +
+          `tokens≈${this.estimateTokens()}/${this.#tokenBudget}`
+      );
+
+      return { level: 4, removed, usage: summary.usage };
+    } catch (err) {
+      this.#logger.warn(
+        `[ContextWindow] L4 auto-compact failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return { level: 4, removed: 0 };
+    }
   }
 
   /**
@@ -335,106 +444,124 @@ export class ContextWindow {
   }
 
   /**
-   * L2 压缩: 删除历史轮次，保留 prompt + 摘要 + 最后 2 轮完整链
-   * 1. 找到倒数第 2 轮 assistant(toolCalls) 的起始位置
-   * 2. 提取 messages[1..start-1] 中的已提交候选
-   * 3. 用精简的摘要占位替换
+   * L2 Merge: 合并连续同角色消息 + 去重 submit 记录
+   * 保留语义完整性，不删除消息，只合并冗余。
    */
-  #compactL2() {
-    // 找到倒数第 2 个 tool round 的起始（保留最后 2 轮）
-    const roundStarts = this.#findAllToolRoundStarts();
-    if (roundStarts.length < 2) {
-      return { level: 2, removed: 0 };
-    }
+  #compactL2Merge() {
+    let merged = 0;
 
-    const keepFrom = roundStarts[roundStarts.length - 2]; // 保留从倒数第 2 轮开始
-    if (keepFrom <= 1) {
-      return { level: 2, removed: 0 };
-    }
-
-    return this.#spliceAndSummarize(keepFrom, 2);
-  }
-
-  /** L3 压缩: 激进模式 — 仅保留 prompt + 最后 1 轮 */
-  #compactL3() {
-    const lastRoundStart = this.#findLastToolRoundStart();
-    if (lastRoundStart <= 1) {
-      // 没有 tool round，保留 prompt + 最后一条消息
-      if (this.#messages.length > 3) {
-        const removed = this.#messages.splice(1, this.#messages.length - 2);
-        this.#compactionLog.push(`L3: removed ${removed.length} messages (no tool rounds)`);
-        return { level: 3, removed: removed.length };
+    // Pass 1: merge consecutive same-role text messages (not tool messages)
+    for (let i = this.#messages.length - 1; i >= 2; i--) {
+      const curr = this.#messages[i];
+      const prev = this.#messages[i - 1];
+      if (
+        curr.role === prev.role &&
+        curr.role !== 'tool' &&
+        !curr.toolCalls &&
+        !prev.toolCalls &&
+        curr.content &&
+        prev.content
+      ) {
+        prev.content = `${prev.content}\n---\n${curr.content}`;
+        this.#messages.splice(i, 1);
+        merged++;
       }
-      return { level: 3, removed: 0 };
     }
 
-    return this.#spliceAndSummarize(lastRoundStart, 3);
-  }
-
-  /**
-   * 执行 splice + summarize（L2/L3 共用）
-   * @param keepFrom 保留的消息起始位置
-   * @param level 压缩级别
-   *
-   * ⚠ 注意：此方法在 messages[1] 插入 role='user' 摘要，
-   *   与 messages[0]（也是 user）形成连续同角色消息。
-   *   Provider 层（GoogleGeminiProvider / ClaudeProvider）的 #convertMessages
-   *   已通过 pushOrMerge 自动合并连续同角色消息来处理此情况。
-   */
-  #spliceAndSummarize(keepFrom: number, level: number) {
-    const removed = this.#messages.slice(1, keepFrom);
-
-    // 从被移除的消息中提取已提交候选标题
-    for (const m of removed) {
-      if (m.role === 'assistant' && m.toolCalls) {
-        for (const tc of m.toolCalls) {
+    // Pass 2: deduplicate submit-related tool calls in older rounds
+    const seen = new Set<string>();
+    const lastRoundStart = this.#findLastToolRoundStart();
+    for (let i = 1; i < lastRoundStart && i < this.#messages.length; i++) {
+      const msg = this.#messages[i];
+      if (msg.role === 'assistant' && msg.toolCalls) {
+        for (const tc of msg.toolCalls) {
           if (tc.name === 'submit_knowledge' || tc.name === 'submit_with_check') {
-            this.#compactedSubmits.add(tc.args?.title || tc.args?.category || 'untitled');
+            const key = `${tc.name}:${tc.args?.title || ''}`;
+            if (seen.has(key)) {
+              const tcIndex = msg.toolCalls.indexOf(tc);
+              if (tcIndex >= 0 && msg.toolCalls.length > 1) {
+                msg.toolCalls.splice(tcIndex, 1);
+                merged++;
+              }
+            } else {
+              seen.add(key);
+            }
           }
         }
       }
     }
 
-    // 计算历史统计
-    const toolCallCount = removed.filter((m) => m.role === 'assistant' && m.toolCalls).length;
-    const toolResultCount = removed.filter((m) => m.role === 'tool').length;
+    if (merged > 0) {
+      this.#compactionLog.push(`L2-merge: merged ${merged} entries`);
+      this.#logger.info(
+        `[ContextWindow] L2 merge: ${merged} entries merged | ` +
+          `tokens≈${this.estimateTokens()}/${this.#tokenBudget}`
+      );
+    }
+    return { level: 2, removed: merged };
+  }
 
-    // Splice: 移除 messages[1..keepFrom-1]
-    this.#messages.splice(1, keepFrom - 1);
-
-    // 插入精简摘要（不包含控制指令）
-    const summaryParts = [
-      `[Context compressed: ${toolCallCount} tool rounds, ${toolResultCount} results removed]`,
-    ];
-    if (this.#compactedSubmits.size > 0) {
-      summaryParts.push(`[Submitted candidates: ${[...this.#compactedSubmits].join(', ')}]`);
+  /**
+   * L3 Collapse: 设置折叠阈值，使 toProjectedMessages() 返回折叠视图。
+   * 原始消息保留不变 (toMessages() 仍返回完整数据)。
+   */
+  #compactL3Collapse() {
+    const roundStarts = this.#findAllToolRoundStarts();
+    if (roundStarts.length < 2) {
+      return { level: 3, removed: 0 };
     }
 
-    this.#messages.splice(1, 0, {
-      role: 'user',
-      content: summaryParts.join('\n'),
-    });
+    // Collapse everything before the last 2 rounds
+    const keepFrom = roundStarts[roundStarts.length - 2];
+    if (keepFrom <= 1) {
+      return { level: 3, removed: 0 };
+    }
 
-    const removedCount = keepFrom - 1;
-    this.#compactionLog.push(
-      `L${level}: removed ${removedCount} messages (${toolCallCount} rounds)`
-    );
-    const afterTokens = this.estimateTokens();
-    const ratio = this.getTokenUsageRatio();
+    this.#collapseThreshold = keepFrom;
+    this.#compactionLog.push(`L3-collapse: threshold set at index ${keepFrom}`);
     this.#logger.info(
-      `[ContextWindow] L${level} compact: removed ${removedCount} messages (${toolCallCount} rounds), ` +
-        `kept last ${level === 2 ? 2 : 1} round(s) | ` +
-        `tokens≈${afterTokens}/${this.#tokenBudget} (${(ratio * 100).toFixed(1)}%)`
+      `[ContextWindow] L3 collapse: projection threshold at index ${keepFrom}, ` +
+        `${this.#messages.length - keepFrom} messages visible in projection`
     );
-
-    return { level, removed: removedCount };
+    return { level: 3, removed: 0 };
   }
 
   // ─── 查询 API ─────────────────────────────────────────
 
-  /** 导出消息（供 AI Provider 使用） */
+  /** 导出消息（供 AI Provider 使用 — 返回原始引用） */
   toMessages() {
     return this.#messages;
+  }
+
+  /**
+   * 导出折叠后的消息视图（供 LLM 调用使用）。
+   * 当 L3 collapse 激活时，将 #collapseThreshold 之前的消息
+   * 折叠为一条摘要行，减少 token 消耗。
+   * 当未激活时，返回原始消息。
+   */
+  toProjectedMessages(): ContextMessage[] {
+    if (this.#collapseThreshold < 0) {
+      return this.#messages;
+    }
+    if (this.#collapseThreshold >= this.#messages.length) {
+      return this.#messages;
+    }
+
+    const collapsedRegion = this.#messages.slice(1, this.#collapseThreshold);
+    const toolRounds = collapsedRegion.filter((m) => m.role === 'assistant' && m.toolCalls).length;
+    const toolResults = collapsedRegion.filter((m) => m.role === 'tool').length;
+    const submitTitles = [...this.#compactedSubmits];
+
+    const summaryParts = [`[Collapsed: ${toolRounds} tool rounds, ${toolResults} results]`];
+    if (submitTitles.length > 0) {
+      summaryParts.push(`[Submitted: ${submitTitles.join(', ')}]`);
+    }
+
+    return [
+      this.#messages[0],
+      { role: 'user' as const, content: summaryParts.join('\n') },
+      ...this.#messages.slice(this.#collapseThreshold),
+    ];
   }
 
   /** 获取消息数量 */
@@ -668,8 +795,8 @@ function limitSearchResult(result: unknown, maxMatches: number, maxChars: number
       }
       return copy;
     });
-    if (src.matches!.length > maxMatches) {
-      limited._note = `Showing ${maxMatches} of ${src.matches!.length} matches`;
+    if ((src.matches?.length ?? 0) > maxMatches) {
+      limited._note = `Showing ${maxMatches} of ${src.matches?.length ?? 0} matches`;
     }
   }
 
@@ -717,8 +844,8 @@ function limitSearchResultObj(
       }
       return copy;
     });
-    if (src.matches!.length > maxMatches) {
-      limited._note = `Showing ${maxMatches} of ${src.matches!.length} matches`;
+    if ((src.matches?.length ?? 0) > maxMatches) {
+      limited._note = `Showing ${maxMatches} of ${src.matches?.length ?? 0} matches`;
     }
   }
   return limited;
@@ -745,7 +872,7 @@ function limitFileContent(result: unknown, maxChars: number) {
       }
       truncated += `${line}\n`;
     }
-    limited.content = `${truncated}... [truncated at ${maxChars} chars, total ${src.content!.length}]`;
+    limited.content = `${truncated}... [truncated at ${maxChars} chars, total ${src.content?.length}]`;
   }
 
   return JSON.stringify(limited);

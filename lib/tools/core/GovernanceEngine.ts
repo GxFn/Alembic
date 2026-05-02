@@ -1,3 +1,4 @@
+import { validateToolInputV2 } from '#tools/core/SchemaValidator.js';
 import type { ToolServiceLocator } from '#tools/core/ToolCallContext.js';
 import type { ToolCallRequest } from '#tools/core/ToolContracts.js';
 import {
@@ -5,7 +6,6 @@ import {
   denyToolDecision,
   type ToolDecision,
 } from '#tools/core/ToolDecision.js';
-import { validateToolInput } from '#tools/core/ToolInputSchema.js';
 import type { ToolCapabilityManifest } from '../catalog/CapabilityManifest.js';
 
 export interface GovernanceEngineOptions {
@@ -48,7 +48,7 @@ export class GovernanceEngine {
       return discover;
     }
 
-    const plan = this.#plan(request, manifest);
+    const plan = await this.#plan(request, manifest);
     if (!plan.allowed) {
       return plan;
     }
@@ -101,15 +101,20 @@ export class GovernanceEngine {
     return allowToolDecision('discover');
   }
 
-  #plan(request: ToolCallRequest, manifest: ToolCapabilityManifest): ToolDecision {
+  async #plan(request: ToolCallRequest, manifest: ToolCapabilityManifest): Promise<ToolDecision> {
     if (!manifest.inputSchema || typeof manifest.inputSchema !== 'object') {
       return denyToolDecision('plan', `Capability '${manifest.id}' has no input schema`);
     }
-    const validationErrors = validateToolInput(request.args, manifest.inputSchema);
-    if (validationErrors.length > 0) {
+
+    const v2Result = await validateToolInputV2(
+      request.args,
+      manifest.inputSchema as Record<string, unknown>,
+      manifest.id
+    );
+    if (!v2Result.valid) {
       return denyToolDecision(
         'plan',
-        `Capability '${manifest.id}' input validation failed: ${validationErrors.join('; ')}`
+        `Capability '${manifest.id}' input validation failed: ${v2Result.errors.join('; ')}`
       );
     }
     return allowToolDecision('plan');

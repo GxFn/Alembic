@@ -18,6 +18,7 @@ import type { ExplorationTracker } from '../context/ExplorationTracker.js';
 import type { ActiveContext } from '../memory/ActiveContext.js';
 import type { MemoryCoordinator } from '../memory/MemoryCoordinator.js';
 import type { DiagnosticsCollector } from './DiagnosticsCollector.js';
+import type { ExitController } from './ExitController.js';
 import type { MessageAdapter } from './MessageAdapter.js';
 
 /** Tool call hook type */
@@ -72,6 +73,7 @@ interface LoopContextConfig {
   toolChoiceOverride?: string | null;
   abortSignal?: AbortSignal | null;
   diagnostics?: DiagnosticsCollector | null;
+  exitController?: ExitController | null;
 }
 
 export class LoopContext {
@@ -158,6 +160,9 @@ export class LoopContext {
   /** 统一诊断收集器 */
   diagnostics: DiagnosticsCollector | null;
 
+  /** ExitController — 统一退出决策 */
+  exitController: ExitController | null;
+
   constructor(config: LoopContextConfig) {
     this.messages = config.messages;
     this.tracker = (config.tracker || null) as ExplorationTracker | null;
@@ -177,6 +182,7 @@ export class LoopContext {
     this.toolChoiceOverride = config.toolChoiceOverride || null;
     this.abortSignal = (config.abortSignal || null) as AbortSignal | null;
     this.diagnostics = config.diagnostics || null;
+    this.exitController = config.exitController || null;
     this.loopStartTime = Date.now();
   }
 

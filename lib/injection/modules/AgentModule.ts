@@ -36,6 +36,11 @@ import { ToolRouter } from '#tools/core/ToolRouter.js';
 import { ALL_TOOLS, TOOL_CAPABILITY_MANIFESTS } from '#tools/handlers/index.js';
 import { WorkflowRegistry } from '#tools/workflow/WorkflowRegistry.js';
 import { ToolForge } from '../../agent/forge/ToolForge.js';
+import {
+  buildMcpToolCapabilities,
+  type McpToolDeclaration,
+} from '../../external/mcp/McpCapabilityProjection.js';
+import { McpToolAdapter, type McpToolExecutor } from '../../external/mcp/McpToolAdapter.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { AIRecallStrategy } from '../../service/skills/AIRecallStrategy.js';
 import { FeedbackStore } from '../../service/skills/FeedbackStore.js';
@@ -61,12 +66,33 @@ export function register(c: ServiceContainer) {
   c.singleton('workflowRegistry', () => new WorkflowRegistry());
   c.singleton('terminalSessionManager', () => new InMemoryTerminalSessionManager());
 
+  c.singleton('mcpToolDeclarations', (): McpToolDeclaration[] => []);
+
   c.singleton('toolRegistry', (ct: ServiceContainer) => {
     const registry = new ToolRegistry();
     registry.registerAll(ALL_TOOLS);
+
+    const catalog = ct.get('capabilityCatalog') as CapabilityCatalog;
+
+    // MCP tools: register manifests into main catalog + build adapter
+    const mcpDeclarations = ct.get('mcpToolDeclarations') as McpToolDeclaration[];
+    if (mcpDeclarations.length > 0) {
+      const { manifests: mcpManifests } = buildMcpToolCapabilities(mcpDeclarations);
+      for (const m of mcpManifests) {
+        if (!catalog.has(m.id)) {
+          catalog.register(m);
+        }
+      }
+    }
+    const mcpExecutor: McpToolExecutor =
+      (ct.singletons.mcpToolExecutor as McpToolExecutor) ??
+      (async (_name: string, _args: Record<string, unknown>) => {
+        throw new Error('MCP tool executor not configured');
+      });
+
     registry.setRouter(
       new ToolRouter({
-        catalog: ct.get('capabilityCatalog') as CapabilityCatalog,
+        catalog,
         adapters: [
           new InternalToolAdapter(registry),
           new DashboardOperationAdapter(DASHBOARD_OPERATION_HANDLERS),
@@ -76,6 +102,7 @@ export function register(c: ServiceContainer) {
           new SkillAdapter(),
           new MacSystemAdapter(),
           new WorkflowAdapter(ct.get('workflowRegistry') as WorkflowRegistry),
+          new McpToolAdapter(mcpExecutor),
         ],
         projectRoot: resolveProjectRoot(ct),
         dataRoot: resolveDataRoot(ct),

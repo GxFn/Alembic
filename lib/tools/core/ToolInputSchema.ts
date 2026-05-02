@@ -82,6 +82,7 @@ export function normalizeToolInput(
   return { args: normalized, changed, unmatchedKeys };
 }
 
+/** @deprecated Use `validateToolInputV2` from `SchemaValidator.ts` (ajv-based, full JSON Schema). */
 export function validateToolInput(
   args: Record<string, unknown>,
   schema: ToolParameterSchema
