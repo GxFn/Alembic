@@ -4,8 +4,8 @@ import type { BootstrapFile, IncrementalPlan } from '#types/workflows.js';
 import type {
   CandidateResults,
   DimensionStat,
-} from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
-import type { WorkflowResultPersistenceContext } from '#workflows/capabilities/persistence/reports/WorkflowReportTypes.js';
+} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
+import type { WorkflowResultPersistenceContext } from '#workflows/capabilities/persistence/WorkflowReportTypes.js';
 import { FileDiffPlanner } from '#workflows/capabilities/project-intelligence/FileDiffPlanner.js';
 
 const logger = Logger.getInstance();

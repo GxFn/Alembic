@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { WorkflowReport } from '#workflows/capabilities/persistence/reports/WorkflowReportTypes.js';
+import type { WorkflowReport } from '#workflows/capabilities/persistence/WorkflowReportTypes.js';
 
 export function getReportSessionId(report: WorkflowReport) {
   const session = report.session as { id?: unknown } | undefined;

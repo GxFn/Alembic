@@ -19,13 +19,13 @@ import type { ServiceContainer } from '#inject/ServiceContainer.js';
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
-import { runFullResetPolicy } from '#workflows/capabilities/cleanup/WorkflowCleanupPolicies.js';
 import {
   buildExternalMissionBriefing,
   createExternalWorkflowSession,
   getActiveExternalWorkflowSession,
-} from '#workflows/capabilities/execution/external-agent/ExternalMissionWorkflow.js';
+} from '#workflows/capabilities/execution/external/ExternalMissionWorkflow.js';
 import { ProjectIntelligenceCapability } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
+import { runFullResetPolicy } from '#workflows/capabilities/WorkflowCleanupPolicies.js';
 import { createExternalColdStartIntent } from '#workflows/cold-start/ColdStartIntent.js';
 import { buildColdStartWorkflowPlan } from '#workflows/cold-start/ColdStartPlan.js';
 import {
@@ -33,13 +33,11 @@ import {
   presentExternalColdStartResponse,
 } from '#workflows/cold-start/ColdStartPresenters.js';
 
-/** MCP handler context passed from McpServer */
+import type { WorkflowLogger } from '#workflows/shared/WorkflowTypes.js';
+
 interface McpContext {
   container: ServiceContainer;
-  logger: {
-    info(msg: string, meta?: Record<string, unknown>): void;
-    warn(msg: string, meta?: Record<string, unknown>): void;
-  };
+  logger: WorkflowLogger;
   startedAt?: number;
   [key: string]: unknown;
 }

@@ -5,7 +5,7 @@ import { resolveDataRoot } from '#shared/resolveProjectRoot.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import type { IncrementalPlan } from '#types/workflows.js';
-import type { BootstrapFileEntry } from '#workflows/capabilities/execution/internal-agent/agent-runs/BootstrapDimensionInputBuilder.js';
+import type { BootstrapFileEntry } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
 import type {
   BootstrapTaskManagerLike,
   BootstrapWorkflowContext,

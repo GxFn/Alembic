@@ -1,9 +1,11 @@
 import Logger from '#infra/logging/Logger.js';
-import { runCursorDelivery } from '#workflows/capabilities/completion/DeliveryCompletionStep.js';
-import { verifyDelivery } from '#workflows/capabilities/completion/DeliveryVerificationStep.js';
-import { refreshPanorama } from '#workflows/capabilities/completion/PanoramaCompletionStep.js';
-import { consolidateSemanticMemory } from '#workflows/capabilities/completion/SemanticMemoryCompletionStep.js';
-import { generateWiki } from '#workflows/capabilities/completion/WikiCompletionStep.js';
+import {
+  consolidateSemanticMemory,
+  generateWiki,
+  refreshPanorama,
+  runCursorDelivery,
+  verifyDelivery,
+} from '#workflows/capabilities/completion/CompletionSteps.js';
 import type {
   CompletionContextLike,
   CompletionLogger,

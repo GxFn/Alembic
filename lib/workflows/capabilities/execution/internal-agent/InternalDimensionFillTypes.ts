@@ -1,6 +1,6 @@
 import type { AgentService, SystemRunContextFactory } from '#agent/service/index.js';
-import type { BootstrapFileEntry } from '#workflows/capabilities/execution/internal-agent/agent-runs/BootstrapDimensionInputBuilder.js';
-import type { BootstrapProjectGraphLike } from '#workflows/capabilities/execution/internal-agent/context/BootstrapRuntimeInitializer.js';
+import type { BootstrapFileEntry } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
+import type { BootstrapProjectGraphLike } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
 
 interface BootstrapWorkflowSingletons {
   aiProvider?: {

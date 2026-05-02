@@ -7,9 +7,9 @@ import {
   runWorkflowCompletionFinalizer,
   type WorkflowCompletionFinalizerDependencies,
 } from '#workflows/capabilities/completion/WorkflowCompletionFinalizer.js';
-import { BOOTSTRAP_COMPLETE_ACTIONS } from '#workflows/capabilities/execution/external-agent/mission-briefing/BootstrapDimensionText.js';
-import { generateSkill as generateWorkflowSkill } from '#workflows/capabilities/execution/skills/WorkflowSkillCompletionCapability.js';
-import { saveDimensionCheckpoint } from '#workflows/capabilities/persistence/checkpoint/DimensionCheckpointStore.js';
+import { BOOTSTRAP_COMPLETE_ACTIONS } from '#workflows/capabilities/execution/external/MissionBriefingSupport.js';
+import { generateSkill as generateWorkflowSkill } from '#workflows/capabilities/execution/WorkflowSkillCompletionCapability.js';
+import { saveDimensionCheckpoint } from '#workflows/capabilities/persistence/DimensionCheckpoint.js';
 
 const logger = Logger.getInstance();
 
@@ -426,7 +426,7 @@ async function getActiveExternalWorkflowSession(
   sessionId?: string
 ): Promise<ExternalWorkflowSession | null> {
   const { getActiveExternalWorkflowSession } = await import(
-    '#workflows/capabilities/execution/external-agent/ExternalMissionWorkflow.js'
+    '#workflows/capabilities/execution/external/ExternalMissionWorkflow.js'
   );
   return getActiveExternalWorkflowSession(
     container as never,

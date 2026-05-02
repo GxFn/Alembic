@@ -2,8 +2,8 @@ import { describe, expect, test } from 'vitest';
 import {
   normalizeDimensionFindings,
   projectBootstrapDimensionAgentOutput,
-} from '#workflows/capabilities/execution/internal-agent/projections/BootstrapDimensionProjection.js';
-import { projectBootstrapSessionResult } from '#workflows/capabilities/execution/internal-agent/projections/BootstrapSessionProjection.js';
+  projectBootstrapSessionResult,
+} from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
 import type { AgentRunResult } from '../../lib/agent/service/index.js';
 
 function makeRunResult(partial: Partial<AgentRunResult>): AgentRunResult {

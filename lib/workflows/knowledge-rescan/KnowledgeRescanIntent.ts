@@ -1,6 +1,7 @@
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
+import { normalizeDimensionIds, type WorkflowExecutor } from '#workflows/shared/WorkflowTypes.js';
 
-export type KnowledgeRescanExecutor = 'internal-agent' | 'external-agent';
+export type KnowledgeRescanExecutor = WorkflowExecutor;
 
 export interface InternalKnowledgeRescanArgs extends RescanInput {
   skipAsyncFill?: boolean;
@@ -77,12 +78,4 @@ export function createExternalKnowledgeRescanIntent(
   };
 }
 
-function normalizeDimensionIds(dimensions: unknown): string[] | undefined {
-  if (!Array.isArray(dimensions)) {
-    return undefined;
-  }
-  const values = dimensions.filter(
-    (dimension): dimension is string => typeof dimension === 'string'
-  );
-  return values.length > 0 ? values : undefined;
-}
+// normalizeDimensionIds → imported from WorkflowTypes

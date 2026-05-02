@@ -200,6 +200,8 @@ interface AllPhasesOptions {
   sourceTag?: string;
   summaryPrefix?: string;
   dataRoot?: string;
+  /** Log prefix for phase messages (default: 'Bootstrap'). Use 'Rescan' for incremental scans. */
+  logPrefix?: string;
   [key: string]: unknown;
 }
 
@@ -1189,6 +1191,7 @@ export async function runAllPhases(
 ) {
   const warnings: string[] = [];
   const materialization = resolveProjectAnalysisMaterialization(options.materialize);
+  const lp = options.logPrefix || 'Bootstrap';
   const report: PhaseReport | null = options.generateReport
     ? { phases: {}, startTime: Date.now() }
     : null;

@@ -403,20 +403,13 @@ export class FileDiffSnapshotStore {
     diff: DiffResult,
     allDimIds: string[]
   ): AffectedDimensionResult {
-    const changeRatio =
-      (diff.added.length + diff.modified.length + diff.deleted.length) /
-      (diff.added.length +
-        diff.modified.length +
-        diff.deleted.length +
-        (diff.unchanged?.length || 0) || 1);
-
     // 变更超过 50% → 全量
-    if (changeRatio > FULL_REBUILD_THRESHOLD) {
+    if (diff.changeRatio > FULL_REBUILD_THRESHOLD) {
       return {
         mode: 'full',
         dimensions: allDimIds,
         skippedDimensions: [],
-        reason: `变更比例 ${(changeRatio * 100).toFixed(0)}% 超过阈值 (${(FULL_REBUILD_THRESHOLD * 100).toFixed(0)}%)，建议全量冷启动`,
+        reason: `变更比例 ${(diff.changeRatio * 100).toFixed(0)}% 超过阈值 (${(FULL_REBUILD_THRESHOLD * 100).toFixed(0)}%)，建议全量冷启动`,
       };
     }
 

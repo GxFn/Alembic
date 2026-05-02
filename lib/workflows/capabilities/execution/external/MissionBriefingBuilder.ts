@@ -30,20 +30,18 @@ import type {
   IncrementalPlan,
   LocalPackageModule,
 } from '#types/project-snapshot.js';
+import { buildEvidenceStarters } from '#workflows/capabilities/execution/external/EvidenceStarterBuilder.js';
 import {
-  EXAMPLE_TEMPLATES,
-  SUBMISSION_SCHEMA,
-} from '#workflows/capabilities/execution/external-agent/mission-briefing/BootstrapDimensionText.js';
-import { applyBriefingCompressionPolicy } from '#workflows/capabilities/execution/external-agent/mission-briefing/BriefingCompressionPolicy.js';
-import { buildEvidenceStarters } from '#workflows/capabilities/execution/external-agent/mission-briefing/EvidenceStarterBuilder.js';
-import { buildExecutionInstructions } from '#workflows/capabilities/execution/external-agent/mission-briefing/ExecutionInstructionBuilder.js';
-import {
+  applyBriefingCompressionPolicy,
   type BriefingProfile,
+  buildExecutionInstructions,
   createBriefingPlan,
+  EXAMPLE_TEMPLATES,
+  projectRescanEvidenceHints,
   type RescanBriefingInput,
   type ResponseBudget,
-} from '#workflows/capabilities/execution/external-agent/mission-briefing/MissionBriefingProfiles.js';
-import { projectRescanEvidenceHints } from '#workflows/capabilities/execution/external-agent/mission-briefing/RescanEvidenceProjector.js';
+  SUBMISSION_SCHEMA,
+} from '#workflows/capabilities/execution/external/MissionBriefingSupport.js';
 import { TierScheduler } from '#workflows/capabilities/planning/dimensions/TierScheduler.js';
 
 // ── 本地类型定义 ────────────────────────────────────────────
@@ -335,7 +333,7 @@ function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
   };
 }
 
-export { buildEvidenceStarters } from '#workflows/capabilities/execution/external-agent/mission-briefing/EvidenceStarterBuilder.js';
+export { buildEvidenceStarters } from '#workflows/capabilities/execution/external/EvidenceStarterBuilder.js';
 
 // ── AST 压缩 ────────────────────────────────────────────────
 

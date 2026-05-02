@@ -9,7 +9,7 @@ import type {
   PhaseReport,
   ProjectSnapshot,
 } from '#types/project-snapshot.js';
-import { buildInternalNextSteps } from '#workflows/capabilities/execution/external-agent/mission-briefing/BootstrapDimensionText.js';
+import { buildInternalNextSteps } from '#workflows/capabilities/execution/external/MissionBriefingSupport.js';
 import { buildLanguageExtension as buildProjectLanguageExtension } from '#workflows/capabilities/presentation/LanguageExtensionBuilder.js';
 import { summarizePanorama as summarizeProjectPanorama } from '#workflows/capabilities/presentation/PanoramaSummaryPresenter.js';
 import { inferTargetRole } from '#workflows/capabilities/presentation/TargetClassifier.js';
@@ -124,6 +124,18 @@ export function buildInternalColdStartReport({
   };
 }
 
+export interface InternalColdStartResponseInput {
+  cleanupResult: CleanupResult;
+  snapshot: ProjectSnapshot;
+  report: Record<string, unknown>;
+  targetFileMap: ColdStartTargetFileMap;
+  dimensions: DimensionDef[];
+  cachedSessionId: string | null;
+  taskCount: number;
+  bootstrapSession: { toJSON(): Record<string, unknown> } | null;
+  responseTimeMs: number;
+}
+
 export function presentInternalColdStartResponse({
   cleanupResult,
   snapshot,
@@ -134,17 +146,7 @@ export function presentInternalColdStartResponse({
   taskCount,
   bootstrapSession,
   responseTimeMs,
-}: {
-  cleanupResult: CleanupResult;
-  snapshot: ProjectSnapshot;
-  report: Record<string, unknown>;
-  targetFileMap: ColdStartTargetFileMap;
-  dimensions: DimensionDef[];
-  cachedSessionId: string | null;
-  taskCount: number;
-  bootstrapSession: { toJSON(): Record<string, unknown> } | null;
-  responseTimeMs: number;
-}) {
+}: InternalColdStartResponseInput) {
   const responseData: Record<string, unknown> = {
     cleanup: presentFullResetCleanup(cleanupResult),
     report,

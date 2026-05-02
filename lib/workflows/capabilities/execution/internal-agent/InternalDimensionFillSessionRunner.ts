@@ -6,33 +6,33 @@ import type {
 import Logger from '#infra/logging/Logger.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import {
+  type CandidateResults,
+  consumeBootstrapCandidateRelations,
+  consumeBootstrapDimensionError as consumeBootstrapDimensionErrorSideEffects,
+  consumeBootstrapDimensionResult,
+  consumeBootstrapSessionResult as consumeBootstrapSessionResultSideEffects,
+  consumeBootstrapTierReflection,
+  type DimensionCandidateData,
+  type DimensionStat,
+} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
+import {
   type BootstrapDimensionPlan,
   createBootstrapDimensionRuntimeInput,
   resolveBootstrapDimensionPlan as resolveBootstrapDimensionPlanData,
-} from '#workflows/capabilities/execution/internal-agent/agent-runs/BootstrapDimensionRuntimeBuilder.js';
-import { buildBootstrapSessionExecutionInput } from '#workflows/capabilities/execution/internal-agent/agent-runs/BootstrapSessionExecutionBuilder.js';
-import { consumeBootstrapCandidateRelations } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapCandidateRelationConsumer.js';
-import {
-  type CandidateResults,
-  consumeBootstrapDimensionError as consumeBootstrapDimensionErrorSideEffects,
-  consumeBootstrapDimensionResult,
-  type DimensionCandidateData,
-  type DimensionStat,
-} from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
-import { consumeBootstrapSessionResult as consumeBootstrapSessionResultSideEffects } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapSessionConsumer.js';
-import { consumeBootstrapTierReflection } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapTierReflectionConsumer.js';
-import { prepareBootstrapRescanState } from '#workflows/capabilities/execution/internal-agent/context/BootstrapRescanState.js';
-import type { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/context/BootstrapRuntimeInitializer.js';
-import type { InternalDimensionFillPreparation } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillPreparation.js';
+} from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import {
   projectAgentRunResult,
   projectBootstrapDimensionAgentOutput,
-} from '#workflows/capabilities/execution/internal-agent/projections/BootstrapDimensionProjection.js';
+} from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
+import { prepareBootstrapRescanState } from '#workflows/capabilities/execution/internal-agent/BootstrapRescanState.js';
+import type { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
+import { buildBootstrapSessionExecutionInput } from '#workflows/capabilities/execution/internal-agent/BootstrapSessionExecutionBuilder.js';
+import type { InternalDimensionFillPreparation } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillPreparation.js';
 import {
   applyRestoredDimensionState,
   resolveIncrementalSkippedDimensions,
   restoreCheckpointDimensions,
-} from '#workflows/capabilities/persistence/checkpoint/DimensionRestoreState.js';
+} from '#workflows/capabilities/persistence/DimensionCheckpoint.js';
 import { TierScheduler } from '#workflows/capabilities/planning/dimensions/TierScheduler.js';
 
 const logger = Logger.getInstance();

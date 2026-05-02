@@ -1,9 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
 import {
   consumeBootstrapCandidateRelations,
+  type DimensionCandidateData,
   extractBootstrapCandidateRelations,
-} from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapCandidateRelationConsumer.js';
-import type { DimensionCandidateData } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
+} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 
 function createDimensionCandidates(): Record<string, DimensionCandidateData> {
   return {

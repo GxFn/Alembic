@@ -3,9 +3,149 @@ import type {
   CompletionLogger,
   CompletionSessionLike,
   CompletionSessionStoreLike,
+  DeliveryPipelineLike,
+  LoadServiceContainer,
+  PanoramaServiceLike,
   PersistentMemoryDb,
+  WikiGeneratorLike,
   WorkflowSemanticMemoryConsolidationResult,
 } from '#workflows/capabilities/completion/WorkflowCompletionTypes.js';
+
+// ── DeliveryCompletionStep ──
+
+export async function runCursorDelivery({
+  getServiceContainer,
+  log,
+}: {
+  getServiceContainer: LoadServiceContainer;
+  log: CompletionLogger;
+}): Promise<void> {
+  try {
+    const container = await getServiceContainer();
+    const pipeline = container.services?.cursorDeliveryPipeline
+      ? (container.get?.('cursorDeliveryPipeline') as DeliveryPipelineLike | undefined)
+      : undefined;
+    if (!pipeline) {
+      return;
+    }
+
+    const deliveryResult = await pipeline.deliver();
+    log.info(
+      `[DimensionComplete] Auto Cursor Delivery complete — ` +
+        `A: ${deliveryResult.channelA?.rulesCount || 0} rules, ` +
+        `B: ${deliveryResult.channelB?.topicCount || 0} topics, ` +
+        `C: ${deliveryResult.channelC?.synced || 0} skills, ` +
+        `F: ${deliveryResult.channelF?.filesWritten || 0} agent files`
+    );
+  } catch (err: unknown) {
+    log.warn(
+      `[DimensionComplete] Auto CursorDelivery failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
+// ── DeliveryVerificationStep ──
+
+export async function verifyDelivery({
+  ctx,
+  log,
+}: {
+  ctx: CompletionContextLike;
+  log: CompletionLogger;
+}): Promise<import('#service/bootstrap/DeliveryVerifier.js').DeliveryVerification | null> {
+  try {
+    const { DeliveryVerifier } = await import('#service/bootstrap/DeliveryVerifier.js');
+    const { resolveDataRoot, resolveProjectRoot } = await import('#shared/resolveProjectRoot.js');
+    const projectRoot = resolveProjectRoot(ctx.container as never);
+    const dataRoot = resolveDataRoot(ctx.container as never) || projectRoot;
+    const verifier = new DeliveryVerifier(projectRoot, dataRoot);
+    const verification = verifier.verify();
+    if (!verification.allPassed) {
+      log.warn('[DimensionComplete] Delivery verification incomplete', {
+        failures: verification.failures,
+      });
+    } else {
+      log.info('[DimensionComplete] Delivery verification passed — all channels OK');
+    }
+    return verification;
+  } catch (err: unknown) {
+    log.warn(
+      `[DimensionComplete] DeliveryVerifier failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
+    );
+    return null;
+  }
+}
+
+// ── PanoramaCompletionStep ──
+
+export async function refreshPanorama({
+  getServiceContainer,
+  log,
+}: {
+  getServiceContainer: LoadServiceContainer;
+  log: CompletionLogger;
+}): Promise<void> {
+  try {
+    const container = await getServiceContainer();
+    const panoramaService = container.services?.panoramaService
+      ? (container.get?.('panoramaService') as PanoramaServiceLike | undefined)
+      : undefined;
+    if (!panoramaService || typeof panoramaService.rescan !== 'function') {
+      return;
+    }
+
+    await panoramaService.rescan();
+    const overview = await panoramaService.getOverview();
+    log.info(
+      `[DimensionComplete] Panorama refreshed — ${overview.moduleCount} modules, ${overview.gapCount} gaps`
+    );
+  } catch (err: unknown) {
+    log.warn(
+      `[DimensionComplete] Panorama refresh failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
+// ── WikiCompletionStep ──
+
+export async function generateWiki({
+  getServiceContainer,
+  projectRoot,
+  log,
+}: {
+  getServiceContainer: LoadServiceContainer;
+  projectRoot: string;
+  log: CompletionLogger;
+}): Promise<void> {
+  try {
+    const container = await getServiceContainer();
+    const { WikiGenerator } = await import('#service/wiki/WikiGenerator.js');
+    const moduleService = container.get?.('moduleService');
+    const knowledgeService = container.get?.('knowledgeService');
+    if (!moduleService || !knowledgeService) {
+      return;
+    }
+
+    const wikiDeps: import('#service/wiki/WikiGenerator.js').WikiDeps = {
+      projectRoot,
+      moduleService: moduleService as import('#service/wiki/WikiGenerator.js').WikiModuleService,
+      knowledgeService:
+        knowledgeService as import('#service/wiki/WikiGenerator.js').WikiKnowledgeService,
+      options: { mode: 'bootstrap' },
+    };
+    const wikiGenerator: WikiGeneratorLike = new WikiGenerator(wikiDeps);
+    const wikiResult = await wikiGenerator.generate();
+    log.info(
+      `[DimensionComplete] Auto Wiki generation: ${(wikiResult as { totalPages?: number }).totalPages || 0} pages`
+    );
+  } catch (err: unknown) {
+    log.warn(
+      `[DimensionComplete] Wiki generation failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
+// ── SemanticMemoryCompletionStep ──
 
 interface SemanticMemoryConsolidatorLike {
   consolidate(

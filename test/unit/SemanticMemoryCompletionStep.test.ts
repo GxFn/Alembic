@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import {
   consolidateSemanticMemory,
   type SemanticMemoryCompletionDependencies,
-} from '#workflows/capabilities/completion/SemanticMemoryCompletionStep.js';
+} from '#workflows/capabilities/completion/CompletionSteps.js';
 import type { WorkflowSemanticMemoryConsolidationResult } from '#workflows/capabilities/completion/WorkflowCompletionTypes.js';
 
 function makeResult(

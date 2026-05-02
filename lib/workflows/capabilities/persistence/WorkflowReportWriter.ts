@@ -5,18 +5,18 @@ import type { IncrementalPlan } from '#types/workflows.js';
 import type {
   CandidateResults,
   DimensionStat,
-} from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
-import type { SkillResults } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapSkillConsumer.js';
+  SkillResults,
+} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 import {
   writeWorkflowReportHistory,
   writeWorkflowReportHistoryWithWriteZone,
-} from '#workflows/capabilities/persistence/reports/WorkflowReportHistoryStore.js';
+} from '#workflows/capabilities/persistence/WorkflowReportHistoryStore.js';
 import type {
   PersistWorkflowResultOptions,
   WorkflowReport,
   WorkflowReportConsolidationResult,
   WorkflowResultPersistenceContext,
-} from '#workflows/capabilities/persistence/reports/WorkflowReportTypes.js';
+} from '#workflows/capabilities/persistence/WorkflowReportTypes.js';
 
 const logger = Logger.getInstance();
 

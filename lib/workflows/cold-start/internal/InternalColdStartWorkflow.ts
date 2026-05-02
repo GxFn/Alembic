@@ -52,13 +52,13 @@ import { applyTestDimensionFilter } from '#shared/test-mode.js';
 import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '#types/workflows.js';
-import { runFullResetPolicy } from '#workflows/capabilities/cleanup/WorkflowCleanupPolicies.js';
-import { cacheProjectAnalysisSession } from '#workflows/capabilities/execution/external-agent/session/WorkflowSessionCache.js';
+import { cacheProjectAnalysisSession } from '#workflows/capabilities/execution/external/SessionSupport.js';
 import {
   dispatchInternalDimensionExecution,
   startInternalDimensionExecutionSession,
 } from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
 import { ProjectIntelligenceCapability } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
+import { runFullResetPolicy } from '#workflows/capabilities/WorkflowCleanupPolicies.js';
 import {
   createInternalColdStartIntent,
   type InternalColdStartArgs,
@@ -74,17 +74,9 @@ import {
   presentInternalColdStartResponse,
 } from '#workflows/cold-start/ColdStartPresenters.js';
 
-// ─── Local type definitions (bootstrap-internal) ─────
+import type { WorkflowMcpContext } from '#workflows/shared/WorkflowTypes.js';
 
-interface BootstrapLogger {
-  info(...args: unknown[]): void;
-  warn(...args: unknown[]): void;
-  error(...args: unknown[]): void;
-}
-
-interface BootstrapMcpContext extends McpContext {
-  logger: BootstrapLogger;
-}
+type BootstrapMcpContext = WorkflowMcpContext & McpContext;
 
 /**
  * bootstrapKnowledge — 一键初始化知识库 (Skill-aware)
@@ -225,7 +217,7 @@ export async function runInternalColdStartWorkflow(
     dispatchInternalDimensionExecution({
       view: {
         snapshot,
-        ctx: ctx as BootstrapMcpContext & { logger: BootstrapLogger },
+        ctx: ctx as BootstrapMcpContext,
         bootstrapSession,
         targetFileMap,
         projectRoot,

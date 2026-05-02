@@ -6,8 +6,8 @@ import {
 import {
   consumeBootstrapSkills,
   type SkillResults,
-} from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapSkillConsumer.js';
-import type { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/context/BootstrapRuntimeInitializer.js';
+} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
+import type { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
 import type { InternalDimensionFillPreparation } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillPreparation.js';
 import {
   consumeInternalDimensionCandidateRelations,

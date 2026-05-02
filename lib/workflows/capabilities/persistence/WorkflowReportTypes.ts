@@ -4,8 +4,8 @@ import type { WorkflowSemanticMemoryConsolidationResult } from '#workflows/capab
 import type {
   CandidateResults,
   DimensionStat,
-} from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
-import type { SkillResults } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapSkillConsumer.js';
+  SkillResults,
+} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 import type { FileDiffPlanner } from '#workflows/capabilities/project-intelligence/FileDiffPlanner.js';
 
 export type WorkflowReportConsolidationResult = WorkflowSemanticMemoryConsolidationResult;

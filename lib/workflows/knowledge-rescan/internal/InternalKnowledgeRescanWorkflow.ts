@@ -24,11 +24,7 @@ import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '#types/workflows.js';
-import {
-  runForceRescanCleanPolicy,
-  runRescanCleanPolicy,
-} from '#workflows/capabilities/cleanup/WorkflowCleanupPolicies.js';
-import { cacheProjectAnalysisSession } from '#workflows/capabilities/execution/external-agent/session/WorkflowSessionCache.js';
+import { cacheProjectAnalysisSession } from '#workflows/capabilities/execution/external/SessionSupport.js';
 import {
   dispatchInternalDimensionExecution,
   startInternalDimensionExecutionSession,
@@ -43,6 +39,10 @@ import {
 } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
 import { ProjectIntelligenceCapability } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
 import {
+  runForceRescanCleanPolicy,
+  runRescanCleanPolicy,
+} from '#workflows/capabilities/WorkflowCleanupPolicies.js';
+import {
   createInternalKnowledgeRescanIntent,
   type InternalKnowledgeRescanArgs,
 } from '#workflows/knowledge-rescan/KnowledgeRescanIntent.js';
@@ -52,6 +52,7 @@ import {
   presentInternalKnowledgeRescanResponse,
 } from '#workflows/knowledge-rescan/KnowledgeRescanPresenters.js';
 import { buildKnowledgeRescanWorkflowPlan } from '#workflows/knowledge-rescan/KnowledgeRescanWorkflowPlan.js';
+import type { WorkflowMcpContext } from '#workflows/shared/WorkflowTypes.js';
 import { runEvolutionAudit } from '../../../agent/runs/evolution/EvolutionAgentRun.js';
 import {
   type EvolutionCandidatePlan,
@@ -60,16 +61,32 @@ import {
 } from '../../../service/evolution/RecipeImpactPlanner.js';
 import { SourceRefReconciler } from '../../../service/knowledge/SourceRefReconciler.js';
 
-// ── Local types ──────────────────────────────────────────
+type RescanMcpContext = WorkflowMcpContext & McpContext;
 
-interface RescanLogger {
-  info(...args: unknown[]): void;
-  warn(...args: unknown[]): void;
-  error(...args: unknown[]): void;
+// ── Helpers ──────────────────────────────────────────
+
+type SourceRefRepoT = InstanceType<
+  typeof import('../../../repository/sourceref/RecipeSourceRefRepository.js').RecipeSourceRefRepositoryImpl
+>;
+type KnowledgeRepoT = InstanceType<
+  typeof import('../../../repository/knowledge/KnowledgeRepository.impl.js').default
+>;
+
+interface KnowledgeRepos {
+  sourceRefRepo: SourceRefRepoT;
+  knowledgeRepo: KnowledgeRepoT;
 }
 
-interface RescanMcpContext extends McpContext {
-  logger: RescanLogger;
+function resolveKnowledgeRepos(container: { get(name: string): unknown }): KnowledgeRepos | null {
+  const sourceRefRepo = container.get('recipeSourceRefRepository');
+  const knowledgeRepo = container.get('knowledgeRepository');
+  if (!sourceRefRepo || !knowledgeRepo) {
+    return null;
+  }
+  return {
+    sourceRefRepo: sourceRefRepo as SourceRefRepoT,
+    knowledgeRepo: knowledgeRepo as KnowledgeRepoT,
+  };
 }
 
 // ── 主入口 ──────────────────────────────────────────────
@@ -152,23 +169,16 @@ export async function runInternalKnowledgeRescanWorkflow(
 
   let reconcileReport;
   try {
-    const sourceRefRepo = ctx.container.get('recipeSourceRefRepository');
-    const knowledgeRepo = ctx.container.get('knowledgeRepository');
-    const signalBus = ctx.container.get('signalBus');
-    if (sourceRefRepo && knowledgeRepo) {
+    const repos = resolveKnowledgeRepos(ctx.container);
+    if (repos) {
+      const signalBus = ctx.container.get('signalBus') as
+        | import('../../../infrastructure/signal/SignalBus.js').SignalBus
+        | undefined;
       const reconciler = new SourceRefReconciler(
         projectRoot,
-        sourceRefRepo as InstanceType<
-          typeof import('../../../repository/sourceref/RecipeSourceRefRepository.js').RecipeSourceRefRepositoryImpl
-        >,
-        knowledgeRepo as InstanceType<
-          typeof import('../../../repository/knowledge/KnowledgeRepository.impl.js').default
-        >,
-        {
-          signalBus: signalBus as
-            | import('../../../infrastructure/signal/SignalBus.js').SignalBus
-            | undefined,
-        }
+        repos.sourceRefRepo,
+        repos.knowledgeRepo,
+        { signalBus }
       );
       reconcileReport = await reconciler.reconcile({ force: true });
       await reconciler.repairRenames();
@@ -225,18 +235,13 @@ export async function runInternalKnowledgeRescanWorkflow(
 
   let candidatePlan: EvolutionCandidatePlan | null = null;
   try {
-    const sourceRefRepo = ctx.container.get('recipeSourceRefRepository');
-    const knowledgeRepo = ctx.container.get('knowledgeRepository');
-    if (sourceRefRepo && knowledgeRepo) {
+    const repos = resolveKnowledgeRepos(ctx.container);
+    if (repos) {
       const diff = _incrementalPlan?.diff ?? null;
       const impactPlanner = new RecipeImpactPlanner(
         projectRoot,
-        sourceRefRepo as InstanceType<
-          typeof import('../../../repository/sourceref/RecipeSourceRefRepository.js').RecipeSourceRefRepositoryImpl
-        >,
-        knowledgeRepo as InstanceType<
-          typeof import('../../../repository/knowledge/KnowledgeRepository.impl.js').default
-        >
+        repos.sourceRefRepo,
+        repos.knowledgeRepo
       );
       candidatePlan = await impactPlanner.plan(diff);
       ctx.logger.info('[Rescan-Internal] Impact planning complete', candidatePlan.summary);
@@ -256,17 +261,10 @@ export async function runInternalKnowledgeRescanWorkflow(
     const dispatchEvolutionAudit = async () => {
       try {
         const agentService = ctx.container.get('agentService');
-        const knowledgeRepo = ctx.container.get('knowledgeRepository');
-        if (agentService && knowledgeRepo) {
+        const repos = resolveKnowledgeRepos(ctx.container);
+        if (agentService && repos) {
           const auditRecipes = await Promise.all(
-            _candidatePlanRef.candidates.map((c) =>
-              toEvolutionAuditRecipe(
-                c,
-                knowledgeRepo as InstanceType<
-                  typeof import('../../../repository/knowledge/KnowledgeRepository.impl.js').default
-                >
-              )
-            )
+            _candidatePlanRef.candidates.map((c) => toEvolutionAuditRecipe(c, repos.knowledgeRepo))
           );
           const evolutionResult = await runEvolutionAudit({
             agentService:
@@ -438,7 +436,7 @@ export async function runInternalKnowledgeRescanWorkflow(
   if (executionDimensions.length > 0 && !intent.internalExecution?.skipAsyncFill) {
     const fillView: PipelineFillView = {
       snapshot,
-      ctx: ctx as RescanMcpContext & { logger: RescanLogger },
+      ctx: ctx as RescanMcpContext,
       bootstrapSession,
       targetFileMap,
       projectRoot,

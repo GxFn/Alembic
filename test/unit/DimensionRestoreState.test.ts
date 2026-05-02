@@ -6,8 +6,8 @@ import type {
   CandidateResults,
   DimensionCandidateData,
   DimensionStat,
-} from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
-import type { DimensionContext } from '#workflows/capabilities/execution/internal-agent/context/DimensionContext.js';
+} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
+import type { DimensionContext } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
 import {
   applyRestoredDimensionState,
   type DimensionCheckpoint,

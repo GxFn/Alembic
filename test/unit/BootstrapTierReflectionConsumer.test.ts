@@ -1,6 +1,8 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { DimensionStat } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
-import { consumeBootstrapTierReflection } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapTierReflectionConsumer.js';
+import {
+  consumeBootstrapTierReflection,
+  type DimensionStat,
+} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 
 describe('bootstrap tier reflection consumer', () => {

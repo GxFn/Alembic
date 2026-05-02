@@ -20,13 +20,9 @@ import type { RescanInput } from '#shared/schemas/mcp-tools.js';
 import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import {
-  runForceRescanCleanPolicy,
-  runRescanCleanPolicy,
-} from '#workflows/capabilities/cleanup/WorkflowCleanupPolicies.js';
-import {
   buildExternalMissionBriefing,
   createExternalWorkflowSession,
-} from '#workflows/capabilities/execution/external-agent/ExternalMissionWorkflow.js';
+} from '#workflows/capabilities/execution/external/ExternalMissionWorkflow.js';
 import {
   auditRecipesForRescan,
   buildKnowledgeRescanPlan,
@@ -35,6 +31,10 @@ import {
   syncKnowledgeStoreForRescan,
 } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
 import { ProjectIntelligenceCapability } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
+import {
+  runForceRescanCleanPolicy,
+  runRescanCleanPolicy,
+} from '#workflows/capabilities/WorkflowCleanupPolicies.js';
 import { createExternalKnowledgeRescanIntent } from '#workflows/knowledge-rescan/KnowledgeRescanIntent.js';
 import {
   presentExternalKnowledgeRescanEmptyProject,

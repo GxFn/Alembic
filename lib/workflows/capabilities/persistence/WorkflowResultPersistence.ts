@@ -1,16 +1,16 @@
 import Logger from '#infra/logging/Logger.js';
 import type { IncrementalPlan } from '#types/workflows.js';
-import type { DimensionStat } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
-import { clearDimensionCheckpoints } from '#workflows/capabilities/persistence/checkpoint/DimensionCheckpointStore.js';
+import type { DimensionStat } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
+import { clearDimensionCheckpoints } from '#workflows/capabilities/persistence/DimensionCheckpoint.js';
 import type {
   PersistWorkflowResultOptions,
   WorkflowResultPersistenceResult,
-} from '#workflows/capabilities/persistence/reports/WorkflowReportTypes.js';
-import { writeWorkflowReport } from '#workflows/capabilities/persistence/reports/WorkflowReportWriter.js';
+} from '#workflows/capabilities/persistence/WorkflowReportTypes.js';
+import { writeWorkflowReport } from '#workflows/capabilities/persistence/WorkflowReportWriter.js';
 import {
   createDefaultFileDiffPlanner,
   saveWorkflowSnapshot,
-} from '#workflows/capabilities/persistence/snapshots/WorkflowSnapshotStore.js';
+} from '#workflows/capabilities/persistence/WorkflowSnapshotStore.js';
 
 const logger = Logger.getInstance();
 
@@ -123,10 +123,10 @@ function logBootstrapSummary({
   totalTimeMs: number;
   totalTokenUsage: { input: number; output: number };
   totalToolCalls: number;
-  candidateResults: import('#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js').CandidateResults;
-  skillResults: import('#workflows/capabilities/execution/internal-agent/consumers/BootstrapSkillConsumer.js').SkillResults;
+  candidateResults: import('#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js').CandidateResults;
+  skillResults: import('#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js').SkillResults;
   consolidationResult:
-    | import('#workflows/capabilities/persistence/reports/WorkflowReportTypes.js').WorkflowReportConsolidationResult
+    | import('#workflows/capabilities/persistence/WorkflowReportTypes.js').WorkflowReportConsolidationResult
     | null;
   skippedDims: string[];
   incrementalSkippedDims: string[];

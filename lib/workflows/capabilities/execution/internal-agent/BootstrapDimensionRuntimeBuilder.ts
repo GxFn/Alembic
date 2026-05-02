@@ -14,19 +14,19 @@ import type {
   DimensionDef,
   GuardAudit,
 } from '#types/project-snapshot.js';
-import { buildEvidenceStarters } from '#workflows/capabilities/execution/external-agent/mission-briefing/EvidenceStarterBuilder.js';
+import { buildEvidenceStarters } from '#workflows/capabilities/execution/external/EvidenceStarterBuilder.js';
 import {
   type BootstrapFileEntry,
   buildBootstrapDimensionRunInput,
-} from '#workflows/capabilities/execution/internal-agent/agent-runs/BootstrapDimensionInputBuilder.js';
+} from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
 import {
   type BootstrapExistingRecipe,
   type BootstrapRescanContext,
   getBootstrapDimensionExistingRecipes,
   projectBootstrapDimensionRescanContext,
   projectBootstrapExistingRecipesForPrompt,
-} from '#workflows/capabilities/execution/internal-agent/context/BootstrapRescanState.js';
-import type { BootstrapProjectGraphLike } from '#workflows/capabilities/execution/internal-agent/context/BootstrapRuntimeInitializer.js';
+} from '#workflows/capabilities/execution/internal-agent/BootstrapRescanState.js';
+import type { BootstrapProjectGraphLike } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
 import type {
   BootstrapTerminalMode,
   BootstrapTerminalToolset,

@@ -1,9 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { DimensionStat } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
 import {
   consumeBootstrapSessionResult,
   consumeMissingBootstrapDimensions,
-} from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapSessionConsumer.js';
+  type DimensionStat,
+} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 import type { AgentRunResult } from '../../lib/agent/service/index.js';
 

@@ -1,4 +1,10 @@
-export type ColdStartExecutor = 'internal-agent' | 'external-agent';
+import {
+  normalizeDimensionIds,
+  normalizeStringArray,
+  type WorkflowExecutor,
+} from '#workflows/shared/WorkflowTypes.js';
+
+export type ColdStartExecutor = WorkflowExecutor;
 
 export interface InternalColdStartArgs {
   maxFiles?: number;
@@ -88,14 +94,4 @@ export function createExternalColdStartIntent(): ColdStartWorkflowIntent {
   };
 }
 
-function normalizeDimensionIds(dimensions: unknown): string[] | undefined {
-  const values = normalizeStringArray(dimensions);
-  return values && values.length > 0 ? values : undefined;
-}
-
-function normalizeStringArray(values: unknown): string[] | undefined {
-  if (!Array.isArray(values)) {
-    return undefined;
-  }
-  return values.filter((value): value is string => typeof value === 'string');
-}
+// normalizeDimensionIds, normalizeStringArray → imported from WorkflowTypes

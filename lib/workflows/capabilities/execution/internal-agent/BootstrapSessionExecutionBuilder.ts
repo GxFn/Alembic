@@ -1,12 +1,12 @@
 import type { AgentRunInput, AgentRunResult } from '#agent/service/index.js';
 import Logger from '#infra/logging/Logger.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
-import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/agent-runs/BootstrapDimensionRuntimeBuilder.js';
+import type { DimensionStat } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
+import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import {
   type BootstrapSessionChildRunPlan,
   buildBootstrapSessionRunInput,
-} from '#workflows/capabilities/execution/internal-agent/agent-runs/BootstrapSessionInputBuilder.js';
-import type { DimensionStat } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
+} from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
 
 const logger = Logger.getInstance();
 

@@ -41,6 +41,7 @@ export function buildKnowledgeRescanWorkflowPlan({
     generateReport: true,
     generateAstContext: intent.projectAnalysis.generateAstContext,
     incremental: intent.analysisMode === 'incremental',
+    logPrefix: 'Rescan',
   };
   const materialize: ProjectAnalysisMaterializationPlan = {
     codeEntityGraph: true,

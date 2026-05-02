@@ -46,6 +46,7 @@ export function buildColdStartWorkflowPlan({
     generateReport: true,
     generateAstContext: intent.projectAnalysis.generateAstContext,
     incremental: false,
+    logPrefix: 'Bootstrap',
   };
   const materialize: ProjectAnalysisMaterializationPlan = {
     codeEntityGraph: true,

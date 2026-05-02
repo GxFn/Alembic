@@ -2,8 +2,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
 import type { IncrementalPlan } from '#types/workflows.js';
-import type { CandidateResults } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapDimensionConsumer.js';
-import type { SkillResults } from '#workflows/capabilities/execution/internal-agent/consumers/BootstrapSkillConsumer.js';
+import type {
+  CandidateResults,
+  SkillResults,
+} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 import { buildWorkflowReport } from '#workflows/capabilities/persistence/reports/WorkflowReportWriter.js';
 import {
   persistWorkflowResult,

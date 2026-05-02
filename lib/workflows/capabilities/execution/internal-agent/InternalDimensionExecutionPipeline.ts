@@ -1,7 +1,7 @@
 import Logger from '#infra/logging/Logger.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
-import { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/context/BootstrapRuntimeInitializer.js';
+import { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
 import { finalizeInternalDimensionFill as finalizeInternalDimensionExecution } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
 import {
   emitInternalDimensionFillAiUnavailable as emitInternalDimensionExecutionAiUnavailable,
@@ -12,7 +12,7 @@ import type {
   BootstrapWorkflowContainer as InternalDimensionExecutionContainer,
   BootstrapWorkflowContext as InternalDimensionExecutionContext,
 } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillTypes.js';
-import { fillDimensionsMock } from '#workflows/capabilities/execution/internal-agent/mock/MockBootstrapPipeline.js';
+import { fillDimensionsMock } from '#workflows/capabilities/execution/internal-agent/MockBootstrapPipeline.js';
 
 const logger = Logger.getInstance();
 
@@ -81,6 +81,6 @@ export async function clearSnapshots(
   }
 }
 
-export { clearDimensionCheckpoints as clearCheckpoints } from '#workflows/capabilities/persistence/checkpoint/DimensionCheckpointStore.js';
+export { clearDimensionCheckpoints as clearCheckpoints } from '#workflows/capabilities/persistence/DimensionCheckpoint.js';
 
 export default runInternalDimensionExecution;

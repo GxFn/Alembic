@@ -5,12 +5,12 @@ import type {
   ProjectSnapshot,
 } from '#types/project-snapshot.js';
 import { toSessionCache } from '#types/snapshot-views.js';
-import { buildMissionBriefing } from '#workflows/capabilities/execution/external-agent/mission-briefing/MissionBriefingBuilder.js';
+import { buildMissionBriefing } from '#workflows/capabilities/execution/external/MissionBriefingBuilder.js';
 import type {
   BriefingProfile,
   RescanBriefingInput,
-} from '#workflows/capabilities/execution/external-agent/mission-briefing/MissionBriefingProfiles.js';
-import { getOrCreateSessionManager } from '#workflows/capabilities/execution/external-agent/session/WorkflowSessionManagerProvider.js';
+} from '#workflows/capabilities/execution/external/MissionBriefingSupport.js';
+import { getOrCreateSessionManager } from '#workflows/capabilities/execution/external/SessionSupport.js';
 import { buildLanguageExtension } from '#workflows/capabilities/presentation/LanguageExtensionBuilder.js';
 
 export type ExternalSessionContainer = Parameters<typeof getOrCreateSessionManager>[0];
