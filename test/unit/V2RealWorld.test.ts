@@ -12,6 +12,7 @@
  *   - 集成: DeltaCache / SearchCache / OutputCompressor / Capability
  */
 
+import { existsSync } from 'node:fs';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { DeltaCache } from '#tools/v2/cache/DeltaCache.js';
 import { SearchCache } from '#tools/v2/cache/SearchCache.js';
@@ -21,6 +22,7 @@ import { ToolRouterV2 } from '#tools/v2/router.js';
 import type { ToolCallV2, ToolContext, ToolResult } from '#tools/v2/types.js';
 
 const BILIDILI_ROOT = '/Users/gaoxuefeng/Documents/github/BiliDili';
+const HAS_BILIDILI = existsSync(BILIDILI_ROOT);
 
 /* ================================================================== */
 /*  测试基础设施                                                        */
@@ -95,7 +97,7 @@ function assertHasMeta(result: ToolResult) {
 /*  §1 code.search — 真实搜索质量                                       */
 /* ================================================================== */
 
-describe('code.search — LLM 使用场景', () => {
+describe.runIf(HAS_BILIDILI)('code.search — LLM 使用场景', () => {
   const router = new ToolRouterV2();
 
   test('LLM 场景: 找到 ViewController 类定义', async () => {
@@ -195,7 +197,7 @@ describe('code.search — LLM 使用场景', () => {
 /*  §2 code.read — 文件读取 + 大文件处理 + DeltaCache                    */
 /* ================================================================== */
 
-describe('code.read — LLM 使用场景', () => {
+describe.runIf(HAS_BILIDILI)('code.read — LLM 使用场景', () => {
   const router = new ToolRouterV2();
 
   test('LLM 场景: 读取 README.md 带行号', async () => {
@@ -279,7 +281,7 @@ describe('code.read — LLM 使用场景', () => {
 /*  §3 code.structure — 目录树                                          */
 /* ================================================================== */
 
-describe('code.structure — LLM 使用场景', () => {
+describe.runIf(HAS_BILIDILI)('code.structure — LLM 使用场景', () => {
   const router = new ToolRouterV2();
 
   test('LLM 场景: 获取项目概览 (depth=2)', async () => {
@@ -416,7 +418,7 @@ describe('code.write — 安全与功能', () => {
 /*  §5 code.outline — AST 骨架                                         */
 /* ================================================================== */
 
-describe('code.outline — LLM 使用场景', () => {
+describe.runIf(HAS_BILIDILI)('code.outline — LLM 使用场景', () => {
   const router = new ToolRouterV2();
 
   test('无 AstAnalyzer 时优雅降级', async () => {
@@ -446,7 +448,7 @@ describe('code.outline — LLM 使用场景', () => {
 /*  §6 terminal.exec — 命令执行 + 安全                                  */
 /* ================================================================== */
 
-describe('terminal.exec — LLM 使用场景', () => {
+describe.runIf(HAS_BILIDILI)('terminal.exec — LLM 使用场景', () => {
   const router = new ToolRouterV2();
 
   test('LLM 场景: 列出 Swift 文件', async () => {
@@ -1020,7 +1022,7 @@ describe('graph — Mock DI 完整流程', () => {
 /*  §11 Router 高级特性: 并发控制 + parseToolCall + Capability             */
 /* ================================================================== */
 
-describe('Router 高级特性', () => {
+describe.runIf(HAS_BILIDILI)('Router 高级特性', () => {
   test('parseToolCall: JSON 字符串参数', () => {
     const router = new ToolRouterV2();
     const result = router.parseToolCall(
@@ -1133,7 +1135,7 @@ describe('Router 高级特性', () => {
 /*  §12 LLM 完整工作流模拟                                               */
 /* ================================================================== */
 
-describe('LLM 完整工作流: 分析 BiliDili 项目', () => {
+describe.runIf(HAS_BILIDILI)('LLM 完整工作流: 分析 BiliDili 项目', () => {
   const router = new ToolRouterV2();
 
   test('完整流程: 结构 → 搜索 → 读取 → 记忆 → 自省', async () => {
@@ -1203,7 +1205,7 @@ describe('LLM 完整工作流: 分析 BiliDili 项目', () => {
 /*  §13 token 估算与输出质量                                             */
 /* ================================================================== */
 
-describe('输出质量: token 估算合理性', () => {
+describe.runIf(HAS_BILIDILI)('输出质量: token 估算合理性', () => {
   const router = new ToolRouterV2();
 
   test('code.read token 估算与内容成正比', async () => {

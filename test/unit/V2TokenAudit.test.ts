@@ -5,6 +5,7 @@
  * 捕获输出大小、token 估算、信噪比，输出审计报告。
  */
 
+import { existsSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import { DeltaCache } from '#tools/v2/cache/DeltaCache.js';
 import { SearchCache } from '#tools/v2/cache/SearchCache.js';
@@ -13,6 +14,7 @@ import { ToolRouterV2 } from '#tools/v2/router.js';
 import type { ToolContext, ToolResult } from '#tools/v2/types.js';
 
 const BILIDILI_ROOT = '/Users/gaoxuefeng/Documents/github/BiliDili';
+const HAS_BILIDILI = existsSync(BILIDILI_ROOT);
 
 function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
@@ -64,7 +66,7 @@ function recordAudit(tool: string, action: string, scenario: string, result: Too
   });
 }
 
-describe('Token 效率审计 — BiliDili 真实数据', () => {
+describe.runIf(HAS_BILIDILI)('Token 效率审计 — BiliDili 真实数据', () => {
   const router = new ToolRouterV2();
 
   /* ────────── code.search ────────── */
