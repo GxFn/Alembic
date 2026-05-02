@@ -270,7 +270,7 @@ export async function consumeBootstrapDimensionResult({
 
   for (const tc of producerResult.toolCalls || []) {
     const tool = tc.tool || tc.name;
-    if (tool === 'submit_knowledge' || tool === 'submit_with_check') {
+    if (tool === 'knowledge') {
       const args = tc.params || tc.args || {};
       const candidateSummary = {
         title: String(args.title || ''),
@@ -545,7 +545,7 @@ export function extractBootstrapCandidateRelations(
     const toolCalls = dimData?.producerResult?.toolCalls || [];
     for (const toolCall of toolCalls) {
       const toolName = toolCall.tool || toolCall.name;
-      if (toolName !== 'submit_knowledge' && toolName !== 'submit_with_check') {
+      if (toolName !== 'knowledge') {
         continue;
       }
       const params = toolCall.params || toolCall.args || {};

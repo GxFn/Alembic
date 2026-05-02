@@ -212,7 +212,7 @@ export class RulesGenerator {
       '',
       '- `alembic_bootstrap` — Cold-start: analyze the project and generate initial knowledge entries',
       '- `alembic_search({ query })` — Search knowledge base (BM25 + semantic)',
-      '- `alembic_submit_knowledge` — Submit a knowledge candidate (strict validation)',
+      '- `alembic_knowledge({ action: "submit" })` — Submit a knowledge candidate (strict validation)',
       '- `alembic_guard` — Run compliance review on current changes',
       '- `alembic_task` — Task & decision management (prime/create/claim/close/record_decision)',
       '- `alembic_panorama` — Project panorama (overview/module/gaps/health)',

@@ -50,8 +50,20 @@ interface ActiveContextLike {
   };
 }
 
-/** 工具调用参数 (门控模块内部使用) */
+/** 工具调用参数 (门控模块内部使用, V2 资源导向格式) */
 interface ToolCallArgsLike {
+  action?: string;
+  params?: {
+    path?: string;
+    filePath?: string;
+    filePaths?: string[];
+    patterns?: string[];
+    pattern?: string;
+    query?: string;
+    type?: string;
+    entity?: string;
+    [key: string]: unknown;
+  };
   filePath?: string;
   pattern?: string;
   query?: string;
@@ -193,52 +205,61 @@ export function buildAnalysisReport(
     const result = call.result;
 
     switch (tool) {
-      case 'read_project_file':
-        if (args.filePath) {
-          referencedFiles.add(args.filePath);
-        }
-        break;
-      case 'search_project_code':
-        if (args.pattern || args.query) {
-          searchQueries.push((args.pattern || args.query)!);
-        }
-        if (typeof result === 'string') {
-          const fileMatches = result.match(
-            /(?:^|\n)([\w/.-]+\.(?:go|mod|sum|py|pyi|java|kt|kts|js|ts|jsx|tsx|mjs|cjs|swift|m|h|c|cpp|cc|hpp|cs|rb|rs|sql|json|yaml|yml|toml|xml|html|css|scss|less|sh|md|txt|gradle|properties|proto|vue|svelte|graphql|cfg|conf|ini|env|lock|rst))(?::\d+)?/gi
-          );
-          if (fileMatches) {
-            for (const m of fileMatches) {
-              const clean = m.trim().replace(/:\d+$/, '').replace(/^\n/, '');
-              if (clean.length > 2 && clean.length < 120) {
-                referencedFiles.add(clean);
+      case 'code': {
+        const p = args.params || args;
+        if (args.action === 'read') {
+          const fp = p.path || p.filePath || (args as ToolCallArgsLike).filePath;
+          if (fp && typeof fp === 'string') {
+            referencedFiles.add(fp);
+          }
+          if (Array.isArray(p.filePaths)) {
+            for (const f of p.filePaths) {
+              referencedFiles.add(f);
+            }
+          }
+        } else if (args.action === 'search') {
+          const pat =
+            p.pattern ||
+            p.query ||
+            (args as ToolCallArgsLike).pattern ||
+            (args as ToolCallArgsLike).query;
+          if (pat) {
+            searchQueries.push(pat as string);
+          }
+          if (typeof result === 'string') {
+            const fileMatches = result.match(
+              /(?:^|\n)([\w/.-]+\.(?:go|mod|sum|py|pyi|java|kt|kts|js|ts|jsx|tsx|mjs|cjs|swift|m|h|c|cpp|cc|hpp|cs|rb|rs|sql|json|yaml|yml|toml|xml|html|css|scss|less|sh|md|txt|gradle|properties|proto|vue|svelte|graphql|cfg|conf|ini|env|lock|rst))(?::\d+)?/gi
+            );
+            if (fileMatches) {
+              for (const m of fileMatches) {
+                const clean = m.trim().replace(/:\d+$/, '').replace(/^\n/, '');
+                if (clean.length > 2 && clean.length < 120) {
+                  referencedFiles.add(clean);
+                }
               }
             }
           }
         }
         break;
-      case 'get_class_info':
-        if (args.className) {
-          classesExplored.push(args.className);
+      }
+      case 'graph': {
+        const p = args.params || args;
+        const entity =
+          p.entity ||
+          (args as ToolCallArgsLike).className ||
+          (args as ToolCallArgsLike).protocolName;
+        if (entity && typeof entity === 'string') {
+          classesExplored.push(entity);
           if (projectGraph) {
-            const info = projectGraph.getClassInfo(args.className);
+            const info = projectGraph.getClassInfo(entity) || projectGraph.getProtocolInfo(entity);
             if (info?.filePath) {
               referencedFiles.add(info.filePath);
             }
           }
         }
         break;
-      case 'get_protocol_info':
-        if (args.protocolName && projectGraph) {
-          const info = projectGraph.getProtocolInfo(args.protocolName);
-          if (info?.filePath) {
-            referencedFiles.add(info.filePath);
-          }
-        }
-        break;
-      case 'get_file_summary':
-        if (args.filePath) {
-          referencedFiles.add(args.filePath);
-        }
+      }
+      default:
         break;
     }
   }
@@ -419,7 +440,7 @@ function buildQualityScores(
 
   const suggestions: string[] = [];
   if (scores.depthScore < 50) {
-    suggestions.push('Need more read_project_file to examine code');
+    suggestions.push('Need more code({ action: "read" }) to examine code');
   }
   if (scores.evidenceScore < 50) {
     suggestions.push('Findings lack file-level evidence');
@@ -516,9 +537,9 @@ function analysisQualityGateV1(report: GateableReport, options: GateOptions = {}
 export function buildRetryPrompt(reason: string) {
   const hints = {
     'Analysis too short':
-      '你的分析不够深入。请使用更多工具（get_class_info、read_project_file、search_project_code）查看实际代码，输出至少 500 字的分析。',
+      '你的分析不够深入。请使用更多工具（graph({ action: "query" })、code({ action: "read" })、code({ action: "search" })）查看实际代码，输出至少 500 字的分析。',
     'Too few file references':
-      '你的分析缺少代码引用。请使用 get_class_info 和 read_project_file 查看至少 3 个相关文件，并在分析中引用具体文件和行号。',
+      '你的分析缺少代码引用。请使用 graph({ action: "query" }) 和 code({ action: "read" }) 查看至少 3 个相关文件，并在分析中引用具体文件和行号。',
     'Analysis lacks structure':
       '请将分析组织成结构化的段落，使用编号列表或标题来区分不同的发现。每个发现应包含具体的文件路径和代码位置。',
   };
@@ -599,7 +620,7 @@ interface EvolutionToolCallRecord {
  * Evolution Gate 评估器 — 面向 PipelineStrategy gate.evaluator
  *
  * 检查 Evolution Agent 是否对所有现有 Recipe 做出了决策:
- * - evolved (submit_knowledge with supersedes)
+ * - evolved (knowledge with supersedes)
  * - deprecated (confirm_deprecation)
  * - skipped (skip_evolution)
  *
@@ -625,7 +646,7 @@ export function evolutionGateEvaluator(
   for (const tc of toolCalls) {
     const tool = tc.tool || tc.name;
 
-    if (tool === 'submit_knowledge' && tc.args?.supersedes) {
+    if (tool === 'knowledge' && tc.args?.supersedes) {
       processedIds.add(String(tc.args.supersedes));
     }
 

@@ -30,7 +30,7 @@ import type { DistilledContext } from './memory-flush-contract.js';
 
 /** 工具特化压缩策略 — 不同工具返回不同结构，压缩时保留最有价值的部分 */
 const TOOL_COMPRESS_STRATEGIES = {
-  search_project_code(result: unknown) {
+  code(result: unknown) {
     if (typeof result !== 'object' || result === null) {
       return String(result).substring(0, 600);
     }
@@ -40,38 +40,37 @@ const TOOL_COMPRESS_STRATEGIES = {
       line: number;
     }>;
     const batchResults = (r.batchResults || {}) as Record<string, Record<string, unknown>>;
-    const lines: string[] = [];
-    if (matches.length > 0) {
-      lines.push(`搜索到 ${matches.length} 个匹配`);
-      const fileGroups: Record<string, number[]> = {};
-      for (const m of matches) {
-        if (!fileGroups[m.file]) {
-          fileGroups[m.file] = [];
-        }
-        fileGroups[m.file].push(m.line);
-      }
-      for (const [file, lineNums] of Object.entries(fileGroups).slice(0, 8)) {
-        lines.push(`  ${file}: L${lineNums.slice(0, 3).join(',')}`);
-      }
-    }
-    for (const [pattern, sub] of Object.entries(batchResults).slice(0, 5)) {
-      const subMatches = (Array.isArray(sub.matches) ? sub.matches : []) as Array<{
-        file: string;
-        line: number;
-      }>;
-      lines.push(`  [${pattern}] ${subMatches.length} 个匹配`);
-      for (const m of subMatches.slice(0, 3)) {
-        lines.push(`    ${m.file}:${m.line}`);
-      }
-    }
-    return lines.join('\n');
-  },
 
-  read_project_file(result: unknown) {
-    if (typeof result !== 'object' || result === null) {
-      return String(result).substring(0, 600);
+    // search action: 有 matches 或 batchResults
+    if (matches.length > 0 || Object.keys(batchResults).length > 0) {
+      const lines: string[] = [];
+      if (matches.length > 0) {
+        lines.push(`搜索到 ${matches.length} 个匹配`);
+        const fileGroups: Record<string, number[]> = {};
+        for (const m of matches) {
+          if (!fileGroups[m.file]) {
+            fileGroups[m.file] = [];
+          }
+          fileGroups[m.file].push(m.line);
+        }
+        for (const [file, lineNums] of Object.entries(fileGroups).slice(0, 8)) {
+          lines.push(`  ${file}: L${lineNums.slice(0, 3).join(',')}`);
+        }
+      }
+      for (const [pattern, sub] of Object.entries(batchResults).slice(0, 5)) {
+        const subMatches = (Array.isArray(sub.matches) ? sub.matches : []) as Array<{
+          file: string;
+          line: number;
+        }>;
+        lines.push(`  [${pattern}] ${subMatches.length} 个匹配`);
+        for (const m of subMatches.slice(0, 3)) {
+          lines.push(`    ${m.file}:${m.line}`);
+        }
+      }
+      return lines.join('\n');
     }
-    const r = result as Record<string, unknown>;
+
+    // read action: 有 files 数组或 content 字段
     if (Array.isArray(r.files)) {
       const files = r.files as Array<{ content?: string; path?: string }>;
       const lines = [`读取 ${files.length} 个文件`];
@@ -81,17 +80,35 @@ const TOOL_COMPRESS_STRATEGIES = {
       }
       return lines.join('\n');
     }
-    const content = (r.content as string) || String(result);
-    const totalLines = content.split('\n').length;
-    return `文件 ${(r.path as string) || '?'} (${totalLines} 行)`;
+    if (r.content) {
+      const content = (r.content as string) || String(result);
+      const totalLines = content.split('\n').length;
+      return `文件 ${(r.path as string) || '?'} (${totalLines} 行)`;
+    }
+
+    // structure/outline action: 有 entries/children
+    const entries = r.entries || r.children || [];
+    if (Array.isArray(entries) && entries.length > 0) {
+      return `目录结构: ${entries.length} 个条目`;
+    }
+
+    return defaultCompress(result);
   },
 
-  get_class_info(result: unknown) {
+  graph(result: unknown) {
     if (typeof result !== 'object' || result === null) {
       return String(result).substring(0, 600);
     }
     const r = result as Record<string, unknown>;
-    const lines = [`类 ${(r.className as string) || '?'}`];
+
+    // hierarchy query: 有 classes 或 hierarchy 数组
+    const classes = r.classes || r.hierarchy;
+    if (Array.isArray(classes)) {
+      return `类层级: ${classes.length} 个类`;
+    }
+
+    // class/protocol query: 有 className 等
+    const lines = [`类 ${(r.className as string) || (r.protocolName as string) || '?'}`];
     if (r.superClass) {
       lines.push(`  继承: ${r.superClass}`);
     }
@@ -105,15 +122,6 @@ const TOOL_COMPRESS_STRATEGIES = {
       lines.push(`  属性数: ${r.properties.length}`);
     }
     return lines.join('\n');
-  },
-
-  get_class_hierarchy(result: unknown) {
-    if (typeof result !== 'object' || result === null) {
-      return String(result).substring(0, 600);
-    }
-    const r = result as Record<string, unknown>;
-    const classes = r.classes || r.hierarchy || [];
-    return `类层级: ${Array.isArray(classes) ? classes.length : 0} 个类`;
   },
 
   get_project_overview(result: unknown) {
@@ -778,70 +786,76 @@ export class ActiveContext {
     const envelope = isToolResultEnvelope(result) ? result : null;
 
     switch (toolName) {
-      case 'search_project_code': {
-        meta.resultType = 'search';
-        const matches = Array.isArray(resultObj?.matches) ? (resultObj.matches as unknown[]) : [];
-        const batchResults = resultObj?.batchResults as
-          | Record<string, Record<string, unknown>>
-          | undefined;
-        const totalMatches = batchResults
-          ? Object.values(batchResults).reduce(
-              (s, br) => s + (Array.isArray(br.matches) ? br.matches.length : 0),
-              0
-            )
-          : matches.length;
-        meta.keyFacts.push(`${totalMatches} matches found`);
-        if (isNew) {
-          meta.keyFacts.push('new files discovered');
+      case 'code': {
+        const action = (args?.action as string) || '';
+        if (action === 'search') {
+          meta.resultType = 'search';
+          const matches = Array.isArray(resultObj?.matches) ? (resultObj.matches as unknown[]) : [];
+          const batchResults = resultObj?.batchResults as
+            | Record<string, Record<string, unknown>>
+            | undefined;
+          const totalMatches = batchResults
+            ? Object.values(batchResults).reduce(
+                (s, br) => s + (Array.isArray(br.matches) ? br.matches.length : 0),
+                0
+              )
+            : matches.length;
+          meta.keyFacts.push(`${totalMatches} matches found`);
+          if (isNew) {
+            meta.keyFacts.push('new files discovered');
+          }
+        } else if (action === 'read') {
+          meta.resultType = 'file_content';
+          const fp = (args?.filePath as string) || '';
+          const fps = (args?.filePaths as string[]) || [];
+          const allPaths = fp ? [fp, ...fps] : fps;
+          meta.keyFacts.push(`read ${allPaths.length} file(s)`);
+        } else if (action === 'structure') {
+          meta.resultType = 'structure';
+          meta.keyFacts.push(`list ${(args?.directory as string) || '/'}`);
+        } else {
+          meta.resultType = action || 'code';
+          meta.keyFacts.push(`code.${action}`);
         }
         break;
       }
-      case 'read_project_file': {
-        meta.resultType = 'file_content';
-        const fp = (args?.filePath as string) || '';
-        const fps = (args?.filePaths as string[]) || [];
-        const allPaths = fp ? [fp, ...fps] : fps;
-        meta.keyFacts.push(`read ${allPaths.length} file(s)`);
+      case 'knowledge': {
+        const action = (args?.action as string) || '';
+        if (action === 'submit') {
+          meta.resultType = 'submit';
+          meta.gotNewInfo = true;
+          const status = resultObj ? (resultObj.status as string) || 'ok' : 'ok';
+          const title = (args?.title as string) || '(untitled)';
+          meta.keyFacts.push(`submit "${title}": ${status}`);
+        } else {
+          meta.resultType = 'query';
+          meta.keyFacts.push(`knowledge.${action}`);
+        }
         break;
       }
-      case 'submit_knowledge':
-      case 'submit_with_check': {
-        meta.resultType = 'submit';
-        meta.gotNewInfo = true;
-        const status = resultObj ? (resultObj.status as string) || 'ok' : 'ok';
-        const title = (args?.title as string) || '(untitled)';
-        meta.keyFacts.push(`submit "${title}": ${status}`);
-        break;
-      }
-      case 'list_project_structure': {
-        meta.resultType = 'structure';
-        meta.keyFacts.push(`list ${(args?.directory as string) || '/'}`);
-        break;
-      }
-      case 'get_class_info':
-      case 'get_class_hierarchy':
-      case 'get_protocol_info':
-      case 'get_method_overrides':
-      case 'get_category_map': {
+      case 'graph': {
         meta.resultType = 'ast_query';
         const target =
           (args?.className as string) ||
           (args?.protocolName as string) ||
           (args?.name as string) ||
           '';
-        meta.keyFacts.push(`${toolName}(${target})`);
+        meta.keyFacts.push(`graph(${target})`);
         break;
       }
-      case 'get_project_overview': {
-        meta.resultType = 'overview';
-        meta.keyFacts.push('project overview');
+      case 'terminal': {
+        meta.resultType = 'terminal';
+        meta.keyFacts.push('terminal exec');
         break;
       }
-      case 'semantic_search_code':
-      case 'get_file_summary':
-      case 'get_previous_analysis': {
-        meta.resultType = 'query';
-        meta.keyFacts.push(toolName);
+      case 'memory': {
+        meta.resultType = 'memory';
+        meta.keyFacts.push(`memory.${(args?.action as string) || ''}`);
+        break;
+      }
+      case 'meta': {
+        meta.resultType = 'meta';
+        meta.keyFacts.push(`meta.${(args?.action as string) || ''}`);
         break;
       }
       default: {

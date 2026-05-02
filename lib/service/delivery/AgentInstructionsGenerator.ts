@@ -45,8 +45,8 @@ const MCP_TOOLS_SUMMARY = [
     desc: 'Knowledge CRUD (operation: list/get/insights/confirm_usage)',
   },
   {
-    name: 'alembic_submit_knowledge',
-    desc: 'Submit a knowledge candidate (strict validation)',
+    name: 'alembic_knowledge',
+    desc: 'Knowledge CRUD & submission (operation: submit/submit_batch/get/list)',
   },
   { name: 'alembic_guard', desc: 'Code compliance check (single file or batch audit)' },
   { name: 'alembic_structure', desc: 'Project structure discovery (targets/files/metadata)' },

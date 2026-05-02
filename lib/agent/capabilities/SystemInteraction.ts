@@ -21,11 +21,11 @@ export class SystemInteraction extends Capability {
 你可以在本地环境中执行结构化终端命令、写入文件、探索项目，并读取受治理的本机 macOS 状态。
 
 能力:
-1. **终端命令**: terminal_run 执行结构化命令，参数为 { bin, args, env, cwd, timeoutMs, network, filesystem, interactive, session }
+1. **终端命令**: terminal 执行结构化命令，参数为 { bin, args, env, cwd, timeoutMs, network, filesystem, interactive, session }
    - interactive 默认为 "never"；当前不开放需要人工输入的交互式命令
    - env 默认为单次命令作用域；只有 persistent session 显式声明 envPersistence="explicit" 时才复用显式 env metadata
    - terminal_script 执行非交互 /bin/sh 脚本；脚本会先写入 artifact，并且每次都需要确认
-   - terminal_shell 执行受治理的 /bin/sh -lc 命令字符串；适合必须使用管道/重定向/命令替换的场景
+   - terminal({ mode: "shell" }) 执行受治理的 /bin/sh -lc 命令字符串；适合必须使用管道/重定向/命令替换的场景
    - terminal_pty 通过 PTY wrapper 观察一次性 shell 命令 transcript；可提供有限的一次性 stdin，发送后立即关闭，不开放持续交互
    - terminal_session_status / terminal_session_close / terminal_session_cleanup 可查看、关闭或清理 persistent session metadata
 2. **文件写入**: write_project_file 创建/覆盖项目内文件
@@ -53,9 +53,9 @@ export class SystemInteraction extends Capability {
 
   get tools() {
     return [
-      'terminal_run',
+      'terminal',
+      'code',
       'terminal_script',
-      'terminal_shell',
       'terminal_pty',
       'terminal_session_close',
       'terminal_session_status',
@@ -66,8 +66,6 @@ export class SystemInteraction extends Capability {
       'mac_screenshot',
       'write_project_file',
       'get_environment_info',
-      'search_project_code',
-      'read_project_file',
       'list_project_structure',
       'get_project_overview',
       'get_file_summary',

@@ -127,7 +127,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '跨模块选取核心文件（覆盖不同功能区域），逐一阅读，验证：命名模式是否全局一致、注释风格（MARK 段落/文档注释格式/行内注释习惯）、文件内代码组织顺序（属性→初始化→公开方法→私有方法）、import 排列规则（系统框架/第三方/项目内 分组情况）、access control 使用惯例（public/internal/private/fileprivate 的选择策略）',
         output: '每条规范有跨模块证据支撑，含具体 文件名:行号 引用',
-        tools: ['read_file 逐个阅读不同模块的代表性文件'],
+        tools: ['code({ action: "read" }) 逐个阅读不同模块的代表性文件'],
       },
       {
         name: '偏差与例外检测',
@@ -191,7 +191,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读每种模式的代表性实现文件，提取项目的标准写法：线程安全策略（Singleton 的初始化方式）、创建约束（Factory 的参数校验）、生命周期管理（Delegate 的弱引用）、注册/注销对称性（Observer 的移除时机）',
         output: '每种模式的规范实现骨架（含线程安全、生命周期、约束规则）+ 多个实现实例的代码引用',
-        tools: ['read_file 阅读模式核心实现文件'],
+        tools: ['code({ action: "read" }) 阅读模式核心实现文件'],
       },
       {
         name: '反模式与滥用检测',
@@ -243,7 +243,10 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '浏览项目根目录和核心子目录，识别分层架构类型（MVC/MVVM/Clean Architecture/Feature-based/Monorepo）。阅读构建配置（Package.swift/build.gradle/package.json/Cargo.toml/go.mod/pyproject.toml/CMakeLists.txt）确认模块划分。绘制层次关系：哪些目录属于哪一层、各层的职责边界',
         output: '架构层次图：层名→目录映射→职责定义→层间依赖方向（上层→下层，禁止反向）',
-        tools: ['list_dir 浏览目录树（至少两层深度）', 'read_file 阅读构建配置文件确认模块划分'],
+        tools: [
+          'list_dir 浏览目录树（至少两层深度）',
+          'code({ action: "read" }) 阅读构建配置文件确认模块划分',
+        ],
       },
       {
         name: '依赖规则提取',
@@ -252,7 +255,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         output: '依赖规则矩阵（层A可→层B, 层A禁→层C）+ 依赖注入机制说明 + 违规实例（如有）',
         tools: [
           'grep_search 搜索 import/include/require/from 语句',
-          'read_file 阅读 DI/组装/启动入口文件',
+          'code({ action: "read" }) 阅读 DI/组装/启动入口文件',
         ],
       },
       {
@@ -317,7 +320,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '选取典型业务流程（如网络请求→解析→展示），阅读完整调用链，追踪错误从底层到表现层的传播路径：底层抛出什么错误→中间层如何转换/包装→表现层如何展示给用户。关注统一错误转换层（如 Error Mapper/Handler）、重试策略（指数退避/有限次数）、降级方案（缓存兜底/默认值）',
         output: '错误传播全链路图（底层→中间层→表现层）+ 重试策略说明 + 降级机制说明',
-        tools: ['read_file 沿调用链逐层阅读错误处理代码'],
+        tools: ['code({ action: "read" }) 沿调用链逐层阅读错误处理代码'],
       },
       {
         name: '薄弱点检测',
@@ -383,7 +386,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心 ViewModel/Store 文件，深入分析：数据绑定方式（单向/双向）、Input→Output 转换模式、事件传播路径（用户操作→ViewModel→Service→Repository 的完整链路）、状态持久化策略（内存/磁盘/远程同步）。特别关注 Output 类型约束（如 Driver 不能 error、Relay 必须有初始值）',
         output: '数据绑定标准模式：输入→转换→输出→UI 的完整链路图 + Output 类型约束规则',
-        tools: ['read_file 阅读核心 ViewModel/Store/Reducer 文件'],
+        tools: ['code({ action: "read" }) 阅读核心 ViewModel/Store/Reducer 文件'],
       },
       {
         name: '订阅泄漏检测',
@@ -445,7 +448,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
           '区分硬规则（CI 强制执行、lint 报错、pre-commit 拦截）和软指南（文档建议但无自动化检查）。阅读 CI 配置(.github/workflows/)、lint 配置(biome.json/.eslintrc/swiftlint.yml/rustfmt.toml/.golangci.yml/flake8/mypy.ini)、pre-commit/husky 配置，提取被工具链强制的规则',
         output: '规则强度矩阵：硬规则（工具强制）vs 软指南（文档建议）+ 每条规则的强制机制',
         tools: [
-          'read_file 阅读 CI 配置和 lint 配置文件',
+          'code({ action: "read" }) 阅读 CI 配置和 lint 配置文件',
           'grep_search 搜索 lint/format/check 相关命令',
         ],
       },
@@ -510,7 +513,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心并发文件，提取项目的线程安全约定：共享可变状态的保护方式(Lock/Actor/Mutex/串行队列/synchronized)、UI 线程保障机制(MainActor/main thread dispatch/runOnUiThread)、跨线程数据传递方式(值拷贝/不可变引用/Channel/Queue)、线程安全标注或约束(Sendable/ThreadSafe/@WorkerThread)',
         output: '线程安全策略矩阵：各场景的标准做法 + 标准代码骨架',
-        tools: ['read_file 阅读包含并发逻辑的核心文件'],
+        tools: ['code({ action: "read" }) 阅读包含并发逻辑的核心文件'],
       },
       {
         name: '竞态与死锁风险检测',
@@ -573,7 +576,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心网络封装文件，追踪一个典型 API 请求的完整生命周期：API 定义→请求构建→Header/Token 注入→错误码映射→响应模型解析→结果包装(Result/Observable)。提取认证管理(Token 存储/刷新/过期处理)、超时/重试策略、响应缓存机制',
         output: '标准 API 请求全链路文档 + 认证流程 + 重试策略 + 缓存策略',
-        tools: ['read_file 沿请求链路逐层阅读网络封装文件'],
+        tools: ['code({ action: "read" }) 沿请求链路逐层阅读网络封装文件'],
       },
       {
         name: '安全与健壮性检测',
@@ -634,7 +637,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心 UI 组件和 ViewController/Page，提取：布局代码的标准写法（约束创建方式/布局方法命名）、样式管理策略（颜色/字体/间距是否有统一管理）、主题/Dark Mode 适配方式、复用组件的使用约定（Cell/Header/Footer 的标准实现）',
         output: 'UI 组件标准实现模式：布局写法 + 样式管理 + 主题适配 + 组件复用约定',
-        tools: ['read_file 阅读核心 ViewController/Component/Cell 实现文件'],
+        tools: ['code({ action: "read" }) 阅读核心 ViewController/Component/Cell 实现文件'],
       },
       {
         name: 'UI 一致性检测',
@@ -690,7 +693,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         output: '测试基础设施全景：框架选型 + 目录结构 + 覆盖率要求 + CI 集成方式',
         tools: [
           'file_search 搜索 *Test*/*Spec*/*test* 文件',
-          'read_file 阅读测试配置(jest.config/vitest.config/pytest.ini)',
+          'code({ action: "read" }) 阅读测试配置(jest.config/vitest.config/pytest.ini)',
         ],
       },
       {
@@ -698,7 +701,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心测试文件，提取项目的测试约定：测试命名规则(test_功能_场景_预期/describe-it 结构)、Mock 创建方式(手写 Mock/框架 Mock/Protocol Mock)、Fixture/测试数据管理(Factory 模式/JSON 文件/Builder)、arrange-act-assert 结构、异步测试写法',
         output: '测试模式规范：命名约定 + Mock 策略 + Fixture 管理 + 异步测试写法',
-        tools: ['read_file 阅读不同模块的测试文件（覆盖 Mock/Fixture/异步场景）'],
+        tools: ['code({ action: "read" }) 阅读不同模块的测试文件（覆盖 Mock/Fixture/异步场景）'],
       },
       {
         name: '测试覆盖评估',
@@ -762,7 +765,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读认证模块核心文件，分析：Token 刷新策略(主动刷新/被动刷新/双 Token 机制)、敏感数据存储方式(加密方式/安全等级)、网络安全配置(HTTPS 强制/证书校验/Certificate Pinning)、输入校验(防 XSS/SQL 注入/CSRF Token)',
         output: '安全实现详图：Token 刷新流程 + 存储安全策略 + 网络安全配置 + 输入校验规则',
-        tools: ['read_file 阅读认证/Token 管理/安全配置核心文件'],
+        tools: ['code({ action: "read" }) 阅读认证/Token 管理/安全配置核心文件'],
       },
       {
         name: '安全漏洞扫描',
@@ -831,7 +834,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心性能优化文件，分析各策略的实现细节：缓存策略(淘汰算法/容量限制/过期机制)、列表分页(页码/游标/预加载阈值)、图片管线(下载→解码→缩放→缓存的链路)、启动优化(预热/懒加载/延迟任务)',
         output: '性能优化实现详图：各策略的标准实现 + 参数配置 + 使用约束',
-        tools: ['read_file 阅读缓存管理器/列表优化/图片管线核心文件'],
+        tools: ['code({ action: "read" }) 阅读缓存管理器/列表优化/图片管线核心文件'],
       },
       {
         name: '性能瓶颈检测',
@@ -899,7 +902,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读日志封装文件，提取项目的日志约定：日志分级规则(verbose/debug/info/warning/error 各自的使用场景)、日志分类系统(Category/Tag/Module 标签)、格式约定(是否使用结构化日志)、Release 构建策略(哪些级别会在 Release 中输出、敏感信息过滤)',
         output: '日志规范矩阵：各级别的使用场景 + 分类标签体系 + Release 安全策略',
-        tools: ['read_file 阅读 Logger 封装/Category 定义/日志配置文件'],
+        tools: ['code({ action: "read" }) 阅读 Logger 封装/Category 定义/日志配置文件'],
       },
       {
         name: '日志合规检测',
@@ -971,7 +974,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心 Swift/ObjC 文件，提取项目的语言惯用法约定：Protocol-Oriented vs 继承的选择准则、值类型(struct) vs 引用类型(class) 的边界、final class 的强制/可选策略、enum 命名空间的使用模式、Optional 解包策略(guard let/if let/强制解包的场景限制)、闭包简写约定($0 vs 命名参数)',
         output: '项目 Swift 惯用法矩阵：各场景的标准做法 + 禁止做法',
-        tools: ['read_file 阅读展示多种语言特性的核心文件'],
+        tools: ['code({ action: "read" }) 阅读展示多种语言特性的核心文件'],
       },
       {
         name: '过时模式检测',
@@ -1029,7 +1032,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
           '搜索项目的模块系统和类型基础设施：模块格式(ESM/CommonJS/UMD)、路径别名(tsconfig paths/#imports)、barrel exports(index.ts 重导出策略)、TypeScript 严格模式配置(strict/noImplicitAny/strictNullChecks)、类型定义文件(.d.ts)分布',
         output: '模块+类型体系全景：模块格式 + 路径别名 + barrel 策略 + TS 严格度配置',
         tools: [
-          'read_file 阅读 tsconfig.json/package.json 的关键配置',
+          'code({ action: "read" }) 阅读 tsconfig.json/package.json 的关键配置',
           'grep_search 搜索 import/export/type/interface 模式',
         ],
       },
@@ -1038,7 +1041,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心类型定义文件和业务代码，提取项目的 TypeScript 约定：泛型使用模式(工具类型/条件类型/映射类型)、类型守卫策略(is/in/typeof/instanceof)、联合类型 vs enum 的选择、模板字面量类型的活用、any/unknown 的使用边界(何时允许 any、何时必须 unknown)、类型断言(as)的使用约束',
         output: '类型策略矩阵：各场景的推荐方案 + 禁止方案 + 代码骨架示例',
-        tools: ['read_file 阅读核心 .d.ts 文件和展示泛型使用的业务文件'],
+        tools: ['code({ action: "read" }) 阅读核心 .d.ts 文件和展示泛型使用的业务文件'],
       },
       {
         name: '类型安全薄弱检测',
@@ -1090,14 +1093,17 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '搜索项目的 Python 包结构和开发工具链：包管理(pip/poetry/uv/conda)、构建配置(pyproject.toml/setup.py/setup.cfg)、__init__.py 的导出策略(__all__ 定义)、虚拟环境管理、类型检查工具(mypy/pyright/pytype 配置)',
         output: '包结构+工具链全景：包管理方式 + 目录组织 + 类型检查配置 + 开发工具链',
-        tools: ['list_dir 浏览项目包结构', 'read_file 阅读 pyproject.toml/setup.py/mypy.ini'],
+        tools: [
+          'list_dir 浏览项目包结构',
+          'code({ action: "read" }) 阅读 pyproject.toml/setup.py/mypy.ini',
+        ],
       },
       {
         name: 'Python 惯用法提取',
         action:
           '阅读核心 Python 文件，提取项目的 Python 约定：dataclass vs pydantic vs NamedTuple 的选择策略、类型标注完整度(是否全量标注/关键接口标注)、装饰器使用模式(自定义装饰器/框架装饰器)、上下文管理器(with 语句的使用场景)、生成器/迭代器模式、f-string vs format 的选择',
         output: 'Python 惯用法矩阵：数据类选型 + 类型标注策略 + 装饰器约定 + 其他惯用法',
-        tools: ['read_file 阅读核心 Python 模块文件'],
+        tools: ['code({ action: "read" }) 阅读核心 Python 模块文件'],
       },
       {
         name: '反模式检测',
@@ -1156,7 +1162,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心 Java/Kotlin 文件，提取项目约定：泛型使用模式(泛型约束/通配符/类型擦除处理)、Stream API vs 传统循环的选择、Kotlin coroutine 使用约定(Dispatchers 选择/结构化并发/Flow vs Channel)、null 安全策略(Java: @Nullable/@NonNull/Optional; Kotlin: ?/!!的限制)、sealed class/enum 的使用场景',
         output: 'JVM 惯用法矩阵：各场景的标准做法 + null 安全约定 + 异步策略',
-        tools: ['read_file 阅读核心 Java/Kotlin 业务文件'],
+        tools: ['code({ action: "read" }) 阅读核心 Java/Kotlin 业务文件'],
       },
       {
         name: '反模式检测',
@@ -1208,14 +1214,17 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '搜索项目的 Go 模块结构：go.mod(模块路径/Go 版本/依赖管理)、标准布局(cmd/pkg/internal/api)、包命名约定(单数 vs 复数/缩写规则)、internal 包的使用(封装边界)、接口定义位置(消费方定义 vs 提供方定义)',
         output: '模块结构全景：标准布局 + 包组织约定 + internal 封装策略 + 接口定义位置约定',
-        tools: ['read_file 阅读 go.mod', 'list_dir 浏览项目目录结构（cmd/pkg/internal 等）'],
+        tools: [
+          'code({ action: "read" }) 阅读 go.mod',
+          'list_dir 浏览项目目录结构（cmd/pkg/internal 等）',
+        ],
       },
       {
         name: 'Go 惯用法提取',
         action:
           '阅读核心 Go 文件，提取项目的 Go 约定：接口设计(小接口/单方法接口/embed 组合)、错误处理链(error wrapping with %w/sentinel errors/custom error types)、context 传递(首参数 context/超时控制/取消传播)、goroutine 启动约定(errgroup/WaitGroup/context cancel)、defer 使用模式',
         output: 'Go 惯用法矩阵：错误处理约定 + 接口设计规范 + goroutine 管理策略',
-        tools: ['read_file 阅读核心 Go 业务文件（选取展示多种惯用法的文件）'],
+        tools: ['code({ action: "read" }) 阅读核心 Go 业务文件（选取展示多种惯用法的文件）'],
       },
       {
         name: '反模式检测',
@@ -1271,7 +1280,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         output: '所有权策略全景：智能指针选型 + 生命周期管理策略 + crate 组织方式',
         tools: [
           'grep_search 搜索 Arc/Rc/Box/lifetime/Clone/unsafe 关键词',
-          'read_file 阅读 Cargo.toml',
+          'code({ action: "read" }) 阅读 Cargo.toml',
         ],
       },
       {
@@ -1279,7 +1288,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心 Rust 文件，提取项目约定：trait 设计(small traits/blanket implements/trait objects vs generics)、错误处理(thiserror vs anyhow/? 操作符链/自定义 Error 类型层次)、derive 宏使用约定(哪些 trait 需要 derive)、enum 活用(Option/Result 的自定义扩展)、迭代器链 vs 命令式循环的选择',
         output: 'Rust 惯用法矩阵：trait 设计规范 + 错误处理链 + derive 约定 + 迭代器使用策略',
-        tools: ['read_file 阅读核心 Rust 业务文件和 lib.rs'],
+        tools: ['code({ action: "read" }) 阅读核心 Rust 业务文件和 lib.rs'],
       },
       {
         name: 'unsafe 与质量检测',
@@ -1328,14 +1337,17 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '搜索项目的 .NET 结构：.csproj(SDK/TargetFramework/NuGet 依赖)、项目类型(ASP.NET Core/Console/Worker/MAUI)、namespace 组织约定(与目录对齐/自定义规则)、启动配置(Program.cs/Startup.cs/Host Builder)、Nullable reference types 开启状态',
         output: '.NET 项目结构全景：SDK 版本 + 项目类型 + namespace 约定 + nullable 启用状态',
-        tools: ['read_file 阅读 .csproj/Program.cs/appsettings.json', 'list_dir 浏览项目结构'],
+        tools: [
+          'code({ action: "read" }) 阅读 .csproj/Program.cs/appsettings.json',
+          'list_dir 浏览项目结构',
+        ],
       },
       {
         name: 'C# 惯用法提取',
         action:
           '阅读核心 C# 文件，提取项目约定：LINQ 使用模式(方法语法 vs 查询语法/延迟执行的理解)、async/await 模式(ConfigureAwait/async void 禁用/ValueTask vs Task)、DI 注册约定(AddScoped/AddTransient/AddSingleton 的选择策略)、record/readonly struct 的使用场景、pattern matching 活用度',
         output: 'C# 惯用法矩阵：LINQ 约定 + async 策略 + DI 注册模式 + 现代 C# 特性采用情况',
-        tools: ['read_file 阅读核心 C# 业务文件和 DI 注册文件'],
+        tools: ['code({ action: "read" }) 阅读核心 C# 业务文件和 DI 注册文件'],
       },
       {
         name: '反模式检测',
@@ -1404,7 +1416,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心组件和 Hooks 文件，提取项目约定：组件拆分粒度(容器/展示/Layout/原子组件)、Props 设计(interface vs type/children 使用/默认值策略)、自定义 Hook 的封装模式(数据获取/表单/定时器)、副作用管理(useEffect 依赖规则/清理函数约定)、性能优化(React.memo/useMemo/useCallback 的使用准则)',
         output: '组件模式规范：组件拆分策略 + Props 设计约定 + Hooks 封装模式 + 性能优化规则',
-        tools: ['read_file 阅读核心 Page/Component/Hook 文件'],
+        tools: ['code({ action: "read" }) 阅读核心 Page/Component/Hook 文件'],
       },
       {
         name: '反模式检测',
@@ -1467,7 +1479,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心 SFC 和 Composable 文件，提取项目约定：Composable 封装模式(何时抽取为 composable)、ref vs reactive 选择策略、Props/Emits 定义方式(TypeScript interface/runtime 声明)、v-model 组件绑定约定、provide/inject 的使用场景、插槽(slot)使用模式',
         output: '组件模式规范：Composable 封装策略 + 响应式选型规则 + Props 设计约定',
-        tools: ['read_file 阅读核心 Vue SFC 和 Composable 文件'],
+        tools: ['code({ action: "read" }) 阅读核心 Vue SFC 和 Composable 文件'],
       },
       {
         name: '反模式检测',
@@ -1527,7 +1539,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心 Spring 组件，提取项目约定：Controller 层约定(响应包装/参数校验/异常处理器)、Service 层约定(事务管理/幂等性)、Repository 层约定(JPA vs MyBatis/查询方法命名)、中间件链(Interceptor→Filter→AOP 的使用分工)、配置管理约定(@Value vs @ConfigurationProperties)',
         output: 'Spring 框架模式规范：各层职责+约定 + 中间件链 + 配置管理',
-        tools: ['read_file 阅读核心 Controller/Service/Configuration 文件'],
+        tools: ['code({ action: "read" }) 阅读核心 Controller/Service/Configuration 文件'],
       },
       {
         name: '反模式检测',
@@ -1590,7 +1602,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心 SwiftUI View 文件，提取项目约定：视图拆分策略(何时抽取子视图/何时用 ViewModifier)、数据流规则(@State 局部状态/@Observable 共享状态/@Environment 环境值的选择准则)、导航约定(路由管理方式/sheet vs fullScreenCover 选择)、列表性能(LazyVStack/ForEach 优化)、动画约定(withAnimation/animation modifier 的使用方式)',
         output: '视图模式规范：拆分策略 + 属性包装器选择准则 + 导航约定 + 性能优化规则',
-        tools: ['read_file 阅读核心 SwiftUI View 文件（覆盖列表/表单/导航场景）'],
+        tools: ['code({ action: "read" }) 阅读核心 SwiftUI View 文件（覆盖列表/表单/导航场景）'],
       },
       {
         name: '反模式检测',
@@ -1648,7 +1660,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
         action:
           '阅读核心框架组件，提取项目约定：Model 定义规范(字段命名/Meta 配置/Manager 自定义)、View/Router 组织(URL 命名空间/版本管理/权限装饰器)、序列化策略(嵌套序列化器/自定义验证/动态字段)、中间件链(认证/CORS/日志/限流的顺序和实现)、数据库迁移管理(migration 文件组织/数据迁移策略)',
         output: '框架模式规范：Model 约定 + View 组织 + 序列化策略 + 中间件链 + 迁移管理',
-        tools: ['read_file 阅读核心 models/views/serializers/middleware 文件'],
+        tools: ['code({ action: "read" }) 阅读核心 models/views/serializers/middleware 文件'],
       },
       {
         name: '反模式检测',

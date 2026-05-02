@@ -105,7 +105,7 @@ export class ExplorationTracker {
   /** tick 是否已调用（用于 rollback） */
   #ticked = false;
   /** 提交工具名（用于 nudge 文本生成） */
-  #submitToolName = 'submit_knowledge';
+  #submitToolName = 'knowledge';
   /** 管线类型标识 — 统一场景判别（替代 submitToolName / strategy.name 字符串比较） */
   #pipelineType: PipelineType;
   /** 当前阶段开始时间（用于 dwell time 统计） */
@@ -126,7 +126,7 @@ export class ExplorationTracker {
       idleRoundsToExit: 3,
       ...budget,
     };
-    this.#submitToolName = budget.submitToolName || 'submit_knowledge';
+    this.#submitToolName = budget.submitToolName || 'knowledge';
     // pipelineType 显式传入 > 从策略名推断默认值
     this.#pipelineType =
       budget.pipelineType || (strategy.name === 'analyst' ? 'analyst' : 'bootstrap');
@@ -308,11 +308,7 @@ export class ExplorationTracker {
     const isNew = this.#signalDetector.detect(toolName, args, result);
 
     // Submit 追踪
-    if (
-      toolName === 'submit_knowledge' ||
-      toolName === 'submit_with_check' ||
-      toolName === 'collect_scan_recipe'
-    ) {
+    if (toolName === 'knowledge') {
       const status =
         typeof result === 'object' ? (result as Record<string, unknown>)?.status : 'ok';
       const isRejected = status === 'rejected';

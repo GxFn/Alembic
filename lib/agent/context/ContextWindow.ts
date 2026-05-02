@@ -475,7 +475,7 @@ export class ContextWindow {
       const msg = this.#messages[i];
       if (msg.role === 'assistant' && msg.toolCalls) {
         for (const tc of msg.toolCalls) {
-          if (tc.name === 'submit_knowledge' || tc.name === 'submit_with_check') {
+          if (tc.name === 'knowledge') {
             const key = `${tc.name}:${tc.args?.title || ''}`;
             if (seen.has(key)) {
               const tcIndex = msg.toolCalls.indexOf(tc);
@@ -678,7 +678,7 @@ export class ContextWindow {
       const m = this.#messages[i];
       if (m.role === 'assistant' && m.toolCalls) {
         for (const tc of m.toolCalls) {
-          if (tc.name === 'submit_knowledge' || tc.name === 'submit_with_check') {
+          if (tc.name === 'knowledge') {
             this.#compactedSubmits.add(tc.args?.title || tc.args?.category || 'untitled');
           }
         }
@@ -732,14 +732,19 @@ export class ContextWindow {
 export function limitToolResult(toolName: string, result: unknown, quota: ToolResultQuota) {
   const { maxChars = 4000, maxMatches = 10 } = quota;
 
-  // submit_knowledge / submit_with_check 结果很短，不截断
-  if (toolName === 'submit_knowledge' || toolName === 'submit_with_check') {
+  // knowledge (submit) 结果很短，不截断
+  if (toolName === 'knowledge') {
     const raw = typeof result === 'string' ? result : JSON.stringify(result);
     return raw.length > 500 ? raw.substring(0, 500) : raw;
   }
 
-  // search_project_code: 限制匹配数 + 截断上下文（支持批量模式）
-  if (toolName === 'search_project_code') {
+  // code (search): 限制匹配数 + 截断上下文（支持批量模式）
+  if (
+    toolName === 'code' &&
+    typeof result === 'object' &&
+    result !== null &&
+    ((result as SearchResultLike).matches || (result as SearchResultLike).batchResults)
+  ) {
     if (result && typeof result === 'object' && (result as SearchResultLike).batchResults) {
       // 批量模式：对每个 pattern 的结果独立限制（直接操作对象，避免 stringify→parse 往返）
       const limited: SearchResultLike = { ...(result as SearchResultLike) };
@@ -757,8 +762,8 @@ export function limitToolResult(toolName: string, result: unknown, quota: ToolRe
     return limitSearchResult(result, maxMatches, maxChars);
   }
 
-  // read_project_file: 限制字符数（支持批量模式）
-  if (toolName === 'read_project_file') {
+  // code (read): 限制字符数（支持批量模式）
+  if (toolName === 'code') {
     if (result && typeof result === 'object' && (result as FileResultLike).batchResults) {
       const raw = JSON.stringify(result);
       return raw.length > maxChars ? `${raw.substring(0, maxChars)}\n... [batch truncated]` : raw;
@@ -777,7 +782,7 @@ export function limitToolResult(toolName: string, result: unknown, quota: ToolRe
 /**
  * 限制搜索结果 — 只保留 topN 匹配，每个匹配的 context 截断
  *
- * search_project_code 返回格式:
+ * code (search) 返回格式:
  *   { matches: [{ file, line, code, context, score }], total, searchedFiles }
  */
 function limitSearchResult(result: unknown, maxMatches: number, maxChars: number) {

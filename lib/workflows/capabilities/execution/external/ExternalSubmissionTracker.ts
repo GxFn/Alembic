@@ -3,10 +3,10 @@
  *
  * 质量门控的外部 Agent 对应模块。
  * 内部 Agent 使用 EvidenceCollector 从 toolCall 中收集证据 (bootstrap-gate.js)，
- * 外部 Agent 使用 ExternalSubmissionTracker 从 submit_knowledge 调用中积累证据。
+ * 外部 Agent 使用 ExternalSubmissionTracker 从 knowledge 调用中积累证据。
  *
  * 职责:
- *   - 追踪每个维度的 submit_knowledge 提交 (recipe 元数据 + 引用文件)
+ *   - 追踪每个维度的 knowledge 提交 (recipe 元数据 + 引用文件)
  *   - 从提交内容构建 evidenceMap (filePath → 引用摘要)
  *   - 从 dimension_complete 的 analysisText 提取负空间信号
  *   - 计算维度级质量评分 (对应 bootstrap-gate.js 的 buildQualityScores)
@@ -34,7 +34,7 @@ const MAX_NEGATIVE_SIGNALS = 30;
 
 // ── 类型定义 ────────────────────────────────────────────────
 
-/** 一次 submit_knowledge 的提交记录 */
+/** 一次 knowledge 提交的提交记录 */
 interface SubmissionRecord {
   recipeId: string;
   title: string;
@@ -55,7 +55,7 @@ interface NegativeSignal {
   dimId?: string;
 }
 
-/** submit_knowledge 原始参数中需要的字段 */
+/** knowledge 提交原始参数中需要的字段 */
 interface SubmissionArgs {
   title?: string;
   knowledgeType?: string;
@@ -128,10 +128,10 @@ export class ExternalSubmissionTracker {
   // ─── 提交记录 ─────────────────────────────────────────
 
   /**
-   * 记录一次成功的 submit_knowledge 提交
+   * 记录一次成功的 knowledge 提交
    *
    * @param dimId 当前活跃维度 (由调用方根据 session 进度推断)
-   * @param submissionArgs submit_knowledge 的原始参数
+   * @param submissionArgs knowledge 的原始参数
    * @param recipeId 提交成功后返回的 recipe ID
    */
   recordSubmission(dimId: string, submissionArgs: SubmissionArgs, recipeId: string) {

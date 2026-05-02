@@ -61,16 +61,7 @@ export class Conversation extends Capability {
   }
 
   get tools() {
-    return [
-      'search_knowledge',
-      'search_recipes',
-      'get_recipe_detail',
-      'get_related_recipes',
-      'semantic_search_code',
-      'submit_knowledge',
-      'knowledge_overview',
-      'get_project_stats',
-    ];
+    return ['knowledge', 'code', 'graph', 'meta'];
   }
 
   buildContext(context: ContextInput) {

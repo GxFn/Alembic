@@ -96,9 +96,7 @@ export async function produceForcedSummary({
     `[ForcedSummary] ⚠ producing forced summary (${iterations} iters, ${toolCalls.length} calls, source=${source}, pipeline=${pipelineType})`
   );
 
-  const candidateCount = toolCalls.filter(
-    (tc: ToolCallRecord) => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check'
-  ).length;
+  const candidateCount = toolCalls.filter((tc: ToolCallRecord) => tc.tool === 'knowledge').length;
 
   let finalReply: string | undefined;
 
@@ -113,9 +111,7 @@ export async function produceForcedSummary({
 
   // 收集工具调用摘要
   const submitSummary = toolCalls
-    .filter(
-      (tc: ToolCallRecord) => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check'
-    )
+    .filter((tc: ToolCallRecord) => tc.tool === 'knowledge')
     .map(
       (tc: ToolCallRecord, i: number) =>
         `${i + 1}. ${tc.args?.title || tc.args?.category || tc.params?.title || tc.params?.category || 'untitled'}`
@@ -215,7 +211,9 @@ ${toolContextSummary}
       // Analyst 管线兜底: 从工具调用记录合成 Markdown 分析报告
       const toolNames = [...new Set(toolCalls.map((tc: ToolCallRecord) => tc.tool))];
       const filesRead = toolCalls
-        .filter((tc: ToolCallRecord) => tc.tool === 'read_project_file')
+        .filter(
+          (tc: ToolCallRecord) => tc.tool === 'code' && (tc.args || tc.params)?.action === 'read'
+        )
         .flatMap((tc: ToolCallRecord) => {
           const p: ToolCallArgs = tc.args || tc.params || {};
           if (p.filePaths) {
@@ -229,8 +227,7 @@ ${toolContextSummary}
         .slice(0, 15);
       const searches = toolCalls
         .filter(
-          (tc: ToolCallRecord) =>
-            tc.tool === 'search_project_code' || tc.tool === 'semantic_search_code'
+          (tc: ToolCallRecord) => tc.tool === 'code' && (tc.args || tc.params)?.action === 'search'
         )
         .map((tc: ToolCallRecord) => {
           const p: ToolCallArgs = tc.args || tc.params || {};
@@ -239,9 +236,7 @@ ${toolContextSummary}
         .filter((v): v is string => Boolean(v))
         .slice(0, 8);
       const classesExplored = toolCalls
-        .filter(
-          (tc: ToolCallRecord) => tc.tool === 'get_class_info' || tc.tool === 'get_class_hierarchy'
-        )
+        .filter((tc: ToolCallRecord) => tc.tool === 'graph')
         .map((tc: ToolCallRecord) => (tc.args || tc.params)?.className)
         .filter((v): v is string => Boolean(v))
         .slice(0, 10);
@@ -261,9 +256,7 @@ ${toolContextSummary}
     } else if (isSystem) {
       // system 源兜底: 合成 dimensionDigest JSON
       const titles = toolCalls
-        .filter(
-          (tc: ToolCallRecord) => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check'
-        )
+        .filter((tc: ToolCallRecord) => tc.tool === 'knowledge')
         .map((tc: ToolCallRecord) => tc.args?.title || tc.params?.title || 'untitled');
       finalReply = `\`\`\`json
 {
@@ -280,7 +273,9 @@ ${toolContextSummary}
       // user 源兜底: 合成 Markdown 摘要
       const toolNames = [...new Set(toolCalls.map((tc: ToolCallRecord) => tc.tool))];
       const filesRead = toolCalls
-        .filter((tc: ToolCallRecord) => tc.tool === 'read_project_file')
+        .filter(
+          (tc: ToolCallRecord) => tc.tool === 'code' && (tc.args || tc.params)?.action === 'read'
+        )
         .flatMap((tc: ToolCallRecord) => {
           const p: ToolCallArgs = tc.args || tc.params || {};
           if (p.filePaths) {
@@ -294,8 +289,7 @@ ${toolContextSummary}
         .slice(0, 10);
       const searches = toolCalls
         .filter(
-          (tc: ToolCallRecord) =>
-            tc.tool === 'search_project_code' || tc.tool === 'semantic_search_code'
+          (tc: ToolCallRecord) => tc.tool === 'code' && (tc.args || tc.params)?.action === 'search'
         )
         .map((tc: ToolCallRecord) => {
           const p: ToolCallArgs = tc.args || tc.params || {};
@@ -332,7 +326,7 @@ function buildToolContextForUserSummary(toolCalls: ToolCallRecord[]) {
 
   // 目录结构探索
   const structureCalls = toolCalls.filter(
-    (tc: ToolCallRecord) => tc.tool === 'list_project_structure'
+    (tc: ToolCallRecord) => tc.tool === 'code' && (tc.args || tc.params)?.action === 'structure'
   );
   if (structureCalls.length > 0) {
     const dirs = structureCalls
@@ -343,7 +337,7 @@ function buildToolContextForUserSummary(toolCalls: ToolCallRecord[]) {
 
   // 项目概况
   const overviewCalls = toolCalls.filter(
-    (tc: ToolCallRecord) => tc.tool === 'get_project_overview'
+    (tc: ToolCallRecord) => tc.tool === 'code' && (tc.args || tc.params)?.action === 'structure'
   );
   if (overviewCalls.length > 0) {
     sections.push('**项目概况**: 已获取');
@@ -351,7 +345,7 @@ function buildToolContextForUserSummary(toolCalls: ToolCallRecord[]) {
 
   // 代码搜索
   const searchCalls = toolCalls.filter(
-    (tc: ToolCallRecord) => tc.tool === 'search_project_code' || tc.tool === 'semantic_search_code'
+    (tc: ToolCallRecord) => tc.tool === 'code' && (tc.args || tc.params)?.action === 'search'
   );
   if (searchCalls.length > 0) {
     const queries = searchCalls
@@ -367,7 +361,9 @@ function buildToolContextForUserSummary(toolCalls: ToolCallRecord[]) {
   }
 
   // 文件读取
-  const readCalls = toolCalls.filter((tc: ToolCallRecord) => tc.tool === 'read_project_file');
+  const readCalls = toolCalls.filter(
+    (tc: ToolCallRecord) => tc.tool === 'code' && (tc.args || tc.params)?.action === 'read'
+  );
   if (readCalls.length > 0) {
     const files = readCalls
       .flatMap((tc: ToolCallRecord) => {
@@ -387,15 +383,7 @@ function buildToolContextForUserSummary(toolCalls: ToolCallRecord[]) {
   }
 
   // AST 分析
-  const astCalls = toolCalls.filter((tc: ToolCallRecord) =>
-    [
-      'get_class_hierarchy',
-      'get_class_info',
-      'get_protocol_info',
-      'get_method_overrides',
-      'get_category_map',
-    ].includes(tc.tool)
-  );
+  const astCalls = toolCalls.filter((tc: ToolCallRecord) => tc.tool === 'graph');
   if (astCalls.length > 0) {
     const entities = astCalls
       .map((tc: ToolCallRecord) => {
@@ -410,8 +398,8 @@ function buildToolContextForUserSummary(toolCalls: ToolCallRecord[]) {
   }
 
   // 知识库搜索
-  const kbCalls = toolCalls.filter((tc: ToolCallRecord) =>
-    ['search_knowledge', 'search_recipes', 'knowledge_overview'].includes(tc.tool)
+  const kbCalls = toolCalls.filter(
+    (tc: ToolCallRecord) => tc.tool === 'knowledge' && (tc.args || tc.params)?.action === 'search'
   );
   if (kbCalls.length > 0) {
     sections.push(`**知识库查询**: ${kbCalls.length} 次`);

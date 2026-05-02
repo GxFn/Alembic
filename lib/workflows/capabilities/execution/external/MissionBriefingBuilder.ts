@@ -259,7 +259,7 @@ function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
           phase: '2. 深度验证',
           action: `阅读 5+ 个核心文件，验证 ${dim.label} 的实现方式是否一致`,
           expectedOutput: '每个模式至少有 3 个文件证据，含具体行号',
-          tools: ['read_file 逐个阅读核心文件'],
+          tools: ['code({ action: "read" }) 逐个阅读核心文件'],
         },
         {
           phase: '3. 异常检测',

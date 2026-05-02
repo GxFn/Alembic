@@ -346,32 +346,38 @@ export class PlanTracker {
 
       // 策略 2: 工具类型 → 步骤描述的语义匹配
       const desc = step.description.toLowerCase();
+      const actionName = (action.params?.action as string) || '';
+
       if (
-        toolName === 'get_project_overview' &&
+        toolName === 'code' &&
+        actionName === 'structure' &&
         (desc.includes('概览') ||
           desc.includes('overview') ||
+          desc.includes('目录') ||
           desc.includes('结构') ||
+          desc.includes('structure') ||
           desc.includes('项目'))
       ) {
         return step;
       }
       if (
-        toolName === 'list_project_structure' &&
-        (desc.includes('目录') || desc.includes('结构') || desc.includes('structure'))
-      ) {
-        return step;
-      }
-      if (
-        (toolName === 'get_class_info' || toolName === 'get_class_hierarchy') &&
+        toolName === 'graph' &&
         (desc.includes('继承') ||
           desc.includes('类') ||
           desc.includes('hierarchy') ||
-          desc.includes('class'))
+          desc.includes('class') ||
+          desc.includes('图谱') ||
+          desc.includes('graph') ||
+          desc.includes('调用') ||
+          desc.includes('call') ||
+          desc.includes('关系') ||
+          desc.includes('依赖'))
       ) {
         return step;
       }
       if (
-        toolName === 'read_project_file' &&
+        toolName === 'code' &&
+        actionName === 'read' &&
         (desc.includes('阅读') ||
           desc.includes('read') ||
           desc.includes('深入') ||
@@ -381,22 +387,12 @@ export class PlanTracker {
         return step;
       }
       if (
-        toolName === 'search_project_code' &&
+        toolName === 'code' &&
+        actionName === 'search' &&
         (desc.includes('搜索') ||
           desc.includes('search') ||
           desc.includes('查找') ||
           desc.includes('分析'))
-      ) {
-        return step;
-      }
-      if (
-        (toolName === 'query_code_graph' || toolName === 'query_call_graph') &&
-        (desc.includes('图谱') ||
-          desc.includes('graph') ||
-          desc.includes('调用') ||
-          desc.includes('call') ||
-          desc.includes('关系') ||
-          desc.includes('依赖'))
       ) {
         return step;
       }

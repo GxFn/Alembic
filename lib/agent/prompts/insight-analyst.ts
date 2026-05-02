@@ -82,8 +82,8 @@ export const ANALYST_SYSTEM_PROMPT = `你是一位高级软件架构师，正在
 | 阶段 | 轮次占比 | 目标 |
 |------|---------|------|
 | 1. 全局扫描 | 第 1-3 轮 | get_project_overview + list_project_structure 了解项目结构 |
-| 2. 结构化探索 | 第 4-N×60% 轮 | get_class_hierarchy / get_class_info 理解核心类；search_project_code 批量搜索关键模式 |
-| 3. 深度验证 | 第 N×60%-N×80% 轮 | read_project_file 阅读关键实现，确认细节 |
+| 2. 结构化探索 | 第 4-N×60% 轮 | graph({ action: "query" }) 理解核心类；code({ action: "search" }) 批量搜索关键模式 |
+| 3. 深度验证 | 第 N×60%-N×80% 轮 | code({ action: "read" }) 阅读关键实现，确认细节 |
 | 4. 输出总结 | 最后 20% | **停止调用工具**，直接输出你的分析文本 |
 
 ## 关键规则
@@ -93,10 +93,10 @@ export const ANALYST_SYSTEM_PROMPT = `你是一位高级软件架构师，正在
 - 优先使用注入的 panorama / projectInfo / codeEntityGraph / sessionStore，再用工具验证关键事实
 
 ## 工具效率
-- **批量搜索**: search_project_code({ patterns: ["keywordA", "keywordB", "keywordC"] }) — 一次搜 3-5 个
-- **批量读文件**: read_project_file({ filePaths: ["a.m", "b.m", "c.m"] }) — 一次读 3-5 个
-- **结构化查询优先**: get_class_hierarchy / get_class_info 比文本搜索更精确高效
-- **调用关系查询优先**: query_call_graph 比文本搜索更适合验证调用链
+- **批量搜索**: code({ action: "search", params: { patterns: ["keywordA", "keywordB", "keywordC"] } }) — 一次搜 3-5 个
+- **批量读文件**: code({ action: "read", params: { filePaths: ["a.m", "b.m", "c.m"] } }) — 一次读 3-5 个
+- **结构化查询优先**: graph({ action: "query", params: { type: "hierarchy"/"class" } }) 比文本搜索更精确高效
+- **调用关系查询优先**: graph({ action: "query", params: { type: "callers"/"callees" } }) 比文本搜索更适合验证调用链
 - **终端仅作验证**: 只有当前冷启动终端测试模式启用，且需要验证脚本、测试入口、CLI 行为或工程事实时才使用终端工具
 
 ## 输出要求
@@ -110,28 +110,7 @@ export const ANALYST_SYSTEM_PROMPT = `你是一位高级软件架构师，正在
 // Analyst 可用工具白名单 — 只做探索，不做提交
 // ──────────────────────────────────────────────────────────────────
 
-export const ANALYST_TOOLS = [
-  // AST 结构化分析
-  'get_project_overview',
-  'get_class_hierarchy',
-  'get_class_info',
-  'get_protocol_info',
-  'get_method_overrides',
-  'get_category_map',
-  // 文件访问
-  'search_project_code',
-  'read_project_file',
-  'list_project_structure',
-  'get_file_summary',
-  'semantic_search_code',
-  // 前序上下文 (可选)
-  'get_previous_analysis',
-  // Agent Memory (v4.0) — 工作记忆 + 情景记忆
-  'note_finding',
-  'get_previous_evidence',
-  // Phase E: 代码实体图谱查询
-  'query_code_graph',
-];
+export const ANALYST_TOOLS = ['code', 'graph', 'terminal', 'memory', 'meta'];
 
 // ──────────────────────────────────────────────────────────────────
 // Analyst 预算 — 使用 analyst 策略（自由探索，无阶段约束）
@@ -325,7 +304,7 @@ export async function buildAnalystPrompt(
 每个关键发现用编号列表呈现，引用 3 个以上具体文件（完整相对路径）。
 禁止只写文件名（如 NetworkClient.swift），必须写完整路径（如 Packages/AOXNetworkKit/Sources/AOXNetworkKit/Client/NetworkClient.swift:42）。
 ${depthHint}
-重要: 务必使用 read_project_file 阅读代码确认，不要假设文件存在。引用的每个文件路径都必须是你亲眼看到的。
+重要: 务必使用 code({ action: "read" }) 阅读代码确认，不要假设文件存在。引用的每个文件路径都必须是你亲眼看到的。
 【跨维度去重】只分析属于当前维度视角的内容。不要将其他维度的知识点混入本维度来充数。例如: 分析 code-standard 时只关注命名/注释/文件组织，不要混入设计模式(code-pattern)或分层架构(architecture)的内容。如果某个发现与多个维度相关，则只从当前维度的核心视角分析，避免与其他维度产生重叠。
 【本地子包覆盖】如果项目有本地子包/模块（如 Packages/ 目录下的包），必须同时分析其内部实现，不得仅看主项目对其的调用。`);
 
@@ -390,7 +369,7 @@ ${depthHint}
       const graphCtx = codeEntityGraph.generateContextForAgent({ maxEntities: 20, maxEdges: 40 });
       if (graphCtx) {
         parts.push(graphCtx);
-        parts.push('使用 query_code_graph 工具可以查询更详细的继承链、影响分析等。');
+        parts.push('使用 graph({ action: "query" }) 工具可以查询更详细的继承链、影响分析等。');
       }
     } catch {
       /* CodeEntityGraph context failed, non-critical */
@@ -421,7 +400,7 @@ ${depthHint}
       }
     }
     esLines.push('');
-    esLines.push('利用上述信号作为分析切入点，用 read_project_file 验证并深入探索。');
+    esLines.push('利用上述信号作为分析切入点，用 code({ action: "read" }) 验证并深入探索。');
     parts.push(esLines.join('\n'));
   }
 
@@ -464,11 +443,10 @@ ${depthHint}
 
   if (toolPolicyHints?.terminalTest === true) {
     parts.push(`## 终端工具使用边界
-- 当前终端实验档位: ${String(toolPolicyHints.terminalToolset || 'terminal-run')}
+- 当前终端实验档位: ${String(toolPolicyHints.terminalToolset || 'terminal-exec')}
 - 终端是可选的代码分析证据工具，不是必调工具
-- 默认先用全景数据、query_code_graph、query_call_graph、search_project_code、read_project_file
-- 需要确认工程事实时优先 terminal_run
-- 只有管道、重定向或命令替换确实必要时才用 terminal_shell
+- 默认先用全景数据、graph({ action: "query" })、code({ action: "search" })、code({ action: "read" })
+- 需要确认工程事实时优先 terminal({ action: "exec" })
 - 只有命令依赖 TTY transcript 时才用 terminal_pty
 - 禁止 install、网络操作、写项目文件、删除、chmod/chown、sudo、后台 daemon`);
   }

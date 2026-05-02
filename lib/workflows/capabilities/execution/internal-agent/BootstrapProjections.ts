@@ -144,7 +144,7 @@ export function projectBootstrapDimensionAgentOutput({
 
   const submitCalls = runtimeToolCalls.filter((tc: ToolCallRecord) => {
     const tool = tc?.tool || tc?.name;
-    return tool === 'submit_knowledge' || tool === 'submit_with_check';
+    return tool === 'knowledge';
   });
   const successCount = submitCalls.filter((tc: ToolCallRecord) => {
     const res = tc?.result;

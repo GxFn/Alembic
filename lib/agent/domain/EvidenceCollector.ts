@@ -176,26 +176,24 @@ export class EvidenceCollector {
 
     // 按工具类型提取证据
     if (hasResult) {
+      const action = (args.action as string) || '';
       try {
         switch (tool) {
-          case 'read_project_file':
-            this.#extractFileEvidence(args, result);
+          case 'code':
+            if (action === 'read') {
+              this.#extractFileEvidence(args, result);
+            } else if (action === 'search') {
+              this.#extractSearchEvidence(args, result);
+            }
             break;
-          case 'search_project_code':
-          case 'semantic_search_code':
-            this.#extractSearchEvidence(args, result);
-            break;
-          case 'get_class_info':
-            this.#extractClassEvidence(args, result);
-            break;
-          case 'get_protocol_info':
-            this.#extractProtocolEvidence(args, result);
-            break;
-          case 'get_file_summary':
-            this.#extractFileSummary(args, result);
+          case 'graph':
+            if (args.protocolName) {
+              this.#extractProtocolEvidence(args, result);
+            } else {
+              this.#extractClassEvidence(args, result);
+            }
             break;
           // note_finding → WorkingMemory 已处理，不在此重复采集
-          // get_project_overview / list_project_structure → 仅入日志
         }
       } catch {
         // 证据提取失败不影响整体流程，仅记入探索日志
@@ -514,46 +512,50 @@ export class EvidenceCollector {
 
   /** 推断工具调用意图 — WHY */
   #inferIntent(tool: string | undefined, args: ToolCallArgs) {
+    const action = (args.action as string) || '';
     switch (tool) {
-      case 'read_project_file':
-        if (args.filePaths?.length) {
-          const preview = args.filePaths.slice(0, 3).join(', ');
-          return `Read ${args.filePaths.length} files: ${preview}${args.filePaths.length > 3 ? '…' : ''}`;
+      case 'code': {
+        if (action === 'read') {
+          if (args.filePaths?.length) {
+            const preview = args.filePaths.slice(0, 3).join(', ');
+            return `Read ${args.filePaths.length} files: ${preview}${args.filePaths.length > 3 ? '…' : ''}`;
+          }
+          return `Read ${args.filePath || '?'}`;
         }
-        return `Read ${args.filePath || '?'}`;
-      case 'search_project_code': {
-        const pats = this.#extractSearchPatterns(args);
-        if (pats.length > 1) {
-          return `Search ${pats.length} patterns: ${pats.slice(0, 3).join(', ')}`;
+        if (action === 'search') {
+          const pats = this.#extractSearchPatterns(args);
+          if (pats.length > 1) {
+            return `Search ${pats.length} patterns: ${pats.slice(0, 3).join(', ')}`;
+          }
+          return `Search "${pats[0] || '?'}"`;
         }
-        return `Search "${pats[0] || '?'}"`;
+        if (action === 'structure') {
+          return `List ${args.directory || args.path || '/'}`;
+        }
+        if (action === 'outline') {
+          return `Summarize ${args.filePath || '?'}`;
+        }
+        return `code.${action}(${JSON.stringify(args).substring(0, 50)})`;
       }
-      case 'semantic_search_code':
-        return `Semantic search: "${args.query || '?'}"`;
-      case 'get_class_info':
-        return `Inspect class ${args.className || '?'}`;
-      case 'get_protocol_info':
-        return `Inspect protocol ${args.protocolName || '?'}`;
-      case 'get_class_hierarchy':
-        return `Get class hierarchy${args.rootClass ? ` from ${args.rootClass}` : ''}`;
-      case 'get_project_overview':
-        return 'Get project overview';
-      case 'list_project_structure':
-        return `List ${args.directory || args.path || '/'}`;
-      case 'get_file_summary':
-        return `Summarize ${args.filePath || '?'}`;
-      case 'get_method_overrides':
-        return `Get overrides${args.methodName ? ` for ${args.methodName}` : ''}`;
-      case 'get_category_map':
-        return 'Get category map';
-      case 'note_finding':
-        return `Note: ${(args.finding || '').substring(0, 50)}`;
-      case 'get_previous_analysis':
-        return `Get prev analysis${args.dimensionId ? ` for ${args.dimensionId}` : ''}`;
-      case 'get_previous_evidence':
-        return `Get prev evidence${args.query ? ` "${args.query}"` : ''}`;
-      case 'query_code_graph':
+      case 'graph':
+        if (args.protocolName) {
+          return `Inspect protocol ${args.protocolName}`;
+        }
+        if (args.className) {
+          return `Inspect class ${args.className}`;
+        }
         return `Query graph: ${(args.query || '').substring(0, 50)}`;
+      case 'knowledge':
+        if (action === 'search') {
+          return `Search knowledge: "${args.query || '?'}"`;
+        }
+        return `knowledge.${action}`;
+      case 'memory':
+        return `memory.${action}: ${(args.finding || '').substring(0, 50)}`;
+      case 'meta':
+        return `meta.${action}`;
+      case 'terminal':
+        return `terminal exec`;
       default:
         return `${tool}(${JSON.stringify(args).substring(0, 50)})`;
     }
@@ -572,16 +574,13 @@ export class EvidenceCollector {
     }
 
     switch (tool) {
-      case 'read_project_file':
+      case 'code': {
         if (result.files) {
           return `${result.files.length} files read`;
         }
         if (result.content) {
           return `${(result.content || '').split('\n').length} lines from ${result.path || '?'}`;
         }
-        return JSON.stringify(result).substring(0, 100);
-      case 'search_project_code':
-      case 'semantic_search_code': {
         const batchKeys = Object.keys(result.batchResults || {});
         if (batchKeys.length > 0) {
           const total = batchKeys.reduce(
@@ -590,16 +589,19 @@ export class EvidenceCollector {
           );
           return `${total} matches across ${batchKeys.length} patterns`;
         }
-        return `${(result.matches || []).length} matches`;
+        if (result.matches) {
+          return `${result.matches.length} matches`;
+        }
+        if (result.entries || result.children) {
+          return `${(result.entries || result.children || []).length} entries`;
+        }
+        return JSON.stringify(result).substring(0, 100);
       }
-      case 'get_class_info':
+      case 'graph':
+        if (result.classes || result.hierarchy) {
+          return `${(result.classes || result.hierarchy || []).length} classes`;
+        }
         return `class ${result.className || '?'}${result.superClass ? ` < ${result.superClass}` : ''}, ${result.methods?.length || 0} methods`;
-      case 'get_class_hierarchy':
-        return `${(result.classes || result.hierarchy || []).length} classes`;
-      case 'get_project_overview':
-        return 'overview loaded';
-      case 'list_project_structure':
-        return `${(result.entries || result.children || []).length} entries`;
       default:
         return JSON.stringify(result).substring(0, 100);
     }
@@ -618,18 +620,16 @@ export class EvidenceCollector {
     }
 
     switch (tool) {
-      case 'read_project_file':
-        return !!(result.content || result.files?.length);
-      case 'search_project_code':
-      case 'semantic_search_code':
+      case 'code':
         return (
+          !!(result.content || result.files?.length) ||
           (result.matches?.length ?? 0) > 0 ||
           Object.values(result.batchResults || {}).some(
             (r: { matches?: SearchMatch[] }) => (r.matches?.length ?? 0) > 0
           )
         );
-      case 'get_class_info':
-        return !!result.className;
+      case 'graph':
+        return !!(result.className || result.classes || result.hierarchy);
       default:
         return true;
     }

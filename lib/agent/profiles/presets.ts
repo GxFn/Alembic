@@ -224,8 +224,8 @@ export const PRESETS = Object.freeze({
             prev: Record<string, unknown>
           ) => {
             const prevProduce = prev.produce as { toolCalls?: ToolCallRecord[] } | undefined;
-            const submitCalls = (prevProduce?.toolCalls || []).filter((tc) =>
-              ['submit_knowledge', 'submit_with_check'].includes((tc.tool || tc.name) as string)
+            const submitCalls = (prevProduce?.toolCalls || []).filter(
+              (tc) => (tc.tool || tc.name) === 'knowledge'
             );
             const rejected = submitCalls.filter((tc) => {
               const res = tc.result;

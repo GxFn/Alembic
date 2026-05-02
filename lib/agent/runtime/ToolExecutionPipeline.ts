@@ -326,7 +326,7 @@ export const submitDedup = {
   name: 'submitDedup',
 
   before(call: ToolCall, ctx: ToolExecContext): BeforeVerdict | undefined {
-    if (call.name !== 'submit_knowledge' && call.name !== 'submit_with_check') {
+    if (call.name !== 'knowledge') {
       return;
     }
     const { sharedState } = ctx.loopCtx;
@@ -372,7 +372,7 @@ export const submitDedup = {
   },
 
   after(call: ToolCall, result: unknown, ctx: ToolExecContext, meta: ToolMetadata) {
-    if (call.name !== 'submit_knowledge' && call.name !== 'submit_with_check') {
+    if (call.name !== 'knowledge') {
       return;
     }
     const { sharedState } = ctx.loopCtx;

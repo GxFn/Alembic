@@ -85,7 +85,7 @@ export function projectScanRunResult({
 
 export function extractCollectedRecipes(toolCalls: ToolCallEntry[]): ScanRecipe[] {
   return toolCalls
-    .filter((tc) => (tc.tool || tc.name) === 'collect_scan_recipe')
+    .filter((tc) => (tc.tool || tc.name) === 'knowledge')
     .map((tc) => {
       const res = tc.result as Record<string, unknown> | null;
       if (res && typeof res === 'object' && res.status === 'collected' && res.recipe) {
@@ -141,7 +141,7 @@ function buildScanDiagnostics({
 }) {
   const phases = result.phases as Record<string, PhaseSummary> | undefined;
   const toolCalls = result.toolCalls || [];
-  const collectCalls = toolCalls.filter((tc) => (tc.tool || tc.name) === 'collect_scan_recipe');
+  const collectCalls = toolCalls.filter((tc) => (tc.tool || tc.name) === 'knowledge');
   return {
     label: label || '',
     task,

@@ -21,7 +21,6 @@ import {
   DASHBOARD_OPERATION_HANDLERS,
   DASHBOARD_OPERATION_MANIFESTS,
 } from '#tools/adapters/DashboardOperations.js';
-import { InternalToolAdapter } from '#tools/adapters/InternalToolAdapter.js';
 import { MacSystemAdapter } from '#tools/adapters/MacSystemAdapter.js';
 import { MAC_SYSTEM_CAPABILITY_MANIFESTS } from '#tools/adapters/MacSystemCapabilities.js';
 import { SkillAdapter } from '#tools/adapters/SkillAdapter.js';
@@ -31,10 +30,11 @@ import { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionM
 import { TERMINAL_CAPABILITY_MANIFESTS } from '#tools/adapters/terminal-capabilities/index.js';
 import { WorkflowAdapter } from '#tools/adapters/WorkflowAdapter.js';
 import type { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
-import { toolDefV1ToV2 } from '#tools/catalog/ToolDefinitionV2.js';
 import { UnifiedToolCatalog } from '#tools/catalog/UnifiedToolCatalog.js';
-import { ToolRouter } from '#tools/core/ToolRouter.js';
-import { ALL_TOOLS } from '#tools/handlers/index.js';
+import { LightweightRouter } from '#tools/core/LightweightRouter.js';
+import { ToolContextFactory } from '#tools/v2/adapter/ToolContextFactory.js';
+import { V2CapabilityCatalog } from '#tools/v2/adapter/V2CapabilityCatalog.js';
+import { V2ToolRouterAdapter } from '#tools/v2/adapter/V2ToolRouterAdapter.js';
 import { WorkflowRegistry } from '#tools/workflow/WorkflowRegistry.js';
 import { ToolForge } from '../../agent/forge/ToolForge.js';
 import {
@@ -53,14 +53,33 @@ import { SkillHooks } from '../../service/skills/SkillHooks.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {
-  // UnifiedToolCatalog: 单源真相 — 合并 CapabilityCatalog + ToolRegistry
-  c.singleton('capabilityCatalog', () => {
+  // ── V2 Tool System ─────────────────────────────────────────────────
+  // capabilityCatalog: V2CapabilityCatalog 直接从 TOOL_REGISTRY 生成 schema
+  c.singleton('capabilityCatalog', () => new V2CapabilityCatalog());
+
+  // V2 ToolContextFactory: 长生命周期，持有 DeltaCache/SearchCache/Compressor
+  c.singleton(
+    'v2ToolContextFactory',
+    (ct: ServiceContainer) =>
+      new ToolContextFactory({
+        container: ct,
+        projectRoot: resolveProjectRoot(ct),
+      })
+  );
+
+  // toolRouter: V2ToolRouterAdapter 实现 ToolRouterContract
+  c.singleton(
+    'toolRouter',
+    (ct: ServiceContainer) =>
+      new V2ToolRouterAdapter({
+        contextFactory: ct.get('v2ToolContextFactory') as ToolContextFactory,
+      })
+  );
+
+  // toolRegistry: 非 Agent 表面 (Dashboard/Terminal/Skill/Mac/MCP) 的工具注册
+  c.singleton('toolRegistry', (ct: ServiceContainer) => {
     const catalog = new UnifiedToolCatalog();
 
-    // V1 内部工具 → V2 桥接注册
-    catalog.registerV2All(ALL_TOOLS.map(toolDefV1ToV2));
-
-    // 非内部工具 manifest 直接注册（Dashboard/Terminal/Skill/Mac）
     for (const m of [
       ...DASHBOARD_OPERATION_MANIFESTS,
       ...TERMINAL_CAPABILITY_MANIFESTS,
@@ -70,26 +89,7 @@ export function register(c: ServiceContainer) {
       catalog.register(m);
     }
 
-    return catalog;
-  });
-
-  c.singleton('workflowRegistry', () => new WorkflowRegistry());
-  c.singleton('terminalSessionManager', () => new InMemoryTerminalSessionManager());
-
-  c.singleton('mcpToolDeclarations', (ct: ServiceContainer): McpToolDeclaration[] => {
-    try {
-      const discovery = new McpToolDiscovery();
-      return discovery.discover(resolveProjectRoot(ct));
-    } catch {
-      return [];
-    }
-  });
-
-  // toolRegistry: 返回 UnifiedToolCatalog（兼容 InternalToolHandlerStore + ForgedInternalToolStore）
-  c.singleton('toolRegistry', (ct: ServiceContainer) => {
-    const catalog = ct.get('capabilityCatalog') as UnifiedToolCatalog;
-
-    // MCP tools: register manifests into main catalog + build adapter
+    // MCP tools
     const mcpDeclarations = ct.get('mcpToolDeclarations') as McpToolDeclaration[];
     if (mcpDeclarations.length > 0) {
       const { manifests: mcpManifests } = buildMcpToolCapabilities(mcpDeclarations);
@@ -106,10 +106,9 @@ export function register(c: ServiceContainer) {
       });
 
     catalog.setRouter(
-      new ToolRouter({
+      new LightweightRouter({
         catalog,
         adapters: [
-          new InternalToolAdapter(catalog),
           new DashboardOperationAdapter(DASHBOARD_OPERATION_HANDLERS),
           new TerminalAdapter({
             sessionManager: ct.get('terminalSessionManager') as InMemoryTerminalSessionManager,
@@ -127,9 +126,16 @@ export function register(c: ServiceContainer) {
     return catalog;
   });
 
-  c.singleton('toolRouter', (ct: ServiceContainer) => {
-    const catalog = ct.get('toolRegistry') as UnifiedToolCatalog;
-    return catalog.getRouter();
+  c.singleton('workflowRegistry', () => new WorkflowRegistry());
+  c.singleton('terminalSessionManager', () => new InMemoryTerminalSessionManager());
+
+  c.singleton('mcpToolDeclarations', (ct: ServiceContainer): McpToolDeclaration[] => {
+    try {
+      const discovery = new McpToolDiscovery();
+      return discovery.discover(resolveProjectRoot(ct));
+    } catch {
+      return [];
+    }
   });
 
   c.singleton('toolForge', (ct: ServiceContainer) => {
@@ -175,6 +181,7 @@ export function register(c: ServiceContainer) {
       new AgentRuntimeBuilder({
         container: ct as unknown as Record<string, unknown>,
         toolRegistry: ct.get('toolRegistry'),
+        toolRouter: ct.get('toolRouter'),
         aiProvider: ct.singletons.aiProvider || null,
         projectRoot: resolveProjectRoot(ct),
         dataRoot: resolveDataRoot(ct),

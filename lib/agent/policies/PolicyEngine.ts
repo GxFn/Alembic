@@ -73,7 +73,7 @@ export class PolicyEngine {
       return { ok: true };
     }
 
-    if (toolName === 'terminal_run' && typeof args?.bin === 'string') {
+    if (toolName === 'terminal' && typeof args?.bin === 'string') {
       const check = safety.checkCommand(formatTerminalRunForSafetyPolicy(args));
       if (!check.safe) {
         return { ok: false, reason: `[SafetyPolicy] 命令拦截: ${check.reason}` };
@@ -88,13 +88,19 @@ export class PolicyEngine {
     }
 
     const filePathsToCheck: string[] = [];
-    if (toolName === 'read_project_file' || toolName === 'get_file_summary') {
-      if (typeof args?.filePath === 'string') {
-        filePathsToCheck.push(args.filePath);
+    if (toolName === 'code') {
+      const p = (args?.params || args) as Record<string, unknown>;
+      if (typeof p?.path === 'string') {
+        filePathsToCheck.push(p.path);
       }
-      if (Array.isArray(args?.filePaths)) {
+      if (typeof p?.filePath === 'string') {
+        filePathsToCheck.push(p.filePath);
+      }
+      if (Array.isArray(p?.filePaths)) {
         filePathsToCheck.push(
-          ...args.filePaths.filter((filePath): filePath is string => typeof filePath === 'string')
+          ...(p.filePaths as unknown[]).filter(
+            (filePath): filePath is string => typeof filePath === 'string'
+          )
         );
       }
     }

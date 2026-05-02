@@ -48,8 +48,7 @@ export const CONSOLIDATION_GATE_SYSTEM_PROMPT = `你是 Alembic 的 **Consolidat
 // ──────────────────────────────────────────────────────────────────
 
 export const CONSOLIDATION_GATE_TOOLS = [
-  'read_project_file',
-  'search_project_code',
+  'code',
   'merge_into_existing',
   'approve_create',
   'reject_candidate',

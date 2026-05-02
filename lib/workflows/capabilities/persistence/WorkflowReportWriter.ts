@@ -330,7 +330,7 @@ function inferTerminalToolset(stageToolsets: Array<Record<string, unknown>>) {
   if (tools.has('terminal_shell')) {
     return 'terminal-shell';
   }
-  if (tools.has('terminal_run')) {
+  if (tools.has('terminal')) {
     return 'terminal-run';
   }
   return 'baseline';

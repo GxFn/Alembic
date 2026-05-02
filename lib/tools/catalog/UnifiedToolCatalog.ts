@@ -14,13 +14,14 @@
  */
 
 import { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
-import type { ToolSchemaProjection } from '#tools/catalog/CapabilityManifest.js';
-import {
-  type ToolDefinitionV2,
-  type ToolHandler,
-  v2ToManifest,
-  v2ToSchemaProjection,
-} from '#tools/catalog/ToolDefinitionV2.js';
+import type {
+  CapabilityKind,
+  ToolCapabilityManifest,
+  ToolExecutionProfile,
+  ToolGovernanceProfile,
+  ToolRiskProfile,
+  ToolSchemaProjection,
+} from '#tools/catalog/CapabilityManifest.js';
 import type {
   ForgedInternalToolDefinition,
   ForgedInternalToolStore,
@@ -29,6 +30,105 @@ import type {
   InternalToolHandlerStore,
 } from '#tools/core/InternalToolHandler.js';
 import type { ToolRouterContract } from '#tools/core/ToolContracts.js';
+
+// ── Types inlined from deleted ToolDefinitionV2.ts ──
+
+export type ToolHandler = (
+  args: Record<string, unknown>,
+  context: Record<string, unknown>
+) => unknown | Promise<unknown>;
+
+export interface ToolDefinitionV2 {
+  id: string;
+  title: string;
+  description: string;
+  kind: CapabilityKind;
+  inputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
+  risk: ToolRiskProfile;
+  governance: ToolGovernanceProfile;
+  execution: ToolExecutionProfile;
+  handler: ToolHandler;
+  modelOverrides?: Record<
+    string,
+    {
+      description?: string;
+      inputSchema?: Record<string, unknown>;
+    }
+  >;
+}
+
+function v2ToManifest(def: ToolDefinitionV2): ToolCapabilityManifest {
+  const surfaces: Array<'runtime' | 'http' | 'mcp' | 'dashboard' | 'skill' | 'internal'> = [
+    'runtime',
+  ];
+  if (def.governance.allowInRemoteMcp) {
+    surfaces.push('mcp');
+  }
+  if (!def.risk.sideEffect) {
+    surfaces.push('http');
+  }
+
+  return {
+    id: def.id,
+    title: def.title,
+    kind: def.kind,
+    description: def.description,
+    owner: 'core',
+    lifecycle: 'active',
+    surfaces,
+    inputSchema: def.inputSchema,
+    outputSchema: def.outputSchema,
+    risk: def.risk,
+    execution: def.execution,
+    governance: def.governance,
+    evals: {
+      required: def.risk.sideEffect || def.governance.policyProfile !== 'read',
+      cases: [],
+    },
+  };
+}
+
+function v2ToSchemaProjection(def: ToolDefinitionV2, model?: string): ToolSchemaProjection {
+  const override = model ? matchModelOverride(def, model) : undefined;
+  return {
+    name: def.id,
+    description: override?.description ?? def.description,
+    parameters: override?.inputSchema ?? def.inputSchema,
+  };
+}
+
+function matchModelOverride(
+  def: ToolDefinitionV2,
+  model: string
+): { description?: string; inputSchema?: Record<string, unknown> } | undefined {
+  if (!def.modelOverrides) {
+    return undefined;
+  }
+  for (const [pattern, override] of Object.entries(def.modelOverrides)) {
+    if (matchGlob(model, pattern)) {
+      return override;
+    }
+  }
+  return undefined;
+}
+
+function matchGlob(value: string, pattern: string): boolean {
+  if (pattern === '*') {
+    return true;
+  }
+  const starIdx = pattern.indexOf('*');
+  if (starIdx < 0) {
+    return value === pattern;
+  }
+  const prefix = pattern.slice(0, starIdx);
+  const suffix = pattern.slice(starIdx + 1);
+  return (
+    value.startsWith(prefix) &&
+    value.endsWith(suffix) &&
+    value.length >= prefix.length + suffix.length
+  );
+}
 
 export class UnifiedToolCatalog
   extends CapabilityCatalog

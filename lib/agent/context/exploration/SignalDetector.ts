@@ -14,20 +14,7 @@
 
 // ─── 搜索工具白名单（用于判断"搜索轮次"）───────────────
 
-export const SEARCH_TOOLS = new Set([
-  'search_project_code',
-  'semantic_search_code',
-  'get_class_info',
-  'get_class_hierarchy',
-  'get_protocol_info',
-  'get_method_overrides',
-  'get_category_map',
-  'list_project_structure',
-  'get_project_overview',
-  'get_file_summary',
-  'query_code_graph',
-  'query_call_graph',
-]);
+export const SEARCH_TOOLS = new Set(['code', 'graph']);
 
 /** 信号检测所需的指标集合引用 */
 interface SignalMetrics {
@@ -65,32 +52,30 @@ export class SignalDetector {
    * @returns 是否包含新信息
    */
   detect(toolName: string, args: Record<string, unknown>, result: unknown) {
+    const action = (args?.action as string) || '';
+
     switch (toolName) {
-      case 'search_project_code':
-        return this.#detectSearchSignal(args, result);
+      case 'code': {
+        if (action === 'search') {
+          return this.#detectSearchSignal(args, result);
+        }
+        if (action === 'read') {
+          return this.#detectFileReadSignal(args);
+        }
+        if (action === 'structure') {
+          return this.#detectListSignal(args);
+        }
+        return this.#detectGenericSignal(toolName, args);
+      }
 
-      case 'read_project_file':
-        return this.#detectFileReadSignal(args);
-
-      case 'list_project_structure':
-        return this.#detectListSignal(args);
-
-      case 'get_class_info':
-      case 'get_class_hierarchy':
-      case 'get_protocol_info':
-      case 'get_method_overrides':
-      case 'get_category_map':
-      case 'query_code_graph':
-      case 'query_call_graph':
+      case 'graph':
         return this.#detectQuerySignal(toolName, args);
 
-      case 'get_project_overview':
-        return this.#detectSingletonQuery('overview');
-
-      case 'submit_knowledge':
-      case 'submit_with_check':
-        // Submit 本身不算"新信息"（阶段转换由 submitCount 驱动）
-        return false;
+      case 'knowledge':
+        if (action === 'submit') {
+          return false;
+        }
+        return this.#detectGenericSignal(toolName, args);
 
       default:
         return this.#detectGenericSignal(toolName, args);

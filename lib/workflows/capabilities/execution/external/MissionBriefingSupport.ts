@@ -76,8 +76,8 @@ export function createBriefingPlan(input: BriefingProfileInput = {}): BriefingPl
 
 /** 知识提交的完整 Schema — 定义必填字段、内容结构、枚举值和质量门控 */
 export const SUBMISSION_SCHEMA = {
-  tool: 'alembic_submit_knowledge',
-  batchTool: 'alembic_submit_knowledge_batch',
+  tool: 'knowledge',
+  batchTool: 'knowledge',
   requiredFields: getRequiredFieldNames(),
   contentStructure: {
     pattern: '代码片段（可选）',
@@ -223,8 +223,8 @@ export function buildInternalNextSteps(
     '',
     '== 完成后可执行的后续操作 ==',
     '1. 调用 alembic_enrich_candidates(candidateIds) 补全候选缺失字段',
-    '2. 使用 alembic_submit_knowledge_batch 手动提交更多知识条目',
-    '3. 使用 alembic_submit_knowledge 逐条提交高质量知识',
+    '2. 使用 knowledge({ action: "submit_batch" }) 手动提交更多知识条目',
+    '3. 使用 knowledge({ action: "submit" }) 逐条提交高质量知识',
     '4. 使用 alembic_skill({ operation: "load", name }) 加载自动生成的 Project Skills',
     '',
     '== 宏观维度 → Project Skills ==',
@@ -487,12 +487,12 @@ function buildWorkflowInstruction({
       'Step 1 — Evolve (仅 needsVerification 中的 Recipe): ' +
       '读 sourceRefs 源码验证 → 调用 alembic_evolve({ decisions: [本维度决策] }) → ' +
       'Step 2 — Gap-Fill: ' +
-      '分析代码发现新模式 → 调用 alembic_submit_knowledge 提交 (数量参考 gap 值) → ' +
+      '分析代码发现新模式 → 调用 knowledge({ action: "submit" }) 提交 (数量参考 gap 值) → ' +
       'Step 3 — Complete: 调用 alembic_dimension_complete 完成维度'
     );
   }
 
-  return '对每个维度: (1) 用你的原生能力阅读代码分析 → (2) 调用 alembic_submit_knowledge_batch 批量提交候选（**每维度最少 3 条，目标 5 条**，将不同关注点拆分为独立候选，1-2 条视为不合格） → (3) 调用 alembic_dimension_complete 完成维度（必须传 referencedFiles=[分析过的文件路径] 和 keyFindings=[3-5条关键发现]）';
+  return '对每个维度: (1) 用你的原生能力阅读代码分析 → (2) 调用 knowledge({ action: "submit_batch" }) 批量提交候选（**每维度最少 3 条，目标 5 条**，将不同关注点拆分为独立候选，1-2 条视为不合格） → (3) 调用 alembic_dimension_complete 完成维度（必须传 referencedFiles=[分析过的文件路径] 和 keyFindings=[3-5条关键发现]）';
 }
 
 // ═══════════════════════════════════════════════════════════

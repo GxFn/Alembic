@@ -14,8 +14,6 @@ import Logger from '#infra/logging/Logger.js';
 import type { SignalBus } from '#infra/signal/SignalBus.js';
 import type { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
 import type { ToolCapabilityManifest } from '#tools/catalog/CapabilityManifest.js';
-import { createInternalToolManifest } from '#tools/catalog/CapabilityProjection.js';
-import type { ToolDefinition } from '#tools/catalog/ToolDefinition.js';
 import type { ForgedInternalToolStore } from '#tools/core/InternalToolHandler.js';
 import type { WorkflowHandler, WorkflowRegistry } from '#tools/workflow/WorkflowRegistry.js';
 import type { CompositionSpec } from './DynamicComposer.js';
@@ -434,24 +432,44 @@ export class ToolForge {
 }
 
 function buildGeneratedToolManifest(tool: GeneratedTool): ToolCapabilityManifest {
-  return createInternalToolManifest({
-    name: tool.name,
+  return {
+    id: tool.name,
+    title: tool.name,
+    kind: 'internal-tool',
     description: tool.description,
-    parameters: tool.parameters,
-    metadata: {
-      owner: 'agent-forge',
-      lifecycle: 'experimental',
+    owner: 'agent-forge',
+    lifecycle: 'experimental',
+    surfaces: ['runtime'],
+    inputSchema: tool.parameters,
+    risk: {
       sideEffect: true,
-      policyProfile: 'write',
-      auditLevel: 'full',
+      dataAccess: 'project',
+      writeScope: 'project',
+      network: 'none',
+      credentialAccess: 'none',
+      requiresHumanConfirmation: 'on-risk',
+      owaspTags: ['excessive-agency'],
+    },
+    execution: {
+      adapter: 'internal',
+      timeoutMs: 30_000,
+      maxOutputBytes: 16_000,
       abortMode: 'preStart',
-      surface: ['runtime'],
-      composable: false,
+      cachePolicy: 'none',
+      concurrency: 'single',
+      artifactMode: 'inline',
     },
-    handler: async () => {
-      throw new Error('Generated tool manifest handler must be resolved by InternalToolAdapter.');
+    governance: {
+      auditLevel: 'full',
+      policyProfile: 'write',
+      approvalPolicy: 'explain-then-run',
+      allowedRoles: ['owner', 'admin', 'developer', 'external_agent'],
+      allowInComposer: false,
+      allowInRemoteMcp: false,
+      allowInNonInteractive: false,
     },
-  } satisfies ToolDefinition);
+    evals: { required: true, cases: [] },
+  };
 }
 
 function buildWorkflowManifest(spec: CompositionSpec): ToolCapabilityManifest {

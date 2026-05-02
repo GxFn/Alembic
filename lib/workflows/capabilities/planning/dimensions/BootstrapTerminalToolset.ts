@@ -22,13 +22,13 @@ const TOOLSET_MODES: Record<BootstrapTerminalToolset, BootstrapTerminalMode[]> =
 };
 
 const ANALYZE_TOOLS: Record<BootstrapTerminalMode, string> = {
-  run: 'terminal_run',
+  run: 'terminal',
   shell: 'terminal_shell',
   pty: 'terminal_pty',
 };
 
 const EVOLUTION_TOOLS: Partial<Record<BootstrapTerminalMode, string>> = {
-  run: 'terminal_run',
+  run: 'terminal',
   shell: 'terminal_shell',
 };
 
@@ -88,7 +88,7 @@ export function buildBootstrapTerminalPolicyHints(config: BootstrapTerminalTools
     terminalScriptAllowed: false,
     constraints: [
       'Terminal tools are optional code-analysis evidence tools for analyze/evolve only.',
-      'Prefer terminal_run. Use terminal_shell only for pipes/redirection/substitution.',
+      'Prefer terminal({ action: "run" }). Use terminal_shell only for pipes/redirection/substitution.',
       'Use terminal_pty only when a TTY transcript is required.',
       'No installs, network operations, project writes, deletions, chmod/chown, sudo, or daemons.',
     ],

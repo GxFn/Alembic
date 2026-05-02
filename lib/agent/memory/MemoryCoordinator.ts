@@ -105,8 +105,8 @@ const DEFAULT_MEMORY_BUDGET = 4000;
 
 /** 副作用工具 — 不缓存结果 (B3 fix) */
 const NON_CACHEABLE_TOOLS = new Set([
-  'submit_knowledge',
-  'submit_with_check',
+  'knowledge',
+  'memory',
   'note_finding',
   'get_previous_analysis',
   'get_previous_evidence',

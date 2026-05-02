@@ -25,12 +25,14 @@ interface AgentRuntimeBuilderOptions {
   projectBriefing?: string | null;
   projectRoot?: string;
   dataRoot?: string;
+  toolRouter?: unknown;
 }
 
 export class AgentRuntimeBuilder {
   #container: Record<string, unknown>;
   #toolRegistry: ToolRegistryLike;
   #aiProvider: unknown;
+  #toolRouter: unknown;
   #logger = Logger.getInstance();
   #sharedOpts: {
     memoryCoordinator: unknown;
@@ -47,10 +49,12 @@ export class AgentRuntimeBuilder {
     projectBriefing = null,
     projectRoot = process.cwd(),
     dataRoot = projectRoot,
+    toolRouter = null,
   }: AgentRuntimeBuilderOptions) {
     this.#container = container;
     this.#toolRegistry = toolRegistry;
     this.#aiProvider = aiProvider;
+    this.#toolRouter = toolRouter;
     this.#sharedOpts = {
       memoryCoordinator,
       projectBriefing,
@@ -81,7 +85,8 @@ export class AgentRuntimeBuilder {
       presetName,
       aiProvider: this.#aiProvider as never,
       toolRegistry: this.#toolRegistry as never,
-      toolRouter: this.#toolRegistry.getRouter?.() || null,
+      toolRouter:
+        (this.#toolRouter as ToolRouterContract) || this.#toolRegistry.getRouter?.() || null,
       container: this.#container,
       capabilities,
       strategy: preset.strategyInstance as Strategy,

@@ -41,11 +41,7 @@ export class QualityGatePolicy extends Policy {
       const hasSubmitCalls = (result.toolCalls || []).some((tc: unknown) => {
         const obj = tc as Record<string, unknown>;
         const name = (obj.tool || obj.name) as string;
-        return (
-          name === 'submit_knowledge' ||
-          name === 'submit_with_check' ||
-          name === 'collect_scan_recipe'
-        );
+        return name === 'knowledge';
       });
       if (!hasSubmitCalls) {
         const fileRefCount = (result.reply.match(/[\w/-]+\.\w{1,6}/g) || []).length;

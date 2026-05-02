@@ -26,9 +26,9 @@ import { CapabilityProbe } from '#core/capability/CapabilityProbe.js';
 import Logger from '#infra/logging/Logger.js';
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
+import { LightweightRouter } from '#tools/core/LightweightRouter.js';
 import type { ToolRouterContract } from '#tools/core/ToolContracts.js';
 import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
-import { ToolRouter } from '#tools/core/ToolRouter.js';
 import { applyPendingAutoApprove, markAutoApproveNeeded } from './autoApproveInjector.js';
 import { envelope } from './envelope.js';
 import { wrapHandler } from './errorHandler.js';
@@ -295,7 +295,7 @@ export class McpServer {
     if (!this._toolRouter) {
       const { manifests } = buildMcpToolCapabilities(TOOLS);
       const catalog = new CapabilityCatalog(manifests);
-      this._toolRouter = new ToolRouter({
+      this._toolRouter = new LightweightRouter({
         catalog,
         adapters: [new McpToolAdapter((toolName, args) => this._executeMcpHandler(toolName, args))],
         projectRoot: resolveProjectRoot(this.container),

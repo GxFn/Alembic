@@ -1171,7 +1171,7 @@ export class AgentRuntime {
     // 直接跳过 forced summary，避免浪费一次 LLM 调用
     if (!ctx.lastReply && ctx.tracker?.pipelineType === 'scan') {
       const recipeCount = ctx.toolCalls.filter(
-        (tc: ToolCallEntry) => (tc.tool || tc.name) === 'collect_scan_recipe'
+        (tc: ToolCallEntry) => (tc.tool || tc.name) === 'knowledge'
       ).length;
       ctx.lastReply = `[scan complete: ${recipeCount} recipes collected]`;
     }

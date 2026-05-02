@@ -41,7 +41,7 @@ const WEIGHTS = { title: 0.2, clause: 0.3, code: 0.3, guard: 0.2 };
 export class BootstrapDedup {
   readonly #candidates: CandidateSummary[] = [];
 
-  /** 注册已提交的候选（submit_knowledge 成功后调用） */
+  /** 注册已提交的候选（knowledge 提交成功后调用） */
   register(summary: CandidateSummary): void {
     this.#candidates.push(summary);
   }

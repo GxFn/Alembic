@@ -25,6 +25,6 @@ export class ScanProduction extends Capability {
   }
 
   get tools() {
-    return ['collect_scan_recipe', 'read_project_file'];
+    return ['knowledge', 'code'];
   }
 }

@@ -35,8 +35,8 @@ import { validateSessionStoreShape } from './session-store-schema.js';
 
 /** 副作用工具 — 不缓存结果 (B3 fix) */
 const NON_CACHEABLE = new Set([
-  'submit_knowledge',
-  'submit_with_check',
+  'knowledge',
+  'memory',
   'note_finding',
   'get_previous_analysis',
   'get_previous_evidence',
@@ -584,13 +584,13 @@ export class SessionStore implements Disposable {
       return null;
     }
 
-    if (toolName === 'search_project_code') {
+    if (toolName === 'code' && args?.action === 'search') {
       const pattern = args?.pattern || '';
       if (pattern) {
-        const entry = this.#searchCache.get(pattern);
+        const entry = this.#searchCache.get(pattern as string);
         if (entry) {
           if (this.#ttlMs > 0 && Date.now() - entry.cachedAt > this.#ttlMs) {
-            this.#searchCache.delete(pattern);
+            this.#searchCache.delete(pattern as string);
             this.#cacheStats.evictions++;
             this.#cacheStats.misses++;
             return null;
@@ -601,7 +601,7 @@ export class SessionStore implements Disposable {
         }
       }
     }
-    if (toolName === 'read_project_file') {
+    if (toolName === 'code' && args?.action === 'read') {
       const filePath = args?.filePath || '';
       if (filePath) {
         const entry = this.#fileCache.get(filePath);
@@ -628,7 +628,7 @@ export class SessionStore implements Disposable {
       return;
     }
 
-    if (toolName === 'search_project_code') {
+    if (toolName === 'code' && args?.action === 'search') {
       const pattern = args?.pattern || '';
       if (pattern) {
         if (this.#searchCache.size >= MAX_SEARCH_CACHE) {
@@ -637,10 +637,10 @@ export class SessionStore implements Disposable {
             this.#searchCache.delete(oldestKey);
           }
         }
-        this.#searchCache.set(pattern, { result, cachedAt: Date.now(), hitCount: 0 });
+        this.#searchCache.set(pattern as string, { result, cachedAt: Date.now(), hitCount: 0 });
       }
     }
-    if (toolName === 'read_project_file') {
+    if (toolName === 'code' && args?.action === 'read') {
       const filePath = args?.filePath || '';
       const content =
         typeof result === 'object' && result !== null
