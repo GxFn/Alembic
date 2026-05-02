@@ -1,24 +1,19 @@
 /**
- * MCP Handlers — Bootstrap 冷启动知识库初始化 (内部 Agent 路径)
+ * InternalColdStartWorkflow — 内部 Agent 冷启动知识库初始化
  *
- * ⚠️ 本文件是「内部 Agent」冷启动路径 — 由 Alembic 内置的 Analyst/Producer
- *    双 Agent AI pipeline 自动完成知识提取。需要配置 AI Provider (API Key)。
+ * 由 Alembic AgentRuntime 自动完成知识提取。需要配置 AI Provider (API Key)。
  *
  * 调用方:
  *   - CLI: `alembic bootstrap --knowledge`
- *   - AgentRuntime: `bootstrapKnowledgeTool` (infrastructure.js)
+ *   - MCP: `alembic_bootstrap` (带 knowledge 参数)
  *   - Dashboard HTTP: POST /api/bootstrap/knowledge
  *
- * 外部 Agent 路径（Cursor/Copilot 等 IDE Agent）请参见:
- *   - bootstrap-external.js  — 无参数 Mission Briefing 入口
- *   - dimension-complete.js  — 维度完成通知
- *   外部 Agent 使用 read_file/grep_search 等原生能力自行分析代码，
- *   不经过本文件的 Phase 5 AI pipeline。
+ * 外部 Agent 路径请参见 ExternalColdStartWorkflow。
  *
- * 内部 Agent 架构 (v5 + Async Fill):
+ * 流程 (Async Fill):
  *
  * 同步阶段（快速返回，~1-3s）:
- *   Phase 1   → 文件收集（SPM Target 源文件扫描）
+ *   Phase 1   → 文件收集
  *   Phase 1.5 → AST 代码结构分析（Tree-sitter）
  *   Phase 2   → SPM 依赖关系 → knowledge_edges（模块级图谱）
  *   Phase 3   → Guard 规则审计
@@ -38,13 +33,6 @@
  *   bootstrap:task-failed    — 单个维度失败
  *   bootstrap:all-completed  — 全部维度完成（前端弹出通知）
  *
- * 模块结构:
- *   bootstrap.js              ← 内部 Agent 主入口 (本文件)
- *   bootstrap-external.js     ← 外部 Agent 主入口 (Mission Briefing)
-
- *   bootstrap/patterns.js     ← 多语言代码模式匹配（内部 Agent 专用）
- *   bootstrap/dimensions.js   ← 7 维度知识提取器（内部 Agent 专用）
- *   bootstrap/projectSkills.js ← Phase 5.5 Project Skill 生成（内部 Agent 专用）
  */
 
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';

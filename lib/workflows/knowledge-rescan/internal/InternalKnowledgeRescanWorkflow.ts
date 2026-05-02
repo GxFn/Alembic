@@ -1,21 +1,19 @@
 /**
- * rescan-internal.ts — 内部 Agent 知识重扫
+ * InternalKnowledgeRescanWorkflow — 内部 Agent 增量知识重扫
  *
- * 与 rescan-external.ts（为外部 IDE Agent 生成 Mission Briefing）不同，
- * 本文件由内置 AI dimension execution 在服务端自动完成知识补齐。
+ * 与 ExternalKnowledgeRescanWorkflow（为外部 IDE Agent 生成 Mission Briefing）不同，
+ * 本文件由 AgentRuntime dimension execution 在服务端自动完成知识补齐。
  *
  * 流程:
  *   1. snapshotRecipes — 快照保留知识
  *   2. rescanClean — 清理衍生缓存
- *   2.5 Recipe 文件 ↔ DB 一致性恢复
- *   3. Phase 1-4 全量分析（文件收集→AST→依赖→Guard→维度）
+ *   2.5 Recipe 文件 ↔ DB 一致性恢复 (SourceRefReconciler)
+ *   3. Phase 1-4 全量分析 (ProjectIntelligenceCapability)
  *   4. 覆盖分类 — RecipeImpactPlanner + SourceRef + lifecycle 三层评估
  *   5. 计算 gap 维度（需要补齐的维度）
- *   5.5 BootstrapSessionManager — 缓存 Phase 结果供复用
+ *   5.5 缓存 Phase 结果供复用 (SessionSupport)
  *   6. 快速返回骨架 → 异步 internal dimension execution 填充 gap 维度
  *   7. 前端通过 Socket.io 接收维度完成进度
- *
- * @module handlers/rescan-internal
  */
 
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';

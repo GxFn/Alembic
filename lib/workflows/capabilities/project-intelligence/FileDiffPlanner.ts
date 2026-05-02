@@ -9,10 +9,8 @@
  *   2. 扫描当前文件 → 计算 diff (added/modified/deleted)
  *   3. 推断受影响维度 → { mode, dimensions, skippedDimensions }
  *   4. 从快照恢复未变更维度的 EpisodicMemory
- *   5. 只对受影响维度执行 Analyst → Producer
+ *   5. 只对受影响维度执行 dimension fill
  *   6. 完成后保存新快照
- *
- * @module file-diff/FileDiffPlanner
  */
 
 import { SessionStore } from '#agent/memory/SessionStore.js';

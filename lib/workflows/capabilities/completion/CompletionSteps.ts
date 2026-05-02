@@ -1,3 +1,10 @@
+/**
+ * CompletionSteps — Workflow 完成阶段的各步骤实现
+ *
+ * 包含 Cursor Delivery、交付验证、Panorama 刷新、Wiki 生成
+ * 和语义记忆固化，由 WorkflowCompletionFinalizer 按顺序调用。
+ */
+
 import type {
   CompletionContextLike,
   CompletionLogger,

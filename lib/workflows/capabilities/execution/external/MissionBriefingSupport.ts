@@ -1,12 +1,9 @@
 /**
- * MissionBriefingSupport — Mission Briefing 辅助模块合集
+ * MissionBriefingSupport — Mission Briefing 配置、文本模板与辅助构建器
  *
- * 合并自:
- *   - MissionBriefingProfiles (Briefing 配置与预算)
- *   - BootstrapDimensionText (固定文本常量与提示模板)
- *   - BriefingCompressionPolicy (响应压缩策略)
- *   - ExecutionInstructionBuilder (执行计划构建)
- *   - RescanEvidenceProjector (增量扫描证据投影)
+ * 包含 Briefing 构建过程中的配置档案、维度文本常量、
+ * 响应压缩策略、执行指令构建和 Rescan 证据投影。
+ * 由 MissionBriefingBuilder 统一调用。
  */
 
 import { sopToCompactText } from '#domain/dimension/DimensionSop.js';

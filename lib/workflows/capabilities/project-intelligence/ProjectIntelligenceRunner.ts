@@ -1,21 +1,18 @@
 /**
- * bootstrap-phases.js — 共享的 Phase 1-4 数据收集管线
+ * ProjectIntelligenceRunner — 共享 Phase 1-4 项目分析管线
  *
- * 内部 Agent (bootstrap-internal.js) 和外部 Agent (bootstrap-external.js)
- * 共享完全相同的项目分析逻辑。本模块将这些逻辑提取为可复用函数，
- * 消除约 300 行重复代码。
+ * 冷启动 (ColdStart) 和增量扫描 (KnowledgeRescan) 共享完全相同的
+ * 项目分析逻辑，内部/外部 Agent 均通过 ProjectIntelligenceCapability 调用此模块。
  *
  * Phase 概览:
  *   Phase 1   → 文件收集（DiscovererRegistry → 多语言项目类型检测）
  *   Phase 1.5 → AST 代码结构分析（tree-sitter + SFC 预处理）
  *   Phase 1.6 → Code Entity Graph（代码实体关系图谱）
- *   Phase 2.2 → Panorama 全景汇总（RoleRefiner + CouplingAnalyzer + LayerInferrer）
  *   Phase 2   → 依赖关系 → knowledge_edges
  *   Phase 2.1 → Module 实体写入 Entity Graph
+ *   Phase 2.2 → Panorama 全景汇总（RoleRefiner + CouplingAnalyzer + LayerInferrer）
  *   Phase 3   → Guard 规则审计
  *   Phase 4   → 维度条件化过滤 + Enhancement Pack + 语言画像
- *
- * @module bootstrap/shared/bootstrap-phases
  */
 
 import fs from 'node:fs';

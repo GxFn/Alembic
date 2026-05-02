@@ -9,8 +9,6 @@
  *
  * 存储: SQLite bootstrap_snapshots + bootstrap_dim_files 表（runtime schema 兼容名）
  * 所有操作使用 Drizzle 类型安全 API。
- *
- * @module file-diff/FileDiffSnapshotStore
  */
 
 import { randomUUID } from 'node:crypto';

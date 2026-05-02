@@ -1,7 +1,7 @@
 /**
  * TargetClassifier — Target/文件分类辅助
  *
- * 从 bootstrap.js 拆分而来，负责：
+ * 负责：
  *   - Target 名称 → 模块职责推断
  *   - 文件名 → 分析优先级推断
  */

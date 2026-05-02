@@ -1,5 +1,5 @@
 /**
- * TierScheduler.js — 维度分层并行调度器
+ * TierScheduler — 维度分层并行调度器
  *
  * 内部 Agent 和外部 Agent 共享此调度模型。
  * 按维度间信息依赖关系分 3 层执行:

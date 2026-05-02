@@ -1,15 +1,10 @@
 /**
- * dimension-configs.js — v3.0 维度配置 + Tier Reflection
+ * bootstrapDimensionConfigs — 维度配置表 + Tier Reflection 构建
  *
- * **v2: 从统一维度注册表 (DimensionRegistry) 派生**
- *
- * 从 orchestrator.js 拆分，包含:
- * - DIMENSION_CONFIGS_V3: 维度的 outputType + allowedKnowledgeTypes
- *   现在从 DimensionRegistry 自动生成，无需手动维护
- * - getFullDimensionConfig(): 合并 baseDimensions + V3 专属配置
- * - buildTierReflection: Tier 级反思聚合 (规则化, 不需要 AI)
- *
- * @module pipeline/dimension-configs
+ * 从 DimensionRegistry 派生的维度执行配置：
+ *   - DIMENSION_CONFIGS_V3: 维度的 outputType + allowedKnowledgeTypes（自动生成）
+ *   - getFullDimensionConfig(): 合并 baseDimensions + V3 专属配置
+ *   - buildTierReflection(): Tier 级反思聚合（规则化，不需要 AI）
  */
 
 import { getDimensionFocusKeywords, getDimensionSOP } from '#domain/dimension/DimensionSop.js';

@@ -1,14 +1,12 @@
 /**
- * DimensionCheckpoint — 维度执行断点存储/恢复 + 维度状态恢复
+ * DimensionCheckpoint — 维度执行断点存储与恢复
  *
  * 在维度级粒度保存/加载/清理执行进度，支持意外中断后恢复。
  *
  * 调用方:
- *   - orchestrator.js (内部 Agent) — AI pipeline 每个维度完成后保存
- *   - dimension-complete.js (外部 Agent) — 外部 Agent 通知维度完成时保存
- *   - workflow cleanup — clearDimensionCheckpoints() 全量重建前清理
- *
- * @module pipeline/checkpoint
+ *   - BootstrapConsumers (内部 Agent) — 每个维度完成后保存
+ *   - ExternalDimensionCompletionWorkflow (外部 Agent) — 维度完成时保存
+ *   - WorkflowResultPersistence — clearDimensionCheckpoints() 全量重建前清理
  */
 
 import fs from 'node:fs/promises';

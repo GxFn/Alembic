@@ -1,13 +1,11 @@
 /**
- * mock-pipeline.ts — Mock AI Bootstrap 轻量管线
+ * MockBootstrapPipeline — Mock AI 模式下的轻量知识填充管线
  *
  * 当 AI Provider 为 mock 时，利用 Phase 1-4 已收集的真实数据
  * (AST、依赖图、文件列表、Panorama) 为每个维度生成模板化候选知识。
  *
  * 不调用 AI，但走完完整的 submit → dimension_complete 流程，
  * 使 Dashboard 能正常展示知识库、健康雷达等 UI。
- *
- * @module pipeline/mock-pipeline
  */
 
 import path from 'node:path';

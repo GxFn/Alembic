@@ -1,9 +1,8 @@
 /**
- * SessionSupport — Session 管理辅助模块合集
+ * SessionSupport — SessionManager 单例获取与项目分析 Session 缓存
  *
- * 合并自:
- *   - WorkflowSessionManagerProvider (SessionManager 单例获取)
- *   - WorkflowSessionCache (项目分析 Session 缓存)
+ * 为冷启动和增量扫描提供 BootstrapSessionManager 的单例解析，
+ * 以及 Phase 1-4 分析结果的缓存，供后续维度执行复用。
  */
 
 import path from 'node:path';

@@ -1,3 +1,14 @@
+/**
+ * BootstrapConsumers — 内部 Agent 维度执行结果的消费处理器
+ *
+ * 处理维度运行结果的各个方面：
+ *   - Dimension: 单维度分析报告消费、候选提交、checkpoint 保存
+ *   - Session: 整体会话结果消费、缺失维度检测
+ *   - Tier: 分层反思生成（跨维度 pattern 发现）
+ *   - CandidateRelation: 候选间关系写入 Code Entity Graph
+ *   - Skill: skillWorthy 维度的 Project Skill 生成
+ */
+
 import type { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import type { SessionStore } from '#agent/memory/SessionStore.js';
 import type { AgentRunResult } from '#agent/service/index.js';

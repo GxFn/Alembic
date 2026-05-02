@@ -1,16 +1,10 @@
 /**
- * Bootstrap 基础维度定义 + 维度条件化过滤
+ * BaseDimensions — DimensionRegistry 的适配层
  *
- * **v2: 从统一维度注册表 (DimensionRegistry) 派生**
- *
- * 此模块现在是 DimensionRegistry 的瘦适配层：
- * - `baseDimensions` 从 DIMENSION_REGISTRY 转换为旧格式，保持下游 API 兼容
- * - `resolveActiveDimensions()` 委托给 DimensionRegistry.resolveActiveDimensions()
- * - `BaseDimension` 接口保留给 MissionBriefingBuilder 等消费者使用
- *
- * 调用方:
- *   - bootstrap.js (内部 Agent) — Phase 4 构建响应骨架 + Phase 5 维度填充
- *   - bootstrap-external.js (外部 Agent) — Mission Briefing 中的维度清单
+ * 从统一维度注册表 (DimensionRegistry) 派生的瘦适配层：
+ *   - `baseDimensions` 从 DIMENSION_REGISTRY 转换为下游兼容格式
+ *   - `resolveActiveDimensions()` 委托给 DimensionRegistry
+ *   - `BaseDimension` 接口保留给 MissionBriefingBuilder 等消费者使用
  */
 
 import type { UnifiedDimension } from '#domain/dimension/index.js';

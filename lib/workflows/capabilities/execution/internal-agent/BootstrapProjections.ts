@@ -1,8 +1,11 @@
-import type { AgentRunResult } from '#agent/service/index.js';
+/**
+ * BootstrapProjections — AgentRunResult 到领域结构的投影层
+ *
+ * 将 AgentRuntime 返回的原始 AgentRunResult 投影为 Bootstrap 领域所需的
+ * 结构化数据（维度分析报告、候选提取、会话统计等），供 BootstrapConsumers 消费。
+ */
 
-// ---------------------------------------------------------------------------
-// Dimension projection
-// ---------------------------------------------------------------------------
+import type { AgentRunResult } from '#agent/service/index.js';
 
 export interface ToolCallRecord {
   tool?: string;

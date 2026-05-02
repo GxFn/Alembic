@@ -1,3 +1,10 @@
+/**
+ * BootstrapInputBuilders — AgentRunInput 构建器
+ *
+ * 构建内部 Agent Bootstrap 会话和单维度运行所需的 AgentRunInput，
+ * 包括消息、上下文、执行参数和子任务编排。
+ */
+
 import type { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import type { SystemRunContext } from '#agent/runtime/SystemRunContext.js';
 import type {

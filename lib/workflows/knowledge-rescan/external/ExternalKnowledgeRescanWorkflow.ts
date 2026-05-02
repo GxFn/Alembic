@@ -1,17 +1,14 @@
 /**
- * MCP Handler — alembic_rescan (知识重扫)
+ * ExternalKnowledgeRescanWorkflow — 外部 Agent 增量知识重扫
  *
- * 保留已审核 Recipe，清理衍生缓存，全量/指定维度重新扫描，
- * 新知识通过批量提交走正常的进化架构。
+ * 保留已审核 Recipe，清理衍生缓存，全量/指定维度重新扫描。
  *
  * 流程:
  *   1. snapshotRecipes — 快照保留知识
  *   2. rescanClean — 清理衍生缓存
- *   3. Phase 1-4 全量分析
+ *   3. Phase 1-4 全量分析 (ProjectIntelligenceCapability)
  *   4. 构建 Mission Briefing（含 allRecipes + evolutionGuide）
- *   5. 返回给 Agent 按维度执行: evolve → gap-fill → dimension_complete
- *
- * @module handlers/rescan-external
+ *   5. 返回给外部 Agent 按维度执行: evolve → gap-fill → dimension_complete
  */
 
 import type { ServiceContainer } from '#inject/ServiceContainer.js';

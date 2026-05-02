@@ -1,18 +1,14 @@
 /**
- * pipeline/dimension-context.js — 跨维度上下文管理 (v6)
+ * DimensionContext — 内部 Agent 跨维度上下文容器
  *
- * ⚠️ 内部 Agent 专用 — 被 orchestrator.js 的 PipelineStrategy analyze 阶段调用。
- *    外部 Agent 不使用此模块（外部 Agent 的跨维度上下文由 BootstrapSession.js + EpisodicMemory 管理）。
+ * 内部 Agent 专用。外部 Agent 的跨维度上下文由 BootstrapSession + EpisodicMemory 管理。
  *
- * 在 PipelineStrategy 按维度分批执行时，维护跨维度的上下文:
+ * 按维度分批执行时，维护跨维度的累积上下文:
  *   - 项目基础信息 (不变)
  *   - 已完成维度的 DimensionDigest (累积)
  *   - 已提交候选的摘要列表 (累积)
  *
- * 确保每个维度的 Analyst 阶段都能看到前序维度的分析结论，
- * 实现跨维度透明互补。
- *
- * @module pipeline/dimension-context
+ * 确保每个维度都能看到前序维度的分析结论，实现跨维度透明互补。
  */
 
 // ─── Local type definitions ──────────────────────────────
