@@ -95,10 +95,11 @@ export class DeepSeekProvider extends AiProvider {
   /**
    * chatWithTools() 是多轮 Agent 循环的核心。
    *
-   * V4 thinking 模式策略 (遵循官方文档):
+   * V4 thinking 模式策略 (遵循官方文档 2026-04-24):
    *   - 开启 thinking，reasoning_effort 默认 "high"
-   *   - 有 tool_calls 的 assistant 消息: 回传 reasoning_content（必须）
-   *   - 纯文本 assistant 消息: 不回传 reasoning_content（省 token）
+   *   - 有 tool_calls 的 assistant 消息: 回传 reasoning_content（必须，否则 400）
+   *   - 纯文本 assistant 消息: reasoning_content 可选（回传也会被忽略）
+   *   - 为安全起见，V4 thinking 模式下所有 assistant 消息统一回传 reasoning_content
    */
   async chatWithTools(
     prompt: string,
@@ -116,6 +117,10 @@ export class DeepSeekProvider extends AiProvider {
       const unifiedMessages = rawMessages as UnifiedMessage[] | undefined;
       const toolSchemas = rawToolSchemas as ToolSchema[] | undefined;
 
+      const hasTools = toolSchemas && toolSchemas.length > 0;
+      const v4 = this.#isV4();
+      const v4Thinking = v4 && hasTools;
+
       const messages: Array<Record<string, unknown>> = [];
       if (systemPrompt) {
         messages.push({ role: 'system', content: systemPrompt });
@@ -132,11 +137,14 @@ export class DeepSeekProvider extends AiProvider {
         } else if (msg.role === 'assistant') {
           const m: Record<string, unknown> = { role: 'assistant', content: msg.content || null };
           const hasToolCalls = msg.toolCalls && msg.toolCalls.length > 0;
-          // 官方要求: 带 tool_calls 的 assistant 消息必须回传 reasoning_content
-          // 即使值为空字符串/null 也必须包含此字段，否则 API 返回 400
-          if (hasToolCalls) {
+
+          if (v4Thinking) {
+            // V4 thinking 模式下:
+            //   - 带 tool_calls 的消息: reasoning_content 必须回传（官方硬性要求）
+            //   - 纯文本消息: reasoning_content 回传无害（被忽略），统一回传更安全
             m.reasoning_content = msg.reasoningContent ?? '';
           }
+
           if (hasToolCalls) {
             m.tool_calls = msg.toolCalls!.map(
               (tc: { id: string; name: string; args: Record<string, unknown> }) => ({
@@ -156,9 +164,10 @@ export class DeepSeekProvider extends AiProvider {
         }
       }
 
-      const hasTools = toolSchemas && toolSchemas.length > 0;
-      const v4 = this.#isV4();
-      const v4Thinking = v4 && hasTools;
+      // V4 预飞检查: 检测可能导致 400 的 reasoning_content 缺失
+      if (v4Thinking) {
+        this.#validateV4Messages(messages);
+      }
 
       const body: Record<string, unknown> = {
         model: this.model,
@@ -294,6 +303,47 @@ export class DeepSeekProvider extends AiProvider {
         error: (err as Error).message,
       });
       return Array.isArray(text) ? texts.map(() => []) : [];
+    }
+  }
+
+  // ─── V4 消息校验 ────────────────────────────────────────
+
+  /**
+   * V4 thinking 模式预飞检查:
+   * 检测消息数组中是否有 assistant+tool_calls 但缺少 reasoning_content 的消息。
+   * 如果发现异常，记录详细日志辅助排查，并尝试修补（设空字符串兜底）。
+   */
+  #validateV4Messages(messages: Array<Record<string, unknown>>) {
+    let issues = 0;
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i];
+      if (m.role !== 'assistant') {
+        continue;
+      }
+
+      const hasTC = Array.isArray(m.tool_calls) && (m.tool_calls as unknown[]).length > 0;
+      const rc = m.reasoning_content;
+
+      if (hasTC && (rc === undefined || rc === null)) {
+        issues++;
+        this.logger?.warn(
+          `[DeepSeek V4] ⚠ preflight: messages[${i}] has tool_calls but reasoning_content=${String(rc)}. ` +
+            `Patching to empty string. content=${String(m.content)?.slice(0, 80)}`
+        );
+        m.reasoning_content = '';
+      }
+
+      if (hasTC && rc === '') {
+        this.logger?.debug(
+          `[DeepSeek V4] preflight: messages[${i}] has tool_calls with empty reasoning_content (may have been lost)`
+        );
+      }
+    }
+
+    if (issues > 0) {
+      this.logger?.warn(
+        `[DeepSeek V4] preflight found ${issues} assistant messages with missing reasoning_content (patched)`
+      );
     }
   }
 

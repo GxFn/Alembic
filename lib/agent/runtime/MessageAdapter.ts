@@ -196,7 +196,7 @@ export class SimpleArrayAdapter extends MessageAdapter {
 
   appendAssistantText(text: string, reasoningContent?: string | null) {
     const msg: ChatMessage = { role: 'assistant', content: text };
-    if (reasoningContent) {
+    if (reasoningContent != null) {
       msg.reasoningContent = reasoningContent;
     }
     this.#messages.push(msg);
@@ -207,10 +207,12 @@ export class SimpleArrayAdapter extends MessageAdapter {
     calls: ToolCallRecord[],
     reasoningContent?: string | null
   ) {
-    const msg: ChatMessage = { role: 'assistant', content: text, toolCalls: calls };
-    if (reasoningContent != null) {
-      msg.reasoningContent = reasoningContent;
-    }
+    const msg: ChatMessage = {
+      role: 'assistant',
+      content: text,
+      toolCalls: calls,
+      reasoningContent: reasoningContent ?? '',
+    };
     this.#messages.push(msg);
   }
 

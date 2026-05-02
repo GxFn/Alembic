@@ -221,12 +221,10 @@ export class ContextWindow {
       role: 'assistant',
       content: text || null,
       toolCalls,
+      // V4 要求: 带 tool_calls 的 assistant 消息的 reasoning_content 必须保留
+      // 始终存储此字段（即使为空），确保后续 API 调用不会丢失
+      reasoningContent: reasoningContent ?? '',
     };
-    // V4 要求: 带 tool_calls 的 assistant 消息的 reasoning_content 必须保留
-    // 即使是空字符串也不能丢弃，否则后续 API 调用会 400
-    if (reasoningContent != null) {
-      msg.reasoningContent = reasoningContent;
-    }
     this.#messages.push(msg);
   }
 
@@ -250,7 +248,7 @@ export class ContextWindow {
       role: 'assistant',
       content: text,
     };
-    if (reasoningContent) {
+    if (reasoningContent != null) {
       msg.reasoningContent = reasoningContent;
     }
     this.#messages.push(msg);
@@ -282,17 +280,18 @@ export class ContextWindow {
   }
 
   /**
-   * L1 压缩: 截断旧轮次的工具结果内容 + 清理无用 reasoningContent
+   * L1 压缩: 截断旧轮次的工具结果内容
    *
-   * DeepSeek V4 优化: 官方文档明确指出，纯文本 assistant 消息的 reasoningContent
-   * 不需要回传（会被忽略）。L1 阶段清理这些无用的 reasoningContent 可节省大量 token。
-   * 有 toolCalls 的 assistant 消息的 reasoningContent 必须保留。
+   * 注意: 不再清理任何消息的 reasoningContent。
+   * DeepSeek V4 thinking 模式要求带 tool_calls 的 assistant 消息必须回传
+   * reasoning_content，而 ContextWindow 无法感知当前 Provider 类型。
+   * 保留所有 reasoningContent 是最安全的策略（非 tool_call 消息的
+   * reasoning_content 回传给 API 时会被忽略，无负面影响）。
    */
   #compactL1() {
     const TRUNCATE_THRESHOLD = 2000;
     const TRUNCATE_TO = 500;
     let truncated = 0;
-    let reasoningCleaned = 0;
 
     const lastRoundStart = this.#findLastToolRoundStart();
     if (lastRoundStart < 0) {
@@ -305,22 +304,17 @@ export class ContextWindow {
         msg.content = `${msg.content.substring(0, TRUNCATE_TO)}\n... [truncated from ${msg.content.length} chars]`;
         truncated++;
       }
-      // 纯文本 assistant 消息的 reasoningContent 不需要回传，清理释放空间
-      if (msg.role === 'assistant' && msg.reasoningContent && !msg.toolCalls?.length) {
-        msg.reasoningContent = null;
-        reasoningCleaned++;
-      }
     }
 
-    if (truncated > 0 || reasoningCleaned > 0) {
+    if (truncated > 0) {
       const afterTokens = this.estimateTokens();
       const ratio = this.getTokenUsageRatio();
       this.#logger.info(
-        `[ContextWindow] L1 compact: truncated ${truncated} tool results, cleaned ${reasoningCleaned} reasoning | ` +
+        `[ContextWindow] L1 compact: truncated ${truncated} tool results | ` +
           `tokens≈${afterTokens}/${this.#tokenBudget} (${(ratio * 100).toFixed(1)}%)`
       );
     }
-    return { level: 1, removed: truncated + reasoningCleaned };
+    return { level: 1, removed: truncated };
   }
 
   /**
