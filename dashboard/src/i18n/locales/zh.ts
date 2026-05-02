@@ -899,6 +899,8 @@ export const zh = {
     testMode: '测试模式',
     testModeHint: '冷启动: {bootstrap} | 增量扫描: {rescan}',
     testModeAll: '全部',
+    terminalTest: '终端测试',
+    terminalTestHint: '终端工具集: {toolset}',
     notifySuccess: '{completed} 个维度全部填充成功',
     notifyPartial: '{completed}/{total} 成功，{failed} 失败',
     coldStartComplete: '项目扫描完成',

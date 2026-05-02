@@ -211,8 +211,8 @@ export class BootstrapTaskManager {
     let testModePayload: Record<string, unknown> | undefined;
     try {
       const cfg = getTestModeConfig();
-      if (cfg.enabled) {
-        testModePayload = cfg;
+      if (cfg.enabled || cfg.terminal.enabled) {
+        testModePayload = cfg as unknown as Record<string, unknown>;
       }
     } catch {
       /* best effort */

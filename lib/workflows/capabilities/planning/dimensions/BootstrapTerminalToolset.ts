@@ -1,3 +1,5 @@
+import { getTestModeConfig } from '#shared/test-mode.js';
+
 export type BootstrapTerminalToolset =
   | 'baseline'
   | 'terminal-run'
@@ -33,10 +35,11 @@ const EVOLUTION_TOOLS: Partial<Record<BootstrapTerminalMode, string>> = {
 export function resolveBootstrapTerminalToolset(
   input: { terminalTest?: unknown; terminalToolset?: unknown; allowedTerminalModes?: unknown } = {}
 ): BootstrapTerminalToolsetConfig {
-  const envEnabled = process.env.ALEMBIC_BOOTSTRAP_TERMINAL_TEST === '1';
-  const requestedToolset = normalizeToolset(
-    input.terminalToolset || process.env.ALEMBIC_BOOTSTRAP_TERMINAL_TOOLSET
-  );
+  const terminalCfg = getTestModeConfig().terminal;
+  const envEnabled = terminalCfg.enabled;
+  const envToolset = terminalCfg.toolset;
+  const requestedToolset = normalizeToolset(input.terminalToolset || envToolset);
+
   const explicitEnabled =
     typeof input.terminalTest === 'boolean' ? input.terminalTest : input.terminalTest === '1';
   const terminalTest =

@@ -51,11 +51,18 @@ const INITIAL_REVIEW_STATE: ReviewState = {
   round3: { status: 'idle' },
 };
 
+/** 终端测试能力配置 */
+export interface TestTerminalConfig {
+  enabled: boolean;
+  toolset: string;
+}
+
 /** 测试模式配置 */
 export interface TestModeConfig {
   enabled: boolean;
   bootstrapDims: string[];
   rescanDims: string[];
+  terminal: TestTerminalConfig;
 }
 
 export interface BootstrapSession {

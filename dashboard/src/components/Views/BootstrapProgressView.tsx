@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Check, X, Loader2, Sparkles, Code2, Layers, BookOpen, Zap, Settings, Bot, Brain, Filter, Wand2, GitMerge, Clock, Wrench, StopCircle } from 'lucide-react';
+import { Check, X, Loader2, Sparkles, Code2, Layers, BookOpen, Zap, Settings, Bot, Brain, Filter, Wand2, GitMerge, Clock, Wrench, StopCircle, TerminalSquare } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import type { BootstrapSession, BootstrapTask, ReviewState } from '../../hooks/useBootstrapSocket';
 
@@ -339,13 +339,23 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
                 {t('bootstrap.testMode')}
               </span>
             )}
+            {session.testMode?.terminal?.enabled && (
+              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                <TerminalSquare size={10} />
+                {t('bootstrap.terminalTest')}
+              </span>
+            )}
           </div>
           {statusText && <p className="text-sm text-[var(--fg-secondary)] mt-0.5">{statusText}</p>}
-          {session.testMode?.enabled && (
+          {(session.testMode?.enabled || session.testMode?.terminal?.enabled) && (
             <p className="text-xs text-amber-600 mt-0.5">
-              {t('bootstrap.testModeHint', {
+              {session.testMode?.enabled && t('bootstrap.testModeHint', {
                 bootstrap: session.testMode.bootstrapDims.length > 0 ? session.testMode.bootstrapDims.join(', ') : t('bootstrap.testModeAll'),
                 rescan: session.testMode.rescanDims.length > 0 ? session.testMode.rescanDims.join(', ') : t('bootstrap.testModeAll'),
+              })}
+              {session.testMode?.enabled && session.testMode?.terminal?.enabled && ' | '}
+              {session.testMode?.terminal?.enabled && t('bootstrap.terminalTestHint', {
+                toolset: session.testMode.terminal.toolset,
               })}
             </p>
           )}

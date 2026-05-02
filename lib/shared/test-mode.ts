@@ -1,12 +1,19 @@
 /**
  * test-mode.ts — 通用测试模式支持
  *
- * 通过 .env 配置启用测试模式，限制 bootstrap / rescan 维度数量以加速端到端测试。
+ * 通过 .env 配置启用测试模式，限制 bootstrap / rescan 维度数量以加速端到端测试，
+ * 并统一管理终端测试能力的接入开关。
  *
  * 环境变量:
- *   ALEMBIC_TEST_MODE=1                          启用测试模式
- *   ALEMBIC_TEST_BOOTSTRAP_DIMS=arch,coding      冷启动阶段维度 (逗号分隔 ID)
- *   ALEMBIC_TEST_RESCAN_DIMS=design-patterns      增量扫描阶段维度 (逗号分隔 ID)
+ *   ALEMBIC_TEST_MODE=1                                    启用测试模式
+ *   ALEMBIC_TEST_BOOTSTRAP_DIMS=arch,coding                冷启动阶段维度 (逗号分隔 ID)
+ *   ALEMBIC_TEST_RESCAN_DIMS=design-patterns               增量扫描阶段维度 (逗号分隔 ID)
+ *   ALEMBIC_TEST_TERMINAL=1                                启用终端测试能力
+ *   ALEMBIC_TEST_TERMINAL_TOOLSET=terminal-run              终端工具集 (baseline|terminal-run|terminal-shell|terminal-pty)
+ *
+ * 兼容旧环境变量:
+ *   ALEMBIC_BOOTSTRAP_TERMINAL_TEST → ALEMBIC_TEST_TERMINAL
+ *   ALEMBIC_BOOTSTRAP_TERMINAL_TOOLSET → ALEMBIC_TEST_TERMINAL_TOOLSET
  *
  * 当 ALEMBIC_TEST_MODE 未设置或为 falsy 时，所有 API 透明返回原始数据。
  */
@@ -30,21 +37,51 @@ function envList(key: string): string[] {
     .filter(Boolean);
 }
 
+function envStr(key: string): string {
+  return (process.env[key] ?? '').trim();
+}
+
 /** 是否启用了测试模式 */
 export function isTestMode(): boolean {
   return envBool('ALEMBIC_TEST_MODE');
 }
 
-/** 获取测试模式配置摘要（供 API / 前端展示） */
-export function getTestModeConfig(): {
+/** 终端测试能力配置 */
+export interface TestTerminalConfig {
+  enabled: boolean;
+  toolset: string;
+}
+
+/** 完整测试模式配置 */
+export interface TestModeConfig {
   enabled: boolean;
   bootstrapDims: string[];
   rescanDims: string[];
-} {
+  terminal: TestTerminalConfig;
+}
+
+/**
+ * 解析终端测试能力配置
+ *
+ * 优先级: ALEMBIC_TEST_TERMINAL > ALEMBIC_BOOTSTRAP_TERMINAL_TEST（兼容旧值）
+ * 工具集: ALEMBIC_TEST_TERMINAL_TOOLSET > ALEMBIC_BOOTSTRAP_TERMINAL_TOOLSET
+ */
+function resolveTerminalTestConfig(): TestTerminalConfig {
+  const enabled = envBool('ALEMBIC_TEST_TERMINAL') || envBool('ALEMBIC_BOOTSTRAP_TERMINAL_TEST');
+  const toolset =
+    envStr('ALEMBIC_TEST_TERMINAL_TOOLSET') ||
+    envStr('ALEMBIC_BOOTSTRAP_TERMINAL_TOOLSET') ||
+    (enabled ? 'terminal-run' : 'baseline');
+  return { enabled, toolset };
+}
+
+/** 获取测试模式完整配置（供 API / 前端展示 / 终端工具集解析） */
+export function getTestModeConfig(): TestModeConfig {
   return {
     enabled: isTestMode(),
     bootstrapDims: envList('ALEMBIC_TEST_BOOTSTRAP_DIMS'),
     rescanDims: envList('ALEMBIC_TEST_RESCAN_DIMS'),
+    terminal: resolveTerminalTestConfig(),
   };
 }
 

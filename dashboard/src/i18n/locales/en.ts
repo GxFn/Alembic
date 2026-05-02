@@ -902,6 +902,8 @@ export const en: DeepString<typeof zh> = {
     testMode: 'Test Mode',
     testModeHint: 'Bootstrap: {bootstrap} | Rescan: {rescan}',
     testModeAll: 'all',
+    terminalTest: 'Terminal Test',
+    terminalTestHint: 'Terminal toolset: {toolset}',
     notifySuccess: 'All {completed} dimensions filled successfully',
     notifyPartial: '{completed}/{total} succeeded, {failed} failed',
     coldStartComplete: 'Project scan complete',
