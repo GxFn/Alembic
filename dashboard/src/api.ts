@@ -808,6 +808,12 @@ export const api = {
     return res.data?.data || { status: 'idle' };
   },
 
+  /** 查询当前测试模式配置 */
+  async getTestModeConfig(): Promise<{ enabled: boolean; bootstrapDims: string[]; rescanDims: string[]; terminal: { enabled: boolean; toolset: string } }> {
+    const res = await http.get('/modules/test-mode');
+    return res.data?.data || { enabled: false, bootstrapDims: [], rescanDims: [], terminal: { enabled: false, toolset: 'baseline' } };
+  },
+
   /** 取消正在运行的 bootstrap / rescan 异步填充 */
   async cancelBootstrap(reason?: string): Promise<{ success: boolean }> {
     const res = await http.post('/modules/bootstrap/cancel', { reason });

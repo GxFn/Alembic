@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Cpu, ChevronDown, ChevronRight, MessageSquare, Settings, Search, Zap, Radio, FlaskConical } from 'lucide-react';
+import { Plus, Cpu, ChevronDown, ChevronRight, MessageSquare, Settings, Search, Zap, Radio, FlaskConical, FlaskRound, TerminalSquare } from 'lucide-react';
 import api from '../../api';
 import { getSocket } from '../../lib/socket';
 import { useGlobalChat } from '../Shared/GlobalChatDrawer';
@@ -84,6 +84,16 @@ const Header: React.FC<HeaderProps> = ({
   const { t } = useI18n();
   const [aiProviders, setAiProviders] = useState<AiProvider[]>([]);
   const [aiSwitching, setAiSwitching] = useState(false);
+
+  /* ── 测试模式标识（全局持久展示） ── */
+  const [testMode, setTestMode] = useState<{ enabled: boolean; bootstrapDims: string[]; rescanDims: string[]; terminal: { enabled: boolean; toolset: string } } | null>(null);
+  useEffect(() => {
+    api.getTestModeConfig().then(cfg => {
+      if (cfg.enabled || cfg.terminal.enabled) {
+        setTestMode(cfg);
+      }
+    }).catch(() => { /* best-effort */ });
+  }, []);
 
   /* ── Token 消耗指标（事件驱动刷新） ── */
   const [tokenSummary, setTokenSummary] = useState<{ total_tokens: number; call_count: number } | null>(null);
@@ -170,7 +180,7 @@ const Header: React.FC<HeaderProps> = ({
       <header
         className="h-[var(--topbar-height)] flex items-center justify-between px-5 border-b border-[var(--border-muted)] glass shrink-0 gap-3 select-none z-10"
       >
-        {/* ── 左侧：面包屑 ── */}
+        {/* ── 左侧：面包屑 + 测试模式标识 ── */}
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm text-[var(--fg-subtle)] font-medium truncate max-w-[160px]" title={projectName || 'Alembic'}>{projectName || 'Alembic'}</span>
           {tabLabel && (
@@ -178,6 +188,38 @@ const Header: React.FC<HeaderProps> = ({
               <ChevronRight size={14} className="text-[var(--fg-subtle)]/50 shrink-0" />
               <span className="text-sm text-[var(--fg-default)] font-semibold truncate">{tabLabel}</span>
             </>
+          )}
+          {testMode && (
+            <div className="flex items-center gap-1.5 ml-2 shrink-0">
+              {testMode.enabled && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-300/40 cursor-default">
+                      <FlaskRound size={10} />
+                      {t('bootstrap.testMode')}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-xs">
+                    <p className="font-medium mb-1">{t('bootstrap.testMode')}</p>
+                    <p>Bootstrap: {testMode.bootstrapDims.length > 0 ? testMode.bootstrapDims.join(', ') : t('bootstrap.testModeAll')}</p>
+                    <p>Rescan: {testMode.rescanDims.length > 0 ? testMode.rescanDims.join(', ') : t('bootstrap.testModeAll')}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {testMode.terminal.enabled && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-600 border border-sky-300/40 cursor-default">
+                      <TerminalSquare size={10} />
+                      {t('bootstrap.terminalTest')}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    Toolset: {testMode.terminal.toolset}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
           )}
         </div>
 

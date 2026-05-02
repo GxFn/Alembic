@@ -631,10 +631,21 @@ router.get('/bootstrap/status', async (req: Request, res: Response): Promise<voi
   const { getTestModeConfig } = await import('#shared/test-mode.js');
   const sessionStatus = taskManager.getSessionStatus();
   const testMode = getTestModeConfig();
+  const includeTestMode = testMode.enabled || testMode.terminal.enabled;
   res.json({
     success: true,
-    data: { ...sessionStatus, ...(testMode.enabled ? { testMode } : {}) },
+    data: { ...sessionStatus, ...(includeTestMode ? { testMode } : {}) },
   });
+});
+
+/**
+ * GET /api/v1/modules/test-mode
+ * 返回当前测试模式配置（前端 Header 持久展示测试标识）
+ */
+router.get('/test-mode', async (_req: Request, res: Response): Promise<void> => {
+  const { getTestModeConfig } = await import('#shared/test-mode.js');
+  const cfg = getTestModeConfig();
+  res.json({ success: true, data: cfg });
 });
 
 /**

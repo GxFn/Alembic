@@ -602,62 +602,19 @@ program
         return;
       }
 
-      // ── Step 3: 规则引擎预审计（已废弃，返回空结果）──
-      const spinnerAudit = ora(`预审计: ${targetRecipes.length} 条 Recipe...`).start();
-      const auditResult = {
-        totalAudited: 0,
-        healthy: 0,
-        watch: 0,
-        decay: 0,
-        severe: 0,
-        dead: 0,
-        results: [] as Array<{
-          recipeId: string;
-          title: string;
-          relevanceScore: number;
-          verdict: string;
-          evidence: {
-            triggerStillMatches: boolean;
-            symbolsAlive: number;
-            depsIntact: boolean;
-            codeFilesExist: number;
-          };
-          decayReasons: string[];
-        }>,
-        proposalsCreated: 0,
-        immediateDeprecated: 0,
-      };
-      spinnerAudit.stop();
-
-      cli.log('\n📊 规则预审计结果（RelevanceAuditor 已移除，跳过）');
-      cli.log(`${'─'.repeat(50)}`);
-      cli.log(
-        `  总计: ${auditResult.totalAudited} | 健康: ${auditResult.healthy} | 观察: ${auditResult.watch} | 衰退: ${auditResult.decay} | 严重: ${auditResult.severe} | 死亡: ${auditResult.dead}`
-      );
-
       if (opts.dryRun) {
-        for (const r of auditResult.results) {
-          const icon =
-            r.verdict === 'healthy'
-              ? '✅'
-              : r.verdict === 'watch'
-                ? '👀'
-                : r.verdict === 'dead'
-                  ? '💀'
-                  : '⚠️';
-          cli.log(`  ${icon} ${r.title} (score: ${r.relevanceScore})`);
-          for (const reason of r.decayReasons) {
-            cli.log(`     └─ ${reason}`);
-          }
-        }
+        cli.log(`\n📊 待审计 Recipe: ${targetRecipes.length} 条`);
         if (opts.json) {
-          cli.json(auditResult);
+          cli.json({
+            totalRecipes: targetRecipes.length,
+            recipes: targetRecipes.map((r) => ({ id: r.id, title: r.title })),
+          });
         }
         await bootstrap.shutdown();
         return;
       }
 
-      // ── Step 4: Agent 驱动的深度验证（evolution 管线）──
+      // ── Step 3: Agent 驱动的进化验证 ──
       const agentService = container.get(
         'agentService'
       ) as import('../lib/agent/service/index.js').AgentService;
@@ -667,37 +624,10 @@ program
         process.exit(1);
       }
 
-      // 为每个 Recipe 附加 auditHint
-      const auditMap = new Map(
-        auditResult.results.map(
-          (r: {
-            recipeId: string;
-            relevanceScore: number;
-            verdict: string;
-            evidence: {
-              triggerStillMatches: boolean;
-              symbolsAlive: number;
-              depsIntact: boolean;
-              codeFilesExist: number;
-            };
-            decayReasons: string[];
-          }) => [r.recipeId, r]
-        )
-      );
-      const recipesWithHints = targetRecipes.map((r) => {
-        const hint = auditMap.get(r.id);
-        return {
-          ...r,
-          auditHint: hint
-            ? {
-                relevanceScore: hint.relevanceScore,
-                verdict: hint.verdict,
-                evidence: hint.evidence,
-                decayReasons: hint.decayReasons,
-              }
-            : null,
-        };
-      });
+      const recipesWithHints = targetRecipes.map((r) => ({
+        ...r,
+        auditHint: null,
+      }));
 
       const spinnerAgent = ora('Agent 正在读取源码验证 Recipe...').start();
 
@@ -727,7 +657,7 @@ program
       }
 
       if (opts.json) {
-        cli.json({ audit: auditResult, agent: agentResult });
+        cli.json({ agent: agentResult });
       }
 
       // ── Step 6: 执行到期 Proposal（含 Agent 刚创建的） ──

@@ -27,7 +27,7 @@ import {
   projectInternalRescanPromptRecipesFromParts,
 } from './RescanEvidenceProjectors.js';
 
-// ── RelevanceAudit 类型定义（原 RelevanceAuditor.ts）──────────
+// ── RelevanceAudit 类型定义 ──────────
 
 /** 单个 Recipe 的审计结果 */
 export interface RelevanceAuditResult {
@@ -134,9 +134,8 @@ export function syncKnowledgeStoreForRescan(opts: KnowledgeSyncOptions): void {
 /**
  * 对保留的 Recipe 进行覆盖分类，为 gap analysis 和 EvolutionPrescreen 提供数据。
  *
- * 新架构设计（v2）— 不再复制旧 RelevanceAuditor 的全套逻辑：
- *   - 进化触发由 RecipeImpactPlanner + EvolutionAgent 管线负责
- *   - 本函数仅负责 coverage classification（全量 recipe → verdict）
+ * 进化触发由 RecipeImpactPlanner + EvolutionAgent 管线负责，
+ * 本函数仅负责 coverage classification（全量 recipe → verdict）。
  *
  * 数据来源优先级：
  *   1. RecipeImpactPlanner 候选（candidatePlan）— 精确的 diff-based 影响评估
