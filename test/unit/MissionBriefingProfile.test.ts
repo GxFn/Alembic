@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import type { DimensionDef } from '#types/project-snapshot.js';
-import { buildMissionBriefing } from '#workflows/capabilities/execution/external-agent/mission-briefing/MissionBriefingBuilder.js';
+import { buildMissionBriefing } from '#workflows/capabilities/execution/external/MissionBriefingBuilder.js';
 import type { ExternalRescanEvidencePlan } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
 
 describe('MissionBriefing profiles', () => {

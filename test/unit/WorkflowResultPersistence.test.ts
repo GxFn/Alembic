@@ -6,7 +6,7 @@ import type {
   CandidateResults,
   SkillResults,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import { buildWorkflowReport } from '#workflows/capabilities/persistence/reports/WorkflowReportWriter.js';
+import { buildWorkflowReport } from '#workflows/capabilities/persistence/WorkflowReportWriter.js';
 import {
   persistWorkflowResult,
   summarizeWorkflowDimensionStats,

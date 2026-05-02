@@ -14,7 +14,7 @@ import {
   resolveIncrementalSkippedDimensions,
   restoreCheckpointDimensions,
   syncRestoredSessionStoreDigests,
-} from '#workflows/capabilities/persistence/checkpoint/DimensionRestoreState.js';
+} from '#workflows/capabilities/persistence/DimensionCheckpoint.js';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 import type { IncrementalPlan } from '../../lib/external/mcp/handlers/types.js';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';

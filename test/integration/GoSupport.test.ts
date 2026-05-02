@@ -452,70 +452,13 @@ describe('L3: Go Enhancement Pack (go-web)', () => {
   });
 });
 
+// L5: removed — V1 tool handler (get_file_summary) replaced by V2 code.outline
+
 // ══════════════════════════════════════════════════════════════════
-// L5: SUMMARY_EXTRACTORS[go] + IndexingPipeline + extForLang
+// L5b: IndexingPipeline Go support
 // ══════════════════════════════════════════════════════════════════
-describe('L5: Go Infrastructure Support', () => {
-  it('SUMMARY_EXTRACTORS should have go entry', async () => {
-    // Import the module and access the handler
-    const toolsMod = await import('../../lib/tools/handlers/index.js');
-    const allTools = toolsMod.ALL_TOOLS || toolsMod.default;
-    const getFileSummary = Array.isArray(allTools)
-      ? allTools.find((t) => t.name === 'get_file_summary')
-      : null;
-
-    // Verify Go extraction works through handler invocation
-    // Create a temp Go file
-    const tmpDir = path.join(__dirname, '..', `_tmp_go_test_${Date.now()}`);
-    fs.mkdirSync(tmpDir, { recursive: true });
-    const goFile = path.join(tmpDir, 'main.go');
-    fs.writeFileSync(
-      goFile,
-      `package main
-
-import "fmt"
-import "net/http"
-
-type Server struct {
-	port int
-}
-
-type Handler interface {
-	Handle(w http.ResponseWriter, r *http.Request)
-}
-
-func NewServer(port int) *Server {
-	return &Server{port: port}
-}
-
-func (s *Server) Start() error {
-	return http.ListenAndServe(fmt.Sprintf(":%d", s.port), nil)
-}
-
-func main() {
-	srv := NewServer(8080)
-	srv.Start()
-}
-`
-    );
-
-    try {
-      if (getFileSummary) {
-        const ctx = { projectRoot: tmpDir };
-        const result = await getFileSummary.handler({ filePath: 'main.go' }, ctx);
-        expect(result.language).toBe('go');
-        expect(result.imports.length).toBeGreaterThanOrEqual(1);
-        expect(result.declarations.length).toBeGreaterThanOrEqual(1);
-        expect(result.methods.length).toBeGreaterThanOrEqual(1);
-      }
-    } finally {
-      // Cleanup
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
+describe('L5b: Go IndexingPipeline Support', () => {
   it('IndexingPipeline SCANNABLE_EXTENSIONS should include .go', async () => {
-    // Verify by importing and checking the module loads
     const mod = await import('../../lib/infrastructure/vector/IndexingPipeline.js');
     expect(mod.IndexingPipeline).toBeDefined();
   });

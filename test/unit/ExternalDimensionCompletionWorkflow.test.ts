@@ -3,7 +3,7 @@ import {
   type ExternalDimensionCompletionContext,
   type ExternalWorkflowSession,
   runExternalDimensionCompletionWorkflow,
-} from '#workflows/capabilities/execution/external-agent/ExternalDimensionCompletionWorkflow.js';
+} from '#workflows/capabilities/execution/external/ExternalDimensionCompletionWorkflow.js';
 
 describe('ExternalDimensionCompletionWorkflow', () => {
   it('returns validation envelopes before touching session state', async () => {

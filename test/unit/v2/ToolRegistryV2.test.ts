@@ -177,7 +177,7 @@ describe('ToolRouterV2', () => {
         stubCtx()
       );
       expect(result.ok).toBe(false);
-      expect(result.error).toContain('Unknown tool');
+      expect(result.error).toContain('Invalid call');
     });
 
     test('returns fail for unknown action', async () => {
@@ -187,7 +187,7 @@ describe('ToolRouterV2', () => {
         stubCtx()
       );
       expect(result.ok).toBe(false);
-      expect(result.error).toContain('Unknown action');
+      expect(result.error).toContain('Invalid call');
     });
 
     test('dispatches to handler and returns result', async () => {
