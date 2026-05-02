@@ -192,8 +192,9 @@ describe('code.search (BiliDili)', () => {
       ctx
     );
     expect(result.ok).toBe(true);
-    const data = result.data as { total?: number; shown?: number; matches?: unknown[] };
-    expect(data.total).toBeGreaterThan(0);
+    const text = result.data as string;
+    expect(text).toMatch(/\d+ matches/);
+    expect(text).toContain('ViewController');
   }, 30000);
 
   test('batch patterns search', async () => {
@@ -206,8 +207,8 @@ describe('code.search (BiliDili)', () => {
       ctx
     );
     expect(result.ok).toBe(true);
-    const data = result.data as { total?: number; shown?: number; matches?: unknown[] };
-    expect(data.total).toBeGreaterThan(0);
+    const text = result.data as string;
+    expect(text).toMatch(/\d+ matches/);
   }, 30000);
 
   test('glob filtering', async () => {
@@ -357,9 +358,8 @@ describe('terminal.exec (BiliDili)', () => {
       ctx
     );
     expect(result.ok).toBe(true);
-    const data = result.data as { stdout?: string; output?: string };
-    const output = data.stdout || data.output || '';
-    expect(output).toContain('hello world');
+    const text = result.data as string;
+    expect(text).toContain('hello world');
   });
 
   test('executes git status', async () => {
@@ -485,9 +485,10 @@ describe('meta.tools', () => {
   test('returns all tool specs', async () => {
     const result = await router.execute({ tool: 'meta', action: 'tools', params: {} }, ctx);
     expect(result.ok).toBe(true);
-    // meta.tools without name returns an array of summaries
-    const data = result.data as Array<{ tool?: string }>;
-    expect(data.length).toBe(6);
+    const text = result.data as string;
+    expect(text).toContain('[code]');
+    expect(text).toContain('[terminal]');
+    expect(text).toContain('[meta]');
   });
 
   test('returns single tool detail', async () => {
@@ -496,10 +497,10 @@ describe('meta.tools', () => {
       ctx
     );
     expect(result.ok).toBe(true);
-    // meta.tools with name returns { tool, description, actions }
-    const data = result.data as { tool?: string; actions?: unknown };
-    expect(data.tool).toBe('code');
-    expect(data.actions).toBeTruthy();
+    const text = result.data as string;
+    expect(text).toContain('[code]');
+    expect(text).toContain('search');
+    expect(text).toContain('read');
   });
 });
 

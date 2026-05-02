@@ -37,12 +37,14 @@ async function handleTools(params: Record<string, unknown>, ctx: ToolContext): P
   const name = params.name as string | undefined;
 
   if (!name) {
-    const summary = Object.values(registry).map((spec) => ({
-      tool: spec.name,
-      description: spec.description,
-      actions: Object.entries(spec.actions).map(([k, v]) => `${k}: ${v.summary}`),
-    }));
-    return ok(summary);
+    const lines = Object.values(registry).map((spec) => {
+      const acts = Object.entries(spec.actions)
+        .map(([k, v]) => `  ${k}: ${v.summary}`)
+        .join('\n');
+      return `[${spec.name}] ${spec.description}\n${acts}`;
+    });
+    const text = lines.join('\n\n');
+    return ok(text, { tokensEstimate: estimateTokens(text) });
   }
 
   const spec = registry[name];
@@ -50,24 +52,21 @@ async function handleTools(params: Record<string, unknown>, ctx: ToolContext): P
     return fail(`Unknown tool: ${name}. Available: ${Object.keys(registry).join(', ')}`);
   }
 
-  const detail = {
-    tool: spec.name,
-    description: spec.description,
-    actions: Object.fromEntries(
-      Object.entries(spec.actions).map(([k, v]) => [
-        k,
-        {
-          summary: v.summary,
-          description: v.description,
-          params: v.params,
-          risk: v.risk ?? 'read-only',
-        },
-      ])
-    ),
-  };
-
-  const text = JSON.stringify(detail, null, 2);
-  return ok(detail, { tokensEstimate: estimateTokens(text) });
+  const sections: string[] = [`[${spec.name}] ${spec.description}\n`];
+  for (const [k, v] of Object.entries(spec.actions)) {
+    const paramDesc = v.params?.properties
+      ? Object.entries(v.params.properties as Record<string, Record<string, unknown>>)
+          .map(([pk, pv]) => {
+            const required = ((v.params?.required as string[]) ?? []).includes(pk);
+            const enumVals = pv.enum ? ` (${(pv.enum as string[]).join('|')})` : '';
+            return `    ${pk}${required ? '*' : ''}: ${pv.type ?? 'any'}${enumVals} — ${pv.description ?? ''}`;
+          })
+          .join('\n')
+      : '    (no params)';
+    sections.push(`  ${k} [${v.risk ?? 'read-only'}]: ${v.summary}\n${paramDesc}`);
+  }
+  const text = sections.join('\n');
+  return ok(text, { tokensEstimate: estimateTokens(text) });
 }
 
 /**

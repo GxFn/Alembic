@@ -7,13 +7,10 @@
  * 引擎: ripgrep (搜索), Tree-sitter via AstAnalyzer (骨架), fs (读写)
  */
 
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { estimateTokens, fail, ok, type ToolContext, type ToolResult } from '../types.js';
-
-const execFileAsync = promisify(execFile);
 
 export async function handle(
   action: string,
@@ -108,16 +105,35 @@ async function handleSearch(
   const deduped = deduplicateMatches(allMatches).slice(0, maxResults);
   const output = formatSearchOutput(deduped, totalCount);
 
-  return ok(
-    { total: totalCount, shown: deduped.length, matches: deduped },
-    { tokensEstimate: estimateTokens(output), durationMs: Date.now() - startMs }
-  );
+  return ok(output, {
+    tokensEstimate: estimateTokens(output),
+    durationMs: Date.now() - startMs,
+  });
 }
 
 interface RipgrepResult {
   matches: SearchMatch[];
   total: number;
 }
+
+/** ripgrep 排除的噪音目录 — 与 IGNORED_DIRS 对齐 */
+const RG_EXCLUDE_GLOBS = [
+  '!.git',
+  '!node_modules',
+  '!.build',
+  '!dist',
+  '!build',
+  '!.next',
+  '!__pycache__',
+  '!.venv',
+  '!venv',
+  '!Pods',
+  '!Carthage',
+  '!.gradle',
+  '!DerivedData',
+  '!coverage',
+  '!.turbo',
+];
 
 async function ripgrepSearch(
   pattern: string,
@@ -133,24 +149,79 @@ async function ripgrepSearch(
     '--color',
     'never',
   ];
+  for (const excl of RG_EXCLUDE_GLOBS) {
+    args.push('--glob', excl);
+  }
   if (opts.glob) {
     args.push('--glob', opts.glob);
   }
   if (!opts.regex) {
     args.push('--fixed-strings');
   }
-  args.push('--', pattern);
+  args.push('--', pattern, './');
 
-  const { stdout } = await execFileAsync('rg', args, {
-    cwd,
-    maxBuffer: 1024 * 1024,
-    timeout: 10000,
-  });
-
-  return parseRipgrepJson(stdout, cwd);
+  return spawnRg(args, cwd, 15000);
 }
 
-function parseRipgrepJson(jsonOutput: string, cwd: string): RipgrepResult {
+/**
+ * 通过 spawn 调用 ripgrep，关闭 stdin 防止 rg 等待输入。
+ *
+ * 关键：ripgrep 检测到 stdin 可读时会从 stdin 读取（而不是搜索目录），
+ * Node.js exec/execFile 默认保持 stdin 打开 → rg 永远挂起。
+ * 解决方案：stdio: ['ignore', 'pipe', 'pipe'] + 显式传入 './' 搜索路径。
+ * see: https://github.com/BurntSushi/ripgrep/issues/2056
+ */
+function spawnRg(args: string[], cwd: string, timeout: number): Promise<RipgrepResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('rg', args, {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, TERM: 'dumb', NO_COLOR: '1' },
+    });
+
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    const MAX_BUFFER = 2 * 1024 * 1024;
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      totalBytes += chunk.length;
+      if (totalBytes <= MAX_BUFFER) {
+        chunks.push(chunk);
+      }
+    });
+
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+    }, timeout);
+
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      const stdout = Buffer.concat(chunks).toString('utf-8');
+
+      if (code === 0 || code === 2) {
+        resolve(parseRipgrepJson(stdout, cwd));
+      } else if (code === 1) {
+        // rg exit code 1 = no matches
+        resolve({ matches: [], total: 0 });
+      } else {
+        // timeout killed or other error — return partial if any
+        const partial = parseRipgrepJson(stdout, cwd);
+        if (partial.matches.length > 0) {
+          resolve(partial);
+        } else {
+          reject(new Error(`rg exited with code ${code}`));
+        }
+      }
+    });
+
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+function parseRipgrepJson(jsonOutput: string, _cwd: string): RipgrepResult {
   const matches: SearchMatch[] = [];
   let total = 0;
 
@@ -162,7 +233,8 @@ function parseRipgrepJson(jsonOutput: string, cwd: string): RipgrepResult {
       const obj = JSON.parse(line);
       if (obj.type === 'match') {
         const data = obj.data;
-        const relPath = path.relative(cwd, data.path?.text ?? '');
+        const rawPath = (data.path?.text ?? '') as string;
+        const relPath = rawPath.startsWith('./') ? rawPath.slice(2) : rawPath;
         matches.push({
           file: relPath,
           line: data.line_number ?? 0,
@@ -281,13 +353,13 @@ async function handleRead(params: Record<string, unknown>, ctx: ToolContext): Pr
     const end = Math.min(lineCount, endLine ?? lineCount);
     const slice = lines
       .slice(start - 1, end)
-      .map((l, i) => `${String(start + i).padStart(6)}|${l}`)
+      .map((l, i) => `${start + i}|${l}`)
       .join('\n');
     return ok(slice, { tokensEstimate: estimateTokens(slice) });
   }
 
   if (lineCount <= 500) {
-    const numbered = lines.map((l, i) => `${String(i + 1).padStart(6)}|${l}`).join('\n');
+    const numbered = lines.map((l, i) => `${i + 1}|${l}`).join('\n');
     return ok(numbered, { tokensEstimate: estimateTokens(numbered) });
   }
 
@@ -309,10 +381,34 @@ async function generateOutlineForRead(
       return `${outline}\n\nFile has ${lineCount} lines. Showing outline. Use startLine/endLine to read specific sections.`;
     }
   } catch {
-    // AST 不可用，使用简易骨架
+    // AST 不可用，使用头尾预览
   }
 
-  return `[File: ${relPath}, ${lineCount} lines — too large for full read]\nUse startLine/endLine to read specific sections.`;
+  const content = await fs.readFile(absPath, 'utf-8');
+  const lines = content.split('\n');
+  const headCount = 30;
+  const tailCount = 15;
+
+  const head = lines
+    .slice(0, headCount)
+    .map((l, i) => `${i + 1}|${l}`)
+    .join('\n');
+  const tail = lines
+    .slice(-tailCount)
+    .map((l, i) => `${lineCount - tailCount + i + 1}|${l}`)
+    .join('\n');
+
+  return [
+    `// ${relPath} — ${lineCount} lines (showing head + tail)`,
+    '',
+    head,
+    '',
+    `  ... [${lineCount - headCount - tailCount} lines omitted] ...`,
+    '',
+    tail,
+    '',
+    'Use startLine/endLine to read specific sections.',
+  ].join('\n');
 }
 
 /* ================================================================== */
@@ -433,6 +529,7 @@ const IGNORED_DIRS = new Set([
   '.git',
   '.svn',
   '.hg',
+  '.build',
   'dist',
   'build',
   '.next',
@@ -447,6 +544,8 @@ const IGNORED_DIRS = new Set([
   '.vscode',
   'coverage',
   '.turbo',
+  'Packages',
+  '.swiftpm',
 ]);
 
 async function buildDirectoryTree(

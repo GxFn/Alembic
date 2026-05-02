@@ -18,7 +18,7 @@ import { estimateTokens, fail, ok, type ToolContext, type ToolResult } from '../
 
 const execAsync = promisify(exec);
 
-/** 危险命令黑名单 — 前缀匹配 */
+/** 危险命令黑名单 — 子串匹配 */
 const BLOCKED_COMMANDS = [
   'sudo ',
   'su ',
@@ -31,11 +31,11 @@ const BLOCKED_COMMANDS = [
   'chmod 777',
   ':(){',
   'fork bomb',
-  'curl | sh',
-  'wget | sh',
-  'curl | bash',
-  'wget | bash',
 ];
+
+/** 危险管道模式 — 下载命令输出 pipe 到 shell */
+const PIPE_TO_SHELL_RE =
+  /\b(curl|wget)\b.*\|\s*(sh|bash|zsh|dash|ksh|csh|tcsh|fish|perl|python|ruby|node)\b/i;
 
 /** 危险可执行文件 */
 const BLOCKED_BINS = new Set([
@@ -93,35 +93,23 @@ async function handleExec(params: Record<string, unknown>, ctx: ToolContext): Pr
     const durationMs = Date.now() - startMs;
 
     if (exitCode === 137) {
-      return ok(
-        {
-          exitCode: -1,
-          output: '[command timed out or aborted]',
-          partial: stripAnsi(stdout),
-        },
-        { durationMs }
-      );
+      const partial = stripAnsi(stdout);
+      const text = partial
+        ? `[timeout] partial output:\n${partial}`
+        : '[command timed out or aborted]';
+      return ok(text, { durationMs, tokensEstimate: estimateTokens(text) });
     }
 
-    return ok(
-      { exitCode, output: compressed },
-      {
-        tokensEstimate: estimateTokens(compressed),
-        durationMs,
-      }
-    );
+    const text = exitCode === 0 ? compressed : `[exit ${exitCode}]\n${compressed}`;
+    return ok(text, {
+      tokensEstimate: estimateTokens(text),
+      durationMs,
+    });
   } catch (err: unknown) {
     const durationMs = Date.now() - startMs;
-    return ok(
-      {
-        exitCode: 1,
-        output: err instanceof Error ? err.message : 'Command failed',
-      },
-      {
-        tokensEstimate: 0,
-        durationMs,
-      }
-    );
+    const msg = err instanceof Error ? err.message : 'Command failed';
+    const text = `[exit 1]\n${msg}`;
+    return ok(text, { tokensEstimate: estimateTokens(text), durationMs });
   }
 }
 
@@ -180,6 +168,10 @@ function checkCommandSafety(command: string): { safe: boolean; reason?: string }
     if (trimmed.startsWith(blocked) || trimmed.includes(blocked)) {
       return { safe: false, reason: `Blocked command pattern: ${blocked.trim()}` };
     }
+  }
+
+  if (PIPE_TO_SHELL_RE.test(trimmed)) {
+    return { safe: false, reason: 'Blocked: piping download command output to shell' };
   }
 
   const firstWord = trimmed.split(/\s+/)[0];
