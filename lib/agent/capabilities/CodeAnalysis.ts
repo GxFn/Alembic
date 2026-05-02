@@ -12,7 +12,7 @@ export class CodeAnalysis extends Capability {
 分析策略:
 | 阶段 | 目标 |
 |------|------|
-| 全局扫描 | get_project_overview + list_project_structure + 既有 panorama 上下文 |
+| 全局扫描 | code({ action: "structure" }) + 既有 panorama 上下文 |
 | 结构化探索 | graph / code 批量搜索 |
 | 深度验证 | code / analyze_code 阅读关键实现 |
 | 输出总结 | 停止工具调用，输出分析 |

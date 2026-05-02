@@ -424,13 +424,13 @@ describe('ActiveContext', () => {
 
     test('buildObservationMeta 静态方法', () => {
       const meta = ActiveContext.buildObservationMeta(
-        'search_project_code',
-        { query: 'main' },
-        'Found 5 matches in src/main.js and src/util.js',
+        'code',
+        { action: 'search', pattern: 'main' },
+        '5 matches (showing 5)\n\nsrc/main.js:1: content',
         false
       );
       expect(meta).toBeDefined();
-      expect(meta.resultType).toBeDefined();
+      expect(meta.resultType).toBe('search');
     });
   });
 

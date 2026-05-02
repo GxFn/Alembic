@@ -350,7 +350,7 @@ describe('ReasoningTrace — 迁入方法', () => {
       const meta = ReasoningTrace.buildObservationMeta(
         'code',
         { action: 'search', query: 'test' },
-        { matches: [{ file: 'a.js' }, { file: 'b.js' }] },
+        '2 matches (showing 2)\n\na.js:1: foo\nb.js:2: bar',
         true
       );
       expect(meta.resultType).toBe('search');
@@ -363,7 +363,7 @@ describe('ReasoningTrace — 迁入方法', () => {
       const meta = ReasoningTrace.buildObservationMeta(
         'code',
         { action: 'search', query: 'test' },
-        { matches: [{ file: 'a.js' }] },
+        '1 matches (showing 1)\n\na.js:1: foo',
         false
       );
       expect(meta.gotNewInfo).toBe(false);
@@ -373,12 +373,13 @@ describe('ReasoningTrace — 迁入方法', () => {
     test('code (action: read)', () => {
       const meta = ReasoningTrace.buildObservationMeta(
         'code',
-        { action: 'read', filePath: 'src/main.js' },
+        { action: 'read', path: 'src/main.js' },
         'content…',
         true
       );
       expect(meta.resultType).toBe('file_content');
       expect(meta.gotNewInfo).toBe(true);
+      expect(meta.keyFacts[0]).toContain('read src/main.js');
     });
 
     test('knowledge (action: submit) 总是 gotNewInfo=true', () => {
@@ -397,7 +398,7 @@ describe('ReasoningTrace — 迁入方法', () => {
       const meta = ReasoningTrace.buildObservationMeta(
         'code',
         { action: 'structure', directory: '/src' },
-        ['a.js', 'b.js'],
+        'src/\n  a.js\n  b.js',
         true
       );
       expect(meta.resultType).toBe('structure');
@@ -406,7 +407,7 @@ describe('ReasoningTrace — 迁入方法', () => {
     test('graph — AST 查询工具', () => {
       const meta = ReasoningTrace.buildObservationMeta(
         'graph',
-        { className: 'MyClass' },
+        { action: 'query', type: 'class', entity: 'MyClass' },
         { methods: [] },
         true
       );
@@ -519,7 +520,7 @@ describe('ExplorationTracker', () => {
       const { isNew } = tracker.recordToolCall(
         'code',
         { action: 'search', pattern: 'BDRequest' },
-        { matches: [{ file: 'a.js' }, { file: 'b.js' }] }
+        '2 matches (showing 2)\n\na.js:10: class BDRequest\nb.js:20: BDRequest.shared'
       );
       expect(isNew).toBe(true);
     });
@@ -530,12 +531,12 @@ describe('ExplorationTracker', () => {
       tracker.recordToolCall(
         'code',
         { action: 'search', pattern: 'BDRequest' },
-        { matches: [{ file: 'a.js' }] }
+        '1 matches (showing 1)\n\na.js:10: class BDRequest'
       );
       const { isNew } = tracker.recordToolCall(
         'code',
         { action: 'search', pattern: 'BDRequest' },
-        { matches: [{ file: 'a.js' }] }
+        '1 matches (showing 1)\n\na.js:10: class BDRequest'
       );
       expect(isNew).toBe(false);
     });
@@ -545,7 +546,7 @@ describe('ExplorationTracker', () => {
       tracker.tick();
       const { isNew } = tracker.recordToolCall(
         'code',
-        { action: 'read', filePath: 'src/main.js' },
+        { action: 'read', path: 'src/main.js' },
         'content'
       );
       expect(isNew).toBe(true);
@@ -645,6 +646,11 @@ describe('ExplorationTracker', () => {
       // 模拟搜索到 searchBudget 轮次 → EXPLORE→PRODUCE 转换
       for (let i = 0; i < 8; i++) {
         tracker.tick();
+        tracker.recordToolCall(
+          'code',
+          { action: 'search', pattern: `q${i}` },
+          `1 matches (showing 1)\n\nf${i}.js:1: x`
+        );
         tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
       }
       // 到达 searchBudget=8，应触发 EXPLORE→PRODUCE
@@ -685,7 +691,7 @@ describe('ExplorationTracker', () => {
         tracker.recordToolCall(
           'code',
           { action: 'search', pattern: `p${i}` },
-          { matches: [{ file: `f${i}.js` }] }
+          `1 matches (showing 1)\n\nf${i}.js:1: content`
         );
         trace.addAction('code', { action: 'search', pattern: `p${i}` });
         trace.addObservation('code', {
@@ -810,6 +816,11 @@ describe('ExplorationTracker', () => {
       // 先手动推进到 PRODUCE
       for (let i = 0; i < 8; i++) {
         tracker.tick();
+        tracker.recordToolCall(
+          'code',
+          { action: 'search', pattern: `q${i}` },
+          `1 matches (showing 1)\n\nf${i}.js:1: x`
+        );
         tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
       }
       expect(tracker.phase).toBe('PRODUCE');

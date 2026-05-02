@@ -123,22 +123,6 @@ const TOOL_COMPRESS_STRATEGIES = {
     }
     return lines.join('\n');
   },
-
-  get_project_overview(result: unknown) {
-    if (typeof result !== 'object' || result === null) {
-      return String(result).substring(0, 800);
-    }
-    return JSON.stringify(result).substring(0, 800);
-  },
-
-  list_project_structure(result: unknown) {
-    if (typeof result !== 'object' || result === null) {
-      return String(result).substring(0, 600);
-    }
-    const r = result as Record<string, unknown>;
-    const entries = r.entries || r.children || [];
-    return `目录结构: ${Array.isArray(entries) ? entries.length : 0} 个条目`;
-  },
 };
 
 /** 默认压缩 — 截断到 maxChars */
@@ -790,26 +774,25 @@ export class ActiveContext {
         const action = (args?.action as string) || '';
         if (action === 'search') {
           meta.resultType = 'search';
-          const matches = Array.isArray(resultObj?.matches) ? (resultObj.matches as unknown[]) : [];
-          const batchResults = resultObj?.batchResults as
-            | Record<string, Record<string, unknown>>
-            | undefined;
-          const totalMatches = batchResults
-            ? Object.values(batchResults).reduce(
-                (s, br) => s + (Array.isArray(br.matches) ? br.matches.length : 0),
-                0
-              )
-            : matches.length;
-          meta.keyFacts.push(`${totalMatches} matches found`);
+          // V2 搜索结果为紧凑文本 "N matches (showing M)\n\nfile:line: content"
+          const matchCount =
+            typeof result === 'string' ? ((result.match(/^(\d+) matches/) ?? [])[1] ?? '?') : '?';
+          meta.keyFacts.push(`${matchCount} matches found`);
           if (isNew) {
             meta.keyFacts.push('new files discovered');
           }
-        } else if (action === 'read') {
-          meta.resultType = 'file_content';
-          const fp = (args?.filePath as string) || '';
-          const fps = (args?.filePaths as string[]) || [];
-          const allPaths = fp ? [fp, ...fps] : fps;
-          meta.keyFacts.push(`read ${allPaths.length} file(s)`);
+        } else if (action === 'read' || action === 'outline') {
+          meta.resultType = action === 'read' ? 'file_content' : 'outline';
+          const fp = (args?.path as string) || '';
+          if (fp) {
+            meta.keyFacts.push(`${action} ${fp}`);
+          }
+        } else if (action === 'write') {
+          meta.resultType = 'write';
+          const fp = (args?.path as string) || '';
+          if (fp) {
+            meta.keyFacts.push(`write ${fp}`);
+          }
         } else if (action === 'structure') {
           meta.resultType = 'structure';
           meta.keyFacts.push(`list ${(args?.directory as string) || '/'}`);
@@ -821,12 +804,11 @@ export class ActiveContext {
       }
       case 'knowledge': {
         const action = (args?.action as string) || '';
-        if (action === 'submit') {
+        if (action === 'submit' || action === 'submit_batch') {
           meta.resultType = 'submit';
           meta.gotNewInfo = true;
-          const status = resultObj ? (resultObj.status as string) || 'ok' : 'ok';
           const title = (args?.title as string) || '(untitled)';
-          meta.keyFacts.push(`submit "${title}": ${status}`);
+          meta.keyFacts.push(`submit "${title}"`);
         } else {
           meta.resultType = 'query';
           meta.keyFacts.push(`knowledge.${action}`);
@@ -835,17 +817,16 @@ export class ActiveContext {
       }
       case 'graph': {
         meta.resultType = 'ast_query';
-        const target =
-          (args?.className as string) ||
-          (args?.protocolName as string) ||
-          (args?.name as string) ||
-          '';
-        meta.keyFacts.push(`graph(${target})`);
+        const action = (args?.action as string) || '';
+        const type = (args?.type as string) || '';
+        const entity = (args?.entity as string) || '';
+        meta.keyFacts.push(`graph.${action}(${type}${entity ? `:${entity}` : ''})`);
         break;
       }
       case 'terminal': {
         meta.resultType = 'terminal';
-        meta.keyFacts.push('terminal exec');
+        const cmd = (args?.command as string) || '';
+        meta.keyFacts.push(`exec: ${cmd.substring(0, 60)}`);
         break;
       }
       case 'memory': {

@@ -114,7 +114,7 @@ export const EVOLVER_TOOLS = [
   'code',
   'graph',
   'knowledge',
-  // semantic_search_code → code (action: search) — 已合并到 code
+  // code({ action: "search" }) 覆盖语义搜索
   'quality_score',
   // Evolution 决策工具
   'propose_evolution',

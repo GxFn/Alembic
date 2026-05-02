@@ -40,7 +40,7 @@ import {
 import { NudgeGenerator } from './exploration/NudgeGenerator.js';
 import type { ActiveTrace } from './exploration/PlanTracker.js';
 import { PlanTracker } from './exploration/PlanTracker.js';
-import { SEARCH_TOOLS, SignalDetector } from './exploration/SignalDetector.js';
+import { isSearchAction, SEARCH_TOOLS, SignalDetector } from './exploration/SignalDetector.js';
 
 // ─── 本地类型 ──────────────────────────────────────────
 
@@ -104,6 +104,8 @@ export class ExplorationTracker {
 
   /** tick 是否已调用（用于 rollback） */
   #ticked = false;
+  /** 当前轮次是否包含搜索操作（由 recordToolCall 标记，endRound 消费并重置） */
+  #currentRoundHasSearch = false;
   /** 提交工具名（用于 nudge 文本生成） */
   #submitToolName = 'knowledge';
   /** 管线类型标识 — 统一场景判别（替代 submitToolName / strategy.name 字符串比较） */
@@ -307,6 +309,10 @@ export class ExplorationTracker {
     this.#metrics.totalToolCalls++;
     const isNew = this.#signalDetector.detect(toolName, args, result);
 
+    if (isSearchAction(toolName, args)) {
+      this.#currentRoundHasSearch = true;
+    }
+
     // Submit 追踪
     if (toolName === 'knowledge') {
       const status =
@@ -351,11 +357,11 @@ export class ExplorationTracker {
       this.#metrics.roundsSinceSubmit++;
     }
 
-    // 2. 搜索轮次计数
-    const hasSearchTool = toolNames.some((t) => SEARCH_TOOLS.has(t));
-    if (hasSearchTool) {
+    // 2. 搜索轮次计数（基于 recordToolCall 中精确的 action 级判定）
+    if (this.#currentRoundHasSearch) {
       this.#metrics.searchRoundsInPhase++;
     }
+    this.#currentRoundHasSearch = false;
 
     // 2.5 连续空闲轮次追踪（无任何工具调用 = 真正空转，有工具调用 = 活跃工作）
     if (toolNames.length === 0) {

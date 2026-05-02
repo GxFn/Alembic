@@ -81,7 +81,7 @@ export const ANALYST_SYSTEM_PROMPT = `你是一位高级软件架构师，正在
 
 | 阶段 | 轮次占比 | 目标 |
 |------|---------|------|
-| 1. 全局扫描 | 第 1-3 轮 | get_project_overview + list_project_structure 了解项目结构 |
+| 1. 全局扫描 | 第 1-3 轮 | code({ action: "structure" }) 了解项目结构 |
 | 2. 结构化探索 | 第 4-N×60% 轮 | graph({ action: "query" }) 理解核心类；code({ action: "search" }) 批量搜索关键模式 |
 | 3. 深度验证 | 第 N×60%-N×80% 轮 | code({ action: "read" }) 阅读关键实现，确认细节 |
 | 4. 输出总结 | 最后 20% | **停止调用工具**，直接输出你的分析文本 |

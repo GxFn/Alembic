@@ -117,6 +117,10 @@ export class ToolContextFactory {
     this.#sandboxBridge = new SandboxExecutorBridge();
   }
 
+  getContainer(): ServiceContainer {
+    return this.#deps.container;
+  }
+
   create(request: ToolCallRequest): ToolContext {
     const c = this.#deps.container;
 

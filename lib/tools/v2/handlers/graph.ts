@@ -5,8 +5,7 @@
  * Actions: overview, query
  *
  * 统一了旧系统 7 个 AST 工具: get_class_info, get_class_hierarchy,
- * get_protocol_info, get_method_overrides, get_category_map,
- * query_code_graph, query_call_graph
+ * Actions: query (class/protocol/hierarchy/call-graph/category)
  */
 
 import { estimateTokens, fail, ok, type ToolContext, type ToolResult } from '../types.js';

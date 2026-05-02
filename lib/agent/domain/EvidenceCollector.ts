@@ -229,10 +229,7 @@ export class EvidenceCollector {
 
   // ─── 工具特化提取 ─────────────────────────────────────
 
-  /**
-   * read_project_file — 提取代码片段
-   * 支持批量读取 (result.files) 和单文件读取 (result.content)
-   */
+  /** code.read — 提取代码片段（批量 result.files / 单文件 result.content） */
   #extractFileEvidence(args: ToolCallArgs, result: ToolResult) {
     // 字符串结果 — 可能是错误消息或直接内容
     if (typeof result === 'string') {
@@ -268,10 +265,7 @@ export class EvidenceCollector {
     }
   }
 
-  /**
-   * search_project_code / semantic_search_code — 提取匹配 + 负空间信号
-   * 支持批量搜索 (result.batchResults) 和单模式搜索 (result.matches)
-   */
+  /** code.search — 提取匹配 + 负空间信号（批量 batchResults / 单模式 matches） */
   #extractSearchEvidence(args: ToolCallArgs, result: ToolResult) {
     const patterns = this.#extractSearchPatterns(args);
 
@@ -382,7 +376,7 @@ export class EvidenceCollector {
     entry.summary = entry.summary ? `${entry.summary}; ${summary}` : summary;
   }
 
-  /** get_file_summary — 提取文件级摘要 → evidenceMap */
+  /** code.outline — 提取文件级摘要 → evidenceMap */
   #extractFileSummary(args: ToolCallArgs, result: ToolResult) {
     const filePath = args.filePath || (typeof result === 'object' && result?.filePath);
     if (!filePath) {

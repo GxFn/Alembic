@@ -1,15 +1,14 @@
 /**
- * V2 Tool System — 端到端测试 (使用 BiliDili 真实项目)
+ * V2 Tool System — 单元测试
  *
  * 验证:
  *   1. ToolRouterV2 解析 + 分发
- *   2. 每个 handler 真实执行
- *   3. V2ToolRouterAdapter ↔ ToolResultEnvelope 转换
- *   4. DeltaCache / SearchCache / OutputCompressor 集成
- *   5. Capability 权限拦截
+ *   2. V2ToolRouterAdapter ↔ ToolResultEnvelope 转换
+ *   3. DeltaCache / SearchCache / OutputCompressor 集成
+ *   4. Capability 权限拦截
  */
 
-import { beforeAll, describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { V2CapabilityCatalog } from '#tools/v2/adapter/V2CapabilityCatalog.js';
 import { V2ToolRouterAdapter } from '#tools/v2/adapter/V2ToolRouterAdapter.js';
 import { DeltaCache } from '#tools/v2/cache/DeltaCache.js';
@@ -20,11 +19,11 @@ import { TOOL_REGISTRY } from '#tools/v2/registry.js';
 import { ToolRouterV2 } from '#tools/v2/router.js';
 import type { ToolCallV2, ToolContext } from '#tools/v2/types.js';
 
-const BILIDILI_ROOT = '/Users/gaoxuefeng/Documents/github/BiliDili';
+const PROJECT_ROOT = process.cwd();
 
 function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
-    projectRoot: BILIDILI_ROOT,
+    projectRoot: PROJECT_ROOT,
     deltaCache: new DeltaCache(50),
     searchCache: new SearchCache(50),
     compressor: new OutputCompressor(),
@@ -172,253 +171,72 @@ describe('V2 Router', () => {
       expect(r.ok).toBe(true);
     }
   });
-});
 
-// ─────────────────────────────────────────────────
-//  §3 code.search — BiliDili 真实搜索
-// ─────────────────────────────────────────────────
-
-describe('code.search (BiliDili)', () => {
-  const router = new ToolRouterV2();
-  const ctx = makeCtx();
-
-  test('finds Swift class declarations', async () => {
+  test('code.search on current project', async () => {
     const result = await router.execute(
       {
         tool: 'code',
         action: 'search',
-        params: { patterns: ['class.*ViewController'], maxResults: 5, regex: true },
+        params: { patterns: ['TOOL_REGISTRY'], maxResults: 5 },
       },
-      ctx
+      makeCtx()
     );
     expect(result.ok).toBe(true);
     const text = result.data as string;
     expect(text).toMatch(/\d+ matches/);
-    expect(text).toContain('ViewController');
-  }, 30000);
-
-  test('batch patterns search', async () => {
-    const result = await router.execute(
-      {
-        tool: 'code',
-        action: 'search',
-        params: { patterns: ['import UIKit', 'import SwiftUI'], maxResults: 5 },
-      },
-      ctx
-    );
-    expect(result.ok).toBe(true);
-    const text = result.data as string;
-    expect(text).toMatch(/\d+ matches/);
-  }, 30000);
-
-  test('glob filtering', async () => {
-    const result = await router.execute(
-      {
-        tool: 'code',
-        action: 'search',
-        params: { patterns: ['func'], glob: '*.swift', maxResults: 3 },
-      },
-      ctx
-    );
-    expect(result.ok).toBe(true);
+    expect(text).toContain('TOOL_REGISTRY');
   }, 15000);
 
-  test('search cache returns same result', async () => {
-    const call: ToolCallV2 = {
-      tool: 'code',
-      action: 'search',
-      params: { patterns: ['AppDelegate'], maxResults: 3 },
-    };
-    const r1 = await router.execute(call, ctx);
-    const r2 = await router.execute(call, ctx);
-    expect(r1.ok).toBe(true);
-    expect(r2.ok).toBe(true);
-  }, 30000);
-});
-
-// ─────────────────────────────────────────────────
-//  §4 code.read — 文件读取 + DeltaCache
-// ─────────────────────────────────────────────────
-
-describe('code.read (BiliDili)', () => {
-  const router = new ToolRouterV2();
-  const ctx = makeCtx();
-
-  test('reads README.md', async () => {
+  test('code.read on README.md', async () => {
     const result = await router.execute(
       { tool: 'code', action: 'read', params: { path: 'README.md' } },
-      ctx
+      makeCtx()
     );
     expect(result.ok).toBe(true);
-    // code.read returns a numbered string, not an object
     expect(typeof result.data).toBe('string');
     expect((result.data as string).length).toBeGreaterThan(0);
   });
 
-  test('reads with line range', async () => {
+  test('code.structure on current project', async () => {
     const result = await router.execute(
-      {
-        tool: 'code',
-        action: 'read',
-        params: { path: 'Package.swift', startLine: 1, endLine: 10 },
-      },
-      ctx
-    );
-    expect(result.ok).toBe(true);
-    const text = result.data as string;
-    const lines = text.split('\n');
-    expect(lines.length).toBeLessThanOrEqual(10);
-  });
-
-  test('delta cache returns unchanged on re-read', async () => {
-    const freshCtx = makeCtx();
-    await router.execute({ tool: 'code', action: 'read', params: { path: 'README.md' } }, freshCtx);
-    const r2 = await router.execute(
-      { tool: 'code', action: 'read', params: { path: 'README.md' } },
-      freshCtx
-    );
-    expect(r2.ok).toBe(true);
-    expect(r2.data).toBe('[unchanged since last read]');
-  });
-
-  test('fails for nonexistent file', async () => {
-    const result = await router.execute(
-      { tool: 'code', action: 'read', params: { path: 'nonexistent-file-xyz.txt' } },
-      ctx
-    );
-    expect(result.ok).toBe(false);
-  });
-});
-
-// ─────────────────────────────────────────────────
-//  §5 code.outline — AST 骨架 (可能无 Tree-sitter)
-// ─────────────────────────────────────────────────
-
-describe('code.outline (BiliDili)', () => {
-  const router = new ToolRouterV2();
-  const ctx = makeCtx();
-
-  test('returns outline or graceful fallback for Swift file', async () => {
-    const result = await router.execute(
-      { tool: 'code', action: 'outline', params: { path: 'Package.swift' } },
-      ctx
-    );
-    // outline 可能因无 AstAnalyzer 而返回 fail，但不应崩溃
-    expect(typeof result.ok).toBe('boolean');
-  });
-});
-
-// ─────────────────────────────────────────────────
-//  §6 code.structure — 目录树
-// ─────────────────────────────────────────────────
-
-describe('code.structure (BiliDili)', () => {
-  const router = new ToolRouterV2();
-  const ctx = makeCtx();
-
-  test('returns project directory tree', async () => {
-    const result = await router.execute(
-      { tool: 'code', action: 'structure', params: { depth: 2 } },
-      ctx
-    );
-    expect(result.ok).toBe(true);
-    // code.structure returns a plain string tree
-    const tree = result.data as string;
-    expect(tree).toContain('BiliDili');
-  });
-
-  test('respects depth limit', async () => {
-    const r1 = await router.execute(
       { tool: 'code', action: 'structure', params: { depth: 1 } },
-      ctx
+      makeCtx()
     );
-    const r2 = await router.execute(
-      { tool: 'code', action: 'structure', params: { depth: 3 } },
-      ctx
-    );
-    expect(r1.ok).toBe(true);
-    expect(r2.ok).toBe(true);
-    const tree1 = r1.data as string;
-    const tree2 = r2.data as string;
-    expect(tree2.length).toBeGreaterThanOrEqual(tree1.length);
+    expect(result.ok).toBe(true);
+    const tree = result.data as string;
+    expect(tree).toContain('lib');
   });
-});
 
-// ─────────────────────────────────────────────────
-//  §7 terminal.exec — 命令执行
-// ─────────────────────────────────────────────────
-
-describe('terminal.exec (BiliDili)', () => {
-  const router = new ToolRouterV2();
-  const ctx = makeCtx();
-
-  test('executes simple command', async () => {
+  test('terminal.exec echo', async () => {
     const result = await router.execute(
       { tool: 'terminal', action: 'exec', params: { command: 'echo hello world' } },
-      ctx
+      makeCtx()
     );
     expect(result.ok).toBe(true);
-    const text = result.data as string;
-    expect(text).toContain('hello world');
+    expect(result.data as string).toContain('hello world');
   });
 
-  test('executes git status', async () => {
-    const result = await router.execute(
-      { tool: 'terminal', action: 'exec', params: { command: 'git status --short' } },
-      ctx
-    );
-    expect(result.ok).toBe(true);
-  });
-
-  test('blocks dangerous command', async () => {
+  test('terminal.exec blocks dangerous command', async () => {
     const result = await router.execute(
       { tool: 'terminal', action: 'exec', params: { command: 'sudo rm -rf /' } },
-      ctx
+      makeCtx()
     );
     expect(result.ok).toBe(false);
     expect(result.error).toContain('blocked');
   });
 
-  test('compresses output', async () => {
+  test('terminal.exec blocks cwd escape', async () => {
     const result = await router.execute(
-      {
-        tool: 'terminal',
-        action: 'exec',
-        params: { command: 'find . -name "*.swift" | head -20' },
-      },
-      ctx
-    );
-    expect(result.ok).toBe(true);
-  }, 10000);
-
-  test('blocks cwd escape outside project root', async () => {
-    const result = await router.execute(
-      {
-        tool: 'terminal',
-        action: 'exec',
-        params: { command: 'ls', cwd: '/tmp' },
-      },
-      ctx
+      { tool: 'terminal', action: 'exec', params: { command: 'ls', cwd: '/tmp' } },
+      makeCtx()
     );
     expect(result.ok).toBe(false);
     expect(result.error).toContain('cwd must be within project root');
   });
-
-  test('allows cwd within project root', async () => {
-    const result = await router.execute(
-      {
-        tool: 'terminal',
-        action: 'exec',
-        params: { command: 'pwd', cwd: '.' },
-      },
-      ctx
-    );
-    expect(result.ok).toBe(true);
-  });
 });
 
 // ─────────────────────────────────────────────────
-//  §8 memory.save / memory.recall
+//  §3 memory.save / memory.recall
 // ─────────────────────────────────────────────────
 
 describe('memory (save + recall)', () => {
@@ -450,7 +268,7 @@ describe('memory (save + recall)', () => {
       {
         tool: 'memory',
         action: 'save',
-        params: { key: 'arch-pattern', content: 'BiliDili uses MVVM with Coordinator pattern' },
+        params: { key: 'arch-pattern', content: 'Project uses MVVM with Coordinator pattern' },
       },
       ctx
     );
@@ -475,7 +293,7 @@ describe('memory (save + recall)', () => {
 });
 
 // ─────────────────────────────────────────────────
-//  §9 meta.tools — 工具自省
+//  §4 meta.tools — 工具自省
 // ─────────────────────────────────────────────────
 
 describe('meta.tools', () => {
@@ -505,7 +323,7 @@ describe('meta.tools', () => {
 });
 
 // ─────────────────────────────────────────────────
-//  §10 V2ToolRouterAdapter — V1 接口兼容
+//  §5 V2ToolRouterAdapter — V1 接口兼容
 // ─────────────────────────────────────────────────
 
 describe('V2ToolRouterAdapter', () => {
@@ -513,8 +331,8 @@ describe('V2ToolRouterAdapter', () => {
     const { ToolContextFactory } = await import('#tools/v2/adapter/ToolContextFactory.js');
     const factory = new ToolContextFactory({
       container: { get: () => undefined },
-      projectRoot: BILIDILI_ROOT,
-      dataRoot: BILIDILI_ROOT,
+      projectRoot: PROJECT_ROOT,
+      dataRoot: PROJECT_ROOT,
     });
     const adapter = new V2ToolRouterAdapter({ contextFactory: factory });
 
@@ -540,8 +358,8 @@ describe('V2ToolRouterAdapter', () => {
     const { ToolContextFactory } = await import('#tools/v2/adapter/ToolContextFactory.js');
     const factory = new ToolContextFactory({
       container: { get: () => undefined },
-      projectRoot: BILIDILI_ROOT,
-      dataRoot: BILIDILI_ROOT,
+      projectRoot: PROJECT_ROOT,
+      dataRoot: PROJECT_ROOT,
     });
     const adapter = new V2ToolRouterAdapter({ contextFactory: factory });
 
@@ -559,7 +377,7 @@ describe('V2ToolRouterAdapter', () => {
 });
 
 // ─────────────────────────────────────────────────
-//  §11 V2CapabilityCatalog — Schema 生成
+//  §6 V2CapabilityCatalog — Schema 生成
 // ─────────────────────────────────────────────────
 
 describe('V2CapabilityCatalog', () => {
@@ -595,7 +413,7 @@ describe('V2CapabilityCatalog', () => {
 });
 
 // ─────────────────────────────────────────────────
-//  §12 Capability V2 — 权限 + prompt 生成
+//  §7 Capability V2 — 权限 + prompt 生成
 // ─────────────────────────────────────────────────
 
 describe('CapabilityV2', () => {
@@ -628,7 +446,7 @@ describe('CapabilityV2', () => {
 });
 
 // ─────────────────────────────────────────────────
-//  §13 DeltaCache 单元测试
+//  §8 DeltaCache 单元测试
 // ─────────────────────────────────────────────────
 
 describe('DeltaCache', () => {
@@ -665,7 +483,7 @@ describe('DeltaCache', () => {
 });
 
 // ─────────────────────────────────────────────────
-//  §14 OutputCompressor
+//  §9 OutputCompressor
 // ─────────────────────────────────────────────────
 
 describe('OutputCompressor', () => {

@@ -1,8 +1,8 @@
 /**
  * V2ToolRouterAdapter — V2 工具路由器适配到 V1 ToolRouterContract。
  *
- * 让 AgentRuntime 的 ToolExecutionPipeline 无缝调用 V2 handler。
- * ToolCallRequest → ToolCallV2 → ToolResult → ToolResultEnvelope
+ * 职责单一：只处理 V2 工具系统的 6 个核心 LLM 工具 (code/terminal/knowledge/graph/memory/meta)。
+ * Dashboard Operations 和 MCP 工具各有独立路由，不经过此 adapter。
  */
 
 import { randomUUID } from 'node:crypto';

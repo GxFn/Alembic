@@ -19,8 +19,8 @@ export class ScanProduction extends Capability {
 
 工作流:
 1. 识别分析中的知识点
-2. read_project_file 获取代码片段 (如需)
-3. collect_scan_recipe 逐个提交每个知识点
+2. code({ action: "read" }) 获取代码片段 (如需)
+3. knowledge({ action: "submit" }) 逐个提交每个知识点
 4. 每个独立模式/发现单独提交 — 不要合并`;
   }
 

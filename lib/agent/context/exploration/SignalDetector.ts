@@ -1,13 +1,18 @@
 /**
- * SignalDetector — 工具调用信号检测器
+ * SignalDetector — V2 工具调用信号检测器
  *
- * 从 ExplorationTracker.js 提取的信号收集逻辑。
  * 检测每次工具调用是否产生了新信息（新文件、新搜索模式、新查询目标）。
  *
- * 设计原则:
- *   - 持有对 tracker metrics 的引用（共享 Set 实例避免拷贝开销）
- *   - 纯检测 + 副作用（更新 Sets），不涉及阶段管理
- *   - 可被外部扩展新工具类型
+ * V2 参数契约:
+ *   - code.read / code.outline: params.path (单文件)
+ *   - code.search: params.pattern / params.patterns (搜索模式)
+ *   - code.structure: params.directory (目录)
+ *   - code.write: params.path (写入目标)
+ *   - graph.query: params.type + params.entity
+ *   - terminal.exec: params.command
+ *
+ * 搜索结果为紧凑文本格式，从中提取文件路径:
+ *   "file.swift:42: content" → 提取 "file.swift"
  *
  * @module SignalDetector
  */
@@ -16,6 +21,18 @@
 
 export const SEARCH_TOOLS = new Set(['code', 'graph']);
 
+/** 判断是否为搜索 action（更精确的搜索轮次判定） */
+export function isSearchAction(toolName: string, args: Record<string, unknown>): boolean {
+  const action = (args?.action as string) || '';
+  if (toolName === 'code') {
+    return action === 'search';
+  }
+  if (toolName === 'graph') {
+    return action === 'query';
+  }
+  return false;
+}
+
 /** 信号检测所需的指标集合引用 */
 interface SignalMetrics {
   uniqueFiles: Set<string>;
@@ -23,35 +40,17 @@ interface SignalMetrics {
   uniqueQueries: Set<string>;
 }
 
-/** 搜索结果条目 */
-interface SearchResultMatch {
-  file?: string;
-  [key: string]: unknown;
-}
-
-/** 搜索工具返回结果 */
-interface SearchResult {
-  matches?: SearchResultMatch[];
-  batchResults?: Record<string, { matches?: SearchResultMatch[] }>;
-}
-
 export class SignalDetector {
-  /** 共享引用 — 指向 ExplorationTracker 的 metrics 中的三个 Set */
   #metrics: SignalMetrics;
 
-  /**
-   * @param metrics
-   */
   constructor(metrics: SignalMetrics) {
     this.#metrics = metrics;
   }
 
   /**
    * 检测工具调用是否产生了新信息
-   *
-   * @returns 是否包含新信息
    */
-  detect(toolName: string, args: Record<string, unknown>, result: unknown) {
+  detect(toolName: string, args: Record<string, unknown>, result: unknown): boolean {
     const action = (args?.action as string) || '';
 
     switch (toolName) {
@@ -60,7 +59,13 @@ export class SignalDetector {
           return this.#detectSearchSignal(args, result);
         }
         if (action === 'read') {
-          return this.#detectFileReadSignal(args);
+          return this.#detectFileSignal(args);
+        }
+        if (action === 'outline') {
+          return this.#detectFileSignal(args);
+        }
+        if (action === 'write') {
+          return this.#detectFileSignal(args);
         }
         if (action === 'structure') {
           return this.#detectListSignal(args);
@@ -69,13 +74,16 @@ export class SignalDetector {
       }
 
       case 'graph':
-        return this.#detectQuerySignal(toolName, args);
+        return this.#detectGraphSignal(args);
 
       case 'knowledge':
-        if (action === 'submit') {
+        if (action === 'submit' || action === 'submit_batch') {
           return false;
         }
         return this.#detectGenericSignal(toolName, args);
+
+      case 'terminal':
+        return this.#detectTerminalSignal(args);
 
       default:
         return this.#detectGenericSignal(toolName, args);
@@ -84,64 +92,52 @@ export class SignalDetector {
 
   // ─── 内部检测方法 ──────────────────────────────
 
-  #detectSearchSignal(args: Record<string, unknown>, result: unknown) {
+  /** code.search — 从 params + 文本结果中提取信号 */
+  #detectSearchSignal(args: Record<string, unknown>, result: unknown): boolean {
     let foundNew = false;
+
     const pattern = (args?.pattern as string) || '';
     const patterns = (args?.patterns as string[]) || [];
-    // 单模式
+
     if (pattern && !this.#metrics.uniquePatterns.has(pattern)) {
       this.#metrics.uniquePatterns.add(pattern);
       foundNew = true;
     }
-    // 批量模式
     for (const p of patterns) {
       if (!this.#metrics.uniquePatterns.has(p)) {
         this.#metrics.uniquePatterns.add(p);
         foundNew = true;
       }
     }
-    // 检查搜索结果是否有新文件
-    if (result && typeof result === 'object') {
-      const r = result as SearchResult;
-      const matches = r.matches || [];
-      const batchResults: Record<string, { matches?: SearchResultMatch[] }> = r.batchResults || {};
-      for (const m of matches) {
-        if (m.file && !this.#metrics.uniqueFiles.has(m.file)) {
-          this.#metrics.uniqueFiles.add(m.file);
+
+    // V2 搜索结果是紧凑文本，从中提取文件路径
+    // 格式: "file.swift:42: content" 或 "── file.swift ──"
+    if (typeof result === 'string') {
+      const files = extractFilesFromSearchText(result);
+      for (const f of files) {
+        if (!this.#metrics.uniqueFiles.has(f)) {
+          this.#metrics.uniqueFiles.add(f);
           foundNew = true;
         }
       }
-      for (const sub of Object.values(batchResults)) {
-        for (const m of sub.matches || []) {
-          if (m.file && !this.#metrics.uniqueFiles.has(m.file)) {
-            this.#metrics.uniqueFiles.add(m.file);
-            foundNew = true;
-          }
-        }
-      }
     }
+
     return foundNew;
   }
 
-  #detectFileReadSignal(args: Record<string, unknown>) {
-    let foundNew = false;
-    const fp = (args?.filePath as string) || '';
-    const fps = (args?.filePaths as string[]) || [];
+  /** code.read / code.outline / code.write — params.path 信号 */
+  #detectFileSignal(args: Record<string, unknown>): boolean {
+    const fp = (args?.path as string) || '';
     if (fp && !this.#metrics.uniqueFiles.has(fp)) {
       this.#metrics.uniqueFiles.add(fp);
-      foundNew = true;
+      return true;
     }
-    for (const f of fps) {
-      if (!this.#metrics.uniqueFiles.has(f)) {
-        this.#metrics.uniqueFiles.add(f);
-        foundNew = true;
-      }
-    }
-    return foundNew;
+    return false;
   }
 
-  #detectListSignal(args: Record<string, unknown>) {
-    const dir = (args?.directory as string) || '/';
+  /** code.structure — params.directory 信号 */
+  #detectListSignal(args: Record<string, unknown>): boolean {
+    const dir = (args?.directory as string) || (args?.path as string) || '/';
     const qKey = `list:${dir}`;
     if (!this.#metrics.uniqueQueries.has(qKey)) {
       this.#metrics.uniqueQueries.add(qKey);
@@ -150,10 +146,12 @@ export class SignalDetector {
     return false;
   }
 
-  #detectQuerySignal(toolName: string, args: Record<string, unknown>) {
-    const queryTarget =
-      (args?.className as string) || (args?.protocolName as string) || (args?.name as string) || '';
-    const qKey = `${toolName}:${queryTarget}`;
+  /** graph.query — params.type + params.entity 信号 */
+  #detectGraphSignal(args: Record<string, unknown>): boolean {
+    const action = (args?.action as string) || '';
+    const type = (args?.type as string) || '';
+    const entity = (args?.entity as string) || '';
+    const qKey = `graph:${action}:${type}:${entity}`;
     if (!this.#metrics.uniqueQueries.has(qKey)) {
       this.#metrics.uniqueQueries.add(qKey);
       return true;
@@ -161,15 +159,19 @@ export class SignalDetector {
     return false;
   }
 
-  #detectSingletonQuery(key: string) {
-    if (!this.#metrics.uniqueQueries.has(key)) {
-      this.#metrics.uniqueQueries.add(key);
+  /** terminal.exec — command 信号去重 */
+  #detectTerminalSignal(args: Record<string, unknown>): boolean {
+    const cmd = (args?.command as string) || '';
+    const qKey = `terminal:${cmd.substring(0, 100)}`;
+    if (!this.#metrics.uniqueQueries.has(qKey)) {
+      this.#metrics.uniqueQueries.add(qKey);
       return true;
     }
     return false;
   }
 
-  #detectGenericSignal(toolName: string, args: Record<string, unknown>) {
+  /** 通用降级 — 按工具名 + 参数指纹去重 */
+  #detectGenericSignal(toolName: string, args: Record<string, unknown>): boolean {
     const qKey = `${toolName}:${JSON.stringify(args || {}).substring(0, 80)}`;
     if (!this.#metrics.uniqueQueries.has(qKey)) {
       this.#metrics.uniqueQueries.add(qKey);
@@ -177,4 +179,34 @@ export class SignalDetector {
     }
     return false;
   }
+}
+
+// ─── 辅助函数 ──────────────────────────────
+
+/**
+ * 从 V2 紧凑搜索文本中提取文件路径。
+ *
+ * 支持格式:
+ *   "── path/to/file.ext ──" (分隔线)
+ *   "path/to/file.ext:42: content" (匹配行)
+ */
+const SEARCH_FILE_SEPARATOR_RE = /^── (.+?) ──/gm;
+const SEARCH_FILE_MATCH_RE = /^(\S+?\.\w+):\d+:/gm;
+
+function extractFilesFromSearchText(text: string): Set<string> {
+  const files = new Set<string>();
+
+  let m: RegExpExecArray | null;
+
+  SEARCH_FILE_SEPARATOR_RE.lastIndex = 0;
+  while ((m = SEARCH_FILE_SEPARATOR_RE.exec(text)) !== null) {
+    files.add(m[1]);
+  }
+
+  SEARCH_FILE_MATCH_RE.lastIndex = 0;
+  while ((m = SEARCH_FILE_MATCH_RE.exec(text)) !== null) {
+    files.add(m[1]);
+  }
+
+  return files;
 }
