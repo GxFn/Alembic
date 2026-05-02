@@ -76,7 +76,10 @@ const CODE_SPEC: ToolSpec = {
           path: { type: 'string', description: 'File path relative to project root' },
           kinds: {
             type: 'array',
-            items: { type: 'string' },
+            items: {
+              type: 'string',
+              enum: ['class', 'function', 'interface', 'type', 'method', 'enum'],
+            },
             description: 'Filter: class/function/interface/type/method/enum',
           },
           maxDepth: { type: 'number', description: 'Max nesting depth' },

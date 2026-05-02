@@ -1,13 +1,17 @@
 /**
  * @module tools/v2/handlers/terminal
  *
- * 终端执行工具 — 在沙箱中执行命令，返回结构化压缩输出。
+ * 终端执行工具 — 在 Seatbelt 沙箱中执行命令，返回结构化压缩输出。
  * Actions: exec
  *
- * 执行流程: 安全检查 → 沙箱执行 → OutputCompressor 压缩 → token budget 截断
+ * 执行流程: 安全检查 → cwd 校验 → Seatbelt 沙箱执行 → OutputCompressor 压缩 → token budget 截断
+ *
+ * 沙箱集成: 通过 ToolContext.sandboxExecutor 注入 SandboxExecutor，
+ *           未注入时降级为 plain exec（测试/非 macOS 环境）。
  */
 
 import { exec } from 'node:child_process';
+import path from 'node:path';
 import { promisify } from 'node:util';
 import { stripAnsi } from '../compressor/strip.js';
 import { estimateTokens, fail, ok, type ToolContext, type ToolResult } from '../types.js';
@@ -66,7 +70,12 @@ async function handleExec(params: Record<string, unknown>, ctx: ToolContext): Pr
     return fail('terminal.exec requires command');
   }
 
-  const cwd = params.cwd ? String(params.cwd) : ctx.projectRoot;
+  const rawCwd = params.cwd ? String(params.cwd) : ctx.projectRoot;
+  const cwd = path.resolve(ctx.projectRoot, rawCwd);
+  if (!cwd.startsWith(ctx.projectRoot)) {
+    return fail(`cwd must be within project root: ${ctx.projectRoot}`);
+  }
+
   const timeout = Math.min((params.timeout as number) || 30000, 120000);
 
   const securityCheck = checkCommandSafety(command);
@@ -77,20 +86,25 @@ async function handleExec(params: Record<string, unknown>, ctx: ToolContext): Pr
   const startMs = Date.now();
 
   try {
-    const { stdout, stderr } = await execAsync(command, {
-      cwd,
-      timeout,
-      maxBuffer: 1024 * 1024,
-      env: { ...process.env, TERM: 'dumb', NO_COLOR: '1' },
-      signal: ctx.abortSignal,
-    });
+    const { stdout, stderr, exitCode } = await execInSandboxOrDirect(command, cwd, timeout, ctx);
 
     const rawOutput = combineOutput(stdout, stderr);
     const compressed = await compressOutput(rawOutput, command, ctx);
     const durationMs = Date.now() - startMs;
 
+    if (exitCode === 137) {
+      return ok(
+        {
+          exitCode: -1,
+          output: '[command timed out or aborted]',
+          partial: stripAnsi(stdout),
+        },
+        { durationMs }
+      );
+    }
+
     return ok(
-      { exitCode: 0, output: compressed },
+      { exitCode, output: compressed },
       {
         tokensEstimate: estimateTokens(compressed),
         durationMs,
@@ -98,39 +112,65 @@ async function handleExec(params: Record<string, unknown>, ctx: ToolContext): Pr
     );
   } catch (err: unknown) {
     const durationMs = Date.now() - startMs;
-    const execErr = err as {
-      code?: number;
-      stdout?: string;
-      stderr?: string;
-      killed?: boolean;
-      message?: string;
-    };
-
-    if (execErr.killed || ctx.abortSignal?.aborted) {
-      return ok(
-        {
-          exitCode: -1,
-          output: '[command timed out or aborted]',
-          partial: stripAnsi(execErr.stdout ?? ''),
-        },
-        { durationMs }
-      );
-    }
-
-    const rawOutput = combineOutput(execErr.stdout ?? '', execErr.stderr ?? '');
-    const compressed = await compressOutput(rawOutput, command, ctx);
-
     return ok(
       {
-        exitCode: execErr.code ?? 1,
-        output: compressed || execErr.message || 'Command failed',
+        exitCode: 1,
+        output: err instanceof Error ? err.message : 'Command failed',
       },
       {
-        tokensEstimate: estimateTokens(compressed || ''),
+        tokensEstimate: 0,
         durationMs,
       }
     );
   }
+}
+
+/**
+ * 优先使用 Seatbelt 沙箱执行，未注入时降级为 plain exec。
+ *
+ * ctx.sandboxExecutor 由 ToolContextFactory 从 DI 容器注入，
+ * 类型为 { exec(cmd, opts): Promise<{stdout,stderr,exitCode}> }
+ */
+async function execInSandboxOrDirect(
+  command: string,
+  cwd: string,
+  timeout: number,
+  ctx: ToolContext
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const executor = ctx.sandboxExecutor as SandboxExecutorLike | undefined;
+  if (executor) {
+    return executor.exec(command, {
+      cwd,
+      projectRoot: ctx.projectRoot,
+      timeout,
+      signal: ctx.abortSignal,
+    });
+  }
+
+  // 降级: plain exec（测试环境 / sandboxExecutor 未注入）
+  try {
+    const { stdout, stderr } = await execAsync(command, {
+      cwd,
+      timeout,
+      maxBuffer: 1024 * 1024,
+      env: { ...process.env, TERM: 'dumb', NO_COLOR: '1' },
+      signal: ctx.abortSignal,
+    });
+    return { stdout, stderr, exitCode: 0 };
+  } catch (err: unknown) {
+    const e = err as { code?: number; stdout?: string; stderr?: string; killed?: boolean };
+    if (e.killed || ctx.abortSignal?.aborted) {
+      return { stdout: e.stdout ?? '', stderr: e.stderr ?? '', exitCode: 137 };
+    }
+    return { stdout: e.stdout ?? '', stderr: e.stderr ?? '', exitCode: e.code ?? 1 };
+  }
+}
+
+interface SandboxExecutorLike {
+  exec(
+    command: string,
+    opts: { cwd: string; projectRoot: string; timeout: number; signal?: AbortSignal }
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }>;
 }
 
 function checkCommandSafety(command: string): { safe: boolean; reason?: string } {

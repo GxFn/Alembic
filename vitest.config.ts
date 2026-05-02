@@ -9,6 +9,8 @@ export default defineConfig({
       '#agent': `${projectRoot}lib/agent`,
       '#tools': `${projectRoot}lib/tools`,
       '#workflows': `${projectRoot}lib/workflows`,
+      '#sandbox': `${projectRoot}lib/sandbox`,
+      '#infra': `${projectRoot}lib/infra`,
     },
     conditions: ['alembic-dev'],
   },

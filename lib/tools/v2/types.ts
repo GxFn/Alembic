@@ -109,6 +109,9 @@ export interface ToolContext {
   /** 安全策略 — terminal handler 可选引用 */
   safetyPolicy?: unknown;
 
+  /** Seatbelt 沙箱执行器 — terminal handler 通过 DI 注入，未注入时降级为 plain exec */
+  sandboxExecutor?: unknown;
+
   // ── 轻量级工具组件 (通过 DI 接口约束) ──
 
   /** 文件读取增量缓存 */

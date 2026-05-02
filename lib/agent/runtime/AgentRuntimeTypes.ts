@@ -119,9 +119,7 @@ export interface RuntimeConfig {
   id?: string;
   presetName?: string;
   aiProvider: import('#external/ai/AiProvider.js').AiProvider;
-  toolRegistry:
-    | import('#tools/catalog/UnifiedToolCatalog.js').UnifiedToolCatalog
-    | import('#tools/catalog/ToolRegistry.js').ToolRegistry;
+  toolRegistry: import('#tools/catalog/UnifiedToolCatalog.js').UnifiedToolCatalog;
   toolRouter?: import('#tools/core/ToolContracts.js').ToolRouterContract | null;
   container?: Record<string, unknown> | null;
   capabilities?: import('../capabilities/index.js').Capability[];

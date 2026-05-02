@@ -143,6 +143,35 @@ describe('V2 Router', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain('Permission denied');
   });
+
+  test('validates required params', async () => {
+    const result = await router.execute({ tool: 'code', action: 'search', params: {} }, makeCtx());
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('Missing required param "patterns"');
+  });
+
+  test('validates enum params', async () => {
+    const result = await router.execute(
+      { tool: 'knowledge', action: 'search', params: { query: 'test', kind: 'invalid' } },
+      makeCtx()
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('Invalid value');
+  });
+
+  test('executeParallel splits token budget', async () => {
+    const ctx = makeCtx({ tokenBudget: 6000 });
+    const calls: ToolCallV2[] = [
+      { tool: 'meta', action: 'tools', params: {} },
+      { tool: 'meta', action: 'tools', params: {} },
+      { tool: 'meta', action: 'tools', params: {} },
+    ];
+    const results = await router.executeParallel(calls, ctx);
+    expect(results).toHaveLength(3);
+    for (const r of results) {
+      expect(r.ok).toBe(true);
+    }
+  });
 });
 
 // ─────────────────────────────────────────────────
@@ -361,6 +390,31 @@ describe('terminal.exec (BiliDili)', () => {
     );
     expect(result.ok).toBe(true);
   }, 10000);
+
+  test('blocks cwd escape outside project root', async () => {
+    const result = await router.execute(
+      {
+        tool: 'terminal',
+        action: 'exec',
+        params: { command: 'ls', cwd: '/tmp' },
+      },
+      ctx
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('cwd must be within project root');
+  });
+
+  test('allows cwd within project root', async () => {
+    const result = await router.execute(
+      {
+        tool: 'terminal',
+        action: 'exec',
+        params: { command: 'pwd', cwd: '.' },
+      },
+      ctx
+    );
+    expect(result.ok).toBe(true);
+  });
 });
 
 // ─────────────────────────────────────────────────
