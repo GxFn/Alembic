@@ -18,7 +18,7 @@ function makeProjection(): BootstrapDimensionProjection {
     artifact: { analysisText: 'short analysis', referencedFiles: ['src/a.ts'], findings: ['one'] },
     runtimeToolCalls: [
       {
-        tool: 'submit_knowledge',
+        tool: 'knowledge',
         args: { title: 'Candidate', category: 'api', summary: 'Summary' },
       },
     ],
@@ -34,7 +34,7 @@ function makeProjection(): BootstrapDimensionProjection {
       rejectedCount: 0,
       toolCalls: [
         {
-          tool: 'submit_knowledge',
+          tool: 'knowledge',
           args: { title: 'Candidate', category: 'api', summary: 'Summary' },
         },
       ],

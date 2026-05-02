@@ -12,20 +12,20 @@ function createDimensionCandidates(): Record<string, DimensionCandidateData> {
       producerResult: {
         toolCalls: [
           {
-            tool: 'submit_knowledge',
+            tool: 'knowledge',
             params: {
               title: 'API contract',
               relations: [{ type: 'depends_on', target: 'Client' }],
             },
           },
           {
-            name: 'submit_with_check',
+            name: 'knowledge',
             args: {
               title: 'Validation flow',
             },
           },
           {
-            tool: 'note_finding',
+            tool: 'graph',
             params: { title: 'Ignored' },
           },
         ],

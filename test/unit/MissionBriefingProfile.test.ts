@@ -16,7 +16,7 @@ describe('MissionBriefing profiles', () => {
     expect(briefing.meta?.profile).toBe('cold-start-external');
     expect(briefing.evidenceHints).toBeUndefined();
     expect((briefing.executionPlan as { workflow: string }).workflow).toContain(
-      'alembic_submit_knowledge_batch'
+      'knowledge({ action: "submit_batch" })'
     );
   });
 

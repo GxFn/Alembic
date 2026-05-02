@@ -99,7 +99,7 @@ describe('buildEvolverPrompt', () => {
   it('should render source refs with read instruction', () => {
     const prompt = buildEvolverPrompt(null, null, makeContext());
     expect(prompt).toContain('WBISigner.swift');
-    expect(prompt).toContain('read_project_file');
+    expect(prompt).toContain('code({ action: "read" })');
   });
 
   it('should render recipe core code with verification framing', () => {
@@ -148,8 +148,8 @@ describe('buildEvolverPrompt', () => {
     expect(prompt).toContain('步骤 1');
     expect(prompt).toContain('步骤 2');
     expect(prompt).toContain('步骤 3');
-    expect(prompt).toContain('read_project_file');
-    expect(prompt).toContain('search_project_code');
+    expect(prompt).toContain('code({ action: "read" })');
+    expect(prompt).toContain('code({ action: "search" })');
   });
 
   it('should show propose_evolution JSON example with evidence fields', () => {
@@ -195,7 +195,7 @@ describe('buildEvolverPrompt', () => {
       ],
     });
     const prompt = buildEvolverPrompt(null, null, ctx);
-    expect(prompt).toContain('search_project_code');
+    expect(prompt).toContain('code({ action: "search" })');
     expect(prompt).toContain('无');
   });
 
@@ -238,8 +238,8 @@ describe('EVOLVER_SYSTEM_PROMPT', () => {
     expect(EVOLVER_SYSTEM_PROMPT).toContain('真实性');
     expect(EVOLVER_SYSTEM_PROMPT).toContain('提案');
     expect(EVOLVER_SYSTEM_PROMPT).toContain('不创建新 Recipe');
-    expect(EVOLVER_SYSTEM_PROMPT).toContain('read_project_file');
-    expect(EVOLVER_SYSTEM_PROMPT).toContain('search_project_code');
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('code({ action: "read" })');
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('code({ action: "search" })');
   });
 
   it('should include decision table with verification results', () => {
@@ -252,13 +252,9 @@ describe('EVOLVER_SYSTEM_PROMPT', () => {
 describe('EVOLVER_TOOLS', () => {
   it('should contain the full verification and decision toolset', () => {
     expect(EVOLVER_TOOLS).toEqual([
-      'read_project_file',
-      'search_project_code',
-      'semantic_search_code',
-      'query_code_graph',
-      'query_call_graph',
-      'search_recipes',
-      'get_recipe_detail',
+      'code',
+      'graph',
+      'knowledge',
       'quality_score',
       'propose_evolution',
       'confirm_deprecation',
@@ -267,8 +263,8 @@ describe('EVOLVER_TOOLS', () => {
   });
 
   it('should include proposal-based tools (no submit_knowledge)', () => {
-    expect(EVOLVER_TOOLS).toContain('read_project_file');
-    expect(EVOLVER_TOOLS).toContain('search_project_code');
+    expect(EVOLVER_TOOLS).toContain('code');
+    expect(EVOLVER_TOOLS).toContain('graph');
     expect(EVOLVER_TOOLS).toContain('propose_evolution');
     expect(EVOLVER_TOOLS).toContain('confirm_deprecation');
     expect(EVOLVER_TOOLS).toContain('skip_evolution');

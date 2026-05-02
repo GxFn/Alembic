@@ -175,8 +175,8 @@ describe('E2E: Full Pipeline', () => {
       const svc = container.get('testAiDep');
       expect(svc).toEqual({ created: true });
 
-      // 热重载 AI Provider
-      container.reloadAiProvider(null);
+      // 热重载 AI Provider (null 被忽略，需传非 null provider)
+      container.reloadAiProvider({ type: 'mock-reload' });
 
       // singleton 缓存应该被清除（下次 get 会重建）
       expect(container.singletons.testAiDep).toBeNull();

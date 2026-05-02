@@ -29,7 +29,7 @@ describe('evolutionGateEvaluator', () => {
   it('should pass when all recipes are processed (existingRecipes)', () => {
     const source = {
       toolCalls: [
-        makeToolCall('submit_knowledge', { supersedes: 'recipe-1' }),
+        makeToolCall('knowledge', { supersedes: 'recipe-1' }),
         makeToolCall('confirm_deprecation', { recipeId: 'recipe-2' }),
         makeToolCall('skip_evolution', { recipeId: 'recipe-3' }),
       ],
@@ -43,7 +43,7 @@ describe('evolutionGateEvaluator', () => {
 
   it('should retry when some recipes are unprocessed', () => {
     const source = {
-      toolCalls: [makeToolCall('submit_knowledge', { supersedes: 'recipe-1' })],
+      toolCalls: [makeToolCall('knowledge', { supersedes: 'recipe-1' })],
     };
     const result = evolutionGateEvaluator(source, null, {
       existingRecipes: makeExistingRecipes(3),
@@ -68,10 +68,10 @@ describe('evolutionGateEvaluator', () => {
     expect(result.action).toBe('pass');
   });
 
-  it('should not count submit_knowledge without supersedes as processed', () => {
+  it('should not count knowledge without supersedes as processed', () => {
     const source = {
       toolCalls: [
-        makeToolCall('submit_knowledge', { title: 'New recipe' }),
+        makeToolCall('knowledge', { title: 'New recipe' }),
         makeToolCall('confirm_deprecation', { recipeId: 'recipe-2' }),
       ],
     };
@@ -135,7 +135,7 @@ describe('evolutionGateEvaluator', () => {
     const source = {
       toolCalls: [
         makeToolCall('propose_evolution', { recipeId: 'recipe-1' }),
-        makeToolCall('submit_knowledge', { supersedes: 'recipe-1' }),
+        makeToolCall('knowledge', { supersedes: 'recipe-1' }),
       ],
     };
     const result = evolutionGateEvaluator(source, null, {

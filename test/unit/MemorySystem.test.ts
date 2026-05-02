@@ -162,12 +162,12 @@ describe('MemoryCoordinator', () => {
       const ctx = mc.getActiveContext('dim-obs');
       ctx?.startRound(1);
 
-      mc.recordObservation('search_project_code', { pattern: 'foo' }, 'result', 1, false);
+      mc.recordObservation('code', { action: 'search', pattern: 'foo' }, 'result', 1, false);
 
       // ActiveContext 不应被 recordObservation 写入 (trace.recordToolCall 负责)
       expect(ctx?.totalObservations).toBe(0);
       // 缓存应通过 SessionStore 写入 (非副作用工具)
-      const cached = ss.getCachedResult('search_project_code', { pattern: 'foo' });
+      const cached = ss.getCachedResult('code', { action: 'search', pattern: 'foo' });
       expect(cached).toBe('result');
     });
 
@@ -175,10 +175,10 @@ describe('MemoryCoordinator', () => {
       const ss = new SessionStore();
       const mc = new MemoryCoordinator({ mode: 'bootstrap', sessionStore: ss });
 
-      mc.recordObservation('submit_knowledge', { id: 'k1' }, 'submitted', 1);
+      mc.recordObservation('knowledge', { action: 'submit', id: 'k1' }, 'submitted', 1);
 
-      // submit_knowledge 是 NON_CACHEABLE，不应缓存
-      const cached = ss.getCachedResult('submit_knowledge', { id: 'k1' });
+      // knowledge 是 NON_CACHEABLE，不应缓存
+      const cached = ss.getCachedResult('knowledge', { action: 'submit', id: 'k1' });
       expect(cached).toBeNull();
     });
 
@@ -186,10 +186,10 @@ describe('MemoryCoordinator', () => {
       const ss = new SessionStore();
       const mc = new MemoryCoordinator({ mode: 'bootstrap', sessionStore: ss });
 
-      mc.recordObservation('search_project_code', { query: 'bar' }, 'result', 1, true);
+      mc.recordObservation('code', { action: 'search', pattern: 'bar' }, 'result', 1, true);
 
       // cacheHit=true → 不写入缓存
-      const cached = ss.getCachedResult('search_project_code', { query: 'bar' });
+      const cached = ss.getCachedResult('code', { action: 'search', pattern: 'bar' });
       expect(cached).toBeNull();
     });
   });
@@ -655,17 +655,17 @@ describe('SessionStore', () => {
   describe('ReadOnlyCache (ToolResultCache 兼容)', () => {
     test('缓存只读工具结果', () => {
       const ss = new SessionStore();
-      ss.cacheToolResult('search_project_code', { pattern: 'main' }, 'Found 5');
+      ss.cacheToolResult('code', { action: 'search', pattern: 'main' }, 'Found 5');
 
-      const cached = ss.getCachedResult('search_project_code', { pattern: 'main' });
+      const cached = ss.getCachedResult('code', { action: 'search', pattern: 'main' });
       expect(cached).toBe('Found 5');
     });
 
     test('排除副作用工具 (B3 fix)', () => {
       const ss = new SessionStore();
-      ss.cacheToolResult('submit_knowledge', { id: 'k1' }, 'submitted');
+      ss.cacheToolResult('knowledge', { action: 'submit', id: 'k1' }, 'submitted');
 
-      const cached = ss.getCachedResult('submit_knowledge', { id: 'k1' });
+      const cached = ss.getCachedResult('knowledge', { action: 'submit', id: 'k1' });
       expect(cached).toBeNull();
     });
 
@@ -679,20 +679,20 @@ describe('SessionStore', () => {
 
     test('get/set 兼容方法', () => {
       const ss = new SessionStore();
-      ss.set('read_project_file', { filePath: 'a.js' }, 'content');
+      ss.set('code', { action: 'read', filePath: 'a.js' }, { content: 'content' });
 
-      const result = ss.get('read_project_file', { filePath: 'a.js' });
+      const result = ss.get('code', { action: 'read', filePath: 'a.js' });
       expect(result).toBeDefined();
-      expect(result.content).toBe('content');
-      expect(result.cached).toBe(true);
+      expect((result as { content: string }).content).toBe('content');
+      expect((result as { cached: boolean }).cached).toBe(true);
     });
 
     test('clearCache 清空缓存', () => {
       const ss = new SessionStore();
-      ss.cacheToolResult('search_project_code', { pattern: 'x' }, 'result');
+      ss.cacheToolResult('code', { action: 'search', pattern: 'x' }, 'result');
       ss.clearCache();
 
-      const cached = ss.getCachedResult('search_project_code', { pattern: 'x' });
+      const cached = ss.getCachedResult('code', { action: 'search', pattern: 'x' });
       expect(cached).toBeNull();
     });
   });
@@ -816,7 +816,7 @@ describe('SessionStore', () => {
     test('返回合并的统计', () => {
       const ss = new SessionStore();
       ss.storeDimensionReport('dim-s1', { analysisText: 'a' });
-      ss.cacheToolResult('search_project_code', { pattern: 'test' }, 'r1');
+      ss.cacheToolResult('code', { action: 'search', pattern: 'test' }, 'r1');
 
       const stats = ss.getStats();
       expect(stats).toBeDefined();

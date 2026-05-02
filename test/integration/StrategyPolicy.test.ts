@@ -276,10 +276,10 @@ describe('Integration: Agent Policies', () => {
       expect(policy.checkFilePath('/tmp/project/app2/src/index.ts').safe).toBe(false);
     });
 
-    test('should validate batch read_project_file paths', () => {
+    test('should validate batch code tool file paths', () => {
       const engine = new PolicyEngine([new SafetyPolicy({ fileScope: '/tmp/project/app' })]);
 
-      const result = engine.validateToolCall('read_project_file', {
+      const result = engine.validateToolCall('code', {
         filePaths: ['/tmp/project/app/src/a.ts', '/tmp/project/app2/src/b.ts'],
       });
 
@@ -324,7 +324,7 @@ describe('Integration: Agent Policies', () => {
       expect(policy.validateAfter({ reply: 'Found an error', toolCalls: [] }).ok).toBe(false);
     });
 
-    test('should skip file ref check when toolCalls contain submit_knowledge', () => {
+    test('should skip file ref check when toolCalls contain knowledge', () => {
       const policy = new QualityGatePolicy({
         minEvidenceLength: 0,
         minFileRefs: 3,
@@ -333,12 +333,12 @@ describe('Integration: Agent Policies', () => {
 
       const result = policy.validateAfter({
         reply: 'Short reply without any file refs',
-        toolCalls: [{ tool: 'submit_knowledge' }, { tool: 'submit_with_check' }],
+        toolCalls: [{ tool: 'knowledge' }, { tool: 'other_tool' }],
       });
       expect(result.ok).toBe(true);
     });
 
-    test('should skip file ref check when toolCalls contain collect_scan_recipe', () => {
+    test('should skip file ref check when toolCalls contain knowledge (via name field)', () => {
       const policy = new QualityGatePolicy({
         minEvidenceLength: 0,
         minFileRefs: 3,
@@ -347,7 +347,7 @@ describe('Integration: Agent Policies', () => {
 
       const result = policy.validateAfter({
         reply: 'No file references here',
-        toolCalls: [{ name: 'collect_scan_recipe' }],
+        toolCalls: [{ name: 'knowledge' }],
       });
       expect(result.ok).toBe(true);
     });

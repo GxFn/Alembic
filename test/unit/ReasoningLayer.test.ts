@@ -21,8 +21,8 @@ describe('ReasoningTrace', () => {
   test('startRound + endRound 创建一个完整轮次', () => {
     trace.startRound(1);
     trace.setThought('分析项目结构');
-    trace.addAction('search_project_code', { query: 'main' });
-    trace.addObservation('search_project_code', {
+    trace.addAction('code', { action: 'search', query: 'main' });
+    trace.addObservation('code', {
       gotNewInfo: true,
       resultType: 'search',
       keyFacts: ['5 matches'],
@@ -219,12 +219,12 @@ describe('ReasoningTrace', () => {
 
     test('getCurrentRoundActions 返回当前轮次的 actions', () => {
       trace.startRound(1);
-      trace.addAction('search_project_code', { query: 'main' });
-      trace.addAction('read_project_file', { filePath: 'a.js' });
+      trace.addAction('code', { action: 'search', query: 'main' });
+      trace.addAction('code', { action: 'read', filePath: 'a.js' });
 
       const actions = trace.getCurrentRoundActions();
       expect(actions).toHaveLength(2);
-      expect(actions[0].tool).toBe('search_project_code');
+      expect(actions[0].tool).toBe('code');
     });
 
     test('getCurrentIteration 返回当前轮次编号', () => {
@@ -346,10 +346,10 @@ describe('ReasoningTrace — 迁入方法', () => {
   });
 
   describe('buildObservationMeta (static)', () => {
-    test('search_project_code — isNew=true', () => {
+    test('code (action: search) — isNew=true', () => {
       const meta = ReasoningTrace.buildObservationMeta(
-        'search_project_code',
-        { query: 'test' },
+        'code',
+        { action: 'search', query: 'test' },
         { matches: [{ file: 'a.js' }, { file: 'b.js' }] },
         true
       );
@@ -359,10 +359,10 @@ describe('ReasoningTrace — 迁入方法', () => {
       expect(meta.keyFacts).toContain('new files discovered');
     });
 
-    test('search_project_code — isNew=false', () => {
+    test('code (action: search) — isNew=false', () => {
       const meta = ReasoningTrace.buildObservationMeta(
-        'search_project_code',
-        { query: 'test' },
+        'code',
+        { action: 'search', query: 'test' },
         { matches: [{ file: 'a.js' }] },
         false
       );
@@ -370,10 +370,10 @@ describe('ReasoningTrace — 迁入方法', () => {
       expect(meta.keyFacts).not.toContain('new files discovered');
     });
 
-    test('read_project_file', () => {
+    test('code (action: read)', () => {
       const meta = ReasoningTrace.buildObservationMeta(
-        'read_project_file',
-        { filePath: 'src/main.js' },
+        'code',
+        { action: 'read', filePath: 'src/main.js' },
         'content…',
         true
       );
@@ -381,10 +381,10 @@ describe('ReasoningTrace — 迁入方法', () => {
       expect(meta.gotNewInfo).toBe(true);
     });
 
-    test('submit_knowledge 总是 gotNewInfo=true', () => {
+    test('knowledge (action: submit) 总是 gotNewInfo=true', () => {
       const meta = ReasoningTrace.buildObservationMeta(
-        'submit_knowledge',
-        { title: '测试' },
+        'knowledge',
+        { action: 'submit', title: '测试' },
         { status: 'accepted' },
         false
       );
@@ -393,19 +393,19 @@ describe('ReasoningTrace — 迁入方法', () => {
       expect(meta.keyFacts[0]).toContain('测试');
     });
 
-    test('list_project_structure', () => {
+    test('code (action: structure)', () => {
       const meta = ReasoningTrace.buildObservationMeta(
-        'list_project_structure',
-        { directory: '/src' },
+        'code',
+        { action: 'structure', directory: '/src' },
         ['a.js', 'b.js'],
         true
       );
       expect(meta.resultType).toBe('structure');
     });
 
-    test('AST 查询工具', () => {
+    test('graph — AST 查询工具', () => {
       const meta = ReasoningTrace.buildObservationMeta(
-        'get_class_info',
+        'graph',
         { className: 'MyClass' },
         { methods: [] },
         true
@@ -513,56 +513,64 @@ describe('ExplorationTracker', () => {
 
   // ─── recordToolCall ────────────────────────────────────
   describe('recordToolCall', () => {
-    test('search_project_code 新文件 → isNew=true', () => {
+    test('code (action: search) 新文件 → isNew=true', () => {
       const tracker = createTracker();
       tracker.tick();
       const { isNew } = tracker.recordToolCall(
-        'search_project_code',
-        { pattern: 'BDRequest' },
+        'code',
+        { action: 'search', pattern: 'BDRequest' },
         { matches: [{ file: 'a.js' }, { file: 'b.js' }] }
       );
       expect(isNew).toBe(true);
     });
 
-    test('search_project_code 重复模式+文件 → isNew=false', () => {
+    test('code (action: search) 重复模式+文件 → isNew=false', () => {
       const tracker = createTracker();
       tracker.tick();
       tracker.recordToolCall(
-        'search_project_code',
-        { pattern: 'BDRequest' },
+        'code',
+        { action: 'search', pattern: 'BDRequest' },
         { matches: [{ file: 'a.js' }] }
       );
       const { isNew } = tracker.recordToolCall(
-        'search_project_code',
-        { pattern: 'BDRequest' },
+        'code',
+        { action: 'search', pattern: 'BDRequest' },
         { matches: [{ file: 'a.js' }] }
       );
       expect(isNew).toBe(false);
     });
 
-    test('read_project_file 首次 → isNew=true', () => {
+    test('code (action: read) 首次 → isNew=true', () => {
       const tracker = createTracker();
       tracker.tick();
       const { isNew } = tracker.recordToolCall(
-        'read_project_file',
-        { filePath: 'src/main.js' },
+        'code',
+        { action: 'read', filePath: 'src/main.js' },
         'content'
       );
       expect(isNew).toBe(true);
     });
 
-    test('submit_knowledge 成功 → 增加 submitCount', () => {
+    test('knowledge (action: submit) 成功 → 增加 submitCount', () => {
       const tracker = createTracker();
       tracker.tick();
       expect(tracker.totalSubmits).toBe(0);
-      tracker.recordToolCall('submit_knowledge', { title: '测试' }, { status: 'accepted' });
+      tracker.recordToolCall(
+        'knowledge',
+        { action: 'submit', title: '测试' },
+        { status: 'accepted' }
+      );
       expect(tracker.totalSubmits).toBe(1);
     });
 
-    test('submit_knowledge rejected → 不增加 submitCount', () => {
+    test('knowledge (action: submit) rejected → 不增加 submitCount', () => {
       const tracker = createTracker();
       tracker.tick();
-      tracker.recordToolCall('submit_knowledge', { title: '测试' }, { status: 'rejected' });
+      tracker.recordToolCall(
+        'knowledge',
+        { action: 'submit', title: '测试' },
+        { status: 'rejected' }
+      );
       expect(tracker.totalSubmits).toBe(0);
     });
   });
@@ -583,7 +591,7 @@ describe('ExplorationTracker', () => {
         if (tracker.shouldExit()) {
           return; // 允许提前退出
         }
-        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['search_project_code'] });
+        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
       }
       tracker.tick();
       expect(tracker.shouldExit()).toBe(true);
@@ -594,9 +602,9 @@ describe('ExplorationTracker', () => {
       // 推进到 SUMMARIZE: 提交足够多次
       tracker.tick();
       for (let i = 0; i < 7; i++) {
-        tracker.recordToolCall('submit_knowledge', { title: `t${i}` }, { status: 'ok' });
+        tracker.recordToolCall('knowledge', { action: 'submit', title: `t${i}` }, { status: 'ok' });
       }
-      tracker.endRound({ hasNewInfo: false, submitCount: 7, toolNames: ['submit_knowledge'] });
+      tracker.endRound({ hasNewInfo: false, submitCount: 7, toolNames: ['knowledge'] });
       // 此时应该转到 SUMMARIZE
       expect(tracker.phase).toBe('SUMMARIZE');
 
@@ -637,7 +645,7 @@ describe('ExplorationTracker', () => {
       // 模拟搜索到 searchBudget 轮次 → EXPLORE→PRODUCE 转换
       for (let i = 0; i < 8; i++) {
         tracker.tick();
-        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['search_project_code'] });
+        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
       }
       // 到达 searchBudget=8，应触发 EXPLORE→PRODUCE
       expect(tracker.phase).toBe('PRODUCE');
@@ -675,19 +683,19 @@ describe('ExplorationTracker', () => {
         tracker.tick();
         trace.startRound(i);
         tracker.recordToolCall(
-          'search_project_code',
-          { pattern: `p${i}` },
+          'code',
+          { action: 'search', pattern: `p${i}` },
           { matches: [{ file: `f${i}.js` }] }
         );
-        trace.addAction('search_project_code', { pattern: `p${i}` });
-        trace.addObservation('search_project_code', {
+        trace.addAction('code', { action: 'search', pattern: `p${i}` });
+        trace.addObservation('code', {
           gotNewInfo: true,
           resultType: 'search',
           keyFacts: [],
           resultSize: 100,
         });
         trace.endRound();
-        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['search_project_code'] });
+        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
       }
 
       // 第 5 轮
@@ -707,15 +715,15 @@ describe('ExplorationTracker', () => {
       for (let i = 1; i <= 4; i++) {
         tracker.tick();
         trace.startRound(i);
-        trace.addAction('search_project_code', { pattern: `p${i}` });
-        trace.addObservation('search_project_code', {
+        trace.addAction('code', { action: 'search', pattern: `p${i}` });
+        trace.addObservation('code', {
           gotNewInfo: false,
           resultType: 'search',
           keyFacts: [],
           resultSize: 100,
         });
         trace.endRound();
-        tracker.endRound({ hasNewInfo: false, submitCount: 0, toolNames: ['search_project_code'] });
+        tracker.endRound({ hasNewInfo: false, submitCount: 0, toolNames: ['code'] });
       }
 
       // 第 5 轮 — 应出现停滞反思（iteration>=4, roundsSinceNewInfo>=2, reflection interval=5）
@@ -735,9 +743,9 @@ describe('ExplorationTracker', () => {
       for (let i = 1; i <= 5; i++) {
         tracker.tick();
         trace.startRound(i);
-        trace.addAction('search_project_code', { pattern: `p${i}` });
+        trace.addAction('code', { action: 'search', pattern: `p${i}` });
         trace.endRound();
-        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['search_project_code'] });
+        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
       }
 
       // 第 6 轮 — reflection interval=5 也会命中
@@ -769,9 +777,9 @@ describe('ExplorationTracker', () => {
       // 推进到 SUMMARIZE
       tracker.tick();
       for (let i = 0; i < 7; i++) {
-        tracker.recordToolCall('submit_knowledge', { title: `t${i}` }, { status: 'ok' });
+        tracker.recordToolCall('knowledge', { action: 'submit', title: `t${i}` }, { status: 'ok' });
       }
-      tracker.endRound({ hasNewInfo: false, submitCount: 7, toolNames: ['submit_knowledge'] });
+      tracker.endRound({ hasNewInfo: false, submitCount: 7, toolNames: ['knowledge'] });
       expect(tracker.phase).toBe('SUMMARIZE');
 
       // SUMMARIZE 阶段收到文本
@@ -802,7 +810,7 @@ describe('ExplorationTracker', () => {
       // 先手动推进到 PRODUCE
       for (let i = 0; i < 8; i++) {
         tracker.tick();
-        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['search_project_code'] });
+        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
       }
       expect(tracker.phase).toBe('PRODUCE');
 
@@ -813,7 +821,7 @@ describe('ExplorationTracker', () => {
       // phase='PRODUCE' → nudge 注入提交引导
       expect(result.shouldContinue).toBe(true);
       expect(result.nudge).not.toBeNull();
-      expect(result.nudge).toContain('submit_knowledge');
+      expect(result.nudge).toContain('knowledge');
     });
   });
 
@@ -834,9 +842,9 @@ describe('ExplorationTracker', () => {
       // 推进到 SUMMARIZE
       tracker.tick();
       for (let i = 0; i < 7; i++) {
-        tracker.recordToolCall('submit_knowledge', { title: `t${i}` }, { status: 'ok' });
+        tracker.recordToolCall('knowledge', { action: 'submit', title: `t${i}` }, { status: 'ok' });
       }
-      tracker.endRound({ hasNewInfo: false, submitCount: 7, toolNames: ['submit_knowledge'] });
+      tracker.endRound({ hasNewInfo: false, submitCount: 7, toolNames: ['knowledge'] });
       expect(tracker.phase).toBe('SUMMARIZE');
       expect(tracker.getToolChoice()).toBe('none');
     });
@@ -854,9 +862,9 @@ describe('ExplorationTracker', () => {
     test('接近上限时包含紧急警告', () => {
       const tracker = createTracker('bootstrap', { maxIterations: 4 });
       tracker.tick();
-      tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['search_project_code'] });
+      tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
       tracker.tick();
-      tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['search_project_code'] });
+      tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
       tracker.tick();
       const ctx = tracker.getPhaseContext();
       // iteration=3, remaining=1 → ⚠️ 紧急
@@ -876,7 +884,7 @@ describe('ExplorationTracker', () => {
       const tracker = createTracker('bootstrap', { maxIterations: 3 });
       for (let i = 0; i < 3; i++) {
         tracker.tick();
-        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['search_project_code'] });
+        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
       }
       // iteration=3 = maxIterations → shouldExit 中强制转入终结阶段
       tracker.tick(); // iteration=4 > maxIterations → 但先检查 shouldExit
@@ -909,7 +917,7 @@ describe('ExplorationTracker', () => {
       trace.startRound(1);
       tracker.getNudge(trace); // 消耗 planning nudge
       trace.endRound();
-      tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['search_project_code'] });
+      tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
 
       // 第 2 轮
       tracker.tick();
@@ -928,9 +936,9 @@ describe('ExplorationTracker', () => {
         1
       );
 
-      // 模拟执行 get_project_overview
+      // 模拟执行 code (action: structure)
       trace.startRound(1);
-      trace.addAction('get_project_overview', {});
+      trace.addAction('code', { action: 'structure' });
 
       tracker.updatePlanProgress(trace);
       const progress = tracker.getPlanProgress();
@@ -946,7 +954,7 @@ describe('ExplorationTracker', () => {
 
       // 第 1 轮：匹配
       trace.startRound(1);
-      trace.addAction('get_project_overview', {});
+      trace.addAction('code', { action: 'structure' });
       tracker.updatePlanProgress(trace);
       trace.endRound();
 
@@ -969,7 +977,7 @@ describe('ExplorationTracker', () => {
       );
 
       trace.startRound(1);
-      trace.addAction('search_project_code', { query: 'BDBaseRequest' });
+      trace.addAction('code', { action: 'search', query: 'BDBaseRequest' });
       tracker.updatePlanProgress(trace);
 
       const progress = tracker.getPlanProgress();
@@ -988,15 +996,15 @@ describe('ExplorationTracker', () => {
         1
       );
       trace.endRound();
-      tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['search_project_code'] });
+      tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
 
       // 填充 2-8 轮
       for (let i = 2; i <= 8; i++) {
         tracker.tick();
         trace.startRound(i);
-        trace.addAction('search_project_code', { pattern: `p${i}` });
+        trace.addAction('code', { action: 'search', pattern: `p${i}` });
         trace.endRound();
-        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['search_project_code'] });
+        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
       }
 
       // 第 9 轮应触发 replan（距 plan 创建于第 1 轮已过 8 轮）
@@ -1019,16 +1027,16 @@ describe('ExplorationTracker', () => {
         tracker.tick();
         trace.startRound(i);
         trace.setThought('长推理文本足够20字符以上的内容用于测试');
-        trace.addAction('submit_knowledge', { title: `t${i}` });
-        trace.addObservation('submit_knowledge', {
+        trace.addAction('knowledge', { action: 'submit', title: `t${i}` });
+        trace.addObservation('knowledge', {
           gotNewInfo: true,
           resultType: 'submit',
           keyFacts: [`submit "${i}": ok`],
           resultSize: 100,
         });
-        tracker.recordToolCall('submit_knowledge', { title: `t${i}` }, { status: 'ok' });
+        tracker.recordToolCall('knowledge', { action: 'submit', title: `t${i}` }, { status: 'ok' });
         trace.endRound();
-        tracker.endRound({ hasNewInfo: true, submitCount: 1, toolNames: ['submit_knowledge'] });
+        tracker.endRound({ hasNewInfo: true, submitCount: 1, toolNames: ['knowledge'] });
       }
 
       const metrics = tracker.getQualityMetrics(trace);
@@ -1053,17 +1061,17 @@ describe('ExplorationTracker', () => {
       tracker.tick();
       trace.startRound(1);
       trace.setThought('先获取概览');
-      trace.addAction('get_project_overview', {});
-      trace.addObservation('get_project_overview', {
+      trace.addAction('code', { action: 'structure' });
+      trace.addObservation('code', {
         gotNewInfo: true,
-        resultType: 'overview',
+        resultType: 'structure',
         keyFacts: ['project overview'],
         resultSize: 500,
       });
-      tracker.recordToolCall('get_project_overview', {}, { files: 10 });
+      tracker.recordToolCall('code', { action: 'structure' }, { files: 10 });
       tracker.updatePlanProgress(trace);
       trace.endRound();
-      tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['get_project_overview'] });
+      tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
 
       const metrics = tracker.getQualityMetrics(trace);
       expect(metrics.breakdown).toHaveProperty('planCompletion');
@@ -1081,7 +1089,7 @@ describe('ExplorationTracker', () => {
 
       for (let i = 0; i < 3; i++) {
         tracker.tick();
-        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['get_project_overview'] });
+        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
       }
       expect(tracker.phase).toBe('EXPLORE');
     });

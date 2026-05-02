@@ -63,11 +63,12 @@ describe('WorkflowCompletionFinalizer', () => {
       'utf8'
     );
 
-    expect(source).toContain('DeliveryCompletionStep.js');
-    expect(source).toContain('DeliveryVerificationStep.js');
-    expect(source).toContain('PanoramaCompletionStep.js');
-    expect(source).toContain('WikiCompletionStep.js');
-    expect(source).toContain('SemanticMemoryCompletionStep.js');
+    expect(source).toContain('CompletionSteps.js');
+    expect(source).toContain('runCursorDelivery');
+    expect(source).toContain('verifyDelivery');
+    expect(source).toContain('refreshPanorama');
+    expect(source).toContain('generateWiki');
+    expect(source).toContain('consolidateSemanticMemory');
   });
 });
 

@@ -42,15 +42,15 @@ describe('bootstrap projections', () => {
         },
         toolCalls: [
           {
-            tool: 'read_file',
-            args: { filePath: 'src/a.ts' },
+            tool: 'code',
+            args: { action: 'read_file', filePath: 'src/a.ts' },
           },
           {
-            tool: 'submit_knowledge',
+            tool: 'knowledge',
             result: { status: 'accepted' },
           },
           {
-            tool: 'submit_with_check',
+            tool: 'knowledge',
             result: { status: 'rejected' },
           },
         ],
