@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { EvolutionPolicy } from '#domain/evolution/EvolutionPolicy.js';
 import type { RecipeSourceRefRepositoryImpl } from '#repo/sourceref/RecipeSourceRefRepository.js';
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
@@ -101,7 +102,8 @@ export interface RecipeAuditOptions {
   container: RescanServiceContainer;
   logger: RescanLogger;
   recipeEntries: RecipeSnapshotEntry[];
-  allFiles: Array<{ relativePath?: string; name: string }>;
+  allFiles: Array<{ path?: string; relativePath?: string; name: string }>;
+  projectRoot?: string;
   /** RecipeImpactPlanner 产出的增量候选（可选，有则增强 verdict 精度） */
   candidatePlan?: EvolutionCandidatePlan | null;
 }
@@ -147,13 +149,13 @@ export function syncKnowledgeStoreForRescan(opts: KnowledgeSyncOptions): void {
 export async function auditRecipesForRescan(
   opts: RecipeAuditOptions
 ): Promise<RelevanceAuditSummary> {
-  const { recipeEntries, allFiles, candidatePlan, container, logger } = opts;
+  const { recipeEntries, allFiles, projectRoot, candidatePlan, container, logger } = opts;
 
   if (recipeEntries.length === 0) {
     return emptyAuditSummary();
   }
 
-  const filePathSet = new Set(allFiles.map((f) => f.relativePath || f.name).filter(Boolean));
+  const filePathSet = buildComparableFilePathSet(allFiles, projectRoot);
 
   const impactMap = buildImpactMap(candidatePlan);
 
@@ -187,6 +189,36 @@ export async function auditRecipesForRescan(
     proposalsCreated: 0,
     immediateDeprecated: counters.dead,
   };
+}
+
+function buildComparableFilePathSet(
+  allFiles: Array<{ path?: string; relativePath?: string; name: string }>,
+  projectRoot?: string
+): Set<string> {
+  const paths = new Set<string>();
+  for (const file of allFiles) {
+    addComparablePath(paths, file.relativePath);
+    addComparablePath(paths, file.name);
+    addComparablePath(paths, file.path);
+    if (file.path && projectRoot && path.isAbsolute(file.path)) {
+      addComparablePath(paths, path.relative(projectRoot, file.path));
+    }
+  }
+  return paths;
+}
+
+function addComparablePath(paths: Set<string>, value: string | undefined): void {
+  const normalized = normalizeComparablePath(value);
+  if (normalized) {
+    paths.add(normalized);
+  }
+}
+
+function normalizeComparablePath(value: string | undefined): string {
+  if (!value) {
+    return '';
+  }
+  return path.normalize(value).replace(/\\/g, '/').replace(/^\.\//, '');
 }
 
 // ── Impact 候选映射 ──────────────────────────────────────
@@ -352,7 +384,7 @@ function lifecycleToScore(
   const reasons: string[] = [];
   const hasSourceFiles = (entry.sourceRefs?.length ?? 0) > 0;
   const existingFiles = hasSourceFiles
-    ? entry.sourceRefs!.filter((ref) => filePathSet.has(ref)).length
+    ? (entry.sourceRefs ?? []).filter((ref) => filePathSet.has(normalizeComparablePath(ref))).length
     : 0;
 
   switch (entry.lifecycle) {
@@ -411,7 +443,7 @@ function buildLifecycleEvidence(
   filePathSet: Set<string>
 ): RelevanceAuditResult['evidence'] {
   const refs = entry.sourceRefs ?? [];
-  const existCount = refs.filter((ref) => filePathSet.has(ref)).length;
+  const existCount = refs.filter((ref) => filePathSet.has(normalizeComparablePath(ref))).length;
   return {
     triggerStillMatches: entry.lifecycle === 'active' || entry.lifecycle === 'evolving',
     symbolsAlive: existCount,

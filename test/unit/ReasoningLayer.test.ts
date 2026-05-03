@@ -774,6 +774,19 @@ describe('ExplorationTracker', () => {
       const nudge = tracker.getNudge(trace);
       expect(nudge).toBeNull(); // producer 禁用 reflection + planning
     });
+
+    test('终结阶段不再触发 planning 或 reflection nudge', () => {
+      const tracker = createTracker('analyst');
+      const trace = new ReasoningTrace();
+      trace.setPlan('1. 获取项目概览\n2. 搜索错误处理\n3. 总结分析发现', 1);
+
+      tracker.forceTerminal('test');
+      tracker.tick();
+      trace.startRound(1);
+
+      expect(tracker.phase).toBe('SUMMARIZE');
+      expect(tracker.getNudge(trace)).toBeNull();
+    });
   });
 
   // ─── onTextResponse ───────────────────────────────────

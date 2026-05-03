@@ -43,7 +43,7 @@ export function buildEvolutionPrescreen(
     knowledgeType: string;
     trigger: string;
   }>,
-  dimensions: Array<{ id: string }>
+  dimensions: Array<{ id: string; knowledgeTypes?: string[] }>
 ): EvolutionPrescreen {
   const needsVerification: PrescreenNeedsVerification[] = [];
   const autoResolved: PrescreenAutoResolved[] = [];
@@ -51,7 +51,10 @@ export function buildEvolutionPrescreen(
 
   for (const result of auditSummary.results) {
     const snap = snapById.get(result.recipeId);
-    const dimension = snap?.knowledgeType || 'unknown';
+    const dimension = snap ? findMatchingDimensionId(snap, dimensions) : null;
+    if (!dimension) {
+      continue;
+    }
 
     switch (result.verdict) {
       case 'healthy': {
@@ -90,17 +93,21 @@ export function buildEvolutionPrescreen(
   const healthyByDim = new Map<string, number>();
   const observingByDim = new Map<string, number>();
 
-  for (const entry of snapshotEntries) {
-    const dim = entry.knowledgeType || 'unknown';
-    const auditResult = auditSummary.results.find((result) => result.recipeId === entry.id);
-
-    if (entry.lifecycle === 'active' || entry.lifecycle === 'evolving') {
-      if (!auditResult || auditResult.verdict === 'healthy' || auditResult.verdict === 'watch') {
-        healthyByDim.set(dim, (healthyByDim.get(dim) || 0) + 1);
+  for (const dim of dimensions) {
+    for (const entry of snapshotEntries) {
+      if (!recipeBelongsToDimension(entry, dim)) {
+        continue;
       }
-    } else if (entry.lifecycle === 'staging') {
-      if (!auditResult || auditResult.verdict === 'healthy' || auditResult.verdict === 'watch') {
-        observingByDim.set(dim, (observingByDim.get(dim) || 0) + 1);
+      const auditResult = auditSummary.results.find((result) => result.recipeId === entry.id);
+
+      if (entry.lifecycle === 'active' || entry.lifecycle === 'evolving') {
+        if (!auditResult || auditResult.verdict === 'healthy' || auditResult.verdict === 'watch') {
+          healthyByDim.set(dim.id, (healthyByDim.get(dim.id) || 0) + 1);
+        }
+      } else if (entry.lifecycle === 'staging') {
+        if (!auditResult || auditResult.verdict === 'healthy' || auditResult.verdict === 'watch') {
+          observingByDim.set(dim.id, (observingByDim.get(dim.id) || 0) + 1);
+        }
       }
     }
   }
@@ -118,6 +125,21 @@ export function buildEvolutionPrescreen(
   }
 
   return { needsVerification, autoResolved, dimensionGaps };
+}
+
+function findMatchingDimensionId(
+  entry: { knowledgeType: string },
+  dimensions: Array<{ id: string; knowledgeTypes?: string[] }>
+): string | null {
+  return dimensions.find((dimension) => recipeBelongsToDimension(entry, dimension))?.id ?? null;
+}
+
+function recipeBelongsToDimension(
+  entry: { knowledgeType: string },
+  dimension: { id: string; knowledgeTypes?: string[] }
+): boolean {
+  const knowledgeType = entry.knowledgeType || '';
+  return knowledgeType === dimension.id || (dimension.knowledgeTypes ?? []).includes(knowledgeType);
 }
 
 function buildAuditHint(result: RelevanceAuditResult): string {

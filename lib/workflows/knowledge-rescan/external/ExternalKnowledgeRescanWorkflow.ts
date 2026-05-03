@@ -172,6 +172,7 @@ export async function runExternalKnowledgeRescanWorkflow(ctx: McpContext, args: 
     logger: ctx.logger,
     recipeEntries: recipeSnapshot.entries,
     allFiles,
+    projectRoot,
   });
 
   const knowledgeRescanPlan = buildKnowledgeRescanPlan({

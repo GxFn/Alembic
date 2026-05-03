@@ -101,6 +101,8 @@ interface QualityReport {
   suggestions: string[];
 }
 
+const REQUIRED_MEMORY_FINDING_SUGGESTION = 'Required memory.note_finding calls are missing';
+
 /** 门控选项 */
 interface GateOptions {
   outputType?: string;
@@ -128,6 +130,9 @@ interface InsightGateStrategyContext {
   outputType?: string;
   [key: string]: unknown;
 }
+
+const FILE_REF_RE =
+  /[\w/.-]+\.(?:go|mod|sum|py|pyi|java|kt|kts|js|ts|jsx|tsx|mjs|cjs|swift|m|h|c|cpp|cc|hpp|cs|rb|rs|sql|json|yaml|yml|toml|xml|html|css|scss|less|sh|md|txt|gradle|properties|proto|vue|svelte|graphql|cfg|conf|ini|env|lock|rst)\b/gi;
 
 // ──────────────────────────────────────────────────────────────────
 // AnalysisReport 构建
@@ -181,6 +186,68 @@ export function sanitizeAnalysisText(text: string) {
   }
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
   return cleaned;
+}
+
+function extractFileRefs(text: string) {
+  const refs = new Set<string>();
+  for (const match of text.match(FILE_REF_RE) || []) {
+    const clean = match.trim();
+    if (clean.length > 2 && clean.length < 120) {
+      refs.add(clean);
+    }
+  }
+  return [...refs];
+}
+
+function splitMarkdownSections(text: string) {
+  const headings = [...text.matchAll(/^#{2,4}\s+(.+)$/gm)];
+  return headings.map((match, index) => {
+    const start = match.index ?? 0;
+    const bodyStart = start + match[0].length;
+    const nextStart = headings[index + 1]?.index ?? text.length;
+    return {
+      title: match[1].replace(/[`*_]/g, '').trim(),
+      body: text.slice(bodyStart, nextStart).trim(),
+    };
+  });
+}
+
+function shouldSkipDerivedFindingTitle(title: string) {
+  return /^(?:待探索|总结|结论|概览|项目概览|分析报告|探索计划|执行计划)$/i.test(title.trim());
+}
+
+function deriveFindingsFromAnalysisText(
+  analysisText: string,
+  knownReferencedFiles: string[]
+): NormalizedFinding[] {
+  const knownFiles = new Set(knownReferencedFiles);
+  const findings: NormalizedFinding[] = [];
+
+  for (const section of splitMarkdownSections(analysisText)) {
+    const title = section.title.replace(/^\d+(?:\.\d+)*[、.)\s-]*/, '').trim();
+    if (!title || shouldSkipDerivedFindingTitle(title)) {
+      continue;
+    }
+
+    const fileRefs = extractFileRefs(section.body).filter(
+      (ref) => knownFiles.size === 0 || knownFiles.has(ref)
+    );
+    if (fileRefs.length === 0) {
+      continue;
+    }
+
+    findings.push({
+      finding: title,
+      evidence: fileRefs.slice(0, 3).join(', '),
+      importance: Math.min(10, 5 + fileRefs.length),
+    });
+
+    if (findings.length >= 5) {
+      break;
+    }
+  }
+
+  return findings;
 }
 
 /**
@@ -266,15 +333,8 @@ export function buildAnalysisReport(
 
   // 从分析文本中提取文件路径
   const text = sanitizeAnalysisText(analystResult.reply || '');
-  const FILE_EXT_RE =
-    /[\w/.-]+\.(?:go|mod|sum|py|pyi|java|kt|kts|js|ts|jsx|tsx|mjs|cjs|swift|m|h|c|cpp|cc|hpp|cs|rb|rs|sql|json|yaml|yml|toml|xml|html|css|scss|less|sh|md|txt|gradle|properties|proto|vue|svelte|graphql|cfg|conf|ini|env|lock|rst)\b/gi;
-  const textFileRefs = text.match(FILE_EXT_RE);
-  if (textFileRefs) {
-    for (const f of textFileRefs) {
-      if (f.length > 2 && f.length < 120) {
-        referencedFiles.add(f);
-      }
-    }
+  for (const f of extractFileRefs(text)) {
+    referencedFiles.add(f);
   }
 
   return {
@@ -327,8 +387,15 @@ export function buildAnalysisArtifact(
   }
   const evidence = collector.build();
 
+  const allFiles = new Set(baseReport.referencedFiles);
+  for (const filePath of evidence.evidenceMap.keys()) {
+    allFiles.add(filePath);
+  }
+
   const distilled = activeContext?.distill() || { keyFindings: [], toolCallSummary: [] };
-  const findings = distilled.keyFindings.map((f: RawFinding) => ({
+  const memoryFindingCount = distilled.keyFindings.length;
+  let derivedFindingCount = 0;
+  let findings = distilled.keyFindings.map((f: RawFinding) => ({
     finding: f.finding,
     evidence:
       typeof f.evidence === 'string'
@@ -340,13 +407,15 @@ export function buildAnalysisArtifact(
             : '',
     importance: f.importance,
   }));
-
-  const allFiles = new Set(baseReport.referencedFiles);
-  for (const filePath of evidence.evidenceMap.keys()) {
-    allFiles.add(filePath);
+  if (findings.length === 0) {
+    findings = deriveFindingsFromAnalysisText(baseReport.analysisText, [...allFiles]);
+    derivedFindingCount = findings.length;
   }
 
-  const qualityReport = buildQualityScores(baseReport.analysisText, findings, evidence);
+  const qualityReport = buildQualityScores(baseReport.analysisText, findings, evidence, {
+    memoryFindingCount,
+    derivedFindingCount,
+  });
 
   return {
     // Layer 1: Core
@@ -370,6 +439,8 @@ export function buildAnalysisArtifact(
     metadata: {
       ...baseReport.metadata,
       artifactVersion: 2,
+      memoryFindingCount,
+      derivedFindingCount,
     },
 
     // v1 backward compat
@@ -394,7 +465,8 @@ export function buildAnalysisArtifact(
 function buildQualityScores(
   analysisText: string,
   findings: NormalizedFinding[],
-  evidence: EvidenceCollectorResult
+  evidence: EvidenceCollectorResult,
+  options: { memoryFindingCount?: number; derivedFindingCount?: number } = {}
 ) {
   const scores = {} as QualityScores;
 
@@ -458,6 +530,9 @@ function buildQualityScores(
   if (scores.evidenceScore < 50) {
     suggestions.push('Findings lack file-level evidence');
   }
+  if ((options.memoryFindingCount ?? 0) === 0) {
+    suggestions.push(REQUIRED_MEMORY_FINDING_SUGGESTION);
+  }
   if (scores.coherenceScore < 50) {
     suggestions.push('Analysis text is too short or unstructured');
   }
@@ -490,6 +565,13 @@ function applyGateThresholds(qualityReport: QualityReport, options: GateOptions 
   const { totalScore } = qualityReport;
   const needsCandidates = options.outputType === 'dual' || options.outputType === 'candidate';
   const threshold = needsCandidates ? 60 : 45;
+  if (needsCandidates && qualityReport.suggestions.includes(REQUIRED_MEMORY_FINDING_SUGGESTION)) {
+    return {
+      pass: false,
+      reason: REQUIRED_MEMORY_FINDING_SUGGESTION,
+      action: 'retry',
+    };
+  }
 
   if (totalScore >= threshold) {
     return { pass: true };
@@ -555,6 +637,8 @@ export function buildRetryPrompt(reason: string) {
       '你的分析缺少代码引用。请使用 graph({ action: "query" }) 和 code({ action: "read" }) 查看至少 3 个相关文件，并在分析中引用具体文件和行号。',
     'Analysis lacks structure':
       '请将分析组织成结构化的段落，使用编号列表或标题来区分不同的发现。每个发现应包含具体的文件路径和代码位置。',
+    [REQUIRED_MEMORY_FINDING_SUGGESTION]:
+      '你的分析正文已有发现，但没有写入结构化记忆。请先对至少 3 个核心发现调用 memory({ action: "note_finding", params: { finding, evidence, importance } })，evidence 必须包含完整相对路径和行号，然后再输出最终报告。',
   };
 
   return (

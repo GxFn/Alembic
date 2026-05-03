@@ -35,11 +35,12 @@ export function createInternalKnowledgeRescanIntent(
   args: InternalKnowledgeRescanArgs
 ): KnowledgeRescanWorkflowIntent {
   const forceMode = args.force ?? false;
+  const cleanupPolicy = forceMode ? 'force-rescan' : 'rescan-clean';
   return {
     kind: 'knowledge-rescan',
     executor: 'internal-agent',
     analysisMode: forceMode ? 'full' : 'incremental',
-    cleanupPolicy: forceMode ? 'force-rescan' : 'none',
+    cleanupPolicy,
     completionPolicy: 'auto-fill',
     projectAnalysis: {
       maxFiles: 500,
@@ -60,11 +61,12 @@ export function createExternalKnowledgeRescanIntent(
   args: RescanInput
 ): KnowledgeRescanWorkflowIntent {
   const forceMode = args.force ?? false;
+  const cleanupPolicy = forceMode ? 'force-rescan' : 'rescan-clean';
   return {
     kind: 'knowledge-rescan',
     executor: 'external-agent',
     analysisMode: forceMode ? 'full' : 'incremental',
-    cleanupPolicy: forceMode ? 'force-rescan' : 'none',
+    cleanupPolicy,
     completionPolicy: 'external-dimension-complete',
     projectAnalysis: {
       maxFiles: 500,

@@ -65,11 +65,16 @@ export function projectInternalRescanGapPlan(plan: KnowledgeRescanPlan): Interna
 }
 
 export function projectInternalRescanPromptRecipes(plan: KnowledgeRescanPlan) {
-  return projectInternalRescanPromptRecipesFromParts({
-    recipeEntries: plan.recipeEntries,
-    auditSummary: plan.auditSummary,
-    auditVerdictMap: plan.auditVerdictMap,
-  });
+  return plan.dimensionPlans.flatMap((dimensionPlan) =>
+    [...dimensionPlan.existingRecipes, ...dimensionPlan.decayingRecipes].map((entry) =>
+      projectInternalRescanPromptRecipe({
+        entry,
+        dimensionId: dimensionPlan.dimension.id,
+        auditSummary: plan.auditSummary,
+        auditVerdictMap: plan.auditVerdictMap,
+      })
+    )
+  );
 }
 
 export function projectInternalRescanPromptRecipesFromParts(opts: {
@@ -88,26 +93,55 @@ export function projectInternalRescanPromptRecipesFromParts(opts: {
   sourceRefs?: string[];
   auditEvidence?: Record<string, unknown>;
 }> {
-  return opts.recipeEntries.map((entry) => {
-    const auditResult = opts.auditSummary.results.find((result) => result.recipeId === entry.id);
-    const verdict = opts.auditVerdictMap.get(entry.id);
-    const isDecaying =
-      entry.lifecycle === 'decaying' || verdict === 'decay' || verdict === 'severe';
+  return opts.recipeEntries.map((entry) =>
+    projectInternalRescanPromptRecipe({
+      entry,
+      dimensionId: entry.knowledgeType,
+      auditSummary: opts.auditSummary,
+      auditVerdictMap: opts.auditVerdictMap,
+    })
+  );
+}
 
-    return {
-      id: entry.id,
-      title: entry.title,
-      trigger: entry.trigger,
-      knowledgeType: entry.knowledgeType,
-      status: isDecaying ? 'decaying' : 'healthy',
-      decayReason:
-        isDecaying && auditResult?.decayReasons ? auditResult.decayReasons.join('; ') : undefined,
-      auditScore: auditResult?.relevanceScore,
-      content: entry.content,
-      sourceRefs: entry.sourceRefs,
-      auditEvidence: auditResult?.evidence,
-    };
-  });
+function projectInternalRescanPromptRecipe({
+  entry,
+  dimensionId,
+  auditSummary,
+  auditVerdictMap,
+}: {
+  entry: RecipeSnapshotEntry;
+  dimensionId: string;
+  auditSummary: RelevanceAuditSummary;
+  auditVerdictMap: Map<string, AuditVerdict>;
+}): {
+  id: string;
+  title: string;
+  trigger: string;
+  knowledgeType: string;
+  status: 'decaying' | 'healthy';
+  decayReason?: string;
+  auditScore?: number;
+  content?: { markdown?: string; rationale?: string; coreCode?: string };
+  sourceRefs?: string[];
+  auditEvidence?: Record<string, unknown>;
+} {
+  const auditResult = auditSummary.results.find((result) => result.recipeId === entry.id);
+  const verdict = auditVerdictMap.get(entry.id);
+  const isDecaying = entry.lifecycle === 'decaying' || verdict === 'decay' || verdict === 'severe';
+
+  return {
+    id: entry.id,
+    title: entry.title,
+    trigger: entry.trigger,
+    knowledgeType: dimensionId,
+    status: isDecaying ? 'decaying' : 'healthy',
+    decayReason:
+      isDecaying && auditResult?.decayReasons ? auditResult.decayReasons.join('; ') : undefined,
+    auditScore: auditResult?.relevanceScore,
+    content: entry.content,
+    sourceRefs: entry.sourceRefs,
+    auditEvidence: auditResult?.evidence,
+  };
 }
 
 export function projectExternalRescanEvidencePlan(

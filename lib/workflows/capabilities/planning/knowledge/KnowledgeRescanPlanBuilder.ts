@@ -88,11 +88,17 @@ export function buildKnowledgeRescanPlan({
   const auditResultByRecipeId = new Map(
     auditSummary.results.map((result) => [result.recipeId, result])
   );
-  const coverageByDimension = buildCoverageByDimension({ recipeEntries, auditVerdictMap });
+  const coverageByDimension = buildCoverageByDimension({
+    recipeEntries,
+    auditVerdictMap,
+    dimensions,
+  });
   const affectedDimensionIds = new Set(fileDiff?.affectedDimensionIds ?? []);
   const changedFiles = fileDiff?.changedFiles ?? [];
   const dimensionPlans = requestedDimensions.map((dimension) => {
-    const existingRecipes = recipeEntries.filter((entry) => entry.knowledgeType === dimension.id);
+    const existingRecipes = recipeEntries.filter((entry) =>
+      recipeBelongsToDimension(entry, dimension)
+    );
     const decayingRecipes = existingRecipes.filter((entry) =>
       isRecipeDecaying(entry, auditResultByRecipeId.get(entry.id), auditVerdictMap.get(entry.id))
     );
@@ -165,25 +171,36 @@ export function buildKnowledgeRescanPlan({
 function buildCoverageByDimension({
   recipeEntries,
   auditVerdictMap,
+  dimensions,
 }: {
   recipeEntries: RecipeSnapshotEntry[];
   auditVerdictMap: Map<string, AuditVerdict>;
+  dimensions: DimensionDef[];
 }): Record<string, number> {
   const coverageByDimension: Record<string, number> = {};
 
-  for (const entry of recipeEntries) {
-    const dimensionId = entry.knowledgeType || 'unknown';
-    const isConfirmed = entry.lifecycle === 'active' || entry.lifecycle === 'evolving';
-    const verdict = auditVerdictMap.get(entry.id);
-    const isHealthyStaging =
-      entry.lifecycle === 'staging' && (!verdict || verdict === 'healthy' || verdict === 'watch');
+  for (const dimension of dimensions) {
+    for (const entry of recipeEntries) {
+      if (!recipeBelongsToDimension(entry, dimension)) {
+        continue;
+      }
+      const isConfirmed = entry.lifecycle === 'active' || entry.lifecycle === 'evolving';
+      const verdict = auditVerdictMap.get(entry.id);
+      const isHealthyStaging =
+        entry.lifecycle === 'staging' && (!verdict || verdict === 'healthy' || verdict === 'watch');
 
-    if (isConfirmed || isHealthyStaging) {
-      coverageByDimension[dimensionId] = (coverageByDimension[dimensionId] || 0) + 1;
+      if (isConfirmed || isHealthyStaging) {
+        coverageByDimension[dimension.id] = (coverageByDimension[dimension.id] || 0) + 1;
+      }
     }
   }
 
   return coverageByDimension;
+}
+
+function recipeBelongsToDimension(entry: RecipeSnapshotEntry, dimension: DimensionDef): boolean {
+  const knowledgeType = entry.knowledgeType || '';
+  return knowledgeType === dimension.id || (dimension.knowledgeTypes ?? []).includes(knowledgeType);
 }
 
 function buildDimensionExecutionReasons({

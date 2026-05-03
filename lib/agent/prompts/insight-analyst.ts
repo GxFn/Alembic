@@ -328,9 +328,12 @@ ${depthHint}
 【本地子包覆盖】如果项目有本地子包/模块（如 Packages/ 目录下的包），必须同时分析其内部实现，不得仅看主项目对其的调用。`);
 
   // §5 工具使用提示
-  parts.push(
-    '使用 memory({ action: "note_finding", params: { finding: "发现描述", evidence: "文件路径:行号", importance: 8 } }) 记录关键发现，确保重要信息不会在后期被遗忘。每个重要发现都必须记录，这直接影响分析质量评分。'
-  );
+  parts.push(`【硬性要求：结构化记录发现】
+最终 Markdown 报告不能替代 memory.note_finding。
+在输出最终报告前，必须先为每个核心发现调用:
+memory({ action: "note_finding", params: { finding: "发现描述", evidence: "完整相对路径:行号", importance: 8 } })
+如果当前维度需要产出候选知识，至少记录 3 条 note_finding；若确认不足 3 条，请记录所有已确认发现，并在最终报告说明不足原因。
+缺少 memory.note_finding 会导致 QualityGate retry，因为 Producer 依赖这些结构化发现。`);
   parts.push(
     '使用 memory({ action: "recall", params: { tags: ["finding"] } }) 回顾已记录的发现，避免重复分析。'
   );

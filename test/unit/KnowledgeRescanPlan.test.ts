@@ -2,9 +2,11 @@ import { describe, expect, test } from 'vitest';
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import { buildKnowledgeRescanPlan } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
-import type {
-  RelevanceAuditResult,
-  RelevanceAuditSummary,
+import {
+  auditRecipesForRescan,
+  buildRescanPrescreen,
+  type RelevanceAuditResult,
+  type RelevanceAuditSummary,
 } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
 import {
   projectExternalRescanEvidencePlan,
@@ -159,6 +161,109 @@ describe('KnowledgeRescanPlan', () => {
     expect(evidencePlan.decayCount).toBe(2);
     expect(evidencePlan.executionReasons.ui.map((reason) => reason.kind)).toContain('coverage-gap');
     expect(evidencePlan.occupiedTriggers).toContain('@network-dead');
+  });
+
+  test('counts legacy knowledge types through dimension knowledgeTypes', () => {
+    const plan = buildKnowledgeRescanPlan({
+      recipeEntries: [
+        recipe({ id: 'factory', knowledgeType: 'code-pattern' }),
+        recipe({ id: 'sendable', knowledgeType: 'code-pattern' }),
+        recipe({ id: 'retry', knowledgeType: 'best-practice' }),
+      ],
+      auditSummary: {
+        totalAudited: 3,
+        healthy: 3,
+        watch: 0,
+        decay: 0,
+        severe: 0,
+        dead: 0,
+        proposalsCreated: 0,
+        immediateDeprecated: 0,
+        results: [
+          result('factory', 'Factory', 'healthy'),
+          result('sendable', 'Sendable', 'healthy'),
+          result('retry', 'Retry', 'healthy'),
+        ],
+      },
+      dimensions: [
+        { id: 'design-patterns', label: 'Design Patterns', knowledgeTypes: ['code-pattern'] },
+        { id: 'error-resilience', label: 'Error Resilience', knowledgeTypes: ['best-practice'] },
+      ],
+      requestedDimensionIds: ['design-patterns', 'error-resilience'],
+      targetPerDimension: 2,
+    });
+
+    expect(plan.coverageByDimension).toMatchObject({
+      'design-patterns': 2,
+      'error-resilience': 1,
+    });
+    expect(plan.dimensionPlans.find((dim) => dim.dimension.id === 'design-patterns')).toMatchObject(
+      {
+        existingCount: 2,
+        gap: 0,
+        shouldExecute: false,
+      }
+    );
+    expect(
+      plan.dimensionPlans.find((dim) => dim.dimension.id === 'error-resilience')
+    ).toMatchObject({
+      existingCount: 1,
+      gap: 1,
+      shouldExecute: true,
+    });
+
+    const promptRecipes = projectInternalRescanPromptRecipes(plan);
+    expect(
+      promptRecipes.filter((recipe) => recipe.knowledgeType === 'design-patterns')
+    ).toHaveLength(2);
+    expect(
+      promptRecipes.filter((recipe) => recipe.knowledgeType === 'error-resilience')
+    ).toHaveLength(1);
+
+    const prescreen = buildRescanPrescreen(
+      plan.auditSummary,
+      plan.recipeEntries,
+      plan.requestedDimensions
+    );
+    expect(prescreen.dimensionGaps).toMatchObject({
+      'design-patterns': { healthy: 2, gap: 3 },
+      'error-resilience': { healthy: 1, gap: 4 },
+    });
+    expect(prescreen.autoResolved).toHaveLength(3);
+  });
+
+  test('audits project-relative recipe source refs against absolute collected file paths', async () => {
+    const auditSummary = await auditRecipesForRescan({
+      container: {
+        get() {
+          throw new Error('no source ref repository');
+        },
+      },
+      logger: { info: () => {}, warn: () => {} },
+      projectRoot: '/repo',
+      recipeEntries: [
+        recipe({
+          id: 'source-backed',
+          sourceRefs: ['Sources/Core/Thing.swift'],
+        }),
+      ],
+      allFiles: [
+        {
+          name: 'Thing.swift',
+          relativePath: 'Core/Thing.swift',
+          path: '/repo/Sources/Core/Thing.swift',
+        },
+      ],
+    });
+
+    expect(auditSummary.results[0]).toMatchObject({
+      recipeId: 'source-backed',
+      verdict: 'healthy',
+      relevanceScore: 90,
+      evidence: expect.objectContaining({
+        codeFilesExist: 1,
+      }),
+    });
   });
 });
 

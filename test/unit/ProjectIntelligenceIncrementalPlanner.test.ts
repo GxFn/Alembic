@@ -57,6 +57,40 @@ describe('ProjectIntelligenceIncrementalPlanner', () => {
     expect(report.phases.incremental).toEqual({ plan });
   });
 
+  test('preserves this binding when resolving database from a ServiceContainer-like object', async () => {
+    const db = { marker: 'bound-database' };
+    const plan = {
+      canIncremental: true,
+      mode: 'incremental',
+      affectedDimensions: ['architecture'],
+      skippedDimensions: [],
+      previousSnapshot: null,
+      diff: null,
+      reason: 'bound',
+      restoredEpisodic: null,
+    };
+    const container = {
+      get(name: string) {
+        return this === container && name === 'database' ? db : null;
+      },
+    };
+    fileDiffPlannerMock.evaluate.mockReturnValue(plan);
+
+    const result = await evaluateProjectAnalysisIncrementalPlan({
+      enabled: true,
+      projectRoot: '/repo',
+      ctx: {
+        container,
+        logger: { info: vi.fn() },
+      },
+      allFiles: [],
+      report: null,
+    });
+
+    expect(fileDiffPlannerMock.constructorArgs[0]?.[0]).toBe(db);
+    expect(result).toEqual({ incrementalPlan: plan, warnings: [] });
+  });
+
   test('falls back through resolver aliases before reporting missing db', async () => {
     const db = { marker: 'ctx-db' };
     fileDiffPlannerMock.evaluate.mockReturnValue({

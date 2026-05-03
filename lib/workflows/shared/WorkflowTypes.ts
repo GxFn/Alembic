@@ -34,7 +34,10 @@ export function normalizeStringArray(values: unknown): string[] | undefined {
   if (!Array.isArray(values)) {
     return undefined;
   }
-  return values.filter((value): value is string => typeof value === 'string');
+  return values
+    .flatMap((value) => (typeof value === 'string' ? value.split(',') : []))
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 // ── Workflow 执行模式 ──

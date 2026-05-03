@@ -192,20 +192,12 @@ export class CleanupService {
     this.#dataRoot = opts.dataRoot || opts.projectRoot;
     this.#logger = opts.logger || { info() {}, warn() {} };
     this.#wz = opts.writeZone || null;
-    this.#db = opts.db
-      ? typeof (opts.db as DbWrapper)?.getDb === 'function'
-        ? (opts.db as DbWrapper).getDb!()
-        : (opts.db as SqliteDb)
-      : null;
+    this.#db = resolveSqliteDb(opts.db);
   }
 
   /** 更新 DB 引用（fullReset 后重连时调用） */
   setDb(db: unknown): void {
-    this.#db = db
-      ? typeof (db as DbWrapper)?.getDb === 'function'
-        ? (db as DbWrapper).getDb!()
-        : (db as SqliteDb)
-      : null;
+    this.#db = resolveSqliteDb(db);
   }
 
   // ─── 需求 A：全量清理（垃圾桶模式） ────────────────────
@@ -404,7 +396,7 @@ export class CleanupService {
 
     // 6. 删除 bootstrap-report.json
     result.deletedFiles += this.#deleteFile(
-      path.join(getProjectKnowledgePath(this.#dataRoot), '.asd', 'bootstrap-report.json')
+      path.join(this.#dataRoot, '.asd', 'bootstrap-report.json')
     );
 
     this.#logger.info('[CleanupService] rescanClean complete', {
@@ -490,7 +482,7 @@ export class CleanupService {
 
     // 6. 删除 bootstrap-report.json
     result.deletedFiles += this.#deleteFile(
-      path.join(getProjectKnowledgePath(this.#dataRoot), '.asd', 'bootstrap-report.json')
+      path.join(this.#dataRoot, '.asd', 'bootstrap-report.json')
     );
 
     this.#logger.info('[CleanupService] forceRescanClean complete', {
@@ -866,4 +858,15 @@ export class CleanupService {
     }
     return 0;
   }
+}
+
+function resolveSqliteDb(db: unknown): SqliteDb | null {
+  if (!db) {
+    return null;
+  }
+  const wrapper = db as DbWrapper;
+  if (typeof wrapper.getDb === 'function') {
+    return wrapper.getDb();
+  }
+  return db as SqliteDb;
 }

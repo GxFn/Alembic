@@ -245,6 +245,10 @@ export class ExplorationTracker {
    * @returns |null}
    */
   getNudge(trace: ExplorationTrace | null) {
+    if (this.#isTerminalPhase()) {
+      return null;
+    }
+
     // 委托 NudgeGenerator
     const nudge = this.#nudgeGenerator.generate(this.#buildNudgeState(), trace);
     if (nudge) {

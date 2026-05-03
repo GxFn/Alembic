@@ -302,6 +302,7 @@ export async function runInternalKnowledgeRescanWorkflow(
     logger: ctx.logger,
     recipeEntries: recipeSnapshot.entries,
     allFiles,
+    projectRoot,
     candidatePlan,
   });
 

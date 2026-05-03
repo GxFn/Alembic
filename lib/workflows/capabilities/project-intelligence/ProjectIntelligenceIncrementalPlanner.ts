@@ -76,10 +76,10 @@ function resolveIncrementalDatabase(ctx: ProjectAnalysisIncrementalContext): unk
   if (container && typeof container === 'object') {
     const containerLike = container as ProjectAnalysisIncrementalContainer;
     return (
-      resolveContainerService(containerLike.get, 'database') ??
-      resolveContainerService(containerLike.get, 'db') ??
-      resolveContainerService(containerLike.resolve, 'database') ??
-      resolveContainerService(containerLike.resolve, 'db') ??
+      resolveContainerService(containerLike, 'get', 'database') ??
+      resolveContainerService(containerLike, 'get', 'db') ??
+      resolveContainerService(containerLike, 'resolve', 'database') ??
+      resolveContainerService(containerLike, 'resolve', 'db') ??
       ctx.db
     );
   }
@@ -87,16 +87,16 @@ function resolveIncrementalDatabase(ctx: ProjectAnalysisIncrementalContext): unk
 }
 
 function resolveContainerService(
-  resolver:
-    | ProjectAnalysisIncrementalContainer['get']
-    | ProjectAnalysisIncrementalContainer['resolve'],
+  container: ProjectAnalysisIncrementalContainer,
+  method: keyof ProjectAnalysisIncrementalContainer,
   name: string
 ) {
+  const resolver = container[method];
   if (typeof resolver !== 'function') {
     return undefined;
   }
   try {
-    return resolver(name);
+    return resolver.call(container, name);
   } catch {
     return undefined;
   }

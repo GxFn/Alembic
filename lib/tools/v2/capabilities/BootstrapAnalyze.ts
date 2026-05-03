@@ -32,7 +32,7 @@ export class BootstrapAnalyze extends CapabilityV2 {
 | 全局扫描 | graph.overview + code.structure 获取项目概览 |
 | 结构化探索 | graph.query + code.search 批量搜索关键模式 |
 | 深度验证 | code.read 阅读关键实现 |
-| 记录发现 | memory.note_finding 记录关键发现（含证据和重要性评分） |
+| 记录发现 | memory.note_finding 记录关键发现（含证据和重要性评分），这是硬性步骤 |
 
 关键规则:
 - 批量搜索: code.search({ patterns: [...] })
@@ -40,6 +40,7 @@ export class BootstrapAnalyze extends CapabilityV2 {
 - 不要重复搜索相同关键词
 - 调用关系优先用 graph.query(type: "callers")
 - 每发现重要模式/问题，立即调用 memory({ action: "note_finding", params: { finding: "...", evidence: "文件路径:行号", importance: 8 } })
+- 输出最终报告前，必须确认核心发现已经写入 memory.note_finding；最终 Markdown 不能替代该工具调用
 - 搜索前先用 memory({ action: "get_previous_evidence", params: { query: "类名/文件名" } }) 检查前序维度是否已有发现
 
 ${super.promptFragment}`;
