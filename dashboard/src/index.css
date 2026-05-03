@@ -236,6 +236,16 @@ html.dark {
 .dark .bg-teal-100     { background-color: rgba(20, 184, 166, 0.18); }
 .dark .bg-orange-50    { background-color: rgba(249, 115, 22, 0.1); }
 .dark .bg-orange-100   { background-color: rgba(249, 115, 22, 0.18); }
+.dark .bg-sky-50       { background-color: rgba(14, 165, 233, 0.1); }
+.dark .bg-sky-100      { background-color: rgba(14, 165, 233, 0.18); }
+.dark .bg-pink-50      { background-color: rgba(236, 72, 153, 0.1); }
+.dark .bg-pink-100     { background-color: rgba(236, 72, 153, 0.18); }
+.dark .bg-fuchsia-50   { background-color: rgba(217, 70, 239, 0.1); }
+.dark .bg-fuchsia-100  { background-color: rgba(217, 70, 239, 0.18); }
+.dark .bg-lime-50      { background-color: rgba(132, 204, 22, 0.1); }
+.dark .bg-lime-100     { background-color: rgba(132, 204, 22, 0.18); }
+.dark .bg-yellow-50    { background-color: rgba(234, 179, 8, 0.1); }
+.dark .bg-yellow-100   { background-color: rgba(234, 179, 8, 0.18); }
 
 /* ── 品牌色浅底 hover 变体 ── */
 .dark .hover\:bg-blue-50:hover   { background-color: rgba(59, 130, 246, 0.15); }
@@ -272,6 +282,16 @@ html.dark {
 .dark .text-orange-700 { color: #fdba74; }
 .dark .text-rose-700   { color: #fda4af; }
 .dark .text-indigo-700 { color: #a5b4fc; }
+.dark .text-sky-700    { color: #7dd3fc; }
+.dark .text-sky-600    { color: #38bdf8; }
+.dark .text-pink-700   { color: #f9a8d4; }
+.dark .text-pink-600   { color: #f472b6; }
+.dark .text-fuchsia-700 { color: #f0abfc; }
+.dark .text-fuchsia-600 { color: #e879f9; }
+.dark .text-lime-700   { color: #bef264; }
+.dark .text-lime-600   { color: #a3e635; }
+.dark .text-yellow-700 { color: #fde047; }
+.dark .text-yellow-600 { color: #facc15; }
 
 /* ── 品牌色边框（200 → 低透明度） ── */
 .dark .border-blue-200    { border-color: rgba(59, 130, 246, 0.25); }
@@ -297,6 +317,16 @@ html.dark {
 .dark .border-rose-200    { border-color: rgba(244, 63, 94, 0.25); }
 .dark .border-orange-200  { border-color: rgba(249, 115, 22, 0.25); }
 .dark .border-teal-200    { border-color: rgba(20, 184, 166, 0.25); }
+.dark .border-sky-100     { border-color: rgba(14, 165, 233, 0.15); }
+.dark .border-sky-200     { border-color: rgba(14, 165, 233, 0.25); }
+.dark .border-pink-100    { border-color: rgba(236, 72, 153, 0.15); }
+.dark .border-pink-200    { border-color: rgba(236, 72, 153, 0.25); }
+.dark .border-fuchsia-100 { border-color: rgba(217, 70, 239, 0.15); }
+.dark .border-fuchsia-200 { border-color: rgba(217, 70, 239, 0.25); }
+.dark .border-lime-100    { border-color: rgba(132, 204, 22, 0.15); }
+.dark .border-lime-200    { border-color: rgba(132, 204, 22, 0.25); }
+.dark .border-yellow-100  { border-color: rgba(234, 179, 8, 0.15); }
+.dark .border-yellow-200  { border-color: rgba(234, 179, 8, 0.25); }
 
 /* ── 表单控件 ── */
 .dark input:not([type="checkbox"]):not([type="radio"]):not([cmdk-input]),
@@ -1244,4 +1274,3 @@ button:active:not(:disabled),
   background: linear-gradient(90deg, transparent, var(--border-default), transparent);
   border: none;
 }
-
