@@ -31,6 +31,7 @@ import {
   DIMENSION_CONFIGS_V3,
   getFullDimensionConfig,
 } from '#workflows/capabilities/planning/dimensions/bootstrapDimensionConfigs.js';
+import type { KnowledgeRescanExecutionDecision } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
 
 interface DimConfigV3Entry {
   outputType: string;
@@ -57,6 +58,7 @@ export interface BootstrapDimensionPlan {
   dimExistingRecipes: BootstrapExistingRecipe[];
   hasExistingRecipes: boolean;
   prescreenDone: boolean;
+  rescanExecutionDecision?: KnowledgeRescanExecutionDecision;
 }
 
 export interface BootstrapDimensionRuntimeBuildResult {
@@ -111,10 +113,16 @@ export function resolveBootstrapDimensionPlan({
         };
   const v3OutputType = (DIMENSION_CONFIGS_V3 as Record<string, DimConfigV3Entry | undefined>)[dimId]
     ?.outputType;
-  const needsCandidates = Boolean(
+  const baseNeedsCandidates = Boolean(
     v3OutputType ? v3OutputType !== 'skill' : !dimConfig.skillWorthy || dimConfig.dualOutput
   );
   const dimExistingRecipes = getBootstrapDimensionExistingRecipes({ rescanContext, dimId });
+  const rescanExecutionDecision = rescanContext?.executionDecisions[dimId];
+  const needsCandidates = rescanExecutionDecision
+    ? baseNeedsCandidates &&
+      rescanExecutionDecision.mode === 'produce' &&
+      rescanExecutionDecision.createBudget > 0
+    : baseNeedsCandidates;
 
   return {
     dim,
@@ -123,6 +131,7 @@ export function resolveBootstrapDimensionPlan({
     dimExistingRecipes,
     hasExistingRecipes: dimExistingRecipes.length > 0,
     prescreenDone: rescanContext?.evolutionPrescreen !== undefined,
+    ...(rescanExecutionDecision ? { rescanExecutionDecision } : {}),
   };
 }
 

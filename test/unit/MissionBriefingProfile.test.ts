@@ -16,7 +16,10 @@ describe('MissionBriefing profiles', () => {
     expect(briefing.meta?.profile).toBe('cold-start-external');
     expect(briefing.evidenceHints).toBeUndefined();
     expect((briefing.executionPlan as { workflow: string }).workflow).toContain(
-      'knowledge({ action: "submit_batch" })'
+      'knowledge({ action: "submit_batch", dimensionId: 当前维度ID, items: [...] })'
+    );
+    expect((briefing.executionPlan as { workflow: string }).workflow).toContain(
+      'item.category 只填业务/组件分类'
     );
   });
 
@@ -40,6 +43,9 @@ describe('MissionBriefing profiles', () => {
     expect(briefing.meta?.profile).toBe('rescan-external');
     expect((briefing.executionPlan as { workflow: string }).workflow).toContain('增量扫描模式');
     expect((briefing.executionPlan as { workflow: string }).workflow).toContain('仅 1 条需要验证');
+    expect((briefing.executionPlan as { workflow: string }).workflow).toContain(
+      'executionMode="produce"'
+    );
 
     const hints = briefing.evidenceHints as Record<string, unknown>;
     expect(hints.rescanMode).toBe(true);
@@ -114,12 +120,16 @@ function createEvidencePlan(): ExternalRescanEvidencePlan {
         dimensionId: 'architecture',
         existingCount: 1,
         gap: 2,
+        executionMode: 'produce',
+        createBudget: 2,
+        shouldExecute: true,
         existingTriggers: ['@architecture-recipe'],
         executionReasons: [{ kind: 'coverage-gap', detail: 'Need more recipes' }],
       },
     ],
     executionReasons: { architecture: [{ kind: 'coverage-gap', detail: 'Need more recipes' }] },
     totalGap: 2,
+    totalCreateBudget: 2,
     decayCount: 0,
     occupiedTriggers: ['@architecture-recipe'],
     coveredDimensions: 0,

@@ -26,6 +26,7 @@ import { WarningRepository } from '../../repository/evolution/WarningRepository.
 import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
+import { findSimilarRecipes } from '../../service/candidate/SimilarityService.js';
 import { ConsolidationAdvisor } from '../../service/evolution/ConsolidationAdvisor.js';
 import { ContentPatcher } from '../../service/evolution/ContentPatcher.js';
 import { DecayDetector } from '../../service/evolution/DecayDetector.js';
@@ -336,8 +337,20 @@ export function register(c: ServiceContainer) {
     const knowledgeService = ct.get('knowledgeService');
     const dataRoot = resolveDataRoot(ct) as string;
     let consolidationAdvisor = null;
+    let proposalRepository = null;
+    let evolutionGateway = null;
     try {
       consolidationAdvisor = ct.get('consolidationAdvisor');
+    } catch {
+      /* optional */
+    }
+    try {
+      proposalRepository = ct.get('proposalRepository');
+    } catch {
+      /* optional */
+    }
+    try {
+      evolutionGateway = ct.get('evolutionGateway');
     } catch {
       /* optional */
     }
@@ -349,6 +362,13 @@ export function register(c: ServiceContainer) {
       consolidationAdvisor: consolidationAdvisor as unknown as ConstructorParameters<
         typeof RecipeProductionGateway
       >[0]['consolidationAdvisor'],
+      proposalRepository: proposalRepository as unknown as ConstructorParameters<
+        typeof RecipeProductionGateway
+      >[0]['proposalRepository'],
+      evolutionGateway: evolutionGateway as unknown as ConstructorParameters<
+        typeof RecipeProductionGateway
+      >[0]['evolutionGateway'],
+      findSimilarRecipes,
     });
   });
 

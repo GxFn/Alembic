@@ -7,6 +7,7 @@ import {
   resolveBootstrapDimensionPlan,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import { prepareBootstrapRescanState } from '#workflows/capabilities/execution/internal-agent/BootstrapRescanState.js';
+import type { KnowledgeRescanExecutionDecision } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
 
 const dimensions = [
   {
@@ -153,6 +154,90 @@ describe('bootstrap dimension runtime builder', () => {
       modules: ['src'],
     });
     expect(strategyContext.projectGraph).toBeTruthy();
+  });
+
+  test('turns verify-only rescan decisions into analyze-only dimension runs', () => {
+    const decision: KnowledgeRescanExecutionDecision = {
+      dimensionId: 'custom-dual-dim',
+      dimension: dimensions[1],
+      mode: 'verify-only',
+      createBudget: 0,
+      existingCount: 5,
+      gap: 0,
+      existingRecipes: [],
+      decayingRecipes: [],
+      reasons: [{ kind: 'file-change', changedFiles: ['src/api.ts'] }],
+      shouldExecute: true,
+    };
+    const {
+      rescanContext,
+      globalSubmittedTitles,
+      globalSubmittedPatterns,
+      globalSubmittedTriggers,
+    } = prepareBootstrapRescanState({
+      existingRecipes: [
+        {
+          id: 'recipe-1',
+          title: 'Healthy Recipe',
+          trigger: 'healthy_trigger',
+          knowledgeType: 'custom-dual-dim',
+        },
+      ],
+      evolutionPrescreen: { done: true },
+      executionDecisions: [decision],
+    });
+    const plan = resolveBootstrapDimensionPlan({
+      dimId: 'custom-dual-dim',
+      dimensions,
+      rescanContext,
+    });
+    expect(plan).not.toBeNull();
+    if (!plan) {
+      throw new Error('expected custom-dual-dim plan');
+    }
+    expect(plan.needsCandidates).toBe(false);
+    expect(plan.rescanExecutionDecision).toBe(decision);
+
+    const memoryCoordinator = new MemoryCoordinator({ mode: 'bootstrap' });
+    const result = createBootstrapDimensionRuntimeInput({
+      dimId: 'custom-dual-dim',
+      plan,
+      memoryCoordinator,
+      systemRunContextFactory: createContextFactory(),
+      projectInfo: { name: 'repo', lang: 'typescript', fileCount: 10 },
+      primaryLang: 'typescript',
+      dimContext: {},
+      sessionStore: {},
+      semanticMemory: {},
+      codeEntityGraphInst: {},
+      projectGraph: { getOverview: () => ({ totalClasses: 0, totalProtocols: 0 }) },
+      panoramaResult: null,
+      astProjectSummary: null,
+      guardAudit: null,
+      depGraphData: null,
+      callGraphResult: null,
+      rescanContext,
+      targetFileMap: { src: [] },
+      globalSubmittedTitles,
+      globalSubmittedPatterns,
+      globalSubmittedTriggers,
+      bootstrapDedup: {},
+      sessionId: 'session-1',
+      allFiles: [],
+      sessionAbortSignal: null,
+    });
+    const strategyContext = result.runInput.context?.strategyContext as Record<string, unknown>;
+
+    expect(result.runInput.params).toMatchObject({
+      dimId: 'custom-dual-dim',
+      needsCandidates: false,
+    });
+    expect(strategyContext.rescanContext).toMatchObject({
+      gap: 0,
+      createBudget: 0,
+      executionMode: 'verify-only',
+      existing: 5,
+    });
   });
 
   test('builds compact panorama context defensively', () => {

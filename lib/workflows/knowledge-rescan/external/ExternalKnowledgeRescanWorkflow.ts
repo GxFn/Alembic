@@ -181,7 +181,8 @@ export async function runExternalKnowledgeRescanWorkflow(ctx: McpContext, args: 
     dimensions: allDimensions as DimensionDef[],
     requestedDimensionIds: intent.dimensionIds,
   });
-  const dimensions = knowledgeRescanPlan.requestedDimensions;
+  const dimensions = knowledgeRescanPlan.executionDimensions;
+  const requestedDimensions = knowledgeRescanPlan.requestedDimensions;
 
   // ═══════════════════════════════════════════════════════════
   // Step 4.5: 构建进化前置过滤（Phase A）
@@ -242,7 +243,7 @@ export async function runExternalKnowledgeRescanWorkflow(ctx: McpContext, args: 
   const dimGapLog = evidencePlan.dimensionGaps
     .map(
       (dimensionGap) =>
-        `${dimensionGap.dimensionId}(${dimensionGap.existingCount}→gap ${dimensionGap.gap})`
+        `${dimensionGap.dimensionId}(${dimensionGap.existingCount}→gap ${dimensionGap.gap}, mode ${dimensionGap.executionMode}, budget ${dimensionGap.createBudget})`
     )
     .join(', ');
   ctx.logger.info(
@@ -252,6 +253,7 @@ export async function runExternalKnowledgeRescanWorkflow(ctx: McpContext, args: 
   ctx.logger.info(`[Rescan] Dimension gaps: ${dimGapLog}`);
   ctx.logger.info('[Rescan] Execution reasons', {
     executionDimensions: knowledgeRescanPlan.executionDimensions.length,
+    produceDimensions: knowledgeRescanPlan.produceDimensions.length,
     reasons: knowledgeRescanPlan.executionReasons,
   });
 
@@ -261,7 +263,7 @@ export async function runExternalKnowledgeRescanWorkflow(ctx: McpContext, args: 
     auditSummary,
     briefing: briefing as Record<string, unknown>,
     evidencePlan,
-    dimensions,
+    dimensions: requestedDimensions,
     reason: intent.reason,
     responseTimeMs: Date.now() - t0,
   });

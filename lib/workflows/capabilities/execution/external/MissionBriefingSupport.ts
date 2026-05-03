@@ -84,6 +84,7 @@ export const SUBMISSION_SCHEMA = {
     markdown: 'Markdown 正文（必填，≥200 字符，项目特写风格）',
     rationale: '设计原理说明（必填）',
   },
+  dimensionId: '当前维度 ID；必须作为维度归属字段提交，不要写入 category/knowledgeType',
   categoryEnum: ['View', 'Service', 'Tool', 'Model', 'Network', 'Storage', 'UI', 'Utility'],
   kindEnum: ['rule', 'pattern', 'fact'],
   reasoning: {
@@ -487,12 +488,13 @@ function buildWorkflowInstruction({
       'Step 1 — Evolve (仅 needsVerification 中的 Recipe): ' +
       '读 sourceRefs 源码验证 → 调用 alembic_evolve({ decisions: [本维度决策] }) → ' +
       'Step 2 — Gap-Fill: ' +
-      '分析代码发现新模式 → 调用 knowledge({ action: "submit" }) 提交 (数量参考 gap 值) → ' +
+      '仅当 dimensionGaps[].executionMode="produce" 时，分析代码发现新模式 → 调用 knowledge({ action: "submit", params: { dimensionId: 当前维度ID, category: 业务/组件分类, knowledgeType: 知识类型 } }) 提交，数量不得超过 createBudget；' +
+      'executionMode="verify-only" 的维度只做验证/演进，不提交新候选 → ' +
       'Step 3 — Complete: 调用 alembic_dimension_complete 完成维度'
     );
   }
 
-  return '对每个维度: (1) 用你的原生能力阅读代码分析 → (2) 调用 knowledge({ action: "submit_batch" }) 批量提交候选（**每维度最少 3 条，目标 5 条**，将不同关注点拆分为独立候选，1-2 条视为不合格） → (3) 调用 alembic_dimension_complete 完成维度（必须传 referencedFiles=[分析过的文件路径] 和 keyFindings=[3-5条关键发现]）';
+  return '对每个维度: (1) 用你的原生能力阅读代码分析 → (2) 调用 knowledge({ action: "submit_batch", dimensionId: 当前维度ID, items: [...] }) 批量提交候选（**每维度最少 3 条，目标 5 条**；item.category 只填业务/组件分类，item.knowledgeType 只填知识类型） → (3) 调用 alembic_dimension_complete 完成维度（必须传 referencedFiles=[分析过的文件路径] 和 keyFindings=[3-5条关键发现]）';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -546,7 +548,9 @@ export function projectRescanEvidenceHints({
       occupiedTriggers: evidencePlan.occupiedTriggers,
       rules: [
         '禁止提交 occupiedTriggers 列表中已存在的 trigger',
-        '每个维度的补齐数量参考 dimensionGaps[].gap，gap=0 的维度可以跳过或只提交真正的新发现',
+        '只有 dimensionGaps[].executionMode="produce" 的维度允许提交新候选，提交数量不得超过 createBudget',
+        'dimensionGaps[].executionMode="verify-only" 的维度只验证或演进已有 Recipe，不调用 knowledge.submit 创建新候选',
+        'dimensionGaps[].executionMode="skip" 的维度不执行，不提交',
         '专注于尚未覆盖的新模式，不要重复已有知识的内容',
       ],
     },

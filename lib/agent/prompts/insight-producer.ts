@@ -155,7 +155,8 @@ export function buildProducerPrompt(
   parts.push(`维度约束:
 - dimensionId: ${dimConfig.id}
 - 允许的 knowledgeType: ${(dimConfig.allowedKnowledgeTypes || []).join(', ') || '(all)'}
-- category: ${dimConfig.id}`);
+- category: 只能填写业务/组件分类（View/Service/Tool/Model/Network/Storage/UI/Utility），不要填写维度 ID
+- 提交时必须让 knowledge 工具携带 dimensionId=${dimConfig.id}；不要用 category 或 knowledgeType 表示维度归属`);
 
   parts.push(STYLE_GUIDE);
   parts.push(SUBMIT_REQUIREMENTS);
@@ -177,6 +178,8 @@ interface ProducerRescanContext {
   decayingRecipes?: Array<{ id?: string; title: string; trigger: string; decayReason?: string }>;
   occupiedTriggers: string[];
   gap: number;
+  createBudget?: number;
+  executionMode?: 'skip' | 'verify-only' | 'produce';
   existing: number;
 }
 
@@ -243,7 +246,8 @@ export function buildProducerPromptV2(
   parts.push(`维度约束:
 - dimensionId: ${dimConfig.id}
 - 允许的 knowledgeType: ${(dimConfig.allowedKnowledgeTypes || []).join(', ') || '(all)'}
-- category: ${dimConfig.id}`);
+- category: 只能填写业务/组件分类（View/Service/Tool/Model/Network/Storage/UI/Utility），不要填写维度 ID
+- 提交时必须让 knowledge 工具携带 dimensionId=${dimConfig.id}；不要用 category 或 knowledgeType 表示维度归属`);
 
   // §8 写作指南 + 提交要求
   parts.push(STYLE_GUIDE);
@@ -282,11 +286,12 @@ export function buildProducerPromptV2(
   }
 
   // §9a Rescan 模式约束 — 限制提交数量，避免重复
-  if (rescanContext && rescanContext.gap > 0) {
+  if (rescanContext && (rescanContext.createBudget ?? rescanContext.gap) > 0) {
+    const createBudget = rescanContext.createBudget ?? rescanContext.gap;
     const lines = [
       '## ⚠️ 增量扫描模式 — 补齐约束',
       `本维度已有 ${rescanContext.existing} 个有效知识，需补齐 **${rescanContext.gap}** 个。`,
-      `**提交上限: ${rescanContext.gap} 个候选**。达到目标后立即停止，不要多提交。`,
+      `**提交上限: ${createBudget} 个候选**。达到目标后立即停止，不要多提交。`,
     ];
     if (rescanContext.occupiedTriggers.length > 0) {
       lines.push(`已占用的 trigger: ${rescanContext.occupiedTriggers.slice(0, 15).join(', ')}`);

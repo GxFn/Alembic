@@ -28,6 +28,7 @@ export interface InternalDimensionFillPreparation {
   callGraphResult: PipelineFillView['snapshot']['callGraph'];
   existingRecipes: unknown;
   evolutionPrescreen: unknown;
+  rescanExecutionDecisions: PipelineFillView['rescanExecutionDecisions'];
   targetFileMap: PipelineFillView['targetFileMap'];
   taskManager: BootstrapTaskManagerLike | null;
   sessionId: string;
@@ -93,6 +94,7 @@ export function prepareInternalDimensionFillRun(
     callGraphResult: snapshot.callGraph,
     existingRecipes: view.existingRecipes ?? null,
     evolutionPrescreen: view.evolutionPrescreen ?? null,
+    rescanExecutionDecisions: view.rescanExecutionDecisions,
     targetFileMap: view.targetFileMap,
     taskManager,
     sessionId: view.bootstrapSession?.id ?? '',

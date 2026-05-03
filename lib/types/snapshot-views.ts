@@ -8,6 +8,7 @@
  */
 
 import type { EvolutionPrescreen } from '#workflows/capabilities/planning/knowledge/EvolutionPrescreen.js';
+import type { KnowledgeRescanExecutionDecision } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
 import type {
   AstSummary,
   BootstrapSessionShape,
@@ -65,6 +66,8 @@ export interface PipelineFillView {
   readonly existingRecipes?: ExistingRecipeInfo[];
   /** 进化前置过滤结果（rescan 模式，Phase A 已完成时提供） */
   readonly evolutionPrescreen?: EvolutionPrescreen;
+  /** Rescan 统一执行准入决策（skip / verify-only / produce） */
+  readonly rescanExecutionDecisions?: readonly KnowledgeRescanExecutionDecision[];
   /** 管线模式：'bootstrap'（默认）全量 finalize | 'rescan' 轻量收尾 */
   readonly mode?: PipelineMode;
 }

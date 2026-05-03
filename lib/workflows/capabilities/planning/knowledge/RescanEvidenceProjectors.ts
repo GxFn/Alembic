@@ -3,14 +3,18 @@ import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type {
   AuditVerdict,
+  KnowledgeRescanExecutionDecision,
   KnowledgeRescanPlan,
+  RescanExecutionMode,
   RescanExecutionReason,
 } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
 import type { RelevanceAuditSummary } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
 
 export interface InternalRescanGapPlan {
   requestedDimensions: DimensionDef[];
+  executionDecisions: KnowledgeRescanExecutionDecision[];
   executionDimensions: DimensionDef[];
+  produceDimensions: DimensionDef[];
   gapDimensions: DimensionDef[];
   skippedDimensions: DimensionDef[];
   coverageByDimension: Record<string, number>;
@@ -23,6 +27,9 @@ export interface ExternalDimensionGap {
   dimensionId: string;
   existingCount: number;
   gap: number;
+  executionMode: RescanExecutionMode;
+  createBudget: number;
+  shouldExecute: boolean;
   existingTriggers: string[];
   executionReasons: RescanExecutionReason[];
 }
@@ -47,6 +54,7 @@ export interface ExternalRescanEvidencePlan {
   dimensionGaps: ExternalDimensionGap[];
   executionReasons: Record<string, RescanExecutionReason[]>;
   totalGap: number;
+  totalCreateBudget: number;
   decayCount: number;
   occupiedTriggers: string[];
   coveredDimensions: number;
@@ -56,7 +64,9 @@ export interface ExternalRescanEvidencePlan {
 export function projectInternalRescanGapPlan(plan: KnowledgeRescanPlan): InternalRescanGapPlan {
   return {
     requestedDimensions: plan.requestedDimensions,
+    executionDecisions: plan.executionDecisions,
     executionDimensions: plan.executionDimensions,
+    produceDimensions: plan.produceDimensions,
     gapDimensions: plan.gapDimensions,
     skippedDimensions: plan.skippedDimensions,
     coverageByDimension: plan.coverageByDimension,
@@ -186,27 +196,40 @@ export function projectExternalRescanEvidencePlan(
     dimensionId: dimensionPlan.dimension.id,
     existingCount: dimensionPlan.existingCount,
     gap: dimensionPlan.gap,
+    executionMode: dimensionPlan.execution.mode,
+    createBudget: dimensionPlan.execution.createBudget,
+    shouldExecute: dimensionPlan.execution.shouldExecute,
     existingTriggers: dimensionPlan.existingRecipes.map((entry) => entry.trigger).filter(Boolean),
     executionReasons: dimensionPlan.executionReasons,
   }));
   const totalGap = dimensionGaps.reduce((sum, dimensionGap) => sum + dimensionGap.gap, 0);
+  const totalCreateBudget = dimensionGaps.reduce(
+    (sum, dimensionGap) => sum + dimensionGap.createBudget,
+    0
+  );
   const decayCount = allRecipes.filter(
     (recipe) => recipe.auditHint.verdict === 'decay' || recipe.auditHint.verdict === 'severe'
   ).length;
   const coveredDimensions = dimensionGaps.filter((dimensionGap) => dimensionGap.gap === 0).length;
   const gapSummaryParts = dimensionGaps
-    .filter((dimensionGap) => dimensionGap.gap > 0)
+    .filter((dimensionGap) => dimensionGap.createBudget > 0)
     .map((dimensionGap) => `${dimensionGap.dimensionId}(需补${dimensionGap.gap}条)`);
+  const verifyOnlyParts = dimensionGaps
+    .filter((dimensionGap) => dimensionGap.executionMode === 'verify-only')
+    .map((dimensionGap) => dimensionGap.dimensionId);
   const gapSummary =
     gapSummaryParts.length > 0
       ? `需补齐维度: ${gapSummaryParts.join('、')}。`
-      : '所有维度已充分覆盖，仅在发现全新模式时提交。';
+      : verifyOnlyParts.length > 0
+        ? `无需创建新候选；需验证维度: ${verifyOnlyParts.join('、')}。`
+        : '所有维度已充分覆盖，无需创建新候选。';
 
   return {
     allRecipes,
     dimensionGaps,
     executionReasons: plan.executionReasons,
     totalGap,
+    totalCreateBudget,
     decayCount,
     occupiedTriggers: plan.occupiedTriggers,
     coveredDimensions,

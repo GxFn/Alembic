@@ -227,8 +227,8 @@ export class HookSystem {
  *
  * Bridges HookSystem → AgentEventBus for backward compatibility.
  * Pipeline middleware (allowlistGate, observationRecord, trackerSignal,
- * traceRecord, submitDedup) remain in ToolExecutionPipeline — they use
- * blocking semantics that don't fit fire-and-forget hooks.
+ * traceRecord, submitDedup) remain in ToolExecutionPipeline because they
+ * need synchronous access to tool results and loop state.
  */
 export function registerDefaultHooks(
   hookSystem: HookSystem,

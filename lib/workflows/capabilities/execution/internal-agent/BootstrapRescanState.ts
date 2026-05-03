@@ -1,6 +1,10 @@
 import { resolveRecipeDimensionId } from '#domain/dimension/RecipeDimension.js';
 import Logger from '#infra/logging/Logger.js';
 import { BootstrapDedup } from '#service/bootstrap/BootstrapDedup.js';
+import type {
+  KnowledgeRescanExecutionDecision,
+  RescanExecutionMode,
+} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
 
 const logger = Logger.getInstance();
 
@@ -24,6 +28,7 @@ export interface BootstrapRescanContext {
   decayingRecipes: BootstrapExistingRecipe[];
   occupiedTriggers: string[];
   coverageByDim: Record<string, number>;
+  executionDecisions: Record<string, KnowledgeRescanExecutionDecision>;
   evolutionPrescreen?: unknown;
 }
 
@@ -39,9 +44,11 @@ export interface BootstrapDedupState {
 export function prepareBootstrapRescanState({
   existingRecipes,
   evolutionPrescreen,
+  executionDecisions,
 }: {
   existingRecipes: unknown;
   evolutionPrescreen: unknown;
+  executionDecisions?: readonly KnowledgeRescanExecutionDecision[];
 }): BootstrapDedupState {
   const globalSubmittedTitles = new Set<string>();
   const globalSubmittedPatterns = new Set<string>();
@@ -71,16 +78,22 @@ export function prepareBootstrapRescanState({
     globalSubmittedTriggers,
     bootstrapDedup,
     existingRecipesList,
-    rescanContext: buildBootstrapRescanContext({ existingRecipesList, evolutionPrescreen }),
+    rescanContext: buildBootstrapRescanContext({
+      existingRecipesList,
+      evolutionPrescreen,
+      executionDecisions,
+    }),
   };
 }
 
 function buildBootstrapRescanContext({
   existingRecipesList,
   evolutionPrescreen,
+  executionDecisions,
 }: {
   existingRecipesList: BootstrapExistingRecipe[] | null;
   evolutionPrescreen: unknown;
+  executionDecisions?: readonly KnowledgeRescanExecutionDecision[];
 }): BootstrapRescanContext | null {
   if (!existingRecipesList) {
     return null;
@@ -89,6 +102,9 @@ function buildBootstrapRescanContext({
     existingRecipes: existingRecipesList.filter((recipe) => recipe.status !== 'decaying'),
     decayingRecipes: existingRecipesList.filter((recipe) => recipe.status === 'decaying'),
     occupiedTriggers: existingRecipesList.map((recipe) => recipe.trigger).filter(Boolean),
+    executionDecisions: Object.fromEntries(
+      (executionDecisions ?? []).map((decision) => [decision.dimensionId, decision])
+    ),
     coverageByDim: existingRecipesList.reduce(
       (acc, recipe) => {
         if (recipe.status !== 'decaying') {
@@ -128,6 +144,11 @@ export function projectBootstrapDimensionRescanContext({
   if (!rescanContext) {
     return null;
   }
+  const fallbackExisting = rescanContext.coverageByDim[dimId] || 0;
+  const fallbackGap = Math.max(0, 5 - fallbackExisting);
+  const executionDecision = rescanContext.executionDecisions[dimId];
+  const executionMode: RescanExecutionMode =
+    executionDecision?.mode ?? (fallbackGap > 0 ? 'produce' : 'skip');
   return {
     existingRecipes: rescanContext.existingRecipes.filter(
       (recipe) => recipeDimensionKey(recipe) === dimId
@@ -136,8 +157,11 @@ export function projectBootstrapDimensionRescanContext({
       (recipe) => recipeDimensionKey(recipe) === dimId
     ),
     occupiedTriggers: rescanContext.occupiedTriggers,
-    gap: Math.max(0, 5 - (rescanContext.coverageByDim[dimId] || 0)),
-    existing: rescanContext.coverageByDim[dimId] || 0,
+    gap: executionDecision?.gap ?? fallbackGap,
+    createBudget: executionDecision?.createBudget ?? fallbackGap,
+    executionMode,
+    shouldExecute: executionDecision?.shouldExecute ?? executionMode !== 'skip',
+    existing: executionDecision?.existingCount ?? fallbackExisting,
   };
 }
 

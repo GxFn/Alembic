@@ -242,6 +242,7 @@ export async function consolidatedSkill(ctx: McpContext, args: ConsolidatedSkill
  */
 export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<string, unknown>) {
   const { RecipeProductionGateway } = await import('#service/knowledge/RecipeProductionGateway.js');
+  const { findSimilarRecipes } = await import('#service/candidate/SimilarityService.js');
 
   const items = args.items as Record<string, unknown>[] | undefined;
   if (!items || !Array.isArray(items) || items.length === 0) {
@@ -293,11 +294,15 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
 
   // 获取 bootstrapSession 已提交标题用于跨维度去重
   let existingTitles: Set<string> | undefined;
+  let existingTriggers: Set<string> | undefined;
   try {
     const sessionManager = ctx.container.get('bootstrapSessionManager');
     const bsSession = sessionManager?.getSession?.();
     if (bsSession?.submissionTracker?.getAllSubmittedTitles) {
       existingTitles = bsSession.submissionTracker.getAllSubmittedTitles();
+    }
+    if (bsSession?.submissionTracker?.getAllSubmittedTriggers) {
+      existingTriggers = bsSession.submissionTracker.getAllSubmittedTriggers();
     }
   } catch {
     /* best effort */
@@ -330,16 +335,17 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     consolidationAdvisor: consolidationAdvisor ?? null,
     proposalRepository: proposalRepository ?? null,
     evolutionGateway: evolutionGateway ?? null,
+    findSimilarRecipes,
   });
 
   const gatewayResult = await gateway.create({
     source: 'mcp-external',
     items: items as import('#service/knowledge/RecipeProductionGateway.js').CreateRecipeItem[],
     options: {
-      skipSimilarityCheck: true,
       skipConsolidation,
       supersedes,
       existingTitles,
+      existingTriggers,
       userId: getDeveloperIdentity(),
     },
   });
@@ -474,6 +480,7 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
 
 interface SessionTrackerLike {
   submissionTracker?: {
+    getAllSubmittedTriggers?(): Set<string>;
     recordRejection(dimId: string, title: string, reason: string): void;
     recordSubmission(dimId: string, item: unknown, recipeId: string): void;
   };

@@ -87,6 +87,7 @@ export async function runInternalDimensionAgentSession({
   } = prepareBootstrapRescanState({
     existingRecipes: preparation.existingRecipes,
     evolutionPrescreen: preparation.evolutionPrescreen,
+    executionDecisions: preparation.rescanExecutionDecisions,
   });
   const checkpointRestoreDimIds = rescanContext ? [] : activeDimIds;
   if (rescanContext && activeDimIds.length > 0) {

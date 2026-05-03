@@ -39,13 +39,24 @@ export class UnifiedValidator {
   /** 已提交代码指纹 */
   #codeFingerprints;
 
+  /** 已提交 trigger (小写) */
+  #triggers;
+
   /**
    * @param [options.existingTitles] 预填充已有标题
    * @param [options.existingFingerprints] 预填充已有代码指纹
+   * @param [options.existingTriggers] 预填充已有 trigger
    */
-  constructor(options: { existingTitles?: Set<string>; existingFingerprints?: Set<string> } = {}) {
+  constructor(
+    options: {
+      existingTitles?: Set<string>;
+      existingFingerprints?: Set<string>;
+      existingTriggers?: Set<string>;
+    } = {}
+  ) {
     this.#titles = options.existingTitles || new Set();
     this.#codeFingerprints = options.existingFingerprints || new Set();
+    this.#triggers = options.existingTriggers || new Set();
   }
 
   /**
@@ -259,6 +270,11 @@ export class UnifiedValidator {
       errors.push(`标题重复: "${candidate.title}"`);
     }
 
+    const trigger = ((candidate.trigger as string) || '').toLowerCase().trim();
+    if (trigger && this.#triggers.has(trigger)) {
+      errors.push(`trigger 重复: "${candidate.trigger}"`);
+    }
+
     const pattern = (
       ((candidate.content as Record<string, unknown> | undefined)?.pattern as string) || ''
     ).trim();
@@ -276,9 +292,16 @@ export class UnifiedValidator {
    * 记录已提交的标题和代码指纹（提交成功后调用）
    * @param [pattern] 代码模式
    */
-  recordSubmission(title: string | null | undefined, pattern: string | null | undefined) {
+  recordSubmission(
+    title: string | null | undefined,
+    pattern: string | null | undefined,
+    trigger?: string | null
+  ) {
     if (title && typeof title === 'string') {
       this.#titles.add(title.toLowerCase().trim());
+    }
+    if (trigger && typeof trigger === 'string') {
+      this.#triggers.add(trigger.toLowerCase().trim());
     }
     if (pattern && typeof pattern === 'string' && pattern.length >= 30) {
       const fp = codeFingerprint(pattern);

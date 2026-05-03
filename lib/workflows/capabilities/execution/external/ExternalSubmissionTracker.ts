@@ -452,6 +452,13 @@ export class ExternalSubmissionTracker {
     }
     return titles;
   }
+
+  /**
+   * 获取所有已使用 trigger 集合（小写，用于跨维度硬去重）
+   */
+  getAllSubmittedTriggers(): Set<string> {
+    return new Set([...this.#usedTriggers].map((trigger) => trigger.toLowerCase().trim()));
+  }
 }
 
 export default ExternalSubmissionTracker;

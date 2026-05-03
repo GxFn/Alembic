@@ -83,10 +83,19 @@ export function presentInternalKnowledgeRescanResponse({
     gapAnalysis: {
       totalDimensions: gapPlan.requestedDimensions.length,
       executionDimensions: executionDimensionCount,
+      produceDimensions: gapPlan.produceDimensions.length,
       gapDimensions: gapPlan.gapDimensions.length,
       skippedDimensions: gapPlan.skippedDimensions.map((dimension) => dimension.id),
       targetPerDimension: gapPlan.targetPerDimension,
       executionReasons: gapPlan.executionReasons,
+      executionDecisions: gapPlan.executionDecisions.map((decision) => ({
+        dimensionId: decision.dimensionId,
+        mode: decision.mode,
+        existing: decision.existingCount,
+        gap: decision.gap,
+        createBudget: decision.createBudget,
+        reasons: decision.reasons.map((reason) => reason.kind),
+      })),
       gaps: gapPlan.gapDimensions.map((dimension) => ({
         dimensionId: dimension.id,
         label: dimension.label,
@@ -178,7 +187,7 @@ export function presentExternalKnowledgeRescanResponse({
       `${evidencePlan.gapSummary}` +
       `对每个维度执行三步：` +
       `(1) alembic_evolve — 过滤 allRecipes 中本维度 Recipe，读源码验证后提交决策 → ` +
-      `(2) knowledge({ action: "submit" }) — 分析代码，发现未覆盖的新模式 → ` +
+      `(2) knowledge({ action: "submit" }) — 仅对 executionMode=produce 且 createBudget>0 的维度提交未覆盖的新模式 → ` +
       `(3) alembic_dimension_complete — 标记维度完成。` +
       `注意: evidenceHints.constraints.occupiedTriggers 中的 trigger 已被占用，请勿重复。`,
     meta: { tool: 'alembic_rescan', responseTimeMs },

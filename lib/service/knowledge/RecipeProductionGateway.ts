@@ -67,6 +67,8 @@ export interface CreateRecipeRequest {
     similarityThreshold?: number;
     /** 已提交标题集（批量去重用） */
     existingTitles?: Set<string>;
+    /** 已提交 trigger 集（批量/会话去重用） */
+    existingTriggers?: Set<string>;
     /** 已提交指纹集（批量去重用） */
     existingFingerprints?: Set<string>;
     /** UnifiedValidator 跳过系统注入字段列表 */
@@ -272,6 +274,7 @@ export class RecipeProductionGateway {
     // ── Step 1: Schema Validation ──
     const validator = new UnifiedValidator({
       existingTitles: options.existingTitles,
+      existingTriggers: options.existingTriggers,
       existingFingerprints: options.existingFingerprints,
     });
 
@@ -300,7 +303,8 @@ export class RecipeProductionGateway {
         // 记录已提交标题/指纹以防批量内重复
         validator.recordSubmission(
           item.title,
-          (item.content as Record<string, unknown> | undefined)?.pattern as string | undefined
+          (item.content as Record<string, unknown> | undefined)?.pattern as string | undefined,
+          item.trigger
         );
       }
     }
@@ -340,11 +344,15 @@ export class RecipeProductionGateway {
     // ── Step 2: Similarity Check ──
     let afterSimilarityItems = afterDedupItems;
 
-    if (!options.skipSimilarityCheck && this.#findSimilarRecipes) {
+    // 普通 agent/mcp/ide 提交通道不允许跳过相似度检测；只有离线 batch-import
+    // 可以显式跳过，用于受控迁移或恢复。
+    const skipSimilarityCheck = source === 'batch-import' && options.skipSimilarityCheck === true;
+
+    if (!skipSimilarityCheck && this.#findSimilarRecipes) {
       const threshold = options.similarityThreshold ?? 0.7;
       afterSimilarityItems = [];
 
-      for (const entry of validItems) {
+      for (const entry of afterDedupItems) {
         const { item, index } = entry;
         const contentObj =
           item.content && typeof item.content === 'object' ? item.content : { markdown: '' };

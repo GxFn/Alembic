@@ -193,6 +193,10 @@ export const SubmitKnowledgeItemSchema = z.object({
     '推理对象: { whyStandard: "原因", sources: ["来源"], confidence: 0.0-1.0 }'
   ),
   // ── 可选字段 ──
+  dimensionId: z
+    .string()
+    .optional()
+    .describe('维度归属 ID；不要用 category/knowledgeType 表示维度'),
   topicHint: z.string().optional(),
   complexity: ComplexityEnum.optional(),
   scope: ScopeEnum.optional(),
@@ -212,7 +216,7 @@ export const SubmitKnowledgeInput = z.object({
     .min(1)
     .describe(
       '知识条目数组（1~N 条）。单条与批量统一处理，所有条目严格校验 + 融合分析。' +
-        '每条字段: title, language, content(对象), kind, doClause, dontClause, whenClause, coreCode, category, trigger, description, headers, usageGuide, knowledgeType, reasoning(对象)。'
+        '每条字段: title, language, content(对象), kind, doClause, dontClause, whenClause, coreCode, category(业务/组件分类), trigger, description, headers, usageGuide, knowledgeType(知识类型), reasoning(对象), dimensionId(维度归属)。'
     ),
   target_name: z.string().optional().describe('来源标识，如 network-module-scan'),
   source: z.string().optional().describe('来源标记，默认 mcp'),
@@ -222,7 +226,7 @@ export const SubmitKnowledgeInput = z.object({
     .describe('跳过融合分析（当确认需要独立新建时设为 true）'),
   skipDuplicateCheck: z.boolean().default(false),
   client_id: z.string().optional(),
-  dimensionId: z.string().optional().describe('冷启动关联维度 ID'),
+  dimensionId: z.string().optional().describe('冷启动/增量扫描关联维度 ID'),
   supersedes: z
     .string()
     .optional()

@@ -11,7 +11,7 @@
  *   4. ObservationRecord — 记忆记录
  *   5. TrackerSignal — ExplorationTracker 信号收集
  *   6. TraceRecord — ActiveContext 推理链记录
- *   7. SubmitDedup — 提交去重
+ *   7. SubmitTracker — 提交成功后登记会话状态
  *
  * @module core/ToolExecutionPipeline
  */
@@ -307,60 +307,15 @@ export const traceRecord = {
 };
 
 /**
- * SubmitDedup — 提交去重
+ * SubmitTracker — 提交状态登记
  *
- * after: 检查并标记重复提交 (修改 metadata)
+ * 不在 Runtime 层提前拦截 knowledge.submit。所有字段校验、唯一性检查、
+ * 相似度检测和融合决策都必须进入 RecipeProductionGateway 统一处理。
+ *
+ * after: 仅在提交真正创建后登记标题/trigger/指纹，供后续 Gateway 校验使用。
  */
 export const submitDedup = {
   name: 'submitDedup',
-
-  before(call: ToolCall, ctx: ToolExecContext): BeforeVerdict | undefined {
-    if (call.name !== 'knowledge') {
-      return;
-    }
-    const { sharedState } = ctx.loopCtx;
-    if (!sharedState?.submittedTitles) {
-      return;
-    }
-
-    // V2 args structure: { action: "submit", params: { title, ... } }
-    const params = (call.args?.params as Record<string, unknown>) ?? call.args ?? {};
-    const title = String(params.title || params.category || '');
-    const normalizedTitle = title.toLowerCase().trim();
-    if (!normalizedTitle) {
-      return;
-    }
-
-    // trigger 去重 — 不同 title 但相同 trigger 的跨维度重复
-    const trigger = String(params.trigger || '')
-      .toLowerCase()
-      .trim();
-    if (trigger && sharedState.submittedTriggers?.has(trigger)) {
-      ctx.runtime.logger.info(`[ToolPipeline] 🔁 duplicate trigger: "${trigger}"`);
-      return {
-        blocked: true,
-        result: {
-          submitted: false,
-          status: 'duplicate',
-          reason: `重复 trigger: "${trigger}" 已被其他候选占用。请更换 trigger 后重试或跳过此条目。`,
-        },
-      };
-    }
-
-    // title 去重 — 已存在的 recipe 或本次 session 已提交的标题
-    if (sharedState.submittedTitles.has(normalizedTitle)) {
-      ctx.runtime.logger.info(`[ToolPipeline] 🔁 duplicate blocked: "${title}"`);
-      return {
-        blocked: true,
-        result: {
-          submitted: false,
-          status: 'duplicate',
-          reason: `重复提交: "${title}" 已存在。请提交不同主题的知识条目。`,
-        },
-      };
-    }
-    return undefined;
-  },
 
   after(call: ToolCall, result: unknown, ctx: ToolExecContext, meta: ToolMetadata) {
     if (call.name !== 'knowledge') {
@@ -371,12 +326,14 @@ export const submitDedup = {
       return;
     }
 
-    const resultObj = result as Record<string, unknown> | null;
-    const isRejected = typeof result === 'object' && resultObj?.status === 'rejected';
-    const isError =
-      typeof result === 'object' && (resultObj?.error || resultObj?.status === 'error');
+    const action = String(call.args?.action || '');
+    if (action !== 'submit') {
+      return;
+    }
 
-    if (isRejected || isError) {
+    const resultObj = result as Record<string, unknown> | null;
+    const status = typeof result === 'object' ? String(resultObj?.status || '') : '';
+    if (status !== 'created') {
       return;
     }
 
@@ -486,7 +443,7 @@ export const eventBusPublisher = {
  *   2. observationRecord (记忆记录)
  *   3. trackerSignal (信号收集)
  *   4. traceRecord (推理链)
- *   5. submitDedup (提交去重)
+ *   5. submitDedup (提交成功后登记会话状态；不做提前拦截)
  *
  * Runtime SafetyPolicy 已迁入 ToolRouter/GovernanceEngine 的 approve 阶段。
  *

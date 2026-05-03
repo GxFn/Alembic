@@ -161,10 +161,9 @@ async function handleSubmit(
       source: 'agent-tool',
       items: [item],
       options: {
-        skipSimilarityCheck: !isBootstrap,
-        skipConsolidation: true,
         supersedes: pickString(params.supersedes),
         existingTitles: ctx.runtime?.submittedTitles ?? undefined,
+        existingTriggers: ctx.runtime?.submittedTriggers ?? undefined,
         existingFingerprints: ctx.runtime?.submittedPatterns ?? undefined,
         systemInjectedFields: isBootstrap ? getSystemInjectedFields() : undefined,
         userId: 'agent',
@@ -190,9 +189,10 @@ async function handleSubmit(
     if (result.duplicates.length > 0) {
       return ok({
         status: 'duplicate_blocked',
-        similar: result.duplicates.map((d: { title: string; score: number }) => ({
+        similar: result.duplicates.map((d) => ({
           title: d.title,
-          similarity: d.score,
+          similarity: d.score ?? d.similarTo?.[0]?.similarity ?? 0,
+          similarTo: d.similarTo ?? [],
         })),
       });
     }
@@ -474,7 +474,11 @@ interface RecipeGatewayLike {
   }): Promise<{
     created: Array<{ id: string; title: string }>;
     rejected: Array<{ reason: string; errors?: string[]; warnings?: string[] }>;
-    duplicates: Array<{ title: string; score: number }>;
+    duplicates: Array<{
+      title: string;
+      score?: number;
+      similarTo?: Array<{ title: string; similarity: number; file?: string }>;
+    }>;
     merged: unknown[];
     blocked: unknown[];
   }>;

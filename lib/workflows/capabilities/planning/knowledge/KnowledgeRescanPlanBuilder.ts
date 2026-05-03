@@ -27,6 +27,21 @@ export interface RescanExecutionReason {
   detail?: string;
 }
 
+export type RescanExecutionMode = 'skip' | 'verify-only' | 'produce';
+
+export interface KnowledgeRescanExecutionDecision {
+  dimensionId: string;
+  dimension: DimensionDef;
+  mode: RescanExecutionMode;
+  createBudget: number;
+  existingCount: number;
+  gap: number;
+  existingRecipes: RecipeSnapshotEntry[];
+  decayingRecipes: RecipeSnapshotEntry[];
+  reasons: RescanExecutionReason[];
+  shouldExecute: boolean;
+}
+
 export interface KnowledgeRescanDimensionPlan {
   dimension: DimensionDef;
   existingCount: number;
@@ -34,6 +49,7 @@ export interface KnowledgeRescanDimensionPlan {
   existingRecipes: RecipeSnapshotEntry[];
   decayingRecipes: RecipeSnapshotEntry[];
   executionReasons: RescanExecutionReason[];
+  execution: KnowledgeRescanExecutionDecision;
   shouldExecute: boolean;
 }
 
@@ -46,7 +62,9 @@ export interface KnowledgeRescanPlan {
   requestedDimensions: DimensionDef[];
   skippedByRequestDimensions: DimensionDef[];
   dimensionPlans: KnowledgeRescanDimensionPlan[];
+  executionDecisions: KnowledgeRescanExecutionDecision[];
   executionDimensions: DimensionDef[];
+  produceDimensions: DimensionDef[];
   gapDimensions: DimensionDef[];
   skippedDimensions: DimensionDef[];
   coverageByDimension: Record<string, number>;
@@ -117,9 +135,14 @@ export function buildKnowledgeRescanPlan({
       targetPerDimension,
       gap,
     });
-    const shouldExecute = executionReasons.some(
-      (reason) => reason.kind !== 'manual-request' && reason.kind !== 'fully-covered'
-    );
+    const execution = buildKnowledgeRescanExecutionDecision({
+      dimension,
+      existingCount,
+      gap,
+      existingRecipes,
+      decayingRecipes,
+      executionReasons,
+    });
 
     return {
       dimension,
@@ -128,15 +151,20 @@ export function buildKnowledgeRescanPlan({
       existingRecipes,
       decayingRecipes,
       executionReasons,
-      shouldExecute,
+      execution,
+      shouldExecute: execution.shouldExecute,
     };
   });
 
+  const executionDecisions = dimensionPlans.map((dimensionPlan) => dimensionPlan.execution);
   const gapDimensions = dimensionPlans
     .filter((dimensionPlan) => dimensionPlan.gap > 0)
     .map((dimensionPlan) => dimensionPlan.dimension);
   const executionDimensions = dimensionPlans
     .filter((dimensionPlan) => dimensionPlan.shouldExecute)
+    .map((dimensionPlan) => dimensionPlan.dimension);
+  const produceDimensions = dimensionPlans
+    .filter((dimensionPlan) => dimensionPlan.execution.mode === 'produce')
     .map((dimensionPlan) => dimensionPlan.dimension);
   const skippedDimensions = dimensionPlans
     .filter((dimensionPlan) => !dimensionPlan.shouldExecute)
@@ -161,13 +189,49 @@ export function buildKnowledgeRescanPlan({
     requestedDimensions,
     skippedByRequestDimensions,
     dimensionPlans,
+    executionDecisions,
     executionDimensions,
+    produceDimensions,
     gapDimensions,
     skippedDimensions,
     coverageByDimension,
     executionReasons,
     occupiedTriggers,
     decayingRecipeIds,
+  };
+}
+
+function buildKnowledgeRescanExecutionDecision({
+  dimension,
+  existingCount,
+  gap,
+  existingRecipes,
+  decayingRecipes,
+  executionReasons,
+}: {
+  dimension: DimensionDef;
+  existingCount: number;
+  gap: number;
+  existingRecipes: RecipeSnapshotEntry[];
+  decayingRecipes: RecipeSnapshotEntry[];
+  executionReasons: RescanExecutionReason[];
+}): KnowledgeRescanExecutionDecision {
+  const requiresVerification = executionReasons.some(
+    (reason) => reason.kind === 'recipe-decay' || reason.kind === 'file-change'
+  );
+  const mode: RescanExecutionMode =
+    gap > 0 ? 'produce' : requiresVerification ? 'verify-only' : 'skip';
+  return {
+    dimensionId: dimension.id,
+    dimension,
+    mode,
+    createBudget: mode === 'produce' ? gap : 0,
+    existingCount,
+    gap,
+    existingRecipes,
+    decayingRecipes,
+    reasons: executionReasons,
+    shouldExecute: mode !== 'skip',
   };
 }
 

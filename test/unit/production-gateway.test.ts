@@ -3,6 +3,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+import { BootstrapDedup } from '../../lib/service/bootstrap/BootstrapDedup.js';
 import {
   type CreateRecipeItem,
   type GatewayDeps,
@@ -107,6 +108,22 @@ describe('RecipeProductionGateway', () => {
       expect(result.created).toHaveLength(0);
     });
 
+    it('应在统一校验层拒绝会话内重复 trigger', async () => {
+      const gateway = new RecipeProductionGateway(makeDeps());
+
+      const result = await gateway.create({
+        source: 'agent-tool',
+        items: [makeItem({ trigger: '@existing-trigger' })],
+        options: {
+          existingTriggers: new Set(['@existing-trigger']),
+          skipConsolidation: true,
+        },
+      });
+
+      expect(result.rejected).toHaveLength(1);
+      expect(result.rejected[0].errors.join('\n')).toContain('trigger 重复');
+    });
+
     it('空 items 返回空结果', async () => {
       const gateway = new RecipeProductionGateway(makeDeps());
 
@@ -193,7 +210,7 @@ describe('RecipeProductionGateway', () => {
       expect(result.created).toHaveLength(1);
     });
 
-    it('skipSimilarityCheck=true 应跳过查重', async () => {
+    it('agent-tool 即使传入 skipSimilarityCheck=true 也必须执行相似度检查', async () => {
       const findSimilar = vi.fn(() => [{ file: 'existing.md', title: '高相似', similarity: 0.95 }]);
 
       const gateway = new RecipeProductionGateway(makeDeps({ findSimilarRecipes: findSimilar }));
@@ -204,8 +221,50 @@ describe('RecipeProductionGateway', () => {
         options: { skipSimilarityCheck: true, skipConsolidation: true },
       });
 
+      expect(findSimilar).toHaveBeenCalledOnce();
+      expect(result.duplicates).toHaveLength(1);
+      expect(result.created).toHaveLength(0);
+    });
+
+    it('仅 batch-import 可显式跳过相似度检查', async () => {
+      const findSimilar = vi.fn(() => [{ file: 'existing.md', title: '高相似', similarity: 0.95 }]);
+
+      const gateway = new RecipeProductionGateway(makeDeps({ findSimilarRecipes: findSimilar }));
+
+      const result = await gateway.create({
+        source: 'batch-import',
+        items: [makeItem()],
+        options: { skipSimilarityCheck: true, skipConsolidation: true },
+      });
+
       expect(findSimilar).not.toHaveBeenCalled();
       expect(result.created).toHaveLength(1);
+    });
+
+    it('bootstrap 会话去重命中后不应被后续相似度阶段重新放回创建队列', async () => {
+      const bootstrapDedup = new BootstrapDedup();
+      const item = makeItem();
+      bootstrapDedup.register({
+        id: 'existing-session-recipe',
+        title: item.title || '',
+        category: item.category || '',
+        coreCode: item.coreCode || '',
+        doClause: item.doClause || '',
+        dontClause: item.dontClause || '',
+        guardPattern: item.content?.pattern,
+      });
+      const findSimilar = vi.fn(() => []);
+      const gateway = new RecipeProductionGateway(makeDeps({ findSimilarRecipes: findSimilar }));
+
+      const result = await gateway.create({
+        source: 'agent-tool',
+        items: [item],
+        options: { bootstrapDedup, skipConsolidation: true },
+      });
+
+      expect(result.duplicates).toHaveLength(1);
+      expect(result.created).toHaveLength(0);
+      expect(findSimilar).not.toHaveBeenCalled();
     });
   });
 

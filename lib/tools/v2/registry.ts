@@ -354,7 +354,11 @@ const MEMORY_SPEC: ToolSpec = {
           key: { type: 'string', description: 'Finding identifier' },
           content: { type: 'string', description: 'Finding content' },
           tags: { type: 'array', items: { type: 'string' }, description: 'Tags for filtering' },
-          category: { type: 'string', description: 'Dimension ID (bootstrap scenario)' },
+          category: {
+            type: 'string',
+            description:
+              'Business/component category. Use dimensionId/tags for bootstrap dimension ownership.',
+          },
         },
         required: ['key', 'content'],
       },

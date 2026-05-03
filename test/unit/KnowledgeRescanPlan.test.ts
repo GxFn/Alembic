@@ -102,7 +102,20 @@ describe('KnowledgeRescanPlan', () => {
     expect(plan.coverageByDimension).toMatchObject({ api: 2, ui: 1, storage: 2 });
     expect(plan.gapDimensions.map((dimension) => dimension.id)).toEqual(['ui']);
     expect(plan.executionDimensions.map((dimension) => dimension.id)).toEqual(['api', 'ui']);
+    expect(plan.produceDimensions.map((dimension) => dimension.id)).toEqual(['ui']);
     expect(plan.skippedDimensions.map((dimension) => dimension.id)).toEqual(['storage']);
+    expect(
+      plan.executionDecisions.map((decision) => [decision.dimensionId, decision.mode])
+    ).toEqual([
+      ['api', 'verify-only'],
+      ['ui', 'produce'],
+      ['storage', 'skip'],
+    ]);
+    expect(plan.executionDecisions.find((decision) => decision.dimensionId === 'ui')).toMatchObject(
+      {
+        createBudget: 1,
+      }
+    );
     expect(plan.executionReasons.api.map((reason) => reason.kind)).toEqual([
       'manual-request',
       'recipe-decay',
@@ -132,8 +145,14 @@ describe('KnowledgeRescanPlan', () => {
 
     expect(gapPlan.targetPerDimension).toBe(2);
     expect(gapPlan.executionDimensions.map((dimension) => dimension.id)).toEqual(['api', 'ui']);
+    expect(gapPlan.produceDimensions.map((dimension) => dimension.id)).toEqual(['ui']);
     expect(gapPlan.gapDimensions.map((dimension) => dimension.id)).toEqual(['ui']);
     expect(gapPlan.skippedDimensions.map((dimension) => dimension.id)).toEqual(['storage']);
+    expect(gapPlan.executionDecisions.map((decision) => decision.mode)).toEqual([
+      'verify-only',
+      'produce',
+      'skip',
+    ]);
     expect(promptRecipes.find((entry) => entry.id === 'api-severe')).toMatchObject({
       status: 'decaying',
       decayReason: 'symbols missing',
@@ -152,11 +171,30 @@ describe('KnowledgeRescanPlan', () => {
 
     expect(evidencePlan.allRecipes.map((entry) => entry.id)).not.toContain('network-dead');
     expect(evidencePlan.dimensionGaps).toEqual([
-      expect.objectContaining({ dimensionId: 'api', existingCount: 2, gap: 0 }),
-      expect.objectContaining({ dimensionId: 'ui', existingCount: 1, gap: 1 }),
-      expect.objectContaining({ dimensionId: 'storage', existingCount: 2, gap: 0 }),
+      expect.objectContaining({
+        dimensionId: 'api',
+        existingCount: 2,
+        gap: 0,
+        executionMode: 'verify-only',
+        createBudget: 0,
+      }),
+      expect.objectContaining({
+        dimensionId: 'ui',
+        existingCount: 1,
+        gap: 1,
+        executionMode: 'produce',
+        createBudget: 1,
+      }),
+      expect.objectContaining({
+        dimensionId: 'storage',
+        existingCount: 2,
+        gap: 0,
+        executionMode: 'skip',
+        createBudget: 0,
+      }),
     ]);
     expect(evidencePlan.totalGap).toBe(1);
+    expect(evidencePlan.totalCreateBudget).toBe(1);
     expect(evidencePlan.coveredDimensions).toBe(2);
     expect(evidencePlan.decayCount).toBe(2);
     expect(evidencePlan.executionReasons.ui.map((reason) => reason.kind)).toContain('coverage-gap');

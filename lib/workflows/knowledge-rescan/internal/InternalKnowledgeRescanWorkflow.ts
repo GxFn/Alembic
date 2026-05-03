@@ -375,6 +375,7 @@ export async function runInternalKnowledgeRescanWorkflow(
   const {
     requestedDimensions,
     executionDimensions,
+    produceDimensions,
     gapDimensions,
     skippedDimensions,
     targetPerDimension,
@@ -383,12 +384,15 @@ export async function runInternalKnowledgeRescanWorkflow(
   ctx.logger.info('[Rescan-Internal] Gap analysis', {
     totalDimensions: requestedDimensions.length,
     executionDimensions: executionDimensions.length,
+    produceDimensions: produceDimensions.length,
     gapDimensions: gapDimensions.length,
     skippedDimensions: skippedDimensions.length,
     gapDetails: knowledgeRescanPlan.dimensionPlans.map((dimensionPlan) => ({
       id: dimensionPlan.dimension.id,
       existing: dimensionPlan.existingCount,
       gap: dimensionPlan.gap,
+      mode: dimensionPlan.execution.mode,
+      createBudget: dimensionPlan.execution.createBudget,
       reasons: dimensionPlan.executionReasons.map((reason) => reason.kind),
       target: targetPerDimension,
     })),
@@ -447,6 +451,7 @@ export async function runInternalKnowledgeRescanWorkflow(
         ...fillView,
         existingRecipes: allExistingRecipes,
         evolutionPrescreen: prescreen,
+        rescanExecutionDecisions: knowledgeRescanPlan.executionDecisions,
         mode: 'rescan',
       },
       dimensions: executionDimensions,
