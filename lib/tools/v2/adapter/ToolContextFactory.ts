@@ -144,6 +144,7 @@ export class ToolContextFactory {
       tokenBudget: this.#deps.defaultTokenBudget ?? 8000,
       abortSignal: request.abortSignal ?? undefined,
       memoryCoordinator: (request.runtime?.memoryCoordinator as MemoryCoordinatorLike) ?? undefined,
+      runtime: request.runtime ?? undefined,
     };
   }
 }

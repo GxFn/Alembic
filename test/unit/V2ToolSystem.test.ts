@@ -158,6 +158,102 @@ describe('V2 Router', () => {
     expect(result.error).toContain('Invalid value');
   });
 
+  test('knowledge.submit rejects candidates without reasoning.sources', async () => {
+    const result = await router.execute(
+      {
+        tool: 'knowledge',
+        action: 'submit',
+        params: {
+          title: 'Network Error Pattern',
+          description: 'Documents a network error handling pattern.',
+          content: {
+            markdown: 'A'.repeat(220),
+            rationale: 'This rationale explains why the pattern is useful for maintainers.',
+          },
+          kind: 'rule',
+          trigger: '@network-error-pattern',
+          whenClause: 'When handling network errors in feature view models.',
+          doClause: 'Map low-level failures to a user-facing error before display.',
+          reasoning: { whyStandard: 'Missing source coverage', confidence: 0.8, sources: [] },
+        },
+      },
+      makeCtx({
+        recipeGateway: {
+          create: async () => ({
+            created: [],
+            rejected: [],
+            duplicates: [],
+            merged: [],
+            blocked: [],
+          }),
+        },
+      })
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('reasoning.sources');
+  });
+
+  test('knowledge.submit accepts candidates with reasoning.sources', async () => {
+    let createRequest: unknown;
+    const result = await router.execute(
+      {
+        tool: 'knowledge',
+        action: 'submit',
+        params: {
+          title: 'Network Error Pattern',
+          description: 'Documents a network error handling pattern.',
+          content: {
+            markdown: 'A'.repeat(220),
+            rationale: 'This rationale explains why the pattern is useful for maintainers.',
+          },
+          kind: 'rule',
+          trigger: '@network-error-pattern',
+          whenClause: 'When handling network errors in feature view models.',
+          doClause: 'Map low-level failures to a user-facing error before display.',
+          reasoning: {
+            whyStandard: 'Evidence comes from the implementation.',
+            confidence: 0.8,
+            sources: ['Sources/Features/Home/HomeViewModel.swift:42'],
+          },
+        },
+      },
+      makeCtx({
+        recipeGateway: {
+          create: async (request: unknown) => {
+            createRequest = request;
+            return {
+              created: [{ id: 'recipe-1', title: 'Network Error Pattern' }],
+              rejected: [],
+              duplicates: [],
+              merged: [],
+              blocked: [],
+            };
+          },
+        },
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.data).toMatchObject({ status: 'created', id: 'recipe-1' });
+    expect(createRequest).toMatchObject({
+      items: [
+        expect.objectContaining({
+          category: 'Utility',
+          knowledgeType: 'code-pattern',
+          language: 'markdown',
+          headers: [],
+          usageGuide: expect.stringContaining('### When'),
+          sourceRefs: ['Sources/Features/Home/HomeViewModel.swift:42'],
+          reasoning: expect.objectContaining({
+            whyStandard: 'Evidence comes from the implementation.',
+            sources: ['Sources/Features/Home/HomeViewModel.swift:42'],
+          }),
+        }),
+      ],
+    });
+  });
+
   test('executeParallel splits token budget', async () => {
     const ctx = makeCtx({ tokenBudget: 6000 });
     const calls: ToolCallV2[] = [

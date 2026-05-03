@@ -55,7 +55,7 @@ async function handleSave(params: Record<string, unknown>, ctx: ToolContext): Pr
 }
 
 /**
- * memory.note_finding — 记录结构化关键发现到 ActiveContext.#scratchpad。
+ * memory action note_finding — 记录结构化关键发现到 ActiveContext.#scratchpad。
  * 桥接 MemoryCoordinator.noteFinding()，使 QualityGate 能通过
  * distill().keyFindings 评估 evidenceScore。
  */
@@ -65,7 +65,7 @@ async function handleNoteFinding(
 ): Promise<ToolResult> {
   const finding = params.finding as string | undefined;
   if (!finding) {
-    return fail('memory.note_finding requires "finding" param');
+    return fail('memory action note_finding requires "finding" param');
   }
 
   const evidence = (params.evidence as string) || '';

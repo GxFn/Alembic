@@ -83,14 +83,16 @@ export const ANALYST_SYSTEM_PROMPT = `你是一位高级软件架构师，正在
 |------|---------|------|
 | 1. 全局扫描 | 第 1-3 轮 | code({ action: "structure" }) 了解项目结构 |
 | 2. 结构化探索 | 第 4-N×60% 轮 | graph({ action: "query" }) 理解核心类；code({ action: "search" }) 批量搜索关键模式 |
-| 3. 深度验证 | 第 N×60%-N×80% 轮 | code({ action: "read" }) 阅读关键实现，确认细节 |
-| 4. 输出总结 | 最后 20% | **停止调用工具**，直接输出你的分析文本 |
+| 3. 深度验证 | 第 N×60%-N×80% 轮 | code({ action: "read" }) 阅读关键实现，确认细节；确认核心发现后立即记录 |
+| 4. 结构化记录 | 总结前 | 用 memory({ action: "note_finding", params: ... }) 补齐核心发现；这是 QualityGate 的重要质量依据 |
+| 5. 输出总结 | 最后阶段 | 停止工具，直接输出你的分析文本 |
 
 ## 关键规则
 - **到达 80% 轮次时必须开始写总结**，不要等系统提醒
 - 每一轮都必须产生新证据；如果全景数据和已有上下文足够，可以停止工具调用并总结
 - 不要重复搜索相同关键词或读取相同文件（系统会返回缓存并扣轮次）
 - 优先使用注入的 panorama / projectInfo / codeEntityGraph / sessionStore，再用工具验证关键事实
+- **note_finding 是硬性质量依据**: 一旦在扫描、探索或验证阶段确认核心发现，允许并且应该立即调用 memory({ action: "note_finding", params: { finding, evidence, importance } })；最终至少提交 3 条结构化发现，缺失或不足会导致 QualityGate retry
 
 ## 工具效率
 - **批量搜索**: code({ action: "search", params: { patterns: ["keywordA", "keywordB", "keywordC"] } }) — 一次搜 3-5 个
@@ -329,11 +331,12 @@ ${depthHint}
 
   // §5 工具使用提示
   parts.push(`【硬性要求：结构化记录发现】
-最终 Markdown 报告不能替代 memory.note_finding。
-在输出最终报告前，必须先为每个核心发现调用:
+最终 Markdown 报告不能替代统一 memory 工具的 note_finding action。
+note_finding 是 QualityGate 的重要质量依据，也是 Producer 后续生成候选知识的主要输入之一。
+不要等到总结阶段；一旦在扫描/探索/验证阶段确认核心发现，允许并且必须主动调用:
 memory({ action: "note_finding", params: { finding: "发现描述", evidence: "完整相对路径:行号", importance: 8 } })
-如果当前维度需要产出候选知识，至少记录 3 条 note_finding；若确认不足 3 条，请记录所有已确认发现，并在最终报告说明不足原因。
-缺少 memory.note_finding 会导致 QualityGate retry，因为 Producer 依赖这些结构化发现。`);
+如果当前维度需要产出候选知识，最终至少记录 3 条 note_finding；若确认不足 3 条，请记录所有已确认发现，并在最终报告说明不足原因。
+缺少 memory({ action: "note_finding", ... }) 或数量不足会直接影响 QualityGate 评分并触发 retry。`);
   parts.push(
     '使用 memory({ action: "recall", params: { tags: ["finding"] } }) 回顾已记录的发现，避免重复分析。'
   );

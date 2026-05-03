@@ -137,8 +137,11 @@ export interface ToolContext {
   /** 工具注册表引用 (meta.tools 自省需要，由 router 自动注入) */
   toolRegistry?: ToolRegistry;
 
-  /** Agent 记忆协调器 — memory.note_finding 桥接到 ActiveContext.#scratchpad */
+  /** Agent 记忆协调器 — memory 工具的 note_finding action 桥接到 ActiveContext.#scratchpad */
   memoryCoordinator?: MemoryCoordinatorLike;
+
+  /** Runtime metadata from AgentRuntime, used by write tools to inject system-owned fields. */
+  runtime?: import('#tools/core/ToolCallContext.js').ToolRuntimeCallContext;
 }
 
 /** action handler 函数签名 */

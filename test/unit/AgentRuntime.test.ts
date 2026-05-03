@@ -437,6 +437,72 @@ describe('AgentRuntime', () => {
       });
     });
 
+    test('should preserve envelope errors when structuredContent is null', async () => {
+      const toolRouter = {
+        execute: vi.fn().mockResolvedValue({
+          ok: false,
+          toolId: 'search_knowledge',
+          callId: 'router-call-error',
+          startedAt: new Date().toISOString(),
+          durationMs: 3,
+          status: 'error',
+          text: 'Rejected: validation_failed',
+          structuredContent: null,
+          diagnostics: {
+            degraded: false,
+            fallbackUsed: false,
+            warnings: [],
+            timedOutStages: [],
+            blockedTools: [],
+            truncatedToolCalls: 0,
+            emptyResponses: 0,
+            aiErrorCount: 0,
+            gateFailures: [],
+          },
+          trust: {
+            source: 'internal',
+            sanitized: true,
+            containsUntrustedText: false,
+            containsSecrets: false,
+          },
+        }),
+      };
+      const aiProvider = mockAiProvider({
+        chatWithTools: vi
+          .fn()
+          .mockResolvedValueOnce({
+            type: 'function_call',
+            text: null,
+            functionCalls: [
+              { id: 'call_1', name: 'search_knowledge', args: { query: 'patterns' } },
+            ],
+            usage: { inputTokens: 100, outputTokens: 50 },
+          })
+          .mockResolvedValueOnce({
+            type: 'text',
+            text: 'Done',
+            functionCalls: null,
+            usage: { inputTokens: 200, outputTokens: 100 },
+          }),
+      });
+      const rt = createRuntime({
+        aiProvider,
+        toolRouter,
+        additionalTools: ['search_knowledge'],
+      });
+
+      const result = await rt.reactLoop('Search for patterns');
+
+      expect(result.toolCalls[0]).toMatchObject({
+        result: { error: 'Rejected: validation_failed' },
+        envelope: {
+          ok: false,
+          status: 'error',
+          text: 'Rejected: validation_failed',
+        },
+      });
+    });
+
     test('should accumulate token usage across iterations', async () => {
       const aiProvider = mockAiProvider({
         chatWithTools: vi

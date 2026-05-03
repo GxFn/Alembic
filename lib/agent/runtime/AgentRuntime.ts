@@ -366,13 +366,14 @@ export class AgentRuntime {
       }
 
       // 迭代准备 (hooks + nudge + compact + toolChoice + prompt)
-      const { toolChoice, effectiveSystemPrompt, dynamicContext, compactResult } =
+      const { toolChoice, toolSchemas, effectiveSystemPrompt, dynamicContext, compactResult } =
         this.#prepareIteration(ctx);
 
       // LLM 调用 (含错误恢复 + 空响应重试)
       const llmResult = await this.#callLLM(
         ctx,
         toolChoice,
+        toolSchemas,
         effectiveSystemPrompt,
         dynamicContext,
         compactResult
@@ -648,7 +649,7 @@ export class AgentRuntime {
     // 动态 toolChoice
     const forceSummaryAt = Math.max(2, Math.ceil(maxIterations * 0.8));
     const forceSummary = !tracker && ctx.iteration >= forceSummaryAt;
-    let toolChoice: string | Record<string, unknown>;
+    let toolChoice: string;
     if (ctx.toolChoiceOverride && ctx.iteration === 1) {
       toolChoice = ctx.toolChoiceOverride;
     } else if (tracker) {
@@ -656,6 +657,8 @@ export class AgentRuntime {
     } else {
       toolChoice = ctx.toolSchemas.length > 0 ? (forceSummary ? 'none' : 'auto') : 'none';
     }
+
+    const toolSchemas = this.#getIterationToolSchemas(ctx, toolChoice);
 
     // ── System prompt 保持静态（最大化 prefix cache 命中） ──
     // 动态内容（phase context, 进度, memory prompt）分离到 dynamicContext，
@@ -684,7 +687,9 @@ export class AgentRuntime {
       }
     }
     if (forceSummary) {
-      dynamicParts.push('[系统提示] 已进入最后阶段，请停止调用工具，基于已有信息输出总结。');
+      dynamicParts.push(
+        '[系统提示] 已进入最后阶段，请停止调用探索工具，基于已有信息输出总结。若任务要求结构化记录且尚未记录，只允许使用 memory({ action: "note_finding", params: ... }) 补齐核心发现。'
+      );
     }
     const dynamicContext = dynamicParts.length > 0 ? dynamicParts.join('\n\n') : null;
 
@@ -694,7 +699,64 @@ export class AgentRuntime {
       removed: compactResult.removed + preLLMCheck.compaction.removed,
     };
 
-    return { toolChoice, effectiveSystemPrompt, dynamicContext, compactResult: mergedCompact };
+    return {
+      toolChoice,
+      toolSchemas,
+      effectiveSystemPrompt,
+      dynamicContext,
+      compactResult: mergedCompact,
+    };
+  }
+
+  #getIterationToolSchemas(ctx: LoopContext, toolChoice: string): Array<Record<string, unknown>> {
+    const tracker = ctx.tracker;
+    if (
+      toolChoice !== 'none' &&
+      tracker?.pipelineType === 'analyst' &&
+      tracker.phase === 'RECORD'
+    ) {
+      return ctx.toolSchemas
+        .filter((schema) => schema.name === 'memory')
+        .map((schema) => ({
+          ...schema,
+          description:
+            'Record exactly one structured key finding. In RECORD phase, call this tool repeatedly until at least 3 findings are recorded; do not output prose.',
+          parameters: {
+            type: 'object',
+            properties: {
+              action: {
+                type: 'string',
+                enum: ['note_finding'],
+                description: 'Must be note_finding in RECORD phase',
+              },
+              params: {
+                type: 'object',
+                properties: {
+                  finding: {
+                    type: 'string',
+                    description: 'Concrete, verifiable finding description',
+                  },
+                  evidence: {
+                    type: 'string',
+                    description: 'Complete relative file path and line number/range',
+                  },
+                  importance: {
+                    type: 'number',
+                    description: 'Importance 1-10',
+                    minimum: 1,
+                    maximum: 10,
+                  },
+                },
+                required: ['finding', 'evidence', 'importance'],
+                additionalProperties: false,
+              },
+            },
+            required: ['action', 'params'],
+            additionalProperties: false,
+          },
+        }));
+    }
+    return ctx.toolSchemas;
   }
 
   /**
@@ -707,6 +769,7 @@ export class AgentRuntime {
   async #callLLM(
     ctx: LoopContext,
     toolChoice: string,
+    toolSchemas: Array<Record<string, unknown>>,
     effectiveSystemPrompt: string,
     dynamicContext: string | null,
     compactResult?: { level: number; removed: number }
@@ -741,8 +804,8 @@ export class AgentRuntime {
       const effectiveToolSchemas =
         toolChoice === 'none' && isToolSchemaHarmful
           ? undefined
-          : ctx.toolSchemas.length > 0
-            ? ctx.toolSchemas
+          : toolSchemas.length > 0
+            ? toolSchemas
             : undefined;
 
       // 构建 LLM 输入消息 — projected messages + ephemeral dynamic context
@@ -847,20 +910,22 @@ export class AgentRuntime {
       ctx.consecutiveEmptyResponses = 0;
     }
 
-    // Graceful exit 保护 — 在 SUMMARIZE 阶段或 gracefulExit 状态下，
-    // toolChoice=none 但部分 LLM (DeepSeek 等) 可能仍然返回 tool calls，需要忽略
+    // Graceful exit 保护 — toolChoice=none 或 gracefulExit 状态下，
+    // 部分 LLM (DeepSeek 等) 可能仍然返回 tool calls，需要忽略。
+    // Analyst 的 RECORD 阶段会暴露 memory-only 补记录窗口，不能在这里丢弃。
     const isTerminalPhase = ctx.tracker?.phase === 'SUMMARIZE' || ctx.tracker?.phase === 'FINALIZE';
     if (
-      (ctx.tracker?.isGracefulExit || isTerminalPhase) &&
+      (ctx.tracker?.isGracefulExit || toolChoice === 'none') &&
       llmResult.functionCalls?.length &&
       llmResult.functionCalls.length > 0
     ) {
+      const violationReason = ctx.tracker?.isGracefulExit ? 'graceful exit' : 'toolChoice=none';
       this.logger.warn(
-        `[AgentRuntime] ⚠ AI returned ${llmResult.functionCalls.length} tool calls despite toolChoice=none (${isTerminalPhase ? 'terminal phase' : 'graceful exit'}) — ignoring`
+        `[AgentRuntime] ⚠ AI returned ${llmResult.functionCalls.length} tool calls during ${violationReason}${isTerminalPhase ? ' (terminal phase)' : ''} — ignoring`
       );
       ctx.diagnostics?.warn({
         code: 'tool_choice_violation',
-        message: `AI returned ${llmResult.functionCalls.length} tool calls despite toolChoice=none`,
+        message: `AI returned ${llmResult.functionCalls.length} tool calls during ${violationReason}`,
       });
       if (llmResult.text) {
         ctx.lastReply = cleanFinalAnswer(llmResult.text);
@@ -1193,7 +1258,9 @@ export class AgentRuntime {
       if (metricsTransitionedToTerminal && textResult.isFinalAnswer) {
         const digestNudge =
           tracker.pipelineType === 'analyst'
-            ? `请**停止调用工具**，直接输出你的完整分析报告。用 Markdown 格式，包含具体文件路径、类名和代码模式。至少涵盖 3 个核心发现。\n\n**现在开始输出你的分析报告。**\n⚠️ 严禁在回复中复制本条指令文字，只输出你自己的分析。`
+            ? `请**停止调用工具**，直接输出你的完整分析报告。用 Markdown 格式，包含具体文件路径、类名和代码模式，至少涵盖 3 个核心发现。\n\n` +
+              `**现在开始输出你的分析报告。**\n` +
+              `⚠️ 严禁在回复中复制本条指令文字，只输出你自己的分析。`
             : null;
         if (digestNudge) {
           messages.appendAssistantText(llmResult.text || '', llmResult.reasoningContent);

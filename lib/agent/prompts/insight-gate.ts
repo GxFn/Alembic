@@ -101,7 +101,9 @@ interface QualityReport {
   suggestions: string[];
 }
 
-const REQUIRED_MEMORY_FINDING_SUGGESTION = 'Required memory.note_finding calls are missing';
+const REQUIRED_MEMORY_FINDING_SUGGESTION = 'Required memory action note_finding calls are missing';
+const INSUFFICIENT_MEMORY_FINDINGS_SUGGESTION =
+  'At least 3 memory action note_finding calls are required';
 
 /** 门控选项 */
 interface GateOptions {
@@ -530,8 +532,11 @@ function buildQualityScores(
   if (scores.evidenceScore < 50) {
     suggestions.push('Findings lack file-level evidence');
   }
-  if ((options.memoryFindingCount ?? 0) === 0) {
+  const memoryFindingCount = options.memoryFindingCount ?? 0;
+  if (memoryFindingCount === 0) {
     suggestions.push(REQUIRED_MEMORY_FINDING_SUGGESTION);
+  } else if (memoryFindingCount < 3) {
+    suggestions.push(INSUFFICIENT_MEMORY_FINDINGS_SUGGESTION);
   }
   if (scores.coherenceScore < 50) {
     suggestions.push('Analysis text is too short or unstructured');
@@ -569,6 +574,16 @@ function applyGateThresholds(qualityReport: QualityReport, options: GateOptions 
     return {
       pass: false,
       reason: REQUIRED_MEMORY_FINDING_SUGGESTION,
+      action: 'retry',
+    };
+  }
+  if (
+    needsCandidates &&
+    qualityReport.suggestions.includes(INSUFFICIENT_MEMORY_FINDINGS_SUGGESTION)
+  ) {
+    return {
+      pass: false,
+      reason: INSUFFICIENT_MEMORY_FINDINGS_SUGGESTION,
       action: 'retry',
     };
   }
@@ -638,7 +653,9 @@ export function buildRetryPrompt(reason: string) {
     'Analysis lacks structure':
       '请将分析组织成结构化的段落，使用编号列表或标题来区分不同的发现。每个发现应包含具体的文件路径和代码位置。',
     [REQUIRED_MEMORY_FINDING_SUGGESTION]:
-      '你的分析正文已有发现，但没有写入结构化记忆。请先对至少 3 个核心发现调用 memory({ action: "note_finding", params: { finding, evidence, importance } })，evidence 必须包含完整相对路径和行号，然后再输出最终报告。',
+      '你的分析正文已有发现，但没有写入结构化记忆。请调用统一 memory 工具的 note_finding action，准确格式是 memory({ action: "note_finding", params: { finding, evidence, importance } })，不是 memory.note_finding。请至少记录 3 个核心发现，evidence 必须包含完整相对路径和行号，然后再输出最终报告。',
+    [INSUFFICIENT_MEMORY_FINDINGS_SUGGESTION]:
+      '结构化发现数量不足。请继续只调用 memory({ action: "note_finding", params: { finding, evidence, importance } })，至少补齐到 3 个核心发现；每个 evidence 必须包含完整相对路径和行号，然后再输出最终报告。',
   };
 
   return (

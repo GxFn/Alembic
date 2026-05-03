@@ -98,6 +98,16 @@ export class NudgeGenerator {
       m.iteration >= DEFAULT_MIN_EXPLORE_ITERS
     ) {
       this.#convergenceNudged = true;
+      if (state.phase === 'PRODUCE') {
+        return {
+          type: 'convergence',
+          text:
+            `Producer 阶段已连续 ${m.roundsSinceNewInfo} 轮没有有效新提交。` +
+            `如果已达到提交上限或没有新的非重复候选，请停止继续读取/搜索，直接输出总结 JSON；` +
+            `否则只调用 ${state.submitToolName} 提交尚未提交且不重复的候选。\n` +
+            `⚠️ 以上是行为指令，严禁在回复中复制或引用这段文字。`,
+        };
+      }
       return {
         type: 'convergence',
         text:
@@ -145,12 +155,21 @@ export class NudgeGenerator {
       return `你已充分探索了项目代码，现在请开始调用 ${submitToolName} 工具来提交你发现的知识候选。不要再搜索，直接提交。`;
     }
 
+    if (toPhase === 'RECORD') {
+      return (
+        `你已完成分析验证。现在进入结构化记录阶段：请**停止调用 code、graph、terminal 等探索工具**。\n` +
+        `本阶段不要输出自然语言正文，必须只调用 memory({ action: "note_finding", params: { finding, evidence, importance } }) 记录核心发现，至少 3 条；每次工具调用记录 1 条发现。\n` +
+        `note_finding 是 QualityGate 的重要质量依据；evidence 必须包含完整相对路径和行号。缺少或不足会导致 QualityGate retry。\n` +
+        `⚠️ 以上是行为指令，严禁在回复中复制或引用这段文字。`
+      );
+    }
+
     if (toPhase === 'SUMMARIZE') {
       const submitCount = m.submitCount;
       // Analyst 管线: 纯文本分析报告
       if (pipelineType === 'analyst') {
         return (
-          `你已完成分析探索。请**停止调用工具**，直接输出你的**完整分析报告**。\n\n` +
+          `你已完成结构化记录。请**停止调用工具**，直接输出你的**完整分析报告**。\n\n` +
           `要求：\n` +
           `- 用 Markdown 格式组织内容（二级/三级标题）\n` +
           `- 包含具体的文件路径、类名、方法名、代码模式\n` +
@@ -182,7 +201,7 @@ export class NudgeGenerator {
     }
 
     if (toPhase === 'VERIFY') {
-      return '搜索阶段信息已饱和。现在进入验证阶段——读取最关键的源文件，确认细节和实现逻辑。';
+      return '搜索阶段信息已饱和。现在进入验证阶段——读取最关键的源文件，确认细节和实现逻辑。note_finding 是 QualityGate 的重要质量依据；请在确认每个核心发现后立即调用 memory({ action: "note_finding", params: ... })，允许在验证阶段主动提交，不要等到总结阶段。';
     }
 
     return `阶段切换: ${fromPhase} → ${toPhase}`;
@@ -229,7 +248,7 @@ export class NudgeGenerator {
           `- 包含具体文件路径、类名、代码模式\n` +
           `- 列出你发现的关键模式或规范（至少 3 条）\n` +
           `- 如有未覆盖的方面，在末尾用「## 未覆盖」章节列出\n\n` +
-          `**现在开始输出分析总结，不要调用任何工具。**\n` +
+          `**现在开始输出分析总结，不要再进行新的搜索或阅读。**\n` +
           `⛔ 严禁在回复中复制或引用本条指令的任何文字，只输出你自己的分析。`,
       };
     }
@@ -363,6 +382,9 @@ export class NudgeGenerator {
       case 'VERIFY':
         return '当前处于验证阶段，请阅读关键源文件确认实现细节。';
 
+      case 'RECORD':
+        return `当前处于结构化记录阶段：不要输出正文，只调用 memory({ action: "note_finding", params: { finding, evidence, importance } })；已记录 ${m.memoryFindingCount}/3 条核心发现。`;
+
       default:
         return null;
     }
@@ -379,6 +401,8 @@ export class NudgeGenerator {
         return '提交阶段';
       case 'VERIFY':
         return '验证阶段';
+      case 'RECORD':
+        return '记录阶段 — 只允许 memory 工具的 note_finding action';
       case 'SUMMARIZE':
         return '⚠ 总结阶段 — 请停止工具调用，直接输出分析文本';
       default:

@@ -84,6 +84,7 @@ export class ExplorationTracker {
     uniqueQueries: new Set(),
     totalToolCalls: 0,
     submitCount: 0,
+    memoryFindingCount: 0,
     roundsSinceNewInfo: 0,
     roundsSinceSubmit: 0,
     iteration: 0,
@@ -248,6 +249,9 @@ export class ExplorationTracker {
     if (this.#isTerminalPhase()) {
       return null;
     }
+    if (this.#phase === 'RECORD') {
+      return null;
+    }
 
     // 委托 NudgeGenerator
     const nudge = this.#nudgeGenerator.generate(this.#buildNudgeState(), trace);
@@ -326,6 +330,13 @@ export class ExplorationTracker {
       if (!hasError && !isRejected) {
         this.#metrics.submitCount++;
         this.#metrics.roundsSinceSubmit = 0;
+      }
+    }
+    if (toolName === 'memory' && args?.action === 'note_finding') {
+      const resultObj = typeof result === 'object' ? (result as Record<string, unknown>) : null;
+      const hasError = resultObj?.error !== undefined;
+      if (!hasError) {
+        this.#metrics.memoryFindingCount++;
       }
     }
 
@@ -425,7 +436,9 @@ export class ExplorationTracker {
       // Bootstrap 管线: dimensionDigest JSON
       const nudge =
         this.#pipelineType === 'analyst'
-          ? `请**停止调用工具**，直接输出你的完整分析报告。用 Markdown 格式，包含具体文件路径、类名和代码模式。至少涵盖 3 个核心发现。\n\n**现在开始输出你的分析报告。**\n⚠️ 严禁在回复中复制本条指令文字，只输出你自己的分析。`
+          ? `请**停止调用工具**，直接输出你的完整分析报告。用 Markdown 格式，包含具体文件路径、类名和代码模式，至少涵盖 3 个核心发现。\n\n` +
+            `**现在开始输出你的分析报告。**\n` +
+            `⚠️ 严禁在回复中复制本条指令文字，只输出你自己的分析。`
           : `请在回复中直接输出 dimensionDigest JSON 总结（用 \`\`\`json 包裹）：\n` +
             `\`\`\`json\n{"dimensionDigest":{"summary":"分析总结(100-200字)","candidateCount":${submitCount},"keyFindings":["关键发现"],"crossRefs":{},"gaps":["未覆盖方面"],"remainingTasks":[{"signal":"未处理的信号/主题","reason":"未完成原因","priority":"high|medium|low","searchHints":["建议搜索词"]}]}}\n\`\`\`\n> 如果所有信号都已覆盖，remainingTasks 留空数组 \`[]\`。\n` +
             `⚠️ 严禁在回复中复制本条指令文字，只输出 JSON。`;
@@ -444,6 +457,16 @@ export class ExplorationTracker {
           ? `你的分析很好。请继续调用 ${this.#submitToolName} 提交你发现的知识候选，每个值得记录的模式/实践都应该提交。`
           : null;
       return { isFinalAnswer: false, needsDigestNudge: false, shouldContinue: true, nudge };
+    }
+
+    if (this.#phase === 'RECORD') {
+      return {
+        isFinalAnswer: false,
+        needsDigestNudge: false,
+        shouldContinue: true,
+        nudge:
+          '当前仍处于 RECORD 结构化记录阶段。不要输出自然语言正文；请只调用 memory({ action: "note_finding", params: { finding, evidence, importance } })，直到至少记录 3 条核心发现。note_finding 是 QualityGate 的重要质量依据。',
+      };
     }
 
     return { isFinalAnswer: false, needsDigestNudge: false, shouldContinue: true, nudge: null };
@@ -509,6 +532,7 @@ export class ExplorationTracker {
       phase: this.#phase,
       phaseRounds: this.#metrics.phaseRounds,
       submitCount: this.#metrics.submitCount,
+      memoryFindingCount: this.#metrics.memoryFindingCount,
       uniqueFiles: this.#metrics.uniqueFiles.size,
       uniquePatterns: this.#metrics.uniquePatterns.size,
       uniqueQueries: this.#metrics.uniqueQueries.size,

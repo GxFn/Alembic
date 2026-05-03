@@ -5,7 +5,7 @@
  *   - STRATEGY_ANALYST 阶段序列与转换条件
  *   - STRATEGY_ANALYST getToolChoice 动态切换（40% 预算后 required→auto）
  *   - STRATEGY_ANALYST EXPLORE→VERIFY 多条件触发
- *   - STRATEGY_ANALYST VERIFY→SUMMARIZE 松弛退出
+ *   - STRATEGY_ANALYST VERIFY→RECORD→SUMMARIZE 松弛退出
  *   - createBootstrapStrategy 正常 / skill-only 模式
  *   - STRATEGY_PRODUCER 基本行为
  */
@@ -36,6 +36,7 @@ function makeMetrics(overrides: Partial<ExplorationMetrics> = {}): ExplorationMe
   return {
     iteration: 0,
     submitCount: 0,
+    memoryFindingCount: 0,
     searchRoundsInPhase: 0,
     phaseRounds: 0,
     roundsSinceSubmit: 0,
@@ -51,7 +52,7 @@ function getTransition(strategy: typeof STRATEGY_ANALYST, key: string): Transiti
 
 describe('STRATEGY_ANALYST', () => {
   test('has correct phase sequence', () => {
-    expect(STRATEGY_ANALYST.phases).toEqual(['SCAN', 'EXPLORE', 'VERIFY', 'SUMMARIZE']);
+    expect(STRATEGY_ANALYST.phases).toEqual(['SCAN', 'EXPLORE', 'VERIFY', 'RECORD', 'SUMMARIZE']);
   });
 
   test('enables reflection and planning', () => {
@@ -78,6 +79,10 @@ describe('STRATEGY_ANALYST', () => {
 
     test('VERIFY phase returns auto', () => {
       expect(STRATEGY_ANALYST.getToolChoice('VERIFY', makeMetrics(), budget)).toBe('auto');
+    });
+
+    test('RECORD phase returns required for analyst memory-only finalization', () => {
+      expect(STRATEGY_ANALYST.getToolChoice('RECORD', makeMetrics(), budget)).toBe('required');
     });
 
     test('SUMMARIZE phase returns none', () => {
@@ -131,9 +136,9 @@ describe('STRATEGY_ANALYST', () => {
     });
   });
 
-  describe('VERIFY→SUMMARIZE transition', () => {
+  describe('VERIFY→RECORD transition', () => {
     const budget = makeBudget({ maxIterations: 34 });
-    const transition = getTransition(STRATEGY_ANALYST, 'VERIFY→SUMMARIZE');
+    const transition = getTransition(STRATEGY_ANALYST, 'VERIFY→RECORD');
 
     test('triggers when past 75% budget', () => {
       const metrics = makeMetrics({ iteration: 26 }); // 26 >= floor(34*0.75)=25
@@ -150,8 +155,38 @@ describe('STRATEGY_ANALYST', () => {
       expect(transition.onMetrics!(metrics, budget)).toBe(true);
     });
 
-    test('onTextResponse is always true (any text = summarize)', () => {
+    test('onTextResponse is always true (any text = record)', () => {
       expect(transition.onTextResponse).toBe(true);
+    });
+  });
+
+  describe('RECORD→SUMMARIZE transition', () => {
+    const budget = makeBudget({ maxIterations: 34 });
+    const transition = getTransition(STRATEGY_ANALYST, 'RECORD→SUMMARIZE');
+
+    test('triggers after at least three memory findings are recorded', () => {
+      expect(transition.onMetrics!(makeMetrics({ memoryFindingCount: 3 }), budget)).toBe(true);
+    });
+
+    test('does not trigger before enough memory findings are recorded', () => {
+      expect(
+        transition.onMetrics!(makeMetrics({ phaseRounds: 1, memoryFindingCount: 2 }), budget)
+      ).toBe(false);
+    });
+
+    test('does not fall through by record rounds alone', () => {
+      expect(
+        transition.onMetrics!(makeMetrics({ phaseRounds: 3, memoryFindingCount: 0 }), budget)
+      ).toBe(false);
+    });
+
+    test('onTextResponse waits for enough memory findings', () => {
+      const fn = transition.onTextResponse as (
+        m: ExplorationMetrics,
+        b: ExplorationBudget
+      ) => boolean;
+      expect(fn(makeMetrics({ memoryFindingCount: 2 }), budget)).toBe(false);
+      expect(fn(makeMetrics({ memoryFindingCount: 3 }), budget)).toBe(true);
     });
   });
 

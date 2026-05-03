@@ -32,15 +32,15 @@ export class BootstrapAnalyze extends CapabilityV2 {
 | 全局扫描 | graph.overview + code.structure 获取项目概览 |
 | 结构化探索 | graph.query + code.search 批量搜索关键模式 |
 | 深度验证 | code.read 阅读关键实现 |
-| 记录发现 | memory.note_finding 记录关键发现（含证据和重要性评分），这是硬性步骤 |
+| 结构化记录 | memory 工具的 note_finding action 记录关键发现（含证据和重要性评分），这是 QualityGate 重要质量依据和硬性步骤 |
 
 关键规则:
 - 批量搜索: code.search({ patterns: [...] })
 - 大文件自动返回 outline，需要时用 startLine/endLine 读取
 - 不要重复搜索相同关键词
 - 调用关系优先用 graph.query(type: "callers")
-- 每发现重要模式/问题，立即调用 memory({ action: "note_finding", params: { finding: "...", evidence: "文件路径:行号", importance: 8 } })
-- 输出最终报告前，必须确认核心发现已经写入 memory.note_finding；最终 Markdown 不能替代该工具调用
+- 每发现重要模式/问题，立即调用 memory({ action: "note_finding", params: { finding: "...", evidence: "文件路径:行号", importance: 8 } })，允许在全局扫描、结构化探索、深度验证阶段就主动提交，不要等到总结阶段
+- 输出最终报告前，必须确认核心发现已经通过 memory({ action: "note_finding", params: ... }) 写入；最终 Markdown 不能替代该工具调用；缺少或不足会直接影响 QualityGate 评分并触发 retry；RECORD 阶段只允许补写 memory，SUMMARIZE 阶段会停止所有工具
 - 搜索前先用 memory({ action: "get_previous_evidence", params: { query: "类名/文件名" } }) 检查前序维度是否已有发现
 
 ${super.promptFragment}`;

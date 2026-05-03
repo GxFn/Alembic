@@ -7,6 +7,9 @@
  * 后端: SearchEngine (BM25 + 向量), RecipeProductionGateway, KnowledgeRepository
  */
 
+import path from 'node:path';
+import { DIMENSION_DISPLAY_GROUP } from '#domain/dimension/DimensionRegistry.js';
+import { getSystemInjectedFields } from '#domain/knowledge/FieldSpec.js';
 import { estimateTokens, fail, ok, type ToolContext, type ToolResult } from '../types.js';
 
 export async function handle(
@@ -92,25 +95,90 @@ async function handleSubmit(
   }
 
   try {
+    if (params.title) {
+      params.title = stripProjectNamePrefix(String(params.title), ctx.projectRoot);
+    }
+
+    const content = params.content as Record<string, unknown>;
+    const reasoning = params.reasoning as Record<string, unknown> | undefined;
+    const normalizedSources = normalizeStringArray(
+      reasoning?.sources ?? params.sourceRefs ?? params.filePaths
+    );
+    const dimMeta = (ctx.runtime?.dimensionMeta as DimensionMetaLike | null | undefined) ?? null;
+    const effectiveDimensionId =
+      dimMeta?.id ?? pickString(params.dimensionId) ?? pickString(ctx.runtime?.dimensionScopeId);
+    const isBootstrap = !!dimMeta;
+    const allowedKnowledgeType = normalizeStringArray(dimMeta?.allowedKnowledgeTypes)[0];
+    const effectiveKnowledgeType =
+      allowedKnowledgeType ?? pickString(params.knowledgeType) ?? 'code-pattern';
+    const effectiveCategory = effectiveDimensionId ?? pickString(params.category) ?? 'Utility';
+    const effectiveLanguage =
+      pickString(params.language) ??
+      pickString(ctx.runtime?.projectLanguage) ??
+      pickString(ctx.runtime?.lang) ??
+      'markdown';
+    const rationale = pickString(content.rationale);
+    const description = pickString(params.description) ?? '';
+    const itemReasoning = {
+      ...reasoning,
+      whyStandard: pickString(reasoning?.whyStandard) ?? rationale ?? description,
+      sources: normalizedSources,
+      confidence:
+        typeof reasoning?.confidence === 'number'
+          ? reasoning.confidence
+          : (params.confidence ?? 0.75),
+    };
+    const baseTags = normalizeStringArray(params.tags);
+    const tags = isBootstrap
+      ? [
+          ...new Set([
+            ...baseTags,
+            ...(effectiveDimensionId ? [effectiveDimensionId] : []),
+            'bootstrap',
+            ...(effectiveDimensionId
+              ? [DIMENSION_DISPLAY_GROUP[effectiveDimensionId] || effectiveDimensionId]
+              : []),
+          ]),
+        ]
+      : baseTags;
     const item = {
+      ...params,
       title: params.title as string,
-      description: params.description as string,
-      content: params.content as Record<string, unknown>,
+      description,
+      content,
       kind: params.kind as string,
       trigger: params.trigger as string,
       whenClause: params.whenClause as string,
       doClause: params.doClause as string,
       dontClause: params.dontClause as string | undefined,
-      tags: params.tags as string[] | undefined,
-      reasoning: params.reasoning as Record<string, unknown> | undefined,
+      coreCode: pickString(params.coreCode) ?? pickString(content.pattern) ?? '',
+      topicHint: pickString(params.topicHint) ?? effectiveCategory,
+      headers: normalizeStringArray(params.headers),
+      usageGuide: pickString(params.usageGuide) ?? buildDefaultUsageGuide(params),
+      tags,
+      reasoning: itemReasoning,
+      sourceRefs: normalizeStringArray(params.sourceRefs ?? params.filePaths ?? normalizedSources),
+      knowledgeType: effectiveKnowledgeType,
+      category: effectiveCategory,
+      language: effectiveLanguage,
+      source: isBootstrap ? 'bootstrap' : 'agent',
+      agentNotes: dimMeta
+        ? { dimensionId: dimMeta.id, outputType: pickString(dimMeta.outputType) ?? 'candidate' }
+        : null,
     };
 
     const result = await gateway.create({
       source: 'agent-tool',
       items: [item],
       options: {
-        skipSimilarityCheck: true,
+        skipSimilarityCheck: !isBootstrap,
         skipConsolidation: true,
+        supersedes: pickString(params.supersedes),
+        existingTitles: ctx.runtime?.submittedTitles ?? undefined,
+        existingFingerprints: ctx.runtime?.submittedPatterns ?? undefined,
+        systemInjectedFields: isBootstrap ? getSystemInjectedFields() : undefined,
+        userId: 'agent',
+        bootstrapDedup: isBootstrap ? ctx.runtime?.bootstrapDedup : undefined,
       },
     });
 
@@ -140,7 +208,15 @@ async function handleSubmit(
     }
 
     if (result.rejected.length > 0) {
-      return fail(`Rejected: ${result.rejected[0].reason}`);
+      const rejected = result.rejected[0];
+      const details = [
+        `Rejected: ${rejected.reason}`,
+        ...(Array.isArray(rejected.errors) ? rejected.errors : []),
+        ...(Array.isArray(rejected.warnings)
+          ? rejected.warnings.map((warning) => `warning: ${warning}`)
+          : []),
+      ].join('\n');
+      return fail(details);
     }
 
     if (result.blocked.length > 0) {
@@ -155,6 +231,46 @@ async function handleSubmit(
   }
 }
 
+function pickString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+interface DimensionMetaLike {
+  id: string;
+  outputType?: unknown;
+  allowedKnowledgeTypes?: unknown;
+}
+
+function stripProjectNamePrefix(title: string, projectRoot: string) {
+  if (!title || !projectRoot) {
+    return title;
+  }
+  const projectName = path.basename(projectRoot);
+  if (!projectName || projectName.length < 2) {
+    return title;
+  }
+  const prefix = new RegExp(
+    `^${projectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[的—–-]?\\s*`,
+    'i'
+  );
+  const stripped = title.replace(prefix, '');
+  return stripped.length > 0 ? stripped : title;
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+function buildDefaultUsageGuide(params: Record<string, unknown>) {
+  const whenClause = pickString(params.whenClause) ?? 'When this project pattern applies.';
+  const doClause = pickString(params.doClause) ?? 'Follow the documented project pattern.';
+  const dontClause = pickString(params.dontClause) ?? 'Avoid contradicting the documented pattern.';
+  return `### When\n${whenClause}\n\n### Do\n${doClause}\n\n### Don't\n${dontClause}`;
+}
+
 function validateSubmitParams(params: Record<string, unknown>): string | null {
   const errors: string[] = [];
   const title = params.title as string | undefined;
@@ -164,6 +280,7 @@ function validateSubmitParams(params: Record<string, unknown>): string | null {
   const trigger = params.trigger as string | undefined;
   const whenClause = params.whenClause as string | undefined;
   const doClause = params.doClause as string | undefined;
+  const reasoning = params.reasoning as Record<string, unknown> | undefined;
 
   if (!title || title.length < 3 || title.length > 200) {
     errors.push('title must be 3-200 characters');
@@ -194,6 +311,14 @@ function validateSubmitParams(params: Record<string, unknown>): string | null {
   }
   if (!doClause || doClause.length < 10) {
     errors.push('doClause is required (≥10 chars)');
+  }
+  const sources = reasoning?.sources;
+  if (
+    !reasoning ||
+    !Array.isArray(sources) ||
+    sources.filter((source) => typeof source === 'string' && source.trim().length > 0).length === 0
+  ) {
+    errors.push('reasoning.sources must be a non-empty array');
   }
 
   return errors.length > 0 ? errors.join('; ') : null;
@@ -358,7 +483,7 @@ interface RecipeGatewayLike {
     options?: Record<string, unknown>;
   }): Promise<{
     created: Array<{ id: string; title: string }>;
-    rejected: Array<{ reason: string }>;
+    rejected: Array<{ reason: string; errors?: string[]; warnings?: string[] }>;
     duplicates: Array<{ title: string; score: number }>;
     merged: unknown[];
     blocked: unknown[];

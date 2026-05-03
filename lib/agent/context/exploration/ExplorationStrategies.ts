@@ -33,6 +33,7 @@ export type PipelineType = 'scan' | 'bootstrap' | 'analyst';
 export interface ExplorationMetrics {
   iteration: number;
   submitCount: number;
+  memoryFindingCount: number;
   searchRoundsInPhase: number;
   phaseRounds: number;
   roundsSinceSubmit: number;
@@ -52,7 +53,7 @@ export interface ExplorationBudget {
 }
 
 /** 探索阶段 */
-export type ExplorationPhase = 'SCAN' | 'EXPLORE' | 'PRODUCE' | 'VERIFY' | 'SUMMARIZE';
+export type ExplorationPhase = 'SCAN' | 'EXPLORE' | 'PRODUCE' | 'VERIFY' | 'RECORD' | 'SUMMARIZE';
 
 /** 完整探索指标（含 Set 集合，用于 NudgeGenerator / SignalDetector） */
 export interface FullExplorationMetrics extends ExplorationMetrics {
@@ -159,17 +160,18 @@ export function createBootstrapStrategy(isSkillOnly = false) {
 
 /**
  * Analyst 策略（纯探索，无 submit 阶段）
- * 4 阶段: SCAN → EXPLORE → VERIFY → SUMMARIZE
+ * 5 阶段: SCAN → EXPLORE → VERIFY → RECORD → SUMMARIZE
  *
  * v2 改进: 支持探索饱和后的自然退出，避免耗尽全部轮次才进入总结：
  *   - EXPLORE 阶段在 40% 预算后从 required 降级为 auto，允许 LLM 自然输出文本
  *   - EXPLORE→VERIFY 新增 onTextResponse=true，文本回复即可触发转换
  *   - EXPLORE→VERIFY 新增 consecutiveIdleRounds 检测（LLM 连续无工具调用=分析完成）
- *   - VERIFY→SUMMARIZE 阈值从 80% 降至 75%
+ *   - VERIFY→RECORD 阈值从 80% 降至 75%
+ *   - RECORD 是 required memory-only 补记录阶段，至少 3 条 note_finding 后进入 SUMMARIZE
  */
 export const STRATEGY_ANALYST = {
   name: 'analyst',
-  phases: ['SCAN', 'EXPLORE', 'VERIFY', 'SUMMARIZE'],
+  phases: ['SCAN', 'EXPLORE', 'VERIFY', 'RECORD', 'SUMMARIZE'],
   transitions: {
     'SCAN→EXPLORE': {
       onMetrics: (m: ExplorationMetrics) => m.iteration >= 2,
@@ -184,17 +186,24 @@ export const STRATEGY_ANALYST = {
       onTextResponse: (m: ExplorationMetrics, b: ExplorationBudget) =>
         m.iteration >= Math.floor(b.maxIterations * 0.4),
     },
-    'VERIFY→SUMMARIZE': {
+    'VERIFY→RECORD': {
       onMetrics: (m: ExplorationMetrics, b: ExplorationBudget) =>
         m.iteration >= Math.floor(b.maxIterations * 0.75) ||
         m.roundsSinceNewInfo >= 2 ||
         m.consecutiveIdleRounds >= 1,
       onTextResponse: true,
     },
+    'RECORD→SUMMARIZE': {
+      onMetrics: (m: ExplorationMetrics) => m.memoryFindingCount >= 3,
+      onTextResponse: (m: ExplorationMetrics) => m.memoryFindingCount >= 3,
+    },
   },
   getToolChoice: (phase: ExplorationPhase, m: ExplorationMetrics, b: ExplorationBudget) => {
     if (phase === 'SUMMARIZE') {
       return 'none';
+    }
+    if (phase === 'RECORD') {
+      return 'required';
     }
     if (phase === 'SCAN') {
       return 'required';

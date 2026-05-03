@@ -66,7 +66,7 @@ describe('insight gate analysis artifact', () => {
     expect(artifact.qualityReport.scores.evidenceScore).toBeGreaterThanOrEqual(50);
     expect(artifact.qualityReport.suggestions).not.toContain('Findings lack file-level evidence');
     expect(artifact.qualityReport.suggestions).toContain(
-      'Required memory.note_finding calls are missing'
+      'Required memory action note_finding calls are missing'
     );
     expect(artifact.metadata).toMatchObject({
       memoryFindingCount: 0,
@@ -75,7 +75,7 @@ describe('insight gate analysis artifact', () => {
     expect(analysisQualityGate(artifact, { outputType: 'candidate' })).toMatchObject({
       pass: false,
       action: 'retry',
-      reason: 'Required memory.note_finding calls are missing',
+      reason: 'Required memory action note_finding calls are missing',
     });
   });
 
@@ -116,14 +116,54 @@ describe('insight gate analysis artifact', () => {
     );
 
     expect(artifact.qualityReport.suggestions).not.toContain(
-      'Required memory.note_finding calls are missing'
+      'Required memory action note_finding calls are missing'
     );
     expect(artifact.metadata).toMatchObject({
       memoryFindingCount: 3,
       derivedFindingCount: 0,
     });
     expect(analysisQualityGate(artifact, { outputType: 'candidate' }).reason).not.toBe(
-      'Required memory.note_finding calls are missing'
+      'Required memory action note_finding calls are missing'
     );
+  });
+
+  test('requires at least three memory note_finding calls for candidate output', () => {
+    const artifact = buildAnalysisArtifact(
+      {
+        reply: `
+## NetworkError 统一网络错误枚举
+
+核心错误模型落在 Packages/AOXNetworkKit/Sources/AOXNetworkKit/Core/NetworkError.swift。
+`,
+        toolCalls: evidenceToolCalls,
+      },
+      'error-resilience',
+      null,
+      {
+        distill: () => ({
+          keyFindings: [
+            {
+              finding: 'NetworkError 统一网络错误枚举',
+              evidence: 'Packages/AOXNetworkKit/Sources/AOXNetworkKit/Core/NetworkError.swift:12',
+              importance: 9,
+            },
+          ],
+          toolCallSummary: [],
+        }),
+      }
+    );
+
+    expect(artifact.metadata).toMatchObject({
+      memoryFindingCount: 1,
+      derivedFindingCount: 0,
+    });
+    expect(artifact.qualityReport.suggestions).toContain(
+      'At least 3 memory action note_finding calls are required'
+    );
+    expect(analysisQualityGate(artifact, { outputType: 'candidate' })).toMatchObject({
+      pass: false,
+      action: 'retry',
+      reason: 'At least 3 memory action note_finding calls are required',
+    });
   });
 });

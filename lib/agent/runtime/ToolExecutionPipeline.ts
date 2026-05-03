@@ -190,12 +190,11 @@ export class ToolExecutionPipeline {
           metadata.blocked = true;
           loopCtx.diagnostics?.recordBlockedTool(call.name, envelope.text);
         }
-        toolResult =
-          envelope.structuredContent !== undefined
+        toolResult = !envelope.ok
+          ? { error: envelope.text }
+          : envelope.structuredContent !== undefined
             ? envelope.structuredContent
-            : envelope.ok
-              ? { success: true, message: envelope.text }
-              : { error: envelope.text };
+            : { success: true, message: envelope.text };
       } catch (err: unknown) {
         toolResult = { error: (err as Error).message };
       }

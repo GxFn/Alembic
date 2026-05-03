@@ -77,6 +77,12 @@ export class AgentStageFactoryRegistry {
       const memoryCoordinator = context?.memoryCoordinator as
         | { allocateBudget?: (role: string) => void }
         | undefined;
+      const rescanContext = (context?.strategyContext as Record<string, unknown> | undefined)
+        ?.rescanContext as { gap?: number } | null | undefined;
+      const rescanGap =
+        typeof rescanContext?.gap === 'number' && Number.isFinite(rescanContext.gap)
+          ? Math.max(0, Math.floor(rescanContext.gap))
+          : null;
 
       const withTerminalPromptContext = (ctx: Record<string, unknown>) => ({
         ...ctx,
@@ -95,6 +101,15 @@ export class AgentStageFactoryRegistry {
 
       const produceStage = {
         ...presetStages[2],
+        ...(rescanGap != null && rescanGap > 0
+          ? {
+              budget: {
+                ...((presetStages[2].budget as Record<string, unknown> | undefined) || {}),
+                maxSubmits: rescanGap,
+                softSubmitLimit: rescanGap,
+              },
+            }
+          : {}),
         promptBuilder: (ctx: Record<string, unknown>) => {
           memoryCoordinator?.allocateBudget?.('producer');
           return presetStages[2].promptBuilder?.(withTerminalPromptContext(ctx));
