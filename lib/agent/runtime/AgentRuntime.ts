@@ -625,7 +625,8 @@ export class AgentRuntime {
     }
 
     // ── Session token 预算预检 ──
-    const tokenBudgetAction = this.#checkSessionTokenBudget(ctx);
+    const sessionCompact = { level: 0, removed: 0 };
+    const tokenBudgetAction = this.#checkSessionTokenBudget(ctx, sessionCompact);
 
     // 动态 toolChoice
     const forceSummaryAt = Math.max(2, Math.ceil(maxIterations * 0.8));
@@ -676,7 +677,13 @@ export class AgentRuntime {
     }
     const dynamicContext = dynamicParts.length > 0 ? dynamicParts.join('\n\n') : null;
 
-    return { toolChoice, effectiveSystemPrompt, dynamicContext, compactResult };
+    // 合并两阶段压缩结果 (messages.compactIfNeeded + session budget 二次压缩)
+    const mergedCompact = {
+      level: Math.max(compactResult.level, sessionCompact.level),
+      removed: compactResult.removed + sessionCompact.removed,
+    };
+
+    return { toolChoice, effectiveSystemPrompt, dynamicContext, compactResult: mergedCompact };
   }
 
   /**
@@ -690,7 +697,10 @@ export class AgentRuntime {
    *
    * @returns 'normal' | 'compress' | 'summarize'
    */
-  #checkSessionTokenBudget(ctx: LoopContext): 'normal' | 'compress' | 'summarize' {
+  #checkSessionTokenBudget(
+    ctx: LoopContext,
+    compactOut?: { level: number; removed: number }
+  ): 'normal' | 'compress' | 'summarize' {
     const sessionBudget = ctx.budget.maxSessionInputTokens;
     if (!sessionBudget) {
       return 'normal';
@@ -732,6 +742,10 @@ export class AgentRuntime {
         this.logger.info(
           `[AgentRuntime] session budget pressure → extra compact L${extraCompact.level}, removed ${extraCompact.removed}`
         );
+        if (compactOut) {
+          compactOut.level = Math.max(compactOut.level, extraCompact.level);
+          compactOut.removed += extraCompact.removed;
+        }
       }
       if (cw.needsL4Compaction()) {
         ctx._pendingL4Compaction = true;
@@ -814,10 +828,15 @@ export class AgentRuntime {
 
     let llmResult: LLMResult;
     try {
-      // toolChoice='none' 时不发送 toolSchemas —— 部分 LLM (Gemini) 在看到
-      // 工具定义但被禁止调用时会返回空内容，导致 SUMMARIZE 阶段失败
+      // toolChoice='none' 时是否保留 tool schemas 取决于供应商:
+      //   - 保留: 维持 prefix cache (system prompt + tool schemas 不变 → cache hit)
+      //   - 移除: DeepSeek V4 会因 hasTools=true 启用 thinking mode（增加 token 成本）;
+      //           Gemini 在禁止调用但看到定义时可能返回空内容
+      // 策略: DeepSeek V4 和 Gemini 移除 schemas，其他保留以获得 cache 收益
+      const isToolSchemaHarmful =
+        /deepseek-v4/i.test(this.#modelRef) || /gemini/i.test(this.#modelRef);
       const effectiveToolSchemas =
-        toolChoice === 'none'
+        toolChoice === 'none' && isToolSchemaHarmful
           ? undefined
           : ctx.toolSchemas.length > 0
             ? ctx.toolSchemas

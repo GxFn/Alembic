@@ -309,7 +309,10 @@ export class ContextWindow {
    */
   compactIfNeeded() {
     const [, t1, t2, t3] = this.#thresholds;
-    let usage = this.getTokenUsageRatio();
+    // 融合 session 压力: 当 session 预算紧张时，即使 per-call usage 不高，
+    // 也主动压缩以减少每轮 input token，延缓 session 累计增长。
+    // 乘以 0.8 避免 session 一进入 70% 就立刻触发 L1。
+    let usage = Math.max(this.getTokenUsageRatio(), this.#sessionPressure * 0.8);
 
     if (usage < t1 || this.#messages.length <= 4) {
       return { level: 0, removed: 0 };
