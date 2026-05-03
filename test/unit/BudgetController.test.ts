@@ -120,22 +120,21 @@ describe('BudgetController', () => {
       expect(result.sessionUsageRatio).toBeLessThan(0.9);
     });
 
-    test('returns summarize when projected >= 90%', () => {
+    test('returns compress (aggressive) when projected >= 90%', () => {
       const usage = createUsage(85_000);
-      const tracker = mockTracker();
       const ctrl = new BudgetController(
         createConfig({
           maxSessionInputTokens: 100_000,
           cumulativeUsage: usage,
-          tracker: tracker as unknown as BudgetControllerConfig['tracker'],
         })
       );
       // projected = 85000 + 10000 = 95000/100000 = 95%
+      // >90% triggers aggressive compress + L4 pending, not forced exit
 
       const result = ctrl.checkBeforeLLMCall(1);
-      expect(result.action).toBe('summarize');
+      expect(result.action).toBe('compress');
       expect(result.sessionUsageRatio).toBeGreaterThanOrEqual(0.9);
-      expect(tracker.forceTerminal).toHaveBeenCalledOnce();
+      expect(ctrl.pendingL4).toBe(true);
     });
 
     test('syncs session pressure to ContextWindow', () => {
@@ -189,7 +188,7 @@ describe('BudgetController', () => {
       // projected = 90000 + 30000 = 120000/100000 = 120%
 
       const result = ctrl.checkBeforeLLMCall(2);
-      expect(result.action).toBe('summarize');
+      expect(result.action).toBe('compress');
       expect(result.estimatedNextCallTokens).toBe(30_000);
     });
   });
@@ -520,7 +519,7 @@ describe('BudgetController', () => {
       expect(summary.forcedSummarize).toBe(false);
     });
 
-    test('records forcedSummarize flag', () => {
+    test('records forcedSummarize as false (budget no longer forces exit)', () => {
       const usage = createUsage(85_000);
       const ctrl = new BudgetController(
         createConfig({
@@ -531,7 +530,7 @@ describe('BudgetController', () => {
 
       ctrl.checkBeforeLLMCall(10);
       const summary = ctrl.getSessionSummary();
-      expect(summary.forcedSummarize).toBe(true);
+      expect(summary.forcedSummarize).toBe(false);
     });
   });
 });

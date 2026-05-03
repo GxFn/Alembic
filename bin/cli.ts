@@ -310,9 +310,9 @@ program
 
             const total = sessionStatus.tasks.length;
             const done = sessionStatus.tasks.filter(
-              (t: any) => t.status === 'done' || t.status === 'error'
+              (t: any) => t.status === 'completed' || t.status === 'failed'
             ).length;
-            const current = sessionStatus.tasks.find((t: any) => t.status === 'running');
+            const current = sessionStatus.tasks.find((t: any) => t.status === 'filling');
             const statusText = current
               ? `[${done}/${total}] 正在处理: ${current.meta?.label || current.id}`
               : `[${done}/${total}] 等待中...`;
@@ -328,14 +328,14 @@ program
               // 输出各维度结果
               if (!opts.json) {
                 const succeeded = ('tasks' in sessionStatus ? sessionStatus.tasks : []).filter(
-                  (t: any) => t.status === 'done'
+                  (t: any) => t.status === 'completed'
                 ).length;
                 const failed = ('tasks' in sessionStatus ? sessionStatus.tasks : []).filter(
-                  (t: any) => t.status === 'error'
+                  (t: any) => t.status === 'failed'
                 ).length;
                 cli.log(`\n  Results: ${succeeded} succeeded, ${failed} failed`);
                 for (const t of 'tasks' in sessionStatus ? sessionStatus.tasks : []) {
-                  const icon = t.status === 'done' ? '✅' : '❌';
+                  const icon = t.status === 'completed' ? '✅' : '❌';
                   cli.log(`    ${icon} ${t.meta?.label || t.id}`);
                 }
                 cli.blank();
@@ -458,9 +458,9 @@ program
 
             const total = sessionStatus.tasks.length;
             const done = sessionStatus.tasks.filter(
-              (t: any) => t.status === 'done' || t.status === 'error'
+              (t: any) => t.status === 'completed' || t.status === 'failed'
             ).length;
-            const current = sessionStatus.tasks.find((t: any) => t.status === 'running');
+            const current = sessionStatus.tasks.find((t: any) => t.status === 'filling');
             const statusText = current
               ? `[${done}/${total}] 正在处理: ${current.meta?.label || current.id}`
               : `[${done}/${total}] 等待中...`;
@@ -474,12 +474,12 @@ program
               waitSpinner.succeed(`AI 填充完成: ${total} 个维度`);
               if (!opts.json) {
                 const succeeded = sessionStatus.tasks.filter(
-                  (t: any) => t.status === 'done'
+                  (t: any) => t.status === 'completed'
                 ).length;
-                const failed = sessionStatus.tasks.filter((t: any) => t.status === 'error').length;
+                const failed = sessionStatus.tasks.filter((t: any) => t.status === 'failed').length;
                 cli.log(`\n  Results: ${succeeded} succeeded, ${failed} failed`);
                 for (const t of sessionStatus.tasks) {
-                  const icon = t.status === 'done' ? '✅' : '❌';
+                  const icon = t.status === 'completed' ? '✅' : '❌';
                   cli.log(`    ${icon} ${t.meta?.label || t.id}`);
                 }
                 cli.blank();

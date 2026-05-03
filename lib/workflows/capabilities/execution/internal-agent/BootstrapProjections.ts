@@ -144,7 +144,11 @@ export function projectBootstrapDimensionAgentOutput({
 
   const submitCalls = runtimeToolCalls.filter((tc: ToolCallRecord) => {
     const tool = tc?.tool || tc?.name;
-    return tool === 'knowledge';
+    if (tool !== 'knowledge') {
+      return false;
+    }
+    const args = (tc?.args || tc?.params) as Record<string, unknown> | undefined;
+    return args?.action === 'submit';
   });
   const successCount = submitCalls.filter((tc: ToolCallRecord) => {
     const res = tc?.result;
@@ -154,10 +158,14 @@ export function projectBootstrapDimensionAgentOutput({
     if (typeof res === 'string') {
       return !res.includes('rejected') && !res.includes('error');
     }
-    return (
-      (res as Record<string, unknown>).status !== 'rejected' &&
-      (res as Record<string, unknown>).status !== 'error'
-    );
+    const resObj = res as Record<string, unknown>;
+    if (resObj.error) {
+      return false;
+    }
+    if (resObj.submitted === false) {
+      return false;
+    }
+    return resObj.status !== 'rejected' && resObj.status !== 'error';
   }).length;
   const rejectedCount = submitCalls.length - successCount;
 

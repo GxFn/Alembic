@@ -170,7 +170,11 @@ export class EvidenceCollector {
    */
   processToolCall(toolCall: ToolCall, round = 0) {
     const tool = toolCall.tool || toolCall.name;
-    const args = toolCall.params || toolCall.args || {};
+    const rawArgs = toolCall.params || toolCall.args || {};
+    // V2 tool calls nest real params under args.params — flatten for uniform access
+    const nested =
+      rawArgs.params && typeof rawArgs.params === 'object' ? (rawArgs.params as ToolCallArgs) : {};
+    const args: ToolCallArgs = { ...nested, ...rawArgs };
     const result = toolCall.result;
     const hasResult = result != null && result !== '';
 
@@ -187,7 +191,7 @@ export class EvidenceCollector {
             }
             break;
           case 'graph':
-            if (args.protocolName) {
+            if (args.protocolName || (action === 'query' && args.type === 'protocol')) {
               this.#extractProtocolEvidence(args, result);
             } else {
               this.#extractClassEvidence(args, result);
@@ -231,14 +235,15 @@ export class EvidenceCollector {
 
   /** code.read — 提取代码片段（批量 result.files / 单文件 result.content） */
   #extractFileEvidence(args: ToolCallArgs, result: ToolResult) {
+    const argPath = args.path || args.filePath;
+
     // 字符串结果 — 可能是错误消息或直接内容
     if (typeof result === 'string') {
       if (this.#isErrorString(result)) {
         return;
       }
-      const filePath = args.filePath;
-      if (filePath) {
-        this.#addCodeSnippet(filePath, result, args.startLine || 1);
+      if (argPath) {
+        this.#addCodeSnippet(argPath, result, args.startLine || 1);
       }
       return;
     }
@@ -259,7 +264,7 @@ export class EvidenceCollector {
     }
 
     // 单文件: result.content
-    const filePath = result.path || result.filePath || args.filePath;
+    const filePath = result.path || result.filePath || argPath;
     if (filePath && result.content) {
       this.#addCodeSnippet(filePath, result.content, result.startLine || args.startLine || 1);
     }
@@ -319,7 +324,7 @@ export class EvidenceCollector {
       return;
     }
 
-    const className = result.className || args.className;
+    const className = result.className || args.className || args.entity;
     const filePath = result.filePath;
     if (!filePath) {
       return;
@@ -514,7 +519,7 @@ export class EvidenceCollector {
             const preview = args.filePaths.slice(0, 3).join(', ');
             return `Read ${args.filePaths.length} files: ${preview}${args.filePaths.length > 3 ? '…' : ''}`;
           }
-          return `Read ${args.filePath || '?'}`;
+          return `Read ${args.path || args.filePath || '?'}`;
         }
         if (action === 'search') {
           const pats = this.#extractSearchPatterns(args);
@@ -527,7 +532,7 @@ export class EvidenceCollector {
           return `List ${args.directory || args.path || '/'}`;
         }
         if (action === 'outline') {
-          return `Summarize ${args.filePath || '?'}`;
+          return `Summarize ${args.path || args.filePath || '?'}`;
         }
         return `code.${action}(${JSON.stringify(args).substring(0, 50)})`;
       }
@@ -535,8 +540,8 @@ export class EvidenceCollector {
         if (args.protocolName) {
           return `Inspect protocol ${args.protocolName}`;
         }
-        if (args.className) {
-          return `Inspect class ${args.className}`;
+        if (args.className || args.entity) {
+          return `Inspect class ${args.className || args.entity}`;
         }
         return `Query graph: ${(args.query || '').substring(0, 50)}`;
       case 'knowledge':

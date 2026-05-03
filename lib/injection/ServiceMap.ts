@@ -72,6 +72,7 @@ import type { KnowledgeGraphService } from '../service/knowledge/KnowledgeGraphS
 import type { KnowledgeService } from '../service/knowledge/KnowledgeService.js';
 // ── Context Types ──
 import type { RecipeExtractor } from '../service/knowledge/RecipeExtractor.js';
+import type { RecipeProductionGateway } from '../service/knowledge/RecipeProductionGateway.js';
 import type { ModuleService } from '../service/module/ModuleService.js';
 import type { CouplingAnalyzer } from '../service/panorama/CouplingAnalyzer.js';
 import type { LayerInferrer } from '../service/panorama/LayerInferrer.js';
@@ -139,6 +140,7 @@ export interface ServiceMap {
   // ═══ KnowledgeModule ═══
   confidenceRouter: ConfidenceRouter;
   knowledgeService: KnowledgeService;
+  recipeProductionGateway: RecipeProductionGateway;
   knowledgeGraphService: KnowledgeGraphService;
   codeEntityGraph: CodeEntityGraph;
   searchEngine: SearchEngine;

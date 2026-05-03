@@ -415,10 +415,23 @@ function buildQualityScores(
   const evidencedFindings = (findings || []).filter(
     (f) => f.evidence && f.evidence.length > 0
   ).length;
-  scores.evidenceScore =
-    findingCount > 0
-      ? Math.min(100, (evidencedFindings / findingCount) * 60 + findingCount * 10)
-      : 0;
+  if (findingCount > 0) {
+    scores.evidenceScore = Math.min(
+      100,
+      (evidencedFindings / findingCount) * 60 + findingCount * 10
+    );
+  } else {
+    // LLM didn't call note_finding — derive partial score from analysis text quality
+    // so a substantial analysis doesn't get zero just because note_finding wasn't used
+    const textLen = analysisText?.length || 0;
+    const hasFileRefs = uniqueFilesRead > 0;
+    scores.evidenceScore = Math.min(
+      40,
+      (textLen > 2000 ? 15 : textLen > 500 ? 8 : 0) +
+        (hasFileRefs ? 15 : 0) +
+        (snippetCount > 0 ? 10 : 0)
+    );
+  }
 
   const textLen = analysisText?.length || 0;
   const hasHeaders = /#{1,3}\s/.test(analysisText || '');

@@ -334,14 +334,16 @@ export const submitDedup = {
       return;
     }
 
-    const title = String(call.args?.title || call.args?.category || '');
+    // V2 args structure: { action: "submit", params: { title, ... } }
+    const params = (call.args?.params as Record<string, unknown>) ?? call.args ?? {};
+    const title = String(params.title || params.category || '');
     const normalizedTitle = title.toLowerCase().trim();
     if (!normalizedTitle) {
       return;
     }
 
     // trigger 去重 — 不同 title 但相同 trigger 的跨维度重复
-    const trigger = String(call.args?.trigger || '')
+    const trigger = String(params.trigger || '')
       .toLowerCase()
       .trim();
     if (trigger && sharedState.submittedTriggers?.has(trigger)) {
@@ -389,7 +391,9 @@ export const submitDedup = {
       return;
     }
 
-    const title = String(call.args?.title || call.args?.category || '');
+    // V2 args structure: { action: "submit", params: { title, ... } }
+    const params = (call.args?.params as Record<string, unknown>) ?? call.args ?? {};
+    const title = String(params.title || params.category || '');
     const normalizedTitle = title.toLowerCase().trim();
     if (!normalizedTitle) {
       return;
@@ -398,14 +402,14 @@ export const submitDedup = {
     // 提交成功 — 注册标题/trigger/指纹以防后续重复
     sharedState.submittedTitles.add(normalizedTitle);
 
-    const trigger = String(call.args?.trigger || '')
+    const trigger = String(params.trigger || '')
       .toLowerCase()
       .trim();
     if (trigger && sharedState.submittedTriggers) {
       sharedState.submittedTriggers.add(trigger);
     }
 
-    const contentObj = call.args?.content as Record<string, unknown> | undefined;
+    const contentObj = params.content as Record<string, unknown> | undefined;
     const pattern = String(contentObj?.pattern || '');
     if (pattern.length >= 30 && sharedState.submittedPatterns) {
       const fp = pattern

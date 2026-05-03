@@ -41,6 +41,7 @@ import { CodeEntityGraph } from '../../service/knowledge/CodeEntityGraph.js';
 import { ConfidenceRouter } from '../../service/knowledge/ConfidenceRouter.js';
 import { KnowledgeGraphService } from '../../service/knowledge/KnowledgeGraphService.js';
 import { KnowledgeService } from '../../service/knowledge/KnowledgeService.js';
+import { RecipeProductionGateway } from '../../service/knowledge/RecipeProductionGateway.js';
 import { SourceRefReconciler } from '../../service/knowledge/SourceRefReconciler.js';
 import { HybridRetriever } from '../../service/search/HybridRetriever.js';
 import { SearchEngine } from '../../service/search/SearchEngine.js';
@@ -329,6 +330,26 @@ export function register(c: ServiceContainer) {
     const lifecycle = ct.get('lifecycleStateMachine') as LifecycleStateMachine;
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
     return new EvolutionGateway(proposalRepo, lifecycle, knowledgeRepo);
+  });
+
+  c.singleton('recipeProductionGateway', (ct: ServiceContainer) => {
+    const knowledgeService = ct.get('knowledgeService');
+    const dataRoot = resolveDataRoot(ct) as string;
+    let consolidationAdvisor = null;
+    try {
+      consolidationAdvisor = ct.get('consolidationAdvisor');
+    } catch {
+      /* optional */
+    }
+    return new RecipeProductionGateway({
+      knowledgeService: knowledgeService as unknown as ConstructorParameters<
+        typeof RecipeProductionGateway
+      >[0]['knowledgeService'],
+      projectRoot: dataRoot,
+      consolidationAdvisor: consolidationAdvisor as unknown as ConstructorParameters<
+        typeof RecipeProductionGateway
+      >[0]['consolidationAdvisor'],
+    });
   });
 
   c.singleton('fileChangeHandler', (ct: ServiceContainer) => {

@@ -315,11 +315,11 @@ export class ExplorationTracker {
 
     // Submit 追踪
     if (toolName === 'knowledge') {
-      const status =
-        typeof result === 'object' ? (result as Record<string, unknown>)?.status : 'ok';
-      const isRejected = status === 'rejected';
-      const isError = status === 'error';
-      if (!isRejected && !isError) {
+      const resultObj = typeof result === 'object' ? (result as Record<string, unknown>) : null;
+      const hasError = resultObj?.error !== undefined;
+      const status = resultObj?.status as string | undefined;
+      const isRejected = status === 'rejected' || status === 'duplicate';
+      if (!hasError && !isRejected) {
         this.#metrics.submitCount++;
         this.#metrics.roundsSinceSubmit = 0;
       }

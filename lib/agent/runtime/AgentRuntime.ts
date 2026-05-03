@@ -194,6 +194,7 @@ export class AgentRuntime {
     this.iterationCount = 0;
     this.toolCallHistory = [];
     this.tokenUsage = { input: 0, output: 0, reasoning: 0, cacheHit: 0 };
+
     const diagnostics = DiagnosticsCollector.from(opts.diagnostics);
 
     // ── Policy: 执行前校验 ──
@@ -648,9 +649,7 @@ export class AgentRuntime {
     const forceSummaryAt = Math.max(2, Math.ceil(maxIterations * 0.8));
     const forceSummary = !tracker && ctx.iteration >= forceSummaryAt;
     let toolChoice: string | Record<string, unknown>;
-    if (tokenBudgetAction === 'summarize') {
-      toolChoice = 'none';
-    } else if (ctx.toolChoiceOverride && ctx.iteration === 1) {
+    if (ctx.toolChoiceOverride && ctx.iteration === 1) {
       toolChoice = ctx.toolChoiceOverride;
     } else if (tracker) {
       toolChoice = tracker.getToolChoice();
@@ -684,11 +683,7 @@ export class AgentRuntime {
         dynamicParts.push(wmContext);
       }
     }
-    if (tokenBudgetAction === 'summarize') {
-      dynamicParts.push(
-        '[系统提示] Token 预算即将耗尽，请停止调用工具，立即基于已有信息输出完整总结。'
-      );
-    } else if (forceSummary) {
+    if (forceSummary) {
       dynamicParts.push('[系统提示] 已进入最后阶段，请停止调用工具，基于已有信息输出总结。');
     }
     const dynamicContext = dynamicParts.length > 0 ? dynamicParts.join('\n\n') : null;

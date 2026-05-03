@@ -55,7 +55,7 @@ export interface BudgetLogger {
 }
 
 export interface PreLLMCheckResult {
-  action: 'normal' | 'compress' | 'summarize';
+  action: 'normal' | 'compress';
   estimatedNextCallTokens: number;
   sessionUsageRatio: number;
   compaction: CompactionResult;
@@ -94,7 +94,7 @@ export interface SessionBudgetSummary {
 /* ── Constants ─────────────────────────────────────────── */
 
 const COMPRESS_THRESHOLD = 0.75;
-const SUMMARIZE_THRESHOLD = 0.9;
+const AGGRESSIVE_COMPRESS_THRESHOLD = 0.9;
 const DEFAULT_ESTIMATE = 8000;
 const MIN_TOOL_CHARS = 400;
 
@@ -191,28 +191,20 @@ export class BudgetController {
       };
     }
 
-    if (ratio > SUMMARIZE_THRESHOLD) {
-      this.#logger.info(
-        `[BudgetController] ⚠ session 预检: ${usedInputTokens} used + ~${estimated} est = ${projected}/${this.#maxSessionInputTokens} (${(ratio * 100).toFixed(1)}%) → 强制 SUMMARIZE`
-      );
-      if (this.#tracker) {
-        this.#tracker.forceTerminal(`session token budget ${(ratio * 100).toFixed(0)}% projected`);
-      }
-      this.#forcedSummarize = true;
-      return {
-        action: 'summarize',
-        estimatedNextCallTokens: estimated,
-        sessionUsageRatio: ratio,
-        compaction: { level: 0, removed: 0 },
-      };
-    }
-
-    // 75%-90%: 触发激进压缩
+    // 75%+: 触发压缩 — session budget 只做压缩触发，不做终止决策
+    // 终止由 maxIterations / timeout / ExitController 负责
+    const isAggressive = ratio > AGGRESSIVE_COMPRESS_THRESHOLD;
+    const label = isAggressive ? '激进压缩' : '压缩';
     this.#logger.info(
-      `[BudgetController] ⚠ session 预检: ${usedInputTokens} used + ~${estimated} est = ${projected}/${this.#maxSessionInputTokens} (${(ratio * 100).toFixed(1)}%) → 激进压缩`
+      `[BudgetController] ⚠ session 预检: ${usedInputTokens} used + ~${estimated} est = ${projected}/${this.#maxSessionInputTokens} (${(ratio * 100).toFixed(1)}%) → ${label}`
     );
 
     const compaction = this.#runExtraCompaction();
+
+    // >90%: 标记 L4 pending 以触发 LLM-based 摘要压缩，释放更多空间
+    if (isAggressive && this.#contextWindow && !this.#pendingL4) {
+      this.#pendingL4 = true;
+    }
 
     return {
       action: 'compress',
@@ -389,15 +381,17 @@ export class BudgetController {
     const inTok = u.inputTokens || 0;
     const cacheRate = inTok > 0 ? ((u.cacheHitTokens || 0) / inTok) * 100 : 0;
     const sessionBudget = this.#maxSessionInputTokens;
-    const sessionRatio =
-      sessionBudget > 0 ? (this.#cumulativeUsage.input / sessionBudget) * 100 : 0;
+    const sessionPart =
+      sessionBudget > 0
+        ? `session=${this.#cumulativeUsage.input}/${sessionBudget} (${((this.#cumulativeUsage.input / sessionBudget) * 100).toFixed(1)}%)`
+        : `session=${this.#cumulativeUsage.input} (unlimited)`;
 
     this.#logger.info(
       `[TurnTelemetry] iter=${iteration} | ` +
         `in=${inTok} out=${u.outputTokens || 0} reasoning=${u.reasoningTokens || 0} ` +
         `cache=${u.cacheHitTokens || 0} (${cacheRate.toFixed(0)}% hit) | ` +
         `compact=L${compaction.level} | ` +
-        `session=${this.#cumulativeUsage.input}/${sessionBudget} (${sessionRatio.toFixed(1)}%)`
+        sessionPart
     );
 
     if ((u.cacheHitTokens || 0) === 0 && inTok > 1024) {

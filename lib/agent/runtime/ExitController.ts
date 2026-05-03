@@ -356,11 +356,25 @@ export function createExitController(
   const tracker = ctx.tracker;
   const stageTimeoutMs = ctx.budget?.timeoutMs ?? 0;
 
+  const stageSessionBudget = (ctx.budget?.maxSessionInputTokens as number) || 0;
+  const hasStageSessionLimit = stageSessionBudget > 0;
+
+  const boundValidate = policies.validateDuring.bind(policies);
+  const validateDuring = hasStageSessionLimit
+    ? boundValidate
+    : (stepState: StepState) => {
+        const result = boundValidate(stepState);
+        if (!result.ok && typeof result.reason === 'string' && result.reason.includes('session')) {
+          return { ok: true, action: 'continue' };
+        }
+        return result;
+      };
+
   return new ExitController({
     tracker,
     effectiveTimeoutMs: stageTimeoutMs,
     abortSignal: ctx.abortSignal,
-    validateDuring: policies.validateDuring.bind(policies),
+    validateDuring,
     skipPolicyIterCheck: !!tracker,
     loopStartTime: ctx.loopStartTime,
     maxIterations: ctx.maxIterations,

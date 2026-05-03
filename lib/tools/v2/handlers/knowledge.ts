@@ -108,6 +108,10 @@ async function handleSubmit(
     const result = await gateway.create({
       source: 'agent-tool',
       items: [item],
+      options: {
+        skipSimilarityCheck: true,
+        skipConsolidation: true,
+      },
     });
 
     if (result.created.length > 0) {
@@ -137,6 +141,12 @@ async function handleSubmit(
 
     if (result.rejected.length > 0) {
       return fail(`Rejected: ${result.rejected[0].reason}`);
+    }
+
+    if (result.blocked.length > 0) {
+      return fail(
+        `Blocked by consolidation: ${(result.blocked[0] as { title?: string }).title ?? 'unknown'}`
+      );
     }
 
     return ok({ status: 'processed', result });
