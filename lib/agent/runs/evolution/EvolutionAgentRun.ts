@@ -108,15 +108,35 @@ export function projectEvolutionAuditResult({
   iterations: number;
 }): EvolutionAuditResult {
   return {
-    proposed: countToolCalls(toolCalls, 'propose_evolution'),
-    deprecated: countToolCalls(toolCalls, 'confirm_deprecation'),
-    skipped: countToolCalls(toolCalls, 'skip_evolution'),
+    proposed: countManageOps(toolCalls, 'evolve'),
+    deprecated: countManageOps(toolCalls, 'deprecate'),
+    skipped: countManageOps(toolCalls, 'skip_evolution'),
     iterations,
     toolCalls: toolCalls.length,
     reply: reply || '',
   };
 }
 
-function countToolCalls(toolCalls: ToolCallEntry[], toolName: string) {
-  return toolCalls.filter((tc) => (tc.tool || tc.name) === toolName).length;
+/** V2: knowledge.manage(operation: X) 统计；V1 compat: 独立工具名 fallback */
+function countManageOps(toolCalls: ToolCallEntry[], operation: string) {
+  let count = 0;
+  for (const tc of toolCalls) {
+    const tool = tc.tool || tc.name;
+    if (tool === 'knowledge') {
+      const params = (tc.args?.params as Record<string, unknown>) || tc.args || {};
+      if (params.operation === operation) {
+        count++;
+      }
+    }
+    // V1 compat
+    const v1Map: Record<string, string> = {
+      evolve: 'propose_evolution',
+      deprecate: 'confirm_deprecation',
+      skip_evolution: 'skip_evolution',
+    };
+    if (tool === v1Map[operation]) {
+      count++;
+    }
+  }
+  return count;
 }

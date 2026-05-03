@@ -1262,7 +1262,7 @@ export class AgentRuntime {
 
   /** 循环退出后处理 — 强制摘要 + 构建返回值 */
   async #finalize(ctx: LoopContext) {
-    // Scan 管线: 所有结果在 toolCalls 中 (collect_scan_recipe)，不需要文本回复
+    // Scan 管线: 所有结果在 toolCalls 中 (knowledge.submit)，不需要文本回复
     // 直接跳过 forced summary，避免浪费一次 LLM 调用
     if (!ctx.lastReply && ctx.tracker?.pipelineType === 'scan') {
       const recipeCount = ctx.toolCalls.filter(

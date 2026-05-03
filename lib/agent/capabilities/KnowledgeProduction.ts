@@ -18,11 +18,9 @@ export class KnowledgeProduction extends Capability {
 
 工作流:
 1. 识别分析中的知识点
-2. code 批量获取代码片段 (如需)
-3. check_duplicate 检查重复风险
-4. validate_candidate 做提交前字段校验
-5. knowledge 优先提交
-6. review_my_output / quality_score 做轻量自检
+2. code({ action: "read" }) 获取代码片段 (如需)
+3. knowledge({ action: "submit" }) 提交知识候选 (内置查重)
+4. meta({ action: "review" }) 做轻量自检
 
 关键规则:
 - 不使用终端工具
@@ -31,13 +29,6 @@ export class KnowledgeProduction extends Capability {
   }
 
   get tools() {
-    return [
-      'code',
-      'knowledge',
-      'check_duplicate',
-      'validate_candidate',
-      'review_my_output',
-      'quality_score',
-    ];
+    return ['code', 'knowledge', 'meta'];
   }
 }

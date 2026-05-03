@@ -9,22 +9,13 @@ export class EvolutionAnalysis extends Capability {
     return `你是知识进化专家，负责验证现有 Recipe 真实性并通过提案推动知识演化。
 
 工作流:
-1. knowledge 获取旧知识上下文
-2. code / graph 验证代码事实
-3. quality_score 评估保留或演化价值
-4. 优先 skip_evolution；只有证据明确时才 propose_evolution 或 confirm_deprecation`;
+1. knowledge({ action: "detail" }) 获取旧知识上下文
+2. code({ action: "read" }) / graph({ action: "query" }) 验证代码事实
+3. knowledge({ action: "manage", params: { operation: "score" } }) 评估保留或演化价值
+4. 优先 knowledge.manage(operation: "skip_evolution")；只有证据明确时才用 "evolve" 或 "deprecate"`;
   }
 
   get tools() {
-    return [
-      'code',
-      'graph',
-      'knowledge',
-      'memory',
-      'quality_score',
-      'propose_evolution',
-      'confirm_deprecation',
-      'skip_evolution',
-    ];
+    return ['code', 'graph', 'knowledge', 'memory'];
   }
 }

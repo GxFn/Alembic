@@ -573,6 +573,24 @@ export class MemoryCoordinator {
     return this.#sessionStore || null;
   }
 
+  /** 检索前序维度的代码证据 — V2 memory.get_previous_evidence 桥接 */
+  searchEvidence(
+    query: string,
+    dimId?: string
+  ): Array<{
+    filePath: string;
+    evidence: { dimId?: string; importance?: number; finding: string };
+  }> {
+    if (!this.#sessionStore) {
+      return [];
+    }
+    try {
+      return this.#sessionStore.searchEvidence(query, dimId);
+    } catch {
+      return [];
+    }
+  }
+
   /** 获取 PersistentMemory */
   getPersistentMemory() {
     return this.#persistentMemory || null;

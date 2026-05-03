@@ -620,9 +620,9 @@ interface EvolutionToolCallRecord {
  * Evolution Gate 评估器 — 面向 PipelineStrategy gate.evaluator
  *
  * 检查 Evolution Agent 是否对所有现有 Recipe 做出了决策:
- * - evolved (knowledge with supersedes)
- * - deprecated (confirm_deprecation)
- * - skipped (skip_evolution)
+ * - evolved: knowledge.manage(operation: "evolve") 或 knowledge.submit(supersedes: ...)
+ * - deprecated: knowledge.manage(operation: "deprecate")
+ * - skipped: knowledge.manage(operation: "skip_evolution")
  *
  * 如果还有未处理的 Recipe，返回 retry 要求补充决策。
  *
@@ -640,26 +640,39 @@ export function evolutionGateEvaluator(
     .length;
   const toolCalls = source?.toolCalls || [];
 
-  // 按 recipeId 去重统计已处理 Recipe 数（跨 tool 类型去重）
   const processedIds = new Set<string>();
 
   for (const tc of toolCalls) {
     const tool = tc.tool || tc.name;
+    const args = tc.args || {};
 
-    if (tool === 'knowledge' && tc.args?.supersedes) {
-      processedIds.add(String(tc.args.supersedes));
+    // V2: knowledge({ action: "manage", params: { operation: "evolve"|"deprecate"|"skip_evolution", recipeId } })
+    if (tool === 'knowledge') {
+      const params = (args.params as Record<string, unknown>) || args;
+      const operation = params.operation as string | undefined;
+      const recipeId = params.recipeId as string | undefined;
+
+      if (
+        recipeId &&
+        (operation === 'evolve' || operation === 'deprecate' || operation === 'skip_evolution')
+      ) {
+        processedIds.add(String(recipeId));
+      }
+      // V2: knowledge.submit with supersedes
+      if (args.supersedes || params.supersedes) {
+        processedIds.add(String(args.supersedes || params.supersedes));
+      }
     }
 
-    if (tool === 'propose_evolution' && tc.args?.recipeId) {
-      processedIds.add(String(tc.args.recipeId));
+    // V1 compat: standalone tool names
+    if (tool === 'propose_evolution' && args.recipeId) {
+      processedIds.add(String(args.recipeId));
     }
-
-    if (tool === 'confirm_deprecation' && tc.args?.recipeId) {
-      processedIds.add(String(tc.args.recipeId));
+    if (tool === 'confirm_deprecation' && args.recipeId) {
+      processedIds.add(String(args.recipeId));
     }
-
-    if (tool === 'skip_evolution' && tc.args?.recipeId) {
-      processedIds.add(String(tc.args.recipeId));
+    if (tool === 'skip_evolution' && args.recipeId) {
+      processedIds.add(String(args.recipeId));
     }
   }
 

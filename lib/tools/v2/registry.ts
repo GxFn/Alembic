@@ -390,6 +390,29 @@ const MEMORY_SPEC: ToolSpec = {
       concurrency: 'parallel',
       risk: 'write',
     },
+    get_previous_evidence: {
+      summary: 'Search evidence from previous dimension analyses',
+      description:
+        'Query evidence collected by previous dimensions to avoid redundant file reads and searches. ' +
+        'Returns matching findings with file paths and importance scores.',
+      params: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search query (file name, class name, pattern name, keyword)',
+          },
+          dimId: {
+            type: 'string',
+            description: 'Filter by dimension ID (optional, default: all previous dimensions)',
+          },
+        },
+        required: ['query'],
+      },
+      handler: async (p, ctx) => handleMemory('get_previous_evidence', p, ctx),
+      concurrency: 'parallel',
+      risk: 'read-only',
+    },
   },
 };
 

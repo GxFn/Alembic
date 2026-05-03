@@ -164,7 +164,7 @@ export class NudgeGenerator {
       // Scan 管线: 纯文本总结
       if (pipelineType === 'scan') {
         return (
-          `你已通过 collect_scan_recipe 提交了 ${submitCount} 个知识候选。` +
+          `你已通过 knowledge({ action: "submit" }) 提交了 ${submitCount} 个知识候选。` +
           `请**停止调用工具**，直接输出你的分析总结（Markdown 格式）。\n` +
           `⚠️ 不要再调用任何工具，直接输出文本。`
         );
@@ -239,7 +239,7 @@ export class NudgeGenerator {
         type: 'force_exit',
         text:
           `⚠️ **轮次耗尽** (${m.iteration}/${b.maxIterations})。你必须**立即停止工具调用**。\n\n` +
-          `已通过 collect_scan_recipe 提交了 ${submitCount} 个知识候选。` +
+          `已通过 knowledge({ action: "submit" }) 提交了 ${submitCount} 个知识候选。` +
           `请直接输出你的分析总结（Markdown 格式），列出已发现和未覆盖的关键模式。\n` +
           `⛔ 不要再调用任何工具，直接输出文本。`,
       };

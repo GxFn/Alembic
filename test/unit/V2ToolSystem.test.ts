@@ -58,13 +58,13 @@ describe('V2 Registry', () => {
     }
   });
 
-  test('total 18 actions', () => {
+  test('total 19 actions', () => {
     let count = 0;
     for (const spec of Object.values(TOOL_REGISTRY)) {
       count += Object.keys(spec.actions).length;
     }
-    // code:5 + terminal:1 + knowledge:4 + graph:2 + memory:3 + meta:3 = 18
-    expect(count).toBe(18);
+    // code:5 + terminal:1 + knowledge:4 + graph:2 + memory:4 + meta:3 = 19
+    expect(count).toBe(19);
   });
 
   test('every action has required fields', () => {
@@ -360,6 +360,46 @@ describe('memory (save + recall)', () => {
     );
     expect(result.ok).toBe(false);
     expect(result.error).toContain('finding');
+  });
+
+  test('get_previous_evidence bridges to memoryCoordinator.searchEvidence', async () => {
+    const mockCoordinator = {
+      noteFinding: vi.fn().mockReturnValue('ok'),
+      searchEvidence: vi.fn().mockReturnValue([
+        {
+          filePath: 'src/Foo.ts',
+          evidence: { dimId: 'arch', importance: 8, finding: 'Singleton pattern' },
+        },
+      ]),
+    };
+    const ctx = makeCtx({ memoryCoordinator: mockCoordinator });
+    const result = await router.execute(
+      { tool: 'memory', action: 'get_previous_evidence', params: { query: 'Foo' } },
+      ctx
+    );
+    expect(result.ok).toBe(true);
+    expect(mockCoordinator.searchEvidence).toHaveBeenCalledWith('Foo', undefined);
+    const data = result.data as { count: number };
+    expect(data.count).toBe(1);
+  });
+
+  test('get_previous_evidence returns empty when no coordinator', async () => {
+    const result = await router.execute(
+      { tool: 'memory', action: 'get_previous_evidence', params: { query: 'Bar' } },
+      makeCtx()
+    );
+    expect(result.ok).toBe(true);
+    const data = result.data as { count: number };
+    expect(data.count).toBe(0);
+  });
+
+  test('get_previous_evidence requires query param', async () => {
+    const result = await router.execute(
+      { tool: 'memory', action: 'get_previous_evidence', params: {} },
+      makeCtx()
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('query');
   });
 });
 

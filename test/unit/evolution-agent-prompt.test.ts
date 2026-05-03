@@ -133,13 +133,13 @@ describe('buildEvolverPrompt', () => {
   it('should include proposal-based decision instructions', () => {
     const prompt = buildEvolverPrompt(null, null, makeContext());
     expect(prompt).toContain('决策指令');
-    // Proposal-based: propose_evolution instead of submit_knowledge
-    expect(prompt).toContain('propose_evolution');
-    expect(prompt).toContain('confirm_deprecation');
-    expect(prompt).toContain('skip_evolution');
+    // V2: unified knowledge.manage with operation params
+    expect(prompt).toContain('knowledge({ action: "manage"');
+    expect(prompt).toContain('"operation": "evolve"');
+    expect(prompt).toContain('"operation": "deprecate"');
+    expect(prompt).toContain('"operation": "skip_evolution"');
     // Should NOT reference submit_knowledge (proposal approach)
     expect(prompt).not.toContain('submit_knowledge');
-    expect(prompt).not.toContain('supersedes');
   });
 
   it('should include structured verification workflow', () => {
@@ -226,11 +226,11 @@ describe('EVOLVER_SYSTEM_PROMPT', () => {
     expect(EVOLVER_SYSTEM_PROMPT.length).toBeGreaterThan(100);
   });
 
-  it('should mention proposal-based decision tools', () => {
-    expect(EVOLVER_SYSTEM_PROMPT).toContain('propose_evolution');
-    expect(EVOLVER_SYSTEM_PROMPT).toContain('confirm_deprecation');
-    expect(EVOLVER_SYSTEM_PROMPT).toContain('skip_evolution');
-    // Should NOT reference submit_knowledge
+  it('should mention V2 knowledge.manage decision operations', () => {
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('knowledge({ action: "manage"');
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('"evolve"');
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('"deprecate"');
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('"skip_evolution"');
     expect(EVOLVER_SYSTEM_PROMPT).not.toContain('submit_knowledge');
   });
 
@@ -250,24 +250,17 @@ describe('EVOLVER_SYSTEM_PROMPT', () => {
 });
 
 describe('EVOLVER_TOOLS', () => {
-  it('should contain the full verification and decision toolset', () => {
-    expect(EVOLVER_TOOLS).toEqual([
-      'code',
-      'graph',
-      'knowledge',
-      'quality_score',
-      'propose_evolution',
-      'confirm_deprecation',
-      'skip_evolution',
-    ]);
+  it('should contain V2 resource-oriented tools only', () => {
+    expect(EVOLVER_TOOLS).toEqual(['code', 'graph', 'knowledge']);
   });
 
-  it('should include proposal-based tools (no submit_knowledge)', () => {
+  it('should include knowledge (for manage operations) but not old standalone tools', () => {
     expect(EVOLVER_TOOLS).toContain('code');
     expect(EVOLVER_TOOLS).toContain('graph');
-    expect(EVOLVER_TOOLS).toContain('propose_evolution');
-    expect(EVOLVER_TOOLS).toContain('confirm_deprecation');
-    expect(EVOLVER_TOOLS).toContain('skip_evolution');
+    expect(EVOLVER_TOOLS).toContain('knowledge');
+    expect(EVOLVER_TOOLS).not.toContain('propose_evolution');
+    expect(EVOLVER_TOOLS).not.toContain('confirm_deprecation');
+    expect(EVOLVER_TOOLS).not.toContain('skip_evolution');
     expect(EVOLVER_TOOLS).not.toContain('submit_knowledge');
   });
 });

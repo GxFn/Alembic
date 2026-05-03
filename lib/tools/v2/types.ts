@@ -163,7 +163,7 @@ export interface CapabilityV2Def {
 /*  DI 接口 (Lightweight)                                              */
 /* ------------------------------------------------------------------ */
 
-/** MemoryCoordinator 最小接口 — memory.note_finding 通过此接口写入 ActiveContext */
+/** MemoryCoordinator 最小接口 — memory 工具通过此接口桥接 Agent 记忆系统 */
 export interface MemoryCoordinatorLike {
   noteFinding(
     finding: string,
@@ -172,6 +172,15 @@ export interface MemoryCoordinatorLike {
     round: number,
     scopeId?: string
   ): string;
+
+  /** 检索前序维度的代码证据 — get_previous_evidence 桥接 */
+  searchEvidence?(
+    query: string,
+    dimId?: string
+  ): Array<{
+    filePath: string;
+    evidence: { dimId?: string; importance?: number; finding: string };
+  }>;
 }
 
 /** DeltaCache 最小接口 */
