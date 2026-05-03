@@ -146,11 +146,13 @@ export function resolveIncrementalSkippedDimensions({
   isIncremental,
   incrementalPlan,
   activeDimIds,
+  forceExecuteDimIds = [],
   emitter,
 }: {
   isIncremental?: boolean | null;
   incrementalPlan?: IncrementalPlan | null;
   activeDimIds: string[];
+  forceExecuteDimIds?: string[];
   emitter: BootstrapEventEmitter;
 }) {
   const incrementalSkippedDims: string[] = [];
@@ -159,7 +161,11 @@ export function resolveIncrementalSkippedDimensions({
   }
 
   const affected = new Set(incrementalPlan.affectedDimensions);
+  const forceExecute = new Set(forceExecuteDimIds);
   for (const dimId of activeDimIds) {
+    if (forceExecute.has(dimId)) {
+      continue;
+    }
     if (!affected.has(dimId) && incrementalPlan.skippedDimensions.includes(dimId)) {
       incrementalSkippedDims.push(dimId);
       emitter.emitDimensionComplete(dimId, {

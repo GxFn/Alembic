@@ -26,6 +26,7 @@ export async function persistWorkflowResult({
   candidateResults,
   skillResults,
   consolidationResult,
+  completionSummary,
   skippedDims,
   incrementalSkippedDims,
   isIncremental,
@@ -44,6 +45,7 @@ export async function persistWorkflowResult({
     candidateResults,
     skillResults,
     consolidationResult,
+    completionSummary,
     skippedDims,
     incrementalSkippedDims,
     isIncremental,
@@ -52,28 +54,7 @@ export async function persistWorkflowResult({
     concurrency,
   });
 
-  const report = await writeWorkflowReport({
-    ctx,
-    dataRoot,
-    sessionId,
-    projectRoot,
-    projectInfo,
-    dimensionStats,
-    candidateResults,
-    skillResults,
-    consolidationResult,
-    skippedDims,
-    incrementalSkippedDims,
-    isIncremental,
-    incrementalPlan,
-    totalTimeMs,
-    totalTokenUsage,
-    totalToolCalls,
-  });
-
-  await clearDimensionCheckpoints(dataRoot);
-
-  const snapshotId = saveWorkflowSnapshot({
+  const snapshot = saveWorkflowSnapshot({
     ctx,
     projectRoot,
     sessionId,
@@ -88,7 +69,37 @@ export async function persistWorkflowResult({
     createFileDiffPlanner,
   });
 
-  return { totalTimeMs, totalTokenUsage, totalToolCalls, report, snapshotId };
+  const report = await writeWorkflowReport({
+    ctx,
+    dataRoot,
+    sessionId,
+    projectRoot,
+    projectInfo,
+    dimensionStats,
+    candidateResults,
+    skillResults,
+    consolidationResult,
+    completionSummary,
+    snapshotSummary: snapshot,
+    skippedDims,
+    incrementalSkippedDims,
+    isIncremental,
+    incrementalPlan,
+    totalTimeMs,
+    totalTokenUsage,
+    totalToolCalls,
+  });
+
+  await clearDimensionCheckpoints(dataRoot);
+
+  return {
+    totalTimeMs,
+    totalTokenUsage,
+    totalToolCalls,
+    report,
+    snapshotId: snapshot.id,
+    snapshot,
+  };
 }
 
 export function summarizeWorkflowDimensionStats(dimensionStats: Record<string, DimensionStat>) {
@@ -113,6 +124,7 @@ function logBootstrapSummary({
   candidateResults,
   skillResults,
   consolidationResult,
+  completionSummary,
   skippedDims,
   incrementalSkippedDims,
   isIncremental,
@@ -127,6 +139,9 @@ function logBootstrapSummary({
   skillResults: import('#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js').SkillResults;
   consolidationResult:
     | import('#workflows/capabilities/persistence/WorkflowReportTypes.js').WorkflowReportConsolidationResult
+    | null;
+  completionSummary?:
+    | import('#workflows/capabilities/completion/WorkflowCompletionTypes.js').WorkflowCompletionSummary
     | null;
   skippedDims: string[];
   incrementalSkippedDims: string[];
@@ -145,6 +160,9 @@ function logBootstrapSummary({
       `  Skills: ${skillResults.created} created, ${skillResults.failed} failed`,
       consolidationResult
         ? `  Semantic Memory: +${consolidationResult.total.added} ADD, ~${consolidationResult.total.updated} UPDATE, ⊕${consolidationResult.total.merged} MERGE`
+        : '',
+      completionSummary
+        ? `  Completion: ${completionSummary.mode}/${completionSummary.isolation}`
         : '',
       `  Time: ${totalTimeMs}ms (${(totalTimeMs / 1000).toFixed(1)}s)`,
       `  Mode: ${enableParallel ? `parallel (concurrency=${concurrency})` : 'serial'}`,

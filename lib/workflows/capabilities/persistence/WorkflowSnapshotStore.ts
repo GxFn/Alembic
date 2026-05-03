@@ -5,7 +5,10 @@ import type {
   CandidateResults,
   DimensionStat,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import type { WorkflowResultPersistenceContext } from '#workflows/capabilities/persistence/WorkflowReportTypes.js';
+import type {
+  WorkflowResultPersistenceContext,
+  WorkflowSnapshotSummary,
+} from '#workflows/capabilities/persistence/WorkflowReportTypes.js';
 import { FileDiffPlanner } from '#workflows/capabilities/project-intelligence/FileDiffPlanner.js';
 
 const logger = Logger.getInstance();
@@ -41,34 +44,43 @@ export function saveWorkflowSnapshot({
   isIncremental,
   incrementalPlan,
   createFileDiffPlanner,
-}: SaveWorkflowSnapshotOptions) {
+}: SaveWorkflowSnapshotOptions): WorkflowSnapshotSummary {
   try {
     const db = ctx.container.get('database');
-    if (db && allFiles) {
-      const fileDiffPlanner = createFileDiffPlanner(db, projectRoot);
-      const snapshotId = fileDiffPlanner.saveSnapshot({
-        sessionId,
-        allFiles,
-        dimensionStats,
-        episodicMemory: sessionStore as unknown as Parameters<
-          FileDiffPlanner['saveSnapshot']
-        >[0]['episodicMemory'],
-        meta: {
-          durationMs: totalTimeMs,
-          candidateCount: candidateResults.created,
-          primaryLang,
-        },
-        plan: isIncremental ? incrementalPlan || null : null,
-      });
-      logger.info(`[Insight-v3] 📸 Snapshot saved: ${snapshotId}`);
-      return snapshotId;
+    if (!db) {
+      return { status: 'skipped', id: null, reason: 'database unavailable' };
     }
+    if (!allFiles) {
+      return { status: 'skipped', id: null, reason: 'file list unavailable' };
+    }
+
+    const fileDiffPlanner = createFileDiffPlanner(db, projectRoot);
+    const snapshotId = fileDiffPlanner.saveSnapshot({
+      sessionId,
+      allFiles,
+      dimensionStats,
+      episodicMemory: sessionStore as unknown as Parameters<
+        FileDiffPlanner['saveSnapshot']
+      >[0]['episodicMemory'],
+      meta: {
+        durationMs: totalTimeMs,
+        candidateCount: candidateResults.created,
+        primaryLang,
+      },
+      plan: isIncremental ? incrementalPlan || null : null,
+    });
+    logger.info(`[Insight-v3] 📸 Snapshot saved: ${snapshotId}`);
+    return {
+      status: 'saved',
+      id: snapshotId,
+      fileCount: allFiles.length,
+      dimensionCount: Object.keys(dimensionStats).length,
+    };
   } catch (snapErr: unknown) {
-    logger.warn(
-      `[Insight-v3] Snapshot save failed (non-blocking): ${snapErr instanceof Error ? snapErr.message : String(snapErr)}`
-    );
+    const reason = snapErr instanceof Error ? snapErr.message : String(snapErr);
+    logger.warn(`[Insight-v3] Snapshot save failed (non-blocking): ${reason}`);
+    return { status: 'failed', id: null, reason };
   }
-  return null;
 }
 
 export function createDefaultFileDiffPlanner(db: unknown, projectRoot: string) {

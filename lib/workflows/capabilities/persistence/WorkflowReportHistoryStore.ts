@@ -26,6 +26,46 @@ export function buildWorkflowReportSummary(report: WorkflowReport) {
   };
 }
 
+export function buildWorkflowReportArtifactManifest(report: WorkflowReport) {
+  const sessionId = getReportSessionId(report);
+  const terminal = report.terminal as
+    | {
+        enabled?: boolean;
+        commands?: unknown[];
+        transcriptRefs?: unknown[];
+      }
+    | undefined;
+  const transcriptRefs = Array.isArray(terminal?.transcriptRefs)
+    ? terminal.transcriptRefs.filter(
+        (ref): ref is string => typeof ref === 'string' && ref.trim().length > 0
+      )
+    : [];
+  return {
+    version: '1.0.0',
+    sessionId,
+    createdAt: new Date().toISOString(),
+    report: {
+      latest: 'bootstrap-report.json',
+      history: sessionId ? `bootstrap-reports/${sessionId}.json` : null,
+    },
+    snapshot: report.snapshot ?? {
+      status: 'skipped',
+      id: null,
+      reason: 'snapshot result not recorded',
+    },
+    terminal: {
+      enabled: terminal?.enabled === true,
+      commandCount: Array.isArray(terminal?.commands) ? terminal.commands.length : 0,
+      transcriptRefs,
+    },
+    artifacts: transcriptRefs.map((ref) => ({ kind: 'terminal-transcript', ref })),
+    notes:
+      transcriptRefs.length > 0
+        ? []
+        : ['No terminal transcript artifacts were captured for this session.'],
+  };
+}
+
 export async function writeWorkflowReportHistoryWithWriteZone(
   writeZone: import('#infra/io/WriteZone.js').WriteZone,
   report: WorkflowReport
@@ -37,6 +77,10 @@ export async function writeWorkflowReportHistoryWithWriteZone(
   await writeZone.writeFileAsync(
     writeZone.runtime(path.join('bootstrap-reports', `${sessionId}.json`)),
     JSON.stringify(report, null, 2)
+  );
+  await writeZone.writeFileAsync(
+    writeZone.runtime(path.join('bootstrap-reports', 'artifacts', sessionId, 'manifest.json')),
+    JSON.stringify(buildWorkflowReportArtifactManifest(report), null, 2)
   );
   const indexPath = writeZone.runtime(path.join('bootstrap-reports', 'index.json'));
   const existing = await readJsonFile<{ reports?: Array<Record<string, unknown>> }>(
@@ -58,8 +102,14 @@ export async function writeWorkflowReportHistory(reportDir: string, report: Work
     return;
   }
   const historyDir = path.join(reportDir, 'bootstrap-reports');
+  const artifactDir = path.join(historyDir, 'artifacts', sessionId);
   await fs.mkdir(historyDir, { recursive: true });
+  await fs.mkdir(artifactDir, { recursive: true });
   await fs.writeFile(path.join(historyDir, `${sessionId}.json`), JSON.stringify(report, null, 2));
+  await fs.writeFile(
+    path.join(artifactDir, 'manifest.json'),
+    JSON.stringify(buildWorkflowReportArtifactManifest(report), null, 2)
+  );
 
   const indexPath = path.join(historyDir, 'index.json');
   const existing = await readJsonFile<{ reports?: Array<Record<string, unknown>> }>(indexPath);

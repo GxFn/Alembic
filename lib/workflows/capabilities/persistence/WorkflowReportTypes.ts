@@ -1,6 +1,9 @@
 import type { SessionStore } from '#agent/memory/SessionStore.js';
 import type { BootstrapFile, IncrementalPlan } from '#types/workflows.js';
-import type { WorkflowSemanticMemoryConsolidationResult } from '#workflows/capabilities/completion/WorkflowCompletionTypes.js';
+import type {
+  WorkflowCompletionSummary,
+  WorkflowSemanticMemoryConsolidationResult,
+} from '#workflows/capabilities/completion/WorkflowCompletionTypes.js';
 import type {
   CandidateResults,
   DimensionStat,
@@ -20,8 +23,20 @@ export interface WorkflowReport {
   checkpoints: { restored: string[] };
   incremental: Record<string, unknown> | null;
   semanticMemory: Record<string, unknown> | null;
+  completion?: WorkflowCompletionSummary | null;
+  snapshot?: WorkflowSnapshotSummary | null;
   codeEntityGraph?: Record<string, unknown>;
   [key: string]: unknown;
+}
+
+export type WorkflowSnapshotStatus = 'saved' | 'skipped' | 'failed';
+
+export interface WorkflowSnapshotSummary {
+  status: WorkflowSnapshotStatus;
+  id: string | null;
+  reason?: string;
+  fileCount?: number;
+  dimensionCount?: number;
 }
 
 export interface WorkflowResultPersistenceContext {
@@ -43,6 +58,7 @@ export interface PersistWorkflowResultOptions {
   candidateResults: CandidateResults;
   skillResults: SkillResults;
   consolidationResult: WorkflowReportConsolidationResult | null;
+  completionSummary?: WorkflowCompletionSummary | null;
   skippedDims: string[];
   incrementalSkippedDims: string[];
   isIncremental?: boolean | null;
@@ -62,4 +78,5 @@ export interface WorkflowResultPersistenceResult {
   totalToolCalls: number;
   report: WorkflowReport | null;
   snapshotId: string | null;
+  snapshot: WorkflowSnapshotSummary;
 }

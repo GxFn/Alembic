@@ -7,6 +7,7 @@ import type {
   CandidateResults,
   SkillResults,
 } from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
+import { writeWorkflowReportHistory } from '../../lib/workflows/capabilities/persistence/WorkflowReportHistoryStore.js';
 import { buildWorkflowReport } from '../../lib/workflows/capabilities/persistence/WorkflowReportWriter.js';
 import {
   persistWorkflowResult,
@@ -73,6 +74,25 @@ describe('WorkflowResultPersistence', () => {
         total: { added: 1, updated: 2, merged: 3, skipped: 4 },
         durationMs: 12,
       },
+      completionSummary: {
+        mode: 'bootstrap',
+        isolation: 'full-completion',
+        delivery: { status: 'completed', verification: null },
+        wiki: { status: 'scheduled' },
+        semanticMemory: {
+          status: 'completed',
+          result: {
+            total: { added: 1, updated: 2, merged: 3, skipped: 4 },
+            durationMs: 12,
+          },
+        },
+      },
+      snapshotSummary: {
+        status: 'saved',
+        id: 'snapshot-1',
+        fileCount: 10,
+        dimensionCount: 1,
+      },
       skippedDims: ['api'],
       incrementalSkippedDims: ['ui'],
       isIncremental: true,
@@ -94,6 +114,25 @@ describe('WorkflowResultPersistence', () => {
         diff: { added: 1, modified: 1, deleted: 0, unchanged: 1 },
       },
       semanticMemory: { added: 1, updated: 2, merged: 3, skipped: 4, durationMs: 12 },
+      completion: {
+        mode: 'bootstrap',
+        isolation: 'full-completion',
+        delivery: { status: 'completed', verification: null },
+        wiki: { status: 'scheduled' },
+        semanticMemory: {
+          status: 'completed',
+          result: {
+            total: { added: 1, updated: 2, merged: 3, skipped: 4 },
+            durationMs: 12,
+          },
+        },
+      },
+      snapshot: {
+        status: 'saved',
+        id: 'snapshot-1',
+        fileCount: 10,
+        dimensionCount: 1,
+      },
       dimensions: {
         api: {
           candidatesSubmitted: 2,
@@ -106,6 +145,39 @@ describe('WorkflowResultPersistence', () => {
           qualityGate: { action: 'pass' },
         },
       },
+    });
+  });
+
+  test('reports rescan finalizer isolation explicitly', () => {
+    const report = buildWorkflowReport({
+      projectInfo: { name: 'Alembic', fileCount: 10, lang: 'ts' },
+      dimensionStats: {},
+      candidateResults,
+      skillResults,
+      consolidationResult: null,
+      completionSummary: {
+        mode: 'rescan',
+        isolation: 'pipeline-isolation',
+        reason:
+          'rescan skips delivery/wiki/semantic memory to avoid rebuilding downstream artifacts',
+        delivery: { status: 'skipped', verification: null },
+        wiki: { status: 'skipped' },
+        semanticMemory: { status: 'skipped', result: null },
+      },
+      skippedDims: [],
+      incrementalSkippedDims: [],
+      totalTimeMs: 1234,
+      totalTokenUsage: { input: 1, output: 2 },
+      totalToolCalls: 0,
+    });
+
+    expect(report.semanticMemory).toBeNull();
+    expect(report.completion).toMatchObject({
+      mode: 'rescan',
+      isolation: 'pipeline-isolation',
+      delivery: { status: 'skipped' },
+      wiki: { status: 'skipped' },
+      semanticMemory: { status: 'skipped' },
     });
   });
 
@@ -231,17 +303,92 @@ describe('WorkflowResultPersistence', () => {
     });
 
     expect(result.snapshotId).toBe('snapshot-1');
+    expect(result.snapshot).toMatchObject({ status: 'saved', id: 'snapshot-1' });
     expect(result.totalTokenUsage).toEqual({ input: 2, output: 3 });
-    expect(writeFileAsync).toHaveBeenCalledWith(
-      'runtime:bootstrap-report.json',
-      expect.stringContaining('"version": "2.7.0"')
+    const latestReportCall = writeFileAsync.mock.calls.find(
+      ([target]) => target === 'runtime:bootstrap-report.json'
     );
+    expect(latestReportCall).toBeTruthy();
+    const latestReport = JSON.parse(String(latestReportCall?.[1]));
+    expect(latestReport.snapshot).toMatchObject({ status: 'saved', id: 'snapshot-1' });
+    const manifestCall = writeFileAsync.mock.calls.find(
+      ([target]) => target === 'runtime:bootstrap-reports/artifacts/session-1/manifest.json'
+    );
+    expect(manifestCall).toBeTruthy();
+    const manifest = JSON.parse(String(manifestCall?.[1]));
+    expect(manifest).toMatchObject({
+      sessionId: 'session-1',
+      snapshot: { status: 'saved', id: 'snapshot-1' },
+      terminal: { enabled: false, commandCount: 0 },
+    });
     expect(saveSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'session-1',
         meta: expect.objectContaining({ candidateCount: 2, primaryLang: 'ts' }),
       })
     );
+
+    await fs.rm(dataRoot, { recursive: true, force: true });
+  });
+
+  test('writes valid report history index and per-session artifact manifests', async () => {
+    const dataRoot = await fs.mkdtemp(path.join(process.cwd(), '.tmp-bootstrap-history-'));
+    const reportDir = path.join(dataRoot, '.asd');
+    const reportA = buildWorkflowReport({
+      sessionId: 'session-a',
+      projectInfo: { name: 'Alembic', fileCount: 1, lang: 'ts' },
+      dimensionStats: {},
+      candidateResults,
+      skillResults,
+      consolidationResult: null,
+      snapshotSummary: { status: 'skipped', id: null, reason: 'database unavailable' },
+      skippedDims: [],
+      incrementalSkippedDims: [],
+      totalTimeMs: 1,
+      totalTokenUsage: { input: 0, output: 0 },
+      totalToolCalls: 0,
+    });
+    const reportB = buildWorkflowReport({
+      sessionId: 'session-b',
+      projectInfo: { name: 'Alembic', fileCount: 2, lang: 'ts' },
+      dimensionStats: {},
+      candidateResults,
+      skillResults,
+      consolidationResult: null,
+      snapshotSummary: {
+        status: 'saved',
+        id: 'snapshot-b',
+        fileCount: 2,
+        dimensionCount: 0,
+      },
+      skippedDims: [],
+      incrementalSkippedDims: [],
+      totalTimeMs: 2,
+      totalTokenUsage: { input: 0, output: 0 },
+      totalToolCalls: 0,
+    });
+
+    await writeWorkflowReportHistory(reportDir, reportA);
+    await writeWorkflowReportHistory(reportDir, reportB);
+    await writeWorkflowReportHistory(reportDir, reportA);
+
+    const index = JSON.parse(
+      await fs.readFile(path.join(reportDir, 'bootstrap-reports', 'index.json'), 'utf8')
+    );
+    expect(index.reports.map((entry: { sessionId: string }) => entry.sessionId)).toEqual([
+      'session-a',
+      'session-b',
+    ]);
+    const manifest = JSON.parse(
+      await fs.readFile(
+        path.join(reportDir, 'bootstrap-reports', 'artifacts', 'session-b', 'manifest.json'),
+        'utf8'
+      )
+    );
+    expect(manifest).toMatchObject({
+      sessionId: 'session-b',
+      snapshot: { status: 'saved', id: 'snapshot-b' },
+    });
 
     await fs.rm(dataRoot, { recursive: true, force: true });
   });

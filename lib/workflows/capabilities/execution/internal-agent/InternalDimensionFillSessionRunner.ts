@@ -16,6 +16,11 @@ import {
   type DimensionStat,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 import {
+  applyBootstrapDimensionAdmissions,
+  type BootstrapDimensionAdmissionResult,
+  resolveBootstrapDimensionAdmissions,
+} from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionAdmission.js';
+import {
   type BootstrapDimensionPlan,
   createBootstrapDimensionRuntimeInput,
   resolveBootstrapDimensionPlan as resolveBootstrapDimensionPlanData,
@@ -28,11 +33,6 @@ import { prepareBootstrapRescanState } from '#workflows/capabilities/execution/i
 import type { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
 import { buildBootstrapSessionExecutionInput } from '#workflows/capabilities/execution/internal-agent/BootstrapSessionExecutionBuilder.js';
 import type { InternalDimensionFillPreparation } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillPreparation.js';
-import {
-  applyRestoredDimensionState,
-  resolveIncrementalSkippedDimensions,
-  restoreCheckpointDimensions,
-} from '#workflows/capabilities/persistence/DimensionCheckpoint.js';
 import { TierScheduler } from '#workflows/capabilities/planning/dimensions/TierScheduler.js';
 
 const logger = Logger.getInstance();
@@ -47,6 +47,7 @@ export interface InternalDimensionFillSessionResult {
   dimensionCandidates: Record<string, DimensionCandidateData>;
   dimensionStats: Record<string, DimensionStat>;
   bootstrapDedup: { count: number; clear(): void };
+  admissions: BootstrapDimensionAdmissionResult;
   enableParallel: boolean;
   concurrency: number;
 }
@@ -63,21 +64,6 @@ export async function runInternalDimensionAgentSession({
   const { enableParallel, concurrency } = resolveInternalDimensionExecutionConcurrency();
   const scheduler = new TierScheduler();
   const activeDimIds = preparation.dimensions.map((dimension: DimensionDef) => dimension.id);
-  const incrementalSkippedDims = resolveIncrementalSkippedDimensions({
-    isIncremental: preparation.isIncremental,
-    incrementalPlan: preparation.incrementalPlan,
-    activeDimIds,
-    emitter: preparation.emitter,
-  });
-
-  logger.info(
-    `[Insight-v3] Active dimensions: [${activeDimIds.join(', ')}], concurrency=${enableParallel ? concurrency : 1}${preparation.isIncremental ? `, incremental skip: [${incrementalSkippedDims.join(', ')}]` : ''}`
-  );
-
-  const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
-  const dimensionCandidates: Record<string, DimensionCandidateData> = {};
-  const dimensionStats: Record<string, DimensionStat> = {};
-
   const {
     globalSubmittedTitles,
     globalSubmittedPatterns,
@@ -89,24 +75,25 @@ export async function runInternalDimensionAgentSession({
     evolutionPrescreen: preparation.evolutionPrescreen,
     executionDecisions: preparation.rescanExecutionDecisions,
   });
-  const checkpointRestoreDimIds = rescanContext ? [] : activeDimIds;
-  if (rescanContext && activeDimIds.length > 0) {
-    logger.info(
-      `[Insight-v3] Rescan mode: checkpoint restore disabled for active dimensions [${activeDimIds.join(', ')}]`
-    );
-  }
+  const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
+  const dimensionCandidates: Record<string, DimensionCandidateData> = {};
+  const dimensionStats: Record<string, DimensionStat> = {};
 
-  const { completedCheckpoints, skippedDims } = await restoreCheckpointDimensions({
+  const admissions = await resolveBootstrapDimensionAdmissions({
     dataRoot: preparation.dataRoot,
-    activeDimIds: checkpointRestoreDimIds,
+    activeDimIds,
+    isIncremental: preparation.isIncremental,
+    incrementalPlan: preparation.incrementalPlan,
+    rescanContext,
     dimContext: runtime.dimContext,
     sessionStore: runtime.sessionStore,
     emitter: preparation.emitter,
   });
-  applyRestoredDimensionState({
-    incrementalSkippedDims,
-    checkpointSkippedDims: skippedDims,
-    completedCheckpoints,
+  logger.info(
+    `[Insight-v3] Active dimensions: [${activeDimIds.join(', ')}], concurrency=${enableParallel ? concurrency : 1}${preparation.isIncremental ? `, incremental skip: [${admissions.incrementalSkippedDims.join(', ')}]` : ''}`
+  );
+  applyBootstrapDimensionAdmissions({
+    admissions,
     sessionStore: runtime.sessionStore,
     dimensionStats,
     candidateResults,
@@ -222,7 +209,7 @@ export async function runInternalDimensionAgentSession({
     return consumeBootstrapSessionResultSideEffects({
       parentRunResult,
       activeDimIds,
-      skippedDimIds: [...incrementalSkippedDims, ...skippedDims],
+      skippedDimIds: admissions.skippedDimIds,
       durationMs,
       sessionStore: runtime.sessionStore,
       dimensionStats,
@@ -234,7 +221,7 @@ export async function runInternalDimensionAgentSession({
   const { input: bootstrapSessionInput } = buildBootstrapSessionExecutionInput({
     sessionId: preparation.sessionId,
     activeDimIds,
-    skippedDimIds: [...incrementalSkippedDims, ...skippedDims],
+    skippedDimIds: admissions.skippedDimIds,
     concurrency,
     primaryLang: preparation.primaryLang,
     projectLang: runtime.projectInfo.lang || null,
@@ -262,12 +249,13 @@ export async function runInternalDimensionAgentSession({
 
   return {
     activeDimIds,
-    incrementalSkippedDims,
-    skippedDims,
+    incrementalSkippedDims: admissions.incrementalSkippedDims,
+    skippedDims: admissions.checkpointSkippedDims,
     candidateResults,
     dimensionCandidates,
     dimensionStats,
     bootstrapDedup,
+    admissions,
     enableParallel,
     concurrency,
   };

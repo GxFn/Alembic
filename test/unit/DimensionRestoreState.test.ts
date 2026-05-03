@@ -69,6 +69,28 @@ describe('DimensionRestoreState', () => {
     });
   });
 
+  test('does not incremental-skip dimensions forced by rescan execution', () => {
+    const emitDimensionComplete = vi.fn();
+
+    const skipped = resolveIncrementalSkippedDimensions({
+      isIncremental: true,
+      incrementalPlan: makePlan({
+        affectedDimensions: [],
+        skippedDimensions: ['agent-guidelines', 'ui'],
+      }),
+      activeDimIds: ['agent-guidelines', 'ui'],
+      forceExecuteDimIds: ['agent-guidelines'],
+      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+    });
+
+    expect(skipped).toEqual(['ui']);
+    expect(emitDimensionComplete).toHaveBeenCalledTimes(1);
+    expect(emitDimensionComplete).toHaveBeenCalledWith('ui', {
+      type: 'incremental-restored',
+      reason: 'no-change-detected',
+    });
+  });
+
   test('loads active checkpoints and restores checkpoint side effects', async () => {
     const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'alembic-checkpoint-'));
     const checkpointDir = path.join(dataRoot, '.asd', 'bootstrap-checkpoint');

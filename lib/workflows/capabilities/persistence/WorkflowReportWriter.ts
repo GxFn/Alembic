@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import Logger from '#infra/logging/Logger.js';
 import type { IncrementalPlan } from '#types/workflows.js';
+import type { WorkflowCompletionSummary } from '#workflows/capabilities/completion/WorkflowCompletionTypes.js';
 import type {
   CandidateResults,
   DimensionStat,
@@ -16,6 +17,7 @@ import type {
   WorkflowReport,
   WorkflowReportConsolidationResult,
   WorkflowResultPersistenceContext,
+  WorkflowSnapshotSummary,
 } from '#workflows/capabilities/persistence/WorkflowReportTypes.js';
 
 const logger = Logger.getInstance();
@@ -30,6 +32,8 @@ export async function writeWorkflowReport({
   candidateResults,
   skillResults,
   consolidationResult,
+  completionSummary,
+  snapshotSummary,
   skippedDims,
   incrementalSkippedDims,
   isIncremental,
@@ -41,6 +45,7 @@ export async function writeWorkflowReport({
   PersistWorkflowResultOptions,
   'allFiles' | 'sessionStore' | 'enableParallel' | 'concurrency' | 'startedAtMs'
 > & {
+  snapshotSummary?: WorkflowSnapshotSummary | null;
   totalTimeMs: number;
   totalTokenUsage: { input: number; output: number };
   totalToolCalls: number;
@@ -53,6 +58,8 @@ export async function writeWorkflowReport({
       candidateResults,
       skillResults,
       consolidationResult,
+      completionSummary,
+      snapshotSummary,
       skippedDims,
       incrementalSkippedDims,
       isIncremental,
@@ -80,6 +87,8 @@ export function buildWorkflowReport({
   candidateResults,
   skillResults,
   consolidationResult,
+  completionSummary,
+  snapshotSummary,
   skippedDims,
   incrementalSkippedDims,
   isIncremental,
@@ -94,6 +103,8 @@ export function buildWorkflowReport({
   candidateResults: CandidateResults;
   skillResults: SkillResults;
   consolidationResult: WorkflowReportConsolidationResult | null;
+  completionSummary?: WorkflowCompletionSummary | null;
+  snapshotSummary?: WorkflowSnapshotSummary | null;
   skippedDims: string[];
   incrementalSkippedDims: string[];
   isIncremental?: boolean | null;
@@ -174,6 +185,8 @@ export function buildWorkflowReport({
           durationMs: consolidationResult.durationMs,
         }
       : null,
+    completion: completionSummary ?? null,
+    snapshot: snapshotSummary ?? null,
   };
 
   for (const [dimId, stat] of Object.entries(dimensionStats)) {

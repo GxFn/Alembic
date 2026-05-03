@@ -20,6 +20,7 @@ import type {
 export type {
   WorkflowCompletionFinalizerDependencies,
   WorkflowCompletionFinalizerResult,
+  WorkflowCompletionSummary,
   WorkflowSemanticMemoryConsolidationResult,
   WorkflowSemanticMemoryMode,
 } from '#workflows/capabilities/completion/WorkflowCompletionTypes.js';

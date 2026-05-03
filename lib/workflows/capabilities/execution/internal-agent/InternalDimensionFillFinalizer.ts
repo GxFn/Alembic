@@ -1,6 +1,8 @@
 import Logger from '#infra/logging/Logger.js';
 import {
   runWorkflowCompletionFinalizer,
+  type WorkflowCompletionFinalizerResult,
+  type WorkflowCompletionSummary,
   type WorkflowSemanticMemoryConsolidationResult,
 } from '#workflows/capabilities/completion/WorkflowCompletionFinalizer.js';
 import {
@@ -13,6 +15,7 @@ import {
   consumeInternalDimensionCandidateRelations,
   type InternalDimensionFillSessionResult,
 } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillSessionRunner.js';
+import type { WorkflowSnapshotSummary } from '#workflows/capabilities/persistence/WorkflowReportTypes.js';
 import { persistWorkflowResult } from '#workflows/capabilities/persistence/WorkflowResultPersistence.js';
 
 type InternalDimensionFillRuntime = Awaited<ReturnType<typeof initializeBootstrapRuntime>>;
@@ -20,6 +23,9 @@ type InternalDimensionFillRuntime = Awaited<ReturnType<typeof initializeBootstra
 export interface InternalDimensionFillFinalizationResult {
   skillResults: SkillResults;
   consolidationResult: WorkflowSemanticMemoryConsolidationResult | null;
+  completionSummary: WorkflowCompletionSummary;
+  snapshotId: string | null;
+  snapshot: WorkflowSnapshotSummary;
   totalTimeMs: number;
 }
 
@@ -76,8 +82,12 @@ export async function finalizeInternalDimensionFill({
     });
   }
   const consolidationResult = workflowCompletion.semanticMemoryResult;
+  const completionSummary = buildInternalDimensionCompletionSummary({
+    pipelineMode,
+    workflowCompletion,
+  });
 
-  const { totalTimeMs } = await persistWorkflowResult({
+  const { totalTimeMs, snapshotId, snapshot } = await persistWorkflowResult({
     ctx: preparation.ctx,
     dataRoot: preparation.dataRoot,
     projectRoot: preparation.projectRoot,
@@ -89,6 +99,7 @@ export async function finalizeInternalDimensionFill({
     candidateResults: sessionResult.candidateResults,
     skillResults,
     consolidationResult,
+    completionSummary,
     skippedDims: sessionResult.skippedDims,
     incrementalSkippedDims: sessionResult.incrementalSkippedDims,
     isIncremental: preparation.isIncremental,
@@ -100,5 +111,45 @@ export async function finalizeInternalDimensionFill({
 
   preparation.ctx.container.singletons._fileCache = null;
 
-  return { skillResults, consolidationResult, totalTimeMs };
+  return {
+    skillResults,
+    consolidationResult,
+    completionSummary,
+    snapshotId,
+    snapshot,
+    totalTimeMs,
+  };
+}
+
+export function buildInternalDimensionCompletionSummary({
+  pipelineMode,
+  workflowCompletion,
+}: {
+  pipelineMode: 'bootstrap' | 'rescan';
+  workflowCompletion: WorkflowCompletionFinalizerResult;
+}): WorkflowCompletionSummary {
+  if (pipelineMode === 'rescan') {
+    return {
+      mode: 'rescan',
+      isolation: 'pipeline-isolation',
+      reason: 'rescan skips delivery/wiki/semantic memory to avoid rebuilding downstream artifacts',
+      delivery: { status: 'skipped', verification: null },
+      wiki: { status: 'skipped' },
+      semanticMemory: { status: 'skipped', result: null },
+    };
+  }
+
+  return {
+    mode: 'bootstrap',
+    isolation: 'full-completion',
+    delivery: {
+      status: workflowCompletion.deliveryVerification ? 'completed' : 'skipped',
+      verification: workflowCompletion.deliveryVerification,
+    },
+    wiki: { status: 'scheduled' },
+    semanticMemory: {
+      status: workflowCompletion.semanticMemoryResult ? 'completed' : 'skipped',
+      result: workflowCompletion.semanticMemoryResult,
+    },
+  };
 }

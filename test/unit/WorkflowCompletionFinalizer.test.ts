@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
 import { runWorkflowCompletionFinalizer } from '#workflows/capabilities/completion/WorkflowCompletionFinalizer.js';
+import { buildInternalDimensionCompletionSummary } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
 
 describe('WorkflowCompletionFinalizer', () => {
   test('runs delivery and panorama before scheduling wiki and immediate semantic memory', async () => {
@@ -55,6 +56,42 @@ describe('WorkflowCompletionFinalizer', () => {
     expect(source).toContain('runWorkflowCompletionFinalizer');
     expect(source).not.toContain('consumeBootstrapDeliveryAndWiki');
     expect(source).not.toContain('consumeBootstrapSemanticMemory');
+  });
+
+  test('summarizes rescan finalizer as pipeline isolation', () => {
+    expect(
+      buildInternalDimensionCompletionSummary({
+        pipelineMode: 'rescan',
+        workflowCompletion: { deliveryVerification: null, semanticMemoryResult: null },
+      })
+    ).toMatchObject({
+      mode: 'rescan',
+      isolation: 'pipeline-isolation',
+      delivery: { status: 'skipped' },
+      wiki: { status: 'skipped' },
+      semanticMemory: { status: 'skipped' },
+    });
+  });
+
+  test('summarizes bootstrap finalizer as full completion', () => {
+    expect(
+      buildInternalDimensionCompletionSummary({
+        pipelineMode: 'bootstrap',
+        workflowCompletion: {
+          deliveryVerification: { ok: true } as never,
+          semanticMemoryResult: {
+            total: { added: 1, updated: 0, merged: 0, skipped: 0 },
+            durationMs: 10,
+          },
+        },
+      })
+    ).toMatchObject({
+      mode: 'bootstrap',
+      isolation: 'full-completion',
+      delivery: { status: 'completed' },
+      wiki: { status: 'scheduled' },
+      semanticMemory: { status: 'completed' },
+    });
   });
 
   test('keeps completion side effects in dedicated step modules', () => {

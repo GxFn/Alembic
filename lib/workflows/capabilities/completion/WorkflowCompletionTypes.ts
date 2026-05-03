@@ -91,3 +91,22 @@ export interface WorkflowCompletionFinalizerResult {
     | null;
   semanticMemoryResult: WorkflowSemanticMemoryConsolidationResult | null;
 }
+
+export type WorkflowCompletionStepStatus = 'completed' | 'scheduled' | 'skipped';
+
+export interface WorkflowCompletionSummary {
+  mode: 'bootstrap' | 'rescan';
+  isolation: 'full-completion' | 'pipeline-isolation';
+  reason?: string;
+  delivery: {
+    status: WorkflowCompletionStepStatus;
+    verification?: WorkflowCompletionFinalizerResult['deliveryVerification'];
+  };
+  wiki: {
+    status: WorkflowCompletionStepStatus;
+  };
+  semanticMemory: {
+    status: WorkflowCompletionStepStatus;
+    result?: WorkflowSemanticMemoryConsolidationResult | null;
+  };
+}
