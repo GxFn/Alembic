@@ -32,7 +32,9 @@ import { randomUUID } from 'node:crypto';
 import type { LLMGateway } from '#external/ai/gateway/LLMGateway.js';
 import Logger from '#infra/logging/Logger.js';
 import type { ToolSchemaProjection } from '#tools/catalog/CapabilityManifest.js';
+import { isToolResultEnvelope } from '#tools/core/ToolResultPresenter.js';
 import { Capability, CapabilityRegistry } from '../capabilities/index.js';
+import { limitToolResult } from '../context/ContextWindow.js';
 import { PolicyEngine } from '../policies/index.js';
 import { AgentEventBus, AgentEvents } from './AgentEventBus.js';
 import type { AgentMessage } from './AgentMessage.js';
@@ -362,14 +364,16 @@ export class AgentRuntime {
       }
 
       // 迭代准备 (hooks + nudge + compact + toolChoice + prompt)
-      const { toolChoice, effectiveSystemPrompt, effectivePrompt } = this.#prepareIteration(ctx);
+      const { toolChoice, effectiveSystemPrompt, dynamicContext, compactResult } =
+        this.#prepareIteration(ctx);
 
       // LLM 调用 (含错误恢复 + 空响应重试)
       const llmResult = await this.#callLLM(
         ctx,
         toolChoice,
         effectiveSystemPrompt,
-        effectivePrompt
+        dynamicContext,
+        compactResult
       );
       if (!llmResult) {
         break;
@@ -530,7 +534,7 @@ export class AgentRuntime {
     const ec = ctx.exitController;
     if (ec) {
       const signal = ec.checkBeforeIteration(ctx, this.tokenUsage);
-      if (signal.action !== 'continue') {
+      if (signal.action === 'exit' || signal.action === 'graceful_exit') {
         this.logger.info(
           `[AgentRuntime] ExitController: ${signal.reason} — ${signal.detail || ''}`
         );
@@ -539,6 +543,11 @@ export class AgentRuntime {
           message: signal.detail || signal.reason || 'ExitController stopped the run',
         });
         return true;
+      }
+      if (signal.action === 'continue' && signal.reason) {
+        this.logger.info(
+          `[AgentRuntime] ExitController: ${signal.reason} (graceful) — ${signal.detail || ''}`
+        );
       }
     } else {
       // Legacy fallback (no ExitController — should not happen in normal flow)
@@ -579,6 +588,10 @@ export class AgentRuntime {
 
   /**
    * 迭代准备 — 合并 nudge/压缩/提示词增强/toolChoice
+   *
+   * 包含 session token 预算预检: 在 LLM 调用前估算 input token，
+   * 如果即将超出 session 级预算，提前触发 SUMMARIZE 而非等到下轮被硬杀。
+   *
    * @returns }
    */
   #prepareIteration(ctx: LoopContext) {
@@ -611,12 +624,16 @@ export class AgentRuntime {
       );
     }
 
+    // ── Session token 预算预检 ──
+    const tokenBudgetAction = this.#checkSessionTokenBudget(ctx);
+
     // 动态 toolChoice
     const forceSummaryAt = Math.max(2, Math.ceil(maxIterations * 0.8));
     const forceSummary = !tracker && ctx.iteration >= forceSummaryAt;
     let toolChoice: string | Record<string, unknown>;
-    if (ctx.toolChoiceOverride && ctx.iteration === 1) {
-      // 首轮 toolChoice 覆盖: 强制 LLM 生成 tool call (LLM 自行决定调哪个、传什么)
+    if (tokenBudgetAction === 'summarize') {
+      toolChoice = 'none';
+    } else if (ctx.toolChoiceOverride && ctx.iteration === 1) {
       toolChoice = ctx.toolChoiceOverride;
     } else if (tracker) {
       toolChoice = tracker.getToolChoice();
@@ -624,13 +641,22 @@ export class AgentRuntime {
       toolChoice = ctx.toolSchemas.length > 0 ? (forceSummary ? 'none' : 'auto') : 'none';
     }
 
-    // 系统提示词增强 (阶段上下文 + 动态记忆)
-    let effectiveSystemPrompt = ctx.baseSystemPrompt;
+    // ── System prompt 保持静态（最大化 prefix cache 命中） ──
+    // 动态内容（phase context, 进度, memory prompt）分离到 dynamicContext，
+    // 在 #callLLM 中作为 ephemeral user message 注入，不存储到 ContextWindow。
+    const effectiveSystemPrompt = ctx.baseSystemPrompt;
+
+    const dynamicParts: string[] = [];
     if (tracker) {
-      effectiveSystemPrompt += tracker.getPhaseContext();
-    } else if (ctx.isSystem && !tracker) {
+      const phaseCtx = tracker.getPhaseContext();
+      if (phaseCtx) {
+        dynamicParts.push(phaseCtx);
+      }
+    } else if (ctx.isSystem) {
       const remaining = maxIterations - ctx.iteration;
-      effectiveSystemPrompt += `\n\n## 当前进度\n第 ${ctx.iteration}/${maxIterations} 轮 | 剩余 ${remaining} 轮`;
+      dynamicParts.push(
+        `## 当前进度\n第 ${ctx.iteration}/${maxIterations} 轮 | 剩余 ${remaining} 轮`
+      );
     }
     if (ctx.isSystem && ctx.memoryCoordinator) {
       const wmContext = ctx.memoryCoordinator.buildDynamicMemoryPrompt?.({
@@ -638,29 +664,145 @@ export class AgentRuntime {
         scopeId: (ctx.context?.dimensionScopeId as string) || undefined,
       });
       if (wmContext) {
-        effectiveSystemPrompt += `\n\n${wmContext}`;
+        dynamicParts.push(wmContext);
       }
     }
+    if (tokenBudgetAction === 'summarize') {
+      dynamicParts.push(
+        '[系统提示] Token 预算即将耗尽，请停止调用工具，立即基于已有信息输出完整总结。'
+      );
+    } else if (forceSummary) {
+      dynamicParts.push('[系统提示] 已进入最后阶段，请停止调用工具，基于已有信息输出总结。');
+    }
+    const dynamicContext = dynamicParts.length > 0 ? dynamicParts.join('\n\n') : null;
 
-    // 非 tracker 模式的强制摘要提示注入
-    const effectivePrompt = forceSummary
-      ? `${prompt}\n\n[系统提示] 已进入最后阶段，请停止调用工具，基于已有信息输出总结。`
-      : prompt;
-
-    return { toolChoice, effectiveSystemPrompt, effectivePrompt };
+    return { toolChoice, effectiveSystemPrompt, dynamicContext, compactResult };
   }
 
   /**
-   * LLM 调用 — 含错误恢复 + 空响应重试
+   * Session token 预算预检 — 在 LLM 调用前估算 input token 消耗，
+   * 防止单轮 LLM 调用把 session token 从安全区直接推到超限。
    *
+   * 预估逻辑: 本轮 input token ≈ ContextWindow.estimateTokens() + systemPrompt + toolSchemas
+   * 预检阈值:
+   *   - 已用 + 预估 > budget × 0.85 → 触发激进压缩 (L4)
+   *   - 已用 + 预估 > budget × 0.95 → 强制 SUMMARIZE + toolChoice=none
+   *
+   * @returns 'normal' | 'compress' | 'summarize'
+   */
+  #checkSessionTokenBudget(ctx: LoopContext): 'normal' | 'compress' | 'summarize' {
+    const sessionBudget = ctx.budget.maxSessionInputTokens;
+    if (!sessionBudget) {
+      return 'normal';
+    }
+
+    const usedInputTokens = this.tokenUsage.input;
+    const estimatedNextCallTokens = this.#estimateNextCallInputTokens(ctx);
+    const projected = usedInputTokens + estimatedNextCallTokens;
+    const ratio = projected / sessionBudget;
+
+    // 同步 session pressure 到 ContextWindow（影响工具结果配额）
+    if (ctx.contextWindow) {
+      ctx.contextWindow.setSessionPressure(usedInputTokens / sessionBudget);
+    }
+
+    if (ratio <= 0.85) {
+      return 'normal';
+    }
+
+    if (ratio > 0.95) {
+      this.logger.info(
+        `[AgentRuntime] ⚠ session token 预算预检: ${usedInputTokens} used + ~${estimatedNextCallTokens} estimated = ${projected}/${sessionBudget} (${(ratio * 100).toFixed(1)}%) → 强制 SUMMARIZE`
+      );
+      if (ctx.tracker) {
+        ctx.tracker.forceTerminal(`session token budget ${(ratio * 100).toFixed(0)}% projected`);
+      }
+      return 'summarize';
+    }
+
+    // 85%-95%: 触发激进压缩
+    this.logger.info(
+      `[AgentRuntime] ⚠ session token 预算预检: ${usedInputTokens} used + ~${estimatedNextCallTokens} estimated = ${projected}/${sessionBudget} (${(ratio * 100).toFixed(1)}%) → 激进压缩`
+    );
+
+    if (ctx.contextWindow) {
+      const cw = ctx.contextWindow;
+      const extraCompact = cw.compactIfNeeded();
+      if (extraCompact.level > 0) {
+        this.logger.info(
+          `[AgentRuntime] session budget pressure → extra compact L${extraCompact.level}, removed ${extraCompact.removed}`
+        );
+      }
+      if (cw.needsL4Compaction()) {
+        ctx._pendingL4Compaction = true;
+      }
+    }
+
+    return 'compress';
+  }
+
+  /**
+   * 预估下一次 LLM 调用的 input token 消耗量。
+   *
+   * 策略: 如果有 ContextWindow，使用其 estimateFullContextTokens；
+   * 否则根据历史平均值或最近一轮的 usage 推算。
+   */
+  #estimateNextCallInputTokens(ctx: LoopContext): number {
+    if (ctx.contextWindow) {
+      return ctx.contextWindow.estimateFullContextTokens(
+        ctx.baseSystemPrompt.length,
+        ctx.toolSchemas.length
+      );
+    }
+
+    // 无 ContextWindow 时使用历史平均值
+    if (ctx.iteration > 1 && this.tokenUsage.input > 0) {
+      return Math.ceil(this.tokenUsage.input / (ctx.iteration - 1));
+    }
+
+    return 8000;
+  }
+
+  /**
+   * LLM 调用 — 含错误恢复 + 空响应重试 + TurnTelemetry
+   *
+   * @param dynamicContext 每轮动态上下文（phase/progress/memory），作为 ephemeral user message 注入
+   * @param compactResult 本轮压缩结果（用于 telemetry）
    * @returns llmResult 或 null (表示应退出)
    */
   async #callLLM(
     ctx: LoopContext,
     toolChoice: string,
     effectiveSystemPrompt: string,
-    effectivePrompt: string
+    dynamicContext: string | null,
+    compactResult?: { level: number; removed: number }
   ): Promise<LLMResult | null> {
+    // L4 compaction: session 预算压力下执行 LLM-based 摘要压缩
+    if (ctx._pendingL4Compaction && ctx.contextWindow) {
+      ctx._pendingL4Compaction = false;
+      try {
+        const l4Result = await ctx.contextWindow.compactL4(
+          this.aiProvider as unknown as Parameters<typeof ctx.contextWindow.compactL4>[0]
+        );
+        if (l4Result.removed > 0) {
+          this.logger.info(
+            `[AgentRuntime] L4 compaction executed: removed ${l4Result.removed} messages`
+          );
+        }
+        if (l4Result.usage) {
+          const usage = l4Result.usage as Record<string, number>;
+          this.tokenUsage.input += usage.inputTokens || 0;
+          this.tokenUsage.output += usage.outputTokens || 0;
+          ctx.addTokenUsage({
+            inputTokens: usage.inputTokens || 0,
+            outputTokens: usage.outputTokens || 0,
+          });
+        }
+      } catch (err) {
+        this.logger.warn(`[AgentRuntime] L4 compaction failed: ${err}`);
+      }
+    }
+
     this.bus.publish(
       AgentEvents.LLM_CALL_START,
       {
@@ -681,8 +823,12 @@ export class AgentRuntime {
             ? ctx.toolSchemas
             : undefined;
 
-      const unifiedMessages =
+      // 构建 LLM 输入消息 — projected messages + ephemeral dynamic context
+      const projected =
         ctx.messages.toProjectedMessages() as import('#external/ai/AiProvider.js').UnifiedMessage[];
+      const unifiedMessages = dynamicContext
+        ? [...projected, { role: 'user' as const, content: dynamicContext }]
+        : projected;
       const unifiedTools = effectiveToolSchemas as
         | import('#external/ai/AiProvider.js').ToolSchema[]
         | undefined;
@@ -699,7 +845,7 @@ export class AgentRuntime {
           abortSignal: ctx.abortSignal ?? undefined,
         })) as LLMResult;
       } else {
-        llmResult = (await this.aiProvider.chatWithTools(effectivePrompt, {
+        llmResult = (await this.aiProvider.chatWithTools(ctx.prompt, {
           messages: unifiedMessages,
           toolSchemas: unifiedTools,
           toolChoice: unifiedTools ? toolChoice : undefined,
@@ -721,6 +867,34 @@ export class AgentRuntime {
       this.tokenUsage.reasoning += llmResult.usage.reasoningTokens || 0;
       this.tokenUsage.cacheHit += llmResult.usage.cacheHitTokens || 0;
       ctx.addTokenUsage(llmResult.usage);
+    }
+
+    // ── TurnTelemetry: 每轮 token 消耗可观测性 ──
+    if (llmResult.usage && ctx.isSystem) {
+      const u = llmResult.usage;
+      const inTok = u.inputTokens || 0;
+      const cacheRate = inTok > 0 ? ((u.cacheHitTokens || 0) / inTok) * 100 : 0;
+      const sessionBudget = ctx.budget.maxSessionInputTokens || 0;
+      const sessionRatio = sessionBudget > 0 ? (this.tokenUsage.input / sessionBudget) * 100 : 0;
+      this.logger.info(
+        `[TurnTelemetry] iter=${ctx.iteration} | ` +
+          `in=${inTok} out=${u.outputTokens || 0} reasoning=${u.reasoningTokens || 0} ` +
+          `cache=${u.cacheHitTokens || 0} (${cacheRate.toFixed(0)}% hit) | ` +
+          `compact=L${compactResult?.level ?? 0} | ` +
+          `session=${this.tokenUsage.input}/${sessionBudget} (${sessionRatio.toFixed(1)}%)`
+      );
+
+      // 告警: 连续 3 轮 cache hit = 0
+      if ((u.cacheHitTokens || 0) === 0 && inTok > 1024) {
+        ctx._consecutiveZeroCacheHits = (ctx._consecutiveZeroCacheHits || 0) + 1;
+        if (ctx._consecutiveZeroCacheHits >= 3) {
+          this.logger.warn(
+            `[TurnTelemetry] ⚠ ${ctx._consecutiveZeroCacheHits} consecutive turns with 0 cache hits — check if system prompt is being modified`
+          );
+        }
+      } else {
+        ctx._consecutiveZeroCacheHits = 0;
+      }
     }
 
     this.bus.publish(
@@ -874,6 +1048,18 @@ export class AgentRuntime {
     let roundHasNewInfo = false;
     const roundToolNames: string[] = [];
 
+    // 并行工具调用共享 token 预算: 总预算按调用数分摊，
+    // 避免 N 个并行调用各自拿满 maxChars 导致 token 爆炸。
+    // 公式: roundBudget = baseQuota.maxChars × ceil(N/2), 每个工具分得 roundBudget / N
+    const baseQuota = messages.getToolResultQuota();
+    const roundMaxChars = baseQuota.maxChars * Math.ceil(activeCalls.length / 2);
+    const perToolMaxChars = Math.max(400, Math.floor(roundMaxChars / activeCalls.length));
+    const perToolMaxMatches = Math.max(
+      2,
+      Math.floor((baseQuota.maxMatches * Math.ceil(activeCalls.length / 2)) / activeCalls.length)
+    );
+    let roundCharsUsed = 0;
+
     // 执行每个工具
     for (const fc of activeCalls) {
       this.#emitProgress('tool_call', { tool: fc.name, args: fc.args });
@@ -950,8 +1136,20 @@ export class AgentRuntime {
         callId: fc.id,
       });
 
-      // 工具结果格式化 (统一通过 MessageAdapter)
-      let resultStr = messages.formatToolResult(fc.name, envelope || toolResult);
+      // 工具结果格式化 — 使用本轮分摊配额而非全局配额
+      const remainingBudget = Math.max(400, roundMaxChars - roundCharsUsed);
+      const toolQuota = {
+        maxChars: Math.min(perToolMaxChars, remainingBudget),
+        maxMatches: perToolMaxMatches,
+      };
+      const rawForLimit = envelope || toolResult;
+      let resultStr: string;
+      if (isToolResultEnvelope(rawForLimit)) {
+        resultStr = limitToolResult(fc.name, (rawForLimit as { text: string }).text, toolQuota);
+      } else {
+        resultStr = limitToolResult(fc.name, rawForLimit, toolQuota);
+      }
+      roundCharsUsed += resultStr.length;
 
       // 提交去重: pipeline 中间件已标记 metadata
       const dedupMessage = (metadata as ToolMetadata).dedupMessage;

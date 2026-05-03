@@ -111,6 +111,8 @@ export class ContextWindow {
   #thresholds: [number, number, number, number, number];
   /** Whether L4 LLM summary is enabled */
   #enableL4LLM: boolean;
+  /** Session-level budget pressure (0-1). Affects getToolResultQuota(). */
+  #sessionPressure = 0;
 
   /**
    * 模型名 → 上下文窗口大小映射（token 数）。
@@ -406,13 +408,10 @@ export class ContextWindow {
   }
 
   /**
-   * L1 压缩: 截断旧轮次的工具结果内容
+   * L1 压缩: 截断旧轮次的工具结果内容。
    *
-   * 注意: 不再清理任何消息的 reasoningContent。
-   * DeepSeek V4 thinking 模式要求带 tool_calls 的 assistant 消息必须回传
-   * reasoning_content，而 ContextWindow 无法感知当前 Provider 类型。
-   * 保留所有 reasoningContent 是最安全的策略（非 tool_call 消息的
-   * reasoning_content 回传给 API 时会被忽略，无负面影响）。
+   * reasoning 管理已下沉到 Transport 层（DeepSeekTransport.#projectV4Reasoning），
+   * ContextWindow 不再关心供应商特定的 reasoning 约束。
    */
   #compactL1() {
     const TRUNCATE_THRESHOLD = 2000;
@@ -574,14 +573,30 @@ export class ContextWindow {
     return this.#tokenBudget;
   }
 
-  /** 估算当前 token 使用量 */
+  /**
+   * 设置 session-level 预算压力（0-1）。
+   * 影响 getToolResultQuota() 返回更保守的配额。
+   * 由 AgentRuntime 在每轮迭代前根据 session token 消耗比例更新。
+   */
+  setSessionPressure(ratio: number) {
+    this.#sessionPressure = Math.max(0, Math.min(1, ratio));
+  }
+
+  /**
+   * 估算实际发送给 LLM 的 token 使用量。
+   *
+   * reasoningContent 只对最近 2 轮 tool-call assistant 消息计数，
+   * 因为 Transport 层会在发送前剥离更早的 reasoning。
+   */
   estimateTokens() {
+    const recentToolCallIndices = this.#findRecentToolCallIndices(2);
     let total = 0;
-    for (const m of this.#messages) {
+    for (let i = 0; i < this.#messages.length; i++) {
+      const m = this.#messages[i];
       if (m.content) {
         total += estimateTokensFast(m.content);
       }
-      if (m.reasoningContent) {
+      if (m.reasoningContent && recentToolCallIndices.has(i)) {
         total += estimateTokensFast(m.reasoningContent);
       }
       if (m.toolCalls) {
@@ -589,6 +604,18 @@ export class ContextWindow {
       }
     }
     return total;
+  }
+
+  /** 找到最近 N 轮 assistant(toolCalls) 的索引集合 */
+  #findRecentToolCallIndices(n: number): Set<number> {
+    const indices = new Set<number>();
+    for (let i = this.#messages.length - 1; i >= 0 && indices.size < n; i--) {
+      const m = this.#messages[i];
+      if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+        indices.add(i);
+      }
+    }
+    return indices;
   }
 
   /** 获取 token 使用率 (0-1) */
@@ -611,22 +638,36 @@ export class ContextWindow {
   }
 
   /**
-   * 获取动态工具结果配额
-   * 根据当前 token 使用率返回工具结果的大小限制
-   * @returns }
+   * 获取动态工具结果配额 — 5 级预算阶梯。
+   *
+   * 综合 ContextWindow 使用率和 session-level 预算压力,
+   * 取两者的较高值作为有效使用率:
+   *
+   *   | 有效使用率 | 状态      | maxChars | maxMatches |
+   *   |-----------|----------|----------|------------|
+   *   | 0 - 50%   | Normal   | 6000     | 15         |
+   *   | 50 - 70%  | Elevated | 3000     | 8          |
+   *   | 70 - 85%  | High     | 1500     | 5          |
+   *   | 85 - 95%  | Critical | 800      | 3          |
+   *   | > 95%     | Exhausted| 400      | 2          |
    */
   getToolResultQuota() {
     const usage = this.getTokenUsageRatio();
-    if (usage < 0.4) {
+    const effectiveUsage = Math.max(usage, this.#sessionPressure);
+
+    if (effectiveUsage < 0.5) {
       return { maxChars: 6000, maxMatches: 15 };
     }
-    if (usage < 0.6) {
+    if (effectiveUsage < 0.7) {
       return { maxChars: 3000, maxMatches: 8 };
     }
-    if (usage < 0.8) {
+    if (effectiveUsage < 0.85) {
       return { maxChars: 1500, maxMatches: 5 };
     }
-    return { maxChars: 800, maxMatches: 3 };
+    if (effectiveUsage < 0.95) {
+      return { maxChars: 800, maxMatches: 3 };
+    }
+    return { maxChars: 400, maxMatches: 2 };
   }
 
   /** 获取压缩日志（用于调试） */
@@ -738,33 +779,39 @@ export function limitToolResult(toolName: string, result: unknown, quota: ToolRe
     return raw.length > 500 ? raw.substring(0, 500) : raw;
   }
 
-  // code (search): 限制匹配数 + 截断上下文（支持批量模式）
-  if (
-    toolName === 'code' &&
-    typeof result === 'object' &&
-    result !== null &&
-    ((result as SearchResultLike).matches || (result as SearchResultLike).batchResults)
-  ) {
-    if (result && typeof result === 'object' && (result as SearchResultLike).batchResults) {
-      // 批量模式：对每个 pattern 的结果独立限制（直接操作对象，避免 stringify→parse 往返）
-      const limited: SearchResultLike = { ...(result as SearchResultLike) };
-      const perKeyChars = Math.floor(maxChars / Object.keys(limited.batchResults!).length);
-      for (const [key, sub] of Object.entries(limited.batchResults!)) {
-        limited.batchResults![key] = limitSearchResultObj(
-          sub,
-          Math.min(maxMatches, 3),
-          perKeyChars
-        );
-      }
-      const raw = JSON.stringify(limited);
-      return raw.length > maxChars ? `${raw.substring(0, maxChars)}\n... [batch truncated]` : raw;
-    }
-    return limitSearchResult(result, maxMatches, maxChars);
-  }
-
-  // code (read): 限制字符数（支持批量模式）
+  // code 工具: 区分搜索结果、文件内容、其他操作
   if (toolName === 'code') {
-    if (result && typeof result === 'object' && (result as FileResultLike).batchResults) {
+    // V2 纯文本搜索结果: "N matches (showing M)\n\n..."
+    if (typeof result === 'string' && /^\d+ matches/.test(result)) {
+      return result.length > maxChars
+        ? `${result.substring(0, maxChars)}\n... [search truncated]`
+        : result;
+    }
+
+    // V1 结构化搜索结果 (兼容)
+    if (
+      typeof result === 'object' &&
+      result !== null &&
+      ((result as SearchResultLike).matches || (result as SearchResultLike).batchResults)
+    ) {
+      if ((result as SearchResultLike).batchResults) {
+        const limited: SearchResultLike = { ...(result as SearchResultLike) };
+        const perKeyChars = Math.floor(maxChars / Object.keys(limited.batchResults!).length);
+        for (const [key, sub] of Object.entries(limited.batchResults!)) {
+          limited.batchResults![key] = limitSearchResultObj(
+            sub,
+            Math.min(maxMatches, 3),
+            perKeyChars
+          );
+        }
+        const raw = JSON.stringify(limited);
+        return raw.length > maxChars ? `${raw.substring(0, maxChars)}\n... [batch truncated]` : raw;
+      }
+      return limitSearchResult(result, maxMatches, maxChars);
+    }
+
+    // 文件内容 (read/write/outline/structure)
+    if (typeof result === 'object' && result !== null && (result as FileResultLike).batchResults) {
       const raw = JSON.stringify(result);
       return raw.length > maxChars ? `${raw.substring(0, maxChars)}\n... [batch truncated]` : raw;
     }

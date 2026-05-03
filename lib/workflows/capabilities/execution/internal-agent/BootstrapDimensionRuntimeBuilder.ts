@@ -198,14 +198,15 @@ export function createBootstrapDimensionRuntimeInput({
     outputType: dimConfig.outputType || 'candidate',
     allowedKnowledgeTypes: dimConfig.allowedKnowledgeTypes || [],
   };
+  const contextWindow = systemRunContextFactory.createContextWindow({ isSystem: true });
   const systemRunContext = createSystemRunContext({
     memoryCoordinator,
     scopeId: analystScopeId,
     activeContext: memoryCoordinator.getActiveContext(analystScopeId),
-    contextWindow: systemRunContextFactory.createContextWindow({ isSystem: true }),
+    contextWindow,
     tracker: ExplorationTracker.resolve(
       { source: 'system', strategy: 'analyst' },
-      computeAnalystBudget(projectInfo.fileCount || 0)
+      computeAnalystBudget(projectInfo.fileCount || 0, contextWindow.tokenBudget)
     ),
     source: 'system',
     outputType: dimConfig.outputType || 'analysis',

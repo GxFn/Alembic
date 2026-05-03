@@ -454,6 +454,23 @@ export class ExplorationTracker {
     }
   }
 
+  /**
+   * 外部强制转入终结阶段（SUMMARIZE）。
+   * 用于 session token 预算即将耗尽时，让 agent 提前输出结论而非等待
+   * 下一轮 BudgetPolicy 检查后被硬杀。
+   */
+  forceTerminal(reason: string) {
+    if (this.#isTerminalPhase()) {
+      return;
+    }
+    this.#logger.info(
+      `[ExplorationTracker] forceTerminal: ${reason} — ${this.#phase} → ${this.#getTerminalPhase()}`
+    );
+    this.#transitionTo(this.#getTerminalPhase());
+    this.#justTransitioned = false;
+    this.#gracefulExitRound = this.#metrics.iteration;
+  }
+
   // ─── 状态查询 ─────────────────────────────────────────
 
   get isGracefulExit() {

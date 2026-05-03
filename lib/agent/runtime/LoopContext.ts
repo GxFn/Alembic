@@ -50,6 +50,8 @@ interface BudgetConfig {
   timeoutMs?: number;
   maxTokens?: number;
   temperature?: number;
+  maxSessionInputTokens?: number;
+  maxSessionTokens?: number;
   [key: string]: unknown;
 }
 
@@ -162,6 +164,12 @@ export class LoopContext {
 
   /** ExitController — 统一退出决策 */
   exitController: ExitController | null;
+
+  /** L4 compaction 标记: session 预算压力下需要异步 LLM 摘要压缩 */
+  _pendingL4Compaction = false;
+
+  /** 连续 cache hit 为 0 的轮次计数（TurnTelemetry 告警用） */
+  _consecutiveZeroCacheHits = 0;
 
   constructor(config: LoopContextConfig) {
     this.messages = config.messages;

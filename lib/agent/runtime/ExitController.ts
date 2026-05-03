@@ -80,6 +80,9 @@ export class ExitController {
   readonly #loopStartTime: number;
   readonly #maxIterations: number;
 
+  /** token 超限后是否已给过一次 graceful 机会 */
+  #tokenGraceFired = false;
+
   constructor(config: ExitControllerConfig) {
     this.#tracker = config.tracker ?? null;
     this.#effectiveTimeoutMs = config.effectiveTimeoutMs;
@@ -88,6 +91,13 @@ export class ExitController {
     this.#skipPolicyIterCheck = config.skipPolicyIterCheck;
     this.#loopStartTime = config.loopStartTime;
     this.#maxIterations = config.maxIterations;
+  }
+
+  #isTrackerTerminal(): boolean {
+    if (!this.#tracker) {
+      return false;
+    }
+    return this.#tracker.isGracefulExit || this.#tracker.isHardExit;
   }
 
   // ── 1. Pre-iteration check (replaces #shouldExit) ──
@@ -139,9 +149,23 @@ export class ExitController {
     } as StepState);
     if (!duringCheck.ok) {
       const reasonStr = typeof duringCheck.reason === 'string' ? duringCheck.reason : '';
+      const isTokenIssue = reasonStr.includes('token');
+
+      // Token 超限 + 首次触发 + tracker 未在终结阶段 → graceful exit
+      // 给 tracker 一次机会完成 SUMMARIZE，避免直接硬杀丢失已有分析
+      if (isTokenIssue && !this.#tokenGraceFired && this.#tracker && !this.#isTrackerTerminal()) {
+        this.#tokenGraceFired = true;
+        this.#tracker.forceTerminal(reasonStr);
+        return {
+          action: 'continue',
+          reason: 'token_budget_exhausted',
+          detail: `${reasonStr} — forced SUMMARIZE, allowing one final round`,
+        };
+      }
+
       return {
         action: 'exit',
-        reason: reasonStr.includes('token') ? 'token_budget_exhausted' : 'policy_stop',
+        reason: isTokenIssue ? 'token_budget_exhausted' : 'policy_stop',
         needsSummary: true,
         detail: reasonStr || 'Policy stopped the run',
       };

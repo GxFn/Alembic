@@ -72,7 +72,7 @@ export class DeepSeekTransport extends LLMTransport {
     const messages = this.#buildToolMessages(request.messages, request.systemPrompt, v4Thinking);
 
     if (v4Thinking) {
-      this.#validateV4Messages(messages);
+      this.#projectV4Reasoning(messages);
     }
 
     const body: Record<string, unknown> = {
@@ -195,14 +195,47 @@ export class DeepSeekTransport extends LLMTransport {
     return messages;
   }
 
-  #validateV4Messages(messages: Array<Record<string, unknown>>): void {
-    for (const m of messages) {
+  /**
+   * V4 reasoning 投影: 确保消息满足 API 约束，同时剥离旧轮次的 reasoning 以节省 token。
+   *
+   * DeepSeek V4 API 规则:
+   *   - 带 tool_calls 的 assistant: reasoning_content 字段必须存在（允许为空字符串）
+   *   - 不带 tool_calls 的 assistant: reasoning_content 会被 API 忽略
+   *
+   * 策略: 只保留最近 2 轮 tool-call assistant 的完整 reasoning，
+   *        更早的 tool-call assistant 设为空字符串，非 tool-call assistant 删除。
+   */
+  #projectV4Reasoning(messages: Array<Record<string, unknown>>): void {
+    const toolCallIndices: number[] = [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (
+        m.role === 'assistant' &&
+        Array.isArray(m.tool_calls) &&
+        (m.tool_calls as unknown[]).length > 0
+      ) {
+        toolCallIndices.push(i);
+      }
+    }
+
+    const preserveSet = new Set(toolCallIndices.slice(0, 2));
+
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i];
       if (m.role !== 'assistant') {
         continue;
       }
-      const hasTC = Array.isArray(m.tool_calls) && (m.tool_calls as unknown[]).length > 0;
-      if (hasTC && m.reasoning_content == null) {
+
+      const hasToolCalls = Array.isArray(m.tool_calls) && (m.tool_calls as unknown[]).length > 0;
+
+      if (preserveSet.has(i)) {
+        if (m.reasoning_content == null) {
+          m.reasoning_content = '';
+        }
+      } else if (hasToolCalls) {
         m.reasoning_content = '';
+      } else {
+        delete m.reasoning_content;
       }
     }
   }

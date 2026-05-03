@@ -88,11 +88,58 @@ describe('ExitController.checkBeforeIteration', () => {
     expect(sig.reason).toBe('stage_timeout');
   });
 
-  it('exits on token budget exhausted', () => {
+  it('exits on token budget exhausted (no tracker)', () => {
     const ctrl = makeCtrl({ validateDuring: policyTokenStop });
     const sig = ctrl.checkBeforeIteration(stubCtx(), tokenUsage);
     expect(sig.action).toBe('exit');
     expect(sig.reason).toBe('token_budget_exhausted');
+  });
+
+  it('graceful continues on token budget exhausted with active tracker', () => {
+    const forceTerminal = vi.fn();
+    const tracker = {
+      tick: vi.fn(),
+      shouldExit: vi.fn().mockReturnValue(false),
+      phase: 'EXPLORE',
+      iteration: 10,
+      totalSubmits: 0,
+      isGracefulExit: false,
+      isHardExit: false,
+      forceTerminal,
+    };
+    const ctrl = makeCtrl({ tracker: tracker as any, validateDuring: policyTokenStop });
+    const sig = ctrl.checkBeforeIteration(stubCtx(), tokenUsage);
+    expect(sig.action).toBe('continue');
+    expect(sig.reason).toBe('token_budget_exhausted');
+    expect(sig.detail).toContain('forced SUMMARIZE');
+    expect(forceTerminal).toHaveBeenCalledOnce();
+  });
+
+  it('exits on token budget exhausted after graceful already fired', () => {
+    const forceTerminal = vi.fn();
+    const tracker = {
+      tick: vi.fn(),
+      shouldExit: vi.fn().mockReturnValue(false),
+      phase: 'EXPLORE',
+      iteration: 10,
+      totalSubmits: 0,
+      isGracefulExit: false,
+      isHardExit: false,
+      forceTerminal,
+    };
+    const ctrl = makeCtrl({ tracker: tracker as any, validateDuring: policyTokenStop });
+
+    // First call — graceful
+    const sig1 = ctrl.checkBeforeIteration(stubCtx(), tokenUsage);
+    expect(sig1.action).toBe('continue');
+
+    // Simulate tracker now in terminal after forceTerminal
+    (tracker as any).isGracefulExit = true;
+
+    // Second call — hard exit
+    const sig2 = ctrl.checkBeforeIteration(stubCtx(), tokenUsage);
+    expect(sig2.action).toBe('exit');
+    expect(sig2.reason).toBe('token_budget_exhausted');
   });
 
   it('exits on generic policy stop', () => {

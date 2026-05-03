@@ -63,6 +63,8 @@ export class PolicyEngine {
           maxTokens: bp.maxTokens,
           timeoutMs: bp.timeoutMs,
           temperature: bp.temperature,
+          maxSessionInputTokens: bp.maxSessionInputTokens,
+          maxSessionTokens: bp.maxSessionTokens,
         }
       : null;
   }

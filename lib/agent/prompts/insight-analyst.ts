@@ -124,10 +124,18 @@ export const ANALYST_BUDGET = {
   maxSubmits: 0,
   softSubmitLimit: 0,
   idleRoundsToExit: 2,
-  /** Session-level total token cap (input + output). ~5000 tokens/round average. */
-  maxSessionTokens: 24 * 5000,
-  /** Session-level input token cap. ~3500 tokens/round average. */
-  maxSessionInputTokens: 24 * 3500,
+  /**
+   * Session-level total token cap (input + output).
+   * 默认基于中等上下文模型(~24k budget): 24 × 24000 × 0.6 × 1.35 ≈ 466k
+   * 会被 computeAnalystBudget 根据 contextWindowBudget 动态覆盖。
+   */
+  maxSessionTokens: Math.ceil(24 * 24_000 * 0.6 * 1.35),
+  /**
+   * Session-level input token cap.
+   * 默认基于中等上下文模型(~24k budget): 24 × 24000 × 0.6 ≈ 345k
+   * 会被 computeAnalystBudget 根据 contextWindowBudget 动态覆盖。
+   */
+  maxSessionInputTokens: Math.ceil(24 * 24_000 * 0.6),
 };
 
 /**
@@ -141,9 +149,14 @@ export const ANALYST_BUDGET = {
  *
  * searchBudget 按比例随 maxIterations 缩放（保持 75%）。
  * timeoutMs 按比例随 maxIterations 缩放（基线 480s 对应 24 轮）。
+ *
+ * @param fileCount 项目文件数
+ * @param contextWindowBudget ContextWindow 的 tokenBudget，用于计算合理的 session 限额。
+ *   如果未提供，使用保守的 15000 token/轮 估算。
  */
 export function computeAnalystBudget(
-  fileCount: number
+  fileCount: number,
+  contextWindowBudget?: number
 ): typeof ANALYST_BUDGET & { timeoutMs: number } {
   const clamped = Math.max(0, fileCount);
   let maxIter: number;
@@ -151,23 +164,29 @@ export function computeAnalystBudget(
   if (clamped <= 40) {
     maxIter = 24;
   } else if (clamped <= 100) {
-    // 40→100 文件: 24→32 轮（线性插值）
     maxIter = Math.round(24 + ((clamped - 40) / 60) * 8);
   } else if (clamped <= 200) {
-    // 100→200 文件: 32→40 轮
     maxIter = Math.round(32 + ((clamped - 100) / 100) * 8);
   } else {
     maxIter = 40;
   }
 
+  // Session token 预算: 基于 ContextWindow budget 动态计算
+  // 每轮 input token ≈ contextWindowBudget × avgUsageRatio
+  // 早期轮次 usage 较低(~40%), 后期接近上限(~70%), 取加权平均 ~60%
+  const cwBudget = contextWindowBudget || 15_000;
+  const avgInputPerRound = Math.ceil(cwBudget * 0.6);
+  const maxSessionInputTokens = maxIter * avgInputPerRound;
+  // output 约占 input 的 30-40%
+  const maxSessionTokens = Math.ceil(maxSessionInputTokens * 1.35);
+
   return {
     ...ANALYST_BUDGET,
     maxIterations: maxIter,
     searchBudget: Math.round(maxIter * 0.75),
-    // 超时随轮次等比缩放: 24轮→480s, 40轮→800s
     timeoutMs: Math.round((maxIter / 24) * 480_000),
-    maxSessionTokens: maxIter * 5000,
-    maxSessionInputTokens: maxIter * 3500,
+    maxSessionTokens,
+    maxSessionInputTokens,
   };
 }
 
