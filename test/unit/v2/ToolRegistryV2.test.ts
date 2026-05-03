@@ -15,7 +15,7 @@ const EXPECTED_ACTIONS: Record<string, string[]> = {
   terminal: ['exec'],
   knowledge: ['search', 'submit', 'detail', 'manage'],
   graph: ['overview', 'query'],
-  memory: ['save', 'recall'],
+  memory: ['save', 'recall', 'note_finding'],
   meta: ['tools', 'plan', 'review'],
 };
 
@@ -40,10 +40,10 @@ describe('TOOL_REGISTRY structural integrity', () => {
     }
   });
 
-  test('total action count is 17', () => {
+  test('total action count is 18', () => {
     const count = getToolNames().reduce((s, t) => s + getActionNames(t).length, 0);
-    expect(count).toBe(17);
-    expect(TOTAL_ACTIONS).toBe(17);
+    expect(count).toBe(18);
+    expect(TOTAL_ACTIONS).toBe(18);
   });
 
   test('every action has handler, params schema, and summary', () => {

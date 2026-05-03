@@ -10,7 +10,7 @@ import type { ToolCallRequest } from '#tools/core/ToolContracts.js';
 import { DeltaCache } from '../cache/DeltaCache.js';
 import { SearchCache } from '../cache/SearchCache.js';
 import { OutputCompressor } from '../compressor/OutputCompressor.js';
-import type { ToolContext } from '../types.js';
+import type { MemoryCoordinatorLike, ToolContext } from '../types.js';
 
 interface ServiceContainer {
   get(name: string): unknown;
@@ -143,6 +143,7 @@ export class ToolContextFactory {
 
       tokenBudget: this.#deps.defaultTokenBudget ?? 8000,
       abortSignal: request.abortSignal ?? undefined,
+      memoryCoordinator: (request.runtime?.memoryCoordinator as MemoryCoordinatorLike) ?? undefined,
     };
   }
 }

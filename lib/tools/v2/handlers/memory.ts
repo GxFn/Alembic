@@ -17,6 +17,8 @@ export async function handle(
       return handleSave(params, ctx);
     case 'recall':
       return handleRecall(params, ctx);
+    case 'note_finding':
+      return handleNoteFinding(params, ctx);
     default:
       return fail(`Unknown memory action: ${action}`);
   }
@@ -48,6 +50,45 @@ async function handleSave(params: Record<string, unknown>, ctx: ToolContext): Pr
   ctx.sessionStore.save(key, content, meta);
 
   return ok({ saved: key, size: content.length });
+}
+
+/**
+ * memory.note_finding — 记录结构化关键发现到 ActiveContext.#scratchpad。
+ * 桥接 MemoryCoordinator.noteFinding()，使 QualityGate 能通过
+ * distill().keyFindings 评估 evidenceScore。
+ */
+async function handleNoteFinding(
+  params: Record<string, unknown>,
+  ctx: ToolContext
+): Promise<ToolResult> {
+  const finding = params.finding as string | undefined;
+  if (!finding) {
+    return fail('memory.note_finding requires "finding" param');
+  }
+
+  const evidence = (params.evidence as string) || '';
+  const importance = Math.min(10, Math.max(1, (params.importance as number) || 5));
+  const round = (params.round as number) || 0;
+
+  if (!ctx.memoryCoordinator) {
+    if (ctx.sessionStore) {
+      ctx.sessionStore.save(`finding:${Date.now()}`, finding, {
+        tags: ['finding'],
+        evidence,
+        importance,
+      });
+      return ok({
+        recorded: true,
+        target: 'sessionStore',
+        importance,
+        message: `📌 Finding recorded (sessionStore fallback): "${finding.substring(0, 80)}"`,
+      });
+    }
+    return fail('Neither memoryCoordinator nor sessionStore available');
+  }
+
+  const message = ctx.memoryCoordinator.noteFinding(finding, evidence, importance, round);
+  return ok({ recorded: true, target: 'activeContext', importance, message });
 }
 
 async function handleRecall(

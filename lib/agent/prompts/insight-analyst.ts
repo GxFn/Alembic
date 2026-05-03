@@ -327,10 +327,13 @@ ${depthHint}
 【跨维度去重】只分析属于当前维度视角的内容。不要将其他维度的知识点混入本维度来充数。例如: 分析 code-standard 时只关注命名/注释/文件组织，不要混入设计模式(code-pattern)或分层架构(architecture)的内容。如果某个发现与多个维度相关，则只从当前维度的核心视角分析，避免与其他维度产生重叠。
 【本地子包覆盖】如果项目有本地子包/模块（如 Packages/ 目录下的包），必须同时分析其内部实现，不得仅看主项目对其的调用。`);
 
-  // §5 前序上下文提示
-  parts.push('可以调用 get_previous_analysis 获取前序维度的分析结果，避免重复分析。');
-  parts.push('使用 note_finding 工具记录关键发现到工作记忆，确保重要信息不会在后期被遗忘。');
-  parts.push('使用 get_previous_evidence 工具查询前序维度对特定文件/类的分析证据，避免重复搜索。');
+  // §5 工具使用提示
+  parts.push(
+    '使用 memory({ action: "note_finding", params: { finding: "发现描述", evidence: "文件路径:行号", importance: 8 } }) 记录关键发现，确保重要信息不会在后期被遗忘。每个重要发现都必须记录，这直接影响分析质量评分。'
+  );
+  parts.push(
+    '使用 memory({ action: "recall", params: { tags: ["finding"] } }) 回顾已记录的发现，避免重复分析。'
+  );
 
   // §6 前序维度分析摘要 (Tier 2+ 才有)
   if (episodicMemory) {

@@ -17,7 +17,7 @@ export class BootstrapAnalyze extends CapabilityV2 {
       code: ['search', 'read', 'outline', 'structure'],
       terminal: ['exec'],
       graph: ['overview', 'query'],
-      memory: ['save', 'recall'],
+      memory: ['save', 'recall', 'note_finding'],
       meta: ['plan'],
     };
   }
@@ -32,13 +32,14 @@ export class BootstrapAnalyze extends CapabilityV2 {
 | 全局扫描 | graph.overview + code.structure 获取项目概览 |
 | 结构化探索 | graph.query + code.search 批量搜索关键模式 |
 | 深度验证 | code.read 阅读关键实现 |
-| 记录发现 | memory.save 保存重要发现 |
+| 记录发现 | memory.note_finding 记录关键发现（含证据和重要性评分） |
 
 关键规则:
 - 批量搜索: code.search({ patterns: [...] })
 - 大文件自动返回 outline，需要时用 startLine/endLine 读取
 - 不要重复搜索相同关键词
 - 调用关系优先用 graph.query(type: "callers")
+- 每发现重要模式/问题，立即调用 memory({ action: "note_finding", params: { finding: "...", evidence: "文件路径:行号", importance: 8 } })
 
 ${super.promptFragment}`;
   }

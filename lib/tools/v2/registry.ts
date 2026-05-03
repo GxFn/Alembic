@@ -367,6 +367,29 @@ const MEMORY_SPEC: ToolSpec = {
       concurrency: 'parallel',
       risk: 'read-only',
     },
+    note_finding: {
+      summary: 'Record a structured key finding to ActiveContext scratchpad',
+      description:
+        'Record an important discovery with evidence and importance rating. These findings feed into QualityGate evaluation (evidenceScore) and are preserved across context compression.',
+      params: {
+        type: 'object',
+        properties: {
+          finding: { type: 'string', description: 'Key finding description' },
+          evidence: {
+            type: 'string',
+            description: 'Evidence reference (file path:line, e.g. "src/App.tsx:42")',
+          },
+          importance: {
+            type: 'number',
+            description: 'Importance rating 1-10 (default 5)',
+          },
+        },
+        required: ['finding'],
+      },
+      handler: async (p, ctx) => handleMemory('note_finding', p, ctx),
+      concurrency: 'parallel',
+      risk: 'write',
+    },
   },
 };
 

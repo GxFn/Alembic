@@ -18,7 +18,7 @@ export class ScanAnalyze extends CapabilityV2 {
       terminal: ['exec'],
       knowledge: ['search'],
       graph: ['query'],
-      memory: ['save'],
+      memory: ['save', 'note_finding'],
     };
   }
 }

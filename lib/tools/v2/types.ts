@@ -136,6 +136,9 @@ export interface ToolContext {
 
   /** 工具注册表引用 (meta.tools 自省需要，由 router 自动注入) */
   toolRegistry?: ToolRegistry;
+
+  /** Agent 记忆协调器 — memory.note_finding 桥接到 ActiveContext.#scratchpad */
+  memoryCoordinator?: MemoryCoordinatorLike;
 }
 
 /** action handler 函数签名 */
@@ -159,6 +162,17 @@ export interface CapabilityV2Def {
 /* ------------------------------------------------------------------ */
 /*  DI 接口 (Lightweight)                                              */
 /* ------------------------------------------------------------------ */
+
+/** MemoryCoordinator 最小接口 — memory.note_finding 通过此接口写入 ActiveContext */
+export interface MemoryCoordinatorLike {
+  noteFinding(
+    finding: string,
+    evidence: string,
+    importance: number,
+    round: number,
+    scopeId?: string
+  ): string;
+}
 
 /** DeltaCache 最小接口 */
 export interface DeltaCacheLike {

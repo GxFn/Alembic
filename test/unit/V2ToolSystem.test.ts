@@ -58,13 +58,13 @@ describe('V2 Registry', () => {
     }
   });
 
-  test('total 17 actions', () => {
+  test('total 18 actions', () => {
     let count = 0;
     for (const spec of Object.values(TOOL_REGISTRY)) {
       count += Object.keys(spec.actions).length;
     }
-    // code:5 + terminal:1 + knowledge:4 + graph:2 + memory:2 + meta:3 = 17
-    expect(count).toBe(17);
+    // code:5 + terminal:1 + knowledge:4 + graph:2 + memory:3 + meta:3 = 18
+    expect(count).toBe(18);
   });
 
   test('every action has required fields', () => {
@@ -289,6 +289,77 @@ describe('memory (save + recall)', () => {
     expect(result.ok).toBe(true);
     const data = result.data as { count?: number };
     expect(data.count).toBe(0);
+  });
+
+  test('note_finding bridges to memoryCoordinator', async () => {
+    const findings: Array<{
+      finding: string;
+      evidence: string;
+      importance: number;
+      round: number;
+    }> = [];
+    const ctx = makeCtx({
+      memoryCoordinator: {
+        noteFinding(finding: string, evidence: string, importance: number, round: number) {
+          findings.push({ finding, evidence, importance, round });
+          return `📌 recorded: ${finding}`;
+        },
+      },
+    });
+
+    const result = await router.execute(
+      {
+        tool: 'memory',
+        action: 'note_finding',
+        params: { finding: 'Uses MVVM pattern', evidence: 'src/App.swift:12', importance: 8 },
+      },
+      ctx
+    );
+    expect(result.ok).toBe(true);
+    const data = result.data as { recorded: boolean; target: string; importance: number };
+    expect(data.recorded).toBe(true);
+    expect(data.target).toBe('activeContext');
+    expect(data.importance).toBe(8);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].finding).toBe('Uses MVVM pattern');
+    expect(findings[0].evidence).toBe('src/App.swift:12');
+  });
+
+  test('note_finding falls back to sessionStore when no memoryCoordinator', async () => {
+    const saved: Array<{ key: string; content: string }> = [];
+    const ctx = makeCtx({
+      sessionStore: {
+        save(key: string, content: string) {
+          saved.push({ key, content });
+        },
+        recall() {
+          return [];
+        },
+      },
+    });
+
+    const result = await router.execute(
+      {
+        tool: 'memory',
+        action: 'note_finding',
+        params: { finding: 'Fallback test' },
+      },
+      ctx
+    );
+    expect(result.ok).toBe(true);
+    const data = result.data as { target: string };
+    expect(data.target).toBe('sessionStore');
+    expect(saved).toHaveLength(1);
+    expect(saved[0].content).toBe('Fallback test');
+  });
+
+  test('note_finding requires finding param', async () => {
+    const result = await router.execute(
+      { tool: 'memory', action: 'note_finding', params: {} },
+      makeCtx()
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('finding');
   });
 });
 
