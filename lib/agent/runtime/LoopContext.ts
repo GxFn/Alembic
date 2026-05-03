@@ -17,6 +17,7 @@ import type { ContextWindow } from '../context/ContextWindow.js';
 import type { ExplorationTracker } from '../context/ExplorationTracker.js';
 import type { ActiveContext } from '../memory/ActiveContext.js';
 import type { MemoryCoordinator } from '../memory/MemoryCoordinator.js';
+import type { BudgetController } from './BudgetController.js';
 import type { DiagnosticsCollector } from './DiagnosticsCollector.js';
 import type { ExitController } from './ExitController.js';
 import type { MessageAdapter } from './MessageAdapter.js';
@@ -165,11 +166,8 @@ export class LoopContext {
   /** ExitController — 统一退出决策 */
   exitController: ExitController | null;
 
-  /** L4 compaction 标记: session 预算压力下需要异步 LLM 摘要压缩 */
-  _pendingL4Compaction = false;
-
-  /** 连续 cache hit 为 0 的轮次计数（TurnTelemetry 告警用） */
-  _consecutiveZeroCacheHits = 0;
+  /** BudgetController — 预算决策 + 压缩触发 + 遥测 */
+  budgetController: BudgetController | null = null;
 
   constructor(config: LoopContextConfig) {
     this.messages = config.messages;

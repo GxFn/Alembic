@@ -199,15 +199,16 @@ export function createBootstrapDimensionRuntimeInput({
     allowedKnowledgeTypes: dimConfig.allowedKnowledgeTypes || [],
   };
   const contextWindow = systemRunContextFactory.createContextWindow({ isSystem: true });
+  const computedBudget = computeAnalystBudget(
+    projectInfo.fileCount || 0,
+    contextWindow.tokenBudget
+  );
   const systemRunContext = createSystemRunContext({
     memoryCoordinator,
     scopeId: analystScopeId,
     activeContext: memoryCoordinator.getActiveContext(analystScopeId),
     contextWindow,
-    tracker: ExplorationTracker.resolve(
-      { source: 'system', strategy: 'analyst' },
-      computeAnalystBudget(projectInfo.fileCount || 0, contextWindow.tokenBudget)
-    ),
+    tracker: ExplorationTracker.resolve({ source: 'system', strategy: 'analyst' }, computedBudget),
     source: 'system',
     outputType: dimConfig.outputType || 'analysis',
     dimId,
@@ -222,6 +223,7 @@ export function createBootstrapDimensionRuntimeInput({
       _bootstrapDedup: bootstrapDedup,
     },
     extraFields: {
+      _computedBudget: computedBudget,
       dimConfig,
       projectInfo,
       dimContext,

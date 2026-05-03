@@ -51,6 +51,7 @@ import {
   type ToolMetadata,
 } from './AgentRuntimeTypes.js';
 import { AgentState } from './AgentState.js';
+import { BudgetController } from './BudgetController.js';
 import { DiagnosticsCollector } from './DiagnosticsCollector.js';
 import { createExitController } from './ExitController.js';
 import { cleanFinalAnswer } from './final-answer.js';
@@ -523,6 +524,20 @@ export class AgentRuntime {
     });
 
     ctx.exitController = createExitController(ctx, this.policies);
+
+    ctx.budgetController = new BudgetController({
+      maxSessionInputTokens: (budget.maxSessionInputTokens as number) || 0,
+      maxSessionTokens: budget.maxSessionTokens as number | undefined,
+      cumulativeUsage: this.tokenUsage,
+      contextWindow: contextWindow || null,
+      tracker: (tracker || null) as
+        | import('../context/ExplorationTracker.js').ExplorationTracker
+        | null,
+      baseSystemPromptLength: baseSystemPrompt.length,
+      toolSchemaCount: toolSchemas.length,
+      logger: this.logger,
+    });
+
     return ctx;
   }
 
@@ -616,8 +631,9 @@ export class AgentRuntime {
       }
     }
 
-    // 压缩检查
-    const compactResult = messages.compactIfNeeded();
+    // 压缩检查 — 委托 BudgetController
+    const budgetCtrl = ctx.budgetController!;
+    const compactResult = budgetCtrl.runCompactionCycle();
     if (compactResult.level > 0) {
       this.logger.info(
         `[AgentRuntime] context compacted: L${compactResult.level}, removed ${compactResult.removed} items`
@@ -625,8 +641,8 @@ export class AgentRuntime {
     }
 
     // ── Session token 预算预检 ──
-    const sessionCompact = { level: 0, removed: 0 };
-    const tokenBudgetAction = this.#checkSessionTokenBudget(ctx, sessionCompact);
+    const preLLMCheck = budgetCtrl.checkBeforeLLMCall(ctx.iteration);
+    const tokenBudgetAction = preLLMCheck.action;
 
     // 动态 toolChoice
     const forceSummaryAt = Math.max(2, Math.ceil(maxIterations * 0.8));
@@ -677,104 +693,13 @@ export class AgentRuntime {
     }
     const dynamicContext = dynamicParts.length > 0 ? dynamicParts.join('\n\n') : null;
 
-    // 合并两阶段压缩结果 (messages.compactIfNeeded + session budget 二次压缩)
+    // 合并常规压缩 + session budget 二次压缩
     const mergedCompact = {
-      level: Math.max(compactResult.level, sessionCompact.level),
-      removed: compactResult.removed + sessionCompact.removed,
+      level: Math.max(compactResult.level, preLLMCheck.compaction.level),
+      removed: compactResult.removed + preLLMCheck.compaction.removed,
     };
 
     return { toolChoice, effectiveSystemPrompt, dynamicContext, compactResult: mergedCompact };
-  }
-
-  /**
-   * Session token 预算预检 — 在 LLM 调用前估算 input token 消耗，
-   * 防止单轮 LLM 调用把 session token 从安全区直接推到超限。
-   *
-   * 预估逻辑: 本轮 input token ≈ ContextWindow.estimateTokens() + systemPrompt + toolSchemas
-   * 预检阈值:
-   *   - 已用 + 预估 > budget × 0.85 → 触发激进压缩 (L4)
-   *   - 已用 + 预估 > budget × 0.95 → 强制 SUMMARIZE + toolChoice=none
-   *
-   * @returns 'normal' | 'compress' | 'summarize'
-   */
-  #checkSessionTokenBudget(
-    ctx: LoopContext,
-    compactOut?: { level: number; removed: number }
-  ): 'normal' | 'compress' | 'summarize' {
-    const sessionBudget = ctx.budget.maxSessionInputTokens;
-    if (!sessionBudget) {
-      return 'normal';
-    }
-
-    const usedInputTokens = this.tokenUsage.input;
-    const estimatedNextCallTokens = this.#estimateNextCallInputTokens(ctx);
-    const projected = usedInputTokens + estimatedNextCallTokens;
-    const ratio = projected / sessionBudget;
-
-    // 同步 session pressure 到 ContextWindow（影响工具结果配额）
-    if (ctx.contextWindow) {
-      ctx.contextWindow.setSessionPressure(usedInputTokens / sessionBudget);
-    }
-
-    if (ratio <= 0.85) {
-      return 'normal';
-    }
-
-    if (ratio > 0.95) {
-      this.logger.info(
-        `[AgentRuntime] ⚠ session token 预算预检: ${usedInputTokens} used + ~${estimatedNextCallTokens} estimated = ${projected}/${sessionBudget} (${(ratio * 100).toFixed(1)}%) → 强制 SUMMARIZE`
-      );
-      if (ctx.tracker) {
-        ctx.tracker.forceTerminal(`session token budget ${(ratio * 100).toFixed(0)}% projected`);
-      }
-      return 'summarize';
-    }
-
-    // 85%-95%: 触发激进压缩
-    this.logger.info(
-      `[AgentRuntime] ⚠ session token 预算预检: ${usedInputTokens} used + ~${estimatedNextCallTokens} estimated = ${projected}/${sessionBudget} (${(ratio * 100).toFixed(1)}%) → 激进压缩`
-    );
-
-    if (ctx.contextWindow) {
-      const cw = ctx.contextWindow;
-      const extraCompact = cw.compactIfNeeded();
-      if (extraCompact.level > 0) {
-        this.logger.info(
-          `[AgentRuntime] session budget pressure → extra compact L${extraCompact.level}, removed ${extraCompact.removed}`
-        );
-        if (compactOut) {
-          compactOut.level = Math.max(compactOut.level, extraCompact.level);
-          compactOut.removed += extraCompact.removed;
-        }
-      }
-      if (cw.needsL4Compaction()) {
-        ctx._pendingL4Compaction = true;
-      }
-    }
-
-    return 'compress';
-  }
-
-  /**
-   * 预估下一次 LLM 调用的 input token 消耗量。
-   *
-   * 策略: 如果有 ContextWindow，使用其 estimateFullContextTokens；
-   * 否则根据历史平均值或最近一轮的 usage 推算。
-   */
-  #estimateNextCallInputTokens(ctx: LoopContext): number {
-    if (ctx.contextWindow) {
-      return ctx.contextWindow.estimateFullContextTokens(
-        ctx.baseSystemPrompt.length,
-        ctx.toolSchemas.length
-      );
-    }
-
-    // 无 ContextWindow 时使用历史平均值
-    if (ctx.iteration > 1 && this.tokenUsage.input > 0) {
-      return Math.ceil(this.tokenUsage.input / (ctx.iteration - 1));
-    }
-
-    return 8000;
   }
 
   /**
@@ -792,29 +717,12 @@ export class AgentRuntime {
     compactResult?: { level: number; removed: number }
   ): Promise<LLMResult | null> {
     // L4 compaction: session 预算压力下执行 LLM-based 摘要压缩
-    if (ctx._pendingL4Compaction && ctx.contextWindow) {
-      ctx._pendingL4Compaction = false;
-      try {
-        const l4Result = await ctx.contextWindow.compactL4(
-          this.aiProvider as unknown as Parameters<typeof ctx.contextWindow.compactL4>[0]
-        );
-        if (l4Result.removed > 0) {
-          this.logger.info(
-            `[AgentRuntime] L4 compaction executed: removed ${l4Result.removed} messages`
-          );
-        }
-        if (l4Result.usage) {
-          const usage = l4Result.usage as Record<string, number>;
-          this.tokenUsage.input += usage.inputTokens || 0;
-          this.tokenUsage.output += usage.outputTokens || 0;
-          ctx.addTokenUsage({
-            inputTokens: usage.inputTokens || 0,
-            outputTokens: usage.outputTokens || 0,
-          });
-        }
-      } catch (err) {
-        this.logger.warn(`[AgentRuntime] L4 compaction failed: ${err}`);
-      }
+    const budgetCtrl = ctx.budgetController!;
+    if (budgetCtrl.pendingL4) {
+      await budgetCtrl.executeL4IfPending(
+        this.aiProvider as unknown as Parameters<typeof budgetCtrl.executeL4IfPending>[0],
+        (u) => ctx.addTokenUsage(u)
+      );
     }
 
     this.bus.publish(
@@ -879,41 +787,19 @@ export class AgentRuntime {
       return this.#handleAiError(ctx, aiErr as AiError);
     }
 
-    // 累计 Token (runtime 级 + loop 级)
+    // 累计 Token (BudgetController 管理 runtime 级, LoopContext 管理 loop 级)
     if (llmResult.usage) {
-      this.tokenUsage.input += llmResult.usage.inputTokens || 0;
-      this.tokenUsage.output += llmResult.usage.outputTokens || 0;
-      this.tokenUsage.reasoning += llmResult.usage.reasoningTokens || 0;
-      this.tokenUsage.cacheHit += llmResult.usage.cacheHitTokens || 0;
+      budgetCtrl.recordLLMUsage(llmResult.usage);
       ctx.addTokenUsage(llmResult.usage);
     }
 
-    // ── TurnTelemetry: 每轮 token 消耗可观测性 ──
+    // ── TurnTelemetry ──
     if (llmResult.usage && ctx.isSystem) {
-      const u = llmResult.usage;
-      const inTok = u.inputTokens || 0;
-      const cacheRate = inTok > 0 ? ((u.cacheHitTokens || 0) / inTok) * 100 : 0;
-      const sessionBudget = ctx.budget.maxSessionInputTokens || 0;
-      const sessionRatio = sessionBudget > 0 ? (this.tokenUsage.input / sessionBudget) * 100 : 0;
-      this.logger.info(
-        `[TurnTelemetry] iter=${ctx.iteration} | ` +
-          `in=${inTok} out=${u.outputTokens || 0} reasoning=${u.reasoningTokens || 0} ` +
-          `cache=${u.cacheHitTokens || 0} (${cacheRate.toFixed(0)}% hit) | ` +
-          `compact=L${compactResult?.level ?? 0} | ` +
-          `session=${this.tokenUsage.input}/${sessionBudget} (${sessionRatio.toFixed(1)}%)`
-      );
-
-      // 告警: 连续 3 轮 cache hit = 0
-      if ((u.cacheHitTokens || 0) === 0 && inTok > 1024) {
-        ctx._consecutiveZeroCacheHits = (ctx._consecutiveZeroCacheHits || 0) + 1;
-        if (ctx._consecutiveZeroCacheHits >= 3) {
-          this.logger.warn(
-            `[TurnTelemetry] ⚠ ${ctx._consecutiveZeroCacheHits} consecutive turns with 0 cache hits — check if system prompt is being modified`
-          );
-        }
-      } else {
-        ctx._consecutiveZeroCacheHits = 0;
-      }
+      budgetCtrl.emitTurnTelemetry({
+        iteration: ctx.iteration,
+        currentUsage: llmResult.usage,
+        compaction: compactResult ?? { level: 0, removed: 0 },
+      });
     }
 
     this.bus.publish(
@@ -1067,17 +953,9 @@ export class AgentRuntime {
     let roundHasNewInfo = false;
     const roundToolNames: string[] = [];
 
-    // 并行工具调用共享 token 预算: 总预算按调用数分摊，
-    // 避免 N 个并行调用各自拿满 maxChars 导致 token 爆炸。
-    // 公式: roundBudget = baseQuota.maxChars × ceil(N/2), 每个工具分得 roundBudget / N
-    const baseQuota = messages.getToolResultQuota();
-    const roundMaxChars = baseQuota.maxChars * Math.ceil(activeCalls.length / 2);
-    const perToolMaxChars = Math.max(400, Math.floor(roundMaxChars / activeCalls.length));
-    const perToolMaxMatches = Math.max(
-      2,
-      Math.floor((baseQuota.maxMatches * Math.ceil(activeCalls.length / 2)) / activeCalls.length)
-    );
-    let roundCharsUsed = 0;
+    // 并行工具调用共享 token 预算 — 委托 BudgetController
+    const budgetCtrl = ctx.budgetController!;
+    const toolBudget = budgetCtrl.getToolBudget(activeCalls.length);
 
     // 执行每个工具
     for (const fc of activeCalls) {
@@ -1155,11 +1033,11 @@ export class AgentRuntime {
         callId: fc.id,
       });
 
-      // 工具结果格式化 — 使用本轮分摊配额而非全局配额
-      const remainingBudget = Math.max(400, roundMaxChars - roundCharsUsed);
+      // 工具结果格式化 — 使用 BudgetController 分摊配额
+      const remaining = budgetCtrl.getRemainingToolBudget();
       const toolQuota = {
-        maxChars: Math.min(perToolMaxChars, remainingBudget),
-        maxMatches: perToolMaxMatches,
+        maxChars: Math.min(toolBudget.perToolMaxChars, remaining.maxChars),
+        maxMatches: toolBudget.perToolMaxMatches,
       };
       const rawForLimit = envelope || toolResult;
       let resultStr: string;
@@ -1168,7 +1046,7 @@ export class AgentRuntime {
       } else {
         resultStr = limitToolResult(fc.name, rawForLimit, toolQuota);
       }
-      roundCharsUsed += resultStr.length;
+      budgetCtrl.recordToolCharsUsed(resultStr.length);
 
       // 提交去重: pipeline 中间件已标记 metadata
       const dedupMessage = (metadata as ToolMetadata).dedupMessage;

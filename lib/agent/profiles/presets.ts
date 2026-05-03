@@ -270,8 +270,8 @@ export const PRESETS = Object.freeze({
           maxTokens: config?.maxTokens ?? 4096,
           temperature: config?.temperature ?? 0.3,
           timeoutMs: config?.timeoutMs ?? 3_600_000,
-          maxSessionTokens: ANALYST_BUDGET.maxSessionTokens,
-          maxSessionInputTokens: ANALYST_BUDGET.maxSessionInputTokens,
+          // Session token 限制由 BudgetController 统一管理
+          // (基于 computeAnalystBudget 动态计算，与 contextWindowBudget 对齐)
         }),
       (config?: PolicyFactoryConfig) =>
         new QualityGatePolicy({

@@ -382,9 +382,13 @@ export class PipelineStrategy extends Strategy {
       ctx
     );
 
-    // Budget (retry 时使用 retryBudget)
+    // Budget (retry 时使用 retryBudget; 无 stage.budget 时回退到 strategyContext._computedBudget)
     const isRetry = !!phaseResults[`_was_retry_${stage.name}`];
-    const effectiveBudget = isRetry && stage.retryBudget ? stage.retryBudget : stage.budget;
+    const computedBudget = (strategyContext._computedBudget || null) as StageBudget | null;
+    const effectiveBudget =
+      isRetry && stage.retryBudget
+        ? stage.retryBudget
+        : stage.budget || computedBudget || undefined;
     delete phaseResults[`_was_retry_${stage.name}`];
 
     // 阶段隔离 (ContextWindow + ExplorationTracker)
