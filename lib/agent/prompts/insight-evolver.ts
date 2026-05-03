@@ -52,8 +52,6 @@ export interface EvolutionContext {
     fileCount: number;
     modules: string[];
   };
-  terminalTest?: boolean;
-  terminalToolset?: string;
   toolPolicyHints?: Record<string, unknown> | null;
 }
 
@@ -228,10 +226,13 @@ export function buildEvolverPrompt(
   parts.push('- 使用 `graph({ action: "query" })` 验证符号关系和调用链');
   parts.push('- 确认该模式是否迁移到了新位置或已被完全移除');
   parts.push('');
-  if (strategyContext.terminalTest) {
+  const terminalCapability = strategyContext.toolPolicyHints?.terminalCapability as
+    | Record<string, unknown>
+    | undefined;
+  if (terminalCapability?.enabled === true) {
     parts.push('**可选终端验证**');
     parts.push(
-      `- 当前终端实验档位: ${strategyContext.terminalToolset || 'terminal-exec'}；终端只用于验证工程命令事实`
+      `- 当前终端能力档位: ${String(terminalCapability.toolset || 'terminal-exec')}；终端只用于验证工程命令事实`
     );
     parts.push('- 使用 terminal({ action: "exec" }) 执行验证命令');
     parts.push('- Evolution 阶段默认不使用 terminal_pty');

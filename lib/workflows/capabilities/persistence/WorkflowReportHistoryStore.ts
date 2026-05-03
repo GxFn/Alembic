@@ -17,7 +17,7 @@ export function buildWorkflowReportSummary(report: WorkflowReport) {
     timestamp: report.timestamp,
     project: report.project,
     mode: session?.mode || null,
-    terminalToolset: session?.terminalToolset || 'baseline',
+    terminalCapability: session?.terminalCapability || 'baseline',
     durationMs: duration.totalMs || 0,
     candidates: totals.candidates || 0,
     toolCalls: totals.toolCalls || 0,

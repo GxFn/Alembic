@@ -179,16 +179,6 @@ export class ToolExecutionPipeline {
                 ? loopCtx.sharedState._dimensionScopeId
                 : null,
             currentRound: loopCtx.iteration || 0,
-            terminalTest: loopCtx.context?.terminalTest === true,
-            terminalToolset:
-              typeof loopCtx.context?.terminalToolset === 'string'
-                ? loopCtx.context.terminalToolset
-                : null,
-            allowedTerminalModes: Array.isArray(loopCtx.context?.allowedTerminalModes)
-              ? loopCtx.context.allowedTerminalModes.filter(
-                  (mode): mode is string => typeof mode === 'string'
-                )
-              : [],
           },
         });
         metadata.envelope = envelope;

@@ -2157,7 +2157,7 @@ export interface BootstrapReportSummary {
   timestamp: string;
   project?: Record<string, unknown>;
   mode?: string | null;
-  terminalToolset?: string;
+  terminalCapability?: string;
   durationMs?: number;
   candidates?: number;
   toolCalls?: number;

@@ -72,27 +72,20 @@ export class AgentStageFactoryRegistry {
       const needsCandidates = params.needsCandidates !== false;
       const hasExistingRecipes = params.hasExistingRecipes === true;
       const prescreenDone = params.prescreenDone === true;
-      const terminalToolset = resolveBootstrapTerminalToolset({
-        terminalTest: params.terminalTest ?? context?.terminalTest,
-        terminalToolset: params.terminalToolset ?? context?.terminalToolset,
-        allowedTerminalModes: params.allowedTerminalModes ?? context?.allowedTerminalModes,
-      });
-      const terminalPolicyHints = buildBootstrapTerminalPolicyHints(terminalToolset);
+      const terminalCapability = resolveBootstrapTerminalToolset();
+      const terminalPolicyHints = buildBootstrapTerminalPolicyHints(terminalCapability);
       const memoryCoordinator = context?.memoryCoordinator as
         | { allocateBudget?: (role: string) => void }
         | undefined;
 
       const withTerminalPromptContext = (ctx: Record<string, unknown>) => ({
         ...ctx,
-        terminalTest: terminalToolset.terminalTest,
-        terminalToolset: terminalToolset.terminalToolset,
-        allowedTerminalModes: terminalToolset.allowedTerminalModes,
         toolPolicyHints: terminalPolicyHints,
       });
 
       const analyzeStage = {
         ...presetStages[0],
-        additionalTools: getBootstrapStageTerminalTools('analyze', terminalToolset),
+        additionalTools: getBootstrapStageTerminalTools('analyze', terminalCapability),
         promptBuilder: (ctx: Record<string, unknown>) =>
           presetStages[0].promptBuilder?.(withTerminalPromptContext(ctx)),
       };
@@ -114,7 +107,7 @@ export class AgentStageFactoryRegistry {
             ...evolutionPresetStages[0],
             additionalTools: getBootstrapStageTerminalTools(
               evolutionPresetStages[0].name || 'evolve',
-              terminalToolset
+              terminalCapability
             ),
             promptBuilder: (ctx: Record<string, unknown>) =>
               evolutionPresetStages[0].promptBuilder?.(withTerminalPromptContext(ctx)),

@@ -97,7 +97,7 @@ export const ANALYST_SYSTEM_PROMPT = `你是一位高级软件架构师，正在
 - **批量读文件**: code({ action: "read", params: { filePaths: ["a.m", "b.m", "c.m"] } }) — 一次读 3-5 个
 - **结构化查询优先**: graph({ action: "query", params: { type: "hierarchy"/"class" } }) 比文本搜索更精确高效
 - **调用关系查询优先**: graph({ action: "query", params: { type: "callers"/"callees" } }) 比文本搜索更适合验证调用链
-- **终端仅作验证**: 只有当前冷启动终端测试模式启用，且需要验证脚本、测试入口、CLI 行为或工程事实时才使用终端工具
+- **终端仅作验证**: 终端是默认沙箱能力；只在需要验证脚本、测试入口、CLI 行为或工程事实时使用
 
 ## 输出要求
 输出你的分析发现，包括具体的文件完整相对路径（从项目根目录开始）和行号。
@@ -450,7 +450,7 @@ ${depthHint}
   }
 
   // §EVO: Evolution 结果 — 避免重复覆盖已被 Evolution Agent 处理的模式
-  if (evolutionResult && evolutionResult.totalRecipes && evolutionResult.totalRecipes > 0) {
+  if (evolutionResult?.totalRecipes && evolutionResult.totalRecipes > 0) {
     const evoLines = [
       '## 🔄 Evolution 结果',
       `Evolution Agent 已审查本维度 ${evolutionResult.totalRecipes} 个现有 Recipe:`,
@@ -463,9 +463,12 @@ ${depthHint}
     parts.push(evoLines.join('\n'));
   }
 
-  if (toolPolicyHints?.terminalTest === true) {
+  const terminalCapability = toolPolicyHints?.terminalCapability as
+    | Record<string, unknown>
+    | undefined;
+  if (terminalCapability?.enabled === true) {
     parts.push(`## 终端工具使用边界
-- 当前终端实验档位: ${String(toolPolicyHints.terminalToolset || 'terminal-exec')}
+- 当前终端能力档位: ${String(terminalCapability.toolset || 'terminal-exec')}
 - 终端是可选的代码分析证据工具，不是必调工具
 - 默认先用全景数据、graph({ action: "query" })、code({ action: "search" })、code({ action: "read" })
 - 需要确认工程事实时优先 terminal({ action: "exec" })

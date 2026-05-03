@@ -10,10 +10,6 @@ import type {
   BootstrapTaskManagerLike,
   BootstrapWorkflowContext,
 } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillTypes.js';
-import {
-  type BootstrapTerminalToolsetConfig,
-  resolveBootstrapTerminalToolset,
-} from '#workflows/capabilities/planning/dimensions/BootstrapTerminalToolset.js';
 
 const logger = Logger.getInstance();
 
@@ -36,7 +32,6 @@ export interface InternalDimensionFillPreparation {
   taskManager: BootstrapTaskManagerLike | null;
   sessionId: string;
   sessionAbortSignal: AbortSignal | null;
-  terminalToolsetConfig: BootstrapTerminalToolsetConfig;
   isIncremental: boolean;
   emitter: BootstrapEventEmitter;
   allFiles: BootstrapFileEntry[] | null;
@@ -102,11 +97,6 @@ export function prepareInternalDimensionFillRun(
     taskManager,
     sessionId: view.bootstrapSession?.id ?? '',
     sessionAbortSignal: taskManager?.getSessionAbortSignal?.() ?? null,
-    terminalToolsetConfig: resolveBootstrapTerminalToolset({
-      terminalTest: view.terminalTest,
-      terminalToolset: view.terminalToolset,
-      allowedTerminalModes: view.allowedTerminalModes,
-    }),
     isIncremental,
     emitter,
     allFiles: snapshot.allFiles as unknown as BootstrapFileEntry[] | null,

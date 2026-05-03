@@ -1,8 +1,4 @@
-import {
-  normalizeDimensionIds,
-  normalizeStringArray,
-  type WorkflowExecutor,
-} from '#workflows/shared/WorkflowTypes.js';
+import { normalizeDimensionIds, type WorkflowExecutor } from '#workflows/shared/WorkflowTypes.js';
 
 export type ColdStartExecutor = WorkflowExecutor;
 
@@ -12,9 +8,6 @@ export interface InternalColdStartArgs {
   contentMaxLines?: number;
   incremental?: boolean;
   skipAsyncFill?: boolean;
-  terminalTest?: boolean;
-  terminalToolset?: string;
-  allowedTerminalModes?: string[];
   loadSkills?: boolean;
   dimensions?: string[];
   [key: string]: unknown;
@@ -31,9 +24,6 @@ export interface ColdStartProjectAnalysisIntent {
 
 export interface InternalColdStartExecutionIntent {
   skipAsyncFill: boolean;
-  terminalTest: boolean;
-  terminalToolset?: string;
-  allowedTerminalModes?: string[];
 }
 
 export interface ColdStartWorkflowIntent {
@@ -67,9 +57,6 @@ export function createInternalColdStartIntent(
     dimensionIds: normalizeDimensionIds(args.dimensions),
     internalExecution: {
       skipAsyncFill: args.skipAsyncFill ?? false,
-      terminalTest: args.terminalTest === true,
-      terminalToolset: typeof args.terminalToolset === 'string' ? args.terminalToolset : undefined,
-      allowedTerminalModes: normalizeStringArray(args.allowedTerminalModes),
     },
     ignoredFileDiffIncremental: args.incremental === true,
   };

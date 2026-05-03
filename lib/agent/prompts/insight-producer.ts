@@ -249,13 +249,16 @@ export function buildProducerPromptV2(
   parts.push(STYLE_GUIDE);
   parts.push(SUBMIT_REQUIREMENTS);
   parts.push(`## Producer 工具边界
-- 不使用终端工具，即使当前冷启动启用了终端实验档位
+- 不使用终端工具，即使当前冷启动启用了终端能力档位
 - 不新增搜索探索；只在必要时 code({ action: "read" }) 补齐 Analyst 已指出的证据
 - knowledge({ action: "submit" }) 内置查重和校验，直接提交即可
 - meta({ action: "review" }) 用于自检，不替代提交`);
-  if (toolPolicyHints?.terminalTest === true) {
+  const terminalCapability = toolPolicyHints?.terminalCapability as
+    | Record<string, unknown>
+    | undefined;
+  if (terminalCapability?.enabled === true) {
     parts.push(
-      `当前终端实验档位是 ${String(toolPolicyHints.terminalToolset || 'unknown')}，但 Producer 阶段禁止使用终端。`
+      `当前终端能力档位是 ${String(terminalCapability.toolset || 'unknown')}，但 Producer 阶段禁止使用终端。`
     );
   }
 

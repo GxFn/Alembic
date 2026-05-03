@@ -217,7 +217,7 @@ const Header: React.FC<HeaderProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-600 border border-sky-300/40 cursor-default">
                       <TerminalSquare size={10} />
-                      {t('bootstrap.terminalTest')}
+                      {t('bootstrap.terminalCapability')}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="text-xs">

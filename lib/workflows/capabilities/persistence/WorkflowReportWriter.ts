@@ -105,7 +105,8 @@ export function buildWorkflowReport({
   const toolUsage = summarizeReportToolUsage(dimensionStats);
   const terminal = summarizeReportTerminalUsage(dimensionStats);
   const stageToolsets = summarizeReportStageToolsets(dimensionStats);
-  const terminalToolset = inferTerminalToolset(stageToolsets);
+  const terminalCapability = inferTerminalCapability(stageToolsets);
+  const terminalEnabled = terminalCapability !== 'baseline' || terminal.enabled;
   const report: WorkflowReport = {
     version: '2.7.0',
     timestamp: new Date().toISOString(),
@@ -114,8 +115,8 @@ export function buildWorkflowReport({
       mode: isIncremental && incrementalPlan ? 'incremental' : 'full',
       startedAt: new Date(Date.now() - totalTimeMs).toISOString(),
       completedAt: new Date().toISOString(),
-      terminalTest: terminalToolset !== 'baseline',
-      terminalToolset,
+      terminalEnabled: terminalCapability !== 'baseline',
+      terminalCapability,
     },
     project: {
       name: projectInfo.name,
@@ -136,12 +137,12 @@ export function buildWorkflowReport({
     },
     stageToolsets,
     toolUsage,
-    terminal,
+    terminal: { ...terminal, enabled: terminalEnabled },
     comparisonHints: {
       durationMs: totalTimeMs,
       candidates: candidateResults.created,
       toolCalls: totalToolCalls,
-      terminalEnabled: terminal.enabled,
+      terminalEnabled,
       terminalSuccessRate: terminal.successRate,
     },
     checkpoints: {
@@ -283,7 +284,7 @@ function summarizeReportTerminalUsage(dimensionStats: Record<string, DimensionSt
       | null
       | undefined;
     for (const call of diagnostics?.toolCalls || []) {
-      if (!call.tool.startsWith('terminal_')) {
+      if (call.tool !== 'terminal' && !call.tool.startsWith('terminal_')) {
         continue;
       }
       total++;
@@ -316,7 +317,7 @@ function summarizeReportTerminalUsage(dimensionStats: Record<string, DimensionSt
   };
 }
 
-function inferTerminalToolset(stageToolsets: Array<Record<string, unknown>>) {
+function inferTerminalCapability(stageToolsets: Array<Record<string, unknown>>) {
   const tools = new Set(
     stageToolsets.flatMap((toolset) =>
       Array.isArray(toolset.allowedToolIds)

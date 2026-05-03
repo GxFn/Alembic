@@ -625,14 +625,6 @@ export class PipelineStrategy extends Strategy {
         ...((message.metadata.context as Record<string, unknown>) || {}),
         pipelinePhase: stage.name,
         previousPhases: phaseResults,
-        terminalTest: strategyContext.terminalTest === true,
-        terminalToolset:
-          typeof strategyContext.terminalToolset === 'string'
-            ? strategyContext.terminalToolset
-            : null,
-        allowedTerminalModes: Array.isArray(strategyContext.allowedTerminalModes)
-          ? strategyContext.allowedTerminalModes
-          : [],
         toolPolicyHints: strategyContext.toolPolicyHints || null,
         ...(dimensionScopeId ? { dimensionScopeId } : {}),
       },

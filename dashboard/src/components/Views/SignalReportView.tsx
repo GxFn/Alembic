@@ -176,7 +176,7 @@ function BootstrapReportCard({
           bootstrap
         </span>
         <span className="text-[var(--fg-default)] font-medium truncate">
-          {summary.terminalToolset || 'baseline'}
+          {summary.terminalCapability || 'baseline'}
         </span>
         <span className="text-[var(--fg-subtle)] text-xs truncate">
           candidates={summary.candidates ?? 0}

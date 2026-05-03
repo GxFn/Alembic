@@ -2,16 +2,16 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
 import type { IncrementalPlan } from '#types/workflows.js';
+import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 import type {
   CandidateResults,
   SkillResults,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import { buildWorkflowReport } from '#workflows/capabilities/persistence/WorkflowReportWriter.js';
+} from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
+import { buildWorkflowReport } from '../../lib/workflows/capabilities/persistence/WorkflowReportWriter.js';
 import {
   persistWorkflowResult,
   summarizeWorkflowDimensionStats,
-} from '#workflows/capabilities/persistence/WorkflowResultPersistence.js';
-import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
+} from '../../lib/workflows/capabilities/persistence/WorkflowResultPersistence.js';
 
 const candidateResults: CandidateResults = { created: 2, failed: 0, errors: [] };
 const skillResults: SkillResults = { created: 1, failed: 0, skills: ['project-api'], errors: [] };
@@ -106,6 +106,82 @@ describe('WorkflowResultPersistence', () => {
           qualityGate: { action: 'pass' },
         },
       },
+    });
+  });
+
+  test('counts terminal-run tool calls in report terminal usage', () => {
+    const report = buildWorkflowReport({
+      projectInfo: { name: 'Alembic', fileCount: 10, lang: 'ts' },
+      dimensionStats: {
+        api: {
+          candidateCount: 0,
+          durationMs: 9,
+          toolCallCount: 1,
+          tokenUsage: { input: 1, output: 2 },
+          diagnostics: {
+            toolCalls: [{ tool: 'terminal', status: 'ok', ok: true, durationMs: 12 }],
+          },
+        },
+      },
+      candidateResults,
+      skillResults,
+      consolidationResult: null,
+      skippedDims: [],
+      incrementalSkippedDims: [],
+      totalTimeMs: 1234,
+      totalTokenUsage: { input: 1, output: 2 },
+      totalToolCalls: 1,
+    });
+
+    expect(report.toolUsage).toMatchObject({
+      total: 1,
+      byTool: { terminal: 1 },
+    });
+    expect(report.terminal).toMatchObject({
+      enabled: true,
+      commands: [{ dimensionId: 'api', tool: 'terminal', status: 'ok', ok: true }],
+      successRate: 1,
+    });
+  });
+
+  test('marks terminal enabled when stage toolset exposes terminal', () => {
+    const report = buildWorkflowReport({
+      projectInfo: { name: 'Alembic', fileCount: 10, lang: 'ts' },
+      dimensionStats: {
+        api: {
+          candidateCount: 0,
+          durationMs: 9,
+          toolCallCount: 0,
+          tokenUsage: { input: 1, output: 2 },
+          diagnostics: {
+            stageToolsets: [
+              {
+                stage: 'analyze',
+                allowedToolIds: ['code', 'terminal', 'graph', 'memory', 'meta'],
+                source: 'system',
+              },
+            ],
+          },
+        },
+      },
+      candidateResults,
+      skillResults,
+      consolidationResult: null,
+      skippedDims: [],
+      incrementalSkippedDims: [],
+      totalTimeMs: 1234,
+      totalTokenUsage: { input: 1, output: 2 },
+      totalToolCalls: 0,
+    });
+
+    expect(report.session).toMatchObject({
+      terminalEnabled: true,
+      terminalCapability: 'terminal-run',
+    });
+    expect(report.terminal).toMatchObject({
+      enabled: true,
+      commands: [],
+      successRate: 0,
     });
   });
 

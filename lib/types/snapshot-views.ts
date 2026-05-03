@@ -67,10 +67,6 @@ export interface PipelineFillView {
   readonly evolutionPrescreen?: EvolutionPrescreen;
   /** 管线模式：'bootstrap'（默认）全量 finalize | 'rescan' 轻量收尾 */
   readonly mode?: PipelineMode;
-  /** 冷启动终端工具集实验开关 */
-  readonly terminalTest?: boolean;
-  readonly terminalToolset?: string;
-  readonly allowedTerminalModes?: string[];
 }
 
 // ─── 视图 1: toResponseData ──────────────────────────────────

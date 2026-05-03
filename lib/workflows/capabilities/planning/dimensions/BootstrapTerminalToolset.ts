@@ -9,9 +9,9 @@ export type BootstrapTerminalToolset =
 export type BootstrapTerminalMode = 'run' | 'shell' | 'pty';
 
 export interface BootstrapTerminalToolsetConfig {
-  terminalTest: boolean;
-  terminalToolset: BootstrapTerminalToolset;
-  allowedTerminalModes: BootstrapTerminalMode[];
+  enabled: boolean;
+  toolset: BootstrapTerminalToolset;
+  modes: BootstrapTerminalMode[];
 }
 
 const TOOLSET_MODES: Record<BootstrapTerminalToolset, BootstrapTerminalMode[]> = {
@@ -32,30 +32,19 @@ const EVOLUTION_TOOLS: Partial<Record<BootstrapTerminalMode, string>> = {
   shell: 'terminal_shell',
 };
 
-export function resolveBootstrapTerminalToolset(
-  input: { terminalTest?: unknown; terminalToolset?: unknown; allowedTerminalModes?: unknown } = {}
-): BootstrapTerminalToolsetConfig {
+export function resolveBootstrapTerminalToolset(): BootstrapTerminalToolsetConfig {
   const terminalCfg = getTestModeConfig().terminal;
-  const envEnabled = terminalCfg.enabled;
   const envToolset = terminalCfg.toolset;
-  const requestedToolset = normalizeToolset(input.terminalToolset || envToolset);
+  const requestedToolset = normalizeToolset(envToolset);
 
-  const explicitEnabled =
-    typeof input.terminalTest === 'boolean' ? input.terminalTest : input.terminalTest === '1';
-  const terminalTest =
-    explicitEnabled || envEnabled || (!!requestedToolset && requestedToolset !== 'baseline');
-  const terminalToolset = terminalTest ? requestedToolset || 'terminal-run' : 'baseline';
-  const defaultModes = TOOLSET_MODES[terminalToolset];
-  const allowedTerminalModes = normalizeModes(
-    input.allowedTerminalModes,
-    defaultModes,
-    defaultModes
-  );
+  const toolset = requestedToolset || 'terminal-run';
+  const enabled = toolset !== 'baseline';
+  const defaultModes = TOOLSET_MODES[toolset];
 
   return {
-    terminalTest,
-    terminalToolset,
-    allowedTerminalModes,
+    enabled,
+    toolset,
+    modes: [...defaultModes],
   };
 }
 
@@ -63,16 +52,16 @@ export function getBootstrapStageTerminalTools(
   stageName: string,
   config: BootstrapTerminalToolsetConfig
 ): string[] {
-  if (!config.terminalTest || config.terminalToolset === 'baseline') {
+  if (!config.enabled || config.toolset === 'baseline') {
     return [];
   }
 
   if (stageName === 'analyze') {
-    return config.allowedTerminalModes.map((mode) => ANALYZE_TOOLS[mode]).filter(Boolean);
+    return config.modes.map((mode) => ANALYZE_TOOLS[mode]).filter(Boolean);
   }
 
   if (stageName === 'evolve' || stageName === 'evolution') {
-    return config.allowedTerminalModes
+    return config.modes
       .map((mode) => EVOLUTION_TOOLS[mode])
       .filter((tool): tool is string => typeof tool === 'string');
   }
@@ -82,13 +71,15 @@ export function getBootstrapStageTerminalTools(
 
 export function buildBootstrapTerminalPolicyHints(config: BootstrapTerminalToolsetConfig) {
   return {
-    terminalTest: config.terminalTest,
-    terminalToolset: config.terminalToolset,
-    allowedTerminalModes: [...config.allowedTerminalModes],
-    terminalScriptAllowed: false,
+    terminalCapability: {
+      enabled: config.enabled,
+      toolset: config.toolset,
+      modes: [...config.modes],
+      scriptAllowed: false,
+    },
     constraints: [
       'Terminal tools are optional code-analysis evidence tools for analyze/evolve only.',
-      'Prefer terminal({ action: "run" }). Use terminal_shell only for pipes/redirection/substitution.',
+      'Prefer terminal({ action: "exec" }). Use terminal_shell only for pipes/redirection/substitution.',
       'Use terminal_pty only when a TTY transcript is required.',
       'No installs, network operations, project writes, deletions, chmod/chown, sudo, or daemons.',
     ],
@@ -102,19 +93,4 @@ function normalizeToolset(value: unknown): BootstrapTerminalToolset | null {
     value === 'terminal-pty'
     ? value
     : null;
-}
-
-function normalizeModes(
-  value: unknown,
-  fallback: BootstrapTerminalMode[],
-  allowed: BootstrapTerminalMode[]
-): BootstrapTerminalMode[] {
-  if (!Array.isArray(value)) {
-    return [...fallback];
-  }
-  const modes = value.filter(
-    (mode): mode is BootstrapTerminalMode =>
-      (mode === 'run' || mode === 'shell' || mode === 'pty') && allowed.includes(mode)
-  );
-  return modes.length > 0 ? modes : [...fallback];
 }

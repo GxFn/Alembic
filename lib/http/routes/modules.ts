@@ -519,21 +519,14 @@ router.post(
   '/bootstrap',
   validate(ModuleBootstrapBody),
   async (req: Request, res: Response): Promise<void> => {
-    const {
-      maxFiles,
-      skipGuard,
-      contentMaxLines,
-      terminalTest,
-      terminalToolset,
-      allowedTerminalModes,
-    } = req.body || {};
+    const { maxFiles, skipGuard, contentMaxLines } = req.body || {};
 
     const container = getServiceContainer();
     const envelope = await executeDashboardOperation(
       container,
       req,
       DASHBOARD_OPERATION_IDS.bootstrapProject,
-      { maxFiles, skipGuard, contentMaxLines, terminalTest, terminalToolset, allowedTerminalModes }
+      { maxFiles, skipGuard, contentMaxLines }
     );
     sendDashboardOperationResponse(res, envelope);
   }
@@ -631,7 +624,7 @@ router.get('/bootstrap/status', async (req: Request, res: Response): Promise<voi
   const { getTestModeConfig } = await import('#shared/test-mode.js');
   const sessionStatus = taskManager.getSessionStatus();
   const testMode = getTestModeConfig();
-  const includeTestMode = testMode.enabled || testMode.terminal.enabled;
+  const includeTestMode = testMode.enabled;
   res.json({
     success: true,
     data: { ...sessionStatus, ...(includeTestMode ? { testMode } : {}) },

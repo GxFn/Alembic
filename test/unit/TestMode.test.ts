@@ -3,9 +3,9 @@
  *
  * 覆盖范围:
  *   - isTestMode() 环境变量开关
- *   - getTestModeConfig() 配置读取（维度过滤 + 终端测试能力）
+ *   - getTestModeConfig() 配置读取（维度过滤 + 默认终端能力档位）
  *   - applyTestDimensionFilter() 维度过滤（bootstrap / rescan 两种模式）
- *   - 终端测试配置：新旧环境变量兼容、优先级、默认值
+ *   - 终端配置：默认值、ALEMBIC_TERMINAL_TOOLSET 档位覆盖
  *   - 边界情况：空配置、不匹配的 ID、test mode 关闭时透传
  */
 import { afterEach, describe, expect, test, vi } from 'vitest';
@@ -88,57 +88,26 @@ describe('test-mode', () => {
       expect(cfg.bootstrapDims).toEqual([]);
     });
 
-    test('includes terminal config with defaults when disabled', async () => {
+    test('includes terminal-run as the default terminal capability', async () => {
       delete process.env.ALEMBIC_TEST_MODE;
-      delete process.env.ALEMBIC_TEST_TERMINAL;
+      delete process.env.ALEMBIC_TERMINAL_TOOLSET;
       const { getTestModeConfig } = await loadModule();
       const cfg = getTestModeConfig();
-      expect(cfg.terminal).toEqual({ enabled: false, toolset: 'baseline' });
+      expect(cfg.terminal).toEqual({ enabled: true, toolset: 'terminal-run' });
     });
 
-    test('includes terminal config when ALEMBIC_TEST_TERMINAL=1', async () => {
-      process.env.ALEMBIC_TEST_MODE = '1';
-      process.env.ALEMBIC_TEST_TERMINAL = '1';
-      const { getTestModeConfig } = await loadModule();
-      const cfg = getTestModeConfig();
-      expect(cfg.terminal.enabled).toBe(true);
-      expect(cfg.terminal.toolset).toBe('terminal-run');
-    });
-
-    test('respects ALEMBIC_TEST_TERMINAL_TOOLSET override', async () => {
-      process.env.ALEMBIC_TEST_TERMINAL = '1';
-      process.env.ALEMBIC_TEST_TERMINAL_TOOLSET = 'terminal-shell';
+    test('respects ALEMBIC_TERMINAL_TOOLSET override', async () => {
+      process.env.ALEMBIC_TERMINAL_TOOLSET = 'terminal-shell';
       const { getTestModeConfig } = await loadModule();
       const cfg = getTestModeConfig();
       expect(cfg.terminal).toEqual({ enabled: true, toolset: 'terminal-shell' });
     });
 
-    test('falls back to legacy ALEMBIC_BOOTSTRAP_TERMINAL_TEST', async () => {
-      delete process.env.ALEMBIC_TEST_TERMINAL;
-      process.env.ALEMBIC_BOOTSTRAP_TERMINAL_TEST = '1';
+    test('allows explicit baseline terminal toolset override', async () => {
+      process.env.ALEMBIC_TERMINAL_TOOLSET = 'baseline';
       const { getTestModeConfig } = await loadModule();
       const cfg = getTestModeConfig();
-      expect(cfg.terminal.enabled).toBe(true);
-      expect(cfg.terminal.toolset).toBe('terminal-run');
-    });
-
-    test('falls back to legacy ALEMBIC_BOOTSTRAP_TERMINAL_TOOLSET', async () => {
-      process.env.ALEMBIC_TEST_TERMINAL = '1';
-      delete process.env.ALEMBIC_TEST_TERMINAL_TOOLSET;
-      process.env.ALEMBIC_BOOTSTRAP_TERMINAL_TOOLSET = 'terminal-pty';
-      const { getTestModeConfig } = await loadModule();
-      const cfg = getTestModeConfig();
-      expect(cfg.terminal.toolset).toBe('terminal-pty');
-    });
-
-    test('new env vars take priority over legacy ones', async () => {
-      process.env.ALEMBIC_TEST_TERMINAL = '1';
-      process.env.ALEMBIC_TEST_TERMINAL_TOOLSET = 'terminal-shell';
-      process.env.ALEMBIC_BOOTSTRAP_TERMINAL_TEST = '1';
-      process.env.ALEMBIC_BOOTSTRAP_TERMINAL_TOOLSET = 'terminal-pty';
-      const { getTestModeConfig } = await loadModule();
-      const cfg = getTestModeConfig();
-      expect(cfg.terminal.toolset).toBe('terminal-shell');
+      expect(cfg.terminal).toEqual({ enabled: false, toolset: 'baseline' });
     });
   });
 

@@ -71,7 +71,7 @@ export async function runInternalDimensionAgentSession({
   });
 
   logger.info(
-    `[Insight-v3] Active dimensions: [${activeDimIds.join(', ')}], concurrency=${enableParallel ? concurrency : 1}, terminalToolset=${preparation.terminalToolsetConfig.terminalToolset}${preparation.isIncremental ? `, incremental skip: [${incrementalSkippedDims.join(', ')}]` : ''}`
+    `[Insight-v3] Active dimensions: [${activeDimIds.join(', ')}], concurrency=${enableParallel ? concurrency : 1}${preparation.isIncremental ? `, incremental skip: [${incrementalSkippedDims.join(', ')}]` : ''}`
   );
 
   const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
@@ -141,9 +141,6 @@ export async function runInternalDimensionAgentSession({
       sessionId: preparation.sessionId,
       allFiles: preparation.allFiles,
       sessionAbortSignal: preparation.sessionAbortSignal,
-      terminalTest: preparation.terminalToolsetConfig.terminalTest,
-      terminalToolset: preparation.terminalToolsetConfig.terminalToolset,
-      allowedTerminalModes: preparation.terminalToolsetConfig.allowedTerminalModes,
     });
   }
 
@@ -234,9 +231,6 @@ export async function runInternalDimensionAgentSession({
     concurrency,
     primaryLang: preparation.primaryLang,
     projectLang: runtime.projectInfo.lang || null,
-    terminalTest: preparation.terminalToolsetConfig.terminalTest,
-    terminalToolset: preparation.terminalToolsetConfig.terminalToolset,
-    allowedTerminalModes: preparation.terminalToolsetConfig.allowedTerminalModes,
     sessionAbortSignal: preparation.sessionAbortSignal,
     taskManager: preparation.taskManager,
     scheduler,

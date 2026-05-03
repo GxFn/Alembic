@@ -289,11 +289,6 @@ export const ModuleBootstrapBody = z.object({
   maxFiles: z.number().int().min(1).max(10000).default(500),
   skipGuard: z.boolean().default(false),
   contentMaxLines: z.number().int().min(1).max(10000).default(120),
-  terminalTest: z.boolean().optional(),
-  terminalToolset: z
-    .enum(['baseline', 'terminal-run', 'terminal-shell', 'terminal-pty'])
-    .optional(),
-  allowedTerminalModes: z.array(z.enum(['run', 'shell', 'pty'])).optional(),
 });
 
 export const ModuleRescanBody = z.object({

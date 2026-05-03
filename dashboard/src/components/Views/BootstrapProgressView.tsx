@@ -342,7 +342,7 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
             {session.testMode?.terminal?.enabled && (
               <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
                 <TerminalSquare size={10} />
-                {t('bootstrap.terminalTest')}
+                {t('bootstrap.terminalCapability')}
               </span>
             )}
           </div>
@@ -354,7 +354,7 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
                 rescan: session.testMode.rescanDims.length > 0 ? session.testMode.rescanDims.join(', ') : t('bootstrap.testModeAll'),
               })}
               {session.testMode?.enabled && session.testMode?.terminal?.enabled && ' | '}
-              {session.testMode?.terminal?.enabled && t('bootstrap.terminalTestHint', {
+              {session.testMode?.terminal?.enabled && t('bootstrap.terminalCapabilityHint', {
                 toolset: session.testMode.terminal.toolset,
               })}
             </p>
