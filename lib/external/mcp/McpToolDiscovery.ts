@@ -2,7 +2,10 @@
  * McpToolDiscovery — MCP 工具动态发现服务
  *
  * 启动时从项目目录扫描 MCP 配置文件（.vscode/mcp.json, .cursor/mcp.json），
- * 解析出 McpToolDeclaration[]，供 AgentModule 注入主 catalog。
+ * 解析出内联 McpToolDeclaration[]，供 AgentModule 注入主 catalog。
+ *
+ * 注意：VSCode/Cursor 的标准 mcp.json 通常只声明 server，不包含工具 schema；
+ * 这属于正常情况，不应在 info 日志中显示为 loaded 0。
  *
  * @module external/mcp/McpToolDiscovery
  */
@@ -40,7 +43,7 @@ export class McpToolDiscovery {
    *   - .vscode/mcp.json
    *   - .cursor/mcp.json
    *
-   * Each server config may contain a `tools` array with tool declarations.
+   * Each server config may contain a non-standard `tools` array with inline tool declarations.
    */
   discover(projectRoot: string): McpToolDeclaration[] {
     this.#declarations = [];
@@ -58,6 +61,8 @@ export class McpToolDiscovery {
         const raw = readFileSync(configPath, 'utf8');
         const config = JSON.parse(raw) as McpConfigFile;
         const servers = config.servers ?? config.mcpServers ?? {};
+        let loadedFromFile = 0;
+        const serverCount = Object.keys(servers).length;
 
         for (const [serverId, serverConfig] of Object.entries(servers)) {
           if (!serverConfig?.tools || !Array.isArray(serverConfig.tools)) {
@@ -73,13 +78,21 @@ export class McpToolDiscovery {
               description: tool.description,
               inputSchema: tool.inputSchema,
               serverId,
+              serverSource: 'workspace-config',
             });
+            loadedFromFile++;
           }
         }
 
-        this.#logger.info(
-          `[McpToolDiscovery] loaded ${this.#declarations.length} MCP tool declarations from ${configPath}`
-        );
+        if (loadedFromFile > 0) {
+          this.#logger.info(
+            `[McpToolDiscovery] loaded ${loadedFromFile} MCP tool declarations from ${configPath}`
+          );
+        } else if (serverCount > 0) {
+          this.#logger.debug(
+            `[McpToolDiscovery] found ${serverCount} MCP server declarations without inline tool schemas from ${configPath}`
+          );
+        }
       } catch (err) {
         this.#logger.warn(
           `[McpToolDiscovery] failed to parse ${configPath}: ${err instanceof Error ? err.message : String(err)}`
