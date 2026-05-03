@@ -28,6 +28,7 @@ export interface KnowledgeEntryProps {
   autoApprovable?: boolean;
   stagingDeadline?: number | null;
   language?: string;
+  dimensionId?: string;
   category?: string;
   knowledgeType?: string;
   kind?: string;
@@ -82,6 +83,7 @@ export class KnowledgeEntry {
 
   // Language & Classification
   language: string;
+  dimensionId: string;
   category: string;
   knowledgeType: string;
   kind: string;
@@ -148,6 +150,7 @@ export class KnowledgeEntry {
 
     // ── 语言与分类 ──
     this.language = props.language || '';
+    this.dimensionId = props.dimensionId || '';
     this.category = props.category || '';
     this.knowledgeType = props.knowledgeType || 'code-pattern';
     this.kind = props.kind || inferKind(this.knowledgeType);
@@ -361,6 +364,7 @@ export class KnowledgeEntry {
       lifecycleHistory: this.lifecycleHistory,
       autoApprovable: this.autoApprovable,
       language: this.language,
+      dimensionId: this.dimensionId,
       category: this.category,
       kind: this.kind,
       knowledgeType: this.knowledgeType,

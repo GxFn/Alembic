@@ -21,6 +21,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { recipeStorageBucket } from '#domain/dimension/RecipeDimension.js';
 import type { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
 import { CANDIDATES_DIR, RECIPES_DIR } from '../../infrastructure/config/Defaults.js';
 import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
@@ -38,6 +39,7 @@ const SCALAR_FIELDS = [
   'trigger',
   'lifecycle',
   'language',
+  'dimensionId',
   'category',
   'kind',
   'knowledgeType',
@@ -245,8 +247,8 @@ export class KnowledgeFileWriter implements KnowledgeFileStore {
 
   /**
    * 将 KnowledgeEntry 落盘到对应目录
-   * - isCandidate() → Alembic/candidates/{category}/
-   * - isActive()/deprecated → Alembic/recipes/{category}/
+   * - isCandidate() → Alembic/candidates/{dimensionId|category}/
+   * - isActive()/deprecated → Alembic/recipes/{dimensionId|category}/
    *
    * @returns 写入的文件路径，失败返回 null
    */
@@ -323,10 +325,8 @@ export class KnowledgeFileWriter implements KnowledgeFileStore {
 
     // fallback: 按文件名在 candidates/ 和 recipes/ 中扫描
     const { filename } = this._resolveFilePath(entry);
-    const searchDirs = [
-      path.join(this.candidatesDir, (entry.category || 'general').toLowerCase()),
-      path.join(this.recipesDir, (entry.category || 'general').toLowerCase()),
-    ];
+    const bucket = recipeStorageBucket(entry).toLowerCase();
+    const searchDirs = [path.join(this.candidatesDir, bucket), path.join(this.recipesDir, bucket)];
 
     for (const dir of searchDirs) {
       const fp = path.join(dir, filename);
@@ -391,8 +391,8 @@ export class KnowledgeFileWriter implements KnowledgeFileStore {
    */
   _resolveFilePath(entry: KnowledgeEntry): { dir: string; filename: string } {
     const baseDir = entry.isCandidate() ? this.candidatesDir : this.recipesDir;
-    const category = (entry.category || 'general').toLowerCase();
-    const dir = path.join(baseDir, category);
+    const bucket = recipeStorageBucket(entry).toLowerCase();
+    const dir = path.join(baseDir, bucket);
     const filename = _slugFilename(entry.trigger, entry.title, entry.id);
     return { dir, filename };
   }

@@ -268,24 +268,25 @@ export async function consumeBootstrapDimensionResult({
     digest as Parameters<typeof sessionStore.addDimensionDigest>[1]
   );
 
-  for (const tc of producerResult.toolCalls || []) {
-    const tool = tc.tool || tc.name;
-    if (tool === 'knowledge') {
-      const args = tc.params || tc.args || {};
-      const candidateSummary = {
-        title: String(args.title || ''),
-        subTopic: String(args.category || ''),
-        summary: String(args.summary || ''),
-      };
-      dimContext.addSubmittedCandidate(
-        dimId,
-        candidateSummary as Parameters<typeof dimContext.addSubmittedCandidate>[1]
-      );
-      sessionStore.addSubmittedCandidate(
-        dimId,
-        candidateSummary as Parameters<typeof sessionStore.addSubmittedCandidate>[1]
-      );
+  for (const tc of submitCalls) {
+    if (!isSuccessfulToolCall(tc)) {
+      continue;
     }
+    const params = extractSubmitParams(tc);
+    const result = isRecord(tc.result) ? tc.result : {};
+    const candidateSummary = {
+      title: pickString(params.title) || pickString(result.title),
+      subTopic: pickString(params.category) || pickString(params.knowledgeType) || dimId,
+      summary: pickString(params.summary) || pickString(params.description),
+    };
+    dimContext.addSubmittedCandidate(
+      dimId,
+      candidateSummary as Parameters<typeof dimContext.addSubmittedCandidate>[1]
+    );
+    sessionStore.addSubmittedCandidate(
+      dimId,
+      candidateSummary as Parameters<typeof sessionStore.addSubmittedCandidate>[1]
+    );
   }
 
   emitter.emitDimensionComplete(dimId, {
@@ -341,6 +342,37 @@ export async function consumeBootstrapDimensionResult({
   }
 
   return dimResult;
+}
+
+function extractSubmitParams(tc: ToolCallRecord): Record<string, unknown> {
+  const rawArgs = tc.params || tc.args || {};
+  const nestedParams = rawArgs.params;
+  return isRecord(nestedParams) ? nestedParams : rawArgs;
+}
+
+function isSuccessfulToolCall(tc: ToolCallRecord): boolean {
+  const res = tc.result;
+  if (!res) {
+    return true;
+  }
+  if (typeof res === 'string') {
+    return !res.includes('rejected') && !res.includes('error');
+  }
+  if (!isRecord(res)) {
+    return true;
+  }
+  if (res.error || res.submitted === false) {
+    return false;
+  }
+  return res.status !== 'rejected' && res.status !== 'error';
+}
+
+function pickString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 function summarizeDimensionStages(runResult: AgentResultLike) {

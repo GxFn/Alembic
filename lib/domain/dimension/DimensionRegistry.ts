@@ -602,7 +602,7 @@ export const DIMENSION_DISPLAY_GROUP: Record<string, string> = Object.fromEntrie
   DIMENSION_REGISTRY.map((d) => [d.id, d.displayGroup])
 );
 
-/** 所有维度 ID 集合（用于分类时快速判断 category 是否为维度 ID） */
+/** 所有维度 ID 集合（用于兼容旧 category/knowledgeType 维度归属） */
 const DIMENSION_ID_SET = new Set<string>(DIMENSION_REGISTRY.map((d) => d.id));
 
 /** 按 ID 获取维度 */
@@ -671,11 +671,11 @@ export function buildTierPlan(
 /**
  * 将 Recipe 分类到最匹配的维度
  *
- * 优先级: category 即维度 ID → topicHint 精确匹配 → category 匹配 → null
+ * 优先级: category 即维度 ID（legacy） → topicHint 精确匹配 → category 匹配 → null
  *
- * Bootstrap 生成的 recipe 通常以 dimension ID 作为 category（如 'security-auth'、
- * 'concurrency-async'），直接命中最精确。topicHint 值（如 'networking'、'architecture'）
- * 偏宏观，仅作为后备分类依据。
+ * 新 Bootstrap/Rescan 路径应使用显式 dimensionId；这里保留 category 维度 ID
+ * 仅用于旧数据回推。topicHint 值（如 'networking'、'architecture'）偏宏观，
+ * 仅作为后备分类依据。
  */
 export function classifyRecipeToDimension(topicHint: string, category: string): DimensionId | null {
   // 0. category 精确匹配维度 ID（最高优先级）

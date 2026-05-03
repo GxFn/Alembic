@@ -1,3 +1,4 @@
+import { recipeBelongsToDimension } from '#domain/dimension/RecipeDimension.js';
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type {
@@ -88,16 +89,18 @@ export function buildKnowledgeRescanPlan({
   const auditResultByRecipeId = new Map(
     auditSummary.results.map((result) => [result.recipeId, result])
   );
+  const knownDimensionIds = dimensions.map((dimension) => dimension.id);
   const coverageByDimension = buildCoverageByDimension({
     recipeEntries,
     auditVerdictMap,
     dimensions,
+    knownDimensionIds,
   });
   const affectedDimensionIds = new Set(fileDiff?.affectedDimensionIds ?? []);
   const changedFiles = fileDiff?.changedFiles ?? [];
   const dimensionPlans = requestedDimensions.map((dimension) => {
     const existingRecipes = recipeEntries.filter((entry) =>
-      recipeBelongsToDimension(entry, dimension)
+      recipeBelongsToDimension(entry, dimension, { knownDimensionIds })
     );
     const decayingRecipes = existingRecipes.filter((entry) =>
       isRecipeDecaying(entry, auditResultByRecipeId.get(entry.id), auditVerdictMap.get(entry.id))
@@ -172,16 +175,17 @@ function buildCoverageByDimension({
   recipeEntries,
   auditVerdictMap,
   dimensions,
+  knownDimensionIds,
 }: {
   recipeEntries: RecipeSnapshotEntry[];
   auditVerdictMap: Map<string, AuditVerdict>;
   dimensions: DimensionDef[];
+  knownDimensionIds: readonly string[];
 }): Record<string, number> {
   const coverageByDimension: Record<string, number> = {};
-
   for (const dimension of dimensions) {
     for (const entry of recipeEntries) {
-      if (!recipeBelongsToDimension(entry, dimension)) {
+      if (!recipeBelongsToDimension(entry, dimension, { knownDimensionIds })) {
         continue;
       }
       const isConfirmed = entry.lifecycle === 'active' || entry.lifecycle === 'evolving';
@@ -196,11 +200,6 @@ function buildCoverageByDimension({
   }
 
   return coverageByDimension;
-}
-
-function recipeBelongsToDimension(entry: RecipeSnapshotEntry, dimension: DimensionDef): boolean {
-  const knowledgeType = entry.knowledgeType || '';
-  return knowledgeType === dimension.id || (dimension.knowledgeTypes ?? []).includes(knowledgeType);
 }
 
 function buildDimensionExecutionReasons({

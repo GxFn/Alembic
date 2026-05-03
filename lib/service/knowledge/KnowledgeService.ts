@@ -57,6 +57,7 @@ interface ListFilters {
   lifecycle?: string;
   kind?: string;
   language?: string;
+  dimensionId?: string;
   category?: string;
   knowledgeType?: string;
   source?: string;
@@ -267,6 +268,7 @@ export class KnowledgeService {
         'description',
         'trigger',
         'language',
+        'dimensionId',
         'category',
         'knowledgeType',
         'complexity',
@@ -305,6 +307,7 @@ export class KnowledgeService {
           case 'description':
           case 'trigger':
           case 'language':
+          case 'dimensionId':
           case 'category':
           case 'complexity':
           case 'scope':
@@ -559,12 +562,22 @@ export class KnowledgeService {
 
   /**
    * 查询列表
-   * @param filters { lifecycle, kind, language, category, knowledgeType, source, tag }
+   * @param filters { lifecycle, kind, language, dimensionId, category, knowledgeType, source, tag }
    * @param pagination { page, pageSize }
    */
   async list(filters: ListFilters = {}, pagination: PaginationOptions = {}) {
     try {
-      const { lifecycle, kind, language, category, knowledgeType, source, tag, scope } = filters;
+      const {
+        lifecycle,
+        kind,
+        language,
+        dimensionId,
+        category,
+        knowledgeType,
+        source,
+        tag,
+        scope,
+      } = filters;
       const { page = 1, pageSize = 20 } = pagination;
 
       const dbFilters: Record<string, unknown> = {};
@@ -576,6 +589,9 @@ export class KnowledgeService {
       }
       if (language) {
         dbFilters.language = language;
+      }
+      if (dimensionId) {
+        dbFilters.dimensionId = dimensionId;
       }
       if (category) {
         dbFilters.category = category;

@@ -610,13 +610,22 @@ export class KnowledgeRepositoryImpl {
    * 获取活跃 Recipe 的元数据 (title, category, topicHint, kind)
    * 用于 DimensionAnalyzer 维度分类分析
    */
-  async findRecipeMetadata(
-    lifecycles: readonly string[]
-  ): Promise<Array<{ title: string; category: string; topicHint: string; kind: string }>> {
+  async findRecipeMetadata(lifecycles: readonly string[]): Promise<
+    Array<{
+      title: string;
+      dimensionId: string;
+      category: string;
+      knowledgeType: string;
+      topicHint: string;
+      kind: string;
+    }>
+  > {
     const rows = this.#drizzle
       .select({
         title: knowledgeEntries.title,
+        dimensionId: knowledgeEntries.dimensionId,
         category: knowledgeEntries.category,
+        knowledgeType: knowledgeEntries.knowledgeType,
         topicHint: knowledgeEntries.topicHint,
         kind: knowledgeEntries.kind,
       })
@@ -625,7 +634,9 @@ export class KnowledgeRepositoryImpl {
       .all();
     return rows.map((r) => ({
       title: r.title ?? '',
+      dimensionId: r.dimensionId ?? '',
       category: r.category ?? '',
+      knowledgeType: r.knowledgeType ?? '',
       topicHint: r.topicHint ?? '',
       kind: r.kind ?? '',
     }));
@@ -1034,6 +1045,7 @@ export class KnowledgeRepositoryImpl {
       lifecycleHistory: safeJsonStringify(e.lifecycleHistory || [], '[]'),
       autoApprovable: e.autoApprovable ? 1 : 0,
       language: e.language,
+      dimensionId: e.dimensionId || '',
       category: e.category,
       kind: e.kind || inferKind(e.knowledgeType),
       knowledgeType: e.knowledgeType || 'code-pattern',

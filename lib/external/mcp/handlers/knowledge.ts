@@ -3,6 +3,7 @@
  * submitKnowledge, submitKnowledgeBatch, knowledgeLifecycle
  */
 
+import { dimensionTags } from '#domain/dimension/RecipeDimension.js';
 import { UnifiedValidator } from '#domain/knowledge/UnifiedValidator.js';
 import { getDeveloperIdentity } from '#shared/developer-identity.js';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
@@ -47,6 +48,7 @@ interface EnrichInput {
   language?: string;
   tags?: string[];
   category?: string;
+  dimensionId?: string;
   content?: { pattern?: string; [key: string]: unknown };
   [key: string]: unknown;
 }
@@ -84,6 +86,10 @@ function _enrichToV3(args: EnrichInput, container: McpServiceContainer | null): 
     }
   } catch {
     /* best effort */
+  }
+
+  if (data.dimensionId) {
+    data.tags = dimensionTags(data.dimensionId, data.tags || []);
   }
 
   return data;
@@ -215,7 +221,7 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
   }
 
   const service = ctx.container.get('knowledgeService');
-  const source = args.source || 'cursor-scan';
+  const source = typeof args.source === 'string' ? args.source : 'cursor-scan';
   let count = 0;
   const itemErrors: { index: number; title: string; error: string }[] = [];
   const rejectedItems: {
@@ -290,7 +296,17 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
     }
 
     try {
-      const itemData = _enrichToV3({ ...items[i], source }, ctx.container);
+      const itemDimensionId = items[i].dimensionId;
+      const effectiveDimensionId: string | undefined =
+        typeof itemDimensionId === 'string'
+          ? itemDimensionId
+          : typeof args.dimensionId === 'string'
+            ? args.dimensionId
+            : currentDimId || undefined;
+      const itemData = _enrichToV3(
+        { ...items[i], source, dimensionId: effectiveDimensionId },
+        ctx.container
+      );
       const entry = await service.create(itemData, { userId: getDeveloperIdentity() });
       // ── QualityScorer 自动评分（R9: create 后置执行）──
       try {

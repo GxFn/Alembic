@@ -76,8 +76,26 @@ describe('ExternalDimensionCompletionWorkflow', () => {
     expect(data.isBootstrapComplete).toBe(false);
     expect(data.subpackageCoverageWarning).toContain('internal-lib');
     expect(updates).toEqual([
-      { recipeId: 'recipe-a', tags: ['existing', 'dimension:architecture', 'bootstrap:session-1'] },
-      { recipeId: 'recipe-b', tags: ['existing', 'dimension:architecture', 'bootstrap:session-1'] },
+      {
+        recipeId: 'recipe-a',
+        tags: [
+          'existing',
+          'architecture',
+          'dimension:architecture',
+          'bootstrap',
+          'bootstrap:session-1',
+        ],
+      },
+      {
+        recipeId: 'recipe-b',
+        tags: [
+          'existing',
+          'architecture',
+          'dimension:architecture',
+          'bootstrap',
+          'bootstrap:session-1',
+        ],
+      },
     ]);
     expect(checkpoint).toHaveBeenCalledWith(
       '/tmp/alembic-test-project',

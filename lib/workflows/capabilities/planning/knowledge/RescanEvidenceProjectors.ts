@@ -1,3 +1,4 @@
+import { resolveRecipeDimensionId } from '#domain/dimension/RecipeDimension.js';
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type {
@@ -31,6 +32,7 @@ export interface ExternalRescanEvidencePlan {
     id: string;
     title: string;
     trigger: string;
+    dimensionId: string;
     knowledgeType: string;
     doClause: string;
     lifecycle: string;
@@ -85,6 +87,7 @@ export function projectInternalRescanPromptRecipesFromParts(opts: {
   id: string;
   title: string;
   trigger: string;
+  dimensionId: string;
   knowledgeType: string;
   status: 'decaying' | 'healthy';
   decayReason?: string;
@@ -96,7 +99,7 @@ export function projectInternalRescanPromptRecipesFromParts(opts: {
   return opts.recipeEntries.map((entry) =>
     projectInternalRescanPromptRecipe({
       entry,
-      dimensionId: entry.knowledgeType,
+      dimensionId: resolveRecipeDimensionId(entry) || entry.dimensionId || entry.category || '',
       auditSummary: opts.auditSummary,
       auditVerdictMap: opts.auditVerdictMap,
     })
@@ -117,6 +120,7 @@ function projectInternalRescanPromptRecipe({
   id: string;
   title: string;
   trigger: string;
+  dimensionId: string;
   knowledgeType: string;
   status: 'decaying' | 'healthy';
   decayReason?: string;
@@ -133,7 +137,8 @@ function projectInternalRescanPromptRecipe({
     id: entry.id,
     title: entry.title,
     trigger: entry.trigger,
-    knowledgeType: dimensionId,
+    dimensionId,
+    knowledgeType: entry.knowledgeType,
     status: isDecaying ? 'decaying' : 'healthy',
     decayReason:
       isDecaying && auditResult?.decayReasons ? auditResult.decayReasons.join('; ') : undefined,
@@ -157,6 +162,7 @@ export function projectExternalRescanEvidencePlan(
         id: result.recipeId,
         title: result.title,
         trigger: snapshotEntry?.trigger || '',
+        dimensionId: snapshotEntry ? resolveRecipeDimensionId(snapshotEntry) || '' : '',
         knowledgeType: snapshotEntry?.knowledgeType || '',
         doClause: snapshotEntry?.doClause || '',
         lifecycle: snapshotEntry?.lifecycle || 'active',

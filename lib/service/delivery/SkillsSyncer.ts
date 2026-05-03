@@ -268,7 +268,7 @@ export class SkillsSyncer {
       try {
         const dimension = sourceDirName.replace(/^project-/, '');
         const result = await this.knowledgeService.list(
-          { lifecycle: 'active', category: dimension },
+          { lifecycle: 'active', dimensionId: dimension },
           { page: 1, pageSize: 50 }
         );
         const resultObj = result as Record<string, unknown> | unknown[] | null | undefined;

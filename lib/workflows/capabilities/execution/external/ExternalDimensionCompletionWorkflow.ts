@@ -1,3 +1,4 @@
+import { dimensionTags } from '#domain/dimension/RecipeDimension.js';
 import Logger from '#infra/logging/Logger.js';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
 import { getDeveloperIdentity } from '#shared/developer-identity.js';
@@ -143,7 +144,7 @@ interface KnowledgeServiceLike {
   get(recipeId: string): Promise<KnowledgeEntryLike | null> | KnowledgeEntryLike | null;
   update(
     recipeId: string,
-    patch: { category?: string; tags?: string[] },
+    patch: { category?: string; dimensionId?: string; tags?: string[] },
     options: { userId: string }
   ): Promise<unknown> | unknown;
 }
@@ -510,14 +511,13 @@ async function bindSubmittedRecipes({
         }
         const newTags = [
           ...new Set([
-            ...parseExistingTags(entry.tags),
-            `dimension:${dimensionId}`,
+            ...dimensionTags(dimensionId, parseExistingTags(entry.tags)),
             `bootstrap:${session.id}`,
           ]),
         ];
         await knowledgeService.update(
           recipeId,
-          { category: dimensionId, tags: newTags },
+          { dimensionId, tags: newTags },
           { userId: getDeveloperIdentity() }
         );
         recipesBound++;

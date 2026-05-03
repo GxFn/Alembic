@@ -1,3 +1,4 @@
+import { resolveRecipeDimensionId } from '#domain/dimension/RecipeDimension.js';
 import Logger from '#infra/logging/Logger.js';
 import { BootstrapDedup } from '#service/bootstrap/BootstrapDedup.js';
 
@@ -7,6 +8,8 @@ export interface BootstrapExistingRecipe {
   id: string;
   title: string;
   trigger: string;
+  dimensionId?: string;
+  category?: string;
   knowledgeType: string;
   status?: string;
   decayReason?: string;
@@ -89,7 +92,7 @@ function buildBootstrapRescanContext({
     coverageByDim: existingRecipesList.reduce(
       (acc, recipe) => {
         if (recipe.status !== 'decaying') {
-          const dim = recipe.knowledgeType || 'unknown';
+          const dim = recipeDimensionKey(recipe);
           acc[dim] = (acc[dim] || 0) + 1;
         }
         return acc;
@@ -108,8 +111,10 @@ export function getBootstrapDimensionExistingRecipes({
   dimId: string;
 }) {
   return [
-    ...(rescanContext?.existingRecipes?.filter((recipe) => recipe.knowledgeType === dimId) ?? []),
-    ...(rescanContext?.decayingRecipes?.filter((recipe) => recipe.knowledgeType === dimId) ?? []),
+    ...(rescanContext?.existingRecipes?.filter((recipe) => recipeDimensionKey(recipe) === dimId) ??
+      []),
+    ...(rescanContext?.decayingRecipes?.filter((recipe) => recipeDimensionKey(recipe) === dimId) ??
+      []),
   ];
 }
 
@@ -125,15 +130,25 @@ export function projectBootstrapDimensionRescanContext({
   }
   return {
     existingRecipes: rescanContext.existingRecipes.filter(
-      (recipe) => recipe.knowledgeType === dimId
+      (recipe) => recipeDimensionKey(recipe) === dimId
     ),
     decayingRecipes: rescanContext.decayingRecipes.filter(
-      (recipe) => recipe.knowledgeType === dimId
+      (recipe) => recipeDimensionKey(recipe) === dimId
     ),
     occupiedTriggers: rescanContext.occupiedTriggers,
     gap: Math.max(0, 5 - (rescanContext.coverageByDim[dimId] || 0)),
     existing: rescanContext.coverageByDim[dimId] || 0,
   };
+}
+
+function recipeDimensionKey(recipe: BootstrapExistingRecipe): string {
+  return (
+    resolveRecipeDimensionId(recipe) ||
+    recipe.dimensionId ||
+    recipe.category ||
+    recipe.knowledgeType ||
+    'unknown'
+  );
 }
 
 export function projectBootstrapExistingRecipesForPrompt(recipes: BootstrapExistingRecipe[]) {

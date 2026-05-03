@@ -92,7 +92,7 @@ export function buildProducerStyleGuide() {
     '## Cursor 交付字段（每个 knowledge 提交必须附带）',
     '',
     '每个候选必须提供以下交付字段，它们直接决定在 Cursor IDE 中作为 Rules 的展示质量。',
-    '注意：language / category / knowledgeType / source 由系统自动设置，无需填写。',
+    '注意：language / dimensionId / category / knowledgeType / source 由系统自动设置，无需填写。',
     '',
     getCursorDeliverySpec(),
   ].join('\n');

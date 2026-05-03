@@ -1002,6 +1002,7 @@ export class SearchEngine {
       trigger, // ×2 boost
       desc, // ×1 (no boost — description already contributes naturally)
       r.language,
+      r.dimensionId,
       r.category,
       r.knowledgeType,
       tagText,
@@ -1055,6 +1056,7 @@ export class SearchEngine {
       knowledgeType: r.knowledgeType,
       kind: r.kind || 'pattern',
       language: r.language || '',
+      dimensionId: r.dimensionId || '',
       category: r.category || '',
       updatedAt: r.updatedAt || null,
       createdAt: r.createdAt || null,

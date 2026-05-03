@@ -56,6 +56,7 @@ export interface DocMeta {
   knowledgeType: string | undefined;
   kind: string;
   language: string;
+  dimensionId?: string;
   category: string;
   updatedAt: string | null;
   createdAt: string | null;
@@ -80,6 +81,7 @@ export interface SearchResultItem {
   kind?: string;
   status?: string;
   language?: string;
+  dimensionId?: string;
   category?: string;
   score?: number;
   content?: string;
@@ -109,6 +111,7 @@ export interface DbRow {
   title?: string;
   description?: string;
   language?: string;
+  dimensionId?: string;
   category?: string;
   knowledgeType?: string;
   kind?: string;

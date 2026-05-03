@@ -20,6 +20,14 @@ export {
   PRE_SUBMIT_CHECKLIST,
   sopToCompactText,
 } from './DimensionSop.js';
+export {
+  dimensionTags,
+  isKnownDimensionId,
+  recipeBelongsToDimension,
+  recipeDimensionIdOrUnknown,
+  recipeStorageBucket,
+  resolveRecipeDimensionId,
+} from './RecipeDimension.js';
 export type {
   DimensionId,
   FrameworkDimId,

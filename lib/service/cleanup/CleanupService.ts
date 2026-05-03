@@ -24,6 +24,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { recipeDimensionIdOrUnknown } from '#domain/dimension/index.js';
 import { CANDIDATES_DIR } from '#infra/config/Defaults.js';
 import {
   getContextIndexPath,
@@ -86,6 +87,7 @@ export interface RecipeSnapshotEntry {
   id: string;
   title: string;
   trigger: string;
+  dimensionId?: string;
   category: string;
   knowledgeType: string;
   doClause: string;
@@ -507,10 +509,15 @@ export class CleanupService {
 
     try {
       const { sql: lcFilter, params: lcParams } = lifecycleInSql(CONSUMABLE_LIFECYCLES);
+      const columns = this.#db.prepare('PRAGMA table_info(knowledge_entries)').all() as Array<{
+        name: string;
+      }>;
+      const hasDimensionId = columns.some((column) => column.name === 'dimensionId');
       const rows = this.#db
         .prepare(
           // @escape-hatch(permanent) — dynamic lifecycle filter + json_extract
-          `SELECT id, title, trigger, category, knowledgeType, doClause,
+          `SELECT id, title, trigger, ${hasDimensionId ? 'dimensionId' : "'' AS dimensionId"},
+                  category, knowledgeType, doClause,
                   sourceFile, lifecycle, content, json_extract(reasoning, '$.sources') AS sourceRefsJson
            FROM knowledge_entries
            WHERE ${lcFilter}`
@@ -519,6 +526,7 @@ export class CleanupService {
         id: string;
         title: string;
         trigger: string;
+        dimensionId: string | null;
         category: string;
         knowledgeType: string | null;
         doClause: string | null;
@@ -549,6 +557,7 @@ export class CleanupService {
           id: r.id,
           title: r.title || '',
           trigger: r.trigger || '',
+          dimensionId: r.dimensionId || undefined,
           category: r.category || '',
           knowledgeType: r.knowledgeType || 'code-pattern',
           doClause: r.doClause || '',
@@ -559,10 +568,10 @@ export class CleanupService {
         };
       });
 
-      // 按维度统计覆盖度 (使用 knowledgeType = 维度 id)
+      // 按维度统计覆盖度。新数据使用 dimensionId；旧数据由 resolver 兼容回推。
       const coverageByDimension: Record<string, number> = {};
       for (const entry of entries) {
-        const dim = entry.knowledgeType || 'unknown';
+        const dim = recipeDimensionIdOrUnknown(entry);
         coverageByDimension[dim] = (coverageByDimension[dim] || 0) + 1;
       }
 

@@ -166,9 +166,9 @@ describe('KnowledgeRescanPlan', () => {
   test('counts legacy knowledge types through dimension knowledgeTypes', () => {
     const plan = buildKnowledgeRescanPlan({
       recipeEntries: [
-        recipe({ id: 'factory', knowledgeType: 'code-pattern' }),
-        recipe({ id: 'sendable', knowledgeType: 'code-pattern' }),
-        recipe({ id: 'retry', knowledgeType: 'best-practice' }),
+        recipe({ id: 'factory', category: '', knowledgeType: 'code-pattern' }),
+        recipe({ id: 'sendable', category: '', knowledgeType: 'code-pattern' }),
+        recipe({ id: 'retry', category: '', knowledgeType: 'best-practice' }),
       ],
       auditSummary: {
         totalAudited: 3,
@@ -213,11 +213,11 @@ describe('KnowledgeRescanPlan', () => {
     });
 
     const promptRecipes = projectInternalRescanPromptRecipes(plan);
+    expect(promptRecipes.filter((recipe) => recipe.dimensionId === 'design-patterns')).toHaveLength(
+      2
+    );
     expect(
-      promptRecipes.filter((recipe) => recipe.knowledgeType === 'design-patterns')
-    ).toHaveLength(2);
-    expect(
-      promptRecipes.filter((recipe) => recipe.knowledgeType === 'error-resilience')
+      promptRecipes.filter((recipe) => recipe.dimensionId === 'error-resilience')
     ).toHaveLength(1);
 
     const prescreen = buildRescanPrescreen(
@@ -230,6 +230,79 @@ describe('KnowledgeRescanPlan', () => {
       'error-resilience': { healthy: 1, gap: 4 },
     });
     expect(prescreen.autoResolved).toHaveLength(3);
+  });
+
+  test('does not count broad knowledge types across explicit dimension categories', () => {
+    const plan = buildKnowledgeRescanPlan({
+      recipeEntries: [
+        recipe({
+          id: 'network-error',
+          title: 'Network Error',
+          category: 'error-resilience',
+          knowledgeType: 'best-practice',
+        }),
+        recipe({
+          id: 'safe-decode',
+          title: 'Safe Decode',
+          category: 'error-resilience',
+          knowledgeType: 'best-practice',
+        }),
+        recipe({
+          id: 'retry-policy',
+          title: 'Retry Policy',
+          category: 'error-resilience',
+          knowledgeType: 'best-practice',
+        }),
+      ],
+      auditSummary: {
+        totalAudited: 3,
+        healthy: 3,
+        watch: 0,
+        decay: 0,
+        severe: 0,
+        dead: 0,
+        proposalsCreated: 0,
+        immediateDeprecated: 0,
+        results: [
+          result('network-error', 'Network Error', 'healthy'),
+          result('safe-decode', 'Safe Decode', 'healthy'),
+          result('retry-policy', 'Retry Policy', 'healthy'),
+        ],
+      },
+      dimensions: [
+        { id: 'error-resilience', label: 'Error Resilience', knowledgeTypes: ['best-practice'] },
+        {
+          id: 'observability-logging',
+          label: 'Observability Logging',
+          knowledgeTypes: ['best-practice'],
+        },
+      ],
+      requestedDimensionIds: ['error-resilience', 'observability-logging'],
+      targetPerDimension: 5,
+    });
+
+    expect(plan.coverageByDimension).toMatchObject({
+      'error-resilience': 3,
+    });
+    expect(plan.coverageByDimension['observability-logging']).toBeUndefined();
+    expect(
+      plan.dimensionPlans.find((dim) => dim.dimension.id === 'observability-logging')
+    ).toMatchObject({
+      existingCount: 0,
+      gap: 5,
+      existingRecipes: [],
+      shouldExecute: true,
+    });
+
+    const prescreen = buildRescanPrescreen(
+      plan.auditSummary,
+      plan.recipeEntries,
+      plan.requestedDimensions
+    );
+    expect(prescreen.dimensionGaps).toMatchObject({
+      'error-resilience': { healthy: 3, gap: 2 },
+      'observability-logging': { healthy: 0, gap: 5 },
+    });
   });
 
   test('audits project-relative recipe source refs against absolute collected file paths', async () => {

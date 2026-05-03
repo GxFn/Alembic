@@ -45,6 +45,7 @@ export interface CreateRecipeItem {
   scope?: string;
   complexity?: string;
   sourceFile?: string;
+  dimensionId?: string;
   knowledgeType?: string;
   language?: string;
   category?: string;
@@ -626,6 +627,7 @@ export class RecipeProductionGateway {
 
     return {
       language: item.language || '',
+      dimensionId: item.dimensionId || '',
       category: item.category || (item as Record<string, unknown>)._category || 'general',
       knowledgeType: item.knowledgeType || 'code-pattern',
       source: item.source || this.#sourceLabel(source),

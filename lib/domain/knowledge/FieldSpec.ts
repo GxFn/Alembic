@@ -118,8 +118,16 @@ export const V3_FIELD_SPEC = [
     level: FieldLevel.REQUIRED,
     type: 'string',
     rule: 'View/Service/Tool/Model/Network/Storage/UI/Utility',
-    pipeline: 'QualityScorer(metadata 0.35) + 标准分类',
+    pipeline: 'QualityScorer(metadata 0.35) + 业务/组件分类；维度归属使用 dimensionId',
     systemInjected: true, // 内部路径系统注入
+  },
+  {
+    name: 'dimensionId',
+    level: FieldLevel.EXPECTED,
+    type: 'string',
+    rule: 'architecture / testing-quality / error-resilience 等维度 ID',
+    pipeline: 'Bootstrap/Rescan 维度归属；内部路径系统注入',
+    systemInjected: true,
   },
   {
     name: 'headers',
@@ -156,7 +164,7 @@ export const V3_FIELD_SPEC = [
     level: FieldLevel.REQUIRED,
     type: 'string',
     rule: 'code-pattern / architecture / best-practice 等',
-    pipeline: '知识维度分类',
+    pipeline: '知识形态分类；不得用于判断 Bootstrap 维度归属',
     systemInjected: true,
   },
   {
@@ -239,7 +247,7 @@ export const STANDARD_CATEGORIES = [
   'Utility',
 ];
 
-/** category 白名单 — 统一维度 ID + 特殊流程中的合法 category */
+/** category 白名单 — 保留历史维度 ID 兼容；新写入应使用 dimensionId 表示维度归属 */
 export const WHITELISTED_CATEGORIES = [
   // ── Layer 1: 通用维度 ──
   'architecture',
@@ -304,7 +312,7 @@ export function getExternalAgentRequiredFields() {
   return getRequiredFieldNames();
 }
 
-/** 获取 AI 在内部路径必须提供的字段（排除系统注入的 language/category/knowledgeType） */
+/** 获取 AI 在内部路径必须提供的字段（排除系统注入字段） */
 export function getInternalAgentRequiredFields() {
   return V3_FIELD_SPEC.filter(
     (f) => f.level === FieldLevel.REQUIRED && !f.name.includes('.') && !f.systemInjected

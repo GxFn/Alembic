@@ -8,7 +8,7 @@
  */
 
 import path from 'node:path';
-import { DIMENSION_DISPLAY_GROUP } from '#domain/dimension/DimensionRegistry.js';
+import { dimensionTags } from '#domain/dimension/RecipeDimension.js';
 import { getSystemInjectedFields } from '#domain/knowledge/FieldSpec.js';
 import { estimateTokens, fail, ok, type ToolContext, type ToolResult } from '../types.js';
 
@@ -111,7 +111,7 @@ async function handleSubmit(
     const allowedKnowledgeType = normalizeStringArray(dimMeta?.allowedKnowledgeTypes)[0];
     const effectiveKnowledgeType =
       allowedKnowledgeType ?? pickString(params.knowledgeType) ?? 'code-pattern';
-    const effectiveCategory = effectiveDimensionId ?? pickString(params.category) ?? 'Utility';
+    const effectiveCategory = pickString(params.category) ?? 'Utility';
     const effectiveLanguage =
       pickString(params.language) ??
       pickString(ctx.runtime?.projectLanguage) ??
@@ -129,18 +129,7 @@ async function handleSubmit(
           : (params.confidence ?? 0.75),
     };
     const baseTags = normalizeStringArray(params.tags);
-    const tags = isBootstrap
-      ? [
-          ...new Set([
-            ...baseTags,
-            ...(effectiveDimensionId ? [effectiveDimensionId] : []),
-            'bootstrap',
-            ...(effectiveDimensionId
-              ? [DIMENSION_DISPLAY_GROUP[effectiveDimensionId] || effectiveDimensionId]
-              : []),
-          ]),
-        ]
-      : baseTags;
+    const tags = isBootstrap ? dimensionTags(effectiveDimensionId, baseTags) : baseTags;
     const item = {
       ...params,
       title: params.title as string,
@@ -158,6 +147,7 @@ async function handleSubmit(
       tags,
       reasoning: itemReasoning,
       sourceRefs: normalizeStringArray(params.sourceRefs ?? params.filePaths ?? normalizedSources),
+      dimensionId: effectiveDimensionId,
       knowledgeType: effectiveKnowledgeType,
       category: effectiveCategory,
       language: effectiveLanguage,

@@ -11,6 +11,7 @@
  *   003: remote_commands
  *   004: evolution_proposals (+ knowledge_entries.staging_deadline)
  *   005: recipe_source_refs
+ *   009: knowledge_entries.dimensionId
  *   内联: remote_state
  *   内部: schema_migrations
  *
@@ -52,6 +53,7 @@ export const knowledgeEntries = sqliteTable(
     autoApprovable: integer('autoApprovable').default(0),
 
     language: text('language').notNull().default(''),
+    dimensionId: text('dimensionId').default(''),
     category: text('category').notNull().default('general'),
     kind: text('kind').default('pattern'),
     knowledgeType: text('knowledgeType').default('code-pattern'),
@@ -112,6 +114,7 @@ export const knowledgeEntries = sqliteTable(
   (table) => [
     index('idx_ke3_lifecycle').on(table.lifecycle),
     index('idx_ke3_language').on(table.language),
+    index('idx_ke3_dimensionId').on(table.dimensionId),
     index('idx_ke3_category').on(table.category),
     index('idx_ke3_kind').on(table.kind),
     index('idx_ke3_createdAt').on(table.createdAt),

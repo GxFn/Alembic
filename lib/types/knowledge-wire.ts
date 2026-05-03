@@ -105,6 +105,7 @@ export interface KnowledgeEntryWire {
 
   // ── 分类 ──
   language: string;
+  dimensionId: string;
   category: string;
   kind: string;
   knowledgeType: string;

@@ -508,7 +508,7 @@ export class SetupService {
         '',
         '## 统一知识模型',
         '',
-        '所有知识统一为 **Recipe** 实体，由 `knowledgeType` 区分维度：',
+        '所有知识统一为 **Recipe** 实体，由 `dimensionId` 表示维度归属，`knowledgeType` 表示知识类型：',
         '',
         '| knowledgeType | 说明 |',
         '|---------------|------|',

@@ -16,9 +16,9 @@
 
 import type { UnifiedDimension } from '#domain/dimension/index.js';
 import {
-  classifyRecipeToDimension,
   DIMENSION_REGISTRY,
   resolveActiveDimensions,
+  resolveRecipeDimensionId,
 } from '#domain/dimension/index.js';
 import { LanguageService } from '#shared/LanguageService.js';
 import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
@@ -204,10 +204,10 @@ export class DimensionAnalyzer {
   /**
    * 将 recipe 分类到最匹配的维度
    *
-   * 委托给 DimensionRegistry.classifyRecipeToDimension()
+   * 委托给统一 RecipeDimension resolver；兼容旧 category / knowledgeType 维度写法。
    */
   #classifyRecipe(recipe: RecipeMetadata): string | null {
-    return classifyRecipeToDimension(recipe.topicHint, recipe.category);
+    return resolveRecipeDimensionId(recipe);
   }
 
   /* ─── 维度评分 ─────────────────────────────────── */
@@ -308,7 +308,9 @@ export class DimensionAnalyzer {
 
 interface RecipeMetadata {
   title: string;
+  dimensionId: string;
   category: string;
+  knowledgeType: string;
   topicHint: string;
   kind: string;
 }

@@ -13,15 +13,26 @@ import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
 
 function makeProjection(): BootstrapDimensionProjection {
+  const successfulSubmit = {
+    tool: 'knowledge',
+    args: {
+      action: 'submit',
+      params: { title: 'Candidate', category: 'api', summary: 'Summary' },
+    },
+    result: { status: 'created', title: 'Candidate' },
+  };
+  const failedSubmit = {
+    tool: 'knowledge',
+    args: {
+      action: 'submit',
+      params: { category: 'api', summary: 'Missing title' },
+    },
+    result: { error: 'Missing required param: title' },
+  };
   return {
     analysisText: 'short analysis',
     artifact: { analysisText: 'short analysis', referencedFiles: ['src/a.ts'], findings: ['one'] },
-    runtimeToolCalls: [
-      {
-        tool: 'knowledge',
-        args: { title: 'Candidate', category: 'api', summary: 'Summary' },
-      },
-    ],
+    runtimeToolCalls: [successfulSubmit, failedSubmit],
     combinedTokenUsage: { input: 3, output: 5 },
     analysisReport: {
       dimensionId: 'api',
@@ -32,18 +43,13 @@ function makeProjection(): BootstrapDimensionProjection {
     producerResult: {
       candidateCount: 1,
       rejectedCount: 0,
-      toolCalls: [
-        {
-          tool: 'knowledge',
-          args: { title: 'Candidate', category: 'api', summary: 'Summary' },
-        },
-      ],
+      toolCalls: [successfulSubmit, failedSubmit],
       reply: 'producer reply',
       tokenUsage: { input: 3, output: 5 },
     },
-    submitCalls: [],
-    successCount: 0,
-    rejectedCount: 0,
+    submitCalls: [successfulSubmit, failedSubmit],
+    successCount: 1,
+    rejectedCount: 1,
   };
 }
 

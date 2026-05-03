@@ -33,6 +33,7 @@ interface MockCandidate {
   trigger: string;
   kind: 'rule' | 'pattern' | 'fact';
   language: string;
+  dimensionId: string;
   category: string;
   knowledgeType: string;
   topicHint: string;
@@ -263,7 +264,8 @@ function getDimensionTemplates(
 
   const base = {
     language: lang,
-    knowledgeType: dimId,
+    dimensionId: dimId,
+    knowledgeType: 'code-pattern',
   };
 
   switch (dimId) {

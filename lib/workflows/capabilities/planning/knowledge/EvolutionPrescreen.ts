@@ -1,3 +1,7 @@
+import {
+  recipeBelongsToDimension,
+  resolveRecipeDimensionId,
+} from '#domain/dimension/RecipeDimension.js';
 import type {
   RelevanceAuditResult,
   RelevanceAuditSummary,
@@ -39,6 +43,8 @@ export function buildEvolutionPrescreen(
   snapshotEntries: Array<{
     id: string;
     title: string;
+    dimensionId?: string;
+    category?: string;
     lifecycle: string;
     knowledgeType: string;
     trigger: string;
@@ -48,10 +54,11 @@ export function buildEvolutionPrescreen(
   const needsVerification: PrescreenNeedsVerification[] = [];
   const autoResolved: PrescreenAutoResolved[] = [];
   const snapById = new Map(snapshotEntries.map((entry) => [entry.id, entry]));
+  const knownDimensionIds = dimensions.map((dimension) => dimension.id);
 
   for (const result of auditSummary.results) {
     const snap = snapById.get(result.recipeId);
-    const dimension = snap ? findMatchingDimensionId(snap, dimensions) : null;
+    const dimension = snap ? findMatchingDimensionId(snap, dimensions, knownDimensionIds) : null;
     if (!dimension) {
       continue;
     }
@@ -92,10 +99,9 @@ export function buildEvolutionPrescreen(
 
   const healthyByDim = new Map<string, number>();
   const observingByDim = new Map<string, number>();
-
   for (const dim of dimensions) {
     for (const entry of snapshotEntries) {
-      if (!recipeBelongsToDimension(entry, dim)) {
+      if (!recipeBelongsToDimension(entry, dim, { knownDimensionIds })) {
         continue;
       }
       const auditResult = auditSummary.results.find((result) => result.recipeId === entry.id);
@@ -128,18 +134,19 @@ export function buildEvolutionPrescreen(
 }
 
 function findMatchingDimensionId(
-  entry: { knowledgeType: string },
-  dimensions: Array<{ id: string; knowledgeTypes?: string[] }>
+  entry: { dimensionId?: string; category?: string; knowledgeType: string; topicHint?: string },
+  dimensions: Array<{ id: string; knowledgeTypes?: string[] }>,
+  knownDimensionIds: readonly string[]
 ): string | null {
-  return dimensions.find((dimension) => recipeBelongsToDimension(entry, dimension))?.id ?? null;
-}
-
-function recipeBelongsToDimension(
-  entry: { knowledgeType: string },
-  dimension: { id: string; knowledgeTypes?: string[] }
-): boolean {
-  const knowledgeType = entry.knowledgeType || '';
-  return knowledgeType === dimension.id || (dimension.knowledgeTypes ?? []).includes(knowledgeType);
+  const resolved = resolveRecipeDimensionId(entry, { knownDimensionIds });
+  if (resolved && dimensions.some((dimension) => dimension.id === resolved)) {
+    return resolved;
+  }
+  return (
+    dimensions.find((dimension) =>
+      recipeBelongsToDimension(entry, dimension, { knownDimensionIds })
+    )?.id ?? null
+  );
 }
 
 function buildAuditHint(result: RelevanceAuditResult): string {

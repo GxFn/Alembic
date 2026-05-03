@@ -78,9 +78,26 @@ export async function runInternalDimensionAgentSession({
   const dimensionCandidates: Record<string, DimensionCandidateData> = {};
   const dimensionStats: Record<string, DimensionStat> = {};
 
+  const {
+    globalSubmittedTitles,
+    globalSubmittedPatterns,
+    globalSubmittedTriggers,
+    bootstrapDedup,
+    rescanContext,
+  } = prepareBootstrapRescanState({
+    existingRecipes: preparation.existingRecipes,
+    evolutionPrescreen: preparation.evolutionPrescreen,
+  });
+  const checkpointRestoreDimIds = rescanContext ? [] : activeDimIds;
+  if (rescanContext && activeDimIds.length > 0) {
+    logger.info(
+      `[Insight-v3] Rescan mode: checkpoint restore disabled for active dimensions [${activeDimIds.join(', ')}]`
+    );
+  }
+
   const { completedCheckpoints, skippedDims } = await restoreCheckpointDimensions({
     dataRoot: preparation.dataRoot,
-    activeDimIds,
+    activeDimIds: checkpointRestoreDimIds,
     dimContext: runtime.dimContext,
     sessionStore: runtime.sessionStore,
     emitter: preparation.emitter,
@@ -93,17 +110,6 @@ export async function runInternalDimensionAgentSession({
     dimensionStats,
     candidateResults,
     dimensionCandidates,
-  });
-
-  const {
-    globalSubmittedTitles,
-    globalSubmittedPatterns,
-    globalSubmittedTriggers,
-    bootstrapDedup,
-    rescanContext,
-  } = prepareBootstrapRescanState({
-    existingRecipes: preparation.existingRecipes,
-    evolutionPrescreen: preparation.evolutionPrescreen,
   });
 
   function resolveBootstrapDimensionPlan(dimId: string) {

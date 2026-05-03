@@ -9,6 +9,7 @@
  * alembic_bootstrap 已迁移到 bootstrap-external.js（外部 Agent 路径）。
  */
 
+import { dimensionTags } from '#domain/dimension/RecipeDimension.js';
 import { getRequiredFieldsDescription } from '#domain/knowledge/FieldSpec.js';
 import { getDeveloperIdentity } from '#shared/developer-identity.js';
 import { envelope } from '../envelope.js';
@@ -281,6 +282,12 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     }
     if (dimensionId && !item.dimensionId) {
       item.dimensionId = dimensionId;
+    }
+    if (item.dimensionId && typeof item.dimensionId === 'string') {
+      const existingTags = Array.isArray(item.tags)
+        ? item.tags.filter((tag): tag is string => typeof tag === 'string')
+        : [];
+      item.tags = dimensionTags(item.dimensionId, existingTags);
     }
   }
 

@@ -31,6 +31,7 @@ export default function migrate(db: import('better-sqlite3').Database) {
       autoApprovable    INTEGER DEFAULT 0,
 
       language          TEXT NOT NULL DEFAULT '',
+      dimensionId       TEXT DEFAULT '',
       category          TEXT NOT NULL DEFAULT 'general',
       kind              TEXT DEFAULT 'pattern',
       knowledgeType     TEXT DEFAULT 'code-pattern',
@@ -88,6 +89,7 @@ export default function migrate(db: import('better-sqlite3').Database) {
 
     CREATE INDEX IF NOT EXISTS idx_ke3_lifecycle    ON knowledge_entries(lifecycle);
     CREATE INDEX IF NOT EXISTS idx_ke3_language     ON knowledge_entries(language);
+    CREATE INDEX IF NOT EXISTS idx_ke3_dimensionId  ON knowledge_entries(dimensionId);
     CREATE INDEX IF NOT EXISTS idx_ke3_category     ON knowledge_entries(category);
     CREATE INDEX IF NOT EXISTS idx_ke3_kind         ON knowledge_entries(kind);
     CREATE INDEX IF NOT EXISTS idx_ke3_createdAt    ON knowledge_entries(createdAt);
