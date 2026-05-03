@@ -47,10 +47,17 @@ describe('bootstrap projections', () => {
           },
           {
             tool: 'knowledge',
+            args: { action: 'search', params: { query: 'overview' } },
+            result: { status: 'ok' },
+          },
+          {
+            tool: 'knowledge',
+            args: { action: 'submit', params: { title: 'Accepted candidate' } },
             result: { status: 'accepted' },
           },
           {
             tool: 'knowledge',
+            args: { action: 'submit', params: { title: 'Rejected candidate' } },
             result: { status: 'rejected' },
           },
         ],
@@ -63,7 +70,7 @@ describe('bootstrap projections', () => {
       findings: ['important finding'],
       referencedFiles: ['src/a.ts'],
       metadata: {
-        toolCallCount: 3,
+        toolCallCount: 4,
         tokenUsage: { input: 10, output: 20 },
         artifactVersion: 2,
       },
