@@ -4,6 +4,24 @@
 
 ---
 
+## [0.0.9] - 2026-05-04
+
+### Added
+- V2 工具系统主线落地：以 6 个资源导向工具替换 65+ V1 工具，并补齐 Agent/Tool 架构重设计、权限治理和 macOS Seatbelt 沙箱执行链路
+- 增量 rescan evolution pipeline：新增隔离、取消、维度准入和完成链路，为冷启动后的持续演化提供统一主线
+- DeepSeek V4 thinking mode 与多配置 LLM Provider：支持 reasoning_content 全链路传递、智能策略和前端多模型配置
+
+### Changed
+- Agent、Workflow、Tool 与 Capability 模块边界重组，目录结构扁平化，预算控制抽出为 BudgetController，并加入 prefix cache、telemetry 和预算分层优化
+- Bootstrap terminal capability 改为默认能力，CI / release 主线纳入 VSCode 扩展构建验证
+
+### Fixed
+- 修复 V2 工具迁移后 recipe persistence、note_finding 和能力对齐问题，恢复候选项入库链路
+- 稳定 rescan 分析链、维度归属、执行准入和完成逻辑，修复真实项目扫描中的 token budget 与 exploration tracker 问题
+- 修复 ghost data root、dashboard env 命名、暗色 badge 配色、MCP server-only 日志和多项 CI / 测试断言问题
+
+---
+
 ## [0.0.7] - 2026-04-20
 
 ### Fixed
