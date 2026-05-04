@@ -35,6 +35,7 @@ import {
   projectInternalRescanPromptRecipes,
   syncKnowledgeStoreForRescan,
 } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
+import { FileDiffPlanner } from '#workflows/capabilities/project-intelligence/FileDiffPlanner.js';
 import { ProjectIntelligenceCapability } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
 import {
   runForceRescanCleanPolicy,
@@ -51,10 +52,13 @@ import {
 } from '#workflows/knowledge-rescan/KnowledgeRescanPresenters.js';
 import { buildKnowledgeRescanWorkflowPlan } from '#workflows/knowledge-rescan/KnowledgeRescanWorkflowPlan.js';
 import type { WorkflowMcpContext } from '#workflows/shared/WorkflowTypes.js';
+import type { EvolutionAuditResult } from '../../../agent/runs/evolution/EvolutionAgentRun.js';
 import { runEvolutionAudit } from '../../../agent/runs/evolution/EvolutionAgentRun.js';
 import {
   type EvolutionCandidatePlan,
   RecipeImpactPlanner,
+  type RescanImpactSubmissionResult,
+  submitRescanImpactDecisions,
   toEvolutionAuditRecipe,
 } from '../../../service/evolution/RecipeImpactPlanner.js';
 import { SourceRefReconciler } from '../../../service/knowledge/SourceRefReconciler.js';
@@ -85,6 +89,24 @@ function resolveKnowledgeRepos(container: { get(name: string): unknown }): Knowl
     sourceRefRepo: sourceRefRepo as SourceRefRepoT,
     knowledgeRepo: knowledgeRepo as KnowledgeRepoT,
   };
+}
+
+function countImpactProposalOutcomes(result: RescanImpactSubmissionResult | null): number {
+  if (!result) {
+    return 0;
+  }
+  return result.results.filter(
+    (r) => r.outcome === 'proposal-created' || r.outcome === 'proposal-upgraded'
+  ).length;
+}
+
+function countImpactImmediateDeprecations(result: RescanImpactSubmissionResult | null): number {
+  if (!result) {
+    return 0;
+  }
+  return result.results.filter(
+    (r) => r.action === 'deprecate' && r.outcome === 'immediately-executed'
+  ).length;
 }
 
 // ── 主入口 ──────────────────────────────────────────────
@@ -251,20 +273,46 @@ export async function runInternalKnowledgeRescanWorkflow(
   }
 
   // ═══════════════════════════════════════════════════════════
-  // Step 3: Evolution Agent 验证 (fire-and-forget，不阻塞 HTTP 响应)
+  // Step 3: Evolution Agent 验证
   // ═══════════════════════════════════════════════════════════
 
+  let impactSubmissionResult: RescanImpactSubmissionResult | null = null;
+  let evolutionAuditResult: EvolutionAuditResult | null = null;
   if (candidatePlan && candidatePlan.candidates.length > 0) {
-    const _candidatePlanRef = candidatePlan;
-    const dispatchEvolutionAudit = async () => {
-      try {
-        const agentService = ctx.container.get('agentService');
-        const repos = resolveKnowledgeRepos(ctx.container);
-        if (agentService && repos) {
-          const auditRecipes = await Promise.all(
-            _candidatePlanRef.candidates.map((c) => toEvolutionAuditRecipe(c, repos.knowledgeRepo))
-          );
-          const evolutionResult = await runEvolutionAudit({
+    try {
+      const gateway = ctx.container.get('evolutionGateway') as Parameters<
+        typeof submitRescanImpactDecisions
+      >[1];
+      if (gateway) {
+        impactSubmissionResult = await submitRescanImpactDecisions(candidatePlan, gateway, {
+          source: 'rescan-evolution',
+        });
+        ctx.logger.info('[Rescan-Internal] Impact decisions submitted', {
+          submitted: impactSubmissionResult.submitted,
+          skipped: impactSubmissionResult.skipped,
+          errors: impactSubmissionResult.errors.length,
+          processedRecipeIds: impactSubmissionResult.processedRecipeIds,
+        });
+      }
+    } catch (err: unknown) {
+      ctx.logger.warn('[Rescan-Internal] Impact decision submission failed', {
+        error: (err as Error).message,
+      });
+    }
+
+    try {
+      const agentService = ctx.container.get('agentService');
+      const repos = resolveKnowledgeRepos(ctx.container);
+      if (agentService && repos) {
+        const preprocessedIds = new Set(impactSubmissionResult?.processedRecipeIds ?? []);
+        const agentCandidates = candidatePlan.candidates.filter(
+          (c) => !preprocessedIds.has(c.recipeId)
+        );
+        const auditRecipes = await Promise.all(
+          agentCandidates.map((c) => toEvolutionAuditRecipe(c, repos.knowledgeRepo))
+        );
+        if (auditRecipes.length > 0) {
+          evolutionAuditResult = await runEvolutionAudit({
             agentService:
               agentService as import('../../../agent/service/AgentService.js').AgentService,
             recipes: auditRecipes,
@@ -276,28 +324,29 @@ export async function runInternalKnowledgeRescanWorkflow(
             proposalSource: 'rescan-evolution',
           });
           ctx.logger.info('[Rescan-Internal] Evolution audit complete', {
-            proposed: evolutionResult.proposed,
-            deprecated: evolutionResult.deprecated,
-            skipped: evolutionResult.skipped,
+            proposed: evolutionAuditResult.proposed,
+            deprecated: evolutionAuditResult.deprecated,
+            skipped: evolutionAuditResult.skipped,
+            toolCalls: evolutionAuditResult.toolCalls,
           });
+        } else {
+          ctx.logger.info(
+            '[Rescan-Internal] Evolution audit skipped — impact decisions covered all candidates'
+          );
         }
-      } catch (err: unknown) {
-        ctx.logger.warn('[Rescan-Internal] Evolution audit failed (async)', {
-          error: (err as Error).message,
-        });
       }
-    };
-    dispatchEvolutionAudit().catch(() => {});
-    ctx.logger.info('[Rescan-Internal] Evolution audit dispatched async', {
-      candidates: candidatePlan.candidates.length,
-    });
+    } catch (err: unknown) {
+      ctx.logger.warn('[Rescan-Internal] Evolution audit failed', {
+        error: (err as Error).message,
+      });
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
   // Step 4: Recipe 证据验证 + 快速衰退（保留用于 gap analysis）
   // ═══════════════════════════════════════════════════════════
 
-  const auditSummary = await auditRecipesForRescan({
+  const rawAuditSummary = await auditRecipesForRescan({
     container: ctx.container,
     logger: ctx.logger,
     recipeEntries: recipeSnapshot.entries,
@@ -305,6 +354,17 @@ export async function runInternalKnowledgeRescanWorkflow(
     projectRoot,
     candidatePlan,
   });
+  const auditSummary = {
+    ...rawAuditSummary,
+    proposalsCreated:
+      rawAuditSummary.proposalsCreated +
+      countImpactProposalOutcomes(impactSubmissionResult) +
+      (evolutionAuditResult?.proposed ?? 0),
+    immediateDeprecated:
+      rawAuditSummary.immediateDeprecated +
+      countImpactImmediateDeprecations(impactSubmissionResult) +
+      (evolutionAuditResult?.deprecated ?? 0),
+  };
 
   ctx.logger.info('[Rescan-Internal] Relevance audit complete', {
     total: auditSummary.totalAudited,
@@ -461,6 +521,25 @@ export async function runInternalKnowledgeRescanWorkflow(
     ctx.logger.info(
       '[Rescan-Internal] All dimensions fully covered and healthy — no async fill needed'
     );
+    try {
+      const fileDiffPlanner = new FileDiffPlanner(db, projectRoot, { logger: ctx.logger });
+      const snapshotId = fileDiffPlanner.saveSnapshot({
+        sessionId: bootstrapSession?.id ?? sessionId ?? `rescan-${Date.now()}`,
+        allFiles,
+        dimensionStats: {},
+        episodicMemory: null,
+        meta: {
+          primaryLang: primaryLang || undefined,
+          candidateCount: 0,
+        },
+        plan: _incrementalPlan,
+      });
+      ctx.logger.info('[Rescan-Internal] Snapshot saved for no-fill rescan', { snapshotId });
+    } catch (err: unknown) {
+      ctx.logger.warn('[Rescan-Internal] Snapshot save skipped for no-fill rescan', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   // ── SkillHooks: onRescanComplete (fire-and-forget) ──
@@ -497,6 +576,7 @@ export async function runInternalKnowledgeRescanWorkflow(
     snapshot,
     bootstrapSession,
     sessionId,
+    evolutionAudit: evolutionAuditResult,
     reason: intent.reason,
     responseTimeMs: Date.now() - t0,
   });

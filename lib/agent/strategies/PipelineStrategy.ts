@@ -64,6 +64,7 @@ interface GateConfig {
     strategyContext: Record<string, unknown>
   ) => { action?: string; pass?: boolean; reason?: string; artifact?: unknown };
   maxRetries?: number;
+  useCumulativeToolCalls?: boolean;
   minEvidenceLength?: number;
   minFileRefs?: number;
   minToolCalls?: number;
@@ -91,6 +92,7 @@ interface PipelineStage {
   skipOnDegrade?: boolean;
   skipOnFail?: boolean;
   submitToolName?: string;
+  decisionOnlyOnRetry?: boolean;
   /** 管线类型标识 — 传递至 ExplorationTracker 用于统一场景判别 */
   pipelineType?: PipelineType;
   source?: string;
@@ -238,7 +240,10 @@ export class PipelineStrategy extends Strategy {
     // v3: 自定义评估器 (Bootstrap 用)
     if (typeof gate.evaluator === 'function') {
       this.#ensureGateActiveContext(stage, strategyContext, phaseResults, bus, ctx.diagnostics);
-      gateResult = gate.evaluator(source, phaseResults, strategyContext) as typeof gateResult;
+      const gateSource = gate.useCumulativeToolCalls
+        ? this.#withCumulativeToolCalls(source, ctx)
+        : source;
+      gateResult = gate.evaluator(gateSource, phaseResults, strategyContext) as typeof gateResult;
       if (!gateResult.action) {
         gateResult.action = gateResult.pass ? 'pass' : 'retry';
       }
@@ -384,6 +389,7 @@ export class PipelineStrategy extends Strategy {
 
     // Budget (retry 时使用 retryBudget; 无 stage.budget 时回退到 strategyContext._computedBudget)
     const isRetry = !!phaseResults[`_was_retry_${stage.name}`];
+    const decisionOnly = isRetry && stage.decisionOnlyOnRetry === true;
     const computedBudget = (strategyContext._computedBudget || null) as StageBudget | null;
     const effectiveBudget =
       isRetry && stage.retryBudget
@@ -430,6 +436,7 @@ export class PipelineStrategy extends Strategy {
       stageTracker,
       strategyContext,
       phaseResults,
+      decisionOnly,
       bus
     );
 
@@ -479,6 +486,7 @@ export class PipelineStrategy extends Strategy {
         retryTracker,
         strategyContext,
         phaseResults,
+        decisionOnly,
         bus
       );
     }
@@ -595,6 +603,7 @@ export class PipelineStrategy extends Strategy {
     stageTracker: ExplorationTracker | null,
     strategyContext: Record<string, unknown>,
     phaseResults: Record<string, unknown>,
+    decisionOnly: boolean,
     bus: AgentEventBus
   ): Promise<StageResult> {
     // 创建 AbortController — hard timeout 时取消进行中的 LLM 请求
@@ -637,7 +646,12 @@ export class PipelineStrategy extends Strategy {
       tracker: stageTracker,
       trace: strategyContext.trace || null,
       memoryCoordinator: strategyContext.memoryCoordinator || null,
-      sharedState: strategyContext.sharedState || null,
+      sharedState: decisionOnly
+        ? {
+            ...((strategyContext.sharedState as Record<string, unknown>) || {}),
+            _evolutionDecisionOnly: true,
+          }
+        : strategyContext.sharedState || null,
       source: strategyContext.source || null,
       abortSignal: abortController.signal,
       diagnostics: strategyContext.diagnostics as DiagnosticsCollector,
@@ -729,6 +743,20 @@ export class PipelineStrategy extends Strategy {
     }
 
     return reasons.length === 0 ? { pass: true } : { pass: false, reason: reasons.join('; ') };
+  }
+
+  #withCumulativeToolCalls(source: unknown, ctx: PipelineContext) {
+    const base =
+      source && typeof source === 'object' && !Array.isArray(source)
+        ? ({ ...(source as Record<string, unknown>) } as Record<string, unknown>)
+        : { value: source };
+
+    return {
+      ...base,
+      toolCalls: ctx.totalToolCalls,
+      iterations: ctx.totalIterations,
+      tokenUsage: ctx.totalTokenUsage,
+    };
   }
 
   /** 找到当前 gate 之前最近的执行阶段索引 (用于 retry 回退) */

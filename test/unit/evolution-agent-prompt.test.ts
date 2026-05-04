@@ -138,6 +138,8 @@ describe('buildEvolverPrompt', () => {
     expect(prompt).toContain('"operation": "evolve"');
     expect(prompt).toContain('"operation": "deprecate"');
     expect(prompt).toContain('"operation": "skip_evolution"');
+    expect(prompt).toContain('"id": "recipe-xxx"');
+    expect(prompt).not.toContain('"recipeId"');
     // Should NOT reference submit_knowledge (proposal approach)
     expect(prompt).not.toContain('submit_knowledge');
   });

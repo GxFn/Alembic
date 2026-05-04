@@ -120,6 +120,7 @@ export class EvolutionGateway {
     decision: EvolutionDecision,
     entry: { id: string; stats?: unknown }
   ): EvolutionResult {
+    const reason = decision.reason ?? decision.description ?? 'Recipe verified as still valid';
     try {
       const stats = (typeof entry.stats === 'object' ? entry.stats : {}) as Record<string, unknown>;
       stats.lastVerifiedAt = Date.now();
@@ -129,6 +130,8 @@ export class EvolutionGateway {
         `[EvolutionGateway] Failed to update lastVerifiedAt for ${decision.recipeId}: ${err instanceof Error ? err.message : String(err)}`
       );
     }
+
+    this.#rejectExistingProposals(decision.recipeId, reason, decision.source);
 
     return { recipeId: decision.recipeId, action: 'valid', outcome: 'verified' };
   }
@@ -302,6 +305,19 @@ export class EvolutionGateway {
     } catch (err: unknown) {
       this.#logger.warn(
         `[EvolutionGateway] Failed to resolve existing deprecate proposals for ${recipeId}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  #rejectExistingProposals(recipeId: string, reason: string, resolvedBy: string): void {
+    try {
+      const existing = this.#proposalRepo.findByTarget(recipeId);
+      for (const p of existing) {
+        this.#proposalRepo.markRejected(p.id, `Gateway valid: ${reason}`, resolvedBy);
+      }
+    } catch (err: unknown) {
+      this.#logger.warn(
+        `[EvolutionGateway] Failed to reject existing proposals for ${recipeId}: ${err instanceof Error ? err.message : String(err)}`
       );
     }
   }

@@ -132,6 +132,7 @@ export class ToolContextFactory {
       searchEngine: tryGet(c, 'searchEngine'),
       recipeGateway: tryGet(c, 'recipeProductionGateway'),
       knowledgeRepo: tryGet(c, 'knowledgeRepository'),
+      evolutionGateway: tryGet(c, 'evolutionGateway'),
       astAnalyzer: tryGet(c, 'astAnalyzer'),
       safetyPolicy: request.runtime?.safetyPolicy ?? undefined,
       sandboxExecutor: this.#sandboxBridge,

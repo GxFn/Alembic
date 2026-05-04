@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   analysisQualityGate,
   buildAnalysisArtifact,
+  insightGateEvaluator,
 } from '../../lib/agent/prompts/insight-gate.js';
 
 describe('insight gate analysis artifact', () => {
@@ -164,6 +165,40 @@ describe('insight gate analysis artifact', () => {
       pass: false,
       action: 'retry',
       reason: 'At least 3 memory action note_finding calls are required',
+    });
+  });
+
+  test('treats needsCandidates as candidate output even when outputType is analysis', () => {
+    const reply = `
+## NetworkError 统一网络错误枚举
+
+核心错误模型落在 Packages/AOXNetworkKit/Sources/AOXNetworkKit/Core/NetworkError.swift，并通过 Sources/Infrastructure/Networking/Client/NetworkError+Bili.swift 转换成业务可读错误。
+
+## ResponseDecoder 容错解析链路
+
+响应解析由 Packages/AOXNetworkKit/Sources/AOXNetworkKit/Core/ResponseDecoder.swift 承担。
+
+## 中间件错误恢复
+
+请求链路中的 Sources/Infrastructure/Networking/Middleware/AuthMiddleware.swift 提供认证恢复。
+`;
+
+    const result = insightGateEvaluator(
+      { reply, toolCalls: evidenceToolCalls },
+      {},
+      {
+        dimId: 'error-resilience',
+        outputType: 'analysis',
+        needsCandidates: true,
+        activeContext: {
+          distill: () => ({ keyFindings: [], toolCallSummary: [] }),
+        },
+      }
+    );
+
+    expect(result).toMatchObject({
+      action: 'retry',
+      reason: 'Required memory action note_finding calls are missing',
     });
   });
 });

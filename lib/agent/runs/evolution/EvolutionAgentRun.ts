@@ -91,11 +91,22 @@ export async function runEvolutionAudit({
     presentation: { responseShape: 'system-task-result' },
   });
 
-  return projectEvolutionAuditResult({
+  const audit = projectEvolutionAuditResult({
     reply: result.reply,
     toolCalls: result.toolCalls,
     iterations: result.usage.iterations,
   });
+  const decisionIds = collectEvolutionDecisionIds(
+    result.toolCalls,
+    recipes.map((r) => r.id)
+  );
+  if (decisionIds.size < recipes.length) {
+    const pending = recipes.map((r) => r.id).filter((id) => !decisionIds.has(id));
+    throw new Error(
+      `Evolution audit incomplete: decisions ${decisionIds.size}/${recipes.length}; pending=${pending.join(', ')}`
+    );
+  }
+  return audit;
 }
 
 export function projectEvolutionAuditResult({
@@ -108,8 +119,8 @@ export function projectEvolutionAuditResult({
   iterations: number;
 }): EvolutionAuditResult {
   return {
-    proposed: countManageOps(toolCalls, 'evolve'),
-    deprecated: countManageOps(toolCalls, 'deprecate'),
+    proposed: countProposalOutcomes(toolCalls),
+    deprecated: countImmediateDeprecations(toolCalls),
     skipped: countManageOps(toolCalls, 'skip_evolution'),
     iterations,
     toolCalls: toolCalls.length,
@@ -117,14 +128,19 @@ export function projectEvolutionAuditResult({
   };
 }
 
-/** V2: knowledge.manage(operation: X) 统计；V1 compat: 独立工具名 fallback */
+/** V2: knowledge.manage(operation: X, id) 统计；V1 compat: 独立工具名 fallback */
 function countManageOps(toolCalls: ToolCallEntry[], operation: string) {
   let count = 0;
   for (const tc of toolCalls) {
+    if (!isSuccessfulManageCall(tc)) {
+      continue;
+    }
     const tool = tc.tool || tc.name;
     if (tool === 'knowledge') {
+      const action = tc.args?.action as string | undefined;
       const params = (tc.args?.params as Record<string, unknown>) || tc.args || {};
-      if (params.operation === operation) {
+      const id = params.id || params.recipeId;
+      if (action === 'manage' && id && params.operation === operation) {
         count++;
       }
     }
@@ -139,4 +155,139 @@ function countManageOps(toolCalls: ToolCallEntry[], operation: string) {
     }
   }
   return count;
+}
+
+function isSuccessfulManageCall(tc: ToolCallEntry) {
+  if (tc.envelope?.ok === false) {
+    return false;
+  }
+  const result = tc.result as Record<string, unknown> | null;
+  if (result && typeof result === 'object' && typeof result.error === 'string') {
+    return false;
+  }
+  return true;
+}
+
+function countProposalOutcomes(toolCalls: ToolCallEntry[]) {
+  let count = 0;
+  for (const tc of toolCalls) {
+    if (!isSuccessfulManageCall(tc) || !isKnowledgeManageCall(tc)) {
+      continue;
+    }
+    const { status, outcome } = readEvolutionToolResult(tc);
+    if (outcome) {
+      if (outcome === 'proposal-created' || outcome === 'proposal-upgraded') {
+        count++;
+      }
+      continue;
+    }
+    if (
+      status === 'evolution_proposed' ||
+      status === 'evolution_proposal_upgraded' ||
+      status === 'deprecation_proposed'
+    ) {
+      count++;
+    }
+  }
+  return count;
+}
+
+function countImmediateDeprecations(toolCalls: ToolCallEntry[]) {
+  let count = 0;
+  for (const tc of toolCalls) {
+    if (!isSuccessfulManageCall(tc) || !isKnowledgeManageCall(tc)) {
+      continue;
+    }
+    const { status, outcome } = readEvolutionToolResult(tc);
+    if (outcome) {
+      if (outcome === 'immediately-executed') {
+        count++;
+      }
+      continue;
+    }
+    if (status === 'deprecated') {
+      count++;
+    }
+  }
+  return count;
+}
+
+function isKnowledgeManageCall(tc: ToolCallEntry) {
+  const tool = tc.tool || tc.name;
+  const args = tc.args || {};
+  const params = (args.params as Record<string, unknown>) || args;
+  const operation = params.operation as string | undefined;
+  return (
+    tool === 'knowledge' &&
+    args.action === 'manage' &&
+    (operation === 'evolve' || operation === 'deprecate' || operation === 'skip_evolution')
+  );
+}
+
+function readEvolutionToolResult(tc: ToolCallEntry) {
+  const result = asRecord(tc.result);
+  const data = asRecord(result?.data);
+  const source = data || result || {};
+  return {
+    status: typeof source.status === 'string' ? source.status : '',
+    outcome: typeof source.outcome === 'string' ? source.outcome : '',
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+export function collectEvolutionDecisionIds(
+  toolCalls: ToolCallEntry[],
+  expectedIds: string[] = []
+): Set<string> {
+  const ids = new Set<string>();
+  const expected = new Set(expectedIds);
+  const mark = (id: unknown) => {
+    if (typeof id !== 'string' || id.length === 0) {
+      return;
+    }
+    if (expected.size > 0 && !expected.has(id)) {
+      return;
+    }
+    ids.add(id);
+  };
+
+  for (const tc of toolCalls) {
+    if (!isSuccessfulManageCall(tc)) {
+      continue;
+    }
+    const tool = tc.tool || tc.name;
+    const args = tc.args || {};
+    if (tool === 'knowledge') {
+      const action = args.action as string | undefined;
+      const params = (args.params as Record<string, unknown>) || args;
+      const operation = params.operation as string | undefined;
+      const id = params.id || params.recipeId;
+      if (
+        action === 'manage' &&
+        id &&
+        (operation === 'evolve' || operation === 'deprecate' || operation === 'skip_evolution')
+      ) {
+        mark(id);
+      }
+      const supersedes = args.supersedes || params.supersedes;
+      if ((action === 'submit' || supersedes) && supersedes) {
+        mark(supersedes);
+      }
+    }
+
+    if (tool === 'propose_evolution' && args.recipeId) {
+      mark(args.recipeId);
+    }
+    if (tool === 'confirm_deprecation' && args.recipeId) {
+      mark(args.recipeId);
+    }
+    if (tool === 'skip_evolution' && args.recipeId) {
+      mark(args.recipeId);
+    }
+  }
+
+  return ids;
 }

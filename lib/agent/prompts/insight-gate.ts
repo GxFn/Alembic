@@ -130,6 +130,7 @@ interface InsightGateStrategyContext {
   activeContext?: ActiveContextLike | null;
   dimId?: string;
   outputType?: string;
+  needsCandidates?: boolean;
   [key: string]: unknown;
 }
 
@@ -688,14 +689,16 @@ export function insightGateEvaluator(
     return { action: 'degrade', reason: 'No analysis output', artifact: null };
   }
 
-  const { projectGraph, activeContext, dimId, outputType } =
+  const { projectGraph, activeContext, dimId, outputType, needsCandidates } =
     strategyContext as InsightGateStrategyContext;
 
   const artifact = activeContext
     ? buildAnalysisArtifact(source as AnalystResult, dimId as string, projectGraph, activeContext)
     : buildAnalysisReport(source as AnalystResult, dimId as string, projectGraph);
 
-  const gate = analysisQualityGate(artifact, { outputType: outputType || 'analysis' });
+  const gate = analysisQualityGate(artifact, {
+    outputType: needsCandidates ? 'candidate' : outputType || 'analysis',
+  });
 
   const qr = (artifact as Record<string, unknown>).qualityReport as QualityReport | undefined;
   if (qr?.scores) {
@@ -728,15 +731,16 @@ interface EvolutionToolCallRecord {
   name?: string;
   args?: Record<string, unknown>;
   result?: unknown;
+  envelope?: { ok?: boolean };
 }
 
 /**
  * Evolution Gate 评估器 — 面向 PipelineStrategy gate.evaluator
  *
  * 检查 Evolution Agent 是否对所有现有 Recipe 做出了决策:
- * - evolved: knowledge.manage(operation: "evolve") 或 knowledge.submit(supersedes: ...)
- * - deprecated: knowledge.manage(operation: "deprecate")
- * - skipped: knowledge.manage(operation: "skip_evolution")
+ * - evolved: knowledge.manage(operation: "evolve", id) 或 knowledge.submit(supersedes: ...)
+ * - deprecated: knowledge.manage(operation: "deprecate", id)
+ * - skipped: knowledge.manage(operation: "skip_evolution", id)
  *
  * 如果还有未处理的 Recipe，返回 retry 要求补充决策。
  *
@@ -752,57 +756,90 @@ export function evolutionGateEvaluator(
 ) {
   const totalRecipes = (strategyContext.existingRecipes ?? strategyContext.decayedRecipes ?? [])
     .length;
+  const expectedIds = (strategyContext.existingRecipes ?? strategyContext.decayedRecipes ?? []).map(
+    (r) => r.id
+  );
+  const expectedIdSet = new Set(expectedIds);
   const toolCalls = source?.toolCalls || [];
 
   const processedIds = new Set<string>();
+  const markProcessed = (id: unknown) => {
+    if (typeof id !== 'string' || id.length === 0) {
+      return;
+    }
+    if (expectedIdSet.size > 0 && !expectedIdSet.has(id)) {
+      return;
+    }
+    processedIds.add(id);
+  };
 
   for (const tc of toolCalls) {
     const tool = tc.tool || tc.name;
     const args = tc.args || {};
 
-    // V2: knowledge({ action: "manage", params: { operation: "evolve"|"deprecate"|"skip_evolution", recipeId } })
+    if (!isSuccessfulEvolutionToolCall(tc)) {
+      continue;
+    }
+
+    // V2: knowledge({ action: "manage", params: { operation: "evolve"|"deprecate"|"skip_evolution", id } })
     if (tool === 'knowledge') {
       const params = (args.params as Record<string, unknown>) || args;
+      const action = args.action as string | undefined;
       const operation = params.operation as string | undefined;
-      const recipeId = params.recipeId as string | undefined;
+      const recipeId = (params.id ?? params.recipeId) as string | undefined;
 
       if (
+        action === 'manage' &&
         recipeId &&
         (operation === 'evolve' || operation === 'deprecate' || operation === 'skip_evolution')
       ) {
-        processedIds.add(String(recipeId));
+        markProcessed(recipeId);
       }
       // V2: knowledge.submit with supersedes
-      if (args.supersedes || params.supersedes) {
-        processedIds.add(String(args.supersedes || params.supersedes));
+      const supersedes = args.supersedes || params.supersedes;
+      if ((action === 'submit' || supersedes) && supersedes) {
+        markProcessed(supersedes);
       }
     }
 
     // V1 compat: standalone tool names
     if (tool === 'propose_evolution' && args.recipeId) {
-      processedIds.add(String(args.recipeId));
+      markProcessed(args.recipeId);
     }
     if (tool === 'confirm_deprecation' && args.recipeId) {
-      processedIds.add(String(args.recipeId));
+      markProcessed(args.recipeId);
     }
     if (tool === 'skip_evolution' && args.recipeId) {
-      processedIds.add(String(args.recipeId));
+      markProcessed(args.recipeId);
     }
   }
 
   const processed = processedIds.size;
+  const pendingIds = expectedIds.filter((id) => !processedIds.has(id));
 
-  if (totalRecipes > 0 && processed < totalRecipes) {
+  if (totalRecipes > 0 && pendingIds.length > 0) {
     return {
       action: 'retry',
-      reason: `只处理了 ${processed}/${totalRecipes} 个 Recipe，还有 ${totalRecipes - processed} 个未决策`,
+      reason: `只处理了 ${processed}/${totalRecipes} 个 Recipe，还有 ${pendingIds.length} 个未决策`,
+      artifact: { processed, totalRecipes, pendingIds },
     };
   }
 
   return {
     action: 'pass',
-    artifact: { processed, totalRecipes },
+    artifact: { processed, totalRecipes, pendingIds },
   };
+}
+
+function isSuccessfulEvolutionToolCall(tc: EvolutionToolCallRecord): boolean {
+  if (tc.envelope?.ok === false) {
+    return false;
+  }
+  const result = tc.result as Record<string, unknown> | undefined;
+  if (result && typeof result === 'object' && typeof result.error === 'string') {
+    return false;
+  }
+  return true;
 }
 
 // ──────────────────────────────────────────────────────────────────

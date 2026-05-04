@@ -135,6 +135,8 @@ describe('bootstrap dimension runtime builder', () => {
       hasExistingRecipes: true,
       prescreenDone: true,
     });
+    expect(strategyContext.outputType).toBe('candidate');
+    expect(strategyContext.needsCandidates).toBe(true);
     expect(systemRunContext.sharedState).toMatchObject({
       submittedTitles: globalSubmittedTitles,
       submittedPatterns: globalSubmittedPatterns,
@@ -232,6 +234,8 @@ describe('bootstrap dimension runtime builder', () => {
       dimId: 'custom-dual-dim',
       needsCandidates: false,
     });
+    expect(strategyContext.outputType).toBe('dual');
+    expect(strategyContext.needsCandidates).toBe(false);
     expect(strategyContext.rescanContext).toMatchObject({
       gap: 0,
       createBudget: 0,

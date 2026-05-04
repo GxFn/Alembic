@@ -109,6 +109,35 @@ describe('EvolutionGateway', () => {
       expect(knowledgeRepo.updateStats).toHaveBeenCalled();
     });
 
+    it('valid → rejects active automated proposals for the recipe', async () => {
+      const proposalRepo = createMockProposalRepo();
+      const { gateway } = createGateway({ proposalRepo });
+
+      await gateway.submit({
+        recipeId: 'r1',
+        action: 'update',
+        source: 'rescan-evolution',
+        confidence: 0.8,
+        description: 'pattern modified',
+        evidence: [{ modifiedPath: 'a.swift' }],
+      });
+
+      const result = await gateway.submit({
+        recipeId: 'r1',
+        action: 'valid',
+        source: 'rescan-evolution',
+        confidence: 0.9,
+        reason: 'Agent verified current code still matches',
+      });
+
+      expect(result.outcome).toBe('verified');
+      expect(proposalRepo.markRejected).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining('Agent verified current code still matches'),
+        'rescan-evolution'
+      );
+    });
+
     it('update → creates proposal', async () => {
       const { gateway, proposalRepo } = createGateway();
 

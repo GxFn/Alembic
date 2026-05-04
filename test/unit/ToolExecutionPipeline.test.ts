@@ -96,4 +96,58 @@ describe('ToolExecutionPipeline knowledge submission tracking', () => {
     expect(sharedState.submittedTitles.has('duplicate title')).toBe(false);
     expect(sharedState.submittedTriggers.has('@duplicate-title')).toBe(false);
   });
+
+  test('blocks non-manage knowledge calls during evolution decision-only retry', async () => {
+    const runtime = makeRuntime({ status: 'unused' });
+    const pipeline = createToolPipeline();
+
+    const result = await pipeline.execute(
+      {
+        name: 'knowledge',
+        id: 'call-1',
+        args: {
+          action: 'search',
+          params: { query: 'recipe-id' },
+        },
+      },
+      {
+        runtime,
+        loopCtx: makeLoopCtx({ _evolutionDecisionOnly: true }),
+        iteration: 1,
+      } as never
+    );
+
+    expect(runtime.toolRouter.execute).not.toHaveBeenCalled();
+    expect(result.result).toMatchObject({
+      error: expect.stringContaining('decision-only'),
+    });
+  });
+
+  test('allows knowledge.manage decisions during evolution decision-only retry', async () => {
+    const runtime = makeRuntime({ status: 'evolution_verified' });
+    const pipeline = createToolPipeline();
+
+    const result = await pipeline.execute(
+      {
+        name: 'knowledge',
+        id: 'call-1',
+        args: {
+          action: 'manage',
+          params: {
+            operation: 'skip_evolution',
+            id: 'recipe-1',
+            reason: 'verified valid',
+          },
+        },
+      },
+      {
+        runtime,
+        loopCtx: makeLoopCtx({ _evolutionDecisionOnly: true }),
+        iteration: 1,
+      } as never
+    );
+
+    expect(runtime.toolRouter.execute).toHaveBeenCalledOnce();
+    expect(result.result).toMatchObject({ status: 'evolution_verified' });
+  });
 });

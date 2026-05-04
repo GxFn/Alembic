@@ -8,10 +8,11 @@
  *   1. EventBusPublisher — 事件发布
  *   2. ProgressEmitter — 进度回调
  *   3. AllowlistGate — 当前 capability 白名单拦截
- *   4. ObservationRecord — 记忆记录
- *   5. TrackerSignal — ExplorationTracker 信号收集
- *   6. TraceRecord — ActiveContext 推理链记录
- *   7. SubmitTracker — 提交成功后登记会话状态
+ *   4. EvolutionDecisionGate — Evolution retry 仅允许 knowledge.manage 决策
+ *   5. ObservationRecord — 记忆记录
+ *   6. TrackerSignal — ExplorationTracker 信号收集
+ *   7. TraceRecord — ActiveContext 推理链记录
+ *   8. SubmitTracker — 提交成功后登记会话状态
  *
  * @module core/ToolExecutionPipeline
  */
@@ -262,6 +263,39 @@ export const allowlistGate = {
 };
 
 /**
+ * EvolutionDecisionGate — Evolution retry 决策补写阶段的动作级守卫。
+ *
+ * allowlist 只能限制到工具名（knowledge），但 retry 阶段需要更硬的约束：
+ * 只允许 knowledge.manage(evolve/deprecate/skip_evolution)，禁止继续 search/detail/read。
+ */
+export const evolutionDecisionGate = {
+  name: 'evolutionDecisionGate',
+  before(call: ToolCall, ctx: ToolExecContext): BeforeVerdict | undefined {
+    if (ctx.loopCtx.sharedState?._evolutionDecisionOnly !== true) {
+      return undefined;
+    }
+
+    const params = (call.args?.params as Record<string, unknown> | undefined) ?? call.args ?? {};
+    const action = String(call.args?.action || '');
+    const operation = String(params.operation || '');
+    const allowedOperation =
+      operation === 'evolve' || operation === 'deprecate' || operation === 'skip_evolution';
+
+    if (call.name === 'knowledge' && action === 'manage' && allowedOperation && params.id) {
+      return undefined;
+    }
+
+    return {
+      blocked: true,
+      result: {
+        error:
+          'Evolution retry is decision-only. Call knowledge({ action: "manage", params: { operation: "evolve|deprecate|skip_evolution", id, reason, data? } }) for each pending Recipe; search/detail/code/graph are disabled.',
+      },
+    };
+  },
+};
+
+/**
  * ObservationRecord — MemoryCoordinator 观察记录
  *
  * after: 记录工具执行观察
@@ -440,10 +474,11 @@ export const eventBusPublisher = {
  *
  * 中间件顺序:
  *   1. allowlistGate (当前 capability 白名单 — 可短路)
- *   2. observationRecord (记忆记录)
- *   3. trackerSignal (信号收集)
- *   4. traceRecord (推理链)
- *   5. submitDedup (提交成功后登记会话状态；不做提前拦截)
+ *   2. evolutionDecisionGate (Evolution retry 动作级守卫 — 可短路)
+ *   3. observationRecord (记忆记录)
+ *   4. trackerSignal (信号收集)
+ *   5. traceRecord (推理链)
+ *   6. submitDedup (提交成功后登记会话状态；不做提前拦截)
  *
  * Runtime SafetyPolicy 已迁入 ToolRouter/GovernanceEngine 的 approve 阶段。
  *
@@ -454,6 +489,7 @@ export const eventBusPublisher = {
 export function createToolPipeline() {
   return new ToolExecutionPipeline()
     .use(allowlistGate)
+    .use(evolutionDecisionGate)
     .use(observationRecord)
     .use(trackerSignal)
     .use(traceRecord)

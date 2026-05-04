@@ -12,10 +12,13 @@
  */
 
 import type { EvolutionAuditRecipe } from '../../agent/runs/evolution/EvolutionAgentRun.js';
+import { isConsumable, isDegraded } from '../../domain/knowledge/Lifecycle.js';
+import type { ProposalSource } from '../../repository/evolution/ProposalRepository.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 import { extractRecipeTokens } from '../../shared/recipe-tokens.js';
 import { assessImpactUnified } from './ContentImpactAnalyzer.js';
+import type { EvolutionAction, EvolutionDecision, EvolutionResult } from './EvolutionGateway.js';
 
 // ── Types ──────────────────────────────────────────────
 
@@ -57,6 +60,18 @@ export interface DiffInput {
   added: string[];
   modified: string[];
   deleted: string[];
+}
+
+export interface RescanImpactSubmissionResult {
+  submitted: number;
+  skipped: number;
+  errors: Array<{ recipeId: string; error: string }>;
+  processedRecipeIds: string[];
+  results: EvolutionResult[];
+}
+
+interface EvolutionGatewayLike {
+  submit(decision: EvolutionDecision): Promise<EvolutionResult>;
 }
 
 // ── Reason priority (higher = more critical) ──
@@ -126,7 +141,7 @@ export class RecipeImpactPlanner {
       }
       for (const ref of refs) {
         const entry = await this.#knowledgeRepo.findById(ref.recipeId);
-        if (!entry || entry.lifecycle !== 'active') {
+        if (!entry || !isEvolutionTrackableLifecycle(entry.lifecycle)) {
           ignored.push({ filePath: modifiedPath, reason: 'recipe-not-active' });
           continue;
         }
@@ -269,6 +284,10 @@ export class RecipeImpactPlanner {
 
 // ── Conversion Helper ──
 
+function isEvolutionTrackableLifecycle(lifecycle: unknown): boolean {
+  return typeof lifecycle === 'string' && (isConsumable(lifecycle) || isDegraded(lifecycle));
+}
+
 /**
  * 将 EvolutionCandidate 转换为 EvolutionAuditRecipe（供 runEvolutionAudit 消费）。
  *
@@ -303,4 +322,96 @@ export async function toEvolutionAuditRecipe(
     },
     auditHint: null,
   };
+}
+
+/**
+ * 将高置信 diff 候选转换为确定性 Gateway 决策。
+ *
+ * 只处理无需 LLM 判断的直接信号：
+ * - source-modified-pattern: 代码触碰了 Recipe 关键 token，先创建 update proposal
+ * - source-deleted: 所有来源丢失，按 FileChangeHandler 同语义提交 deprecate
+ *
+ * source-deleted-partial/source-missing 仍交给 Evolution Agent 判断迁移、替代或有效性。
+ */
+export function toRescanImpactDecision(
+  candidate: EvolutionCandidate,
+  opts: { source?: ProposalSource; now?: number } = {}
+): EvolutionDecision | null {
+  const source = opts.source ?? 'rescan-evolution';
+  const detectedAt = opts.now ?? Date.now();
+  const evidence = [
+    {
+      reason: candidate.reason,
+      affectedFiles: candidate.affectedFiles,
+      impactScore: candidate.impactScore,
+      matchedTokens: candidate.matchedTokens,
+      sourceRefs: candidate.sourceRefs,
+      detectedAt,
+    },
+  ];
+
+  let action: EvolutionAction;
+  let confidence: number;
+  let description: string;
+
+  if (candidate.reason === 'source-modified-pattern') {
+    action = 'update';
+    confidence = Math.min(0.5 + candidate.impactScore, 0.9);
+    description =
+      `Source pattern modified for "${candidate.recipeTitle || candidate.recipeId}" ` +
+      `(impact=${candidate.impactScore.toFixed(2)}, tokens=${candidate.matchedTokens.join(', ') || 'n/a'})`;
+  } else if (candidate.reason === 'source-deleted') {
+    action = 'deprecate';
+    confidence = 0.9;
+    description =
+      `All source references lost for "${candidate.recipeTitle || candidate.recipeId}": ` +
+      candidate.affectedFiles.join(', ');
+  } else {
+    return null;
+  }
+
+  return {
+    recipeId: candidate.recipeId,
+    action,
+    source,
+    confidence,
+    description,
+    reason: description,
+    evidence,
+  };
+}
+
+export async function submitRescanImpactDecisions(
+  candidatePlan: EvolutionCandidatePlan,
+  gateway: EvolutionGatewayLike,
+  opts: { source?: ProposalSource; now?: number } = {}
+): Promise<RescanImpactSubmissionResult> {
+  const results: EvolutionResult[] = [];
+  const errors: Array<{ recipeId: string; error: string }> = [];
+  const processedRecipeIds: string[] = [];
+  let submitted = 0;
+  let skipped = 0;
+
+  for (const candidate of candidatePlan.candidates) {
+    const decision = toRescanImpactDecision(candidate, opts);
+    if (!decision) {
+      skipped++;
+      continue;
+    }
+
+    const result = await gateway.submit(decision);
+    results.push(result);
+    if (result.outcome === 'error') {
+      errors.push({ recipeId: candidate.recipeId, error: result.error ?? 'unknown error' });
+      continue;
+    }
+    processedRecipeIds.push(candidate.recipeId);
+    if (result.outcome === 'skipped') {
+      skipped++;
+      continue;
+    }
+    submitted++;
+  }
+
+  return { submitted, skipped, errors, processedRecipeIds, results };
 }

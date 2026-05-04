@@ -27,8 +27,8 @@ export class Evolution extends CapabilityV2 {
 工作流:
 1. knowledge.search / knowledge.detail 获取旧知识上下文
 2. code.search / code.read / graph.query 验证代码事实
-3. 证据明确时: knowledge.manage(operation: "evolve") 或 knowledge.manage(operation: "deprecate")
-4. 无法确定时: knowledge.manage(operation: "skip_evolution")
+3. 证据明确时: knowledge({ action: "manage", params: { operation: "evolve"|"deprecate", id } })
+4. 无法确定时: knowledge({ action: "manage", params: { operation: "skip_evolution", id } })
 
 关键规则:
 - 优先 skip_evolution，只有证据明确时才 evolve 或 deprecate

@@ -372,6 +372,46 @@ const VALID_OPERATIONS = new Set<ManageOperation>([
   'skip_evolution',
 ]);
 
+type EvolutionProposalSource =
+  | 'ide-agent'
+  | 'metabolism'
+  | 'decay-scan'
+  | 'consolidation'
+  | 'relevance-audit'
+  | 'file-change'
+  | 'rescan-evolution';
+
+type EvolutionAction = 'update' | 'deprecate' | 'valid';
+
+interface EvolutionGatewayLike {
+  submit(decision: {
+    recipeId: string;
+    action: EvolutionAction;
+    source: EvolutionProposalSource;
+    confidence: number;
+    description?: string;
+    evidence?: Record<string, unknown>[];
+    reason?: string;
+    replacedByRecipeId?: string;
+  }): Promise<{
+    recipeId: string;
+    action: EvolutionAction;
+    outcome: string;
+    proposalId?: string;
+    error?: string;
+  }>;
+}
+
+const EVOLUTION_SOURCES = new Set<EvolutionProposalSource>([
+  'ide-agent',
+  'metabolism',
+  'decay-scan',
+  'consolidation',
+  'relevance-audit',
+  'file-change',
+  'rescan-evolution',
+]);
+
 async function handleManage(
   params: Record<string, unknown>,
   ctx: ToolContext
@@ -386,13 +426,17 @@ async function handleManage(
     return fail('knowledge.manage requires id');
   }
 
+  const reason = stringValue(params.reason);
+  const data = recordValue(params.data);
+
+  if (operation === 'evolve' || operation === 'deprecate' || operation === 'skip_evolution') {
+    return handleEvolutionManage(operation, id, reason, data, params, ctx);
+  }
+
   const repo = ctx.knowledgeRepo as KnowledgeRepoLike | undefined;
   if (!repo) {
     return fail('Knowledge repository not available');
   }
-
-  const reason = params.reason as string | undefined;
-  const data = params.data as Record<string, unknown> | undefined;
 
   try {
     switch (operation) {
@@ -407,10 +451,6 @@ async function handleManage(
       case 'publish':
         await repo.publish(id);
         return ok({ operation, id, status: 'published' });
-
-      case 'deprecate':
-        await repo.deprecate(id, reason ?? 'Deprecated by agent');
-        return ok({ operation, id, status: 'deprecated' });
 
       case 'update':
         if (!data) {
@@ -430,20 +470,164 @@ async function handleManage(
         return ok({ operation, id, status: 'validated', result: validation });
       }
 
-      case 'evolve':
-        await repo.evolve(id, reason, data);
-        return ok({ operation, id, status: 'evolution_proposed' });
-
-      case 'skip_evolution':
-        await repo.skipEvolution(id, reason);
-        return ok({ operation, id, status: 'evolution_skipped' });
-
       default:
         return fail(`Unhandled operation: ${operation}`);
     }
   } catch (err: unknown) {
     return fail(`Manage(${operation}) failed: ${err instanceof Error ? err.message : String(err)}`);
   }
+}
+
+async function handleEvolutionManage(
+  operation: 'evolve' | 'deprecate' | 'skip_evolution',
+  id: string,
+  reason: string | undefined,
+  data: Record<string, unknown> | undefined,
+  params: Record<string, unknown>,
+  ctx: ToolContext
+): Promise<ToolResult> {
+  const gateway = ctx.evolutionGateway as EvolutionGatewayLike | undefined;
+  if (!gateway?.submit) {
+    return fail('Evolution gateway not available');
+  }
+
+  const confidence =
+    numberValue(data?.confidence) ??
+    numberValue(params.confidence) ??
+    (operation === 'deprecate' ? 0.7 : 0.9);
+  const source = resolveEvolutionSource(ctx);
+  const description =
+    stringValue(data?.description) ??
+    stringValue(params.description) ??
+    reason ??
+    defaultEvolutionDescription(operation);
+  const evidence = buildEvolutionEvidence(data, params);
+
+  const action: EvolutionAction =
+    operation === 'evolve' ? 'update' : operation === 'deprecate' ? 'deprecate' : 'valid';
+
+  try {
+    const result = await gateway.submit({
+      recipeId: id,
+      action,
+      source,
+      confidence,
+      description,
+      evidence,
+      reason,
+      replacedByRecipeId:
+        stringValue(data?.replacedByRecipeId) ??
+        stringValue(params.replacedByRecipeId) ??
+        stringValue(data?.supersedes) ??
+        stringValue(params.supersedes),
+    });
+
+    if (result.outcome === 'error') {
+      return fail(result.error || `Evolution ${operation} failed`);
+    }
+
+    return ok({
+      operation,
+      id,
+      status: evolutionStatus(operation, result.outcome),
+      outcome: result.outcome,
+      proposalId: result.proposalId,
+    });
+  } catch (err: unknown) {
+    return fail(`Manage(${operation}) failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+function resolveEvolutionSource(ctx: ToolContext): EvolutionProposalSource {
+  const raw = ctx.runtime?.sharedState?.evolutionProposalSource;
+  return typeof raw === 'string' && EVOLUTION_SOURCES.has(raw as EvolutionProposalSource)
+    ? (raw as EvolutionProposalSource)
+    : 'ide-agent';
+}
+
+function defaultEvolutionDescription(operation: 'evolve' | 'deprecate' | 'skip_evolution') {
+  if (operation === 'evolve') {
+    return 'Evolution Agent proposed an update based on code verification';
+  }
+  if (operation === 'deprecate') {
+    return 'Evolution Agent confirmed the recipe is outdated';
+  }
+  return 'Evolution Agent verified the recipe remains valid or needs no change';
+}
+
+function evolutionStatus(
+  operation: 'evolve' | 'deprecate' | 'skip_evolution',
+  outcome: string
+): string {
+  if (operation === 'skip_evolution') {
+    return outcome === 'verified' ? 'evolution_verified' : 'evolution_skipped';
+  }
+  if (operation === 'deprecate') {
+    return outcome === 'immediately-executed' ? 'deprecated' : 'deprecation_proposed';
+  }
+  return outcome === 'proposal-upgraded' ? 'evolution_proposal_upgraded' : 'evolution_proposed';
+}
+
+function buildEvolutionEvidence(
+  data: Record<string, unknown> | undefined,
+  params: Record<string, unknown>
+): Record<string, unknown>[] {
+  const records: Record<string, unknown>[] = [];
+  const rawEvidence = data?.evidence ?? params.evidence;
+  if (Array.isArray(rawEvidence)) {
+    for (const item of rawEvidence) {
+      const record = recordValue(item);
+      if (record) {
+        records.push(record);
+      }
+    }
+  } else {
+    const record = recordValue(rawEvidence);
+    if (record) {
+      records.push(record);
+    }
+  }
+
+  const inline = collectInlineEvidence(data, params);
+  if (Object.keys(inline).length > 0) {
+    records.push(inline);
+  }
+  return records;
+}
+
+function collectInlineEvidence(
+  data: Record<string, unknown> | undefined,
+  params: Record<string, unknown>
+): Record<string, unknown> {
+  const record: Record<string, unknown> = {};
+  for (const key of [
+    'type',
+    'sourceStatus',
+    'currentCode',
+    'newLocation',
+    'suggestedChanges',
+    'confidence',
+  ]) {
+    const value = data?.[key] ?? params[key];
+    if (value !== undefined) {
+      record[key] = value;
+    }
+  }
+  return record;
+}
+
+function recordValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 /* ================================================================== */
@@ -489,12 +673,9 @@ interface KnowledgeRepoLike {
   approve(id: string, reason?: string): Promise<void>;
   reject(id: string, reason: string): Promise<void>;
   publish(id: string): Promise<void>;
-  deprecate(id: string, reason: string): Promise<void>;
   update(id: string, data: Record<string, unknown>): Promise<void>;
   score(id: string, score: number): Promise<void>;
   validate(id: string): Promise<unknown>;
-  evolve(id: string, reason?: string, data?: Record<string, unknown>): Promise<void>;
-  skipEvolution(id: string, reason?: string): Promise<void>;
 }
 
 function truncateText(text: string, maxLen: number): string {

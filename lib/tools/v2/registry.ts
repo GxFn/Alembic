@@ -254,7 +254,7 @@ const KNOWLEDGE_SPEC: ToolSpec = {
     manage: {
       summary: 'Lifecycle operations (approve/reject/publish/deprecate/evolve/...)',
       description:
-        'Perform lifecycle management on recipes: approve, reject, publish, deprecate, update, score, validate, evolve, skip_evolution.',
+        'Perform lifecycle management on recipes. Evolution decisions use operation=evolve|deprecate|skip_evolution with the canonical recipe id field named id.',
       params: {
         type: 'object',
         properties: {

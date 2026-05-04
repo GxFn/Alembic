@@ -15,6 +15,7 @@
  * @module service/evolution/FileChangeHandler
  */
 
+import { isConsumable, isDegraded } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
@@ -356,8 +357,8 @@ export class FileChangeHandler implements FileChangeSubscriber {
         entry = null;
       }
 
-      // 非 active 的 Recipe 不进入 details（文档 §13.1 B5）
-      if (entry && typeof entry.lifecycle === 'string' && entry.lifecycle !== 'active') {
+      // 只跟踪仍可消费或处于治理中的知识；pending/deprecated 不进入进化链路。
+      if (entry && !isEvolutionTrackableLifecycle(entry.lifecycle)) {
         report.skipped++;
         continue;
       }
@@ -479,3 +480,7 @@ export class FileChangeHandler implements FileChangeSubscriber {
 
 /** @deprecated Use FileChangeHandler instead */
 export { FileChangeHandler as ReactiveEvolutionService };
+
+function isEvolutionTrackableLifecycle(lifecycle: unknown): boolean {
+  return typeof lifecycle === 'string' && (isConsumable(lifecycle) || isDegraded(lifecycle));
+}

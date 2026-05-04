@@ -101,6 +101,43 @@ interface StrategyConfig {
   fanOut?: StrategyConfig;
 }
 
+function buildEvolutionRetryPrompt(
+  retryCtx: { reason?: string; artifact?: unknown },
+  _origPrompt: string,
+  prev: Record<string, unknown>
+) {
+  const artifact = (retryCtx.artifact || {}) as {
+    processed?: number;
+    totalRecipes?: number;
+    pendingIds?: string[];
+  };
+  const pendingIds = Array.isArray(artifact.pendingIds) ? artifact.pendingIds : [];
+  const prevReply = (prev.evolve as { reply?: string } | undefined)?.reply || '';
+  const pendingList = pendingIds.length
+    ? pendingIds.map((id) => `- ${id}`).join('\n')
+    : '- （无法从 gate artifact 解析，按原始 Recipe 清单逐条补齐）';
+
+  return `⚠️ Evolution Gate 未通过: ${retryCtx.reason || '存在未提交决策的 Recipe'}
+
+你上一轮可能已经完成了阅读和分析，但没有为所有 Recipe 调用 \`knowledge.manage\`。现在进入决策补写阶段：
+
+- 当前回复必须只调用 \`knowledge({ action: "manage", params: ... })\`，不要先输出自然语言
+- 禁止继续调用 \`knowledge.search\`、\`knowledge.detail\`、\`code\`、\`graph\` 或其他探索工具；待处理 ID 不是搜索词
+- 不要输出 Markdown 报告来替代工具调用；输出正文会被视为未完成
+- Recipe 标识字段必须是 \`id\`，禁止使用 \`recipeId\`
+- 对每个待处理 Recipe 必须调用以下三种之一:
+  - \`knowledge({ action: "manage", params: { "operation": "skip_evolution", "id": "...", "reason": "验证有效: ..." } })\`
+  - \`knowledge({ action: "manage", params: { "operation": "evolve", "id": "...", "reason": "...", "data": { "description": "...", "evidence": { "currentCode": "..." }, "confidence": 0.85 } } })\`
+  - \`knowledge({ action: "manage", params: { "operation": "deprecate", "id": "...", "reason": "...", "data": { "confidence": 0.7 } } })\`
+- 如果证据不足，也必须立刻用 \`skip_evolution\` 显式记录“信息不足”，不能留空
+
+待补决策 Recipe ID:
+${pendingList}
+
+上一轮分析摘要（仅供你决定，不可当作最终结果）:
+${prevReply.slice(0, 3000)}`;
+}
+
 // ─── Preset 定义 ──────────────────────────────
 
 /** 所有内置 Preset */
@@ -311,13 +348,16 @@ export const PRESETS = Object.freeze({
           systemPrompt: EVOLVER_SYSTEM_PROMPT,
           promptBuilder: (ctx: Record<string, unknown>) =>
             buildEvolverPrompt(null, null, ctx as unknown as EvolutionContext),
+          retryPromptBuilder: buildEvolutionRetryPrompt,
+          decisionOnlyOnRetry: true,
         },
         // ── Phase 2: Evolution Gate ──
         {
           name: 'evolution_gate',
           gate: {
             evaluator: evolutionGateEvaluator,
-            maxRetries: 1,
+            useCumulativeToolCalls: true,
+            maxRetries: 8,
           },
         },
       ],

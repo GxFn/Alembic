@@ -162,7 +162,7 @@ describe('FileChangeHandler', () => {
       expect(signalBus.send).toHaveBeenCalledTimes(3);
     });
 
-    test('非 active 的 Recipe 被跳过（§13.1 B5）', async () => {
+    test('deprecated Recipe 被跳过', async () => {
       const { handler, sourceRefRepo, knowledgeRepo } = createHandler();
       sourceRefRepo._seed('r1', 'Sources/A.swift');
       knowledgeRepo._seed('r1', {
@@ -178,6 +178,35 @@ describe('FileChangeHandler', () => {
       expect(report.needsReview).toBe(0);
       expect(report.skipped).toBe(1);
       expect(report.details).toHaveLength(0);
+    });
+
+    test('staging Recipe 仍参与 modified 进化检查', async () => {
+      mockAssessFileImpact.mockReturnValue({
+        level: 'pattern',
+        score: 0.5,
+        matchedTokens: ['NetworkKitRetryPolicy'],
+      });
+      const { handler, sourceRefRepo, knowledgeRepo, gateway } = createHandler();
+      sourceRefRepo._seed('r1', 'Sources/RetryPolicy.swift');
+      knowledgeRepo._seed('r1', {
+        title: 'RetryPolicy 暂存知识',
+        lifecycle: 'staging',
+        coreCode: 'final class NetworkKitRetryPolicy {}',
+      });
+
+      const report = await handler.handleFileChanges([
+        { type: 'modified', path: 'Sources/RetryPolicy.swift' },
+      ]);
+
+      expect(report.skipped).toBe(0);
+      expect(report.needsReview).toBe(1);
+      expect(gateway.submit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipeId: 'r1',
+          action: 'update',
+          source: 'file-change',
+        })
+      );
     });
 
     test('无 sourceRef 匹配 → 跳过', async () => {
@@ -438,7 +467,7 @@ describe('FileChangeHandler', () => {
   /* ─── 旧 Bug 回归验证 ─── */
 
   describe('Bug 回归', () => {
-    test('[回归] 非 active Recipe 被跳过不误报', async () => {
+    test('[回归] deprecated Recipe 被跳过不误报', async () => {
       const { handler, sourceRefRepo, knowledgeRepo } = createHandler();
       sourceRefRepo._seed('r1', 'Sources/Middleware/AuthMiddleware.swift');
       knowledgeRepo._seed('r1', {

@@ -13,7 +13,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { relative } from 'node:path';
+import { isAbsolute, relative } from 'node:path';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { DrizzleDB } from '#infra/database/drizzle/index.js';
 import { getDrizzle } from '#infra/database/drizzle/index.js';
@@ -114,6 +114,70 @@ interface AffectedDimensionResult {
   reason: string;
 }
 
+export function normalizeSnapshotPath(
+  file: { path?: string; relativePath?: string },
+  projectRoot: string
+): string {
+  const rawPath = typeof file.path === 'string' ? file.path : '';
+  if (rawPath) {
+    const fromPath = isAbsolute(rawPath) ? relative(projectRoot, rawPath) : rawPath;
+    if (fromPath && !fromPath.startsWith('..')) {
+      return toPosixPath(fromPath);
+    }
+  }
+  return toPosixPath(file.relativePath || rawPath);
+}
+
+export interface ReconciledSnapshotHashes {
+  hashes: Record<string, string>;
+  remapped: Record<string, string>;
+  ambiguous: string[];
+}
+
+export function reconcileSnapshotHashes(
+  snapshotHashes: Record<string, string>,
+  currentPaths: Iterable<string>
+): ReconciledSnapshotHashes {
+  const current = [...currentPaths].map(toPosixPath);
+  const currentSet = new Set(current);
+  const hashes: Record<string, string> = {};
+  const remapped: Record<string, string> = {};
+  const ambiguous: string[] = [];
+
+  for (const [rawPath, hash] of Object.entries(snapshotHashes)) {
+    const oldPath = toPosixPath(rawPath);
+    if (currentSet.has(oldPath)) {
+      hashes[oldPath] = hash;
+      continue;
+    }
+
+    const suffix = `/${oldPath}`;
+    const candidates = current.filter((candidate) => candidate.endsWith(suffix));
+    if (candidates.length === 1) {
+      hashes[candidates[0]] = hash;
+      remapped[oldPath] = candidates[0];
+      continue;
+    }
+
+    hashes[oldPath] = hash;
+    if (candidates.length > 1) {
+      ambiguous.push(oldPath);
+    }
+  }
+
+  return { hashes, remapped, ambiguous };
+}
+
+function toPosixPath(value: string): string {
+  return value.replace(/\\/g, '/');
+}
+
+function isSameSnapshotPath(left: string, right: string): boolean {
+  const a = toPosixPath(left);
+  const b = toPosixPath(right);
+  return a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+}
+
 // ──────────────────────────────────────────────────────────────
 // 常量
 // ──────────────────────────────────────────────────────────────
@@ -183,7 +247,7 @@ export class FileDiffSnapshotStore {
     // 计算文件指纹
     const fileHashes: Record<string, string> = {};
     for (const f of allFiles) {
-      const rel = f.relativePath || relative(projectRoot, f.path);
+      const rel = normalizeSnapshotPath(f, projectRoot);
       fileHashes[rel] = this.#computeContentHash(f.content || this.#readFileContent(f.path));
     }
 
@@ -347,13 +411,24 @@ export class FileDiffSnapshotStore {
     currentFiles: SnapshotFile[],
     projectRoot: string
   ): DiffResult {
-    const oldHashes = snapshot.fileHashes || {};
-
     // 计算当前文件 hash
     const newHashes: Record<string, string> = {};
     for (const f of currentFiles) {
-      const rel = f.relativePath || relative(projectRoot, f.path);
+      const rel = normalizeSnapshotPath(f, projectRoot);
       newHashes[rel] = this.#computeContentHash(f.content || '');
+    }
+
+    const reconciled = reconcileSnapshotHashes(snapshot.fileHashes || {}, Object.keys(newHashes));
+    const oldHashes = reconciled.hashes;
+    const remappedCount = Object.keys(reconciled.remapped).length;
+    if (remappedCount > 0) {
+      this.#log(`Reconciled ${remappedCount} legacy snapshot paths with current scan paths`);
+    }
+    if (reconciled.ambiguous.length > 0) {
+      this.#log(
+        `Skipped ${reconciled.ambiguous.length} ambiguous legacy snapshot path remaps`,
+        'warn'
+      );
     }
 
     const added: string[] = [];
@@ -428,7 +503,10 @@ export class FileDiffSnapshotStore {
     const dimFileMap = this.#getDimFileMap(snapshot.id);
     for (const [dimId, files] of Object.entries(dimFileMap) as [string, Set<string>][]) {
       for (const changedFile of changedFiles) {
-        if (files.has(changedFile)) {
+        const matchesChangedFile =
+          files.has(changedFile) ||
+          [...files].some((file) => isSameSnapshotPath(file, changedFile));
+        if (matchesChangedFile) {
           affected.add(dimId);
           break;
         }
@@ -480,7 +558,7 @@ export class FileDiffSnapshotStore {
       if (!map[row.dimId]) {
         map[row.dimId] = new Set();
       }
-      map[row.dimId].add(row.filePath);
+      map[row.dimId].add(toPosixPath(row.filePath));
     }
     return map;
   }

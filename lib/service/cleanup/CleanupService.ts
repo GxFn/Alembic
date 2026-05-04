@@ -146,11 +146,8 @@ const ALL_DATA_TABLES = [
   'remote_state',
 ];
 
-/** rescanClean 时清除的 DB 表（保留知识/进化相关表） */
+/** rescanClean 时清除的 DB 表（保留知识/进化/增量证据相关表） */
 const RESCAN_CLEAN_TABLES = [
-  'bootstrap_dim_files', // FK → bootstrap_snapshots, 先删
-  'recipe_source_refs', // FK → knowledge_entries, 先删
-  'bootstrap_snapshots',
   'code_entities',
   'guard_violations',
   'semantic_memories',
@@ -334,7 +331,8 @@ export class CleanupService {
    * 清除: 衍生 DB 表、pending/rejected/deprecated 知识条目、
    *       candidates/、skills/、wiki/、向量索引、bootstrap-report
    * 保留: recipes/、active/published/staging/evolving 知识条目、
-   *       knowledge_edges、evolution_proposals
+   *       knowledge_edges、evolution_proposals、
+   *       bootstrap_snapshots、bootstrap_dim_files、recipe_source_refs
    */
   async rescanClean(): Promise<CleanupResult> {
     const result: CleanupResult = {

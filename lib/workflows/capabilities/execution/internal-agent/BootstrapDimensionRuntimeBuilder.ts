@@ -192,9 +192,10 @@ export function createBootstrapDimensionRuntimeInput({
     plan;
   const analystScopeId = `${dimId}:analyst`;
   memoryCoordinator.createDimensionScope(analystScopeId);
+  const effectiveOutputType = needsCandidates ? 'candidate' : dimConfig.outputType || 'analysis';
   const dimensionMeta = {
     id: dimId,
-    outputType: dimConfig.outputType || 'candidate',
+    outputType: effectiveOutputType,
     allowedKnowledgeTypes: dimConfig.allowedKnowledgeTypes || [],
   };
   const contextWindow = systemRunContextFactory.createContextWindow({ isSystem: true });
@@ -209,7 +210,7 @@ export function createBootstrapDimensionRuntimeInput({
     contextWindow,
     tracker: ExplorationTracker.resolve({ source: 'system', strategy: 'analyst' }, computedBudget),
     source: 'system',
-    outputType: dimConfig.outputType || 'analysis',
+    outputType: effectiveOutputType,
     dimId,
     dimensionId: dimId,
     dimensionLabel: dimConfig.label,
@@ -223,6 +224,7 @@ export function createBootstrapDimensionRuntimeInput({
     },
     extraFields: {
       _computedBudget: computedBudget,
+      needsCandidates,
       dimConfig,
       projectInfo,
       dimContext,

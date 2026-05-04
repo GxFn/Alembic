@@ -58,6 +58,7 @@ export function presentInternalKnowledgeRescanResponse({
   snapshot,
   bootstrapSession,
   sessionId,
+  evolutionAudit,
   reason,
   responseTimeMs,
 }: {
@@ -68,6 +69,13 @@ export function presentInternalKnowledgeRescanResponse({
   snapshot: ProjectSnapshot;
   bootstrapSession: { toJSON(): Record<string, unknown> } | null;
   sessionId: string | null;
+  evolutionAudit?: {
+    proposed: number;
+    deprecated: number;
+    skipped: number;
+    iterations: number;
+    toolCalls: number;
+  } | null;
   reason?: string | null;
   responseTimeMs: number;
 }) {
@@ -80,6 +88,15 @@ export function presentInternalKnowledgeRescanResponse({
       reason: reason || null,
     },
     relevanceAudit: presentRelevanceAudit(auditSummary),
+    evolutionAudit: evolutionAudit
+      ? {
+          proposed: evolutionAudit.proposed,
+          deprecated: evolutionAudit.deprecated,
+          skipped: evolutionAudit.skipped,
+          iterations: evolutionAudit.iterations,
+          toolCalls: evolutionAudit.toolCalls,
+        }
+      : null,
     gapAnalysis: {
       totalDimensions: gapPlan.requestedDimensions.length,
       executionDimensions: executionDimensionCount,
