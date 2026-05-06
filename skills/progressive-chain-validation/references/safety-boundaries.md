@@ -30,3 +30,21 @@ Progressive chain validation often touches tests, generated artifacts, runtime d
 ## Repair Rule
 
 Fix the current failing node only. Re-run that node before moving to the next. If a broader refactor becomes necessary, record the reason in the node report before expanding scope.
+
+## Command Triage
+
+Before running a command, classify it:
+
+- `read-only`: source search, file reads, git diff/status/log, static inspection.
+- `local-check`: typecheck, build, lint, focused tests in the Alembic source repo.
+- `runtime-write`: commands that create `.asd`, knowledge base, candidates, wiki, database, project skills, or IDE integration files.
+- `service`: long-running servers, dashboards, watchers, MCP servers.
+- `destructive`: delete, reset, rewrite, migration, or production data access.
+
+Only `read-only` and `local-check` are allowed by default in this repository. Everything else needs a recorded path boundary and, when applicable, explicit approval.
+
+## Failure Handling
+
+- Keep failed command output with the node round, not only in the final report.
+- Do not advance a failed node by explaining it away; either repair, split, block, or skip with a recorded reason.
+- If a repair changes code, add or update a focused test when the behavior is reusable.

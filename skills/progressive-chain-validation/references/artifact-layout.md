@@ -6,6 +6,7 @@ A progressive-chain-validation run writes records under `scratch/chain-runs/<run
 
 ```text
 scratch/chain-runs/<run-id>/
+  manifest.json
   report/
     plan.md
     nodes.json
@@ -27,6 +28,7 @@ scratch/chain-runs/<run-id>/
 
 ## Rules
 
+- `manifest.json` contains run id, target, owner, startedAt, status, and the safe write boundary.
 - `report/` contains human-readable state and handoff notes.
 - `evidence/` contains structured facts and machine-checkable outputs.
 - `command-output/` contains trimmed command output when it is too long for reports.
@@ -34,6 +36,7 @@ scratch/chain-runs/<run-id>/
 - Do not write run artifacts to `docs-dev/`.
 - Do not write run artifacts to this internal Skill directory.
 - Do not use `scratch/chain-runs/` as a user project runtime data root.
+- For startup, copy or render `templates/manifest.json`, `templates/nodes.json`, `templates/plan.md`, `templates/commands.md`, and `templates/N0-data-location.json` before marking `N0-data-location` complete.
 
 ## Run ID
 
@@ -47,4 +50,23 @@ Example:
 
 ```text
 pcv-20260506-1430-alembic-rescan
+```
+
+## Manifest Shape
+
+```json
+{
+  "schemaVersion": 1,
+  "runId": "pcv-YYYYMMDD-HHMM-target-slug",
+  "target": "workflow-or-feature",
+  "status": "running",
+  "owner": "agent-or-person",
+  "startedAt": "iso-time",
+  "writeBoundary": {
+    "targetProjectRoot": "/absolute/path-or-n/a",
+    "dataRoot": "/absolute/path-or-n/a",
+    "allowedWriteRoots": ["scratch/chain-runs/<run-id>"],
+    "requiresApproval": []
+  }
+}
 ```

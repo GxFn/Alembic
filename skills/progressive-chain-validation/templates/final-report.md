@@ -1,6 +1,6 @@
 # Progressive Chain Validation Final Report
 
-Run ID: `<run-id>`
+Run ID: `<pcv-YYYYMMDD-HHMM-target-slug>`
 Target: `<workflow-or-feature>`
 Completed at: `<iso-time>`
 
@@ -14,6 +14,14 @@ State whether the chain passed, partially passed, or remains blocked.
 |------|--------|--------------|-------|
 | N0-data-location | `<status>` | `<path>` | `<notes>` |
 
+## Safety Boundary Confirmation
+
+- Target project root:
+- Data root:
+- Write mode:
+- User-runtime writes in Alembic source repo: no
+- Approval gates used:
+
 ## Changes Made
 
 - `<file-or-module>`: `<summary>`
@@ -21,6 +29,13 @@ State whether the chain passed, partially passed, or remains blocked.
 ## Verification
 
 - `<command>`: `<result>`
+
+## Artifacts
+
+- Plan:
+- Command log:
+- Structured evidence:
+- Node rounds:
 
 ## Residual Risk
 

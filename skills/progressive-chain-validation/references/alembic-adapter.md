@@ -31,6 +31,27 @@ For Alembic cold-start, rescan, bootstrap, delivery, or skill-generation chains:
 4. Prefer focused unit tests before end-to-end manual commands.
 5. If an `alembic` command must be tested, first build/link the dev package and use a developer-provided external project path.
 
+## Concrete Execution Pattern
+
+Use this order for most Alembic source-repo validation:
+
+1. Search for entry points, command handlers, services, and tests with read-only tools.
+2. Read the smallest set of source files that explain the current node.
+3. Define a focused verification command before editing.
+4. Apply the minimal code or Skill change for the current node.
+5. Run the focused command again.
+6. Broaden to typecheck, targeted unit tests, or build only when the node touches shared contracts.
+
+Do not begin with a full end-to-end user command from this repository. If a behavior requires CLI validation, use an external project path after `N0-data-location` records the write boundary.
+
+## Node Failure Policy
+
+- `fail`: evidence disproves the hypothesis and a focused repair is possible.
+- `blocked`: required approval, fixture, external project, credential, or safe path fact is missing.
+- `skipped`: the node is no longer relevant because an earlier node changed the plan.
+
+When a node fails twice for different reasons, split it by module or side effect before making another repair.
+
 ## Useful Commands
 
 Use commands appropriate to the changed surface:

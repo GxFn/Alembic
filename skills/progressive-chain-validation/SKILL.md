@@ -1,6 +1,7 @@
 ---
 name: progressive-chain-validation
-description: Use when validating or repairing a complex long-running workflow by decomposing it into small nodes, preparing evidence, running checks node by node, applying minimal fixes, and producing a handoff report.
+description: "Use when: validating long-chain workflow behavior, progressive node-by-node repair, Alembic cold-start/rescan/bootstrap/delivery/skill-generation flows, or any complex agent harness where evidence and safe write boundaries must be recorded."
+argument-hint: "<workflow-or-feature> [target-project-root]"
 ---
 
 # Progressive Chain Validation
@@ -21,6 +22,26 @@ Before acting, identify:
 
 If any command would write Alembic runtime data, first complete `N0-data-location` and get an explicit path fact table.
 
+## Startup Checklist
+
+1. Load [Safety Boundaries](./references/safety-boundaries.md) before planning commands.
+2. Load [Alembic Adapter](./references/alembic-adapter.md) when working in this repository.
+3. Load [Data Location Preflight](./references/data-location-preflight.md) before any runtime, knowledge, database, candidate, wiki, or project-skill writes.
+4. Create a run id with the `pcv-YYYYMMDD-HHMM-<target-slug>` pattern.
+5. Use [Artifact Layout](./references/artifact-layout.md) to decide where evidence and reports should live.
+6. Initialize the run with [Manifest](./templates/manifest.json), [Nodes JSON](./templates/nodes.json), [Plan](./templates/plan.md), [Commands](./templates/commands.md), and [N0 data-location evidence](./templates/N0-data-location.json).
+
+## Node Contract
+
+Every node must have:
+
+- A stable id such as `N0-data-location`, `N1-entry-model`, or `N2-focused-test`.
+- A hypothesis that can be proven or falsified.
+- Planned commands and files to inspect before command execution.
+- Pass criteria that can be checked from files, command output, or structured evidence.
+- A status from `pending`, `running`, `pass`, `fail`, `blocked`, or `skipped`.
+- A failure policy that says whether to retry, repair, split the node, or stop.
+
 ## Execution Loop
 
 1. Build a read-only model of the workflow, entry points, state transitions, and expected artifacts.
@@ -31,6 +52,24 @@ If any command would write Alembic runtime data, first complete `N0-data-locatio
 6. Re-run the same node before moving forward.
 7. Record commands, outputs, files changed, evidence paths, and remaining risk.
 8. Finish with a concise handoff report.
+
+## Failure Handling
+
+- If a node fails before code changes, improve observability or split the node smaller.
+- If a node fails after a fix, revert only your own failed attempt or apply a narrower fix; do not revert unrelated user changes.
+- If the failure needs broader refactoring, record the reason in the node round before expanding scope.
+- If a command would cross the declared write boundary, stop and ask for approval with the exact path facts.
+- After any repair, rerun the same node and update its status before starting another node.
+
+## Evidence Contract
+
+Record enough evidence for another maintainer to replay the decision:
+
+- `report/plan.md`: workflow boundary, node list, safety boundary, allowed commands.
+- `report/rounds/<node-id>.md`: per-node hypothesis, actions, output refs, decision.
+- `evidence/*.json`: structured path facts, parsed outputs, fixture metadata, or validation facts.
+- `command-output/*`: trimmed command output when too long for the round note.
+- `report/final-report.md`: pass/partial/blocked outcome, changes made, verification, residual risk.
 
 ## Safety Rules
 
@@ -43,15 +82,17 @@ If any command would write Alembic runtime data, first complete `N0-data-locatio
 
 ## References
 
-- `references/artifact-layout.md`
-- `references/alembic-adapter.md`
-- `references/data-location-preflight.md`
-- `references/safety-boundaries.md`
+- [Artifact layout](./references/artifact-layout.md)
+- [Alembic adapter](./references/alembic-adapter.md)
+- [Data location preflight](./references/data-location-preflight.md)
+- [Safety boundaries](./references/safety-boundaries.md)
 
 ## Templates
 
-- `templates/plan.md`
-- `templates/round.md`
-- `templates/final-report.md`
-- `templates/commands.md`
-- `templates/nodes.json`
+- [Plan](./templates/plan.md)
+- [Round](./templates/round.md)
+- [Final report](./templates/final-report.md)
+- [Commands](./templates/commands.md)
+- [Manifest](./templates/manifest.json)
+- [Nodes JSON](./templates/nodes.json)
+- [N0 data-location evidence](./templates/N0-data-location.json)

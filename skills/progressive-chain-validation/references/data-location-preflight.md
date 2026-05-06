@@ -39,3 +39,21 @@ Record these fields in `evidence/N0-data-location.json`:
 - In Ghost mode, `dataRoot` must not equal `projectRoot`.
 - If `targetProjectRoot` is the Alembic development repository, block user-runtime writes.
 - Continue only after the path facts are clear and the write boundary is acceptable.
+
+## Source Checks
+
+When validating Alembic itself, derive the dev-repo facts from source markers before planning any runtime writes:
+
+- `package.json` name is `alembic-ai`.
+- `lib/bootstrap.ts` exists.
+- `SOUL.md` exists.
+- `isExcludedProject` would be true for the source repository.
+
+For external projects, record the realpath and whether Ghost mode maps runtime data to a separate `dataRoot`.
+
+## N0 Decision
+
+- Pass when every path is absolute or explicitly `n/a`, and the write boundary is safe.
+- Block when `dataRoot` equals an Alembic source repository for user-runtime writes.
+- Block when the external project path is unknown or not approved for mutation.
+- Continue with read-only source analysis if the node does not need runtime writes.

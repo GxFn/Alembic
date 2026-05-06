@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "runId": "<pcv-YYYYMMDD-HHMM-target-slug>",
+  "target": "<workflow-or-feature>",
+  "status": "running",
+  "owner": "<agent-or-person>",
+  "startedAt": "<iso-time>",
+  "currentNode": "N0-data-location",
+  "nextNode": "N1-entry-model",
+  "writeBoundary": {
+    "targetProjectRoot": "<absolute-path-or-n/a>",
+    "dataRoot": "<absolute-path-or-n/a>",
+    "allowedWriteRoots": ["scratch/chain-runs/<run-id>"],
+    "requiresApproval": []
+  },
+  "startupChecks": {
+    "safetyBoundariesLoaded": false,
+    "alembicAdapterLoaded": false,
+    "dataLocationPreflightLoaded": false,
+    "artifactLayoutLoaded": false,
+    "runtimeWritesAllowed": false
+  }
+}

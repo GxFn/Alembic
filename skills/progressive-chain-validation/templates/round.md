@@ -1,6 +1,7 @@
 # Node Round: `<node-id>`
 
-Status: pending
+Status: `<pending|running|pass|fail|blocked|skipped>`
+Attempt: `<number>`
 Started at: `<iso-time>`
 Completed at: `<iso-time-or-empty>`
 
@@ -13,6 +14,7 @@ Describe what this node should prove or falsify.
 - Files read:
 - Commands planned:
 - Fixtures or test data:
+- Write boundary touched:
 
 ## Actions
 
@@ -31,7 +33,16 @@ Describe what this node should prove or falsify.
 
 - Pass/fail:
 - Reason:
+- Criteria satisfied:
+- Criteria failed:
 - Next node:
+
+## Repair / Retry
+
+- Change attempted:
+- Rerun command:
+- Rerun result:
+- Scope expansion needed:
 
 ## Follow-up
 

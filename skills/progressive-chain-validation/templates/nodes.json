@@ -1,18 +1,53 @@
 {
-  "runId": "<run-id>",
+  "schemaVersion": 1,
+  "runId": "<pcv-YYYYMMDD-HHMM-target-slug>",
   "target": "<workflow-or-feature>",
+  "statusValues": ["pending", "running", "pass", "fail", "blocked", "skipped"],
+  "writeBoundary": {
+    "targetProjectRoot": "<absolute-path-or-n/a>",
+    "dataRoot": "<absolute-path-or-n/a>",
+    "allowedWriteRoots": ["scratch/chain-runs/<run-id>"],
+    "requiresApproval": []
+  },
   "nodes": [
     {
       "id": "N0-data-location",
       "purpose": "Confirm projectRoot, dataRoot, Ghost mode, runtime directory, knowledge directory, and write boundaries before running workflow checks.",
       "status": "pending",
+      "attempts": 0,
+      "dependsOn": [],
+      "commands": [],
       "evidence": ["evidence/N0-data-location.json"],
       "passCriteria": [
-        "targetProjectRoot is an absolute path",
-        "dataRoot is an absolute path",
+        "targetProjectRoot, projectRealpath, dataRoot, runtimeDir, databasePath, knowledgeDir, skillsDir, candidatesDir, and wikiDir are absolute paths or explicitly marked n/a",
+        "isAlembicDevRepo and isExcludedProject are recorded from source checks",
         "Alembic source repository is not used as a user runtime data root",
-        "runtime and knowledge paths are explicitly recorded"
-      ]
+        "runtime and knowledge paths are explicitly recorded",
+        "writeMode and requiresUserConfirmation are recorded"
+      ],
+      "failurePolicy": "Stop the run until path facts are corrected or explicit approval changes the write boundary."
+    },
+    {
+      "id": "N1-entry-model",
+      "purpose": "Identify the workflow entry points, modules, side effects, and existing tests before changing code.",
+      "status": "pending",
+      "attempts": 0,
+      "dependsOn": ["N0-data-location"],
+      "commands": ["rg/read-only search", "targeted file reads"],
+      "evidence": ["report/rounds/N1-entry-model.md"],
+      "passCriteria": [
+        "entry point files are listed",
+        "state transitions and side effects are summarized",
+        "focused verification command is selected before repair"
+      ],
+      "failurePolicy": "Split by module or state transition if the workflow boundary is still unclear."
     }
+  ],
+  "transitionRules": [
+    "pending -> running when inputs, planned commands, and evidence targets are recorded",
+    "running -> pass when all passCriteria are satisfied by evidence",
+    "running -> fail when evidence falsifies the node hypothesis and a focused repair is possible",
+    "running -> blocked when required data, approval, or safe command scope is missing",
+    "fail -> running only after recording the repair attempt and rerun command"
   ]
 }
