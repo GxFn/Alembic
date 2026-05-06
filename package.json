@@ -169,7 +169,7 @@
     "dist",
     "config",
     "scripts/postbuild.mjs",
-    "skills",
+    "injectable-skills",
     "templates",
     "dashboard/dist",
     "template.json",

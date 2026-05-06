@@ -7,11 +7,12 @@
  *
  * @example
  * ```ts
- * import { PACKAGE_ROOT, SKILLS_DIR, RESOURCES_DIR } from '../../shared/package-root.js';
+ * import { PACKAGE_ROOT, INJECTABLE_SKILLS_DIR, RESOURCES_DIR } from '../../shared/package-root.js';
  * ```
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { DEFAULT_FOLDER_NAMES } from './folder-names.js';
 
 const __dirname = import.meta.dirname;
 
@@ -52,16 +53,28 @@ function findPackageRoot(): string {
 export const PACKAGE_ROOT = findPackageRoot();
 
 /** `<root>/config/` — 配置文件目录 */
-export const CONFIG_DIR = path.join(PACKAGE_ROOT, 'config');
+export const CONFIG_DIR = path.join(PACKAGE_ROOT, DEFAULT_FOLDER_NAMES.package.config);
 
-/** `<root>/skills/` — 技能目录 */
-export const SKILLS_DIR = path.join(PACKAGE_ROOT, 'skills');
+/** `<root>/skills/` — Alembic 仓库内部维护 Skill 目录 */
+export const INTERNAL_SKILLS_DIR = path.join(
+  PACKAGE_ROOT,
+  DEFAULT_FOLDER_NAMES.package.internalSkills
+);
+
+/** `<root>/injectable-skills/` — 产品内置注入 Skill 源目录 */
+export const INJECTABLE_SKILLS_DIR = path.join(
+  PACKAGE_ROOT,
+  DEFAULT_FOLDER_NAMES.package.injectableSkills
+);
+
+/** @deprecated Use INJECTABLE_SKILLS_DIR for product builtin skills. */
+export const SKILLS_DIR = INJECTABLE_SKILLS_DIR;
 
 /** `<root>/templates/` — 模板目录 */
-export const TEMPLATES_DIR = path.join(PACKAGE_ROOT, 'templates');
+export const TEMPLATES_DIR = path.join(PACKAGE_ROOT, DEFAULT_FOLDER_NAMES.package.templates);
 
 /** `<root>/resources/` — 静态资源目录 */
-export const RESOURCES_DIR = path.join(PACKAGE_ROOT, 'resources');
+export const RESOURCES_DIR = path.join(PACKAGE_ROOT, DEFAULT_FOLDER_NAMES.package.resources);
 
 /** `<root>/dashboard/` — Dashboard 前端目录 */
-export const DASHBOARD_DIR = path.join(PACKAGE_ROOT, 'dashboard');
+export const DASHBOARD_DIR = path.join(PACKAGE_ROOT, DEFAULT_FOLDER_NAMES.package.dashboard);

@@ -3,8 +3,9 @@ import path from 'node:path';
 import { getProjectSkillsPath } from '#infra/config/Paths.js';
 import type { WriteZone } from '#infra/io/WriteZone.js';
 import Logger from '#infra/logging/Logger.js';
+import { getCursorRulesDir, getCursorRulesRelativePath } from '#shared/ide-paths.js';
 import pathGuard from '#shared/PathGuard.js';
-import { SKILLS_DIR } from '#shared/package-root.js';
+import { INJECTABLE_SKILLS_DIR } from '#shared/package-root.js';
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 
 const logger = Logger.getInstance();
@@ -134,7 +135,7 @@ function createWorkflowSkill(
     };
   }
 
-  const builtinSkillPath = path.join(SKILLS_DIR, name, 'SKILL.md');
+  const builtinSkillPath = path.join(INJECTABLE_SKILLS_DIR, name, 'SKILL.md');
   if (fs.existsSync(builtinSkillPath)) {
     return {
       success: false,
@@ -341,12 +342,12 @@ function regenerateEditorIndex(ctx?: SkillContext | null) {
 
     const writeZone = getWriteZone(ctx);
     const projectRoot = resolveProjectRoot(ctx?.container);
-    const rulesDir = path.join(projectRoot, '.cursor', 'rules');
+    const rulesDir = getCursorRulesDir(projectRoot);
 
     if (projectSkills.length === 0) {
       try {
         if (writeZone) {
-          writeZone.remove(writeZone.project('.cursor/rules/alembic-skills.mdc'));
+          writeZone.remove(writeZone.project(getCursorRulesRelativePath('alembic-skills.mdc')));
         } else {
           fs.unlinkSync(path.join(rulesDir, 'alembic-skills.mdc'));
         }
@@ -374,8 +375,11 @@ function regenerateEditorIndex(ctx?: SkillContext | null) {
 
     const content = `${lines.join('\n')}\n`;
     if (writeZone) {
-      writeZone.ensureDir(writeZone.project('.cursor/rules'));
-      writeZone.writeFile(writeZone.project('.cursor/rules/alembic-skills.mdc'), content);
+      writeZone.ensureDir(writeZone.project(getCursorRulesRelativePath()));
+      writeZone.writeFile(
+        writeZone.project(getCursorRulesRelativePath('alembic-skills.mdc')),
+        content
+      );
     } else {
       pathGuard.assertProjectWriteSafe(rulesDir);
       fs.mkdirSync(rulesDir, { recursive: true });
@@ -390,7 +394,7 @@ function regenerateEditorIndex(ctx?: SkillContext | null) {
   }
 }
 
-function parseSkillMeta(skillName: string, baseDir = SKILLS_DIR) {
+function parseSkillMeta(skillName: string, baseDir = INJECTABLE_SKILLS_DIR) {
   try {
     const content = fs.readFileSync(path.join(baseDir, skillName, 'SKILL.md'), 'utf8');
     const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);

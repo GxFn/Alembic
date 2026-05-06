@@ -20,6 +20,7 @@ import {
   getProjectKnowledgePath,
   getProjectSkillsPath,
 } from '#infra/config/Paths.js';
+import { getCursorRulesDir, getCursorSkillsDir } from '#shared/ide-paths.js';
 
 // ── 类型定义 ────────────────────────────────────────────────
 
@@ -128,7 +129,7 @@ export class DeliveryVerifier {
   // ─── 各通道验证 ───────────────────────────────────────
 
   #verifyChannelA(): ChannelVerification {
-    const filePath = path.join(this.#projectRoot, '.cursor', 'rules', 'alembic-project-rules.mdc');
+    const filePath = path.join(getCursorRulesDir(this.#projectRoot), 'alembic-project-rules.mdc');
     if (fs.existsSync(filePath)) {
       const size = fs.statSync(filePath).size;
       return { generated: size > 0, file: 'alembic-project-rules.mdc', size };
@@ -137,7 +138,7 @@ export class DeliveryVerifier {
   }
 
   #verifyChannelB(): ChannelVerification {
-    const rulesDir = path.join(this.#projectRoot, '.cursor', 'rules');
+    const rulesDir = getCursorRulesDir(this.#projectRoot);
     if (!fs.existsSync(rulesDir)) {
       return { generated: false, files: [], count: 0 };
     }
@@ -152,7 +153,7 @@ export class DeliveryVerifier {
   }
 
   #verifyChannelC(): ChannelVerification {
-    const skillsDir = path.join(this.#projectRoot, '.cursor', 'skills');
+    const skillsDir = getCursorSkillsDir(this.#projectRoot);
     if (!fs.existsSync(skillsDir)) {
       return { generated: false, skillCount: 0 };
     }

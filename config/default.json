@@ -33,6 +33,46 @@
     "path": "./config/constitution.yaml",
     "strictMode": true
   },
+  "paths": {
+    "folderNames": {
+      "package": {
+        "config": "config",
+        "dashboard": "dashboard",
+        "injectableSkills": "injectable-skills",
+        "internalSkills": "skills",
+        "resources": "resources",
+        "templates": "templates"
+      },
+      "dev": {
+        "chainRuns": "chain-runs",
+        "scratch": "scratch"
+      },
+      "global": {
+        "cache": "cache",
+        "root": ".asd",
+        "snippets": "snippets",
+        "workspaces": "workspaces"
+      },
+      "project": {
+        "cache": "cache",
+        "candidates": "candidates",
+        "context": "context",
+        "knowledgeBase": "Alembic",
+        "logs": "logs",
+        "recipes": "recipes",
+        "runtime": ".asd",
+        "skills": "skills",
+        "wiki": "wiki"
+      },
+      "ide": {
+        "cursorRoot": ".cursor",
+        "cursorRules": "rules",
+        "cursorSkills": "skills",
+        "githubRoot": ".github",
+        "vscodeRoot": ".vscode"
+      }
+    }
+  },
   "features": {
     "USE_NEW_GATEWAY": true,
     "REASONING_QUALITY_SCORE": true

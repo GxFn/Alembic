@@ -1,0 +1,18 @@
+{
+  "runId": "<run-id>",
+  "target": "<workflow-or-feature>",
+  "nodes": [
+    {
+      "id": "N0-data-location",
+      "purpose": "Confirm projectRoot, dataRoot, Ghost mode, runtime directory, knowledge directory, and write boundaries before running workflow checks.",
+      "status": "pending",
+      "evidence": ["evidence/N0-data-location.json"],
+      "passCriteria": [
+        "targetProjectRoot is an absolute path",
+        "dataRoot is an absolute path",
+        "Alembic source repository is not used as a user runtime data root",
+        "runtime and knowledge paths are explicitly recorded"
+      ]
+    }
+  ]
+}

@@ -14,8 +14,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getProjectSkillsPath } from '#infra/config/Paths.js';
 import type { WriteZone } from '#infra/io/WriteZone.js';
+import { getCursorRulesDir, getCursorRulesRelativePath } from '#shared/ide-paths.js';
 import pathGuard from '#shared/PathGuard.js';
-import { SKILLS_DIR } from '#shared/package-root.js';
+import { INJECTABLE_SKILLS_DIR } from '#shared/package-root.js';
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { McpContext } from './types.js';
 
@@ -38,7 +39,7 @@ function _getProjectSkillsDir(ctx?: McpContext) {
  * 返回 { description, createdBy, createdAt }，缺失字段为 null。
  * 同时兼容旧格式（无 createdBy 的 SKILL.md）。
  */
-function _parseSkillMeta(skillName: string, baseDir = SKILLS_DIR) {
+function _parseSkillMeta(skillName: string, baseDir = INJECTABLE_SKILLS_DIR) {
   try {
     const content = fs.readFileSync(path.join(baseDir, skillName, 'SKILL.md'), 'utf8');
     const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
@@ -95,11 +96,11 @@ export function listSkills(ctx?: McpContext | null) {
 
     // 内置 Skills
     const builtinDirs = fs
-      .readdirSync(SKILLS_DIR, { withFileTypes: true })
+      .readdirSync(INJECTABLE_SKILLS_DIR, { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
     for (const name of builtinDirs) {
-      const meta = _parseSkillMeta(name, SKILLS_DIR);
+      const meta = _parseSkillMeta(name, INJECTABLE_SKILLS_DIR);
       skillMap.set(name, {
         name,
         source: 'builtin',
@@ -192,7 +193,7 @@ export function loadSkill(ctx: McpContext | null, args: { skillName?: string; se
   // 项目级 Skills 优先
   const projectSkillsDir = _getProjectSkillsDir(ctx ?? undefined);
   const projectSkillPath = path.join(projectSkillsDir, skillName, 'SKILL.md');
-  const builtinSkillPath = path.join(SKILLS_DIR, skillName, 'SKILL.md');
+  const builtinSkillPath = path.join(INJECTABLE_SKILLS_DIR, skillName, 'SKILL.md');
   const skillPath = fs.existsSync(projectSkillPath) ? projectSkillPath : builtinSkillPath;
   const source = skillPath === projectSkillPath ? 'project' : 'builtin';
 
@@ -212,7 +213,10 @@ export function loadSkill(ctx: McpContext | null, args: { skillName?: string; se
     }
 
     // 提取 createdBy/createdAt
-    const meta = _parseSkillMeta(skillName, source === 'project' ? projectSkillsDir : SKILLS_DIR);
+    const meta = _parseSkillMeta(
+      skillName,
+      source === 'project' ? projectSkillsDir : INJECTABLE_SKILLS_DIR
+    );
 
     // ── SkillHooks: onSkillLoad (fire-and-forget) ──
     try {
@@ -243,13 +247,13 @@ export function loadSkill(ctx: McpContext | null, args: { skillName?: string; se
     // 列出所有可用 Skills
     const available = new Set();
     try {
-      fs.readdirSync(SKILLS_DIR, { withFileTypes: true })
+      fs.readdirSync(INJECTABLE_SKILLS_DIR, { withFileTypes: true })
         .filter((d) => d.isDirectory())
         .forEach((d) => {
           available.add(d.name);
         });
     } catch {
-      /* skip: SKILLS_DIR may not exist */
+      /* skip: INJECTABLE_SKILLS_DIR may not exist */
     }
     try {
       fs.readdirSync(_getProjectSkillsDir(ctx ?? undefined), { withFileTypes: true })
@@ -323,7 +327,7 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
   }
 
   // 不允许覆盖内置 Skill
-  const builtinSkillPath = path.join(SKILLS_DIR, name, 'SKILL.md');
+  const builtinSkillPath = path.join(INJECTABLE_SKILLS_DIR, name, 'SKILL.md');
   if (fs.existsSync(builtinSkillPath)) {
     return JSON.stringify({
       success: false,
@@ -460,12 +464,12 @@ function _regenerateEditorIndex(ctx?: McpContext) {
 
     const wz = _getWriteZone(ctx);
     const projectRoot = resolveProjectRoot(ctx?.container);
-    const rulesDir = path.join(projectRoot, '.cursor', 'rules');
+    const rulesDir = getCursorRulesDir(projectRoot);
 
     if (projectSkills.length === 0) {
       try {
         if (wz) {
-          wz.remove(wz.project('.cursor/rules/alembic-skills.mdc'));
+          wz.remove(wz.project(getCursorRulesRelativePath('alembic-skills.mdc')));
         } else {
           fs.unlinkSync(path.join(rulesDir, 'alembic-skills.mdc'));
         }
@@ -492,8 +496,8 @@ function _regenerateEditorIndex(ctx?: McpContext) {
     ].join('\n');
 
     if (wz) {
-      wz.ensureDir(wz.project('.cursor/rules'));
-      wz.writeFile(wz.project('.cursor/rules/alembic-skills.mdc'), mdcContent);
+      wz.ensureDir(wz.project(getCursorRulesRelativePath()));
+      wz.writeFile(wz.project(getCursorRulesRelativePath('alembic-skills.mdc')), mdcContent);
     } else {
       pathGuard.assertProjectWriteSafe(rulesDir);
       fs.mkdirSync(rulesDir, { recursive: true });
@@ -530,7 +534,7 @@ export function deleteSkill(ctx: McpContext | null, args: { name?: string }) {
   }
 
   // 不允许删除内置 Skill
-  const builtinSkillPath = path.join(SKILLS_DIR, name);
+  const builtinSkillPath = path.join(INJECTABLE_SKILLS_DIR, name);
   if (fs.existsSync(builtinSkillPath)) {
     return JSON.stringify({
       success: false,
@@ -639,7 +643,7 @@ export function updateSkill(ctx: McpContext | null, args: UpdateSkillArgs) {
   }
 
   // 不允许更新内置 Skill
-  const builtinSkillPath = path.join(SKILLS_DIR, name, 'SKILL.md');
+  const builtinSkillPath = path.join(INJECTABLE_SKILLS_DIR, name, 'SKILL.md');
   if (fs.existsSync(builtinSkillPath)) {
     return JSON.stringify({
       success: false,

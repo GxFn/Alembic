@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
+import { getCursorRulesDir, getCursorRulesRelativePath } from '../../shared/ide-paths.js';
 import { BUDGET, estimateTokens } from './TokenBudget.js';
 
 export class RulesGenerator {
@@ -24,7 +25,7 @@ export class RulesGenerator {
   constructor(projectRoot: string, projectName = 'Project', wz?: WriteZone) {
     this.projectRoot = projectRoot;
     this.projectName = projectName;
-    this.rulesDir = path.join(projectRoot, '.cursor', 'rules');
+    this.rulesDir = getCursorRulesDir(projectRoot);
     this.wz = wz ?? null;
   }
 
@@ -54,7 +55,10 @@ export class RulesGenerator {
     const content = this._renderChannelA(kept);
     const filePath = path.join(this.rulesDir, 'alembic-project-rules.mdc');
     if (this.wz) {
-      this.wz.writeFile(this.wz.project('.cursor/rules/alembic-project-rules.mdc'), content);
+      this.wz.writeFile(
+        this.wz.project(getCursorRulesRelativePath('alembic-project-rules.mdc')),
+        content
+      );
     } else {
       fs.writeFileSync(filePath, content, 'utf8');
     }
@@ -98,7 +102,7 @@ export class RulesGenerator {
     const fileName = `alembic-patterns-${topic}.mdc`;
     const filePath = path.join(this.rulesDir, fileName);
     if (this.wz) {
-      this.wz.writeFile(this.wz.project(`.cursor/rules/${fileName}`), content);
+      this.wz.writeFile(this.wz.project(getCursorRulesRelativePath(fileName)), content);
     } else {
       fs.writeFileSync(filePath, content, 'utf8');
     }
@@ -125,7 +129,7 @@ export class RulesGenerator {
         const filePath = path.join(this.rulesDir, file);
         try {
           if (this.wz) {
-            this.wz.remove(this.wz.project(`.cursor/rules/${file}`));
+            this.wz.remove(this.wz.project(getCursorRulesRelativePath(file)));
           } else {
             fs.unlinkSync(filePath);
           }
@@ -184,7 +188,10 @@ export class RulesGenerator {
     const content = this._renderBaseline();
     const filePath = path.join(this.rulesDir, 'alembic-project-rules.mdc');
     if (this.wz) {
-      this.wz.writeFile(this.wz.project('.cursor/rules/alembic-project-rules.mdc'), content);
+      this.wz.writeFile(
+        this.wz.project(getCursorRulesRelativePath('alembic-project-rules.mdc')),
+        content
+      );
     } else {
       fs.writeFileSync(filePath, content, 'utf8');
     }
@@ -228,7 +235,7 @@ export class RulesGenerator {
 
   _ensureDir() {
     if (this.wz) {
-      this.wz.ensureDir(this.wz.project('.cursor/rules'));
+      this.wz.ensureDir(this.wz.project(getCursorRulesRelativePath()));
     } else if (!fs.existsSync(this.rulesDir)) {
       fs.mkdirSync(this.rulesDir, { recursive: true });
     }

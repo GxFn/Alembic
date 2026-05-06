@@ -4,7 +4,7 @@
  * Channel C: 将内置 Skills 和项目级 Skills 统一同步到
  * .cursor/skills/ 目录，适配 Cursor Agent Skills 标准格式。
  *
- * - 内置 Skills：从 Alembic 包 skills/ 目录直接复制（alembic-create 等）
+ * - 内置 Skills：从 Alembic 包 injectable-skills/ 目录直接复制（alembic-create 等）
  * - 项目级 Skills：从 Alembic/skills/ 转换格式后写入（project-* → alembic-*）
  * - 同时为项目级 Skill 生成 references/RECIPES.md（相关 Recipe 摘要）
  */
@@ -12,8 +12,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
+import { DEFAULT_FOLDER_NAMES } from '../../shared/folder-names.js';
+import { getCursorSkillsDir } from '../../shared/ide-paths.js';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
-import { SKILLS_DIR as BUILTIN_SKILLS_DIR } from '../../shared/package-root.js';
+import { INJECTABLE_SKILLS_DIR as BUILTIN_SKILLS_DIR } from '../../shared/package-root.js';
 
 /**
  * 技能名称映射：Alembic/skills/ → .cursor/skills/
@@ -95,8 +97,12 @@ export class SkillsSyncer {
     this.projectRoot = projectRoot;
     this.projectName = projectName;
     this.knowledgeService = knowledgeService;
-    this.sourceDir = path.join(dataRoot || projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'skills');
-    this.targetDir = path.join(projectRoot, '.cursor', 'skills');
+    this.sourceDir = path.join(
+      dataRoot || projectRoot,
+      DEFAULT_KNOWLEDGE_BASE_DIR,
+      DEFAULT_FOLDER_NAMES.project.skills
+    );
+    this.targetDir = getCursorSkillsDir(projectRoot);
     this.wz = wz ?? null;
   }
 
@@ -122,7 +128,7 @@ export class SkillsSyncer {
   }
 
   /**
-   * 同步内置 Skills：从 Alembic 包 skills/ 目录直接复制到 .cursor/skills/
+   * 同步内置 Skills：从 Alembic 包 injectable-skills/ 目录直接复制到 .cursor/skills/
    */
   _syncBuiltinSkills(result: { builtinSynced: string[]; errors: string[] }) {
     if (!fs.existsSync(BUILTIN_SKILLS_DIR)) {

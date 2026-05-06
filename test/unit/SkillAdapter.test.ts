@@ -104,6 +104,27 @@ describe('SkillAdapter', () => {
     });
   });
 
+  test('does not search internal repository skills by default', async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-internal-search-'));
+    const adapter = new SkillAdapter();
+
+    const result = await adapter.execute(
+      request(SKILL_SEARCH_CAPABILITY, { query: 'progressive-chain-validation' }, projectRoot)
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: 'success',
+      structuredContent: {
+        success: true,
+        data: {
+          total: 0,
+          skills: [],
+        },
+      },
+    });
+  });
+
   test('loads project skills from ghost dataRoot when it differs from projectRoot', async () => {
     const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-project-root-'));
     const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-ghost-root-'));

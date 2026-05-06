@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { DEFAULT_FOLDER_NAMES } from '../../shared/folder-names.js';
 import pathGuard from '../../shared/PathGuard.js';
 import {
-  DEFAULT_KNOWLEDGE_BASE_DIR,
   detectKnowledgeBaseDir,
   SPEC_FILENAME as MARKER_SPEC,
 } from '../../shared/ProjectMarkers.js';
@@ -48,12 +48,14 @@ export function getSnippetsPath() {
     return ensureDir(path.join(USER_HOME, 'Library/Developer/Xcode/UserData/CodeSnippets'));
   }
   // 非 macOS: 放到全局缓存目录下
-  return ensureDir(path.join(USER_HOME, '.asd', 'snippets'));
+  return ensureDir(
+    path.join(USER_HOME, DEFAULT_FOLDER_NAMES.global.root, DEFAULT_FOLDER_NAMES.global.snippets)
+  );
 }
 
 /** VSCode 项目级 Snippets 目录 = projectRoot/.vscode/ */
 export function getVSCodeSnippetsPath(projectRoot: string) {
-  return ensureDir(path.join(projectRoot, '.vscode'));
+  return ensureDir(path.join(projectRoot, DEFAULT_FOLDER_NAMES.ide.vscodeRoot));
 }
 
 /**
@@ -64,7 +66,9 @@ export function getCachePath() {
   if (process.env.ALEMBIC_CACHE_PATH) {
     return process.env.ALEMBIC_CACHE_PATH;
   }
-  return ensureDir(path.join(USER_HOME, '.asd', 'cache'));
+  return ensureDir(
+    path.join(USER_HOME, DEFAULT_FOLDER_NAMES.global.root, DEFAULT_FOLDER_NAMES.global.cache)
+  );
 }
 
 /**
@@ -94,7 +98,7 @@ export function getProjectSpecPath(projectRoot: string) {
  * 注意：仅返回路径，不创建目录
  */
 export function getProjectInternalDataPath(projectRoot: string) {
-  return path.join(getProjectKnowledgePath(projectRoot), '.asd');
+  return path.join(getProjectKnowledgePath(projectRoot), DEFAULT_FOLDER_NAMES.project.runtime);
 }
 
 /**
@@ -102,7 +106,7 @@ export function getProjectInternalDataPath(projectRoot: string) {
  * 注意：仅返回路径，不创建目录
  */
 export function getContextStoragePath(projectRoot: string) {
-  return path.join(getProjectInternalDataPath(projectRoot), 'context');
+  return path.join(getProjectInternalDataPath(projectRoot), DEFAULT_FOLDER_NAMES.project.context);
 }
 
 /**
@@ -119,7 +123,7 @@ export function getContextIndexPath(projectRoot: string) {
  * 注意：仅返回路径，不创建目录
  */
 export function getProjectSkillsPath(projectRoot: string) {
-  return path.join(getProjectKnowledgePath(projectRoot), 'skills');
+  return path.join(getProjectKnowledgePath(projectRoot), DEFAULT_FOLDER_NAMES.project.skills);
 }
 
 /**
@@ -135,7 +139,7 @@ export function getProjectRecipesPath(
   if (dir) {
     return path.join(projectRoot, dir);
   }
-  return path.join(getProjectKnowledgePath(projectRoot), 'recipes');
+  return path.join(getProjectKnowledgePath(projectRoot), DEFAULT_FOLDER_NAMES.project.recipes);
 }
 
 export default {

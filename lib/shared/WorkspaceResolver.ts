@@ -12,7 +12,9 @@
  */
 
 import path from 'node:path';
-import { detectKnowledgeBaseDir } from './ProjectMarkers.js';
+import type { AlembicFolderNames, PartialAlembicFolderNames } from './folder-names.js';
+import { resolveFolderNames } from './folder-names.js';
+import { detectKnowledgeBaseDir, SPEC_FILENAME } from './ProjectMarkers.js';
 import { getGhostWorkspaceDir, ProjectRegistry } from './ProjectRegistry.js';
 
 export class WorkspaceResolver {
@@ -31,15 +33,22 @@ export class WorkspaceResolver {
   /** 知识库目录名（如 'Alembic'） */
   readonly knowledgeBaseDir: string;
 
+  /** 目录名约定 */
+  readonly folderNames: AlembicFolderNames;
+
   constructor(opts: {
     projectRoot: string;
     ghost?: boolean;
     projectId?: string;
     knowledgeBaseDir?: string;
+    folderNames?: PartialAlembicFolderNames;
   }) {
     this.projectRoot = path.resolve(opts.projectRoot);
     this.ghost = opts.ghost ?? false;
-    this.knowledgeBaseDir = opts.knowledgeBaseDir ?? detectKnowledgeBaseDir(this.projectRoot);
+    this.folderNames = resolveFolderNames(opts.folderNames);
+    this.knowledgeBaseDir =
+      opts.knowledgeBaseDir ??
+      detectKnowledgeBaseDir(this.projectRoot, this.folderNames.project.knowledgeBase);
 
     if (this.ghost) {
       // Ghost 模式：从 ProjectRegistry 查 ID 或用显式传入的 ID
@@ -60,12 +69,16 @@ export class WorkspaceResolver {
    * 从 ProjectRegistry 自动创建 resolver
    * 自动检测项目是否为 Ghost 模式
    */
-  static fromProject(projectRoot: string): WorkspaceResolver {
+  static fromProject(
+    projectRoot: string,
+    opts: { folderNames?: PartialAlembicFolderNames } = {}
+  ): WorkspaceResolver {
     const entry = ProjectRegistry.get(projectRoot);
     return new WorkspaceResolver({
       projectRoot,
       ghost: entry?.ghost ?? false,
       projectId: entry?.id,
+      folderNames: opts.folderNames,
     });
   }
 
@@ -73,7 +86,7 @@ export class WorkspaceResolver {
 
   /** 运行时目录: .asd/ */
   get runtimeDir(): string {
-    return path.join(this.dataRoot, '.asd');
+    return path.join(this.dataRoot, this.folderNames.project.runtime);
   }
 
   /** 数据库路径: .asd/alembic.db */
@@ -83,22 +96,22 @@ export class WorkspaceResolver {
 
   /** 日志目录: .asd/logs */
   get logsDir(): string {
-    return path.join(this.runtimeDir, 'logs');
+    return path.join(this.runtimeDir, this.folderNames.project.logs);
   }
 
   /** 报告目录: .asd/logs/reports */
   get reportsDir(): string {
-    return path.join(this.runtimeDir, 'logs', 'reports');
+    return path.join(this.logsDir, 'reports');
   }
 
   /** 信号日志目录: .asd/logs/signals */
   get signalsDir(): string {
-    return path.join(this.runtimeDir, 'logs', 'signals');
+    return path.join(this.logsDir, 'signals');
   }
 
   /** 错误追踪目录: .asd/logs/errors */
   get errorsDir(): string {
-    return path.join(this.runtimeDir, 'logs', 'errors');
+    return path.join(this.logsDir, 'errors');
   }
 
   /** 对话存储目录: .asd/conversations */
@@ -108,7 +121,7 @@ export class WorkspaceResolver {
 
   /** 缓存目录: .asd/cache */
   get cacheDir(): string {
-    return path.join(this.runtimeDir, 'cache');
+    return path.join(this.runtimeDir, this.folderNames.project.cache);
   }
 
   /** 记忆文件: .asd/memory.jsonl (legacy) */
@@ -128,7 +141,7 @@ export class WorkspaceResolver {
 
   /** 上下文存储: .asd/context */
   get contextDir(): string {
-    return path.join(this.runtimeDir, 'context');
+    return path.join(this.runtimeDir, this.folderNames.project.context);
   }
 
   /** 记忆嵌入: .asd/context/memory_embeddings.json */
@@ -143,7 +156,7 @@ export class WorkspaceResolver {
 
   /** Skills 迁移目录: .asd/skills */
   get runtimeSkillsDir(): string {
-    return path.join(this.runtimeDir, 'skills');
+    return path.join(this.runtimeDir, this.folderNames.project.skills);
   }
 
   // ─── 知识库路径（Alembic/ 下） ────────────────────
@@ -155,27 +168,27 @@ export class WorkspaceResolver {
 
   /** Recipes 目录: Alembic/recipes */
   get recipesDir(): string {
-    return path.join(this.knowledgeDir, 'recipes');
+    return path.join(this.knowledgeDir, this.folderNames.project.recipes);
   }
 
   /** Candidates 目录: Alembic/candidates */
   get candidatesDir(): string {
-    return path.join(this.knowledgeDir, 'candidates');
+    return path.join(this.knowledgeDir, this.folderNames.project.candidates);
   }
 
   /** Skills 目录: Alembic/skills */
   get skillsDir(): string {
-    return path.join(this.knowledgeDir, 'skills');
+    return path.join(this.knowledgeDir, this.folderNames.project.skills);
   }
 
   /** Wiki 目录: Alembic/wiki */
   get wikiDir(): string {
-    return path.join(this.knowledgeDir, 'wiki');
+    return path.join(this.knowledgeDir, this.folderNames.project.wiki);
   }
 
   /** Boxspec 文件: Alembic/Alembic.boxspec.json */
   get specPath(): string {
-    return path.join(this.knowledgeDir, 'Alembic.boxspec.json');
+    return path.join(this.knowledgeDir, SPEC_FILENAME);
   }
 
   /** Recipes 索引: Alembic/recipes/index.json */

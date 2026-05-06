@@ -11,7 +11,7 @@
  *   - 完全向后兼容旧版 hooks.js (直接导出函数)
  *   - 新格式支持: export default { hooks: { onXxx: { handler, priority, timeout } } }
  *
- * 加载顺序: 内置 skills/ → 项目级 Alembic/skills/（同名覆盖）
+ * 加载顺序: 内置 injectable-skills/ → 项目级 Alembic/skills/（同名覆盖）
  */
 
 import fs from 'node:fs';
@@ -19,7 +19,7 @@ import path from 'node:path';
 import { resolveDataRoot } from '#shared/resolveProjectRoot.js';
 import { getProjectSkillsPath } from '../../infrastructure/config/Paths.js';
 import Logger from '../../infrastructure/logging/Logger.js';
-import { SKILLS_DIR } from '../../shared/package-root.js';
+import { INJECTABLE_SKILLS_DIR } from '../../shared/package-root.js';
 import type { HookDefinition, HookHandlerOptions, HookMode, RegisteredHandler } from './types.js';
 
 // ═══════════════════════════════════════════════════════
@@ -126,8 +126,8 @@ export class SkillHooks {
   async load(container?: { singletons?: { _projectRoot?: unknown } }) {
     const loaded = new Map<string, Record<string, unknown>>();
 
-    // 1. 内置 skills
-    await this.#loadFromDir(SKILLS_DIR, loaded);
+    // 1. 内置 injectable-skills
+    await this.#loadFromDir(INJECTABLE_SKILLS_DIR, loaded);
 
     // 2. 项目级 skills（覆盖同名）
     await this.#loadFromDir(_getProjectSkillsDir(container), loaded);

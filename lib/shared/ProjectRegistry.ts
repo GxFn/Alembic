@@ -14,9 +14,10 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { WriteZone } from '../infrastructure/io/WriteZone.js';
+import { DEFAULT_FOLDER_NAMES } from './folder-names.js';
 
 const USER_HOME = process.env.HOME || process.env.USERPROFILE || '';
-const REGISTRY_DIR = path.join(USER_HOME, '.asd');
+const REGISTRY_DIR = path.join(USER_HOME, DEFAULT_FOLDER_NAMES.global.root);
 const REGISTRY_PATH = path.join(REGISTRY_DIR, 'projects.json');
 
 export interface ProjectEntry {
@@ -72,7 +73,12 @@ function saveRegistry(data: RegistryData, wz?: WriteZone): void {
 
 /** 获取 Ghost 模式的外置工作区根目录 */
 export function getGhostWorkspaceDir(projectId: string): string {
-  return path.join(USER_HOME, '.asd', 'workspaces', projectId);
+  return path.join(
+    USER_HOME,
+    DEFAULT_FOLDER_NAMES.global.root,
+    DEFAULT_FOLDER_NAMES.global.workspaces,
+    projectId
+  );
 }
 
 export const ProjectRegistry = {

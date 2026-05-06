@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { ToolExecutionAdapter, ToolExecutionRequest } from '#tools/core/ToolContracts.js';
 import type { ToolResultEnvelope, ToolResultStatus } from '#tools/core/ToolResultEnvelope.js';
 import { getProjectSkillsPath } from '../../infrastructure/config/Paths.js';
-import { SKILLS_DIR } from '../../shared/package-root.js';
+import { INJECTABLE_SKILLS_DIR } from '../../shared/package-root.js';
 
 type SkillSource = 'builtin' | 'project';
 type SkillSourceFilter = 'all' | SkillSource;
@@ -24,7 +24,7 @@ export class SkillAdapter implements ToolExecutionAdapter {
   readonly #builtinSkillsDir: string;
 
   constructor(options: { builtinSkillsDir?: string } = {}) {
-    this.#builtinSkillsDir = options.builtinSkillsDir ?? SKILLS_DIR;
+    this.#builtinSkillsDir = options.builtinSkillsDir ?? INJECTABLE_SKILLS_DIR;
   }
 
   async execute(request: ToolExecutionRequest): Promise<ToolResultEnvelope> {

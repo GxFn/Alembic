@@ -32,8 +32,11 @@ import {
 import { dirname, join, resolve } from 'node:path';
 import { Command } from 'commander';
 import { cli } from '../lib/cli/CliLogger.js';
+import { DEFAULT_FOLDER_NAMES } from '../lib/shared/folder-names.js';
+import { getCursorRoot, getCursorRulesDir, getCursorSkillsDir } from '../lib/shared/ide-paths.js';
 import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-root.js';
 import { shutdown } from '../lib/shared/shutdown.js';
+import { WorkspaceResolver } from '../lib/shared/WorkspaceResolver.js';
 
 const pkgPath = join(PACKAGE_ROOT, 'package.json');
 const pkg = existsSync(pkgPath) ? JSON.parse(readFileSync(pkgPath, 'utf8')) : { version: '2.0.0' };
@@ -164,7 +167,7 @@ program
 
 /** 更新 .asd/config.json 中的 core.subRepoUrl 字段 */
 function _updateConfigUrl(projectRoot: string, url: string) {
-  const configPath = join(projectRoot, '.asd', 'config.json');
+  const configPath = join(WorkspaceResolver.fromProject(projectRoot).runtimeDir, 'config.json');
   if (!existsSync(configPath)) {
     return;
   }
@@ -1186,8 +1189,8 @@ program
         });
 
       // ── MCP 配置检测 ──
-      const cursorMcpPath = join(projectRoot, '.cursor', 'mcp.json');
-      const vscodeMcpPath = join(projectRoot, '.vscode', 'mcp.json');
+      const cursorMcpPath = join(getCursorRoot(projectRoot), 'mcp.json');
+      const vscodeMcpPath = join(projectRoot, DEFAULT_FOLDER_NAMES.ide.vscodeRoot, 'mcp.json');
       const hasMcpConfig = (() => {
         try {
           const c = JSON.parse(readFileSync(cursorMcpPath, 'utf8'));
@@ -1347,14 +1350,13 @@ program
     }
 
     // 检查数据库 (Ghost-aware)
-    const { WorkspaceResolver } = await import('../lib/shared/WorkspaceResolver.js');
     const resolver = WorkspaceResolver.fromProject(process.cwd());
-    const dbPath = join(resolver.dataRoot, '.asd', 'alembic.db');
+    const dbPath = resolver.databasePath;
     const dbExists = existsSync(dbPath);
     cli.log(`  Database:     ${dbExists ? `✅ ${dbPath}` : '❌ not found'}`);
 
     // 检查 .asd 目录
-    const asdDir = join(resolver.dataRoot, '.asd');
+    const asdDir = resolver.runtimeDir;
     cli.log(
       `  Workspace:    ${existsSync(asdDir) ? `✅ ${resolver.ghost ? '👻 Ghost' : '.asd/'}` : '❌ not initialized (run alembic setup)'}`
     );
@@ -1427,12 +1429,11 @@ program
     const projectRoot = resolve(opts.dir);
 
     const { getAiConfigInfo } = await import('../lib/external/ai/AiFactory.js');
-    const { WorkspaceResolver } = await import('../lib/shared/WorkspaceResolver.js');
     const resolver = WorkspaceResolver.fromProject(projectRoot);
     const aiInfo = getAiConfigInfo();
     const aiOk = !!(aiInfo.provider && aiInfo.provider !== 'none');
 
-    const dbPath = join(resolver.dataRoot, '.asd', 'alembic.db');
+    const dbPath = resolver.databasePath;
     const dbExists = existsSync(dbPath);
 
     let dbSizeMB = 0;
@@ -1755,7 +1756,7 @@ program
     const projectRoot = resolve(opts.dir);
     const targets = opts.target === 'all' ? ['.qoder', '.trae'] : [`.${opts.target}`];
 
-    const cursorDir = join(projectRoot, '.cursor');
+    const cursorDir = getCursorRoot(projectRoot);
     if (!existsSync(cursorDir)) {
       cli.error('❌ 未找到 .cursor/ 目录，请先运行 alembic setup 或 alembic cursor-rules');
       process.exit(1);
@@ -1765,9 +1766,9 @@ program
       let count = 0;
 
       // 1. 镜像 rules/ — alembic- 前缀文件（.mdc → .md 改名）
-      const cursorRulesDir = join(cursorDir, 'rules');
+      const cursorRulesDir = getCursorRulesDir(projectRoot);
       if (existsSync(cursorRulesDir)) {
-        const targetRulesDir = join(projectRoot, target, 'rules');
+        const targetRulesDir = join(projectRoot, target, DEFAULT_FOLDER_NAMES.ide.cursorRules);
         mkdirSync(targetRulesDir, { recursive: true });
         const files = readdirSync(cursorRulesDir).filter(
           (f) => f.startsWith('alembic-') && (f.endsWith('.mdc') || f.endsWith('.md'))
@@ -1780,9 +1781,9 @@ program
       }
 
       // 2. 镜像 skills/ — alembic- 前缀目录
-      const cursorSkillsDir = join(cursorDir, 'skills');
+      const cursorSkillsDir = getCursorSkillsDir(projectRoot);
       if (existsSync(cursorSkillsDir)) {
-        const targetSkillsDir = join(projectRoot, target, 'skills');
+        const targetSkillsDir = join(projectRoot, target, DEFAULT_FOLDER_NAMES.ide.cursorSkills);
         const skillDirs = readdirSync(cursorSkillsDir, { withFileTypes: true }).filter(
           (d) => d.isDirectory() && d.name.startsWith('alembic-')
         );
@@ -2172,10 +2173,10 @@ program
         fs.mkdirSync(wsDir, { recursive: true });
 
         // 2. 迁移数据目录：项目 → 全局
-        const asdSrc = join(projectRoot, '.asd');
-        const asdDest = join(wsDir, '.asd');
-        const kbSrc = join(projectRoot, 'Alembic');
-        const kbDest = join(wsDir, 'Alembic');
+        const asdSrc = join(projectRoot, DEFAULT_FOLDER_NAMES.project.runtime);
+        const asdDest = join(wsDir, DEFAULT_FOLDER_NAMES.project.runtime);
+        const kbSrc = join(projectRoot, DEFAULT_FOLDER_NAMES.project.knowledgeBase);
+        const kbDest = join(wsDir, DEFAULT_FOLDER_NAMES.project.knowledgeBase);
 
         let migrated = false;
         if (fs.existsSync(asdSrc)) {
@@ -2191,8 +2192,12 @@ program
 
         // 4. MCP 切换：项目级 → 全局
         //    Cursor: 项目 .cursor/mcp.json → 全局 ~/.cursor/mcp.json
-        removeMcpEntry(join(projectRoot, '.cursor', 'mcp.json'), 'mcpServers');
-        writeMcpConfig(join(os.homedir(), '.cursor', 'mcp.json'), 'mcpServers', cursorMcpEntry);
+        removeMcpEntry(join(getCursorRoot(projectRoot), 'mcp.json'), 'mcpServers');
+        writeMcpConfig(
+          join(os.homedir(), DEFAULT_FOLDER_NAMES.ide.cursorRoot, 'mcp.json'),
+          'mcpServers',
+          cursorMcpEntry
+        );
         //    VSCode: 项目 .vscode/mcp.json → 全局（绝对路径）
         removeMcpEntry(join(projectRoot, '.vscode', 'mcp.json'), 'servers');
         writeMcpConfig(vscodeMcpGlobalPath(), 'servers', vscodeMcpEntry(true));
@@ -2224,10 +2229,10 @@ program
         const wsDir = getGhostWorkspaceDir(existing.id);
 
         // 1. 迁移数据目录：全局 → 项目
-        const asdSrc = join(wsDir, '.asd');
-        const asdDest = join(projectRoot, '.asd');
-        const kbSrc = join(wsDir, 'Alembic');
-        const kbDest = join(projectRoot, 'Alembic');
+        const asdSrc = join(wsDir, DEFAULT_FOLDER_NAMES.project.runtime);
+        const asdDest = join(projectRoot, DEFAULT_FOLDER_NAMES.project.runtime);
+        const kbSrc = join(wsDir, DEFAULT_FOLDER_NAMES.project.knowledgeBase);
+        const kbDest = join(projectRoot, DEFAULT_FOLDER_NAMES.project.knowledgeBase);
 
         let migrated = false;
         if (fs.existsSync(asdSrc)) {
@@ -2244,8 +2249,11 @@ program
 
         // 3. MCP 切换：全局 → 项目级
         //    Cursor: 全局 → 项目 .cursor/mcp.json
-        removeMcpEntry(join(os.homedir(), '.cursor', 'mcp.json'), 'mcpServers');
-        writeMcpConfig(join(projectRoot, '.cursor', 'mcp.json'), 'mcpServers', cursorMcpEntry);
+        removeMcpEntry(
+          join(os.homedir(), DEFAULT_FOLDER_NAMES.ide.cursorRoot, 'mcp.json'),
+          'mcpServers'
+        );
+        writeMcpConfig(join(getCursorRoot(projectRoot), 'mcp.json'), 'mcpServers', cursorMcpEntry);
         //    VSCode: 全局 → 项目 .vscode/mcp.json
         removeMcpEntry(vscodeMcpGlobalPath(), 'servers');
         writeMcpConfig(join(projectRoot, '.vscode', 'mcp.json'), 'servers', vscodeMcpEntry(false));

@@ -20,6 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
+import { getProjectSkillsPath } from '../../infrastructure/config/Paths.js';
 import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
 import {
   type CallGraphRepo,
@@ -27,7 +28,11 @@ import {
 } from '../../repository/delivery/DeliveryRepoAdapter.js';
 import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
 import { DELIVERY_RANK, KNOWLEDGE_CONFIDENCE } from '../../shared/constants.js';
-import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
+import {
+  getCursorRulesDir,
+  getCursorSkillsDir,
+  getCursorSkillsRelativePath,
+} from '../../shared/ide-paths.js';
 import { AgentInstructionsGenerator } from './AgentInstructionsGenerator.js';
 import { KnowledgeCompressor } from './KnowledgeCompressor.js';
 import { RulesGenerator } from './RulesGenerator.js';
@@ -39,6 +44,7 @@ export class CursorDeliveryPipeline {
   agentInstructions: AgentInstructionsGenerator;
   compressor: KnowledgeCompressor;
   database: Record<string, unknown> | null;
+  dataRoot: string;
   knowledgeService: {
     list: (
       filter: Record<string, unknown>,
@@ -96,6 +102,7 @@ export class CursorDeliveryPipeline {
     this.projectName = projectName || this._inferProjectName(projectRoot);
     this.logger = logger || console;
     this.database = database || null;
+    this.dataRoot = dataRoot ?? projectRoot;
     this.wz = wz ?? null;
 
     // 子模块
@@ -669,10 +676,12 @@ export class CursorDeliveryPipeline {
       return result;
     }
 
-    const devdocsDir = path.join(this.projectRoot, '.cursor', 'skills', 'alembic-devdocs');
+    const devdocsDir = path.join(getCursorSkillsDir(this.projectRoot), 'alembic-devdocs');
     const refsDir = path.join(devdocsDir, 'references');
     if (this.wz) {
-      this.wz.ensureDir(this.wz.project('.cursor/skills/alembic-devdocs/references'));
+      this.wz.ensureDir(
+        this.wz.project(getCursorSkillsRelativePath('alembic-devdocs', 'references'))
+      );
     } else {
       fs.mkdirSync(refsDir, { recursive: true });
     }
@@ -743,7 +752,10 @@ export class CursorDeliveryPipeline {
 
     const skillMdContent = `${skillLines.join('\n')}\n`;
     if (this.wz) {
-      this.wz.writeFile(this.wz.project('.cursor/skills/alembic-devdocs/SKILL.md'), skillMdContent);
+      this.wz.writeFile(
+        this.wz.project(getCursorSkillsRelativePath('alembic-devdocs', 'SKILL.md')),
+        skillMdContent
+      );
     } else {
       fs.writeFileSync(path.join(devdocsDir, 'SKILL.md'), skillMdContent, 'utf8');
     }
@@ -762,7 +774,7 @@ export class CursorDeliveryPipeline {
   _generateChannelF(rules: KnowledgeEntryProps[], patterns: KnowledgeEntryProps[]) {
     try {
       // 收集可用 Skills 名称
-      const skillsDir = path.join(this.projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'skills');
+      const skillsDir = getProjectSkillsPath(this.dataRoot);
       let skills: string[] = [];
       if (fs.existsSync(skillsDir)) {
         skills = fs
@@ -823,11 +835,10 @@ export class CursorDeliveryPipeline {
    */
   _mirrorToIDE(targetDirName: string) {
     try {
-      const cursorDir = path.join(this.projectRoot, '.cursor');
       const targetDir = path.join(this.projectRoot, targetDirName);
 
       // Mirror rules/ — 只复制 alembic-* 文件
-      const cursorRulesDir = path.join(cursorDir, 'rules');
+      const cursorRulesDir = getCursorRulesDir(this.projectRoot);
       if (fs.existsSync(cursorRulesDir)) {
         const targetRulesDir = path.join(targetDir, 'rules');
         if (this.wz) {
@@ -855,7 +866,7 @@ export class CursorDeliveryPipeline {
       }
 
       // Mirror skills/ — 只复制 alembic-* 子目录
-      const cursorSkillsDir = path.join(cursorDir, 'skills');
+      const cursorSkillsDir = getCursorSkillsDir(this.projectRoot);
       if (fs.existsSync(cursorSkillsDir)) {
         const targetSkillsDir = path.join(targetDir, 'skills');
         for (const entry of fs.readdirSync(cursorSkillsDir, { withFileTypes: true })) {

@@ -17,17 +17,21 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { DEFAULT_FOLDER_NAMES } from './folder-names.js';
 
 // ─── 目录名常量 ──────────────────────────────────────────────
 
 /** 默认知识库顶级目录名 */
-export const DEFAULT_KNOWLEDGE_BASE_DIR = 'Alembic';
+export const DEFAULT_KNOWLEDGE_BASE_DIR = DEFAULT_FOLDER_NAMES.project.knowledgeBase;
 
 /** 默认子仓库相对路径（相对于 projectRoot） */
-export const DEFAULT_SUB_REPO_DIR = 'Alembic/recipes';
+export const DEFAULT_SUB_REPO_DIR = path.join(
+  DEFAULT_FOLDER_NAMES.project.knowledgeBase,
+  DEFAULT_FOLDER_NAMES.project.recipes
+);
 
 /** 运行时配置目录名 */
-export const RUNTIME_DIR = '.asd';
+export const RUNTIME_DIR = DEFAULT_FOLDER_NAMES.project.runtime;
 
 /** Boxspec 文件名 — 知识库目录标记 */
 export const SPEC_FILENAME = 'Alembic.boxspec.json';
@@ -53,7 +57,7 @@ export function isAlembicProject(folderPath: string): boolean {
   try {
     const registryPath = path.join(
       process.env.HOME || process.env.USERPROFILE || '',
-      '.asd',
+      DEFAULT_FOLDER_NAMES.global.root,
       'projects.json'
     );
     if (fs.existsSync(registryPath)) {
@@ -80,7 +84,10 @@ export function isAlembicProject(folderPath: string): boolean {
  * 探测知识库目录名
  * 优先查找含 boxspec.json 的一级子目录，fallback 到默认值 'Alembic'
  */
-export function detectKnowledgeBaseDir(projectRoot: string): string {
+export function detectKnowledgeBaseDir(
+  projectRoot: string,
+  fallbackDir = DEFAULT_KNOWLEDGE_BASE_DIR
+): string {
   try {
     const entries = fs.readdirSync(projectRoot, { withFileTypes: true });
     for (const e of entries) {
@@ -93,7 +100,7 @@ export function detectKnowledgeBaseDir(projectRoot: string): string {
   } catch {
     /* ignore */
   }
-  return DEFAULT_KNOWLEDGE_BASE_DIR;
+  return fallbackDir;
 }
 
 /**
