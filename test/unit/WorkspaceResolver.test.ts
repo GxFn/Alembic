@@ -1,8 +1,30 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, test } from 'vitest';
-import { getGhostWorkspaceDir } from '../../lib/shared/ProjectRegistry.js';
+import { afterEach, describe, expect, test } from 'vitest';
+import { isAlembicProject } from '../../lib/shared/ProjectMarkers.js';
+import {
+  getGhostWorkspaceDir,
+  getProjectRegistryPath,
+  ProjectRegistry,
+} from '../../lib/shared/ProjectRegistry.js';
 import WorkspaceResolver from '../../lib/shared/WorkspaceResolver.js';
+
+const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
+
+function useTempAlembicHome(): string {
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-home-'));
+  process.env.ALEMBIC_HOME = tempHome;
+  return tempHome;
+}
+
+afterEach(() => {
+  if (ORIGINAL_ALEMBIC_HOME === undefined) {
+    delete process.env.ALEMBIC_HOME;
+  } else {
+    process.env.ALEMBIC_HOME = ORIGINAL_ALEMBIC_HOME;
+  }
+});
 
 describe('WorkspaceResolver', () => {
   test('derives the standard data and knowledge paths from default folder names', () => {
@@ -34,6 +56,108 @@ describe('WorkspaceResolver', () => {
     expect(resolver.dataRoot).toBe(dataRoot);
     expect(resolver.runtimeDir).toBe(path.join(dataRoot, '.asd'));
     expect(resolver.skillsDir).toBe(path.join(dataRoot, 'Alembic', 'skills'));
+  });
+
+  test('inspects ghost registry facts with an explicit marker and object-shaped registry', () => {
+    useTempAlembicHome();
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-ghost-source-'));
+    const symlinkParent = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-ghost-link-'));
+    const symlinkRoot = path.join(symlinkParent, 'project');
+    fs.symlinkSync(projectRoot, symlinkRoot, 'dir');
+
+    const entry = ProjectRegistry.register(projectRoot, true);
+    const workspaceDir = getGhostWorkspaceDir(entry.id);
+    fs.mkdirSync(workspaceDir, { recursive: true });
+
+    const inspection = ProjectRegistry.inspect(symlinkRoot);
+
+    expect(ProjectRegistry.get(symlinkRoot)).toMatchObject(entry);
+    expect(ProjectRegistry.isGhost(symlinkRoot)).toBe(true);
+    expect(ProjectRegistry.getWorkspaceDir(symlinkRoot)).toBe(workspaceDir);
+    expect(isAlembicProject(symlinkRoot)).toBe(true);
+    expect(inspection).toMatchObject({
+      inputProjectRoot: path.resolve(symlinkRoot),
+      projectRoot: path.resolve(symlinkRoot),
+      projectRealpath: fs.realpathSync(projectRoot),
+      registryPath: getProjectRegistryPath(),
+      registered: true,
+      mode: 'ghost',
+      ghost: true,
+      projectId: entry.id,
+      expectedProjectId: entry.id,
+      dataRoot: workspaceDir,
+      dataRootSource: 'ghost-registry',
+      workspaceExists: true,
+      ghostMarker: {
+        kind: 'project-registry',
+        registryPath: getProjectRegistryPath(),
+        projectRoot: fs.realpathSync(projectRoot),
+        projectId: entry.id,
+      },
+    });
+  });
+
+  test('exposes N0-ready workspace facts for ghost projects', () => {
+    useTempAlembicHome();
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-ghost-facts-'));
+    const entry = ProjectRegistry.register(projectRoot, true);
+    const dataRoot = getGhostWorkspaceDir(entry.id);
+    fs.mkdirSync(dataRoot, { recursive: true });
+
+    const resolver = WorkspaceResolver.fromProject(projectRoot);
+    const facts = resolver.toFacts();
+
+    expect(facts).toMatchObject({
+      targetProjectRoot: path.resolve(projectRoot),
+      projectRealpath: fs.realpathSync(projectRoot),
+      registryPath: getProjectRegistryPath(),
+      registered: true,
+      mode: 'ghost',
+      ghost: true,
+      projectId: entry.id,
+      expectedProjectId: entry.id,
+      dataRoot,
+      dataRootSource: 'ghost-registry',
+      workspaceExists: true,
+      runtimeDir: path.join(dataRoot, '.asd'),
+      databasePath: path.join(dataRoot, '.asd', 'alembic.db'),
+      knowledgeBaseDir: 'Alembic',
+      knowledgeDir: path.join(dataRoot, 'Alembic'),
+      recipesDir: path.join(dataRoot, 'Alembic', 'recipes'),
+      skillsDir: path.join(dataRoot, 'Alembic', 'skills'),
+      candidatesDir: path.join(dataRoot, 'Alembic', 'candidates'),
+      wikiDir: path.join(dataRoot, 'Alembic', 'wiki'),
+    });
+    expect(facts.ghostMarker).toMatchObject({ kind: 'project-registry', projectId: entry.id });
+  });
+
+  test('inspects unregistered projects as standard mode without a ghost marker', () => {
+    useTempAlembicHome();
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-standard-unregistered-'));
+
+    const inspection = ProjectRegistry.inspect(projectRoot);
+    const resolver = WorkspaceResolver.fromProject(projectRoot);
+
+    expect(inspection).toMatchObject({
+      projectRoot: path.resolve(projectRoot),
+      projectRealpath: fs.realpathSync(projectRoot),
+      registered: false,
+      mode: 'standard',
+      ghost: false,
+      projectId: null,
+      dataRoot: path.resolve(projectRoot),
+      dataRootSource: 'project-root',
+      workspaceExists: true,
+      ghostMarker: null,
+    });
+    expect(resolver.toFacts()).toMatchObject({
+      mode: 'standard',
+      ghost: false,
+      dataRoot: path.resolve(projectRoot),
+      dataRootSource: 'project-root',
+      ghostMarker: null,
+    });
+    expect(isAlembicProject(projectRoot)).toBe(false);
   });
 
   test('uses folder name overrides without changing projectRoot semantics', () => {

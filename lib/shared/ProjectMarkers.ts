@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_FOLDER_NAMES } from './folder-names.js';
+import { ProjectRegistry } from './ProjectRegistry.js';
 
 // ─── 目录名常量 ──────────────────────────────────────────────
 
@@ -54,30 +55,7 @@ export function isAlembicProject(folderPath: string): boolean {
     return true;
   }
 
-  try {
-    const registryPath = path.join(
-      process.env.HOME || process.env.USERPROFILE || '',
-      DEFAULT_FOLDER_NAMES.global.root,
-      'projects.json'
-    );
-    if (fs.existsSync(registryPath)) {
-      const raw = fs.readFileSync(registryPath, 'utf-8');
-      const data = JSON.parse(raw) as { version?: number; projects?: Record<string, unknown> };
-      if (data.version === 1 && data.projects) {
-        let normalized: string;
-        try {
-          normalized = fs.realpathSync(folderPath);
-        } catch {
-          normalized = path.resolve(folderPath);
-        }
-        return normalized in data.projects;
-      }
-    }
-  } catch {
-    /* registry unreadable — fall through */
-  }
-
-  return false;
+  return ProjectRegistry.inspect(folderPath).registered;
 }
 
 /**

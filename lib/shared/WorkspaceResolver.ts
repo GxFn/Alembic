@@ -11,11 +11,40 @@
  * projectRoot 始终指向真实项目目录（用于代码分析、AST 解析等）。
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 import type { AlembicFolderNames, PartialAlembicFolderNames } from './folder-names.js';
 import { resolveFolderNames } from './folder-names.js';
 import { detectKnowledgeBaseDir, SPEC_FILENAME } from './ProjectMarkers.js';
-import { getGhostWorkspaceDir, ProjectRegistry } from './ProjectRegistry.js';
+import {
+  getGhostWorkspaceDir,
+  ProjectRegistry,
+  type ProjectRegistryInspection,
+  type WorkspaceMode,
+} from './ProjectRegistry.js';
+
+export interface WorkspaceFacts {
+  targetProjectRoot: string;
+  projectRealpath: string;
+  registryPath: string;
+  registered: boolean;
+  mode: WorkspaceMode;
+  ghost: boolean;
+  projectId: string | null;
+  expectedProjectId: string;
+  dataRoot: string;
+  dataRootSource: 'project-root' | 'ghost-registry';
+  workspaceExists: boolean;
+  ghostMarker: ProjectRegistryInspection['ghostMarker'];
+  runtimeDir: string;
+  databasePath: string;
+  knowledgeBaseDir: string;
+  knowledgeDir: string;
+  recipesDir: string;
+  skillsDir: string;
+  candidatesDir: string;
+  wikiDir: string;
+}
 
 export class WorkspaceResolver {
   /** 真实项目根目录（用于代码分析） */
@@ -49,10 +78,11 @@ export class WorkspaceResolver {
     this.knowledgeBaseDir =
       opts.knowledgeBaseDir ??
       detectKnowledgeBaseDir(this.projectRoot, this.folderNames.project.knowledgeBase);
+    const inspection = ProjectRegistry.inspect(this.projectRoot);
 
     if (this.ghost) {
       // Ghost 模式：从 ProjectRegistry 查 ID 或用显式传入的 ID
-      this.projectId = opts.projectId ?? ProjectRegistry.get(this.projectRoot)?.id ?? null;
+      this.projectId = opts.projectId ?? inspection.projectId ?? null;
       if (!this.projectId) {
         throw new Error(
           `[WorkspaceResolver] Ghost 模式需要项目已注册。请先运行 alembic setup --ghost`
@@ -73,13 +103,43 @@ export class WorkspaceResolver {
     projectRoot: string,
     opts: { folderNames?: PartialAlembicFolderNames } = {}
   ): WorkspaceResolver {
-    const entry = ProjectRegistry.get(projectRoot);
+    const inspection = ProjectRegistry.inspect(projectRoot);
     return new WorkspaceResolver({
       projectRoot,
-      ghost: entry?.ghost ?? false,
-      projectId: entry?.id,
+      ghost: inspection.ghost,
+      projectId: inspection.projectId ?? undefined,
       folderNames: opts.folderNames,
     });
+  }
+
+  /**
+   * 生成 N0-data-location 可直接记录的路径事实。
+   * projectRoot 始终是源码位置；dataRoot 是运行时和知识库写入边界。
+   */
+  toFacts(): WorkspaceFacts {
+    const inspection = ProjectRegistry.inspect(this.projectRoot);
+    return {
+      targetProjectRoot: this.projectRoot,
+      projectRealpath: inspection.projectRealpath,
+      registryPath: inspection.registryPath,
+      registered: inspection.registered,
+      mode: this.ghost ? 'ghost' : 'standard',
+      ghost: this.ghost,
+      projectId: this.projectId,
+      expectedProjectId: inspection.expectedProjectId,
+      dataRoot: this.dataRoot,
+      dataRootSource: this.ghost ? 'ghost-registry' : 'project-root',
+      workspaceExists: fs.existsSync(this.dataRoot),
+      ghostMarker: this.ghost ? inspection.ghostMarker : null,
+      runtimeDir: this.runtimeDir,
+      databasePath: this.databasePath,
+      knowledgeBaseDir: this.knowledgeBaseDir,
+      knowledgeDir: this.knowledgeDir,
+      recipesDir: this.recipesDir,
+      skillsDir: this.skillsDir,
+      candidatesDir: this.candidatesDir,
+      wikiDir: this.wikiDir,
+    };
   }
 
   // ─── 运行时路径（.asd/ 下） ──────────────────────

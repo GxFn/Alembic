@@ -70,9 +70,18 @@ type DataLocationEvidence = {
   isAlembicDevRepo: boolean;
   isExcludedProject: boolean;
   registryPath: string;
+  registered: boolean;
+  mode: string;
+  ghost: boolean;
+  projectId: string;
+  expectedProjectId: string;
   dataRoot: string;
+  dataRootSource: string;
+  workspaceExists: boolean;
+  ghostMarker: unknown;
   runtimeDir: string;
   databasePath: string;
+  knowledgeBaseDir: string;
   knowledgeDir: string;
   skillsDir: string;
   candidatesDir: string;
@@ -241,9 +250,18 @@ describe('progressive-chain-validation internal skill', () => {
     evidence.isAlembicDevRepo = isAlembicDevRepo(PACKAGE_ROOT);
     evidence.isExcludedProject = exclusion.excluded;
     evidence.registryPath = 'n/a';
+    evidence.registered = false;
+    evidence.mode = 'standard';
+    evidence.ghost = false;
+    evidence.projectId = 'n/a';
+    evidence.expectedProjectId = 'n/a';
     evidence.dataRoot = 'n/a';
+    evidence.dataRootSource = 'project-root';
+    evidence.workspaceExists = false;
+    evidence.ghostMarker = null;
     evidence.runtimeDir = 'n/a';
     evidence.databasePath = 'n/a';
+    evidence.knowledgeBaseDir = 'Alembic';
     evidence.knowledgeDir = 'n/a';
     evidence.skillsDir = 'n/a';
     evidence.candidatesDir = 'n/a';
@@ -300,7 +318,14 @@ describe('progressive-chain-validation internal skill', () => {
       projectRealpath,
       isAlembicDevRepo: true,
       isExcludedProject: true,
+      registered: false,
+      mode: 'standard',
+      ghost: false,
+      projectId: 'n/a',
       dataRoot: 'n/a',
+      dataRootSource: 'project-root',
+      workspaceExists: false,
+      ghostMarker: null,
       writeMode: 'read-only',
       runtimeWritesAllowed: false,
       decision: 'pass',
@@ -357,6 +382,10 @@ describe('progressive-chain-validation internal skill', () => {
     expect(JSON.parse(manifestTemplate)).toMatchObject({ currentNode: 'N0-data-location' });
     expect(JSON.parse(n0EvidenceTemplate)).toMatchObject({
       nodeId: 'N0-data-location',
+      mode: 'standard',
+      dataRootSource: 'project-root',
+      workspaceExists: false,
+      ghostMarker: null,
       writeMode: 'read-only',
       runtimeWritesAllowed: false,
     });

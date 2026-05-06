@@ -16,14 +16,36 @@ import path from 'node:path';
 import type { WriteZone } from '../infrastructure/io/WriteZone.js';
 import { DEFAULT_FOLDER_NAMES } from './folder-names.js';
 
-const USER_HOME = process.env.HOME || process.env.USERPROFILE || '';
-const REGISTRY_DIR = path.join(USER_HOME, DEFAULT_FOLDER_NAMES.global.root);
-const REGISTRY_PATH = path.join(REGISTRY_DIR, 'projects.json');
+export type WorkspaceMode = 'standard' | 'ghost';
+
+export interface GhostMarker {
+  kind: 'project-registry';
+  registryPath: string;
+  projectRoot: string;
+  projectId: string;
+}
 
 export interface ProjectEntry {
   id: string;
   ghost: boolean;
   createdAt: string;
+}
+
+export interface ProjectRegistryInspection {
+  inputProjectRoot: string;
+  projectRoot: string;
+  projectRealpath: string;
+  registryPath: string;
+  registered: boolean;
+  entry: ProjectEntry | null;
+  mode: WorkspaceMode;
+  ghost: boolean;
+  projectId: string | null;
+  expectedProjectId: string;
+  dataRoot: string;
+  dataRootSource: 'project-root' | 'ghost-registry';
+  workspaceExists: boolean;
+  ghostMarker: GhostMarker | null;
 }
 
 interface RegistryData {
@@ -35,7 +57,27 @@ interface RegistryData {
  * 为项目路径生成稳定的短 ID
  * 使用 realpath 规范化，避免符号链接导致重复注册
  */
-function generateProjectId(projectRoot: string): string {
+function getUserHome(): string {
+  return process.env.ALEMBIC_HOME || process.env.HOME || process.env.USERPROFILE || '';
+}
+
+export function getProjectRegistryDir(): string {
+  return path.join(getUserHome(), DEFAULT_FOLDER_NAMES.global.root);
+}
+
+export function getProjectRegistryPath(): string {
+  return path.join(getProjectRegistryDir(), 'projects.json');
+}
+
+export function normalizeProjectPath(projectRoot: string): string {
+  try {
+    return fs.realpathSync(projectRoot);
+  } catch {
+    return path.resolve(projectRoot);
+  }
+}
+
+export function generateProjectId(projectRoot: string): string {
   let normalized: string;
   try {
     normalized = fs.realpathSync(projectRoot);
@@ -47,8 +89,9 @@ function generateProjectId(projectRoot: string): string {
 
 function loadRegistry(): RegistryData {
   try {
-    if (fs.existsSync(REGISTRY_PATH)) {
-      const raw = fs.readFileSync(REGISTRY_PATH, 'utf-8');
+    const registryPath = getProjectRegistryPath();
+    if (fs.existsSync(registryPath)) {
+      const raw = fs.readFileSync(registryPath, 'utf-8');
       const data = JSON.parse(raw) as RegistryData;
       if (data.version === 1 && data.projects) {
         return data;
@@ -64,17 +107,18 @@ function saveRegistry(data: RegistryData, wz?: WriteZone): void {
   if (wz) {
     wz.writeFile(wz.global('projects.json'), JSON.stringify(data, null, 2));
   } else {
-    if (!fs.existsSync(REGISTRY_DIR)) {
-      fs.mkdirSync(REGISTRY_DIR, { recursive: true, mode: 0o700 });
+    const registryDir = getProjectRegistryDir();
+    if (!fs.existsSync(registryDir)) {
+      fs.mkdirSync(registryDir, { recursive: true, mode: 0o700 });
     }
-    fs.writeFileSync(REGISTRY_PATH, JSON.stringify(data, null, 2), { mode: 0o600 });
+    fs.writeFileSync(getProjectRegistryPath(), JSON.stringify(data, null, 2), { mode: 0o600 });
   }
 }
 
 /** 获取 Ghost 模式的外置工作区根目录 */
 export function getGhostWorkspaceDir(projectId: string): string {
   return path.join(
-    USER_HOME,
+    getUserHome(),
     DEFAULT_FOLDER_NAMES.global.root,
     DEFAULT_FOLDER_NAMES.global.workspaces,
     projectId
@@ -88,8 +132,49 @@ export const ProjectRegistry = {
    */
   get(projectRoot: string): ProjectEntry | null {
     const data = loadRegistry();
-    const normalized = normalizePath(projectRoot);
+    const normalized = normalizeProjectPath(projectRoot);
     return data.projects[normalized] ?? null;
+  },
+
+  /**
+   * 返回项目的 Ghost/标准模式判定事实。
+   * 这是诊断、N0-data-location 和 resolver 的统一来源，避免手写解析 projects.json。
+   */
+  inspect(projectRoot: string): ProjectRegistryInspection {
+    const inputProjectRoot = path.resolve(projectRoot);
+    const projectRealpath = normalizeProjectPath(projectRoot);
+    const data = loadRegistry();
+    const entry = data.projects[projectRealpath] ?? null;
+    const ghost = entry?.ghost === true;
+    const projectId = entry?.id ?? null;
+    const dataRoot = ghost && projectId ? getGhostWorkspaceDir(projectId) : inputProjectRoot;
+    const registryPath = getProjectRegistryPath();
+    const expectedProjectId = generateProjectId(projectRoot);
+
+    return {
+      inputProjectRoot,
+      projectRoot: inputProjectRoot,
+      projectRealpath,
+      registryPath,
+      registered: entry !== null,
+      entry,
+      mode: ghost ? 'ghost' : 'standard',
+      ghost,
+      projectId,
+      expectedProjectId,
+      dataRoot,
+      dataRootSource: ghost ? 'ghost-registry' : 'project-root',
+      workspaceExists: fs.existsSync(dataRoot),
+      ghostMarker:
+        ghost && projectId
+          ? {
+              kind: 'project-registry',
+              registryPath,
+              projectRoot: projectRealpath,
+              projectId,
+            }
+          : null,
+    };
   },
 
   /**
@@ -98,7 +183,7 @@ export const ProjectRegistry = {
    */
   register(projectRoot: string, ghost: boolean, writeZone?: WriteZone): ProjectEntry {
     const data = loadRegistry();
-    const normalized = normalizePath(projectRoot);
+    const normalized = normalizeProjectPath(projectRoot);
 
     const existing = data.projects[normalized];
     if (existing) {
@@ -122,7 +207,7 @@ export const ProjectRegistry = {
    */
   unregister(projectRoot: string, writeZone?: WriteZone): boolean {
     const data = loadRegistry();
-    const normalized = normalizePath(projectRoot);
+    const normalized = normalizeProjectPath(projectRoot);
     if (data.projects[normalized]) {
       delete data.projects[normalized];
       saveRegistry(data, writeZone);
@@ -145,11 +230,11 @@ export const ProjectRegistry = {
    * @returns 工作区目录路径（仅 Ghost 模式项目），或 null
    */
   getWorkspaceDir(projectRoot: string): string | null {
-    const entry = this.get(projectRoot);
-    if (!entry?.ghost) {
+    const inspection = this.inspect(projectRoot);
+    if (!inspection.ghost) {
       return null;
     }
-    return getGhostWorkspaceDir(entry.id);
+    return inspection.dataRoot;
   },
 
   /**
@@ -163,13 +248,5 @@ export const ProjectRegistry = {
     }));
   },
 };
-
-function normalizePath(p: string): string {
-  try {
-    return fs.realpathSync(p);
-  } catch {
-    return path.resolve(p);
-  }
-}
 
 export default ProjectRegistry;

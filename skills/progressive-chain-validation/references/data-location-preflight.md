@@ -14,9 +14,19 @@ Record these fields in `evidence/N0-data-location.json`:
   "isExcludedProject": false,
   "registryPath": "/Users/example/.asd/projects.json",
   "registered": true,
+  "mode": "ghost",
   "ghost": true,
   "projectId": "project-id",
+  "expectedProjectId": "project-id",
   "dataRoot": "/Users/example/.asd/workspaces/project-id",
+  "dataRootSource": "ghost-registry",
+  "workspaceExists": true,
+  "ghostMarker": {
+    "kind": "project-registry",
+    "registryPath": "/Users/example/.asd/projects.json",
+    "projectRoot": "/absolute/realpath/to/target-project",
+    "projectId": "project-id"
+  },
   "runtimeDir": "/Users/example/.asd/workspaces/project-id/.asd",
   "databasePath": "/Users/example/.asd/workspaces/project-id/.asd/alembic.db",
   "knowledgeBaseDir": "Alembic",
@@ -36,6 +46,7 @@ Record these fields in `evidence/N0-data-location.json`:
 - Do not store `~`, `$HOME`, or relative paths as evidence values.
 - `projectRoot` is the real source project used for code analysis.
 - `dataRoot` is the root for runtime data and knowledge writes.
+- `mode`, `dataRootSource`, and `ghostMarker` must come from `ProjectRegistry.inspect()` / `WorkspaceResolver.toFacts()`, not from project file type guessing.
 - In Ghost mode, `dataRoot` must not equal `projectRoot`.
 - If `targetProjectRoot` is the Alembic development repository, block user-runtime writes.
 - Continue only after the path facts are clear and the write boundary is acceptable.
