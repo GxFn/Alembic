@@ -3,6 +3,51 @@
   "runId": "<pcv-YYYYMMDD-HHMM-target-slug>",
   "target": "<workflow-or-feature>",
   "statusValues": ["pending", "running", "pass", "fail", "blocked", "skipped"],
+  "planGeneration": {
+    "sourceFirst": true,
+    "requiredArtifacts": ["report/plan.md", "evidence/chain-map.json", "report/plan-alignment.md", "report/skill-review.md"],
+    "analysisSteps": [
+      "locate entry points from code, tests, routes, handlers, commands, or failing output",
+      "follow the call path across imports, dependency injection, task scheduling, and event dispatch",
+      "identify input, state, algorithm, async, external, persistence, cleanup, report, and observability boundaries",
+      "declare executor scope before choosing commands: internal-agent, external-agent, dashboard, cli, mcp-public, or mcp-internal",
+      "record branches and degradation paths such as skip flags, async dispatch, cancellation, unavailable services, mock modes, and alternate routes",
+      "list side effects, artifact producers, existing tests, and observability gaps before command execution",
+      "derive nodes from stop conditions and evidence surfaces before applying reference protocols",
+      "render a self-contained report/plan.md with analysis narrative, node cut strategy, expanded node sections, variant orders, benchmark review, node-to-test coverage map, expansion strategy, and full-run readiness gate"
+    ],
+    "nodeDerivationRules": [
+      "create a node when a boundary changes semantic input, durable state, execution surface, side effects, dependent artifacts, async flow, or known defect risk",
+      "create or split a node when a branch can skip, block, or degrade later nodes while the current command returns success",
+      "each derived node must have a source boundary, stop condition, evidence surface, pass criteria, failure classes, first repair target, recheck standard, and advance rule",
+      "split broad phases when one command success could hide multiple independent invariants",
+      "merge only when adjacent boundaries always fail and repair together and cannot be stopped independently"
+    ],
+    "referenceAlignmentRules": [
+      "reference documents and domain protocols are coverage oracles, not substitutes for source analysis",
+      "compare each reference requirement as covered, split, merged, missing, not-applicable, or conditional",
+      "fill missing coverage by adding a source-derived node, focused test, or observability step before broad execution",
+      "do not mark a node passed until its own source evidence satisfies its pass criteria"
+    ]
+  },
+  "granularity": {
+    "minimumNodesForLongChain": 10,
+    "planningRule": "Build a code-derived chain map before applying target documents, domain overlays, or broad workflow commands.",
+    "antiPattern": "Do not replace node-by-node validation with a single smoke command or one end-to-end run.",
+    "sourceBoundaryRule": "Split source boundaries that can stop, fail, skip, degrade, write, persist, dispatch asynchronously, call an agent/model, or produce artifacts independently.",
+    "overlayRule": "Domain overlays are optional coverage oracles selected after source analysis; they cannot replace source-derived stop conditions or pass nodes without evidence.",
+    "branchRule": "Skipped, mocked, degraded, or alternate-route branches need explicit downstream impact before later nodes can be scoped or skipped.",
+    "scopeExpansionRule": "Each expansion changes one variable at a time: dimensions, maxFiles, terminal toolset, provider mode, or wait behavior.",
+    "domainOverlays": [
+      {
+        "id": "<overlay-id-or-none>",
+        "path": "<optional-skill-reference-or-target-doc>",
+        "loadWhen": "<source-chain-or-user-request-indicates-domain>",
+        "alignmentRequired": true,
+        "statusValues": ["covered", "split", "merged", "missing", "not-applicable", "conditional"]
+      }
+    ]
+  },
   "writeBoundary": {
     "targetProjectRoot": "<absolute-path-or-n/a>",
     "dataRoot": "<absolute-path-or-n/a>",
@@ -48,6 +93,13 @@
     "running -> pass when all passCriteria are satisfied by evidence",
     "running -> fail when evidence falsifies the node hypothesis and a focused repair is possible",
     "running -> blocked when required data, approval, or safe command scope is missing",
-    "fail -> running only after recording the repair attempt and rerun command"
+    "fail -> running only after recording the repair attempt and rerun command",
+    "a later broad command cannot pass an earlier node; each node needs its own source evidence",
+    "reference documents cannot pass nodes by themselves; they only reveal missing coverage or stricter criteria",
+    "a skipped, mocked, or degraded branch cannot pass downstream nodes unless the node plan explicitly scopes that branch as the target",
+    "scope expansion changes one variable at a time: dimensions, maxFiles, terminal toolset, provider mode, or wait behavior",
+    "report/plan.md must contain expanded node sections before a broad workflow command can be treated as execution-ready",
+    "async workflows must distinguish skeleton-only observation from full async execution before downstream nodes can pass",
+    "expansion nodes must change only one variable after focused validation passes"
   ]
 }

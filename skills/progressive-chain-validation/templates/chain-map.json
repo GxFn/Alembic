@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "runId": "<pcv-YYYYMMDD-HHMM-target-slug>",
+  "target": "<workflow-or-feature>",
+  "sourceFirst": true,
+  "sourceInputs": {
+    "entryHints": [],
+    "executorScope": "<internal-agent|external-agent|dashboard|cli|mcp-public|mcp-internal|mixed|unknown>",
+    "targetDocuments": [],
+    "failingOutputs": [],
+    "existingTests": []
+  },
+  "entryPoints": [
+    {
+      "id": "<entry-id>",
+      "kind": "cli|http|mcp|dashboard|service|agent-tool|test|unknown",
+      "file": "<repo-relative-path>",
+      "symbol": "<symbol-or-n/a>",
+      "inputModel": "<request-or-intent>",
+      "sideEffects": []
+    }
+  ],
+  "callPath": [
+    {
+      "order": 1,
+      "from": "<entry-or-symbol>",
+      "to": "<next-symbol>",
+      "file": "<repo-relative-path>",
+      "reason": "<why-this-hop-matters>"
+    }
+  ],
+  "stateBoundaries": [
+    {
+      "id": "B1",
+      "name": "<boundary-name>",
+      "kind": "input|state|algorithm|async|external|persistence|cleanup|report|observability",
+      "ownerFile": "<repo-relative-path>",
+      "ownerSymbol": "<symbol-or-n/a>",
+      "stopCondition": "<how-to-stop-or-inspect-here>",
+      "observableEvidence": [],
+      "firstRepairTarget": "<file-or-module>",
+      "nodeCandidate": "<node-id>"
+    }
+  ],
+  "sideEffects": [
+    {
+      "kind": "filesystem|database|model|terminal|network|process|memory|none",
+      "boundary": "<boundary-id>",
+      "target": "<path-service-or-n/a>",
+      "writeBoundary": "<allowed-root-or-n/a>",
+      "approvalRequired": false
+    }
+  ],
+  "branches": [
+    {
+      "id": "<branch-id>",
+      "boundary": "<boundary-id>",
+      "trigger": "<flag-route-state-or-condition>",
+      "effect": "<which-nodes-continue-skip-block-or-degrade>",
+      "evidence": "<log-status-field-artifact-or-test>",
+      "decision": "pass-current-node|block-later-nodes|separate-plan|required-observation"
+    }
+  ],
+  "degradationPaths": [
+    {
+      "id": "<degradation-id>",
+      "boundary": "<boundary-id>",
+      "condition": "<missing-service-timeout-mock-mode-or-fallback>",
+      "expectedBehavior": "<skip-block-retry-or-graceful-degrade>",
+      "evidence": "<how-to-prove-this-path>",
+      "downstreamImpact": "<nodes-that-cannot-be-marked-pass>"
+    }
+  ],
+  "artifactSurfaces": [
+    {
+      "artifact": "<log-json-db-report-snapshot-or-state>",
+      "producerBoundary": "<boundary-id>",
+      "validationMethod": "<command-file-read-db-query-or-test>",
+      "requiredForNodes": []
+    }
+  ],
+  "observabilityGaps": [
+    {
+      "boundary": "<boundary-id>",
+      "missingEvidence": "<what-cannot-be-proven-yet>",
+      "firstObservationRepair": "<log-report-field-test-hook-or-parser>"
+    }
+  ],
+  "derivedNodes": [
+    {
+      "id": "<node-id>",
+      "sourceBoundary": "<boundary-id>",
+      "purpose": "<what-this-node-proves>",
+      "stopCondition": "<where-this-round-stops>",
+      "evidence": [],
+      "passCriteria": [],
+      "failureClasses": ["input", "state", "algorithm", "async", "external", "persistence", "observability"],
+      "firstRepairTarget": "<file-or-module>"
+    }
+  ],
+  "referenceAlignment": [
+    {
+      "reference": "<document-or-protocol>",
+      "referenceNode": "<reference-section-or-node>",
+      "derivedNode": "<node-id-or-n/a>",
+      "status": "covered|split|merged|missing|not-applicable|conditional",
+      "action": "<keep-add-split-merge-block-or-explain>"
+    }
+  ],
+  "decision": "ready|blocked",
+  "notes": []
+}

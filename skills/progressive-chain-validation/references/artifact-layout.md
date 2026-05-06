@@ -9,6 +9,8 @@ scratch/chain-runs/<run-id>/
   manifest.json
   report/
     plan.md
+    plan-alignment.md
+    skill-review.md
     nodes.json
     rounds/
       N0-data-location.md
@@ -18,6 +20,7 @@ scratch/chain-runs/<run-id>/
     final-report.md
     handoff.md
   evidence/
+    chain-map.json
     N0-data-location.json
   logs/
   fixtures/
@@ -29,6 +32,8 @@ scratch/chain-runs/<run-id>/
 ## Rules
 
 - `manifest.json` contains run id, target, owner, startedAt, status, and the safe write boundary.
+- `report/plan.md` is the primary self-contained execution plan: source narrative, node cuts, variants, expanded node sections, branch impacts, and full-run readiness.
+- `report/skill-review.md` records benchmark fit and any Skill/template/overlay changes discovered by plan generation.
 - `report/` contains human-readable state and handoff notes.
 - `evidence/` contains structured facts and machine-checkable outputs.
 - `command-output/` contains trimmed command output when it is too long for reports.
@@ -36,7 +41,8 @@ scratch/chain-runs/<run-id>/
 - Do not write run artifacts to `docs-dev/`.
 - Do not write run artifacts to this internal Skill directory.
 - Do not use `scratch/chain-runs/` as a user project runtime data root.
-- For startup, copy or render `templates/manifest.json`, `templates/nodes.json`, `templates/plan.md`, `templates/commands.md`, and `templates/N0-data-location.json` before marking `N0-data-location` complete.
+- `report/plan-alignment.md` records target documents and any selected domain overlays using `covered`, `split`, `merged`, `missing`, `not-applicable`, and `conditional` statuses.
+- For startup, copy or render the manifest, node state, chain map, plan, alignment, skill review, command log, and N0 evidence templates before marking `N0-data-location` complete. Fill `report/plan.md` to the plan-quality standard before broad workflow execution.
 
 ## Run ID
 

@@ -62,6 +62,18 @@ When validating Alembic itself, derive the dev-repo facts from source markers be
 
 For external projects, record the realpath and whether Ghost mode maps runtime data to a separate `dataRoot`.
 
+## Isolated Real-Project Runs
+
+When validating against a real external project, prefer an isolated runtime before touching the user's live Ghost workspace:
+
+1. Create `scratch/chain-runs/<run-id>/isolated-home`.
+2. Set `ALEMBIC_HOME` to that isolated home for the validation process.
+3. Register the real project in Ghost mode inside that temporary registry.
+4. Record `registryPath`, `dataRoot`, `runtimeDir`, `databasePath`, and `knowledgeDir` from `ProjectRegistry.inspect()` and `WorkspaceResolver.toFacts()`.
+5. Mark `writeMode` as `isolated-ghost-runtime` and note that the real source tree is read-only for the run.
+
+This validates real source scanning and runtime write boundaries without mutating the user's live `~/.asd/workspaces/<project-id>` data. If the objective is to validate the live workspace itself, record that as a separate write boundary and ask before destructive cleanup.
+
 ## N0 Decision
 
 - Pass when every path is absolute or explicitly `n/a`, and the write boundary is safe.
