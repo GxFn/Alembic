@@ -44,6 +44,33 @@ describe('WorkflowCompletionFinalizer', () => {
     expect(scheduled).toHaveLength(2);
   });
 
+  test('can skip target delivery and wiki while keeping scheduled semantic memory', async () => {
+    const events: string[] = [];
+    const scheduled: Array<() => Promise<void>> = [];
+
+    const result = await runWorkflowCompletionFinalizer({
+      ctx: { container: { get: () => undefined } },
+      session: { id: 'session-1' },
+      projectRoot: process.cwd(),
+      dataRoot: process.cwd(),
+      log: { info: vi.fn(), warn: vi.fn() },
+      dependencies: {
+        getServiceContainer: () => createContainer(events),
+        scheduleTask: (task) => scheduled.push(task),
+      },
+      steps: { delivery: 'skip', wiki: 'skip' },
+    });
+
+    expect(events).toEqual(['panorama:rescan', 'panorama:overview']);
+    expect(scheduled).toHaveLength(1);
+    expect(result).toMatchObject({
+      deliveryVerification: null,
+      deliveryStatus: 'skipped',
+      wikiStatus: 'skipped',
+      panoramaStatus: 'completed',
+    });
+  });
+
   test('internal finalizer delegates completion side effects to workflow finalizer', () => {
     const source = readFileSync(
       join(
@@ -91,6 +118,26 @@ describe('WorkflowCompletionFinalizer', () => {
       delivery: { status: 'completed' },
       wiki: { status: 'scheduled' },
       semanticMemory: { status: 'completed' },
+    });
+  });
+
+  test('summarizes skipped bootstrap delivery and wiki from finalizer result', () => {
+    expect(
+      buildInternalDimensionCompletionSummary({
+        pipelineMode: 'bootstrap',
+        workflowCompletion: {
+          deliveryVerification: null,
+          semanticMemoryResult: null,
+          deliveryStatus: 'skipped',
+          wikiStatus: 'skipped',
+        },
+      })
+    ).toMatchObject({
+      mode: 'bootstrap',
+      isolation: 'full-completion',
+      delivery: { status: 'skipped' },
+      wiki: { status: 'skipped' },
+      semanticMemory: { status: 'skipped' },
     });
   });
 

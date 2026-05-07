@@ -4,7 +4,7 @@
 
 ## Required Facts
 
-Record these fields in `evidence/N0-data-location.json`:
+Record these fields in the N0 data-location section of `report/plan.md`. Use an attachment only if the path fact payload is too large to keep readable:
 
 ```json
 {
@@ -42,7 +42,7 @@ Record these fields in `evidence/N0-data-location.json`:
 
 ## Rules
 
-- Store expanded absolute paths in structured evidence.
+- Store expanded absolute paths in the plan's N0 evidence table or in a linked attachment.
 - Do not store `~`, `$HOME`, or relative paths as evidence values.
 - `projectRoot` is the real source project used for code analysis.
 - `dataRoot` is the root for runtime data and knowledge writes.

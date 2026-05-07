@@ -78,6 +78,7 @@ export async function finalizeInternalDimensionFill({
         getServiceContainer: () => preparation.ctx.container,
       },
       semanticMemory: { mode: 'immediate' },
+      steps: preparation.skipTargetDelivery ? { delivery: 'skip', wiki: 'skip' } : undefined,
       shouldAbort,
     });
   }
@@ -143,10 +144,12 @@ export function buildInternalDimensionCompletionSummary({
     mode: 'bootstrap',
     isolation: 'full-completion',
     delivery: {
-      status: workflowCompletion.deliveryVerification ? 'completed' : 'skipped',
+      status:
+        workflowCompletion.deliveryStatus ??
+        (workflowCompletion.deliveryVerification ? 'completed' : 'skipped'),
       verification: workflowCompletion.deliveryVerification,
     },
-    wiki: { status: 'scheduled' },
+    wiki: { status: workflowCompletion.wikiStatus ?? 'scheduled' },
     semanticMemory: {
       status: workflowCompletion.semanticMemoryResult ? 'completed' : 'skipped',
       result: workflowCompletion.semanticMemoryResult,

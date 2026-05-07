@@ -79,6 +79,12 @@ export interface WorkflowCompletionFinalizerDependencies {
 
 export type WorkflowSemanticMemoryMode = 'scheduled' | 'immediate' | 'skip';
 
+export interface WorkflowCompletionStepOptions {
+  delivery?: 'run' | 'skip';
+  wiki?: 'schedule' | 'skip';
+  panorama?: 'run' | 'skip';
+}
+
 export interface WorkflowSemanticMemoryConsolidationResult {
   total: { added: number; updated: number; merged: number; skipped: number };
   durationMs: number;
@@ -90,6 +96,9 @@ export interface WorkflowCompletionFinalizerResult {
     | import('#service/bootstrap/DeliveryVerifier.js').DeliveryVerification
     | null;
   semanticMemoryResult: WorkflowSemanticMemoryConsolidationResult | null;
+  deliveryStatus?: WorkflowCompletionStepStatus;
+  wikiStatus?: WorkflowCompletionStepStatus;
+  panoramaStatus?: WorkflowCompletionStepStatus;
 }
 
 export type WorkflowCompletionStepStatus = 'completed' | 'scheduled' | 'skipped';

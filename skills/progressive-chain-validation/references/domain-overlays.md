@@ -32,10 +32,10 @@ An overlay must not:
 
 ## Selection Procedure
 
-1. Complete `evidence/chain-map.json` with source entry points, call path, side effects, branches, and proposed nodes.
+1. Complete the plan's Source Chain Map section with source entry points, call path, side effects, branches, and proposed nodes.
 2. List candidate overlays in `report/plan.md` with `selected`, `not-selected`, or `blocked` status.
 3. Load only selected overlays.
-4. Compare every overlay requirement in `report/plan-alignment.md` using `covered`, `split`, `merged`, `missing`, `not-applicable`, or `conditional`.
+4. Compare every overlay requirement in the plan's Reference Alignment section using `covered`, `split`, `merged`, `missing`, `not-applicable`, or `conditional`.
 5. Render selected overlay requirements into expanded `report/plan.md` node sections; do not leave them only inside the overlay file.
 6. Add source-derived nodes, focused tests, or observability work for missing coverage before broad execution.
 7. Record why any overlay item is not applicable.

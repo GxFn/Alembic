@@ -210,6 +210,7 @@ export async function runInternalColdStartWorkflow(
         targetFileMap,
         projectRoot,
         mode: 'bootstrap',
+        skipTargetDelivery: intent.internalExecution?.skipTargetDelivery === true,
       },
       dimensions,
       logPrefix: 'Bootstrap',

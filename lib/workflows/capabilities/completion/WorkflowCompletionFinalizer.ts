@@ -14,12 +14,14 @@ import type {
   ShouldAbortFn,
   WorkflowCompletionFinalizerDependencies,
   WorkflowCompletionFinalizerResult,
+  WorkflowCompletionStepOptions,
   WorkflowSemanticMemoryMode,
 } from '#workflows/capabilities/completion/WorkflowCompletionTypes.js';
 
 export type {
   WorkflowCompletionFinalizerDependencies,
   WorkflowCompletionFinalizerResult,
+  WorkflowCompletionStepOptions,
   WorkflowCompletionSummary,
   WorkflowSemanticMemoryConsolidationResult,
   WorkflowSemanticMemoryMode,
@@ -35,6 +37,7 @@ export async function runWorkflowCompletionFinalizer({
   log = logger,
   dependencies = {},
   semanticMemory = {},
+  steps = {},
   shouldAbort,
 }: {
   ctx: CompletionContextLike;
@@ -44,25 +47,61 @@ export async function runWorkflowCompletionFinalizer({
   log?: CompletionLogger;
   dependencies?: WorkflowCompletionFinalizerDependencies;
   semanticMemory?: { mode?: WorkflowSemanticMemoryMode };
+  steps?: WorkflowCompletionStepOptions;
   shouldAbort?: ShouldAbortFn;
 }): Promise<WorkflowCompletionFinalizerResult> {
   const getServiceContainer = dependencies.getServiceContainer ?? defaultGetServiceContainer;
   const scheduleTask = dependencies.scheduleTask ?? defaultScheduleTask;
   const semanticMemoryMode = semanticMemory.mode ?? 'scheduled';
+  const deliveryMode = steps.delivery ?? 'run';
+  const panoramaMode = steps.panorama ?? 'run';
+  const wikiMode = steps.wiki ?? 'schedule';
 
   if (shouldAbort?.()) {
     log.info('[CompletionFinalizer] Aborted before delivery — user cancelled');
-    return { deliveryVerification: null, semanticMemoryResult: null };
+    return {
+      deliveryVerification: null,
+      semanticMemoryResult: null,
+      deliveryStatus: 'skipped',
+      wikiStatus: 'skipped',
+      panoramaStatus: 'skipped',
+    };
   }
-  await runCursorDelivery({ getServiceContainer, log });
-  const deliveryVerification = await verifyDelivery({ ctx, log });
-  await refreshPanorama({ getServiceContainer, log });
+  let deliveryVerification: WorkflowCompletionFinalizerResult['deliveryVerification'] = null;
+  let deliveryStatus: WorkflowCompletionFinalizerResult['deliveryStatus'] = 'skipped';
+  if (deliveryMode === 'run') {
+    await runCursorDelivery({ getServiceContainer, log });
+    deliveryVerification = await verifyDelivery({ ctx, log });
+    deliveryStatus = deliveryVerification ? 'completed' : 'skipped';
+  } else {
+    log.info('[CompletionFinalizer] Target delivery skipped by workflow option');
+  }
+
+  let panoramaStatus: WorkflowCompletionFinalizerResult['panoramaStatus'] = 'skipped';
+  if (panoramaMode === 'run') {
+    await refreshPanorama({ getServiceContainer, log });
+    panoramaStatus = 'completed';
+  } else {
+    log.info('[CompletionFinalizer] Panorama refresh skipped by workflow option');
+  }
 
   if (shouldAbort?.()) {
     log.info('[CompletionFinalizer] Aborted before wiki/memory — user cancelled');
-    return { deliveryVerification, semanticMemoryResult: null };
+    return {
+      deliveryVerification,
+      semanticMemoryResult: null,
+      deliveryStatus,
+      wikiStatus: 'skipped',
+      panoramaStatus,
+    };
   }
-  scheduleTask(() => generateWiki({ getServiceContainer, projectRoot, log }));
+  let wikiStatus: WorkflowCompletionFinalizerResult['wikiStatus'] = 'skipped';
+  if (wikiMode === 'schedule') {
+    scheduleTask(() => generateWiki({ getServiceContainer, projectRoot, log }));
+    wikiStatus = 'scheduled';
+  } else {
+    log.info('[CompletionFinalizer] Wiki generation skipped by workflow option');
+  }
   let semanticMemoryResult: WorkflowCompletionFinalizerResult['semanticMemoryResult'] = null;
   if (semanticMemoryMode === 'immediate') {
     if (!shouldAbort?.()) {
@@ -76,7 +115,7 @@ export async function runWorkflowCompletionFinalizer({
     }
   }
 
-  return { deliveryVerification, semanticMemoryResult };
+  return { deliveryVerification, semanticMemoryResult, deliveryStatus, wikiStatus, panoramaStatus };
 }
 
 async function defaultGetServiceContainer(): Promise<ServiceContainerLike> {

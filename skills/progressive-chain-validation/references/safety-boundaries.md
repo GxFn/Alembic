@@ -43,6 +43,19 @@ Before running a command, classify it:
 
 Only `read-only` and `local-check` are allowed by default in this repository. Everything else needs a recorded path boundary and, when applicable, explicit approval.
 
+## Terminal Stability Contract
+
+Before running a terminal command as node evidence, record these facts in `report/plan.md`:
+
+- Execution mode: `sync` only for short, bounded commands; `async` for servers, watchers, model-backed runs, wait-mode workflows, or commands with uncertain duration.
+- Timeout budget: every command needs a hard budget or an explicit async finish/readiness signal. Do not use unbounded `timeout=0` for tests, builds, broad workflow commands, or external-project validation.
+- Non-interactive guarantee: commands must pass flags or environment variables that prevent prompts. If a prompt appears, stop and collect the required value explicitly instead of leaving the terminal waiting.
+- Output policy: use concise reporters, filters, or an attachment file for bulky output; the plan stores the summary and the attachment path.
+- Exit evidence: capture a test summary or append an explicit exit marker such as `exit_code=$?; print "<node-id>-exit:$exit_code"; (( exit_code == 0 ))` when the tool output may be ambiguous. Avoid zsh special variables such as `status`, and do not close the persistent shell just to propagate an exit code.
+- Hang recovery: if output stalls past the budget, stop or kill the terminal, record the partial output, mark the current node `blocked` or `fail`, and create a smaller harness or observability repair before rerunning.
+
+Terminal commands are evidence transports, not proof by themselves. A command that times out or is cancelled cannot pass the node even if earlier lines look promising.
+
 ## Failure Handling
 
 - Keep failed command output with the node round, not only in the final report.

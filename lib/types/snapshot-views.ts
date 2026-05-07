@@ -70,6 +70,8 @@ export interface PipelineFillView {
   readonly rescanExecutionDecisions?: readonly KnowledgeRescanExecutionDecision[];
   /** 管线模式：'bootstrap'（默认）全量 finalize | 'rescan' 轻量收尾 */
   readonly mode?: PipelineMode;
+  /** 跳过会写入目标项目根目录的 Cursor/Wiki/Agent instruction 交付步骤 */
+  readonly skipTargetDelivery?: boolean;
 }
 
 // ─── 视图 1: toResponseData ──────────────────────────────────

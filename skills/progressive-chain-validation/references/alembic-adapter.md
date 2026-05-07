@@ -38,9 +38,10 @@ Use this order for most Alembic source-repo validation:
 1. Search for entry points, command handlers, services, and tests with read-only tools.
 2. Read the smallest set of source files that explain the current node.
 3. Define a focused verification command before editing.
-4. Apply the minimal code or Skill change for the current node.
-5. Run the focused command again.
-6. Broaden to typecheck, targeted unit tests, or build only when the node touches shared contracts.
+4. Give that command a terminal stability guard: bounded timeout, non-interactive flags, concise output, and explicit exit evidence when output may be truncated.
+5. Apply the minimal code or Skill change for the current node.
+6. Run the focused command again with the same guard.
+7. Broaden to typecheck, targeted unit tests, or build only when the node touches shared contracts.
 
 Do not begin with a full end-to-end user command from this repository. If a behavior requires CLI validation, use an external project path after `N0-data-location` records the write boundary.
 

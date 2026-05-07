@@ -1,6 +1,6 @@
 # Alembic Cold-start and Rescan Overlay
 
-Use this overlay for Alembic cold-start, bootstrap, rescan, Agent fill, persistence, finalizer, snapshot, report, or history validation after `evidence/chain-map.json` exists.
+Use this overlay for Alembic cold-start, bootstrap, rescan, Agent fill, persistence, finalizer, snapshot, report, or history validation after the plan's Source Chain Map section exists.
 
 This overlay is a coverage oracle, not a ready-made plan. The generated `report/plan.md` must still derive node cuts from source and must meet or exceed `docs-dev/bootstrap-rescan-chain-test-plan.md`.
 
@@ -9,7 +9,8 @@ This overlay is a coverage oracle, not a ready-made plan. The generated `report/
 - Declare executor scope before choosing commands. Public MCP `alembic_bootstrap` follows the external-agent path; CLI cold-start, Dashboard bootstrap operations, and `bootstrap-internal` validate internal auto-fill behavior.
 - Treat `skipAsyncFill=true` as skeleton-only evidence. It can prove cleanup, scan, snapshot, dimension planning, session, and task creation, but not async dispatch, stage factory, analyze, produce, persistence consumers, finalizer, or report-history nodes.
 - For pure full-reset cold-start plans, mark N5 rescan preservation as `not-applicable` and N10 evolve/prescreen as `conditional` unless the source path introduces existing recipe truth, decay, or prescreen input.
-- A broad smoke command or full run can provide observation evidence, but it cannot mark multiple nodes as passed.
+- A broad smoke command or full run can provide observation evidence, but it cannot mark multiple nodes as passed and must not replace current-node repair.
+- For external real-project validation, do not run a full `--wait` command that can reach delivery/wiki/agent-instruction writes until the plan has either proven no-target-write/dry-run routing, isolated delivery routing, or explicit approval for the exact target paths.
 
 ## Canonical Coverage Nodes
 
@@ -36,10 +37,14 @@ This overlay is a coverage oracle, not a ready-made plan. The generated `report/
 Cold-start full reset:
 N0 Ghost workspace -> N1 Bootstrap -> N2 cold-start intent -> N3 discovery -> N4 materialization -> N6 dimension plan -> N7 session/tasks -> N8 stage factory/tool policy -> N9 single-dimension analyze -> N11 single-dimension produce -> N12 persistence -> N13 finalizer -> N14 report/history/snapshot -> EXP-two-dimensions -> EXP-full-dimensions.
 
+Execute this order as a cursor, one node at a time. The order is not permission to run one `--wait` command through N14. If the only available command crosses N8-N14, first add a no-delivery/dry-run harness or mark the current node blocked with the missing stop point.
+
 Use N10 in cold-start only when existing recipe truth, decay, or prescreen/evolution behavior is in scope.
 
 Internal rescan:
 N0 Ghost workspace -> N1 Bootstrap -> N2 rescan intent -> N5 existing recipe snapshot and cleanup -> N3 rediscovery -> N4 rematerialization -> N6 rescan dimension plan -> N7 gap session tasks -> N8 stage factory/tool policy -> N10 evolve/prescreen -> N9 single gap-dimension analyze -> N11 produce -> N12 no duplicate healthy recipe -> N13 finalizer isolation -> N14 report/history/snapshot -> EXP-two-dimensions -> EXP-full-dimensions.
+
+Execute this order as a cursor, one node at a time. Existing-recipe fixture state and finalizer isolation must be proven before broad rescan confirmation.
 
 ## Mandatory Internal Source Splits
 
@@ -67,5 +72,52 @@ If any applicable source split is missing from the generated plan, mark the plan
 
 - Render every applicable canonical node and source split as an expanded `report/plan.md` section.
 - Keep node evidence concrete: logs, reports, DB rows, snapshots, task status, candidate files, or structured JSON.
+- Render benchmark-style operational guidance for every node. Preserve useful target-document checklists and source-align them to the real boundary before execution.
 - Prefer observability as the first optimization action when a failing invariant is ambiguous.
+- Give every node a smallest allowed command or harness and a list of forbidden broad commands.
+- Treat full `--wait` runs as final confirmation only after current-node validation has passed through delivery safety gates.
 - Each expansion node changes only one variable: dimensions, `maxFiles`, terminal toolset, provider mode, or wait/no-wait behavior.
+
+## Detailed Guidance Floors
+
+These floors are minimum guidance for generated Alembic cold-start/rescan plans. A source-derived plan may split or rename nodes, but it must preserve the concrete diagnostic power of the applicable floor.
+
+### N11 Produce Guidance Floor
+
+Goal: prove that Producer turns an analysis artifact into candidate output while respecting gap limits, dedup, schema, and tool boundaries.
+
+Execution range: advance only until Producer finishes and submits candidate digest; do not run final delivery, wiki, semantic memory, or report/history as proof for this node.
+
+Evidence checklist:
+
+- submitted, accepted, and rejected counts.
+- rejected reason for each rejected item.
+- candidate title, trigger, kind, and sourceRefs.
+- gap limit and remaining gap budget, especially in rescan mode.
+- duplicate title and duplicate trigger decisions.
+- Producer toolCalls and allowed tool ids.
+
+Pass standard:
+
+- Producer does not use terminal tools.
+- Rescan mode submits no more candidates than the gap permits.
+- Accepted candidates have sourceRefs that point to real target-project files.
+- Rejected candidates have actionable field-level reasons rather than vague schema failure.
+
+Failure taxonomy:
+
+- Submit schema is unclear or hidden from the Producer.
+- Analyst artifact cannot be produced into candidates.
+- Dedup set is too strict or too loose.
+- Producer continues exploration and wastes budget instead of producing.
+
+Optimization actions:
+
+- Tighten Producer prompt and submit schema guidance.
+- Expose concrete rejected field errors in Producer or consumer output.
+- Adjust dedup rules so only true title/trigger/content duplicates are blocked.
+
+Recheck metrics:
+
+- Reuse the same analysis artifact and compare accepted ratio before and after repair.
+- Confirm rejected reasons move from unknown or vague schema errors to actionable field-level reasons and decrease when the fix is correct.
