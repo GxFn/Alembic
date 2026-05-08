@@ -47,7 +47,7 @@ If any command would write Alembic runtime data, first complete `N0-data-locatio
 
 ## Primary Deliverable
 
-The first required output is `report/plan.md`: a self-contained execution document that is at least as clear as `docs-dev/bootstrap-rescan-chain-test-plan.md` for Alembic cold-start/rescan work, and equally explicit for other long chains.
+The first required output is `report/plan.md`: a self-contained execution document that is at least as clear as `docs-dev/workflows-scan/bootstrap-rescan-chain-test-plan.md` for Alembic cold-start/rescan work, and equally explicit for other long chains.
 
 When the user asks for a plan or a skill-generated plan, stop after producing and reviewing the plan unless they explicitly ask to execute it. Do not run broad workflow commands merely to make the plan look complete.
 

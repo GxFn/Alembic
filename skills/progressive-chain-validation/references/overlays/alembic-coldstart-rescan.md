@@ -2,7 +2,7 @@
 
 Use this overlay for Alembic cold-start, bootstrap, rescan, Agent fill, persistence, finalizer, snapshot, report, or history validation after the plan's Source Chain Map section exists.
 
-This overlay is a coverage oracle, not a ready-made plan. The generated `report/plan.md` must still derive node cuts from source and must meet or exceed `docs-dev/bootstrap-rescan-chain-test-plan.md`.
+This overlay is a coverage oracle, not a ready-made plan. The generated `report/plan.md` must still derive node cuts from source and must meet or exceed `docs-dev/workflows-scan/bootstrap-rescan-chain-test-plan.md`.
 
 ## Applicability Rules
 

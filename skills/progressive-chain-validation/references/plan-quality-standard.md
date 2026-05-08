@@ -2,7 +2,7 @@
 
 The primary product of this skill is a self-contained long-chain execution plan. The plan must be clear enough for another agent to execute node by node without rereading this skill.
 
-For Alembic cold-start and rescan work, `docs-dev/bootstrap-rescan-chain-test-plan.md` is the minimum quality floor. A generated plan should improve it by combining source-derived boundaries, target-document requirements, branch impacts, and execution handoff instructions in one place.
+For Alembic cold-start and rescan work, `docs-dev/workflows-scan/bootstrap-rescan-chain-test-plan.md` is the minimum quality floor. A generated plan should improve it by combining source-derived boundaries, target-document requirements, branch impacts, and execution handoff instructions in one place.
 
 ## Plan-First Contract
 

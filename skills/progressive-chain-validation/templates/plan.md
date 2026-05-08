@@ -12,7 +12,7 @@ Execution cursor: only the current node may change status in one round.
 
 Primary deliverable: this document is the execution guide for a later agent. It must be self-contained, more explicit than the target reference document, and complete before broad workflow execution.
 
-Minimum reference standard: `docs-dev/bootstrap-rescan-chain-test-plan.md` for Alembic cold-start/rescan work. For other workflows, use the same clarity bar: clear method, node overview, per-node sections, variant orders, round protocol, and full-run readiness gate.
+Minimum reference standard: `docs-dev/workflows-scan/bootstrap-rescan-chain-test-plan.md` for Alembic cold-start/rescan work. For other workflows, use the same clarity bar: clear method, node overview, per-node sections, variant orders, round protocol, and full-run readiness gate.
 
 ## Scope
 
