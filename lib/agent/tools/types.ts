@@ -2,15 +2,15 @@ import type {
   MainlineGuardRule,
   MainlineGuardRuleLoadResult,
   MainlineGuardRuleProvider,
-} from "../guard/index.js";
-import type { ContextIndexReader } from "../mainline/data/index.js";
+} from "../../guard/index.js";
+import type { ContextIndexReader } from "../../mainline/data/index.js";
 import type {
   MainlineProjectIntelligenceArtifact,
   MainlineProjectIntelligenceQueries,
-} from "../mainline/graph/index.js";
-import type { MainlineSearchIndex } from "../mainline/search/index.js";
+} from "../../mainline/graph/index.js";
+import type { MainlineSearchIndex } from "../../mainline/search/index.js";
 
-// 新 Tool 模块不兼容 legacy V1/V2；这里只描述全新的 resource.action 契约。
+// 内部 Agent Tool 模块不兼容 legacy V1/V2；这里只描述新的 resource.action 契约。
 export type ToolResource = "code" | "terminal" | "knowledge" | "graph" | "memory" | "meta";
 
 export type ToolName =

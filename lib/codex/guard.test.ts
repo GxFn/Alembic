@@ -105,6 +105,30 @@ describe("runCodexGuard", () => {
     expect(result.message).toContain("outside projectRoot");
   });
 
+  it("uses an explicit projectRoot instead of the ambient workspace", async () => {
+    const explicitProjectRoot = currentProjectRoot();
+    const ambientProjectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "alembic-guard-ambient-"));
+    tempRoots.push(ambientProjectRoot);
+    const workspace = initializeCodexWorkspace({ projectRoot: explicitProjectRoot });
+    const persistence = await createMainlineWorkflowPersistence({
+      projectRoot: workspace.projectRoot,
+      dataRoot: workspace.dataRoot,
+      mode: workspace.mode,
+    });
+    await persistence.contextIndex.flush();
+    process.env.ALEMBIC_PROJECT_DIR = ambientProjectRoot;
+
+    const result = await runCodexGuard({
+      projectRoot: explicitProjectRoot,
+      code: "export const value = 1;",
+      language: "typescript",
+      filePath: "src/app.ts",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.projectRoot).toBe(explicitProjectRoot);
+  });
+
   it("completes with a warning when no guard-rule Recipes exist", async () => {
     const workspace = initializeCodexWorkspace({ projectRoot: currentProjectRoot() });
     const persistence = await createMainlineWorkflowPersistence({

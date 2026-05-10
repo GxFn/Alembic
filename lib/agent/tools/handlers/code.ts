@@ -3,7 +3,7 @@ import {
   type MainlineGuardFile,
   type MainlineGuardRule,
   type MainlineGuardRuleLoadResult,
-} from "../../guard/index.js";
+} from "../../../guard/index.js";
 import type { ToolHandler, ToolRuntimeDependencies } from "../types.js";
 import { isRecord, toolFailure, toolSuccess } from "../types.js";
 

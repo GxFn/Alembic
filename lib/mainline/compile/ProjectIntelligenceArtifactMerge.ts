@@ -12,7 +12,7 @@ import type {
   MainlineProjectIntelligenceSymbol,
 } from "../graph/index.js";
 
-export interface MainlineProjectIntelligenceIncrementalPlan {
+interface MainlineProjectIntelligenceArtifactMergeIncrementalPlan {
   readonly affectedFiles: readonly string[];
   readonly fullRebuildRequired?: boolean;
 }
@@ -20,7 +20,7 @@ export interface MainlineProjectIntelligenceIncrementalPlan {
 export interface MainlineProjectIntelligenceArtifactMergeRequest {
   readonly previousArtifact: MainlineProjectIntelligenceArtifact;
   readonly patchArtifact: MainlineProjectIntelligenceArtifact;
-  readonly incrementalPlan: MainlineProjectIntelligenceIncrementalPlan;
+  readonly incrementalPlan: MainlineProjectIntelligenceArtifactMergeIncrementalPlan;
   readonly generatedAt?: number;
 }
 

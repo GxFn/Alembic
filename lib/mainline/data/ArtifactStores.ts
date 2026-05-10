@@ -18,6 +18,7 @@ export interface RecipeMarkdownFileIndex {
  */
 export interface CompiledContextSnapshot {
   recipes: Recipe[];
+  recipeFiles: RecipeMarkdownFileIndex[];
   edges: RecipeEdge[];
   sourceRefs: SourceRef[];
 }

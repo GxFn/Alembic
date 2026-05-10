@@ -39,7 +39,9 @@ interface ParsedGuardFile {
 }
 
 export async function runCodexGuard(args: Record<string, unknown> = {}): Promise<CodexGuardResult> {
-  const workspace = inspectWorkspace();
+  // 中文注释：Guard 可以被 CLI/MCP 显式指定 projectRoot；不指定时才回退到当前进程环境。
+  // 这样测试、daemon 和未来多 IDE adapter 不会互相污染工作区选择。
+  const workspace = inspectWorkspace(stringValue(args.projectRoot));
   if (!workspace.initialized) {
     return statusResult(workspace, "uninitialized", "Alembic workspace is not initialized.");
   }

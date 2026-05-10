@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryContextIndex } from "../mainline/data/index.js";
-import { MainlineProjectIntelligenceBuilder } from "../mainline/graph/index.js";
-import { createRecipe, createSourceRef } from "../mainline/knowledge/index.js";
-import { InMemoryMainlineSearchIndex } from "../mainline/search/index.js";
+import { InMemoryContextIndex } from "../../mainline/data/index.js";
+import { MainlineProjectIntelligenceBuilder } from "../../mainline/graph/index.js";
+import { createRecipe, createSourceRef } from "../../mainline/knowledge/index.js";
+import { InMemoryMainlineSearchIndex } from "../../mainline/search/index.js";
 import { createDefaultToolRegistry, ToolRouter } from "./index.js";
 import type { ToolFailureEnvelope, ToolResultEnvelope, ToolSuccessEnvelope } from "./types.js";
 

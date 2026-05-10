@@ -25,7 +25,9 @@ export interface CodexToolDefinition {
   name: string;
 }
 
-// status/diagnostics/init 必须轻量；bootstrap/rescan 只排 daemon job，不在 stdio 内跑长任务。
+// CodexToolDefinition 是 MCP/插件协议面，不给内部 Agent runtime 直接调用。
+// 内部 Agent 工具在 lib/agent/tools；status/diagnostics/init 必须轻量；
+// bootstrap/rescan 只排 daemon job，不在 stdio 内跑长任务。
 export const CODEX_TOOLS: CodexToolDefinition[] = [
   {
     name: "alembic_codex_diagnostics",
@@ -163,6 +165,10 @@ export const CODEX_TOOLS: CodexToolDefinition[] = [
         language: { type: "string", description: "Language for inline code or file entries." },
         filePath: { type: "string", description: "Path for the inline snippet." },
         path: { type: "string", description: "Alternative path for the inline snippet." },
+        projectRoot: {
+          type: "string",
+          description: "Explicit project root to inspect. Defaults to the current Codex workspace.",
+        },
         files: {
           type: "array",
           items: {
@@ -275,6 +281,7 @@ export function buildStatus(workspace = inspectWorkspace()): Record<string, unkn
   const candidateCount = countMarkdownFiles(workspace.candidatesDir);
   const skillCount = countMarkdownFiles(workspace.skillsDir);
   const daemonState = readDaemonState(workspace);
+  const runtimeReadiness = buildRuntimeReadiness(workspace, recipeCount);
   // 显式报告项目污染风险，后续 smoke 用它验证 Ghost mode 没写入用户项目。
   const projectArtifacts = {
     cursorDirExists: existsSync(join(workspace.projectRoot, ".cursor")),
@@ -306,10 +313,11 @@ export function buildStatus(workspace = inspectWorkspace()): Record<string, unkn
       wikiDir: workspace.wikiDir,
     },
     knowledge: {
-      usable: recipeCount > 0,
+      usable: runtimeReadiness.primeReady || runtimeReadiness.recipesReady,
       recipeCount,
       candidateCount,
       skillCount,
+      readiness: runtimeReadiness,
     },
     projectArtifacts,
     daemon: {
@@ -317,7 +325,7 @@ export function buildStatus(workspace = inspectWorkspace()): Record<string, unkn
       running: daemonState !== null,
       note: "Use alembic_codex_bootstrap, alembic_codex_rescan, or alembic_codex_job for durable daemon work.",
     },
-    onboarding: buildOnboarding(workspace, recipeCount),
+    onboarding: buildOnboarding(workspace, runtimeReadiness),
   };
 }
 
@@ -392,7 +400,7 @@ export function buildDiagnostics(): Record<string, unknown> {
 
 function buildOnboarding(
   workspace: WorkspaceInspection,
-  recipeCount: number,
+  readiness: RuntimeReadiness,
 ): Record<string, unknown> {
   // onboarding 只给下一步建议，不在 status 阶段隐式启动长任务。
   if (!workspace.initialized) {
@@ -402,11 +410,25 @@ function buildOnboarding(
       nextActions: ["Initialize Ghost workspace: call alembic_codex_init"],
     };
   }
-  if (recipeCount === 0) {
+  if (!readiness.primeReady) {
     return {
       state: "needs_bootstrap",
       primaryAction: { tool: "alembic_codex_bootstrap", startsDaemon: true },
       nextActions: ["Queue a durable bootstrap job: call alembic_codex_bootstrap"],
+    };
+  }
+  if (!readiness.recipesReady) {
+    return {
+      state: "project_intelligence_ready",
+      primaryAction: {
+        tool: "alembic_task",
+        arguments: { operation: "prime" },
+        startsDaemon: false,
+      },
+      nextActions: [
+        "Prime Codex with project intelligence.",
+        "Submit reviewed Recipe candidates when durable project knowledge is ready.",
+      ],
     };
   }
   return {
@@ -417,6 +439,33 @@ function buildOnboarding(
       startsDaemon: false,
     },
     nextActions: ["Prime Codex before coding work."],
+  };
+}
+
+interface RuntimeReadiness {
+  readonly contextReady: boolean;
+  readonly primeReady: boolean;
+  readonly projectIntelligenceReady: boolean;
+  readonly recipesReady: boolean;
+  readonly searchReady: boolean;
+}
+
+function buildRuntimeReadiness(
+  workspace: WorkspaceInspection,
+  recipeCount: number,
+): RuntimeReadiness {
+  const contextDir = join(workspace.runtimeDir, "context");
+  const projectIntelligenceReady = existsSync(
+    join(contextDir, "project-intelligence-artifact.json"),
+  );
+  const contextReady = existsSync(join(contextDir, "context-index.json"));
+  const searchReady = existsSync(join(contextDir, "search-index.json"));
+  return {
+    contextReady,
+    primeReady: contextReady && searchReady,
+    projectIntelligenceReady,
+    recipesReady: recipeCount > 0,
+    searchReady,
   };
 }
 

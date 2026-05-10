@@ -1,7 +1,7 @@
 import {
   MainlineProjectIntelligenceQueries,
   type MainlineProjectIntelligenceTraversalDirection,
-} from "../../mainline/graph/index.js";
+} from "../../../mainline/graph/index.js";
 import type {
   ProjectIntelligenceArtifactProvider,
   ToolHandler,

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { createRecipe, createRecipeKnowledgePayload } from "../../mainline/knowledge/index.js";
 import { MainlineWorkflowEntrypoint } from "./MainlineWorkflowEntrypoint.js";
 import { createMainlineWorkflowPersistence } from "./MainlineWorkflowPersistence.js";
 
@@ -70,6 +71,50 @@ describe("mainline workflow dataRoot persistence", () => {
     await expect(restored.artifactStore.load()).resolves.toMatchObject({
       files: expect.arrayContaining([expect.objectContaining({ path: "src/app.ts" })]),
     });
+  });
+
+  it("persists recipe Markdown file indexes across dependency rebuilds", async () => {
+    const projectRoot = await makeFixtureProject();
+    const dataRoot = await makeTempRoot("alembic-workflow-data-");
+    const first = await createMainlineWorkflowPersistence({ projectRoot, dataRoot, mode: "ghost" });
+    const recipe = createRecipe({
+      id: "recipe-runtime-file-index",
+      title: "Runtime File Index",
+      kind: "pattern",
+      status: "candidate",
+      summary: "Keep Recipe Markdown file indexes in the runtime snapshot.",
+      confidence: 0.8,
+      knowledge: createRecipeKnowledgePayload({
+        language: "typescript",
+        do: ["Persist recipeFiles together with recipes."],
+      }),
+    });
+
+    await first.contextIndex.upsertContextArtifacts({
+      recipes: [recipe],
+      recipeFiles: [
+        {
+          recipeId: recipe.id,
+          bucket: "candidates",
+          relativePath: "Alembic/candidates/runtime-file-index.md",
+          contentHash: "sha256:test",
+          updatedAt: 1,
+        },
+      ],
+    });
+
+    const restored = await createMainlineWorkflowPersistence({
+      projectRoot,
+      dataRoot,
+      mode: "ghost",
+    });
+
+    await expect(restored.contextIndex.findRecipeFilesByRecipeIds([recipe.id])).resolves.toEqual([
+      expect.objectContaining({
+        recipeId: recipe.id,
+        relativePath: "Alembic/candidates/runtime-file-index.md",
+      }),
+    ]);
   });
 });
 

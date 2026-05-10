@@ -5,7 +5,7 @@ export const terminalExecuteHandler: ToolHandler = (invocation, context) => {
   const command = isRecord(invocation.input) ? stringValue(invocation.input.command) : undefined;
   return toolFailure(context.descriptor, "policy_required", {
     code: "policy_required",
-    message: "terminal.execute is declared but command execution is gated outside lib/tools.",
+    message: "terminal.execute is declared but command execution is gated outside lib/agent/tools.",
     details: {
       executesCommands: false,
       ...(command ? { commandPreview: command.slice(0, 120) } : {}),

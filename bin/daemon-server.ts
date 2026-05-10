@@ -8,9 +8,10 @@ import type { DaemonJobHandler } from "../lib/daemon/DaemonJobRunner.js";
 import { clearDaemonState, writeDaemonState } from "../lib/daemon/DaemonState.js";
 import { JsonDaemonJobStore } from "../lib/daemon/JobStore.js";
 import {
-  createMainlineWorkflowPersistence,
-  MainlineWorkflowEntrypoint,
-} from "../lib/workflows/index.js";
+  MainlineCompileSession,
+  type MainlineCompileSessionRequest,
+} from "../lib/mainline/compile/index.js";
+import { createMainlineWorkflowPersistence } from "../lib/workflows/index.js";
 
 const projectRoot = resolveProjectRoot(process.env.ALEMBIC_PROJECT_DIR);
 const workspace = inspectWorkspace(projectRoot);
@@ -41,12 +42,31 @@ const initialState = {
 
 const interruptedJobs = await new JsonDaemonJobStore(initialState.dataRoot).markInterrupted();
 let currentState = initialState;
-const workflow = new MainlineWorkflowEntrypoint(workflowPersistence.dependencies);
+const compileSession = new MainlineCompileSession({
+  workspacePaths: workflowPersistence.workspacePaths,
+  writeBoundary: workflowPersistence.writeBoundary,
+  contextIndex: workflowPersistence.contextIndex,
+  artifactStore: workflowPersistence.artifactStore,
+});
+// 中文注释：daemon 是 Codex 插件后台入口，bootstrap/rescan 这类长任务在 daemon 中执行；
+// MCP stdio 只负责把请求排入 durable queue，HTTP enqueue 返回后不等待编译完成。
 const workflowHandlers: Record<"bootstrap" | "rescan", DaemonJobHandler> = {
   bootstrap: async (job, context) =>
-    runWorkflowJob(workflow, "bootstrap", workspace.projectRoot, job.input, context.isCancelled),
+    runCompileSessionJob(
+      compileSession,
+      "cold-start",
+      workspace.projectRoot,
+      job.input,
+      context.isCancelled,
+    ),
   rescan: async (job, context) =>
-    runWorkflowJob(workflow, "rescan", workspace.projectRoot, job.input, context.isCancelled),
+    runCompileSessionJob(
+      compileSession,
+      "incremental",
+      workspace.projectRoot,
+      job.input,
+      context.isCancelled,
+    ),
 };
 const bridge = await startDaemonHttpBridge({
   state: () => currentState,
@@ -78,29 +98,80 @@ async function shutdown(): Promise<void> {
   process.exit(0);
 }
 
-async function runWorkflowJob(
-  workflow: MainlineWorkflowEntrypoint,
-  kind: "bootstrap" | "rescan",
+async function runCompileSessionJob(
+  compileSession: MainlineCompileSession,
+  mode: "cold-start" | "incremental",
   projectRoot: string,
   input: Record<string, unknown> | undefined,
   isCancelled: () => Promise<boolean>,
 ): Promise<Record<string, unknown>> {
-  const result = await workflow.run({
-    kind,
+  if (await isCancelled()) {
+    return { mode, cancelled: true };
+  }
+  const result = await compileSession.run({
     projectRoot,
-    scan: isRecord(input?.scan) ? input.scan : {},
-    changedFiles: stringList(input?.changedFiles),
-    cancellation: { isCancelled },
+    mode,
+    ...compileSessionInput(input),
   });
+  if (await isCancelled()) {
+    return { mode, cancelled: true };
+  }
   return JSON.parse(JSON.stringify(result)) as Record<string, unknown>;
+}
+
+function compileSessionInput(
+  input: Record<string, unknown> | undefined,
+): Omit<MainlineCompileSessionRequest, "projectRoot" | "mode"> {
+  if (!input) {
+    return {};
+  }
+
+  return {
+    ...(isRecord(input.scan) ? { scan: input.scan } : {}),
+    ...optionalStringList("changedFiles", input.changedFiles),
+    ...optionalStringList("removedFiles", input.removedFiles),
+    ...optionalStringMap("diffTextByPath", input.diffTextByPath),
+    ...optionalStringList("notes", input.notes),
+    ...optionalFiniteNumber("maxFileBytes", input.maxFileBytes),
+    ...optionalFiniteNumber("dependentDepth", input.dependentDepth),
+    ...optionalFiniteNumber("fullRebuildChangeRatio", input.fullRebuildChangeRatio),
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function stringList(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
-    : [];
+function optionalStringList(
+  key: "changedFiles" | "removedFiles" | "notes",
+  value: unknown,
+): Partial<Pick<MainlineCompileSessionRequest, typeof key>> {
+  if (!Array.isArray(value)) {
+    return {};
+  }
+  const strings = value.filter(
+    (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
+  );
+  return strings.length > 0 ? { [key]: strings } : {};
+}
+
+function optionalStringMap(
+  key: "diffTextByPath",
+  value: unknown,
+): Partial<Pick<MainlineCompileSessionRequest, typeof key>> {
+  if (!isRecord(value)) {
+    return {};
+  }
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, string] =>
+      typeof entry[0] === "string" && typeof entry[1] === "string",
+  );
+  return entries.length > 0 ? { [key]: Object.fromEntries(entries) } : {};
+}
+
+function optionalFiniteNumber(
+  key: "maxFileBytes" | "dependentDepth" | "fullRebuildChangeRatio",
+  value: unknown,
+): Partial<Pick<MainlineCompileSessionRequest, typeof key>> {
+  return typeof value === "number" && Number.isFinite(value) ? { [key]: value } : {};
 }

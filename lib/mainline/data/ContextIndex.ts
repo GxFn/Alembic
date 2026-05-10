@@ -59,6 +59,9 @@ export class InMemoryContextIndex implements ContextIndex {
     for (const recipe of snapshot?.recipes ?? []) {
       this.#recipes.set(recipe.id, recipe);
     }
+    for (const file of snapshot?.recipeFiles ?? []) {
+      this.#recipeFiles.set(file.recipeId, file);
+    }
     for (const edge of snapshot?.edges ?? []) {
       this.#edges.set(edge.id, edge);
     }
@@ -229,6 +232,9 @@ export class InMemoryContextIndex implements ContextIndex {
   snapshot(): ContextIndexSnapshot {
     return {
       recipes: [...this.#recipes.values()],
+      // 中文注释：recipeFiles 是运行期从 Recipe id 反查 Markdown 来源的索引；
+      // 必须随 snapshot 一起持久化，否则 daemon 重启后 prime/guard 会丢失文件级来源。
+      recipeFiles: [...this.#recipeFiles.values()],
       edges: [...this.#edges.values()],
       sourceRefs: [...this.#sourceRefs.values()],
     };

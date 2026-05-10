@@ -3,13 +3,13 @@ import type {
   RecipeEdge,
   RecipeMarkdownFileIndex,
   SourceRef,
-} from "../../mainline/data/index.js";
+} from "../../../mainline/data/index.js";
 import type {
   MainlineSearchDocument,
   MainlineSearchDocumentKind,
   MainlineSearchHit,
   MainlineSearchQuery,
-} from "../../mainline/search/index.js";
+} from "../../../mainline/search/index.js";
 import type { ToolHandler, ToolResultEnvelope } from "../types.js";
 import { isRecord, toolFailure, toolSuccess } from "../types.js";
 
