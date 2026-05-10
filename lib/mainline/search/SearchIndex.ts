@@ -72,6 +72,10 @@ export class InMemoryMainlineSearchIndex implements MainlineSearchIndex {
     }
   }
 
+  clear(): void {
+    this.#documents.clear();
+  }
+
   search(query: MainlineSearchQuery): MainlineSearchHit[] {
     const limit = query.limit ?? 20;
     const kinds = query.kinds ? new Set(query.kinds) : null;

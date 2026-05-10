@@ -41,7 +41,7 @@ describe("mainline workflow entrypoint", () => {
     });
     expect(result.summary.sourceRefs).toBeGreaterThan(0);
     expect(result.summary.searchDocuments).toBeGreaterThan(0);
-    expect(result.warnings).toContain("recipe_generation_deferred");
+    expect(result.warnings).not.toContain("recipe_generation_deferred");
     await expect(artifactStore.load()).resolves.toMatchObject({
       projectRoot,
       files: expect.arrayContaining([expect.objectContaining({ path: "src/app.ts" })]),

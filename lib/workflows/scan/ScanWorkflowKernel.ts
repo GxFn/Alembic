@@ -2,11 +2,18 @@ export type MainlineWorkflowKind = "bootstrap" | "rescan";
 export type MainlineWorkflowStatus = "completed" | "cancelled" | "failed";
 
 export type MainlineWorkflowPhaseId =
+  | "normalize"
+  | "plan"
+  | "track"
   | "scan"
   | "read-files"
   | "build-project-intelligence"
   | "materialize-project-intelligence"
-  | "save-artifact";
+  | "save-artifact"
+  | "compile-session"
+  | "project"
+  | "persist"
+  | "recommend";
 
 export interface MainlineWorkflowCancellationToken {
   isCancelled(): boolean | Promise<boolean>;

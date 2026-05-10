@@ -1,6 +1,8 @@
 import {
   JsonMainlineProjectIntelligenceArtifactStore,
+  MAINLINE_FILE_FINGERPRINT_SNAPSHOT_STORE_PATH,
   MAINLINE_PROJECT_INTELLIGENCE_ARTIFACT_STORE_PATH,
+  MainlineCompileSession,
   type MainlineProjectIntelligenceArtifactStore,
 } from "../../mainline/compile/index.js";
 import {
@@ -22,9 +24,12 @@ import type {
 import {
   type InMemoryMainlineSearchIndex,
   type MainlineSearchDocument,
+  type MainlineSearchHit,
   type MainlineSearchIndex,
   MainlineSearchIndexStore,
+  type MainlineSearchQuery,
 } from "../../mainline/search/index.js";
+import { ScanLifecycleRunner } from "../scan/ScanLifecycleRunner.js";
 import type {
   MainlineWorkflowEntrypointDependencies,
   MainlineWorkflowPersistedArtifacts,
@@ -62,11 +67,17 @@ export async function createMainlineWorkflowPersistence(
 ): Promise<DataRootMainlineWorkflowPersistence> {
   const workspacePaths = new MainlineWorkspacePaths(input);
   const writeBoundary = new MainlineWriteBoundary({ workspacePaths });
-  const fileStore = new DataRootJsonFileStore(writeBoundary, new CoreMainlineAtomicFileStore());
+  const coreFileStore = new CoreMainlineAtomicFileStore();
+  const fileStore = new DataRootJsonFileStore(writeBoundary, coreFileStore);
   const persistedArtifacts = {
     artifactPath: runtimeAbsolute(writeBoundary, MAINLINE_PROJECT_INTELLIGENCE_ARTIFACT_STORE_PATH),
     contextSnapshotPath: runtimeAbsolute(writeBoundary, MAINLINE_CONTEXT_INDEX_STORE_PATH),
     searchSnapshotPath: runtimeAbsolute(writeBoundary, MAINLINE_SEARCH_INDEX_STORE_PATH),
+    fingerprintSnapshotPath: runtimeAbsolute(
+      writeBoundary,
+      MAINLINE_FILE_FINGERPRINT_SNAPSHOT_STORE_PATH,
+    ),
+    recipeMarkdownRoot: workspacePaths.recipesDir,
   };
 
   const contextIndex = await PersistentMainlineContextIndex.restore({
@@ -94,6 +105,28 @@ export async function createMainlineWorkflowPersistence(
     searchIndex,
     persistedArtifacts,
   );
+  const resetRuntimeState = async () => {
+    await contextIndex.reset();
+    searchIndex.clear();
+    await searchIndex.flush();
+  };
+  const compileSession = new MainlineCompileSession({
+    workspacePaths,
+    writeBoundary,
+    fileStore: coreFileStore,
+    contextIndex,
+    searchIndex,
+    searchIndexStore,
+    artifactStore,
+  });
+  const now = input.now;
+  const lifecycleRunner = new ScanLifecycleRunner({
+    workspacePaths,
+    compileSession,
+    resetRuntimeState,
+    persistedArtifacts,
+    ...(now === undefined ? {} : { now: () => new Date(now()) }),
+  });
 
   return {
     workspacePaths,
@@ -103,6 +136,10 @@ export async function createMainlineWorkflowPersistence(
       searchIndex,
       artifactStore,
       persistence,
+      compileSession,
+      lifecycleRunner,
+      persistedArtifacts,
+      resetRuntimeState,
     },
     contextIndex,
     searchIndex,
@@ -152,11 +189,14 @@ export class PersistentMainlineContextIndex extends InMemoryContextIndex {
   async flush(): Promise<void> {
     await this.#fileStore.writeJsonAtomic(this.#target, this.snapshot());
   }
+
+  async reset(): Promise<void> {
+    this.clear();
+    await this.flush();
+  }
 }
 
-export class PersistentMainlineSearchIndex
-  implements Pick<MainlineSearchIndex, "remove" | "upsert">
-{
+export class PersistentMainlineSearchIndex implements MainlineSearchIndex {
   readonly #index: InMemoryMainlineSearchIndex;
   readonly #store: MainlineSearchIndexStore;
   #pendingSave: Promise<unknown> = Promise.resolve();
@@ -176,8 +216,17 @@ export class PersistentMainlineSearchIndex
     this.#queueSave();
   }
 
+  search(query: MainlineSearchQuery): MainlineSearchHit[] {
+    return this.#index.search(query);
+  }
+
   snapshot(): MainlineSearchDocument[] {
     return this.#index.snapshot();
+  }
+
+  clear(): void {
+    this.#index.clear();
+    this.#queueSave();
   }
 
   async flush(): Promise<void> {

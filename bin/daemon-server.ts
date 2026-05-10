@@ -7,12 +7,13 @@ import { startDaemonHttpBridge } from "../lib/daemon/DaemonHttpBridge.js";
 import type { DaemonJobExecutionContext, DaemonJobHandler } from "../lib/daemon/DaemonJobRunner.js";
 import { clearDaemonState, writeDaemonState } from "../lib/daemon/DaemonState.js";
 import { type DaemonJobProgressStep, JsonDaemonJobStore } from "../lib/daemon/JobStore.js";
+import { MainlineCompileSession } from "../lib/mainline/compile/index.js";
 import {
-  MainlineCompileSession,
-  type MainlineCompileSessionRequest,
-  type MainlineCompileSessionResult,
-} from "../lib/mainline/compile/index.js";
-import { createMainlineWorkflowPersistence } from "../lib/workflows/index.js";
+  createMainlineWorkflowPersistence,
+  type ScanLifecycleResult,
+  type ScanLifecycleRunInput,
+  ScanLifecycleRunner,
+} from "../lib/workflows/index.js";
 
 const projectRoot = resolveProjectRoot(process.env.ALEMBIC_PROJECT_DIR);
 const workspace = inspectWorkspace(projectRoot);
@@ -47,15 +48,32 @@ const compileSession = new MainlineCompileSession({
   workspacePaths: workflowPersistence.workspacePaths,
   writeBoundary: workflowPersistence.writeBoundary,
   contextIndex: workflowPersistence.contextIndex,
+  searchIndex: workflowPersistence.searchIndex,
   artifactStore: workflowPersistence.artifactStore,
 });
+const scanLifecycleRunner =
+  workflowPersistence.dependencies.lifecycleRunner ??
+  new ScanLifecycleRunner({
+    workspacePaths: workflowPersistence.workspacePaths,
+    compileSession,
+    persistedArtifacts: workflowPersistence.persistedArtifacts,
+    ...(workflowPersistence.dependencies.resetRuntimeState === undefined
+      ? {}
+      : { resetRuntimeState: workflowPersistence.dependencies.resetRuntimeState }),
+  });
 // 中文注释：daemon 是 Codex 插件后台入口，bootstrap/rescan 这类长任务在 daemon 中执行；
 // MCP stdio 只负责把请求排入 durable queue，HTTP enqueue 返回后不等待编译完成。
 const workflowHandlers: Record<"bootstrap" | "rescan", DaemonJobHandler> = {
   bootstrap: async (job, context) =>
-    runCompileSessionJob(compileSession, "cold-start", workspace.projectRoot, job.input, context),
+    runScanLifecycleJob(
+      scanLifecycleRunner,
+      "bootstrap",
+      workspace.projectRoot,
+      job.input,
+      context,
+    ),
   rescan: async (job, context) =>
-    runCompileSessionJob(compileSession, "incremental", workspace.projectRoot, job.input, context),
+    runScanLifecycleJob(scanLifecycleRunner, "rescan", workspace.projectRoot, job.input, context),
 };
 const bridge = await startDaemonHttpBridge({
   state: () => currentState,
@@ -87,58 +105,68 @@ async function shutdown(): Promise<void> {
   process.exit(0);
 }
 
-async function runCompileSessionJob(
-  compileSession: MainlineCompileSession,
-  mode: "cold-start" | "incremental",
+async function runScanLifecycleJob(
+  runner: ScanLifecycleRunner,
+  kind: "bootstrap" | "rescan",
   projectRoot: string,
   input: Record<string, unknown> | undefined,
   context: DaemonJobExecutionContext,
 ): Promise<Record<string, unknown>> {
   await context.reportProgress({
-    phase: "compile:preparing",
-    message: `Preparing ${mode} compile session.`,
+    phase: "scan:preparing",
+    message: `Preparing ${kind} scan lifecycle.`,
     percent: 10,
   });
   if (await context.isCancelled()) {
-    return { mode, cancelled: true };
+    return { kind, cancelled: true };
   }
   await context.reportProgress({
-    phase: "compile:running",
-    message: `Running ${mode} compile session.`,
+    phase: "scan:running",
+    message: `Running ${kind} scan lifecycle.`,
     percent: 20,
   });
-  const result = await compileSession.run({
+  const result = await runner.run({
+    kind,
     projectRoot,
-    mode,
-    ...compileSessionInput(input),
+    ...scanLifecycleInput(input),
+    cancellation: { isCancelled: () => context.isCancelled() },
   });
   if (await context.isCancelled()) {
-    return { mode, cancelled: true };
+    return { kind, cancelled: true };
   }
   await context.reportProgress({
-    phase: "compile:completed",
-    message: `${mode} compile session completed.`,
+    phase: "scan:completed",
+    message: `${kind} scan lifecycle completed.`,
     percent: 90,
-    steps: compileProgressSteps(result),
+    steps: scanLifecycleProgressSteps(result),
   });
   return JSON.parse(JSON.stringify(result)) as Record<string, unknown>;
 }
 
-function compileProgressSteps(result: MainlineCompileSessionResult): DaemonJobProgressStep[] {
-  const checkpoints = result.progress.checkpoints;
-  const checkpointCount = checkpoints.length;
+function scanLifecycleProgressSteps(result: ScanLifecycleResult): DaemonJobProgressStep[] {
+  const lifecycleSteps = result.phases.map((phase) => ({
+    phase: phase.id,
+    status: phase.status,
+    ...(phase.error === undefined ? {} : { message: phase.error }),
+  }));
+  const compileSteps =
+    result.compile?.progress.checkpoints.map((checkpoint) => ({
+      phase: `compile:${checkpoint.phase}`,
+      status: checkpoint.status,
+      ...(checkpoint.detail === undefined ? {} : { message: checkpoint.detail }),
+    })) ?? [];
+  const steps = [...lifecycleSteps, ...compileSteps];
+  const stepCount = steps.length;
 
-  return checkpoints.map((checkpoint, index) => ({
-    phase: checkpoint.phase,
-    status: checkpoint.status,
-    ...(checkpoint.detail === undefined ? {} : { message: checkpoint.detail }),
-    percent: checkpointCount === 0 ? 100 : Math.round(((index + 1) / checkpointCount) * 100),
+  return steps.map((step, index) => ({
+    ...step,
+    percent: stepCount === 0 ? 100 : Math.round(((index + 1) / stepCount) * 100),
   }));
 }
 
-function compileSessionInput(
+function scanLifecycleInput(
   input: Record<string, unknown> | undefined,
-): Omit<MainlineCompileSessionRequest, "projectRoot" | "mode"> {
+): Omit<ScanLifecycleRunInput, "projectRoot" | "kind" | "cancellation"> {
   if (!input) {
     return {};
   }
@@ -152,6 +180,7 @@ function compileSessionInput(
     ...optionalFiniteNumber("maxFileBytes", input.maxFileBytes),
     ...optionalFiniteNumber("dependentDepth", input.dependentDepth),
     ...optionalFiniteNumber("fullRebuildChangeRatio", input.fullRebuildChangeRatio),
+    ...optionalCleanupPolicy(input.cleanup),
   };
 }
 
@@ -162,7 +191,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function optionalStringList(
   key: "changedFiles" | "removedFiles" | "notes",
   value: unknown,
-): Partial<Pick<MainlineCompileSessionRequest, typeof key>> {
+): Partial<Pick<ScanLifecycleRunInput, typeof key>> {
   if (!Array.isArray(value)) {
     return {};
   }
@@ -175,7 +204,7 @@ function optionalStringList(
 function optionalStringMap(
   key: "diffTextByPath",
   value: unknown,
-): Partial<Pick<MainlineCompileSessionRequest, typeof key>> {
+): Partial<Pick<ScanLifecycleRunInput, typeof key>> {
   if (!isRecord(value)) {
     return {};
   }
@@ -189,6 +218,12 @@ function optionalStringMap(
 function optionalFiniteNumber(
   key: "maxFileBytes" | "dependentDepth" | "fullRebuildChangeRatio",
   value: unknown,
-): Partial<Pick<MainlineCompileSessionRequest, typeof key>> {
+): Partial<Pick<ScanLifecycleRunInput, typeof key>> {
   return typeof value === "number" && Number.isFinite(value) ? { [key]: value } : {};
+}
+
+function optionalCleanupPolicy(value: unknown): Partial<Pick<ScanLifecycleRunInput, "cleanup">> {
+  return value === "full-reset" || value === "rescan-clean" || value === "none"
+    ? { cleanup: value }
+    : {};
 }

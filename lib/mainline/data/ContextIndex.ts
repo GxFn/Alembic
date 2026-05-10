@@ -56,6 +56,14 @@ export class InMemoryContextIndex implements ContextIndex {
   readonly #sourceRefs = new Map<string, SourceRef>();
 
   constructor(snapshot?: Partial<ContextIndexSnapshot>) {
+    this.replaceSnapshot(snapshot);
+  }
+
+  replaceSnapshot(snapshot: Partial<ContextIndexSnapshot> = {}): void {
+    this.#recipes.clear();
+    this.#recipeFiles.clear();
+    this.#edges.clear();
+    this.#sourceRefs.clear();
     for (const recipe of snapshot?.recipes ?? []) {
       this.#recipes.set(recipe.id, recipe);
     }
@@ -68,6 +76,10 @@ export class InMemoryContextIndex implements ContextIndex {
     for (const sourceRef of snapshot?.sourceRefs ?? []) {
       this.#sourceRefs.set(sourceRef.id, sourceRef);
     }
+  }
+
+  clear(): void {
+    this.replaceSnapshot();
   }
 
   async findRecipesByFiles(files: readonly string[], limit = 20): Promise<Recipe[]> {

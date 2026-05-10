@@ -1,26 +1,17 @@
-import fs from "node:fs/promises";
+import type { MainlineSourceFileScanOptions } from "../../mainline/code/index.js";
 import {
-  MainlineSourceFileScanner,
-  type MainlineSourceFileScanOptions,
-  type MainlineSourceFileScanResult,
-} from "../../mainline/code/index.js";
-import {
+  MainlineCompileSession,
   type MainlineProjectIntelligenceArtifactStore,
-  MainlineProjectIntelligenceMaterializer,
 } from "../../mainline/compile/index.js";
 import type { ContextIndexWriter } from "../../mainline/data/index.js";
-import {
-  type MainlineProjectIntelligenceArtifact,
-  MainlineProjectIntelligenceBuilder,
-} from "../../mainline/graph/index.js";
+import type { MainlineProjectIntelligenceArtifact } from "../../mainline/graph/index.js";
 import type { MainlineSearchDocument, MainlineSearchIndex } from "../../mainline/search/index.js";
-import {
-  type MainlineWorkflowCancellationToken,
-  MainlineWorkflowCancelledError,
-  type MainlineWorkflowKind,
-  type MainlineWorkflowPhaseRecord,
-  type MainlineWorkflowStatus,
-  ScanWorkflowKernel,
+import { type ScanLifecycleRunInput, ScanLifecycleRunner } from "../scan/ScanLifecycleRunner.js";
+import type {
+  MainlineWorkflowCancellationToken,
+  MainlineWorkflowKind,
+  MainlineWorkflowPhaseRecord,
+  MainlineWorkflowStatus,
 } from "../scan/ScanWorkflowKernel.js";
 
 export interface MainlineWorkflowRunInput {
@@ -28,17 +19,20 @@ export interface MainlineWorkflowRunInput {
   readonly projectRoot: string;
   readonly scan?: Partial<MainlineSourceFileScanOptions>;
   readonly changedFiles?: readonly string[];
+  readonly removedFiles?: readonly string[];
+  readonly diffTextByPath?: Record<string, string>;
   readonly cancellation?: MainlineWorkflowCancellationToken;
 }
 
 export interface MainlineWorkflowEntrypointDependencies {
-  readonly scanner?: MainlineSourceFileScanner;
-  readonly projectIntelligenceBuilder?: MainlineProjectIntelligenceBuilder;
-  readonly materializer?: MainlineProjectIntelligenceMaterializer;
+  readonly compileSession?: MainlineCompileSession;
+  readonly lifecycleRunner?: ScanLifecycleRunner;
   readonly contextIndex?: ContextIndexWriter;
-  readonly searchIndex?: Pick<MainlineSearchIndex, "remove" | "upsert">;
+  readonly searchIndex?: MainlineSearchIndex;
   readonly artifactStore?: MainlineProjectIntelligenceArtifactStore;
   readonly persistence?: MainlineWorkflowPersistence;
+  readonly persistedArtifacts?: MainlineWorkflowPersistedArtifacts;
+  readonly resetRuntimeState?: () => Promise<void>;
   readonly now?: () => Date;
 }
 
@@ -53,6 +47,8 @@ export interface MainlineWorkflowPersistedArtifacts {
   readonly artifactPath?: string;
   readonly contextSnapshotPath?: string;
   readonly searchSnapshotPath?: string;
+  readonly fingerprintSnapshotPath?: string;
+  readonly recipeMarkdownRoot?: string;
 }
 
 export interface MainlineWorkflowPersistence {
@@ -81,7 +77,7 @@ export interface MainlineWorkflowResult {
     readonly semanticEdges: number;
     readonly sourceRefs: number;
     readonly searchDocuments: number;
-    readonly recipes: 0;
+    readonly recipes: number;
     readonly truncated: boolean;
   };
   readonly persisted?: MainlineWorkflowPersistedArtifacts;
@@ -95,175 +91,92 @@ const SKIPPED_SIDE_EFFECTS: MainlineWorkflowSideEffects = {
   semanticMemory: false,
 };
 
+/**
+ * MainlineWorkflowEntrypoint 保留原 workflow 调用面，但内部统一交给 ScanLifecycleRunner。
+ * 中文注释：旧入口不再手写 scan/read/build/materialize 分支，避免冷启动和 rescan 绕过完整主线链路。
+ */
 export class MainlineWorkflowEntrypoint {
-  readonly #scanner: MainlineSourceFileScanner;
-  readonly #builder: MainlineProjectIntelligenceBuilder;
-  readonly #materializer: MainlineProjectIntelligenceMaterializer;
-  readonly #contextIndex: ContextIndexWriter | undefined;
-  readonly #searchIndex: Pick<MainlineSearchIndex, "remove" | "upsert"> | undefined;
-  readonly #artifactStore: MainlineProjectIntelligenceArtifactStore | undefined;
-  readonly #persistence: MainlineWorkflowPersistence | undefined;
-  readonly #now: () => Date;
+  readonly #lifecycleRunner: ScanLifecycleRunner;
 
   constructor(dependencies: MainlineWorkflowEntrypointDependencies = {}) {
-    this.#scanner = dependencies.scanner ?? new MainlineSourceFileScanner();
-    this.#builder =
-      dependencies.projectIntelligenceBuilder ?? new MainlineProjectIntelligenceBuilder();
-    this.#materializer = dependencies.materializer ?? new MainlineProjectIntelligenceMaterializer();
-    this.#contextIndex = dependencies.contextIndex;
-    this.#searchIndex = dependencies.searchIndex;
-    this.#artifactStore = dependencies.artifactStore;
-    this.#persistence = dependencies.persistence;
-    this.#now = dependencies.now ?? (() => new Date());
+    this.#lifecycleRunner =
+      dependencies.lifecycleRunner ??
+      new ScanLifecycleRunner({
+        compileSession:
+          dependencies.compileSession ??
+          new MainlineCompileSession({
+            ...(dependencies.contextIndex === undefined
+              ? {}
+              : { contextIndex: dependencies.contextIndex }),
+            ...(dependencies.searchIndex === undefined
+              ? {}
+              : { searchIndex: dependencies.searchIndex }),
+            ...(dependencies.artifactStore === undefined
+              ? {}
+              : { artifactStore: dependencies.artifactStore }),
+          }),
+        ...(dependencies.resetRuntimeState === undefined
+          ? {}
+          : { resetRuntimeState: dependencies.resetRuntimeState }),
+        ...(dependencies.persistedArtifacts === undefined
+          ? {}
+          : { persistedArtifacts: dependencies.persistedArtifacts }),
+        ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
+      });
   }
 
   async run(input: MainlineWorkflowRunInput): Promise<MainlineWorkflowResult> {
-    const kernel = new ScanWorkflowKernel({
-      ...(input.cancellation ? { cancellation: input.cancellation } : {}),
-      now: this.#now,
-    });
-    const warnings: string[] = [];
-    let scanResult: MainlineSourceFileScanResult | null = null;
-    let selectedFiles = 0;
-    let artifact: MainlineProjectIntelligenceArtifact | null = null;
-    let sourceRefs = 0;
-    let searchDocuments = 0;
-    let materializedSearchDocuments: readonly MainlineSearchDocument[] = [];
-    let persisted: MainlineWorkflowPersistedArtifacts | undefined;
-
-    try {
-      scanResult = await kernel.runPhase("scan", () =>
-        this.#scanner.scan({
-          root: input.projectRoot,
-          maxFiles: 1_000,
-          includeTests: false,
-          includeDocs: false,
-          includeMarkdown: false,
-          ...input.scan,
-        }),
-      );
-
-      const files = await kernel.runPhase("read-files", () =>
-        readProjectIntelligenceFiles(scanResult as MainlineSourceFileScanResult, input),
-      );
-      selectedFiles = files.length;
-
-      artifact = await kernel.runPhase("build-project-intelligence", () =>
-        this.#builder.build({
-          projectRoot: input.projectRoot,
-          knownFiles:
-            scanResult?.files
-              .filter((file) => file.kind === "source")
-              .map((file) => file.relativePath) ?? [],
-          files,
-          generatedAt: this.#now().getTime(),
-        }),
-      );
-
-      const materialized = await kernel.runPhase("materialize-project-intelligence", () =>
-        this.#materializer.materialize(artifact as MainlineProjectIntelligenceArtifact, {
-          ...(this.#contextIndex ? { contextIndex: this.#contextIndex } : {}),
-          ...(this.#searchIndex ? { searchIndex: this.#searchIndex } : {}),
-        }),
-      );
-      sourceRefs = materialized.sourceRefs.length;
-      searchDocuments = materialized.searchDocuments.length;
-      materializedSearchDocuments = materialized.searchDocuments;
-
-      await kernel.runPhase("save-artifact", async () => {
-        await this.#artifactStore?.save(artifact as MainlineProjectIntelligenceArtifact);
-        persisted = await this.#persistence?.saveSnapshots({
-          kind: input.kind,
-          projectRoot: input.projectRoot,
-          artifact: artifact as MainlineProjectIntelligenceArtifact,
-          searchDocuments: materializedSearchDocuments,
-        });
-      });
-
-      warnings.push("recipe_generation_deferred");
-      return this.#result(input, "completed", kernel.phases, scanResult, {
-        selectedFiles,
-        artifact,
-        sourceRefs,
-        searchDocuments,
-        ...(persisted ? { persisted } : {}),
-        warnings,
-      });
-    } catch (error) {
-      if (error instanceof MainlineWorkflowCancelledError) {
-        warnings.push(`cancelled_before_${error.phase}`);
-        return this.#result(input, "cancelled", kernel.phases, scanResult, {
-          selectedFiles,
-          artifact,
-          sourceRefs,
-          searchDocuments,
-          ...(persisted ? { persisted } : {}),
-          warnings,
-        });
-      }
-      throw error;
-    }
-  }
-
-  #result(
-    input: MainlineWorkflowRunInput,
-    status: MainlineWorkflowStatus,
-    phases: readonly MainlineWorkflowPhaseRecord[],
-    scanResult: MainlineSourceFileScanResult | null,
-    partial: {
-      readonly selectedFiles: number;
-      readonly artifact: MainlineProjectIntelligenceArtifact | null;
-      readonly sourceRefs: number;
-      readonly searchDocuments: number;
-      readonly persisted?: MainlineWorkflowPersistedArtifacts;
-      readonly warnings: readonly string[];
-    },
-  ): MainlineWorkflowResult {
+    const lifecycle = await this.#lifecycleRunner.run(toLifecycleInput(input));
     return {
-      kind: input.kind,
-      status,
-      phases,
-      projectRoot: input.projectRoot,
+      kind: lifecycle.kind,
+      status: lifecycle.status,
+      phases: lifecycle.phases,
+      projectRoot: lifecycle.projectRoot,
       summary: {
-        scannedFiles: scanResult?.metadata.totalFiles ?? 0,
-        sourceFiles: scanResult?.metadata.sourceFiles ?? 0,
-        selectedFiles: partial.selectedFiles,
-        parsedFiles: partial.artifact?.files.filter((file) => file.status === "parsed").length ?? 0,
-        symbols: partial.artifact?.symbols.length ?? 0,
-        semanticEdges: partial.artifact?.semanticEdges.length ?? 0,
-        sourceRefs: partial.sourceRefs,
-        searchDocuments: partial.searchDocuments,
-        recipes: 0,
-        truncated: scanResult?.truncated ?? false,
+        scannedFiles: lifecycle.summary.scannedFiles,
+        sourceFiles: lifecycle.summary.sourceFiles,
+        selectedFiles: lifecycle.summary.selectedFiles,
+        parsedFiles: lifecycle.summary.parsedFiles,
+        symbols: lifecycle.summary.symbols,
+        semanticEdges: lifecycle.summary.semanticEdges,
+        sourceRefs: lifecycle.summary.sourceRefs,
+        searchDocuments: lifecycle.summary.searchDocuments,
+        recipes: lifecycle.summary.recipes,
+        truncated: lifecycle.summary.truncated,
       },
-      ...(partial.persisted ? { persisted: partial.persisted } : {}),
+      ...(lifecycle.persisted === undefined ? {} : { persisted: lifecycle.persisted }),
       skippedSideEffects: SKIPPED_SIDE_EFFECTS,
-      warnings: partial.warnings,
+      warnings: lifecycle.warnings,
     };
   }
 }
 
-async function readProjectIntelligenceFiles(
-  scanResult: MainlineSourceFileScanResult,
-  input: MainlineWorkflowRunInput,
-) {
-  const changedFileSet =
-    input.kind === "rescan" && input.changedFiles && input.changedFiles.length > 0
-      ? new Set(input.changedFiles)
-      : null;
-  const files = scanResult.files.filter(
-    (file) =>
-      file.kind === "source" &&
-      (!changedFileSet || changedFileSet.has(file.relativePath) || changedFileSet.has(file.path)),
-  );
+function toLifecycleInput(input: MainlineWorkflowRunInput): ScanLifecycleRunInput {
+  const scan = scanWithoutRoot(input.scan);
+  return {
+    kind: input.kind,
+    projectRoot: input.projectRoot,
+    ...(scan === undefined ? {} : { scan }),
+    ...(input.changedFiles === undefined ? {} : { changedFiles: input.changedFiles }),
+    ...(input.removedFiles === undefined ? {} : { removedFiles: input.removedFiles }),
+    ...(input.diffTextByPath === undefined ? {} : { diffTextByPath: input.diffTextByPath }),
+    ...(input.cancellation === undefined ? {} : { cancellation: input.cancellation }),
+    source: "workflow",
+  };
+}
 
-  const result = [];
-  for (const file of files) {
-    result.push({
-      path: file.relativePath,
-      content: await fs.readFile(file.path, "utf8"),
-      languageId: file.languageId,
-    });
+function scanWithoutRoot(
+  scan: Partial<MainlineSourceFileScanOptions> | undefined,
+): Omit<MainlineSourceFileScanOptions, "root"> | undefined {
+  if (scan === undefined) {
+    return undefined;
   }
-  return result;
+  return {
+    ...(scan.maxDepth === undefined ? {} : { maxDepth: scan.maxDepth }),
+    ...(scan.maxFiles === undefined ? {} : { maxFiles: scan.maxFiles }),
+    ...(scan.includeTests === undefined ? {} : { includeTests: scan.includeTests }),
+    ...(scan.includeDocs === undefined ? {} : { includeDocs: scan.includeDocs }),
+    ...(scan.includeMarkdown === undefined ? {} : { includeMarkdown: scan.includeMarkdown }),
+    ...(scan.skipDirs === undefined ? {} : { skipDirs: scan.skipDirs }),
+  };
 }
