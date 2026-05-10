@@ -23,12 +23,18 @@ import type {
   MainlineZonedPath as JsonMainlineZonedPath,
 } from "../../mainline/data/JsonStores.js";
 import {
+  type RecipeLifecycleRecord,
+  RecipeLifecycleStore,
+  type RecipeLifecycleStorePort,
+} from "../../mainline/knowledge/index.js";
+import {
   type InMemoryMainlineSearchIndex,
   type MainlineSearchDocument,
   type MainlineSearchHit,
   type MainlineSearchIndex,
   MainlineSearchIndexStore,
   type MainlineSearchQuery,
+  projectRecipeSearchDocument,
 } from "../../mainline/search/index.js";
 import { ScanLifecycleRunner } from "../scan/ScanLifecycleRunner.js";
 import type {
@@ -102,6 +108,11 @@ export async function createMainlineWorkflowPersistence(
     ),
     [contextIndex, searchIndex],
   );
+  const knowledgeLifecycleStore = new IndexingRecipeLifecycleStore(
+    new RecipeLifecycleStore(writeBoundary, { fileStore: coreFileStore }),
+    contextIndex,
+    searchIndex,
+  );
   const persistence = new DataRootWorkflowSnapshotPersistence(
     contextIndex,
     searchIndex,
@@ -134,6 +145,7 @@ export async function createMainlineWorkflowPersistence(
     contextIndex,
     searchIndex,
     artifactStore,
+    knowledgeLifecycleStore,
     ...(input.now === undefined ? {} : { now: input.now }),
   });
 
@@ -169,6 +181,7 @@ export function createMainlineAgentToolDependencies(input: {
   readonly contextIndex: PersistentMainlineContextIndex;
   readonly searchIndex: PersistentMainlineSearchIndex;
   readonly artifactStore: MainlineProjectIntelligenceArtifactStore;
+  readonly knowledgeLifecycleStore: RecipeLifecycleStorePort;
   readonly now?: () => number;
 }): ToolRuntimeDependencies {
   return {
@@ -176,6 +189,7 @@ export function createMainlineAgentToolDependencies(input: {
     contextIndex: input.contextIndex,
     searchIndex: input.searchIndex,
     projectIntelligenceArtifactProvider: input.artifactStore,
+    knowledgeLifecycleStore: input.knowledgeLifecycleStore,
     ...(input.now === undefined ? {} : { now: input.now }),
   };
 }
@@ -289,6 +303,90 @@ class DataRootWorkflowSnapshotPersistence implements MainlineWorkflowSnapshotPer
   }
 }
 
+class IndexingRecipeLifecycleStore implements RecipeLifecycleStorePort {
+  readonly #inner: RecipeLifecycleStorePort;
+  readonly #contextIndex: PersistentMainlineContextIndex;
+  readonly #searchIndex: PersistentMainlineSearchIndex;
+
+  constructor(
+    inner: RecipeLifecycleStorePort,
+    contextIndex: PersistentMainlineContextIndex,
+    searchIndex: PersistentMainlineSearchIndex,
+  ) {
+    this.#inner = inner;
+    this.#contextIndex = contextIndex;
+    this.#searchIndex = searchIndex;
+  }
+
+  async writeCandidate(
+    recipe: Parameters<RecipeLifecycleStorePort["writeCandidate"]>[0],
+    options?: Parameters<RecipeLifecycleStorePort["writeCandidate"]>[1],
+  ): ReturnType<RecipeLifecycleStorePort["writeCandidate"]> {
+    const record = await this.#inner.writeCandidate(recipe, options);
+    await this.#indexRecord(record);
+    return record;
+  }
+
+  async publish(
+    recipeId: Parameters<RecipeLifecycleStorePort["publish"]>[0],
+    options?: Parameters<RecipeLifecycleStorePort["publish"]>[1],
+  ): ReturnType<RecipeLifecycleStorePort["publish"]> {
+    const record = await this.#inner.publish(recipeId, options);
+    await this.#indexRecord(record);
+    return record;
+  }
+
+  async reject(
+    recipeId: Parameters<RecipeLifecycleStorePort["reject"]>[0],
+    options?: Parameters<RecipeLifecycleStorePort["reject"]>[1],
+  ): ReturnType<RecipeLifecycleStorePort["reject"]> {
+    const record = await this.#inner.reject(recipeId, options);
+    await this.#indexRecord(record);
+    return record;
+  }
+
+  list(
+    options?: Parameters<RecipeLifecycleStorePort["list"]>[0],
+  ): ReturnType<RecipeLifecycleStorePort["list"]> {
+    return this.#inner.list(options);
+  }
+
+  load(
+    recipeId: Parameters<RecipeLifecycleStorePort["load"]>[0],
+    options?: Parameters<RecipeLifecycleStorePort["load"]>[1],
+  ): ReturnType<RecipeLifecycleStorePort["load"]> {
+    return this.#inner.load(recipeId, options);
+  }
+
+  async #indexRecord(record: RecipeLifecycleRecord): Promise<void> {
+    await this.#contextIndex.upsertContextArtifacts({
+      recipes: [record.recipe],
+      ...(record.file === undefined
+        ? {}
+        : {
+            recipeFiles: [
+              {
+                recipeId: record.file.recipeId,
+                bucket: record.file.bucket,
+                relativePath: record.file.relativePath,
+                contentHash: record.file.contentHash,
+                ...(record.metadata.updatedAt === undefined
+                  ? {}
+                  : { updatedAt: record.metadata.updatedAt }),
+              },
+            ],
+          }),
+    });
+
+    if (record.status === "rejected") {
+      this.#searchIndex.remove([`recipe:${record.id}`]);
+    } else {
+      this.#searchIndex.upsert([lifecycleSearchDocument(record)]);
+    }
+    await this.#searchIndex.flush();
+  }
+}
+
 class FlushingMainlineProjectIntelligenceArtifactStore
   implements MainlineProjectIntelligenceArtifactStore
 {
@@ -311,6 +409,18 @@ class FlushingMainlineProjectIntelligenceArtifactStore
     await Promise.all(this.#flushers.map((flusher) => flusher.flush()));
     await this.#inner.save(artifact);
   }
+}
+
+function lifecycleSearchDocument(record: RecipeLifecycleRecord): MainlineSearchDocument {
+  const document = projectRecipeSearchDocument(record.recipe);
+  return {
+    ...document,
+    metadata: {
+      ...(document.metadata ?? {}),
+      lifecycleStatus: record.status,
+      recipeStatus: record.status,
+    },
+  };
 }
 
 class DataRootJsonFileStore implements JsonMainlineAtomicFileStore {

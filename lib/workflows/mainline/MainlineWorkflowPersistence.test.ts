@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { ToolRouter } from "../../agent/tools/index.js";
 import { createRecipe, createRecipeKnowledgePayload } from "../../mainline/knowledge/index.js";
 import { MainlineWorkflowEntrypoint } from "./MainlineWorkflowEntrypoint.js";
 import { createMainlineWorkflowPersistence } from "./MainlineWorkflowPersistence.js";
@@ -110,6 +111,67 @@ describe("mainline workflow dataRoot persistence", () => {
     });
   });
 
+  it("wires internal agent knowledge tools to the dataRoot lifecycle store", async () => {
+    const projectRoot = await makeFixtureProject();
+    const dataRoot = await makeTempRoot("alembic-workflow-data-");
+    const persistence = await createMainlineWorkflowPersistence({
+      projectRoot,
+      dataRoot,
+      mode: "ghost",
+      now: () => 20_000,
+    });
+    const router = new ToolRouter({ dependencies: persistence.agentToolDependencies });
+
+    const submit = await router.invoke({
+      name: "knowledge.submit",
+      input: validAgentKnowledgeItem(),
+    });
+
+    expect(submit.ok).toBe(true);
+    if (!submit.ok) {
+      throw new Error(submit.error.message);
+    }
+    const candidateId = (submit.data as { record: { id: string } }).record.id;
+    await expect(
+      persistence.agentToolDependencies.knowledgeLifecycleStore?.load(candidateId, {
+        status: "candidate",
+      }),
+    ).resolves.toMatchObject({ id: candidateId, status: "candidate" });
+    await expect(persistence.contextIndex.findRecipesByIds([candidateId])).resolves.toEqual([
+      expect.objectContaining({ id: candidateId, status: "candidate" }),
+    ]);
+    expect(persistence.searchIndex.search({ text: "agent lifecycle", limit: 5 })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          document: expect.objectContaining({
+            id: `recipe:${candidateId}`,
+            metadata: expect.objectContaining({ lifecycleStatus: "candidate" }),
+          }),
+        }),
+      ]),
+    );
+
+    const publish = await router.invoke({
+      name: "knowledge.manage",
+      input: { operation: "publish", id: candidateId },
+    });
+
+    expect(publish.ok).toBe(true);
+    await expect(
+      persistence.agentToolDependencies.knowledgeLifecycleStore?.load(candidateId),
+    ).resolves.toMatchObject({ id: candidateId, status: "active" });
+    expect(persistence.searchIndex.search({ text: "agent lifecycle", limit: 5 })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          document: expect.objectContaining({
+            id: `recipe:${candidateId}`,
+            metadata: expect.objectContaining({ lifecycleStatus: "active" }),
+          }),
+        }),
+      ]),
+    );
+  });
+
   it("persists recipe Markdown file indexes across dependency rebuilds", async () => {
     const projectRoot = await makeFixtureProject();
     const dataRoot = await makeTempRoot("alembic-workflow-data-");
@@ -166,6 +228,41 @@ async function makeFixtureProject(): Promise<string> {
   );
   await fs.writeFile(path.join(root, "src", "util.ts"), "export function helper() { return 1; }\n");
   return root;
+}
+
+function validAgentKnowledgeItem(): Record<string, unknown> {
+  const markdown = [
+    "Use agent lifecycle tool wiring when internal AgentRuntime submits durable Alembic knowledge.",
+    "This keeps AI-generated candidates in the Ghost data root and indexes them for later review.",
+    "Source: src/app.ts:1",
+    "",
+    "```ts",
+    "export function app() { return helper(); }",
+    "```",
+  ].join("\n");
+  return {
+    title: "Agent Lifecycle Tool Wiring",
+    description:
+      "Internal AgentRuntime can submit knowledge candidates through dataRoot lifecycle.",
+    trigger: "agent lifecycle tool wiring",
+    kind: "pattern",
+    whenClause: "When internal AgentRuntime produces a reusable Alembic Recipe candidate.",
+    doClause: "Submit through knowledge.submit with the dataRoot lifecycle store injected.",
+    dontClause: "Do not write candidate Markdown outside the Alembic data root.",
+    coreCode: "export function app() { return helper(); }",
+    category: "agent-runtime",
+    reasoning: {
+      whyStandard: "Agent fill must produce reviewable candidates without project pollution.",
+      sources: ["src/app.ts"],
+      confidence: 0.9,
+    },
+    content: {
+      markdown,
+      rationale: "The candidate has concrete source evidence and a project-local code pattern.",
+    },
+    language: "typescript",
+    confidence: 0.9,
+  };
 }
 
 async function makeTempRoot(prefix: string): Promise<string> {
