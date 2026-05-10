@@ -5,6 +5,7 @@ export * from "./GuardFinding.js";
 export * from "./Recipe.js";
 export * from "./RecipeEdge.js";
 export * from "./RecipeKnowledgePayload.js";
+export * from "./RecipeLifecycleStore.js";
 export * from "./RecipeMarkdownCodec.js";
 export * from "./RecipeMarkdownStore.js";
 export * from "./RecipeQualityPolicy.js";

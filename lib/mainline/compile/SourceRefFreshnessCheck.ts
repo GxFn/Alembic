@@ -16,7 +16,10 @@ export class SourceRefFreshnessCheck {
     return sourceRefs.map((sourceRef) => ({
       sourceRefId: sourceRef.id,
       status: sourceRef.status,
-      fresh: sourceRef.status === "active" || sourceRef.status === "renamed",
+      fresh:
+        sourceRef.status === "active" ||
+        sourceRef.status === "repaired" ||
+        sourceRef.status === "renamed",
       reason: reasonForStatus(sourceRef.status),
     }));
   }
@@ -26,6 +29,8 @@ function reasonForStatus(status: SourceRef["status"]): string {
   switch (status) {
     case "active":
       return "Source reference is active.";
+    case "repaired":
+      return "Source reference was repaired by the incremental SourceRef repair chain.";
     case "renamed":
       return "Source reference was renamed but is still usable.";
     case "stale":

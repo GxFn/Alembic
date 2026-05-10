@@ -61,5 +61,6 @@ export function createRecipe(input: RecipeInput): Recipe {
 }
 
 export function isUsableRecipe(recipe: Recipe): boolean {
-  return recipe.status === "active" || recipe.status === "candidate";
+  // 中文注释：candidate 仍在审核边界内，不能默认进入 prime/guard/search 的 active 知识集合。
+  return recipe.status === "active";
 }

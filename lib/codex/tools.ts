@@ -10,6 +10,8 @@ import {
 import { runCodexGuard } from "./guard.js";
 import { readPackageInfo } from "./package-info.js";
 import { runCodexPrime } from "./prime.js";
+import { runCodexSearch } from "./search.js";
+import { runCodexStructure } from "./structure.js";
 import { submitCodexKnowledge } from "./submit-knowledge.js";
 import {
   countMarkdownFiles,
@@ -138,6 +140,74 @@ export const CODEX_TOOLS: CodexToolDefinition[] = [
     annotations: { readOnlyHint: true },
   },
   {
+    name: "alembic_search",
+    description:
+      "Search Alembic public read models for the current Codex workspace. Reads SearchIndexSnapshot and ContextIndex only.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Natural language or code search text." },
+        text: { type: "string", description: "Alias for query." },
+        paths: {
+          type: "array",
+          items: { type: "string" },
+          description: "Path filters from the project root.",
+        },
+        symbols: {
+          type: "array",
+          items: { type: "string" },
+          description: "Symbol filters or fully qualified names.",
+        },
+        kinds: {
+          type: "array",
+          items: {
+            type: "string",
+            enum: ["recipe", "source-ref", "symbol", "file", "note", "graph-node"],
+          },
+          description: "Optional document kinds to include.",
+        },
+        kind: {
+          type: "string",
+          enum: ["recipe", "source-ref", "symbol", "file", "note", "graph-node"],
+          description: "Single document kind alias.",
+        },
+        limit: { type: "number", description: "Maximum hits to return, capped at 50." },
+        projectRoot: {
+          type: "string",
+          description: "Explicit project root. Defaults to the current Codex workspace.",
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: "alembic_structure",
+    description:
+      "Read project structure from Alembic ProjectIntelligence artifacts or graph documents for the current Codex workspace.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        operation: {
+          type: "string",
+          enum: ["summary", "files", "symbols", "dependencies", "cycles"],
+          description: "Structure view to return. Defaults to summary.",
+        },
+        path: { type: "string", description: "Optional project-relative path filter." },
+        file: { type: "string", description: "Alias for path." },
+        target: { type: "string", description: "Alias for path." },
+        symbol: { type: "string", description: "Optional symbol name or FQN filter." },
+        limit: { type: "number", description: "Maximum records to return, capped at 100." },
+        projectRoot: {
+          type: "string",
+          description: "Explicit project root. Defaults to the current Codex workspace.",
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true },
+  },
+  {
     name: "alembic_submit_knowledge",
     description:
       "Submit Alembic Recipe candidates for later review. Default Codex tier writes candidates only and does not publish Recipes.",
@@ -256,6 +326,14 @@ export async function handleCodexTool(
           };
         }
         return { success: true, data: await runCodexPrime(args) };
+      case "alembic_search":
+        // 中文注释：Codex public search 是 MCP 协议面，只读 mainline snapshots；
+        // internal Agent tools 仍留在 lib/agent/tools，二者不能共享 envelope 或 registry。
+        return { success: true, data: await runCodexSearch(args) };
+      case "alembic_structure":
+        // 中文注释：Codex public structure 只消费 ProjectIntelligence read model，
+        // 不导入 internal Agent graph tool，也不暴露 resource.action 形态。
+        return { success: true, data: await runCodexStructure(args) };
       case "alembic_submit_knowledge":
         return { success: true, data: await submitCodexKnowledge(args) };
       case "alembic_guard":

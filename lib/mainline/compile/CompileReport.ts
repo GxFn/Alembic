@@ -51,6 +51,7 @@ const EDGE_SOURCES = [
 
 const SOURCE_REF_STATUSES = [
   "active",
+  "repaired",
   "stale",
   "renamed",
   "missing",
@@ -302,5 +303,5 @@ function countBy<T extends string>(values: readonly T[], keys: readonly T[]): Re
 }
 
 function isFreshSourceRefStatus(status: SourceRefStatus): boolean {
-  return status === "active" || status === "renamed";
+  return status === "active" || status === "repaired" || status === "renamed";
 }

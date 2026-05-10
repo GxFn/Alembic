@@ -5,12 +5,14 @@ import type {
   MainlineProjectIntelligenceEdge,
   MainlineProjectIntelligenceSymbol,
 } from "../graph/index.js";
+import type { MainlineSourceRefMovedFile } from "./RecipePathRepairer.js";
 
 export interface MainlineProjectIntelligenceIncrementalPlanRequest {
   readonly artifact: MainlineProjectIntelligenceArtifact;
   readonly fingerprintDiff?: MainlineFileFingerprintSnapshotDiff;
   readonly changedFiles?: readonly string[];
   readonly deletedFiles?: readonly string[];
+  readonly movedFiles?: readonly MainlineSourceRefMovedFile[];
   readonly dependentDepth?: number;
   readonly fullRebuildChangeRatio?: number;
 }
@@ -22,7 +24,9 @@ export interface MainlineProjectIntelligenceIncrementalPlan {
   readonly affectedFiles: readonly string[];
   readonly filesToParse: readonly string[];
   readonly affectedSymbols: readonly MainlineProjectIntelligenceSymbol[];
+  readonly movedFiles: readonly MainlineSourceRefMovedFile[];
   readonly sourceRefIdsToRefresh: readonly string[];
+  readonly sourceRefIdsToRepair: readonly string[];
   readonly sourceRefIdsToStale: readonly string[];
   readonly searchDocumentIdsToRefresh: readonly string[];
   readonly searchDocumentIdsToRemove: readonly string[];
@@ -33,7 +37,7 @@ export interface MainlineProjectIntelligenceIncrementalPlan {
 
 export interface MainlineProjectIntelligenceIncrementalReason {
   readonly path: string;
-  readonly kind: "changed" | "deleted" | "dependent" | "full-rebuild-threshold";
+  readonly kind: "changed" | "deleted" | "moved" | "dependent" | "full-rebuild-threshold";
   readonly via?: string;
 }
 
@@ -48,15 +52,19 @@ export class MainlineProjectIntelligenceIncrementalPlanner {
   plan(
     request: MainlineProjectIntelligenceIncrementalPlanRequest,
   ): MainlineProjectIntelligenceIncrementalPlan {
+    const movedFiles = normalizeMovedFiles(request.movedFiles ?? []);
     const changedFiles = uniqueMainlinePosixPaths([
       ...(request.fingerprintDiff?.added ?? []),
       ...(request.fingerprintDiff?.modified ?? []),
       ...(request.changedFiles ?? []),
+      ...movedFiles.map((movedFile) => movedFile.toPath),
     ]);
     const deletedFiles = uniqueMainlinePosixPaths([
       ...(request.fingerprintDiff?.deleted ?? []),
       ...(request.deletedFiles ?? []),
+      ...movedFiles.map((movedFile) => movedFile.fromPath),
     ]);
+    const movedFromPaths = new Set(movedFiles.map((move) => move.fromPath));
     const knownFiles = new Set(request.artifact.files.map((file) => file.path));
     const fullRebuildRequired =
       (request.fingerprintDiff?.changeRatio ?? 0) >=
@@ -75,10 +83,13 @@ export class MainlineProjectIntelligenceIncrementalPlanner {
     const affectedFiles = uniqueMainlinePosixPaths([...filesToParse, ...deletedFiles]).sort();
     const affectedSymbols = symbolsForFiles(request.artifact.symbols, affectedFiles);
     const symbolsToRefresh = symbolsForFiles(request.artifact.symbols, filesToParse);
-    const symbolsToStale = symbolsForFiles(request.artifact.symbols, deletedFiles);
+    const symbolsToRepair = symbolsForFiles(request.artifact.symbols, [...movedFromPaths]);
+    const staleDeletedFiles = deletedFiles.filter((filePath) => !movedFromPaths.has(filePath));
+    const symbolsToStale = symbolsForFiles(request.artifact.symbols, staleDeletedFiles);
     const reasons = buildReasons({
       changedFiles,
       deletedFiles,
+      movedFiles,
       dependentFiles,
       fullRebuildRequired,
     });
@@ -90,12 +101,17 @@ export class MainlineProjectIntelligenceIncrementalPlanner {
       affectedFiles,
       filesToParse,
       affectedSymbols,
+      movedFiles,
       sourceRefIdsToRefresh: uniqueStrings([
         ...filesToParse,
         ...symbolsToRefresh.map((symbol) => symbol.id),
       ]),
+      sourceRefIdsToRepair: uniqueStrings([
+        ...movedFiles.map((movedFile) => movedFile.fromPath),
+        ...symbolsToRepair.map((symbol) => symbol.id),
+      ]),
       sourceRefIdsToStale: uniqueStrings([
-        ...deletedFiles,
+        ...staleDeletedFiles,
         ...symbolsToStale.map((symbol) => symbol.id),
       ]),
       searchDocumentIdsToRefresh: uniqueStrings([
@@ -104,6 +120,7 @@ export class MainlineProjectIntelligenceIncrementalPlanner {
       ]),
       searchDocumentIdsToRemove: uniqueStrings([
         ...deletedFiles.map((filePath) => `file:${filePath}`),
+        ...symbolsToRepair.map((symbol) => symbol.id),
         ...symbolsToStale.map((symbol) => symbol.id),
       ]),
       contextLookupFiles: affectedFiles,
@@ -194,12 +211,18 @@ function symbolsForFiles(
 function buildReasons(input: {
   readonly changedFiles: readonly string[];
   readonly deletedFiles: readonly string[];
+  readonly movedFiles: readonly MainlineSourceRefMovedFile[];
   readonly dependentFiles: readonly string[];
   readonly fullRebuildRequired: boolean;
 }): MainlineProjectIntelligenceIncrementalReason[] {
   const reasons: MainlineProjectIntelligenceIncrementalReason[] = [
     ...input.changedFiles.map((filePath) => ({ path: filePath, kind: "changed" as const })),
     ...input.deletedFiles.map((filePath) => ({ path: filePath, kind: "deleted" as const })),
+    ...input.movedFiles.map((movedFile) => ({
+      path: movedFile.fromPath,
+      kind: "moved" as const,
+      via: movedFile.toPath,
+    })),
     ...input.dependentFiles.map((filePath) => ({ path: filePath, kind: "dependent" as const })),
   ];
 
@@ -218,4 +241,26 @@ function buildReasons(input: {
 
 function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort();
+}
+
+function normalizeMovedFiles(
+  movedFiles: readonly MainlineSourceRefMovedFile[],
+): MainlineSourceRefMovedFile[] {
+  const byFrom = new Map<string, MainlineSourceRefMovedFile>();
+  for (const movedFile of movedFiles) {
+    const fromPath = normalizeMainlinePosixPath(movedFile.fromPath);
+    const toPath = normalizeMainlinePosixPath(movedFile.toPath);
+    if (!fromPath || !toPath || byFrom.has(fromPath)) {
+      continue;
+    }
+    byFrom.set(fromPath, {
+      fromPath,
+      toPath,
+      ...(movedFile.contentHash === undefined ? {} : { contentHash: movedFile.contentHash }),
+    });
+  }
+  return [...byFrom.values()].sort(
+    (left, right) =>
+      left.fromPath.localeCompare(right.fromPath) || left.toPath.localeCompare(right.toPath),
+  );
 }

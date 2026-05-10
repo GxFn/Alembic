@@ -5,7 +5,7 @@ import { requireNonEmptyString } from "./internal/assert.js";
  * Recipe 应通过它指向真实代码、文档、diff 或 finding，
  * 而不是携带不可结构化追踪的来源文本。
  */
-export type SourceRefStatus = "active" | "stale" | "renamed" | "missing" | "unknown";
+export type SourceRefStatus = "active" | "repaired" | "stale" | "renamed" | "missing" | "unknown";
 
 export type SourceRefKind =
   | "file"
@@ -79,5 +79,9 @@ export function sourceRefIdForPath(path: string, symbol?: string): string {
 
 /** freshness 是主线中替代 ReverseGuard 的轻量健康判断。 */
 export function isFreshSourceRef(sourceRef: SourceRef): boolean {
-  return sourceRef.status === "active" || sourceRef.status === "renamed";
+  return (
+    sourceRef.status === "active" ||
+    sourceRef.status === "repaired" ||
+    sourceRef.status === "renamed"
+  );
 }

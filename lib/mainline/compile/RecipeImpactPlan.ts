@@ -1,6 +1,7 @@
 export type MainlineRecipeImpactLevel = "pattern" | "reference" | "none";
 
 export type MainlineRecipeImpactReason =
+  | "source-moved"
   | "source-deleted"
   | "source-deleted-partial"
   | "source-modified-pattern"
@@ -13,6 +14,7 @@ export interface MainlineRecipeImpact {
   readonly recipeId: string;
   readonly recipeTitle: string;
   readonly changedPath: string;
+  readonly targetPath?: string;
   readonly reason: MainlineRecipeImpactReason;
   readonly impactLevel: MainlineRecipeImpactLevel;
   readonly impactScore: number;
@@ -61,6 +63,7 @@ export function createEmptyMainlineRecipeImpactPlan(): MainlineRecipeImpactPlan 
 }
 
 const IMPACT_REASON_PRIORITY: Record<MainlineRecipeImpactReason, number> = {
+  "source-moved": 5,
   "source-deleted": 5,
   "source-deleted-partial": 4,
   "source-modified-pattern": 3,

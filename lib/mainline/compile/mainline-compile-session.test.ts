@@ -75,6 +75,24 @@ describe("mainline compile session", () => {
           suggestedAction: "update",
         }),
       );
+      expect(incremental.sourceRefRepair.summary).toEqual({
+        movedFileCount: 0,
+        removedFileCount: 0,
+        repairedSourceRefCount: 0,
+        staleSourceRefCount: 0,
+        affectedRecipeCount: 0,
+      });
+      expect(incremental.progress.checkpoints.map((checkpoint) => checkpoint.phase)).toContain(
+        "source-ref-repair",
+      );
+      expect(incremental.cancel.supported).toBe(false);
+      expect(incremental.cancel.checkpoints.map((checkpoint) => checkpoint.kind)).toEqual([
+        "pre-run",
+        "pre-source-ref-repair",
+        "post-source-ref-repair",
+        "post-run",
+      ]);
+      expect(incremental.cancel.warnings[0]).toContain("checkpoint-only");
       expect(incremental.search.restoredDocuments).toBeGreaterThan(0);
       await expect(jobLedger.list({ kind: "mainline-compile-session" })).resolves.toEqual([
         expect.objectContaining({ status: "completed" }),

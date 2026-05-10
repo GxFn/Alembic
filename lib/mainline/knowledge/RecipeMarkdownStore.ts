@@ -124,6 +124,21 @@ export class RecipeMarkdownStore {
 
     return { recipes, files, warnings };
   }
+
+  async deleteFile(
+    file: Pick<RecipeMarkdownReadFile | RecipeMarkdownWriteResult, "relativePath">,
+  ): Promise<boolean> {
+    const target = this.#writeBoundary.knowledge(knowledgeRelativePath(file.relativePath));
+    try {
+      await fs.rm(target.absolute, { force: false });
+      return true;
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return false;
+      }
+      throw error;
+    }
+  }
 }
 
 export function recipeMarkdownBucket(recipe: Recipe): RecipeMarkdownBucket {
@@ -196,6 +211,11 @@ interface DirectoryEntry {
 
 function toPosix(value: string): string {
   return value.split(path.sep).join(path.posix.sep);
+}
+
+function knowledgeRelativePath(value: string): string {
+  const relativePath = toPosix(value);
+  return relativePath.startsWith("Alembic/") ? relativePath.slice("Alembic/".length) : relativePath;
 }
 
 function isNotFoundError(error: unknown): boolean {

@@ -2,8 +2,12 @@ import type { ContextBundle, EvidencePackage } from "../knowledge/index.js";
 import { type AiCapabilityDecision, AiCapabilityPolicy } from "./AiCapabilityPolicy.js";
 import type { AiProviderStatus, AiTask } from "./AiPort.js";
 
+export type AiTaskPlanStatus = "blocked" | "degraded" | "ready";
+
 export interface AiTaskPlan {
+  status: AiTaskPlanStatus;
   allowed: boolean;
+  degraded: boolean;
   decision: AiCapabilityDecision;
   tasks: AiTask[];
 }
@@ -32,12 +36,14 @@ export class AiTaskPlanner {
   planContentMining(request: ContentMiningAiTaskPlanRequest): AiTaskPlan {
     const decision = this.#policy.decide(request.providerStatus);
     if (!decision.allowed) {
-      return { allowed: false, decision, tasks: [] };
+      return blockedPlan(decision, request.providerStatus);
     }
 
     const evidence = request.evidencePackage;
     return {
+      status: "ready",
       allowed: true,
+      degraded: false,
       decision,
       tasks: [
         {
@@ -63,12 +69,14 @@ export class AiTaskPlanner {
   planKnowledgeInjection(request: KnowledgeInjectionAiTaskPlanRequest): AiTaskPlan {
     const decision = this.#policy.decide(request.providerStatus);
     if (!decision.allowed) {
-      return { allowed: false, decision, tasks: [] };
+      return blockedPlan(decision, request.providerStatus);
     }
 
     const bundle = request.contextBundle;
     return {
+      status: "ready",
       allowed: true,
+      degraded: false,
       decision,
       tasks: [
         {
@@ -82,6 +90,28 @@ export class AiTaskPlanner {
       ],
     };
   }
+}
+
+function blockedPlan(
+  decision: AiCapabilityDecision,
+  providerStatus: AiProviderStatus | null | undefined,
+): AiTaskPlan {
+  return {
+    status: planStatusForBlockedProvider(providerStatus),
+    allowed: false,
+    degraded: true,
+    decision,
+    tasks: [],
+  };
+}
+
+function planStatusForBlockedProvider(
+  providerStatus: AiProviderStatus | null | undefined,
+): AiTaskPlanStatus {
+  if (!providerStatus || providerStatus.mock || providerStatus.provider === "missing") {
+    return "blocked";
+  }
+  return "degraded";
 }
 
 function buildEvidenceSummaryPrompt(evidence: EvidencePackage): string {

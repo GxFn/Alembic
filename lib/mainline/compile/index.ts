@@ -15,6 +15,8 @@ export * from "./ProjectIntelligenceRunner.js";
 export * from "./ProjectPanoramaSummary.js";
 export * from "./RecipeImpactAnalyzer.js";
 export * from "./RecipeImpactPlan.js";
+export * from "./RecipePathRepairer.js";
 export * from "./RecipeRelationMiner.js";
 export * from "./SourceRefFreshnessCheck.js";
 export * from "./SourceRefMaterializer.js";
+export * from "./SourceRefRepairService.js";

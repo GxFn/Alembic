@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { EvidencePackage } from "../knowledge/index.js";
 import { AiCapabilityPolicy } from "./AiCapabilityPolicy.js";
 import type { MainlineAgentAiPort } from "./AiPort.js";
 import { AiProviderMainlineAdapter } from "./AiProviderAdapter.js";
+import { AiTaskPlanner } from "./AiTaskPlanner.js";
 import { ParameterGuard } from "./guard/ParameterGuard.js";
 import type { ModelDef } from "./registry/model-defs.js";
 
@@ -49,6 +51,59 @@ describe("Mainline AI boundaries", () => {
       "reasoningEffort",
     ]);
   });
+
+  it("marks AI task plans as blocked, degraded, or ready from provider status", () => {
+    const planner = new AiTaskPlanner();
+
+    expect(
+      planner.planContentMining({
+        evidencePackage: evidenceFixture(),
+        providerStatus: undefined,
+      }),
+    ).toMatchObject({
+      status: "blocked",
+      allowed: false,
+      degraded: true,
+      tasks: [],
+    });
+
+    expect(
+      planner.planContentMining({
+        evidencePackage: evidenceFixture(),
+        providerStatus: {
+          provider: "openai",
+          model: "gpt-test",
+          ready: false,
+          mock: false,
+          reason: "API key missing.",
+        },
+      }),
+    ).toMatchObject({
+      status: "degraded",
+      allowed: false,
+      degraded: true,
+      tasks: [],
+    });
+
+    const ready = planner.planContentMining({
+      evidencePackage: evidenceFixture(),
+      providerStatus: {
+        provider: "openai",
+        model: "gpt-test",
+        ready: true,
+        mock: false,
+      },
+    });
+    expect(ready).toMatchObject({
+      status: "ready",
+      allowed: true,
+      degraded: false,
+    });
+    expect(ready.tasks.map((task) => task.kind)).toEqual([
+      "summarize-evidence",
+      "propose-recipe-edges",
+    ]);
+  });
 });
 
 function mockProvider(): MainlineAgentAiPort {
@@ -61,6 +116,25 @@ function mockProvider(): MainlineAgentAiPort {
     async chatWithTools() {
       return { text: "should not run" };
     },
+  };
+}
+
+function evidenceFixture(): EvidencePackage {
+  return {
+    id: "evidence-1",
+    origin: "manual",
+    projectRoot: "/tmp/alembic-test",
+    changedFiles: ["lib/example.ts"],
+    sourceRefs: [
+      {
+        id: "lib/example.ts",
+        kind: "file",
+        location: { path: "lib/example.ts" },
+        status: "active",
+      },
+    ],
+    notes: ["fixture evidence"],
+    createdAt: 1,
   };
 }
 

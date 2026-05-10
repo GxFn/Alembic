@@ -12,6 +12,7 @@ import type {
   MainlineRecipeImpactSuggestedAction,
 } from "./RecipeImpactPlan.js";
 import { summarizeMainlineRecipeImpacts } from "./RecipeImpactPlan.js";
+import type { MainlineSourceRefMovedFile } from "./RecipePathRepairer.js";
 
 export interface MainlineRecipeImpactAnalyzeRequest {
   readonly recipes: readonly Recipe[];
@@ -21,6 +22,7 @@ export interface MainlineRecipeImpactAnalyzeRequest {
   readonly diffTextByPath?: Record<string, string>;
   readonly fileContentByPath?: Record<string, string>;
   readonly sourceRefs?: readonly SourceRef[];
+  readonly movedFiles?: readonly MainlineSourceRefMovedFile[];
 }
 
 export interface MainlineRecipeImpactAssessment {
@@ -46,9 +48,40 @@ export class RecipeImpactAnalyzer {
     const deletedFiles = uniqueMainlinePosixPaths(request.deletedFiles ?? []);
     const createdFiles = uniqueMainlinePosixPaths(request.createdFiles ?? []);
     const createdSet = new Set(createdFiles);
+    const movedFiles = normalizeMovedFiles(request.movedFiles ?? []);
+    const movedFromPaths = new Set(movedFiles.map((move) => move.fromPath));
     const recipesByPath = recipesByEvidencePath(request.recipes, sourceRefPathById);
     const impacts: MainlineRecipeImpact[] = [];
     const ignored: MainlineRecipeImpactIgnored[] = [];
+
+    for (const movedFile of movedFiles) {
+      const recipes = recipesByPath.get(movedFile.fromPath) ?? [];
+      if (recipes.length === 0) {
+        ignored.push({ changedPath: movedFile.fromPath, reason: "no-recipe-reference" });
+        continue;
+      }
+
+      for (const recipe of recipes) {
+        if (!isRecipeImpactTrackable(recipe)) {
+          ignored.push({ changedPath: movedFile.fromPath, reason: "recipe-not-trackable" });
+          continue;
+        }
+        impacts.push(
+          createImpact({
+            recipe,
+            changedPath: movedFile.fromPath,
+            targetPath: movedFile.toPath,
+            reason: "source-moved",
+            assessment: {
+              impactLevel: "reference",
+              impactScore: 0.8,
+              matchedTokens: [],
+            },
+            suggestedAction: "verify",
+          }),
+        );
+      }
+    }
 
     for (const changedPath of changedFiles) {
       if (createdSet.has(changedPath)) {
@@ -80,6 +113,9 @@ export class RecipeImpactAnalyzer {
     }
 
     for (const deletedPath of deletedFiles) {
+      if (movedFromPaths.has(deletedPath)) {
+        continue;
+      }
       const recipes = recipesByPath.get(deletedPath) ?? [];
       if (recipes.length === 0) {
         ignored.push({ changedPath: deletedPath, reason: "no-recipe-reference" });
@@ -110,7 +146,11 @@ export class RecipeImpactAnalyzer {
       }
     }
 
-    const allChangedFiles = uniqueMainlinePosixPaths([...changedFiles, ...deletedFiles]);
+    const allChangedFiles = uniqueMainlinePosixPaths([
+      ...changedFiles,
+      ...deletedFiles,
+      ...movedFiles.flatMap((movedFile) => [movedFile.fromPath, movedFile.toPath]),
+    ]);
     const sortedImpacts = impacts.sort(compareImpacts);
     const sortedIgnored = ignored.sort(
       (left, right) =>
@@ -208,6 +248,7 @@ function assessTokenImpact(
 function createImpact(input: {
   readonly recipe: Recipe;
   readonly changedPath: string;
+  readonly targetPath?: string;
   readonly reason: MainlineRecipeImpactReason;
   readonly assessment: MainlineRecipeImpactAssessment;
   readonly suggestedAction: MainlineRecipeImpactSuggestedAction;
@@ -216,6 +257,7 @@ function createImpact(input: {
     recipeId: input.recipe.id,
     recipeTitle: input.recipe.title,
     changedPath: input.changedPath,
+    ...(input.targetPath === undefined ? {} : { targetPath: input.targetPath }),
     reason: input.reason,
     impactLevel: input.assessment.impactLevel,
     impactScore: input.assessment.impactScore,
@@ -223,6 +265,28 @@ function createImpact(input: {
     suggestedAction: input.suggestedAction,
     sourceRefIds: input.recipe.sourceRefIds,
   };
+}
+
+function normalizeMovedFiles(
+  movedFiles: readonly MainlineSourceRefMovedFile[],
+): MainlineSourceRefMovedFile[] {
+  const byFrom = new Map<string, MainlineSourceRefMovedFile>();
+  for (const movedFile of movedFiles) {
+    const fromPath = normalizeMainlinePosixPath(movedFile.fromPath);
+    const toPath = normalizeMainlinePosixPath(movedFile.toPath);
+    if (!fromPath || !toPath || byFrom.has(fromPath)) {
+      continue;
+    }
+    byFrom.set(fromPath, {
+      fromPath,
+      toPath,
+      ...(movedFile.contentHash === undefined ? {} : { contentHash: movedFile.contentHash }),
+    });
+  }
+  return [...byFrom.values()].sort(
+    (left, right) =>
+      left.fromPath.localeCompare(right.fromPath) || left.toPath.localeCompare(right.toPath),
+  );
 }
 
 function reasonForModifiedImpact(level: MainlineRecipeImpactLevel): MainlineRecipeImpactReason {

@@ -68,6 +68,15 @@ import {
   createEmptyMainlineRecipeImpactPlan,
   type MainlineRecipeImpactPlan,
 } from "./RecipeImpactPlan.js";
+import {
+  createEmptyMainlineSourceRefRepairPlan,
+  type MainlineSourceRefMovedFile,
+  type MainlineSourceRefRepairPlan,
+} from "./RecipePathRepairer.js";
+import {
+  detectMainlineSourceRefMovedFiles,
+  SourceRefRepairService,
+} from "./SourceRefRepairService.js";
 
 export const MAINLINE_FILE_FINGERPRINT_SNAPSHOT_STORE_PATH =
   "context/file-fingerprint-snapshot.json";
@@ -110,6 +119,47 @@ export interface MainlineCompileSessionRecipeMarkdownReport {
   readonly warnings: readonly string[];
 }
 
+export type MainlineCompileProgressPhase =
+  | "scan"
+  | "fingerprint"
+  | "recipe-markdown"
+  | "content-mining"
+  | "project-intelligence"
+  | "source-ref-repair"
+  | "recipe-impact"
+  | "search-index"
+  | "fingerprint-store";
+
+export type MainlineCompileProgressStatus = "completed" | "skipped";
+
+export interface MainlineCompileProgressCheckpoint {
+  readonly phase: MainlineCompileProgressPhase;
+  readonly status: MainlineCompileProgressStatus;
+  readonly detail?: string;
+}
+
+export interface MainlineCompileProgressReport {
+  readonly checkpoints: readonly MainlineCompileProgressCheckpoint[];
+}
+
+export type MainlineCompileCancelCheckpointKind =
+  | "pre-run"
+  | "pre-source-ref-repair"
+  | "post-source-ref-repair"
+  | "post-run";
+
+export interface MainlineCompileCancelCheckpoint {
+  readonly kind: MainlineCompileCancelCheckpointKind;
+  readonly reached: boolean;
+  readonly cancellable: boolean;
+}
+
+export interface MainlineCompileCancelReport {
+  readonly supported: false;
+  readonly warnings: readonly string[];
+  readonly checkpoints: readonly MainlineCompileCancelCheckpoint[];
+}
+
 export interface MainlineCompileSessionResult {
   readonly mode: MainlineCompileSessionMode;
   readonly projectRoot: string;
@@ -120,9 +170,12 @@ export interface MainlineCompileSessionResult {
   readonly projectIntelligence: MainlineProjectIntelligenceRunnerResult;
   readonly projectPanorama: MainlineProjectPanoramaSummary;
   readonly contentMining: ContentMiningPipelineArtifacts;
+  readonly sourceRefRepair: MainlineSourceRefRepairPlan;
   readonly recipeImpact: MainlineRecipeImpactPlan;
   readonly recipeMarkdown: MainlineCompileSessionRecipeMarkdownReport;
   readonly search: MainlineCompileSessionSearchReport;
+  readonly progress: MainlineCompileProgressReport;
+  readonly cancel: MainlineCompileCancelReport;
   readonly warnings: readonly string[];
   readonly jobId?: string;
 }
@@ -141,6 +194,7 @@ export interface MainlineCompileSessionDependencies {
   readonly projectIntelligenceRunner?: MainlineProjectIntelligenceRunner;
   readonly contentMiningRunner?: ContentMiningRunner;
   readonly recipeImpactAnalyzer?: RecipeImpactAnalyzer;
+  readonly sourceRefRepairService?: SourceRefRepairService;
   readonly recipeMarkdownStore?: RecipeMarkdownStore;
   readonly jobLedger?: MainlineJobLedgerPort;
 }
@@ -169,6 +223,7 @@ interface MainlineCompileSessionRuntime {
   readonly projectIntelligenceRunner: MainlineProjectIntelligenceRunner;
   readonly contentMiningRunner: ContentMiningRunner;
   readonly recipeImpactAnalyzer: RecipeImpactAnalyzer;
+  readonly sourceRefRepairService: SourceRefRepairService;
   readonly recipeMarkdownStore: RecipeMarkdownStore;
   readonly jobLedger: MainlineJobLedgerPort;
 }
@@ -278,7 +333,11 @@ export class MainlineCompileSession {
     runtime: MainlineCompileSessionRuntime,
     request: MainlineCompileSessionRequest & { readonly generatedAt: number },
   ): Promise<Omit<MainlineCompileSessionResult, "jobId">> {
+    const progressCheckpoints: MainlineCompileProgressCheckpoint[] = [];
+    const cancelCheckpoints: MainlineCompileCancelCheckpoint[] = [];
+    reachCancelCheckpoint(cancelCheckpoints, "pre-run");
     const scanned = await scanCompileFiles(runtime, request);
+    markProgress(progressCheckpoints, "scan", "completed");
     const fingerprintSnapshot = createMainlineFileFingerprintSnapshot({
       id: `mainline-fingerprint-${request.generatedAt}`,
       projectRoot: request.projectRoot,
@@ -310,10 +369,20 @@ export class MainlineCompileSession {
         ...(request.removedFiles === undefined ? {} : { removedFiles: request.removedFiles }),
       },
     );
+    const detectedMovedFiles =
+      request.mode === "incremental"
+        ? detectMainlineSourceRefMovedFiles({
+            previousFingerprintSnapshot: previousSnapshot,
+            currentFingerprintSnapshot: fingerprintSnapshot,
+            fingerprintDiff,
+          })
+        : [];
+    markProgress(progressCheckpoints, "fingerprint", "completed");
     const loadedRecipeMarkdown = await runtime.recipeMarkdownStore.loadAll();
     const compileRecipes = mergeCompileRecipes(loadedRecipeMarkdown.recipes, request.recipes ?? []);
     const recipeMarkdownWrites = await runtime.recipeMarkdownStore.writeMany(compileRecipes ?? []);
     const recipeFiles = recipeMarkdownWritesToFiles(recipeMarkdownWrites, request.generatedAt);
+    markProgress(progressCheckpoints, "recipe-markdown", "completed");
     // 先写 Recipe 与内容证据，再写项目事实 SourceRef；同 id 时项目事实保留语言/符号元数据。
     const contentMining = await runtime.contentMiningRunner.compileAndWrite({
       evidenceRequest: {
@@ -330,16 +399,43 @@ export class MainlineCompileSession {
       generatedAt: request.generatedAt,
       reportId: `mainline-compile-report-${request.generatedAt}`,
     });
+    markProgress(progressCheckpoints, "content-mining", "completed");
     const projectIntelligence = await runProjectIntelligence(runtime, request, {
       projectFiles: scanned.projectFiles,
       fingerprintDiff,
+      movedFiles: detectedMovedFiles,
     });
+    markProgress(progressCheckpoints, "project-intelligence", "completed");
     const projectPanorama = summarizeMainlineProjectPanorama(projectIntelligence.artifact);
     const compiledSourceRefs = [
       ...contentMining.sourceRefs,
       ...(projectIntelligence.materialized?.sourceRefs ?? []),
       ...(projectIntelligence.materialized?.staleSourceRefs ?? []),
     ];
+    reachCancelCheckpoint(cancelCheckpoints, "pre-source-ref-repair");
+    const sourceRefRepair =
+      request.mode === "incremental"
+        ? runtime.sourceRefRepairService.repair({
+            recipes: contentMining.recipes,
+            sourceRefs: compiledSourceRefs,
+            fingerprintDiff,
+            ...(previousSnapshot === null ? {} : { previousFingerprintSnapshot: previousSnapshot }),
+            currentFingerprintSnapshot: fingerprintSnapshot,
+            ...(projectIntelligence.incrementalPlan === undefined
+              ? {}
+              : { incrementalPlan: projectIntelligence.incrementalPlan }),
+            movedFiles: detectedMovedFiles,
+            ...(request.removedFiles === undefined ? {} : { removedFiles: request.removedFiles }),
+            generatedAt: request.generatedAt,
+          })
+        : createEmptyMainlineSourceRefRepairPlan();
+    markProgress(
+      progressCheckpoints,
+      "source-ref-repair",
+      request.mode === "incremental" ? "completed" : "skipped",
+      `${sourceRefRepair.repairs.length} SourceRef repair item(s)`,
+    );
+    reachCancelCheckpoint(cancelCheckpoints, "post-source-ref-repair");
     const recipeImpact =
       request.mode === "incremental"
         ? runtime.recipeImpactAnalyzer.analyze({
@@ -347,11 +443,13 @@ export class MainlineCompileSession {
             changedFiles: fingerprintDiff.modified,
             deletedFiles: fingerprintDiff.deleted,
             createdFiles: fingerprintDiff.added,
+            movedFiles: sourceRefRepair.movedFiles,
             ...(request.diffTextByPath ? { diffTextByPath: request.diffTextByPath } : {}),
             fileContentByPath: fileContentByPath(scanned.fingerprintFiles),
-            sourceRefs: compiledSourceRefs,
+            sourceRefs: [...compiledSourceRefs, ...sourceRefRepair.sourceRefs],
           })
         : createEmptyMainlineRecipeImpactPlan();
+    markProgress(progressCheckpoints, "recipe-impact", "completed");
     const contentSearchDocuments = projectMainlineSearchDocuments({
       recipes: contentMining.recipes,
       sourceRefs: contentMining.sourceRefs,
@@ -360,9 +458,12 @@ export class MainlineCompileSession {
     const persistedSearchSnapshot = await runtime.searchIndexStore.saveDocuments(
       runtime.searchIndex.snapshot(),
     );
+    markProgress(progressCheckpoints, "search-index", "completed");
 
     // 指纹保存放在所有写入之后，避免失败的增量运行污染下一轮 baseline。
     await runtime.fingerprintStore.save(fingerprintSnapshot);
+    markProgress(progressCheckpoints, "fingerprint-store", "completed");
+    reachCancelCheckpoint(cancelCheckpoints, "post-run");
 
     return {
       mode: request.mode,
@@ -374,6 +475,7 @@ export class MainlineCompileSession {
       projectIntelligence,
       projectPanorama,
       contentMining,
+      sourceRefRepair,
       recipeImpact,
       recipeMarkdown: recipeMarkdownReport(loadedRecipeMarkdown, recipeMarkdownWrites),
       search: searchReport(projectIntelligence, {
@@ -381,6 +483,8 @@ export class MainlineCompileSession {
         persistedSnapshot: persistedSearchSnapshot,
         contentDocumentsUpserted: contentSearchDocuments.length,
       }),
+      progress: { checkpoints: progressCheckpoints },
+      cancel: compileCancelReport(cancelCheckpoints),
       warnings: [
         ...scanned.warnings,
         ...loadedRecipeMarkdown.warnings.map(recipeMarkdownWarning),
@@ -449,6 +553,8 @@ export class MainlineCompileSession {
       new ContentMiningRunner(new CompileArtifactWriter(contextIndex));
     const recipeImpactAnalyzer =
       this.#dependencies.recipeImpactAnalyzer ?? new RecipeImpactAnalyzer();
+    const sourceRefRepairService =
+      this.#dependencies.sourceRefRepairService ?? new SourceRefRepairService();
     const recipeMarkdownStore =
       this.#dependencies.recipeMarkdownStore ??
       new RecipeMarkdownStore(writeBoundary, { fileStore });
@@ -468,6 +574,7 @@ export class MainlineCompileSession {
       projectIntelligenceRunner,
       contentMiningRunner,
       recipeImpactAnalyzer,
+      sourceRefRepairService,
       recipeMarkdownStore,
       jobLedger,
     };
@@ -521,6 +628,7 @@ async function runProjectIntelligence(
   input: {
     readonly projectFiles: readonly MainlineProjectIntelligenceFileInput[];
     readonly fingerprintDiff: MainlineFileFingerprintSnapshotDiff;
+    readonly movedFiles: readonly MainlineSourceRefMovedFile[];
   },
 ): Promise<MainlineProjectIntelligenceRunnerResult> {
   if (request.mode === "cold-start") {
@@ -538,6 +646,7 @@ async function runProjectIntelligence(
     ...(request.maxFileBytes === undefined ? {} : { maxFileBytes: request.maxFileBytes }),
     incremental: {
       fingerprintDiff: input.fingerprintDiff,
+      ...(input.movedFiles.length === 0 ? {} : { movedFiles: input.movedFiles }),
       ...(request.changedFiles === undefined ? {} : { changedFiles: request.changedFiles }),
       ...(request.removedFiles === undefined ? {} : { deletedFiles: request.removedFiles }),
       ...(request.dependentDepth === undefined ? {} : { dependentDepth: request.dependentDepth }),
@@ -673,6 +782,38 @@ function skippedFileWarning(
   return `Skipped ${skippedFile.path}: ${skippedFile.reason}.`;
 }
 
+function markProgress(
+  checkpoints: MainlineCompileProgressCheckpoint[],
+  phase: MainlineCompileProgressPhase,
+  status: MainlineCompileProgressStatus,
+  detail?: string,
+): void {
+  checkpoints.push({
+    phase,
+    status,
+    ...(detail === undefined ? {} : { detail }),
+  });
+}
+
+function reachCancelCheckpoint(
+  checkpoints: MainlineCompileCancelCheckpoint[],
+  kind: MainlineCompileCancelCheckpointKind,
+): void {
+  checkpoints.push({ kind, reached: true, cancellable: false });
+}
+
+function compileCancelReport(
+  checkpoints: readonly MainlineCompileCancelCheckpoint[],
+): MainlineCompileCancelReport {
+  return {
+    supported: false,
+    warnings: [
+      "Mainline compile cancellation is checkpoint-only; deep cancellation is not wired yet.",
+    ],
+    checkpoints,
+  };
+}
+
 function compileSessionJobResult(result: Omit<MainlineCompileSessionResult, "jobId">): unknown {
   return {
     mode: result.mode,
@@ -695,9 +836,18 @@ function compileSessionJobResult(result: Omit<MainlineCompileSessionResult, "job
       recipeCount: result.contentMining.recipes.length,
       edgeCount: result.contentMining.edges.length,
     },
+    sourceRefRepair: result.sourceRefRepair.summary,
     recipeImpact: result.recipeImpact.summary,
     recipeMarkdown: result.recipeMarkdown,
     search: result.search,
+    progress: {
+      checkpointCount: result.progress.checkpoints.length,
+    },
+    cancel: {
+      supported: result.cancel.supported,
+      checkpointCount: result.cancel.checkpoints.length,
+      warningCount: result.cancel.warnings.length,
+    },
     warningCount: result.warnings.length,
   };
 }

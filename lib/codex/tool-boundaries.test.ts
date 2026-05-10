@@ -34,6 +34,19 @@ describe("tool surface boundaries", () => {
     expect(codexToolNames).not.toEqual(expect.arrayContaining(agentToolNames));
   });
 
+  it("keeps Codex public tool implementations away from internal Agent tools", () => {
+    const codexToolImports = ["tools.ts", "search.ts", "structure.ts"].flatMap((file) => {
+      const source = readFileSync(join(repoRoot, "lib", "codex", file), "utf8");
+      return [...source.matchAll(/from\s+["']([^"']+)["']/g)].map((match) => match[1]);
+    });
+
+    // Codex public tools 只能读 mainline read models；internal Agent tools 留在 lib/agent/tools。
+    for (const specifier of codexToolImports) {
+      expect(specifier).not.toMatch(/(?:\.\.\/)*agent\/tools/);
+      expect(specifier).not.toContain("lib/agent/tools");
+    }
+  });
+
   it("exports internal Agent tools only from lib/agent/tools", () => {
     expect(existsSync(join(repoRoot, "lib/tools"))).toBe(false);
 
