@@ -4,14 +4,19 @@ import type {
   RecipeMarkdownFileIndex,
   SourceRef,
 } from "../../../mainline/data/index.js";
-import type { Recipe, RecipeLifecycleRecord } from "../../../mainline/knowledge/index.js";
+import {
+  createRecipe,
+  type Recipe,
+  type RecipeLifecycleRecord,
+  RecipeSubmissionPolicy,
+} from "../../../mainline/knowledge/index.js";
 import type {
   MainlineSearchDocument,
   MainlineSearchDocumentKind,
   MainlineSearchHit,
   MainlineSearchQuery,
 } from "../../../mainline/search/index.js";
-import type { ToolHandler, ToolResultEnvelope } from "../types.js";
+import type { ToolHandler, ToolHandlerContext, ToolResultEnvelope } from "../types.js";
 import { isRecord, toolFailure, toolSuccess } from "../types.js";
 
 const SEARCH_DOCUMENT_KINDS = new Set<MainlineSearchDocumentKind>([
@@ -31,6 +36,41 @@ interface KnowledgeSearchInput {
   readonly limit: number;
   readonly includeContext: boolean;
 }
+
+type ManageOperation =
+  | "approve"
+  | "reject"
+  | "publish"
+  | "deprecate"
+  | "update"
+  | "score"
+  | "validate"
+  | "evolve"
+  | "skip_evolution";
+
+const MANAGE_OPERATIONS = new Set<ManageOperation>([
+  "approve",
+  "reject",
+  "publish",
+  "deprecate",
+  "update",
+  "score",
+  "validate",
+  "evolve",
+  "skip_evolution",
+]);
+
+type RepositoryManageResult =
+  | { readonly ok: true; readonly data: Record<string, unknown> }
+  | {
+      readonly ok: false;
+      readonly status: "unavailable" | "error";
+      readonly error: {
+        readonly code: string;
+        readonly message: string;
+        readonly details?: unknown;
+      };
+    };
 
 export const knowledgeSearchHandler: ToolHandler = async (
   invocation,
@@ -75,6 +115,14 @@ export const knowledgeDetailHandler: ToolHandler = async (
     return toolFailure(context.descriptor, "error", id.error);
   }
 
+  const repositoryRecipe = await context.dependencies.knowledgeRepository?.getById(id.value);
+  if (repositoryRecipe) {
+    return toolSuccess(context.descriptor, {
+      recipe: repositoryRecipe,
+      source: "knowledgeRepository",
+    });
+  }
+
   const lifecycleRecord = await context.dependencies.knowledgeLifecycleStore?.load(id.value, {
     status: "all",
   });
@@ -107,27 +155,372 @@ export const knowledgeDetailHandler: ToolHandler = async (
   });
 };
 
-export const knowledgeSubmitHandler: ToolHandler = (_invocation, context) =>
-  toolFailure(context.descriptor, "policy_required", {
-    code: "policy_required",
-    message:
-      "knowledge.submit is intentionally gated; candidate writes must go through a reviewed lifecycle service.",
-    details: { lifecycleWrite: false },
-  });
+export const knowledgeSubmitHandler: ToolHandler = async (
+  invocation,
+  context,
+): Promise<ToolResultEnvelope> => {
+  if (!isRecord(invocation.input)) {
+    return toolFailure(context.descriptor, "error", {
+      code: "invalid_input",
+      message: "knowledge.submit input must be an object.",
+    });
+  }
 
-export const knowledgeManageHandler: ToolHandler = (invocation, context) => {
-  const input = isRecord(invocation.input) ? invocation.input : {};
-  return toolFailure(context.descriptor, "policy_required", {
-    code: "policy_required",
-    message:
-      "knowledge.manage is intentionally gated; publish/reject must go through explicit review tooling.",
-    details: {
-      lifecycleWrite: false,
-      ...(optionalString(input.operation) ? { operation: optionalString(input.operation) } : {}),
-      ...(optionalString(input.id) ? { id: optionalString(input.id) } : {}),
-    },
+  if (context.dependencies.knowledgeGateway) {
+    const submission = normalizeAgentKnowledgeSubmission(invocation.input);
+    const result = await context.dependencies.knowledgeGateway.create({
+      source: "agent-tool",
+      items: [submission],
+      options: { userId: "agent" },
+    });
+    await rememberSubmission(context, submission);
+    return toolSuccess(context.descriptor, { status: "processed", result });
+  }
+
+  const lifecycle = context.dependencies.knowledgeLifecycleStore;
+  if (!lifecycle) {
+    return toolFailure(context.descriptor, "unavailable", {
+      code: "knowledge_lifecycle_unavailable",
+      message: "knowledge.submit requires knowledgeGateway or knowledgeLifecycleStore.",
+    });
+  }
+
+  const updatedAt = Math.floor((context.dependencies.now?.() ?? Date.now()) / 1000);
+  const submission = normalizeAgentKnowledgeSubmission(invocation.input);
+  const id = optionalString(submission.id) ?? candidateId(submission);
+  const existing = await lifecycle.list({ status: "all" });
+  const policy = new RecipeSubmissionPolicy().evaluate(submission, {
+    id,
+    status: "candidate",
+    updatedAt,
+    existingRecipes: existing.map((record) => record.recipe),
+    metadata: { source: "agent-tool" },
+  });
+  if (!policy.accepted || !policy.recipeInput) {
+    return toolFailure(context.descriptor, "error", {
+      code: "candidate_rejected",
+      message: policy.errors.join("; ") || "Recipe submission rejected.",
+      details: {
+        decision: policy.decision,
+        errors: policy.errors,
+        warnings: policy.warnings,
+        similarRecipes: policy.similarRecipes,
+      },
+    });
+  }
+
+  const recipe = createRecipe({
+    ...policy.recipeInput,
+    id,
+    status: "candidate",
+    updatedAt,
+  });
+  const record = await lifecycle.writeCandidate(recipe, { now: updatedAt, submittedBy: "agent" });
+  await rememberSubmission(context, { id, title: recipe.title, kind: recipe.kind });
+  return toolSuccess(context.descriptor, {
+    status: "candidate_created",
+    record: formatLifecycleRecord(record),
+    recipe: formatRecipe(record.recipe),
+    warnings: policy.warnings,
   });
 };
+
+export const knowledgeManageHandler: ToolHandler = async (
+  invocation,
+  context,
+): Promise<ToolResultEnvelope> => {
+  const parsed = parseManageInput(invocation.input);
+  if (!parsed.ok) {
+    return toolFailure(context.descriptor, "error", parsed.error);
+  }
+
+  const repository = context.dependencies.knowledgeRepository;
+  if (repository && !isEvolutionOperation(parsed.input.operation)) {
+    const result = await runRepositoryManage(repository, parsed.input);
+    if (result.ok) {
+      return toolSuccess(context.descriptor, result.data);
+    }
+    if (result.error.code !== "repository_operation_unavailable") {
+      return toolFailure(context.descriptor, result.status, result.error);
+    }
+  }
+
+  const lifecycle = context.dependencies.knowledgeLifecycleStore;
+  if (lifecycle && (parsed.input.operation === "publish" || parsed.input.operation === "approve")) {
+    const record = await lifecycle.publish(parsed.input.id, { publishedBy: "agent" });
+    return toolSuccess(context.descriptor, {
+      operation: parsed.input.operation,
+      status: record.status,
+      record: formatLifecycleRecord(record),
+    });
+  }
+  if (lifecycle && parsed.input.operation === "reject") {
+    const record = await lifecycle.reject(parsed.input.id, {
+      rejectedBy: "agent",
+      ...(parsed.input.reason ? { reason: parsed.input.reason } : {}),
+    });
+    return toolSuccess(context.descriptor, {
+      operation: "reject",
+      status: "rejected",
+      record: formatLifecycleRecord(record),
+    });
+  }
+
+  if (
+    context.dependencies.evolutionGateway &&
+    (parsed.input.operation === "evolve" ||
+      parsed.input.operation === "deprecate" ||
+      parsed.input.operation === "skip_evolution")
+  ) {
+    const description = optionalString(parsed.input.data?.description);
+    const replacedByRecipeId = optionalString(parsed.input.data?.replacedByRecipeId);
+    const result = await context.dependencies.evolutionGateway.submit({
+      recipeId: parsed.input.id,
+      action:
+        parsed.input.operation === "evolve"
+          ? "update"
+          : parsed.input.operation === "deprecate"
+            ? "deprecate"
+            : "valid",
+      source: "ide-agent",
+      confidence: numberValue(parsed.input.data?.confidence) ?? 0.8,
+      ...(parsed.input.reason ? { reason: parsed.input.reason } : {}),
+      ...(description ? { description } : {}),
+      ...(Array.isArray(parsed.input.data?.evidence)
+        ? { evidence: parsed.input.data.evidence.filter(isRecord) }
+        : {}),
+      ...(replacedByRecipeId ? { replacedByRecipeId } : {}),
+    });
+    return toolSuccess(context.descriptor, {
+      operation: parsed.input.operation,
+      status: "evolution_recorded",
+      result,
+    });
+  }
+
+  return toolFailure(context.descriptor, "unavailable", {
+    code: "knowledge_manage_unavailable",
+    message:
+      "knowledge.manage requires knowledgeRepository, knowledgeLifecycleStore, or evolutionGateway for the requested operation.",
+    details: { operation: parsed.input.operation, id: parsed.input.id },
+  });
+};
+
+async function runRepositoryManage(
+  repository: NonNullable<ToolHandlerContext["dependencies"]["knowledgeRepository"]>,
+  input: {
+    readonly operation: ManageOperation;
+    readonly id: string;
+    readonly reason?: string;
+    readonly data?: Record<string, unknown>;
+  },
+): Promise<RepositoryManageResult> {
+  switch (input.operation) {
+    case "approve":
+      if (!repository.approve) {
+        return repositoryOperationUnavailable(input.operation);
+      }
+      await repository.approve(input.id, input.reason);
+      return { ok: true, data: { operation: input.operation, id: input.id, status: "approved" } };
+    case "reject":
+      if (!repository.reject) {
+        return repositoryOperationUnavailable(input.operation);
+      }
+      await repository.reject(input.id, input.reason);
+      return { ok: true, data: { operation: input.operation, id: input.id, status: "rejected" } };
+    case "publish":
+      if (!repository.publish) {
+        return repositoryOperationUnavailable(input.operation);
+      }
+      await repository.publish(input.id);
+      return { ok: true, data: { operation: input.operation, id: input.id, status: "published" } };
+    case "update":
+      if (!repository.update || !input.data) {
+        return repositoryOperationUnavailable(input.operation);
+      }
+      await repository.update(input.id, input.data);
+      return { ok: true, data: { operation: input.operation, id: input.id, status: "updated" } };
+    case "score": {
+      if (!repository.score) {
+        return repositoryOperationUnavailable(input.operation);
+      }
+      const score = numberValue(input.data?.score) ?? 0;
+      await repository.score(input.id, score);
+      return {
+        ok: true,
+        data: { operation: input.operation, id: input.id, status: "scored", score },
+      };
+    }
+    case "validate": {
+      if (!repository.validate) {
+        return repositoryOperationUnavailable(input.operation);
+      }
+      const result = await repository.validate(input.id);
+      return {
+        ok: true,
+        data: { operation: input.operation, id: input.id, status: "validated", result },
+      };
+    }
+    case "deprecate":
+    case "evolve":
+    case "skip_evolution":
+      return repositoryOperationUnavailable(input.operation);
+  }
+}
+
+function repositoryOperationUnavailable(operation: string): RepositoryManageResult {
+  return {
+    ok: false,
+    status: "unavailable" as const,
+    error: {
+      code: "repository_operation_unavailable",
+      message: `knowledgeRepository does not support ${operation}.`,
+    },
+  };
+}
+
+function isEvolutionOperation(operation: ManageOperation): boolean {
+  return operation === "evolve" || operation === "deprecate" || operation === "skip_evolution";
+}
+
+function parseManageInput(input: unknown):
+  | {
+      readonly ok: true;
+      readonly input: {
+        readonly operation: ManageOperation;
+        readonly id: string;
+        readonly reason?: string;
+        readonly data?: Record<string, unknown>;
+      };
+    }
+  | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } } {
+  if (!isRecord(input)) {
+    return {
+      ok: false,
+      error: { code: "invalid_input", message: "knowledge.manage input must be an object." },
+    };
+  }
+  const operation = optionalString(input.operation);
+  const id = optionalString(input.id);
+  if (!operation || !MANAGE_OPERATIONS.has(operation as ManageOperation)) {
+    return {
+      ok: false,
+      error: { code: "invalid_input", message: `Invalid knowledge.manage operation: ${operation}` },
+    };
+  }
+  if (!id) {
+    return {
+      ok: false,
+      error: { code: "invalid_input", message: "knowledge.manage requires id." },
+    };
+  }
+  const reason = optionalString(input.reason);
+  const data = isRecord(input.data) ? input.data : undefined;
+  return {
+    ok: true,
+    input: {
+      operation: operation as ManageOperation,
+      id,
+      ...(reason ? { reason } : {}),
+      ...(data ? { data } : {}),
+    },
+  };
+}
+
+async function rememberSubmission(
+  context: ToolHandlerContext,
+  item: Record<string, unknown>,
+): Promise<void> {
+  const title = optionalString(item.title) ?? optionalString(item.id) ?? "knowledge-candidate";
+  await context.dependencies.memoryStore?.save({
+    key: `submit:${title}`,
+    content: JSON.stringify({ title, kind: item.kind ?? "unknown" }),
+    tags: ["submission"],
+    category: "knowledge",
+  });
+}
+
+function candidateId(item: Record<string, unknown>): string {
+  const title = optionalString(item.title) ?? "agent-knowledge";
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
+  return `${slug || "agent-knowledge"}-${shortHash(stableJson(item))}`;
+}
+
+function normalizeAgentKnowledgeSubmission(item: Record<string, unknown>): Record<string, unknown> {
+  const title = cleanRecipeTitle(optionalString(item.title) ?? "Agent Knowledge Candidate");
+  const description =
+    optionalString(item.description) ??
+    optionalString(item.summary) ??
+    optionalString(item.doClause) ??
+    title;
+  const kind = optionalString(item.kind) ?? optionalString(item.knowledgeType) ?? "pattern";
+  const language = optionalString(item.language) ?? "typescript";
+  const category = optionalString(item.category) ?? optionalString(item.dimensionId) ?? "agent";
+  const trigger = optionalString(item.trigger) ?? optionalString(item.topicHint) ?? title;
+  const whenClause = optionalString(item.whenClause) ?? `When working on ${trigger}.`;
+  const doClause = optionalString(item.doClause) ?? description;
+  const dontClause =
+    optionalString(item.dontClause) ?? "Do not apply this Recipe outside the stated trigger.";
+  const coreCode = optionalString(item.coreCode) ?? extractCodeBlock(item.content) ?? doClause;
+  const content = isRecord(item.content) ? item.content : {};
+  const reasoning = isRecord(item.reasoning) ? item.reasoning : {};
+  const sourceRefs = uniqueStrings([
+    ...optionalStringArray(item.sourceRefIds),
+    ...optionalStringArray(item.sourceRefs),
+    ...optionalStringArray(reasoning.sources),
+    ...optionalStringList(item.sourceFile),
+  ]);
+  return {
+    ...item,
+    title,
+    description,
+    summary: optionalString(item.summary) ?? description,
+    kind,
+    trigger,
+    whenClause,
+    doClause,
+    dontClause,
+    coreCode,
+    category,
+    headers: optionalStringList(item.headers),
+    reasoning: {
+      whyStandard:
+        optionalString(reasoning.whyStandard) ??
+        "Captured by the internal Agent tool layer from concrete project evidence.",
+      sources: optionalStringArray(reasoning.sources),
+      confidence: numberValue(reasoning.confidence) ?? numberValue(item.confidence) ?? 0.7,
+      ...reasoning,
+    },
+    content: {
+      markdown: optionalString(content.markdown) ?? description,
+      rationale:
+        optionalString(content.rationale) ??
+        "This candidate preserves AgentRuntime knowledge for later review and reuse.",
+      ...content,
+    },
+    knowledgeType: optionalString(item.knowledgeType) ?? "code-pattern",
+    language,
+    usageGuide: optionalString(item.usageGuide) ?? `${whenClause}\n\n${doClause}`,
+    ...(sourceRefs.length > 0 ? { sourceRefIds: sourceRefs } : {}),
+  };
+}
+
+function cleanRecipeTitle(value: string): string {
+  return value.replace(/^\s*(recipe|knowledge|candidate)\s*[:：-]\s*/i, "").trim() || value;
+}
+
+function extractCodeBlock(content: unknown): string | undefined {
+  if (!isRecord(content)) {
+    return undefined;
+  }
+  const markdown = optionalString(content.markdown);
+  const match = markdown?.match(/```[a-zA-Z0-9_-]*\n([\s\S]*?)```/);
+  return match?.[1]?.trim();
+}
 
 function parseKnowledgeSearchInput(
   input: unknown,
@@ -321,11 +714,22 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 function optionalStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
   return uniqueStrings(value.map(optionalString));
+}
+
+function optionalStringList(value: unknown): string[] {
+  if (typeof value === "string" && value.trim()) {
+    return [value.trim()];
+  }
+  return optionalStringArray(value);
 }
 
 function optionalSearchKinds(value: unknown): MainlineSearchDocumentKind[] | undefined {
@@ -360,6 +764,25 @@ function uniqueStrings(values: readonly (string | undefined)[]): string[] {
 
 function round(value: number): number {
   return Math.round(value * 1_000) / 1_000;
+}
+
+function shortHash(value: string): string {
+  let hash = 0;
+  for (const char of value) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+  return hash.toString(16);
+}
+
+function stableJson(value: unknown): string {
+  if (!isRecord(value)) {
+    return JSON.stringify(value);
+  }
+  const output: Record<string, unknown> = {};
+  for (const key of Object.keys(value).sort()) {
+    output[key] = value[key];
+  }
+  return JSON.stringify(output);
 }
 
 async function findRecipesByIds(

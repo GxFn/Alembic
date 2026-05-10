@@ -1,10 +1,15 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { MainlineWorkspacePaths, MainlineWriteBoundary } from "../../mainline/core/index.js";
 import { InMemoryContextIndex } from "../../mainline/data/index.js";
 import { MainlineProjectIntelligenceBuilder } from "../../mainline/graph/index.js";
-import { createRecipe, createSourceRef } from "../../mainline/knowledge/index.js";
+import {
+  createRecipe,
+  createSourceRef,
+  RecipeLifecycleStore,
+} from "../../mainline/knowledge/index.js";
 import { InMemoryMainlineSearchIndex } from "../../mainline/search/index.js";
 import { createDefaultToolHandlers, createDefaultToolRegistry, ToolRouter } from "./index.js";
 import type { ToolFailureEnvelope, ToolResultEnvelope, ToolSuccessEnvelope } from "./types.js";
@@ -37,8 +42,8 @@ describe("new tools registry and router", () => {
     const registry = createDefaultToolRegistry();
 
     expect(registry.list().map((tool) => tool.name)).toEqual(EXPECTED_TOOLS);
-    expect(registry.get("code.write")?.availability.status).toBe("policy_required");
-    expect(registry.get("terminal.execute")?.availability.status).toBe("policy_required");
+    expect(registry.get("code.write")?.availability.status).toBe("available");
+    expect(registry.get("terminal.execute")?.availability.status).toBe("available");
 
     const result = await new ToolRouter({ registry }).invoke({ name: "legacy.v2" });
     expectFailure(result);
@@ -80,6 +85,18 @@ describe("new tools registry and router", () => {
       error: "Unknown tool: code.missing",
     });
   });
+
+  it("validates registered input schemas before handlers run", async () => {
+    const result = await new ToolRouter().invoke({
+      name: "memory.save",
+      input: { key: "missing-content", extra: true },
+    });
+
+    expectFailure(result);
+    expect(result.error.code).toBe("invalid_input_schema");
+    expect(result.error.message).toContain("$.content is required");
+    expect(result.error.message).toContain("$.extra is not allowed");
+  });
 });
 
 describe("code tools", () => {
@@ -111,6 +128,13 @@ describe("code tools", () => {
     expectOk(search);
     expect((search.data as { count: number }).count).toBeGreaterThan(0);
 
+    const singlePattern = await router.invoke({
+      name: "code.search",
+      input: { pattern: "render", maxResults: 5 },
+    });
+    expectOk(singlePattern);
+    expect((singlePattern.data as { count: number }).count).toBeGreaterThan(0);
+
     const read = await router.invoke({
       name: "code.read",
       input: { path: "src/app.ts", startLine: 2, endLine: 3 },
@@ -128,18 +152,222 @@ describe("code tools", () => {
 
     const structure = await router.invoke({ name: "code.structure", input: { depth: 2 } });
     expectOk(structure);
-    expect(JSON.stringify(structure.data)).toContain("src/app.ts");
+    expect(JSON.stringify(structure.data)).toContain("app.ts");
   });
 
-  it("policy-gates file writes", async () => {
+  it("writes project files and rejects protected paths", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "alembic-agent-write-"));
+    const router = new ToolRouter({ dependencies: { projectRoot: root } });
+
+    const result = await router.invoke({
+      name: "code.write",
+      input: {
+        path: "src/generated.ts",
+        content: "export const generated = true;\n",
+        createDirectories: true,
+      },
+    });
+
+    expectOk(result);
+    expect(result.data).toMatchObject({ written: "src/generated.ts" });
+    await expect(readFile(path.join(root, "src", "generated.ts"), "utf8")).resolves.toBe(
+      "export const generated = true;\n",
+    );
+
+    const protectedWrite = await router.invoke({
+      name: "code.write",
+      input: { path: ".env", content: "SECRET=1\n" },
+    });
+    expectFailure(protectedWrite);
+    expect(protectedWrite.error.code).toBe("write_protected_path");
+  });
+});
+
+describe("terminal.execute", () => {
+  it("executes safe commands in the project root and blocks dangerous commands", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "alembic-agent-terminal-"));
+    const router = new ToolRouter({ dependencies: { projectRoot: root } });
+
+    const result = await router.invoke({
+      name: "terminal.execute",
+      input: { command: "printf agent-tool-ok" },
+    });
+
+    expectOk(result);
+    expect(result.data).toMatchObject({
+      command: "printf agent-tool-ok",
+      cwd: ".",
+      exitCode: 0,
+      output: "agent-tool-ok",
+    });
+
+    const blocked = await router.invoke({
+      name: "terminal.execute",
+      input: { command: "sudo whoami" },
+    });
+    expectFailure(blocked);
+    expect(blocked.error.code).toBe("command_blocked");
+  });
+
+  it("compresses terminal output with the default command-aware compressor", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "alembic-agent-terminal-compress-"));
+    const router = new ToolRouter({
+      dependencies: {
+        projectRoot: root,
+        terminalExecutor: {
+          execute: async () => ({
+            stdout: "src/app.ts(1,1): error TS2322: Type mismatch\nChecked 10 files\n",
+            stderr: "",
+            exitCode: 2,
+          }),
+        },
+      },
+    });
+
+    const result = await router.invoke({
+      name: "terminal.execute",
+      input: { command: "npx tsc --noEmit" },
+    });
+
+    expectOk(result);
+    expect((result.data as { output: string }).output).toContain("[lint-output]");
+    expect((result.data as { output: string }).output).toContain("error TS2322");
+  });
+});
+
+describe("knowledge.submit and knowledge.manage", () => {
+  it("stages accepted agent knowledge and publishes it through lifecycle management", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "alembic-agent-knowledge-"));
+    const lifecycle = makeLifecycleStore(root);
+    const router = new ToolRouter({
+      dependencies: {
+        knowledgeLifecycleStore: lifecycle,
+        now: () => 10_000,
+      },
+    });
+
+    const submit = await router.invoke({
+      name: "knowledge.submit",
+      input: validKnowledgeItem(),
+    });
+
+    expectOk(submit);
+    const submitData = submit.data as {
+      readonly status: string;
+      readonly record: { readonly id: string; readonly status: string };
+      readonly warnings: readonly string[];
+    };
+    expect(submitData.status).toBe("candidate_created");
+    expect(submitData.record.status).toBe("candidate");
+    expect(submitData.warnings).toEqual([]);
+    await expect(
+      lifecycle.load(submitData.record.id, { status: "candidate" }),
+    ).resolves.toMatchObject({
+      id: submitData.record.id,
+      status: "candidate",
+    });
+
+    const publish = await router.invoke({
+      name: "knowledge.manage",
+      input: { operation: "publish", id: submitData.record.id },
+    });
+
+    expectOk(publish);
+    expect(publish.data).toMatchObject({
+      operation: "publish",
+      status: "active",
+      record: { id: submitData.record.id, status: "active" },
+    });
+  });
+
+  it("delegates repository management operations when a knowledge repository is injected", async () => {
+    const approved: Array<{ readonly id: string; readonly reason?: string }> = [];
+    const result = await new ToolRouter({
+      dependencies: {
+        knowledgeRepository: {
+          getById: async () => null,
+          approve: async (id, reason) => {
+            approved.push({ id, ...(reason ? { reason } : {}) });
+          },
+        },
+      },
+    }).invoke({
+      name: "knowledge.manage",
+      input: { operation: "approve", id: "recipe-a", reason: "reviewed" },
+    });
+
+    expectOk(result);
+    expect(result.data).toMatchObject({ operation: "approve", id: "recipe-a", status: "approved" });
+    expect(approved).toEqual([{ id: "recipe-a", reason: "reviewed" }]);
+  });
+
+  it("reads knowledge details from an injected repository before lifecycle lookup", async () => {
+    const result = await new ToolRouter({
+      dependencies: {
+        knowledgeRepository: {
+          getById: async (id) => ({
+            id,
+            title: "Repository Recipe",
+            kind: "pattern",
+          }),
+        },
+      },
+    }).invoke({ name: "knowledge.detail", input: { id: "recipe-a" } });
+
+    expectOk(result);
+    expect(result.data).toMatchObject({
+      source: "knowledgeRepository",
+      recipe: { id: "recipe-a", title: "Repository Recipe" },
+    });
+  });
+
+  it("routes evolution operations to the evolution gateway without repository compatibility fallback", async () => {
+    const submitted: unknown[] = [];
+    const result = await new ToolRouter({
+      dependencies: {
+        knowledgeRepository: { getById: async () => null },
+        evolutionGateway: {
+          submit: async (decision) => {
+            submitted.push(decision);
+            return { id: "evolution-1" };
+          },
+        },
+      },
+    }).invoke({
+      name: "knowledge.manage",
+      input: {
+        operation: "evolve",
+        id: "recipe-a",
+        reason: "New implementation evidence.",
+        data: { description: "Refresh the recipe body.", confidence: 0.91 },
+      },
+    });
+
+    expectOk(result);
+    expect(result.data).toMatchObject({
+      operation: "evolve",
+      status: "evolution_recorded",
+      result: { id: "evolution-1" },
+    });
+    expect(submitted[0]).toMatchObject({
+      recipeId: "recipe-a",
+      action: "update",
+      source: "ide-agent",
+      confidence: 0.91,
+    });
+  });
+});
+
+describe("code guard negative routing", () => {
+  it("requires projectRoot for file writes", async () => {
     const result = await new ToolRouter().invoke({
       name: "code.write",
       input: { path: "src/app.ts", content: "x" },
     });
 
     expectFailure(result);
-    expect(result.status).toBe("policy_required");
-    expect(result.error.details).toMatchObject({ executesWrites: false });
+    expect(result.status).toBe("unavailable");
+    expect(result.error.code).toBe("project_root_unavailable");
   });
 });
 
@@ -315,6 +543,48 @@ describe("graph tools", () => {
     expect(data.operation).toBe("callees");
     expect(data.result.map((relation) => relation.symbol.fqn)).toEqual(["src/app.ts::render"]);
   });
+
+  it("queries injected entity graphs for internal agent class and search operations", async () => {
+    const projectGraph = {
+      getOverview: () => ({ languages: ["objective-c"], totalFiles: 1 }),
+      getClassInfo: (name: string) => ({
+        name,
+        methods: ["viewDidLoad"],
+        file: "Sources/AppController.m",
+      }),
+      searchEntities: (query: string, limit: number) => [{ query, limit, name: "AppController" }],
+    };
+    const router = new ToolRouter({ dependencies: { projectGraph } });
+
+    const overview = await router.invoke({ name: "graph.overview" });
+    expectOk(overview);
+    expect(overview.data).toMatchObject({
+      source: "projectGraph",
+      overview: { languages: ["objective-c"], totalFiles: 1 },
+    });
+
+    const classInfo = await router.invoke({
+      name: "graph.query",
+      input: { operation: "class", entity: "AppController" },
+    });
+    expectOk(classInfo);
+    expect(classInfo.data).toMatchObject({
+      operation: "class",
+      entity: "AppController",
+      result: { name: "AppController", file: "Sources/AppController.m" },
+    });
+
+    const search = await router.invoke({
+      name: "graph.query",
+      input: { operation: "search", entity: "App", limit: 3 },
+    });
+    expectOk(search);
+    expect(search.data).toMatchObject({
+      operation: "search",
+      entity: "App",
+      result: [{ query: "App", limit: 3, name: "AppController" }],
+    });
+  });
 });
 
 describe("memory and meta tools", () => {
@@ -352,26 +622,70 @@ describe("memory and meta tools", () => {
   });
 });
 
-describe("terminal.execute", () => {
-  it("returns a policy gate envelope without executing commands", async () => {
-    const result = await new ToolRouter().invoke({
-      name: "terminal.execute",
-      input: { command: "printf should-not-run" },
-    });
-
-    expectFailure(result);
-    expect(result.status).toBe("policy_required");
-    expect(result.error).toMatchObject({
-      code: "policy_required",
-      details: { executesCommands: false, commandPreview: "printf should-not-run" },
-    });
-  });
-});
-
 function expectOk<T>(result: ToolResultEnvelope<T>): asserts result is ToolSuccessEnvelope<T> {
   expect(result.ok).toBe(true);
 }
 
 function expectFailure(result: ToolResultEnvelope): asserts result is ToolFailureEnvelope {
   expect(result.ok).toBe(false);
+}
+
+function makeLifecycleStore(root: string): RecipeLifecycleStore {
+  return new RecipeLifecycleStore(
+    new MainlineWriteBoundary({
+      workspacePaths: new MainlineWorkspacePaths({
+        projectRoot: path.join(root, "project"),
+        dataRoot: path.join(root, "ghost"),
+      }),
+    }),
+  );
+}
+
+function validKnowledgeItem(): Record<string, unknown> {
+  const markdown = [
+    "Use the internal agent tool migration helper when Alembic needs to move runtime-only tool behavior into the new repository.",
+    "The helper keeps agent-facing capabilities separate from Codex MCP tools while preserving concrete code, terminal, graph, memory, and knowledge workflows.",
+    "Source: src/agent-tool-layer.ts:12",
+    "",
+    "```ts",
+    "export function agentToolLayer(name: string) {",
+    "  return { name, compatibility: 'no-legacy-v1-v2' as const };",
+    "}",
+    "```",
+    "",
+    "This candidate includes a file reference and a code block so the submission policy can treat it as concrete project evidence.",
+  ].join("\n");
+
+  return {
+    title: "Internal Agent Tool Layer Migration",
+    description: "Migrate agent-only tool behavior into the new resource.action tool layer.",
+    trigger: "Use the internal agent tool layer migration pattern",
+    kind: "pattern",
+    doClause:
+      "Implement internal agent tools through lib/agent/tools and keep Codex public MCP tools separate.",
+    dontClause: "Do not route internal agent calls through legacy V1/V2 compatibility adapters.",
+    whenClause: "When AgentRuntime needs code, terminal, graph, memory, or knowledge tools.",
+    coreCode:
+      "export function agentToolLayer(name: string) { return { name, compatibility: 'no-legacy-v1-v2' as const }; }",
+    category: "agent-runtime",
+    headers: ["Internal Agent Tool Layer Migration"],
+    reasoning: {
+      whyStandard:
+        "The runtime needs a complete internal tool surface without leaking public MCP policy boundaries.",
+      sources: ["src/agent-tool-layer.ts"],
+      confidence: 0.88,
+    },
+    content: {
+      markdown,
+      rationale:
+        "AgentRuntime tools must be complete, local-first, and independently testable before runtime orchestration migrates.",
+    },
+    knowledgeType: "code-pattern",
+    language: "typescript",
+    usageGuide:
+      "Register tool descriptors in resource.action form and inject runtime dependencies through ToolRouter.",
+    dimensionId: "agent-tool-layer",
+    topicHint: "internal agent tool migration",
+    confidence: 0.88,
+  };
 }

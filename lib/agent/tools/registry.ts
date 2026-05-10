@@ -11,14 +11,6 @@ const objectOutputSchema: ToolSchema = {
   additionalProperties: true,
 };
 
-const unavailableOutputSchema: ToolSchema = {
-  type: "object",
-  properties: {
-    error: { type: "object" },
-  },
-  additionalProperties: true,
-};
-
 const filePathProperty: ToolSchema = { type: "string", description: "Project-relative path." };
 
 // 中文注释：这是内部 Agent action space 的单一清单，不兼容 legacy V1/V2，
@@ -43,11 +35,11 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
           description: "Search patterns. Maximum 10.",
         },
         glob: { type: "string", description: "Simple file suffix or wildcard filter." },
+        pattern: { type: "string", description: "Single search pattern alias." },
         maxResults: { type: "integer", minimum: 1, maximum: 50, default: 10 },
         contextLines: { type: "integer", minimum: 0, maximum: 8, default: 2 },
         regex: { type: "boolean", default: false },
       },
-      required: ["patterns"],
       additionalProperties: false,
     },
     outputSchema: objectOutputSchema,
@@ -125,11 +117,8 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     resource: "code",
     action: "write",
     title: "Code Write",
-    description: "Declares write intent. Actual writes are gated outside lib/agent/tools.",
-    availability: {
-      status: "policy_required",
-      reason: "File writes require an external write-boundary and policy gate.",
-    },
+    description: "Creates or overwrites project files after path-scope checks.",
+    availability: { status: "available" },
     risk: "write",
     concurrency: "exclusive",
     inputSchema: {
@@ -142,8 +131,8 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       required: ["path", "content"],
       additionalProperties: false,
     },
-    outputSchema: unavailableOutputSchema,
-    metadata: { executesWrites: false },
+    outputSchema: objectOutputSchema,
+    metadata: { protectedPaths: [".git", "node_modules", ".env"] },
   },
   {
     name: "code.guard",
@@ -185,11 +174,8 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     resource: "terminal",
     action: "execute",
     title: "Terminal Execute",
-    description: "Declares terminal intent but never executes commands inside this tools module.",
-    availability: {
-      status: "policy_required",
-      reason: "Terminal execution requires an external policy gate.",
-    },
+    description: "Executes a bounded shell command inside the project root with safety checks.",
+    availability: { status: "available" },
     risk: "side-effect",
     concurrency: "single",
     inputSchema: {
@@ -202,8 +188,8 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       required: ["command"],
       additionalProperties: false,
     },
-    outputSchema: unavailableOutputSchema,
-    metadata: { executesCommands: false },
+    outputSchema: objectOutputSchema,
+    metadata: { blockedDangerousCommands: true },
   },
   {
     name: "knowledge.search",
@@ -253,27 +239,21 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     resource: "knowledge",
     action: "submit",
     title: "Knowledge Submit",
-    description: "Declares candidate submission intent. Writes require lifecycle policy injection.",
-    availability: {
-      status: "policy_required",
-      reason: "Candidate writes require an injected lifecycle service and review policy.",
-    },
+    description: "Submits a Recipe candidate through an injected lifecycle store or gateway.",
+    availability: { status: "available" },
     risk: "write",
     concurrency: "single",
     inputSchema: objectOutputSchema,
-    outputSchema: unavailableOutputSchema,
-    metadata: { lifecycleWrite: false },
+    outputSchema: objectOutputSchema,
+    metadata: { lifecycleWrite: true, defaultStatus: "candidate" },
   },
   {
     name: "knowledge.manage",
     resource: "knowledge",
     action: "manage",
     title: "Knowledge Manage",
-    description: "Declares lifecycle management intent for candidate publish/reject operations.",
-    availability: {
-      status: "policy_required",
-      reason: "Lifecycle writes are reviewed outside the generic Agent tool router.",
-    },
+    description: "Runs lifecycle management through an injected lifecycle store or repository.",
+    availability: { status: "available" },
     risk: "write",
     concurrency: "single",
     inputSchema: {
@@ -281,7 +261,17 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       properties: {
         operation: {
           type: "string",
-          enum: ["publish", "reject", "approve", "deprecate", "update", "score", "validate"],
+          enum: [
+            "publish",
+            "reject",
+            "approve",
+            "deprecate",
+            "update",
+            "score",
+            "validate",
+            "evolve",
+            "skip_evolution",
+          ],
         },
         id: { type: "string" },
         reason: { type: "string" },
@@ -290,8 +280,8 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       required: ["operation", "id"],
       additionalProperties: false,
     },
-    outputSchema: unavailableOutputSchema,
-    metadata: { lifecycleWrite: false },
+    outputSchema: objectOutputSchema,
+    metadata: { lifecycleWrite: true },
   },
   {
     name: "graph.overview",
@@ -320,14 +310,43 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       properties: {
         operation: {
           type: "string",
-          enum: ["callers", "callees", "impact", "dependencies", "cycles"],
+          enum: [
+            "callers",
+            "callees",
+            "impact",
+            "dependencies",
+            "cycles",
+            "class",
+            "protocol",
+            "hierarchy",
+            "overrides",
+            "extensions",
+            "search",
+          ],
         },
+        type: {
+          type: "string",
+          enum: [
+            "callers",
+            "callees",
+            "impact",
+            "dependencies",
+            "cycles",
+            "class",
+            "protocol",
+            "hierarchy",
+            "overrides",
+            "extensions",
+            "search",
+          ],
+        },
+        entity: { type: "string" },
         ref: { type: "string" },
         maxDepth: { type: "integer", minimum: 0, maximum: 8, default: 1 },
+        limit: { type: "integer", minimum: 1, maximum: 100, default: 20 },
         direction: { type: "string", enum: ["incoming", "outgoing", "both"], default: "both" },
         includeStart: { type: "boolean", default: false },
       },
-      required: ["operation"],
       additionalProperties: false,
     },
     outputSchema: objectOutputSchema,

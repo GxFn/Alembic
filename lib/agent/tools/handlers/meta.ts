@@ -15,7 +15,7 @@ export const metaCapabilitiesHandler: ToolHandler = (invocation, context) => {
   });
 };
 
-export const metaPlanHandler: ToolHandler = (invocation, context) => {
+export const metaPlanHandler: ToolHandler = async (invocation, context) => {
   if (!isRecord(invocation.input)) {
     return toolFailure(context.descriptor, "error", {
       code: "invalid_input",
@@ -30,25 +30,40 @@ export const metaPlanHandler: ToolHandler = (invocation, context) => {
       message: "meta.plan requires strategy and steps.",
     });
   }
+  const saved = await context.dependencies.memoryStore?.save({
+    key: `plan:${context.dependencies.now?.() ?? Date.now()}`,
+    content: JSON.stringify({ strategy, steps }),
+    tags: ["plan"],
+    category: "meta-plan",
+  });
   return toolSuccess(context.descriptor, {
     accepted: true,
     strategy,
     stepCount: steps.length,
     steps,
+    ...(saved ? { memoryKey: saved.key } : {}),
   });
 };
 
-export const metaReviewHandler: ToolHandler = (_invocation, context) => {
+export const metaReviewHandler: ToolHandler = async (_invocation, context) => {
   const tools = context.registry.list();
   const policyRequired = tools.filter((tool) => tool.availability.status === "policy_required");
   const unavailable = tools.filter((tool) => tool.availability.status === "unavailable");
   const writeLike = tools.filter((tool) => tool.risk === "write" || tool.risk === "side-effect");
+  const [submissions, plans] = context.dependencies.memoryStore
+    ? await Promise.all([
+        context.dependencies.memoryStore.recall({ tags: ["submission"], limit: 20 }),
+        context.dependencies.memoryStore.recall({ tags: ["plan"], limit: 5 }),
+      ])
+    : [[], []];
   return toolSuccess(context.descriptor, {
     toolCount: tools.length,
     available: tools.filter((tool) => tool.availability.status === "available").length,
     policyRequired: policyRequired.map((tool) => tool.name),
     unavailable: unavailable.map((tool) => tool.name),
     writeLike: writeLike.map((tool) => tool.name),
+    submissions: submissions.map((record) => ({ key: record.key, content: record.content })),
+    plans: plans.map((record) => ({ key: record.key, content: record.content })),
     compatibility: "no-legacy-v1-v2",
   });
 };

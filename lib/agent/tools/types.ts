@@ -3,6 +3,7 @@ import type {
   MainlineGuardRuleLoadResult,
   MainlineGuardRuleProvider,
 } from "../../guard/index.js";
+import type { MainlineAstParser } from "../../mainline/code/index.js";
 import type { ContextIndexReader } from "../../mainline/data/index.js";
 import type {
   MainlineProjectIntelligenceArtifact,
@@ -186,8 +187,87 @@ export interface ToolMemoryCoordinator {
   }>;
 }
 
+export interface ToolDeltaCacheCheck {
+  readonly mode: "unchanged" | "delta" | "full";
+  readonly content: string;
+  readonly lineCount: number;
+}
+
+export interface ToolDeltaCache {
+  get(path: string): { readonly hash: string; readonly content: string } | undefined;
+  set(path: string, hash: string, content: string): void;
+  check(path: string, currentContent: string): ToolDeltaCacheCheck;
+}
+
+export interface ToolSearchCache {
+  get(key: string): unknown | undefined;
+  set(key: string, value: unknown): void;
+}
+
+export interface ToolTerminalExecutionRequest {
+  readonly command: string;
+  readonly cwd: string;
+  readonly projectRoot: string;
+  readonly timeoutMs: number;
+  readonly abortSignal?: AbortSignal;
+}
+
+export interface ToolTerminalExecutionResult {
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly exitCode: number;
+  readonly timedOut?: boolean;
+}
+
+export interface ToolTerminalExecutor {
+  execute(request: ToolTerminalExecutionRequest): Promise<ToolTerminalExecutionResult>;
+}
+
+export interface ToolTerminalOutputCompressor {
+  compress(
+    raw: string,
+    options: { readonly command: string; readonly tokenBudget?: number },
+  ): string | Promise<string>;
+}
+
+export interface ToolKnowledgeGateway {
+  create(request: {
+    readonly source: string;
+    readonly items: readonly Record<string, unknown>[];
+    readonly options?: Record<string, unknown>;
+  }): Promise<unknown>;
+}
+
+export interface ToolKnowledgeRepository {
+  getById(id: string): Promise<Record<string, unknown> | null>;
+  approve?(id: string, reason?: string): Promise<unknown>;
+  reject?(id: string, reason?: string): Promise<unknown>;
+  publish?(id: string): Promise<unknown>;
+  update?(id: string, data: Record<string, unknown>): Promise<unknown>;
+  score?(id: string, score: number): Promise<unknown>;
+  validate?(id: string): Promise<unknown>;
+}
+
+export interface ToolEvolutionGateway {
+  submit(decision: {
+    readonly recipeId: string;
+    readonly action: "update" | "deprecate" | "valid";
+    readonly source: string;
+    readonly confidence: number;
+    readonly description?: string;
+    readonly evidence?: readonly Record<string, unknown>[];
+    readonly reason?: string;
+    readonly replacedByRecipeId?: string;
+  }): Promise<unknown>;
+}
+
 export interface ToolRuntimeDependencies {
   readonly projectRoot?: string;
+  readonly tokenBudget?: number;
+  readonly abortSignal?: AbortSignal;
+  readonly astParser?: MainlineAstParser;
+  readonly deltaCache?: ToolDeltaCache;
+  readonly searchCache?: ToolSearchCache;
   readonly searchIndex?: MainlineSearchIndex;
   readonly contextIndex?: ContextIndexReader;
   readonly guardRules?: readonly MainlineGuardRule[];
@@ -201,6 +281,13 @@ export interface ToolRuntimeDependencies {
   readonly memoryStore?: ToolMemoryStore;
   readonly memoryCoordinator?: ToolMemoryCoordinator;
   readonly knowledgeLifecycleStore?: RecipeLifecycleStorePort;
+  readonly knowledgeGateway?: ToolKnowledgeGateway;
+  readonly knowledgeRepository?: ToolKnowledgeRepository;
+  readonly evolutionGateway?: ToolEvolutionGateway;
+  readonly projectGraph?: unknown;
+  readonly codeEntityGraph?: unknown;
+  readonly terminalExecutor?: ToolTerminalExecutor;
+  readonly terminalCompressor?: ToolTerminalOutputCompressor;
   readonly now?: () => number;
 }
 

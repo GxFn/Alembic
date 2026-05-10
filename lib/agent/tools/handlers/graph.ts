@@ -10,7 +10,15 @@ import type {
 } from "../types.js";
 import { isRecord, toolFailure, toolSuccess } from "../types.js";
 
-type GraphOperation = "callers" | "callees" | "impact" | "dependencies" | "cycles";
+type MainlineGraphOperation = "callers" | "callees" | "impact" | "dependencies" | "cycles";
+type LegacyGraphOperation =
+  | "class"
+  | "protocol"
+  | "hierarchy"
+  | "overrides"
+  | "extensions"
+  | "search";
+type GraphOperation = MainlineGraphOperation | LegacyGraphOperation;
 
 const GRAPH_OPERATIONS = new Set<GraphOperation>([
   "callers",
@@ -18,6 +26,12 @@ const GRAPH_OPERATIONS = new Set<GraphOperation>([
   "impact",
   "dependencies",
   "cycles",
+  "class",
+  "protocol",
+  "hierarchy",
+  "overrides",
+  "extensions",
+  "search",
 ]);
 
 const TRAVERSAL_DIRECTIONS = new Set<MainlineProjectIntelligenceTraversalDirection>([
@@ -29,7 +43,9 @@ const TRAVERSAL_DIRECTIONS = new Set<MainlineProjectIntelligenceTraversalDirecti
 interface GraphQueryInput {
   readonly operation: GraphOperation;
   readonly ref?: string;
+  readonly entity?: string;
   readonly maxDepth: number;
+  readonly limit: number;
   readonly direction: MainlineProjectIntelligenceTraversalDirection;
   readonly includeStart: boolean;
 }
@@ -38,6 +54,18 @@ export const graphOverviewHandler: ToolHandler = async (
   _invocation,
   context,
 ): Promise<ToolResultEnvelope> => {
+  const projectGraph = context.dependencies.projectGraph as ProjectGraphLike | undefined;
+  if (projectGraph?.getOverview) {
+    try {
+      const overview = projectGraph.getOverview();
+      if (overview) {
+        return toolSuccess(context.descriptor, { source: "projectGraph", overview });
+      }
+    } catch {
+      // Fall through to mainline artifact summary.
+    }
+  }
+
   const artifact = await loadProjectIntelligenceArtifact(
     context.dependencies.projectIntelligenceArtifactProvider,
   );
@@ -91,16 +119,10 @@ export const graphQueryHandler: ToolHandler = async (
     return toolFailure(context.descriptor, "error", parsed.error);
   }
 
-  const queries = await resolveProjectIntelligenceQueries(context.dependencies);
-  if (!queries) {
-    return toolFailure(context.descriptor, "unavailable", {
-      code: "project_intelligence_unavailable",
-      message: "graph.query requires ProjectIntelligenceQueries or an artifact provider.",
-    });
-  }
-
   const input = parsed.input;
-  const result = runGraphQuery(queries, input);
+  const result = isLegacyOperation(input.operation)
+    ? runLegacyGraphQuery(context.dependencies, input)
+    : runGraphQuery(await resolveProjectIntelligenceQueries(context.dependencies), input);
   if (!result.ok) {
     return toolFailure(context.descriptor, "error", result.error);
   }
@@ -108,6 +130,7 @@ export const graphQueryHandler: ToolHandler = async (
   return toolSuccess(context.descriptor, {
     operation: input.operation,
     ...(input.ref ? { ref: input.ref } : {}),
+    ...(input.entity ? { entity: input.entity } : {}),
     result: result.data,
   });
 };
@@ -124,7 +147,7 @@ function parseGraphQueryInput(
     };
   }
 
-  const operation = optionalString(input.operation);
+  const operation = optionalString(input.operation) ?? optionalString(input.type);
   if (!operation || !GRAPH_OPERATIONS.has(operation as GraphOperation)) {
     return {
       ok: false,
@@ -149,13 +172,23 @@ function parseGraphQueryInput(
   }
 
   const ref = optionalString(input.ref);
+  const entity = optionalString(input.entity) ?? ref;
+  const limit = boundedInteger(input.limit, 20, 100);
+  if (limit === undefined) {
+    return {
+      ok: false,
+      error: { code: "invalid_input", message: "graph.query limit must be an integer." },
+    };
+  }
 
   return {
     ok: true,
     input: {
       operation: operation as GraphOperation,
       ...(ref ? { ref } : {}),
+      ...(entity ? { entity } : {}),
       maxDepth,
+      limit,
       direction: direction as MainlineProjectIntelligenceTraversalDirection,
       includeStart: input.includeStart === true,
     },
@@ -187,11 +220,21 @@ async function loadProjectIntelligenceArtifact(
 }
 
 function runGraphQuery(
-  queries: MainlineProjectIntelligenceQueries,
+  queries: MainlineProjectIntelligenceQueries | undefined,
   input: GraphQueryInput,
 ):
   | { readonly ok: true; readonly data: readonly unknown[] }
   | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } } {
+  if (!queries) {
+    return {
+      ok: false,
+      error: {
+        code: "project_intelligence_unavailable",
+        message: "graph.query requires ProjectIntelligenceQueries or an artifact provider.",
+      },
+    };
+  }
+
   if (
     (input.operation === "callers" ||
       input.operation === "callees" ||
@@ -222,7 +265,78 @@ function runGraphQuery(
       return { ok: true, data: queries.fileDependencyAdjacency(input.ref) };
     case "cycles":
       return { ok: true, data: queries.cycles(input.ref) };
+    default:
+      return {
+        ok: false,
+        error: { code: "invalid_input", message: "Unsupported graph query operation." },
+      };
   }
+}
+
+function runLegacyGraphQuery(
+  dependencies: ToolRuntimeDependencies,
+  input: GraphQueryInput,
+):
+  | { readonly ok: true; readonly data: unknown }
+  | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } } {
+  const graph = dependencies.projectGraph as ProjectGraphLike | undefined;
+  const entityGraph = dependencies.codeEntityGraph as CodeEntityGraphLike | undefined;
+  const entity = input.entity;
+  if (!graph && !entityGraph) {
+    return {
+      ok: false,
+      error: {
+        code: "graph_dependency_unavailable",
+        message: "Legacy graph query types require projectGraph or codeEntityGraph dependency.",
+      },
+    };
+  }
+  if (!entity) {
+    return {
+      ok: false,
+      error: { code: "invalid_input", message: `${input.operation} requires entity or ref.` },
+    };
+  }
+
+  switch (input.operation) {
+    case "class":
+      return {
+        ok: true,
+        data: graph?.getClassInfo?.(entity) ?? entityGraph?.queryEntity?.(entity, "class") ?? null,
+      };
+    case "protocol":
+      return { ok: true, data: graph?.getProtocolInfo?.(entity) ?? null };
+    case "hierarchy":
+      return { ok: true, data: graph?.getClassHierarchy?.(entity) ?? null };
+    case "overrides":
+      return { ok: true, data: graph?.getMethodOverrides?.(entity) ?? null };
+    case "extensions":
+      return { ok: true, data: graph?.getCategoryMap?.(entity) ?? null };
+    case "search":
+      return {
+        ok: true,
+        data:
+          entityGraph?.search?.(entity, input.limit) ??
+          graph?.searchEntities?.(entity, input.limit) ??
+          null,
+      };
+    default:
+      return {
+        ok: false,
+        error: { code: "invalid_input", message: "Unsupported legacy graph query." },
+      };
+  }
+}
+
+function isLegacyOperation(operation: GraphOperation): operation is LegacyGraphOperation {
+  return (
+    operation === "class" ||
+    operation === "protocol" ||
+    operation === "hierarchy" ||
+    operation === "overrides" ||
+    operation === "extensions" ||
+    operation === "search"
+  );
 }
 
 function optionalString(value: unknown): string | undefined {
@@ -245,4 +359,27 @@ function countBy(values: readonly string[]): Record<string, number> {
     counts[value] = (counts[value] ?? 0) + 1;
   }
   return counts;
+}
+
+interface GraphOverview {
+  readonly languages?: readonly string[];
+  readonly totalFiles?: number;
+  readonly totalDefinitions?: number;
+  readonly summary?: Record<string, unknown>;
+  readonly modules?: readonly unknown[];
+}
+
+interface ProjectGraphLike {
+  getOverview?(): GraphOverview | null;
+  getClassInfo?(name: string): unknown;
+  getProtocolInfo?(name: string): unknown;
+  getClassHierarchy?(name: string): unknown;
+  getMethodOverrides?(name: string): unknown;
+  getCategoryMap?(name: string): unknown;
+  searchEntities?(query: string, limit: number): unknown;
+}
+
+interface CodeEntityGraphLike {
+  queryEntity?(name: string, kind: string): unknown;
+  search?(query: string, limit: number): unknown;
 }

@@ -1,7 +1,10 @@
+import { InMemoryToolDeltaCache, InMemoryToolSearchCache } from "./cache-store.js";
 import { ToolOutputCompressor } from "./compressor.js";
 import { createDefaultToolHandlers } from "./handlers/index.js";
 import { InMemoryToolMemoryStore } from "./memory-store.js";
 import { createDefaultToolRegistry } from "./registry.js";
+import { validateToolInputSchema } from "./schema.js";
+import { DefaultToolTerminalOutputCompressor } from "./terminal-output-compressor.js";
 import type {
   ToolHandler,
   ToolIdentity,
@@ -37,6 +40,9 @@ export class ToolRouter {
       options.dependencies?.now ? { now: options.dependencies.now } : {},
     );
     this.#dependencies = {
+      deltaCache: new InMemoryToolDeltaCache(),
+      searchCache: new InMemoryToolSearchCache(),
+      terminalCompressor: new DefaultToolTerminalOutputCompressor(),
       memoryStore,
       ...options.dependencies,
     };
@@ -59,6 +65,15 @@ export class ToolRouter {
       return toolFailure(descriptor, "unavailable", {
         code: "handler_unavailable",
         message: `No handler registered for ${descriptor.name}.`,
+      });
+    }
+
+    const schemaCheck = validateToolInputSchema(descriptor.inputSchema, invocation.input);
+    if (!schemaCheck.ok) {
+      return toolFailure(descriptor, "error", {
+        code: "invalid_input_schema",
+        message: schemaCheck.errors.join("; "),
+        details: { errors: schemaCheck.errors },
       });
     }
 
