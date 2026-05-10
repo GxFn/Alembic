@@ -4,7 +4,7 @@ This playbook describes how to release, test, and promote the Alembic Codex plug
 
 ## Release Model
 
-Alembic for Codex is shipped from the Alembic monorepo as three coupled artifacts:
+Alembic for Codex is shipped from this repository as three coupled artifacts:
 
 - The npm runtime package: `alembic-ai`.
 - The packaged Codex plugin directory: `plugins/alembic-codex`.
@@ -25,21 +25,23 @@ That means every package version bump must keep these surfaces aligned:
 - `package-lock.json`
 - `plugins/alembic-codex/.mcp.json`
 - `plugins/alembic-codex/README.md`
-- root `README.md` / `README_CN.md` when public instructions change
+- root `README.md` when public instructions change
 
 ## Version And Tag Flow
 
 Use the tag-driven GitHub Release workflow as the source of truth. Avoid local manual `npm publish` except for emergency recovery.
 
-1. Choose the version, for example `0.1.0`.
+1. Choose the next unpublished version, for example `0.1.1` when `0.1.0` is already on npm.
 2. Update package and plugin pins to the same version.
 3. Run local release checks:
 
 ```bash
+npm run typecheck
+npm run lint
 npm run build
-alembic codex diagnostics --json
-npm run release:codex-plugin
-npm run release:codex-plugin:daemon
+npm run test:unit
+npm run verify:codex-plugin
+node dist/bin/cli.js codex diagnostics --json
 ```
 
 4. Commit the version and release-readiness changes.
@@ -47,11 +49,11 @@ npm run release:codex-plugin:daemon
 6. Create an annotated tag on the exact green commit:
 
 ```bash
-git tag -a v0.1.0 -m "Release v0.1.0"
-git push origin v0.1.0
+git tag -a v0.1.1 -m "Release v0.1.1"
+git push origin v0.1.1
 ```
 
-7. Watch the `Release` workflow. It verifies the tag matches `package.json`, builds runtime/Dashboard/VS Code extension, runs lint, unit and integration tests, previews the npm package, uploads the VS Code artifact, and publishes npm with provenance.
+7. Watch the `Release` workflow. It verifies the tag matches `package.json`, runs typecheck, lint, build, unit tests, plugin verification, previews the npm package, and publishes npm with provenance.
 8. Confirm the registry:
 
 ```bash
@@ -67,20 +69,17 @@ The GitHub `Release` workflow is expected to do the irreversible publish step.
 It must pass:
 
 - Tag/package version equality check.
+- npm package version is not already published.
 - `npm ci`.
-- Dashboard dependency install.
-- VS Code extension dependency install.
+- `npm run typecheck`.
+- `npm run lint`.
 - `npm run build`.
-- `npm run build:dashboard`.
-- `npm run build:vscode-ext`.
-- `npm run lint -- --diagnostic-level=error`.
 - `npm run test:unit`.
-- `npm run test:integration`.
+- `npm run verify:codex-plugin`.
 - `npm pack --dry-run`.
-- VS Code extension package preview.
-- `npm publish --provenance --access public --ignore-scripts`.
+- `npm publish --provenance --access public`.
 
-`prepublishOnly` still runs `npm run release:codex-plugin` for local safety, but the Release workflow uses `--ignore-scripts` because it already ran the build and test gates.
+The workflow requires a repository secret named `NPM_TOKEN` with permission to publish `alembic-ai`.
 
 ## Test Matrix
 
@@ -90,12 +89,11 @@ Use the matrix below when changing plugin metadata, MCP startup, daemon lifecycl
 | --- | --- | --- | --- |
 | Static plugin metadata | `npm run verify:codex-plugin` | Manifest, assets, skills, marketplace entry, MCP pin, README release copy | Every plugin metadata or docs change |
 | Runtime build | `npm run build` | TypeScript builds and CLI/MCP bins are generated | Every code change |
-| CLI diagnostics | `alembic codex diagnostics --json` | Node, npm/npx, package pin, plugin files, admin gate, daemon version checks work outside Codex | Every release candidate |
-| Package/install smoke | `npm run smoke:codex-plugin -- --no-stdio` | npm tarball contents and local marketplace install simulation | Docs/metadata/package files changes |
-| MCP stdio smoke | `npm run smoke:codex-plugin` | Real MCP client can list/call Codex tools through stdio | MCP shim changes |
-| Daemon smoke | `npm run release:codex-plugin:daemon` | Dashboard daemon startup, daemon state, job recovery | Daemon/job/Dashboard bridge changes |
+| Typecheck | `npm run typecheck` | TypeScript surface is valid without emitting files | Every code change |
+| Lint | `npm run lint` | Biome rules and formatting-sensitive issues pass | Every code change |
+| CLI diagnostics | `node dist/bin/cli.js codex diagnostics --json` | Node, npm/npx, package pin, plugin files, admin gate, daemon version checks work outside Codex | Every release candidate |
+| Package preview | `npm pack --dry-run` | npm tarball contents match package files | Docs/metadata/package files changes |
 | Unit tests | `npm run test:unit` | Core behavior and Codex MCP unit contracts | Shared code changes |
-| Integration tests | `npm run test:integration` | End-to-end service behavior without relying on the Codex app | HTTP/workflow/storage changes |
 | CI | GitHub `CI` on `main` | Linux/Node 22 compatibility and clean checkout behavior | Before tagging |
 | Release workflow | GitHub `Release` on `v*` tag | Production publish path | Every npm release |
 | Manual Codex app pass | Install/enable plugin, run first-minute prompts | Actual marketplace-style UX | Before public announcement |
@@ -123,7 +121,7 @@ Run this against a fresh test repository and one real project before public prom
 | --- | --- | --- | --- |
 | Plugin visible but MCP does not start | `alembic codex diagnostics --json` | Node < 22, missing npm/npx, npx cannot fetch package | Install Node 22, use global `npm install -g alembic-ai@<version>` fallback |
 | Diagnostics pin mismatch | `plugins/alembic-codex/.mcp.json` | Version bump missed plugin MCP config | Update pin and rerun `npm run verify:codex-plugin` |
-| npm release did not happen | Release workflow logs | Tag mismatch, tests failed, npm token/provenance issue | Fix workflow failure, create a new patch version/tag |
+| npm release did not happen | Release workflow logs | Tag mismatch, tests failed, `NPM_TOKEN` secret/provenance issue | Fix workflow failure, create a new patch version/tag |
 | Daemon starts but tools fail | `alembic daemon status --json` and daemon log path | stale daemon state, missing bridge token, health identity mismatch | Stop daemon, rerun dashboard/bootstrap, inspect `daemon.log` |
 | Job remains running forever | `alembic_codex_job` and Dashboard jobs page | daemon restart before interruption marking, old JobStore record | Restart daemon; lifecycle should mark active jobs failed with interruption reason |
 | Codex creates project artifacts in Ghost mode | `alembic codex status --json` | setup profile regression or manual standard init | Fix setup profile; rerun on clean test project |
