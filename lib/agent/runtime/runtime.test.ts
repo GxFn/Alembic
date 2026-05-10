@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { AiTaskPlanner, type ModelDef } from "../../mainline/ai/index.js";
 import type { EvidencePackage } from "../../mainline/knowledge/index.js";
 import { type ToolInvocation, type ToolResultEnvelope, toolSuccess } from "../tools/index.js";
+import { AgentEventBus } from "./AgentEventBus.js";
 import { AgentRuntime } from "./AgentRuntime.js";
+import type { LLMResult, RuntimeAiProvider } from "./AgentRuntimeTypes.js";
+import { MAX_TOOL_CALLS_PER_ITER } from "./AgentRuntimeTypes.js";
+import { BudgetController } from "./BudgetController.js";
 import { DiagnosticsCollector } from "./DiagnosticsCollector.js";
 import { createToolPipeline } from "./ToolExecutionPipeline.js";
 
@@ -272,6 +276,191 @@ describe("AgentRuntime tool execution pipeline", () => {
       },
     ]);
   });
+
+  it("runs a full ReAct loop through new internal agent tools and returns a final answer", async () => {
+    const invocations: ToolInvocation[] = [];
+    const provider = sequenceProvider([
+      {
+        functionCalls: [
+          {
+            id: "call-meta",
+            name: "meta.capabilities",
+            args: { includeUnavailable: false },
+          },
+        ],
+        usage: { inputTokens: 10, outputTokens: 5 },
+      },
+      {
+        text: "Final Answer: 工具链路已经接通。",
+        usage: { inputTokens: 15, outputTokens: 7, cacheHitTokens: 3 },
+      },
+    ]);
+    const runtime = new AgentRuntime({
+      aiProvider: provider,
+      toolRouter: {
+        async invoke(invocation: ToolInvocation): Promise<ToolResultEnvelope> {
+          invocations.push(invocation);
+          return toolSuccess(
+            { name: "meta.capabilities", resource: "meta", action: "capabilities" },
+            { tools: ["meta.capabilities"] },
+            { requestId: invocation.requestId },
+          );
+        },
+      },
+      additionalTools: ["meta.capabilities"],
+      lang: "zh",
+    });
+
+    const result = await runtime.reactLoop("检查工具能力");
+
+    expect(result.reply).toBe("工具链路已经接通。");
+    expect(result.iterations).toBe(2);
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls[0]).toMatchObject({
+      tool: "meta.capabilities",
+      result: { tools: ["meta.capabilities"] },
+    });
+    expect(result.tokenUsage).toMatchObject({ input: 25, output: 12, cacheHit: 3 });
+    expect(invocations).toEqual([
+      {
+        name: "meta.capabilities",
+        input: { includeUnavailable: false },
+        requestId: "call-meta",
+      },
+    ]);
+  });
+
+  it("caps oversized tool fan-out per iteration and records diagnostics", async () => {
+    const calls = Array.from({ length: MAX_TOOL_CALLS_PER_ITER + 3 }, (_, index) => ({
+      id: `call-${index + 1}`,
+      name: "meta.capabilities",
+      args: {},
+    }));
+    const provider = sequenceProvider([
+      { functionCalls: calls },
+      { text: "最终答案：已完成截断保护。" },
+    ]);
+    const invocations: ToolInvocation[] = [];
+    const runtime = new AgentRuntime({
+      aiProvider: provider,
+      toolRouter: {
+        async invoke(invocation: ToolInvocation): Promise<ToolResultEnvelope> {
+          invocations.push(invocation);
+          return toolSuccess(
+            { name: "meta.capabilities", resource: "meta", action: "capabilities" },
+            { ok: true },
+            { requestId: invocation.requestId },
+          );
+        },
+      },
+      additionalTools: ["meta.capabilities"],
+    });
+
+    const result = await runtime.reactLoop("触发 fan-out");
+
+    expect(invocations).toHaveLength(MAX_TOOL_CALLS_PER_ITER);
+    expect(result.toolCalls).toHaveLength(MAX_TOOL_CALLS_PER_ITER);
+    expect(result.diagnostics?.truncatedToolCalls).toBe(3);
+    expect(result.reply).toBe("已完成截断保护。");
+  });
+
+  it("executes AgentMessage-like envelopes and emits replies, progress, and bus events", async () => {
+    const replies: string[] = [];
+    const progressTypes: string[] = [];
+    const bus = new AgentEventBus();
+    const events: string[] = [];
+    bus.subscribe("*", (event) => {
+      events.push(event.type);
+    });
+    const runtime = new AgentRuntime(
+      {
+        aiProvider: sequenceProvider([{ text: "Final Answer: 收到。" }]),
+        toolRouter: neverInvokedToolRouter(),
+        onProgress: (event) => {
+          progressTypes.push(event.type);
+        },
+      },
+      { eventBus: bus },
+    );
+
+    const result = await runtime.execute({
+      content: "ping",
+      channel: "mcp",
+      session: { id: "s1", history: [{ role: "user", content: "历史" }] },
+      replyFn: (text) => {
+        replies.push(text);
+      },
+    });
+
+    expect(result.reply).toBe("收到。");
+    expect(replies).toEqual(["收到。"]);
+    expect(progressTypes).toContain("agent:started");
+    expect(progressTypes).toContain("agent:completed");
+    expect(events).toContain("agent:started");
+    expect(events).toContain("agent:completed");
+    expect(result.state.phase).toBe("completed");
+  });
+
+  it("keeps evolution decision retry restricted to knowledge.manage decisions", async () => {
+    let invoked = false;
+    const result = await createToolPipeline().execute(
+      { id: "call-search", name: "knowledge.search", args: { query: "escape" } },
+      {
+        toolRouter: {
+          async invoke(): Promise<ToolResultEnvelope> {
+            invoked = true;
+            throw new Error("decision-only guard should block before router");
+          },
+        },
+        allowedToolIds: ["knowledge.search", "knowledge.manage"],
+        iteration: 1,
+        sharedState: { _evolutionDecisionOnly: true },
+      },
+    );
+
+    expect(invoked).toBe(false);
+    expect(result.metadata.blocked).toBe(true);
+    expect(result.result).toMatchObject({
+      error: expect.stringContaining("Evolution retry is decision-only"),
+    });
+  });
+
+  it("returns dimensionDigest JSON when system bootstrap exits through forced summary", async () => {
+    const runtime = new AgentRuntime({
+      toolRouter: neverInvokedToolRouter(),
+    });
+
+    const result = await runtime.reactLoop("bootstrap dimension", {
+      source: "system",
+      tracker: { pipelineType: "bootstrap", iteration: 3 },
+    });
+
+    expect(result.reply).toContain("dimensionDigest");
+    expect(result.reply).toContain('"candidateCount"');
+    expect(result.diagnostics?.degraded).toBe(true);
+  });
+
+  it("executes pending L4 compaction and records its token usage", async () => {
+    const usage = { input: 0, output: 0, reasoning: 0, cacheHit: 0 };
+    const budget = new BudgetController({
+      maxSessionInputTokens: 100,
+      cumulativeUsage: usage,
+      contextWindow: {
+        compactIfNeeded: () => ({ level: 3, removed: 1 }),
+        compactL4: async () => ({
+          removed: 2,
+          usage: { inputTokens: 4, outputTokens: 5, reasoningTokens: 1, cacheHitTokens: 2 },
+        }),
+      },
+    });
+
+    budget.requestL4Compaction();
+    const result = await budget.executeL4IfPending(sequenceProvider([{ text: "summary" }]));
+
+    expect(result).toEqual({ level: 4, removed: 2 });
+    expect(usage).toEqual({ input: 4, output: 5, reasoning: 1, cacheHit: 2 });
+    expect(budget.pendingL4).toBe(false);
+  });
 });
 
 function neverInvokedToolRouter() {
@@ -321,6 +510,20 @@ function thinkingModel(): ModelDef {
       temperature: { allowed: false },
       toolChoice: { allowed: true, disabledWhen: "thinking" },
       reasoningEffort: { allowed: true, allowedValues: ["low", "medium", "high"] },
+    },
+  };
+}
+
+function sequenceProvider(results: readonly LLMResult[]): RuntimeAiProvider {
+  let index = 0;
+  return {
+    async chatWithTools(): Promise<LLMResult> {
+      const result = results[index] ?? results.at(-1);
+      index += 1;
+      if (!result) {
+        throw new Error("sequenceProvider requires at least one result.");
+      }
+      return result;
     },
   };
 }

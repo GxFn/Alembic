@@ -7,6 +7,12 @@ export interface TokenUsageAccumulator {
 
 export interface RuntimeContextWindow {
   compactIfNeeded(): CompactionResult;
+  compactL4?(aiProvider: {
+    chatWithTools(
+      prompt: string,
+      opts: Record<string, unknown>,
+    ): Promise<{ readonly text?: string; readonly usage?: LLMUsageInput } | null>;
+  }): Promise<{ readonly removed: number; readonly usage?: LLMUsageInput }>;
   needsL4Compaction?(): boolean;
   setSessionPressure?(pressure: number): void;
   estimateFullContextTokens?(baseSystemPromptLength: number, toolSchemaCount: number): number;
@@ -167,6 +173,47 @@ export class BudgetController {
 
   requestL4Compaction(): void {
     this.#pendingL4 = true;
+  }
+
+  async executeL4IfPending(
+    aiProvider: {
+      chatWithTools(
+        prompt: string,
+        opts: Record<string, unknown>,
+      ): Promise<{ readonly text?: string; readonly usage?: LLMUsageInput } | null>;
+    },
+    addLoopTokenUsage?: (usage: {
+      readonly inputTokens: number;
+      readonly outputTokens: number;
+    }) => void,
+  ): Promise<CompactionResult> {
+    if (!this.#pendingL4 || !this.#contextWindow?.compactL4) {
+      return { level: 0, removed: 0 };
+    }
+    this.#pendingL4 = false;
+    try {
+      const l4Result = await this.#contextWindow.compactL4(aiProvider);
+      if (l4Result.removed > 0) {
+        this.#logger.info(
+          `[BudgetController] L4 compaction executed: removed ${l4Result.removed} messages`,
+        );
+      }
+      if (l4Result.usage) {
+        const inputTokens = l4Result.usage.inputTokens ?? 0;
+        const outputTokens = l4Result.usage.outputTokens ?? 0;
+        this.#cumulativeUsage.input += inputTokens;
+        this.#cumulativeUsage.output += outputTokens;
+        this.#cumulativeUsage.reasoning += l4Result.usage.reasoningTokens ?? 0;
+        this.#cumulativeUsage.cacheHit += l4Result.usage.cacheHitTokens ?? 0;
+        addLoopTokenUsage?.({ inputTokens, outputTokens });
+      }
+      const result = { level: 4, removed: l4Result.removed };
+      this.#trackCompaction(result);
+      return result;
+    } catch (error) {
+      this.#logger.warn(`[BudgetController] L4 compaction failed: ${String(error)}`);
+      return { level: 0, removed: 0 };
+    }
   }
 
   recordLLMUsage(usage: LLMUsageInput): void {

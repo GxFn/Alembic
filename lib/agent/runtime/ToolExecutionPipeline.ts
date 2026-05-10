@@ -45,17 +45,27 @@ export interface ToolTraceSink {
   ): void | Promise<void>;
 }
 
+export type ToolProgressEmitter = (type: string, payload: Record<string, unknown>) => void;
+
+export interface ToolEventBusLike {
+  publish(type: string, payload: unknown, opts?: { readonly source?: string }): void;
+}
+
 export interface ToolExecContext {
   readonly toolRouter: ToolRouterContract;
   readonly allowedToolIds: readonly string[];
   readonly iteration: number;
   readonly source?: string;
+  readonly agentId?: string;
+  readonly sharedState?: Record<string, unknown> | null;
   readonly diagnostics?: DiagnosticsCollector | null;
   readonly hooks?: HookSystem | null;
   readonly logger?: ToolExecLogger | null;
   readonly observationSink?: ToolObservationSink | null;
   readonly trackerSink?: ToolTrackerSink | null;
   readonly traceSink?: ToolTraceSink | null;
+  readonly progress?: ToolProgressEmitter | null;
+  readonly eventBus?: ToolEventBusLike | null;
   readonly onToolCall?:
     | ((name: string, args: Record<string, unknown>, result: unknown, iteration: number) => void)
     | null;
@@ -193,6 +203,41 @@ export const allowlistGate: ToolMiddleware = {
   },
 };
 
+export const evolutionDecisionGate: ToolMiddleware = {
+  name: "evolutionDecisionGate",
+  before(call, context): BeforeVerdict | undefined {
+    if (context.sharedState?._evolutionDecisionOnly !== true) {
+      return undefined;
+    }
+
+    const operation = stringValue(call.args.operation);
+    const allowedOperation = new Set(["evolve", "deprecate", "skip_evolution"]).has(
+      operation ?? "",
+    );
+    if (call.name === "knowledge.manage" && allowedOperation && stringValue(call.args.id)) {
+      return undefined;
+    }
+
+    return {
+      blocked: true,
+      result: {
+        error:
+          'Evolution retry is decision-only. Call knowledge.manage({ operation: "evolve|deprecate|skip_evolution", id, reason, data? }) for each pending Recipe; search/detail/code/graph are disabled.',
+      },
+      envelope: toolFailure(
+        { name: call.name, resource: "knowledge", action: "manage" },
+        "error",
+        {
+          code: "evolution_decision_only",
+          message:
+            "Evolution retry only allows knowledge.manage evolve/deprecate/skip_evolution decisions.",
+        },
+        { requestId: call.id },
+      ),
+    };
+  },
+};
+
 export const observationRecord: ToolMiddleware = {
   name: "observationRecord",
   async after(call, result, context, metadata) {
@@ -231,7 +276,7 @@ export const traceRecord: ToolMiddleware = {
 
 export const submitDedup: ToolMiddleware = {
   name: "submitDedup",
-  after(call, result, _context, metadata) {
+  after(call, result, context, metadata) {
     if (call.name !== "knowledge.submit" || !isRecord(result) || "error" in result) {
       if (call.name === "knowledge.search" && isRecord(result) && !("error" in result)) {
         metadata.isSubmit = false;
@@ -248,17 +293,65 @@ export const submitDedup: ToolMiddleware = {
     }
     if (status === "created" || status === "candidate_created" || status === "processed") {
       metadata.isNew = true;
+      recordSubmittedKnowledge(call.args, context.sharedState);
     }
+  },
+};
+
+export const progressEmitter: ToolMiddleware = {
+  name: "progressEmitter",
+  before(call, context) {
+    context.progress?.("tool_call", {
+      tool: call.name,
+      args: call.args,
+      iteration: context.iteration,
+    });
+    return undefined;
+  },
+  after(call, result, context, metadata) {
+    const error = isRecord(result) && typeof result.error === "string" ? result.error : undefined;
+    context.progress?.("tool_end", {
+      tool: call.name,
+      duration: metadata.durationMs,
+      status: error ? "error" : "ok",
+      ...(error ? { error } : {}),
+    });
+  },
+};
+
+export const eventBusPublisher: ToolMiddleware = {
+  name: "eventBusPublisher",
+  before(call, context) {
+    context.eventBus?.publish(
+      "tool:call:start",
+      { agentId: context.agentId, tool: call.name, iteration: context.iteration },
+      context.agentId ? { source: context.agentId } : undefined,
+    );
+    return undefined;
+  },
+  after(call, result, context, metadata) {
+    const success = !(isRecord(result) && "error" in result);
+    context.eventBus?.publish(
+      "tool:call:end",
+      {
+        agentId: context.agentId,
+        tool: call.name,
+        durationMs: metadata.durationMs,
+        success,
+      },
+      context.agentId ? { source: context.agentId } : undefined,
+    );
   },
 };
 
 export function createToolPipeline(): ToolExecutionPipeline {
   return new ToolExecutionPipeline()
     .use(allowlistGate)
-    .use(submitDedup)
+    .use(evolutionDecisionGate)
     .use(observationRecord)
     .use(trackerSignal)
-    .use(traceRecord);
+    .use(traceRecord)
+    .use(submitDedup);
 }
 
 function toInvocation(call: ToolCall): ToolInvocation {
@@ -285,4 +378,40 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function recordSubmittedKnowledge(
+  args: Record<string, unknown>,
+  sharedState: Record<string, unknown> | null | undefined,
+): void {
+  if (!sharedState) {
+    return;
+  }
+  const title = stringValue(args.title) ?? stringValue(args.category);
+  const normalizedTitle = title?.toLowerCase().trim();
+  const submittedTitles = sharedState.submittedTitles;
+  if (normalizedTitle && submittedTitles instanceof Set) {
+    submittedTitles.add(normalizedTitle);
+  }
+
+  const trigger = stringValue(args.trigger)?.toLowerCase().trim();
+  const submittedTriggers = sharedState.submittedTriggers;
+  if (trigger && submittedTriggers instanceof Set) {
+    submittedTriggers.add(trigger);
+  }
+
+  const content = isRecord(args.content) ? args.content : null;
+  const pattern = stringValue(content?.pattern);
+  const submittedPatterns = sharedState.submittedPatterns;
+  if (pattern && pattern.length >= 30 && submittedPatterns instanceof Set) {
+    const fingerprint = pattern
+      .replace(/\/\/[^\n]*/g, "")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\s+/g, "")
+      .toLowerCase()
+      .slice(0, 200);
+    if (fingerprint.length >= 20) {
+      submittedPatterns.add(fingerprint);
+    }
+  }
 }
