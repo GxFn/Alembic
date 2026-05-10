@@ -120,9 +120,12 @@ export const graphQueryHandler: ToolHandler = async (
   }
 
   const input = parsed.input;
-  const result = isLegacyOperation(input.operation)
-    ? runLegacyGraphQuery(context.dependencies, input)
-    : runGraphQuery(await resolveProjectIntelligenceQueries(context.dependencies), input);
+  const queries = isLegacyOnlyOperation(input.operation)
+    ? undefined
+    : await resolveProjectIntelligenceQueries(context.dependencies);
+  const result = queries
+    ? runGraphQuery(queries, input)
+    : runProjectGraphQuery(context.dependencies, input);
   if (!result.ok) {
     return toolFailure(context.descriptor, "error", result.error);
   }
@@ -273,7 +276,7 @@ function runGraphQuery(
   }
 }
 
-function runLegacyGraphQuery(
+function runProjectGraphQuery(
   dependencies: ToolRuntimeDependencies,
   input: GraphQueryInput,
 ):
@@ -287,7 +290,7 @@ function runLegacyGraphQuery(
       ok: false,
       error: {
         code: "graph_dependency_unavailable",
-        message: "Legacy graph query types require projectGraph or codeEntityGraph dependency.",
+        message: `${input.operation} requires ProjectIntelligenceQueries, projectGraph, or codeEntityGraph dependency.`,
       },
     };
   }
@@ -308,10 +311,28 @@ function runLegacyGraphQuery(
       return { ok: true, data: graph?.getProtocolInfo?.(entity) ?? null };
     case "hierarchy":
       return { ok: true, data: graph?.getClassHierarchy?.(entity) ?? null };
+    case "callers":
+      return {
+        ok: true,
+        data:
+          graph?.getCallers?.(entity, input.limit) ??
+          entityGraph?.queryCallGraph?.(entity, "callers", input.limit) ??
+          null,
+      };
+    case "callees":
+      return {
+        ok: true,
+        data:
+          graph?.getCallees?.(entity, input.limit) ??
+          entityGraph?.queryCallGraph?.(entity, "callees", input.limit) ??
+          null,
+      };
     case "overrides":
       return { ok: true, data: graph?.getMethodOverrides?.(entity) ?? null };
     case "extensions":
       return { ok: true, data: graph?.getCategoryMap?.(entity) ?? null };
+    case "impact":
+      return { ok: true, data: entityGraph?.impactAnalysis?.(entity, input.limit) ?? null };
     case "search":
       return {
         ok: true,
@@ -323,12 +344,15 @@ function runLegacyGraphQuery(
     default:
       return {
         ok: false,
-        error: { code: "invalid_input", message: "Unsupported legacy graph query." },
+        error: {
+          code: "project_intelligence_unavailable",
+          message: `${input.operation} requires ProjectIntelligenceQueries or an artifact provider.`,
+        },
       };
   }
 }
 
-function isLegacyOperation(operation: GraphOperation): operation is LegacyGraphOperation {
+function isLegacyOnlyOperation(operation: GraphOperation): operation is LegacyGraphOperation {
   return (
     operation === "class" ||
     operation === "protocol" ||
@@ -374,6 +398,8 @@ interface ProjectGraphLike {
   getClassInfo?(name: string): unknown;
   getProtocolInfo?(name: string): unknown;
   getClassHierarchy?(name: string): unknown;
+  getCallers?(name: string, limit: number): unknown;
+  getCallees?(name: string, limit: number): unknown;
   getMethodOverrides?(name: string): unknown;
   getCategoryMap?(name: string): unknown;
   searchEntities?(query: string, limit: number): unknown;
@@ -381,5 +407,7 @@ interface ProjectGraphLike {
 
 interface CodeEntityGraphLike {
   queryEntity?(name: string, kind: string): unknown;
+  queryCallGraph?(name: string, direction: string, limit: number): unknown;
+  impactAnalysis?(name: string, limit: number): unknown;
   search?(query: string, limit: number): unknown;
 }

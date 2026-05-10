@@ -20,7 +20,12 @@ import {
   memoryRecallHandler,
   memorySaveHandler,
 } from "./memory.js";
-import { metaCapabilitiesHandler, metaPlanHandler, metaReviewHandler } from "./meta.js";
+import {
+  metaCapabilitiesHandler,
+  metaPlanHandler,
+  metaReviewHandler,
+  metaToolsHandler,
+} from "./meta.js";
 import { terminalExecuteHandler } from "./terminal.js";
 
 export {
@@ -43,6 +48,7 @@ export {
   metaCapabilitiesHandler,
   metaPlanHandler,
   metaReviewHandler,
+  metaToolsHandler,
   terminalExecuteHandler,
 };
 
@@ -66,6 +72,7 @@ export function createDefaultToolHandlers(): ReadonlyMap<ToolName, ToolHandler> 
     ["memory.note_finding", memoryNoteFindingHandler],
     ["memory.get_previous_evidence", memoryPreviousEvidenceHandler],
     ["meta.capabilities", metaCapabilitiesHandler],
+    ["meta.tools", metaToolsHandler],
     ["meta.plan", metaPlanHandler],
     ["meta.review", metaReviewHandler],
   ]);

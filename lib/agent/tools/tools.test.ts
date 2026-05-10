@@ -33,6 +33,7 @@ const EXPECTED_TOOLS = [
   "memory.note_finding",
   "memory.get_previous_evidence",
   "meta.capabilities",
+  "meta.tools",
   "meta.plan",
   "meta.review",
 ] as const;
@@ -301,6 +302,42 @@ describe("knowledge.submit and knowledge.manage", () => {
     expect(approved).toEqual([{ id: "recipe-a", reason: "reviewed" }]);
   });
 
+  it("normalizes knowledge gateway submit outcomes for agent review", async () => {
+    const created = await new ToolRouter({
+      dependencies: {
+        knowledgeGateway: {
+          create: async () => ({
+            created: [{ id: "candidate-1", title: "Candidate One" }],
+            duplicates: [],
+            rejected: [],
+            blocked: [],
+          }),
+        },
+      },
+    }).invoke({ name: "knowledge.submit", input: validKnowledgeItem() });
+    expectOk(created);
+    expect(created.data).toMatchObject({
+      status: "created",
+      id: "candidate-1",
+      title: "Candidate One",
+    });
+
+    const duplicate = await new ToolRouter({
+      dependencies: {
+        knowledgeGateway: {
+          create: async () => ({
+            created: [],
+            duplicates: [{ title: "Candidate One", score: 0.95 }],
+            rejected: [],
+            blocked: [],
+          }),
+        },
+      },
+    }).invoke({ name: "knowledge.submit", input: validKnowledgeItem() });
+    expectOk(duplicate);
+    expect(duplicate.data).toMatchObject({ status: "duplicate_blocked" });
+  });
+
   it("reads knowledge details from an injected repository before lifecycle lookup", async () => {
     const result = await new ToolRouter({
       dependencies: {
@@ -346,7 +383,7 @@ describe("knowledge.submit and knowledge.manage", () => {
     expectOk(result);
     expect(result.data).toMatchObject({
       operation: "evolve",
-      status: "evolution_recorded",
+      status: "evolution_proposed",
       result: { id: "evolution-1" },
     });
     expect(submitted[0]).toMatchObject({
@@ -433,6 +470,15 @@ describe("knowledge.search and knowledge.detail", () => {
         body: "Initialize Alembic without local IDE writes.",
         path: "lib/codex/workspace.ts",
         tags: ["ghost"],
+        metadata: { category: "codex", status: "active" },
+      },
+      {
+        id: "recipe:candidate-agent-tool",
+        kind: "recipe",
+        title: "Agent tool candidate",
+        body: "Candidate about internal agent tool migration.",
+        tags: ["agent-runtime"],
+        metadata: { category: "agent-runtime", status: "candidate" },
       },
     ]);
 
@@ -487,6 +533,21 @@ describe("knowledge.search and knowledge.detail", () => {
     expect(searchData.context.recipeIds).toEqual(["ghost-init"]);
     expect(searchData.context.recipeFiles[0]?.relativePath).toBe("recipes/ghost-init.md");
     expect(searchData.context.sourceRefs[0]?.id).toBe("lib/codex/workspace.ts");
+
+    const filtered = await router.invoke({
+      name: "knowledge.search",
+      input: {
+        query: "agent tool candidate",
+        kind: "candidate",
+        category: "agent-runtime",
+        limit: 5,
+      },
+    });
+    expectOk(filtered);
+    expect(
+      (filtered.data as { hits: ReadonlyArray<{ readonly document: { readonly id: string } }> })
+        .hits[0]?.document.id,
+    ).toBe("recipe:candidate-agent-tool");
 
     const detail = await router.invoke({ name: "knowledge.detail", input: { id: "ghost-init" } });
     expectOk(detail);
@@ -552,9 +613,16 @@ describe("graph tools", () => {
         methods: ["viewDidLoad"],
         file: "Sources/AppController.m",
       }),
+      getCallers: (name: string, limit: number) => [{ name, limit, caller: "SceneDelegate" }],
       searchEntities: (query: string, limit: number) => [{ query, limit, name: "AppController" }],
     };
-    const router = new ToolRouter({ dependencies: { projectGraph } });
+    const codeEntityGraph = {
+      queryCallGraph: (name: string, direction: string, limit: number) => [
+        { name, direction, limit, callee: "render" },
+      ],
+      impactAnalysis: (name: string, limit: number) => [{ name, limit, impacted: "Window" }],
+    };
+    const router = new ToolRouter({ dependencies: { projectGraph, codeEntityGraph } });
 
     const overview = await router.invoke({ name: "graph.overview" });
     expectOk(overview);
@@ -572,6 +640,28 @@ describe("graph tools", () => {
       operation: "class",
       entity: "AppController",
       result: { name: "AppController", file: "Sources/AppController.m" },
+    });
+
+    const callers = await router.invoke({
+      name: "graph.query",
+      input: { operation: "callers", entity: "AppController", limit: 2 },
+    });
+    expectOk(callers);
+    expect(callers.data).toMatchObject({
+      operation: "callers",
+      entity: "AppController",
+      result: [{ name: "AppController", limit: 2, caller: "SceneDelegate" }],
+    });
+
+    const impact = await router.invoke({
+      name: "graph.query",
+      input: { operation: "impact", entity: "AppController", limit: 2 },
+    });
+    expectOk(impact);
+    expect(impact.data).toMatchObject({
+      operation: "impact",
+      entity: "AppController",
+      result: [{ name: "AppController", limit: 2, impacted: "Window" }],
     });
 
     const search = await router.invoke({
@@ -615,6 +705,21 @@ describe("memory and meta tools", () => {
     });
     expectOk(plan);
     expect((plan.data as { stepCount: number }).stepCount).toBe(1);
+
+    const tools = await router.invoke({ name: "meta.tools", input: { name: "code" } });
+    expectOk(tools);
+    expect(
+      (tools.data as { tools: ReadonlyArray<{ readonly name: string }> }).tools.map(
+        (tool) => tool.name,
+      ),
+    ).toEqual([
+      "code.search",
+      "code.read",
+      "code.outline",
+      "code.structure",
+      "code.write",
+      "code.guard",
+    ]);
 
     const review = await router.invoke({ name: "meta.review" });
     expectOk(review);

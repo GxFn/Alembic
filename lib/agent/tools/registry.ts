@@ -205,6 +205,8 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       properties: {
         query: { type: "string" },
         text: { type: "string" },
+        kind: { type: "string", enum: ["recipe", "candidate", "all"] },
+        category: { type: "string" },
         paths: { type: "array", items: { type: "string" } },
         symbols: { type: "array", items: { type: "string" } },
         kinds: { type: "array", items: { type: "string" } },
@@ -459,6 +461,25 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     },
     outputSchema: objectOutputSchema,
     metadata: { stable: true },
+  },
+  {
+    name: "meta.tools",
+    resource: "meta",
+    action: "tools",
+    title: "Tool Schema",
+    description: "Returns compact tool summaries or one tool's full action schema.",
+    availability: { status: "available" },
+    risk: "read-only",
+    concurrency: "parallel",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Optional resource or tool name." },
+      },
+      additionalProperties: false,
+    },
+    outputSchema: objectOutputSchema,
+    metadata: { runtimeOnly: true },
   },
   {
     name: "meta.plan",

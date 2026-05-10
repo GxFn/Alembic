@@ -14,6 +14,37 @@ export interface ToolExecLogger {
   warn(message: string): void;
 }
 
+export interface ToolObservationSink {
+  recordToolCall(entry: {
+    readonly name: string;
+    readonly args: Record<string, unknown>;
+    readonly result: unknown;
+    readonly iteration: number;
+    readonly source?: string;
+    readonly metadata: ToolMetadata;
+  }): void | Promise<void>;
+}
+
+export interface ToolTrackerSink {
+  signalToolCall(event: {
+    readonly name: string;
+    readonly ok: boolean;
+    readonly blocked: boolean;
+    readonly isNew: boolean;
+    readonly iteration: number;
+    readonly source?: string;
+  }): void | Promise<void>;
+}
+
+export interface ToolTraceSink {
+  recordToolCall(
+    name: string,
+    args: Record<string, unknown>,
+    result: unknown,
+    isNew: boolean,
+  ): void | Promise<void>;
+}
+
 export interface ToolExecContext {
   readonly toolRouter: ToolRouterContract;
   readonly allowedToolIds: readonly string[];
@@ -22,6 +53,12 @@ export interface ToolExecContext {
   readonly diagnostics?: DiagnosticsCollector | null;
   readonly hooks?: HookSystem | null;
   readonly logger?: ToolExecLogger | null;
+  readonly observationSink?: ToolObservationSink | null;
+  readonly trackerSink?: ToolTrackerSink | null;
+  readonly traceSink?: ToolTraceSink | null;
+  readonly onToolCall?:
+    | ((name: string, args: Record<string, unknown>, result: unknown, iteration: number) => void)
+    | null;
 }
 
 export interface ToolExecutionResult {
@@ -158,21 +195,59 @@ export const allowlistGate: ToolMiddleware = {
 
 export const observationRecord: ToolMiddleware = {
   name: "observationRecord",
+  async after(call, result, context, metadata) {
+    context.onToolCall?.(call.name, call.args, result, context.iteration);
+    await context.observationSink?.recordToolCall({
+      name: call.name,
+      args: call.args,
+      result,
+      iteration: context.iteration,
+      ...(context.source ? { source: context.source } : {}),
+      metadata,
+    });
+  },
 };
 
 export const trackerSignal: ToolMiddleware = {
   name: "trackerSignal",
+  async after(call, _result, context, metadata) {
+    await context.trackerSink?.signalToolCall({
+      name: call.name,
+      ok: !metadata.blocked,
+      blocked: metadata.blocked,
+      isNew: metadata.isNew,
+      iteration: context.iteration,
+      ...(context.source ? { source: context.source } : {}),
+    });
+  },
 };
 
 export const traceRecord: ToolMiddleware = {
   name: "traceRecord",
+  async after(call, result, context, metadata) {
+    await context.traceSink?.recordToolCall(call.name, call.args, result, metadata.isNew);
+  },
 };
 
 export const submitDedup: ToolMiddleware = {
   name: "submitDedup",
   after(call, result, _context, metadata) {
-    if (call.name === "knowledge.search" && isRecord(result) && !("error" in result)) {
-      metadata.isSubmit = false;
+    if (call.name !== "knowledge.submit" || !isRecord(result) || "error" in result) {
+      if (call.name === "knowledge.search" && isRecord(result) && !("error" in result)) {
+        metadata.isSubmit = false;
+      }
+      return;
+    }
+
+    metadata.isSubmit = true;
+    const status = stringValue(result.status);
+    if (status === "duplicate_blocked") {
+      metadata.isNew = false;
+      metadata.dedupMessage = "Knowledge submission blocked as duplicate.";
+      return;
+    }
+    if (status === "created" || status === "candidate_created" || status === "processed") {
+      metadata.isNew = true;
     }
   },
 };
@@ -180,10 +255,10 @@ export const submitDedup: ToolMiddleware = {
 export function createToolPipeline(): ToolExecutionPipeline {
   return new ToolExecutionPipeline()
     .use(allowlistGate)
+    .use(submitDedup)
     .use(observationRecord)
     .use(trackerSignal)
-    .use(traceRecord)
-    .use(submitDedup);
+    .use(traceRecord);
 }
 
 function toInvocation(call: ToolCall): ToolInvocation {
@@ -206,4 +281,8 @@ function diagnosticReason(result: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }

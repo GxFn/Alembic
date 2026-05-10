@@ -8,7 +8,7 @@ import {
   ParameterGuard,
 } from "../../mainline/ai/index.js";
 import { createDefaultToolRegistry, type ToolRegistryReader } from "../tools/index.js";
-import type { AgentDiagnostics, RuntimeConfig } from "./AgentRuntimeTypes.js";
+import type { AgentDiagnostics, RuntimeConfig, ToolCallHook } from "./AgentRuntimeTypes.js";
 import { DiagnosticsCollector } from "./DiagnosticsCollector.js";
 import { HookSystem } from "./HookSystem.js";
 import {
@@ -49,6 +49,7 @@ export interface AgentRuntimeToolCallOptions {
   readonly diagnostics?: DiagnosticsCollector | Partial<AgentDiagnostics>;
   readonly iteration?: number;
   readonly source?: string;
+  readonly onToolCall?: ToolCallHook | null;
 }
 
 /**
@@ -147,6 +148,7 @@ export class AgentRuntime {
       diagnostics,
       hooks: this.#hooks,
       source: options.source ?? "agent-runtime",
+      onToolCall: options.onToolCall ?? this.#config.onToolCall ?? null,
     });
   }
 }

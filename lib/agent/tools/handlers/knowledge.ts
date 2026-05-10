@@ -30,6 +30,8 @@ const SEARCH_DOCUMENT_KINDS = new Set<MainlineSearchDocumentKind>([
 
 interface KnowledgeSearchInput {
   readonly text?: string;
+  readonly kind?: string;
+  readonly category?: string;
   readonly paths: readonly string[];
   readonly symbols: readonly string[];
   readonly kinds?: readonly MainlineSearchDocumentKind[];
@@ -90,18 +92,26 @@ export const knowledgeSearchHandler: ToolHandler = async (
   }
 
   const query = toSearchQuery(parsed.input);
-  const hits = searchIndex.search(query);
+  const hits = searchIndex.search({ ...query, limit: query.limit ? query.limit * 3 : 30 });
+  const filteredHits = hits
+    .filter((hit) => matchKnowledgeKind(hit.document, parsed.input.kind))
+    .filter((hit) => matchKnowledgeCategory(hit.document, parsed.input.category))
+    .slice(0, parsed.input.limit);
   const contextSummary = await buildContextSummary({
     ...(context.dependencies.contextIndex
       ? { contextIndex: context.dependencies.contextIndex }
       : {}),
-    hits,
+    hits: filteredHits,
     includeContext: parsed.input.includeContext,
   });
 
   return toolSuccess(context.descriptor, {
     query,
-    hits: hits.map(formatSearchHit),
+    filters: {
+      ...(parsed.input.kind ? { kind: parsed.input.kind } : {}),
+      ...(parsed.input.category ? { category: parsed.input.category } : {}),
+    },
+    hits: filteredHits.map(formatSearchHit),
     context: contextSummary,
   });
 };
@@ -173,8 +183,11 @@ export const knowledgeSubmitHandler: ToolHandler = async (
       items: [submission],
       options: { userId: "agent" },
     });
-    await rememberSubmission(context, submission);
-    return toolSuccess(context.descriptor, { status: "processed", result });
+    const presented = presentKnowledgeGatewayResult(result);
+    if (presented.status === "created" || presented.status === "processed") {
+      await rememberSubmission(context, submission);
+    }
+    return toolSuccess(context.descriptor, presented);
   }
 
   const lifecycle = context.dependencies.knowledgeLifecycleStore;
@@ -293,7 +306,7 @@ export const knowledgeManageHandler: ToolHandler = async (
     });
     return toolSuccess(context.descriptor, {
       operation: parsed.input.operation,
-      status: "evolution_recorded",
+      status: evolutionStatus(parsed.input.operation, result),
       result,
     });
   }
@@ -381,6 +394,49 @@ function repositoryOperationUnavailable(operation: string): RepositoryManageResu
 
 function isEvolutionOperation(operation: ManageOperation): boolean {
   return operation === "evolve" || operation === "deprecate" || operation === "skip_evolution";
+}
+
+function presentKnowledgeGatewayResult(result: unknown): Record<string, unknown> {
+  if (!isRecord(result)) {
+    return { status: "processed", result };
+  }
+  const created = arrayValue(result.created);
+  if (created.length > 0) {
+    const first = isRecord(created[0]) ? created[0] : {};
+    return {
+      status: "created",
+      id: optionalString(first.id),
+      title: optionalString(first.title),
+      result,
+    };
+  }
+  const duplicates = arrayValue(result.duplicates);
+  if (duplicates.length > 0) {
+    return { status: "duplicate_blocked", duplicates, result };
+  }
+  const rejected = arrayValue(result.rejected);
+  if (rejected.length > 0) {
+    return { status: "rejected", rejected, result };
+  }
+  const blocked = arrayValue(result.blocked);
+  if (blocked.length > 0) {
+    return { status: "blocked", blocked, result };
+  }
+  if (optionalString(result.status)) {
+    return { status: optionalString(result.status), result };
+  }
+  return { status: "processed", result };
+}
+
+function evolutionStatus(operation: ManageOperation, result: unknown): string {
+  const outcome = isRecord(result) ? optionalString(result.outcome) : undefined;
+  if (operation === "skip_evolution") {
+    return outcome === "verified" ? "evolution_verified" : "evolution_skipped";
+  }
+  if (operation === "deprecate") {
+    return outcome === "immediately-executed" ? "deprecated" : "deprecation_proposed";
+  }
+  return outcome === "proposal-upgraded" ? "evolution_proposal_upgraded" : "evolution_proposed";
 }
 
 function parseManageInput(input: unknown):
@@ -536,6 +592,8 @@ function parseKnowledgeSearchInput(
 
   const record = input ?? {};
   const text = optionalString(record.query) ?? optionalString(record.text);
+  const kind = optionalString(record.kind);
+  const category = optionalString(record.category);
   const paths = optionalStringArray(record.paths);
   const symbols = optionalStringArray(record.symbols);
   const kinds = optionalSearchKinds(record.kinds);
@@ -568,6 +626,8 @@ function parseKnowledgeSearchInput(
     ok: true,
     input: {
       ...(text ? { text } : {}),
+      ...(kind ? { kind } : {}),
+      ...(category ? { category } : {}),
       paths,
       symbols,
       ...(kinds ? { kinds } : {}),
@@ -575,6 +635,39 @@ function parseKnowledgeSearchInput(
       includeContext,
     },
   };
+}
+
+function matchKnowledgeKind(document: MainlineSearchDocument, kind: string | undefined): boolean {
+  if (!kind || kind === "all") {
+    return true;
+  }
+  const metadata = document.metadata ?? {};
+  if (kind === "recipe") {
+    return document.kind === "recipe";
+  }
+  if (kind === "candidate") {
+    return (
+      metadata.status === "candidate" ||
+      metadata.recipeStatus === "candidate" ||
+      metadata.lifecycleStatus === "candidate"
+    );
+  }
+  return document.kind === kind || metadata.recipeKind === kind || metadata.knowledgeType === kind;
+}
+
+function matchKnowledgeCategory(
+  document: MainlineSearchDocument,
+  category: string | undefined,
+): boolean {
+  if (!category) {
+    return true;
+  }
+  const metadata = document.metadata ?? {};
+  return (
+    metadata.category === category ||
+    metadata.topicHint === category ||
+    document.tags?.includes(category) === true
+  );
 }
 
 function toSearchQuery(input: KnowledgeSearchInput): MainlineSearchQuery {
@@ -730,6 +823,10 @@ function optionalStringList(value: unknown): string[] {
     return [value.trim()];
   }
   return optionalStringArray(value);
+}
+
+function arrayValue(value: unknown): readonly unknown[] {
+  return Array.isArray(value) ? value : [];
 }
 
 function optionalSearchKinds(value: unknown): MainlineSearchDocumentKind[] | undefined {

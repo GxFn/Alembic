@@ -34,6 +34,7 @@ export type ToolName =
   | "memory.note_finding"
   | "memory.get_previous_evidence"
   | "meta.capabilities"
+  | "meta.tools"
   | "meta.plan"
   | "meta.review";
 

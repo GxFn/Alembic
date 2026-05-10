@@ -64,6 +64,83 @@ describe("AgentRuntime tool execution pipeline", () => {
     ]);
   });
 
+  it("records tool observations, tracker signals, traces, and submit dedup metadata", async () => {
+    const observations: unknown[] = [];
+    const signals: unknown[] = [];
+    const traces: unknown[] = [];
+    const onToolCalls: unknown[] = [];
+    const toolRouter = {
+      async invoke(invocation: ToolInvocation): Promise<ToolResultEnvelope> {
+        return toolSuccess(
+          { name: "knowledge.submit", resource: "knowledge", action: "submit" },
+          { status: "duplicate_blocked", id: "candidate-1" },
+          { requestId: invocation.requestId },
+        );
+      },
+    };
+
+    const result = await createToolPipeline().execute(
+      { id: "call-submit", name: "knowledge.submit", args: { title: "Duplicate" } },
+      {
+        toolRouter,
+        allowedToolIds: ["knowledge.submit"],
+        iteration: 2,
+        source: "runtime-test",
+        onToolCall: (name, args, toolResult, iteration) => {
+          onToolCalls.push({ name, args, toolResult, iteration });
+        },
+        observationSink: {
+          recordToolCall: (entry) => {
+            observations.push(entry);
+          },
+        },
+        trackerSink: {
+          signalToolCall: (event) => {
+            signals.push(event);
+          },
+        },
+        traceSink: {
+          recordToolCall: (name, args, toolResult, isNew) => {
+            traces.push({ name, args, toolResult, isNew });
+          },
+        },
+      },
+    );
+
+    expect(result.metadata).toMatchObject({
+      isSubmit: true,
+      isNew: false,
+      dedupMessage: "Knowledge submission blocked as duplicate.",
+    });
+    expect(observations).toHaveLength(1);
+    expect(signals).toEqual([
+      {
+        name: "knowledge.submit",
+        ok: true,
+        blocked: false,
+        isNew: false,
+        iteration: 2,
+        source: "runtime-test",
+      },
+    ]);
+    expect(traces).toEqual([
+      {
+        name: "knowledge.submit",
+        args: { title: "Duplicate" },
+        toolResult: { status: "duplicate_blocked", id: "candidate-1" },
+        isNew: false,
+      },
+    ]);
+    expect(onToolCalls).toEqual([
+      {
+        name: "knowledge.submit",
+        args: { title: "Duplicate" },
+        toolResult: { status: "duplicate_blocked", id: "candidate-1" },
+        iteration: 2,
+      },
+    ]);
+  });
+
   it("maps missing provider plans to blocked runtime degradation without mock fallback", async () => {
     const runtime = new AgentRuntime({ toolRouter: neverInvokedToolRouter() });
 

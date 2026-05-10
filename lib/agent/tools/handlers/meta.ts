@@ -15,6 +15,48 @@ export const metaCapabilitiesHandler: ToolHandler = (invocation, context) => {
   });
 };
 
+export const metaToolsHandler: ToolHandler = (invocation, context) => {
+  const name = isRecord(invocation.input) ? stringValue(invocation.input.name) : undefined;
+  const tools = context.registry.list();
+  if (!name) {
+    return toolSuccess(context.descriptor, {
+      resources: uniqueResources(tools),
+      tools: tools.map((tool) => ({
+        name: tool.name,
+        resource: tool.resource,
+        action: tool.action,
+        summary: tool.title,
+        description: tool.description,
+        risk: tool.risk ?? "read-only",
+        availability: tool.availability.status,
+      })),
+    });
+  }
+
+  const matches = tools.filter((tool) => tool.name === name || tool.resource === name);
+  if (matches.length === 0) {
+    return toolFailure(context.descriptor, "error", {
+      code: "unknown_tool",
+      message: `Unknown tool or resource: ${name}`,
+      details: { available: tools.map((tool) => tool.name) },
+    });
+  }
+
+  return toolSuccess(context.descriptor, {
+    name,
+    tools: matches.map((tool) => ({
+      name: tool.name,
+      title: tool.title,
+      description: tool.description,
+      risk: tool.risk ?? "read-only",
+      concurrency: tool.concurrency ?? "parallel",
+      inputSchema: tool.inputSchema,
+      outputSchema: tool.outputSchema,
+      metadata: tool.metadata ?? {},
+    })),
+  });
+};
+
 export const metaPlanHandler: ToolHandler = async (invocation, context) => {
   if (!isRecord(invocation.input)) {
     return toolFailure(context.descriptor, "error", {
