@@ -7,8 +7,10 @@ import {
   getCodexDaemonJob,
   listCodexDaemonJobs,
 } from "./daemon-client.js";
+import { runCodexGuard } from "./guard.js";
 import { readPackageInfo } from "./package-info.js";
 import { runCodexPrime } from "./prime.js";
+import { submitCodexKnowledge } from "./submit-knowledge.js";
 import {
   countMarkdownFiles,
   initializeCodexWorkspace,
@@ -133,6 +135,59 @@ export const CODEX_TOOLS: CodexToolDefinition[] = [
     },
     annotations: { readOnlyHint: true },
   },
+  {
+    name: "alembic_submit_knowledge",
+    description:
+      "Submit Alembic Recipe candidates for later review. Default Codex tier writes candidates only and does not publish Recipes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: { type: "object" },
+          description: "Recipe candidate submissions following the Alembic V3 knowledge shape.",
+        },
+      },
+      additionalProperties: true,
+    },
+    annotations: { destructiveHint: false },
+  },
+  {
+    name: "alembic_guard",
+    description:
+      "Check code against Alembic guard-rule Recipes from the mainline runtime index. Reads dataRoot snapshots and project files only when explicitly requested.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        code: { type: "string", description: "Inline code snippet to check." },
+        language: { type: "string", description: "Language for inline code or file entries." },
+        filePath: { type: "string", description: "Path for the inline snippet." },
+        path: { type: "string", description: "Alternative path for the inline snippet." },
+        files: {
+          type: "array",
+          items: {
+            anyOf: [
+              { type: "string" },
+              {
+                type: "object",
+                properties: {
+                  path: { type: "string" },
+                  content: { type: "string" },
+                  language: { type: "string" },
+                },
+                required: ["path"],
+                additionalProperties: false,
+              },
+            ],
+          },
+        },
+        maxFindings: { type: "number" },
+        maxFindingsPerRule: { type: "number" },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true },
+  },
 ];
 
 export interface ToolResult {
@@ -195,6 +250,10 @@ export async function handleCodexTool(
           };
         }
         return { success: true, data: await runCodexPrime(args) };
+      case "alembic_submit_knowledge":
+        return { success: true, data: await submitCodexKnowledge(args) };
+      case "alembic_guard":
+        return { success: true, data: await runCodexGuard(args) };
       default:
         return {
           success: false,
