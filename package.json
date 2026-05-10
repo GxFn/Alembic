@@ -1,0 +1,47 @@
+{
+  "name": "alembic-ai",
+  "version": "0.1.0",
+  "description": "Alembic - Codex-first project memory runtime and MCP plugin package.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./dist/bin/cli.js",
+  "types": "./dist/bin/cli.d.ts",
+  "bin": {
+    "alembic": "./dist/bin/cli.js",
+    "alembic-codex-mcp": "./dist/bin/codex-mcp.js"
+  },
+  "files": [
+    "dist",
+    "plugins/alembic-codex",
+    ".agents/plugins/marketplace.json",
+    "scripts/verify-codex-plugin.mjs",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run test:unit",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "verify:codex-plugin": "node scripts/verify-codex-plugin.mjs"
+  },
+  "keywords": [
+    "alembic",
+    "codex",
+    "mcp"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "commander": "^14.0.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.6",
+    "@types/node": "^22.19.18",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

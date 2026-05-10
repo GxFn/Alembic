@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Alembic">
+  <defs>
+    <linearGradient id="alembic-bg" x1="8" y1="5" x2="56" y2="59" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="0.52" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="alembic-core" x1="27" y1="27" x2="37" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#67E8F9"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <radialGradient id="alembic-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(49 13) rotate(128) scale(23)">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="alembic-clip">
+      <rect width="64" height="64" rx="16"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#alembic-clip)">
+    <rect width="64" height="64" fill="url(#alembic-bg)"/>
+    <circle cx="49" cy="13" r="23" fill="url(#alembic-glow)"/>
+    <path d="M19 48h26L35 15h-6L19 48Z" fill="#F8FAFC"/>
+    <path d="M26 40h12l-4-14h-4l-4 14Z" fill="url(#alembic-core)"/>
+    <path d="M16 49h32" stroke="#E0F2FE" stroke-width="4" stroke-linecap="round" opacity="0.92"/>
+  </g>
+</svg>
