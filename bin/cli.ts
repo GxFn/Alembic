@@ -3,7 +3,8 @@
 import { Command } from "commander";
 import { readPackageInfo } from "../lib/codex/package-info.js";
 import { buildDiagnostics, buildStatus } from "../lib/codex/tools.js";
-import { initializeCodexWorkspace } from "../lib/codex/workspace.js";
+import { initializeCodexWorkspace, inspectWorkspace } from "../lib/codex/workspace.js";
+import { DaemonSupervisor, JsonDaemonJobStore } from "../lib/daemon/index.js";
 
 const packageInfo = readPackageInfo();
 const program = new Command();
@@ -47,6 +48,61 @@ codex
       },
       options.json,
     );
+  });
+
+const daemon = program.command("daemon").description("Manage the local Alembic daemon");
+
+daemon
+  .command("start")
+  .description("Start the local daemon for this workspace")
+  .option("--json", "Print JSON output")
+  .action(async (options: { json?: boolean }) => {
+    printResult(await new DaemonSupervisor().start(), options.json);
+  });
+
+daemon
+  .command("status")
+  .description("Inspect local daemon status")
+  .option("--json", "Print JSON output")
+  .action(async (options: { json?: boolean }) => {
+    printResult(await new DaemonSupervisor().status(), options.json);
+  });
+
+daemon
+  .command("stop")
+  .description("Stop the local daemon")
+  .option("--json", "Print JSON output")
+  .action(async (options: { json?: boolean }) => {
+    printResult(await new DaemonSupervisor().stop(), options.json);
+  });
+
+const job = program.command("job").description("Inspect local daemon jobs");
+
+job
+  .command("list")
+  .description("List durable daemon jobs")
+  .option("--json", "Print JSON output")
+  .action(async (options: { json?: boolean }) => {
+    const workspace = inspectWorkspace();
+    printResult({ jobs: await new JsonDaemonJobStore(workspace.dataRoot).list() }, options.json);
+  });
+
+job
+  .command("get <id>")
+  .description("Read one durable daemon job")
+  .option("--json", "Print JSON output")
+  .action(async (id: string, options: { json?: boolean }) => {
+    const workspace = inspectWorkspace();
+    printResult({ job: await new JsonDaemonJobStore(workspace.dataRoot).get(id) }, options.json);
+  });
+
+job
+  .command("cancel <id>")
+  .description("Cancel one durable daemon job")
+  .option("--json", "Print JSON output")
+  .action(async (id: string, options: { json?: boolean }) => {
+    const workspace = inspectWorkspace();
+    printResult({ job: await new JsonDaemonJobStore(workspace.dataRoot).cancel(id) }, options.json);
   });
 
 program.parse();

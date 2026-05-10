@@ -262,7 +262,7 @@ function buildPostInitActions(workspace: WorkspaceInspection): Array<Record<stri
 }
 
 function readDaemonState(workspace: WorkspaceInspection): unknown {
-  const statePath = join(workspace.runtimeDir, "daemon.json");
+  const statePath = join(workspace.runtimeDir, "daemon", "state.json");
   if (!existsSync(statePath)) {
     return null;
   }

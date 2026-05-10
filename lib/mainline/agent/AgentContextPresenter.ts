@@ -31,6 +31,17 @@ export class AgentContextPresenter {
       lines.push("");
     }
 
+    if (bundle.droppedRecipeIds.length > 0 || bundle.truncatedRecipeIds.length > 0) {
+      lines.push("## Runtime Budget", "");
+      if (bundle.droppedRecipeIds.length > 0) {
+        lines.push(`- dropped: ${bundle.droppedRecipeIds.join(", ")}`);
+      }
+      if (bundle.truncatedRecipeIds.length > 0) {
+        lines.push(`- truncated: ${bundle.truncatedRecipeIds.join(", ")}`);
+      }
+      lines.push(`- tokens used: ${bundle.tokensUsed}`, "");
+    }
+
     // 中文注释：agent 注入层只产出纯 Markdown，不绑定 dashboard 或插件前端。
     return `${lines.join("\n").trimEnd()}\n`;
   }
