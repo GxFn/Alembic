@@ -4,12 +4,13 @@ import { randomBytes } from "node:crypto";
 import { readPackageInfo } from "../lib/codex/package-info.js";
 import { inspectWorkspace, resolveProjectRoot } from "../lib/codex/workspace.js";
 import { startDaemonHttpBridge } from "../lib/daemon/DaemonHttpBridge.js";
-import type { DaemonJobHandler } from "../lib/daemon/DaemonJobRunner.js";
+import type { DaemonJobExecutionContext, DaemonJobHandler } from "../lib/daemon/DaemonJobRunner.js";
 import { clearDaemonState, writeDaemonState } from "../lib/daemon/DaemonState.js";
-import { JsonDaemonJobStore } from "../lib/daemon/JobStore.js";
+import { type DaemonJobProgressStep, JsonDaemonJobStore } from "../lib/daemon/JobStore.js";
 import {
   MainlineCompileSession,
   type MainlineCompileSessionRequest,
+  type MainlineCompileSessionResult,
 } from "../lib/mainline/compile/index.js";
 import { createMainlineWorkflowPersistence } from "../lib/workflows/index.js";
 
@@ -52,21 +53,9 @@ const compileSession = new MainlineCompileSession({
 // MCP stdio 只负责把请求排入 durable queue，HTTP enqueue 返回后不等待编译完成。
 const workflowHandlers: Record<"bootstrap" | "rescan", DaemonJobHandler> = {
   bootstrap: async (job, context) =>
-    runCompileSessionJob(
-      compileSession,
-      "cold-start",
-      workspace.projectRoot,
-      job.input,
-      context.isCancelled,
-    ),
+    runCompileSessionJob(compileSession, "cold-start", workspace.projectRoot, job.input, context),
   rescan: async (job, context) =>
-    runCompileSessionJob(
-      compileSession,
-      "incremental",
-      workspace.projectRoot,
-      job.input,
-      context.isCancelled,
-    ),
+    runCompileSessionJob(compileSession, "incremental", workspace.projectRoot, job.input, context),
 };
 const bridge = await startDaemonHttpBridge({
   state: () => currentState,
@@ -103,20 +92,48 @@ async function runCompileSessionJob(
   mode: "cold-start" | "incremental",
   projectRoot: string,
   input: Record<string, unknown> | undefined,
-  isCancelled: () => Promise<boolean>,
+  context: DaemonJobExecutionContext,
 ): Promise<Record<string, unknown>> {
-  if (await isCancelled()) {
+  await context.reportProgress({
+    phase: "compile:preparing",
+    message: `Preparing ${mode} compile session.`,
+    percent: 10,
+  });
+  if (await context.isCancelled()) {
     return { mode, cancelled: true };
   }
+  await context.reportProgress({
+    phase: "compile:running",
+    message: `Running ${mode} compile session.`,
+    percent: 20,
+  });
   const result = await compileSession.run({
     projectRoot,
     mode,
     ...compileSessionInput(input),
   });
-  if (await isCancelled()) {
+  if (await context.isCancelled()) {
     return { mode, cancelled: true };
   }
+  await context.reportProgress({
+    phase: "compile:completed",
+    message: `${mode} compile session completed.`,
+    percent: 90,
+    steps: compileProgressSteps(result),
+  });
   return JSON.parse(JSON.stringify(result)) as Record<string, unknown>;
+}
+
+function compileProgressSteps(result: MainlineCompileSessionResult): DaemonJobProgressStep[] {
+  const checkpoints = result.progress.checkpoints;
+  const checkpointCount = checkpoints.length;
+
+  return checkpoints.map((checkpoint, index) => ({
+    phase: checkpoint.phase,
+    status: checkpoint.status,
+    ...(checkpoint.detail === undefined ? {} : { message: checkpoint.detail }),
+    percent: checkpointCount === 0 ? 100 : Math.round(((index + 1) / checkpointCount) * 100),
+  }));
 }
 
 function compileSessionInput(

@@ -8,6 +8,7 @@ import {
   listCodexDaemonJobs,
 } from "./daemon-client.js";
 import { runCodexGuard } from "./guard.js";
+import { runCodexKnowledge } from "./knowledge.js";
 import { readPackageInfo } from "./package-info.js";
 import { runCodexPrime } from "./prime.js";
 import { runCodexSearch } from "./search.js";
@@ -208,6 +209,39 @@ export const CODEX_TOOLS: CodexToolDefinition[] = [
     annotations: { readOnlyHint: true },
   },
   {
+    name: "alembic_knowledge",
+    description:
+      "List, publish, or reject Alembic Recipe lifecycle records through the Codex public MCP adapter.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        operation: {
+          type: "string",
+          enum: ["list", "publish", "reject"],
+          description: "Lifecycle operation to run. Defaults to list.",
+        },
+        status: {
+          type: "string",
+          enum: ["candidate", "active", "rejected", "all"],
+          description: "List filter. Defaults to active for list.",
+        },
+        id: { type: "string", description: "Recipe id for publish or reject." },
+        recipeId: { type: "string", description: "Recipe id for publish or reject." },
+        reason: { type: "string", description: "Review reason for reject." },
+        reviewer: { type: "string", description: "Reviewer name for publish or reject metadata." },
+        publishedBy: { type: "string", description: "Reviewer name for publish metadata." },
+        rejectedBy: { type: "string", description: "Reviewer name for reject metadata." },
+        limit: { type: "number", description: "Maximum records to return, capped at 100." },
+        projectRoot: {
+          type: "string",
+          description: "Explicit project root. Defaults to the current Codex workspace.",
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: { destructiveHint: false },
+  },
+  {
     name: "alembic_submit_knowledge",
     description:
       "Submit Alembic Recipe candidates for later review. Default Codex tier writes candidates only and does not publish Recipes.",
@@ -334,6 +368,10 @@ export async function handleCodexTool(
         // 中文注释：Codex public structure 只消费 ProjectIntelligence read model，
         // 不导入 internal Agent graph tool，也不暴露 resource.action 形态。
         return { success: true, data: await runCodexStructure(args) };
+      case "alembic_knowledge":
+        // 中文注释：Codex public lifecycle adapter，只桥接 RecipeLifecycleStore；
+        // 不导入 lib/agent/tools，也不暴露 internal Agent envelope。
+        return { success: true, data: await runCodexKnowledge(args) };
       case "alembic_submit_knowledge":
         return { success: true, data: await submitCodexKnowledge(args) };
       case "alembic_guard":

@@ -3,7 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MainlineProjectIntelligenceBuilder } from "../mainline/graph/index.js";
-import { createRecipe, createSourceRef } from "../mainline/knowledge/index.js";
+import {
+  createRecipe,
+  createSourceRef,
+  type RecipeLifecycleRecord,
+  RecipeLifecycleStore,
+} from "../mainline/knowledge/index.js";
 import { projectMainlineSearchDocuments } from "../mainline/search/index.js";
 import { createMainlineWorkflowPersistence } from "../workflows/mainline/MainlineWorkflowPersistence.js";
 import { CODEX_TOOLS, handleCodexTool } from "./tools.js";
@@ -41,6 +46,7 @@ describe("Codex public search and structure tools", () => {
   it("registers stable public tool names and schemas", () => {
     const searchTool = CODEX_TOOLS.find((tool) => tool.name === "alembic_search");
     const structureTool = CODEX_TOOLS.find((tool) => tool.name === "alembic_structure");
+    const knowledgeTool = CODEX_TOOLS.find((tool) => tool.name === "alembic_knowledge");
 
     expect(searchTool).toMatchObject({
       name: "alembic_search",
@@ -65,6 +71,19 @@ describe("Codex public search and structure tools", () => {
           operation: expect.objectContaining({
             enum: ["summary", "files", "symbols", "dependencies", "cycles"],
           }),
+          projectRoot: expect.objectContaining({ type: "string" }),
+        }),
+      },
+    });
+    expect(knowledgeTool).toMatchObject({
+      name: "alembic_knowledge",
+      annotations: { destructiveHint: false },
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: expect.objectContaining({
+          operation: expect.objectContaining({ enum: ["list", "publish", "reject"] }),
+          status: expect.objectContaining({ enum: ["candidate", "active", "rejected", "all"] }),
           projectRoot: expect.objectContaining({ type: "string" }),
         }),
       },
@@ -181,6 +200,249 @@ describe("Codex public search and structure tools", () => {
       dependencies: [expect.objectContaining({ file: "src/util.ts", kind: "imports" })],
     });
   });
+
+  it("lists alembic_knowledge records with active as the default status", async () => {
+    const workspace = initializeCodexWorkspace({
+      projectRoot: currentProjectRoot(),
+      standard: true,
+    });
+    const persistence = await createMainlineWorkflowPersistence({
+      projectRoot: workspace.projectRoot,
+      dataRoot: workspace.dataRoot,
+      mode: workspace.mode,
+    });
+    const lifecycle = new RecipeLifecycleStore(persistence.writeBoundary);
+    await lifecycle.writeCandidate(
+      lifecycleRecipe("public-candidate-list", "Candidate records stay outside default list."),
+      { now: 10 },
+    );
+    await lifecycle.writeCandidate(
+      lifecycleRecipe("public-active-list", "Active records are listed by default."),
+      { now: 11 },
+    );
+    await lifecycle.publish("public-active-list", { now: 12 });
+
+    const activeResult = await handleCodexTool("alembic_knowledge", {
+      operation: "list",
+      projectRoot: workspace.projectRoot,
+    });
+    const candidateResult = await handleCodexTool("alembic_knowledge", {
+      operation: "list",
+      status: "candidate",
+      projectRoot: workspace.projectRoot,
+    });
+
+    expect(activeResult.success).toBe(true);
+    expect(candidateResult.success).toBe(true);
+    const activeData = activeResult.data as {
+      readonly status: string;
+      readonly operation: string;
+      readonly records: ReadonlyArray<{ readonly id: string; readonly status: string }>;
+      readonly items: ReadonlyArray<{ readonly id: string; readonly status: string }>;
+      readonly warnings: readonly string[];
+      readonly dataRoot: string;
+      readonly projectRoot: string;
+    };
+    const candidateData = candidateResult.data as typeof activeData;
+    expect(activeData).toMatchObject({
+      status: "completed",
+      operation: "list",
+      dataRoot: workspace.dataRoot,
+      projectRoot: workspace.projectRoot,
+      warnings: [],
+    });
+    expect(activeData.records).toMatchObject([{ id: "public-active-list", status: "active" }]);
+    expect(activeData.items).toEqual(activeData.records);
+    expect(candidateData.records).toMatchObject([
+      { id: "public-candidate-list", status: "candidate" },
+    ]);
+  });
+
+  it("publishes alembic_knowledge candidates into ContextIndex and SearchIndex", async () => {
+    const workspace = initializeCodexWorkspace({
+      projectRoot: currentProjectRoot(),
+      standard: true,
+    });
+    const persistence = await createMainlineWorkflowPersistence({
+      projectRoot: workspace.projectRoot,
+      dataRoot: workspace.dataRoot,
+      mode: workspace.mode,
+    });
+    const lifecycle = new RecipeLifecycleStore(persistence.writeBoundary);
+    await lifecycle.writeCandidate(
+      lifecycleRecipe(
+        "public-lifecycle-publish",
+        "Publish public lifecycle recipes into the active search index.",
+      ),
+      { now: 20 },
+    );
+
+    const result = await handleCodexTool("alembic_knowledge", {
+      operation: "publish",
+      recipeId: "public-lifecycle-publish",
+      reviewer: "codex-public-test",
+      projectRoot: workspace.projectRoot,
+    });
+
+    expect(result.success).toBe(true);
+    const data = result.data as {
+      readonly status: string;
+      readonly operation: string;
+      readonly records: ReadonlyArray<{
+        readonly id: string;
+        readonly status: string;
+        readonly file?: { readonly bucket: string };
+      }>;
+      readonly warnings: readonly string[];
+      readonly dataRoot: string;
+      readonly projectRoot: string;
+    };
+    expect(data).toMatchObject({
+      status: "completed",
+      operation: "publish",
+      dataRoot: workspace.dataRoot,
+      projectRoot: workspace.projectRoot,
+      records: [
+        {
+          id: "public-lifecycle-publish",
+          status: "active",
+          file: { bucket: "recipes" },
+        },
+      ],
+      warnings: [],
+    });
+
+    const restored = await createMainlineWorkflowPersistence({
+      projectRoot: workspace.projectRoot,
+      dataRoot: workspace.dataRoot,
+      mode: workspace.mode,
+    });
+    expect(restored.contextIndex.snapshot().recipes).toMatchObject([
+      { id: "public-lifecycle-publish", status: "active" },
+    ]);
+    expect(restored.searchIndex.snapshot()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "recipe:public-lifecycle-publish", kind: "recipe" }),
+      ]),
+    );
+
+    const search = await handleCodexTool("alembic_search", {
+      query: "active search index",
+      projectRoot: workspace.projectRoot,
+      limit: 5,
+    });
+    const searchData = search.data as {
+      readonly hits: ReadonlyArray<{ readonly id: string; readonly kind: string }>;
+    };
+    expect(searchData.hits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "recipe:public-lifecycle-publish", kind: "recipe" }),
+      ]),
+    );
+  });
+
+  it("rejects alembic_knowledge candidates without leaving them in active search", async () => {
+    const workspace = initializeCodexWorkspace({
+      projectRoot: currentProjectRoot(),
+      standard: true,
+    });
+    const persistence = await createMainlineWorkflowPersistence({
+      projectRoot: workspace.projectRoot,
+      dataRoot: workspace.dataRoot,
+      mode: workspace.mode,
+    });
+    const lifecycle = new RecipeLifecycleStore(persistence.writeBoundary);
+    const candidate = await lifecycle.writeCandidate(
+      lifecycleRecipe(
+        "public-lifecycle-reject",
+        "Reject public lifecycle recipes before active search can use them.",
+      ),
+      { now: 30 },
+    );
+    await persistence.contextIndex.upsertContextArtifacts({
+      recipes: [candidate.recipe],
+      recipeFiles: recipeFilesFromRecord(candidate),
+    });
+    persistence.searchIndex.upsert(projectMainlineSearchDocuments({ recipes: [candidate.recipe] }));
+    await persistence.searchIndex.flush();
+
+    const before = await handleCodexTool("alembic_search", {
+      query: "before active search",
+      projectRoot: workspace.projectRoot,
+      limit: 5,
+    });
+    expect((before.data as { readonly hits: ReadonlyArray<{ readonly id: string }> }).hits).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "recipe:public-lifecycle-reject" })]),
+    );
+
+    const result = await handleCodexTool("alembic_knowledge", {
+      operation: "reject",
+      recipeId: "public-lifecycle-reject",
+      reason: "Too narrow for public lifecycle knowledge.",
+      reviewer: "codex-public-test",
+      projectRoot: workspace.projectRoot,
+    });
+
+    expect(result.success).toBe(true);
+    const data = result.data as {
+      readonly status: string;
+      readonly operation: string;
+      readonly records: ReadonlyArray<{ readonly id: string; readonly status: string }>;
+      readonly warnings: readonly string[];
+    };
+    expect(data).toMatchObject({
+      status: "completed",
+      operation: "reject",
+      records: [{ id: "public-lifecycle-reject", status: "rejected" }],
+      warnings: [],
+    });
+
+    const after = await handleCodexTool("alembic_search", {
+      query: "before active search",
+      projectRoot: workspace.projectRoot,
+      limit: 5,
+    });
+    expect(
+      (after.data as { readonly hits: ReadonlyArray<{ readonly id: string }> }).hits.map(
+        (hit) => hit.id,
+      ),
+    ).not.toContain("recipe:public-lifecycle-reject");
+
+    const rejectedList = await handleCodexTool("alembic_knowledge", {
+      operation: "list",
+      status: "rejected",
+      projectRoot: workspace.projectRoot,
+    });
+    expect(
+      (
+        rejectedList.data as {
+          readonly records: ReadonlyArray<{ readonly id: string; readonly status: string }>;
+        }
+      ).records,
+    ).toMatchObject([{ id: "public-lifecycle-reject", status: "rejected" }]);
+  });
+
+  it("keeps alembic_knowledge outside internal Agent tool imports and envelopes", async () => {
+    const sources = await Promise.all([
+      fs.readFile(new URL("./tools.ts", import.meta.url), "utf8"),
+      fs.readFile(new URL("./knowledge.ts", import.meta.url), "utf8"),
+    ]);
+    const importSpecifiers = sources.flatMap((source) =>
+      [...source.matchAll(/from\s+["']([^"']+)["']/g)].map((match) => match[1]),
+    );
+
+    for (const specifier of importSpecifiers) {
+      expect(specifier).not.toMatch(/(?:\.\.\/)*agent\/tools/);
+      expect(specifier).not.toContain("lib/agent/tools");
+    }
+
+    const result = await handleCodexTool("alembic_knowledge", {
+      operation: "list",
+      projectRoot: currentProjectRoot(),
+    });
+    expect(JSON.stringify(result.data)).not.toContain("resource.action");
+    expect(JSON.stringify(result.data)).not.toContain("ToolResultEnvelope");
+  });
 });
 
 function currentProjectRoot(): string {
@@ -197,4 +459,34 @@ function restoreEnv(name: string, value: string | undefined): void {
   } else {
     process.env[name] = value;
   }
+}
+
+function lifecycleRecipe(id: string, summary: string) {
+  return createRecipe({
+    id,
+    title: id
+      .split("-")
+      .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+      .join(" "),
+    kind: "workflow",
+    status: "candidate",
+    summary,
+    trigger: summary,
+    confidence: 0.9,
+  });
+}
+
+function recipeFilesFromRecord(record: RecipeLifecycleRecord) {
+  if (!record.file) {
+    return [];
+  }
+  return [
+    {
+      recipeId: record.id,
+      bucket: record.file.bucket,
+      relativePath: record.file.relativePath,
+      contentHash: record.file.contentHash,
+      ...(record.metadata.updatedAt === undefined ? {} : { updatedAt: record.metadata.updatedAt }),
+    },
+  ];
 }

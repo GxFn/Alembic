@@ -11,6 +11,26 @@ export interface DaemonJobError {
   message: string;
 }
 
+export interface DaemonJobProgressStep {
+  phase: string;
+  status?: string;
+  message?: string;
+  percent?: number;
+}
+
+// 中文注释：progress 只服务 daemon/job 可观测性，不决定业务流程或编译结果。
+export interface DaemonJobProgress {
+  phase: string;
+  message?: string;
+  percent?: number;
+  steps?: DaemonJobProgressStep[];
+  updatedAt: string;
+}
+
+export type DaemonJobProgressInput = Omit<DaemonJobProgress, "updatedAt"> & {
+  updatedAt?: string;
+};
+
 export interface DaemonJob {
   id: string;
   kind: DaemonJobKind;
@@ -18,6 +38,7 @@ export interface DaemonJob {
   input?: Record<string, unknown>;
   result?: Record<string, unknown>;
   error?: DaemonJobError;
+  progress?: DaemonJobProgress;
   createdAt: string;
   updatedAt: string;
   startedAt?: string;
@@ -35,6 +56,7 @@ export interface UpdateDaemonJobInput {
   input?: Record<string, unknown>;
   result?: Record<string, unknown>;
   error?: DaemonJobError;
+  progress?: DaemonJobProgressInput;
   startedAt?: string;
   completedAt?: string;
   cancelledAt?: string;
@@ -66,6 +88,12 @@ export class JsonDaemonJobStore {
       id: createJobId(input.kind),
       kind: input.kind,
       status: "queued",
+      progress: normalizeJobProgress({
+        phase: "queued",
+        message: `${input.kind} job queued.`,
+        percent: 0,
+        updatedAt: now,
+      }),
       createdAt: now,
       updatedAt: now,
       ...(input.input === undefined ? {} : { input: input.input }),
@@ -100,9 +128,11 @@ export class JsonDaemonJobStore {
       throw new Error(`Daemon job not found: ${id}`);
     }
 
-    const updated = {
+    const update = withoutProgress(withoutUndefined(input));
+    const updated: DaemonJob = {
       ...current,
-      ...withoutUndefined(input),
+      ...update,
+      ...(input.progress === undefined ? {} : { progress: normalizeJobProgress(input.progress) }),
       updatedAt: new Date().toISOString(),
     };
 
@@ -122,6 +152,7 @@ export class JsonDaemonJobStore {
     return this.update(id, {
       status: "cancelled",
       cancelledAt: new Date().toISOString(),
+      progress: terminalProgress("cancelled", "Job cancelled.", job.progress),
     });
   }
 
@@ -146,6 +177,15 @@ export class JsonDaemonJobStore {
           code: interruptedErrorCode,
           message: "Daemon restarted before the job finished.",
         },
+        progress: normalizeJobProgress(
+          terminalProgress(
+            "failed",
+            "Daemon restarted before the job finished.",
+            job.progress,
+            now,
+          ),
+          now,
+        ),
       };
     });
 
@@ -215,6 +255,7 @@ function parseJob(value: unknown): DaemonJob {
   const input = optionalRecord(value.input, "input");
   const result = optionalRecord(value.result, "result");
   const error = optionalJobError(value.error);
+  const progress = optionalJobProgress(value.progress);
 
   return {
     id: requireString(value, "id"),
@@ -225,6 +266,7 @@ function parseJob(value: unknown): DaemonJob {
     ...(input === undefined ? {} : { input }),
     ...(result === undefined ? {} : { result }),
     ...(error === undefined ? {} : { error }),
+    ...(progress === undefined ? {} : { progress }),
     ...optionalStringField(value, "startedAt"),
     ...optionalStringField(value, "completedAt"),
     ...optionalStringField(value, "cancelledAt"),
@@ -242,6 +284,22 @@ function optionalJobError(value: unknown): DaemonJobError | undefined {
     code: requireString(value, "code"),
     message: requireString(value, "message"),
   };
+}
+
+function optionalJobProgress(value: unknown): DaemonJobProgress | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  assertRecord(value, "daemon job progress");
+
+  return normalizeJobProgress({
+    phase: requireString(value, "phase"),
+    ...optionalNonEmptyStringField(value, "message"),
+    ...optionalPercentField(value, "percent"),
+    ...optionalProgressStepsField(value),
+    updatedAt: requireString(value, "updatedAt"),
+  });
 }
 
 function requireJobKind(value: unknown): DaemonJobKind {
@@ -290,10 +348,117 @@ function optionalStringField(value: Record<string, unknown>, key: string): Recor
   return { [key]: field };
 }
 
+function optionalNonEmptyStringField(
+  value: Record<string, unknown>,
+  key: string,
+): Record<string, string> {
+  const field = value[key];
+
+  if (field === undefined) {
+    return {};
+  }
+
+  if (typeof field !== "string" || field.length === 0) {
+    throw new Error(`Invalid daemon job: expected non-empty string field "${key}"`);
+  }
+
+  return { [key]: field };
+}
+
+function optionalPercentField(value: Record<string, unknown>, key: string): Record<string, number> {
+  const field = value[key];
+
+  if (field === undefined) {
+    return {};
+  }
+
+  return { [key]: requirePercent(field, key) };
+}
+
+function optionalProgressStepsField(
+  value: Record<string, unknown>,
+): Partial<Record<"steps", DaemonJobProgressStep[]>> {
+  const steps = value.steps;
+
+  if (steps === undefined) {
+    return {};
+  }
+
+  if (!Array.isArray(steps)) {
+    throw new Error("Invalid daemon job progress: expected steps array");
+  }
+
+  return { steps: steps.map(parseProgressStep) };
+}
+
+function parseProgressStep(value: unknown): DaemonJobProgressStep {
+  assertRecord(value, "daemon job progress step");
+
+  return {
+    phase: requireString(value, "phase"),
+    ...optionalNonEmptyStringField(value, "status"),
+    ...optionalNonEmptyStringField(value, "message"),
+    ...optionalPercentField(value, "percent"),
+  };
+}
+
+function normalizeJobProgress(
+  progress: DaemonJobProgressInput,
+  updatedAt = new Date().toISOString(),
+): DaemonJobProgress {
+  return {
+    phase: requireNonEmptyString(progress.phase, "progress.phase"),
+    ...(progress.message === undefined
+      ? {}
+      : { message: requireNonEmptyString(progress.message, "progress.message") }),
+    ...(progress.percent === undefined
+      ? {}
+      : { percent: requirePercent(progress.percent, "percent") }),
+    ...(progress.steps === undefined ? {} : { steps: progress.steps.map(normalizeProgressStep) }),
+    updatedAt: progress.updatedAt ?? updatedAt,
+  };
+}
+
+function normalizeProgressStep(step: DaemonJobProgressStep): DaemonJobProgressStep {
+  return {
+    phase: requireNonEmptyString(step.phase, "progress step phase"),
+    ...(step.status === undefined
+      ? {}
+      : { status: requireNonEmptyString(step.status, "progress step status") }),
+    ...(step.message === undefined
+      ? {}
+      : { message: requireNonEmptyString(step.message, "progress step message") }),
+    ...(step.percent === undefined
+      ? {}
+      : { percent: requirePercent(step.percent, "step percent") }),
+  };
+}
+
+function terminalProgress(
+  phase: "failed" | "cancelled",
+  message: string,
+  current: DaemonJobProgress | undefined,
+  updatedAt?: string,
+): DaemonJobProgressInput {
+  return {
+    phase,
+    message,
+    ...(current?.percent === undefined ? {} : { percent: current.percent }),
+    ...(current?.steps === undefined ? {} : { steps: current.steps }),
+    ...(updatedAt === undefined ? {} : { updatedAt }),
+  };
+}
+
 function withoutUndefined(input: UpdateDaemonJobInput): UpdateDaemonJobInput {
   return Object.fromEntries(
     Object.entries(input).filter(([, value]) => value !== undefined),
   ) as UpdateDaemonJobInput;
+}
+
+function withoutProgress(input: UpdateDaemonJobInput): Omit<UpdateDaemonJobInput, "progress"> {
+  const { progress, ...rest } = input;
+  void progress;
+  return rest;
 }
 
 function isTerminal(status: DaemonJobStatus): boolean {
@@ -318,6 +483,22 @@ function requireString(value: Record<string, unknown>, key: string): string {
   }
 
   return field;
+}
+
+function requireNonEmptyString(value: string, label: string): string {
+  if (value.length === 0) {
+    throw new Error(`Invalid daemon job: expected non-empty string field "${label}"`);
+  }
+
+  return value;
+}
+
+function requirePercent(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) {
+    throw new Error(`Invalid daemon job progress: expected ${label} percent between 0 and 100`);
+  }
+
+  return value;
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

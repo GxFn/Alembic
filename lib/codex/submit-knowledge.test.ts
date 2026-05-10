@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { runCodexPrime } from "./prime.js";
+import { RecipeLifecycleStore } from "../mainline/knowledge/index.js";
+import { createMainlineWorkflowPersistence } from "../workflows/mainline/MainlineWorkflowPersistence.js";
 import { submitCodexKnowledge } from "./submit-knowledge.js";
 import { initializeCodexWorkspace } from "./workspace.js";
 
@@ -34,7 +35,7 @@ afterEach(async () => {
 });
 
 describe("submitCodexKnowledge", () => {
-  it("writes accepted candidates to Ghost storage and makes them prime-readable", async () => {
+  it("stages accepted candidates through lifecycle storage without publishing active recipes", async () => {
     const workspace = initializeCodexWorkspace({ projectRoot });
     const item = validKnowledgeItem();
 
@@ -45,28 +46,56 @@ describe("submitCodexKnowledge", () => {
     expect(result.rejected).toBe(0);
     expect(result.candidatesDir).toBe(workspace.candidatesDir);
     expect(result.items[0]?.accepted).toBe(true);
+    const candidateId = result.items[0]?.id;
     const candidatePath = result.items[0]?.path;
+    expect(candidateId).toBeTruthy();
     expect(candidatePath).toBeTruthy();
-    await expect(fs.stat(candidatePath as string)).resolves.toMatchObject({
-      isFile: expect.any(Function),
-    });
+    const candidateStat = await fs.stat(candidatePath as string);
+    expect(candidateStat.isFile()).toBe(true);
+    expect((candidatePath as string).startsWith(workspace.dataRoot)).toBe(true);
     await expect(fs.stat(path.join(projectRoot, ".asd"))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(fs.stat(path.join(projectRoot, "Alembic"))).rejects.toMatchObject({
       code: "ENOENT",
     });
+    await expect(fs.readdir(workspace.recipesDir)).resolves.toEqual([]);
 
-    const prime = await runCodexPrime({
-      projectRoot,
-      task: "Use the candidate box helper pattern",
-      files: ["src/candidate-box.ts"],
+    const persistence = await createMainlineWorkflowPersistence({
+      projectRoot: workspace.projectRoot,
+      dataRoot: workspace.dataRoot,
     });
+    const lifecycleStore = new RecipeLifecycleStore(persistence.writeBoundary);
+    const staged = await lifecycleStore.load(candidateId as string, { status: "candidate" });
 
-    expect(prime.status).toBe("completed");
-    expect(prime.recipeIds).toContain(result.items[0]?.id);
-    expect(prime.markdown).toContain("Codex Candidate Box Helper");
+    expect(staged).toMatchObject({
+      id: candidateId,
+      status: "candidate",
+      recipe: { status: "candidate" },
+      file: {
+        absolutePath: candidatePath,
+        bucket: "candidates",
+      },
+    });
+    await expect(lifecycleStore.load(candidateId as string)).resolves.toBeNull();
+    await expect(lifecycleStore.list()).resolves.toEqual([]);
+
+    const snapshot = persistence.contextIndex.snapshot();
+    const indexedRecipe = snapshot.recipes.find((recipe) => recipe.id === candidateId);
+    const indexedFile = snapshot.recipeFiles.find((file) => file.recipeId === candidateId);
+    const searchDoc = persistence.searchIndex
+      .snapshot()
+      .find((document) => document.id === `recipe:${candidateId}`);
+
+    expect(indexedRecipe).toMatchObject({ id: candidateId, status: "candidate" });
+    expect(indexedFile).toMatchObject({
+      recipeId: candidateId,
+      bucket: "candidates",
+      relativePath: staged?.file?.relativePath,
+      contentHash: staged?.file?.contentHash,
+    });
+    expect(searchDoc).toMatchObject({ id: `recipe:${candidateId}`, kind: "recipe" });
   });
 
-  it("rejects invalid submissions without writing candidate Markdown", async () => {
+  it("rejects invalid submissions without writing candidate files", async () => {
     const workspace = initializeCodexWorkspace({ projectRoot });
 
     const result = await submitCodexKnowledge({
@@ -86,7 +115,7 @@ describe("submitCodexKnowledge", () => {
 function validKnowledgeItem(): Record<string, unknown> {
   const markdown = [
     "Use the candidate box helper when Codex needs to turn a reviewed item into runtime-readable knowledge.",
-    "The helper keeps writes in Ghost storage and records source references so prime can recall the candidate.",
+    "The helper keeps writes in Ghost storage and records source references so readiness checks can inspect the staged candidate.",
     "来源: src/candidate-box.ts:12",
     "",
     "```ts",
@@ -104,7 +133,8 @@ function validKnowledgeItem(): Record<string, unknown> {
     description: "Store Codex knowledge submissions as review-only candidate Recipes.",
     trigger: "Use the candidate box helper pattern",
     kind: "pattern",
-    doClause: "Write accepted Codex submissions as candidate Recipe markdown in Ghost storage.",
+    doClause:
+      "Write accepted Codex submissions as candidate Recipes through the lifecycle store in Ghost storage.",
     dontClause: "Do not publish or activate a Recipe from the Codex submission helper.",
     whenClause: "When Codex submits project knowledge through alembic_submit_knowledge.",
     coreCode:
@@ -113,7 +143,7 @@ function validKnowledgeItem(): Record<string, unknown> {
     headers: ["Codex Candidate Box Helper"],
     reasoning: {
       whyStandard:
-        "It preserves review boundaries while making accepted candidates available to prime.",
+        "It preserves review boundaries while making accepted candidates available to review readiness.",
       sources: ["src/candidate-box.ts"],
       confidence: 0.82,
     },

@@ -1,11 +1,9 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   createRecipe,
   createSourceRef,
   type RecipeInput,
-  RecipeMarkdownCodec,
+  RecipeLifecycleStore,
   RecipeSubmissionPolicy,
   type SourceRef,
 } from "../mainline/knowledge/index.js";
@@ -78,13 +76,17 @@ export async function submitCodexKnowledge(
   }
 
   try {
-    mkdirSync(workspace.candidatesDir, { recursive: true });
     const persistence = await createMainlineWorkflowPersistence({
       projectRoot: workspace.projectRoot,
       dataRoot: workspace.dataRoot,
     });
+    const lifecycleStore = new RecipeLifecycleStore(persistence.writeBoundary);
     const snapshot = persistence.contextIndex.snapshot();
-    const existingRecipes = snapshot.recipes;
+    const lifecycleRecords = await lifecycleStore.list({ status: "all" });
+    const existingRecipes = uniqueRecipesById([
+      ...snapshot.recipes,
+      ...lifecycleRecords.map((record) => record.recipe),
+    ]);
     const usedIds = new Set(existingRecipes.map((recipe) => recipe.id));
     const results: CodexKnowledgeSubmissionItemResult[] = [];
 
@@ -100,7 +102,7 @@ export async function submitCodexKnowledge(
         continue;
       }
 
-      const id = uniqueCandidateId(rawItem, workspace.candidatesDir, usedIds);
+      const id = uniqueCandidateId(rawItem, usedIds);
       usedIds.add(id);
       const updatedAt = Math.floor(Date.now() / 1000);
       const sourceRefs = sourceRefsFromSubmission(rawItem, id, updatedAt);
@@ -132,35 +134,40 @@ export async function submitCodexKnowledge(
 
       const recipeInput = ensureCandidateRecipeInput(policy.recipeInput, id, sourceRefs, updatedAt);
       const recipe = createRecipe(recipeInput);
-      const markdown = new RecipeMarkdownCodec().toMarkdown(recipe);
-      const filename = `${safeFileStem(id)}.md`;
-      const path = join(workspace.candidatesDir, filename);
-      const contentHash = sha256(markdown);
+      // 中文注释：Codex submit 只写 lifecycle candidate，不调用 publish()，
+      // 因此不会进入 RecipeLifecycleStore 默认 active 可用语义。
+      const record = await lifecycleStore.writeCandidate(recipe, {
+        now: updatedAt,
+        submittedBy: "codex",
+      });
+      const file = record.file;
+      if (!file) {
+        throw new Error(`RecipeLifecycleStore did not return a candidate file for ${record.id}.`);
+      }
 
-      writeFileSync(path, markdown, "utf8");
       await persistence.contextIndex.upsertContextArtifacts({
-        recipes: [recipe],
+        recipes: [record.recipe],
         sourceRefs,
         recipeFiles: [
           {
-            recipeId: recipe.id,
-            bucket: "candidates",
-            relativePath: ["Alembic", "candidates", filename].join("/"),
-            contentHash,
+            recipeId: file.recipeId,
+            bucket: file.bucket,
+            relativePath: file.relativePath,
+            contentHash: file.contentHash,
             updatedAt,
           },
         ],
       });
       persistence.searchIndex.upsert(
-        projectMainlineSearchDocuments({ recipes: [recipe], sourceRefs }),
+        projectMainlineSearchDocuments({ recipes: [record.recipe], sourceRefs }),
       );
       await persistence.searchIndex.flush();
 
       results.push({
         index,
         accepted: true,
-        id: recipe.id,
-        path,
+        id: record.recipe.id,
+        path: file.absolutePath,
         decision: policy.decision,
         errors: [],
         warnings: policy.warnings,
@@ -239,11 +246,7 @@ function ensureCandidateRecipeInput(
   };
 }
 
-function uniqueCandidateId(
-  item: Record<string, unknown>,
-  candidatesDir: string,
-  usedIds: ReadonlySet<string>,
-): string {
+function uniqueCandidateId(item: Record<string, unknown>, usedIds: ReadonlySet<string>): string {
   const title = stringValue(item.title) ?? "codex-knowledge";
   const content = stableJson({
     title,
@@ -258,10 +261,7 @@ function uniqueCandidateId(
   const base = `${slugify(title)}-${sha256(content).slice(0, 10)}`;
   let candidate = base;
   let suffix = 2;
-  while (
-    usedIds.has(candidate) ||
-    existsSync(join(candidatesDir, `${safeFileStem(candidate)}.md`))
-  ) {
+  while (usedIds.has(candidate)) {
     candidate = `${base}-${suffix}`;
     suffix += 1;
   }
@@ -343,6 +343,10 @@ function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
+function uniqueRecipesById<T extends { readonly id: string }>(recipes: readonly T[]): T[] {
+  return [...new Map(recipes.map((recipe) => [recipe.id, recipe])).values()];
+}
+
 function slugify(value: string): string {
   return (
     value
@@ -351,10 +355,6 @@ function slugify(value: string): string {
       .replace(/^-+|-+$/g, "")
       .slice(0, 60) || "codex-knowledge"
   );
-}
-
-function safeFileStem(value: string): string {
-  return slugify(value);
 }
 
 function sha256(value: string): string {
