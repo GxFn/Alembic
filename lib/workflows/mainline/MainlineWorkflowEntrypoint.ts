@@ -13,7 +13,7 @@ import {
   type MainlineProjectIntelligenceArtifact,
   MainlineProjectIntelligenceBuilder,
 } from "../../mainline/graph/index.js";
-import type { MainlineSearchIndex } from "../../mainline/search/index.js";
+import type { MainlineSearchDocument, MainlineSearchIndex } from "../../mainline/search/index.js";
 import {
   type MainlineWorkflowCancellationToken,
   MainlineWorkflowCancelledError,
@@ -38,7 +38,27 @@ export interface MainlineWorkflowEntrypointDependencies {
   readonly contextIndex?: ContextIndexWriter;
   readonly searchIndex?: Pick<MainlineSearchIndex, "remove" | "upsert">;
   readonly artifactStore?: MainlineProjectIntelligenceArtifactStore;
+  readonly persistence?: MainlineWorkflowPersistence;
   readonly now?: () => Date;
+}
+
+export interface MainlineWorkflowPersistenceInput {
+  readonly kind: MainlineWorkflowKind;
+  readonly projectRoot: string;
+  readonly artifact: MainlineProjectIntelligenceArtifact;
+  readonly searchDocuments: readonly MainlineSearchDocument[];
+}
+
+export interface MainlineWorkflowPersistedArtifacts {
+  readonly artifactPath?: string;
+  readonly contextSnapshotPath?: string;
+  readonly searchSnapshotPath?: string;
+}
+
+export interface MainlineWorkflowPersistence {
+  saveSnapshots(
+    input: MainlineWorkflowPersistenceInput,
+  ): Promise<MainlineWorkflowPersistedArtifacts>;
 }
 
 export interface MainlineWorkflowSideEffects {
@@ -64,6 +84,7 @@ export interface MainlineWorkflowResult {
     readonly recipes: 0;
     readonly truncated: boolean;
   };
+  readonly persisted?: MainlineWorkflowPersistedArtifacts;
   readonly skippedSideEffects: MainlineWorkflowSideEffects;
   readonly warnings: readonly string[];
 }
@@ -81,6 +102,7 @@ export class MainlineWorkflowEntrypoint {
   readonly #contextIndex: ContextIndexWriter | undefined;
   readonly #searchIndex: Pick<MainlineSearchIndex, "remove" | "upsert"> | undefined;
   readonly #artifactStore: MainlineProjectIntelligenceArtifactStore | undefined;
+  readonly #persistence: MainlineWorkflowPersistence | undefined;
   readonly #now: () => Date;
 
   constructor(dependencies: MainlineWorkflowEntrypointDependencies = {}) {
@@ -91,6 +113,7 @@ export class MainlineWorkflowEntrypoint {
     this.#contextIndex = dependencies.contextIndex;
     this.#searchIndex = dependencies.searchIndex;
     this.#artifactStore = dependencies.artifactStore;
+    this.#persistence = dependencies.persistence;
     this.#now = dependencies.now ?? (() => new Date());
   }
 
@@ -105,6 +128,8 @@ export class MainlineWorkflowEntrypoint {
     let artifact: MainlineProjectIntelligenceArtifact | null = null;
     let sourceRefs = 0;
     let searchDocuments = 0;
+    let materializedSearchDocuments: readonly MainlineSearchDocument[] = [];
+    let persisted: MainlineWorkflowPersistedArtifacts | undefined;
 
     try {
       scanResult = await kernel.runPhase("scan", () =>
@@ -143,9 +168,16 @@ export class MainlineWorkflowEntrypoint {
       );
       sourceRefs = materialized.sourceRefs.length;
       searchDocuments = materialized.searchDocuments.length;
+      materializedSearchDocuments = materialized.searchDocuments;
 
       await kernel.runPhase("save-artifact", async () => {
         await this.#artifactStore?.save(artifact as MainlineProjectIntelligenceArtifact);
+        persisted = await this.#persistence?.saveSnapshots({
+          kind: input.kind,
+          projectRoot: input.projectRoot,
+          artifact: artifact as MainlineProjectIntelligenceArtifact,
+          searchDocuments: materializedSearchDocuments,
+        });
       });
 
       warnings.push("recipe_generation_deferred");
@@ -154,6 +186,7 @@ export class MainlineWorkflowEntrypoint {
         artifact,
         sourceRefs,
         searchDocuments,
+        ...(persisted ? { persisted } : {}),
         warnings,
       });
     } catch (error) {
@@ -164,6 +197,7 @@ export class MainlineWorkflowEntrypoint {
           artifact,
           sourceRefs,
           searchDocuments,
+          ...(persisted ? { persisted } : {}),
           warnings,
         });
       }
@@ -181,6 +215,7 @@ export class MainlineWorkflowEntrypoint {
       readonly artifact: MainlineProjectIntelligenceArtifact | null;
       readonly sourceRefs: number;
       readonly searchDocuments: number;
+      readonly persisted?: MainlineWorkflowPersistedArtifacts;
       readonly warnings: readonly string[];
     },
   ): MainlineWorkflowResult {
@@ -201,6 +236,7 @@ export class MainlineWorkflowEntrypoint {
         recipes: 0,
         truncated: scanResult?.truncated ?? false,
       },
+      ...(partial.persisted ? { persisted: partial.persisted } : {}),
       skippedSideEffects: SKIPPED_SIDE_EFFECTS,
       warnings: partial.warnings,
     };

@@ -7,7 +7,10 @@ import { startDaemonHttpBridge } from "../lib/daemon/DaemonHttpBridge.js";
 import type { DaemonJobHandler } from "../lib/daemon/DaemonJobRunner.js";
 import { clearDaemonState, writeDaemonState } from "../lib/daemon/DaemonState.js";
 import { JsonDaemonJobStore } from "../lib/daemon/JobStore.js";
-import { MainlineWorkflowEntrypoint } from "../lib/workflows/index.js";
+import {
+  createMainlineWorkflowPersistence,
+  MainlineWorkflowEntrypoint,
+} from "../lib/workflows/index.js";
 
 const projectRoot = resolveProjectRoot(process.env.ALEMBIC_PROJECT_DIR);
 const workspace = inspectWorkspace(projectRoot);
@@ -17,14 +20,20 @@ if (!workspace.projectId) {
 
 const info = readPackageInfo();
 const startedAt = new Date().toISOString();
+const dataRoot = process.env.ALEMBIC_DAEMON_DATA_ROOT ?? workspace.dataRoot;
+const workflowPersistence = await createMainlineWorkflowPersistence({
+  projectRoot: workspace.projectRoot,
+  dataRoot,
+  mode: workspace.mode,
+});
 const initialState = {
   pid: process.pid,
   port: Number.parseInt(process.env.ALEMBIC_DAEMON_PORT ?? "0", 10) || 0,
   token: process.env.ALEMBIC_DAEMON_TOKEN ?? randomBytes(24).toString("hex"),
   projectRoot: workspace.projectRoot,
-  dataRoot: process.env.ALEMBIC_DAEMON_DATA_ROOT ?? workspace.dataRoot,
+  dataRoot,
   projectId: workspace.projectId,
-  databasePath: workspace.databasePath,
+  databasePath: workflowPersistence.workspacePaths.databasePath,
   version: info.version,
   startedAt,
   updatedAt: startedAt,
@@ -32,7 +41,7 @@ const initialState = {
 
 const interruptedJobs = await new JsonDaemonJobStore(initialState.dataRoot).markInterrupted();
 let currentState = initialState;
-const workflow = new MainlineWorkflowEntrypoint();
+const workflow = new MainlineWorkflowEntrypoint(workflowPersistence.dependencies);
 const workflowHandlers: Record<"bootstrap" | "rescan", DaemonJobHandler> = {
   bootstrap: async (job, context) =>
     runWorkflowJob(workflow, "bootstrap", workspace.projectRoot, job.input, context.isCancelled),
