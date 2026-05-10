@@ -79,6 +79,15 @@ export const CODEX_TOOLS: CodexToolDefinition[] = [
           items: { type: "string" },
           description: "Optional file path hints for a targeted bootstrap.",
         },
+        agentFill: {
+          type: "boolean",
+          description:
+            "Also run the internal AgentRuntime dimension fill after the scan lifecycle.",
+        },
+        maxAgentTasks: {
+          type: "integer",
+          description: "Optional cap for internal AgentRuntime dimension tasks.",
+        },
       },
       additionalProperties: false,
     },
@@ -96,6 +105,28 @@ export const CODEX_TOOLS: CodexToolDefinition[] = [
           type: "array",
           items: { type: "string" },
           description: "Changed project files to prioritize during rescan.",
+        },
+        removedFiles: {
+          type: "array",
+          items: { type: "string" },
+          description: "Removed project files to account for during rescan.",
+        },
+        diffTextByPath: {
+          type: "object",
+          description: "Optional project-relative diff text map for Recipe impact analysis.",
+        },
+        agentFill: {
+          type: "boolean",
+          description:
+            "Also run the internal AgentRuntime dimension and evolution fill after the scan lifecycle.",
+        },
+        includeEvolution: {
+          type: "boolean",
+          description: "Whether internal AgentRuntime should plan Recipe evolution tasks.",
+        },
+        maxAgentTasks: {
+          type: "integer",
+          description: "Optional cap for internal AgentRuntime dimension/evolution tasks.",
         },
       },
       additionalProperties: false,
@@ -645,9 +676,26 @@ function buildWorkflowJobInput(args: Record<string, unknown>): Record<string, un
   if (isRecord(args.scan)) {
     input.scan = args.scan;
   }
+  if (typeof args.agentFill === "boolean") {
+    input.agentFill = args.agentFill;
+  }
+  if (typeof args.includeEvolution === "boolean") {
+    input.includeEvolution = args.includeEvolution;
+  }
+  const maxAgentTasks = integerValue(args.maxAgentTasks);
+  if (maxAgentTasks !== undefined) {
+    input.maxAgentTasks = maxAgentTasks;
+  }
   const changedFiles = stringList(args.changedFiles);
   if (changedFiles.length > 0) {
     input.changedFiles = changedFiles;
+  }
+  const removedFiles = stringList(args.removedFiles);
+  if (removedFiles.length > 0) {
+    input.removedFiles = removedFiles;
+  }
+  if (isStringMap(args.diffTextByPath)) {
+    input.diffTextByPath = args.diffTextByPath;
   }
   return input;
 }
@@ -720,4 +768,17 @@ function stringList(value: unknown): string[] {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function integerValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+function isStringMap(value: unknown): value is Record<string, string> {
+  return (
+    isRecord(value) &&
+    Object.entries(value).every(
+      ([key, entry]) => typeof key === "string" && typeof entry === "string",
+    )
+  );
 }

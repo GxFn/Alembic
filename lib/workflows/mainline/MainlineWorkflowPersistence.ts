@@ -1,3 +1,4 @@
+import type { ToolRuntimeDependencies } from "../../agent/tools/index.js";
 import {
   JsonMainlineProjectIntelligenceArtifactStore,
   MAINLINE_FILE_FINGERPRINT_SNAPSHOT_STORE_PATH,
@@ -55,6 +56,7 @@ export interface DataRootMainlineWorkflowPersistence {
   readonly searchIndex: PersistentMainlineSearchIndex;
   readonly artifactStore: MainlineProjectIntelligenceArtifactStore;
   readonly persistedArtifacts: MainlineWorkflowPersistedArtifacts;
+  readonly agentToolDependencies: ToolRuntimeDependencies;
 }
 
 /**
@@ -127,6 +129,13 @@ export async function createMainlineWorkflowPersistence(
     persistedArtifacts,
     ...(now === undefined ? {} : { now: () => new Date(now()) }),
   });
+  const agentToolDependencies = createMainlineAgentToolDependencies({
+    projectRoot: workspacePaths.projectRoot,
+    contextIndex,
+    searchIndex,
+    artifactStore,
+    ...(input.now === undefined ? {} : { now: input.now }),
+  });
 
   return {
     workspacePaths,
@@ -145,6 +154,7 @@ export async function createMainlineWorkflowPersistence(
     searchIndex,
     artifactStore,
     persistedArtifacts,
+    agentToolDependencies,
   };
 }
 
@@ -152,6 +162,22 @@ export async function createMainlineWorkflowEntrypointDependencies(
   input: MainlineWorkflowPersistenceOptions,
 ): Promise<MainlineWorkflowEntrypointDependencies> {
   return (await createMainlineWorkflowPersistence(input)).dependencies;
+}
+
+export function createMainlineAgentToolDependencies(input: {
+  readonly projectRoot: string;
+  readonly contextIndex: PersistentMainlineContextIndex;
+  readonly searchIndex: PersistentMainlineSearchIndex;
+  readonly artifactStore: MainlineProjectIntelligenceArtifactStore;
+  readonly now?: () => number;
+}): ToolRuntimeDependencies {
+  return {
+    projectRoot: input.projectRoot,
+    contextIndex: input.contextIndex,
+    searchIndex: input.searchIndex,
+    projectIntelligenceArtifactProvider: input.artifactStore,
+    ...(input.now === undefined ? {} : { now: input.now }),
+  };
 }
 
 export class PersistentMainlineContextIndex extends InMemoryContextIndex {

@@ -9,7 +9,11 @@ import { clearDaemonState, writeDaemonState } from "../lib/daemon/DaemonState.js
 import { type DaemonJobProgressStep, JsonDaemonJobStore } from "../lib/daemon/JobStore.js";
 import { MainlineCompileSession } from "../lib/mainline/compile/index.js";
 import {
+  ColdStartWorkflow,
   createMainlineWorkflowPersistence,
+  InternalColdStartWorkflow,
+  InternalKnowledgeRescanWorkflow,
+  KnowledgeRescanWorkflow,
   type ScanLifecycleResult,
   type ScanLifecycleRunInput,
   ScanLifecycleRunner,
@@ -61,19 +65,37 @@ const scanLifecycleRunner =
       ? {}
       : { resetRuntimeState: workflowPersistence.dependencies.resetRuntimeState }),
   });
+const internalColdStartWorkflow = new InternalColdStartWorkflow({
+  coldStart: new ColdStartWorkflow(scanLifecycleRunner),
+  toolDependencies: workflowPersistence.agentToolDependencies,
+});
+const internalKnowledgeRescanWorkflow = new InternalKnowledgeRescanWorkflow({
+  rescan: new KnowledgeRescanWorkflow(scanLifecycleRunner),
+  toolDependencies: workflowPersistence.agentToolDependencies,
+});
 // 中文注释：daemon 是 Codex 插件后台入口，bootstrap/rescan 这类长任务在 daemon 中执行；
 // MCP stdio 只负责把请求排入 durable queue，HTTP enqueue 返回后不等待编译完成。
 const workflowHandlers: Record<"bootstrap" | "rescan", DaemonJobHandler> = {
   bootstrap: async (job, context) =>
-    runScanLifecycleJob(
+    runWorkflowJob(
       scanLifecycleRunner,
+      internalColdStartWorkflow,
+      internalKnowledgeRescanWorkflow,
       "bootstrap",
       workspace.projectRoot,
       job.input,
       context,
     ),
   rescan: async (job, context) =>
-    runScanLifecycleJob(scanLifecycleRunner, "rescan", workspace.projectRoot, job.input, context),
+    runWorkflowJob(
+      scanLifecycleRunner,
+      internalColdStartWorkflow,
+      internalKnowledgeRescanWorkflow,
+      "rescan",
+      workspace.projectRoot,
+      job.input,
+      context,
+    ),
 };
 const bridge = await startDaemonHttpBridge({
   state: () => currentState,
@@ -105,16 +127,21 @@ async function shutdown(): Promise<void> {
   process.exit(0);
 }
 
-async function runScanLifecycleJob(
+async function runWorkflowJob(
   runner: ScanLifecycleRunner,
+  internalColdStart: InternalColdStartWorkflow,
+  internalRescan: InternalKnowledgeRescanWorkflow,
   kind: "bootstrap" | "rescan",
   projectRoot: string,
   input: Record<string, unknown> | undefined,
   context: DaemonJobExecutionContext,
 ): Promise<Record<string, unknown>> {
+  const agentFill = input?.agentFill === true;
   await context.reportProgress({
     phase: "scan:preparing",
-    message: `Preparing ${kind} scan lifecycle.`,
+    message: agentFill
+      ? `Preparing ${kind} scan and internal agent workflow.`
+      : `Preparing ${kind} scan lifecycle.`,
     percent: 10,
   });
   if (await context.isCancelled()) {
@@ -122,25 +149,84 @@ async function runScanLifecycleJob(
   }
   await context.reportProgress({
     phase: "scan:running",
-    message: `Running ${kind} scan lifecycle.`,
+    message: agentFill
+      ? `Running ${kind} scan and internal agent workflow.`
+      : `Running ${kind} scan lifecycle.`,
     percent: 20,
   });
-  const result = await runner.run({
-    kind,
-    projectRoot,
-    ...scanLifecycleInput(input),
-    cancellation: { isCancelled: () => context.isCancelled() },
-  });
+  const cancellation = { isCancelled: () => context.isCancelled() };
+  const result = agentFill
+    ? await runInternalAgentWorkflowJob({
+        internalColdStart,
+        internalRescan,
+        kind,
+        projectRoot,
+        input,
+        cancellation,
+      })
+    : await runner.run({
+        kind,
+        projectRoot,
+        ...scanLifecycleInput(input),
+        cancellation,
+      });
   if (await context.isCancelled()) {
     return { kind, cancelled: true };
   }
   await context.reportProgress({
     phase: "scan:completed",
-    message: `${kind} scan lifecycle completed.`,
+    message: agentFill
+      ? `${kind} scan and internal agent workflow completed.`
+      : `${kind} scan lifecycle completed.`,
     percent: 90,
-    steps: scanLifecycleProgressSteps(result),
+    steps: workflowProgressSteps(result),
   });
   return JSON.parse(JSON.stringify(result)) as Record<string, unknown>;
+}
+
+async function runInternalAgentWorkflowJob(input: {
+  readonly internalColdStart: InternalColdStartWorkflow;
+  readonly internalRescan: InternalKnowledgeRescanWorkflow;
+  readonly kind: "bootstrap" | "rescan";
+  readonly projectRoot: string;
+  readonly input: Record<string, unknown> | undefined;
+  readonly cancellation: { isCancelled(): boolean | Promise<boolean> };
+}) {
+  const agentOptions = agentWorkflowInput(input.input);
+  if (input.kind === "bootstrap") {
+    return input.internalColdStart.run({
+      projectRoot: input.projectRoot,
+      ...coldStartInput(input.input),
+      ...coldStartAgentWorkflowInput(agentOptions),
+      cancellation: input.cancellation,
+    });
+  }
+  return input.internalRescan.run({
+    projectRoot: input.projectRoot,
+    ...knowledgeRescanInput(input.input),
+    ...agentOptions,
+    cancellation: input.cancellation,
+  });
+}
+
+function workflowProgressSteps(
+  result: ScanLifecycleResult | Awaited<ReturnType<InternalColdStartWorkflow["run"]>>,
+): DaemonJobProgressStep[] {
+  if ("scan" in result) {
+    const scanSteps = scanLifecycleProgressSteps(result.scan);
+    const agentResults = result.agent?.results ?? [];
+    const agentSteps = agentResults.map((taskResult) => ({
+      phase: `agent:${taskResult.task.kind}:${taskResult.task.id}`,
+      status: taskResult.status,
+      message: `${taskResult.task.label}: ${taskResult.candidateCount} candidate(s), ${taskResult.toolCallCount} tool call(s)`,
+    }));
+    const rawSteps = [...scanSteps, ...agentSteps];
+    return rawSteps.map((step, index) => ({
+      ...step,
+      percent: rawSteps.length === 0 ? 100 : Math.round(((index + 1) / rawSteps.length) * 100),
+    }));
+  }
+  return scanLifecycleProgressSteps(result);
 }
 
 function scanLifecycleProgressSteps(result: ScanLifecycleResult): DaemonJobProgressStep[] {
@@ -162,6 +248,65 @@ function scanLifecycleProgressSteps(result: ScanLifecycleResult): DaemonJobProgr
     ...step,
     percent: stepCount === 0 ? 100 : Math.round(((index + 1) / stepCount) * 100),
   }));
+}
+
+function coldStartInput(input: Record<string, unknown> | undefined): Pick<
+  ScanLifecycleRunInput,
+  "scan" | "maxFileBytes" | "notes"
+> & {
+  readonly cleanup?: "full-reset" | "none";
+} {
+  const lifecycleInput = scanLifecycleInput(input);
+  return {
+    ...(lifecycleInput.scan === undefined ? {} : { scan: lifecycleInput.scan }),
+    ...(lifecycleInput.maxFileBytes === undefined
+      ? {}
+      : { maxFileBytes: lifecycleInput.maxFileBytes }),
+    ...(lifecycleInput.notes === undefined ? {} : { notes: lifecycleInput.notes }),
+    ...(lifecycleInput.cleanup === "full-reset" || lifecycleInput.cleanup === "none"
+      ? { cleanup: lifecycleInput.cleanup }
+      : {}),
+  };
+}
+
+function knowledgeRescanInput(input: Record<string, unknown> | undefined): Omit<
+  ScanLifecycleRunInput,
+  "projectRoot" | "kind" | "cancellation" | "cleanup"
+> & {
+  readonly cleanup?: "rescan-clean" | "none";
+} {
+  const lifecycleInput = scanLifecycleInput(input);
+  const { cleanup, ...rescanInput } = lifecycleInput;
+  return {
+    ...rescanInput,
+    ...(cleanup === "rescan-clean" || cleanup === "none" ? { cleanup } : {}),
+  };
+}
+
+function agentWorkflowInput(input: Record<string, unknown> | undefined): {
+  readonly maxAgentTasks?: number;
+  readonly skipAgentFill?: boolean;
+  readonly includeEvolution?: boolean;
+} {
+  return {
+    ...(typeof input?.maxAgentTasks === "number" && Number.isFinite(input.maxAgentTasks)
+      ? { maxAgentTasks: input.maxAgentTasks }
+      : {}),
+    ...(typeof input?.includeEvolution === "boolean"
+      ? { includeEvolution: input.includeEvolution }
+      : {}),
+    skipAgentFill: false,
+  };
+}
+
+function coldStartAgentWorkflowInput(input: ReturnType<typeof agentWorkflowInput>): {
+  readonly maxAgentTasks?: number;
+  readonly skipAgentFill?: boolean;
+} {
+  return {
+    ...(input.maxAgentTasks === undefined ? {} : { maxAgentTasks: input.maxAgentTasks }),
+    ...(input.skipAgentFill === undefined ? {} : { skipAgentFill: input.skipAgentFill }),
+  };
 }
 
 function scanLifecycleInput(

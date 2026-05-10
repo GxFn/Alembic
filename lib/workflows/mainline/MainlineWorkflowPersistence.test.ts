@@ -73,6 +73,43 @@ describe("mainline workflow dataRoot persistence", () => {
     });
   });
 
+  it("exposes internal agent tool dependencies backed by dataRoot snapshots", async () => {
+    const projectRoot = await makeFixtureProject();
+    const dataRoot = await makeTempRoot("alembic-workflow-data-");
+
+    const persistence = await createMainlineWorkflowPersistence({
+      projectRoot,
+      dataRoot,
+      mode: "ghost",
+    });
+    await new MainlineWorkflowEntrypoint(persistence.dependencies).run({
+      kind: "bootstrap",
+      projectRoot,
+    });
+
+    const tools = persistence.agentToolDependencies;
+    const searchIndex = tools.searchIndex;
+    const contextIndex = tools.contextIndex;
+    const artifactProvider = tools.projectIntelligenceArtifactProvider;
+    expect(tools.projectRoot).toBe(projectRoot);
+    expect(searchIndex).toBeDefined();
+    expect(contextIndex).toBeDefined();
+    expect(artifactProvider).toBeDefined();
+    expect(searchIndex?.search({ text: "helper", limit: 5 })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          document: expect.objectContaining({ path: "src/util.ts" }),
+        }),
+      ]),
+    );
+    await expect(contextIndex?.findSourceRefsByPaths(["src/app.ts"])).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "src/app.ts" })]),
+    );
+    await expect(artifactProvider?.load()).resolves.toMatchObject({
+      files: expect.arrayContaining([expect.objectContaining({ path: "src/app.ts" })]),
+    });
+  });
+
   it("persists recipe Markdown file indexes across dependency rebuilds", async () => {
     const projectRoot = await makeFixtureProject();
     const dataRoot = await makeTempRoot("alembic-workflow-data-");

@@ -26,15 +26,18 @@ export interface InternalColdStartWorkflowResult {
 export class InternalColdStartWorkflow {
   readonly #coldStart: ColdStartWorkflow;
   readonly #agentWorkflow: AgentDimensionWorkflow;
+  readonly #toolDependencies: ToolRuntimeDependencies | undefined;
 
   constructor(
     options: {
       readonly coldStart?: ColdStartWorkflow;
       readonly agentWorkflow?: AgentDimensionWorkflow;
+      readonly toolDependencies?: ToolRuntimeDependencies;
     } = {},
   ) {
     this.#coldStart = options.coldStart ?? new ColdStartWorkflow();
     this.#agentWorkflow = options.agentWorkflow ?? new AgentDimensionWorkflow();
+    this.#toolDependencies = options.toolDependencies;
   }
 
   async run(input: InternalColdStartWorkflowInput): Promise<InternalColdStartWorkflowResult> {
@@ -46,7 +49,7 @@ export class InternalColdStartWorkflow {
       scan,
       aiProvider: input.aiProvider ?? null,
       ...(input.toolRouter === undefined ? {} : { toolRouter: input.toolRouter }),
-      ...(input.toolDependencies === undefined ? {} : { toolDependencies: input.toolDependencies }),
+      ...agentToolDependencies(this.#toolDependencies, input.toolDependencies),
       ...(input.maxAgentTasks === undefined ? {} : { maxTasks: input.maxAgentTasks }),
       includeEvolution: false,
       source: "system",
@@ -59,4 +62,13 @@ export function runInternalColdStartWorkflow(
   input: InternalColdStartWorkflowInput,
 ): Promise<InternalColdStartWorkflowResult> {
   return new InternalColdStartWorkflow().run(input);
+}
+
+function agentToolDependencies(
+  defaults: ToolRuntimeDependencies | undefined,
+  override: ToolRuntimeDependencies | undefined,
+): { readonly toolDependencies?: ToolRuntimeDependencies } {
+  const merged =
+    defaults === undefined && override === undefined ? undefined : { ...defaults, ...override };
+  return merged === undefined ? {} : { toolDependencies: merged };
 }

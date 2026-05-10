@@ -30,15 +30,18 @@ export interface InternalKnowledgeRescanWorkflowResult {
 export class InternalKnowledgeRescanWorkflow {
   readonly #rescan: KnowledgeRescanWorkflow;
   readonly #agentWorkflow: AgentDimensionWorkflow;
+  readonly #toolDependencies: ToolRuntimeDependencies | undefined;
 
   constructor(
     options: {
       readonly rescan?: KnowledgeRescanWorkflow;
       readonly agentWorkflow?: AgentDimensionWorkflow;
+      readonly toolDependencies?: ToolRuntimeDependencies;
     } = {},
   ) {
     this.#rescan = options.rescan ?? new KnowledgeRescanWorkflow();
     this.#agentWorkflow = options.agentWorkflow ?? new AgentDimensionWorkflow();
+    this.#toolDependencies = options.toolDependencies;
   }
 
   async run(
@@ -52,7 +55,7 @@ export class InternalKnowledgeRescanWorkflow {
       scan,
       aiProvider: input.aiProvider ?? null,
       ...(input.toolRouter === undefined ? {} : { toolRouter: input.toolRouter }),
-      ...(input.toolDependencies === undefined ? {} : { toolDependencies: input.toolDependencies }),
+      ...agentToolDependencies(this.#toolDependencies, input.toolDependencies),
       ...(input.maxAgentTasks === undefined ? {} : { maxTasks: input.maxAgentTasks }),
       includeEvolution: input.includeEvolution ?? true,
       source: "system",
@@ -65,4 +68,13 @@ export function runInternalKnowledgeRescanWorkflow(
   input: InternalKnowledgeRescanWorkflowInput,
 ): Promise<InternalKnowledgeRescanWorkflowResult> {
   return new InternalKnowledgeRescanWorkflow().run(input);
+}
+
+function agentToolDependencies(
+  defaults: ToolRuntimeDependencies | undefined,
+  override: ToolRuntimeDependencies | undefined,
+): { readonly toolDependencies?: ToolRuntimeDependencies } {
+  const merged =
+    defaults === undefined && override === undefined ? undefined : { ...defaults, ...override };
+  return merged === undefined ? {} : { toolDependencies: merged };
 }
