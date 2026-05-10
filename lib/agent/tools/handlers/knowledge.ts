@@ -4,6 +4,7 @@ import type {
   RecipeMarkdownFileIndex,
   SourceRef,
 } from "../../../mainline/data/index.js";
+import type { Recipe, RecipeLifecycleRecord } from "../../../mainline/knowledge/index.js";
 import type {
   MainlineSearchDocument,
   MainlineSearchDocumentKind,
@@ -62,6 +63,69 @@ export const knowledgeSearchHandler: ToolHandler = async (
     query,
     hits: hits.map(formatSearchHit),
     context: contextSummary,
+  });
+};
+
+export const knowledgeDetailHandler: ToolHandler = async (
+  invocation,
+  context,
+): Promise<ToolResultEnvelope> => {
+  const id = parseIdInput(invocation.input, "knowledge.detail");
+  if (!id.ok) {
+    return toolFailure(context.descriptor, "error", id.error);
+  }
+
+  const lifecycleRecord = await context.dependencies.knowledgeLifecycleStore?.load(id.value, {
+    status: "all",
+  });
+  const contextIndex = context.dependencies.contextIndex;
+  const indexedRecipes = await findRecipesByIds(contextIndex, [id.value]);
+  const recipe = lifecycleRecord?.recipe ?? indexedRecipes[0];
+  if (!recipe) {
+    return toolFailure(context.descriptor, "unavailable", {
+      code: "recipe_not_found",
+      message: `Recipe not found: ${id.value}`,
+    });
+  }
+
+  const [recipeFiles, edges, sourceRefs] = contextIndex
+    ? await Promise.all([
+        contextIndex.findRecipeFilesByRecipeIds([recipe.id]),
+        contextIndex.findRecipeEdges([recipe.id]),
+        contextIndex.findSourceRefs([recipe.id]),
+      ])
+    : ([[], [], []] as const);
+
+  return toolSuccess(context.descriptor, {
+    recipe: formatRecipe(recipe),
+    ...(lifecycleRecord ? { lifecycle: formatLifecycleRecord(lifecycleRecord) } : {}),
+    context: {
+      recipeFiles: recipeFiles.map(formatRecipeFile),
+      edges: edges.map(formatRecipeEdge),
+      sourceRefs: sourceRefs.map(formatSourceRef),
+    },
+  });
+};
+
+export const knowledgeSubmitHandler: ToolHandler = (_invocation, context) =>
+  toolFailure(context.descriptor, "policy_required", {
+    code: "policy_required",
+    message:
+      "knowledge.submit is intentionally gated; candidate writes must go through a reviewed lifecycle service.",
+    details: { lifecycleWrite: false },
+  });
+
+export const knowledgeManageHandler: ToolHandler = (invocation, context) => {
+  const input = isRecord(invocation.input) ? invocation.input : {};
+  return toolFailure(context.descriptor, "policy_required", {
+    code: "policy_required",
+    message:
+      "knowledge.manage is intentionally gated; publish/reject must go through explicit review tooling.",
+    details: {
+      lifecycleWrite: false,
+      ...(optionalString(input.operation) ? { operation: optionalString(input.operation) } : {}),
+      ...(optionalString(input.id) ? { id: optionalString(input.id) } : {}),
+    },
   });
 };
 
@@ -218,6 +282,31 @@ function formatSourceRef(sourceRef: SourceRef) {
   };
 }
 
+function formatRecipe(recipe: Recipe) {
+  return {
+    id: recipe.id,
+    title: recipe.title,
+    summary: recipe.summary,
+    kind: recipe.kind,
+    status: recipe.status,
+    tags: [...recipe.tags].sort(),
+    sourceRefIds: [...recipe.sourceRefIds].sort(),
+    confidence: recipe.confidence,
+    trigger: recipe.trigger,
+    updatedAt: recipe.updatedAt,
+    metadata: recipe.metadata,
+  };
+}
+
+function formatLifecycleRecord(record: RecipeLifecycleRecord) {
+  return {
+    id: record.id,
+    status: record.status,
+    metadata: record.metadata,
+    ...(record.file ? { file: formatRecipeFile(record.file) } : {}),
+  };
+}
+
 function recipeIdFromDocument(document: MainlineSearchDocument): string {
   if (document.kind !== "recipe") {
     return "";
@@ -271,4 +360,38 @@ function uniqueStrings(values: readonly (string | undefined)[]): string[] {
 
 function round(value: number): number {
   return Math.round(value * 1_000) / 1_000;
+}
+
+async function findRecipesByIds(
+  contextIndex: ContextIndexReader | undefined,
+  ids: readonly string[],
+): Promise<Recipe[]> {
+  const reader = contextIndex as
+    | (ContextIndexReader & {
+        findRecipesByIds?: (recipeIds: readonly string[]) => Promise<Recipe[]>;
+      })
+    | undefined;
+  return reader?.findRecipesByIds ? reader.findRecipesByIds(ids) : [];
+}
+
+function parseIdInput(
+  input: unknown,
+  toolName: string,
+):
+  | { readonly ok: true; readonly value: string }
+  | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } } {
+  if (!isRecord(input)) {
+    return {
+      ok: false,
+      error: { code: "invalid_input", message: `${toolName} input must be an object.` },
+    };
+  }
+  const id = optionalString(input.id);
+  if (!id) {
+    return {
+      ok: false,
+      error: { code: "invalid_input", message: `${toolName} requires id.` },
+    };
+  }
+  return { ok: true, value: id };
 }

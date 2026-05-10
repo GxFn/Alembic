@@ -1,5 +1,6 @@
 import { ToolOutputCompressor } from "./compressor.js";
 import { createDefaultToolHandlers } from "./handlers/index.js";
+import { InMemoryToolMemoryStore } from "./memory-store.js";
 import { createDefaultToolRegistry } from "./registry.js";
 import type {
   ToolHandler,
@@ -9,7 +10,7 @@ import type {
   ToolResultEnvelope,
   ToolRuntimeDependencies,
 } from "./types.js";
-import { toolFailure } from "./types.js";
+import { isRecord, toolFailure } from "./types.js";
 
 export interface ToolRouterOptions {
   readonly registry?: ToolRegistryReader;
@@ -23,11 +24,22 @@ export class ToolRouter {
   readonly #handlers: ReadonlyMap<string, ToolHandler>;
   readonly #dependencies: ToolRuntimeDependencies;
   readonly #compressor: ToolOutputCompressor;
+  readonly #toolLocks = new Map<string, Promise<void>>();
+  #globalLock: Promise<void> | null = null;
+  #globalRelease: (() => void) | null = null;
 
   constructor(options: ToolRouterOptions = {}) {
     this.#registry = options.registry ?? createDefaultToolRegistry();
     this.#handlers = options.handlers ?? createDefaultToolHandlers();
-    this.#dependencies = options.dependencies ?? {};
+    // 中文注释：内部 tools 默认拥有一次 Router 生命周期内的工作记忆；
+    // 外部如果有更持久的 memory coordinator，可以通过 dependencies 覆盖。
+    const memoryStore = new InMemoryToolMemoryStore(
+      options.dependencies?.now ? { now: options.dependencies.now } : {},
+    );
+    this.#dependencies = {
+      memoryStore,
+      ...options.dependencies,
+    };
     this.#compressor = options.compressor ?? new ToolOutputCompressor();
   }
 
@@ -50,21 +62,120 @@ export class ToolRouter {
       });
     }
 
+    const release = await this.#acquireLock(descriptor);
     try {
       const envelope = await handler(invocation, {
         descriptor,
         registry: this.#registry,
         dependencies: this.#dependencies,
       });
-      return invocation.compression
-        ? this.#compressor.compressEnvelope(envelope, invocation.compression)
-        : envelope;
+      // 中文注释：registry 的 maxOutputTokens 是默认保护网，调用方仍可用
+      // invocation.compression 覆盖，或显式传 false 关闭压缩。
+      const defaultCompression = descriptor.maxOutputTokens
+        ? { maxStringLength: descriptor.maxOutputTokens * 4 }
+        : undefined;
+      const compression =
+        invocation.compression === false
+          ? undefined
+          : (invocation.compression ?? defaultCompression);
+      return compression ? this.#compressor.compressEnvelope(envelope, compression) : envelope;
     } catch (error) {
       return toolFailure(descriptor, "error", {
         code: "handler_error",
         message: error instanceof Error ? error.message : "Tool handler failed.",
       });
+    } finally {
+      release();
     }
+  }
+
+  async invokeParallel(invocations: readonly ToolInvocation[]): Promise<ToolResultEnvelope[]> {
+    return Promise.all(invocations.map((invocation) => this.invoke(invocation)));
+  }
+
+  parseToolCall(
+    name: string,
+    rawArguments: string | Record<string, unknown>,
+  ): ToolInvocation | { readonly error: string } {
+    let args: Record<string, unknown>;
+    try {
+      const parsed = typeof rawArguments === "string" ? JSON.parse(rawArguments) : rawArguments;
+      if (!isRecord(parsed)) {
+        return { error: "Tool arguments must decode to an object." };
+      }
+      args = parsed;
+    } catch (error) {
+      return {
+        error: `Failed to parse tool arguments: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
+
+    const action = stringValue(args.action);
+    const nestedInput = isRecord(args.params)
+      ? args.params
+      : isRecord(args.input)
+        ? args.input
+        : {};
+    const topLevelInput = Object.fromEntries(
+      Object.entries(args).filter(([key]) => !["action", "params", "input"].includes(key)),
+    );
+    const input = { ...topLevelInput, ...nestedInput };
+    const requestedName = name.includes(".") ? name : action ? `${name}.${action}` : name;
+    if (!this.#registry.get(requestedName)) {
+      return { error: `Unknown tool: ${requestedName}` };
+    }
+    return { name: requestedName, input };
+  }
+
+  async #acquireLock(descriptor: { readonly name: string; readonly concurrency?: string }) {
+    const mode = descriptor.concurrency ?? "parallel";
+    if (mode === "exclusive") {
+      await this.#acquireGlobalLock();
+      return () => this.#releaseGlobalLock();
+    }
+    if (mode === "single") {
+      await this.#acquireToolLock(descriptor.name);
+      return () => this.#releaseToolLock(descriptor.name);
+    }
+    return () => undefined;
+  }
+
+  async #acquireToolLock(name: string): Promise<void> {
+    while (this.#toolLocks.has(name)) {
+      await this.#toolLocks.get(name);
+    }
+    let release!: () => void;
+    const promise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    (promise as Promise<void> & { release: () => void }).release = release;
+    this.#toolLocks.set(name, promise);
+  }
+
+  #releaseToolLock(name: string): void {
+    const promise = this.#toolLocks.get(name);
+    this.#toolLocks.delete(name);
+    (promise as (Promise<void> & { release?: () => void }) | undefined)?.release?.();
+  }
+
+  async #acquireGlobalLock(): Promise<void> {
+    while (this.#globalLock) {
+      await this.#globalLock;
+    }
+    let release!: () => void;
+    this.#globalLock = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.#globalRelease = release;
+  }
+
+  #releaseGlobalLock(): void {
+    const release = this.#globalRelease;
+    this.#globalLock = null;
+    this.#globalRelease = null;
+    release?.();
   }
 }
 

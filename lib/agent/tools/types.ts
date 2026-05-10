@@ -8,19 +8,33 @@ import type {
   MainlineProjectIntelligenceArtifact,
   MainlineProjectIntelligenceQueries,
 } from "../../mainline/graph/index.js";
+import type { RecipeLifecycleStorePort } from "../../mainline/knowledge/index.js";
 import type { MainlineSearchIndex } from "../../mainline/search/index.js";
 
 // 内部 Agent Tool 模块不兼容 legacy V1/V2；这里只描述新的 resource.action 契约。
 export type ToolResource = "code" | "terminal" | "knowledge" | "graph" | "memory" | "meta";
 
 export type ToolName =
-  | "code.query"
+  | "code.search"
+  | "code.read"
+  | "code.outline"
+  | "code.structure"
+  | "code.write"
   | "code.guard"
   | "terminal.execute"
   | "knowledge.search"
+  | "knowledge.detail"
+  | "knowledge.submit"
+  | "knowledge.manage"
+  | "graph.overview"
   | "graph.query"
-  | "memory.query"
-  | "meta.capabilities";
+  | "memory.save"
+  | "memory.recall"
+  | "memory.note_finding"
+  | "memory.get_previous_evidence"
+  | "meta.capabilities"
+  | "meta.plan"
+  | "meta.review";
 
 export type ToolAvailabilityStatus = "available" | "unavailable" | "policy_required";
 
@@ -66,6 +80,9 @@ export interface ToolDefinition extends ToolIdentity {
   readonly title: string;
   readonly description: string;
   readonly availability: ToolAvailability;
+  readonly risk?: "read-only" | "write" | "side-effect";
+  readonly concurrency?: "parallel" | "single" | "exclusive";
+  readonly maxOutputTokens?: number;
   readonly inputSchema: ToolSchema;
   readonly outputSchema: ToolSchema;
   readonly metadata?: Readonly<Record<string, unknown>>;
@@ -131,7 +148,46 @@ export interface ProjectIntelligenceArtifactProvider {
   load(): Promise<MainlineProjectIntelligenceArtifact | null>;
 }
 
+export interface ToolMemoryRecord {
+  readonly key: string;
+  readonly content: string;
+  readonly tags: readonly string[];
+  readonly category?: string;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+  readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+export interface ToolMemoryRecallOptions {
+  readonly query?: string;
+  readonly tags?: readonly string[];
+  readonly limit?: number;
+}
+
+export interface ToolMemoryStore {
+  save(record: Omit<ToolMemoryRecord, "createdAt" | "updatedAt">): Promise<ToolMemoryRecord>;
+  recall(options?: ToolMemoryRecallOptions): Promise<ToolMemoryRecord[]>;
+}
+
+export interface ToolMemoryCoordinator {
+  noteFinding(
+    finding: string,
+    evidence: string,
+    importance: number,
+    round: number,
+    scopeId?: string,
+  ): string;
+  searchEvidence?(
+    query: string,
+    dimId?: string,
+  ): Array<{
+    filePath: string;
+    evidence: { dimId?: string; importance?: number; finding: string };
+  }>;
+}
+
 export interface ToolRuntimeDependencies {
+  readonly projectRoot?: string;
   readonly searchIndex?: MainlineSearchIndex;
   readonly contextIndex?: ContextIndexReader;
   readonly guardRules?: readonly MainlineGuardRule[];
@@ -142,6 +198,10 @@ export interface ToolRuntimeDependencies {
   readonly projectIntelligenceArtifactProvider?:
     | ProjectIntelligenceArtifactProvider
     | (() => Promise<MainlineProjectIntelligenceArtifact | null>);
+  readonly memoryStore?: ToolMemoryStore;
+  readonly memoryCoordinator?: ToolMemoryCoordinator;
+  readonly knowledgeLifecycleStore?: RecipeLifecycleStorePort;
+  readonly now?: () => number;
 }
 
 export interface ToolHandlerContext {

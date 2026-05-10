@@ -34,6 +34,54 @@ interface GraphQueryInput {
   readonly includeStart: boolean;
 }
 
+export const graphOverviewHandler: ToolHandler = async (
+  _invocation,
+  context,
+): Promise<ToolResultEnvelope> => {
+  const artifact = await loadProjectIntelligenceArtifact(
+    context.dependencies.projectIntelligenceArtifactProvider,
+  );
+  if (!artifact && !context.dependencies.projectIntelligenceQueries) {
+    return toolFailure(context.descriptor, "unavailable", {
+      code: "project_intelligence_unavailable",
+      message: "graph.overview requires a ProjectIntelligence artifact provider.",
+    });
+  }
+
+  if (!artifact) {
+    return toolSuccess(context.descriptor, {
+      projectRoot: null,
+      files: { total: 0, parsed: 0, unsupported: 0, failed: 0 },
+      symbols: { total: 0, byKind: {} },
+      edges: { project: 0, semantic: 0 },
+      note: "Only query port is available; inject an artifact provider for overview facts.",
+    });
+  }
+
+  const fileStatuses = countBy(artifact.files.map((file) => file.status));
+  const symbolKinds = countBy(artifact.symbols.map((symbol) => symbol.kind));
+  return toolSuccess(context.descriptor, {
+    ...(artifact.projectRoot ? { projectRoot: artifact.projectRoot } : {}),
+    ...(artifact.generatedAt === undefined ? {} : { generatedAt: artifact.generatedAt }),
+    files: {
+      total: artifact.files.length,
+      parsed: fileStatuses.parsed ?? 0,
+      unsupported: fileStatuses.unsupported ?? 0,
+      failed: fileStatuses.failed ?? 0,
+    },
+    languages: countBy(artifact.files.map((file) => file.languageId)),
+    symbols: {
+      total: artifact.symbols.length,
+      byKind: symbolKinds,
+    },
+    edges: {
+      project: artifact.projectGraph.edges.length,
+      semantic: artifact.semanticEdges.length,
+      callSites: artifact.callSites.length,
+    },
+  });
+};
+
 export const graphQueryHandler: ToolHandler = async (
   invocation,
   context,
@@ -189,4 +237,12 @@ function boundedInteger(value: unknown, fallback: number, max: number): number |
     return undefined;
   }
   return Math.min(value, max);
+}
+
+function countBy(values: readonly string[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const value of values) {
+    counts[value] = (counts[value] ?? 0) + 1;
+  }
+  return counts;
 }
