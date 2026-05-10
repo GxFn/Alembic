@@ -12,10 +12,13 @@ export interface MainlineSearchProjectionInput {
 export function projectMainlineSearchDocuments(
   input: MainlineSearchProjectionInput,
 ): MainlineSearchDocument[] {
-  const recipes = [...(input.snapshot?.recipes ?? []), ...(input.recipes ?? [])];
+  const recipes = [...(input.snapshot?.recipes ?? []), ...(input.recipes ?? [])].filter(
+    (recipe) => recipe.status === "active",
+  );
   const sourceRefs = [...(input.snapshot?.sourceRefs ?? []), ...(input.sourceRefs ?? [])];
   const documents = new Map<string, MainlineSearchDocument>();
 
+  // 中文注释：默认搜索投影只发布 active Recipe；candidate 只能通过 lifecycle/list 审核面查看。
   for (const recipe of recipes) {
     documents.set(`recipe:${recipe.id}`, projectRecipeSearchDocument(recipe));
   }

@@ -371,9 +371,11 @@ describe("Codex public search and structure tools", () => {
       projectRoot: workspace.projectRoot,
       limit: 5,
     });
-    expect((before.data as { readonly hits: ReadonlyArray<{ readonly id: string }> }).hits).toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: "recipe:public-lifecycle-reject" })]),
-    );
+    expect(
+      (before.data as { readonly hits: ReadonlyArray<{ readonly id: string }> }).hits.map(
+        (hit) => hit.id,
+      ),
+    ).not.toContain("recipe:public-lifecycle-reject");
 
     const result = await handleCodexTool("alembic_knowledge", {
       operation: "reject",

@@ -38,10 +38,13 @@ describe("mainline search index", () => {
         recipes: [
           {
             id: "recipe-1",
+            kind: "workflow",
+            status: "active",
             sourceRefIds: ["src/runtime.ts"],
             title: "Runtime prime",
             summary: "Load ContextIndex before Codex work.",
             tags: ["runtime", "prime"],
+            confidence: 0.8,
           },
         ],
         edges: [],

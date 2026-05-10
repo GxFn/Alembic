@@ -72,6 +72,7 @@ describe("Codex daemon HTTP client", () => {
     const job = makeJob("bootstrap_123", "bootstrap");
     const jobWithInput = { ...job, input: { force: true } };
     const fetchMock = stubFetch((url, init) => {
+      expect(new Headers(init?.headers).get("x-alembic-daemon-token")).toBe("test-token");
       if (url.endsWith("/api/v1/jobs/bootstrap")) {
         expect(init?.method).toBe("POST");
         expect(init?.body).toBe(JSON.stringify({ force: true }));

@@ -92,7 +92,7 @@ describe("submitCodexKnowledge", () => {
       relativePath: staged?.file?.relativePath,
       contentHash: staged?.file?.contentHash,
     });
-    expect(searchDoc).toMatchObject({ id: `recipe:${candidateId}`, kind: "recipe" });
+    expect(searchDoc).toBeUndefined();
   });
 
   it("rejects invalid submissions without writing candidate files", async () => {

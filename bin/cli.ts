@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { runCodexKnowledge } from "../lib/codex/knowledge.js";
 import { readPackageInfo } from "../lib/codex/package-info.js";
 import { buildDiagnostics, buildStatus } from "../lib/codex/tools.js";
 import { initializeCodexWorkspace, inspectWorkspace } from "../lib/codex/workspace.js";
-import { DaemonSupervisor, JsonDaemonJobStore } from "../lib/daemon/index.js";
+import { type DaemonJob, DaemonSupervisor, JsonDaemonJobStore } from "../lib/daemon/index.js";
 
 const packageInfo = readPackageInfo();
 const program = new Command();
@@ -84,7 +85,8 @@ job
   .option("--json", "Print JSON output")
   .action(async (options: { json?: boolean }) => {
     const workspace = inspectWorkspace();
-    printResult({ jobs: await new JsonDaemonJobStore(workspace.dataRoot).list() }, options.json);
+    const jobs = await new JsonDaemonJobStore(workspace.dataRoot).list();
+    printResult({ jobs, progress: jobs.map(summarizeJobProgress) }, options.json);
   });
 
 job
@@ -93,7 +95,8 @@ job
   .option("--json", "Print JSON output")
   .action(async (id: string, options: { json?: boolean }) => {
     const workspace = inspectWorkspace();
-    printResult({ job: await new JsonDaemonJobStore(workspace.dataRoot).get(id) }, options.json);
+    const job = await new JsonDaemonJobStore(workspace.dataRoot).get(id);
+    printResult({ job, progress: job ? summarizeJobProgress(job) : undefined }, options.json);
   });
 
 job
@@ -102,8 +105,79 @@ job
   .option("--json", "Print JSON output")
   .action(async (id: string, options: { json?: boolean }) => {
     const workspace = inspectWorkspace();
-    printResult({ job: await new JsonDaemonJobStore(workspace.dataRoot).cancel(id) }, options.json);
+    const job = await new JsonDaemonJobStore(workspace.dataRoot).cancel(id);
+    printResult({ job, progress: summarizeJobProgress(job) }, options.json);
   });
+
+const knowledge = program
+  .command("knowledge")
+  .description("Review Alembic Recipe lifecycle records");
+
+knowledge
+  .command("list")
+  .description("List Recipe lifecycle records. Defaults to active Recipes.")
+  .option("--status <status>", "candidate, active, rejected, or all")
+  .option("--limit <number>", "Maximum records to print")
+  .option("--project-root <path>", "Explicit project root")
+  .option("--json", "Print JSON output")
+  .action(
+    async (options: { json?: boolean; limit?: string; projectRoot?: string; status?: string }) => {
+      printResult(
+        await runCodexKnowledge({
+          operation: "list",
+          ...(options.status ? { status: options.status } : {}),
+          ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
+          ...(options.limit ? { limit: Number.parseInt(options.limit, 10) } : {}),
+        }),
+        options.json,
+      );
+    },
+  );
+
+knowledge
+  .command("publish <id>")
+  .description("Publish a candidate Recipe into the active lifecycle")
+  .option("--reviewer <name>", "Reviewer name for lifecycle metadata")
+  .option("--project-root <path>", "Explicit project root")
+  .option("--json", "Print JSON output")
+  .action(
+    async (id: string, options: { json?: boolean; projectRoot?: string; reviewer?: string }) => {
+      printResult(
+        await runCodexKnowledge({
+          operation: "publish",
+          id,
+          ...(options.reviewer ? { reviewer: options.reviewer } : {}),
+          ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
+        }),
+        options.json,
+      );
+    },
+  );
+
+knowledge
+  .command("reject <id>")
+  .description("Reject a candidate Recipe without publishing it")
+  .option("--reason <text>", "Review reason")
+  .option("--reviewer <name>", "Reviewer name for lifecycle metadata")
+  .option("--project-root <path>", "Explicit project root")
+  .option("--json", "Print JSON output")
+  .action(
+    async (
+      id: string,
+      options: { json?: boolean; projectRoot?: string; reason?: string; reviewer?: string },
+    ) => {
+      printResult(
+        await runCodexKnowledge({
+          operation: "reject",
+          id,
+          ...(options.reason ? { reason: options.reason } : {}),
+          ...(options.reviewer ? { reviewer: options.reviewer } : {}),
+          ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
+        }),
+        options.json,
+      );
+    },
+  );
 
 program.parse();
 
@@ -113,4 +187,17 @@ function printResult(result: unknown, json?: boolean): void {
     return;
   }
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+}
+
+function summarizeJobProgress(job: DaemonJob): Record<string, unknown> {
+  return {
+    id: job.id,
+    kind: job.kind,
+    status: job.status,
+    phase: job.progress?.phase ?? job.status,
+    percent: job.progress?.percent ?? null,
+    message: job.progress?.message ?? null,
+    stepCount: job.progress?.steps?.length ?? 0,
+    updatedAt: job.progress?.updatedAt ?? job.updatedAt,
+  };
 }

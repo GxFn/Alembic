@@ -68,6 +68,11 @@ async function handleRequest(
   const url = new URL(request.url ?? "/", daemonBaseUrl(state));
   const method = request.method ?? "GET";
 
+  if (!isAuthorizedDaemonRequestHeaders(request.headers, state.token)) {
+    writeJson(response, 401, { success: false, error: { message: "Unauthorized daemon request" } });
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/api/v1/daemon/health") {
     writeJson(response, 200, { success: true, data: { ...state, mode: "daemon" } });
     return;
@@ -152,4 +157,20 @@ function listeningPort(server: http.Server): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function isAuthorizedDaemonRequestHeaders(
+  headers: http.IncomingHttpHeaders,
+  expectedToken: string,
+): boolean {
+  const headerToken = firstHeaderValue(headers["x-alembic-daemon-token"]);
+  if (headerToken === expectedToken) {
+    return true;
+  }
+  const authorization = firstHeaderValue(headers.authorization);
+  return authorization === `Bearer ${expectedToken}`;
+}
+
+function firstHeaderValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }

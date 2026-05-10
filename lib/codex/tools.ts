@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { DaemonJob } from "../daemon/index.js";
 import {
   cancelCodexDaemonJob,
   enqueueCodexDaemonJob,
@@ -595,7 +596,8 @@ async function handleCodexJobTool(args: Record<string, unknown>): Promise<ToolRe
     };
   }
   if (action === "list") {
-    return { success: true, data: await listCodexDaemonJobs() };
+    const jobs = await listCodexDaemonJobs();
+    return { success: true, data: { jobs, progress: jobs.map(summarizeDaemonJobProgress) } };
   }
 
   const id = stringValue(args.id);
@@ -608,16 +610,31 @@ async function handleCodexJobTool(args: Record<string, unknown>): Promise<ToolRe
   }
 
   if (action === "status") {
-    return { success: true, data: await getCodexDaemonJob(id) };
+    const job = await getCodexDaemonJob(id);
+    return { success: true, data: { job, progress: summarizeDaemonJobProgress(job) } };
   }
   if (action === "cancel") {
+    const job = await cancelCodexDaemonJob(id);
     return {
       success: true,
       message: "Alembic job cancelled.",
-      data: await cancelCodexDaemonJob(id),
+      data: { job, progress: summarizeDaemonJobProgress(job) },
     };
   }
   return { success: false, message: `Unsupported job action: ${action}` };
+}
+
+function summarizeDaemonJobProgress(job: DaemonJob): Record<string, unknown> {
+  return {
+    id: job.id,
+    kind: job.kind,
+    status: job.status,
+    phase: job.progress?.phase ?? job.status,
+    percent: job.progress?.percent ?? null,
+    message: job.progress?.message ?? null,
+    stepCount: job.progress?.steps?.length ?? 0,
+    updatedAt: job.progress?.updatedAt ?? job.updatedAt,
+  };
 }
 
 function buildWorkflowJobInput(args: Record<string, unknown>): Record<string, unknown> {

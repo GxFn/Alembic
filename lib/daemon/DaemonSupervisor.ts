@@ -230,7 +230,9 @@ function statusResult(
 
 async function fetchHealth(state: DaemonState): Promise<Record<string, unknown> | undefined> {
   try {
-    const response = await fetch(`${daemonBaseUrl(state)}/api/v1/daemon/health`);
+    const response = await fetch(`${daemonBaseUrl(state)}/api/v1/daemon/health`, {
+      headers: { "x-alembic-daemon-token": state.token },
+    });
     return response.ok ? ((await response.json()) as Record<string, unknown>) : undefined;
   } catch {
     return undefined;

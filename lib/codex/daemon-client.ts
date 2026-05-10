@@ -82,7 +82,10 @@ async function requestCodexDaemon<T>(
   }
 
   // MCP stdio 只负责排队/查询，bootstrap/rescan 这类长任务交给 daemon 在后台执行。
-  const response = await fetch(`${daemonBaseUrl(status.state)}${pathname}`, init);
+  const response = await fetch(
+    `${daemonBaseUrl(status.state)}${pathname}`,
+    withDaemonToken(init, status.state.token),
+  );
   const envelope = await readDaemonEnvelope<T>(response);
   if (!response.ok) {
     throw new Error(envelope.error?.message ?? `Alembic daemon HTTP ${response.status}`);
@@ -92,6 +95,12 @@ async function requestCodexDaemon<T>(
   }
 
   return envelope.data;
+}
+
+function withDaemonToken(init: RequestInit, token: string): RequestInit {
+  const headers = new Headers(init.headers);
+  headers.set("x-alembic-daemon-token", token);
+  return { ...init, headers };
 }
 
 async function readDaemonEnvelope<T>(response: Response): Promise<DaemonEnvelope<T>> {
