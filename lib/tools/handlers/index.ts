@@ -1,4 +1,5 @@
 import type { ToolHandler, ToolName } from "../types.js";
+import { codeGuardHandler } from "./code.js";
 import { graphQueryHandler } from "./graph.js";
 import { knowledgeSearchHandler } from "./knowledge.js";
 import { metaCapabilitiesHandler } from "./meta.js";
@@ -6,6 +7,7 @@ import { terminalExecuteHandler } from "./terminal.js";
 import { unavailableToolHandler } from "./unavailable.js";
 
 export {
+  codeGuardHandler,
   graphQueryHandler,
   knowledgeSearchHandler,
   metaCapabilitiesHandler,
@@ -16,6 +18,7 @@ export {
 export function createDefaultToolHandlers(): ReadonlyMap<ToolName, ToolHandler> {
   return new Map<ToolName, ToolHandler>([
     ["code.query", unavailableToolHandler],
+    ["code.guard", codeGuardHandler],
     ["terminal.execute", terminalExecuteHandler],
     ["knowledge.search", knowledgeSearchHandler],
     ["graph.query", graphQueryHandler],

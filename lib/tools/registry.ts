@@ -31,6 +31,48 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     metadata: { stable: true },
   },
   {
+    name: "code.guard",
+    resource: "code",
+    action: "guard",
+    title: "Code Guard",
+    description: "Checks supplied code files against mainline guard-rule Recipes.",
+    availability: { status: "available" },
+    inputSchema: {
+      type: "object",
+      properties: {
+        files: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              path: { type: "string" },
+              content: { type: "string" },
+              language: { type: "string" },
+              isTest: { type: "boolean" },
+            },
+            required: ["path", "content"],
+            additionalProperties: false,
+          },
+        },
+        maxFindings: { type: "integer", minimum: 1, maximum: 1000, default: 200 },
+        maxFindingsPerRule: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+      },
+      required: ["files"],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        summary: { type: "object" },
+        findings: { type: "array", items: { type: "object" } },
+        warnings: { type: "array", items: { type: "string" } },
+      },
+      required: ["summary", "findings", "warnings"],
+      additionalProperties: false,
+    },
+    metadata: { port: "MainlineGuardRuleProvider" },
+  },
+  {
     name: "terminal.execute",
     resource: "terminal",
     action: "execute",

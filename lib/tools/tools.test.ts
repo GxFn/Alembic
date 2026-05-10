@@ -12,6 +12,7 @@ describe("new tools registry and router", () => {
 
     expect(registry.list().map((tool) => tool.name)).toEqual([
       "code.query",
+      "code.guard",
       "terminal.execute",
       "knowledge.search",
       "graph.query",
@@ -39,12 +40,64 @@ describe("new tools registry and router", () => {
     expect(data.resources).toEqual(["code", "graph", "knowledge", "memory", "meta", "terminal"]);
     expect(data.tools.map((tool) => tool.name)).toEqual([
       "code.query",
+      "code.guard",
       "terminal.execute",
       "knowledge.search",
       "graph.query",
       "memory.query",
       "meta.capabilities",
     ]);
+  });
+});
+
+describe("code.guard", () => {
+  it("checks supplied files against injected mainline guard rules", async () => {
+    const result = await new ToolRouter({
+      dependencies: {
+        guardRules: [
+          {
+            id: "no-console-log",
+            ruleRecipeId: "guard-no-console-log",
+            pattern: "console\\.log\\s*\\(",
+            message: "不要在生产代码中保留 console.log。",
+            severity: "warning",
+            languages: ["typescript"],
+            skipComments: true,
+          },
+        ],
+      },
+    }).invoke({
+      name: "code.guard",
+      input: {
+        files: [
+          {
+            path: "src/app.ts",
+            content: ["// console.log('comment')", "console.log('debug');"].join("\n"),
+          },
+        ],
+      },
+    });
+
+    expectOk(result);
+    const data = result.data as {
+      readonly summary: { readonly findings: number; readonly warnings: number };
+      readonly findings: ReadonlyArray<{ readonly ruleId: string; readonly line: number }>;
+    };
+    expect(data.summary).toMatchObject({ findings: 1, warnings: 1 });
+    expect(data.findings[0]).toMatchObject({ ruleId: "no-console-log", line: 2 });
+  });
+
+  it("requires a mainline guard rule dependency", async () => {
+    const result = await new ToolRouter().invoke({
+      name: "code.guard",
+      input: {
+        files: [{ path: "src/app.ts", content: "console.log('debug');" }],
+      },
+    });
+
+    expectFailure(result);
+    expect(result.status).toBe("unavailable");
+    expect(result.error.code).toBe("guard_rules_unavailable");
   });
 });
 

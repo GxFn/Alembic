@@ -1,3 +1,8 @@
+import type {
+  MainlineGuardRule,
+  MainlineGuardRuleLoadResult,
+  MainlineGuardRuleProvider,
+} from "../guard/index.js";
 import type { ContextIndexReader } from "../mainline/data/index.js";
 import type {
   MainlineProjectIntelligenceArtifact,
@@ -10,6 +15,7 @@ export type ToolResource = "code" | "terminal" | "knowledge" | "graph" | "memory
 
 export type ToolName =
   | "code.query"
+  | "code.guard"
   | "terminal.execute"
   | "knowledge.search"
   | "graph.query"
@@ -128,6 +134,10 @@ export interface ProjectIntelligenceArtifactProvider {
 export interface ToolRuntimeDependencies {
   readonly searchIndex?: MainlineSearchIndex;
   readonly contextIndex?: ContextIndexReader;
+  readonly guardRules?: readonly MainlineGuardRule[];
+  readonly guardRuleProvider?:
+    | MainlineGuardRuleProvider
+    | (() => Promise<readonly MainlineGuardRule[] | MainlineGuardRuleLoadResult>);
   readonly projectIntelligenceQueries?: MainlineProjectIntelligenceQueries;
   readonly projectIntelligenceArtifactProvider?:
     | ProjectIntelligenceArtifactProvider
