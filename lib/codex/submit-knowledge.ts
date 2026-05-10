@@ -7,7 +7,6 @@ import {
   RecipeSubmissionPolicy,
   type SourceRef,
 } from "../mainline/knowledge/index.js";
-import { projectMainlineSearchDocuments } from "../mainline/search/index.js";
 import { createMainlineWorkflowPersistence } from "../workflows/mainline/MainlineWorkflowPersistence.js";
 import { inspectWorkspace } from "./workspace.js";
 
@@ -144,24 +143,6 @@ export async function submitCodexKnowledge(
       if (!file) {
         throw new Error(`RecipeLifecycleStore did not return a candidate file for ${record.id}.`);
       }
-
-      await persistence.contextIndex.upsertContextArtifacts({
-        recipes: [record.recipe],
-        sourceRefs,
-        recipeFiles: [
-          {
-            recipeId: file.recipeId,
-            bucket: file.bucket,
-            relativePath: file.relativePath,
-            contentHash: file.contentHash,
-            updatedAt,
-          },
-        ],
-      });
-      persistence.searchIndex.upsert(
-        projectMainlineSearchDocuments({ recipes: [record.recipe], sourceRefs }),
-      );
-      await persistence.searchIndex.flush();
 
       results.push({
         index,

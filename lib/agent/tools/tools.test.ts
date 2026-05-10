@@ -26,6 +26,9 @@ const EXPECTED_TOOLS = [
   "knowledge.detail",
   "knowledge.submit",
   "knowledge.manage",
+  "runtime.inject_context",
+  "runtime.guard_finding",
+  "runtime.source_ref_repair",
   "graph.overview",
   "graph.query",
   "memory.save",
@@ -70,7 +73,15 @@ describe("new tools registry and router", () => {
       readonly tools: ReadonlyArray<{ readonly name: string }>;
     };
     expect(data.compatibility).toBe("no-legacy-v1-v2");
-    expect(data.resources).toEqual(["code", "graph", "knowledge", "memory", "meta", "terminal"]);
+    expect(data.resources).toEqual([
+      "code",
+      "graph",
+      "knowledge",
+      "memory",
+      "meta",
+      "runtime",
+      "terminal",
+    ]);
     expect(data.tools.map((tool) => tool.name)).toEqual(EXPECTED_TOOLS);
   });
 
@@ -440,9 +451,19 @@ describe("code.guard", () => {
     const data = result.data as {
       readonly summary: { readonly findings: number; readonly warnings: number };
       readonly findings: ReadonlyArray<{ readonly ruleId: string; readonly line: number }>;
+      readonly runtimeFindings: ReadonlyArray<{
+        readonly ruleRecipeId: string;
+        readonly captureDraft?: unknown;
+        readonly rescanRequest?: unknown;
+      }>;
     };
     expect(data.summary).toMatchObject({ findings: 1, warnings: 1 });
     expect(data.findings[0]).toMatchObject({ ruleId: "no-console-log", line: 2 });
+    expect(data.runtimeFindings[0]).toMatchObject({
+      ruleRecipeId: "guard-no-console-log",
+      captureDraft: expect.any(Object),
+      rescanRequest: expect.any(Object),
+    });
   });
 
   it("requires a mainline guard rule dependency", async () => {
@@ -552,6 +573,88 @@ describe("knowledge.search and knowledge.detail", () => {
     const detail = await router.invoke({ name: "knowledge.detail", input: { id: "ghost-init" } });
     expectOk(detail);
     expect((detail.data as { recipe: { id: string } }).recipe.id).toBe("ghost-init");
+  });
+});
+
+describe("runtime tools", () => {
+  it("injects compiled runtime context and builds guard/repair runtime reports", async () => {
+    const searchIndex = new InMemoryMainlineSearchIndex();
+    searchIndex.upsert([
+      {
+        id: "recipe:runtime-prime",
+        kind: "recipe",
+        title: "Runtime prime",
+        body: "Use compiled ContextIndex and SearchIndex before agent work.",
+        path: "src/runtime.ts",
+        metadata: { trigger: "runtime prime" },
+      },
+    ]);
+    const contextIndex = new InMemoryContextIndex();
+    await contextIndex.upsertContextArtifacts({
+      recipes: [
+        createRecipe({
+          id: "runtime-prime",
+          title: "Runtime prime",
+          status: "active",
+          summary: "Prime agent context from compiled runtime artifacts.",
+          sourceRefIds: ["src/runtime.ts"],
+          tags: ["runtime"],
+        }),
+      ],
+      sourceRefs: [
+        createSourceRef({
+          id: "src/runtime.ts",
+          path: "src/runtime.ts",
+          status: "active",
+        }),
+      ],
+    });
+    const router = new ToolRouter({
+      dependencies: {
+        projectRoot: "/project",
+        contextIndex,
+        searchIndex,
+        sourceRefRepairIndex: contextIndex,
+      },
+    });
+
+    const injected = await router.invoke({
+      name: "runtime.inject_context",
+      input: { taskText: "runtime prime", activeFile: "src/runtime.ts" },
+    });
+    expectOk(injected);
+    expect((injected.data as { readonly recipeIds: readonly string[] }).recipeIds).toContain(
+      "runtime-prime",
+    );
+    expect((injected.data as { readonly markdown: string }).markdown).toContain("Runtime prime");
+
+    const finding = await router.invoke({
+      name: "runtime.guard_finding",
+      input: {
+        rule: {
+          recipeId: "runtime-prime",
+          message: "Runtime prime must be used",
+          sourceRefIds: ["src/runtime.ts"],
+        },
+        risk: { message: "Agent started without runtime prime." },
+        location: { file: "src/runtime.ts", line: 1 },
+        feedback: { capture: {}, rescan: {} },
+      },
+    });
+    expectOk(finding);
+    expect(finding.data).toMatchObject({
+      evidenceCount: 1,
+      hasCaptureDraft: true,
+      hasRescanRequest: true,
+      finding: { ruleRecipeId: "runtime-prime", file: "src/runtime.ts", line: 1 },
+    });
+
+    const repair = await router.invoke({
+      name: "runtime.source_ref_repair",
+      input: { apply: false, includeProjectIntelligence: false },
+    });
+    expectOk(repair);
+    expect(repair.data).toMatchObject({ mode: "report" });
   });
 });
 

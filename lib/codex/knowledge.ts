@@ -1,3 +1,4 @@
+import { sourceRefsFromRecipe } from "../mainline/compile/index.js";
 import type { RecipeMarkdownFileIndex } from "../mainline/data/index.js";
 import {
   type RecipeLifecycleRecord,
@@ -122,12 +123,14 @@ export async function runCodexKnowledge(
         const record = await lifecycle.publish(parsed.input.recipeId ?? "", {
           ...(parsed.input.publishedBy ? { publishedBy: parsed.input.publishedBy } : {}),
         });
+        const sourceRefs = sourceRefsFromRecipe(record.recipe, "codex-knowledge-publish");
         await persistence.contextIndex.upsertContextArtifacts({
           recipes: [record.recipe],
+          sourceRefs,
           recipeFiles: recipeFilesFromRecord(record),
         });
         persistence.searchIndex.upsert(
-          projectMainlineSearchDocuments({ recipes: [record.recipe] }),
+          projectMainlineSearchDocuments({ recipes: [record.recipe], sourceRefs }),
         );
         await persistence.searchIndex.flush();
 

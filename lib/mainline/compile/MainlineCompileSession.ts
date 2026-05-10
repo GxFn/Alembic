@@ -45,9 +45,12 @@ import {
   type MainlineSearchIndex,
   type MainlineSearchIndexSnapshot,
   MainlineSearchIndexStore,
-  projectMainlineSearchDocuments,
 } from "../search/index.js";
 import { CompileArtifactWriter } from "./CompileArtifactWriter.js";
+import {
+  type MainlineCompileSearchMaterializeResult,
+  MainlineCompileSearchMaterializer,
+} from "./CompileSearchMaterializer.js";
 import type { ContentMiningPipelineArtifacts } from "./ContentMiningPipeline.js";
 import { ContentMiningRunner } from "./ContentMiningRunner.js";
 import {
@@ -63,6 +66,10 @@ import {
   type MainlineProjectPanoramaSummary,
   summarizeMainlineProjectPanorama,
 } from "./ProjectPanoramaSummary.js";
+import {
+  linkMainlineRecipeEvidence,
+  type MainlineRecipeEvidenceLinkReport,
+} from "./RecipeEvidenceLinker.js";
 import { RecipeImpactAnalyzer } from "./RecipeImpactAnalyzer.js";
 import {
   createEmptyMainlineRecipeImpactPlan,
@@ -104,11 +111,16 @@ export interface MainlineCompileSessionRequest {
 }
 
 export interface MainlineCompileSessionSearchReport {
+  readonly upserted: number;
+  readonly removed: number;
+  readonly embedded: number;
+  readonly embeddingFailures: number;
   readonly restoredDocuments: number;
   readonly persistedDocuments: number;
   readonly projectDocumentsUpserted: number;
   readonly projectDocumentsRemoved: number;
   readonly contentDocumentsUpserted: number;
+  readonly contentDocumentsRemoved: number;
 }
 
 export interface MainlineCompileSessionRecipeMarkdownReport {
@@ -170,6 +182,7 @@ export interface MainlineCompileSessionResult {
   readonly projectIntelligence: MainlineProjectIntelligenceRunnerResult;
   readonly projectPanorama: MainlineProjectPanoramaSummary;
   readonly contentMining: ContentMiningPipelineArtifacts;
+  readonly recipeEvidence: MainlineRecipeEvidenceLinkReport;
   readonly sourceRefRepair: MainlineSourceRefRepairPlan;
   readonly recipeImpact: MainlineRecipeImpactPlan;
   readonly recipeMarkdown: MainlineCompileSessionRecipeMarkdownReport;
@@ -196,6 +209,7 @@ export interface MainlineCompileSessionDependencies {
   readonly recipeImpactAnalyzer?: RecipeImpactAnalyzer;
   readonly sourceRefRepairService?: SourceRefRepairService;
   readonly recipeMarkdownStore?: RecipeMarkdownStore;
+  readonly searchMaterializer?: MainlineCompileSearchMaterializer;
   readonly jobLedger?: MainlineJobLedgerPort;
 }
 
@@ -225,6 +239,7 @@ interface MainlineCompileSessionRuntime {
   readonly recipeImpactAnalyzer: RecipeImpactAnalyzer;
   readonly sourceRefRepairService: SourceRefRepairService;
   readonly recipeMarkdownStore: RecipeMarkdownStore;
+  readonly searchMaterializer: MainlineCompileSearchMaterializer;
   readonly jobLedger: MainlineJobLedgerPort;
 }
 
@@ -412,6 +427,11 @@ export class MainlineCompileSession {
       ...(projectIntelligence.materialized?.sourceRefs ?? []),
       ...(projectIntelligence.materialized?.staleSourceRefs ?? []),
     ];
+    const recipeEvidence = linkMainlineRecipeEvidence({
+      recipes: contentMining.recipes,
+      projectIntelligence: projectIntelligence.artifact,
+      sourceRefs: compiledSourceRefs,
+    });
     reachCancelCheckpoint(cancelCheckpoints, "pre-source-ref-repair");
     const sourceRefRepair =
       request.mode === "incremental"
@@ -450,11 +470,10 @@ export class MainlineCompileSession {
           })
         : createEmptyMainlineRecipeImpactPlan();
     markProgress(progressCheckpoints, "recipe-impact", "completed");
-    const contentSearchDocuments = projectMainlineSearchDocuments({
+    const contentSearch = await runtime.searchMaterializer.materialize({
       recipes: contentMining.recipes,
       sourceRefs: contentMining.sourceRefs,
     });
-    runtime.searchIndex.upsert(contentSearchDocuments);
     const persistedSearchSnapshot = await runtime.searchIndexStore.saveDocuments(
       runtime.searchIndex.snapshot(),
     );
@@ -475,13 +494,13 @@ export class MainlineCompileSession {
       projectIntelligence,
       projectPanorama,
       contentMining,
+      recipeEvidence,
       sourceRefRepair,
       recipeImpact,
       recipeMarkdown: recipeMarkdownReport(loadedRecipeMarkdown, recipeMarkdownWrites),
-      search: searchReport(projectIntelligence, {
+      search: searchReport(projectIntelligence, contentSearch, {
         restoredDocuments: restoredSearchDocuments,
         persistedSnapshot: persistedSearchSnapshot,
-        contentDocumentsUpserted: contentSearchDocuments.length,
       }),
       progress: { checkpoints: progressCheckpoints },
       cancel: compileCancelReport(cancelCheckpoints),
@@ -558,6 +577,11 @@ export class MainlineCompileSession {
     const recipeMarkdownStore =
       this.#dependencies.recipeMarkdownStore ??
       new RecipeMarkdownStore(writeBoundary, { fileStore });
+    const searchMaterializer =
+      this.#dependencies.searchMaterializer ??
+      new MainlineCompileSearchMaterializer({
+        searchIndex,
+      });
     const jobLedger = this.#dependencies.jobLedger ?? new InMemoryMainlineJobLedger();
 
     return {
@@ -576,6 +600,7 @@ export class MainlineCompileSession {
       recipeImpactAnalyzer,
       sourceRefRepairService,
       recipeMarkdownStore,
+      searchMaterializer,
       jobLedger,
     };
   }
@@ -708,18 +733,27 @@ async function restoreSearchIndex(
 
 function searchReport(
   projectIntelligence: MainlineProjectIntelligenceRunnerResult,
+  contentSearch: MainlineCompileSearchMaterializeResult,
   input: {
     readonly restoredDocuments: number;
     readonly persistedSnapshot: MainlineSearchIndexSnapshot;
-    readonly contentDocumentsUpserted: number;
   },
 ): MainlineCompileSessionSearchReport {
+  const projectDocumentsUpserted = projectIntelligence.materialized?.searchDocuments.length ?? 0;
+  const projectDocumentsRemoved =
+    projectIntelligence.materialized?.removedSearchDocumentIds.length ?? 0;
+
   return {
+    upserted: projectDocumentsUpserted + contentSearch.upserted,
+    removed: projectDocumentsRemoved + contentSearch.removed,
+    embedded: contentSearch.embedded,
+    embeddingFailures: contentSearch.embeddingFailures.length,
     restoredDocuments: input.restoredDocuments,
     persistedDocuments: input.persistedSnapshot.documents.length,
-    projectDocumentsUpserted: projectIntelligence.materialized?.searchDocuments.length ?? 0,
-    projectDocumentsRemoved: projectIntelligence.materialized?.removedSearchDocumentIds.length ?? 0,
-    contentDocumentsUpserted: input.contentDocumentsUpserted,
+    projectDocumentsUpserted,
+    projectDocumentsRemoved,
+    contentDocumentsUpserted: contentSearch.upserted,
+    contentDocumentsRemoved: contentSearch.removed,
   };
 }
 
@@ -836,6 +870,7 @@ function compileSessionJobResult(result: Omit<MainlineCompileSessionResult, "job
       recipeCount: result.contentMining.recipes.length,
       edgeCount: result.contentMining.edges.length,
     },
+    recipeEvidence: result.recipeEvidence.summary,
     sourceRefRepair: result.sourceRefRepair.summary,
     recipeImpact: result.recipeImpact.summary,
     recipeMarkdown: result.recipeMarkdown,

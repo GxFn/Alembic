@@ -13,6 +13,7 @@ import {
   type MainlineSourceSymbol,
   StructuralMainlineAstParser,
 } from "../../../mainline/code/index.js";
+import { GuardFindingBuilder } from "../../../mainline/runtime/index.js";
 import type { ToolHandler, ToolRuntimeDependencies } from "../types.js";
 import { isRecord, toolFailure, toolSuccess } from "../types.js";
 
@@ -321,13 +322,59 @@ export const codeGuardHandler: ToolHandler = async (invocation, context) => {
         : {}),
     },
   });
+  const runtimeFindings = buildRuntimeGuardFindings(result.findings, loaded.rules);
 
   return toolSuccess(context.descriptor, {
     summary: result.summary,
     findings: result.findings,
+    runtimeFindings,
     warnings: [...loaded.warnings, ...result.warnings],
   });
 };
+
+function buildRuntimeGuardFindings(
+  findings: ReturnType<MainlineGuardCheckEngine["check"]>["findings"],
+  rules: readonly MainlineGuardRule[],
+) {
+  const ruleById = new Map(rules.map((rule) => [rule.id, rule]));
+  const builder = new GuardFindingBuilder();
+  return findings.map((finding) => {
+    const rule = ruleById.get(finding.ruleId);
+    return builder.build({
+      rule: {
+        recipeId: finding.ruleRecipeId,
+        message: rule?.message ?? finding.message,
+        severity: rule?.severity ?? finding.severity,
+        ...(rule?.fixSuggestion ? { suggestedFix: rule.fixSuggestion } : {}),
+      },
+      risk: {
+        message: finding.snippet ? `${finding.message}: ${finding.snippet}` : finding.message,
+        severity: finding.severity,
+        ...(finding.suggestedFix ? { suggestedFix: finding.suggestedFix } : {}),
+      },
+      location: {
+        ...(finding.file ? { file: finding.file } : {}),
+        ...(finding.line === undefined ? {} : { line: finding.line }),
+      },
+      feedback: {
+        capture: {
+          title: `Guard finding for ${finding.ruleRecipeId}`,
+          body: finding.message,
+        },
+        rescan: {
+          reason: `Refresh focused evidence for ${finding.ruleRecipeId}`,
+        },
+      },
+      metadata: {
+        source: "code.guard",
+        ruleId: finding.ruleId,
+        language: finding.language,
+        column: finding.column,
+        category: finding.category,
+      },
+    });
+  });
+}
 
 async function loadGuardRules(
   dependencies: ToolRuntimeDependencies,

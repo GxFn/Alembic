@@ -85,13 +85,8 @@ describe("submitCodexKnowledge", () => {
       .snapshot()
       .find((document) => document.id === `recipe:${candidateId}`);
 
-    expect(indexedRecipe).toMatchObject({ id: candidateId, status: "candidate" });
-    expect(indexedFile).toMatchObject({
-      recipeId: candidateId,
-      bucket: "candidates",
-      relativePath: staged?.file?.relativePath,
-      contentHash: staged?.file?.contentHash,
-    });
+    expect(indexedRecipe).toBeUndefined();
+    expect(indexedFile).toBeUndefined();
     expect(searchDoc).toBeUndefined();
   });
 
@@ -150,7 +145,7 @@ function validKnowledgeItem(): Record<string, unknown> {
     content: {
       markdown,
       rationale:
-        "Codex submissions need a review-only storage path that still refreshes runtime indexes.",
+        "Codex submissions need a review-only storage path before publish refreshes runtime indexes.",
     },
     knowledgeType: "code-pattern",
     language: "typescript",

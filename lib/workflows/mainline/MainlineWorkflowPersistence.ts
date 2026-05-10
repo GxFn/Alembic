@@ -5,6 +5,7 @@ import {
   MAINLINE_PROJECT_INTELLIGENCE_ARTIFACT_STORE_PATH,
   MainlineCompileSession,
   type MainlineProjectIntelligenceArtifactStore,
+  sourceRefsFromRecipe,
 } from "../../mainline/compile/index.js";
 import {
   MainlineAtomicFileStore as CoreMainlineAtomicFileStore,
@@ -26,6 +27,7 @@ import {
   type RecipeLifecycleRecord,
   RecipeLifecycleStore,
   type RecipeLifecycleStorePort,
+  RecipeMarkdownStore,
 } from "../../mainline/knowledge/index.js";
 import {
   type InMemoryMainlineSearchIndex,
@@ -34,7 +36,7 @@ import {
   type MainlineSearchIndex,
   MainlineSearchIndexStore,
   type MainlineSearchQuery,
-  projectRecipeSearchDocument,
+  projectMainlineSearchDocuments,
 } from "../../mainline/search/index.js";
 import { ScanLifecycleRunner } from "../scan/ScanLifecycleRunner.js";
 import type {
@@ -113,6 +115,7 @@ export async function createMainlineWorkflowPersistence(
     contextIndex,
     searchIndex,
   );
+  const recipeMarkdownStore = new RecipeMarkdownStore(writeBoundary, { fileStore: coreFileStore });
   const persistence = new DataRootWorkflowSnapshotPersistence(
     contextIndex,
     searchIndex,
@@ -131,6 +134,7 @@ export async function createMainlineWorkflowPersistence(
     searchIndex,
     searchIndexStore,
     artifactStore,
+    recipeMarkdownStore,
   });
   const now = input.now;
   const lifecycleRunner = new ScanLifecycleRunner({
@@ -146,6 +150,8 @@ export async function createMainlineWorkflowPersistence(
     searchIndex,
     artifactStore,
     knowledgeLifecycleStore,
+    sourceRefRepairIndex: contextIndex,
+    sourceRefRepairMarkdownStore: recipeMarkdownStore,
     ...(input.now === undefined ? {} : { now: input.now }),
   });
 
@@ -182,6 +188,8 @@ export function createMainlineAgentToolDependencies(input: {
   readonly searchIndex: PersistentMainlineSearchIndex;
   readonly artifactStore: MainlineProjectIntelligenceArtifactStore;
   readonly knowledgeLifecycleStore: RecipeLifecycleStorePort;
+  readonly sourceRefRepairIndex?: PersistentMainlineContextIndex;
+  readonly sourceRefRepairMarkdownStore?: RecipeMarkdownStore;
   readonly now?: () => number;
 }): ToolRuntimeDependencies {
   return {
@@ -190,6 +198,12 @@ export function createMainlineAgentToolDependencies(input: {
     searchIndex: input.searchIndex,
     projectIntelligenceArtifactProvider: input.artifactStore,
     knowledgeLifecycleStore: input.knowledgeLifecycleStore,
+    ...(input.sourceRefRepairIndex === undefined
+      ? {}
+      : { sourceRefRepairIndex: input.sourceRefRepairIndex }),
+    ...(input.sourceRefRepairMarkdownStore === undefined
+      ? {}
+      : { sourceRefRepairMarkdownStore: input.sourceRefRepairMarkdownStore }),
     ...(input.now === undefined ? {} : { now: input.now }),
   };
 }
@@ -359,8 +373,27 @@ class IndexingRecipeLifecycleStore implements RecipeLifecycleStorePort {
   }
 
   async #indexRecord(record: RecipeLifecycleRecord): Promise<void> {
+    if (record.status === "candidate") {
+      // 中文注释：candidate 只属于审核面，不能进入运行期 Context/Search，
+      // 否则 prime、guard 和 agent runtime 会读到未发布知识。
+      return;
+    }
+
+    if (record.status === "rejected") {
+      const deleted = await this.#contextIndex.deleteRecipes([record.id]);
+      this.#searchIndex.remove([
+        `recipe:${record.id}`,
+        ...deleted.sourceRefIds.map((sourceRefId) => `source-ref:${sourceRefId}`),
+        ...record.recipe.sourceRefIds.map((sourceRefId) => `source-ref:${sourceRefId}`),
+      ]);
+      await Promise.all([this.#contextIndex.flush(), this.#searchIndex.flush()]);
+      return;
+    }
+
+    const sourceRefs = sourceRefsFromRecipe(record.recipe, "recipe-lifecycle");
     await this.#contextIndex.upsertContextArtifacts({
       recipes: [record.recipe],
+      sourceRefs,
       ...(record.file === undefined
         ? {}
         : {
@@ -377,12 +410,9 @@ class IndexingRecipeLifecycleStore implements RecipeLifecycleStorePort {
             ],
           }),
     });
-
-    if (record.status === "rejected") {
-      this.#searchIndex.remove([`recipe:${record.id}`]);
-    } else {
-      this.#searchIndex.upsert([lifecycleSearchDocument(record)]);
-    }
+    this.#searchIndex.upsert(
+      projectMainlineSearchDocuments({ recipes: [record.recipe], sourceRefs }),
+    );
     await this.#searchIndex.flush();
   }
 }
@@ -409,18 +439,6 @@ class FlushingMainlineProjectIntelligenceArtifactStore
     await Promise.all(this.#flushers.map((flusher) => flusher.flush()));
     await this.#inner.save(artifact);
   }
-}
-
-function lifecycleSearchDocument(record: RecipeLifecycleRecord): MainlineSearchDocument {
-  const document = projectRecipeSearchDocument(record.recipe);
-  return {
-    ...document,
-    metadata: {
-      ...(document.metadata ?? {}),
-      lifecycleStatus: record.status,
-      recipeStatus: record.status,
-    },
-  };
 }
 
 class DataRootJsonFileStore implements JsonMainlineAtomicFileStore {

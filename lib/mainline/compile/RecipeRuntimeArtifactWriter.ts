@@ -216,7 +216,7 @@ function recipeFileFromWrite(write: RecipeMarkdownWriteResult): RecipeMarkdownFi
   };
 }
 
-function sourceRefsFromRecipe(recipe: Recipe, source: string): SourceRef[] {
+export function sourceRefsFromRecipe(recipe: Recipe, source: string): SourceRef[] {
   return recipe.sourceRefIds.flatMap((sourceRefId) => {
     const parsed = parseSourceRefPath(sourceRefId);
     if (!parsed) {

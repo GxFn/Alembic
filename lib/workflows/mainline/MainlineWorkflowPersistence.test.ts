@@ -137,19 +137,12 @@ describe("mainline workflow dataRoot persistence", () => {
         status: "candidate",
       }),
     ).resolves.toMatchObject({ id: candidateId, status: "candidate" });
-    await expect(persistence.contextIndex.findRecipesByIds([candidateId])).resolves.toEqual([
-      expect.objectContaining({ id: candidateId, status: "candidate" }),
-    ]);
-    expect(persistence.searchIndex.search({ text: "agent lifecycle", limit: 5 })).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          document: expect.objectContaining({
-            id: `recipe:${candidateId}`,
-            metadata: expect.objectContaining({ lifecycleStatus: "candidate" }),
-          }),
-        }),
-      ]),
-    );
+    await expect(persistence.contextIndex.findRecipesByIds([candidateId])).resolves.toEqual([]);
+    expect(
+      persistence.searchIndex
+        .search({ text: "agent lifecycle", limit: 5 })
+        .map((hit) => hit.document.id),
+    ).not.toContain(`recipe:${candidateId}`);
 
     const publish = await router.invoke({
       name: "knowledge.manage",
@@ -160,12 +153,15 @@ describe("mainline workflow dataRoot persistence", () => {
     await expect(
       persistence.agentToolDependencies.knowledgeLifecycleStore?.load(candidateId),
     ).resolves.toMatchObject({ id: candidateId, status: "active" });
+    await expect(persistence.contextIndex.findRecipesByIds([candidateId])).resolves.toEqual([
+      expect.objectContaining({ id: candidateId, status: "active" }),
+    ]);
     expect(persistence.searchIndex.search({ text: "agent lifecycle", limit: 5 })).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           document: expect.objectContaining({
             id: `recipe:${candidateId}`,
-            metadata: expect.objectContaining({ lifecycleStatus: "active" }),
+            kind: "recipe",
           }),
         }),
       ]),

@@ -9,11 +9,22 @@ import type {
   MainlineProjectIntelligenceArtifact,
   MainlineProjectIntelligenceQueries,
 } from "../../mainline/graph/index.js";
-import type { RecipeLifecycleStorePort } from "../../mainline/knowledge/index.js";
+import type {
+  MainlineSourceRefRepairIndex,
+  RecipeLifecycleStorePort,
+  RecipeMarkdownStore,
+} from "../../mainline/knowledge/index.js";
 import type { MainlineSearchIndex } from "../../mainline/search/index.js";
 
 // 内部 Agent Tool 模块不兼容 legacy V1/V2；这里只描述新的 resource.action 契约。
-export type ToolResource = "code" | "terminal" | "knowledge" | "graph" | "memory" | "meta";
+export type ToolResource =
+  | "code"
+  | "terminal"
+  | "knowledge"
+  | "runtime"
+  | "graph"
+  | "memory"
+  | "meta";
 
 export type ToolName =
   | "code.search"
@@ -27,6 +38,9 @@ export type ToolName =
   | "knowledge.detail"
   | "knowledge.submit"
   | "knowledge.manage"
+  | "runtime.inject_context"
+  | "runtime.guard_finding"
+  | "runtime.source_ref_repair"
   | "graph.overview"
   | "graph.query"
   | "memory.save"
@@ -282,6 +296,8 @@ export interface ToolRuntimeDependencies {
   readonly memoryStore?: ToolMemoryStore;
   readonly memoryCoordinator?: ToolMemoryCoordinator;
   readonly knowledgeLifecycleStore?: RecipeLifecycleStorePort;
+  readonly sourceRefRepairIndex?: MainlineSourceRefRepairIndex;
+  readonly sourceRefRepairMarkdownStore?: RecipeMarkdownStore;
   readonly knowledgeGateway?: ToolKnowledgeGateway;
   readonly knowledgeRepository?: ToolKnowledgeRepository;
   readonly evolutionGateway?: ToolEvolutionGateway;

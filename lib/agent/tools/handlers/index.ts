@@ -26,6 +26,11 @@ import {
   metaReviewHandler,
   metaToolsHandler,
 } from "./meta.js";
+import {
+  runtimeGuardFindingHandler,
+  runtimeInjectContextHandler,
+  runtimeSourceRefRepairHandler,
+} from "./runtime.js";
 import { terminalExecuteHandler } from "./terminal.js";
 
 export {
@@ -49,6 +54,9 @@ export {
   metaPlanHandler,
   metaReviewHandler,
   metaToolsHandler,
+  runtimeGuardFindingHandler,
+  runtimeInjectContextHandler,
+  runtimeSourceRefRepairHandler,
   terminalExecuteHandler,
 };
 
@@ -65,6 +73,9 @@ export function createDefaultToolHandlers(): ReadonlyMap<ToolName, ToolHandler> 
     ["knowledge.detail", knowledgeDetailHandler],
     ["knowledge.submit", knowledgeSubmitHandler],
     ["knowledge.manage", knowledgeManageHandler],
+    ["runtime.inject_context", runtimeInjectContextHandler],
+    ["runtime.guard_finding", runtimeGuardFindingHandler],
+    ["runtime.source_ref_repair", runtimeSourceRefRepairHandler],
     ["graph.overview", graphOverviewHandler],
     ["graph.query", graphQueryHandler],
     ["memory.save", memorySaveHandler],
