@@ -7,3 +7,4 @@ export * from "./guard/ParameterGuard.js";
 export * from "./LLMGatewayAdapter.js";
 export * from "./registry/ModelRegistry.js";
 export * from "./registry/model-defs.js";
+export * from "./registry/ProviderConfig.js";
