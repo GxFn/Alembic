@@ -1,3 +1,4 @@
+export * from "./agent/index.js";
 export * from "./cold-start/index.js";
 export * from "./knowledge-rescan/index.js";
 export * from "./mainline/MainlineWorkflowEntrypoint.js";
