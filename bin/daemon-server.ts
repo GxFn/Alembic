@@ -4,8 +4,10 @@ import { randomBytes } from "node:crypto";
 import { readPackageInfo } from "../lib/codex/package-info.js";
 import { inspectWorkspace, resolveProjectRoot } from "../lib/codex/workspace.js";
 import { startDaemonHttpBridge } from "../lib/daemon/DaemonHttpBridge.js";
+import type { DaemonJobHandler } from "../lib/daemon/DaemonJobRunner.js";
 import { clearDaemonState, writeDaemonState } from "../lib/daemon/DaemonState.js";
 import { JsonDaemonJobStore } from "../lib/daemon/JobStore.js";
+import { MainlineWorkflowEntrypoint } from "../lib/workflows/index.js";
 
 const projectRoot = resolveProjectRoot(process.env.ALEMBIC_PROJECT_DIR);
 const workspace = inspectWorkspace(projectRoot);
@@ -30,9 +32,18 @@ const initialState = {
 
 const interruptedJobs = await new JsonDaemonJobStore(initialState.dataRoot).markInterrupted();
 let currentState = initialState;
+const workflow = new MainlineWorkflowEntrypoint();
+const workflowHandlers: Record<"bootstrap" | "rescan", DaemonJobHandler> = {
+  bootstrap: async (job, context) =>
+    runWorkflowJob(workflow, "bootstrap", workspace.projectRoot, job.input, context.isCancelled),
+  rescan: async (job, context) =>
+    runWorkflowJob(workflow, "rescan", workspace.projectRoot, job.input, context.isCancelled),
+};
 const bridge = await startDaemonHttpBridge({
   state: () => currentState,
   requestedPort: initialState.port,
+  jobHandlers: workflowHandlers,
+  autoRunJobs: true,
 });
 const readyState = {
   ...initialState,
@@ -56,4 +67,31 @@ async function shutdown(): Promise<void> {
   await bridge.close();
   await clearDaemonState(readyState.dataRoot);
   process.exit(0);
+}
+
+async function runWorkflowJob(
+  workflow: MainlineWorkflowEntrypoint,
+  kind: "bootstrap" | "rescan",
+  projectRoot: string,
+  input: Record<string, unknown> | undefined,
+  isCancelled: () => Promise<boolean>,
+): Promise<Record<string, unknown>> {
+  const result = await workflow.run({
+    kind,
+    projectRoot,
+    scan: isRecord(input?.scan) ? input.scan : {},
+    changedFiles: stringList(input?.changedFiles),
+    cancellation: { isCancelled },
+  });
+  return JSON.parse(JSON.stringify(result)) as Record<string, unknown>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+    : [];
 }

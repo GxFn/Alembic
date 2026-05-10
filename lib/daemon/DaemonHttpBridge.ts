@@ -1,6 +1,10 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { DaemonJobRunner } from "./DaemonJobRunner.js";
+import {
+  type DaemonJobHandler,
+  DaemonJobRunner,
+  type DaemonJobRunnerOptions,
+} from "./DaemonJobRunner.js";
 import { type DaemonState, daemonBaseUrl } from "./DaemonState.js";
 import { type DaemonJobKind, JsonDaemonJobStore } from "./JobStore.js";
 
@@ -8,6 +12,8 @@ export interface DaemonHttpBridgeOptions {
   readonly state: DaemonState | (() => DaemonState);
   readonly host?: string;
   readonly requestedPort?: number;
+  readonly jobHandlers?: Partial<Record<DaemonJobKind, DaemonJobHandler>>;
+  readonly autoRunJobs?: boolean;
 }
 
 export interface DaemonHttpBridgeHandle {
@@ -24,7 +30,11 @@ export async function startDaemonHttpBridge(
   const stateProvider =
     typeof options.state === "function" ? options.state : () => options.state as DaemonState;
   const jobStore = new JsonDaemonJobStore(stateProvider().dataRoot);
-  const jobRunner = new DaemonJobRunner(jobStore);
+  const runnerOptions: DaemonJobRunnerOptions = {
+    ...(options.jobHandlers ? { handlers: options.jobHandlers } : {}),
+    ...(options.autoRunJobs !== undefined ? { autoStart: options.autoRunJobs } : {}),
+  };
+  const jobRunner = new DaemonJobRunner(jobStore, runnerOptions);
   const server = http.createServer((request, response) => {
     handleRequest(request, response, stateProvider, jobStore, jobRunner).catch((error: unknown) => {
       writeJson(response, 500, {
