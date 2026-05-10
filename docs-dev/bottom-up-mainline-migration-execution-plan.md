@@ -225,6 +225,8 @@ npm run test:unit -- SqliteContextIndex
 - `Alembic-legacy/lib/mainline/graph/*`
 - `Alembic-legacy/lib/mainline/compile/ProjectIntelligence*`
 
+状态：进行中。
+
 第一批迁移：
 
 - `LanguageCatalog.ts`
@@ -250,6 +252,8 @@ npm run test:unit -- SqliteContextIndex
 - full compile session。
 - content mining。
 - panorama summary。
+- `ProjectIntelligenceRunner.ts`：它会把扫描、build、store 和 runtime 写入串成编排层，等 L5/L6 后再接。
+- `ProjectIntelligenceIncrementalPlanner.ts`：先不迁完整 planner；本批 artifact merge 只保留需要的只读 plan shape，避免 L4 反向拉入文件指纹增量编排。
 
 验收：
 

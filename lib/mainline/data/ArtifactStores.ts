@@ -1,25 +1,6 @@
-export interface SourceRef {
-  readonly id: string;
-  readonly location: {
-    readonly path: string;
-    readonly line?: number;
-    readonly column?: number;
-  };
-  readonly metadata?: Record<string, unknown>;
-}
+import type { Recipe, RecipeEdge, SourceRef } from "../knowledge/index.js";
 
-export interface Recipe {
-  readonly id: string;
-  readonly sourceRefIds: readonly string[];
-  readonly [key: string]: unknown;
-}
-
-export interface RecipeEdge {
-  readonly id: string;
-  readonly fromRecipeId: string;
-  readonly toRecipeId: string;
-  readonly [key: string]: unknown;
-}
+export type { Recipe, RecipeEdge, SourceRef };
 
 export type RecipeMarkdownFileBucket = "candidates" | "recipes";
 

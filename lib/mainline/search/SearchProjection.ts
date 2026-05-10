@@ -72,13 +72,13 @@ export function projectSourceRefSearchDocument(sourceRef: SourceRef): MainlineSe
   };
 }
 
-function stringField(record: Record<string, unknown>, key: string): string {
-  const value = record[key];
+function stringField(record: object, key: string): string {
+  const value = (record as Partial<Record<string, unknown>>)[key];
   return typeof value === "string" ? value : "";
 }
 
-function arrayStringField(record: Record<string, unknown>, key: string): string[] {
-  const value = record[key];
+function arrayStringField(record: object, key: string): string[] {
+  const value = (record as Partial<Record<string, unknown>>)[key];
   return Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === "string")
     : [];
