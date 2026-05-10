@@ -1,7 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  cancelCodexDaemonJob,
+  enqueueCodexDaemonJob,
+  getCodexDaemonJob,
+  listCodexDaemonJobs,
+} from "./daemon-client.js";
 import { readPackageInfo } from "./package-info.js";
+import { runCodexPrime } from "./prime.js";
 import {
   countMarkdownFiles,
   initializeCodexWorkspace,
@@ -16,7 +23,7 @@ export interface CodexToolDefinition {
   name: string;
 }
 
-// MCP 首屏保持轻量：只暴露诊断、状态和初始化，避免 stdio 启动时拉起 daemon。
+// status/diagnostics/init 必须轻量；bootstrap/rescan 只排 daemon job，不在 stdio 内跑长任务。
 export const CODEX_TOOLS: CodexToolDefinition[] = [
   {
     name: "alembic_codex_diagnostics",
@@ -50,6 +57,82 @@ export const CODEX_TOOLS: CodexToolDefinition[] = [
     },
     annotations: { destructiveHint: false },
   },
+  {
+    name: "alembic_codex_bootstrap",
+    description:
+      "Start an Alembic bootstrap job through the local daemon. The MCP call only enqueues durable work and returns a job id.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        force: { type: "boolean", description: "Rebuild baseline artifacts even if they exist." },
+        scan: { type: "object", description: "Optional scan controls for the workflow." },
+        changedFiles: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional file path hints for a targeted bootstrap.",
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: { destructiveHint: false },
+  },
+  {
+    name: "alembic_codex_rescan",
+    description:
+      "Start an Alembic rescan job through the local daemon. The MCP call only enqueues durable work and returns a job id.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scan: { type: "object", description: "Optional scan controls for the workflow." },
+        changedFiles: {
+          type: "array",
+          items: { type: "string" },
+          description: "Changed project files to prioritize during rescan.",
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: { destructiveHint: false },
+  },
+  {
+    name: "alembic_codex_job",
+    description:
+      "List, inspect, or cancel Alembic daemon jobs. Does not run workflow work inside the MCP stdio process.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["list", "status", "cancel"],
+          description: "Job operation to perform.",
+        },
+        id: { type: "string", description: "Job id for status or cancel." },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  },
+  {
+    name: "alembic_task",
+    description:
+      "Run an Alembic task. First supported operation is prime, which reads mainline runtime indexes and returns Codex-ready context.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        operation: { type: "string", enum: ["prime"], description: "Task operation to run." },
+        task: { type: "string", description: "Current coding task or user intent." },
+        files: { type: "array", items: { type: "string" } },
+        symbols: { type: "array", items: { type: "string" } },
+        diff: { type: "string" },
+        errors: { type: "array", items: { type: "string" } },
+        diagnostics: { type: "array", items: { type: "string" } },
+        limit: { type: "number" },
+      },
+      required: ["operation"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true },
+  },
 ];
 
 export interface ToolResult {
@@ -62,34 +145,69 @@ export async function handleCodexTool(
   name: string,
   args: Record<string, unknown> = {},
 ): Promise<ToolResult> {
-  switch (name) {
-    case "alembic_codex_diagnostics":
-      return { success: true, data: buildDiagnostics() };
-    case "alembic_codex_status":
-      return { success: true, data: buildStatus() };
-    case "alembic_codex_init": {
-      const workspace = initializeCodexWorkspace({
-        force: Boolean(args.force),
-        seed: Boolean(args.seed),
-        standard: args.standard === true,
-      });
-      return {
-        success: true,
-        message: workspace.ghost
-          ? "Alembic Codex Ghost workspace initialized."
-          : "Alembic standard workspace initialized.",
-        data: {
-          status: buildStatus(workspace),
-          nextActions: buildPostInitActions(workspace),
-        },
-      };
+  try {
+    switch (name) {
+      case "alembic_codex_diagnostics":
+        return { success: true, data: buildDiagnostics() };
+      case "alembic_codex_status":
+        return { success: true, data: buildStatus() };
+      case "alembic_codex_init": {
+        const workspace = initializeCodexWorkspace({
+          force: Boolean(args.force),
+          seed: Boolean(args.seed),
+          standard: args.standard === true,
+        });
+        return {
+          success: true,
+          message: workspace.ghost
+            ? "Alembic Codex Ghost workspace initialized."
+            : "Alembic standard workspace initialized.",
+          data: {
+            status: buildStatus(workspace),
+            nextActions: buildPostInitActions(workspace),
+          },
+        };
+      }
+      case "alembic_codex_bootstrap": {
+        const job = await enqueueCodexDaemonJob("bootstrap", buildWorkflowJobInput(args));
+        return {
+          success: true,
+          message: "Alembic bootstrap job queued.",
+          data: { job, nextAction: { tool: "alembic_codex_job", arguments: { id: job.id } } },
+        };
+      }
+      case "alembic_codex_rescan": {
+        const job = await enqueueCodexDaemonJob("rescan", buildWorkflowJobInput(args));
+        return {
+          success: true,
+          message: "Alembic rescan job queued.",
+          data: { job, nextAction: { tool: "alembic_codex_job", arguments: { id: job.id } } },
+        };
+      }
+      case "alembic_codex_job":
+        return handleCodexJobTool(args);
+      case "alembic_task":
+        if (args.operation !== "prime") {
+          return {
+            success: false,
+            message: "Unsupported Alembic task operation.",
+            data: { supportedOperations: ["prime"] },
+          };
+        }
+        return { success: true, data: await runCodexPrime(args) };
+      default:
+        return {
+          success: false,
+          message: `Unknown Alembic Codex tool: ${name}`,
+          data: { availableTools: CODEX_TOOLS.map((tool) => tool.name) },
+        };
     }
-    default:
-      return {
-        success: false,
-        message: `Unknown Alembic Codex tool: ${name}`,
-        data: { availableTools: CODEX_TOOLS.map((tool) => tool.name) },
-      };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : String(error),
+      data: { code: "ALEMBIC_CODEX_TOOL_FAILED", tool: name },
+    };
   }
 }
 
@@ -97,6 +215,7 @@ export function buildStatus(workspace = inspectWorkspace()): Record<string, unkn
   const recipeCount = countMarkdownFiles(workspace.recipesDir);
   const candidateCount = countMarkdownFiles(workspace.candidatesDir);
   const skillCount = countMarkdownFiles(workspace.skillsDir);
+  const daemonState = readDaemonState(workspace);
   // 显式报告项目污染风险，后续 smoke 用它验证 Ghost mode 没写入用户项目。
   const projectArtifacts = {
     cursorDirExists: existsSync(join(workspace.projectRoot, ".cursor")),
@@ -135,9 +254,9 @@ export function buildStatus(workspace = inspectWorkspace()): Record<string, unkn
     },
     projectArtifacts,
     daemon: {
-      state: readDaemonState(workspace),
-      running: false,
-      note: "Daemon support is scheduled for the next migration batch.",
+      state: daemonState,
+      running: daemonState !== null,
+      note: "Use alembic_codex_bootstrap, alembic_codex_rescan, or alembic_codex_job for durable daemon work.",
     },
     onboarding: buildOnboarding(workspace, recipeCount),
   };
@@ -228,7 +347,7 @@ function buildOnboarding(
     return {
       state: "needs_bootstrap",
       primaryAction: { tool: "alembic_codex_bootstrap", startsDaemon: true },
-      nextActions: ["Bootstrap support lands in the next migration batch."],
+      nextActions: ["Queue a durable bootstrap job: call alembic_codex_bootstrap"],
     };
   }
   return {
@@ -236,10 +355,60 @@ function buildOnboarding(
     primaryAction: {
       tool: "alembic_task",
       arguments: { operation: "prime" },
-      startsDaemon: true,
+      startsDaemon: false,
     },
     nextActions: ["Prime Codex before coding work."],
   };
+}
+
+async function handleCodexJobTool(args: Record<string, unknown>): Promise<ToolResult> {
+  const action = stringValue(args.action) ?? (stringValue(args.id) ? "status" : "list");
+  if (action !== "list" && action !== "status" && action !== "cancel") {
+    return {
+      success: false,
+      message: `Unsupported job action: ${action}`,
+      data: { supportedActions: ["list", "status", "cancel"] },
+    };
+  }
+  if (action === "list") {
+    return { success: true, data: await listCodexDaemonJobs() };
+  }
+
+  const id = stringValue(args.id);
+  if (!id) {
+    return {
+      success: false,
+      message: "Job id is required for status or cancel.",
+      data: { required: ["id"] },
+    };
+  }
+
+  if (action === "status") {
+    return { success: true, data: await getCodexDaemonJob(id) };
+  }
+  if (action === "cancel") {
+    return {
+      success: true,
+      message: "Alembic job cancelled.",
+      data: await cancelCodexDaemonJob(id),
+    };
+  }
+  return { success: false, message: `Unsupported job action: ${action}` };
+}
+
+function buildWorkflowJobInput(args: Record<string, unknown>): Record<string, unknown> {
+  const input: Record<string, unknown> = {};
+  if (typeof args.force === "boolean") {
+    input.force = args.force;
+  }
+  if (isRecord(args.scan)) {
+    input.scan = args.scan;
+  }
+  const changedFiles = stringList(args.changedFiles);
+  if (changedFiles.length > 0) {
+    input.changedFiles = changedFiles;
+  }
+  return input;
 }
 
 function buildPostInitActions(workspace: WorkspaceInspection): Array<Record<string, unknown>> {
@@ -296,4 +465,18 @@ function safeExec(command: string, args: string[]): Record<string, unknown> {
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+    : [];
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
