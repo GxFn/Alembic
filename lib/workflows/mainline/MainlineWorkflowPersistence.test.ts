@@ -40,6 +40,26 @@ describe("mainline workflow dataRoot persistence", () => {
       files: expect.arrayContaining([expect.objectContaining({ path: "src/app.ts" })]),
     });
     await expect(
+      readJson(path.join(dataRoot, ".asd/context/engineering-workflow-artifact.json")),
+    ).resolves.toMatchObject({
+      artifact: expect.objectContaining({
+        files: expect.arrayContaining([expect.objectContaining({ relativePath: "src/app.ts" })]),
+      }),
+    });
+    await expect(
+      readJson(path.join(dataRoot, ".asd/context/engineering-code-graph.json")),
+    ).resolves.toMatchObject({
+      files: expect.arrayContaining([expect.objectContaining({ path: "src/app.ts" })]),
+    });
+    await expect(
+      readJson(path.join(dataRoot, ".asd/context/engineering-entity-graph.json")),
+    ).resolves.toMatchObject({ entities: expect.any(Array), edges: expect.any(Array) });
+    await expect(
+      readJson(path.join(dataRoot, ".asd/context/engineering-panorama-snapshot.json")),
+    ).resolves.toMatchObject({
+      overview: expect.objectContaining({ totalFileCount: expect.any(Number) }),
+    });
+    await expect(
       readJson(path.join(dataRoot, ".asd/context/context-index.json")),
     ).resolves.toMatchObject({ sourceRefs: expect.any(Array) });
     await expect(
@@ -136,10 +156,12 @@ describe("mainline workflow dataRoot persistence", () => {
     const searchIndex = tools.searchIndex;
     const contextIndex = tools.contextIndex;
     const artifactProvider = tools.projectIntelligenceArtifactProvider;
+    const engineeringGraphProvider = tools.engineeringGraphProvider;
     expect(tools.projectRoot).toBe(projectRoot);
     expect(searchIndex).toBeDefined();
     expect(contextIndex).toBeDefined();
     expect(artifactProvider).toBeDefined();
+    expect(engineeringGraphProvider).toBeDefined();
     expect(searchIndex?.search({ text: "helper", limit: 5 })).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -152,6 +174,10 @@ describe("mainline workflow dataRoot persistence", () => {
     );
     await expect(artifactProvider?.load()).resolves.toMatchObject({
       files: expect.arrayContaining([expect.objectContaining({ path: "src/app.ts" })]),
+    });
+    await expect(engineeringGraphProvider?.overview()).resolves.toMatchObject({
+      source: "engineering",
+      files: { total: expect.any(Number) },
     });
   });
 

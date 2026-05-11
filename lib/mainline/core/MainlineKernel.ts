@@ -3,7 +3,7 @@ import {
   ExtensionLanguageService,
   type MainlineLanguageService,
 } from "../code/LanguageServicePort.js";
-import { StructuralMainlineAstParser } from "../code/StructuralAstParser.js";
+import { TreeSitterMainlineAstParser } from "../code/TreeSitterAstParser.js";
 import { type MainlineDatabasePort, UnavailableMainlineDatabase } from "../data/DatabasePort.js";
 import { type ContextIndex, InMemoryContextIndex } from "../data/index.js";
 import { InMemoryMainlineJobLedger, type MainlineJobLedgerPort } from "../data/JobLedger.js";
@@ -96,7 +96,7 @@ export class MainlineKernel implements MainlineDisposable {
     this.searchIndex = options.searchIndex ?? new InMemoryMainlineSearchIndex();
     this.projectGraphBuilder = options.projectGraphBuilder ?? new MainlineProjectGraphBuilder();
     this.languageService = options.languageService ?? new ExtensionLanguageService();
-    this.astParser = options.astParser ?? new StructuralMainlineAstParser();
+    this.astParser = options.astParser ?? new TreeSitterMainlineAstParser();
     this.logger = options.logger ?? new NoopMainlineLogger();
     this.scheduler = options.scheduler ?? new MainlineSchedulerImpl();
     this.concurrency = options.concurrency ?? new MainlineConcurrencyLimiter(4);

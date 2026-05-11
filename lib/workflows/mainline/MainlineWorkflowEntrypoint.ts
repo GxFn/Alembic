@@ -56,6 +56,10 @@ export interface MainlineWorkflowPersistedArtifacts {
   readonly searchSnapshotPath?: string;
   readonly vectorSnapshotPath?: string;
   readonly fingerprintSnapshotPath?: string;
+  readonly engineeringWorkflowArtifactPath?: string;
+  readonly engineeringCodeGraphPath?: string;
+  readonly engineeringEntityGraphPath?: string;
+  readonly engineeringPanoramaSnapshotPath?: string;
   readonly recipeMarkdownRoot?: string;
 }
 

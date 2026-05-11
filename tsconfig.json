@@ -22,5 +22,12 @@
     "types": ["node", "vitest"]
   },
   "include": ["bin/**/*.ts", "lib/**/*.ts"],
-  "exclude": ["**/*.test.ts", "dist", "node_modules", "plugins", "docs-dev", "vitest.config.ts"]
+  "exclude": [
+    "**/*.test.ts",
+    "dist",
+    "node_modules",
+    "plugins",
+    "docs-dev",
+    "vitest.config.ts"
+  ]
 }

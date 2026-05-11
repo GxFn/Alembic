@@ -1,3 +1,4 @@
+import type { EngineeringGraphQueryProvider } from "../../engineering/index.js";
 import type {
   MainlineGuardRule,
   MainlineGuardRuleLoadResult,
@@ -5,10 +6,7 @@ import type {
 } from "../../guard/index.js";
 import type { MainlineAstParser } from "../../mainline/code/index.js";
 import type { ContextIndexReader } from "../../mainline/data/index.js";
-import type {
-  MainlineProjectIntelligenceArtifact,
-  MainlineProjectIntelligenceQueries,
-} from "../../mainline/graph/index.js";
+import type { MainlineProjectIntelligenceArtifact } from "../../mainline/graph/index.js";
 import type {
   MainlineSourceRefRepairIndex,
   RecipeLifecycleStorePort,
@@ -289,10 +287,10 @@ export interface ToolRuntimeDependencies {
   readonly guardRuleProvider?:
     | MainlineGuardRuleProvider
     | (() => Promise<readonly MainlineGuardRule[] | MainlineGuardRuleLoadResult>);
-  readonly projectIntelligenceQueries?: MainlineProjectIntelligenceQueries;
   readonly projectIntelligenceArtifactProvider?:
     | ProjectIntelligenceArtifactProvider
     | (() => Promise<MainlineProjectIntelligenceArtifact | null>);
+  readonly engineeringGraphProvider?: EngineeringGraphQueryProvider;
   readonly memoryStore?: ToolMemoryStore;
   readonly memoryCoordinator?: ToolMemoryCoordinator;
   readonly knowledgeLifecycleStore?: RecipeLifecycleStorePort;
@@ -301,8 +299,6 @@ export interface ToolRuntimeDependencies {
   readonly knowledgeGateway?: ToolKnowledgeGateway;
   readonly knowledgeRepository?: ToolKnowledgeRepository;
   readonly evolutionGateway?: ToolEvolutionGateway;
-  readonly projectGraph?: unknown;
-  readonly codeEntityGraph?: unknown;
   readonly terminalExecutor?: ToolTerminalExecutor;
   readonly terminalCompressor?: ToolTerminalOutputCompressor;
   readonly now?: () => number;

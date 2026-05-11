@@ -1,10 +1,17 @@
 import type { ToolRuntimeDependencies } from "../../agent/tools/index.js";
 import type { MainlineEmbeddingPort } from "../../mainline/ai/index.js";
 import {
+  JsonMainlineEngineeringWorkflowArtifactStore,
   JsonMainlineProjectIntelligenceArtifactStore,
+  MAINLINE_ENGINEERING_CODE_GRAPH_STORE_PATH,
+  MAINLINE_ENGINEERING_ENTITY_GRAPH_STORE_PATH,
+  MAINLINE_ENGINEERING_PANORAMA_SNAPSHOT_STORE_PATH,
+  MAINLINE_ENGINEERING_WORKFLOW_ARTIFACT_STORE_PATH,
   MAINLINE_FILE_FINGERPRINT_SNAPSHOT_STORE_PATH,
   MAINLINE_PROJECT_INTELLIGENCE_ARTIFACT_STORE_PATH,
   MainlineCompileSession,
+  MainlineEngineeringGraphProvider,
+  type MainlineEngineeringWorkflowArtifactStore,
   type MainlineProjectIntelligenceArtifactStore,
   sourceRefsFromRecipe,
 } from "../../mainline/compile/index.js";
@@ -69,6 +76,7 @@ export interface DataRootMainlineWorkflowPersistence {
   readonly searchIndex: PersistentMainlineSearchIndex;
   readonly vectorStore: MainlineVectorStore;
   readonly artifactStore: MainlineProjectIntelligenceArtifactStore;
+  readonly engineeringWorkflowArtifactStore: MainlineEngineeringWorkflowArtifactStore;
   readonly persistedArtifacts: MainlineWorkflowPersistedArtifacts;
   readonly agentToolDependencies: ToolRuntimeDependencies;
 }
@@ -94,6 +102,22 @@ export async function createMainlineWorkflowPersistence(
       writeBoundary,
       MAINLINE_FILE_FINGERPRINT_SNAPSHOT_STORE_PATH,
     ),
+    engineeringWorkflowArtifactPath: runtimeAbsolute(
+      writeBoundary,
+      MAINLINE_ENGINEERING_WORKFLOW_ARTIFACT_STORE_PATH,
+    ),
+    engineeringCodeGraphPath: runtimeAbsolute(
+      writeBoundary,
+      MAINLINE_ENGINEERING_CODE_GRAPH_STORE_PATH,
+    ),
+    engineeringEntityGraphPath: runtimeAbsolute(
+      writeBoundary,
+      MAINLINE_ENGINEERING_ENTITY_GRAPH_STORE_PATH,
+    ),
+    engineeringPanoramaSnapshotPath: runtimeAbsolute(
+      writeBoundary,
+      MAINLINE_ENGINEERING_PANORAMA_SNAPSHOT_STORE_PATH,
+    ),
     recipeMarkdownRoot: workspacePaths.recipesDir,
   };
 
@@ -118,6 +142,15 @@ export async function createMainlineWorkflowPersistence(
       fileStore,
     ),
     [contextIndex, searchIndex],
+  );
+  const engineeringWorkflowArtifactStore = new JsonMainlineEngineeringWorkflowArtifactStore(
+    {
+      workflowResult: dataStoreTarget(MAINLINE_ENGINEERING_WORKFLOW_ARTIFACT_STORE_PATH),
+      codeGraph: dataStoreTarget(MAINLINE_ENGINEERING_CODE_GRAPH_STORE_PATH),
+      entityGraph: dataStoreTarget(MAINLINE_ENGINEERING_ENTITY_GRAPH_STORE_PATH),
+      panoramaSnapshot: dataStoreTarget(MAINLINE_ENGINEERING_PANORAMA_SNAPSHOT_STORE_PATH),
+    },
+    fileStore,
   );
   const knowledgeLifecycleStore = new IndexingRecipeLifecycleStore(
     new RecipeLifecycleStore(writeBoundary, { fileStore: coreFileStore }),
@@ -148,6 +181,7 @@ export async function createMainlineWorkflowPersistence(
       : { embeddingProvider: input.embeddingProvider }),
     searchIndexStore,
     artifactStore,
+    engineeringWorkflowArtifactStore,
     recipeMarkdownStore,
   });
   const now = input.now;
@@ -163,6 +197,7 @@ export async function createMainlineWorkflowPersistence(
     contextIndex,
     searchIndex,
     artifactStore,
+    engineeringWorkflowArtifactStore,
     knowledgeLifecycleStore,
     sourceRefRepairIndex: contextIndex,
     sourceRefRepairMarkdownStore: recipeMarkdownStore,
@@ -190,6 +225,7 @@ export async function createMainlineWorkflowPersistence(
     searchIndex,
     vectorStore,
     artifactStore,
+    engineeringWorkflowArtifactStore,
     persistedArtifacts,
     agentToolDependencies,
   };
@@ -206,6 +242,7 @@ export function createMainlineAgentToolDependencies(input: {
   readonly contextIndex: PersistentMainlineContextIndex;
   readonly searchIndex: PersistentMainlineSearchIndex;
   readonly artifactStore: MainlineProjectIntelligenceArtifactStore;
+  readonly engineeringWorkflowArtifactStore: MainlineEngineeringWorkflowArtifactStore;
   readonly knowledgeLifecycleStore: RecipeLifecycleStorePort;
   readonly sourceRefRepairIndex?: PersistentMainlineContextIndex;
   readonly sourceRefRepairMarkdownStore?: RecipeMarkdownStore;
@@ -215,6 +252,9 @@ export function createMainlineAgentToolDependencies(input: {
     projectRoot: input.projectRoot,
     contextIndex: input.contextIndex,
     searchIndex: input.searchIndex,
+    engineeringGraphProvider: new MainlineEngineeringGraphProvider(
+      input.engineeringWorkflowArtifactStore,
+    ),
     projectIntelligenceArtifactProvider: input.artifactStore,
     knowledgeLifecycleStore: input.knowledgeLifecycleStore,
     ...(input.sourceRefRepairIndex === undefined

@@ -4,7 +4,7 @@ import {
   type MainlineImportRecord,
   type MainlineSourceSymbol,
   MainlineSymbolTableBuilder,
-  StructuralMainlineAstParser,
+  TreeSitterMainlineAstParser,
 } from "../code/index.js";
 import { computeMainlineContentHash } from "../core/Hashing.js";
 import { normalizeMainlinePosixPath } from "../core/PathIdentity.js";
@@ -17,7 +17,8 @@ import {
 export type MainlineProjectIntelligenceEdgeKind =
   | MainlineProjectGraphEdgeKind
   | "calls"
-  | "constructs";
+  | "constructs"
+  | "data_flow";
 
 export interface MainlineProjectIntelligenceFileInput {
   readonly path: string;
@@ -61,6 +62,58 @@ export interface MainlineProjectIntelligenceEdge {
   readonly specifier?: string;
 }
 
+export interface MainlineLegacyAstProjectSummary {
+  readonly lang: string;
+  readonly fileCount: number;
+  readonly classes: readonly Record<string, unknown>[];
+  readonly protocols: readonly Record<string, unknown>[];
+  readonly categories: readonly Record<string, unknown>[];
+  readonly inheritanceGraph: readonly Record<string, unknown>[];
+  readonly patternStats: Record<string, unknown>;
+  readonly projectMetrics: Record<string, unknown>;
+  readonly fileSummaries: readonly MainlineLegacyAstFileSummary[];
+}
+
+export interface MainlineLegacyAstFileSummary extends Record<string, unknown> {
+  readonly file: string;
+  readonly lang?: string;
+  readonly classes?: readonly Record<string, unknown>[];
+  readonly protocols?: readonly Record<string, unknown>[];
+  readonly categories?: readonly Record<string, unknown>[];
+  readonly methods?: readonly Record<string, unknown>[];
+  readonly properties?: readonly Record<string, unknown>[];
+  readonly imports?: readonly unknown[];
+  readonly exports?: readonly unknown[];
+  readonly callSites?: readonly Record<string, unknown>[];
+  readonly inheritanceGraph?: readonly Record<string, unknown>[];
+  readonly metrics?: Record<string, unknown>;
+}
+
+export interface MainlineProjectCallGraphEdge {
+  readonly caller: string;
+  readonly callee: string;
+  readonly callType: string;
+  readonly resolveMethod: string;
+  readonly line: number;
+  readonly file: string;
+  readonly isAwait: boolean;
+  readonly argCount: number;
+}
+
+export interface MainlineProjectDataFlowEdge {
+  readonly from: string;
+  readonly to: string;
+  readonly flowType: string;
+  readonly direction: string;
+  readonly confidence?: number;
+}
+
+export interface MainlineProjectCallGraphFacts {
+  readonly callEdges: readonly MainlineProjectCallGraphEdge[];
+  readonly dataFlowEdges: readonly MainlineProjectDataFlowEdge[];
+  readonly stats: Record<string, unknown>;
+}
+
 export interface MainlineProjectIntelligenceArtifact {
   readonly projectRoot?: string;
   readonly generatedAt?: number;
@@ -69,6 +122,8 @@ export interface MainlineProjectIntelligenceArtifact {
   readonly callSites: MainlineCallSite[];
   readonly projectGraph: MainlineProjectGraph;
   readonly semanticEdges: MainlineProjectIntelligenceEdge[];
+  readonly astProjectSummary?: MainlineLegacyAstProjectSummary;
+  readonly callGraph?: MainlineProjectCallGraphFacts;
 }
 
 interface ParsedFileFacts {
@@ -80,6 +135,7 @@ interface ParsedFileFacts {
   readonly symbols: readonly MainlineSourceSymbol[];
   readonly imports: readonly MainlineImportRecord[];
   readonly callSites: readonly MainlineCallSite[];
+  readonly legacySummary?: MainlineLegacyAstFileSummary;
 }
 
 export interface MainlineProjectIntelligenceBuilderDependencies {
@@ -99,7 +155,7 @@ export class MainlineProjectIntelligenceBuilder {
   readonly #symbolTableBuilder: MainlineSymbolTableBuilder;
 
   constructor(dependencies: MainlineProjectIntelligenceBuilderDependencies = {}) {
-    this.#parser = dependencies.parser ?? new StructuralMainlineAstParser();
+    this.#parser = dependencies.parser ?? new TreeSitterMainlineAstParser();
     this.#graphBuilder = dependencies.graphBuilder ?? new MainlineProjectGraphBuilder();
     this.#symbolTableBuilder = dependencies.symbolTableBuilder ?? new MainlineSymbolTableBuilder();
   }
@@ -108,6 +164,11 @@ export class MainlineProjectIntelligenceBuilder {
     input: MainlineProjectIntelligenceBuildInput,
   ): Promise<MainlineProjectIntelligenceArtifact> {
     const parsedFiles = await this.#parseFiles(input.files);
+    const astProjectSummary = buildLegacyAstProjectSummary(parsedFiles);
+    const callGraph =
+      astProjectSummary === undefined
+        ? undefined
+        : await analyzeLegacyProjectCallGraph(astProjectSummary, input.projectRoot ?? "/");
     const symbolTable = this.#symbolTableBuilder.build(
       parsedFiles.map((file) => ({
         path: file.path,
@@ -161,7 +222,9 @@ export class MainlineProjectIntelligenceBuilder {
       symbols: sortSymbols(symbols),
       callSites: sortCallSites(parsedFiles.flatMap((file) => file.callSites)),
       projectGraph,
-      semanticEdges: buildSemanticEdges(projectGraph, parsedFiles),
+      semanticEdges: buildSemanticEdges(projectGraph, parsedFiles, callGraph),
+      ...(astProjectSummary === undefined ? {} : { astProjectSummary }),
+      ...(callGraph === undefined ? {} : { callGraph }),
     };
   }
 
@@ -197,15 +260,167 @@ export class MainlineProjectIntelligenceBuilder {
         symbols: result.symbols,
         imports: result.imports,
         callSites: result.callSites,
+        ...(isLegacyAstFileSummary(result.legacySummary)
+          ? { legacySummary: { ...result.legacySummary, file: normalizedPath } }
+          : {}),
       });
     }
     return parsedFiles.sort((left, right) => left.path.localeCompare(right.path));
   }
 }
 
+function isLegacyAstFileSummary(value: unknown): value is MainlineLegacyAstFileSummary {
+  return typeof value === "object" && value !== null;
+}
+
+function buildLegacyAstProjectSummary(
+  files: readonly ParsedFileFacts[],
+): MainlineLegacyAstProjectSummary | undefined {
+  const fileSummaries = files
+    .filter((file) => file.legacySummary)
+    .map((file) => file.legacySummary)
+    .filter((summary): summary is MainlineLegacyAstFileSummary => Boolean(summary));
+  if (fileSummaries.length === 0) {
+    return undefined;
+  }
+
+  const classes = fileSummaries.flatMap((summary) =>
+    withFile(summary.classes ?? [], summary.file),
+  );
+  const protocols = fileSummaries.flatMap((summary) =>
+    withFile(summary.protocols ?? [], summary.file),
+  );
+  const categories = fileSummaries.flatMap((summary) =>
+    withFile(summary.categories ?? [], summary.file),
+  );
+  const inheritanceGraph = fileSummaries.flatMap((summary) => summary.inheritanceGraph ?? []);
+
+  return {
+    lang: dominantLanguage(files),
+    fileCount: fileSummaries.length,
+    classes,
+    protocols,
+    categories,
+    inheritanceGraph,
+    patternStats: buildPatternStats(fileSummaries),
+    projectMetrics: aggregateLegacyMetrics(fileSummaries),
+    fileSummaries,
+  };
+}
+
+async function analyzeLegacyProjectCallGraph(
+  astProjectSummary: MainlineLegacyAstProjectSummary,
+  projectRoot: string,
+): Promise<MainlineProjectCallGraphFacts | undefined> {
+  if (!astProjectSummary.fileSummaries.some((summary) => (summary.callSites?.length ?? 0) > 0)) {
+    return undefined;
+  }
+
+  try {
+    const { CallGraphAnalyzer } = await import(
+      "../code/tree-sitter/analysis/CallGraphAnalyzer.js"
+    );
+    const analyzer = new CallGraphAnalyzer(projectRoot);
+    const result = await analyzer.analyze(astProjectSummary as any, {
+      timeout: 15_000,
+      maxCallSitesPerFile: 500,
+      minConfidence: 0.5,
+    });
+    return {
+      callEdges: result.callEdges,
+      dataFlowEdges: result.dataFlowEdges,
+      stats: { ...result.stats },
+    };
+  } catch {
+    // 中文说明：调用图是增强事实，失败不能回退到薄 parser，也不能阻断 AST 基础事实落地。
+    return undefined;
+  }
+}
+
+function withFile(
+  records: readonly Record<string, unknown>[],
+  file: string,
+): Record<string, unknown>[] {
+  return records.map((record) => ({ ...record, file }));
+}
+
+function dominantLanguage(files: readonly ParsedFileFacts[]): string {
+  const counts = new Map<string, number>();
+  for (const file of files) {
+    counts.set(file.languageId, (counts.get(file.languageId) ?? 0) + 1);
+  }
+  return (
+    [...counts.entries()].sort(
+      (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+    )[0]?.[0] ?? "unknown"
+  );
+}
+
+function buildPatternStats(
+  fileSummaries: readonly MainlineLegacyAstFileSummary[],
+): Record<string, unknown> {
+  const stats: Record<string, { count: number; files: string[]; instances: unknown[] }> = {};
+  for (const summary of fileSummaries) {
+    const patterns = Array.isArray(summary.patterns) ? summary.patterns : [];
+    for (const pattern of patterns) {
+      if (!isRecord(pattern)) {
+        continue;
+      }
+      const type = typeof pattern.type === "string" ? pattern.type : "unknown";
+      stats[type] ??= { count: 0, files: [], instances: [] };
+      stats[type].count += 1;
+      if (!stats[type].files.includes(summary.file)) {
+        stats[type].files.push(summary.file);
+      }
+      stats[type].instances.push({ ...pattern, file: summary.file });
+    }
+  }
+  return stats;
+}
+
+function aggregateLegacyMetrics(
+  fileSummaries: readonly MainlineLegacyAstFileSummary[],
+): Record<string, unknown> {
+  const methods = fileSummaries.flatMap((summary) => summary.methods ?? []);
+  const classes = fileSummaries.flatMap((summary) => summary.classes ?? []);
+  const definitionMethods = methods.filter((method) => method.kind === "definition");
+  const classMethodCounts = new Map<string, number>();
+  for (const method of definitionMethods) {
+    if (typeof method.className === "string") {
+      classMethodCounts.set(method.className, (classMethodCounts.get(method.className) ?? 0) + 1);
+    }
+  }
+  const methodCountValues = [...classMethodCounts.values()];
+
+  return {
+    totalMethods: definitionMethods.length,
+    totalClasses: classes.length,
+    avgMethodsPerClass:
+      methodCountValues.length === 0
+        ? 0
+        : methodCountValues.reduce((sum, count) => sum + count, 0) / methodCountValues.length,
+    maxNestingDepth: maxNumeric(definitionMethods, "nestingDepth"),
+    longMethods: definitionMethods.filter((method) => numericValue(method.bodyLines) > 50),
+    complexMethods: definitionMethods.filter((method) => numericValue(method.complexity) > 10),
+  };
+}
+
+function maxNumeric(records: readonly Record<string, unknown>[], key: string): number {
+  return records.reduce((max, record) => Math.max(max, numericValue(record[key])), 0);
+}
+
+function numericValue(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function buildSemanticEdges(
   projectGraph: MainlineProjectGraph,
   files: readonly ParsedFileFacts[],
+  callGraph: MainlineProjectCallGraphFacts | undefined,
 ): MainlineProjectIntelligenceEdge[] {
   const graphEdges = projectGraph.edges.map((edge) => ({
     from: normalizeGraphNodeId(edge.from),
@@ -229,8 +444,29 @@ function buildSemanticEdges(
       ];
     }),
   );
+  const resolvedCallGraphEdges: MainlineProjectIntelligenceEdge[] = (
+    callGraph?.callEdges ?? []
+  ).map((edge) => ({
+    from: symbolNodeId(edge.caller),
+    to: symbolNodeId(edge.callee),
+    kind: edge.callType === "constructor" ? "constructs" : "calls",
+    file: edge.file,
+    line: edge.line,
+  }));
+  const dataFlowEdges: MainlineProjectIntelligenceEdge[] = (callGraph?.dataFlowEdges ?? []).map(
+    (edge) => ({
+    from: symbolNodeId(edge.from),
+    to: symbolNodeId(edge.to),
+    kind: "data_flow",
+  }),
+  );
 
-  return uniqueSemanticEdges([...graphEdges, ...callEdges]).sort(
+  return uniqueSemanticEdges([
+    ...graphEdges,
+    ...callEdges,
+    ...resolvedCallGraphEdges,
+    ...dataFlowEdges,
+  ]).sort(
     (left, right) =>
       left.from.localeCompare(right.from) ||
       left.to.localeCompare(right.to) ||

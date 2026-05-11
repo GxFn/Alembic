@@ -37,6 +37,32 @@ export interface MainlineProjectModuleSummary {
   readonly representativePaths: readonly string[];
 }
 
+export interface MainlineProjectModuleDependencyEdge {
+  readonly from: string;
+  readonly to: string;
+  readonly relation: string;
+  readonly weight: number;
+}
+
+export interface MainlineProjectModuleCycle {
+  readonly cycle: readonly string[];
+  readonly severity: "warning" | "error";
+}
+
+export interface MainlineProjectLayerLevel {
+  readonly level: number;
+  readonly name: string;
+  readonly modules: readonly string[];
+}
+
+export interface MainlineProjectLayerViolation {
+  readonly from: string;
+  readonly to: string;
+  readonly fromLayer: number;
+  readonly toLayer: number;
+  readonly relation: string;
+}
+
 export interface MainlineExternalDependencySummary {
   readonly specifier: string;
   readonly count: number;
@@ -57,9 +83,16 @@ export interface MainlineProjectPanoramaSummary {
   readonly testSourceRatio: number;
   readonly symbolCount: number;
   readonly callSiteCount: number;
+  readonly callGraphEdgeCount: number;
+  readonly dataFlowEdgeCount: number;
+  readonly crossFileCallEdgeCount: number;
   readonly dominantLanguage?: string;
   readonly languages: readonly MainlineProjectLanguageSummary[];
   readonly modules: readonly MainlineProjectModuleSummary[];
+  readonly moduleDependencyEdges: readonly MainlineProjectModuleDependencyEdge[];
+  readonly layers: readonly MainlineProjectLayerLevel[];
+  readonly layerViolations: readonly MainlineProjectLayerViolation[];
+  readonly moduleCycles: readonly MainlineProjectModuleCycle[];
   readonly externalDependencies: readonly MainlineExternalDependencySummary[];
   readonly unresolvedDependencyCount: number;
   readonly dependencyCycles: readonly string[][];
@@ -84,6 +117,13 @@ export class ProjectPanoramaSummary {
     const symbolCountByFile = countSymbolsByFile(artifact);
     const modules = buildModuleSummaries(artifact, symbolCountByFile);
     const languages = buildLanguageSummaries(artifact);
+    const moduleDependencyEdges = buildModuleDependencyEdges(artifact);
+    const moduleCycles = findModuleCycles(moduleDependencyEdges);
+    const layerHierarchy = inferModuleLayers(
+      modules.map((module) => module.name),
+      moduleDependencyEdges,
+      moduleCycles,
+    );
     const sourceFileCount = files.filter(isSourceFile).length;
     const testFileCount = files.filter(isTestFile).length;
     const docFileCount = files.filter(isDocFile).length;
@@ -102,9 +142,18 @@ export class ProjectPanoramaSummary {
       testSourceRatio: roundRatio(testFileCount, sourceFileCount),
       symbolCount: artifact.symbols.length,
       callSiteCount: artifact.callSites.length,
+      callGraphEdgeCount: artifact.callGraph?.callEdges.length ?? 0,
+      dataFlowEdgeCount: artifact.callGraph?.dataFlowEdges.length ?? 0,
+      crossFileCallEdgeCount: (artifact.callGraph?.callEdges ?? []).filter(
+        (edge) => pathFromFqn(edge.caller) !== pathFromFqn(edge.callee),
+      ).length,
       ...(dominantLanguage === undefined ? {} : { dominantLanguage }),
       languages,
       modules,
+      moduleDependencyEdges,
+      layers: layerHierarchy.levels,
+      layerViolations: layerHierarchy.violations,
+      moduleCycles,
       externalDependencies: summarizeExternalDependencies(
         artifact.projectGraph.externalDependencies,
       ),
@@ -244,6 +293,261 @@ function summarizeExternalDependencies(
     .sort(
       (left, right) => right.count - left.count || left.specifier.localeCompare(right.specifier),
     );
+}
+
+function buildModuleDependencyEdges(
+  artifact: MainlineProjectIntelligenceArtifact,
+): MainlineProjectModuleDependencyEdge[] {
+  const edges: MainlineProjectModuleDependencyEdge[] = [];
+
+  for (const edge of artifact.projectGraph.edges) {
+    if (!edge.from.startsWith("file:") || !edge.to.startsWith("file:")) {
+      continue;
+    }
+    const from = mainlineModuleNameForPath(edge.from.slice("file:".length));
+    const to = mainlineModuleNameForPath(edge.to.slice("file:".length));
+    if (from !== to) {
+      edges.push({ from, to, relation: edge.kind, weight: 0.5 });
+    }
+  }
+
+  for (const edge of artifact.callGraph?.callEdges ?? []) {
+    const from = mainlineModuleNameForPath(edge.file);
+    const to = mainlineModuleNameForPath(pathFromFqn(edge.callee));
+    if (from !== to) {
+      edges.push({ from, to, relation: "calls", weight: 1.0 });
+    }
+  }
+
+  for (const edge of artifact.callGraph?.dataFlowEdges ?? []) {
+    const from = mainlineModuleNameForPath(pathFromFqn(edge.from));
+    const to = mainlineModuleNameForPath(pathFromFqn(edge.to));
+    if (from !== to) {
+      edges.push({ from, to, relation: "data_flow", weight: 0.8 });
+    }
+  }
+
+  return dedupeModuleEdges(edges);
+}
+
+function dedupeModuleEdges(
+  edges: readonly MainlineProjectModuleDependencyEdge[],
+): MainlineProjectModuleDependencyEdge[] {
+  const byKey = new Map<string, MainlineProjectModuleDependencyEdge>();
+  for (const edge of edges) {
+    const key = `${edge.from}\u0000${edge.to}\u0000${edge.relation}`;
+    const current = byKey.get(key);
+    byKey.set(key, {
+      from: edge.from,
+      to: edge.to,
+      relation: edge.relation,
+      weight: (current?.weight ?? 0) + edge.weight,
+    });
+  }
+  return [...byKey.values()].sort(
+    (left, right) =>
+      left.from.localeCompare(right.from) ||
+      left.to.localeCompare(right.to) ||
+      left.relation.localeCompare(right.relation),
+  );
+}
+
+function findModuleCycles(
+  edges: readonly MainlineProjectModuleDependencyEdge[],
+): MainlineProjectModuleCycle[] {
+  const nodes = new Set<string>();
+  const adjacency = new Map<string, string[]>();
+  for (const edge of edges) {
+    nodes.add(edge.from);
+    nodes.add(edge.to);
+    adjacency.set(edge.from, [...(adjacency.get(edge.from) ?? []), edge.to]);
+  }
+  for (const [node, targets] of adjacency) {
+    adjacency.set(node, [...new Set(targets)].sort());
+  }
+
+  let index = 0;
+  const stack: string[] = [];
+  const onStack = new Set<string>();
+  const indices = new Map<string, number>();
+  const lowlinks = new Map<string, number>();
+  const cycles: MainlineProjectModuleCycle[] = [];
+
+  const strongConnect = (node: string): void => {
+    indices.set(node, index);
+    lowlinks.set(node, index);
+    index += 1;
+    stack.push(node);
+    onStack.add(node);
+
+    for (const next of adjacency.get(node) ?? []) {
+      if (!indices.has(next)) {
+        strongConnect(next);
+        lowlinks.set(node, Math.min(lowlinks.get(node) ?? 0, lowlinks.get(next) ?? 0));
+      } else if (onStack.has(next)) {
+        lowlinks.set(node, Math.min(lowlinks.get(node) ?? 0, indices.get(next) ?? 0));
+      }
+    }
+
+    if (lowlinks.get(node) === indices.get(node)) {
+      const component: string[] = [];
+      let current: string | undefined;
+      do {
+        current = stack.pop();
+        if (current) {
+          onStack.delete(current);
+          component.push(current);
+        }
+      } while (current && current !== node);
+
+      if (component.length > 1) {
+        const cycle = canonicalizeModuleCycle(component);
+        cycles.push({
+          cycle,
+          severity: cycle.length > 3 ? "error" : "warning",
+        });
+      }
+    }
+  };
+
+  for (const node of [...nodes].sort()) {
+    if (!indices.has(node)) {
+      strongConnect(node);
+    }
+  }
+
+  return cycles.sort((left, right) => left.cycle.join("\u0000").localeCompare(right.cycle.join("\u0000")));
+}
+
+function inferModuleLayers(
+  moduleNames: readonly string[],
+  edges: readonly MainlineProjectModuleDependencyEdge[],
+  cycles: readonly MainlineProjectModuleCycle[],
+): {
+  readonly levels: MainlineProjectLayerLevel[];
+  readonly violations: MainlineProjectLayerViolation[];
+} {
+  const modules = new Set(moduleNames);
+  const cyclePairs = new Set<string>();
+  for (const cycle of cycles) {
+    for (let index = 0; index < cycle.cycle.length; index += 1) {
+      const from = cycle.cycle[index];
+      const to = cycle.cycle[(index + 1) % cycle.cycle.length];
+      cyclePairs.add(`${from}\u0000${to}`);
+    }
+  }
+
+  const adjacency = new Map<string, Set<string>>();
+  for (const moduleName of modules) {
+    adjacency.set(moduleName, new Set());
+  }
+  for (const edge of edges) {
+    modules.add(edge.from);
+    modules.add(edge.to);
+    adjacency.set(edge.from, adjacency.get(edge.from) ?? new Set());
+    adjacency.set(edge.to, adjacency.get(edge.to) ?? new Set());
+    if (edge.from !== edge.to && !cyclePairs.has(`${edge.from}\u0000${edge.to}`)) {
+      adjacency.get(edge.from)?.add(edge.to);
+    }
+  }
+
+  const levels = new Map<string, number>();
+  const active = new Set<string>();
+  const computeLevel = (moduleName: string): number => {
+    const cached = levels.get(moduleName);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (active.has(moduleName)) {
+      return 0;
+    }
+    active.add(moduleName);
+    const deps = [...(adjacency.get(moduleName) ?? [])];
+    const level = deps.length === 0 ? 0 : Math.max(...deps.map((dep) => computeLevel(dep))) + 1;
+    active.delete(moduleName);
+    levels.set(moduleName, level);
+    return level;
+  };
+
+  for (const moduleName of [...modules].sort()) {
+    computeLevel(moduleName);
+  }
+
+  const grouped = new Map<number, string[]>();
+  for (const [moduleName, level] of levels) {
+    grouped.set(level, [...(grouped.get(level) ?? []), moduleName]);
+  }
+  const sortedGroups = [...grouped.entries()].sort((left, right) => left[0] - right[0]);
+  const layerLevels = sortedGroups.map(([level, groupedModules]) => ({
+    level,
+    name: inferLayerName(groupedModules, level, sortedGroups.length),
+    modules: groupedModules.sort(),
+  }));
+
+  const violations = edges.flatMap((edge) => {
+    const fromLayer = levels.get(edge.from);
+    const toLayer = levels.get(edge.to);
+    if (fromLayer === undefined || toLayer === undefined || fromLayer >= toLayer) {
+      return [];
+    }
+    return [
+      {
+        from: edge.from,
+        to: edge.to,
+        fromLayer,
+        toLayer,
+        relation: edge.relation,
+      },
+    ];
+  });
+
+  return { levels: layerLevels, violations };
+}
+
+function inferLayerName(modules: readonly string[], level: number, layerCount: number): string {
+  const joined = modules.join(" ");
+  if (/foundation|core|base|shared|common/i.test(joined) || level === 0) {
+    return "Foundation";
+  }
+  if (/model|entity|dto/i.test(joined)) {
+    return "Model";
+  }
+  if (/service|repository|manager|provider|store/i.test(joined)) {
+    return "Service";
+  }
+  if (/network|api|http/i.test(joined)) {
+    return "Networking";
+  }
+  if (/ui|view|screen|component|widget/i.test(joined)) {
+    return "UI";
+  }
+  if (/router|coordinator|navigation/i.test(joined)) {
+    return "Routing";
+  }
+  if (/test|spec|mock/i.test(joined)) {
+    return "Test";
+  }
+  if (level === layerCount - 1) {
+    return "Application";
+  }
+  return "Feature";
+}
+
+function canonicalizeModuleCycle(cycle: readonly string[]): string[] {
+  if (cycle.length === 0) {
+    return [];
+  }
+  const rotations = cycle.map((_, index) => [...cycle.slice(index), ...cycle.slice(0, index)]);
+  return (
+    rotations.sort((left, right) => left.join("\u0000").localeCompare(right.join("\u0000")))[0] ??
+    []
+  );
+}
+
+function pathFromFqn(fqn: string): string {
+  return fqn.startsWith("symbol:")
+    ? fqn.slice("symbol:".length).split("::")[0] ?? fqn
+    : fqn.split("::")[0] ?? fqn;
 }
 
 function countSymbolsByFile(artifact: MainlineProjectIntelligenceArtifact): Map<string, number> {

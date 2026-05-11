@@ -57,6 +57,14 @@ import {
 import type { ContentMiningPipelineArtifacts } from "./ContentMiningPipeline.js";
 import { ContentMiningRunner } from "./ContentMiningRunner.js";
 import {
+  JsonMainlineEngineeringWorkflowArtifactStore,
+  MAINLINE_ENGINEERING_CODE_GRAPH_STORE_PATH,
+  MAINLINE_ENGINEERING_ENTITY_GRAPH_STORE_PATH,
+  MAINLINE_ENGINEERING_PANORAMA_SNAPSHOT_STORE_PATH,
+  MAINLINE_ENGINEERING_WORKFLOW_ARTIFACT_STORE_PATH,
+  type MainlineEngineeringWorkflowArtifactStore,
+} from "./EngineeringWorkflowArtifactStore.js";
+import {
   JsonMainlineProjectIntelligenceArtifactStore,
   MAINLINE_PROJECT_INTELLIGENCE_ARTIFACT_STORE_PATH,
   type MainlineProjectIntelligenceArtifactStore,
@@ -208,6 +216,7 @@ export interface MainlineCompileSessionDependencies {
   readonly embeddingProvider?: MainlineEmbeddingPort;
   readonly searchIndexStore?: MainlineSearchIndexStore;
   readonly artifactStore?: MainlineProjectIntelligenceArtifactStore;
+  readonly engineeringWorkflowArtifactStore?: MainlineEngineeringWorkflowArtifactStore;
   readonly fingerprintStore?: FileFingerprintSnapshotStore;
   readonly projectIntelligenceRunner?: MainlineProjectIntelligenceRunner;
   readonly contentMiningRunner?: ContentMiningRunner;
@@ -240,6 +249,7 @@ interface MainlineCompileSessionRuntime {
   readonly embeddingProvider?: MainlineEmbeddingPort;
   readonly searchIndexStore: MainlineSearchIndexStore;
   readonly artifactStore: MainlineProjectIntelligenceArtifactStore;
+  readonly engineeringWorkflowArtifactStore: MainlineEngineeringWorkflowArtifactStore;
   readonly fingerprintStore: FileFingerprintSnapshotStore;
   readonly projectIntelligenceRunner: MainlineProjectIntelligenceRunner;
   readonly contentMiningRunner: ContentMiningRunner;
@@ -567,6 +577,25 @@ export class MainlineCompileSession {
         jsonStoreTarget(writeBoundary.runtime(MAINLINE_PROJECT_INTELLIGENCE_ARTIFACT_STORE_PATH)),
         jsonFileStore,
       );
+    const engineeringWorkflowArtifactStore =
+      this.#dependencies.engineeringWorkflowArtifactStore ??
+      new JsonMainlineEngineeringWorkflowArtifactStore(
+        {
+          workflowResult: jsonStoreTarget(
+            writeBoundary.runtime(MAINLINE_ENGINEERING_WORKFLOW_ARTIFACT_STORE_PATH),
+          ),
+          codeGraph: jsonStoreTarget(
+            writeBoundary.runtime(MAINLINE_ENGINEERING_CODE_GRAPH_STORE_PATH),
+          ),
+          entityGraph: jsonStoreTarget(
+            writeBoundary.runtime(MAINLINE_ENGINEERING_ENTITY_GRAPH_STORE_PATH),
+          ),
+          panoramaSnapshot: jsonStoreTarget(
+            writeBoundary.runtime(MAINLINE_ENGINEERING_PANORAMA_SNAPSHOT_STORE_PATH),
+          ),
+        },
+        jsonFileStore,
+      );
     const fingerprintStore =
       this.#dependencies.fingerprintStore ??
       new FileFingerprintSnapshotStore(
@@ -579,6 +608,7 @@ export class MainlineCompileSession {
         scanner,
         fileSystem,
         artifactStore,
+        engineeringWorkflowArtifactStore,
         contextIndex,
         searchIndex,
       });
@@ -617,6 +647,7 @@ export class MainlineCompileSession {
       ...(embeddingProvider === undefined ? {} : { embeddingProvider }),
       searchIndexStore,
       artifactStore,
+      engineeringWorkflowArtifactStore,
       fingerprintStore,
       projectIntelligenceRunner,
       contentMiningRunner,
@@ -685,6 +716,7 @@ async function runProjectIntelligence(
       generatedAt: request.generatedAt,
       files: input.projectFiles,
       ...(request.maxFileBytes === undefined ? {} : { maxFileBytes: request.maxFileBytes }),
+      engineeringWorkflow: true,
     });
   }
 
@@ -692,6 +724,7 @@ async function runProjectIntelligence(
     projectRoot: request.projectRoot,
     generatedAt: request.generatedAt,
     ...(request.maxFileBytes === undefined ? {} : { maxFileBytes: request.maxFileBytes }),
+    engineeringWorkflow: true,
     incremental: {
       fingerprintDiff: input.fingerprintDiff,
       ...(input.movedFiles.length === 0 ? {} : { movedFiles: input.movedFiles }),

@@ -11,7 +11,7 @@ import {
 import {
   defaultMainlineLanguageCatalog,
   type MainlineSourceSymbol,
-  StructuralMainlineAstParser,
+  TreeSitterMainlineAstParser,
 } from "../../../mainline/code/index.js";
 import { GuardFindingBuilder } from "../../../mainline/runtime/index.js";
 import type { ToolHandler, ToolRuntimeDependencies } from "../types.js";
@@ -801,7 +801,7 @@ async function buildAstOutline(
   dependencies: ToolRuntimeDependencies,
   options: { readonly kinds?: readonly string[]; readonly maxDepth: number },
 ) {
-  const parser = dependencies.astParser ?? new StructuralMainlineAstParser();
+  const parser = dependencies.astParser ?? new TreeSitterMainlineAstParser();
   const parsed = await parser.parse({ path: relativePath, content });
   if (parsed.status !== "parsed") {
     return null;
@@ -814,7 +814,7 @@ async function buildAstOutline(
   const language = defaultMainlineLanguageCatalog.displayName(parsed.languageId);
   const lineCount = content.split(/\r?\n/).length;
   const text = [
-    `// ${relativePath} — ${lineCount} lines, ${language}, mainline structural AST`,
+    `// ${relativePath} — ${lineCount} lines, ${language}, tree-sitter AST`,
     "",
     ...symbols.map((symbol) => symbol.text),
   ].join("\n");

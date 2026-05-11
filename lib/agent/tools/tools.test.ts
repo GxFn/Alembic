@@ -2,9 +2,12 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  EngineeringWorkflowGraphQueryProvider,
+  EngineeringWorkflowRunner,
+} from "../../engineering/index.js";
 import { MainlineWorkspacePaths, MainlineWriteBoundary } from "../../mainline/core/index.js";
 import { InMemoryContextIndex } from "../../mainline/data/index.js";
-import { MainlineProjectIntelligenceBuilder } from "../../mainline/graph/index.js";
 import {
   createRecipe,
   createSourceRef,
@@ -797,112 +800,63 @@ describe("runtime tools", () => {
 });
 
 describe("graph tools", () => {
-  it("uses project intelligence through an artifact provider", async () => {
-    const artifact = await new MainlineProjectIntelligenceBuilder().build({
-      projectRoot: "/project",
-      knownFiles: ["src/app.ts", "src/util.ts"],
-      files: [
-        {
-          path: "src/app.ts",
-          content: [
-            'import { helper } from "./util";',
-            "export function App() {",
-            "  return render();",
-            "}",
-            "function render() {",
-            "  return helper();",
-            "}",
-            "",
-          ].join("\n"),
-          languageId: "typescript",
-        },
-        {
-          path: "src/util.ts",
-          content: "export function helper() { return true; }\n",
-          languageId: "typescript",
-        },
-      ],
-      generatedAt: 1,
-    });
-
+  it("uses the engineering graph provider for overview and call queries", async () => {
     const router = new ToolRouter({
-      dependencies: { projectIntelligenceArtifactProvider: async () => artifact },
+      dependencies: { engineeringGraphProvider: await fixtureEngineeringGraphProvider() },
     });
     const overview = await router.invoke({ name: "graph.overview" });
     expectOk(overview);
-    expect((overview.data as { files: { total: number } }).files.total).toBe(2);
+    expect(overview.data).toMatchObject({
+      source: "engineering",
+      files: { total: 2 },
+      code: { callEdges: 1 },
+    });
 
     const query = await router.invoke({
       name: "graph.query",
-      input: { operation: "callees", ref: "src/app.ts::App" },
+      input: { operation: "callees", ref: "App.render" },
     });
 
     expectOk(query);
     const data = query.data as {
       readonly operation: string;
-      readonly result: ReadonlyArray<{ readonly symbol: { readonly fqn: string } }>;
+      readonly result: ReadonlyArray<{ readonly symbol: string }>;
     };
     expect(data.operation).toBe("callees");
-    expect(data.result.map((relation) => relation.symbol.fqn)).toEqual(["src/app.ts::render"]);
+    expect(data.result.map((relation) => relation.symbol)).toEqual(["helper"]);
   });
 
-  it("queries injected entity graphs for internal agent class and search operations", async () => {
-    const projectGraph = {
-      getOverview: () => ({ languages: ["objective-c"], totalFiles: 1 }),
-      getClassInfo: (name: string) => ({
-        name,
-        methods: ["viewDidLoad"],
-        file: "Sources/AppController.m",
-      }),
-      getCallers: (name: string, limit: number) => [{ name, limit, caller: "SceneDelegate" }],
-      searchEntities: (query: string, limit: number) => [{ query, limit, name: "AppController" }],
-    };
-    const codeEntityGraph = {
-      queryCallGraph: (name: string, direction: string, limit: number) => [
-        { name, direction, limit, callee: "render" },
-      ],
-      impactAnalysis: (name: string, limit: number) => [{ name, limit, impacted: "Window" }],
-    };
-    const router = new ToolRouter({ dependencies: { projectGraph, codeEntityGraph } });
+  it("queries engineering class, impact, and search operations through the same provider", async () => {
+    const router = new ToolRouter({
+      dependencies: { engineeringGraphProvider: await fixtureEngineeringGraphProvider() },
+    });
 
     const overview = await router.invoke({ name: "graph.overview" });
     expectOk(overview);
     expect(overview.data).toMatchObject({
-      source: "projectGraph",
-      overview: { languages: ["objective-c"], totalFiles: 1 },
+      source: "engineering",
+      files: { total: 2 },
     });
 
     const classInfo = await router.invoke({
       name: "graph.query",
-      input: { operation: "class", entity: "AppController" },
+      input: { operation: "class", entity: "App" },
     });
     expectOk(classInfo);
     expect(classInfo.data).toMatchObject({
       operation: "class",
-      entity: "AppController",
-      result: { name: "AppController", file: "Sources/AppController.m" },
-    });
-
-    const callers = await router.invoke({
-      name: "graph.query",
-      input: { operation: "callers", entity: "AppController", limit: 2 },
-    });
-    expectOk(callers);
-    expect(callers.data).toMatchObject({
-      operation: "callers",
-      entity: "AppController",
-      result: [{ name: "AppController", limit: 2, caller: "SceneDelegate" }],
+      entity: "App",
+      result: { name: "App", filePath: "src/app.ts" },
     });
 
     const impact = await router.invoke({
       name: "graph.query",
-      input: { operation: "impact", entity: "AppController", limit: 2 },
+      input: { operation: "impact", ref: "class:App", maxDepth: 2 },
     });
     expectOk(impact);
     expect(impact.data).toMatchObject({
       operation: "impact",
-      entity: "AppController",
-      result: [{ name: "AppController", limit: 2, impacted: "Window" }],
+      ref: "class:App",
     });
 
     const search = await router.invoke({
@@ -913,7 +867,10 @@ describe("graph tools", () => {
     expect(search.data).toMatchObject({
       operation: "search",
       entity: "App",
-      result: [{ query: "App", limit: 3, name: "AppController" }],
+      result: {
+        entities: expect.arrayContaining([expect.objectContaining({ name: "App" })]),
+        classes: expect.arrayContaining([expect.objectContaining({ name: "App" })]),
+      },
     });
   });
 });
@@ -983,6 +940,70 @@ describe("memory and meta tools", () => {
     );
   });
 });
+
+async function fixtureEngineeringGraphProvider(): Promise<EngineeringWorkflowGraphQueryProvider> {
+  const result = await new EngineeringWorkflowRunner().run({
+    projectRoot: "/project",
+    discoveryResult: {
+      targets: [{ name: "app", path: "/project", type: "application", language: "typescript" }],
+      files: [
+        {
+          name: "app.ts",
+          path: "src/app.ts",
+          relativePath: "src/app.ts",
+          language: "typescript",
+          targetName: "app",
+        },
+        {
+          name: "util.ts",
+          path: "src/util.ts",
+          relativePath: "src/util.ts",
+          language: "typescript",
+          targetName: "app",
+        },
+      ],
+      dependencyGraph: {
+        nodes: ["file:src/app.ts", "file:src/util.ts"],
+        edges: [{ from: "file:src/app.ts", to: "file:src/util.ts", type: "imports" }],
+      },
+    },
+    fileContents: {
+      "src/app.ts": 'import { helper } from "./util"; export class App { render(){ helper(); } }',
+      "src/util.ts": "export function helper() { return true; }",
+    },
+    astSummaries: {
+      fileSummaries: [
+        {
+          file: "src/app.ts",
+          lang: "typescript",
+          imports: [{ path: "./util" }],
+          classes: [{ name: "App", methods: [{ name: "render", line: 1 }] }],
+          callGraphEdges: [
+            {
+              caller: "App.render",
+              callee: "helper",
+              callType: "function",
+              resolveMethod: "fixture",
+              line: 1,
+              filePath: "src/app.ts",
+              isAwait: false,
+              argCount: 0,
+              sourceFilePath: "src/app.ts",
+              targetFilePath: "src/util.ts",
+            },
+          ],
+        },
+        {
+          file: "src/util.ts",
+          lang: "typescript",
+          methods: [{ name: "helper", line: 1 }],
+        },
+      ],
+    },
+    optionalStage: false,
+  });
+  return new EngineeringWorkflowGraphQueryProvider({ artifact: result.artifact });
+}
 
 function expectOk<T>(result: ToolResultEnvelope<T>): asserts result is ToolSuccessEnvelope<T> {
   expect(result.ok).toBe(true);

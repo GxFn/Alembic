@@ -67,6 +67,12 @@ export interface MainlineAstParseResult {
   symbols: MainlineSourceSymbol[];
   imports: MainlineImportRecord[];
   callSites: MainlineCallSite[];
+  /**
+   * 从 Alembic-legacy 迁入的成熟 AST 原始摘要。
+   * 中文说明：ProjectIntelligence/CallGraph/Panorama 会优先消费这个结构化事实，
+   * 避免再从薄层 symbol/import 结果里二次猜测工程关系。
+   */
+  legacySummary?: unknown;
   reason?: string;
 }
 

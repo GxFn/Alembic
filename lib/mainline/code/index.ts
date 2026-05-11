@@ -7,3 +7,4 @@ export * from "./MainlineImportPathResolver.js";
 export * from "./MainlineSymbolTableBuilder.js";
 export * from "./SourceFileScanner.js";
 export * from "./StructuralAstParser.js";
+export * from "./TreeSitterAstParser.js";

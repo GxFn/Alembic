@@ -15,6 +15,14 @@ import {
   MainlineProjectIntelligenceBuilder,
   type MainlineProjectIntelligenceFileInput,
 } from "../graph/index.js";
+import type { MainlineEngineeringWorkflowArtifactStore } from "./EngineeringWorkflowArtifactStore.js";
+import {
+  buildEngineeringWorkflowInput,
+  MainlineEngineeringWorkflowCompileAdapter,
+  type MainlineEngineeringWorkflowCompileAdapterPort,
+  type MainlineEngineeringWorkflowCompileAdapterRequest,
+  type MainlineEngineeringWorkflowCompileAdapterResult,
+} from "./EngineeringWorkflowCompileAdapter.js";
 import { mergeMainlineProjectIntelligenceArtifact } from "./ProjectIntelligenceArtifactMerge.js";
 import {
   InMemoryMainlineProjectIntelligenceArtifactStore,
@@ -38,6 +46,13 @@ export type MainlineProjectIntelligenceRunnerIncrementalRequest = Omit<
   "artifact"
 >;
 
+export type MainlineProjectIntelligenceEngineeringWorkflowRequest =
+  | boolean
+  | Pick<
+      MainlineEngineeringWorkflowCompileAdapterRequest,
+      "computedAt" | "maxFiles" | "optionalStage" | "stale" | "staleAfterMs"
+    >;
+
 export interface MainlineProjectIntelligenceRunnerRequest {
   readonly projectRoot: string;
   readonly files?: readonly MainlineProjectIntelligenceFileInput[];
@@ -46,6 +61,7 @@ export interface MainlineProjectIntelligenceRunnerRequest {
   readonly maxFileBytes?: number;
   readonly materialize?: boolean;
   readonly incremental?: MainlineProjectIntelligenceRunnerIncrementalRequest;
+  readonly engineeringWorkflow?: MainlineProjectIntelligenceEngineeringWorkflowRequest;
 }
 
 export interface MainlineProjectIntelligenceRunnerDependencies {
@@ -57,6 +73,8 @@ export interface MainlineProjectIntelligenceRunnerDependencies {
   readonly artifactStore?: MainlineProjectIntelligenceArtifactStore;
   readonly contextIndex?: ContextIndexWriter;
   readonly searchIndex?: MainlineProjectIntelligenceSearchWriter;
+  readonly engineeringWorkflowAdapter?: MainlineEngineeringWorkflowCompileAdapterPort;
+  readonly engineeringWorkflowArtifactStore?: MainlineEngineeringWorkflowArtifactStore;
 }
 
 export interface MainlineProjectIntelligenceSkippedFile {
@@ -70,6 +88,7 @@ export interface MainlineProjectIntelligenceRunnerResult {
   readonly scanResult?: MainlineSourceFileScanResult;
   readonly incrementalPlan?: MainlineProjectIntelligenceIncrementalPlan;
   readonly materialized?: MainlineProjectIntelligenceMaterializeResult;
+  readonly engineeringWorkflow?: MainlineEngineeringWorkflowCompileAdapterResult;
   readonly skippedFiles: MainlineProjectIntelligenceSkippedFile[];
 }
 
@@ -88,6 +107,8 @@ export class MainlineProjectIntelligenceRunner {
   readonly #artifactStore: MainlineProjectIntelligenceArtifactStore;
   readonly #contextIndex: ContextIndexWriter | undefined;
   readonly #searchIndex: MainlineProjectIntelligenceSearchWriter | undefined;
+  readonly #engineeringWorkflowAdapter: MainlineEngineeringWorkflowCompileAdapterPort | undefined;
+  readonly #engineeringWorkflowArtifactStore: MainlineEngineeringWorkflowArtifactStore | undefined;
 
   constructor(dependencies: MainlineProjectIntelligenceRunnerDependencies = {}) {
     this.#scanner = dependencies.scanner ?? new MainlineSourceFileScanner();
@@ -100,6 +121,8 @@ export class MainlineProjectIntelligenceRunner {
       dependencies.artifactStore ?? new InMemoryMainlineProjectIntelligenceArtifactStore();
     this.#contextIndex = dependencies.contextIndex;
     this.#searchIndex = dependencies.searchIndex;
+    this.#engineeringWorkflowAdapter = dependencies.engineeringWorkflowAdapter;
+    this.#engineeringWorkflowArtifactStore = dependencies.engineeringWorkflowArtifactStore;
   }
 
   async run(
@@ -133,11 +156,13 @@ export class MainlineProjectIntelligenceRunner {
         ? await this.#materializer.materialize(artifact, this.#materializeTarget())
         : undefined;
     await this.#artifactStore.save(artifact);
+    const engineeringWorkflow = await this.#runEngineeringWorkflowSidecar(request, artifact, files);
 
     return {
       artifact,
       ...(scanResult === undefined ? {} : { scanResult }),
       ...(materialized === undefined ? {} : { materialized }),
+      ...(engineeringWorkflow === undefined ? {} : { engineeringWorkflow }),
       skippedFiles,
     };
   }
@@ -210,12 +235,14 @@ export class MainlineProjectIntelligenceRunner {
           )
         : undefined;
     await this.#artifactStore.save(artifact);
+    const engineeringWorkflow = await this.#runEngineeringWorkflowSidecar(request, artifact, files);
 
     return {
       artifact,
       patchArtifact,
       incrementalPlan,
       ...(materialized === undefined ? {} : { materialized }),
+      ...(engineeringWorkflow === undefined ? {} : { engineeringWorkflow }),
       skippedFiles: options.skippedFiles,
     };
   }
@@ -284,6 +311,70 @@ export class MainlineProjectIntelligenceRunner {
       ...(this.#searchIndex === undefined ? {} : { searchIndex: this.#searchIndex }),
     };
   }
+
+  async #runEngineeringWorkflowSidecar(
+    request: MainlineProjectIntelligenceRunnerRequest,
+    artifact: MainlineProjectIntelligenceArtifact,
+    files: readonly MainlineProjectIntelligenceFileInput[],
+  ): Promise<MainlineEngineeringWorkflowCompileAdapterResult | undefined> {
+    const engineeringWorkflowRequest = request.engineeringWorkflow;
+    if (!engineeringWorkflowRequest) {
+      return undefined;
+    }
+
+    const adapterRequest: MainlineEngineeringWorkflowCompileAdapterRequest = {
+      projectRoot: request.projectRoot,
+      artifact,
+      files,
+      ...(request.generatedAt === undefined ? {} : { generatedAt: request.generatedAt }),
+      ...normalizeEngineeringWorkflowRequest(engineeringWorkflowRequest),
+    };
+    const adapter =
+      this.#engineeringWorkflowAdapter ?? new MainlineEngineeringWorkflowCompileAdapter();
+    try {
+      return await this.#persistEngineeringWorkflowSidecar(await adapter.run(adapterRequest));
+    } catch (error: unknown) {
+      // 中文说明：engineering sidecar 是迁移期增强链路，失败不能阻断已验证的 mainline artifact。
+      return {
+        status: "failed",
+        input: buildEngineeringWorkflowInput(adapterRequest),
+        diagnostics: [
+          {
+            source: "adapter",
+            severity: "error",
+            message: "Engineering workflow adapter threw during sidecar compile.",
+            cause: errorMessage(error),
+          },
+        ],
+      };
+    }
+  }
+
+  async #persistEngineeringWorkflowSidecar(
+    result: MainlineEngineeringWorkflowCompileAdapterResult,
+  ): Promise<MainlineEngineeringWorkflowCompileAdapterResult> {
+    if (!this.#engineeringWorkflowArtifactStore || !result.workflowResult) {
+      return result;
+    }
+    try {
+      await this.#engineeringWorkflowArtifactStore.save(result.workflowResult);
+      return result;
+    } catch (error: unknown) {
+      return {
+        ...result,
+        status: result.status === "failed" ? "failed" : "partial",
+        diagnostics: [
+          ...result.diagnostics,
+          {
+            source: "adapter",
+            severity: "warning",
+            message: "Engineering workflow sidecar artifact persistence failed.",
+            cause: errorMessage(error),
+          },
+        ],
+      };
+    }
+  }
 }
 
 function incrementalMaterializeOptions(
@@ -347,4 +438,20 @@ function documentBelongsToAffectedFile(
 
 function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort();
+}
+
+function normalizeEngineeringWorkflowRequest(
+  request: MainlineProjectIntelligenceEngineeringWorkflowRequest,
+): Omit<
+  MainlineEngineeringWorkflowCompileAdapterRequest,
+  "projectRoot" | "artifact" | "files" | "generatedAt"
+> {
+  if (request === true || request === false) {
+    return {};
+  }
+  return request;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

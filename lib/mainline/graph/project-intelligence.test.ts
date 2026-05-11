@@ -22,6 +22,20 @@ describe("mainline project intelligence read model", () => {
         specifier: "./util",
       }),
     );
+    expect(artifact.astProjectSummary?.fileSummaries).toHaveLength(2);
+    expect(artifact.callGraph?.callEdges).toContainEqual(
+      expect.objectContaining({
+        caller: "src/app.ts::render",
+        callee: "src/util.ts::helper",
+      }),
+    );
+    expect(artifact.semanticEdges).toContainEqual(
+      expect.objectContaining({
+        from: "symbol:src/app.ts::render",
+        to: "symbol:src/util.ts::helper",
+        kind: "calls",
+      }),
+    );
     expect(queries.callees("src/app.ts::App").map((relation) => relation.symbol.fqn)).toEqual([
       "src/app.ts::render",
     ]);
