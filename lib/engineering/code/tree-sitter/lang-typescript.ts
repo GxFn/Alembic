@@ -1,4 +1,4 @@
-import type { EngineeringCodeAstProtocolFact } from "../ast/EngineeringCodeAstFacts.js";
+import type { EngineeringCodeAstProtocolFact } from "../ast/facts.js";
 import type {
   EngineeringCodeAstClassFact,
   EngineeringCodeAstMethodFact,

@@ -1,9 +1,4 @@
-export {
-  type ProjectSnapshotProjectionOptions,
-  projectSnapshotFromEngineeringWorkflowResult,
-  projectSnapshotInputFromEngineeringWorkflowResult,
-} from "./EngineeringWorkflowProjection.js";
-export { buildProjectSnapshot } from "./ProjectSnapshotBuilder.js";
+export { buildProjectSnapshot } from "./builder.js";
 export {
   ENGINEERING_PROJECT_SNAPSHOT_VERSION,
   type ProjectSnapshot,
@@ -15,9 +10,14 @@ export {
   type ProjectSnapshotLocalPackageModule,
   type ProjectSnapshotTarget,
   type ProjectSnapshotTargetInput,
-} from "./ProjectSnapshotTypes.js";
+} from "./types.js";
 export {
   type ProjectSnapshotSessionCache,
   toResponseData,
   toSessionCache,
-} from "./ProjectSnapshotViews.js";
+} from "./views.js";
+export {
+  type ProjectSnapshotProjectionOptions,
+  projectSnapshotFromEngineeringWorkflowResult,
+  projectSnapshotInputFromEngineeringWorkflowResult,
+} from "./workflow-projection.js";

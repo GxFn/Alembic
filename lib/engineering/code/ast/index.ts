@@ -15,9 +15,9 @@ export type {
   EngineeringCodeAstReceiverTypeFact,
   EngineeringCodeAstReferenceFact,
   EngineeringCodeAstTextFact,
-} from "./EngineeringCodeAstFacts.js";
+} from "./facts.js";
 export {
   normalizeEngineeringCodeAstFileSummary,
   normalizeEngineeringCodeAstSummary,
   normalizeEngineeringCodeAstSummaryInput,
-} from "./EngineeringCodeAstNormalizer.js";
+} from "./normalizer.js";

@@ -1,11 +1,13 @@
-export { CallEdgeResolver } from "./CallEdgeResolver.js";
-export { CallGraphAnalyzer } from "./CallGraphAnalyzer.js";
+export { CallEdgeResolver } from "./call-edge-resolver.js";
+export { CallGraphAnalyzer } from "./call-graph.js";
 export {
   CallSiteExtractor,
   normalizeCallSiteRecord,
   parseCallsFromText,
-} from "./CallSiteExtractor.js";
-export { DataFlowInferrer } from "./DataFlowInferrer.js";
+} from "./call-site-extractor.js";
+export { DataFlowInferrer } from "./data-flow.js";
+export { ImportPathResolver } from "./import-path-resolver.js";
+export { SymbolTableBuilder } from "./symbol-table.js";
 export type {
   EngineeringCodeAnalysisInput,
   EngineeringCodeAnalysisTier,
@@ -18,6 +20,4 @@ export type {
   EngineeringCodeSymbolDeclaration,
   EngineeringCodeSymbolKind,
   EngineeringCodeSymbolTable,
-} from "./EngineeringCodeAnalysisTypes.js";
-export { ImportPathResolver } from "./ImportPathResolver.js";
-export { SymbolTableBuilder } from "./SymbolTableBuilder.js";
+} from "./types.js";

@@ -4,7 +4,15 @@
  * @module engineering/dimension
  */
 
-export { DimensionCopy } from "./DimensionCopy.js";
+export { DimensionCopy } from "./copy.js";
+export {
+  dimensionTags,
+  isKnownDimensionId,
+  recipeBelongsToDimension,
+  recipeDimensionIdOrUnknown,
+  recipeStorageBucket,
+  resolveRecipeDimensionId,
+} from "./recipe.js";
 export {
   buildTierPlan,
   classifyRecipeToDimension,
@@ -13,31 +21,23 @@ export {
   getDimension,
   getDimensionsByLayer,
   resolveActiveDimensions,
-} from "./DimensionRegistry.js";
+} from "./registry.js";
 export {
   getDimensionFocusKeywords,
   getDimensionSOP,
   PRE_SUBMIT_CHECKLIST,
   sopToCompactText,
-} from "./DimensionSop.js";
-export {
-  dimensionTags,
-  isKnownDimensionId,
-  recipeBelongsToDimension,
-  recipeDimensionIdOrUnknown,
-  recipeStorageBucket,
-  resolveRecipeDimensionId,
-} from "./RecipeDimension.js";
+} from "./sop.js";
 export type {
   DimensionId,
   FrameworkDimId,
   LanguageDimId,
   UnifiedDimension,
   UniversalDimId,
-} from "./UnifiedDimension.js";
+} from "./unified.js";
 export {
   ALL_DIMENSION_IDS,
   FRAMEWORK_DIM_IDS,
   LANGUAGE_DIM_IDS,
   UNIVERSAL_DIM_IDS,
-} from "./UnifiedDimension.js";
+} from "./unified.js";
