@@ -1,4 +1,4 @@
-import { defaultMainlineLanguageCatalog } from "../../engineering/code/language-catalog.js";
+import { defaultMainlineLanguageCatalog } from "../../engineering/code/index.js";
 import type { Recipe, RecipeInput } from "./Recipe.js";
 import type { RecipeSubmission } from "./RecipeSubmission.js";
 

@@ -26,6 +26,8 @@ describe("engineering enhancement registry", () => {
         "python-langchain",
       ]),
     );
+    expect(packs.flatMap((pack) => pack.getGuardRules())).toHaveLength(54);
+    expect(packs.every((pack) => typeof pack.detectPatterns === "function")).toBe(true);
   });
 
   it("resolves packs and preserves dimension, guard, and pattern APIs", () => {

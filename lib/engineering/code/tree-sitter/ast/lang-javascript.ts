@@ -2,15 +2,15 @@ import type {
   EngineeringCodeAstClassFact,
   EngineeringCodeAstMethodFact,
   EngineeringCodeAstPropertyFact,
-} from "../ast/index.js";
-import { extractCallSitesEcma } from "./call-sites.js";
-import { createImportFact } from "./import-facts.js";
-import { estimateComplexity, maxNesting } from "./metrics.js";
+} from "../../ast/index.js";
+import { extractCallSitesEcma } from "../call-sites.js";
+import { createImportFact } from "../import-facts.js";
+import { estimateComplexity, maxNesting } from "../metrics.js";
 import type {
   EngineeringTreeSitterContext,
   EngineeringTreeSitterLanguagePlugin,
   TreeSitterNode,
-} from "./types.js";
+} from "../types.js";
 
 let javascriptGrammar: unknown = null;
 

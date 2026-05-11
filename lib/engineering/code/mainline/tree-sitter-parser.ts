@@ -1,4 +1,10 @@
 import path from "node:path";
+import {
+  analyzeFile,
+  type EngineeringTreeSitterLanguageId,
+  initializeTreeSitterRuntime,
+  isAvailable,
+} from "../tree-sitter/index.js";
 import type {
   MainlineAstParseRequest,
   MainlineAstParseResult,
@@ -13,12 +19,6 @@ import {
   defaultMainlineLanguageCatalog,
   type MainlineLanguageCatalog,
 } from "./language-catalog.js";
-import {
-  analyzeFile,
-  type EngineeringTreeSitterLanguageId,
-  initializeTreeSitterRuntime,
-  isAvailable,
-} from "./tree-sitter/index.js";
 
 interface LegacyAstSummary {
   readonly classes?: readonly LegacyClassRecord[];

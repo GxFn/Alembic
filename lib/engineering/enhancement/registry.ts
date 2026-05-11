@@ -2,16 +2,16 @@ import type {
   AstSummary,
   DetectedPattern,
   EngineeringEnhancementConditions,
-  EngineeringEnhancementPackDefinition,
+  EnhancementPack,
   ExtraDimension,
   GuardRule,
+  PreprocessedEnhancementFile,
 } from "./pack.js";
-import { EngineeringEnhancementPack } from "./pack.js";
 
 export class EngineeringEnhancementRegistry {
-  readonly #packs: EngineeringEnhancementPack[] = [];
+  readonly #packs: EnhancementPack[] = [];
 
-  register(pack: EngineeringEnhancementPack): this {
+  register(pack: EnhancementPack): this {
     const existingIndex = this.#packs.findIndex((candidate) => candidate.id === pack.id);
     if (existingIndex === -1) {
       this.#packs.push(pack);
@@ -21,37 +21,18 @@ export class EngineeringEnhancementRegistry {
     return this;
   }
 
-  registerDefinition(definition: EngineeringEnhancementPackDefinition): this {
-    return this.register(new EngineeringEnhancementPack(definition));
+  /** 根据语言和框架筛选适用的增强包。 */
+  resolve(primaryLang: string, detectedFrameworks: readonly string[] = []): EnhancementPack[] {
+    return this.#packs.filter((pack) =>
+      matchesEngineeringEnhancementConditions(pack.conditions, primaryLang, detectedFrameworks),
+    );
   }
 
-  resolve(
-    primaryLang: string,
-    detectedFrameworks: readonly string[] = [],
-  ): EngineeringEnhancementPack[] {
-    const normalizedLang = normalizeToken(primaryLang);
-    const normalizedFrameworks = new Set(detectedFrameworks.map(normalizeToken));
-
-    return this.#packs.filter((pack) => {
-      const conditions = pack.conditions;
-      const languageMatch =
-        conditions.languages.length === 0 ||
-        conditions.languages.some((language) => normalizeToken(language) === normalizedLang);
-      const frameworkMatch =
-        !conditions.frameworks ||
-        conditions.frameworks.length === 0 ||
-        conditions.frameworks.some((framework) =>
-          normalizedFrameworks.has(normalizeToken(framework)),
-        );
-      return languageMatch && frameworkMatch;
-    });
-  }
-
-  get(id: string): EngineeringEnhancementPack | undefined {
+  get(id: string): EnhancementPack | undefined {
     return this.#packs.find((pack) => pack.id === id);
   }
 
-  all(): EngineeringEnhancementPack[] {
+  all(): EnhancementPack[] {
     return [...this.#packs];
   }
 
@@ -87,7 +68,7 @@ export class EngineeringEnhancementRegistry {
     ext: string,
     primaryLang: string,
     detectedFrameworks: readonly string[] = [],
-  ): { readonly content: string; readonly lang: string; readonly packId: string } | null {
+  ): (PreprocessedEnhancementFile & { readonly packId: string }) | null {
     for (const pack of this.resolve(primaryLang, detectedFrameworks)) {
       const result = pack.preprocessFile(content, ext);
       if (result) {
@@ -103,16 +84,33 @@ export function matchesEngineeringEnhancementConditions(
   primaryLang: string,
   detectedFrameworks: readonly string[] = [],
 ): boolean {
-  const registry = new EngineeringEnhancementRegistry();
-  registry.register(
-    new EngineeringEnhancementPack({
-      id: "candidate",
-      displayName: "Candidate",
-      languages: conditions.languages,
-      ...(conditions.frameworks === undefined ? {} : { frameworks: conditions.frameworks }),
-    }),
-  );
-  return registry.resolve(primaryLang, detectedFrameworks).length > 0;
+  const normalizedLang = normalizeLanguage(primaryLang);
+  const normalizedFrameworks = new Set(detectedFrameworks.map(normalizeToken));
+  const languageMatch =
+    conditions.languages.length === 0 ||
+    conditions.languages.some((language) => normalizeLanguage(language) === normalizedLang);
+  const frameworkMatch =
+    !conditions.frameworks ||
+    conditions.frameworks.length === 0 ||
+    conditions.frameworks.some((framework) => normalizedFrameworks.has(normalizeToken(framework)));
+  return languageMatch && frameworkMatch;
+}
+
+function normalizeLanguage(value: string): string {
+  const lower = normalizeToken(value);
+  if (lower === "ts" || lower === "tsx") {
+    return "typescript";
+  }
+  if (lower === "js" || lower === "jsx" || lower === "node") {
+    return "javascript";
+  }
+  if (lower === "py") {
+    return "python";
+  }
+  if (lower === "rs") {
+    return "rust";
+  }
+  return lower;
 }
 
 function normalizeToken(value: string): string {
@@ -137,3 +135,5 @@ function dedupePatterns(patterns: readonly DetectedPattern[]): DetectedPattern[]
     ).values(),
   ];
 }
+
+export { EngineeringEnhancementRegistry as EnhancementRegistry };

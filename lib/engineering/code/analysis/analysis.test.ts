@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
+import type { EngineeringCodeAstSummaryInput } from "../types.js";
 import {
   CallGraphAnalyzer,
   CallSiteExtractor,
   ImportPathResolver,
   SymbolTableBuilder,
-} from "./analysis/index.js";
-import type { EngineeringCodeAstSummaryInput } from "./types.js";
+} from "./index.js";
 
 const analysisSummary: EngineeringCodeAstSummaryInput = {
   fileSummaries: [

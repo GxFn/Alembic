@@ -2,6 +2,19 @@ import type {
   EngineeringCodeAstFileSummaryInput,
   EngineeringCodeAstSummaryInput,
 } from "../../code/types.js";
+import {
+  type AstClassInfo,
+  type AstMethodInfo,
+  type AstPatternInfo,
+  type AstProtocolInfo,
+  type AstSummary,
+  type DetectedPattern,
+  type EnhancementPack,
+  type ExtraDimension,
+  type GuardRule,
+  getEngineeringEnhancementRegistry,
+} from "../../enhancement/index.js";
+import { getEngineeringEnhancementPackMatcher } from "../../enhancement/matchers.js";
 import type { EngineeringFile } from "../../foundation/types.js";
 import type { EngineeringImportFact } from "../../panorama/module-discoverer.js";
 import type {
@@ -9,10 +22,6 @@ import type {
   EngineeringPanoramaSnapshot,
   EngineeringTechStackItem,
 } from "../../panorama/types.js";
-import {
-  type EngineeringWorkflowEnhancementPackDefinition,
-  LEGACY_ENHANCEMENT_PACKS,
-} from "./enhancement-catalog.js";
 import type {
   EngineeringWorkflowEnhancementPatternCandidate,
   EngineeringWorkflowEnhancementPreprocessInput,
@@ -30,19 +39,29 @@ export function preprocessEnhancements(
 ): EngineeringWorkflowEnhancementPreprocessResult {
   const context = buildEnhancementContext(input);
   const minConfidence = input.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
-  const matched = LEGACY_ENHANCEMENT_PACKS.map((pack) => resolvePack(pack, context)).filter(
-    (result) => result.confidence >= minConfidence,
-  );
+  const registry = getEngineeringEnhancementRegistry();
+  const matched = registry
+    .all()
+    .map((pack) => resolvePack(pack, context))
+    .filter((result) => result.confidence >= minConfidence);
 
   const signals = matched.flatMap((pack) => pack.signals);
-  const patterns = matched.flatMap((pack) => detectPatternCandidates(pack.definition, context));
-  const guardRules = dedupeGuardRules(matched.flatMap((pack) => pack.definition.guardRules));
-  const dimensions = dedupeDimensions(matched.flatMap((pack) => pack.definition.dimensions));
+  const patterns = dedupePatterns(
+    matched.flatMap((pack) => detectPatternCandidates(pack.pack, context)),
+  );
+  const guardRules = dedupeGuardRules(
+    matched.flatMap((pack) => pack.pack.getGuardRules().map((rule) => toGuardRuleFact(rule))),
+  );
+  const dimensions = dedupeDimensions(
+    matched.flatMap((pack) =>
+      pack.pack.getExtraDimensions().map((dimension) => toOptionalDimension(dimension, pack.pack)),
+    ),
+  );
 
   return {
     packs: matched.map((pack) => ({
-      id: pack.definition.id,
-      displayName: pack.definition.displayName,
+      id: pack.pack.id,
+      displayName: pack.pack.displayName,
       matched: true,
       confidence: pack.confidence,
       signals: pack.signals,
@@ -57,7 +76,7 @@ export function preprocessEnhancements(
             {
               code: "optional.enhancement.no-match",
               severity: "info",
-              message: "No legacy enhancement pack matched the supplied engineering facts.",
+              message: "No enhancement pack matched the supplied engineering facts.",
               source: "enhancement-preprocessor",
             },
           ]
@@ -67,6 +86,7 @@ export function preprocessEnhancements(
 
 interface EnhancementContext {
   readonly languages: ReadonlySet<string>;
+  readonly frameworks: ReadonlySet<string>;
   readonly techStackNames: readonly string[];
   readonly importSpecifiers: readonly ImportSignal[];
   readonly files: readonly FileSignal[];
@@ -92,7 +112,7 @@ interface RoleSignal {
 }
 
 interface PackResolution {
-  readonly definition: EngineeringWorkflowEnhancementPackDefinition;
+  readonly pack: EnhancementPack;
   readonly confidence: number;
   readonly signals: readonly EngineeringWorkflowEnhancementSignal[];
 }
@@ -104,6 +124,7 @@ function buildEnhancementContext(input: EngineeringWorkflowEnhancementPreprocess
   const techStackNames = normalizeTechStack(input.techStackItems, input.panoramaSnapshot);
   const roles = normalizeRoles(input.panoramaSnapshot);
   const languages = new Set<string>();
+  const frameworks = new Set<string>();
 
   for (const file of files) {
     const rawLanguage = file.language ?? languageForPath(file.path);
@@ -118,11 +139,14 @@ function buildEnhancementContext(input: EngineeringWorkflowEnhancementPreprocess
     }
   }
   for (const item of input.techStackItems ?? []) {
+    const name = normalizeToken(item.name);
     if (item.category === "language") {
       const lang = normalizeLanguage(item.name);
       if (lang) {
         languages.add(lang);
       }
+    } else {
+      frameworks.add(name);
     }
   }
   for (const lang of input.panoramaSnapshot?.techStack.primaryLanguages ?? []) {
@@ -131,9 +155,25 @@ function buildEnhancementContext(input: EngineeringWorkflowEnhancementPreprocess
       languages.add(normalized);
     }
   }
+  for (const category of input.panoramaSnapshot?.techStack.categories ?? []) {
+    for (const item of category.items) {
+      if (category.name.toLowerCase() === "language") {
+        const lang = normalizeLanguage(item.name);
+        if (lang) {
+          languages.add(lang);
+        }
+      } else {
+        frameworks.add(normalizeToken(item.name));
+      }
+    }
+  }
+  for (const name of techStackNames) {
+    frameworks.add(normalizeToken(name));
+  }
 
   return {
     languages,
+    frameworks,
     techStackNames,
     importSpecifiers,
     files,
@@ -142,49 +182,63 @@ function buildEnhancementContext(input: EngineeringWorkflowEnhancementPreprocess
   };
 }
 
-function resolvePack(
-  definition: EngineeringWorkflowEnhancementPackDefinition,
-  context: EnhancementContext,
-): PackResolution {
+function resolvePack(pack: EnhancementPack, context: EnhancementContext): PackResolution {
+  const matcher = getEngineeringEnhancementPackMatcher(pack.id);
   const signals: EngineeringWorkflowEnhancementSignal[] = [];
+  const conditions = pack.conditions;
 
-  for (const language of definition.languages) {
-    if (context.languages.has(language)) {
-      signals.push(signal(definition.id, "tech-stack", language, 0.35, "language match"));
+  for (const language of conditions.languages) {
+    if (context.languages.has(normalizeLanguage(language))) {
+      signals.push(signal(pack.id, "tech-stack", language, 0.35, "language match"));
+    }
+  }
+
+  for (const framework of conditions.frameworks ?? []) {
+    if (context.frameworks.has(normalizeToken(framework))) {
+      signals.push(signal(pack.id, "tech-stack", framework, 0.45, "framework match"));
     }
   }
 
   for (const name of context.techStackNames) {
-    if (matchesAnyAlias(name, definition.aliases) || matchesAnyAlias(name, definition.frameworks)) {
-      signals.push(signal(definition.id, "tech-stack", name, 0.45, "tech stack match"));
+    if (
+      matchesAnyAlias(name, matcher.aliases) ||
+      matchesAnyAlias(name, conditions.frameworks ?? [])
+    ) {
+      signals.push(signal(pack.id, "tech-stack", name, 0.45, "tech stack match"));
     }
   }
 
   for (const fact of context.importSpecifiers) {
-    if (matchesAnyAlias(fact.specifier, definition.aliases)) {
+    if (matchesAnyAlias(fact.specifier, matcher.aliases)) {
       signals.push(
-        signal(definition.id, "import", fact.specifier, 0.55, "import fact match", fact.filePath),
+        signal(pack.id, "import", fact.specifier, 0.55, "import fact match", fact.filePath),
       );
     }
   }
 
   for (const file of context.files) {
-    if (definition.fileHints.some((hint) => hint.test(file.path))) {
-      signals.push(signal(definition.id, "file", file.path, 0.3, "file path match", file.path));
+    if (matcher.fileHints.some((hint) => hint.test(file.path))) {
+      signals.push(signal(pack.id, "file", file.path, 0.3, "file path match", file.path));
     }
     if (
       typeof file.content === "string" &&
-      definition.aliases.some((alias) => contentMentions(file.content ?? "", alias))
+      matcher.aliases.some((alias) => contentMentions(file.content ?? "", alias))
     ) {
-      signals.push(signal(definition.id, "file", file.path, 0.35, "file content match", file.path));
+      signals.push(signal(pack.id, "file", file.path, 0.35, "file content match", file.path));
+    }
+    const preprocessed = pack.preprocessFile(file.content ?? "", extensionForPath(file.path));
+    if (preprocessed) {
+      signals.push(
+        signal(pack.id, "file", file.path, 0.45, "pack preprocessor accepted file", file.path),
+      );
     }
   }
 
   for (const role of context.roles) {
-    if (definition.roleHints.some((hint) => hint.test(role.role))) {
+    if (matcher.roleHints.some((hint) => hint.test(role.role))) {
       signals.push(
         signal(
-          definition.id,
+          pack.id,
           "panorama-role",
           `${role.module}:${role.role}`,
           Math.min(0.35, role.confidence),
@@ -195,29 +249,35 @@ function resolvePack(
   }
 
   const languageMatched =
-    definition.languages.length === 0 ||
-    definition.languages.some((language) => context.languages.has(language));
-  const frameworkMatched = signals.some((item) => item.source !== "panorama-role");
+    conditions.languages.length === 0 ||
+    conditions.languages.some((language) => context.languages.has(normalizeLanguage(language)));
+  const frameworkMatched =
+    !conditions.frameworks ||
+    conditions.frameworks.length === 0 ||
+    conditions.frameworks.some((framework) => context.frameworks.has(normalizeToken(framework))) ||
+    signals.some((item) => item.source !== "panorama-role" && item.source !== "tech-stack");
   const rawConfidence = signals.reduce((sum, item) => sum + item.confidence, 0);
   const confidence = Math.min(1, rawConfidence * (languageMatched || frameworkMatched ? 1 : 0.55));
 
   return {
-    definition,
+    pack,
     confidence,
     signals: dedupeSignals(signals),
   };
 }
 
 function detectPatternCandidates(
-  definition: EngineeringWorkflowEnhancementPackDefinition,
+  pack: EnhancementPack,
   context: EnhancementContext,
 ): readonly EngineeringWorkflowEnhancementPatternCandidate[] {
   const patterns: EngineeringWorkflowEnhancementPatternCandidate[] = [];
+  const matcher = getEngineeringEnhancementPackMatcher(pack.id);
+
   for (const fact of context.importSpecifiers) {
-    if (matchesAnyAlias(fact.specifier, definition.aliases)) {
+    if (matchesAnyAlias(fact.specifier, matcher.aliases)) {
       patterns.push({
-        type: `${definition.id}-ecosystem-usage`,
-        packId: definition.id,
+        type: `${pack.id}-ecosystem-usage`,
+        packId: pack.id,
         confidence: 0.78,
         source: "import",
         evidence: [fact.specifier],
@@ -228,98 +288,172 @@ function detectPatternCandidates(
 
   for (const astFile of context.astFiles) {
     const filePath = stringValue(astFile.file ?? astFile.path ?? astFile.filePath);
-    for (const method of arrayRecords(astFile.methods)) {
-      const name = stringValue(method.name);
-      if (!name) {
-        continue;
-      }
-      const candidate = methodPattern(definition.id, name);
-      if (candidate) {
-        const line = numberValue(method.line);
-        patterns.push({
-          type: candidate,
-          packId: definition.id,
-          confidence: 0.82,
-          source: "ast",
-          evidence: [name],
-          ...(filePath ? { filePath } : {}),
-          ...(line === undefined ? {} : { line }),
-        });
-      }
-    }
-    for (const cls of arrayRecords(astFile.classes)) {
-      const name = stringValue(cls.name);
-      if (!name) {
-        continue;
-      }
-      const candidate = classPattern(definition.id, name, cls);
-      if (candidate) {
-        const line = numberValue(cls.line);
-        patterns.push({
-          type: candidate,
-          packId: definition.id,
-          confidence: 0.8,
-          source: "ast",
-          evidence: [name],
-          ...(filePath ? { filePath } : {}),
-          ...(line === undefined ? {} : { line }),
-        });
-      }
+    const summary = astSummaryForFile(astFile);
+    for (const pattern of pack.detectPatterns(summary)) {
+      patterns.push(toPatternCandidate(pattern, pack.id, filePath));
     }
   }
-
-  if (patterns.length === 0) {
-    return definition.patternTypes.slice(0, 2).map((type) => ({
-      type,
-      packId: definition.id,
-      confidence: 0.55,
-      source: "pack",
-      evidence: ["pack matched"],
-    }));
-  }
-
   return dedupePatterns(patterns);
 }
 
-function methodPattern(packId: string, methodName: string): string | null {
-  if (packId === "react" && /^use[A-Z]/.test(methodName)) {
-    return "custom-hook";
-  }
-  if (packId === "react" && /^[A-Z]/.test(methodName)) {
-    return "react-component";
-  }
-  if (packId === "fastapi" && methodName.startsWith("get_")) {
-    return "fastapi-dependency";
-  }
-  if (packId === "rust-web" && /^(get|post|put|delete|handle|list|create)_/.test(methodName)) {
-    return "rust-web-handler";
-  }
-  if (packId === "node-server" && /middleware|handler|controller/i.test(methodName)) {
-    return "middleware";
-  }
-  return null;
+function astSummaryForFile(astFile: EngineeringCodeAstFileSummaryInput): AstSummary {
+  return {
+    methods: arrayRecords(astFile.methods).map(toAstMethod),
+    classes: arrayRecords(astFile.classes).map(toAstClass),
+    protocols: arrayRecords(astFile.protocols).map(toAstProtocol),
+    imports: importsForAstFile(astFile),
+    patterns: arrayRecords(astFile.patterns).map(toAstPattern),
+  };
 }
 
-function classPattern(
+function toAstMethod(record: Record<string, unknown>): AstMethodInfo {
+  return compactObject({
+    name: stringValue(record.name),
+    className: optionalString(record.className),
+    line: numberValue(record.line),
+    paramCount: numberValue(record.paramCount),
+    isAsync: booleanValue(record.isAsync),
+    isExported: booleanValue(record.isExported),
+    isClassMethod: booleanValue(record.isClassMethod),
+    decorators: optionalStringArray(record.decorators),
+    annotations: optionalStringArray(record.annotations),
+  });
+}
+
+function toAstClass(record: Record<string, unknown>): AstClassInfo {
+  return compactObject({
+    name: stringValue(record.name),
+    line: numberValue(record.line),
+    superclass: optionalString(record.superclass ?? record.superClass),
+    kind: optionalString(record.kind),
+    methods: optionalStringArray(record.methods),
+    interfaces: optionalStringArray(record.interfaces),
+    annotations: optionalStringArray(record.annotations),
+    decorators: optionalStringArray(record.decorators),
+    embeddedTypes: optionalStringArray(record.embeddedTypes),
+    fieldCount: numberValue(record.fieldCount),
+    derives: optionalStringArray(record.derives),
+    traitName: optionalString(record.traitName),
+  });
+}
+
+function toAstProtocol(record: Record<string, unknown>): AstProtocolInfo {
+  return compactObject({
+    name: stringValue(record.name),
+    line: numberValue(record.line),
+    methods: optionalStringArray(record.methods),
+  });
+}
+
+function toAstPattern(record: Record<string, unknown>): AstPatternInfo {
+  return compactObject({
+    type: stringValue(record.type),
+    count: numberValue(record.count),
+    confidence: numberValue(record.confidence),
+  });
+}
+
+function importsForAstFile(astFile: EngineeringCodeAstFileSummaryInput): readonly string[] {
+  const imports: string[] = [];
+  for (const rawImport of Array.isArray(astFile.imports) ? astFile.imports : []) {
+    const record: Record<string, unknown> = isRecord(rawImport) ? rawImport : { path: rawImport };
+    const specifier = stringValue(
+      record.specifier ?? record.path ?? record.module ?? record.source,
+    );
+    if (specifier) {
+      imports.push(specifier);
+    }
+  }
+  for (const rawImport of Array.isArray(astFile.importFacts) ? astFile.importFacts : []) {
+    const record: Record<string, unknown> = isRecord(rawImport) ? rawImport : { path: rawImport };
+    const specifier = stringValue(
+      record.specifier ?? record.path ?? record.module ?? record.source,
+    );
+    if (specifier) {
+      imports.push(specifier);
+    }
+  }
+  return [...new Set(imports)];
+}
+
+function toPatternCandidate(
+  pattern: DetectedPattern,
   packId: string,
-  className: string,
-  cls: Record<string, unknown>,
-): string | null {
-  const lower = className.toLowerCase();
-  const superclass = stringValue(cls.superclass ?? cls.superClass);
-  if (packId === "fastapi" && /BaseModel|BaseSettings/.test(superclass)) {
-    return "pydantic-model";
+  filePath: string,
+): EngineeringWorkflowEnhancementPatternCandidate {
+  const metadata = patternMetadata(pattern);
+  return {
+    type: pattern.type,
+    packId,
+    confidence: pattern.confidence,
+    source: "ast",
+    evidence: patternEvidence(pattern),
+    ...(filePath ? { filePath } : {}),
+    ...(pattern.line === undefined ? {} : { line: pattern.line }),
+    ...(Object.keys(metadata).length === 0 ? {} : { metadata }),
+  };
+}
+
+function patternMetadata(pattern: DetectedPattern): Readonly<Record<string, unknown>> {
+  const metadata: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(pattern)) {
+    if (!["type", "className", "methodName", "line", "confidence"].includes(key)) {
+      metadata[key] = value;
+    }
   }
-  if (packId === "node-server" && lower.endsWith("dto")) {
-    return "node-dto";
+  return metadata;
+}
+
+function patternEvidence(pattern: DetectedPattern): readonly string[] {
+  return [
+    pattern.methodName,
+    pattern.className,
+    typeof pattern.importName === "string" ? pattern.importName : undefined,
+    pattern.type,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0);
+}
+
+function toGuardRuleFact(rule: GuardRule): EngineeringWorkflowGuardRuleFact {
+  return {
+    ruleId: rule.ruleId,
+    category: rule.category,
+    dimension: rule.dimension,
+    severity: normalizeSeverity(rule.severity),
+    languages: [...rule.languages],
+    pattern: rule.pattern,
+    message: rule.message,
+    source: rule.source ?? "enhancement-pack",
+  };
+}
+
+function normalizeSeverity(value: string): EngineeringWorkflowGuardRuleFact["severity"] {
+  if (value === "error" || value === "warning" || value === "info") {
+    return value;
   }
-  if (packId === "react" && (lower.includes("provider") || lower.includes("context"))) {
-    return "react-context-provider";
-  }
-  if (packId === "rust-web" && lower.includes("state")) {
-    return "rust-web-state";
-  }
-  return null;
+  return "warning";
+}
+
+function toOptionalDimension(
+  dimension: ExtraDimension,
+  pack: EnhancementPack,
+): EngineeringWorkflowOptionalDimension {
+  return {
+    id: dimension.id,
+    label: dimension.label,
+    guide: dimension.guide,
+    knowledgeTypes: [...dimension.knowledgeTypes],
+    ...(dimension.tierHint === undefined ? {} : { tierHint: dimension.tierHint }),
+    ...(dimension.skillWorthy === undefined ? {} : { skillWorthy: dimension.skillWorthy }),
+    ...(dimension.dualOutput === undefined ? {} : { dualOutput: dimension.dualOutput }),
+    ...(dimension.skillMeta === undefined ? {} : { skillMeta: { ...dimension.skillMeta } }),
+    conditions: {
+      languages: [...pack.conditions.languages],
+      ...(pack.conditions.frameworks === undefined
+        ? {}
+        : { frameworks: [...pack.conditions.frameworks] }),
+    },
+    source: dimension.source ?? pack.id,
+  };
 }
 
 function normalizeFiles(
@@ -333,7 +467,7 @@ function normalizeFiles(
     seen.add(filePath);
     result.push({
       path: filePath,
-      ...(file.language === undefined ? {} : { language: file.language }),
+      language: file.language,
       ...(fileContents[filePath] === undefined ? {} : { content: fileContents[filePath] }),
     });
   }
@@ -360,17 +494,11 @@ function normalizeImportFacts(
   }));
   for (const astFile of astFiles) {
     const filePath = stringValue(astFile.file ?? astFile.path ?? astFile.filePath);
-    for (const rawImport of Array.isArray(astFile.imports) ? astFile.imports : []) {
-      const record: Record<string, unknown> = isRecord(rawImport) ? rawImport : { path: rawImport };
-      const specifier = stringValue(
-        record.specifier ?? record.path ?? record.module ?? record.source,
-      );
-      if (specifier) {
-        result.push({
-          specifier,
-          ...(filePath ? { filePath } : {}),
-        });
-      }
+    for (const specifier of importsForAstFile(astFile)) {
+      result.push({
+        specifier,
+        ...(filePath ? { filePath } : {}),
+      });
     }
   }
   const byKey = new Map<string, ImportSignal>();
@@ -510,7 +638,7 @@ function dedupeDimensions(
 }
 
 function normalizeLanguage(value: string): string {
-  const lower = value.toLowerCase();
+  const lower = normalizeToken(value);
   if (lower === "ts" || lower === "tsx") {
     return "typescript";
   }
@@ -524,6 +652,10 @@ function normalizeLanguage(value: string): string {
     return "rust";
   }
   return lower;
+}
+
+function normalizeToken(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 function languageForPath(filePath: string): string | undefined {
@@ -551,12 +683,33 @@ function languageForPath(filePath: string): string | undefined {
   return undefined;
 }
 
+function extensionForPath(filePath: string): string {
+  const match = filePath.match(/\.[^./]+$/);
+  return match?.[0] ?? "";
+}
+
 function stringValue(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 function numberValue(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
+}
+
+function booleanValue(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function optionalStringArray(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const strings = value.filter((item): item is string => typeof item === "string");
+  return strings.length > 0 ? strings : undefined;
 }
 
 function arrayRecords(value: unknown): readonly Record<string, unknown>[] {
@@ -565,4 +718,14 @@ function arrayRecords(value: unknown): readonly Record<string, unknown>[] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function compactObject<T extends Record<string, unknown>>(input: T): T {
+  const output: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== undefined) {
+      output[key] = value;
+    }
+  }
+  return output as T;
 }

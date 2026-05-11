@@ -85,6 +85,7 @@ snapshot-store
 - `panorama/refiner.ts` 保留全景精化编排，层级推断和角色精化已拆出。
 - `dimension/sop.ts` 保留查询 API，大段 SOP 数据、类型和构建器已拆出。
 - `graph/query-provider.ts` 是 agent/tool 侧查询入口。
+- `enhancement/` 已迁入 Alembic-legacy 的 14 个成熟 Enhancement Pack，实现 per-pack class、维度追加、Guard 规则、AST pattern 检测和 Vue SFC 预处理；workflow optional 阶段通过 registry 消费这些真实 pack，不再依赖浅 catalog。
 - 仍需继续整理 `entity/graph.ts`、`code/ast/normalizer.ts`、`discovery` parser 规则和 `graph/query-provider.ts`，但不应引入额外抽象层。
 
 ## 全量扫描结论

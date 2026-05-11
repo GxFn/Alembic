@@ -1,9 +1,10 @@
-import { type MainlineAstParser, UnavailableAstParser } from "../../engineering/code/ast-port.js";
 import {
   ExtensionLanguageService,
+  type MainlineAstParser,
   type MainlineLanguageService,
-} from "../../engineering/code/language-service.js";
-import { TreeSitterMainlineAstParser } from "../../engineering/code/tree-sitter-parser.js";
+  TreeSitterMainlineAstParser,
+  UnavailableAstParser,
+} from "../../engineering/code/index.js";
 import { type MainlineDatabasePort, UnavailableMainlineDatabase } from "../data/DatabasePort.js";
 import { type ContextIndex, InMemoryContextIndex } from "../data/index.js";
 import { InMemoryMainlineJobLedger, type MainlineJobLedgerPort } from "../data/JobLedger.js";

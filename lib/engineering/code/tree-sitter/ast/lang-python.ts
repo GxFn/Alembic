@@ -1,12 +1,12 @@
-import type { EngineeringCodeAstClassFact, EngineeringCodeAstMethodFact } from "../ast/index.js";
-import { extractCallSitesPython } from "./call-sites.js";
-import { createImportFact } from "./import-facts.js";
-import { estimateComplexity, maxNesting } from "./metrics.js";
+import type { EngineeringCodeAstClassFact, EngineeringCodeAstMethodFact } from "../../ast/index.js";
+import { extractCallSitesPython } from "../call-sites.js";
+import { createImportFact } from "../import-facts.js";
+import { estimateComplexity, maxNesting } from "../metrics.js";
 import type {
   EngineeringTreeSitterContext,
   EngineeringTreeSitterLanguagePlugin,
   TreeSitterNode,
-} from "./types.js";
+} from "../types.js";
 
 let pythonGrammar: unknown = null;
 

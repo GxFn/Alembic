@@ -1,18 +1,18 @@
 import { plugin as dartPlugin, setGrammar as setDartGrammar } from "./ast/lang-dart.js";
 import { plugin as goPlugin, setGrammar as setGoGrammar } from "./ast/lang-go.js";
 import { plugin as javaPlugin, setGrammar as setJavaGrammar } from "./ast/lang-java.js";
+import { javascriptPlugin, setJavaScriptGrammar } from "./ast/lang-javascript.js";
 import { plugin as kotlinPlugin, setGrammar as setKotlinGrammar } from "./ast/lang-kotlin.js";
 import { plugin as objcPlugin, setGrammar as setObjcGrammar } from "./ast/lang-objc.js";
+import { pythonPlugin, setPythonGrammar } from "./ast/lang-python.js";
 import { plugin as rustPlugin, setGrammar as setRustGrammar } from "./ast/lang-rust.js";
 import { setGrammar as setSwiftGrammar, plugin as swiftPlugin } from "./ast/lang-swift.js";
-import { javascriptPlugin, setJavaScriptGrammar } from "./lang-javascript.js";
-import { pythonPlugin, setPythonGrammar } from "./lang-python.js";
 import {
   setTsxGrammar,
   setTypeScriptGrammar,
   tsxPlugin,
   typescriptPlugin,
-} from "./lang-typescript.js";
+} from "./ast/lang-typescript.js";
 import { initParser, loadLanguageWasm } from "./parser-init.js";
 import type {
   EngineeringTreeSitterLanguageId,

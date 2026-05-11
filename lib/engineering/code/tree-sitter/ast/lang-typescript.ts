@@ -1,17 +1,17 @@
-import type { EngineeringCodeAstProtocolFact } from "../ast/facts.js";
+import type { EngineeringCodeAstProtocolFact } from "../../ast/facts.js";
 import type {
   EngineeringCodeAstClassFact,
   EngineeringCodeAstMethodFact,
   EngineeringCodeAstPropertyFact,
-} from "../ast/index.js";
-import { extractCallSitesEcma } from "./call-sites.js";
-import { createImportFact, type EngineeringTreeSitterImportKind } from "./import-facts.js";
-import { estimateComplexity, maxNesting } from "./metrics.js";
+} from "../../ast/index.js";
+import { extractCallSitesEcma } from "../call-sites.js";
+import { createImportFact, type EngineeringTreeSitterImportKind } from "../import-facts.js";
+import { estimateComplexity, maxNesting } from "../metrics.js";
 import type {
   EngineeringTreeSitterContext,
   EngineeringTreeSitterLanguagePlugin,
   TreeSitterNode,
-} from "./types.js";
+} from "../types.js";
 
 let typeScriptGrammar: unknown = null;
 let tsxGrammar: unknown = null;

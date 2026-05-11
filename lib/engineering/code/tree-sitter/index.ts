@@ -8,10 +8,19 @@ import {
   normalizeEngineeringCodeAstFileSummary,
   normalizeEngineeringCodeAstSummary,
 } from "../ast/index.js";
+import { asRecord, stringArray, stringValue } from "../ast/normalizer-utils.js";
+import { generateContextForAgent } from "./agent-context.js";
 import { getCallSiteExtractor } from "./call-sites.js";
 import { resolveTreeSitterLanguageId } from "./language-id.js";
 import { computeMetrics } from "./metrics.js";
 import { getParserClass, isParserReady } from "./parser-init.js";
+import {
+  aggregateProjectMetrics,
+  buildPatternStats,
+  dominantLanguage,
+  type EngineeringInheritanceEdge,
+  withFile,
+} from "./project-summary.js";
 import {
   getLanguagePlugin,
   hasRegisteredLanguage,
@@ -35,12 +44,7 @@ import type {
 const parserCache = new Map<EngineeringTreeSitterLanguageId, TreeSitterParser>();
 onLanguageRegistryChanged(() => parserCache.clear());
 
-interface EngineeringInheritanceEdge {
-  readonly from: string;
-  readonly to: string;
-  readonly type: "inherits" | "conforms" | "extends";
-}
-
+export { generateContextForAgent };
 export { initializeTreeSitterRuntime, knownLanguages, registerLanguage, supportedLanguages };
 export type {
   EngineeringTreeSitterAnalyzeFileOptions,
@@ -253,74 +257,6 @@ export function analyzeProject(
     projectMetrics: aggregateProjectMetrics(normalized.fileSummaries),
   };
   return projectSummary as EngineeringCodeAstFactsProjectSummary;
-}
-
-export function generateContextForAgent(projectSummary: {
-  readonly fileCount?: number;
-  readonly classes?: readonly Record<string, unknown>[];
-  readonly protocols?: readonly Record<string, unknown>[];
-  readonly categories?: readonly Record<string, unknown>[];
-  readonly inheritanceGraph?: readonly EngineeringInheritanceEdge[];
-  readonly patternStats?: Record<string, { readonly count?: number }>;
-  readonly projectMetrics?: Record<string, unknown>;
-}): string {
-  const classes = projectSummary.classes ?? [];
-  const protocols = projectSummary.protocols ?? [];
-  const categories = projectSummary.categories ?? [];
-  const inheritanceGraph = projectSummary.inheritanceGraph ?? [];
-  const patternStats = projectSummary.patternStats ?? {};
-  const projectMetrics = projectSummary.projectMetrics ?? {};
-  const lines = ["## 项目代码结构分析（AST）", ""];
-
-  lines.push("### 代码规模");
-  lines.push(`- 已分析文件: ${projectSummary.fileCount ?? 0}`);
-  lines.push(`- 类/结构体: ${classes.length}`);
-  lines.push(`- 协议: ${protocols.length}`);
-  lines.push(`- Category/Extension: ${categories.length}`);
-  lines.push(`- 平均方法数/类: ${formatMetric(projectMetrics.avgMethodsPerClass)}`);
-  lines.push(`- 最大嵌套深度: ${formatMetric(projectMetrics.maxNestingDepth)}`);
-  lines.push("");
-
-  if (inheritanceGraph.length > 0) {
-    lines.push("### 继承关系图");
-    lines.push("```");
-    lines.push(renderInheritanceTree(inheritanceGraph));
-    lines.push("```");
-    lines.push("");
-  }
-
-  const conformances = classes.filter((entry) => stringArray(entry.protocols).length > 0);
-  if (conformances.length > 0) {
-    lines.push("### 协议遵循");
-    for (const entry of conformances.slice(0, 20)) {
-      lines.push(
-        `- \`${stringValue(entry.name, "Unknown")}\` -> ${stringArray(entry.protocols)
-          .map((protocol) => `\`${protocol}\``)
-          .join(", ")}`,
-      );
-    }
-    lines.push("");
-  }
-
-  if (categories.length > 0) {
-    lines.push("### Category / Extension");
-    for (const entry of categories.slice(0, 15)) {
-      const className = stringValue(entry.className ?? entry.targetClass, "Unknown");
-      const categoryName = stringValue(entry.categoryName ?? entry.name, "extension");
-      lines.push(`- \`${className}(${categoryName})\``);
-    }
-    lines.push("");
-  }
-
-  if (Object.keys(patternStats).length > 0) {
-    lines.push("### 检测到的设计模式");
-    for (const [type, stat] of Object.entries(patternStats)) {
-      lines.push(`- **${type}**: ${stat.count ?? 0} 处`);
-    }
-    lines.push("");
-  }
-
-  return lines.join("\n");
 }
 
 export function findCallExpressions(
@@ -537,10 +473,6 @@ function sourceFromRequest(request: EngineeringTreeSitterAnalyzeFileRequest): st
   return request.content ?? request.source ?? request.text ?? "";
 }
 
-function stringValue(value: unknown, fallback: string): string {
-  return typeof value === "string" ? value : fallback;
-}
-
 function buildInheritanceGraph(
   classes: readonly unknown[],
   protocols: readonly unknown[],
@@ -590,129 +522,6 @@ function buildInheritanceGraph(
   return [
     ...new Map(edges.map((edge) => [`${edge.from}\0${edge.to}\0${edge.type}`, edge])).values(),
   ];
-}
-
-function buildPatternStats(
-  fileSummaries: readonly EngineeringCodeAstFactsFileSummary[],
-): Record<string, { count: number; files: string[]; instances: Record<string, unknown>[] }> {
-  const stats: Record<
-    string,
-    { count: number; files: string[]; instances: Record<string, unknown>[] }
-  > = {};
-  for (const summary of fileSummaries) {
-    const summaryRecord = summary as unknown as Record<string, unknown>;
-    const patterns = Array.isArray(summaryRecord.patterns)
-      ? (summaryRecord.patterns as readonly unknown[])
-      : [];
-    for (const pattern of patterns) {
-      if (!isRecord(pattern)) {
-        continue;
-      }
-      const type = stringValue(pattern.type, "unknown");
-      stats[type] ??= { count: 0, files: [], instances: [] };
-      stats[type].count += 1;
-      if (!stats[type].files.includes(summary.file)) {
-        stats[type].files.push(summary.file);
-      }
-      stats[type].instances.push({ ...pattern, file: summary.file });
-    }
-  }
-  return stats;
-}
-
-function aggregateProjectMetrics(
-  fileSummaries: readonly EngineeringCodeAstFactsFileSummary[],
-): Record<string, unknown> {
-  const methods = fileSummaries.flatMap((summary) => summary.methods);
-  const definitionMethods = methods.filter(
-    (method) => (method as unknown as Record<string, unknown>).kind === "definition",
-  );
-  const classMethodCounts = new Map<string, number>();
-  for (const method of definitionMethods) {
-    if (method.className) {
-      classMethodCounts.set(method.className, (classMethodCounts.get(method.className) ?? 0) + 1);
-    }
-  }
-  const methodCountValues = [...classMethodCounts.values()];
-
-  return {
-    totalMethods: definitionMethods.length,
-    totalClasses: fileSummaries.reduce((sum, summary) => sum + summary.classes.length, 0),
-    avgMethodsPerClass:
-      methodCountValues.length === 0
-        ? 0
-        : methodCountValues.reduce((sum, count) => sum + count, 0) / methodCountValues.length,
-    maxNestingDepth: maxNumeric(definitionMethods, "nestingDepth"),
-    longMethods: definitionMethods.filter((method) => numericValue(method.bodyLines) > 50),
-    complexMethods: definitionMethods.filter((method) => numericValue(method.complexity) > 10),
-  };
-}
-
-function renderInheritanceTree(edges: readonly EngineeringInheritanceEdge[]): string {
-  const targets = new Set(edges.map((edge) => edge.to));
-  const sources = new Set(edges.map((edge) => edge.from));
-  const roots = [...targets].filter((target) => !sources.has(target)).slice(0, 5);
-  const childMap = new Map<string, string[]>();
-  for (const edge of edges) {
-    const children = childMap.get(edge.to) ?? [];
-    const label = edge.type === "conforms" ? `${edge.from} [conforms]` : edge.from;
-    if (!children.includes(label)) {
-      children.push(label);
-    }
-    childMap.set(edge.to, children);
-  }
-
-  const lines: string[] = [];
-  function render(name: string, depth: number): void {
-    lines.push(`${"  ".repeat(depth)}${name}`);
-    for (const child of (childMap.get(name) ?? []).slice(0, 10)) {
-      render(child, depth + 1);
-    }
-  }
-  for (const root of roots) {
-    render(root, 0);
-  }
-  return lines.join("\n");
-}
-
-function dominantLanguage(fileSummaries: readonly EngineeringCodeAstFactsFileSummary[]): string {
-  const counts = new Map<string, number>();
-  for (const summary of fileSummaries) {
-    counts.set(summary.languageId, (counts.get(summary.languageId) ?? 0) + 1);
-  }
-  return (
-    [...counts.entries()].sort(
-      (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
-    )[0]?.[0] ?? "unknown"
-  );
-}
-
-function withFile<T extends object>(
-  records: readonly T[],
-  file: string,
-): Array<T & { file: string }> {
-  return records.map((record) => ({ ...record, file }));
-}
-
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
-    : [];
-}
-
-function formatMetric(value: unknown): string {
-  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(1) : "0";
-}
-
-function maxNumeric(records: readonly unknown[], key: string): number {
-  return records.reduce<number>(
-    (max, record) => Math.max(max, numericValue(asRecord(record)[key])),
-    0,
-  );
-}
-
-function numericValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function protocolResult(
@@ -785,12 +594,4 @@ function isTreeSitterNodeLike(value: unknown): value is {
     typeof (value as { readonly child?: unknown }).child === "function" &&
     typeof (value as { readonly namedChild?: unknown }).namedChild === "function"
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
 }

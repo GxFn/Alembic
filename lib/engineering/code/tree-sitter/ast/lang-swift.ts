@@ -6,7 +6,7 @@
  * Phase 5: 新增 ImportRecord 结构化导入 + extractCallSites 调用点提取
  */
 
-import { ImportRecord } from "../analysis/ImportRecord.js";
+import { ImportRecord } from "../analysis/import-record.js";
 
 // ── Swift AST 遍历 ──
 

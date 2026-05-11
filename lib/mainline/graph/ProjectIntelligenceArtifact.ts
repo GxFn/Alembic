@@ -315,7 +315,7 @@ async function analyzeLegacyProjectCallGraph(
   }
 
   try {
-    const { CallGraphAnalyzer } = await import("../../engineering/code/analysis/index.js");
+    const { CallGraphAnalyzer } = await import("../../engineering/code/index.js");
     const analyzer = new CallGraphAnalyzer(projectRoot);
     const result = await analyzer.analyze(astProjectSummary, {
       timeout: 15_000,

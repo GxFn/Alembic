@@ -7,7 +7,7 @@
  * 模式: Singleton (object), Factory (companion), DSL, Flow, Sealed
  */
 
-import { ImportRecord } from "../analysis/ImportRecord.js";
+import { ImportRecord } from "../analysis/import-record.js";
 
 function walkKotlin(root: any, ctx: any) {
   _walkKtNode(root, ctx, null);

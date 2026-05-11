@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CallGraphAnalyzer } from "./analysis/index.js";
-import { normalizeEngineeringCodeAstSummary } from "./ast/index.js";
+import { CallGraphAnalyzer } from "../analysis/index.js";
+import { normalizeEngineeringCodeAstSummary } from "./index.js";
 
 describe("EngineeringCode AST facts normalizer", () => {
   it("normalizes TypeScript imports, calls, property types, and receiver types", () => {
