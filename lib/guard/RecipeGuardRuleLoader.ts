@@ -1,4 +1,4 @@
-import { MainlineLanguageCatalog } from "../mainline/code/index.js";
+import { MainlineLanguageCatalog } from "../engineering/code/index.js";
 import { isUsableRecipe, type Recipe } from "../mainline/knowledge/index.js";
 import type {
   MainlineGuardRecipeProvider,

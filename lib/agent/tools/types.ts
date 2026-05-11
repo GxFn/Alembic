@@ -1,10 +1,10 @@
+import type { MainlineAstParser } from "../../engineering/code/index.js";
 import type { EngineeringGraphQueryProvider } from "../../engineering/index.js";
 import type {
   MainlineGuardRule,
   MainlineGuardRuleLoadResult,
   MainlineGuardRuleProvider,
 } from "../../guard/index.js";
-import type { MainlineAstParser } from "../../mainline/code/index.js";
 import type { ContextIndexReader } from "../../mainline/data/index.js";
 import type { MainlineProjectIntelligenceArtifact } from "../../mainline/graph/index.js";
 import type {

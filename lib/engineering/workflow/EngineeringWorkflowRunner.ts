@@ -1195,6 +1195,8 @@ function buildGraphs(
     files: facts.files,
     dependencyGraph: discovery.dependencyGraph,
     codeGraph,
+    callGraph,
+    dataFlow,
   });
 
   return {
@@ -1252,6 +1254,8 @@ function buildEmptyGraphs(
     files,
     dependencyGraph,
     codeGraph,
+    callGraph: [],
+    dataFlow: [],
   });
   return {
     codeGraph,

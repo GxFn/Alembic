@@ -1,4 +1,4 @@
-import type { MainlineSourceFileScanOptions } from "../../mainline/code/index.js";
+import type { MainlineSourceFileScanOptions } from "../../engineering/code/index.js";
 import type { MainlineWorkspacePathInput } from "../../mainline/core/index.js";
 import type { Recipe } from "../../mainline/knowledge/index.js";
 import {

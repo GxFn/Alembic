@@ -3,16 +3,16 @@ import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
+  defaultMainlineLanguageCatalog,
+  type MainlineSourceSymbol,
+  TreeSitterMainlineAstParser,
+} from "../../../engineering/code/index.js";
+import {
   MainlineGuardCheckEngine,
   type MainlineGuardFile,
   type MainlineGuardRule,
   type MainlineGuardRuleLoadResult,
 } from "../../../guard/index.js";
-import {
-  defaultMainlineLanguageCatalog,
-  type MainlineSourceSymbol,
-  TreeSitterMainlineAstParser,
-} from "../../../mainline/code/index.js";
 import { GuardFindingBuilder } from "../../../mainline/runtime/index.js";
 import type { ToolHandler, ToolRuntimeDependencies } from "../types.js";
 import { isRecord, toolFailure, toolSuccess } from "../types.js";

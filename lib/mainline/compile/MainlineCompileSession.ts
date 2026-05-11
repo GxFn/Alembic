@@ -1,10 +1,10 @@
 import path from "node:path";
-import type { MainlineEmbeddingPort } from "../ai/index.js";
 import {
   MainlineSourceFileScanner,
   type MainlineSourceFileScanOptions,
   type MainlineSourceFileScanResult,
-} from "../code/index.js";
+} from "../../engineering/code/index.js";
+import type { MainlineEmbeddingPort } from "../ai/index.js";
 import {
   epochSecondsNow,
   MainlineAtomicFileStore,

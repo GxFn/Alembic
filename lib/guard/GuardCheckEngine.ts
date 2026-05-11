@@ -1,4 +1,4 @@
-import { MainlineLanguageCatalog } from "../mainline/code/index.js";
+import { MainlineLanguageCatalog } from "../engineering/code/index.js";
 import { computeMainlineContentHash } from "../mainline/core/index.js";
 import type {
   MainlineGuardCheckRequest,

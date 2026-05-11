@@ -207,6 +207,83 @@ describe("EngineeringEntityGraph", () => {
     expect(dependencyImpact.edges.map((item) => item.relation)).toEqual(["data_flow"]);
   });
 
+  it("adds call graph and data-flow edges in memory without undercounting paths or impact", () => {
+    const graph = new EngineeringEntityGraph().addCallGraph(
+      [
+        callEdge({
+          caller: "App/UI.swift::UI.render",
+          callee: "ViewModel.refresh",
+          resolveMethod: "direct",
+          filePath: "App/UI.swift",
+          sourceFilePath: "App/UI.swift",
+          targetFilePath: "App/ViewModel.swift",
+        }),
+        callEdge({
+          caller: "App/UI.swift::UI.render",
+          callee: "ViewModel.refresh",
+          resolveMethod: "direct",
+          filePath: "App/UI.swift",
+          line: 9,
+          sourceFilePath: "App/UI.swift",
+          targetFilePath: "App/ViewModel.swift",
+        }),
+        callEdge({
+          caller: "ViewModel.refresh",
+          callee: "Repository.load",
+          filePath: "App/ViewModel.swift",
+          sourceFilePath: "App/ViewModel.swift",
+          targetFilePath: "Core/Repository.swift",
+        }),
+      ],
+      [
+        dataFlowEdge({
+          from: "Repository.load",
+          to: "property:Repository.cache",
+          flowType: "store",
+          filePath: "Core/Repository.swift",
+        }),
+      ],
+    );
+
+    expect(graph.countByType()).toMatchObject({ method: 3, property: 1 });
+    expect(graph.findOutgoing("method:UI.render", "calls")).toEqual([
+      expect.objectContaining({
+        to: "method:ViewModel.refresh",
+        weight: 1,
+        metadata: expect.objectContaining({ callCount: 2 }),
+      }),
+    ]);
+    expect(graph.findPath("method:UI.render", "property:Repository.cache", undefined, 3)).toEqual(
+      expect.objectContaining({
+        nodes: [
+          "method:UI.render",
+          "method:ViewModel.refresh",
+          "method:Repository.load",
+          "property:Repository.cache",
+        ],
+        distance: 3,
+      }),
+    );
+
+    const impact = graph.getImpactRadius("method:Repository.load", 2, "both");
+    expect(impact.distanceById).toMatchObject({
+      "method:UI.render": 2,
+      "method:ViewModel.refresh": 1,
+      "method:Repository.load": 0,
+      "property:Repository.cache": 1,
+    });
+
+    const callImpact = graph.getCallImpactRadius("method:Repository.load", 2);
+    expect(callImpact.relationCounts).toEqual({ calls: 2, data_flow: 1 });
+    expect(callImpact.directCallers).toBe(1);
+    expect(callImpact.transitiveCallers).toBe(2);
+    expect(callImpact.affectedFiles).toEqual([
+      "App/UI.swift",
+      "App/ViewModel.swift",
+      "Core/Repository.swift",
+    ]);
+  });
+
   it("generates structured agent context with a markdown renderer", () => {
     const graph = new EngineeringEntityGraph()
       .addEntity(entity("module:App", "module", "App"))
@@ -279,22 +356,44 @@ describe("EngineeringEntityGraph", () => {
     });
   });
 
-  it("supports property and recipe entities with legacy pattern relationships", () => {
+  it("supports property and recipe entities with legacy pattern and candidate relationships", () => {
     const graph = new EngineeringEntityGraph()
-      .addEntity(entity("recipe:Repository Contract", "recipe", "Repository Contract"))
-      .addEntity(entity("pattern:Repository", "pattern", "Repository"))
       .addEntity(entity("property:Store.cache", "property", "cache"))
       .addEntity(entity("class:Store", "class", "Store"))
-      .addEdge(edge("recipe:Repository Contract", "pattern:Repository", "uses_pattern"))
-      .addEdge(edge("property:Store.cache", "class:Store", "is_part_of"));
+      .addEdge(edge("property:Store.cache", "class:Store", "is_part_of"))
+      .addPatternStats({
+        Repository: {
+          count: 1,
+          files: ["Core/Store.swift"],
+          instances: [{ className: "Store", file: "Core/Store.swift" }],
+        },
+      })
+      .addCandidateRelations([
+        {
+          title: "Repository Contract",
+          relations: {
+            prerequisite: [{ target: "Storage Contract", description: "must exist first" }],
+            implements: [{ target: "Serializable Contract" }],
+          },
+        },
+      ]);
 
     expect(graph.countByType()).toMatchObject({
-      recipe: 1,
+      recipe: 3,
       pattern: 1,
       property: 1,
     });
-    expect(graph.findOutgoing("recipe:Repository Contract", "uses_pattern")).toEqual([
+    expect(graph.findOutgoing("class:Store", "uses_pattern")).toEqual([
       expect.objectContaining({ to: "pattern:Repository" }),
+    ]);
+    expect(graph.findOutgoing("recipe:Repository Contract", "depends_on")).toEqual([
+      expect.objectContaining({
+        to: "recipe:Storage Contract",
+        metadata: expect.objectContaining({ description: "must exist first" }),
+      }),
+    ]);
+    expect(graph.findOutgoing("recipe:Repository Contract", "conforms")).toEqual([
+      expect.objectContaining({ to: "recipe:Serializable Contract" }),
     ]);
     expect(graph.findOutgoing("property:Store.cache", "is_part_of")).toEqual([
       expect.objectContaining({ to: "class:Store" }),
@@ -407,5 +506,61 @@ function edge(from: string, to: string, relation: string, metadata: Record<strin
     relation,
     weight: 1,
     metadata,
+  };
+}
+
+function callEdge(
+  overrides: Partial<{
+    caller: string;
+    callee: string;
+    callType: string;
+    resolveMethod: string;
+    line: number | null;
+    filePath: string;
+    isAwait: boolean;
+    argCount: number;
+    sourceFilePath: string | null;
+    targetFilePath: string | null;
+  }>,
+) {
+  return {
+    caller: "Caller.run",
+    callee: "Callee.run",
+    callType: "method",
+    resolveMethod: "summary",
+    line: 7,
+    filePath: "App/File.swift",
+    isAwait: false,
+    argCount: 0,
+    sourceFilePath: null,
+    targetFilePath: null,
+    ...overrides,
+  };
+}
+
+function dataFlowEdge(
+  overrides: Partial<{
+    from: string;
+    to: string;
+    flowType: string;
+    direction: string;
+    confidence: number | null;
+    filePath: string | null;
+    line: number | null;
+    source: string | null;
+    sink: string | null;
+  }>,
+) {
+  return {
+    from: "Source.run",
+    to: "Sink.run",
+    flowType: "argument",
+    direction: "forward",
+    confidence: 0.7,
+    filePath: "App/File.swift",
+    line: 7,
+    source: null,
+    sink: null,
+    ...overrides,
   };
 }

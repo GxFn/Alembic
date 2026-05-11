@@ -1,4 +1,4 @@
-import type { MainlineCallSite } from "../code/index.js";
+import type { MainlineCallSite } from "../../engineering/code/index.js";
 import { normalizeMainlinePosixPath } from "../core/PathIdentity.js";
 import type {
   MainlineProjectGraph,

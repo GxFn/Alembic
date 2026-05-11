@@ -3,7 +3,7 @@ import {
   type MainlineScannedSourceFile,
   MainlineSourceFileScanner,
   type MainlineSourceFileScanResult,
-} from "../code/index.js";
+} from "../../engineering/code/index.js";
 import { filterMainlineGeneratedFiles, isMainlineGeneratedProjectFile } from "../core/index.js";
 import type { MainlineFileFingerprintSnapshotDiff } from "../data/index.js";
 import type {

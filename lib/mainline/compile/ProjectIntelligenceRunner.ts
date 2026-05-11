@@ -3,7 +3,7 @@ import {
   MainlineSourceFileScanner,
   type MainlineSourceFileScanOptions,
   type MainlineSourceFileScanResult,
-} from "../code/index.js";
+} from "../../engineering/code/index.js";
 import {
   type MainlineFileSystemPort,
   MainlineValidationError,

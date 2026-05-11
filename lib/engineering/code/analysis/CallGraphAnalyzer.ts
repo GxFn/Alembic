@@ -19,6 +19,8 @@ import { SymbolTableBuilder } from "./SymbolTableBuilder.js";
 export interface EngineeringCodeCallGraphAnalysisOptions {
   readonly pathHints?: EngineeringCodeImportPathHints;
   readonly maxCallSitesPerFile?: number;
+  readonly timeout?: number;
+  readonly minConfidence?: number;
 }
 
 export interface EngineeringCodeCallGraphAnalysisResult {
@@ -32,18 +34,53 @@ export interface EngineeringCodeCallGraphAnalysisResult {
     readonly resolvedCallSites: number;
     readonly unresolvedCallSites: number;
     readonly dataFlowEdges: number;
+    readonly durationMs?: number;
+    readonly resolvedRate?: number;
+    readonly totalEdges?: number;
+    readonly tier?: "full-cha" | "full" | "sampled" | "import-only";
+    readonly partial?: boolean;
   };
 }
 
 export class CallGraphAnalyzer {
+  readonly #projectRoot: string;
+
+  constructor(projectRoot = "/") {
+    this.#projectRoot = projectRoot;
+  }
+
   analyze(
     input: EngineeringCodeAnalysisInput,
     options: EngineeringCodeCallGraphAnalysisOptions = {},
   ): EngineeringCodeCallGraphAnalysisResult {
+    const startedAt = Date.now();
+    const deadline = startedAt + (options.timeout ?? Number.POSITIVE_INFINITY);
     const summaries = fileSummariesFromAnalysisInput(input);
+    const tier = analysisTier(summaries.length);
+    if (tier === "import-only") {
+      return {
+        symbolTable: SymbolTableBuilder.build(input),
+        callEdges: [],
+        dataFlowEdges: [],
+        stats: {
+          filesProcessed: summaries.length,
+          symbolCount: 0,
+          totalCallSites: 0,
+          resolvedCallSites: 0,
+          unresolvedCallSites: 0,
+          dataFlowEdges: 0,
+          durationMs: Date.now() - startedAt,
+          resolvedRate: 0,
+          totalEdges: 0,
+          tier,
+        },
+      };
+    }
+    const summariesForResolution = tier === "sampled" ? sampleCoreFiles(summaries, 500) : summaries;
     const symbolTable = SymbolTableBuilder.build(input);
     const importResolver = new ImportPathResolver({
       knownFiles: summaries.map((summary) => normalizePath(filePathForSummary(summary))),
+      projectRoot: this.#projectRoot,
       ...(options.pathHints ? { pathHints: options.pathHints } : {}),
     });
     const callResolver = new CallEdgeResolver(symbolTable, importResolver);
@@ -53,7 +90,12 @@ export class CallGraphAnalyzer {
     let filesProcessed = 0;
     const maxCallSites = options.maxCallSitesPerFile ?? 500;
 
-    for (const summary of summaries) {
+    let partial = false;
+    for (const summary of summariesForResolution) {
+      if (Date.now() > deadline) {
+        partial = true;
+        break;
+      }
       const filePath = normalizePath(filePathForSummary(summary));
       if (!filePath || filePath === "(unknown)") {
         continue;
@@ -77,9 +119,52 @@ export class CallGraphAnalyzer {
         resolvedCallSites: callEdges.length - unresolvedCallSites,
         unresolvedCallSites,
         dataFlowEdges: dataFlowEdges.length,
+        durationMs: Date.now() - startedAt,
+        resolvedRate:
+          totalCallSites === 0 ? 0 : (callEdges.length - unresolvedCallSites) / totalCallSites,
+        totalEdges: callEdges.length + dataFlowEdges.length,
+        tier,
+        ...(partial ? { partial } : {}),
       },
     };
   }
+}
+
+function analysisTier(fileCount: number): "full-cha" | "full" | "sampled" | "import-only" {
+  if (fileCount < 100) {
+    return "full-cha";
+  }
+  if (fileCount <= 500) {
+    return "full";
+  }
+  if (fileCount <= 2000) {
+    return "sampled";
+  }
+  return "import-only";
+}
+
+function sampleCoreFiles<
+  T extends {
+    readonly file?: unknown;
+    readonly filePath?: unknown;
+    readonly path?: unknown;
+    readonly callSites?: readonly unknown[];
+  },
+>(summaries: readonly T[], limit: number): readonly T[] {
+  const coreDirectoryPattern =
+    /\/(src|lib|app|core|pkg|internal|domain|service|controller|handler|api)\//i;
+  return [...summaries]
+    .map((summary) => {
+      const filePath = String(summary.file ?? summary.filePath ?? summary.path ?? "");
+      return {
+        summary,
+        score: coreDirectoryPattern.test(filePath) ? 2 : 1,
+        callSiteCount: summary.callSites?.length ?? 0,
+      };
+    })
+    .sort((left, right) => right.score - left.score || right.callSiteCount - left.callSiteCount)
+    .slice(0, limit)
+    .map((entry) => entry.summary);
 }
 
 export default CallGraphAnalyzer;

@@ -1,5 +1,5 @@
+import type { MainlineSourceFileScanOptions } from "../../engineering/code/index.js";
 import type { MainlineEmbeddingPort } from "../../mainline/ai/index.js";
-import type { MainlineSourceFileScanOptions } from "../../mainline/code/index.js";
 import {
   MainlineCompileSession,
   type MainlineProjectIntelligenceArtifactStore,

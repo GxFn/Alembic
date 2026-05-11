@@ -1,6 +1,5 @@
 export * as mainlineAgent from "./agent/index.js";
 export * as mainlineAi from "./ai/index.js";
-export * as mainlineCode from "./code/index.js";
 export * as mainlineCompile from "./compile/index.js";
 export * as mainlineCore from "./core/index.js";
 export * as mainlineData from "./data/index.js";

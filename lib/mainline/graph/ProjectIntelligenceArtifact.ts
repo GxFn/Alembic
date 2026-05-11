@@ -5,7 +5,7 @@ import {
   type MainlineSourceSymbol,
   MainlineSymbolTableBuilder,
   TreeSitterMainlineAstParser,
-} from "../code/index.js";
+} from "../../engineering/code/index.js";
 import { computeMainlineContentHash } from "../core/Hashing.js";
 import { normalizeMainlinePosixPath } from "../core/PathIdentity.js";
 import {
@@ -284,9 +284,7 @@ function buildLegacyAstProjectSummary(
     return undefined;
   }
 
-  const classes = fileSummaries.flatMap((summary) =>
-    withFile(summary.classes ?? [], summary.file),
-  );
+  const classes = fileSummaries.flatMap((summary) => withFile(summary.classes ?? [], summary.file));
   const protocols = fileSummaries.flatMap((summary) =>
     withFile(summary.protocols ?? [], summary.file),
   );
@@ -317,18 +315,31 @@ async function analyzeLegacyProjectCallGraph(
   }
 
   try {
-    const { CallGraphAnalyzer } = await import(
-      "../code/tree-sitter/analysis/CallGraphAnalyzer.js"
-    );
+    const { CallGraphAnalyzer } = await import("../../engineering/code/analysis/index.js");
     const analyzer = new CallGraphAnalyzer(projectRoot);
-    const result = await analyzer.analyze(astProjectSummary as any, {
+    const result = await analyzer.analyze(astProjectSummary, {
       timeout: 15_000,
       maxCallSitesPerFile: 500,
       minConfidence: 0.5,
     });
     return {
-      callEdges: result.callEdges,
-      dataFlowEdges: result.dataFlowEdges,
+      callEdges: result.callEdges.map((edge) => ({
+        caller: edge.caller,
+        callee: edge.callee,
+        callType: edge.callType,
+        resolveMethod: edge.resolveMethod,
+        line: edge.line ?? 0,
+        file: edge.filePath,
+        isAwait: edge.isAwait,
+        argCount: edge.argCount,
+      })),
+      dataFlowEdges: result.dataFlowEdges.map((edge) => ({
+        from: edge.from,
+        to: edge.to,
+        flowType: edge.flowType,
+        direction: edge.direction,
+        ...(edge.confidence === null ? {} : { confidence: edge.confidence }),
+      })),
       stats: { ...result.stats },
     };
   } catch {
@@ -455,10 +466,10 @@ function buildSemanticEdges(
   }));
   const dataFlowEdges: MainlineProjectIntelligenceEdge[] = (callGraph?.dataFlowEdges ?? []).map(
     (edge) => ({
-    from: symbolNodeId(edge.from),
-    to: symbolNodeId(edge.to),
-    kind: "data_flow",
-  }),
+      from: symbolNodeId(edge.from),
+      to: symbolNodeId(edge.to),
+      kind: "data_flow",
+    }),
   );
 
   return uniqueSemanticEdges([

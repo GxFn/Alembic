@@ -1,5 +1,7 @@
 import {
   EmptyEngineeringCodeGraph,
+  type EngineeringCodeCallGraphEdge,
+  type EngineeringCodeDataFlowEdge,
   type EngineeringCodeGraphReader,
 } from "../code/EngineeringCodeGraphModel.js";
 import type {
@@ -65,6 +67,37 @@ export interface EngineeringEntityGraphInput {
   readonly files: readonly EngineeringFile[];
   readonly dependencyGraph: EngineeringDependencyGraph;
   readonly codeGraph?: EngineeringCodeGraphReader;
+  readonly callGraph?: readonly EngineeringCodeCallGraphEdge[];
+  readonly dataFlow?: readonly EngineeringCodeDataFlowEdge[];
+  readonly patternStats?: EngineeringPatternStats;
+  readonly candidateRelations?: readonly EngineeringCandidateWithRelations[];
+}
+
+export interface EngineeringPatternInstance {
+  readonly className?: string;
+  readonly name?: string;
+  readonly file?: string;
+  readonly filePath?: string;
+}
+
+export interface EngineeringPatternStat {
+  readonly count: number;
+  readonly files?: readonly string[];
+  readonly instances?: readonly EngineeringPatternInstance[];
+}
+
+export type EngineeringPatternStats = Readonly<Record<string, EngineeringPatternStat>>;
+
+export interface EngineeringCandidateRelation {
+  readonly type: string;
+  readonly target: string;
+  readonly description?: string;
+}
+
+export interface EngineeringCandidateWithRelations {
+  readonly title?: string;
+  readonly id?: string;
+  readonly relations?: unknown;
 }
 
 export interface EngineeringEntityPath {
@@ -174,6 +207,13 @@ export class EngineeringEntityGraph {
     graph.addFiles(input.files);
     graph.addDependencyGraph(input.dependencyGraph);
     graph.addCodeGraph(input.files, input.codeGraph ?? new EmptyEngineeringCodeGraph());
+    graph.addCallGraph(input.callGraph ?? [], input.dataFlow ?? []);
+    if (input.patternStats) {
+      graph.addPatternStats(input.patternStats);
+    }
+    if (input.candidateRelations) {
+      graph.addCandidateRelations(input.candidateRelations);
+    }
     return graph;
   }
 
@@ -295,6 +335,205 @@ export class EngineeringEntityGraph {
     return this;
   }
 
+  addCallGraph(
+    callEdges: readonly EngineeringCodeCallGraphEdge[],
+    dataFlowEdges: readonly EngineeringCodeDataFlowEdge[] = [],
+  ): this {
+    const aggregatedCalls = new Map<
+      string,
+      {
+        callerId: string;
+        calleeId: string;
+        callType: string;
+        resolveMethod: string;
+        filePath: string | null;
+        sourceFilePath: string | null;
+        targetFilePath: string | null;
+        hasAwait: boolean;
+        argCount: number;
+        callCount: number;
+        callSites: { readonly line: number | null; readonly isAwait: boolean }[];
+      }
+    >();
+
+    for (const edge of callEdges) {
+      const callerId = codeReferenceEntityId(edge.caller, "method");
+      const calleeId = codeReferenceEntityId(edge.callee, "method");
+      if (!callerId || !calleeId || callerId === calleeId) {
+        continue;
+      }
+
+      this.ensureReferenceEntity(callerId, edge.caller, "method", {
+        filePath: edge.sourceFilePath ?? filePathFromCodeReference(edge.caller) ?? edge.filePath,
+        line: edge.line,
+        metadata: { fqn: edge.caller, source: "phase5-call-graph" },
+      });
+      this.ensureReferenceEntity(calleeId, edge.callee, "method", {
+        filePath: edge.targetFilePath ?? filePathFromCodeReference(edge.callee),
+        line: null,
+        metadata: { fqn: edge.callee, source: "phase5-call-graph" },
+      });
+
+      const key = `${callerId}\u0000${calleeId}`;
+      const current = aggregatedCalls.get(key);
+      if (current) {
+        current.callCount += 1;
+        current.callSites.push({ line: edge.line, isAwait: edge.isAwait });
+        current.hasAwait = current.hasAwait || edge.isAwait;
+        current.argCount = Math.max(current.argCount, edge.argCount);
+        if (edge.resolveMethod === "direct") {
+          current.resolveMethod = "direct";
+        }
+        continue;
+      }
+
+      aggregatedCalls.set(key, {
+        callerId,
+        calleeId,
+        callType: edge.callType,
+        resolveMethod: edge.resolveMethod,
+        filePath: edge.filePath,
+        sourceFilePath: edge.sourceFilePath,
+        targetFilePath: edge.targetFilePath,
+        hasAwait: edge.isAwait,
+        argCount: edge.argCount,
+        callCount: 1,
+        callSites: [{ line: edge.line, isAwait: edge.isAwait }],
+      });
+    }
+
+    for (const call of aggregatedCalls.values()) {
+      this.addSimpleEdge(
+        call.callerId,
+        call.calleeId,
+        "calls",
+        {
+          source: "phase5-call-graph",
+          callType: call.callType,
+          resolveMethod: call.resolveMethod,
+          file: call.filePath,
+          filePath: call.filePath,
+          sourceFilePath: call.sourceFilePath,
+          targetFilePath: call.targetFilePath,
+          isAwait: call.hasAwait,
+          argCount: call.argCount,
+          callCount: call.callCount,
+          callSites: call.callSites.slice(0, 10),
+        },
+        call.resolveMethod === "direct" ? 1 : 0.6,
+      );
+    }
+
+    for (const edge of dataFlowEdges) {
+      const fromId = codeReferenceEntityId(edge.from, "method");
+      const toId = codeReferenceEntityId(edge.to, "method");
+      if (!fromId || !toId || fromId === toId) {
+        continue;
+      }
+
+      this.ensureReferenceEntity(fromId, edge.from, "method", {
+        filePath: edge.filePath ?? filePathFromCodeReference(edge.from),
+        line: edge.line,
+        metadata: { fqn: edge.from, source: "phase5-data-flow" },
+      });
+      this.ensureReferenceEntity(toId, edge.to, "method", {
+        filePath: edge.filePath ?? filePathFromCodeReference(edge.to),
+        line: edge.line,
+        metadata: { fqn: edge.to, source: "phase5-data-flow" },
+      });
+      this.addSimpleEdge(
+        fromId,
+        toId,
+        "data_flow",
+        {
+          source: "phase5-data-flow",
+          flowType: edge.flowType,
+          direction: edge.direction,
+          confidence: edge.confidence,
+          file: edge.filePath,
+          filePath: edge.filePath,
+          line: edge.line,
+          sourceSymbol: edge.source,
+          sinkSymbol: edge.sink,
+        },
+        0.5,
+      );
+    }
+
+    return this;
+  }
+
+  addPatternStats(patternStats: EngineeringPatternStats): this {
+    for (const [patternType, stat] of Object.entries(patternStats).sort(([left], [right]) =>
+      left.localeCompare(right),
+    )) {
+      const patternEntityId = patternId(patternType);
+      this.addEntity({
+        id: patternEntityId,
+        type: "pattern",
+        name: patternType,
+        filePath: null,
+        line: null,
+        metadata: {
+          source: "ast-pattern-detection",
+          count: stat.count,
+          files: stat.files?.slice(0, 10) ?? [],
+        },
+      });
+
+      for (const instance of (stat.instances ?? []).slice(0, 50)) {
+        const className = firstString(instance.className, instance.name);
+        if (!className) {
+          continue;
+        }
+        const sourceId = hasEntityPrefix(className) ? className : classId(className);
+        this.ensureReferenceEntity(sourceId, className, "class", {
+          filePath: instance.filePath ?? instance.file ?? null,
+          line: null,
+          metadata: { source: "ast-pattern-detection" },
+        });
+        this.addSimpleEdge(
+          sourceId,
+          patternEntityId,
+          "uses_pattern",
+          {
+            source: "ast-pattern-detection",
+            file: instance.filePath ?? instance.file ?? null,
+          },
+          0.8,
+        );
+      }
+    }
+    return this;
+  }
+
+  addCandidateRelations(candidates: readonly EngineeringCandidateWithRelations[]): this {
+    for (const candidate of candidates) {
+      const title = firstString(candidate.title, candidate.id);
+      if (!title) {
+        continue;
+      }
+      const fromId = recipeId(title);
+      this.ensureRecipeEntity(fromId, title);
+
+      for (const relation of flattenCandidateRelations(candidate.relations)) {
+        const toId = recipeId(relation.target);
+        this.ensureRecipeEntity(toId, relation.target);
+        this.addSimpleEdge(
+          fromId,
+          toId,
+          mapCandidateRelationType(relation.type),
+          {
+            source: "candidate-relations",
+            description: relation.description ?? "",
+          },
+          0.7,
+        );
+      }
+    }
+    return this;
+  }
+
   findEntity(id: string): EngineeringEntity | null {
     return this.#entities.get(id) ?? null;
   }
@@ -334,6 +573,7 @@ export class EngineeringEntityGraph {
     from: string,
     to: string,
     relation?: EngineeringEntityRelation,
+    maxDepth = Number.POSITIVE_INFINITY,
   ): EngineeringEntityPath | null {
     if (!this.#entities.has(from) || !this.#entities.has(to)) {
       return null;
@@ -342,7 +582,8 @@ export class EngineeringEntityGraph {
       return { nodes: [from], edges: [], distance: 0 };
     }
 
-    const queue: string[] = [from];
+    const boundedDepth = Math.max(0, Math.floor(maxDepth));
+    const queue: { readonly id: string; readonly distance: number }[] = [{ id: from, distance: 0 }];
     const visited = new Set([from]);
     const previous = new Map<string, EngineeringEntityEdge>();
 
@@ -351,7 +592,10 @@ export class EngineeringEntityGraph {
       if (!current) {
         continue;
       }
-      for (const edge of this.findOutgoing(current, relation)) {
+      if (current.distance >= boundedDepth) {
+        continue;
+      }
+      for (const edge of this.findOutgoing(current.id, relation)) {
         if (visited.has(edge.to)) {
           continue;
         }
@@ -360,7 +604,7 @@ export class EngineeringEntityGraph {
         if (edge.to === to) {
           return buildPath(from, to, previous);
         }
-        queue.push(edge.to);
+        queue.push({ id: edge.to, distance: current.distance + 1 });
       }
     }
 
@@ -849,6 +1093,44 @@ export class EngineeringEntityGraph {
     }
   }
 
+  private ensureReferenceEntity(
+    id: string,
+    rawRef: string,
+    fallbackType: EngineeringEntityType,
+    options: {
+      readonly filePath: string | null;
+      readonly line: number | null;
+      readonly metadata: Readonly<Record<string, unknown>>;
+    },
+  ): void {
+    if (this.#entities.has(id)) {
+      return;
+    }
+    const type = entityTypeFromId(id) ?? fallbackType;
+    this.addEntity({
+      id,
+      type,
+      name: entityNameFromId(id) || extractCodeEntityRef(rawRef),
+      filePath: options.filePath,
+      line: options.line,
+      metadata: options.metadata,
+    });
+  }
+
+  private ensureRecipeEntity(id: string, title: string): void {
+    if (this.#entities.has(id)) {
+      return;
+    }
+    this.addEntity({
+      id,
+      type: "recipe",
+      name: title,
+      filePath: null,
+      line: null,
+      metadata: { source: "candidate-relations" },
+    });
+  }
+
   private neighborEdges(
     id: string,
     direction: "outgoing" | "incoming" | "both",
@@ -1094,6 +1376,14 @@ function propertyId(owner: string, name: string): string {
   return `property:${owner}.${name}`;
 }
 
+function patternId(name: string): string {
+  return name.startsWith("pattern:") ? name : `pattern:${name}`;
+}
+
+function recipeId(name: string): string {
+  return name.startsWith("recipe:") ? name : `recipe:${name}`;
+}
+
 function dependencyEntityType(node: EngineeringDependencyNode): EngineeringEntityType {
   return isExternalEngineeringDependencyNode(node) ? "external" : "module";
 }
@@ -1161,6 +1451,132 @@ function isNonEmptyString(value: string | null): value is string {
 
 function stringMetadata(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
+}
+
+function firstString(...values: readonly unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function codeReferenceEntityId(ref: string, fallbackType: EngineeringEntityType): string {
+  const clean = extractCodeEntityRef(ref);
+  if (!clean) {
+    return "";
+  }
+  return hasEntityPrefix(clean) ? clean : `${fallbackType}:${clean}`;
+}
+
+function extractCodeEntityRef(ref: string): string {
+  const clean = ref.trim();
+  if (!clean) {
+    return "";
+  }
+  const separator = clean.lastIndexOf("::");
+  if (separator >= 0 && separator < clean.length - 2) {
+    return clean.slice(separator + 2).trim();
+  }
+  return clean;
+}
+
+function filePathFromCodeReference(ref: string): string | null {
+  const clean = ref.trim();
+  const separator = clean.lastIndexOf("::");
+  if (separator <= 0) {
+    return null;
+  }
+  return clean.slice(0, separator);
+}
+
+function hasEntityPrefix(value: string): boolean {
+  return entityTypes.some((type) => value.startsWith(`${type}:`));
+}
+
+function entityTypeFromId(id: string): EngineeringEntityType | null {
+  return entityTypes.find((type) => id.startsWith(`${type}:`)) ?? null;
+}
+
+function entityNameFromId(id: string): string {
+  const type = entityTypeFromId(id);
+  return type ? id.slice(type.length + 1) : id;
+}
+
+function flattenCandidateRelations(relations: unknown): readonly EngineeringCandidateRelation[] {
+  if (!relations) {
+    return [];
+  }
+  if (hasToFlatArray(relations)) {
+    return flattenCandidateRelations(relations.toFlatArray());
+  }
+  if (Array.isArray(relations)) {
+    return relations.flatMap((relation) => relationFromUnknown(relation, null));
+  }
+  if (isRecord(relations)) {
+    const flattened: EngineeringCandidateRelation[] = [];
+    for (const [type, list] of Object.entries(relations)) {
+      for (const item of Array.isArray(list) ? list : [list]) {
+        flattened.push(...relationFromUnknown(item, type));
+      }
+    }
+    return flattened;
+  }
+  return [];
+}
+
+function relationFromUnknown(
+  value: unknown,
+  fallbackType: string | null,
+): EngineeringCandidateRelation[] {
+  if (typeof value === "string" && fallbackType) {
+    return [{ type: fallbackType, target: value }];
+  }
+  if (!isRecord(value)) {
+    return [];
+  }
+  const type = firstString(value.type, fallbackType);
+  const target = firstString(value.target, value.id, value.title);
+  if (!type || !target) {
+    return [];
+  }
+  const description = firstString(value.description);
+  return [
+    {
+      type,
+      target,
+      ...(description ? { description } : {}),
+    },
+  ];
+}
+
+function hasToFlatArray(value: unknown): value is { toFlatArray: () => unknown } {
+  return isRecord(value) && typeof value.toFlatArray === "function";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function mapCandidateRelationType(type: string): string {
+  const mapping: Readonly<Record<string, string>> = {
+    inherits: "inherits",
+    implements: "conforms",
+    calls: "calls",
+    depends_on: "depends_on",
+    data_flow: "data_flow",
+    conflicts: "conflicts",
+    extends: "extends",
+    related: "related",
+    alternative: "related",
+    prerequisite: "depends_on",
+    deprecated_by: "related",
+    solves: "related",
+    enforces: "enforces",
+    references: "references",
+  };
+  return mapping[type] ?? "related";
 }
 
 function buildPath(

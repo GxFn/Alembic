@@ -6,6 +6,7 @@ export type EngineeringCodeAstLanguageId =
   | "tsx"
   | "swift"
   | "objective-c"
+  | "objectivec"
   | "objc"
   | "python"
   | "java"

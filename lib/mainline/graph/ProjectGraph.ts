@@ -3,7 +3,7 @@ import {
   type MainlineImportPathAlias,
   MainlineImportPathResolver,
   type MainlineImportRecord,
-} from "../code/index.js";
+} from "../../engineering/code/index.js";
 import { normalizeMainlinePosixPath, uniqueMainlinePosixPaths } from "../core/PathIdentity.js";
 
 export type MainlineProjectGraphNodeKind = "file" | "symbol";

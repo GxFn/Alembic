@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { MainlineSourceFileScanOptions } from "../../mainline/code/index.js";
+import type { MainlineSourceFileScanOptions } from "../../engineering/code/index.js";
 import {
   MainlineCompileSession,
   type MainlineCompileSessionRequest,

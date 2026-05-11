@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { MainlineScannedSourceFile } from "../code/index.js";
+import type { MainlineScannedSourceFile } from "../../engineering/code/index.js";
 import { normalizeMainlinePosixPath } from "../core/index.js";
 import { createSourceRef, type SourceRef, type SourceRefStatus } from "../knowledge/index.js";
 import { parseMainlineUnifiedDiff, tokenizeMainlineDiff } from "./DiffParser.js";
