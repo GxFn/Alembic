@@ -30,7 +30,11 @@
     "longDescription": "Alembic helps Codex understand how your project is actually written. It distills source code into local Recipes, exposes project knowledge through MCP, primes Codex before coding work, and checks changes with Guard. The plugin starts as a lightweight status and diagnostics shim, initializes in Ghost mode by default, and wakes the Alembic daemon only for project knowledge, Dashboard, Guard, bootstrap, or rescan workflows.",
     "developerName": "gaoxuefeng",
     "category": "Coding",
-    "capabilities": ["Interactive", "Read", "Write"],
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
     "websiteURL": "https://github.com/GxFn/Alembic#readme",
     "defaultPrompt": [
       "Guide me through Alembic Codex first-minute setup for this project",
@@ -44,6 +48,8 @@
     "brandColor": "#2563EB",
     "composerIcon": "./assets/alembic-small.svg",
     "logo": "./assets/alembic-logo.svg",
-    "screenshots": ["./assets/alembic-codex-status.svg"]
+    "screenshots": [
+      "./assets/alembic-codex-status.svg"
+    ]
   }
 }

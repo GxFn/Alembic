@@ -1,0 +1,14 @@
+# Swift 构建产物（避免 npm 包带上 .build，体积巨大）
+tools/parse-package/.build/
+
+# 可选：不打包 source map 以减小体积
+# dashboard/dist/**/*.map
+
+# 测试与开发
+test/temp/
+.env
+.env.local
+*.boxspec
+
+# ── 确保 native-ui 二进制被打包（覆盖 .gitignore 中的排除规则） ──
+!resources/native-ui/native-ui

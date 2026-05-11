@@ -1,61 +1,223 @@
 {
   "name": "alembic-ai",
   "version": "0.1.0",
-  "description": "Alembic - Codex-first project memory runtime and MCP plugin package.",
+  "description": "Alembic — Auto Source Distill. Distill project knowledge from source code into structured recipes for humans and AI agents.",
   "type": "module",
+  "main": "dist/lib/bootstrap.js",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.0.0"
   },
-  "main": "./dist/bin/cli.js",
-  "types": "./dist/bin/cli.d.ts",
-  "bin": {
-    "alembic": "./dist/bin/cli.js",
-    "alembic-codex-mcp": "./dist/bin/codex-mcp.js"
+  "imports": {
+    "#shared/*": {
+      "alembic-dev": "./lib/shared/*",
+      "default": "./dist/lib/shared/*"
+    },
+    "#infra/*": {
+      "alembic-dev": "./lib/infrastructure/*",
+      "default": "./dist/lib/infrastructure/*"
+    },
+    "#service/*": {
+      "alembic-dev": "./lib/service/*",
+      "default": "./dist/lib/service/*"
+    },
+    "#agent/*": {
+      "alembic-dev": "./lib/agent/*",
+      "default": "./dist/lib/agent/*"
+    },
+    "#domain/*": {
+      "alembic-dev": "./lib/domain/*",
+      "default": "./dist/lib/domain/*"
+    },
+    "#inject/*": {
+      "alembic-dev": "./lib/injection/*",
+      "default": "./dist/lib/injection/*"
+    },
+    "#core/*": {
+      "alembic-dev": "./lib/core/*",
+      "default": "./dist/lib/core/*"
+    },
+    "#external/*": {
+      "alembic-dev": "./lib/external/*",
+      "default": "./dist/lib/external/*"
+    },
+    "#platform/*": {
+      "alembic-dev": "./lib/platform/*",
+      "default": "./dist/lib/platform/*"
+    },
+    "#repo/*": {
+      "alembic-dev": "./lib/repository/*",
+      "default": "./dist/lib/repository/*"
+    },
+    "#types/*": {
+      "alembic-dev": "./lib/types/*",
+      "default": "./dist/lib/types/*"
+    },
+    "#http/*": {
+      "alembic-dev": "./lib/http/*",
+      "default": "./dist/lib/http/*"
+    },
+    "#workflows/*": {
+      "alembic-dev": "./lib/workflows/*",
+      "default": "./dist/lib/workflows/*"
+    },
+    "#tools/*": {
+      "alembic-dev": "./lib/tools/*",
+      "default": "./dist/lib/tools/*"
+    },
+    "#sandbox/*": {
+      "alembic-dev": "./lib/sandbox/*",
+      "default": "./dist/lib/sandbox/*"
+    }
   },
-  "files": [
-    "dist",
-    "resources/grammars",
-    "plugins/alembic-codex",
-    ".agents/plugins/marketplace.json",
-    "scripts/verify-codex-plugin.mjs",
-    "README.md"
-  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run test:unit",
-    "test:unit": "vitest run --config vitest.config.ts",
-    "lint": "biome check .",
-    "format": "biome format --write .",
-    "verify:codex-plugin": "node scripts/verify-codex-plugin.mjs"
+    "build": "tsc",
+    "build:check": "tsc --noEmit",
+    "postbuild": "node scripts/postbuild.mjs",
+    "prepublishOnly": "npm run release:codex-plugin",
+    "build:screenshot": "swiftc -O -framework ScreenCaptureKit -framework AppKit resources/native-ui/screenshot.swift -o resources/native-ui/screenshot",
+    "install:vscode-ext": "npm ci --prefix resources/vscode-ext",
+    "install:cursor-skill": "node dist/scripts/install-cursor-skill.js",
+    "install:cursor-skill:mcp": "node dist/scripts/install-cursor-skill.js --mcp",
+    "install:vscode-copilot": "node dist/scripts/install-vscode-copilot.js",
+    "verify:context-api": "node dist/scripts/verify-context-api.js",
+    "setup:mcp": "node dist/scripts/setup-mcp-config.js --editor vscode && node dist/scripts/setup-mcp-config.js --editor cursor",
+    "build:dashboard": "cd dashboard && npm run build",
+    "build:vscode-ext": "npm --prefix resources/vscode-ext run compile",
+    "package:vscode-ext": "npm --prefix resources/vscode-ext run package --",
+    "dashboard": "node dist/bin/cli.js ui",
+    "test": "vitest run",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:integration": "vitest run test/integration",
+    "test:e2e": "vitest run test/e2e",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "dev:link": "npm run build && npm install -g .",
+    "dev:verify": "which alembic && alembic -v",
+    "release:check": "npm run build && node dist/scripts/release.js check",
+    "release:codex-plugin": "node scripts/release-codex-plugin.mjs",
+    "release:codex-plugin:daemon": "node scripts/release-codex-plugin.mjs --daemon",
+    "release:patch": "npm run build && node dist/scripts/release.js patch",
+    "release:minor": "npm run build && node dist/scripts/release.js minor",
+    "release:major": "npm run build && node dist/scripts/release.js major",
+    "cli": "node dist/bin/cli.js",
+    "mcp": "node dist/bin/mcp-server.js",
+    "diagnose:mcp": "node dist/scripts/diagnose-mcp.js",
+    "verify:codex-plugin": "node scripts/verify-codex-plugin.mjs",
+    "smoke:codex-plugin": "node scripts/smoke-codex-plugin.mjs",
+    "lint": "biome check lib/ bin/ config/ scripts/",
+    "lint:fix": "biome check --fix lib/ bin/ config/ scripts/",
+    "lint:repo-boundary": "node scripts/lint-repo-boundary.mjs",
+    "format": "biome format --write lib/ bin/ config/ scripts/",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run lint && npm run build:vscode-ext",
+    "prepare": "husky"
   },
   "author": "gaoxuefeng",
   "license": "MIT",
+  "bin": {
+    "alembic": "dist/bin/cli.js",
+    "alembic-mcp": "dist/bin/mcp-server.js",
+    "alembic-codex-mcp": "dist/bin/codex-mcp.js"
+  },
   "keywords": [
-    "alembic",
+    "knowledge-base",
+    "ai",
+    "ai-agent",
+    "mcp",
     "codex",
-    "mcp"
+    "codex-plugin",
+    "openai-codex",
+    "copilot",
+    "cursor",
+    "code-review",
+    "guard",
+    "ast",
+    "tree-sitter",
+    "typescript",
+    "javascript",
+    "python",
+    "swift",
+    "rust",
+    "kotlin",
+    "developer-tools",
+    "cli"
   ],
   "homepage": "https://github.com/GxFn/Alembic#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/GxFn/Alembic.git"
   },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.59.0",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "ajv": "^8.20.0",
+    "better-sqlite3": "^12.6.2",
+    "commander": "^14.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "drizzle-orm": "^0.45.1",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "js-yaml": "^4.1.1",
+    "minimist": "^1.2.8",
+    "open": "^11.0.0",
+    "ora": "^9.3.0",
+    "p-limit": "^7.3.0",
+    "socket.io": "^4.8.3",
+    "undici": "^7.22.0",
+    "uuid": "^13.0.0",
+    "web-tree-sitter": "^0.26.6",
+    "winston": "^3.19.0",
+    "zod": "^4.3.6"
+  },
   "bugs": {
     "url": "https://github.com/GxFn/Alembic/issues"
   },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
-    "commander": "^14.0.3",
-    "js-yaml": "^4.1.0",
-    "web-tree-sitter": "^0.26.8",
-    "zod": "^4.3.6"
+  "files": [
+    ".agents/plugins/marketplace.json",
+    "dist",
+    "config",
+    "scripts/postbuild.mjs",
+    "scripts/verify-codex-plugin.mjs",
+    "scripts/smoke-codex-plugin.mjs",
+    "scripts/release-codex-plugin.mjs",
+    "injectable-skills",
+    "plugins",
+    "templates",
+    "dashboard/dist",
+    "template.json",
+    "resources/native-ui/screenshot.swift",
+    "resources/native-ui/screenshot",
+    "resources/openChrome.applescript",
+    "resources/grammars"
+  ],
+  "directories": {
+    "doc": "docs",
+    "lib": "lib",
+    "test": "test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.6",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/js-yaml": "^4.0.9",
+    "@types/minimist": "^1.2.5",
     "@types/node": "^22.19.18",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.2",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
+  },
+  "overrides": {
+    "minimatch": "^10.2.2",
+    "diff": "^8.0.3",
+    "glob": "^11.0.0"
+  },
+  "lint-staged": {
+    "*.{ts,js,mjs,cjs}": [
+      "biome check --fix --no-errors-on-unmatched --diagnostic-level=error",
+      "biome format --write --no-errors-on-unmatched"
+    ]
   }
 }

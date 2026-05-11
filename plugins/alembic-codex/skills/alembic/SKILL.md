@@ -15,24 +15,6 @@ If status reports runtime or environment problems, call `alembic_codex_diagnosti
 
 If the workspace is not initialized and the user wants Alembic knowledge for this project, call `alembic_codex_init`. The default profile is Ghost mode, so Alembic data is stored in the external workspace data root and Codex does not write IDE configuration into the project.
 
-## AI Configuration
-
-When the user asks to configure an AI API key, keep the exchange to the raw secret only. Ask them to copy the provider key by itself, with no `apiKey:`, `apikey`, `ALEMBIC_*`, JSON wrapper, Markdown fence, or explanatory label.
-
-Write keys through stdin so the raw secret never appears in chat or command output:
-
-```bash
-pbpaste | alembic ai configure --provider deepseek --model deepseek-v4-pro --key-stdin --embed-provider ollama --embed-model qwen3-embedding:0.6b
-```
-
-For non-macOS environments, replace `pbpaste` with an equivalent secret source, or use:
-
-```bash
-printf %s "$DEEPSEEK_API_KEY" | alembic ai configure --provider deepseek --model deepseek-v4-pro --key-stdin
-```
-
-After writing, verify with `alembic ai status --json`. Only report the masked key, provider, model, and workspace settings/secrets paths.
-
 ## Daily Coding Flow
 
 For non-trivial coding tasks:

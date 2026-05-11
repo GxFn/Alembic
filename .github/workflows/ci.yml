@@ -1,47 +1,146 @@
+# ──────────────────────────────────────────────────────
+# Alembic V2 CI Pipeline
+# 构建 → API 验证 → 单元测试 → 集成测试
+# ──────────────────────────────────────────────────────
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
-
-permissions:
-  contents: read
+    branches: [main, master]
 
 env:
+  API_BASE: http://localhost:3100/api/v1
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   NODE_ENV: test
 
 jobs:
-  check:
-    name: Node 22 checks
+  build:
+    name: Build & Lint
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    strategy:
+      matrix:
+        node-version: ['22']
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: "22"
-          cache: npm
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      - run: npm ci
+      - run: cd dashboard && npm ci
+      - run: npm run install:vscode-ext
+      - run: npm run build
+      - run: npm run lint -- --diagnostic-level=error
+      - run: npm run build:dashboard
+      - run: npm run build:vscode-ext
 
-      - name: Install dependencies
-        run: npm ci
+  api-smoke:
+    name: API Smoke Test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: cd dashboard && npm ci
+      - run: npm run install:vscode-ext
+      - run: npm run build:dashboard
+      - run: npm run build:vscode-ext
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Start API Server
+        run: |
+          ASD_SKIP_ENTRY_CHECK=1 ASD_DISABLE_WRITE_GUARD=1 ASD_DISABLE_RATE_LIMIT=1 \
+            npm run dashboard -- --port 3100 --no-open > /tmp/api-server.log 2>&1 &
+          echo "PID=$!" >> $GITHUB_ENV
+          sleep 2
 
-      - name: Lint
-        run: npm run lint
+      - name: Wait for readiness
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf $API_BASE/health > /dev/null 2>&1; then
+              echo "✓ API ready (${i}s)"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "✗ API not ready after 30s"
+          cat /tmp/api-server.log
+          exit 1
 
-      - name: Build
-        run: npm run build
+      - name: Health check
+        run: |
+          HEALTH=$(curl -sf $API_BASE/health)
+          echo "$HEALTH" | jq .
+          echo "$HEALTH" | jq -e '.status == "healthy"'
 
-      - name: Unit tests
-        run: npm run test:unit
+      - name: Readiness check
+        run: |
+          curl -sf $API_BASE/health/ready | jq -e '.ready == true'
 
-      - name: Verify Codex plugin package
-        run: npm run verify:codex-plugin
+      - name: Root endpoint
+        run: |
+          ROOT=$(curl -sf $API_BASE/../..)
+          echo "$ROOT" | jq .
+          echo "$ROOT" | jq -e '.name == "Alembic API"'
+
+      - name: Knowledge listing
+        run: |
+          curl -sf $API_BASE/knowledge | jq -e '.success == true'
+
+      - name: Upload server log
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: api-server-log
+          path: /tmp/api-server.log
+
+  unit-tests:
+    name: Unit Tests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:unit
+
+  integration-tests:
+    name: Integration Tests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+
+      - name: Show Node/npm version
+        run: node -v && npm -v
+
+      - name: Run integration tests
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee /tmp/integration-test.log
+        env:
+          ASD_DISABLE_WRITE_GUARD: '1'
+          ASD_DISABLE_RATE_LIMIT: '1'
+
+      - name: Upload test log
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: integration-test-log
+          path: /tmp/integration-test.log

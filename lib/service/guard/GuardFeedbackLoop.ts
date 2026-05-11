@@ -1,0 +1,190 @@
+/**
+ * GuardFeedbackLoop — Guard ↔ Recipe 闭环联动
+ *
+ * 功能:
+ *   1. 对比当前和历史 violations，检测已修复的违规
+ *   2. 已修复违规如有 fixSuggestion → 自动 confirmUsage（记录 Recipe 使用）
+ *   3. 集成到 guardAuditFiles MCP handler 和 GuardHandler (FileWatcher)
+ */
+
+import Logger from '../../infrastructure/logging/Logger.js';
+
+import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+
+interface ViolationsStoreLike {
+  getRunsByFile(filePath: string): { violations: { ruleId: string; fixSuggestion?: string }[] }[];
+}
+
+interface FeedbackCollectorLike {
+  record(action: string, recipeId: string, meta: Record<string, unknown>): void;
+}
+
+interface GuardCheckEngineLike {
+  getRules(): { id: string; fixSuggestion?: string }[];
+}
+
+interface CheckResult {
+  violations: { ruleId: string; fixSuggestion?: string }[];
+}
+
+interface FixedViolation {
+  ruleId: unknown;
+  filePath: string;
+  fixRecipeId: string;
+}
+
+export class GuardFeedbackLoop {
+  feedbackCollector: FeedbackCollectorLike | null;
+  guardCheckEngine: GuardCheckEngineLike | null;
+  logger: ReturnType<typeof Logger.getInstance>;
+  violationsStore: ViolationsStoreLike | null;
+  _signalBus: SignalBus | null;
+  /** @param [options.guardCheckEngine] 用于查找规则 */
+  constructor(
+    violationsStore: ViolationsStoreLike | null,
+    feedbackCollector: FeedbackCollectorLike | null,
+    options: { guardCheckEngine?: GuardCheckEngineLike; signalBus?: SignalBus } = {}
+  ) {
+    this.violationsStore = violationsStore;
+    this.feedbackCollector = feedbackCollector;
+    this.guardCheckEngine = options.guardCheckEngine || null;
+    this._signalBus = options.signalBus || null;
+    this.logger = Logger.getInstance();
+  }
+
+  /**
+   * 对比当前和历史 violations，检测已修复的违规
+   * @param currentResult 本次检查结果
+   * @param filePath 文件路径
+   * @returns >} 已修复且有 Recipe 关联的列表
+   */
+  detectFixedViolations(currentResult: CheckResult, filePath: string) {
+    if (!this.violationsStore) {
+      return [];
+    }
+
+    try {
+      const previousRuns = this.violationsStore.getRunsByFile(filePath);
+      if (previousRuns.length === 0) {
+        return [];
+      }
+
+      // 取最近一次运行结果
+      const lastRun = previousRuns[previousRuns.length - 1];
+      const lastRuleIds = new Set((lastRun.violations || []).map((v) => v.ruleId));
+      const currentRuleIds = new Set((currentResult.violations || []).map((v) => v.ruleId));
+
+      const fixed: FixedViolation[] = [];
+      for (const ruleId of lastRuleIds) {
+        if (!currentRuleIds.has(ruleId)) {
+          // 该规则的违规已消失 → 修复了
+          const fixRecipeId = this._findFixRecipe(ruleId, lastRun.violations);
+          if (fixRecipeId) {
+            fixed.push({ ruleId, filePath, fixRecipeId });
+          }
+        }
+      }
+
+      return fixed;
+    } catch (err: unknown) {
+      this.logger.debug(
+        `[GuardFeedbackLoop] detectFixedViolations error: ${(err as Error).message}`
+      );
+      return [];
+    }
+  }
+
+  /**
+   * 对已修复的违规自动确认使用
+   * @param fixedList
+   */
+  autoConfirmUsage(fixedList: FixedViolation[]) {
+    if (!this.feedbackCollector || !fixedList?.length) {
+      return;
+    }
+
+    for (const { ruleId, fixRecipeId, filePath } of fixedList) {
+      try {
+        this.feedbackCollector.record('insert', fixRecipeId, {
+          source: 'guard_fix_detection',
+          automatic: true,
+          ruleId,
+          filePath,
+        });
+        this.logger.info(
+          `[GuardFeedbackLoop] Auto-confirmed usage: recipe=${fixRecipeId} from fixing rule=${ruleId}`
+        );
+
+        // ── Signal: usage confirmation ──
+        if (this._signalBus) {
+          this._signalBus.send('usage', 'GuardFeedbackLoop', 1, {
+            target: fixRecipeId,
+            metadata: { ruleId, filePath, source: 'guard_fix_detection' },
+          });
+        }
+      } catch (err: unknown) {
+        this.logger.debug(`[GuardFeedbackLoop] autoConfirmUsage error: ${(err as Error).message}`);
+      }
+    }
+  }
+
+  /**
+   * 一站式处理：检测修复 + 自动确认
+   * 供 MCP handler、GuardHandler、HTTP guard/file 端点集成调用
+   * @param currentResult
+   */
+  processFixDetection(currentResult: CheckResult, filePath: string) {
+    const fixed = this.detectFixedViolations(currentResult, filePath);
+    if (fixed.length > 0) {
+      this.autoConfirmUsage(fixed);
+      this.logger.info(
+        `[GuardFeedbackLoop] Detected ${fixed.length} fixed violations in ${filePath}`
+      );
+    }
+    return fixed;
+  }
+
+  /**
+   * 获取闭环统计数据
+   * @returns }
+   */
+  getStats() {
+    return {
+      hasViolationsStore: !!this.violationsStore,
+      hasFeedbackCollector: !!this.feedbackCollector,
+      hasGuardCheckEngine: !!this.guardCheckEngine,
+    };
+  }
+
+  /**
+   * 从 violation 或 GuardCheckEngine 查找 fixRecipeId
+   * 增强：当无显式 fixSuggestion 时，以 ruleId 本身作为 fallback recipeId
+   * 这允许 Knowledge Base 中以 ruleId 命名的条目自动关联
+   */
+  _findFixRecipe(ruleId: string, violations: { ruleId: string; fixSuggestion?: string }[]) {
+    // 先从 violation 本身的 fixSuggestion 查找
+    for (const v of violations || []) {
+      if (v.ruleId === ruleId && v.fixSuggestion) {
+        return v.fixSuggestion.replace(/^recipe:/, '');
+      }
+    }
+
+    // 再从 GuardCheckEngine 的规则定义中查找
+    if (this.guardCheckEngine) {
+      try {
+        const rules = this.guardCheckEngine.getRules();
+        const rule = rules.find((r) => r.id === ruleId);
+        if (rule?.fixSuggestion) {
+          return rule.fixSuggestion.replace(/^recipe:/, '');
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // fallback: 用 ruleId 本身作为 recipeId — 允许知识库按规则 ID 索引
+    return ruleId || null;
+  }
+}
+
+export default GuardFeedbackLoop;

@@ -218,10 +218,6 @@ alembic ui
 # CLI：把 provider/model 和 Key 写入工作区 settings/secrets
 printf %s "$OPENAI_API_KEY" | alembic ai configure --provider openai --model gpt-5.5 --key-stdin
 
-# Agent 安全配置 DeepSeek：只复制纯 key，再让 agent 从 stdin 读取
-pbpaste | alembic ai configure --provider deepseek --model deepseek-v4-pro --key-stdin \
-  --embed-provider ollama --embed-model qwen3-embedding:0.6b
-
 # CLI：把当前 shell 中显式导出的 ALEMBIC_* 变量持久化到工作区 settings/secrets
 ALEMBIC_AI_PROVIDER=google ALEMBIC_GOOGLE_API_KEY=... alembic ai import-env
 
@@ -230,9 +226,6 @@ alembic ai status
 ```
 
 显式进程环境变量仍可用于一次性运行，并且会覆盖工作区配置，但不会被自动持久化。
-
-把 API Key 交给 agent 时，只提供纯 key。不要包含 `apiKey:`、`apikey`、
-`ALEMBIC_DEEPSEEK_API_KEY=`、JSON 包装或 Markdown 代码块。
 
 ---
 

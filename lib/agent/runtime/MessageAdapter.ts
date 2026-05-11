@@ -1,164 +1,246 @@
-import type {
-  RuntimeChatMessage,
-  RuntimeToolCallRecord,
-  ToolCallEntry,
-} from "./AgentRuntimeTypes.js";
+/**
+ * MessageAdapter — 统一消息操作接口
+ *
+ * 消除 reactLoop 内的 useCtxWin 双模式分支:
+ *   - ContextWindowAdapter: 委托给 ContextWindow 实例 (bootstrap/system 场景)
+ *   - SimpleArrayAdapter: 裸数组模式 (对话场景)
+ *
+ * 两个实现对外暴露完全相同的 API，
+ * 使得 reactLoop 及其提取方法无需关心底层消息存储方式。
+ *
+ * @module core/MessageAdapter
+ */
 
-export interface RuntimeContextWindowLike {
-  appendUserMessage(text: string): void;
-  appendAssistantText(text: string, reasoningContent?: string | null): void;
-  appendAssistantWithToolCalls(
-    text: string | null,
-    calls: readonly RuntimeToolCallRecord[],
-    reasoningContent?: string | null,
-  ): void;
-  appendToolResult(callId: string, name: string, content: string): void;
-  appendUserNudge?(text: string): void;
-  toMessages(): unknown[];
-  toProjectedMessages?(): unknown[];
-  resetToPromptOnly(): void;
-  getToolResultQuota?(): { readonly maxChars: number; readonly maxMatches: number };
-  compactIfNeeded?(): { readonly level: number; readonly removed: number };
+import { isToolResultEnvelope } from '#tools/core/ToolResultPresenter.js';
+import type { ContextWindow } from '../context/ContextWindow.js';
+import { limitToolResult } from '../context/ContextWindow.js';
+
+/** 工具调用记录 */
+interface ToolCallRecord {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
 }
 
-export abstract class MessageAdapter {
-  abstract appendUserMessage(text: string): void;
+/** 聊天消息 */
+interface ChatMessage {
+  role: 'user' | 'assistant' | 'tool';
+  content: string | null;
+  reasoningContent?: string | null;
+  toolCalls?: ToolCallRecord[];
+  toolCallId?: string;
+  name?: string;
+}
 
-  abstract appendAssistantText(text: string, reasoningContent?: string | null): void;
+// ─────────────────────────────────────────────
+//  Base class (接口定义 + JSDoc)
+// ─────────────────────────────────────────────
 
-  abstract appendAssistantWithToolCalls(
-    text: string | null,
-    calls: readonly RuntimeToolCallRecord[],
-    reasoningContent?: string | null,
-  ): void;
+/** @abstract */
+export class MessageAdapter {
+  /** 追加用户消息 */
+  appendUserMessage(_text: string) {
+    throw new Error('not implemented');
+  }
 
-  abstract appendToolResult(callId: string, name: string, content: string): void;
+  /** 追加助手纯文本回复 */
+  appendAssistantText(_text: string, _reasoningContent?: string | null) {
+    throw new Error('not implemented');
+  }
 
-  abstract appendUserNudge(text: string): void;
+  /**
+   * 追加助手带工具调用的回复
+   * @param _calls functionCalls 数组
+   * @param _reasoningContent DeepSeek V4 推理内容（可选）
+   */
+  appendAssistantWithToolCalls(
+    _text: string | null,
+    _calls: ToolCallRecord[],
+    _reasoningContent?: string | null
+  ) {
+    throw new Error('not implemented');
+  }
 
-  abstract toMessages(): unknown[];
+  /** 追加工具执行结果 */
+  appendToolResult(_callId: string, _name: string, _content: string) {
+    throw new Error('not implemented');
+  }
 
+  /** 追加系统/用户 nudge 消息 */
+  appendUserNudge(_text: string) {
+    throw new Error('not implemented');
+  }
+
+  /**
+   * 导出当前消息列表 (供 LLM 调用)
+   * @returns >}
+   */
+  toMessages(): unknown[] {
+    throw new Error('not implemented');
+  }
+
+  /**
+   * 导出压缩后的消息列表 (L3 collapse 读时投影)
+   * 默认等同于 toMessages()；ContextWindowAdapter 会使用 toProjectedMessages 投影。
+   */
   toProjectedMessages(): unknown[] {
     return this.toMessages();
   }
 
-  abstract resetToPromptOnly(): void;
+  /** 重置到仅保留初始 prompt (错误恢复) */
+  resetToPromptOnly() {
+    throw new Error('not implemented');
+  }
 
-  abstract getToolResultQuota(): { readonly maxChars: number; readonly maxMatches: number };
+  /**
+   * 获取工具结果限额
+   * @returns }
+   */
+  getToolResultQuota(): { maxChars: number; maxMatches: number } {
+    throw new Error('not implemented');
+  }
 
-  abstract compactIfNeeded(): { readonly level: number; readonly removed: number };
+  /**
+   * 压缩检查 — 如果消息过多则自动压缩
+   * @returns }
+   */
+  compactIfNeeded(): { level: number; removed: number } {
+    throw new Error('not implemented');
+  }
 
-  formatToolResult(toolName: string, rawResult: unknown): string {
+  /**
+   * 格式化工具结果字符串 (统一 limitToolResult 调用)
+   * @param rawResult 工具原始返回值
+   */
+  formatToolResult(toolName: string, rawResult: unknown) {
     const quota = this.getToolResultQuota();
-    const value = isToolResultEnvelopeLike(rawResult)
-      ? (rawResult.text ?? rawResult.data ?? rawResult.error)
-      : rawResult;
-    return limitToolResult(toolName, value, quota);
+    if (isToolResultEnvelope(rawResult)) {
+      return limitToolResult(toolName, rawResult.text, quota);
+    }
+    return limitToolResult(toolName, rawResult, quota);
   }
 }
 
-export class ContextWindowAdapter extends MessageAdapter {
-  readonly #ctxWin: RuntimeContextWindowLike;
+// ─────────────────────────────────────────────
+//  ContextWindowAdapter — 委托给 ContextWindow
+// ─────────────────────────────────────────────
 
-  constructor(ctxWin: RuntimeContextWindowLike) {
+/**
+ * 委托所有消息操作给 ContextWindow 实例。
+ *
+ * 用于 bootstrap / system 场景，
+ * ContextWindow 提供三级递进压缩 + 动态 token 预算。
+ */
+export class ContextWindowAdapter extends MessageAdapter {
+  #ctxWin;
+
+  constructor(ctxWin: ContextWindow) {
     super();
     this.#ctxWin = ctxWin;
   }
 
-  get contextWindow(): RuntimeContextWindowLike {
+  /** 获取底层 ContextWindow 实例 (供 forced-summary 等外部逻辑使用) */
+  get contextWindow() {
     return this.#ctxWin;
   }
 
-  appendUserMessage(text: string): void {
+  appendUserMessage(text: string) {
     this.#ctxWin.appendUserMessage(text);
   }
 
-  appendAssistantText(text: string, reasoningContent?: string | null): void {
+  appendAssistantText(text: string, reasoningContent?: string | null) {
     this.#ctxWin.appendAssistantText(text, reasoningContent);
   }
 
   appendAssistantWithToolCalls(
     text: string | null,
-    calls: readonly RuntimeToolCallRecord[],
-    reasoningContent?: string | null,
-  ): void {
+    calls: ToolCallRecord[],
+    reasoningContent?: string | null
+  ) {
     this.#ctxWin.appendAssistantWithToolCalls(text, calls, reasoningContent);
   }
 
-  appendToolResult(callId: string, name: string, content: string): void {
+  appendToolResult(callId: string, name: string, content: string) {
     this.#ctxWin.appendToolResult(callId, name, content);
   }
 
-  appendUserNudge(text: string): void {
-    if (this.#ctxWin.appendUserNudge) {
-      this.#ctxWin.appendUserNudge(text);
-      return;
-    }
-    this.#ctxWin.appendUserMessage(text);
+  appendUserNudge(text: string) {
+    this.#ctxWin.appendUserNudge(text);
   }
 
-  toMessages(): unknown[] {
+  toMessages() {
     return this.#ctxWin.toMessages();
   }
 
-  override toProjectedMessages(): unknown[] {
-    return this.#ctxWin.toProjectedMessages?.() ?? this.#ctxWin.toMessages();
+  toProjectedMessages() {
+    return this.#ctxWin.toProjectedMessages();
   }
 
-  resetToPromptOnly(): void {
+  resetToPromptOnly() {
     this.#ctxWin.resetToPromptOnly();
   }
 
-  getToolResultQuota(): { readonly maxChars: number; readonly maxMatches: number } {
-    return this.#ctxWin.getToolResultQuota?.() ?? { maxChars: 8000, maxMatches: 20 };
+  getToolResultQuota() {
+    return this.#ctxWin.getToolResultQuota();
   }
 
-  compactIfNeeded(): { readonly level: number; readonly removed: number } {
-    return this.#ctxWin.compactIfNeeded?.() ?? { level: 0, removed: 0 };
+  compactIfNeeded() {
+    return this.#ctxWin.compactIfNeeded();
   }
 }
 
-export class SimpleArrayAdapter extends MessageAdapter {
-  readonly #messages: RuntimeChatMessage[] = [];
+// ─────────────────────────────────────────────
+//  SimpleArrayAdapter — 裸数组模式
+// ─────────────────────────────────────────────
 
-  appendUserMessage(text: string): void {
-    this.#messages.push({ role: "user", content: text });
+/**
+ * 简单数组消息管理 — 对话场景。
+ *
+ * 不做任何压缩，getToolResultQuota 返回固定 8000。
+ * compactIfNeeded 始终返回 no-op。
+ */
+export class SimpleArrayAdapter extends MessageAdapter {
+  #messages: ChatMessage[] = [];
+
+  appendUserMessage(text: string) {
+    this.#messages.push({ role: 'user', content: text });
   }
 
-  appendAssistantText(text: string, reasoningContent?: string | null): void {
-    this.#messages.push({
-      role: "assistant",
-      content: text,
-      ...(reasoningContent != null ? { reasoningContent } : {}),
-    });
+  appendAssistantText(text: string, reasoningContent?: string | null) {
+    const msg: ChatMessage = { role: 'assistant', content: text };
+    if (reasoningContent != null) {
+      msg.reasoningContent = reasoningContent;
+    }
+    this.#messages.push(msg);
   }
 
   appendAssistantWithToolCalls(
     text: string | null,
-    calls: readonly RuntimeToolCallRecord[],
-    reasoningContent?: string | null,
-  ): void {
-    this.#messages.push({
-      role: "assistant",
+    calls: ToolCallRecord[],
+    reasoningContent?: string | null
+  ) {
+    const msg: ChatMessage = {
+      role: 'assistant',
       content: text,
-      toolCalls: calls.map((call) => ({ ...call, args: { ...call.args } })),
-      ...(reasoningContent != null ? { reasoningContent } : {}),
-    });
+      toolCalls: calls,
+      reasoningContent: reasoningContent ?? '',
+    };
+    this.#messages.push(msg);
   }
 
-  appendToolResult(callId: string, name: string, content: string): void {
-    this.#messages.push({ role: "tool", toolCallId: callId, name, content });
+  appendToolResult(callId: string, name: string, content: string) {
+    this.#messages.push({ role: 'tool', toolCallId: callId, name, content });
   }
 
-  appendUserNudge(text: string): void {
-    this.#messages.push({ role: "user", content: text });
+  appendUserNudge(text: string) {
+    this.#messages.push({ role: 'user', content: text });
   }
 
-  toMessages(): RuntimeChatMessage[] {
-    return this.#messages.map(cloneMessage);
+  toMessages() {
+    return [...this.#messages];
   }
 
-  resetToPromptOnly(): void {
+  resetToPromptOnly() {
     const first = this.#messages[0];
     this.#messages.length = 0;
     if (first) {
@@ -166,101 +248,23 @@ export class SimpleArrayAdapter extends MessageAdapter {
     }
   }
 
-  getToolResultQuota(): { readonly maxChars: number; readonly maxMatches: number } {
+  getToolResultQuota() {
     return { maxChars: 8000, maxMatches: 20 };
   }
 
-  compactIfNeeded(): { readonly level: number; readonly removed: number } {
+  compactIfNeeded() {
     return { level: 0, removed: 0 };
   }
 }
 
-export function createMessageAdapter(contextWindow: unknown): MessageAdapter {
-  return isContextWindowLike(contextWindow)
-    ? new ContextWindowAdapter(contextWindow)
-    : new SimpleArrayAdapter();
-}
+// ─────────────────────────────────────────────
+//  Factory helper
+// ─────────────────────────────────────────────
 
-export function formatToolCallHistory(entries: readonly ToolCallEntry[]): string {
-  if (entries.length === 0) {
-    return "没有工具调用记录。";
+/** 根据是否提供 contextWindow 创建对应适配器 */
+export function createMessageAdapter(contextWindow: ContextWindow | null | undefined) {
+  if (contextWindow) {
+    return new ContextWindowAdapter(contextWindow);
   }
-  return entries
-    .map((entry, index) => {
-      const output = limitString(stringify(entry.result), 1200);
-      return `#${index + 1} ${entry.tool}\nargs: ${stringify(entry.args)}\nresult: ${output}`;
-    })
-    .join("\n\n");
-}
-
-function isContextWindowLike(value: unknown): value is RuntimeContextWindowLike {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const candidate = value as Partial<RuntimeContextWindowLike>;
-  return (
-    typeof candidate.appendUserMessage === "function" &&
-    typeof candidate.appendAssistantText === "function" &&
-    typeof candidate.appendAssistantWithToolCalls === "function" &&
-    typeof candidate.appendToolResult === "function" &&
-    typeof candidate.toMessages === "function" &&
-    typeof candidate.resetToPromptOnly === "function"
-  );
-}
-
-function isToolResultEnvelopeLike(value: unknown): value is {
-  readonly ok: boolean;
-  readonly data?: unknown;
-  readonly text?: string;
-  readonly error?: unknown;
-} {
-  return (
-    !!value &&
-    typeof value === "object" &&
-    "ok" in value &&
-    "status" in value &&
-    ("data" in value || "error" in value)
-  );
-}
-
-function limitToolResult(
-  toolName: string,
-  value: unknown,
-  quota: { readonly maxChars: number; readonly maxMatches: number },
-): string {
-  const text = limitString(stringify(value), quota.maxChars);
-  return text.length === 0 ? `[${toolName}] 工具没有返回内容。` : text;
-}
-
-function limitString(text: string, maxChars: number): string {
-  if (text.length <= maxChars) {
-    return text;
-  }
-  return `${text.slice(0, Math.max(0, maxChars - 80))}\n...[truncated ${text.length - maxChars} chars]`;
-}
-
-function stringify(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-  try {
-    return JSON.stringify(value, null, 2) ?? String(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function cloneMessage(message: RuntimeChatMessage): RuntimeChatMessage {
-  return {
-    role: message.role,
-    content: message.content,
-    ...(message.reasoningContent !== undefined
-      ? { reasoningContent: message.reasoningContent }
-      : {}),
-    ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
-    ...(message.name ? { name: message.name } : {}),
-    ...(message.toolCalls
-      ? { toolCalls: message.toolCalls.map((call) => ({ ...call, args: { ...call.args } })) }
-      : {}),
-  };
+  return new SimpleArrayAdapter();
 }

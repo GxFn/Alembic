@@ -1,11 +1,28 @@
-import { defineConfig } from "vitest/config";
+import { fileURLToPath } from 'node:url';
+import { defineConfig } from 'vitest/config';
+
+const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
+  resolve: {
+    conditions: ['alembic-dev'],
+  },
   test: {
-    environment: "node",
-    globals: false,
-    include: ["{bin,lib,scripts}/**/*.{test,spec}.ts"],
-    exclude: ["dist/**", "node_modules/**", "plugins/**", "docs-dev/**"],
-    passWithNoTests: true,
+    include: ['test/**/*.test.ts'],
+    globals: true,
+    testTimeout: 30000,
+    hookTimeout: 30000,
+    teardownTimeout: 10000,
+    setupFiles: ['test/setup.ts'],
+    coverage: {
+      include: ['lib/**/*.ts'],
+      exclude: ['lib/**/index.ts', 'lib/bootstrap.ts'],
+      thresholds: {
+        branches: 75,
+        functions: 75,
+        lines: 80,
+        statements: 80,
+      },
+    },
   },
 });

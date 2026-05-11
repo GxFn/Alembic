@@ -36,18 +36,6 @@ The normal first minute is:
 3. `alembic_codex_init` when status reports `needs_init`
 4. `alembic_codex_bootstrap` for first project knowledge, or `alembic_task` with `operation=prime` before coding work
 
-## AI Key Setup
-
-When configuring a provider key through Codex, ask the user to copy the raw key only. Do not ask for `apiKey: ...`, `apikey ...`, `ALEMBIC_DEEPSEEK_API_KEY=...`, JSON, or Markdown-wrapped text. Feed the secret through stdin and verify only the masked result:
-
-```bash
-pbpaste | alembic ai configure --provider deepseek --model deepseek-v4-pro --key-stdin \
-  --embed-provider ollama --embed-model qwen3-embedding:0.6b
-alembic ai status --json
-```
-
-The CLI and Dashboard config route also normalize common copied wrappers before storing secrets, but raw-key input is the canonical agent flow.
-
 ## Long-Running Jobs
 
 `alembic_codex_bootstrap` and `alembic_codex_rescan` return a durable job id immediately. Use `alembic_codex_job` with that id to resume status checks after Codex reconnects or the Dashboard refreshes.

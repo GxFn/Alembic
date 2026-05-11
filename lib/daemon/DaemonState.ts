@@ -1,122 +1,104 @@
-import fs from "node:fs/promises";
-import path from "node:path";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { PACKAGE_ROOT } from '../shared/package-root.js';
+import { WorkspaceResolver } from '../shared/WorkspaceResolver.js';
+
+export const DAEMON_STATE_SCHEMA_VERSION = 1;
+
+export interface DaemonPaths {
+  dataRoot: string;
+  jobsDir: string;
+  lockDir: string;
+  logPath: string;
+  pidPath: string;
+  projectId: string | null;
+  projectRoot: string;
+  runtimeDir: string;
+  statePath: string;
+}
 
 export interface DaemonState {
-  pid: number;
-  port: number;
-  token: string;
+  schemaVersion: number;
   projectRoot: string;
   dataRoot: string;
-  projectId: string;
-  databasePath: string;
+  projectId: string | null;
+  pid: number;
+  host: string;
+  port: number;
+  url: string;
+  dashboardUrl: string;
+  token: string;
   version: string;
+  mode: 'daemon';
   startedAt: string;
-  updatedAt: string;
+  lastReadyAt: string;
+  databasePath: string;
+  schemaMigrationVersion: string | null;
 }
 
-const daemonRuntimeDirectoryName = ".asd";
-const daemonDirectoryName = "daemon";
-const daemonStateFileName = "state.json";
-const daemonPidFileName = "daemon.pid";
-const daemonLogFileName = "daemon.log";
-const daemonLockDirectoryName = "lock";
-
-export function daemonStateDirectory(dataRoot: string): string {
-  return path.join(dataRoot, daemonRuntimeDirectoryName, daemonDirectoryName);
-}
-
-export function daemonStatePath(dataRoot: string): string {
-  return path.join(daemonStateDirectory(dataRoot), daemonStateFileName);
-}
-
-export function daemonPidPath(dataRoot: string): string {
-  return path.join(daemonStateDirectory(dataRoot), daemonPidFileName);
-}
-
-export function daemonLogPath(dataRoot: string): string {
-  return path.join(daemonStateDirectory(dataRoot), daemonLogFileName);
-}
-
-export function daemonLockDirectory(dataRoot: string): string {
-  return path.join(daemonStateDirectory(dataRoot), daemonLockDirectoryName);
-}
-
-export function daemonBaseUrl(state: Pick<DaemonState, "port">): string {
-  return `http://127.0.0.1:${state.port}`;
-}
-
-export async function readDaemonState(dataRoot: string): Promise<DaemonState | undefined> {
-  const statePath = daemonStatePath(dataRoot);
-  let raw: string;
-
+export function getPackageVersion(): string {
   try {
-    raw = await fs.readFile(statePath, "utf8");
-  } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") {
-      return undefined;
-    }
-
-    throw error;
+    const raw = readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8');
+    const pkg = JSON.parse(raw) as { version?: string };
+    return pkg.version || '0.0.0';
+  } catch {
+    return '0.0.0';
   }
-
-  return parseDaemonState(JSON.parse(raw));
 }
 
-export async function writeDaemonState(state: DaemonState): Promise<void> {
-  const statePath = daemonStatePath(state.dataRoot);
-
-  // State 是 daemon/job 的持久边界：进程内存态可以重建，外部接入只依赖这里的快照。
-  await fs.mkdir(path.dirname(statePath), { recursive: true });
-  await fs.writeFile(statePath, `${JSON.stringify(parseDaemonState(state), null, 2)}\n`, "utf8");
-}
-
-export async function clearDaemonState(dataRoot: string): Promise<void> {
-  await fs.rm(daemonStatePath(dataRoot), { force: true });
-}
-
-export function parseDaemonState(value: unknown): DaemonState {
-  assertRecord(value, "daemon state");
-
+export function resolveDaemonPaths(projectRoot: string): DaemonPaths {
+  const resolver = WorkspaceResolver.fromProject(projectRoot);
   return {
-    pid: requireNumber(value, "pid"),
-    port: requireNumber(value, "port"),
-    token: requireString(value, "token"),
-    projectRoot: requireString(value, "projectRoot"),
-    dataRoot: requireString(value, "dataRoot"),
-    projectId: requireString(value, "projectId"),
-    databasePath: requireString(value, "databasePath"),
-    version: requireString(value, "version"),
-    startedAt: requireString(value, "startedAt"),
-    updatedAt: requireString(value, "updatedAt"),
+    projectRoot: resolver.projectRoot,
+    dataRoot: resolver.dataRoot,
+    projectId: resolver.projectId,
+    runtimeDir: resolver.runtimeDir,
+    statePath: join(resolver.runtimeDir, 'daemon.json'),
+    pidPath: join(resolver.runtimeDir, 'daemon.pid'),
+    lockDir: join(resolver.runtimeDir, 'daemon.lock'),
+    logPath: join(resolver.runtimeDir, 'daemon.log'),
+    jobsDir: join(resolver.runtimeDir, 'jobs'),
   };
 }
 
-function assertRecord(value: unknown, label: string): asserts value is Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error(`Invalid ${label}: expected object`);
+export function ensureDaemonDirs(paths: DaemonPaths): void {
+  mkdirSync(paths.runtimeDir, { recursive: true });
+  mkdirSync(paths.jobsDir, { recursive: true });
+}
+
+export function readDaemonState(statePath: string): DaemonState | null {
+  if (!existsSync(statePath)) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(statePath, 'utf8')) as Partial<DaemonState>;
+    if (
+      parsed.schemaVersion !== DAEMON_STATE_SCHEMA_VERSION ||
+      typeof parsed.token !== 'string' ||
+      parsed.token.length === 0
+    ) {
+      return null;
+    }
+    return parsed as DaemonState;
+  } catch {
+    return null;
   }
 }
 
-function requireString(value: Record<string, unknown>, key: string): string {
-  const field = value[key];
-
-  if (typeof field !== "string" || field.length === 0) {
-    throw new Error(`Invalid daemon state: expected non-empty string field "${key}"`);
-  }
-
-  return field;
+export function writeDaemonState(statePath: string, state: DaemonState): void {
+  mkdirSync(dirname(statePath), { recursive: true });
+  const tmpPath = `${statePath}.${process.pid}.tmp`;
+  writeFileSync(tmpPath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+  renameSync(tmpPath, statePath);
 }
 
-function requireNumber(value: Record<string, unknown>, key: string): number {
-  const field = value[key];
-
-  if (typeof field !== "number" || !Number.isFinite(field)) {
-    throw new Error(`Invalid daemon state: expected finite number field "${key}"`);
+export function removeDaemonState(
+  paths: Pick<DaemonPaths, 'statePath' | 'pidPath' | 'lockDir'>,
+  options: { includeLock?: boolean } = {}
+) {
+  rmSync(paths.statePath, { force: true });
+  rmSync(paths.pidPath, { force: true });
+  if (options.includeLock !== false) {
+    rmSync(paths.lockDir, { recursive: true, force: true });
   }
-
-  return field;
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
 }

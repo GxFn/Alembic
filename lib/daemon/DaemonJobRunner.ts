@@ -1,205 +1,293 @@
-import type {
-  CreateDaemonJobInput,
-  DaemonJob,
-  DaemonJobKind,
-  DaemonJobProgress,
-  DaemonJobProgressInput,
-  JsonDaemonJobStore,
-} from "./JobStore.js";
+import type { ServiceContainer } from '../injection/ServiceContainer.js';
+import { resolveProjectRoot } from '../shared/resolveProjectRoot.js';
+import {
+  type DaemonJobKind,
+  type DaemonJobRecord,
+  type DaemonJobSource,
+  JobStore,
+} from './JobStore.js';
 
-export interface DaemonJobExecutionContext {
-  isCancelled(): Promise<boolean>;
-  reportProgress(progress: DaemonJobProgressInput): Promise<DaemonJob>;
+interface LoggerLike {
+  error(message: string, meta?: Record<string, unknown>): void;
+  info(message: string, meta?: Record<string, unknown>): void;
+  warn(message: string, meta?: Record<string, unknown>): void;
 }
 
-export type DaemonJobHandler = (
-  job: DaemonJob,
-  context: DaemonJobExecutionContext,
-) => Promise<Record<string, unknown>>;
-
-export interface EnqueueDaemonJobInput {
-  readonly kind: DaemonJobKind;
-  readonly input?: Record<string, unknown>;
+export interface DaemonJobOptions {
+  args?: Record<string, unknown>;
+  container: ServiceContainer;
+  kind: DaemonJobKind;
+  logger: LoggerLike;
+  source?: DaemonJobSource;
 }
 
-export interface DaemonJobRunnerOptions {
-  readonly handlers?: Partial<Record<DaemonJobKind, DaemonJobHandler>>;
-  readonly autoStart?: boolean;
+export interface RunDaemonJobOptions extends DaemonJobOptions {
+  jobId: string;
 }
 
-export class DaemonJobRunner {
-  readonly #store: JsonDaemonJobStore;
-  readonly #handlers: Partial<Record<DaemonJobKind, DaemonJobHandler>>;
-  readonly #autoStart: boolean;
-
-  constructor(store: JsonDaemonJobStore, options: DaemonJobRunnerOptions = {}) {
-    this.#store = store;
-    this.#handlers = options.handlers ?? {};
-    this.#autoStart = options.autoStart === true;
-  }
-
-  async enqueue(input: EnqueueDaemonJobInput): Promise<DaemonJob> {
-    const job = await this.#store.create(toCreateJobInput(input));
-    if (this.#autoStart && this.#handlers[job.kind]) {
-      // HTTP enqueue 不能阻塞 stdio/MCP 生命周期；真实执行由 durable job 状态机异步推进。
-      queueMicrotask(() => {
-        this.run(job.id).catch(() => undefined);
-      });
-    }
-    return job;
-  }
-
-  async cancel(jobId: string): Promise<DaemonJob> {
-    return this.#store.cancel(jobId);
-  }
-
-  async markInterrupted(): Promise<DaemonJob[]> {
-    return this.#store.markInterrupted();
-  }
-
-  async run(jobId: string): Promise<DaemonJob> {
-    const job = await this.#getRequired(jobId);
-    if (isTerminal(job.status)) {
-      return job;
-    }
-
-    const handler = this.#handlers[job.kind];
-    if (!handler) {
-      return this.#store.update(job.id, {
-        status: "failed",
-        completedAt: new Date().toISOString(),
-        error: {
-          code: "WORKFLOW_HANDLER_UNAVAILABLE",
-          message: `No workflow handler registered for ${job.kind}.`,
-        },
-        progress: terminalProgress(
-          "failed",
-          `No workflow handler registered for ${job.kind}.`,
-          job.progress,
-        ),
-      });
-    }
-
-    const running = await this.#store.update(job.id, {
-      status: "running",
-      startedAt: new Date().toISOString(),
-      progress: progressUpdate({
-        phase: "running",
-        message: `${job.kind} job started.`,
-        percent: 5,
-        current: job.progress,
-      }),
-    });
-
-    try {
-      const result = await handler(running, {
-        isCancelled: async () => (await this.#store.get(job.id))?.status === "cancelled",
-        reportProgress: async (progress) => {
-          const current = await this.#getRequired(job.id);
-          if (isTerminal(current.status)) {
-            return current;
-          }
-
-          const updated = await this.#store.update(job.id, {
-            progress: progressUpdate({ ...progress, current: current.progress }),
-          });
-
-          if (updated.status === "cancelled") {
-            return this.#store.update(job.id, {
-              progress: terminalProgress("cancelled", "Job cancelled.", updated.progress),
-            });
-          }
-
-          return updated;
-        },
-      });
-      const current = await this.#getRequired(job.id);
-      if (current.status === "cancelled") {
-        return current;
-      }
-      return this.#store.update(job.id, {
-        status: "completed",
-        result,
-        completedAt: new Date().toISOString(),
-        progress: progressUpdate({
-          phase: "completed",
-          message: `${job.kind} job completed.`,
-          percent: 100,
-          current: current.progress,
-        }),
-      });
-    } catch (error) {
-      const current = await this.#getRequired(job.id);
-      if (current.status === "cancelled") {
-        return current;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      return this.#store.update(job.id, {
-        status: "failed",
-        completedAt: new Date().toISOString(),
-        error: {
-          code: "WORKFLOW_FAILED",
-          message,
-        },
-        progress: terminalProgress("failed", message, current.progress),
-      });
-    }
-  }
-
-  async runNext(kind?: DaemonJobKind): Promise<DaemonJob | null> {
-    const jobs = await this.#store.list();
-    const next = jobs.find((job) => job.status === "queued" && (!kind || job.kind === kind));
-    return next ? this.run(next.id) : null;
-  }
-
-  async #getRequired(jobId: string): Promise<DaemonJob> {
-    const job = await this.#store.get(jobId);
-    if (!job) {
-      throw new Error(`Daemon job not found: ${jobId}`);
-    }
-    return job;
-  }
+export interface RunDaemonJobResult {
+  job: DaemonJobRecord | null;
+  result: unknown;
 }
 
-function toCreateJobInput(input: EnqueueDaemonJobInput): CreateDaemonJobInput {
-  return {
-    kind: input.kind,
-    ...(input.input === undefined ? {} : { input: input.input }),
-  };
-}
-
-function isTerminal(status: DaemonJob["status"]): boolean {
-  return status === "completed" || status === "failed" || status === "cancelled";
-}
-
-function progressUpdate(
-  input: DaemonJobProgressInput & { readonly current?: DaemonJobProgress | undefined },
-): DaemonJobProgressInput {
-  return {
-    phase: input.phase,
-    ...(input.message === undefined ? {} : { message: input.message }),
-    ...(input.percent === undefined
-      ? input.current?.percent === undefined
-        ? {}
-        : { percent: input.current.percent }
-      : { percent: input.percent }),
-    ...(input.steps === undefined
-      ? input.current?.steps === undefined
-        ? {}
-        : { steps: input.current.steps }
-      : { steps: input.steps }),
-    ...(input.updatedAt === undefined ? {} : { updatedAt: input.updatedAt }),
-  };
-}
-
-function terminalProgress(
-  phase: "failed" | "cancelled",
-  message: string,
-  current: DaemonJobProgress | undefined,
-): DaemonJobProgressInput {
-  return progressUpdate({
-    phase,
-    message,
-    current,
+export function createDaemonJob(options: DaemonJobOptions): DaemonJobRecord {
+  const store = getJobStore(options.container);
+  return store.create({
+    kind: options.kind,
+    request: options.args || {},
+    source: options.source || 'system',
   });
+}
+
+export function enqueueDaemonJob(options: DaemonJobOptions): DaemonJobRecord {
+  const job = createDaemonJob(options);
+  queueMicrotask(() => {
+    void runDaemonJob({ ...options, jobId: job.id }).catch((err: unknown) => {
+      options.logger.error('Daemon job failed after enqueue', {
+        jobId: job.id,
+        kind: options.kind,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  });
+  return job;
+}
+
+export async function runDaemonJob(options: RunDaemonJobOptions): Promise<RunDaemonJobResult> {
+  const store = getJobStore(options.container);
+  const runningJob = store.markRunning(options.jobId);
+  if (!runningJob) {
+    throw new Error(`Daemon job not found: ${options.jobId}`);
+  }
+
+  options.logger.info('Daemon job started', {
+    jobId: options.jobId,
+    kind: options.kind,
+    source: options.source,
+  });
+
+  try {
+    const result = await executeInternalWorkflow(options);
+    const bootstrapSessionId = extractBootstrapSessionId(result);
+
+    if (bootstrapSessionId && isBootstrapSessionRunning(result, options.container)) {
+      const job = store.update(options.jobId, {
+        result,
+        bootstrapSessionId,
+        status: 'running',
+      });
+      linkBootstrapSessionCompletion({
+        bootstrapSessionId,
+        container: options.container,
+        fallbackResult: result,
+        jobId: options.jobId,
+        logger: options.logger,
+        store,
+      });
+      return { job, result };
+    }
+
+    const job = store.complete(options.jobId, result, { bootstrapSessionId });
+    return { job, result };
+  } catch (err: unknown) {
+    store.fail(options.jobId, err);
+    throw err;
+  }
+}
+
+export function cancelDaemonJob(options: {
+  container: ServiceContainer;
+  jobId: string;
+  reason?: string;
+}): DaemonJobRecord | null {
+  const store = getJobStore(options.container);
+  const job = store.cancel(options.jobId, options.reason || 'Cancelled');
+  const bootstrapSessionId = job?.bootstrapSessionId;
+  const taskManager = getOptionalService<{
+    abortSession(reason: string): void;
+    getSessionStatus(): Record<string, unknown>;
+    isRunning: boolean;
+    markCancelled(): void;
+  }>(options.container, 'bootstrapTaskManager');
+  const status = taskManager?.getSessionStatus();
+  if (taskManager && status?.id === bootstrapSessionId) {
+    if (taskManager.isRunning) {
+      taskManager.abortSession(options.reason || 'Cancelled');
+    } else {
+      taskManager.markCancelled();
+    }
+  }
+  return job;
+}
+
+export function markInterruptedDaemonJobs(options: {
+  code?: string;
+  container: ServiceContainer;
+  logger: LoggerLike;
+  reason: string;
+}): DaemonJobRecord[] {
+  const store = getJobStore(options.container);
+  const jobs = store.markActiveInterrupted({
+    code: options.code,
+    reason: options.reason,
+  });
+  if (jobs.length > 0) {
+    options.logger.warn('Marked interrupted daemon jobs as failed', {
+      count: jobs.length,
+      jobIds: jobs.map((job) => job.id),
+      reason: options.reason,
+    });
+  }
+  return jobs;
+}
+
+export function getJobStore(container: ServiceContainer): JobStore {
+  try {
+    return container.get('jobStore');
+  } catch {
+    return new JobStore({ projectRoot: resolveProjectRoot(container) });
+  }
+}
+
+async function executeInternalWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
+  if (options.kind === 'bootstrap') {
+    const { bootstrapKnowledge } = await import('../external/mcp/handlers/bootstrap-internal.js');
+    const raw = await bootstrapKnowledge(
+      { container: options.container, logger: options.logger },
+      {
+        maxFiles: numberArg(options.args?.maxFiles, 500),
+        skipGuard: Boolean(options.args?.skipGuard || false),
+        contentMaxLines: numberArg(options.args?.contentMaxLines, 120),
+        loadSkills: true,
+      }
+    );
+    const result = unwrapEnvelope(raw);
+    return { ...asRecord(result), asyncFill: true };
+  }
+
+  const { rescanInternal } = await import('../external/mcp/handlers/rescan-internal.js');
+  const raw = await rescanInternal(
+    { container: options.container, logger: options.logger },
+    {
+      reason:
+        (options.args?.reason as string | undefined) || `${options.source || 'daemon'}-rescan`,
+      dimensions: Array.isArray(options.args?.dimensions)
+        ? options.args.dimensions.filter(
+            (dimension): dimension is string => typeof dimension === 'string'
+          )
+        : undefined,
+    }
+  );
+  const result = unwrapEnvelope(raw);
+  return { ...asRecord(result), asyncFill: true };
+}
+
+function linkBootstrapSessionCompletion(options: {
+  bootstrapSessionId: string;
+  container: ServiceContainer;
+  fallbackResult: unknown;
+  jobId: string;
+  logger: LoggerLike;
+  store: JobStore;
+}): void {
+  const completeFromSession = (session: Record<string, unknown>) => {
+    const current = options.store.get(options.jobId);
+    if (!current || current.status === 'cancelled' || current.status === 'failed') {
+      return;
+    }
+    options.store.complete(
+      options.jobId,
+      {
+        ...asRecord(options.fallbackResult),
+        finalSession: session,
+      },
+      { bootstrapSessionId: options.bootstrapSessionId }
+    );
+  };
+
+  const taskManager = getOptionalService<{ getSessionStatus(): Record<string, unknown> }>(
+    options.container,
+    'bootstrapTaskManager'
+  );
+  const currentStatus = taskManager?.getSessionStatus();
+  if (currentStatus?.id === options.bootstrapSessionId && currentStatus.status !== 'running') {
+    completeFromSession(currentStatus);
+    return;
+  }
+
+  const eventBus = getOptionalService<{
+    off(eventName: string, listener: (payload: unknown) => void): void;
+    on(eventName: string, listener: (payload: unknown) => void): void;
+  }>(options.container, 'eventBus');
+  if (!eventBus) {
+    options.logger.warn('Daemon job could not subscribe to bootstrap completion events', {
+      jobId: options.jobId,
+      bootstrapSessionId: options.bootstrapSessionId,
+    });
+    return;
+  }
+
+  const listener = (payload: unknown) => {
+    const session = asRecord(payload);
+    if (session.sessionId !== options.bootstrapSessionId) {
+      return;
+    }
+    eventBus.off('bootstrap:all-completed', listener);
+    completeFromSession(session);
+  };
+  eventBus.on('bootstrap:all-completed', listener);
+}
+
+function extractBootstrapSessionId(result: unknown): string | undefined {
+  const session = asRecord(result).bootstrapSession;
+  return typeof session === 'object' &&
+    session &&
+    typeof (session as { id?: unknown }).id === 'string'
+    ? (session as { id: string }).id
+    : undefined;
+}
+
+function isBootstrapSessionRunning(result: unknown, container: ServiceContainer): boolean {
+  const bootstrapSessionId = extractBootstrapSessionId(result);
+  if (!bootstrapSessionId) {
+    return false;
+  }
+  const taskManager = getOptionalService<{ getSessionStatus(): Record<string, unknown> }>(
+    container,
+    'bootstrapTaskManager'
+  );
+  const status = taskManager?.getSessionStatus();
+  if (status?.id === bootstrapSessionId) {
+    return status.status === 'running';
+  }
+  const session = asRecord(result).bootstrapSession;
+  return (
+    typeof session === 'object' &&
+    session !== null &&
+    (session as { status?: unknown }).status === 'running'
+  );
+}
+
+function getOptionalService<T>(container: ServiceContainer, name: string): T | null {
+  try {
+    return container.get(name) as T;
+  } catch {
+    return null;
+  }
+}
+
+function unwrapEnvelope(raw: unknown): unknown {
+  const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (parsed && typeof parsed === 'object' && 'data' in parsed) {
+    return (parsed as { data?: unknown }).data || parsed;
+  }
+  return parsed;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : { value };
+}
+
+function numberArg(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }

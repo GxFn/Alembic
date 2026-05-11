@@ -1,0 +1,945 @@
+/**
+ * @module LanguageService
+ * @description 统一语言服务 - 项目中唯一的语言映射与检测来源
+ *
+ * 所有文件扩展名→语言映射、扩展名→显示名、主语言推断都必须通过此服务。
+ * 禁止在业务代码中自建 langMap / _inferLang。
+ *
+ * ---
+ * 使用方式：
+ *   import { LanguageService } from '../shared/LanguageService.js';
+ *   const lang = LanguageService.inferLang('App.swift');      // 'swift'
+ *   const display = LanguageService.displayName('swift');       // 'Swift'
+ *   const primary = LanguageService.detectPrimary(langStats);   // 'typescript'
+ *   const langs  = LanguageService.detectProjectLanguages('/path/to/project');
+ */
+
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+// ═══════════════════════════════════════════════════════════
+// 1) 文件扩展名 → 规范化语言 ID
+// ═══════════════════════════════════════════════════════════
+
+const EXT_TO_LANG: Record<string, string> = Object.freeze({
+  // Apple
+  '.swift': 'swift',
+  '.m': 'objectivec',
+  '.mm': 'objectivec',
+  '.h': 'objectivec', // C/ObjC 头文件默认归 objectivec
+
+  // C/C++
+  '.c': 'c',
+  '.cpp': 'cpp',
+  '.cc': 'cpp',
+  '.cxx': 'cpp',
+  '.hpp': 'cpp',
+
+  // JavaScript/TypeScript
+  '.js': 'javascript',
+  '.mjs': 'javascript',
+  '.cjs': 'javascript',
+  '.jsx': 'javascript',
+  '.ts': 'typescript',
+  '.tsx': 'typescript',
+  '.vue': 'javascript',
+  '.svelte': 'javascript',
+
+  // Python
+  '.py': 'python',
+
+  // JVM
+  '.java': 'java',
+  '.kt': 'kotlin',
+  '.kts': 'kotlin',
+
+  // Go / Rust / Ruby
+  '.go': 'go',
+  '.rs': 'rust',
+  '.rb': 'ruby',
+
+  // Dart / C#
+  '.dart': 'dart',
+  '.cs': 'csharp',
+
+  // Markup / Data (常用)
+  '.md': 'markdown',
+  '.json': 'json',
+  '.yaml': 'yaml',
+  '.yml': 'yaml',
+  '.toml': 'toml',
+  '.xml': 'xml',
+  '.plist': 'plist',
+});
+
+// ═══════════════════════════════════════════════════════════
+// 2) 裸扩展名（不带 dot）→ 规范化语言 ID
+//    用于 langStats（bootstrap 按 extname('.').replace('.','') 做 key）
+// ═══════════════════════════════════════════════════════════
+
+const BARE_EXT_TO_LANG: Record<string, string> = Object.freeze({
+  swift: 'swift',
+  m: 'objectivec',
+  mm: 'objectivec',
+  h: 'objectivec',
+  c: 'c',
+  cpp: 'cpp',
+  cc: 'cpp',
+  cxx: 'cpp',
+  hpp: 'cpp',
+  js: 'javascript',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  jsx: 'javascript',
+  ts: 'typescript',
+  tsx: 'typescript',
+  vue: 'javascript',
+  svelte: 'javascript',
+  py: 'python',
+  java: 'java',
+  kt: 'kotlin',
+  kts: 'kotlin',
+  go: 'go',
+  rs: 'rust',
+  rb: 'ruby',
+  dart: 'dart',
+  cs: 'csharp',
+});
+
+// ═══════════════════════════════════════════════════════════
+// 3) 语言 ID → 人类可读显示名
+// ═══════════════════════════════════════════════════════════
+
+const LANG_DISPLAY_NAMES: Record<string, string> = Object.freeze({
+  swift: 'Swift',
+  objectivec: 'Objective-C',
+  c: 'C',
+  cpp: 'C++',
+  javascript: 'JavaScript',
+  typescript: 'TypeScript',
+  python: 'Python',
+  java: 'Java',
+  kotlin: 'Kotlin',
+  go: 'Go',
+  rust: 'Rust',
+  ruby: 'Ruby',
+  dart: 'Dart',
+  csharp: 'C#',
+  markdown: 'Markdown',
+  json: 'JSON',
+  yaml: 'YAML',
+  toml: 'TOML',
+  xml: 'XML',
+  plist: 'Property List',
+  unknown: 'Unknown',
+});
+
+// ═══════════════════════════════════════════════════════════
+// 4) 已知可分析的编程语言集合
+// ═══════════════════════════════════════════════════════════
+
+const KNOWN_PROGRAMMING_LANGS = Object.freeze(
+  new Set([
+    'swift',
+    'objectivec',
+    'c',
+    'cpp',
+    'javascript',
+    'typescript',
+    'python',
+    'java',
+    'kotlin',
+    'go',
+    'rust',
+    'ruby',
+    'dart',
+    'csharp',
+  ])
+);
+
+// ═══════════════════════════════════════════════════════════
+// 5) 源代码扩展名（Guard / 文件收集时使用）
+// ═══════════════════════════════════════════════════════════
+
+const SOURCE_CODE_EXTS = Object.freeze(
+  new Set([
+    '.m',
+    '.mm',
+    '.h',
+    '.swift',
+    '.c',
+    '.cpp',
+    '.cc',
+    '.cxx',
+    '.hpp',
+    '.js',
+    '.mjs',
+    '.cjs',
+    '.jsx',
+    '.ts',
+    '.tsx',
+    '.vue',
+    '.svelte',
+    '.py',
+    '.java',
+    '.kt',
+    '.kts',
+    '.go',
+    '.rs',
+    '.rb',
+    '.dart',
+    '.cs',
+  ])
+);
+
+// ═══════════════════════════════════════════════════════════
+// 5.5) 语言别名映射 — 将常见缩写/变体归一化为规范 ID
+// ═══════════════════════════════════════════════════════════
+
+const LANG_ALIASES: Record<string, string> = Object.freeze({
+  // Objective-C variants
+  objc: 'objectivec',
+  'objective-c': 'objectivec',
+  'obj-c': 'objectivec',
+  // TypeScript
+  ts: 'typescript',
+  tsx: 'typescript',
+  // JavaScript
+  js: 'javascript',
+  jsx: 'javascript',
+  // C++
+  'c++': 'cpp',
+  cxx: 'cpp',
+  // C#
+  'c#': 'csharp',
+  cs: 'csharp',
+  // Python
+  py: 'python',
+  python3: 'python',
+  // Kotlin
+  kt: 'kotlin',
+  // Rust
+  rs: 'rust',
+  // Go
+  golang: 'go',
+  // Ruby
+  rb: 'ruby',
+});
+
+// ═══════════════════════════════════════════════════════════
+// 6) 生态系统/Discoverer ID → 对应编程语言 ID 数组
+// ═══════════════════════════════════════════════════════════
+
+const ECO_TO_LANGS: Record<string, readonly string[]> = Object.freeze({
+  spm: Object.freeze(['swift', 'objectivec']),
+  xcode: Object.freeze(['swift', 'objectivec']),
+  node: Object.freeze(['javascript', 'typescript']),
+  go: Object.freeze(['go']),
+  jvm: Object.freeze(['java', 'kotlin']),
+  python: Object.freeze(['python']),
+  dart: Object.freeze(['dart']),
+  rust: Object.freeze(['rust']),
+  dotnet: Object.freeze(['csharp']),
+  ruby: Object.freeze(['ruby']),
+  generic: Object.freeze([]),
+});
+
+// ═══════════════════════════════════════════════════════════
+// 7) 构建系统标志文件 → 生态系统映射（项目级语言检测的核心数据）
+// ═══════════════════════════════════════════════════════════
+
+const BUILD_SYSTEM_MARKERS = Object.freeze([
+  // Apple / iOS
+  { file: 'Package.swift', eco: 'spm', buildTool: 'SPM' },
+  { file: 'Podfile', eco: 'spm', buildTool: 'CocoaPods' },
+  { file: '*.xcodeproj', eco: 'xcode', buildTool: 'Xcode' },
+  { file: '*.xcworkspace', eco: 'xcode', buildTool: 'Xcode' },
+  // JS / TS (lock files before package.json to detect specific tool)
+  { file: 'yarn.lock', eco: 'node', buildTool: 'Yarn' },
+  { file: 'pnpm-lock.yaml', eco: 'node', buildTool: 'pnpm' },
+  { file: 'package.json', eco: 'node', buildTool: 'npm' },
+  // Python
+  { file: 'Pipfile', eco: 'python', buildTool: 'Pipenv' },
+  { file: 'pyproject.toml', eco: 'python', buildTool: 'Poetry' },
+  { file: 'setup.py', eco: 'python', buildTool: 'setuptools' },
+  { file: 'requirements.txt', eco: 'python', buildTool: 'pip' },
+  // Go
+  { file: 'go.mod', eco: 'go', buildTool: 'Go Modules' },
+  // Rust
+  { file: 'Cargo.toml', eco: 'rust', buildTool: 'Cargo' },
+  // JVM
+  { file: 'pom.xml', eco: 'jvm', buildTool: 'Maven' },
+  { file: 'build.gradle', eco: 'jvm', buildTool: 'Gradle' },
+  { file: 'build.gradle.kts', eco: 'jvm', buildTool: 'Gradle (Kotlin)' },
+  // Dart / Flutter
+  { file: 'pubspec.yaml', eco: 'dart', buildTool: 'Flutter' },
+  { file: 'melos.yaml', eco: 'dart', buildTool: 'Melos' },
+  // C# / .NET
+  { file: '*.csproj', eco: 'dotnet', buildTool: '.NET' },
+  { file: '*.sln', eco: 'dotnet', buildTool: '.NET' },
+  // Ruby
+  { file: 'Gemfile', eco: 'ruby', buildTool: 'Bundler' },
+]);
+
+/** 扫描目录时跳过的标准目录（性能优化） */
+const SCAN_SKIP_DIRS = Object.freeze(
+  new Set([
+    '.git',
+    'node_modules',
+    '.build',
+    'build',
+    'dist',
+    'target',
+    'out',
+    'vendor',
+    '.cache',
+    'Pods',
+    'DerivedData',
+    '__pycache__',
+    '.venv',
+    'venv',
+    '.gradle',
+    'Carthage',
+    '.fvm',
+    '.dart_tool',
+    '.cargo',
+  ])
+);
+
+// ═══════════════════════════════════════════════════════════
+// 8) 编程语言通用关键字（代码分析时排除保留字用）
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 各语言通用关键字，用于代码标识符提取时排除保留字。
+ * 与 search/tokenizer 的 EN_STOPWORDS 用途不同：
+ *   - EN_STOPWORDS 过滤自然语言虚词（the, is, are）
+ *   - LANGUAGE_KEYWORDS 过滤编程语言保留字（class, func, def）
+ */
+const LANGUAGE_KEYWORDS = Object.freeze(
+  new Set([
+    // JS/TS
+    'const',
+    'function',
+    'return',
+    'class',
+    'interface',
+    'type',
+    'export',
+    'import',
+    'from',
+    'async',
+    'await',
+    'this',
+    'super',
+    'null',
+    'undefined',
+    'true',
+    'false',
+    'void',
+    'number',
+    'string',
+    'boolean',
+    'extends',
+    'implements',
+    'static',
+    'private',
+    'public',
+    'protected',
+    'readonly',
+    'throw',
+    'catch',
+    'finally',
+    'typeof',
+    'instanceof',
+    'delete',
+    'yield',
+    'switch',
+    'case',
+    'default',
+    'break',
+    'continue',
+    'while',
+    'else',
+    // Swift
+    'func',
+    'self',
+    'init',
+    'deinit',
+    'struct',
+    'enum',
+    'protocol',
+    'guard',
+    'weak',
+    'strong',
+    'lazy',
+    'mutating',
+    'override',
+    'final',
+    'some',
+    'where',
+    'associatedtype',
+    'typealias',
+    'throws',
+    'rethrows',
+    'inout',
+    // Python
+    'def',
+    'lambda',
+    'nonlocal',
+    'global',
+    'with',
+    'elif',
+    'pass',
+    'raise',
+    'except',
+    'assert',
+    'None',
+    'True',
+    'False',
+    'print',
+    'range',
+    'list',
+    // Common
+    'that',
+    'then',
+    'else',
+    'each',
+    'when',
+    'with',
+    'have',
+    'from',
+    'into',
+    'require',
+    'module',
+    'exports',
+    'include',
+    'using',
+    'namespace',
+    'auto',
+  ])
+);
+
+// ═══════════════════════════════════════════════════════════
+// 9) 通用测试目录模式（路径中包含典型测试目录名）
+// ═══════════════════════════════════════════════════════════
+
+const TEST_DIR_PATTERN =
+  /(?:^|[/\\])(?:tests?|__tests__|spec|__mocks__|testdata|test_driver|integration_test|e2e)[/\\]/;
+
+// ═══════════════════════════════════════════════════════════
+// Lazy caches
+// ═══════════════════════════════════════════════════════════
+
+let _sourceExtRegex: RegExp | null = null;
+
+// ═══════════════════════════════════════════════════════════
+// LanguageService — 静态单例
+// ═══════════════════════════════════════════════════════════
+
+export class LanguageService {
+  // ─── 文件名 → 语言 ────────────────────────────
+
+  /**
+   * 从文件名（或路径）推断规范化语言 ID
+   * @returns 语言 ID，如 'swift', 'typescript', 'python', 'unknown'
+   */
+  static inferLang(filename: string) {
+    if (!filename || typeof filename !== 'string') {
+      return 'unknown';
+    }
+    const dot = filename.lastIndexOf('.');
+    if (dot === -1) {
+      return 'unknown';
+    }
+    const ext = filename.slice(dot).toLowerCase();
+    return EXT_TO_LANG[ext] || 'unknown';
+  }
+
+  /**
+   * 从文件扩展名（带 dot）推断语言
+   * @param ext 如 '.ts', '.py'
+   */
+  static langFromExt(ext: string) {
+    if (!ext || typeof ext !== 'string') {
+      return 'unknown';
+    }
+    return EXT_TO_LANG[ext.toLowerCase()] || 'unknown';
+  }
+
+  // ─── 别名归一化 ───────────────────────────────
+
+  /**
+   * 将语言 ID 别名/缩写归一化为规范 ID
+   *
+   * 示例:
+   *   normalize('objc')     → 'objectivec'
+   *   normalize('ts')       → 'typescript'
+   *   normalize('golang')   → 'go'
+   *   normalize('swift')    → 'swift' (已是规范 ID)
+   *   normalize('unknown')  → 'unknown'
+   *
+   * @param langId 语言 ID（可能是别名）
+   * @returns 规范化语言 ID
+   */
+  static normalize(langId: string) {
+    if (!langId || typeof langId !== 'string') {
+      return 'unknown';
+    }
+    const lower = langId.toLowerCase().trim();
+    if (KNOWN_PROGRAMMING_LANGS.has(lower)) {
+      return lower;
+    }
+    return LANG_ALIASES[lower] || lower;
+  }
+
+  /**
+   * 将规范语言 ID 转为 Guard 兼容 ID
+   *
+   * Guard 内置规则使用 'objc' 而非 'objectivec'。
+   * 其他语言 ID 不变。
+   */
+  static toGuardLangId(langId: string) {
+    const id = (langId || '').toLowerCase().replace(/[_-]/g, '');
+    return id === 'objectivec' ? 'objc' : langId;
+  }
+
+  // ─── 显示名 ────────────────────────────────────
+
+  /** 语言 ID → 人类可读名称 */
+  static displayName(langId: string) {
+    return LANG_DISPLAY_NAMES[langId] || langId;
+  }
+
+  /**
+   * 文件扩展名（带 dot）→ 人类可读语言名
+   * @param ext 如 '.swift', '.ts'
+   */
+  static displayNameFromExt(ext: string) {
+    const lang = EXT_TO_LANG[ext.toLowerCase()];
+    return lang ? LANG_DISPLAY_NAMES[lang] || lang : ext;
+  }
+
+  // ─── 主语言检测 ────────────────────────────────
+
+  /**
+   * 从文件扩展名统计推断主语言
+   * @param langStats key = 裸扩展名 (如 'ts', 'm', 'py')，value = 文件数
+   * @returns 主语言 ID
+   */
+  static detectPrimary(langStats: Record<string, number>) {
+    if (!langStats || typeof langStats !== 'object') {
+      return 'unknown';
+    }
+    // 按规范化语言聚合计数（避免 ObjC 的 .h/.m/.mm 分散）
+    const aggregated: Record<string, number> = {};
+    for (const [ext, count] of Object.entries(langStats)) {
+      const lang = BARE_EXT_TO_LANG[ext] || ext;
+      aggregated[lang] = (aggregated[lang] || 0) + (count as number);
+    }
+    let best = 'unknown',
+      bestCount = 0;
+    for (const [lang, count] of Object.entries(aggregated)) {
+      if (count > bestCount && KNOWN_PROGRAMMING_LANGS.has(lang)) {
+        best = lang;
+        bestCount = count;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * 从文件扩展名统计返回所有检测到的编程语言（按文件数降序）
+   * @returns >}
+   */
+  static detectAll(langStats: Record<string, number>) {
+    if (!langStats || typeof langStats !== 'object') {
+      return [];
+    }
+    const aggregated: Record<string, number> = {};
+    for (const [ext, count] of Object.entries(langStats)) {
+      const lang = BARE_EXT_TO_LANG[ext] || ext;
+      aggregated[lang] = (aggregated[lang] || 0) + (count as number);
+    }
+    return Object.entries(aggregated)
+      .filter(([lang]) => KNOWN_PROGRAMMING_LANGS.has(lang))
+      .sort((a, b) => b[1] - a[1])
+      .map(([lang, count]) => ({ lang, count }));
+  }
+
+  /**
+   * 多语言项目画像 — 返回主语言 + 次要语言 + 完整排序列表
+   *
+   * 与 detectPrimary 的区别:
+   *   - detectPrimary 只给出一个语言，适用于需要单值场景
+   *   - detectProfile 给出完整画像，适用于维度文案、AI prompt 等需要
+   *     感知多语言的场景
+   *
+   * @param langStats key=裸扩展名, value=文件数
+   * @param [opts.secondaryThreshold=0.1] 次要语言文件占比阈值（≥此比例才算次要语言）
+   * @returns >, totalFiles: number, isMultiLang: boolean }}
+   */
+  static detectProfile(
+    langStats: Record<string, number>,
+    opts: { secondaryThreshold?: number } = {}
+  ) {
+    const threshold = opts.secondaryThreshold ?? 0.1;
+    const all = LanguageService.detectAll(langStats);
+    if (all.length === 0) {
+      return { primary: 'unknown', secondary: [], all: [], totalFiles: 0, isMultiLang: false };
+    }
+
+    const totalFiles = all.reduce((s, e) => s + e.count, 0);
+    const enriched = all.map((e) => ({ ...e, ratio: e.count / totalFiles }));
+    const primary = enriched[0].lang;
+    const secondary = enriched
+      .slice(1)
+      .filter((e) => e.ratio >= threshold)
+      .map((e) => e.lang);
+
+    return {
+      primary,
+      secondary,
+      all: enriched,
+      totalFiles,
+      isMultiLang: secondary.length > 0,
+    };
+  }
+
+  // ─── 查询方法 ─────────────────────────────────
+
+  /** 该语言 ID 是否是已知编程语言 */
+  static isKnownLang(langId: string) {
+    return KNOWN_PROGRAMMING_LANGS.has(langId);
+  }
+
+  /**
+   * 该扩展名是否为源代码文件
+   * @param ext 带 dot，如 '.ts'
+   */
+  static isSourceExt(ext: string) {
+    return SOURCE_CODE_EXTS.has(ext.toLowerCase());
+  }
+
+  /** 获取所有源代码扩展名（不可变） */
+  static get sourceExts() {
+    return SOURCE_CODE_EXTS;
+  }
+
+  /**
+   * 匹配源代码文件扩展名的正则（缓存 / 从 sourceExts 自动派生）
+   *
+   * 示例: `/\.(m|mm|swift|h|ts|tsx|py|...)$/i`
+   */
+  static get sourceExtRegex(): RegExp {
+    if (!_sourceExtRegex) {
+      const bareExts = [...SOURCE_CODE_EXTS].map((e) =>
+        e.slice(1).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      );
+      _sourceExtRegex = new RegExp(`\\.(${bareExts.join('|')})$`, 'i');
+    }
+    return _sourceExtRegex;
+  }
+
+  /** 获取所有已知编程语言 ID（不可变） */
+  static get knownLangs() {
+    return KNOWN_PROGRAMMING_LANGS;
+  }
+
+  /** 编程语言通用关键字集合（代码标识符提取时排除保留字） */
+  static get languageKeywords() {
+    return LANGUAGE_KEYWORDS;
+  }
+
+  /** 获取完整的 ext→lang 映射（不可变） */
+  static get extToLangMap() {
+    return EXT_TO_LANG;
+  }
+
+  /** 获取完整的 bareExt→lang 映射（不可变） */
+  static get bareExtToLangMap() {
+    return BARE_EXT_TO_LANG;
+  }
+
+  /**
+   * 根据语言 ID 返回主扩展名（带 dot）
+   * @param langId 如 'go', 'swift', 'python'
+   * @returns 如 '.go', '.swift', '.py'；未知返回 null
+   */
+  static extForLang(langId: string) {
+    if (!langId) {
+      return null;
+    }
+    const lower = langId.toLowerCase();
+    for (const [ext, lang] of Object.entries(EXT_TO_LANG)) {
+      if (lang === lower) {
+        return ext;
+      }
+    }
+    return null;
+  }
+
+  // ─── 生态系统 / 项目级语言检测 ────────────────
+
+  /** 获取语言别名映射表（不可变） */
+  static get langAliases() {
+    return LANG_ALIASES;
+  }
+
+  /** 获取 ECO_TO_LANGS 映射（不可变） */
+  static get ecoToLangs() {
+    return ECO_TO_LANGS;
+  }
+
+  /** 获取 BUILD_SYSTEM_MARKERS（不可变） */
+  static get buildSystemMarkers() {
+    return BUILD_SYSTEM_MARKERS;
+  }
+
+  /** 获取 SCAN_SKIP_DIRS（不可变） */
+  static get scanSkipDirs() {
+    return SCAN_SKIP_DIRS;
+  }
+
+  /**
+   * 根据生态系统/Discoverer ID 获取对应的语言 ID 数组
+   * @param ecoId 如 'spm', 'node', 'rust', 'dart'
+   */
+  static langsForEco(ecoId: string) {
+    return ECO_TO_LANGS[ecoId] || [];
+  }
+
+  /**
+   * 检测构建系统标志文件 — 纯数据匹配，不访问文件系统
+   *
+   * @param entryNames 目录内文件/目录名列表
+   * @returns >}
+   */
+  static matchBuildMarkers(entryNames: string[]) {
+    if (!Array.isArray(entryNames) || entryNames.length === 0) {
+      return [];
+    }
+    const nameSet = new Set(entryNames);
+    const results: { eco: string; buildTool: string }[] = [];
+    const seenEco = new Set();
+
+    for (const marker of BUILD_SYSTEM_MARKERS) {
+      if (seenEco.has(marker.eco)) {
+        continue;
+      }
+      const isGlob = marker.file.startsWith('*');
+      const matched = isGlob
+        ? entryNames.some((n) => n.endsWith(marker.file.slice(1)))
+        : nameSet.has(marker.file);
+      if (matched) {
+        results.push({ eco: marker.eco, buildTool: marker.buildTool });
+        seenEco.add(marker.eco);
+      }
+    }
+    return results;
+  }
+
+  /**
+   * 检测项目使用的编程语言 — 统一入口
+   *
+   * 策略（按优先级）：
+   *   1. 若传入 discovererIds（来自 ModuleService），直接映射为语言
+   *   2. 否则扫描项目目录的构建系统标记文件（支持 monorepo 多层扫描）
+   *
+   * @param projectRoot 项目根目录绝对路径
+   * @param [opts.discovererIds] ModuleService 检测到的生态 ID
+   * @param [opts.maxDepth=2] 最大扫描深度：0=仅根目录，1=+子目录，2=+孙目录
+   * @returns 规范化语言 ID 数组（如 ['rust', 'dart']）
+   */
+  static detectProjectLanguages(
+    projectRoot: string,
+    opts: { discovererIds?: string[]; maxDepth?: number } = {}
+  ) {
+    if (!projectRoot || typeof projectRoot !== 'string') {
+      return [];
+    }
+    const { discovererIds, maxDepth = 2 } = opts;
+
+    // ── Path 1: 从 Discoverer ID 映射 ──
+    if (discovererIds && discovererIds.length > 0) {
+      const nonGeneric = discovererIds.filter((id: string) => id !== 'generic');
+      if (nonGeneric.length > 0) {
+        const langSet = new Set();
+        for (const did of nonGeneric) {
+          for (const lang of ECO_TO_LANGS[did] || []) {
+            langSet.add(lang);
+          }
+        }
+        // 启发式: node 与其他生态共存时，JS/TS 通常只是构建工具，去掉
+        if (nonGeneric.length > 1 && nonGeneric.includes('node')) {
+          const hasOther = nonGeneric.some((e) => e !== 'node');
+          if (hasOther) {
+            langSet.delete('javascript');
+            langSet.delete('typescript');
+          }
+        }
+        if (langSet.size > 0) {
+          return [...langSet];
+        }
+      }
+    }
+
+    // ── Path 2: 扫描构建系统标记文件 ──
+    const seenEco = new Set<string>();
+
+    const scanDir = (dir: string) => {
+      try {
+        for (const marker of BUILD_SYSTEM_MARKERS) {
+          if (seenEco.has(marker.eco)) {
+            continue;
+          }
+          const isGlob = marker.file.startsWith('*');
+          let matched = false;
+          if (isGlob) {
+            try {
+              const suffix = marker.file.slice(1);
+              matched = readdirSync(dir).some((n) => n.endsWith(suffix));
+            } catch {
+              /* skip */
+            }
+          } else {
+            matched = existsSync(join(dir, marker.file));
+          }
+          if (matched) {
+            seenEco.add(marker.eco);
+          }
+        }
+      } catch {
+        /* skip unreadable dir */
+      }
+    };
+
+    // Level 0: 项目根目录
+    scanDir(projectRoot);
+
+    // Level 1..maxDepth: 子目录（支持 monorepo）
+    if (seenEco.size === 0 && maxDepth >= 1) {
+      const queue: [string, number][] = [[projectRoot, 0]];
+      while (queue.length > 0) {
+        const [dir, depth] = queue.shift()!;
+        if (depth >= maxDepth) {
+          continue;
+        }
+        try {
+          for (const ent of readdirSync(dir, { withFileTypes: true })) {
+            if (!ent.isDirectory() || ent.name.startsWith('.') || SCAN_SKIP_DIRS.has(ent.name)) {
+              continue;
+            }
+            const sub = join(dir, ent.name);
+            scanDir(sub);
+            if (depth + 1 < maxDepth) {
+              queue.push([sub, depth + 1]);
+            }
+          }
+        } catch {
+          /* skip */
+        }
+      }
+    }
+
+    // ── 将生态 ID 转为语言 ID ──
+    const langSet = new Set();
+    for (const eco of seenEco) {
+      for (const lang of ECO_TO_LANGS[eco] || []) {
+        langSet.add(lang);
+      }
+    }
+
+    // ── 启发式: node 与其他生态共存时，JS/TS 通常只是构建工具，去掉 ──
+    if (seenEco.size > 1 && seenEco.has('node')) {
+      const hasOther = [...seenEco].some((e) => e !== 'node');
+      if (hasOther) {
+        langSet.delete('javascript');
+        langSet.delete('typescript');
+      }
+    }
+
+    return [...langSet];
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 9) 测试文件判定 — 统一入口
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * 判定文件路径是否为测试文件
+   *
+   * 两层判定：
+   *   1. 语言特定的文件名模式（_test.go, .test.ts, test_*.py 等）
+   *   2. 通用测试目录模式（test/, tests/, __tests__/, spec/ 等）
+   *
+   * @param filePath 文件路径（相对或绝对均可）
+   * @param [language] 已知语言 ID，省略时从扩展名推断
+   * @returns 是否为测试文件
+   */
+  static isTestFile(filePath: string, language?: string): boolean {
+    if (!filePath) {
+      return false;
+    }
+    const name = filePath.split(/[/\\]/).pop() || '';
+    const lang = language || LanguageService.inferLang(name);
+
+    // ── 1. 语言特定的文件名模式 ──
+    switch (lang) {
+      case 'go':
+        if (name.endsWith('_test.go')) {
+          return true;
+        }
+        break;
+      case 'swift':
+        if (name.endsWith('Tests.swift') || name.endsWith('Test.swift')) {
+          return true;
+        }
+        break;
+      case 'rust':
+        if (name.endsWith('_test.rs') || name.startsWith('test_')) {
+          return true;
+        }
+        break;
+      case 'javascript':
+      case 'typescript':
+        if (/\.(test|spec)\.(js|ts|jsx|tsx|mjs|mts)$/.test(name)) {
+          return true;
+        }
+        break;
+      case 'python':
+        if (name.startsWith('test_') || name.endsWith('_test.py')) {
+          return true;
+        }
+        break;
+      case 'java':
+      case 'kotlin':
+        if (
+          name.endsWith('Test.java') ||
+          name.endsWith('Test.kt') ||
+          name.endsWith('Tests.java') ||
+          name.endsWith('Tests.kt')
+        ) {
+          return true;
+        }
+        break;
+      case 'ruby':
+        if (name.endsWith('_spec.rb') || name.endsWith('_test.rb') || name.startsWith('test_')) {
+          return true;
+        }
+        break;
+      case 'dart':
+        if (name.endsWith('_test.dart')) {
+          return true;
+        }
+        break;
+      default:
+        break;
+    }
+
+    // ── 2. 通用测试目录模式 ──
+    return TEST_DIR_PATTERN.test(filePath);
+  }
+}
+
+export default LanguageService;

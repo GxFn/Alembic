@@ -1,0 +1,4 @@
+# Strip AI-tool trailers (Made-with, Generated-by, etc.) from commit messages
+sed -i '' '/^Made-with:/d' "$1"
+# Remove trailing blank lines
+sed -i '' -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$1"

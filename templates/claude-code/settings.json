@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(alembic *)",
+      "Bash(curl -s * localhost:3000/*)",
+      "mcp__alembic__*"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "command": "bash .claude/hooks/alembic-session.sh"
+      }
+    ],
+    "PreCompact": [
+      {
+        "command": "bash .claude/hooks/alembic-session.sh --brief"
+      }
+    ]
+  }
+}

@@ -1,7 +1,73 @@
-/node_modules/
-/dist/
-/coverage/
+# ============================================================
+# Alembic — .gitignore
+# ============================================================
+
+# ─── Dependencies ────────────────────────────────────
+node_modules/
+resources/vscode-ext/node_modules/
+
+# ─── Build outputs ───────────────────────────────────
+dist/
+dashboard/dist/
+resources/vscode-ext/out/
+resources/vscode-ext/*.vsix
+
+# ─── Native build products ───────────────────────────
+# Swift/ObjC binaries & intermediate build artifacts
+resources/native-ui/native-ui
+resources/native-ui/screenshot
+# Prevent test-project native source leakage into repo
+*.boxspec
+*.h
+*.m
+*.pch
+*.swift
+# Tracked native sources (exceptions)
+!resources/native-ui/main.swift
+!resources/native-ui/combined-window.swift
+!resources/native-ui/screenshot.swift
+
+# ─── Environment & secrets ───────────────────────────
+.env
+.env.local
+.env.*.local
+.env.backup
+
+# ─── Alembic runtime (dev repo protection) ──────────
+# isOwnDevRepo() already prevents creation; belt-and-suspenders
+.asd/
+Alembic/
+# Codex plugin ships a lowercase skills/alembic entry; keep runtime Alembic/ ignored.
+!plugins/alembic-codex/skills/alembic/
+!plugins/alembic-codex/skills/alembic/SKILL.md
+
+# ─── Testing ─────────────────────────────────────────
+test/temp/
+test/integration/reports/
+/test-*.js
+/diagnose-*.js
+
+# ─── Logs ────────────────────────────────────────────
+logs/
+*.log
+
+# ─── Development scratch (not committed) ─────────────
+scratch/
+docs-dev/
+
+# ─── Editor / IDE local config ───────────────────────
+.vscode/
+.cursor/
+.editorconfig
+
+# ─── OS artifacts ────────────────────────────────────
 .DS_Store
-/.asd/
-/Alembic/
-/undefined/
+Thumbs.db
+nohup.out
+*.sw[a-p]
+
+# ─── Misc temp ───────────────────────────────────────
+/tmp/
+.cache/
+.git-commit-msg.tmp
+prettier-output.log

@@ -1,442 +1,333 @@
 #!/usr/bin/env node
 
-import { randomBytes } from "node:crypto";
-import type { RuntimeAiProvider } from "../lib/agent/runtime/index.js";
+process.env.ALEMBIC_API_SERVER = '1';
+process.env.ALEMBIC_DAEMON_MODE = '1';
+
+import { randomBytes } from 'node:crypto';
+import { existsSync, rmSync } from 'node:fs';
+import type { AddressInfo } from 'node:net';
+import { createServer } from 'node:net';
+import { join, resolve } from 'node:path';
+import Bootstrap from '../lib/bootstrap.js';
+import { markInterruptedDaemonJobs } from '../lib/daemon/DaemonJobRunner.js';
 import {
-  createCodexEmbeddingProviderFromEnv,
-  createCodexRuntimeAiProviderFromEnv,
-} from "../lib/codex/ai-provider.js";
-import { readPackageInfo } from "../lib/codex/package-info.js";
-import { inspectWorkspace, resolveProjectRoot } from "../lib/codex/workspace.js";
-import { startDaemonHttpBridge } from "../lib/daemon/DaemonHttpBridge.js";
-import type { DaemonJobExecutionContext, DaemonJobHandler } from "../lib/daemon/DaemonJobRunner.js";
-import { clearDaemonState, writeDaemonState } from "../lib/daemon/DaemonState.js";
-import { type DaemonJobProgressStep, JsonDaemonJobStore } from "../lib/daemon/JobStore.js";
-import { MainlineCompileSession } from "../lib/mainline/compile/index.js";
-import {
-  ColdStartWorkflow,
-  createMainlineWorkflowPersistence,
-  DisabledWorkflowFinalizer,
-  InternalColdStartWorkflow,
-  InternalKnowledgeRescanWorkflow,
-  JsonWorkflowReportStore,
-  KnowledgeRescanWorkflow,
-  type ScanLifecycleResult,
-  type ScanLifecycleRunInput,
-  ScanLifecycleRunner,
-  type WorkflowFinalizer,
-  type WorkflowReportStorePort,
-} from "../lib/workflows/index.js";
+  DAEMON_STATE_SCHEMA_VERSION,
+  getPackageVersion,
+  resolveDaemonPaths,
+  writeDaemonState,
+} from '../lib/daemon/DaemonState.js';
+import HttpServer from '../lib/http/HttpServer.js';
+import Logger from '../lib/infrastructure/logging/Logger.js';
+import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
+import { DaemonFileChangeCollector } from '../lib/service/evolution/DaemonFileChangeCollector.js';
+import { DASHBOARD_DIR } from '../lib/shared/package-root.js';
+import { shutdown } from '../lib/shared/shutdown.js';
+import { timerRegistry } from '../lib/shared/TimerRegistry.js';
 
-const projectRoot = resolveProjectRoot(process.env.ALEMBIC_PROJECT_DIR);
-const workspace = inspectWorkspace(projectRoot);
-if (!workspace.projectId) {
-  throw new Error("Alembic workspace is not initialized. Run `alembic codex init` first.");
-}
+shutdown.install();
 
-const info = readPackageInfo();
-const startedAt = new Date().toISOString();
-const dataRoot = process.env.ALEMBIC_DAEMON_DATA_ROOT ?? workspace.dataRoot;
-const runtimeAiProvider = createCodexRuntimeAiProviderFromEnv(process.env);
-const embeddingProvider = createCodexEmbeddingProviderFromEnv(process.env);
-const workflowPersistence = await createMainlineWorkflowPersistence({
-  projectRoot: workspace.projectRoot,
-  dataRoot,
-  mode: workspace.mode,
-  ...(embeddingProvider === undefined ? {} : { embeddingProvider }),
+type WorkspaceResolver = Awaited<ReturnType<Bootstrap['initialize']>>['workspaceResolver'];
+
+process.on('uncaughtException', (error) => {
+  const logger = Logger.getInstance();
+  logger.error('Daemon uncaught exception', { message: error.message, stack: error.stack });
+  process.exit(1);
 });
-const initialState = {
-  pid: process.pid,
-  port: Number.parseInt(process.env.ALEMBIC_DAEMON_PORT ?? "0", 10) || 0,
-  token: process.env.ALEMBIC_DAEMON_TOKEN ?? randomBytes(24).toString("hex"),
-  projectRoot: workspace.projectRoot,
-  dataRoot,
-  projectId: workspace.projectId,
-  databasePath: workflowPersistence.workspacePaths.databasePath,
-  version: info.version,
-  startedAt,
-  updatedAt: startedAt,
-};
 
-const interruptedJobs = await new JsonDaemonJobStore(initialState.dataRoot).markInterrupted();
-let currentState = initialState;
-const workflowFinalizer = new DisabledWorkflowFinalizer();
-const workflowReportStore = new JsonWorkflowReportStore({
-  reportsDir: workflowPersistence.workspacePaths.snapshot().reportsDir,
+process.on('unhandledRejection', (reason) => {
+  const logger = Logger.getInstance();
+  logger.error('Daemon unhandled rejection', { reason });
+  process.exit(1);
 });
-const compileSession = new MainlineCompileSession({
-  workspacePaths: workflowPersistence.workspacePaths,
-  writeBoundary: workflowPersistence.writeBoundary,
-  contextIndex: workflowPersistence.contextIndex,
-  searchIndex: workflowPersistence.searchIndex,
-  vectorStore: workflowPersistence.vectorStore,
-  ...(embeddingProvider === undefined ? {} : { embeddingProvider }),
-  artifactStore: workflowPersistence.artifactStore,
-});
-const scanLifecycleRunner =
-  workflowPersistence.dependencies.lifecycleRunner ??
-  new ScanLifecycleRunner({
-    workspacePaths: workflowPersistence.workspacePaths,
-    compileSession,
-    persistedArtifacts: workflowPersistence.persistedArtifacts,
-    ...(workflowPersistence.dependencies.resetRuntimeState === undefined
-      ? {}
-      : { resetRuntimeState: workflowPersistence.dependencies.resetRuntimeState }),
-  });
-const internalColdStartWorkflow = new InternalColdStartWorkflow({
-  coldStart: new ColdStartWorkflow(scanLifecycleRunner),
-  toolDependencies: workflowPersistence.agentToolDependencies,
-  finalizer: workflowFinalizer,
-  reportStore: workflowReportStore,
-});
-const internalKnowledgeRescanWorkflow = new InternalKnowledgeRescanWorkflow({
-  rescan: new KnowledgeRescanWorkflow(scanLifecycleRunner),
-  toolDependencies: workflowPersistence.agentToolDependencies,
-  finalizer: workflowFinalizer,
-  reportStore: workflowReportStore,
-});
-// 中文注释：daemon 是 Codex 插件后台入口，bootstrap/rescan 这类长任务在 daemon 中执行；
-// MCP stdio 只负责把请求排入 durable queue，HTTP enqueue 返回后不等待编译完成。
-const workflowHandlers: Record<"bootstrap" | "rescan", DaemonJobHandler> = {
-  bootstrap: async (job, context) =>
-    runWorkflowJob(
-      scanLifecycleRunner,
-      internalColdStartWorkflow,
-      internalKnowledgeRescanWorkflow,
-      "bootstrap",
-      workspace.projectRoot,
-      job.input,
-      context,
-      runtimeAiProvider,
-      workflowFinalizer,
-      workflowReportStore,
-    ),
-  rescan: async (job, context) =>
-    runWorkflowJob(
-      scanLifecycleRunner,
-      internalColdStartWorkflow,
-      internalKnowledgeRescanWorkflow,
-      "rescan",
-      workspace.projectRoot,
-      job.input,
-      context,
-      runtimeAiProvider,
-      workflowFinalizer,
-      workflowReportStore,
-    ),
-};
-const bridge = await startDaemonHttpBridge({
-  state: () => currentState,
-  requestedPort: initialState.port,
-  jobHandlers: workflowHandlers,
-  autoRunJobs: true,
-});
-const readyState = {
-  ...initialState,
-  port: bridge.port,
-  updatedAt: new Date().toISOString(),
-};
-currentState = readyState;
-await writeDaemonState(readyState);
 
-process.stderr.write(
-  `Alembic daemon ready on ${bridge.url}; interruptedJobs=${interruptedJobs.length}\n`,
-);
+async function main() {
+  const logger = Logger.getInstance();
+  const projectRoot = resolve(process.env.ALEMBIC_PROJECT_DIR || process.cwd());
+  const host = process.env.ALEMBIC_DAEMON_HOST || process.env.HOST || '127.0.0.1';
+  const requestedPort = Number.parseInt(
+    process.env.ALEMBIC_DAEMON_PORT || process.env.PORT || '0',
+    10
+  );
+  const token = process.env.ALEMBIC_DAEMON_TOKEN || randomBytes(32).toString('hex');
+  const paths = resolveDaemonPaths(projectRoot);
+  const statePath = process.env.ALEMBIC_DAEMON_STATE_PATH || paths.statePath;
 
-for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.once(signal, async () => {
-    await shutdown();
-  });
-}
+  process.env.ALEMBIC_PROJECT_DIR = projectRoot;
+  process.env.ALEMBIC_DAEMON_TOKEN = token;
+  process.env.HOST = host;
+  process.env.PORT = String(Number.isFinite(requestedPort) ? requestedPort : 0);
 
-async function shutdown(): Promise<void> {
-  await bridge.close();
-  await clearDaemonState(readyState.dataRoot);
-  process.exit(0);
-}
-
-async function runWorkflowJob(
-  runner: ScanLifecycleRunner,
-  internalColdStart: InternalColdStartWorkflow,
-  internalRescan: InternalKnowledgeRescanWorkflow,
-  kind: "bootstrap" | "rescan",
-  projectRoot: string,
-  input: Record<string, unknown> | undefined,
-  context: DaemonJobExecutionContext,
-  aiProvider: RuntimeAiProvider | null,
-  finalizer: WorkflowFinalizer,
-  reportStore: WorkflowReportStorePort,
-): Promise<Record<string, unknown>> {
-  const agentFill = input?.agentFill === true;
-  await context.reportProgress({
-    phase: "scan:preparing",
-    message: agentFill
-      ? `Preparing ${kind} scan and internal agent workflow.`
-      : `Preparing ${kind} scan lifecycle.`,
-    percent: 10,
-  });
-  if (await context.isCancelled()) {
-    return { kind, cancelled: true };
+  if (projectRoot !== process.cwd()) {
+    process.chdir(projectRoot);
   }
-  await context.reportProgress({
-    phase: "scan:running",
-    message: agentFill
-      ? `Running ${kind} scan and internal agent workflow.`
-      : `Running ${kind} scan lifecycle.`,
-    percent: 20,
-  });
-  const cancellation = { isCancelled: () => context.isCancelled() };
-  const result = agentFill
-    ? await runInternalAgentWorkflowJob({
-        internalColdStart,
-        internalRescan,
-        kind,
-        projectRoot,
-        input,
-        cancellation,
-        aiProvider,
-      })
-    : await runner.run({
-        kind,
-        projectRoot,
-        ...scanLifecycleInput(input),
-        cancellation,
-      });
-  if (await context.isCancelled()) {
-    return { kind, cancelled: true };
-  }
-  const resultWithFinalizer =
-    agentFill || !("kind" in result)
-      ? result
-      : await finalizeScanLifecycleJob(result, { finalizer, reportStore });
-  if (await context.isCancelled()) {
-    return { kind, cancelled: true };
-  }
-  await context.reportProgress({
-    phase: "scan:completed",
-    message: agentFill
-      ? `${kind} scan and internal agent workflow completed.`
-      : `${kind} scan lifecycle completed.`,
-    percent: 90,
-    steps: workflowProgressSteps(resultWithFinalizer),
-  });
-  return JSON.parse(JSON.stringify(resultWithFinalizer)) as Record<string, unknown>;
-}
 
-async function runInternalAgentWorkflowJob(input: {
-  readonly internalColdStart: InternalColdStartWorkflow;
-  readonly internalRescan: InternalKnowledgeRescanWorkflow;
-  readonly kind: "bootstrap" | "rescan";
-  readonly projectRoot: string;
-  readonly input: Record<string, unknown> | undefined;
-  readonly cancellation: { isCancelled(): boolean | Promise<boolean> };
-  readonly aiProvider: RuntimeAiProvider | null;
-}) {
-  const agentOptions = agentWorkflowInput(input.input);
-  if (input.kind === "bootstrap") {
-    return input.internalColdStart.run({
-      projectRoot: input.projectRoot,
-      ...coldStartInput(input.input),
-      ...coldStartAgentWorkflowInput(agentOptions),
-      aiProvider: input.aiProvider,
-      cancellation: input.cancellation,
+  Bootstrap.configurePathGuard(projectRoot);
+
+  const bootstrap = new Bootstrap({ env: process.env.NODE_ENV || 'development' });
+  const components = await bootstrap.initialize();
+  const container = getServiceContainer();
+  await container.initialize({
+    db: components.db,
+    auditLogger: components.auditLogger,
+    gateway: components.gateway,
+    constitution: components.constitution,
+    config: components.config,
+    skillHooks: components.skillHooks,
+    projectRoot,
+    workspaceResolver: components.workspaceResolver,
+  });
+
+  markInterruptedDaemonJobs({
+    code: 'DAEMON_RESTARTED',
+    container,
+    logger,
+    reason: 'Alembic daemon restarted before this job completed. Start a new job to retry.',
+  });
+
+  try {
+    const eventBus = container.get('eventBus');
+    const gateway = container.get('gateway') as { eventBus?: unknown };
+    gateway.eventBus = eventBus;
+  } catch {
+    /* EventBus 不可用不阻塞 daemon */
+  }
+
+  const httpServer = await startHttpServer(requestedPort, host);
+  const fileChangeCollector = startDaemonFileChangeCollector({
+    container,
+    logger,
+    projectRoot,
+  });
+  const actualPort = resolveBoundDaemonPort(httpServer, requestedPort);
+  const daemonUrl = buildDaemonUrl(host, actualPort);
+  const dashboardMounted = mountDashboardIfAvailable(httpServer);
+  await verifyHttpServerReady(daemonUrl);
+
+  const resolver = components.workspaceResolver;
+  const schemaMigrationVersion = getSchemaMigrationVersion(components.db);
+  writeReadyDaemonState({
+    statePath,
+    projectRoot,
+    resolver,
+    host,
+    actualPort,
+    daemonUrl,
+    dashboardMounted,
+    token,
+    schemaMigrationVersion,
+  });
+
+  logger.info('Alembic daemon ready', {
+    projectRoot,
+    dataRoot: resolver?.dataRoot,
+    port: actualPort,
+    statePath,
+  });
+
+  import('../lib/service/bootstrap/UiStartupTasks.js')
+    .then(({ runUiStartupTasks }) => runUiStartupTasks({ projectRoot, container }))
+    .then((report) => {
+      if (report.errors.length > 0) {
+        logger.warn(`UiStartupTasks completed with ${report.errors.length} error(s)`);
+      }
+    })
+    .catch((error: unknown) => {
+      logger.debug(`UiStartupTasks failed: ${(error as Error).message}`);
     });
+
+  shutdown.register(async () => {
+    rmSync(statePath, { force: true });
+    rmSync(paths.pidPath, { force: true });
+  }, 'daemon-state');
+  shutdown.register(async () => {
+    await bootstrap.shutdown();
+  }, 'bootstrap');
+  shutdown.register(async () => {
+    await httpServer.stop();
+  }, 'http-server');
+  shutdown.register(async () => {
+    await timerRegistry.dispose();
+  }, 'timer-registry');
+  shutdown.register(() => {
+    fileChangeCollector?.stop();
+  }, 'daemon-file-change-collector');
+  shutdown.register(() => {
+    markInterruptedDaemonJobs({
+      code: 'DAEMON_SHUTDOWN',
+      container,
+      logger,
+      reason: 'Alembic daemon shut down before this job completed. Start a new job to retry.',
+    });
+  }, 'daemon-jobs');
+}
+
+function startDaemonFileChangeCollector(options: {
+  container: ReturnType<typeof getServiceContainer>;
+  logger: ReturnType<typeof Logger.getInstance>;
+  projectRoot: string;
+}): DaemonFileChangeCollector | null {
+  if (process.env.ALEMBIC_DAEMON_FILE_CHANGES === '0') {
+    options.logger.info('[daemon-file-change] disabled by ALEMBIC_DAEMON_FILE_CHANGES=0');
+    return null;
   }
-  return input.internalRescan.run({
-    projectRoot: input.projectRoot,
-    ...knowledgeRescanInput(input.input),
-    ...agentOptions,
-    aiProvider: input.aiProvider,
-    cancellation: input.cancellation,
+
+  const dispatcher = options.container.get(
+    'fileChangeDispatcher'
+  ) as import('../lib/service/FileChangeDispatcher.js').FileChangeDispatcher;
+  const collector = new DaemonFileChangeCollector({
+    projectRoot: options.projectRoot,
+    dispatcher,
+    intervalMs: Number.parseInt(process.env.ALEMBIC_DAEMON_FILE_CHANGE_INTERVAL_MS || '', 10),
+    extensionTtlMs: Number.parseInt(process.env.ALEMBIC_VSCODE_HEARTBEAT_TTL_MS || '', 10),
+    logger: options.logger,
+  });
+  collector.start();
+  return collector;
+}
+
+function resolveBoundDaemonPort(httpServer: HttpServer, requestedPort: number): number {
+  let actualPort = getListeningPort(httpServer) ?? requestedPort;
+  if (!actualPort || actualPort < 0) {
+    actualPort = requestedPort;
+  }
+  if (!actualPort || actualPort <= 0) {
+    throw new Error(`Daemon HTTP server did not bind to a valid port: ${actualPort}`);
+  }
+  return actualPort;
+}
+
+function writeReadyDaemonState(options: {
+  statePath: string;
+  projectRoot: string;
+  resolver: WorkspaceResolver;
+  host: string;
+  actualPort: number;
+  daemonUrl: string;
+  dashboardMounted: boolean;
+  token: string;
+  schemaMigrationVersion: string | null;
+}): void {
+  const now = new Date().toISOString();
+  writeDaemonState(options.statePath, {
+    schemaVersion: DAEMON_STATE_SCHEMA_VERSION,
+    projectRoot: options.projectRoot,
+    dataRoot: options.resolver?.dataRoot || options.projectRoot,
+    projectId: options.resolver?.projectId || null,
+    pid: process.pid,
+    host: options.host,
+    port: options.actualPort,
+    url: options.daemonUrl,
+    dashboardUrl: options.dashboardMounted ? options.daemonUrl : `${options.daemonUrl}/api-spec`,
+    token: options.token,
+    version: getPackageVersion(),
+    mode: 'daemon',
+    startedAt: now,
+    lastReadyAt: now,
+    databasePath: options.resolver?.databasePath || '',
+    schemaMigrationVersion: options.schemaMigrationVersion,
   });
 }
 
-async function finalizeScanLifecycleJob(
-  scan: ScanLifecycleResult,
-  input: {
-    readonly finalizer: WorkflowFinalizer;
-    readonly reportStore: WorkflowReportStorePort;
-  },
-) {
-  const finalizer = await input.finalizer.run({
-    kind: scan.kind,
-    projectRoot: scan.projectRoot,
-    scan,
+async function startHttpServer(port: number, host: string): Promise<HttpServer> {
+  const portToUse = port !== 0 && !(await isPortAvailable(port, host)) ? 0 : port;
+  try {
+    const httpServer = new HttpServer({ port: portToUse, host });
+    await httpServer.initialize();
+    await httpServer.start();
+    return httpServer;
+  } catch (error: unknown) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EADDRINUSE' && port !== 0) {
+      const httpServer = new HttpServer({ port: 0, host });
+      await httpServer.initialize();
+      await httpServer.start();
+      return httpServer;
+    }
+    throw error;
+  }
+}
+
+function mountDashboardIfAvailable(httpServer: HttpServer): boolean {
+  const distDir = join(DASHBOARD_DIR, 'dist');
+  const indexPath = join(distDir, 'index.html');
+  if (!existsSync(indexPath)) {
+    Logger.getInstance().warn('Dashboard dist is missing; daemon will serve API routes only', {
+      indexPath,
+    });
+    return false;
+  }
+  httpServer.mountDashboard(distDir);
+  return true;
+}
+
+async function isPortAvailable(port: number, host: string): Promise<boolean> {
+  const { promise, resolve } = Promise.withResolvers<boolean>();
+  const server = createServer();
+  server.once('error', () => resolve(false));
+  server.once('listening', () => {
+    server.close(() => resolve(true));
   });
-  const report = await input.reportStore.save({
-    kind: scan.kind,
-    scan,
-    finalizer,
-    source: "daemon-scan-lifecycle",
+  server.listen(port, host);
+  return promise;
+}
+
+async function verifyHttpServerReady(baseUrl: string): Promise<void> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1000);
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/daemon/health`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`health returned ${response.status}`);
+    }
+    const payload = (await response.json()) as { success?: unknown };
+    if (payload.success !== true) {
+      throw new Error('health response did not report success');
+    }
+  } catch (error: unknown) {
+    throw new Error(
+      `Daemon HTTP server failed readiness verification at ${baseUrl}: ${(error as Error).message}`
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function buildDaemonUrl(host: string, port: number): string {
+  const urlHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+  const formattedHost =
+    urlHost.includes(':') && !urlHost.startsWith('[') ? `[${urlHost}]` : urlHost;
+  return `http://${formattedHost}:${port}`;
+}
+
+function getListeningPort(httpServer: HttpServer): number | null {
+  const address = httpServer.getServer()?.address();
+  if (address && typeof address === 'object') {
+    return (address as AddressInfo).port;
+  }
+  return null;
+}
+
+function getSchemaMigrationVersion(db: unknown): string | null {
+  try {
+    const rawDb = (
+      db as { getDb?: () => { prepare: (sql: string) => { get: () => unknown } } }
+    )?.getDb?.();
+    const row = rawDb
+      ?.prepare('SELECT version FROM schema_migrations ORDER BY applied_at DESC LIMIT 1')
+      .get() as { version?: string } | undefined;
+    return row?.version || null;
+  } catch {
+    return null;
+  }
+}
+
+main().catch((error: unknown) => {
+  const logger = Logger.getInstance();
+  logger.error('Failed to start Alembic daemon', {
+    message: (error as Error).message,
+    stack: (error as Error).stack,
   });
-  return { ...scan, finalizer, report };
-}
-
-function workflowProgressSteps(
-  result:
-    | (ScanLifecycleResult & {
-        readonly finalizer?: unknown;
-        readonly report?: unknown;
-      })
-    | Awaited<ReturnType<InternalColdStartWorkflow["run"]>>,
-): DaemonJobProgressStep[] {
-  if ("scan" in result) {
-    const scanSteps = scanLifecycleProgressSteps(result.scan);
-    const agentResults = result.agent?.results ?? [];
-    const agentSteps = agentResults.map((taskResult) => ({
-      phase: `agent:${taskResult.task.kind}:${taskResult.task.id}`,
-      status: taskResult.status,
-      message: `${taskResult.task.label}: ${taskResult.candidateCount} candidate(s), ${taskResult.toolCallCount} tool call(s)`,
-    }));
-    const rawSteps = [...scanSteps, ...agentSteps];
-    return rawSteps.map((step, index) => ({
-      ...step,
-      percent: rawSteps.length === 0 ? 100 : Math.round(((index + 1) / rawSteps.length) * 100),
-    }));
-  }
-  return scanLifecycleProgressSteps(result);
-}
-
-function scanLifecycleProgressSteps(result: ScanLifecycleResult): DaemonJobProgressStep[] {
-  const lifecycleSteps = result.phases.map((phase) => ({
-    phase: phase.id,
-    status: phase.status,
-    ...(phase.error === undefined ? {} : { message: phase.error }),
-  }));
-  const compileSteps =
-    result.compile?.progress.checkpoints.map((checkpoint) => ({
-      phase: `compile:${checkpoint.phase}`,
-      status: checkpoint.status,
-      ...(checkpoint.detail === undefined ? {} : { message: checkpoint.detail }),
-    })) ?? [];
-  const steps = [...lifecycleSteps, ...compileSteps];
-  const stepCount = steps.length;
-
-  return steps.map((step, index) => ({
-    ...step,
-    percent: stepCount === 0 ? 100 : Math.round(((index + 1) / stepCount) * 100),
-  }));
-}
-
-function coldStartInput(input: Record<string, unknown> | undefined): Pick<
-  ScanLifecycleRunInput,
-  "scan" | "maxFileBytes" | "notes"
-> & {
-  readonly cleanup?: "full-reset" | "none";
-} {
-  const lifecycleInput = scanLifecycleInput(input);
-  return {
-    ...(lifecycleInput.scan === undefined ? {} : { scan: lifecycleInput.scan }),
-    ...(lifecycleInput.maxFileBytes === undefined
-      ? {}
-      : { maxFileBytes: lifecycleInput.maxFileBytes }),
-    ...(lifecycleInput.notes === undefined ? {} : { notes: lifecycleInput.notes }),
-    ...(lifecycleInput.cleanup === "full-reset" || lifecycleInput.cleanup === "none"
-      ? { cleanup: lifecycleInput.cleanup }
-      : {}),
-  };
-}
-
-function knowledgeRescanInput(input: Record<string, unknown> | undefined): Omit<
-  ScanLifecycleRunInput,
-  "projectRoot" | "kind" | "cancellation" | "cleanup"
-> & {
-  readonly cleanup?: "rescan-clean" | "none";
-} {
-  const lifecycleInput = scanLifecycleInput(input);
-  const { cleanup, ...rescanInput } = lifecycleInput;
-  return {
-    ...rescanInput,
-    ...(cleanup === "rescan-clean" || cleanup === "none" ? { cleanup } : {}),
-  };
-}
-
-function agentWorkflowInput(input: Record<string, unknown> | undefined): {
-  readonly maxAgentTasks?: number;
-  readonly skipAgentFill?: boolean;
-  readonly includeEvolution?: boolean;
-} {
-  return {
-    ...(typeof input?.maxAgentTasks === "number" && Number.isFinite(input.maxAgentTasks)
-      ? { maxAgentTasks: input.maxAgentTasks }
-      : {}),
-    ...(typeof input?.includeEvolution === "boolean"
-      ? { includeEvolution: input.includeEvolution }
-      : {}),
-    skipAgentFill: false,
-  };
-}
-
-function coldStartAgentWorkflowInput(input: ReturnType<typeof agentWorkflowInput>): {
-  readonly maxAgentTasks?: number;
-  readonly skipAgentFill?: boolean;
-} {
-  return {
-    ...(input.maxAgentTasks === undefined ? {} : { maxAgentTasks: input.maxAgentTasks }),
-    ...(input.skipAgentFill === undefined ? {} : { skipAgentFill: input.skipAgentFill }),
-  };
-}
-
-function scanLifecycleInput(
-  input: Record<string, unknown> | undefined,
-): Omit<ScanLifecycleRunInput, "projectRoot" | "kind" | "cancellation"> {
-  if (!input) {
-    return {};
-  }
-
-  return {
-    ...(isRecord(input.scan) ? { scan: input.scan } : {}),
-    ...optionalStringList("changedFiles", input.changedFiles),
-    ...optionalStringList("removedFiles", input.removedFiles),
-    ...optionalStringMap("diffTextByPath", input.diffTextByPath),
-    ...optionalStringList("notes", input.notes),
-    ...optionalFiniteNumber("maxFileBytes", input.maxFileBytes),
-    ...optionalFiniteNumber("dependentDepth", input.dependentDepth),
-    ...optionalFiniteNumber("fullRebuildChangeRatio", input.fullRebuildChangeRatio),
-    ...optionalCleanupPolicy(input.cleanup),
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function optionalStringList(
-  key: "changedFiles" | "removedFiles" | "notes",
-  value: unknown,
-): Partial<Pick<ScanLifecycleRunInput, typeof key>> {
-  if (!Array.isArray(value)) {
-    return {};
-  }
-  const strings = value.filter(
-    (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
-  );
-  return strings.length > 0 ? { [key]: strings } : {};
-}
-
-function optionalStringMap(
-  key: "diffTextByPath",
-  value: unknown,
-): Partial<Pick<ScanLifecycleRunInput, typeof key>> {
-  if (!isRecord(value)) {
-    return {};
-  }
-  const entries = Object.entries(value).filter(
-    (entry): entry is [string, string] =>
-      typeof entry[0] === "string" && typeof entry[1] === "string",
-  );
-  return entries.length > 0 ? { [key]: Object.fromEntries(entries) } : {};
-}
-
-function optionalFiniteNumber(
-  key: "maxFileBytes" | "dependentDepth" | "fullRebuildChangeRatio",
-  value: unknown,
-): Partial<Pick<ScanLifecycleRunInput, typeof key>> {
-  return typeof value === "number" && Number.isFinite(value) ? { [key]: value } : {};
-}
-
-function optionalCleanupPolicy(value: unknown): Partial<Pick<ScanLifecycleRunInput, "cleanup">> {
-  return value === "full-reset" || value === "rescan-clean" || value === "none"
-    ? { cleanup: value }
-    : {};
-}
+  process.exit(1);
+});

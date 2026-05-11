@@ -1,10 +1,11 @@
-import type { ToolResultEnvelope } from "../tools/index.js";
+import type { ToolDiagnosticsRecorder } from '#tools/core/ToolCallContext.js';
+import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
 import type {
   AgentDiagnostics,
   AgentDiagnosticWarning,
   StageToolsetDiagnostic,
   ToolCallDiagnostic,
-} from "./AgentRuntimeTypes.js";
+} from './AgentRuntimeTypes.js';
 
 function emptyDiagnostics(): AgentDiagnostics {
   return {
@@ -21,74 +22,72 @@ function emptyDiagnostics(): AgentDiagnostics {
 }
 
 function isDiagnostics(value: unknown): value is Partial<AgentDiagnostics> {
-  return typeof value === "object" && value !== null;
+  return !!value && typeof value === 'object';
 }
 
-export class DiagnosticsCollector {
-  #diagnostics: AgentDiagnostics = emptyDiagnostics();
+export class DiagnosticsCollector implements ToolDiagnosticsRecorder {
+  #diagnostics: AgentDiagnostics;
 
   constructor(seed?: Partial<AgentDiagnostics>) {
+    this.#diagnostics = emptyDiagnostics();
     if (seed) {
       this.merge(seed);
     }
   }
 
-  static from(value: unknown): DiagnosticsCollector {
+  static from(value: unknown) {
     if (value instanceof DiagnosticsCollector) {
       return value;
     }
     return new DiagnosticsCollector(isDiagnostics(value) ? value : undefined);
   }
 
-  markDegraded(): void {
+  markDegraded() {
     this.#diagnostics.degraded = true;
   }
 
-  markFallbackUsed(): void {
+  markFallbackUsed() {
     this.#diagnostics.fallbackUsed = true;
   }
 
-  warn(warning: AgentDiagnosticWarning): void {
+  warn(warning: AgentDiagnosticWarning) {
     this.#diagnostics.warnings.push(warning);
   }
 
-  recordTimedOutStage(stage: string): void {
+  recordTimedOutStage(stage: string) {
     if (!this.#diagnostics.timedOutStages.includes(stage)) {
       this.#diagnostics.timedOutStages.push(stage);
     }
   }
 
-  recordBlockedTool(tool: string, reason: string): void {
+  recordBlockedTool(tool: string, reason: string) {
     this.#diagnostics.blockedTools.push({ tool, reason });
   }
 
-  recordTruncatedToolCalls(count: number): void {
+  recordTruncatedToolCalls(count: number) {
     if (count > 0) {
       this.#diagnostics.truncatedToolCalls += count;
     }
   }
 
-  recordEmptyResponse(): void {
-    this.#diagnostics.emptyResponses += 1;
+  recordEmptyResponse() {
+    this.#diagnostics.emptyResponses++;
   }
 
-  recordAiError(message: string): void {
-    this.#diagnostics.aiErrorCount += 1;
-    this.warn({ code: "ai_error", message });
+  recordAiError(message: string) {
+    this.#diagnostics.aiErrorCount++;
+    this.warn({ code: 'ai_error', message });
   }
 
-  recordGateFailure(stage: string, action: string, reason?: string): void {
+  recordGateFailure(stage: string, action: string, reason?: string) {
     this.#diagnostics.gateFailures.push({ stage, action, ...(reason ? { reason } : {}) });
-    if (action === "degrade") {
+    if (action === 'degrade') {
       this.markDegraded();
     }
   }
 
-  recordStageToolset(toolset: StageToolsetDiagnostic): void {
-    if (!this.#diagnostics.stageToolsets) {
-      this.#diagnostics.stageToolsets = [];
-    }
-    const entries = this.#diagnostics.stageToolsets;
+  recordStageToolset(toolset: StageToolsetDiagnostic) {
+    const entries = (this.#diagnostics.stageToolsets ??= []);
     entries.push({
       stage: toolset.stage,
       capabilities: [...toolset.capabilities],
@@ -100,26 +99,26 @@ export class DiagnosticsCollector {
 
   recordToolCallEnvelope(
     envelope: ToolResultEnvelope,
-    context: { kind?: string; surface?: string; source?: string } = {},
-  ): void {
-    if (!this.#diagnostics.toolCalls) {
-      this.#diagnostics.toolCalls = [];
-    }
-    const calls = this.#diagnostics.toolCalls;
-    const now = new Date().toISOString();
-    const callId = envelope.meta?.requestId ?? `${envelope.name}:${calls.length + 1}`;
+    context: {
+      kind?: string;
+      surface?: string;
+      source?: string;
+    } = {}
+  ) {
+    const calls = (this.#diagnostics.toolCalls ??= []);
     const entry: ToolCallDiagnostic = {
-      tool: envelope.name,
-      callId,
+      tool: envelope.toolId,
+      callId: envelope.callId,
+      ...(envelope.parentCallId ? { parentCallId: envelope.parentCallId } : {}),
       status: envelope.status,
       ok: envelope.ok,
       ...(context.surface ? { surface: context.surface } : {}),
       ...(context.source ? { source: context.source } : {}),
       ...(context.kind ? { kind: context.kind } : {}),
-      startedAt: now,
-      durationMs: 0,
+      startedAt: envelope.startedAt,
+      durationMs: envelope.durationMs,
     };
-    const existingIndex = calls.findIndex((call) => call.callId === callId);
+    const existingIndex = calls.findIndex((call) => call.callId === envelope.callId);
     if (existingIndex >= 0) {
       calls[existingIndex] = entry;
     } else {
@@ -127,48 +126,48 @@ export class DiagnosticsCollector {
     }
   }
 
-  merge(input: unknown): void {
+  merge(input: unknown) {
     if (!isDiagnostics(input)) {
       return;
     }
+
     if (input.degraded) {
       this.markDegraded();
     }
     if (input.fallbackUsed) {
       this.markFallbackUsed();
     }
-    for (const warning of input.warnings ?? []) {
+    for (const warning of input.warnings || []) {
       this.warn(warning);
     }
-    for (const stage of input.timedOutStages ?? []) {
+    for (const stage of input.timedOutStages || []) {
       this.recordTimedOutStage(stage);
     }
-    for (const blockedTool of input.blockedTools ?? []) {
+    for (const blockedTool of input.blockedTools || []) {
       this.recordBlockedTool(blockedTool.tool, blockedTool.reason);
     }
-    this.recordTruncatedToolCalls(input.truncatedToolCalls ?? 0);
-    for (let index = 0; index < (input.emptyResponses ?? 0); index += 1) {
+    this.recordTruncatedToolCalls(input.truncatedToolCalls || 0);
+    for (let index = 0; index < (input.emptyResponses || 0); index++) {
       this.recordEmptyResponse();
     }
-    this.#diagnostics.aiErrorCount += input.aiErrorCount ?? 0;
-    for (const gateFailure of input.gateFailures ?? []) {
+    for (let index = 0; index < (input.aiErrorCount || 0); index++) {
+      this.#diagnostics.aiErrorCount++;
+    }
+    for (const gateFailure of input.gateFailures || []) {
       this.recordGateFailure(gateFailure.stage, gateFailure.action, gateFailure.reason);
     }
-    if (input.toolCalls?.length && !this.#diagnostics.toolCalls) {
-      this.#diagnostics.toolCalls = [];
-    }
-    for (const toolCall of input.toolCalls ?? []) {
-      const calls = this.#diagnostics.toolCalls ?? [];
+    for (const toolCall of input.toolCalls || []) {
+      const calls = (this.#diagnostics.toolCalls ??= []);
       if (!calls.some((call) => call.callId === toolCall.callId)) {
         calls.push({ ...toolCall });
       }
     }
-    for (const toolset of input.stageToolsets ?? []) {
+    for (const toolset of input.stageToolsets || []) {
       this.recordStageToolset(toolset);
     }
   }
 
-  isEmpty(): boolean {
+  isEmpty() {
     return (
       !this.#diagnostics.degraded &&
       !this.#diagnostics.fallbackUsed &&
@@ -179,8 +178,8 @@ export class DiagnosticsCollector {
       this.#diagnostics.emptyResponses === 0 &&
       this.#diagnostics.aiErrorCount === 0 &&
       this.#diagnostics.gateFailures.length === 0 &&
-      (this.#diagnostics.toolCalls?.length ?? 0) === 0 &&
-      (this.#diagnostics.stageToolsets?.length ?? 0) === 0
+      (this.#diagnostics.toolCalls?.length || 0) === 0 &&
+      (this.#diagnostics.stageToolsets?.length || 0) === 0
     );
   }
 

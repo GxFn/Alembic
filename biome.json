@@ -1,12 +1,18 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.6/schema.json",
-  "vcs": {
-    "enabled": true,
-    "clientKind": "git",
-    "useIgnoreFile": true
-  },
   "files": {
-    "ignoreUnknown": true
+    "includes": [
+      "lib/**",
+      "bin/**",
+      "config/**",
+      "scripts/**",
+      "test/**",
+      "*.js",
+      "*.mjs",
+      "*.cjs",
+      "*.ts",
+      "*.mts"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -14,17 +20,45 @@
     "indentWidth": 2,
     "lineWidth": 100
   },
+  "javascript": {
+    "formatter": {
+      "semicolons": "always",
+      "quoteStyle": "single",
+      "trailingCommas": "es5",
+      "bracketSpacing": true,
+      "arrowParentheses": "always"
+    }
+  },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
-    }
-  },
-  "javascript": {
-    "formatter": {
-      "quoteStyle": "double",
-      "semicolons": "always",
-      "trailingCommas": "all"
+      "recommended": true,
+      "correctness": {
+        "noUnusedFunctionParameters": "off"
+      },
+      "complexity": {
+        "noThisInStatic": "off",
+        "noStaticOnlyClass": "off"
+      },
+      "style": {
+        "useConst": "error",
+        "useTemplate": "error",
+        "useBlockStatements": "error",
+        "useThrowOnlyError": "error"
+      },
+      "suspicious": {
+        "noVar": "error",
+        "noDoubleEquals": "error",
+        "noExplicitAny": "warn",
+        "noImplicitAnyLet": "warn",
+        "noAssignInExpressions": "off",
+        "noConsole": {
+          "level": "warn",
+          "options": {
+            "allow": ["warn", "error"]
+          }
+        }
+      }
     }
   }
 }

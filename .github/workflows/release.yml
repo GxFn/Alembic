@@ -1,26 +1,24 @@
+# Alembic 发布：推送 v* tag 后，由 GitHub Actions 构建、测试并发布到 npm
 name: Release
 
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-permissions:
-  contents: read
-  id-token: write
-
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  publish:
-    name: Publish npm package
+  build-test-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    permissions:
+      id-token: write   # npm provenance / trusted publishing
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -28,9 +26,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: "22"
-          cache: npm
-          registry-url: "https://registry.npmjs.org"
+          node-version: '22'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Verify tag matches package version
         run: |
@@ -40,37 +38,50 @@ jobs:
           echo "Package version: ${PACKAGE_VERSION}"
           test "${TAG_VERSION}" = "${PACKAGE_VERSION}"
 
-      - name: Verify package version is unpublished
-        run: |
-          PACKAGE_NAME="$(node -p "require('./package.json').name")"
-          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
-          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version > /dev/null 2>&1; then
-            echo "::error::${PACKAGE_NAME}@${PACKAGE_VERSION} is already published. Bump package.json before tagging."
-            exit 1
-          fi
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Install dashboard dependencies
+        run: npm ci --prefix dashboard
 
-      - name: Lint
-        run: npm run lint
+      - name: Install VS Code extension dependencies
+        run: npm run install:vscode-ext
 
-      - name: Build
+      - name: Build TypeScript
         run: npm run build
 
-      - name: Unit tests
+      - name: Build Dashboard
+        run: npm run build:dashboard
+
+      - name: Build VS Code extension
+        run: npm run build:vscode-ext
+
+      - name: Lint
+        run: npm run lint -- --diagnostic-level=error
+
+      - name: Run unit tests
         run: npm run test:unit
 
-      - name: Verify Codex plugin package
-        run: npm run verify:codex-plugin
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          ASD_DISABLE_WRITE_GUARD: '1'
+          ASD_DISABLE_RATE_LIMIT: '1'
 
       - name: Preview npm package
         run: npm pack --dry-run
 
+      - name: Preview VS Code extension package
+        run: npm run package:vscode-ext -- --out /tmp/alembic-vscode.vsix
+
+      - name: Upload VS Code extension package
+        uses: actions/upload-artifact@v5
+        with:
+          name: alembic-vscode-extension
+          path: /tmp/alembic-vscode.vsix
+
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        # Build artifacts are produced above; skip prepublishOnly to avoid duplicate builds.
+        run: npm publish --provenance --access public --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,0 +1,135 @@
+{
+  "database": {
+    "type": "sqlite",
+    "path": "./.asd/alembic.db",
+    "verbose": false
+  },
+  "server": {
+    "port": 3000,
+    "host": "localhost",
+    "cors": {
+      "enabled": true,
+      "origin": "*"
+    }
+  },
+  "cache": {
+    "mode": "memory",
+    "ttl": 300
+  },
+  "monitoring": {
+    "enabled": true,
+    "slowRequestThreshold": 1000
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "console": true,
+    "file": {
+      "enabled": true,
+      "path": "./.asd/logs"
+    }
+  },
+  "constitution": {
+    "path": "./config/constitution.yaml",
+    "strictMode": true
+  },
+  "paths": {
+    "folderNames": {
+      "package": {
+        "config": "config",
+        "dashboard": "dashboard",
+        "injectableSkills": "injectable-skills",
+        "internalSkills": "skills",
+        "resources": "resources",
+        "templates": "templates"
+      },
+      "dev": {
+        "chainRuns": "chain-runs",
+        "scratch": "scratch"
+      },
+      "global": {
+        "cache": "cache",
+        "root": ".asd",
+        "snippets": "snippets",
+        "workspaces": "workspaces"
+      },
+      "project": {
+        "cache": "cache",
+        "candidates": "candidates",
+        "context": "context",
+        "knowledgeBase": "Alembic",
+        "logs": "logs",
+        "recipes": "recipes",
+        "runtime": ".asd",
+        "skills": "skills",
+        "wiki": "wiki"
+      },
+      "ide": {
+        "cursorRoot": ".cursor",
+        "cursorRules": "rules",
+        "cursorSkills": "skills",
+        "githubRoot": ".github",
+        "vscodeRoot": ".vscode"
+      }
+    }
+  },
+  "features": {
+    "USE_NEW_GATEWAY": true,
+    "REASONING_QUALITY_SCORE": true
+  },
+  "ai": {
+    "provider": "openai",
+    "model": "gpt-5.4",
+    "temperature": 0.7,
+    "maxTokens": 2000
+  },
+  "vector": {
+    "enabled": true,
+    "adapter": "auto",
+    "dimensions": 768,
+    "indexPath": "./data/vector-index",
+    "hnsw": {
+      "M": 16,
+      "efConstruct": 200,
+      "efSearch": 100
+    },
+    "quantize": "auto",
+    "quantizeThreshold": 3000,
+    "persistence": {
+      "format": "binary",
+      "flushIntervalMs": 2000,
+      "flushBatchSize": 100
+    },
+    "hybrid": {
+      "enabled": true,
+      "rrfK": 60,
+      "alpha": 0.5
+    },
+    "contextualEnrich": false,
+    "contextualModel": "claude-sonnet-4-20250514",
+    "autoSyncOnCrud": true,
+    "syncDebounceMs": 2000,
+    "dimensionGuard": true
+  },
+  "qualityGate": {
+    "maxErrors": 0,
+    "maxWarnings": 20,
+    "minScore": 70
+  },
+  "guard": {
+    "disabledRules": [],
+    "codeLevelThresholds": {
+      "swift-excessive-force-unwrap": 5,
+      "rust-excessive-unwrap": 3,
+      "rust-excessive-unsafe": 3,
+      "dart-excessive-late": 3
+    }
+  },
+  "taskGraph": {
+    "decision": {
+      "staleDays": 30,
+      "maxActiveInPrime": 20,
+      "maxStaleInPrime": 10
+    }
+  }
+}

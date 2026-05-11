@@ -1,143 +1,86 @@
-import type { ToolInvocation, ToolResultEnvelope } from "../tools/index.js";
+/**
+ * AgentRuntimeTypes — AgentRuntime 共享类型定义
+ *
+ * 从 AgentRuntime.ts 提取的接口和类型，
+ * 供 AgentRuntime、ToolExecutionPipeline、LarkTransport 及测试文件独立消费。
+ *
+ * @module AgentRuntimeTypes
+ */
 
-export type RuntimeChatRole = "system" | "user" | "assistant" | "tool";
-
-export interface RuntimeToolCallRecord {
-  readonly id: string;
-  readonly name: string;
-  readonly args: Record<string, unknown>;
-  /** Gemini 3+ thought signature 需要由上层原样回传。 */
-  readonly thoughtSignature?: string;
-}
-
-export interface RuntimeChatMessage {
-  readonly role: RuntimeChatRole;
-  readonly content: string | null;
-  readonly reasoningContent?: string | null;
-  readonly toolCalls?: readonly RuntimeToolCallRecord[];
-  readonly toolCallId?: string;
-  readonly name?: string;
-}
-
-export interface RuntimeToolSchema {
-  readonly name: string;
-  readonly description?: string;
-  readonly parameters: Record<string, unknown>;
-  readonly [key: string]: unknown;
-}
-
+/** Tool call entry recorded during execution */
 export interface ToolCallEntry {
-  readonly tool: string;
-  readonly name?: string;
-  readonly args: Record<string, unknown>;
-  readonly result: unknown;
-  readonly envelope?: ToolResultEnvelope;
-  readonly durationMs: number;
+  tool: string;
+  name?: string;
+  args: Record<string, unknown>;
+  result: unknown;
+  envelope?: import('#tools/core/ToolResultEnvelope.js').ToolResultEnvelope;
+  durationMs: number;
 }
 
+/** LLM function call descriptor */
 export interface FunctionCall {
-  readonly id: string;
-  readonly name: string;
-  readonly args: Record<string, unknown>;
-  /** Gemini 3+ thought signature 需要由上层原样回传。 */
-  readonly thoughtSignature?: string;
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  /** Gemini 3+ thought signature — 必须原样回传 */
+  thoughtSignature?: string;
 }
 
+/** chatWithTools result from the AI provider */
 export interface LLMResult {
-  readonly type?: string;
-  readonly text?: string | null;
-  readonly functionCalls?: readonly FunctionCall[] | null;
-  readonly usage?: {
-    readonly inputTokens?: number;
-    readonly outputTokens?: number;
-    readonly reasoningTokens?: number;
-    readonly cacheHitTokens?: number;
+  type?: string;
+  text?: string | null;
+  functionCalls?: FunctionCall[] | null;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    reasoningTokens?: number;
+    cacheHitTokens?: number;
   };
-  /** DeepSeek 等模型的推理内容，运行时只传递不解析。 */
-  readonly reasoningContent?: string | null;
+  /** DeepSeek V4 thinking 推理内容，需原样回传 */
+  reasoningContent?: string | null;
 }
 
-export interface RuntimeChatWithToolsOptions {
-  readonly messages?: readonly RuntimeChatMessage[];
-  readonly toolSchemas?: readonly RuntimeToolSchema[];
-  readonly tools?: readonly RuntimeToolSchema[];
-  readonly toolChoice?: string | null;
-  readonly systemPrompt?: string;
-  readonly temperature?: number;
-  readonly maxTokens?: number;
-  readonly abortSignal?: AbortSignal | null;
-  readonly modelRef?: string;
-}
-
-export interface RuntimeAiProvider {
-  readonly name?: string;
-  readonly _circuitState?: string;
-  chatWithTools(prompt: string, options?: RuntimeChatWithToolsOptions): Promise<LLMResult | null>;
-}
-
-export interface RuntimePolicyStepState {
-  readonly iteration: number;
-  readonly startTime: number;
-  readonly totalTokens: number;
-  readonly totalInputTokens: number;
-}
-
-export interface RuntimePolicyEngine {
-  validateDuring(stepState: RuntimePolicyStepState): {
-    readonly ok: boolean;
-    readonly action?: string;
-    readonly reason?: string;
-  };
-}
-
-export interface RuntimePromptCapability {
-  readonly promptFragment: string;
-  buildContext?(context: Record<string, unknown>): string | null | undefined;
-}
-
-export interface RuntimeStrategyConfig extends Record<string, unknown> {
-  readonly budget?: Record<string, unknown>;
-  readonly defaultBudget?: Record<string, unknown>;
-}
-
+/** AI error with optional circuit breaker code */
 export interface AiError extends Error {
-  readonly code?: string;
+  code?: string;
 }
 
+/** Progress event emitted to listeners */
 export interface ProgressEvent {
-  readonly type: string;
-  readonly agentId: string;
-  readonly preset: string;
-  readonly timestamp: number;
-  readonly [key: string]: unknown;
+  type: string;
+  agentId: string;
+  preset: string;
+  timestamp: number;
+  [key: string]: unknown;
 }
 
 export interface AgentDiagnosticWarning {
-  readonly code: string;
-  readonly message: string;
-  readonly stage?: string;
-  readonly tool?: string;
+  code: string;
+  message: string;
+  stage?: string;
+  tool?: string;
 }
 
 export interface ToolCallDiagnostic {
-  readonly tool: string;
-  readonly callId: string;
-  readonly parentCallId?: string;
-  readonly status: string;
-  readonly ok: boolean;
-  readonly surface?: string;
-  readonly source?: string;
-  readonly kind?: string;
-  readonly startedAt: string;
-  readonly durationMs: number;
+  tool: string;
+  callId: string;
+  parentCallId?: string;
+  status: string;
+  ok: boolean;
+  surface?: string;
+  source?: string;
+  kind?: string;
+  startedAt: string;
+  durationMs: number;
 }
 
 export interface StageToolsetDiagnostic {
-  readonly stage: string;
-  readonly capabilities: readonly string[];
-  readonly allowedToolIds: readonly string[];
-  readonly toolSchemaCount: number;
-  readonly source?: string;
+  stage: string;
+  capabilities: string[];
+  allowedToolIds: string[];
+  toolSchemaCount: number;
+  source?: string;
 }
 
 export interface AgentDiagnostics {
@@ -154,6 +97,7 @@ export interface AgentDiagnostics {
   stageToolsets?: StageToolsetDiagnostic[];
 }
 
+/** Tool execution pipeline metadata */
 export interface ToolMetadata {
   cacheHit: boolean;
   blocked: boolean;
@@ -161,103 +105,80 @@ export interface ToolMetadata {
   durationMs: number;
   dedupMessage?: string;
   isSubmit?: boolean;
-  envelope?: ToolResultEnvelope;
+  envelope?: import('#tools/core/ToolResultEnvelope.js').ToolResultEnvelope;
 }
 
+/** File cache entry */
 export interface FileCacheEntry {
-  readonly relativePath: string;
-  readonly content?: string;
-  readonly name?: string;
-  readonly language?: string;
+  relativePath: string;
+  content?: string;
+  name?: string;
 }
 
-export interface AgentMessageSession {
-  readonly id: string;
-  readonly history?: ReadonlyArray<{ readonly role: string; readonly content: string }>;
-}
-
-export interface AgentMessageSender {
-  readonly id: string;
-  readonly name?: string;
-  readonly type: "user" | "system" | "agent";
-}
-
-export interface AgentMessageLike {
-  readonly content: string;
-  readonly channel?: string;
-  readonly session?: AgentMessageSession;
-  readonly sender?: AgentMessageSender;
-  readonly metadata?: Record<string, unknown>;
-  reply?(text: string): void | Promise<void>;
-  readonly replyFn?: ((text: string) => void | Promise<void>) | null;
-}
-
-export interface ToolRouterContract {
-  invoke(invocation: ToolInvocation): Promise<ToolResultEnvelope>;
+export interface RuntimeConfig {
+  id?: string;
+  presetName?: string;
+  aiProvider: import('#external/ai/AiProvider.js').AiProvider;
+  toolRegistry: import('#tools/catalog/UnifiedToolCatalog.js').UnifiedToolCatalog;
+  toolRouter?: import('#tools/core/ToolContracts.js').ToolRouterContract | null;
+  container?: Record<string, unknown> | null;
+  capabilities?: import('../capabilities/index.js').Capability[];
+  strategy: import('../strategies/index.js').Strategy;
+  policies?: import('../policies/index.js').PolicyEngine;
+  persona?: Record<string, unknown>;
+  memory?: Record<string, unknown>;
+  onProgress?: ((event: ProgressEvent) => void) | null;
+  onToolCall?: ToolCallHook | null;
+  lang?: string | null;
+  projectRoot?: string;
+  dataRoot?: string;
+  additionalTools?: string[];
+  /** 可选: LLMGateway 实例 — 启用后走 Gateway 路径替代 aiProvider 直接调用 */
+  gateway?: import('#external/ai/gateway/LLMGateway.js').LLMGateway;
+  /** Gateway 使用的模型引用 (provider:model)，不设则从 aiProvider 推导 */
+  modelRef?: string;
 }
 
 export type ToolCallHook = (
   name: string,
   args: Record<string, unknown>,
   result: unknown,
-  iteration: number,
+  iteration: number
 ) => void;
 
-export interface RuntimeConfig {
-  readonly id?: string;
-  readonly presetName?: string;
-  readonly aiProvider?: RuntimeAiProvider | null;
-  readonly toolRouter: ToolRouterContract;
-  readonly strategy?: RuntimeStrategyConfig | null;
-  readonly policies?: RuntimePolicyEngine | null;
-  readonly capabilities?: readonly RuntimePromptCapability[];
-  readonly persona?: Record<string, unknown>;
-  readonly memory?: Record<string, unknown>;
-  readonly onProgress?: ((event: ProgressEvent) => void) | null;
-  readonly onToolCall?: ToolCallHook | null;
-  readonly lang?: string | null;
-  readonly projectRoot?: string;
-  readonly dataRoot?: string;
-  readonly additionalTools?: readonly string[];
-  readonly defaultBudget?: Record<string, unknown>;
-  /** 可选 LLM Gateway。新仓库里它遵循 RuntimeAiProvider 的 chatWithTools 契约。 */
-  readonly gateway?: RuntimeAiProvider | null;
-  /** Gateway 使用的模型引用，例如 provider:model。 */
-  readonly modelRef?: string;
-}
-
 export interface AgentResult {
-  readonly reply: string;
-  readonly toolCalls: readonly ToolCallEntry[];
-  readonly tokenUsage: { input: number; output: number; reasoning?: number; cacheHit?: number };
-  readonly iterations: number;
-  readonly durationMs: number;
-  readonly phases?: Record<string, unknown>;
-  readonly diagnostics?: AgentDiagnostics;
-  readonly state: Record<string, unknown>;
-  readonly qualityWarning?: string;
-  readonly [key: string]: unknown;
+  reply: string;
+  toolCalls: ToolCallEntry[];
+  tokenUsage: { input: number; output: number; reasoning?: number; cacheHit?: number };
+  iterations: number;
+  durationMs: number;
+  phases?: Record<string, unknown>;
+  diagnostics?: AgentDiagnostics;
+  state: Record<string, unknown>;
+  qualityWarning?: string;
+  [key: string]: unknown;
 }
 
 export interface ReactLoopOpts {
-  readonly history?: ReadonlyArray<{ role: string; content: string }>;
-  readonly context?: Record<string, unknown>;
-  readonly capabilityOverride?: readonly string[];
-  readonly additionalToolsOverride?: readonly string[];
-  readonly budgetOverride?: Record<string, unknown>;
-  readonly systemPromptOverride?: string;
-  readonly onToolCall?: ToolCallHook | null;
-  readonly sharedState?: Record<string, unknown>;
-  readonly source?: string;
-  readonly toolChoiceOverride?: string | null;
-  readonly abortSignal?: AbortSignal;
-  readonly diagnostics?: unknown;
-  readonly contextWindow?: unknown;
-  readonly tracker?: unknown;
-  readonly trace?: unknown;
-  readonly memoryCoordinator?: unknown;
-  readonly [key: string]: unknown;
+  history?: Array<{ role: string; content: string }>;
+  context?: Record<string, unknown>;
+  capabilityOverride?: string[];
+  additionalToolsOverride?: string[];
+  budgetOverride?: Record<string, unknown>;
+  systemPromptOverride?: string;
+  onToolCall?: ToolCallHook | null;
+  contextWindow?: import('../context/ContextWindow.js').ContextWindow;
+  tracker?: Record<string, unknown>;
+  trace?: Record<string, unknown>;
+  memoryCoordinator?: Record<string, unknown>;
+  sharedState?: Record<string, unknown>;
+  source?: string;
+  toolChoiceOverride?: string | null;
+  /** 外部中止信号 — PipelineStrategy hard timeout 时取消进行中的 LLM 调用 */
+  abortSignal?: AbortSignal;
+  diagnostics?: unknown;
+  [key: string]: unknown;
 }
 
-/** 单轮最多消费的工具调用数，避免模型一次性展开过大的 fan-out。 */
+/** 单次迭代允许的最大工具调用数 */
 export const MAX_TOOL_CALLS_PER_ITER = 8;

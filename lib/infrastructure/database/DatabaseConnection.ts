@@ -1,0 +1,183 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import Database from 'better-sqlite3';
+/** Re-exported type alias so declaration emit can name it */
+export type SqliteDatabase = InstanceType<typeof Database>;
+
+import { isExcludedProject } from '../../shared/isOwnDevRepo.js';
+import pathGuard from '../../shared/PathGuard.js';
+import type { WorkspaceResolver } from '../../shared/WorkspaceResolver.js';
+import { type DrizzleDB, initDrizzle } from './drizzle/index.js';
+
+const __dirname = import.meta.dirname;
+
+/**
+ * DatabaseConnection - 数据库连接管理器
+ *
+ * 重要：相对 DB 路径通过 projectRoot 解析，而非 process.cwd()。
+ * 这样即使 MCP 服务器的 cwd 不是项目目录，DB 也不会创建到项目外。
+ */
+export class DatabaseConnection {
+  config: { path: string; verbose?: boolean };
+  db: SqliteDatabase | null;
+  drizzle: DrizzleDB | null;
+  /** 可选的 WorkspaceResolver，Ghost 模式下用于重定向 DB 路径 */
+  #workspaceResolver: WorkspaceResolver | null;
+  constructor(
+    config: { path: string; verbose?: boolean },
+    workspaceResolver?: WorkspaceResolver | null
+  ) {
+    this.config = config;
+    this.db = null;
+    this.drizzle = null;
+    this.#workspaceResolver = workspaceResolver ?? null;
+  }
+
+  /** 连接数据库 */
+  async connect(): Promise<SqliteDatabase> {
+    const dbPath = this.config.path;
+
+    // Ghost 模式：直接使用 WorkspaceResolver 提供的 DB 路径
+    // 标准模式 / 无 resolver：使用 projectRoot 解析相对路径
+    const dataRoot = this.#workspaceResolver?.dataRoot ?? null;
+    const projectRoot = dataRoot ?? pathGuard.projectRoot;
+    let resolvedDbPath =
+      projectRoot && !path.isAbsolute(dbPath)
+        ? path.resolve(projectRoot, dbPath)
+        : path.resolve(dbPath);
+
+    // ── 排除项目保护 ──────────────────────────────────────────
+    // 检测 DB 即将落地到不适合创建知识库的项目 → 重定向到临时目录
+    // 包括：Alembic 源码仓库、生态项目（alembic-book 等）、.asd-skip 标记项目
+    const effectiveRoot = projectRoot || path.resolve('.');
+    const exclusion = isExcludedProject(effectiveRoot);
+    if (exclusion.excluded) {
+      const devDbDir = path.join(os.tmpdir(), 'alembic-dev');
+      if (!fs.existsSync(devDbDir)) {
+        fs.mkdirSync(devDbDir, { recursive: true });
+      }
+      resolvedDbPath = path.join(devDbDir, 'alembic.db');
+      process.stderr.write(
+        `[Alembic] Excluded project detected (${exclusion.reason}) — DB redirected to ${resolvedDbPath}\n`
+      );
+    } else {
+      // 路径安全检查 — 防止 DB 文件创建到项目允许范围外
+      pathGuard.assertProjectWriteSafe(resolvedDbPath);
+
+      // 确保数据目录存在
+      const dbDir = path.dirname(resolvedDbPath);
+      if (!fs.existsSync(dbDir)) {
+        fs.mkdirSync(dbDir, { recursive: true });
+      }
+    }
+
+    this.db = new Database(resolvedDbPath, {
+      verbose: this.config.verbose
+        ? (msg: unknown) => {
+            process.stderr.write(`[SQL] ${msg}\n`);
+          }
+        : undefined,
+    });
+
+    // 启用 WAL 模式（Write-Ahead Logging）
+    this.db.pragma('journal_mode = WAL');
+    this.db.pragma('foreign_keys = ON');
+    // 多进程并发写入保护：等待最多 3 秒获取写锁，而非立即 SQLITE_BUSY
+    this.db.pragma('busy_timeout = 3000');
+
+    // 初始化 Drizzle ORM 包装（与 raw db 共存，操作同一连接）
+    this.drizzle = initDrizzle(this.db);
+
+    return this.db;
+  }
+
+  /** 运行所有 migration（支持 .sql、.js、.ts） */
+  async runMigrations() {
+    if (!this.db) {
+      throw new Error('Database not connected. Call connect() first.');
+    }
+    const db = this.db;
+    const migrationsDir = path.join(__dirname, 'migrations');
+    const migrationFiles = fs
+      .readdirSync(migrationsDir)
+      .filter((file) => /\.(sql|js|ts)$/.test(file) && !file.endsWith('.d.ts'))
+      .sort();
+
+    // 确保 schema_migrations 表存在
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version TEXT PRIMARY KEY,
+        applied_at TEXT NOT NULL
+      )
+    `);
+
+    for (const file of migrationFiles) {
+      const version = file.replace(/\.(sql|js|ts)$/, '');
+
+      // 检查是否已应用
+      const applied = db
+        .prepare('SELECT version FROM schema_migrations WHERE version = ?')
+        .get(version);
+
+      if (!applied) {
+        if (process.env.ALEMBIC_QUIET !== '1') {
+          process.stderr.write(`Applying migration: ${version}\n`);
+        }
+
+        if (file.endsWith('.js') || file.endsWith('.ts')) {
+          // JS migration: export default function(db) { ... }
+          const mod = await import(path.join(migrationsDir, file));
+          const migrate = mod.default || mod;
+          const runMigration = db.transaction(() => {
+            migrate(db);
+            db.prepare(
+              'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)'
+            ).run(version, new Date().toISOString());
+          });
+          runMigration();
+        } else {
+          const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+          const runMigration = db.transaction(() => {
+            db.exec(sql);
+            db.prepare(
+              'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)'
+            ).run(version, new Date().toISOString());
+          });
+          runMigration();
+        }
+
+        if (process.env.ALEMBIC_QUIET !== '1') {
+          process.stderr.write(`✅ Migration ${version} applied\n`);
+        }
+      }
+    }
+  }
+
+  /** 关闭数据库连接 */
+  close() {
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+      this.drizzle = null;
+    }
+  }
+
+  /** 获取数据库实例 */
+  getDb(): SqliteDatabase {
+    if (!this.db) {
+      throw new Error('Database not connected. Call connect() first.');
+    }
+    return this.db;
+  }
+
+  /** 获取 Drizzle ORM 实例 */
+  getDrizzle(): DrizzleDB {
+    if (!this.drizzle) {
+      throw new Error('Drizzle not initialized. Call connect() first.');
+    }
+    return this.drizzle;
+  }
+}
+
+export default DatabaseConnection;

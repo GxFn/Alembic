@@ -1,37 +1,43 @@
 #!/usr/bin/env node
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readPackageInfo } from "../lib/codex/package-info.js";
-import { CODEX_TOOLS, handleCodexTool } from "../lib/codex/tools.js";
+/**
+ * Alembic Codex MCP shim.
+ * Lightweight stdio entry: lists tools immediately and starts/connects daemon only when a tool needs Core.
+ */
 
-// Codex 插件入口只设置 runtime 标记；真正长任务交给后续 daemon 批次承载。
-process.env.ALEMBIC_MCP_MODE = "1";
-process.env.ALEMBIC_CODEX_MCP_MODE = "1";
-process.env.ALEMBIC_MCP_TIER = process.env.ALEMBIC_MCP_TIER || "agent";
+process.env.ALEMBIC_MCP_MODE = '1';
+process.env.ALEMBIC_CODEX_MCP_MODE = '1';
+process.env.ALEMBIC_MCP_TIER = process.env.ALEMBIC_MCP_TIER || 'agent';
 
-const packageInfo = readPackageInfo();
-const server = new McpServer(
-  { name: "alembic-codex", version: packageInfo.version },
-  { capabilities: { tools: {} } },
-);
-
-server.server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: CODEX_TOOLS,
-}));
-
-// stdio 层只做协议适配，业务结果统一交给 codex/tools.ts 生成，便于 CLI 复用。
-server.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const result = await handleCodexTool(
-    request.params.name,
-    (request.params.arguments || {}) as Record<string, unknown>,
-  );
-  return {
-    content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-    isError: result.success ? undefined : true,
-  };
+process.on('uncaughtException', (error) => {
+  process.stderr.write(`[Codex MCP] Uncaught Exception: ${error.message}\n`);
+  if (error.stack) {
+    process.stderr.write(`${error.stack}\n`);
+  }
+  process.exit(1);
 });
 
-await server.connect(new StdioServerTransport());
-process.stderr.write(`Alembic Codex MCP ready - ${CODEX_TOOLS.length} tools\n`);
+process.on('unhandledRejection', (reason) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  process.stderr.write(`[Codex MCP] Unhandled Rejection: ${message}\n`);
+  process.exit(1);
+});
+
+const { shutdown } = await import('../lib/shared/shutdown.js');
+const { timerRegistry } = await import('../lib/shared/TimerRegistry.js');
+shutdown.install();
+shutdown.register(async () => {
+  await timerRegistry.dispose();
+}, 'timer-registry');
+
+const { startCodexMcpServer } = await import('../lib/external/mcp/CodexMcpServer.js');
+
+startCodexMcpServer()
+  .then((server) => {
+    shutdown.register(() => server.shutdown(), 'codex-mcp-server');
+  })
+  .catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`Codex MCP Server failed to start: ${message}\n`);
+    process.exit(1);
+  });

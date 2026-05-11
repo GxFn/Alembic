@@ -219,10 +219,6 @@ alembic ui
 # CLI: save provider/model and a key into workspace settings/secrets
 printf %s "$OPENAI_API_KEY" | alembic ai configure --provider openai --model gpt-5.5 --key-stdin
 
-# Agent-safe DeepSeek setup: copy only the raw key, then let the agent read it from stdin
-pbpaste | alembic ai configure --provider deepseek --model deepseek-v4-pro --key-stdin \
-  --embed-provider ollama --embed-model qwen3-embedding:0.6b
-
 # CLI: persist explicitly exported ALEMBIC_* variables into workspace settings/secrets
 ALEMBIC_AI_PROVIDER=google ALEMBIC_GOOGLE_API_KEY=... alembic ai import-env
 
@@ -231,9 +227,6 @@ alembic ai status
 ```
 
 Explicit process environment variables still work for one-off runs and override workspace settings without being persisted.
-
-When handing an API key to an agent, provide the raw key only. Avoid labels such as
-`apiKey:`, `apikey`, `ALEMBIC_DEEPSEEK_API_KEY=`, JSON wrappers, or Markdown code fences.
 
 ---
 

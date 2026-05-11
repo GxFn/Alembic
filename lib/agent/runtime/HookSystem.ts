@@ -1,30 +1,51 @@
+/**
+ * HookSystem — 统一事件与可扩展切点
+ *
+ * 替代碎片化的 4 个事件通道（AgentEventBus / EventBus / SignalBus / Pipeline Middleware），
+ * 提供统一的 hook 注册和分发机制。
+ *
+ * 设计原则：
+ *   - 类型安全：每个 HookEvent 有明确的 payload 类型
+ *   - 可组合：支持 sync 和 async hook
+ *   - 可拦截：tool:execute:before 支持 block（返回 false 阻止执行）
+ *   - 兼容：通过 bridge 连接 AgentEventBus / SignalBus
+ *
+ * @module core/HookSystem
+ */
+
+import Logger from '#infra/logging/Logger.js';
+
+// ── Hook Events ──
+
 export type HookEvent =
-  | "agent:iteration:before"
-  | "agent:iteration:after"
-  | "agent:exit"
-  | "agent:finalize"
-  | "tool:execute:before"
-  | "tool:execute:after"
-  | "context:compact:before"
-  | "context:compact:after"
-  | "exploration:phase_transition"
-  | "exploration:budget_warning"
-  | "llm:call:before"
-  | "llm:call:after";
+  | 'agent:iteration:before'
+  | 'agent:iteration:after'
+  | 'agent:exit'
+  | 'agent:finalize'
+  | 'tool:execute:before'
+  | 'tool:execute:after'
+  | 'context:compact:before'
+  | 'context:compact:after'
+  | 'exploration:phase_transition'
+  | 'exploration:budget_warning'
+  | 'llm:call:before'
+  | 'llm:call:after';
+
+// ── Payload Types ──
 
 export interface HookPayloadMap {
-  "agent:iteration:before": { iteration: number; phase?: string };
-  "agent:iteration:after": { iteration: number; hadToolCalls: boolean; hadText: boolean };
-  "agent:exit": { reason: string; iteration: number; detail?: string };
-  "agent:finalize": { reply: string; iterations: number; toolCallCount: number };
-  "tool:execute:before": { toolId: string; args: Record<string, unknown>; callId: string };
-  "tool:execute:after": { toolId: string; ok: boolean; durationMs: number; callId: string };
-  "context:compact:before": { level: number; usage: number };
-  "context:compact:after": { level: number; removed: number; usage: number };
-  "exploration:phase_transition": { from: string; to: string; iteration: number };
-  "exploration:budget_warning": { used: number; total: number; iteration: number };
-  "llm:call:before": { iteration: number; toolChoice: string };
-  "llm:call:after": {
+  'agent:iteration:before': { iteration: number; phase?: string };
+  'agent:iteration:after': { iteration: number; hadToolCalls: boolean; hadText: boolean };
+  'agent:exit': { reason: string; iteration: number; detail?: string };
+  'agent:finalize': { reply: string; iterations: number; toolCallCount: number };
+  'tool:execute:before': { toolId: string; args: Record<string, unknown>; callId: string };
+  'tool:execute:after': { toolId: string; ok: boolean; durationMs: number; callId: string };
+  'context:compact:before': { level: number; usage: number };
+  'context:compact:after': { level: number; removed: number; usage: number };
+  'exploration:phase_transition': { from: string; to: string; iteration: number };
+  'exploration:budget_warning': { used: number; total: number; iteration: number };
+  'llm:call:before': { iteration: number; toolChoice: string };
+  'llm:call:after': {
     iteration: number;
     hasToolCalls: boolean;
     hasText: boolean;
@@ -33,39 +54,42 @@ export interface HookPayloadMap {
   };
 }
 
+// ── Hook Handler Types ──
+
 export type HookHandler<E extends HookEvent> = (
-  payload: HookPayloadMap[E],
-) => undefined | boolean | Promise<undefined | boolean>;
+  payload: HookPayloadMap[E]
+) => void | undefined | boolean | Promise<void | undefined | boolean>;
 
 interface HookEntry<E extends HookEvent = HookEvent> {
-  readonly event: E;
-  readonly handler: HookHandler<E>;
-  readonly priority: number;
-  readonly once: boolean;
-  readonly id: string;
+  event: E;
+  handler: HookHandler<E>;
+  priority: number;
+  once: boolean;
+  id: string;
 }
 
-export interface HookLogger {
-  warn(message: string): void;
-}
+// ── HookSystem Class ──
 
-let hookCounter = 0;
+let _hookCounter = 0;
 
 export class HookSystem {
   readonly #hooks = new Map<HookEvent, HookEntry[]>();
-  readonly #logger: HookLogger;
+  readonly #logger = Logger;
 
-  constructor(logger: HookLogger = console) {
-    this.#logger = logger;
-  }
-
+  /**
+   * Register a hook handler.
+   *
+   * @param event - The event to listen for
+   * @param handler - Handler function. For 'tool:execute:before', return false to block.
+   * @param opts - Options: priority (lower = earlier, default 100), once (auto-remove after first call)
+   * @returns Unsubscribe function
+   */
   on<E extends HookEvent>(
     event: E,
     handler: HookHandler<E>,
-    opts: { readonly priority?: number; readonly once?: boolean } = {},
+    opts: { priority?: number; once?: boolean } = {}
   ): () => void {
-    hookCounter += 1;
-    const id = `hook_${hookCounter}`;
+    const id = `hook_${++_hookCounter}`;
     const entry: HookEntry<E> = {
       event,
       handler,
@@ -73,69 +97,107 @@ export class HookSystem {
       once: opts.once ?? false,
       id,
     };
-    const list = this.#hooks.get(event) ?? [];
+
+    if (!this.#hooks.has(event)) {
+      this.#hooks.set(event, []);
+    }
+    const list = this.#hooks.get(event)!;
     list.push(entry as unknown as HookEntry);
     list.sort((a, b) => a.priority - b.priority);
-    this.#hooks.set(event, list);
+
     return () => {
-      const index = list.findIndex((item) => item.id === id);
-      if (index >= 0) {
-        list.splice(index, 1);
+      const idx = list.findIndex((e) => e.id === id);
+      if (idx >= 0) {
+        list.splice(idx, 1);
       }
     };
   }
 
+  /** Register a one-shot hook. */
   once<E extends HookEvent>(event: E, handler: HookHandler<E>, priority?: number): () => void {
-    return this.on(event, handler, { ...(priority !== undefined ? { priority } : {}), once: true });
+    return this.on(event, handler, { priority, once: true });
   }
 
+  /**
+   * Emit an event to all registered hooks.
+   *
+   * For 'tool:execute:before': if any handler returns false, the tool execution is blocked.
+   * All other events are fire-and-forget.
+   *
+   * @returns For blocking events, returns false if any handler blocked. Otherwise true.
+   */
   async emit<E extends HookEvent>(event: E, payload: HookPayloadMap[E]): Promise<boolean> {
     const list = this.#hooks.get(event);
     if (!list || list.length === 0) {
       return true;
     }
+
     const toRemove: string[] = [];
     let blocked = false;
+
     for (const entry of list) {
       try {
-        const result = await entry.handler(payload as never);
-        if (event === "tool:execute:before" && result === false) {
+        const result = entry.handler(payload as never);
+        const resolved = result instanceof Promise ? await result : result;
+
+        if (event === 'tool:execute:before' && resolved === false) {
           blocked = true;
         }
-      } catch (error) {
+      } catch (err) {
         this.#logger.warn(
-          `[HookSystem] hook error on ${event} (${entry.id}): ${error instanceof Error ? error.message : String(error)}`,
+          `[HookSystem] hook error on ${event} (${entry.id}): ${err instanceof Error ? err.message : String(err)}`
         );
       }
+
       if (entry.once) {
         toRemove.push(entry.id);
       }
     }
-    this.#removeIds(list, toRemove);
+
+    // Clean up one-shot hooks
+    if (toRemove.length > 0) {
+      for (const id of toRemove) {
+        const idx = list.findIndex((e) => e.id === id);
+        if (idx >= 0) {
+          list.splice(idx, 1);
+        }
+      }
+    }
+
     return !blocked;
   }
 
+  /**
+   * Synchronous emit — for performance-critical hooks where async is unnecessary.
+   * Does not support blocking (always returns true).
+   */
   emitSync<E extends HookEvent>(event: E, payload: HookPayloadMap[E]): void {
     const list = this.#hooks.get(event);
     if (!list || list.length === 0) {
       return;
     }
-    const toRemove: string[] = [];
+
     for (const entry of list) {
       try {
         entry.handler(payload as never);
-      } catch (error) {
+      } catch (err) {
         this.#logger.warn(
-          `[HookSystem] hook error on ${event} (${entry.id}): ${error instanceof Error ? error.message : String(error)}`,
+          `[HookSystem] hook error on ${event} (${entry.id}): ${err instanceof Error ? err.message : String(err)}`
         );
       }
-      if (entry.once) {
-        toRemove.push(entry.id);
+    }
+
+    // Clean up one-shot hooks
+    const toRemove = list.filter((e) => e.once).map((e) => e.id);
+    for (const id of toRemove) {
+      const idx = list.findIndex((e) => e.id === id);
+      if (idx >= 0) {
+        list.splice(idx, 1);
       }
     }
-    this.#removeIds(list, toRemove);
   }
 
+  /** Remove all hooks for a specific event or all events. */
   clear(event?: HookEvent): void {
     if (event) {
       this.#hooks.delete(event);
@@ -144,6 +206,7 @@ export class HookSystem {
     }
   }
 
+  /** Get registered hook count for inspection. */
   hookCount(event?: HookEvent): number {
     if (event) {
       return this.#hooks.get(event)?.length ?? 0;
@@ -154,55 +217,61 @@ export class HookSystem {
     }
     return total;
   }
-
-  #removeIds(list: HookEntry[], ids: readonly string[]): void {
-    for (const id of ids) {
-      const index = list.findIndex((entry) => entry.id === id);
-      if (index >= 0) {
-        list.splice(index, 1);
-      }
-    }
-  }
 }
 
+// ── Default hooks registration ──
+
+/**
+ * Register default hooks that bridge HookSystem events to existing subsystems.
+ * Call this during AgentRuntime initialization.
+ *
+ * Bridges HookSystem → AgentEventBus for backward compatibility.
+ * Pipeline middleware (allowlistGate, observationRecord, trackerSignal,
+ * traceRecord, submitDedup) remain in ToolExecutionPipeline because they
+ * need synchronous access to tool results and loop state.
+ */
 export function registerDefaultHooks(
   hookSystem: HookSystem,
   agentId?: string,
-  bus?: { publish(type: string, payload: unknown, opts?: { source?: string }): void } | null,
+  bus?: { publish(type: string, payload: unknown, opts?: { source?: string }): void } | null
 ): void {
   if (!bus) {
     return;
   }
-  const sourceOptions = agentId ? { source: agentId } : undefined;
 
-  hookSystem.on("llm:call:before", (payload) => {
+  hookSystem.on('llm:call:before', (p) => {
     bus.publish(
-      "llm:call:start",
-      { iteration: payload.iteration, toolChoice: payload.toolChoice },
-      sourceOptions,
+      'llm:call:start',
+      { iteration: p.iteration, toolChoice: p.toolChoice },
+      { source: agentId }
     );
-    return undefined;
   });
 
-  hookSystem.on("llm:call:after", (payload) => {
+  hookSystem.on('llm:call:after', (p) => {
     bus.publish(
-      "llm:call:end",
+      'llm:call:end',
       {
-        hasToolCalls: payload.hasToolCalls,
-        hasText: payload.hasText,
-        usage: { inputTokens: payload.inputTokens, outputTokens: payload.outputTokens },
+        hasToolCalls: p.hasToolCalls,
+        hasText: p.hasText,
+        usage: { inputTokens: p.inputTokens, outputTokens: p.outputTokens },
       },
-      sourceOptions,
+      { source: agentId }
     );
-    return undefined;
   });
 
-  hookSystem.on("agent:exit", (payload) => {
+  hookSystem.on('agent:exit', (p) => {
     bus.publish(
-      "step:completed",
-      { reason: payload.reason, iteration: payload.iteration, detail: payload.detail },
-      sourceOptions,
+      'step:completed',
+      {
+        reason: p.reason,
+        iteration: p.iteration,
+        detail: p.detail,
+      },
+      { source: agentId }
     );
-    return undefined;
   });
+
+  // tool:execute:before/after are NOT bridged to AgentEventBus here
+  // because AgentRuntime.#processToolCalls already publishes
+  // TOOL_CALL_START/END directly. Bridging would cause duplicates.
 }

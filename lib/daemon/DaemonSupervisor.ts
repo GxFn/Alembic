@@ -1,256 +1,300 @@
-import { spawn } from "node:child_process";
-import { closeSync, existsSync, openSync } from "node:fs";
-import fs from "node:fs/promises";
-import path from "node:path";
-import { setTimeout as sleep } from "node:timers/promises";
-import { readPackageInfo } from "../codex/package-info.js";
-import { inspectWorkspace, resolveProjectRoot } from "../codex/workspace.js";
+import { spawn } from 'node:child_process';
 import {
-  clearDaemonState,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { join, resolve } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { PACKAGE_ROOT } from '../shared/package-root.js';
+import {
+  type DaemonPaths,
   type DaemonState,
-  daemonBaseUrl,
-  daemonLockDirectory,
-  daemonLogPath,
-  daemonPidPath,
+  ensureDaemonDirs,
+  getPackageVersion,
   readDaemonState,
-} from "./DaemonState.js";
+  removeDaemonState,
+  resolveDaemonPaths,
+} from './DaemonState.js';
 
-export type DaemonStatusKind = "ready" | "starting" | "stopped" | "stale" | "failed";
+export type DaemonStatusKind = 'ready' | 'starting' | 'stopped' | 'stale' | 'failed';
 
 export interface DaemonStatus {
-  readonly status: DaemonStatusKind;
-  readonly ready: boolean;
-  readonly projectRoot: string;
-  readonly dataRoot: string;
-  readonly state: DaemonState | undefined;
-  readonly pidAlive: boolean;
-  readonly health: Record<string, unknown> | undefined;
-  readonly message?: string;
+  status: DaemonStatusKind;
+  ready: boolean;
+  projectRoot: string;
+  dataRoot: string;
+  projectId: string | null;
+  statePath: string;
+  pidPath: string;
+  lockDir: string;
+  logPath: string;
+  state: DaemonState | null;
+  pidAlive: boolean;
+  health: Record<string, unknown> | null;
+  message?: string;
 }
 
-export interface DaemonSupervisorOptions {
-  readonly projectRoot?: string;
-  readonly waitUntilReadyMs?: number;
+export interface StartDaemonOptions {
+  projectRoot: string;
+  host?: string;
+  port?: number;
+  restart?: boolean;
+  waitUntilReadyMs?: number;
+}
+
+export interface StopDaemonOptions {
+  projectRoot: string;
+  waitMs?: number;
 }
 
 export class DaemonSupervisor {
-  async status(projectRootInput?: string): Promise<DaemonStatus> {
-    const workspace = inspectWorkspace(resolveProjectRoot(projectRootInput));
-    const state = await readDaemonState(workspace.dataRoot);
-    const pidAlive = state ? isProcessAlive(state.pid) : false;
+  async status(projectRootInput: string): Promise<DaemonStatus> {
+    const projectRoot = resolve(projectRootInput);
+    const paths = resolveDaemonPaths(projectRoot);
+    const state = readDaemonState(paths.statePath);
+    const pidAlive = state?.pid ? isProcessAlive(state.pid) : false;
+
     if (!state) {
-      return statusResult(
-        workspace.projectRoot,
-        workspace.dataRoot,
-        "stopped",
+      return this.#statusResult(
+        paths,
+        'stopped',
         false,
-        undefined,
+        null,
         false,
+        null,
+        'daemon is not started'
       );
     }
+
     if (!pidAlive) {
-      return statusResult(
-        workspace.projectRoot,
-        workspace.dataRoot,
-        "stale",
+      return this.#statusResult(
+        paths,
+        'stale',
         false,
         state,
         false,
-        undefined,
-        "daemon pid is not alive",
+        null,
+        'daemon pid is not alive'
       );
     }
-    const health = await fetchHealth(state);
-    if (matchesState(state, health)) {
-      return statusResult(
-        workspace.projectRoot,
-        workspace.dataRoot,
-        "ready",
-        true,
-        state,
-        true,
-        health,
-      );
+
+    const health = await fetchDaemonHealth(state);
+    if (isMatchingHealth(state, health)) {
+      return this.#statusResult(paths, 'ready', true, state, true, health);
     }
-    return statusResult(
-      workspace.projectRoot,
-      workspace.dataRoot,
-      "stale",
+
+    return this.#statusResult(
+      paths,
+      'stale',
       false,
       state,
       true,
       health,
-      "daemon process is alive but health identity did not match",
+      'daemon process is alive but health identity did not match'
     );
   }
 
-  async start(options: DaemonSupervisorOptions = {}): Promise<DaemonStatus> {
-    const workspace = inspectWorkspace(resolveProjectRoot(options.projectRoot));
-    if (!workspace.initialized || !workspace.projectId) {
-      return statusResult(
-        workspace.projectRoot,
-        workspace.dataRoot,
-        "failed",
-        false,
-        undefined,
-        false,
-        undefined,
-        "Alembic workspace is not initialized. Run `alembic codex init` first.",
-      );
-    }
-    const current = await this.status(workspace.projectRoot);
-    if (current.ready) {
-      return current;
+  async start(options: StartDaemonOptions): Promise<DaemonStatus> {
+    const projectRoot = resolve(options.projectRoot);
+    const paths = resolveDaemonPaths(projectRoot);
+    ensureDaemonDirs(paths);
+
+    const existing = await this.status(projectRoot);
+    if (existing.ready && !options.restart) {
+      return existing;
     }
 
-    return withDaemonLock(workspace.dataRoot, async () => {
-      const afterLock = await this.status(workspace.projectRoot);
-      if (afterLock.ready) {
+    return this.#withLock(paths, options.waitUntilReadyMs ?? 10_000, async () => {
+      const afterLock = await this.status(projectRoot);
+      if (afterLock.ready && !options.restart) {
         return afterLock;
       }
+
       if (afterLock.state?.pid && afterLock.pidAlive) {
-        await terminateProcess(afterLock.state.pid, 5000);
+        await this.#terminateProcess(afterLock.state.pid, 5000);
       }
-      await clearDaemonState(workspace.dataRoot);
+      removeDaemonState(paths, { includeLock: false });
 
-      const info = readPackageInfo();
-      const entry = path.join(info.packageRoot, "dist", "bin", "daemon-server.js");
+      const port = options.port ?? 0;
+      const host = options.host || '127.0.0.1';
+      const entry = join(PACKAGE_ROOT, 'dist', 'bin', 'daemon-server.js');
       if (!existsSync(entry)) {
-        return statusResult(
-          workspace.projectRoot,
-          workspace.dataRoot,
-          "failed",
-          false,
-          undefined,
-          false,
-          undefined,
-          `Daemon server entry not found: ${entry}. Run npm run build first.`,
-        );
+        throw new Error(`Daemon server entry not found: ${entry}. Run npm run build first.`);
       }
 
-      await fs.mkdir(path.dirname(daemonLogPath(workspace.dataRoot)), { recursive: true });
-      const logPath = daemonLogPath(workspace.dataRoot);
-      const logFd = openSync(logPath, "a");
+      const logFd = openSync(paths.logPath, 'a');
       const child = spawn(process.execPath, [entry], {
-        cwd: workspace.projectRoot,
+        cwd: projectRoot,
         detached: true,
         env: {
           ...process.env,
-          ALEMBIC_PROJECT_DIR: workspace.projectRoot,
-          ALEMBIC_DAEMON_DATA_ROOT: workspace.dataRoot,
+          ALEMBIC_API_SERVER: '1',
+          ALEMBIC_DAEMON_MODE: '1',
+          ALEMBIC_DAEMON_HOST: host,
+          ALEMBIC_DAEMON_PORT: String(port),
+          ALEMBIC_DAEMON_STATE_PATH: paths.statePath,
+          ALEMBIC_PROJECT_DIR: projectRoot,
+          ALEMBIC_QUIET: process.env.ALEMBIC_QUIET || '1',
         },
-        stdio: ["ignore", logFd, logFd],
+        stdio: ['ignore', logFd, logFd],
       });
       closeSync(logFd);
       child.unref();
-      await fs.writeFile(daemonPidPath(workspace.dataRoot), `${child.pid ?? ""}\n`, {
-        mode: 0o600,
-      });
 
-      return waitForReady(this, workspace.projectRoot, options.waitUntilReadyMs ?? 10_000);
+      const childPid = child.pid ?? null;
+      writeFileSync(paths.pidPath, `${childPid ?? ''}\n`, { mode: 0o600 });
+
+      const ready = await waitForReady(paths, options.waitUntilReadyMs ?? 10_000);
+      if (!ready.ready) {
+        const childAlive = childPid ? isProcessAlive(childPid) : false;
+        if (!childAlive) {
+          removeDaemonState(paths, { includeLock: false });
+          return this.#statusResult(
+            paths,
+            'failed',
+            false,
+            null,
+            false,
+            null,
+            `daemon failed to become ready; see ${paths.logPath}`
+          );
+        }
+        return this.#statusResult(
+          paths,
+          'starting',
+          false,
+          null,
+          true,
+          null,
+          ready.message || `daemon is still starting; see ${paths.logPath}`
+        );
+      }
+      return ready;
     });
   }
 
-  async stop(options: DaemonSupervisorOptions = {}): Promise<DaemonStatus> {
-    const workspace = inspectWorkspace(resolveProjectRoot(options.projectRoot));
-    const state = await readDaemonState(workspace.dataRoot);
-    if (state && isProcessAlive(state.pid)) {
-      await terminateProcess(state.pid, options.waitUntilReadyMs ?? 5000);
+  async stop(options: StopDaemonOptions): Promise<DaemonStatus> {
+    const projectRoot = resolve(options.projectRoot);
+    const paths = resolveDaemonPaths(projectRoot);
+    const state = readDaemonState(paths.statePath);
+
+    if (state?.pid && isProcessAlive(state.pid)) {
+      await this.#terminateProcess(state.pid, options.waitMs ?? 5000);
     }
-    await clearDaemonState(workspace.dataRoot);
-    await fs.rm(daemonPidPath(workspace.dataRoot), { force: true });
-    return statusResult(
-      workspace.projectRoot,
-      workspace.dataRoot,
-      "stopped",
-      false,
-      undefined,
-      false,
-      undefined,
-      "daemon stopped",
-    );
+
+    removeDaemonState(paths);
+    return this.#statusResult(paths, 'stopped', false, null, false, null, 'daemon stopped');
+  }
+
+  async ensure(options: StartDaemonOptions): Promise<DaemonStatus> {
+    const current = await this.status(options.projectRoot);
+    if (current.ready) {
+      return current;
+    }
+    return this.start(options);
+  }
+
+  async #withLock<T>(paths: DaemonPaths, waitMs: number, fn: () => Promise<T>): Promise<T> {
+    const startedAt = Date.now();
+    while (true) {
+      try {
+        mkdirSync(paths.lockDir, { mode: 0o700 });
+        writeFileSync(
+          join(paths.lockDir, 'owner.json'),
+          `${JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }, null, 2)}\n`
+        );
+        break;
+      } catch (error: unknown) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+          throw error;
+        }
+        const ready = await this.status(paths.projectRoot);
+        if (ready.ready) {
+          return ready as T;
+        }
+        if (Date.now() - startedAt > waitMs) {
+          if (isStaleLock(paths.lockDir)) {
+            rmSync(paths.lockDir, { recursive: true, force: true });
+            continue;
+          }
+          throw new Error(`Timed out waiting for daemon lock: ${paths.lockDir}`);
+        }
+        await sleep(200);
+      }
+    }
+
+    try {
+      return await fn();
+    } finally {
+      rmSync(paths.lockDir, { recursive: true, force: true });
+    }
+  }
+
+  async #terminateProcess(pid: number, waitMs: number): Promise<void> {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      return;
+    }
+
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < waitMs) {
+      if (!isProcessAlive(pid)) {
+        return;
+      }
+      await sleep(100);
+    }
+
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      /* already gone */
+    }
+  }
+
+  #statusResult(
+    paths: DaemonPaths,
+    status: DaemonStatusKind,
+    ready: boolean,
+    state: DaemonState | null,
+    pidAlive: boolean,
+    health: Record<string, unknown> | null,
+    message?: string
+  ): DaemonStatus {
+    return {
+      status,
+      ready,
+      projectRoot: paths.projectRoot,
+      dataRoot: paths.dataRoot,
+      projectId: paths.projectId,
+      statePath: paths.statePath,
+      pidPath: paths.pidPath,
+      lockDir: paths.lockDir,
+      logPath: paths.logPath,
+      state,
+      pidAlive,
+      health,
+      message,
+    };
   }
 }
 
-async function waitForReady(
-  supervisor: DaemonSupervisor,
-  projectRoot: string,
-  waitMs: number,
-): Promise<DaemonStatus> {
+async function waitForReady(paths: DaemonPaths, waitMs: number): Promise<DaemonStatus> {
+  const supervisor = new DaemonSupervisor();
   const startedAt = Date.now();
   while (Date.now() - startedAt < waitMs) {
-    const status = await supervisor.status(projectRoot);
+    const status = await supervisor.status(paths.projectRoot);
     if (status.ready) {
       return status;
     }
     await sleep(200);
   }
-  return supervisor.status(projectRoot);
-}
-
-async function withDaemonLock<T>(dataRoot: string, fn: () => Promise<T>): Promise<T> {
-  const lockDir = daemonLockDirectory(dataRoot);
-  await fs.mkdir(path.dirname(lockDir), { recursive: true });
-  try {
-    await fs.mkdir(lockDir);
-  } catch (error) {
-    if (!isNodeError(error) || error.code !== "EEXIST") {
-      throw error;
-    }
-    throw new Error(`Daemon lock already exists: ${lockDir}`);
-  }
-  try {
-    return await fn();
-  } finally {
-    await fs.rm(lockDir, { recursive: true, force: true });
-  }
-}
-
-function statusResult(
-  projectRoot: string,
-  dataRoot: string,
-  status: DaemonStatusKind,
-  ready: boolean,
-  state: DaemonState | undefined,
-  pidAlive: boolean,
-  health?: Record<string, unknown>,
-  message?: string,
-): DaemonStatus {
-  return {
-    status,
-    ready,
-    projectRoot,
-    dataRoot,
-    state,
-    pidAlive,
-    health,
-    ...(message ? { message } : {}),
-  };
-}
-
-async function fetchHealth(state: DaemonState): Promise<Record<string, unknown> | undefined> {
-  try {
-    const response = await fetch(`${daemonBaseUrl(state)}/api/v1/daemon/health`, {
-      headers: { "x-alembic-daemon-token": state.token },
-    });
-    return response.ok ? ((await response.json()) as Record<string, unknown>) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function matchesState(state: DaemonState, health: Record<string, unknown> | undefined): boolean {
-  const data = health?.data;
-  return (
-    health?.success === true &&
-    typeof data === "object" &&
-    data !== null &&
-    (data as Record<string, unknown>).projectRoot === state.projectRoot &&
-    (data as Record<string, unknown>).dataRoot === state.dataRoot &&
-    (data as Record<string, unknown>).projectId === state.projectId &&
-    (data as Record<string, unknown>).databasePath === state.databasePath &&
-    (data as Record<string, unknown>).version === state.version
-  );
+  return supervisor.status(paths.projectRoot);
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -262,26 +306,43 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-async function terminateProcess(pid: number, waitMs: number): Promise<void> {
+function isStaleLock(lockDir: string): boolean {
   try {
-    process.kill(pid, "SIGTERM");
+    const stat = statSync(lockDir);
+    return Date.now() - stat.mtimeMs > 30_000;
   } catch {
-    return;
-  }
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < waitMs) {
-    if (!isProcessAlive(pid)) {
-      return;
-    }
-    await sleep(100);
-  }
-  try {
-    process.kill(pid, "SIGKILL");
-  } catch {
-    /* process already gone */
+    return true;
   }
 }
 
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
+async function fetchDaemonHealth(state: DaemonState): Promise<Record<string, unknown> | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1000);
+  try {
+    const response = await fetch(`${state.url}/api/v1/daemon/health`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function isMatchingHealth(state: DaemonState, health: Record<string, unknown> | null): boolean {
+  const data = (health?.data || {}) as Record<string, unknown>;
+  return (
+    health?.success === true &&
+    data.projectRoot === state.projectRoot &&
+    data.dataRoot === state.dataRoot &&
+    data.projectId === state.projectId &&
+    data.version === getPackageVersion() &&
+    data.databasePath === state.databasePath &&
+    data.schemaMigrationVersion === state.schemaMigrationVersion &&
+    data.mode === 'daemon'
+  );
 }

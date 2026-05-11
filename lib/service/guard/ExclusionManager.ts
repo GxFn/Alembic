@@ -1,0 +1,311 @@
+/**
+ * ExclusionManager — Guard 规则排除策略管理
+ * 三级排除: path（路径排除）、rule（规则在特定文件排除）、globalRule（全局禁用规则）
+ * 持久化到 Alembic/guard-exclusions.json（Git 友好，跟随知识库提交）
+ */
+
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import type { WriteZone } from '#infra/io/WriteZone.js';
+import Logger from '../../infrastructure/logging/Logger.js';
+import pathGuard from '../../shared/PathGuard.js';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
+
+interface PathExclusion {
+  pattern: string;
+  reason: string;
+  addedAt: string;
+}
+
+interface RuleExclusionEntry {
+  filePath: string;
+  reason: string;
+  addedAt: string;
+}
+
+interface GlobalRuleExclusion {
+  ruleId: string;
+  reason: string;
+  addedAt: string;
+}
+
+interface ExclusionData {
+  pathExclusions: PathExclusion[];
+  ruleExclusions: Record<string, RuleExclusionEntry[]>;
+  globalRuleExclusions: GlobalRuleExclusion[];
+}
+
+interface ExclusionMeta {
+  reason?: string;
+}
+
+interface ViolationInput {
+  ruleId?: string;
+  filePath?: string;
+}
+
+interface ExclusionConfig {
+  pathExclusions?: { pattern: string; reason?: string }[];
+  ruleExclusions?: Record<string, { filePath: string; reason?: string }[]>;
+  globalRuleExclusions?: { ruleId: string; reason?: string }[];
+}
+
+export class ExclusionManager {
+  #exclusionsPath;
+  #data: ExclusionData;
+  readonly #wz: WriteZone | null;
+
+  constructor(
+    projectRoot: string,
+    options: { knowledgeBaseDir?: string; internalDir?: string; wz?: WriteZone } = {}
+  ) {
+    const kbDir = options.knowledgeBaseDir || DEFAULT_KNOWLEDGE_BASE_DIR;
+    this.#exclusionsPath = join(projectRoot, kbDir, 'guard-exclusions.json');
+    pathGuard.assertProjectWriteSafe(this.#exclusionsPath);
+    this.#wz = options.wz ?? null;
+    this.#migrateOldPath(projectRoot, options.internalDir || '.asd');
+    this.#data = this.#load();
+  }
+
+  // ─── Path 排除 ───────────────────────────────────────
+
+  /**
+   * 添加路径排除 (glob 或精确路径)
+   * @param meta
+   */
+  addPathExclusion(pattern: string, meta: ExclusionMeta = {}) {
+    if (!pattern) {
+      return;
+    }
+    const exists = this.#data.pathExclusions.find((e) => e.pattern === pattern);
+    if (exists) {
+      return;
+    }
+    this.#data.pathExclusions.push({
+      pattern,
+      reason: meta.reason || '',
+      addedAt: new Date().toISOString(),
+    });
+    this.#save();
+  }
+
+  /** 检查文件路径是否被排除 */
+  isPathExcluded(filePath: string) {
+    return this.#data.pathExclusions.some((e) => this.#matchGlob(filePath, e.pattern));
+  }
+
+  /** 移除路径排除 */
+  removePathExclusion(pattern: string) {
+    this.#data.pathExclusions = this.#data.pathExclusions.filter((e) => e.pattern !== pattern);
+    this.#save();
+  }
+
+  // ─── Rule 排除 (per-file) ───────────────────────────
+
+  /** 为特定文件排除某条规则 */
+  addRuleExclusion(ruleId: string, filePath: string, meta: ExclusionMeta = {}) {
+    if (!this.#data.ruleExclusions[ruleId]) {
+      this.#data.ruleExclusions[ruleId] = [];
+    }
+    const list = this.#data.ruleExclusions[ruleId];
+    if (list.find((e) => e.filePath === filePath)) {
+      return;
+    }
+    list.push({ filePath, reason: meta.reason || '', addedAt: new Date().toISOString() });
+    this.#save();
+  }
+
+  /** 检查规则在特定文件是否被排除 */
+  isRuleExcluded(ruleId: string, filePath: string) {
+    if (this.isRuleGloballyDisabled(ruleId)) {
+      return true;
+    }
+    const list = this.#data.ruleExclusions[ruleId];
+    if (!list) {
+      return false;
+    }
+    return list.some((e) => e.filePath === filePath || this.#matchGlob(filePath, e.filePath));
+  }
+
+  /** 移除文件级规则排除 */
+  removeRuleExclusion(ruleId: string, filePath: string) {
+    const list = this.#data.ruleExclusions[ruleId];
+    if (!list) {
+      return;
+    }
+    this.#data.ruleExclusions[ruleId] = list.filter((e) => e.filePath !== filePath);
+    if (this.#data.ruleExclusions[ruleId].length === 0) {
+      delete this.#data.ruleExclusions[ruleId];
+    }
+    this.#save();
+  }
+
+  // ─── Global Rule 排除 ────────────────────────────────
+
+  /** 全局禁用某条规则 */
+  addGlobalRuleExclusion(ruleId: string, meta: ExclusionMeta = {}) {
+    if (this.#data.globalRuleExclusions.find((e) => e.ruleId === ruleId)) {
+      return;
+    }
+    this.#data.globalRuleExclusions.push({
+      ruleId,
+      reason: meta.reason || '',
+      addedAt: new Date().toISOString(),
+    });
+    this.#save();
+  }
+
+  /** 检查规则是否被全局禁用 */
+  isRuleGloballyDisabled(ruleId: string) {
+    return this.#data.globalRuleExclusions.some((e) => e.ruleId === ruleId);
+  }
+
+  /** 移除全局规则排除 */
+  removeGlobalRuleExclusion(ruleId: string) {
+    this.#data.globalRuleExclusions = this.#data.globalRuleExclusions.filter(
+      (e) => e.ruleId !== ruleId
+    );
+    this.#save();
+  }
+
+  // ─── 批量操作 ─────────────────────────────────────────
+
+  /**
+   * 应用排除策略到审计结果
+   * @param violations [{ruleId, filePath, ...}]
+   * @returns 过滤后的违反列表
+   */
+  applyExclusions(violations: ViolationInput[]) {
+    return violations.filter((v) => {
+      if (v.filePath && this.isPathExcluded(v.filePath)) {
+        return false;
+      }
+      if (v.ruleId && v.filePath && this.isRuleExcluded(v.ruleId, v.filePath)) {
+        return false;
+      }
+      if (v.ruleId && this.isRuleGloballyDisabled(v.ruleId)) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  /** 导入排除配置 */
+  importExclusions(config: ExclusionConfig) {
+    if (config.pathExclusions) {
+      for (const e of config.pathExclusions) {
+        this.addPathExclusion(e.pattern, e);
+      }
+    }
+    if (config.ruleExclusions) {
+      for (const [ruleId, list] of Object.entries(config.ruleExclusions)) {
+        for (const e of list) {
+          this.addRuleExclusion(ruleId, e.filePath, e);
+        }
+      }
+    }
+    if (config.globalRuleExclusions) {
+      for (const e of config.globalRuleExclusions) {
+        this.addGlobalRuleExclusion(e.ruleId, e);
+      }
+    }
+  }
+
+  /** 导出当前排除配置 */
+  exportExclusions() {
+    return { ...this.#data };
+  }
+
+  // ─── 私有方法 ─────────────────────────────────────────
+
+  #matchGlob(filePath: string, pattern: string) {
+    // 简易 glob 匹配: ** 表示任意路径, * 表示同级任意文件名, ? 表示单个字符
+    // 1. 精确正则匹配 (支持 glob 通配符)
+    const escaped = pattern
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+      .replace(/\*\*/g, '<<<GLOB>>>')
+      .replace(/\*/g, '[^/]*')
+      .replace(/\?/g, '[^/]')
+      .replace(/<<<GLOB>>>/g, '.*');
+    if (new RegExp(`^${escaped}$`).test(filePath)) {
+      return true;
+    }
+    // 1b. 不含 / 的通配符 pattern 按文件名匹配 (如 *.test.js 匹配任意路径下的文件名)
+    if (pattern.includes('*') && !pattern.includes('/')) {
+      const basename = filePath.split('/').pop() || '';
+      if (new RegExp(`^${escaped}$`).test(basename)) {
+        return true;
+      }
+    }
+    // 2. 路径段匹配 — pattern 不含通配符时，按完整路径段（/segment/）匹配
+    //    避免 "test" 匹配 "contest.js" 这类误报
+    if (!pattern.includes('*') && !pattern.includes('?')) {
+      const segments = filePath.split('/');
+      if (segments.includes(pattern)) {
+        return true;
+      }
+      // 后缀匹配: 支持 "src/foo.js" 匹配 "/project/src/foo.js"
+      if (pattern.includes('/') && filePath.endsWith(`/${pattern}`)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  #load() {
+    try {
+      if (existsSync(this.#exclusionsPath)) {
+        return JSON.parse(readFileSync(this.#exclusionsPath, 'utf-8'));
+      }
+    } catch {
+      /* silent */
+    }
+    return { pathExclusions: [], ruleExclusions: {}, globalRuleExclusions: [] };
+  }
+
+  #save() {
+    try {
+      if (this.#wz) {
+        this.#wz.writeFile(
+          this.#wz.knowledge('guard-exclusions.json'),
+          JSON.stringify(this.#data, null, 2)
+        );
+      } else {
+        const dir = dirname(this.#exclusionsPath);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+        writeFileSync(this.#exclusionsPath, JSON.stringify(this.#data, null, 2));
+      }
+    } catch (err: unknown) {
+      Logger.getInstance().warn('ExclusionManager: failed to persist exclusions', {
+        error: (err as Error).message,
+      });
+    }
+  }
+
+  /** 自动迁移旧路径 .asd/guard-exclusions.json → Alembic/guard-exclusions.json */
+  #migrateOldPath(projectRoot: string, internalDir: string) {
+    try {
+      const oldPath = join(projectRoot, internalDir, 'guard-exclusions.json');
+      if (existsSync(oldPath) && !existsSync(this.#exclusionsPath)) {
+        const content = readFileSync(oldPath, 'utf-8');
+        if (this.#wz) {
+          this.#wz.writeFile(this.#wz.knowledge('guard-exclusions.json'), content);
+        } else {
+          const dir = dirname(this.#exclusionsPath);
+          if (!existsSync(dir)) {
+            mkdirSync(dir, { recursive: true });
+          }
+          writeFileSync(this.#exclusionsPath, content);
+        }
+        unlinkSync(oldPath);
+        Logger.getInstance().info(
+          'ExclusionManager: migrated guard-exclusions.json to knowledge base dir'
+        );
+      }
+    } catch {
+      // 迁移失败不阻断启动
+    }
+  }
+}
