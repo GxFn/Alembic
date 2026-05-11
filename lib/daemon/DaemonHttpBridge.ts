@@ -23,6 +23,21 @@ export interface DaemonHttpBridgeHandle {
   close(): Promise<void>;
 }
 
+export interface DaemonHttpBridgeRouteInput {
+  readonly method: string;
+  readonly path: string;
+  readonly headers: http.IncomingHttpHeaders;
+  readonly body?: unknown;
+  readonly stateProvider: () => DaemonState;
+  readonly jobStore: JsonDaemonJobStore;
+  readonly jobRunner: DaemonJobRunner;
+}
+
+export interface DaemonHttpBridgeRouteResult {
+  readonly statusCode: number;
+  readonly body: unknown;
+}
+
 export async function startDaemonHttpBridge(
   options: DaemonHttpBridgeOptions,
 ): Promise<DaemonHttpBridgeHandle> {
@@ -65,55 +80,78 @@ async function handleRequest(
   jobRunner: DaemonJobRunner,
 ): Promise<void> {
   const state = stateProvider();
-  const url = new URL(request.url ?? "/", daemonBaseUrl(state));
-  const method = request.method ?? "GET";
-
   if (!isAuthorizedDaemonRequestHeaders(request.headers, state.token)) {
-    writeJson(response, 401, { success: false, error: { message: "Unauthorized daemon request" } });
+    writeJson(response, 401, {
+      success: false,
+      error: { message: "Unauthorized daemon request" },
+    });
     return;
+  }
+
+  const route = await handleDaemonHttpBridgeRequest({
+    method: request.method ?? "GET",
+    path: request.url ?? "/",
+    headers: request.headers,
+    body: request.method === "POST" ? await readRequestJson(request) : undefined,
+    stateProvider: () => state,
+    jobStore,
+    jobRunner,
+  });
+  writeJson(response, route.statusCode, route.body);
+}
+
+export async function handleDaemonHttpBridgeRequest(
+  input: DaemonHttpBridgeRouteInput,
+): Promise<DaemonHttpBridgeRouteResult> {
+  const state = input.stateProvider();
+  const url = new URL(input.path, daemonBaseUrl(state));
+  const method = input.method;
+
+  if (!isAuthorizedDaemonRequestHeaders(input.headers, state.token)) {
+    return jsonRoute(401, {
+      success: false,
+      error: { message: "Unauthorized daemon request" },
+    });
   }
 
   if (method === "GET" && url.pathname === "/api/v1/daemon/health") {
-    writeJson(response, 200, { success: true, data: { ...state, mode: "daemon" } });
-    return;
+    return jsonRoute(200, { success: true, data: { ...state, mode: "daemon" } });
   }
 
   if (method === "GET" && url.pathname === "/api/v1/jobs") {
-    writeJson(response, 200, { success: true, data: { jobs: await jobStore.list() } });
-    return;
+    return jsonRoute(200, { success: true, data: { jobs: await input.jobStore.list() } });
   }
 
   const jobMatch = url.pathname.match(/^\/api\/v1\/jobs\/([^/]+)$/);
   if (method === "GET" && jobMatch?.[1]) {
-    const job = await jobStore.get(jobMatch[1]);
-    writeJson(response, job ? 200 : 404, job ? { success: true, data: { job } } : notFound());
-    return;
+    const job = await input.jobStore.get(jobMatch[1]);
+    return jsonRoute(job ? 200 : 404, job ? { success: true, data: { job } } : notFound());
   }
 
   if (method === "POST" && jobMatch?.[1] && url.pathname.endsWith("/cancel")) {
-    writeJson(response, 404, notFound());
-    return;
+    return jsonRoute(404, notFound());
   }
 
   const cancelMatch = url.pathname.match(/^\/api\/v1\/jobs\/([^/]+)\/cancel$/);
   if (method === "POST" && cancelMatch?.[1]) {
-    const job = await jobRunner.cancel(cancelMatch[1]);
-    writeJson(response, 200, { success: true, data: { job } });
-    return;
+    const job = await input.jobRunner.cancel(cancelMatch[1]);
+    return jsonRoute(200, { success: true, data: { job } });
   }
 
   const enqueueMatch = url.pathname.match(/^\/api\/v1\/jobs\/(bootstrap|rescan)$/);
   if (method === "POST" && enqueueMatch?.[1]) {
-    const input = await readRequestJson(request);
-    const job = await jobRunner.enqueue({
+    const job = await input.jobRunner.enqueue({
       kind: enqueueMatch[1] as DaemonJobKind,
-      input: isRecord(input) ? input : {},
+      input: isRecord(input.body) ? input.body : {},
     });
-    writeJson(response, 202, { success: true, data: { job } });
-    return;
+    return jsonRoute(202, { success: true, data: { job } });
   }
 
-  writeJson(response, 404, notFound());
+  return jsonRoute(404, notFound());
+}
+
+function jsonRoute(statusCode: number, body: unknown): DaemonHttpBridgeRouteResult {
+  return { statusCode, body };
 }
 
 function notFound() {

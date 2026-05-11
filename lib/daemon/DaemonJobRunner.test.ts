@@ -130,6 +130,44 @@ describe("daemon job runner", () => {
       progress: { phase: "failed" },
     });
   });
+
+  it("runs the next queued job by kind without crossing other queued work", async () => {
+    const root = await makeTempRoot();
+    const store = new JsonDaemonJobStore(root);
+    const handled: string[] = [];
+    const runner = new DaemonJobRunner(store, {
+      handlers: {
+        bootstrap: async (job) => {
+          handled.push(job.id);
+          return { kind: job.kind };
+        },
+        rescan: async (job) => {
+          handled.push(job.id);
+          return { kind: job.kind };
+        },
+      },
+    });
+
+    const bootstrap = await runner.enqueue({ kind: "bootstrap" });
+    const rescan = await runner.enqueue({ kind: "rescan" });
+
+    const completedRescan = await runner.runNext("rescan");
+    const completedBootstrap = await runner.runNext();
+    const empty = await runner.runNext();
+
+    expect(completedRescan).toMatchObject({
+      id: rescan.id,
+      kind: "rescan",
+      status: "completed",
+    });
+    expect(completedBootstrap).toMatchObject({
+      id: bootstrap.id,
+      kind: "bootstrap",
+      status: "completed",
+    });
+    expect(empty).toBeNull();
+    expect(handled).toEqual([rescan.id, bootstrap.id]);
+  });
 });
 
 async function makeTempRoot(): Promise<string> {

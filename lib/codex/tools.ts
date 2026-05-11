@@ -694,8 +694,9 @@ function buildWorkflowJobInput(args: Record<string, unknown>): Record<string, un
   if (removedFiles.length > 0) {
     input.removedFiles = removedFiles;
   }
-  if (isStringMap(args.diffTextByPath)) {
-    input.diffTextByPath = args.diffTextByPath;
+  const diffTextByPath = stringMap(args.diffTextByPath);
+  if (Object.keys(diffTextByPath).length > 0) {
+    input.diffTextByPath = diffTextByPath;
   }
   return input;
 }
@@ -774,11 +775,15 @@ function integerValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
-function isStringMap(value: unknown): value is Record<string, string> {
-  return (
-    isRecord(value) &&
-    Object.entries(value).every(
-      ([key, entry]) => typeof key === "string" && typeof entry === "string",
-    )
-  );
+function stringMap(value: unknown): Record<string, string> {
+  if (!isRecord(value)) {
+    return {};
+  }
+  const entries: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === "string") {
+      entries[key] = entry;
+    }
+  }
+  return entries;
 }
