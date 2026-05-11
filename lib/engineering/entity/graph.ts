@@ -6,196 +6,91 @@ import {
 } from "../code/types.js";
 import type {
   EngineeringDependencyGraph,
-  EngineeringDependencyNode,
   EngineeringFile,
   EngineeringTarget,
 } from "../foundation/types.js";
+import { normalizeEngineeringDependencyNode } from "../foundation/types.js";
 import {
-  isExternalEngineeringDependencyNode,
-  normalizeEngineeringDependencyNode,
-} from "../foundation/types.js";
+  buildPath,
+  categoryId,
+  classId,
+  codeReferenceEntityId,
+  compareEdges,
+  compareEntities,
+  connectedComponents,
+  countEdgesByRelation,
+  dependencyEntityType,
+  directedCycles,
+  edgeBelongsToFiles,
+  edgeKey,
+  entityBelongsToFiles,
+  entityNameFromId,
+  entityTypeFromId,
+  entityTypes,
+  extractCodeEntityRef,
+  fileId,
+  filePathFromCodeReference,
+  firstString,
+  flattenCandidateRelations,
+  hasEntityPrefix,
+  isNonEmptyString,
+  mapCandidateRelationType,
+  matchesRelation,
+  methodId,
+  moduleId,
+  normalizedPathSet,
+  patternId,
+  propertyId,
+  protocolId,
+  recipeId,
+  roundWeight,
+  stringMetadata,
+  targetId,
+  zeroHotNode,
+} from "./helpers.js";
 
-export type EngineeringEntityType =
-  | "file"
-  | "target"
-  | "module"
-  | "external"
-  | "class"
-  | "protocol"
-  | "category"
-  | "method"
-  | "property"
-  | "symbol"
-  | "pattern"
-  | "recipe";
+export type {
+  EngineeringAgentContext,
+  EngineeringAgentContextOptions,
+  EngineeringCallImpactRadius,
+  EngineeringCallReference,
+  EngineeringCandidateRelation,
+  EngineeringCandidateWithRelations,
+  EngineeringEdgeCleanupResult,
+  EngineeringEntity,
+  EngineeringEntityEdge,
+  EngineeringEntityGraphInput,
+  EngineeringEntityPath,
+  EngineeringEntityRelation,
+  EngineeringEntityTopology,
+  EngineeringEntityType,
+  EngineeringFileCleanupResult,
+  EngineeringHotNode,
+  EngineeringImpactRadius,
+  EngineeringPatternInstance,
+  EngineeringPatternStat,
+  EngineeringPatternStats,
+} from "./types.js";
 
-export type EngineeringEntityRelation =
-  | "contains"
-  | "defines"
-  | "depends_on"
-  | "imports"
-  | "inherits"
-  | "conforms"
-  | "extends"
-  | "calls"
-  | "data_flow"
-  | "references"
-  | "matches"
-  | "uses_pattern"
-  | "is_part_of"
-  | string;
-
-export interface EngineeringEntity {
-  readonly id: string;
-  readonly type: EngineeringEntityType;
-  readonly name: string;
-  readonly filePath: string | null;
-  readonly line: number | null;
-  readonly metadata: Readonly<Record<string, unknown>>;
-}
-
-export interface EngineeringEntityEdge {
-  readonly from: string;
-  readonly to: string;
-  readonly relation: EngineeringEntityRelation;
-  readonly weight: number;
-  readonly metadata: Readonly<Record<string, unknown>>;
-}
-
-export interface EngineeringEntityGraphInput {
-  readonly targets: readonly EngineeringTarget[];
-  readonly files: readonly EngineeringFile[];
-  readonly dependencyGraph: EngineeringDependencyGraph;
-  readonly codeGraph?: EngineeringCodeGraphReader;
-  readonly callGraph?: readonly EngineeringCodeCallGraphEdge[];
-  readonly dataFlow?: readonly EngineeringCodeDataFlowEdge[];
-  readonly patternStats?: EngineeringPatternStats;
-  readonly candidateRelations?: readonly EngineeringCandidateWithRelations[];
-}
-
-export interface EngineeringPatternInstance {
-  readonly className?: string;
-  readonly name?: string;
-  readonly file?: string;
-  readonly filePath?: string;
-}
-
-export interface EngineeringPatternStat {
-  readonly count: number;
-  readonly files?: readonly string[];
-  readonly instances?: readonly EngineeringPatternInstance[];
-}
-
-export type EngineeringPatternStats = Readonly<Record<string, EngineeringPatternStat>>;
-
-export interface EngineeringCandidateRelation {
-  readonly type: string;
-  readonly target: string;
-  readonly description?: string;
-}
-
-export interface EngineeringCandidateWithRelations {
-  readonly title?: string;
-  readonly id?: string;
-  readonly relations?: unknown;
-}
-
-export interface EngineeringEntityPath {
-  readonly nodes: readonly string[];
-  readonly edges: readonly EngineeringEntityEdge[];
-  readonly distance: number;
-}
-
-export interface EngineeringImpactRadius {
-  readonly root: string;
-  readonly depth: number;
-  readonly direction: "outgoing" | "incoming" | "both";
-  readonly nodes: readonly EngineeringEntity[];
-  readonly edges: readonly EngineeringEntityEdge[];
-  readonly distanceById: Readonly<Record<string, number>>;
-}
-
-export interface EngineeringEntityTopology {
-  readonly nodeCount: number;
-  readonly edgeCount: number;
-  readonly roots: readonly string[];
-  readonly leaves: readonly string[];
-  readonly isolated: readonly string[];
-  readonly components: readonly (readonly string[])[];
-  readonly cycles: readonly (readonly string[])[];
-}
-
-export interface EngineeringHotNode {
-  readonly id: string;
-  readonly degree: number;
-  readonly fanIn: number;
-  readonly fanOut: number;
-  readonly weightedDegree: number;
-}
-
-export interface EngineeringCallReference {
-  readonly entity: EngineeringEntity;
-  readonly edge: EngineeringEntityEdge;
-  readonly depth: number;
-  readonly callType: string;
-}
-
-export interface EngineeringCallImpactRadius extends EngineeringImpactRadius {
-  readonly relationCounts: Readonly<Record<string, number>>;
-  readonly affectedFiles: readonly string[];
-  readonly directCallers: number;
-  readonly transitiveCallers: number;
-}
-
-export interface EngineeringFileCleanupResult {
-  readonly deletedEntities: number;
-  readonly deletedEdges: number;
-  readonly entityIds: readonly string[];
-}
-
-export interface EngineeringEdgeCleanupResult {
-  readonly deletedEdges: number;
-}
-
-export interface EngineeringAgentContextOptions {
-  readonly maxHotNodes?: number;
-  readonly maxPaths?: number;
-  readonly maxDependencies?: number;
-  readonly maxRiskModules?: number;
-}
-
-export interface EngineeringAgentContext {
-  readonly stats: {
-    readonly entityCount: number;
-    readonly edgeCount: number;
-    readonly entitiesByType: Readonly<Record<EngineeringEntityType, number>>;
-    readonly edgesByRelation: Readonly<Record<string, number>>;
-  };
-  readonly hotNodes: readonly EngineeringHotNode[];
-  readonly criticalPaths: readonly EngineeringEntityPath[];
-  readonly externalDependencies: readonly {
-    readonly entity: EngineeringEntity;
-    readonly incoming: readonly EngineeringEntityEdge[];
-  }[];
-  readonly callAndDataFlowSummary: {
-    readonly calls: number;
-    readonly dataFlows: number;
-    readonly hotCallees: readonly {
-      readonly entity: EngineeringEntity;
-      readonly callerCount: number;
-      readonly callers: readonly EngineeringEntity[];
-    }[];
-    readonly dataFlowSources: readonly {
-      readonly entity: EngineeringEntity;
-      readonly outgoingCount: number;
-    }[];
-  };
-  readonly riskModules: readonly {
-    readonly entity: EngineeringEntity;
-    readonly score: number;
-    readonly reasons: readonly string[];
-  }[];
-}
+import type {
+  EngineeringAgentContext,
+  EngineeringAgentContextOptions,
+  EngineeringCallImpactRadius,
+  EngineeringCallReference,
+  EngineeringCandidateWithRelations,
+  EngineeringEdgeCleanupResult,
+  EngineeringEntity,
+  EngineeringEntityEdge,
+  EngineeringEntityGraphInput,
+  EngineeringEntityPath,
+  EngineeringEntityRelation,
+  EngineeringEntityTopology,
+  EngineeringEntityType,
+  EngineeringFileCleanupResult,
+  EngineeringHotNode,
+  EngineeringImpactRadius,
+  EngineeringPatternStats,
+} from "./types.js";
 
 export class EngineeringEntityGraph {
   readonly #entities = new Map<string, EngineeringEntity>();
@@ -1327,385 +1222,4 @@ export class EngineeringEntityGraph {
     }
     return deleted;
   }
-}
-
-const entityTypes: readonly EngineeringEntityType[] = [
-  "file",
-  "target",
-  "module",
-  "external",
-  "class",
-  "protocol",
-  "category",
-  "method",
-  "property",
-  "symbol",
-  "pattern",
-  "recipe",
-];
-
-function targetId(name: string): string {
-  return `target:${name}`;
-}
-
-function fileId(path: string): string {
-  return `file:${path}`;
-}
-
-function moduleId(name: string): string {
-  return `module:${name}`;
-}
-
-function classId(name: string): string {
-  return `class:${name}`;
-}
-
-function protocolId(name: string): string {
-  return `protocol:${name}`;
-}
-
-function categoryId(name: string): string {
-  return `category:${name}`;
-}
-
-function methodId(owner: string, name: string): string {
-  return `method:${owner}.${name}`;
-}
-
-function propertyId(owner: string, name: string): string {
-  return `property:${owner}.${name}`;
-}
-
-function patternId(name: string): string {
-  return name.startsWith("pattern:") ? name : `pattern:${name}`;
-}
-
-function recipeId(name: string): string {
-  return name.startsWith("recipe:") ? name : `recipe:${name}`;
-}
-
-function dependencyEntityType(node: EngineeringDependencyNode): EngineeringEntityType {
-  return isExternalEngineeringDependencyNode(node) ? "external" : "module";
-}
-
-function matchesRelation(
-  edge: EngineeringEntityEdge,
-  relation: EngineeringEntityRelation | undefined,
-): boolean {
-  return relation === undefined || edge.relation === relation;
-}
-
-function countEdgesByRelation(
-  edges: readonly EngineeringEntityEdge[],
-): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  for (const edge of edges) {
-    counts[edge.relation] = (counts[edge.relation] ?? 0) + 1;
-  }
-  return Object.fromEntries(
-    Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)),
-  );
-}
-
-function normalizedPathSet(paths: readonly string[]): ReadonlySet<string> {
-  return new Set(paths.map((path) => path.trim()).filter(Boolean));
-}
-
-function entityBelongsToFiles(entity: EngineeringEntity, paths: ReadonlySet<string>): boolean {
-  return (
-    (entity.filePath !== null && paths.has(entity.filePath)) ||
-    (entity.type === "file" && paths.has(entity.id.replace(/^file:/, "")))
-  );
-}
-
-function edgeBelongsToFiles(
-  edge: EngineeringEntityEdge,
-  entities: ReadonlyMap<string, EngineeringEntity>,
-  paths: ReadonlySet<string>,
-): boolean {
-  const from = entities.get(edge.from);
-  const to = entities.get(edge.to);
-  return (
-    metadataReferencesFile(edge.metadata, paths) ||
-    (from !== undefined && entityBelongsToFiles(from, paths)) ||
-    (to !== undefined && entityBelongsToFiles(to, paths))
-  );
-}
-
-function metadataReferencesFile(
-  metadata: Readonly<Record<string, unknown>>,
-  paths: ReadonlySet<string>,
-): boolean {
-  for (const key of ["file", "filePath", "path", "sourceFile"]) {
-    const value = metadata[key];
-    if (typeof value === "string" && paths.has(value)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function isNonEmptyString(value: string | null): value is string {
-  return typeof value === "string" && value.length > 0;
-}
-
-function stringMetadata(value: unknown, fallback: string): string {
-  return typeof value === "string" && value.length > 0 ? value : fallback;
-}
-
-function firstString(...values: readonly unknown[]): string | null {
-  for (const value of values) {
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-  return null;
-}
-
-function codeReferenceEntityId(ref: string, fallbackType: EngineeringEntityType): string {
-  const clean = extractCodeEntityRef(ref);
-  if (!clean) {
-    return "";
-  }
-  return hasEntityPrefix(clean) ? clean : `${fallbackType}:${clean}`;
-}
-
-function extractCodeEntityRef(ref: string): string {
-  const clean = ref.trim();
-  if (!clean) {
-    return "";
-  }
-  const separator = clean.lastIndexOf("::");
-  if (separator >= 0 && separator < clean.length - 2) {
-    return clean.slice(separator + 2).trim();
-  }
-  return clean;
-}
-
-function filePathFromCodeReference(ref: string): string | null {
-  const clean = ref.trim();
-  const separator = clean.lastIndexOf("::");
-  if (separator <= 0) {
-    return null;
-  }
-  return clean.slice(0, separator);
-}
-
-function hasEntityPrefix(value: string): boolean {
-  return entityTypes.some((type) => value.startsWith(`${type}:`));
-}
-
-function entityTypeFromId(id: string): EngineeringEntityType | null {
-  return entityTypes.find((type) => id.startsWith(`${type}:`)) ?? null;
-}
-
-function entityNameFromId(id: string): string {
-  const type = entityTypeFromId(id);
-  return type ? id.slice(type.length + 1) : id;
-}
-
-function flattenCandidateRelations(relations: unknown): readonly EngineeringCandidateRelation[] {
-  if (!relations) {
-    return [];
-  }
-  if (hasToFlatArray(relations)) {
-    return flattenCandidateRelations(relations.toFlatArray());
-  }
-  if (Array.isArray(relations)) {
-    return relations.flatMap((relation) => relationFromUnknown(relation, null));
-  }
-  if (isRecord(relations)) {
-    const flattened: EngineeringCandidateRelation[] = [];
-    for (const [type, list] of Object.entries(relations)) {
-      for (const item of Array.isArray(list) ? list : [list]) {
-        flattened.push(...relationFromUnknown(item, type));
-      }
-    }
-    return flattened;
-  }
-  return [];
-}
-
-function relationFromUnknown(
-  value: unknown,
-  fallbackType: string | null,
-): EngineeringCandidateRelation[] {
-  if (typeof value === "string" && fallbackType) {
-    return [{ type: fallbackType, target: value }];
-  }
-  if (!isRecord(value)) {
-    return [];
-  }
-  const type = firstString(value.type, fallbackType);
-  const target = firstString(value.target, value.id, value.title);
-  if (!type || !target) {
-    return [];
-  }
-  const description = firstString(value.description);
-  return [
-    {
-      type,
-      target,
-      ...(description ? { description } : {}),
-    },
-  ];
-}
-
-function hasToFlatArray(value: unknown): value is { toFlatArray: () => unknown } {
-  return isRecord(value) && typeof value.toFlatArray === "function";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function mapCandidateRelationType(type: string): string {
-  const mapping: Readonly<Record<string, string>> = {
-    inherits: "inherits",
-    implements: "conforms",
-    calls: "calls",
-    depends_on: "depends_on",
-    data_flow: "data_flow",
-    conflicts: "conflicts",
-    extends: "extends",
-    related: "related",
-    alternative: "related",
-    prerequisite: "depends_on",
-    deprecated_by: "related",
-    solves: "related",
-    enforces: "enforces",
-    references: "references",
-  };
-  return mapping[type] ?? "related";
-}
-
-function buildPath(
-  from: string,
-  to: string,
-  previous: ReadonlyMap<string, EngineeringEntityEdge>,
-): EngineeringEntityPath {
-  const edges: EngineeringEntityEdge[] = [];
-  let current = to;
-  while (current !== from) {
-    const edge = previous.get(current);
-    if (!edge) {
-      break;
-    }
-    edges.push(edge);
-    current = edge.from;
-  }
-  edges.reverse();
-  return {
-    nodes: [from, ...edges.map((edge) => edge.to)],
-    edges,
-    distance: edges.length,
-  };
-}
-
-function connectedComponents(
-  ids: readonly string[],
-  adjacency: ReadonlyMap<string, ReadonlySet<string>>,
-): readonly (readonly string[])[] {
-  const visited = new Set<string>();
-  const components: string[][] = [];
-  for (const id of ids) {
-    if (visited.has(id)) {
-      continue;
-    }
-    const component: string[] = [];
-    const stack = [id];
-    visited.add(id);
-    while (stack.length > 0) {
-      const current = stack.pop();
-      if (!current) {
-        continue;
-      }
-      component.push(current);
-      for (const next of [...(adjacency.get(current) ?? [])].sort()) {
-        if (!visited.has(next)) {
-          visited.add(next);
-          stack.push(next);
-        }
-      }
-    }
-    components.push(component.sort());
-  }
-  return components.sort((left, right) => left[0]?.localeCompare(right[0] ?? "") ?? 0);
-}
-
-function directedCycles(
-  ids: readonly string[],
-  edges: readonly EngineeringEntityEdge[],
-): readonly (readonly string[])[] {
-  const adjacency = new Map<string, string[]>();
-  for (const id of ids) {
-    adjacency.set(id, []);
-  }
-  for (const edge of edges) {
-    adjacency.set(edge.from, [...(adjacency.get(edge.from) ?? []), edge.to].sort());
-  }
-
-  const cycles = new Map<string, readonly string[]>();
-  for (const start of ids) {
-    visitCycle(start, start, adjacency, [], new Set(), cycles);
-  }
-  return [...cycles.values()].sort((left, right) =>
-    left.join("\u0000").localeCompare(right.join("\u0000")),
-  );
-}
-
-function visitCycle(
-  start: string,
-  current: string,
-  adjacency: ReadonlyMap<string, readonly string[]>,
-  path: readonly string[],
-  seen: ReadonlySet<string>,
-  cycles: Map<string, readonly string[]>,
-): void {
-  if (path.length > 24) {
-    return;
-  }
-  const nextPath = [...path, current];
-  const nextSeen = new Set(seen);
-  nextSeen.add(current);
-  for (const next of adjacency.get(current) ?? []) {
-    if (next === start && nextPath.length > 1) {
-      const cycle = canonicalCycle(nextPath);
-      cycles.set(cycle.join("\u0000"), cycle);
-    } else if (!nextSeen.has(next)) {
-      visitCycle(start, next, adjacency, nextPath, nextSeen, cycles);
-    }
-  }
-}
-
-function canonicalCycle(cycle: readonly string[]): readonly string[] {
-  const rotations = cycle.map((_, index) => [...cycle.slice(index), ...cycle.slice(0, index)]);
-  return (
-    rotations.sort((left, right) => left.join("\u0000").localeCompare(right.join("\u0000")))[0] ??
-    []
-  );
-}
-
-function zeroHotNode(id: string): EngineeringHotNode {
-  return { id, degree: 0, fanIn: 0, fanOut: 0, weightedDegree: 0 };
-}
-
-function edgeKey(from: string, to: string, relation: EngineeringEntityRelation): string {
-  return `${from}\u0000${to}\u0000${relation}`;
-}
-
-function compareEntities(left: EngineeringEntity, right: EngineeringEntity): number {
-  return left.id.localeCompare(right.id);
-}
-
-function compareEdges(left: EngineeringEntityEdge, right: EngineeringEntityEdge): number {
-  return (
-    left.from.localeCompare(right.from) ||
-    left.to.localeCompare(right.to) ||
-    left.relation.localeCompare(right.relation)
-  );
-}
-
-function roundWeight(value: number): number {
-  return Math.round(value * 1000) / 1000;
 }

@@ -79,22 +79,27 @@ snapshot-store
 
 - `lib/mainline/code` 已迁入 `code/` 并删除旧目录。
 - `code/tree-sitter` 持有成熟多语言 runtime 和 walker。
-- `workflow/runner.ts` 是当前冷启动前工程流水线入口，cache/incremental 评估、optional phase、snapshot run 和 workflow status 已拆到同目录短职责文件。
+- `workflow/runner.ts` 是当前冷启动前工程流水线入口，只保留阶段调度、诊断汇总和 artifact 组装；discovery、facts、graphs、panorama、capabilities、cache/incremental、optional phase、snapshot run 和 workflow status 已拆到同目录短职责文件。
 - `code/graph.ts` 保留公开图接口和索引状态，AST summary 归一化与图查询 helper 已拆到 `code/analysis/graph-normalization.ts`、`code/analysis/graph-query.ts`。
+- `code/ast/normalizer.ts` 保留 AST fact 归一化入口，文本/import/call-site 解析与去重 helper 已拆到 `code/ast/normalizer-text.ts`。
+- `entity/graph.ts` 保留实体图公开 API 和状态；实体类型、ID 构造、关系映射、拓扑/cleanup/code-ref helper 已拆到 `entity/types.ts`、`entity/helpers.ts`。
+- `graph/query-provider.ts` 保留 agent/tool 查询入口；查询类型、依赖图查询、ref 解析、结果转换和健康分计算已拆到 `graph/query-types.ts`、`graph/dependency-query.ts`、`graph/query-helpers.ts`。
 - `panorama/module-discoverer.ts` 保留模块发现编排，模块发现类型、规则和 import fallback 推断已拆出。
 - `panorama/refiner.ts` 保留全景精化编排，层级推断和角色精化已拆出。
 - `dimension/sop.ts` 保留查询 API，大段 SOP 数据、类型和构建器已拆出。
-- `graph/query-provider.ts` 是 agent/tool 侧查询入口。
 - `enhancement/` 已迁入 Alembic-legacy 的 14 个成熟 Enhancement Pack，实现 per-pack class、维度追加、Guard 规则、AST pattern 检测和 Vue SFC 预处理；workflow optional 阶段通过 registry 消费这些真实 pack，不再依赖浅 catalog。
-- 仍需继续整理 `entity/graph.ts`、`code/ast/normalizer.ts`、`discovery` parser 规则和 `graph/query-provider.ts`，但不应引入额外抽象层。
+- `workflow/optional/enhancement-preprocessor.ts` 保留增强包匹配和信号预处理；AST summary 适配、pattern candidate 转换与 AST import 提取已拆到 `workflow/optional/enhancement-ast.ts`。
+- 后续整理重点放在 `discovery` parser 规则和个别语言 walker 内部，但这些文件目前属于领域密集实现，不按行数机械拆分。
 
 ## 全量扫描结论
 
-本模块当前约 4.8 万行 TypeScript。整理优先级不按“看起来像旧名”判断，而按真实职责密度、依赖密度和工程链路位置判断：
+本模块当前约 5.1 万行 TypeScript。整理优先级不按“看起来像旧名”判断，而按真实职责密度、依赖密度和工程链路位置判断：
 
-- `workflow/runner.ts`：冷启动前流水线入口已拆出 cache/incremental、optional stage、snapshot 保存和 status helper，后续只继续收敛 stage 函数边界。
-- `code/graph.ts` 与 `entity/graph.ts`：保存成熟图查询能力；`code/graph.ts` 已拆出 normalization/query helper，`entity/graph.ts` 仍待拆 topology 与 cleanup helper。
-- `code/ast/normalizer.ts` 与 `code/tree-sitter/ast/*`：保留成熟多语言 AST 能力；整理时只清边界，不把语言 walker 简化成浅实现。
+- `workflow/runner.ts`：冷启动前流水线入口已拆出 discovery/facts/graphs/panorama/capabilities/cache/incremental/optional/snapshot/status，入口层只承载主线顺序和降级诊断。
+- `code/graph.ts` 与 `entity/graph.ts`：保存成熟图查询能力；`code/graph.ts` 已拆出 normalization/query helper，`entity/graph.ts` 已拆出 types/helper，剩余代码主要是公开图状态和行为方法。
+- `code/ast/normalizer.ts` 与 `code/tree-sitter/ast/*`：保留成熟多语言 AST 能力；文本解析 helper 已拆出，语言 walker 因规则密集暂不拆成更碎文件。
+- `graph/query-provider.ts`：保留 agent/tool 侧 provider 入口；依赖查询、entity ref 解析和结果转换已拆出。
+- `workflow/optional/enhancement-preprocessor.ts`：保留增强包 preprocess 编排；AST adapter 已拆出，避免 optional 阶段直接承载 AST 数据模型转换。
 - `panorama/module-discoverer.ts` 与 `panorama/refiner.ts`：模块发现、import fallback、拓扑分层、角色推断都属于主线能力；规则/类型/推断 helper 已拆出，不删信号。
 - `dimension/sop.ts`：SOP 数据体积大但属于稳定知识资产，当前已拆成数据、类型、构建器和查询 API。
 

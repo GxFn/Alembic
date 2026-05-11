@@ -1,101 +1,47 @@
 import { EngineeringCodeGraph } from "../code/graph.js";
-import type { EngineeringCodeCallGraphEdge, EngineeringCodeClassInfo } from "../code/types.js";
+import type { EngineeringCodeClassInfo } from "../code/types.js";
 import type {
   EngineeringEntity,
+  EngineeringEntityGraph,
   EngineeringEntityRelation,
-  EngineeringEntityType,
 } from "../entity/graph.js";
-import { EngineeringEntityGraph } from "../entity/graph.js";
-import type { EngineeringDependencyGraph } from "../foundation/types.js";
-import type { EngineeringPanoramaSnapshot } from "../panorama/types.js";
+import type { EngineeringWorkflowArtifact } from "../workflow/types.js";
+import { dependencyAdjacency, dependencyCycles } from "./dependency-query.js";
+import {
+  bounded,
+  callRelation,
+  cleanEntityName,
+  conformanceResult,
+  countBy,
+  dedupeCallRelations,
+  dedupeConformanceResults,
+  entityCallRelation,
+  entityGraphFromSnapshot,
+  entityIdCandidates,
+  isEntityType,
+  panoramaHealthScore,
+  requiredEntity,
+  requiredRef,
+  splitMethodRef,
+} from "./query-helpers.js";
+
+export type {
+  EngineeringGraphOverviewResult,
+  EngineeringGraphQueryInput,
+  EngineeringGraphQueryOperation,
+  EngineeringGraphQueryProvider,
+  EngineeringGraphQueryResult,
+  EngineeringGraphTraversalDirection,
+} from "./query-types.js";
+
 import type {
-  EngineeringEntityGraphSnapshot,
-  EngineeringWorkflowArtifact,
-} from "../workflow/types.js";
-
-export type EngineeringGraphTraversalDirection = "incoming" | "outgoing" | "both";
-
-export type EngineeringGraphQueryOperation =
-  | "callers"
-  | "callees"
-  | "impact"
-  | "path"
-  | "topology"
-  | "callImpact"
-  | "entities"
-  | "edges"
-  | "conformances"
-  | "dependencies"
-  | "cycles"
-  | "class"
-  | "protocol"
-  | "hierarchy"
-  | "overrides"
-  | "extensions"
-  | "search";
-
-export interface EngineeringGraphQueryInput {
-  readonly operation: EngineeringGraphQueryOperation;
-  readonly ref?: string;
-  readonly entity?: string;
-  readonly from?: string;
-  readonly to?: string;
-  readonly relation?: string;
-  readonly entityType?: string;
-  readonly query?: string;
-  readonly maxDepth?: number;
-  readonly limit?: number;
-  readonly direction?: EngineeringGraphTraversalDirection;
-  readonly includeStart?: boolean;
-}
-
-export interface EngineeringGraphOverviewResult {
-  readonly source: "engineering";
-  readonly projectRoot: string;
-  readonly files: {
-    readonly total: number;
-    readonly byLanguage: Readonly<Record<string, number>>;
-  };
-  readonly targets: readonly string[];
-  readonly code: {
-    readonly totalFiles: number;
-    readonly totalClasses: number;
-    readonly totalProtocols: number;
-    readonly totalMethods: number;
-    readonly callEdges: number;
-    readonly dataFlowEdges: number;
-  };
-  readonly dependencies: {
-    readonly nodes: number;
-    readonly edges: number;
-    readonly cycles: number;
-  };
-  readonly entities: {
-    readonly total: number;
-    readonly edges: number;
-    readonly byType: Readonly<Record<string, number>>;
-  };
-  readonly panorama: {
-    readonly moduleCount: number;
-    readonly externalDependencyCount: number;
-    readonly healthScore: number | null;
-    readonly gaps: number;
-  };
-}
-
-export interface EngineeringGraphQueryResult {
-  readonly operation: EngineeringGraphQueryOperation;
-  readonly ref?: string;
-  readonly entity?: string;
-  readonly result: unknown;
-}
-
-export interface EngineeringGraphQueryProvider {
-  overview(): Promise<EngineeringGraphOverviewResult> | EngineeringGraphOverviewResult;
-  query(
-    input: EngineeringGraphQueryInput,
-  ): Promise<EngineeringGraphQueryResult> | EngineeringGraphQueryResult;
-}
+  EngineeringGraphOverviewResult,
+  EngineeringGraphQueryInput,
+  EngineeringGraphQueryOperation,
+  EngineeringGraphQueryProvider,
+  EngineeringGraphQueryResult,
+  EngineeringGraphTraversalDirection,
+} from "./query-types.js";
 
 export interface EngineeringWorkflowGraphQueryProviderInput {
   readonly artifact: EngineeringWorkflowArtifact;
@@ -475,286 +421,4 @@ export class EngineeringWorkflowGraphQueryProvider implements EngineeringGraphQu
     );
     return byName?.id ?? null;
   }
-}
-
-function entityGraphFromSnapshot(snapshot: EngineeringEntityGraphSnapshot): EngineeringEntityGraph {
-  const graph = new EngineeringEntityGraph();
-  for (const entity of snapshot.entities) {
-    graph.addEntity(entity);
-  }
-  for (const edge of snapshot.edges) {
-    graph.addEdge(edge);
-  }
-  return graph;
-}
-
-function dependencyAdjacency(
-  dependencyGraph: EngineeringDependencyGraph,
-  ref?: string,
-): readonly unknown[] {
-  const nodeIds = dependencyGraph.nodes.map((node) => (typeof node === "string" ? node : node.id));
-  const selected = ref ? nodeIds.filter((nodeId) => nodeMatchesRef(nodeId, ref)) : nodeIds;
-  return selected.sort().map((nodeId) => ({
-    node: nodeId,
-    dependencies: dependencyGraph.edges
-      .filter((edge) => edge.from === nodeId)
-      .sort(compareDependencyEdge),
-    dependents: dependencyGraph.edges
-      .filter((edge) => edge.to === nodeId)
-      .sort(compareDependencyEdge),
-  }));
-}
-
-function dependencyCycles(
-  dependencyGraph: EngineeringDependencyGraph,
-  panorama: EngineeringPanoramaSnapshot | null,
-  ref?: string,
-): readonly unknown[] {
-  const panoramaCycles =
-    panorama?.cycles.map((cycle) => ({
-      kind: "module",
-      nodes: cycle.cycle,
-      severity: cycle.severity,
-    })) ?? [];
-  const graphCycles = findDependencyCycles(dependencyGraph).map((cycle) => ({
-    kind: "dependency",
-    nodes: cycle,
-    severity: "warning",
-  }));
-  return [...panoramaCycles, ...graphCycles]
-    .filter((cycle) => !ref || cycle.nodes.some((node) => nodeMatchesRef(node, ref)))
-    .sort((left, right) => left.nodes.join("\0").localeCompare(right.nodes.join("\0")));
-}
-
-function findDependencyCycles(dependencyGraph: EngineeringDependencyGraph): readonly string[][] {
-  const adjacency = new Map<string, string[]>();
-  for (const edge of dependencyGraph.edges) {
-    adjacency.set(edge.from, [...(adjacency.get(edge.from) ?? []), edge.to].sort());
-  }
-  const cycles = new Map<string, string[]>();
-  for (const start of [...adjacency.keys()].sort()) {
-    visitCycle(start, start, adjacency, [], cycles);
-  }
-  return [...cycles.values()].sort((left, right) =>
-    left.join("\0").localeCompare(right.join("\0")),
-  );
-}
-
-function visitCycle(
-  start: string,
-  current: string,
-  adjacency: ReadonlyMap<string, readonly string[]>,
-  path: readonly string[],
-  cycles: Map<string, string[]>,
-): void {
-  if (path.includes(current)) {
-    return;
-  }
-  const nextPath = [...path, current];
-  for (const next of adjacency.get(current) ?? []) {
-    if (next === start && nextPath.length > 1) {
-      const cycle = canonicalCycle(nextPath);
-      cycles.set(cycle.join("\0"), cycle);
-      continue;
-    }
-    if (nextPath.length < 12) {
-      visitCycle(start, next, adjacency, nextPath, cycles);
-    }
-  }
-}
-
-function canonicalCycle(cycle: readonly string[]): string[] {
-  const rotations = cycle.map((_, index) => [...cycle.slice(index), ...cycle.slice(0, index)]);
-  return rotations.sort((left, right) => left.join("\0").localeCompare(right.join("\0")))[0] ?? [];
-}
-
-function callRelation(edge: EngineeringCodeCallGraphEdge, side: "caller" | "callee") {
-  return {
-    symbol: side === "caller" ? edge.caller : edge.callee,
-    edge,
-  };
-}
-
-function entityCallRelation(reference: {
-  readonly entity: EngineeringEntity;
-  readonly edge: unknown;
-  readonly depth: number;
-  readonly callType: string;
-}) {
-  const fqn = reference.entity.metadata.fqn;
-  return {
-    symbol: typeof fqn === "string" && fqn.length > 0 ? fqn : reference.entity.name,
-    entity: reference.entity,
-    edge: reference.edge,
-    depth: reference.depth,
-    callType: reference.callType,
-  };
-}
-
-function dedupeCallRelations(values: readonly unknown[]): readonly unknown[] {
-  return [
-    ...new Map(
-      values.map((value) => {
-        const record = isRecord(value) ? value : {};
-        const symbol = record.symbol;
-        return [
-          typeof symbol === "string" && symbol.length > 0 ? symbol : JSON.stringify(value),
-          value,
-        ];
-      }),
-    ).values(),
-  ];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function splitMethodRef(ref: string): readonly [string, string | null] {
-  const separator = ref.includes("#") ? ref.lastIndexOf("#") : ref.lastIndexOf(".");
-  if (separator <= 0 || separator >= ref.length - 1) {
-    return [ref, null];
-  }
-  return [ref.slice(0, separator), ref.slice(separator + 1)];
-}
-
-function entityIdCandidates(ref: string): readonly string[] {
-  const clean = ref.trim();
-  if (!clean) {
-    return [];
-  }
-  if (entityTypes.some((type) => clean.startsWith(`${type}:`))) {
-    return [clean];
-  }
-  const codeRef = extractCodeEntityRef(clean);
-  return [
-    `class:${clean}`,
-    `protocol:${clean}`,
-    `category:${clean}`,
-    `method:${clean}`,
-    ...(codeRef === clean ? [] : [`method:${codeRef}`]),
-    `property:${clean}`,
-    `symbol:${clean}`,
-    `file:${clean}`,
-    `module:file:${clean}`,
-    `module:${clean}`,
-    `target:${clean}`,
-    `external:${clean}`,
-    `pattern:${clean}`,
-    `recipe:${clean}`,
-  ];
-}
-
-function extractCodeEntityRef(ref: string): string {
-  const separator = ref.lastIndexOf("::");
-  if (separator >= 0 && separator < ref.length - 2) {
-    return ref.slice(separator + 2).trim();
-  }
-  return ref;
-}
-
-function isEntityType(value: string): value is EngineeringEntityType {
-  return entityTypes.includes(value as EngineeringEntityType);
-}
-
-function conformanceResult(
-  classId: string,
-  protocolId: string,
-  edge: unknown,
-  graph: EngineeringEntityGraph,
-) {
-  return {
-    class: graph.findEntity(classId)?.name ?? cleanEntityName(classId),
-    protocol: graph.findEntity(protocolId)?.name ?? cleanEntityName(protocolId),
-    edge,
-    source: "entity-graph",
-  };
-}
-
-function dedupeConformanceResults(values: readonly unknown[]): readonly unknown[] {
-  const keyed = new Map<string, unknown>();
-  for (const value of values) {
-    if (!isRecord(value)) {
-      keyed.set(JSON.stringify(value), value);
-      continue;
-    }
-    const className = typeof value.class === "string" ? value.class : "";
-    const protocolName = typeof value.protocol === "string" ? value.protocol : "";
-    const key =
-      className && protocolName ? `${className}\u0000${protocolName}` : JSON.stringify(value);
-    if (!keyed.has(key) || value.source === "entity-graph") {
-      keyed.set(key, value);
-    }
-  }
-  return [...keyed.values()];
-}
-
-function cleanEntityName(ref: string): string {
-  const codeRef = extractCodeEntityRef(ref);
-  const separator = codeRef.indexOf(":");
-  return separator >= 0 ? codeRef.slice(separator + 1) : codeRef;
-}
-
-const entityTypes: readonly EngineeringEntityType[] = [
-  "file",
-  "target",
-  "module",
-  "external",
-  "class",
-  "protocol",
-  "category",
-  "method",
-  "property",
-  "symbol",
-  "pattern",
-  "recipe",
-];
-
-function requiredRef(operation: string, ref: string | undefined): string {
-  if (!ref) {
-    throw new Error(`${operation} requires ref.`);
-  }
-  return ref;
-}
-
-function requiredEntity(operation: string, entity: string | undefined): string {
-  if (!entity) {
-    throw new Error(`${operation} requires entity or ref.`);
-  }
-  return entity;
-}
-
-function bounded(value: number | undefined, fallback: number, max: number): number {
-  if (value === undefined) {
-    return fallback;
-  }
-  return Math.min(Math.max(0, Math.floor(value)), max);
-}
-
-function countBy(values: readonly string[]): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  for (const value of values) {
-    counts[value] = (counts[value] ?? 0) + 1;
-  }
-  return counts;
-}
-
-function compareDependencyEdge(
-  left: EngineeringDependencyGraph["edges"][number],
-  right: EngineeringDependencyGraph["edges"][number],
-): number {
-  return (
-    left.from.localeCompare(right.from) ||
-    left.to.localeCompare(right.to) ||
-    left.type.localeCompare(right.type)
-  );
-}
-
-function nodeMatchesRef(nodeId: string, ref: string): boolean {
-  const clean = ref.startsWith("file:") ? ref.slice("file:".length) : ref;
-  return nodeId === ref || nodeId === clean || nodeId.endsWith(`:${clean}`);
-}
-
-function panoramaHealthScore(panorama: EngineeringPanoramaSnapshot | null): number | null {
-  return panorama?.health.score ?? null;
 }

@@ -1,21 +1,3 @@
-import { CallGraphAnalyzer } from "../code/analysis/index.js";
-import { EngineeringCodeGraph } from "../code/graph.js";
-import type {
-  EngineeringCodeAstFileSummaryInput,
-  EngineeringCodeAstSummaryInput,
-  EngineeringCodeCallGraphEdge,
-  EngineeringCodeDataFlowEdge,
-} from "../code/types.js";
-import { createDefaultDiscovererRegistry } from "../discovery/index.js";
-import { EngineeringEntityGraph } from "../entity/graph.js";
-import type {
-  EngineeringDependencyGraph,
-  EngineeringDiscoverer,
-  EngineeringFile,
-  EngineeringTarget,
-} from "../foundation/types.js";
-import type { EngineeringImportFact } from "../panorama/module-discoverer.js";
-import { EngineeringPanoramaService } from "../panorama/service.js";
 import {
   cachePhaseSummary,
   disabledCacheState,
@@ -23,32 +5,27 @@ import {
   filterDiscoveryByAffectedFiles,
 } from "./cache/evaluation.js";
 import { saveWorkflowSnapshot } from "./cache/snapshot-run.js";
-import {
-  isEngineeringGeneratedArtifact,
-  runWorkflowPhase,
-  withPhaseReport,
-  workflowDiagnostic,
-} from "./core/core.js";
+import { workflowCapabilities } from "./capabilities.js";
+import { runWorkflowPhase, withPhaseReport, workflowDiagnostic } from "./core/core.js";
 import {
   dedupeDiagnostics,
   phaseStatus,
   skippedWorkflowPhase,
   workflowStatus,
 } from "./core/status.js";
+import { discoverProject, emptyDiscovery } from "./discovery.js";
+import { collectFacts, countAstSummaries, discoveryShellFacts, emptyFacts } from "./facts.js";
+import { buildEmptyGraphs, buildGraphs, type EngineeringWorkflowGraphBundle } from "./graphs.js";
 import { runOptionalStagePhase, skippedOptionalStageArtifact } from "./optional/phase.js";
+import { buildPanorama } from "./panorama.js";
 import type {
-  EngineeringEntityGraphSnapshot,
   EngineeringWorkflowArtifact,
-  EngineeringWorkflowCapabilities,
   EngineeringWorkflowDiagnostic,
-  EngineeringWorkflowDiscoveryResult,
   EngineeringWorkflowFactBundle,
   EngineeringWorkflowInput,
   EngineeringWorkflowPhaseReport,
   EngineeringWorkflowResult,
 } from "./types.js";
-
-const EMPTY_DEPENDENCY_GRAPH: EngineeringDependencyGraph = { nodes: [], edges: [] };
 
 export class EngineeringWorkflowRunner {
   async run(input: EngineeringWorkflowInput): Promise<EngineeringWorkflowResult> {
@@ -191,7 +168,7 @@ export class EngineeringWorkflowRunner {
       );
     }
 
-    let graphs: ReturnType<typeof buildEmptyGraphs> | ReturnType<typeof buildGraphs>;
+    let graphs: EngineeringWorkflowGraphBundle;
     if (executionMode === "skip" || executionMode === "panorama-only") {
       graphs = buildEmptyGraphs(
         effectiveDiscovery.targets,
@@ -386,364 +363,4 @@ export async function runEngineeringWorkflow(
   input: EngineeringWorkflowInput,
 ): Promise<EngineeringWorkflowResult> {
   return new EngineeringWorkflowRunner().run(input);
-}
-
-function discoveryShellFacts(
-  input: EngineeringWorkflowInput,
-  discovery: EngineeringWorkflowDiscoveryResult,
-): EngineeringWorkflowFactBundle {
-  const { astSummaries: _astSummaries, ...withoutAstSummaries } = input;
-  void _astSummaries;
-  return collectFacts({ ...withoutAstSummaries, importFacts: [], fileContents: {} }, discovery);
-}
-
-async function discoverProject(
-  input: EngineeringWorkflowInput,
-): Promise<EngineeringWorkflowDiscoveryResult> {
-  if (input.discoveryResult) {
-    return input.discoveryResult;
-  }
-
-  const discoverer =
-    input.discoverer ?? (await createDefaultDiscovererRegistry().detect(input.projectRoot));
-  await discoverer.load(input.projectRoot);
-  const targets = await discoverer.listTargets();
-  const diagnostics: EngineeringWorkflowDiagnostic[] = [];
-  const files: EngineeringFile[] = [];
-  const seen = new Set<string>();
-
-  for (const target of targets) {
-    try {
-      const targetFiles = await discoverer.getTargetFiles(target);
-      for (const file of targetFiles) {
-        const key = file.relativePath || file.path;
-        if (seen.has(key)) {
-          continue;
-        }
-        seen.add(key);
-        files.push(file);
-      }
-    } catch (error: unknown) {
-      diagnostics.push(
-        workflowDiagnostic(
-          "discover",
-          "warning",
-          `Target file discovery failed for ${targetName(target)}`,
-          error,
-        ),
-      );
-    }
-  }
-
-  const dependencyGraph = await dependencyGraphFor(discoverer, diagnostics);
-  return {
-    targets,
-    files,
-    dependencyGraph,
-    discovererId: discoverer.id,
-    discovererName: discoverer.displayName,
-    diagnostics,
-  };
-}
-
-function collectFacts(
-  input: EngineeringWorkflowInput,
-  discovery: EngineeringWorkflowDiscoveryResult,
-): EngineeringWorkflowFactBundle {
-  const maxFiles = input.maxFiles ?? Number.POSITIVE_INFINITY;
-  const generatedArtifactPaths: string[] = [];
-  const files: EngineeringFile[] = [];
-
-  for (const file of discovery.files) {
-    const key = file.relativePath || file.path;
-    if (isEngineeringGeneratedArtifact(key) || isEngineeringGeneratedArtifact(file.path)) {
-      generatedArtifactPaths.push(key);
-      continue;
-    }
-    if (files.length >= maxFiles) {
-      continue;
-    }
-    files.push(file);
-  }
-
-  const filePathSet = new Set(files.flatMap((file) => [file.relativePath, file.path]));
-  const fileContents = Object.fromEntries(
-    Object.entries(input.fileContents ?? {}).filter(([filePath]) => filePathSet.has(filePath)),
-  );
-  const importFacts = dedupeImportFacts([
-    ...(input.importFacts ?? []),
-    ...extractImportFacts(input.astSummaries, filePathSet),
-  ]);
-
-  return {
-    files,
-    fileContents,
-    importFacts,
-    ...(input.astSummaries === undefined ? {} : { astSummaries: input.astSummaries }),
-    generatedArtifactPaths,
-  };
-}
-
-function buildGraphs(
-  input: EngineeringWorkflowInput,
-  discovery: EngineeringWorkflowDiscoveryResult,
-  facts: EngineeringWorkflowFactBundle,
-): {
-  readonly codeGraph: EngineeringCodeGraph;
-  readonly callGraph: readonly EngineeringCodeCallGraphEdge[];
-  readonly dataFlow: readonly EngineeringCodeDataFlowEdge[];
-  readonly entityGraphSnapshot: EngineeringEntityGraphSnapshot;
-  readonly diagnostics: readonly EngineeringWorkflowDiagnostic[];
-  readonly partial: boolean;
-} {
-  const diagnostics: EngineeringWorkflowDiagnostic[] = [];
-  let partial = false;
-  const analysisInput = facts.astSummaries;
-  let codeGraph = analysisInput
-    ? EngineeringCodeGraph.fromAstSummary(analysisInput)
-    : EngineeringCodeGraph.fromAstSummary([]);
-  let callGraph: readonly EngineeringCodeCallGraphEdge[] = codeGraph.getCallGraphEdges();
-  let dataFlow: readonly EngineeringCodeDataFlowEdge[] = codeGraph.getDataFlowEdges();
-
-  if (analysisInput) {
-    try {
-      const explicitCallGraph = callGraph;
-      const explicitDataFlow = dataFlow;
-      const analysis = new CallGraphAnalyzer().analyze(analysisInput, {
-        ...(input.pathHints === undefined ? {} : { pathHints: input.pathHints }),
-      });
-      codeGraph = EngineeringCodeGraph.fromAstSummary({
-        astProjectSummary: { fileSummaries: astSummariesFrom(analysisInput) },
-        // 中文说明：外部 adapter 可能已经注入成熟调用图；这里与增量推断结果合并，避免迁移期丢边。
-        callGraphEdges: [...explicitCallGraph, ...analysis.callEdges],
-        dataFlowEdges: [...explicitDataFlow, ...analysis.dataFlowEdges],
-      });
-      callGraph = codeGraph.getCallGraphEdges();
-      dataFlow = codeGraph.getDataFlowEdges();
-    } catch (error: unknown) {
-      partial = true;
-      diagnostics.push(
-        workflowDiagnostic(
-          "buildGraphs",
-          "warning",
-          "Call graph analysis failed; using structural code graph",
-          error,
-        ),
-      );
-    }
-  }
-
-  const entityGraph = EngineeringEntityGraph.fromInput({
-    targets: discovery.targets,
-    files: facts.files,
-    dependencyGraph: discovery.dependencyGraph,
-    codeGraph,
-    callGraph,
-    dataFlow,
-  });
-
-  return {
-    codeGraph,
-    callGraph,
-    dataFlow,
-    entityGraphSnapshot: {
-      entities: entityGraph.entities,
-      edges: entityGraph.edges,
-      topology: entityGraph.getTopology(),
-    },
-    diagnostics,
-    partial,
-  };
-}
-
-function buildPanorama(
-  input: EngineeringWorkflowInput,
-  facts: EngineeringWorkflowFactBundle,
-  dependencyGraph: EngineeringDependencyGraph,
-  codeGraph: EngineeringCodeGraph,
-) {
-  const service = input.panoramaService ?? new EngineeringPanoramaService();
-  const recipeFacts = optionalRecipeFacts(input);
-  return service.buildSnapshot({
-    projectRoot: input.projectRoot,
-    files: facts.files,
-    dependencyGraph,
-    codeGraph,
-    importFacts: facts.importFacts,
-    ...(recipeFacts === undefined ? {} : { recipeFacts }),
-    ...(input.generatedAt === undefined ? {} : { generatedAt: input.generatedAt }),
-    ...(input.computedAt === undefined ? {} : { computedAt: input.computedAt }),
-    ...(input.staleAfterMs === undefined ? {} : { staleAfterMs: input.staleAfterMs }),
-    ...(input.stale === undefined ? {} : { stale: input.stale }),
-  });
-}
-
-function optionalRecipeFacts(input: EngineeringWorkflowInput) {
-  const optionalStage = input.optionalStage;
-  if (!optionalStage || typeof optionalStage === "boolean") {
-    return undefined;
-  }
-  return optionalStage.recipeFacts;
-}
-
-function buildEmptyGraphs(
-  targets: readonly EngineeringTarget[],
-  files: readonly EngineeringFile[],
-  dependencyGraph: EngineeringDependencyGraph,
-) {
-  const codeGraph = EngineeringCodeGraph.fromAstSummary([]);
-  const entityGraph = EngineeringEntityGraph.fromInput({
-    targets,
-    files,
-    dependencyGraph,
-    codeGraph,
-    callGraph: [],
-    dataFlow: [],
-  });
-  return {
-    codeGraph,
-    callGraph: [],
-    dataFlow: [],
-    entityGraphSnapshot: {
-      entities: entityGraph.entities,
-      edges: entityGraph.edges,
-      topology: entityGraph.getTopology(),
-    },
-    diagnostics: [],
-    partial: true,
-  };
-}
-
-function emptyDiscovery(): EngineeringWorkflowDiscoveryResult {
-  return {
-    targets: [],
-    files: [],
-    dependencyGraph: EMPTY_DEPENDENCY_GRAPH,
-  };
-}
-
-function emptyFacts(): EngineeringWorkflowFactBundle {
-  return {
-    files: [],
-    fileContents: {},
-    importFacts: [],
-    generatedArtifactPaths: [],
-  };
-}
-
-async function dependencyGraphFor(
-  discoverer: EngineeringDiscoverer,
-  diagnostics: EngineeringWorkflowDiagnostic[],
-): Promise<EngineeringDependencyGraph> {
-  try {
-    return await discoverer.getDependencyGraph();
-  } catch (error: unknown) {
-    diagnostics.push(
-      workflowDiagnostic("discover", "warning", "Dependency graph discovery failed", error),
-    );
-    return EMPTY_DEPENDENCY_GRAPH;
-  }
-}
-
-function targetName(target: EngineeringTarget | string): string {
-  return typeof target === "string" ? target : target.name;
-}
-
-function workflowCapabilities(
-  input: EngineeringWorkflowInput,
-  discovery: EngineeringWorkflowDiscoveryResult,
-  graphs: ReturnType<typeof buildEmptyGraphs> | ReturnType<typeof buildGraphs>,
-  hasPanorama: boolean,
-  optionalStage: EngineeringWorkflowArtifact["optionalStage"],
-): EngineeringWorkflowCapabilities {
-  return {
-    injectedDiscovery: input.discoveryResult !== undefined,
-    injectedAstSummaries: input.astSummaries !== undefined,
-    injectedFileContents: input.fileContents !== undefined,
-    injectedImportFacts: input.importFacts !== undefined,
-    discovery: discovery.targets.length > 0 || discovery.files.length > 0,
-    factCollection: true,
-    codeGraph: graphs.codeGraph.toJSON().files.length > 0,
-    callGraph: graphs.callGraph.length > 0,
-    dataFlow: graphs.dataFlow.length > 0,
-    entityGraph: graphs.entityGraphSnapshot.entities.length > 0,
-    panorama: hasPanorama,
-    optionalStage: optionalStage.status !== "disabled" && optionalStage.status !== "skipped",
-    dimensionFileRefs: optionalStage.dimensionFileRefs.length > 0,
-    cache: input.snapshotStore !== undefined,
-    incrementalStore: input.snapshotStore !== undefined,
-  };
-}
-
-function astSummariesFrom(
-  input: EngineeringCodeAstSummaryInput,
-): readonly EngineeringCodeAstFileSummaryInput[] {
-  if (Array.isArray(input)) {
-    return input;
-  }
-  const container = input as Exclude<
-    EngineeringCodeAstSummaryInput,
-    readonly EngineeringCodeAstFileSummaryInput[]
-  >;
-  return (
-    container.fileSummaries ?? container.files ?? container.astProjectSummary?.fileSummaries ?? []
-  );
-}
-
-function countAstSummaries(input: EngineeringCodeAstSummaryInput | undefined): number {
-  return input === undefined ? 0 : astSummariesFrom(input).length;
-}
-
-function extractImportFacts(
-  input: EngineeringCodeAstSummaryInput | undefined,
-  filePathSet: ReadonlySet<string>,
-): readonly EngineeringImportFact[] {
-  if (!input) {
-    return [];
-  }
-  const facts: EngineeringImportFact[] = [];
-  for (const summary of astSummariesFrom(input)) {
-    const filePath = stringValue(summary.file ?? summary.path ?? summary.filePath);
-    if (!filePath || !filePathSet.has(filePath)) {
-      continue;
-    }
-    for (const rawImport of Array.isArray(summary.imports) ? summary.imports : []) {
-      const record: Record<string, unknown> = isRecord(rawImport) ? rawImport : { path: rawImport };
-      const specifier = stringValue(
-        record.specifier ?? record.path ?? record.module ?? record.source,
-      );
-      if (!specifier) {
-        continue;
-      }
-      facts.push({
-        filePath,
-        specifier,
-        ...(typeof record.kind === "string" ? { kind: record.kind } : {}),
-      });
-    }
-  }
-  return facts;
-}
-
-function dedupeImportFacts(
-  facts: readonly EngineeringImportFact[],
-): readonly EngineeringImportFact[] {
-  const byKey = new Map<string, EngineeringImportFact>();
-  for (const fact of facts) {
-    byKey.set(`${fact.filePath}\0${fact.specifier}\0${fact.kind ?? ""}`, fact);
-  }
-  return [...byKey.values()].sort(
-    (left, right) =>
-      left.filePath.localeCompare(right.filePath) ||
-      left.specifier.localeCompare(right.specifier) ||
-      (left.kind ?? "").localeCompare(right.kind ?? ""),
-  );
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
