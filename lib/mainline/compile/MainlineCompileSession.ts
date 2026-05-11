@@ -1,4 +1,5 @@
 import path from "node:path";
+import type { MainlineEmbeddingPort } from "../ai/index.js";
 import {
   MainlineSourceFileScanner,
   type MainlineSourceFileScanOptions,
@@ -45,11 +46,13 @@ import {
   type MainlineSearchIndex,
   type MainlineSearchIndexSnapshot,
   MainlineSearchIndexStore,
+  type MainlineVectorStore,
 } from "../search/index.js";
 import { CompileArtifactWriter } from "./CompileArtifactWriter.js";
 import {
   type MainlineCompileSearchMaterializeResult,
   MainlineCompileSearchMaterializer,
+  MainlineEmbeddingPortBatchEmbedder,
 } from "./CompileSearchMaterializer.js";
 import type { ContentMiningPipelineArtifacts } from "./ContentMiningPipeline.js";
 import { ContentMiningRunner } from "./ContentMiningRunner.js";
@@ -201,6 +204,8 @@ export interface MainlineCompileSessionDependencies {
   readonly scanner?: MainlineSourceFileScanner;
   readonly contextIndex?: ContextIndexWriter;
   readonly searchIndex?: MainlineSearchIndex;
+  readonly vectorStore?: MainlineVectorStore;
+  readonly embeddingProvider?: MainlineEmbeddingPort;
   readonly searchIndexStore?: MainlineSearchIndexStore;
   readonly artifactStore?: MainlineProjectIntelligenceArtifactStore;
   readonly fingerprintStore?: FileFingerprintSnapshotStore;
@@ -231,6 +236,8 @@ interface MainlineCompileSessionRuntime {
   readonly scanner: MainlineSourceFileScanner;
   readonly contextIndex: ContextIndexWriter;
   readonly searchIndex: MainlineSearchIndex;
+  readonly vectorStore?: MainlineVectorStore;
+  readonly embeddingProvider?: MainlineEmbeddingPort;
   readonly searchIndexStore: MainlineSearchIndexStore;
   readonly artifactStore: MainlineProjectIntelligenceArtifactStore;
   readonly fingerprintStore: FileFingerprintSnapshotStore;
@@ -470,6 +477,10 @@ export class MainlineCompileSession {
           })
         : createEmptyMainlineRecipeImpactPlan();
     markProgress(progressCheckpoints, "recipe-impact", "completed");
+    const projectSearch = await runtime.searchMaterializer.materialize({
+      searchDocuments: projectIntelligence.materialized?.searchDocuments ?? [],
+      searchDocumentIdsToRemove: projectIntelligence.materialized?.removedSearchDocumentIds ?? [],
+    });
     const contentSearch = await runtime.searchMaterializer.materialize({
       recipes: contentMining.recipes,
       sourceRefs: contentMining.sourceRefs,
@@ -498,7 +509,7 @@ export class MainlineCompileSession {
       sourceRefRepair,
       recipeImpact,
       recipeMarkdown: recipeMarkdownReport(loadedRecipeMarkdown, recipeMarkdownWrites),
-      search: searchReport(projectIntelligence, contentSearch, {
+      search: searchReport(projectIntelligence, projectSearch, contentSearch, {
         restoredDocuments: restoredSearchDocuments,
         persistedSnapshot: persistedSearchSnapshot,
       }),
@@ -540,6 +551,8 @@ export class MainlineCompileSession {
     const scanner = this.#dependencies.scanner ?? new MainlineSourceFileScanner();
     const contextIndex = this.#dependencies.contextIndex ?? new InMemoryContextIndex();
     const searchIndex = this.#dependencies.searchIndex ?? new InMemoryMainlineSearchIndex();
+    const vectorStore = this.#dependencies.vectorStore;
+    const embeddingProvider = this.#dependencies.embeddingProvider;
     const searchIndexStore =
       this.#dependencies.searchIndexStore ??
       new MainlineSearchIndexStore(
@@ -577,10 +590,16 @@ export class MainlineCompileSession {
     const recipeMarkdownStore =
       this.#dependencies.recipeMarkdownStore ??
       new RecipeMarkdownStore(writeBoundary, { fileStore });
+    const searchEmbedder =
+      embeddingProvider === undefined
+        ? undefined
+        : new MainlineEmbeddingPortBatchEmbedder(embeddingProvider);
     const searchMaterializer =
       this.#dependencies.searchMaterializer ??
       new MainlineCompileSearchMaterializer({
         searchIndex,
+        ...(vectorStore === undefined ? {} : { vectorStore }),
+        ...(searchEmbedder === undefined ? {} : { embedder: searchEmbedder }),
       });
     const jobLedger = this.#dependencies.jobLedger ?? new InMemoryMainlineJobLedger();
 
@@ -592,6 +611,8 @@ export class MainlineCompileSession {
       scanner,
       contextIndex,
       searchIndex,
+      ...(vectorStore === undefined ? {} : { vectorStore }),
+      ...(embeddingProvider === undefined ? {} : { embeddingProvider }),
       searchIndexStore,
       artifactStore,
       fingerprintStore,
@@ -733,21 +754,24 @@ async function restoreSearchIndex(
 
 function searchReport(
   projectIntelligence: MainlineProjectIntelligenceRunnerResult,
+  projectSearch: MainlineCompileSearchMaterializeResult,
   contentSearch: MainlineCompileSearchMaterializeResult,
   input: {
     readonly restoredDocuments: number;
     readonly persistedSnapshot: MainlineSearchIndexSnapshot;
   },
 ): MainlineCompileSessionSearchReport {
-  const projectDocumentsUpserted = projectIntelligence.materialized?.searchDocuments.length ?? 0;
+  const projectDocumentsUpserted =
+    projectSearch.upserted || projectIntelligence.materialized?.searchDocuments.length || 0;
   const projectDocumentsRemoved =
-    projectIntelligence.materialized?.removedSearchDocumentIds.length ?? 0;
+    projectSearch.removed || projectIntelligence.materialized?.removedSearchDocumentIds.length || 0;
 
   return {
     upserted: projectDocumentsUpserted + contentSearch.upserted,
     removed: projectDocumentsRemoved + contentSearch.removed,
-    embedded: contentSearch.embedded,
-    embeddingFailures: contentSearch.embeddingFailures.length,
+    embedded: projectSearch.embedded + contentSearch.embedded,
+    embeddingFailures:
+      projectSearch.embeddingFailures.length + contentSearch.embeddingFailures.length,
     restoredDocuments: input.restoredDocuments,
     persistedDocuments: input.persistedSnapshot.documents.length,
     projectDocumentsUpserted,

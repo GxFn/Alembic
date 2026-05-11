@@ -1,12 +1,17 @@
+import { MainlineEmbeddingPortBatchEmbedder } from "../mainline/compile/index.js";
 import { type ContextIndexSnapshot, InMemoryContextIndex } from "../mainline/data/index.js";
 import {
   InMemoryMainlineSearchIndex,
+  JsonMainlineVectorStore,
+  MainlineHybridSearch,
+  type MainlineHybridSearchHit,
   type MainlineSearchDocument,
   type MainlineSearchDocumentKind,
   type MainlineSearchHit,
   type MainlineSearchIndexSnapshot,
   projectMainlineSearchDocuments,
 } from "../mainline/search/index.js";
+import { createCodexEmbeddingProviderFromEnv } from "./ai-provider.js";
 import {
   type CodexRuntimeReadiness,
   codexReadModelPaths,
@@ -40,6 +45,8 @@ export interface CodexSearchResult {
   readonly sources: CodexSearchSources;
 }
 
+type CodexSearchBackendHit = MainlineSearchHit | MainlineHybridSearchHit;
+
 export interface CodexSearchQuerySummary {
   readonly text?: string;
   readonly paths: readonly string[];
@@ -66,8 +73,11 @@ export interface CodexSearchHit {
 export interface CodexSearchSources {
   readonly contextSnapshotPath: string;
   readonly searchSnapshotPath: string;
+  readonly vectorSnapshotPath: string;
   readonly searchDocumentCount: number;
   readonly contextDocumentCount: number;
+  readonly vectorDocumentCount: number;
+  readonly semantic: "hybrid" | "sparse";
 }
 
 interface ParsedSearchInput {
@@ -95,8 +105,11 @@ export async function runCodexSearch(
       sources: {
         contextSnapshotPath: paths.contextSnapshotPath,
         searchSnapshotPath: paths.searchSnapshotPath,
+        vectorSnapshotPath: paths.vectorSnapshotPath,
         searchDocumentCount: 0,
         contextDocumentCount: 0,
+        vectorDocumentCount: 0,
+        semantic: "sparse",
       },
     });
   }
@@ -113,8 +126,11 @@ export async function runCodexSearch(
       sources: {
         contextSnapshotPath: paths.contextSnapshotPath,
         searchSnapshotPath: paths.searchSnapshotPath,
+        vectorSnapshotPath: paths.vectorSnapshotPath,
         searchDocumentCount: 0,
         contextDocumentCount: 0,
+        vectorDocumentCount: 0,
+        semantic: "sparse",
       },
     });
   }
@@ -143,8 +159,11 @@ export async function runCodexSearch(
       sources: {
         contextSnapshotPath: paths.contextSnapshotPath,
         searchSnapshotPath: paths.searchSnapshotPath,
+        vectorSnapshotPath: paths.vectorSnapshotPath,
         searchDocumentCount: 0,
         contextDocumentCount: 0,
+        vectorDocumentCount: 0,
+        semantic: "sparse",
       },
     });
   }
@@ -166,12 +185,18 @@ export async function runCodexSearch(
   const index = new InMemoryMainlineSearchIndex();
   index.upsert([...searchDocuments, ...contextDocuments]);
 
-  const hits = index.search({
+  const searchQuery = {
     ...(parsed.input.query.text ? { text: parsed.input.query.text } : {}),
     paths: parsed.input.query.paths,
     symbols: parsed.input.query.symbols,
     ...(parsed.input.query.kinds.length > 0 ? { kinds: parsed.input.query.kinds } : {}),
     limit: parsed.input.query.limit,
+  };
+  const searchResult = await searchWithOptionalHybrid({
+    index,
+    query: searchQuery,
+    vectorSnapshotPath: paths.vectorSnapshotPath,
+    warnings,
   });
 
   return {
@@ -182,15 +207,84 @@ export async function runCodexSearch(
     readiness,
     warnings,
     query: parsed.input.query,
-    hitCount: hits.length,
-    hits: hits.map(summarizeHit),
+    hitCount: searchResult.hits.length,
+    hits: searchResult.hits.map(summarizeHit),
     sources: {
       contextSnapshotPath: paths.contextSnapshotPath,
       searchSnapshotPath: paths.searchSnapshotPath,
+      vectorSnapshotPath: paths.vectorSnapshotPath,
       searchDocumentCount: searchDocuments.length,
       contextDocumentCount: contextDocuments.length,
+      vectorDocumentCount: searchResult.vectorDocumentCount,
+      semantic: searchResult.semantic,
     },
   };
+}
+
+async function searchWithOptionalHybrid(input: {
+  readonly index: InMemoryMainlineSearchIndex;
+  readonly query: Parameters<InMemoryMainlineSearchIndex["search"]>[0];
+  readonly vectorSnapshotPath: string;
+  readonly warnings: string[];
+}): Promise<{
+  readonly hits: readonly CodexSearchBackendHit[];
+  readonly vectorDocumentCount: number;
+  readonly semantic: CodexSearchSources["semantic"];
+}> {
+  const sparseHits = () => ({
+    hits: input.index.search(input.query),
+    vectorDocumentCount: 0,
+    semantic: "sparse" as const,
+  });
+  if (!input.query.text?.trim()) {
+    return sparseHits();
+  }
+
+  const vectorStore = new JsonMainlineVectorStore(input.vectorSnapshotPath);
+  let vectorDocumentCount = 0;
+  try {
+    await vectorStore.load();
+    vectorDocumentCount = (await vectorStore.snapshot()).length;
+  } catch {
+    input.warnings.push("vector_snapshot_unreadable");
+    return sparseHits();
+  }
+  if (vectorDocumentCount === 0) {
+    return sparseHits();
+  }
+
+  const embeddingProvider = createCodexEmbeddingProviderFromEnv();
+  if (!embeddingProvider) {
+    input.warnings.push("semantic_search_embedding_provider_missing");
+    return {
+      hits: input.index.search(input.query),
+      vectorDocumentCount,
+      semantic: "sparse",
+    };
+  }
+
+  try {
+    const hybrid = new MainlineHybridSearch({
+      searchIndex: input.index,
+      vectorStore,
+      embedder: new MainlineEmbeddingPortBatchEmbedder(embeddingProvider),
+    });
+    return {
+      hits: await hybrid.search(input.query, {
+        sparseLimit: Math.max(input.query.limit ?? DEFAULT_LIMIT, 50),
+        vectorLimit: Math.max(input.query.limit ?? DEFAULT_LIMIT, 50),
+      }),
+      vectorDocumentCount,
+      semantic: "hybrid",
+    };
+  } catch {
+    input.warnings.push("semantic_search_failed_used_sparse");
+    return {
+      hits: input.index.search(input.query),
+      vectorDocumentCount,
+      semantic: "sparse",
+    };
+  }
 }
 
 function parseSearchInput(args: Record<string, unknown>):
@@ -265,7 +359,7 @@ function emptyResult(input: {
   };
 }
 
-function summarizeHit(hit: MainlineSearchHit): CodexSearchHit {
+function summarizeHit(hit: CodexSearchBackendHit): CodexSearchHit {
   const document = hit.document;
   const recipeId = metadataString(document, "recipeId");
   const sourceRefId = metadataString(document, "sourceRefId");
@@ -281,7 +375,7 @@ function summarizeHit(hit: MainlineSearchHit): CodexSearchHit {
     ...(sourceRefId ? { sourceRefId } : {}),
     tags: [...(document.tags ?? [])].slice(0, 8),
     score: round(hit.score),
-    confidence: round(hit.confidence),
+    confidence: round(hit.confidence ?? hit.score),
     reasons: hit.reasons.slice(0, 8),
   };
 }

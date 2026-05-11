@@ -1,4 +1,5 @@
 import type { ToolRuntimeDependencies } from "../../agent/tools/index.js";
+import type { MainlineEmbeddingPort } from "../../mainline/ai/index.js";
 import {
   JsonMainlineProjectIntelligenceArtifactStore,
   MAINLINE_FILE_FINGERPRINT_SNAPSHOT_STORE_PATH,
@@ -31,11 +32,13 @@ import {
 } from "../../mainline/knowledge/index.js";
 import {
   type InMemoryMainlineSearchIndex,
+  JsonMainlineVectorStore,
   type MainlineSearchDocument,
   type MainlineSearchHit,
   type MainlineSearchIndex,
   MainlineSearchIndexStore,
   type MainlineSearchQuery,
+  type MainlineVectorStore,
   projectMainlineSearchDocuments,
 } from "../../mainline/search/index.js";
 import { ScanLifecycleRunner } from "../scan/ScanLifecycleRunner.js";
@@ -48,12 +51,14 @@ import type {
 
 const MAINLINE_CONTEXT_INDEX_STORE_PATH = "context/context-index.json";
 const MAINLINE_SEARCH_INDEX_STORE_PATH = "context/search-index.json";
+const MAINLINE_VECTOR_INDEX_STORE_PATH = "context/vector-index.json";
 
 export interface MainlineWorkflowPersistenceOptions {
   readonly projectRoot: string;
   readonly dataRoot: string;
   readonly mode?: MainlineWorkspaceMode;
   readonly now?: () => number;
+  readonly embeddingProvider?: MainlineEmbeddingPort;
 }
 
 export interface DataRootMainlineWorkflowPersistence {
@@ -62,6 +67,7 @@ export interface DataRootMainlineWorkflowPersistence {
   readonly dependencies: MainlineWorkflowEntrypointDependencies;
   readonly contextIndex: PersistentMainlineContextIndex;
   readonly searchIndex: PersistentMainlineSearchIndex;
+  readonly vectorStore: MainlineVectorStore;
   readonly artifactStore: MainlineProjectIntelligenceArtifactStore;
   readonly persistedArtifacts: MainlineWorkflowPersistedArtifacts;
   readonly agentToolDependencies: ToolRuntimeDependencies;
@@ -83,6 +89,7 @@ export async function createMainlineWorkflowPersistence(
     artifactPath: runtimeAbsolute(writeBoundary, MAINLINE_PROJECT_INTELLIGENCE_ARTIFACT_STORE_PATH),
     contextSnapshotPath: runtimeAbsolute(writeBoundary, MAINLINE_CONTEXT_INDEX_STORE_PATH),
     searchSnapshotPath: runtimeAbsolute(writeBoundary, MAINLINE_SEARCH_INDEX_STORE_PATH),
+    vectorSnapshotPath: runtimeAbsolute(writeBoundary, MAINLINE_VECTOR_INDEX_STORE_PATH),
     fingerprintSnapshotPath: runtimeAbsolute(
       writeBoundary,
       MAINLINE_FILE_FINGERPRINT_SNAPSHOT_STORE_PATH,
@@ -103,6 +110,8 @@ export async function createMainlineWorkflowPersistence(
     await searchIndexStore.restoreIndex(),
     searchIndexStore,
   );
+  const vectorStore = new JsonMainlineVectorStore(persistedArtifacts.vectorSnapshotPath);
+  await vectorStore.load();
   const artifactStore = new FlushingMainlineProjectIntelligenceArtifactStore(
     new JsonMainlineProjectIntelligenceArtifactStore(
       dataStoreTarget(MAINLINE_PROJECT_INTELLIGENCE_ARTIFACT_STORE_PATH),
@@ -125,6 +134,7 @@ export async function createMainlineWorkflowPersistence(
     await contextIndex.reset();
     searchIndex.clear();
     await searchIndex.flush();
+    await clearVectorStore(vectorStore);
   };
   const compileSession = new MainlineCompileSession({
     workspacePaths,
@@ -132,6 +142,10 @@ export async function createMainlineWorkflowPersistence(
     fileStore: coreFileStore,
     contextIndex,
     searchIndex,
+    vectorStore,
+    ...(input.embeddingProvider === undefined
+      ? {}
+      : { embeddingProvider: input.embeddingProvider }),
     searchIndexStore,
     artifactStore,
     recipeMarkdownStore,
@@ -165,11 +179,16 @@ export async function createMainlineWorkflowPersistence(
       persistence,
       compileSession,
       lifecycleRunner,
+      vectorStore,
+      ...(input.embeddingProvider === undefined
+        ? {}
+        : { embeddingProvider: input.embeddingProvider }),
       persistedArtifacts,
       resetRuntimeState,
     },
     contextIndex,
     searchIndex,
+    vectorStore,
     artifactStore,
     persistedArtifacts,
     agentToolDependencies,
@@ -469,6 +488,14 @@ class DataRootJsonFileStore implements JsonMainlineAtomicFileStore {
   #runtimeTarget(target: JsonMainlineZonedPath) {
     return this.#writeBoundary.runtime(target.path);
   }
+}
+
+async function clearVectorStore(vectorStore: MainlineVectorStore): Promise<void> {
+  const items = await vectorStore.snapshot();
+  if (items.length === 0) {
+    return;
+  }
+  await vectorStore.remove(items.map((item) => item.id));
 }
 
 function dataStoreTarget(path: string): JsonMainlineZonedPath {

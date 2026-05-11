@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ToolRouter } from "../../agent/tools/index.js";
+import type { MainlineEmbeddingPort } from "../../mainline/ai/index.js";
 import { createRecipe, createRecipeKnowledgePayload } from "../../mainline/knowledge/index.js";
 import { MainlineWorkflowEntrypoint } from "./MainlineWorkflowEntrypoint.js";
 import { createMainlineWorkflowPersistence } from "./MainlineWorkflowPersistence.js";
@@ -72,6 +73,49 @@ describe("mainline workflow dataRoot persistence", () => {
     await expect(restored.artifactStore.load()).resolves.toMatchObject({
       files: expect.arrayContaining([expect.objectContaining({ path: "src/app.ts" })]),
     });
+  });
+
+  it("persists vector snapshots when a real embedding port is configured", async () => {
+    const projectRoot = await makeFixtureProject();
+    const dataRoot = await makeTempRoot("alembic-workflow-data-");
+    const persistence = await createMainlineWorkflowPersistence({
+      projectRoot,
+      dataRoot,
+      mode: "ghost",
+      embeddingProvider: deterministicEmbeddingProvider(),
+    });
+
+    const result = await new MainlineWorkflowEntrypoint(persistence.dependencies).run({
+      kind: "bootstrap",
+      projectRoot,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.persisted?.vectorSnapshotPath).toBe(
+      path.join(dataRoot, ".asd/context/vector-index.json"),
+    );
+    await expect(
+      readJson(path.join(dataRoot, ".asd/context/vector-index.json")),
+    ).resolves.toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          id: "file:src/app.ts",
+          vector: expect.any(Array),
+        }),
+      ]),
+    });
+    await expect(persistence.vectorStore.snapshot()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "file:src/app.ts" })]),
+    );
+
+    const restored = await createMainlineWorkflowPersistence({
+      projectRoot,
+      dataRoot,
+      mode: "ghost",
+    });
+    await expect(restored.vectorStore.snapshot()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "file:src/app.ts" })]),
+    );
   });
 
   it("exposes internal agent tool dependencies backed by dataRoot snapshots", async () => {
@@ -259,6 +303,18 @@ function validAgentKnowledgeItem(): Record<string, unknown> {
     language: "typescript",
     confidence: 0.9,
   };
+}
+
+function deterministicEmbeddingProvider(): MainlineEmbeddingPort {
+  return {
+    status: () => ({ provider: "test", model: "deterministic", ready: true, mock: false }),
+    embedText: async (text) => [text.length, tokenCount(text)],
+    embedBatch: async (texts) => texts.map((text) => [text.length, tokenCount(text)]),
+  };
+}
+
+function tokenCount(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
 }
 
 async function makeTempRoot(prefix: string): Promise<string> {

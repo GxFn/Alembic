@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 
 import { randomBytes } from "node:crypto";
+import type { RuntimeAiProvider } from "../lib/agent/runtime/index.js";
+import {
+  createCodexEmbeddingProviderFromEnv,
+  createCodexRuntimeAiProviderFromEnv,
+} from "../lib/codex/ai-provider.js";
 import { readPackageInfo } from "../lib/codex/package-info.js";
 import { inspectWorkspace, resolveProjectRoot } from "../lib/codex/workspace.js";
 import { startDaemonHttpBridge } from "../lib/daemon/DaemonHttpBridge.js";
@@ -28,10 +33,13 @@ if (!workspace.projectId) {
 const info = readPackageInfo();
 const startedAt = new Date().toISOString();
 const dataRoot = process.env.ALEMBIC_DAEMON_DATA_ROOT ?? workspace.dataRoot;
+const runtimeAiProvider = createCodexRuntimeAiProviderFromEnv(process.env);
+const embeddingProvider = createCodexEmbeddingProviderFromEnv(process.env);
 const workflowPersistence = await createMainlineWorkflowPersistence({
   projectRoot: workspace.projectRoot,
   dataRoot,
   mode: workspace.mode,
+  ...(embeddingProvider === undefined ? {} : { embeddingProvider }),
 });
 const initialState = {
   pid: process.pid,
@@ -53,6 +61,8 @@ const compileSession = new MainlineCompileSession({
   writeBoundary: workflowPersistence.writeBoundary,
   contextIndex: workflowPersistence.contextIndex,
   searchIndex: workflowPersistence.searchIndex,
+  vectorStore: workflowPersistence.vectorStore,
+  ...(embeddingProvider === undefined ? {} : { embeddingProvider }),
   artifactStore: workflowPersistence.artifactStore,
 });
 const scanLifecycleRunner =
@@ -85,6 +95,7 @@ const workflowHandlers: Record<"bootstrap" | "rescan", DaemonJobHandler> = {
       workspace.projectRoot,
       job.input,
       context,
+      runtimeAiProvider,
     ),
   rescan: async (job, context) =>
     runWorkflowJob(
@@ -95,6 +106,7 @@ const workflowHandlers: Record<"bootstrap" | "rescan", DaemonJobHandler> = {
       workspace.projectRoot,
       job.input,
       context,
+      runtimeAiProvider,
     ),
 };
 const bridge = await startDaemonHttpBridge({
@@ -135,6 +147,7 @@ async function runWorkflowJob(
   projectRoot: string,
   input: Record<string, unknown> | undefined,
   context: DaemonJobExecutionContext,
+  aiProvider: RuntimeAiProvider | null,
 ): Promise<Record<string, unknown>> {
   const agentFill = input?.agentFill === true;
   await context.reportProgress({
@@ -163,6 +176,7 @@ async function runWorkflowJob(
         projectRoot,
         input,
         cancellation,
+        aiProvider,
       })
     : await runner.run({
         kind,
@@ -191,6 +205,7 @@ async function runInternalAgentWorkflowJob(input: {
   readonly projectRoot: string;
   readonly input: Record<string, unknown> | undefined;
   readonly cancellation: { isCancelled(): boolean | Promise<boolean> };
+  readonly aiProvider: RuntimeAiProvider | null;
 }) {
   const agentOptions = agentWorkflowInput(input.input);
   if (input.kind === "bootstrap") {
@@ -198,6 +213,7 @@ async function runInternalAgentWorkflowJob(input: {
       projectRoot: input.projectRoot,
       ...coldStartInput(input.input),
       ...coldStartAgentWorkflowInput(agentOptions),
+      aiProvider: input.aiProvider,
       cancellation: input.cancellation,
     });
   }
@@ -205,6 +221,7 @@ async function runInternalAgentWorkflowJob(input: {
     projectRoot: input.projectRoot,
     ...knowledgeRescanInput(input.input),
     ...agentOptions,
+    aiProvider: input.aiProvider,
     cancellation: input.cancellation,
   });
 }

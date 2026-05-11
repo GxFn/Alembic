@@ -1,3 +1,4 @@
+import type { MainlineEmbeddingPort } from "../../mainline/ai/index.js";
 import type { MainlineSourceFileScanOptions } from "../../mainline/code/index.js";
 import {
   MainlineCompileSession,
@@ -5,7 +6,11 @@ import {
 } from "../../mainline/compile/index.js";
 import type { ContextIndexWriter } from "../../mainline/data/index.js";
 import type { MainlineProjectIntelligenceArtifact } from "../../mainline/graph/index.js";
-import type { MainlineSearchDocument, MainlineSearchIndex } from "../../mainline/search/index.js";
+import type {
+  MainlineSearchDocument,
+  MainlineSearchIndex,
+  MainlineVectorStore,
+} from "../../mainline/search/index.js";
 import { type ScanLifecycleRunInput, ScanLifecycleRunner } from "../scan/ScanLifecycleRunner.js";
 import type {
   MainlineWorkflowCancellationToken,
@@ -29,6 +34,8 @@ export interface MainlineWorkflowEntrypointDependencies {
   readonly lifecycleRunner?: ScanLifecycleRunner;
   readonly contextIndex?: ContextIndexWriter;
   readonly searchIndex?: MainlineSearchIndex;
+  readonly vectorStore?: MainlineVectorStore;
+  readonly embeddingProvider?: MainlineEmbeddingPort;
   readonly artifactStore?: MainlineProjectIntelligenceArtifactStore;
   readonly persistence?: MainlineWorkflowPersistence;
   readonly persistedArtifacts?: MainlineWorkflowPersistedArtifacts;
@@ -47,6 +54,7 @@ export interface MainlineWorkflowPersistedArtifacts {
   readonly artifactPath?: string;
   readonly contextSnapshotPath?: string;
   readonly searchSnapshotPath?: string;
+  readonly vectorSnapshotPath?: string;
   readonly fingerprintSnapshotPath?: string;
   readonly recipeMarkdownRoot?: string;
 }
@@ -111,6 +119,12 @@ export class MainlineWorkflowEntrypoint {
             ...(dependencies.searchIndex === undefined
               ? {}
               : { searchIndex: dependencies.searchIndex }),
+            ...(dependencies.vectorStore === undefined
+              ? {}
+              : { vectorStore: dependencies.vectorStore }),
+            ...(dependencies.embeddingProvider === undefined
+              ? {}
+              : { embeddingProvider: dependencies.embeddingProvider }),
             ...(dependencies.artifactStore === undefined
               ? {}
               : { artifactStore: dependencies.artifactStore }),

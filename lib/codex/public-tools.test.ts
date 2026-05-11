@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MainlineProjectIntelligenceBuilder } from "../mainline/graph/index.js";
 import {
   createRecipe,
@@ -19,6 +19,9 @@ const tempRoots: string[] = [];
 let previousAlembicHome: string | undefined;
 let previousHome: string | undefined;
 let previousProjectDir: string | undefined;
+let previousEmbedProvider: string | undefined;
+let previousEmbedModel: string | undefined;
+let previousOpenAiKey: string | undefined;
 
 beforeEach(async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "alembic-public-tools-home-"));
@@ -28,6 +31,9 @@ beforeEach(async () => {
   previousAlembicHome = process.env.ALEMBIC_HOME;
   previousHome = process.env.HOME;
   previousProjectDir = process.env.ALEMBIC_PROJECT_DIR;
+  previousEmbedProvider = process.env.ALEMBIC_EMBED_PROVIDER;
+  previousEmbedModel = process.env.ALEMBIC_EMBED_MODEL;
+  previousOpenAiKey = process.env.ALEMBIC_OPENAI_API_KEY;
   process.env.ALEMBIC_HOME = path.join(home, ".asd");
   process.env.HOME = home;
   process.env.ALEMBIC_PROJECT_DIR = projectRoot;
@@ -37,6 +43,10 @@ afterEach(async () => {
   restoreEnv("ALEMBIC_HOME", previousAlembicHome);
   restoreEnv("HOME", previousHome);
   restoreEnv("ALEMBIC_PROJECT_DIR", previousProjectDir);
+  restoreEnv("ALEMBIC_EMBED_PROVIDER", previousEmbedProvider);
+  restoreEnv("ALEMBIC_EMBED_MODEL", previousEmbedModel);
+  restoreEnv("ALEMBIC_OPENAI_API_KEY", previousOpenAiKey);
+  vi.unstubAllGlobals();
   await Promise.all(
     tempRoots.splice(0).map((root) => fs.rm(root, { force: true, recursive: true })),
   );
@@ -143,6 +153,75 @@ describe("Codex public search and structure tools", () => {
     expect(data.hitCount).toBeGreaterThan(0);
     expect(data.hits[0]).toMatchObject({ id: "recipe:codex-public-search", kind: "recipe" });
     expect(JSON.stringify(data)).not.toContain("resource.action");
+  });
+
+  it("uses vector snapshots for alembic_search when an embedding provider is configured", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({
+          data: [{ index: 0, embedding: [1, 0] }],
+        }),
+      ),
+    );
+    process.env.ALEMBIC_EMBED_PROVIDER = "openai";
+    process.env.ALEMBIC_EMBED_MODEL = "text-embedding-3-small";
+    process.env.ALEMBIC_OPENAI_API_KEY = "sk-test";
+    const workspace = initializeCodexWorkspace({
+      projectRoot: currentProjectRoot(),
+      standard: true,
+    });
+    const persistence = await createMainlineWorkflowPersistence({
+      projectRoot: workspace.projectRoot,
+      dataRoot: workspace.dataRoot,
+      mode: workspace.mode,
+    });
+    const recipe = createRecipe({
+      id: "codex-semantic-vector-search",
+      title: "Codex semantic vector search",
+      kind: "workflow",
+      status: "active",
+      summary: "Semantic search uses the persisted vector snapshot.",
+      trigger: "semantic vector search",
+      confidence: 0.9,
+    });
+    const [document] = projectMainlineSearchDocuments({ recipes: [recipe] });
+    if (!document) {
+      throw new Error("Expected projected recipe document.");
+    }
+    persistence.searchIndex.upsert([document]);
+    await persistence.searchIndex.flush();
+    await persistence.vectorStore.upsert([
+      {
+        id: document.id,
+        vector: [1, 0],
+        content: "semantic-only persisted vector hit",
+        ...(document.metadata === undefined ? {} : { metadata: document.metadata }),
+      },
+    ]);
+
+    const result = await handleCodexTool("alembic_search", {
+      query: "unrelated query text",
+      projectRoot: workspace.projectRoot,
+      limit: 5,
+    });
+
+    expect(result.success).toBe(true);
+    const data = result.data as {
+      readonly sources: {
+        readonly semantic: string;
+        readonly vectorDocumentCount: number;
+      };
+      readonly hits: ReadonlyArray<{
+        readonly id: string;
+        readonly reasons: readonly string[];
+      }>;
+    };
+    expect(data.sources).toMatchObject({ semantic: "hybrid", vectorDocumentCount: 1 });
+    expect(data.hits[0]).toMatchObject({
+      id: "recipe:codex-semantic-vector-search",
+      reasons: expect.arrayContaining(["vector:cosine", "fusion:rrf"]),
+    });
   });
 
   it("handles alembic_structure from the ProjectIntelligence artifact", async () => {
@@ -461,6 +540,13 @@ function restoreEnv(name: string, value: string | undefined): void {
   } else {
     process.env[name] = value;
   }
+}
+
+function jsonResponse(payload: unknown): Response {
+  return new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 function lifecycleRecipe(id: string, summary: string) {

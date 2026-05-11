@@ -6,17 +6,20 @@ import type { WorkspaceInspection } from "./workspace.js";
 
 export const CODEX_CONTEXT_INDEX_READ_MODEL_PATH = "context/context-index.json";
 export const CODEX_SEARCH_INDEX_READ_MODEL_PATH = "context/search-index.json";
+export const CODEX_VECTOR_INDEX_READ_MODEL_PATH = "context/vector-index.json";
 
 export interface CodexReadModelPaths {
   readonly contextSnapshotPath: string;
   readonly projectIntelligencePath: string;
   readonly searchSnapshotPath: string;
+  readonly vectorSnapshotPath: string;
 }
 
 export interface CodexRuntimeReadiness {
   readonly initialized: boolean;
   readonly contextReady: boolean;
   readonly searchReady: boolean;
+  readonly vectorReady: boolean;
   readonly projectIntelligenceReady: boolean;
 }
 
@@ -32,6 +35,7 @@ export function codexReadModelPaths(workspace: WorkspaceInspection): CodexReadMo
       MAINLINE_PROJECT_INTELLIGENCE_READ_MODEL_PATH,
     ),
     searchSnapshotPath: join(workspace.runtimeDir, CODEX_SEARCH_INDEX_READ_MODEL_PATH),
+    vectorSnapshotPath: join(workspace.runtimeDir, CODEX_VECTOR_INDEX_READ_MODEL_PATH),
   };
 }
 
@@ -43,6 +47,7 @@ export function inspectCodexRuntimeReadiness(
     initialized: workspace.initialized,
     contextReady: existsSync(paths.contextSnapshotPath),
     searchReady: existsSync(paths.searchSnapshotPath),
+    vectorReady: existsSync(paths.vectorSnapshotPath),
     projectIntelligenceReady: existsSync(paths.projectIntelligencePath),
   };
 }
