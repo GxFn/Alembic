@@ -3,6 +3,7 @@ import { ToolOutputCompressor } from "./compressor.js";
 import { createDefaultToolHandlers } from "./handlers/index.js";
 import { InMemoryToolMemoryStore } from "./memory-store.js";
 import { createDefaultToolRegistry } from "./registry.js";
+import { ToolSandboxTerminalExecutor } from "./sandbox.js";
 import { validateToolInputSchema } from "./schema.js";
 import { DefaultToolTerminalOutputCompressor } from "./terminal-output-compressor.js";
 import type {
@@ -46,6 +47,7 @@ export class ToolRouter {
       deltaCache: new InMemoryToolDeltaCache(),
       searchCache: new InMemoryToolSearchCache(),
       terminalCompressor: new DefaultToolTerminalOutputCompressor(),
+      terminalExecutor: new ToolSandboxTerminalExecutor(),
       memoryStore,
       ...options.dependencies,
     };

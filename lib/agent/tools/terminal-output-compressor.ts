@@ -13,6 +13,7 @@ interface TerminalParserEntry {
 const PARSERS: readonly TerminalParserEntry[] = [
   { name: "git-status", pattern: /^git\s+status\b/, parse: parseGitStatus },
   { name: "git-diff", pattern: /^git\s+diff\b/, parse: parseGitDiff },
+  { name: "git-log", pattern: /^git\s+log\b/, parse: parseGitLog },
   {
     name: "test-output",
     pattern: /^(vitest|jest|mocha|pytest|npx\s+vitest|npx\s+jest|npm\s+test|pnpm\s+test)\b/,
@@ -94,6 +95,95 @@ function parseGitDiff(raw: string): string | null {
     ...files.slice(0, 40).map((file) => `file: ${file}`),
     ...hunks.slice(0, 60),
   ].join("\n");
+}
+
+function parseGitLog(raw: string): string | null {
+  const full = parseFullGitLog(raw);
+  if (full.length > 0) {
+    return full.join("\n");
+  }
+  const oneline = parseOnelineGitLog(raw);
+  return oneline.length > 0 ? oneline.join("\n") : null;
+}
+
+function parseFullGitLog(raw: string): string[] {
+  const entries: string[] = [];
+  const lines = raw.split("\n");
+  let index = 0;
+
+  while (index < lines.length && entries.length < 20) {
+    const commitMatch = /^commit\s+([0-9a-f]{7,40})$/.exec(lines[index]?.trim() ?? "");
+    if (!commitMatch) {
+      index += 1;
+      continue;
+    }
+
+    const hash = commitMatch[1]?.slice(0, 7) ?? "";
+    let author = "";
+    let date = "";
+    let message = "";
+    index += 1;
+
+    while (index < lines.length) {
+      const line = lines[index]?.trim() ?? "";
+      const authorMatch = /^Author:\s+(.+?)(?:\s+<.*>)?$/.exec(line);
+      const dateMatch = /^Date:\s+(.+)$/.exec(line);
+      if (authorMatch) {
+        author = authorMatch[1] ?? "";
+      } else if (dateMatch) {
+        date = (dateMatch[1] ?? "").trim().split(" ").slice(0, 4).join(" ");
+      } else if (line && !/^commit\s+[0-9a-f]{7,40}$/.test(line) && !message) {
+        message = line;
+      }
+      if (/^commit\s+[0-9a-f]{7,40}$/.test(line)) {
+        break;
+      }
+      index += 1;
+    }
+
+    if (hash) {
+      entries.push(formatGitLogEntry(hash, date, author, message));
+    }
+  }
+
+  return entries;
+}
+
+function parseOnelineGitLog(raw: string): string[] {
+  const entries: string[] = [];
+  for (const line of raw.split("\n")) {
+    if (entries.length >= 20) {
+      break;
+    }
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const formatted =
+      /^([0-9a-f]{7,40})\s+(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?(?:\s*[+-]\d{4})?)\s+(.+?):\s+(.+)$/.exec(
+        trimmed,
+      );
+    if (formatted) {
+      entries.push(
+        formatGitLogEntry(
+          formatted[1]?.slice(0, 7) ?? "",
+          formatted[2] ?? "",
+          formatted[3] ?? "",
+          formatted[4] ?? "",
+        ),
+      );
+      continue;
+    }
+    const oneline = /^([0-9a-f]{7,40})\s+(.+)$/.exec(trimmed);
+    if (oneline) {
+      entries.push(formatGitLogEntry(oneline[1]?.slice(0, 7) ?? "", "", "", oneline[2] ?? ""));
+    }
+  }
+  return entries;
+}
+
+function formatGitLogEntry(hash: string, date: string, author: string, message: string): string {
+  return [hash, date, author ? `${author}:` : "", message].filter(Boolean).join(" ");
 }
 
 function parseTestOutput(raw: string): string | null {

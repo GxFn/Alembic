@@ -222,6 +222,9 @@ export interface ToolTerminalExecutionRequest {
   readonly cwd: string;
   readonly projectRoot: string;
   readonly timeoutMs: number;
+  readonly network?: "none" | "allowlisted" | "open";
+  readonly filesystem?: "read-only" | "project-write" | "workspace-write";
+  readonly env?: Readonly<Record<string, string>>;
   readonly abortSignal?: AbortSignal;
 }
 
@@ -230,6 +233,13 @@ export interface ToolTerminalExecutionResult {
   readonly stderr: string;
   readonly exitCode: number;
   readonly timedOut?: boolean;
+  readonly sandboxed?: boolean;
+  readonly degradeReason?: string;
+  readonly sandboxViolations?: {
+    readonly count: number;
+    readonly operations: Readonly<Record<string, number>>;
+    readonly paths: readonly string[];
+  };
 }
 
 export interface ToolTerminalExecutor {

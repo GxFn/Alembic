@@ -184,6 +184,23 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         command: { type: "string" },
         cwd: { type: "string" },
         timeout: { type: "integer", minimum: 1, maximum: 120000, default: 30000 },
+        network: {
+          type: "string",
+          enum: ["none", "allowlisted", "open"],
+          default: "none",
+          description: "Per-command sandbox network intent.",
+        },
+        filesystem: {
+          type: "string",
+          enum: ["read-only", "project-write", "workspace-write"],
+          default: "project-write",
+          description: "Per-command sandbox filesystem write intent.",
+        },
+        env: {
+          type: "object",
+          additionalProperties: true,
+          description: "Small per-command environment overlay. Secret-like keys are rejected.",
+        },
       },
       required: ["command"],
       additionalProperties: false,

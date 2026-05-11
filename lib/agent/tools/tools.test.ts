@@ -14,7 +14,18 @@ import {
   RecipeLifecycleStore,
 } from "../../mainline/knowledge/index.js";
 import { InMemoryMainlineSearchIndex } from "../../mainline/search/index.js";
-import { createDefaultToolHandlers, createDefaultToolRegistry, ToolRouter } from "./index.js";
+import {
+  buildToolSandboxEnvironment,
+  buildToolSeatbeltProfile,
+  createDefaultToolHandlers,
+  createDefaultToolRegistry,
+  createToolSandboxProfile,
+  DefaultToolTerminalOutputCompressor,
+  parseToolSandboxViolations,
+  summarizeToolSandboxViolations,
+  ToolRouter,
+  ToolSandboxTerminalExecutor,
+} from "./index.js";
 import type { ToolFailureEnvelope, ToolResultEnvelope, ToolSuccessEnvelope } from "./types.js";
 import { toolSuccess } from "./types.js";
 
@@ -342,6 +353,20 @@ describe("terminal.execute", () => {
     });
     expectFailure(pipeToShell);
     expect(pipeToShell.error.code).toBe("command_blocked");
+
+    const evalPayload = await router.invoke({
+      name: "terminal.execute",
+      input: { command: "printf ok; eval echo unsafe" },
+    });
+    expectFailure(evalPayload);
+    expect(evalPayload.error.code).toBe("command_blocked");
+
+    const killallPayload = await router.invoke({
+      name: "terminal.execute",
+      input: { command: "printf ok && killall Finder" },
+    });
+    expectFailure(killallPayload);
+    expect(killallPayload.error.code).toBe("command_blocked");
   });
 
   it("compresses terminal output with the default command-aware compressor", async () => {
@@ -367,6 +392,163 @@ describe("terminal.execute", () => {
     expectOk(result);
     expect((result.data as { output: string }).output).toContain("[lint-output]");
     expect((result.data as { output: string }).output).toContain("error TS2322");
+  });
+
+  it("returns sandbox audit metadata from the default agent terminal executor", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "alembic-agent-terminal-sandbox-"));
+    const router = new ToolRouter({
+      dependencies: {
+        projectRoot: root,
+        terminalExecutor: new ToolSandboxTerminalExecutor({ mode: "disabled" }),
+      },
+    });
+
+    const result = await router.invoke({
+      name: "terminal.execute",
+      input: { command: "printf sandbox-ok" },
+    });
+
+    expectOk(result);
+    expect(result.data).toMatchObject({
+      output: "sandbox-ok",
+      sandboxed: false,
+      degradeReason: "disabled",
+    });
+  });
+
+  it("passes per-command sandbox intents and safe env overlays to the executor", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "alembic-agent-terminal-intents-"));
+    const seen: unknown[] = [];
+    const router = new ToolRouter({
+      dependencies: {
+        projectRoot: root,
+        terminalExecutor: {
+          execute: async (request) => {
+            seen.push(request);
+            return { stdout: request.env?.SAFE_FLAG ?? "", stderr: "", exitCode: 0 };
+          },
+        },
+      },
+    });
+
+    const result = await router.invoke({
+      name: "terminal.execute",
+      input: {
+        command: "printf $SAFE_FLAG",
+        network: "allowlisted",
+        filesystem: "read-only",
+        env: { SAFE_FLAG: "1" },
+      },
+    });
+
+    expectOk(result);
+    expect(result.data).toMatchObject({
+      output: "1",
+      network: "allowlisted",
+      filesystem: "read-only",
+      envKeys: ["SAFE_FLAG"],
+    });
+    expect(seen[0]).toMatchObject({
+      network: "allowlisted",
+      filesystem: "read-only",
+      env: { SAFE_FLAG: "1" },
+    });
+
+    const secretEnv = await router.invoke({
+      name: "terminal.execute",
+      input: { command: "printf bad", env: { API_TOKEN: "secret" } },
+    });
+    expectFailure(secretEnv);
+    expect(secretEnv.error.code).toBe("invalid_input");
+  });
+});
+
+describe("agent tool sandbox", () => {
+  it("builds a Seatbelt profile with project write scope, sensitive path denies, and no network", () => {
+    const profile = createToolSandboxProfile({
+      mode: "enforce",
+      network: "none",
+      filesystem: "project-write",
+      cwd: "/tmp/project",
+      projectRoot: "/tmp/project",
+      timeoutMs: 30_000,
+      env: { SAFE_FLAG: "1" },
+    });
+
+    const sbpl = buildToolSeatbeltProfile(profile);
+
+    expect(profile.filesystem.writePaths).toContain("/tmp/project");
+    expect(profile.filesystem.denyPaths.some((item) => item.endsWith("/.ssh"))).toBe(true);
+    expect(sbpl).toContain("(deny network-outbound)");
+    expect(sbpl).toContain('(allow file-write* (subpath "/tmp/project"))');
+  });
+
+  it("sanitizes command environments and strips secret-like host variables", () => {
+    const previous = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "secret";
+    try {
+      const profile = createToolSandboxProfile({
+        mode: "enforce",
+        network: "none",
+        filesystem: "read-only",
+        cwd: "/tmp/project",
+        projectRoot: "/tmp/project",
+        timeoutMs: 30_000,
+        env: { SAFE_FLAG: "1", OPENAI_API_KEY: "also-secret" },
+      });
+
+      const env = buildToolSandboxEnvironment(
+        { SAFE_RUNTIME_FLAG: "2", OPENAI_API_KEY: "runtime-secret" },
+        profile,
+      );
+
+      expect(env.SAFE_FLAG).toBe("1");
+      expect(env.SAFE_RUNTIME_FLAG).toBe("2");
+      expect(env.OPENAI_API_KEY).toBeUndefined();
+      expect(env.HOME).toBe(profile.filesystem.tempDir);
+      expect(env.SANDBOX).toBe("1");
+    } finally {
+      if (previous === undefined) {
+        delete process.env.OPENAI_API_KEY;
+      } else {
+        process.env.OPENAI_API_KEY = previous;
+      }
+    }
+  });
+
+  it("parses and summarizes Seatbelt violations for agent audit output", () => {
+    const violations = parseToolSandboxViolations(
+      [
+        "sandbox: sh(123) deny(1) file-write-create /tmp/project/.git/index.lock",
+        "sandbox: node(124) deny(1) network-outbound 93.184.216.34:443",
+      ].join("\n"),
+    );
+
+    expect(violations).toHaveLength(2);
+    expect(summarizeToolSandboxViolations(violations)).toEqual({
+      count: 2,
+      operations: { "file-write-create": 1, "network-outbound": 1 },
+      paths: ["/tmp/project/.git/index.lock", "93.184.216.34:443"],
+    });
+  });
+
+  it("keeps old git log terminal compression behavior", () => {
+    const compressor = new DefaultToolTerminalOutputCompressor();
+    const compressed = compressor.compress(
+      [
+        "commit 1234567890abcdef",
+        "Author: Ada Lovelace <ada@example.com>",
+        "Date:   Mon May 11 10:00:00 2026 +0800",
+        "",
+        "    Add agent sandbox tools",
+      ].join("\n"),
+      { command: "git log -1" },
+    );
+
+    expect(compressed).toContain("[git-log]");
+    expect(compressed).toContain(
+      "1234567 Mon May 11 10:00:00 Ada Lovelace: Add agent sandbox tools",
+    );
   });
 });
 

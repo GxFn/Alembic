@@ -6,6 +6,7 @@ export * from "./handlers/index.js";
 export * from "./memory-store.js";
 export * from "./registry.js";
 export * from "./router.js";
+export * from "./sandbox.js";
 export * from "./schema.js";
 export * from "./terminal-output-compressor.js";
 export * from "./types.js";
