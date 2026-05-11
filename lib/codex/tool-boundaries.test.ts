@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createDefaultToolRegistry } from "../agent/tools/index.js";
@@ -35,15 +35,22 @@ describe("tool surface boundaries", () => {
   });
 
   it("keeps Codex public tool implementations away from internal Agent tools", () => {
-    const codexToolImports = ["tools.ts", "search.ts", "structure.ts"].flatMap((file) => {
-      const source = readFileSync(join(repoRoot, "lib", "codex", file), "utf8");
-      return [...source.matchAll(/from\s+["']([^"']+)["']/g)].map((match) => match[1]);
+    const codexToolImports = codexProductionFiles().flatMap((file) => {
+      const source = readFileSync(file, "utf8");
+      return [...source.matchAll(/from\s+["']([^"']+)["']/g)].map((match) => ({
+        file: relative(repoRoot, file),
+        specifier: match[1],
+      }));
     });
 
     // Codex public tools 只能读 mainline read models；internal Agent tools 留在 lib/agent/tools。
-    for (const specifier of codexToolImports) {
-      expect(specifier).not.toMatch(/(?:\.\.\/)*agent\/tools/);
-      expect(specifier).not.toContain("lib/agent/tools");
+    for (const { file, specifier } of codexToolImports) {
+      expect({ file, specifier }).not.toMatchObject({
+        specifier: expect.stringMatching(/(?:\.\.\/)*agent\/tools/),
+      });
+      expect({ file, specifier }).not.toMatchObject({
+        specifier: expect.stringContaining("lib/agent/tools"),
+      });
     }
   });
 
@@ -76,4 +83,11 @@ describe("tool surface boundaries", () => {
 function intersection(left: readonly string[], right: readonly string[]): string[] {
   const rightSet = new Set(right);
   return left.filter((value) => rightSet.has(value)).sort();
+}
+
+function codexProductionFiles(): string[] {
+  const codexDir = join(repoRoot, "lib", "codex");
+  return readdirSync(codexDir)
+    .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+    .map((file) => join(codexDir, file));
 }

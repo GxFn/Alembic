@@ -36,6 +36,7 @@ const BLOCKED_BINS = new Set([
 
 const PIPE_TO_SHELL_RE =
   /\b(curl|wget)\b.*\|\s*(sh|bash|zsh|dash|ksh|csh|tcsh|fish|perl|python|ruby|node)\b/i;
+const SHELL_SEGMENT_RE = /[;&|()]+/;
 const ANSI_ESCAPE_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 
 export const terminalExecuteHandler: ToolHandler = async (invocation, context) => {
@@ -194,6 +195,14 @@ function checkCommandSafety(command: string): { readonly safe: boolean; readonly
   const firstWord = normalized.split(/\s+/)[0];
   if (firstWord && BLOCKED_BINS.has(firstWord)) {
     return { safe: false, reason: `Blocked executable: ${firstWord}` };
+  }
+  for (const segment of normalized.split(SHELL_SEGMENT_RE)) {
+    const executable = segment.trim().split(/\s+/)[0];
+    if (executable && BLOCKED_BINS.has(executable)) {
+      // 中文注释：Agent terminal 可以执行有界命令，但不能把危险可执行文件藏在
+      // 分号、管道或子 shell 后面绕过首词检查。
+      return { safe: false, reason: `Blocked executable: ${executable}` };
+    }
   }
   return { safe: true };
 }

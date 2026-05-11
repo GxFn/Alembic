@@ -224,6 +224,118 @@ describe("Codex public search and structure tools", () => {
     });
   });
 
+  it("degrades alembic_search to sparse when vectors exist without an embedding provider", async () => {
+    const workspace = initializeCodexWorkspace({
+      projectRoot: currentProjectRoot(),
+      standard: true,
+    });
+    const persistence = await createMainlineWorkflowPersistence({
+      projectRoot: workspace.projectRoot,
+      dataRoot: workspace.dataRoot,
+      mode: workspace.mode,
+    });
+    const recipe = createRecipe({
+      id: "codex-vector-without-provider",
+      title: "Codex vector without provider",
+      kind: "workflow",
+      status: "active",
+      summary: "Public search must report sparse mode when no embedding provider exists.",
+      trigger: "vector without embedding provider",
+      confidence: 0.9,
+    });
+    const [document] = projectMainlineSearchDocuments({ recipes: [recipe] });
+    if (!document) {
+      throw new Error("Expected projected recipe document.");
+    }
+    persistence.searchIndex.upsert([document]);
+    await persistence.searchIndex.flush();
+    await persistence.vectorStore.upsert([
+      {
+        id: document.id,
+        vector: [1, 0],
+        content: "semantic vector exists but provider is missing",
+      },
+    ]);
+
+    const result = await handleCodexTool("alembic_search", {
+      query: "vector without embedding provider",
+      projectRoot: workspace.projectRoot,
+      limit: 5,
+    });
+
+    expect(result.success).toBe(true);
+    const data = result.data as {
+      readonly warnings: readonly string[];
+      readonly sources: {
+        readonly semantic: string;
+        readonly vectorDocumentCount: number;
+      };
+      readonly hits: ReadonlyArray<{ readonly id: string; readonly reasons: readonly string[] }>;
+    };
+    expect(data.sources).toMatchObject({ semantic: "sparse", vectorDocumentCount: 1 });
+    expect(data.warnings).toContain("semantic_search_embedding_provider_missing");
+    expect(data.hits[0]).toMatchObject({ id: "recipe:codex-vector-without-provider" });
+    expect(data.hits[0]?.reasons).not.toContain("vector:cosine");
+  });
+
+  it("reports sparse degradation when the configured embedding provider fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("embedding down", { status: 503 })),
+    );
+    process.env.ALEMBIC_EMBED_PROVIDER = "openai";
+    process.env.ALEMBIC_EMBED_MODEL = "text-embedding-3-small";
+    process.env.ALEMBIC_OPENAI_API_KEY = "sk-test";
+    const workspace = initializeCodexWorkspace({
+      projectRoot: currentProjectRoot(),
+      standard: true,
+    });
+    const persistence = await createMainlineWorkflowPersistence({
+      projectRoot: workspace.projectRoot,
+      dataRoot: workspace.dataRoot,
+      mode: workspace.mode,
+    });
+    const recipe = createRecipe({
+      id: "codex-semantic-provider-failure",
+      title: "Codex semantic provider failure",
+      kind: "workflow",
+      status: "active",
+      summary: "Public search must not report hybrid when provider calls fail.",
+      trigger: "semantic provider failure",
+      confidence: 0.9,
+    });
+    const [document] = projectMainlineSearchDocuments({ recipes: [recipe] });
+    if (!document) {
+      throw new Error("Expected projected recipe document.");
+    }
+    persistence.searchIndex.upsert([document]);
+    await persistence.searchIndex.flush();
+    await persistence.vectorStore.upsert([
+      {
+        id: document.id,
+        vector: [1, 0],
+        content: "semantic provider failure vector",
+      },
+    ]);
+
+    const result = await handleCodexTool("alembic_search", {
+      query: "semantic provider failure",
+      projectRoot: workspace.projectRoot,
+      limit: 5,
+    });
+
+    expect(result.success).toBe(true);
+    const data = result.data as {
+      readonly warnings: readonly string[];
+      readonly sources: { readonly semantic: string; readonly vectorDocumentCount: number };
+      readonly hits: ReadonlyArray<{ readonly id: string; readonly reasons: readonly string[] }>;
+    };
+    expect(data.sources).toMatchObject({ semantic: "sparse", vectorDocumentCount: 1 });
+    expect(data.warnings).toContain("semantic_search_degraded_used_sparse");
+    expect(data.hits[0]).toMatchObject({ id: "recipe:codex-semantic-provider-failure" });
+    expect(data.hits[0]?.reasons).not.toContain("fusion:rrf");
+  });
+
   it("handles alembic_structure from the ProjectIntelligence artifact", async () => {
     const workspace = initializeCodexWorkspace({
       projectRoot: currentProjectRoot(),

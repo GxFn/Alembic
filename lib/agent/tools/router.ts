@@ -28,8 +28,11 @@ export class ToolRouter {
   readonly #dependencies: ToolRuntimeDependencies;
   readonly #compressor: ToolOutputCompressor;
   readonly #toolLocks = new Map<string, Promise<void>>();
-  #globalLock: Promise<void> | null = null;
-  #globalRelease: (() => void) | null = null;
+  #exclusiveLock: Promise<void> | null = null;
+  #exclusivePending: Promise<void> | null = null;
+  #exclusiveRelease: (() => void) | null = null;
+  #activeNonExclusiveTools = 0;
+  readonly #nonExclusiveIdleWaiters: Array<() => void> = [];
 
   constructor(options: ToolRouterOptions = {}) {
     this.#registry = options.registry ?? createDefaultToolRegistry();
@@ -147,14 +150,22 @@ export class ToolRouter {
   async #acquireLock(descriptor: { readonly name: string; readonly concurrency?: string }) {
     const mode = descriptor.concurrency ?? "parallel";
     if (mode === "exclusive") {
-      await this.#acquireGlobalLock();
-      return () => this.#releaseGlobalLock();
+      await this.#acquireExclusiveLock();
+      return () => this.#releaseExclusiveLock();
     }
     if (mode === "single") {
+      await this.#waitForExclusiveClear();
       await this.#acquireToolLock(descriptor.name);
-      return () => this.#releaseToolLock(descriptor.name);
+      await this.#waitForExclusiveClear();
+      this.#activeNonExclusiveTools += 1;
+      return () => {
+        this.#releaseNonExclusiveTool();
+        this.#releaseToolLock(descriptor.name);
+      };
     }
-    return () => undefined;
+    await this.#waitForExclusiveClear();
+    this.#activeNonExclusiveTools += 1;
+    return () => this.#releaseNonExclusiveTool();
   }
 
   async #acquireToolLock(name: string): Promise<void> {
@@ -175,21 +186,54 @@ export class ToolRouter {
     (promise as (Promise<void> & { release?: () => void }) | undefined)?.release?.();
   }
 
-  async #acquireGlobalLock(): Promise<void> {
-    while (this.#globalLock) {
-      await this.#globalLock;
+  async #waitForExclusiveClear(): Promise<void> {
+    while (this.#exclusivePending || this.#exclusiveLock) {
+      await (this.#exclusivePending ?? this.#exclusiveLock);
     }
-    let release!: () => void;
-    this.#globalLock = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    this.#globalRelease = release;
   }
 
-  #releaseGlobalLock(): void {
-    const release = this.#globalRelease;
-    this.#globalLock = null;
-    this.#globalRelease = null;
+  async #acquireExclusiveLock(): Promise<void> {
+    await this.#waitForExclusiveClear();
+    let releasePending!: () => void;
+    this.#exclusivePending = new Promise<void>((resolve) => {
+      releasePending = resolve;
+    });
+
+    try {
+      await this.#waitForNonExclusiveToolsIdle();
+      let release!: () => void;
+      this.#exclusiveLock = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      this.#exclusiveRelease = release;
+    } finally {
+      this.#exclusivePending = null;
+      releasePending();
+    }
+  }
+
+  async #waitForNonExclusiveToolsIdle(): Promise<void> {
+    while (this.#activeNonExclusiveTools > 0) {
+      await new Promise<void>((resolve) => {
+        this.#nonExclusiveIdleWaiters.push(resolve);
+      });
+    }
+  }
+
+  #releaseNonExclusiveTool(): void {
+    this.#activeNonExclusiveTools = Math.max(0, this.#activeNonExclusiveTools - 1);
+    if (this.#activeNonExclusiveTools > 0) {
+      return;
+    }
+    for (const resolve of this.#nonExclusiveIdleWaiters.splice(0)) {
+      resolve();
+    }
+  }
+
+  #releaseExclusiveLock(): void {
+    const release = this.#exclusiveRelease;
+    this.#exclusiveLock = null;
+    this.#exclusiveRelease = null;
     release?.();
   }
 }

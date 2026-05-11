@@ -269,13 +269,20 @@ async function searchWithOptionalHybrid(input: {
       vectorStore,
       embedder: new MainlineEmbeddingPortBatchEmbedder(embeddingProvider),
     });
+    const hits = await hybrid.search(input.query, {
+      sparseLimit: Math.max(input.query.limit ?? DEFAULT_LIMIT, 50),
+      vectorLimit: Math.max(input.query.limit ?? DEFAULT_LIMIT, 50),
+    });
+    const usedVector = hits.some(isHybridVectorHit);
+    if (!usedVector) {
+      input.warnings.push("semantic_search_degraded_used_sparse");
+    }
     return {
-      hits: await hybrid.search(input.query, {
-        sparseLimit: Math.max(input.query.limit ?? DEFAULT_LIMIT, 50),
-        vectorLimit: Math.max(input.query.limit ?? DEFAULT_LIMIT, 50),
-      }),
+      hits,
       vectorDocumentCount,
-      semantic: "hybrid",
+      // 中文注释：MainlineHybridSearch 会把 embedding/vector 失败降级成 sparse 命中；
+      // public tool 只有在结果真的融合了 vector 信号时才对外报告 hybrid。
+      semantic: usedVector ? "hybrid" : "sparse",
     };
   } catch {
     input.warnings.push("semantic_search_failed_used_sparse");
@@ -285,6 +292,10 @@ async function searchWithOptionalHybrid(input: {
       semantic: "sparse",
     };
   }
+}
+
+function isHybridVectorHit(hit: CodexSearchBackendHit): boolean {
+  return "sources" in hit && hit.sources.includes("vector") && hit.meta?.degraded !== true;
 }
 
 function parseSearchInput(args: Record<string, unknown>):

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import type { MainlineEmbeddingPort } from "../ai/index.js";
 import { InMemoryMainlineJobLedger } from "../data/index.js";
 import { createRecipe, createRecipeKnowledgePayload } from "../knowledge/index.js";
 import { MainlineCompileSession } from "./index.js";
@@ -103,4 +104,48 @@ describe("mainline compile session", () => {
       await fs.rm(dataRoot, { recursive: true, force: true });
     }
   });
+
+  it("keeps sparse SearchIndex persistence when embedding fails", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "alembic-compile-root-"));
+    const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), "alembic-compile-data-"));
+    try {
+      await fs.mkdir(path.join(root, "src"), { recursive: true });
+      await fs.writeFile(
+        path.join(root, "src", "search.ts"),
+        "export function search() { return 'sparse'; }\n",
+      );
+      const result = await new MainlineCompileSession({
+        embeddingProvider: failingEmbeddingProvider(),
+      }).run({
+        projectRoot: root,
+        mode: "cold-start",
+        workspace: { dataRoot },
+        generatedAt: 1,
+      });
+
+      expect(result.search.persistedDocuments).toBeGreaterThan(0);
+      expect(result.search.embeddingFailures).toBeGreaterThan(0);
+      const searchSnapshot = JSON.parse(
+        await fs.readFile(path.join(dataRoot, ".asd/context/search-index.json"), "utf8"),
+      ) as { readonly documents: readonly { readonly id: string }[] };
+      expect(searchSnapshot.documents).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "file:src/search.ts" })]),
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+      await fs.rm(dataRoot, { recursive: true, force: true });
+    }
+  });
 });
+
+function failingEmbeddingProvider(): MainlineEmbeddingPort {
+  return {
+    status: () => ({ provider: "test", model: "failing", ready: true, mock: false }),
+    embedText: async () => {
+      throw new Error("embedding unavailable");
+    },
+    embedBatch: async () => {
+      throw new Error("embedding unavailable");
+    },
+  };
+}

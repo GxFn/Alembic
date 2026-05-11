@@ -485,9 +485,11 @@ export class MainlineCompileSession {
       recipes: contentMining.recipes,
       sourceRefs: contentMining.sourceRefs,
     });
+    await flushSearchIndex(runtime.searchIndex);
     const persistedSearchSnapshot = await runtime.searchIndexStore.saveDocuments(
       runtime.searchIndex.snapshot(),
     );
+    await flushSearchIndex(runtime.searchIndex);
     markProgress(progressCheckpoints, "search-index", "completed");
 
     // 指纹保存放在所有写入之后，避免失败的增量运行污染下一轮 baseline。
@@ -779,6 +781,13 @@ function searchReport(
     contentDocumentsUpserted: contentSearch.upserted,
     contentDocumentsRemoved: contentSearch.removed,
   };
+}
+
+async function flushSearchIndex(searchIndex: MainlineSearchIndex): Promise<void> {
+  const flushable = searchIndex as MainlineSearchIndex & { flush?: () => Promise<void> };
+  // 中文注释：持久化 SearchIndex 可能把 upsert/remove 排队为异步 atomic write；
+  // compile 返回前必须等待队列清空，避免 daemon/job result 已完成但 dataRoot 仍在写。
+  await flushable.flush?.();
 }
 
 function recipeMarkdownReport(
