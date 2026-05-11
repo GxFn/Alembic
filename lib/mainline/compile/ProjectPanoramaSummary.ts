@@ -416,7 +416,9 @@ function findModuleCycles(
     }
   }
 
-  return cycles.sort((left, right) => left.cycle.join("\u0000").localeCompare(right.cycle.join("\u0000")));
+  return cycles.sort((left, right) =>
+    left.cycle.join("\u0000").localeCompare(right.cycle.join("\u0000")),
+  );
 }
 
 function inferModuleLayers(
@@ -546,8 +548,8 @@ function canonicalizeModuleCycle(cycle: readonly string[]): string[] {
 
 function pathFromFqn(fqn: string): string {
   return fqn.startsWith("symbol:")
-    ? fqn.slice("symbol:".length).split("::")[0] ?? fqn
-    : fqn.split("::")[0] ?? fqn;
+    ? (fqn.slice("symbol:".length).split("::")[0] ?? fqn)
+    : (fqn.split("::")[0] ?? fqn);
 }
 
 function countSymbolsByFile(artifact: MainlineProjectIntelligenceArtifact): Map<string, number> {

@@ -1,77 +1,70 @@
 import path from "node:path";
-import {
+import type {
   MainlineSourceFileScanner,
-  type MainlineSourceFileScanOptions,
-  type MainlineSourceFileScanResult,
+  MainlineSourceFileScanOptions,
+  MainlineSourceFileScanResult,
 } from "../../engineering/code/index.js";
 import type { MainlineEmbeddingPort } from "../ai/index.js";
 import {
   epochSecondsNow,
-  MainlineAtomicFileStore,
+  type MainlineAtomicFileStore,
   type MainlineFileSystemPort,
   MainlineValidationError,
   type MainlineWorkspacePathInput,
-  MainlineWorkspacePaths,
-  MainlineWriteBoundary,
-  NodeMainlineFileSystem,
-  normalizeMainlinePosixPath,
-  uniqueMainlinePosixPaths,
+  type MainlineWorkspacePaths,
+  type MainlineWriteBoundary,
 } from "../core/index.js";
 import {
   type ContextIndexWriter,
   createMainlineFileFingerprintSnapshot,
   diffMainlineFileFingerprintSnapshots,
-  FileFingerprintSnapshotStore,
-  InMemoryContextIndex,
-  InMemoryMainlineJobLedger,
-  type MainlineFileFingerprintInput,
+  type FileFingerprintSnapshotStore,
   type MainlineFileFingerprintSnapshot,
   type MainlineFileFingerprintSnapshotDiff,
   type MainlineJobLedgerPort,
-  type RecipeMarkdownFileIndex,
 } from "../data/index.js";
+import type { Recipe, RecipeMarkdownStore } from "../knowledge/index.js";
 import type {
-  MainlineAtomicFileStore as MainlineJsonAtomicFileStore,
-  MainlineZonedPath as MainlineJsonZonedPath,
-} from "../data/JsonStores.js";
-import type { MainlineProjectIntelligenceFileInput } from "../graph/index.js";
-import {
-  type Recipe,
-  type RecipeMarkdownLoadResult,
-  RecipeMarkdownStore,
-  type RecipeMarkdownWriteResult,
-} from "../knowledge/index.js";
-import {
-  InMemoryMainlineSearchIndex,
-  type MainlineSearchIndex,
-  type MainlineSearchIndexSnapshot,
+  MainlineSearchIndex,
   MainlineSearchIndexStore,
-  type MainlineVectorStore,
+  MainlineVectorStore,
 } from "../search/index.js";
-import { CompileArtifactWriter } from "./CompileArtifactWriter.js";
 import {
-  type MainlineCompileSearchMaterializeResult,
-  MainlineCompileSearchMaterializer,
-  MainlineEmbeddingPortBatchEmbedder,
-} from "./CompileSearchMaterializer.js";
+  compileCancelReport,
+  compileSessionJobResult,
+  fileContentByPath,
+  flushSearchIndex,
+  markProgress,
+  mergeCompileRecipes,
+  mergeExplicitFileChanges,
+  reachCancelCheckpoint,
+  recipeMarkdownReport,
+  recipeMarkdownWarning,
+  recipeMarkdownWritesToFiles,
+  restoreSearchIndex,
+  runProjectIntelligence,
+  scanCompileFiles,
+  searchReport,
+  skippedFileWarning,
+} from "./CompileSessionHelpers.js";
+import {
+  createMainlineCompileSessionRuntime,
+  type MainlineCompileSessionRuntime,
+} from "./CompileSessionRuntime.js";
+
+export {
+  MAINLINE_FILE_FINGERPRINT_SNAPSHOT_STORE_PATH,
+  MAINLINE_SEARCH_INDEX_STORE_PATH,
+} from "./CompileSessionPaths.js";
+
+import type { MainlineCompileSearchMaterializer } from "./CompileSearchMaterializer.js";
 import type { ContentMiningPipelineArtifacts } from "./ContentMiningPipeline.js";
-import { ContentMiningRunner } from "./ContentMiningRunner.js";
-import {
-  JsonMainlineEngineeringWorkflowArtifactStore,
-  MAINLINE_ENGINEERING_CODE_GRAPH_STORE_PATH,
-  MAINLINE_ENGINEERING_ENTITY_GRAPH_STORE_PATH,
-  MAINLINE_ENGINEERING_PANORAMA_SNAPSHOT_STORE_PATH,
-  MAINLINE_ENGINEERING_WORKFLOW_ARTIFACT_STORE_PATH,
-  type MainlineEngineeringWorkflowArtifactStore,
-} from "./EngineeringWorkflowArtifactStore.js";
-import {
-  JsonMainlineProjectIntelligenceArtifactStore,
-  MAINLINE_PROJECT_INTELLIGENCE_ARTIFACT_STORE_PATH,
-  type MainlineProjectIntelligenceArtifactStore,
-} from "./ProjectIntelligenceArtifactStore.js";
-import {
+import type { ContentMiningRunner } from "./ContentMiningRunner.js";
+import type { MainlineEngineeringWorkflowArtifactStore } from "./EngineeringWorkflowArtifactStore.js";
+import type { MainlineProjectIntelligenceArtifactStore } from "./ProjectIntelligenceArtifactStore.js";
+import type {
   MainlineProjectIntelligenceRunner,
-  type MainlineProjectIntelligenceRunnerResult,
+  MainlineProjectIntelligenceRunnerResult,
 } from "./ProjectIntelligenceRunner.js";
 import {
   type MainlineProjectPanoramaSummary,
@@ -81,24 +74,19 @@ import {
   linkMainlineRecipeEvidence,
   type MainlineRecipeEvidenceLinkReport,
 } from "./RecipeEvidenceLinker.js";
-import { RecipeImpactAnalyzer } from "./RecipeImpactAnalyzer.js";
+import type { RecipeImpactAnalyzer } from "./RecipeImpactAnalyzer.js";
 import {
   createEmptyMainlineRecipeImpactPlan,
   type MainlineRecipeImpactPlan,
 } from "./RecipeImpactPlan.js";
 import {
   createEmptyMainlineSourceRefRepairPlan,
-  type MainlineSourceRefMovedFile,
   type MainlineSourceRefRepairPlan,
 } from "./RecipePathRepairer.js";
 import {
   detectMainlineSourceRefMovedFiles,
-  SourceRefRepairService,
+  type SourceRefRepairService,
 } from "./SourceRefRepairService.js";
-
-export const MAINLINE_FILE_FINGERPRINT_SNAPSHOT_STORE_PATH =
-  "context/file-fingerprint-snapshot.json";
-export const MAINLINE_SEARCH_INDEX_STORE_PATH = "context/search-index.json";
 
 export type MainlineCompileSessionMode = "cold-start" | "incremental";
 
@@ -237,62 +225,6 @@ export interface MainlineCompileSessionKernel {
   readonly jobLedger: MainlineJobLedgerPort;
 }
 
-interface MainlineCompileSessionRuntime {
-  readonly workspacePaths: MainlineWorkspacePaths;
-  readonly writeBoundary: MainlineWriteBoundary;
-  readonly fileStore: MainlineAtomicFileStore;
-  readonly fileSystem: Pick<MainlineFileSystemPort, "readText">;
-  readonly scanner: MainlineSourceFileScanner;
-  readonly contextIndex: ContextIndexWriter;
-  readonly searchIndex: MainlineSearchIndex;
-  readonly vectorStore?: MainlineVectorStore;
-  readonly embeddingProvider?: MainlineEmbeddingPort;
-  readonly searchIndexStore: MainlineSearchIndexStore;
-  readonly artifactStore: MainlineProjectIntelligenceArtifactStore;
-  readonly engineeringWorkflowArtifactStore: MainlineEngineeringWorkflowArtifactStore;
-  readonly fingerprintStore: FileFingerprintSnapshotStore;
-  readonly projectIntelligenceRunner: MainlineProjectIntelligenceRunner;
-  readonly contentMiningRunner: ContentMiningRunner;
-  readonly recipeImpactAnalyzer: RecipeImpactAnalyzer;
-  readonly sourceRefRepairService: SourceRefRepairService;
-  readonly recipeMarkdownStore: RecipeMarkdownStore;
-  readonly searchMaterializer: MainlineCompileSearchMaterializer;
-  readonly jobLedger: MainlineJobLedgerPort;
-}
-
-interface ScannedCompileFiles {
-  readonly scanResult: MainlineSourceFileScanResult;
-  readonly projectFiles: MainlineProjectIntelligenceFileInput[];
-  readonly fingerprintFiles: MainlineFileFingerprintInput[];
-  readonly warnings: string[];
-}
-
-const DEFAULT_MAX_FILE_BYTES = 512 * 1024;
-
-class MainlineJsonFileStoreAdapter implements MainlineJsonAtomicFileStore {
-  readonly #fileStore: MainlineAtomicFileStore;
-
-  constructor(fileStore: MainlineAtomicFileStore) {
-    this.#fileStore = fileStore;
-  }
-
-  readText(target: MainlineJsonZonedPath): Promise<string | null> {
-    return this.#fileStore.readText(jsonStoreTargetToCore(target));
-  }
-
-  readJson<T>(target: MainlineJsonZonedPath): Promise<T | null> {
-    return this.#fileStore.readJson<T>(jsonStoreTargetToCore(target));
-  }
-
-  writeJsonAtomic(target: MainlineJsonZonedPath, value: unknown): Promise<void> {
-    return this.#fileStore.writeJsonAtomic(jsonStoreTargetToCore(target), value);
-  }
-
-  appendJsonl(target: MainlineJsonZonedPath, value: unknown): Promise<void> {
-    return this.#fileStore.appendJsonl(jsonStoreTargetToCore(target), value);
-  }
-}
-
 /**
  * MainlineCompileSession 是冷启动/增量编译的主线入口。
  * 中文注释：它只串起文件指纹、ProjectIntelligence、内容挖掘、Recipe Markdown、
@@ -332,7 +264,7 @@ export class MainlineCompileSession {
 
   async run(request: MainlineCompileSessionRequest): Promise<MainlineCompileSessionResult> {
     const projectRoot = path.resolve(request.projectRoot);
-    const runtime = this.#runtime(projectRoot, request);
+    const runtime = createMainlineCompileSessionRuntime(this.#dependencies, projectRoot, request);
     const generatedAt = request.generatedAt ?? epochSecondsNow();
     const job = await runtime.jobLedger.create({
       kind: "mainline-compile-session",
@@ -534,437 +466,4 @@ export class MainlineCompileSession {
       ],
     };
   }
-
-  #runtime(
-    projectRoot: string,
-    request: Pick<MainlineCompileSessionRequest, "workspace">,
-  ): MainlineCompileSessionRuntime {
-    const workspacePaths =
-      this.#dependencies.workspacePaths ??
-      new MainlineWorkspacePaths({
-        projectRoot,
-        ...(request.workspace ?? {}),
-      });
-    if (path.resolve(workspacePaths.projectRoot) !== projectRoot) {
-      throw new MainlineValidationError(
-        "Mainline compile session workspacePaths must match request.projectRoot.",
-        {
-          workspaceProjectRoot: workspacePaths.projectRoot,
-          requestProjectRoot: projectRoot,
-        },
-      );
-    }
-
-    const writeBoundary =
-      this.#dependencies.writeBoundary ?? new MainlineWriteBoundary({ workspacePaths });
-    const fileStore = this.#dependencies.fileStore ?? new MainlineAtomicFileStore();
-    const jsonFileStore = new MainlineJsonFileStoreAdapter(fileStore);
-    const fileSystem = this.#dependencies.fileSystem ?? new NodeMainlineFileSystem();
-    const scanner = this.#dependencies.scanner ?? new MainlineSourceFileScanner();
-    const contextIndex = this.#dependencies.contextIndex ?? new InMemoryContextIndex();
-    const searchIndex = this.#dependencies.searchIndex ?? new InMemoryMainlineSearchIndex();
-    const vectorStore = this.#dependencies.vectorStore;
-    const embeddingProvider = this.#dependencies.embeddingProvider;
-    const searchIndexStore =
-      this.#dependencies.searchIndexStore ??
-      new MainlineSearchIndexStore(
-        jsonStoreTarget(writeBoundary.runtime(MAINLINE_SEARCH_INDEX_STORE_PATH)),
-        jsonFileStore,
-      );
-    const artifactStore =
-      this.#dependencies.artifactStore ??
-      new JsonMainlineProjectIntelligenceArtifactStore(
-        jsonStoreTarget(writeBoundary.runtime(MAINLINE_PROJECT_INTELLIGENCE_ARTIFACT_STORE_PATH)),
-        jsonFileStore,
-      );
-    const engineeringWorkflowArtifactStore =
-      this.#dependencies.engineeringWorkflowArtifactStore ??
-      new JsonMainlineEngineeringWorkflowArtifactStore(
-        {
-          workflowResult: jsonStoreTarget(
-            writeBoundary.runtime(MAINLINE_ENGINEERING_WORKFLOW_ARTIFACT_STORE_PATH),
-          ),
-          codeGraph: jsonStoreTarget(
-            writeBoundary.runtime(MAINLINE_ENGINEERING_CODE_GRAPH_STORE_PATH),
-          ),
-          entityGraph: jsonStoreTarget(
-            writeBoundary.runtime(MAINLINE_ENGINEERING_ENTITY_GRAPH_STORE_PATH),
-          ),
-          panoramaSnapshot: jsonStoreTarget(
-            writeBoundary.runtime(MAINLINE_ENGINEERING_PANORAMA_SNAPSHOT_STORE_PATH),
-          ),
-        },
-        jsonFileStore,
-      );
-    const fingerprintStore =
-      this.#dependencies.fingerprintStore ??
-      new FileFingerprintSnapshotStore(
-        jsonStoreTarget(writeBoundary.runtime(MAINLINE_FILE_FINGERPRINT_SNAPSHOT_STORE_PATH)),
-        jsonFileStore,
-      );
-    const projectIntelligenceRunner =
-      this.#dependencies.projectIntelligenceRunner ??
-      new MainlineProjectIntelligenceRunner({
-        scanner,
-        fileSystem,
-        artifactStore,
-        engineeringWorkflowArtifactStore,
-        contextIndex,
-        searchIndex,
-      });
-    const contentMiningRunner =
-      this.#dependencies.contentMiningRunner ??
-      new ContentMiningRunner(new CompileArtifactWriter(contextIndex));
-    const recipeImpactAnalyzer =
-      this.#dependencies.recipeImpactAnalyzer ?? new RecipeImpactAnalyzer();
-    const sourceRefRepairService =
-      this.#dependencies.sourceRefRepairService ?? new SourceRefRepairService();
-    const recipeMarkdownStore =
-      this.#dependencies.recipeMarkdownStore ??
-      new RecipeMarkdownStore(writeBoundary, { fileStore });
-    const searchEmbedder =
-      embeddingProvider === undefined
-        ? undefined
-        : new MainlineEmbeddingPortBatchEmbedder(embeddingProvider);
-    const searchMaterializer =
-      this.#dependencies.searchMaterializer ??
-      new MainlineCompileSearchMaterializer({
-        searchIndex,
-        ...(vectorStore === undefined ? {} : { vectorStore }),
-        ...(searchEmbedder === undefined ? {} : { embedder: searchEmbedder }),
-      });
-    const jobLedger = this.#dependencies.jobLedger ?? new InMemoryMainlineJobLedger();
-
-    return {
-      workspacePaths,
-      writeBoundary,
-      fileStore,
-      fileSystem,
-      scanner,
-      contextIndex,
-      searchIndex,
-      ...(vectorStore === undefined ? {} : { vectorStore }),
-      ...(embeddingProvider === undefined ? {} : { embeddingProvider }),
-      searchIndexStore,
-      artifactStore,
-      engineeringWorkflowArtifactStore,
-      fingerprintStore,
-      projectIntelligenceRunner,
-      contentMiningRunner,
-      recipeImpactAnalyzer,
-      sourceRefRepairService,
-      recipeMarkdownStore,
-      searchMaterializer,
-      jobLedger,
-    };
-  }
-}
-
-async function scanCompileFiles(
-  runtime: MainlineCompileSessionRuntime,
-  request: MainlineCompileSessionRequest,
-): Promise<ScannedCompileFiles> {
-  const maxFileBytes = request.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
-  const scanResult = await runtime.scanner.scan({
-    root: request.projectRoot,
-    ...(request.scan ?? {}),
-  });
-  const projectFiles: MainlineProjectIntelligenceFileInput[] = [];
-  const fingerprintFiles: MainlineFileFingerprintInput[] = [];
-  const warnings: string[] = [];
-
-  for (const file of scanResult.files) {
-    if (file.sizeBytes > maxFileBytes) {
-      warnings.push(`Skipped ${file.relativePath}: file exceeds ${maxFileBytes} bytes.`);
-      continue;
-    }
-    try {
-      const content = await runtime.fileSystem.readText(file.path);
-      fingerprintFiles.push({ path: file.relativePath, content });
-      if (file.kind === "source") {
-        projectFiles.push({
-          path: file.relativePath,
-          content,
-          languageId: file.languageId,
-        });
-      }
-    } catch {
-      warnings.push(`Skipped ${file.relativePath}: file could not be read.`);
-    }
-  }
-
-  return {
-    scanResult,
-    projectFiles,
-    fingerprintFiles,
-    warnings,
-  };
-}
-
-async function runProjectIntelligence(
-  runtime: MainlineCompileSessionRuntime,
-  request: MainlineCompileSessionRequest & { readonly generatedAt: number },
-  input: {
-    readonly projectFiles: readonly MainlineProjectIntelligenceFileInput[];
-    readonly fingerprintDiff: MainlineFileFingerprintSnapshotDiff;
-    readonly movedFiles: readonly MainlineSourceRefMovedFile[];
-  },
-): Promise<MainlineProjectIntelligenceRunnerResult> {
-  if (request.mode === "cold-start") {
-    return runtime.projectIntelligenceRunner.run({
-      projectRoot: request.projectRoot,
-      generatedAt: request.generatedAt,
-      files: input.projectFiles,
-      ...(request.maxFileBytes === undefined ? {} : { maxFileBytes: request.maxFileBytes }),
-      engineeringWorkflow: true,
-    });
-  }
-
-  return runtime.projectIntelligenceRunner.run({
-    projectRoot: request.projectRoot,
-    generatedAt: request.generatedAt,
-    ...(request.maxFileBytes === undefined ? {} : { maxFileBytes: request.maxFileBytes }),
-    engineeringWorkflow: true,
-    incremental: {
-      fingerprintDiff: input.fingerprintDiff,
-      ...(input.movedFiles.length === 0 ? {} : { movedFiles: input.movedFiles }),
-      ...(request.changedFiles === undefined ? {} : { changedFiles: request.changedFiles }),
-      ...(request.removedFiles === undefined ? {} : { deletedFiles: request.removedFiles }),
-      ...(request.dependentDepth === undefined ? {} : { dependentDepth: request.dependentDepth }),
-      ...(request.fullRebuildChangeRatio === undefined
-        ? {}
-        : { fullRebuildChangeRatio: request.fullRebuildChangeRatio }),
-    },
-  });
-}
-
-function mergeExplicitFileChanges(
-  diff: MainlineFileFingerprintSnapshotDiff,
-  input: {
-    readonly changedFiles?: readonly string[];
-    readonly removedFiles?: readonly string[];
-    readonly currentFiles: readonly string[];
-  },
-): MainlineFileFingerprintSnapshotDiff {
-  const currentFiles = new Set(input.currentFiles.map(normalizeMainlinePosixPath));
-  const removedFiles = uniqueMainlinePosixPaths(input.removedFiles ?? []);
-  const changedFiles = uniqueMainlinePosixPaths(input.changedFiles ?? []).filter(
-    (filePath) => !removedFiles.includes(filePath),
-  );
-  const added = uniqueMainlinePosixPaths(
-    diff.added.filter((filePath) => !removedFiles.includes(filePath)),
-  );
-  const modified = uniqueMainlinePosixPaths([
-    ...diff.modified,
-    ...changedFiles.filter((filePath) => !added.includes(filePath)),
-  ]).filter((filePath) => !removedFiles.includes(filePath));
-  const deleted = uniqueMainlinePosixPaths([...diff.deleted, ...removedFiles]);
-  const unchanged = uniqueMainlinePosixPaths(
-    [...currentFiles].filter(
-      (filePath) => !added.includes(filePath) && !modified.includes(filePath),
-    ),
-  );
-  const total = new Set([...added, ...modified, ...deleted, ...unchanged]).size;
-
-  return {
-    added,
-    modified,
-    deleted,
-    unchanged,
-    changeRatio: total === 0 ? 0 : (added.length + modified.length + deleted.length) / total,
-  };
-}
-
-async function restoreSearchIndex(
-  store: MainlineSearchIndexStore,
-  index: MainlineSearchIndex,
-): Promise<number> {
-  const snapshot = await store.loadSnapshot();
-  if (!snapshot) {
-    return 0;
-  }
-  index.upsert(snapshot.documents);
-  return snapshot.documents.length;
-}
-
-function searchReport(
-  projectIntelligence: MainlineProjectIntelligenceRunnerResult,
-  projectSearch: MainlineCompileSearchMaterializeResult,
-  contentSearch: MainlineCompileSearchMaterializeResult,
-  input: {
-    readonly restoredDocuments: number;
-    readonly persistedSnapshot: MainlineSearchIndexSnapshot;
-  },
-): MainlineCompileSessionSearchReport {
-  const projectDocumentsUpserted =
-    projectSearch.upserted || projectIntelligence.materialized?.searchDocuments.length || 0;
-  const projectDocumentsRemoved =
-    projectSearch.removed || projectIntelligence.materialized?.removedSearchDocumentIds.length || 0;
-
-  return {
-    upserted: projectDocumentsUpserted + contentSearch.upserted,
-    removed: projectDocumentsRemoved + contentSearch.removed,
-    embedded: projectSearch.embedded + contentSearch.embedded,
-    embeddingFailures:
-      projectSearch.embeddingFailures.length + contentSearch.embeddingFailures.length,
-    restoredDocuments: input.restoredDocuments,
-    persistedDocuments: input.persistedSnapshot.documents.length,
-    projectDocumentsUpserted,
-    projectDocumentsRemoved,
-    contentDocumentsUpserted: contentSearch.upserted,
-    contentDocumentsRemoved: contentSearch.removed,
-  };
-}
-
-async function flushSearchIndex(searchIndex: MainlineSearchIndex): Promise<void> {
-  const flushable = searchIndex as MainlineSearchIndex & { flush?: () => Promise<void> };
-  // 中文注释：持久化 SearchIndex 可能把 upsert/remove 排队为异步 atomic write；
-  // compile 返回前必须等待队列清空，避免 daemon/job result 已完成但 dataRoot 仍在写。
-  await flushable.flush?.();
-}
-
-function recipeMarkdownReport(
-  loaded: RecipeMarkdownLoadResult,
-  writes: readonly RecipeMarkdownWriteResult[],
-): MainlineCompileSessionRecipeMarkdownReport {
-  return {
-    loaded: loaded.recipes.length,
-    written: writes.length,
-    loadedPaths: loaded.files.map((file) => file.relativePath),
-    paths: writes.map((write) => write.relativePath),
-    warnings: loaded.warnings.map(recipeMarkdownWarning),
-  };
-}
-
-function recipeMarkdownWritesToFiles(
-  writes: readonly RecipeMarkdownWriteResult[],
-  updatedAt: number,
-): RecipeMarkdownFileIndex[] {
-  return writes.map((write) => ({
-    recipeId: write.recipeId,
-    bucket: write.bucket,
-    relativePath: write.relativePath,
-    contentHash: write.contentHash,
-    updatedAt,
-  }));
-}
-
-function fileContentByPath(files: readonly MainlineFileFingerprintInput[]): Record<string, string> {
-  return Object.fromEntries(
-    files.flatMap((file) => (typeof file.content === "string" ? [[file.path, file.content]] : [])),
-  );
-}
-
-function mergeCompileRecipes(
-  markdownRecipes: readonly Recipe[],
-  requestRecipes: readonly Recipe[],
-): readonly Recipe[] | undefined {
-  if (markdownRecipes.length === 0 && requestRecipes.length === 0) {
-    return undefined;
-  }
-  const recipesById = new Map<string, Recipe>();
-  for (const recipe of markdownRecipes) {
-    recipesById.set(recipe.id, recipe);
-  }
-  for (const recipe of requestRecipes) {
-    recipesById.set(recipe.id, recipe);
-  }
-  return [...recipesById.values()];
-}
-
-function recipeMarkdownWarning(warning: RecipeMarkdownLoadResult["warnings"][number]): string {
-  return `Skipped ${warning.relativePath}: ${warning.message}.`;
-}
-
-function skippedFileWarning(
-  skippedFile: MainlineProjectIntelligenceRunnerResult["skippedFiles"][number],
-): string {
-  return `Skipped ${skippedFile.path}: ${skippedFile.reason}.`;
-}
-
-function markProgress(
-  checkpoints: MainlineCompileProgressCheckpoint[],
-  phase: MainlineCompileProgressPhase,
-  status: MainlineCompileProgressStatus,
-  detail?: string,
-): void {
-  checkpoints.push({
-    phase,
-    status,
-    ...(detail === undefined ? {} : { detail }),
-  });
-}
-
-function reachCancelCheckpoint(
-  checkpoints: MainlineCompileCancelCheckpoint[],
-  kind: MainlineCompileCancelCheckpointKind,
-): void {
-  checkpoints.push({ kind, reached: true, cancellable: false });
-}
-
-function compileCancelReport(
-  checkpoints: readonly MainlineCompileCancelCheckpoint[],
-): MainlineCompileCancelReport {
-  return {
-    supported: false,
-    warnings: [
-      "Mainline compile cancellation is checkpoint-only; deep cancellation is not wired yet.",
-    ],
-    checkpoints,
-  };
-}
-
-function compileSessionJobResult(result: Omit<MainlineCompileSessionResult, "jobId">): unknown {
-  return {
-    mode: result.mode,
-    projectRoot: result.projectRoot,
-    files: {
-      added: result.fingerprintDiff.added.length,
-      modified: result.fingerprintDiff.modified.length,
-      deleted: result.fingerprintDiff.deleted.length,
-      unchanged: result.fingerprintDiff.unchanged.length,
-    },
-    projectIntelligence: {
-      fileCount: result.projectIntelligence.artifact.files.length,
-      symbolCount: result.projectIntelligence.artifact.symbols.length,
-      edgeCount: result.projectIntelligence.artifact.semanticEdges.length,
-      moduleCount: result.projectPanorama.modules.length,
-      dependencyCycleCount: result.projectPanorama.cycleCount,
-    },
-    contentMining: {
-      sourceRefCount: result.contentMining.sourceRefs.length,
-      recipeCount: result.contentMining.recipes.length,
-      edgeCount: result.contentMining.edges.length,
-    },
-    recipeEvidence: result.recipeEvidence.summary,
-    sourceRefRepair: result.sourceRefRepair.summary,
-    recipeImpact: result.recipeImpact.summary,
-    recipeMarkdown: result.recipeMarkdown,
-    search: result.search,
-    progress: {
-      checkpointCount: result.progress.checkpoints.length,
-    },
-    cancel: {
-      supported: result.cancel.supported,
-      checkpointCount: result.cancel.checkpoints.length,
-      warningCount: result.cancel.warnings.length,
-    },
-    warningCount: result.warnings.length,
-  };
-}
-
-function jsonStoreTarget(
-  target: ReturnType<MainlineWriteBoundary["runtime"]>,
-): MainlineJsonZonedPath {
-  return { path: target.absolute, zone: target.zone };
-}
-
-function jsonStoreTargetToCore(
-  target: MainlineJsonZonedPath,
-): ReturnType<MainlineWriteBoundary["runtime"]> {
-  return {
-    zone: "data",
-    absolute: path.resolve(target.path),
-    relative: path.basename(target.path),
-  };
 }
