@@ -85,6 +85,13 @@ Codex MCP tool
 - 新增 `WorkflowReportStore`：持久化 scan/agent/finalizer 汇总，不依赖前端。
 - 新增 `WorkflowFinalizer` port：delivery/wiki/panorama/semantic memory 默认 disabled，可由后续 IDE/Dashboard 插件打开。
 
+### P1 本轮落地状态
+
+- `WorkflowBriefingBuilder` 已落到 `lib/workflows/agent`，统一生成任务 tier、准入说明、证据 starter、缺口信号、影响信号和预算。
+- `AgentDimensionWorkflow` 已改为 briefing 驱动：支持 `critical/high/normal/background` 分层，加入 `knowledge-gap`、`scan-coverage-gap`、`semantic-search-gap` 这类缺口任务，并保留 `agent-guidelines` 的 skill-worthy 输出语义。
+- `WorkflowFinalizer` 已落到 port：Codex 首阶段默认 `DisabledWorkflowFinalizer`，只记录 delivery/wiki/panorama/semantic-memory disabled 状态，不执行旧 IDE/Wiki 副作用。
+- `WorkflowReportStore` 已写入 `dataRoot/.asd/logs/reports`，daemon job result 会带回 report 引用，JSON/Markdown report 记录 scan/agent/finalizer 三段摘要。
+
 ### P2 再下一批迁移
 
 - Project Skill 生成链路接入 finalizer，但不作为 Codex 插件默认行为。

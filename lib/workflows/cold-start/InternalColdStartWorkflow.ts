@@ -4,6 +4,12 @@ import {
   AgentDimensionWorkflow,
   type AgentDimensionWorkflowResult,
 } from "../agent/AgentDimensionWorkflow.js";
+import {
+  DisabledWorkflowFinalizer,
+  type WorkflowFinalizer,
+  type WorkflowFinalizerResult,
+} from "../finalizer/index.js";
+import type { WorkflowReportReference, WorkflowReportStorePort } from "../report/index.js";
 import { ColdStartWorkflow, type ColdStartWorkflowInput } from "./ColdStartWorkflow.js";
 
 export interface InternalColdStartWorkflowInput extends ColdStartWorkflowInput {
@@ -17,6 +23,8 @@ export interface InternalColdStartWorkflowInput extends ColdStartWorkflowInput {
 export interface InternalColdStartWorkflowResult {
   readonly scan: Awaited<ReturnType<ColdStartWorkflow["run"]>>;
   readonly agent?: AgentDimensionWorkflowResult;
+  readonly finalizer?: WorkflowFinalizerResult;
+  readonly report?: WorkflowReportReference;
 }
 
 /**
@@ -27,23 +35,29 @@ export class InternalColdStartWorkflow {
   readonly #coldStart: ColdStartWorkflow;
   readonly #agentWorkflow: AgentDimensionWorkflow;
   readonly #toolDependencies: ToolRuntimeDependencies | undefined;
+  readonly #finalizer: WorkflowFinalizer;
+  readonly #reportStore: WorkflowReportStorePort | undefined;
 
   constructor(
     options: {
       readonly coldStart?: ColdStartWorkflow;
       readonly agentWorkflow?: AgentDimensionWorkflow;
       readonly toolDependencies?: ToolRuntimeDependencies;
+      readonly finalizer?: WorkflowFinalizer;
+      readonly reportStore?: WorkflowReportStorePort;
     } = {},
   ) {
     this.#coldStart = options.coldStart ?? new ColdStartWorkflow();
     this.#agentWorkflow = options.agentWorkflow ?? new AgentDimensionWorkflow();
     this.#toolDependencies = options.toolDependencies;
+    this.#finalizer = options.finalizer ?? new DisabledWorkflowFinalizer();
+    this.#reportStore = options.reportStore;
   }
 
   async run(input: InternalColdStartWorkflowInput): Promise<InternalColdStartWorkflowResult> {
     const scan = await this.#coldStart.run(input);
     if (input.skipAgentFill === true || scan.status !== "completed") {
-      return { scan };
+      return this.#finalize({ scan, source: "internal-cold-start" });
     }
     const agent = await this.#agentWorkflow.run({
       scan,
@@ -54,7 +68,33 @@ export class InternalColdStartWorkflow {
       includeEvolution: false,
       source: "system",
     });
-    return { scan, agent };
+    return this.#finalize({ scan, agent, source: "internal-cold-start" });
+  }
+
+  async #finalize(input: {
+    readonly scan: Awaited<ReturnType<ColdStartWorkflow["run"]>>;
+    readonly agent?: AgentDimensionWorkflowResult;
+    readonly source: string;
+  }): Promise<InternalColdStartWorkflowResult> {
+    const finalizer = await this.#finalizer.run({
+      kind: "bootstrap",
+      projectRoot: input.scan.projectRoot,
+      scan: input.scan,
+      ...(input.agent === undefined ? {} : { agent: input.agent }),
+    });
+    const report = await this.#reportStore?.save({
+      kind: "bootstrap",
+      scan: input.scan,
+      ...(input.agent === undefined ? {} : { agent: input.agent }),
+      finalizer,
+      source: input.source,
+    });
+    return {
+      scan: input.scan,
+      ...(input.agent === undefined ? {} : { agent: input.agent }),
+      finalizer,
+      ...(report === undefined ? {} : { report }),
+    };
   }
 }
 

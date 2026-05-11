@@ -5,6 +5,12 @@ import {
   type AgentDimensionWorkflowResult,
 } from "../agent/AgentDimensionWorkflow.js";
 import {
+  DisabledWorkflowFinalizer,
+  type WorkflowFinalizer,
+  type WorkflowFinalizerResult,
+} from "../finalizer/index.js";
+import type { WorkflowReportReference, WorkflowReportStorePort } from "../report/index.js";
+import {
   KnowledgeRescanWorkflow,
   type KnowledgeRescanWorkflowInput,
 } from "./KnowledgeRescanWorkflow.js";
@@ -21,6 +27,8 @@ export interface InternalKnowledgeRescanWorkflowInput extends KnowledgeRescanWor
 export interface InternalKnowledgeRescanWorkflowResult {
   readonly scan: Awaited<ReturnType<KnowledgeRescanWorkflow["run"]>>;
   readonly agent?: AgentDimensionWorkflowResult;
+  readonly finalizer?: WorkflowFinalizerResult;
+  readonly report?: WorkflowReportReference;
 }
 
 /**
@@ -31,17 +39,23 @@ export class InternalKnowledgeRescanWorkflow {
   readonly #rescan: KnowledgeRescanWorkflow;
   readonly #agentWorkflow: AgentDimensionWorkflow;
   readonly #toolDependencies: ToolRuntimeDependencies | undefined;
+  readonly #finalizer: WorkflowFinalizer;
+  readonly #reportStore: WorkflowReportStorePort | undefined;
 
   constructor(
     options: {
       readonly rescan?: KnowledgeRescanWorkflow;
       readonly agentWorkflow?: AgentDimensionWorkflow;
       readonly toolDependencies?: ToolRuntimeDependencies;
+      readonly finalizer?: WorkflowFinalizer;
+      readonly reportStore?: WorkflowReportStorePort;
     } = {},
   ) {
     this.#rescan = options.rescan ?? new KnowledgeRescanWorkflow();
     this.#agentWorkflow = options.agentWorkflow ?? new AgentDimensionWorkflow();
     this.#toolDependencies = options.toolDependencies;
+    this.#finalizer = options.finalizer ?? new DisabledWorkflowFinalizer();
+    this.#reportStore = options.reportStore;
   }
 
   async run(
@@ -49,7 +63,7 @@ export class InternalKnowledgeRescanWorkflow {
   ): Promise<InternalKnowledgeRescanWorkflowResult> {
     const scan = await this.#rescan.run(input);
     if (input.skipAgentFill === true || scan.status !== "completed") {
-      return { scan };
+      return this.#finalize({ scan, source: "internal-knowledge-rescan" });
     }
     const agent = await this.#agentWorkflow.run({
       scan,
@@ -60,7 +74,33 @@ export class InternalKnowledgeRescanWorkflow {
       includeEvolution: input.includeEvolution ?? true,
       source: "system",
     });
-    return { scan, agent };
+    return this.#finalize({ scan, agent, source: "internal-knowledge-rescan" });
+  }
+
+  async #finalize(input: {
+    readonly scan: Awaited<ReturnType<KnowledgeRescanWorkflow["run"]>>;
+    readonly agent?: AgentDimensionWorkflowResult;
+    readonly source: string;
+  }): Promise<InternalKnowledgeRescanWorkflowResult> {
+    const finalizer = await this.#finalizer.run({
+      kind: "rescan",
+      projectRoot: input.scan.projectRoot,
+      scan: input.scan,
+      ...(input.agent === undefined ? {} : { agent: input.agent }),
+    });
+    const report = await this.#reportStore?.save({
+      kind: "rescan",
+      scan: input.scan,
+      ...(input.agent === undefined ? {} : { agent: input.agent }),
+      finalizer,
+      source: input.source,
+    });
+    return {
+      scan: input.scan,
+      ...(input.agent === undefined ? {} : { agent: input.agent }),
+      finalizer,
+      ...(report === undefined ? {} : { report }),
+    };
   }
 }
 

@@ -16,12 +16,16 @@ import { MainlineCompileSession } from "../lib/mainline/compile/index.js";
 import {
   ColdStartWorkflow,
   createMainlineWorkflowPersistence,
+  DisabledWorkflowFinalizer,
   InternalColdStartWorkflow,
   InternalKnowledgeRescanWorkflow,
+  JsonWorkflowReportStore,
   KnowledgeRescanWorkflow,
   type ScanLifecycleResult,
   type ScanLifecycleRunInput,
   ScanLifecycleRunner,
+  type WorkflowFinalizer,
+  type WorkflowReportStorePort,
 } from "../lib/workflows/index.js";
 
 const projectRoot = resolveProjectRoot(process.env.ALEMBIC_PROJECT_DIR);
@@ -56,6 +60,10 @@ const initialState = {
 
 const interruptedJobs = await new JsonDaemonJobStore(initialState.dataRoot).markInterrupted();
 let currentState = initialState;
+const workflowFinalizer = new DisabledWorkflowFinalizer();
+const workflowReportStore = new JsonWorkflowReportStore({
+  reportsDir: workflowPersistence.workspacePaths.snapshot().reportsDir,
+});
 const compileSession = new MainlineCompileSession({
   workspacePaths: workflowPersistence.workspacePaths,
   writeBoundary: workflowPersistence.writeBoundary,
@@ -78,10 +86,14 @@ const scanLifecycleRunner =
 const internalColdStartWorkflow = new InternalColdStartWorkflow({
   coldStart: new ColdStartWorkflow(scanLifecycleRunner),
   toolDependencies: workflowPersistence.agentToolDependencies,
+  finalizer: workflowFinalizer,
+  reportStore: workflowReportStore,
 });
 const internalKnowledgeRescanWorkflow = new InternalKnowledgeRescanWorkflow({
   rescan: new KnowledgeRescanWorkflow(scanLifecycleRunner),
   toolDependencies: workflowPersistence.agentToolDependencies,
+  finalizer: workflowFinalizer,
+  reportStore: workflowReportStore,
 });
 // 中文注释：daemon 是 Codex 插件后台入口，bootstrap/rescan 这类长任务在 daemon 中执行；
 // MCP stdio 只负责把请求排入 durable queue，HTTP enqueue 返回后不等待编译完成。
@@ -96,6 +108,8 @@ const workflowHandlers: Record<"bootstrap" | "rescan", DaemonJobHandler> = {
       job.input,
       context,
       runtimeAiProvider,
+      workflowFinalizer,
+      workflowReportStore,
     ),
   rescan: async (job, context) =>
     runWorkflowJob(
@@ -107,6 +121,8 @@ const workflowHandlers: Record<"bootstrap" | "rescan", DaemonJobHandler> = {
       job.input,
       context,
       runtimeAiProvider,
+      workflowFinalizer,
+      workflowReportStore,
     ),
 };
 const bridge = await startDaemonHttpBridge({
@@ -148,6 +164,8 @@ async function runWorkflowJob(
   input: Record<string, unknown> | undefined,
   context: DaemonJobExecutionContext,
   aiProvider: RuntimeAiProvider | null,
+  finalizer: WorkflowFinalizer,
+  reportStore: WorkflowReportStorePort,
 ): Promise<Record<string, unknown>> {
   const agentFill = input?.agentFill === true;
   await context.reportProgress({
@@ -187,15 +205,22 @@ async function runWorkflowJob(
   if (await context.isCancelled()) {
     return { kind, cancelled: true };
   }
+  const resultWithFinalizer =
+    agentFill || !("kind" in result)
+      ? result
+      : await finalizeScanLifecycleJob(result, { finalizer, reportStore });
+  if (await context.isCancelled()) {
+    return { kind, cancelled: true };
+  }
   await context.reportProgress({
     phase: "scan:completed",
     message: agentFill
       ? `${kind} scan and internal agent workflow completed.`
       : `${kind} scan lifecycle completed.`,
     percent: 90,
-    steps: workflowProgressSteps(result),
+    steps: workflowProgressSteps(resultWithFinalizer),
   });
-  return JSON.parse(JSON.stringify(result)) as Record<string, unknown>;
+  return JSON.parse(JSON.stringify(resultWithFinalizer)) as Record<string, unknown>;
 }
 
 async function runInternalAgentWorkflowJob(input: {
@@ -226,8 +251,34 @@ async function runInternalAgentWorkflowJob(input: {
   });
 }
 
+async function finalizeScanLifecycleJob(
+  scan: ScanLifecycleResult,
+  input: {
+    readonly finalizer: WorkflowFinalizer;
+    readonly reportStore: WorkflowReportStorePort;
+  },
+) {
+  const finalizer = await input.finalizer.run({
+    kind: scan.kind,
+    projectRoot: scan.projectRoot,
+    scan,
+  });
+  const report = await input.reportStore.save({
+    kind: scan.kind,
+    scan,
+    finalizer,
+    source: "daemon-scan-lifecycle",
+  });
+  return { ...scan, finalizer, report };
+}
+
 function workflowProgressSteps(
-  result: ScanLifecycleResult | Awaited<ReturnType<InternalColdStartWorkflow["run"]>>,
+  result:
+    | (ScanLifecycleResult & {
+        readonly finalizer?: unknown;
+        readonly report?: unknown;
+      })
+    | Awaited<ReturnType<InternalColdStartWorkflow["run"]>>,
 ): DaemonJobProgressStep[] {
   if ("scan" in result) {
     const scanSteps = scanLifecycleProgressSteps(result.scan);

@@ -52,6 +52,7 @@ export interface ScanLifecyclePersistedArtifacts {
   readonly artifactPath?: string;
   readonly contextSnapshotPath?: string;
   readonly searchSnapshotPath?: string;
+  readonly vectorSnapshotPath?: string;
   readonly fingerprintSnapshotPath?: string;
   readonly recipeMarkdownRoot?: string;
 }

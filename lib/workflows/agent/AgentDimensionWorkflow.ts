@@ -8,6 +8,14 @@ import { ToolRouter, type ToolRuntimeDependencies } from "../../agent/tools/inde
 import { mainlineRecipeImpactCandidates } from "../../mainline/compile/index.js";
 import type { DimensionLensActivation } from "../../mainline/knowledge/index.js";
 import type { ScanLifecycleResult } from "../scan/ScanLifecycleRunner.js";
+import {
+  type AgentWorkflowOutputType,
+  type AgentWorkflowTaskTier,
+  compareWorkflowTaskTier,
+  WorkflowBriefingBuilder,
+  type WorkflowTaskBriefing,
+  workflowGapActivations,
+} from "./WorkflowBriefingBuilder.js";
 
 export type AgentWorkflowTaskKind = "dimension" | "evolution";
 export type AgentWorkflowTaskStatus = "completed" | "degraded" | "failed";
@@ -15,10 +23,15 @@ export type AgentWorkflowTaskStatus = "completed" | "degraded" | "failed";
 export interface AgentWorkflowTask {
   readonly id: string;
   readonly kind: AgentWorkflowTaskKind;
+  readonly tier: AgentWorkflowTaskTier;
   readonly label: string;
   readonly reason: string;
   readonly confidence: number;
-  readonly outputType: "candidate" | "skill" | "decision";
+  readonly outputType: AgentWorkflowOutputType;
+  readonly admission: string;
+  readonly briefing: WorkflowTaskBriefing;
+  readonly gapSignals: readonly string[];
+  readonly impactSignals: readonly string[];
   readonly prompt: string;
   readonly allowedToolIds: readonly string[];
   readonly sharedState?: Record<string, unknown>;
@@ -42,6 +55,7 @@ export interface AgentDimensionDigest {
   readonly crossRefs?: Record<string, unknown>;
   readonly gaps?: readonly unknown[];
   readonly remainingTasks?: readonly unknown[];
+  readonly skillWorthy?: boolean;
 }
 
 export interface AgentDimensionWorkflowInput {
@@ -141,12 +155,19 @@ export function planAgentWorkflowTasks(
   scan: ScanLifecycleResult,
   options: { readonly maxTasks?: number; readonly includeEvolution?: boolean } = {},
 ): AgentWorkflowTask[] {
-  const dimensionTasks = dimensionActivations(scan).map((activation) =>
-    dimensionTask(scan, activation),
+  const briefingBuilder = new WorkflowBriefingBuilder();
+  const gapTasks = workflowGapActivations(scan).map((activation) =>
+    dimensionTask(scan, activation, briefingBuilder),
   );
-  const evolutionTasks = options.includeEvolution === false ? [] : recipeEvolutionTasks(scan);
+  const dimensionTasks = dimensionActivations(scan).map((activation) =>
+    dimensionTask(scan, activation, briefingBuilder),
+  );
+  const evolutionTasks =
+    options.includeEvolution === false ? [] : recipeEvolutionTasks(scan, briefingBuilder);
   const maxTasks = options.maxTasks ?? 8;
-  return [...dimensionTasks, ...evolutionTasks].slice(0, maxTasks);
+  return [...gapTasks, ...dimensionTasks, ...evolutionTasks]
+    .sort(compareAgentWorkflowTasks)
+    .slice(0, maxTasks);
 }
 
 async function runTask(input: {
@@ -170,8 +191,8 @@ async function runTask(input: {
     additionalTools: input.task.allowedToolIds,
     strategy: {
       budget: {
-        maxIterations: input.task.kind === "evolution" ? 4 : 8,
-        maxTokens: input.task.kind === "evolution" ? 1600 : 3200,
+        maxIterations: input.task.briefing.budget.maxIterations,
+        maxTokens: input.task.briefing.budget.maxTokens,
       },
     },
   });
@@ -224,67 +245,55 @@ function dimensionActivations(scan: ScanLifecycleResult): readonly DimensionLens
 function dimensionTask(
   scan: ScanLifecycleResult,
   activation: DimensionLensActivation,
+  briefingBuilder: WorkflowBriefingBuilder,
 ): AgentWorkflowTask {
   const lensId = String(activation.lensId);
-  const panorama = scan.evidence?.projectPanorama;
+  const briefing = briefingBuilder.buildDimension({ scan, activation });
   return {
     id: lensId,
     kind: "dimension",
+    tier: briefing.tier,
     label: lensId,
     reason: activation.reason,
     confidence: activation.confidence,
-    outputType: lensId === "agent-guidelines" ? "skill" : "candidate",
+    outputType: briefing.outputType,
+    admission: briefing.admission,
+    briefing,
+    gapSignals: briefing.gapSignals,
+    impactSignals: briefing.impactSignals,
     allowedToolIds: DIMENSION_TOOL_IDS,
-    prompt: [
-      `你正在为 Alembic 内部冷启动/增量扫描补齐维度：${lensId}`,
-      `维度触发原因：${activation.reason}`,
-      `项目根目录：${scan.projectRoot}`,
-      `扫描模式：${scan.mode}`,
-      panorama
-        ? `项目摘要：files=${panorama.fileCount}, symbols=${panorama.symbolCount}, language=${
-            panorama.dominantLanguage ?? "unknown"
-          }`
-        : null,
-      `变更摘要：added=${scan.summary.addedFiles}, modified=${scan.summary.modifiedFiles}, deleted=${scan.summary.deletedFiles}`,
-      "",
-      "请用允许的工具查证事实。高价值且可复用的规范、模式或 agent 操作约束可以通过 knowledge.submit 提交候选；普通发现用 memory.note_finding 记录。",
-      "最终必须输出 dimensionDigest JSON，包含 summary、candidateCount、keyFindings、gaps、remainingTasks。",
-    ]
-      .filter(Boolean)
-      .join("\n"),
+    prompt: briefing.prompt,
   };
 }
 
-function recipeEvolutionTasks(scan: ScanLifecycleResult): AgentWorkflowTask[] {
+function recipeEvolutionTasks(
+  scan: ScanLifecycleResult,
+  briefingBuilder: WorkflowBriefingBuilder,
+): AgentWorkflowTask[] {
   const impactPlan = scan.compile?.recipeImpact;
   if (!impactPlan || impactPlan.impacts.length === 0) {
     return [];
   }
 
-  return mainlineRecipeImpactCandidates(impactPlan).map((impact) => ({
-    id: `evolution:${impact.recipeId}`,
-    kind: "evolution" as const,
-    label: `Review ${impact.recipeTitle}`,
-    reason: impact.reason,
-    confidence: impact.impactScore,
-    outputType: "decision" as const,
-    allowedToolIds: EVOLUTION_TOOL_IDS,
-    sharedState: { _evolutionDecisionOnly: true },
-    prompt: [
-      `你正在审查增量扫描发现的 Recipe 影响：${impact.recipeTitle}`,
-      `Recipe id: ${impact.recipeId}`,
-      `变化路径：${impact.changedPath}`,
-      impact.targetPath ? `目标路径：${impact.targetPath}` : null,
-      `影响原因：${impact.reason}`,
-      `影响等级：${impact.impactLevel}`,
-      `建议动作：${impact.suggestedAction}`,
-      `命中 token：${impact.matchedTokens.join(", ") || "none"}`,
-      "",
-      "当前阶段只允许调用 knowledge.manage，并且必须对该 Recipe 做 evolve、deprecate 或 skip_evolution 决策。",
-    ]
-      .filter(Boolean)
-      .join("\n"),
-  }));
+  return mainlineRecipeImpactCandidates(impactPlan).map((impact) => {
+    const briefing = briefingBuilder.buildEvolution({ scan, impact });
+    return {
+      id: `evolution:${impact.recipeId}`,
+      kind: "evolution" as const,
+      tier: briefing.tier,
+      label: `Review ${impact.recipeTitle}`,
+      reason: impact.reason,
+      confidence: impact.impactScore,
+      outputType: "decision" as const,
+      admission: briefing.admission,
+      briefing,
+      gapSignals: briefing.gapSignals,
+      impactSignals: briefing.impactSignals,
+      allowedToolIds: EVOLUTION_TOOL_IDS,
+      sharedState: { _evolutionDecisionOnly: true },
+      prompt: briefing.prompt,
+    };
+  });
 }
 
 function presentTaskResult(
@@ -345,6 +354,19 @@ function summarizeTaskResults(results: readonly AgentWorkflowTaskResult[]) {
     candidateCount: results.reduce((sum, result) => sum + result.candidateCount, 0),
     toolCallCount: results.reduce((sum, result) => sum + result.toolCallCount, 0),
   };
+}
+
+function compareAgentWorkflowTasks(left: AgentWorkflowTask, right: AgentWorkflowTask): number {
+  return (
+    compareWorkflowTaskTier(left.tier, right.tier) ||
+    taskKindPriority(right.kind) - taskKindPriority(left.kind) ||
+    right.confidence - left.confidence ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+function taskKindPriority(kind: AgentWorkflowTaskKind): number {
+  return kind === "evolution" ? 2 : 1;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
