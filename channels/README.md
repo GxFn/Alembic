@@ -1,0 +1,18 @@
+# Alembic Channels
+
+Channels describe how Alembic reaches a specific AI surface or distribution path.
+They do not own product code. They point to the concrete artifacts that already
+exist in the repository, such as Codex plugins, npm global packages, IDE
+extensions, skills, or installer bundles.
+
+Each channel gets its own directory:
+
+- `channels/codex/` is the Codex entrypoint. It currently publishes the
+  `alembic-codex` plugin and depends on the npm global package `alembic-ai`.
+
+When a channel grows, add more entries to that channel's `plugins` or
+`packages` list instead of hardcoding one-off release logic in a single plugin
+directory.
+
+Runtime code should branch on the stable channel id, for example
+`ALEMBIC_CHANNEL_ID=codex`, not on install paths or artifact names.

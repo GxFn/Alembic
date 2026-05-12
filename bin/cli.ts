@@ -39,6 +39,7 @@ import { dirname, join, resolve } from 'node:path';
 import { Command } from 'commander';
 import { cli } from '../lib/cli/CliLogger.js';
 import { DEFAULT_FOLDER_NAMES } from '../lib/shared/folder-names.js';
+import { CODEX_CHANNEL_ID, resolveAlembicChannelId } from '../lib/shared/channel.js';
 import { getCursorRoot, getCursorRulesDir, getCursorSkillsDir } from '../lib/shared/ide-paths.js';
 import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-root.js';
 import { shutdown } from '../lib/shared/shutdown.js';
@@ -2477,6 +2478,10 @@ async function buildCodexStatus(projectRootInput: string) {
     ok: initialized,
     packageVersion: pkg.version,
     profile: 'codex-plugin',
+    channel: {
+      id: resolveAlembicChannelId(CODEX_CHANNEL_ID),
+      expectedId: CODEX_CHANNEL_ID,
+    },
     initialized,
     projectRoot,
     registry: {
@@ -2512,6 +2517,7 @@ async function buildCodexStatus(projectRootInput: string) {
     projectArtifacts,
     mcp: {
       runtimeCommand: 'alembic-codex-mcp',
+      channelId: resolveAlembicChannelId(CODEX_CHANNEL_ID),
       tier: process.env.ALEMBIC_MCP_TIER || 'agent',
       requiresProjectEnv: null,
     },
@@ -2567,6 +2573,7 @@ function printCodexDiagnostics(diagnostics: Record<string, unknown>) {
   );
   cli.log(`  Plugin:      ${formatCheck(plugin?.ok)} ${String(plugin?.root || 'missing')}`);
   cli.log(`  Daemon:      ${daemon?.ready ? 'ready' : String(daemon?.status || 'not running')}`);
+  cli.log(`  Channel:     ${String(codexInfo?.channelId || CODEX_CHANNEL_ID)}`);
   cli.log(
     `  Tier:        requested=${String(codexInfo?.requestedTier || 'agent')} effective=${String(
       codexInfo?.effectiveTier || 'agent'
@@ -2607,6 +2614,7 @@ function printCodexStatus(status: Awaited<ReturnType<typeof buildCodexStatus>>) 
   cli.log('  Alembic Codex Status');
   cli.log(`  ${'─'.repeat(40)}`);
   cli.log(`  Initialized: ${status.initialized ? 'yes' : 'no'}`);
+  cli.log(`  Channel:     ${status.channel.id}`);
   cli.log(`  Profile:     ${status.profile}`);
   cli.log(`  Version:     ${status.packageVersion}`);
   cli.log(`  Project:     ${status.projectRoot}`);

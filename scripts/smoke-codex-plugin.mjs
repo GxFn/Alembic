@@ -48,6 +48,7 @@ writeFileSync(
 writeFileSync(join(stdioProjectRoot, 'index.js'), 'export const stdioSmoke = true;\n');
 
 const previousEnv = {
+  ALEMBIC_CHANNEL_ID: process.env.ALEMBIC_CHANNEL_ID,
   ALEMBIC_HOME: process.env.ALEMBIC_HOME,
   ALEMBIC_PROJECT_DIR: process.env.ALEMBIC_PROJECT_DIR,
   CODEX_WORKSPACE_DIR: process.env.CODEX_WORKSPACE_DIR,
@@ -93,6 +94,7 @@ try {
   simulateMarketplaceInstall({ packageRoot, packageVersion: packageJson.version });
 
   process.env.ALEMBIC_HOME = alembicHome;
+  process.env.ALEMBIC_CHANNEL_ID = 'codex';
   process.env.ALEMBIC_PROJECT_DIR = projectRoot;
   process.env.CODEX_WORKSPACE_DIR = projectRoot;
   process.env.ALEMBIC_QUIET = '1';
@@ -113,6 +115,7 @@ try {
     'diagnostics package pin mismatch'
   );
   assert(diagnostics.data?.plugin?.ok === true, 'diagnostics plugin checks did not pass');
+  assert(diagnostics.data?.codex?.channelId === 'codex', 'diagnostics channel id mismatch');
   assert(
     diagnostics.data?.primaryAction?.tool === 'alembic_codex_status',
     'diagnostics should point healthy installs to status'
@@ -124,6 +127,7 @@ try {
     beforeStatus.data?.initialized === false,
     'fresh smoke workspace should start uninitialized'
   );
+  assert(beforeStatus.data?.channel?.id === 'codex', 'status channel id mismatch');
   assert(
     beforeStatus.data?.onboarding?.state === 'needs_init',
     'fresh smoke workspace should recommend initialization'
@@ -253,6 +257,9 @@ try {
 function requiredPackageFiles(version) {
   return [
     'package/.agents/plugins/marketplace.json',
+    'package/channels/README.md',
+    'package/channels/codex/channel.json',
+    'package/channels/codex/README.md',
     'package/dist/bin/codex-mcp.js',
     'package/dist/bin/daemon-server.js',
     'package/dist/lib/external/mcp/CodexMcpServer.js',
@@ -266,7 +273,9 @@ function requiredPackageFiles(version) {
     'package/plugins/alembic-codex/assets/alembic-codex-status.svg',
     'package/plugins/alembic-codex/skills/alembic/SKILL.md',
     'package/scripts/verify-codex-plugin.mjs',
+    'package/scripts/verify-codex-channel.mjs',
     'package/scripts/smoke-codex-plugin.mjs',
+    'package/scripts/release-codex-channel.mjs',
     'package/scripts/release-codex-plugin.mjs',
     'package/package.json',
   ].map((file) => file.replace('<version>', version));
@@ -389,6 +398,7 @@ async function runStdioSmoke({ packageJson, packageRoot, projectRoot, alembicHom
     args: [join(packageRoot, 'dist', 'bin', 'codex-mcp.js')],
     cwd: packageRoot,
     env: {
+      ALEMBIC_CHANNEL_ID: 'codex',
       ALEMBIC_CODEX_ENABLE_ADMIN: '0',
       ALEMBIC_HOME: alembicHome,
       ALEMBIC_MCP_TIER: 'agent',
@@ -457,6 +467,10 @@ async function runStdioSmoke({ packageJson, packageRoot, projectRoot, alembicHom
       'MCP stdio diagnostics plugin checks did not pass'
     );
     assert(
+      diagnostics.data?.codex?.channelId === 'codex',
+      'MCP stdio diagnostics channel id mismatch'
+    );
+    assert(
       diagnostics.data?.primaryAction?.tool === 'alembic_codex_status',
       'MCP stdio diagnostics should point healthy installs to status'
     );
@@ -467,6 +481,7 @@ async function runStdioSmoke({ packageJson, packageRoot, projectRoot, alembicHom
       beforeStatus.data?.initialized === false,
       'MCP stdio fresh workspace should start uninitialized'
     );
+    assert(beforeStatus.data?.channel?.id === 'codex', 'MCP stdio status channel id mismatch');
     assert(
       beforeStatus.data?.onboarding?.primaryAction?.tool === 'alembic_codex_init',
       'MCP stdio fresh workspace should point to codex init'

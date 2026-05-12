@@ -46,6 +46,10 @@ alembic ui              # Start background service (MCP Server + Dashboard) — 
 
 Alembic also ships a Codex plugin at `plugins/alembic-codex`. It is designed for a click-install flow: Codex starts a lightweight MCP shim first, checks diagnostics and workspace status without starting services, initializes in Ghost mode by default, then wakes the Alembic daemon only for Dashboard, Guard, bootstrap, rescan, or project-knowledge tools.
 
+The Codex distribution entry lives at `channels/codex`. It ties the Codex
+marketplace plugin to the npm global runtime package `alembic-ai`, and is the
+place to add future Codex plugins or non-plugin npm packages.
+
 Recommended first run inside Codex:
 
 1. `alembic_codex_diagnostics`
@@ -58,11 +62,13 @@ For release validation:
 ```bash
 npm run build
 alembic codex diagnostics --json
+npm run verify:codex-channel
+npm run release:codex-channel
 npm run release:codex-plugin
 npm run release:codex-plugin:daemon   # optional localhost daemon smoke
 ```
 
-For the detailed release, testing, and promotion plan, see `plugins/alembic-codex/RELEASE-PLAYBOOK.md`.
+For the Codex channel manifest, see `channels/codex/channel.json`. For the detailed release, testing, and promotion plan, see `plugins/alembic-codex/RELEASE-PLAYBOOK.md`.
 
 ## Using in IDE
 

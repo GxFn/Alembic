@@ -13,6 +13,7 @@ import {
 import { type DaemonStatus, DaemonSupervisor } from '../../daemon/DaemonSupervisor.js';
 import { JobStore } from '../../daemon/JobStore.js';
 import { DEFAULT_FOLDER_NAMES } from '../../shared/folder-names.js';
+import { CODEX_CHANNEL_ID, resolveAlembicChannelId } from '../../shared/channel.js';
 import { PACKAGE_ROOT } from '../../shared/package-root.js';
 import { WorkspaceResolver } from '../../shared/WorkspaceResolver.js';
 import { WorkspaceSettingsStore } from '../../shared/WorkspaceSettingsStore.js';
@@ -319,6 +320,10 @@ export class CodexMcpServer {
     return {
       success: true,
       data: {
+        channel: {
+          id: resolveAlembicChannelId(CODEX_CHANNEL_ID),
+          expectedId: CODEX_CHANNEL_ID,
+        },
         initialized: knowledge.initialized,
         projectRoot: this.projectRoot,
         registry: {
@@ -823,6 +828,7 @@ function resolveEffectiveCodexTier(tierName: string): string {
 
 function buildRuntimeDiagnostics(daemonStatus: DaemonStatus): Record<string, unknown> {
   const packageVersion = getPackageVersion();
+  const channelId = resolveAlembicChannelId(CODEX_CHANNEL_ID);
   const nodeMajor = Number.parseInt(process.versions.node.split('.')[0] || '0', 10);
   const npm = probeCommand('npm');
   const npx = probeCommand('npx');
@@ -898,6 +904,8 @@ function buildRuntimeDiagnostics(daemonStatus: DaemonStatus): Record<string, unk
       healthVersion: readHealthVersion(daemonStatus.health),
     },
     codex: {
+      channelId,
+      expectedChannelId: CODEX_CHANNEL_ID,
       requestedTier,
       effectiveTier,
       adminEnabled,

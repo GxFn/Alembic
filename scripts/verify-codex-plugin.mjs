@@ -108,6 +108,10 @@ expect(
 );
 expect(args.includes('alembic-codex-mcp'), '.mcp.json must call alembic-codex-mcp');
 expect(!args.includes('latest'), '.mcp.json must not use latest');
+expect(
+  server?.env?.ALEMBIC_CHANNEL_ID === 'codex',
+  '.mcp.json must set stable ALEMBIC_CHANNEL_ID=codex'
+);
 expect(server?.env?.ALEMBIC_MCP_TIER === 'agent', '.mcp.json must default to agent tier');
 expect(
   server?.env?.ALEMBIC_CODEX_ENABLE_ADMIN === '0',

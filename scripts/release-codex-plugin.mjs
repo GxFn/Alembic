@@ -27,6 +27,12 @@ const steps = [
         },
       ]),
   {
+    name: 'Verify Codex channel entry',
+    command: 'npm',
+    args: ['run', 'verify:codex-channel'],
+    verifies: ['channels/codex/channel.json'],
+  },
+  {
     name: 'Verify Codex plugin metadata',
     command: 'npm',
     args: ['run', 'verify:codex-plugin'],

@@ -7,6 +7,7 @@
 
 process.env.ALEMBIC_MCP_MODE = '1';
 process.env.ALEMBIC_CODEX_MCP_MODE = '1';
+process.env.ALEMBIC_CHANNEL_ID = process.env.ALEMBIC_CHANNEL_ID || 'codex';
 process.env.ALEMBIC_MCP_TIER = process.env.ALEMBIC_MCP_TIER || 'agent';
 
 process.on('uncaughtException', (error) => {

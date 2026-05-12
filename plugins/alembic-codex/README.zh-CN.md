@@ -50,6 +50,7 @@ plugins/alembic-codex
 
 - 需要 Node.js 22 或更新版本。本地开发推荐 Node 22 LTS；MCP shim 和 daemon 应使用同一个 Node 可执行文件。
 - Marketplace MCP 配置固定 runtime 包为 `alembic-ai@0.1.0`。
+- Marketplace MCP 配置会设置 `ALEMBIC_CHANNEL_ID=codex`；项目功能判断应使用这个稳定渠道标识。
 - MCP 启动命令通过 `npx --prefix /tmp` 运行，避免 Alembic 仓库里的本地 `package.json` 影响已发布 runtime binary。
 - 默认 MCP tier 是 `agent`；只有同时设置 `ALEMBIC_MCP_TIER=admin` 和 `ALEMBIC_CODEX_ENABLE_ADMIN=1` 时，才会显示 admin tools。
 
