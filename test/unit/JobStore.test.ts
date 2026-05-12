@@ -29,8 +29,13 @@ describe('JobStore', () => {
     const store = new JobStore({ projectRoot });
 
     const first = store.create({
+      actor: { role: 'external_agent', user: 'codex-user' },
+      channelId: 'codex',
+      client: 'codex-plugin',
+      createdByTool: 'alembic_codex_bootstrap',
       kind: 'bootstrap',
       request: { maxFiles: 10 },
+      sessionId: 'codex-session',
       source: 'codex',
     });
     store.markRunning(first.id);
@@ -48,7 +53,12 @@ describe('JobStore', () => {
     });
 
     expect(completed).toMatchObject({
+      actor: { role: 'external_agent', user: 'codex-user' },
+      channelId: 'codex',
+      client: 'codex-plugin',
+      createdByTool: 'alembic_codex_bootstrap',
       id: first.id,
+      sessionId: 'codex-session',
       status: 'completed',
       bootstrapSessionId: 'bs_1',
     });

@@ -1,26 +1,18 @@
 # Codex Channel
 
-The Codex channel is the entrypoint for everything Alembic exposes to Codex.
-It is intentionally above a single plugin:
+The Codex channel is the stable entrypoint for the current Alembic Codex plugin.
 
-- `plugins[]` lists installable Codex plugin artifacts.
-- `packages[]` lists npm packages that must be published or installed for those
-  plugins and for non-plugin Codex usage.
-- `marketplace` points at the Codex marketplace manifest used by the channel.
+Current scope is intentionally narrow:
 
-Today this channel contains one plugin, `alembic-codex`, and one global npm
-runtime package, `alembic-ai`. The plugin launches the `alembic-codex-mcp` bin
-from the pinned npm package, while the same package also exposes the non-plugin
-global commands `alembic` and `alembic-mcp`.
+- exactly one Codex plugin: `alembic-codex`
+- exactly one npm runtime package: `alembic-ai`
+- exactly one MCP runtime bin used by the plugin: `alembic-codex-mcp`
+- exactly one channel id for feature checks: `codex`
 
-Runtime feature checks should use the stable channel id `codex`, exposed as
-`ALEMBIC_CHANNEL_ID=codex` and returned by Codex diagnostics/status. Do not infer
-channel behavior from a plugin name, binary name, marketplace name, or install
-path; those can change as more Codex plugins and npm packages are added.
-
-Add future Codex plugins to `plugins[]` and future non-plugin npm packages to
-`packages[]`. Keep channel wiring here instead of embedding channel assumptions
-inside a single plugin README or release script.
+`channels/codex/channel.json` records this wiring so Codex runtime checks do not
+infer behavior from a plugin path, binary name, marketplace name, or install
+location. This file is not a multi-plugin abstraction point for the current
+phase; expanding it requires a deliberate plan.
 
 Validate the channel with:
 

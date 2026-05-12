@@ -38,20 +38,31 @@ expect(
 
 const plugins = Array.isArray(channel.plugins) ? channel.plugins : [];
 const packages = Array.isArray(channel.packages) ? channel.packages : [];
-expect(plugins.length > 0, 'Codex channel must list at least one plugin');
-expect(packages.length > 0, 'Codex channel must list at least one package');
+expect(plugins.length === 1, 'Codex channel must list exactly one plugin in the current phase');
+expect(packages.length === 1, 'Codex channel must list exactly one package in the current phase');
+expect(plugins[0]?.name === 'alembic-codex', 'Codex channel plugin must be alembic-codex');
+expect(packages[0]?.name === 'alembic-ai', 'Codex channel package must be alembic-ai');
+expect(
+  channel.description === 'Codex distribution entry for the Alembic Codex plugin and npm runtime.',
+  'Codex channel description must stay scoped to the current plugin/runtime'
+);
 
 const marketplaceEntries = Array.isArray(marketplace.plugins) ? marketplace.plugins : [];
 for (const plugin of plugins) {
   const pluginRoot = join(root, plugin.path || '');
   const pluginJson = readJson(join(pluginRoot, '.codex-plugin', 'plugin.json'));
   const mcpJson = readJson(join(pluginRoot, '.mcp.json'));
-  const marketplaceEntry = marketplaceEntries.find((entry) => entry?.name === plugin.marketplaceEntry);
+  const marketplaceEntry = marketplaceEntries.find(
+    (entry) => entry?.name === plugin.marketplaceEntry
+  );
   const server = mcpJson.mcpServers?.alembic;
   const args = Array.isArray(server?.args) ? server.args : [];
   const runtimeSpecifier = args[args.indexOf('--package') + 1];
 
-  expect(plugin.name === pluginJson.name, `channel plugin ${plugin.name} must match plugin.json name`);
+  expect(
+    plugin.name === pluginJson.name,
+    `channel plugin ${plugin.name} must match plugin.json name`
+  );
   expect(existsSync(pluginRoot), `channel plugin path must exist: ${plugin.path}`);
   expect(Boolean(marketplaceEntry), `marketplace must include channel plugin ${plugin.name}`);
   expect(
@@ -82,7 +93,10 @@ for (const plugin of plugins) {
 
 for (const pkg of packages) {
   expect(pkg.name === packageJson.name, `channel package ${pkg.name} must match package.json name`);
-  expect(pkg.version === packageVersion, `channel package ${pkg.name} version must match package.json`);
+  expect(
+    pkg.version === packageVersion,
+    `channel package ${pkg.name} version must match package.json`
+  );
   expect(pkg.registry === 'npm', `channel package ${pkg.name} registry must be npm`);
   expect(pkg.installScope === 'global', `channel package ${pkg.name} installScope must be global`);
   for (const bin of pkg.binaries || []) {
@@ -104,7 +118,8 @@ expect(
   'package.json files[] must include channels'
 );
 expect(
-  Array.isArray(packageJson.files) && packageJson.files.includes('scripts/verify-codex-channel.mjs'),
+  Array.isArray(packageJson.files) &&
+    packageJson.files.includes('scripts/verify-codex-channel.mjs'),
   'package.json files[] must include scripts/verify-codex-channel.mjs'
 );
 expect(
@@ -124,7 +139,9 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`Codex channel verification passed (${packageJson.name}@${packageVersion}).`);
+process.stdout.write(
+  `Codex channel verification passed (${packageJson.name}@${packageVersion}).\n`
+);
 
 function expect(condition, message) {
   if (!condition) {

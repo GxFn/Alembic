@@ -16,6 +16,7 @@ interface LoggerLike {
 export interface DaemonJobOptions {
   args?: Record<string, unknown>;
   container: ServiceContainer;
+  context?: Pick<DaemonJobRecord, 'actor' | 'channelId' | 'client' | 'createdByTool' | 'sessionId'>;
   kind: DaemonJobKind;
   logger: LoggerLike;
   source?: DaemonJobSource;
@@ -36,6 +37,7 @@ export function createDaemonJob(options: DaemonJobOptions): DaemonJobRecord {
     kind: options.kind,
     request: options.args || {},
     source: options.source || 'system',
+    ...options.context,
   });
 }
 

@@ -1,7 +1,7 @@
 {
   "id": "codex",
   "displayName": "Codex",
-  "description": "Codex distribution entry for Alembic plugins and npm runtime artifacts.",
+  "description": "Codex distribution entry for the Alembic Codex plugin and npm runtime.",
   "marketplace": {
     "name": "gxfn",
     "displayName": "GxFn",

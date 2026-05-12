@@ -97,6 +97,8 @@
     "test:watch": "vitest",
     "dev:link": "npm run build && npm install -g .",
     "dev:verify": "which alembic && alembic -v",
+    "dev:codex-plugin:sync": "node scripts/sync-codex-plugin-cache.mjs",
+    "dev:codex-plugin:local-mcp": "node scripts/sync-codex-plugin-cache.mjs --local-mcp",
     "release:check": "npm run build && node dist/scripts/release.js check",
     "release:codex-channel": "node scripts/release-codex-channel.mjs",
     "release:codex-channel:daemon": "node scripts/release-codex-channel.mjs --daemon",

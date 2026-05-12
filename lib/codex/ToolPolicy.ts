@@ -17,16 +17,39 @@ export interface CodexToolDefinition {
 
 export interface CodexToolPolicyInput<T extends CodexToolDefinition = CodexToolDefinition> {
   adminEnabled?: boolean;
+  channelId?: string;
   coreTools: T[];
+  daemon?: {
+    message?: string;
+    ready?: boolean;
+    status?: string;
+  };
   knowledge: CodexKnowledgeState;
   tierName?: string;
   tierOrder: Record<string, number>;
+}
+
+export type CodexToolPolicyState =
+  | 'bootstrap_running'
+  | 'daemon_stale'
+  | 'needs_bootstrap'
+  | 'needs_init'
+  | 'ready'
+  | 'ready_refreshing'
+  | 'ready_stale';
+
+export interface CodexToolPolicySignal {
+  code: string;
+  message: string;
+  severity: 'info' | 'warning';
 }
 
 export interface CodexToolPolicyResult<T extends CodexToolDefinition = CodexToolDefinition> {
   allowedLocalToolNames: Set<string>;
   effectiveTier: string;
   hiddenReason: string | null;
+  signals: CodexToolPolicySignal[];
+  state: CodexToolPolicyState;
   visibleTools: Array<T | CodexToolDefinition>;
 }
 
@@ -199,10 +222,13 @@ export function resolveCodexToolPolicy<T extends CodexToolDefinition>(
   const coreTools = input.coreTools.filter(
     (tool) => input.knowledge.usable && (input.tierOrder[tool.tier || 'agent'] ?? 0) <= maxTier
   );
+  const state = resolveCodexToolPolicyState(input);
   return {
     allowedLocalToolNames,
     effectiveTier,
     hiddenReason: input.knowledge.usable ? null : 'CODEX_ALEMBIC_KNOWLEDGE_REQUIRED',
+    signals: buildCodexToolPolicySignals(input, state),
+    state,
     visibleTools: [...localTools, ...coreTools],
   };
 }
@@ -225,4 +251,77 @@ export function isToolAllowedForCodexKnowledge(
     return true;
   }
   return allowedCodexToolNames(knowledge).has(name);
+}
+
+export function resolveCodexToolPolicyState(input: CodexToolPolicyInput): CodexToolPolicyState {
+  const knowledge = input.knowledge;
+  if (!knowledge.initialized) {
+    return 'needs_init';
+  }
+  if (!knowledge.usable && knowledge.jobs?.bootstrapRunning) {
+    return 'bootstrap_running';
+  }
+  if (!knowledge.usable) {
+    return 'needs_bootstrap';
+  }
+  if (input.daemon?.status === 'stale') {
+    return 'daemon_stale';
+  }
+  if (knowledge.freshness?.stale) {
+    return 'ready_stale';
+  }
+  if (knowledge.jobs?.running) {
+    return 'ready_refreshing';
+  }
+  return 'ready';
+}
+
+export function buildCodexToolPolicySignals(
+  input: CodexToolPolicyInput,
+  state: CodexToolPolicyState
+): CodexToolPolicySignal[] {
+  const signals: CodexToolPolicySignal[] = [];
+  if (state === 'bootstrap_running') {
+    signals.push({
+      code: 'CODEX_BOOTSTRAP_RUNNING',
+      message: 'A bootstrap job is already running; use alembic_codex_job to recover progress.',
+      severity: 'info',
+    });
+  }
+  if (state === 'ready_refreshing') {
+    signals.push({
+      code: 'CODEX_REFRESH_RUNNING',
+      message: 'A bootstrap or rescan job is refreshing project knowledge in the background.',
+      severity: 'info',
+    });
+  }
+  if (state === 'ready_stale') {
+    signals.push({
+      code:
+        input.knowledge.freshness?.status === 'source_refs_stale'
+          ? 'CODEX_SOURCE_REFS_STALE'
+          : 'CODEX_KNOWLEDGE_REFRESH_FAILED',
+      message:
+        input.knowledge.freshness?.reason ||
+        'The latest bootstrap or rescan did not complete after the current knowledge was built.',
+      severity: 'warning',
+    });
+  }
+  if (state === 'daemon_stale') {
+    signals.push({
+      code: 'CODEX_DAEMON_STALE',
+      message: input.daemon?.message || 'Daemon state exists but is not healthy.',
+      severity: 'warning',
+    });
+  }
+  if (input.knowledge.vector?.skipped) {
+    signals.push({
+      code: 'CODEX_VECTOR_SKIPPED_NON_BLOCKING',
+      message:
+        input.knowledge.vector.reason ||
+        'Semantic vector index is unavailable; Codex tools remain available.',
+      severity: 'info',
+    });
+  }
+  return signals;
 }

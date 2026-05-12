@@ -29,6 +29,7 @@ const pinnedSpecifier = packageIndex >= 0 ? args[packageIndex + 1] : null;
 const marketplaceEntry = Array.isArray(marketplaceJson.plugins)
   ? marketplaceJson.plugins.find((entry) => entry?.name === 'alembic-codex')
   : null;
+const marketplaceEntries = Array.isArray(marketplaceJson.plugins) ? marketplaceJson.plugins : [];
 
 expect(
   packageJson.bin?.['alembic-codex-mcp'] === 'dist/bin/codex-mcp.js',
@@ -68,6 +69,19 @@ expect(
   packageJson.scripts?.['release:codex-plugin:daemon'] ===
     'node scripts/release-codex-plugin.mjs --daemon',
   'package.json must expose release:codex-plugin:daemon'
+);
+expect(
+  packageJson.scripts?.['dev:codex-plugin:sync'] === 'node scripts/sync-codex-plugin-cache.mjs',
+  'package.json must expose dev:codex-plugin:sync'
+);
+expect(
+  packageJson.scripts?.['dev:codex-plugin:local-mcp'] ===
+    'node scripts/sync-codex-plugin-cache.mjs --local-mcp',
+  'package.json must expose dev:codex-plugin:local-mcp'
+);
+expect(
+  existsSync(join(root, 'scripts', 'sync-codex-plugin-cache.mjs')),
+  'local Codex cache sync script must exist'
 );
 expect(pluginJson.name === 'alembic-codex', 'plugin.json name must be alembic-codex');
 expect(
@@ -129,6 +143,10 @@ expect(
 expect(
   marketplaceJson.interface?.displayName === 'GxFn',
   '.agents/plugins/marketplace.json must display as GxFn'
+);
+expect(
+  marketplaceEntries.length === 1,
+  '.agents/plugins/marketplace.json must list exactly one plugin in the current phase'
 );
 expect(Boolean(marketplaceEntry), '.agents/plugins/marketplace.json must include alembic-codex');
 if (marketplaceEntry) {
@@ -292,7 +310,7 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`Codex plugin verification passed (${expectedRuntime}).`);
+process.stdout.write(`Codex plugin verification passed (${expectedRuntime}).\n`);
 
 function expect(condition, message) {
   if (!condition) {

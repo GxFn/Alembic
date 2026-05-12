@@ -38,7 +38,11 @@ import {
 import { dirname, join, resolve } from 'node:path';
 import { Command } from 'commander';
 import { cli } from '../lib/cli/CliLogger.js';
-import { CODEX_SETUP_PROFILE, resolveCodexRuntimeContext } from '../lib/codex/index.js';
+import {
+  buildCodexStatus as buildCodexStatusData,
+  CODEX_SETUP_PROFILE,
+  resolveCodexRuntimeContext,
+} from '../lib/codex/index.js';
 import { DEFAULT_FOLDER_NAMES } from '../lib/shared/folder-names.js';
 import { getCursorRoot, getCursorRulesDir, getCursorSkillsDir } from '../lib/shared/ide-paths.js';
 import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-root.js';
@@ -2442,119 +2446,7 @@ async function readAllStdin() {
 }
 
 async function buildCodexStatus(projectRootInput: string) {
-  const projectRoot = resolve(projectRootInput);
-  const resolver = WorkspaceResolver.fromProject(projectRoot);
-  const facts = resolver.toFacts();
-
-  const configPath = resolver.configPath;
-  const databasePath = resolver.databasePath;
-  const settingsStore = new WorkspaceSettingsStore(resolver);
-  const daemonStatePath = join(resolver.runtimeDir, 'daemon.json');
-  const daemonPidPath = join(resolver.runtimeDir, 'daemon.pid');
-  const { DaemonSupervisor } = await import('../lib/daemon/DaemonSupervisor.js');
-  const daemonStatus = await new DaemonSupervisor().status(projectRoot);
-  const runtime = resolveCodexRuntimeContext();
-
-  const runtimeExists = existsSync(resolver.runtimeDir);
-  const configExists = existsSync(configPath);
-  const databaseExists = existsSync(databasePath);
-  const knowledgeExists = existsSync(resolver.knowledgeDir);
-  const recipesExists = existsSync(resolver.recipesDir);
-  const settingsExists = existsSync(settingsStore.settingsPath);
-  const secretsExists = existsSync(settingsStore.secretsPath);
-  const daemonState = daemonStatus.state || readJsonIfExists(daemonStatePath);
-
-  const projectArtifacts = {
-    runtimeDir: join(projectRoot, DEFAULT_FOLDER_NAMES.project.runtime),
-    runtimeExists: existsSync(join(projectRoot, DEFAULT_FOLDER_NAMES.project.runtime)),
-    knowledgeDir: join(projectRoot, DEFAULT_FOLDER_NAMES.project.knowledgeBase),
-    knowledgeExists: existsSync(join(projectRoot, DEFAULT_FOLDER_NAMES.project.knowledgeBase)),
-    cursorDir: join(projectRoot, DEFAULT_FOLDER_NAMES.ide.cursorRoot),
-    cursorDirExists: existsSync(join(projectRoot, DEFAULT_FOLDER_NAMES.ide.cursorRoot)),
-    vscodeMcpPath: join(projectRoot, '.vscode', 'mcp.json'),
-    vscodeMcpExists: existsSync(join(projectRoot, '.vscode', 'mcp.json')),
-  };
-
-  const initialized = configExists && databaseExists && knowledgeExists && recipesExists;
-  const nextActions = initialized
-    ? [
-        'Use the Alembic Codex plugin skill and call alembic_health.',
-        'Call alembic_task(operation=prime) before non-trivial coding tasks.',
-      ]
-    : [`Run alembic codex init --dir ${projectRoot}.`];
-
-  return {
-    ok: initialized,
-    packageVersion: runtime.packageVersion,
-    profile: CODEX_SETUP_PROFILE,
-    channel: {
-      id: runtime.channelId,
-      expectedId: runtime.expectedChannelId,
-    },
-    initialized,
-    projectRoot,
-    registry: {
-      registered: facts.registered,
-      path: facts.registryPath,
-      projectId: facts.projectId,
-      expectedProjectId: facts.expectedProjectId,
-    },
-    workspace: {
-      mode: facts.mode,
-      ghost: facts.ghost,
-      dataRoot: facts.dataRoot,
-      dataRootSource: facts.dataRootSource,
-      workspaceExists: facts.workspaceExists,
-      runtimeDir: resolver.runtimeDir,
-      runtimeExists,
-      configPath,
-      configExists,
-      databasePath,
-      databaseExists,
-      settingsPath: settingsStore.settingsPath,
-      settingsExists,
-      secretsPath: settingsStore.secretsPath,
-      secretsExists,
-      knowledgeDir: resolver.knowledgeDir,
-      knowledgeExists,
-      recipesDir: resolver.recipesDir,
-      recipesExists,
-      candidatesDir: resolver.candidatesDir,
-      skillsDir: resolver.skillsDir,
-      wikiDir: resolver.wikiDir,
-    },
-    projectArtifacts,
-    mcp: {
-      runtimeCommand: runtime.runtimeBin,
-      channelId: runtime.channelId,
-      tier: runtime.requestedTier,
-      requiresProjectEnv: null,
-    },
-    daemon: {
-      implemented: true,
-      status: daemonStatus.status,
-      ready: daemonStatus.ready,
-      statePath: daemonStatePath,
-      stateExists: existsSync(daemonStatePath),
-      pidPath: daemonPidPath,
-      pidExists: existsSync(daemonPidPath),
-      pidAlive: daemonStatus.pidAlive,
-      health: daemonStatus.health,
-      state: daemonState,
-    },
-    nextActions,
-  };
-}
-
-function readJsonIfExists(filePath: string): unknown | null {
-  if (!existsSync(filePath)) {
-    return null;
-  }
-  try {
-    return JSON.parse(readFileSync(filePath, 'utf8'));
-  } catch {
-    return null;
-  }
+  return buildCodexStatusData(resolve(projectRootInput));
 }
 
 function printCodexDiagnostics(diagnostics: Record<string, unknown>) {

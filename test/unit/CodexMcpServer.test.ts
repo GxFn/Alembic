@@ -466,7 +466,16 @@ describe('CodexMcpServer', () => {
     expect(supervisor.ensure).toHaveBeenCalledWith({ projectRoot, waitUntilReadyMs: 3000 });
     expect(String(url)).toBe('http://127.0.0.1:39127/api/v1/jobs/bootstrap');
     expect(headers['x-alembic-daemon-token']).toBe('test-token');
-    expect(body).toMatchObject({ maxFiles: 25 });
+    expect(body).toMatchObject({
+      jobContext: {
+        actor: { role: 'external_agent' },
+        channelId: 'codex',
+        client: 'codex-plugin',
+        createdByTool: 'alembic_codex_bootstrap',
+      },
+      maxFiles: 25,
+    });
+    expect(typeof (body.jobContext as { sessionId?: unknown }).sessionId).toBe('string');
   });
 
   test('Codex job status reads local JobStore without starting daemon', async () => {
