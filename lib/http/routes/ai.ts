@@ -33,7 +33,6 @@ import { resolveDataRoot, resolveProjectRoot } from '../../shared/resolveProject
 import {
   AiChatBody,
   AiConfigBody,
-  AiWorkspaceConfigBody,
   AiFormatUsageGuideBody,
   AiLangBody,
   AiStreamBody,
@@ -41,6 +40,7 @@ import {
   AiTaskBody,
   AiToolBody,
   AiTranslateBody,
+  AiWorkspaceConfigBody,
 } from '../../shared/schemas/http-requests.js';
 import {
   collectAiRuntimeOverrideDiff,
