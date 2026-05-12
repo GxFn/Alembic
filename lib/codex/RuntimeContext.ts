@@ -17,7 +17,7 @@ export const CODEX_MCP_SHIM_ENV = 'ALEMBIC_CODEX_MCP_MODE';
 export const CODEX_MCP_TIER_ENV = 'ALEMBIC_MCP_TIER';
 export const CODEX_ADMIN_ENABLE_ENV = 'ALEMBIC_CODEX_ENABLE_ADMIN';
 export const CODEX_PLUGIN_ROOT_ENV = 'ALEMBIC_CODEX_PLUGIN_ROOT';
-export const CODEX_EMBEDDED_RUNTIME_SPECIFIER = './runtime';
+export const CODEX_EMBEDDED_RUNTIME_SPECIFIER = './runtime.tgz';
 
 export interface CodexRuntimeContext {
   adminEnabled: boolean;

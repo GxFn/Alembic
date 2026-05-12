@@ -131,7 +131,7 @@ try {
     'diagnostics runtime package identity mismatch'
   );
   assert(
-    diagnostics.data?.package?.runtimeSpecifier === './runtime',
+    diagnostics.data?.package?.runtimeSpecifier === './runtime.tgz',
     'diagnostics embedded runtime specifier mismatch'
   );
   assert(diagnostics.data?.plugin?.ok === true, 'diagnostics plugin checks did not pass');
@@ -299,6 +299,7 @@ function requiredPackageFiles(version) {
     'package/plugins/alembic-codex/.codex-plugin/plugin.json',
     'package/plugins/alembic-codex/.agents/plugins/marketplace.json',
     'package/plugins/alembic-codex/.mcp.json',
+    'package/plugins/alembic-codex/runtime.tgz',
     'package/plugins/alembic-codex/runtime/package.json',
     'package/plugins/alembic-codex/runtime/dist/bin/codex-mcp.js',
     'package/plugins/alembic-codex/runtime/dist/bin/daemon-server.js',
@@ -401,7 +402,7 @@ function simulateMarketplaceInstall({ packageRoot, packageVersion }) {
   const env = mcp.mcpServers?.alembic?.env || {};
   const packageIndex = args.indexOf('--package');
   assert(
-    args[packageIndex + 1] === './runtime',
+    args[packageIndex + 1] === './runtime.tgz',
     'installed plugin MCP embedded runtime specifier mismatch'
   );
   assert(args.includes('alembic-codex-mcp'), 'installed plugin MCP binary missing');
@@ -416,6 +417,8 @@ function simulateMarketplaceInstall({ packageRoot, packageVersion }) {
   );
 
   const runtimeRoot = join(installedRoot, 'runtime');
+  const runtimeTarballPath = join(installedRoot, 'runtime.tgz');
+  assert(existsSync(runtimeTarballPath), 'embedded runtime tarball missing');
   const distributionMarketplace = readJson(
     join(installedRoot, '.agents', 'plugins', 'marketplace.json')
   );
@@ -551,7 +554,7 @@ async function runStdioSmoke({ packageJson, runtimeRoot, pluginRoot, projectRoot
       'MCP stdio diagnostics runtime package identity mismatch'
     );
     assert(
-      diagnostics.data?.package?.runtimeSpecifier === './runtime',
+      diagnostics.data?.package?.runtimeSpecifier === './runtime.tgz',
       'MCP stdio diagnostics embedded runtime specifier mismatch'
     );
     assert(
@@ -657,8 +660,8 @@ async function runNpxRuntimeSmoke({ installedRoot, projectRoot, alembicHome }) {
   const client = new Client({ name: 'alembic-codex-npx-runtime-smoke', version: '0.0.0' });
   try {
     await withTimeout(
-      client.connect(transport, { timeout: 60000 }),
-      70000,
+      client.connect(transport, { timeout: 180000 }),
+      190000,
       () => `MCP npx runtime connect timed out\n${stderr.join('')}`
     );
     const toolsResult = await withTimeout(

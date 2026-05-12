@@ -1,6 +1,17 @@
 #!/usr/bin/env node
 
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
@@ -42,12 +53,14 @@ copyFile('README_CN.md', 'README_CN.md', { optional: true });
 copyTree('channels', 'channels');
 copyTree('.agents', '.agents');
 copyPluginShellSnapshot();
+const runtimeTarballPath = packRuntimeTarball();
 
 process.stdout.write(
   `${JSON.stringify(
     {
       ok: true,
       runtimeRoot,
+      runtimeTarballPath,
       package: `${packageJson.name}@${packageJson.version}`,
       entry: 'dist/bin/codex-mcp.js',
       pluginRoot,
@@ -117,6 +130,47 @@ function copyPluginShellSnapshot() {
   }
 }
 
+function packRuntimeTarball() {
+  const runtimeTarballPath = join(pluginRoot, 'runtime.tgz');
+  const packRoot = mkdtempSync(join(tmpdir(), 'alembic-codex-runtime-pack-'));
+  const npmCache = join(tmpdir(), 'alembic-codex-npm-cache');
+  mkdirSync(npmCache, { recursive: true });
+  rmSync(runtimeTarballPath, { force: true });
+
+  try {
+    const result = spawnSync(
+      'npm',
+      ['pack', runtimeRoot, '--json', '--pack-destination', packRoot, '--ignore-scripts'],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          HUSKY: '0',
+          npm_config_cache: npmCache,
+        },
+      }
+    );
+    if (result.status !== 0) {
+      throw new Error(
+        `npm pack embedded runtime failed (${result.status})\n${result.stdout}\n${result.stderr}`
+      );
+    }
+    const packInfo = parseNpmPackJson(result.stdout)[0];
+    if (!packInfo?.filename) {
+      throw new Error(`npm pack embedded runtime did not return a filename\n${result.stdout}`);
+    }
+    const packedPath = join(packRoot, packInfo.filename);
+    if (!existsSync(packedPath)) {
+      throw new Error(`npm pack embedded runtime did not create ${packedPath}`);
+    }
+    renameSync(packedPath, runtimeTarballPath);
+    return runtimeTarballPath;
+  } finally {
+    rmSync(packRoot, { force: true, recursive: true });
+  }
+}
+
 function copyTree(sourceRelative, destinationRelative, options = {}) {
   const source = join(root, sourceRelative);
   const destination = join(runtimeRoot, destinationRelative);
@@ -151,6 +205,14 @@ function copyFile(sourceRelative, destinationRelative, options = {}) {
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function parseNpmPackJson(stdout) {
+  try {
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`npm pack embedded runtime did not emit JSON output: ${error.message}`);
+  }
 }
 
 function normalizeRuntimeImports(imports) {

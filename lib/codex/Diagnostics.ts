@@ -138,7 +138,7 @@ export function buildCodexRuntimeDiagnostics(
         : `disabled-requires-${CODEX_ADMIN_ENABLE_ENV}=1`,
     },
     offlineFallback: {
-      note: 'The Codex plugin ships Alembic runtime code in ./runtime. npx installs that local package and resolves its production npm dependencies on first MCP start.',
+      note: 'The Codex plugin ships Alembic runtime code in ./runtime and starts MCP from ./runtime.tgz. npx installs that local package tarball and resolves its production npm dependencies on first MCP start.',
       globalInstall: `npm install -g ${context.pinnedRuntimeSpecifier}`,
       localPackage: context.embeddedRuntimeSpecifier,
       command: context.runtimeBin,
@@ -273,10 +273,10 @@ function buildDiagnosticIssues(input: {
   if (!input.checks.packagePin) {
     issues.push({
       action:
-        'Update plugins/alembic-codex/.mcp.json to use npx --package ./runtime alembic-codex-mcp, then run npm run prepare:codex-plugin-runtime.',
+        'Update plugins/alembic-codex/.mcp.json to use npx --package ./runtime.tgz alembic-codex-mcp, then run npm run prepare:codex-plugin-runtime.',
       code: 'PLUGIN_RUNTIME_PIN_MISMATCH',
       message:
-        'Codex plugin MCP config is not using the embedded Alembic runtime package from ./runtime.',
+        'Codex plugin MCP config is not using the embedded Alembic runtime tarball from ./runtime.tgz.',
       severity: 'error',
     });
   }

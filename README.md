@@ -49,9 +49,9 @@ Alembic also ships a Codex plugin at `plugins/alembic-codex`. It is designed for
 The Codex plugin lives at `plugins/alembic-codex` as a Git submodule backed by
 the dedicated `GxFn/AlembicCodex` distribution repository.
 The installed plugin ships Alembic business runtime code in `./runtime` as an
-embedded `alembic-ai` package; `npx --package ./runtime` is used only to install
-that local package and resolve production npm dependencies before starting
-`alembic-codex-mcp`.
+embedded `alembic-ai` package, plus `./runtime.tgz` packed from that directory;
+`npx --package ./runtime.tgz` is used only to install that local package tarball
+and resolve production npm dependencies before starting `alembic-codex-mcp`.
 
 Recommended first run inside Codex:
 

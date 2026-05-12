@@ -19,7 +19,7 @@
       "path": "plugins/alembic-codex",
       "marketplaceEntry": "alembic-codex",
       "runtimePackage": "alembic-ai",
-      "runtimeSpecifier": "./runtime",
+      "runtimeSpecifier": "./runtime.tgz",
       "embeddedRuntimePath": "runtime",
       "distributionRepo": "GxFn/AlembicCodex",
       "runtimeBin": "alembic-codex-mcp",

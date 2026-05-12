@@ -17,6 +17,7 @@ const readmeCnPath = join(pluginRoot, 'README.zh-CN.md');
 const releasePlaybookPath = join(pluginRoot, 'RELEASE-PLAYBOOK.md');
 const runtimeRoot = join(pluginRoot, 'runtime');
 const runtimePackagePath = join(runtimeRoot, 'package.json');
+const runtimeTarballPath = join(pluginRoot, 'runtime.tgz');
 const pluginJson = readJson(pluginJsonPath);
 const mcpJson = readJson(mcpJsonPath);
 const marketplaceJson = readJson(marketplacePath);
@@ -27,7 +28,7 @@ const iface = pluginJson.interface || {};
 
 const packageVersion = packageJson.version;
 const expectedRuntime = `alembic-ai@${packageVersion}`;
-const expectedEmbeddedRuntimeSpecifier = './runtime';
+const expectedEmbeddedRuntimeSpecifier = './runtime.tgz';
 const server = mcpJson.mcpServers?.alembic;
 const args = Array.isArray(server?.args) ? server.args : [];
 const packageIndex = args.indexOf('--package');
@@ -128,10 +129,7 @@ for (const keyword of ['codex', 'codex-plugin', 'openai-codex']) {
   );
 }
 expect(server?.command === 'npx', '.mcp.json must launch through npx');
-expect(
-  args.includes('--prefix') && args[args.indexOf('--prefix') + 1] === '/tmp',
-  '.mcp.json must run npx with --prefix /tmp so installs do not write into the plugin directory'
-);
+expect(!args.includes('--prefix'), '.mcp.json must not use --prefix with relative runtime.tgz');
 expect(args.includes('--package'), '.mcp.json npx args must include --package');
 expect(
   runtimeSpecifier === expectedEmbeddedRuntimeSpecifier,
@@ -142,6 +140,7 @@ expect(
 expect(args.includes('alembic-codex-mcp'), '.mcp.json must call alembic-codex-mcp');
 expect(!args.includes('latest'), '.mcp.json must not use latest');
 expect(server?.cwd === '.', '.mcp.json must run from the installed plugin root');
+expect(existsSync(runtimeTarballPath), 'embedded runtime tarball runtime.tgz must exist');
 expect(
   server?.env?.ALEMBIC_CHANNEL_ID === 'codex',
   '.mcp.json must set stable ALEMBIC_CHANNEL_ID=codex'
