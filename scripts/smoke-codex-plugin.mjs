@@ -297,6 +297,7 @@ function requiredPackageFiles(version) {
     'package/dist/lib/daemon/DaemonSupervisor.js',
     'package/dashboard/dist/index.html',
     'package/plugins/alembic-codex/.codex-plugin/plugin.json',
+    'package/plugins/alembic-codex/.agents/plugins/marketplace.json',
     'package/plugins/alembic-codex/.mcp.json',
     'package/plugins/alembic-codex/runtime/package.json',
     'package/plugins/alembic-codex/runtime/dist/bin/codex-mcp.js',
@@ -415,6 +416,20 @@ function simulateMarketplaceInstall({ packageRoot, packageVersion }) {
   );
 
   const runtimeRoot = join(installedRoot, 'runtime');
+  const distributionMarketplace = readJson(
+    join(installedRoot, '.agents', 'plugins', 'marketplace.json')
+  );
+  const distributionEntry = Array.isArray(distributionMarketplace.plugins)
+    ? distributionMarketplace.plugins.find((item) => item?.name === 'alembic-codex')
+    : null;
+  assert(
+    distributionMarketplace.name === 'alembic-codex',
+    'installed plugin standalone marketplace name mismatch'
+  );
+  assert(
+    distributionEntry?.source?.path === '.',
+    'installed plugin standalone marketplace must point to repository root'
+  );
   const runtimePackage = readJson(join(runtimeRoot, 'package.json'));
   assert(runtimePackage.name === 'alembic-ai', 'embedded runtime package name mismatch');
   assert(

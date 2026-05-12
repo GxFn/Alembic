@@ -11,6 +11,12 @@ const pluginRoot = join(root, 'plugins', 'alembic-codex');
 const pluginJsonPath = join(pluginRoot, '.codex-plugin', 'plugin.json');
 const mcpJsonPath = join(pluginRoot, '.mcp.json');
 const marketplacePath = join(root, '.agents', 'plugins', 'marketplace.json');
+const distributionMarketplacePath = join(
+  pluginRoot,
+  '.agents',
+  'plugins',
+  'marketplace.json'
+);
 const readmePath = join(pluginRoot, 'README.md');
 const readmeCnPath = join(pluginRoot, 'README.zh-CN.md');
 const releasePlaybookPath = join(pluginRoot, 'RELEASE-PLAYBOOK.md');
@@ -19,6 +25,7 @@ const runtimePackagePath = join(runtimeRoot, 'package.json');
 const pluginJson = readJson(pluginJsonPath);
 const mcpJson = readJson(mcpJsonPath);
 const marketplaceJson = readJson(marketplacePath);
+const distributionMarketplaceJson = readJson(distributionMarketplacePath);
 const runtimePackageJson = readJson(runtimePackagePath);
 const errors = [];
 const iface = pluginJson.interface || {};
@@ -34,6 +41,12 @@ const marketplaceEntry = Array.isArray(marketplaceJson.plugins)
   ? marketplaceJson.plugins.find((entry) => entry?.name === 'alembic-codex')
   : null;
 const marketplaceEntries = Array.isArray(marketplaceJson.plugins) ? marketplaceJson.plugins : [];
+const distributionMarketplaceEntry = Array.isArray(distributionMarketplaceJson.plugins)
+  ? distributionMarketplaceJson.plugins.find((entry) => entry?.name === 'alembic-codex')
+  : null;
+const distributionMarketplaceEntries = Array.isArray(distributionMarketplaceJson.plugins)
+  ? distributionMarketplaceJson.plugins
+  : [];
 
 expect(
   packageJson.bin?.['alembic-codex-mcp'] === 'dist/bin/codex-mcp.js',
@@ -185,11 +198,54 @@ for (const requiredRuntimeFile of [
   'resources/grammars/tree-sitter-typescript.wasm',
   'channels/codex/channel.json',
   '.agents/plugins/marketplace.json',
+  'plugins/alembic-codex/.agents/plugins/marketplace.json',
   'plugins/alembic-codex/.codex-plugin/plugin.json',
 ]) {
   expect(
     existsSync(join(runtimeRoot, requiredRuntimeFile)),
     `embedded runtime missing ${requiredRuntimeFile}`
+  );
+}
+expect(
+  distributionMarketplaceJson.name === 'alembic-codex',
+  'standalone AlembicCodex marketplace must be named alembic-codex'
+);
+expect(
+  distributionMarketplaceJson.interface?.displayName === 'Alembic Codex',
+  'standalone AlembicCodex marketplace must display as Alembic Codex'
+);
+expect(
+  distributionMarketplaceEntries.length === 1,
+  'standalone AlembicCodex marketplace must list exactly one plugin'
+);
+expect(
+  Boolean(distributionMarketplaceEntry),
+  'standalone AlembicCodex marketplace must include alembic-codex'
+);
+if (distributionMarketplaceEntry) {
+  expect(
+    distributionMarketplaceEntry.source?.source === 'local',
+    'standalone AlembicCodex marketplace source must be local'
+  );
+  expect(
+    distributionMarketplaceEntry.source?.path === '.',
+    'standalone AlembicCodex marketplace path must point to the repository root'
+  );
+  expect(
+    resolve(pluginRoot, distributionMarketplaceEntry.source?.path || '') === pluginRoot,
+    'standalone AlembicCodex marketplace path must resolve to the plugin root'
+  );
+  expect(
+    distributionMarketplaceEntry.policy?.installation === 'AVAILABLE',
+    'standalone AlembicCodex marketplace installation policy must be AVAILABLE'
+  );
+  expect(
+    distributionMarketplaceEntry.policy?.authentication === 'ON_INSTALL',
+    'standalone AlembicCodex marketplace authentication policy must be ON_INSTALL'
+  );
+  expect(
+    distributionMarketplaceEntry.category === iface.category,
+    'standalone AlembicCodex marketplace category must match plugin interface category'
   );
 }
 expect(
@@ -292,17 +348,17 @@ expect(
   'plugin Chinese README must link to English README'
 );
 expect(
-  readme.includes('npx codex-marketplace add GxFn/AlembicCodex --plugin'),
+  readme.includes('codex plugin marketplace add GxFn/AlembicCodex --ref main'),
   'plugin README must document AlembicCodex plugin install command'
 );
 expect(
-  readmeCn.includes('npx codex-marketplace add GxFn/AlembicCodex --plugin'),
+  readmeCn.includes('codex plugin marketplace add GxFn/AlembicCodex --ref main'),
   'plugin Chinese README must document AlembicCodex plugin install command'
 );
 expect(
-  readme.includes('[plugins."alembic-codex@gxfn"]') &&
-    readmeCn.includes('[plugins."alembic-codex@gxfn"]'),
-  'plugin READMEs must document local gxfn marketplace registration'
+  readme.includes('[plugins."alembic-codex@alembic-codex"]') &&
+    readmeCn.includes('[plugins."alembic-codex@alembic-codex"]'),
+  'plugin READMEs must document standalone local marketplace registration'
 );
 expect(
   readme.includes('alembic_codex_diagnostics'),

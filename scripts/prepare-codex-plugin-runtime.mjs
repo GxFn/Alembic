@@ -105,6 +105,7 @@ function writeRuntimePackageJson() {
 function copyPluginShellSnapshot() {
   const destination = join(runtimeRoot, 'plugins', 'alembic-codex');
   for (const entry of [
+    '.agents',
     '.codex-plugin',
     '.mcp.json',
     'README.md',
