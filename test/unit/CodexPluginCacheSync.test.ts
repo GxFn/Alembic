@@ -49,7 +49,9 @@ describe('Codex plugin cache sync script', () => {
     expect(cachedMcp.mcpServers.alembic.args).toEqual([localEntry]);
     expect(cachedMcp.mcpServers.alembic.env.ALEMBIC_CHANNEL_ID).toBe('codex');
     expect(repoMcp.mcpServers.alembic.command).toBe('npx');
-    expect(repoMcp.mcpServers.alembic.args).toContain('alembic-ai@0.1.0');
+    expect(repoMcp.mcpServers.alembic.args).toContain('--package');
+    expect(repoMcp.mcpServers.alembic.args).toContain('./runtime');
+    expect(repoMcp.mcpServers.alembic.args).toContain('alembic-codex-mcp');
   });
 });
 
