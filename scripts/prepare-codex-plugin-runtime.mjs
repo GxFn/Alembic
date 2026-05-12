@@ -1,13 +1,6 @@
 #!/usr/bin/env node
 
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
@@ -51,7 +44,7 @@ copyTree('.agents', '.agents');
 copyPluginShellSnapshot();
 
 process.stdout.write(
-  JSON.stringify(
+  `${JSON.stringify(
     {
       ok: true,
       runtimeRoot,
@@ -61,7 +54,7 @@ process.stdout.write(
     },
     null,
     2
-  ) + '\n'
+  )}\n`
 );
 
 function writeRuntimePackageJson() {

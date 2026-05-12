@@ -11,12 +11,7 @@ const pluginRoot = join(root, 'plugins', 'alembic-codex');
 const pluginJsonPath = join(pluginRoot, '.codex-plugin', 'plugin.json');
 const mcpJsonPath = join(pluginRoot, '.mcp.json');
 const marketplacePath = join(root, '.agents', 'plugins', 'marketplace.json');
-const distributionMarketplacePath = join(
-  pluginRoot,
-  '.agents',
-  'plugins',
-  'marketplace.json'
-);
+const distributionMarketplacePath = join(pluginRoot, '.agents', 'plugins', 'marketplace.json');
 const readmePath = join(pluginRoot, 'README.md');
 const readmeCnPath = join(pluginRoot, 'README.zh-CN.md');
 const releasePlaybookPath = join(pluginRoot, 'RELEASE-PLAYBOOK.md');
