@@ -1,7 +1,7 @@
 {
-  "name": "alembic-codex-marketplace",
+  "name": "gxfn",
   "interface": {
-    "displayName": "Alembic"
+    "displayName": "GxFn"
   },
   "plugins": [
     {

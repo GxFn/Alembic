@@ -25,6 +25,7 @@ That means every package version bump must keep these surfaces aligned:
 - `package-lock.json`
 - `plugins/alembic-codex/.mcp.json`
 - `plugins/alembic-codex/README.md`
+- `plugins/alembic-codex/README.zh-CN.md`
 - root `README.md` / `README_CN.md` when public instructions change
 
 ## Version And Tag Flow

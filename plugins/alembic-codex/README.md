@@ -2,12 +2,49 @@
 
 Alembic for Codex gives Codex local project memory without turning every chat into a setup session. It starts with a lightweight MCP shim, reports diagnostics and workspace status without initializing the database, initializes in Ghost mode by default, then starts or connects to the per-workspace daemon only when project knowledge, Guard, Dashboard, bootstrap, or rescan work is requested.
 
+Chinese version: [README.zh-CN.md](README.zh-CN.md)
+
 Use it when you want Codex to:
 
 - Prime itself with project Recipes before coding.
 - Run Guard checks against the current change.
 - Build or refresh project knowledge through recoverable daemon jobs.
 - Open the local Dashboard only when a visual handoff is useful.
+
+## Install
+
+Install from the GxFn Codex Marketplace plugin target:
+
+```bash
+npx codex-marketplace add GxFn/Alembic/plugins/alembic-codex --plugin
+```
+
+For a pinned release after the matching Git tag exists:
+
+```bash
+npx codex-marketplace add https://github.com/GxFn/Alembic/tree/v0.1.0/plugins/alembic-codex --plugin
+```
+
+If Codex asks for a GitHub target or direct artifact path, use:
+
+```text
+https://github.com/GxFn/Alembic/tree/v0.1.0/plugins/alembic-codex
+```
+
+If the Codex dialog separates source, ref, and sparse path, fill it like this:
+
+```text
+Source:
+https://github.com/GxFn/Alembic.git
+
+Git ref:
+v0.1.0
+
+Sparse path:
+plugins/alembic-codex
+```
+
+Enable `alembic-codex` from the plugin list after installation.
 
 ## Runtime
 
@@ -64,7 +101,18 @@ For the full release, testing, and promotion plan, see [RELEASE-PLAYBOOK.md](./R
 
 ## Local Marketplace
 
-This repository includes `.agents/plugins/marketplace.json` so local Codex builds can discover Alembic as an installable plugin entry. The entry points to `./plugins/alembic-codex`, marks installation as `AVAILABLE`, and uses `ON_INSTALL` authentication policy.
+This repository includes `.agents/plugins/marketplace.json` so local Codex builds can discover Alembic as an installable plugin entry under the `gxfn` marketplace, matching `codex-lark-remote`. The entry points to `./plugins/alembic-codex`, marks installation as `AVAILABLE`, and uses `ON_INSTALL` authentication policy.
+
+Register this repository as a local marketplace during development:
+
+```toml
+[marketplaces.gxfn]
+source_type = "local"
+source = "/absolute/path/to/Alembic"
+
+[plugins."alembic-codex@gxfn"]
+enabled = true
+```
 
 `npm run smoke:codex-plugin` packages the runtime, resolves this marketplace entry from the packed tarball, copies the plugin into a temporary install root, and validates the installed manifest, MCP config, assets, skills, and stdio MCP calls.
 

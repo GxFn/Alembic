@@ -12,6 +12,7 @@ const pluginJsonPath = join(pluginRoot, '.codex-plugin', 'plugin.json');
 const mcpJsonPath = join(pluginRoot, '.mcp.json');
 const marketplacePath = join(root, '.agents', 'plugins', 'marketplace.json');
 const readmePath = join(pluginRoot, 'README.md');
+const readmeCnPath = join(pluginRoot, 'README.zh-CN.md');
 const releasePlaybookPath = join(pluginRoot, 'RELEASE-PLAYBOOK.md');
 const pluginJson = readJson(pluginJsonPath);
 const mcpJson = readJson(mcpJsonPath);
@@ -113,12 +114,12 @@ expect(
   '.mcp.json must disable Codex admin tools by default'
 );
 expect(
-  marketplaceJson.name === 'alembic-codex-marketplace',
-  '.agents/plugins/marketplace.json must name the marketplace alembic-codex-marketplace'
+  marketplaceJson.name === 'gxfn',
+  '.agents/plugins/marketplace.json must name the marketplace gxfn'
 );
 expect(
-  marketplaceJson.interface?.displayName === 'Alembic',
-  '.agents/plugins/marketplace.json must display as Alembic'
+  marketplaceJson.interface?.displayName === 'GxFn',
+  '.agents/plugins/marketplace.json must display as GxFn'
 );
 expect(Boolean(marketplaceEntry), '.agents/plugins/marketplace.json must include alembic-codex');
 if (marketplaceEntry) {
@@ -185,18 +186,50 @@ for (const skill of [
 }
 
 const readme = existsSync(readmePath) ? readFileSync(readmePath, 'utf8') : '';
+const readmeCn = existsSync(readmeCnPath) ? readFileSync(readmeCnPath, 'utf8') : '';
 const rootReadme = existsSync(rootReadmePath) ? readFileSync(rootReadmePath, 'utf8') : '';
 const rootReadmeCn = existsSync(rootReadmeCnPath) ? readFileSync(rootReadmeCnPath, 'utf8') : '';
+expect(existsSync(readmeCnPath), 'plugin Chinese README must exist');
 expect(readme.includes(expectedRuntime), `README.md must mention ${expectedRuntime}`);
+expect(readmeCn.includes(expectedRuntime), `README.zh-CN.md must mention ${expectedRuntime}`);
+expect(
+  readme.includes('Chinese version: [README.zh-CN.md](README.zh-CN.md)'),
+  'plugin README must link to Chinese README'
+);
+expect(
+  readmeCn.includes('English version: [README.md](README.md)'),
+  'plugin Chinese README must link to English README'
+);
+expect(
+  readme.includes('npx codex-marketplace add GxFn/Alembic/plugins/alembic-codex --plugin'),
+  'plugin README must document GxFn marketplace install command'
+);
+expect(
+  readmeCn.includes('npx codex-marketplace add GxFn/Alembic/plugins/alembic-codex --plugin'),
+  'plugin Chinese README must document GxFn marketplace install command'
+);
+expect(
+  readme.includes('[plugins."alembic-codex@gxfn"]') &&
+    readmeCn.includes('[plugins."alembic-codex@gxfn"]'),
+  'plugin READMEs must document local gxfn marketplace registration'
+);
 expect(
   readme.includes('alembic_codex_diagnostics'),
   'README.md must document alembic_codex_diagnostics'
+);
+expect(
+  readmeCn.includes('alembic_codex_diagnostics'),
+  'README.zh-CN.md must document alembic_codex_diagnostics'
 );
 expect(
   readme.includes('alembic codex diagnostics --json'),
   'README.md must document CLI Codex diagnostics'
 );
 expect(readme.includes('alembic_codex_cleanup'), 'README.md must document cleanup policy');
+expect(
+  readmeCn.includes('alembic_codex_cleanup'),
+  'README.zh-CN.md must document cleanup policy'
+);
 expect(
   readme.includes('Use it when you want Codex to:'),
   'plugin README must include product-facing use cases'
@@ -214,6 +247,10 @@ for (const phrase of [
   expect(releasePlaybook.includes(phrase), `release playbook must include ${phrase}`);
 }
 expect(readme.includes('RELEASE-PLAYBOOK.md'), 'plugin README must link to release playbook');
+expect(
+  readmeCn.includes('RELEASE-PLAYBOOK.md'),
+  'plugin Chinese README must link to release playbook'
+);
 expect(rootReadme.includes('## Codex Plugin'), 'root README must document Codex Plugin');
 expect(
   rootReadme.includes('npm run release:codex-plugin'),

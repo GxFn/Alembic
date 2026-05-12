@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Alembic">
-  <rect width="64" height="64" rx="14" fill="#2563EB"/>
-  <path d="M19 47h26L34 16h-4L19 47Z" fill="#F8FAFC"/>
-  <path d="M25 39h14l-5-14h-4l-5 14Z" fill="#2563EB"/>
-  <path d="M16 48h32" stroke="#DBEAFE" stroke-width="4" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 512 512" role="img" aria-label="Alembic">
+  <rect width="512" height="512" rx="96" fill="#0F172A"/>
+  <path d="M156 380h200L276 112h-40L156 380Z" fill="#F8FAFC"/>
+  <path d="M213 318h86l-31-105h-24l-31 105Z" fill="#2563EB"/>
+  <path d="M128 384h256" stroke="#60A5FA" stroke-width="28" stroke-linecap="round"/>
 </svg>
