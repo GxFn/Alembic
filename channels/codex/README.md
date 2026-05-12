@@ -5,9 +5,10 @@ The Codex channel is the stable entrypoint for the current Alembic Codex plugin.
 Current scope is intentionally narrow:
 
 - exactly one Codex plugin: `alembic-codex`
-- exactly one npm runtime package: `alembic-ai`
+- exactly one embedded npm runtime package: `alembic-ai`
 - exactly one MCP runtime bin used by the plugin: `alembic-codex-mcp`
 - exactly one channel id for feature checks: `codex`
+- exactly one installable plugin distribution repo: `GxFn/AlembicCodex`
 
 `channels/codex/channel.json` records this wiring so Codex runtime checks do not
 infer behavior from a plugin path, binary name, marketplace name, or install

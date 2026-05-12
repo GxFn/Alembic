@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { getPackageVersion } from '../daemon/DaemonState.js';
 import {
   ALEMBIC_CHANNEL_ID_ENV,
@@ -16,6 +16,8 @@ export const CODEX_MCP_MODE_ENV = 'ALEMBIC_MCP_MODE';
 export const CODEX_MCP_SHIM_ENV = 'ALEMBIC_CODEX_MCP_MODE';
 export const CODEX_MCP_TIER_ENV = 'ALEMBIC_MCP_TIER';
 export const CODEX_ADMIN_ENABLE_ENV = 'ALEMBIC_CODEX_ENABLE_ADMIN';
+export const CODEX_PLUGIN_ROOT_ENV = 'ALEMBIC_CODEX_PLUGIN_ROOT';
+export const CODEX_EMBEDDED_RUNTIME_SPECIFIER = './runtime';
 
 export interface CodexRuntimeContext {
   adminEnabled: boolean;
@@ -27,6 +29,7 @@ export interface CodexRuntimeContext {
   marketplacePath: string;
   packageRoot: string;
   packageVersion: string;
+  embeddedRuntimeSpecifier: string;
   pinnedRuntimeSpecifier: string;
   pluginRoot: string;
   requestedTier: string;
@@ -59,12 +62,21 @@ export function resolveCodexRuntimeContext(
     marketplacePath: join(PACKAGE_ROOT, '.agents', 'plugins', 'marketplace.json'),
     packageRoot: PACKAGE_ROOT,
     packageVersion,
+    embeddedRuntimeSpecifier: CODEX_EMBEDDED_RUNTIME_SPECIFIER,
     pinnedRuntimeSpecifier: `${CODEX_RUNTIME_PACKAGE}@${packageVersion}`,
-    pluginRoot: join(PACKAGE_ROOT, 'plugins', CODEX_PLUGIN_NAME),
+    pluginRoot: resolveCodexPluginRoot(env),
     requestedTier,
     runtimeBin: CODEX_RUNTIME_BIN,
     runtimePackage: CODEX_RUNTIME_PACKAGE,
   };
+}
+
+function resolveCodexPluginRoot(env: NodeJS.ProcessEnv): string {
+  const configured = env[CODEX_PLUGIN_ROOT_ENV]?.trim();
+  if (configured) {
+    return isAbsolute(configured) ? configured : resolve(process.cwd(), configured);
+  }
+  return join(PACKAGE_ROOT, 'plugins', CODEX_PLUGIN_NAME);
 }
 
 export function resolveEffectiveCodexTier(tierName: string, adminEnabled: boolean): string {

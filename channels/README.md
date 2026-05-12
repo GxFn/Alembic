@@ -8,7 +8,9 @@ extensions, skills, or installer bundles.
 Each channel gets its own directory:
 
 - `channels/codex/` is the Codex entrypoint. It currently publishes the
-  `alembic-codex` plugin and depends on the npm global package `alembic-ai`.
+  `alembic-codex` plugin, whose installed directory contains an embedded
+  `alembic-ai` runtime package at `./runtime` in the dedicated
+  `GxFn/AlembicCodex` distribution repository.
 
 When a channel grows, add more entries to that channel's `plugins` or
 `packages` list instead of hardcoding one-off release logic in a single plugin

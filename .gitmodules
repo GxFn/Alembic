@@ -1,0 +1,3 @@
+[submodule "plugins/alembic-codex"]
+	path = plugins/alembic-codex
+	url = https://github.com/GxFn/AlembicCodex.git

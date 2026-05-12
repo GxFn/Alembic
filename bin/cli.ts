@@ -162,7 +162,7 @@ codex
 
 codex
   .command('diagnostics')
-  .description('检查 Codex 插件运行时、MCP pin、资源文件和 daemon 版本，不启动 daemon')
+  .description('检查 Codex 插件运行时、内置 runtime、资源文件和 daemon 版本，不启动 daemon')
   .option('-d, --dir <path>', '项目目录', '.')
   .option('--json', 'JSON 格式输出')
   .action(async (opts) => {
@@ -2470,7 +2470,9 @@ function printCodexDiagnostics(diagnostics: Record<string, unknown>) {
   cli.log(`  npm:         ${formatCheck(npm?.available)} ${String(npm?.version || 'unavailable')}`);
   cli.log(`  npx:         ${formatCheck(npx?.available)} ${String(npx?.version || 'unavailable')}`);
   cli.log(
-    `  MCP pin:     ${formatCheck(mcp?.packagePin)} ${String(mcp?.pinnedSpecifier || 'missing')}`
+    `  Runtime:     ${formatCheck(mcp?.embeddedRuntime || mcp?.packagePin)} ${String(
+      mcp?.runtimeSpecifier || mcp?.pinnedSpecifier || 'missing'
+    )}`
   );
   cli.log(`  Plugin:      ${formatCheck(plugin?.ok)} ${String(plugin?.root || 'missing')}`);
   cli.log(`  Daemon:      ${daemon?.ready ? 'ready' : String(daemon?.status || 'not running')}`);

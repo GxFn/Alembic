@@ -586,7 +586,9 @@ describe('CodexMcpServer', () => {
     };
     const pluginMcp = JSON.parse(
       fs.readFileSync(path.resolve('plugins/alembic-codex/.mcp.json'), 'utf8')
-    ) as { mcpServers: { alembic: { args: string[]; env: Record<string, string> } } };
+    ) as {
+      mcpServers: { alembic: { args: string[]; cwd: string; env: Record<string, string> } };
+    };
     const pluginJson = JSON.parse(
       fs.readFileSync(path.resolve('plugins/alembic-codex/.codex-plugin/plugin.json'), 'utf8')
     ) as { interface: { defaultPrompt: string[]; screenshots: string[] } };
@@ -595,10 +597,13 @@ describe('CodexMcpServer', () => {
     expect(packageJson.scripts['verify:codex-plugin']).toBe('node scripts/verify-codex-plugin.mjs');
     expect(pluginMcp.mcpServers.alembic.args).toContain('alembic-codex-mcp');
     expect(pluginMcp.mcpServers.alembic.args).toContain('--package');
-    expect(pluginMcp.mcpServers.alembic.args).toContain(`alembic-ai@${packageJson.version}`);
+    expect(pluginMcp.mcpServers.alembic.args).toContain('./runtime');
+    expect(pluginMcp.mcpServers.alembic.cwd).toBe('.');
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_MCP_MODE).toBe('1');
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_CODEX_MCP_MODE).toBe('1');
+    expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_CODEX_PLUGIN_ROOT).toBe('.');
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_CODEX_ENABLE_ADMIN).toBe('0');
+    expect(pluginMcp.mcpServers.alembic.env.npm_config_cache).toBe('/tmp/alembic-codex-npm-cache');
     expect(pluginJson.interface.defaultPrompt).toContain(
       'Guide me through Alembic Codex first-minute setup for this project'
     );

@@ -11,6 +11,7 @@ dist/
 dashboard/dist/
 resources/vscode-ext/out/
 resources/vscode-ext/*.vsix
+plugins/alembic-codex/runtime/
 
 # ─── Native build products ───────────────────────────
 # Swift/ObjC binaries & intermediate build artifacts

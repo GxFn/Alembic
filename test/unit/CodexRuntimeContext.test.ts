@@ -45,7 +45,7 @@ describe('Codex runtime context', () => {
     expect(context.runtimeBin).toBe('alembic-codex-mcp');
     expect(registry.channel.value?.id).toBe('codex');
     expect(registry.plugin.manifest.value?.name).toBe('alembic-codex');
-    expect(registry.mcp.args).toContain(context.pinnedRuntimeSpecifier);
+    expect(registry.mcp.args).toContain(context.embeddedRuntimeSpecifier);
     expect(registry.mcp.args).toContain(context.runtimeBin);
   });
 
@@ -55,8 +55,9 @@ describe('Codex runtime context', () => {
 
     expect(diagnostics.manifest.ok).toBe(true);
     expect(diagnostics.mcp.packagePin).toBe(true);
+    expect(diagnostics.mcp.embeddedRuntime).toBe(true);
     expect(diagnostics.mcp.agentTierByDefault).toBe(true);
-    expect(diagnostics.mcp.pinnedSpecifier).toBe(context.pinnedRuntimeSpecifier);
+    expect(diagnostics.mcp.runtimeSpecifier).toBe(context.embeddedRuntimeSpecifier);
     expect(diagnostics.skills.missing).toEqual([]);
     expect(diagnostics.assets.missing).toEqual([]);
     expect(context.defaultTier).toBe(CODEX_DEFAULT_MCP_TIER);

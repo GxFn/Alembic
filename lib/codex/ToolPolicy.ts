@@ -83,7 +83,7 @@ export const CODEX_LOCAL_TOOLS: CodexToolDefinition[] = [
     name: 'alembic_codex_diagnostics',
     tier: 'agent',
     description:
-      'Run Alembic Codex runtime diagnostics without starting the daemon. Checks Node, npm, npx, package pinning, daemon version, offline fallback, admin mode gate, and first-run next actions.',
+      'Run Alembic Codex runtime diagnostics without starting the daemon. Checks Node, npm, npx, embedded runtime wiring, daemon version, offline fallback, admin mode gate, and first-run next actions.',
     inputSchema: {
       type: 'object',
       properties: {},

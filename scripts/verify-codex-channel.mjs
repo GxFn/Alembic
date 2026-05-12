@@ -43,7 +43,8 @@ expect(packages.length === 1, 'Codex channel must list exactly one package in th
 expect(plugins[0]?.name === 'alembic-codex', 'Codex channel plugin must be alembic-codex');
 expect(packages[0]?.name === 'alembic-ai', 'Codex channel package must be alembic-ai');
 expect(
-  channel.description === 'Codex distribution entry for the Alembic Codex plugin and npm runtime.',
+  channel.description ===
+    'Codex distribution entry for the Alembic Codex plugin and embedded npm runtime.',
   'Codex channel description must stay scoped to the current plugin/runtime'
 );
 
@@ -70,8 +71,17 @@ for (const plugin of plugins) {
     `marketplace path for ${plugin.name} must be ./${plugin.path}`
   );
   expect(
-    runtimeSpecifier === `${plugin.runtimePackage}@${packageVersion}`,
-    `plugin ${plugin.name} MCP runtime must pin ${plugin.runtimePackage}@${packageVersion}`
+    runtimeSpecifier === plugin.runtimeSpecifier,
+    `plugin ${plugin.name} MCP runtime must use embedded specifier ${plugin.runtimeSpecifier}`
+  );
+  expect(
+    plugin.embeddedRuntimePath === 'runtime' &&
+      existsSync(join(pluginRoot, plugin.embeddedRuntimePath, 'package.json')),
+    `plugin ${plugin.name} must declare an embedded runtime package path`
+  );
+  expect(
+    plugin.distributionRepo === 'GxFn/AlembicCodex',
+    `plugin ${plugin.name} must declare the AlembicCodex distribution repo`
   );
   expect(
     args.includes(plugin.runtimeBin),

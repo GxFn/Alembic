@@ -1,7 +1,7 @@
 {
   "id": "codex",
   "displayName": "Codex",
-  "description": "Codex distribution entry for the Alembic Codex plugin and npm runtime.",
+  "description": "Codex distribution entry for the Alembic Codex plugin and embedded npm runtime.",
   "marketplace": {
     "name": "gxfn",
     "displayName": "GxFn",
@@ -19,6 +19,9 @@
       "path": "plugins/alembic-codex",
       "marketplaceEntry": "alembic-codex",
       "runtimePackage": "alembic-ai",
+      "runtimeSpecifier": "./runtime",
+      "embeddedRuntimePath": "runtime",
+      "distributionRepo": "GxFn/AlembicCodex",
       "runtimeBin": "alembic-codex-mcp",
       "releaseScript": "release:codex-plugin",
       "smokeScript": "smoke:codex-plugin"

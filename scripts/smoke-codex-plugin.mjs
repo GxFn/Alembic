@@ -20,6 +20,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 const root = resolve(import.meta.dirname, '..');
 const shouldRunDaemon = process.argv.includes('--daemon');
 const shouldRunStdio = !process.argv.includes('--no-stdio');
+const shouldRunNpxRuntime = shouldRunStdio && !process.argv.includes('--no-npx-runtime');
 const keepTmp = process.argv.includes('--keep') || process.env.KEEP_SMOKE_TMP === '1';
 const tmpRoot = mkdtempSync(join(tmpdir(), 'alembic-codex-smoke-'));
 const packDir = join(tmpRoot, 'pack');
@@ -27,15 +28,19 @@ const extractDir = join(tmpRoot, 'extract');
 const npmCacheDir = join(tmpRoot, 'npm-cache');
 const projectRoot = join(tmpRoot, 'project');
 const stdioProjectRoot = join(tmpRoot, 'stdio-project');
+const npxProjectRoot = join(tmpRoot, 'npx-project');
 const alembicHome = join(tmpRoot, 'home');
 const stdioAlembicHome = join(tmpRoot, 'stdio-home');
+const npxAlembicHome = join(tmpRoot, 'npx-home');
 mkdirSync(packDir, { recursive: true });
 mkdirSync(extractDir, { recursive: true });
 mkdirSync(npmCacheDir, { recursive: true });
 mkdirSync(projectRoot, { recursive: true });
 mkdirSync(stdioProjectRoot, { recursive: true });
+mkdirSync(npxProjectRoot, { recursive: true });
 mkdirSync(alembicHome, { recursive: true });
 mkdirSync(stdioAlembicHome, { recursive: true });
+mkdirSync(npxAlembicHome, { recursive: true });
 writeFileSync(
   join(projectRoot, 'package.json'),
   '{"name":"codex-smoke-project","type":"module"}\n'
@@ -46,9 +51,15 @@ writeFileSync(
   '{"name":"codex-stdio-smoke-project","type":"module"}\n'
 );
 writeFileSync(join(stdioProjectRoot, 'index.js'), 'export const stdioSmoke = true;\n');
+writeFileSync(
+  join(npxProjectRoot, 'package.json'),
+  '{"name":"codex-npx-runtime-smoke-project","type":"module"}\n'
+);
+writeFileSync(join(npxProjectRoot, 'index.js'), 'export const npxRuntimeSmoke = true;\n');
 
 const previousEnv = {
   ALEMBIC_CHANNEL_ID: process.env.ALEMBIC_CHANNEL_ID,
+  ALEMBIC_CODEX_PLUGIN_ROOT: process.env.ALEMBIC_CODEX_PLUGIN_ROOT,
   ALEMBIC_HOME: process.env.ALEMBIC_HOME,
   ALEMBIC_PROJECT_DIR: process.env.ALEMBIC_PROJECT_DIR,
   CODEX_WORKSPACE_DIR: process.env.CODEX_WORKSPACE_DIR,
@@ -91,19 +102,24 @@ try {
     symlinkSync(repoNodeModules, join(packageRoot, 'node_modules'), 'dir');
   }
 
-  simulateMarketplaceInstall({ packageRoot, packageVersion: packageJson.version });
+  const installedPlugin = simulateMarketplaceInstall({
+    packageRoot,
+    packageVersion: packageJson.version,
+  });
+  const runtimeRoot = installedPlugin.runtimeRoot;
 
   process.env.ALEMBIC_HOME = alembicHome;
   process.env.ALEMBIC_CHANNEL_ID = 'codex';
+  process.env.ALEMBIC_CODEX_PLUGIN_ROOT = installedPlugin.installedRoot;
   process.env.ALEMBIC_PROJECT_DIR = projectRoot;
   process.env.CODEX_WORKSPACE_DIR = projectRoot;
   process.env.ALEMBIC_QUIET = '1';
 
   const { CodexMcpServer } = await import(
-    pathToFileURL(join(packageRoot, 'dist', 'lib', 'external', 'mcp', 'CodexMcpServer.js')).href
+    pathToFileURL(join(runtimeRoot, 'dist', 'lib', 'external', 'mcp', 'CodexMcpServer.js')).href
   );
   const { JobStore } = await import(
-    pathToFileURL(join(packageRoot, 'dist', 'lib', 'daemon', 'JobStore.js')).href
+    pathToFileURL(join(runtimeRoot, 'dist', 'lib', 'daemon', 'JobStore.js')).href
   );
 
   server = new CodexMcpServer({ projectRoot, waitUntilReadyMs: 5000 });
@@ -112,7 +128,11 @@ try {
   assertResult(diagnostics, 'diagnostics');
   assert(
     diagnostics.data?.package?.pinnedSpecifier === `alembic-ai@${packageJson.version}`,
-    'diagnostics package pin mismatch'
+    'diagnostics runtime package identity mismatch'
+  );
+  assert(
+    diagnostics.data?.package?.runtimeSpecifier === './runtime',
+    'diagnostics embedded runtime specifier mismatch'
   );
   assert(diagnostics.data?.plugin?.ok === true, 'diagnostics plugin checks did not pass');
   assert(diagnostics.data?.codex?.channelId === 'codex', 'diagnostics channel id mismatch');
@@ -174,11 +194,21 @@ try {
   if (shouldRunStdio) {
     await runStdioSmoke({
       packageJson,
-      packageRoot,
+      runtimeRoot,
+      pluginRoot: installedPlugin.installedRoot,
       projectRoot: stdioProjectRoot,
       alembicHome: stdioAlembicHome,
     });
     stdio = 'passed';
+  }
+  let npxRuntime = 'skipped';
+  if (shouldRunNpxRuntime) {
+    await runNpxRuntimeSmoke({
+      installedRoot: installedPlugin.installedRoot,
+      projectRoot: npxProjectRoot,
+      alembicHome: npxAlembicHome,
+    });
+    npxRuntime = 'passed';
   }
 
   let daemon = null;
@@ -231,6 +261,7 @@ try {
         alembicHome,
         install: 'passed',
         stdio,
+        npxRuntime,
         recovery,
         daemon: shouldRunDaemon ? daemon?.data?.dashboardUrl || null : 'skipped',
       },
@@ -267,6 +298,13 @@ function requiredPackageFiles(version) {
     'package/dashboard/dist/index.html',
     'package/plugins/alembic-codex/.codex-plugin/plugin.json',
     'package/plugins/alembic-codex/.mcp.json',
+    'package/plugins/alembic-codex/runtime/package.json',
+    'package/plugins/alembic-codex/runtime/dist/bin/codex-mcp.js',
+    'package/plugins/alembic-codex/runtime/dist/bin/daemon-server.js',
+    'package/plugins/alembic-codex/runtime/dist/lib/external/mcp/CodexMcpServer.js',
+    'package/plugins/alembic-codex/runtime/dashboard/dist/index.html',
+    'package/plugins/alembic-codex/runtime/resources/grammars/tree-sitter-typescript.wasm',
+    'package/plugins/alembic-codex/runtime/plugins/alembic-codex/.codex-plugin/plugin.json',
     'package/plugins/alembic-codex/RELEASE-PLAYBOOK.md',
     'package/plugins/alembic-codex/README.md',
     'package/plugins/alembic-codex/README.zh-CN.md',
@@ -275,6 +313,7 @@ function requiredPackageFiles(version) {
     'package/scripts/verify-codex-plugin.mjs',
     'package/scripts/verify-codex-channel.mjs',
     'package/scripts/smoke-codex-plugin.mjs',
+    'package/scripts/prepare-codex-plugin-runtime.mjs',
     'package/scripts/release-codex-channel.mjs',
     'package/scripts/release-codex-plugin.mjs',
     'package/package.json',
@@ -358,12 +397,43 @@ function simulateMarketplaceInstall({ packageRoot, packageVersion }) {
       : join(installedRoot, '.mcp.json');
   const mcp = readJson(mcpPath);
   const args = Array.isArray(mcp.mcpServers?.alembic?.args) ? mcp.mcpServers.alembic.args : [];
+  const env = mcp.mcpServers?.alembic?.env || {};
   const packageIndex = args.indexOf('--package');
   assert(
-    args[packageIndex + 1] === `alembic-ai@${packageVersion}`,
-    'installed plugin MCP runtime pin mismatch'
+    args[packageIndex + 1] === './runtime',
+    'installed plugin MCP embedded runtime specifier mismatch'
   );
   assert(args.includes('alembic-codex-mcp'), 'installed plugin MCP binary missing');
+  assert(mcp.mcpServers?.alembic?.cwd === '.', 'installed plugin MCP cwd must be plugin root');
+  assert(
+    env.ALEMBIC_CODEX_PLUGIN_ROOT === '.',
+    'installed plugin MCP must pass ALEMBIC_CODEX_PLUGIN_ROOT=.'
+  );
+  assert(
+    env.npm_config_cache === '/tmp/alembic-codex-npm-cache',
+    'installed plugin MCP must keep npm cache out of the user home directory'
+  );
+
+  const runtimeRoot = join(installedRoot, 'runtime');
+  const runtimePackage = readJson(join(runtimeRoot, 'package.json'));
+  assert(runtimePackage.name === 'alembic-ai', 'embedded runtime package name mismatch');
+  assert(
+    runtimePackage.version === packageVersion,
+    'embedded runtime package version does not match plugin package version'
+  );
+  assert(
+    runtimePackage.bin?.['alembic-codex-mcp'] === 'dist/bin/codex-mcp.js',
+    'embedded runtime MCP bin missing'
+  );
+  for (const required of [
+    'dist/bin/codex-mcp.js',
+    'dist/lib/external/mcp/CodexMcpServer.js',
+    'dashboard/dist/index.html',
+    'resources/grammars/tree-sitter-typescript.wasm',
+    'plugins/alembic-codex/.codex-plugin/plugin.json',
+  ]) {
+    assert(existsSync(join(runtimeRoot, required)), `embedded runtime missing ${required}`);
+  }
 
   for (const asset of collectManifestAssets(manifest.interface || {})) {
     assert(existsSync(resolve(installedRoot, asset)), `installed plugin asset missing: ${asset}`);
@@ -381,6 +451,8 @@ function simulateMarketplaceInstall({ packageRoot, packageVersion }) {
       `installed plugin skill missing: ${skill}`
     );
   }
+
+  return { installedRoot, runtimeRoot };
 }
 
 function collectManifestAssets(iface) {
@@ -391,15 +463,16 @@ function collectManifestAssets(iface) {
   ].filter((asset) => typeof asset === 'string' && asset.length > 0);
 }
 
-async function runStdioSmoke({ packageJson, packageRoot, projectRoot, alembicHome }) {
+async function runStdioSmoke({ packageJson, runtimeRoot, pluginRoot, projectRoot, alembicHome }) {
   const stderr = [];
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [join(packageRoot, 'dist', 'bin', 'codex-mcp.js')],
-    cwd: packageRoot,
+    args: [join(runtimeRoot, 'dist', 'bin', 'codex-mcp.js')],
+    cwd: pluginRoot,
     env: {
       ALEMBIC_CHANNEL_ID: 'codex',
       ALEMBIC_CODEX_ENABLE_ADMIN: '0',
+      ALEMBIC_CODEX_PLUGIN_ROOT: pluginRoot,
       ALEMBIC_HOME: alembicHome,
       ALEMBIC_MCP_TIER: 'agent',
       ALEMBIC_PROJECT_DIR: projectRoot,
@@ -460,7 +533,11 @@ async function runStdioSmoke({ packageJson, packageRoot, projectRoot, alembicHom
     assertResult(diagnostics, 'MCP stdio diagnostics');
     assert(
       diagnostics.data?.package?.pinnedSpecifier === `alembic-ai@${packageJson.version}`,
-      'MCP stdio diagnostics package pin mismatch'
+      'MCP stdio diagnostics runtime package identity mismatch'
+    );
+    assert(
+      diagnostics.data?.package?.runtimeSpecifier === './runtime',
+      'MCP stdio diagnostics embedded runtime specifier mismatch'
     );
     assert(
       diagnostics.data?.plugin?.ok === true,
@@ -535,6 +612,48 @@ async function runStdioSmoke({ packageJson, packageRoot, projectRoot, alembicHom
     const jobs = await callStdioJsonTool(client, 'alembic_codex_job', { limit: 5 }, stderr);
     assertResult(jobs, 'MCP stdio job list');
     assert(Array.isArray(jobs.data?.jobs), 'MCP stdio job list did not return jobs array');
+  } finally {
+    await client.close();
+  }
+}
+
+async function runNpxRuntimeSmoke({ installedRoot, projectRoot, alembicHome }) {
+  const mcp = readJson(join(installedRoot, '.mcp.json'));
+  const server = mcp.mcpServers?.alembic || {};
+  assert(typeof server.command === 'string', 'MCP npx runtime command missing');
+  assert(Array.isArray(server.args), 'MCP npx runtime args missing');
+  const stderr = [];
+  const transport = new StdioClientTransport({
+    command: server.command,
+    args: server.args,
+    cwd: installedRoot,
+    env: {
+      ...process.env,
+      ...(server.env || {}),
+      ALEMBIC_HOME: alembicHome,
+      ALEMBIC_PROJECT_DIR: projectRoot,
+      ALEMBIC_QUIET: '1',
+      CODEX_WORKSPACE_DIR: projectRoot,
+    },
+    stderr: 'pipe',
+  });
+  transport.stderr?.on('data', (chunk) => stderr.push(String(chunk)));
+
+  const client = new Client({ name: 'alembic-codex-npx-runtime-smoke', version: '0.0.0' });
+  try {
+    await withTimeout(
+      client.connect(transport, { timeout: 60000 }),
+      70000,
+      () => `MCP npx runtime connect timed out\n${stderr.join('')}`
+    );
+    const toolsResult = await withTimeout(
+      client.listTools(undefined, { timeout: 10000 }),
+      15000,
+      () => `MCP npx runtime tools/list timed out\n${stderr.join('')}`
+    );
+    const toolNames = new Set(toolsResult.tools.map((tool) => tool.name));
+    assert(toolNames.has('alembic_codex_diagnostics'), 'MCP npx runtime missing diagnostics');
+    assert(toolNames.has('alembic_codex_status'), 'MCP npx runtime missing status');
   } finally {
     await client.close();
   }

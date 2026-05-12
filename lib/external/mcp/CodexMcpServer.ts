@@ -215,7 +215,7 @@ export class CodexMcpServer {
           nextActions: [
             buildCodexRecommendedAction({
               label: 'Run diagnostics',
-              reason: 'Check Node, npm, package pinning, and daemon state before retrying.',
+              reason: 'Check Node, npm, embedded runtime wiring, and daemon state before retrying.',
               startsDaemon: false,
               tool: 'alembic_codex_diagnostics',
             }),

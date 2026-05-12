@@ -27,6 +27,16 @@ const steps = [
         },
       ]),
   {
+    name: 'Prepare embedded Codex plugin runtime',
+    command: 'npm',
+    args: ['run', 'prepare:codex-plugin-runtime'],
+    verifies: [
+      'plugins/alembic-codex/runtime/package.json',
+      'plugins/alembic-codex/runtime/dist/bin/codex-mcp.js',
+      'plugins/alembic-codex/runtime/dashboard/dist/index.html',
+    ],
+  },
+  {
     name: 'Verify Codex channel entry',
     command: 'npm',
     args: ['run', 'verify:codex-channel'],

@@ -330,7 +330,7 @@ export function buildCodexStatusOnboarding(input: {
         'Alembic Codex is installed, but runtime diagnostics need attention before project knowledge is reliable.',
       primaryAction: buildCodexRecommendedAction({
         label: 'Run diagnostics',
-        reason: 'Resolve Node, npm, package pinning, or plugin metadata issues first.',
+        reason: 'Resolve Node, npm, embedded runtime, or plugin metadata issues first.',
         startsDaemon: false,
         tool: 'alembic_codex_diagnostics',
       }),

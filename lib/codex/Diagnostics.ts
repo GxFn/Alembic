@@ -22,14 +22,21 @@ export interface CodexPluginDiagnostics {
     binary: string | null;
     codexShimMode: boolean;
     command: string | null;
+    embeddedRuntime: boolean;
     mcpMode: boolean;
     ok: boolean;
     packagePin: boolean;
     path: string;
     pinnedSpecifier: string | null;
+    runtimeSpecifier: string | null;
   };
   ok: boolean;
-  readme: { mentionsPinnedRuntime: boolean; ok: boolean; path: string };
+  readme: {
+    mentionsEmbeddedRuntime: boolean;
+    mentionsPinnedRuntime: boolean;
+    ok: boolean;
+    path: string;
+  };
   root: string;
   skills: { missing: string[]; ok: boolean; required: string[] };
 }
@@ -56,6 +63,7 @@ export function buildCodexRuntimeDiagnostics(
     node: nodeMajor >= 22,
     npm: npmAvailable,
     npx: npxAvailable,
+    embeddedRuntime: plugin.mcp.embeddedRuntime,
     packagePin: plugin.mcp.packagePin,
     pluginAssets: plugin.assets.ok,
     pluginManifest: plugin.manifest.ok,
@@ -107,6 +115,8 @@ export function buildCodexRuntimeDiagnostics(
     package: {
       name: context.runtimePackage,
       version: context.packageVersion,
+      embeddedRuntime: plugin.mcp.embeddedRuntime,
+      runtimeSpecifier: context.embeddedRuntimeSpecifier,
       pinnedSpecifier: context.pinnedRuntimeSpecifier,
       mcpBinary: context.runtimeBin,
     },
@@ -128,8 +138,9 @@ export function buildCodexRuntimeDiagnostics(
         : `disabled-requires-${CODEX_ADMIN_ENABLE_ENV}=1`,
     },
     offlineFallback: {
-      note: 'The marketplace MCP config uses pinned npx. If first-run network access is unavailable, install the same pinned runtime globally and use alembic-codex-mcp from PATH.',
+      note: 'The Codex plugin ships Alembic runtime code in ./runtime. npx installs that local package and resolves its production npm dependencies on first MCP start.',
       globalInstall: `npm install -g ${context.pinnedRuntimeSpecifier}`,
+      localPackage: context.embeddedRuntimeSpecifier,
       command: context.runtimeBin,
     },
     cleanup: {
@@ -146,15 +157,16 @@ export function buildCodexPluginDiagnostics(
   const registry = loadCodexPluginRegistry(context);
   const args = registry.mcp.args;
   const packageIndex = args.indexOf('--package');
-  const pinnedSpecifier = packageIndex >= 0 ? args[packageIndex + 1] || null : null;
+  const runtimeSpecifier = packageIndex >= 0 ? args[packageIndex + 1] || null : null;
   const command =
     typeof registry.mcp.server?.command === 'string' ? registry.mcp.server.command : null;
   const binary = args.find((arg) => arg === context.runtimeBin) || null;
-  const packagePin =
+  const embeddedRuntime =
     command === 'npx' &&
-    pinnedSpecifier === context.pinnedRuntimeSpecifier &&
+    runtimeSpecifier === context.embeddedRuntimeSpecifier &&
     binary === context.runtimeBin &&
     !args.includes('latest');
+  const packagePin = embeddedRuntime;
   const adminDisabledByDefault = registry.mcp.env?.[CODEX_ADMIN_ENABLE_ENV] === '0';
   const agentTierByDefault = registry.mcp.env?.ALEMBIC_MCP_TIER === CODEX_DEFAULT_MCP_TIER;
   const mcpMode = registry.mcp.env?.[CODEX_MCP_MODE_ENV] === '1';
@@ -166,7 +178,9 @@ export function buildCodexPluginDiagnostics(
   const missingSkills = requiredSkills.filter(
     (skill) => !existsSync(join(registry.plugin.root, 'skills', skill, 'SKILL.md'))
   );
-  const readmeOk = registry.plugin.readme.includes(context.pinnedRuntimeSpecifier);
+  const mentionsEmbeddedRuntime = registry.plugin.readme.includes(context.embeddedRuntimeSpecifier);
+  const mentionsPinnedRuntime = registry.plugin.readme.includes(context.pinnedRuntimeSpecifier);
+  const readmeOk = mentionsEmbeddedRuntime && mentionsPinnedRuntime;
 
   return {
     assets: {
@@ -187,15 +201,18 @@ export function buildCodexPluginDiagnostics(
       binary,
       codexShimMode,
       command,
+      embeddedRuntime,
       mcpMode,
-      ok: packagePin && adminDisabledByDefault && agentTierByDefault && mcpMode && codexShimMode,
+      ok:
+        embeddedRuntime && adminDisabledByDefault && agentTierByDefault && mcpMode && codexShimMode,
       packagePin,
       path: registry.mcp.json.path,
-      pinnedSpecifier,
+      pinnedSpecifier: runtimeSpecifier,
+      runtimeSpecifier,
     },
     ok:
       registry.plugin.manifest.ok &&
-      packagePin &&
+      embeddedRuntime &&
       adminDisabledByDefault &&
       agentTierByDefault &&
       mcpMode &&
@@ -204,7 +221,8 @@ export function buildCodexPluginDiagnostics(
       missingSkills.length === 0 &&
       readmeOk,
     readme: {
-      mentionsPinnedRuntime: readmeOk,
+      mentionsEmbeddedRuntime,
+      mentionsPinnedRuntime,
       ok: readmeOk,
       path: registry.plugin.readmePath,
     },
@@ -246,7 +264,7 @@ function buildDiagnosticIssues(input: {
   }
   if (!input.checks.npx) {
     issues.push({
-      action: `Install the pinned runtime globally with npm install -g alembic-ai@${input.packageVersion}.`,
+      action: `Install npm/npx support, or install the fallback runtime globally with npm install -g alembic-ai@${input.packageVersion}.`,
       code: 'NPX_UNAVAILABLE',
       message: String(input.npx.error || 'npx is not available.'),
       severity: 'error',
@@ -254,9 +272,11 @@ function buildDiagnosticIssues(input: {
   }
   if (!input.checks.packagePin) {
     issues.push({
-      action: `Update plugins/alembic-codex/.mcp.json to use npx --package alembic-ai@${input.packageVersion} alembic-codex-mcp.`,
+      action:
+        'Update plugins/alembic-codex/.mcp.json to use npx --package ./runtime alembic-codex-mcp, then run npm run prepare:codex-plugin-runtime.',
       code: 'PLUGIN_RUNTIME_PIN_MISMATCH',
-      message: 'Codex plugin MCP config is not pinned to the current Alembic runtime package.',
+      message:
+        'Codex plugin MCP config is not using the embedded Alembic runtime package from ./runtime.',
       severity: 'error',
     });
   }

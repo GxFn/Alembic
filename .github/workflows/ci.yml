@@ -24,6 +24,8 @@ jobs:
         node-version: ['22']
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
@@ -42,6 +44,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
@@ -106,6 +110,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
@@ -120,6 +126,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
