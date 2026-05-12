@@ -281,9 +281,9 @@ function stopLarkWS() {
 
 // ─── 自动启动（路由加载时） ─────────────────────────
 
-// 延迟启动：等 8s 确保 Bootstrap.loadDotEnv() + DB init 完成后再读取环境变量
-// 注意：模块级代码在 ESM import 时执行，此时 .env 尚未加载，
-// 所以凭证检查必须在回调内部而非外部
+// 延迟启动：等 8s 确保 Bootstrap 完成 workspace settings 与 DB 初始化后再读取运行时配置。
+// 注意：模块级代码在 ESM import 时执行，此时 workspace settings 尚未应用，
+// 所以凭证检查必须在回调内部而非外部。
 timerRegistry.setTimeout(
   async () => {
     const { appId, appSecret } = getLarkConfig();

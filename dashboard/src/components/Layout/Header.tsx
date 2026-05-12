@@ -152,7 +152,7 @@ const Header: React.FC<HeaderProps> = ({
     setAiSwitching(true);
     try {
       onBeforeAiSwitch?.();
-      await api.saveLlmEnvConfig({
+      await api.saveLlmWorkspaceConfig({
         provider: provider.id,
         model: provider.defaultModel,
       });
@@ -391,7 +391,7 @@ const Header: React.FC<HeaderProps> = ({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onOpenLlmConfig}>
                   <Settings size={14} />
-                  <span>{t('header.editEnvConfig')}</span>
+                  <span>{t('header.editAiSettings')}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -45,10 +45,10 @@ import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-root.js';
 import { shutdown } from '../lib/shared/shutdown.js';
 import { WorkspaceResolver } from '../lib/shared/WorkspaceResolver.js';
 import {
-  collectAiEnv,
-  collectAiEnvOverrides,
-  isAiEnvReady,
-  maskAiEnvConfig,
+  collectAiRuntimeOverrideDiff,
+  collectAiRuntimeOverrides,
+  isAiRuntimeConfigReady,
+  maskAiRuntimeConfig,
   PROVIDER_KEY_ENV,
   WorkspaceSettingsStore,
 } from '../lib/shared/WorkspaceSettingsStore.js';
@@ -250,28 +250,32 @@ ai.command('configure')
     printAiConfigStatus(status);
   });
 
-ai.command('import-env')
-  .description('把当前 shell 中显式设置的 Alembic AI 环境变量导入工作区配置')
-  .option('-d, --dir <path>', '项目目录', '.')
-  .option('--json', 'JSON 格式输出')
-  .action(async (opts) => {
-    const projectRoot = resolve(opts.dir);
-    const updates = collectAiEnv(process.env);
-    if (Object.keys(updates).length === 0) {
-      cli.error('No Alembic AI environment variables found in the current process.');
-      process.exit(1);
-    }
+function registerAiRuntimeImportCommand(name: string) {
+  ai.command(name)
+    .description('把当前进程中的 Alembic AI 运行时覆盖导入工作区配置')
+    .option('-d, --dir <path>', '项目目录', '.')
+    .option('--json', 'JSON 格式输出')
+    .action(async (opts) => {
+      const projectRoot = resolve(opts.dir);
+      const updates = collectAiRuntimeOverrides(process.env);
+      if (Object.keys(updates).length === 0) {
+        cli.error('No Alembic AI runtime overrides found in the current process.');
+        process.exit(1);
+      }
 
-    const store = WorkspaceSettingsStore.fromProject(projectRoot);
-    store.writeAiConfig(updates);
-    const status = buildAiConfigStatus(projectRoot);
-    if (opts.json) {
-      cli.json(status);
-      return;
-    }
-    cli.success('Imported current process AI environment into Alembic workspace settings.');
-    printAiConfigStatus(status);
-  });
+      const store = WorkspaceSettingsStore.fromProject(projectRoot);
+      store.writeAiConfig(updates);
+      const status = buildAiConfigStatus(projectRoot);
+      if (opts.json) {
+        cli.json(status);
+        return;
+      }
+      cli.success('Imported current process AI runtime overrides into Alembic workspace settings.');
+      printAiConfigStatus(status);
+    });
+}
+
+registerAiRuntimeImportCommand('import-runtime');
 
 // ─────────────────────────────────────────────────────
 // daemon 命令 — Codex/插件模式后台服务
@@ -2294,24 +2298,28 @@ interface AiConfigureOptions {
 function buildAiConfigStatus(projectRoot: string) {
   const store = WorkspaceSettingsStore.fromProject(projectRoot);
   const workspaceConfig = store.readAiConfig();
-  const processConfig = collectAiEnvOverrides(workspaceConfig.env, process.env);
+  const processConfig = collectAiRuntimeOverrideDiff(workspaceConfig.runtimeValues, process.env);
   const effectiveEnv = {
-    ...workspaceConfig.env,
+    ...workspaceConfig.runtimeValues,
     ...processConfig,
   };
   const hasWorkspaceConfig = workspaceConfig.hasSettingsFile || workspaceConfig.hasSecretsFile;
   const hasProcessConfig = Object.keys(processConfig).length > 0;
 
   return {
-    ok: isAiEnvReady(effectiveEnv),
+    ok: isAiRuntimeConfigReady(effectiveEnv),
     projectRoot,
-    source: hasProcessConfig ? 'process-env' : hasWorkspaceConfig ? 'workspace-settings' : 'empty',
+    source: hasProcessConfig
+      ? 'runtime-overrides'
+      : hasWorkspaceConfig
+        ? 'workspace-settings'
+        : 'empty',
     provider: effectiveEnv.ALEMBIC_AI_PROVIDER || null,
     model: effectiveEnv.ALEMBIC_AI_MODEL || null,
     embedProvider: effectiveEnv.ALEMBIC_EMBED_PROVIDER || null,
     embedModel: effectiveEnv.ALEMBIC_EMBED_MODEL || null,
-    vars: maskAiEnvConfig(effectiveEnv),
-    explicitEnvKeys: Object.keys(processConfig).sort(),
+    vars: maskAiRuntimeConfig(effectiveEnv),
+    runtimeOverrideKeys: Object.keys(processConfig).sort(),
     workspace: {
       settingsPath: workspaceConfig.settingsPath,
       settingsExists: workspaceConfig.hasSettingsFile,
@@ -2379,15 +2387,15 @@ function printAiConfigStatus(status: ReturnType<typeof buildAiConfigStatus>) {
   cli.log(
     `  Secrets:     ${status.workspace.secretsExists ? status.workspace.secretsPath : 'missing'}`
   );
-  if (status.explicitEnvKeys.length > 0) {
-    cli.log(`  Env override: ${status.explicitEnvKeys.join(', ')}`);
+  if (status.runtimeOverrideKeys.length > 0) {
+    cli.log(`  Runtime override: ${status.runtimeOverrideKeys.join(', ')}`);
   }
   cli.blank();
 }
 
 function formatAiConfigSource(source: string) {
-  if (source === 'process-env') {
-    return 'explicit process environment';
+  if (source === 'runtime-overrides') {
+    return 'runtime overrides';
   }
   if (source === 'workspace-settings') {
     return 'Alembic workspace settings';

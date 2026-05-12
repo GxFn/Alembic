@@ -326,7 +326,7 @@ export class FileDeployer {
     }
 
     // 2. 迁移：清理旧版散落的 Alembic 规则（无 section marker 时代的残留）
-    //    只清理 Alembic 专属规则，不触碰通用规则（.DS_Store, .env 等可能是用户自己添加的）
+    //    只清理 Alembic 专属规则，不触碰通用规则（.DS_Store、用户自建密钥文件等）
     const alembicOnlyPatterns = GITIGNORE_RULES.filter((r) => r.pattern.startsWith('.asd')).map(
       (r) => r.pattern
     );

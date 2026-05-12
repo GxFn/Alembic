@@ -563,7 +563,7 @@ async function buildDirectoryTree(
   const files: string[] = [];
 
   for (const entry of entries) {
-    if (entry.name.startsWith('.') && entry.name !== '.env.example') {
+    if (entry.name.startsWith('.')) {
       continue;
     }
     if (entry.isDirectory()) {

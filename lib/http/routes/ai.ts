@@ -33,7 +33,7 @@ import { resolveDataRoot, resolveProjectRoot } from '../../shared/resolveProject
 import {
   AiChatBody,
   AiConfigBody,
-  AiEnvConfigBody,
+  AiWorkspaceConfigBody,
   AiFormatUsageGuideBody,
   AiLangBody,
   AiStreamBody,
@@ -43,9 +43,9 @@ import {
   AiTranslateBody,
 } from '../../shared/schemas/http-requests.js';
 import {
-  collectAiEnvOverrides,
-  isAiEnvReady,
-  maskAiEnvConfig,
+  collectAiRuntimeOverrideDiff,
+  isAiRuntimeConfigReady,
+  maskAiRuntimeConfig,
   PROVIDER_KEY_ENV,
   WorkspaceSettingsStore,
 } from '../../shared/WorkspaceSettingsStore.js';
@@ -872,12 +872,12 @@ function getWorkspaceSettingsStore() {
 function readLlmConfig() {
   const store = getWorkspaceSettingsStore();
   const settingsConfig = store.readAiConfig();
-  const processConfig = collectAiEnvOverrides(settingsConfig.env, process.env);
+  const processConfig = collectAiRuntimeOverrideDiff(settingsConfig.runtimeValues, process.env);
   const rawVars = {
-    ...settingsConfig.env,
+    ...settingsConfig.runtimeValues,
     ...processConfig,
   };
-  const vars = maskAiEnvConfig(rawVars);
+  const vars = maskAiRuntimeConfig(rawVars);
   const hasSettings = settingsConfig.hasSettingsFile || settingsConfig.hasSecretsFile;
   const hasProcessConfig = Object.keys(processConfig).length > 0;
 
@@ -887,28 +887,32 @@ function readLlmConfig() {
     hasSecretsFile: settingsConfig.hasSecretsFile,
     settingsPath: settingsConfig.settingsPath,
     secretsPath: settingsConfig.secretsPath,
-    configSource: hasProcessConfig ? 'process-env' : hasSettings ? 'workspace-settings' : 'empty',
-    llmReady: isAiEnvReady(rawVars),
+    configSource: hasProcessConfig
+      ? 'runtime-overrides'
+      : hasSettings
+        ? 'workspace-settings'
+        : 'empty',
+    llmReady: isAiRuntimeConfigReady(rawVars),
   };
 }
 
 /**
- * GET /api/v1/ai/env-config
- * 读取工作区 LLM 配置；路径名保留 env-config 以兼容旧 Dashboard。
+ * GET /api/v1/ai/workspace-config
+ * 读取工作区 LLM 配置。
  */
-router.get('/env-config', async (_req: Request, res: Response): Promise<void> => {
+router.get('/workspace-config', async (_req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: readLlmConfig() });
 });
 
 /**
- * POST /api/v1/ai/env-config
+ * POST /api/v1/ai/workspace-config
  * 写入 / 更新工作区 LLM 配置。
  *
  * Body: { provider, model, apiKey, proxy? }
  */
 router.post(
-  '/env-config',
-  validate(AiEnvConfigBody),
+  '/workspace-config',
+  validate(AiWorkspaceConfigBody),
   async (req: Request, res: Response): Promise<void> => {
     if (!requireDeveloperRole(req, res)) {
       return;

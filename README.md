@@ -225,14 +225,14 @@ alembic ui
 # CLI: save provider/model and a key into workspace settings/secrets
 printf %s "$OPENAI_API_KEY" | alembic ai configure --provider openai --model gpt-5.5 --key-stdin
 
-# CLI: persist explicitly exported ALEMBIC_* variables into workspace settings/secrets
-ALEMBIC_AI_PROVIDER=google ALEMBIC_GOOGLE_API_KEY=... alembic ai import-env
+# CLI: import one-off runtime overrides into workspace settings/secrets
+ALEMBIC_AI_PROVIDER=google ALEMBIC_GOOGLE_API_KEY=... alembic ai import-runtime
 
 # Inspect the effective configuration
 alembic ai status
 ```
 
-Explicit process environment variables still work for one-off runs and override workspace settings without being persisted.
+Explicit runtime overrides still work for one-off runs and override workspace settings without being persisted.
 
 ---
 

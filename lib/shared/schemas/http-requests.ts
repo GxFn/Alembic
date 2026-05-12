@@ -360,7 +360,7 @@ export const AiFormatUsageGuideBody = z.object({
   text: z.string().optional(),
 });
 
-export const AiEnvConfigBody = z.object({
+export const AiWorkspaceConfigBody = z.object({
   provider: z.string().min(1, 'provider is required'),
   model: z.string().optional(),
   apiKey: z.string().optional(),

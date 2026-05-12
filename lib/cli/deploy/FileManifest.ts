@@ -192,9 +192,6 @@ export const GITIGNORE_RULES = [
   { pattern: '.asd/*', comment: '运行时缓存（不入库）' },
   { pattern: '!.asd/config.json', negation: true },
 
-  // Environment (contains API keys created by `alembic setup`)
-  { pattern: '.env', comment: '环境变量（含 API Key）' },
-
   // Logs（已收纳到 .asd/ 下，由 .asd/* 统一覆盖）
 ];
 

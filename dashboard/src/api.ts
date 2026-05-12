@@ -1660,16 +1660,16 @@ Skill 文档格式要求：
   // ── LLM workspace settings ─────────────────────────
 
   /** 读取 Alembic 工作区中的 LLM 配置 */
-  async getLlmEnvConfig(): Promise<{
+  async getLlmWorkspaceConfig(): Promise<{
     vars: Record<string, string>;
     hasSettingsFile?: boolean;
     hasSecretsFile?: boolean;
     settingsPath?: string;
     secretsPath?: string;
-    configSource?: 'workspace-settings' | 'process-env' | 'empty';
+    configSource?: 'workspace-settings' | 'runtime-overrides' | 'empty';
     llmReady: boolean;
   }> {
-    const res = await http.get('/ai/env-config');
+    const res = await http.get('/ai/workspace-config');
     return res.data?.data || { vars: {}, llmReady: false };
   },
 
@@ -1684,7 +1684,7 @@ Skill 文档格式要求：
   },
 
   /** 写入 / 更新 Alembic 工作区中的 LLM 配置 */
-  async saveLlmEnvConfig(config: {
+  async saveLlmWorkspaceConfig(config: {
     provider: string;
     model?: string;
     apiKey?: string;
@@ -1701,10 +1701,10 @@ Skill 文档格式要求：
     hasSecretsFile?: boolean;
     settingsPath?: string;
     secretsPath?: string;
-    configSource?: 'workspace-settings' | 'process-env' | 'empty';
+    configSource?: 'workspace-settings' | 'runtime-overrides' | 'empty';
     llmReady: boolean;
   }> {
-    const res = await http.post('/ai/env-config', config);
+    const res = await http.post('/ai/workspace-config', config);
     return res.data?.data || { vars: {}, llmReady: false };
   },
 

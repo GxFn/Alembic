@@ -224,14 +224,14 @@ alembic ui
 # CLI：把 provider/model 和 Key 写入工作区 settings/secrets
 printf %s "$OPENAI_API_KEY" | alembic ai configure --provider openai --model gpt-5.5 --key-stdin
 
-# CLI：把当前 shell 中显式导出的 ALEMBIC_* 变量持久化到工作区 settings/secrets
-ALEMBIC_AI_PROVIDER=google ALEMBIC_GOOGLE_API_KEY=... alembic ai import-env
+# CLI：把一次性的运行时覆盖配置持久化到工作区 settings/secrets
+ALEMBIC_AI_PROVIDER=google ALEMBIC_GOOGLE_API_KEY=... alembic ai import-runtime
 
 # 查看当前有效配置
 alembic ai status
 ```
 
-显式进程环境变量仍可用于一次性运行，并且会覆盖工作区配置，但不会被自动持久化。
+显式运行时覆盖仍可用于一次性运行，并且会覆盖工作区配置，但不会被自动持久化。
 
 ---
 

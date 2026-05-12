@@ -213,8 +213,10 @@ describe('PathGuard', () => {
       ).not.toThrow();
     });
 
-    test('should allow .env in project root', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.env'))).not.toThrow();
+    test('should block .env creation in project root', () => {
+      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.env'))).toThrow(
+        PathGuardError
+      );
     });
 
     test('should allow writes within packageRoot', () => {

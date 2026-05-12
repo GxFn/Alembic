@@ -70,7 +70,7 @@ const PROJECT_WRITE_SCOPE_PREFIXES = [
 ];
 
 /** 项目根目录下允许直接写入的文件（非目录前缀匹配） */
-const PROJECT_ROOT_WRITABLE_FILES = ['.gitignore', '.env'];
+const PROJECT_ROOT_WRITABLE_FILES = ['.gitignore'];
 
 class PathGuard {
   targetPath: string | undefined;

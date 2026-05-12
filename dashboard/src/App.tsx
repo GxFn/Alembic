@@ -440,7 +440,7 @@ const App: React.FC = () => {
 
   const fetchLlmStatus = async () => {
   try {
-    const data = await api.getLlmEnvConfig();
+    const data = await api.getLlmWorkspaceConfig();
     setLlmReady(data.llmReady);
   } catch {
     // 加载失败时保持默认值（true），不影响正常使用
