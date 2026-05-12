@@ -38,8 +38,8 @@ import {
 import { dirname, join, resolve } from 'node:path';
 import { Command } from 'commander';
 import { cli } from '../lib/cli/CliLogger.js';
+import { CODEX_SETUP_PROFILE, resolveCodexRuntimeContext } from '../lib/codex/index.js';
 import { DEFAULT_FOLDER_NAMES } from '../lib/shared/folder-names.js';
-import { CODEX_CHANNEL_ID, resolveAlembicChannelId } from '../lib/shared/channel.js';
 import { getCursorRoot, getCursorRulesDir, getCursorSkillsDir } from '../lib/shared/ide-paths.js';
 import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-root.js';
 import { shutdown } from '../lib/shared/shutdown.js';
@@ -100,7 +100,7 @@ program
       force: opts.force,
       seed: opts.seed,
       ghost: opts.codex ? true : opts.ghost,
-      profile: opts.codex ? 'codex-plugin' : 'full-ide',
+      profile: opts.codex ? CODEX_SETUP_PROFILE : 'full-ide',
       subRepoUrl: opts.repo,
     });
 
@@ -130,7 +130,7 @@ codex
       force: opts.force,
       seed: opts.seed,
       ghost: !opts.standard,
-      profile: 'codex-plugin',
+      profile: CODEX_SETUP_PROFILE,
       quiet: opts.json,
       subRepoUrl: opts.repo,
     });
@@ -142,7 +142,7 @@ codex
     if (opts.json) {
       cli.json({
         ok,
-        profile: 'codex-plugin',
+        profile: CODEX_SETUP_PROFILE,
         results,
         status,
       });
@@ -2453,6 +2453,7 @@ async function buildCodexStatus(projectRootInput: string) {
   const daemonPidPath = join(resolver.runtimeDir, 'daemon.pid');
   const { DaemonSupervisor } = await import('../lib/daemon/DaemonSupervisor.js');
   const daemonStatus = await new DaemonSupervisor().status(projectRoot);
+  const runtime = resolveCodexRuntimeContext();
 
   const runtimeExists = existsSync(resolver.runtimeDir);
   const configExists = existsSync(configPath);
@@ -2484,11 +2485,11 @@ async function buildCodexStatus(projectRootInput: string) {
 
   return {
     ok: initialized,
-    packageVersion: pkg.version,
-    profile: 'codex-plugin',
+    packageVersion: runtime.packageVersion,
+    profile: CODEX_SETUP_PROFILE,
     channel: {
-      id: resolveAlembicChannelId(CODEX_CHANNEL_ID),
-      expectedId: CODEX_CHANNEL_ID,
+      id: runtime.channelId,
+      expectedId: runtime.expectedChannelId,
     },
     initialized,
     projectRoot,
@@ -2524,9 +2525,9 @@ async function buildCodexStatus(projectRootInput: string) {
     },
     projectArtifacts,
     mcp: {
-      runtimeCommand: 'alembic-codex-mcp',
-      channelId: resolveAlembicChannelId(CODEX_CHANNEL_ID),
-      tier: process.env.ALEMBIC_MCP_TIER || 'agent',
+      runtimeCommand: runtime.runtimeBin,
+      channelId: runtime.channelId,
+      tier: runtime.requestedTier,
       requiresProjectEnv: null,
     },
     daemon: {
@@ -2581,7 +2582,9 @@ function printCodexDiagnostics(diagnostics: Record<string, unknown>) {
   );
   cli.log(`  Plugin:      ${formatCheck(plugin?.ok)} ${String(plugin?.root || 'missing')}`);
   cli.log(`  Daemon:      ${daemon?.ready ? 'ready' : String(daemon?.status || 'not running')}`);
-  cli.log(`  Channel:     ${String(codexInfo?.channelId || CODEX_CHANNEL_ID)}`);
+  cli.log(
+    `  Channel:     ${String(codexInfo?.channelId || resolveCodexRuntimeContext().expectedChannelId)}`
+  );
   cli.log(
     `  Tier:        requested=${String(codexInfo?.requestedTier || 'agent')} effective=${String(
       codexInfo?.effectiveTier || 'agent'

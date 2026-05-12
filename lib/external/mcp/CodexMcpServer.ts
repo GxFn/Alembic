@@ -1,20 +1,22 @@
-import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { McpServer as SdkMcpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { SetupService } from '../../cli/SetupService.js';
 import {
-  type DaemonState,
-  getPackageVersion,
-  resolveDaemonPaths,
-} from '../../daemon/DaemonState.js';
+  buildCodexRuntimeDiagnostics,
+  CODEX_ADMIN_ENABLE_ENV,
+  CODEX_DEFAULT_MCP_TIER,
+  CODEX_MCP_TIER_ENV,
+  CODEX_SETUP_PROFILE,
+  resolveCodexRuntimeContext,
+  resolveEffectiveCodexTier,
+} from '../../codex/index.js';
+import { type DaemonState, resolveDaemonPaths } from '../../daemon/DaemonState.js';
 import { type DaemonStatus, DaemonSupervisor } from '../../daemon/DaemonSupervisor.js';
 import { JobStore } from '../../daemon/JobStore.js';
 import { DEFAULT_FOLDER_NAMES } from '../../shared/folder-names.js';
-import { CODEX_CHANNEL_ID, resolveAlembicChannelId } from '../../shared/channel.js';
-import { PACKAGE_ROOT } from '../../shared/package-root.js';
 import { WorkspaceResolver } from '../../shared/WorkspaceResolver.js';
 import { WorkspaceSettingsStore } from '../../shared/WorkspaceSettingsStore.js';
 import { TIER_ORDER, TOOLS, withMcpToolAnnotations } from './tools.js';
@@ -310,7 +312,8 @@ export class CodexMcpServer {
     const facts = resolver.toFacts();
     const daemonStatus = await this.supervisor.status(this.projectRoot);
     const knowledge = inspectCodexKnowledge(this.projectRoot);
-    const diagnostics = buildRuntimeDiagnostics(daemonStatus);
+    const runtime = resolveCodexRuntimeContext();
+    const diagnostics = buildCodexRuntimeDiagnostics(daemonStatus, runtime);
     const onboarding = buildStatusOnboarding({
       daemonStatus,
       diagnostics,
@@ -321,8 +324,8 @@ export class CodexMcpServer {
       success: true,
       data: {
         channel: {
-          id: resolveAlembicChannelId(CODEX_CHANNEL_ID),
-          expectedId: CODEX_CHANNEL_ID,
+          id: runtime.channelId,
+          expectedId: runtime.expectedChannelId,
         },
         initialized: knowledge.initialized,
         projectRoot: this.projectRoot,
@@ -369,9 +372,10 @@ export class CodexMcpServer {
 
   async buildDiagnostics(): Promise<Record<string, unknown>> {
     const daemonStatus = await this.supervisor.status(this.projectRoot);
+    const runtime = resolveCodexRuntimeContext();
     return {
       success: true,
-      data: buildRuntimeDiagnostics(daemonStatus),
+      data: buildCodexRuntimeDiagnostics(daemonStatus, runtime),
     };
   }
 
@@ -381,7 +385,7 @@ export class CodexMcpServer {
       force: Boolean(args.force),
       seed: Boolean(args.seed),
       ghost: args.standard !== true,
-      profile: 'codex-plugin',
+      profile: CODEX_SETUP_PROFILE,
       quiet: true,
     });
     const results = await service.run();
@@ -409,7 +413,7 @@ export class CodexMcpServer {
                 tool: 'alembic_codex_diagnostics',
               }),
             ],
-        profile: 'codex-plugin',
+        profile: CODEX_SETUP_PROFILE,
         results,
         status: (status as { data?: unknown }).data,
       },
@@ -651,12 +655,15 @@ export class CodexMcpServer {
 }
 
 export function getVisibleCodexTools(
-  tierName = process.env.ALEMBIC_MCP_TIER || 'agent',
+  tierName = process.env[CODEX_MCP_TIER_ENV] || CODEX_DEFAULT_MCP_TIER,
   projectRoot = resolveProjectRoot()
 ) {
   const knowledge = inspectCodexKnowledge(projectRoot);
   const allowedNames = allowedCodexToolNames(knowledge);
-  const effectiveTier = resolveEffectiveCodexTier(tierName);
+  const effectiveTier = resolveEffectiveCodexTier(
+    tierName,
+    process.env[CODEX_ADMIN_ENABLE_ENV] === '1'
+  );
   const maxTier = (TIER_ORDER as Record<string, number>)[effectiveTier] ?? TIER_ORDER.agent;
   const coreTools = TOOLS.filter(
     (tool) =>
@@ -819,113 +826,6 @@ function buildKnowledgeGateActions(knowledge: CodexKnowledgeState): CodexRecomme
   return actions;
 }
 
-function resolveEffectiveCodexTier(tierName: string): string {
-  if (tierName === 'admin' && process.env.ALEMBIC_CODEX_ENABLE_ADMIN !== '1') {
-    return 'agent';
-  }
-  return tierName;
-}
-
-function buildRuntimeDiagnostics(daemonStatus: DaemonStatus): Record<string, unknown> {
-  const packageVersion = getPackageVersion();
-  const channelId = resolveAlembicChannelId(CODEX_CHANNEL_ID);
-  const nodeMajor = Number.parseInt(process.versions.node.split('.')[0] || '0', 10);
-  const npm = probeCommand('npm');
-  const npx = probeCommand('npx');
-  const npmAvailable = npm.available === true;
-  const npxAvailable = npx.available === true;
-  const plugin = buildPluginDiagnostics(packageVersion);
-  const requestedTier = process.env.ALEMBIC_MCP_TIER || 'agent';
-  const effectiveTier = resolveEffectiveCodexTier(requestedTier);
-  const adminEnabled = process.env.ALEMBIC_CODEX_ENABLE_ADMIN === '1';
-  const checks = {
-    adminGate: requestedTier !== 'admin' || adminEnabled,
-    node: nodeMajor >= 22,
-    npm: npmAvailable,
-    npx: npxAvailable,
-    packagePin: plugin.mcp.packagePin,
-    pluginAssets: plugin.assets.ok,
-    pluginManifest: plugin.manifest.ok,
-    pluginSkills: plugin.skills.ok,
-  };
-  const issues = buildDiagnosticIssues({
-    adminEnabled,
-    checks,
-    npm,
-    npx,
-    packageVersion,
-    plugin,
-    requestedTier,
-  });
-
-  return {
-    ok: Object.values(checks).every(Boolean),
-    summary: buildDiagnosticSummary(issues),
-    checks,
-    issues,
-    nextActions: buildDiagnosticNextActions(issues),
-    primaryAction:
-      issues.length === 0
-        ? buildRecommendedAction({
-            label: 'Check workspace status',
-            reason: 'Runtime checks passed; inspect project initialization and daemon state next.',
-            startsDaemon: false,
-            tool: 'alembic_codex_status',
-          })
-        : buildRecommendedAction({
-            label: 'Fix diagnostics',
-            reason: 'Resolve the reported runtime or plugin metadata issue before using Alembic.',
-            startsDaemon: false,
-            tool: 'alembic_codex_diagnostics',
-          }),
-    node: {
-      ok: checks.node,
-      required: '>=22',
-      recommended: '22 LTS',
-      version: process.versions.node,
-      execPath: process.execPath,
-      modules: process.versions.modules,
-    },
-    commands: {
-      npm,
-      npx,
-    },
-    package: {
-      name: 'alembic-ai',
-      version: packageVersion,
-      pinnedSpecifier: `alembic-ai@${packageVersion}`,
-      mcpBinary: 'alembic-codex-mcp',
-    },
-    plugin,
-    daemon: {
-      ready: daemonStatus.ready,
-      status: daemonStatus.status,
-      stateVersion: daemonStatus.state?.version || null,
-      healthVersion: readHealthVersion(daemonStatus.health),
-    },
-    codex: {
-      channelId,
-      expectedChannelId: CODEX_CHANNEL_ID,
-      requestedTier,
-      effectiveTier,
-      adminEnabled,
-      adminMode: adminEnabled
-        ? 'enabled-by-ALEMBIC_CODEX_ENABLE_ADMIN'
-        : 'disabled-requires-ALEMBIC_CODEX_ENABLE_ADMIN=1',
-    },
-    offlineFallback: {
-      note: 'The marketplace MCP config uses pinned npx. If first-run network access is unavailable, install the same pinned runtime globally and use alembic-codex-mcp from PATH.',
-      globalInstall: `npm install -g alembic-ai@${packageVersion}`,
-      command: 'alembic-codex-mcp',
-    },
-    cleanup: {
-      automaticOnUninstall: false,
-      command: 'alembic_codex_cleanup',
-      defaultMode: 'dry-run',
-    },
-  };
-}
-
 function buildStatusOnboarding(input: {
   daemonStatus: DaemonStatus;
   diagnostics: Record<string, unknown>;
@@ -1086,251 +986,6 @@ function buildActionLabels(actions: unknown): string[] {
         )
         .filter((value): value is string => Boolean(value))
     : [];
-}
-
-interface PluginDiagnostics {
-  assets: { missing: string[]; ok: boolean; required: string[] };
-  manifest: { ok: boolean; path: string; version: string | null };
-  mcp: {
-    adminDisabledByDefault: boolean;
-    agentTierByDefault: boolean;
-    binary: string | null;
-    command: string | null;
-    ok: boolean;
-    packagePin: boolean;
-    path: string;
-    pinnedSpecifier: string | null;
-  };
-  ok: boolean;
-  readme: { mentionsPinnedRuntime: boolean; ok: boolean; path: string };
-  root: string;
-  skills: { missing: string[]; ok: boolean; required: string[] };
-}
-
-interface DiagnosticIssue {
-  action: string;
-  code: string;
-  message: string;
-  severity: 'error' | 'warning';
-}
-
-function buildPluginDiagnostics(packageVersion: string): PluginDiagnostics {
-  const pluginRoot = join(PACKAGE_ROOT, 'plugins', 'alembic-codex');
-  const manifestPath = join(pluginRoot, '.codex-plugin', 'plugin.json');
-  const mcpPath = join(pluginRoot, '.mcp.json');
-  const readmePath = join(pluginRoot, 'README.md');
-  const manifest = readJsonObject(manifestPath);
-  const mcpConfig = readJsonObject(mcpPath);
-  const manifestInterface = asPlainRecord(manifest.value?.interface);
-  const manifestAssets = collectManifestAssetPaths(manifestInterface);
-  const missingAssets = manifestAssets.filter((asset) => !existsSync(join(pluginRoot, asset)));
-  const requiredSkills = [
-    'alembic',
-    'alembic-create',
-    'alembic-devdocs',
-    'alembic-guard',
-    'alembic-recipes',
-    'alembic-structure',
-  ];
-  const missingSkills = requiredSkills.filter(
-    (skill) => !existsSync(join(pluginRoot, 'skills', skill, 'SKILL.md'))
-  );
-  const server = asPlainRecord(asPlainRecord(mcpConfig.value?.mcpServers)?.alembic);
-  const args = Array.isArray(server?.args)
-    ? server.args.filter((arg): arg is string => typeof arg === 'string')
-    : [];
-  const packageIndex = args.indexOf('--package');
-  const pinnedSpecifier = packageIndex >= 0 ? args[packageIndex + 1] || null : null;
-  const command = typeof server?.command === 'string' ? server.command : null;
-  const env = asPlainRecord(server?.env);
-  const binary = args.find((arg) => arg === 'alembic-codex-mcp') || null;
-  const packagePin =
-    command === 'npx' &&
-    pinnedSpecifier === `alembic-ai@${packageVersion}` &&
-    binary === 'alembic-codex-mcp' &&
-    !args.includes('latest');
-  const adminDisabledByDefault = env?.ALEMBIC_CODEX_ENABLE_ADMIN === '0';
-  const agentTierByDefault = env?.ALEMBIC_MCP_TIER === 'agent';
-  const readme = existsSync(readmePath) ? readFileSync(readmePath, 'utf8') : '';
-  const readmeOk = readme.includes(`alembic-ai@${packageVersion}`);
-
-  return {
-    assets: {
-      missing: missingAssets,
-      ok: manifestAssets.length > 0 && missingAssets.length === 0,
-      required: manifestAssets,
-    },
-    manifest: {
-      ok: manifest.ok && asString(manifest.value?.name) === 'alembic-codex',
-      path: manifestPath,
-      version: asString(manifest.value?.version) || null,
-    },
-    mcp: {
-      adminDisabledByDefault,
-      agentTierByDefault,
-      binary,
-      command,
-      ok: packagePin && adminDisabledByDefault && agentTierByDefault,
-      packagePin,
-      path: mcpPath,
-      pinnedSpecifier,
-    },
-    ok:
-      manifest.ok &&
-      packagePin &&
-      adminDisabledByDefault &&
-      agentTierByDefault &&
-      missingAssets.length === 0 &&
-      missingSkills.length === 0 &&
-      readmeOk,
-    readme: {
-      mentionsPinnedRuntime: readmeOk,
-      ok: readmeOk,
-      path: readmePath,
-    },
-    root: pluginRoot,
-    skills: {
-      missing: missingSkills,
-      ok: missingSkills.length === 0,
-      required: requiredSkills,
-    },
-  };
-}
-
-function buildDiagnosticIssues(input: {
-  adminEnabled: boolean;
-  checks: Record<string, boolean>;
-  npm: Record<string, unknown>;
-  npx: Record<string, unknown>;
-  packageVersion: string;
-  plugin: PluginDiagnostics;
-  requestedTier: string;
-}): DiagnosticIssue[] {
-  const issues: DiagnosticIssue[] = [];
-  if (!input.checks.node) {
-    issues.push({
-      action:
-        'Install Node.js 22 LTS or newer, then restart Codex. Keep MCP and daemon on the same Node executable.',
-      code: 'NODE_VERSION_UNSUPPORTED',
-      message: `Alembic Codex requires Node.js >=22; current runtime is ${process.versions.node}.`,
-      severity: 'error',
-    });
-  }
-  if (!input.checks.npm) {
-    issues.push({
-      action: 'Install npm or use a Node.js distribution that includes npm.',
-      code: 'NPM_UNAVAILABLE',
-      message: String(input.npm.error || 'npm is not available.'),
-      severity: 'error',
-    });
-  }
-  if (!input.checks.npx) {
-    issues.push({
-      action: `Install the pinned runtime globally with npm install -g alembic-ai@${input.packageVersion}.`,
-      code: 'NPX_UNAVAILABLE',
-      message: String(input.npx.error || 'npx is not available.'),
-      severity: 'error',
-    });
-  }
-  if (!input.checks.packagePin) {
-    issues.push({
-      action: `Update plugins/alembic-codex/.mcp.json to use npx --package alembic-ai@${input.packageVersion} alembic-codex-mcp.`,
-      code: 'PLUGIN_RUNTIME_PIN_MISMATCH',
-      message: 'Codex plugin MCP config is not pinned to the current Alembic runtime package.',
-      severity: 'error',
-    });
-  }
-  if (!input.checks.pluginManifest || !input.plugin.readme.ok) {
-    issues.push({
-      action: 'Run npm run verify:codex-plugin and repair plugin metadata before publishing.',
-      code: 'PLUGIN_METADATA_INCOMPLETE',
-      message: 'Codex plugin manifest or README metadata is incomplete.',
-      severity: 'error',
-    });
-  }
-  if (!input.checks.pluginAssets || !input.checks.pluginSkills) {
-    issues.push({
-      action: 'Restore missing plugin assets or skills under plugins/alembic-codex.',
-      code: 'PLUGIN_ASSETS_OR_SKILLS_MISSING',
-      message: 'Codex plugin assets or skills are missing from the package.',
-      severity: 'error',
-    });
-  }
-  if (input.requestedTier === 'admin' && !input.adminEnabled) {
-    issues.push({
-      action: 'Set ALEMBIC_CODEX_ENABLE_ADMIN=1 only for explicit admin workflows.',
-      code: 'CODEX_ADMIN_OPT_IN_REQUIRED',
-      message: 'Admin tier was requested, but the Codex-specific admin opt-in is disabled.',
-      severity: 'warning',
-    });
-  }
-  return issues;
-}
-
-function buildDiagnosticNextActions(issues: DiagnosticIssue[]): string[] {
-  if (issues.length === 0) {
-    return ['Alembic Codex runtime checks passed.'];
-  }
-  return [...new Set(issues.map((issue) => issue.action))];
-}
-
-function buildDiagnosticSummary(issues: DiagnosticIssue[]): string {
-  if (issues.length === 0) {
-    return 'Alembic Codex runtime checks passed. Continue with status, init, bootstrap, or priming.';
-  }
-  const errorCount = issues.filter((issue) => issue.severity === 'error').length;
-  const warningCount = issues.filter((issue) => issue.severity === 'warning').length;
-  const parts = [];
-  if (errorCount > 0) {
-    parts.push(`${errorCount} error${errorCount === 1 ? '' : 's'}`);
-  }
-  if (warningCount > 0) {
-    parts.push(`${warningCount} warning${warningCount === 1 ? '' : 's'}`);
-  }
-  return `Alembic Codex diagnostics found ${parts.join(' and ')}. Review issues before starting project knowledge workflows.`;
-}
-
-function collectManifestAssetPaths(manifestInterface: Record<string, unknown> | null): string[] {
-  const assets = [
-    asString(manifestInterface?.composerIcon),
-    asString(manifestInterface?.logo),
-    ...(Array.isArray(manifestInterface?.screenshots)
-      ? manifestInterface.screenshots.map((value) => asString(value))
-      : []),
-  ];
-  return assets.filter((asset): asset is string => Boolean(asset));
-}
-
-function readJsonObject(filePath: string): { ok: boolean; value: Record<string, unknown> | null } {
-  try {
-    const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as unknown;
-    return { ok: Boolean(parsed && typeof parsed === 'object'), value: asPlainRecord(parsed) };
-  } catch {
-    return { ok: false, value: null };
-  }
-}
-
-function probeCommand(command: string): Record<string, unknown> {
-  const result = spawnSync(command, ['--version'], {
-    encoding: 'utf8',
-    timeout: 2000,
-  });
-  const output = `${result.stdout || result.stderr || ''}`.trim();
-  return {
-    available: result.status === 0,
-    version: result.status === 0 ? output : null,
-    error:
-      result.status === 0 ? null : result.error?.message || output || `Unable to run ${command}`,
-  };
-}
-
-function readHealthVersion(health: Record<string, unknown> | null): string | null {
-  const data = health?.data;
-  if (!data || typeof data !== 'object') {
-    return null;
-  }
-  const version = (data as { version?: unknown }).version;
-  return typeof version === 'string' ? version : null;
 }
 
 async function callDaemonBridge(
@@ -1496,10 +1151,6 @@ function asPlainRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function resolveProjectRoot(projectRoot?: string): string {

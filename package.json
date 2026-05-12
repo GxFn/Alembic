@@ -64,6 +64,10 @@
       "alembic-dev": "./lib/tools/*",
       "default": "./dist/lib/tools/*"
     },
+    "#codex/*": {
+      "alembic-dev": "./lib/codex/*",
+      "default": "./dist/lib/codex/*"
+    },
     "#sandbox/*": {
       "alembic-dev": "./lib/sandbox/*",
       "default": "./dist/lib/sandbox/*"
