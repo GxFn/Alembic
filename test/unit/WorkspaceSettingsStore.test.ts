@@ -61,7 +61,7 @@ describe('WorkspaceSettingsStore', () => {
       ALEMBIC_GOOGLE_API_KEY: 'secret-google-key',
     });
 
-    expect(result.env).toMatchObject({
+    expect(result.runtimeValues).toMatchObject({
       ALEMBIC_AI_PROVIDER: 'google',
       ALEMBIC_AI_MODEL: 'gemini-3-flash-preview',
       ALEMBIC_GOOGLE_API_KEY: 'secret-google-key',
