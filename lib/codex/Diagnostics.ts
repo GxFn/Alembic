@@ -6,6 +6,8 @@ import { asString, CODEX_REQUIRED_SKILLS, loadCodexPluginRegistry } from './Plug
 import {
   CODEX_ADMIN_ENABLE_ENV,
   CODEX_DEFAULT_MCP_TIER,
+  CODEX_MCP_MODE_ENV,
+  CODEX_MCP_SHIM_ENV,
   CODEX_PLUGIN_NAME,
   type CodexRuntimeContext,
   resolveCodexRuntimeContext,
@@ -18,7 +20,9 @@ export interface CodexPluginDiagnostics {
     adminDisabledByDefault: boolean;
     agentTierByDefault: boolean;
     binary: string | null;
+    codexShimMode: boolean;
     command: string | null;
+    mcpMode: boolean;
     ok: boolean;
     packagePin: boolean;
     path: string;
@@ -55,6 +59,7 @@ export function buildCodexRuntimeDiagnostics(
     packagePin: plugin.mcp.packagePin,
     pluginAssets: plugin.assets.ok,
     pluginManifest: plugin.manifest.ok,
+    pluginMcp: plugin.mcp.ok,
     pluginSkills: plugin.skills.ok,
   };
   const issues = buildDiagnosticIssues({
@@ -152,6 +157,8 @@ export function buildCodexPluginDiagnostics(
     !args.includes('latest');
   const adminDisabledByDefault = registry.mcp.env?.[CODEX_ADMIN_ENABLE_ENV] === '0';
   const agentTierByDefault = registry.mcp.env?.ALEMBIC_MCP_TIER === CODEX_DEFAULT_MCP_TIER;
+  const mcpMode = registry.mcp.env?.[CODEX_MCP_MODE_ENV] === '1';
+  const codexShimMode = registry.mcp.env?.[CODEX_MCP_SHIM_ENV] === '1';
   const missingAssets = registry.plugin.assets.filter(
     (asset) => !existsSync(join(registry.plugin.root, asset))
   );
@@ -178,8 +185,10 @@ export function buildCodexPluginDiagnostics(
       adminDisabledByDefault,
       agentTierByDefault,
       binary,
+      codexShimMode,
       command,
-      ok: packagePin && adminDisabledByDefault && agentTierByDefault,
+      mcpMode,
+      ok: packagePin && adminDisabledByDefault && agentTierByDefault && mcpMode && codexShimMode,
       packagePin,
       path: registry.mcp.json.path,
       pinnedSpecifier,
@@ -189,6 +198,8 @@ export function buildCodexPluginDiagnostics(
       packagePin &&
       adminDisabledByDefault &&
       agentTierByDefault &&
+      mcpMode &&
+      codexShimMode &&
       missingAssets.length === 0 &&
       missingSkills.length === 0 &&
       readmeOk,
@@ -246,6 +257,15 @@ function buildDiagnosticIssues(input: {
       action: `Update plugins/alembic-codex/.mcp.json to use npx --package alembic-ai@${input.packageVersion} alembic-codex-mcp.`,
       code: 'PLUGIN_RUNTIME_PIN_MISMATCH',
       message: 'Codex plugin MCP config is not pinned to the current Alembic runtime package.',
+      severity: 'error',
+    });
+  }
+  if (!input.checks.pluginMcp && input.checks.packagePin) {
+    issues.push({
+      action:
+        'Restore plugins/alembic-codex/.mcp.json Codex env defaults: ALEMBIC_MCP_MODE=1, ALEMBIC_CODEX_MCP_MODE=1, ALEMBIC_MCP_TIER=agent, ALEMBIC_CODEX_ENABLE_ADMIN=0.',
+      code: 'PLUGIN_MCP_ENV_INCOMPLETE',
+      message: 'Codex plugin MCP config is missing required Codex runtime environment defaults.',
       severity: 'error',
     });
   }

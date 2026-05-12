@@ -1,17 +1,22 @@
-import { existsSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { McpServer as SdkMcpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { SetupService } from '../../cli/SetupService.js';
 import {
+  allowedCodexToolNames,
   buildCodexRuntimeDiagnostics,
   CODEX_ADMIN_ENABLE_ENV,
   CODEX_DEFAULT_MCP_TIER,
   CODEX_MCP_TIER_ENV,
   CODEX_SETUP_PROFILE,
+  type CodexKnowledgeState,
+  EMPTY_CODEX_KNOWLEDGE_STATE,
+  inspectCodexKnowledge,
+  isToolAllowedForCodexKnowledge,
   resolveCodexRuntimeContext,
-  resolveEffectiveCodexTier,
+  resolveCodexToolPolicy,
 } from '../../codex/index.js';
 import { type DaemonState, resolveDaemonPaths } from '../../daemon/DaemonState.js';
 import { type DaemonStatus, DaemonSupervisor } from '../../daemon/DaemonSupervisor.js';
@@ -46,167 +51,6 @@ interface CodexRecommendedAction {
   startsDaemon: boolean;
   tool: string;
 }
-
-interface CodexKnowledgeState {
-  hasKnowledge: boolean;
-  initialized: boolean;
-  recipeCount: number;
-  skillCount: number;
-  usable: boolean;
-}
-
-const CODEX_DISCOVERY_TOOL_NAMES = new Set(['alembic_codex_status', 'alembic_codex_diagnostics']);
-
-const CODEX_INIT_TOOL_NAMES = new Set([...CODEX_DISCOVERY_TOOL_NAMES, 'alembic_codex_init']);
-
-const CODEX_COLD_START_TOOL_NAMES = new Set([
-  ...CODEX_INIT_TOOL_NAMES,
-  'alembic_codex_bootstrap',
-  'alembic_codex_job',
-]);
-
-export const CODEX_LOCAL_TOOLS = [
-  {
-    name: 'alembic_codex_status',
-    tier: 'agent',
-    description:
-      'Check Alembic Codex plugin status without starting the daemon. Reports workspace, Ghost data root, initialization, daemon state, and the recommended next tool call.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'alembic_codex_diagnostics',
-    tier: 'agent',
-    description:
-      'Run Alembic Codex runtime diagnostics without starting the daemon. Checks Node, npm, npx, package pinning, daemon version, offline fallback, admin mode gate, and first-run next actions.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'alembic_codex_init',
-    tier: 'agent',
-    description:
-      'Initialize Alembic for Codex plugin use. Defaults to Ghost mode, skips IDE file deployment, and returns next actions for bootstrap or priming.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        force: {
-          type: 'boolean',
-          description: 'Overwrite existing Alembic Codex setup artifacts.',
-        },
-        seed: { type: 'boolean', description: 'Create seed example Recipes.' },
-        standard: {
-          type: 'boolean',
-          description: 'Write Alembic data into the project instead of the Ghost data root.',
-        },
-      },
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'alembic_codex_dashboard',
-    tier: 'agent',
-    description:
-      'Start or connect to the project Alembic daemon and return the local Dashboard URL plus follow-up job actions.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'alembic_codex_bootstrap',
-    tier: 'agent',
-    description:
-      'Start or connect to the daemon and enqueue an internal Alembic bootstrap job. Returns immediately with a recoverable job id.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        maxFiles: { type: 'number', description: 'Maximum files to include in project analysis.' },
-        skipGuard: { type: 'boolean', description: 'Skip Guard audit during bootstrap analysis.' },
-        contentMaxLines: {
-          type: 'number',
-          description: 'Maximum lines of content sampled per file.',
-        },
-      },
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'alembic_codex_rescan',
-    tier: 'agent',
-    description:
-      'Start or connect to the daemon and enqueue an internal Alembic rescan job. Returns immediately with a recoverable job id.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        reason: { type: 'string', description: 'Short reason for the rescan.' },
-        dimensions: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Optional dimension ids to rescan.',
-        },
-      },
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'alembic_codex_job',
-    tier: 'agent',
-    description:
-      'Read Alembic daemon job status from the local JobStore without starting the daemon. Pass jobId for one job, or omit it to list recent jobs.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        jobId: {
-          type: 'string',
-          description: 'Job id returned by alembic_codex_bootstrap or alembic_codex_rescan.',
-        },
-        kind: { type: 'string', enum: ['bootstrap', 'rescan'] },
-        status: {
-          type: 'string',
-          enum: ['queued', 'running', 'completed', 'failed', 'cancelled'],
-        },
-        limit: { type: 'number', description: 'Maximum jobs to return when listing.' },
-      },
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'alembic_codex_stop',
-    tier: 'agent',
-    description: 'Stop the current project Alembic daemon.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        waitMs: { type: 'number', description: 'Milliseconds to wait for graceful daemon stop.' },
-      },
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'alembic_codex_cleanup',
-    tier: 'agent',
-    description:
-      'Preview or explicitly clean Alembic Codex runtime files. Plugin uninstall never removes user data automatically; this tool requires confirm=true before deleting runtime state.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        confirm: {
-          type: 'boolean',
-          description: 'When true, stop the daemon and delete runtime state/log/job files.',
-        },
-      },
-      additionalProperties: false,
-    },
-  },
-];
 
 export class CodexMcpServer {
   readonly projectRoot: string;
@@ -391,14 +235,9 @@ export class CodexMcpServer {
     const results = await service.run();
     const status = await this.buildStatus();
     const ok = results.every((result) => result.ok);
-    const knowledgeAfterInit = (status as { data?: { knowledge?: CodexKnowledgeState } }).data
-      ?.knowledge ?? {
-      hasKnowledge: false,
-      initialized: false,
-      recipeCount: 0,
-      skillCount: 0,
-      usable: false,
-    };
+    const knowledgeAfterInit =
+      (status as { data?: { knowledge?: CodexKnowledgeState } }).data?.knowledge ??
+      EMPTY_CODEX_KNOWLEDGE_STATE;
     return {
       success: ok,
       data: {
@@ -659,92 +498,13 @@ export function getVisibleCodexTools(
   projectRoot = resolveProjectRoot()
 ) {
   const knowledge = inspectCodexKnowledge(projectRoot);
-  const allowedNames = allowedCodexToolNames(knowledge);
-  const effectiveTier = resolveEffectiveCodexTier(
+  return resolveCodexToolPolicy({
+    adminEnabled: process.env[CODEX_ADMIN_ENABLE_ENV] === '1',
+    coreTools: TOOLS,
+    knowledge,
     tierName,
-    process.env[CODEX_ADMIN_ENABLE_ENV] === '1'
-  );
-  const maxTier = (TIER_ORDER as Record<string, number>)[effectiveTier] ?? TIER_ORDER.agent;
-  const coreTools = TOOLS.filter(
-    (tool) =>
-      knowledge.usable &&
-      ((TIER_ORDER as Record<string, number>)[tool.tier || 'agent'] ?? 0) <= maxTier
-  );
-  const localTools = CODEX_LOCAL_TOOLS.filter((tool) => allowedNames.has(tool.name));
-  return [...localTools, ...coreTools].map(withMcpToolAnnotations);
-}
-
-function allowedCodexToolNames(knowledge: CodexKnowledgeState): Set<string> {
-  if (knowledge.usable) {
-    return new Set(CODEX_LOCAL_TOOLS.map((tool) => tool.name));
-  }
-  if (knowledge.initialized) {
-    return CODEX_COLD_START_TOOL_NAMES;
-  }
-  return CODEX_INIT_TOOL_NAMES;
-}
-
-function isToolAllowedForCodexKnowledge(name: string, knowledge: CodexKnowledgeState): boolean {
-  if (knowledge.usable) {
-    return true;
-  }
-  return allowedCodexToolNames(knowledge).has(name);
-}
-
-function inspectCodexKnowledge(projectRoot: string): CodexKnowledgeState {
-  let resolver: WorkspaceResolver;
-  try {
-    resolver = WorkspaceResolver.fromProject(projectRoot);
-  } catch {
-    resolver = new WorkspaceResolver({ projectRoot });
-  }
-  const initialized =
-    existsSync(resolver.configPath) &&
-    existsSync(resolver.databasePath) &&
-    existsSync(resolver.knowledgeDir) &&
-    existsSync(resolver.recipesDir);
-  const recipeCount = countMarkdownFiles(resolver.recipesDir, {
-    excludeNames: new Set(['_template.md']),
-  });
-  const skillCount = countSkillFiles(resolver.skillsDir);
-  const hasKnowledge = recipeCount > 0 || skillCount > 0;
-  return {
-    hasKnowledge,
-    initialized,
-    recipeCount,
-    skillCount,
-    usable: initialized && hasKnowledge,
-  };
-}
-
-function countMarkdownFiles(dir: string, options: { excludeNames?: Set<string> } = {}): number {
-  try {
-    return readdirSync(dir, { withFileTypes: true }).reduce((count, entry) => {
-      if (entry.isDirectory()) {
-        return count + countMarkdownFiles(join(dir, entry.name), options);
-      }
-      return (
-        count +
-        (entry.isFile() && entry.name.endsWith('.md') && !options.excludeNames?.has(entry.name)
-          ? 1
-          : 0)
-      );
-    }, 0);
-  } catch {
-    return 0;
-  }
-}
-
-function countSkillFiles(dir: string): number {
-  try {
-    return readdirSync(dir, { withFileTypes: true }).reduce(
-      (count, entry) =>
-        count + (entry.isDirectory() && existsSync(join(dir, entry.name, 'SKILL.md')) ? 1 : 0),
-      0
-    );
-  } catch {
-    return 0;
-  }
+    tierOrder: TIER_ORDER,
+  }).visibleTools.map(withMcpToolAnnotations);
 }
 
 function buildPostInitActions(knowledge: CodexKnowledgeState): CodexRecommendedAction[] {

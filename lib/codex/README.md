@@ -2,7 +2,9 @@
 
 `lib/codex` 集中维护 Alembic 面向 Codex 插件形态的运行约定。
 
-这里管理的是插件入口需要共享的稳定事实：Codex 渠道标识、插件名、runtime package/bin、MCP 默认 tier、admin gate、channel/marketplace/plugin manifest 路径、插件资产与 Skill 校验、runtime diagnostics。
+这里管理的是插件入口需要共享的稳定事实和策略：Codex 渠道标识、插件名、runtime package/bin、MCP 默认 tier、admin gate、channel/marketplace/plugin manifest 路径、插件资产与 Skill 校验、runtime diagnostics、workspace knowledge state、工具可见性策略。
+
+当前阶段只维护 `alembic-codex` 这一个 Codex 插件和 `alembic-ai` runtime，不在这里做多插件或多个非插件包的提前抽象。
 
 边界：
 
@@ -16,3 +18,5 @@
 - `RuntimeContext.ts`：Codex 常量、MCP shim 默认环境、runtime context。
 - `PluginRegistry.ts`：读取 channel、marketplace、plugin manifest、MCP 配置和插件 README。
 - `Diagnostics.ts`：生成 Codex runtime/plugin diagnostics，供 MCP 与 CLI 复用。
+- `KnowledgeState.ts`：检查 Codex workspace/Ghost data root 是否初始化、是否已有可用 Recipes 或 Project Skills。
+- `ToolPolicy.ts`：维护当前 `alembic-codex` 插件的 local tools 与工具可见性策略。

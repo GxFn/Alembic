@@ -51,6 +51,7 @@ Enable `alembic-codex` from the plugin list after installation.
 - Node.js 22 or newer is required. Node 22 LTS is recommended for local development; keep the MCP shim and daemon on the same Node executable.
 - The marketplace MCP config pins the runtime package as `alembic-ai@0.1.0`.
 - The marketplace MCP config sets `ALEMBIC_CHANNEL_ID=codex`; project feature checks should use that stable channel id.
+- The marketplace MCP config explicitly sets `ALEMBIC_MCP_MODE=1` and `ALEMBIC_CODEX_MCP_MODE=1`; the binary still applies the same defaults as a safety net.
 - The MCP launch command runs `npx` with `--prefix /tmp` so GitHub/local installs inside the Alembic repository cannot shadow the published runtime binaries.
 - The default MCP tier is `agent`; admin tools stay hidden unless both `ALEMBIC_MCP_TIER=admin` and `ALEMBIC_CODEX_ENABLE_ADMIN=1` are set.
 

@@ -112,6 +112,11 @@ expect(
   server?.env?.ALEMBIC_CHANNEL_ID === 'codex',
   '.mcp.json must set stable ALEMBIC_CHANNEL_ID=codex'
 );
+expect(server?.env?.ALEMBIC_MCP_MODE === '1', '.mcp.json must explicitly set ALEMBIC_MCP_MODE=1');
+expect(
+  server?.env?.ALEMBIC_CODEX_MCP_MODE === '1',
+  '.mcp.json must explicitly set ALEMBIC_CODEX_MCP_MODE=1'
+);
 expect(server?.env?.ALEMBIC_MCP_TIER === 'agent', '.mcp.json must default to agent tier');
 expect(
   server?.env?.ALEMBIC_CODEX_ENABLE_ADMIN === '0',
@@ -230,10 +235,7 @@ expect(
   'README.md must document CLI Codex diagnostics'
 );
 expect(readme.includes('alembic_codex_cleanup'), 'README.md must document cleanup policy');
-expect(
-  readmeCn.includes('alembic_codex_cleanup'),
-  'README.zh-CN.md must document cleanup policy'
-);
+expect(readmeCn.includes('alembic_codex_cleanup'), 'README.zh-CN.md must document cleanup policy');
 expect(
   readme.includes('Use it when you want Codex to:'),
   'plugin README must include product-facing use cases'

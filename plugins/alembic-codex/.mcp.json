@@ -6,6 +6,8 @@
       "env": {
         "ALEMBIC_CHANNEL_ID": "codex",
         "ALEMBIC_CODEX_ENABLE_ADMIN": "0",
+        "ALEMBIC_CODEX_MCP_MODE": "1",
+        "ALEMBIC_MCP_MODE": "1",
         "ALEMBIC_MCP_TIER": "agent"
       }
     }

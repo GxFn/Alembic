@@ -587,6 +587,8 @@ describe('CodexMcpServer', () => {
     expect(pluginMcp.mcpServers.alembic.args).toContain('alembic-codex-mcp');
     expect(pluginMcp.mcpServers.alembic.args).toContain('--package');
     expect(pluginMcp.mcpServers.alembic.args).toContain(`alembic-ai@${packageJson.version}`);
+    expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_MCP_MODE).toBe('1');
+    expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_CODEX_MCP_MODE).toBe('1');
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_CODEX_ENABLE_ADMIN).toBe('0');
     expect(pluginJson.interface.defaultPrompt).toContain(
       'Guide me through Alembic Codex first-minute setup for this project'
