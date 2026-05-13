@@ -18,12 +18,11 @@ describe('Codex plugin cache sync script', () => {
   test('prints the gxfn cache target without writing during dry-run', () => {
     const codexHome = tempDir();
     const output = runSyncScript('--dry-run', '--codex-home', codexHome);
-    const summary = JSON.parse(output) as { targetRoot: string };
+    const summary = JSON.parse(output) as { targetRoots: string[] };
+    const [targetRoot] = summary.targetRoots;
 
-    expect(summary.targetRoot).toBe(
-      join(codexHome, 'plugins', 'cache', 'gxfn', 'alembic-codex', '0.1.1')
-    );
-    expect(existsSync(summary.targetRoot)).toBe(false);
+    expect(targetRoot).toBe(join(codexHome, 'plugins', 'cache', 'gxfn', 'alembic-codex', '0.1.2'));
+    expect(existsSync(targetRoot)).toBe(false);
   });
 
   test('copies the plugin and rewrites only the cached MCP config for local dist', () => {
@@ -38,22 +37,21 @@ describe('Codex plugin cache sync script', () => {
       '--local-mcp-entry',
       localEntry
     );
-    const summary = JSON.parse(output) as { targetRoot: string };
-    const cachedMcpPath = join(summary.targetRoot, '.mcp.json');
+    const summary = JSON.parse(output) as { targetRoots: string[] };
+    const [targetRoot] = summary.targetRoots;
+    const cachedMcpPath = join(targetRoot, '.mcp.json');
     const repoMcpPath = join(projectRoot, 'plugins', 'alembic-codex', '.mcp.json');
     const cachedMcp = JSON.parse(readFileSync(cachedMcpPath, 'utf8'));
     const repoMcp = JSON.parse(readFileSync(repoMcpPath, 'utf8'));
 
-    expect(existsSync(join(summary.targetRoot, '.codex-plugin', 'plugin.json'))).toBe(true);
+    expect(existsSync(join(targetRoot, '.codex-plugin', 'plugin.json'))).toBe(true);
     expect(cachedMcp.mcpServers.alembic.command).toBe(process.execPath);
     expect(cachedMcp.mcpServers.alembic.args).toEqual([localEntry]);
     expect(cachedMcp.mcpServers.alembic.env.ALEMBIC_CHANNEL_ID).toBe('codex');
     expect(cachedMcp.mcpServers.alembic.env.ALEMBIC_RUNTIME_MODE).toBe('plugin');
     expect(cachedMcp.mcpServers.alembic.env.ALEMBIC_PLUGIN_HOST).toBe('codex');
-    expect(repoMcp.mcpServers.alembic.command).toBe('npx');
-    expect(repoMcp.mcpServers.alembic.args).toContain('--package');
-    expect(repoMcp.mcpServers.alembic.args).toContain('./runtime.tgz');
-    expect(repoMcp.mcpServers.alembic.args).toContain('alembic-codex-mcp');
+    expect(repoMcp.mcpServers.alembic.command).toBe('node');
+    expect(repoMcp.mcpServers.alembic.args).toContain('./bin/alembic-codex-mcp-wrapper.mjs');
   });
 });
 

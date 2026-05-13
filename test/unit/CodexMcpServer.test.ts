@@ -966,7 +966,9 @@ describe('CodexMcpServer', () => {
     const pluginMcp = JSON.parse(
       fs.readFileSync(path.resolve('plugins/alembic-codex/.mcp.json'), 'utf8')
     ) as {
-      mcpServers: { alembic: { args: string[]; cwd: string; env: Record<string, string> } };
+      mcpServers: {
+        alembic: { args: string[]; command: string; cwd: string; env: Record<string, string> };
+      };
     };
     const pluginJson = JSON.parse(
       fs.readFileSync(path.resolve('plugins/alembic-codex/.codex-plugin/plugin.json'), 'utf8')
@@ -974,9 +976,16 @@ describe('CodexMcpServer', () => {
 
     expect(packageJson.bin['alembic-codex-mcp']).toBe('dist/bin/codex-mcp.js');
     expect(packageJson.scripts['verify:codex-plugin']).toBe('node scripts/verify-codex-plugin.mjs');
-    expect(pluginMcp.mcpServers.alembic.args).toContain('alembic-codex-mcp');
-    expect(pluginMcp.mcpServers.alembic.args).toContain('--package');
-    expect(pluginMcp.mcpServers.alembic.args).toContain('./runtime.tgz');
+    expect(pluginMcp.mcpServers.alembic.command).toBe('node');
+    expect(pluginMcp.mcpServers.alembic.args).toContain('./bin/alembic-codex-mcp-wrapper.mjs');
+    expect(
+      fs
+        .readFileSync(
+          path.resolve('plugins/alembic-codex/bin/alembic-codex-mcp-wrapper.mjs'),
+          'utf8'
+        )
+        .includes('./runtime.tgz')
+    ).toBe(true);
     expect(pluginMcp.mcpServers.alembic.cwd).toBe('.');
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_RUNTIME_MODE).toBe('plugin');
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_PLUGIN_HOST).toBe('codex');
@@ -984,7 +993,7 @@ describe('CodexMcpServer', () => {
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_CODEX_MCP_MODE).toBe('1');
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_CODEX_PLUGIN_ROOT).toBe('.');
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_CODEX_ENABLE_ADMIN).toBe('0');
-    expect(pluginMcp.mcpServers.alembic.env.npm_config_cache).toBe('/tmp/alembic-codex-npm-cache');
+    expect(pluginMcp.mcpServers.alembic.env.npm_config_cache).toBeUndefined();
     expect(pluginJson.interface.defaultPrompt).toContain(
       'Guide me through Alembic Codex first-minute setup for this project'
     );

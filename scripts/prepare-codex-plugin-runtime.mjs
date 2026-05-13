@@ -118,6 +118,7 @@ function copyPluginShellSnapshot() {
     'README.zh-CN.md',
     'RELEASE-PLAYBOOK.md',
     'assets',
+    'bin',
     'skills',
   ]) {
     const source = join(pluginRoot, entry);
@@ -133,7 +134,7 @@ function copyPluginShellSnapshot() {
 function packRuntimeTarball() {
   const runtimeTarballPath = join(pluginRoot, 'runtime.tgz');
   const packRoot = mkdtempSync(join(tmpdir(), 'alembic-codex-runtime-pack-'));
-  const npmCache = join(tmpdir(), 'alembic-codex-npm-cache');
+  const npmCache = join(packRoot, 'npm-cache');
   mkdirSync(npmCache, { recursive: true });
   rmSync(runtimeTarballPath, { force: true });
 

@@ -31,8 +31,6 @@ const expectedRuntime = `alembic-ai@${packageVersion}`;
 const expectedEmbeddedRuntimeSpecifier = './runtime.tgz';
 const server = mcpJson.mcpServers?.alembic;
 const args = Array.isArray(server?.args) ? server.args : [];
-const packageIndex = args.indexOf('--package');
-const runtimeSpecifier = packageIndex >= 0 ? args[packageIndex + 1] : null;
 const marketplaceEntry = Array.isArray(marketplaceJson.plugins)
   ? marketplaceJson.plugins.find((entry) => entry?.name === 'alembic-codex')
   : null;
@@ -98,8 +96,34 @@ expect(
   'package.json must expose dev:codex-plugin:local-mcp'
 );
 expect(
+  packageJson.scripts?.['dev:codex-plugin:verify'] === 'node scripts/dev-verify-codex-plugin.mjs',
+  'package.json must expose dev:codex-plugin:verify'
+);
+expect(
+  packageJson.scripts?.['dev:codex-plugin:refresh'] ===
+    'node scripts/dev-verify-codex-plugin.mjs --refresh-only',
+  'package.json must expose dev:codex-plugin:refresh'
+);
+expect(
+  packageJson.scripts?.['dev:codex-plugin:probe-installed'] ===
+    'node scripts/dev-verify-codex-plugin.mjs --probe-only',
+  'package.json must expose dev:codex-plugin:probe-installed'
+);
+expect(
+  packageJson.scripts?.['dev:codex-plugin:watch'] === 'node scripts/dev-watch-codex-plugin.mjs',
+  'package.json must expose dev:codex-plugin:watch'
+);
+expect(
   existsSync(join(root, 'scripts', 'sync-codex-plugin-cache.mjs')),
   'local Codex cache sync script must exist'
+);
+expect(
+  existsSync(join(root, 'scripts', 'dev-verify-codex-plugin.mjs')),
+  'local Codex plugin dev verification script must exist'
+);
+expect(
+  existsSync(join(root, 'scripts', 'dev-watch-codex-plugin.mjs')),
+  'local Codex plugin watch refresh script must exist'
 );
 expect(pluginJson.name === 'alembic-codex', 'plugin.json name must be alembic-codex');
 expect(
@@ -128,17 +152,23 @@ for (const keyword of ['codex', 'codex-plugin', 'openai-codex']) {
     `package keywords must include ${keyword}`
   );
 }
-expect(server?.command === 'npx', '.mcp.json must launch through npx');
-expect(!args.includes('--prefix'), '.mcp.json must not use --prefix with relative runtime.tgz');
-expect(args.includes('--package'), '.mcp.json npx args must include --package');
+expect(server?.command === 'node', '.mcp.json must launch the plugin-local Node wrapper');
 expect(
-  runtimeSpecifier === expectedEmbeddedRuntimeSpecifier,
-  `.mcp.json must install the embedded runtime from ${expectedEmbeddedRuntimeSpecifier}; found ${
-    runtimeSpecifier || '<missing>'
-  }`
+  args.includes('./bin/alembic-codex-mcp-wrapper.mjs'),
+  '.mcp.json must call the plugin-local MCP wrapper'
 );
-expect(args.includes('alembic-codex-mcp'), '.mcp.json must call alembic-codex-mcp');
+expect(!args.includes('--prefix'), '.mcp.json must not use --prefix with relative runtime.tgz');
 expect(!args.includes('latest'), '.mcp.json must not use latest');
+expect(
+  existsSync(join(pluginRoot, 'bin', 'alembic-codex-mcp-wrapper.mjs')),
+  'plugin MCP wrapper must exist'
+);
+expect(
+  readFileSync(join(pluginRoot, 'bin', 'alembic-codex-mcp-wrapper.mjs'), 'utf8').includes(
+    expectedEmbeddedRuntimeSpecifier
+  ),
+  `plugin MCP wrapper must launch embedded runtime ${expectedEmbeddedRuntimeSpecifier}`
+);
 expect(server?.cwd === '.', '.mcp.json must run from the installed plugin root');
 expect(existsSync(runtimeTarballPath), 'embedded runtime tarball runtime.tgz must exist');
 expect(
@@ -168,8 +198,8 @@ expect(
   '.mcp.json must disable Codex admin tools by default'
 );
 expect(
-  server?.env?.npm_config_cache === '/tmp/alembic-codex-npm-cache',
-  '.mcp.json must keep npx/npm cache out of the user home directory'
+  !server?.env?.npm_config_cache,
+  '.mcp.json must let the wrapper own npm cache and startup locking'
 );
 expect(existsSync(runtimePackagePath), 'embedded runtime package.json must exist');
 expect(runtimePackageJson.name === 'alembic-ai', 'embedded runtime package must be alembic-ai');
@@ -202,6 +232,7 @@ for (const requiredRuntimeFile of [
   '.agents/plugins/marketplace.json',
   'plugins/alembic-codex/.agents/plugins/marketplace.json',
   'plugins/alembic-codex/.codex-plugin/plugin.json',
+  'plugins/alembic-codex/bin/alembic-codex-mcp-wrapper.mjs',
 ]) {
   expect(
     existsSync(join(runtimeRoot, requiredRuntimeFile)),

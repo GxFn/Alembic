@@ -308,6 +308,7 @@ function requiredPackageFiles(version) {
     'package/plugins/alembic-codex/.codex-plugin/plugin.json',
     'package/plugins/alembic-codex/.agents/plugins/marketplace.json',
     'package/plugins/alembic-codex/.mcp.json',
+    'package/plugins/alembic-codex/bin/alembic-codex-mcp-wrapper.mjs',
     'package/plugins/alembic-codex/runtime.tgz',
     'package/plugins/alembic-codex/runtime/package.json',
     'package/plugins/alembic-codex/runtime/dist/bin/codex-mcp.js',
@@ -316,6 +317,7 @@ function requiredPackageFiles(version) {
     'package/plugins/alembic-codex/runtime/dashboard/dist/index.html',
     'package/plugins/alembic-codex/runtime/resources/grammars/tree-sitter-typescript.wasm',
     'package/plugins/alembic-codex/runtime/plugins/alembic-codex/.codex-plugin/plugin.json',
+    'package/plugins/alembic-codex/runtime/plugins/alembic-codex/bin/alembic-codex-mcp-wrapper.mjs',
     'package/plugins/alembic-codex/RELEASE-PLAYBOOK.md',
     'package/plugins/alembic-codex/README.md',
     'package/plugins/alembic-codex/README.zh-CN.md',
@@ -409,12 +411,18 @@ function simulateMarketplaceInstall({ packageRoot, packageVersion }) {
   const mcp = readJson(mcpPath);
   const args = Array.isArray(mcp.mcpServers?.alembic?.args) ? mcp.mcpServers.alembic.args : [];
   const env = mcp.mcpServers?.alembic?.env || {};
-  const packageIndex = args.indexOf('--package');
   assert(
-    args[packageIndex + 1] === './runtime.tgz',
-    'installed plugin MCP embedded runtime specifier mismatch'
+    mcp.mcpServers?.alembic?.command === 'node',
+    'installed plugin MCP must launch the plugin-local Node wrapper'
   );
-  assert(args.includes('alembic-codex-mcp'), 'installed plugin MCP binary missing');
+  assert(
+    args.includes('./bin/alembic-codex-mcp-wrapper.mjs'),
+    'installed plugin MCP wrapper missing'
+  );
+  assert(
+    existsSync(join(installedRoot, 'bin', 'alembic-codex-mcp-wrapper.mjs')),
+    'installed plugin MCP wrapper file missing'
+  );
   assert(mcp.mcpServers?.alembic?.cwd === '.', 'installed plugin MCP cwd must be plugin root');
   assert(
     env.ALEMBIC_CODEX_PLUGIN_ROOT === '.',
@@ -428,10 +436,7 @@ function simulateMarketplaceInstall({ packageRoot, packageVersion }) {
     env.ALEMBIC_PLUGIN_HOST === 'codex',
     'installed plugin MCP must pass ALEMBIC_PLUGIN_HOST=codex'
   );
-  assert(
-    env.npm_config_cache === '/tmp/alembic-codex-npm-cache',
-    'installed plugin MCP must keep npm cache out of the user home directory'
-  );
+  assert(!env.npm_config_cache, 'installed plugin MCP wrapper must own per-run npm cache setup');
 
   const runtimeRoot = join(installedRoot, 'runtime');
   const runtimeTarballPath = join(installedRoot, 'runtime.tgz');

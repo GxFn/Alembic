@@ -68,7 +68,10 @@ for (const plugin of plugins) {
   );
   const server = mcpJson.mcpServers?.alembic;
   const args = Array.isArray(server?.args) ? server.args : [];
-  const runtimeSpecifier = args[args.indexOf('--package') + 1];
+  const wrapperArg = args.find((arg) => arg.endsWith('alembic-codex-mcp-wrapper.mjs'));
+  const wrapperPath = wrapperArg ? join(pluginRoot, wrapperArg.replace(/^\.\//, '')) : '';
+  const wrapperSource =
+    wrapperPath && existsSync(wrapperPath) ? readFileSync(wrapperPath, 'utf8') : '';
 
   expect(
     plugin.name === pluginJson.name,
@@ -81,8 +84,12 @@ for (const plugin of plugins) {
     `marketplace path for ${plugin.name} must be ./${plugin.path}`
   );
   expect(
-    runtimeSpecifier === plugin.runtimeSpecifier,
-    `plugin ${plugin.name} MCP runtime must use embedded specifier ${plugin.runtimeSpecifier}`
+    server?.command === 'node' && args.includes('./bin/alembic-codex-mcp-wrapper.mjs'),
+    `plugin ${plugin.name} MCP config must launch the plugin-local Node wrapper`
+  );
+  expect(
+    wrapperSource.includes(plugin.runtimeSpecifier),
+    `plugin ${plugin.name} MCP wrapper must use embedded specifier ${plugin.runtimeSpecifier}`
   );
   expect(
     plugin.embeddedRuntimePath === 'runtime' &&
@@ -94,8 +101,8 @@ for (const plugin of plugins) {
     `plugin ${plugin.name} must declare the AlembicCodex distribution repo`
   );
   expect(
-    args.includes(plugin.runtimeBin),
-    `plugin ${plugin.name} MCP config must call ${plugin.runtimeBin}`
+    wrapperSource.includes(plugin.runtimeBin),
+    `plugin ${plugin.name} MCP wrapper must call ${plugin.runtimeBin}`
   );
   expect(
     server?.env?.ALEMBIC_CHANNEL_ID === channel.runtime?.channelId,

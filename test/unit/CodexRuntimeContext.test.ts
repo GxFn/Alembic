@@ -69,8 +69,8 @@ describe('Codex runtime context', () => {
     expect(context.runtimeBin).toBe('alembic-codex-mcp');
     expect(registry.channel.value?.id).toBe('codex');
     expect(registry.plugin.manifest.value?.name).toBe('alembic-codex');
-    expect(registry.mcp.args).toContain(context.embeddedRuntimeSpecifier);
-    expect(registry.mcp.args).toContain(context.runtimeBin);
+    expect(registry.mcp.server?.command).toBe('node');
+    expect(registry.mcp.args).toContain('./bin/alembic-codex-mcp-wrapper.mjs');
   });
 
   test('builds plugin diagnostics from shared Codex registry facts', () => {
