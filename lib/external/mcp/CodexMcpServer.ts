@@ -64,7 +64,7 @@ export class CodexMcpServer {
 
   async start(): Promise<void> {
     this.sdkServer = new SdkMcpServer(
-      { name: 'alembic-codex', version: '0.1.0' },
+      { name: 'alembic-codex', version: '0.1.1' },
       { capabilities: { tools: {} } }
     );
     this.registerHandlers();

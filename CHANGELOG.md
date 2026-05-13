@@ -4,6 +4,14 @@
 
 ---
 
+## [0.1.1] - 2026-05-13
+
+### Changed
+- 发布 Alembic Codex 插件运行时标识：新增通用 `ALEMBIC_RUNTIME_MODE=plugin` 和宿主 `ALEMBIC_PLUGIN_HOST=codex`，为后续 Claude Code 等插件宿主预留稳定分层。
+- Codex 插件发布包、渠道 manifest、验证脚本和 smoke 流程同步校验 plugin runtime identity。
+
+---
+
 ## [0.0.9] - 2026-05-04
 
 ### Added

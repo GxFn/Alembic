@@ -21,7 +21,7 @@ describe('Codex plugin cache sync script', () => {
     const summary = JSON.parse(output) as { targetRoot: string };
 
     expect(summary.targetRoot).toBe(
-      join(codexHome, 'plugins', 'cache', 'gxfn', 'alembic-codex', '0.1.0')
+      join(codexHome, 'plugins', 'cache', 'gxfn', 'alembic-codex', '0.1.1')
     );
     expect(existsSync(summary.targetRoot)).toBe(false);
   });

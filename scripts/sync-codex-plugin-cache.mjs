@@ -20,7 +20,7 @@ const pluginManifest = readJson(join(pluginRoot, '.codex-plugin', 'plugin.json')
 const codexHome = resolve(options.codexHome || process.env.CODEX_HOME || join(homedir(), '.codex'));
 const marketplaceName = channel.marketplace?.name || 'gxfn';
 const pluginName = pluginManifest.name || pluginEntry.name;
-const pluginVersion = pluginManifest.version || pluginEntry.version || '0.1.0';
+const pluginVersion = pluginManifest.version || pluginEntry.version || '0.1.1';
 const targetRoot = join(codexHome, 'plugins', 'cache', marketplaceName, pluginName, pluginVersion);
 const localMcpEntry = resolve(
   options.localMcpEntry || join(projectRoot, 'dist', 'bin', 'codex-mcp.js')

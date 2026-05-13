@@ -38,7 +38,7 @@
       "name": "alembic-ai",
       "registry": "npm",
       "installScope": "global",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "binaries": [
         "alembic",
         "alembic-mcp",
