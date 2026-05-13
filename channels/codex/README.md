@@ -7,6 +7,8 @@ Current scope is intentionally narrow:
 - exactly one Codex plugin: `alembic-codex`
 - exactly one embedded npm runtime package: `alembic-ai`
 - exactly one MCP runtime bin used by the plugin: `alembic-codex-mcp`
+- exactly one generic runtime mode for plugin-packaged execution: `plugin`
+- exactly one current plugin host id: `codex`
 - exactly one channel id for feature checks: `codex`
 - exactly one installable plugin distribution repo: `GxFn/AlembicCodex`
 

@@ -4,10 +4,14 @@ import { join } from 'node:path';
 import type { DaemonStatus } from '../daemon/DaemonSupervisor.js';
 import { asString, CODEX_REQUIRED_SKILLS, loadCodexPluginRegistry } from './PluginRegistry.js';
 import {
+  ALEMBIC_PLUGIN_HOST_ENV,
+  ALEMBIC_RUNTIME_MODE_ENV,
+  ALEMBIC_RUNTIME_MODE_PLUGIN,
   CODEX_ADMIN_ENABLE_ENV,
   CODEX_DEFAULT_MCP_TIER,
   CODEX_MCP_MODE_ENV,
   CODEX_MCP_SHIM_ENV,
+  CODEX_PLUGIN_HOST,
   CODEX_PLUGIN_NAME,
   type CodexRuntimeContext,
   resolveCodexRuntimeContext,
@@ -27,7 +31,11 @@ export interface CodexPluginDiagnostics {
     ok: boolean;
     packagePin: boolean;
     path: string;
+    pluginHost: boolean;
+    pluginHostValue: string | null;
     pinnedSpecifier: string | null;
+    runtimeMode: boolean;
+    runtimeModeValue: string | null;
     runtimeSpecifier: string | null;
   };
   ok: boolean;
@@ -63,8 +71,12 @@ export function buildCodexRuntimeDiagnostics(
     node: nodeMajor >= 22,
     npm: npmAvailable,
     npx: npxAvailable,
+    runtimeMode: context.runtimeMode === context.expectedRuntimeMode,
+    runtimePluginHost: context.pluginHost === context.expectedPluginHost,
     embeddedRuntime: plugin.mcp.embeddedRuntime,
     packagePin: plugin.mcp.packagePin,
+    pluginHost: plugin.mcp.pluginHost,
+    pluginRuntimeMode: plugin.mcp.runtimeMode,
     pluginAssets: plugin.assets.ok,
     pluginManifest: plugin.manifest.ok,
     pluginMcp: plugin.mcp.ok,
@@ -76,8 +88,10 @@ export function buildCodexRuntimeDiagnostics(
     npm,
     npx,
     packageVersion: context.packageVersion,
+    pluginHost: context.pluginHost,
     plugin,
     requestedTier: context.requestedTier,
+    runtimeMode: context.runtimeMode,
   });
 
   return {
@@ -130,12 +144,26 @@ export function buildCodexRuntimeDiagnostics(
     codex: {
       channelId: context.channelId,
       expectedChannelId: context.expectedChannelId,
+      pluginHost: context.pluginHost,
+      runtimeMode: context.runtimeMode,
       requestedTier: context.requestedTier,
       effectiveTier: context.effectiveTier,
       adminEnabled: context.adminEnabled,
       adminMode: context.adminEnabled
         ? `enabled-by-${CODEX_ADMIN_ENABLE_ENV}`
         : `disabled-requires-${CODEX_ADMIN_ENABLE_ENV}=1`,
+    },
+    runtimeIdentity: {
+      mode: context.runtimeMode,
+      expectedMode: context.expectedRuntimeMode,
+      pluginHost: context.pluginHost,
+      expectedPluginHost: context.expectedPluginHost,
+      isPluginRuntime: context.runtimeMode === ALEMBIC_RUNTIME_MODE_PLUGIN,
+      env: {
+        mode: ALEMBIC_RUNTIME_MODE_ENV,
+        pluginHost: ALEMBIC_PLUGIN_HOST_ENV,
+        channelId: 'ALEMBIC_CHANNEL_ID',
+      },
     },
     offlineFallback: {
       note: 'The Codex plugin ships Alembic runtime code in ./runtime and starts MCP from ./runtime.tgz. npx installs that local package tarball and resolves its production npm dependencies on first MCP start.',
@@ -169,6 +197,16 @@ export function buildCodexPluginDiagnostics(
   const packagePin = embeddedRuntime;
   const adminDisabledByDefault = registry.mcp.env?.[CODEX_ADMIN_ENABLE_ENV] === '0';
   const agentTierByDefault = registry.mcp.env?.ALEMBIC_MCP_TIER === CODEX_DEFAULT_MCP_TIER;
+  const pluginHostValue =
+    typeof registry.mcp.env?.[ALEMBIC_PLUGIN_HOST_ENV] === 'string'
+      ? registry.mcp.env[ALEMBIC_PLUGIN_HOST_ENV]
+      : null;
+  const runtimeModeValue =
+    typeof registry.mcp.env?.[ALEMBIC_RUNTIME_MODE_ENV] === 'string'
+      ? registry.mcp.env[ALEMBIC_RUNTIME_MODE_ENV]
+      : null;
+  const pluginHost = pluginHostValue === CODEX_PLUGIN_HOST;
+  const runtimeMode = runtimeModeValue === ALEMBIC_RUNTIME_MODE_PLUGIN;
   const mcpMode = registry.mcp.env?.[CODEX_MCP_MODE_ENV] === '1';
   const codexShimMode = registry.mcp.env?.[CODEX_MCP_SHIM_ENV] === '1';
   const missingAssets = registry.plugin.assets.filter(
@@ -204,10 +242,20 @@ export function buildCodexPluginDiagnostics(
       embeddedRuntime,
       mcpMode,
       ok:
-        embeddedRuntime && adminDisabledByDefault && agentTierByDefault && mcpMode && codexShimMode,
+        embeddedRuntime &&
+        adminDisabledByDefault &&
+        agentTierByDefault &&
+        pluginHost &&
+        runtimeMode &&
+        mcpMode &&
+        codexShimMode,
       packagePin,
       path: registry.mcp.json.path,
+      pluginHost,
+      pluginHostValue,
       pinnedSpecifier: runtimeSpecifier,
+      runtimeMode,
+      runtimeModeValue,
       runtimeSpecifier,
     },
     ok:
@@ -215,6 +263,8 @@ export function buildCodexPluginDiagnostics(
       embeddedRuntime &&
       adminDisabledByDefault &&
       agentTierByDefault &&
+      pluginHost &&
+      runtimeMode &&
       mcpMode &&
       codexShimMode &&
       missingAssets.length === 0 &&
@@ -241,8 +291,10 @@ function buildDiagnosticIssues(input: {
   npm: Record<string, unknown>;
   npx: Record<string, unknown>;
   packageVersion: string;
+  pluginHost: string;
   plugin: CodexPluginDiagnostics;
   requestedTier: string;
+  runtimeMode: string;
 }): CodexDiagnosticIssue[] {
   const issues: CodexDiagnosticIssue[] = [];
   if (!input.checks.node) {
@@ -270,6 +322,14 @@ function buildDiagnosticIssues(input: {
       severity: 'error',
     });
   }
+  if (!input.checks.runtimeMode || !input.checks.runtimePluginHost) {
+    issues.push({
+      action: 'Start Alembic Codex with ALEMBIC_RUNTIME_MODE=plugin and ALEMBIC_PLUGIN_HOST=codex.',
+      code: 'RUNTIME_IDENTITY_MISMATCH',
+      message: `Current runtime identity is ALEMBIC_RUNTIME_MODE=${input.runtimeMode}, ALEMBIC_PLUGIN_HOST=${input.pluginHost}.`,
+      severity: 'error',
+    });
+  }
   if (!input.checks.packagePin) {
     issues.push({
       action:
@@ -283,7 +343,7 @@ function buildDiagnosticIssues(input: {
   if (!input.checks.pluginMcp && input.checks.packagePin) {
     issues.push({
       action:
-        'Restore plugins/alembic-codex/.mcp.json Codex env defaults: ALEMBIC_MCP_MODE=1, ALEMBIC_CODEX_MCP_MODE=1, ALEMBIC_MCP_TIER=agent, ALEMBIC_CODEX_ENABLE_ADMIN=0.',
+        'Restore plugins/alembic-codex/.mcp.json Codex env defaults: ALEMBIC_RUNTIME_MODE=plugin, ALEMBIC_PLUGIN_HOST=codex, ALEMBIC_MCP_MODE=1, ALEMBIC_CODEX_MCP_MODE=1, ALEMBIC_MCP_TIER=agent, ALEMBIC_CODEX_ENABLE_ADMIN=0.',
       code: 'PLUGIN_MCP_ENV_INCOMPLETE',
       message: 'Codex plugin MCP config is missing required Codex runtime environment defaults.',
       severity: 'error',

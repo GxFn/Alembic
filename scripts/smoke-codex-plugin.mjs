@@ -59,8 +59,10 @@ writeFileSync(join(npxProjectRoot, 'index.js'), 'export const npxRuntimeSmoke = 
 
 const previousEnv = {
   ALEMBIC_CHANNEL_ID: process.env.ALEMBIC_CHANNEL_ID,
+  ALEMBIC_PLUGIN_HOST: process.env.ALEMBIC_PLUGIN_HOST,
   ALEMBIC_CODEX_PLUGIN_ROOT: process.env.ALEMBIC_CODEX_PLUGIN_ROOT,
   ALEMBIC_HOME: process.env.ALEMBIC_HOME,
+  ALEMBIC_RUNTIME_MODE: process.env.ALEMBIC_RUNTIME_MODE,
   ALEMBIC_PROJECT_DIR: process.env.ALEMBIC_PROJECT_DIR,
   CODEX_WORKSPACE_DIR: process.env.CODEX_WORKSPACE_DIR,
 };
@@ -110,7 +112,9 @@ try {
 
   process.env.ALEMBIC_HOME = alembicHome;
   process.env.ALEMBIC_CHANNEL_ID = 'codex';
+  process.env.ALEMBIC_PLUGIN_HOST = 'codex';
   process.env.ALEMBIC_CODEX_PLUGIN_ROOT = installedPlugin.installedRoot;
+  process.env.ALEMBIC_RUNTIME_MODE = 'plugin';
   process.env.ALEMBIC_PROJECT_DIR = projectRoot;
   process.env.CODEX_WORKSPACE_DIR = projectRoot;
   process.env.ALEMBIC_QUIET = '1';
@@ -136,6 +140,11 @@ try {
   );
   assert(diagnostics.data?.plugin?.ok === true, 'diagnostics plugin checks did not pass');
   assert(diagnostics.data?.codex?.channelId === 'codex', 'diagnostics channel id mismatch');
+  assert(diagnostics.data?.runtimeIdentity?.mode === 'plugin', 'diagnostics runtime mode mismatch');
+  assert(
+    diagnostics.data?.runtimeIdentity?.pluginHost === 'codex',
+    'diagnostics plugin host mismatch'
+  );
   assert(
     diagnostics.data?.primaryAction?.tool === 'alembic_codex_status',
     'diagnostics should point healthy installs to status'
@@ -412,6 +421,14 @@ function simulateMarketplaceInstall({ packageRoot, packageVersion }) {
     'installed plugin MCP must pass ALEMBIC_CODEX_PLUGIN_ROOT=.'
   );
   assert(
+    env.ALEMBIC_RUNTIME_MODE === 'plugin',
+    'installed plugin MCP must pass ALEMBIC_RUNTIME_MODE=plugin'
+  );
+  assert(
+    env.ALEMBIC_PLUGIN_HOST === 'codex',
+    'installed plugin MCP must pass ALEMBIC_PLUGIN_HOST=codex'
+  );
+  assert(
     env.npm_config_cache === '/tmp/alembic-codex-npm-cache',
     'installed plugin MCP must keep npm cache out of the user home directory'
   );
@@ -493,8 +510,10 @@ async function runStdioSmoke({ packageJson, runtimeRoot, pluginRoot, projectRoot
       ALEMBIC_CODEX_PLUGIN_ROOT: pluginRoot,
       ALEMBIC_HOME: alembicHome,
       ALEMBIC_MCP_TIER: 'agent',
+      ALEMBIC_PLUGIN_HOST: 'codex',
       ALEMBIC_PROJECT_DIR: projectRoot,
       ALEMBIC_QUIET: '1',
+      ALEMBIC_RUNTIME_MODE: 'plugin',
       CODEX_WORKSPACE_DIR: projectRoot,
       PATH: process.env.PATH || '',
     },
@@ -564,6 +583,14 @@ async function runStdioSmoke({ packageJson, runtimeRoot, pluginRoot, projectRoot
     assert(
       diagnostics.data?.codex?.channelId === 'codex',
       'MCP stdio diagnostics channel id mismatch'
+    );
+    assert(
+      diagnostics.data?.runtimeIdentity?.mode === 'plugin',
+      'MCP stdio diagnostics runtime mode mismatch'
+    );
+    assert(
+      diagnostics.data?.runtimeIdentity?.pluginHost === 'codex',
+      'MCP stdio diagnostics plugin host mismatch'
     );
     assert(
       diagnostics.data?.primaryAction?.tool === 'alembic_codex_status',

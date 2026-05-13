@@ -19,3 +19,8 @@ directory.
 
 Runtime code should branch on the stable channel id, for example
 `ALEMBIC_CHANNEL_ID=codex`, not on install paths or artifact names.
+
+Use `ALEMBIC_RUNTIME_MODE=plugin` for behavior that applies to any packaged
+plugin runtime, regardless of host. Use `ALEMBIC_PLUGIN_HOST=codex` only for
+Codex-specific behavior. A future Claude Code plugin should keep
+`ALEMBIC_RUNTIME_MODE=plugin` and set its own plugin host id.

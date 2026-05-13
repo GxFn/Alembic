@@ -599,6 +599,8 @@ describe('CodexMcpServer', () => {
     expect(pluginMcp.mcpServers.alembic.args).toContain('--package');
     expect(pluginMcp.mcpServers.alembic.args).toContain('./runtime.tgz');
     expect(pluginMcp.mcpServers.alembic.cwd).toBe('.');
+    expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_RUNTIME_MODE).toBe('plugin');
+    expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_PLUGIN_HOST).toBe('codex');
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_MCP_MODE).toBe('1');
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_CODEX_MCP_MODE).toBe('1');
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_CODEX_PLUGIN_ROOT).toBe('.');

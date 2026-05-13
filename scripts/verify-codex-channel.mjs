@@ -35,6 +35,16 @@ expect(
   channel.runtime?.env?.ALEMBIC_CHANNEL_ID === channel.id,
   'Codex channel runtime env must set ALEMBIC_CHANNEL_ID to the channel id'
 );
+expect(channel.runtime?.mode === 'plugin', 'Codex channel runtime.mode must be plugin');
+expect(channel.runtime?.pluginHost === 'codex', 'Codex channel runtime.pluginHost must be codex');
+expect(
+  channel.runtime?.env?.ALEMBIC_RUNTIME_MODE === 'plugin',
+  'Codex channel runtime env must set ALEMBIC_RUNTIME_MODE=plugin'
+);
+expect(
+  channel.runtime?.env?.ALEMBIC_PLUGIN_HOST === 'codex',
+  'Codex channel runtime env must set ALEMBIC_PLUGIN_HOST=codex'
+);
 
 const plugins = Array.isArray(channel.plugins) ? channel.plugins : [];
 const packages = Array.isArray(channel.packages) ? channel.packages : [];
@@ -90,6 +100,22 @@ for (const plugin of plugins) {
   expect(
     server?.env?.ALEMBIC_CHANNEL_ID === channel.runtime?.channelId,
     `plugin ${plugin.name} MCP config must set ALEMBIC_CHANNEL_ID=${channel.runtime?.channelId}`
+  );
+  expect(
+    plugin.runtimeMode === channel.runtime?.mode,
+    `plugin ${plugin.name} runtimeMode must match channel runtime.mode`
+  );
+  expect(
+    plugin.pluginHost === channel.runtime?.pluginHost,
+    `plugin ${plugin.name} pluginHost must match channel runtime.pluginHost`
+  );
+  expect(
+    server?.env?.ALEMBIC_RUNTIME_MODE === channel.runtime?.mode,
+    `plugin ${plugin.name} MCP config must set ALEMBIC_RUNTIME_MODE=${channel.runtime?.mode}`
+  );
+  expect(
+    server?.env?.ALEMBIC_PLUGIN_HOST === channel.runtime?.pluginHost,
+    `plugin ${plugin.name} MCP config must set ALEMBIC_PLUGIN_HOST=${channel.runtime?.pluginHost}`
   );
   expect(
     packageJson.scripts?.[plugin.releaseScript],

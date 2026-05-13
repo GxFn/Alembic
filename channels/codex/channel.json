@@ -9,8 +9,12 @@
   },
   "runtime": {
     "channelId": "codex",
+    "mode": "plugin",
+    "pluginHost": "codex",
     "env": {
-      "ALEMBIC_CHANNEL_ID": "codex"
+      "ALEMBIC_CHANNEL_ID": "codex",
+      "ALEMBIC_PLUGIN_HOST": "codex",
+      "ALEMBIC_RUNTIME_MODE": "plugin"
     }
   },
   "plugins": [
@@ -19,8 +23,10 @@
       "path": "plugins/alembic-codex",
       "marketplaceEntry": "alembic-codex",
       "runtimePackage": "alembic-ai",
+      "runtimeMode": "plugin",
       "runtimeSpecifier": "./runtime.tgz",
       "embeddedRuntimePath": "runtime",
+      "pluginHost": "codex",
       "distributionRepo": "GxFn/AlembicCodex",
       "runtimeBin": "alembic-codex-mcp",
       "releaseScript": "release:codex-plugin",

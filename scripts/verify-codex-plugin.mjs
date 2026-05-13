@@ -145,6 +145,14 @@ expect(
   server?.env?.ALEMBIC_CHANNEL_ID === 'codex',
   '.mcp.json must set stable ALEMBIC_CHANNEL_ID=codex'
 );
+expect(
+  server?.env?.ALEMBIC_RUNTIME_MODE === 'plugin',
+  '.mcp.json must set ALEMBIC_RUNTIME_MODE=plugin so Alembic knows it is plugin-hosted'
+);
+expect(
+  server?.env?.ALEMBIC_PLUGIN_HOST === 'codex',
+  '.mcp.json must set ALEMBIC_PLUGIN_HOST=codex for the current plugin host'
+);
 expect(server?.env?.ALEMBIC_MCP_MODE === '1', '.mcp.json must explicitly set ALEMBIC_MCP_MODE=1');
 expect(
   server?.env?.ALEMBIC_CODEX_MCP_MODE === '1',

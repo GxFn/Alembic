@@ -66,9 +66,11 @@ function rewriteCachedMcpForLocalDist(cacheRoot) {
     env: {
       ...serverEnv,
       ALEMBIC_CHANNEL_ID: 'codex',
+      ALEMBIC_PLUGIN_HOST: 'codex',
       ALEMBIC_CODEX_MCP_MODE: '1',
       ALEMBIC_MCP_MODE: '1',
       ALEMBIC_MCP_TIER: serverEnv.ALEMBIC_MCP_TIER || 'agent',
+      ALEMBIC_RUNTIME_MODE: 'plugin',
     },
   };
   writeFileSync(mcpPath, `${JSON.stringify(mcp, null, 2)}\n`);
