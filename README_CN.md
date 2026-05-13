@@ -216,7 +216,6 @@ alembic guard:ci --min-score 90   # CI 质量门禁
 - **知识图谱** — 14 种关联关系，查询影响路径和依赖深度
 - **语义搜索** — HNSW 向量索引 + 加权字段匹配混合检索，RRF 融合 + 7 路信号排序
 - **sourceRefs** — Recipe 携带源码证据，Agent 无需自行验证
-- **飞书远程** — 手机发消息，意图识别分流到 Bot 或 IDE
 - **远程仓库** — Recipe 目录转 git 子仓库，多项目共享
 
 > AI 驱动功能需 LLM API Key。支持 Google / OpenAI / Claude / DeepSeek / Ollama，自动 fallback。
@@ -278,7 +277,6 @@ Recipe 是 Markdown 文件，SQLite 只是读缓存。数据库坏了 `alembic s
 | **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP 工具；支持 hooks |
 | **Trae / Qoder** | MCP | `alembic setup` 自动生成，`alembic mirror` 同步配置 |
 | **Xcode** | 文件监听 | `alembic watch` + 文件指令 + Snippet 同步 |
-| **飞书 (Lark)** | Bot + WebSocket | 手机发消息 → 意图识别 → Bot Agent 或 IDE Agent Mode 执行 |
 
 ### VS Code 扩展
 

@@ -2,7 +2,7 @@
  * AgentRuntimeTypes — AgentRuntime 共享类型定义
  *
  * 从 AgentRuntime.ts 提取的接口和类型，
- * 供 AgentRuntime、ToolExecutionPipeline、LarkTransport 及测试文件独立消费。
+ * 供 AgentRuntime、ToolExecutionPipeline 及测试文件独立消费。
  *
  * @module AgentRuntimeTypes
  */

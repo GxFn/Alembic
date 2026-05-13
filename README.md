@@ -223,7 +223,6 @@ Knowledge changes auto-deliver to IDE-consumable formats:
 - **Knowledge Graph** — 14 relationship types, query impact paths and dependency depth
 - **Semantic Search** — HNSW vector index + field-weighted scoring hybrid, RRF fusion + 7-signal ranking
 - **sourceRefs** — Recipes carry source evidence, Agent trusts without self-verification
-- **Lark Remote** — Message from phone, intent routes to Bot or IDE
 - **Remote Repository** — Recipe directory as git sub-repo, shared across projects
 
 > AI-driven features require an LLM API Key. Supports Google / OpenAI / Claude / DeepSeek / Ollama with automatic fallback.
@@ -285,7 +284,6 @@ Recipes are Markdown files. SQLite is just a read cache. If the database breaks,
 | **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP tools; supports hooks |
 | **Trae / Qoder** | MCP | `alembic setup` auto-generates, `alembic mirror` syncs config |
 | **Xcode** | File watching | `alembic watch` + file directives + Snippet sync |
-| **Lark** | Bot + WebSocket | Message from phone → intent recognition → Bot Agent or IDE Agent Mode execution |
 
 ### VS Code Extension
 

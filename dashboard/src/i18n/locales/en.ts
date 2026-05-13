@@ -1074,7 +1074,7 @@ export const en: DeepString<typeof zh> = {
     roleChatAgent: 'Built-in Agent',
     developerResp: 'Review & decide, maintain project standards',
     cursorAgentResp: 'Generate code per standards, search knowledge base, manage tasks',
-    chatAgentResp: 'Cold start analysis, Lark programming, Skills recommendation, scan & audit',
+    chatAgentResp: 'Cold start analysis, Skills recommendation, scan & audit',
     coreComponents: 'Core Components',
     bootstrapLabel: 'Bootstrap (Cold Start)',
     bootstrapDesc: '14 dimensions × 7-phase dual-path knowledge extraction engine',
@@ -1134,7 +1134,7 @@ export const en: DeepString<typeof zh> = {
     // Role capability cells
     developerCap: 'Dashboard review candidates, save Recipes; <code class="bg-slate-100 px-1 rounded">// as:search</code> knowledge retrieval; run <code class="bg-slate-100 px-1 rounded">asd ui</code>',
     cursorAgentCap: '11 Skills understand conventions; 22 MCP tools for on-demand retrieval & candidate submission; writes go through Gateway review; TaskGraph DAG orchestration + tokenBudget-aware consumption',
-    chatAgentCap: 'Unified AgentRuntime; Lark Preset programming chat; Skills smart recommendation + auto-injection; <code class="bg-slate-100 px-1 rounded">asd coldstart</code> cold start + <code class="bg-slate-100 px-1 rounded">asd ais</code> scan',
+    chatAgentCap: 'Unified AgentRuntime; Skills smart recommendation + auto-injection; <code class="bg-slate-100 px-1 rounded">asd coldstart</code> cold start + <code class="bg-slate-100 px-1 rounded">asd ais</code> scan',
     // Component card bullets
     bootstrapBullet1: '14 dimensions (7 universal + 7 language), auto-activated by lang/framework',
     bootstrapBullet2: 'Dual-path: Analyst/Producer AI pipeline or IDE Agent + MCP',
@@ -1269,9 +1269,9 @@ export const en: DeepString<typeof zh> = {
     archOverviewIDE: 'IDE Integration (MCP + Skills + Extension Triple-Channel)',
     // IDE Integration component card
     ideIntegrationLabel: 'IDE Integration',
-    ideIntegrationDesc: '6 IDEs + Lark, MCP/Extension/Directives triple-channel access',
+    ideIntegrationDesc: '6 IDEs, MCP/Extension/Directives triple-channel access',
     ideIntegrationBullet1: 'MCP Server: 16 tools + Skills auto-discovery + Tier visibility',
-    ideIntegrationBullet2: 'VSCode Extension: 11 modules (Guard + CodeLens + #asd Agent + Decision)',
+    ideIntegrationBullet2: 'VSCode Extension: Guard + CodeLens + #asd Agent + Decision deep integration',
     ideIntegrationBullet3: 'One-click <code class="bg-slate-100 px-1 rounded text-xs">asd setup</code> generates Cursor / VS Code / Claude Code templates',
     // Security & Permissions component card
     securityLabel: 'Security & Permissions',
@@ -1294,15 +1294,13 @@ export const en: DeepString<typeof zh> = {
     // Agent Architecture section
     agentArchTitle: 'Agent Architecture',
     agentArchDesc: 'Unified runtime + orthogonal configuration, powering all AI capabilities',
-    agentArchPresetTitle: '4 Preset Modes',
+    agentArchPresetTitle: '2 Preset Modes',
     agentArchPresetDesc: 'One AgentRuntime, different configuration combos:',
-    agentArchPresetChat: '<strong>chat</strong>: Conversation Q&A (8 rounds / 120s) — Dashboard & Lark daily chat',
+    agentArchPresetChat: '<strong>chat</strong>: Conversation Q&A (8 rounds / 120s) — Dashboard daily chat',
     agentArchPresetInsight: '<strong>insight</strong>: Deep Insight (24 rounds / 600s) — cold start multi-dimension analysis + knowledge extraction',
-    agentArchPresetLark: '<strong>lark</strong>: Lark Chat (12 rounds / 180s) — Lark channel knowledge management',
-    agentArchPresetRemoteExec: '<strong>remote-exec</strong>: Remote Exec (6 rounds / 60s) — terminal command sandbox',
     agentArchStrategyTitle: '4 Execution Strategies',
     agentArchStrategyDesc: 'Based on Anthropic Agents design patterns:',
-    agentArchStrategySingle: '<strong>Single</strong>: One ReAct loop — chat, Lark, remote exec',
+    agentArchStrategySingle: '<strong>Single</strong>: One ReAct loop — chat',
     agentArchStrategyPipeline: '<strong>Pipeline</strong>: Sequential stages + quality gates (pass/retry/degrade) — scan analysis',
     agentArchStrategyFanOut: '<strong>FanOut</strong>: Concurrent sub-tasks + tier-based throttle — cold start parallel dimensions',
     agentArchStrategyAdaptive: '<strong>Adaptive</strong>: Auto-select strategy at runtime — dynamic dispatch',

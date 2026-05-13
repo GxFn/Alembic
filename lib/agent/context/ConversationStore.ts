@@ -29,7 +29,7 @@ import { estimateTokens as _estimateTokens } from '#shared/token-utils.js';
 /** 对话索引中的条目 */
 interface ConversationEntry {
   id: string;
-  category: 'user' | 'system' | 'lark';
+  category: 'user' | 'system';
   title: string;
   createdAt: string;
   updatedAt: string;
@@ -188,7 +188,7 @@ export class ConversationStore {
    * 对话列表
    * @param [opts.category] 按类别过滤
    */
-  list({ category, limit = 20 }: { category?: 'user' | 'system' | 'lark'; limit?: number } = {}) {
+  list({ category, limit = 20 }: { category?: 'user' | 'system'; limit?: number } = {}) {
     const index = this.#loadIndex();
     let results = index;
     if (category) {
@@ -305,7 +305,7 @@ export class ConversationStore {
     category,
   }: {
     maxAgeDays?: number;
-    category?: 'user' | 'system' | 'lark';
+    category?: 'user' | 'system';
   } = {}) {
     const index = this.#loadIndex();
     const cutoff = Date.now() - maxAgeDays * 86400000;

@@ -5,8 +5,6 @@ import { AgentProfileRegistry } from '../profiles/AgentProfileRegistry.js';
 import { AgentStageFactoryRegistry } from '../profiles/AgentStageFactoryRegistry.js';
 import { AgentMessage, Channel } from '../runtime/AgentMessage.js';
 import type {
-  AgentProfileOverride,
-  AgentProfileRef,
   AgentRunInput,
   AgentRunResult,
   AgentRunStatus,
@@ -167,9 +165,6 @@ function buildRuntimeOptions(input: AgentRunInput): AgentRuntimeRunOptions {
 }
 
 function runtimeSourceFor(source: AgentRunInput['context']['source']): AgentRuntimeSource {
-  if (source === 'lark') {
-    return 'user';
-  }
   if (source === 'http-chat' || source === 'http-stream') {
     return 'user';
   }
@@ -185,9 +180,6 @@ function stripProfileSelectionMetadata(metadata: Record<string, unknown>) {
 }
 
 function toChannel(source: AgentRunInput['context']['source']) {
-  if (source === 'lark') {
-    return Channel.LARK;
-  }
   if (source === 'mcp') {
     return Channel.MCP;
   }

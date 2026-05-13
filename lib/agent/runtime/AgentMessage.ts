@@ -5,11 +5,8 @@
  * Transport 适配器负责将渠道特定格式转换为 AgentMessage,
  * Agent 只处理 AgentMessage, 通过 replyFn 返回结果。
  *
- * 这是将"飞书聊天"和"前端聊天"统一为同一概念的关键:
- *   - HTTP/SSE (Dashboard)  → AgentMessage { channel: 'http', ... }
- *   - WebSocket (Lark/飞书)  → AgentMessage { channel: 'lark', ... }
- *   - CLI (终端)             → AgentMessage { channel: 'cli',  ... }
- *   - MCP (IDE 扩展)         → AgentMessage { channel: 'mcp',  ... }
+ * Transport factory methods keep HTTP, CLI, MCP, and internal surfaces
+ * normalized before they reach AgentRuntime.
  *
  * @module AgentMessage
  */
@@ -64,19 +61,6 @@ interface HttpRequest {
   ip?: string;
 }
 
-/** Lark message shape */
-interface LarkMessage {
-  text?: string;
-  content?: string;
-  chatId?: string;
-  senderId?: string;
-  userId?: string;
-  senderName?: string;
-  messageId?: string;
-  messageType?: string;
-  [key: string]: unknown;
-}
-
 /** CLI options */
 interface CliOptions {
   sessionId?: string;
@@ -117,7 +101,6 @@ interface McpRequest {
 /** 通信渠道枚举 */
 export const Channel = Object.freeze({
   HTTP: 'http',
-  LARK: 'lark',
   CLI: 'cli',
   MCP: 'mcp',
   INTERNAL: 'internal', // Agent 间通信
@@ -205,35 +188,6 @@ export class AgentMessage {
         mode: body.mode, // 手动指定 preset
         context: body.context, // 额外上下文
         stream: body.stream ?? true,
-      },
-      replyFn,
-    });
-  }
-
-  /**
-   * 从飞书消息构建
-   * @param larkMsg 飞书消息对象
-   * @param replyFn 飞书回复函数
-   */
-  static fromLark(larkMsg: LarkMessage, replyFn?: ReplyFn | null) {
-    return new AgentMessage({
-      content: larkMsg.text || larkMsg.content || '',
-      channel: Channel.LARK,
-      session: {
-        id: larkMsg.chatId || randomUUID(),
-        history: [],
-      },
-      sender: {
-        id: larkMsg.senderId || larkMsg.userId || 'lark-user',
-        name: larkMsg.senderName,
-        type: 'user',
-      },
-      metadata: {
-        messageId: larkMsg.messageId,
-        chatId: larkMsg.chatId,
-        messageType: larkMsg.messageType,
-        // 飞书特有字段透传
-        raw: larkMsg,
       },
       replyFn,
     });

@@ -282,10 +282,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function serviceKindForPreset(preset: string): CompiledAgentProfile['serviceKind'] {
-  if (preset === 'remote-exec') {
-    return 'remote-operation';
-  }
-  if (preset === 'chat' || preset === 'lark') {
+  if (preset === 'chat') {
     return 'conversation';
   }
   if (preset === 'evolution') {

@@ -29,7 +29,6 @@ import { hasAnyProject, isDocumentInScope, invalidateCache } from './projectScop
 import { registerTaskTool } from './taskTool';
 import { GuardDiagnostics } from './guardDiagnostics';
 import { registerGuardCodeActions } from './guardCodeAction';
-import { RemoteCommandPoller } from './remoteCommandPoller';
 
 function toErrorMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -199,10 +198,6 @@ export function activate(context: vscode.ExtensionContext) {
 
   // ── Guard Code Actions（灯泡菜单：搜索知识库修复）──
   registerGuardCodeActions(context);
-
-  // ── Remote Command Poller（飞书 → IDE 远程指令桥接）──
-  const remotePoller = new RemoteCommandPoller(apiClient);
-  remotePoller.register(context);
 
   // CodeLens — 暂时关闭，待后续处理
   // codeLensProvider = new DirectiveCodeLensProvider();

@@ -10,17 +10,14 @@
  *   |------------------|--------------------------|--------------|---------------------|
  *   | chat             | Conv + Analysis          | Single       | StandardBudget      |
  *   | insight          | Analysis + Production    | FanOut+Pipe  | DeepBudget+Quality  |
- *   | remote-exec      | Conv + Analysis + System | Single       | ShortBudget+Safety  |
  *
  * 注意:
- *   - "飞书聊天" 用 chat preset，不需要单独的 Agent
- *   - "飞书远程执行" 用 remote-exec preset，Safety 由 Policy 提供
  *   - "冷启动" 和 "扫描" 统一使用 insight preset，仅编排层不同
  *
  * @module presets
  */
 
-import { BudgetPolicy, QualityGatePolicy, SafetyPolicy } from '../policies/index.js';
+import { BudgetPolicy, QualityGatePolicy } from '../policies/index.js';
 // v3.0: 导入 Insight prompt/strategy templates
 import {
   ANALYST_BUDGET,
@@ -146,7 +143,7 @@ export const PRESETS = Object.freeze({
 
   chat: {
     name: '对话',
-    description: '多轮对话、知识检索、代码问答。适用于 Dashboard 和飞书的常规对话。',
+    description: '多轮对话、知识检索、代码问答。适用于 Dashboard 常规对话。',
     capabilities: ['conversation', 'code_analysis'],
     strategy: { type: 'single' },
     policies: [
@@ -377,69 +374,6 @@ export const PRESETS = Object.freeze({
     },
     memory: {
       enabled: false,
-    },
-  },
-
-  // ─── lark: 飞书知识管理对话 ─────────────
-
-  lark: {
-    name: '飞书对话',
-    description: '通过飞书自然语言进行知识管理、代码分析、项目理解。服务端直接处理，不转发 IDE。',
-    capabilities: ['conversation', 'code_analysis'],
-    strategy: { type: 'single' },
-    policies: [
-      (config?: PolicyFactoryConfig) =>
-        new BudgetPolicy({
-          maxIterations: config?.maxIterations ?? 12,
-          maxTokens: config?.maxTokens ?? 4096,
-          temperature: config?.temperature ?? 0.7,
-          timeoutMs: config?.timeoutMs ?? 180_000,
-        }),
-      () =>
-        new SafetyPolicy({
-          allowedSenders: process.env.ALEMBIC_LARK_ALLOWED_USERS?.split(',').filter(Boolean) || [],
-        }),
-    ],
-    persona: {
-      role: 'assistant',
-      description: 'Alembic 知识管理助手 (飞书)。用中文回复，简洁专业。',
-    },
-    memory: {
-      enabled: true,
-      mode: 'user',
-      tiers: ['working', 'episodic', 'semantic'],
-    },
-  },
-
-  // ─── remote-exec: 远程执行 ──────────────
-
-  'remote-exec': {
-    name: '远程执行',
-    description: '通过飞书/远程终端执行本地操作。搭配 SafetyPolicy 保障安全。',
-    capabilities: ['conversation', 'code_analysis', 'system_interaction'],
-    strategy: { type: 'single' },
-    policies: [
-      (config?: PolicyFactoryConfig) =>
-        new BudgetPolicy({
-          maxIterations: config?.maxIterations ?? 6,
-          maxTokens: config?.maxTokens ?? 2048,
-          temperature: config?.temperature ?? 0.5,
-          timeoutMs: config?.timeoutMs ?? 60_000,
-        }),
-      () =>
-        new SafetyPolicy({
-          allowedSenders: process.env.ALEMBIC_LARK_ALLOWED_USERS?.split(',').filter(Boolean) || [],
-          fileScope: process.env.ALEMBIC_PROJECT_ROOT,
-        }),
-    ],
-    persona: {
-      role: 'assistant',
-      description: 'Alembic 远程编程助手',
-    },
-    memory: {
-      enabled: true,
-      mode: 'user',
-      tiers: ['working', 'episodic'],
     },
   },
 });

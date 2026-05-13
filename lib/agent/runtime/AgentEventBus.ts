@@ -41,7 +41,6 @@ export const AgentEvents = Object.freeze({
 
   // ── 外部触发 ──
   USER_INPUT: 'user:input',
-  LARK_MESSAGE: 'lark:message',
   SCAN_REQUEST: 'scan:request',
 });
 

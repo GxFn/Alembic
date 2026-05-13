@@ -1071,7 +1071,7 @@ export const zh = {
     roleChatAgent: '内置 Agent',
     developerResp: '审核与决策、维护项目标准',
     cursorAgentResp: '按规范生成代码、检索知识库、管理任务',
-    chatAgentResp: '冷启动分析、飞书编程、Skills 推荐、扫描审查',
+    chatAgentResp: '冷启动分析、Skills 推荐、扫描审查',
     coreComponents: '核心组件',
     bootstrapLabel: 'Bootstrap（冷启动）',
     bootstrapDesc: '14 维度 × 7 阶段双路径知识提取引擎',
@@ -1131,7 +1131,7 @@ export const zh = {
     // Role capability cells
     developerCap: 'Dashboard 审核候选、保存 Recipe；<code class="bg-slate-100 px-1 rounded">// as:search</code> 检索知识；运行 <code class="bg-slate-100 px-1 rounded">asd ui</code>',
     cursorAgentCap: '11 个 Skills 理解规范；22 个 MCP 工具按需检索、提交候选；写操作经 Gateway 审核；TaskGraph DAG 任务编排 + tokenBudget 感知消费',
-    chatAgentCap: '统一 AgentRuntime 驱动；飞书 Lark Preset 编程对话；Skills 智能推荐 + 自动注入；<code class="bg-slate-100 px-1 rounded">asd coldstart</code> 冷启动 + <code class="bg-slate-100 px-1 rounded">asd ais</code> 扫描',
+    chatAgentCap: '统一 AgentRuntime 驱动；Skills 智能推荐 + 自动注入；<code class="bg-slate-100 px-1 rounded">asd coldstart</code> 冷启动 + <code class="bg-slate-100 px-1 rounded">asd ais</code> 扫描',
     // Component card bullets
     bootstrapBullet1: '14 维度知识提取（7 通用 + 7 语言），按语言/框架自动激活',
     bootstrapBullet2: '双路径：Analyst/Producer AI 管线 或 IDE Agent + MCP',
@@ -1266,9 +1266,9 @@ export const zh = {
     archOverviewIDE: 'IDE 集成（MCP + Skills + Extension 三通道）',
     // IDE Integration component card
     ideIntegrationLabel: 'IDE 集成',
-    ideIntegrationDesc: '6 种 IDE + 飞书，MCP/Extension/Directives 三通道接入',
+    ideIntegrationDesc: '6 种 IDE，MCP/Extension/Directives 三通道接入',
     ideIntegrationBullet1: 'MCP Server：16 工具 + Skills 自动发现 + Tier 可见性',
-    ideIntegrationBullet2: 'VSCode Extension：11 模块（Guard + CodeLens + #asd Agent + Decision）',
+    ideIntegrationBullet2: 'VSCode Extension：Guard + CodeLens + #asd Agent + Decision 深度集成',
     ideIntegrationBullet3: '一键 <code class="bg-slate-100 px-1 rounded text-xs">asd setup</code> 生成 Cursor / VS Code / Claude Code 模板',
     // Security & Permissions component card
     securityLabel: '安全与权限',
@@ -1291,15 +1291,13 @@ export const zh = {
     // Agent Architecture section
     agentArchTitle: 'Agent 架构',
     agentArchDesc: '统一运行时 + 正交组合配置，驱动所有 AI 能力',
-    agentArchPresetTitle: '4 种 Preset 模式',
+    agentArchPresetTitle: '2 种 Preset 模式',
     agentArchPresetDesc: '同一个 AgentRuntime，不同的配置组合：',
-    agentArchPresetChat: '<strong>chat</strong>：对话问答（8 轮 / 120s）— Dashboard 和飞书日常对话',
+    agentArchPresetChat: '<strong>chat</strong>：对话问答（8 轮 / 120s）— Dashboard 日常对话',
     agentArchPresetInsight: '<strong>insight</strong>：深度洞察（24 轮 / 600s）— 冷启动多维度分析 + 知识提取',
-    agentArchPresetLark: '<strong>lark</strong>：飞书对话（12 轮 / 180s）— 飞书渠道知识管理',
-    agentArchPresetRemoteExec: '<strong>remote-exec</strong>：远程执行（6 轮 / 60s）— 终端命令沙箱',
     agentArchStrategyTitle: '4 种执行策略',
     agentArchStrategyDesc: '参考 Anthropic Agents 设计模式：',
-    agentArchStrategySingle: '<strong>Single</strong>：单次 ReAct 循环 — 对话、飞书、远程执行',
+    agentArchStrategySingle: '<strong>Single</strong>：单次 ReAct 循环 — 对话',
     agentArchStrategyPipeline: '<strong>Pipeline</strong>：顺序多阶段 + 质量门控（通过/重试/降级三态）— 扫描分析',
     agentArchStrategyFanOut: '<strong>FanOut</strong>：并发子任务 + 分层限流 — 冷启动多维度并行',
     agentArchStrategyAdaptive: '<strong>Adaptive</strong>：运行时自动选择策略 — 动态调度',

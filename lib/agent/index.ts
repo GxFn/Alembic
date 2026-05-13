@@ -6,7 +6,7 @@
  * 统一架构: Surface -> AgentService -> Runtime -> Action Layer
  *
  *   ┌──────── Surface Layer ─────────┐
- *   │  HTTP│Lark│CLI│MCP│Workflow    │  ← 只构造 AgentRunInput
+ *   │  HTTP│CLI│MCP│Workflow         │  ← 只构造 AgentRunInput
  *   └──────────────┬─────────────────┘
  *              │
  *   ┌──────────▼─────────────────────┐
@@ -40,7 +40,6 @@
  *   | chat         | Conv + Analysis      | Single      | Budget(8轮)      |
  *   | bootstrap    | Analysis + Knowledge | FanOut+Pipe | Budget+Quality   |
  *   | scan         | Analysis + Knowledge | Pipeline    | Budget+Quality   |
- *   | remote-exec  | Conv+Analysis+System | Single      | Budget+Safety    |
  */
 
 // ── Capabilities ──

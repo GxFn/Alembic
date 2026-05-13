@@ -56,7 +56,7 @@ lib/
 ├── repository/   # 数据访问层（KnowledgeRepository）
 ├── infrastructure/ # 基础设施（Database、Config、Vector、Logging）
 ├── injection/    # 依赖注入容器（ServiceContainer、Modules）
-├── external/     # 外部接口（MCP Server、Lark Transport）
+├── external/     # 外部接口（MCP Server）
 ├── platform/     # 平台适配（OpenBrowser、ScreenCaptureService）
 ├── cli/          # CLI 命令实现
 ├── http/         # HTTP Server / 路由

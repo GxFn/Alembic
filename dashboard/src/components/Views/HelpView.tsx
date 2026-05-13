@@ -334,8 +334,6 @@ const HelpView: React.FC = () => {
               <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
                 <li dangerouslySetInnerHTML={{ __html: t('help.agentArchPresetChat') }} />
                 <li dangerouslySetInnerHTML={{ __html: t('help.agentArchPresetInsight') }} />
-                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchPresetLark') }} />
-                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchPresetRemoteExec') }} />
               </ul>
             </div>
             {/* Strategies */}

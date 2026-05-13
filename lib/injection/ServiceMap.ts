@@ -53,7 +53,6 @@ import type { KnowledgeEdgeRepositoryImpl } from '../repository/knowledge/Knowle
 // ── Repository Types ──
 import type { KnowledgeRepositoryImpl } from '../repository/knowledge/KnowledgeRepository.impl.js';
 import type { MemoryRepositoryImpl } from '../repository/memory/MemoryRepository.js';
-import type { RemoteCommandRepository } from '../repository/remote/RemoteCommandRepository.js';
 import type { SessionRepositoryImpl } from '../repository/session/SessionRepository.js';
 import type { RecipeSourceRefRepositoryImpl } from '../repository/sourceref/RecipeSourceRefRepository.js';
 import type { TokenUsageStore } from '../repository/token/TokenUsageStore.js';
@@ -122,7 +121,6 @@ export interface ServiceMap {
   sessionRepository: SessionRepositoryImpl;
   proposalRepository: ProposalRepository;
   warningRepository: WarningRepository;
-  remoteCommandRepository: RemoteCommandRepository;
   recipeSourceRefRepository: RecipeSourceRefRepositoryImpl;
   knowledgeFileWriter: KnowledgeFileWriter;
   knowledgeSyncService: KnowledgeSyncService;
