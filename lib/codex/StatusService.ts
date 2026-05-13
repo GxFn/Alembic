@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { DaemonStatus } from '../daemon/DaemonSupervisor.js';
 import { DaemonSupervisor } from '../daemon/DaemonSupervisor.js';
+import type { CodeChangeMonitorStatus } from '../service/evolution/code-change-monitor/index.js';
 import { DEFAULT_FOLDER_NAMES } from '../shared/folder-names.js';
 import { WorkspaceResolver } from '../shared/WorkspaceResolver.js';
 import { WorkspaceSettingsStore } from '../shared/WorkspaceSettingsStore.js';
@@ -49,6 +50,7 @@ export interface CodexStatusServiceOptions {
 
 export interface CodexStatusData {
   channel: { expectedId: string; id: string };
+  codeChangeMonitor: CodeChangeMonitorStatus | null;
   daemon: CodexDaemonSummary & {
     health: Record<string, unknown> | null;
     implemented: boolean;
@@ -144,6 +146,7 @@ export async function buildCodexStatus(
   });
   const daemonStatePath = join(resolver.runtimeDir, 'daemon.json');
   const daemonPidPath = join(resolver.runtimeDir, 'daemon.pid');
+  const codeChangeMonitor = readCodeChangeMonitorStatus(daemonStatus.health);
 
   return {
     ok: knowledge.initialized,
@@ -206,6 +209,7 @@ export async function buildCodexStatus(
       adminEnabled: runtime.adminEnabled,
       requiresProjectEnv: null,
     },
+    codeChangeMonitor,
     daemon: {
       ...summarizeCodexDaemonStatus(daemonStatus),
       implemented: true,
@@ -226,6 +230,17 @@ export async function buildCodexStatus(
       state: policyState,
     },
   };
+}
+
+function readCodeChangeMonitorStatus(
+  health: Record<string, unknown> | null
+): CodeChangeMonitorStatus | null {
+  const data = (health?.data || null) as Record<string, unknown> | null;
+  const status = data?.codeChangeMonitor;
+  if (!status || typeof status !== 'object') {
+    return null;
+  }
+  return status as CodeChangeMonitorStatus;
 }
 
 function buildCodexAutoInitStatus(

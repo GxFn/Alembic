@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DaemonStatus } from '../daemon/DaemonSupervisor.js';
+import type { CodeChangeMonitorStatus } from '../service/evolution/code-change-monitor/index.js';
 import { asString, CODEX_REQUIRED_SKILLS, loadCodexPluginRegistry } from './PluginRegistry.js';
 import {
   buildCodexProjectRootRequiredMessage,
@@ -157,6 +158,7 @@ export function buildCodexRuntimeDiagnostics(
       ? summarizeCodexProjectRootResolution(options.projectRootResolution)
       : null,
     autoInit: options.autoInit || null,
+    codeChangeMonitor: readHealthCodeChangeMonitor(daemonStatus.health),
     plugin,
     daemon: {
       ready: daemonStatus.ready,
@@ -491,4 +493,18 @@ function readHealthVersion(health: Record<string, unknown> | null): string | nul
   }
   const version = (data as { version?: unknown }).version;
   return typeof version === 'string' ? version : null;
+}
+
+function readHealthCodeChangeMonitor(
+  health: Record<string, unknown> | null
+): CodeChangeMonitorStatus | null {
+  const data = health?.data;
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+  const status = (data as { codeChangeMonitor?: unknown }).codeChangeMonitor;
+  if (!status || typeof status !== 'object') {
+    return null;
+  }
+  return status as CodeChangeMonitorStatus;
 }

@@ -19,6 +19,7 @@ import {
 import HttpServer from '../lib/http/HttpServer.js';
 import Logger from '../lib/infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
+import { createInactiveMonitorStatus } from '../lib/service/evolution/code-change-monitor/index.js';
 import { DaemonFileChangeCollector } from '../lib/service/evolution/DaemonFileChangeCollector.js';
 import { DASHBOARD_DIR } from '../lib/shared/package-root.js';
 import { shutdown } from '../lib/shared/shutdown.js';
@@ -93,7 +94,7 @@ async function main() {
   }
 
   const httpServer = await startHttpServer(requestedPort, host);
-  const fileChangeCollector = startDaemonFileChangeCollector({
+  const fileChangeCollector = await startDaemonFileChangeCollector({
     container,
     logger,
     projectRoot,
@@ -148,9 +149,7 @@ async function main() {
   shutdown.register(async () => {
     await timerRegistry.dispose();
   }, 'timer-registry');
-  shutdown.register(() => {
-    fileChangeCollector?.stop();
-  }, 'daemon-file-change-collector');
+  shutdown.register(() => fileChangeCollector?.stop(), 'daemon-file-change-collector');
   shutdown.register(() => {
     markInterruptedDaemonJobs({
       code: 'DAEMON_SHUTDOWN',
@@ -161,13 +160,21 @@ async function main() {
   }, 'daemon-jobs');
 }
 
-function startDaemonFileChangeCollector(options: {
+async function startDaemonFileChangeCollector(options: {
   container: ReturnType<typeof getServiceContainer>;
   logger: ReturnType<typeof Logger.getInstance>;
   projectRoot: string;
-}): DaemonFileChangeCollector | null {
+}): Promise<DaemonFileChangeCollector | null> {
   if (process.env.ALEMBIC_DAEMON_FILE_CHANGES === '0') {
     options.logger.info('[daemon-file-change] disabled by ALEMBIC_DAEMON_FILE_CHANGES=0');
+    options.container.singletons.codeChangeMonitor = {
+      getStatus: () =>
+        createInactiveMonitorStatus(
+          options.projectRoot,
+          'disabled by ALEMBIC_DAEMON_FILE_CHANGES=0',
+          false
+        ),
+    };
     return null;
   }
 
@@ -178,10 +185,10 @@ function startDaemonFileChangeCollector(options: {
     projectRoot: options.projectRoot,
     dispatcher,
     intervalMs: Number.parseInt(process.env.ALEMBIC_DAEMON_FILE_CHANGE_INTERVAL_MS || '', 10),
-    extensionTtlMs: Number.parseInt(process.env.ALEMBIC_VSCODE_HEARTBEAT_TTL_MS || '', 10),
     logger: options.logger,
   });
-  collector.start();
+  options.container.singletons.codeChangeMonitor = collector;
+  await collector.start();
   return collector;
 }
 

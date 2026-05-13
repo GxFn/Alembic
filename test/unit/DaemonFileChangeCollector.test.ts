@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { DaemonFileChangeCollector } from '../../lib/service/evolution/DaemonFileChangeCollector.js';
-import { FileChangeSourceTracker } from '../../lib/service/evolution/FileChangeSourceTracker.js';
+import { getFileChangeSourceTracker } from '../../lib/service/evolution/FileChangeSourceTracker.js';
 import type { FileChangeDispatcher } from '../../lib/service/FileChangeDispatcher.js';
 import type {
   FileChangeEvent,
@@ -39,34 +39,29 @@ describe('DaemonFileChangeCollector', () => {
       },
     ]);
 
-    collector.stop();
+    await collector.stop();
   });
 
-  test('uses vscode heartbeat to suppress fallback duplicates, then resumes after expiry', async () => {
+  test('does not gate daemon monitoring on VSCode extension heartbeat', async () => {
     const repo = createRepo();
-    const tracker = new FileChangeSourceTracker();
-    tracker.markVscodeExtensionSeen(1_000);
-    const { collector, dispatch } = createCollector(repo, tracker);
+    getFileChangeSourceTracker().markVscodeExtensionSeen(1_000);
+    const { collector, dispatch } = createCollector(repo);
 
     await collector.scanOnce(1_000);
 
-    appendFileSync(join(repo, 'src', 'index.ts'), '\nexport const handledByIde = 3;\n');
+    writeFileSync(join(repo, 'src', 'daemon.ts'), 'export const daemon = true;\n');
     await collector.scanOnce(2_000);
-    expect(dispatch).not.toHaveBeenCalled();
-
-    writeFileSync(join(repo, 'src', 'fallback.ts'), 'export const fallback = true;\n');
-    await collector.scanOnce(20_000);
 
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(dispatch.mock.calls[0]?.[0]).toEqual([
       {
-        type: 'created',
-        path: 'src/fallback.ts',
         eventSource: 'git-worktree',
+        path: 'src/daemon.ts',
+        type: 'created',
       },
     ]);
 
-    collector.stop();
+    await collector.stop();
   });
 
   test('filters Alembic internal files from fallback dispatch', async () => {
@@ -80,19 +75,17 @@ describe('DaemonFileChangeCollector', () => {
     await collector.scanOnce(2_000);
 
     expect(dispatch).not.toHaveBeenCalled();
-    collector.stop();
+    await collector.stop();
   });
 });
 
-function createCollector(repo: string, sourceTracker = new FileChangeSourceTracker()) {
+function createCollector(repo: string) {
   const dispatch = vi.fn(async (events: FileChangeEvent[]) => makeReport(events));
   const dispatcher = { dispatch } as unknown as FileChangeDispatcher;
   const collector = new DaemonFileChangeCollector({
     projectRoot: repo,
     dispatcher,
-    sourceTracker,
     intervalMs: 999_999,
-    extensionTtlMs: 10_000,
     logger: {
       debug: vi.fn(),
       info: vi.fn(),

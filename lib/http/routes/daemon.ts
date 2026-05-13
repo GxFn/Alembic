@@ -1,6 +1,7 @@
 import express from 'express';
 import { getPackageVersion } from '../../daemon/DaemonState.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import type { CodeChangeMonitorStatus } from '../../service/evolution/code-change-monitor/index.js';
 import { resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import { WorkspaceResolver } from '../../shared/WorkspaceResolver.js';
 
@@ -10,9 +11,11 @@ router.get('/health', (_req, res) => {
   const container = getServiceContainer();
   const projectRoot = resolveProjectRoot(container);
   const resolver = WorkspaceResolver.fromProject(projectRoot);
+  const codeChangeMonitor = readCodeChangeMonitorStatus(container);
   res.json({
     success: true,
     data: {
+      codeChangeMonitor,
       mode: process.env.ALEMBIC_DAEMON_MODE === '1' ? 'daemon' : 'api',
       projectRoot,
       dataRoot: resolver.dataRoot,
@@ -25,6 +28,15 @@ router.get('/health', (_req, res) => {
     },
   });
 });
+
+function readCodeChangeMonitorStatus(
+  container: ReturnType<typeof getServiceContainer>
+): CodeChangeMonitorStatus | null {
+  const monitor = container.singletons.codeChangeMonitor as
+    | { getStatus?: () => CodeChangeMonitorStatus }
+    | undefined;
+  return monitor?.getStatus?.() ?? null;
+}
 
 function getSchemaMigrationVersion(
   container: ReturnType<typeof getServiceContainer>
