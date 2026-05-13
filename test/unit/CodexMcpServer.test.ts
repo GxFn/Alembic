@@ -578,7 +578,7 @@ describe('CodexMcpServer', () => {
     expect(supervisor.stop).not.toHaveBeenCalled();
   });
 
-  test('package and plugin config point Codex to the lightweight MCP binary', () => {
+  test('package and plugin config point Codex to the packaged MCP runtime tarball', () => {
     const packageJson = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8')) as {
       version: string;
       bin: Record<string, string>;
@@ -597,7 +597,7 @@ describe('CodexMcpServer', () => {
     expect(packageJson.scripts['verify:codex-plugin']).toBe('node scripts/verify-codex-plugin.mjs');
     expect(pluginMcp.mcpServers.alembic.args).toContain('alembic-codex-mcp');
     expect(pluginMcp.mcpServers.alembic.args).toContain('--package');
-    expect(pluginMcp.mcpServers.alembic.args).toContain('./runtime');
+    expect(pluginMcp.mcpServers.alembic.args).toContain('./runtime.tgz');
     expect(pluginMcp.mcpServers.alembic.cwd).toBe('.');
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_MCP_MODE).toBe('1');
     expect(pluginMcp.mcpServers.alembic.env.ALEMBIC_CODEX_MCP_MODE).toBe('1');
