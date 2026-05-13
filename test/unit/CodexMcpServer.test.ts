@@ -3,6 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
+  getCodexSavedProjectRootPath,
+  readCodexInitMarker,
+} from '../../lib/codex/ProjectRootResolver.js';
+import {
   DAEMON_STATE_SCHEMA_VERSION,
   type DaemonState,
   getPackageVersion,
@@ -14,8 +18,13 @@ import { CodexMcpServer, getVisibleCodexTools } from '../../lib/external/mcp/Cod
 import { getGhostWorkspaceDir, ProjectRegistry } from '../../lib/shared/ProjectRegistry.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
+const ORIGINAL_ALEMBIC_PROJECT_DIR = process.env.ALEMBIC_PROJECT_DIR;
 const ORIGINAL_CODEX_ENABLE_ADMIN = process.env.ALEMBIC_CODEX_ENABLE_ADMIN;
+const ORIGINAL_CODEX_WORKSPACE_DIR = process.env.CODEX_WORKSPACE_DIR;
+const ORIGINAL_CODEX_WORKSPACE_ROOT = process.env.CODEX_WORKSPACE_ROOT;
+const ORIGINAL_INIT_CWD = process.env.INIT_CWD;
 const ORIGINAL_MCP_TIER = process.env.ALEMBIC_MCP_TIER;
+const ORIGINAL_PWD = process.env.PWD;
 
 function useTempAlembicHome(): string {
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-codex-home-'));
@@ -108,10 +117,35 @@ afterEach(() => {
   } else {
     process.env.ALEMBIC_CODEX_ENABLE_ADMIN = ORIGINAL_CODEX_ENABLE_ADMIN;
   }
+  if (ORIGINAL_ALEMBIC_PROJECT_DIR === undefined) {
+    delete process.env.ALEMBIC_PROJECT_DIR;
+  } else {
+    process.env.ALEMBIC_PROJECT_DIR = ORIGINAL_ALEMBIC_PROJECT_DIR;
+  }
+  if (ORIGINAL_CODEX_WORKSPACE_DIR === undefined) {
+    delete process.env.CODEX_WORKSPACE_DIR;
+  } else {
+    process.env.CODEX_WORKSPACE_DIR = ORIGINAL_CODEX_WORKSPACE_DIR;
+  }
+  if (ORIGINAL_CODEX_WORKSPACE_ROOT === undefined) {
+    delete process.env.CODEX_WORKSPACE_ROOT;
+  } else {
+    process.env.CODEX_WORKSPACE_ROOT = ORIGINAL_CODEX_WORKSPACE_ROOT;
+  }
+  if (ORIGINAL_INIT_CWD === undefined) {
+    delete process.env.INIT_CWD;
+  } else {
+    process.env.INIT_CWD = ORIGINAL_INIT_CWD;
+  }
   if (ORIGINAL_MCP_TIER === undefined) {
     delete process.env.ALEMBIC_MCP_TIER;
   } else {
     process.env.ALEMBIC_MCP_TIER = ORIGINAL_MCP_TIER;
+  }
+  if (ORIGINAL_PWD === undefined) {
+    delete process.env.PWD;
+  } else {
+    process.env.PWD = ORIGINAL_PWD;
   }
   vi.restoreAllMocks();
 });
@@ -161,7 +195,7 @@ describe('CodexMcpServer', () => {
     });
   });
 
-  test('hides project-knowledge tools before workspace initialization', () => {
+  test('exposes cold-start and init-on-demand tools before workspace initialization', () => {
     const projectRoot = makeProjectRoot();
     const names = getVisibleCodexTools('agent', projectRoot).map((tool) => tool.name);
 
@@ -169,6 +203,10 @@ describe('CodexMcpServer', () => {
       'alembic_codex_status',
       'alembic_codex_diagnostics',
       'alembic_codex_init',
+      'alembic_codex_dashboard',
+      'alembic_codex_bootstrap',
+      'alembic_codex_rescan',
+      'alembic_codex_job',
     ]);
   });
 
@@ -181,12 +219,13 @@ describe('CodexMcpServer', () => {
       'alembic_codex_status',
       'alembic_codex_diagnostics',
       'alembic_codex_init',
+      'alembic_codex_dashboard',
       'alembic_codex_bootstrap',
+      'alembic_codex_rescan',
       'alembic_codex_job',
     ]);
     expect(names).not.toContain('alembic_task');
     expect(names).not.toContain('alembic_health');
-    expect(names).not.toContain('alembic_codex_dashboard');
   });
 
   test('detects usable knowledge from the registered ghost data root', () => {
@@ -205,7 +244,9 @@ describe('CodexMcpServer', () => {
       'alembic_codex_status',
       'alembic_codex_diagnostics',
       'alembic_codex_init',
+      'alembic_codex_dashboard',
       'alembic_codex_bootstrap',
+      'alembic_codex_rescan',
       'alembic_codex_job',
     ]);
 
@@ -281,6 +322,102 @@ describe('CodexMcpServer', () => {
     expect(supervisor.ensure).not.toHaveBeenCalled();
   });
 
+  test('tool-call projectRoot override scopes status to the requested project', async () => {
+    useTempAlembicHome();
+    delete process.env.ALEMBIC_PROJECT_DIR;
+    delete process.env.CODEX_WORKSPACE_DIR;
+    delete process.env.CODEX_WORKSPACE_ROOT;
+    const pluginRoot = path.join(
+      makeProjectRoot(),
+      '.codex',
+      'plugins',
+      'cache',
+      'alembic-codex',
+      'alembic-codex',
+      '0.1.2'
+    );
+    fs.mkdirSync(pluginRoot, { recursive: true });
+    process.env.PWD = pluginRoot;
+
+    const projectRoot = makeProjectRoot();
+    const supervisor = makeSupervisor(
+      makeDaemonStatus(projectRoot, {
+        status: 'stopped',
+        ready: false,
+        state: null,
+        pidAlive: false,
+      })
+    );
+    const server = new CodexMcpServer({ supervisor });
+
+    const result = (await server.handleToolCall('alembic_codex_status', { projectRoot })) as {
+      data: {
+        projectRoot: string;
+        projectRootResolution: { path: string; source: string; trust: string };
+      };
+      success: boolean;
+    };
+
+    expect(result.success).toBe(true);
+    expect(result.data.projectRoot).toBe(projectRoot);
+    expect(result.data.projectRootResolution).toMatchObject({
+      path: projectRoot,
+      source: 'explicit-option',
+      trust: 'trusted',
+    });
+    expect(supervisor.status).toHaveBeenCalledWith(projectRoot);
+  });
+
+  test('tool-call projectRoot override saves the project root for later calls', async () => {
+    useTempAlembicHome();
+    delete process.env.ALEMBIC_PROJECT_DIR;
+    delete process.env.CODEX_WORKSPACE_DIR;
+    delete process.env.CODEX_WORKSPACE_ROOT;
+    const pluginRoot = path.join(
+      makeProjectRoot(),
+      '.codex',
+      'plugins',
+      'cache',
+      'alembic-codex',
+      'alembic-codex',
+      '0.1.2'
+    );
+    fs.mkdirSync(pluginRoot, { recursive: true });
+    process.env.INIT_CWD = pluginRoot;
+    process.env.PWD = pluginRoot;
+
+    const projectRoot = makeProjectRoot();
+    const supervisor = makeSupervisor(
+      makeDaemonStatus(projectRoot, {
+        status: 'stopped',
+        ready: false,
+        state: null,
+        pidAlive: false,
+      })
+    );
+    const firstServer = new CodexMcpServer({ supervisor });
+    await firstServer.handleToolCall('alembic_codex_status', { projectRoot });
+
+    const secondServer = new CodexMcpServer({ supervisor });
+    const result = (await secondServer.handleToolCall('alembic_codex_status', {})) as {
+      data: {
+        projectRoot: string;
+        projectRootResolution: { path: string; source: string; trust: string };
+      };
+      success: boolean;
+    };
+
+    expect(fs.existsSync(getCodexSavedProjectRootPath())).toBe(true);
+    expect(result.success).toBe(true);
+    expect(result.data.projectRoot).toBe(projectRoot);
+    expect(result.data.projectRootResolution).toMatchObject({
+      path: projectRoot,
+      source: 'saved-project-root',
+      trust: 'trusted',
+    });
+    expect(fs.existsSync(path.join(pluginRoot, '.asd'))).toBe(false);
+  });
+
   test('status recommends bootstrap after initialization when knowledge is still empty', async () => {
     useTempAlembicHome();
     const projectRoot = makeProjectRoot();
@@ -310,6 +447,248 @@ describe('CodexMcpServer', () => {
     expect(result.data.onboarding).toMatchObject({
       state: 'needs_bootstrap',
       primaryAction: { tool: 'alembic_codex_bootstrap' },
+    });
+    expect(supervisor.ensure).not.toHaveBeenCalled();
+  });
+
+  test('explicit Codex init creates a Ghost workspace marker without starting daemon', async () => {
+    useTempAlembicHome();
+    const projectRoot = makeProjectRoot();
+    const supervisor = makeSupervisor(
+      makeDaemonStatus(projectRoot, {
+        status: 'stopped',
+        ready: false,
+        state: null,
+        pidAlive: false,
+      })
+    );
+    const server = new CodexMcpServer({ projectRoot, supervisor });
+
+    const result = (await server.handleToolCall('alembic_codex_init', {})) as {
+      success: boolean;
+      data: {
+        status: {
+          autoInit: { markerExists: boolean; route: string };
+          initialized: boolean;
+          workspace: { dataRoot: string; ghost: boolean };
+        };
+      };
+    };
+    const marker = readCodexInitMarker(projectRoot);
+
+    expect(result.success).toBe(true);
+    expect(result.data.status.initialized).toBe(true);
+    expect(result.data.status.workspace.ghost).toBe(true);
+    expect(result.data.status.autoInit).toMatchObject({
+      markerExists: true,
+      route: 'explicit',
+    });
+    expect(marker).toMatchObject({
+      initializedBy: 'alembic_codex_init',
+      route: 'explicit',
+      projectRoot,
+    });
+    expect(fs.existsSync(path.join(projectRoot, '.asd'))).toBe(false);
+    expect(supervisor.ensure).not.toHaveBeenCalled();
+  });
+
+  test('init-on-demand initializes before reading Codex job status', async () => {
+    useTempAlembicHome();
+    const projectRoot = makeProjectRoot();
+    const supervisor = makeSupervisor(
+      makeDaemonStatus(projectRoot, {
+        status: 'stopped',
+        ready: false,
+        state: null,
+        pidAlive: false,
+      })
+    );
+    const server = new CodexMcpServer({ projectRoot, supervisor });
+
+    const result = (await server.handleToolCall('alembic_codex_job', { limit: 5 })) as {
+      success: boolean;
+      data: { jobs: unknown[] };
+    };
+    const marker = readCodexInitMarker(projectRoot);
+
+    expect(result.success).toBe(true);
+    expect(result.data.jobs).toEqual([]);
+    expect(marker).toMatchObject({
+      initializedBy: 'codex-plugin-init-on-demand',
+      requestedTool: 'alembic_codex_job',
+      route: 'tool-call',
+    });
+    expect(fs.existsSync(path.join(projectRoot, '.asd'))).toBe(false);
+    expect(supervisor.ensure).not.toHaveBeenCalled();
+  });
+
+  test('tool-call projectRoot override sends init to the requested project', async () => {
+    useTempAlembicHome();
+    delete process.env.ALEMBIC_PROJECT_DIR;
+    delete process.env.CODEX_WORKSPACE_DIR;
+    delete process.env.CODEX_WORKSPACE_ROOT;
+    const pluginRoot = path.join(
+      makeProjectRoot(),
+      '.codex',
+      'plugins',
+      'cache',
+      'alembic-codex',
+      'alembic-codex',
+      '0.1.2'
+    );
+    fs.mkdirSync(pluginRoot, { recursive: true });
+    process.env.PWD = pluginRoot;
+
+    const projectRoot = makeProjectRoot();
+    const supervisor = makeSupervisor(
+      makeDaemonStatus(projectRoot, {
+        status: 'stopped',
+        ready: false,
+        state: null,
+        pidAlive: false,
+      })
+    );
+    const server = new CodexMcpServer({ supervisor });
+
+    const result = (await server.handleToolCall('alembic_codex_init', { projectRoot })) as {
+      data: { status: { initialized: boolean; workspace: { ghost: boolean } } };
+      success: boolean;
+    };
+    const marker = readCodexInitMarker(projectRoot);
+
+    expect(result.success).toBe(true);
+    expect(result.data.status.workspace.ghost).toBe(true);
+    expect(marker).toMatchObject({
+      initializedBy: 'alembic_codex_init',
+      projectRoot,
+      route: 'explicit',
+    });
+    expect(fs.existsSync(path.join(pluginRoot, '.asd'))).toBe(false);
+    expect(supervisor.ensure).not.toHaveBeenCalled();
+  });
+
+  test('status and diagnostics do not initialize a fresh workspace', async () => {
+    useTempAlembicHome();
+    const projectRoot = makeProjectRoot();
+    const supervisor = makeSupervisor(
+      makeDaemonStatus(projectRoot, {
+        status: 'stopped',
+        ready: false,
+        state: null,
+        pidAlive: false,
+      })
+    );
+    const server = new CodexMcpServer({ projectRoot, supervisor });
+
+    await server.handleToolCall('alembic_codex_status', {});
+    await server.handleToolCall('alembic_codex_diagnostics', {});
+
+    expect(readCodexInitMarker(projectRoot)).toBeNull();
+    expect(fs.existsSync(path.join(projectRoot, '.asd'))).toBe(false);
+    expect(supervisor.ensure).not.toHaveBeenCalled();
+  });
+
+  test('manual init fails closed when only a plugin-cache fallback root is available', async () => {
+    useTempAlembicHome();
+    delete process.env.ALEMBIC_PROJECT_DIR;
+    delete process.env.CODEX_WORKSPACE_DIR;
+    delete process.env.CODEX_WORKSPACE_ROOT;
+    delete process.env.INIT_CWD;
+    const pluginRoot = path.join(
+      makeProjectRoot(),
+      '.codex',
+      'plugins',
+      'cache',
+      'gxfn',
+      'alembic-codex',
+      '0.1.1'
+    );
+    fs.mkdirSync(pluginRoot, { recursive: true });
+    process.env.PWD = pluginRoot;
+    const supervisor = makeSupervisor(
+      makeDaemonStatus(pluginRoot, {
+        status: 'stopped',
+        ready: false,
+        state: null,
+        pidAlive: false,
+      })
+    );
+    const server = new CodexMcpServer({ supervisor });
+
+    const result = (await server.handleToolCall('alembic_codex_init', {})) as {
+      data: {
+        errorCode: string;
+        needsUserInput: boolean;
+        projectRootResolution: { trust: string; userMessage: string };
+        required: { projectRoot: string };
+        requiredActions: string[];
+      };
+      message: string;
+      success: boolean;
+    };
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('cannot determine the target project directory');
+    expect(result.data.errorCode).toBe('CODEX_PROJECT_ROOT_REJECTED');
+    expect(result.data.needsUserInput).toBe(true);
+    expect(result.data.required.projectRoot).toBe('absolute path');
+    expect(result.data.requiredActions).toContain(
+      'Provide the target project root as an absolute path.'
+    );
+    expect(result.data.projectRootResolution.trust).toBe('rejected');
+    expect(result.data.projectRootResolution.userMessage).toContain(
+      'project workflows cannot be used yet'
+    );
+    expect(fs.existsSync(path.join(pluginRoot, '.asd'))).toBe(false);
+    expect(supervisor.ensure).not.toHaveBeenCalled();
+  });
+
+  test('unresolved Desktop project root exposes tools that require explicit projectRoot', async () => {
+    useTempAlembicHome();
+    delete process.env.ALEMBIC_PROJECT_DIR;
+    delete process.env.CODEX_WORKSPACE_DIR;
+    delete process.env.CODEX_WORKSPACE_ROOT;
+    delete process.env.INIT_CWD;
+    const pluginRoot = path.join(
+      makeProjectRoot(),
+      '.codex',
+      'plugins',
+      'cache',
+      'alembic-codex',
+      'alembic-codex',
+      '0.1.2'
+    );
+    fs.mkdirSync(pluginRoot, { recursive: true });
+    process.env.PWD = pluginRoot;
+
+    const tools = getVisibleCodexTools('agent');
+    const byName = new Map(tools.map((tool) => [tool.name, tool]));
+    const supervisor = makeSupervisor(
+      makeDaemonStatus(pluginRoot, {
+        status: 'stopped',
+        ready: false,
+        state: null,
+        pidAlive: false,
+      })
+    );
+    const server = new CodexMcpServer({ supervisor });
+
+    const result = (await server.handleToolCall('alembic_health', {})) as {
+      data: { errorCode: string; needsUserInput: boolean; required: { projectRoot: string } };
+      success: boolean;
+    };
+
+    expect(byName.has('alembic_task')).toBe(true);
+    expect(byName.get('alembic_task')?.inputSchema?.properties).toMatchObject({
+      projectRoot: {
+        type: 'string',
+      },
+    });
+    expect(result.success).toBe(false);
+    expect(result.data).toMatchObject({
+      errorCode: 'CODEX_PROJECT_ROOT_REJECTED',
+      needsUserInput: true,
+      required: { projectRoot: 'absolute path' },
     });
     expect(supervisor.ensure).not.toHaveBeenCalled();
   });

@@ -46,7 +46,7 @@ const knowledgeReady: CodexKnowledgeState = {
 };
 
 describe('Codex tool policy', () => {
-  test('keeps uninitialized workspaces on diagnostics/status/init only', () => {
+  test('keeps uninitialized workspaces on diagnostics/status/init and init-on-demand tools', () => {
     const result = resolveCodexToolPolicy({
       coreTools,
       knowledge: notInitialized,
@@ -60,6 +60,10 @@ describe('Codex tool policy', () => {
       'alembic_codex_status',
       'alembic_codex_diagnostics',
       'alembic_codex_init',
+      'alembic_codex_dashboard',
+      'alembic_codex_bootstrap',
+      'alembic_codex_rescan',
+      'alembic_codex_job',
     ]);
   });
 
@@ -76,7 +80,9 @@ describe('Codex tool policy', () => {
       'alembic_codex_status',
       'alembic_codex_diagnostics',
       'alembic_codex_init',
+      'alembic_codex_dashboard',
       'alembic_codex_bootstrap',
+      'alembic_codex_rescan',
       'alembic_codex_job',
     ]);
   });
@@ -161,7 +167,9 @@ describe('Codex tool policy', () => {
       'alembic_codex_status',
       'alembic_codex_diagnostics',
       'alembic_codex_init',
+      'alembic_codex_dashboard',
       'alembic_codex_bootstrap',
+      'alembic_codex_rescan',
       'alembic_codex_job',
     ]);
   });

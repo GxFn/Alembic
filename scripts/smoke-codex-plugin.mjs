@@ -540,13 +540,16 @@ async function runStdioSmoke({ packageJson, runtimeRoot, pluginRoot, projectRoot
       'alembic_codex_status',
       'alembic_codex_diagnostics',
       'alembic_codex_init',
+      'alembic_codex_dashboard',
+      'alembic_codex_bootstrap',
+      'alembic_codex_rescan',
+      'alembic_codex_job',
     ]) {
       assert(toolNames.has(required), `MCP stdio tools/list missing ${required}`);
     }
     for (const hidden of [
       'alembic_health',
       'alembic_task',
-      'alembic_codex_bootstrap',
       'alembic_codex_cleanup',
       'alembic_enrich_candidates',
       'alembic_knowledge_lifecycle',

@@ -4,6 +4,11 @@ import { join } from 'node:path';
 import type { DaemonStatus } from '../daemon/DaemonSupervisor.js';
 import { asString, CODEX_REQUIRED_SKILLS, loadCodexPluginRegistry } from './PluginRegistry.js';
 import {
+  buildCodexProjectRootRequiredMessage,
+  type CodexProjectRootResolution,
+  summarizeCodexProjectRootResolution,
+} from './ProjectRootResolver.js';
+import {
   ALEMBIC_PLUGIN_HOST_ENV,
   ALEMBIC_RUNTIME_MODE_ENV,
   ALEMBIC_RUNTIME_MODE_PLUGIN,
@@ -49,6 +54,11 @@ export interface CodexPluginDiagnostics {
   skills: { missing: string[]; ok: boolean; required: string[] };
 }
 
+export interface CodexRuntimeDiagnosticsOptions {
+  autoInit?: Record<string, unknown>;
+  projectRootResolution?: CodexProjectRootResolution;
+}
+
 export interface CodexDiagnosticIssue {
   action: string;
   code: string;
@@ -58,7 +68,8 @@ export interface CodexDiagnosticIssue {
 
 export function buildCodexRuntimeDiagnostics(
   daemonStatus: DaemonStatus,
-  context: CodexRuntimeContext = resolveCodexRuntimeContext()
+  context: CodexRuntimeContext = resolveCodexRuntimeContext(),
+  options: CodexRuntimeDiagnosticsOptions = {}
 ): Record<string, unknown> {
   const nodeMajor = Number.parseInt(process.versions.node.split('.')[0] || '0', 10);
   const npm = probeCommand('npm');
@@ -81,6 +92,8 @@ export function buildCodexRuntimeDiagnostics(
     pluginManifest: plugin.manifest.ok,
     pluginMcp: plugin.mcp.ok,
     pluginSkills: plugin.skills.ok,
+    projectRoot:
+      !options.projectRootResolution || options.projectRootResolution.trust === 'trusted',
   };
   const issues = buildDiagnosticIssues({
     adminEnabled: context.adminEnabled,
@@ -90,6 +103,7 @@ export function buildCodexRuntimeDiagnostics(
     packageVersion: context.packageVersion,
     pluginHost: context.pluginHost,
     plugin,
+    projectRootResolution: options.projectRootResolution,
     requestedTier: context.requestedTier,
     runtimeMode: context.runtimeMode,
   });
@@ -134,6 +148,10 @@ export function buildCodexRuntimeDiagnostics(
       pinnedSpecifier: context.pinnedRuntimeSpecifier,
       mcpBinary: context.runtimeBin,
     },
+    projectRootResolution: options.projectRootResolution
+      ? summarizeCodexProjectRootResolution(options.projectRootResolution)
+      : null,
+    autoInit: options.autoInit || null,
     plugin,
     daemon: {
       ready: daemonStatus.ready,
@@ -293,10 +311,21 @@ function buildDiagnosticIssues(input: {
   packageVersion: string;
   pluginHost: string;
   plugin: CodexPluginDiagnostics;
+  projectRootResolution?: CodexProjectRootResolution;
   requestedTier: string;
   runtimeMode: string;
 }): CodexDiagnosticIssue[] {
   const issues: CodexDiagnosticIssue[] = [];
+  if (input.projectRootResolution && input.projectRootResolution.trust !== 'trusted') {
+    const rejected = input.projectRootResolution.trust === 'rejected';
+    issues.push({
+      action:
+        'Pass the current workspace directory as the projectRoot argument, then rerun the Alembic tool.',
+      code: rejected ? 'CODEX_PROJECT_ROOT_REJECTED' : 'CODEX_PROJECT_ROOT_UNRESOLVED',
+      message: buildCodexProjectRootRequiredMessage(input.projectRootResolution),
+      severity: 'error',
+    });
+  }
   if (!input.checks.node) {
     issues.push({
       action:
