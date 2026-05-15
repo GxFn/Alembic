@@ -14,8 +14,8 @@ import {
 import { buildTerminalEnvironment, summarizeTerminalEnv } from './TerminalEnvironment.js';
 import {
   type ExecFailure,
+  executeTerminalFile,
   recordAndReturn,
-  sandboxedExecFile,
   shellAuditData,
   statusForFailure,
 } from './TerminalExecutorShared.js';
@@ -43,7 +43,7 @@ export async function executeShell(
   }
   const envSummary = summarizeTerminalEnv(shell.env, 'none');
   try {
-    const execResult = await sandboxedExecFile(
+    const execResult = await executeTerminalFile(
       shell.shell,
       ['-lc', shell.command],
       {
@@ -71,15 +71,12 @@ export async function executeShell(
         startedAt,
         startedMs,
         'success',
-        {
-          ...shellStructuredContent(shell, output, 0, envSummary, policy),
-          sandbox: execResult.sandbox,
-        },
+        shellStructuredContent(shell, output, 0, envSummary, policy),
         output.artifacts
       )
     );
   } catch (err) {
-    const failure = err as ExecFailure & { _sandboxMeta?: Record<string, unknown> };
+    const failure = err as ExecFailure;
     const output = materializeTerminalOutput(request, {
       stdout: failure.stdout || '',
       stderr: failure.stderr || failure.message || '',
@@ -91,10 +88,7 @@ export async function executeShell(
         startedAt,
         startedMs,
         statusForFailure(request, failure),
-        {
-          ...shellStructuredContent(shell, output, failure.code ?? 1, envSummary, policy),
-          sandbox: failure._sandboxMeta,
-        },
+        shellStructuredContent(shell, output, failure.code ?? 1, envSummary, policy),
         output.artifacts
       )
     );

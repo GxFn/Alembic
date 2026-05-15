@@ -21,13 +21,12 @@ function mockTerminalToolset(toolset = 'terminal-run') {
       bootstrapDims: [],
       rescanDims: [],
       terminal: { enabled: toolset !== 'baseline', toolset },
-      sandbox: { mode: 'enforce', available: true },
     }),
   }));
 }
 
 describe('BootstrapTerminalToolset', () => {
-  test('defaults to sandboxed terminal-run', async () => {
+  test('defaults to terminal-run', async () => {
     delete process.env.ALEMBIC_TERMINAL_TOOLSET;
     mockTerminalToolset();
 

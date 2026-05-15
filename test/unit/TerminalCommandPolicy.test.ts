@@ -203,7 +203,7 @@ describe('TerminalCommandPolicy', () => {
     expect(JSON.stringify(decision.preview)).not.toContain('value');
   });
 
-  test('blocks sensitive-looking environment variables from persistence', () => {
+  test('blocks sensitive-looking environment variables from terminal_run', () => {
     const decision = evaluateTerminalCommandPolicy(
       policyInput({
         env: { API_TOKEN: 'secret' },
@@ -219,7 +219,7 @@ describe('TerminalCommandPolicy', () => {
 
     expect(decision).toMatchObject({
       allowed: false,
-      matchedRule: 'env-persistence-sensitive-key',
+      matchedRule: 'sensitive-env-key',
       reason: expect.stringContaining('Sensitive-looking environment variables'),
       risk: 'high',
     });

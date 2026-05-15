@@ -135,7 +135,7 @@ const CODE_SPEC: ToolSpec = {
 
 const TERMINAL_SPEC: ToolSpec = {
   name: 'terminal',
-  description: 'Execute commands in sandbox with structured output compression',
+  description: 'Execute governed commands with structured output compression',
   actions: {
     exec: {
       summary: 'Execute a shell command',

@@ -806,7 +806,6 @@ export const api = {
     bootstrapDims: string[];
     rescanDims: string[];
     terminal: { enabled: boolean; toolset: string };
-    sandbox: { mode: string; available: boolean };
   }> {
     const res = await http.get('/modules/test-mode');
     return res.data?.data || {
@@ -814,7 +813,6 @@ export const api = {
       bootstrapDims: [],
       rescanDims: [],
       terminal: { enabled: false, toolset: 'baseline' },
-      sandbox: { mode: 'enforce', available: false },
     };
   },
 

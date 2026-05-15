@@ -2,7 +2,7 @@
  * test-mode.ts — 通用测试模式支持
  *
  * 通过运行时覆盖启用测试模式，限制 bootstrap / rescan 维度数量以加速端到端测试。
- * 终端能力已成为默认沙箱能力；这里仅保留终端档位覆盖配置。
+ * 终端能力已成为默认受控能力；这里仅保留终端档位覆盖配置。
  *
  * 环境变量:
  *   ALEMBIC_TEST_MODE=1                                    启用测试模式
@@ -47,38 +47,24 @@ export interface TerminalConfig {
   toolset: string;
 }
 
-/** 沙箱状态信息 */
-export interface SandboxStatusConfig {
-  mode: string;
-  available: boolean;
-}
-
 /** 完整测试模式配置 */
 export interface TestModeConfig {
   enabled: boolean;
   bootstrapDims: string[];
   rescanDims: string[];
   terminal: TerminalConfig;
-  sandbox: SandboxStatusConfig;
 }
 
 /**
  * 解析终端能力配置
  *
- * 终端执行已由沙箱治理，默认开放 terminal-run。
+ * 终端执行已由命令策略治理，默认开放 terminal-run。
  * 使用 ALEMBIC_TERMINAL_TOOLSET=baseline 可显式回退到无终端档位。
  * 不再读取旧测试开关；测试模式只负责维度过滤。
  */
 function resolveTerminalConfig(): TerminalConfig {
   const toolset = envStr('ALEMBIC_TERMINAL_TOOLSET') || 'terminal-run';
   return { enabled: toolset !== 'baseline', toolset };
-}
-
-function resolveSandboxStatus(): SandboxStatusConfig {
-  const v = (process.env.ALEMBIC_SANDBOX_MODE ?? '').trim().toLowerCase();
-  const mode =
-    v === 'disabled' || v === '0' || v === 'off' ? 'disabled' : v === 'audit' ? 'audit' : 'enforce';
-  return { mode, available: process.platform === 'darwin' };
 }
 
 /** 获取测试模式完整配置（供 API / 前端展示 / 终端工具集解析） */
@@ -88,7 +74,6 @@ export function getTestModeConfig(): TestModeConfig {
     bootstrapDims: envList('ALEMBIC_TEST_BOOTSTRAP_DIMS'),
     rescanDims: envList('ALEMBIC_TEST_RESCAN_DIMS'),
     terminal: resolveTerminalConfig(),
-    sandbox: resolveSandboxStatus(),
   };
 }
 

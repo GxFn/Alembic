@@ -18,9 +18,9 @@ import {
 } from './TerminalEnvironment.js';
 import {
   type ExecFailure,
+  executeTerminalFile,
   getTerminalSessionManager,
   recordAndReturn,
-  sandboxedExecFile,
   statusForFailure,
 } from './TerminalExecutorShared.js';
 
@@ -76,7 +76,7 @@ export async function executeStructuredCommand(
   const envSummary = summarizeTerminalEnv(commandEnv, terminal.session.envPersistence);
 
   try {
-    const execResult = await sandboxedExecFile(
+    const execResult = await executeTerminalFile(
       terminal.bin,
       terminal.args,
       {
@@ -122,13 +122,12 @@ export async function executeStructuredCommand(
           session: terminal.session,
           sessionRecord,
           policy,
-          sandbox: execResult.sandbox,
         },
         output.artifacts
       )
     );
   } catch (err) {
-    const failure = err as ExecFailure & { _sandboxMeta?: Record<string, unknown> };
+    const failure = err as ExecFailure;
     const output = materializeTerminalOutput(request, {
       stdout: failure.stdout || '',
       stderr: failure.stderr || failure.message || '',
@@ -158,7 +157,6 @@ export async function executeStructuredCommand(
           session: terminal.session,
           sessionRecord,
           policy,
-          sandbox: failure._sandboxMeta,
         },
         output.artifacts
       )
