@@ -647,38 +647,6 @@ const HelpView: React.FC = () => {
             </div>
           </div>
 
-          {/* VSCode Extension */}
-          <div className="mt-5">
-            <h3 className="font-semibold text-[var(--fg-primary)] mb-3 flex items-center gap-2">
-              <MonitorSmartphone size={ICON_SIZES.lg} className="text-blue-600" />
-              {t('help.vscodeExtension')}
-            </h3>
-            <p className="text-[var(--fg-secondary)] text-sm mb-3">{t('help.vscodeExtDesc')}</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-              <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg p-3">
-                <h4 className="font-semibold text-[var(--fg-primary)] text-sm mb-1">{t('help.vscodeExtTaskTool')}</h4>
-                <p className="text-[var(--fg-secondary)] text-xs">{t('help.vscodeExtTaskToolDesc')}</p>
-              </div>
-              <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg p-3">
-                <h4 className="font-semibold text-[var(--fg-primary)] text-sm mb-1">{t('help.vscodeExtGuardDiag')}</h4>
-                <p className="text-[var(--fg-secondary)] text-xs">{t('help.vscodeExtGuardDiagDesc')}</p>
-              </div>
-              <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg p-3">
-                <h4 className="font-semibold text-[var(--fg-primary)] text-sm mb-1">{t('help.vscodeExtCodeLens')}</h4>
-                <p className="text-[var(--fg-secondary)] text-xs">{t('help.vscodeExtCodeLensDesc')}</p>
-              </div>
-            </div>
-            <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg p-3">
-              <h4 className="font-semibold text-[var(--fg-primary)] text-sm mb-2">Commands</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-xs text-[var(--fg-secondary)]">
-                <p>{t('help.vscodeExtCmd1')}</p>
-                <p>{t('help.vscodeExtCmd2')}</p>
-                <p>{t('help.vscodeExtCmd3')}</p>
-                <p>{t('help.vscodeExtCmd4')}</p>
-                <p>{t('help.vscodeExtCmd5')}</p>
-              </div>
-            </div>
-          </div>
         </Section>
 
         {/* 命令速查 */}

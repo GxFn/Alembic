@@ -32,11 +32,9 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: cd dashboard && npm ci
-      - run: npm run install:vscode-ext
       - run: npm run build
       - run: npm run lint -- --diagnostic-level=error
       - run: npm run build:dashboard
-      - run: npm run build:vscode-ext
 
   api-smoke:
     name: API Smoke Test
@@ -53,9 +51,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: cd dashboard && npm ci
-      - run: npm run install:vscode-ext
       - run: npm run build:dashboard
-      - run: npm run build:vscode-ext
 
       - name: Start API Server
         run: |

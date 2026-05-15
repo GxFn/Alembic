@@ -47,7 +47,6 @@ import recipesRouter from './routes/recipes.js';
 import searchRouter from './routes/search.js';
 import signalsRouter from './routes/signals.js';
 import skillsRouter from './routes/skills.js';
-import taskRouter from './routes/task.js';
 import violationsRouter from './routes/violations.js';
 import wikiRouter from './routes/wiki.js';
 
@@ -296,7 +295,7 @@ export class HttpServer {
       this.app.use(`${apiPrefix}/monitoring`, monitoringRouter);
     }
 
-    // Guard 实时检查路由（Extension DiagnosticCollection 调用）
+    // Guard 检查路由
     this.app.use(`${apiPrefix}/guard`, guardRouter);
 
     // Guard 合规报告路由
@@ -304,9 +303,6 @@ export class HttpServer {
 
     // 守护规则路由
     this.app.use(`${apiPrefix}/rules`, guardRuleRouter);
-
-    // TaskGraph 路由（Extension taskTool.ts 转发调用）
-    this.app.use(`${apiPrefix}/task`, taskRouter);
 
     // 搜索路由
     this.app.use(`${apiPrefix}/search`, searchRouter);

@@ -66,4 +66,3 @@ lib/
 
 ### 子项目
 - **Dashboard**（`dashboard/`）：React 19 + Vite + Tailwind CSS 前端
-- **VSCode Extension**（`resources/vscode-ext/`）：VSCode Copilot 集成扩展

@@ -496,7 +496,6 @@
 
 ### 新增
 
-- **VS Code 扩展项目作用域**：扩展仅在工作区包含 AutoSnippet 项目（存在 `AutoSnippet/` 或 `.autosnippet/` 目录）时激活状态栏、CodeLens 和 onSave 指令检测，非项目零开销
 - **projectScope 模块**：新增 `projectScope.ts`，提供 `hasAnyProject()` / `isFileInScope()` / `isDocumentInScope()` / `invalidateCache()` 等 API
 
 ### 修复
@@ -565,7 +564,6 @@
 - **Dashboard 国际化（i18n）**：新增 `i18n/` 模块（zh.ts、en.ts、types.ts、index.tsx），清理约 117 处硬编码中文字符串，覆盖 Guard 规则消息、冷启动维度标签、SSE 进度文本
 - **Dashboard 暗色模式**：新增 `theme/index.tsx`，全局支持亮色/暗色主题切换
 - **Agent 语言特性**：Agent 可感知项目语言并动态切换 Skill 和分析策略
-- **VSCode 扩展**：新增 `resources/vscode-ext/`（extension.ts、apiClient、codeLens、statusBar、directiveDetector、codeInserter）
 - **模块服务与 Snippet Codec 体系**：新增 `ModuleService`、`LanguageService`，Snippet 编解码拆分为 `SnippetCodec`/`VSCodeCodec`/`XcodeCodec` + `PlaceholderConverter`
 - **Go 语言参考 Skill**：新增 `autosnippet-reference-go`（539 行），覆盖模块结构、命名、错误处理、接口、并发等 12 个章节
 - **多语言参考 Skills**：新增 `autosnippet-reference-java`、`autosnippet-reference-kotlin`、`autosnippet-reference-python`

@@ -155,10 +155,6 @@ class ReleaseChecker {
       } else {
         throw new Error('dist/index.html 不存在');
       }
-
-      info('构建 VS Code 扩展...');
-      exec('npm run build:vscode-ext');
-      success('VS Code 扩展构建成功');
     } catch (err: any) {
       this.errors.push('发布产物构建失败');
       error('发布产物构建失败');

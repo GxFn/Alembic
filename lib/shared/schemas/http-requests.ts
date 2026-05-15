@@ -254,15 +254,6 @@ export const UpdateSkillBody = z
     message: 'At least one of description or content must be provided',
   });
 
-// ═══ Task (unified dispatch) ═════════════════════
-
-export const TaskDispatchBody = z
-  .object({
-    operation: z.string().min(1, 'operation is required'),
-    // 各操作的参数透传为 passthrough（具体校验在 handler 中）
-  })
-  .passthrough();
-
 // ═══ Modules ═════════════════════════════════════
 
 export const ScanFolderBody = z.object({

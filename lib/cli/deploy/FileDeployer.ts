@@ -655,49 +655,6 @@ export class FileDeployer {
         return false;
       }
     },
-
-    /** 构建并安装 VSCode Extension */
-    installVSCodeExtension() {
-      const extDir = join(REPO_ROOT, 'resources', 'vscode-ext');
-      const pkgJson = join(extDir, 'package.json');
-      if (!existsSync(pkgJson)) {
-        return false;
-      }
-
-      try {
-        // 编译 TypeScript
-        execSync('npx tsc -p ./tsconfig.json', { cwd: extDir, stdio: 'pipe' });
-
-        // 打包 .vsix
-        execSync('npx @vscode/vsce package --no-dependencies -o alembic.vsix', {
-          cwd: extDir,
-          stdio: 'pipe',
-        });
-
-        const vsixPath = join(extDir, 'alembic.vsix');
-        if (!existsSync(vsixPath)) {
-          return false;
-        }
-
-        // 探测可用 IDE CLI
-        const cliCandidates = ['code', 'cursor', 'codex'];
-        const installed: string[] = [];
-
-        for (const cli of cliCandidates) {
-          try {
-            execSync(`which ${cli}`, { stdio: 'pipe' });
-            execSync(`${cli} --install-extension "${vsixPath}" --force`, { stdio: 'pipe' });
-            installed.push(cli);
-          } catch {
-            /* CLI 不可用 */
-          }
-        }
-
-        return installed.length > 0;
-      } catch {
-        return false;
-      }
-    },
   };
 
   /* ═══ Destination Resolvers ══════════════════════════ */

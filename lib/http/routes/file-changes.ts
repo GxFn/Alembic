@@ -3,7 +3,7 @@
  *
  * POST /api/v1/file-changes
  *
- * 接收 FileChangeCollector 推送的事件，交由 FileChangeDispatcher 分发。
+ * 接收外部文件变更事件，交由 FileChangeDispatcher 分发。
  * 不直接依赖任何业务服务（如 ReactiveEvolutionService）。
  *
  * 响应体回传 {@link ReactiveEvolutionReport}（文档 §5.1 I1）——
@@ -15,7 +15,6 @@
 import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { getFileChangeSourceTracker } from '../../service/evolution/FileChangeSourceTracker.js';
 import type { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 import type {
   FileChangeEvent,
@@ -28,12 +27,6 @@ const logger = Logger.getInstance();
 
 const VALID_TYPES = new Set(['created', 'renamed', 'deleted', 'modified']);
 const VALID_SOURCES = new Set<FileChangeEventSource>(['ide-edit', 'git-head', 'git-worktree']);
-const sourceTracker = getFileChangeSourceTracker();
-
-router.post('/heartbeat', (_req: Request, res: Response) => {
-  sourceTracker.markVscodeExtensionSeen();
-  res.json({ success: true, data: sourceTracker.snapshot() });
-});
 
 /**
  * POST /api/v1/file-changes
@@ -100,8 +93,6 @@ router.post('/', async (req: Request, res: Response) => {
       });
       return;
     }
-
-    sourceTracker.markVscodeExtensionSeen();
 
     const container = getServiceContainer();
     const dispatcher = container.get('fileChangeDispatcher') as FileChangeDispatcher;

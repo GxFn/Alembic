@@ -159,16 +159,6 @@ export const MANIFEST = [
     category: 'mcp',
     ghostPolicy: 'global' as const,
   },
-
-  // ═══ VSCode Extension ═════════════════════════════════
-  {
-    id: 'vscode-extension',
-    strategy: 'generate',
-    generate: 'installVSCodeExtension',
-    on: 'setup',
-    category: 'vscode-extension',
-    ghostPolicy: 'deploy' as const,
-  },
 ];
 
 /**

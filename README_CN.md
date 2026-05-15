@@ -272,18 +272,17 @@ Recipe 是 Markdown 文件，SQLite 只是读缓存。数据库坏了 `alembic s
 
 | IDE | 集成方式 | 接入说明 |
 |-----|---------|----------|
-| **VS Code** | 扩展 + MCP | Agent Mode 中 `#alembic` 引用工具；搜索、指令、CodeLens、Guard 诊断波浪线、灯泡修复 |
+| **VS Code** | MCP | `.vscode/mcp.json` 接入 Copilot / Agent Mode，使用 Alembic MCP 工具 |
 | **Cursor** | MCP + Rules | `.cursor/mcp.json` + `.cursor/rules/` + `.cursor/skills/` |
 | **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP 工具；支持 hooks |
 | **Trae / Qoder** | MCP | `alembic setup` 自动生成，`alembic mirror` 同步配置 |
 | **Xcode** | 文件监听 | `alembic watch` + 文件指令 + Snippet 同步 |
 
-### VS Code 扩展
+### VS Code MCP 集成
 
-- **Comment Directives**：`// as:s <query>` 搜索插入、`// as:c` 从选区创建候选、`// as:a` 审计当前文件
-- **CodeLens**：指令上方可点击操作
-- **Guard 诊断**：违规显示为波浪线 + 灯泡快速修复
-- **Status Bar**：实时 API Server 连接状态
+- **MCP 配置**：`alembic setup` 写入 `.vscode/mcp.json`
+- **Agent Mode**：通过 Alembic MCP 工具检索知识、运行 Guard、提交候选 Recipe
+- **Copilot 指令**：生成 `.github/copilot-instructions.md`，同步 Alembic 项目约定
 
 所有配置由 `alembic setup` 自动生成。更新后运行 `alembic upgrade` 刷新。
 
