@@ -51,10 +51,6 @@ export interface PanoramaServiceLike {
   getOverview(): Promise<{ moduleCount: number; gapCount: number }>;
 }
 
-export interface WikiGeneratorLike {
-  generate(): Promise<Record<string, unknown>>;
-}
-
 export type LoadServiceContainer = () => Promise<ServiceContainerLike> | ServiceContainerLike;
 export type ScheduleTask = (task: () => Promise<void>) => void;
 export type PersistentMemoryDb =
@@ -71,7 +67,6 @@ export interface WorkflowCompletionFinalizerDependencies {
 export type WorkflowSemanticMemoryMode = 'scheduled' | 'immediate' | 'skip';
 
 export interface WorkflowCompletionStepOptions {
-  wiki?: 'schedule' | 'skip';
   panorama?: 'run' | 'skip';
 }
 
@@ -83,7 +78,6 @@ export interface WorkflowSemanticMemoryConsolidationResult {
 
 export interface WorkflowCompletionFinalizerResult {
   semanticMemoryResult: WorkflowSemanticMemoryConsolidationResult | null;
-  wikiStatus?: WorkflowCompletionStepStatus;
   panoramaStatus?: WorkflowCompletionStepStatus;
 }
 
@@ -93,9 +87,6 @@ export interface WorkflowCompletionSummary {
   mode: 'bootstrap' | 'rescan';
   isolation: 'full-completion' | 'pipeline-isolation';
   reason?: string;
-  wiki: {
-    status: WorkflowCompletionStepStatus;
-  };
   semanticMemory: {
     status: WorkflowCompletionStepStatus;
     result?: WorkflowSemanticMemoryConsolidationResult | null;

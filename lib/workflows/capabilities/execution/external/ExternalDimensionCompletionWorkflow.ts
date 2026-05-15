@@ -285,16 +285,15 @@ export async function runExternalDimensionCompletionWorkflow(
     dependencies,
   });
 
-  const completionFinalizer = isComplete
-    ? await (dependencies.runCompletionFinalizer ?? runWorkflowCompletionFinalizer)({
-        ctx,
-        session: session.value,
-        projectRoot,
-        dataRoot,
-        log: logger,
-        dependencies: dependencies.finalizerDependencies,
-      })
-    : { semanticMemoryResult: null };
+  if (isComplete) {
+    await (dependencies.runCompletionFinalizer ?? runWorkflowCompletionFinalizer)({
+      ctx,
+      session: session.value,
+      dataRoot,
+      log: logger,
+      dependencies: dependencies.finalizerDependencies,
+    });
+  }
 
   if (input.value.crossDimensionHints) {
     session.value.storeHints(input.value.dimensionId, input.value.crossDimensionHints);

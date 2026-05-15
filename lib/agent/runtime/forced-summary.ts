@@ -7,7 +7,7 @@
  * 支持三种模式 (根据 source + tracker.pipelineType 判断):
  *   - system + analyst: 输出 Markdown 分析报告 (供 Quality Gate 评估)
  *   - system + bootstrap: 输出 dimensionDigest JSON (供维度编排消费)
- *   - user: 输出人类可读的 Markdown 结构化总结 (前端 AI Chat 展示)
+ *   - user: 输出人类可读的 Markdown 结构化总结
  *
  * @module forced-summary
  */

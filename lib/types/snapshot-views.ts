@@ -29,7 +29,7 @@ import type {
  * BootstrapSession.snapshotCache 的类型化形状。
  *
  * 替代之前 `Record<string, unknown>` 的擦除类型，
- * 消费端（dimension-complete-external、wiki-external）不再需要 `as` 手动转型。
+ * 消费端不再需要 `as` 手动转型。
  *
  */
 export interface SessionCacheShape {

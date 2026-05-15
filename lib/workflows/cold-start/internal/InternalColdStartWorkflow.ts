@@ -166,7 +166,7 @@ export async function runInternalColdStartWorkflow(
   }
 
   // ═══════════════════════════════════════════════════════════
-  // Phase 4.6: BootstrapSessionManager — 缓存 Phase 结果供 wiki_plan 复用
+  // Phase 4.6: BootstrapSessionManager — 缓存 Phase 结果供后续维度完成流程复用
   // （与 bootstrap-external 对齐）
   // ═══════════════════════════════════════════════════════════
   const cachedSessionId = cacheProjectAnalysisSession({

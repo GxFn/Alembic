@@ -185,7 +185,6 @@ function createWorkflowSkill(
     };
   }
 
-  removePendingSuggestion(name);
   runSkillCreatedHook(ctx, { name, description, createdBy, path: skillPath });
 
   return {
@@ -357,17 +356,6 @@ function getWriteZone(ctx?: SkillContext | null): WriteZone | undefined {
 
 function getProjectSkillsDir(ctx?: SkillContext | null): string {
   return getProjectSkillsPath(resolveDataRoot(ctx?.container));
-}
-
-function removePendingSuggestion(name: string): void {
-  try {
-    const globalState = globalThis as unknown as {
-      _signalCollector?: { removePendingSuggestion(name: string): void };
-    };
-    globalState._signalCollector?.removePendingSuggestion(name);
-  } catch {
-    /* silent */
-  }
 }
 
 function runSkillCreatedHook(

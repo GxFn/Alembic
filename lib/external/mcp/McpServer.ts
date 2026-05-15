@@ -8,7 +8,7 @@
  * 通过 ALEMBIC_MCP_TIER 环境变量控制可见工具集（agent/admin）
  *
  * 冷启动双路径:
- *   - 外部 Agent 路径: bootstrap (Mission Briefing) → dimension_complete × N → wiki(plan) → wiki(finalize)
+ *   - 外部 Agent 路径: bootstrap (Mission Briefing) → dimension_complete × N
  *   - 内部 Agent 路径: bootstrap.js bootstrapKnowledge() → orchestrator.js AI pipeline (Phase 5)
  *
  * Gateway 权限 gating: 写操作经过 Gateway 权限/宪法/审计检查（支持动态 resolver）
@@ -103,7 +103,6 @@ import { evolveExternal } from './handlers/evolve-external.js';
 import { panoramaHandler } from './handlers/panorama.js';
 import { rescanExternal } from './handlers/rescan-external.js';
 import { taskHandler } from './handlers/task.js';
-import { wikiRouter } from './handlers/wiki-external.js';
 
 // ─── McpServer 类 ─────────────────────────────────────────────
 
@@ -581,7 +580,6 @@ export class McpServer {
           ctx as Parameters<typeof consolidateHandler>[0],
           args as Parameters<typeof consolidateHandler>[1]
         ),
-      alembic_wiki: (ctx, args) => wikiRouter(ctx, args),
       // ── Admin 层 (+4) ──
       alembic_enrich_candidates: (ctx, args) => candidateHandlers.enrichCandidates(ctx, args),
       alembic_knowledge_lifecycle: (ctx, args) => knowledgeHandlers.knowledgeLifecycle(ctx, args),

@@ -1,7 +1,6 @@
 import Logger from '#infra/logging/Logger.js';
 import {
   consolidateSemanticMemory,
-  generateWiki,
   refreshPanorama,
 } from '#workflows/capabilities/completion/CompletionSteps.js';
 import type {
@@ -30,7 +29,6 @@ const logger = Logger.getInstance();
 export async function runWorkflowCompletionFinalizer({
   ctx,
   session,
-  projectRoot,
   dataRoot,
   log = logger,
   dependencies = {},
@@ -40,7 +38,6 @@ export async function runWorkflowCompletionFinalizer({
 }: {
   ctx: CompletionContextLike;
   session: CompletionSessionLike;
-  projectRoot: string;
   dataRoot: string;
   log?: CompletionLogger;
   dependencies?: WorkflowCompletionFinalizerDependencies;
@@ -52,13 +49,11 @@ export async function runWorkflowCompletionFinalizer({
   const scheduleTask = dependencies.scheduleTask ?? defaultScheduleTask;
   const semanticMemoryMode = semanticMemory.mode ?? 'scheduled';
   const panoramaMode = steps.panorama ?? 'run';
-  const wikiMode = steps.wiki ?? 'schedule';
 
   if (shouldAbort?.()) {
     log.info('[CompletionFinalizer] Aborted before panorama — user cancelled');
     return {
       semanticMemoryResult: null,
-      wikiStatus: 'skipped',
       panoramaStatus: 'skipped',
     };
   }
@@ -72,19 +67,11 @@ export async function runWorkflowCompletionFinalizer({
   }
 
   if (shouldAbort?.()) {
-    log.info('[CompletionFinalizer] Aborted before wiki/memory — user cancelled');
+    log.info('[CompletionFinalizer] Aborted before semantic memory — user cancelled');
     return {
       semanticMemoryResult: null,
-      wikiStatus: 'skipped',
       panoramaStatus,
     };
-  }
-  let wikiStatus: WorkflowCompletionFinalizerResult['wikiStatus'] = 'skipped';
-  if (wikiMode === 'schedule') {
-    scheduleTask(() => generateWiki({ getServiceContainer, projectRoot, log }));
-    wikiStatus = 'scheduled';
-  } else {
-    log.info('[CompletionFinalizer] Wiki generation skipped by workflow option');
   }
   let semanticMemoryResult: WorkflowCompletionFinalizerResult['semanticMemoryResult'] = null;
   if (semanticMemoryMode === 'immediate') {
@@ -99,7 +86,7 @@ export async function runWorkflowCompletionFinalizer({
     }
   }
 
-  return { semanticMemoryResult, wikiStatus, panoramaStatus };
+  return { semanticMemoryResult, panoramaStatus };
 }
 
 async function defaultGetServiceContainer(): Promise<ServiceContainerLike> {

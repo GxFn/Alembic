@@ -5,14 +5,13 @@ import { runWorkflowCompletionFinalizer } from '#workflows/capabilities/completi
 import { buildInternalDimensionCompletionSummary } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
 
 describe('WorkflowCompletionFinalizer', () => {
-  test('runs panorama before scheduling wiki and immediate semantic memory', async () => {
+  test('runs panorama before immediate semantic memory', async () => {
     const events: string[] = [];
     const container = createContainer(events);
 
     const result = await runWorkflowCompletionFinalizer({
       ctx: { container: { get: () => undefined } },
       session: { id: 'session-1' },
-      projectRoot: process.cwd(),
       dataRoot: process.cwd(),
       log: { info: vi.fn(), warn: vi.fn() },
       dependencies: {
@@ -22,17 +21,16 @@ describe('WorkflowCompletionFinalizer', () => {
       semanticMemory: { mode: 'immediate' },
     });
 
-    expect(events).toEqual(['panorama:rescan', 'panorama:overview', 'schedule']);
+    expect(events).toEqual(['panorama:rescan', 'panorama:overview']);
     expect(result.semanticMemoryResult).toBeNull();
   });
 
-  test('scheduled semantic memory shares the same scheduler boundary as wiki', async () => {
+  test('scheduled semantic memory uses the workflow scheduler', async () => {
     const scheduled: Array<() => Promise<void>> = [];
 
     await runWorkflowCompletionFinalizer({
       ctx: { container: { get: () => undefined } },
       session: { id: 'session-1' },
-      projectRoot: process.cwd(),
       dataRoot: process.cwd(),
       log: { info: vi.fn(), warn: vi.fn() },
       dependencies: {
@@ -41,31 +39,29 @@ describe('WorkflowCompletionFinalizer', () => {
       },
     });
 
-    expect(scheduled).toHaveLength(2);
+    expect(scheduled).toHaveLength(1);
   });
 
-  test('can skip wiki while keeping scheduled semantic memory', async () => {
+  test('can skip panorama while keeping scheduled semantic memory', async () => {
     const events: string[] = [];
     const scheduled: Array<() => Promise<void>> = [];
 
     const result = await runWorkflowCompletionFinalizer({
       ctx: { container: { get: () => undefined } },
       session: { id: 'session-1' },
-      projectRoot: process.cwd(),
       dataRoot: process.cwd(),
       log: { info: vi.fn(), warn: vi.fn() },
       dependencies: {
         getServiceContainer: () => createContainer(events),
         scheduleTask: (task) => scheduled.push(task),
       },
-      steps: { wiki: 'skip' },
+      steps: { panorama: 'skip' },
     });
 
-    expect(events).toEqual(['panorama:rescan', 'panorama:overview']);
+    expect(events).toEqual([]);
     expect(scheduled).toHaveLength(1);
     expect(result).toMatchObject({
-      wikiStatus: 'skipped',
-      panoramaStatus: 'completed',
+      panoramaStatus: 'skipped',
     });
   });
 
@@ -92,7 +88,6 @@ describe('WorkflowCompletionFinalizer', () => {
     ).toMatchObject({
       mode: 'rescan',
       isolation: 'pipeline-isolation',
-      wiki: { status: 'skipped' },
       semanticMemory: { status: 'skipped' },
     });
   });
@@ -111,24 +106,21 @@ describe('WorkflowCompletionFinalizer', () => {
     ).toMatchObject({
       mode: 'bootstrap',
       isolation: 'full-completion',
-      wiki: { status: 'scheduled' },
       semanticMemory: { status: 'completed' },
     });
   });
 
-  test('summarizes skipped bootstrap wiki from finalizer result', () => {
+  test('summarizes skipped bootstrap semantic memory from finalizer result', () => {
     expect(
       buildInternalDimensionCompletionSummary({
         pipelineMode: 'bootstrap',
         workflowCompletion: {
           semanticMemoryResult: null,
-          wikiStatus: 'skipped',
         },
       })
     ).toMatchObject({
       mode: 'bootstrap',
       isolation: 'full-completion',
-      wiki: { status: 'skipped' },
       semanticMemory: { status: 'skipped' },
     });
   });
@@ -141,7 +133,6 @@ describe('WorkflowCompletionFinalizer', () => {
 
     expect(source).toContain('CompletionSteps.js');
     expect(source).toContain('refreshPanorama');
-    expect(source).toContain('generateWiki');
     expect(source).toContain('consolidateSemanticMemory');
   });
 });

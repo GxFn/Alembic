@@ -111,7 +111,7 @@ export class AgentProfileCompiler {
     context?: AgentRunContext
   ): CompiledAgentProfile {
     const params = mergeParams(defaultParamsForProfile(definition.id), inputParams);
-    const actionSpace = resolveActionSpace(definition, params);
+    const actionSpace = resolveActionSpace(definition);
     const strategy = compileStrategy(definition.strategy, {
       params,
       context: context as unknown as Record<string, unknown>,
@@ -204,10 +204,7 @@ function additionalToolsFromActionSpace(actionSpace: AgentActionSpace) {
   return [...actionSpace.toolIds];
 }
 
-function resolveActionSpace(definition: AgentProfileDefinition, params: Record<string, unknown>) {
-  if (definition.id === 'signal-analysis' && params.mode === 'auto') {
-    return { mode: 'listed' as const, toolIds: ['suggest_skills', 'create_skill'] };
-  }
+function resolveActionSpace(definition: AgentProfileDefinition) {
   return definition.defaults?.actionSpace || { mode: 'listed' as const, toolIds: [] };
 }
 

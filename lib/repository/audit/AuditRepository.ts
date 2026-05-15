@@ -275,7 +275,7 @@ export class AuditRepositoryImpl extends RepositoryBase<typeof auditLogs, AuditL
   }
 
   /**
-   * Guard 违规规则名 TOP-N (SkillAdvisor.#getGuardPatterns)
+   * Guard 违规规则名 TOP-N
    */
   async findTopGuardViolationRules(
     minCount: number,
@@ -298,7 +298,7 @@ export class AuditRepositoryImpl extends RepositoryBase<typeof auditLogs, AuditL
   }
 
   /**
-   * Guard 违规信号 (SignalCollector.#collectGuardSignals)
+   * Guard 违规统计
    */
   async findGuardViolationSignals(
     limit: number
@@ -321,7 +321,7 @@ export class AuditRepositoryImpl extends RepositoryBase<typeof auditLogs, AuditL
   }
 
   /**
-   * 最近动作日志 (SignalCollector.#collectActionSignals)
+   * 最近动作日志
    */
   async findRecentActions(
     sinceTs: number,

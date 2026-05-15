@@ -396,7 +396,3 @@ export const FileSaveBody = z.object({
   path: z.string().min(1, 'path is required'),
   content: z.string({ message: 'content is required' }),
 });
-
-// ═══ Wiki Routes ═════════════════════════════════
-
-/* Wiki validation stays as inline path-param check (wildcard route) */

@@ -4,7 +4,7 @@
  * 设计:
  * - 每个对话一个 JSONL 文件: .asd/conversations/{id}.jsonl
  * - 索引文件: .asd/conversations/index.json
- * - 按 category 隔离: 'user'(Dashboard) / 'system'(SignalCollector)
+ * - 按 category 隔离: 'user'(Dashboard) / 'system'(internal workflows)
  * - Token 预算: 超限时自动生成摘要压缩旧轮次
  * - 静默降级: 持久化失败不影响核心功能
  *

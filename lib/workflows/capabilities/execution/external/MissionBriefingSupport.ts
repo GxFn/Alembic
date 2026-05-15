@@ -238,14 +238,11 @@ export function buildInternalNextSteps(
 }
 
 /** Bootstrap 全部维度完成后的 nextActions（供外部 Agent 使用） */
-export const BOOTSTRAP_COMPLETE_ACTIONS = [
-  {
-    action: 'wiki_generate',
-    prompt:
-      '知识库初始化完成！是否继续生成项目 Wiki 文档？Wiki 将基于刚建立的知识库和项目分析数据自动生成结构化文档。',
-    tool: 'alembic_wiki_plan',
-  },
-];
+export const BOOTSTRAP_COMPLETE_ACTIONS: Array<{
+  action: string;
+  prompt: string;
+  tool: string;
+}> = [];
 
 // ═══════════════════════════════════════════════════════════
 // §3 — BriefingCompressionPolicy

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   ScrollText, Plus, RefreshCw, ChevronRight, ChevronDown,
-  Sparkles, X, Send, Package, FolderOpen, Copy, Check,
-  AlertCircle, Loader2, FileText, Lightbulb, BookOpen, Bot, User, Cpu,
-  Pencil, Trash2, Save, Zap,
+  Sparkles, X, Package, FolderOpen, Copy, Check,
+  AlertCircle, Loader2, FileText, Bot, User, Cpu,
+  Pencil, Trash2, Save,
 } from 'lucide-react';
 import api from '../../api';
 import { getErrorMessage, getErrorStatus } from '../../utils/error';
@@ -49,11 +49,9 @@ const CREATED_BY_CONFIG: Record<string, { label: string; color: string; icon: ty
 
 interface SkillsViewProps {
   onRefresh?: () => void;
-  signalSuggestionCount?: number;
-  onSuggestionCountChange?: (count: number) => void;
 }
 
-const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCount = 0, onSuggestionCountChange }) => {
+const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh }) => {
   const { t } = useI18n();
   const [skills, setSkills] = useState<SkillItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,11 +60,6 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filter, setFilter] = useState<'all' | 'builtin' | 'project'>('all');
   const [copied, setCopied] = useState(false);
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [creatingSuggestion, setCreatingSuggestion] = useState<string | null>(null);
-
   /* ── Edit & Delete state ── */
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
@@ -171,78 +164,6 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
     }
   };
 
-  /* ── Fetch skill suggestions (merge rule-based + AI signal) ── */
-  const handleSuggest = async () => {
-    setLoadingSuggestions(true);
-    setShowSuggestions(true);
-    try {
-      // 并行获取两个来源
-      const [ruleData, signalData] = await Promise.allSettled([
-        api.suggestSkills(),
-        api.getSignalStatus(),
-      ]);
-
-      const ruleSuggestions = ruleData.status === 'fulfilled' ? (ruleData.value.suggestions || []) : [];
-      const signalSuggestions = signalData.status === 'fulfilled' ? (signalData.value.suggestions || []) : [];
-
-      // 合并去重（以 name 为 key，signal AI 建议优先）
-      const merged = new Map<string, any>();
-      for (const s of ruleSuggestions) merged.set(s.name, s);
-      for (const s of signalSuggestions) merged.set(s.name, { ...merged.get(s.name), ...s });
-      const list = [...merged.values()];
-
-      setSuggestions(list);
-      // 同步角标数量为实际推荐数
-      onSuggestionCountChange?.(list.length);
-    } catch (err: unknown) {
-      notify(getErrorMessage(err, ''), { title: t('skills.aiRecommendFailed'), type: 'error' });
-      setSuggestions([]);
-      onSuggestionCountChange?.(0);
-    } finally {
-      setLoadingSuggestions(false);
-    }
-  };
-
-  /* ── 角标 > 0 时自动加载推荐 ── */
-  useEffect(() => {
-    if (signalSuggestionCount > 0 && suggestions.length === 0 && !showSuggestions) {
-      handleSuggest();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /* ── Create skill from suggestion (AI generate content) ── */
-  const handleCreateFromSuggestion = async (suggestion: any) => {
-    setCreatingSuggestion(suggestion.name);
-    try {
-      // 使用 AI 生成 Skill 内容
-      const desc = suggestion.description || suggestion.rationale || suggestion.name;
-      const prompt = `${t('skillsView.aiPromptPrefix')}\n\n名称：${suggestion.name}\n描述：${desc}\n推荐原因：${suggestion.rationale}\n\n请直接生成 Skill 正文内容（Markdown 格式），不需要 frontmatter，不需要输出 JSON 元数据。内容应该详细、实用，包含具体的操作指南和示例。`;
-      const aiResult = await api.aiGenerateSkill(prompt);
-      let content = aiResult.reply || suggestion.body || `# ${desc}\n\n${suggestion.rationale || ''}`;
-      // 剥离 AI 可能输出的 JSON 元数据首行
-      content = content.replace(/^\s*\{["']name["']\s*:.*\}\s*\n?/, '').trim();
-
-      await api.createSkill({
-        name: suggestion.name,
-        description: desc,
-        content,
-        createdBy: 'user-ai',
-      });
-      notify(t('skills.createAddedToKB'), { title: `Skill "${suggestion.name}" ${t('skills.createSuccess')}` });
-      setSuggestions(prev => {
-        const next = prev.filter(s => s.name !== suggestion.name);
-        onSuggestionCountChange?.(next.length);
-        return next;
-      });
-      fetchSkills();
-    } catch (err: unknown) {
-      notify(getErrorMessage(err, ''), { title: t('skills.createFailed'), type: 'error' });
-    } finally {
-      setCreatingSuggestion(null);
-    }
-  };
-
   /* ── Filter ── */
   const filteredSkills = skills.filter(s => {
     if (filter === 'all') return true;
@@ -279,19 +200,6 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
             <RefreshCw size={16} />
           </button>
           <button
-            onClick={handleSuggest}
-            disabled={loadingSuggestions}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-              loadingSuggestions
-                ? 'text-[var(--fg-muted)] bg-[var(--bg-subtle)] cursor-not-allowed'
-                : 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20'
-            }`}
-            title={t('skills.aiRecommendTooltip')}
-          >
-            {loadingSuggestions ? <Loader2 size={14} className="animate-spin" /> : <Lightbulb size={14} />}
-            {t('skills.aiRecommend')}
-          </button>
-          <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 transition-all"
           >
@@ -325,63 +233,6 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
           </button>
         ))}
       </div>
-
-      {/* ── Skill Suggestions Panel ── */}
-      {showSuggestions && (
-        <div className="mb-4 border border-amber-200 bg-amber-50/50 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Lightbulb size={16} className="text-amber-600" />
-              <span className="text-sm font-semibold text-amber-800">{t('skills.aiRecommendDesc')}</span>
-              {suggestions.length > 0 && (
-                <span className="px-1.5 py-0.5 bg-amber-200 text-amber-700 text-[10px] font-bold rounded-full">{suggestions.length}</span>
-              )}
-            </div>
-            <button onClick={() => setShowSuggestions(false)} className="p-1 text-amber-400 hover:text-amber-600">
-              <X size={14} />
-            </button>
-          </div>
-          {loadingSuggestions ? (
-            <div className="flex items-center gap-2 text-amber-600 text-xs py-2">
-              <Loader2 size={14} className="animate-spin" />
-              {t('skills.aiRecommending')}
-            </div>
-          ) : suggestions.length === 0 ? (
-            <p className="text-xs text-amber-600/70">{t('skills.noRecommendations')}</p>
-          ) : (
-            <div className="space-y-2">
-              {suggestions.map(s => (
-                <div key={s.name} className="flex items-start gap-3 p-3 bg-[var(--bg-surface)] rounded-lg border border-amber-100">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono text-xs font-semibold text-[var(--fg-primary)]">{s.name}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                        s.priority === 'high' ? 'bg-red-100 text-red-600'
-                        : s.priority === 'medium' ? 'bg-amber-100 text-amber-600'
-                        : 'bg-[var(--bg-subtle)] text-[var(--fg-secondary)]'
-                      }`}>{s.priority}</span>
-                      <span className="text-[10px] text-[var(--fg-muted)]">{s.source}</span>
-                    </div>
-                    <p className="text-xs text-[var(--fg-secondary)] mb-1">{s.description}</p>
-                    <p className="text-[11px] text-[var(--fg-muted)] line-clamp-2">{s.rationale}</p>
-                  </div>
-                  <button
-                    onClick={() => handleCreateFromSuggestion(s)}
-                    disabled={creatingSuggestion === s.name}
-                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors text-xs font-medium disabled:opacity-50"
-                  >
-                    {creatingSuggestion === s.name ? (
-                      <><Loader2 size={12} className="animate-spin" /> {t('skills.creating')}</>
-                    ) : (
-                      <><Zap size={12} /> {t('skills.acceptRecommend')}</>
-                    )}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── Content ── */}
       <div className="flex-1 flex gap-4 xl:gap-6 min-h-0 overflow-hidden">
@@ -602,7 +453,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
         </div>
       </div>
 
-      {/* ── AI Create Modal ── */}
+      {/* ── Create Modal ── */}
       {showCreateModal && (
         <CreateSkillModal
           onClose={() => setShowCreateModal(false)}
@@ -618,7 +469,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
 };
 
 /* ═══════════════════════════════════════════════════════
- *  AI Create Modal
+ *  Create Modal
  * ═══════════════════════════════════════════════════════ */
 
 const CreateSkillModal: React.FC<{
@@ -626,96 +477,12 @@ const CreateSkillModal: React.FC<{
   onCreated: () => void;
 }> = ({ onClose, onCreated }) => {
   const { t } = useI18n();
-  const [mode, setMode] = useState<'ai' | 'manual'>('ai');
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [generating, setGenerating] = useState(false);
 
-  // Manual / AI-generated fields
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [aiGenerated, setAiGenerated] = useState(false);
-
-  /* ── AI Generate ── */
-  const handleGenerate = async () => {
-    if (!aiPrompt.trim()) return;
-    setGenerating(true);
-    setError('');
-    try {
-      const result = await api.aiGenerateSkill(aiPrompt);
-      const reply = result.reply || '';
-
-      // 解析 AI 回复 — 提取元数据 JSON（支持裸 JSON 行 / ```json 代码块 / 散落在正文中）
-      let metaName = '';
-      let metaDesc = '';
-      let bodyContent = reply;
-
-      // 策略 1：找 ```json { ... } ``` 代码块
-      const codeBlockRe = /```(?:json)?\s*\n?\s*(\{[^}]*"name"[^}]*\})\s*\n?\s*```/i;
-      const cbMatch = reply.match(codeBlockRe);
-      if (cbMatch) {
-        try {
-          const meta = JSON.parse(cbMatch[1]);
-          metaName = meta.name || '';
-          metaDesc = meta.description || '';
-          bodyContent = reply.replace(cbMatch[0], '').trim();
-        } catch { /* ignore */ }
-      }
-
-      // 策略 2：找第一行裸 JSON 对象
-      if (!metaName) {
-        const lines = reply.split('\n');
-        for (let i = 0; i < Math.min(lines.length, 5); i++) {
-          const line = lines[i].trim();
-          if (!line || line.startsWith('```')) continue;
-          if (line.startsWith('{') && line.endsWith('}')) {
-            try {
-              const meta = JSON.parse(line);
-              if (meta.name) {
-                metaName = meta.name;
-                metaDesc = meta.description || '';
-                // 正文 = 跳过该行及其后的空行
-                let bodyStart = i + 1;
-                while (bodyStart < lines.length && !lines[bodyStart].trim()) bodyStart++;
-                bodyContent = lines.slice(bodyStart).join('\n').trim();
-                break;
-              }
-            } catch { /* not JSON */ }
-          }
-        }
-      }
-
-      // 策略 3：正则兜底 — 从正文提取 name / description
-      if (!metaName) {
-        const nameRe = /"name"\s*:\s*"([a-z][a-z0-9-]{1,62}[a-z0-9])"/;
-        const descRe = /"description"\s*:\s*"([^"]+)"/;
-        const nm = reply.match(nameRe);
-        const dm = reply.match(descRe);
-        if (nm) metaName = nm[1];
-        if (dm) metaDesc = dm[1];
-      }
-
-      // 清理正文中残留的元数据代码块
-      bodyContent = bodyContent
-        .replace(/```(?:json)?\s*\n?\s*\{[^}]*"name"[^}]*\}\s*\n?\s*```/gi, '')
-        .replace(/^\s*\{[^}]*"name"[^}]*\}\s*$/gm, '')
-        .trim();
-
-      if (metaName) setName(metaName);
-      if (metaDesc) setDescription(metaDesc);
-      setContent(bodyContent || reply.trim());
-
-      setAiGenerated(true);
-      setMode('manual'); // Switch to manual to let user review/edit
-      notify(t('skills.checkGenerated'), { title: t('skills.aiGenerated') });
-    } catch (err: unknown) {
-      setError(t('skills.aiGenFailed') + ': ' + getErrorMessage(err, ''));
-    } finally {
-      setGenerating(false);
-    }
-  };
 
   /* ── Save ── */
   const handleSave = async () => {
@@ -726,7 +493,12 @@ const CreateSkillModal: React.FC<{
     setSaving(true);
     setError('');
     try {
-      await api.createSkill({ name: name.trim(), description: description.trim(), content: content.trim(), createdBy: aiGenerated ? 'user-ai' : 'manual' });
+      await api.createSkill({
+        name: name.trim(),
+        description: description.trim(),
+        content: content.trim(),
+        createdBy: 'manual',
+      });
       notify(t('skills.savedToKB'), { title: `Skill "${name}" ${t('skills.createSuccess')}` });
       onCreated();
     } catch (err: unknown) {
@@ -753,109 +525,47 @@ const CreateSkillModal: React.FC<{
           </button>
         </div>
 
-        {/* Mode toggle */}
-        <div className="px-6 pt-4">
-          <div className="inline-flex items-center gap-1 p-1 bg-[var(--bg-subtle)] rounded-lg">
-            <button
-              onClick={() => setMode('ai')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                mode === 'ai' ? 'bg-[var(--bg-surface)] text-violet-700 shadow-sm' : 'text-[var(--fg-secondary)] hover:text-[var(--fg-primary)]'
-              }`}
-            >
-              <Sparkles size={12} />
-              {t('skills.aiGenMode')}
-            </button>
-            <button
-              onClick={() => setMode('manual')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                mode === 'manual' ? 'bg-[var(--bg-surface)] text-violet-700 shadow-sm' : 'text-[var(--fg-secondary)] hover:text-[var(--fg-primary)]'
-              }`}
-            >
-              <FileText size={12} />
-              {t('skills.manualMode')}
-            </button>
-          </div>
-        </div>
-
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {mode === 'ai' ? (
-            /* AI mode */
-            <div className="space-y-4">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-[var(--fg-primary)] mb-1.5">
-                  {t('skills.describeSkill')}
+                  {t('skills.skillName')} <span className="text-[var(--fg-muted)] text-xs">(kebab-case)</span>
                 </label>
-                <div className="relative">
-                  <textarea
-                    value={aiPrompt}
-                    onChange={e => setAiPrompt(e.target.value)}
-                    placeholder={t('skillsView.placeholderDesc')}
-                    className="w-full h-32 px-4 py-3 border border-[var(--border-default)] rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
-                    disabled={generating}
-                  />
-                </div>
-              </div>
-              <button
-                onClick={handleGenerate}
-                disabled={generating || !aiPrompt.trim()}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-violet-600 text-white rounded-xl hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-              >
-                {generating ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    {t('skills.aiGeneratingContent')}
-                  </>
-                ) : (
-                  <>
-                    <Send size={16} />
-                    {t('skills.generateSkill')}
-                  </>
-                )}
-              </button>
-            </div>
-          ) : (
-            /* Manual mode / Edit generated */
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--fg-primary)] mb-1.5">
-                    {t('skills.skillName')} <span className="text-[var(--fg-muted)] text-xs">(kebab-case)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    placeholder="my-custom-skill"
-                    className="w-full px-3 py-2 border border-[var(--border-default)] rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--fg-primary)] mb-1.5">
-                    {t('skills.skillDescription')}
-                  </label>
-                  <input
-                    type="text"
-                    value={description}
-                    onChange={e => setDescription(e.target.value)}
-                    placeholder={t('skillsView.placeholderName')}
-                    className="w-full px-3 py-2 border border-[var(--border-default)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
-                  />
-                </div>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="my-custom-skill"
+                  className="w-full px-3 py-2 border border-[var(--border-default)] rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-[var(--fg-primary)] mb-1.5">
-                  {t('skills.skillContent')} <span className="text-[var(--fg-muted)] text-xs">(Markdown)</span>
+                  {t('skills.skillDescription')}
                 </label>
-                <textarea
-                  value={content}
-                  onChange={e => setContent(e.target.value)}
-                  placeholder={t('skillsView.placeholderContent')}
-                  className="w-full h-64 px-4 py-3 border border-[var(--border-default)] rounded-xl text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 leading-relaxed"
+                <input
+                  type="text"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder={t('skillsView.placeholderName')}
+                  className="w-full px-3 py-2 border border-[var(--border-default)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
                 />
               </div>
             </div>
-          )}
+            <div>
+              <label className="block text-sm font-medium text-[var(--fg-primary)] mb-1.5">
+                {t('skills.skillContent')} <span className="text-[var(--fg-muted)] text-xs">(Markdown)</span>
+              </label>
+              <textarea
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                placeholder={t('skillsView.placeholderContent')}
+                className="w-full h-64 px-4 py-3 border border-[var(--border-default)] rounded-xl text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 leading-relaxed"
+              />
+            </div>
+          </div>
 
           {error && (
             <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
@@ -873,25 +583,23 @@ const CreateSkillModal: React.FC<{
           >
             {t('common.cancel')}
           </button>
-          {mode === 'manual' && (
-            <button
-              onClick={handleSave}
-              disabled={saving || !name.trim() || !description.trim() || !content.trim()}
-              className="flex items-center gap-2 px-5 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-            >
-              {saving ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  {t('common.saving')}
-                </>
-              ) : (
-                <>
-                  <Plus size={14} />
-                  {t('skills.addSkill')}
-                </>
-              )}
-            </button>
-          )}
+          <button
+            onClick={handleSave}
+            disabled={saving || !name.trim() || !description.trim() || !content.trim()}
+            className="flex items-center gap-2 px-5 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+          >
+            {saving ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                {t('common.saving')}
+              </>
+            ) : (
+              <>
+                <Plus size={14} />
+                {t('skills.addSkill')}
+              </>
+            )}
+          </button>
         </div>
       </div>
     </PageOverlay>

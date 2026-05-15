@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Cpu, ChevronDown, ChevronRight, MessageSquare, Settings, Search, Zap, Radio, FlaskConical, FlaskRound, TerminalSquare, ShieldCheck, ShieldAlert, Eye } from 'lucide-react';
+import { Plus, Cpu, ChevronDown, ChevronRight, Settings, Search, Zap, Radio, FlaskConical, FlaskRound, TerminalSquare, ShieldCheck, ShieldAlert, Eye } from 'lucide-react';
 import api from '../../api';
 import { getSocket } from '../../lib/socket';
-import { useGlobalChat } from '../Shared/GlobalChatDrawer';
 import { useI18n } from '../../i18n';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
@@ -44,9 +43,7 @@ const TAB_LABELS: Record<TabType, string> = {
   panorama: 'sidebar.panorama',
   skills: 'sidebar.skills',
   jobs: 'sidebar.jobs',
-  wiki: 'sidebar.repoWiki',
   signals: 'sidebar.signals',
-  ai: 'sidebar.aiAssistant',
   help: 'sidebar.help',
 };
 
@@ -81,7 +78,6 @@ const Header: React.FC<HeaderProps> = ({
   showSignalMonitor = false,
   onToggleSignalMonitor,
 }) => {
-  const { toggle: toggleChat, isOpen: chatOpen } = useGlobalChat();
   const { t } = useI18n();
   const [aiProviders, setAiProviders] = useState<AiProvider[]>([]);
   const [aiSwitching, setAiSwitching] = useState(false);
@@ -427,19 +423,7 @@ const Header: React.FC<HeaderProps> = ({
             </Tooltip>
           )}
 
-          {/* AI Chat Toggle（贴最右） */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={chatOpen ? "accent" : "ghost"}
-                size="icon-sm"
-                onClick={toggleChat}
-              >
-                <MessageSquare size={16} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{chatOpen ? t('header.closeAiChat') : t('header.openAiChat')}</TooltipContent>
-          </Tooltip>        </div>
+        </div>
       </header>
     </TooltipProvider>
   );

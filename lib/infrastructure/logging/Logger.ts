@@ -5,14 +5,7 @@ import winston from 'winston';
 import pathGuard from '../../shared/PathGuard.js';
 
 // Agent 系统相关标签 — 终端高亮显示
-const AGENT_TAGS = [
-  'AgentRuntime',
-  'ToolRegistry',
-  'SignalCollector',
-  'SkillAdvisor',
-  'CircuitBreaker',
-  'EventAggregator',
-];
+const AGENT_TAGS = ['AgentRuntime', 'ToolRegistry', 'CircuitBreaker'];
 const MUTED_PREFIXES = ['Tool registered:'];
 
 // ANSI 颜色常量 — 保证深色终端可读性

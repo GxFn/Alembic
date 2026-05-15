@@ -298,7 +298,7 @@ export class Gateway extends EventEmitter {
     };
     await this.auditLogger.log(entry);
 
-    // 向 EventBus 发送 Gateway 操作完成事件（供 SignalCollector 等监听）
+    // 向 EventBus 发送 Gateway 操作完成事件（供审计、演化等内部订阅者监听）
     if (this.eventBus) {
       this.emit('gateway:action:completed', { ...entry, timestamp: Date.now() });
       this.eventBus.emit('gateway:action:completed', { ...entry, timestamp: Date.now() });

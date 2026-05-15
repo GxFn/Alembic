@@ -77,7 +77,6 @@ describe('WorkflowResultPersistence', () => {
       completionSummary: {
         mode: 'bootstrap',
         isolation: 'full-completion',
-        wiki: { status: 'scheduled' },
         semanticMemory: {
           status: 'completed',
           result: {
@@ -116,7 +115,6 @@ describe('WorkflowResultPersistence', () => {
       completion: {
         mode: 'bootstrap',
         isolation: 'full-completion',
-        wiki: { status: 'scheduled' },
         semanticMemory: {
           status: 'completed',
           result: {
@@ -156,8 +154,7 @@ describe('WorkflowResultPersistence', () => {
       completionSummary: {
         mode: 'rescan',
         isolation: 'pipeline-isolation',
-        reason: 'rescan skips wiki/semantic memory to avoid rebuilding downstream artifacts',
-        wiki: { status: 'skipped' },
+        reason: 'rescan skips semantic memory to avoid rebuilding downstream artifacts',
         semanticMemory: { status: 'skipped', result: null },
       },
       skippedDims: [],
@@ -171,7 +168,6 @@ describe('WorkflowResultPersistence', () => {
     expect(report.completion).toMatchObject({
       mode: 'rescan',
       isolation: 'pipeline-isolation',
-      wiki: { status: 'skipped' },
       semanticMemory: { status: 'skipped' },
     });
   });

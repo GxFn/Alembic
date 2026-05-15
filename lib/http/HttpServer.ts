@@ -47,7 +47,6 @@ import searchRouter from './routes/search.js';
 import signalsRouter from './routes/signals.js';
 import skillsRouter from './routes/skills.js';
 import violationsRouter from './routes/violations.js';
-import wikiRouter from './routes/wiki.js';
 
 interface HttpServerConfig {
   port: number;
@@ -332,9 +331,6 @@ export class HttpServer {
 
     // Recipe 操作路由（关系发现等）
     this.app.use(`${apiPrefix}/recipes`, recipesRouter);
-
-    // Wiki 路由
-    this.app.use(`${apiPrefix}/wiki`, wikiRouter);
 
     // Panorama 全景路由（项目结构 + 覆盖率 + 健康度）
     this.app.use(`${apiPrefix}/panorama`, panoramaRouter);

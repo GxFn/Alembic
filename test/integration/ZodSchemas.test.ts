@@ -46,7 +46,6 @@ import {
   SearchInput,
   SkillInput,
   StructureInput,
-  SubmitKnowledgeInput,
   TaskInput,
   TOOL_SCHEMAS,
 } from '../../lib/shared/schemas/mcp-tools.js';
@@ -329,7 +328,6 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
         'alembic_skill',
         'alembic_bootstrap',
         'alembic_dimension_complete',
-        'alembic_wiki',
         'alembic_task',
         'alembic_enrich_candidates',
         'alembic_knowledge_lifecycle',
@@ -340,8 +338,8 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
       }
     });
 
-    test('should have at least 15 entries', () => {
-      expect(Object.keys(TOOL_SCHEMAS).length).toBeGreaterThanOrEqual(15);
+    test('should have at least 14 entries', () => {
+      expect(Object.keys(TOOL_SCHEMAS).length).toBeGreaterThanOrEqual(14);
     });
   });
 });
@@ -441,7 +439,6 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
       expect(result.username).toBe('admin');
     });
   });
-
 });
 
 describe('Integration: Zod Schemas — config.ts', () => {

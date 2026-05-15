@@ -4,7 +4,6 @@ import { CHAT_PROFILES } from './chat.profile.js';
 import { EVOLUTION_PROFILES } from './evolution.profile.js';
 import { RELATION_PROFILES } from './relation.profile.js';
 import { SCAN_PROFILES } from './scan.profile.js';
-import { SIGNAL_PROFILES } from './signal.profile.js';
 import { TRANSLATION_PROFILES } from './translation.profile.js';
 
 export const BUILTIN_PROFILES: AgentProfileDefinition[] = [
@@ -13,6 +12,5 @@ export const BUILTIN_PROFILES: AgentProfileDefinition[] = [
   ...RELATION_PROFILES,
   ...EVOLUTION_PROFILES,
   ...TRANSLATION_PROFILES,
-  ...SIGNAL_PROFILES,
   ...BOOTSTRAP_PROFILES,
 ];

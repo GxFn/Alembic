@@ -2,11 +2,11 @@ import React from 'react';
 import { useGlobalChat } from './GlobalChatDrawer';
 
 /* ═══════════════════════════════════════════════════════════
- * PageOverlay — 感知 AI Chat 面板的全局遮罩容器
+ * PageOverlay — 感知候选润色面板的全局遮罩容器
  *
- * 当 AI Chat 面板打开时:
- *   - 遮罩层 right 偏移 420px（AI Chat 宽度）
- *   - 蒙层不覆盖 AI Chat 面板
+ * 当候选润色面板打开时:
+ *   - 遮罩层 right 偏移 420px（面板宽度）
+ *   - 蒙层不覆盖润色面板
  *   - 抽屉 / 弹窗以页面内容右侧为基准
  *
  * ── z-index 层级规范 ──────────────────────────────────

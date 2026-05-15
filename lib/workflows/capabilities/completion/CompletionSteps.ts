@@ -1,7 +1,7 @@
 /**
  * CompletionSteps — Workflow 完成阶段的各步骤实现
  *
- * 包含 Panorama 刷新、Wiki 生成和语义记忆固化，
+ * 包含 Panorama 刷新和语义记忆固化，
  * 由 WorkflowCompletionFinalizer 按顺序调用。
  */
 
@@ -13,7 +13,6 @@ import type {
   LoadServiceContainer,
   PanoramaServiceLike,
   PersistentMemoryDb,
-  WikiGeneratorLike,
   WorkflowSemanticMemoryConsolidationResult,
 } from '#workflows/capabilities/completion/WorkflowCompletionTypes.js';
 
@@ -43,45 +42,6 @@ export async function refreshPanorama({
   } catch (err: unknown) {
     log.warn(
       `[DimensionComplete] Panorama refresh failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
-    );
-  }
-}
-
-// ── WikiCompletionStep ──
-
-export async function generateWiki({
-  getServiceContainer,
-  projectRoot,
-  log,
-}: {
-  getServiceContainer: LoadServiceContainer;
-  projectRoot: string;
-  log: CompletionLogger;
-}): Promise<void> {
-  try {
-    const container = await getServiceContainer();
-    const { WikiGenerator } = await import('#service/wiki/WikiGenerator.js');
-    const moduleService = container.get?.('moduleService');
-    const knowledgeService = container.get?.('knowledgeService');
-    if (!moduleService || !knowledgeService) {
-      return;
-    }
-
-    const wikiDeps: import('#service/wiki/WikiGenerator.js').WikiDeps = {
-      projectRoot,
-      moduleService: moduleService as import('#service/wiki/WikiGenerator.js').WikiModuleService,
-      knowledgeService:
-        knowledgeService as import('#service/wiki/WikiGenerator.js').WikiKnowledgeService,
-      options: { mode: 'bootstrap' },
-    };
-    const wikiGenerator: WikiGeneratorLike = new WikiGenerator(wikiDeps);
-    const wikiResult = await wikiGenerator.generate();
-    log.info(
-      `[DimensionComplete] Auto Wiki generation: ${(wikiResult as { totalPages?: number }).totalPages || 0} pages`
-    );
-  } catch (err: unknown) {
-    log.warn(
-      `[DimensionComplete] Wiki generation failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
     );
   }
 }

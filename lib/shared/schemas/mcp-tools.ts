@@ -239,10 +239,8 @@ export type SubmitKnowledgeInput = z.infer<typeof SubmitKnowledgeInput>;
 
 export const SkillInput = z.object({
   operation: z
-    .enum(['list', 'load', 'create', 'update', 'delete', 'suggest'])
-    .describe(
-      'list=列表 | load=加载内容(name) | create=创建 | update=更新 | delete=删除 | suggest=推荐'
-    ),
+    .enum(['list', 'load', 'create', 'update', 'delete'])
+    .describe('list=列表 | load=加载内容(name) | create=创建 | update=更新 | delete=删除'),
   name: z.string().optional().describe('Skill 名称（kebab-case，如 alembic-create）'),
   skillName: z.string().optional().describe('name 的别名，与 name 等价'),
   section: z.string().optional().describe('load 时过滤指定章节'),
@@ -294,22 +292,6 @@ export const DimensionCompleteInput = z.object({
   crossDimensionHints: z.record(z.string(), z.string()).optional(),
 });
 export type DimensionCompleteInput = z.infer<typeof DimensionCompleteInput>;
-
-// ══════════════════════════════════════════════════════
-//  11c. alembic_wiki (merged: plan + finalize)
-// ══════════════════════════════════════════════════════
-
-export const WikiInput = z.object({
-  operation: z
-    .enum(['plan', 'finalize'])
-    .describe('plan — 规划主题 + 数据包; finalize — 写入 meta.json + 验证'),
-  // plan 参数
-  language: z.enum(['zh', 'en']).optional().describe('Wiki 语言，默认 zh'),
-  sessionId: z.string().optional(),
-  // finalize 参数
-  articlesWritten: z.array(z.string()).optional(),
-});
-export type WikiInput = z.infer<typeof WikiInput>;
 
 // ══════════════════════════════════════════════════════
 //  12. alembic_capabilities — 无参数
@@ -474,7 +456,6 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   alembic_bootstrap: BootstrapInput,
   alembic_rescan: RescanInput,
   alembic_dimension_complete: DimensionCompleteInput,
-  alembic_wiki: WikiInput,
   alembic_task: TaskInput,
   alembic_enrich_candidates: EnrichCandidatesInput,
   alembic_knowledge_lifecycle: KnowledgeLifecycleInput,

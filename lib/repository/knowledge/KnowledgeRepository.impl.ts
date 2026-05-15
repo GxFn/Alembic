@@ -807,7 +807,7 @@ export class KnowledgeRepositoryImpl {
 
   /**
    * 活跃条目按 category 分布
-   * (SkillAdvisor.#getKBDistribution)
+   * 知识库分布统计
    */
   async countGroupByCategory(): Promise<Array<{ category: string; cnt: number }>> {
     return this.#drizzle
@@ -830,7 +830,7 @@ export class KnowledgeRepositoryImpl {
 
   /**
    * 活跃条目按 language 分布
-   * (SkillAdvisor.#getKBDistribution)
+   * 知识库分布统计
    */
   async countGroupByLanguage(): Promise<Array<{ language: string; cnt: number }>> {
     return this.#drizzle
@@ -853,7 +853,7 @@ export class KnowledgeRepositoryImpl {
 
   /**
    * 高使用率活跃 Recipe (adoptions + applications >= minUsage)
-   * (SkillAdvisor.#getKBDistribution)
+   * 知识库分布统计
    */
   async findHotRecipesByUsage(
     minUsage: number,
@@ -886,7 +886,7 @@ export class KnowledgeRepositoryImpl {
 
   /**
    * 全库生命周期统计 (total / pending / deprecated)
-   * (SkillAdvisor.#getKBDistribution)
+   * 知识库分布统计
    */
   async getLifecycleCounts(): Promise<{
     total: number;
@@ -915,7 +915,7 @@ export class KnowledgeRepositoryImpl {
   }
 
   /**
-   * 活跃 Recipe 信号 (SignalCollector.#collectRecipeSignals)
+   * 活跃 Recipe 统计
    */
   async findActiveRecipeSignals(limit: number): Promise<
     Array<{
@@ -966,7 +966,7 @@ export class KnowledgeRepositoryImpl {
   }
 
   /**
-   * 待审核 Candidate (SignalCollector.#collectCandidateSignals)
+   * 待审核 Candidate 统计
    */
   async findPendingCandidates(limit: number): Promise<
     Array<{

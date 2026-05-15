@@ -5,7 +5,7 @@
  * SkillHooks 在启动时扫描并注册所有钩子，在特定事件发生时按模式调用。
  *
  * v2 升级:
- *   - 扩展到 16+ 钩子，覆盖知识/Guard/Skill/搜索/推荐/Bootstrap/信号全生命周期
+ *   - 覆盖知识/Guard/Skill/搜索/Bootstrap 生命周期
  *   - 4 种执行模式: series / parallel / waterfall / bail
  *   - Handler 支持 priority、timeout、name 元数据
  *   - 完全向后兼容旧版 hooks.js (直接导出函数)
@@ -46,16 +46,9 @@ const HOOK_REGISTRY: HookDefinition[] = [
   { name: 'onSearch', mode: 'waterfall', description: '搜索结果后处理（可修改排序）' },
   { name: 'onSearchMiss', mode: 'parallel', description: '搜索无结果时' },
 
-  // ── 推荐 ──
-  { name: 'onRecommendation', mode: 'waterfall', description: '推荐结果后处理（可过滤/排序）' },
-  { name: 'onRecommendFeedback', mode: 'parallel', description: '推荐反馈事件' },
-
   // ── Bootstrap ──
   { name: 'onBootstrapStart', mode: 'series', description: '冷启动开始前' },
   { name: 'onBootstrapComplete', mode: 'parallel', description: '冷启动完成后' },
-
-  // ── 信号 ──
-  { name: 'onSignalCollected', mode: 'parallel', description: '新信号收集完成' },
 
   // ── 向后兼容 (旧名映射) ──
   { name: 'onCandidateSubmit', mode: 'bail', description: '(compat) 同 onKnowledgeSubmit' },

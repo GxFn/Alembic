@@ -1,20 +1,21 @@
 /**
- * MCP Tool Definitions — V3 Consolidated (15 agent + 2 admin = 17 tools)
+ * MCP Tool Definitions — V3 Consolidated (16 agent + 2 admin = 18 tools)
  *
  * Each tool declaration contains name, tier (agent/admin), description, and inputSchema.
  * description is the key for Agent tool selection — use bullet list to enumerate all operations and their purposes.
  * inputSchema is auto-generated from Zod Schema (zodToMcpSchema); parameter .describe() translates to JSON Schema description.
  *
- * Agent tools (14):
+ * Agent tools (16):
  *   1-7:   Query tools (health/search/knowledge/structure/graph/call_context/guard)
  *   8:     Write tool (submit_knowledge — unified pipeline, single/batch)
  *   9:     Skill management (skill)
- *   10-12: Cold-start (bootstrap/dimension_complete/wiki)
- *   13:    Project panorama (panorama)
- *   14:    Task management (task — 5 ops: prime/create/close/fail/record_decision)
+ *   10-13: Workflow tools (bootstrap/rescan/evolve/consolidate)
+ *   14:    Dimension completion (dimension_complete)
+ *   15:    Project panorama (panorama)
+ *   16:    Task management (task — 5 ops: prime/create/close/fail/record_decision)
  *
  * Admin tools (2):
- *   15-16: enrich_candidates/knowledge_lifecycle
+ *   17-18: enrich_candidates/knowledge_lifecycle
  */
 
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
@@ -39,7 +40,6 @@ import {
   StructureInput,
   SubmitKnowledgeInput,
   TaskInput,
-  WikiInput,
 } from '#shared/schemas/mcp-tools.js';
 import { zodToMcpSchema } from './zodToMcpSchema.js';
 
@@ -164,7 +164,6 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   alembic_evolve: destructiveTool('Apply Alembic Evolution Decision'),
   alembic_consolidate: localWriteTool('Review Alembic Consolidation Decision'),
   alembic_dimension_complete: localWriteTool('Complete Alembic Dimension Analysis'),
-  alembic_wiki: localWriteTool('Plan Or Finalize Alembic Wiki'),
   alembic_panorama: localWriteTool('Query Or Refresh Alembic Panorama'),
   alembic_task: localWriteTool('Manage Alembic Task State'),
   alembic_enrich_candidates: readOnlyTool('Diagnose Alembic Candidate Fields'),
@@ -196,11 +195,6 @@ export const TOOL_GATEWAY_MAP = {
   alembic_rescan: { action: 'knowledge:bootstrap', resource: 'knowledge' },
   // dimension_complete — write operation (recipe tagging + skill creation + checkpoint)
   alembic_dimension_complete: { action: 'knowledge:bootstrap', resource: 'knowledge' },
-  // wiki — finalize is a write operation (meta.json)
-  alembic_wiki: {
-    resolver: (args: Record<string, unknown>) =>
-      args?.operation === 'finalize' ? { action: 'knowledge:create', resource: 'knowledge' } : null, // plan is read-only
-  },
   // guard write operation (files mode only)
   alembic_guard: {
     resolver: (args: Record<string, unknown>) =>
@@ -217,7 +211,7 @@ export const TOOL_GATEWAY_MAP = {
           update: { action: 'update:skills', resource: 'skills' },
           delete: { action: 'delete:skills', resource: 'skills' },
         }) as Record<string, { action: string; resource: string }>
-      )[args?.operation as string] || null, // list/load/suggest are read-only
+      )[args?.operation as string] || null, // list/load are read-only
   },
   // knowledge submission (unified pipeline)
   alembic_submit_knowledge: { action: 'knowledge:create', resource: 'knowledge' },
@@ -365,8 +359,7 @@ export const TOOLS = [
       '• load — load full Skill content for detailed guidance (requires name)\n' +
       '• create — create project-level Skill (requires name + description + content)\n' +
       '• update — update project-level Skill content\n' +
-      '• delete — delete project-level Skill (built-in cannot be deleted)\n' +
-      '• suggest — recommend Skills to create based on project analysis',
+      '• delete — delete project-level Skill (built-in cannot be deleted)',
     inputSchema: zodToMcpSchema(SkillInput),
   },
 
@@ -434,17 +427,6 @@ export const TOOLS = [
       'Dimension analysis completion notification. Handles: Recipe linking, Skill generation (auto-synthesized from submitted candidates), Checkpoint saving, cross-dimension Hints distribution.\n' +
       'analysisText can be brief — the system auto-synthesizes detailed content from submitted candidates for Skill generation.',
     inputSchema: zodToMcpSchema(DimensionCompleteInput),
-  },
-
-  // 12. Wiki Documentation Generation
-  {
-    name: 'alembic_wiki',
-    tier: 'agent',
-    description:
-      'Wiki documentation generation.\n' +
-      '• plan — plan topics + data packages (integrates project structure and knowledge base; returns topic list + per-topic data package for Agent to write)\n' +
-      '• finalize — complete generation (write meta.json, dedup check, validate completeness; call after all articles are written)',
-    inputSchema: zodToMcpSchema(WikiInput),
   },
 
   // 13. Project Panorama
