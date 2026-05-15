@@ -8,15 +8,13 @@
 
 import type { FileChangeDispatcher } from '../FileChangeDispatcher.js';
 import { CodeChangeMonitor } from './code-change-monitor/CodeChangeMonitor.js';
+import type { CodeChangeMonitorTuningOptions } from './code-change-monitor/CodeChangeMonitorConfig.js';
 import type { CodeChangeMonitorStatus } from './code-change-monitor/CodeChangeMonitorStatus.js';
 
-export interface DaemonFileChangeCollectorOptions {
+export interface DaemonFileChangeCollectorOptions extends CodeChangeMonitorTuningOptions {
   dispatcher: FileChangeDispatcher;
-  eventReconcileDelayMs?: number;
-  intervalMs?: number;
   logger?: ConstructorParameters<typeof CodeChangeMonitor>[0]['logger'];
   projectRoot: string;
-  watcherReadyTimeoutMs?: number;
 }
 
 export class DaemonFileChangeCollector {
@@ -24,12 +22,15 @@ export class DaemonFileChangeCollector {
 
   constructor(options: DaemonFileChangeCollectorOptions) {
     this.#monitor = new CodeChangeMonitor({
+      dispatchDebounceMs: options.dispatchDebounceMs,
+      dispatchMaxBatchSize: options.dispatchMaxBatchSize,
       dispatcher: options.dispatcher,
-      eventReconcileDelayMs: options.eventReconcileDelayMs,
+      eventDedupeCooldownMs: options.eventDedupeCooldownMs,
+      gitPollIntervalMs: options.gitPollIntervalMs,
       logger: options.logger,
       projectRoot: options.projectRoot,
-      reconcileIntervalMs: options.intervalMs,
       watcherReadyTimeoutMs: options.watcherReadyTimeoutMs,
+      watchSettleMs: options.watchSettleMs,
     });
   }
 

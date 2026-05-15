@@ -14,22 +14,27 @@ type TimerHandle = ReturnType<typeof setTimeout>;
 export interface FileChangeEventBufferOptions {
   debounceMs?: number;
   dispatch: (events: FileChangeEvent[]) => Promise<ReactiveEvolutionReport>;
+  eventDedupeCooldownMs?: number;
   ignorePath?: (filePath: string) => boolean;
   logger?: Pick<AppLogger, 'warn'>;
   maxBatchSize?: number;
-  modifiedCooldownMs?: number;
   onDispatchError?: (error: Error) => void;
+}
+
+export interface FileChangeEventBufferPushOptions {
+  bypassCooldown?: boolean;
 }
 
 export class FileChangeEventBuffer {
   readonly #debounceMs: number;
   readonly #dispatch: (events: FileChangeEvent[]) => Promise<ReactiveEvolutionReport>;
+  readonly #eventDedupeCooldownMs: number;
   readonly #ignorePath: (filePath: string) => boolean;
   readonly #logger: Pick<AppLogger, 'warn'>;
   readonly #maxBatchSize: number;
-  readonly #modifiedCooldownMs: number;
   readonly #onDispatchError: (error: Error) => void;
   readonly #pending = new Map<string, FileChangeEvent>();
+  readonly #lastDispatchedEvent = new Map<string, number>();
   readonly #lastModifiedFlush = new Map<string, number>();
 
   #disposed = false;
@@ -45,14 +50,14 @@ export class FileChangeEventBuffer {
   constructor(options: FileChangeEventBufferOptions) {
     this.#debounceMs = normalizePositiveInt(options.debounceMs, 3000);
     this.#dispatch = options.dispatch;
+    this.#eventDedupeCooldownMs = normalizePositiveInt(options.eventDedupeCooldownMs, 30_000);
     this.#ignorePath = options.ignorePath ?? (() => false);
     this.#logger = options.logger ?? Logger.getInstance();
     this.#maxBatchSize = normalizePositiveInt(options.maxBatchSize, 500);
-    this.#modifiedCooldownMs = normalizePositiveInt(options.modifiedCooldownMs, 30_000);
     this.#onDispatchError = options.onDispatchError ?? (() => {});
   }
 
-  push(rawEvent: FileChangeEvent): void {
+  push(rawEvent: FileChangeEvent, options: FileChangeEventBufferPushOptions = {}): void {
     if (this.#disposed) {
       return;
     }
@@ -62,10 +67,19 @@ export class FileChangeEventBuffer {
     }
 
     const pathKey = event.type === 'renamed' ? (event.oldPath ?? event.path) : event.path;
-    if (event.type === 'modified') {
-      const now = Date.now();
+    const key = eventKey(event);
+    const now = Date.now();
+    if (!options.bypassCooldown) {
+      this.#forgetOppositeEventCooldown(event);
+      const lastDispatchedAt = this.#lastDispatchedEvent.get(key);
+      if (lastDispatchedAt && now - lastDispatchedAt < this.#eventDedupeCooldownMs) {
+        return;
+      }
+    }
+
+    if (!options.bypassCooldown && event.type === 'modified') {
       const lastTime = this.#lastModifiedFlush.get(pathKey);
-      if (lastTime && now - lastTime < this.#modifiedCooldownMs) {
+      if (lastTime && now - lastTime < this.#eventDedupeCooldownMs) {
         return;
       }
       this.#lastModifiedFlush.set(pathKey, now);
@@ -83,7 +97,6 @@ export class FileChangeEventBuffer {
       }
     }
 
-    const key = eventKey(event);
     const existingSameType = this.#pending.get(key);
     if (existingSameType && hasHigherSourcePriority(existingSameType, event)) {
       return;
@@ -157,6 +170,7 @@ export class FileChangeEventBuffer {
 
     const truncated = allEvents.length > this.#maxBatchSize;
     const events = truncated ? allEvents.slice(0, this.#maxBatchSize) : allEvents;
+    const overflowEvents = truncated ? allEvents.slice(this.#maxBatchSize) : [];
     if (truncated) {
       this.#logger.warn('[code-change-monitor] file change batch truncated', {
         maxBatchSize: this.#maxBatchSize,
@@ -172,6 +186,11 @@ export class FileChangeEventBuffer {
         source: report.eventSource ?? inferBatchSource(events) ?? null,
         truncated,
       };
+      this.#rememberDispatchedEvents(events);
+      if (overflowEvents.length > 0 && !this.#disposed) {
+        this.#restorePending(overflowEvents);
+        this.#scheduleFlush();
+      }
     } catch (error: unknown) {
       const dispatchError = error instanceof Error ? error : new Error(String(error));
       this.#logger.warn('[code-change-monitor] dispatch failed; file changes will retry', {
@@ -181,8 +200,35 @@ export class FileChangeEventBuffer {
       this.#onDispatchError(dispatchError);
       if (!this.#disposed) {
         this.#restorePending(events);
+        this.#restorePending(overflowEvents);
         this.#scheduleFlush();
       }
+    }
+  }
+
+  #rememberDispatchedEvents(events: FileChangeEvent[]): void {
+    const now = Date.now();
+    for (const event of events) {
+      this.#lastDispatchedEvent.set(eventKey(event), now);
+    }
+    for (const [key, dispatchedAt] of this.#lastDispatchedEvent) {
+      if (now - dispatchedAt > this.#eventDedupeCooldownMs) {
+        this.#lastDispatchedEvent.delete(key);
+      }
+    }
+    for (const [key, modifiedAt] of this.#lastModifiedFlush) {
+      if (now - modifiedAt > this.#eventDedupeCooldownMs) {
+        this.#lastModifiedFlush.delete(key);
+      }
+    }
+  }
+
+  #forgetOppositeEventCooldown(event: FileChangeEvent): void {
+    if (event.type === 'created') {
+      this.#lastDispatchedEvent.delete(`deleted:${event.path}`);
+    }
+    if (event.type === 'deleted') {
+      this.#lastDispatchedEvent.delete(`created:${event.path}`);
     }
   }
 

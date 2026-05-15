@@ -25,6 +25,10 @@ export interface GitWorktreeScanResult {
   headChanged: boolean;
 }
 
+export interface GitWorktreeScanOptions {
+  forcePaths?: string[];
+}
+
 interface WorktreeSnapshot {
   eventsByKey: Map<string, FileChangeEvent>;
   keys: Set<string>;
@@ -54,7 +58,10 @@ export class GitWorktreeReconciler {
     this.#projectRoot = options.projectRoot;
   }
 
-  async scanOnce(now = Date.now()): Promise<GitWorktreeScanResult> {
+  async scanOnce(
+    now = Date.now(),
+    options: GitWorktreeScanOptions = {}
+  ): Promise<GitWorktreeScanResult> {
     const scannedAt = new Date(now).toISOString();
     try {
       const isWorktree =
@@ -77,6 +84,7 @@ export class GitWorktreeReconciler {
             events.push(event);
           }
         }
+        events.push(...selectForcedPathEvents(snapshot.eventsByKey, options.forcePaths));
       }
 
       const headChanged =
@@ -236,6 +244,22 @@ function filterEvents(events: FileChangeEvent[]): FileChangeEvent[] {
     filtered.push(event);
   }
   return filtered;
+}
+
+function selectForcedPathEvents(
+  eventsByKey: Map<string, FileChangeEvent>,
+  forcePaths: string[] | undefined
+): FileChangeEvent[] {
+  const forcedPaths = new Set(
+    (forcePaths ?? []).map(normalizeProjectRelativePath).filter(isDispatchablePath)
+  );
+  if (forcedPaths.size === 0) {
+    return [];
+  }
+
+  return [...eventsByKey.values()].filter((event) => {
+    return forcedPaths.has(event.path) || Boolean(event.oldPath && forcedPaths.has(event.oldPath));
+  });
 }
 
 function isDispatchablePath(filePath: string): boolean {

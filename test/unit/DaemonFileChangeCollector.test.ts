@@ -85,7 +85,7 @@ function createCollector(repo: string) {
   const collector = new DaemonFileChangeCollector({
     projectRoot: repo,
     dispatcher,
-    intervalMs: 999_999,
+    gitPollIntervalMs: 999_999,
     logger: {
       debug: vi.fn(),
       info: vi.fn(),

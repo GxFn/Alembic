@@ -19,7 +19,10 @@ import {
 import HttpServer from '../lib/http/HttpServer.js';
 import Logger from '../lib/infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
-import { createInactiveMonitorStatus } from '../lib/service/evolution/code-change-monitor/index.js';
+import {
+  type CodeChangeMonitorTuningOptions,
+  createInactiveMonitorStatus,
+} from '../lib/service/evolution/code-change-monitor/index.js';
 import { DaemonFileChangeCollector } from '../lib/service/evolution/DaemonFileChangeCollector.js';
 import { DASHBOARD_DIR } from '../lib/shared/package-root.js';
 import { shutdown } from '../lib/shared/shutdown.js';
@@ -184,12 +187,62 @@ async function startDaemonFileChangeCollector(options: {
   const collector = new DaemonFileChangeCollector({
     projectRoot: options.projectRoot,
     dispatcher,
-    intervalMs: Number.parseInt(process.env.ALEMBIC_DAEMON_FILE_CHANGE_INTERVAL_MS || '', 10),
     logger: options.logger,
+    ...readDaemonFileChangeTuningEnv(),
   });
   options.container.singletons.codeChangeMonitor = collector;
   await collector.start();
   return collector;
+}
+
+function readDaemonFileChangeTuningEnv(): CodeChangeMonitorTuningOptions {
+  const tuning: CodeChangeMonitorTuningOptions = {};
+  setPositiveIntEnv(tuning, 'dispatchDebounceMs', 'ALEMBIC_DAEMON_DISPATCH_DEBOUNCE_MS');
+  setPositiveIntEnv(tuning, 'dispatchMaxBatchSize', 'ALEMBIC_DAEMON_DISPATCH_MAX_BATCH_SIZE');
+  setPositiveIntEnv(tuning, 'eventDedupeCooldownMs', 'ALEMBIC_DAEMON_EVENT_DEDUPE_COOLDOWN_MS');
+  setPositiveIntEnv(tuning, 'gitPollIntervalMs', 'ALEMBIC_DAEMON_GIT_POLL_INTERVAL_MS');
+  setBooleanEnv(tuning, 'watcherFallbackToPolling', 'ALEMBIC_DAEMON_WATCHER_FALLBACK_TO_POLLING');
+  setPositiveIntEnv(
+    tuning,
+    'watcherPollingIntervalMs',
+    'ALEMBIC_DAEMON_WATCHER_POLLING_INTERVAL_MS'
+  );
+  setPositiveIntEnv(tuning, 'watcherReadyTimeoutMs', 'ALEMBIC_DAEMON_WATCHER_READY_TIMEOUT_MS');
+  setBooleanEnv(tuning, 'watcherUsePolling', 'ALEMBIC_DAEMON_WATCHER_USE_POLLING');
+  setPositiveIntEnv(tuning, 'watchSettleMs', 'ALEMBIC_DAEMON_WATCH_SETTLE_MS');
+  return tuning;
+}
+
+function setBooleanEnv(
+  tuning: CodeChangeMonitorTuningOptions,
+  key: 'watcherFallbackToPolling' | 'watcherUsePolling',
+  envName: string
+): void {
+  const value = process.env[envName];
+  if (value === '1' || value === 'true') {
+    tuning[key] = true;
+  }
+  if (value === '0' || value === 'false') {
+    tuning[key] = false;
+  }
+}
+
+function setPositiveIntEnv(
+  tuning: CodeChangeMonitorTuningOptions,
+  key:
+    | 'dispatchDebounceMs'
+    | 'dispatchMaxBatchSize'
+    | 'eventDedupeCooldownMs'
+    | 'gitPollIntervalMs'
+    | 'watcherPollingIntervalMs'
+    | 'watcherReadyTimeoutMs'
+    | 'watchSettleMs',
+  envName: string
+): void {
+  const value = Number.parseInt(process.env[envName] || '', 10);
+  if (Number.isFinite(value) && value > 0) {
+    tuning[key] = value;
+  }
 }
 
 function resolveBoundDaemonPort(httpServer: HttpServer, requestedPort: number): number {

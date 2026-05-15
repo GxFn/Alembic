@@ -1,6 +1,8 @@
+import { realpathSync } from 'node:fs';
 import chokidar, { type FSWatcher } from 'chokidar';
 import Logger from '../../../infrastructure/logging/Logger.js';
 import type { FileChangeEvent } from '../../../types/reactive-evolution.js';
+import { DEFAULT_CODE_CHANGE_MONITOR_TUNING } from './CodeChangeMonitorConfig.js';
 import type { CodeChangeWatcherStatus } from './CodeChangeMonitorStatus.js';
 import {
   isSafeProjectRelativePath,
@@ -9,38 +11,60 @@ import {
   toProjectRelativePath,
 } from './ProjectWatchIgnore.js';
 
-const WATCHER_READY_TIMEOUT_MS = 5000;
-
 type AppLogger = ReturnType<typeof Logger.getInstance>;
 
 export interface ChokidarProjectWatcherOptions {
+  fallbackToPolling?: boolean;
   logger?: Pick<AppLogger, 'warn'>;
+  onError?: (error: Error) => void;
   onEvent: (event: FileChangeEvent) => void;
+  pollingIntervalMs?: number;
   projectRoot: string;
   readyTimeoutMs?: number;
+  usePolling?: boolean;
 }
 
 export class ChokidarProjectWatcher {
   readonly #logger: Pick<AppLogger, 'warn'>;
+  readonly #canonicalProjectRoot: string;
+  readonly #fallbackToPolling: boolean;
+  readonly #onError: (error: Error) => void;
   readonly #onEvent: (event: FileChangeEvent) => void;
+  readonly #pollingIntervalMs: number;
   readonly #projectRoot: string;
   readonly #readyTimeoutMs: number;
 
+  #fallbackInProgress = false;
+  #lastNativeResourceError: Error | null = null;
+  #mode: CodeChangeWatcherStatus['mode'];
   #status: CodeChangeWatcherStatus = {
     backend: 'chokidar',
     healthy: false,
     lastError: null,
     lastEventAt: null,
+    mode: 'native',
     ready: false,
     watchedDirectoryCount: 0,
   };
   #watcher: FSWatcher | null = null;
 
   constructor(options: ChokidarProjectWatcherOptions) {
+    this.#fallbackToPolling =
+      options.fallbackToPolling ?? DEFAULT_CODE_CHANGE_MONITOR_TUNING.watcherFallbackToPolling;
     this.#logger = options.logger ?? Logger.getInstance();
+    this.#onError = options.onError ?? (() => {});
     this.#onEvent = options.onEvent;
+    this.#pollingIntervalMs =
+      options.pollingIntervalMs ?? DEFAULT_CODE_CHANGE_MONITOR_TUNING.watcherPollingIntervalMs;
     this.#projectRoot = options.projectRoot;
-    this.#readyTimeoutMs = options.readyTimeoutMs ?? WATCHER_READY_TIMEOUT_MS;
+    this.#canonicalProjectRoot = safeRealpath(options.projectRoot);
+    this.#readyTimeoutMs =
+      options.readyTimeoutMs ?? DEFAULT_CODE_CHANGE_MONITOR_TUNING.watcherReadyTimeoutMs;
+    this.#mode = options.usePolling ? 'polling' : 'native';
+    this.#status = {
+      ...this.#status,
+      mode: this.#mode,
+    };
   }
 
   async start(): Promise<void> {
@@ -48,6 +72,15 @@ export class ChokidarProjectWatcher {
       return;
     }
 
+    await this.#startMode(this.#mode);
+    if (this.#shouldFallbackToPolling()) {
+      await this.#restartWithPolling();
+    }
+  }
+
+  async #startMode(mode: CodeChangeWatcherStatus['mode']): Promise<void> {
+    this.#lastNativeResourceError = null;
+    this.#mode = mode;
     const watcher = chokidar.watch('.', {
       atomic: true,
       awaitWriteFinish: {
@@ -56,18 +89,35 @@ export class ChokidarProjectWatcher {
       },
       cwd: this.#projectRoot,
       ignoreInitial: true,
-      ignored: (filePath) =>
-        shouldIgnoreProjectPath(toProjectRelativePath(filePath, this.#projectRoot)),
+      ignored: (filePath) => shouldIgnoreProjectPath(this.#toRelativePath(filePath)),
+      interval: this.#pollingIntervalMs,
       persistent: true,
+      usePolling: mode === 'polling',
     });
     this.#watcher = watcher;
+    this.#status = {
+      ...this.#status,
+      healthy: false,
+      lastError: null,
+      mode,
+      ready: false,
+      watchedDirectoryCount: 0,
+    };
 
     watcher.on('all', (eventName, filePath) => {
       this.#handleEvent(eventName, filePath);
     });
     watcher.on('error', (error) => {
-      const message = error instanceof Error ? error.message : String(error);
+      const normalizedError = error instanceof Error ? error : new Error(String(error));
+      const message = normalizedError.message;
       this.#logger.warn('[code-change-monitor] chokidar watcher error', { error: message });
+      this.#onError(normalizedError);
+      if (mode === 'native' && isWatcherResourceLimitError(normalizedError)) {
+        this.#lastNativeResourceError = normalizedError;
+        if (this.#status.ready) {
+          void this.#restartWithPolling();
+        }
+      }
       this.#status = {
         ...this.#status,
         healthy: false,
@@ -79,6 +129,7 @@ export class ChokidarProjectWatcher {
         ...this.#status,
         healthy: true,
         lastError: null,
+        mode,
         ready: true,
         watchedDirectoryCount: countWatchedDirectories(watcher),
       };
@@ -110,14 +161,41 @@ export class ChokidarProjectWatcher {
     };
   }
 
+  #shouldFallbackToPolling(): boolean {
+    return (
+      this.#mode === 'native' && this.#fallbackToPolling && Boolean(this.#lastNativeResourceError)
+    );
+  }
+
+  async #restartWithPolling(): Promise<void> {
+    if (!this.#shouldFallbackToPolling() || this.#fallbackInProgress) {
+      return;
+    }
+    this.#fallbackInProgress = true;
+    const previousError = this.#lastNativeResourceError;
+    this.#logger.warn('[code-change-monitor] falling back to chokidar polling watcher', {
+      error: previousError?.message ?? 'native watcher unavailable',
+      pollingIntervalMs: this.#pollingIntervalMs,
+    });
+    const watcher = this.#watcher;
+    this.#watcher = null;
+    try {
+      if (watcher) {
+        await watcher.close();
+      }
+      this.#lastNativeResourceError = null;
+      await this.#startMode('polling');
+    } finally {
+      this.#fallbackInProgress = false;
+    }
+  }
+
   #handleEvent(eventName: string, rawPath: string): void {
     const type = mapChokidarEvent(eventName);
     if (!type) {
       return;
     }
-    const filePath = normalizeProjectRelativePath(
-      toProjectRelativePath(rawPath, this.#projectRoot)
-    );
+    const filePath = normalizeProjectRelativePath(this.#toRelativePath(rawPath));
     if (!isSafeProjectRelativePath(filePath) || shouldIgnoreProjectPath(filePath)) {
       return;
     }
@@ -130,6 +208,14 @@ export class ChokidarProjectWatcher {
       path: filePath,
       type,
     });
+  }
+
+  #toRelativePath(filePath: string): string {
+    const relativePath = toProjectRelativePath(filePath, this.#projectRoot);
+    if (isSafeProjectRelativePath(relativePath)) {
+      return relativePath;
+    }
+    return toProjectRelativePath(filePath, this.#canonicalProjectRoot);
   }
 
   async #waitUntilReady(): Promise<void> {
@@ -174,4 +260,17 @@ function mapChokidarEvent(eventName: string): FileChangeEvent['type'] | null {
 
 function countWatchedDirectories(watcher: FSWatcher): number {
   return Object.keys(watcher.getWatched()).length;
+}
+
+function safeRealpath(filePath: string): string {
+  try {
+    return realpathSync.native(filePath);
+  } catch {
+    return filePath;
+  }
+}
+
+function isWatcherResourceLimitError(error: Error): boolean {
+  const code = (error as { code?: unknown }).code;
+  return code === 'EMFILE' || code === 'ENOSPC';
 }
