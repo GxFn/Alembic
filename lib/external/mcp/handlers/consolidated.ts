@@ -149,7 +149,6 @@ export async function consolidatedGraph(ctx: McpContext, args: ConsolidatedGraph
 
 /**
  * Guard 检查：按参数自动路由
- *   operation: 'reverse_audit'      → guardReverseAudit()     (Recipe→Code 反向验证)
  *   operation: 'coverage_matrix'    → guardCoverageMatrix()    (模块覆盖率矩阵)
  *   operation: 'compliance_report'  → guardComplianceReport()  (3D 合规报告)
  *   无参数       → guardReview()    (自动 git diff 检测 + inline recipe)
@@ -158,9 +157,6 @@ export async function consolidatedGraph(ctx: McpContext, args: ConsolidatedGraph
  */
 export async function consolidatedGuard(ctx: McpContext, args: ConsolidatedGuardArgs) {
   // operation 显式路由
-  if (args.operation === 'reverse_audit') {
-    return guardHandlers.guardReverseAudit(ctx, args);
-  }
   if (args.operation === 'coverage_matrix') {
     return guardHandlers.guardCoverageMatrix(ctx, args);
   }

@@ -1,11 +1,10 @@
 /**
  * DecayDetector — 知识衰退检测 + 评分
  *
- * 6 种衰退检测策略（任一满足即触发 decaying 转换）：
+ * 5 种衰退检测策略（任一满足即触发 decaying 转换）：
  *   1. daysSinceLastHit > 90 — 90 天无使用
  *   2. ruleFalsePositiveRate > 0.4 && triggers > 10 — 规则已不准
- *   3. ReverseGuard: coreCode 引用的 API 符号已删除
- *   3b. SourceRefReconciler: 来源文件路径失效（recipe_source_refs.status = stale）
+ *   3. SourceRefReconciler: 来源文件路径失效（recipe_source_refs.status = stale）
  *   4. 同域新 Recipe 发布且 deprecated_by 关系指向它
  *   5. 矛盾检测: Agent 在 evolve 流程中语义判断
  *
@@ -19,9 +18,6 @@
  *   0-19:   死亡 → 跳过确认直接 deprecated
  */
 
-import { and, like, sql } from 'drizzle-orm';
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
-import { auditLogs } from '../../infrastructure/database/drizzle/schema.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
@@ -37,7 +33,6 @@ export interface DecaySignal {
 export type DecayStrategy =
   | 'no_recent_usage'
   | 'high_false_positive'
-  | 'symbol_drift'
   | 'source_ref_stale'
   | 'superseded'
   | 'contradiction';
@@ -107,7 +102,6 @@ export class DecayDetector {
   #knowledgeRepo: KnowledgeRepositoryImpl;
   #edgeRepo: KnowledgeEdgeRepositoryImpl | null;
   #sourceRefRepo: RecipeSourceRefRepositoryImpl | null;
-  #drizzle: DrizzleDB | null;
   #signalBus: SignalBus | null;
   #logger = Logger.getInstance();
 
@@ -117,13 +111,11 @@ export class DecayDetector {
       signalBus?: SignalBus;
       knowledgeEdgeRepo?: KnowledgeEdgeRepositoryImpl;
       sourceRefRepo?: RecipeSourceRefRepositoryImpl;
-      drizzle?: DrizzleDB;
     } = {}
   ) {
     this.#knowledgeRepo = knowledgeRepo;
     this.#edgeRepo = options.knowledgeEdgeRepo ?? null;
     this.#sourceRefRepo = options.sourceRefRepo ?? null;
-    this.#drizzle = options.drizzle ?? null;
     this.#signalBus = options.signalBus ?? null;
   }
 
@@ -207,16 +199,7 @@ export class DecayDetector {
       });
     }
 
-    // 策略 3: 符号漂移（由 ReverseGuard 提供，此处从 DB 查 drift 标记）
-    if (await this.#hasSymbolDrift(recipe.id)) {
-      signals.push({
-        recipeId: recipe.id,
-        strategy: 'symbol_drift',
-        detail: 'ReverseGuard detected symbol drift in coreCode',
-      });
-    }
-
-    // 策略 3b: 来源引用失效（由 SourceRefReconciler 填充 recipe_source_refs）
+    // 策略 3: 来源引用失效（由 SourceRefReconciler 填充 recipe_source_refs）
     const staleRefCount = await this.#getStaleSourceRefCount(recipe.id);
     if (staleRefCount > 0) {
       signals.push({
@@ -341,28 +324,6 @@ export class DecayDetector {
     const authority = Math.min(1, authorityRaw / 100);
 
     return { freshness, usage, quality, authority };
-  }
-
-  async #hasSymbolDrift(recipeId: string): Promise<boolean> {
-    try {
-      if (!this.#drizzle) {
-        return false;
-      }
-      const row = this.#drizzle
-        .select({ id: auditLogs.id })
-        .from(auditLogs)
-        .where(
-          and(
-            like(auditLogs.action, '%ReverseGuard%'),
-            sql`json_extract(${auditLogs.operationData}, '$.target') = ${recipeId}`
-          )
-        )
-        .limit(1)
-        .get();
-      return !!row;
-    } catch {
-      return false;
-    }
   }
 
   async #getStaleSourceRefCount(recipeId: string): Promise<number> {

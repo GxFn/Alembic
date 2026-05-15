@@ -254,11 +254,6 @@ export function register(c: ServiceContainer) {
       sourceRefRepo: ct.services.recipeSourceRefRepository
         ? (ct.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl)
         : undefined,
-      drizzle: (
-        ct.get('database') as unknown as {
-          getDrizzle(): import('../../infrastructure/database/drizzle/index.js').DrizzleDB;
-        }
-      ).getDrizzle(),
     });
   });
 

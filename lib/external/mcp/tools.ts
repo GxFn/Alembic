@@ -327,7 +327,6 @@ export const TOOLS = [
       '• no params → auto-check git diff incremental files (preferred after coding)\n' +
       '• files → check specified file list\n' +
       '• code → inline check code snippet\n' +
-      '• operation: "reverse_audit" → Recipe→Code reverse validation (check if knowledge is outdated)\n' +
       '• operation: "coverage_matrix" → module-level Guard rule coverage matrix\n' +
       'Each violation includes a fix guide (doClause + coreCode). Fix accordingly and re-check.',
     inputSchema: zodToMcpSchema(GuardInput),

@@ -749,49 +749,6 @@ export class KnowledgeRepositoryImpl {
   }
 
   /**
-   * 活跃规则 + content 中的 coreCode / pattern 字段 + stats
-   * (ReverseGuard.#loadActiveRules)
-   */
-  findActiveRulesWithContentSync(): Array<{
-    id: string;
-    title: string;
-    coreCode: string;
-    guardPattern: string;
-    stats: string | null;
-  }> {
-    return this.#drizzle
-      .select({
-        id: knowledgeEntries.id,
-        title: knowledgeEntries.title,
-        coreCode: sql<string>`json_extract(${knowledgeEntries.content}, '$.coreCode')`.as(
-          'coreCode'
-        ),
-        guardPattern: sql<string>`json_extract(${knowledgeEntries.content}, '$.pattern')`.as(
-          'guardPattern'
-        ),
-        stats: knowledgeEntries.stats,
-      })
-      .from(knowledgeEntries)
-      .where(and(eq(knowledgeEntries.lifecycle, 'active'), eq(knowledgeEntries.kind, 'rule')))
-      .all();
-  }
-
-  /**
-   * 获取单条记录的 guardHits 数
-   * (ReverseGuard.#historicalGuardHits)
-   */
-  getGuardHitsSync(id: string): number {
-    const row = this.#drizzle
-      .select({
-        hits: sql<number>`json_extract(${knowledgeEntries.stats}, '$.guardHits')`.as('hits'),
-      })
-      .from(knowledgeEntries)
-      .where(eq(knowledgeEntries.id, id))
-      .get();
-    return Number(row?.hits ?? 0);
-  }
-
-  /**
    * 活跃规则的 id + language (CoverageAnalyzer.#loadActiveRules) — sync
    */
   findActiveRuleIdsSync(): Array<{ id: string; language: string }> {

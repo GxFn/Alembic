@@ -138,16 +138,16 @@ export type CallContextInput = z.infer<typeof CallContextInput>;
 
 export const GuardInput = z.object({
   operation: z
-    .enum(['check', 'review', 'reverse_audit', 'coverage_matrix', 'compliance_report'])
+    .enum(['check', 'review', 'coverage_matrix', 'compliance_report'])
     .optional()
     .describe(
-      'Guard 操作类型。reverse_audit: Recipe→Code 反向验证；coverage_matrix: 模块覆盖率矩阵；compliance_report: 3D 合规报告（含 uncertain）。省略则按 code/files 自动路由。'
+      'Guard 操作类型。coverage_matrix: 模块覆盖率矩阵；compliance_report: 3D 合规报告（含 uncertain）。省略则按 code/files 自动路由。'
     ),
   files: z.array(z.string()).optional(),
   code: z.string().optional(),
   language: z.string().optional(),
   filePath: z.string().optional(),
-  maxFiles: z.number().optional().describe('reverse_audit/coverage_matrix 时扫描的最大文件数'),
+  maxFiles: z.number().optional().describe('coverage_matrix 时扫描的最大文件数'),
 });
 export type GuardInput = z.infer<typeof GuardInput>;
 

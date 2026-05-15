@@ -166,7 +166,7 @@
 - **统一进化架构 Phase 0-4**：五个阶段完整实施，从"知识工具"进化为"知识有机体"
   - **Phase 0 — Signal Bus**：统一信号总线（9 种信号类型）+ HitRecorder 批量采集（30s buffer） + Stats 扩展（时间戳×3 + 滑窗×3 + version + FP率）
   - **Phase 1 — Panorama**：项目全景——AST 角色精化、Tarjan SCC 耦合分析、Kahn 拓扑分层、知识覆盖率热力图、能力缺口报告；MCP 工具 `autosnippet_panorama` 4 操作
-  - **Phase 2 — Guard 免疫系统**：三态输出（pass/violation/uncertain）、三维报告（合规度+覆盖率+置信度）、ReverseGuard 反向验证、CoverageAnalyzer 覆盖矩阵
+  - **Phase 2 — Guard 免疫系统**：三态输出（pass/violation/uncertain）、三维报告（合规度+覆盖率+置信度）、CoverageAnalyzer 覆盖矩阵
   - **Phase 3 — 知识治理**：六态生命周期（staging/evolving/decaying 三个系统驱动中间态）、ContradictionDetector 矛盾检测、RedundancyAnalyzer 冗余分析、DecayDetector + DecayScorer 衰退评估、KnowledgeMetabolism 治理总线
   - **Phase 4 — Tool Forge**：动态工具锻造——复用/组合/生成三模式、SandboxRunner 沙箱验证、TemporaryToolRegistry TTL 临时注册、DynamicComposer 运行时组合；ToolExecutionPipeline allowlistGate Forge fallback 集成
 
