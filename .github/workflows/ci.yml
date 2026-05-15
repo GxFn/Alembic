@@ -11,7 +11,7 @@ on:
     branches: [main, master]
 
 env:
-  API_BASE: http://localhost:3100/api/v1
+  API_BASE: http://127.0.0.1:3100/api/v1
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   NODE_ENV: test
 
@@ -55,8 +55,13 @@ jobs:
 
       - name: Start API Server
         run: |
-          ASD_SKIP_ENTRY_CHECK=1 ASD_DISABLE_WRITE_GUARD=1 ASD_DISABLE_RATE_LIMIT=1 \
-            npm run dashboard -- --port 3100 --no-open > /tmp/api-server.log 2>&1 &
+          ALEMBIC_PROJECT_DIR="$GITHUB_WORKSPACE" \
+            ALEMBIC_DAEMON_HOST=127.0.0.1 \
+            ALEMBIC_DAEMON_PORT=3100 \
+            ASD_SKIP_ENTRY_CHECK=1 \
+            ASD_DISABLE_WRITE_GUARD=1 \
+            ASD_DISABLE_RATE_LIMIT=1 \
+            node dist/bin/daemon-server.js > /tmp/api-server.log 2>&1 &
           echo "PID=$!" >> $GITHUB_ENV
           sleep 2
 
@@ -83,11 +88,11 @@ jobs:
         run: |
           curl -sf $API_BASE/health/ready | jq -e '.ready == true'
 
-      - name: Root endpoint
+      - name: API spec endpoint
         run: |
-          ROOT=$(curl -sf $API_BASE/../..)
-          echo "$ROOT" | jq .
-          echo "$ROOT" | jq -e '.name == "Alembic API"'
+          SPEC=$(curl -sf http://127.0.0.1:3100/api-spec)
+          echo "$SPEC" | jq .
+          echo "$SPEC" | jq -e '.info.title == "Alembic API"'
 
       - name: Knowledge listing
         run: |
