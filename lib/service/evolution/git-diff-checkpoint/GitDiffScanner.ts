@@ -1,97 +1,92 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFile, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import Logger from '../../../infrastructure/logging/Logger.js';
 import type { FileChangeEvent, FileChangeEventSource } from '../../../types/reactive-evolution.js';
-import type { CodeChangeReconcilerStatus } from './CodeChangeMonitorStatus.js';
+import type { GitDiffScanStatus } from './GitDiffCheckpointStatus.js';
 import {
   isSafeProjectRelativePath,
   normalizeProjectRelativePath,
   shouldIgnoreProjectPath,
-} from './ProjectWatchIgnore.js';
+} from './ProjectDiffIgnore.js';
 
 const GIT_TIMEOUT_MS = 5000;
 
 type AppLogger = ReturnType<typeof Logger.getInstance>;
 
-export interface GitWorktreeReconcilerOptions {
+export interface GitDiffScannerOptions {
   execGit?: (args: string[], cwd: string) => Promise<string>;
   logger?: Pick<AppLogger, 'warn'>;
   projectRoot: string;
 }
 
-export interface GitWorktreeScanResult {
-  baseline: boolean;
-  dirtyPathCount: number;
-  events: FileChangeEvent[];
-  headChanged: boolean;
+export interface GitDiffScanOptions {
+  previousHead?: string | null;
 }
 
-export interface GitWorktreeScanOptions {
-  forcePaths?: string[];
+export interface GitDiffScanResult {
+  dirtyPathCount: number;
+  events: FileChangeEvent[];
+  head: string | null;
+  headChanged: boolean;
+  scanned: boolean;
+  scannedAt: string;
+  signature: string | null;
 }
 
 interface WorktreeSnapshot {
   eventsByKey: Map<string, FileChangeEvent>;
   keys: Set<string>;
+  signature: string;
 }
 
-export class GitWorktreeReconciler {
+export class GitDiffScanner {
   readonly #execGit: (args: string[], cwd: string) => Promise<string>;
   readonly #logger: Pick<AppLogger, 'warn'>;
   readonly #projectRoot: string;
 
-  #lastHead: string | null = null;
-  #lastKeys: Set<string> | null = null;
-  #status: CodeChangeReconcilerStatus = {
+  #status: GitDiffScanStatus = {
     backend: 'git',
-    baselineReady: false,
     dirtyPathCount: 0,
     healthy: false,
     lastError: null,
     lastEventCount: 0,
     lastHead: null,
     lastScanAt: null,
+    lastSignature: null,
   };
 
-  constructor(options: GitWorktreeReconcilerOptions) {
+  constructor(options: GitDiffScannerOptions) {
     this.#execGit = options.execGit ?? execGit;
     this.#logger = options.logger ?? Logger.getInstance();
     this.#projectRoot = options.projectRoot;
   }
 
-  async scanOnce(
-    now = Date.now(),
-    options: GitWorktreeScanOptions = {}
-  ): Promise<GitWorktreeScanResult> {
+  async scanOnce(now = Date.now(), options: GitDiffScanOptions = {}): Promise<GitDiffScanResult> {
     const scannedAt = new Date(now).toISOString();
     try {
       const isWorktree =
-        (await this.#execGit(['rev-parse', '--is-inside-work-tree'], this.#projectRoot)) === 'true';
+        (await this.#execGit(['rev-parse', '--is-inside-work-tree'], this.#projectRoot)).trim() ===
+        'true';
       if (!isWorktree) {
         this.#markUnavailable(scannedAt, 'project is not a git worktree');
-        return { baseline: false, dirtyPathCount: 0, events: [], headChanged: false };
+        return emptyResult(scannedAt);
       }
 
       const currentHead = normalizeHead(
         await this.#execGit(['rev-parse', 'HEAD'], this.#projectRoot)
       );
-      const snapshot = await this.#collectSnapshot();
-      const baseline = this.#lastKeys === null;
-      const events: FileChangeEvent[] = [];
-
-      if (!baseline) {
-        for (const [key, event] of snapshot.eventsByKey) {
-          if (!this.#lastKeys?.has(key)) {
-            events.push(event);
-          }
-        }
-        events.push(...selectForcedPathEvents(snapshot.eventsByKey, options.forcePaths));
-      }
-
+      const snapshot = await this.#collectSnapshot(currentHead);
+      const events: FileChangeEvent[] = [...snapshot.eventsByKey.values()];
       const headChanged =
-        Boolean(this.#lastHead) && Boolean(currentHead) && this.#lastHead !== currentHead;
-      if (headChanged && this.#lastHead && currentHead) {
+        Boolean(options.previousHead) &&
+        Boolean(currentHead) &&
+        options.previousHead !== currentHead;
+
+      if (headChanged && options.previousHead && currentHead) {
         const headDiff = await this.#execGit(
-          ['diff', '--name-status', `${this.#lastHead}..${currentHead}`],
+          ['diff', '--name-status', `${options.previousHead}..${currentHead}`],
           this.#projectRoot
         );
         addNameStatusEvents(snapshot.eventsByKey, headDiff, 'git-head');
@@ -102,62 +97,102 @@ export class GitWorktreeReconciler {
         }
       }
 
-      this.#lastHead = currentHead;
-      this.#lastKeys = snapshot.keys;
+      const filteredEvents = filterEvents(events);
       this.#status = {
         backend: 'git',
-        baselineReady: true,
         dirtyPathCount: snapshot.keys.size,
         healthy: true,
         lastError: null,
-        lastEventCount: baseline ? 0 : events.length,
+        lastEventCount: filteredEvents.length,
         lastHead: currentHead,
         lastScanAt: scannedAt,
+        lastSignature: snapshot.signature,
       };
 
       return {
-        baseline,
         dirtyPathCount: snapshot.keys.size,
-        events: filterEvents(events),
+        events: filteredEvents,
+        head: currentHead,
         headChanged,
+        scanned: true,
+        scannedAt,
+        signature: snapshot.signature,
       };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.#logger.warn('[code-change-monitor] git reconciliation failed', { error: message });
+      this.#logger.warn('[git-diff-checkpoint] git diff scan failed', { error: message });
       this.#status = {
         ...this.#status,
         healthy: false,
         lastError: message,
         lastScanAt: scannedAt,
       };
-      return {
-        baseline: false,
-        dirtyPathCount: this.#status.dirtyPathCount,
-        events: [],
-        headChanged: false,
-      };
+      return emptyResult(scannedAt);
     }
   }
 
-  getStatus(): CodeChangeReconcilerStatus {
+  getStatus(): GitDiffScanStatus {
     return { ...this.#status };
   }
 
-  async #collectSnapshot(): Promise<WorktreeSnapshot> {
-    const [unstaged, staged, untracked] = await Promise.all([
+  async #collectSnapshot(currentHead: string | null): Promise<WorktreeSnapshot> {
+    const [unstagedStatus, stagedStatus, untracked, unstagedDiff, stagedDiff] = await Promise.all([
       this.#execGit(['diff', '--name-status'], this.#projectRoot),
       this.#execGit(['diff', '--name-status', '--cached'], this.#projectRoot),
       this.#execGit(['ls-files', '--others', '--exclude-standard'], this.#projectRoot),
+      this.#execGit(['diff', '--no-ext-diff', '--binary'], this.#projectRoot),
+      this.#execGit(['diff', '--cached', '--no-ext-diff', '--binary'], this.#projectRoot),
     ]);
 
     const eventsByKey = new Map<string, FileChangeEvent>();
-    addNameStatusEvents(eventsByKey, unstaged, 'git-worktree');
-    addNameStatusEvents(eventsByKey, staged, 'git-worktree');
-    addUntrackedEvents(eventsByKey, untracked);
+    addNameStatusEvents(eventsByKey, unstagedStatus, 'git-worktree');
+    addNameStatusEvents(eventsByKey, stagedStatus, 'git-worktree');
+    const untrackedPaths = addUntrackedEvents(eventsByKey, untracked);
     return {
       eventsByKey,
       keys: new Set([...eventsByKey.keys()].filter((key) => !key.startsWith('head:'))),
+      signature: await this.#buildSignature({
+        currentHead,
+        stagedDiff,
+        unstagedDiff,
+        untrackedPaths,
+      }),
     };
+  }
+
+  async #buildSignature(input: {
+    currentHead: string | null;
+    stagedDiff: string;
+    unstagedDiff: string;
+    untrackedPaths: string[];
+  }): Promise<string> {
+    const hash = createHash('sha256');
+    hash.update(`head:${input.currentHead ?? ''}\0`);
+    hash.update('unstaged\0');
+    hash.update(input.unstagedDiff);
+    hash.update('\0staged\0');
+    hash.update(input.stagedDiff);
+    hash.update('\0untracked\0');
+    for (const filePath of [...input.untrackedPaths].sort()) {
+      hash.update(`${filePath}\0`);
+      await this.#hashUntrackedFile(hash, filePath);
+    }
+    return hash.digest('hex');
+  }
+
+  async #hashUntrackedFile(hash: ReturnType<typeof createHash>, filePath: string): Promise<void> {
+    try {
+      const fileStat = await stat(join(this.#projectRoot, filePath));
+      if (!fileStat.isFile()) {
+        hash.update(`non-file:${fileStat.size}:${fileStat.mtimeMs}\0`);
+        return;
+      }
+      hash.update(`file:${fileStat.size}\0`);
+      hash.update(await readFile(join(this.#projectRoot, filePath)));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      hash.update(`unreadable:${message}\0`);
+    }
   }
 
   #markUnavailable(scannedAt: string, message: string): void {
@@ -213,17 +248,32 @@ export function addNameStatusEvents(
   }
 }
 
-function addUntrackedEvents(target: Map<string, FileChangeEvent>, output: string): void {
+function addUntrackedEvents(target: Map<string, FileChangeEvent>, output: string): string[] {
+  const paths: string[] = [];
   for (const filePath of splitLines(output).map(normalizeProjectRelativePath)) {
     if (!isDispatchablePath(filePath)) {
       continue;
     }
+    paths.push(filePath);
     target.set(`created:${filePath}`, {
       eventSource: 'git-worktree',
       path: filePath,
       type: 'created',
     });
   }
+  return paths;
+}
+
+function emptyResult(scannedAt: string): GitDiffScanResult {
+  return {
+    dirtyPathCount: 0,
+    events: [],
+    head: null,
+    headChanged: false,
+    scanned: false,
+    scannedAt,
+    signature: null,
+  };
 }
 
 function filterEvents(events: FileChangeEvent[]): FileChangeEvent[] {
@@ -246,22 +296,6 @@ function filterEvents(events: FileChangeEvent[]): FileChangeEvent[] {
   return filtered;
 }
 
-function selectForcedPathEvents(
-  eventsByKey: Map<string, FileChangeEvent>,
-  forcePaths: string[] | undefined
-): FileChangeEvent[] {
-  const forcedPaths = new Set(
-    (forcePaths ?? []).map(normalizeProjectRelativePath).filter(isDispatchablePath)
-  );
-  if (forcedPaths.size === 0) {
-    return [];
-  }
-
-  return [...eventsByKey.values()].filter((event) => {
-    return forcedPaths.has(event.path) || Boolean(event.oldPath && forcedPaths.has(event.oldPath));
-  });
-}
-
 function isDispatchablePath(filePath: string): boolean {
   return isSafeProjectRelativePath(filePath) && !shouldIgnoreProjectPath(filePath);
 }
@@ -282,7 +316,7 @@ function execGit(args: string[], cwd: string): Promise<string> {
         resolve('');
         return;
       }
-      resolve(stdout.trim());
+      resolve(stdout);
     });
   });
 }

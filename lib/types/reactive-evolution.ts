@@ -1,7 +1,7 @@
 /**
  * reactive-evolution.ts — ReactiveEvolution 类型定义
  *
- * 文件变更事件驱动的 Recipe 实时进化。
+ * 文件变更事件驱动的 Recipe 进化。
  */
 
 /* ═══════════════════ File Change Events ═══════════════════ */
@@ -14,7 +14,7 @@ export type FileChangeType = 'created' | 'renamed' | 'deleted' | 'modified';
  *
  *  - `ide-edit`     VSCode 扩展捕获的实时 IDE 编辑（Signal 1-3：rename / delete / create）+ 保存
  *  - `git-head`     Git HEAD 变化（commit / pull / switch）导致的批量 diff
- *  - `git-worktree` Working Tree 扫描（窗口聚焦 / 5 分钟定时）产生的批量 diff
+ *  - `git-worktree` Working Tree checkpoint 扫描产生的批量 diff
  *
  * 来源会被透传到 {@link ReactiveEvolutionReport.eventSource}，供 VSCode 扩展判断
  * 是否弹窗（只有 ide-edit 才弹）。服务端 FileChangeHandler 只读取不修改。

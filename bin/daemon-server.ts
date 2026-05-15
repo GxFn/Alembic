@@ -19,11 +19,7 @@ import {
 import HttpServer from '../lib/http/HttpServer.js';
 import Logger from '../lib/infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
-import {
-  type CodeChangeMonitorTuningOptions,
-  createInactiveMonitorStatus,
-} from '../lib/service/evolution/code-change-monitor/index.js';
-import { DaemonFileChangeCollector } from '../lib/service/evolution/DaemonFileChangeCollector.js';
+import { GitDiffCheckpointService } from '../lib/service/evolution/git-diff-checkpoint/index.js';
 import { DASHBOARD_DIR } from '../lib/shared/package-root.js';
 import { shutdown } from '../lib/shared/shutdown.js';
 import { timerRegistry } from '../lib/shared/TimerRegistry.js';
@@ -97,7 +93,7 @@ async function main() {
   }
 
   const httpServer = await startHttpServer(requestedPort, host);
-  const fileChangeCollector = await startDaemonFileChangeCollector({
+  registerDaemonGitDiffCheckpoint({
     container,
     logger,
     projectRoot,
@@ -152,7 +148,6 @@ async function main() {
   shutdown.register(async () => {
     await timerRegistry.dispose();
   }, 'timer-registry');
-  shutdown.register(() => fileChangeCollector?.stop(), 'daemon-file-change-collector');
   shutdown.register(() => {
     markInterruptedDaemonJobs({
       code: 'DAEMON_SHUTDOWN',
@@ -163,86 +158,21 @@ async function main() {
   }, 'daemon-jobs');
 }
 
-async function startDaemonFileChangeCollector(options: {
+function registerDaemonGitDiffCheckpoint(options: {
   container: ReturnType<typeof getServiceContainer>;
   logger: ReturnType<typeof Logger.getInstance>;
   projectRoot: string;
-}): Promise<DaemonFileChangeCollector | null> {
-  if (process.env.ALEMBIC_DAEMON_FILE_CHANGES === '0') {
-    options.logger.info('[daemon-file-change] disabled by ALEMBIC_DAEMON_FILE_CHANGES=0');
-    options.container.singletons.codeChangeMonitor = {
-      getStatus: () =>
-        createInactiveMonitorStatus(
-          options.projectRoot,
-          'disabled by ALEMBIC_DAEMON_FILE_CHANGES=0',
-          false
-        ),
-    };
-    return null;
-  }
-
+}): GitDiffCheckpointService {
   const dispatcher = options.container.get(
     'fileChangeDispatcher'
   ) as import('../lib/service/FileChangeDispatcher.js').FileChangeDispatcher;
-  const collector = new DaemonFileChangeCollector({
+  const checkpoint = new GitDiffCheckpointService({
     projectRoot: options.projectRoot,
     dispatcher,
     logger: options.logger,
-    ...readDaemonFileChangeTuningEnv(),
   });
-  options.container.singletons.codeChangeMonitor = collector;
-  await collector.start();
-  return collector;
-}
-
-function readDaemonFileChangeTuningEnv(): CodeChangeMonitorTuningOptions {
-  const tuning: CodeChangeMonitorTuningOptions = {};
-  setPositiveIntEnv(tuning, 'dispatchDebounceMs', 'ALEMBIC_DAEMON_DISPATCH_DEBOUNCE_MS');
-  setPositiveIntEnv(tuning, 'dispatchMaxBatchSize', 'ALEMBIC_DAEMON_DISPATCH_MAX_BATCH_SIZE');
-  setPositiveIntEnv(tuning, 'eventDedupeCooldownMs', 'ALEMBIC_DAEMON_EVENT_DEDUPE_COOLDOWN_MS');
-  setPositiveIntEnv(tuning, 'gitPollIntervalMs', 'ALEMBIC_DAEMON_GIT_POLL_INTERVAL_MS');
-  setBooleanEnv(tuning, 'watcherFallbackToPolling', 'ALEMBIC_DAEMON_WATCHER_FALLBACK_TO_POLLING');
-  setPositiveIntEnv(
-    tuning,
-    'watcherPollingIntervalMs',
-    'ALEMBIC_DAEMON_WATCHER_POLLING_INTERVAL_MS'
-  );
-  setPositiveIntEnv(tuning, 'watcherReadyTimeoutMs', 'ALEMBIC_DAEMON_WATCHER_READY_TIMEOUT_MS');
-  setBooleanEnv(tuning, 'watcherUsePolling', 'ALEMBIC_DAEMON_WATCHER_USE_POLLING');
-  setPositiveIntEnv(tuning, 'watchSettleMs', 'ALEMBIC_DAEMON_WATCH_SETTLE_MS');
-  return tuning;
-}
-
-function setBooleanEnv(
-  tuning: CodeChangeMonitorTuningOptions,
-  key: 'watcherFallbackToPolling' | 'watcherUsePolling',
-  envName: string
-): void {
-  const value = process.env[envName];
-  if (value === '1' || value === 'true') {
-    tuning[key] = true;
-  }
-  if (value === '0' || value === 'false') {
-    tuning[key] = false;
-  }
-}
-
-function setPositiveIntEnv(
-  tuning: CodeChangeMonitorTuningOptions,
-  key:
-    | 'dispatchDebounceMs'
-    | 'dispatchMaxBatchSize'
-    | 'eventDedupeCooldownMs'
-    | 'gitPollIntervalMs'
-    | 'watcherPollingIntervalMs'
-    | 'watcherReadyTimeoutMs'
-    | 'watchSettleMs',
-  envName: string
-): void {
-  const value = Number.parseInt(process.env[envName] || '', 10);
-  if (Number.isFinite(value) && value > 0) {
-    tuning[key] = value;
-  }
+  options.container.singletons.gitDiffCheckpoint = checkpoint;
+  return checkpoint;
 }
 
 function resolveBoundDaemonPort(httpServer: HttpServer, requestedPort: number): number {

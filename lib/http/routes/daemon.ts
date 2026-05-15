@@ -1,7 +1,7 @@
 import express from 'express';
 import { getPackageVersion } from '../../daemon/DaemonState.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import type { CodeChangeMonitorStatus } from '../../service/evolution/code-change-monitor/index.js';
+import type { GitDiffCheckpointStatus } from '../../service/evolution/git-diff-checkpoint/index.js';
 import { resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import { WorkspaceResolver } from '../../shared/WorkspaceResolver.js';
 
@@ -11,11 +11,11 @@ router.get('/health', (_req, res) => {
   const container = getServiceContainer();
   const projectRoot = resolveProjectRoot(container);
   const resolver = WorkspaceResolver.fromProject(projectRoot);
-  const codeChangeMonitor = readCodeChangeMonitorStatus(container);
+  const gitDiffCheckpoint = readGitDiffCheckpointStatus(container);
   res.json({
     success: true,
     data: {
-      codeChangeMonitor,
+      gitDiffCheckpoint,
       mode: process.env.ALEMBIC_DAEMON_MODE === '1' ? 'daemon' : 'api',
       projectRoot,
       dataRoot: resolver.dataRoot,
@@ -29,13 +29,13 @@ router.get('/health', (_req, res) => {
   });
 });
 
-function readCodeChangeMonitorStatus(
+function readGitDiffCheckpointStatus(
   container: ReturnType<typeof getServiceContainer>
-): CodeChangeMonitorStatus | null {
-  const monitor = container.singletons.codeChangeMonitor as
-    | { getStatus?: () => CodeChangeMonitorStatus }
+): GitDiffCheckpointStatus | null {
+  const checkpoint = container.singletons.gitDiffCheckpoint as
+    | { getStatus?: () => GitDiffCheckpointStatus }
     | undefined;
-  return monitor?.getStatus?.() ?? null;
+  return checkpoint?.getStatus?.() ?? null;
 }
 
 function getSchemaMigrationVersion(

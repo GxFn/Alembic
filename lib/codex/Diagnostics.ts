@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DaemonStatus } from '../daemon/DaemonSupervisor.js';
-import type { CodeChangeMonitorStatus } from '../service/evolution/code-change-monitor/index.js';
+import type { GitDiffCheckpointStatus } from '../service/evolution/git-diff-checkpoint/index.js';
 import { asString, CODEX_REQUIRED_SKILLS, loadCodexPluginRegistry } from './PluginRegistry.js';
 import {
   buildCodexProjectRootRequiredMessage,
@@ -158,7 +158,7 @@ export function buildCodexRuntimeDiagnostics(
       ? summarizeCodexProjectRootResolution(options.projectRootResolution)
       : null,
     autoInit: options.autoInit || null,
-    codeChangeMonitor: readHealthCodeChangeMonitor(daemonStatus.health),
+    gitDiffCheckpoint: readHealthGitDiffCheckpoint(daemonStatus.health),
     plugin,
     daemon: {
       ready: daemonStatus.ready,
@@ -495,16 +495,16 @@ function readHealthVersion(health: Record<string, unknown> | null): string | nul
   return typeof version === 'string' ? version : null;
 }
 
-function readHealthCodeChangeMonitor(
+function readHealthGitDiffCheckpoint(
   health: Record<string, unknown> | null
-): CodeChangeMonitorStatus | null {
+): GitDiffCheckpointStatus | null {
   const data = health?.data;
   if (!data || typeof data !== 'object') {
     return null;
   }
-  const status = (data as { codeChangeMonitor?: unknown }).codeChangeMonitor;
+  const status = (data as { gitDiffCheckpoint?: unknown }).gitDiffCheckpoint;
   if (!status || typeof status !== 'object') {
     return null;
   }
-  return status as CodeChangeMonitorStatus;
+  return status as GitDiffCheckpointStatus;
 }

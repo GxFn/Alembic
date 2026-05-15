@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { DaemonStatus } from '../daemon/DaemonSupervisor.js';
 import { DaemonSupervisor } from '../daemon/DaemonSupervisor.js';
-import type { CodeChangeMonitorStatus } from '../service/evolution/code-change-monitor/index.js';
+import type { GitDiffCheckpointStatus } from '../service/evolution/git-diff-checkpoint/index.js';
 import { DEFAULT_FOLDER_NAMES } from '../shared/folder-names.js';
 import { WorkspaceResolver } from '../shared/WorkspaceResolver.js';
 import { WorkspaceSettingsStore } from '../shared/WorkspaceSettingsStore.js';
@@ -50,7 +50,6 @@ export interface CodexStatusServiceOptions {
 
 export interface CodexStatusData {
   channel: { expectedId: string; id: string };
-  codeChangeMonitor: CodeChangeMonitorStatus | null;
   daemon: CodexDaemonSummary & {
     health: Record<string, unknown> | null;
     implemented: boolean;
@@ -58,6 +57,7 @@ export interface CodexStatusData {
     stateExists: boolean;
   };
   diagnostics: Record<string, unknown>;
+  gitDiffCheckpoint: GitDiffCheckpointStatus | null;
   initialized: boolean;
   knowledge: CodexKnowledgeState;
   autoInit: Record<string, unknown>;
@@ -146,7 +146,7 @@ export async function buildCodexStatus(
   });
   const daemonStatePath = join(resolver.runtimeDir, 'daemon.json');
   const daemonPidPath = join(resolver.runtimeDir, 'daemon.pid');
-  const codeChangeMonitor = readCodeChangeMonitorStatus(daemonStatus.health);
+  const gitDiffCheckpoint = readGitDiffCheckpointStatus(daemonStatus.health);
 
   return {
     ok: knowledge.initialized,
@@ -209,7 +209,7 @@ export async function buildCodexStatus(
       adminEnabled: runtime.adminEnabled,
       requiresProjectEnv: null,
     },
-    codeChangeMonitor,
+    gitDiffCheckpoint,
     daemon: {
       ...summarizeCodexDaemonStatus(daemonStatus),
       implemented: true,
@@ -232,15 +232,15 @@ export async function buildCodexStatus(
   };
 }
 
-function readCodeChangeMonitorStatus(
+function readGitDiffCheckpointStatus(
   health: Record<string, unknown> | null
-): CodeChangeMonitorStatus | null {
+): GitDiffCheckpointStatus | null {
   const data = (health?.data || null) as Record<string, unknown> | null;
-  const status = data?.codeChangeMonitor;
+  const status = data?.gitDiffCheckpoint;
   if (!status || typeof status !== 'object') {
     return null;
   }
-  return status as CodeChangeMonitorStatus;
+  return status as GitDiffCheckpointStatus;
 }
 
 function buildCodexAutoInitStatus(
