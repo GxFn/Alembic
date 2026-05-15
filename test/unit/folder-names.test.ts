@@ -32,10 +32,6 @@ describe('folder names', () => {
       runtime: '.asd',
       skills: 'skills',
     });
-    expect(DEFAULT_FOLDER_NAMES.ide).toMatchObject({
-      cursorRoot: '.cursor',
-      cursorSkills: 'skills',
-    });
   });
 
   test('merges partial overrides without dropping defaults', () => {

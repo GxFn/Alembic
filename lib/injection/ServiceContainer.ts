@@ -206,7 +206,7 @@ export class ServiceContainer {
    *   - searchEngine: buildIndex() — 搜索索引
    *
    * 仅在长驻进程（HTTP server / MCP server）中自动启动轮询。
-   * CLI 场景无需启动（进程生命周期短，缓存不会过时）。
+   * 其他短生命周期调用无需启动（进程生命周期短，缓存不会过时）。
    */
   #initCacheCoordinator(): void {
     try {
@@ -244,7 +244,7 @@ export class ServiceContainer {
         svc?.buildIndex?.();
       });
 
-      // 长驻进程自动启动轮询（CLI 不启动）
+      // 长驻进程自动启动轮询
       const isMcp = process.env.ALEMBIC_MCP_MODE === '1';
       const isApiServer = process.env.ALEMBIC_API_SERVER === '1';
       if (isMcp || isApiServer) {

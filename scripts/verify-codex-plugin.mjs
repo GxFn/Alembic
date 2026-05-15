@@ -241,44 +241,44 @@ for (const requiredRuntimeFile of [
 }
 expect(
   distributionMarketplaceJson.name === 'alembic-codex',
-  'standalone AlembicCodex marketplace must be named alembic-codex'
+  'AlembicCodex plugin distribution marketplace must be named alembic-codex'
 );
 expect(
   distributionMarketplaceJson.interface?.displayName === 'Alembic Codex',
-  'standalone AlembicCodex marketplace must display as Alembic Codex'
+  'AlembicCodex plugin distribution marketplace must display as Alembic Codex'
 );
 expect(
   distributionMarketplaceEntries.length === 1,
-  'standalone AlembicCodex marketplace must list exactly one plugin'
+  'AlembicCodex plugin distribution marketplace must list exactly one plugin'
 );
 expect(
   Boolean(distributionMarketplaceEntry),
-  'standalone AlembicCodex marketplace must include alembic-codex'
+  'AlembicCodex plugin distribution marketplace must include alembic-codex'
 );
 if (distributionMarketplaceEntry) {
   expect(
     distributionMarketplaceEntry.source?.source === 'local',
-    'standalone AlembicCodex marketplace source must be local'
+    'AlembicCodex plugin distribution marketplace source must be local'
   );
   expect(
     distributionMarketplaceEntry.source?.path === '.',
-    'standalone AlembicCodex marketplace path must point to the repository root'
+    'AlembicCodex plugin distribution marketplace path must point to the repository root'
   );
   expect(
     resolve(pluginRoot, distributionMarketplaceEntry.source?.path || '') === pluginRoot,
-    'standalone AlembicCodex marketplace path must resolve to the plugin root'
+    'AlembicCodex plugin distribution marketplace path must resolve to the plugin root'
   );
   expect(
     distributionMarketplaceEntry.policy?.installation === 'AVAILABLE',
-    'standalone AlembicCodex marketplace installation policy must be AVAILABLE'
+    'AlembicCodex plugin distribution marketplace installation policy must be AVAILABLE'
   );
   expect(
     distributionMarketplaceEntry.policy?.authentication === 'ON_INSTALL',
-    'standalone AlembicCodex marketplace authentication policy must be ON_INSTALL'
+    'AlembicCodex plugin distribution marketplace authentication policy must be ON_INSTALL'
   );
   expect(
     distributionMarketplaceEntry.category === iface.category,
-    'standalone AlembicCodex marketplace category must match plugin interface category'
+    'AlembicCodex plugin distribution marketplace category must match plugin interface category'
   );
 }
 expect(
@@ -391,7 +391,7 @@ expect(
 expect(
   readme.includes('[plugins."alembic-codex@alembic-codex"]') &&
     readmeCn.includes('[plugins."alembic-codex@alembic-codex"]'),
-  'plugin READMEs must document standalone local marketplace registration'
+  'plugin READMEs must document plugin distribution marketplace registration'
 );
 expect(
   readme.includes('alembic_codex_diagnostics'),
@@ -400,10 +400,6 @@ expect(
 expect(
   readmeCn.includes('alembic_codex_diagnostics'),
   'README.zh-CN.md must document alembic_codex_diagnostics'
-);
-expect(
-  readme.includes('alembic codex diagnostics --json'),
-  'README.md must document CLI Codex diagnostics'
 );
 expect(readme.includes('alembic_codex_cleanup'), 'README.md must document cleanup policy');
 expect(readmeCn.includes('alembic_codex_cleanup'), 'README.zh-CN.md must document cleanup policy');
@@ -428,14 +424,10 @@ expect(
   readmeCn.includes('RELEASE-PLAYBOOK.md'),
   'plugin Chinese README must link to release playbook'
 );
-expect(rootReadme.includes('## Codex Plugin'), 'root README must document Codex Plugin');
+expect(rootReadme.includes('## Codex 插件'), 'root README must document Codex plugin');
 expect(
   rootReadme.includes('npm run release:codex-plugin'),
   'root README must document Codex plugin release check'
-);
-expect(
-  rootReadme.includes('alembic codex diagnostics --json'),
-  'root README must document CLI Codex diagnostics'
 );
 expect(
   rootReadme.includes('plugins/alembic-codex/RELEASE-PLAYBOOK.md'),
@@ -445,10 +437,6 @@ expect(rootReadmeCn.includes('## Codex 插件'), 'Chinese README must document C
 expect(
   rootReadmeCn.includes('npm run release:codex-plugin'),
   'Chinese README must document Codex plugin release check'
-);
-expect(
-  rootReadmeCn.includes('alembic codex diagnostics --json'),
-  'Chinese README must document CLI Codex diagnostics'
 );
 expect(
   rootReadmeCn.includes('plugins/alembic-codex/RELEASE-PLAYBOOK.md'),

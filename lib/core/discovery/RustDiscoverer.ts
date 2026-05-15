@@ -23,10 +23,8 @@ const EXCLUDE_DIRS = new Set([
   'node_modules',
   '.cargo',
   '.idea',
-  '.vscode',
   'dist',
   'build',
-  '.cursor',
 ]);
 
 export class RustDiscoverer extends ProjectDiscoverer {

@@ -26,7 +26,7 @@ export interface SnippetProps {
  *
  * 与 Recipe 的区别:
  * - Recipe: 抽象的知识模式 / 最佳实践
- * - Snippet: 具体的、可安装的代码片段（支持多 IDE: Xcode / VSCode / Cursor）
+ * - Snippet: 具体的、可安装的代码片段（由各 IDE 插件适配安装目标）
  */
 export class Snippet {
   category: string;
@@ -54,8 +54,8 @@ export class Snippet {
     this.summary = props.summary || '';
     this.code = Array.isArray(props.code) ? props.code.join('\n') : props.code || '';
 
-    // 多 IDE 安装状态
-    // targets = { xcode: { installed, path }, vscode: { installed, path } }
+    // 多插件目标安装状态
+    // targets = { codex: { installed, path }, xcode: { installed, path } }
     this.targets = props.targets || {};
 
     // 向后兼容: 旧数据的 installed/installedPath 迁移到 targets.xcode
@@ -75,8 +75,7 @@ export class Snippet {
   }
 
   /**
-   * 是否已安装到指定 IDE (不传则检查任意)
-   * @param [target] 'xcode' | 'vscode'
+   * 是否已安装到指定插件目标 (不传则检查任意)
    */
   isInstalled(target?: string): boolean {
     if (target) {

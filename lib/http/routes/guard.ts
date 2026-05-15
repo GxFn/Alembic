@@ -1,7 +1,7 @@
 /**
  * Guard 文件检查 API 路由
  *
- * 提供 HTTP 端点供 Dashboard、CLI 或外部客户端触发 Guard 检查。
+ * 提供 HTTP 端点供 Dashboard 或插件宿主触发 Guard 检查。
  *
  * 端点:
  *   POST /api/v1/guard/file   — 单文件检查

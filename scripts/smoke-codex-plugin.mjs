@@ -449,11 +449,11 @@ function simulateMarketplaceInstall({ packageRoot, packageVersion }) {
     : null;
   assert(
     distributionMarketplace.name === 'alembic-codex',
-    'installed plugin standalone marketplace name mismatch'
+    'installed plugin distribution marketplace name mismatch'
   );
   assert(
     distributionEntry?.source?.path === '.',
-    'installed plugin standalone marketplace must point to repository root'
+    'installed plugin distribution marketplace must point to repository root'
   );
   const runtimePackage = readJson(join(runtimeRoot, 'package.json'));
   assert(runtimePackage.name === 'alembic-ai', 'embedded runtime package name mismatch');

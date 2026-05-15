@@ -14,7 +14,7 @@ export class KnowledgeProduction extends Capability {
 2. 项目特写风格的正文 (content.markdown)
 3. 相关文件路径
 4. 正确的 kind (rule / pattern / fact)
-5. 完整的 Cursor 交付字段
+5. 完整的 插件适配字段
 
 工作流:
 1. 识别分析中的知识点

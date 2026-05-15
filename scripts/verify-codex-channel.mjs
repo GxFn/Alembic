@@ -141,7 +141,10 @@ for (const pkg of packages) {
     `channel package ${pkg.name} version must match package.json`
   );
   expect(pkg.registry === 'npm', `channel package ${pkg.name} registry must be npm`);
-  expect(pkg.installScope === 'global', `channel package ${pkg.name} installScope must be global`);
+  expect(
+    pkg.installScope === 'embedded-plugin-runtime',
+    `channel package ${pkg.name} installScope must be embedded-plugin-runtime`
+  );
   for (const bin of pkg.binaries || []) {
     expect(
       typeof packageJson.bin?.[bin] === 'string',

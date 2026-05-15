@@ -37,11 +37,9 @@
     {
       "name": "alembic-ai",
       "registry": "npm",
-      "installScope": "global",
+      "installScope": "embedded-plugin-runtime",
       "version": "0.1.2",
       "binaries": [
-        "alembic",
-        "alembic-mcp",
         "alembic-codex-mcp"
       ],
       "usedBy": [

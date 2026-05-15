@@ -4,7 +4,6 @@
  * 由 Alembic AgentRuntime 自动完成知识提取。需要配置 AI Provider (API Key)。
  *
  * 调用方:
- *   - CLI: `alembic bootstrap --knowledge`
  *   - MCP: `alembic_bootstrap` (带 knowledge 参数)
  *   - Dashboard HTTP: POST /api/bootstrap/knowledge
  *
@@ -200,7 +199,7 @@ export async function runInternalColdStartWorkflow(
   });
 
   // ── 异步后台填充（fire-and-forget）──
-  // skipAsyncFill: CLI 非 --wait 模式跳过异步填充，避免进程退出后 DB 断连
+  // skipAsyncFill: 短生命周期调用可跳过异步填充，避免进程退出后 DB 断连
   if (!intent.internalExecution?.skipAsyncFill) {
     dispatchInternalDimensionExecution({
       view: {
@@ -210,7 +209,6 @@ export async function runInternalColdStartWorkflow(
         targetFileMap,
         projectRoot,
         mode: 'bootstrap',
-        skipTargetDelivery: intent.internalExecution?.skipTargetDelivery === true,
       },
       dimensions,
       logPrefix: 'Bootstrap',

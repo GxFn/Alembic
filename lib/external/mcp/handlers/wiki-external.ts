@@ -1,5 +1,5 @@
 /**
- * MCP Handlers — Cursor-Native Wiki 生成
+ * MCP Handlers — 插件驱动的 Wiki 生成
  *
  *   - wikiPlan:     数据收集 + 主题发现 → 返回写作规划
  *   - wikiFinalize: Agent 写完所有文章后调用 → meta.json + 去重 + 验证
@@ -359,7 +359,7 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
  *   1. 验证文件存在性
  *   2. 去重检查（内容相似度）
  *   3. 写入 meta.json
- *   4. 同步 Cursor 端文档（可选）
+ *   4. 写入 Wiki 元数据
  *
  * @param ctx { container, logger, startedAt }
  * @param args { articlesWritten: string[] }
@@ -515,36 +515,6 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
     });
   }
 
-  // ── 4. 同步 Cursor 端文档（仅检测，不修改 Agent 写的内容）──
-  let syncedDocs = 0;
-  try {
-    const wzSync = _getWriteZone(ctx);
-    const devdocsDir = path.join(projectRoot, '.cursor', 'skills', 'alembic-devdocs', 'references');
-    if (fs.existsSync(devdocsDir)) {
-      const docsDir = path.join(wikiDir, 'documents');
-      _ensureDir(docsDir, wzSync, dataRoot);
-      const mdFiles = fs.readdirSync(devdocsDir).filter((f) => f.endsWith('.md'));
-      for (const file of mdFiles) {
-        const src = path.join(devdocsDir, file);
-        const dest = path.join(docsDir, file);
-        if (!fs.existsSync(dest)) {
-          const content = fs.readFileSync(src, 'utf-8');
-          const header = `<!-- synced from .cursor/skills/alembic-devdocs/references/${file} -->\n\n`;
-          if (wzSync) {
-            const rel = path.join(DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki', 'documents', file);
-            wzSync.writeFile(wzSync.data(rel), header + content);
-          } else {
-            fs.writeFileSync(dest, header + content);
-          }
-          syncedDocs++;
-        }
-      }
-    }
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    logger.debug(`[wiki-finalize] Cursor docs sync skipped: ${msg}`);
-  }
-
   return envelope({
     success: true,
     data: {
@@ -557,7 +527,6 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
         passed: missingFiles.length === 0,
       },
       ...(isGhost ? { ghost: true, migratedCount } : {}),
-      syncedDocs,
       meta,
     },
     meta: {

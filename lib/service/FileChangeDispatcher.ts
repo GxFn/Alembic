@@ -1,11 +1,11 @@
 /**
  * FileChangeDispatcher — 文件变更事件分发器（Pub-Sub）
  *
- * 接收 HTTP 路由推送的文件变更事件，分发给所有注册的订阅者。
+ * 接收插件运行时内部生成的文件变更事件，分发给所有注册的订阅者。
  * 订阅者之间相互隔离，使用 Promise.allSettled 确保单个失败不影响其他。
  *
  * 订阅者可选返回 {@link ReactiveEvolutionReport}，Dispatcher 将所有 report 合并后
- * 返回给路由层，路由层再透传到 HTTP 响应体（供 VSCode 扩展弹窗使用）。
+ * 返回给调用方；当前主要由 git diff checkpoint 在明确触发时使用。
  */
 
 import Logger from '../infrastructure/logging/Logger.js';
@@ -98,7 +98,7 @@ export class FileChangeDispatcher {
    * 分发事件给所有订阅者并合并其 report。
    *
    * 即便无订阅者 / 无事件，也返回一份带 eventSource 的空 report，
-   * HTTP 路由层可直接透传。
+   * 调用方可直接记录或继续汇总。
    */
   async dispatch(events: FileChangeEvent[]): Promise<ReactiveEvolutionReport> {
     const eventSource = inferBatchSource(events);

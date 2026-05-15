@@ -4,7 +4,7 @@
  * 三级 fallback:
  *   1. ServiceContainer.singletons._projectRoot（最可靠，Bootstrap 后一定有值）
  *   2. process.env.ALEMBIC_PROJECT_DIR（MCP/HTTP Server 启动时设置）
- *   3. process.cwd()（CLI 模式下通常正确；MCP 模式下可能是 $HOME）
+ *   3. process.cwd()（脚本场景下通常正确；MCP 模式下可能是 $HOME）
  *
  * 用于 MCP handler / HTTP route / Service 内部获取项目根目录，
  * 替代散落在各处的裸 `process.cwd()` 调用。

@@ -32,7 +32,6 @@ const watchEntries = [
   'README.md',
   'README_CN.md',
   'resources/grammars',
-  'resources/openChrome.applescript',
   'scripts/dev-verify-codex-plugin.mjs',
   'scripts/dev-watch-codex-plugin.mjs',
   'scripts/prepare-codex-plugin-runtime.mjs',

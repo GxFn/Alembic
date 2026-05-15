@@ -2,7 +2,7 @@
 
 `lib/codex` 集中维护 Alembic 面向 Codex 插件形态的运行约定。
 
-这里管理的是插件入口需要共享的稳定事实和策略：通用插件运行时模式、Codex 插件宿主标识、Codex 渠道标识、插件名、runtime package/bin、MCP 默认 tier、admin gate、channel/marketplace/plugin manifest 路径、插件资产与 Skill 校验、runtime diagnostics、workspace knowledge state、工具可见性策略、CLI/MCP 共享 status、Codex long-running job 来源上下文。
+这里管理的是插件入口需要共享的稳定事实和策略：通用插件运行时模式、Codex 插件宿主标识、Codex 渠道标识、插件名、runtime package/bin、MCP 默认 tier、admin gate、channel/marketplace/plugin manifest 路径、插件资产与 Skill 校验、runtime diagnostics、workspace knowledge state、工具可见性策略、MCP status、Codex long-running job 来源上下文。
 
 当前阶段只维护 `alembic-codex` 这一个 Codex 插件和 `alembic-ai` runtime，不在这里做多插件或多个非插件包的提前抽象。
 
@@ -17,8 +17,8 @@
 
 - `RuntimeContext.ts`：Codex 常量、MCP shim 默认环境、runtime context。
 - `PluginRegistry.ts`：读取 channel、marketplace、plugin manifest、MCP 配置和插件 README。
-- `Diagnostics.ts`：生成 Codex runtime/plugin diagnostics，供 MCP 与 CLI 复用。
+- `Diagnostics.ts`：生成 Codex runtime/plugin diagnostics，供 MCP 与插件验证脚本复用。
 - `KnowledgeState.ts`：检查 Codex workspace/Ghost data root 是否初始化、是否已有可用 Recipes 或 Project Skills，并只读汇总 bootstrap/rescan job、SourceRef stale、bootstrap snapshot、knowledge freshness 与 optional vector index 状态。
 - `ToolPolicy.ts`：维护当前 `alembic-codex` 插件的 local tools 与工具可见性策略，输出 needs-init、bootstrap-running、ready-stale、daemon-stale 等可解释状态；vector 缺失是 non-blocking 信号，不会隐藏已有知识工具。
-- `StatusService.ts`：构建 CLI 与 MCP 共用的 Codex status、onboarding、next actions 和 daemon 状态摘要。
+- `StatusService.ts`：构建 MCP 使用的 Codex status、onboarding、next actions 和 daemon 状态摘要。
 - `JobContext.ts`：构建 bootstrap/rescan job 的 Codex channel、client、session、tool、actor 上下文。

@@ -184,27 +184,21 @@ describe('PathGuard', () => {
       ).not.toThrow();
     });
 
-    test('should allow .cursor/ (IDE integration)', () => {
+    test('should block IDE adapter files in core', () => {
       expect(() =>
         pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.cursor/mcp.json'))
-      ).not.toThrow();
+      ).toThrow(PathGuardError);
       expect(() =>
         pathGuard.assertProjectWriteSafe(
           path.join(PROJECT_ROOT, '.cursor/rules/alembic-skills.mdc')
         )
-      ).not.toThrow();
-    });
-
-    test('should allow .vscode/ (IDE integration)', () => {
+      ).toThrow(PathGuardError);
       expect(() =>
         pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.vscode/settings.json'))
-      ).not.toThrow();
-    });
-
-    test('should allow .github/ (Copilot instructions)', () => {
+      ).toThrow(PathGuardError);
       expect(() =>
         pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.github/copilot-instructions.md'))
-      ).not.toThrow();
+      ).toThrow(PathGuardError);
     });
 
     test('should allow .gitignore in project root', () => {

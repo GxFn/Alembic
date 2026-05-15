@@ -1,7 +1,7 @@
 /**
  * shutdown.ts — 统一 Graceful Shutdown 协调器
  *
- * 所有入口（mcp-server / api-server / cli）共用同一个 shutdown 协调器，
+ * 所有插件运行时入口共用同一个 shutdown 协调器，
  * 避免各入口重复编写 signal handler 并确保：
  *   1. 防重入 — 多次信号只执行一轮 shutdown
  *   2. 倒序执行 — 后注册的 hook 先关闭（类似栈 LIFO）

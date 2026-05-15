@@ -40,10 +40,6 @@
       "alembic-dev": "./lib/external/*",
       "default": "./dist/lib/external/*"
     },
-    "#platform/*": {
-      "alembic-dev": "./lib/platform/*",
-      "default": "./dist/lib/platform/*"
-    },
     "#repo/*": {
       "alembic-dev": "./lib/repository/*",
       "default": "./dist/lib/repository/*"
@@ -74,18 +70,11 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node scripts/clean-dist.mjs && tsc",
     "build:check": "tsc --noEmit",
     "postbuild": "node scripts/postbuild.mjs",
     "prepublishOnly": "npm run release:codex-plugin",
-    "build:screenshot": "swiftc -O -framework ScreenCaptureKit -framework AppKit resources/native-ui/screenshot.swift -o resources/native-ui/screenshot",
-    "install:cursor-skill": "node dist/scripts/install-cursor-skill.js",
-    "install:cursor-skill:mcp": "node dist/scripts/install-cursor-skill.js --mcp",
-    "install:vscode-copilot": "node dist/scripts/install-vscode-copilot.js",
-    "verify:context-api": "node dist/scripts/verify-context-api.js",
-    "setup:mcp": "node dist/scripts/setup-mcp-config.js --editor vscode && node dist/scripts/setup-mcp-config.js --editor cursor",
     "build:dashboard": "cd dashboard && npm run build",
-    "dashboard": "node dist/bin/cli.js ui",
     "test": "vitest run",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:integration": "vitest run test/integration",
@@ -93,7 +82,6 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "dev:link": "npm run build && npm install -g .",
-    "dev:verify": "which alembic && alembic -v",
     "dev:codex-plugin:sync": "node scripts/sync-codex-plugin-cache.mjs",
     "dev:codex-plugin:local-mcp": "node scripts/sync-codex-plugin-cache.mjs --local-mcp",
     "dev:codex-plugin:refresh": "node scripts/dev-verify-codex-plugin.mjs --refresh-only",
@@ -112,9 +100,6 @@
     "release:patch": "npm run build && node dist/scripts/release.js patch",
     "release:minor": "npm run build && node dist/scripts/release.js minor",
     "release:major": "npm run build && node dist/scripts/release.js major",
-    "cli": "node dist/bin/cli.js",
-    "mcp": "node dist/bin/mcp-server.js",
-    "diagnose:mcp": "node dist/scripts/diagnose-mcp.js",
     "verify:codex-channel": "node scripts/verify-codex-channel.mjs",
     "verify:codex-plugin": "node scripts/verify-codex-plugin.mjs",
     "smoke:codex-plugin": "node scripts/smoke-codex-plugin.mjs",
@@ -129,8 +114,6 @@
   "author": "gaoxuefeng",
   "license": "MIT",
   "bin": {
-    "alembic": "dist/bin/cli.js",
-    "alembic-mcp": "dist/bin/mcp-server.js",
     "alembic-codex-mcp": "dist/bin/codex-mcp.js"
   },
   "keywords": [
@@ -153,8 +136,7 @@
     "swift",
     "rust",
     "kotlin",
-    "developer-tools",
-    "cli"
+    "developer-tools"
   ],
   "homepage": "https://github.com/GxFn/Alembic#readme",
   "repository": {
@@ -172,7 +154,6 @@
     "helmet": "^8.1.0",
     "js-yaml": "^4.1.1",
     "minimist": "^1.2.8",
-    "open": "^11.0.0",
     "ora": "^9.3.0",
     "p-limit": "^7.3.0",
     "socket.io": "^4.8.3",
@@ -202,9 +183,6 @@
     "templates",
     "dashboard/dist",
     "template.json",
-    "resources/native-ui/screenshot.swift",
-    "resources/native-ui/screenshot",
-    "resources/openChrome.applescript",
     "resources/grammars"
   ],
   "directories": {

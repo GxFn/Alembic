@@ -18,7 +18,6 @@ const IGNORED_DIRS = new Set([
   '.turbo',
   'bower_components',
   '.idea',
-  '.vscode',
 ]);
 
 interface TreeNode {

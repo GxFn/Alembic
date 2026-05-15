@@ -257,11 +257,8 @@ export function resolveProjectAnalysisMaterialization(
 
 // ── R13: Alembic 生成物黑名单 ─────────────────────────
 
-const ALEMBIC_GENERATED_BASENAMES = new Set(['AGENTS.md', 'CLAUDE.md', 'copilot-instructions.md']);
-const ALEMBIC_GENERATED_PATH_SEGMENTS = [
-  `${path.sep}.cursor${path.sep}`, // .cursor/rules/*.mdc
-  `${path.sep}.github${path.sep}copilot-instructions.md`,
-];
+const ALEMBIC_GENERATED_BASENAMES = new Set<string>();
+const ALEMBIC_GENERATED_PATH_SEGMENTS: string[] = [];
 
 /** 判断文件是否为 Alembic 生成物（用于排除自引用循环知识） */
 export function isAlembicGenerated(filePath: string) {

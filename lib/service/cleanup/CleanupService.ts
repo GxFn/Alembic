@@ -16,8 +16,7 @@
  *
  * 保留原则:
  *   - 配置数据 (config.json, constitution.yaml, boxspec.json) 永不清理
- *   - IDE 集成配置 (.vscode/, .cursor/, .github/) 永不清理
- *   - 交付物 (.cursor/rules/alembic-*) 由 R4 重建，不在此清理
+ *   - 各 IDE 插件自己的宿主配置不由核心 CleanupService 管理
  *
  * @module service/cleanup/CleanupService
  */

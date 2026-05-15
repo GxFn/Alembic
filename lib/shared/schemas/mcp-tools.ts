@@ -167,13 +167,10 @@ export const SubmitKnowledgeItemSchema = z.object({
     '内容对象: { pattern?: "代码片段", markdown?: "正文", rationale: "设计原理" }。pattern/markdown 至少提供一个，rationale 必填'
   ),
   kind: StrictKindEnum.describe('rule=规范约束 | pattern=代码模式 | fact=项目事实'),
-  doClause: z
-    .string()
-    .min(1, 'doClause is required')
-    .describe('✅ 应该怎么做（Channel A+B 硬依赖）'),
+  doClause: z.string().min(1, 'doClause is required').describe('✅ 应该怎么做（插件适配字段）'),
   dontClause: z.string().min(1, 'dontClause is required').describe('❌ 不应该怎么做'),
-  whenClause: z.string().min(1, 'whenClause is required').describe('何时适用（Channel B 硬依赖）'),
-  coreCode: z.string().min(1, 'coreCode is required').describe('核心代码片段（Channel B 模板块）'),
+  whenClause: z.string().min(1, 'whenClause is required').describe('何时适用'),
+  coreCode: z.string().min(1, 'coreCode is required').describe('核心代码片段'),
   category: z
     .string()
     .min(1, 'category is required')

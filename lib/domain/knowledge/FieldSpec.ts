@@ -6,7 +6,7 @@
  *   EXPECTED  — 缺少则 warning + suggestions，不阻塞入库
  *   OPTIONAL  — 缺少不报任何问题
  *
- * 判决依据: 从 6 条交付管线 (Channel A/B/F, Search, Guard, Quality) 反推，
+ * 判决依据: 从核心消费方 (Search, Guard, Quality, 插件适配层) 反推，
  * 以「缺少时的实际损害」为唯一标准。
  *
  * 消费方:
@@ -58,7 +58,7 @@ export const V3_FIELD_SPEC = [
     level: FieldLevel.REQUIRED,
     type: 'string',
     rule: '设计原理说明',
-    pipeline: 'Channel B **Why** line (via _extractFirstSentence)',
+    pipeline: '项目事实解释 + 质量评分依据',
   },
   {
     name: 'description',
@@ -68,48 +68,48 @@ export const V3_FIELD_SPEC = [
     pipeline: 'search result display + QualityScorer(metadata 0.3 as summary)',
   },
 
-  // ── Cursor 交付字段 (6) — 直接决定 .mdc 产出 ────────────
+  // ── 插件适配字段 (6) — 供各 IDE 插件生成宿主侧规则/提示 ────────────
   {
     name: 'trigger',
     level: FieldLevel.REQUIRED,
     type: 'string',
     rule: '@前缀 kebab-case 唯一标识符',
-    pipeline: 'Channel B ### 标题 + filter 硬依赖 + QualityScorer(completeness 0.25 + format 0.5)',
+    pipeline: '插件适配层稳定标识 + QualityScorer(completeness 0.25 + format 0.5)',
   },
   {
     name: 'kind',
     level: FieldLevel.REQUIRED,
     type: 'string',
     rule: 'rule | pattern | fact',
-    pipeline: 'CursorDeliveryPipeline._classify() 路由: rule→A, pattern→B',
+    pipeline: '插件适配层分类路由: rule / pattern / fact',
   },
   {
     name: 'doClause',
     level: FieldLevel.REQUIRED,
     type: 'string',
     rule: '英文祈使句 ≤60 tokens，以动词开头',
-    pipeline: '⚠️ Channel A + B 双通道 filter 硬依赖，缺少 → 所有 .mdc 产出为零',
+    pipeline: '插件适配层正向动作摘要，缺少会降低规则生成质量',
   },
   {
     name: 'dontClause',
     level: FieldLevel.REQUIRED,
     type: 'string',
     rule: '英文反向约束（描述禁止的做法）',
-    pipeline: 'Channel A "Do NOT" 后缀 + Channel B **Don\'t** 行。知识「禁止」维度',
+    pipeline: '插件适配层反向约束摘要。知识「禁止」维度',
   },
   {
     name: 'whenClause',
     level: FieldLevel.REQUIRED,
     type: 'string',
     rule: '英文触发场景描述',
-    pipeline: 'Channel B **When** 行 + filter 硬依赖，缺少 → Channel B 产出为零',
+    pipeline: '插件适配层适用条件摘要',
   },
   {
     name: 'coreCode',
     level: FieldLevel.REQUIRED,
     type: 'string',
     rule: '3-8 行纯代码骨架，语法完整可复制',
-    pipeline: 'Channel B 代码模板块 (via _skeletonize)。最直接可复制的内容',
+    pipeline: '插件适配层代码模板块。最直接可复制的内容',
   },
 
   // ── 分类与推理 (5) ────────────────────────────────────────
@@ -172,7 +172,7 @@ export const V3_FIELD_SPEC = [
     level: FieldLevel.REQUIRED,
     type: 'string',
     rule: '编程语言标识 (swift/typescript/python/...)',
-    pipeline: 'Channel A [language] 前缀 + QualityScorer(format 0.5)',
+    pipeline: '插件适配层语言过滤 + QualityScorer(format 0.5)',
     systemInjected: true,
   },
   {
@@ -340,13 +340,13 @@ export function getFieldDef(name: string) {
 }
 
 /**
- * 生成 Cursor 交付字段描述对象（供 MissionBriefingBuilder.submissionSpec.cursorFields）
+ * 生成插件适配字段描述对象（供 MissionBriefingBuilder.submissionSpec.adapterFields）
  *
  * 从 V3_FIELD_SPEC 中提取 trigger/kind/doClause/dontClause/whenClause/coreCode 的 rule，
  * 并标记 REQUIRED 级别为【必填】前缀。
  */
-export function getCursorDeliverySpec() {
-  const CURSOR_FIELD_NAMES = [
+export function getAgentAdapterFieldSpec() {
+  const ADAPTER_FIELD_NAMES = [
     'trigger',
     'kind',
     'doClause',
@@ -355,7 +355,7 @@ export function getCursorDeliverySpec() {
     'coreCode',
   ];
   const result: Record<string, any> = {};
-  for (const name of CURSOR_FIELD_NAMES) {
+  for (const name of ADAPTER_FIELD_NAMES) {
     const def = V3_FIELD_SPEC.find((f) => f.name === name);
     if (def) {
       const prefix = def.level === FieldLevel.REQUIRED ? '【必填】' : '';

@@ -3,7 +3,7 @@
  *
  * Phase 1-4 同步执行（文件收集 / AST / 依赖图 / Guard），
  * 构建 Mission Briefing 一次性返回，不启动异步 AI pipeline。
- * 等待外部 Agent (Cursor/Copilot) 主动提交知识 + 完成维度。
+ * 等待 IDE 插件宿主中的外部 Agent 主动提交知识 + 完成维度。
  *
  * 与 InternalColdStartWorkflow 的关系：
  *   - 本文件: 外部 Agent 路径 — Agent 自行分析代码 + 提交知识，不需要 AI Provider

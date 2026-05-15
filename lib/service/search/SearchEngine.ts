@@ -770,7 +770,7 @@ export class SearchEngine {
   }
 
   /**
-   * 补充详细字段（content / description / trigger / delivery 字段）— 批量 IN 查询
+   * 补充详细字段（content / description / trigger / 插件适配字段）— 批量 IN 查询
    * 用于向量搜索结果与 FieldWeighted 结果的一致性
    */
   _supplementDetails(items: SearchResultItem[]) {
@@ -798,7 +798,7 @@ export class SearchEngine {
           if (row.moduleName) {
             item.moduleName = row.moduleName;
           }
-          // Cursor 交付字段 — 供 Agent 投影生成 actionHint
+          // 插件适配字段 — 供 Agent 投影生成 actionHint
           if (!item.whenClause && row.whenClause) {
             item.whenClause = row.whenClause;
           }

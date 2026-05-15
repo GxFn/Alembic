@@ -73,14 +73,10 @@ export interface CodexStatusData {
   profile: string;
   projectRootResolution: Record<string, unknown>;
   projectArtifacts: {
-    cursorDir: string;
-    cursorDirExists: boolean;
     knowledgeDir: string;
     knowledgeExists: boolean;
     runtimeDir: string;
     runtimeExists: boolean;
-    vscodeMcpExists: boolean;
-    vscodeMcpPath: string;
   };
   projectRoot: string;
   registry: Record<string, unknown>;
@@ -196,10 +192,6 @@ export async function buildCodexStatus(
       runtimeExists: existsSync(join(projectRoot, DEFAULT_FOLDER_NAMES.project.runtime)),
       knowledgeDir: join(projectRoot, DEFAULT_FOLDER_NAMES.project.knowledgeBase),
       knowledgeExists: existsSync(join(projectRoot, DEFAULT_FOLDER_NAMES.project.knowledgeBase)),
-      cursorDir: join(projectRoot, DEFAULT_FOLDER_NAMES.ide.cursorRoot),
-      cursorDirExists: existsSync(join(projectRoot, DEFAULT_FOLDER_NAMES.ide.cursorRoot)),
-      vscodeMcpPath: join(projectRoot, '.vscode', 'mcp.json'),
-      vscodeMcpExists: existsSync(join(projectRoot, '.vscode', 'mcp.json')),
     },
     mcp: {
       runtimeCommand: runtime.runtimeBin,

@@ -40,7 +40,7 @@ export default function migrate(db: import('better-sqlite3').Database) {
       difficulty        TEXT,
       tags              TEXT DEFAULT '[]',
 
-      -- Cursor 交付字段
+      -- 插件适配字段
       trigger           TEXT DEFAULT '',
       topicHint         TEXT DEFAULT '',
       whenClause        TEXT DEFAULT '',

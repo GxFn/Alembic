@@ -40,7 +40,6 @@ export function walkDir(dir: string, callback: (filePath: string) => void, maxFi
     '__tests__',
     'Tests',
     DEFAULT_KNOWLEDGE_BASE_DIR,
-    '.cursor',
   ]);
   let count = 0;
 

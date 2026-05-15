@@ -323,7 +323,7 @@ export class HnswVectorAdapter extends VectorStore {
           `Vector dimension mismatch: store has ${this.#dimension}d, ` +
             `new vector is ${vector.length}d. ` +
             `This usually means the embedding model was changed. ` +
-            `Run 'alembic embed --clear --force' to rebuild with the new model.`
+            `Trigger vector index rebuild from the plugin host with clear+force.`
         );
       }
     }
@@ -388,7 +388,7 @@ export class HnswVectorAdapter extends VectorStore {
             `Vector dimension mismatch: store has ${this.#dimension}d, ` +
               `new vector is ${vector.length}d. ` +
               `This usually means the embedding model was changed. ` +
-              `Run 'alembic embed --clear --force' to rebuild with the new model.`
+              `Trigger vector index rebuild from the plugin host with clear+force.`
           );
         }
       }

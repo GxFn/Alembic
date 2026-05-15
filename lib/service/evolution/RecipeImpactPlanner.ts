@@ -5,7 +5,7 @@
  * 批量分析所有变更文件对 Recipe 的影响，生成 EvolutionCandidatePlan。
  *
  * 与 FileChangeHandler 的区别:
- *   - FileChangeHandler 处理实时 IDE 事件，使用 git diff HEAD，逐个文件分析
+ *   - FileChangeHandler 处理已归一化的文件事件，当前主要来自 git diff checkpoint
  *   - RecipeImpactPlanner 处理 rescan 批量 diff，消费 runAllPhases 的 incrementalPlan 产出
  *
  * @module service/evolution/RecipeImpactPlanner

@@ -39,7 +39,6 @@ export interface InternalDimensionFillPreparation {
   agentService: AgentService | null;
   systemRunContextFactory: SystemRunContextFactory | null;
   isMockMode: boolean;
-  skipTargetDelivery: boolean;
 }
 
 export function prepareInternalDimensionFillRun(
@@ -106,7 +105,6 @@ export function prepareInternalDimensionFillRun(
     agentService,
     systemRunContextFactory,
     isMockMode,
-    skipTargetDelivery: view.skipTargetDelivery === true,
   };
 }
 

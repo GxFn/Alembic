@@ -4,7 +4,7 @@
  * 功能:
  *   1. 对比当前和历史 violations，检测已修复的违规
  *   2. 已修复违规如有 fixSuggestion → 自动 confirmUsage（记录 Recipe 使用）
- *   3. 集成到 guardAuditFiles MCP handler 和 GuardHandler (FileWatcher)
+ *   3. 集成到 guardAuditFiles MCP handler 和 GuardHandler
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';

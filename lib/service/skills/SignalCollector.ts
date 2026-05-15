@@ -1,7 +1,7 @@
 /**
  * SignalCollector — AI 驱动的后台行为分析与 Skill 推荐引擎
  *
- * 在 `alembic ui` 运行时作为后台守护进程运行，周期性收集多维度信号并
+ * 在 Alembic daemon 运行时作为后台守护进程运行，周期性收集多维度信号并
  * 通过 AgentService（统一 AgentRuntime 入口）进行深度分析，生成 Skill 推荐。
  *
  * 三种工作模式：
@@ -229,7 +229,7 @@ export class SignalCollector implements Startable {
   }
 
   /**
-   * 外部事件推送入口（由 FileWatcher / Guard / CLI 等调用）
+   * 外部事件推送入口（由 Guard 或插件宿主调用）
    *
    * 事件会经过 EventAggregator 聚合后触发提前分析。
    * @param key 事件类型（如 'file_change', 'guard_violation', 'candidate_submit'）

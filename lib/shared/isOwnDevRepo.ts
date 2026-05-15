@@ -6,7 +6,7 @@
  *  2. isAlembicEcosystemRepo — Alembic 生态项目（alembic-book 等）
  *  3. isExcludedProject — 综合判定：不适合创建知识库的项目
  *
- * 用于防止 MCP 服务器 / CLI 在不当目录创建 `.asd/` 运行时数据。
+ * 用于防止插件运行时在不当目录创建 `.asd/` 运行时数据。
  *
  * isAlembicDevRepo 检测条件（三者同时满足）：
  *  1. projectRoot/package.json 的 name === 'alembic-ai'

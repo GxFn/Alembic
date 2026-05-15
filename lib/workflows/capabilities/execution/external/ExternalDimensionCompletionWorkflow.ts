@@ -294,7 +294,7 @@ export async function runExternalDimensionCompletionWorkflow(
         log: logger,
         dependencies: dependencies.finalizerDependencies,
       })
-    : { deliveryVerification: null, semanticMemoryResult: null };
+    : { semanticMemoryResult: null };
 
   if (input.value.crossDimensionHints) {
     session.value.storeHints(input.value.dimensionId, input.value.crossDimensionHints);
@@ -335,7 +335,6 @@ export async function runExternalDimensionCompletionWorkflow(
       qualityFeedback,
       evidenceHints,
       subpackageCoverageWarning,
-      deliveryVerification: isComplete ? completionFinalizer.deliveryVerification : undefined,
       nextActions: isComplete ? BOOTSTRAP_COMPLETE_ACTIONS : undefined,
     },
     meta: {

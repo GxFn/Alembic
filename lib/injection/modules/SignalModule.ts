@@ -22,7 +22,7 @@ import type { ServiceContainer } from '../ServiceContainer.js';
 
 /**
  * Register intent signal subscriber for JSONL persistence.
- * Replaces standalone SignalLogger — writes IntentChainRecord to .asd/logs/signals/YYYY-MM-DD.jsonl.
+ * Replaces the old SignalLogger singleton — writes IntentChainRecord to .asd/logs/signals/YYYY-MM-DD.jsonl.
  */
 function registerIntentPersistence(
   signalBus: SignalBus,

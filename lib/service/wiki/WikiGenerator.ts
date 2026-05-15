@@ -24,7 +24,6 @@
  *   ├── patterns/             — 按分类拆分 (Recipe 较多时)
  *   │   └── {category}.md
  *   ├── protocols.md          — 协议参考 (协议较多时)
- *   ├── documents/            — 同步的 Cursor 端文档
  *   └── meta.json             — Wiki 元数据
  *
  * @module WikiGenerator
@@ -175,7 +174,6 @@ export const WikiPhase = Object.freeze({
   KNOWLEDGE: 'knowledge', // 整合已有 Recipes
   GENERATE: 'generate', // 生成 Markdown 骨架
   AI_COMPOSE: 'ai-compose', // AI 合成写作增强
-  SYNC_DOCS: 'sync-docs', // 同步 Cursor 端 MD
   DEDUP: 'dedup', // 去重
   FINALIZE: 'finalize', // 写入 meta.json
 });
@@ -288,19 +286,11 @@ export class WikiGenerator {
         return this._abortedResult();
       }
 
-      // Phase 8: Sync Cursor docs
-      this._emit(WikiPhase.SYNC_DOCS, 80, '同步 Cursor 端文档...');
-      const syncedFiles = this._syncCursorDocs();
-      files.push(...syncedFiles);
-      if (this._aborted) {
-        return this._abortedResult();
-      }
-
-      // Phase 9: Dedup
+      // Phase 8: Dedup
       this._emit(WikiPhase.DEDUP, 90, '去重检查...');
       const dedupResult = dedup(files, this.wikiDir, this._emit.bind(this), this.#wz);
 
-      // Phase 10: Finalize
+      // Phase 9: Finalize
       this._emit(WikiPhase.FINALIZE, 95, '写入元数据...');
       const meta = this._writeMeta(files, startTime, dedupResult);
 
@@ -311,7 +301,6 @@ export class WikiGenerator {
         success: true,
         filesGenerated: files.length,
         aiComposed: files.filter((f) => f.polished).length,
-        syncedDocs: syncedFiles.length,
         dedup: dedupResult,
         duration,
         wikiDir: this.wikiDir,
@@ -1014,74 +1003,6 @@ export class WikiGenerator {
       `撰写完成: ${files.length} 篇文档 (${composed} 篇 AI 增强)`
     );
     return files;
-  }
-
-  // ═══ Phase 8: 同步 Cursor 端 MD ═══════════════════════════
-
-  /**
-   * 同步 Cursor 端保存的 MD 到 wiki 目录
-   *
-   * 同步源:
-   *   1. .cursor/skills/alembic-devdocs/references/ (*.md)  → wiki/documents/
-   *
-   * @returns >}
-   */
-  _syncCursorDocs() {
-    const synced: WikiFileResult[] = [];
-    const isZh = this.options.language === 'zh';
-
-    // ── Source 1: Channel D devdocs ──
-    const devdocsDir = path.join(
-      this.projectRoot,
-      '.cursor',
-      'skills',
-      'alembic-devdocs',
-      'references'
-    );
-    if (fs.existsSync(devdocsDir)) {
-      this._ensureDir(path.join(this.wikiDir, 'documents'));
-      const files = fs.readdirSync(devdocsDir).filter((f) => f.endsWith('.md'));
-      for (const file of files) {
-        try {
-          const content = fs.readFileSync(path.join(devdocsDir, file), 'utf-8');
-          const header = `<!-- synced from .cursor/skills/alembic-devdocs/references/${file} -->\n\n`;
-          const result: WikiFileResult = this._writeFile(`documents/${file}`, header + content);
-          result.source = 'cursor-devdocs';
-          synced.push(result);
-        } catch {
-          /* skip */
-        }
-      }
-    }
-
-    // 生成目录索引
-    this._generateSyncIndex(synced, isZh);
-
-    logger.info(`[WikiGenerator] Synced ${synced.length} docs from Cursor`);
-    this._emit(WikiPhase.SYNC_DOCS, 88, `同步完成: ${synced.length} 个文档`);
-    return synced;
-  }
-
-  /** 为同步目录生成索引页 */
-  _generateSyncIndex(synced: WikiFileResult[], isZh: boolean) {
-    const docFiles = synced.filter((f: WikiFileResult) => f.path.startsWith('documents/'));
-
-    if (docFiles.length > 0) {
-      const lines = [
-        `# ${isZh ? '开发文档' : 'Developer Documents'}`,
-        '',
-        `> ${isZh ? '由 Cursor Agent 创建并同步到 Wiki 的开发文档' : 'Development documents created by Cursor Agent and synced to Wiki'}`,
-        '',
-        `| ${isZh ? '文档' : 'Document'} | ${isZh ? '来源' : 'Source'} |`,
-        '|--------|--------|',
-      ];
-      for (const f of docFiles) {
-        const name = path.basename(f.path, '.md');
-        lines.push(`| [${name}](${path.basename(f.path)}) | ${f.source} |`);
-      }
-      lines.push('');
-      this._writeFile('documents/_index.md', lines.join('\n'));
-    }
   }
 
   _emit(phase: string, progress: number, message: string) {

@@ -122,17 +122,6 @@ export const MONITORING = Object.freeze({
   ERROR_ALERT_THRESHOLD: 10,
 });
 
-// ─── Cursor 交付 ─────────────────────────────────────────
-
-/** CursorDeliveryPipeline 排序权重 */
-export const DELIVERY_RANK = Object.freeze({
-  CONFIDENCE_WEIGHT: 50,
-  AUTHORITY_WEIGHT: 30,
-  USE_COUNT_MAX: 10,
-  USE_COUNT_WEIGHT: 2,
-  ACTIVE_BONUS: 10,
-});
-
 export default {
   QUALITY_WEIGHTS,
   QUALITY_GRADES,
@@ -145,5 +134,4 @@ export default {
   AI_CIRCUIT_BREAKER,
   CACHE,
   MONITORING,
-  DELIVERY_RANK,
 };

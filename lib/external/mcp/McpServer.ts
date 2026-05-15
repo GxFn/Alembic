@@ -2,7 +2,7 @@
  * Alembic V3 MCP Server — 整合版
  *
  * Model Context Protocol (stdio transport)
- * 提供给 IDE AI Agent (Cursor/VSCode Copilot) 的工具集
+ * 提供给插件宿主 Agent 的工具集
  *
  * V3.3 整合：39 → 16 工具（14 agent + 2 admin）
  * 通过 ALEMBIC_MCP_TIER 环境变量控制可见工具集（agent/admin）
@@ -30,7 +30,6 @@ import { LightweightRouter } from '#tools/core/LightweightRouter.js';
 import type { ToolActor, ToolCallSource, ToolSurface } from '#tools/core/ToolCallContext.js';
 import type { ToolRouterContract } from '#tools/core/ToolContracts.js';
 import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
-import { applyPendingAutoApprove, markAutoApproveNeeded } from './autoApproveInjector.js';
 import { envelope } from './envelope.js';
 import { wrapHandler } from './errorHandler.js';
 import type { IntentState, McpContext, McpServiceContainer } from './handlers/types.js';
@@ -54,7 +53,6 @@ interface McpSession {
 /** McpServer constructor options */
 interface McpServerOptions {
   actorRole?: string;
-  autoApprove?: boolean;
   container?: McpServiceContainer | null;
   bootstrap?: BootstrapLike | null;
   source?: ToolCallSource;
@@ -112,8 +110,6 @@ import { wikiRouter } from './handlers/wiki-external.js';
 export class McpServer {
   container: McpServiceContainer | null;
   logger: ReturnType<typeof Logger.getInstance> | null;
-  _autoApproveMarked: boolean;
-  _autoApproveEnabled: boolean;
   _capabilityProbe: CapabilityProbe | null;
   _defaultActorRole: string | null;
   _defaultSource: ToolCallSource;
@@ -131,8 +127,6 @@ export class McpServer {
     this.bootstrap = options.bootstrap || null;
     this.sdkServer = null;
     this._startedAt = Date.now();
-    this._autoApproveMarked = false;
-    this._autoApproveEnabled = options.autoApprove !== false;
     this._capabilityProbe = null;
     this._defaultActorRole = options.actorRole || null;
     this._defaultSource = options.source || { kind: 'mcp', name: 'tools/call' };
@@ -171,7 +165,7 @@ export class McpServer {
         const msg =
           `[MCP] 缺少 ALEMBIC_PROJECT_DIR 环境变量。MCP server 拒绝启动。\n` +
           `在多根工作区中 process.cwd() 可能指向任意子目录，不能作为项目根目录。\n` +
-          `请在 .vscode/mcp.json 的 env 中设置 ALEMBIC_PROJECT_DIR 为目标项目的绝对路径。`;
+          `请由插件宿主传入 ALEMBIC_PROJECT_DIR，或在调用 MCP 工具时提供明确的 projectRoot。`;
         process.stderr.write(`${msg}\n`);
         throw new Error(msg);
       }
@@ -186,7 +180,7 @@ export class McpServer {
         const msg =
           `[MCP] projectRoot "${projectRoot}" 是排除项目（${exclusion.reason}），` +
           `MCP server 拒绝在此目录创建运行时数据。\n` +
-          `提示: 在 .vscode/mcp.json 的 env 中设置正确的 ALEMBIC_PROJECT_DIR。`;
+          `提示: 请由插件宿主传入正确的 ALEMBIC_PROJECT_DIR。`;
         process.stderr.write(`${msg}\n`);
         throw new Error(msg);
       }
@@ -359,18 +353,6 @@ export class McpServer {
 
     // ── [DEFERRED] Decision 注入（待 JSONL 数据验证后启用） ──
     // await this._injectDecisions(name, result);
-
-    // ── 首次成功 tool call → 标记 autoApprove（one-shot） ──
-    // 用户已手动授权了至少一个工具，标记后下次 MCP 启动注入 autoApprove
-    if (this._autoApproveEnabled && !this._autoApproveMarked) {
-      this._autoApproveMarked = true;
-      try {
-        const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
-        markAutoApproveNeeded(projectRoot, this.logger || undefined);
-      } catch {
-        /* non-blocking */
-      }
-    }
 
     return result;
   }
@@ -664,14 +646,6 @@ export class McpServer {
 
   async start() {
     await this.initialize();
-
-    // 首次 bootstrap 成功后的标记 → 注入 autoApprove（在连接建立前，安全写入 mcp.json）
-    const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
-    try {
-      applyPendingAutoApprove(projectRoot, this.logger || undefined);
-    } catch {
-      /* non-blocking */
-    }
 
     const transport = new StdioServerTransport();
     if (!this.sdkServer) {

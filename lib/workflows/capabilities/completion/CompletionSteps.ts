@@ -1,8 +1,8 @@
 /**
  * CompletionSteps — Workflow 完成阶段的各步骤实现
  *
- * 包含 Cursor Delivery、交付验证、Panorama 刷新、Wiki 生成
- * 和语义记忆固化，由 WorkflowCompletionFinalizer 按顺序调用。
+ * 包含 Panorama 刷新、Wiki 生成和语义记忆固化，
+ * 由 WorkflowCompletionFinalizer 按顺序调用。
  */
 
 import type {
@@ -10,78 +10,12 @@ import type {
   CompletionLogger,
   CompletionSessionLike,
   CompletionSessionStoreLike,
-  DeliveryPipelineLike,
   LoadServiceContainer,
   PanoramaServiceLike,
   PersistentMemoryDb,
   WikiGeneratorLike,
   WorkflowSemanticMemoryConsolidationResult,
 } from '#workflows/capabilities/completion/WorkflowCompletionTypes.js';
-
-// ── DeliveryCompletionStep ──
-
-export async function runCursorDelivery({
-  getServiceContainer,
-  log,
-}: {
-  getServiceContainer: LoadServiceContainer;
-  log: CompletionLogger;
-}): Promise<void> {
-  try {
-    const container = await getServiceContainer();
-    const pipeline = container.services?.cursorDeliveryPipeline
-      ? (container.get?.('cursorDeliveryPipeline') as DeliveryPipelineLike | undefined)
-      : undefined;
-    if (!pipeline) {
-      return;
-    }
-
-    const deliveryResult = await pipeline.deliver();
-    log.info(
-      `[DimensionComplete] Auto Cursor Delivery complete — ` +
-        `A: ${deliveryResult.channelA?.rulesCount || 0} rules, ` +
-        `B: ${deliveryResult.channelB?.topicCount || 0} topics, ` +
-        `C: ${deliveryResult.channelC?.synced || 0} skills, ` +
-        `F: ${deliveryResult.channelF?.filesWritten || 0} agent files`
-    );
-  } catch (err: unknown) {
-    log.warn(
-      `[DimensionComplete] Auto CursorDelivery failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
-    );
-  }
-}
-
-// ── DeliveryVerificationStep ──
-
-export async function verifyDelivery({
-  ctx,
-  log,
-}: {
-  ctx: CompletionContextLike;
-  log: CompletionLogger;
-}): Promise<import('#service/bootstrap/DeliveryVerifier.js').DeliveryVerification | null> {
-  try {
-    const { DeliveryVerifier } = await import('#service/bootstrap/DeliveryVerifier.js');
-    const { resolveDataRoot, resolveProjectRoot } = await import('#shared/resolveProjectRoot.js');
-    const projectRoot = resolveProjectRoot(ctx.container as never);
-    const dataRoot = resolveDataRoot(ctx.container as never) || projectRoot;
-    const verifier = new DeliveryVerifier(projectRoot, dataRoot);
-    const verification = verifier.verify();
-    if (!verification.allPassed) {
-      log.warn('[DimensionComplete] Delivery verification incomplete', {
-        failures: verification.failures,
-      });
-    } else {
-      log.info('[DimensionComplete] Delivery verification passed — all channels OK');
-    }
-    return verification;
-  } catch (err: unknown) {
-    log.warn(
-      `[DimensionComplete] DeliveryVerifier failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
-    );
-    return null;
-  }
-}
 
 // ── PanoramaCompletionStep ──
 

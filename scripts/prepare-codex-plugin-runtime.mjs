@@ -43,10 +43,6 @@ copyTree('config', 'config');
 copyTree('templates', 'templates');
 copyTree('injectable-skills', 'injectable-skills');
 copyTree('resources/grammars', 'resources/grammars');
-copyTree('resources/native-ui', 'resources/native-ui', { optional: true });
-copyFile('resources/openChrome.applescript', 'resources/openChrome.applescript', {
-  optional: true,
-});
 copyFile('template.json', 'template.json', { optional: true });
 copyFile('README.md', 'README.md', { optional: true });
 copyFile('README_CN.md', 'README_CN.md', { optional: true });

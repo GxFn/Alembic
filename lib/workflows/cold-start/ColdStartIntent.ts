@@ -8,7 +8,6 @@ export interface InternalColdStartArgs {
   contentMaxLines?: number;
   incremental?: boolean;
   skipAsyncFill?: boolean;
-  skipTargetDelivery?: boolean;
   loadSkills?: boolean;
   dimensions?: string[];
   [key: string]: unknown;
@@ -25,7 +24,6 @@ export interface ColdStartProjectAnalysisIntent {
 
 export interface InternalColdStartExecutionIntent {
   skipAsyncFill: boolean;
-  skipTargetDelivery: boolean;
 }
 
 export interface ColdStartWorkflowIntent {
@@ -59,7 +57,6 @@ export function createInternalColdStartIntent(
     dimensionIds: normalizeDimensionIds(args.dimensions),
     internalExecution: {
       skipAsyncFill: args.skipAsyncFill ?? false,
-      skipTargetDelivery: args.skipTargetDelivery ?? false,
     },
     ignoredFileDiffIncremental: args.incremental === true,
   };

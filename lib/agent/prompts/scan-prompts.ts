@@ -87,7 +87,7 @@ export const SCAN_TASK_CONFIGS = {
 2. 有项目特写风格的正文 (content.markdown 字段，结合代码展示)
 3. 标注相关文件的完整相对路径 + 行号 (reasoning.sources，如 ["Packages/ModuleName/Sources/.../FileName.swift"])
 4. 选择正确的 kind (rule/pattern/fact)
-5. 提供完整的 Cursor 交付字段 (trigger, doClause, whenClause 等)
+5. 提供完整的 插件适配字段 (trigger, doClause, whenClause 等)
 6. 标注所属模块/包名（特别是来自本地子包的知识）
 
 ## 「项目特写」写作要求（content.markdown）

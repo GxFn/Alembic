@@ -260,7 +260,7 @@ export class ProposalExecutor {
   /**
    * 启动时一次性清理 — 清理过期 Pending、对长期 Observing 做兜底评估
    *
-   * 不再被定时调用，仅在 Dashboard 启动时 / CLI evolve-check 时调用。
+   * 不再被定时调用，仅在 Dashboard 启动或插件宿主明确检查时调用。
    * 主要流程已由 subscribeToSignals() 接管。
    */
   async checkAndExecute(): Promise<ProposalExecutionResult> {

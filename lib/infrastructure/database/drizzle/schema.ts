@@ -52,7 +52,7 @@ export const knowledgeEntries = sqliteTable(
     difficulty: text('difficulty'),
     tags: text('tags').default('[]'),
 
-    // Cursor 交付字段
+    // 插件适配字段
     trigger: text('trigger').default(''),
     topicHint: text('topicHint').default(''),
     whenClause: text('whenClause').default(''),

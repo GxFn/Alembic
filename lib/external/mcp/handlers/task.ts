@@ -178,7 +178,7 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
     ctx.session.intent = freshIntent;
   }
 
-  // ─── Delivery: build response ───
+  // ─── Build response ───
   const relatedCount = searchResult?.relatedKnowledge.length ?? 0;
   const ruleCount = searchResult?.guardRules.length ?? 0;
 

@@ -541,7 +541,6 @@ const IGNORED_DIRS = new Set([
   '.gradle',
   'DerivedData',
   '.idea',
-  '.vscode',
   'coverage',
   '.turbo',
   'Packages',
