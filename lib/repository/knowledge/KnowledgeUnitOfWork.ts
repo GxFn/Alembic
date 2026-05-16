@@ -23,10 +23,10 @@
  */
 
 import type { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
-import Logger from '../../infrastructure/logging/Logger.js';
-import type { DrizzleTx } from '../base/RepositoryBase.js';
-import type { KnowledgeFileStore } from './KnowledgeFileStore.js';
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { DrizzleTx } from '@alembic/core/repository/base/RepositoryBase';
+import type { KnowledgeFileStore } from '@alembic/core/repository/knowledge/KnowledgeFileStore';
 
 /* ═══ 类型定义 ═══ */
 

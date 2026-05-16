@@ -25,9 +25,9 @@ import { recipeStorageBucket } from '@alembic/core/domain/dimension/RecipeDimens
 import type { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 import { CANDIDATES_DIR, RECIPES_DIR } from '@alembic/core/infrastructure/config/Defaults';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { KnowledgeFileStore } from '@alembic/core/repository/knowledge/KnowledgeFileStore';
 import pathGuard from '@alembic/core/shared/PathGuard';
-import Logger from '../../infrastructure/logging/Logger.js';
-import type { KnowledgeFileStore } from '../../repository/knowledge/KnowledgeFileStore.js';
 
 /* ═══════════════════════════════════════════════════════════
  * 标量字段定义 — frontmatter 中直接输出为 key: value

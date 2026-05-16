@@ -14,6 +14,7 @@ import {
   join as _pathJoin,
   relative,
 } from 'node:path';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import {
   type AgentService,
   runScanAgentTask,
@@ -21,7 +22,6 @@ import {
 } from '#agent/service/index.js';
 import { getDiscovererRegistry } from '../../core/discovery/index.js';
 import { inferLang } from '../../external/mcp/handlers/LanguageExtensions.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 
 /** 全局排除目录 */
 const SCAN_EXCLUDE_DIRS = new Set([

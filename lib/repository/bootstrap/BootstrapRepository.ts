@@ -5,12 +5,12 @@
  * 使用 Drizzle 类型安全 API 操作 bootstrap_snapshots + bootstrap_dim_files 表。
  */
 
-import { and, count, desc, eq, sql } from 'drizzle-orm';
 import {
   bootstrapDimFiles,
   bootstrapSnapshots,
-} from '../../infrastructure/database/drizzle/schema.js';
-import { RepositoryBase } from '../base/RepositoryBase.js';
+} from '@alembic/core/infrastructure/database/drizzle/schema';
+import { RepositoryBase } from '@alembic/core/repository/base/RepositoryBase';
+import { and, count, desc, eq, sql } from 'drizzle-orm';
 
 /* ═══ 类型定义 ═══ */
 

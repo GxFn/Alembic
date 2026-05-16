@@ -68,10 +68,10 @@ type RescanMcpContext = WorkflowMcpContext & McpContext;
 // ── Helpers ──────────────────────────────────────────
 
 type SourceRefRepoT = InstanceType<
-  typeof import('../../../repository/sourceref/RecipeSourceRefRepository.js').RecipeSourceRefRepositoryImpl
+  typeof import('@alembic/core/repository/sourceref/RecipeSourceRefRepository').RecipeSourceRefRepositoryImpl
 >;
 type KnowledgeRepoT = InstanceType<
-  typeof import('../../../repository/knowledge/KnowledgeRepository.impl.js').default
+  typeof import('@alembic/core/repository/knowledge/KnowledgeRepository.impl').default
 >;
 
 interface KnowledgeRepos {

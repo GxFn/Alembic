@@ -1,8 +1,8 @@
 import os from 'node:os';
 import path from 'node:path';
+import DatabaseConnection from '@alembic/core/infrastructure/database/DatabaseConnection';
 import AuditLogger from '../../lib/infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../lib/infrastructure/audit/AuditStore.js';
-import DatabaseConnection from '../../lib/infrastructure/database/DatabaseConnection.js';
 
 const __dirname = import.meta.dirname;
 

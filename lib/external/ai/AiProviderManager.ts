@@ -15,7 +15,7 @@
  *   - DI 数据管道: switchProvider() 通过回调同步 singletons 中的 provider 引用
  */
 
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 
 // ── 类型 ────────────────────────────────────────────────
 

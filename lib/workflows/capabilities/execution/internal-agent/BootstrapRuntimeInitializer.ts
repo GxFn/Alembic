@@ -1,9 +1,9 @@
 import path from 'node:path';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import { MemoryEmbeddingStore } from '#agent/memory/MemoryEmbeddingStore.js';
 import { PersistentMemory } from '#agent/memory/PersistentMemory.js';
 import { SessionStore } from '#agent/memory/SessionStore.js';
-import Logger from '#infra/logging/Logger.js';
 import type { IncrementalPlan } from '#types/workflows.js';
 import { DimensionContext } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
 import { syncRestoredSessionStoreDigests } from '#workflows/capabilities/persistence/DimensionCheckpoint.js';

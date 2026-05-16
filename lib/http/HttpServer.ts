@@ -6,6 +6,7 @@
 
 import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
 import cors from 'cors';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
@@ -13,7 +14,6 @@ import helmet from 'helmet';
 import { CapabilityProbe } from '../core/capability/CapabilityProbe.js';
 import { registerGatewayActions } from '../core/gateway/GatewayActionRegistry.js';
 import { initCacheAdapter } from '../infrastructure/cache/UnifiedCacheAdapter.js';
-import Logger from '../infrastructure/logging/Logger.js';
 import { type ErrorTracker, initErrorTracker } from '../infrastructure/monitoring/ErrorTracker.js';
 import { initPerformanceMonitor } from '../infrastructure/monitoring/PerformanceMonitor.js';
 import { initRealtimeService } from '../infrastructure/realtime/RealtimeService.js';

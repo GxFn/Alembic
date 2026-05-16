@@ -9,7 +9,7 @@
  */
 
 import path from 'node:path';
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';

@@ -1,4 +1,4 @@
-import Logger from '../../infrastructure/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { AuditStore } from './AuditStore.js';
 
 /** Minimal EventBus shape for optional audit event emission */

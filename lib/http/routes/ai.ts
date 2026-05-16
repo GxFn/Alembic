@@ -3,6 +3,7 @@
  * AI 提供商管理、摘要、翻译、对话、工作区 LLM 配置
  */
 
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { ValidationError } from '@alembic/core/shared/errors/index';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import {
@@ -34,7 +35,6 @@ import {
 import { createProvider } from '../../external/ai/AiFactory.js';
 import { getModelRegistry } from '../../external/ai/registry/ModelRegistry.js';
 import { PROVIDER_CONFIGS } from '../../external/ai/registry/ProviderConfig.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import {

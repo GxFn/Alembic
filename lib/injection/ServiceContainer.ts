@@ -1,5 +1,8 @@
 import { type Dirent, readdirSync, statSync } from 'node:fs';
 import { extname as pathExtname, join as pathJoin, relative as pathRelative } from 'node:path';
+// ─── P3: Infrastructure ──────────────────────────────
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 // ─── v3.0: AST ProjectGraph ──────────────────────────
 import ProjectGraph from '../core/ast/ProjectGraph.js';
@@ -7,9 +10,6 @@ import ProjectGraph from '../core/ast/ProjectGraph.js';
 import { initEnhancementRegistry } from '../core/enhancement/index.js';
 import { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
 import { GraphCache } from '../infrastructure/cache/GraphCache.js';
-// ─── P3: Infrastructure ──────────────────────────────
-import Logger from '../infrastructure/logging/Logger.js';
-import { unwrapRawDb } from '../repository/search/SearchRepoAdapter.js';
 import * as AgentModule from './modules/AgentModule.js';
 import * as AiModule from './modules/AiModule.js';
 import * as AppModule from './modules/AppModule.js';
@@ -212,12 +212,12 @@ export class ServiceContainer {
     try {
       const db = this.singletons.database as
         | {
-            getDb?: () => import('../infrastructure/database/DatabaseConnection.js').SqliteDatabase;
+            getDb?: () => import('@alembic/core/infrastructure/database/DatabaseConnection').SqliteDatabase;
           }
         | undefined;
       const rawDb = db
         ? (unwrapRawDb(db as unknown) as
-            | import('../infrastructure/database/DatabaseConnection.js').SqliteDatabase
+            | import('@alembic/core/infrastructure/database/DatabaseConnection').SqliteDatabase
             | null)
         : null;
       if (!rawDb) {

@@ -13,7 +13,7 @@
  * 当 ALEMBIC_TEST_MODE 未设置或为 falsy 时，所有 API 透明返回原始数据。
  */
 
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { DimensionDef } from '#types/project-snapshot.js';
 
 function envBool(key: string): boolean {

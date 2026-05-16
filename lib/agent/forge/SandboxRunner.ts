@@ -13,7 +13,7 @@
 
 import { createContext, runInContext } from 'node:vm';
 
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 
 /* ────────────────────── Types ────────────────────── */
 

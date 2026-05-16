@@ -6,10 +6,10 @@
  * embedding 已迁移到 JSON sidecar (MemoryEmbeddingStore)。
  */
 
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import { semanticMemories } from '@alembic/core/infrastructure/database/drizzle/schema';
+import { RepositoryBase } from '@alembic/core/repository/base/RepositoryBase';
 import { and, avg, count, desc, eq, isNull, or, sql } from 'drizzle-orm';
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
-import { semanticMemories } from '../../infrastructure/database/drizzle/schema.js';
-import { RepositoryBase } from '../base/RepositoryBase.js';
 
 /* ═══ 类型定义 ═══ */
 

@@ -19,14 +19,14 @@
  *   0-19:   死亡 → 跳过确认直接 deprecated
  */
 
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import { auditLogs } from '@alembic/core/infrastructure/database/drizzle/schema';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
+import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
 import { and, like, sql } from 'drizzle-orm';
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
-import { auditLogs } from '../../infrastructure/database/drizzle/schema.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
-import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
-import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
-import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 
 export interface DecaySignal {
   recipeId: string;

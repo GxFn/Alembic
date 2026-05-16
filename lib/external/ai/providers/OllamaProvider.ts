@@ -6,7 +6,7 @@
  * 支持本地部署的 LLM 和 Embedding 模型。
  */
 
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import {
   AiProvider,
   type AiProviderConfig,

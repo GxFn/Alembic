@@ -18,10 +18,10 @@
  * @module infrastructure/cache/CacheCoordinator
  */
 
+import type { SqliteDatabase } from '@alembic/core/infrastructure/database/DatabaseConnection';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { Startable } from '@alembic/core/shared/lifecycle';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
-import type { SqliteDatabase } from '../database/DatabaseConnection.js';
-import Logger from '../logging/Logger.js';
 
 export type InvalidateHandler = () => void;
 

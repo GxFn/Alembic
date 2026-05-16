@@ -10,9 +10,9 @@
  *   - 支持手动续期和提前回收
  */
 
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { Disposable } from '@alembic/core/shared/lifecycle';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
-import Logger from '#infra/logging/Logger.js';
 import type { SignalBus } from '#infra/signal/SignalBus.js';
 import type {
   ForgedInternalToolStore,

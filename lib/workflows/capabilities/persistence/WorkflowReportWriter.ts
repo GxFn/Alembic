@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { IncrementalPlan } from '#types/workflows.js';
 import type { WorkflowCompletionSummary } from '#workflows/capabilities/completion/WorkflowCompletionTypes.js';
 import type {

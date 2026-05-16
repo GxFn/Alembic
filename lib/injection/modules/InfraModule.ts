@@ -9,30 +9,30 @@
 
 import path from 'node:path';
 import { WriteZone } from '@alembic/core/infrastructure/io';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
+import { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
+import { GuardViolationRepositoryImpl } from '@alembic/core/repository/guard/GuardViolationRepository';
+import { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
+import { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import { MemoryRepositoryImpl } from '@alembic/core/repository/memory/MemoryRepository';
+import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
+import { SessionRepositoryImpl } from '@alembic/core/repository/session/SessionRepository';
+import { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
+import { KnowledgeFileWriter } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
+import { KnowledgeSyncService } from '@alembic/core/service/knowledge/KnowledgeSyncService';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
-import { KnowledgeSyncService } from '../../cli/KnowledgeSyncService.js';
 import Gateway from '../../core/gateway/Gateway.js';
 import { JobStore } from '../../daemon/JobStore.js';
 import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../infrastructure/audit/AuditStore.js';
 import { EventBus } from '../../infrastructure/event/EventBus.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService as _getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
-import { BootstrapRepositoryImpl } from '../../repository/bootstrap/BootstrapRepository.js';
 import { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
-import { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
-import { GuardViolationRepositoryImpl } from '../../repository/guard/GuardViolationRepository.js';
-import { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
-import { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
-import { MemoryRepositoryImpl } from '../../repository/memory/MemoryRepository.js';
 import { RemoteCommandRepository } from '../../repository/remote/RemoteCommandRepository.js';
-import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
-import { SessionRepositoryImpl } from '../../repository/session/SessionRepository.js';
-import { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 import { BootstrapTaskManager } from '../../service/bootstrap/BootstrapTaskManager.js';
-import { KnowledgeFileWriter } from '../../service/knowledge/KnowledgeFileWriter.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {

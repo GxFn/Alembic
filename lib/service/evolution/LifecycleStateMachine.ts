@@ -22,11 +22,10 @@
 
 import { randomUUID } from 'node:crypto';
 import { isValidTransition } from '@alembic/core/domain/knowledge/Lifecycle';
-import Logger from '../../infrastructure/logging/Logger.js';
-import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
-import type { LifecycleEventRepository } from '../../repository/evolution/LifecycleEventRepository.js';
-import type { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
-import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { LifecycleEventRepository } from '@alembic/core/repository/evolution/LifecycleEventRepository';
+import type { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
+import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type {
   LifecycleHealthSummary,
   TimeoutCheckResult,
@@ -34,7 +33,8 @@ import type {
   TransitionEvidence,
   TransitionRequest,
   TransitionResult,
-} from '../../types/evolution.js';
+} from '@alembic/core/types/evolution';
+import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 
 /* ────────────────────── Constants ────────────────────── */
 

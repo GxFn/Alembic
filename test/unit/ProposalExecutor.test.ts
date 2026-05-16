@@ -4,11 +4,12 @@
  * Mock ProposalRepository + DB，验证 update / deprecate 两种 Proposal 的执行判据和执行/拒绝逻辑。
  * 信号驱动架构：checkAndExecute 现为启动时兆底清理，主流程由 subscribeToSignals 接管。
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type {
   ProposalRecord,
   ProposalRepository,
-} from '../../lib/repository/evolution/ProposalRepository.js';
+} from '@alembic/core/repository/evolution/ProposalRepository';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProposalExecutor } from '../../lib/service/evolution/ProposalExecutor.js';
 
 /* ── Mock factories ── */

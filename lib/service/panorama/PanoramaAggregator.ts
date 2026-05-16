@@ -7,10 +7,10 @@
  * @module PanoramaAggregator
  */
 
-import type { BootstrapRepositoryImpl } from '../../repository/bootstrap/BootstrapRepository.js';
+import type { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
+import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
+import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
-import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
-import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import type { CouplingAnalyzer } from './CouplingAnalyzer.js';
 import { DimensionAnalyzer } from './DimensionAnalyzer.js';
 import type { ConfigLayer, LayerInferrer } from './LayerInferrer.js';

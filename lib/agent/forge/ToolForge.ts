@@ -9,7 +9,7 @@
  * 瀑布逻辑：reuse → compose → generate，首个成功即返回。
  */
 
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 
 import type { SignalBus } from '#infra/signal/SignalBus.js';
 import type { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';

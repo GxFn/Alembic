@@ -15,8 +15,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import Logger from '../../infrastructure/logging/Logger.js';
-import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 
 export interface PathRename {
   oldPath: string;

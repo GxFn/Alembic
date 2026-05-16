@@ -8,10 +8,10 @@
  *   - 消除 12 个 escape-hatch 注解
  */
 
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import { lifecycleTransitionEvents } from '@alembic/core/infrastructure/database/drizzle/schema';
+import type { TransitionEvent, TransitionEvidence } from '@alembic/core/types/evolution';
 import { count, desc, eq, gt, sql } from 'drizzle-orm';
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
-import { lifecycleTransitionEvents } from '../../infrastructure/database/drizzle/schema.js';
-import type { TransitionEvent, TransitionEvidence } from '../../types/evolution.js';
 
 /* ────────────────────── Types ────────────────────── */
 

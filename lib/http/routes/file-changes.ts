@@ -12,8 +12,8 @@
  * @module http/routes/file-changes
  */
 
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import express, { type Request, type Response } from 'express';
-import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { getFileChangeSourceTracker } from '../../service/evolution/FileChangeSourceTracker.js';
 import type { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';

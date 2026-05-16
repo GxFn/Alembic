@@ -22,12 +22,12 @@ import path from 'node:path';
 import type { KnowledgeEntryProps } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 import { getProjectSkillsPath } from '@alembic/core/infrastructure/config/Paths';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
+import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { KNOWLEDGE_CONFIDENCE } from '@alembic/core/shared/constants';
 import {
   type CallGraphRepo,
   RawDbCallGraphAdapter,
 } from '../../repository/delivery/DeliveryRepoAdapter.js';
-import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
 import {
   getCursorRulesDir,
   getCursorSkillsDir,

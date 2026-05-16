@@ -14,11 +14,11 @@
  * @module RoleRefiner
  */
 
+import type { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
+import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
 import type { LanguageFamily, RolePattern } from '@alembic/core/shared/LanguageProfiles';
 import { LanguageProfiles } from '@alembic/core/shared/LanguageProfiles';
-import type { BootstrapRepositoryImpl } from '../../repository/bootstrap/BootstrapRepository.js';
 import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
-import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
 import type { ModuleRole } from './PanoramaTypes.js';
 
 // re-export for backward compat

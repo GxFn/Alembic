@@ -12,11 +12,11 @@
  */
 
 import { isConsumable, isDegraded } from '@alembic/core/domain/knowledge/Lifecycle';
+import type { ProposalSource } from '@alembic/core/repository/evolution/ProposalRepository';
+import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
 import { extractRecipeTokens } from '@alembic/core/shared/recipe-tokens';
 import type { EvolutionAuditRecipe } from '../../agent/runs/evolution/EvolutionAgentRun.js';
-import type { ProposalSource } from '../../repository/evolution/ProposalRepository.js';
-import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
-import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 import { assessImpactUnified } from './ContentImpactAnalyzer.js';
 import type { EvolutionAction, EvolutionDecision, EvolutionResult } from './EvolutionGateway.js';
 

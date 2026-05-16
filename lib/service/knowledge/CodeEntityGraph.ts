@@ -23,9 +23,9 @@
  * @module CodeEntityGraph
  */
 
-import Logger from '../../infrastructure/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
 import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
-import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
 
 const logger = Logger.getInstance();
 

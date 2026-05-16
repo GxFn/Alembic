@@ -12,10 +12,10 @@
 
 import { type RecipeLike, RecipeSimilarity } from '@alembic/core/domain/evolution/RecipeSimilarity';
 import { CONSUMABLE_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
-import Logger from '../../infrastructure/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
-import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 
 /* ────────────────────── Types ────────────────────── */
 

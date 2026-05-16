@@ -12,10 +12,10 @@
  *   0.85-0.89 → 72h
  */
 
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import { unixNow } from '@alembic/core/shared/utils/common';
-import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
-import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 
 /* ────────────────────── Types ────────────────────── */
 

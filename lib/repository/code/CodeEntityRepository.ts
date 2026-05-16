@@ -5,10 +5,10 @@
  * 使用 Drizzle 类型安全 API。
  */
 
+import { codeEntities } from '@alembic/core/infrastructure/database/drizzle/schema';
+import { RepositoryBase } from '@alembic/core/repository/base/RepositoryBase';
 import { unixNow } from '@alembic/core/shared/utils/common';
 import { and, count, eq, inArray, isNotNull, like, ne, sql } from 'drizzle-orm';
-import { codeEntities } from '../../infrastructure/database/drizzle/schema.js';
-import { RepositoryBase } from '../base/RepositoryBase.js';
 
 /* ═══ 类型定义 ═══ */
 

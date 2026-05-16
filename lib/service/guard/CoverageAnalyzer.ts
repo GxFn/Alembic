@@ -5,10 +5,10 @@
  * 与 PanoramaService 协同：利用模块划分 + gaps 数据做精准评估。
  */
 
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { GuardViolationRepositoryImpl } from '@alembic/core/repository/guard/GuardViolationRepository';
+import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
-import Logger from '../../infrastructure/logging/Logger.js';
-import type { GuardViolationRepositoryImpl } from '../../repository/guard/GuardViolationRepository.js';
-import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 
 /* ────────────────────── Types ────────────────────── */
 

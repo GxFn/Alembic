@@ -9,6 +9,12 @@
  */
 
 import { DimensionCopy } from '@alembic/core/domain/dimension/DimensionCopy';
+import { LifecycleEventRepository } from '@alembic/core/repository/evolution/LifecycleEventRepository';
+import type { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
+import { WarningRepository } from '@alembic/core/repository/evolution/WarningRepository';
+import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
+import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
 import {
   resolveDataRoot,
@@ -21,12 +27,6 @@ import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import { HnswVectorAdapter } from '../../infrastructure/vector/HnswVectorAdapter.js';
 import { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
 import { JsonVectorAdapter } from '../../infrastructure/vector/JsonVectorAdapter.js';
-import { LifecycleEventRepository } from '../../repository/evolution/LifecycleEventRepository.js';
-import type { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
-import { WarningRepository } from '../../repository/evolution/WarningRepository.js';
-import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
-import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
-import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 import { findSimilarRecipes } from '../../service/candidate/SimilarityService.js';
 import { ConsolidationAdvisor } from '../../service/evolution/ConsolidationAdvisor.js';
 import { ContentPatcher } from '../../service/evolution/ContentPatcher.js';
@@ -256,7 +256,7 @@ export function register(c: ServiceContainer) {
         : undefined,
       drizzle: (
         ct.get('database') as unknown as {
-          getDrizzle(): import('../../infrastructure/database/drizzle/index.js').DrizzleDB;
+          getDrizzle(): import('@alembic/core/infrastructure/database/drizzle').DrizzleDB;
         }
       ).getDrizzle(),
     });

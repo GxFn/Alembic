@@ -14,12 +14,12 @@
  */
 
 import { EvolutionPolicy } from '@alembic/core/domain/evolution/EvolutionPolicy';
-import Logger from '../../infrastructure/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type {
   ProposalRepository,
   ProposalSource,
-} from '../../repository/evolution/ProposalRepository.js';
-import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
+} from '@alembic/core/repository/evolution/ProposalRepository';
+import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { LifecycleStateMachine } from './LifecycleStateMachine.js';
 
 /* ────────────────────── Types ────────────────────── */

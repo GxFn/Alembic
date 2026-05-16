@@ -10,10 +10,10 @@
 
 import type { KnowledgeEntry } from '@alembic/core/domain/knowledge';
 import { Lifecycle, PUBLISHED_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
-import Logger from '../../infrastructure/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
-import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 
 export type EnhancementType =
   | 'missing_code_example'

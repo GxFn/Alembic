@@ -41,13 +41,13 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { Startable } from '@alembic/core/shared/lifecycle';
 import pathGuard from '@alembic/core/shared/PathGuard';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import type { AgentService } from '#agent/service/index.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import type { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
-import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import { EventAggregator } from './EventAggregator.js';
 import { SkillAdvisor } from './SkillAdvisor.js';
 

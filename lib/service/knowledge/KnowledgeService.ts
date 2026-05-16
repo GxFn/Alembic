@@ -4,10 +4,10 @@ import {
 } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 import type { KnowledgeRepository } from '@alembic/core/domain/knowledge/KnowledgeRepository';
 import { inferKind, Lifecycle } from '@alembic/core/domain/knowledge/Lifecycle';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { KnowledgeFileWriter } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
 import { ConflictError, NotFoundError, ValidationError } from '@alembic/core/shared/errors/index';
-import Logger from '../../infrastructure/logging/Logger.js';
 import type { ConfidenceRouter } from './ConfidenceRouter.js';
-import type { KnowledgeFileWriter } from './KnowledgeFileWriter.js';
 import type { KnowledgeGraphService } from './KnowledgeGraphService.js';
 
 interface AuditLoggerLike {

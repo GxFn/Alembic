@@ -7,7 +7,7 @@
  *   3. Generate — 必须由 LLM 生成新工具代码
  */
 
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 
 /* ────────────────────── Types ────────────────────── */
 

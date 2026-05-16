@@ -8,15 +8,15 @@
  *   - 通过 Drizzle 执行真实 SQL 读写
  */
 
-import Database from 'better-sqlite3';
-import { eq } from 'drizzle-orm';
 import {
   getDrizzle,
   initDrizzle,
   resetDrizzle,
   schema,
-} from '../../lib/infrastructure/database/drizzle/index.js';
-import migrate003 from '../../lib/infrastructure/database/migrations/003_add_remote_commands.js';
+} from '@alembic/core/infrastructure/database/drizzle';
+import migrate003 from '@alembic/core/infrastructure/database/migrations/003_add_remote_commands';
+import Database from 'better-sqlite3';
+import { eq } from 'drizzle-orm';
 
 describe('Integration: Drizzle ORM', () => {
   let db: InstanceType<typeof Database>;

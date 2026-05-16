@@ -27,8 +27,8 @@
  * @module IntentClassifier
  */
 
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { AiProvider } from '#external/ai/AiProvider.js';
-import Logger from '#infra/logging/Logger.js';
 
 /** 意图类型 */
 export const Intent = Object.freeze({

@@ -18,8 +18,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getProjectSkillsPath } from '@alembic/core/infrastructure/config/Paths';
+import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
-import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 
 export interface SkillSuggestion {
   name: string;

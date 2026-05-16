@@ -3,20 +3,21 @@
  *
  * 使用 in-memory SQLite + Drizzle 验证 CRUD 操作、去重、状态自动分级、过滤查询等。
  */
-import Database from 'better-sqlite3';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   getDrizzle,
   initDrizzle,
   resetDrizzle,
-} from '../../lib/infrastructure/database/drizzle/index.js';
-import migrate004 from '../../lib/infrastructure/database/migrations/004_evolution_proposals.js';
+} from '@alembic/core/infrastructure/database/drizzle';
+import migrate004 from '@alembic/core/infrastructure/database/migrations/004_evolution_proposals';
 import {
   type CreateProposalInput,
   ProposalRepository,
   type ProposalStatus,
   type ProposalType,
-} from '../../lib/repository/evolution/ProposalRepository.js';
+} from '@alembic/core/repository/evolution/ProposalRepository';
+import Database from 'better-sqlite3';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 function makeInput(overrides: Partial<CreateProposalInput> = {}): CreateProposalInput {
   return {

@@ -12,13 +12,13 @@
  * @module service/vector/SyncCoordinator
  */
 
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import { knowledgeEntries } from '@alembic/core/infrastructure/database/drizzle/schema';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import { queryNonDeprecatedEntries } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { and, ne } from 'drizzle-orm';
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
-import { knowledgeEntries } from '../../infrastructure/database/drizzle/schema.js';
 import type { EventBus } from '../../infrastructure/event/EventBus.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import type { VectorStore } from '../../infrastructure/vector/VectorStore.js';
-import { queryNonDeprecatedEntries } from '../../repository/search/SearchRepoAdapter.js';
 import type { ContextualEnricher } from './ContextualEnricher.js';
 import type { EmbedProvider } from './VectorService.js';
 

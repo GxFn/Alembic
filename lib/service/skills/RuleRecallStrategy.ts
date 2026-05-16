@@ -6,8 +6,8 @@
  * 将 SkillSuggestion 转换为标准 RecommendationCandidate。
  */
 
+import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
-import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import { SkillAdvisor } from './SkillAdvisor.js';
 import type { RecallStrategy, RecommendationCandidate, RecommendationContext } from './types.js';
 

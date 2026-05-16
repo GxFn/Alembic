@@ -1,5 +1,5 @@
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { AgentRunInput, AgentRunResult } from '#agent/service/index.js';
-import Logger from '#infra/logging/Logger.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type { DimensionStat } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';

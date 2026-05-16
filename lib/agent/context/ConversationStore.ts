@@ -22,9 +22,9 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import pathGuard from '@alembic/core/shared/PathGuard';
 import { estimateTokens as _estimateTokens } from '@alembic/core/shared/token-utils';
-import Logger from '#infra/logging/Logger.js';
 
 /** 对话索引中的条目 */
 interface ConversationEntry {

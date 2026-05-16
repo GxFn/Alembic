@@ -1,6 +1,6 @@
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { ToolCapabilityManifest } from '#tools/catalog/CapabilityManifest.js';
 import type { ToolExecutionRequest } from '#tools/core/ToolContracts.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import type { ServiceContainer } from '../../injection/ServiceContainer.js';
 
 export type DashboardOperationHandler = (request: ToolExecutionRequest) => Promise<unknown>;

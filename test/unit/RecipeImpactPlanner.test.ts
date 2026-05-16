@@ -63,7 +63,7 @@ function makeSourceRefRepo(data: {
     deleteOne: vi.fn(),
     isAccessible: vi.fn(() => true),
   } as unknown as InstanceType<
-    typeof import('../../lib/repository/sourceref/RecipeSourceRefRepository.js').RecipeSourceRefRepositoryImpl
+    typeof import('@alembic/core/repository/sourceref/RecipeSourceRefRepository').RecipeSourceRefRepositoryImpl
   >;
 }
 
@@ -84,7 +84,7 @@ function makeKnowledgeRepo(
     findById: vi.fn((id: string) => entries[id] ?? null),
     findAllIdAndReasoning: vi.fn(() => []),
   } as unknown as InstanceType<
-    typeof import('../../lib/repository/knowledge/KnowledgeRepository.impl.js').default
+    typeof import('@alembic/core/repository/knowledge/KnowledgeRepository.impl').default
   >;
 }
 

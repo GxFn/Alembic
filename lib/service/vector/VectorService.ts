@@ -13,9 +13,9 @@
  * @module service/vector/VectorService
  */
 
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { EventBus } from '../../infrastructure/event/EventBus.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import type { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
 import type { VectorStore } from '../../infrastructure/vector/VectorStore.js';
 import type { HybridRetriever } from '../search/HybridRetriever.js';

@@ -21,7 +21,7 @@
  * @module AgentRouter
  */
 
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { AgentEventBus } from '../runtime/AgentEventBus.js';
 import { type AgentMessage, Channel } from '../runtime/AgentMessage.js';
 

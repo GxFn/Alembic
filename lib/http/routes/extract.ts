@@ -4,6 +4,7 @@
  */
 
 import { basename } from 'node:path';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
 import express, { type Request, type Response } from 'express';
 import {
@@ -11,7 +12,6 @@ import {
   runScanAgentTask,
   type SystemRunContextFactory,
 } from '#agent/service/index.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ExtractPathBody, ExtractTextBody } from '../../shared/schemas/http-requests.js';
 import { validate } from '../middleware/validate.js';

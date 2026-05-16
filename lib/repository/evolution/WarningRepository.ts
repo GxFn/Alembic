@@ -6,10 +6,10 @@
  */
 
 import crypto from 'node:crypto';
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import { recipeWarnings } from '@alembic/core/infrastructure/database/drizzle/schema';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { and, count, desc, eq, inArray } from 'drizzle-orm';
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
-import { recipeWarnings } from '../../infrastructure/database/drizzle/schema.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 
 /* ────────────────────── Types ────────────────────── */
 

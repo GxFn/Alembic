@@ -10,7 +10,7 @@
  *   6. signalSubscription:    订阅 SignalBus（信号驱动提案评估）
  */
 
-import Logger from '../../infrastructure/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 
 const logger = Logger.getInstance();
 
@@ -51,11 +51,13 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
     let syncService = ctx.container.services.knowledgeSyncService
       ? (ctx.container.get(
           'knowledgeSyncService'
-        ) as import('../../cli/KnowledgeSyncService.js').KnowledgeSyncService)
+        ) as import('@alembic/core/service/knowledge/KnowledgeSyncService').KnowledgeSyncService)
       : null;
 
     if (!syncService) {
-      const { KnowledgeSyncService } = await import('../../cli/KnowledgeSyncService.js');
+      const { KnowledgeSyncService } = await import(
+        '@alembic/core/service/knowledge/KnowledgeSyncService'
+      );
       const { resolveDataRoot } = await import('@alembic/core/shared/resolveProjectRoot');
       const dataRoot = resolveDataRoot(ctx.container as any) || ctx.projectRoot;
       const sourceRefReconciler = ctx.container.singletons.sourceRefReconciler as

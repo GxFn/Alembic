@@ -7,7 +7,7 @@
  * - GatewayActionRegistry 将 action 路由到正确的 Service 方法
  */
 
-import Logger from '../../infrastructure/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { Gateway, GatewayContext } from './Gateway.js';
 
 const logger = Logger.getInstance();

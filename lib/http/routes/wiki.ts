@@ -15,10 +15,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/shared/ProjectMarkers';
 import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
 import express, { type Request, type Response } from 'express';
-import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import {
   type WikiAiProvider,

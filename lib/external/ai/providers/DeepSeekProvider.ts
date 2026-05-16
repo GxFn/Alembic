@@ -20,7 +20,7 @@
  *   - max_tokens 在 thinking+tools 场景自动提升（reasoning_content 占 output token）
  */
 
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import {
   AiProvider,
   type AiProviderConfig,

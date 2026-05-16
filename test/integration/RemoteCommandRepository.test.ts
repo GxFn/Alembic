@@ -12,9 +12,9 @@
  *   - setState / getState (KV store)
  */
 
+import { initDrizzle, resetDrizzle } from '@alembic/core/infrastructure/database/drizzle';
+import migrate003 from '@alembic/core/infrastructure/database/migrations/003_add_remote_commands';
 import Database from 'better-sqlite3';
-import { initDrizzle, resetDrizzle } from '../../lib/infrastructure/database/drizzle/index.js';
-import migrate003 from '../../lib/infrastructure/database/migrations/003_add_remote_commands.js';
 import { RemoteCommandRepository } from '../../lib/repository/remote/RemoteCommandRepository.js';
 
 describe('Integration: RemoteCommandRepository', () => {

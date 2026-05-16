@@ -8,10 +8,10 @@
  * - 无 _assertSafeColumn() —— Drizzle 自带列类型约束
  */
 
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { SQLiteTable, SQLiteTransaction } from 'drizzle-orm/sqlite-core';
 import type { Logger as WinstonLogger } from 'winston';
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 
 /** Drizzle 事务类型 */
 export type DrizzleTx = Parameters<Parameters<DrizzleDB['transaction']>[0]>[0];

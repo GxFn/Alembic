@@ -17,7 +17,7 @@
  * @module PipelineStrategy
  */
 
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { ExplorationTracker } from '../context/ExplorationTracker.js';
 import type { PipelineType } from '../context/exploration/ExplorationStrategies.js';
 import { AgentEventBus, AgentEvents } from '../runtime/AgentEventBus.js';

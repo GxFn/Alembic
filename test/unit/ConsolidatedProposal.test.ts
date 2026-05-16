@@ -10,15 +10,16 @@
  * 由于 enhancedSubmitKnowledge 依赖大量 DI + 动态 import，
  * 本测试通过对 ProposalRepository.create 的行为验证核心逻辑。
  */
-import Database from 'better-sqlite3';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   getDrizzle,
   initDrizzle,
   resetDrizzle,
-} from '../../lib/infrastructure/database/drizzle/index.js';
-import migrate004 from '../../lib/infrastructure/database/migrations/004_evolution_proposals.js';
-import { ProposalRepository } from '../../lib/repository/evolution/ProposalRepository.js';
+} from '@alembic/core/infrastructure/database/drizzle';
+import migrate004 from '@alembic/core/infrastructure/database/migrations/004_evolution_proposals';
+import { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
+import Database from 'better-sqlite3';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 describe('Consolidated Proposal creation logic', () => {
   /**

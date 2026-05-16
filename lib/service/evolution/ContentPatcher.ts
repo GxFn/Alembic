@@ -17,15 +17,15 @@
  * @module service/evolution/ContentPatcher
  */
 
-import Logger from '../../infrastructure/logging/Logger.js';
-import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
-import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
 import type {
   ContentPatchResult,
   PatchChange,
   RecipeContentSnapshot,
   StructuredPatch,
-} from '../../types/evolution.js';
+} from '@alembic/core/types/evolution';
 
 /* ────────────────────── Types ────────────────────── */
 

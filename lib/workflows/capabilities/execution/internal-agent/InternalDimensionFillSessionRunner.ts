@@ -1,9 +1,9 @@
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type {
   AgentRunResult,
   AgentService,
   SystemRunContextFactory,
 } from '#agent/service/index.js';
-import Logger from '#infra/logging/Logger.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import {
   type CandidateResults,

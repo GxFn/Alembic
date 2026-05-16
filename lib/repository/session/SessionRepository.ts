@@ -5,9 +5,9 @@
  * 使用 Drizzle 类型安全 API。
  */
 
+import { sessions } from '@alembic/core/infrastructure/database/drizzle/schema';
+import { RepositoryBase } from '@alembic/core/repository/base/RepositoryBase';
 import { and, count, desc, eq, lt, sql } from 'drizzle-orm';
-import { sessions } from '../../infrastructure/database/drizzle/schema.js';
-import { RepositoryBase } from '../base/RepositoryBase.js';
 
 /* ═══ 类型定义 ═══ */
 

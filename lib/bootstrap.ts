@@ -1,4 +1,7 @@
 import path from 'node:path';
+import DatabaseConnection from '@alembic/core/infrastructure/database/DatabaseConnection';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
 import pathGuard from '@alembic/core/shared/PathGuard';
 import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
 import { WorkspaceSettingsStore } from '@alembic/core/shared/WorkspaceSettingsStore';
@@ -9,9 +12,6 @@ import PermissionManager from './core/permission/PermissionManager.js';
 import AuditLogger from './infrastructure/audit/AuditLogger.js';
 import AuditStore from './infrastructure/audit/AuditStore.js';
 import ConfigLoader from './infrastructure/config/AppConfigLoader.js';
-import DatabaseConnection from './infrastructure/database/DatabaseConnection.js';
-import Logger from './infrastructure/logging/Logger.js';
-import { unwrapRawDb } from './repository/search/SearchRepoAdapter.js';
 import { SkillHooks } from './service/skills/SkillHooks.js';
 import { CONFIG_DIR, PACKAGE_ROOT } from './shared/package-assets.js';
 

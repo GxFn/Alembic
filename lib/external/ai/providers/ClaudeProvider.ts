@@ -13,7 +13,7 @@
  *   - Sonnet 4 / Opus 4 已废弃, 2026-06-15 下线
  */
 
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import {
   AiProvider,
   type AiProviderConfig,

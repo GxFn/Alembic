@@ -3,6 +3,7 @@
  * 统一搜索接口 - 搜 Recipe（含所有知识类型）
  */
 
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import express, { type Request, type Response } from 'express';
 import {
   ContextAwareSearchBody,
@@ -11,7 +12,6 @@ import {
   SearchQuery,
   SimilarityBody,
 } from '#shared/schemas/http-requests.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 import { safeInt } from '../utils/routeHelpers.js';

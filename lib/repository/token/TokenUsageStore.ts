@@ -10,10 +10,10 @@
  *   在 drizzle query builder 中不够直观，保持原有高效预编译语句）
  */
 
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
-import { getDrizzle } from '../../infrastructure/database/drizzle/index.js';
-import { tokenUsage } from '../../infrastructure/database/drizzle/schema.js';
-import Logger from '../../infrastructure/logging/Logger.js';
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import { getDrizzle } from '@alembic/core/infrastructure/database/drizzle';
+import { tokenUsage } from '@alembic/core/infrastructure/database/drizzle/schema';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 
 const MAX_ROWS = 10000; // 自动清理: 保留最近 10000 条
 

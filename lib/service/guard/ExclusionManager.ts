@@ -7,9 +7,9 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import pathGuard from '@alembic/core/shared/PathGuard';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/shared/ProjectMarkers';
-import Logger from '../../infrastructure/logging/Logger.js';
 
 interface PathExclusion {
   pattern: string;

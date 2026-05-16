@@ -16,9 +16,9 @@
 
 import { randomBytes } from 'node:crypto';
 import { EvolutionPolicy } from '@alembic/core/domain/evolution/EvolutionPolicy';
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import { evolutionProposals } from '@alembic/core/infrastructure/database/drizzle/schema';
 import { and, count, desc, eq, inArray, lte } from 'drizzle-orm';
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
-import { evolutionProposals } from '../../infrastructure/database/drizzle/schema.js';
 
 /* ────────────────────── Types ────────────────────── */
 

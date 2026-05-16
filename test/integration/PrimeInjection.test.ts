@@ -18,9 +18,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { parseKnowledgeMarkdown } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
 import Database from 'better-sqlite3';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseKnowledgeMarkdown } from '../../lib/service/knowledge/KnowledgeFileWriter.js';
 import { SearchEngine } from '../../lib/service/search/SearchEngine.js';
 import { extract as extractIntent } from '../../lib/service/task/IntentExtractor.js';
 import { PrimeSearchPipeline } from '../../lib/service/task/PrimeSearchPipeline.js';

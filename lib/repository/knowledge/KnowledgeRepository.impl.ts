@@ -1,13 +1,13 @@
 import { inferKind, KnowledgeEntry } from '@alembic/core/domain/knowledge';
 import { COUNTABLE_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import { getDrizzle } from '@alembic/core/infrastructure/database/drizzle';
+import { knowledgeEntries } from '@alembic/core/infrastructure/database/drizzle/schema';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { safeJsonParse, safeJsonStringify, unixNow } from '@alembic/core/shared/utils/common';
 import type { Database } from 'better-sqlite3';
 import { and, count, desc, eq, gt, inArray, isNotNull, like, ne, or, sql, sum } from 'drizzle-orm';
 import type { Logger as WinstonLogger } from 'winston';
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
-import { getDrizzle } from '../../infrastructure/database/drizzle/index.js';
-import { knowledgeEntries } from '../../infrastructure/database/drizzle/schema.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 
 /** Database connection wrapper interface */
 interface KnowledgeDatabaseWrapper {

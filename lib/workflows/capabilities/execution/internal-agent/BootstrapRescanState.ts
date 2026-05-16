@@ -1,5 +1,5 @@
 import { resolveRecipeDimensionId } from '@alembic/core/domain/dimension/RecipeDimension';
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { BootstrapDedup } from '#service/bootstrap/BootstrapDedup.js';
 import type {
   KnowledgeRescanExecutionDecision,

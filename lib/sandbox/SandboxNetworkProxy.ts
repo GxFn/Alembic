@@ -1,6 +1,6 @@
 import http from 'node:http';
 import net from 'node:net';
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 
 /**
  * 域名白名单 HTTP/HTTPS CONNECT 代理。

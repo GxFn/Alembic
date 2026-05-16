@@ -11,7 +11,7 @@
  */
 
 import { EventEmitter } from 'node:events';
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 
 /** 标准事件类型 */
 export const AgentEvents = Object.freeze({

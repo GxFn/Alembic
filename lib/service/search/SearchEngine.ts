@@ -5,16 +5,17 @@
  * 从 V1 SearchServiceV2 迁移，适配 V2 架构
  */
 
-import Logger from '../../infrastructure/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type {
+  SearchDb as CoreSearchDb,
   SearchKnowledgeRepo,
   SearchSourceRefRepo,
-} from '../../repository/search/SearchRepoAdapter.js';
+} from '@alembic/core/repository/search/SearchRepoAdapter';
 import {
   RawDbKnowledgeAdapter,
   RawDbSourceRefAdapter,
   unwrapSearchDb,
-} from '../../repository/search/SearchRepoAdapter.js';
+} from '@alembic/core/repository/search/SearchRepoAdapter';
 import { CoarseRanker } from './CoarseRanker.js';
 import type { SearchItem } from './contextBoost.js';
 import { contextBoost } from './contextBoost.js';
@@ -91,7 +92,9 @@ export class SearchEngine {
   vectorService: SearchVectorService | null;
   vectorStore: SearchVectorStore | null;
   constructor(db: SearchDb & { getDb?: () => SearchDb }, options: SearchEngineOptions = {}) {
-    this.db = unwrapSearchDb(db);
+    this.db = unwrapSearchDb(
+      db as unknown as CoreSearchDb & { getDb?: () => CoreSearchDb }
+    ) as unknown as SearchDb;
     const opts = options as Record<string, unknown>;
     this.#knowledgeRepo =
       (opts.knowledgeRepo as SearchKnowledgeRepo | null) ?? new RawDbKnowledgeAdapter(this.db);

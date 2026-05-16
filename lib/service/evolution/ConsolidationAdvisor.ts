@@ -21,8 +21,8 @@ import {
   RecipeSimilarity,
 } from '@alembic/core/domain/evolution/RecipeSimilarity';
 import { COUNTABLE_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
-import Logger from '../../infrastructure/logging/Logger.js';
-import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 
 /* ────────────────────── Types ────────────────────── */
 

@@ -1,7 +1,7 @@
 import EventEmitter from 'node:events';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { InternalError } from '@alembic/core/shared/errors/BaseError';
 import { v4 as uuidv4 } from 'uuid';
-import Logger from '../../infrastructure/logging/Logger.js';
 
 export interface GatewayConfig {
   [key: string]: unknown;

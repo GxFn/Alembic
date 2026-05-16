@@ -7,6 +7,7 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
 import express, { type Request, type Response } from 'express';
 import {
@@ -18,7 +19,6 @@ import {
 } from '#shared/schemas/http-requests.js';
 import { DASHBOARD_OPERATION_IDS } from '#tools/adapters/DashboardOperations.js';
 import { getJobStore } from '../../daemon/DaemonJobRunner.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';
 import {

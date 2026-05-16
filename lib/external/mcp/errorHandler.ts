@@ -11,6 +11,7 @@
  * @module external/mcp/errorHandler
  */
 
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import {
   ConflictError,
   ConstitutionViolation,
@@ -19,7 +20,6 @@ import {
   ValidationError,
 } from '@alembic/core/shared/errors/index';
 import { z } from 'zod';
-import Logger from '#infra/logging/Logger.js';
 import { TOOL_SCHEMAS } from '#shared/schemas/mcp-tools.js';
 
 const logger = Logger.getInstance();

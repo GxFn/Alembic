@@ -6,9 +6,9 @@
  * 所有操作使用 Drizzle 类型安全 API（零 raw SQL）。
  */
 
+import { type DrizzleDB, getDrizzle } from '@alembic/core/infrastructure/database/drizzle';
+import { guardViolations } from '@alembic/core/infrastructure/database/drizzle/schema';
 import { asc, count, desc, eq, sql } from 'drizzle-orm';
-import { type DrizzleDB, getDrizzle } from '../../infrastructure/database/drizzle/index.js';
-import { guardViolations } from '../../infrastructure/database/drizzle/schema.js';
 
 const MAX_RUNS = 200;
 

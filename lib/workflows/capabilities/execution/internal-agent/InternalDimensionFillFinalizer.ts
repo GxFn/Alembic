@@ -1,4 +1,4 @@
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import {
   runWorkflowCompletionFinalizer,
   type WorkflowCompletionFinalizerResult,

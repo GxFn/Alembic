@@ -8,9 +8,9 @@
  *   - primeSearchPipeline (for prime multi-query search — no DB dependency)
  */
 
+import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
+import { TokenUsageStore } from '@alembic/core/repository/token/TokenUsageStore';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
-import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
-import { TokenUsageStore } from '../../repository/token/TokenUsageStore.js';
 import { CursorDeliveryPipeline } from '../../service/delivery/CursorDeliveryPipeline.js';
 import { RecipeExtractor } from '../../service/knowledge/RecipeExtractor.js';
 import { ModuleService } from '../../service/module/ModuleService.js';

@@ -5,10 +5,10 @@
  * 新旧代码共存：drizzle 和 raw better-sqlite3 可同时操作同一个连接。
  */
 
+import * as schema from '@alembic/core/infrastructure/database/drizzle/schema';
 import type { Database } from 'better-sqlite3';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import * as schema from './schema.js';
 
 export type DrizzleDB = BetterSQLite3Database<typeof schema>;
 

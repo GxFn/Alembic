@@ -8,7 +8,7 @@
 
 import { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 import { Lifecycle } from '@alembic/core/domain/knowledge/Lifecycle';
-import { KnowledgeRepositoryImpl } from '../../lib/repository/knowledge/KnowledgeRepository.impl.js';
+import { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import { KnowledgeService } from '../../lib/service/knowledge/KnowledgeService.js';
 import { createTestBootstrap } from '../fixtures/factory.js';
 

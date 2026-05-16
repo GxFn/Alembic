@@ -1,4 +1,4 @@
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { IncrementalPlan } from '#types/workflows.js';
 import type { DimensionStat } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 import { clearDimensionCheckpoints } from '#workflows/capabilities/persistence/DimensionCheckpoint.js';

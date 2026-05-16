@@ -5,11 +5,15 @@
  * KnowledgeGraphService 将从直接 db.prepare() 迁移为调用此 Repository。
  */
 
+import { codeEntities, knowledgeEdges } from '@alembic/core/infrastructure/database/drizzle/schema';
+import {
+  type DrizzleTx,
+  type PaginatedResult,
+  RepositoryBase,
+} from '@alembic/core/repository/base/RepositoryBase';
 import { LanguageProfiles } from '@alembic/core/shared/LanguageProfiles';
 import { unixNow } from '@alembic/core/shared/utils/common';
 import { and, count, desc, eq, exists, inArray, like, ne, or, sql } from 'drizzle-orm';
-import { codeEntities, knowledgeEdges } from '../../infrastructure/database/drizzle/schema.js';
-import { type DrizzleTx, type PaginatedResult, RepositoryBase } from '../base/RepositoryBase.js';
 
 /* ═══ 类型定义 ═══ */
 

@@ -29,8 +29,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { LLMGateway } from '#external/ai/gateway/LLMGateway.js';
-import Logger from '#infra/logging/Logger.js';
 import type { ToolSchemaProjection } from '#tools/catalog/CapabilityManifest.js';
 import { isToolResultEnvelope } from '#tools/core/ToolResultPresenter.js';
 import { Capability, CapabilityRegistry } from '../capabilities/index.js';

@@ -9,13 +9,13 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { GuardViolationRepositoryImpl } from '@alembic/core/repository/guard/GuardViolationRepository';
+import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
+import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
-import type { GuardViolationRepositoryImpl } from '../../repository/guard/GuardViolationRepository.js';
-import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
-import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
-import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 import { ComplianceReporter } from '../../service/guard/ComplianceReporter.js';
 import { CoverageAnalyzer } from '../../service/guard/CoverageAnalyzer.js';
 import { ExclusionManager } from '../../service/guard/ExclusionManager.js';

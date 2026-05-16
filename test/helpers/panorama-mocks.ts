@@ -7,10 +7,10 @@
  * 所有方法返回安全默认值 (空数组/0/null)，可通过 opts 覆盖关键返回值。
  */
 
-import type { BootstrapRepositoryImpl } from '../../lib/repository/bootstrap/BootstrapRepository.js';
+import type { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
+import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
+import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { CodeEntityRepositoryImpl } from '../../lib/repository/code/CodeEntityRepository.js';
-import type { KnowledgeEdgeRepositoryImpl } from '../../lib/repository/knowledge/KnowledgeEdgeRepository.js';
-import type { KnowledgeRepositoryImpl } from '../../lib/repository/knowledge/KnowledgeRepository.impl.js';
 
 /* ═══ Types ═══════════════════════════════════════════════ */
 

@@ -18,8 +18,8 @@
  * @module LarkTransport
  */
 
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { AgentService } from '#agent/service/index.js';
-import Logger from '#infra/logging/Logger.js';
 import { ConversationStore } from '../../agent/context/ConversationStore.js';
 import { Intent, IntentClassifier } from './IntentClassifier.js';
 

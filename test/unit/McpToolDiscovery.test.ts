@@ -1,8 +1,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import Logger from '#infra/logging/Logger.js';
 import { McpToolDiscovery } from '../../lib/external/mcp/McpToolDiscovery.js';
 
 describe('McpToolDiscovery', () => {

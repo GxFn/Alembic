@@ -43,9 +43,9 @@ let ConfidenceRouter: typeof import('../../lib/service/knowledge/ConfidenceRoute
 let SourceRefReconciler: typeof import('../../lib/service/knowledge/SourceRefReconciler.js').SourceRefReconciler;
 let SignalBus: typeof import('../../lib/infrastructure/signal/SignalBus.js').SignalBus;
 let RuleLearner: typeof import('../../lib/service/guard/RuleLearner.js').RuleLearner;
-let KnowledgeRepositoryImpl: typeof import('../../lib/repository/knowledge/KnowledgeRepository.impl.js').KnowledgeRepositoryImpl;
-let RecipeSourceRefRepositoryImpl: typeof import('../../lib/repository/sourceref/RecipeSourceRefRepository.js').RecipeSourceRefRepositoryImpl;
-let initDrizzle: typeof import('../../lib/infrastructure/database/drizzle/index.js').initDrizzle;
+let KnowledgeRepositoryImpl: typeof import('@alembic/core/repository/knowledge/KnowledgeRepository.impl').KnowledgeRepositoryImpl;
+let RecipeSourceRefRepositoryImpl: typeof import('@alembic/core/repository/sourceref/RecipeSourceRefRepository').RecipeSourceRefRepositoryImpl;
+let initDrizzle: typeof import('@alembic/core/infrastructure/database/drizzle').initDrizzle;
 
 describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
   let db: InstanceType<typeof Database>;
@@ -88,9 +88,9 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       import('../../lib/service/knowledge/SourceRefReconciler.js'),
       import('../../lib/infrastructure/signal/SignalBus.js'),
       import('../../lib/service/guard/RuleLearner.js'),
-      import('../../lib/repository/knowledge/KnowledgeRepository.impl.js'),
-      import('../../lib/repository/sourceref/RecipeSourceRefRepository.js'),
-      import('../../lib/infrastructure/database/drizzle/index.js'),
+      import('@alembic/core/repository/knowledge/KnowledgeRepository.impl'),
+      import('@alembic/core/repository/sourceref/RecipeSourceRefRepository'),
+      import('@alembic/core/infrastructure/database/drizzle'),
     ]);
 
     Lifecycle = lifecycleMod;

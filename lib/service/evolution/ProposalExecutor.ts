@@ -18,15 +18,15 @@
  */
 
 import { EvolutionPolicy } from '@alembic/core/domain/evolution/EvolutionPolicy';
-import Logger from '../../infrastructure/logging/Logger.js';
-import type { Signal, SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type {
   ProposalRecord,
   ProposalRepository,
   ProposalType,
-} from '../../repository/evolution/ProposalRepository.js';
-import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
-import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
+} from '@alembic/core/repository/evolution/ProposalRepository';
+import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
+import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import type { Signal, SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type { ContentPatcher } from './ContentPatcher.js';
 import type { LifecycleStateMachine } from './LifecycleStateMachine.js';
 
@@ -534,7 +534,7 @@ export class ProposalExecutor {
   async #tryApplyPatch(
     proposal: ProposalRecord,
     patchSource: 'agent-suggestion' | 'correction' | 'merge'
-  ): Promise<import('../../types/evolution.js').ContentPatchResult | null> {
+  ): Promise<import('@alembic/core/types/evolution').ContentPatchResult | null> {
     try {
       return await this.#contentPatcher.applyProposal(proposal, patchSource);
     } catch (err: unknown) {

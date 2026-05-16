@@ -18,8 +18,8 @@
  */
 
 import { buildTierPlan } from '@alembic/core/domain/dimension';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { createLimit } from '@alembic/core/shared/concurrency';
-import Logger from '#infra/logging/Logger.js';
 
 const logger = Logger.getInstance();
 

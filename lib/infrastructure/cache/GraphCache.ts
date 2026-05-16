@@ -12,8 +12,8 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { DataPath, WriteZone } from '@alembic/core/infrastructure/io';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { computeContentHash } from '@alembic/core/shared/content-hash';
-import Logger from '../logging/Logger.js';
 
 export class GraphCache {
   #cacheDir;

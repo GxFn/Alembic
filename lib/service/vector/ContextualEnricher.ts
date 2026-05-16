@@ -15,7 +15,7 @@
  * @module service/vector/ContextualEnricher
  */
 
-import Logger from '../../infrastructure/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 
 // ── Types ──
 

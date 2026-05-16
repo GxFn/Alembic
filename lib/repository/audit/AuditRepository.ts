@@ -5,9 +5,9 @@
  * 使用 Drizzle 类型安全 API 操作 audit_logs 表。
  */
 
+import { auditLogs } from '@alembic/core/infrastructure/database/drizzle/schema';
+import { RepositoryBase } from '@alembic/core/repository/base/RepositoryBase';
 import { and, avg, count, desc, eq, gt, gte, like, lte, sql } from 'drizzle-orm';
-import { auditLogs } from '../../infrastructure/database/drizzle/schema.js';
-import { RepositoryBase } from '../base/RepositoryBase.js';
 
 /* ═══ 类型定义 ═══ */
 

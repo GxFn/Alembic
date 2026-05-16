@@ -7,7 +7,7 @@
  *   3. 集成到 guardAuditFiles MCP handler 和 GuardHandler (FileWatcher)
  */
 
-import Logger from '../../infrastructure/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 

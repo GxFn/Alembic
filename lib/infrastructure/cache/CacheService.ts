@@ -4,7 +4,7 @@
  * 生产环境建议通过 UnifiedCacheAdapter 接入 Redis
  */
 
-import Logger from '../logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 
 /** 本地缓存实现（无 Redis 依赖） */
 export class CacheService {

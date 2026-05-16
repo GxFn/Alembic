@@ -20,13 +20,13 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import * as schema from '@alembic/core/infrastructure/database/drizzle/schema';
+import { semanticMemories } from '@alembic/core/infrastructure/database/drizzle/schema';
 import { jaccardSimilarity, tokenizeForSimilarity } from '@alembic/core/shared/similarity';
 import type { Database } from 'better-sqlite3';
 import { and, asc, avg, count, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import type { DrizzleDB } from '#infra/database/drizzle/index.js';
-import * as schema from '#infra/database/drizzle/schema.js';
-import { semanticMemories } from '#infra/database/drizzle/schema.js';
 
 // ─── 类型定义 ──────────────────────────────────────────
 

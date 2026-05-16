@@ -1,5 +1,5 @@
 import type { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
-import Logger from '../../infrastructure/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { QualityScorer } from '../quality/QualityScorer.js';
 
 interface ConfidenceRouterConfig {

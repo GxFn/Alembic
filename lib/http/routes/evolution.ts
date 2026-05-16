@@ -14,11 +14,11 @@
  * @module http/routes/evolution
  */
 
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
+import type { WarningRepository } from '@alembic/core/repository/evolution/WarningRepository';
 import express, { type Request, type Response } from 'express';
-import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import type { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
-import type { WarningRepository } from '../../repository/evolution/WarningRepository.js';
 import type { ProposalExecutor } from '../../service/evolution/ProposalExecutor.js';
 
 const router = express.Router();

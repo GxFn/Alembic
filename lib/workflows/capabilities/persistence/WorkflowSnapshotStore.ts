@@ -1,5 +1,5 @@
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { SessionStore } from '#agent/memory/SessionStore.js';
-import Logger from '#infra/logging/Logger.js';
 import type { BootstrapFile, IncrementalPlan } from '#types/workflows.js';
 import type {
   CandidateResults,

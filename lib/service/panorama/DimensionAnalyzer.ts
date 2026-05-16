@@ -21,10 +21,10 @@ import {
   resolveRecipeDimensionId,
 } from '@alembic/core/domain/dimension';
 import { COUNTABLE_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
+import type { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
+import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
-import type { BootstrapRepositoryImpl } from '../../repository/bootstrap/BootstrapRepository.js';
 import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
-import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import type { HealthDimension, HealthRadar, KnowledgeGap } from './PanoramaTypes.js';
 
 /* ═══ DimensionAnalyzer Class ═════════════════════════════ */

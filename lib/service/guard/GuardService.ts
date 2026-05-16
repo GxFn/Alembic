@@ -1,7 +1,7 @@
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { ConflictError, NotFoundError, ValidationError } from '@alembic/core/shared/errors/index';
 import { unixNow } from '@alembic/core/shared/utils/common';
 import { v4 as uuidv4 } from 'uuid';
-import Logger from '../../infrastructure/logging/Logger.js';
 
 interface KnowledgeRepositoryLike {
   create(entry: unknown): Promise<{ id: string; title?: string }>;

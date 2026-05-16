@@ -5,7 +5,7 @@
  * 支持原生 Function Calling（结构化工具调用）。
  */
 
-import Logger from '#infra/logging/Logger.js';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import {
   AiProvider,
   type AiProviderConfig,

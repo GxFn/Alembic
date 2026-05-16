@@ -7,9 +7,9 @@
  * 主要消费者：SourceRefReconciler
  */
 
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import { recipeSourceRefs } from '@alembic/core/infrastructure/database/drizzle/schema';
 import { and, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
-import { recipeSourceRefs } from '../../infrastructure/database/drizzle/schema.js';
 
 /* ═══ 类型定义 ═══ */
 

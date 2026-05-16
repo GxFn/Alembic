@@ -4,6 +4,7 @@
  * 替代 recipes.js + candidates.js （旧路由继续保留用于向后兼容）
  */
 
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { ioLimit } from '@alembic/core/shared/concurrency';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import {
@@ -15,7 +16,6 @@ import {
   KnowledgeUsageBody,
   UpdateKnowledgeBody,
 } from '#shared/schemas/http-requests.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';
 import {

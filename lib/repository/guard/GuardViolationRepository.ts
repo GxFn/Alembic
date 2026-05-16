@@ -5,9 +5,9 @@
  * 使用 Drizzle 类型安全 API 操作 guard_violations 表。
  */
 
+import { guardViolations } from '@alembic/core/infrastructure/database/drizzle/schema';
+import { RepositoryBase } from '@alembic/core/repository/base/RepositoryBase';
 import { and, asc, count, desc, eq, sql, sum } from 'drizzle-orm';
-import { guardViolations } from '../../infrastructure/database/drizzle/schema.js';
-import { RepositoryBase } from '../base/RepositoryBase.js';
 
 /* ═══ 类型定义 ═══ */
 

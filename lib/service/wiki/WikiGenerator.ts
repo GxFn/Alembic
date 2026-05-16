@@ -34,9 +34,9 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/shared/ProjectMarkers';
-import Logger from '../../infrastructure/logging/Logger.js';
 import {
   buildAiSystemPrompt,
   buildArticlePrompt,

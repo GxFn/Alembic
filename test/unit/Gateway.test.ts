@@ -1,5 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
+import DatabaseConnection from '@alembic/core/infrastructure/database/DatabaseConnection';
 import { vi } from 'vitest';
 import Constitution from '../../lib/core/constitution/Constitution.js';
 import ConstitutionValidator from '../../lib/core/constitution/ConstitutionValidator.js';
@@ -7,7 +8,6 @@ import Gateway from '../../lib/core/gateway/Gateway.js';
 import PermissionManager from '../../lib/core/permission/PermissionManager.js';
 import AuditLogger from '../../lib/infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../lib/infrastructure/audit/AuditStore.js';
-import DatabaseConnection from '../../lib/infrastructure/database/DatabaseConnection.js';
 
 const __dirname = import.meta.dirname;
 

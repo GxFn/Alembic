@@ -21,7 +21,7 @@
  * @module PersistentMemory
  */
 
-import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
+import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
 import type {
   CandidateMemory,
   ConsolidateOptions,

@@ -16,12 +16,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 import { Lifecycle } from '@alembic/core/domain/knowledge/Lifecycle';
-import { KnowledgeSyncService } from '../../lib/cli/KnowledgeSyncService.js';
 import {
   computeKnowledgeHash,
   KnowledgeFileWriter,
   parseKnowledgeMarkdown,
-} from '../../lib/service/knowledge/KnowledgeFileWriter.js';
+} from '@alembic/core/service/knowledge/KnowledgeFileWriter';
+import { KnowledgeSyncService } from '@alembic/core/service/knowledge/KnowledgeSyncService';
 
 /* ═══ 测试数据 ═══ */
 

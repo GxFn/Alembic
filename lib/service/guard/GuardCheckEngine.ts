@@ -6,13 +6,13 @@
  */
 
 import { GUARD_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import type { GuardKnowledgeRepo } from '@alembic/core/repository/search/SearchRepoAdapter';
+import { RawDbGuardAdapter, unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
 import * as AstAnalyzerModule from '../../core/AstAnalyzer.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
-import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
-import type { GuardKnowledgeRepo } from '../../repository/search/SearchRepoAdapter.js';
-import { RawDbGuardAdapter, unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
 import { runCodeLevelChecks } from './GuardCodeChecks.js';
 import { runCrossFileChecks } from './GuardCrossFileChecks.js';
 import {

@@ -2,9 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getProjectSkillsPath } from '@alembic/core/infrastructure/config/Paths';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import pathGuard from '@alembic/core/shared/PathGuard';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
-import Logger from '#infra/logging/Logger.js';
 import { getCursorRulesDir, getCursorRulesRelativePath } from '#shared/ide-paths.js';
 import { INJECTABLE_SKILLS_DIR } from '../../../shared/package-assets.js';
 

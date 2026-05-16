@@ -12,12 +12,12 @@
  * @module repository/remote/RemoteCommandRepository
  */
 
+import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import { getDrizzle } from '@alembic/core/infrastructure/database/drizzle';
+import { remoteCommands, remoteState } from '@alembic/core/infrastructure/database/drizzle/schema';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { Database } from 'better-sqlite3';
 import { and, desc, eq, isNotNull, lt, sql } from 'drizzle-orm';
-import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
-import { getDrizzle } from '../../infrastructure/database/drizzle/index.js';
-import { remoteCommands, remoteState } from '../../infrastructure/database/drizzle/schema.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 
 /** Unix timestamp in seconds */
 function unixNow(): number {

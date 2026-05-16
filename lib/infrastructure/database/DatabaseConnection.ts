@@ -5,10 +5,10 @@ import Database from 'better-sqlite3';
 /** Re-exported type alias so declaration emit can name it */
 export type SqliteDatabase = InstanceType<typeof Database>;
 
+import { type DrizzleDB, initDrizzle } from '@alembic/core/infrastructure/database/drizzle';
 import { isExcludedProject } from '@alembic/core/shared/isOwnDevRepo';
 import pathGuard from '@alembic/core/shared/PathGuard';
 import type { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
-import { type DrizzleDB, initDrizzle } from './drizzle/index.js';
 
 const __dirname = import.meta.dirname;
 

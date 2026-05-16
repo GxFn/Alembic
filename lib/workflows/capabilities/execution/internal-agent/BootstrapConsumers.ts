@@ -9,10 +9,10 @@
  *   - Skill: skillWorthy 维度的 Project Skill 生成
  */
 
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import type { SessionStore } from '#agent/memory/SessionStore.js';
 import type { AgentRunResult } from '#agent/service/index.js';
-import Logger from '#infra/logging/Logger.js';
 import type { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
 import {
   type AgentResultLike,

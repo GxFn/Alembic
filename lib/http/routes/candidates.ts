@@ -3,6 +3,7 @@
  * 候选条目的 AI 补齐、润色预览/应用
  */
 
+import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { ValidationError } from '@alembic/core/shared/errors/index';
 import express, { type Request, type Response } from 'express';
 import {
@@ -11,7 +12,6 @@ import {
   RefineApplyBody,
   RefinePreviewBody,
 } from '#shared/schemas/http-requests.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';
 import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
