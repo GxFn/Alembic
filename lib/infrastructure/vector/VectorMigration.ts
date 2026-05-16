@@ -38,7 +38,9 @@ export class VectorMigration {
     // 场景 3: 已有二进制索引 (需验证有效性)
     if (existsSync(hnswPath)) {
       // 如果 .asvec 损坏且同时存在 .json, 从 JSON 迁移
-      const { BinaryPersistence } = await import('./BinaryPersistence.js');
+      const { BinaryPersistence } = await import(
+        '@alembic/core/infrastructure/vector/BinaryPersistence'
+      );
       if (BinaryPersistence.isValid(hnswPath)) {
         return 'binary';
       }

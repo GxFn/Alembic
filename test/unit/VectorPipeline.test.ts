@@ -5,9 +5,9 @@ import path from 'node:path';
 let JsonVectorAdapter, IndexingPipeline;
 
 beforeAll(async () => {
-  const vecMod = await import('../../lib/infrastructure/vector/JsonVectorAdapter.js');
+  const vecMod = await import('@alembic/core/infrastructure/vector/JsonVectorAdapter');
   JsonVectorAdapter = vecMod.JsonVectorAdapter;
-  const pipeMod = await import('../../lib/infrastructure/vector/IndexingPipeline.js');
+  const pipeMod = await import('@alembic/core/infrastructure/vector/IndexingPipeline');
   IndexingPipeline = pipeMod.IndexingPipeline;
 });
 

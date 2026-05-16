@@ -13,8 +13,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { chunk } from '../../lib/infrastructure/vector/Chunker.js';
-import { IndexingPipeline } from '../../lib/infrastructure/vector/IndexingPipeline.js';
+import { chunk } from '@alembic/core/infrastructure/vector/Chunker';
+import { IndexingPipeline } from '@alembic/core/infrastructure/vector/IndexingPipeline';
 
 describe('Integration: Indexing Pipeline & Chunker', () => {
   // ─── Chunker ──────────────────────────────────

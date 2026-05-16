@@ -7,14 +7,14 @@
  * @module service/task/PrimeSearchPipeline
  */
 
-import type { SearchResultItem, SlimSearchResult } from '#service/search/SearchTypes.js';
-import { slimSearchResult } from '#service/search/SearchTypes.js';
+import type { SearchResultItem, SlimSearchResult } from '@alembic/core/service/search/SearchTypes';
+import { slimSearchResult } from '@alembic/core/service/search/SearchTypes';
 import type { ExtractedIntent } from './IntentExtractor.js';
 
 // ── Types ───────────────────────────────────────────
 
 /** Slim search result (re-export for external use) */
-export type { SlimSearchResult } from '#service/search/SearchTypes.js';
+export type { SlimSearchResult } from '@alembic/core/service/search/SearchTypes';
 
 export interface PrimeSearchMeta {
   queries: string[];

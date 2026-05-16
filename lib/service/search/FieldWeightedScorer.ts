@@ -14,8 +14,8 @@
  * @module FieldWeightedScorer
  */
 
-import type { BM25SearchResult, Scorer } from './SearchTypes.js';
-import { tokenize } from './tokenizer.js';
+import type { BM25SearchResult, Scorer } from '@alembic/core/service/search/SearchTypes';
+import { tokenize } from '@alembic/core/service/search/tokenizer';
 
 // ── 字段权重常量（可调） ──
 const TRIGGER_WEIGHT = 5.0;

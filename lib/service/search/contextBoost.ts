@@ -10,7 +10,7 @@
  * @module contextBoost
  */
 
-import { tokenize } from './tokenizer.js';
+import { tokenize } from '@alembic/core/service/search/tokenizer';
 
 /**
  * @param items 已排序的候选列表（需有 rankerScore / coarseScore / score）

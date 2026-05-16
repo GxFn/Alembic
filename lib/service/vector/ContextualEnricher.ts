@@ -16,6 +16,11 @@
  */
 
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type {
+  VectorChunkData,
+  VectorChunkEnricher,
+  VectorDocumentInfo,
+} from '@alembic/core/service/vector/EnrichmentTypes';
 
 // ── Types ──
 
@@ -27,17 +32,9 @@ export interface AiProviderLike {
   ): Promise<string>;
 }
 
-export interface ChunkData {
-  content: string;
-  metadata: Record<string, unknown>;
-}
+export interface ChunkData extends VectorChunkData {}
 
-export interface DocumentInfo {
-  title: string;
-  content: string;
-  kind: string;
-  sourcePath?: string;
-}
+export interface DocumentInfo extends VectorDocumentInfo {}
 
 export interface EnricherConfig {
   aiProvider: AiProviderLike;
@@ -47,7 +44,7 @@ export interface EnricherConfig {
 
 // ── Enricher ──
 
-export class ContextualEnricher {
+export class ContextualEnricher implements VectorChunkEnricher {
   #aiProvider: AiProviderLike;
   #cache: Map<string, string>;
   #cacheEnabled: boolean;

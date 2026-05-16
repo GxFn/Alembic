@@ -7,8 +7,12 @@
  * @module BM25Scorer
  */
 
-import type { BM25Document, BM25SearchResult, Scorer } from './SearchTypes.js';
-import { BM25_B, BM25_K1, tokenize } from './tokenizer.js';
+import type {
+  BM25Document,
+  BM25SearchResult,
+  Scorer,
+} from '@alembic/core/service/search/SearchTypes';
+import { BM25_B, BM25_K1, tokenize } from '@alembic/core/service/search/tokenizer';
 
 /** BM25 评分器 */
 export class BM25Scorer implements Scorer {

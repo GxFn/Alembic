@@ -459,7 +459,7 @@ describe('L3: Go Enhancement Pack (go-web)', () => {
 // ══════════════════════════════════════════════════════════════════
 describe('L5b: Go IndexingPipeline Support', () => {
   it('IndexingPipeline SCANNABLE_EXTENSIONS should include .go', async () => {
-    const mod = await import('../../lib/infrastructure/vector/IndexingPipeline.js');
+    const mod = await import('@alembic/core/infrastructure/vector/IndexingPipeline');
     expect(mod.IndexingPipeline).toBeDefined();
   });
 });

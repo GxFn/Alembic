@@ -15,24 +15,22 @@
  *   - AI 不可用时自动降级到 Jaccard
  */
 
+import type {
+  SearchCrossEncoder,
+  SearchResultItem,
+} from '@alembic/core/service/search/SearchTypes';
+import { tokenize } from '@alembic/core/service/search/tokenizer';
 import { jaccardSimilarity } from '@alembic/core/shared/similarity';
-import { tokenize } from './tokenizer.js';
 
-interface RerankCandidate {
-  title?: string;
-  trigger?: string;
-  description?: string;
+type RerankCandidate = SearchResultItem & {
   summary?: string;
-  code?: string;
-  content?: string;
   semanticScore?: number;
-  [key: string]: unknown;
-}
+};
 
 const MAX_CANDIDATES = 40; // 超过此数量截断（控制 prompt 大小）
 const MAX_DOC_LEN = 300; // 每个文档最大字符数
 
-export class CrossEncoderReranker {
+export class CrossEncoderReranker implements SearchCrossEncoder {
   #aiProvider;
   #logger;
 
@@ -58,7 +56,7 @@ export class CrossEncoderReranker {
    * @param candidates Layer 1 输出的候选列表
    * @returns 附带 semanticScore 的候选列表（降序）
    */
-  async rerank(query: string, candidates: RerankCandidate[]) {
+  async rerank(query: string, candidates: SearchResultItem[]): Promise<SearchResultItem[]> {
     if (!candidates || candidates.length === 0) {
       return [];
     }
@@ -96,7 +94,7 @@ export class CrossEncoderReranker {
   }
 
   /** 批量 AI 评分 — 单次 chatWithStructuredOutput 调用 */
-  async #batchScore(query: string, candidates: RerankCandidate[]) {
+  async #batchScore(query: string, candidates: SearchResultItem[]): Promise<SearchResultItem[]> {
     const pairs = candidates.map((c: RerankCandidate, i: number) => {
       const doc = this.#extractDocText(c);
       return `[${i}] ${doc.substring(0, MAX_DOC_LEN)}`;
@@ -173,7 +171,7 @@ Return ONLY a JSON array, no markdown or explanation.`;
   }
 
   /** Jaccard 降级 — 当 AI 不可用时使用 */
-  #jaccardFallback(query: string, candidates: RerankCandidate[]) {
+  #jaccardFallback(query: string, candidates: SearchResultItem[]): SearchResultItem[] {
     const queryTokens = new Set(tokenize(query));
     if (queryTokens.size === 0) {
       return candidates;

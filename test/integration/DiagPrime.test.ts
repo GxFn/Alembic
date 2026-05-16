@@ -6,9 +6,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseKnowledgeMarkdown } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
+import { SearchEngine } from '@alembic/core/service/search/SearchEngine';
 import Database from 'better-sqlite3';
 import { beforeAll, describe, it } from 'vitest';
-import { SearchEngine } from '../../lib/service/search/SearchEngine.js';
 import { extract as extractIntent } from '../../lib/service/task/IntentExtractor.js';
 import { PrimeSearchPipeline } from '../../lib/service/task/PrimeSearchPipeline.js';
 

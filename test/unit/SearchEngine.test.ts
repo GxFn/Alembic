@@ -1,5 +1,5 @@
+import { BM25Scorer, SearchEngine, tokenize } from '@alembic/core/service/search/SearchEngine';
 import { vi } from 'vitest';
-import { BM25Scorer, SearchEngine, tokenize } from '../../lib/service/search/SearchEngine.js';
 
 /* ────────────────────────────────────────────
  *  tokenize()

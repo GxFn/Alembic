@@ -39,7 +39,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { dirname, relative } from 'node:path';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
-import type { ScalarQuantizer } from './ScalarQuantizer.js';
+import type { ScalarQuantizer } from '@alembic/core/infrastructure/vector/ScalarQuantizer';
 
 const MAGIC = 'ASVEC';
 const VERSION = 1;

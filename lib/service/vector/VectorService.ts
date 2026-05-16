@@ -16,11 +16,11 @@
 import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
 import type { EventBus } from '@alembic/core/infrastructure/event/EventBus';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import type { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
-import type { VectorStore } from '../../infrastructure/vector/VectorStore.js';
-import type { HybridRetriever } from '../search/HybridRetriever.js';
+import type { IndexingPipeline } from '@alembic/core/infrastructure/vector/IndexingPipeline';
+import type { VectorStore } from '@alembic/core/infrastructure/vector/VectorStore';
+import type { HybridRetriever } from '@alembic/core/service/search/HybridRetriever';
+import type { SyncCoordinator } from '@alembic/core/service/vector/SyncCoordinator';
 import type { ContextualEnricher } from './ContextualEnricher.js';
-import type { SyncCoordinator } from './SyncCoordinator.js';
 
 // ── Types ──
 
@@ -119,7 +119,7 @@ export class VectorService {
 
     // 延迟 import SyncCoordinator 避免循环依赖
     if (this.#autoSyncOnCrud && this.#eventBus && this.#embedProvider) {
-      const { SyncCoordinator: SC } = await import('./SyncCoordinator.js');
+      const { SyncCoordinator: SC } = await import('@alembic/core/service/vector/SyncCoordinator');
       this.#syncCoordinator = new SC({
         vectorStore: this.#vectorStore,
         embedProvider: this.#embedProvider,

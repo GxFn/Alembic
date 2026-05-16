@@ -15,7 +15,7 @@ import {
   groupByKind,
   type SlimSearchResult,
   slimSearchResult,
-} from '#service/search/SearchTypes.js';
+} from '@alembic/core/service/search/SearchTypes';
 import { envelope } from '../envelope.js';
 import type { McpContext, SearchArgs, SearchResultItem } from './types.js';
 
@@ -36,7 +36,7 @@ function getSearchEngine(ctx: McpContext) {
 
 /** 降级创建 SearchEngine（仅在 container 无法提供时） */
 async function getFallbackEngine(ctx: McpContext) {
-  const { SearchEngine } = await import('#service/search/SearchEngine.js');
+  const { SearchEngine } = await import('@alembic/core/service/search/SearchEngine');
   const db = ctx.container.get('database');
   const knowledgeRepo = ctx.container.get('knowledgeRepository');
   const sourceRefRepo = ctx.container.get('recipeSourceRefRepository');

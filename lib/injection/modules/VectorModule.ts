@@ -9,8 +9,8 @@
  * 依赖 InfraModule 先注册: eventBus, database
  */
 
+import { VectorService } from '@alembic/core/service/vector/VectorService';
 import { ContextualEnricher } from '../../service/vector/ContextualEnricher.js';
-import { VectorService } from '../../service/vector/VectorService.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {

@@ -7,7 +7,7 @@
  * @module service/task/IntentExtractor
  */
 
-import { tokenize } from '#service/search/tokenizer.js';
+import { tokenize } from '@alembic/core/service/search/tokenizer';
 
 // ── Types ───────────────────────────────────────────
 

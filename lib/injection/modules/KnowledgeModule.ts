@@ -12,21 +12,23 @@ import { getDiscovererRegistry } from '@alembic/core/core/discovery';
 import { getEnhancementRegistry } from '@alembic/core/core/enhancement';
 import { DimensionCopy } from '@alembic/core/domain/dimension/DimensionCopy';
 import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
+import { HnswVectorAdapter } from '@alembic/core/infrastructure/vector/HnswVectorAdapter';
+import { IndexingPipeline } from '@alembic/core/infrastructure/vector/IndexingPipeline';
+import { JsonVectorAdapter } from '@alembic/core/infrastructure/vector/JsonVectorAdapter';
 import { LifecycleEventRepository } from '@alembic/core/repository/evolution/LifecycleEventRepository';
 import type { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
 import { WarningRepository } from '@alembic/core/repository/evolution/WarningRepository';
 import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
 import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
+import { HybridRetriever } from '@alembic/core/service/search/HybridRetriever';
+import { SearchEngine } from '@alembic/core/service/search/SearchEngine';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
 import {
   resolveDataRoot,
   resolveKnowledgeScanDirs,
   resolveProjectRoot,
 } from '@alembic/core/shared/resolveProjectRoot';
-import { HnswVectorAdapter } from '../../infrastructure/vector/HnswVectorAdapter.js';
-import { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
-import { JsonVectorAdapter } from '../../infrastructure/vector/JsonVectorAdapter.js';
 import { findSimilarRecipes } from '../../service/candidate/SimilarityService.js';
 import { ConsolidationAdvisor } from '../../service/evolution/ConsolidationAdvisor.js';
 import { ContentPatcher } from '../../service/evolution/ContentPatcher.js';
@@ -45,8 +47,6 @@ import { KnowledgeGraphService } from '../../service/knowledge/KnowledgeGraphSer
 import { KnowledgeService } from '../../service/knowledge/KnowledgeService.js';
 import { RecipeProductionGateway } from '../../service/knowledge/RecipeProductionGateway.js';
 import { SourceRefReconciler } from '../../service/knowledge/SourceRefReconciler.js';
-import { HybridRetriever } from '../../service/search/HybridRetriever.js';
-import { SearchEngine } from '../../service/search/SearchEngine.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {

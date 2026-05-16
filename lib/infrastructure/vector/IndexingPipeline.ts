@@ -11,12 +11,12 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
+import { BatchEmbedder } from '@alembic/core/infrastructure/vector/BatchEmbedder';
+import { chunk } from '@alembic/core/infrastructure/vector/Chunker';
+import type { VectorStore } from '@alembic/core/infrastructure/vector/VectorStore';
 import { computeContentHash } from '@alembic/core/shared/content-hash';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
 import { CANDIDATES_DIR, KNOWLEDGE_BASE_DIR } from '../config/Defaults.js';
-import { BatchEmbedder } from './BatchEmbedder.js';
-import { chunk } from './Chunker.js';
-import type { VectorStore } from './VectorStore.js';
 
 /** ContextualEnricher 接口 (可选, 由 service 层注入) */
 interface ContextualEnricherLike {

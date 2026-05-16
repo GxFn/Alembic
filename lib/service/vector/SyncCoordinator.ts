@@ -16,11 +16,11 @@ import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
 import { knowledgeEntries } from '@alembic/core/infrastructure/database/drizzle/schema';
 import type { EventBus } from '@alembic/core/infrastructure/event/EventBus';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { VectorStore } from '@alembic/core/infrastructure/vector/VectorStore';
 import { queryNonDeprecatedEntries } from '@alembic/core/repository/search/SearchRepoAdapter';
+import type { EmbedProvider } from '@alembic/core/service/vector/VectorService';
 import { and, ne } from 'drizzle-orm';
-import type { VectorStore } from '../../infrastructure/vector/VectorStore.js';
 import type { ContextualEnricher } from './ContextualEnricher.js';
-import type { EmbedProvider } from './VectorService.js';
 
 // ── Types ──
 

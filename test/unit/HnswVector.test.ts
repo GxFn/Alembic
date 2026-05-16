@@ -16,45 +16,45 @@ let IndexingPipeline;
 let AsyncPersistence, WAL_OP, crc32;
 
 beforeAll(async () => {
-  const hnswMod = await import('../../lib/infrastructure/vector/HnswIndex.js');
+  const hnswMod = await import('@alembic/core/infrastructure/vector/HnswIndex');
   HnswIndex = hnswMod.HnswIndex;
   cosineDistance = hnswMod.cosineDistance;
   MinHeap = hnswMod.MinHeap;
   MaxHeap = hnswMod.MaxHeap;
 
-  const sqMod = await import('../../lib/infrastructure/vector/ScalarQuantizer.js');
+  const sqMod = await import('@alembic/core/infrastructure/vector/ScalarQuantizer');
   ScalarQuantizer = sqMod.ScalarQuantizer;
 
-  const bpMod = await import('../../lib/infrastructure/vector/BinaryPersistence.js');
+  const bpMod = await import('@alembic/core/infrastructure/vector/BinaryPersistence');
   BinaryPersistence = bpMod.BinaryPersistence;
 
-  const haMod = await import('../../lib/infrastructure/vector/HnswVectorAdapter.js');
+  const haMod = await import('@alembic/core/infrastructure/vector/HnswVectorAdapter');
   HnswVectorAdapter = haMod.HnswVectorAdapter;
 
-  const vmMod = await import('../../lib/infrastructure/vector/VectorMigration.js');
+  const vmMod = await import('@alembic/core/infrastructure/vector/VectorMigration');
   VectorMigration = vmMod.VectorMigration;
 
-  const beMod = await import('../../lib/infrastructure/vector/BatchEmbedder.js');
+  const beMod = await import('@alembic/core/infrastructure/vector/BatchEmbedder');
   BatchEmbedder = beMod.BatchEmbedder;
 
-  const hrMod = await import('../../lib/service/search/HybridRetriever.js');
+  const hrMod = await import('@alembic/core/service/search/HybridRetriever');
   HybridRetriever = hrMod.HybridRetriever;
 
-  const jvMod = await import('../../lib/infrastructure/vector/JsonVectorAdapter.js');
+  const jvMod = await import('@alembic/core/infrastructure/vector/JsonVectorAdapter');
   _JsonVectorAdapter = jvMod.JsonVectorAdapter;
 
-  const chunkMod = await import('../../lib/infrastructure/vector/Chunker.js');
+  const chunkMod = await import('@alembic/core/infrastructure/vector/Chunker');
   chunk = chunkMod.chunk;
   _estimateTokens = chunkMod.estimateTokens;
   _DEFAULT_MAX_CHUNK_TOKENS = chunkMod.DEFAULT_MAX_CHUNK_TOKENS;
 
-  const astChunkerMod = await import('../../lib/infrastructure/vector/ASTChunker.js');
+  const astChunkerMod = await import('@alembic/core/infrastructure/vector/ASTChunker');
   isASTChunkerAvailable = astChunkerMod.isASTChunkerAvailable;
 
-  const ipMod = await import('../../lib/infrastructure/vector/IndexingPipeline.js');
+  const ipMod = await import('@alembic/core/infrastructure/vector/IndexingPipeline');
   IndexingPipeline = ipMod.IndexingPipeline;
 
-  const apMod = await import('../../lib/infrastructure/vector/AsyncPersistence.js');
+  const apMod = await import('@alembic/core/infrastructure/vector/AsyncPersistence');
   AsyncPersistence = apMod.AsyncPersistence;
   WAL_OP = apMod.WAL_OP;
   crc32 = apMod.crc32;

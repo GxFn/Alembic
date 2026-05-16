@@ -16,6 +16,8 @@ import type { EventBus } from '@alembic/core/infrastructure/event/EventBus';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
 import type Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
+import type { IndexingPipeline } from '@alembic/core/infrastructure/vector/IndexingPipeline';
+import type { VectorStore } from '@alembic/core/infrastructure/vector/VectorStore';
 import type { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
 import type { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
 import type { WarningRepository } from '@alembic/core/repository/evolution/WarningRepository';
@@ -30,6 +32,9 @@ import type { TokenUsageStore } from '@alembic/core/repository/token/TokenUsageS
 import type { KnowledgeFileWriter } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
 // ── CLI Types ──
 import type { KnowledgeSyncService } from '@alembic/core/service/knowledge/KnowledgeSyncService';
+import type { HybridRetriever } from '@alembic/core/service/search/HybridRetriever';
+import type SearchEngine from '@alembic/core/service/search/SearchEngine';
+import type { VectorService } from '@alembic/core/service/vector/VectorService';
 // ── Shared Types ──
 import type { LanguageService } from '@alembic/core/shared/LanguageService';
 // ── Service Types ──
@@ -55,8 +60,6 @@ import type { AiProviderManager } from '../external/ai/AiProviderManager.js';
 import type AuditLogger from '../infrastructure/audit/AuditLogger.js';
 import type AuditStore from '../infrastructure/audit/AuditStore.js';
 import type { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
-import type { IndexingPipeline } from '../infrastructure/vector/IndexingPipeline.js';
-import type { VectorStore } from '../infrastructure/vector/VectorStore.js';
 import type { AuditRepositoryImpl } from '../repository/audit/AuditRepository.js';
 import type { CodeEntityRepositoryImpl } from '../repository/code/CodeEntityRepository.js';
 import type { RemoteCommandRepository } from '../repository/remote/RemoteCommandRepository.js';
@@ -86,14 +89,11 @@ import type { FeedbackCollector } from '../service/quality/FeedbackCollector.js'
 import type { QualityScorer } from '../service/quality/QualityScorer.js';
 import type { RecipeCandidateValidator } from '../service/recipe/RecipeCandidateValidator.js';
 import type { RecipeParser } from '../service/recipe/RecipeParser.js';
-import type { HybridRetriever } from '../service/search/HybridRetriever.js';
-import type SearchEngine from '../service/search/SearchEngine.js';
 import type { HitRecorder } from '../service/signal/HitRecorder.js';
 import type { SkillHooks } from '../service/skills/SkillHooks.js';
 import type { PrimeSearchPipeline } from '../service/task/PrimeSearchPipeline.js';
 // ── Vector Service Types ──
 import type { ContextualEnricher } from '../service/vector/ContextualEnricher.js';
-import type { VectorService } from '../service/vector/VectorService.js';
 
 /**
  * 类型安全的服务映射表

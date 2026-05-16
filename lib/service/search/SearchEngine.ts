@@ -16,11 +16,11 @@ import {
   RawDbSourceRefAdapter,
   unwrapSearchDb,
 } from '@alembic/core/repository/search/SearchRepoAdapter';
-import { CoarseRanker } from './CoarseRanker.js';
-import type { SearchItem } from './contextBoost.js';
-import { contextBoost } from './contextBoost.js';
-import { FieldWeightedScorer } from './FieldWeightedScorer.js';
-import { MultiSignalRanker } from './MultiSignalRanker.js';
+import { CoarseRanker } from '@alembic/core/service/search/CoarseRanker';
+import type { SearchItem } from '@alembic/core/service/search/contextBoost';
+import { contextBoost } from '@alembic/core/service/search/contextBoost';
+import { FieldWeightedScorer } from '@alembic/core/service/search/FieldWeightedScorer';
+import { MultiSignalRanker } from '@alembic/core/service/search/MultiSignalRanker';
 import type {
   DbRow,
   DocMeta,
@@ -38,11 +38,11 @@ import type {
   SearchVectorService,
   SearchVectorStore,
   VectorHit,
-} from './SearchTypes.js';
+} from '@alembic/core/service/search/SearchTypes';
 
 // ── Re-exports for backward compatibility ──
-export { BM25Scorer } from './BM25Scorer.js';
-export { FieldWeightedScorer } from './FieldWeightedScorer.js';
+export { BM25Scorer } from '@alembic/core/service/search/BM25Scorer';
+export { FieldWeightedScorer } from '@alembic/core/service/search/FieldWeightedScorer';
 export type {
   BM25DocMeta,
   DbRow,
@@ -63,9 +63,9 @@ export type {
   SearchVectorStore,
   SlimSearchResult,
   VectorHit,
-} from './SearchTypes.js';
-export { groupByKind, slimSearchResult } from './SearchTypes.js';
-export { tokenize } from './tokenizer.js';
+} from '@alembic/core/service/search/SearchTypes';
+export { groupByKind, slimSearchResult } from '@alembic/core/service/search/SearchTypes';
+export { tokenize } from '@alembic/core/service/search/tokenizer';
 
 /**
  * SearchEngine - 完整搜索服务

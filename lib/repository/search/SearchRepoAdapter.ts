@@ -6,7 +6,7 @@
  * 放在 lib/repository/ 下，允许使用 raw SQL（lint 白名单目录）。
  */
 
-import type { SearchDb } from '../../service/search/SearchTypes.js';
+import type { SearchDb } from '@alembic/core/service/search/SearchTypes';
 
 /** 解包 DatabaseConnection → raw SearchDb（若已是 raw db 则直接返回） */
 export function unwrapSearchDb(db: SearchDb & { getDb?: () => SearchDb }): SearchDb {

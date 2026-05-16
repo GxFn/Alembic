@@ -1,5 +1,5 @@
+import { FieldWeightedScorer } from '@alembic/core/service/search/FieldWeightedScorer';
 import { beforeEach, describe, expect, test } from 'vitest';
-import { FieldWeightedScorer } from '../../lib/service/search/FieldWeightedScorer.js';
 
 /* ────────────────────────────────────────────
  *  FieldWeightedScorer — 基础操作

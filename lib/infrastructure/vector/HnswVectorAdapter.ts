@@ -18,12 +18,12 @@
 import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
+import { AsyncPersistence, WAL_OP } from '@alembic/core/infrastructure/vector/AsyncPersistence';
+import { BinaryPersistence } from '@alembic/core/infrastructure/vector/BinaryPersistence';
+import { HnswIndex } from '@alembic/core/infrastructure/vector/HnswIndex';
+import { ScalarQuantizer } from '@alembic/core/infrastructure/vector/ScalarQuantizer';
+import { VectorStore } from '@alembic/core/infrastructure/vector/VectorStore';
 import pathGuard from '@alembic/core/shared/PathGuard';
-import { AsyncPersistence, WAL_OP } from './AsyncPersistence.js';
-import { BinaryPersistence } from './BinaryPersistence.js';
-import { HnswIndex } from './HnswIndex.js';
-import { ScalarQuantizer } from './ScalarQuantizer.js';
-import { VectorStore } from './VectorStore.js';
 
 export class HnswVectorAdapter extends VectorStore {
   #index;
@@ -148,7 +148,7 @@ export class HnswVectorAdapter extends VectorStore {
     }
 
     // 尝试从 JSON 迁移
-    const { VectorMigration } = await import('./VectorMigration.js');
+    const { VectorMigration } = await import('@alembic/core/infrastructure/vector/VectorMigration');
     const migrationResult = await VectorMigration.migrate(this.#indexDir, this);
     if (migrationResult === 'migrated') {
       // 迁移完成, 数据已加载到内存
