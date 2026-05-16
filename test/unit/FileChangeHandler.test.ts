@@ -1,6 +1,6 @@
+import type { FileChangeEvent, ImpactLevel } from '@alembic/core/types/reactive-evolution';
 import { vi } from 'vitest';
 import { FileChangeHandler } from '../../lib/service/evolution/FileChangeHandler.js';
-import type { FileChangeEvent, ImpactLevel } from '../../lib/types/reactive-evolution.js';
 
 /* ════════════════════════════════════════════
  *  Mock ContentImpactAnalyzer — 控制 diff 返回
@@ -9,7 +9,7 @@ import type { FileChangeEvent, ImpactLevel } from '../../lib/types/reactive-evol
 const mockAssessFileImpact = vi.fn();
 const mockExtractRecipeTokens = vi.fn(() => ({ tokens: new Set(), sources: new Map() }));
 
-vi.mock('../../lib/service/evolution/ContentImpactAnalyzer.js', () => ({
+vi.mock('@alembic/core/service/evolution/ContentImpactAnalyzer', () => ({
   assessFileImpact: (...args: unknown[]) => mockAssessFileImpact(...args),
   extractRecipeTokens: (...args: unknown[]) => mockExtractRecipeTokens(...args),
 }));

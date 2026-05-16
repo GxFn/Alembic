@@ -1,9 +1,10 @@
 /**
  * LayerInferrer 单元测试
  */
+
+import { LayerInferrer } from '@alembic/core/service/panorama/LayerInferrer';
+import type { CyclicDependency, Edge } from '@alembic/core/service/panorama/PanoramaTypes';
 import { describe, expect, it } from 'vitest';
-import { LayerInferrer } from '../../lib/service/panorama/LayerInferrer.js';
-import type { CyclicDependency, Edge } from '../../lib/service/panorama/PanoramaTypes.js';
 
 describe('LayerInferrer', () => {
   const inferrer = new LayerInferrer();

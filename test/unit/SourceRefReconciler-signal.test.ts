@@ -3,8 +3,9 @@
  *
  * 验证 SourceRefReconciler 在发现 stale sourceRefs 时通过 SignalBus 发射 quality 信号。
  */
+
+import { SourceRefReconciler } from '@alembic/core/service/knowledge/SourceRefReconciler';
 import { describe, expect, it, vi } from 'vitest';
-import { SourceRefReconciler } from '../../lib/service/knowledge/SourceRefReconciler.js';
 
 /* ────────────────────── Mock Repos ────────────────────── */
 

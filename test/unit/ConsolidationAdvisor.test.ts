@@ -4,11 +4,12 @@
  * 验证提交前融合分析的 4 种建议路径：
  *   create / merge / reorganize / insufficient
  */
-import { describe, expect, it } from 'vitest';
+
 import {
   type CandidateForConsolidation,
   ConsolidationAdvisor,
-} from '../../lib/service/evolution/ConsolidationAdvisor.js';
+} from '@alembic/core/service/evolution/ConsolidationAdvisor';
+import { describe, expect, it } from 'vitest';
 
 /* ── Mock Repo ── */
 

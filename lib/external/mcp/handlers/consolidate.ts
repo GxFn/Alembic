@@ -9,9 +9,9 @@
  * @module handlers/consolidate
  */
 
+import type { EvolutionGateway } from '@alembic/core/service/evolution/EvolutionGateway';
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
 import type { ConsolidateInput } from '#shared/schemas/mcp-tools.js';
-import type { EvolutionGateway } from '../../../service/evolution/EvolutionGateway.js';
 import { envelope } from '../envelope.js';
 
 /** MCP handler context */

@@ -5,10 +5,10 @@ import {
 import type { KnowledgeRepository } from '@alembic/core/domain/knowledge/KnowledgeRepository';
 import { inferKind, Lifecycle } from '@alembic/core/domain/knowledge/Lifecycle';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { ConfidenceRouter } from '@alembic/core/service/knowledge/ConfidenceRouter';
 import type { KnowledgeFileWriter } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
+import type { KnowledgeGraphService } from '@alembic/core/service/knowledge/KnowledgeGraphService';
 import { ConflictError, NotFoundError, ValidationError } from '@alembic/core/shared/errors/index';
-import type { ConfidenceRouter } from './ConfidenceRouter.js';
-import type { KnowledgeGraphService } from './KnowledgeGraphService.js';
 
 interface AuditLoggerLike {
   log(entry: Record<string, unknown>): Promise<void>;

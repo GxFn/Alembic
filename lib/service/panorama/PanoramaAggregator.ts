@@ -8,20 +8,20 @@
  */
 
 import type { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
+import type { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
 import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
 import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
-import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
-import type { CouplingAnalyzer } from './CouplingAnalyzer.js';
-import { DimensionAnalyzer } from './DimensionAnalyzer.js';
-import type { ConfigLayer, LayerInferrer } from './LayerInferrer.js';
+import type { CouplingAnalyzer } from '@alembic/core/service/panorama/CouplingAnalyzer';
+import { DimensionAnalyzer } from '@alembic/core/service/panorama/DimensionAnalyzer';
+import type { ConfigLayer, LayerInferrer } from '@alembic/core/service/panorama/LayerInferrer';
 import type {
   CallFlowSummary,
   ExternalDepProfile,
   PanoramaModule,
   PanoramaResult,
-} from './PanoramaTypes.js';
-import type { ModuleCandidate, RoleRefiner } from './RoleRefiner.js';
-import { profileTechStack } from './TechStackProfiler.js';
+} from '@alembic/core/service/panorama/PanoramaTypes';
+import type { ModuleCandidate, RoleRefiner } from '@alembic/core/service/panorama/RoleRefiner';
+import { profileTechStack } from '@alembic/core/service/panorama/TechStackProfiler';
 
 /* ═══ Options ═════════════════════════════════════════════ */
 

@@ -1,8 +1,9 @@
 /**
  * RoleRefiner 单元测试
  */
+
+import { RoleRefiner } from '@alembic/core/service/panorama/RoleRefiner';
 import { describe, expect, it } from 'vitest';
-import { RoleRefiner } from '../../lib/service/panorama/RoleRefiner.js';
 import { createMockRepos, type MockRepoOptions } from '../helpers/panorama-mocks.js';
 
 /* ═══ Helper ══════════════════════════════════════════════ */

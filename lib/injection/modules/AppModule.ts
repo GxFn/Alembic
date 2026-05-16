@@ -10,14 +10,14 @@
 
 import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { TokenUsageStore } from '@alembic/core/repository/token/TokenUsageStore';
+import { RecipeExtractor } from '@alembic/core/service/knowledge/RecipeExtractor';
+import { FeedbackCollector } from '@alembic/core/service/quality/FeedbackCollector';
+import { QualityScorer } from '@alembic/core/service/quality/QualityScorer';
+import { RecipeCandidateValidator } from '@alembic/core/service/recipe/RecipeCandidateValidator';
+import { RecipeParser } from '@alembic/core/service/recipe/RecipeParser';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { CursorDeliveryPipeline } from '../../service/delivery/CursorDeliveryPipeline.js';
-import { RecipeExtractor } from '../../service/knowledge/RecipeExtractor.js';
 import { ModuleService } from '../../service/module/ModuleService.js';
-import { FeedbackCollector } from '../../service/quality/FeedbackCollector.js';
-import { QualityScorer } from '../../service/quality/QualityScorer.js';
-import { RecipeCandidateValidator } from '../../service/recipe/RecipeCandidateValidator.js';
-import { RecipeParser } from '../../service/recipe/RecipeParser.js';
 import { PrimeSearchPipeline } from '../../service/task/PrimeSearchPipeline.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 

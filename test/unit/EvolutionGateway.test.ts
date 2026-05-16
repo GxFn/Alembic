@@ -6,8 +6,8 @@
  *   - 基本 submit 路由（update / deprecate / valid）
  */
 
+import { EvolutionGateway } from '@alembic/core/service/evolution/EvolutionGateway';
 import { describe, expect, it, vi } from 'vitest';
-import { EvolutionGateway } from '../../lib/service/evolution/EvolutionGateway.js';
 
 /* ── Mock factories ── */
 

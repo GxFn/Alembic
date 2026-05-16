@@ -9,8 +9,8 @@ import type {
   ProposalRecord,
   ProposalRepository,
 } from '@alembic/core/repository/evolution/ProposalRepository';
+import { ProposalExecutor } from '@alembic/core/service/evolution/ProposalExecutor';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ProposalExecutor } from '../../lib/service/evolution/ProposalExecutor.js';
 
 /* ── Mock factories ── */
 

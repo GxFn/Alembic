@@ -14,7 +14,10 @@
  */
 
 import { UnifiedValidator } from '@alembic/core/domain/knowledge/UnifiedValidator';
-import type { BootstrapDedup, CandidateSummary } from '../bootstrap/BootstrapDedup.js';
+import type {
+  BootstrapDedup,
+  CandidateSummary,
+} from '@alembic/core/service/bootstrap/BootstrapDedup';
 
 /** Lightweight log interface — avoids importing static-only Logger class. */
 interface GatewayLogger {

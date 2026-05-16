@@ -18,7 +18,7 @@ import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
-import { rewriteRecipePaths } from './RecipePathRewriter.js';
+import { rewriteRecipePaths } from '@alembic/core/service/knowledge/RecipePathRewriter';
 
 const execFileAsync = promisify(execFile);
 

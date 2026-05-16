@@ -8,8 +8,9 @@
  *   - 超时检测
  *   - 健康摘要
  */
+
+import { LifecycleStateMachine } from '@alembic/core/service/evolution/LifecycleStateMachine';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { LifecycleStateMachine } from '../../lib/service/evolution/LifecycleStateMachine.js';
 
 /* ── Mock factories ── */
 

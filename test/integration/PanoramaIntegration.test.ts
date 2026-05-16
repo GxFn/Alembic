@@ -4,13 +4,14 @@
  * 使用 Mock Repository 数据验证完整的 Panorama 管线:
  * ModuleDiscoverer → RoleRefiner → CouplingAnalyzer → LayerInferrer → PanoramaAggregator → PanoramaService
  */
+
+import { CouplingAnalyzer } from '@alembic/core/service/panorama/CouplingAnalyzer';
+import { LayerInferrer } from '@alembic/core/service/panorama/LayerInferrer';
+import { ModuleDiscoverer } from '@alembic/core/service/panorama/ModuleDiscoverer';
+import { PanoramaAggregator } from '@alembic/core/service/panorama/PanoramaAggregator';
+import { PanoramaService } from '@alembic/core/service/panorama/PanoramaService';
+import { RoleRefiner } from '@alembic/core/service/panorama/RoleRefiner';
 import { describe, expect, it } from 'vitest';
-import { CouplingAnalyzer } from '../../lib/service/panorama/CouplingAnalyzer.js';
-import { LayerInferrer } from '../../lib/service/panorama/LayerInferrer.js';
-import { ModuleDiscoverer } from '../../lib/service/panorama/ModuleDiscoverer.js';
-import { PanoramaAggregator } from '../../lib/service/panorama/PanoramaAggregator.js';
-import { PanoramaService } from '../../lib/service/panorama/PanoramaService.js';
-import { RoleRefiner } from '../../lib/service/panorama/RoleRefiner.js';
 import { createMockRepos } from '../helpers/panorama-mocks.js';
 
 /* ═══ Tests ═══════════════════════════════════════════════ */

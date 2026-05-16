@@ -1,12 +1,13 @@
 /**
  * PanoramaAggregator 单元测试
  */
+
+import { CouplingAnalyzer } from '@alembic/core/service/panorama/CouplingAnalyzer';
+import { LayerInferrer } from '@alembic/core/service/panorama/LayerInferrer';
+import { PanoramaAggregator } from '@alembic/core/service/panorama/PanoramaAggregator';
+import type { ModuleCandidate } from '@alembic/core/service/panorama/RoleRefiner';
+import { RoleRefiner } from '@alembic/core/service/panorama/RoleRefiner';
 import { describe, expect, it } from 'vitest';
-import { CouplingAnalyzer } from '../../lib/service/panorama/CouplingAnalyzer.js';
-import { LayerInferrer } from '../../lib/service/panorama/LayerInferrer.js';
-import { PanoramaAggregator } from '../../lib/service/panorama/PanoramaAggregator.js';
-import type { ModuleCandidate } from '../../lib/service/panorama/RoleRefiner.js';
-import { RoleRefiner } from '../../lib/service/panorama/RoleRefiner.js';
 import { createMockRepos, type MockEdge, type MockRepoOptions } from '../helpers/panorama-mocks.js';
 
 /* ═══ Tests ═══════════════════════════════════════════════ */

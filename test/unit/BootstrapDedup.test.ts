@@ -6,11 +6,12 @@
  *   - 4 维结构相似度 (title + clause + code + guard)
  *   - 阈值拦截逻辑
  */
-import { describe, expect, it } from 'vitest';
+
 import {
   BootstrapDedup,
   type CandidateSummary,
-} from '../../lib/service/bootstrap/BootstrapDedup.js';
+} from '@alembic/core/service/bootstrap/BootstrapDedup';
+import { describe, expect, it } from 'vitest';
 
 function makeSummary(overrides: Partial<CandidateSummary> = {}): CandidateSummary {
   return {

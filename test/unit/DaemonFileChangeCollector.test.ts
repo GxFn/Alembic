@@ -2,14 +2,14 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type {
+  FileChangeEvent,
+  ReactiveEvolutionReport,
+} from '@alembic/core/types/reactive-evolution';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { DaemonFileChangeCollector } from '../../lib/service/evolution/DaemonFileChangeCollector.js';
 import { FileChangeSourceTracker } from '../../lib/service/evolution/FileChangeSourceTracker.js';
 import type { FileChangeDispatcher } from '../../lib/service/FileChangeDispatcher.js';
-import type {
-  FileChangeEvent,
-  ReactiveEvolutionReport,
-} from '../../lib/types/reactive-evolution.js';
 
 const tempDirs: string[] = [];
 

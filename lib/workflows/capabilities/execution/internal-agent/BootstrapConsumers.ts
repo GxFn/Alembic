@@ -593,7 +593,7 @@ export function extractBootstrapCandidateRelations(
 }
 
 async function defaultGetCodeEntityGraphClass() {
-  const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
+  const { CodeEntityGraph } = await import('@alembic/core/service/knowledge/CodeEntityGraph');
   return CodeEntityGraph as CodeEntityGraphConstructor;
 }
 

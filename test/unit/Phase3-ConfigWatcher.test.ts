@@ -18,10 +18,10 @@ import {
   parseXcodeGenProject,
   parseXcodeGenTarget,
 } from '@alembic/core/core/discovery/parsers/YamlConfigParser';
+import { CouplingAnalyzer } from '@alembic/core/service/panorama/CouplingAnalyzer';
+import type { ExternalDepProfile } from '@alembic/core/service/panorama/PanoramaTypes';
+import { profileTechStack } from '@alembic/core/service/panorama/TechStackProfiler';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CouplingAnalyzer } from '../../lib/service/panorama/CouplingAnalyzer.js';
-import type { ExternalDepProfile } from '../../lib/service/panorama/PanoramaTypes.js';
-import { profileTechStack } from '../../lib/service/panorama/TechStackProfiler.js';
 import { createMockRepos, type MockEdge } from '../helpers/panorama-mocks.js';
 
 // ═══════════════════════════════════════════════════════════

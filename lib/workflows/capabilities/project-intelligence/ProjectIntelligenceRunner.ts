@@ -515,7 +515,7 @@ export async function materializeEntityGraph(
   } | null = null;
 
   try {
-    const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
+    const { CodeEntityGraph } = await import('@alembic/core/service/knowledge/CodeEntityGraph');
     const entityRepo = container.get('codeEntityRepository');
     const edgeRepo = container.get('knowledgeEdgeRepository');
     if (entityRepo && edgeRepo) {
@@ -751,7 +751,7 @@ export async function materializeCallGraph({
 }
 
 async function defaultGetCodeEntityGraphClass() {
-  const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
+  const { CodeEntityGraph } = await import('@alembic/core/service/knowledge/CodeEntityGraph');
   return CodeEntityGraph as unknown as CodeEntityGraphCallGraphConstructor;
 }
 
@@ -880,7 +880,7 @@ export async function materializeModuleEntities(
   }
 
   try {
-    const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
+    const { CodeEntityGraph } = await import('@alembic/core/service/knowledge/CodeEntityGraph');
     const entityRepo = container.get('codeEntityRepository');
     const edgeRepo = container.get('knowledgeEdgeRepository');
     if (entityRepo && edgeRepo) {

@@ -4,8 +4,8 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { CouplingAnalyzer } from '@alembic/core/service/panorama/CouplingAnalyzer';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CouplingAnalyzer } from '../../lib/service/panorama/CouplingAnalyzer.js';
 import { createMockRepos, type MockEdge, type MockEntity } from '../helpers/panorama-mocks.js';
 
 /* ═══ Helper ══════════════════════════════════════════════ */

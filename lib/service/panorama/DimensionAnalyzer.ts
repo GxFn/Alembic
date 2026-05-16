@@ -22,10 +22,14 @@ import {
 } from '@alembic/core/domain/dimension';
 import { COUNTABLE_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
 import type { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
+import type { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
 import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import type {
+  HealthDimension,
+  HealthRadar,
+  KnowledgeGap,
+} from '@alembic/core/service/panorama/PanoramaTypes';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
-import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
-import type { HealthDimension, HealthRadar, KnowledgeGap } from './PanoramaTypes.js';
 
 /* ═══ DimensionAnalyzer Class ═════════════════════════════ */
 

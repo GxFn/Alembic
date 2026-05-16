@@ -15,10 +15,14 @@ import { isConsumable, isDegraded } from '@alembic/core/domain/knowledge/Lifecyc
 import type { ProposalSource } from '@alembic/core/repository/evolution/ProposalRepository';
 import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
+import { assessImpactUnified } from '@alembic/core/service/evolution/ContentImpactAnalyzer';
+import type {
+  EvolutionAction,
+  EvolutionDecision,
+  EvolutionResult,
+} from '@alembic/core/service/evolution/EvolutionGateway';
 import { extractRecipeTokens } from '@alembic/core/shared/recipe-tokens';
 import type { EvolutionAuditRecipe } from '../../agent/runs/evolution/EvolutionAgentRun.js';
-import { assessImpactUnified } from './ContentImpactAnalyzer.js';
-import type { EvolutionAction, EvolutionDecision, EvolutionResult } from './EvolutionGateway.js';
 
 // ── Types ──────────────────────────────────────────────
 

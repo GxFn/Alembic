@@ -9,9 +9,9 @@
  * @module handlers/evolve-external
  */
 
+import type { EvolutionGateway } from '@alembic/core/service/evolution/EvolutionGateway';
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
 import type { EvolveInput } from '#shared/schemas/mcp-tools.js';
-import type { EvolutionGateway } from '../../../service/evolution/EvolutionGateway.js';
 import { envelope } from '../envelope.js';
 
 /** MCP handler context */

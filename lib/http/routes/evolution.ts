@@ -17,9 +17,9 @@
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
 import type { WarningRepository } from '@alembic/core/repository/evolution/WarningRepository';
+import type { ProposalExecutor } from '@alembic/core/service/evolution/ProposalExecutor';
 import express, { type Request, type Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import type { ProposalExecutor } from '../../service/evolution/ProposalExecutor.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();

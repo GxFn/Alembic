@@ -13,15 +13,15 @@
  */
 
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import express, { type Request, type Response } from 'express';
-import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { getFileChangeSourceTracker } from '../../service/evolution/FileChangeSourceTracker.js';
-import type { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 import type {
   FileChangeEvent,
   FileChangeEventSource,
   ReactiveEvolutionReport,
-} from '../../types/reactive-evolution.js';
+} from '@alembic/core/types/reactive-evolution';
+import express, { type Request, type Response } from 'express';
+import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { getFileChangeSourceTracker } from '../../service/evolution/FileChangeSourceTracker.js';
+import type { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();

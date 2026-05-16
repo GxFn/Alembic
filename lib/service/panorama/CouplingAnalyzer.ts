@@ -8,10 +8,10 @@
  */
 
 import { readFileSync } from 'node:fs';
+import type { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
 import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
+import type { CyclicDependency, Edge } from '@alembic/core/service/panorama/PanoramaTypes';
 import { LanguageProfiles } from '@alembic/core/shared/LanguageProfiles';
-import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
-import type { CyclicDependency, Edge } from './PanoramaTypes.js';
 
 /* ═══ Types ═══════════════════════════════════════════════ */
 

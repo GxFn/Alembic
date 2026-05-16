@@ -27,8 +27,8 @@ import type {
 } from '@alembic/core/repository/evolution/ProposalRepository';
 import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
 import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
-import type { ContentPatcher } from './ContentPatcher.js';
-import type { LifecycleStateMachine } from './LifecycleStateMachine.js';
+import type { ContentPatcher } from '@alembic/core/service/evolution/ContentPatcher';
+import type { LifecycleStateMachine } from '@alembic/core/service/evolution/LifecycleStateMachine';
 
 /* ────────────────────── Types ────────────────────── */
 

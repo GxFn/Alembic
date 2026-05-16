@@ -7,8 +7,11 @@
  * @module TechStackProfiler
  */
 
+import type {
+  ExternalDepProfile,
+  TechStackProfile,
+} from '@alembic/core/service/panorama/PanoramaTypes';
 import { LanguageProfiles } from '@alembic/core/shared/LanguageProfiles';
-import type { ExternalDepProfile, TechStackProfile } from './PanoramaTypes.js';
 
 /* ═══ TechStackProfiler ═══════════════════════════════════ */
 

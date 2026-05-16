@@ -14,6 +14,7 @@ import { WriteZone } from '@alembic/core/infrastructure/io';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
 import { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
+import { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
 import { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
 import { GuardViolationRepositoryImpl } from '@alembic/core/repository/guard/GuardViolationRepository';
 import { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
@@ -30,7 +31,6 @@ import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../infrastructure/audit/AuditStore.js';
 import { getRealtimeService as _getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
-import { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
 import { RemoteCommandRepository } from '../../repository/remote/RemoteCommandRepository.js';
 import { BootstrapTaskManager } from '../../service/bootstrap/BootstrapTaskManager.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
@@ -196,7 +196,7 @@ export function register(c: ServiceContainer) {
   c.singleton('knowledgeSyncService', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
     const sourceRefReconciler = ct.singletons.sourceRefReconciler as
-      | import('../../service/knowledge/SourceRefReconciler.js').SourceRefReconciler
+      | import('@alembic/core/service/knowledge/SourceRefReconciler').SourceRefReconciler
       | undefined;
     return new KnowledgeSyncService(dataRoot, {
       sourceRefReconciler: sourceRefReconciler || undefined,

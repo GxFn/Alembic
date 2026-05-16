@@ -10,7 +10,12 @@
  * @module LayerInferrer
  */
 
-import type { CyclicDependency, Edge, LayerHierarchy, LayerViolation } from './PanoramaTypes.js';
+import type {
+  CyclicDependency,
+  Edge,
+  LayerHierarchy,
+  LayerViolation,
+} from '@alembic/core/service/panorama/PanoramaTypes';
 
 /* ═══ Types ═══════════════════════════════════════════════ */
 

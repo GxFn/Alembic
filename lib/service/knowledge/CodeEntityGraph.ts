@@ -24,8 +24,8 @@
  */
 
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
 import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
-import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
 
 const logger = Logger.getInstance();
 

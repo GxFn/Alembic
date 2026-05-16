@@ -10,12 +10,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
+import type { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
 import type { GuardViolationRepositoryImpl } from '@alembic/core/repository/guard/GuardViolationRepository';
 import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
 import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
-import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
 import { ComplianceReporter } from '../../service/guard/ComplianceReporter.js';
 import { CoverageAnalyzer } from '../../service/guard/CoverageAnalyzer.js';
 import { ExclusionManager } from '../../service/guard/ExclusionManager.js';

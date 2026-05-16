@@ -1,8 +1,9 @@
 /**
  * RedundancyAnalyzer 单元测试
  */
+
+import { RedundancyAnalyzer } from '@alembic/core/service/evolution/RedundancyAnalyzer';
 import { describe, expect, it } from 'vitest';
-import { RedundancyAnalyzer } from '../../lib/service/evolution/RedundancyAnalyzer.js';
 
 function mockRepo(rows: Record<string, unknown>[] = []) {
   return {

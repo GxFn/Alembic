@@ -418,7 +418,9 @@ router.post(
     }
 
     try {
-      const { findSimilarRecipes } = await import('../../service/candidate/SimilarityService.js');
+      const { findSimilarRecipes } = await import(
+        '@alembic/core/service/candidate/SimilarityService'
+      );
       const similar = findSimilarRecipes(dataRoot, candidateObj, { threshold: 0.3, topK: 10 });
 
       // 映射为前端期望格式

@@ -14,17 +14,17 @@
  */
 
 import type { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
+import type { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
 import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
 import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
-import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
-import { CouplingAnalyzer } from '../../service/panorama/CouplingAnalyzer.js';
-import { DimensionAnalyzer } from '../../service/panorama/DimensionAnalyzer.js';
-import { LayerInferrer } from '../../service/panorama/LayerInferrer.js';
-import { ModuleDiscoverer } from '../../service/panorama/ModuleDiscoverer.js';
-import { PanoramaAggregator } from '../../service/panorama/PanoramaAggregator.js';
-import { PanoramaScanner } from '../../service/panorama/PanoramaScanner.js';
-import { PanoramaService } from '../../service/panorama/PanoramaService.js';
-import { RoleRefiner } from '../../service/panorama/RoleRefiner.js';
+import { CouplingAnalyzer } from '@alembic/core/service/panorama/CouplingAnalyzer';
+import { DimensionAnalyzer } from '@alembic/core/service/panorama/DimensionAnalyzer';
+import { LayerInferrer } from '@alembic/core/service/panorama/LayerInferrer';
+import { ModuleDiscoverer } from '@alembic/core/service/panorama/ModuleDiscoverer';
+import { PanoramaAggregator } from '@alembic/core/service/panorama/PanoramaAggregator';
+import { PanoramaScanner } from '@alembic/core/service/panorama/PanoramaScanner';
+import { PanoramaService } from '@alembic/core/service/panorama/PanoramaService';
+import { RoleRefiner } from '@alembic/core/service/panorama/RoleRefiner';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export const PanoramaModule = {
@@ -98,7 +98,7 @@ export const PanoramaModule = {
       const logger = (ct.singletons.logger ?? {
         info() {},
         warn() {},
-      }) as import('../../service/panorama/PanoramaScanner.js').ScannerLogger;
+      }) as import('@alembic/core/service/panorama/PanoramaScanner').ScannerLogger;
       return new PanoramaScanner({
         projectRoot: getProjectRoot(),
         container: container,

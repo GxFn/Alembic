@@ -1,3 +1,7 @@
+import {
+  assessDiffImpact,
+  type RecipeTokens,
+} from '@alembic/core/service/evolution/ContentImpactAnalyzer';
 import { parseDiffHunks, tokenizeDiffLines } from '@alembic/core/shared/diff-parser';
 import { extractCodeBlocksFromMarkdown } from '@alembic/core/shared/markdown-utils';
 import {
@@ -5,10 +9,6 @@ import {
   extractRecipeTokens,
   tokenizeIdentifiers,
 } from '@alembic/core/shared/recipe-tokens';
-import {
-  assessDiffImpact,
-  type RecipeTokens,
-} from '../../lib/service/evolution/ContentImpactAnalyzer.js';
 
 describe('ContentImpactAnalyzer', () => {
   /* ─── tokenizeIdentifiers ─── */

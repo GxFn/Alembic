@@ -14,12 +14,12 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
 import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
+import type { ModuleRole } from '@alembic/core/service/panorama/PanoramaTypes';
+import type { ModuleCandidate } from '@alembic/core/service/panorama/RoleRefiner';
 import { LanguageProfiles } from '@alembic/core/shared/LanguageProfiles';
 import { inferTargetRole } from '../../external/mcp/handlers/TargetClassifier.js';
-import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
-import type { ModuleRole } from './PanoramaTypes.js';
-import type { ModuleCandidate } from './RoleRefiner.js';
 
 /* ═══ Constants ═══════════════════════════════════════════ */
 

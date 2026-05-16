@@ -1,8 +1,8 @@
 import { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 import { Lifecycle } from '@alembic/core/domain/knowledge/Lifecycle';
+import { ConfidenceRouter } from '@alembic/core/service/knowledge/ConfidenceRouter';
+import { KnowledgeService } from '@alembic/core/service/knowledge/KnowledgeService';
 import { vi } from 'vitest';
-import { ConfidenceRouter } from '../../lib/service/knowledge/ConfidenceRouter.js';
-import { KnowledgeService } from '../../lib/service/knowledge/KnowledgeService.js';
 
 /* ════════════════════════════════════════════
  *  Mock 工厂

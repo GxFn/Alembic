@@ -14,7 +14,7 @@ import { existsSync } from 'node:fs';
 import { join, normalize } from 'node:path';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
-import type { FileChangeEvent } from '../../types/reactive-evolution.js';
+import type { FileChangeEvent } from '@alembic/core/types/reactive-evolution';
 import type { FileChangeDispatcher } from '../FileChangeDispatcher.js';
 import {
   type FileChangeSourceTracker,

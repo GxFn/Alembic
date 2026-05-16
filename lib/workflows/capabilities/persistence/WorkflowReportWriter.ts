@@ -360,7 +360,7 @@ async function attachCodeEntityGraphTopology({
   report: WorkflowReport;
 }) {
   try {
-    const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
+    const { CodeEntityGraph } = await import('@alembic/core/service/knowledge/CodeEntityGraph');
     const entityRepo = ctx.container.get('codeEntityRepository');
     const edgeRepo = ctx.container.get('knowledgeEdgeRepository');
     if (entityRepo && edgeRepo) {

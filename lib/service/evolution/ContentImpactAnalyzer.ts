@@ -19,7 +19,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getFileDiff, parseDiffHunks, tokenizeDiffLines } from '@alembic/core/shared/diff-parser';
-import type { ImpactLevel } from '../../types/reactive-evolution.js';
+import type { ImpactLevel } from '@alembic/core/types/reactive-evolution';
 
 // Re-export from shared module for backward compatibility
 export {

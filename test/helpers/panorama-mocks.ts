@@ -8,9 +8,9 @@
  */
 
 import type { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
+import type { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
 import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
 import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
-import type { CodeEntityRepositoryImpl } from '../../lib/repository/code/CodeEntityRepository.js';
 
 /* ═══ Types ═══════════════════════════════════════════════ */
 

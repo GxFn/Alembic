@@ -17,15 +17,15 @@ import {
   loadPreference,
   savePreference,
 } from '@alembic/core/core/discovery/DiscovererPreference';
+import { CouplingAnalyzer } from '@alembic/core/service/panorama/CouplingAnalyzer';
+import type { ConfigLayer } from '@alembic/core/service/panorama/LayerInferrer';
+import { LayerInferrer } from '@alembic/core/service/panorama/LayerInferrer';
+import { ModuleDiscoverer } from '@alembic/core/service/panorama/ModuleDiscoverer';
+import { PanoramaAggregator } from '@alembic/core/service/panorama/PanoramaAggregator';
+import type { Edge } from '@alembic/core/service/panorama/PanoramaTypes';
+import type { ModuleCandidate } from '@alembic/core/service/panorama/RoleRefiner';
+import { RoleRefiner } from '@alembic/core/service/panorama/RoleRefiner';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { CouplingAnalyzer } from '../../lib/service/panorama/CouplingAnalyzer.js';
-import type { ConfigLayer } from '../../lib/service/panorama/LayerInferrer.js';
-import { LayerInferrer } from '../../lib/service/panorama/LayerInferrer.js';
-import { ModuleDiscoverer } from '../../lib/service/panorama/ModuleDiscoverer.js';
-import { PanoramaAggregator } from '../../lib/service/panorama/PanoramaAggregator.js';
-import type { Edge } from '../../lib/service/panorama/PanoramaTypes.js';
-import type { ModuleCandidate } from '../../lib/service/panorama/RoleRefiner.js';
-import { RoleRefiner } from '../../lib/service/panorama/RoleRefiner.js';
 
 import { createMockRepos, type MockEdge } from '../helpers/panorama-mocks.js';
 

@@ -16,6 +16,15 @@
  *   7. 前端通过 Socket.io 接收维度完成进度
  */
 
+import {
+  type EvolutionAuditRecipe as CoreEvolutionAuditRecipe,
+  type EvolutionCandidatePlan,
+  RecipeImpactPlanner,
+  type RescanImpactSubmissionResult,
+  submitRescanImpactDecisions,
+  toEvolutionAuditRecipe,
+} from '@alembic/core/service/evolution/RecipeImpactPlanner';
+import { SourceRefReconciler } from '@alembic/core/service/knowledge/SourceRefReconciler';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { applyTestDimensionFilter } from '@alembic/core/shared/test-mode';
 import type { DimensionDef, ProjectSnapshot } from '@alembic/core/types/project-snapshot';
@@ -52,16 +61,11 @@ import {
 } from '#workflows/knowledge-rescan/KnowledgeRescanPresenters.js';
 import { buildKnowledgeRescanWorkflowPlan } from '#workflows/knowledge-rescan/KnowledgeRescanWorkflowPlan.js';
 import type { WorkflowMcpContext } from '#workflows/shared/WorkflowTypes.js';
-import type { EvolutionAuditResult } from '../../../agent/runs/evolution/EvolutionAgentRun.js';
+import type {
+  EvolutionAuditRecipe as AgentEvolutionAuditRecipe,
+  EvolutionAuditResult,
+} from '../../../agent/runs/evolution/EvolutionAgentRun.js';
 import { runEvolutionAudit } from '../../../agent/runs/evolution/EvolutionAgentRun.js';
-import {
-  type EvolutionCandidatePlan,
-  RecipeImpactPlanner,
-  type RescanImpactSubmissionResult,
-  submitRescanImpactDecisions,
-  toEvolutionAuditRecipe,
-} from '../../../service/evolution/RecipeImpactPlanner.js';
-import { SourceRefReconciler } from '../../../service/knowledge/SourceRefReconciler.js';
 
 type RescanMcpContext = WorkflowMcpContext & McpContext;
 
@@ -77,6 +81,36 @@ type KnowledgeRepoT = InstanceType<
 interface KnowledgeRepos {
   sourceRefRepo: SourceRefRepoT;
   knowledgeRepo: KnowledgeRepoT;
+}
+
+function toAgentEvolutionAuditRecipe(recipe: CoreEvolutionAuditRecipe): AgentEvolutionAuditRecipe {
+  const content =
+    recipe.content && typeof recipe.content === 'object'
+      ? {
+          markdown:
+            typeof (recipe.content as { markdown?: unknown }).markdown === 'string'
+              ? (recipe.content as { markdown: string }).markdown
+              : undefined,
+          rationale:
+            typeof (recipe.content as { rationale?: unknown }).rationale === 'string'
+              ? (recipe.content as { rationale: string }).rationale
+              : undefined,
+          coreCode:
+            typeof (recipe.content as { coreCode?: unknown }).coreCode === 'string'
+              ? (recipe.content as { coreCode: string }).coreCode
+              : undefined,
+        }
+      : undefined;
+
+  return {
+    id: recipe.id,
+    title: recipe.title,
+    trigger: recipe.trigger,
+    content,
+    sourceRefs: recipe.sourceRefs,
+    auditHint: null,
+    impactEvidence: recipe.impactEvidence,
+  };
 }
 
 function resolveKnowledgeRepos(container: { get(name: string): unknown }): KnowledgeRepos | null {
@@ -315,7 +349,7 @@ export async function runInternalKnowledgeRescanWorkflow(
           evolutionAuditResult = await runEvolutionAudit({
             agentService:
               agentService as import('../../../agent/service/AgentService.js').AgentService,
-            recipes: auditRecipes,
+            recipes: auditRecipes.map(toAgentEvolutionAuditRecipe),
             projectOverview: {
               primaryLang: primaryLang || 'unknown',
               fileCount: allFiles.length,

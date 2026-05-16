@@ -30,7 +30,7 @@ import type {
   ReconcileReport,
   RepairReport,
   SourceRefReconciler,
-} from '../service/knowledge/SourceRefReconciler.js';
+} from '@alembic/core/service/knowledge/SourceRefReconciler';
 
 export interface SyncAllReport {
   synced: number;

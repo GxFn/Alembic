@@ -9,8 +9,9 @@
  *   - 无 suggestedChanges 时跳过
  *   - before/after 快照创建
  */
+
+import { ContentPatcher } from '@alembic/core/service/evolution/ContentPatcher';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ContentPatcher } from '../../lib/service/evolution/ContentPatcher.js';
 
 /* ── Mock factories ── */
 

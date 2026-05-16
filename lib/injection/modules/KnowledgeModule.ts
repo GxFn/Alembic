@@ -21,6 +21,22 @@ import { WarningRepository } from '@alembic/core/repository/evolution/WarningRep
 import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
 import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
+import { findSimilarRecipes } from '@alembic/core/service/candidate/SimilarityService';
+import { ConsolidationAdvisor } from '@alembic/core/service/evolution/ConsolidationAdvisor';
+import { ContentPatcher } from '@alembic/core/service/evolution/ContentPatcher';
+import { DecayDetector } from '@alembic/core/service/evolution/DecayDetector';
+import { EnhancementSuggester } from '@alembic/core/service/evolution/EnhancementSuggester';
+import { EvolutionGateway } from '@alembic/core/service/evolution/EvolutionGateway';
+import { LifecycleStateMachine } from '@alembic/core/service/evolution/LifecycleStateMachine';
+import { ProposalExecutor } from '@alembic/core/service/evolution/ProposalExecutor';
+import { RedundancyAnalyzer } from '@alembic/core/service/evolution/RedundancyAnalyzer';
+import { StagingManager } from '@alembic/core/service/evolution/StagingManager';
+import { CodeEntityGraph } from '@alembic/core/service/knowledge/CodeEntityGraph';
+import { ConfidenceRouter } from '@alembic/core/service/knowledge/ConfidenceRouter';
+import { KnowledgeGraphService } from '@alembic/core/service/knowledge/KnowledgeGraphService';
+import { KnowledgeService } from '@alembic/core/service/knowledge/KnowledgeService';
+import { RecipeProductionGateway } from '@alembic/core/service/knowledge/RecipeProductionGateway';
+import { SourceRefReconciler } from '@alembic/core/service/knowledge/SourceRefReconciler';
 import { HybridRetriever } from '@alembic/core/service/search/HybridRetriever';
 import { SearchEngine } from '@alembic/core/service/search/SearchEngine';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
@@ -29,24 +45,8 @@ import {
   resolveKnowledgeScanDirs,
   resolveProjectRoot,
 } from '@alembic/core/shared/resolveProjectRoot';
-import { findSimilarRecipes } from '../../service/candidate/SimilarityService.js';
-import { ConsolidationAdvisor } from '../../service/evolution/ConsolidationAdvisor.js';
-import { ContentPatcher } from '../../service/evolution/ContentPatcher.js';
-import { DecayDetector } from '../../service/evolution/DecayDetector.js';
-import { EnhancementSuggester } from '../../service/evolution/EnhancementSuggester.js';
-import { EvolutionGateway } from '../../service/evolution/EvolutionGateway.js';
 import { FileChangeHandler } from '../../service/evolution/FileChangeHandler.js';
-import { LifecycleStateMachine } from '../../service/evolution/LifecycleStateMachine.js';
-import { ProposalExecutor } from '../../service/evolution/ProposalExecutor.js';
-import { RedundancyAnalyzer } from '../../service/evolution/RedundancyAnalyzer.js';
-import { StagingManager } from '../../service/evolution/StagingManager.js';
 import { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
-import { CodeEntityGraph } from '../../service/knowledge/CodeEntityGraph.js';
-import { ConfidenceRouter } from '../../service/knowledge/ConfidenceRouter.js';
-import { KnowledgeGraphService } from '../../service/knowledge/KnowledgeGraphService.js';
-import { KnowledgeService } from '../../service/knowledge/KnowledgeService.js';
-import { RecipeProductionGateway } from '../../service/knowledge/RecipeProductionGateway.js';
-import { SourceRefReconciler } from '../../service/knowledge/SourceRefReconciler.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {
@@ -77,6 +77,13 @@ export function register(c: ServiceContainer) {
           eventBus: ct.services.eventBus ? ct.get('eventBus') : null,
           edgeRepo: ct.get('knowledgeEdgeRepository'),
           proposalRepo: ct.get('proposalRepository'),
+          afterPublish: () => {
+            if (!ct.services.cursorDeliveryPipeline) {
+              return;
+            }
+            const pipeline = ct.get('cursorDeliveryPipeline') as { deliver(): Promise<unknown> };
+            return pipeline.deliver();
+          },
         } as ConstructorParameters<typeof KnowledgeService>[4]
       )
   );

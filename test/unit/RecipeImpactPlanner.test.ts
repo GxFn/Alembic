@@ -13,7 +13,6 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
 import {
   type DiffInput,
   type EvolutionCandidate,
@@ -21,7 +20,8 @@ import {
   RecipeImpactPlanner,
   submitRescanImpactDecisions,
   toRescanImpactDecision,
-} from '../../lib/service/evolution/RecipeImpactPlanner.js';
+} from '@alembic/core/service/evolution/RecipeImpactPlanner';
+import { describe, expect, it, vi } from 'vitest';
 
 // ── Mock factories ──
 

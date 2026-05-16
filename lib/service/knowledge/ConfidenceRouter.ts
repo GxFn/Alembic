@@ -1,6 +1,6 @@
 import type { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import type { QualityScorer } from '../quality/QualityScorer.js';
+import type { QualityScorer } from '@alembic/core/service/quality/QualityScorer';
 
 interface ConfidenceRouterConfig {
   autoApproveThreshold?: number;

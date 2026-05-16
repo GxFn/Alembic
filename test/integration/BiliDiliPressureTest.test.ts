@@ -36,11 +36,11 @@ let UncertaintyCollector: typeof import('../../lib/service/guard/UncertaintyColl
 let ReverseGuard: typeof import('../../lib/service/guard/ReverseGuard.js').ReverseGuard;
 let CoverageAnalyzer: typeof import('../../lib/service/guard/CoverageAnalyzer.js').CoverageAnalyzer;
 let ComplianceReporter: typeof import('../../lib/service/guard/ComplianceReporter.js').ComplianceReporter;
-let DecayDetector: typeof import('../../lib/service/evolution/DecayDetector.js').DecayDetector;
-let StagingManager: typeof import('../../lib/service/evolution/StagingManager.js').StagingManager;
-let RedundancyAnalyzer: typeof import('../../lib/service/evolution/RedundancyAnalyzer.js').RedundancyAnalyzer;
-let ConfidenceRouter: typeof import('../../lib/service/knowledge/ConfidenceRouter.js').ConfidenceRouter;
-let SourceRefReconciler: typeof import('../../lib/service/knowledge/SourceRefReconciler.js').SourceRefReconciler;
+let DecayDetector: typeof import('@alembic/core/service/evolution/DecayDetector').DecayDetector;
+let StagingManager: typeof import('@alembic/core/service/evolution/StagingManager').StagingManager;
+let RedundancyAnalyzer: typeof import('@alembic/core/service/evolution/RedundancyAnalyzer').RedundancyAnalyzer;
+let ConfidenceRouter: typeof import('@alembic/core/service/knowledge/ConfidenceRouter').ConfidenceRouter;
+let SourceRefReconciler: typeof import('@alembic/core/service/knowledge/SourceRefReconciler').SourceRefReconciler;
 let SignalBus: typeof import('@alembic/core/infrastructure/signal/SignalBus').SignalBus;
 let RuleLearner: typeof import('../../lib/service/guard/RuleLearner.js').RuleLearner;
 let KnowledgeRepositoryImpl: typeof import('@alembic/core/repository/knowledge/KnowledgeRepository.impl').KnowledgeRepositoryImpl;
@@ -81,11 +81,11 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       import('../../lib/service/guard/ReverseGuard.js'),
       import('../../lib/service/guard/CoverageAnalyzer.js'),
       import('../../lib/service/guard/ComplianceReporter.js'),
-      import('../../lib/service/evolution/DecayDetector.js'),
-      import('../../lib/service/evolution/StagingManager.js'),
-      import('../../lib/service/evolution/RedundancyAnalyzer.js'),
-      import('../../lib/service/knowledge/ConfidenceRouter.js'),
-      import('../../lib/service/knowledge/SourceRefReconciler.js'),
+      import('@alembic/core/service/evolution/DecayDetector'),
+      import('@alembic/core/service/evolution/StagingManager'),
+      import('@alembic/core/service/evolution/RedundancyAnalyzer'),
+      import('@alembic/core/service/knowledge/ConfidenceRouter'),
+      import('@alembic/core/service/knowledge/SourceRefReconciler'),
       import('@alembic/core/infrastructure/signal/SignalBus'),
       import('../../lib/service/guard/RuleLearner.js'),
       import('@alembic/core/repository/knowledge/KnowledgeRepository.impl'),

@@ -197,7 +197,9 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
   let items = args.items;
   if (args.deduplicate !== false) {
     try {
-      const { aggregateCandidates } = await import('#service/candidate/CandidateAggregator.js');
+      const { aggregateCandidates } = await import(
+        '@alembic/core/service/candidate/CandidateAggregator'
+      );
       // 对 title 字段做去重
       const readinessItems = items.map((it) => ({
         ...it,

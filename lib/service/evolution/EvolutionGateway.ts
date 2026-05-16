@@ -20,7 +20,7 @@ import type {
   ProposalSource,
 } from '@alembic/core/repository/evolution/ProposalRepository';
 import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
-import type { LifecycleStateMachine } from './LifecycleStateMachine.js';
+import type { LifecycleStateMachine } from '@alembic/core/service/evolution/LifecycleStateMachine';
 
 /* ────────────────────── Types ────────────────────── */
 

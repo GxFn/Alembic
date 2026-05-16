@@ -14,8 +14,8 @@
 
 /* ═══ Types ═══════════════════════════════════════════════ */
 
+import type { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
 import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
-import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
 
 export interface PanoramaScannerOptions {
   projectRoot: string;

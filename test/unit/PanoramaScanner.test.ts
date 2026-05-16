@@ -1,8 +1,9 @@
 /**
  * PanoramaScanner 单元测试
  */
+
+import { PanoramaScanner } from '@alembic/core/service/panorama/PanoramaScanner';
 import { describe, expect, it, vi } from 'vitest';
-import { PanoramaScanner } from '../../lib/service/panorama/PanoramaScanner.js';
 import { createMockRepos } from '../helpers/panorama-mocks.js';
 
 /* ═══ Mock Container ══════════════════════════════════════ */
