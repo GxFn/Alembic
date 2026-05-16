@@ -1,4 +1,4 @@
-import { DIMENSION_REGISTRY } from '#domain/dimension/DimensionRegistry.js';
+import { DIMENSION_REGISTRY } from '@alembic/core/domain/dimension/DimensionRegistry';
 
 const DIMENSION_IDS = DIMENSION_REGISTRY.map((dimension) => dimension.id);
 

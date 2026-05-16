@@ -8,13 +8,13 @@
  *   - constitution, aiProvider, projectGraph
  */
 
+import { DimensionCopy } from '@alembic/core/domain/dimension/DimensionCopy';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
 import {
   resolveDataRoot,
   resolveKnowledgeScanDirs,
   resolveProjectRoot,
 } from '@alembic/core/shared/resolveProjectRoot';
-import { DimensionCopy } from '#domain/dimension/DimensionCopy.js';
 import { getDiscovererRegistry } from '../../core/discovery/index.js';
 import { getEnhancementRegistry } from '../../core/enhancement/index.js';
 import type { ReportStore } from '../../infrastructure/report/ReportStore.js';

@@ -22,7 +22,7 @@
  *   - 本 UoW 统一所有操作为 file-first
  */
 
-import type { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
+import type { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { DrizzleTx } from '../base/RepositoryBase.js';

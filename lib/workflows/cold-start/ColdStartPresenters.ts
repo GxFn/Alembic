@@ -1,4 +1,4 @@
-import { getInternalAgentRequiredFields } from '#domain/knowledge/FieldSpec.js';
+import { getInternalAgentRequiredFields } from '@alembic/core/domain/knowledge/FieldSpec';
 import { envelope } from '#external/mcp/envelope.js';
 import type { CleanupResult } from '#service/cleanup/CleanupService.js';
 import type {

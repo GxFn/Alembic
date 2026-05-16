@@ -12,18 +12,18 @@ export {
   isValidTransition,
   KnowledgeEntry,
   Lifecycle,
-} from './knowledge/index.js';
-export { KnowledgeRepository } from './knowledge/KnowledgeRepository.js';
-export { Constraints } from './knowledge/values/Constraints.js';
-export { Content } from './knowledge/values/Content.js';
-export { Quality } from './knowledge/values/Quality.js';
-export { Reasoning as ReasoningV3 } from './knowledge/values/Reasoning.js';
+} from '@alembic/core/domain/knowledge';
+export { KnowledgeRepository } from '@alembic/core/domain/knowledge/KnowledgeRepository';
+export { Constraints } from '@alembic/core/domain/knowledge/values/Constraints';
+export { Content } from '@alembic/core/domain/knowledge/values/Content';
+export { Quality } from '@alembic/core/domain/knowledge/values/Quality';
+export { Reasoning as ReasoningV3 } from '@alembic/core/domain/knowledge/values/Reasoning';
 export {
   RELATION_BUCKETS,
   RELATION_BUCKETS as RelationType,
   Relations,
-} from './knowledge/values/Relations.js';
-export { Stats } from './knowledge/values/Stats.js';
+} from '@alembic/core/domain/knowledge/values/Relations';
+export { Stats } from '@alembic/core/domain/knowledge/values/Stats';
 
 // Snippet 相关
-export { Snippet } from './snippet/Snippet.js';
+export { Snippet } from '@alembic/core/domain/snippet/Snippet';

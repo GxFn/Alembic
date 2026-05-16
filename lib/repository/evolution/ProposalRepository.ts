@@ -15,8 +15,8 @@
  */
 
 import { randomBytes } from 'node:crypto';
+import { EvolutionPolicy } from '@alembic/core/domain/evolution/EvolutionPolicy';
 import { and, count, desc, eq, inArray, lte } from 'drizzle-orm';
-import { EvolutionPolicy } from '../../domain/evolution/EvolutionPolicy.js';
 import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
 import { evolutionProposals } from '../../infrastructure/database/drizzle/schema.js';
 

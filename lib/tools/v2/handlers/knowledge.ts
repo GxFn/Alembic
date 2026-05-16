@@ -8,8 +8,8 @@
  */
 
 import path from 'node:path';
-import { dimensionTags } from '#domain/dimension/RecipeDimension.js';
-import { getSystemInjectedFields } from '#domain/knowledge/FieldSpec.js';
+import { dimensionTags } from '@alembic/core/domain/dimension/RecipeDimension';
+import { getSystemInjectedFields } from '@alembic/core/domain/knowledge/FieldSpec';
 import { estimateTokens, fail, ok, type ToolContext, type ToolResult } from '../types.js';
 
 export async function handle(

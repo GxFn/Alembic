@@ -12,7 +12,10 @@
  * @module domain/dimension/DimensionRegistry
  */
 
-import type { DimensionId, UnifiedDimension } from './UnifiedDimension.js';
+import type {
+  DimensionId,
+  UnifiedDimension,
+} from '@alembic/core/domain/dimension/UnifiedDimension';
 
 // ═══════════════════════════════════════════════════════════
 // Layer 1: Universal Dimensions (13)

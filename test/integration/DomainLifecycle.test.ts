@@ -11,7 +11,7 @@
  *   - KnowledgeEntry 值对象整合
  */
 
-import { KnowledgeEntry } from '../../lib/domain/knowledge/KnowledgeEntry.js';
+import { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 import {
   inferKind,
   isCandidate,
@@ -19,7 +19,7 @@ import {
   isValidTransition,
   Lifecycle,
   normalizeLifecycle,
-} from '../../lib/domain/knowledge/Lifecycle.js';
+} from '@alembic/core/domain/knowledge/Lifecycle';
 
 describe('Integration: KnowledgeEntry & Lifecycle', () => {
   // ─── Lifecycle State Machine ─────────────────

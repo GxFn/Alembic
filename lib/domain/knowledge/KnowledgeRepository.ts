@@ -1,4 +1,4 @@
-import type KnowledgeEntry from './KnowledgeEntry.js';
+import type KnowledgeEntry from '@alembic/core/domain/knowledge/KnowledgeEntry';
 
 export interface PaginationOptions {
   page?: number;

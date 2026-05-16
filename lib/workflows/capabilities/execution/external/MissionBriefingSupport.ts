@@ -6,11 +6,11 @@
  * 由 MissionBriefingBuilder 统一调用。
  */
 
-import { sopToCompactText } from '#domain/dimension/DimensionSop.js';
+import { sopToCompactText } from '@alembic/core/domain/dimension/DimensionSop';
 import {
   getRequiredFieldNames,
   getRequiredFieldsDescription,
-} from '#domain/knowledge/FieldSpec.js';
+} from '@alembic/core/domain/knowledge/FieldSpec';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import { TierScheduler } from '#workflows/capabilities/planning/dimensions/TierScheduler.js';
 import type { ExternalRescanEvidencePlan } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';

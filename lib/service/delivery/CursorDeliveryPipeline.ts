@@ -19,10 +19,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { KnowledgeEntryProps } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 import { getProjectSkillsPath } from '@alembic/core/infrastructure/config/Paths';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
 import { KNOWLEDGE_CONFIDENCE } from '@alembic/core/shared/constants';
-import type { KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
 import {
   type CallGraphRepo,
   RawDbCallGraphAdapter,

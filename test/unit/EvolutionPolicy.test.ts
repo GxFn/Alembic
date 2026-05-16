@@ -3,8 +3,9 @@
  *
  * 纯函数策略类，测试所有 8 个静态方法的边界条件。
  */
+
+import { EvolutionPolicy } from '@alembic/core/domain/evolution/EvolutionPolicy';
 import { describe, expect, it } from 'vitest';
-import { EvolutionPolicy } from '../../lib/domain/evolution/EvolutionPolicy.js';
 
 describe('EvolutionPolicy', () => {
   describe('assessRisk', () => {

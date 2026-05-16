@@ -2,7 +2,7 @@ import {
   classifyRecipeToDimension,
   DIMENSION_DISPLAY_GROUP,
   DIMENSION_REGISTRY,
-} from '#domain/dimension/DimensionRegistry.js';
+} from '@alembic/core/domain/dimension/DimensionRegistry';
 
 const KNOWN_DIMENSION_IDS = new Set(DIMENSION_REGISTRY.map((dimension) => dimension.id));
 

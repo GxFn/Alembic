@@ -8,7 +8,7 @@
  * @returns }
  */
 
-import { UnifiedValidator } from './UnifiedValidator.js';
+import { UnifiedValidator } from '@alembic/core/domain/knowledge/UnifiedValidator';
 
 const STANDARD_CATEGORIES = [
   'View',

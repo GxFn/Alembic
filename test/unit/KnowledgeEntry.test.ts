@@ -1,11 +1,11 @@
-import { KnowledgeEntry } from '../../lib/domain/knowledge/KnowledgeEntry.js';
-import { inferKind, isValidTransition } from '../../lib/domain/knowledge/Lifecycle.js';
-import { Constraints } from '../../lib/domain/knowledge/values/Constraints.js';
-import { Content } from '../../lib/domain/knowledge/values/Content.js';
-import { Quality } from '../../lib/domain/knowledge/values/Quality.js';
-import { Reasoning } from '../../lib/domain/knowledge/values/Reasoning.js';
-import { Relations } from '../../lib/domain/knowledge/values/Relations.js';
-import { Stats } from '../../lib/domain/knowledge/values/Stats.js';
+import { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
+import { inferKind, isValidTransition } from '@alembic/core/domain/knowledge/Lifecycle';
+import { Constraints } from '@alembic/core/domain/knowledge/values/Constraints';
+import { Content } from '@alembic/core/domain/knowledge/values/Content';
+import { Quality } from '@alembic/core/domain/knowledge/values/Quality';
+import { Reasoning } from '@alembic/core/domain/knowledge/values/Reasoning';
+import { Relations } from '@alembic/core/domain/knowledge/values/Relations';
+import { Stats } from '@alembic/core/domain/knowledge/values/Stats';
 
 /* ════════════════════════════════════════════
  *  值对象测试

@@ -1,8 +1,8 @@
-import { describe, expect, test } from 'vitest';
 import {
   recipeBelongsToDimension,
   resolveRecipeDimensionId,
-} from '#domain/dimension/RecipeDimension.js';
+} from '@alembic/core/domain/dimension/RecipeDimension';
+import { describe, expect, test } from 'vitest';
 
 describe('RecipeDimension resolver', () => {
   test('uses explicit dimensionId as the canonical owner', () => {

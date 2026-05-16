@@ -17,8 +17,8 @@
  * @module TierScheduler
  */
 
+import { buildTierPlan } from '@alembic/core/domain/dimension';
 import { createLimit } from '@alembic/core/shared/concurrency';
-import { buildTierPlan } from '#domain/dimension/index.js';
 import Logger from '#infra/logging/Logger.js';
 
 const logger = Logger.getInstance();

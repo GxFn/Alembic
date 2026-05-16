@@ -13,7 +13,7 @@
  * @module PanoramaService
  */
 
-import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
+import { COUNTABLE_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
 import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';

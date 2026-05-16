@@ -5,7 +5,7 @@
  * 支持关系查询、路径分析、PageRank 权重计算
  */
 
-import { RelationType } from '../../domain/index.js';
+import { RelationType } from '@alembic/core/domain';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
 

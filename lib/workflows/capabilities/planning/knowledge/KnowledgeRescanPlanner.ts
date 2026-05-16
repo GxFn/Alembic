@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { EvolutionPolicy } from '#domain/evolution/EvolutionPolicy.js';
+import { EvolutionPolicy } from '@alembic/core/domain/evolution/EvolutionPolicy';
 import type { RecipeSourceRefRepositoryImpl } from '#repo/sourceref/RecipeSourceRefRepository.js';
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 import type { EvolutionCandidatePlan } from '#service/evolution/RecipeImpactPlanner.js';

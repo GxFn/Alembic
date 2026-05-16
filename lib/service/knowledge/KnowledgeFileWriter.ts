@@ -21,11 +21,11 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { recipeStorageBucket } from '@alembic/core/domain/dimension/RecipeDimension';
+import type { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 import { CANDIDATES_DIR, RECIPES_DIR } from '@alembic/core/infrastructure/config/Defaults';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
 import pathGuard from '@alembic/core/shared/PathGuard';
-import { recipeStorageBucket } from '#domain/dimension/RecipeDimension.js';
-import type { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { KnowledgeFileStore } from '../../repository/knowledge/KnowledgeFileStore.js';
 

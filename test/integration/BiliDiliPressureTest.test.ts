@@ -29,8 +29,8 @@ const BILIDILI_DB_PATH = path.join(BILIDILI_ROOT, '.asd/alembic.db');
 const DB_EXISTS = fs.existsSync(BILIDILI_DB_PATH);
 
 /* ── 动态 import（避免顶层副作用） ── */
-let Lifecycle: typeof import('../../lib/domain/knowledge/Lifecycle.js');
-let LifecycleFns: typeof import('../../lib/domain/knowledge/Lifecycle.js');
+let Lifecycle: typeof import('@alembic/core/domain/knowledge/Lifecycle');
+let LifecycleFns: typeof import('@alembic/core/domain/knowledge/Lifecycle');
 let GuardCheckEngine: typeof import('../../lib/service/guard/GuardCheckEngine.js').GuardCheckEngine;
 let UncertaintyCollector: typeof import('../../lib/service/guard/UncertaintyCollector.js').UncertaintyCollector;
 let ReverseGuard: typeof import('../../lib/service/guard/ReverseGuard.js').ReverseGuard;
@@ -75,7 +75,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       sourceRefRepoMod,
       drizzleMod,
     ] = await Promise.all([
-      import('../../lib/domain/knowledge/Lifecycle.js'),
+      import('@alembic/core/domain/knowledge/Lifecycle'),
       import('../../lib/service/guard/GuardCheckEngine.js'),
       import('../../lib/service/guard/UncertaintyCollector.js'),
       import('../../lib/service/guard/ReverseGuard.js'),

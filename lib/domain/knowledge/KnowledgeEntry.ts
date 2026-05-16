@@ -1,14 +1,21 @@
-import { v4 as uuidv4 } from 'uuid';
-import type { KnowledgeEntryWire } from '#types/knowledge-wire.js';
 import {
   inferKind,
   isCandidate as isLifecycleCandidate,
   isValidTransition,
   Lifecycle,
   normalizeLifecycle,
-} from './Lifecycle.js';
-import type { Guard } from './values/Constraints.js';
-import { Constraints, Content, Quality, Reasoning, Relations, Stats } from './values/index.js';
+} from '@alembic/core/domain/knowledge/Lifecycle';
+import {
+  Constraints,
+  Content,
+  Quality,
+  Reasoning,
+  Relations,
+  Stats,
+} from '@alembic/core/domain/knowledge/values';
+import type { Guard } from '@alembic/core/domain/knowledge/values/Constraints';
+import type { KnowledgeEntryWire } from '@alembic/core/types/knowledge-wire';
+import { v4 as uuidv4 } from 'uuid';
 
 /* ═══════════════════════════════════════════════════════════
  * KnowledgeEntry — 统一知识实体

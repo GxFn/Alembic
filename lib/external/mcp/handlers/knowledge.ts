@@ -3,10 +3,10 @@
  * submitKnowledge, submitKnowledgeBatch, knowledgeLifecycle
  */
 
+import { dimensionTags } from '@alembic/core/domain/dimension/RecipeDimension';
+import { UnifiedValidator } from '@alembic/core/domain/knowledge/UnifiedValidator';
 import { getDeveloperIdentity } from '@alembic/core/shared/developer-identity';
 import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
-import { dimensionTags } from '#domain/dimension/RecipeDimension.js';
-import { UnifiedValidator } from '#domain/knowledge/UnifiedValidator.js';
 import { envelope } from '../envelope.js';
 import type { McpContext, McpServiceContainer } from './types.js';
 

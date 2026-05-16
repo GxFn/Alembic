@@ -14,14 +14,14 @@
  * @module DimensionAnalyzer
  */
 
-import { LanguageService } from '@alembic/core/shared/LanguageService';
-import type { UnifiedDimension } from '#domain/dimension/index.js';
+import type { UnifiedDimension } from '@alembic/core/domain/dimension';
 import {
   DIMENSION_REGISTRY,
   resolveActiveDimensions,
   resolveRecipeDimensionId,
-} from '#domain/dimension/index.js';
-import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
+} from '@alembic/core/domain/dimension';
+import { COUNTABLE_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 import type { BootstrapRepositoryImpl } from '../../repository/bootstrap/BootstrapRepository.js';
 import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
 import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';

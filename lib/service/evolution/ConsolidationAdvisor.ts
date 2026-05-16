@@ -19,8 +19,8 @@ import {
   type FieldAnalysis,
   type RecipeLike,
   RecipeSimilarity,
-} from '../../domain/evolution/RecipeSimilarity.js';
-import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
+} from '@alembic/core/domain/evolution/RecipeSimilarity';
+import { COUNTABLE_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 

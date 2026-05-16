@@ -17,7 +17,7 @@
  * @module service/evolution/ProposalExecutor
  */
 
-import { EvolutionPolicy } from '../../domain/evolution/EvolutionPolicy.js';
+import { EvolutionPolicy } from '@alembic/core/domain/evolution/EvolutionPolicy';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { Signal, SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type {

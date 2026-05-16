@@ -1,3 +1,4 @@
+import { getDimensionFocusKeywords } from '@alembic/core/domain/dimension/DimensionSop';
 import { ExplorationTracker } from '#agent/context/ExplorationTracker.js';
 import type { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import { computeAnalystBudget } from '#agent/prompts/insight-analyst.js';
@@ -6,7 +7,6 @@ import {
   projectSystemRunContext,
 } from '#agent/runtime/SystemRunContext.js';
 import type { AgentRunInput, SystemRunContextFactory } from '#agent/service/index.js';
-import { getDimensionFocusKeywords } from '#domain/dimension/DimensionSop.js';
 import type {
   AstSummary,
   CallGraphResult,

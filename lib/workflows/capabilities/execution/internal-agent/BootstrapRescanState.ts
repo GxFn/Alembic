@@ -1,4 +1,4 @@
-import { resolveRecipeDimensionId } from '#domain/dimension/RecipeDimension.js';
+import { resolveRecipeDimensionId } from '@alembic/core/domain/dimension/RecipeDimension';
 import Logger from '#infra/logging/Logger.js';
 import { BootstrapDedup } from '#service/bootstrap/BootstrapDedup.js';
 import type {

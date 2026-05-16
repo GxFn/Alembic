@@ -1,10 +1,10 @@
 /** KnowledgeEntry 领域层统一导出 */
 
 // 实体
-export { KnowledgeEntry } from './KnowledgeEntry.js';
+export { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 // Repository 接口
-export { KnowledgeRepository } from './KnowledgeRepository.js';
-export type { LifecycleFilter } from './Lifecycle.js';
+export { KnowledgeRepository } from '@alembic/core/domain/knowledge/KnowledgeRepository';
+export type { LifecycleFilter } from '@alembic/core/domain/knowledge/Lifecycle';
 // 生命周期
 export {
   CANDIDATE_LIFECYCLES,
@@ -24,11 +24,11 @@ export {
   lifecycleInSql,
   NON_DEPRECATED_LIFECYCLES,
   PUBLISHED_LIFECYCLES,
-} from './Lifecycle.js';
-export { Constraints } from './values/Constraints.js';
+} from '@alembic/core/domain/knowledge/Lifecycle';
+export { Constraints } from '@alembic/core/domain/knowledge/values/Constraints';
 // 值对象
-export { Content } from './values/Content.js';
-export { Quality } from './values/Quality.js';
-export { Reasoning } from './values/Reasoning.js';
-export { RELATION_BUCKETS, Relations } from './values/Relations.js';
-export { Stats } from './values/Stats.js';
+export { Content } from '@alembic/core/domain/knowledge/values/Content';
+export { Quality } from '@alembic/core/domain/knowledge/values/Quality';
+export { Reasoning } from '@alembic/core/domain/knowledge/values/Reasoning';
+export { RELATION_BUCKETS, Relations } from '@alembic/core/domain/knowledge/values/Relations';
+export { Stats } from '@alembic/core/domain/knowledge/values/Stats';

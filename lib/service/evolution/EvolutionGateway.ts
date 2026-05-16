@@ -13,7 +13,7 @@
  * @module service/evolution/EvolutionGateway
  */
 
-import { EvolutionPolicy } from '../../domain/evolution/EvolutionPolicy.js';
+import { EvolutionPolicy } from '@alembic/core/domain/evolution/EvolutionPolicy';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type {
   ProposalRepository,

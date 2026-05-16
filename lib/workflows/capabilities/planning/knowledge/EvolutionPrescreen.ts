@@ -1,7 +1,7 @@
 import {
   recipeBelongsToDimension,
   resolveRecipeDimensionId,
-} from '#domain/dimension/RecipeDimension.js';
+} from '@alembic/core/domain/dimension/RecipeDimension';
 import type {
   RelevanceAuditResult,
   RelevanceAuditSummary,

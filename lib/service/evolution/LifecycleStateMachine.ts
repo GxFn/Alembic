@@ -21,7 +21,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { isValidTransition } from '../../domain/knowledge/Lifecycle.js';
+import { isValidTransition } from '@alembic/core/domain/knowledge/Lifecycle';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type { LifecycleEventRepository } from '../../repository/evolution/LifecycleEventRepository.js';

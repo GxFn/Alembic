@@ -7,7 +7,7 @@
  * @module shared/StyleGuide
  */
 
-import { FieldLevel, V3_FIELD_SPEC } from './FieldSpec.js';
+import { FieldLevel, V3_FIELD_SPEC } from '@alembic/core/domain/knowledge/FieldSpec';
 
 // ── 「项目特写」写作指南全文 ────────────────────────────────
 

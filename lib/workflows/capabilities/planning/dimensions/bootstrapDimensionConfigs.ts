@@ -7,8 +7,11 @@
  *   - buildTierReflection(): Tier 级反思聚合（规则化，不需要 AI）
  */
 
-import { getDimensionFocusKeywords, getDimensionSOP } from '#domain/dimension/DimensionSop.js';
-import { DIMENSION_REGISTRY, getDimension } from '#domain/dimension/index.js';
+import { DIMENSION_REGISTRY, getDimension } from '@alembic/core/domain/dimension';
+import {
+  getDimensionFocusKeywords,
+  getDimensionSOP,
+} from '@alembic/core/domain/dimension/DimensionSop';
 import { baseDimensions } from '#workflows/capabilities/planning/dimensions/BaseDimensions.js';
 
 // ──────────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@
  * @module domain/dimension
  */
 
-export { DimensionCopy } from './DimensionCopy.js';
+export { DimensionCopy } from '@alembic/core/domain/dimension/DimensionCopy';
 export {
   buildTierPlan,
   classifyRecipeToDimension,
@@ -13,13 +13,13 @@ export {
   getDimension,
   getDimensionsByLayer,
   resolveActiveDimensions,
-} from './DimensionRegistry.js';
+} from '@alembic/core/domain/dimension/DimensionRegistry';
 export {
   getDimensionFocusKeywords,
   getDimensionSOP,
   PRE_SUBMIT_CHECKLIST,
   sopToCompactText,
-} from './DimensionSop.js';
+} from '@alembic/core/domain/dimension/DimensionSop';
 export {
   dimensionTags,
   isKnownDimensionId,
@@ -27,17 +27,17 @@ export {
   recipeDimensionIdOrUnknown,
   recipeStorageBucket,
   resolveRecipeDimensionId,
-} from './RecipeDimension.js';
+} from '@alembic/core/domain/dimension/RecipeDimension';
 export type {
   DimensionId,
   FrameworkDimId,
   LanguageDimId,
   UnifiedDimension,
   UniversalDimId,
-} from './UnifiedDimension.js';
+} from '@alembic/core/domain/dimension/UnifiedDimension';
 export {
   ALL_DIMENSION_IDS,
   FRAMEWORK_DIM_IDS,
   LANGUAGE_DIM_IDS,
   UNIVERSAL_DIM_IDS,
-} from './UnifiedDimension.js';
+} from '@alembic/core/domain/dimension/UnifiedDimension';

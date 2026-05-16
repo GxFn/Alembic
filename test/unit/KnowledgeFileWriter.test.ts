@@ -14,9 +14,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
+import { Lifecycle } from '@alembic/core/domain/knowledge/Lifecycle';
 import { KnowledgeSyncService } from '../../lib/cli/KnowledgeSyncService.js';
-import { KnowledgeEntry } from '../../lib/domain/knowledge/KnowledgeEntry.js';
-import { Lifecycle } from '../../lib/domain/knowledge/Lifecycle.js';
 import {
   computeKnowledgeHash,
   KnowledgeFileWriter,

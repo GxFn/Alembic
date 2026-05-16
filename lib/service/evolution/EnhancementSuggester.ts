@@ -8,8 +8,8 @@
  *   ④ 关联 Recipe 已 deprecated → 建议检查引用是否过时
  */
 
-import type { KnowledgeEntry } from '../../domain/knowledge/index.js';
-import { Lifecycle, PUBLISHED_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
+import type { KnowledgeEntry } from '@alembic/core/domain/knowledge';
+import { Lifecycle, PUBLISHED_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';

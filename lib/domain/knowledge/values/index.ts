@@ -1,8 +1,8 @@
 /** 值对象统一导出 */
 
-export { Constraints } from './Constraints.js';
-export { Content } from './Content.js';
-export { Quality } from './Quality.js';
-export { Reasoning } from './Reasoning.js';
-export { RELATION_BUCKETS, Relations } from './Relations.js';
-export { Stats } from './Stats.js';
+export { Constraints } from '@alembic/core/domain/knowledge/values/Constraints';
+export { Content } from '@alembic/core/domain/knowledge/values/Content';
+export { Quality } from '@alembic/core/domain/knowledge/values/Quality';
+export { Reasoning } from '@alembic/core/domain/knowledge/values/Reasoning';
+export { RELATION_BUCKETS, Relations } from '@alembic/core/domain/knowledge/values/Relations';
+export { Stats } from '@alembic/core/domain/knowledge/values/Stats';

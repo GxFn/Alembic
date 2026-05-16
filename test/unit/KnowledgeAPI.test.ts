@@ -5,9 +5,9 @@
  * 使用轻量级 mock 验证路由/handler 正确委托给 KnowledgeService
  */
 
+import { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
+import { Lifecycle } from '@alembic/core/domain/knowledge/Lifecycle';
 import { vi } from 'vitest';
-import { KnowledgeEntry } from '../../lib/domain/knowledge/KnowledgeEntry.js';
-import { Lifecycle } from '../../lib/domain/knowledge/Lifecycle.js';
 
 /* ════════════════════════════════════════════
  *  Mock 工厂
@@ -93,10 +93,10 @@ vi.mock('#http/middleware/RateLimiter.js', () => ({
 }));
 
 // Mock RecipeReadinessChecker
-vi.mock('../../lib/domain/knowledge/RecipeReadinessChecker.js', () => ({
+vi.mock('@alembic/core/domain/knowledge/RecipeReadinessChecker', () => ({
   checkRecipeReadiness: vi.fn(() => ({ ready: true, missing: [], suggestions: [] })),
 }));
-vi.mock('#domain/knowledge/RecipeReadinessChecker.js', () => ({
+vi.mock('@alembic/core/domain/knowledge/RecipeReadinessChecker', () => ({
   checkRecipeReadiness: vi.fn(() => ({ ready: true, missing: [], suggestions: [] })),
 }));
 
@@ -115,7 +115,9 @@ const { submitKnowledge, submitKnowledgeBatch, knowledgeLifecycle } = await impo
 );
 // 从 #imports 别名导入 mock — 与 handler 内部的 dynamic import 一致
 const { checkRecipeSave } = await import('#http/middleware/RateLimiter.js');
-const { checkRecipeReadiness } = await import('#domain/knowledge/RecipeReadinessChecker.js');
+const { checkRecipeReadiness } = await import(
+  '@alembic/core/domain/knowledge/RecipeReadinessChecker'
+);
 
 describe('MCP Knowledge Handlers', () => {
   let svc;

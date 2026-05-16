@@ -6,8 +6,8 @@
  *   创建 → 查询 → 更新 → 发布 → 弃用 → 重新激活 → 删除
  */
 
-import { KnowledgeEntry } from '../../lib/domain/knowledge/KnowledgeEntry.js';
-import { Lifecycle } from '../../lib/domain/knowledge/Lifecycle.js';
+import { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
+import { Lifecycle } from '@alembic/core/domain/knowledge/Lifecycle';
 import { KnowledgeRepositoryImpl } from '../../lib/repository/knowledge/KnowledgeRepository.impl.js';
 import { KnowledgeService } from '../../lib/service/knowledge/KnowledgeService.js';
 import { createTestBootstrap } from '../fixtures/factory.js';

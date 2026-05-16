@@ -15,7 +15,7 @@
  * @module service/evolution/FileChangeHandler
  */
 
-import { isConsumable, isDegraded } from '../../domain/knowledge/Lifecycle.js';
+import { isConsumable, isDegraded } from '@alembic/core/domain/knowledge/Lifecycle';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';

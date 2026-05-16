@@ -6,9 +6,9 @@
  * 此路由仅处理 Recipe 特有的批量 AI 操作。
  */
 
+import { COUNTABLE_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
 import express, { type Request, type Response } from 'express';
 import { type AgentService, runRelationDiscovery } from '#agent/service/index.js';
-import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 

@@ -13,7 +13,7 @@
  *   7. Audit — 统一审计
  */
 
-import { UnifiedValidator } from '#domain/knowledge/UnifiedValidator.js';
+import { UnifiedValidator } from '@alembic/core/domain/knowledge/UnifiedValidator';
 import type { BootstrapDedup, CandidateSummary } from '../bootstrap/BootstrapDedup.js';
 
 /** Lightweight log interface — avoids importing static-only Logger class. */

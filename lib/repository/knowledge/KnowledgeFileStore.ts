@@ -10,7 +10,7 @@
  *   - 所有写操作必须经过此接口落盘为 .md 文件
  */
 
-import type { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
+import type { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 
 /**
  * KnowledgeFileStore — .md 文件写操作接口

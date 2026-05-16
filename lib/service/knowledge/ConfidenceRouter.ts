@@ -1,4 +1,4 @@
-import type { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
+import type { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { QualityScorer } from '../quality/QualityScorer.js';
 

@@ -1,9 +1,9 @@
+import { inferKind, KnowledgeEntry } from '@alembic/core/domain/knowledge';
+import { COUNTABLE_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
 import { safeJsonParse, safeJsonStringify, unixNow } from '@alembic/core/shared/utils/common';
 import type { Database } from 'better-sqlite3';
 import { and, count, desc, eq, gt, inArray, isNotNull, like, ne, or, sql, sum } from 'drizzle-orm';
 import type { Logger as WinstonLogger } from 'winston';
-import { inferKind, KnowledgeEntry } from '../../domain/knowledge/index.js';
-import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
 import { getDrizzle } from '../../infrastructure/database/drizzle/index.js';
 import { knowledgeEntries } from '../../infrastructure/database/drizzle/schema.js';

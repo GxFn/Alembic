@@ -7,11 +7,11 @@
  *   - `BaseDimension` 接口保留给 MissionBriefingBuilder 等消费者使用
  */
 
-import type { UnifiedDimension } from '#domain/dimension/index.js';
+import type { UnifiedDimension } from '@alembic/core/domain/dimension';
 import {
   resolveActiveDimensions as _resolveActive,
   DIMENSION_REGISTRY,
-} from '#domain/dimension/index.js';
+} from '@alembic/core/domain/dimension';
 
 // ═══════════════════════════════════════════════════════════
 // 基础维度定义 — 从统一注册表派生

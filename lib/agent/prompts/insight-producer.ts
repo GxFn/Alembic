@@ -15,7 +15,10 @@
  * @module insight-producer
  */
 
-import { buildProducerStyleGuide, SUBMIT_REQUIREMENTS } from '#domain/knowledge/StyleGuide.js';
+import {
+  buildProducerStyleGuide,
+  SUBMIT_REQUIREMENTS,
+} from '@alembic/core/domain/knowledge/StyleGuide';
 import type { EvidenceEntry } from '../domain/EvidenceCollector.js';
 
 // ──────────────────────────────────────────────────────────────────

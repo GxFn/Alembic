@@ -1,7 +1,10 @@
+import {
+  KnowledgeEntry,
+  type KnowledgeEntryProps,
+} from '@alembic/core/domain/knowledge/KnowledgeEntry';
+import type { KnowledgeRepository } from '@alembic/core/domain/knowledge/KnowledgeRepository';
+import { inferKind, Lifecycle } from '@alembic/core/domain/knowledge/Lifecycle';
 import { ConflictError, NotFoundError, ValidationError } from '@alembic/core/shared/errors/index';
-import { KnowledgeEntry, type KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
-import type { KnowledgeRepository } from '../../domain/knowledge/KnowledgeRepository.js';
-import { inferKind, Lifecycle } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { ConfidenceRouter } from './ConfidenceRouter.js';
 import type { KnowledgeFileWriter } from './KnowledgeFileWriter.js';

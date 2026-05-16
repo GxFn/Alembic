@@ -1,6 +1,6 @@
+import { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
+import { Lifecycle } from '@alembic/core/domain/knowledge/Lifecycle';
 import { vi } from 'vitest';
-import { KnowledgeEntry } from '../../lib/domain/knowledge/KnowledgeEntry.js';
-import { Lifecycle } from '../../lib/domain/knowledge/Lifecycle.js';
 import { ConfidenceRouter } from '../../lib/service/knowledge/ConfidenceRouter.js';
 import { KnowledgeService } from '../../lib/service/knowledge/KnowledgeService.js';
 

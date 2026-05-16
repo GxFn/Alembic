@@ -7,10 +7,10 @@
  * @module ServiceMap
  */
 
+import type DimensionCopy from '@alembic/core/domain/dimension/DimensionCopy';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
 // ── Shared Types ──
 import type { LanguageService } from '@alembic/core/shared/LanguageService';
-import type DimensionCopy from '#domain/dimension/DimensionCopy.js';
 // ── Service Types ──
 import type { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
 import type { UnifiedToolCatalog } from '#tools/catalog/UnifiedToolCatalog.js';

@@ -23,7 +23,7 @@ let resetDiscovererRegistry;
 beforeAll(async () => {
   const lsMod = await import('@alembic/core/shared/LanguageService');
   LanguageService = lsMod.LanguageService;
-  const dcMod = await import('../../lib/domain/dimension/DimensionCopy.js');
+  const dcMod = await import('@alembic/core/domain/dimension/DimensionCopy');
   DimensionCopy = dcMod.DimensionCopy;
   const dMod = await import('../../lib/core/discovery/index.js');
   getDiscovererRegistry = dMod.getDiscovererRegistry;

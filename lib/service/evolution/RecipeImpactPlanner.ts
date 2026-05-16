@@ -11,9 +11,9 @@
  * @module service/evolution/RecipeImpactPlanner
  */
 
+import { isConsumable, isDegraded } from '@alembic/core/domain/knowledge/Lifecycle';
 import { extractRecipeTokens } from '@alembic/core/shared/recipe-tokens';
 import type { EvolutionAuditRecipe } from '../../agent/runs/evolution/EvolutionAgentRun.js';
-import { isConsumable, isDegraded } from '../../domain/knowledge/Lifecycle.js';
 import type { ProposalSource } from '../../repository/evolution/ProposalRepository.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';

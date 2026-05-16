@@ -9,14 +9,14 @@
  * @module shared/UnifiedValidator
  */
 
-import { LanguageService } from '@alembic/core/shared/LanguageService';
 import {
   FieldLevel,
   STANDARD_CATEGORIES,
   V3_FIELD_SPEC,
   VALID_KINDS,
   WHITELISTED_CATEGORIES,
-} from './FieldSpec.js';
+} from '@alembic/core/domain/knowledge/FieldSpec';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 
 // ── 代码指纹工具函数 ───────────────────────────────────────
 

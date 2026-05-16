@@ -1,4 +1,4 @@
-import { recipeBelongsToDimension } from '#domain/dimension/RecipeDimension.js';
+import { recipeBelongsToDimension } from '@alembic/core/domain/dimension/RecipeDimension';
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type {

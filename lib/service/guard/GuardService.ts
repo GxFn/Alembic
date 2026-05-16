@@ -103,7 +103,7 @@ export class GuardService {
     try {
       this._validateCreateInput(data);
 
-      const { KnowledgeEntry } = await import('../../domain/knowledge/KnowledgeEntry.js');
+      const { KnowledgeEntry } = await import('@alembic/core/domain/knowledge/KnowledgeEntry');
       const entry = KnowledgeEntry.fromJSON({
         id: uuidv4(),
         title: data.name,
