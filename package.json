@@ -98,6 +98,7 @@
     "release:major": "npm run build && node dist/scripts/release.js major",
     "verify:codex-channel": "node scripts/verify-codex-channel.mjs",
     "verify:codex-plugin": "node scripts/verify-codex-plugin.mjs",
+    "verify:codex-session": "node scripts/verify-codex-session-scenarios.mjs --all",
     "smoke:codex-plugin": "node scripts/smoke-codex-plugin.mjs",
     "lint": "biome check lib/ bin/ config/ scripts/",
     "lint:fix": "biome check --fix lib/ bin/ config/ scripts/",

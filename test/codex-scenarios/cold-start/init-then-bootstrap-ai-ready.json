@@ -1,0 +1,79 @@
+{
+  "id": "init-then-bootstrap-ai-ready",
+  "description": "用户先初始化再要求知识挖掘，AI 已就绪时应启动 daemon 并创建 bootstrap job。",
+  "fixture": {
+    "ai": "deepseek",
+    "daemon": "stopped",
+    "initialized": false,
+    "knowledge": "none",
+    "project": "minimal-node",
+    "projectRoot": "explicit",
+    "redactions": ["scenario-secret-deepseek-key"]
+  },
+  "turns": [
+    {
+      "user": "初始化 Alembic"
+    },
+    {
+      "user": "开始 Alembic 知识挖掘"
+    }
+  ],
+  "expect": {
+    "toolCalls": [
+      {
+        "name": "alembic_codex_status",
+        "arguments": {
+          "projectRoot": "$projectRoot"
+        },
+        "result": {
+          "success": true,
+          "data.projectRootResolution.trust": "trusted"
+        }
+      },
+      {
+        "name": "alembic_codex_init",
+        "arguments": {
+          "projectRoot": "$projectRoot"
+        },
+        "result": {
+          "success": true
+        }
+      },
+      {
+        "name": "alembic_codex_bootstrap",
+        "arguments": {
+          "projectRoot": "$projectRoot"
+        },
+        "result": {
+          "success": true,
+          "data.jobId": "scenario_bootstrap_job"
+        }
+      }
+    ],
+    "sideEffects": {
+      "daemonEnsureCalled": true,
+      "initMarkerWritten": true,
+      "jobCreated": true,
+      "savedProjectRootWritten": true,
+      "secretWritten": false
+    },
+    "state": {
+      "aiProvider": "deepseek",
+      "aiReady": true,
+      "initializedAfterRun": true,
+      "workspace": {
+        "configExists": true,
+        "databaseExists": true,
+        "knowledgeExists": true,
+        "runtimeExists": true
+      }
+    },
+    "assistant": {
+      "mustMention": ["知识挖掘任务已入队"],
+      "mustNotMention": ["没有启动", "scenario-secret-deepseek-key"]
+    },
+    "redaction": {
+      "mustNotContain": ["scenario-secret-deepseek-key"]
+    }
+  }
+}

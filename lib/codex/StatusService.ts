@@ -6,6 +6,7 @@ import type { GitDiffCheckpointStatus } from '../service/evolution/git-diff-chec
 import { DEFAULT_FOLDER_NAMES } from '../shared/folder-names.js';
 import { WorkspaceResolver } from '../shared/WorkspaceResolver.js';
 import { WorkspaceSettingsStore } from '../shared/WorkspaceSettingsStore.js';
+import { type CodexAiConfigState, inspectCodexAiConfig } from './AiConfigState.js';
 import { buildCodexRuntimeDiagnostics } from './Diagnostics.js';
 import { type CodexKnowledgeState, inspectCodexKnowledge } from './KnowledgeState.js';
 import {
@@ -49,6 +50,7 @@ export interface CodexStatusServiceOptions {
 }
 
 export interface CodexStatusData {
+  aiConfig: CodexAiConfigState;
   channel: { expectedId: string; id: string };
   daemon: CodexDaemonSummary & {
     health: Record<string, unknown> | null;
@@ -113,6 +115,7 @@ export async function buildCodexStatus(
   const projectRoot = resolve(projectRootInput);
   const resolver = WorkspaceResolver.fromProject(projectRoot);
   const settingsStore = new WorkspaceSettingsStore(resolver);
+  const aiConfig = inspectCodexAiConfig(projectRoot);
   const facts = resolver.toFacts();
   const supervisor = options.supervisor || new DaemonSupervisor();
   const daemonStatus = await supervisor.status(projectRoot);
@@ -146,6 +149,7 @@ export async function buildCodexStatus(
 
   return {
     ok: knowledge.initialized,
+    aiConfig,
     packageVersion: runtime.packageVersion,
     profile: CODEX_SETUP_PROFILE,
     channel: {

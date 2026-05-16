@@ -1,0 +1,84 @@
+{
+  "id": "bilidili-bootstrap-real",
+  "description": "手动 live-local 场景：真实 Codex MCP 调用、真实 daemon job、真实 BiliDili Ghost 工作区产物检查。",
+  "manual": true,
+  "fixture": {
+    "bootstrapArgs": {
+      "contentMaxLines": 80,
+      "maxFiles": 160
+    },
+    "daemon": "stopped",
+    "initialized": false,
+    "knowledge": "none",
+    "project": "local-path",
+    "projectPath": "$CODEX_SESSION_PROJECT_ROOT",
+    "projectRoot": "explicit"
+  },
+  "turns": [
+    {
+      "user": "初始化 Alembic"
+    },
+    {
+      "user": "开始 Alembic 知识挖掘"
+    }
+  ],
+  "expect": {
+    "toolCalls": [
+      {
+        "name": "alembic_codex_status",
+        "arguments": {
+          "projectRoot": "$projectRoot"
+        },
+        "result": {
+          "success": true,
+          "data.projectRootResolution.trust": "trusted"
+        }
+      },
+      {
+        "name": "alembic_codex_init",
+        "arguments": {
+          "projectRoot": "$projectRoot"
+        },
+        "result": {
+          "success": true
+        }
+      },
+      {
+        "name": "alembic_codex_bootstrap",
+        "arguments": {
+          "contentMaxLines": 80,
+          "maxFiles": 160,
+          "projectRoot": "$projectRoot"
+        },
+        "result": {
+          "success": true
+        }
+      }
+    ],
+    "sideEffects": {
+      "daemonEnsureCalled": true,
+      "initMarkerWritten": true,
+      "jobCreated": true,
+      "savedProjectRootWritten": true
+    },
+    "state": {
+      "aiReady": true,
+      "initializedAfterRun": true,
+      "workspace": {
+        "configExists": true,
+        "databaseExists": true,
+        "knowledgeExists": true,
+        "runtimeExists": true
+      }
+    },
+    "artifacts": {
+      "allowedTerminalJobStatuses": ["completed"],
+      "minKnowledgeEntries": 1,
+      "requireTerminalJob": true
+    },
+    "assistant": {
+      "mustMention": ["知识挖掘任务已入队"],
+      "mustNotMention": ["没有启动"]
+    }
+  }
+}

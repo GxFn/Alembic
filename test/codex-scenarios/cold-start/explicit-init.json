@@ -1,0 +1,51 @@
+{
+  "id": "explicit-project-root-init-only",
+  "description": "用户主动初始化时只执行 Codex Ghost 初始化，不启动 daemon，也不声称已经完成知识挖掘。",
+  "fixture": {
+    "ai": "missing",
+    "daemon": "stopped",
+    "initialized": false,
+    "knowledge": "none",
+    "project": "minimal-node",
+    "projectRoot": "explicit"
+  },
+  "turns": [
+    {
+      "user": "初始化 Alembic"
+    }
+  ],
+  "expect": {
+    "toolCalls": [
+      {
+        "name": "alembic_codex_status",
+        "arguments": {
+          "projectRoot": "$projectRoot"
+        },
+        "result": {
+          "success": true,
+          "data.projectRootResolution.trust": "trusted"
+        }
+      },
+      {
+        "name": "alembic_codex_init",
+        "arguments": {
+          "projectRoot": "$projectRoot"
+        },
+        "result": {
+          "success": true
+        }
+      }
+    ],
+    "sideEffects": {
+      "daemonEnsureCalled": false,
+      "initMarkerWritten": true,
+      "jobCreated": false,
+      "savedProjectRootWritten": true,
+      "secretWritten": false
+    },
+    "assistant": {
+      "mustMention": ["初始化已完成"],
+      "mustNotMention": ["知识挖掘任务已入队"]
+    }
+  }
+}

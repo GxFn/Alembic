@@ -12,6 +12,8 @@ import {
 import type { DaemonStatus } from '../../lib/daemon/DaemonSupervisor.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
+const ORIGINAL_DEEPSEEK_KEY = process.env.ALEMBIC_DEEPSEEK_API_KEY;
+const ORIGINAL_PROVIDER = process.env.ALEMBIC_AI_PROVIDER;
 
 function useTempAlembicHome(): void {
   process.env.ALEMBIC_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-status-home-'));
@@ -75,6 +77,16 @@ afterEach(() => {
   } else {
     process.env.ALEMBIC_HOME = ORIGINAL_ALEMBIC_HOME;
   }
+  if (ORIGINAL_PROVIDER === undefined) {
+    delete process.env.ALEMBIC_AI_PROVIDER;
+  } else {
+    process.env.ALEMBIC_AI_PROVIDER = ORIGINAL_PROVIDER;
+  }
+  if (ORIGINAL_DEEPSEEK_KEY === undefined) {
+    delete process.env.ALEMBIC_DEEPSEEK_API_KEY;
+  } else {
+    process.env.ALEMBIC_DEEPSEEK_API_KEY = ORIGINAL_DEEPSEEK_KEY;
+  }
   vi.restoreAllMocks();
 });
 
@@ -82,6 +94,8 @@ describe('Codex status service', () => {
   test('builds the shared needs-init status without starting the daemon', async () => {
     useTempAlembicHome();
     const projectRoot = makeProjectRoot();
+    delete process.env.ALEMBIC_AI_PROVIDER;
+    delete process.env.ALEMBIC_DEEPSEEK_API_KEY;
     const supervisor = {
       status: vi.fn(async () => makeDaemonStatus(projectRoot, false)),
     };
@@ -100,6 +114,11 @@ describe('Codex status service', () => {
       primaryAction: { tool: 'alembic_codex_init' },
     });
     expect(status.policy.state).toBe('needs_init');
+    expect(status.aiConfig).toMatchObject({
+      allowsInternalBootstrap: false,
+      ready: false,
+      source: 'empty',
+    });
     expect(status.nextActions).toContain('Initialize Ghost workspace: call alembic_codex_init');
     expect(supervisor.status).toHaveBeenCalledTimes(1);
   });
@@ -108,6 +127,8 @@ describe('Codex status service', () => {
     useTempAlembicHome();
     const projectRoot = makeProjectRoot();
     makeInitializedWorkspace(projectRoot);
+    process.env.ALEMBIC_AI_PROVIDER = 'deepseek';
+    process.env.ALEMBIC_DEEPSEEK_API_KEY = 'secret-deepseek-key';
     const supervisor = {
       status: vi.fn(async () => makeDaemonStatus(projectRoot, true)),
     };
@@ -130,8 +151,15 @@ describe('Codex status service', () => {
         },
       },
     });
+    expect(status.aiConfig).toMatchObject({
+      allowsInternalBootstrap: true,
+      provider: 'deepseek',
+      ready: true,
+      source: 'runtime-overrides',
+    });
     expect(status.policy.state).toBe('needs_bootstrap');
     expect(status.nextActions).toContain('Start bootstrap: call alembic_codex_bootstrap');
     expect(serialized).not.toContain('secret-token');
+    expect(serialized).not.toContain('secret-deepseek-key');
   });
 });

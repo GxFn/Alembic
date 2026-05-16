@@ -76,7 +76,11 @@ export const CODEX_DISCOVERY_TOOL_NAMES = new Set([
   'alembic_codex_diagnostics',
 ]);
 
-export const CODEX_INIT_TOOL_NAMES = new Set([...CODEX_DISCOVERY_TOOL_NAMES, 'alembic_codex_init']);
+export const CODEX_INIT_TOOL_NAMES = new Set([
+  ...CODEX_DISCOVERY_TOOL_NAMES,
+  'alembic_codex_init',
+  'alembic_codex_ai_config',
+]);
 
 export const CODEX_INIT_ON_DEMAND_TOOL_NAMES = new Set([
   'alembic_codex_dashboard',
@@ -119,6 +123,37 @@ export const CODEX_LOCAL_TOOLS: CodexToolDefinition[] = [
       standard: {
         type: 'boolean',
         description: 'Write Alembic data into the project instead of the Ghost data root.',
+      },
+    }),
+  },
+  {
+    name: 'alembic_codex_ai_config',
+    tier: 'agent',
+    description:
+      'Inspect or configure Alembic Codex workspace AI settings. Use status to check masked provider/key readiness, or configure after explicit user confirmation to store API keys in the workspace secrets file.',
+    inputSchema: codexInputSchema({
+      mode: {
+        type: 'string',
+        enum: ['status', 'configure'],
+        description: 'Read masked AI config status or update workspace AI config.',
+      },
+      provider: {
+        type: 'string',
+        enum: ['deepseek', 'openai', 'claude', 'google', 'ollama'],
+        description: 'AI provider used by Alembic internal bootstrap/rescan.',
+      },
+      model: { type: 'string', description: 'Optional model id for the selected provider.' },
+      apiKey: {
+        type: 'string',
+        description:
+          'Provider API key. Requires confirmChatSecret=true because the key passes through the Codex tool call.',
+      },
+      proxy: { type: 'string', description: 'Optional AI proxy URL.' },
+      reasoningEffort: { type: 'string', description: 'Optional reasoning effort hint.' },
+      confirmChatSecret: {
+        type: 'boolean',
+        description:
+          'Required when apiKey is provided. Confirms the user accepts sending the secret through this Codex tool call.',
       },
     }),
   },

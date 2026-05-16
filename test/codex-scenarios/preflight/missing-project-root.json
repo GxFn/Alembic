@@ -1,0 +1,39 @@
+{
+  "id": "missing-project-root-asks-user",
+  "description": "没有可信项目目录时，Agent 只能读取 status 并要求用户提供绝对 projectRoot。",
+  "fixture": {
+    "ai": "missing",
+    "daemon": "stopped",
+    "initialized": false,
+    "knowledge": "none",
+    "project": "minimal-node",
+    "projectRoot": "missing"
+  },
+  "turns": [
+    {
+      "user": "初始化 Alembic"
+    }
+  ],
+  "expect": {
+    "toolCalls": [
+      {
+        "name": "alembic_codex_status",
+        "result": {
+          "success": true,
+          "data.projectRootResolution.trust": "fallback"
+        }
+      }
+    ],
+    "sideEffects": {
+      "daemonEnsureCalled": false,
+      "initMarkerWritten": false,
+      "jobCreated": false,
+      "savedProjectRootWritten": false,
+      "secretWritten": false
+    },
+    "assistant": {
+      "mustMention": ["绝对 projectRoot"],
+      "mustNotMention": ["初始化已完成", "知识挖掘任务已入队"]
+    }
+  }
+}

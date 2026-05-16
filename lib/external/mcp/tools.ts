@@ -144,6 +144,7 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   alembic_codex_status: readOnlyTool('Check Alembic Codex Status'),
   alembic_codex_diagnostics: readOnlyTool('Run Alembic Codex Diagnostics'),
   alembic_codex_init: localWriteTool('Initialize Alembic Codex Workspace', true),
+  alembic_codex_ai_config: localWriteTool('Configure Alembic Codex AI Settings', true),
   alembic_codex_dashboard: localWriteTool('Start Alembic Dashboard', true),
   alembic_codex_bootstrap: aiBackedWriteTool('Start Alembic Bootstrap Job'),
   alembic_codex_rescan: aiBackedWriteTool('Start Alembic Rescan Job'),

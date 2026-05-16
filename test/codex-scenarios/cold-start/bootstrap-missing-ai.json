@@ -1,0 +1,51 @@
+{
+  "id": "bootstrap-missing-ai-fails-closed",
+  "description": "已初始化但缺 AI Provider 时，bootstrap 必须 fail closed，不能启动 daemon 或创建 job。",
+  "fixture": {
+    "ai": "missing",
+    "daemon": "stopped",
+    "initialized": true,
+    "knowledge": "empty",
+    "project": "minimal-node",
+    "projectRoot": "explicit"
+  },
+  "turns": [
+    {
+      "user": "开始 Alembic 知识挖掘"
+    }
+  ],
+  "expect": {
+    "toolCalls": [
+      {
+        "name": "alembic_codex_status",
+        "arguments": {
+          "projectRoot": "$projectRoot"
+        },
+        "result": {
+          "success": true
+        }
+      },
+      {
+        "name": "alembic_codex_bootstrap",
+        "arguments": {
+          "projectRoot": "$projectRoot"
+        },
+        "result": {
+          "success": false,
+          "data.errorCode": "AI_PROVIDER_REQUIRED"
+        }
+      }
+    ],
+    "sideEffects": {
+      "daemonEnsureCalled": false,
+      "initMarkerWritten": false,
+      "jobCreated": false,
+      "savedProjectRootWritten": true,
+      "secretWritten": false
+    },
+    "assistant": {
+      "mustMention": ["没有启动", "AI Provider", "alembic_codex_ai_config"],
+      "mustNotMention": ["知识挖掘任务已入队"]
+    }
+  }
+}
