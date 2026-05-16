@@ -1,0 +1,55 @@
+{
+  "name": "alembic-codex",
+  "version": "0.1.0",
+  "description": "Local-first project memory, Recipes, Guard checks, and recoverable bootstrap jobs for Codex.",
+  "author": {
+    "name": "gaoxuefeng",
+    "url": "https://github.com/GxFn/Alembic"
+  },
+  "homepage": "https://github.com/GxFn/Alembic#readme",
+  "repository": "https://github.com/GxFn/Alembic",
+  "license": "MIT",
+  "keywords": [
+    "coding",
+    "codex",
+    "codex-plugin",
+    "mcp",
+    "project-memory",
+    "guard",
+    "recipes",
+    "knowledge-base",
+    "local-first",
+    "dashboard",
+    "bootstrap"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Alembic",
+    "shortDescription": "Local project memory and Guard checks for Codex",
+    "longDescription": "Alembic helps Codex understand how your project is actually written. It distills source code into local Recipes, exposes project knowledge through MCP, primes Codex before coding work, and checks changes with Guard. The plugin starts as a lightweight status and diagnostics shim, initializes in Ghost mode by default, and wakes the Alembic daemon only for project knowledge, Dashboard, Guard, bootstrap, or rescan workflows.",
+    "developerName": "gaoxuefeng",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/GxFn/Alembic#readme",
+    "defaultPrompt": [
+      "Guide me through Alembic Codex first-minute setup for this project",
+      "Run Alembic Codex diagnostics for this project",
+      "Check Alembic Codex status for this project",
+      "Initialize Alembic Codex in Ghost mode for this project",
+      "Start an Alembic Codex bootstrap job for this project",
+      "Prime Codex with this project's Alembic Recipes",
+      "Check my current changes with Alembic Guard"
+    ],
+    "brandColor": "#2563EB",
+    "composerIcon": "./assets/alembic-small.svg",
+    "logo": "./assets/alembic-logo.svg",
+    "screenshots": [
+      "./assets/alembic-codex-status.svg"
+    ]
+  }
+}

@@ -184,21 +184,27 @@ describe('PathGuard', () => {
       ).not.toThrow();
     });
 
-    test('should block IDE adapter files in core', () => {
+    test('should allow .cursor/ (IDE integration)', () => {
       expect(() =>
         pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.cursor/mcp.json'))
-      ).toThrow(PathGuardError);
+      ).not.toThrow();
       expect(() =>
         pathGuard.assertProjectWriteSafe(
           path.join(PROJECT_ROOT, '.cursor/rules/alembic-skills.mdc')
         )
-      ).toThrow(PathGuardError);
+      ).not.toThrow();
+    });
+
+    test('should allow .vscode/ (IDE integration)', () => {
       expect(() =>
         pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.vscode/settings.json'))
-      ).toThrow(PathGuardError);
+      ).not.toThrow();
+    });
+
+    test('should allow .github/ (Copilot instructions)', () => {
       expect(() =>
         pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.github/copilot-instructions.md'))
-      ).toThrow(PathGuardError);
+      ).not.toThrow();
     });
 
     test('should allow .gitignore in project root', () => {
@@ -207,10 +213,8 @@ describe('PathGuard', () => {
       ).not.toThrow();
     });
 
-    test('should block .env creation in project root', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.env'))).toThrow(
-        PathGuardError
-      );
+    test('should allow .env in project root', () => {
+      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.env'))).not.toThrow();
     });
 
     test('should allow writes within packageRoot', () => {

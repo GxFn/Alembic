@@ -5,7 +5,14 @@ import winston from 'winston';
 import pathGuard from '../../shared/PathGuard.js';
 
 // Agent 系统相关标签 — 终端高亮显示
-const AGENT_TAGS = ['AgentRuntime', 'ToolRegistry', 'CircuitBreaker'];
+const AGENT_TAGS = [
+  'AgentRuntime',
+  'ToolRegistry',
+  'SignalCollector',
+  'SkillAdvisor',
+  'CircuitBreaker',
+  'EventAggregator',
+];
 const MUTED_PREFIXES = ['Tool registered:'];
 
 // ANSI 颜色常量 — 保证深色终端可读性
@@ -109,7 +116,7 @@ const compactConsoleFormat = winston.format.printf(({ level, message, timestamp,
  * 环境变量:
  *   ALEMBIC_LOG_LEVEL — 覆盖日志级别 (debug/info/warn/error)
  *   ALEMBIC_MCP_MODE=1 — MCP 模式下禁用 Console transport
- *   ALEMBIC_QUIET=1 — 结构化输出场景下禁用 Console transport
+ *   ALEMBIC_QUIET=1 — CLI JSON/quiet 场景下禁用 Console transport
  *
  * MCP 模式（ALEMBIC_MCP_MODE=1）下 Console transport 输出到 stderr 并禁用彩色，
  * 避免污染 stdout JSON-RPC 通道。

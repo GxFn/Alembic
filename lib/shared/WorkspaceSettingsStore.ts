@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { dirname, join, resolve } from 'node:path';
 import { WorkspaceResolver } from './WorkspaceResolver.js';
 
-export const AI_SECRET_RUNTIME_KEYS = new Set([
+export const AI_SECRET_ENV_KEYS = new Set([
   'ALEMBIC_GOOGLE_API_KEY',
   'ALEMBIC_OPENAI_API_KEY',
   'ALEMBIC_CLAUDE_API_KEY',
@@ -10,7 +10,7 @@ export const AI_SECRET_RUNTIME_KEYS = new Set([
   'ALEMBIC_EMBED_API_KEY',
 ]);
 
-export const AI_RUNTIME_OVERRIDE_KEYS = [
+export const AI_ENV_KEYS = [
   'ALEMBIC_AI_PROVIDER',
   'ALEMBIC_AI_MODEL',
   'ALEMBIC_GOOGLE_API_KEY',
@@ -82,14 +82,14 @@ interface WorkspaceSecretsFile {
 }
 
 export interface WorkspaceAiConfigRead {
-  runtimeValues: Record<string, string>;
+  env: Record<string, string>;
   hasSecretsFile: boolean;
   hasSettingsFile: boolean;
   secretsPath: string;
   settingsPath: string;
 }
 
-export type AiConfigSource = 'workspace-settings' | 'runtime-overrides' | 'empty';
+export type AiConfigSource = 'workspace-settings' | 'process-env' | 'empty';
 
 export class WorkspaceSettingsStore {
   readonly resolver: WorkspaceResolver;
@@ -109,12 +109,12 @@ export class WorkspaceSettingsStore {
   readAiConfig(): WorkspaceAiConfigRead {
     const settings = this.#readSettings();
     const secrets = this.#readSecrets();
-    const runtimeValues: Record<string, string> = {};
+    const env: Record<string, string> = {};
 
     for (const [field, envKey] of Object.entries(SETTING_FIELD_TO_ENV)) {
       const value = settings.ai?.[field as keyof WorkspaceAiSettings];
       if (typeof value === 'string' && value.length > 0) {
-        runtimeValues[envKey] = value;
+        env[envKey] = value;
       }
     }
 
@@ -122,15 +122,15 @@ export class WorkspaceSettingsStore {
     for (const [provider, envKey] of Object.entries(PROVIDER_KEY_ENV)) {
       const value = providerKeys[provider];
       if (typeof value === 'string' && value.length > 0) {
-        runtimeValues[envKey] = value;
+        env[envKey] = value;
       }
     }
     if (typeof secrets.ai?.embedApiKey === 'string' && secrets.ai.embedApiKey.length > 0) {
-      runtimeValues.ALEMBIC_EMBED_API_KEY = secrets.ai.embedApiKey;
+      env.ALEMBIC_EMBED_API_KEY = secrets.ai.embedApiKey;
     }
 
     return {
-      runtimeValues,
+      env,
       hasSecretsFile: existsSync(this.secretsPath),
       hasSettingsFile: existsSync(this.settingsPath),
       secretsPath: this.secretsPath,
@@ -182,7 +182,7 @@ export class WorkspaceSettingsStore {
 
   applyToProcessEnv(options: { override?: boolean } = {}): WorkspaceAiConfigRead {
     const config = this.readAiConfig();
-    for (const [key, value] of Object.entries(config.runtimeValues)) {
+    for (const [key, value] of Object.entries(config.env)) {
       if (options.override || process.env[key] === undefined) {
         process.env[key] = value;
       }
@@ -205,17 +205,17 @@ export class WorkspaceSettingsStore {
   }
 }
 
-export function isAiRuntimeConfigReady(runtimeValues: Record<string, string>): boolean {
-  const provider = runtimeValues.ALEMBIC_AI_PROVIDER || '';
+export function isAiEnvReady(env: Record<string, string>): boolean {
+  const provider = env.ALEMBIC_AI_PROVIDER || '';
   const neededKey = PROVIDER_KEY_ENV[provider] || '';
-  return Boolean(provider && (!neededKey || runtimeValues[neededKey]));
+  return Boolean(provider && (!neededKey || env[neededKey]));
 }
 
-export function collectAiRuntimeOverrides(
+export function collectAiEnv(
   env: Record<string, string | undefined> = process.env
 ): Record<string, string> {
   const result: Record<string, string> = {};
-  for (const key of AI_RUNTIME_OVERRIDE_KEYS) {
+  for (const key of AI_ENV_KEYS) {
     const value = env[key];
     if (typeof value === 'string' && value.length > 0) {
       result[key] = value;
@@ -224,11 +224,11 @@ export function collectAiRuntimeOverrides(
   return result;
 }
 
-export function collectAiRuntimeOverrideDiff(
+export function collectAiEnvOverrides(
   baseEnv: Record<string, string>,
   env: Record<string, string | undefined> = process.env
 ): Record<string, string> {
-  const processEnv = collectAiRuntimeOverrides(env);
+  const processEnv = collectAiEnv(env);
   const overrides: Record<string, string> = {};
   for (const [key, value] of Object.entries(processEnv)) {
     if (baseEnv[key] !== value) {
@@ -248,11 +248,11 @@ export function maskAiSecret(value: string): string {
   return `${value.slice(0, 2)}...${value.slice(-4)}`;
 }
 
-export function maskAiRuntimeConfig(env: Record<string, string>): Record<string, string> {
+export function maskAiEnvConfig(env: Record<string, string>): Record<string, string> {
   const vars: Record<string, string> = {};
   for (const [key, value] of Object.entries(env)) {
-    if ((AI_RUNTIME_OVERRIDE_KEYS as readonly string[]).includes(key)) {
-      vars[key] = AI_SECRET_RUNTIME_KEYS.has(key) ? maskAiSecret(value) : value;
+    if ((AI_ENV_KEYS as readonly string[]).includes(key)) {
+      vars[key] = AI_SECRET_ENV_KEYS.has(key) ? maskAiSecret(value) : value;
     }
   }
   return vars;

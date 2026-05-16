@@ -20,7 +20,7 @@ import type {
   AgentStageFactoryRegistry,
   SystemRunContextFactory,
 } from '../agent/service/index.js';
-// ── 初始化服务类型 ──
+// ── CLI Types ──
 import type { KnowledgeSyncService } from '../cli/KnowledgeSyncService.js';
 // ── Core AST / Discovery / Enhancement ──
 import type ProjectGraph from '../core/ast/ProjectGraph.js';
@@ -53,10 +53,12 @@ import type { KnowledgeEdgeRepositoryImpl } from '../repository/knowledge/Knowle
 // ── Repository Types ──
 import type { KnowledgeRepositoryImpl } from '../repository/knowledge/KnowledgeRepository.impl.js';
 import type { MemoryRepositoryImpl } from '../repository/memory/MemoryRepository.js';
+import type { RemoteCommandRepository } from '../repository/remote/RemoteCommandRepository.js';
 import type { SessionRepositoryImpl } from '../repository/session/SessionRepository.js';
 import type { RecipeSourceRefRepositoryImpl } from '../repository/sourceref/RecipeSourceRefRepository.js';
 import type { TokenUsageStore } from '../repository/token/TokenUsageStore.js';
 import type { BootstrapTaskManager } from '../service/bootstrap/BootstrapTaskManager.js';
+import type { CursorDeliveryPipeline } from '../service/delivery/CursorDeliveryPipeline.js';
 import type { ComplianceReporter } from '../service/guard/ComplianceReporter.js';
 import type { ExclusionManager } from '../service/guard/ExclusionManager.js';
 import type { GuardCheckEngine } from '../service/guard/GuardCheckEngine.js';
@@ -120,6 +122,7 @@ export interface ServiceMap {
   sessionRepository: SessionRepositoryImpl;
   proposalRepository: ProposalRepository;
   warningRepository: WarningRepository;
+  remoteCommandRepository: RemoteCommandRepository;
   recipeSourceRefRepository: RecipeSourceRefRepositoryImpl;
   knowledgeFileWriter: KnowledgeFileWriter;
   knowledgeSyncService: KnowledgeSyncService;
@@ -133,6 +136,7 @@ export interface ServiceMap {
   feedbackCollector: FeedbackCollector;
   tokenUsageStore: TokenUsageStore;
   moduleService: ModuleService;
+  cursorDeliveryPipeline: CursorDeliveryPipeline;
   primeSearchPipeline: PrimeSearchPipeline;
 
   // ═══ KnowledgeModule ═══

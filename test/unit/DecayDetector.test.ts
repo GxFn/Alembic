@@ -14,6 +14,20 @@ function makeMockRepo(entries: Record<string, unknown>[] = []) {
   };
 }
 
+function makeMockDrizzle(auditRow?: Record<string, unknown>) {
+  return {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: () => ({
+            get: () => auditRow,
+          }),
+        }),
+      }),
+    }),
+  };
+}
+
 function makeMockEdgeRepo(hasEdge: boolean) {
   return {
     findByRelation: async () => (hasEdge ? [{ id: 'edge-1' }] : []),
@@ -113,6 +127,21 @@ describe('DecayDetector', () => {
 
     const result = await detector.evaluate(recipe);
     expect(result.signals.some((s) => s.strategy === 'high_false_positive')).toBe(false);
+  });
+
+  it('should detect symbol_drift from audit_logs', async () => {
+    const stats = JSON.stringify({
+      lastHitAt: Date.now() - 10 * DAY_MS,
+      hitsLast90d: 10,
+      authority: 50,
+    });
+    const recipe = makeRecipe({ stats, quality_score: 0.5 });
+    const detector = new DecayDetector(makeMockRepo() as any, {
+      drizzle: makeMockDrizzle({ id: '1' }) as any,
+    });
+
+    const result = await detector.evaluate(recipe);
+    expect(result.signals.some((s) => s.strategy === 'symbol_drift')).toBe(true);
   });
 
   it('should detect superseded from deprecated_by edge', async () => {

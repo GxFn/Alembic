@@ -13,4 +13,16 @@ export const CHAT_PROFILES: AgentProfileDefinition[] = [
     strategy: { type: 'preset' },
     projection: 'chat-reply',
   },
+  {
+    id: 'lark-chat',
+    title: 'Lark Chat',
+    serviceKind: 'conversation',
+    lifecycle: 'active',
+    basePreset: 'lark',
+    defaults: {
+      actionSpace: { mode: 'listed', toolIds: [] },
+    },
+    strategy: { type: 'preset' },
+    projection: 'chat-reply',
+  },
 ];

@@ -5,8 +5,9 @@
  * Lightweight stdio entry: lists tools immediately and starts/connects daemon only when a tool needs Core.
  */
 
-const { ensureCodexRuntimeEnvironment } = await import('../lib/codex/index.js');
-ensureCodexRuntimeEnvironment();
+process.env.ALEMBIC_MCP_MODE = '1';
+process.env.ALEMBIC_CODEX_MCP_MODE = '1';
+process.env.ALEMBIC_MCP_TIER = process.env.ALEMBIC_MCP_TIER || 'agent';
 
 process.on('uncaughtException', (error) => {
   process.stderr.write(`[Codex MCP] Uncaught Exception: ${error.message}\n`);

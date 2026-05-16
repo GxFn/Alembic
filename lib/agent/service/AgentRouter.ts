@@ -8,19 +8,22 @@
  *
  * 路由策略 (优先级递减):
  *   1. 手动指定 (API `preset` 参数)
- *   2. 关键词匹配 (零延迟正则)
- *   3. LLM 意图分类 (精确但需 AI 调用)
- *   4. 默认 → chat
+ *   2. 渠道特征 (如飞书终端命令以 > 开头 → remote-exec)
+ *   3. 关键词匹配 (零延迟正则)
+ *   4. LLM 意图分类 (精确但需 AI 调用)
+ *   5. 默认 → chat
  *
  * 关键区别 (vs 旧 AgentRouter):
- *   - 旧版路由到 AgentMode (chat/bootstrap/scan) → 多种 Agent 类型
- *   - 新版路由到 Preset (chat/insight) → 同一 Runtime 的不同配置
+ *   - 旧版路由到 AgentMode (chat/bootstrap/scan/lark_bridge) → 4 种 Agent 类型
+ *   - 新版路由到 Preset (chat/insight/remote-exec) → 同一 Runtime 的不同配置
+ *   - 不再存在 "LarkBridge" 模式 — 飞书和前端共享同一 Preset
  *
  * @module AgentRouter
  */
 
 import Logger from '#infra/logging/Logger.js';
-import type { AgentMessage } from '../runtime/AgentMessage.js';
+import { AgentEventBus } from '../runtime/AgentEventBus.js';
+import { type AgentMessage, Channel } from '../runtime/AgentMessage.js';
 
 // ─── Types ──────────────────────────────────────────
 
@@ -53,6 +56,8 @@ interface RouteOpts {
 export const PresetName = Object.freeze({
   CHAT: 'chat',
   INSIGHT: 'insight',
+  LARK: 'lark',
+  REMOTE_EXEC: 'remote-exec',
 });
 
 /** 关键词 → Preset 映射 (零延迟快速路径) */
@@ -68,6 +73,13 @@ const KEYWORD_ROUTES = [
       /深度分析.*路径|知识提取/i,
     ],
   },
+  {
+    preset: PresetName.REMOTE_EXEC,
+    keywords: [
+      /^[>$]\s*/, // 以 > 或 $ 开头 = 终端命令
+      /运行命令|执行命令|run.*command|exec.*command/i,
+    ],
+  },
 ];
 
 /** LLM 路由分类 Schema */
@@ -79,9 +91,9 @@ const ROUTE_CLASSIFICATION_SCHEMA = {
     properties: {
       preset: {
         type: 'string',
-        enum: ['chat', 'insight'],
+        enum: ['chat', 'insight', 'lark', 'remote-exec'],
         description:
-          'The preset to route to. chat=conversation, insight=code analysis and knowledge extraction.',
+          'The preset to route to. chat=conversation, insight=code analysis and knowledge extraction, lark=Lark knowledge management, remote-exec=terminal commands',
       },
       confidence: {
         type: 'number',
@@ -98,11 +110,13 @@ const ROUTE_CLASSIFICATION_SCHEMA = {
 
 export class AgentRouter {
   #logger;
+  #bus;
   #aiProvider: RouterAiProvider | null = null;
   #executor: AgentExecutor | null = null;
 
   constructor() {
     this.#logger = Logger.getInstance();
+    this.#bus = AgentEventBus.getInstance();
   }
 
   /** 设置 AI Provider (用于 LLM 路由) */
@@ -128,7 +142,15 @@ export class AgentRouter {
     let preset: string | null | undefined =
       opts.preset || (message.metadata?.mode as string | undefined);
 
-    // 2. 关键词匹配
+    // 2. 渠道特征路由
+    if (!preset) {
+      preset = this.#matchChannel(message);
+      if (preset) {
+        this.#logger.info(`[AgentRouter] Channel match → ${preset}`);
+      }
+    }
+
+    // 3. 关键词匹配
     if (!preset) {
       preset = this.#matchKeyword(message.content);
       if (preset) {
@@ -136,7 +158,7 @@ export class AgentRouter {
       }
     }
 
-    // 3. LLM 分类
+    // 4. LLM 分类
     if (!preset && this.#aiProvider) {
       preset = await this.#classifyWithLLM(message.content);
       if (preset) {
@@ -144,7 +166,7 @@ export class AgentRouter {
       }
     }
 
-    // 4. 默认 → chat
+    // 5. 默认 → chat
     if (!preset) {
       preset = PresetName.CHAT;
     }
@@ -167,6 +189,9 @@ export class AgentRouter {
   async classify(message: AgentMessage) {
     let preset: string | null | undefined = message.metadata?.mode as string | undefined;
     if (!preset) {
+      preset = this.#matchChannel(message);
+    }
+    if (!preset) {
       preset = this.#matchKeyword(message.content);
     }
     if (!preset && this.#aiProvider) {
@@ -176,6 +201,24 @@ export class AgentRouter {
   }
 
   // ─── 私有方法 ────────────────────────────────
+
+  /**
+   * 渠道特征路由
+   * 飞书消息默认 → lark preset (知识管理对话)
+   * 飞书终端命令 (> 开头) → remote-exec
+   */
+  #matchChannel(message: AgentMessage) {
+    if (message.channel === Channel.LARK) {
+      const text = message.content.trim();
+      // 飞书消息以 > 或 $ 开头 → 终端命令
+      if (/^[>$]\s*/.test(text)) {
+        return PresetName.REMOTE_EXEC;
+      }
+      // 默认走 lark preset (知识管理对话)
+      return PresetName.LARK;
+    }
+    return null;
+  }
 
   #matchKeyword(prompt: string) {
     for (const route of KEYWORD_ROUTES) {

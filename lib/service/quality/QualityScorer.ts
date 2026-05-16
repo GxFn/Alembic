@@ -7,7 +7,7 @@
  * 5 维度加权:
  * - completeness  (0.25): 结构完整性 — 核心字段齐全度
  * - contentDepth  (0.30): 内容深度   — markdown 丰富度、推理、溯源
- * - deliveryReady (0.20): 适配就绪   — trigger/language/tags/category
+ * - deliveryReady (0.20): 交付就绪   — trigger/language/tags/category
  * - actionability (0.15): 可操作性   — coreCode、do/dont/when 质量
  * - provenance    (0.10): 溯源可信   — confidence、sources、authority
  *
@@ -30,7 +30,7 @@ export interface RecipeInput {
   language?: string;
   category?: string;
 
-  // Agent adapter fields
+  // Delivery fields
   doClause?: string;
   dontClause?: string;
   whenClause?: string;

@@ -19,7 +19,7 @@ import {
 import HttpServer from '../lib/http/HttpServer.js';
 import Logger from '../lib/infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
-import { GitDiffCheckpointService } from '../lib/service/evolution/git-diff-checkpoint/index.js';
+import { DaemonFileChangeCollector } from '../lib/service/evolution/DaemonFileChangeCollector.js';
 import { DASHBOARD_DIR } from '../lib/shared/package-root.js';
 import { shutdown } from '../lib/shared/shutdown.js';
 import { timerRegistry } from '../lib/shared/TimerRegistry.js';
@@ -93,7 +93,7 @@ async function main() {
   }
 
   const httpServer = await startHttpServer(requestedPort, host);
-  registerDaemonGitDiffCheckpoint({
+  const fileChangeCollector = startDaemonFileChangeCollector({
     container,
     logger,
     projectRoot,
@@ -149,6 +149,9 @@ async function main() {
     await timerRegistry.dispose();
   }, 'timer-registry');
   shutdown.register(() => {
+    fileChangeCollector?.stop();
+  }, 'daemon-file-change-collector');
+  shutdown.register(() => {
     markInterruptedDaemonJobs({
       code: 'DAEMON_SHUTDOWN',
       container,
@@ -158,21 +161,28 @@ async function main() {
   }, 'daemon-jobs');
 }
 
-function registerDaemonGitDiffCheckpoint(options: {
+function startDaemonFileChangeCollector(options: {
   container: ReturnType<typeof getServiceContainer>;
   logger: ReturnType<typeof Logger.getInstance>;
   projectRoot: string;
-}): GitDiffCheckpointService {
+}): DaemonFileChangeCollector | null {
+  if (process.env.ALEMBIC_DAEMON_FILE_CHANGES === '0') {
+    options.logger.info('[daemon-file-change] disabled by ALEMBIC_DAEMON_FILE_CHANGES=0');
+    return null;
+  }
+
   const dispatcher = options.container.get(
     'fileChangeDispatcher'
   ) as import('../lib/service/FileChangeDispatcher.js').FileChangeDispatcher;
-  const checkpoint = new GitDiffCheckpointService({
+  const collector = new DaemonFileChangeCollector({
     projectRoot: options.projectRoot,
     dispatcher,
+    intervalMs: Number.parseInt(process.env.ALEMBIC_DAEMON_FILE_CHANGE_INTERVAL_MS || '', 10),
+    extensionTtlMs: Number.parseInt(process.env.ALEMBIC_VSCODE_HEARTBEAT_TTL_MS || '', 10),
     logger: options.logger,
   });
-  options.container.singletons.gitDiffCheckpoint = checkpoint;
-  return checkpoint;
+  collector.start();
+  return collector;
 }
 
 function resolveBoundDaemonPort(httpServer: HttpServer, requestedPort: number): number {

@@ -16,7 +16,8 @@
  *
  * 保留原则:
  *   - 配置数据 (config.json, constitution.yaml, boxspec.json) 永不清理
- *   - 各 IDE 插件自己的宿主配置不由核心 CleanupService 管理
+ *   - IDE 集成配置 (.vscode/, .cursor/, .github/) 永不清理
+ *   - 交付物 (.cursor/rules/alembic-*) 由 R4 重建，不在此清理
  *
  * @module service/cleanup/CleanupService
  */
@@ -141,6 +142,8 @@ const ALL_DATA_TABLES = [
   'sessions',
   'semantic_memories',
   'code_entities',
+  'remote_commands',
+  'remote_state',
 ];
 
 /** rescanClean 时清除的 DB 表（保留知识/进化/增量证据相关表） */
@@ -150,6 +153,8 @@ const RESCAN_CLEAN_TABLES = [
   'semantic_memories',
   'sessions',
   'audit_logs',
+  'remote_commands',
+  'remote_state',
 ];
 
 /**
@@ -162,6 +167,8 @@ const FORCE_RESCAN_CLEAN_TABLES = [
   'semantic_memories',
   'sessions',
   'audit_logs',
+  'remote_commands',
+  'remote_state',
 ];
 
 // ── CleanupService ──────────────────────────────────────────

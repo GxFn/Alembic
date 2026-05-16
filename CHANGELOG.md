@@ -4,14 +4,6 @@
 
 ---
 
-## [0.1.1] - 2026-05-13
-
-### Changed
-- 发布 Alembic Codex 插件运行时标识：新增通用 `ALEMBIC_RUNTIME_MODE=plugin` 和宿主 `ALEMBIC_PLUGIN_HOST=codex`，为后续 Claude Code 等插件宿主预留稳定分层。
-- Codex 插件发布包、渠道 manifest、验证脚本和 smoke 流程同步校验 plugin runtime identity。
-
----
-
 ## [0.0.9] - 2026-05-04
 
 ### Added
@@ -166,7 +158,7 @@
 - **统一进化架构 Phase 0-4**：五个阶段完整实施，从"知识工具"进化为"知识有机体"
   - **Phase 0 — Signal Bus**：统一信号总线（9 种信号类型）+ HitRecorder 批量采集（30s buffer） + Stats 扩展（时间戳×3 + 滑窗×3 + version + FP率）
   - **Phase 1 — Panorama**：项目全景——AST 角色精化、Tarjan SCC 耦合分析、Kahn 拓扑分层、知识覆盖率热力图、能力缺口报告；MCP 工具 `autosnippet_panorama` 4 操作
-  - **Phase 2 — Guard 免疫系统**：三态输出（pass/violation/uncertain）、三维报告（合规度+覆盖率+置信度）、CoverageAnalyzer 覆盖矩阵
+  - **Phase 2 — Guard 免疫系统**：三态输出（pass/violation/uncertain）、三维报告（合规度+覆盖率+置信度）、ReverseGuard 反向验证、CoverageAnalyzer 覆盖矩阵
   - **Phase 3 — 知识治理**：六态生命周期（staging/evolving/decaying 三个系统驱动中间态）、ContradictionDetector 矛盾检测、RedundancyAnalyzer 冗余分析、DecayDetector + DecayScorer 衰退评估、KnowledgeMetabolism 治理总线
   - **Phase 4 — Tool Forge**：动态工具锻造——复用/组合/生成三模式、SandboxRunner 沙箱验证、TemporaryToolRegistry TTL 临时注册、DynamicComposer 运行时组合；ToolExecutionPipeline allowlistGate Forge fallback 集成
 
@@ -496,6 +488,7 @@
 
 ### 新增
 
+- **VS Code 扩展项目作用域**：扩展仅在工作区包含 AutoSnippet 项目（存在 `AutoSnippet/` 或 `.autosnippet/` 目录）时激活状态栏、CodeLens 和 onSave 指令检测，非项目零开销
 - **projectScope 模块**：新增 `projectScope.ts`，提供 `hasAnyProject()` / `isFileInScope()` / `isDocumentInScope()` / `invalidateCache()` 等 API
 
 ### 修复
@@ -564,6 +557,7 @@
 - **Dashboard 国际化（i18n）**：新增 `i18n/` 模块（zh.ts、en.ts、types.ts、index.tsx），清理约 117 处硬编码中文字符串，覆盖 Guard 规则消息、冷启动维度标签、SSE 进度文本
 - **Dashboard 暗色模式**：新增 `theme/index.tsx`，全局支持亮色/暗色主题切换
 - **Agent 语言特性**：Agent 可感知项目语言并动态切换 Skill 和分析策略
+- **VSCode 扩展**：新增 `resources/vscode-ext/`（extension.ts、apiClient、codeLens、statusBar、directiveDetector、codeInserter）
 - **模块服务与 Snippet Codec 体系**：新增 `ModuleService`、`LanguageService`，Snippet 编解码拆分为 `SnippetCodec`/`VSCodeCodec`/`XcodeCodec` + `PlaceholderConverter`
 - **Go 语言参考 Skill**：新增 `autosnippet-reference-go`（539 行），覆盖模块结构、命名、错误处理、接口、并发等 12 个章节
 - **多语言参考 Skills**：新增 `autosnippet-reference-java`、`autosnippet-reference-kotlin`、`autosnippet-reference-python`

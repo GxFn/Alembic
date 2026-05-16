@@ -458,6 +458,84 @@ interface RawSearchResult {
   [key: string]: unknown;
 }
 
+/**
+ * 统一 SSE 流消费器 — 从 fetch Response 中逐行读取 SSE events
+ *
+ * 支持统一协议的所有事件类型:
+ *   stream:start — 会话开始
+ *   step:start   — 推理步骤开始
+ *   tool:start   — 工具调用开始
+ *   tool:end     — 工具调用结束
+ *   text:start   — 文本流开始
+ *   text:delta   — 文本分块
+ *   text:end     — 文本流结束
+ *   step:end     — 推理步骤结束
+ *   data:progress — 进度事件（润色等场景）
+ *   stream:done  — 会话完成
+ *   stream:error — 会话错误
+ *
+ * @param response   fetch 返回的 Response（body 为 ReadableStream）
+ * @param onEvent    收到任意事件时的完整回调
+ * @returns          通过 text:delta 拼接的完整文本（chat 场景使用）
+ */
+async function _consumeSSE(
+  response: Response,
+  onEvent: (evt: SSEEvent) => void,
+): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('ReadableStream not available');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullText = '';
+  let chunkCount = 0;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    chunkCount++;
+    const text = decoder.decode(value, { stream: true });
+
+    buffer += text;
+    const lines = buffer.split('\n');
+    // 保留最后一个不完整行
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      // 心跳 :ping 注释 — 忽略
+      if (line.startsWith(':')) continue;
+      if (!line.startsWith('data: ')) continue;
+      const payload = line.slice(6).trim();
+      if (!payload || payload === '[DONE]') continue;
+
+      try {
+        const evt: SSEEvent = JSON.parse(payload);
+        onEvent(evt);
+
+        // text:delta — 拼接完整文本
+        if (evt.type === 'text:delta' && evt.delta) {
+          fullText += evt.delta;
+        }
+        // stream:done — 如果携带 text 则覆盖
+        else if (evt.type === 'stream:done' && evt.text) {
+          fullText = evt.text;
+        }
+        // stream:error — 抛出错误
+        else if (evt.type === 'stream:error') {
+          throw new Error(evt.message || 'Stream error');
+        }
+      } catch (e) {
+        if (e instanceof SyntaxError) continue; // 非 JSON 行忽略
+        throw e;
+      }
+    }
+  }
+
+  return fullText;
+}
+
 // ═══════════════════════════════════════════════════════
 //  API Methods  (v2 — EventSource architecture)
 // ═══════════════════════════════════════════════════════
@@ -806,6 +884,7 @@ export const api = {
     bootstrapDims: string[];
     rescanDims: string[];
     terminal: { enabled: boolean; toolset: string };
+    sandbox: { mode: string; available: boolean };
   }> {
     const res = await http.get('/modules/test-mode');
     return res.data?.data || {
@@ -813,6 +892,7 @@ export const api = {
       bootstrapDims: [],
       rescanDims: [],
       terminal: { enabled: false, toolset: 'baseline' },
+      sandbox: { mode: 'enforce', available: false },
     };
   },
 
@@ -1131,6 +1211,159 @@ export const api = {
     return res.data?.data || { deleted: 0 };
   },
 
+  async chat(
+    prompt: string,
+    history: Array<{ role: string; content: string }>,
+    signal?: AbortSignal,
+  ): Promise<{ text: string; hasContext?: boolean }> {
+    const res = await http.post('/ai/chat', { prompt, history }, { signal });
+    const data = res.data?.data || {};
+    return { text: data.reply || data.text || '', hasContext: data.hasContext };
+  },
+
+  /**
+   * 流式 AI 对话 (SSE) — 统一协议 v2
+   *
+   * 事件类型（按时间顺序）:
+   *   - stream:start  — 会话开始
+   *   - step:start    — 新推理步骤 { step, maxSteps, phase }
+   *   - tool:start    — 工具调用开始 { id, tool, args }
+   *   - tool:end      — 工具调用结束 { tool, status, resultSize?, duration?, error? }
+   *   - text:start    — 文本流开始 { id, role }
+   *   - text:delta    — 文本分块 { id, delta }  ← 逐块推送，前端可逐字渲染
+   *   - text:end      — 文本流结束 { id }
+   *   - step:end      — 推理步骤结束 { step }
+   *   - stream:done   — 全部完成 { text, toolCalls, hasContext }
+   *   - stream:error  — 错误 { message }
+   *
+   * @param prompt       用户消息
+   * @param history      对话历史
+   * @param onEvent      每收到一个 SSE 事件的回调（前端根据 type 分别处理）
+   * @param signal       可选 AbortSignal
+   * @returns            { text, toolCalls, hasContext }
+   */
+  async chatStream(
+    prompt: string,
+    history: Array<{ role: string; content: string }>,
+    onEvent: (event: SSEEvent) => void,
+    signal?: AbortSignal,
+    /** UI language preference — forwarded to Agent for reply language control */
+    lang?: 'zh' | 'en',
+  ): Promise<{ text: string; toolCalls?: ToolCall[]; hasContext?: boolean }> {
+
+    // ── Step 1: POST 启动对话 ──
+    const startRes = await fetch('/api/v1/ai/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, history, ...(lang ? { lang } : {}) }),
+      signal,
+    });
+    if (!startRes.ok) throw new Error(`Chat start failed: ${startRes.status}`);
+
+    const contentType = startRes.headers.get('content-type') || '';
+
+    // ── 兼容检测: 旧后端返回 text/event-stream, 新后端返回 JSON ──
+    if (contentType.includes('text/event-stream')) {
+      // 旧后端 — 直接用 fetch ReadableStream 消费 SSE（降级模式）
+      let finalResult: { text: string; toolCalls?: ToolCall[]; hasContext?: boolean } = { text: '' };
+      const fullText = await _consumeSSE(startRes, (evt) => {
+        onEvent(evt);
+        if (evt.type === 'stream:done') {
+          if (evt.text) finalResult.text = evt.text;
+          finalResult.toolCalls = evt.toolCalls;
+          finalResult.hasContext = evt.hasContext;
+        }
+      });
+      if (!finalResult.text && fullText) finalResult.text = fullText;
+      return finalResult;
+    }
+
+    // ── 新后端: 获取 sessionId → EventSource ──
+    const startData = await startRes.json();
+    const sessionId = startData.sessionId;
+    if (!sessionId) throw new Error(`No sessionId returned: ${JSON.stringify(startData)}`);
+
+    // ── Step 2: 通过 EventSource 消费 SSE 事件 ──
+    return new Promise<{ text: string; toolCalls?: ToolCall[]; hasContext?: boolean }>((resolve, reject) => {
+      const esUrl = `/api/v1/ai/chat/events/${sessionId}`;
+      const es = new EventSource(esUrl);
+      let fullText = '';
+      let finalResult: { text: string; toolCalls?: ToolCall[]; hasContext?: boolean } = { text: '' };
+      let resolved = false;
+
+      function cleanup() {
+        es.close();
+      }
+
+      es.onmessage = (e) => {
+        try {
+          const evt: SSEEvent = JSON.parse(e.data);
+
+          // 跳过内部的 stream:start（EventSource 基础设施事件）
+          if (evt.type === 'stream:start') return;
+
+          // 交付事件给上层回调
+          onEvent(evt);
+
+          // 累积 text:delta 文本
+          if (evt.type === 'text:delta' && evt.delta) {
+            fullText += evt.delta;
+          }
+
+          // 会话完成
+          if (evt.type === 'stream:done') {
+            finalResult = {
+              text: evt.text || fullText,
+              toolCalls: evt.toolCalls,
+              hasContext: evt.hasContext,
+            };
+            cleanup();
+            resolved = true;
+            resolve(finalResult);
+          }
+
+          // 会话错误
+          if (evt.type === 'stream:error') {
+            cleanup();
+            resolved = true;
+            reject(new Error(evt.message || 'Stream error'));
+          }
+        } catch {
+          // 忽略 JSON 解析错误
+        }
+      };
+
+      es.onerror = () => {
+        if (!resolved) {
+          cleanup();
+          if (fullText) {
+            resolved = true;
+            resolve({ text: fullText });
+          } else {
+            resolved = true;
+            reject(new Error('EventSource connection failed'));
+          }
+        }
+      };
+
+      // 处理 AbortSignal
+      if (signal) {
+        const onAbort = () => {
+          if (!resolved) {
+            cleanup();
+            resolved = true;
+            reject(new DOMException('The operation was aborted.', 'AbortError'));
+          }
+        };
+        if (signal.aborted) {
+          onAbort();
+        } else {
+          signal.addEventListener('abort', onAbort, { once: true });
+        }
+      }
+    });
+  },
+
   /**
    * 润色预览 (SSE) — 统一协议 v2
    * 不再推送 JSON 碎片，改为进度事件 + 最终结构化结果
@@ -1375,19 +1608,68 @@ export const api = {
     return res.data?.data || {};
   },
 
+  /** 基于使用模式推荐创建 Skill */
+  async suggestSkills(): Promise<{ suggestions: Array<{ name: string; [key: string]: any }>; analysisContext?: any }> {
+    const res = await http.get('/skills/suggest');
+    return res.data?.data || { suggestions: [], analysisContext: {} };
+  },
+
+  /** 获取 SignalCollector 后台服务状态 */
+  async getSignalStatus(): Promise<{
+    running: boolean;
+    mode: string;
+    snapshot: { lastResult?: { newSuggestions?: number; [key: string]: any }; [key: string]: any } | null;
+    suggestions?: Array<{ name: string; [key: string]: any }>;
+  }> {
+    const res = await http.get('/skills/signal-status');
+    return res.data?.data || { running: false, mode: 'off', snapshot: null };
+  },
+
+  /** AI 生成 Skill 内容（通过 ChatAgent 对话） */
+  async aiGenerateSkill(prompt: string): Promise<{ reply: string; hasContext?: boolean }> {
+    const systemPrompt = `你是一个 Alembic Skill 文档生成助手。用户会描述他们想创建的 Skill，你需要生成完整的 SKILL.md 内容。
+
+Skill 文档格式要求：
+1. 开头用 Markdown 标题说明 Skill 的目的
+2. 包含清晰的使用场景说明
+3. 列出具体的操作步骤和指南
+4. 如有必要，包含代码示例
+5. 使用中文撰写
+
+请严格按以下格式输出（不要用代码块包裹 JSON）：
+
+第一行：一个 JSON 对象，包含 name（kebab-case，3-64 字符）和 description（一句话中文描述）
+第二行：空行
+第三行起：Skill 文档正文内容（Markdown 格式，不含 frontmatter）
+
+示例输出：
+{"name": "swiftui-animation-guide", "description": "SwiftUI 动画最佳实践指南"}
+
+# SwiftUI 动画最佳实践
+
+## 使用场景
+...`;
+
+    const res = await http.post('/ai/chat', {
+      prompt: `${systemPrompt}\n\n用户需求：${prompt}`,
+      history: [],
+    });
+    return res.data?.data || { reply: '' };
+  },
+
   // ── LLM workspace settings ─────────────────────────
 
   /** 读取 Alembic 工作区中的 LLM 配置 */
-  async getLlmWorkspaceConfig(): Promise<{
+  async getLlmEnvConfig(): Promise<{
     vars: Record<string, string>;
     hasSettingsFile?: boolean;
     hasSecretsFile?: boolean;
     settingsPath?: string;
     secretsPath?: string;
-    configSource?: 'workspace-settings' | 'runtime-overrides' | 'empty';
+    configSource?: 'workspace-settings' | 'process-env' | 'empty';
     llmReady: boolean;
   }> {
-    const res = await http.get('/ai/workspace-config');
+    const res = await http.get('/ai/env-config');
     return res.data?.data || { vars: {}, llmReady: false };
   },
 
@@ -1402,7 +1684,7 @@ export const api = {
   },
 
   /** 写入 / 更新 Alembic 工作区中的 LLM 配置 */
-  async saveLlmWorkspaceConfig(config: {
+  async saveLlmEnvConfig(config: {
     provider: string;
     model?: string;
     apiKey?: string;
@@ -1419,10 +1701,10 @@ export const api = {
     hasSecretsFile?: boolean;
     settingsPath?: string;
     secretsPath?: string;
-    configSource?: 'workspace-settings' | 'runtime-overrides' | 'empty';
+    configSource?: 'workspace-settings' | 'process-env' | 'empty';
     llmReady: boolean;
   }> {
-    const res = await http.post('/ai/workspace-config', config);
+    const res = await http.post('/ai/env-config', config);
     return res.data?.data || { vars: {}, llmReady: false };
   },
 
@@ -1519,6 +1801,59 @@ export const api = {
   async knowledgeUpdateQuality(id: string): Promise<{ quality: KnowledgeQuality }> {
     const res = await http.patch(`/knowledge/${id}/quality`);
     return res.data?.data || { quality: {} };
+  },
+
+  // ── Wiki ──────────────────────────────────────────────
+
+  /** 触发 Wiki 全量生成 */
+  async wikiGenerate(): Promise<void> {
+    await http.post('/wiki/generate');
+  },
+
+  /** 触发 Wiki 增量更新 */
+  async wikiUpdate(): Promise<void> {
+    await http.post('/wiki/update');
+  },
+
+  /** 中止 Wiki 生成 */
+  async wikiAbort(): Promise<void> {
+    await http.post('/wiki/abort');
+  },
+
+  /** 获取 Wiki 状态 */
+  async wikiStatus(): Promise<{
+    task: {
+      status: 'idle' | 'running' | 'done' | 'error';
+      phase?: string;
+      progress?: number;
+      message?: string;
+      startedAt?: number;
+      finishedAt?: number;
+      result?: any;
+      error?: string;
+    };
+    wiki?: {
+      exists: boolean;
+      generatedAt?: string;
+      filesCount?: number;
+      version?: string;
+      hasChanges?: boolean;
+    };
+  }> {
+    const res = await http.get('/wiki/status');
+    return res.data?.data || { task: { status: 'idle' } };
+  },
+
+  /** 列出 Wiki 文件 */
+  async wikiFiles(): Promise<{ files: Array<{ path: string; name: string; size: number; modifiedAt: string }>; exists: boolean }> {
+    const res = await http.get('/wiki/files');
+    return res.data?.data || { files: [], exists: false };
+  },
+
+  /** 读取 Wiki 文件内容 */
+  async wikiFileContent(filePath: string): Promise<{ path: string; content: string; size: number }> {
+    const res = await http.get(`/wiki/file/${filePath}`);
+    return res.data?.data || { path: filePath, content: '', size: 0 };
   },
 
   // ── Language preference ──────

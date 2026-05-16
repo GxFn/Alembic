@@ -22,8 +22,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          submodules: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -46,20 +44,17 @@ jobs:
       - name: Install dashboard dependencies
         run: npm ci --prefix dashboard
 
+      - name: Install VS Code extension dependencies
+        run: npm run install:vscode-ext
+
       - name: Build TypeScript
         run: npm run build
 
       - name: Build Dashboard
         run: npm run build:dashboard
 
-      - name: Prepare Codex plugin runtime
-        run: npm run prepare:codex-plugin-runtime
-
-      - name: Verify Codex channel
-        run: npm run verify:codex-channel
-
-      - name: Verify Codex plugin packaging
-        run: npm run verify:codex-plugin
+      - name: Build VS Code extension
+        run: npm run build:vscode-ext
 
       - name: Lint
         run: npm run lint -- --diagnostic-level=error
@@ -75,6 +70,15 @@ jobs:
 
       - name: Preview npm package
         run: npm pack --dry-run
+
+      - name: Preview VS Code extension package
+        run: npm run package:vscode-ext -- --out /tmp/alembic-vscode.vsix
+
+      - name: Upload VS Code extension package
+        uses: actions/upload-artifact@v5
+        with:
+          name: alembic-vscode-extension
+          path: /tmp/alembic-vscode.vsix
 
       - name: Publish to npm
         # Build artifacts are produced above; skip prepublishOnly to avoid duplicate builds.

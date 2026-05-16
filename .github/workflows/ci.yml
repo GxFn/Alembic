@@ -11,7 +11,7 @@ on:
     branches: [main, master]
 
 env:
-  API_BASE: http://127.0.0.1:3100/api/v1
+  API_BASE: http://localhost:3100/api/v1
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   NODE_ENV: test
 
@@ -24,17 +24,17 @@ jobs:
         node-version: ['22']
     steps:
       - uses: actions/checkout@v5
-        with:
-          submodules: true
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
       - run: npm ci
       - run: cd dashboard && npm ci
+      - run: npm run install:vscode-ext
       - run: npm run build
       - run: npm run lint -- --diagnostic-level=error
       - run: npm run build:dashboard
+      - run: npm run build:vscode-ext
 
   api-smoke:
     name: API Smoke Test
@@ -42,8 +42,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          submodules: true
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
@@ -51,17 +49,14 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: cd dashboard && npm ci
+      - run: npm run install:vscode-ext
       - run: npm run build:dashboard
+      - run: npm run build:vscode-ext
 
       - name: Start API Server
         run: |
-          ALEMBIC_PROJECT_DIR="$GITHUB_WORKSPACE" \
-            ALEMBIC_DAEMON_HOST=127.0.0.1 \
-            ALEMBIC_DAEMON_PORT=3100 \
-            ASD_SKIP_ENTRY_CHECK=1 \
-            ASD_DISABLE_WRITE_GUARD=1 \
-            ASD_DISABLE_RATE_LIMIT=1 \
-            node dist/bin/daemon-server.js > /tmp/api-server.log 2>&1 &
+          ASD_SKIP_ENTRY_CHECK=1 ASD_DISABLE_WRITE_GUARD=1 ASD_DISABLE_RATE_LIMIT=1 \
+            npm run dashboard -- --port 3100 --no-open > /tmp/api-server.log 2>&1 &
           echo "PID=$!" >> $GITHUB_ENV
           sleep 2
 
@@ -88,11 +83,11 @@ jobs:
         run: |
           curl -sf $API_BASE/health/ready | jq -e '.ready == true'
 
-      - name: API spec endpoint
+      - name: Root endpoint
         run: |
-          SPEC=$(curl -sf http://127.0.0.1:3100/api-spec)
-          echo "$SPEC" | jq .
-          echo "$SPEC" | jq -e '.info.title == "Alembic API"'
+          ROOT=$(curl -sf $API_BASE/../..)
+          echo "$ROOT" | jq .
+          echo "$ROOT" | jq -e '.name == "Alembic API"'
 
       - name: Knowledge listing
         run: |
@@ -111,8 +106,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          submodules: true
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
@@ -127,8 +120,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          submodules: true
       - uses: actions/setup-node@v5
         with:
           node-version: '22'

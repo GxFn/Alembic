@@ -14,6 +14,7 @@
  *   - extract（路径/文本提取）
  *   - auth（登录）
  *   - commands（文件读写）
+ *   - remote（远程指令、通知）
  *
  * @module shared/schemas/http-requests
  */
@@ -254,6 +255,15 @@ export const UpdateSkillBody = z
     message: 'At least one of description or content must be provided',
   });
 
+// ═══ Task (unified dispatch) ═════════════════════
+
+export const TaskDispatchBody = z
+  .object({
+    operation: z.string().min(1, 'operation is required'),
+    // 各操作的参数透传为 passthrough（具体校验在 handler 中）
+  })
+  .passthrough();
+
 // ═══ Modules ═════════════════════════════════════
 
 export const ScanFolderBody = z.object({
@@ -350,7 +360,7 @@ export const AiFormatUsageGuideBody = z.object({
   text: z.string().optional(),
 });
 
-export const AiWorkspaceConfigBody = z.object({
+export const AiEnvConfigBody = z.object({
   provider: z.string().min(1, 'provider is required'),
   model: z.string().optional(),
   apiKey: z.string().optional(),
@@ -395,4 +405,33 @@ export const FileReadQuery = z.object({
 export const FileSaveBody = z.object({
   path: z.string().min(1, 'path is required'),
   content: z.string({ message: 'content is required' }),
+});
+
+// ═══ Wiki Routes ═════════════════════════════════
+
+/* Wiki validation stays as inline path-param check (wildcard route) */
+
+// ═══ Remote Routes ═══════════════════════════════
+
+export const RemoteSendBody = z.object({
+  command: z
+    .string()
+    .min(1, 'command is required')
+    .transform((s) => s.trim()),
+});
+
+export const RemoteNotifyBody = z.object({
+  text: z
+    .string()
+    .min(1, 'text is required')
+    .transform((s) => s.trim()),
+});
+
+export const RemoteResultBody = z.object({
+  result: z.string().optional(),
+  status: z.string().default('completed'),
+});
+
+export const RemoteHistoryQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });

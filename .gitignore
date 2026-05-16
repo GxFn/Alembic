@@ -4,11 +4,13 @@
 
 # ─── Dependencies ────────────────────────────────────
 node_modules/
+resources/vscode-ext/node_modules/
 
 # ─── Build outputs ───────────────────────────────────
 dist/
 dashboard/dist/
-plugins/alembic-codex/runtime/
+resources/vscode-ext/out/
+resources/vscode-ext/*.vsix
 
 # ─── Native build products ───────────────────────────
 # Swift/ObjC binaries & intermediate build artifacts

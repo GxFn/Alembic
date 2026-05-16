@@ -31,6 +31,7 @@ import commandsRouter from './routes/commands.js';
 import daemonRouter from './routes/daemon.js';
 import evolutionRouter from './routes/evolution.js';
 import extractRouter from './routes/extract.js';
+import fileChangesRouter from './routes/file-changes.js';
 import guardRouter from './routes/guard.js';
 import guardReportRouter from './routes/guardReport.js';
 import guardRuleRouter from './routes/guardRules.js';
@@ -43,10 +44,13 @@ import modulesRouter from './routes/modules.js';
 import monitoringRouter from './routes/monitoring.js';
 import panoramaRouter from './routes/panorama.js';
 import recipesRouter from './routes/recipes.js';
+import remoteRouter from './routes/remote.js';
 import searchRouter from './routes/search.js';
 import signalsRouter from './routes/signals.js';
 import skillsRouter from './routes/skills.js';
+import taskRouter from './routes/task.js';
 import violationsRouter from './routes/violations.js';
+import wikiRouter from './routes/wiki.js';
 
 interface HttpServerConfig {
   port: number;
@@ -293,7 +297,7 @@ export class HttpServer {
       this.app.use(`${apiPrefix}/monitoring`, monitoringRouter);
     }
 
-    // Guard 检查路由
+    // Guard 实时检查路由（Extension DiagnosticCollection 调用）
     this.app.use(`${apiPrefix}/guard`, guardRouter);
 
     // Guard 合规报告路由
@@ -301,6 +305,9 @@ export class HttpServer {
 
     // 守护规则路由
     this.app.use(`${apiPrefix}/rules`, guardRuleRouter);
+
+    // TaskGraph 路由（Extension taskTool.ts 转发调用）
+    this.app.use(`${apiPrefix}/task`, taskRouter);
 
     // 搜索路由
     this.app.use(`${apiPrefix}/search`, searchRouter);
@@ -332,11 +339,20 @@ export class HttpServer {
     // Recipe 操作路由（关系发现等）
     this.app.use(`${apiPrefix}/recipes`, recipesRouter);
 
+    // Wiki 路由
+    this.app.use(`${apiPrefix}/wiki`, wikiRouter);
+
+    // Remote 路由（飞书 Bot → IDE 远程指令桥接）
+    this.app.use(`${apiPrefix}/remote`, remoteRouter);
+
     // Panorama 全景路由（项目结构 + 覆盖率 + 健康度）
     this.app.use(`${apiPrefix}/panorama`, panoramaRouter);
 
     // 进化路由（文件变更驱动 Recipe 修复/弃用）
     this.app.use(`${apiPrefix}/evolution`, evolutionRouter);
+
+    // 文件变更事件接收（领域无关，由 FileChangeDispatcher 分发）
+    this.app.use(`${apiPrefix}/file-changes`, fileChangesRouter);
 
     // 信号留痕 & 报告路由
     this.app.use(`${apiPrefix}/signals`, signalsRouter);

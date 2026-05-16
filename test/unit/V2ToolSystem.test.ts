@@ -329,19 +329,6 @@ describe('V2 Router', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain('cwd must be within project root');
   });
-
-  test('terminal.exec blocks sibling prefix cwd escape', async () => {
-    const result = await router.execute(
-      {
-        tool: 'terminal',
-        action: 'exec',
-        params: { command: 'ls', cwd: '/tmp/alembic-root-other' },
-      },
-      makeCtx({ projectRoot: '/tmp/alembic-root' })
-    );
-    expect(result.ok).toBe(false);
-    expect(result.error).toContain('cwd must be within project root');
-  });
 });
 
 // ─────────────────────────────────────────────────

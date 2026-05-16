@@ -1,12 +1,14 @@
 /**
  * SetupService — 项目初始化服务（V2 重构版）
  *
- * 初始化 Alembic 工作空间底座：
+ * 一键初始化 Alembic V2 工作空间，5 步完成：
  *
  *   Step 1  .asd/ 运行时目录 + config.json
  *   Step 2  Alembic/ 知识库目录结构 + Alembic/recipes/（有 --repo 则 clone，无则为普通目录）
- *   Step 3  SQLite 数据库 + Recipe 同步
- *   Step 4  向量索引
+ *   Step 3  IDE 集成（VSCode MCP + Cursor MCP + copilot-instructions + cursor-rules
+ *           + skills-template + cursor-workflow + claude-hooks + guard-ci + pre-commit-hook）
+ *   Step 4  SQLite 数据库 + V1 数据迁移
+ *   Step 5  平台相关初始化（macOS → Xcode Snippets）
  *
  * ═══════════════════════════════════════════════════════════
  *
@@ -29,7 +31,7 @@
  *
  * 数据流
  * ─────
- *   写入：编辑子仓库文件 → git push（需权限）→ 插件运行时同步 → 更新 DB 缓存
+ *   写入：编辑子仓库文件 → git push（需权限）→ alembic sync → 更新 DB 缓存
  *   读取：查询 SQLite（快速索引）
  *   核心数据（统一 Recipe 实体）修改必须经过 git，普通用户无法绕过
  *
@@ -64,13 +66,14 @@ import {
 import { ProjectRegistry } from '../shared/ProjectRegistry.js';
 import { PACKAGE_ROOT } from '../shared/package-root.js';
 import { WorkspaceResolver } from '../shared/WorkspaceResolver.js';
+import { FileDeployer } from './deploy/FileDeployer.js';
 
 /** Alembic 源码仓库根目录（定位 templates/ 等资源） */
 const REPO_ROOT = PACKAGE_ROOT;
 
 // ─────────────────────────────────────────────────────
 
-export type SetupProfile = 'codex-plugin' | 'headless';
+export type SetupProfile = 'full-ide' | 'codex-plugin' | 'headless';
 
 export class SetupService {
   force: boolean;
@@ -104,9 +107,9 @@ export class SetupService {
     projectRoot: string;
     force?: boolean;
     seed?: boolean;
-    /** 初始化 profile：codex-plugin 为 Codex 市场插件模式，headless 为插件共同底座 */
+    /** 初始化 profile：full-ide 为传统 IDE 交付，codex-plugin 为 Codex 市场插件模式 */
     profile?: SetupProfile;
-    /** 静默输出（用于 MCP/插件宿主需要结构化结果的场景） */
+    /** 静默输出（通常用于 JSON CLI） */
     quiet?: boolean;
     /** Ghost 模式：零项目侵入，数据外置到 ~/.asd/workspaces/ */
     ghost?: boolean;
@@ -119,7 +122,7 @@ export class SetupService {
     this.projectName = this.projectRoot.split('/').pop() || '';
     this.force = options.force || false;
     this.seed = options.seed || false;
-    this.profile = options.profile || 'headless';
+    this.profile = options.profile || 'full-ide';
     this.quiet = options.quiet || false;
     this.subRepoDir = options.subRepoDir || DEFAULT_SUB_REPO_DIR;
     this.subRepoUrl = options.subRepoUrl;
@@ -135,7 +138,7 @@ export class SetupService {
       throw new Error(
         `[SetupService] 检测到当前目录是排除项目（${exclusion.reason}），` +
           '拒绝执行 setup 以避免创建 .asd/ 和 Alembic/ 运行时数据。' +
-          '\n提示: 请由 IDE 插件传入真实用户项目目录，并优先使用 Ghost 模式初始化。'
+          '\n提示: 请在用户项目目录中运行 alembic setup，或使用 alembic setup --ghost。'
       );
     }
 
@@ -174,8 +177,13 @@ export class SetupService {
       { label: '创建运行时目录与配置', fn: () => this.stepRuntime() },
       { label: '初始化知识库与 recipes 子仓库', fn: () => this.stepCoreRepo() },
       { label: '初始化数据库', fn: () => this.stepDatabase() },
+      { label: '平台相关初始化', fn: () => this.stepPlatform() },
       { label: '初始化向量索引', fn: () => this.stepVectorIndex() },
     ];
+
+    if (this.profile === 'full-ide') {
+      steps.splice(2, 0, { label: '配置 IDE 集成', fn: () => this.stepIDE() });
+    }
 
     return steps;
   }
@@ -250,9 +258,9 @@ export class SetupService {
       console.log('    2. 非简单编码任务前使用 alembic_task(operation=prime)');
       console.log('    3. 写完后使用 alembic_guard 检查当前变更');
     } else {
-      console.log('    1. 由目标 IDE 插件启动 Alembic MCP 或 daemon');
-      console.log('    2. 首次使用前确认插件已传入准确的项目目录');
-      console.log('    3. 使用插件侧命令执行 bootstrap、rescan、guard 等能力');
+      console.log('    1. 运行 alembic ui 启动后台服务');
+      console.log('    2. 打开 IDE Agent Mode，告诉它「帮我冷启动」');
+      console.log('    3. 所有分析和知识提取都通过 IDE 完成，无需额外配置');
     }
     console.log('');
   }
@@ -574,7 +582,11 @@ export class SetupService {
           : [
               '## Recipes 知识库',
               '',
-              '`recipes/` 目录随主仓库提交。如需独立管理（团队权限控制），由 IDE 插件适配层提供 recipes 远端配置入口。',
+              '`recipes/` 目录随主仓库提交。如需独立管理（团队权限控制），运行：',
+              '',
+              '```bash',
+              'alembic remote <your-recipes-repo-url>',
+              '```',
             ]),
         '',
         '> 运行时缓存（DB 索引、Candidates、Snippets、审计日志）在 `.asd/alembic.db`。',
@@ -584,7 +596,26 @@ export class SetupService {
     );
   }
 
-  /* ═══ Step 3: 数据库初始化 ═══════════════════════════ */
+  /* ═══ Step 3: IDE 集成 ═══════════════════════════════ */
+
+  stepIDE() {
+    const deployer = new FileDeployer({
+      projectRoot: this.projectRoot,
+      force: this.force,
+      ghost: this.ghost,
+    });
+    const { deployed, skipped: _skipped, errors } = deployer.deployAll('setup');
+
+    if (errors.length > 0) {
+      for (const { id, error } of errors) {
+        console.error(`   ⚠ ${id}: ${error}`);
+      }
+    }
+
+    return { configured: deployed };
+  }
+
+  /* ═══ Step 4: 数据库初始化 ═══════════════════════════ */
 
   async stepDatabase() {
     const ConfigLoader = (await import('../infrastructure/config/ConfigLoader.js')).default;
@@ -659,6 +690,12 @@ export class SetupService {
 
     if (report.orphaned.length > 0) {
     }
+  }
+
+  /* ═══ Step 5: Snippet 初始化 (已移除 — AI-first 迁移) ═════ */
+
+  async stepPlatform() {
+    return { skipped: true };
   }
 
   /* ═══ Helpers ════════════════════════════════════════ */
@@ -750,7 +787,7 @@ export class SetupService {
 
   /**
    * 尝试初始化向量索引: 检查 embedding provider 可用性，
-   * 若可用则自动构建初始索引；否则返回插件宿主可展示的提示。
+   * 若可用则自动构建初始索引；否则提示用户手动运行 alembic embed。
    *
    * 此步骤为 best-effort: 失败不阻塞 setup 流程。
    */
@@ -764,7 +801,7 @@ export class SetupService {
         return {
           status: 'skipped',
           reason: 'vectorService 未注册（AI Provider 未配置或容器未完全初始化）',
-          hint: '在插件宿主中配置 embedding provider 后重新执行初始化或索引构建',
+          hint: '运行 `alembic embed` 构建语义向量索引',
         };
       }
 
@@ -777,7 +814,7 @@ export class SetupService {
         return {
           status: 'skipped',
           reason: '未配置 AI API Key',
-          hint: '配置 API Key 后由插件宿主触发向量索引构建',
+          hint: '配置 API Key 后运行 `alembic embed` 启用语义搜索',
         };
       }
 
@@ -802,7 +839,7 @@ export class SetupService {
       return {
         status: 'warning',
         error: err instanceof Error ? err.message : String(err),
-        hint: '可由插件宿主重新触发向量索引构建',
+        hint: '运行 `alembic embed` 手动构建向量索引',
       };
     }
   }

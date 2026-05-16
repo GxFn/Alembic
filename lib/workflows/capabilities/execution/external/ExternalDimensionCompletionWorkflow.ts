@@ -285,15 +285,16 @@ export async function runExternalDimensionCompletionWorkflow(
     dependencies,
   });
 
-  if (isComplete) {
-    await (dependencies.runCompletionFinalizer ?? runWorkflowCompletionFinalizer)({
-      ctx,
-      session: session.value,
-      dataRoot,
-      log: logger,
-      dependencies: dependencies.finalizerDependencies,
-    });
-  }
+  const completionFinalizer = isComplete
+    ? await (dependencies.runCompletionFinalizer ?? runWorkflowCompletionFinalizer)({
+        ctx,
+        session: session.value,
+        projectRoot,
+        dataRoot,
+        log: logger,
+        dependencies: dependencies.finalizerDependencies,
+      })
+    : { deliveryVerification: null, semanticMemoryResult: null };
 
   if (input.value.crossDimensionHints) {
     session.value.storeHints(input.value.dimensionId, input.value.crossDimensionHints);
@@ -334,6 +335,7 @@ export async function runExternalDimensionCompletionWorkflow(
       qualityFeedback,
       evidenceHints,
       subpackageCoverageWarning,
+      deliveryVerification: isComplete ? completionFinalizer.deliveryVerification : undefined,
       nextActions: isComplete ? BOOTSTRAP_COMPLETE_ACTIONS : undefined,
     },
     meta: {

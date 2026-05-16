@@ -129,10 +129,10 @@ export function evaluateTerminalCommandPolicy(
       preview
     );
   }
-  if (sensitiveEnvKeys(input.env).length > 0) {
+  if (input.session.envPersistence === 'explicit' && sensitiveEnvKeys(input.env).length > 0) {
     return deny(
-      'Sensitive-looking environment variables cannot be passed to terminal_run',
-      'sensitive-env-key',
+      'Sensitive-looking environment variables cannot be persisted in terminal sessions',
+      'env-persistence-sensitive-key',
       'high',
       preview
     );

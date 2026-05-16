@@ -541,6 +541,7 @@ const IGNORED_DIRS = new Set([
   '.gradle',
   'DerivedData',
   '.idea',
+  '.vscode',
   'coverage',
   '.turbo',
   'Packages',
@@ -562,7 +563,7 @@ async function buildDirectoryTree(
   const files: string[] = [];
 
   for (const entry of entries) {
-    if (entry.name.startsWith('.')) {
+    if (entry.name.startsWith('.') && entry.name !== '.env.example') {
       continue;
     }
     if (entry.isDirectory()) {

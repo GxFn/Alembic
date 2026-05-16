@@ -92,7 +92,7 @@ export class KnowledgeEntry {
   difficulty: string | null;
   tags: string[];
 
-  // IDE plugin adapter fields
+  // Cursor delivery fields
   trigger: string;
   topicHint: string;
   whenClause: string;
@@ -159,7 +159,7 @@ export class KnowledgeEntry {
     this.difficulty = props.difficulty || null;
     this.tags = props.tags || [];
 
-    // ── 插件适配字段（AI 直接产出）──
+    // ── Cursor 交付字段（AI 直接产出）──
     this.trigger = props.trigger || '';
     this.topicHint = props.topicHint || '';
     this.whenClause = props.whenClause || '';

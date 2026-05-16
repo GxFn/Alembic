@@ -6,7 +6,7 @@
  *
  * 职责：
  *   - 维度完成状态跟踪
- *   - Phase 缓存（供 dimension_complete 复用）
+ *   - Phase 缓存（供 wiki_plan 复用）
  *   - EpisodicMemory 管理
  *   - Cross-dimension hints 收集与分发
  *   - 进度查询
@@ -86,7 +86,7 @@ export class BootstrapSession {
     /** 外部 Agent 提交追踪 (v2: 对标内部 Agent 的 EvidenceCollector) */
     this.submissionTracker = new ExternalSubmissionTracker();
 
-    /** Phase 1-4 分析结果缓存，供后续维度完成流程复用 */
+    /** Phase 1-4 分析结果缓存，供 wiki_plan 复用 */
     this.snapshotCache = null;
 
     /** 跨维度 hints 收集 */
@@ -220,7 +220,7 @@ export class BootstrapSession {
     this.snapshotCache = cache;
   }
 
-  /** 获取 Snapshot 缓存（dimension-complete 复用） */
+  /** 获取 Snapshot 缓存（wiki_plan / dimension-complete 复用） */
   getSnapshotCache() {
     return this.snapshotCache;
   }

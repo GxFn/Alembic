@@ -46,9 +46,22 @@ export interface ServiceContainerLike extends CompletionContainerLike {
   singletons?: Record<string, unknown>;
 }
 
+export interface DeliveryPipelineLike {
+  deliver(): Promise<{
+    channelA?: { rulesCount?: number };
+    channelB?: { topicCount?: number };
+    channelC?: { synced?: number };
+    channelF?: { filesWritten?: number };
+  }>;
+}
+
 export interface PanoramaServiceLike {
   rescan(): Promise<void>;
   getOverview(): Promise<{ moduleCount: number; gapCount: number }>;
+}
+
+export interface WikiGeneratorLike {
+  generate(): Promise<Record<string, unknown>>;
 }
 
 export type LoadServiceContainer = () => Promise<ServiceContainerLike> | ServiceContainerLike;
@@ -67,6 +80,8 @@ export interface WorkflowCompletionFinalizerDependencies {
 export type WorkflowSemanticMemoryMode = 'scheduled' | 'immediate' | 'skip';
 
 export interface WorkflowCompletionStepOptions {
+  delivery?: 'run' | 'skip';
+  wiki?: 'schedule' | 'skip';
   panorama?: 'run' | 'skip';
 }
 
@@ -77,7 +92,12 @@ export interface WorkflowSemanticMemoryConsolidationResult {
 }
 
 export interface WorkflowCompletionFinalizerResult {
+  deliveryVerification:
+    | import('#service/bootstrap/DeliveryVerifier.js').DeliveryVerification
+    | null;
   semanticMemoryResult: WorkflowSemanticMemoryConsolidationResult | null;
+  deliveryStatus?: WorkflowCompletionStepStatus;
+  wikiStatus?: WorkflowCompletionStepStatus;
   panoramaStatus?: WorkflowCompletionStepStatus;
 }
 
@@ -87,6 +107,13 @@ export interface WorkflowCompletionSummary {
   mode: 'bootstrap' | 'rescan';
   isolation: 'full-completion' | 'pipeline-isolation';
   reason?: string;
+  delivery: {
+    status: WorkflowCompletionStepStatus;
+    verification?: WorkflowCompletionFinalizerResult['deliveryVerification'];
+  };
+  wiki: {
+    status: WorkflowCompletionStepStatus;
+  };
   semanticMemory: {
     status: WorkflowCompletionStepStatus;
     result?: WorkflowSemanticMemoryConsolidationResult | null;

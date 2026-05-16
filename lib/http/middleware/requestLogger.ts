@@ -29,6 +29,7 @@ const SILENT_PATHS = [
   '/api/health',
   '/api/realtime/events',
   '/api/sse',
+  '/api/v1/remote/wait',
   '/socket.io',
 ];
 

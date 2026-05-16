@@ -1,22 +1,25 @@
 import React, { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
-import { X, Send, Brain, Loader2, Check, RotateCcw, ChevronRight, ArrowRight, Sparkles, X as XIcon } from 'lucide-react';
+import { MessageSquare, X, Send, Brain, Loader2, Check, RotateCcw, ChevronRight, ArrowRight, Sparkles, Plus, X as XIcon } from 'lucide-react';
 import MarkdownWithHighlight from './MarkdownWithHighlight';
 import api from '../../api';
 import { notify } from '../../utils/notification';
 import { KnowledgeEntry } from '../../types';
+import { useChatTopics, type ChatMessage } from '../../hooks/useChatTopics';
+import { createStreamEventHandler } from '../../hooks/useChatStream';
 import { useI18n } from '../../i18n';
 import { getErrorMessage, isAbortError } from '../../utils/error';
 
 /* ═══════════════════════════════════════════════════════════
- * GlobalChatDrawer — 候选润色面板（同层内联面板）
+ * GlobalChatDrawer — 常驻 AI Chat（同层内联面板）
  *
  * 布局方式：
  *   App.tsx 中 flex 并列: <Sidebar> | <main> | <GlobalChatPanel>
- *   打开时 main 被压缩，面板同层占位，不覆盖任何内容
+ *   打开时 main 被压缩，ChatPanel 同层占位，不覆盖任何内容
  *
  * 通过 GlobalChatContext 提供全局 API:
+ *   - openChat()        — 打开通用对话
  *   - openRefine(...)   — 打开润色模式
- *   - close()
+ *   - close() / toggle()
  *   - isOpen
  * ═══════════════════════════════════════════════════════════ */
 
@@ -47,20 +50,26 @@ interface RefineContext {
 }
 
 interface GlobalChatAPI {
+  openChat: () => void;
   openRefine: (ctx: {
     candidateIds: string[];
     candidates: KnowledgeEntry[];
     onCandidateUpdated?: (candidateId: string) => void;
   }) => void;
   close: () => void;
+  toggle: () => void;
+  newTopic: () => void;
   isOpen: boolean;
 }
 
 // ─── Context ────────────────────────────────────────────
 
 const GlobalChatContext = createContext<GlobalChatAPI>({
+  openChat: () => {},
   openRefine: () => {},
   close: () => {},
+  toggle: () => {},
+  newTopic: () => {},
   isOpen: false,
 });
 
@@ -181,6 +190,7 @@ interface ChatInternalState {
   setApplied: React.Dispatch<React.SetStateAction<Set<string>>>;
   lastPrompt: string;
   setLastPrompt: React.Dispatch<React.SetStateAction<string>>;
+  chatHistoryRef: React.MutableRefObject<{ role: string; content: string }[]>;
   isRefineMode: boolean;
   currentRefineId: string | null;
   currentRefineCandidate: KnowledgeEntry | undefined;
@@ -190,7 +200,7 @@ interface ChatInternalState {
 
 const ChatStateContext = createContext<ChatInternalState>(null!);
 
-/** 供候选润色面板共享内部状态 */
+/** 供 AiChatView 等外部组件共享聊天内部状态 */
 export const useChatState = () => useContext(ChatStateContext);
 
 // ─── Provider（仅管理状态，不渲染面板） ──────────────────
@@ -205,6 +215,7 @@ export const GlobalChatProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [refineCtx, setRefineCtx] = useState<RefineContext | null>(null);
   const [applied, setApplied] = useState<Set<string>>(new Set());
   const [lastPrompt, setLastPrompt] = useState('');
+  const chatHistoryRef = useRef<{ role: string; content: string }[]>([]);
 
   const isRefineMode = !!refineCtx;
   const currentRefineId = refineCtx ? refineCtx.candidateIds[refineCtx.currentIdx] : null;
@@ -222,16 +233,21 @@ export const GlobalChatProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   }, [refineCtx?.currentIdx]);
 
+  const openChat = useCallback(() => { setRefineCtx(null); setIsOpen(true); }, []);
   const openRefine = useCallback((ctx: { candidateIds: string[]; candidates: KnowledgeEntry[]; onCandidateUpdated?: (id: string) => void }) => {
-    setRefineCtx({ ...ctx, currentIdx: 0 }); setApplied(new Set()); setMessages([]); setIsOpen(true);
+    setRefineCtx({ ...ctx, currentIdx: 0 }); setApplied(new Set()); setMessages([]); chatHistoryRef.current = []; setIsOpen(true);
   }, []);
   const close = useCallback(() => setIsOpen(false), []);
+  const toggle = useCallback(() => setIsOpen(prev => !prev), []);
+  const newTopic = useCallback(() => {
+    setMessages([]); chatHistoryRef.current = []; setLastPrompt(''); setRefineCtx(null); setApplied(new Set());
+  }, []);
 
-  const ctxValue: GlobalChatAPI = { openRefine, close, isOpen };
+  const ctxValue: GlobalChatAPI = { openChat, openRefine, close, toggle, newTopic, isOpen };
   const internalState: ChatInternalState = {
     messages, setMessages, loading, setLoading, applying, setApplying,
     refineCtx, setRefineCtx, applied, setApplied, lastPrompt, setLastPrompt,
-    isRefineMode, currentRefineId, currentRefineCandidate, isBatchRefine, close,
+    chatHistoryRef, isRefineMode, currentRefineId, currentRefineCandidate, isBatchRefine, close,
   };
 
   return (
@@ -246,17 +262,50 @@ export const GlobalChatProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 // ─── GlobalChatPanel — 内联面板（App.tsx flex 同层） ─────
 
 export const GlobalChatPanel: React.FC = () => {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const s = useContext(ChatStateContext);
   const {
     messages, setMessages, loading, setLoading, applying, setApplying,
     refineCtx, setRefineCtx, applied, setApplied, lastPrompt, setLastPrompt,
-    isRefineMode, currentRefineId, currentRefineCandidate, isBatchRefine, close,
+    chatHistoryRef, isRefineMode, currentRefineId, currentRefineCandidate, isBatchRefine, close,
   } = s;
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [input, setInput] = useState('');
+
+  // ── 话题持久化（润色 & 通用对话共用） ──
+  const topicsMgr = useChatTopics();
+  const panelTopicIdRef = useRef<string | null>(null);
+  const isSwitchingRef = useRef(false);
+
+  // 润色模式进入时自动创建话题
+  useEffect(() => {
+    if (isRefineMode && currentRefineCandidate) {
+      isSwitchingRef.current = true;
+      const id = topicsMgr.createTopic(t('globalChat.refineTopicPrefix', { title: currentRefineCandidate.title || t('globalChat.untitled') }));
+      panelTopicIdRef.current = id;
+      setTimeout(() => { isSwitchingRef.current = false; }, 50);
+    }
+  }, [refineCtx]);
+
+  // 消息变化时自动保存到当前话题
+  useEffect(() => {
+    if (isSwitchingRef.current) return;
+    if (panelTopicIdRef.current && messages.length > 0) {
+      topicsMgr.saveTopic(panelTopicIdRef.current, messages as unknown as ChatMessage[]);
+    }
+  }, [messages]);
+
+  // 通用对话首次发送时自动创建话题
+  const ensurePanelTopic = useCallback(() => {
+    if (!panelTopicIdRef.current) {
+      isSwitchingRef.current = true;
+      const id = topicsMgr.createTopic();
+      panelTopicIdRef.current = id;
+      setTimeout(() => { isSwitchingRef.current = false; }, 50);
+    }
+  }, [topicsMgr]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 200); }, []);
@@ -288,47 +337,90 @@ export const GlobalChatPanel: React.FC = () => {
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || loading) return;
-    if (!isRefineMode || !currentRefineId) return;
+
+    // 通用对话首次发送时自动创建话题
+    if (!isRefineMode) ensurePanelTopic();
 
     setInput('');
     setMessages(prev => [...prev, { id: uid(), role: 'user', content: text, timestamp: Date.now() }]);
     setLoading(true);
 
-    setLastPrompt(text);
-    const assistantId = uid();
-    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: t('globalChat.system.refining'), timestamp: Date.now() }]);
+    if (isRefineMode && currentRefineId) {
+      // ── 润色模式 — 统一协议 v2 ──
+      setLastPrompt(text);
+      const assistantId = uid();
+      // 插入一个进度消息
+      setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: t('globalChat.system.refining'), timestamp: Date.now() }]);
 
-    const abort = new AbortController();
-    abortRef.current = abort;
+      const abort = new AbortController();
+      abortRef.current = abort;
 
-    try {
-      const result = await api.refinePreviewStream(currentRefineId, text, (evt) => {
-        if (evt.type === 'data:progress') {
-          const msg = evt.message || evt.stage || t('globalChat.system.processing');
-          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: `🔄 ${msg}` } : m));
+      try {
+        const result = await api.refinePreviewStream(currentRefineId, text, (evt) => {
+          if (evt.type === 'data:progress') {
+            // 更新进度提示
+            const msg = evt.message || evt.stage || t('globalChat.system.processing');
+            setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: `🔄 ${msg}` } : m));
+          }
+        }, abort.signal);
+
+        // 完成：用结构化 diff 替换消息
+        const before = result.before || (currentRefineCandidate ? extractBefore(currentRefineCandidate) : {});
+        const diff = buildDiffFields(before, result.after || {}, t);
+        setMessages(prev => prev.map(m => m.id === assistantId ? {
+          ...m,
+          content: diff.length > 0 ? t('globalChat.previewGenerated', { count: diff.length }) : t('globalChat.noChangeHint'),
+          diff: diff.length > 0 ? diff : undefined,
+          preview: diff.length > 0 ? result.preview ?? undefined : undefined,
+          excludedFields: [],
+        } : m));
+      } catch (err: unknown) {
+        if (isAbortError(err)) {
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: t('globalChat.system.cancelled') } : m));
+        } else {
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: t('globalChat.refinePreviewFailed', { error: getErrorMessage(err) }) } : m));
         }
-      }, abort.signal);
-
-      const before = result.before || (currentRefineCandidate ? extractBefore(currentRefineCandidate) : {});
-      const diff = buildDiffFields(before, result.after || {}, t);
-      setMessages(prev => prev.map(m => m.id === assistantId ? {
-        ...m,
-        content: diff.length > 0 ? t('globalChat.previewGenerated', { count: diff.length }) : t('globalChat.noChangeHint'),
-        diff: diff.length > 0 ? diff : undefined,
-        preview: diff.length > 0 ? result.preview ?? undefined : undefined,
-        excludedFields: [],
-      } : m));
-    } catch (err: unknown) {
-      if (isAbortError(err)) {
-        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: t('globalChat.system.cancelled') } : m));
-      } else {
-        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: t('globalChat.refinePreviewFailed', { error: getErrorMessage(err) }) } : m));
+      } finally {
+        abortRef.current = null;
       }
-    } finally {
-      abortRef.current = null;
-      setLoading(false);
+    } else {
+      // ── 通用对话 — 统一协议 v2: 状态机驱动 ──
+      chatHistoryRef.current.push({ role: 'user', content: text });
+      const assistantId = uid();
+      setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: t('globalChat.system.thinking'), timestamp: Date.now() }]);
+
+      const abort = new AbortController();
+      abortRef.current = abort;
+
+      const { onEvent, getState } = createStreamEventHandler(assistantId, setMessages, t);
+      let answerText = '';
+
+      try {
+        const result = await api.chatStream(text, chatHistoryRef.current, (evt) => {
+          onEvent(evt);
+          answerText = getState().answerText;
+        }, abort.signal, lang);
+
+        // 确保最终内容是完整的回答
+        const finalText = result.text || answerText;
+        chatHistoryRef.current.push({ role: 'model', content: finalText });
+        // 最终只保留回答文本
+        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: finalText } : m));
+      } catch (err: unknown) {
+        if (isAbortError(err)) {
+          const { answerText: partialText, toolLogs } = getState();
+          const partial = partialText || (toolLogs.length > 0 ? toolLogs.join('\n') + '\n\n' + t('globalChat.system.cancelled') : t('globalChat.system.cancelled'));
+          if (partialText) chatHistoryRef.current.push({ role: 'model', content: partialText });
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: partial } : m));
+        } else {
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: t('globalChat.requestFailed', { error: getErrorMessage(err) }) } : m));
+        }
+      } finally {
+        abortRef.current = null;
+      }
     }
-  }, [input, loading, isRefineMode, currentRefineId, currentRefineCandidate, t, setMessages, setLastPrompt, setLoading]);
+    setLoading(false);
+  }, [input, loading, isRefineMode, currentRefineId, currentRefineCandidate, ensurePanelTopic]);
 
   const handleRefineAccept = useCallback(async () => {
     if (applying || !currentRefineId || !refineCtx) return;
@@ -363,6 +455,7 @@ export const GlobalChatPanel: React.FC = () => {
   }, [refineCtx]);
 
   const handleExitRefine = useCallback(() => {
+    panelTopicIdRef.current = null;
     setRefineCtx(null);
     setMessages(prev => [...prev, { id: uid(), role: 'system', content: t('globalChat.system.exitedRefine'), timestamp: Date.now() }]);
   }, []);
@@ -377,11 +470,11 @@ export const GlobalChatPanel: React.FC = () => {
       <div className="px-4 h-[var(--topbar-height)] border-b border-[var(--border-default)] flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 flex items-center justify-center">
-            <Sparkles className="text-emerald-500" size={16} />
+            {isRefineMode ? <Sparkles className="text-emerald-500" size={16} /> : <MessageSquare className="text-blue-600" size={16} />}
           </div>
           <div>
             <h3 className="text-[13px] font-bold text-[var(--fg-primary)] flex items-center gap-2">
-              {t('globalChat.refineTitle')}
+              {isRefineMode ? t('globalChat.refineTitle') : t('globalChat.chatTitle')}
               {isRefineMode && isBatchRefine && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-medium">
                   {(refineCtx?.currentIdx ?? 0) + 1}/{refineCtx?.candidateIds.length}
@@ -389,13 +482,19 @@ export const GlobalChatPanel: React.FC = () => {
               )}
             </h3>
             <p className="text-[10px] text-[var(--fg-muted)] truncate max-w-[250px]">
-              {currentRefineCandidate?.title || t('globalChat.refineSubtitle')}
+              {isRefineMode ? currentRefineCandidate?.title || t('globalChat.refineSubtitle') : t('globalChat.chatSubtitle')}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-1">
           {isRefineMode && (
             <button onClick={handleExitRefine} className="px-2 py-1 text-[10px] font-medium text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] hover:bg-[var(--bg-subtle)] rounded-md transition-colors">{t('globalChat.exitRefine')}</button>
+          )}
+          {!isRefineMode && messages.length > 0 && (
+            <button onClick={() => { panelTopicIdRef.current = null; setMessages([]); chatHistoryRef.current = []; setLastPrompt(''); }}
+              className="p-1.5 hover:bg-[var(--bg-subtle)] rounded-lg transition-colors" title={t('globalChat.newTopic')}>
+              <Plus size={16} className="text-[var(--fg-muted)]" />
+            </button>
           )}
           <button onClick={close} className="p-1.5 hover:bg-[var(--bg-subtle)] rounded-lg transition-colors" title={t('globalChat.closeChat')}>
             <X size={16} className="text-[var(--fg-muted)]" />
@@ -417,6 +516,22 @@ export const GlobalChatPanel: React.FC = () => {
 
       {/* 消息区域 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 scrollbar-light">
+        {messages.length === 0 && !isRefineMode && (
+          <div className="flex flex-col items-center justify-center h-full text-center py-10">
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mb-3">
+              <MessageSquare className="text-blue-500" size={20} />
+            </div>
+            <h4 className="text-sm font-bold text-[var(--fg-primary)] mb-1">{t('globalChat.emptyTitle')}</h4>
+            <p className="text-xs text-[var(--fg-muted)] max-w-[280px] leading-relaxed mb-3">{t('globalChat.emptyDesc')}</p>
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {[t('globalChat.quickPrompts.analyzeArch'), t('globalChat.quickPrompts.findDuplicates'), t('globalChat.quickPrompts.suggestOptimize')].map(p => (
+                <button key={p} onClick={() => { setInput(p); inputRef.current?.focus(); }}
+                  className="text-[10px] px-2.5 py-1 rounded-md bg-[var(--bg-subtle)] text-[var(--fg-secondary)] hover:bg-blue-50 hover:text-blue-700 transition-colors">{p}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* 润色模式预设指令建议 */}
         {isRefineMode && messages.length <= 1 && (
           <div className="flex flex-wrap gap-1.5 mt-2">
@@ -444,9 +559,9 @@ export const GlobalChatPanel: React.FC = () => {
             }`}>
               {msg.role === 'assistant' && (
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <Brain size={12} className="text-emerald-500" />
-                  <span className="text-[10px] font-bold text-emerald-600">
-                    {t('globalChat.assistantRefine')}
+                  <Brain size={12} className={isRefineMode ? 'text-emerald-500' : 'text-blue-500'} />
+                  <span className={`text-[10px] font-bold ${isRefineMode ? 'text-emerald-600' : 'text-blue-600'}`}>
+                    {isRefineMode ? t('globalChat.assistantRefine') : t('globalChat.assistantChat')}
                   </span>
                 </div>
               )}
@@ -470,8 +585,8 @@ export const GlobalChatPanel: React.FC = () => {
           <div className="flex justify-start">
             <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-2xl rounded-tl-md px-3.5 py-2.5 shadow-sm">
               <div className="flex items-center gap-2">
-                <Loader2 size={12} className="animate-spin text-emerald-500" />
-                <span className="text-xs text-[var(--fg-secondary)]">{t('globalChat.loading.analyzing')}</span>
+                <Loader2 size={12} className={`animate-spin ${isRefineMode ? 'text-emerald-500' : 'text-blue-500'}`} />
+                <span className="text-xs text-[var(--fg-secondary)]">{isRefineMode ? t('globalChat.loading.analyzing') : t('globalChat.loading.thinking')}</span>
                 {abortRef.current && (
                   <button onClick={() => abortRef.current?.abort()}
                     className="ml-1 px-1.5 py-0.5 text-[10px] font-bold text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors">
@@ -524,16 +639,21 @@ export const GlobalChatPanel: React.FC = () => {
       <div className="px-4 py-2.5 border-t border-[var(--border-default)] bg-[var(--bg-surface)] shrink-0">
         <div className="flex gap-2">
           <textarea ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
-            placeholder={t('globalChat.refinePlaceholder')} rows={2}
-            className="flex-1 px-3 py-2 text-sm border border-[var(--border-default)] rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 resize-none placeholder:text-[var(--fg-muted)]"
+            placeholder={isRefineMode ? t('globalChat.refinePlaceholder') : t('globalChat.chatPlaceholder')} rows={2}
+            className={`flex-1 px-3 py-2 text-sm border border-[var(--border-default)] rounded-xl focus:outline-none focus:ring-2 ${
+              isRefineMode ? 'focus:ring-emerald-200 focus:border-emerald-400' : 'focus:ring-blue-200 focus:border-blue-400'
+            } resize-none placeholder:text-[var(--fg-muted)]`}
             disabled={loading || applying} />
           <button onClick={handleSend} disabled={!input.trim() || loading || applying}
-            className="self-stretch w-9 flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm shrink-0">
+            className={`self-stretch w-9 flex items-center justify-center rounded-xl bg-gradient-to-r ${
+              isRefineMode ? 'from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700'
+                : 'from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700'
+            } text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm shrink-0`}>
             <Send size={14} />
           </button>
         </div>
         <p className="text-[9px] text-[var(--fg-muted)] mt-1">
-          {t('globalChat.inputHintRefine')}
+          {isRefineMode ? t('globalChat.inputHintRefine') : t('globalChat.inputHintChat')}
         </p>
       </div>
     </aside>

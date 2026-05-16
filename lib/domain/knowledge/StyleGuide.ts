@@ -30,15 +30,15 @@ knowledge({ action: "submit" }) 的 content.markdown 字段必须是「项目特
 - 不要纯代码罗列，必须有项目上下文
 - 标题和正文中不得出现 "Agent" 字样`;
 
-// ── 插件适配字段规范（从 FieldSpec 自动生成） ────────────
+// ── Cursor 交付字段规范（从 FieldSpec 自动生成） ────────────
 
-/** 生成插件适配字段规范文本（供 Producer STYLE_GUIDE 和 MissionBriefing 使用） */
-export function getAgentAdapterFieldSpec() {
+/** 生成 Cursor 交付字段规范文本（供 Producer STYLE_GUIDE 和 MissionBriefing 使用） */
+export function getCursorDeliverySpec() {
   const required: string[] = [];
   const expected: string[] = [];
 
   for (const field of V3_FIELD_SPEC) {
-    // 跳过嵌套字段和非插件适配字段容器
+    // 跳过嵌套字段和非 Cursor 交付字段容器
     if (field.name.includes('.')) {
       continue;
     }
@@ -84,17 +84,17 @@ export function getAgentAdapterFieldSpec() {
   return parts.join('\n');
 }
 
-/** 构建完整的 Producer STYLE_GUIDE（合并项目特写要求 + 插件适配字段规范） */
+/** 构建完整的 Producer STYLE_GUIDE（合并项目特写要求 + Cursor 交付字段规范） */
 export function buildProducerStyleGuide() {
   return [
     PROJECT_SNAPSHOT_STYLE_GUIDE,
     '',
-    '## 插件适配字段（每个 knowledge 提交必须附带）',
+    '## Cursor 交付字段（每个 knowledge 提交必须附带）',
     '',
-    '每个候选必须提供以下字段，供各 IDE 插件生成宿主侧规则、提示或上下文摘要。',
+    '每个候选必须提供以下交付字段，它们直接决定在 Cursor IDE 中作为 Rules 的展示质量。',
     '注意：language / dimensionId / category / knowledgeType / source 由系统自动设置，无需填写。',
     '',
-    getAgentAdapterFieldSpec(),
+    getCursorDeliverySpec(),
   ].join('\n');
 }
 

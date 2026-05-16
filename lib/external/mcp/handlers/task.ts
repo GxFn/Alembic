@@ -11,6 +11,7 @@
  * Architecture: Zero DB. Pure memory (IntentState) + SignalBus → JSONL signals.
  */
 
+import { notifyTaskProgress } from '#infra/notification/LarkNotifier.js';
 import type { SignalBus } from '#infra/signal/SignalBus.js';
 import type { ExtractedIntent } from '#service/task/IntentExtractor.js';
 import { extract as extractIntent } from '#service/task/IntentExtractor.js';
@@ -114,6 +115,13 @@ export async function taskHandler(ctx: McpContext, args: TaskArgs) {
       });
   }
 
+  // ── Lark notification (async, non-blocking) ──
+  notifyTaskProgress(args.operation!, args, result).catch((err: unknown) => {
+    process.stderr.write(
+      `[MCP/Task] Notify error: ${err instanceof Error ? err.message : String(err)}\n`
+    );
+  });
+
   return result;
 }
 
@@ -178,7 +186,7 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
     ctx.session.intent = freshIntent;
   }
 
-  // ─── Build response ───
+  // ─── Delivery: build response ───
   const relatedCount = searchResult?.relatedKnowledge.length ?? 0;
   const ruleCount = searchResult?.guardRules.length ?? 0;
 

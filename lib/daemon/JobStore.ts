@@ -25,20 +25,12 @@ export interface DaemonJobRecord {
   kind: DaemonJobKind;
   status: DaemonJobStatus;
   source: DaemonJobSource;
-  actor?: {
-    role?: string;
-    user?: string;
-  };
-  channelId?: string;
-  client?: string;
-  createdByTool?: string;
   projectRoot: string;
   dataRoot: string;
   projectId: string | null;
   request: Record<string, unknown>;
   result?: unknown;
   error?: DaemonJobError;
-  sessionId?: string;
   bootstrapSessionId?: string;
   createdAt: string;
   updatedAt: string;
@@ -51,13 +43,8 @@ export interface JobStoreOptions {
 }
 
 export interface CreateDaemonJobInput {
-  actor?: DaemonJobRecord['actor'];
-  channelId?: string;
-  client?: string;
-  createdByTool?: string;
   kind: DaemonJobKind;
   request?: Record<string, unknown>;
-  sessionId?: string;
   source?: DaemonJobSource;
 }
 
@@ -104,15 +91,10 @@ export class JobStore {
       kind: input.kind,
       status: 'queued',
       source: input.source || 'system',
-      actor: input.actor,
-      channelId: input.channelId,
-      client: input.client,
-      createdByTool: input.createdByTool,
       projectRoot: this.projectRoot,
       dataRoot: this.dataRoot,
       projectId: this.projectId,
       request: input.request || {},
-      sessionId: input.sessionId,
       createdAt: now,
       updatedAt: now,
     };

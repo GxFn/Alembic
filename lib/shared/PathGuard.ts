@@ -12,6 +12,9 @@
  *    项目内作用域检查，仅允许写入以下前缀：
  *      .asd/     — 运行时 DB、记忆、对话、信号快照
  *      {kbDir}/          — 知识库（recipes、candidates、skills、guard 文件）
+ *      .cursor/          — Cursor IDE 集成
+ *      .vscode/          — VSCode 集成
+ *      .github/          — Copilot instructions
  *      .gitignore        — 追加忽略规则
  *    项目内其他位置（如 data/、src/ 等）一律拦截
  *
@@ -61,10 +64,13 @@ export class PathGuardError extends Error {
  */
 const PROJECT_WRITE_SCOPE_PREFIXES = [
   '.asd', // 运行时 DB、记忆、对话、信号快照
+  '.cursor', // Cursor IDE 集成
+  '.vscode', // VSCode 集成
+  '.github', // Copilot instructions
 ];
 
 /** 项目根目录下允许直接写入的文件（非目录前缀匹配） */
-const PROJECT_ROOT_WRITABLE_FILES = ['.gitignore'];
+const PROJECT_ROOT_WRITABLE_FILES = ['.gitignore', '.env'];
 
 class PathGuard {
   targetPath: string | undefined;
@@ -244,6 +250,12 @@ class PathGuard {
           this.#projectRoot!,
           `排除项目保护 (${this.#excludeReason}): 禁止创建 ${kbDir}/ 知识库数据`
         );
+      }
+      // 排除项目内仍允许写入 .cursor/.vscode/.github 等 IDE 配置
+      for (const prefix of PROJECT_WRITE_SCOPE_PREFIXES) {
+        if (prefix !== '.asd' && firstSegment === prefix) {
+          return;
+        }
       }
       if (PROJECT_ROOT_WRITABLE_FILES.includes(relative)) {
         return;

@@ -30,7 +30,7 @@ export class BootstrapProduce extends CapabilityV2 {
 2. 项目特写风格的正文 (content.markdown ≥200字)
 3. 设计原理说明 (content.rationale)
 4. 正确的 kind (rule / pattern / fact)
-5. 完整的 插件适配字段 (trigger, whenClause, doClause)
+5. 完整的 Cursor 交付字段 (trigger, whenClause, doClause)
 
 工作流:
 1. memory.recall 获取分析阶段的发现

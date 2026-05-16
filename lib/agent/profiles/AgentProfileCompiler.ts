@@ -111,7 +111,7 @@ export class AgentProfileCompiler {
     context?: AgentRunContext
   ): CompiledAgentProfile {
     const params = mergeParams(defaultParamsForProfile(definition.id), inputParams);
-    const actionSpace = resolveActionSpace(definition);
+    const actionSpace = resolveActionSpace(definition, params);
     const strategy = compileStrategy(definition.strategy, {
       params,
       context: context as unknown as Record<string, unknown>,
@@ -204,7 +204,10 @@ function additionalToolsFromActionSpace(actionSpace: AgentActionSpace) {
   return [...actionSpace.toolIds];
 }
 
-function resolveActionSpace(definition: AgentProfileDefinition) {
+function resolveActionSpace(definition: AgentProfileDefinition, params: Record<string, unknown>) {
+  if (definition.id === 'signal-analysis' && params.mode === 'auto') {
+    return { mode: 'listed' as const, toolIds: ['suggest_skills', 'create_skill'] };
+  }
   return definition.defaults?.actionSpace || { mode: 'listed' as const, toolIds: [] };
 }
 
@@ -279,7 +282,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function serviceKindForPreset(preset: string): CompiledAgentProfile['serviceKind'] {
-  if (preset === 'chat') {
+  if (preset === 'remote-exec') {
+    return 'remote-operation';
+  }
+  if (preset === 'chat' || preset === 'lark') {
     return 'conversation';
   }
   if (preset === 'evolution') {

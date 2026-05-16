@@ -4,13 +4,14 @@
  * 负责注册:
  *   - recipeParser, recipeCandidateValidator
  *   - qualityScorer, feedbackCollector, tokenUsageStore, recipeExtractor
- *   - moduleService
+ *   - moduleService, cursorDeliveryPipeline
  *   - primeSearchPipeline (for prime multi-query search — no DB dependency)
  */
 
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
 import { TokenUsageStore } from '../../repository/token/TokenUsageStore.js';
+import { CursorDeliveryPipeline } from '../../service/delivery/CursorDeliveryPipeline.js';
 import { RecipeExtractor } from '../../service/knowledge/RecipeExtractor.js';
 import { ModuleService } from '../../service/module/ModuleService.js';
 import { FeedbackCollector } from '../../service/quality/FeedbackCollector.js';
@@ -63,6 +64,21 @@ export function register(c: ServiceContainer) {
       } as unknown as ConstructorParameters<typeof ModuleService>[1]
     );
   });
+
+  c.singleton(
+    'cursorDeliveryPipeline',
+    (ct: ServiceContainer) =>
+      new CursorDeliveryPipeline({
+        knowledgeService: ct.get('knowledgeService'),
+        projectRoot: resolveProjectRoot(ct),
+        dataRoot: resolveDataRoot(ct),
+        database: ct.get('database'),
+        logger: ct.logger,
+        wz: ct.singletons.writeZone as
+          | import('../../infrastructure/io/WriteZone.js').WriteZone
+          | undefined,
+      } as unknown as ConstructorParameters<typeof CursorDeliveryPipeline>[0])
+  );
 
   // ═══ PrimeSearchPipeline (for prime multi-query search) ═══
 

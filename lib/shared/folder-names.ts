@@ -29,6 +29,13 @@ export interface AlembicFolderNames {
     skills: string;
     wiki: string;
   };
+  ide: {
+    cursorRoot: string;
+    cursorRules: string;
+    cursorSkills: string;
+    githubRoot: string;
+    vscodeRoot: string;
+  };
 }
 
 export type PartialAlembicFolderNames = {
@@ -66,6 +73,13 @@ export const DEFAULT_FOLDER_NAMES: AlembicFolderNames = {
     skills: 'skills',
     wiki: 'wiki',
   },
+  ide: {
+    cursorRoot: '.cursor',
+    cursorRules: 'rules',
+    cursorSkills: 'skills',
+    githubRoot: '.github',
+    vscodeRoot: '.vscode',
+  },
 };
 
 export function validateFolderNameSegment(name: unknown, label: string): string {
@@ -93,6 +107,7 @@ export function resolveFolderNames(overrides: PartialAlembicFolderNames = {}): A
     dev: { ...DEFAULT_FOLDER_NAMES.dev, ...overrides.dev },
     global: { ...DEFAULT_FOLDER_NAMES.global, ...overrides.global },
     project: { ...DEFAULT_FOLDER_NAMES.project, ...overrides.project },
+    ide: { ...DEFAULT_FOLDER_NAMES.ide, ...overrides.ide },
   };
 
   for (const [sectionName, section] of Object.entries(resolved)) {

@@ -65,18 +65,20 @@ export async function finalizeInternalDimensionFill({
 
   if (pipelineMode === 'rescan') {
     Logger.info(
-      '[InternalDimensionFill] rescan mode — skipping semantic memory (pipeline isolation)'
+      '[InternalDimensionFill] rescan mode — skipping delivery/wiki/memory (pipeline isolation)'
     );
-    workflowCompletion = { semanticMemoryResult: null };
+    workflowCompletion = { deliveryVerification: null, semanticMemoryResult: null };
   } else {
     workflowCompletion = await runWorkflowCompletionFinalizer({
       ctx: preparation.ctx,
       session: { id: preparation.sessionId, sessionStore: runtime.sessionStore },
+      projectRoot: preparation.projectRoot,
       dataRoot: preparation.dataRoot,
       dependencies: {
         getServiceContainer: () => preparation.ctx.container,
       },
       semanticMemory: { mode: 'immediate' },
+      steps: preparation.skipTargetDelivery ? { delivery: 'skip', wiki: 'skip' } : undefined,
       shouldAbort,
     });
   }
@@ -131,7 +133,9 @@ export function buildInternalDimensionCompletionSummary({
     return {
       mode: 'rescan',
       isolation: 'pipeline-isolation',
-      reason: 'rescan skips semantic memory to avoid rebuilding downstream artifacts',
+      reason: 'rescan skips delivery/wiki/semantic memory to avoid rebuilding downstream artifacts',
+      delivery: { status: 'skipped', verification: null },
+      wiki: { status: 'skipped' },
       semanticMemory: { status: 'skipped', result: null },
     };
   }
@@ -139,6 +143,13 @@ export function buildInternalDimensionCompletionSummary({
   return {
     mode: 'bootstrap',
     isolation: 'full-completion',
+    delivery: {
+      status:
+        workflowCompletion.deliveryStatus ??
+        (workflowCompletion.deliveryVerification ? 'completed' : 'skipped'),
+      verification: workflowCompletion.deliveryVerification,
+    },
+    wiki: { status: workflowCompletion.wikiStatus ?? 'scheduled' },
     semanticMemory: {
       status: workflowCompletion.semanticMemoryResult ? 'completed' : 'skipped',
       result: workflowCompletion.semanticMemoryResult,

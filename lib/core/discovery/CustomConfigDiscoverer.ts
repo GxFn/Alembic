@@ -247,6 +247,7 @@ const KNOWN_STANDARD_FILES = new Set([
 const EXCLUDE_DIRS = new Set([
   'node_modules',
   '.git',
+  '.cursor',
   'dist',
   'build',
   'out',

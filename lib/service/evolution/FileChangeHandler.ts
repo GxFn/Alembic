@@ -1,13 +1,13 @@
 /**
- * FileChangeHandler — 文件变更驱动的 Recipe 影响处理
+ * FileChangeHandler — 文件变更驱动的 Recipe 实时进化
  *
  * 核心策略：
  *   - 能自动修复的（路径重命名）→ ContentPatcher 修复
  *   - 修不了的（文件/路径删除）→ 通过 Gateway 提交 deprecate
  *   - 项目结构变化（modified）→ 标记受影响 Recipe + 返回变更摘要供 Agent 进化检查
  *
- * 不做全量扫描，也不主动监听文件系统；仅处理传入的 FileChangeEvent 列表。
- * 当前主要由 git diff checkpoint 在明确触发时调用。
+ * 不做全量扫描，仅处理传入的 FileChangeEvent 列表。
+ * 由 HTTP POST /api/v1/evolution/file-changed 或 MCP 触发。
  *
  * lifecycle 变更通过 Gateway → LifecycleStateMachine 链路自动完成，
  * lifecycle signal 由 StateMachine 内部发射。本类仅发射 quality signal。
@@ -477,6 +477,9 @@ export class FileChangeHandler implements FileChangeSubscriber {
     }
   }
 }
+
+/** @deprecated Use FileChangeHandler instead */
+export { FileChangeHandler as ReactiveEvolutionService };
 
 function isEvolutionTrackableLifecycle(lifecycle: unknown): boolean {
   return typeof lifecycle === 'string' && (isConsumable(lifecycle) || isDegraded(lifecycle));

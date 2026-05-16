@@ -1,7 +1,6 @@
 import express from 'express';
 import { getPackageVersion } from '../../daemon/DaemonState.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import type { GitDiffCheckpointStatus } from '../../service/evolution/git-diff-checkpoint/index.js';
 import { resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import { WorkspaceResolver } from '../../shared/WorkspaceResolver.js';
 
@@ -11,11 +10,9 @@ router.get('/health', (_req, res) => {
   const container = getServiceContainer();
   const projectRoot = resolveProjectRoot(container);
   const resolver = WorkspaceResolver.fromProject(projectRoot);
-  const gitDiffCheckpoint = readGitDiffCheckpointStatus(container);
   res.json({
     success: true,
     data: {
-      gitDiffCheckpoint,
       mode: process.env.ALEMBIC_DAEMON_MODE === '1' ? 'daemon' : 'api',
       projectRoot,
       dataRoot: resolver.dataRoot,
@@ -28,15 +25,6 @@ router.get('/health', (_req, res) => {
     },
   });
 });
-
-function readGitDiffCheckpointStatus(
-  container: ReturnType<typeof getServiceContainer>
-): GitDiffCheckpointStatus | null {
-  const checkpoint = container.singletons.gitDiffCheckpoint as
-    | { getStatus?: () => GitDiffCheckpointStatus }
-    | undefined;
-  return checkpoint?.getStatus?.() ?? null;
-}
 
 function getSchemaMigrationVersion(
   container: ReturnType<typeof getServiceContainer>

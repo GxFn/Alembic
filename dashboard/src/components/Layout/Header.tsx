@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Cpu, ChevronDown, ChevronRight, Settings, Search, Zap, Radio, FlaskConical, FlaskRound, TerminalSquare } from 'lucide-react';
+import { Plus, Cpu, ChevronDown, ChevronRight, MessageSquare, Settings, Search, Zap, Radio, FlaskConical, FlaskRound, TerminalSquare, ShieldCheck, ShieldAlert, Eye } from 'lucide-react';
 import api from '../../api';
 import { getSocket } from '../../lib/socket';
+import { useGlobalChat } from '../Shared/GlobalChatDrawer';
 import { useI18n } from '../../i18n';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
@@ -43,7 +44,9 @@ const TAB_LABELS: Record<TabType, string> = {
   panorama: 'sidebar.panorama',
   skills: 'sidebar.skills',
   jobs: 'sidebar.jobs',
+  wiki: 'sidebar.repoWiki',
   signals: 'sidebar.signals',
+  ai: 'sidebar.aiAssistant',
   help: 'sidebar.help',
 };
 
@@ -78,6 +81,7 @@ const Header: React.FC<HeaderProps> = ({
   showSignalMonitor = false,
   onToggleSignalMonitor,
 }) => {
+  const { toggle: toggleChat, isOpen: chatOpen } = useGlobalChat();
   const { t } = useI18n();
   const [aiProviders, setAiProviders] = useState<AiProvider[]>([]);
   const [aiSwitching, setAiSwitching] = useState(false);
@@ -88,10 +92,11 @@ const Header: React.FC<HeaderProps> = ({
     bootstrapDims: string[];
     rescanDims: string[];
     terminal: { enabled: boolean; toolset: string };
+    sandbox: { mode: string; available: boolean };
   } | null>(null);
   useEffect(() => {
     api.getTestModeConfig().then(cfg => {
-      if (cfg.enabled || cfg.terminal.enabled) {
+      if (cfg.enabled || cfg.terminal.enabled || cfg.sandbox.mode !== 'disabled') {
         setTestMode(cfg);
       }
     }).catch(() => { /* best-effort */ });
@@ -147,7 +152,7 @@ const Header: React.FC<HeaderProps> = ({
     setAiSwitching(true);
     try {
       onBeforeAiSwitch?.();
-      await api.saveLlmWorkspaceConfig({
+      await api.saveLlmEnvConfig({
         provider: provider.id,
         model: provider.defaultModel,
       });
@@ -218,6 +223,58 @@ const Header: React.FC<HeaderProps> = ({
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="text-xs">
                     Toolset: {testMode.terminal.toolset}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {testMode.sandbox && !testMode.sandbox.available && testMode.sandbox.mode !== 'disabled' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-500/10 text-gray-500 border border-gray-300/40 cursor-default">
+                      <ShieldAlert size={10} />
+                      {t('sandbox.unavailable')}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    {t('sandbox.unavailableHint')}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {testMode.sandbox && testMode.sandbox.available && testMode.sandbox.mode === 'enforce' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-300/40 cursor-default">
+                      <ShieldCheck size={10} />
+                      {t('sandbox.enforce')}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    {t('sandbox.enforceHint')}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {testMode.sandbox && testMode.sandbox.available && testMode.sandbox.mode === 'audit' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 border border-blue-300/40 cursor-default">
+                      <Eye size={10} />
+                      {t('sandbox.audit')}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    {t('sandbox.auditHint')}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {testMode.sandbox && testMode.sandbox.mode === 'disabled' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-600 border border-red-300/40 cursor-default">
+                      <ShieldAlert size={10} />
+                      {t('sandbox.disabled')}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    {t('sandbox.disabledHint')}
                   </TooltipContent>
                 </Tooltip>
               )}
@@ -334,7 +391,7 @@ const Header: React.FC<HeaderProps> = ({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onOpenLlmConfig}>
                   <Settings size={14} />
-                  <span>{t('header.editAiSettings')}</span>
+                  <span>{t('header.editEnvConfig')}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -370,7 +427,19 @@ const Header: React.FC<HeaderProps> = ({
             </Tooltip>
           )}
 
-        </div>
+          {/* AI Chat Toggle（贴最右） */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={chatOpen ? "accent" : "ghost"}
+                size="icon-sm"
+                onClick={toggleChat}
+              >
+                <MessageSquare size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{chatOpen ? t('header.closeAiChat') : t('header.openAiChat')}</TooltipContent>
+          </Tooltip>        </div>
       </header>
     </TooltipProvider>
   );

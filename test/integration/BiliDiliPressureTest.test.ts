@@ -5,8 +5,9 @@
  *   - Recipe 生命周期 6 态状态机 + 状态流转
  *   - ConfidenceRouter 阈值路由
  *   - StagingManager 暂存期管理 + 自动发布
- *   - DecayDetector 衰退策略
+ *   - DecayDetector 6+1 种衰退策略
  *   - Guard 免疫系统（3 态、UncertaintyCollector、ComplianceReporter 三维评分）
+ *   - ReverseGuard 反向验证
  *   - CoverageAnalyzer 覆盖率矩阵
  *   - SourceRefReconciler 路径健康检查
  *   - 各组件间 SignalBus 连接点
@@ -32,6 +33,7 @@ let Lifecycle: typeof import('../../lib/domain/knowledge/Lifecycle.js');
 let LifecycleFns: typeof import('../../lib/domain/knowledge/Lifecycle.js');
 let GuardCheckEngine: typeof import('../../lib/service/guard/GuardCheckEngine.js').GuardCheckEngine;
 let UncertaintyCollector: typeof import('../../lib/service/guard/UncertaintyCollector.js').UncertaintyCollector;
+let ReverseGuard: typeof import('../../lib/service/guard/ReverseGuard.js').ReverseGuard;
 let CoverageAnalyzer: typeof import('../../lib/service/guard/CoverageAnalyzer.js').CoverageAnalyzer;
 let ComplianceReporter: typeof import('../../lib/service/guard/ComplianceReporter.js').ComplianceReporter;
 let DecayDetector: typeof import('../../lib/service/evolution/DecayDetector.js').DecayDetector;
@@ -59,6 +61,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       lifecycleMod,
       guardEngineMod,
       uncertainMod,
+      reverseGuardMod,
       coverageMod,
       complianceMod,
       decayMod,
@@ -75,6 +78,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       import('../../lib/domain/knowledge/Lifecycle.js'),
       import('../../lib/service/guard/GuardCheckEngine.js'),
       import('../../lib/service/guard/UncertaintyCollector.js'),
+      import('../../lib/service/guard/ReverseGuard.js'),
       import('../../lib/service/guard/CoverageAnalyzer.js'),
       import('../../lib/service/guard/ComplianceReporter.js'),
       import('../../lib/service/evolution/DecayDetector.js'),
@@ -93,6 +97,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
     LifecycleFns = lifecycleMod;
     GuardCheckEngine = guardEngineMod.GuardCheckEngine;
     UncertaintyCollector = uncertainMod.UncertaintyCollector;
+    ReverseGuard = reverseGuardMod.ReverseGuard;
     CoverageAnalyzer = coverageMod.CoverageAnalyzer;
     ComplianceReporter = complianceMod.ComplianceReporter;
     DecayDetector = decayMod.DecayDetector;
@@ -660,14 +665,14 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
 
   describe('5. DecayDetector 衰退检测', () => {
     it('5.1 scanAll 对 BiliDili 全量 active 条目不崩溃', async () => {
-      const detector = new DecayDetector(knowledgeRepo, { signalBus });
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
       const results = await detector.scanAll();
       // 应该返回所有 active 条目的评分
       expect(results.length).toBeGreaterThan(0);
     });
 
     it('5.2 BiliDili 条目衰退评分分布合理', async () => {
-      const detector = new DecayDetector(knowledgeRepo, { signalBus });
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
       const results = await detector.scanAll();
       // BiliDili 是开发项目，recipe 未被实际 guard/search 命中
       // freshness=0 + usage=0 导致大量条目处于 severe/dead — 这是预期行为
@@ -687,7 +692,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
     });
 
     it('5.3 decayScore 四维度加权结果在 0-100 范围', async () => {
-      const detector = new DecayDetector(knowledgeRepo, { signalBus });
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
       const results = await detector.scanAll();
       for (const r of results) {
         expect(r.decayScore).toBeGreaterThanOrEqual(0);
@@ -710,7 +715,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       });
       await reconciler.reconcile({ force: true });
 
-      const detector = new DecayDetector(knowledgeRepo, { signalBus });
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
       const results = await detector.scanAll();
 
       // source_ref_stale 策略依赖 recipe_source_refs 表中的 stale 标记
@@ -746,7 +751,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
         WHERE id = ?
       `).run(oldDate, entry.id);
 
-      const detector = new DecayDetector(knowledgeRepo, { signalBus });
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
       const results = await detector.scanAll();
       const target = results.find((r) => r.recipeId === entry.id);
       expect(target).toBeDefined();
@@ -786,7 +791,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
         WHERE id = ?
       `).run(entry.id);
 
-      const detector = new DecayDetector(knowledgeRepo, { signalBus });
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
       const results = await detector.scanAll();
       const target = results.find((r) => r.recipeId === entry!.id);
       expect(target).toBeDefined();
@@ -810,7 +815,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
     });
 
     it('5.7 衰退级别与 Grace Period 映射正确', async () => {
-      const detector = new DecayDetector(knowledgeRepo, { signalBus });
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
       const results = await detector.scanAll();
       for (const r of results) {
         if (r.level === 'healthy') {
@@ -982,11 +987,134 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
   });
 
   /* ═══════════════════════════════════════════════════════════════
-   *  Section 8: CoverageAnalyzer 覆盖率矩阵
+   *  Section 8: ReverseGuard 反向验证
    * ═══════════════════════════════════════════════════════════════ */
 
-  describe('8. CoverageAnalyzer 覆盖率矩阵', () => {
-    it('8.1 BiliDili 模块覆盖率矩阵分析', () => {
+  describe('8. ReverseGuard 反向验证', () => {
+    it('8.1 auditAllRules 对 BiliDili rule 条目完整执行', () => {
+      const rg = new ReverseGuard(db, { signalBus });
+
+      // 收集 BiliDili 项目文件（含内容）
+      const projectFiles: { path: string; content: string }[] = [];
+      const collectFiles = (dir: string) => {
+        if (!fs.existsSync(dir)) {
+          return;
+        }
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+            collectFiles(full);
+          } else if (entry.isFile() && entry.name.endsWith('.swift')) {
+            projectFiles.push({
+              path: path.relative(BILIDILI_ROOT, full),
+              content: fs.readFileSync(full, 'utf-8'),
+            });
+          }
+        }
+      };
+      collectFiles(path.join(BILIDILI_ROOT, 'Sources'));
+      collectFiles(path.join(BILIDILI_ROOT, 'BiliDili'));
+
+      expect(projectFiles.length).toBeGreaterThan(10);
+
+      const results = rg.auditAllRules(projectFiles);
+      // 如果 DB 中没有 rule 类型的 active 条目，结果可能为空
+      // 有结果时验证每条结构正确
+      for (const r of results) {
+        expect(r.recipeId).toBeDefined();
+        expect(r.title).toBeDefined();
+        expect(['healthy', 'investigate', 'decay']).toContain(r.recommendation);
+        expect(Array.isArray(r.signals)).toBe(true);
+      }
+    });
+
+    it('8.2 健康条目应大部分为 healthy', () => {
+      const rg = new ReverseGuard(db, { signalBus });
+      const projectFiles: { path: string; content: string }[] = [];
+      const collectSwift = (dir: string) => {
+        if (!fs.existsSync(dir)) {
+          return;
+        }
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory() && !entry.name.startsWith('.')) {
+            collectSwift(full);
+          } else if (entry.isFile() && entry.name.endsWith('.swift')) {
+            projectFiles.push({
+              path: path.relative(BILIDILI_ROOT, full),
+              content: fs.readFileSync(full, 'utf-8'),
+            });
+          }
+        }
+      };
+      collectSwift(path.join(BILIDILI_ROOT, 'Sources'));
+      collectSwift(path.join(BILIDILI_ROOT, 'BiliDili'));
+
+      const results = rg.auditAllRules(projectFiles);
+      if (results.length > 0) {
+        const healthy = results.filter((r) => r.recommendation === 'healthy');
+        // 至少 70% 应该 healthy
+        expect(healthy.length / results.length).toBeGreaterThanOrEqual(0.7);
+      }
+      // 没有结果时跳过百分比校验（DB 中无 rule 类型 active 条目）
+    });
+
+    it('8.3 source_ref_stale drift 在 stale ref 条目上被检测', () => {
+      const rg = new ReverseGuard(db, { signalBus });
+      const projectFiles: { path: string; content: string }[] = [];
+      const collectSwift = (dir: string) => {
+        if (!fs.existsSync(dir)) {
+          return;
+        }
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory() && !entry.name.startsWith('.')) {
+            collectSwift(full);
+          } else if (entry.isFile() && entry.name.endsWith('.swift')) {
+            projectFiles.push({
+              path: path.relative(BILIDILI_ROOT, full),
+              content: fs.readFileSync(full, 'utf-8'),
+            });
+          }
+        }
+      };
+      collectSwift(path.join(BILIDILI_ROOT, 'Sources'));
+      collectSwift(path.join(BILIDILI_ROOT, 'BiliDili'));
+
+      const results = rg.auditAllRules(projectFiles);
+
+      // 有 stale ref 的 recipe:
+      // b84ec13a — 文档注释与日志规范 (Logger+Categories.swift → stale)
+      // 86e16437 — BiliImageURL (staging, 但 auditAllRules 只查 active rule)
+      const staleRecipe = results.find(
+        (r) => r.recipeId === 'b84ec13a-1178-49d4-993a-d13a95face5d'
+      );
+      if (staleRecipe) {
+        const hasStaleSignal = staleRecipe.signals.some((s) => s.type === 'source_ref_stale');
+        expect(hasStaleSignal).toBe(true);
+      }
+    });
+
+    it('8.4 quality 信号在 investigate/decay 时发射', () => {
+      const signals: any[] = [];
+      const bus = new SignalBus();
+      bus.subscribe('quality', (s) => signals.push(s));
+
+      const rg = new ReverseGuard(db, { signalBus: bus });
+      const projectFiles = [{ path: 'dummy.swift', content: 'import Foundation\n' }];
+
+      // 即使文件列表很小，也不应崩溃
+      const results = rg.auditAllRules(projectFiles);
+      expect(Array.isArray(results)).toBe(true);
+    });
+  });
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  Section 9: CoverageAnalyzer 覆盖率矩阵
+   * ═══════════════════════════════════════════════════════════════ */
+
+  describe('9. CoverageAnalyzer 覆盖率矩阵', () => {
+    it('9.1 BiliDili 模块覆盖率矩阵分析', () => {
       const analyzer = new CoverageAnalyzer(db);
 
       // 构建模块→文件映射
@@ -1029,7 +1157,7 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
       }
     });
 
-    it('8.2 零覆盖模块正确识别', () => {
+    it('9.2 零覆盖模块正确识别', () => {
       const analyzer = new CoverageAnalyzer(db);
 
       // 添加一个虚拟模块（无对应规则的 Rust 文件）
@@ -1274,7 +1402,7 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
       await reconciler.reconcile({ force: true });
 
       // DecayDetector 可以消费这些信号（通过 DB 间接关联）
-      const detector = new DecayDetector(knowledgeRepo, { signalBus: bus });
+      const detector = new DecayDetector(knowledgeRepo, { signalBus: bus, drizzle: drizzleDb });
       const results = await detector.scanAll();
 
       // 验证 reconcile + scanAll 完整链路不崩溃
@@ -1360,7 +1488,7 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
 
     it('13.4 并发 scanAll + auditFiles 不互相干扰', async () => {
       const engine = new GuardCheckEngine(db, { signalBus });
-      const detector = new DecayDetector(knowledgeRepo, { signalBus });
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
 
       // 同步并行调用
       const decayResults = await detector.scanAll();
@@ -1390,7 +1518,7 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
         WHERE id = ?
       `).run(entry.id);
 
-      const detector = new DecayDetector(knowledgeRepo, { signalBus });
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
       const results = await detector.scanAll();
       // DecayDetector now correctly reads createdAt column
       expect(results.length).toBeGreaterThan(0);
@@ -1411,7 +1539,7 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
     it('13.6 大量 recipe 批量 metabolism 不超时', async () => {
       const cd = new ContradictionDetector(knowledgeRepo, { signalBus });
       const ra = new RedundancyAnalyzer(knowledgeRepo, { signalBus });
-      const dd = new DecayDetector(knowledgeRepo, { signalBus });
+      const dd = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
 
       const metabolism = new KnowledgeMetabolism({
         contradictionDetector: cd,
@@ -1670,7 +1798,7 @@ print(x!)  // force unwrap
         );
 
         // DecayDetector scan
-        const detector = new DecayDetector(knowledgeRepo, { signalBus: bus });
+        const detector = new DecayDetector(knowledgeRepo, { signalBus: bus, drizzle: drizzleDb });
         const results = await detector.scanAll();
         const target = results.find((r) => r.recipeId === testId);
         expect(target).toBeDefined();
@@ -1717,7 +1845,7 @@ print(x!)  // force unwrap
         `).run(testId, Date.now(), Date.now());
 
         // DecayDetector 应该检测到 high_false_positive
-        const detector = new DecayDetector(knowledgeRepo, { signalBus: bus });
+        const detector = new DecayDetector(knowledgeRepo, { signalBus: bus, drizzle: drizzleDb });
         const results = await detector.scanAll();
         const target = results.find((r) => r.recipeId === testId);
 

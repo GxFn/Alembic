@@ -14,9 +14,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getProjectSkillsPath } from '#infra/config/Paths.js';
 import type { WriteZone } from '#infra/io/WriteZone.js';
+import { getCursorRulesDir, getCursorRulesRelativePath } from '#shared/ide-paths.js';
 import pathGuard from '#shared/PathGuard.js';
 import { INJECTABLE_SKILLS_DIR } from '#shared/package-root.js';
-import { resolveDataRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { McpContext } from './types.js';
 
 function _getWriteZone(ctx?: McpContext | null): WriteZone | undefined {
@@ -134,12 +135,27 @@ export function listSkills(ctx?: McpContext | null) {
 
     const skills = [...skillMap.values()].sort((a, b) => a.name.localeCompare(b.name));
 
+    // _meta：附带 SignalCollector 推荐计数（如果后台服务可用）
+    let suggestionCount = 0;
+    try {
+      const g = globalThis as unknown as {
+        _signalCollector?: { getSnapshot(): { lastResult?: { newSuggestions?: number } } };
+      };
+      if (g._signalCollector) {
+        const snapshot = g._signalCollector.getSnapshot();
+        suggestionCount = snapshot?.lastResult?.newSuggestions || 0;
+      }
+    } catch {
+      /* silent */
+    }
+
     return JSON.stringify({
       success: true,
       data: {
         skills,
         total: skills.length,
         hint: '根据当前任务选择合适的 Skill 加载（load_skill）。',
+        _meta: { signalSuggestions: suggestionCount },
       },
     });
   } catch (err: unknown) {
@@ -265,7 +281,8 @@ export function loadSkill(ctx: McpContext | null, args: { skillName?: string; se
 // ═══════════════════════════════════════════════════════════
 
 /**
- * 创建项目级 Skill — 写入 Alembic 数据根目录的 skills/<name>/SKILL.md
+ * 创建项目级 Skill — 写入 {projectRoot}/Alembic/skills/<name>/SKILL.md
+ * 创建后自动 regenerate 编辑器索引（.cursor/rules/alembic-skills.mdc）
  *
  * @param _ctx MCP context
  * @param args { name, description, content, overwrite? }
@@ -380,6 +397,21 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
     });
   }
 
+  // ── regenerate 编辑器索引 ──
+  const indexResult = _regenerateEditorIndex(ctx ?? undefined);
+
+  // ── 清理 SignalCollector 已创建的 pendingSuggestions ──
+  try {
+    const g = globalThis as unknown as {
+      _signalCollector?: { removePendingSuggestion(name: string): void };
+    };
+    if (g._signalCollector) {
+      g._signalCollector.removePendingSuggestion(name);
+    }
+  } catch {
+    /* silent */
+  }
+
   // ── SkillHooks: onSkillCreated (fire-and-forget) ──
   try {
     const skillHooks = ctx?.container?.get?.('skillHooks');
@@ -400,9 +432,83 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
       skillName: name,
       path: skillPath,
       overwritten: fs.existsSync(skillPath) && overwrite,
+      editorIndex: indexResult,
       hint: `Skill "${name}" created. Use alembic_skill({ operation: "load", name: "${name}" }) to verify content.`,
     },
   });
+}
+
+/**
+ * Regenerate .cursor/rules/alembic-skills.mdc 索引文件
+ * 扫描所有项目级 Skills，生成摘要索引供 External Agent 被动发现
+ *
+ * @returns }
+ */
+function _regenerateEditorIndex(ctx?: McpContext) {
+  try {
+    // 扫描项目级 Skills
+    const projectSkills: { name: string; summary: string }[] = [];
+    const projectSkillsDir = _getProjectSkillsDir(ctx);
+    try {
+      const dirs = fs
+        .readdirSync(projectSkillsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name);
+      for (const name of dirs) {
+        const meta = _parseSkillMeta(name, projectSkillsDir);
+        projectSkills.push({ name, summary: meta.description });
+      }
+    } catch {
+      /* no project skills dir */
+    }
+
+    const wz = _getWriteZone(ctx);
+    const projectRoot = resolveProjectRoot(ctx?.container);
+    const rulesDir = getCursorRulesDir(projectRoot);
+
+    if (projectSkills.length === 0) {
+      try {
+        if (wz) {
+          wz.remove(wz.project(getCursorRulesRelativePath('alembic-skills.mdc')));
+        } else {
+          fs.unlinkSync(path.join(rulesDir, 'alembic-skills.mdc'));
+        }
+      } catch {
+        /* not exists */
+      }
+      return { success: true, skillCount: 0 };
+    }
+
+    const skillLines = projectSkills.map((s) => `- **${s.name}**: ${s.summary}`).join('\n');
+
+    const mdcContent = [
+      '---',
+      'description: Alembic 项目级 Skills 索引（自动生成，请勿手动编辑）',
+      'alwaysApply: true',
+      '---',
+      '',
+      '# Alembic Project Skills',
+      '',
+      `本项目已注册 ${projectSkills.length} 个自定义 Skill。使用 \`alembic_skill({ operation: "load", name })\` 加载完整内容。`,
+      '',
+      skillLines,
+      '',
+    ].join('\n');
+
+    if (wz) {
+      wz.ensureDir(wz.project(getCursorRulesRelativePath()));
+      wz.writeFile(wz.project(getCursorRulesRelativePath('alembic-skills.mdc')), mdcContent);
+    } else {
+      pathGuard.assertProjectWriteSafe(rulesDir);
+      fs.mkdirSync(rulesDir, { recursive: true });
+      fs.writeFileSync(path.join(rulesDir, 'alembic-skills.mdc'), mdcContent, 'utf8');
+    }
+    const indexPath = path.join(rulesDir, 'alembic-skills.mdc');
+
+    return { success: true, path: indexPath, skillCount: projectSkills.length };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -411,7 +517,7 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
 
 /**
  * 删除项目级 Skill — 移除 {projectRoot}/Alembic/skills/<name>/ 整个目录
- * 内置 Skill 不可删除。
+ * 内置 Skill 不可删除。删除后自动 regenerate 编辑器索引。
  *
  * @param _ctx MCP context
  * @param args { name: string }
@@ -472,6 +578,9 @@ export function deleteSkill(ctx: McpContext | null, args: { name?: string }) {
     });
   }
 
+  // ── regenerate 编辑器索引 ──
+  const indexResult = _regenerateEditorIndex(ctx ?? undefined);
+
   // ── SkillHooks: onSkillExpired (fire-and-forget) ──
   try {
     const skillHooks = ctx?.container?.get?.('skillHooks');
@@ -489,6 +598,7 @@ export function deleteSkill(ctx: McpContext | null, args: { name?: string }) {
     data: {
       skillName: name,
       deleted: true,
+      editorIndex: indexResult,
       hint: `Skill "${name}" deleted successfully.`,
     },
   });
@@ -500,7 +610,7 @@ export function deleteSkill(ctx: McpContext | null, args: { name?: string }) {
 
 /**
  * 更新项目级 Skill — 修改 description 和/或 content
- * 内置 Skill 不可更新。
+ * 内置 Skill 不可更新。更新后自动 regenerate 编辑器索引。
  *
  * @param _ctx MCP context
  * @param args { name, description?, content? }
@@ -617,6 +727,9 @@ export function updateSkill(ctx: McpContext | null, args: UpdateSkillArgs) {
     });
   }
 
+  // ── regenerate 编辑器索引 ──
+  const indexResult = _regenerateEditorIndex(ctx ?? undefined);
+
   return JSON.stringify({
     success: true,
     data: {
@@ -625,12 +738,103 @@ export function updateSkill(ctx: McpContext | null, args: UpdateSkillArgs) {
       fieldsUpdated: [description ? 'description' : null, content ? 'content' : null].filter(
         Boolean
       ),
+      editorIndex: indexResult,
       hint: `Skill "${name}" updated. Use alembic_skill({ operation: "load", name: "${name}" }) to verify content.`,
     },
   });
 }
 
-/** 相关 Skills（基于静态映射） */
+// ═══════════════════════════════════════════════════════════
+// Handler: suggestSkills
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 基于项目使用模式分析，推荐创建 Skill
+ *
+ * 分析维度：Guard 违规模式、Memory 偏好积累、Recipe 分布缺口、候选积压
+ * Agent 可根据推荐结果自行决定是否调用 createSkill 创建
+ *
+ * @param ctx MCP context（含 container）
+ * @returns JSON envelope
+ */
+export async function suggestSkills(ctx: McpContext) {
+  try {
+    // ── 优先使用 RecommendationPipeline (统一推荐管线) ──
+    const pipeline = ctx?.container?.get?.('recommendationPipeline');
+    if (pipeline && typeof pipeline.recommend === 'function') {
+      const database = ctx?.container?.get?.('database');
+      const projectRoot = resolveProjectRoot(ctx?.container);
+      const dataRoot = resolveDataRoot(ctx?.container as never) || projectRoot;
+      const existingSkills = _listExistingProjectSkillNames(ctx);
+      const recommendations = await pipeline.recommend({
+        projectRoot,
+        dataRoot,
+        database: database?.getDb?.() || database || null,
+        container: ctx?.container,
+        existingSkills,
+      });
+
+      // 记录展示指标
+      try {
+        const metrics = ctx?.container?.get?.('recommendationMetrics');
+        if (metrics && typeof metrics.trackDisplayed === 'function') {
+          metrics.trackDisplayed(recommendations);
+        }
+      } catch {
+        /* metrics tracking is best-effort */
+      }
+
+      return JSON.stringify({
+        success: true,
+        data: {
+          suggestions: recommendations,
+          existingProjectSkills: [...existingSkills],
+          hint:
+            recommendations.length > 0
+              ? `发现 ${recommendations.length} 个 Skill 创建建议（powered by RecommendationPipeline）。`
+              : '当前项目使用模式暂无明确的 Skill 创建建议。',
+        },
+      });
+    }
+
+    // ── Fallback: 直接使用 SkillAdvisor ──
+    const { SkillAdvisor } = await import('#service/skills/SkillAdvisor.js');
+    const projectRoot = resolveProjectRoot(ctx?.container);
+    const dataRoot = resolveDataRoot(ctx?.container as never) || projectRoot;
+    const knowledgeRepo = ctx?.container?.get?.('knowledgeRepository') || null;
+    const auditRepo = ctx?.container?.get?.('auditRepository') || null;
+    const advisor = new SkillAdvisor(projectRoot, { knowledgeRepo, auditRepo, dataRoot });
+    const result = await advisor.suggest();
+
+    return JSON.stringify({
+      success: true,
+      data: result,
+    });
+  } catch (err: unknown) {
+    return JSON.stringify({
+      success: false,
+      error: { code: 'SUGGEST_ERROR', message: err instanceof Error ? err.message : String(err) },
+    });
+  }
+}
+
+/** 获取已有的项目级 Skill 名称集合 */
+function _listExistingProjectSkillNames(ctx?: McpContext | null): Set<string> {
+  const names = new Set<string>();
+  try {
+    const dir = _getProjectSkillsDir(ctx ?? undefined);
+    for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (d.isDirectory()) {
+        names.add(d.name);
+      }
+    }
+  } catch {
+    /* no project skills */
+  }
+  return names;
+}
+
+/** 推荐相关 Skills（基于静态映射） */
 function _getRelatedSkills(skillName: string) {
   const relations = {
     'alembic-create': ['alembic-recipes'],
@@ -640,4 +844,93 @@ function _getRelatedSkills(skillName: string) {
     'alembic-devdocs': ['alembic-recipes', 'alembic-create'],
   };
   return (relations as Record<string, string[]>)[skillName] || [];
+}
+
+// ═══════════════════════════════════════════════════════
+//  推荐反馈
+// ═══════════════════════════════════════════════════════
+
+/**
+ * 记录推荐反馈
+ *
+ * operation: 'feedback'
+ * @param args.recommendationId  推荐 ID
+ * @param args.action           'adopted' | 'dismissed' | 'expired' | 'viewed' | 'modified'
+ * @param args.reason           可选 — 忽略原因
+ * @param args.source           可选 — 推荐来源
+ * @param args.category         可选 — 推荐类别
+ */
+export async function recordFeedback(
+  ctx: McpContext,
+  args: {
+    recommendationId?: string;
+    action?: string;
+    reason?: string;
+    source?: string;
+    category?: string;
+  }
+) {
+  try {
+    const validActions = ['adopted', 'dismissed', 'expired', 'viewed', 'modified'];
+    if (!args.recommendationId || !args.action) {
+      return JSON.stringify({
+        success: false,
+        error: { code: 'MISSING_PARAMS', message: 'recommendationId and action are required' },
+      });
+    }
+    if (!validActions.includes(args.action)) {
+      return JSON.stringify({
+        success: false,
+        error: {
+          code: 'INVALID_ACTION',
+          message: `action must be one of: ${validActions.join(', ')}`,
+        },
+      });
+    }
+
+    // 获取 FeedbackStore
+    const feedbackStore = ctx?.container?.get?.('feedbackStore');
+    if (!feedbackStore || typeof feedbackStore.record !== 'function') {
+      return JSON.stringify({
+        success: false,
+        error: { code: 'STORE_UNAVAILABLE', message: 'FeedbackStore not initialized' },
+      });
+    }
+
+    await feedbackStore.record({
+      recommendationId: args.recommendationId,
+      action: args.action,
+      timestamp: new Date().toISOString(),
+      source: args.source,
+      category: args.category,
+      reason: args.reason,
+    });
+
+    // 触发 SkillHooks: onRecommendFeedback
+    try {
+      const skillHooks = ctx?.container?.get?.('skillHooks');
+      if (skillHooks?.has?.('onRecommendFeedback')) {
+        await skillHooks.run('onRecommendFeedback', {
+          recommendationId: args.recommendationId,
+          action: args.action,
+          reason: args.reason,
+        });
+      }
+    } catch {
+      /* hook error is non-blocking */
+    }
+
+    return JSON.stringify({
+      success: true,
+      data: { recorded: true, recommendationId: args.recommendationId, action: args.action },
+    });
+  } catch (err: unknown) {
+    return JSON.stringify({
+      success: false,
+      error: {
+        code: 'FEEDBACK_ERROR',
+        message: err instanceof Error ? err.message : String(err),
+      },
+    });
+  }
 }

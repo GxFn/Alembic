@@ -7,7 +7,7 @@ import type {
 } from '../runtime/AgentRuntimeTypes.js';
 import type { SystemRunContext } from '../runtime/SystemRunContext.js';
 
-export type BuiltinAgentPreset = 'chat' | 'insight' | 'evolution';
+export type BuiltinAgentPreset = 'chat' | 'insight' | 'evolution' | 'lark' | 'remote-exec';
 
 export interface AgentProfileRef {
   id?: string;
@@ -32,7 +32,8 @@ export type AgentServiceKind =
   | 'system-analysis'
   | 'knowledge-production'
   | 'translation'
-  | 'background-analysis';
+  | 'background-analysis'
+  | 'remote-operation';
 
 export interface AgentProfileDefaults {
   skills?: string[];
@@ -123,12 +124,13 @@ export interface AgentRunActor {
 export type AgentRunSource =
   | 'http-chat'
   | 'http-stream'
+  | 'lark'
   | 'bootstrap'
   | 'system-workflow'
   | 'mcp'
   | 'internal';
 
-export type AgentRuntimeSource = 'user' | 'system' | 'analyst' | 'producer';
+export type AgentRuntimeSource = 'user' | 'system' | 'analyst' | 'producer' | 'remote';
 
 export interface AgentRunCoordinationHooks {
   onChildResult?: (event: {

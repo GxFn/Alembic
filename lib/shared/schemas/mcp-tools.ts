@@ -138,16 +138,16 @@ export type CallContextInput = z.infer<typeof CallContextInput>;
 
 export const GuardInput = z.object({
   operation: z
-    .enum(['check', 'review', 'coverage_matrix', 'compliance_report'])
+    .enum(['check', 'review', 'reverse_audit', 'coverage_matrix', 'compliance_report'])
     .optional()
     .describe(
-      'Guard 操作类型。coverage_matrix: 模块覆盖率矩阵；compliance_report: 3D 合规报告（含 uncertain）。省略则按 code/files 自动路由。'
+      'Guard 操作类型。reverse_audit: Recipe→Code 反向验证；coverage_matrix: 模块覆盖率矩阵；compliance_report: 3D 合规报告（含 uncertain）。省略则按 code/files 自动路由。'
     ),
   files: z.array(z.string()).optional(),
   code: z.string().optional(),
   language: z.string().optional(),
   filePath: z.string().optional(),
-  maxFiles: z.number().optional().describe('coverage_matrix 时扫描的最大文件数'),
+  maxFiles: z.number().optional().describe('reverse_audit/coverage_matrix 时扫描的最大文件数'),
 });
 export type GuardInput = z.infer<typeof GuardInput>;
 
@@ -167,10 +167,13 @@ export const SubmitKnowledgeItemSchema = z.object({
     '内容对象: { pattern?: "代码片段", markdown?: "正文", rationale: "设计原理" }。pattern/markdown 至少提供一个，rationale 必填'
   ),
   kind: StrictKindEnum.describe('rule=规范约束 | pattern=代码模式 | fact=项目事实'),
-  doClause: z.string().min(1, 'doClause is required').describe('✅ 应该怎么做（插件适配字段）'),
+  doClause: z
+    .string()
+    .min(1, 'doClause is required')
+    .describe('✅ 应该怎么做（Channel A+B 硬依赖）'),
   dontClause: z.string().min(1, 'dontClause is required').describe('❌ 不应该怎么做'),
-  whenClause: z.string().min(1, 'whenClause is required').describe('何时适用'),
-  coreCode: z.string().min(1, 'coreCode is required').describe('核心代码片段'),
+  whenClause: z.string().min(1, 'whenClause is required').describe('何时适用（Channel B 硬依赖）'),
+  coreCode: z.string().min(1, 'coreCode is required').describe('核心代码片段（Channel B 模板块）'),
   category: z
     .string()
     .min(1, 'category is required')
@@ -239,8 +242,10 @@ export type SubmitKnowledgeInput = z.infer<typeof SubmitKnowledgeInput>;
 
 export const SkillInput = z.object({
   operation: z
-    .enum(['list', 'load', 'create', 'update', 'delete'])
-    .describe('list=列表 | load=加载内容(name) | create=创建 | update=更新 | delete=删除'),
+    .enum(['list', 'load', 'create', 'update', 'delete', 'suggest'])
+    .describe(
+      'list=列表 | load=加载内容(name) | create=创建 | update=更新 | delete=删除 | suggest=推荐'
+    ),
   name: z.string().optional().describe('Skill 名称（kebab-case，如 alembic-create）'),
   skillName: z.string().optional().describe('name 的别名，与 name 等价'),
   section: z.string().optional().describe('load 时过滤指定章节'),
@@ -292,6 +297,22 @@ export const DimensionCompleteInput = z.object({
   crossDimensionHints: z.record(z.string(), z.string()).optional(),
 });
 export type DimensionCompleteInput = z.infer<typeof DimensionCompleteInput>;
+
+// ══════════════════════════════════════════════════════
+//  11c. alembic_wiki (merged: plan + finalize)
+// ══════════════════════════════════════════════════════
+
+export const WikiInput = z.object({
+  operation: z
+    .enum(['plan', 'finalize'])
+    .describe('plan — 规划主题 + 数据包; finalize — 写入 meta.json + 验证'),
+  // plan 参数
+  language: z.enum(['zh', 'en']).optional().describe('Wiki 语言，默认 zh'),
+  sessionId: z.string().optional(),
+  // finalize 参数
+  articlesWritten: z.array(z.string()).optional(),
+});
+export type WikiInput = z.infer<typeof WikiInput>;
 
 // ══════════════════════════════════════════════════════
 //  12. alembic_capabilities — 无参数
@@ -456,6 +477,7 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   alembic_bootstrap: BootstrapInput,
   alembic_rescan: RescanInput,
   alembic_dimension_complete: DimensionCompleteInput,
+  alembic_wiki: WikiInput,
   alembic_task: TaskInput,
   alembic_enrich_candidates: EnrichCandidatesInput,
   alembic_knowledge_lifecycle: KnowledgeLifecycleInput,

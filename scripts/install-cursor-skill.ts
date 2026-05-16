@@ -1,0 +1,429 @@
+#!/usr/bin/env node
+
+/**
+ * 将 Alembic 自带的 Agent Skills 安装到「当前项目根」的 Cursor 环境（项目根/.cursor/skills/）。
+ * 项目根：从当前工作目录向上查找含 Alembic.boxspec.json 的目录的父级；未找到则用当前目录。
+ *
+ * V3 策略：静态索引 + MCP 按需检索
+ * - project-recipes-context.md：轻量索引（title | trigger | category | summary），不再塞全文
+ * - Agent 需要详情时调用 MCP: alembic_knowledge({ operation: "get" }) / alembic_search
+ * - guard-context.md：同为轻量索引（fallback 用），Guard 主路径走 MCP alembic_guard
+ *
+ * 运行方式：在项目根目录执行 npm run install:cursor-skill，或 alembic install:cursor-skill，或 node scripts/install-cursor-skill.js
+ */
+
+import { INJECTABLE_SKILLS_DIR as _skillsSrc, PACKAGE_ROOT } from '../lib/shared/package-root.js';
+
+const __dirname = import.meta.dirname;
+
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+
+import fs from 'node:fs';
+import path from 'node:path';
+import * as defaults from '../lib/infrastructure/config/Defaults.js';
+import { getCursorRoot, getCursorRulesDir, getCursorSkillsDir } from '../lib/shared/ide-paths.js';
+
+type FrontmatterFields = {
+  category: string | null;
+  complexity: string | null;
+  id: string | null;
+  kind: string | null;
+  knowledgeType: string | null;
+  language: string | null;
+  summary_cn: string | null;
+  summary_en: string | null;
+  title: string | null;
+  trigger: string | null;
+};
+
+type CursorMcpConfig = {
+  mcpServers?: Record<string, unknown>;
+};
+
+const alembicRoot = PACKAGE_ROOT;
+const skillsSource = _skillsSrc;
+
+let projectRoot = process.cwd();
+
+// 首先在当前工作目录及其父目录中查找 Alembic.boxspec.json（项目标记）
+// 如果找到，其所在目录的父级就是项目根
+function findProjectRootFromCwd() {
+  let current = path.resolve(process.cwd());
+  const maxLevels = 20;
+  let levels = 0;
+
+  while (levels < maxLevels) {
+    const boxspecPath = path.join(current, 'Alembic', 'Alembic.boxspec.json');
+    if (fs.existsSync(boxspecPath)) {
+      return current; // 当前目录就是项目根
+    }
+
+    // 还要检查当前目录本身就是知识库目录的情况（用户直接在 Alembic/ 中运行）
+    const directBoxspec = path.join(current, 'Alembic.boxspec.json');
+    if (fs.existsSync(directBoxspec)) {
+      return path.dirname(current); // 当前是知识库，其父级才是项目根
+    }
+
+    const parentPath = path.dirname(current);
+    if (parentPath === current) {
+      break;
+    }
+    current = parentPath;
+    levels++;
+  }
+
+  return null;
+}
+
+const found = findProjectRootFromCwd();
+if (found) {
+  projectRoot = found;
+} else {
+  // 备选方案：使用PathFinder的查找逻辑
+  try {
+    const findPath = require(
+      path.join(alembicRoot, 'lib', 'infrastructure/paths/PathFinder.js')
+    ) as { findProjectRootSync?: (cwd: string) => string | null };
+    const fallback = findPath.findProjectRootSync?.(process.cwd());
+    if (fallback) {
+      projectRoot = fallback;
+    }
+  } catch (_err: unknown) {}
+}
+
+const skillsTarget = getCursorSkillsDir(projectRoot);
+
+if (!fs.existsSync(skillsSource)) {
+  console.error('❌ 未找到 injectable-skills 目录:', skillsSource);
+  process.exit(1);
+}
+
+const skillDirs = fs
+  .readdirSync(skillsSource, { withFileTypes: true })
+  .filter((d) => d.isDirectory())
+  .map((d) => d.name);
+
+if (skillDirs.length === 0) {
+  process.exit(0);
+}
+
+function getRecipesDir(root: string): string {
+  try {
+    // 尝试查找 boxspec.json 来确定 recipes 目录
+    const specCandidates = [
+      path.join(root, 'Alembic', 'boxspec.json'),
+      path.join(root, 'Alembic', 'Alembic.boxspec.json'),
+    ];
+    for (const specPath of specCandidates) {
+      if (fs.existsSync(specPath)) {
+        const spec = JSON.parse(fs.readFileSync(specPath, 'utf8')) as {
+          recipes?: { dir?: unknown };
+        };
+        const dir = spec?.recipes?.dir;
+        if (typeof dir === 'string' && dir.length > 0) {
+          return path.join(root, dir);
+        }
+      }
+    }
+  } catch {
+    /* fallback */
+  }
+  return path.join(root, defaults.RECIPES_DIR);
+}
+
+function collectMdFiles(dir: string, baseDir: string, list: string[] = []): string[] {
+  if (!fs.existsSync(dir)) {
+    return list;
+  }
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory() && !e.name.startsWith('.')) {
+      collectMdFiles(full, baseDir, list);
+      continue;
+    }
+    if (e.isFile() && e.name.toLowerCase().endsWith('.md')) {
+      list.push(path.relative(baseDir, full).replace(/\\/g, '/'));
+    }
+  }
+  return list;
+}
+
+/** 从 Markdown 的 YAML frontmatter 中提取指定字段（轻量实现，不依赖 YAML 库） */
+function extractFrontmatterFields(content: string): FrontmatterFields {
+  const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!m) {
+    return {
+      category: null,
+      complexity: null,
+      id: null,
+      kind: null,
+      knowledgeType: null,
+      language: null,
+      summary_cn: null,
+      summary_en: null,
+      title: null,
+      trigger: null,
+    };
+  }
+  const block = m[1];
+  const extract = (key: string): string | null => {
+    const re = new RegExp(`^${key}:\\s*["']?(.+?)["']?\\s*$`, 'm');
+    const match = block.match(re);
+    return match ? match[1].trim() : null;
+  };
+  return {
+    id: extract('id'),
+    title: extract('title'),
+    trigger: extract('trigger'),
+    category: extract('category'),
+    language: extract('language'),
+    kind: extract('kind'),
+    summary_cn: extract('summary_cn'),
+    summary_en: extract('summary_en'),
+    knowledgeType: extract('knowledgeType'),
+    complexity: extract('complexity'),
+  };
+}
+
+/**
+ * V2: 生成轻量 Recipe 索引（title | trigger | category | summary）
+ * Agent 需要详情时调用 MCP: alembic_knowledge({ operation: "get" }) / alembic_search
+ */
+function buildProjectRecipesContext(projectRoot: string): string | null {
+  const recipesDir = getRecipesDir(projectRoot);
+  if (!fs.existsSync(recipesDir)) {
+    return null;
+  }
+  const mdFiles = collectMdFiles(recipesDir, recipesDir).sort();
+  if (mdFiles.length === 0) {
+    return null;
+  }
+
+  const lines = [
+    '# Project Recipes Index\n\n',
+    'Generated by `alembic install:cursor-skill`. **轻量索引** — 只含摘要信息。\n',
+    'Agent 需要 Recipe 全文时请调用 MCP: `alembic_knowledge({ operation: "get", id })` / `alembic_search(query)`\n\n',
+    `Total: ${mdFiles.length} recipes\n\n`,
+    '| # | File | Title | Trigger | Category | Language | Kind | Summary |\n',
+    '|---|------|-------|---------|----------|----------|------|---------|\n',
+  ];
+
+  let idx = 0;
+  for (const rel of mdFiles) {
+    const full = path.join(recipesDir, rel);
+    idx++;
+    try {
+      const content = fs.readFileSync(full, 'utf8');
+      const fm = extractFrontmatterFields(content);
+      const title = fm.title || '(untitled)';
+      const trigger = fm.trigger || '';
+      const cat = fm.category || defaults.inferCategory(rel, content);
+      const lang = fm.language || '';
+      const kind = fm.kind || '';
+      const summary = (fm.summary_cn || fm.summary_en || '').replace(/\|/g, '/');
+      lines.push(
+        `| ${idx} | ${rel} | ${title} | ${trigger} | ${cat} | ${lang} | ${kind} | ${summary} |\n`
+      );
+    } catch (_: unknown) {
+      lines.push(`| ${idx} | ${rel} | *(read error)* | | | | | |\n`);
+    }
+  }
+
+  // 按 category 统计
+  const catCounts: Record<string, number> = {};
+  for (const rel of mdFiles) {
+    try {
+      const content = fs.readFileSync(path.join(recipesDir, rel), 'utf8');
+      const fm = extractFrontmatterFields(content);
+      const cat = fm.category || defaults.inferCategory(rel, content);
+      catCounts[cat] = (catCounts[cat] || 0) + 1;
+    } catch (_: unknown) {}
+  }
+  lines.push('\n## Category Distribution\n\n');
+  for (const [cat, count] of Object.entries(catCounts).sort((a, b) => b[1] - a[1])) {
+    lines.push(`- **${cat}**: ${count} recipes\n`);
+  }
+
+  lines.push('\n## Usage Tips\n\n');
+  lines.push(
+    '- 查找 Recipe: `alembic_search({ query })` 或 `alembic_search({ query, mode: "context" })`\n'
+  );
+  lines.push(
+    '- 获取详情: `alembic_knowledge({ operation: "get", id })` — 返回完整 Recipe 内容、关系、约束\n'
+  );
+  lines.push(
+    '- 按类型浏览: `alembic_knowledge({ operation: "list", kind: "rule" })` / `kind: "pattern"` / `kind: "fact"`\n'
+  );
+  lines.push('- Guard 检查: `alembic_guard({ code })` / `alembic_guard({ files })`\n');
+
+  return lines.join('');
+}
+
+function buildSpmmapSummary(projectRoot: string): string | null {
+  const spmmapPath = path.join(projectRoot, defaults.SPMMAP_PATH);
+  if (!fs.existsSync(spmmapPath)) {
+    return null;
+  }
+  try {
+    const data = JSON.parse(fs.readFileSync(spmmapPath, 'utf8')) as {
+      graph?: {
+        edges?: Record<string, unknown>;
+        packages?: Record<string, { targets?: unknown }>;
+      };
+    };
+    const graph = data.graph || {};
+    const packages = graph.packages || {};
+    const edges = graph.edges || {};
+    const lines = [
+      '# SPM 依赖结构摘要\n',
+      `Generated by \`alembic install:cursor-skill\`. Source: ${defaults.SPMMAP_PATH}\n`,
+      '\n## Packages\n',
+    ];
+    for (const [pkg, info] of Object.entries(packages)) {
+      const targets = Array.isArray(info.targets)
+        ? info.targets.filter((target): target is string => typeof target === 'string').join(', ')
+        : '';
+      lines.push(`- **${pkg}**: ${targets || '(no targets)'}\n`);
+    }
+    lines.push('\n## 依赖关系 (from → to)\n');
+    for (const [from, toList] of Object.entries(edges)) {
+      if (Array.isArray(toList)) {
+        lines.push(`- ${from} → ${toList.join(', ')}\n`);
+      }
+    }
+    return lines.join('');
+  } catch (_: unknown) {
+    return null;
+  }
+}
+
+for (const name of skillDirs) {
+  const src = path.join(skillsSource, name);
+  const dest = path.join(skillsTarget, name);
+  // 合并模式：只覆盖源文件中存在的文件，保留用户在 skill 目录下自己添加的文件
+  fs.cpSync(src, dest, { recursive: true, force: true });
+
+  if (name === 'alembic-recipes') {
+    // V2: 生成轻量 Recipe 索引（替代 V1 全文拼接 + by-category 切片）
+    const context = buildProjectRecipesContext(projectRoot);
+    const refDir = path.join(dest, 'references');
+    if (!fs.existsSync(refDir)) {
+      fs.mkdirSync(refDir, { recursive: true });
+    }
+    const contextPath = path.join(refDir, 'project-recipes-context.md');
+    if (context) {
+      fs.writeFileSync(contextPath, context, 'utf8');
+    } else {
+      if (fs.existsSync(contextPath)) {
+        fs.unlinkSync(contextPath);
+      }
+    }
+    // 清理 V1 遗留的 by-category 切片（如存在）
+    const oldCatDir = path.join(refDir, 'by-category');
+    if (fs.existsSync(oldCatDir)) {
+      fs.rmSync(oldCatDir, { recursive: true });
+    }
+    const oldIndexJson = path.join(refDir, 'index.json');
+    if (fs.existsSync(oldIndexJson)) {
+      fs.unlinkSync(oldIndexJson);
+    }
+  }
+  if (name === 'alembic-structure') {
+    // spmmap 摘要注入到 structure skill（替代已删除的 dep-graph skill）
+    const summary = buildSpmmapSummary(projectRoot);
+    const refDir = path.join(dest, 'references');
+    if (!fs.existsSync(refDir)) {
+      fs.mkdirSync(refDir, { recursive: true });
+    }
+    const summaryPath = path.join(refDir, 'spmmap-summary.md');
+    if (summary) {
+      fs.writeFileSync(summaryPath, summary, 'utf8');
+    } else {
+      if (fs.existsSync(summaryPath)) {
+        fs.unlinkSync(summaryPath);
+      }
+    }
+  }
+  if (name === 'alembic-guard') {
+    // V2: Guard 索引（同 recipes 索引），Agent 主路径走 MCP guard_check
+    const context = buildProjectRecipesContext(projectRoot);
+    const refDir = path.join(dest, 'references');
+    if (!fs.existsSync(refDir)) {
+      fs.mkdirSync(refDir, { recursive: true });
+    }
+    const guardPath = path.join(refDir, 'guard-context.md');
+    if (context) {
+      fs.writeFileSync(guardPath, context, 'utf8');
+    } else {
+      if (fs.existsSync(guardPath)) {
+        fs.unlinkSync(guardPath);
+      }
+    }
+  }
+}
+
+// 可选：写入 Cursor 规则（.cursor/rules/*.mdc），使会话中持久遵循 Alembic 约定
+const cursorRulesSource = path.join(alembicRoot, 'templates', 'cursor-rules');
+const cursorRulesTarget = getCursorRulesDir(projectRoot);
+if (fs.existsSync(cursorRulesSource)) {
+  const ruleFiles = fs
+    .readdirSync(cursorRulesSource, { withFileTypes: true })
+    .filter((d) => d.isFile() && d.name.toLowerCase().endsWith('.mdc'))
+    .map((d) => d.name);
+  if (ruleFiles.length > 0) {
+    if (!fs.existsSync(cursorRulesTarget)) {
+      fs.mkdirSync(cursorRulesTarget, { recursive: true });
+    }
+    for (const name of ruleFiles) {
+      const src = path.join(cursorRulesSource, name);
+      const dest = path.join(cursorRulesTarget, name);
+      fs.copyFileSync(src, dest);
+    }
+  }
+}
+
+// 可选：写入 MCP 配置，使 alembic_search 等工具可用（连接层封装在此）
+const mcpPath = path.join(getCursorRoot(projectRoot), 'mcp.json');
+const mcpServerScript = path.join(alembicRoot, 'bin', 'mcp-server.js');
+const addMcp = process.argv.includes('--mcp');
+if (addMcp && fs.existsSync(mcpServerScript)) {
+  let mcp: CursorMcpConfig = { mcpServers: {} };
+  if (fs.existsSync(mcpPath)) {
+    try {
+      mcp = JSON.parse(fs.readFileSync(mcpPath, 'utf8')) as CursorMcpConfig;
+      if (!mcp.mcpServers) {
+        mcp.mcpServers = {};
+      }
+    } catch (_: unknown) {}
+  }
+  mcp.mcpServers ??= {};
+  mcp.mcpServers.alembic = {
+    type: 'stdio',
+    command: 'node',
+    args: [mcpServerScript],
+    env: { ALEMBIC_UI_URL: process.env.ALEMBIC_UI_URL || defaults.DEFAULT_ALEMBIC_UI_URL },
+  };
+  fs.mkdirSync(path.dirname(mcpPath), { recursive: true });
+  fs.writeFileSync(mcpPath, JSON.stringify(mcp, null, 2), 'utf8');
+} else if (addMcp) {
+  // mcp-server.js 不存在，已跳过
+}
+
+const runEmbed = process.argv.includes('--embed');
+if (runEmbed) {
+  (async () => {
+    try {
+      const IndexingPipeline = require(
+        path.join(alembicRoot, 'lib', 'context', 'IndexingPipeline')
+      ) as { run: (root: string, opts: { clear: boolean }) => Promise<unknown> };
+      const _result = await IndexingPipeline.run(projectRoot, { clear: false });
+      // 语义索引已更新
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.warn('⚠️  语义索引更新失败:', message);
+    }
+  })().catch(() => process.exit(1));
+}

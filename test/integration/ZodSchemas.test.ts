@@ -34,6 +34,7 @@ import {
   BatchPublishBody,
   CreateGuardRuleBody,
   CreateKnowledgeBody,
+  RemoteSendBody,
   SearchQuery,
   UpdateKnowledgeBody,
 } from '../../lib/shared/schemas/http-requests.js';
@@ -46,6 +47,7 @@ import {
   SearchInput,
   SkillInput,
   StructureInput,
+  SubmitKnowledgeInput,
   TaskInput,
   TOOL_SCHEMAS,
 } from '../../lib/shared/schemas/mcp-tools.js';
@@ -328,6 +330,7 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
         'alembic_skill',
         'alembic_bootstrap',
         'alembic_dimension_complete',
+        'alembic_wiki',
         'alembic_task',
         'alembic_enrich_candidates',
         'alembic_knowledge_lifecycle',
@@ -338,8 +341,8 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
       }
     });
 
-    test('should have at least 14 entries', () => {
-      expect(Object.keys(TOOL_SCHEMAS).length).toBeGreaterThanOrEqual(14);
+    test('should have at least 15 entries', () => {
+      expect(Object.keys(TOOL_SCHEMAS).length).toBeGreaterThanOrEqual(15);
     });
   });
 });
@@ -437,6 +440,17 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
     test('should accept valid credentials', () => {
       const result = AuthLoginBody.parse({ username: 'admin', password: 'pass' });
       expect(result.username).toBe('admin');
+    });
+  });
+
+  describe('RemoteSendBody', () => {
+    test('should trim command', () => {
+      const result = RemoteSendBody.parse({ command: '  hello world  ' });
+      expect(result.command).toBe('hello world');
+    });
+
+    test('should reject empty command', () => {
+      expect(() => RemoteSendBody.parse({ command: '' })).toThrow();
     });
   });
 });

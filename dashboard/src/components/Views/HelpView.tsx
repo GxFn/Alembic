@@ -334,6 +334,8 @@ const HelpView: React.FC = () => {
               <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
                 <li dangerouslySetInnerHTML={{ __html: t('help.agentArchPresetChat') }} />
                 <li dangerouslySetInnerHTML={{ __html: t('help.agentArchPresetInsight') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchPresetLark') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchPresetRemoteExec') }} />
               </ul>
             </div>
             {/* Strategies */}
@@ -487,6 +489,22 @@ const HelpView: React.FC = () => {
                 <li dangerouslySetInnerHTML={{ __html: t('help.featureTaskGraphBullet4') }} />
               </ul>
             </div>
+            {/* Wiki Doc Generation */}
+            <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
+                  <FileCode size={ICON_SIZES.lg} className="text-rose-600" />
+                </div>
+                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.wikiDocGen')}</h3>
+              </div>
+              <p className="text-[var(--fg-secondary)] text-xs mb-3">{t('help.wikiDocGenDesc')}</p>
+              <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
+                <li dangerouslySetInnerHTML={{ __html: t('help.wikiDocBullet1') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.wikiDocBullet2') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.wikiDocBullet3') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.wikiDocBullet4') }} />
+              </ul>
+            </div>
             {/* Data Sync */}
             <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
               <div className="flex items-center gap-3 mb-2">
@@ -601,6 +619,7 @@ const HelpView: React.FC = () => {
                   <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>skill</code></td><td className="px-3 py-2 border-b">{t('help.mcpSkillDesc')}</td></tr>
                   <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>bootstrap</code></td><td className="px-3 py-2 border-b">{t('help.mcpBootstrapDesc')}</td></tr>
                   <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>dimension_complete</code></td><td className="px-3 py-2 border-b">{t('help.mcpDimensionCompleteDesc')}</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>wiki_plan</code> / <code>wiki_finalize</code></td><td className="px-3 py-2 border-b">{t('help.mcpWikiPlanDesc')} · {t('help.mcpWikiFinalizeDesc')}</td></tr>
                   <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>task</code></td><td className="px-3 py-2 border-b">{t('help.mcpTaskDesc')}</td></tr>
                   <tr className="bg-amber-50/30"><td colSpan={3} className="px-3 py-1.5 border-b font-semibold text-amber-700 text-xs">{t('help.mcpAdminLayerHeader')}</td></tr>
                   <tr><td className="px-3 py-2 border-b font-medium">admin</td><td className="px-3 py-2 border-b"><code>enrich_candidates</code> / <code>validate_candidate</code> / <code>check_duplicate</code></td><td className="px-3 py-2 border-b">{t('help.mcpEnrichDesc')}</td></tr>
@@ -630,6 +649,38 @@ const HelpView: React.FC = () => {
             </div>
           </div>
 
+          {/* VSCode Extension */}
+          <div className="mt-5">
+            <h3 className="font-semibold text-[var(--fg-primary)] mb-3 flex items-center gap-2">
+              <MonitorSmartphone size={ICON_SIZES.lg} className="text-blue-600" />
+              {t('help.vscodeExtension')}
+            </h3>
+            <p className="text-[var(--fg-secondary)] text-sm mb-3">{t('help.vscodeExtDesc')}</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+              <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg p-3">
+                <h4 className="font-semibold text-[var(--fg-primary)] text-sm mb-1">{t('help.vscodeExtTaskTool')}</h4>
+                <p className="text-[var(--fg-secondary)] text-xs">{t('help.vscodeExtTaskToolDesc')}</p>
+              </div>
+              <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg p-3">
+                <h4 className="font-semibold text-[var(--fg-primary)] text-sm mb-1">{t('help.vscodeExtGuardDiag')}</h4>
+                <p className="text-[var(--fg-secondary)] text-xs">{t('help.vscodeExtGuardDiagDesc')}</p>
+              </div>
+              <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg p-3">
+                <h4 className="font-semibold text-[var(--fg-primary)] text-sm mb-1">{t('help.vscodeExtCodeLens')}</h4>
+                <p className="text-[var(--fg-secondary)] text-xs">{t('help.vscodeExtCodeLensDesc')}</p>
+              </div>
+            </div>
+            <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg p-3">
+              <h4 className="font-semibold text-[var(--fg-primary)] text-sm mb-2">Commands</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-xs text-[var(--fg-secondary)]">
+                <p>{t('help.vscodeExtCmd1')}</p>
+                <p>{t('help.vscodeExtCmd2')}</p>
+                <p>{t('help.vscodeExtCmd3')}</p>
+                <p>{t('help.vscodeExtCmd4')}</p>
+                <p>{t('help.vscodeExtCmd5')}</p>
+              </div>
+            </div>
+          </div>
         </Section>
 
         {/* 命令速查 */}

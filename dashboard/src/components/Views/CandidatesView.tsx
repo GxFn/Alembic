@@ -324,7 +324,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
     }
   }, []);
 
-  /** Phase 6: AI 润色所有 Bootstrap 候选 — 打开候选润色面板 */
+  /** Phase 6: AI 润色所有 Bootstrap 候选 — 打开全局 AI Chat 润色模式 */
   const handleRefineBootstrap = useCallback(() => {
     if (!effectiveTarget || !data?.candidates?.[effectiveTarget]) return;
     const items = data.candidates[effectiveTarget].items;
@@ -336,7 +336,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
     });
   }, [effectiveTarget, data?.candidates, globalChat, handleCandidateUpdated]);
 
-  /** 单条候选润色 — 打开候选润色面板 */
+  /** 单条候选润色 — 打开全局 AI Chat 润色模式 */
   const handleRefineSingle = useCallback((candidateId: string) => {
     if (!effectiveTarget || !data?.candidates?.[effectiveTarget]) return;
     setExpandedId(candidateId);

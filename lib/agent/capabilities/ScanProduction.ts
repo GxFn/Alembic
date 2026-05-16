@@ -15,7 +15,7 @@ export class ScanProduction extends Capability {
 3. 设计原理说明 (content.rationale)
 4. 相关文件路径 (reasoning.sources)
 5. 正确的 kind (rule / pattern / fact)
-6. 完整的 插件适配字段 (trigger, doClause, whenClause 等)
+6. 完整的 Cursor 交付字段 (trigger, doClause, whenClause 等)
 
 工作流:
 1. 识别分析中的知识点

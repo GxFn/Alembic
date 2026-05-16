@@ -77,7 +77,7 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
     setLoading(true);
     try {
       const [data, providerList] = await Promise.all([
-        api.getLlmWorkspaceConfig(),
+        api.getLlmEnvConfig(),
         api.getAiProviders().catch(() => [] as AiProviderInfo[]),
       ]);
       const filtered = providerList.filter(p => p.id !== 'mock');
@@ -166,7 +166,7 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
           providerKeys[pid] = state.apiKey.trim();
         }
       }
-      await api.saveLlmWorkspaceConfig({
+      await api.saveLlmEnvConfig({
         provider,
         model: model || undefined,
         proxy: proxy.trim() || undefined,
@@ -482,7 +482,7 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
                 {!hasWorkspaceConfig && (
                   <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
                     <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                    <span>{t('llmConfig.settingsWarning')}</span>
+                    <span>{t('llmConfig.envWarning')}</span>
                   </div>
                 )}
 
@@ -593,7 +593,7 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
             ) : (
               <Save size={16} />
             )}
-            {saveSuccess ? t('llmConfig.saved') : t('llmConfig.saveSettings')}
+            {saveSuccess ? t('llmConfig.saved') : t('llmConfig.saveToEnv')}
           </button>
         </div>
       </div>

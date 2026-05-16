@@ -5,13 +5,14 @@ import { runWorkflowCompletionFinalizer } from '#workflows/capabilities/completi
 import { buildInternalDimensionCompletionSummary } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
 
 describe('WorkflowCompletionFinalizer', () => {
-  test('runs panorama before immediate semantic memory', async () => {
+  test('runs delivery and panorama before scheduling wiki and immediate semantic memory', async () => {
     const events: string[] = [];
     const container = createContainer(events);
 
     const result = await runWorkflowCompletionFinalizer({
       ctx: { container: { get: () => undefined } },
       session: { id: 'session-1' },
+      projectRoot: process.cwd(),
       dataRoot: process.cwd(),
       log: { info: vi.fn(), warn: vi.fn() },
       dependencies: {
@@ -21,16 +22,17 @@ describe('WorkflowCompletionFinalizer', () => {
       semanticMemory: { mode: 'immediate' },
     });
 
-    expect(events).toEqual(['panorama:rescan', 'panorama:overview']);
+    expect(events).toEqual(['delivery', 'panorama:rescan', 'panorama:overview', 'schedule']);
     expect(result.semanticMemoryResult).toBeNull();
   });
 
-  test('scheduled semantic memory uses the workflow scheduler', async () => {
+  test('scheduled semantic memory shares the same scheduler boundary as wiki', async () => {
     const scheduled: Array<() => Promise<void>> = [];
 
     await runWorkflowCompletionFinalizer({
       ctx: { container: { get: () => undefined } },
       session: { id: 'session-1' },
+      projectRoot: process.cwd(),
       dataRoot: process.cwd(),
       log: { info: vi.fn(), warn: vi.fn() },
       dependencies: {
@@ -39,29 +41,33 @@ describe('WorkflowCompletionFinalizer', () => {
       },
     });
 
-    expect(scheduled).toHaveLength(1);
+    expect(scheduled).toHaveLength(2);
   });
 
-  test('can skip panorama while keeping scheduled semantic memory', async () => {
+  test('can skip target delivery and wiki while keeping scheduled semantic memory', async () => {
     const events: string[] = [];
     const scheduled: Array<() => Promise<void>> = [];
 
     const result = await runWorkflowCompletionFinalizer({
       ctx: { container: { get: () => undefined } },
       session: { id: 'session-1' },
+      projectRoot: process.cwd(),
       dataRoot: process.cwd(),
       log: { info: vi.fn(), warn: vi.fn() },
       dependencies: {
         getServiceContainer: () => createContainer(events),
         scheduleTask: (task) => scheduled.push(task),
       },
-      steps: { panorama: 'skip' },
+      steps: { delivery: 'skip', wiki: 'skip' },
     });
 
-    expect(events).toEqual([]);
+    expect(events).toEqual(['panorama:rescan', 'panorama:overview']);
     expect(scheduled).toHaveLength(1);
     expect(result).toMatchObject({
-      panoramaStatus: 'skipped',
+      deliveryVerification: null,
+      deliveryStatus: 'skipped',
+      wikiStatus: 'skipped',
+      panoramaStatus: 'completed',
     });
   });
 
@@ -83,11 +89,13 @@ describe('WorkflowCompletionFinalizer', () => {
     expect(
       buildInternalDimensionCompletionSummary({
         pipelineMode: 'rescan',
-        workflowCompletion: { semanticMemoryResult: null },
+        workflowCompletion: { deliveryVerification: null, semanticMemoryResult: null },
       })
     ).toMatchObject({
       mode: 'rescan',
       isolation: 'pipeline-isolation',
+      delivery: { status: 'skipped' },
+      wiki: { status: 'skipped' },
       semanticMemory: { status: 'skipped' },
     });
   });
@@ -97,6 +105,7 @@ describe('WorkflowCompletionFinalizer', () => {
       buildInternalDimensionCompletionSummary({
         pipelineMode: 'bootstrap',
         workflowCompletion: {
+          deliveryVerification: { ok: true } as never,
           semanticMemoryResult: {
             total: { added: 1, updated: 0, merged: 0, skipped: 0 },
             durationMs: 10,
@@ -106,21 +115,28 @@ describe('WorkflowCompletionFinalizer', () => {
     ).toMatchObject({
       mode: 'bootstrap',
       isolation: 'full-completion',
+      delivery: { status: 'completed' },
+      wiki: { status: 'scheduled' },
       semanticMemory: { status: 'completed' },
     });
   });
 
-  test('summarizes skipped bootstrap semantic memory from finalizer result', () => {
+  test('summarizes skipped bootstrap delivery and wiki from finalizer result', () => {
     expect(
       buildInternalDimensionCompletionSummary({
         pipelineMode: 'bootstrap',
         workflowCompletion: {
+          deliveryVerification: null,
           semanticMemoryResult: null,
+          deliveryStatus: 'skipped',
+          wikiStatus: 'skipped',
         },
       })
     ).toMatchObject({
       mode: 'bootstrap',
       isolation: 'full-completion',
+      delivery: { status: 'skipped' },
+      wiki: { status: 'skipped' },
       semanticMemory: { status: 'skipped' },
     });
   });
@@ -132,12 +148,21 @@ describe('WorkflowCompletionFinalizer', () => {
     );
 
     expect(source).toContain('CompletionSteps.js');
+    expect(source).toContain('runCursorDelivery');
+    expect(source).toContain('verifyDelivery');
     expect(source).toContain('refreshPanorama');
+    expect(source).toContain('generateWiki');
     expect(source).toContain('consolidateSemanticMemory');
   });
 });
 
 function createContainer(events: string[]) {
+  const pipeline = {
+    deliver: vi.fn(async () => {
+      events.push('delivery');
+      return { channelA: { rulesCount: 1 } };
+    }),
+  };
   const panoramaService = {
     rescan: vi.fn(async () => {
       events.push('panorama:rescan');
@@ -148,8 +173,11 @@ function createContainer(events: string[]) {
     }),
   };
   return {
-    services: { panoramaService: true },
+    services: { cursorDeliveryPipeline: true, panoramaService: true },
     get: (name: string) => {
+      if (name === 'cursorDeliveryPipeline') {
+        return pipeline;
+      }
       if (name === 'panoramaService') {
         return panoramaService;
       }

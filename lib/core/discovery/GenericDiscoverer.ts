@@ -19,6 +19,7 @@ import {
 const EXCLUDE_DIRS = new Set([
   'node_modules',
   '.git',
+  '.cursor',
   'dist',
   'build',
   'out',

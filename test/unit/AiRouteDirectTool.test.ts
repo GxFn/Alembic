@@ -113,7 +113,7 @@ describe('AI route direct tool governance', () => {
   test('builds chat AgentRunInput without route-level runtime construction fields', () => {
     const input = createHttpChatAgentRunInput(
       mockRequest({
-        body: { mode: 'insight' },
+        body: { mode: 'remote-exec' },
         resolvedRole: 'developer',
         resolvedUser: 'local-user',
       }),

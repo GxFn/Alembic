@@ -3,7 +3,7 @@
  * @description Discoverer 用户偏好持久化 + 冲突检测
  *
  * 当多个 Discoverer 匹配且置信度接近时，允许用户确认选择并持久化。
- * 插件运行时返回 ambiguous 标记，由宿主决定如何向用户确认。
+ * CLI 上下文使用 readline 交互，MCP/HTTP 上下文返回 ambiguous 标记。
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -150,4 +150,62 @@ export function savePreference(
   };
 
   writeFileSync(prefPath, JSON.stringify(data, null, 2), 'utf8');
+}
+
+// ── CLI Interactive Prompt ──────────────────────────
+
+/**
+ * CLI 交互式确认 Discoverer 选择
+ * 仅在 CLI 终端上下文（stdin 可用）时有效
+ *
+ * @returns 用户选择的 Discoverer ID，或 null（非交互环境/超时）
+ */
+export async function promptDiscovererChoice(
+  matches: DetectMatch[],
+  recommended?: DetectMatch
+): Promise<string | null> {
+  // 检测是否在可交互终端
+  if (!process.stdin.isTTY) {
+    return null;
+  }
+
+  const { createInterface } = await import('node:readline');
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+  const question = (prompt: string): Promise<string> =>
+    new Promise((resolve) => {
+      rl.question(prompt, (answer) => {
+        resolve(answer.trim());
+      });
+    });
+
+  try {
+    console.log('\n⚠️  项目构建系统识别需要确认\n');
+    console.log('检测到以下构建系统配置：');
+
+    for (let i = 0; i < matches.length; i++) {
+      const m = matches[i];
+      const rec = recommended && m.discovererId === recommended.discovererId ? '  ← 推荐' : '';
+      console.log(`  [${i + 1}] ${m.displayName}  confidence: ${m.confidence.toFixed(2)}${rec}`);
+    }
+
+    const defaultIdx = recommended
+      ? matches.findIndex((m) => m.discovererId === recommended.discovererId) + 1
+      : 1;
+
+    const answer = await question(
+      `\n请选择主要构建系统 [1-${matches.length}]，或按回车使用推荐 (${defaultIdx}): `
+    );
+
+    const choice = answer === '' ? defaultIdx : Number.parseInt(answer, 10);
+
+    if (choice >= 1 && choice <= matches.length) {
+      return matches[choice - 1].discovererId;
+    }
+
+    // 无效输入, 使用推荐
+    return recommended?.discovererId ?? matches[0].discovererId;
+  } finally {
+    rl.close();
+  }
 }

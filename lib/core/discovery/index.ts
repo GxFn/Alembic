@@ -47,6 +47,7 @@ export {
   type DiscovererPreferenceData,
   detectConflict,
   loadPreference,
+  promptDiscovererChoice,
   savePreference,
 } from './DiscovererPreference.js';
 export { DiscovererRegistry } from './DiscovererRegistry.js';

@@ -24,6 +24,7 @@ const EXCLUDE_DIRS = new Set([
   'build',
   'node_modules',
   '.idea',
+  '.vscode',
   'ios',
   'android',
   'macos',
@@ -32,6 +33,7 @@ const EXCLUDE_DIRS = new Set([
   'web',
   '.pub-cache',
   '.pub',
+  '.cursor',
 ]);
 
 export class DartDiscoverer extends ProjectDiscoverer {

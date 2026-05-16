@@ -71,6 +71,24 @@ describe('AgentProfileCompiler', () => {
     ).toThrow(/must not contain functions/);
   });
 
+  test('compiles signal-analysis action space from pure run params', () => {
+    const compiler = createCompiler();
+
+    const suggestProfile = compiler.compile(
+      { id: 'signal-analysis' },
+      { params: { mode: 'suggest' } }
+    );
+    const autoProfile = compiler.compile({ id: 'signal-analysis' }, { params: { mode: 'auto' } });
+
+    expect(suggestProfile.actionSpace).toEqual({ mode: 'none' });
+    expect(suggestProfile.additionalTools).toEqual([]);
+    expect(autoProfile.actionSpace).toEqual({
+      mode: 'listed',
+      toolIds: ['suggest_skills', 'create_skill'],
+    });
+    expect(autoProfile.additionalTools).toEqual(['suggest_skills', 'create_skill']);
+  });
+
   test('compiles evolution-audit budget from pure recipe params', () => {
     const compiler = createCompiler();
 

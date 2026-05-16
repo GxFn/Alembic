@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Alembic">
+  <rect width="512" height="512" rx="96" fill="#0F172A"/>
+  <path d="M156 380h200L276 112h-40L156 380Z" fill="#F8FAFC"/>
+  <path d="M213 318h86l-31-105h-24l-31 105Z" fill="#2563EB"/>
+  <path d="M128 384h256" stroke="#60A5FA" stroke-width="28" stroke-linecap="round"/>
+</svg>

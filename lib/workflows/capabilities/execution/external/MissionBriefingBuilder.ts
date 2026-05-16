@@ -3,7 +3,7 @@
  *
  * 将 Phase 1-4 的分析结果（AST / EntityGraph / DepGraph / Guard）
  * + 维度定义 + 提交规范 + 执行计划 整合为一站式 Mission Briefing，
- * 让 IDE 插件宿主中的外部 Agent 拥有全部必要上下文来完成代码分析。
+ * 让外部 Agent (Cursor/Copilot) 拥有全部必要上下文来完成代码分析。
  *
  * 设计原则：
  *   - 100KB 响应硬上限，大项目自动降级压缩
@@ -15,7 +15,7 @@
  */
 
 import { getDimensionSOP, PRE_SUBMIT_CHECKLIST } from '#domain/dimension/DimensionSop.js';
-import { getAgentAdapterFieldSpec } from '#domain/knowledge/FieldSpec.js';
+import { getCursorDeliverySpec } from '#domain/knowledge/FieldSpec.js';
 import { PROJECT_SNAPSHOT_STYLE_GUIDE } from '#domain/knowledge/StyleGuide.js';
 import type {
   AstCategoryInfo,
@@ -305,7 +305,7 @@ function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
       '例如: BaseViewController 的继承规则只应出现在 code-pattern（设计模式）中，不应同时出现在 architecture（分层架构）和 code-standard（命名规范）中。' +
       '如果某个发现与多个维度相关，只在最核心的维度提交，其他维度用不同的独立知识点填充。' +
       '宁可少提交也不要重复充数 — 与前序维度标题相同的候选会被系统自动拒绝（硬去重）。',
-    adapterFields: getAgentAdapterFieldSpec(),
+    cursorFields: getCursorDeliverySpec(),
     dimensionCompleteGuide:
       '调用 dimension_complete 时必须传递: referencedFiles=[本维度分析过的全部文件路径], keyFindings=[3-5条关键发现摘要], analysisText=详细分析报告(≥500字符,含##标题+列表+代码块)',
     preSubmitChecklist: PRE_SUBMIT_CHECKLIST,

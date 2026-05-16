@@ -114,7 +114,7 @@ export interface KnowledgeEntryWire {
   difficulty: string | null;
   tags: string[];
 
-  // ── 插件适配字段 ──
+  // ── Delivery 字段 ──
   trigger: string;
   topicHint: string;
   whenClause: string;

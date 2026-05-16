@@ -26,10 +26,12 @@ import ModuleExplorerView from './components/Views/ModuleExplorerView';
 import GuardView from './components/Views/GuardView';
 import PanoramaView from './components/Views/PanoramaView';
 import { GlobalChatProvider, GlobalChatPanel, useGlobalChat } from './components/Shared/GlobalChatDrawer';
+import AiChatView from './components/Views/AiChatView';
 import KnowledgeView from './components/Views/KnowledgeView';
 import SkillsView from './components/Views/SkillsView';
 import BootstrapProgressView from './components/Views/BootstrapProgressView';
 import JobsView from './components/Views/JobsView';
+import WikiView from './components/Views/WikiView';
 import SignalReportView from './components/Views/SignalReportView';
 import RecipeEditor from './components/Modals/RecipeEditor';
 import CreateModal from './components/Modals/CreateModal';
@@ -198,6 +200,7 @@ const App: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createPath, setCreatePath] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
+  // chatHistory / userInput / isAiThinking 已迁移到 GlobalChatDrawer
   const [semanticResults, setSemanticResults] = useState<any[] | null>(null);
   const [searchAction, setSearchAction] = useState<{ q: string; path: string } | null>(null);
   const [isSavingRecipe, setIsSavingRecipe] = useState(false);
@@ -206,11 +209,15 @@ const App: React.FC = () => {
   const [llmReady, setLlmReady] = useState(true); // 默认 true，加载后更新
   const [showLlmConfig, setShowLlmConfig] = useState(false);
 
+  // SignalCollector 后台推荐计数
+  const [signalSuggestionCount, setSignalSuggestionCount] = useState(0);
+
   // SignalMonitor side panel
   const [showSignalMonitor, setShowSignalMonitor] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const trickleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // chatAbortControllerRef 已迁移到 GlobalChatDrawer
 
   // 搜索变化时 Recipes 列表重置到第一页；刷新数据（fetchData）不重置页码
   useEffect(() => {
@@ -276,6 +283,25 @@ const App: React.FC = () => {
       setIsCancellingBootstrap(false);
     }
   };
+
+  // SignalCollector 轮询：每 5 分钟检查是否有新建议
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const status = await api.getSignalStatus();
+        if (!cancelled) {
+          // 优先使用 pendingSuggestions 实际数量，降级到 snapshot 历史计数
+          const pending = status?.suggestions?.length || 0;
+          const fromSnapshot = status?.snapshot?.lastResult?.newSuggestions || 0;
+          setSignalSuggestionCount(pending || fromSnapshot);
+        }
+      } catch { /* silent */ }
+    };
+    poll();
+    const timer = setInterval(poll, 5 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, []);
 
   // Bootstrap 异步填充完成时刷新数据 & 弹出通知（只在 App 层做一次，避免 tab 切换导致重复通知）
   const bootstrapNotifiedRef = useRef<string | null>(null);
@@ -414,7 +440,7 @@ const App: React.FC = () => {
 
   const fetchLlmStatus = async () => {
   try {
-    const data = await api.getLlmWorkspaceConfig();
+    const data = await api.getLlmEnvConfig();
     setLlmReady(data.llmReady);
   } catch {
     // 加载失败时保持默认值（true），不影响正常使用
@@ -1076,6 +1102,7 @@ const App: React.FC = () => {
     activeTab={activeTab} 
     navigateToTab={navigateToTab} 
     candidateCount={candidateCount}
+    signalSuggestionCount={signalSuggestionCount}
     currentUser={auth.authEnabled ? auth.user?.username : (permission.user !== 'anonymous' ? permission.user : undefined)}
     currentRole={permission.role}
     permissionMode={permission.mode}
@@ -1099,7 +1126,7 @@ const App: React.FC = () => {
       onToggleSignalMonitor={() => setShowSignalMonitor(v => !v)}
     />
 
-    <div className="flex-1 overflow-y-auto p-4 xl:p-6 2xl:p-8">
+    <div className={`flex-1 ${activeTab === 'wiki' ? 'overflow-hidden' : 'overflow-y-auto p-4 xl:p-6 2xl:p-8'}`}>
       <AnimatePresence mode="wait">
       <motion.div
         key={activeTab}
@@ -1129,7 +1156,7 @@ const App: React.FC = () => {
       ) : activeTab === 'panorama' ? (
       <PanoramaView />
       ) : activeTab === 'skills' ? (
-      <SkillsView onRefresh={fetchData} />
+      <SkillsView onRefresh={fetchData} signalSuggestionCount={signalSuggestionCount} onSuggestionCountChange={setSignalSuggestionCount} />
       ) : activeTab === 'jobs' ? (
       <JobsView onOpenCandidates={() => navigateToTab('candidates')} />
       ) : activeTab === 'candidates' ? (
@@ -1228,12 +1255,14 @@ const App: React.FC = () => {
         onAddCustomFolder={handleAddCustomFolder}
         onRemoveCustomFolder={handleRemoveCustomFolder}
       />
+      ) : activeTab === 'wiki' ? (
+      <WikiView />
       ) : activeTab === 'signals' ? (
       <SignalReportView />
       ) : activeTab === 'help' ? (
       <HelpView />
       ) : (
-      <HelpView />
+      <AiChatView />
       )}
       </motion.div>
       </AnimatePresence>
@@ -1285,7 +1314,7 @@ const App: React.FC = () => {
 
   </main>
 
-  {/* 候选润色面板 — flex 同层，挤压 main 空间 */}
+  {/* AI Chat 内联面板 — flex 同层，挤压 main 空间 */}
   <ChatPanelSlot />
 
   {/* ⌘K Command Palette */}

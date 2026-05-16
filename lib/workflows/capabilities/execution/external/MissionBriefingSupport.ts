@@ -238,11 +238,21 @@ export function buildInternalNextSteps(
 }
 
 /** Bootstrap 全部维度完成后的 nextActions（供外部 Agent 使用） */
-export const BOOTSTRAP_COMPLETE_ACTIONS: Array<{
-  action: string;
-  prompt: string;
-  tool: string;
-}> = [];
+export const BOOTSTRAP_COMPLETE_ACTIONS = [
+  {
+    action: 'cursor_delivery',
+    prompt:
+      '知识库初始化完成！Cursor Rules 已自动生成到 .cursor/rules/ 目录。如果生成失败，你可以手动触发 Cursor Delivery。',
+    tool: 'alembic_cursor_delivery',
+    auto: true,
+  },
+  {
+    action: 'wiki_generate',
+    prompt:
+      '知识库初始化完成！是否继续生成项目 Wiki 文档？Wiki 将基于刚建立的知识库和项目分析数据自动生成结构化文档。',
+    tool: 'alembic_wiki_plan',
+  },
+];
 
 // ═══════════════════════════════════════════════════════════
 // §3 — BriefingCompressionPolicy

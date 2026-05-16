@@ -879,6 +879,67 @@ async function _injectEnhancementGuardRules(
   }
 }
 
+// ═══ ReverseGuard — Recipe→Code 反向验证 ═══════════════════
+
+interface ReverseAuditArgs {
+  maxFiles?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * 对所有 active rule Recipe 执行反向验证：
+ *   - 检查 coreCode 引用的符号是否还存在
+ *   - 检查 guard pattern 匹配率是否骤降
+ */
+export async function guardReverseAudit(ctx: McpContext, args: ReverseAuditArgs) {
+  const { ReverseGuard } = await import('#service/guard/ReverseGuard.js');
+  const { collectSourceFilesWithContent } = await import('#service/guard/SourceFileCollector.js');
+
+  const projectRoot = resolveProjectRoot(ctx.container);
+
+  // 尝试从 DI 获取，回退到新建
+  let reverseGuard: InstanceType<typeof ReverseGuard>;
+  try {
+    reverseGuard = ctx.container.get('reverseGuard') as InstanceType<typeof ReverseGuard>;
+  } catch {
+    reverseGuard = new ReverseGuard(
+      ctx.container.get('knowledgeRepository') as ConstructorParameters<typeof ReverseGuard>[0],
+      ctx.container.get('codeEntityRepository') as ConstructorParameters<typeof ReverseGuard>[1],
+      ctx.container.get('recipeSourceRefRepository') as ConstructorParameters<
+        typeof ReverseGuard
+      >[2]
+    );
+  }
+
+  const maxFiles = args.maxFiles || 200;
+  const projectFiles = await collectSourceFilesWithContent(projectRoot, { maxFiles });
+  const results = reverseGuard.auditAllRules(projectFiles);
+  const drifts = reverseGuard.getDriftResults(results);
+
+  return envelope({
+    success: true,
+    data: {
+      totalRecipes: results.length,
+      healthy: results.filter((r) => r.recommendation === 'healthy').length,
+      investigate: results.filter((r) => r.recommendation === 'investigate').length,
+      decay: results.filter((r) => r.recommendation === 'decay').length,
+      drifts: drifts.map((d) => ({
+        recipeId: d.recipeId,
+        title: d.title,
+        recommendation: d.recommendation,
+        signals: d.signals,
+      })),
+      allResults: results.map((r) => ({
+        recipeId: r.recipeId,
+        title: r.title,
+        recommendation: r.recommendation,
+        signalCount: r.signals.length,
+      })),
+    },
+    meta: { tool: 'alembic_guard', operation: 'reverse_audit' },
+  });
+}
+
 // ═══ CoverageAnalyzer — 模块覆盖率矩阵 ═══════════════════
 
 interface CoverageMatrixArgs {

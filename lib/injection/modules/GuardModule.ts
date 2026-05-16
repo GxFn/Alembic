@@ -9,17 +9,20 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveDataRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
 import type { GuardViolationRepositoryImpl } from '../../repository/guard/GuardViolationRepository.js';
 import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
+import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 import { ComplianceReporter } from '../../service/guard/ComplianceReporter.js';
 import { CoverageAnalyzer } from '../../service/guard/CoverageAnalyzer.js';
 import { ExclusionManager } from '../../service/guard/ExclusionManager.js';
 import { GuardCheckEngine } from '../../service/guard/GuardCheckEngine.js';
 import { GuardFeedbackLoop } from '../../service/guard/GuardFeedbackLoop.js';
 import { GuardService } from '../../service/guard/GuardService.js';
+import { ReverseGuard } from '../../service/guard/ReverseGuard.js';
 import { RuleLearner } from '../../service/guard/RuleLearner.js';
 import { ViolationsStore } from '../../service/guard/ViolationsStore.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
@@ -133,6 +136,17 @@ export function register(c: ServiceContainer) {
         } as ConstructorParameters<typeof GuardFeedbackLoop>[2]
       )
   );
+
+  c.singleton('reverseGuard', (ct: ServiceContainer) => {
+    return new ReverseGuard(
+      ct.get('knowledgeRepository') as KnowledgeRepositoryImpl,
+      ct.get('codeEntityRepository') as CodeEntityRepositoryImpl,
+      ct.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl,
+      {
+        signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
+      }
+    );
+  });
 
   c.singleton('coverageAnalyzer', (ct: ServiceContainer) => {
     let ruleLearner:

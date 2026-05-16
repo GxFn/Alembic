@@ -1,16 +1,18 @@
 /**
  * @module tools/v2/handlers/terminal
  *
- * 终端执行工具 — 直接执行受控命令，返回结构化压缩输出。
+ * 终端执行工具 — 在 Seatbelt 沙箱中执行命令，返回结构化压缩输出。
  * Actions: exec
  *
- * 执行流程: 安全检查 → cwd 校验 → plain exec → OutputCompressor 压缩 → token budget 截断
+ * 执行流程: 安全检查 → cwd 校验 → Seatbelt 沙箱执行 → OutputCompressor 压缩 → token budget 截断
+ *
+ * 沙箱集成: 通过 ToolContext.sandboxExecutor 注入 SandboxExecutor，
+ *           未注入时降级为 plain exec（测试/非 macOS 环境）。
  */
 
 import { exec } from 'node:child_process';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { buildTerminalEnvironment } from '#tools/adapters/terminal-adapter/TerminalEnvironment.js';
 import { stripAnsi } from '../compressor/strip.js';
 import { estimateTokens, fail, ok, type ToolContext, type ToolResult } from '../types.js';
 
@@ -68,11 +70,9 @@ async function handleExec(params: Record<string, unknown>, ctx: ToolContext): Pr
     return fail('terminal.exec requires command');
   }
 
-  const root = path.resolve(ctx.projectRoot);
-  const rawCwd = params.cwd ? String(params.cwd) : root;
-  const cwd = path.resolve(root, rawCwd);
-  const relative = path.relative(root, cwd);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+  const rawCwd = params.cwd ? String(params.cwd) : ctx.projectRoot;
+  const cwd = path.resolve(ctx.projectRoot, rawCwd);
+  if (!cwd.startsWith(ctx.projectRoot)) {
     return fail(`cwd must be within project root: ${ctx.projectRoot}`);
   }
 
@@ -86,7 +86,7 @@ async function handleExec(params: Record<string, unknown>, ctx: ToolContext): Pr
   const startMs = Date.now();
 
   try {
-    const { stdout, stderr, exitCode } = await execDirect(command, cwd, timeout, ctx);
+    const { stdout, stderr, exitCode } = await execInSandboxOrDirect(command, cwd, timeout, ctx);
 
     const rawOutput = combineOutput(stdout, stderr);
     const compressed = await compressOutput(rawOutput, command, ctx);
@@ -113,18 +113,35 @@ async function handleExec(params: Record<string, unknown>, ctx: ToolContext): Pr
   }
 }
 
-async function execDirect(
+/**
+ * 优先使用 Seatbelt 沙箱执行，未注入时降级为 plain exec。
+ *
+ * ctx.sandboxExecutor 由 ToolContextFactory 从 DI 容器注入，
+ * 类型为 { exec(cmd, opts): Promise<{stdout,stderr,exitCode}> }
+ */
+async function execInSandboxOrDirect(
   command: string,
   cwd: string,
   timeout: number,
   ctx: ToolContext
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const executor = ctx.sandboxExecutor as SandboxExecutorLike | undefined;
+  if (executor) {
+    return executor.exec(command, {
+      cwd,
+      projectRoot: ctx.projectRoot,
+      timeout,
+      signal: ctx.abortSignal,
+    });
+  }
+
+  // 降级: plain exec（测试环境 / sandboxExecutor 未注入）
   try {
     const { stdout, stderr } = await execAsync(command, {
       cwd,
       timeout,
       maxBuffer: 1024 * 1024,
-      env: buildTerminalEnvironment(process.env, { TERM: 'dumb', NO_COLOR: '1' }),
+      env: { ...process.env, TERM: 'dumb', NO_COLOR: '1' },
       signal: ctx.abortSignal,
     });
     return { stdout, stderr, exitCode: 0 };
@@ -135,6 +152,13 @@ async function execDirect(
     }
     return { stdout: e.stdout ?? '', stderr: e.stderr ?? '', exitCode: e.code ?? 1 };
   }
+}
+
+interface SandboxExecutorLike {
+  exec(
+    command: string,
+    opts: { cwd: string; projectRoot: string; timeout: number; signal?: AbortSignal }
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }>;
 }
 
 function checkCommandSafety(command: string): { safe: boolean; reason?: string } {

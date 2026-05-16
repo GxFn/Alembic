@@ -1,6 +1,6 @@
 {
   "name": "alembic-ai",
-  "version": "0.1.2",
+  "version": "0.1.0",
   "description": "Alembic — Auto Source Distill. Distill project knowledge from source code into structured recipes for humans and AI agents.",
   "type": "module",
   "main": "dist/lib/bootstrap.js",
@@ -40,6 +40,10 @@
       "alembic-dev": "./lib/external/*",
       "default": "./dist/lib/external/*"
     },
+    "#platform/*": {
+      "alembic-dev": "./lib/platform/*",
+      "default": "./dist/lib/platform/*"
+    },
     "#repo/*": {
       "alembic-dev": "./lib/repository/*",
       "default": "./dist/lib/repository/*"
@@ -60,17 +64,27 @@
       "alembic-dev": "./lib/tools/*",
       "default": "./dist/lib/tools/*"
     },
-    "#codex/*": {
-      "alembic-dev": "./lib/codex/*",
-      "default": "./dist/lib/codex/*"
+    "#sandbox/*": {
+      "alembic-dev": "./lib/sandbox/*",
+      "default": "./dist/lib/sandbox/*"
     }
   },
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsc",
+    "build": "tsc",
     "build:check": "tsc --noEmit",
     "postbuild": "node scripts/postbuild.mjs",
     "prepublishOnly": "npm run release:codex-plugin",
+    "build:screenshot": "swiftc -O -framework ScreenCaptureKit -framework AppKit resources/native-ui/screenshot.swift -o resources/native-ui/screenshot",
+    "install:vscode-ext": "npm ci --prefix resources/vscode-ext",
+    "install:cursor-skill": "node dist/scripts/install-cursor-skill.js",
+    "install:cursor-skill:mcp": "node dist/scripts/install-cursor-skill.js --mcp",
+    "install:vscode-copilot": "node dist/scripts/install-vscode-copilot.js",
+    "verify:context-api": "node dist/scripts/verify-context-api.js",
+    "setup:mcp": "node dist/scripts/setup-mcp-config.js --editor vscode && node dist/scripts/setup-mcp-config.js --editor cursor",
     "build:dashboard": "cd dashboard && npm run build",
+    "build:vscode-ext": "npm --prefix resources/vscode-ext run compile",
+    "package:vscode-ext": "npm --prefix resources/vscode-ext run package --",
+    "dashboard": "node dist/bin/cli.js ui",
     "test": "vitest run",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:integration": "vitest run test/integration",
@@ -78,39 +92,31 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "dev:link": "npm run build && npm install -g .",
-    "dev:codex-plugin:sync": "node scripts/sync-codex-plugin-cache.mjs",
-    "dev:codex-plugin:local-mcp": "node scripts/sync-codex-plugin-cache.mjs --local-mcp",
-    "dev:codex-plugin:refresh": "node scripts/dev-verify-codex-plugin.mjs --refresh-only",
-    "dev:codex-plugin:probe-installed": "node scripts/dev-verify-codex-plugin.mjs --probe-only",
-    "dev:codex-plugin:verify": "node scripts/dev-verify-codex-plugin.mjs",
-    "dev:codex-plugin:watch": "node scripts/dev-watch-codex-plugin.mjs",
-    "prepare:codex-plugin-runtime": "node scripts/prepare-codex-plugin-runtime.mjs",
+    "dev:verify": "which alembic && alembic -v",
     "release:check": "npm run build && node dist/scripts/release.js check",
-    "release:codex-channel": "node scripts/release-codex-channel.mjs",
-    "release:codex-channel:daemon": "node scripts/release-codex-channel.mjs --daemon",
     "release:codex-plugin": "node scripts/release-codex-plugin.mjs",
     "release:codex-plugin:daemon": "node scripts/release-codex-plugin.mjs --daemon",
-    "sync:gxfn-marketplace": "npm --prefix plugins/alembic-codex run sync:gxfn-marketplace --",
-    "sync:gxfn-marketplace:commit": "npm --prefix plugins/alembic-codex run sync:gxfn-marketplace:commit --",
-    "sync:gxfn-marketplace:push": "npm --prefix plugins/alembic-codex run sync:gxfn-marketplace:push --",
     "release:patch": "npm run build && node dist/scripts/release.js patch",
     "release:minor": "npm run build && node dist/scripts/release.js minor",
     "release:major": "npm run build && node dist/scripts/release.js major",
-    "verify:codex-channel": "node scripts/verify-codex-channel.mjs",
+    "cli": "node dist/bin/cli.js",
+    "mcp": "node dist/bin/mcp-server.js",
+    "diagnose:mcp": "node dist/scripts/diagnose-mcp.js",
     "verify:codex-plugin": "node scripts/verify-codex-plugin.mjs",
-    "verify:codex-session": "node scripts/verify-codex-session-scenarios.mjs --all",
     "smoke:codex-plugin": "node scripts/smoke-codex-plugin.mjs",
     "lint": "biome check lib/ bin/ config/ scripts/",
     "lint:fix": "biome check --fix lib/ bin/ config/ scripts/",
     "lint:repo-boundary": "node scripts/lint-repo-boundary.mjs",
     "format": "biome format --write lib/ bin/ config/ scripts/",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run lint",
+    "check": "npm run typecheck && npm run lint && npm run build:vscode-ext",
     "prepare": "husky"
   },
   "author": "gaoxuefeng",
   "license": "MIT",
   "bin": {
+    "alembic": "dist/bin/cli.js",
+    "alembic-mcp": "dist/bin/mcp-server.js",
     "alembic-codex-mcp": "dist/bin/codex-mcp.js"
   },
   "keywords": [
@@ -133,7 +139,8 @@
     "swift",
     "rust",
     "kotlin",
-    "developer-tools"
+    "developer-tools",
+    "cli"
   ],
   "homepage": "https://github.com/GxFn/Alembic#readme",
   "repository": {
@@ -141,16 +148,19 @@
     "url": "git+https://github.com/GxFn/Alembic.git"
   },
   "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.59.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "ajv": "^8.20.0",
     "better-sqlite3": "^12.6.2",
     "commander": "^14.0.3",
     "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
     "drizzle-orm": "^0.45.1",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
     "js-yaml": "^4.1.1",
     "minimist": "^1.2.8",
+    "open": "^11.0.0",
     "ora": "^9.3.0",
     "p-limit": "^7.3.0",
     "socket.io": "^4.8.3",
@@ -165,21 +175,20 @@
   },
   "files": [
     ".agents/plugins/marketplace.json",
-    "channels",
     "dist",
     "config",
     "scripts/postbuild.mjs",
-    "scripts/verify-codex-channel.mjs",
     "scripts/verify-codex-plugin.mjs",
     "scripts/smoke-codex-plugin.mjs",
-    "scripts/prepare-codex-plugin-runtime.mjs",
-    "scripts/release-codex-channel.mjs",
     "scripts/release-codex-plugin.mjs",
     "injectable-skills",
     "plugins",
     "templates",
     "dashboard/dist",
     "template.json",
+    "resources/native-ui/screenshot.swift",
+    "resources/native-ui/screenshot",
+    "resources/openChrome.applescript",
     "resources/grammars"
   ],
   "directories": {

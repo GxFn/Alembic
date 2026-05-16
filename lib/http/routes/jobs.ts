@@ -10,30 +10,15 @@ import { validate } from '../middleware/validate.js';
 const router = express.Router();
 const logger = Logger.getInstance();
 
-const JobContextBody = z.object({
-  actor: z
-    .object({
-      role: z.string().optional(),
-      user: z.string().optional(),
-    })
-    .optional(),
-  channelId: z.string().optional(),
-  client: z.string().optional(),
-  createdByTool: z.string().optional(),
-  sessionId: z.string().optional(),
-});
-
 const BootstrapJobBody = z.object({
   maxFiles: z.number().int().min(1).max(10000).default(500),
   skipGuard: z.boolean().default(false),
   contentMaxLines: z.number().int().min(1).max(10000).default(120),
-  jobContext: JobContextBody.optional(),
 });
 
 const RescanJobBody = z.object({
   reason: z.string().optional(),
   dimensions: z.array(z.string()).optional(),
-  jobContext: JobContextBody.optional(),
 });
 
 const CancelJobBody = z.object({
@@ -105,12 +90,9 @@ router.post('/bootstrap', validate(BootstrapJobBody), (req: Request, res: Respon
     return;
   }
   const container = getServiceContainer();
-  const body = req.body as z.infer<typeof BootstrapJobBody>;
-  const { jobContext, ...args } = body;
   const job = enqueueDaemonJob({
-    args,
+    args: req.body as z.infer<typeof BootstrapJobBody>,
     container,
-    context: jobContext,
     kind: 'bootstrap',
     logger,
     source: inferJobSource(req),
@@ -131,12 +113,9 @@ router.post('/rescan', validate(RescanJobBody), (req: Request, res: Response): v
     return;
   }
   const container = getServiceContainer();
-  const body = req.body as z.infer<typeof RescanJobBody>;
-  const { jobContext, ...args } = body;
   const job = enqueueDaemonJob({
-    args,
+    args: req.body as z.infer<typeof RescanJobBody>,
     container,
-    context: jobContext,
     kind: 'rescan',
     logger,
     source: inferJobSource(req),

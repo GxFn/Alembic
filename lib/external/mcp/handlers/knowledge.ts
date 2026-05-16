@@ -37,7 +37,7 @@ async function _checkRateLimit(
  * 将 MCP wire format 增强为 V3 KnowledgeEntry 数据：
  *   - 确保 source 为 'mcp'
  *   - RecipeExtractor 语义标签（程序化）
- *   - 其余 V3 字段由调用方生成，缺失即留空（KnowledgeEntry 构造函数填默认值）
+ *   - 其余 V3 字段由 Cursor 生成，缺失即留空（KnowledgeEntry 构造函数填默认值）
  *
  * 注意: QualityScorer 评分已统一为 KnowledgeService.create() 后置执行 (R9)。
  * _enrichToV3 不再内联 QualityScorer，避免外部路径双重评分。
@@ -56,7 +56,7 @@ interface EnrichInput {
 function _enrichToV3(args: EnrichInput, container: McpServiceContainer | null): EnrichInput {
   const data: EnrichInput = { ...args };
 
-  // 来源标记（非调用方职责）
+  // 来源标记（非 Cursor 职责）
   if (!data.source) {
     data.source = 'mcp';
   }
@@ -101,7 +101,7 @@ function _enrichToV3(args: EnrichInput, container: McpServiceContainer | null): 
  * 单条知识提交 (alembic_submit_knowledge)
  *
  * MCP wire format → V3 增强 → KnowledgeService.create()
- * 增强包括：source='mcp'、reasoning 默认值、插件适配字段补齐、QualityScorer、语义标签。
+ * 增强包括：source='mcp'、reasoning 默认值、Delivery 字段补齐、QualityScorer、语义标签。
  */
 export async function submitKnowledge(
   ctx: McpContext,

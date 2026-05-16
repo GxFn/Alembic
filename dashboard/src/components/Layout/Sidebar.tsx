@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, BadgeCheck, Boxes, Inbox, Shield, HelpCircle, LogOut, User, Moon, Sun, Library, ScrollText, Languages, Layers, Radio } from 'lucide-react';
+import { Activity, BadgeCheck, Boxes, Inbox, Shield, MessageSquare, HelpCircle, LogOut, User, Moon, Sun, Library, ScrollText, BookOpen, Languages, Layers, Radio } from 'lucide-react';
 import { TabType } from '../../constants';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
@@ -10,6 +10,7 @@ interface SidebarProps {
   activeTab: TabType;
   navigateToTab: (tab: TabType, options?: { preserveSearch?: boolean }) => void;
   candidateCount: number;
+  signalSuggestionCount?: number;
   currentUser?: string;
   currentRole?: string;
   permissionMode?: string;
@@ -68,6 +69,7 @@ function NavButton({
 
 const Sidebar: React.FC<SidebarProps> = ({
   activeTab, navigateToTab, candidateCount,
+  signalSuggestionCount = 0,
   currentUser, onLogout,
 }) => {
   const { t, lang, setLang } = useI18n();
@@ -83,11 +85,13 @@ const Sidebar: React.FC<SidebarProps> = ({
     { tab: 'spm', icon: Boxes, label: t('sidebar.moduleExplorer') },
     /* ── 质量治理 ── */
     { tab: 'guard', icon: Shield, label: t('sidebar.guard') },
-    { tab: 'skills', icon: ScrollText, label: t('sidebar.skills') },
+    { tab: 'skills', icon: ScrollText, label: t('sidebar.skills'), badge: signalSuggestionCount > 0 ? signalSuggestionCount : undefined },
     { tab: 'jobs', icon: Activity, label: t('sidebar.jobs') },
     /* ── 参考 & 监控 ── */
+    { tab: 'wiki', icon: BookOpen, label: t('sidebar.repoWiki') },
     { tab: 'signals', icon: Radio, label: 'Signals' },
     /* ── 辅助 ── */
+    { tab: 'ai', icon: MessageSquare, label: t('sidebar.aiAssistant') },
     { tab: 'help', icon: HelpCircle, label: t('sidebar.help') },
   ];
 

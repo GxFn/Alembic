@@ -4,7 +4,7 @@
  * 设计:
  * - 每个对话一个 JSONL 文件: .asd/conversations/{id}.jsonl
  * - 索引文件: .asd/conversations/index.json
- * - 按 category 隔离: 'user'(Dashboard) / 'system'(internal workflows)
+ * - 按 category 隔离: 'user'(Dashboard) / 'system'(SignalCollector)
  * - Token 预算: 超限时自动生成摘要压缩旧轮次
  * - 静默降级: 持久化失败不影响核心功能
  *
@@ -29,7 +29,7 @@ import { estimateTokens as _estimateTokens } from '#shared/token-utils.js';
 /** 对话索引中的条目 */
 interface ConversationEntry {
   id: string;
-  category: 'user' | 'system';
+  category: 'user' | 'system' | 'lark';
   title: string;
   createdAt: string;
   updatedAt: string;
@@ -188,7 +188,7 @@ export class ConversationStore {
    * 对话列表
    * @param [opts.category] 按类别过滤
    */
-  list({ category, limit = 20 }: { category?: 'user' | 'system'; limit?: number } = {}) {
+  list({ category, limit = 20 }: { category?: 'user' | 'system' | 'lark'; limit?: number } = {}) {
     const index = this.#loadIndex();
     let results = index;
     if (category) {
@@ -305,7 +305,7 @@ export class ConversationStore {
     category,
   }: {
     maxAgeDays?: number;
-    category?: 'user' | 'system';
+    category?: 'user' | 'system' | 'lark';
   } = {}) {
     const index = this.#loadIndex();
     const cutoff = Date.now() - maxAgeDays * 86400000;

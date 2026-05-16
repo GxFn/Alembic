@@ -10,7 +10,8 @@
  *  - 同时扫描 Alembic/candidates/ 和 Alembic/recipes/ 两个目录
  *
  * 使用方式：
- *  - 初始化: SetupService.stepDatabase() 委托调用（skipViolations = true）
+ *  - CLI: `alembic sync` 委托调用
+ *  - 内部: SetupService.stepDatabase() 委托调用（skipViolations = true）
  */
 
 import { randomUUID } from 'node:crypto';
@@ -61,7 +62,7 @@ export class KnowledgeSyncService {
   /**
    * 完整同步入口 — sync + reconcile + repair
    *
-   * 初始化、daemon 启动和 Dashboard 刷新都会调用此方法。
+   * alembic sync CLI 和 alembic ui 启动都调用此方法。
    *
    * @param db better-sqlite3 原始句柄
    * @param opts 同步选项
@@ -76,7 +77,7 @@ export class KnowledgeSyncService {
 
     const report: SyncAllReport = { ...syncReport };
 
-    // sourceRef 全量扫描已移除 — 路径影响由 git diff checkpoint 在明确触发时处理
+    // sourceRef 全量扫描已移除 — 路径检测由 ReactiveEvolutionService 实时处理
     // SourceRefReconciler 仍保留用于 knowledge:changed 事件中的单条 sourceRef 填充
 
     return report;
@@ -353,7 +354,7 @@ export class KnowledgeSyncService {
         randomUUID(),
         Math.floor(Date.now() / 1000),
         'sync',
-        JSON.stringify({ source: 'sync' }),
+        JSON.stringify({ source: 'cli' }),
         'manual_knowledge_edit',
         entryId,
         JSON.stringify({ file: filePath, expectedHash, actualHash }),

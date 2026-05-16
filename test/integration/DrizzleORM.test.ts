@@ -16,8 +16,7 @@ import {
   resetDrizzle,
   schema,
 } from '../../lib/infrastructure/database/drizzle/index.js';
-import migrate001 from '../../lib/infrastructure/database/migrations/001_initial_schema.js';
-import migrate004 from '../../lib/infrastructure/database/migrations/004_evolution_proposals.js';
+import migrate003 from '../../lib/infrastructure/database/migrations/003_add_remote_commands.js';
 
 describe('Integration: Drizzle ORM', () => {
   let db: InstanceType<typeof Database>;
@@ -67,6 +66,14 @@ describe('Integration: Drizzle ORM', () => {
   });
 
   describe('schema exports', () => {
+    test('should export remoteCommands table', () => {
+      expect(schema.remoteCommands).toBeDefined();
+    });
+
+    test('should export remoteState table', () => {
+      expect(schema.remoteState).toBeDefined();
+    });
+
     test('should export knowledge and other core tables', () => {
       // these are defined in the Drizzle schema
       expect(schema.knowledgeEntries).toBeDefined();
@@ -75,59 +82,81 @@ describe('Integration: Drizzle ORM', () => {
   });
 
   describe('real SQL operations via Drizzle', () => {
-    test('should insert and select from knowledge_entries', () => {
+    test('should insert and select from remote_commands', () => {
       // Run migration to create table
-      migrate001(db);
-      migrate004(db);
+      migrate003(db);
       const drizzle = initDrizzle(db);
 
       // Insert a row via Drizzle
       drizzle
-        .insert(schema.knowledgeEntries)
+        .insert(schema.remoteCommands)
         .values({
           id: 'test-1',
-          title: 'hello',
-          language: 'typescript',
+          source: 'test',
+          command: 'hello',
+          status: 'pending',
           createdAt: Math.floor(Date.now() / 1000),
-          updatedAt: Math.floor(Date.now() / 1000),
         })
         .run();
 
       // Read it back
-      const rows = drizzle.select().from(schema.knowledgeEntries).all();
+      const rows = drizzle.select().from(schema.remoteCommands).all();
       expect(rows).toHaveLength(1);
       expect(rows[0].id).toBe('test-1');
-      expect(rows[0].title).toBe('hello');
-      expect(rows[0].language).toBe('typescript');
+      expect(rows[0].command).toBe('hello');
+      expect(rows[0].status).toBe('pending');
     });
 
-    test('should handle update operations', () => {
-      migrate001(db);
-      migrate004(db);
+    test('should insert and select from remote_state', () => {
+      // remote_state is created inline, create it manually
+      db.exec(
+        'CREATE TABLE IF NOT EXISTS remote_state (key TEXT PRIMARY KEY, value TEXT, updated_at INTEGER)'
+      );
       const drizzle = initDrizzle(db);
 
       drizzle
-        .insert(schema.knowledgeEntries)
+        .insert(schema.remoteState)
         .values({
-          id: 'upd-1',
-          title: 'update me',
-          createdAt: Math.floor(Date.now() / 1000),
+          key: 'test-key',
+          value: 'test-value',
           updatedAt: Math.floor(Date.now() / 1000),
         })
         .run();
 
+      const rows = drizzle.select().from(schema.remoteState).all();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].key).toBe('test-key');
+      expect(rows[0].value).toBe('test-value');
+    });
+
+    test('should handle update operations', () => {
+      migrate003(db);
+      const drizzle = initDrizzle(db);
+
       drizzle
-        .update(schema.knowledgeEntries)
-        .set({ title: 'updated', updatedAt: Math.floor(Date.now() / 1000) })
-        .where(eq(schema.knowledgeEntries.id, 'upd-1'))
+        .insert(schema.remoteCommands)
+        .values({
+          id: 'upd-1',
+          source: 'test',
+          command: 'update me',
+          status: 'pending',
+          createdAt: Math.floor(Date.now() / 1000),
+        })
+        .run();
+
+      drizzle
+        .update(schema.remoteCommands)
+        .set({ status: 'running', claimedAt: Math.floor(Date.now() / 1000) })
+        .where(eq(schema.remoteCommands.id, 'upd-1'))
         .run();
 
       const rows = drizzle
         .select()
-        .from(schema.knowledgeEntries)
-        .where(eq(schema.knowledgeEntries.id, 'upd-1'))
+        .from(schema.remoteCommands)
+        .where(eq(schema.remoteCommands.id, 'upd-1'))
         .all();
-      expect(rows[0].title).toBe('updated');
+      expect(rows[0].status).toBe('running');
+      expect(rows[0].claimedAt).toBeGreaterThan(0);
     });
   });
 });

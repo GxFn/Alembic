@@ -134,7 +134,25 @@ class ReleaseChecker {
       success(`Node.js: ${nodeVersion}`);
     }
 
-    success('发布配置: 使用 config/*.json 与 CI runtime overrides，不依赖本地 .env');
+    // 检查环境变量配置。发布不再改写 .env；CI 会在 tag 推送后独立构建和发布。
+    const envPath = path.join(PACKAGE_ROOT, '.env');
+    if (!fs.existsSync(envPath)) {
+      warning('.env: 不存在（发布流程不依赖本地 .env）');
+    } else {
+      const envContent = fs.readFileSync(envPath, 'utf8');
+      const nodeEnv = envContent.match(/NODE_ENV=(\w+)/)?.[1];
+
+      if (nodeEnv === 'production') {
+        warning(`环境: ${nodeEnv}（发布流程不会改写 .env）`);
+      } else {
+        success(`环境: ${nodeEnv || 'development'}`);
+      }
+
+      const backupPath = path.join(PACKAGE_ROOT, '.env.backup');
+      if (fs.existsSync(backupPath)) {
+        warning('.env.backup 已存在，请确认是否为旧发布流程遗留');
+      }
+    }
   }
 
   // 本地构建校验。真正的发布构建会在 GitHub Actions 中再次执行。
@@ -155,6 +173,10 @@ class ReleaseChecker {
       } else {
         throw new Error('dist/index.html 不存在');
       }
+
+      info('构建 VS Code 扩展...');
+      exec('npm run build:vscode-ext');
+      success('VS Code 扩展构建成功');
     } catch (err: any) {
       this.errors.push('发布产物构建失败');
       error('发布产物构建失败');

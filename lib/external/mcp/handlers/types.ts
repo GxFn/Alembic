@@ -372,7 +372,7 @@ export interface ConsolidatedGraphArgs {
 }
 
 export interface ConsolidatedGuardArgs {
-  operation?: 'check' | 'review' | 'coverage_matrix' | 'compliance_report';
+  operation?: 'check' | 'review' | 'reverse_audit' | 'coverage_matrix' | 'compliance_report';
   code?: string;
   files?: Array<string | { path?: string; [key: string]: unknown }>;
   [key: string]: unknown;

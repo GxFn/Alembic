@@ -65,6 +65,7 @@ function getBridgeServer(): McpServer {
   if (!bridgeServer) {
     bridgeServer = new McpServer({
       actorRole: 'external_agent',
+      autoApprove: false,
       container: getServiceContainer(),
       source: { kind: 'codex', name: '/api/v1/mcp/call' },
       surface: 'codex',
