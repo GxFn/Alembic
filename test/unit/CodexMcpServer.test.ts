@@ -1,16 +1,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { getGhostWorkspaceDir, ProjectRegistry } from '@alembic/core/shared/ProjectRegistry';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   DAEMON_STATE_SCHEMA_VERSION,
   type DaemonState,
   getPackageVersion,
   resolveDaemonPaths,
-} from '../../lib/daemon/DaemonState.js';
+} from '@alembic/core/daemon/DaemonState';
+import { JobStore } from '@alembic/core/daemon/JobStore';
+import { getGhostWorkspaceDir, ProjectRegistry } from '@alembic/core/shared/ProjectRegistry';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { DaemonStatus } from '../../lib/daemon/DaemonSupervisor.js';
-import { JobStore } from '../../lib/daemon/JobStore.js';
 import { CodexMcpServer, getVisibleCodexTools } from '../../lib/external/mcp/CodexMcpServer.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;

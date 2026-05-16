@@ -7,10 +7,13 @@
  * @module ServiceMap
  */
 
+import type { JobStore } from '@alembic/core/daemon/JobStore';
 import type DimensionCopy from '@alembic/core/domain/dimension/DimensionCopy';
 import type DatabaseConnection from '@alembic/core/infrastructure/database/DatabaseConnection';
+import type { EventBus } from '@alembic/core/infrastructure/event/EventBus';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
 import type Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
 import type { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
 import type { WarningRepository } from '@alembic/core/repository/evolution/WarningRepository';
@@ -44,7 +47,6 @@ import type ProjectGraph from '../core/ast/ProjectGraph.js';
 // ── Core Types ──
 import type Constitution from '../core/constitution/Constitution.js';
 import type Gateway from '../core/gateway/Gateway.js';
-import type { JobStore } from '../daemon/JobStore.js';
 // ── Domain Types ──
 // ── External Types ──
 import type { AiProvider } from '../external/ai/AiProvider.js';
@@ -53,8 +55,6 @@ import type { AiProviderManager } from '../external/ai/AiProviderManager.js';
 import type AuditLogger from '../infrastructure/audit/AuditLogger.js';
 import type AuditStore from '../infrastructure/audit/AuditStore.js';
 import type { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
-import type { EventBus } from '../infrastructure/event/EventBus.js';
-import type { SignalBus } from '../infrastructure/signal/SignalBus.js';
 import type { IndexingPipeline } from '../infrastructure/vector/IndexingPipeline.js';
 import type { VectorStore } from '../infrastructure/vector/VectorStore.js';
 import type { AuditRepositoryImpl } from '../repository/audit/AuditRepository.js';

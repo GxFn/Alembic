@@ -7,12 +7,12 @@
 
 import { GUARD_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { GuardKnowledgeRepo } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { RawDbGuardAdapter, unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
 import * as AstAnalyzerModule from '../../core/AstAnalyzer.js';
-import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { runCodeLevelChecks } from './GuardCodeChecks.js';
 import { runCrossFileChecks } from './GuardCrossFileChecks.js';
 import {

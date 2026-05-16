@@ -9,7 +9,7 @@
 
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 
-import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 
 interface ViolationsStoreLike {
   getRunsByFile(filePath: string): { violations: { ruleId: string; fixSuggestion?: string }[] }[];

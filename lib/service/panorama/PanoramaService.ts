@@ -14,9 +14,9 @@
  */
 
 import { COUNTABLE_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
 import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
-import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type { ModuleDiscoverer } from './ModuleDiscoverer.js';
 import type { PanoramaAggregator } from './PanoramaAggregator.js';
 import type { PanoramaScanner } from './PanoramaScanner.js';

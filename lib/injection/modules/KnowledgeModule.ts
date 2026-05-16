@@ -9,6 +9,7 @@
  */
 
 import { DimensionCopy } from '@alembic/core/domain/dimension/DimensionCopy';
+import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
 import { LifecycleEventRepository } from '@alembic/core/repository/evolution/LifecycleEventRepository';
 import type { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
 import { WarningRepository } from '@alembic/core/repository/evolution/WarningRepository';
@@ -23,7 +24,6 @@ import {
 } from '@alembic/core/shared/resolveProjectRoot';
 import { getDiscovererRegistry } from '../../core/discovery/index.js';
 import { getEnhancementRegistry } from '../../core/enhancement/index.js';
-import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import { HnswVectorAdapter } from '../../infrastructure/vector/HnswVectorAdapter.js';
 import { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
 import { JsonVectorAdapter } from '../../infrastructure/vector/JsonVectorAdapter.js';
@@ -226,7 +226,7 @@ export function register(c: ServiceContainer) {
     return new SourceRefReconciler(projectRoot, sourceRefRepo, knowledgeRepo, {
       signalBus:
         (ct.singletons.signalBus as
-          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
           | undefined) || undefined,
     });
   });
@@ -236,7 +236,7 @@ export function register(c: ServiceContainer) {
     return new StagingManager(knowledgeRepo, {
       signalBus:
         (ct.singletons.signalBus as
-          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
           | undefined) || undefined,
     });
   });
@@ -246,7 +246,7 @@ export function register(c: ServiceContainer) {
     return new DecayDetector(knowledgeRepo, {
       signalBus:
         (ct.singletons.signalBus as
-          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
           | undefined) || undefined,
       knowledgeEdgeRepo: ct.services.knowledgeEdgeRepository
         ? (ct.get('knowledgeEdgeRepository') as KnowledgeEdgeRepositoryImpl)
@@ -267,7 +267,7 @@ export function register(c: ServiceContainer) {
     return new RedundancyAnalyzer(knowledgeRepo, {
       signalBus:
         (ct.singletons.signalBus as
-          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
           | undefined) || undefined,
     });
   });
@@ -277,7 +277,7 @@ export function register(c: ServiceContainer) {
     return new EnhancementSuggester(knowledgeRepo, {
       signalBus:
         (ct.singletons.signalBus as
-          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
           | undefined) || undefined,
     });
   });
@@ -307,7 +307,7 @@ export function register(c: ServiceContainer) {
     const lifecycleEventRepo = ct.get('lifecycleEventRepository') as LifecycleEventRepository;
     const signalBus = ct.get(
       'signalBus'
-    ) as import('../../infrastructure/signal/SignalBus.js').SignalBus;
+    ) as import('@alembic/core/infrastructure/signal/SignalBus').SignalBus;
     const proposalRepo = ct.get('proposalRepository') as ProposalRepository;
     return new LifecycleStateMachine(knowledgeRepo, lifecycleEventRepo, signalBus, proposalRepo);
   });
@@ -382,7 +382,7 @@ export function register(c: ServiceContainer) {
     return new FileChangeHandler(sourceRefRepo, knowledgeRepo, contentPatcher, {
       signalBus:
         (ct.singletons.signalBus as
-          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
           | undefined) || undefined,
       evolutionGateway: gateway,
       dataRoot,
@@ -443,7 +443,8 @@ export function initializeKnowledgeServices(c: ServiceContainer): void {
 function await_import_EventBus() {
   // EventBus 类型已经通过 container 解析，此处只用于 TS 类型
   return {
-    EventBus: Object as unknown as typeof import('../../infrastructure/event/EventBus.js').EventBus,
+    EventBus:
+      Object as unknown as typeof import('@alembic/core/infrastructure/event/EventBus').EventBus,
   };
 }
 

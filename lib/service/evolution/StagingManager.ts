@@ -13,9 +13,9 @@
  */
 
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import { unixNow } from '@alembic/core/shared/utils/common';
-import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 
 /* ────────────────────── Types ────────────────────── */
 

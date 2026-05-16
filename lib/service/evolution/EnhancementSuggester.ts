@@ -11,9 +11,9 @@
 import type { KnowledgeEntry } from '@alembic/core/domain/knowledge';
 import { Lifecycle, PUBLISHED_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
-import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
-import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 
 export type EnhancementType =
   | 'missing_code_example'

@@ -171,7 +171,7 @@ export class ComplianceReporter {
     ruleLearner: RuleLearnerLike | null,
     exclusionManager: ExclusionManagerLike | null,
     qualityGateConfig: QualityGateThresholds = {},
-    signalBus?: import('../../infrastructure/signal/SignalBus.js').SignalBus | null
+    signalBus?: import('@alembic/core/infrastructure/signal/SignalBus').SignalBus | null
   ) {
     this.engine = guardCheckEngine;
     this.violationsStore = violationsStore;

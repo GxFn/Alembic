@@ -1,6 +1,6 @@
+import type { DaemonJobRecord } from '@alembic/core/daemon/JobStore';
 import type { Request } from 'express';
 import { describe, expect, test } from 'vitest';
-import type { DaemonJobRecord } from '../../lib/daemon/JobStore.js';
 import {
   buildJobStatusUrl,
   buildJobsApiOrigin,

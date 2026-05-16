@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DataPath, WriteZone } from '@alembic/core/infrastructure/io';
-import type { Signal, SignalBus } from './SignalBus.js';
+import type { Signal, SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 
 export interface SignalTraceQueryOptions {
   type?: string[];

@@ -192,7 +192,7 @@ export async function runInternalKnowledgeRescanWorkflow(
     const repos = resolveKnowledgeRepos(ctx.container);
     if (repos) {
       const signalBus = ctx.container.get('signalBus') as
-        | import('../../../infrastructure/signal/SignalBus.js').SignalBus
+        | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
         | undefined;
       const reconciler = new SourceRefReconciler(
         projectRoot,

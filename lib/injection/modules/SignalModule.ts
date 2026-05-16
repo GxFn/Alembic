@@ -9,13 +9,13 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
+import { SignalAggregator } from '@alembic/core/infrastructure/signal/SignalAggregator';
+import { SignalBridge } from '@alembic/core/infrastructure/signal/SignalBridge';
+import type { Signal } from '@alembic/core/infrastructure/signal/SignalBus';
+import { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
+import { SignalTraceWriter } from '@alembic/core/infrastructure/signal/SignalTraceWriter';
 import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
-import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
-import { SignalAggregator } from '../../infrastructure/signal/SignalAggregator.js';
-import { SignalBridge } from '../../infrastructure/signal/SignalBridge.js';
-import type { Signal } from '../../infrastructure/signal/SignalBus.js';
-import { SignalBus } from '../../infrastructure/signal/SignalBus.js';
-import { SignalTraceWriter } from '../../infrastructure/signal/SignalTraceWriter.js';
 import { HitRecorder } from '../../service/signal/HitRecorder.js';
 import { shutdown } from '../../shared/shutdown.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
@@ -90,7 +90,7 @@ export function register(c: ServiceContainer) {
     const bus = ct.get('signalBus') as SignalBus;
     const eventBus = ct.get(
       'eventBus'
-    ) as import('../../infrastructure/event/EventBus.js').EventBus;
+    ) as import('@alembic/core/infrastructure/event/EventBus').EventBus;
     return new SignalBridge(bus, eventBus);
   });
 

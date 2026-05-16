@@ -265,7 +265,7 @@ export class MultiSignalRanker {
   constructor(
     options: {
       scenarioWeights?: Record<string, Record<string, number>>;
-      signalBus?: import('../../infrastructure/signal/SignalBus.js').SignalBus;
+      signalBus?: import('@alembic/core/infrastructure/signal/SignalBus').SignalBus;
     } = {}
   ) {
     this.#signals = {
@@ -297,7 +297,7 @@ export class MultiSignalRanker {
     }
   }
 
-  #onSignal(signal: import('../../infrastructure/signal/SignalBus.js').Signal): void {
+  #onSignal(signal: import('@alembic/core/infrastructure/signal/SignalBus').Signal): void {
     if (signal.type === 'quality' && signal.target) {
       this.#realtimeWeights.set(signal.target, signal.value);
     }

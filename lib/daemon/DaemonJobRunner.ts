@@ -1,11 +1,11 @@
-import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
-import type { ServiceContainer } from '../injection/ServiceContainer.js';
 import {
   type DaemonJobKind,
   type DaemonJobRecord,
   type DaemonJobSource,
   JobStore,
-} from './JobStore.js';
+} from '@alembic/core/daemon/JobStore';
+import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import type { ServiceContainer } from '../injection/ServiceContainer.js';
 
 interface LoggerLike {
   error(message: string, meta?: Record<string, unknown>): void;

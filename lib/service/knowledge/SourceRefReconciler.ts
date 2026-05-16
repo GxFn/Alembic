@@ -15,9 +15,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
-import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { rewriteRecipePaths } from './RecipePathRewriter.js';
 
 const execFileAsync = promisify(execFile);

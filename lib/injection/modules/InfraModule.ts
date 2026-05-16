@@ -8,8 +8,11 @@
  */
 
 import path from 'node:path';
+import { JobStore } from '@alembic/core/daemon/JobStore';
+import { EventBus } from '@alembic/core/infrastructure/event/EventBus';
 import { WriteZone } from '@alembic/core/infrastructure/io';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
 import { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
 import { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
 import { GuardViolationRepositoryImpl } from '@alembic/core/repository/guard/GuardViolationRepository';
@@ -23,12 +26,9 @@ import { KnowledgeFileWriter } from '@alembic/core/service/knowledge/KnowledgeFi
 import { KnowledgeSyncService } from '@alembic/core/service/knowledge/KnowledgeSyncService';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import Gateway from '../../core/gateway/Gateway.js';
-import { JobStore } from '../../daemon/JobStore.js';
 import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../infrastructure/audit/AuditStore.js';
-import { EventBus } from '../../infrastructure/event/EventBus.js';
 import { getRealtimeService as _getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
-import { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
 import { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
 import { RemoteCommandRepository } from '../../repository/remote/RemoteCommandRepository.js';

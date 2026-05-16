@@ -10,7 +10,6 @@ import {
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { PACKAGE_ROOT } from '../shared/package-assets.js';
 import {
   type DaemonPaths,
   type DaemonState,
@@ -19,7 +18,8 @@ import {
   readDaemonState,
   removeDaemonState,
   resolveDaemonPaths,
-} from './DaemonState.js';
+} from '@alembic/core/daemon/DaemonState';
+import { PACKAGE_ROOT } from '../shared/package-assets.js';
 
 export type DaemonStatusKind = 'ready' | 'starting' | 'stopped' | 'stale' | 'failed';
 

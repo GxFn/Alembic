@@ -216,7 +216,7 @@ export interface RrfHit {
 }
 
 /** Cross-encoder reranker abstraction */
-import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 
 export interface SearchCrossEncoder {
   rerank(query: string, candidates: SearchResultItem[]): Promise<SearchResultItem[]>;

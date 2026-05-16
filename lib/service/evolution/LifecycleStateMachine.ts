@@ -23,6 +23,7 @@
 import { randomUUID } from 'node:crypto';
 import { isValidTransition } from '@alembic/core/domain/knowledge/Lifecycle';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type { LifecycleEventRepository } from '@alembic/core/repository/evolution/LifecycleEventRepository';
 import type { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
 import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
@@ -34,7 +35,6 @@ import type {
   TransitionRequest,
   TransitionResult,
 } from '@alembic/core/types/evolution';
-import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 
 /* ────────────────────── Constants ────────────────────── */
 

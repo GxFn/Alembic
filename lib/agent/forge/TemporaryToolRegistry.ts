@@ -11,9 +11,9 @@
  */
 
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type { Disposable } from '@alembic/core/shared/lifecycle';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
-import type { SignalBus } from '#infra/signal/SignalBus.js';
 import type {
   ForgedInternalToolStore,
   InternalToolHandler,

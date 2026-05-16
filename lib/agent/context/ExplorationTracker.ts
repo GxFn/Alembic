@@ -23,7 +23,7 @@
  */
 
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import type { SignalBus } from '#infra/signal/SignalBus.js';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type {
   ExplorationBudget,
   ExplorationPhase,

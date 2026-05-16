@@ -19,7 +19,7 @@ import { type FSWatcher, watch } from 'node:fs';
 import { glob, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
-import type { SignalBus } from '#infra/signal/SignalBus.js';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import { shutdown } from '#shared/shutdown.js';
 
 /* ═══ Types ═══════════════════════════════════════════════ */

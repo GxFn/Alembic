@@ -19,6 +19,7 @@
 
 import { EvolutionPolicy } from '@alembic/core/domain/evolution/EvolutionPolicy';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { Signal, SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type {
   ProposalRecord,
   ProposalRepository,
@@ -26,7 +27,6 @@ import type {
 } from '@alembic/core/repository/evolution/ProposalRepository';
 import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
 import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
-import type { Signal, SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type { ContentPatcher } from './ContentPatcher.js';
 import type { LifecycleStateMachine } from './LifecycleStateMachine.js';
 

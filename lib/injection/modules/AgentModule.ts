@@ -6,6 +6,7 @@
  *   - feedbackStore, recommendationPipeline, recommendationMetrics
  */
 
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import {
   AgentProfileCompiler,
@@ -43,7 +44,6 @@ import {
 } from '../../external/mcp/McpCapabilityProjection.js';
 import { McpToolAdapter, type McpToolExecutor } from '../../external/mcp/McpToolAdapter.js';
 import { McpToolDiscovery } from '../../external/mcp/McpToolDiscovery.js';
-import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { AIRecallStrategy } from '../../service/skills/AIRecallStrategy.js';
 import { FeedbackStore } from '../../service/skills/FeedbackStore.js';
 import { RecommendationMetrics } from '../../service/skills/RecommendationMetrics.js';

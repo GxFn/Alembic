@@ -14,10 +14,10 @@
 
 import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
 import { knowledgeEntries } from '@alembic/core/infrastructure/database/drizzle/schema';
+import type { EventBus } from '@alembic/core/infrastructure/event/EventBus';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { queryNonDeprecatedEntries } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { and, ne } from 'drizzle-orm';
-import type { EventBus } from '../../infrastructure/event/EventBus.js';
 import type { VectorStore } from '../../infrastructure/vector/VectorStore.js';
 import type { ContextualEnricher } from './ContextualEnricher.js';
 import type { EmbedProvider } from './VectorService.js';

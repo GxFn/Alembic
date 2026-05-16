@@ -57,7 +57,7 @@ interface SignalCollectorOpts {
   auditRepo?: AuditRepositoryImpl | null;
   agentService?: AgentService | null;
   container?: ContainerLike | null;
-  signalBus?: import('../../infrastructure/signal/SignalBus.js').SignalBus | null;
+  signalBus?: import('@alembic/core/infrastructure/signal/SignalBus').SignalBus | null;
   mode?: string;
   intervalMs?: number;
   onSuggestions?: ((suggestions: Record<string, unknown>[]) => void) | null;
@@ -251,7 +251,7 @@ export class SignalCollector implements Startable {
   }
 
   /** 由 SignalBus 实时更新的维度信号快照 */
-  #updateDimension(signal: import('../../infrastructure/signal/SignalBus.js').Signal): void {
+  #updateDimension(signal: import('@alembic/core/infrastructure/signal/SignalBus').Signal): void {
     switch (signal.type) {
       case 'guard':
       case 'guard_blind_spot':

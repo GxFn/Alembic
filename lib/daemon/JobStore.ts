@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, join } from 'node:path';
-import { resolveDaemonPaths } from './DaemonState.js';
+import { resolveDaemonPaths } from '@alembic/core/daemon/DaemonState';
 
 export type DaemonJobKind = 'bootstrap' | 'rescan';
 export type DaemonJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';

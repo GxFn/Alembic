@@ -8,7 +8,7 @@
  *   - 历史清理
  */
 
-import { EventBus } from '../../lib/infrastructure/event/EventBus.js';
+import { EventBus } from '@alembic/core/infrastructure/event/EventBus';
 
 describe('Integration: EventBus', () => {
   let bus: EventBus;

@@ -8,8 +8,8 @@
  *   - SignalBus 通配符订阅收集所有信号
  */
 
-import type { Signal } from '../../lib/infrastructure/signal/SignalBus.js';
-import { SignalBus } from '../../lib/infrastructure/signal/SignalBus.js';
+import type { Signal } from '@alembic/core/infrastructure/signal/SignalBus';
+import { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import { GuardCheckEngine } from '../../lib/service/guard/GuardCheckEngine.js';
 import { SearchEngine } from '../../lib/service/search/SearchEngine.js';
 import { createTestBootstrap } from '../fixtures/factory.js';

@@ -41,7 +41,7 @@ let StagingManager: typeof import('../../lib/service/evolution/StagingManager.js
 let RedundancyAnalyzer: typeof import('../../lib/service/evolution/RedundancyAnalyzer.js').RedundancyAnalyzer;
 let ConfidenceRouter: typeof import('../../lib/service/knowledge/ConfidenceRouter.js').ConfidenceRouter;
 let SourceRefReconciler: typeof import('../../lib/service/knowledge/SourceRefReconciler.js').SourceRefReconciler;
-let SignalBus: typeof import('../../lib/infrastructure/signal/SignalBus.js').SignalBus;
+let SignalBus: typeof import('@alembic/core/infrastructure/signal/SignalBus').SignalBus;
 let RuleLearner: typeof import('../../lib/service/guard/RuleLearner.js').RuleLearner;
 let KnowledgeRepositoryImpl: typeof import('@alembic/core/repository/knowledge/KnowledgeRepository.impl').KnowledgeRepositoryImpl;
 let RecipeSourceRefRepositoryImpl: typeof import('@alembic/core/repository/sourceref/RecipeSourceRefRepository').RecipeSourceRefRepositoryImpl;
@@ -86,7 +86,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       import('../../lib/service/evolution/RedundancyAnalyzer.js'),
       import('../../lib/service/knowledge/ConfidenceRouter.js'),
       import('../../lib/service/knowledge/SourceRefReconciler.js'),
-      import('../../lib/infrastructure/signal/SignalBus.js'),
+      import('@alembic/core/infrastructure/signal/SignalBus'),
       import('../../lib/service/guard/RuleLearner.js'),
       import('@alembic/core/repository/knowledge/KnowledgeRepository.impl'),
       import('@alembic/core/repository/sourceref/RecipeSourceRefRepository'),

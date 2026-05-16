@@ -21,7 +21,7 @@ function createMockSignalBus() {
     send: vi.fn(),
     emit: vi.fn(),
     subscribe: vi.fn(),
-  } as unknown as import('../../lib/infrastructure/signal/SignalBus.js').SignalBus;
+  } as unknown as import('@alembic/core/infrastructure/signal/SignalBus').SignalBus;
 }
 
 const TOOL_BASE = {

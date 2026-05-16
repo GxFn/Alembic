@@ -6,10 +6,10 @@
  * @module infrastructure/signal/SignalAggregator
  */
 
+import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
+import type { Signal, SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type { Startable } from '@alembic/core/shared/lifecycle';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
-import type { ReportStore } from '../report/ReportStore.js';
-import type { Signal, SignalBus } from './SignalBus.js';
 
 interface SlidingWindow {
   entries: Array<{ value: number; ts: number }>;

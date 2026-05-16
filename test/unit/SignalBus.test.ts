@@ -1,6 +1,6 @@
+import type { Signal, SignalHandler } from '@alembic/core/infrastructure/signal/SignalBus';
+import { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import { describe, expect, test, vi } from 'vitest';
-import type { Signal, SignalHandler } from '../../lib/infrastructure/signal/SignalBus.js';
-import { SignalBus } from '../../lib/infrastructure/signal/SignalBus.js';
 
 /* ════════════════════════════════════════════
  *  SignalBus 单元测试

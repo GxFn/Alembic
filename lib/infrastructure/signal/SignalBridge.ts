@@ -7,8 +7,8 @@
  * @module infrastructure/signal/SignalBridge
  */
 
-import type { EventBus } from '../event/EventBus.js';
-import type { SignalBus } from './SignalBus.js';
+import type { EventBus } from '@alembic/core/infrastructure/event/EventBus';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 
 export class SignalBridge {
   constructor(signalBus: SignalBus, eventBus: EventBus) {

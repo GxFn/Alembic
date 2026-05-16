@@ -1,6 +1,6 @@
+import type { Signal } from '@alembic/core/infrastructure/signal/SignalBus';
+import { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import type { Signal } from '../../lib/infrastructure/signal/SignalBus.js';
-import { SignalBus } from '../../lib/infrastructure/signal/SignalBus.js';
 import { HitRecorder } from '../../lib/service/signal/HitRecorder.js';
 
 /* ════════════════════════════════════════════

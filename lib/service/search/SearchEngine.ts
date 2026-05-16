@@ -81,7 +81,7 @@ export class SearchEngine {
   _indexed: boolean;
   _lastIndexTime: string | null = null;
   _multiSignalRanker: MultiSignalRanker;
-  _signalBus: import('../../infrastructure/signal/SignalBus.js').SignalBus | null;
+  _signalBus: import('@alembic/core/infrastructure/signal/SignalBus').SignalBus | null;
   aiProvider: SearchAiProvider | null;
   db: SearchDb;
   hybridRetriever: SearchHybridRetriever | null;

@@ -11,7 +11,7 @@
 
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 
-import type { SignalBus } from '#infra/signal/SignalBus.js';
+import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
 import type { ToolCapabilityManifest } from '#tools/catalog/CapabilityManifest.js';
 import type { ForgedInternalToolStore } from '#tools/core/InternalToolHandler.js';
