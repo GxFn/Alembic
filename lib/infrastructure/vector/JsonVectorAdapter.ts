@@ -6,9 +6,9 @@
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
+import type { WriteZone } from '@alembic/core/infrastructure/io';
+import pathGuard from '@alembic/core/shared/PathGuard';
 import { cosineSimilarity } from '@alembic/core/shared/similarity';
-import pathGuard from '../../shared/PathGuard.js';
-import type { WriteZone } from '../io/WriteZone.js';
 import { VectorStore } from './VectorStore.js';
 
 export class JsonVectorAdapter extends VectorStore {

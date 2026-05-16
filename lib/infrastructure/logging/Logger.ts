@@ -1,8 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import pathGuard from '@alembic/core/shared/PathGuard';
 import winston from 'winston';
-
-import pathGuard from '../../shared/PathGuard.js';
 
 // Agent 系统相关标签 — 终端高亮显示
 const AGENT_TAGS = [

@@ -8,7 +8,7 @@
  *   - primeSearchPipeline (for prime multi-query search — no DB dependency)
  */
 
-import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
 import { TokenUsageStore } from '../../repository/token/TokenUsageStore.js';
 import { CursorDeliveryPipeline } from '../../service/delivery/CursorDeliveryPipeline.js';
@@ -32,7 +32,7 @@ export function register(c: ServiceContainer) {
   c.singleton('feedbackCollector', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
     const wz = ct.singletons.writeZone as
-      | import('../../infrastructure/io/WriteZone.js').WriteZone
+      | import('@alembic/core/infrastructure/io').WriteZone
       | undefined;
     return new FeedbackCollector(dataRoot as ConstructorParameters<typeof FeedbackCollector>[0], {
       wz,
@@ -75,7 +75,7 @@ export function register(c: ServiceContainer) {
         database: ct.get('database'),
         logger: ct.logger,
         wz: ct.singletons.writeZone as
-          | import('../../infrastructure/io/WriteZone.js').WriteZone
+          | import('@alembic/core/infrastructure/io').WriteZone
           | undefined,
       } as unknown as ConstructorParameters<typeof CursorDeliveryPipeline>[0])
   );

@@ -14,7 +14,7 @@
  *   category  — 分组标签（用于 stepIDE 结果汇报）
  */
 
-import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/shared/ProjectMarkers';
 
 /**
  * 部署策略：

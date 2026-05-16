@@ -11,10 +11,10 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import pathGuard from '@alembic/core/shared/PathGuard';
 import type { SessionStore } from '#agent/memory/SessionStore.js';
 import Logger from '#infra/logging/Logger.js';
 import type { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
-import pathGuard from '#shared/PathGuard.js';
 import type { DimensionCheckpointResult, IncrementalPlan } from '#types/workflows.js';
 import type {
   CandidateResults,

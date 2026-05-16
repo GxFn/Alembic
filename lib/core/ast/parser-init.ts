@@ -13,7 +13,7 @@
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { RESOURCES_DIR } from '../../shared/package-root.js';
+import { RESOURCES_DIR } from '../../shared/package-assets.js';
 
 /** 预编译 .wasm 文件存放目录 */
 const GRAMMARS_DIR = path.resolve(RESOURCES_DIR, 'grammars');

@@ -1,6 +1,6 @@
 import { type Dirent, readdirSync, statSync } from 'node:fs';
 import { extname as pathExtname, join as pathJoin, relative as pathRelative } from 'node:path';
-import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 // ─── v3.0: AST ProjectGraph ──────────────────────────
 import ProjectGraph from '../core/ast/ProjectGraph.js';
 // ─── v3.1: Multi-Language Discovery + Enhancement ────────
@@ -349,7 +349,7 @@ export class ServiceContainer {
     // GraphCache 使用 dataRoot 存储缓存（Ghost 模式下写到外置工作区）
     const cacheRoot = resolveDataRoot(this);
     const wz = this.singletons.writeZone as
-      | import('../infrastructure/io/WriteZone.js').WriteZone
+      | import('@alembic/core/infrastructure/io').WriteZone
       | undefined;
     const cache = new GraphCache(cacheRoot, wz ?? undefined);
     const startTime = Date.now();

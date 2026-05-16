@@ -6,6 +6,7 @@
 
 import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
+import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
 import cors from 'cors';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
 import helmet from 'helmet';
@@ -17,7 +18,6 @@ import { type ErrorTracker, initErrorTracker } from '../infrastructure/monitorin
 import { initPerformanceMonitor } from '../infrastructure/monitoring/PerformanceMonitor.js';
 import { initRealtimeService } from '../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../injection/ServiceContainer.js';
-import { resolveDataRoot } from '../shared/resolveProjectRoot.js';
 import apiSpec from './api-spec.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { gatewayMiddleware } from './middleware/gatewayMiddleware.js';
@@ -141,7 +141,7 @@ export class HttpServer {
         const dataRoot = resolveDataRoot(container);
         const wz = container.get(
           'writeZone'
-        ) as import('../infrastructure/io/WriteZone.js').WriteZone;
+        ) as import('@alembic/core/infrastructure/io').WriteZone;
         this.errorTracker = initErrorTracker({
           logDirectory: join(dataRoot, '.asd', 'logs', 'errors'),
           writeZone: wz,

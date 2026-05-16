@@ -13,8 +13,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type { WriteZone } from '#infra/io/WriteZone.js';
-import { RUNTIME_DIR } from '#shared/ProjectMarkers.js';
+import type { WriteZone } from '@alembic/core/infrastructure/io';
+import { RUNTIME_DIR } from '@alembic/core/shared/ProjectMarkers';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type {
   FeedbackAction,

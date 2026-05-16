@@ -57,15 +57,15 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { isExcludedProject } from '../shared/isOwnDevRepo.js';
+import { isExcludedProject } from '@alembic/core/shared/isOwnDevRepo';
 import {
   DEFAULT_KNOWLEDGE_BASE_DIR,
   DEFAULT_SUB_REPO_DIR,
   isGitRepo,
-} from '../shared/ProjectMarkers.js';
-import { ProjectRegistry } from '../shared/ProjectRegistry.js';
-import { PACKAGE_ROOT } from '../shared/package-root.js';
-import { WorkspaceResolver } from '../shared/WorkspaceResolver.js';
+} from '@alembic/core/shared/ProjectMarkers';
+import { ProjectRegistry } from '@alembic/core/shared/ProjectRegistry';
+import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
+import { PACKAGE_ROOT } from '../shared/package-assets.js';
 import { FileDeployer } from './deploy/FileDeployer.js';
 
 /** Alembic 源码仓库根目录（定位 templates/ 等资源） */
@@ -618,7 +618,7 @@ export class SetupService {
   /* ═══ Step 4: 数据库初始化 ═══════════════════════════ */
 
   async stepDatabase() {
-    const ConfigLoader = (await import('../infrastructure/config/ConfigLoader.js')).default;
+    const ConfigLoader = (await import('../infrastructure/config/AppConfigLoader.js')).default;
     const Bootstrap = (await import('../bootstrap.js')).default;
 
     const previousCwd = process.cwd();

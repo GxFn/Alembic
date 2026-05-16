@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { PACKAGE_ROOT } from '../shared/package-root.js';
-import { WorkspaceResolver } from '../shared/WorkspaceResolver.js';
+import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
+import { PACKAGE_ROOT } from '../shared/package-assets.js';
 
 export const DAEMON_STATE_SCHEMA_VERSION = 1;
 

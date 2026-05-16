@@ -16,7 +16,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
-import { TEMPLATES_DIR } from '../../shared/package-root.js';
+import { TEMPLATES_DIR } from '../../shared/package-assets.js';
 import { mergeSection } from './FileProtection.js';
 import { estimateTokens } from './TokenBudget.js';
 

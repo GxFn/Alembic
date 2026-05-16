@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { WriteZone } from '@alembic/core/infrastructure/io';
 import { describe, expect, test, vi } from 'vitest';
-import type { WriteZone } from '#infra/io/WriteZone.js';
 import { generateSkill } from '#workflows/capabilities/execution/WorkflowSkillCompletionCapability.js';
 
 describe('WorkflowSkillCompletionCapability', () => {

@@ -393,7 +393,7 @@ async function writeWorkflowReportFile({
   report: WorkflowReport;
 }) {
   const writeZone = ctx.container.singletons?.writeZone as
-    | import('#infra/io/WriteZone.js').WriteZone
+    | import('@alembic/core/infrastructure/io').WriteZone
     | undefined;
   if (writeZone) {
     await writeZone.writeFileAsync(

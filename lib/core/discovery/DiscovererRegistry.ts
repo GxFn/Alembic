@@ -8,7 +8,7 @@
  * 支持用户偏好持久化: 当匹配模糊时，保存/加载用户选择。
  */
 
-import { WorkspaceResolver } from '../../shared/WorkspaceResolver.js';
+import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
 import type { ConflictResult, DetectMatch } from './DiscovererPreference.js';
 import { detectConflict, loadPreference } from './DiscovererPreference.js';
 import type { ProjectDiscoverer } from './ProjectDiscoverer.js';

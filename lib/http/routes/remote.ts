@@ -18,6 +18,7 @@
 
 import crypto from 'node:crypto';
 import { readFileSync, unlinkSync } from 'node:fs';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import express, { type Request, type Response } from 'express';
 import { LarkTransport } from '../../external/lark/LarkTransport.js';
@@ -27,7 +28,6 @@ import type {
   RemoteCommandRepository,
   StatusCounts,
 } from '../../repository/remote/RemoteCommandRepository.js';
-import { resolveDataRoot, resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import {
   RemoteHistoryQuery,
   RemoteNotifyBody,

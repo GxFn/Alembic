@@ -1,6 +1,5 @@
+import { resolveKnowledgeScanDirs } from '@alembic/core/shared/resolveProjectRoot';
 import { describe, expect, it } from 'vitest';
-
-import { resolveKnowledgeScanDirs } from '../../lib/shared/resolveProjectRoot.js';
 
 describe('resolveKnowledgeScanDirs', () => {
   it('uses workspace dataRoot-relative knowledge paths in ghost mode', () => {

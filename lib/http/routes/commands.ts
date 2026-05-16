@@ -230,7 +230,7 @@ router.post(
 
     try {
       const wz = container.singletons?.writeZone as
-        | import('../../infrastructure/io/WriteZone.js').WriteZone
+        | import('@alembic/core/infrastructure/io').WriteZone
         | undefined;
       if (wz) {
         const rel = resolved.replace(wz.projectRoot, '').replace(/^\//, '');

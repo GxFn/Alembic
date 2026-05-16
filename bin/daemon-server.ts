@@ -21,7 +21,7 @@ import HttpServer from '../lib/http/HttpServer.js';
 import Logger from '../lib/infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
 import { DaemonFileChangeCollector } from '../lib/service/evolution/DaemonFileChangeCollector.js';
-import { DASHBOARD_DIR } from '../lib/shared/package-root.js';
+import { DASHBOARD_DIR } from '../lib/shared/package-assets.js';
 import { shutdown } from '../lib/shared/shutdown.js';
 
 shutdown.install();

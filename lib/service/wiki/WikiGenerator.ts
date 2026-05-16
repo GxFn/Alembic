@@ -33,10 +33,10 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { WriteZone } from '@alembic/core/infrastructure/io';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
-import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/shared/ProjectMarkers';
 import Logger from '../../infrastructure/logging/Logger.js';
-import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 import {
   buildAiSystemPrompt,
   buildArticlePrompt,

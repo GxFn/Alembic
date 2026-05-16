@@ -1,8 +1,8 @@
+import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
 import express from 'express';
 import { getPackageVersion } from '../../daemon/DaemonState.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
-import { WorkspaceResolver } from '../../shared/WorkspaceResolver.js';
 
 const router = express.Router();
 

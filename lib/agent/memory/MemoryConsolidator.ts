@@ -12,7 +12,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type { WriteZone } from '#infra/io/WriteZone.js';
+import type { WriteZone } from '@alembic/core/infrastructure/io';
 import type { MemoryInput } from './MemoryStore.js';
 import { MemoryStore } from './MemoryStore.js';
 

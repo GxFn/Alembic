@@ -2,6 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { DEFAULT_FOLDER_NAMES } from '@alembic/core/shared/folder-names';
+import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
+import { WorkspaceSettingsStore } from '@alembic/core/shared/WorkspaceSettingsStore';
 import { McpServer as SdkMcpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -14,9 +16,7 @@ import {
 import { type DaemonStatus, DaemonSupervisor } from '../../daemon/DaemonSupervisor.js';
 import { JobStore } from '../../daemon/JobStore.js';
 import { DEFAULT_IDE_FOLDER_NAMES } from '../../shared/ide-folder-names.js';
-import { PACKAGE_ROOT } from '../../shared/package-root.js';
-import { WorkspaceResolver } from '../../shared/WorkspaceResolver.js';
-import { WorkspaceSettingsStore } from '../../shared/WorkspaceSettingsStore.js';
+import { PACKAGE_ROOT } from '../../shared/package-assets.js';
 import { TIER_ORDER, TOOLS, withMcpToolAnnotations } from './tools.js';
 
 interface CodexMcpServerOptions {

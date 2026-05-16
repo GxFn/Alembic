@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PACKAGE_ROOT } from '#shared/package-root.js';
+import { PACKAGE_ROOT } from '../../shared/package-assets.js';
 import { Capability } from './Capability.js';
 
 interface ContextInput {

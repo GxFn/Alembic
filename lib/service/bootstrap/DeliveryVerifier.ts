@@ -19,7 +19,7 @@ import {
   getContextIndexPath,
   getProjectKnowledgePath,
   getProjectSkillsPath,
-} from '#infra/config/Paths.js';
+} from '@alembic/core/infrastructure/config/Paths';
 import { getCursorRulesDir, getCursorSkillsDir } from '#shared/ide-paths.js';
 
 // ── 类型定义 ────────────────────────────────────────────────

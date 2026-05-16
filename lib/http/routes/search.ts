@@ -370,7 +370,7 @@ router.post(
     const { code, targetName, candidateId, candidate } = req.body;
     let dataRoot: string;
     try {
-      const { resolveDataRoot } = await import('#shared/resolveProjectRoot.js');
+      const { resolveDataRoot } = await import('@alembic/core/shared/resolveProjectRoot');
       const container = getServiceContainer();
       dataRoot = resolveDataRoot(container) || process.env.ALEMBIC_PROJECT_DIR || process.cwd();
     } catch {

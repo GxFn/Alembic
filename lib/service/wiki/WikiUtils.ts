@@ -9,8 +9,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/shared/ProjectMarkers';
 import Logger from '../../infrastructure/logging/Logger.js';
-import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 
 const logger = Logger.getInstance();
 
@@ -333,7 +333,7 @@ export function dedup(
   files: { path: string; hash: string }[],
   wikiDir: string,
   emit: (phase: string, progress: number, message: string) => void,
-  wz?: import('../../infrastructure/io/WriteZone.js').WriteZone | null
+  wz?: import('@alembic/core/infrastructure/io').WriteZone | null
 ) {
   const removed: string[] = [];
 

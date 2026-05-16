@@ -1,4 +1,4 @@
-import pathGuard from '#shared/PathGuard.js';
+import pathGuard from '@alembic/core/shared/PathGuard';
 
 interface ProjectAnalysisPreparationLogger {
   info(...args: unknown[]): void;

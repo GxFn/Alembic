@@ -262,7 +262,9 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
 
   // ── Step 1: 限流 ──
   const { checkRecipeSave } = await import('#http/middleware/RateLimiter.js');
-  const { resolveDataRoot, resolveProjectRoot } = await import('#shared/resolveProjectRoot.js');
+  const { resolveDataRoot, resolveProjectRoot } = await import(
+    '@alembic/core/shared/resolveProjectRoot'
+  );
   const projectRoot = resolveProjectRoot(ctx.container);
   const dataRoot = resolveDataRoot(ctx.container as never) || projectRoot;
   const limitCheck = checkRecipeSave(projectRoot, clientId || process.env.USER || 'mcp-client');

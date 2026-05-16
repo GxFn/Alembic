@@ -9,12 +9,12 @@
  */
 
 import { LanguageService } from '@alembic/core/shared/LanguageService';
-import { DimensionCopy } from '#domain/dimension/DimensionCopy.js';
 import {
   resolveDataRoot,
   resolveKnowledgeScanDirs,
   resolveProjectRoot,
-} from '#shared/resolveProjectRoot.js';
+} from '@alembic/core/shared/resolveProjectRoot';
+import { DimensionCopy } from '#domain/dimension/DimensionCopy.js';
 import { getDiscovererRegistry } from '../../core/discovery/index.js';
 import { getEnhancementRegistry } from '../../core/enhancement/index.js';
 import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
@@ -126,7 +126,7 @@ export function register(c: ServiceContainer) {
   c.singleton('vectorStore', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
     const wz = ct.singletons.writeZone as
-      | import('../../infrastructure/io/WriteZone.js').WriteZone
+      | import('@alembic/core/infrastructure/io').WriteZone
       | undefined;
     const config =
       ((ct.singletons._config as Record<string, unknown> | undefined)?.vector as

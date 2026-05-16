@@ -6,9 +6,9 @@
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { WriteZone } from '#infra/io/WriteZone.js';
-import pathGuard from '../../shared/PathGuard.js';
-import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
+import type { WriteZone } from '@alembic/core/infrastructure/io';
+import pathGuard from '@alembic/core/shared/PathGuard';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/shared/ProjectMarkers';
 
 interface FeedbackEvent {
   type: string;

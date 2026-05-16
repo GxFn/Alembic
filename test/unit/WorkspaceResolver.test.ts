@@ -1,14 +1,14 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, test } from 'vitest';
-import { isAlembicProject } from '../../lib/shared/ProjectMarkers.js';
+import { isAlembicProject } from '@alembic/core/shared/ProjectMarkers';
 import {
   getGhostWorkspaceDir,
   getProjectRegistryPath,
   ProjectRegistry,
-} from '../../lib/shared/ProjectRegistry.js';
-import WorkspaceResolver from '../../lib/shared/WorkspaceResolver.js';
+} from '@alembic/core/shared/ProjectRegistry';
+import WorkspaceResolver from '@alembic/core/shared/WorkspaceResolver';
+import { afterEach, describe, expect, test } from 'vitest';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
 

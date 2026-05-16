@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import yaml from 'js-yaml';
 import { describe, expect, test } from 'vitest';
-import { INTERNAL_SKILLS_DIR, PACKAGE_ROOT } from '../../lib/shared/package-root.js';
+import { INTERNAL_SKILLS_DIR, PACKAGE_ROOT } from '../../lib/shared/package-assets.js';
 
 const SKILL_NAME = 'progressive-chain-validation';
 const SKILL_DIR = path.join(INTERNAL_SKILLS_DIR, SKILL_NAME);

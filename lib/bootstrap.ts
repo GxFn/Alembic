@@ -1,19 +1,19 @@
 import path from 'node:path';
+import pathGuard from '@alembic/core/shared/PathGuard';
+import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
+import { WorkspaceSettingsStore } from '@alembic/core/shared/WorkspaceSettingsStore';
 import Constitution from './core/constitution/Constitution.js';
 import ConstitutionValidator from './core/constitution/ConstitutionValidator.js';
 import Gateway, { type GatewayConfig } from './core/gateway/Gateway.js';
 import PermissionManager from './core/permission/PermissionManager.js';
 import AuditLogger from './infrastructure/audit/AuditLogger.js';
 import AuditStore from './infrastructure/audit/AuditStore.js';
-import ConfigLoader from './infrastructure/config/ConfigLoader.js';
+import ConfigLoader from './infrastructure/config/AppConfigLoader.js';
 import DatabaseConnection from './infrastructure/database/DatabaseConnection.js';
 import Logger from './infrastructure/logging/Logger.js';
 import { unwrapRawDb } from './repository/search/SearchRepoAdapter.js';
 import { SkillHooks } from './service/skills/SkillHooks.js';
-import pathGuard from './shared/PathGuard.js';
-import { CONFIG_DIR, PACKAGE_ROOT } from './shared/package-root.js';
-import { WorkspaceResolver } from './shared/WorkspaceResolver.js';
-import { WorkspaceSettingsStore } from './shared/WorkspaceSettingsStore.js';
+import { CONFIG_DIR, PACKAGE_ROOT } from './shared/package-assets.js';
 
 /** Bootstrap - 应用程序启动器 */
 /** Bootstrap 初始化选项 */
@@ -56,7 +56,13 @@ export class Bootstrap {
    */
   static configurePathGuard(projectRoot: string, knowledgeBaseDir?: string) {
     if (!pathGuard.configured && projectRoot) {
-      pathGuard.configure({ projectRoot, packageRoot: PACKAGE_ROOT, knowledgeBaseDir });
+      pathGuard.configure({
+        projectRoot,
+        packageRoot: PACKAGE_ROOT,
+        knowledgeBaseDir,
+        extraProjectWritePrefixes: ['.cursor', '.vscode', '.github'],
+        extraProjectWritableFiles: ['.env'],
+      });
     } else if (knowledgeBaseDir) {
       // 已配置但知识库目录名可能后续才知道
       pathGuard.setKnowledgeBaseDir(knowledgeBaseDir);

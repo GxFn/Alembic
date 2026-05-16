@@ -17,7 +17,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { WriteZone } from '#infra/io/WriteZone.js';
+import type { WriteZone } from '@alembic/core/infrastructure/io';
 
 /** debounce flush 延迟 (ms) */
 const FLUSH_DELAY_MS = 2000;

@@ -17,7 +17,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { getProjectSkillsPath } from '../../infrastructure/config/Paths.js';
+import { getProjectSkillsPath } from '@alembic/core/infrastructure/config/Paths';
 import type { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
 import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 

@@ -1,5 +1,5 @@
+import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
-import { resolveProjectRoot } from '../shared/resolveProjectRoot.js';
 import {
   type DaemonJobKind,
   type DaemonJobRecord,

@@ -15,6 +15,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/shared/ProjectMarkers';
+import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
 import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
@@ -25,8 +27,6 @@ import {
   type WikiModuleService,
   type WikiProjectGraph,
 } from '../../service/wiki/WikiGenerator.js';
-import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
-import { resolveDataRoot } from '../../shared/resolveProjectRoot.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();

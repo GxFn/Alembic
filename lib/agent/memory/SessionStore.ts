@@ -23,10 +23,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { WriteZone } from '@alembic/core/infrastructure/io';
 import { CACHE } from '@alembic/core/shared/constants';
 import type { Disposable } from '@alembic/core/shared/lifecycle';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
-import type { WriteZone } from '#infra/io/WriteZone.js';
 import Logger from '#infra/logging/Logger.js';
 import type { SessionStoreSerialized } from './session-store-schema.js';
 import { validateSessionStoreShape } from './session-store-schema.js';

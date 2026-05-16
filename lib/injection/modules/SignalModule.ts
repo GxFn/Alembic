@@ -9,6 +9,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
 import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import { SignalAggregator } from '../../infrastructure/signal/SignalAggregator.js';
 import { SignalBridge } from '../../infrastructure/signal/SignalBridge.js';
@@ -16,7 +17,6 @@ import type { Signal } from '../../infrastructure/signal/SignalBus.js';
 import { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { SignalTraceWriter } from '../../infrastructure/signal/SignalTraceWriter.js';
 import { HitRecorder } from '../../service/signal/HitRecorder.js';
-import { resolveDataRoot } from '../../shared/resolveProjectRoot.js';
 import { shutdown } from '../../shared/shutdown.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
@@ -27,7 +27,7 @@ import type { ServiceContainer } from '../ServiceContainer.js';
 function registerIntentPersistence(
   signalBus: SignalBus,
   projectRoot: string,
-  writeZone?: import('../../infrastructure/io/WriteZone.js').WriteZone
+  writeZone?: import('@alembic/core/infrastructure/io').WriteZone
 ): void {
   signalBus.subscribe('intent', (signal: Signal) => {
     try {
@@ -81,7 +81,7 @@ export function register(c: ServiceContainer) {
   // Register after signalBus is created — subscribe for JSONL persistence
   const signalBus = c.get('signalBus');
   const dataRoot = resolveDataRoot(c);
-  const wz = c.get('writeZone') as import('../../infrastructure/io/WriteZone.js').WriteZone | null;
+  const wz = c.get('writeZone') as import('@alembic/core/infrastructure/io').WriteZone | null;
   registerIntentPersistence(signalBus, dataRoot, wz ?? undefined);
 
   // ═══ SignalBridge — SignalBus → EventBus 桥接 ═══
@@ -99,9 +99,7 @@ export function register(c: ServiceContainer) {
   c.singleton('signalTraceWriter', (ct: ServiceContainer) => {
     const bus = ct.get('signalBus') as SignalBus;
     const root = resolveDataRoot(ct);
-    const wz = ct.get('writeZone') as
-      | import('../../infrastructure/io/WriteZone.js').WriteZone
-      | null;
+    const wz = ct.get('writeZone') as import('@alembic/core/infrastructure/io').WriteZone | null;
     return new SignalTraceWriter(bus, path.join(root, '.asd', 'logs', 'signals'), wz ?? undefined);
   });
 

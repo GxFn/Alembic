@@ -11,7 +11,7 @@ import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, statSync as fstatSync } from 'node:fs';
 import { join } from 'node:path';
 import Logger from '../infrastructure/logging/Logger.js';
-import { RESOURCES_DIR } from '../shared/package-root.js';
+import { RESOURCES_DIR } from '../shared/package-assets.js';
 
 const logger = Logger.getInstance();
 

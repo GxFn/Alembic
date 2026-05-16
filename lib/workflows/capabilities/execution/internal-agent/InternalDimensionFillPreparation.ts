@@ -1,7 +1,7 @@
+import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
 import type { AgentService, SystemRunContextFactory } from '#agent/service/index.js';
 import Logger from '#infra/logging/Logger.js';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
-import { resolveDataRoot } from '#shared/resolveProjectRoot.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import type { IncrementalPlan } from '#types/workflows.js';

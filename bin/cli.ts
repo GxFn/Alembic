@@ -37,13 +37,7 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { DEFAULT_FOLDER_NAMES } from '@alembic/core/shared/folder-names';
-import { Command } from 'commander';
-import { cli } from '../lib/cli/CliLogger.js';
-import { DEFAULT_IDE_FOLDER_NAMES } from '../lib/shared/ide-folder-names.js';
-import { getCursorRoot, getCursorRulesDir, getCursorSkillsDir } from '../lib/shared/ide-paths.js';
-import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-root.js';
-import { shutdown } from '../lib/shared/shutdown.js';
-import { WorkspaceResolver } from '../lib/shared/WorkspaceResolver.js';
+import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
 import {
   collectAiEnv,
   collectAiEnvOverrides,
@@ -51,7 +45,13 @@ import {
   maskAiEnvConfig,
   PROVIDER_KEY_ENV,
   WorkspaceSettingsStore,
-} from '../lib/shared/WorkspaceSettingsStore.js';
+} from '@alembic/core/shared/WorkspaceSettingsStore';
+import { Command } from 'commander';
+import { cli } from '../lib/cli/CliLogger.js';
+import { DEFAULT_IDE_FOLDER_NAMES } from '../lib/shared/ide-folder-names.js';
+import { getCursorRoot, getCursorRulesDir, getCursorSkillsDir } from '../lib/shared/ide-paths.js';
+import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-assets.js';
+import { shutdown } from '../lib/shared/shutdown.js';
 
 const pkgPath = join(PACKAGE_ROOT, 'package.json');
 const pkg = existsSync(pkgPath) ? JSON.parse(readFileSync(pkgPath, 'utf8')) : { version: '2.0.0' };
@@ -356,7 +356,7 @@ program
     const projectRoot = resolve(opts.dir);
 
     const { execSync: exec } = await import('node:child_process');
-    const { resolveSubRepoPath, isGitRepo } = await import('../lib/shared/ProjectMarkers.js');
+    const { resolveSubRepoPath, isGitRepo } = await import('@alembic/core/shared/ProjectMarkers');
 
     const subRepoPath = resolveSubRepoPath(projectRoot);
 
@@ -2108,7 +2108,7 @@ program
     }
 
     // 通过 Bootstrap 打开目标项目的 DB
-    const ConfigLoader = (await import('../lib/infrastructure/config/ConfigLoader.js')).default;
+    const ConfigLoader = (await import('../lib/infrastructure/config/AppConfigLoader.js')).default;
     const env = process.env.NODE_ENV || 'development';
     ConfigLoader.load(env);
     ConfigLoader.set('database.path', '.asd/alembic.db');
@@ -2708,7 +2708,7 @@ program
   .option('-d, --dir <path>', '项目目录', '.')
   .action(async (action: string, opts: { dir: string }) => {
     const { ProjectRegistry, getGhostWorkspaceDir } = await import(
-      '../lib/shared/ProjectRegistry.js'
+      '@alembic/core/shared/ProjectRegistry'
     );
     const fs = await import('node:fs');
     const os = await import('node:os');

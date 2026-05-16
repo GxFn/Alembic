@@ -18,7 +18,7 @@ import {
   RESOURCES_DIR,
   SKILLS_DIR,
   TEMPLATES_DIR,
-} from '../../lib/shared/package-root.js';
+} from '../../lib/shared/package-assets.js';
 
 describe('folder names', () => {
   test('defines the default folder names used by Alembic path resolvers', () => {

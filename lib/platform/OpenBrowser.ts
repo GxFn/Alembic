@@ -11,7 +11,7 @@ import { execFileSync, execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { RESOURCES_DIR } from '#shared/package-root.js';
+import { RESOURCES_DIR } from '../shared/package-assets.js';
 
 const IS_MAC = process.platform === 'darwin';
 

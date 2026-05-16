@@ -10,7 +10,7 @@
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { DataPath, WriteZone } from '#infra/io/WriteZone.js';
+import type { DataPath, WriteZone } from '@alembic/core/infrastructure/io';
 
 // ── Types ───────────────────────────────────────────
 

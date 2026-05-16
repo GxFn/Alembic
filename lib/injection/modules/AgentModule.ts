@@ -6,6 +6,7 @@
  *   - feedbackStore, recommendationPipeline, recommendationMetrics
  */
 
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import {
   AgentProfileCompiler,
   AgentProfileRegistry,
@@ -15,7 +16,6 @@ import {
   AgentStageFactoryRegistry,
   SystemRunContextFactory,
 } from '#agent/service/index.js';
-import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { DashboardOperationAdapter } from '#tools/adapters/DashboardOperationAdapter.js';
 import {
   DASHBOARD_OPERATION_HANDLERS,
@@ -213,7 +213,7 @@ export function register(c: ServiceContainer) {
   c.singleton('feedbackStore', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
     const wz = ct.singletons.writeZone as
-      | import('../../infrastructure/io/WriteZone.js').WriteZone
+      | import('@alembic/core/infrastructure/io').WriteZone
       | undefined;
     return new FeedbackStore(dataRoot, wz);
   });

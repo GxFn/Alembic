@@ -1,12 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_FOLDER_NAMES } from '@alembic/core/shared/folder-names';
-import { DEFAULT_IDE_FOLDER_NAMES } from '../../shared/ide-folder-names.js';
-import pathGuard from '../../shared/PathGuard.js';
+import pathGuard from '@alembic/core/shared/PathGuard';
 import {
   detectKnowledgeBaseDir,
   SPEC_FILENAME as MARKER_SPEC,
-} from '../../shared/ProjectMarkers.js';
+} from '@alembic/core/shared/ProjectMarkers';
+import { DEFAULT_IDE_FOLDER_NAMES } from '../../shared/ide-folder-names.js';
 
 /**
  * Paths — 项目路径解析工具

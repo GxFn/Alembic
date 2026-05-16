@@ -1,5 +1,5 @@
 import path from 'node:path';
-import ConfigLoader from '../../lib/infrastructure/config/ConfigLoader.js';
+import ConfigLoader from '../../lib/infrastructure/config/AppConfigLoader.js';
 
 const __dirname = import.meta.dirname;
 

@@ -28,10 +28,10 @@ import {
 } from 'node:fs';
 import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/shared/ProjectMarkers';
 import { injectAutoApprove } from '../../external/mcp/autoApproveInjector.js';
 import { checkWriteSafety, safeCopyFile } from '../../service/delivery/FileProtection.js';
-import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
-import { PACKAGE_ROOT, TEMPLATES_DIR } from '../../shared/package-root.js';
+import { PACKAGE_ROOT, TEMPLATES_DIR } from '../../shared/package-assets.js';
 import {
   buildMcpServerEntry,
   GITIGNORE_MIGRATIONS,

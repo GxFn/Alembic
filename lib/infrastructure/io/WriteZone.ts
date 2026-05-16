@@ -19,8 +19,8 @@
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import path from 'node:path';
-import pathGuard from '#shared/PathGuard.js';
-import type { WorkspaceResolver } from '#shared/WorkspaceResolver.js';
+import pathGuard from '@alembic/core/shared/PathGuard';
+import type { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
 
 // ─── Zone 常量 & 类型 ───────────────────────────────
 
@@ -68,7 +68,7 @@ export class WriteZone {
 
   /** 从项目根路径创建（异步）— CLI 工具、脚本等一次性场景 */
   static async fromProjectRoot(projectRoot: string): Promise<WriteZone> {
-    const { WorkspaceResolver: WR } = await import('#shared/WorkspaceResolver.js');
+    const { WorkspaceResolver: WR } = await import('@alembic/core/shared/WorkspaceResolver');
     return new WriteZone(WR.fromProject(projectRoot));
   }
 

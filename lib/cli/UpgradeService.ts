@@ -11,8 +11,8 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { ProjectRegistry } from '../shared/ProjectRegistry.js';
-import { WorkspaceResolver } from '../shared/WorkspaceResolver.js';
+import { ProjectRegistry } from '@alembic/core/shared/ProjectRegistry';
+import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
 import { FileDeployer } from './deploy/FileDeployer.js';
 
 export class UpgradeService {

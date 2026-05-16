@@ -8,14 +8,14 @@
  */
 
 import path from 'node:path';
-import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { WriteZone } from '@alembic/core/infrastructure/io';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { KnowledgeSyncService } from '../../cli/KnowledgeSyncService.js';
 import Gateway from '../../core/gateway/Gateway.js';
 import { JobStore } from '../../daemon/JobStore.js';
 import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../infrastructure/audit/AuditStore.js';
 import { EventBus } from '../../infrastructure/event/EventBus.js';
-import { WriteZone } from '../../infrastructure/io/WriteZone.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService as _getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { ReportStore } from '../../infrastructure/report/ReportStore.js';
@@ -90,7 +90,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('writeZone', (ct: ServiceContainer) => {
     const resolver = ct.singletons._workspaceResolver as
-      | import('../../shared/WorkspaceResolver.js').WorkspaceResolver
+      | import('@alembic/core/shared/WorkspaceResolver').WorkspaceResolver
       | undefined;
     if (!resolver) {
       return null;
@@ -188,7 +188,7 @@ export function register(c: ServiceContainer) {
   c.singleton('knowledgeFileWriter', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
     const wz = ct.singletons.writeZone as
-      | import('../../infrastructure/io/WriteZone.js').WriteZone
+      | import('@alembic/core/infrastructure/io').WriteZone
       | undefined;
     return new KnowledgeFileWriter(dataRoot, wz);
   });

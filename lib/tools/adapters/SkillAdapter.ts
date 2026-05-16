@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { getProjectSkillsPath } from '@alembic/core/infrastructure/config/Paths';
 import type { ToolExecutionAdapter, ToolExecutionRequest } from '#tools/core/ToolContracts.js';
 import type { ToolResultEnvelope, ToolResultStatus } from '#tools/core/ToolResultEnvelope.js';
-import { getProjectSkillsPath } from '../../infrastructure/config/Paths.js';
-import { INJECTABLE_SKILLS_DIR } from '../../shared/package-root.js';
+import { INJECTABLE_SKILLS_DIR } from '../../shared/package-assets.js';
 
 type SkillSource = 'builtin' | 'project';
 type SkillSourceFilter = 'all' | SkillSource;

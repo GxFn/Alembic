@@ -6,9 +6,9 @@
 import fs from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import * as Paths from '@alembic/core/infrastructure/config/Paths';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
-import * as Paths from '#infra/config/Paths.js';
-import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { envelope } from '../envelope.js';
 import type { McpContext } from './types.js';
 

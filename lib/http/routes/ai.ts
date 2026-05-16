@@ -4,6 +4,14 @@
  */
 
 import { ValidationError } from '@alembic/core/shared/errors/index';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import {
+  collectAiEnvOverrides,
+  isAiEnvReady,
+  maskAiEnvConfig,
+  PROVIDER_KEY_ENV,
+  WorkspaceSettingsStore,
+} from '@alembic/core/shared/WorkspaceSettingsStore';
 import express, { type Request, type Response } from 'express';
 import {
   type AgentRunInput,
@@ -29,7 +37,6 @@ import { PROVIDER_CONFIGS } from '../../external/ai/registry/ProviderConfig.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { resolveDataRoot, resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import {
   AiChatBody,
   AiConfigBody,
@@ -42,13 +49,6 @@ import {
   AiToolBody,
   AiTranslateBody,
 } from '../../shared/schemas/http-requests.js';
-import {
-  collectAiEnvOverrides,
-  isAiEnvReady,
-  maskAiEnvConfig,
-  PROVIDER_KEY_ENV,
-  WorkspaceSettingsStore,
-} from '../../shared/WorkspaceSettingsStore.js';
 import { validate } from '../middleware/validate.js';
 import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
 import { sendToolEnvelopeResponse } from '../utils/tool-envelope-response.js';

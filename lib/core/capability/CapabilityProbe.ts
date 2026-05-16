@@ -23,8 +23,8 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { readSubRepoUrlFromConfig, resolveSubRepoPath } from '#shared/ProjectMarkers.js';
-import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { readSubRepoUrlFromConfig, resolveSubRepoPath } from '@alembic/core/shared/ProjectMarkers';
+import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import Logger from '../../infrastructure/logging/Logger.js';
 
 export type ProbeResult = 'admin' | 'contributor' | 'visitor';

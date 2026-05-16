@@ -7,7 +7,7 @@ import {
   SPEC_FILENAME as _SPEC_FILENAME,
   DEFAULT_KNOWLEDGE_BASE_DIR,
   DEFAULT_SUB_REPO_DIR,
-} from '../../shared/ProjectMarkers.js';
+} from '@alembic/core/shared/ProjectMarkers';
 
 // ─── 路径 ────────────────────────────────────────────────────
 export const SPEC_FILENAME = _SPEC_FILENAME;

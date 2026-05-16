@@ -151,7 +151,7 @@ vi.mock('../../lib/injection/ServiceContainer.js', () => ({
   })),
 }));
 
-vi.mock('../../lib/shared/resolveProjectRoot.js', () => ({
+vi.mock('@alembic/core/shared/resolveProjectRoot', () => ({
   resolveProjectRoot: vi.fn(() => '/test'),
 }));
 

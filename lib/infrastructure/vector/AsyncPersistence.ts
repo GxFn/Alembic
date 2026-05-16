@@ -17,7 +17,7 @@
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { dirname, relative } from 'node:path';
-import type { WriteZone } from '../io/WriteZone.js';
+import type { WriteZone } from '@alembic/core/infrastructure/io';
 
 // ── WAL 操作类型 ──
 export const WAL_OP = Object.freeze({

@@ -11,11 +11,11 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { WriteZone } from '@alembic/core/infrastructure/io';
 import { DEFAULT_FOLDER_NAMES } from '@alembic/core/shared/folder-names';
-import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/shared/ProjectMarkers';
 import { getCursorSkillsDir } from '../../shared/ide-paths.js';
-import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
-import { INJECTABLE_SKILLS_DIR as BUILTIN_SKILLS_DIR } from '../../shared/package-root.js';
+import { INJECTABLE_SKILLS_DIR as BUILTIN_SKILLS_DIR } from '../../shared/package-assets.js';
 
 /**
  * 技能名称映射：Alembic/skills/ → .cursor/skills/

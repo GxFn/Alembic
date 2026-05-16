@@ -11,8 +11,8 @@
  *   5. 返回给外部 Agent 按维度执行: evolve → gap-fill → dimension_complete
  */
 
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
-import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
 import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';

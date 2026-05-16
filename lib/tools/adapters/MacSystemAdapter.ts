@@ -10,7 +10,7 @@ import type {
   ToolResultEnvelope,
   ToolResultStatus,
 } from '#tools/core/ToolResultEnvelope.js';
-import { RESOURCES_DIR } from '../../shared/package-root.js';
+import { RESOURCES_DIR } from '../../shared/package-assets.js';
 
 const execFileAsync = promisify(execFile);
 const MAX_WINDOW_TITLE_LENGTH = 200;

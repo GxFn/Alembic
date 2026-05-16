@@ -14,7 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
-import { RESOURCES_DIR } from '../../shared/package-root.js';
+import { RESOURCES_DIR } from '../../shared/package-assets.js';
 
 /** .wasm 文件存放目录 */
 const GRAMMARS_DIR = path.resolve(RESOURCES_DIR, 'grammars');

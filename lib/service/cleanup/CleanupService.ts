@@ -24,15 +24,15 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { recipeDimensionIdOrUnknown } from '#domain/dimension/index.js';
-import { CANDIDATES_DIR } from '#infra/config/Defaults.js';
+import { CANDIDATES_DIR } from '@alembic/core/infrastructure/config/Defaults';
 import {
   getContextIndexPath,
   getProjectKnowledgePath,
   getProjectRecipesPath,
   getProjectSkillsPath,
-} from '#infra/config/Paths.js';
-import type { WriteZone } from '#infra/io/WriteZone.js';
+} from '@alembic/core/infrastructure/config/Paths';
+import type { WriteZone } from '@alembic/core/infrastructure/io';
+import { recipeDimensionIdOrUnknown } from '#domain/dimension/index.js';
 import { CONSUMABLE_LIFECYCLES, lifecycleInSql } from '../../domain/knowledge/Lifecycle.js';
 
 // ── 类型定义 ────────────────────────────────────────────────

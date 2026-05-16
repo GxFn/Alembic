@@ -62,7 +62,9 @@ export async function verifyDelivery({
 }): Promise<import('#service/bootstrap/DeliveryVerifier.js').DeliveryVerification | null> {
   try {
     const { DeliveryVerifier } = await import('#service/bootstrap/DeliveryVerifier.js');
-    const { resolveDataRoot, resolveProjectRoot } = await import('#shared/resolveProjectRoot.js');
+    const { resolveDataRoot, resolveProjectRoot } = await import(
+      '@alembic/core/shared/resolveProjectRoot'
+    );
     const projectRoot = resolveProjectRoot(ctx.container as never);
     const dataRoot = resolveDataRoot(ctx.container as never) || projectRoot;
     const verifier = new DeliveryVerifier(projectRoot, dataRoot);

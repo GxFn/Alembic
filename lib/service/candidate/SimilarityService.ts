@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { getProjectRecipesPath } from '@alembic/core/infrastructure/config/Paths';
 import { jaccardSimilarity, tokenizeForSimilarity } from '@alembic/core/shared/similarity';
-import { getProjectRecipesPath } from '../../infrastructure/config/Paths.js';
 
 /**
  * SimilarityService — 轻量级 Recipe 相似度检测

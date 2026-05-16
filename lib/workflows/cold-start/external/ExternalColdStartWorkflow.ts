@@ -11,8 +11,8 @@
  *   - 两者共享 Phase 1-4 分析逻辑 → ProjectIntelligenceRunner
  */
 
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
-import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import {

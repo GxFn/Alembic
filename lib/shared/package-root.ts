@@ -7,7 +7,7 @@
  *
  * @example
  * ```ts
- * import { PACKAGE_ROOT, INJECTABLE_SKILLS_DIR, RESOURCES_DIR } from '../../shared/package-root.js';
+ * import { PACKAGE_ROOT, INJECTABLE_SKILLS_DIR, RESOURCES_DIR } from './package-assets.js';
  * ```
  */
 import { existsSync, readFileSync } from 'node:fs';

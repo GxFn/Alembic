@@ -1,7 +1,7 @@
 /** PathGuard — 路径安全守卫单元测试（双层防护） */
 
 import path from 'node:path';
-import pathGuard, { PathGuardError } from '../../lib/shared/PathGuard.js';
+import pathGuard, { PathGuardError } from '@alembic/core/shared/PathGuard';
 
 describe('PathGuard', () => {
   const PROJECT_ROOT = '/Users/test/projects/MyApp';
@@ -184,27 +184,27 @@ describe('PathGuard', () => {
       ).not.toThrow();
     });
 
-    test('should allow .cursor/ (IDE integration)', () => {
+    test('should block .cursor/ by default (host delivery adapter must opt in)', () => {
       expect(() =>
         pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.cursor/mcp.json'))
-      ).not.toThrow();
+      ).toThrow(PathGuardError);
       expect(() =>
         pathGuard.assertProjectWriteSafe(
           path.join(PROJECT_ROOT, '.cursor/rules/alembic-skills.mdc')
         )
-      ).not.toThrow();
+      ).toThrow(PathGuardError);
     });
 
-    test('should allow .vscode/ (IDE integration)', () => {
+    test('should block .vscode/ by default (host delivery adapter must opt in)', () => {
       expect(() =>
         pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.vscode/settings.json'))
-      ).not.toThrow();
+      ).toThrow(PathGuardError);
     });
 
-    test('should allow .github/ (Copilot instructions)', () => {
+    test('should block .github/ by default (host delivery adapter must opt in)', () => {
       expect(() =>
         pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.github/copilot-instructions.md'))
-      ).not.toThrow();
+      ).toThrow(PathGuardError);
     });
 
     test('should allow .gitignore in project root', () => {
@@ -213,7 +213,31 @@ describe('PathGuard', () => {
       ).not.toThrow();
     });
 
-    test('should allow .env in project root', () => {
+    test('should block .env by default (host env adapter must opt in)', () => {
+      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.env'))).toThrow(
+        PathGuardError
+      );
+    });
+
+    test('should allow host-declared delivery and env write extensions', () => {
+      pathGuard._reset();
+      pathGuard.configure({
+        projectRoot: PROJECT_ROOT,
+        packageRoot: PACKAGE_ROOT,
+        knowledgeBaseDir: 'Alembic',
+        extraProjectWritePrefixes: ['.cursor', '.vscode', '.github'],
+        extraProjectWritableFiles: ['.env'],
+      });
+
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.cursor/mcp.json'))
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.vscode/settings.json'))
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.github/copilot-instructions.md'))
+      ).not.toThrow();
       expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.env'))).not.toThrow();
     });
 

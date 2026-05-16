@@ -19,8 +19,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { WriteZone } from '#infra/io/WriteZone.js';
-import WorkspaceResolver from '#shared/WorkspaceResolver.js';
+import type { WriteZone } from '@alembic/core/infrastructure/io';
+import WorkspaceResolver from '@alembic/core/shared/WorkspaceResolver';
 
 /** Minimal logger interface for auto-approve operations */
 interface AutoApproveLogger {
@@ -53,7 +53,10 @@ const AUTO_APPROVE_TOOLS = [
 /** 标记文件路径（Ghost 模式下写入外置工作区） */
 function _markerPath(projectRoot: string) {
   try {
-    return WorkspaceResolver.fromProject(projectRoot).autoApprovePendingPath;
+    return path.join(
+      WorkspaceResolver.fromProject(projectRoot).runtimeDir,
+      '.auto-approve-pending'
+    );
   } catch {
     return path.join(projectRoot, '.asd', '.auto-approve-pending');
   }

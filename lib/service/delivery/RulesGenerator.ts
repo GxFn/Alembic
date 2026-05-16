@@ -8,7 +8,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
+import type { WriteZone } from '@alembic/core/infrastructure/io';
 import { getCursorRulesDir, getCursorRulesRelativePath } from '../../shared/ide-paths.js';
 import { BUDGET, estimateTokens } from './TokenBudget.js';
 

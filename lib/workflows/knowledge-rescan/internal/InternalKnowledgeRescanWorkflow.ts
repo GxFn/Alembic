@@ -16,8 +16,8 @@
  *   7. 前端通过 Socket.io 接收维度完成进度
  */
 
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { applyTestDimensionFilter } from '@alembic/core/shared/test-mode';
-import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';

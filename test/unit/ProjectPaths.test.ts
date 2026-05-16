@@ -1,11 +1,11 @@
 import path from 'node:path';
-import { describe, expect, test } from 'vitest';
 import {
   getContextStoragePath,
   getProjectInternalDataPath,
   getProjectRecipesPath,
   getProjectSkillsPath,
-} from '../../lib/infrastructure/config/Paths.js';
+} from '@alembic/core/infrastructure/config/Paths';
+import { describe, expect, test } from 'vitest';
 
 describe('project path helpers', () => {
   test('derive default project knowledge paths from shared folder names', () => {
