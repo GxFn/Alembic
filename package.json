@@ -70,8 +70,9 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "build:check": "tsc --noEmit",
+    "build": "npm run build:core && tsc",
+    "build:check": "npm run build:core && tsc --noEmit",
+    "build:core": "tsc -p vendor/AlembicCore/tsconfig.json",
     "postbuild": "node scripts/postbuild.mjs",
     "prepublishOnly": "npm run release:codex-plugin",
     "build:screenshot": "swiftc -O -framework ScreenCaptureKit -framework AppKit resources/native-ui/screenshot.swift -o resources/native-ui/screenshot",
@@ -148,6 +149,7 @@
     "url": "git+https://github.com/GxFn/Alembic.git"
   },
   "dependencies": {
+    "@alembic/core": "file:vendor/AlembicCore",
     "@larksuiteoapi/node-sdk": "^1.59.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "ajv": "^8.20.0",

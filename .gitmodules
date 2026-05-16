@@ -1,0 +1,3 @@
+[submodule "vendor/AlembicCore"]
+	path = vendor/AlembicCore
+	url = https://github.com/GxFn/AlembicCore.git
