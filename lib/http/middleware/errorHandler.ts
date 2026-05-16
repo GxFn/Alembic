@@ -1,12 +1,12 @@
 /** 错误处理中间件 */
 
-import type { ErrorRequestHandler, NextFunction, Request, RequestHandler, Response } from 'express';
 import {
   ConflictError,
   NotFoundError,
   PermissionDenied,
   ValidationError,
-} from '../../shared/errors/index.js';
+} from '@alembic/core/shared/errors/index';
+import type { ErrorRequestHandler, NextFunction, Request, RequestHandler, Response } from 'express';
 
 /** Minimal logger interface (compatible with winston.Logger) */
 interface AppLogger {

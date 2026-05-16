@@ -9,7 +9,7 @@
  * @module shared/UnifiedValidator
  */
 
-import { LanguageService } from '#shared/LanguageService.js';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 import {
   FieldLevel,
   STANDARD_CATEGORIES,

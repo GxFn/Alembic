@@ -8,8 +8,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 import Logger from '../../infrastructure/logging/Logger.js';
-import { LanguageService } from '../../shared/LanguageService.js';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 
 const logger = Logger.getInstance();

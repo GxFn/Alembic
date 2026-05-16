@@ -11,7 +11,7 @@
  * @module MemoryRetriever
  */
 
-import { cosineSimilarity } from '#shared/similarity.js';
+import { cosineSimilarity } from '@alembic/core/shared/similarity';
 import type { MemoryEmbeddingStore } from './MemoryEmbeddingStore.js';
 import type { DeserializedMemory, MemoryRow } from './MemoryStore.js';
 import { MemoryStore } from './MemoryStore.js';

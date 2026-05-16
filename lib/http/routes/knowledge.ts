@@ -4,8 +4,8 @@
  * 替代 recipes.js + candidates.js （旧路由继续保留用于向后兼容）
  */
 
+import { ioLimit } from '@alembic/core/shared/concurrency';
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { ioLimit } from '#shared/concurrency.js';
 import {
   BatchDeleteBody,
   BatchDeprecateBody,

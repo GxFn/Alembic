@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { AppConfigSchema } from '../../shared/schemas/config.js';
+import { AppConfigSchema } from '@alembic/core/shared/schemas/config';
 
 /**
  * ConfigLoader - 配置加载器

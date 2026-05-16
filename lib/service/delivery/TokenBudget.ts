@@ -5,7 +5,7 @@
  * 用于确保 .mdc 文件不超出 Cursor 上下文预算。
  */
 
-import { estimateTokens } from '../../shared/token-utils.js';
+import { estimateTokens } from '@alembic/core/shared/token-utils';
 export { estimateTokens };
 
 /** 默认预算配置 */

@@ -5,7 +5,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { LanguageService } from '../../shared/LanguageService.js';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 
 interface CodeBlock {
   language: string;

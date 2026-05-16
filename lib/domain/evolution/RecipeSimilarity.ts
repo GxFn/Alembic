@@ -24,7 +24,7 @@
  * @module domain/evolution/RecipeSimilarity
  */
 
-import { extractRecipeTokens } from '../../shared/recipe-tokens.js';
+import { extractRecipeTokens } from '@alembic/core/shared/recipe-tokens';
 
 /* ────────────────────── Stop Words ────────────────────── */
 

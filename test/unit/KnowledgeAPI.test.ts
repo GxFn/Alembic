@@ -101,11 +101,11 @@ vi.mock('#domain/knowledge/RecipeReadinessChecker.js', () => ({
 }));
 
 // Mock developer-identity — CI 环境下 git/OS username 不确定，固定为 'mcp'
-vi.mock('#shared/developer-identity.js', () => ({
+vi.mock('@alembic/core/shared/developer-identity', () => ({
   getDeveloperIdentity: vi.fn(() => 'mcp'),
   clearDeveloperIdentityCache: vi.fn(),
 }));
-vi.mock('../../lib/shared/developer-identity.js', () => ({
+vi.mock('@alembic/core/shared/developer-identity', () => ({
   getDeveloperIdentity: vi.fn(() => 'mcp'),
   clearDeveloperIdentityCache: vi.fn(),
 }));
@@ -502,7 +502,7 @@ vi.mock('../../lib/http/utils/routeHelpers.js', () => ({
   safeInt: vi.fn((val, def) => parseInt(val, 10) || def),
 }));
 
-vi.mock('../../lib/shared/errors/index.js', () => ({
+vi.mock('@alembic/core/shared/errors/index', () => ({
   ValidationError: class ValidationError extends Error {
     constructor(msg) {
       super(msg);

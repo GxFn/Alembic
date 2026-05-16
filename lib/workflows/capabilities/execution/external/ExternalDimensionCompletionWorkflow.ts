@@ -1,7 +1,7 @@
+import { getDeveloperIdentity } from '@alembic/core/shared/developer-identity';
 import { dimensionTags } from '#domain/dimension/RecipeDimension.js';
 import Logger from '#infra/logging/Logger.js';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
-import { getDeveloperIdentity } from '#shared/developer-identity.js';
 import { resolveDataRoot } from '#shared/resolveProjectRoot.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import {

@@ -16,8 +16,8 @@
  *   7. 前端通过 Socket.io 接收维度完成进度
  */
 
+import { applyTestDimensionFilter } from '@alembic/core/shared/test-mode';
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
-import { applyTestDimensionFilter } from '#shared/test-mode.js';
 import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
@@ -378,7 +378,10 @@ export async function runInternalKnowledgeRescanWorkflow(
   const knowledgeRescanPlan = buildKnowledgeRescanPlan({
     recipeEntries: recipeSnapshot.entries,
     auditSummary,
-    dimensions: applyTestDimensionFilter(allDimensions as DimensionDef[], 'rescan'),
+    dimensions: applyTestDimensionFilter(
+      allDimensions as unknown as Parameters<typeof applyTestDimensionFilter>[0],
+      'rescan'
+    ) as DimensionDef[],
     requestedDimensionIds: intent.dimensionIds,
     fileDiff: _incrementalPlan?.diff
       ? {

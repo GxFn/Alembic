@@ -5,10 +5,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Disposable } from '@alembic/core/shared/lifecycle';
+import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import type { DataPath, WriteZone } from '#infra/io/WriteZone.js';
-import type { Disposable } from '../../shared/lifecycle.js';
 import { resolveDataRoot } from '../../shared/resolveProjectRoot.js';
-import { timerRegistry } from '../../shared/TimerRegistry.js';
 import Logger from '../logging/Logger.js';
 
 interface ErrorTrackerConfig {

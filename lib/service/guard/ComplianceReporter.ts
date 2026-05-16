@@ -12,8 +12,8 @@
  *   ComplianceReport { qualityGate, summary, topViolations, fileHotspots, ruleHealth, trend }
  */
 
+import { COMPLIANCE_SCORING, QUALITY_GATE } from '@alembic/core/shared/constants';
 import Logger from '../../infrastructure/logging/Logger.js';
-import { COMPLIANCE_SCORING, QUALITY_GATE } from '../../shared/constants.js';
 import { collectSourceFilesWithContent } from './SourceFileCollector.js';
 
 interface ViolationSummary {

@@ -14,8 +14,8 @@
  * @module RoleRefiner
  */
 
-import type { LanguageFamily, RolePattern } from '#shared/LanguageProfiles.js';
-import { LanguageProfiles } from '#shared/LanguageProfiles.js';
+import type { LanguageFamily, RolePattern } from '@alembic/core/shared/LanguageProfiles';
+import { LanguageProfiles } from '@alembic/core/shared/LanguageProfiles';
 import type { BootstrapRepositoryImpl } from '../../repository/bootstrap/BootstrapRepository.js';
 import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
 import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';

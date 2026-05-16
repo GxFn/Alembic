@@ -1,5 +1,5 @@
+import { ConstitutionViolation } from '@alembic/core/shared/errors/BaseError';
 import Logger from '../../infrastructure/logging/Logger.js';
-import { ConstitutionViolation } from '../../shared/errors/BaseError.js';
 import type { Constitution, ConstitutionRule } from './Constitution.js';
 
 export interface ValidationRequest {

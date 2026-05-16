@@ -14,7 +14,7 @@
  * @module infrastructure/vector/BatchEmbedder
  */
 
-import { createLimit } from '#shared/concurrency.js';
+import { createLimit } from '@alembic/core/shared/concurrency';
 
 export class BatchEmbedder {
   #aiProvider;

@@ -7,7 +7,7 @@
  * @module service/candidate/CandidateAggregator
  */
 
-import { jaccardSimilarity, tokenizeForSimilarity } from '../../shared/similarity.js';
+import { jaccardSimilarity, tokenizeForSimilarity } from '@alembic/core/shared/similarity';
 
 /** title 相似度阈值，超过此值视为重复 */
 const TITLE_SIMILARITY_THRESHOLD = 0.85;

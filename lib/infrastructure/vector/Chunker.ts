@@ -11,7 +11,7 @@
  *     └── DEFAULT → fixed (固定大小 + 行边界对齐)
  */
 
-import { estimateTokens } from '../../shared/token-utils.js';
+import { estimateTokens } from '@alembic/core/shared/token-utils';
 import { chunkByAST, isASTChunkerAvailable } from './ASTChunker.js';
 
 export { estimateTokens };

@@ -6,7 +6,7 @@
 
 import { readdir, readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
-import { LanguageService } from '../../shared/LanguageService.js';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 
 /** 支持审计的源文件扩展名 — 委托给 LanguageService */
 export const SOURCE_EXTS = LanguageService.sourceExts;

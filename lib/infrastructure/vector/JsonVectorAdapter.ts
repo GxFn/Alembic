@@ -6,8 +6,8 @@
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
+import { cosineSimilarity } from '@alembic/core/shared/similarity';
 import pathGuard from '../../shared/PathGuard.js';
-import { cosineSimilarity } from '../../shared/similarity.js';
 import type { WriteZone } from '../io/WriteZone.js';
 import { VectorStore } from './VectorStore.js';
 

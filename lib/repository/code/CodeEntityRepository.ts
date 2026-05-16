@@ -5,9 +5,9 @@
  * 使用 Drizzle 类型安全 API。
  */
 
+import { unixNow } from '@alembic/core/shared/utils/common';
 import { and, count, eq, inArray, isNotNull, like, ne, sql } from 'drizzle-orm';
 import { codeEntities } from '../../infrastructure/database/drizzle/schema.js';
-import { unixNow } from '../../shared/utils/common.js';
 import { RepositoryBase } from '../base/RepositoryBase.js';
 
 /* ═══ 类型定义 ═══ */

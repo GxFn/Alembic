@@ -31,7 +31,7 @@ beforeAll(async () => {
   getDiscovererRegistry = dMod.getDiscovererRegistry;
   resetDiscovererRegistry = dMod.resetDiscovererRegistry;
 
-  const lsMod = await import('../../lib/shared/LanguageService.js');
+  const lsMod = await import('@alembic/core/shared/LanguageService');
   _LanguageService = lsMod.LanguageService;
 });
 

@@ -17,6 +17,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 import type { ProjectAnalysisResult } from '#core/AstAnalyzer.js';
 import {
   analyzeProject,
@@ -25,7 +26,6 @@ import {
 } from '#core/AstAnalyzer.js';
 import type { CallGraphResult as CallGraphAnalysisResult } from '#core/analysis/CallGraphAnalyzer.js';
 import { DimensionCopy } from '#domain/dimension/DimensionCopy.js';
-import { LanguageService } from '#shared/LanguageService.js';
 import type { GuardAudit } from '#types/project-snapshot.js';
 import type { IncrementalPlan } from '#types/workflows.js';
 import {

@@ -9,7 +9,7 @@
 
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, extname, join, relative } from 'node:path';
-import { LanguageService } from '../../shared/LanguageService.js';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 import {
   type DiscoveredFile,
   type DiscoveredTarget,

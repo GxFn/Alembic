@@ -18,8 +18,8 @@
  * @module infrastructure/cache/CacheCoordinator
  */
 
-import type { Startable } from '../../shared/lifecycle.js';
-import { timerRegistry } from '../../shared/TimerRegistry.js';
+import type { Startable } from '@alembic/core/shared/lifecycle';
+import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import type { SqliteDatabase } from '../database/DatabaseConnection.js';
 import Logger from '../logging/Logger.js';
 

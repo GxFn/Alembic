@@ -19,6 +19,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { KNOWLEDGE_CONFIDENCE } from '@alembic/core/shared/constants';
 import type { KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
 import { getProjectSkillsPath } from '../../infrastructure/config/Paths.js';
 import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
@@ -27,7 +28,7 @@ import {
   RawDbCallGraphAdapter,
 } from '../../repository/delivery/DeliveryRepoAdapter.js';
 import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
-import { DELIVERY_RANK, KNOWLEDGE_CONFIDENCE } from '../../shared/constants.js';
+import { DELIVERY_RANK } from '../../shared/constants.js';
 import {
   getCursorRulesDir,
   getCursorSkillsDir,

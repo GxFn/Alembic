@@ -7,7 +7,7 @@
  * @module TechStackProfiler
  */
 
-import { LanguageProfiles } from '#shared/LanguageProfiles.js';
+import { LanguageProfiles } from '@alembic/core/shared/LanguageProfiles';
 import type { ExternalDepProfile, TechStackProfile } from './PanoramaTypes.js';
 
 /* ═══ TechStackProfiler ═══════════════════════════════════ */

@@ -14,7 +14,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { LanguageProfiles } from '#shared/LanguageProfiles.js';
+import { LanguageProfiles } from '@alembic/core/shared/LanguageProfiles';
 import { inferTargetRole } from '../../external/mcp/handlers/TargetClassifier.js';
 import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
 import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';

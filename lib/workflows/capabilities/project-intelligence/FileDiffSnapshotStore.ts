@@ -14,11 +14,11 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
+import { computeContentHash } from '@alembic/core/shared/content-hash';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { DrizzleDB } from '#infra/database/drizzle/index.js';
 import { getDrizzle } from '#infra/database/drizzle/index.js';
 import { bootstrapDimFiles, bootstrapSnapshots } from '#infra/database/drizzle/schema.js';
-import { computeContentHash } from '#shared/content-hash.js';
 import type { LoggerLike } from '#types/workflows.js';
 
 // ──────────────────────────────────────────────────────────────────

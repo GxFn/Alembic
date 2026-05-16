@@ -9,7 +9,7 @@
 
 import { existsSync, readdirSync, readFileSync, type Stats, statSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
-import { LanguageService } from '#shared/LanguageService.js';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 import { ProjectDiscoverer } from './ProjectDiscoverer.js';
 
 /** Package.swift 解析结果 */

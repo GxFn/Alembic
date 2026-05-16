@@ -3,9 +3,9 @@
  * 提取自各路由文件中的重复实现
  */
 
+import { getDeveloperIdentity } from '@alembic/core/shared/developer-identity';
 import type { Request } from 'express';
 import { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
-import { getDeveloperIdentity } from '../../shared/developer-identity.js';
 
 /**
  * 从请求中提取操作上下文（用户身份、IP、UA）

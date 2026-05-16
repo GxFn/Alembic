@@ -6,7 +6,7 @@ import {
   NotFoundError,
   PermissionDenied,
   ValidationError,
-} from '../../lib/shared/errors/BaseError.js';
+} from '@alembic/core/shared/errors/BaseError';
 
 describe('Error Classes', () => {
   describe('BaseError', () => {

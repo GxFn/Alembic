@@ -18,7 +18,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { getFileDiff, parseDiffHunks, tokenizeDiffLines } from '../../shared/diff-parser.js';
+import { getFileDiff, parseDiffHunks, tokenizeDiffLines } from '@alembic/core/shared/diff-parser';
 import type { ImpactLevel } from '../../types/reactive-evolution.js';
 
 // Re-export from shared module for backward compatibility
@@ -27,10 +27,10 @@ export {
   extractRecipeTokens,
   type RecipeTokens,
   tokenizeIdentifiers,
-} from '../../shared/recipe-tokens.js';
+} from '@alembic/core/shared/recipe-tokens';
 
-import type { RecipeTokens } from '../../shared/recipe-tokens.js';
-import { tokenizeIdentifiers } from '../../shared/recipe-tokens.js';
+import type { RecipeTokens } from '@alembic/core/shared/recipe-tokens';
+import { tokenizeIdentifiers } from '@alembic/core/shared/recipe-tokens';
 
 /** Diff 影响评估结果 */
 export interface DiffImpactResult {

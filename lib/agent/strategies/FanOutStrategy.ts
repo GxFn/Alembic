@@ -1,4 +1,4 @@
-import { createLimit } from '#shared/concurrency.js';
+import { createLimit } from '@alembic/core/shared/concurrency';
 import { AgentEventBus, AgentEvents } from '../runtime/AgentEventBus.js';
 import { AgentMessage } from '../runtime/AgentMessage.js';
 import { SingleStrategy } from './SingleStrategy.js';

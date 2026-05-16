@@ -33,9 +33,9 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
 import Logger from '../../infrastructure/logging/Logger.js';
-import { LanguageService } from '../../shared/LanguageService.js';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 import {
   buildAiSystemPrompt,

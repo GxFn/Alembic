@@ -172,7 +172,7 @@ export interface CallFlowSummary {
 /* ═══ Module Role ═════════════════════════════════════════ */
 
 // Canonical definition lives in LanguageProfiles; re-exported here for panorama consumers.
-export type { ModuleRole } from '#shared/LanguageProfiles.js';
+export type { ModuleRole } from '@alembic/core/shared/LanguageProfiles';
 
 export interface PanoramaResult {
   modules: Map<string, PanoramaModule>;

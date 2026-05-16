@@ -4,7 +4,7 @@ const envBackup = { ...process.env };
 
 afterEach(() => {
   process.env = { ...envBackup };
-  vi.doUnmock('#shared/test-mode.js');
+  vi.doUnmock('@alembic/core/shared/test-mode');
   vi.resetModules();
 });
 
@@ -15,7 +15,7 @@ async function loadModule() {
 }
 
 function mockTerminalToolset(toolset = 'terminal-run') {
-  vi.doMock('#shared/test-mode.js', () => ({
+  vi.doMock('@alembic/core/shared/test-mode', () => ({
     getTestModeConfig: () => ({
       enabled: false,
       bootstrapDims: [],

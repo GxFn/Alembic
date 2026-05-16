@@ -15,7 +15,7 @@
  *   - AI 不可用时自动降级到 Jaccard
  */
 
-import { jaccardSimilarity } from '../../shared/similarity.js';
+import { jaccardSimilarity } from '@alembic/core/shared/similarity';
 import { tokenize } from './tokenizer.js';
 
 interface RerankCandidate {

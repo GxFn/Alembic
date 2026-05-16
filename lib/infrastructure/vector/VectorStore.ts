@@ -3,7 +3,7 @@
  * 定义向量存储的标准接口，支持 JSON/Milvus 等后端
  */
 
-import { ioLimit } from '#shared/concurrency.js';
+import { ioLimit } from '@alembic/core/shared/concurrency';
 
 export class VectorStore {
   /** 初始化存储 */

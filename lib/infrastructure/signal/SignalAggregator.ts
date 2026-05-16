@@ -6,8 +6,8 @@
  * @module infrastructure/signal/SignalAggregator
  */
 
-import type { Startable } from '../../shared/lifecycle.js';
-import { timerRegistry } from '../../shared/TimerRegistry.js';
+import type { Startable } from '@alembic/core/shared/lifecycle';
+import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import type { ReportStore } from '../report/ReportStore.js';
 import type { Signal, SignalBus } from './SignalBus.js';
 

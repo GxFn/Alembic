@@ -17,8 +17,8 @@
  * - SonarQube: 多维度渐进评级，非二元判断
  */
 
-import { QUALITY_GRADES, QUALITY_WEIGHTS } from '../../shared/constants.js';
-import { LanguageProfiles } from '../../shared/LanguageProfiles.js';
+import { QUALITY_GRADES, QUALITY_WEIGHTS } from '@alembic/core/shared/constants';
+import { LanguageProfiles } from '@alembic/core/shared/LanguageProfiles';
 
 const DEFAULT_WEIGHTS = QUALITY_WEIGHTS;
 

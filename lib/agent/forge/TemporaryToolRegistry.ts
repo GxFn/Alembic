@@ -10,16 +10,15 @@
  *   - 支持手动续期和提前回收
  */
 
+import type { Disposable } from '@alembic/core/shared/lifecycle';
+import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import Logger from '#infra/logging/Logger.js';
-
 import type { SignalBus } from '#infra/signal/SignalBus.js';
 import type {
   ForgedInternalToolStore,
   InternalToolHandler,
 } from '#tools/core/InternalToolHandler.js';
 import type { WorkflowHandler } from '#tools/workflow/WorkflowRegistry.js';
-import type { Disposable } from '../../shared/lifecycle.js';
-import { timerRegistry } from '../../shared/TimerRegistry.js';
 
 /* ────────────────────── Types ────────────────────── */
 

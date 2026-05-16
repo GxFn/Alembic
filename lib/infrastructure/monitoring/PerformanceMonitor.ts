@@ -3,8 +3,8 @@
  * 记录 API 请求的响应时间、吞吐量和错误率
  */
 
-import type { Disposable } from '../../shared/lifecycle.js';
-import { timerRegistry } from '../../shared/TimerRegistry.js';
+import type { Disposable } from '@alembic/core/shared/lifecycle';
+import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import Logger from '../logging/Logger.js';
 
 interface EndpointStats {

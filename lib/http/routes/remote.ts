@@ -18,6 +18,7 @@
 
 import crypto from 'node:crypto';
 import { readFileSync, unlinkSync } from 'node:fs';
+import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import express, { type Request, type Response } from 'express';
 import { LarkTransport } from '../../external/lark/LarkTransport.js';
 import Logger from '../../infrastructure/logging/Logger.js';
@@ -33,7 +34,6 @@ import {
   RemoteResultBody,
   RemoteSendBody,
 } from '../../shared/schemas/http-requests.js';
-import { timerRegistry } from '../../shared/TimerRegistry.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 
 /** Lark WS client shape */

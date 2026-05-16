@@ -35,8 +35,8 @@
  *
  */
 
+import { applyTestDimensionFilter } from '@alembic/core/shared/test-mode';
 import { resolveDataRoot, resolveProjectRoot } from '#shared/resolveProjectRoot.js';
-import { applyTestDimensionFilter } from '#shared/test-mode.js';
 import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
 import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '#types/workflows.js';
@@ -157,9 +157,11 @@ export async function runInternalColdStartWorkflow(
   );
 
   const dimensions = applyTestDimensionFilter(
-    selectColdStartDimensions(snapshot, intent) as DimensionDef[],
+    selectColdStartDimensions(snapshot, intent) as unknown as Parameters<
+      typeof applyTestDimensionFilter
+    >[0],
     'bootstrap'
-  );
+  ) as DimensionDef[];
 
   // 如果调用方指定了维度子集，只保留匹配的维度
   if (intent.dimensionIds?.length) {

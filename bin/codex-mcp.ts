@@ -24,7 +24,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 const { shutdown } = await import('../lib/shared/shutdown.js');
-const { timerRegistry } = await import('../lib/shared/TimerRegistry.js');
+const { timerRegistry } = await import('@alembic/core/shared/TimerRegistry');
 shutdown.install();
 shutdown.register(async () => {
   await timerRegistry.dispose();

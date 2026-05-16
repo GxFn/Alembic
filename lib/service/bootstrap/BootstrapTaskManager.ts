@@ -18,7 +18,7 @@
  *   bootstrap:all-completed — 全部任务完成
  */
 
-import { getTestModeConfig } from '#shared/test-mode.js';
+import { getTestModeConfig } from '@alembic/core/shared/test-mode';
 import type { EventBus } from '../../infrastructure/event/EventBus.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';

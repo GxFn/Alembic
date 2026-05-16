@@ -8,6 +8,7 @@ import { existsSync, rmSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
+import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import Bootstrap from '../lib/bootstrap.js';
 import { markInterruptedDaemonJobs } from '../lib/daemon/DaemonJobRunner.js';
 import {
@@ -22,7 +23,6 @@ import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
 import { DaemonFileChangeCollector } from '../lib/service/evolution/DaemonFileChangeCollector.js';
 import { DASHBOARD_DIR } from '../lib/shared/package-root.js';
 import { shutdown } from '../lib/shared/shutdown.js';
-import { timerRegistry } from '../lib/shared/TimerRegistry.js';
 
 shutdown.install();
 

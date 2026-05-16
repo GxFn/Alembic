@@ -11,8 +11,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { DEFAULT_FOLDER_NAMES } from '@alembic/core/shared/folder-names';
 import type { WriteZone } from '../../infrastructure/io/WriteZone.js';
-import { DEFAULT_FOLDER_NAMES } from '../../shared/folder-names.js';
 import { getCursorSkillsDir } from '../../shared/ide-paths.js';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 import { INJECTABLE_SKILLS_DIR as BUILTIN_SKILLS_DIR } from '../../shared/package-root.js';

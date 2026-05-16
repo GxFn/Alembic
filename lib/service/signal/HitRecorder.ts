@@ -12,10 +12,10 @@
  * @module service/signal/HitRecorder
  */
 
+import type { Startable } from '@alembic/core/shared/lifecycle';
+import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import type { SignalBus, SignalType } from '#infra/signal/SignalBus.js';
 import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
-import type { Startable } from '../../shared/lifecycle.js';
-import { timerRegistry } from '../../shared/TimerRegistry.js';
 
 /** better-sqlite3 兼容类型（与 GuardCheckEngine 相同模式） */
 interface DatabaseLike {

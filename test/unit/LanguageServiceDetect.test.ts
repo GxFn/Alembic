@@ -5,8 +5,8 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import LanguageService from '@alembic/core/shared/LanguageService';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import LanguageService from '../../lib/shared/LanguageService.js';
 
 const TMP = join(tmpdir(), 'asd-langdetect-test');
 

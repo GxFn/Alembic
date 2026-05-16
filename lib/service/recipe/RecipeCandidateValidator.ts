@@ -5,8 +5,8 @@
  * 核心变更：用 content 对象替代旧版 code 字符串。
  */
 
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 import { getRequiredFieldNames } from '#domain/knowledge/FieldSpec.js';
-import { LanguageService } from '../../shared/LanguageService.js';
 
 interface CandidateContent {
   pattern?: string;

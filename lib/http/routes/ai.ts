@@ -3,6 +3,7 @@
  * AI 提供商管理、摘要、翻译、对话、工作区 LLM 配置
  */
 
+import { ValidationError } from '@alembic/core/shared/errors/index';
 import express, { type Request, type Response } from 'express';
 import {
   type AgentRunInput,
@@ -28,7 +29,6 @@ import { PROVIDER_CONFIGS } from '../../external/ai/registry/ProviderConfig.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { ValidationError } from '../../shared/errors/index.js';
 import { resolveDataRoot, resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import {
   AiChatBody,

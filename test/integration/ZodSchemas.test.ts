@@ -9,8 +9,6 @@
  *   - TOOL_SCHEMAS 映射表完整性
  */
 
-import { z } from 'zod';
-
 // ── common schemas ──────────────────────────────────
 import {
   ComplexityEnum,
@@ -24,9 +22,10 @@ import {
   ScopeEnum,
   StrictKindEnum,
   TitleField,
-} from '../../lib/shared/schemas/common.js';
+} from '@alembic/core/shared/schemas/common';
 // ── config schemas ──────────────────────────────────
-import { AppConfigSchema, ConstitutionSchema } from '../../lib/shared/schemas/config.js';
+import { AppConfigSchema, ConstitutionSchema } from '@alembic/core/shared/schemas/config';
+import { z } from 'zod';
 
 // ── HTTP request schemas ────────────────────────────
 import {

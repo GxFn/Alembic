@@ -14,8 +14,8 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 import { getProjectSpecPath } from '#infra/config/Paths.js';
-import { LanguageService } from '#shared/LanguageService.js';
 import {
   type DependencyGraph,
   type DependencyGraphLayer,

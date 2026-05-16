@@ -1,14 +1,14 @@
-import {
-  assessDiffImpact,
-  type RecipeTokens,
-} from '../../lib/service/evolution/ContentImpactAnalyzer.js';
-import { parseDiffHunks, tokenizeDiffLines } from '../../lib/shared/diff-parser.js';
-import { extractCodeBlocksFromMarkdown } from '../../lib/shared/markdown-utils.js';
+import { parseDiffHunks, tokenizeDiffLines } from '@alembic/core/shared/diff-parser';
+import { extractCodeBlocksFromMarkdown } from '@alembic/core/shared/markdown-utils';
 import {
   extractApiTokens,
   extractRecipeTokens,
   tokenizeIdentifiers,
-} from '../../lib/shared/recipe-tokens.js';
+} from '@alembic/core/shared/recipe-tokens';
+import {
+  assessDiffImpact,
+  type RecipeTokens,
+} from '../../lib/service/evolution/ContentImpactAnalyzer.js';
 
 describe('ContentImpactAnalyzer', () => {
   /* ─── tokenizeIdentifiers ─── */

@@ -6,8 +6,8 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { computeContentHash } from '../../shared/content-hash.js';
-import { LanguageService } from '../../shared/LanguageService.js';
+import { computeContentHash } from '@alembic/core/shared/content-hash';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 
 interface ExtractorOptions {
   extractSemanticTags?: boolean;

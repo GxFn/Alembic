@@ -3,7 +3,7 @@
  * 所有具体 Provider 必须实现这3个方法
  */
 
-import { LanguageService } from '../../shared/LanguageService.js';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /** Loose JSON record for external API responses (inherently untyped) */

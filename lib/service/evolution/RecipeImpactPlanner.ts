@@ -11,12 +11,12 @@
  * @module service/evolution/RecipeImpactPlanner
  */
 
+import { extractRecipeTokens } from '@alembic/core/shared/recipe-tokens';
 import type { EvolutionAuditRecipe } from '../../agent/runs/evolution/EvolutionAgentRun.js';
 import { isConsumable, isDegraded } from '../../domain/knowledge/Lifecycle.js';
 import type { ProposalSource } from '../../repository/evolution/ProposalRepository.js';
 import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
-import { extractRecipeTokens } from '../../shared/recipe-tokens.js';
 import { assessImpactUnified } from './ContentImpactAnalyzer.js';
 import type { EvolutionAction, EvolutionDecision, EvolutionResult } from './EvolutionGateway.js';
 

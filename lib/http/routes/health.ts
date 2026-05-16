@@ -1,7 +1,7 @@
 /** 健康检查端点 */
 
+import { getDeveloperIdentity } from '@alembic/core/shared/developer-identity';
 import express from 'express';
-import { getDeveloperIdentity } from '../../shared/developer-identity.js';
 
 const router = express.Router();
 

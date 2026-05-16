@@ -13,7 +13,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { LanguageService } from '../../shared/LanguageService.js';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 import { RESOURCES_DIR } from '../../shared/package-root.js';
 
 /** .wasm 文件存放目录 */

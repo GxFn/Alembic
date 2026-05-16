@@ -11,15 +11,15 @@
  * @module external/mcp/errorHandler
  */
 
-import { z } from 'zod';
-import Logger from '#infra/logging/Logger.js';
 import {
   ConflictError,
   ConstitutionViolation,
   NotFoundError,
   PermissionDenied,
   ValidationError,
-} from '#shared/errors/index.js';
+} from '@alembic/core/shared/errors/index';
+import { z } from 'zod';
+import Logger from '#infra/logging/Logger.js';
 import { TOOL_SCHEMAS } from '#shared/schemas/mcp-tools.js';
 
 const logger = Logger.getInstance();

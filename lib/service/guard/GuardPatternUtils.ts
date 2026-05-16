@@ -9,7 +9,7 @@
  * - detectLanguage: 文件扩展名推断语言
  */
 
-import { LanguageService } from '../../shared/LanguageService.js';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 
 /** 已编译的正则缓存 (pattern string → RegExp) */
 const _regexCache = new Map();

@@ -8,6 +8,7 @@
  *   - constitution, aiProvider, projectGraph
  */
 
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 import { DimensionCopy } from '#domain/dimension/DimensionCopy.js';
 import {
   resolveDataRoot,
@@ -46,7 +47,6 @@ import { RecipeProductionGateway } from '../../service/knowledge/RecipeProductio
 import { SourceRefReconciler } from '../../service/knowledge/SourceRefReconciler.js';
 import { HybridRetriever } from '../../service/search/HybridRetriever.js';
 import { SearchEngine } from '../../service/search/SearchEngine.js';
-import { LanguageService } from '../../shared/LanguageService.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {

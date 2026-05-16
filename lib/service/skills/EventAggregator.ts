@@ -18,8 +18,8 @@
  *   // 5 秒内的多次 push 会合并为一次 batch 回调
  */
 
+import type { Disposable } from '@alembic/core/shared/lifecycle';
 import Logger from '../../infrastructure/logging/Logger.js';
-import type { Disposable } from '../../shared/lifecycle.js';
 
 const DEFAULT_WINDOW_MS = 5000; // 5 秒聚合窗口
 const DEFAULT_MAX_BATCH = 50; // 单次 batch 最大事件数

@@ -21,10 +21,10 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { estimateTokens as _estimateTokens } from '@alembic/core/shared/token-utils';
 import type { WriteZone } from '#infra/io/WriteZone.js';
 import Logger from '#infra/logging/Logger.js';
 import pathGuard from '#shared/PathGuard.js';
-import { estimateTokens as _estimateTokens } from '#shared/token-utils.js';
 
 /** 对话索引中的条目 */
 interface ConversationEntry {

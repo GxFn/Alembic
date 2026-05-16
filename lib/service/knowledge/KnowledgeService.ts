@@ -1,8 +1,8 @@
+import { ConflictError, NotFoundError, ValidationError } from '@alembic/core/shared/errors/index';
 import { KnowledgeEntry, type KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
 import type { KnowledgeRepository } from '../../domain/knowledge/KnowledgeRepository.js';
 import { inferKind, Lifecycle } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
-import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors/index.js';
 import type { ConfidenceRouter } from './ConfidenceRouter.js';
 import type { KnowledgeFileWriter } from './KnowledgeFileWriter.js';
 import type { KnowledgeGraphService } from './KnowledgeGraphService.js';

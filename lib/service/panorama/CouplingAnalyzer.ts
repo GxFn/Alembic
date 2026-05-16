@@ -8,7 +8,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { LanguageProfiles } from '#shared/LanguageProfiles.js';
+import { LanguageProfiles } from '@alembic/core/shared/LanguageProfiles';
 import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
 import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
 import type { CyclicDependency, Edge } from './PanoramaTypes.js';

@@ -7,6 +7,8 @@
  * @module ServiceMap
  */
 
+// ── Shared Types ──
+import type { LanguageService } from '@alembic/core/shared/LanguageService';
 import type DimensionCopy from '#domain/dimension/DimensionCopy.js';
 // ── Service Types ──
 import type { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
@@ -92,8 +94,6 @@ import type { PrimeSearchPipeline } from '../service/task/PrimeSearchPipeline.js
 // ── Vector Service Types ──
 import type { ContextualEnricher } from '../service/vector/ContextualEnricher.js';
 import type { VectorService } from '../service/vector/VectorService.js';
-// ── Shared Types ──
-import type { LanguageService } from '../shared/LanguageService.js';
 
 /**
  * 类型安全的服务映射表
