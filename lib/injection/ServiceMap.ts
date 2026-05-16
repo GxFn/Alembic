@@ -7,6 +7,8 @@
  * @module ServiceMap
  */
 
+// ── Core AST / Discovery / Enhancement ──
+import type ProjectGraph from '@alembic/core/core/ast/ProjectGraph';
 import type { JobStore } from '@alembic/core/daemon/JobStore';
 import type DimensionCopy from '@alembic/core/domain/dimension/DimensionCopy';
 import type DatabaseConnection from '@alembic/core/infrastructure/database/DatabaseConnection';
@@ -42,8 +44,6 @@ import type {
   AgentStageFactoryRegistry,
   SystemRunContextFactory,
 } from '../agent/service/index.js';
-// ── Core AST / Discovery / Enhancement ──
-import type ProjectGraph from '../core/ast/ProjectGraph.js';
 // ── Core Types ──
 import type Constitution from '../core/constitution/Constitution.js';
 import type Gateway from '../core/gateway/Gateway.js';

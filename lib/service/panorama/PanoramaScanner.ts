@@ -109,7 +109,9 @@ export class PanoramaScanner {
         runPhase1_7_CallGraph,
         runPhase2_DependencyGraph,
         runPhase2_1_ModuleEntities,
-      } = await import('#workflows/capabilities/project-intelligence/ProjectIntelligenceRunner.js');
+      } = await import(
+        '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceRunner'
+      );
 
       // Phase 1: 文件收集
       const phase1 = await runPhase1_FileCollection(this.#projectRoot, this.#logger, {
@@ -182,7 +184,7 @@ export class PanoramaScanner {
       if (phase1.discoverer && phase1.discoverer.id !== 'customConfig') {
         try {
           const { CustomConfigDiscoverer } = await import(
-            '../../core/discovery/CustomConfigDiscoverer.js'
+            '@alembic/core/core/discovery/CustomConfigDiscoverer'
           );
           const ccDiscoverer = new CustomConfigDiscoverer();
           const ccDetect = await ccDiscoverer.detect(this.#projectRoot);

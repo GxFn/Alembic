@@ -12,10 +12,11 @@
  */
 
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import type { DimensionDef, ProjectSnapshot } from '@alembic/core/types/project-snapshot';
+import { buildProjectSnapshot } from '@alembic/core/types/project-snapshot-builder';
+import { ProjectIntelligenceCapability } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
-import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
-import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
 import {
   buildExternalMissionBriefing,
   createExternalWorkflowSession,
@@ -27,7 +28,6 @@ import {
   projectExternalRescanEvidencePlan,
   syncKnowledgeStoreForRescan,
 } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
-import { ProjectIntelligenceCapability } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
 import {
   runForceRescanCleanPolicy,
   runRescanCleanPolicy,

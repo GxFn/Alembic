@@ -12,7 +12,7 @@
  *   }
  */
 
-import { ImportRecord } from './ImportRecord.js';
+import { ImportRecord } from '@alembic/core/core/analysis/ImportRecord';
 
 /** Input shape for the project summary from analyzeProject */
 interface ProjectSummaryInput {

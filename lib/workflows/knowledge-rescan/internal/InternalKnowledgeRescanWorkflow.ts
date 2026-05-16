@@ -18,8 +18,10 @@
 
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { applyTestDimensionFilter } from '@alembic/core/shared/test-mode';
-import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
-import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
+import type { DimensionDef, ProjectSnapshot } from '@alembic/core/types/project-snapshot';
+import { buildProjectSnapshot } from '@alembic/core/types/project-snapshot-builder';
+import { FileDiffPlanner } from '@alembic/core/workflows/capabilities/project-intelligence/FileDiffPlanner';
+import { ProjectIntelligenceCapability } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '#types/workflows.js';
 import { cacheProjectAnalysisSession } from '#workflows/capabilities/execution/external/SessionSupport.js';
@@ -35,8 +37,6 @@ import {
   projectInternalRescanPromptRecipes,
   syncKnowledgeStoreForRescan,
 } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
-import { FileDiffPlanner } from '#workflows/capabilities/project-intelligence/FileDiffPlanner.js';
-import { ProjectIntelligenceCapability } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
 import {
   runForceRescanCleanPolicy,
   runRescanCleanPolicy,

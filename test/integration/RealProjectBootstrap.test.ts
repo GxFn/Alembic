@@ -29,7 +29,7 @@ let analyzeProject, astIsAvailable;
 let initEnhancementRegistry;
 
 beforeAll(async () => {
-  const dMod = await import('../../lib/core/discovery/index.js');
+  const dMod = await import('@alembic/core/core/discovery');
   getDiscovererRegistry = dMod.getDiscovererRegistry;
   resetDiscovererRegistry = dMod.resetDiscovererRegistry;
 
@@ -39,12 +39,12 @@ beforeAll(async () => {
   const dcMod = await import('@alembic/core/domain/dimension/DimensionCopy');
   DimensionCopy = dcMod.DimensionCopy;
 
-  await import('../../lib/core/ast/index.js');
-  const astMod = await import('../../lib/core/AstAnalyzer.js');
+  await import('@alembic/core/core/ast');
+  const astMod = await import('@alembic/core/core/AstAnalyzer');
   analyzeProject = astMod.analyzeProject;
   astIsAvailable = astMod.isAvailable;
 
-  const enhMod = await import('../../lib/core/enhancement/index.js');
+  const enhMod = await import('@alembic/core/core/enhancement');
   initEnhancementRegistry = enhMod.initEnhancementRegistry;
 });
 

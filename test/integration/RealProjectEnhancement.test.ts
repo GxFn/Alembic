@@ -20,10 +20,10 @@ let getDiscovererRegistry, resetDiscovererRegistry;
 let LanguageService;
 
 beforeAll(async () => {
-  const enhMod = await import('../../lib/core/enhancement/index.js');
+  const enhMod = await import('@alembic/core/core/enhancement');
   initEnhancementRegistry = enhMod.initEnhancementRegistry;
 
-  const dMod = await import('../../lib/core/discovery/index.js');
+  const dMod = await import('@alembic/core/core/discovery');
   getDiscovererRegistry = dMod.getDiscovererRegistry;
   resetDiscovererRegistry = dMod.resetDiscovererRegistry;
 

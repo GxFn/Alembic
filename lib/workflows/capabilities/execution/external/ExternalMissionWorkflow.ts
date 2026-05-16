@@ -3,7 +3,8 @@ import type {
   DimensionDef,
   MissionBriefingResult,
   ProjectSnapshot,
-} from '#types/project-snapshot.js';
+} from '@alembic/core/types/project-snapshot';
+import { buildLanguageExtension } from '@alembic/core/workflows/capabilities/presentation/LanguageExtensionBuilder';
 import { toSessionCache } from '#types/snapshot-views.js';
 import { buildMissionBriefing } from '#workflows/capabilities/execution/external/MissionBriefingBuilder.js';
 import type {
@@ -11,7 +12,6 @@ import type {
   RescanBriefingInput,
 } from '#workflows/capabilities/execution/external/MissionBriefingSupport.js';
 import { getOrCreateSessionManager } from '#workflows/capabilities/execution/external/SessionSupport.js';
-import { buildLanguageExtension } from '#workflows/capabilities/presentation/LanguageExtensionBuilder.js';
 
 export type ExternalSessionContainer = Parameters<typeof getOrCreateSessionManager>[0];
 export type ExternalWorkflowSession = ReturnType<

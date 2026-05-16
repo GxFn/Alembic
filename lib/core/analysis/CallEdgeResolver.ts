@@ -12,7 +12,7 @@
  *   SymbolTable + ImportPathResolver + CallSite[] → ResolvedEdge[]
  */
 
-import type { ImportPathResolver } from './ImportPathResolver.js';
+import type { ImportPathResolver } from '@alembic/core/core/analysis/ImportPathResolver';
 
 export interface ResolvedEdge {
   caller: string;

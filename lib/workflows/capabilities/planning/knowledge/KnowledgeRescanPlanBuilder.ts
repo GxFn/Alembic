@@ -1,6 +1,6 @@
 import { recipeBelongsToDimension } from '@alembic/core/domain/dimension/RecipeDimension';
+import type { DimensionDef } from '@alembic/core/types/project-snapshot';
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
-import type { DimensionDef } from '#types/project-snapshot.js';
 import type {
   RelevanceAuditResult,
   RelevanceAuditSummary,

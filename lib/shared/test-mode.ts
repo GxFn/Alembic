@@ -14,7 +14,7 @@
  */
 
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import type { DimensionDef } from '#types/project-snapshot.js';
+import type { DimensionDef } from '@alembic/core/types/project-snapshot';
 
 function envBool(key: string): boolean {
   const v = process.env[key];

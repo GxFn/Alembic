@@ -1,6 +1,10 @@
+import type {
+  DimensionDef,
+  GuardAudit,
+  ProjectSnapshot,
+} from '@alembic/core/types/project-snapshot';
 import { envelope } from '#external/mcp/envelope.js';
 import type { CleanupResult, RecipeSnapshot } from '#service/cleanup/CleanupService.js';
-import type { DimensionDef, GuardAudit, ProjectSnapshot } from '#types/project-snapshot.js';
 import type {
   ExternalRescanEvidencePlan,
   InternalRescanGapPlan,

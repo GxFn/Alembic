@@ -1,6 +1,4 @@
 import { getInternalAgentRequiredFields } from '@alembic/core/domain/knowledge/FieldSpec';
-import { envelope } from '#external/mcp/envelope.js';
-import type { CleanupResult } from '#service/cleanup/CleanupService.js';
 import type {
   DimensionDef,
   GuardAuditFileEntry,
@@ -8,11 +6,13 @@ import type {
   MissionBriefingResult,
   PhaseReport,
   ProjectSnapshot,
-} from '#types/project-snapshot.js';
+} from '@alembic/core/types/project-snapshot';
+import { buildLanguageExtension as buildProjectLanguageExtension } from '@alembic/core/workflows/capabilities/presentation/LanguageExtensionBuilder';
+import { inferTargetRole } from '@alembic/core/workflows/capabilities/presentation/TargetClassifier';
+import { envelope } from '#external/mcp/envelope.js';
+import type { CleanupResult } from '#service/cleanup/CleanupService.js';
 import { buildInternalNextSteps } from '#workflows/capabilities/execution/external/MissionBriefingSupport.js';
-import { buildLanguageExtension as buildProjectLanguageExtension } from '#workflows/capabilities/presentation/LanguageExtensionBuilder.js';
 import { summarizePanorama as summarizeProjectPanorama } from '#workflows/capabilities/presentation/PanoramaSummaryPresenter.js';
-import { inferTargetRole } from '#workflows/capabilities/presentation/TargetClassifier.js';
 import { buildTargetFileMap as buildProjectTargetFileMap } from '#workflows/capabilities/presentation/TargetFileMapBuilder.js';
 
 export type ColdStartTargetFileMap = Record<string, Array<Record<string, unknown>>>;

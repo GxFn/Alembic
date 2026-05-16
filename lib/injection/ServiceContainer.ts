@@ -1,13 +1,13 @@
 import { type Dirent, readdirSync, statSync } from 'node:fs';
 import { extname as pathExtname, join as pathJoin, relative as pathRelative } from 'node:path';
+// ─── v3.0: AST ProjectGraph ──────────────────────────
+import ProjectGraph from '@alembic/core/core/ast/ProjectGraph';
+// ─── v3.1: Multi-Language Discovery + Enhancement ────────
+import { initEnhancementRegistry } from '@alembic/core/core/enhancement';
 // ─── P3: Infrastructure ──────────────────────────────
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
-// ─── v3.0: AST ProjectGraph ──────────────────────────
-import ProjectGraph from '../core/ast/ProjectGraph.js';
-// ─── v3.1: Multi-Language Discovery + Enhancement ────────
-import { initEnhancementRegistry } from '../core/enhancement/index.js';
 import { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
 import { GraphCache } from '../infrastructure/cache/GraphCache.js';
 import * as AgentModule from './modules/AgentModule.js';

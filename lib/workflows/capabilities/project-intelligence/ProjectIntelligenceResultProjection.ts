@@ -1,4 +1,4 @@
-import { inferTargetRole } from '#workflows/capabilities/presentation/TargetClassifier.js';
+import { inferTargetRole } from '@alembic/core/workflows/capabilities/presentation/TargetClassifier';
 
 type ProjectAnalysisTargetItem =
   | string

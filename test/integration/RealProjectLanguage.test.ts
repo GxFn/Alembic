@@ -25,7 +25,7 @@ beforeAll(async () => {
   LanguageService = lsMod.LanguageService;
   const dcMod = await import('@alembic/core/domain/dimension/DimensionCopy');
   DimensionCopy = dcMod.DimensionCopy;
-  const dMod = await import('../../lib/core/discovery/index.js');
+  const dMod = await import('@alembic/core/core/discovery');
   getDiscovererRegistry = dMod.getDiscovererRegistry;
   resetDiscovererRegistry = dMod.resetDiscovererRegistry;
 });

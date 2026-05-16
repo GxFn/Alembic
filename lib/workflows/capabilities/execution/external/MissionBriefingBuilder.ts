@@ -29,7 +29,7 @@ import type {
   GuardViolation,
   IncrementalPlan,
   LocalPackageModule,
-} from '#types/project-snapshot.js';
+} from '@alembic/core/types/project-snapshot';
 import { buildEvidenceStarters } from '#workflows/capabilities/execution/external/EvidenceStarterBuilder.js';
 import {
   applyBriefingCompressionPolicy,

@@ -8,10 +8,13 @@
  * 支持用户偏好持久化: 当匹配模糊时，保存/加载用户选择。
  */
 
+import type {
+  ConflictResult,
+  DetectMatch,
+} from '@alembic/core/core/discovery/DiscovererPreference';
+import { detectConflict, loadPreference } from '@alembic/core/core/discovery/DiscovererPreference';
+import type { ProjectDiscoverer } from '@alembic/core/core/discovery/ProjectDiscoverer';
 import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
-import type { ConflictResult, DetectMatch } from './DiscovererPreference.js';
-import { detectConflict, loadPreference } from './DiscovererPreference.js';
-import type { ProjectDiscoverer } from './ProjectDiscoverer.js';
 
 export class DiscovererRegistry {
   #discoverers: ProjectDiscoverer[] = [];

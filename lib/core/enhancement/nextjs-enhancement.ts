@@ -11,7 +11,11 @@
  *   - Parallel Routes / Intercepting Routes
  */
 
-import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
+import {
+  type AstSummary,
+  type DetectedPattern,
+  EnhancementPack,
+} from '@alembic/core/core/enhancement/EnhancementPack';
 
 class NextjsEnhancement extends EnhancementPack {
   get id() {

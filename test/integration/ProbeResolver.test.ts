@@ -15,7 +15,7 @@
  *     - 无效 / 过期 token → visitor
  */
 
-import { CapabilityProbe } from '../../lib/core/capability/CapabilityProbe.js';
+import { CapabilityProbe } from '@alembic/core/core/capability/CapabilityProbe';
 import { roleResolverMiddleware } from '../../lib/http/middleware/roleResolver.js';
 import { createExpiredToken, createTempGitRepo, createTestToken } from '../fixtures/factory.js';
 

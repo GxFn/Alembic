@@ -6,7 +6,7 @@
  */
 
 import path from 'node:path';
-import type { DimensionDef, ProjectSnapshot } from '#types/project-snapshot.js';
+import type { DimensionDef, ProjectSnapshot } from '@alembic/core/types/project-snapshot';
 import { toSessionCache } from '#types/snapshot-views.js';
 import { BootstrapSessionManager } from '#workflows/capabilities/execution/external/BootstrapSession.js';
 

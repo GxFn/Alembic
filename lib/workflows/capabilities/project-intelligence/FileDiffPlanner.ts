@@ -13,9 +13,9 @@
  *   6. 完成后保存新快照
  */
 
+import { FileDiffSnapshotStore } from '@alembic/core/workflows/capabilities/project-intelligence/FileDiffSnapshotStore';
 import { SessionStore } from '#agent/memory/SessionStore.js';
 import type { BootstrapFile, LoggerLike, SaveSnapshotParams } from '#types/workflows.js';
-import { FileDiffSnapshotStore } from '#workflows/capabilities/project-intelligence/FileDiffSnapshotStore.js';
 
 // ──────────────────────────────────────────────────────────────
 // FileDiffPlanner 类

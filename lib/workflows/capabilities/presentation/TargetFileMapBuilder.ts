@@ -1,5 +1,5 @@
-import { inferLang } from './LanguageExtensionBuilder.js';
-import { inferFilePriority } from './TargetClassifier.js';
+import { inferLang } from '@alembic/core/workflows/capabilities/presentation/LanguageExtensionBuilder';
+import { inferFilePriority } from '@alembic/core/workflows/capabilities/presentation/TargetClassifier';
 
 export interface TargetFile {
   name: string;

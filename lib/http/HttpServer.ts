@@ -6,12 +6,12 @@
 
 import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
+import { CapabilityProbe } from '@alembic/core/core/capability/CapabilityProbe';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
 import cors from 'cors';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
 import helmet from 'helmet';
-import { CapabilityProbe } from '../core/capability/CapabilityProbe.js';
 import { registerGatewayActions } from '../core/gateway/GatewayActionRegistry.js';
 import { initCacheAdapter } from '../infrastructure/cache/UnifiedCacheAdapter.js';
 import { type ErrorTracker, initErrorTracker } from '../infrastructure/monitoring/ErrorTracker.js';

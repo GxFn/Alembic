@@ -5,13 +5,13 @@
  * CallEdgeResolver, DataFlowInferrer, CallGraphAnalyzer, CallSiteExtractor
  */
 
-import { CallEdgeResolver } from '../../lib/core/analysis/CallEdgeResolver.js';
-import { CallGraphAnalyzer } from '../../lib/core/analysis/CallGraphAnalyzer.js';
-import { extractCallSitesTS } from '../../lib/core/analysis/CallSiteExtractor.js';
-import { DataFlowInferrer } from '../../lib/core/analysis/DataFlowInferrer.js';
-import { ImportPathResolver } from '../../lib/core/analysis/ImportPathResolver.js';
-import { ImportRecord } from '../../lib/core/analysis/ImportRecord.js';
-import { SymbolTableBuilder } from '../../lib/core/analysis/SymbolTableBuilder.js';
+import { CallEdgeResolver } from '@alembic/core/core/analysis/CallEdgeResolver';
+import { CallGraphAnalyzer } from '@alembic/core/core/analysis/CallGraphAnalyzer';
+import { extractCallSitesTS } from '@alembic/core/core/analysis/CallSiteExtractor';
+import { DataFlowInferrer } from '@alembic/core/core/analysis/DataFlowInferrer';
+import { ImportPathResolver } from '@alembic/core/core/analysis/ImportPathResolver';
+import { ImportRecord } from '@alembic/core/core/analysis/ImportRecord';
+import { SymbolTableBuilder } from '@alembic/core/core/analysis/SymbolTableBuilder';
 
 // ─── ImportRecord ─────────────────────────────────────────
 
@@ -1161,7 +1161,7 @@ describe('Go extractCallSites', () => {
   let extractCallSitesGo;
 
   beforeAll(async () => {
-    const mod = await import('../../lib/core/ast/lang-go.js');
+    const mod = await import('@alembic/core/core/ast/lang-go');
     extractCallSitesGo = mod.plugin.extractCallSites;
   });
 
@@ -1282,7 +1282,7 @@ describe('Go extractCallSites', () => {
 
 describe('Go ImportRecord', () => {
   test('plugin exports extractCallSites', async () => {
-    const mod = await import('../../lib/core/ast/lang-go.js');
+    const mod = await import('@alembic/core/core/ast/lang-go');
     expect(mod.plugin.extractCallSites).toBeDefined();
     expect(typeof mod.plugin.extractCallSites).toBe('function');
   });
@@ -1294,7 +1294,7 @@ describe('Java extractCallSites', () => {
   let extractCallSitesJava;
 
   beforeAll(async () => {
-    const mod = await import('../../lib/core/ast/lang-java.js');
+    const mod = await import('@alembic/core/core/ast/lang-java');
     extractCallSitesJava = mod.plugin.extractCallSites;
   });
 
@@ -1379,7 +1379,7 @@ describe('Java extractCallSites', () => {
   });
 
   test('Java ImportRecord with scoped import', async () => {
-    const mod = await import('../../lib/core/ast/lang-java.js');
+    const mod = await import('@alembic/core/core/ast/lang-java');
     // Verify plugin exports extractCallSites
     expect(mod.plugin.extractCallSites).toBeDefined();
     expect(mod.plugin.extensions).toEqual(['.java']);
@@ -1392,7 +1392,7 @@ describe('Kotlin extractCallSites', () => {
   let extractCallSitesKotlin;
 
   beforeAll(async () => {
-    const mod = await import('../../lib/core/ast/lang-kotlin.js');
+    const mod = await import('@alembic/core/core/ast/lang-kotlin');
     extractCallSitesKotlin = mod.plugin.extractCallSites;
   });
 
@@ -1477,7 +1477,7 @@ describe('Kotlin extractCallSites', () => {
   });
 
   test('Kotlin plugin exports extractCallSites', async () => {
-    const mod = await import('../../lib/core/ast/lang-kotlin.js');
+    const mod = await import('@alembic/core/core/ast/lang-kotlin');
     expect(mod.plugin.extractCallSites).toBeDefined();
     expect(mod.plugin.extensions).toEqual(['.kt', '.kts']);
   });
@@ -1547,7 +1547,7 @@ describe('Rust extractCallSites', () => {
   let extractCallSitesRust;
 
   beforeAll(async () => {
-    const mod = await import('../../lib/core/ast/lang-rust.js');
+    const mod = await import('@alembic/core/core/ast/lang-rust');
     extractCallSitesRust = mod.plugin.extractCallSites;
   });
 
@@ -1667,7 +1667,7 @@ describe('Rust extractCallSites', () => {
   });
 
   test('Rust plugin exports extractCallSites', async () => {
-    const mod = await import('../../lib/core/ast/lang-rust.js');
+    const mod = await import('@alembic/core/core/ast/lang-rust');
     expect(mod.plugin.extractCallSites).toBeDefined();
     expect(typeof mod.plugin.extractCallSites).toBe('function');
     expect(mod.plugin.extensions).toEqual(['.rs']);
@@ -1680,7 +1680,7 @@ describe('Swift extractCallSites', () => {
   let extractCallSitesSwift;
 
   beforeAll(async () => {
-    const mod = await import('../../lib/core/ast/lang-swift.js');
+    const mod = await import('@alembic/core/core/ast/lang-swift');
     extractCallSitesSwift = mod.plugin.extractCallSites;
   });
 
@@ -1779,7 +1779,7 @@ describe('Swift extractCallSites', () => {
   });
 
   test('Swift plugin exports extractCallSites', async () => {
-    const mod = await import('../../lib/core/ast/lang-swift.js');
+    const mod = await import('@alembic/core/core/ast/lang-swift');
     expect(mod.plugin.extractCallSites).toBeDefined();
     expect(typeof mod.plugin.extractCallSites).toBe('function');
     expect(mod.plugin.extensions).toEqual(['.swift']);
@@ -1792,7 +1792,7 @@ describe('Dart extractCallSites', () => {
   let extractCallSitesDart;
 
   beforeAll(async () => {
-    const mod = await import('../../lib/core/ast/lang-dart.js');
+    const mod = await import('@alembic/core/core/ast/lang-dart');
     extractCallSitesDart = mod.plugin.extractCallSites;
   });
 
@@ -1889,7 +1889,7 @@ describe('Dart extractCallSites', () => {
   });
 
   test('Dart plugin exports extractCallSites', async () => {
-    const mod = await import('../../lib/core/ast/lang-dart.js');
+    const mod = await import('@alembic/core/core/ast/lang-dart');
     expect(mod.plugin.extractCallSites).toBeDefined();
     expect(typeof mod.plugin.extractCallSites).toBe('function');
     expect(mod.plugin.extensions).toEqual(['.dart']);
@@ -3020,7 +3020,7 @@ describe('Kotlin walker — constructor property extraction', () => {
   let walkKotlin;
 
   beforeAll(async () => {
-    const mod = await import('../../lib/core/ast/lang-kotlin.js');
+    const mod = await import('@alembic/core/core/ast/lang-kotlin');
     walkKotlin = mod.plugin.walk;
   });
 
@@ -3301,9 +3301,9 @@ describe('CallEdgeResolver — super call resolution', () => {
   let CallEdgeResolver, SymbolTableBuilder, ImportPathResolver;
 
   beforeAll(async () => {
-    ({ CallEdgeResolver } = await import('../../lib/core/analysis/CallEdgeResolver.js'));
-    ({ SymbolTableBuilder } = await import('../../lib/core/analysis/SymbolTableBuilder.js'));
-    ({ ImportPathResolver } = await import('../../lib/core/analysis/ImportPathResolver.js'));
+    ({ CallEdgeResolver } = await import('@alembic/core/core/analysis/CallEdgeResolver'));
+    ({ SymbolTableBuilder } = await import('@alembic/core/core/analysis/SymbolTableBuilder'));
+    ({ ImportPathResolver } = await import('@alembic/core/core/analysis/ImportPathResolver'));
   });
 
   test('super.xxx() resolves to parent class method via CHA (not self-edge)', () => {
@@ -3429,9 +3429,9 @@ describe('CallEdgeResolver — duplicate edge deduplication', () => {
   let CallEdgeResolver, SymbolTableBuilder, ImportPathResolver;
 
   beforeAll(async () => {
-    ({ CallEdgeResolver } = await import('../../lib/core/analysis/CallEdgeResolver.js'));
-    ({ SymbolTableBuilder } = await import('../../lib/core/analysis/SymbolTableBuilder.js'));
-    ({ ImportPathResolver } = await import('../../lib/core/analysis/ImportPathResolver.js'));
+    ({ CallEdgeResolver } = await import('@alembic/core/core/analysis/CallEdgeResolver'));
+    ({ SymbolTableBuilder } = await import('@alembic/core/core/analysis/SymbolTableBuilder'));
+    ({ ImportPathResolver } = await import('@alembic/core/core/analysis/ImportPathResolver'));
   });
 
   test('same caller→callee at same line deduplicates to 1 edge', () => {
@@ -3501,8 +3501,8 @@ describe('Swift walker — super call extraction', () => {
   let analyzeFile;
 
   beforeAll(async () => {
-    await import('../../lib/core/ast/index.js');
-    ({ analyzeFile } = await import('../../lib/core/AstAnalyzer.js'));
+    await import('@alembic/core/core/ast');
+    ({ analyzeFile } = await import('@alembic/core/core/AstAnalyzer'));
   });
 
   test('super.xxx() sets callType=super in Swift', () => {
@@ -3530,8 +3530,8 @@ describe('Java walker — super call extraction', () => {
   let analyzeFile;
 
   beforeAll(async () => {
-    await import('../../lib/core/ast/index.js');
-    ({ analyzeFile } = await import('../../lib/core/AstAnalyzer.js'));
+    await import('@alembic/core/core/ast');
+    ({ analyzeFile } = await import('@alembic/core/core/AstAnalyzer'));
   });
 
   test('super.xxx() sets callType=super in Java', () => {
@@ -3560,8 +3560,8 @@ describe('Kotlin walker — super and this call extraction', () => {
   let analyzeFile;
 
   beforeAll(async () => {
-    await import('../../lib/core/ast/index.js');
-    ({ analyzeFile } = await import('../../lib/core/AstAnalyzer.js'));
+    await import('@alembic/core/core/ast');
+    ({ analyzeFile } = await import('@alembic/core/core/AstAnalyzer'));
   });
 
   test('super.xxx() sets callType=super in Kotlin', () => {

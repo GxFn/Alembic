@@ -1,1 +1,1 @@
-export * from '#workflows/capabilities/presentation/TargetClassifier.js';
+export * from '@alembic/core/workflows/capabilities/presentation/TargetClassifier';

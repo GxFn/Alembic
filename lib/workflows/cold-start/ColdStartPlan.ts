@@ -1,9 +1,9 @@
-import type { ProjectSnapshot } from '#types/project-snapshot.js';
+import type { ProjectSnapshot } from '@alembic/core/types/project-snapshot';
 import type {
   ProjectAnalysisMaterializationPlan,
   ProjectAnalysisPreparationOptions,
   ProjectAnalysisScanOptions,
-} from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
+} from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
 import type { ColdStartWorkflowIntent } from './ColdStartIntent.js';
 
 export interface ColdStartWorkflowPlan {

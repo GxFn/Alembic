@@ -1,5 +1,6 @@
+import type { BootstrapFile, IncrementalPlan } from '@alembic/core/types/workflows';
+import type { FileDiffPlanner } from '@alembic/core/workflows/capabilities/project-intelligence/FileDiffPlanner';
 import type { SessionStore } from '#agent/memory/SessionStore.js';
-import type { BootstrapFile, IncrementalPlan } from '#types/workflows.js';
 import type {
   WorkflowCompletionSummary,
   WorkflowSemanticMemoryConsolidationResult,
@@ -9,7 +10,6 @@ import type {
   DimensionStat,
   SkillResults,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import type { FileDiffPlanner } from '#workflows/capabilities/project-intelligence/FileDiffPlanner.js';
 
 export type WorkflowReportConsolidationResult = WorkflowSemanticMemoryConsolidationResult;
 

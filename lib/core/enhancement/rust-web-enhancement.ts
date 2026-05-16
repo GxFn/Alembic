@@ -9,7 +9,11 @@
  *   - Warp (filter 组合)
  */
 
-import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
+import {
+  type AstSummary,
+  type DetectedPattern,
+  EnhancementPack,
+} from '@alembic/core/core/enhancement/EnhancementPack';
 
 class RustWebEnhancement extends EnhancementPack {
   get id() {

@@ -1,5 +1,5 @@
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import type { DimensionDef } from '#types/project-snapshot.js';
+import type { DimensionDef } from '@alembic/core/types/project-snapshot';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
 import { finalizeInternalDimensionFill as finalizeInternalDimensionExecution } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
@@ -68,7 +68,7 @@ export async function clearSnapshots(
     const db = ctx.container.get('database');
     if (db) {
       const { FileDiffSnapshotStore } = await import(
-        '#workflows/capabilities/project-intelligence/FileDiffSnapshotStore.js'
+        '@alembic/core/workflows/capabilities/project-intelligence/FileDiffSnapshotStore'
       );
       const snap = new FileDiffSnapshotStore(db, { logger: ctx.logger });
       snap.clearProject(projectRoot);

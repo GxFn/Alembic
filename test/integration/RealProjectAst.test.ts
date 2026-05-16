@@ -21,13 +21,13 @@ let _LanguageService;
 
 beforeAll(async () => {
   // 加载 AST 插件
-  await import('../../lib/core/ast/index.js');
-  const astMod = await import('../../lib/core/AstAnalyzer.js');
+  await import('@alembic/core/core/ast');
+  const astMod = await import('@alembic/core/core/AstAnalyzer');
   analyzeFile = astMod.analyzeFile;
   analyzeProject = astMod.analyzeProject;
   _astIsAvailable = astMod.isAvailable;
 
-  const dMod = await import('../../lib/core/discovery/index.js');
+  const dMod = await import('@alembic/core/core/discovery');
   getDiscovererRegistry = dMod.getDiscovererRegistry;
   resetDiscovererRegistry = dMod.resetDiscovererRegistry;
 

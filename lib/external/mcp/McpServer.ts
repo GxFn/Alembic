@@ -19,12 +19,12 @@
  * 整合路由 → handlers/consolidated.js
  */
 
+import { CapabilityProbe } from '@alembic/core/core/capability/CapabilityProbe';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { McpServer as SdkMcpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { CapabilityProbe } from '#core/capability/CapabilityProbe.js';
 import { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
 import { LightweightRouter } from '#tools/core/LightweightRouter.js';
 import type { ToolActor, ToolCallSource, ToolSurface } from '#tools/core/ToolCallContext.js';

@@ -11,14 +11,14 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConfigWatcher } from '../../lib/core/discovery/ConfigWatcher.js';
-import { CustomConfigDiscoverer } from '../../lib/core/discovery/CustomConfigDiscoverer.js';
+import { ConfigWatcher } from '@alembic/core/core/discovery/ConfigWatcher';
+import { CustomConfigDiscoverer } from '@alembic/core/core/discovery/CustomConfigDiscoverer';
 import {
   extractXcodeGenDependencyEdges,
   parseXcodeGenProject,
   parseXcodeGenTarget,
-} from '../../lib/core/discovery/parsers/YamlConfigParser.js';
+} from '@alembic/core/core/discovery/parsers/YamlConfigParser';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CouplingAnalyzer } from '../../lib/service/panorama/CouplingAnalyzer.js';
 import type { ExternalDepProfile } from '../../lib/service/panorama/PanoramaTypes.js';
 import { profileTechStack } from '../../lib/service/panorama/TechStackProfiler.js';

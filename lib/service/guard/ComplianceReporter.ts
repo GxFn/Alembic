@@ -207,7 +207,7 @@ export class ComplianceReporter {
       return;
     }
     try {
-      const { initEnhancementRegistry } = await import('#core/enhancement/index.js');
+      const { initEnhancementRegistry } = await import('@alembic/core/core/enhancement');
       const enhReg = await initEnhancementRegistry();
       // 仅注入无框架条件的通用 Pack（有框架条件的由 Bootstrap resolve() 精确注入）
       const allPacks = enhReg.all().filter((pack) => {
@@ -243,7 +243,7 @@ export class ComplianceReporter {
    */
   async #ensureAstPlugins(): Promise<void> {
     try {
-      const { loadPlugins } = await import('../../core/ast/index.js');
+      const { loadPlugins } = await import('@alembic/core/core/ast');
       await loadPlugins();
     } catch {
       /* AST not available — graceful degradation */

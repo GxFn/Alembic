@@ -1,4 +1,11 @@
 import { getDimensionFocusKeywords } from '@alembic/core/domain/dimension/DimensionSop';
+import type {
+  AstSummary,
+  CallGraphResult,
+  DependencyGraph,
+  DimensionDef,
+  GuardAudit,
+} from '@alembic/core/types/project-snapshot';
 import { ExplorationTracker } from '#agent/context/ExplorationTracker.js';
 import type { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import { computeAnalystBudget } from '#agent/prompts/insight-analyst.js';
@@ -7,13 +14,6 @@ import {
   projectSystemRunContext,
 } from '#agent/runtime/SystemRunContext.js';
 import type { AgentRunInput, SystemRunContextFactory } from '#agent/service/index.js';
-import type {
-  AstSummary,
-  CallGraphResult,
-  DependencyGraph,
-  DimensionDef,
-  GuardAudit,
-} from '#types/project-snapshot.js';
 import { buildEvidenceStarters } from '#workflows/capabilities/execution/external/EvidenceStarterBuilder.js';
 import {
   type BootstrapFileEntry,

@@ -27,7 +27,7 @@ import type {
   ProjectSnapshotInput,
   SnapshotFile,
   SnapshotTarget,
-} from './project-snapshot.js';
+} from '@alembic/core/types/project-snapshot';
 
 const SNAPSHOT_VERSION = '1.0.0';
 

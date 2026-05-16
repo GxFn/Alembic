@@ -11,7 +11,11 @@
  *   - 超时与取消 (select!, timeout)
  */
 
-import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
+import {
+  type AstSummary,
+  type DetectedPattern,
+  EnhancementPack,
+} from '@alembic/core/core/enhancement/EnhancementPack';
 
 class RustTokioEnhancement extends EnhancementPack {
   get id() {

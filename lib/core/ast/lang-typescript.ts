@@ -8,8 +8,8 @@
  * Phase 5: 新增 ImportRecord 结构化导入 + extractCallSites 调用点提取
  */
 
-import { extractCallSitesTS } from '../analysis/CallSiteExtractor.js';
-import { ImportRecord, type ImportRecordMeta } from '../analysis/ImportRecord.js';
+import { extractCallSitesTS } from '@alembic/core/core/analysis/CallSiteExtractor';
+import { ImportRecord, type ImportRecordMeta } from '@alembic/core/core/analysis/ImportRecord';
 
 function walkTypeScript(root: any, ctx: any) {
   _walkTSNode(root, ctx, null);
@@ -439,7 +439,7 @@ function _parseTSVariableDecl(node: any, ctx: any, parentClassName: any) {
       }
 
       // CJS require(): const x = require('path') / const { a, b } = require('path')
-      // Dynamic import(): const mod = await import('./module')
+      // Dynamic import(): const mod = await import('@alembic/core/core/ast/module')
       const callNode = child.namedChildren.find((c: any) => c.type === 'call_expression');
       if (callNode) {
         const requireImport = _parseCJSRequire(callNode, child);
@@ -491,11 +491,11 @@ function _parseImportClause(importNode: any) {
     if (child.type === 'import_clause') {
       for (const clauseChild of child.namedChildren) {
         if (clauseChild.type === 'identifier') {
-          // default import: import Foo from '...'
+          // default import: import Foo from '@alembic/core/core/ast/...'
           symbols.push(clauseChild.text);
           kind = 'default';
         } else if (clauseChild.type === 'named_imports') {
-          // named imports: import { A, B as C } from '...'
+          // named imports: import { A, B as C } from '@alembic/core/core/ast/...'
           kind = 'named';
           for (const specifier of clauseChild.namedChildren) {
             if (specifier.type === 'import_specifier') {
@@ -511,7 +511,7 @@ function _parseImportClause(importNode: any) {
             }
           }
         } else if (clauseChild.type === 'namespace_import') {
-          // namespace import: import * as M from '...'
+          // namespace import: import * as M from '@alembic/core/core/ast/...'
           kind = 'namespace';
           symbols.push('*');
           const aliasNode = clauseChild.namedChildren.find((c: any) => c.type === 'identifier');
@@ -598,7 +598,7 @@ function _parseCJSRequire(callNode: any, declaratorNode: any) {
 }
 
 /**
- * 解析动态 import() 表达式: const mod = await import('./module')
+ * 解析动态 import() 表达式: const mod = await import('@alembic/core/core/ast/module')
  *
  * @param callNode call_expression 节点
  * @param declaratorNode variable_declarator 节点

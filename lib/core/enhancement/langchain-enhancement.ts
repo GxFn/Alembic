@@ -11,7 +11,11 @@
  *   - Streaming / Callback
  */
 
-import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
+import {
+  type AstSummary,
+  type DetectedPattern,
+  EnhancementPack,
+} from '@alembic/core/core/enhancement/EnhancementPack';
 
 class LangChainEnhancement extends EnhancementPack {
   get id() {

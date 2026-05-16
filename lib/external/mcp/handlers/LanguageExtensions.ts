@@ -1,1 +1,1 @@
-export * from '#workflows/capabilities/presentation/LanguageExtensionBuilder.js';
+export * from '@alembic/core/workflows/capabilities/presentation/LanguageExtensionBuilder';

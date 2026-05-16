@@ -11,7 +11,7 @@ import {
   getRequiredFieldNames,
   getRequiredFieldsDescription,
 } from '@alembic/core/domain/knowledge/FieldSpec';
-import type { DimensionDef } from '#types/project-snapshot.js';
+import type { DimensionDef } from '@alembic/core/types/project-snapshot';
 import { TierScheduler } from '#workflows/capabilities/planning/dimensions/TierScheduler.js';
 import type { ExternalRescanEvidencePlan } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
 

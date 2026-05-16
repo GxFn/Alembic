@@ -14,13 +14,13 @@ import {
   join as _pathJoin,
   relative,
 } from 'node:path';
+import { getDiscovererRegistry } from '@alembic/core/core/discovery';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import {
   type AgentService,
   runScanAgentTask,
   type SystemRunContextFactory,
 } from '#agent/service/index.js';
-import { getDiscovererRegistry } from '../../core/discovery/index.js';
 import { inferLang } from '../../external/mcp/handlers/LanguageExtensions.js';
 
 /** 全局排除目录 */
@@ -84,7 +84,7 @@ export class ModuleService {
 
   /** >} */
   #activeDiscoverers: Array<{
-    discoverer: import('../../core/discovery/ProjectDiscoverer.js').ProjectDiscoverer;
+    discoverer: import('@alembic/core/core/discovery/ProjectDiscoverer').ProjectDiscoverer;
     confidence: number;
   }> = [];
 
@@ -273,7 +273,7 @@ export class ModuleService {
       const entry = this.#activeDiscoverers.find((e) => e.discoverer.id === discovererId);
       if (entry) {
         return entry.discoverer.getTargetFiles(
-          targetObj as import('../../core/discovery/ProjectDiscoverer.js').DiscoveredTarget
+          targetObj as import('@alembic/core/core/discovery/ProjectDiscoverer').DiscoveredTarget
         );
       }
     }
@@ -284,7 +284,7 @@ export class ModuleService {
         const targets = await discoverer.listTargets();
         if (targets.some((t) => t.name === targetObj.name)) {
           return discoverer.getTargetFiles(
-            targetObj as import('../../core/discovery/ProjectDiscoverer.js').DiscoveredTarget
+            targetObj as import('@alembic/core/core/discovery/ProjectDiscoverer').DiscoveredTarget
           );
         }
       } catch {}

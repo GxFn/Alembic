@@ -19,8 +19,8 @@
  *   await loadPlugins();
  */
 
-import { registerLanguage } from '../AstAnalyzer.js';
-import { initParser, isParserReady, loadLanguageWasm } from './parser-init.js';
+import { registerLanguage } from '@alembic/core/core/AstAnalyzer';
+import { initParser, isParserReady, loadLanguageWasm } from '@alembic/core/core/ast/parser-init';
 
 let _loaded = false;
 

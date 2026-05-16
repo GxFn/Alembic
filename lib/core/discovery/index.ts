@@ -3,16 +3,16 @@
  * @description ProjectDiscoverer 系统入口 - 初始化 Registry 并注册所有 Discoverer
  */
 
-import { CustomConfigDiscoverer } from './CustomConfigDiscoverer.js';
-import { DartDiscoverer } from './DartDiscoverer.js';
-import { DiscovererRegistry } from './DiscovererRegistry.js';
-import { GenericDiscoverer } from './GenericDiscoverer.js';
-import { GoDiscoverer } from './GoDiscoverer.js';
-import { JvmDiscoverer } from './JvmDiscoverer.js';
-import { NodeDiscoverer } from './NodeDiscoverer.js';
-import { PythonDiscoverer } from './PythonDiscoverer.js';
-import { RustDiscoverer } from './RustDiscoverer.js';
-import { SpmDiscoverer } from './SpmDiscoverer.js';
+import { CustomConfigDiscoverer } from '@alembic/core/core/discovery/CustomConfigDiscoverer';
+import { DartDiscoverer } from '@alembic/core/core/discovery/DartDiscoverer';
+import { DiscovererRegistry } from '@alembic/core/core/discovery/DiscovererRegistry';
+import { GenericDiscoverer } from '@alembic/core/core/discovery/GenericDiscoverer';
+import { GoDiscoverer } from '@alembic/core/core/discovery/GoDiscoverer';
+import { JvmDiscoverer } from '@alembic/core/core/discovery/JvmDiscoverer';
+import { NodeDiscoverer } from '@alembic/core/core/discovery/NodeDiscoverer';
+import { PythonDiscoverer } from '@alembic/core/core/discovery/PythonDiscoverer';
+import { RustDiscoverer } from '@alembic/core/core/discovery/RustDiscoverer';
+import { SpmDiscoverer } from '@alembic/core/core/discovery/SpmDiscoverer';
 
 let _registry: DiscovererRegistry | null = null;
 
@@ -39,8 +39,8 @@ export function resetDiscovererRegistry() {
   _registry = null;
 }
 
-export { CustomConfigDiscoverer } from './CustomConfigDiscoverer.js';
-export { DartDiscoverer } from './DartDiscoverer.js';
+export { CustomConfigDiscoverer } from '@alembic/core/core/discovery/CustomConfigDiscoverer';
+export { DartDiscoverer } from '@alembic/core/core/discovery/DartDiscoverer';
 export {
   type ConflictResult,
   type DetectMatch,
@@ -49,14 +49,14 @@ export {
   loadPreference,
   promptDiscovererChoice,
   savePreference,
-} from './DiscovererPreference.js';
-export { DiscovererRegistry } from './DiscovererRegistry.js';
-export { GenericDiscoverer } from './GenericDiscoverer.js';
-export { GoDiscoverer } from './GoDiscoverer.js';
-export { JvmDiscoverer } from './JvmDiscoverer.js';
-export { NodeDiscoverer } from './NodeDiscoverer.js';
+} from '@alembic/core/core/discovery/DiscovererPreference';
+export { DiscovererRegistry } from '@alembic/core/core/discovery/DiscovererRegistry';
+export { GenericDiscoverer } from '@alembic/core/core/discovery/GenericDiscoverer';
+export { GoDiscoverer } from '@alembic/core/core/discovery/GoDiscoverer';
+export { JvmDiscoverer } from '@alembic/core/core/discovery/JvmDiscoverer';
+export { NodeDiscoverer } from '@alembic/core/core/discovery/NodeDiscoverer';
 // Re-exports
-export { ProjectDiscoverer } from './ProjectDiscoverer.js';
-export { PythonDiscoverer } from './PythonDiscoverer.js';
-export { RustDiscoverer } from './RustDiscoverer.js';
-export { SpmDiscoverer } from './SpmDiscoverer.js';
+export { ProjectDiscoverer } from '@alembic/core/core/discovery/ProjectDiscoverer';
+export { PythonDiscoverer } from '@alembic/core/core/discovery/PythonDiscoverer';
+export { RustDiscoverer } from '@alembic/core/core/discovery/RustDiscoverer';
+export { SpmDiscoverer } from '@alembic/core/core/discovery/SpmDiscoverer';

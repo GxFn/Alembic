@@ -1,9 +1,9 @@
-import { prepareProjectAnalysisRun } from '#workflows/capabilities/project-intelligence/ProjectIntelligencePreparation.js';
+import { prepareProjectAnalysisRun } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligencePreparation';
 import {
   type ProjectAnalysisMaterializationInput,
   type ProjectAnalysisMaterializationOptions,
   runAllPhases,
-} from '#workflows/capabilities/project-intelligence/ProjectIntelligenceRunner.js';
+} from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceRunner';
 
 export type ProjectAnalysisContext = Parameters<typeof runAllPhases>[1];
 export type ProjectAnalysisOptions = Parameters<typeof runAllPhases>[2];

@@ -127,8 +127,8 @@ async function ensureParser() {
 
   try {
     // 触发 AST 插件的顶层 await loadPlugins()
-    await import('../../core/ast/index.js');
-    const astAnalyzer = await import('../../core/AstAnalyzer.js');
+    await import('@alembic/core/core/ast');
+    const astAnalyzer = await import('@alembic/core/core/AstAnalyzer');
     _parseToTree = astAnalyzer.parseToTree;
     _isAvailable = astAnalyzer.isAvailable;
     _supportedLanguages = astAnalyzer.supportedLanguages;

@@ -850,7 +850,7 @@ async function _injectEnhancementGuardRules(
     return;
   }
   try {
-    const { initEnhancementRegistry } = await import('#core/enhancement/index.js');
+    const { initEnhancementRegistry } = await import('@alembic/core/core/enhancement');
     const enhReg = await initEnhancementRegistry();
     // 仅注入无框架条件的通用 Pack 规则（如 go-web 无 frameworks 条件）
     // 有框架条件的 Pack（如 go-grpc 需要 frameworks: ['grpc']）由 Bootstrap Phase 4

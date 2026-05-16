@@ -3,7 +3,11 @@
  * 条件: { languages: ['java', 'kotlin'], frameworks: ['spring'] }
  */
 
-import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
+import {
+  type AstSummary,
+  type DetectedPattern,
+  EnhancementPack,
+} from '@alembic/core/core/enhancement/EnhancementPack';
 
 class SpringEnhancement extends EnhancementPack {
   get id() {

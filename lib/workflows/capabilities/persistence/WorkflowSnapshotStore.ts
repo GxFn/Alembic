@@ -1,6 +1,7 @@
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { BootstrapFile, IncrementalPlan } from '@alembic/core/types/workflows';
+import { FileDiffPlanner } from '@alembic/core/workflows/capabilities/project-intelligence/FileDiffPlanner';
 import type { SessionStore } from '#agent/memory/SessionStore.js';
-import type { BootstrapFile, IncrementalPlan } from '#types/workflows.js';
 import type {
   CandidateResults,
   DimensionStat,
@@ -9,7 +10,6 @@ import type {
   WorkflowResultPersistenceContext,
   WorkflowSnapshotSummary,
 } from '#workflows/capabilities/persistence/WorkflowReportTypes.js';
-import { FileDiffPlanner } from '#workflows/capabilities/project-intelligence/FileDiffPlanner.js';
 
 const logger = Logger.getInstance();
 

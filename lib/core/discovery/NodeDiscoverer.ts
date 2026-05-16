@@ -8,13 +8,13 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, extname, join, relative, resolve } from 'node:path';
-import { inferLang } from '../../external/mcp/handlers/LanguageExtensions.js';
 import {
   type DependencyGraph,
   type DiscoveredFile,
   type DiscoveredTarget,
   ProjectDiscoverer,
-} from './ProjectDiscoverer.js';
+} from '@alembic/core/core/discovery/ProjectDiscoverer';
+import { inferLang } from '../../external/mcp/handlers/LanguageExtensions.js';
 
 const SOURCE_EXTENSIONS = new Set([
   '.ts',

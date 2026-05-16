@@ -1,11 +1,11 @@
-import { describe, expect, test, vi } from 'vitest';
 import {
   buildEntityGraphInput,
   materializeCallGraph,
   resolveProjectAnalysisMaterialization,
   runPhase1_7_CallGraph,
   runPhase2_DependencyGraph,
-} from '#workflows/capabilities/project-intelligence/ProjectIntelligenceRunner.js';
+} from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceRunner';
+import { describe, expect, test, vi } from 'vitest';
 
 describe('ProjectAnalysis materialization plan', () => {
   test('defaults to all current side effects enabled', () => {

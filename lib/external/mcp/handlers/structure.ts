@@ -94,7 +94,7 @@ async function _getLoadedDiscoverer(ctx?: {
   }
 
   // 优先使用 DiscovererRegistry（多语言统一接口）
-  const { getDiscovererRegistry } = await import('#core/discovery/index.js');
+  const { getDiscovererRegistry } = await import('@alembic/core/core/discovery');
   const registry = getDiscovererRegistry();
   const discoverer = await registry.detect(projectRoot);
   await discoverer.load(projectRoot);

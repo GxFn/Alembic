@@ -1,4 +1,4 @@
-import type { DimensionDef } from '#types/project-snapshot.js';
+import type { DimensionDef } from '@alembic/core/types/project-snapshot';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import { runInternalDimensionExecution } from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionPipeline.js';
 import {

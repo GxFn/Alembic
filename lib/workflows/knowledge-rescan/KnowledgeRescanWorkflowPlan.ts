@@ -1,9 +1,9 @@
-import type { DimensionDef } from '#types/project-snapshot.js';
+import type { DimensionDef } from '@alembic/core/types/project-snapshot';
 import type {
   ProjectAnalysisMaterializationPlan,
   ProjectAnalysisPreparationOptions,
   ProjectAnalysisScanOptions,
-} from '#workflows/capabilities/project-intelligence/ProjectIntelligenceCapability.js';
+} from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
 import type { KnowledgeRescanWorkflowIntent } from './KnowledgeRescanIntent.js';
 
 export interface KnowledgeRescanWorkflowPlan {

@@ -6,7 +6,7 @@
  * 模式: Singleton, Builder, Factory, DI, Stream Pipeline
  */
 
-import { ImportRecord } from '../analysis/ImportRecord.js';
+import { ImportRecord } from '@alembic/core/core/analysis/ImportRecord';
 
 function walkJava(root: any, ctx: any) {
   _walkJavaNode(root, ctx, null);

@@ -10,13 +10,13 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, extname, join, relative, resolve } from 'node:path';
-import { LanguageService } from '@alembic/core/shared/LanguageService';
 import {
   type DependencyGraph,
   type DiscoveredFile,
   type DiscoveredTarget,
   ProjectDiscoverer,
-} from './ProjectDiscoverer.js';
+} from '@alembic/core/core/discovery/ProjectDiscoverer';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 
 const SOURCE_EXTENSIONS = new Set(['.java', '.kt', '.kts']);
 const EXCLUDE_DIRS = new Set([

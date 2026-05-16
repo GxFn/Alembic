@@ -235,7 +235,7 @@ async function _getEngine(
   // 注入 Enhancement Pack Guard 规则
   if (!engine.isEpInjected()) {
     try {
-      const { getEnhancementRegistry } = await import('../../core/enhancement/index.js');
+      const { getEnhancementRegistry } = await import('@alembic/core/core/enhancement');
       const registry = getEnhancementRegistry();
       if (registry) {
         const packs = registry.all();

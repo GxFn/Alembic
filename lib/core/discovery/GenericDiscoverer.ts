@@ -9,12 +9,12 @@
 
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, extname, join, relative } from 'node:path';
-import { LanguageService } from '@alembic/core/shared/LanguageService';
 import {
   type DiscoveredFile,
   type DiscoveredTarget,
   ProjectDiscoverer,
-} from './ProjectDiscoverer.js';
+} from '@alembic/core/core/discovery/ProjectDiscoverer';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 
 const EXCLUDE_DIRS = new Set([
   'node_modules',

@@ -9,7 +9,7 @@
  * Phase 5.0 只实现 L0 + L1，L2/L3 (参数级/语句级) 留待 Phase 5.2。
  */
 
-import type { ResolvedEdge } from './CallEdgeResolver.js';
+import type { ResolvedEdge } from '@alembic/core/core/analysis/CallEdgeResolver';
 
 export interface DataFlowEdge {
   from: string;

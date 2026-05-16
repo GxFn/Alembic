@@ -1,5 +1,3 @@
-import type { SessionStore } from '#agent/memory/SessionStore.js';
-
 export interface WorkflowServiceContainer {
   get(name: string): unknown;
   getServiceNames?(): string[];
@@ -49,20 +47,22 @@ export interface FileDiffPlan {
   previousSnapshot: ({ id?: string } & Record<string, unknown>) | null;
   diff: FileDiffSummary | null;
   reason: string;
-  restoredEpisodic: SessionStore | null;
+  restoredEpisodic: RestoredEpisodicMemory | null;
 }
 
 export type IncrementalPlan = FileDiffPlan;
+
+export interface RestoredEpisodicMemory {
+  getCompletedDimensions(): string[];
+  getDimensionReport?(dimId: string): { referencedFiles?: string[] } | null;
+  toJSON(): unknown;
+}
 
 export interface SaveSnapshotParams {
   sessionId: string;
   allFiles: BootstrapFile[];
   dimensionStats: Record<string, Record<string, unknown>>;
-  episodicMemory?: {
-    toJSON(): unknown;
-    getCompletedDimensions(): string[];
-    getDimensionReport?(dimId: string): { referencedFiles?: string[] } | null;
-  } | null;
+  episodicMemory?: RestoredEpisodicMemory | null;
   meta?: Record<string, unknown>;
   plan?: FileDiffPlan | null;
 }

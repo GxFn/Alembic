@@ -1,6 +1,6 @@
-import type { BootstrapFile, IncrementalPlan } from '#types/workflows.js';
-import { baseDimensions } from '#workflows/capabilities/planning/dimensions/BaseDimensions.js';
-import type { PhaseReport } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceRunner.js';
+import type { BootstrapFile, IncrementalPlan } from '@alembic/core/types/workflows';
+import { baseDimensions } from '@alembic/core/workflows/capabilities/planning/dimensions/BaseDimensions';
+import type { PhaseReport } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceRunner';
 
 interface ProjectAnalysisIncrementalLogger {
   info(...args: unknown[]): void;
@@ -45,7 +45,7 @@ export async function evaluateProjectAnalysisIncrementalPlan({
 
   try {
     const { FileDiffPlanner } = await import(
-      '#workflows/capabilities/project-intelligence/FileDiffPlanner.js'
+      '@alembic/core/workflows/capabilities/project-intelligence/FileDiffPlanner'
     );
     const db = resolveIncrementalDatabase(ctx);
     if (!db) {

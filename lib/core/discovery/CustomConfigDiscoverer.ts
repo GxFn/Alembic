@@ -14,39 +14,42 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
-import { getProjectSpecPath } from '@alembic/core/infrastructure/config/Paths';
-import { LanguageService } from '@alembic/core/shared/LanguageService';
 import {
   type DependencyGraph,
   type DependencyGraphLayer,
   type DiscoveredFile,
   type DiscoveredTarget,
   ProjectDiscoverer,
-} from './ProjectDiscoverer.js';
-import { parseCMakeProject } from './parsers/CMakeParser.js';
-import { inferConventionRole, parseGradleProject } from './parsers/GradleDslParser.js';
+} from '@alembic/core/core/discovery/ProjectDiscoverer';
+import { parseCMakeProject } from '@alembic/core/core/discovery/parsers/CMakeParser';
+import {
+  inferConventionRole,
+  parseGradleProject,
+} from '@alembic/core/core/discovery/parsers/GradleDslParser';
 import {
   parseFlutterPluginsDeps,
   parseNxWorkspace,
   parseReactNativeProject,
-} from './parsers/JsonConfigParser.js';
+} from '@alembic/core/core/discovery/parsers/JsonConfigParser';
 import {
   type ParsedLayer,
   type ParsedModuleSpec,
   type ParsedProjectConfig,
   parseBoxfile,
   parseModuleSpec,
-} from './parsers/RubyDslParser.js';
+} from '@alembic/core/core/discovery/parsers/RubyDslParser';
 import {
   type ParsedBuildFile,
   parseStarlarkBuildFile,
   RULE_TO_LANGUAGE,
-} from './parsers/StarlarkParser.js';
+} from '@alembic/core/core/discovery/parsers/StarlarkParser';
 import {
   parseMelosProject,
   parseXcodeGenProject,
   parseXcodeGenTarget,
-} from './parsers/YamlConfigParser.js';
+} from '@alembic/core/core/discovery/parsers/YamlConfigParser';
+import { getProjectSpecPath } from '@alembic/core/infrastructure/config/Paths';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 
 // ── 已知自研构建系统配置表 ────────────────────────────
 

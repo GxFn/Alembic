@@ -8,6 +8,8 @@
  *   - constitution, aiProvider, projectGraph
  */
 
+import { getDiscovererRegistry } from '@alembic/core/core/discovery';
+import { getEnhancementRegistry } from '@alembic/core/core/enhancement';
 import { DimensionCopy } from '@alembic/core/domain/dimension/DimensionCopy';
 import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
 import { LifecycleEventRepository } from '@alembic/core/repository/evolution/LifecycleEventRepository';
@@ -22,8 +24,6 @@ import {
   resolveKnowledgeScanDirs,
   resolveProjectRoot,
 } from '@alembic/core/shared/resolveProjectRoot';
-import { getDiscovererRegistry } from '../../core/discovery/index.js';
-import { getEnhancementRegistry } from '../../core/enhancement/index.js';
 import { HnswVectorAdapter } from '../../infrastructure/vector/HnswVectorAdapter.js';
 import { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
 import { JsonVectorAdapter } from '../../infrastructure/vector/JsonVectorAdapter.js';

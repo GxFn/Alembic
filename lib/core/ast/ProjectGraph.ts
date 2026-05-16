@@ -15,8 +15,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { analyzeFile, isAvailable } from '@alembic/core/core/AstAnalyzer';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
-import { analyzeFile, isAvailable } from '../AstAnalyzer.js';
 
 // ──────────────────────────────────────────────────────────────────
 // 默认配置
@@ -613,7 +613,7 @@ export default class ProjectGraph {
    * @returns >}
    */
   async incrementalUpdate(changedPaths: any, deletedPaths: any[] = [], options: any = {}) {
-    const { analyzeFile, isAvailable } = await import('../AstAnalyzer.js');
+    const { analyzeFile, isAvailable } = await import('@alembic/core/core/AstAnalyzer');
     if (!isAvailable()) {
       return { added: 0, updated: 0, deleted: 0 };
     }

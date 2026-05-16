@@ -10,8 +10,8 @@
 
 import path from 'node:path';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { DimensionDef } from '@alembic/core/types/project-snapshot';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
-import type { DimensionDef } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
 import type { McpContext } from '#types/workflows.js';
 

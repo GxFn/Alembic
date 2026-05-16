@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
 import {
   FileDiffSnapshotStore,
   normalizeSnapshotPath,
   reconcileSnapshotHashes,
   type SnapshotData,
-} from '../../lib/workflows/capabilities/project-intelligence/FileDiffSnapshotStore.js';
+} from '@alembic/core/workflows/capabilities/project-intelligence/FileDiffSnapshotStore';
+import { describe, expect, it } from 'vitest';
 
 describe('normalizeSnapshotPath', () => {
   it('prefers project-relative path derived from absolute file path', () => {

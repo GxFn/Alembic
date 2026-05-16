@@ -12,7 +12,7 @@
  *       已迁移至 web-tree-sitter (WASM)，无原生编译依赖。
  */
 
-import { ImportRecord, type ImportRecordMeta } from '../analysis/ImportRecord.js';
+import { ImportRecord, type ImportRecordMeta } from '@alembic/core/core/analysis/ImportRecord';
 
 function walkDart(root: any, ctx: any) {
   _walkNode(root, ctx, null);

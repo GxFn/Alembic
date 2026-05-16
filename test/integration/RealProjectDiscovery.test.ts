@@ -23,7 +23,7 @@ let getDiscovererRegistry;
 let resetDiscovererRegistry;
 
 beforeAll(async () => {
-  const mod = await import('../../lib/core/discovery/index.js');
+  const mod = await import('@alembic/core/core/discovery');
   getDiscovererRegistry = mod.getDiscovererRegistry;
   resetDiscovererRegistry = mod.resetDiscovererRegistry;
 });

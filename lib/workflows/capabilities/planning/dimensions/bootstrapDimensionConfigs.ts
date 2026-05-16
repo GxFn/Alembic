@@ -12,7 +12,7 @@ import {
   getDimensionFocusKeywords,
   getDimensionSOP,
 } from '@alembic/core/domain/dimension/DimensionSop';
-import { baseDimensions } from '#workflows/capabilities/planning/dimensions/BaseDimensions.js';
+import { baseDimensions } from '@alembic/core/workflows/capabilities/planning/dimensions/BaseDimensions';
 
 // ──────────────────────────────────────────────────────────────────
 // v3.0 维度配置 — 从统一注册表自动生成

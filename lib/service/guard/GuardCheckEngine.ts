@@ -5,6 +5,7 @@
  * 支持: 正则模式匹配 + AST 语义规则 + code-level 检查 + 多维度审计
  */
 
+import * as AstAnalyzerModule from '@alembic/core/core/AstAnalyzer';
 import { GUARD_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
@@ -12,7 +13,6 @@ import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge
 import type { GuardKnowledgeRepo } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { RawDbGuardAdapter, unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
-import * as AstAnalyzerModule from '../../core/AstAnalyzer.js';
 import { runCodeLevelChecks } from './GuardCodeChecks.js';
 import { runCrossFileChecks } from './GuardCrossFileChecks.js';
 import {

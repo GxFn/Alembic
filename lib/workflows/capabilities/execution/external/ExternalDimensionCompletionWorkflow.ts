@@ -2,8 +2,8 @@ import { dimensionTags } from '@alembic/core/domain/dimension/RecipeDimension';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { getDeveloperIdentity } from '@alembic/core/shared/developer-identity';
 import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
+import type { DimensionDef } from '@alembic/core/types/project-snapshot';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
-import type { DimensionDef } from '#types/project-snapshot.js';
 import {
   runWorkflowCompletionFinalizer,
   type WorkflowCompletionFinalizerDependencies,

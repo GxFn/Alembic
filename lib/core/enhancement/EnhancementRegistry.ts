@@ -5,7 +5,7 @@
  * Bootstrap 完成 Phase 1 后，根据主语言 + 检测到的框架自动筛选增强包。
  */
 
-import type { EnhancementPack } from './EnhancementPack.js';
+import type { EnhancementPack } from '@alembic/core/core/enhancement/EnhancementPack';
 
 export class EnhancementRegistry {
   #packs: EnhancementPack[] = [];

@@ -13,7 +13,7 @@ import {
   type DiscoveredFile,
   type DiscoveredTarget,
   ProjectDiscoverer,
-} from './ProjectDiscoverer.js';
+} from '@alembic/core/core/discovery/ProjectDiscoverer';
 
 const SOURCE_EXTENSIONS = new Set(['.dart']);
 

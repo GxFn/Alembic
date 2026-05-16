@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { DimensionDef } from '@alembic/core/types/project-snapshot';
 import { describe, expect, test } from 'vitest';
-import type { DimensionDef } from '#types/project-snapshot.js';
 import { buildMissionBriefing } from '#workflows/capabilities/execution/external/MissionBriefingBuilder.js';
 import type { ExternalRescanEvidencePlan } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
 

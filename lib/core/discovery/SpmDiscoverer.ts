@@ -9,8 +9,8 @@
 
 import { existsSync, readdirSync, readFileSync, type Stats, statSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
+import { ProjectDiscoverer } from '@alembic/core/core/discovery/ProjectDiscoverer';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
-import { ProjectDiscoverer } from './ProjectDiscoverer.js';
 
 /** Package.swift 解析结果 */
 interface ParsedPackage {

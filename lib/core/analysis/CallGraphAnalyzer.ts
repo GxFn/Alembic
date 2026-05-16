@@ -13,10 +13,10 @@
  *   { callEdges, dataFlowEdges, stats }
  */
 
-import { CallEdgeResolver, type ResolvedEdge } from './CallEdgeResolver.js';
-import { DataFlowInferrer } from './DataFlowInferrer.js';
-import { ImportPathResolver } from './ImportPathResolver.js';
-import { SymbolTableBuilder } from './SymbolTableBuilder.js';
+import { CallEdgeResolver, type ResolvedEdge } from '@alembic/core/core/analysis/CallEdgeResolver';
+import { DataFlowInferrer } from '@alembic/core/core/analysis/DataFlowInferrer';
+import { ImportPathResolver } from '@alembic/core/core/analysis/ImportPathResolver';
+import { SymbolTableBuilder } from '@alembic/core/core/analysis/SymbolTableBuilder';
 
 export interface FileSummary {
   file: string;
@@ -79,7 +79,7 @@ interface CallSite {
 }
 
 // Re-use the canonical DataFlowEdge from DataFlowInferrer
-type DataFlowEdge = import('./DataFlowInferrer.js').DataFlowEdge;
+type DataFlowEdge = import('@alembic/core/core/analysis/DataFlowInferrer').DataFlowEdge;
 
 export class CallGraphAnalyzer {
   projectRoot: string;

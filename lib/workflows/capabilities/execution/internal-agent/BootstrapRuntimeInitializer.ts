@@ -77,15 +77,12 @@ export async function initializeBootstrapRuntime({
     astMetrics: (astProjectSummary?.projectMetrics as Record<string, unknown>) ?? undefined,
     guardSummary: (guardAudit?.summary as Record<string, unknown>) ?? undefined,
   });
-  const sessionStore =
-    isIncremental && incrementalPlan?.restoredEpisodic
-      ? incrementalPlan.restoredEpisodic
-      : new SessionStore({
-          projectName: projectInfo.name,
-          primaryLang: projectInfo.lang,
-          fileCount: projectInfo.fileCount,
-          modules,
-        });
+  const sessionStore = createBootstrapSessionStore({
+    projectInfo,
+    modules,
+    isIncremental,
+    incrementalPlan,
+  });
   if (isIncremental && incrementalPlan?.restoredEpisodic) {
     syncRestoredSessionStoreDigests({ sessionStore, dimContext });
   }
@@ -113,6 +110,52 @@ export async function initializeBootstrapRuntime({
     codeEntityGraphInst,
     memoryCoordinator,
   };
+}
+
+function createBootstrapSessionStore({
+  projectInfo,
+  modules,
+  isIncremental,
+  incrementalPlan,
+}: {
+  projectInfo: { name: string; lang: string; fileCount: number };
+  modules: string[];
+  isIncremental?: boolean | null;
+  incrementalPlan?: IncrementalPlan | null;
+}) {
+  if (isIncremental && incrementalPlan?.restoredEpisodic) {
+    const restored = restoreBootstrapSessionStore(incrementalPlan.restoredEpisodic);
+    if (restored) {
+      return restored;
+    }
+  }
+
+  return new SessionStore({
+    projectName: projectInfo.name,
+    primaryLang: projectInfo.lang,
+    fileCount: projectInfo.fileCount,
+    modules,
+  });
+}
+
+function restoreBootstrapSessionStore(
+  restoredEpisodic: NonNullable<IncrementalPlan['restoredEpisodic']>
+) {
+  try {
+    const data = restoredEpisodic.toJSON();
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      logger.warn('[BootstrapRuntime] Restored episodic memory is not object-shaped');
+      return null;
+    }
+    return SessionStore.fromJSON(data as Record<string, unknown>);
+  } catch (err: unknown) {
+    logger.warn(
+      `[BootstrapRuntime] Failed to restore SessionStore: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+    return null;
+  }
 }
 
 async function buildBootstrapProjectGraph({

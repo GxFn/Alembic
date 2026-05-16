@@ -12,12 +12,12 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   detectConflict,
   loadPreference,
   savePreference,
-} from '../../lib/core/discovery/DiscovererPreference.js';
+} from '@alembic/core/core/discovery/DiscovererPreference';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { CouplingAnalyzer } from '../../lib/service/panorama/CouplingAnalyzer.js';
 import type { ConfigLayer } from '../../lib/service/panorama/LayerInferrer.js';
 import { LayerInferrer } from '../../lib/service/panorama/LayerInferrer.js';

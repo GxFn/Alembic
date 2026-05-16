@@ -17,8 +17,8 @@ import {
   type CallSiteInfo,
   defaultExtractCallSites,
   getCallSiteExtractor,
-} from './analysis/CallSiteExtractor.js';
-import { getParserClass, isParserReady } from './ast/parser-init.js';
+} from '@alembic/core/core/analysis/CallSiteExtractor';
+import { getParserClass, isParserReady } from '@alembic/core/core/ast/parser-init';
 
 // ── Type Definitions ────────────────────────────────────────────
 

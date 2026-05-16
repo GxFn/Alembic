@@ -9,7 +9,7 @@ import type {
   DimensionDef,
   GuardAudit,
   GuardViolation,
-} from '#types/project-snapshot.js';
+} from '@alembic/core/types/project-snapshot';
 
 export interface EvidenceStarterOpts {
   astData?: AstSummary | null;

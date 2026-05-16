@@ -95,7 +95,7 @@ export async function ensureGrammars(detectedLanguages: any, options: any = {}) 
  * 由于 loadPlugins() 是幂等的（_loaded 标志），需要重置标志后重新加载
  */
 export async function reloadPlugins() {
-  const astIndex = await import('./index.js');
+  const astIndex = await import('@alembic/core/core/ast');
   if (typeof astIndex._resetForReload === 'function') {
     astIndex._resetForReload();
   }

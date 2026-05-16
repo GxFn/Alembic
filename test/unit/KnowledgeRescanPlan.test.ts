@@ -1,6 +1,6 @@
+import type { DimensionDef } from '@alembic/core/types/project-snapshot';
 import { describe, expect, test } from 'vitest';
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
-import type { DimensionDef } from '#types/project-snapshot.js';
 import { buildKnowledgeRescanPlan } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
 import {
   auditRecipesForRescan,

@@ -17,28 +17,28 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { DimensionCopy } from '@alembic/core/domain/dimension/DimensionCopy';
-import { LanguageService } from '@alembic/core/shared/LanguageService';
-import type { ProjectAnalysisResult } from '#core/AstAnalyzer.js';
+import type { ProjectAnalysisResult } from '@alembic/core/core/AstAnalyzer';
 import {
   analyzeProject,
   isAvailable as astIsAvailable,
   generateContextForAgent,
-} from '#core/AstAnalyzer.js';
-import type { CallGraphResult as CallGraphAnalysisResult } from '#core/analysis/CallGraphAnalyzer.js';
-import type { GuardAudit } from '#types/project-snapshot.js';
-import type { IncrementalPlan } from '#types/workflows.js';
+} from '@alembic/core/core/AstAnalyzer';
+import type { CallGraphResult as CallGraphAnalysisResult } from '@alembic/core/core/analysis/CallGraphAnalyzer';
+import { DimensionCopy } from '@alembic/core/domain/dimension/DimensionCopy';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
+import type { GuardAudit } from '@alembic/core/types/project-snapshot';
+import type { IncrementalPlan } from '@alembic/core/types/workflows';
 import {
   type BaseDimension,
   baseDimensions,
   resolveActiveDimensions,
-} from '#workflows/capabilities/planning/dimensions/BaseDimensions.js';
-import { detectPrimaryLanguage } from '#workflows/capabilities/presentation/LanguageExtensionBuilder.js';
-import { evaluateProjectAnalysisIncrementalPlan } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceIncrementalPlanner.js';
+} from '@alembic/core/workflows/capabilities/planning/dimensions/BaseDimensions';
+import { detectPrimaryLanguage } from '@alembic/core/workflows/capabilities/presentation/LanguageExtensionBuilder';
+import { evaluateProjectAnalysisIncrementalPlan } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceIncrementalPlanner';
 import {
   buildProjectAnalysisLocalPackageModules,
   buildProjectAnalysisTargetsSummary,
-} from '#workflows/capabilities/project-intelligence/ProjectIntelligenceResultProjection.js';
+} from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceResultProjection';
 
 // ── TypeScript Interfaces ────────────────────────────────────
 
@@ -295,7 +295,7 @@ export async function runPhase1_FileCollection(
 ) {
   const maxFiles = options.maxFiles || 500;
 
-  const { getDiscovererRegistry } = await import('#core/discovery/index.js');
+  const { getDiscovererRegistry } = await import('@alembic/core/core/discovery');
   const registry = getDiscovererRegistry();
   const discoverer = await registry.detect(projectRoot);
   logger.info(`[Bootstrap] Project type: ${discoverer.displayName} (${discoverer.id})`);
@@ -393,7 +393,7 @@ export async function runPhase1_5_AstAnalysis(
   // Phase 1.5a: 按需安装缺失的 tree-sitter 语法包
   try {
     const { ensureGrammars, inferLanguagesFromStats, reloadPlugins } = await import(
-      '#core/ast/ensure-grammars.js'
+      '@alembic/core/core/ast/ensure-grammars'
     );
     const neededLangs = inferLanguagesFromStats(langStats);
     if (neededLangs.length > 0) {
@@ -403,7 +403,7 @@ export async function runPhase1_5_AstAnalysis(
         await reloadPlugins();
       }
     }
-    await import('#core/ast/index.js');
+    await import('@alembic/core/core/ast');
   } catch (e: unknown) {
     logger.warn(
       `[Bootstrap] Grammar auto-install skipped: ${e instanceof Error ? e.message : String(e)}`
@@ -427,7 +427,7 @@ export async function runPhase1_5_AstAnalysis(
       ) => { content: string; lang?: string } | null;
       let sfcPreprocessor: AstPreprocessFn | undefined;
       try {
-        const { initEnhancementRegistry } = await import('#core/enhancement/index.js');
+        const { initEnhancementRegistry } = await import('@alembic/core/core/enhancement');
         const enhReg = await initEnhancementRegistry();
         const preprocessPack = enhReg
           .all()
@@ -640,7 +640,7 @@ export async function analyzeProjectCallGraph(
   }
 
   try {
-    const { CallGraphAnalyzer } = await import('#core/analysis/CallGraphAnalyzer.js');
+    const { CallGraphAnalyzer } = await import('@alembic/core/core/analysis/CallGraphAnalyzer');
 
     const analyzer = new CallGraphAnalyzer(projectRoot);
     const changedFiles = options.changedFiles;
@@ -1038,7 +1038,7 @@ export async function runPhase4_DimensionResolve(params: Phase4Params) {
   let guardAudit: GuardAuditLike | null = null;
 
   try {
-    const { initEnhancementRegistry } = await import('#core/enhancement/index.js');
+    const { initEnhancementRegistry } = await import('@alembic/core/core/enhancement');
     const enhReg = await initEnhancementRegistry();
     const matchedPacks = enhReg.resolve(primaryLang, detectedFrameworks);
 

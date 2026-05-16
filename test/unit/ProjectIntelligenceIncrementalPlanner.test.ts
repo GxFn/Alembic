@@ -1,5 +1,5 @@
+import { evaluateProjectAnalysisIncrementalPlan } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceIncrementalPlanner';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { evaluateProjectAnalysisIncrementalPlan } from '#workflows/capabilities/project-intelligence/ProjectIntelligenceIncrementalPlanner.js';
 
 const fileDiffPlannerMock = vi.hoisted(() => {
   const evaluate = vi.fn();
@@ -16,7 +16,7 @@ const fileDiffPlannerMock = vi.hoisted(() => {
   return { evaluate, constructorArgs, FileDiffPlanner };
 });
 
-vi.mock('#workflows/capabilities/project-intelligence/FileDiffPlanner.js', () => ({
+vi.mock('@alembic/core/workflows/capabilities/project-intelligence/FileDiffPlanner', () => ({
   FileDiffPlanner: fileDiffPlannerMock.FileDiffPlanner,
 }));
 

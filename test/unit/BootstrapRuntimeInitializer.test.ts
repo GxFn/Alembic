@@ -3,7 +3,6 @@ import {
   type BootstrapRuntimeContainer,
   initializeBootstrapRuntime,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
-import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 import type { IncrementalPlan } from '../../lib/external/mcp/handlers/types.js';
 
 function makeContainer(
@@ -16,7 +15,9 @@ function makeContainer(
   };
 }
 
-function makeIncrementalPlan(restoredEpisodic: SessionStore): IncrementalPlan {
+function makeIncrementalPlan(
+  restoredEpisodic: NonNullable<IncrementalPlan['restoredEpisodic']>
+): IncrementalPlan {
   return {
     canIncremental: true,
     mode: 'incremental',
@@ -68,11 +69,29 @@ describe('initializeBootstrapRuntime', () => {
     expect(runtime.memoryCoordinator).toBeTruthy();
   });
 
-  test('uses restored incremental SessionStore and syncs digests into DimensionContext', async () => {
+  test('rehydrates restored incremental memory and syncs digests into DimensionContext', async () => {
     const restoredEpisodic = {
       getCompletedDimensions: () => ['api'],
-      getDimensionReport: () => ({ digest: { summary: 'restored api' } }),
-    } as unknown as SessionStore;
+      getDimensionReport: () => ({ referencedFiles: ['src/api.ts'] }),
+      toJSON: () => ({
+        dimensionReports: {
+          api: {
+            dimId: 'api',
+            completedAt: Date.now(),
+            analysisText: 'restored',
+            findings: [],
+            referencedFiles: ['src/api.ts'],
+            candidatesSummary: [],
+            workingMemoryDistilled: null,
+            digest: { summary: 'restored api' },
+          },
+        },
+        crossReferences: [],
+        tierReflections: [],
+        submittedCandidates: {},
+        projectContext: {},
+      }),
+    };
 
     const runtime = await initializeBootstrapRuntime({
       container: makeContainer(),
@@ -85,7 +104,7 @@ describe('initializeBootstrapRuntime', () => {
       incrementalPlan: makeIncrementalPlan(restoredEpisodic),
     });
 
-    expect(runtime.sessionStore).toBe(restoredEpisodic);
+    expect(runtime.sessionStore.getCompletedDimensions()).toEqual(['api']);
     expect(runtime.dimContext.completedDimensions.get('api')).toMatchObject({
       summary: 'restored api',
       dimId: 'api',

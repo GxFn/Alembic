@@ -8,7 +8,7 @@
  *   const packs = registry.resolve(primaryLang, detectedFrameworks);
  */
 
-import { EnhancementRegistry } from './EnhancementRegistry.js';
+import { EnhancementRegistry } from '@alembic/core/core/enhancement/EnhancementRegistry';
 
 let _instance: EnhancementRegistry | null = null;
 
@@ -38,20 +38,20 @@ export async function initEnhancementRegistry() {
   _instance = new EnhancementRegistry();
 
   const packImports = [
-    import('./react-enhancement.js'),
-    import('./nextjs-enhancement.js'),
-    import('./vue-enhancement.js'),
-    import('./node-server-enhancement.js'),
-    import('./django-enhancement.js'),
-    import('./fastapi-enhancement.js'),
-    import('./ml-enhancement.js'),
-    import('./langchain-enhancement.js'),
-    import('./spring-enhancement.js'),
-    import('./android-enhancement.js'),
-    import('./go-web-enhancement.js'),
-    import('./go-grpc-enhancement.js'),
-    import('./rust-web-enhancement.js'),
-    import('./rust-tokio-enhancement.js'),
+    import('@alembic/core/core/enhancement/react-enhancement'),
+    import('@alembic/core/core/enhancement/nextjs-enhancement'),
+    import('@alembic/core/core/enhancement/vue-enhancement'),
+    import('@alembic/core/core/enhancement/node-server-enhancement'),
+    import('@alembic/core/core/enhancement/django-enhancement'),
+    import('@alembic/core/core/enhancement/fastapi-enhancement'),
+    import('@alembic/core/core/enhancement/ml-enhancement'),
+    import('@alembic/core/core/enhancement/langchain-enhancement'),
+    import('@alembic/core/core/enhancement/spring-enhancement'),
+    import('@alembic/core/core/enhancement/android-enhancement'),
+    import('@alembic/core/core/enhancement/go-web-enhancement'),
+    import('@alembic/core/core/enhancement/go-grpc-enhancement'),
+    import('@alembic/core/core/enhancement/rust-web-enhancement'),
+    import('@alembic/core/core/enhancement/rust-tokio-enhancement'),
   ];
 
   const results = await Promise.allSettled(packImports);
@@ -65,5 +65,5 @@ export async function initEnhancementRegistry() {
 }
 
 // Re-exports
-export { EnhancementPack } from './EnhancementPack.js';
-export { EnhancementRegistry } from './EnhancementRegistry.js';
+export { EnhancementPack } from '@alembic/core/core/enhancement/EnhancementPack';
+export { EnhancementRegistry } from '@alembic/core/core/enhancement/EnhancementRegistry';

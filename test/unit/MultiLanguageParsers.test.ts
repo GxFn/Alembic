@@ -4,23 +4,23 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CustomConfigDiscoverer } from '../../lib/core/discovery/CustomConfigDiscoverer.js';
-import { parseCMakeProject } from '../../lib/core/discovery/parsers/CMakeParser.js';
+import { CustomConfigDiscoverer } from '@alembic/core/core/discovery/CustomConfigDiscoverer';
+import { parseCMakeProject } from '@alembic/core/core/discovery/parsers/CMakeParser';
 import {
   inferConventionRole,
   parseGradleProject,
-} from '../../lib/core/discovery/parsers/GradleDslParser.js';
+} from '@alembic/core/core/discovery/parsers/GradleDslParser';
 import {
   parseFlutterPluginsDeps,
   parseNxWorkspace,
   parseReactNativeProject,
-} from '../../lib/core/discovery/parsers/JsonConfigParser.js';
+} from '@alembic/core/core/discovery/parsers/JsonConfigParser';
 import {
   parseStarlarkBuildFile,
   RULE_TO_LANGUAGE,
-} from '../../lib/core/discovery/parsers/StarlarkParser.js';
-import { parseMelosProject } from '../../lib/core/discovery/parsers/YamlConfigParser.js';
+} from '@alembic/core/core/discovery/parsers/StarlarkParser';
+import { parseMelosProject } from '@alembic/core/core/discovery/parsers/YamlConfigParser';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // ═══ StarlarkParser ═══════════════════════════════════
 

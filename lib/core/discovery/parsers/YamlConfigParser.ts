@@ -11,9 +11,12 @@
  * 使用 js-yaml 进行安全解析（禁用危险的 YAML 特性）。
  */
 
+import type {
+  ParsedModule,
+  ParsedModuleSpec,
+  ParsedProjectConfig,
+} from '@alembic/core/core/discovery/parsers/RubyDslParser';
 import yaml from 'js-yaml';
-
-import type { ParsedModule, ParsedModuleSpec, ParsedProjectConfig } from './RubyDslParser.js';
 
 // ── XcodeGen YAML 类型 ───────────────────────────────
 

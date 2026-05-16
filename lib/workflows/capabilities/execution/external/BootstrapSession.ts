@@ -16,8 +16,8 @@
  */
 
 import crypto from 'node:crypto';
+import type { DimensionDef } from '@alembic/core/types/project-snapshot';
 import { SessionStore } from '#agent/memory/SessionStore.js';
-import type { DimensionDef } from '#types/project-snapshot.js';
 import type { SessionCacheShape } from '#types/snapshot-views.js';
 import type { DimensionQualityReport } from './ExternalSubmissionTracker.js';
 import { ExternalSubmissionTracker } from './ExternalSubmissionTracker.js';
