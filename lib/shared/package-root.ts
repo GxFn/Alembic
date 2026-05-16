@@ -12,7 +12,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { DEFAULT_FOLDER_NAMES } from './folder-names.js';
+import { DEFAULT_FOLDER_NAMES } from '@alembic/core/shared/folder-names';
 
 const __dirname = import.meta.dirname;
 

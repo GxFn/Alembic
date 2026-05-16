@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, test } from 'vitest';
-import { resolveFolderNames } from '../../lib/shared/folder-names.js';
+import { resolveIdeFolderNames } from '../../lib/shared/ide-folder-names.js';
 import {
   getCursorRelativePath,
   getCursorRoot,
@@ -31,12 +31,10 @@ describe('ide path helpers', () => {
 
   test('honors resolved custom Cursor folder names for absolute helpers', () => {
     const projectRoot = path.join('/tmp', 'alembic-custom-ide-paths');
-    const folderNames = resolveFolderNames({
-      ide: {
-        cursorRoot: '.agent',
-        cursorRules: 'policy',
-        cursorSkills: 'abilities',
-      },
+    const folderNames = resolveIdeFolderNames({
+      cursorRoot: '.agent',
+      cursorRules: 'policy',
+      cursorSkills: 'abilities',
     });
 
     expect(getCursorRoot(projectRoot, folderNames)).toBe(path.join(projectRoot, '.agent'));

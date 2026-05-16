@@ -13,8 +13,11 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AlembicFolderNames, PartialAlembicFolderNames } from './folder-names.js';
-import { resolveFolderNames } from './folder-names.js';
+import {
+  type AlembicFolderNames,
+  type PartialAlembicFolderNames,
+  resolveFolderNames,
+} from '@alembic/core/shared/folder-names';
 import { detectKnowledgeBaseDir, SPEC_FILENAME } from './ProjectMarkers.js';
 import {
   getGhostWorkspaceDir,

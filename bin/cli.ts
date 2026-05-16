@@ -36,9 +36,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { DEFAULT_FOLDER_NAMES } from '@alembic/core/shared/folder-names';
 import { Command } from 'commander';
 import { cli } from '../lib/cli/CliLogger.js';
-import { DEFAULT_FOLDER_NAMES } from '../lib/shared/folder-names.js';
+import { DEFAULT_IDE_FOLDER_NAMES } from '../lib/shared/ide-folder-names.js';
 import { getCursorRoot, getCursorRulesDir, getCursorSkillsDir } from '../lib/shared/ide-paths.js';
 import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-root.js';
 import { shutdown } from '../lib/shared/shutdown.js';
@@ -1445,7 +1446,7 @@ program
 
       // ── MCP 配置检测 ──
       const cursorMcpPath = join(getCursorRoot(projectRoot), 'mcp.json');
-      const vscodeMcpPath = join(projectRoot, DEFAULT_FOLDER_NAMES.ide.vscodeRoot, 'mcp.json');
+      const vscodeMcpPath = join(projectRoot, DEFAULT_IDE_FOLDER_NAMES.vscodeRoot, 'mcp.json');
       const hasMcpConfig = (() => {
         try {
           const c = JSON.parse(readFileSync(cursorMcpPath, 'utf8'));
@@ -2023,7 +2024,7 @@ program
       // 1. 镜像 rules/ — alembic- 前缀文件（.mdc → .md 改名）
       const cursorRulesDir = getCursorRulesDir(projectRoot);
       if (existsSync(cursorRulesDir)) {
-        const targetRulesDir = join(projectRoot, target, DEFAULT_FOLDER_NAMES.ide.cursorRules);
+        const targetRulesDir = join(projectRoot, target, DEFAULT_IDE_FOLDER_NAMES.cursorRules);
         mkdirSync(targetRulesDir, { recursive: true });
         const files = readdirSync(cursorRulesDir).filter(
           (f) => f.startsWith('alembic-') && (f.endsWith('.mdc') || f.endsWith('.md'))
@@ -2038,7 +2039,7 @@ program
       // 2. 镜像 skills/ — alembic- 前缀目录
       const cursorSkillsDir = getCursorSkillsDir(projectRoot);
       if (existsSync(cursorSkillsDir)) {
-        const targetSkillsDir = join(projectRoot, target, DEFAULT_FOLDER_NAMES.ide.cursorSkills);
+        const targetSkillsDir = join(projectRoot, target, DEFAULT_IDE_FOLDER_NAMES.cursorSkills);
         const skillDirs = readdirSync(cursorSkillsDir, { withFileTypes: true }).filter(
           (d) => d.isDirectory() && d.name.startsWith('alembic-')
         );
@@ -2459,8 +2460,8 @@ async function buildCodexStatus(projectRootInput: string) {
     runtimeExists: existsSync(join(projectRoot, DEFAULT_FOLDER_NAMES.project.runtime)),
     knowledgeDir: join(projectRoot, DEFAULT_FOLDER_NAMES.project.knowledgeBase),
     knowledgeExists: existsSync(join(projectRoot, DEFAULT_FOLDER_NAMES.project.knowledgeBase)),
-    cursorDir: join(projectRoot, DEFAULT_FOLDER_NAMES.ide.cursorRoot),
-    cursorDirExists: existsSync(join(projectRoot, DEFAULT_FOLDER_NAMES.ide.cursorRoot)),
+    cursorDir: join(projectRoot, DEFAULT_IDE_FOLDER_NAMES.cursorRoot),
+    cursorDirExists: existsSync(join(projectRoot, DEFAULT_IDE_FOLDER_NAMES.cursorRoot)),
     vscodeMcpPath: join(projectRoot, '.vscode', 'mcp.json'),
     vscodeMcpExists: existsSync(join(projectRoot, '.vscode', 'mcp.json')),
   };
@@ -2874,7 +2875,7 @@ program
         //    Cursor: 项目 .cursor/mcp.json → 全局 ~/.cursor/mcp.json
         removeMcpEntry(join(getCursorRoot(projectRoot), 'mcp.json'), 'mcpServers');
         writeMcpConfig(
-          join(os.homedir(), DEFAULT_FOLDER_NAMES.ide.cursorRoot, 'mcp.json'),
+          join(os.homedir(), DEFAULT_IDE_FOLDER_NAMES.cursorRoot, 'mcp.json'),
           'mcpServers',
           cursorMcpEntry
         );
@@ -2930,7 +2931,7 @@ program
         // 3. MCP 切换：全局 → 项目级
         //    Cursor: 全局 → 项目 .cursor/mcp.json
         removeMcpEntry(
-          join(os.homedir(), DEFAULT_FOLDER_NAMES.ide.cursorRoot, 'mcp.json'),
+          join(os.homedir(), DEFAULT_IDE_FOLDER_NAMES.cursorRoot, 'mcp.json'),
           'mcpServers'
         );
         writeMcpConfig(join(getCursorRoot(projectRoot), 'mcp.json'), 'mcpServers', cursorMcpEntry);

@@ -7,7 +7,7 @@
  *
  * ---
  * 使用方式：
- *   import { LanguageService } from '../shared/LanguageService.js';
+ *   import { LanguageService } from '@alembic/core/shared/LanguageService';
  *   const lang = LanguageService.inferLang('App.swift');      // 'swift'
  *   const display = LanguageService.displayName('swift');       // 'Swift'
  *   const primary = LanguageService.detectPrimary(langStats);   // 'typescript'

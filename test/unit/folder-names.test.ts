@@ -1,10 +1,14 @@
 import path from 'node:path';
-import { describe, expect, test } from 'vitest';
 import {
   DEFAULT_FOLDER_NAMES,
   resolveFolderNames,
   validateFolderNameSegment,
-} from '../../lib/shared/folder-names.js';
+} from '@alembic/core/shared/folder-names';
+import { describe, expect, test } from 'vitest';
+import {
+  DEFAULT_IDE_FOLDER_NAMES,
+  resolveIdeFolderNames,
+} from '../../lib/shared/ide-folder-names.js';
 import {
   CONFIG_DIR,
   DASHBOARD_DIR,
@@ -32,9 +36,13 @@ describe('folder names', () => {
       runtime: '.asd',
       skills: 'skills',
     });
-    expect(DEFAULT_FOLDER_NAMES.ide).toMatchObject({
+  });
+
+  test('keeps IDE-only folder names in the Alembic outer adapter', () => {
+    expect(DEFAULT_IDE_FOLDER_NAMES).toMatchObject({
       cursorRoot: '.cursor',
       cursorSkills: 'skills',
+      vscodeRoot: '.vscode',
     });
   });
 
@@ -63,6 +71,10 @@ describe('folder names', () => {
 
   test('validates override values while resolving folder names', () => {
     expect(() => resolveFolderNames({ package: { injectableSkills: '../skills' } })).toThrow(Error);
+  });
+
+  test('validates IDE override values while resolving outer folder names', () => {
+    expect(() => resolveIdeFolderNames({ cursorRoot: '../cursor' })).toThrow(Error);
   });
 
   test('derives package paths from the shared default folder names', () => {

@@ -4,11 +4,11 @@
  * 基于 p-limit 提供项目级并发 preset，替代手写 Semaphore / 滑动窗口。
  *
  * 用法:
- *   import { ioLimit, cpuLimit } from '#shared/concurrency.js';
+ *   import { ioLimit, cpuLimit } from '@alembic/core/shared/concurrency';
  *   const results = await Promise.all(items.map(item => ioLimit(() => process(item))));
  *
  * 动态并发（按运行时配置）:
- *   import { createLimit } from '#shared/concurrency.js';
+ *   import { createLimit } from '@alembic/core/shared/concurrency';
  *   const limit = createLimit(tierConfig.concurrency);
  *
  * @module shared/concurrency

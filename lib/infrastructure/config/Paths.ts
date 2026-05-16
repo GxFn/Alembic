@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DEFAULT_FOLDER_NAMES } from '../../shared/folder-names.js';
+import { DEFAULT_FOLDER_NAMES } from '@alembic/core/shared/folder-names';
+import { DEFAULT_IDE_FOLDER_NAMES } from '../../shared/ide-folder-names.js';
 import pathGuard from '../../shared/PathGuard.js';
 import {
   detectKnowledgeBaseDir,
@@ -55,7 +56,7 @@ export function getSnippetsPath() {
 
 /** VSCode 项目级 Snippets 目录 = projectRoot/.vscode/ */
 export function getVSCodeSnippetsPath(projectRoot: string) {
-  return ensureDir(path.join(projectRoot, DEFAULT_FOLDER_NAMES.ide.vscodeRoot));
+  return ensureDir(path.join(projectRoot, DEFAULT_IDE_FOLDER_NAMES.vscodeRoot));
 }
 
 /**

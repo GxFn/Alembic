@@ -13,8 +13,8 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { DEFAULT_FOLDER_NAMES } from '@alembic/core/shared/folder-names';
 import type { WriteZone } from '../infrastructure/io/WriteZone.js';
-import { DEFAULT_FOLDER_NAMES } from './folder-names.js';
 
 export type WorkspaceMode = 'standard' | 'ghost';
 

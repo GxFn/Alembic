@@ -28,13 +28,13 @@ import {
   RawDbCallGraphAdapter,
 } from '../../repository/delivery/DeliveryRepoAdapter.js';
 import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
-import { DELIVERY_RANK } from '../../shared/constants.js';
 import {
   getCursorRulesDir,
   getCursorSkillsDir,
   getCursorSkillsRelativePath,
 } from '../../shared/ide-paths.js';
 import { AgentInstructionsGenerator } from './AgentInstructionsGenerator.js';
+import { DELIVERY_RANK } from './DeliveryRank.js';
 import { KnowledgeCompressor } from './KnowledgeCompressor.js';
 import { RulesGenerator } from './RulesGenerator.js';
 import { SkillsSyncer } from './SkillsSyncer.js';
