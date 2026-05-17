@@ -28,7 +28,7 @@ describe('insight gate analysis artifact', () => {
       tool: 'code',
       args: {
         action: 'read',
-        path: 'Sources/Infrastructure/Networking/Client/NetworkError+Bili.swift',
+        path: 'Sources/Infrastructure/Networking/Client/NetworkError+App.swift',
       },
       result:
         '8|extension NetworkError: UserFacingError {\\n9| public var userMessage: String { ... }\\n}',
@@ -39,11 +39,11 @@ describe('insight gate analysis artifact', () => {
     const reply = `
 ## NetworkError 统一网络错误枚举
 
-核心错误模型落在 Packages/AOXNetworkKit/Sources/AOXNetworkKit/Core/NetworkError.swift，并通过 Sources/Infrastructure/Networking/Client/NetworkError+Bili.swift 转换成业务可读错误。
+核心错误模型落在 Packages/AOXNetworkKit/Sources/AOXNetworkKit/Core/NetworkError.swift，并通过 Sources/Infrastructure/Networking/Client/NetworkError+App.swift 转换成业务可读错误。
 
 ## ResponseDecoder 容错解析链路
 
-响应解析由 Packages/AOXNetworkKit/Sources/AOXNetworkKit/Core/ResponseDecoder.swift 承担，BiliDili 的业务扩展位于 Sources/Infrastructure/Networking/Client/ResponseDecoder+Bili.swift。
+响应解析由 Packages/AOXNetworkKit/Sources/AOXNetworkKit/Core/ResponseDecoder.swift 承担，业务扩展位于 Sources/Infrastructure/Networking/Client/ResponseDecoder+App.swift。
 
 ## 中间件错误恢复
 

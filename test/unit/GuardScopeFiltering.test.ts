@@ -30,7 +30,7 @@ describe('GuardCheckEngine scope filtering', () => {
   it('should include universal-dimension rules when scope=project', () => {
     const db = createMinimalDB();
 
-    // Insert a rule with scope=universal (like BiliDili knowledge_entries)
+    // Insert a rule with scope=universal, as produced by imported knowledge entries.
     db.prepare(`
       INSERT INTO knowledge_entries (id, title, description, language, scope, constraints, lifecycle, kind)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)

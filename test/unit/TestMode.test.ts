@@ -183,7 +183,7 @@ describe('test-mode', () => {
       expect(rescanResult).toHaveLength(allDims.length);
     });
 
-    test('cross-tier configuration for BiliDili scenario', async () => {
+    test('cross-tier configuration for a representative scenario', async () => {
       process.env.ALEMBIC_TEST_MODE = '1';
       process.env.ALEMBIC_TEST_BOOTSTRAP_DIMS = 'architecture,coding-standards';
       process.env.ALEMBIC_TEST_RESCAN_DIMS = 'design-patterns,error-resilience';

@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import { buildProducerPrompt, buildProducerPromptV2 } from '#agent/prompts/insight-producer.js';
+import {
+  buildProducerPrompt,
+  buildProducerPromptV2,
+} from '../../lib/agent/prompts/insight-producer.js';
 
 describe('Insight producer prompt', () => {
   const dimConfig = {
@@ -7,7 +10,7 @@ describe('Insight producer prompt', () => {
     label: 'Testing Quality',
     allowedKnowledgeTypes: ['best-practice', 'code-pattern'],
   };
-  const projectInfo = { name: 'BiliDili' };
+  const projectInfo = { name: 'ExampleApp' };
 
   test('v1 prompt requires dimensionId and forbids category as dimension owner', () => {
     const prompt = buildProducerPrompt(
