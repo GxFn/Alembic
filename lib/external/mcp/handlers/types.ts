@@ -9,7 +9,7 @@ import type {
   IncrementalPlan,
   LoggerLike,
   SaveSnapshotParams,
-} from '#types/workflows.js';
+} from '@alembic/core/types/workflows';
 
 // ─── DI Container (minimal shape) ────────────────────────
 

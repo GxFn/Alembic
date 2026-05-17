@@ -168,8 +168,7 @@
     "template.json",
     "resources/native-ui/screenshot.swift",
     "resources/native-ui/screenshot",
-    "resources/openChrome.applescript",
-    "resources/grammars"
+    "resources/openChrome.applescript"
   ],
   "directories": {
     "doc": "docs",

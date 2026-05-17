@@ -7,7 +7,7 @@ import {
   summarizeWorkflowDimensionStats,
 } from '@alembic/core/workflows/capabilities/persistence/WorkflowResultPersistence';
 import { describe, expect, test, vi } from 'vitest';
-import type { IncrementalPlan } from '#types/workflows.js';
+import type { IncrementalPlan } from '@alembic/core/types/workflows';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
 import type {
   CandidateResults,

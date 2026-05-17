@@ -30,6 +30,11 @@ import { applyTestDimensionFilter } from '@alembic/core/shared/test-mode';
 import type { DimensionDef, ProjectSnapshot } from '@alembic/core/types/project-snapshot';
 import { buildProjectSnapshot } from '@alembic/core/types/project-snapshot-builder';
 import type { PipelineFillView } from '@alembic/core/types/snapshot-views';
+import type {
+  McpContext,
+  WorkflowDatabaseLike,
+  WorkflowSkillHooks,
+} from '@alembic/core/types/workflows';
 import { cacheProjectAnalysisSession } from '@alembic/core/workflows/capabilities/execution/external/SessionSupport';
 import {
   auditRecipesForRescan,
@@ -56,7 +61,6 @@ import {
 } from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanPresenters';
 import { buildKnowledgeRescanWorkflowPlan } from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanWorkflowPlan';
 import type { WorkflowMcpContext } from '@alembic/core/workflows/shared/WorkflowTypes';
-import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '#types/workflows.js';
 import {
   dispatchInternalDimensionExecution,
   startInternalDimensionExecutionSession,

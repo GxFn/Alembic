@@ -12,8 +12,8 @@ import path from 'node:path';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { DimensionDef } from '@alembic/core/types/project-snapshot';
 import type { PipelineFillView } from '@alembic/core/types/snapshot-views';
+import type { McpContext } from '@alembic/core/types/workflows';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
-import type { McpContext } from '#types/workflows.js';
 
 const logger = Logger.getInstance();
 
