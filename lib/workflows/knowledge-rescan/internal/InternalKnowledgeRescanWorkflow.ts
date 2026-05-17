@@ -226,9 +226,11 @@ export async function runInternalKnowledgeRescanWorkflow(
   try {
     const repos = resolveKnowledgeRepos(ctx.container);
     if (repos) {
-      const signalBus = ctx.container.get('signalBus') as
-        | import('@alembic/core/events').SignalBus
-        | undefined;
+      const signalBus = ctx.container.get('signalBus') as ConstructorParameters<
+        typeof SourceRefReconciler
+      >[3] extends { signalBus?: infer S }
+        ? S
+        : never;
       const reconciler = new SourceRefReconciler(
         projectRoot,
         repos.sourceRefRepo,

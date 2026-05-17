@@ -2,12 +2,12 @@
   "version": 1,
   "plan": "docs/AlembicAgent/alembic-agent-extraction-boundary-plan-2026-05-17.md",
   "localAgentPolicy": {
-    "status": "preserve-until-wave-4-deletion-review",
+    "status": "deleted-wave-4",
     "replacementPackage": "@alembic/agent",
-    "replacementPhase": "phase-8-after-agent-phase-3-and-phase-4",
+    "replacementPhase": "wave-4-local-duplicate-deletion",
     "notes": [
-      "Alembic keeps lib/agent/** until Wave 4 deletion review confirms no production consumers remain and host entry tests cover the replacement package.",
-      "CLI, daemon, HTTP/API, Dashboard/native, IDE, Lark runtime, and product shell stay in Alembic."
+      "Alembic local lib/agent duplicate implementation tree has been deleted after production consumers switched to @alembic/agent public subpaths.",
+      "CLI, daemon, HTTP/API, Dashboard/native, IDE, Lark runtime, product shell, and host adapters stay in Alembic."
     ]
   },
   "phaseEvidence": {
@@ -192,6 +192,60 @@
       ],
       "nextPhaseAllowed": true,
       "nextPhase": "Wave 4 may delete or quarantine duplicate local Agent and Tool V2 implementation files only after total-control acceptance review confirms the recorded validation and preserves host adapters."
+    },
+    "phase9LocalAgentToolImplementationDeletion": {
+      "status": "closed",
+      "stage": "wave-4-local-agent-tool-implementation-deletion",
+      "planSection": "alembic-agent-cutover-plugin-cleanup-wave-4-deletion-plan-2026-05-17 §5.1",
+      "completedScope": [
+        "Deleted Alembic local lib/agent duplicate implementation tree after Wave 3 cutover completed production consumers.",
+        "Deleted local generic Tool V2 implementation files and local tool core/catalog/workflow duplicate files.",
+        "Preserved lib/tools/v2/adapter/ToolContextFactory.ts and host adapters as Alembic-owned DI/repository/search/gateway/project-root/data-root/sandbox bridge code.",
+        "Removed package imports alias for #agent/* and cleared configured #agent allowed call sites.",
+        "Updated boundary lint to hard gate Wave 4 deletion state: local Agent files 0, production #agent imports 0, package #agent alias absent, generic Tool V2 duplicate files 0."
+      ],
+      "deletedPaths": [
+        "lib/agent/**",
+        "lib/tools/core/**",
+        "lib/tools/catalog/**",
+        "lib/tools/workflow/**",
+        "lib/tools/v2/adapter/V2CapabilityCatalog.ts",
+        "lib/tools/v2/adapter/V2ToolRouterAdapter.ts",
+        "lib/tools/v2/adapter/index.ts",
+        "lib/tools/v2/cache/**",
+        "lib/tools/v2/capabilities/**",
+        "lib/tools/v2/compressor/**",
+        "lib/tools/v2/handlers/**",
+        "lib/tools/v2/index.ts",
+        "lib/tools/v2/registry.ts",
+        "lib/tools/v2/router.ts",
+        "lib/tools/v2/types.ts"
+      ],
+      "preservedPaths": [
+        "lib/tools/v2/adapter/ToolContextFactory.ts",
+        "lib/tools/adapters/**",
+        "CLI/daemon/HTTP/API/Dashboard/native/IDE/Lark/product shell host wiring"
+      ],
+      "validation": [
+        "npm run lint:agent-extraction-boundary: passed; product #agent call sites 0, local Agent relative import files 0, local Agent relative imports 0, preserved local Agent files 0, duplicate generic Tool V2 files 0.",
+        "npm run build:check: passed.",
+        "npm run lint -- --diagnostic-level=error: passed.",
+        "npm run test:unit -- test/unit/AgentModuleBoundaries.test.ts test/unit/V2ToolSystem.test.ts test/unit/AgentTaskHandlers.test.ts test/unit/ToolForgeIntegration.test.ts test/unit/AgentService.test.ts test/unit/AgentRuntime.test.ts test/unit/MemorySystem.test.ts: passed; 7 files / 177 tests.",
+        "npm run check: passed; existing repository Biome warnings are non-fatal.",
+        "npm run build: passed.",
+        "node dist/bin/cli.js status --json: passed; workspace detected, database not found in current test environment.",
+        "rg -n \"#agent/|../agent/|../../agent/|lib/agent/\" lib bin scripts test --glob '*.ts' --glob '*.js' --glob '*.mjs': passed with no matches.",
+        "find lib/agent -type f | sort: passed as deletion evidence; lib/agent no longer exists.",
+        "find lib/tools/v2 -type f | sort: passed; only lib/tools/v2/adapter/ToolContextFactory.ts remains.",
+        "npm run test:unit: attempted; blocked by local sandbox environment, with SandboxNetworkProxy.listen EPERM on 127.0.0.1 and TerminalAdapter sandbox-exec sandbox_apply Operation not permitted; targeted Wave 4 suites passed."
+      ],
+      "risks": [
+        "AlembicAgent remains the owner of generic Agent/runtime/tool implementation tests; Alembic keeps only host integration coverage.",
+        "ToolContextFactory remains host-owned because it wires Alembic container services, repositories, search/gateway, data roots, project roots, sandbox execution, and runtime request context.",
+        "If future Alembic host code needs Agent capabilities/policies/strategies deep exports, that contract must be added in AlembicAgent rather than restoring local duplicate files."
+      ],
+      "nextPhaseAllowed": true,
+      "nextPhase": "Wave 4 Alembic local Agent and generic Tool V2 duplicate implementation deletion is complete; next acceptance can verify docs, commit, and any downstream contract smoke without restoring local duplicate files."
     }
   },
   "aiProviderRules": {
@@ -209,42 +263,15 @@
     ]
   },
   "toolSystemImportRules": {
-    "status": "consume-alembic-agent-tools-v2-contract",
+    "status": "local-generic-tool-duplicates-deleted",
     "packageName": "@alembic/agent",
     "packageRange": "file:../AlembicAgent",
     "publicEntrypoint": "@alembic/agent/tools",
     "publicV2Entrypoint": "@alembic/agent/tools/v2",
-    "localDeletionCandidates": [
-      "lib/tools/core/**",
-      "lib/tools/catalog/**",
-      "lib/tools/workflow/**",
-      "lib/tools/v2/adapter/V2CapabilityCatalog.ts",
-      "lib/tools/v2/adapter/V2ToolRouterAdapter.ts",
-      "lib/tools/v2/cache/**",
-      "lib/tools/v2/capabilities/**",
-      "lib/tools/v2/compressor/**",
-      "lib/tools/v2/handlers/**",
-      "lib/tools/v2/index.ts",
-      "lib/tools/v2/registry.ts",
-      "lib/tools/v2/router.ts",
-      "lib/tools/v2/types.ts"
-    ],
+    "localDeletionCandidates": [],
     "hostOwnedToolV2Paths": ["lib/tools/v2/adapter/ToolContextFactory.ts", "lib/tools/adapters/**"],
     "scanRoots": ["lib", "bin", "scripts", "test"],
-    "ignoredPathPrefixes": [
-      "lib/tools/core/",
-      "lib/tools/catalog/",
-      "lib/tools/workflow/",
-      "lib/tools/v2/adapter/",
-      "lib/tools/v2/cache/",
-      "lib/tools/v2/capabilities/",
-      "lib/tools/v2/compressor/",
-      "lib/tools/v2/handlers/",
-      "lib/tools/v2/index.ts",
-      "lib/tools/v2/registry.ts",
-      "lib/tools/v2/router.ts",
-      "lib/tools/v2/types.ts"
-    ],
+    "ignoredPathPrefixes": ["lib/tools/v2/adapter/"],
     "deferredLocalImports": [
       {
         "path": "lib/injection/modules/AgentModule.ts",
@@ -258,20 +285,34 @@
       }
     ],
     "notes": [
-      "Common tool contracts, capability catalog, unified catalog, router contracts, result envelopes, presenters, workflow registry, and Tool V2 generic contracts are consumed through @alembic/agent/tools and @alembic/agent/tools/v2 outside local implementation/deferred bridges.",
+      "Common tool contracts, catalog, workflow registry, router contracts, result envelopes, presenters, and Tool V2 generic runtime are consumed through @alembic/agent/tools and @alembic/agent/tools/v2.",
       "Alembic keeps Dashboard, macOS, Skill, Terminal, Workflow, MCP, CLI, daemon, HTTP/API, native, IDE wiring, and concrete ToolContextFactory as host adapters.",
-      "Local lib/tools common trees are preserved only as deletion candidates until host smoke evidence confirms removal is safe."
+      "Wave 4 deleted local duplicate tool implementation trees; do not restore them in Alembic."
+    ],
+    "completedDeletionPaths": [
+      "lib/tools/core/**",
+      "lib/tools/catalog/**",
+      "lib/tools/workflow/**",
+      "lib/tools/v2/adapter/V2CapabilityCatalog.ts",
+      "lib/tools/v2/adapter/V2ToolRouterAdapter.ts",
+      "lib/tools/v2/cache/**",
+      "lib/tools/v2/capabilities/**",
+      "lib/tools/v2/compressor/**",
+      "lib/tools/v2/handlers/**",
+      "lib/tools/v2/index.ts",
+      "lib/tools/v2/registry.ts",
+      "lib/tools/v2/router.ts",
+      "lib/tools/v2/types.ts"
     ]
   },
   "memoryContextImportRules": {
-    "status": "consume-alembic-agent-memory-context",
+    "status": "local-memory-context-duplicates-deleted",
     "packageName": "@alembic/agent",
     "packageRange": "file:../AlembicAgent",
     "publicMemoryEntrypoint": "@alembic/agent/memory",
     "publicContextEntrypoint": "@alembic/agent/context",
-    "localDeletionCandidates": ["lib/agent/memory/**", "lib/agent/context/**"],
     "scanRoots": ["lib", "bin", "scripts"],
-    "ignoredPathPrefixes": ["lib/agent/"],
+    "ignoredPathPrefixes": [],
     "consumedAgentExports": [
       "@alembic/agent/service",
       "@alembic/agent/runtime",
@@ -279,13 +320,13 @@
       "@alembic/agent/domain"
     ],
     "notes": [
-      "Agent-owned memory/context consumers should use @alembic/agent/memory and @alembic/agent/context outside local implementation directories.",
-      "Alembic keeps database connection construction, repository/vector construction, projectRoot/dataRoot, WriteZone/PathGuard, CLI/daemon/HTTP/API/Dashboard/native/IDE wiring, and internal workflow orchestration as host responsibilities.",
-      "Do not delete local lib/agent/service, lib/agent/runtime, lib/agent/prompts, or lib/agent/domain until Alembic has validated the replacement surface and host-specific workflow glue has no contract gaps."
-    ]
+      "Agent-owned memory/context consumers use @alembic/agent/memory and @alembic/agent/context.",
+      "Wave 4 deleted local lib/agent memory/context duplicate files from Alembic."
+    ],
+    "completedDeletionPaths": ["lib/agent/memory/**", "lib/agent/context/**"]
   },
   "hostContractSurfaceImportRules": {
-    "status": "consume-alembic-agent-host-contract-surface",
+    "status": "local-host-contract-surface-duplicates-deleted",
     "packageName": "@alembic/agent",
     "packageRange": "file:../AlembicAgent",
     "publicEntrypoints": {
@@ -294,33 +335,20 @@
       "prompts": "@alembic/agent/prompts",
       "domain": "@alembic/agent/domain"
     },
-    "localDeletionCandidates": [
+    "scanRoots": ["lib", "bin", "scripts"],
+    "ignoredPathPrefixes": [],
+    "notes": [
+      "Alembic production consumers import Agent-owned service, runtime, prompt, and domain contracts from @alembic/agent public subpaths.",
+      "Wave 4 deleted local duplicate service/runtime/prompts/domain files from Alembic; host adapters and product wiring remain local."
+    ],
+    "completedDeletionPaths": [
       "lib/agent/service/**",
       "lib/agent/runtime/**",
       "lib/agent/prompts/**",
       "lib/agent/domain/**"
-    ],
-    "scanRoots": ["lib", "bin", "scripts"],
-    "ignoredPathPrefixes": ["lib/agent/"],
-    "notes": [
-      "Alembic production consumers should import Agent-owned service, runtime, prompt, and domain contracts from @alembic/agent public subpaths.",
-      "Alembic keeps HTTP/API, Lark, workflow orchestration, Dashboard/native/IDE integration, database construction, path/write guards, and host tool adapters as local glue.",
-      "Local lib/agent/service, lib/agent/runtime, lib/agent/prompts, and lib/agent/domain remain preserved deletion candidates until contract coverage and host smoke evidence are complete."
     ]
   },
   "agentSourceNotes": [
-    {
-      "path": "lib/agent/profiles/definitions/remote.profile.ts",
-      "boundary": "agent-profile-with-host-supplied-tools",
-      "disposition": "keep-local-copy-until-runtime-switch",
-      "reason": "remote-exec is an Agent profile, but its executable action space is intentionally empty here; host adapters decide which remote/system tools are exposed."
-    },
-    {
-      "path": "lib/agent/profiles/definitions/signal.profile.ts",
-      "boundary": "agent-profile-used-by-product-background-analysis",
-      "disposition": "switch-call-site-after-agent-public-entrypoint",
-      "reason": "signal-analysis is a generic Agent run profile, while SignalCollector remains an Alembic daemon/product-shell service."
-    },
     {
       "path": "lib/tools/adapters/MacSystemAdapter.ts",
       "boundary": "alembic-main-platform-adapter",
@@ -335,58 +363,25 @@
     }
   ],
   "agentImportRules": {
-    "scanRoots": ["lib", "bin", "scripts"],
-    "ignoredPathPrefixes": ["lib/agent/"],
+    "scanRoots": ["lib", "bin", "scripts", "test"],
+    "ignoredPathPrefixes": [],
     "relativeLocalAgentImportPolicy": {
-      "status": "blocked-outside-preserved-local-agent-implementation",
+      "status": "blocked-after-wave-4-deletion",
       "replacement": "@alembic/agent public subpaths",
-      "localDeletionCandidate": "lib/agent/**",
+      "completedDeletionPath": "lib/agent/**",
       "notes": [
-        "Relative imports that resolve to lib/agent/** are forbidden in production lib/bin/scripts sources outside lib/agent/**.",
-        "Wave 3 cut the final production ToolForge, profiles, and task handler call sites to @alembic/agent/forge, @alembic/agent/profiles, and @alembic/agent/tasks."
+        "Relative imports that resolve to the deleted local Agent tree are forbidden in lib/bin/scripts/test sources.",
+        "Wave 4 removed the local Agent tree and package #agent alias."
       ]
     },
-    "allowedCallSites": [
-      {
-        "path": "lib/tools/v2/capabilities/CapabilityV2.ts",
-        "classification": "tool-system-agent-base-class",
-        "switchAfter": "phase-4",
-        "replacement": "@alembic/agent/tools",
-        "expectedSpecifiers": ["#agent/capabilities/Capability.js"],
-        "reason": "The V2 tool capability base still inherits the local Agent Capability type until AlembicAgent publishes the remaining Tool V2 adapter contract."
-      }
-    ]
+    "allowedCallSites": []
   },
   "toolBoundaryRules": [
-    {
-      "pathPrefix": "lib/tools/core/",
-      "classification": "agent-common-tool-contracts",
-      "switchAfter": "phase-4",
-      "reason": "Core tool contracts, routing services, decisions, envelopes, and presenters are portable Agent tool-system code."
-    },
-    {
-      "pathPrefix": "lib/tools/catalog/",
-      "classification": "agent-common-tool-catalog",
-      "switchAfter": "phase-4",
-      "reason": "Capability manifests and unified catalog are common Agent tool registry infrastructure."
-    },
     {
       "path": "lib/tools/v2/adapter/ToolContextFactory.ts",
       "classification": "alembic-main-tool-v2-context-factory",
       "switchAfter": "do-not-migrate-by-default",
       "reason": "ToolContextFactory composes Alembic-owned DI container services, repositories, search/gateway wiring, data-root/project-root context, and sandbox bridge for the Agent V2 generic router."
-    },
-    {
-      "pathPrefix": "lib/tools/v2/",
-      "classification": "agent-common-tool-v2",
-      "switchAfter": "phase-4",
-      "reason": "V2 router, handlers, cache, compressor, capability catalog, and context adapter are common Agent tool runtime candidates."
-    },
-    {
-      "pathPrefix": "lib/tools/workflow/",
-      "classification": "agent-common-workflow-tool-registry",
-      "switchAfter": "phase-4",
-      "reason": "Workflow registry is a generic tool-system extension point; concrete workflow handlers remain host supplied."
     },
     {
       "path": "lib/tools/adapters/WorkflowAdapter.ts",

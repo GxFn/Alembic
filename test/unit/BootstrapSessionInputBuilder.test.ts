@@ -3,7 +3,7 @@ import {
   type BootstrapSessionChildRunPlan,
   buildBootstrapSessionRunInput,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
-import type { AgentRunInput } from '../../lib/agent/service/index.js';
+import type { AgentRunInput } from '@alembic/agent/service';
 
 function makeChild(id: string, tier: number): BootstrapSessionChildRunPlan {
   return {

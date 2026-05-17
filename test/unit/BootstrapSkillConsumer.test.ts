@@ -5,7 +5,7 @@ import {
   type DimensionCandidateData,
   extractSkillKeyFindings,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
+import type { SessionStore } from '@alembic/agent/memory';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
 
 function makeCandidate(analysisText: string): DimensionCandidateData {

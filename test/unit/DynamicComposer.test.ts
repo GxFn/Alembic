@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { DynamicComposer } from '../../lib/agent/forge/DynamicComposer.js';
+import { DynamicComposer } from '@alembic/agent/forge';
 
 /* ────────── Mock ToolRegistry ────────── */
 

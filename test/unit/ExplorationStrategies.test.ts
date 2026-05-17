@@ -18,7 +18,7 @@ import {
   STRATEGY_ANALYST,
   STRATEGY_PRODUCER,
   type TransitionRule,
-} from '../../lib/agent/context/exploration/ExplorationStrategies.js';
+} from '@alembic/agent/context';
 
 function makeBudget(overrides: Partial<ExplorationBudget> = {}): ExplorationBudget {
   return {

@@ -1,6 +1,6 @@
 import type { ToolResultEnvelope } from '@alembic/agent/tools';
 import { describe, expect, test, vi } from 'vitest';
-import { taskCheckAndSubmit, taskQualityAudit } from '../../lib/agent/tasks/AgentTaskHandlers.js';
+import { taskCheckAndSubmit, taskQualityAudit } from '@alembic/agent/tasks';
 
 function envelope<T>(toolId: string, structuredContent: T): ToolResultEnvelope<T> {
   return {

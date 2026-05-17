@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   buildProducerPrompt,
   buildProducerPromptV2,
-} from '../../lib/agent/prompts/insight-producer.js';
+} from '@alembic/agent/prompts';
 
 describe('Insight producer prompt', () => {
   const dimConfig = {

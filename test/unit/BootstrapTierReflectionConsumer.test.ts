@@ -3,7 +3,7 @@ import {
   consumeBootstrapTierReflection,
   type DimensionStat,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
+import type { SessionStore } from '@alembic/agent/memory';
 
 describe('bootstrap tier reflection consumer', () => {
   test('builds and stores tier reflection from completed dimension stats', () => {

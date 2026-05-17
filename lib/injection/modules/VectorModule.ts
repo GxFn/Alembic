@@ -48,7 +48,11 @@ export function register(c: ServiceContainer) {
               typeof VectorService
             >[0]['hybridRetriever'])
           : null,
-        eventBus: ct.services.eventBus ? ct.get('eventBus') : null,
+        eventBus: ct.services.eventBus
+          ? (ct.get('eventBus') as unknown as ConstructorParameters<
+              typeof VectorService
+            >[0]['eventBus'])
+          : null,
         embedProvider: embedProvider as ConstructorParameters<
           typeof VectorService
         >[0]['embedProvider'],

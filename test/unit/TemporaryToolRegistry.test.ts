@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TemporaryToolRegistry } from '../../lib/agent/forge/TemporaryToolRegistry.js';
+import { TemporaryToolRegistry } from '@alembic/agent/forge';
 
 /* ────────── Mock ToolRegistry ────────── */
 

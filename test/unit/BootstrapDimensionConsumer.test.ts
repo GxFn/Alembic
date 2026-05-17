@@ -8,8 +8,8 @@ import {
 } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 import type { BootstrapDimensionProjection } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
 import type { DimensionContext } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
-import type { MemoryCoordinator } from '../../lib/agent/memory/MemoryCoordinator.js';
-import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
+import type { MemoryCoordinator } from '@alembic/agent/memory';
+import type { SessionStore } from '@alembic/agent/memory';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
 
 function makeProjection(): BootstrapDimensionProjection {

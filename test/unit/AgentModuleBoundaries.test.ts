@@ -5,27 +5,18 @@ import { describe, expect, test } from 'vitest';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const thisFile = fileURLToPath(import.meta.url);
+const localAgentRoot = join('lib', 'agent');
+const agentAlias = '#agent';
+const agentAliasPrefix = `${agentAlias}/`;
 
 describe('agent module boundaries', () => {
+  test('removes the local duplicate agent implementation tree', () => {
+    expect(existsSync(join(repoRoot, localAgentRoot))).toBe(false);
+    expect(collectTypeScriptFiles(join(repoRoot, localAgentRoot))).toEqual([]);
+  });
+
   test('does not restore retired compatibility entry files', () => {
     const retiredFiles = [
-      'lib/agent/AgentRuntime.ts',
-      'lib/agent/AgentRuntimeTypes.ts',
-      'lib/agent/AgentMessage.ts',
-      'lib/agent/AgentState.ts',
-      'lib/agent/AgentEventBus.ts',
-      'lib/agent/AgentRouter.ts',
-      'lib/agent/ConversationStore.ts',
-      'lib/agent/IntentClassifier.ts',
-      'lib/agent/PipelineStrategy.ts',
-      'lib/agent/forced-summary.ts',
-      'lib/agent/presets.ts',
-      'lib/agent/policies.ts',
-      'lib/agent/strategies.ts',
-      'lib/agent/capabilities.ts',
-      'lib/agent/domain/ChatAgentTasks.ts',
-      'lib/agent/runs/chat/ChatAgentTasks.ts',
-      'lib/agent/prompts/ChatAgentPrompts.ts',
       'lib/external/mcp/handlers/bootstrap/MissionBriefingBuilder.ts',
       'lib/external/mcp/handlers/bootstrap/BootstrapSession.ts',
       'lib/external/mcp/handlers/bootstrap/ExternalSubmissionTracker.ts',
@@ -40,11 +31,6 @@ describe('agent module boundaries', () => {
 
   test('keeps retired compatibility directories free of TypeScript modules', () => {
     const retiredDirs = [
-      'lib/agent/core',
-      'lib/agent/tools',
-      'lib/agent/adapters',
-      'lib/agent/workflow',
-      'lib/agent/dashboard',
       'lib/external/mcp/handlers/bootstrap/pipeline',
       join('lib', 'workflows', 'bootstrap'),
       join('lib', 'workflows', 'common-capabilities'),
@@ -86,8 +72,8 @@ describe('agent module boundaries', () => {
     expect(existsSync(httpPresenterPath)).toBe(true);
     expect(existsSync(join(repoRoot, 'lib/tools/adapters/McpToolAdapter.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'lib/tools/core/tool-envelope-response.ts'))).toBe(false);
-    expect(readFileSync(mcpAdapterPath, 'utf8')).not.toContain('#agent/');
-    expect(readFileSync(httpPresenterPath, 'utf8')).not.toContain('#agent/');
+    expect(readFileSync(mcpAdapterPath, 'utf8')).not.toContain(agentAliasPrefix);
+    expect(readFileSync(httpPresenterPath, 'utf8')).not.toContain(agentAliasPrefix);
   });
 
   test('keeps workflow layer independent from handler internals', () => {
@@ -354,27 +340,32 @@ function extractImportSpecifiers(source: string): string[] {
 
 function isRetiredImportSpecifier(specifier: string, relFile: string) {
   const retiredSegments = [
-    'lib/agent/core/',
-    'lib/agent/tools/',
-    'lib/agent/adapters/',
-    'lib/agent/workflow/',
-    'lib/agent/dashboard/',
-    'lib/agent/domain/ChatAgentTasks',
-    'lib/agent/runs/chat/ChatAgentTasks',
-    'lib/agent/prompts/ChatAgentPrompts',
     'lib/external/mcp/handlers/bootstrap/MissionBriefingBuilder',
     'lib/external/mcp/handlers/bootstrap/BootstrapSession',
     'lib/external/mcp/handlers/bootstrap/ExternalSubmissionTracker',
     'lib/external/mcp/handlers/bootstrap/base-dimensions',
     'lib/external/mcp/handlers/bootstrap/shared/bootstrap-phases',
     'lib/external/mcp/handlers/bootstrap/shared/dimension-text',
-    '#agent/core/',
-    '#agent/tools/',
-    '#agent/adapters/',
-    '#agent/workflow/',
-    '#agent/dashboard/',
   ];
-  if (retiredSegments.some((segment) => specifier.includes(segment))) {
+  const retiredAgentSegments = [
+    agentPath('core'),
+    agentPath('tools'),
+    agentPath('adapters'),
+    agentPath('workflow'),
+    agentPath('dashboard'),
+    agentPath('domain', 'ChatAgentTasks'),
+    agentPath('runs', 'chat', 'ChatAgentTasks'),
+    agentPath('prompts', 'ChatAgentPrompts'),
+    `${agentAliasPrefix}core/`,
+    `${agentAliasPrefix}tools/`,
+    `${agentAliasPrefix}adapters/`,
+    `${agentAliasPrefix}workflow/`,
+    `${agentAliasPrefix}dashboard/`,
+  ];
+  if (
+    retiredSegments.some((segment) => specifier.includes(segment)) ||
+    retiredAgentSegments.some((segment) => specifier.includes(segment))
+  ) {
     return true;
   }
   return (
@@ -383,6 +374,10 @@ function isRetiredImportSpecifier(specifier: string, relFile: string) {
       specifier.startsWith('../pipeline/') ||
       specifier.includes('bootstrap/pipeline/'))
   );
+}
+
+function agentPath(...segments: string[]) {
+  return `${join(localAgentRoot, ...segments).split('\\').join('/')}/`;
 }
 
 function isHandlerInternalImport(specifier: string) {

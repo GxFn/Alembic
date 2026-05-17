@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ToolRequirementAnalyzer } from '../../lib/agent/forge/ToolRequirementAnalyzer.js';
+import { ToolRequirementAnalyzer } from '@alembic/agent/forge';
 
 /* ────────── Mock capability directory ────────── */
 

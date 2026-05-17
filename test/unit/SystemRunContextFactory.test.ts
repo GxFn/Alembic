@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { SystemRunContextFactory } from '../../lib/agent/service/index.js';
+import { SystemRunContextFactory } from '@alembic/agent/service';
 
 describe('SystemRunContextFactory', () => {
   test('builds projected system run context with explicit scope metadata', () => {

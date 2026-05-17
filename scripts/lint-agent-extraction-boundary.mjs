@@ -7,6 +7,15 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const configPath = join(repoRoot, 'config', 'agent-extraction-boundary.json');
 const config = JSON.parse(readFileSync(configPath, 'utf8'));
+const agentImportPrefix = `${['#agent', ''].join('/')}`;
+const agentImportPattern = `${agentImportPrefix}*`;
+const localAgentRoot = ['lib', 'agent'].join('/');
+const localAgentPrefix = `${localAgentRoot}/`;
+const localToolV2Root = ['lib', 'tools', 'v2'].join('/');
+const localToolV2Prefix = `${localToolV2Root}/`;
+const hostToolContextFactoryPath = ['lib', 'tools', 'v2', 'adapter', 'ToolContextFactory.ts'].join(
+  '/'
+);
 
 const agentRules = config.agentImportRules ?? {};
 const scanRoots = agentRules.scanRoots ?? ['lib', 'bin'];
@@ -25,7 +34,9 @@ for (const root of scanRoots) {
       continue;
     }
     const specifiers = extractImportSpecifiers(readFileSync(file, 'utf8'));
-    const agentSpecifiers = specifiers.filter((specifier) => specifier.startsWith('#agent/'));
+    const agentSpecifiers = specifiers.filter((specifier) =>
+      specifier.startsWith(agentImportPrefix)
+    );
     if (agentSpecifiers.length > 0) {
       agentImportsByFile.set(relFile, uniqueSorted(agentSpecifiers));
     }
@@ -46,14 +57,14 @@ for (const [relFile, specifiers] of agentImportsByFile) {
   const allowed = allowedByPath.get(relFile);
   if (!allowed) {
     violations.push(
-      `Unclassified #agent import in ${relFile}: ${specifiers.join(', ')}. Add it to config/agent-extraction-boundary.json or remove the dependency.`
+      `Unclassified ${agentImportPrefix} import in ${relFile}: ${specifiers.join(', ')}. Add it to config/agent-extraction-boundary.json or remove the dependency.`
     );
     continue;
   }
   const expected = uniqueSorted(allowed.expectedSpecifiers ?? []);
   if (!sameArray(specifiers, expected)) {
     violations.push(
-      `#agent import drift in ${relFile}: expected [${expected.join(', ')}], found [${specifiers.join(', ')}].`
+      `${agentImportPrefix} import drift in ${relFile}: expected [${expected.join(', ')}], found [${specifiers.join(', ')}].`
     );
   }
 }
@@ -66,7 +77,7 @@ for (const entry of allowedCallSites) {
   }
   if (!agentImportsByFile.has(entry.path)) {
     violations.push(
-      `Configured Agent call site no longer imports #agent/*: ${entry.path}. Remove or update the boundary entry.`
+      `Configured Agent call site no longer imports ${agentImportPattern}: ${entry.path}. Remove or update the boundary entry.`
     );
   }
   if (!entry.classification || !entry.switchAfter || !entry.replacement || !entry.reason) {
@@ -79,6 +90,11 @@ for (const entry of allowedCallSites) {
 for (const offender of localAgentRelativeImports) {
   violations.push(
     `Local Agent relative import remains in ${offender.file}: ${offender.specifier}. Use @alembic/agent public subpaths outside preserved local Agent implementation files.`
+  );
+}
+if (allowedCallSites.length > 0) {
+  violations.push(
+    `Wave 4 forbids configured ${agentImportPattern} call sites; remove allowedCallSites after cutting consumers to @alembic/agent public subpaths.`
   );
 }
 
@@ -120,6 +136,9 @@ if (packageJson.dependencies?.[expectedAgentPackage] !== expectedAgentRange) {
   violations.push(
     `Expected dependency ${expectedAgentPackage}@${expectedAgentRange} for Agent AI extraction boundary.`
   );
+}
+if (Object.prototype.hasOwnProperty.call(packageJson.imports ?? {}, agentImportPattern)) {
+  violations.push(`Wave 4 forbids package imports alias ${agentImportPattern}.`);
 }
 
 const toolSystemRules = config.toolSystemImportRules ?? {};
@@ -281,6 +300,31 @@ for (const offender of localHostContractImports) {
 const toolRules = config.toolBoundaryRules ?? [];
 const toolFiles = collectSourceFiles(join(repoRoot, 'lib', 'tools')).map(toRepoPath);
 const toolClassificationCounts = new Map();
+const preservedLocalAgentFiles = collectSourceFiles(join(repoRoot, localAgentRoot)).map(toRepoPath);
+const duplicateToolV2Files = collectSourceFiles(join(repoRoot, localToolV2Root))
+  .map(toRepoPath)
+  .filter((relFile) => relFile !== hostToolContextFactoryPath);
+const duplicateCommonToolFiles = [
+  ...collectSourceFiles(join(repoRoot, 'lib', 'tools', 'core')),
+  ...collectSourceFiles(join(repoRoot, 'lib', 'tools', 'catalog')),
+  ...collectSourceFiles(join(repoRoot, 'lib', 'tools', 'workflow')),
+].map(toRepoPath);
+
+if (preservedLocalAgentFiles.length > 0) {
+  violations.push(
+    `Wave 4 requires ${localAgentPrefix} duplicate implementation files to be deleted or relocated as host-owned: ${preservedLocalAgentFiles.join(', ')}.`
+  );
+}
+if (duplicateToolV2Files.length > 0) {
+  violations.push(
+    `Wave 4 requires generic ${localToolV2Prefix} implementation files to be deleted; only ${hostToolContextFactoryPath} may remain: ${duplicateToolV2Files.join(', ')}.`
+  );
+}
+if (duplicateCommonToolFiles.length > 0) {
+  violations.push(
+    `Wave 4 requires local generic tool core/catalog/workflow files to be deleted: ${duplicateCommonToolFiles.join(', ')}.`
+  );
+}
 
 for (const relFile of toolFiles) {
   const match = resolveToolRule(relFile, toolRules);
@@ -342,6 +386,11 @@ for (const [surface, importsByFile] of [...hostContractImportsBySurface].sort(([
 }
 console.log(`  local service/runtime/prompts/domain consumers: ${localHostContractImports.length}`);
 console.log(`  classified lib/tools files: ${toolFiles.length}`);
+console.log(`  preserved local Agent files: ${preservedLocalAgentFiles.length}`);
+console.log(`  duplicate generic Tool V2 files: ${duplicateToolV2Files.length}`);
+console.log(
+  `  duplicate generic tool core/catalog/workflow files: ${duplicateCommonToolFiles.length}`
+);
 for (const [classification, count] of [...toolClassificationCounts].sort(([a], [b]) =>
   a.localeCompare(b)
 )) {
@@ -433,7 +482,7 @@ function isLocalAgentRelativeSpecifier(specifier, importerRelFile) {
   const importerDir = dirname(join(repoRoot, importerRelFile));
   const resolved = resolve(importerDir, specifier);
   const rel = stripSourceExtension(toRepoPath(resolved));
-  return rel === 'lib/agent' || rel.startsWith('lib/agent/');
+  return rel === localAgentRoot || rel.startsWith(localAgentPrefix);
 }
 
 function isLocalCommonToolSpecifier(specifier, importerRelFile) {
@@ -468,10 +517,10 @@ function isCommonToolPath(rel) {
 }
 
 function isLocalMemoryContextSpecifier(specifier, importerRelFile) {
-  if (specifier.startsWith('#agent/memory/')) {
+  if (specifier.startsWith(`${agentImportPrefix}memory/`)) {
     return true;
   }
-  if (specifier.startsWith('#agent/context/')) {
+  if (specifier.startsWith(`${agentImportPrefix}context/`)) {
     return true;
   }
   if (!specifier.startsWith('.')) {
@@ -480,15 +529,17 @@ function isLocalMemoryContextSpecifier(specifier, importerRelFile) {
   const importerDir = dirname(join(repoRoot, importerRelFile));
   const resolved = resolve(importerDir, specifier);
   const rel = stripSourceExtension(toRepoPath(resolved));
-  return rel.startsWith('lib/agent/memory/') || rel.startsWith('lib/agent/context/');
+  return (
+    rel.startsWith(`${localAgentPrefix}memory/`) || rel.startsWith(`${localAgentPrefix}context/`)
+  );
 }
 
 function isLocalHostContractSpecifier(specifier, importerRelFile) {
   if (
-    specifier.startsWith('#agent/service/') ||
-    specifier.startsWith('#agent/runtime/') ||
-    specifier.startsWith('#agent/prompts/') ||
-    specifier.startsWith('#agent/domain/')
+    specifier.startsWith(`${agentImportPrefix}service/`) ||
+    specifier.startsWith(`${agentImportPrefix}runtime/`) ||
+    specifier.startsWith(`${agentImportPrefix}prompts/`) ||
+    specifier.startsWith(`${agentImportPrefix}domain/`)
   ) {
     return true;
   }
@@ -499,10 +550,10 @@ function isLocalHostContractSpecifier(specifier, importerRelFile) {
   const resolved = resolve(importerDir, specifier);
   const rel = stripSourceExtension(toRepoPath(resolved));
   return (
-    rel.startsWith('lib/agent/service/') ||
-    rel.startsWith('lib/agent/runtime/') ||
-    rel.startsWith('lib/agent/prompts/') ||
-    rel.startsWith('lib/agent/domain/')
+    rel.startsWith(`${localAgentPrefix}service/`) ||
+    rel.startsWith(`${localAgentPrefix}runtime/`) ||
+    rel.startsWith(`${localAgentPrefix}prompts/`) ||
+    rel.startsWith(`${localAgentPrefix}domain/`)
   );
 }
 

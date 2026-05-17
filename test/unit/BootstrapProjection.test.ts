@@ -4,7 +4,7 @@ import {
   projectBootstrapDimensionAgentOutput,
   projectBootstrapSessionResult,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
-import type { AgentRunResult } from '../../lib/agent/service/index.js';
+import type { AgentRunResult } from '@alembic/agent/service';
 
 function makeRunResult(partial: Partial<AgentRunResult>): AgentRunResult {
   return {

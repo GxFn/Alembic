@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'vitest';
-import { BudgetPolicy } from '../../lib/agent/policies/index.js';
+import { BudgetPolicy } from '@alembic/agent/agent';
 import {
   AgentProfileCompiler,
   AgentProfileRegistry,
   AgentStageFactoryRegistry,
-} from '../../lib/agent/service/index.js';
+} from '@alembic/agent/service';
 
 function createCompiler() {
   return new AgentProfileCompiler({

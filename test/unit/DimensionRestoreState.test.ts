@@ -15,7 +15,7 @@ import {
   restoreCheckpointDimensions,
   syncRestoredSessionStoreDigests,
 } from '#workflows/capabilities/execution/internal-agent/DimensionRestoreState.js';
-import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
+import type { SessionStore } from '@alembic/agent/memory';
 import type { IncrementalPlan } from '../../lib/external/mcp/handlers/types.js';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
 

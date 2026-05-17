@@ -16,7 +16,7 @@ import {
   EVOLVER_SYSTEM_PROMPT,
   EVOLVER_TOOLS,
   type EvolutionContext,
-} from '../../lib/agent/prompts/insight-evolver.js';
+} from '@alembic/agent/prompts';
 
 // ── Fixtures ─────────────────────────────────────────────
 

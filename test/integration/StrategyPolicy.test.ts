@@ -11,17 +11,17 @@
  */
 
 import { vi } from 'vitest';
-import { MemoryCoordinator } from '../../lib/agent/memory/MemoryCoordinator.js';
+import { MemoryCoordinator } from '@alembic/agent/memory';
 import {
   BudgetPolicy,
   Policy,
   PolicyEngine,
   QualityGatePolicy,
   SafetyPolicy,
-} from '../../lib/agent/policies/index.js';
-import { createSystemRunContext } from '../../lib/agent/runtime/SystemRunContext.js';
-import { SingleStrategy, Strategy } from '../../lib/agent/strategies/index.js';
-import { PipelineStrategy } from '../../lib/agent/strategies/PipelineStrategy.js';
+} from '@alembic/agent/agent';
+import { createSystemRunContext } from '@alembic/agent/runtime';
+import { SingleStrategy, Strategy } from '@alembic/agent/agent';
+import { PipelineStrategy } from '@alembic/agent/agent';
 
 describe('Integration: Agent Strategies', () => {
   describe('SingleStrategy', () => {

@@ -9,7 +9,6 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type { SignalBus } from '@alembic/core/events';
 import {
   ComplianceReporter,
   CoverageAnalyzer,
@@ -84,9 +83,9 @@ export function register(c: ServiceContainer) {
       ct.get('database') as ConstructorParameters<typeof GuardCheckEngine>[0],
       {
         guardConfig: merged,
-        signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
+        signalBus: ct.singletons.signalBus || undefined,
         knowledgeRepo: ct.get('knowledgeRepository') as KnowledgeRepository,
-      }
+      } as ConstructorParameters<typeof GuardCheckEngine>[1]
     );
   });
 
@@ -100,9 +99,9 @@ export function register(c: ServiceContainer) {
     const dataRoot = resolveDataRoot(ct);
     const wz = ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;
     return new RuleLearner(dataRoot, {
-      signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
+      signalBus: ct.singletons.signalBus || undefined,
       wz,
-    });
+    } as ConstructorParameters<typeof RuleLearner>[1]);
   });
 
   c.singleton('violationsStore', (ct: ServiceContainer) => {
@@ -132,7 +131,7 @@ export function register(c: ServiceContainer) {
         ct.get('feedbackCollector') as ConstructorParameters<typeof GuardFeedbackLoop>[1],
         {
           guardCheckEngine: ct.get('guardCheckEngine'),
-          signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
+          signalBus: ct.singletons.signalBus || undefined,
         } as ConstructorParameters<typeof GuardFeedbackLoop>[2]
       )
   );
@@ -143,8 +142,8 @@ export function register(c: ServiceContainer) {
       ct.get('codeEntityRepository') as CodeEntityRepository,
       ct.get('recipeSourceRefRepository') as SourceRefRepository,
       {
-        signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
-      }
+        signalBus: ct.singletons.signalBus || undefined,
+      } as ConstructorParameters<typeof ReverseGuard>[3]
     );
   });
 

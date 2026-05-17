@@ -226,27 +226,21 @@ export function register(c: ServiceContainer) {
     const sourceRefRepo = ct.get('recipeSourceRefRepository') as SourceRefRepository;
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new SourceRefReconciler(projectRoot, sourceRefRepo, knowledgeRepo, {
-      signalBus:
-        (ct.singletons.signalBus as import('@alembic/core/events').SignalBus | undefined) ||
-        undefined,
-    });
+      signalBus: ct.singletons.signalBus || undefined,
+    } as ConstructorParameters<typeof SourceRefReconciler>[3]);
   });
 
   c.singleton('stagingManager', (ct: ServiceContainer) => {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new StagingManager(knowledgeRepo, {
-      signalBus:
-        (ct.singletons.signalBus as import('@alembic/core/events').SignalBus | undefined) ||
-        undefined,
-    });
+      signalBus: ct.singletons.signalBus || undefined,
+    } as ConstructorParameters<typeof StagingManager>[1]);
   });
 
   c.singleton('decayDetector', (ct: ServiceContainer) => {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new DecayDetector(knowledgeRepo, {
-      signalBus:
-        (ct.singletons.signalBus as import('@alembic/core/events').SignalBus | undefined) ||
-        undefined,
+      signalBus: ct.singletons.signalBus || undefined,
       knowledgeEdgeRepo: ct.services.knowledgeEdgeRepository
         ? (ct.get('knowledgeEdgeRepository') as KnowledgeEdgeRepository)
         : undefined,
@@ -258,25 +252,21 @@ export function register(c: ServiceContainer) {
           getDrizzle(): import('@alembic/core/database').DrizzleDB;
         }
       ).getDrizzle(),
-    });
+    } as ConstructorParameters<typeof DecayDetector>[1]);
   });
 
   c.singleton('redundancyAnalyzer', (ct: ServiceContainer) => {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new RedundancyAnalyzer(knowledgeRepo, {
-      signalBus:
-        (ct.singletons.signalBus as import('@alembic/core/events').SignalBus | undefined) ||
-        undefined,
-    });
+      signalBus: ct.singletons.signalBus || undefined,
+    } as ConstructorParameters<typeof RedundancyAnalyzer>[1]);
   });
 
   c.singleton('enhancementSuggester', (ct: ServiceContainer) => {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new EnhancementSuggester(knowledgeRepo, {
-      signalBus:
-        (ct.singletons.signalBus as import('@alembic/core/events').SignalBus | undefined) ||
-        undefined,
-    });
+      signalBus: ct.singletons.signalBus || undefined,
+    } as ConstructorParameters<typeof EnhancementSuggester>[1]);
   });
 
   c.singleton('warningRepository', (ct: ServiceContainer) => {
@@ -298,7 +288,9 @@ export function register(c: ServiceContainer) {
     const lifecycleEventRepo = ct.get(
       'lifecycleEventRepository'
     ) as EvolutionLifecycleEventRepository;
-    const signalBus = ct.get('signalBus') as import('@alembic/core/events').SignalBus;
+    const signalBus = ct.get('signalBus') as unknown as ConstructorParameters<
+      typeof LifecycleStateMachine
+    >[2];
     const proposalRepo = ct.get('proposalRepository') as EvolutionProposalRepository;
     return new LifecycleStateMachine(knowledgeRepo, lifecycleEventRepo, signalBus, proposalRepo);
   });

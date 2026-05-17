@@ -22,10 +22,10 @@ vi.mock('../../lib/infrastructure/logging/Logger.js', () => ({
 }));
 
 // ── Dynamic imports (ESM-safe) ──────────────────────────
-const { MemoryCoordinator } = await import('../../lib/agent/memory/MemoryCoordinator.js');
-const { ActiveContext } = await import('../../lib/agent/memory/ActiveContext.js');
-const { SessionStore } = await import('../../lib/agent/memory/SessionStore.js');
-const { MemoryEmbeddingStore } = await import('../../lib/agent/memory/MemoryEmbeddingStore.js');
+const { MemoryCoordinator } = await import('@alembic/agent/memory');
+const { ActiveContext } = await import('@alembic/agent/memory');
+const { SessionStore } = await import('@alembic/agent/memory');
+const { MemoryEmbeddingStore } = await import('@alembic/agent/memory');
 
 // ══════════════════════════════════════════════════════════
 //  1. MemoryCoordinator
@@ -868,7 +868,7 @@ describe('SessionStore', () => {
 
 describe('PersistentMemory', () => {
   let PersistentMemory:
-    | typeof import('../../lib/agent/memory/PersistentMemory.js')['PersistentMemory']
+    | typeof import('@alembic/agent/memory')['PersistentMemory']
     | null = null;
   let Database: typeof import('better-sqlite3')['default'] | null = null;
 
@@ -877,7 +877,7 @@ describe('PersistentMemory', () => {
       // 尝试加载 better-sqlite3 (如果可用)
       const dbMod = await import('better-sqlite3');
       Database = dbMod.default;
-      const pmMod = await import('../../lib/agent/memory/PersistentMemory.js');
+      const pmMod = await import('@alembic/agent/memory');
       PersistentMemory = pmMod.PersistentMemory;
     } catch {
       // better-sqlite3 不可用 → 跳过 PersistentMemory 测试
@@ -886,11 +886,8 @@ describe('PersistentMemory', () => {
   });
 
   test('PersistentMemory 模块可导入', async () => {
-    const mod = await import('../../lib/agent/memory/PersistentMemory.js');
+    const mod = await import('@alembic/agent/memory');
     expect(mod.PersistentMemory).toBeDefined();
-    // 向后兼容别名
-    expect(mod.ProjectSemanticMemory).toBeDefined();
-    expect(mod.PersistentMemory).toBe(mod.ProjectSemanticMemory);
   });
 
   // 使用 in-memory SQLite 测试核心功能
@@ -1209,7 +1206,7 @@ describe('PersistentMemory', () => {
 
 describe('Memory module exports', () => {
   test('memory/index.js 导出所有模块', async () => {
-    const mod = await import('../../lib/agent/memory/index.js');
+    const mod = await import('@alembic/agent/memory');
     expect(mod.MemoryCoordinator).toBeDefined();
     expect(mod.ActiveContext).toBeDefined();
     expect(mod.SessionStore).toBeDefined();

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AgentMessage } from '../../lib/agent/runtime/AgentMessage.js';
-import { PipelineStrategy } from '../../lib/agent/strategies/PipelineStrategy.js';
+import { AgentMessage } from '@alembic/agent/runtime';
+import { PipelineStrategy } from '@alembic/agent/agent';
 
 function decisionCall(id: string) {
   return {

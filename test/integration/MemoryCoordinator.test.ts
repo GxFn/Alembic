@@ -9,7 +9,7 @@
  *   - Scope 管理
  */
 
-import { MemoryCoordinator } from '../../lib/agent/memory/MemoryCoordinator.js';
+import { MemoryCoordinator } from '@alembic/agent/memory';
 
 describe('Integration: MemoryCoordinator', () => {
   describe('Construction & budget allocation', () => {

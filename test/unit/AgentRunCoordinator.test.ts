@@ -5,7 +5,7 @@ import {
   AgentRunCoordinator,
   type AgentRunInput,
   AgentStageFactoryRegistry,
-} from '../../lib/agent/service/index.js';
+} from '@alembic/agent/service';
 
 function createCompiler() {
   return new AgentProfileCompiler({

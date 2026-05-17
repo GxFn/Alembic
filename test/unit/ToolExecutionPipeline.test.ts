@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { createToolPipeline } from '#agent/runtime/ToolExecutionPipeline.js';
+import { createToolPipeline } from '@alembic/agent/runtime';
 
 function makeRuntime(structuredContent: Record<string, unknown>) {
   return {

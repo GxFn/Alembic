@@ -12,7 +12,7 @@
  *   - data update
  */
 
-import { AgentPhase, AgentState } from '../../lib/agent/runtime/AgentState.js';
+import { AgentPhase, AgentState } from '@alembic/agent/runtime';
 
 describe('Integration: AgentState', () => {
   describe('Default transitions', () => {

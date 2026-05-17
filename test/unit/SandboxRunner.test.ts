@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SandboxRunner } from '../../lib/agent/forge/SandboxRunner.js';
+import { SandboxRunner } from '@alembic/agent/forge';
 
 describe('SandboxRunner', () => {
   const sandbox = new SandboxRunner();

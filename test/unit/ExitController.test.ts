@@ -4,8 +4,8 @@
  * 覆盖 6 个 check 方法中的全部退出分支（18 条路径）。
  */
 import { describe, expect, it, vi } from 'vitest';
-import type { ExitSignal } from '../../lib/agent/runtime/ExitController.js';
-import { createExitController, ExitController } from '../../lib/agent/runtime/ExitController.js';
+import type { ExitSignal } from '@alembic/agent/runtime';
+import { createExitController, ExitController } from '@alembic/agent/runtime';
 
 /* ═══════════════════════════════════════════
  *  Helpers

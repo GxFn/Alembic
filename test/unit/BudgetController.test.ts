@@ -15,7 +15,7 @@ import {
   BudgetController,
   type BudgetControllerConfig,
   type TokenUsageAccumulator,
-} from '../../lib/agent/runtime/BudgetController.js';
+} from '@alembic/agent/runtime';
 
 /* ── Mock Factories ─────────────────────────────────── */
 

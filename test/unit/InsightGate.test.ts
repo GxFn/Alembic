@@ -3,7 +3,7 @@ import {
   analysisQualityGate,
   buildAnalysisArtifact,
   insightGateEvaluator,
-} from '../../lib/agent/prompts/insight-gate.js';
+} from '@alembic/agent/prompts';
 
 describe('insight gate analysis artifact', () => {
   const evidenceToolCalls = [

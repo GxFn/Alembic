@@ -7,8 +7,8 @@ vi.mock('../../lib/infrastructure/logging/Logger.js', () => ({
   default: { getInstance: () => mockLogger },
 }));
 
-const { ActiveContext: ReasoningTrace } = await import('../../lib/agent/memory/ActiveContext.js');
-const { ExplorationTracker } = await import('../../lib/agent/context/ExplorationTracker.js');
+const { ActiveContext: ReasoningTrace } = await import('@alembic/agent/memory');
+const { ExplorationTracker } = await import('@alembic/agent/context');
 
 // ─── ReasoningTrace ─────────────────────────────────────
 describe('ReasoningTrace', () => {

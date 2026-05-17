@@ -3,8 +3,8 @@ import {
   type BootstrapFileEntry,
   buildBootstrapDimensionRunInput,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
-import type { MemoryCoordinator } from '../../lib/agent/memory/MemoryCoordinator.js';
-import type { SystemRunContext } from '../../lib/agent/runtime/SystemRunContext.js';
+import type { MemoryCoordinator } from '@alembic/agent/memory';
+import type { SystemRunContext } from '@alembic/agent/runtime';
 
 function makeSystemRunContext(): SystemRunContext {
   const memoryCoordinator = { marker: 'memory' } as unknown as MemoryCoordinator;

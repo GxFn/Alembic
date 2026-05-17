@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { AgentRunInput, AgentRunResult } from '#agent/service/index.js';
+import type { AgentRunInput, AgentRunResult } from '@alembic/agent/service';
 import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import {
   buildBootstrapSessionExecutionInput,

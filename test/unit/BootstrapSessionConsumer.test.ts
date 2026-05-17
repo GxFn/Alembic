@@ -4,8 +4,8 @@ import {
   consumeMissingBootstrapDimensions,
   type DimensionStat,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
-import type { AgentRunResult } from '../../lib/agent/service/index.js';
+import type { SessionStore } from '@alembic/agent/memory';
+import type { AgentRunResult } from '@alembic/agent/service';
 
 function makeRunResult(partial: Partial<AgentRunResult>): AgentRunResult {
   return {

@@ -1,7 +1,7 @@
 import type { KnowledgeRescanExecutionDecision } from '@alembic/core/host-agent-workflows';
 import { describe, expect, test, vi } from 'vitest';
-import { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
-import type { SystemRunContextFactory } from '#agent/service/index.js';
+import { MemoryCoordinator } from '@alembic/agent/memory';
+import type { SystemRunContextFactory } from '@alembic/agent/service';
 import {
   buildPanoramaContext,
   createBootstrapDimensionRuntimeInput,
