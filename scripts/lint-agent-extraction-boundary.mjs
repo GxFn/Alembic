@@ -16,6 +16,8 @@ const localToolV2Prefix = `${localToolV2Root}/`;
 const hostToolContextFactoryPath = ['lib', 'tools', 'v2', 'adapter', 'ToolContextFactory.ts'].join(
   '/'
 );
+const distLocalAgentRoot = ['dist', 'lib', 'agent'].join('/');
+const distLocalToolV2Root = ['dist', 'lib', 'tools', 'v2'].join('/');
 const terminalContractEntrypoint = '@alembic/agent/tools/terminal';
 const terminalCapabilitiesRoot = ['lib', 'tools', 'adapters', 'terminal-capabilities'].join('/');
 const terminalPolicyRoot = ['lib', 'tools', 'adapters', 'terminal-policy'].join('/');
@@ -346,6 +348,37 @@ const duplicateTerminalSessionPlanFiles = existsSync(join(repoRoot, terminalSess
 const duplicateTerminalEnvelopeFiles = existsSync(join(repoRoot, terminalEnvelopePath))
   ? [terminalEnvelopePath]
   : [];
+const staleDistArtifactFiles = [
+  ...collectSourceFiles(join(repoRoot, distLocalAgentRoot)),
+  ...collectSourceFiles(join(repoRoot, 'dist', 'lib', 'tools', 'core')),
+  ...collectSourceFiles(join(repoRoot, 'dist', 'lib', 'tools', 'catalog')),
+  ...collectSourceFiles(join(repoRoot, 'dist', 'lib', 'tools', 'workflow')),
+  ...collectSourceFiles(join(repoRoot, distLocalToolV2Root)).filter(
+    (file) =>
+      ![
+        join(repoRoot, 'dist', 'lib', 'tools', 'v2', 'adapter', 'ToolContextFactory.js'),
+        join(repoRoot, 'dist', 'lib', 'tools', 'v2', 'adapter', 'ToolContextFactory.d.ts'),
+      ].includes(file)
+  ),
+  ...collectSourceFiles(
+    join(repoRoot, 'dist', 'lib', 'tools', 'adapters', 'terminal-capabilities')
+  ),
+  ...collectSourceFiles(join(repoRoot, 'dist', 'lib', 'tools', 'adapters', 'terminal-policy')),
+  ...existingFiles([
+    join(repoRoot, 'dist', 'lib', 'tools', 'adapters', 'TerminalSession.js'),
+    join(repoRoot, 'dist', 'lib', 'tools', 'adapters', 'TerminalSession.d.ts'),
+    join(repoRoot, 'dist', 'lib', 'tools', 'adapters', 'terminal-adapter', 'TerminalEnvelopes.js'),
+    join(
+      repoRoot,
+      'dist',
+      'lib',
+      'tools',
+      'adapters',
+      'terminal-adapter',
+      'TerminalEnvelopes.d.ts'
+    ),
+  ]),
+].map(toRepoPath);
 
 if (preservedLocalAgentFiles.length > 0) {
   violations.push(
@@ -385,6 +418,11 @@ if (duplicateTerminalSessionPlanFiles.length > 0) {
 if (duplicateTerminalEnvelopeFiles.length > 0) {
   violations.push(
     `Wave 5 requires local portable terminal envelope duplicate files to be deleted: ${duplicateTerminalEnvelopeFiles.join(', ')}.`
+  );
+}
+if (staleDistArtifactFiles.length > 0) {
+  violations.push(
+    `Final readiness forbids stale built artifacts for deleted Agent/tool/terminal duplicates. Run npm run build to clean dist: ${staleDistArtifactFiles.join(', ')}.`
   );
 }
 
@@ -460,6 +498,7 @@ console.log(`  duplicate terminal capability files: ${duplicateTerminalCapabilit
 console.log(`  duplicate terminal policy files: ${duplicateTerminalPolicyFiles.length}`);
 console.log(`  duplicate terminal session plan files: ${duplicateTerminalSessionPlanFiles.length}`);
 console.log(`  duplicate terminal envelope files: ${duplicateTerminalEnvelopeFiles.length}`);
+console.log(`  stale deleted duplicate dist artifacts: ${staleDistArtifactFiles.length}`);
 for (const [classification, count] of [...toolClassificationCounts].sort(([a], [b]) =>
   a.localeCompare(b)
 )) {
@@ -480,6 +519,10 @@ function collectSourceFiles(dir) {
     }
   }
   return files;
+}
+
+function existingFiles(paths) {
+  return paths.filter((path) => existsSync(path));
 }
 
 function isSourceFile(name) {

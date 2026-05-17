@@ -58,9 +58,10 @@
     }
   },
   "scripts": {
-    "build": "npm run build:core && tsc",
+    "build": "npm run build:core && npm run clean:dist && tsc",
     "build:check": "npm run build:core && tsc --noEmit",
     "build:core": "tsc -p vendor/AlembicCore/tsconfig.json",
+    "clean:dist": "node scripts/clean-dist.mjs",
     "postbuild": "node scripts/postbuild.mjs",
     "build:screenshot": "swiftc -O -framework ScreenCaptureKit -framework AppKit resources/native-ui/screenshot.swift -o resources/native-ui/screenshot",
     "install:vscode-ext": "npm ci --prefix resources/vscode-ext",
@@ -161,6 +162,7 @@
   "files": [
     "dist",
     "config",
+    "scripts/clean-dist.mjs",
     "scripts/postbuild.mjs",
     "injectable-skills",
     "templates",
