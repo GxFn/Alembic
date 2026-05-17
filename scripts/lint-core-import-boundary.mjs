@@ -19,6 +19,7 @@ const coreImportPattern =
 
 const boundaryConfig = JSON.parse(readFileSync(boundaryConfigPath, 'utf8'));
 const allowedSpecifiers = new Set(boundaryConfig.allowedSpecifiers);
+const frozenMaxOccurrences = boundaryConfig.frozenMaxOccurrences ?? {};
 
 const filesOutput = execFileSync('git', ['ls-files', ...scanRoots], {
   cwd: repoRoot,
@@ -31,6 +32,7 @@ const files = filesOutput
   .filter((file) => sourceFilePattern.test(file));
 
 const seenSpecifiers = new Set();
+const seenSpecifierCounts = new Map();
 const violations = [];
 
 for (const file of files) {
@@ -38,6 +40,7 @@ for (const file of files) {
   for (const match of content.matchAll(coreImportPattern)) {
     const specifier = match[1];
     seenSpecifiers.add(specifier);
+    seenSpecifierCounts.set(specifier, (seenSpecifierCounts.get(specifier) ?? 0) + 1);
 
     if (allowedSpecifiers.has(specifier)) {
       continue;
@@ -63,10 +66,39 @@ if (violations.length > 0) {
   process.exit(1);
 }
 
+const frozenViolations = [];
+for (const [specifier, maxOccurrences] of Object.entries(frozenMaxOccurrences)) {
+  const current = seenSpecifierCounts.get(specifier) ?? 0;
+  if (current > maxOccurrences) {
+    frozenViolations.push({ current, maxOccurrences, specifier });
+  }
+}
+
+if (frozenViolations.length > 0) {
+  console.error('\nFrozen Core import usage increased:\n');
+  console.error(
+    'These @alembic/core deep paths are transitional. New code must use a stable public entrypoint or wait for Core to expose one.\n'
+  );
+
+  for (const violation of frozenViolations) {
+    console.error(
+      `  ${violation.specifier}: ${violation.current} current, ${violation.maxOccurrences} allowed`
+    );
+  }
+
+  console.error(
+    '\nIf this increase is intentional, record the Core API review before raising the limit.'
+  );
+  process.exit(1);
+}
+
 const staleSpecifiers = [...allowedSpecifiers].filter(
   (specifier) => !seenSpecifiers.has(specifier)
 );
+const reducedFrozenSpecifiers = Object.entries(frozenMaxOccurrences).filter(
+  ([specifier, maxOccurrences]) => (seenSpecifierCounts.get(specifier) ?? 0) < maxOccurrences
+);
 
 console.log(
-  `Core import boundary check passed: ${seenSpecifiers.size} current specifier(s), ${staleSpecifiers.length} stale allowlist entries.`
+  `Core import boundary check passed: ${seenSpecifiers.size} current specifier(s), ${staleSpecifiers.length} stale allowlist entries, ${reducedFrozenSpecifiers.length} reduced frozen entries.`
 );
