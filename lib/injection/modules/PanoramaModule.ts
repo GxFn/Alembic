@@ -13,10 +13,12 @@
  * @module PanoramaModule
  */
 
-import type { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
-import type { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
-import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
-import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import type {
+  BootstrapRepository,
+  CodeEntityRepository,
+  KnowledgeEdgeRepository,
+  KnowledgeRepository,
+} from '@alembic/core/repositories';
 import { CouplingAnalyzer } from '@alembic/core/service/panorama/CouplingAnalyzer';
 import { DimensionAnalyzer } from '@alembic/core/service/panorama/DimensionAnalyzer';
 import { LayerInferrer } from '@alembic/core/service/panorama/LayerInferrer';
@@ -38,13 +40,13 @@ export const PanoramaModule = {
     const getProjectRoot = () => ct.config?.projectRoot ?? process.cwd();
 
     const getBootstrapRepo = () =>
-      container.get('bootstrapRepository') as unknown as BootstrapRepositoryImpl;
+      container.get('bootstrapRepository') as unknown as BootstrapRepository;
     const getEntityRepo = () =>
-      container.get('codeEntityRepository') as unknown as CodeEntityRepositoryImpl;
+      container.get('codeEntityRepository') as unknown as CodeEntityRepository;
     const getEdgeRepo = () =>
-      container.get('knowledgeEdgeRepository') as unknown as KnowledgeEdgeRepositoryImpl;
+      container.get('knowledgeEdgeRepository') as unknown as KnowledgeEdgeRepository;
     const getKnowledgeRepo = () =>
-      container.get('knowledgeRepository') as unknown as KnowledgeRepositoryImpl;
+      container.get('knowledgeRepository') as unknown as KnowledgeRepository;
 
     ct.singleton(
       'moduleDiscoverer',

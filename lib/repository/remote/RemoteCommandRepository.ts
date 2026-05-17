@@ -12,7 +12,7 @@
  * @module repository/remote/RemoteCommandRepository
  */
 
-import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import type { DrizzleDB } from '@alembic/core/database';
 import { getDrizzle } from '@alembic/core/infrastructure/database/drizzle';
 import { remoteCommands, remoteState } from '@alembic/core/infrastructure/database/drizzle/schema';
 import Logger from '@alembic/core/infrastructure/logging/Logger';

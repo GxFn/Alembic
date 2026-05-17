@@ -18,7 +18,7 @@
  * @module infrastructure/cache/CacheCoordinator
  */
 
-import type { SqliteDatabase } from '@alembic/core/infrastructure/database/DatabaseConnection';
+import type { SqliteDatabase } from '@alembic/core/database';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { Startable } from '@alembic/core/shared/lifecycle';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';

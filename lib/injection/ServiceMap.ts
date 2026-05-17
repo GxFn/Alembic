@@ -10,25 +10,27 @@
 // ── Core AST / Discovery / Enhancement ──
 import type ProjectGraph from '@alembic/core/core/ast/ProjectGraph';
 import type { JobStore } from '@alembic/core/daemon';
+import type { DatabaseConnection } from '@alembic/core/database';
 import type DimensionCopy from '@alembic/core/domain/dimension/DimensionCopy';
-import type DatabaseConnection from '@alembic/core/infrastructure/database/DatabaseConnection';
 import type { EventBus } from '@alembic/core/infrastructure/event/EventBus';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
 import type Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type { IndexingPipeline } from '@alembic/core/infrastructure/vector/IndexingPipeline';
 import type { VectorStore } from '@alembic/core/infrastructure/vector/VectorStore';
-import type { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
-import type { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
-import type { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
-import type { WarningRepository } from '@alembic/core/repository/evolution/WarningRepository';
-import type { GuardViolationRepositoryImpl } from '@alembic/core/repository/guard/GuardViolationRepository';
-import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
 // ── Repository Types ──
-import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import type {
+  BootstrapRepository,
+  CodeEntityRepository,
+  EvolutionProposalRepository,
+  EvolutionWarningRepository,
+  GuardViolationRepository,
+  KnowledgeEdgeRepository,
+  KnowledgeRepository,
+  SessionRepository,
+  SourceRefRepository,
+} from '@alembic/core/repositories';
 import type { MemoryRepositoryImpl } from '@alembic/core/repository/memory/MemoryRepository';
-import type { SessionRepositoryImpl } from '@alembic/core/repository/session/SessionRepository';
-import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
 import type { TokenUsageStore } from '@alembic/core/repository/token/TokenUsageStore';
 import type { ComplianceReporter } from '@alembic/core/service/guard/ComplianceReporter';
 import type { ExclusionManager } from '@alembic/core/service/guard/ExclusionManager';
@@ -112,18 +114,18 @@ export interface ServiceMap {
   eventBus: EventBus;
   bootstrapTaskManager: BootstrapTaskManager;
   jobStore: JobStore;
-  knowledgeRepository: KnowledgeRepositoryImpl;
-  knowledgeEdgeRepository: KnowledgeEdgeRepositoryImpl;
-  codeEntityRepository: CodeEntityRepositoryImpl;
-  bootstrapRepository: BootstrapRepositoryImpl;
-  guardViolationRepository: GuardViolationRepositoryImpl;
+  knowledgeRepository: KnowledgeRepository;
+  knowledgeEdgeRepository: KnowledgeEdgeRepository;
+  codeEntityRepository: CodeEntityRepository;
+  bootstrapRepository: BootstrapRepository;
+  guardViolationRepository: GuardViolationRepository;
   auditRepository: AuditRepositoryImpl;
   memoryRepository: MemoryRepositoryImpl;
-  sessionRepository: SessionRepositoryImpl;
-  proposalRepository: ProposalRepository;
-  warningRepository: WarningRepository;
+  sessionRepository: SessionRepository;
+  proposalRepository: EvolutionProposalRepository;
+  warningRepository: EvolutionWarningRepository;
   remoteCommandRepository: RemoteCommandRepository;
-  recipeSourceRefRepository: RecipeSourceRefRepositoryImpl;
+  recipeSourceRefRepository: SourceRefRepository;
   knowledgeFileWriter: KnowledgeFileWriter;
   knowledgeSyncService: KnowledgeSyncService;
   terminalSessionManager: InMemoryTerminalSessionManager;

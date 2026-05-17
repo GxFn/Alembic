@@ -10,11 +10,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
-import type { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
-import type { GuardViolationRepositoryImpl } from '@alembic/core/repository/guard/GuardViolationRepository';
-import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import type {
+  CodeEntityRepository,
+  GuardViolationRepository,
+  KnowledgeRepository,
+  SourceRefRepository,
+} from '@alembic/core/repositories';
 import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
-import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
 import { ComplianceReporter } from '@alembic/core/service/guard/ComplianceReporter';
 import { CoverageAnalyzer } from '@alembic/core/service/guard/CoverageAnalyzer';
 import { ExclusionManager } from '@alembic/core/service/guard/ExclusionManager';
@@ -81,7 +83,7 @@ export function register(c: ServiceContainer) {
       {
         guardConfig: merged,
         signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
-        knowledgeRepo: ct.get('knowledgeRepository') as KnowledgeRepositoryImpl,
+        knowledgeRepo: ct.get('knowledgeRepository') as KnowledgeRepository,
       }
     );
   });
@@ -139,9 +141,9 @@ export function register(c: ServiceContainer) {
 
   c.singleton('reverseGuard', (ct: ServiceContainer) => {
     return new ReverseGuard(
-      ct.get('knowledgeRepository') as KnowledgeRepositoryImpl,
-      ct.get('codeEntityRepository') as CodeEntityRepositoryImpl,
-      ct.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl,
+      ct.get('knowledgeRepository') as KnowledgeRepository,
+      ct.get('codeEntityRepository') as CodeEntityRepository,
+      ct.get('recipeSourceRefRepository') as SourceRefRepository,
       {
         signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
       }
@@ -164,8 +166,8 @@ export function register(c: ServiceContainer) {
       /* ruleLearner not yet available */
     }
     return new CoverageAnalyzer(
-      ct.get('knowledgeRepository') as KnowledgeRepositoryImpl,
-      ct.get('guardViolationRepository') as GuardViolationRepositoryImpl,
+      ct.get('knowledgeRepository') as KnowledgeRepository,
+      ct.get('guardViolationRepository') as GuardViolationRepository,
       ruleLearner as ConstructorParameters<typeof CoverageAnalyzer>[2]
     );
   });

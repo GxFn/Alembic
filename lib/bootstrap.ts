@@ -1,5 +1,5 @@
 import path from 'node:path';
-import DatabaseConnection from '@alembic/core/infrastructure/database/DatabaseConnection';
+import { DatabaseConnection } from '@alembic/core/database';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
 import pathGuard from '@alembic/core/shared/PathGuard';

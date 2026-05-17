@@ -18,8 +18,7 @@
 import { isConsumable, isDegraded } from '@alembic/core/domain/knowledge/Lifecycle';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
-import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
-import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
+import type { KnowledgeRepository, SourceRefRepository } from '@alembic/core/repositories';
 import {
   assessFileImpact,
   extractRecipeTokens,
@@ -51,8 +50,8 @@ const IMPACT_WEIGHTS: Record<ImpactLevel, number> = {
 
 export class FileChangeHandler implements FileChangeSubscriber {
   readonly name = 'FileChangeHandler';
-  readonly #sourceRefRepo: RecipeSourceRefRepositoryImpl;
-  readonly #knowledgeRepo: KnowledgeRepositoryImpl;
+  readonly #sourceRefRepo: SourceRefRepository;
+  readonly #knowledgeRepo: KnowledgeRepository;
   readonly #contentPatcher: ContentPatcher;
   readonly #signalBus: SignalBus | null;
   readonly #gateway: EvolutionGateway;
@@ -61,8 +60,8 @@ export class FileChangeHandler implements FileChangeSubscriber {
   readonly #logger = Logger.getInstance();
 
   constructor(
-    sourceRefRepo: RecipeSourceRefRepositoryImpl,
-    knowledgeRepo: KnowledgeRepositoryImpl,
+    sourceRefRepo: SourceRefRepository,
+    knowledgeRepo: KnowledgeRepository,
     contentPatcher: ContentPatcher,
     options: {
       signalBus?: SignalBus;

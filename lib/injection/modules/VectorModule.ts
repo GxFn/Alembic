@@ -59,7 +59,7 @@ export function register(c: ServiceContainer) {
         syncDebounceMs: (config.syncDebounceMs as number) || 2000,
         drizzle: ct.services.database
           ? ((ct.get('database') as unknown as { getDrizzle?(): unknown }).getDrizzle?.() as
-              | import('@alembic/core/infrastructure/database/drizzle').DrizzleDB
+              | import('@alembic/core/database').DrizzleDB
               | undefined)
           : undefined,
       });

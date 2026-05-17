@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import DatabaseConnection from '@alembic/core/infrastructure/database/DatabaseConnection';
+import { DatabaseConnection } from '@alembic/core/database';
 import { vi } from 'vitest';
 import Constitution from '../../lib/core/constitution/Constitution.js';
 import ConstitutionValidator from '../../lib/core/constitution/ConstitutionValidator.js';

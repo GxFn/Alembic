@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import DatabaseConnection from '@alembic/core/infrastructure/database/DatabaseConnection';
+import { DatabaseConnection } from '@alembic/core/database';
 import AuditLogger from '../../lib/infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../lib/infrastructure/audit/AuditStore.js';
 

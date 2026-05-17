@@ -7,10 +7,12 @@
  * 所有方法返回安全默认值 (空数组/0/null)，可通过 opts 覆盖关键返回值。
  */
 
-import type { BootstrapRepositoryImpl } from '@alembic/core/repository/bootstrap/BootstrapRepository';
-import type { CodeEntityRepositoryImpl } from '@alembic/core/repository/code/CodeEntityRepository';
-import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
-import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import type {
+  BootstrapRepository,
+  CodeEntityRepository,
+  KnowledgeEdgeRepository,
+  KnowledgeRepository,
+} from '@alembic/core/repositories';
 
 /* ═══ Types ═══════════════════════════════════════════════ */
 
@@ -67,7 +69,7 @@ function mapMockEntity(raw: MockEntity) {
   };
 }
 
-export function createMockEntityRepo(opts: MockRepoOptions = {}): CodeEntityRepositoryImpl {
+export function createMockEntityRepo(opts: MockRepoOptions = {}): CodeEntityRepository {
   const entities = opts.entities ?? [];
 
   return {
@@ -140,7 +142,7 @@ export function createMockEntityRepo(opts: MockRepoOptions = {}): CodeEntityRepo
     getEntityCount(_projectRoot: string) {
       return opts.entityCount ?? entities.length;
     },
-  } as unknown as CodeEntityRepositoryImpl;
+  } as unknown as CodeEntityRepository;
 }
 
 /* ═══ KnowledgeEdgeRepository Mock ════════════════════════ */
@@ -160,7 +162,7 @@ function mapMockEdge(raw: MockEdge) {
   };
 }
 
-export function createMockEdgeRepo(opts: MockRepoOptions = {}): KnowledgeEdgeRepositoryImpl {
+export function createMockEdgeRepo(opts: MockRepoOptions = {}): KnowledgeEdgeRepository {
   const edges = opts.edges ?? [];
 
   return {
@@ -224,22 +226,22 @@ export function createMockEdgeRepo(opts: MockRepoOptions = {}): KnowledgeEdgeRep
     findPatternsUsedByEntities(_projectRoot: string, _filePaths: string[]) {
       return opts.patterns ?? [];
     },
-  } as unknown as KnowledgeEdgeRepositoryImpl;
+  } as unknown as KnowledgeEdgeRepository;
 }
 
 /* ═══ BootstrapRepository Mock ════════════════════════════ */
 
-export function createMockBootstrapRepo(opts: MockRepoOptions = {}): BootstrapRepositoryImpl {
+export function createMockBootstrapRepo(opts: MockRepoOptions = {}): BootstrapRepository {
   return {
     getLatestPrimaryLang(_projectRoot: string) {
       return opts.primaryLang ?? null;
     },
-  } as unknown as BootstrapRepositoryImpl;
+  } as unknown as BootstrapRepository;
 }
 
 /* ═══ KnowledgeRepository Mock ════════════════════════════ */
 
-export function createMockKnowledgeRepo(opts: MockRepoOptions = {}): KnowledgeRepositoryImpl {
+export function createMockKnowledgeRepo(opts: MockRepoOptions = {}): KnowledgeRepository {
   return {
     countByCountableLifecycles() {
       return opts.recipeCount ?? 0;
@@ -255,7 +257,7 @@ export function createMockKnowledgeRepo(opts: MockRepoOptions = {}): KnowledgeRe
     ) {
       return [];
     },
-  } as unknown as KnowledgeRepositoryImpl;
+  } as unknown as KnowledgeRepository;
 }
 
 /* ═══ Bundle Helper ═══════════════════════════════════════ */

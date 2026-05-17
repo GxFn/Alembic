@@ -20,7 +20,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import type { DrizzleDB } from '@alembic/core/database';
 import * as schema from '@alembic/core/infrastructure/database/drizzle/schema';
 import { semanticMemories } from '@alembic/core/infrastructure/database/drizzle/schema';
 import { jaccardSimilarity, tokenizeForSimilarity } from '@alembic/core/shared/similarity';

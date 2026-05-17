@@ -1,6 +1,6 @@
 /** AuditStore - 审计日志存储（全 Drizzle 类型安全） */
 
-import type { DrizzleDB } from '@alembic/core/infrastructure/database/drizzle';
+import type { DrizzleDB } from '@alembic/core/database';
 import { getDrizzle } from '@alembic/core/infrastructure/database/drizzle';
 import { auditLogs } from '@alembic/core/infrastructure/database/drizzle/schema';
 import { and, avg, count, desc, eq, gte, lte, sql } from 'drizzle-orm';

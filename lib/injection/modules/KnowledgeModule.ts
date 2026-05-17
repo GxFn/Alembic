@@ -15,12 +15,13 @@ import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStor
 import { HnswVectorAdapter } from '@alembic/core/infrastructure/vector/HnswVectorAdapter';
 import { IndexingPipeline } from '@alembic/core/infrastructure/vector/IndexingPipeline';
 import { JsonVectorAdapter } from '@alembic/core/infrastructure/vector/JsonVectorAdapter';
-import { LifecycleEventRepository } from '@alembic/core/repository/evolution/LifecycleEventRepository';
-import type { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
-import { WarningRepository } from '@alembic/core/repository/evolution/WarningRepository';
-import type { KnowledgeEdgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeEdgeRepository';
-import type KnowledgeRepositoryImpl from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
-import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
+import type {
+  EvolutionLifecycleEventRepository,
+  EvolutionProposalRepository,
+  KnowledgeEdgeRepository,
+  KnowledgeRepository,
+  SourceRefRepository,
+} from '@alembic/core/repositories';
 import { findSimilarRecipes } from '@alembic/core/service/candidate/SimilarityService';
 import { ConsolidationAdvisor } from '@alembic/core/service/evolution/ConsolidationAdvisor';
 import { ContentPatcher } from '@alembic/core/service/evolution/ContentPatcher';
@@ -48,6 +49,7 @@ import {
 import { FileChangeHandler } from '../../service/evolution/FileChangeHandler.js';
 import { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
+import { getCoreRepositoryBundle } from './InfraModule.js';
 
 export function register(c: ServiceContainer) {
   // ═══ Knowledge ═══
@@ -228,8 +230,8 @@ export function register(c: ServiceContainer) {
 
   c.singleton('sourceRefReconciler', (ct: ServiceContainer) => {
     const projectRoot = resolveProjectRoot();
-    const sourceRefRepo = ct.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl;
-    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    const sourceRefRepo = ct.get('recipeSourceRefRepository') as SourceRefRepository;
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new SourceRefReconciler(projectRoot, sourceRefRepo, knowledgeRepo, {
       signalBus:
         (ct.singletons.signalBus as
@@ -239,7 +241,7 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('stagingManager', (ct: ServiceContainer) => {
-    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new StagingManager(knowledgeRepo, {
       signalBus:
         (ct.singletons.signalBus as
@@ -249,28 +251,28 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('decayDetector', (ct: ServiceContainer) => {
-    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new DecayDetector(knowledgeRepo, {
       signalBus:
         (ct.singletons.signalBus as
           | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
           | undefined) || undefined,
       knowledgeEdgeRepo: ct.services.knowledgeEdgeRepository
-        ? (ct.get('knowledgeEdgeRepository') as KnowledgeEdgeRepositoryImpl)
+        ? (ct.get('knowledgeEdgeRepository') as KnowledgeEdgeRepository)
         : undefined,
       sourceRefRepo: ct.services.recipeSourceRefRepository
-        ? (ct.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl)
+        ? (ct.get('recipeSourceRefRepository') as SourceRefRepository)
         : undefined,
       drizzle: (
         ct.get('database') as unknown as {
-          getDrizzle(): import('@alembic/core/infrastructure/database/drizzle').DrizzleDB;
+          getDrizzle(): import('@alembic/core/database').DrizzleDB;
         }
       ).getDrizzle(),
     });
   });
 
   c.singleton('redundancyAnalyzer', (ct: ServiceContainer) => {
-    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new RedundancyAnalyzer(knowledgeRepo, {
       signalBus:
         (ct.singletons.signalBus as
@@ -280,7 +282,7 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('enhancementSuggester', (ct: ServiceContainer) => {
-    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new EnhancementSuggester(knowledgeRepo, {
       signalBus:
         (ct.singletons.signalBus as
@@ -290,53 +292,49 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('warningRepository', (ct: ServiceContainer) => {
-    const db = ct.get('database') as unknown as { getDrizzle(): unknown };
-    const drizzle = db.getDrizzle();
-    return new WarningRepository(drizzle as ConstructorParameters<typeof WarningRepository>[0]);
+    return getCoreRepositoryBundle(ct).warningRepository;
   });
 
   c.singleton('contentPatcher', (ct: ServiceContainer) => {
-    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
-    const sourceRefRepo = ct.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl;
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
+    const sourceRefRepo = ct.get('recipeSourceRefRepository') as SourceRefRepository;
     return new ContentPatcher(knowledgeRepo, sourceRefRepo);
   });
 
   c.singleton('lifecycleEventRepository', (ct: ServiceContainer) => {
-    const db = ct.get('database') as unknown as { getDrizzle(): unknown };
-    const drizzle = db.getDrizzle();
-    return new LifecycleEventRepository(
-      drizzle as ConstructorParameters<typeof LifecycleEventRepository>[0]
-    );
+    return getCoreRepositoryBundle(ct).lifecycleEventRepository;
   });
 
   c.singleton('lifecycleStateMachine', (ct: ServiceContainer) => {
-    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
-    const lifecycleEventRepo = ct.get('lifecycleEventRepository') as LifecycleEventRepository;
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
+    const lifecycleEventRepo = ct.get(
+      'lifecycleEventRepository'
+    ) as EvolutionLifecycleEventRepository;
     const signalBus = ct.get(
       'signalBus'
     ) as import('@alembic/core/infrastructure/signal/SignalBus').SignalBus;
-    const proposalRepo = ct.get('proposalRepository') as ProposalRepository;
+    const proposalRepo = ct.get('proposalRepository') as EvolutionProposalRepository;
     return new LifecycleStateMachine(knowledgeRepo, lifecycleEventRepo, signalBus, proposalRepo);
   });
 
   c.singleton('proposalExecutor', (ct: ServiceContainer) => {
-    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
-    const proposalRepo = ct.get('proposalRepository') as ProposalRepository;
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
+    const proposalRepo = ct.get('proposalRepository') as EvolutionProposalRepository;
     const lifecycle = ct.get('lifecycleStateMachine') as LifecycleStateMachine;
     const contentPatcher = ct.get('contentPatcher') as ContentPatcher;
-    const edgeRepo = ct.get('knowledgeEdgeRepository') as KnowledgeEdgeRepositoryImpl;
+    const edgeRepo = ct.get('knowledgeEdgeRepository') as KnowledgeEdgeRepository;
     return new ProposalExecutor(knowledgeRepo, proposalRepo, lifecycle, contentPatcher, edgeRepo);
   });
 
   c.singleton('consolidationAdvisor', (ct: ServiceContainer) => {
-    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new ConsolidationAdvisor(knowledgeRepo);
   });
 
   c.singleton('evolutionGateway', (ct: ServiceContainer) => {
-    const proposalRepo = ct.get('proposalRepository') as ProposalRepository;
+    const proposalRepo = ct.get('proposalRepository') as EvolutionProposalRepository;
     const lifecycle = ct.get('lifecycleStateMachine') as LifecycleStateMachine;
-    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new EvolutionGateway(proposalRepo, lifecycle, knowledgeRepo);
   });
 
@@ -380,8 +378,8 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('fileChangeHandler', (ct: ServiceContainer) => {
-    const sourceRefRepo = ct.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl;
-    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    const sourceRefRepo = ct.get('recipeSourceRefRepository') as SourceRefRepository;
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     const contentPatcher = ct.get('contentPatcher') as ContentPatcher;
     const gateway = ct.get('evolutionGateway') as EvolutionGateway;
     const dataRoot = resolveDataRoot(ct) as string;
@@ -461,8 +459,8 @@ function await_import_EventBus() {
  */
 async function _populateSourceRefsForEntry(c: ServiceContainer, entryId: string): Promise<void> {
   try {
-    const knowledgeRepo = c.get('knowledgeRepository') as KnowledgeRepositoryImpl;
-    const sourceRefRepo = c.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl;
+    const knowledgeRepo = c.get('knowledgeRepository') as KnowledgeRepository;
+    const sourceRefRepo = c.get('recipeSourceRefRepository') as SourceRefRepository;
 
     const row = await knowledgeRepo.findSourceFileAndReasoning(entryId);
     if (!row?.reasoning) {

@@ -212,13 +212,11 @@ export class ServiceContainer {
     try {
       const db = this.singletons.database as
         | {
-            getDb?: () => import('@alembic/core/infrastructure/database/DatabaseConnection').SqliteDatabase;
+            getDb?: () => import('@alembic/core/database').SqliteDatabase;
           }
         | undefined;
       const rawDb = db
-        ? (unwrapRawDb(db as unknown) as
-            | import('@alembic/core/infrastructure/database/DatabaseConnection').SqliteDatabase
-            | null)
+        ? (unwrapRawDb(db as unknown) as import('@alembic/core/database').SqliteDatabase | null)
         : null;
       if (!rawDb) {
         return;
