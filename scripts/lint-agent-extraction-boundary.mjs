@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -65,6 +65,46 @@ for (const entry of allowedCallSites) {
   }
 }
 
+const aiRules = config.aiProviderRules ?? {};
+const aiScanRoots = aiRules.scanRoots ?? scanRoots;
+const aiIgnoredPrefixes = new Set(aiRules.ignoredPathPrefixes ?? ['lib/external/ai/']);
+const agentAiImportsByFile = new Map();
+const localAiProviderImports = [];
+
+for (const root of aiScanRoots) {
+  for (const file of collectTypeScriptFiles(join(repoRoot, root))) {
+    const relFile = toRepoPath(file);
+    if (isIgnored(relFile, aiIgnoredPrefixes)) {
+      continue;
+    }
+    const specifiers = extractImportSpecifiers(readFileSync(file, 'utf8'));
+    const agentAiSpecifiers = specifiers.filter((specifier) => specifier === '@alembic/agent/ai');
+    if (agentAiSpecifiers.length > 0) {
+      agentAiImportsByFile.set(relFile, uniqueSorted(agentAiSpecifiers));
+    }
+    for (const specifier of specifiers) {
+      if (isLocalAiProviderSpecifier(specifier, relFile)) {
+        localAiProviderImports.push({ file: relFile, specifier });
+      }
+    }
+  }
+}
+
+for (const offender of localAiProviderImports) {
+  violations.push(
+    `Local AI provider import remains in ${offender.file}: ${offender.specifier}. Use @alembic/agent/ai outside lib/external/ai/**.`
+  );
+}
+
+const packageJson = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
+const expectedAgentPackage = aiRules.packageName ?? '@alembic/agent';
+const expectedAgentRange = aiRules.packageRange ?? 'file:../AlembicAgent';
+if (packageJson.dependencies?.[expectedAgentPackage] !== expectedAgentRange) {
+  violations.push(
+    `Expected dependency ${expectedAgentPackage}@${expectedAgentRange} for Agent AI extraction boundary.`
+  );
+}
+
 const toolRules = config.toolBoundaryRules ?? [];
 const toolFiles = collectTypeScriptFiles(join(repoRoot, 'lib', 'tools')).map(toRepoPath);
 const toolClassificationCounts = new Map();
@@ -111,6 +151,8 @@ if (violations.length > 0) {
 
 console.log('Agent extraction boundary check passed');
 console.log(`  product #agent call sites: ${agentImportsByFile.size}`);
+console.log(`  @alembic/agent/ai consumer files: ${agentAiImportsByFile.size}`);
+console.log(`  local AI provider consumers: ${localAiProviderImports.length}`);
 console.log(`  classified lib/tools files: ${toolFiles.length}`);
 for (const [classification, count] of [...toolClassificationCounts].sort(([a], [b]) =>
   a.localeCompare(b)
@@ -165,6 +207,22 @@ function isIgnored(relFile, ignored) {
     }
   }
   return false;
+}
+
+function isLocalAiProviderSpecifier(specifier, importerRelFile) {
+  if (specifier.startsWith('#external/ai/')) {
+    return true;
+  }
+  if (specifier.includes('lib/external/ai/')) {
+    return true;
+  }
+  if (!specifier.startsWith('.')) {
+    return false;
+  }
+  const importerDir = dirname(join(repoRoot, importerRelFile));
+  const resolved = resolve(importerDir, specifier);
+  const rel = toRepoPath(resolved);
+  return rel === 'lib/external/ai' || rel.startsWith('lib/external/ai/');
 }
 
 function toRepoPath(file) {

@@ -8,11 +8,13 @@
  */
 
 import { describe, expect, test } from 'vitest';
-import { ParameterGuard } from '../../lib/external/ai/guard/ParameterGuard.js';
-import { DeepSeekProvider } from '../../lib/external/ai/providers/DeepSeekProvider.js';
-import { GoogleGeminiProvider } from '../../lib/external/ai/providers/GoogleGeminiProvider.js';
-import { OpenAiProvider } from '../../lib/external/ai/providers/OpenAiProvider.js';
-import { getModelRegistry } from '../../lib/external/ai/registry/ModelRegistry.js';
+import {
+  DeepSeekProvider,
+  getModelRegistry,
+  GoogleGeminiProvider,
+  OpenAiProvider,
+  ParameterGuard,
+} from '@alembic/agent/ai';
 
 const OPENAI_KEY = process.env.ALEMBIC_OPENAI_API_KEY || '';
 const DEEPSEEK_KEY = process.env.ALEMBIC_DEEPSEEK_API_KEY || '';

@@ -21,9 +21,9 @@
  * @module ContextWindow
  */
 
+import { getModelRegistry } from '@alembic/agent/ai';
 import Logger from '@alembic/core/logging';
 import { estimateTokensFast } from '@alembic/core/shared/token-utils';
-import { getModelRegistry } from '../../external/ai/registry/ModelRegistry.js';
 
 // ─── 类型定义 ──────────────────────────────────────────
 

@@ -118,7 +118,7 @@ export interface FileCacheEntry {
 export interface RuntimeConfig {
   id?: string;
   presetName?: string;
-  aiProvider: import('#external/ai/AiProvider.js').AiProvider;
+  aiProvider: import('@alembic/agent/ai').AiProvider;
   toolRegistry: import('#tools/catalog/UnifiedToolCatalog.js').UnifiedToolCatalog;
   toolRouter?: import('#tools/core/ToolContracts.js').ToolRouterContract | null;
   container?: Record<string, unknown> | null;
@@ -134,7 +134,7 @@ export interface RuntimeConfig {
   dataRoot?: string;
   additionalTools?: string[];
   /** 可选: LLMGateway 实例 — 启用后走 Gateway 路径替代 aiProvider 直接调用 */
-  gateway?: import('#external/ai/gateway/LLMGateway.js').LLMGateway;
+  gateway?: import('@alembic/agent/ai').LLMGateway;
   /** Gateway 使用的模型引用 (provider:model)，不设则从 aiProvider 推导 */
   modelRef?: string;
 }

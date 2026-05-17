@@ -1509,7 +1509,7 @@ program
     cli.log(`  ${'─'.repeat(40)}`);
 
     // AI 配置
-    const { getAiConfigInfo } = await import('../lib/external/ai/AiFactory.js');
+    const { getAiConfigInfo } = await import('@alembic/agent/ai');
     const aiInfo = getAiConfigInfo();
     if (aiInfo.provider && aiInfo.provider !== 'none') {
       cli.log(`  AI Provider:  ${aiInfo.provider}`);
@@ -1599,7 +1599,7 @@ program
   .action(async (opts) => {
     const projectRoot = resolve(opts.dir);
 
-    const { getAiConfigInfo } = await import('../lib/external/ai/AiFactory.js');
+    const { getAiConfigInfo } = await import('@alembic/agent/ai');
     const resolver = WorkspaceResolver.fromProject(projectRoot);
     const aiInfo = getAiConfigInfo();
     const aiOk = !!(aiInfo.provider && aiInfo.provider !== 'none');

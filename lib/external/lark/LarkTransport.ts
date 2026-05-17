@@ -44,7 +44,7 @@ interface LarkTransportConfig {
   getStatusFn?: () => Promise<string>;
   enqueueIdeFn?: (command: string, meta: Record<string, unknown>) => Promise<{ id: string }>;
   isUserAllowed?: (userId: string) => boolean;
-  aiProvider?: import('#external/ai/AiProvider.js').AiProvider;
+  aiProvider?: import('@alembic/agent/ai').AiProvider;
   projectRoot?: string;
 }
 

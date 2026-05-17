@@ -7,6 +7,9 @@
  * @module ServiceMap
  */
 
+// ── Domain Types ──
+// ── External Types ──
+import type { AiProvider, AiProviderManager } from '@alembic/agent/ai';
 import type { JobStore } from '@alembic/core/daemon';
 import type { DatabaseConnection } from '@alembic/core/database';
 import type DimensionCopy from '@alembic/core/domain/dimension/DimensionCopy';
@@ -77,10 +80,6 @@ import type {
 // ── Core Types ──
 import type Constitution from '../core/constitution/Constitution.js';
 import type Gateway from '../core/gateway/Gateway.js';
-// ── Domain Types ──
-// ── External Types ──
-import type { AiProvider } from '../external/ai/AiProvider.js';
-import type { AiProviderManager } from '../external/ai/AiProviderManager.js';
 // ── InfraModule Types ──
 import type AuditLogger from '../infrastructure/audit/AuditLogger.js';
 import type AuditStore from '../infrastructure/audit/AuditStore.js';

@@ -2,7 +2,7 @@
  * AiProvider.extractJSON / _repairTruncatedArray 单元测试
  * 验证截断 JSON 回收能力 — 特别是代码字段含未转义引号的场景
  */
-import AiProvider from '../../lib/external/ai/AiProvider.js';
+import { AiProvider } from '@alembic/agent/ai';
 
 // 构建一个最小实例（不需要真正的 chat 能力）
 function makeProvider() {

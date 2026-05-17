@@ -3,18 +3,20 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ToolSchema, UnifiedMessage } from '../../lib/external/ai/AiProvider.js';
-import { LLMGateway, resetLLMGateway } from '../../lib/external/ai/gateway/LLMGateway.js';
-import { ClaudeTransport } from '../../lib/external/ai/transport/ClaudeTransport.js';
-import { DeepSeekTransport } from '../../lib/external/ai/transport/DeepSeekTransport.js';
-import { GoogleTransport } from '../../lib/external/ai/transport/GoogleTransport.js';
 import {
+  ClaudeTransport,
+  DeepSeekTransport,
+  GoogleTransport,
+  LLMGateway,
   LLMTransport,
+  OpenAiTransport,
+  resetLLMGateway,
+  type ToolSchema,
   type TransportConfig,
   type TransportRequest,
   type TransportResponse,
-} from '../../lib/external/ai/transport/LLMTransport.js';
-import { OpenAiTransport } from '../../lib/external/ai/transport/OpenAiTransport.js';
+  type UnifiedMessage,
+} from '@alembic/agent/ai';
 
 // ─── Transport 基础测试 ─────────────────────────────────
 

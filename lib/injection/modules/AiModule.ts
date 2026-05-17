@@ -13,7 +13,7 @@
  * @module AiModule
  */
 
-import { AiProviderManager, type ManagedAiProvider } from '../../external/ai/AiProviderManager.js';
+import { AiProviderManager, type ManagedAiProvider } from '@alembic/agent/ai';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 /**
@@ -29,7 +29,7 @@ export async function initialize(c: ServiceContainer) {
 
   // AiFactory 模块引用
   try {
-    c.singletons._aiFactory = await import('../../external/ai/AiFactory.js');
+    c.singletons._aiFactory = await import('@alembic/agent/ai');
   } catch {
     c.singletons._aiFactory = null;
   }

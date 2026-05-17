@@ -3,6 +3,7 @@
  * AI 提供商管理、摘要、翻译、对话、工作区 LLM 配置
  */
 
+import { createProvider, getModelRegistry, PROVIDER_CONFIGS } from '@alembic/agent/ai';
 import Logger from '@alembic/core/logging';
 import { ValidationError } from '@alembic/core/shared/errors/index';
 import {
@@ -32,9 +33,6 @@ import {
   taskGuardFullScan,
   taskQualityAudit,
 } from '../../agent/tasks/AgentTaskHandlers.js';
-import { createProvider } from '../../external/ai/AiFactory.js';
-import { getModelRegistry } from '../../external/ai/registry/ModelRegistry.js';
-import { PROVIDER_CONFIGS } from '../../external/ai/registry/ProviderConfig.js';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import {

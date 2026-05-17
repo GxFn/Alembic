@@ -10,6 +10,20 @@
       "CLI, daemon, HTTP/API, Dashboard/native, IDE, Lark runtime, and product shell stay in Alembic."
     ]
   },
+  "aiProviderRules": {
+    "status": "consume-alembic-agent-ai",
+    "packageName": "@alembic/agent",
+    "packageRange": "file:../AlembicAgent",
+    "publicEntrypoint": "@alembic/agent/ai",
+    "localDeletionCandidate": "lib/external/ai/**",
+    "scanRoots": ["lib", "bin", "scripts", "test"],
+    "ignoredPathPrefixes": ["lib/external/ai/"],
+    "notes": [
+      "Provider execution, transports, model registry, parameter guard, and LLM gateway are consumed from @alembic/agent/ai.",
+      "Alembic keeps CLI/daemon/Dashboard AI settings and environment/config persistence as host adapter responsibilities.",
+      "The local lib/external/ai tree is preserved only as a deletion candidate until host smoke evidence is complete."
+    ]
+  },
   "agentSourceNotes": [
     {
       "path": "lib/agent/profiles/definitions/remote.profile.ts",

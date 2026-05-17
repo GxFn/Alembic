@@ -5,9 +5,13 @@
  */
 
 import { beforeAll, describe, expect, test } from 'vitest';
-import { ParameterGuard } from '../../lib/external/ai/guard/ParameterGuard.js';
-import { getModelRegistry, ModelRegistry } from '../../lib/external/ai/registry/ModelRegistry.js';
-import type { ModelDef, ProviderId } from '../../lib/external/ai/registry/model-defs.js';
+import {
+  getModelRegistry,
+  type ModelDef,
+  ModelRegistry,
+  ParameterGuard,
+  type ProviderId,
+} from '@alembic/agent/ai';
 
 // ─── ModelRegistry ────────────────────────────────
 
@@ -465,7 +469,7 @@ describe('ParameterGuard', () => {
 
 describe('ProviderConfig 一致性', () => {
   test('每个 ProviderConfig 的 defaultModelId 在 Registry 中存在', async () => {
-    const { PROVIDER_CONFIGS } = await import('../../lib/external/ai/registry/ProviderConfig.js');
+    const { PROVIDER_CONFIGS } = await import('@alembic/agent/ai');
     const reg = getModelRegistry();
     for (const cfg of PROVIDER_CONFIGS) {
       if (cfg.id === 'ollama') {

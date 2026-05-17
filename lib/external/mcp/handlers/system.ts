@@ -18,7 +18,7 @@ export async function health(ctx: McpContext) {
   // 1) AI 配置
   let aiInfo = { provider: 'unknown', hasKey: false };
   try {
-    const { getAiConfigInfo } = await import('#external/ai/AiFactory.js');
+    const { getAiConfigInfo } = await import('@alembic/agent/ai');
     aiInfo = getAiConfigInfo();
   } catch (e: unknown) {
     issues.push(`ai: ${e instanceof Error ? e.message : String(e)}`);
