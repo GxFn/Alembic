@@ -1,6 +1,6 @@
+import type { AgentRunInput, AgentRunResult } from '@alembic/agent/service';
 import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/project-intelligence';
-import type { AgentRunInput, AgentRunResult } from '#agent/service/index.js';
 import type { DimensionStat } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import {

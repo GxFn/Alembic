@@ -40,13 +40,13 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { AgentService } from '@alembic/agent/service';
 import type { Startable } from '@alembic/core/events';
 import { timerRegistry } from '@alembic/core/events';
 import type { WriteZone } from '@alembic/core/io';
 import { pathGuard } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
 import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
-import type { AgentService } from '#agent/service/index.js';
 import type { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
 import { EventAggregator } from './EventAggregator.js';
 import { SkillAdvisor } from './SkillAdvisor.js';

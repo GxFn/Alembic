@@ -786,7 +786,7 @@ program
       // ── Step 3: Agent 驱动的进化验证 ──
       const agentService = container.get(
         'agentService'
-      ) as import('../lib/agent/service/index.js').AgentService;
+      ) as import('@alembic/agent/service').AgentService;
       if (!agentService) {
         cli.error('AgentService not available (需要配置 AI Provider)');
         await bootstrap.shutdown();
@@ -800,7 +800,7 @@ program
 
       const spinnerAgent = ora('Agent 正在读取源码验证 Recipe...').start();
 
-      const { runEvolutionAudit } = await import('../lib/agent/service/index.js');
+      const { runEvolutionAudit } = await import('@alembic/agent/service');
       const agentResult = await runEvolutionAudit({
         agentService,
         recipes: recipesWithHints,

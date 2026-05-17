@@ -23,12 +23,6 @@ import {
   PanoramaService,
   RoleRefiner,
 } from '@alembic/core/project-intelligence';
-import type {
-  BootstrapRepository,
-  CodeEntityRepository,
-  KnowledgeEdgeRepository,
-  KnowledgeRepository,
-} from '@alembic/core/repositories';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export const PanoramaModule = {
@@ -41,28 +35,40 @@ export const PanoramaModule = {
 
     const getProjectRoot = () => ct.config?.projectRoot ?? process.cwd();
 
-    const getBootstrapRepo = () =>
-      container.get('bootstrapRepository') as unknown as BootstrapRepository;
-    const getEntityRepo = () =>
-      container.get('codeEntityRepository') as unknown as CodeEntityRepository;
-    const getEdgeRepo = () =>
-      container.get('knowledgeEdgeRepository') as unknown as KnowledgeEdgeRepository;
-    const getKnowledgeRepo = () =>
-      container.get('knowledgeRepository') as unknown as KnowledgeRepository;
+    const getBootstrapRepo = (): unknown => container.get('bootstrapRepository');
+    const getEntityRepo = (): unknown => container.get('codeEntityRepository');
+    const getEdgeRepo = (): unknown => container.get('knowledgeEdgeRepository');
+    const getKnowledgeRepo = (): unknown => container.get('knowledgeRepository');
 
     ct.singleton(
       'moduleDiscoverer',
-      () => new ModuleDiscoverer(getEntityRepo(), getEdgeRepo(), getProjectRoot())
+      () =>
+        new ModuleDiscoverer(
+          getEntityRepo() as ConstructorParameters<typeof ModuleDiscoverer>[0],
+          getEdgeRepo() as ConstructorParameters<typeof ModuleDiscoverer>[1],
+          getProjectRoot()
+        )
     );
 
     ct.singleton(
       'roleRefiner',
-      () => new RoleRefiner(getBootstrapRepo(), getEntityRepo(), getEdgeRepo(), getProjectRoot())
+      () =>
+        new RoleRefiner(
+          getBootstrapRepo() as ConstructorParameters<typeof RoleRefiner>[0],
+          getEntityRepo() as ConstructorParameters<typeof RoleRefiner>[1],
+          getEdgeRepo() as ConstructorParameters<typeof RoleRefiner>[2],
+          getProjectRoot()
+        )
     );
 
     ct.singleton(
       'couplingAnalyzer',
-      () => new CouplingAnalyzer(getEdgeRepo(), getEntityRepo(), getProjectRoot())
+      () =>
+        new CouplingAnalyzer(
+          getEdgeRepo() as ConstructorParameters<typeof CouplingAnalyzer>[0],
+          getEntityRepo() as ConstructorParameters<typeof CouplingAnalyzer>[1],
+          getProjectRoot()
+        )
     );
 
     ct.singleton('layerInferrer', () => new LayerInferrer());
@@ -71,9 +77,9 @@ export const PanoramaModule = {
       'dimensionAnalyzer',
       () =>
         new DimensionAnalyzer(
-          getBootstrapRepo(),
-          getEntityRepo(),
-          getKnowledgeRepo(),
+          getBootstrapRepo() as ConstructorParameters<typeof DimensionAnalyzer>[0],
+          getEntityRepo() as ConstructorParameters<typeof DimensionAnalyzer>[1],
+          getKnowledgeRepo() as ConstructorParameters<typeof DimensionAnalyzer>[2],
           getProjectRoot()
         )
     );
@@ -95,7 +101,7 @@ export const PanoramaModule = {
         knowledgeRepo: getKnowledgeRepo(),
         projectRoot: getProjectRoot(),
         dimensionAnalyzer,
-      });
+      } as unknown as ConstructorParameters<typeof PanoramaAggregator>[0]);
     });
 
     ct.singleton('panoramaScanner', () => {
@@ -109,7 +115,7 @@ export const PanoramaModule = {
         entityRepo: getEntityRepo(),
         edgeRepo: getEdgeRepo(),
         logger,
-      });
+      } as unknown as ConstructorParameters<typeof PanoramaScanner>[0]);
     });
 
     ct.singleton('panoramaService', (c: unknown) => {
@@ -125,7 +131,7 @@ export const PanoramaModule = {
         projectRoot: getProjectRoot(),
         scanner,
         moduleDiscoverer,
-      });
+      } as unknown as ConstructorParameters<typeof PanoramaService>[0]);
     });
   },
 };

@@ -5,6 +5,13 @@
 
 import { createProvider, getModelRegistry, PROVIDER_CONFIGS } from '@alembic/agent/ai';
 import { ConversationStore } from '@alembic/agent/context';
+import {
+  type AgentRunInput,
+  type AgentService,
+  runScanAgentTask,
+  runTranslationJson,
+  type SystemRunContextFactory,
+} from '@alembic/agent/service';
 import type { ToolCapabilityManifest, ToolResultEnvelope } from '@alembic/agent/tools';
 import Logger from '@alembic/core/logging';
 import { ValidationError } from '@alembic/core/shared/errors/index';
@@ -17,13 +24,6 @@ import {
 } from '@alembic/core/shared/WorkspaceSettingsStore';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
-import {
-  type AgentRunInput,
-  type AgentService,
-  runScanAgentTask,
-  runTranslationJson,
-  type SystemRunContextFactory,
-} from '#agent/service/index.js';
 import { PRESETS } from '../../agent/profiles/presets.js';
 import {
   taskCheckAndSubmit,

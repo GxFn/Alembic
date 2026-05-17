@@ -14,13 +14,13 @@ import {
   join as _pathJoin,
   relative,
 } from 'node:path';
-import Logger from '@alembic/core/logging';
-import { getDiscovererRegistry } from '@alembic/core/project-intelligence';
 import {
   type AgentService,
   runScanAgentTask,
   type SystemRunContextFactory,
-} from '#agent/service/index.js';
+} from '@alembic/agent/service';
+import Logger from '@alembic/core/logging';
+import { getDiscovererRegistry } from '@alembic/core/project-intelligence';
 import { inferLang } from '../../external/mcp/handlers/LanguageExtensions.js';
 
 /** 全局排除目录 */

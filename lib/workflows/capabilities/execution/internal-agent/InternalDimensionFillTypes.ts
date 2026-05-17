@@ -1,4 +1,4 @@
-import type { AgentService, SystemRunContextFactory } from '#agent/service/index.js';
+import type { AgentService, SystemRunContextFactory } from '@alembic/agent/service';
 import type { BootstrapFileEntry } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
 import type { BootstrapProjectGraphLike } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
 

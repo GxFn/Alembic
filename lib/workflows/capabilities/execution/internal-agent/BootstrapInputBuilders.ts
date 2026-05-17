@@ -6,14 +6,14 @@
  */
 
 import type { MemoryCoordinator } from '@alembic/agent/memory';
-import type { SystemRunContext } from '#agent/runtime/SystemRunContext.js';
+import type { SystemRunContext } from '@alembic/agent/runtime';
 import type {
   AgentRunContext,
   AgentRunExecutionOptions,
   AgentRunInput,
   AgentRunMessage,
   AgentRunPresentationOptions,
-} from '#agent/service/index.js';
+} from '@alembic/agent/service';
 
 // ── Dimension input builder ──────────────────────────────
 

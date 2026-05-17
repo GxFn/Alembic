@@ -234,7 +234,7 @@ async function createDefaultPersistentMemory(
 }
 
 async function createDefaultConsolidator(semanticMemory: unknown, log: CompletionLogger) {
-  const { EpisodicConsolidator } = await import('#agent/domain/EpisodicConsolidator.js');
+  const { EpisodicConsolidator } = await import('@alembic/agent/domain');
   const { PersistentMemory } = await import('@alembic/agent/memory');
   return new EpisodicConsolidator(semanticMemory as InstanceType<typeof PersistentMemory>, {
     logger: {

@@ -5,7 +5,7 @@
  * 结构化数据（维度分析报告、候选提取、会话统计等），供 BootstrapConsumers 消费。
  */
 
-import type { AgentRunResult } from '#agent/service/index.js';
+import type { AgentRunResult } from '@alembic/agent/service';
 
 export interface ToolCallRecord {
   tool?: string;

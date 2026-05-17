@@ -16,6 +16,7 @@
  *   7. 前端通过 Socket.io 接收维度完成进度
  */
 
+import { type AgentService, runEvolutionAudit } from '@alembic/agent/service';
 import type { WorkflowMcpContext } from '@alembic/core/host-agent-workflows';
 import {
   auditRecipesForRescan,
@@ -63,11 +64,9 @@ import {
   dispatchInternalDimensionExecution,
   startInternalDimensionExecutionSession,
 } from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
-import type {
-  EvolutionAuditRecipe as AgentEvolutionAuditRecipe,
-  EvolutionAuditResult,
-} from '../../../agent/runs/evolution/EvolutionAgentRun.js';
-import { runEvolutionAudit } from '../../../agent/runs/evolution/EvolutionAgentRun.js';
+
+type AgentEvolutionAuditRecipe = Parameters<typeof runEvolutionAudit>[0]['recipes'][number];
+type EvolutionAuditResult = Awaited<ReturnType<typeof runEvolutionAudit>>;
 
 type RescanMcpContext = WorkflowMcpContext & McpContext;
 
@@ -349,8 +348,7 @@ export async function runInternalKnowledgeRescanWorkflow(
         );
         if (auditRecipes.length > 0) {
           evolutionAuditResult = await runEvolutionAudit({
-            agentService:
-              agentService as import('../../../agent/service/AgentService.js').AgentService,
+            agentService: agentService as AgentService,
             recipes: auditRecipes.map(toAgentEvolutionAuditRecipe),
             projectOverview: {
               primaryLang: primaryLang || 'unknown',

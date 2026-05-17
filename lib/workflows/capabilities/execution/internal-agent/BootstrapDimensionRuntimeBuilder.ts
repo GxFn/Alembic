@@ -1,5 +1,12 @@
 import { ExplorationTracker } from '@alembic/agent/context';
 import type { MemoryCoordinator } from '@alembic/agent/memory';
+import { computeAnalystBudget } from '@alembic/agent/prompts';
+import {
+  createSystemRunContext,
+  projectSystemRunContext,
+  type SystemRunContext,
+} from '@alembic/agent/runtime';
+import type { AgentRunInput, SystemRunContextFactory } from '@alembic/agent/service';
 import { getDimensionFocusKeywords } from '@alembic/core/domain/dimension/DimensionSop';
 import type { KnowledgeRescanExecutionDecision } from '@alembic/core/host-agent-workflows';
 import {
@@ -14,12 +21,6 @@ import type {
   SnapshotCallGraphResult,
   SnapshotDependencyGraph,
 } from '@alembic/core/project-intelligence';
-import { computeAnalystBudget } from '#agent/prompts/insight-analyst.js';
-import {
-  createSystemRunContext,
-  projectSystemRunContext,
-} from '#agent/runtime/SystemRunContext.js';
-import type { AgentRunInput, SystemRunContextFactory } from '#agent/service/index.js';
 import {
   type BootstrapFileEntry,
   buildBootstrapDimensionRunInput,
@@ -205,8 +206,6 @@ export function createBootstrapDimensionRuntimeInput({
     projectInfo.fileCount || 0,
     contextWindow.tokenBudget
   );
-  // Memory/context are consumed from @alembic/agent now, while SystemRunContext
-  // remains local until Agent publishes explicit runtime/service exports.
   const systemRunContext = createSystemRunContext({
     memoryCoordinator:
       memoryCoordinator as unknown as CreateSystemRunContextOptions['memoryCoordinator'],
@@ -272,7 +271,7 @@ export function createBootstrapDimensionRuntimeInput({
       primaryLang,
       projectLang: projectInfo.lang || null,
       allFiles,
-      systemRunContext,
+      systemRunContext: systemRunContext as SystemRunContext,
       strategyContext,
       memoryCoordinator,
       sessionAbortSignal,

@@ -10,13 +10,13 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import Logger from '@alembic/core/logging';
-import { LanguageService } from '@alembic/core/project-intelligence';
 import {
   type AgentService,
   runScanAgentTask,
   type SystemRunContextFactory,
-} from '../agent/service/index.js';
+} from '@alembic/agent/service';
+import Logger from '@alembic/core/logging';
+import { LanguageService } from '@alembic/core/project-intelligence';
 
 export class AiScanService {
   agentService: AgentService | null;

@@ -4,14 +4,14 @@
  */
 
 import { basename } from 'node:path';
-import Logger from '@alembic/core/logging';
-import { LanguageService } from '@alembic/core/project-intelligence';
-import express, { type Request, type Response } from 'express';
 import {
   type AgentService,
   runScanAgentTask,
   type SystemRunContextFactory,
-} from '#agent/service/index.js';
+} from '@alembic/agent/service';
+import Logger from '@alembic/core/logging';
+import { LanguageService } from '@alembic/core/project-intelligence';
+import express, { type Request, type Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ExtractPathBody, ExtractTextBody } from '../../shared/schemas/http-requests.js';
 import { validate } from '../middleware/validate.js';

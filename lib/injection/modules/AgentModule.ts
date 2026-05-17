@@ -7,14 +7,6 @@
  */
 
 import {
-  type CapabilityCatalog,
-  LightweightRouter,
-  UnifiedToolCatalog,
-  WorkflowRegistry,
-} from '@alembic/agent/tools';
-import type { SignalBus } from '@alembic/core/events';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
-import {
   AgentProfileCompiler,
   AgentProfileRegistry,
   AgentRunCoordinator,
@@ -22,7 +14,15 @@ import {
   AgentService,
   AgentStageFactoryRegistry,
   SystemRunContextFactory,
-} from '#agent/service/index.js';
+} from '@alembic/agent/service';
+import {
+  type CapabilityCatalog,
+  LightweightRouter,
+  UnifiedToolCatalog,
+  WorkflowRegistry,
+} from '@alembic/agent/tools';
+import type { SignalBus } from '@alembic/core/events';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { DashboardOperationAdapter } from '#tools/adapters/DashboardOperationAdapter.js';
 import {
   DASHBOARD_OPERATION_HANDLERS,

@@ -56,7 +56,7 @@
       "completedScope": [
         "Alembic production consumers outside preserved local Agent implementation now import Agent-owned memory/context through @alembic/agent/memory and @alembic/agent/context.",
         "Workflow completion, internal bootstrap admission/consumers/runtime initialization/restore state/input builders, Lark conversation state, and HTTP AI conversation state were switched where the Agent package exposes a stable memory/context surface.",
-        "Local service/runtime/prompts/domain remain in place because AlembicAgent has not yet published explicit service/runtime/prompts/domain subpath exports."
+        "Local service/runtime/prompts/domain remained in place at Phase 5 closure because AlembicAgent had not yet published explicit service/runtime/prompts/domain subpath exports."
       ],
       "preservedPaths": [
         "lib/agent/service/**",
@@ -77,8 +77,41 @@
         "node dist/bin/cli.js status --json: passed; workspace detected, database not found in current test environment.",
         "memory/context smoke import passed: MemoryCoordinator, SessionStore, PersistentMemory, ConversationStore, ContextWindow, and ExplorationTracker are exported."
       ],
-      "nextPhaseAllowed": false,
-      "nextPhase": "Wait for AlembicAgent A6-1 before switching service/runtime/prompts/domain or deleting local Agent implementation."
+      "nextPhaseAllowed": true,
+      "nextPhase": "AlembicAgent A6-1 landed; consume service/runtime/prompts/domain public subpaths before considering local deletion."
+    },
+    "phase6HostContractSurfaceConsumption": {
+      "status": "closed",
+      "stage": "A6-1-consume",
+      "planSection": "alembic-agent-extraction-boundary-acceptance-next-plan-2026-05-17 §5.3",
+      "completedScope": [
+        "Alembic production consumers outside preserved local Agent implementation now import Agent-owned service, runtime, prompts, and domain contracts through @alembic/agent/service, @alembic/agent/runtime, @alembic/agent/prompts, and @alembic/agent/domain.",
+        "CLI AI scan/evolution audit, HTTP AI/extract/recipes routes, Lark transport, internal bootstrap workflow, completion consolidation, dependency injection service registration, and ServiceMap types were switched to Agent public host contract exports.",
+        "Boundary lint now blocks production imports from local lib/agent/service, lib/agent/runtime, lib/agent/prompts, and lib/agent/domain while preserving the local implementation directories as deletion candidates.",
+        "Panorama DI keeps a local type bridge for file-linked Core private-class identity differences introduced by consuming Agent service declarations; runtime objects remain host-owned."
+      ],
+      "preservedPaths": [
+        "lib/agent/service/**",
+        "lib/agent/runtime/**",
+        "lib/agent/prompts/**",
+        "lib/agent/domain/**",
+        "lib/agent/runs/**",
+        "lib/agent/tasks/**",
+        "lib/agent/profiles/**",
+        "lib/agent/forge/**"
+      ],
+      "validation": [
+        "Agent public host contract smoke import passed for @alembic/agent/service, @alembic/agent/runtime, @alembic/agent/prompts, and @alembic/agent/domain.",
+        "npm run lint:agent-extraction-boundary: passed; product #agent call sites 1, @alembic/agent/service consumer files 19, @alembic/agent/runtime consumer files 2, @alembic/agent/prompts consumer files 1, @alembic/agent/domain consumer files 1, local service/runtime/prompts/domain consumers 0.",
+        "npm run build:check: passed.",
+        "npm run lint -- --diagnostic-level=error: passed.",
+        "Representative bootstrap/rescan/completion/HTTP Agent tests: 16 files / 59 tests passed.",
+        "npm run check: passed; existing repository Biome warnings are non-fatal.",
+        "npm run build: passed.",
+        "node dist/bin/cli.js status --json: passed; workspace detected, database not found in current test environment."
+      ],
+      "nextPhaseAllowed": true,
+      "nextPhase": "Do not delete preserved local service/runtime/prompts/domain until remaining local runs/tasks/profiles/forge coverage and Tool V2 adapter contract gaps are explicitly resolved."
     }
   },
   "aiProviderRules": {
@@ -182,16 +215,40 @@
     "localDeletionCandidates": ["lib/agent/memory/**", "lib/agent/context/**"],
     "scanRoots": ["lib", "bin", "scripts"],
     "ignoredPathPrefixes": ["lib/agent/"],
-    "blockedUntilAgentExports": [
-      "#agent/service/index.js",
-      "#agent/runtime/SystemRunContext.js",
-      "#agent/prompts/insight-analyst.js",
-      "#agent/domain/EpisodicConsolidator.js"
+    "consumedAgentExports": [
+      "@alembic/agent/service",
+      "@alembic/agent/runtime",
+      "@alembic/agent/prompts",
+      "@alembic/agent/domain"
     ],
     "notes": [
       "Agent-owned memory/context consumers should use @alembic/agent/memory and @alembic/agent/context outside local implementation directories.",
       "Alembic keeps database connection construction, repository/vector construction, projectRoot/dataRoot, WriteZone/PathGuard, CLI/daemon/HTTP/API/Dashboard/native/IDE wiring, and internal workflow orchestration as host responsibilities.",
-      "Do not delete local lib/agent/service, lib/agent/runtime, lib/agent/prompts, or lib/agent/domain until AlembicAgent exposes explicit service/runtime/prompts/domain public subpaths."
+      "Do not delete local lib/agent/service, lib/agent/runtime, lib/agent/prompts, or lib/agent/domain until Alembic has validated the replacement surface and host-specific workflow glue has no contract gaps."
+    ]
+  },
+  "hostContractSurfaceImportRules": {
+    "status": "consume-alembic-agent-host-contract-surface",
+    "packageName": "@alembic/agent",
+    "packageRange": "file:../AlembicAgent",
+    "publicEntrypoints": {
+      "service": "@alembic/agent/service",
+      "runtime": "@alembic/agent/runtime",
+      "prompts": "@alembic/agent/prompts",
+      "domain": "@alembic/agent/domain"
+    },
+    "localDeletionCandidates": [
+      "lib/agent/service/**",
+      "lib/agent/runtime/**",
+      "lib/agent/prompts/**",
+      "lib/agent/domain/**"
+    ],
+    "scanRoots": ["lib", "bin", "scripts"],
+    "ignoredPathPrefixes": ["lib/agent/"],
+    "notes": [
+      "Alembic production consumers should import Agent-owned service, runtime, prompt, and domain contracts from @alembic/agent public subpaths.",
+      "Alembic keeps HTTP/API, Lark, workflow orchestration, Dashboard/native/IDE integration, database construction, path/write guards, and host tool adapters as local glue.",
+      "Local lib/agent/service, lib/agent/runtime, lib/agent/prompts, and lib/agent/domain remain preserved deletion candidates until contract coverage and host smoke evidence are complete."
     ]
   },
   "agentSourceNotes": [
@@ -225,144 +282,12 @@
     "ignoredPathPrefixes": ["lib/agent/"],
     "allowedCallSites": [
       {
-        "path": "lib/external/lark/LarkTransport.ts",
-        "classification": "host-transport-agent-service",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service",
-        "expectedSpecifiers": ["#agent/service/index.js"],
-        "reason": "Lark remains a host transport and should call the future Agent service facade instead of owning runtime internals."
-      },
-      {
-        "path": "lib/http/routes/ai.ts",
-        "classification": "host-http-agent-route",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service",
-        "expectedSpecifiers": ["#agent/service/index.js"],
-        "reason": "HTTP route owns request/session presentation while delegating run execution to AgentService."
-      },
-      {
-        "path": "lib/http/routes/extract.ts",
-        "classification": "host-http-agent-route",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service",
-        "expectedSpecifiers": ["#agent/service/index.js"],
-        "reason": "HTTP extraction route is an Alembic API boundary around Agent task execution."
-      },
-      {
-        "path": "lib/http/routes/recipes.ts",
-        "classification": "host-http-agent-route",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service",
-        "expectedSpecifiers": ["#agent/service/index.js"],
-        "reason": "Recipe relation discovery should later call the Agent package facade from the route boundary."
-      },
-      {
-        "path": "lib/injection/modules/AgentModule.ts",
-        "classification": "host-dependency-injection-composition",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent plus Alembic host adapters",
-        "expectedSpecifiers": ["#agent/service/index.js"],
-        "reason": "The module composes Agent runtime classes with Alembic-owned Dashboard, Skill, Mac, Terminal, Workflow, and MCP adapters."
-      },
-      {
-        "path": "lib/service/module/ModuleService.ts",
-        "classification": "product-service-agent-task",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service",
-        "expectedSpecifiers": ["#agent/service/index.js"],
-        "reason": "Module scanning remains an Alembic service and should later delegate scan agent tasks to the Agent package."
-      },
-      {
-        "path": "lib/service/skills/SignalCollector.ts",
-        "classification": "product-background-agent-task",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service",
-        "expectedSpecifiers": ["#agent/service/index.js"],
-        "reason": "SignalCollector is an Alembic daemon feature that invokes the signal-analysis Agent profile."
-      },
-      {
         "path": "lib/tools/v2/capabilities/CapabilityV2.ts",
         "classification": "tool-system-agent-base-class",
         "switchAfter": "phase-4",
         "replacement": "@alembic/agent/tools",
         "expectedSpecifiers": ["#agent/capabilities/Capability.js"],
-        "reason": "The V2 tool capability base currently inherits the Agent Capability type and belongs to the common tool-system migration set."
-      },
-      {
-        "path": "lib/workflows/capabilities/completion/CompletionSteps.ts",
-        "classification": "workflow-completion-agent-domain",
-        "switchAfter": "after-A6-1",
-        "replacement": "@alembic/agent/domain",
-        "expectedSpecifiers": ["#agent/domain/EpisodicConsolidator.js"],
-        "reason": "Completion workflow now consumes Agent memory from @alembic/agent/memory, but consolidation stays local until AlembicAgent publishes an explicit domain subpath."
-      },
-      {
-        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.ts",
-        "classification": "workflow-bootstrap-agent-runtime",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service",
-        "expectedSpecifiers": ["#agent/service/index.js"],
-        "reason": "Internal bootstrap consumers coordinate Alembic workflow state with Agent run outputs; memory types now come from @alembic/agent/memory."
-      },
-      {
-        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.ts",
-        "classification": "workflow-bootstrap-agent-runtime",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service-runtime-prompts",
-        "expectedSpecifiers": [
-          "#agent/prompts/insight-analyst.js",
-          "#agent/runtime/SystemRunContext.js",
-          "#agent/service/index.js"
-        ],
-        "reason": "Bootstrap runtime building still needs local service/runtime/prompt contracts until A6-1; context and memory are consumed from @alembic/agent/context and @alembic/agent/memory."
-      },
-      {
-        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.ts",
-        "classification": "workflow-bootstrap-agent-runtime",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service-runtime",
-        "expectedSpecifiers": ["#agent/runtime/SystemRunContext.js", "#agent/service/index.js"],
-        "reason": "Bootstrap input builders assemble Alembic workflow inputs into Agent runtime inputs; MemoryCoordinator now comes from @alembic/agent/memory."
-      },
-      {
-        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapProjections.ts",
-        "classification": "workflow-bootstrap-agent-result",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service",
-        "expectedSpecifiers": ["#agent/service/index.js"],
-        "reason": "Projection code shapes AgentRunResult into Alembic workflow output."
-      },
-      {
-        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapSessionExecutionBuilder.ts",
-        "classification": "workflow-bootstrap-agent-result",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service",
-        "expectedSpecifiers": ["#agent/service/index.js"],
-        "reason": "Session execution builder uses Agent run input/result contracts at the Alembic workflow boundary."
-      },
-      {
-        "path": "lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillPreparation.ts",
-        "classification": "workflow-bootstrap-agent-service",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service",
-        "expectedSpecifiers": ["#agent/service/index.js"],
-        "reason": "Preparation validates host availability of AgentService and SystemRunContextFactory."
-      },
-      {
-        "path": "lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillSessionRunner.ts",
-        "classification": "workflow-bootstrap-agent-service",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service",
-        "expectedSpecifiers": ["#agent/service/index.js"],
-        "reason": "Session runner delegates dimension work to AgentService while retaining Alembic workflow orchestration."
-      },
-      {
-        "path": "lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillTypes.ts",
-        "classification": "workflow-bootstrap-agent-service-type",
-        "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service",
-        "expectedSpecifiers": ["#agent/service/index.js"],
-        "reason": "Internal fill types expose AgentService/SystemRunContextFactory at the workflow boundary."
+        "reason": "The V2 tool capability base still inherits the local Agent Capability type until AlembicAgent publishes the remaining Tool V2 adapter contract."
       }
     ]
   },

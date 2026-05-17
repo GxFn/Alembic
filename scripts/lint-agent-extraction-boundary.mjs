@@ -211,6 +211,47 @@ for (const offender of localMemoryContextImports) {
   );
 }
 
+const hostContractRules = config.hostContractSurfaceImportRules ?? {};
+const hostContractScanRoots = hostContractRules.scanRoots ?? scanRoots;
+const hostContractIgnoredPrefixes = new Set(hostContractRules.ignoredPathPrefixes ?? []);
+const hostContractEntrypoints = hostContractRules.publicEntrypoints ?? {
+  service: '@alembic/agent/service',
+  runtime: '@alembic/agent/runtime',
+  prompts: '@alembic/agent/prompts',
+  domain: '@alembic/agent/domain',
+};
+const hostContractImportsBySurface = new Map(
+  Object.keys(hostContractEntrypoints).map((surface) => [surface, new Map()])
+);
+const localHostContractImports = [];
+
+for (const root of hostContractScanRoots) {
+  for (const file of collectTypeScriptFiles(join(repoRoot, root))) {
+    const relFile = toRepoPath(file);
+    if (isIgnored(relFile, hostContractIgnoredPrefixes)) {
+      continue;
+    }
+    const specifiers = extractImportSpecifiers(readFileSync(file, 'utf8'));
+    for (const [surface, publicEntrypoint] of Object.entries(hostContractEntrypoints)) {
+      const surfaceSpecifiers = specifiers.filter((specifier) => specifier === publicEntrypoint);
+      if (surfaceSpecifiers.length > 0) {
+        hostContractImportsBySurface.get(surface)?.set(relFile, uniqueSorted(surfaceSpecifiers));
+      }
+    }
+    for (const specifier of specifiers) {
+      if (isLocalHostContractSpecifier(specifier, relFile)) {
+        localHostContractImports.push({ file: relFile, specifier });
+      }
+    }
+  }
+}
+
+for (const offender of localHostContractImports) {
+  violations.push(
+    `Local Agent service/runtime/prompts/domain import remains in ${offender.file}: ${offender.specifier}. Use @alembic/agent service/runtime/prompts/domain public subpaths outside preserved local Agent implementation files.`
+  );
+}
+
 const toolRules = config.toolBoundaryRules ?? [];
 const toolFiles = collectTypeScriptFiles(join(repoRoot, 'lib', 'tools')).map(toRepoPath);
 const toolClassificationCounts = new Map();
@@ -265,6 +306,12 @@ console.log(`  deferred local tool import files: ${deferredToolImportsByFile.siz
 console.log(`  @alembic/agent/memory consumer files: ${agentMemoryImportsByFile.size}`);
 console.log(`  @alembic/agent/context consumer files: ${agentContextImportsByFile.size}`);
 console.log(`  local memory/context consumers: ${localMemoryContextImports.length}`);
+for (const [surface, importsByFile] of [...hostContractImportsBySurface].sort(([a], [b]) =>
+  a.localeCompare(b)
+)) {
+  console.log(`  @alembic/agent/${surface} consumer files: ${importsByFile.size}`);
+}
+console.log(`  local service/runtime/prompts/domain consumers: ${localHostContractImports.length}`);
 console.log(`  classified lib/tools files: ${toolFiles.length}`);
 for (const [classification, count] of [...toolClassificationCounts].sort(([a], [b]) =>
   a.localeCompare(b)
@@ -383,6 +430,29 @@ function isLocalMemoryContextSpecifier(specifier, importerRelFile) {
   const resolved = resolve(importerDir, specifier);
   const rel = toRepoPath(resolved).replace(/\.js$/, '.ts');
   return rel.startsWith('lib/agent/memory/') || rel.startsWith('lib/agent/context/');
+}
+
+function isLocalHostContractSpecifier(specifier, importerRelFile) {
+  if (
+    specifier.startsWith('#agent/service/') ||
+    specifier.startsWith('#agent/runtime/') ||
+    specifier.startsWith('#agent/prompts/') ||
+    specifier.startsWith('#agent/domain/')
+  ) {
+    return true;
+  }
+  if (!specifier.startsWith('.')) {
+    return false;
+  }
+  const importerDir = dirname(join(repoRoot, importerRelFile));
+  const resolved = resolve(importerDir, specifier);
+  const rel = toRepoPath(resolved).replace(/\.js$/, '.ts');
+  return (
+    rel.startsWith('lib/agent/service/') ||
+    rel.startsWith('lib/agent/runtime/') ||
+    rel.startsWith('lib/agent/prompts/') ||
+    rel.startsWith('lib/agent/domain/')
+  );
 }
 
 function toRepoPath(file) {

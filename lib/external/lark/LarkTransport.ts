@@ -19,8 +19,8 @@
  */
 
 import { ConversationStore } from '@alembic/agent/context';
+import type { AgentService } from '@alembic/agent/service';
 import Logger from '@alembic/core/logging';
-import type { AgentService } from '#agent/service/index.js';
 import { Intent, IntentClassifier } from './IntentClassifier.js';
 
 // ── Interfaces ──────────────────────────────────

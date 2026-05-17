@@ -10,9 +10,9 @@
  */
 
 import type { MemoryCoordinator, SessionStore } from '@alembic/agent/memory';
+import type { AgentRunResult } from '@alembic/agent/service';
 import { buildTierReflection, saveDimensionCheckpoint } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
-import type { AgentRunResult } from '#agent/service/index.js';
 import type { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
 import {
   type AgentResultLike,
