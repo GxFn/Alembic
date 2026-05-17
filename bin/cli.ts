@@ -1437,11 +1437,12 @@ program
       // 2. 启动 Dashboard UI
       const dashboardDir = DASHBOARD_DIR;
       const distDir = join(dashboardDir, 'dist');
+      const dashboardSourceDir = join(PACKAGE_ROOT, 'vendor', 'AlembicDashboard');
       const hasPrebuilt = existsSync(join(distDir, 'index.html'));
-      const hasSrc = existsSync(join(dashboardDir, 'src'));
+      const hasSharedDashboardSrc = existsSync(join(dashboardSourceDir, 'src'));
 
-      if (hasPrebuilt && !hasSrc) {
-        // ── 生产模式：npm 安装的包，在 API 服务器上直接托管预构建产物 ──
+      if (hasPrebuilt) {
+        // ── 生产模式：API 服务器上直接托管预构建产物 ──
         // 同端口同 origin → /api 路由自然可达，无跨域问题
         httpServer.mountDashboard(distDir);
 
@@ -1452,25 +1453,27 @@ program
           const open = (await import('open')).default;
           open(dashUrl);
         }
-      } else {
-        // ── 开发模式：有源码，启动 Vite Dev Server ──
-        if (!existsSync(join(dashboardDir, 'node_modules'))) {
-          const install = spawn('npm', ['install'], { cwd: dashboardDir, stdio: 'inherit' });
-          await new Promise((resolve, reject) => {
-            install.on('close', (code) =>
-              code === 0 ? resolve(undefined) : reject(new Error(`npm install exited with ${code}`))
-            );
-          });
+      } else if (hasSharedDashboardSrc) {
+        // ── 开发模式：从共享 Dashboard 仓库启动 Vite Dev Server ──
+        if (!existsSync(join(dashboardSourceDir, 'node_modules'))) {
+          cli.error(
+            '❌ Dashboard dependencies are missing. Run `npm ci --prefix vendor/AlembicDashboard` first.'
+          );
+          process.exit(1);
         }
         const viteArgs = ['--host'];
         if (opts.open !== false) {
           viteArgs.push('--open');
         }
-        const vite = spawn('npx', ['vite', ...viteArgs], {
-          cwd: dashboardDir,
-          stdio: 'inherit',
-          env: { ...process.env, VITE_API_URL: `http://127.0.0.1:${port}` },
-        });
+        const vite = spawn(
+          'npm',
+          ['--prefix', dashboardSourceDir, 'run', 'dev', '--', ...viteArgs],
+          {
+            cwd: PACKAGE_ROOT,
+            stdio: 'inherit',
+            env: { ...process.env, VITE_API_URL: `http://127.0.0.1:${port}` },
+          }
+        );
 
         vite.on('error', (err) => {
           cli.error(`❌ Vite failed to start: ${err.message}`);
@@ -1480,6 +1483,10 @@ program
           vite.kill();
           process.exit(0);
         });
+      } else {
+        cli.error('❌ Dashboard build output not found.');
+        cli.error('   Run `npm run build:dashboard` to generate dashboard/dist/index.html.');
+        process.exit(1);
       }
     } catch (err: any) {
       cli.error(`❌ API server failed to start: ${err.message}`);
