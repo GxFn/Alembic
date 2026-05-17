@@ -14,7 +14,7 @@ Extract patterns from your codebase into a knowledge base that AI coding assista
 
 ---
 
-- [Why](#why) · [Getting Started](#getting-started) · [Codex Plugin](#codex-plugin) · [Using in IDE](#using-in-ide) · [Evolution Architecture](#evolution-architecture) · [Engineering Capabilities](#engineering-capabilities) · [IDE Support](#ide-support) · [Deep Dive](#deep-dive)
+- [Why](#why) · [Getting Started](#getting-started) · [Using in IDE](#using-in-ide) · [Evolution Architecture](#evolution-architecture) · [Engineering Capabilities](#engineering-capabilities) · [IDE Support](#ide-support) · [Deep Dive](#deep-dive)
 
 ## Why
 
@@ -41,28 +41,6 @@ alembic ui              # Start background service (MCP Server + Dashboard) — 
 ```
 
 > **Trae / Qoder users:** After `alembic setup`, run `alembic mirror` to sync `.cursor/` config to `.trae/` / `.qoder/`.
-
-## Codex Plugin
-
-Alembic also ships a Codex plugin at `plugins/alembic-codex`. It is designed for a click-install flow: Codex starts a lightweight MCP shim first, checks diagnostics and workspace status without starting services, initializes in Ghost mode by default, then wakes the Alembic daemon only for Dashboard, Guard, bootstrap, rescan, or project-knowledge tools.
-
-Recommended first run inside Codex:
-
-1. `alembic_codex_diagnostics`
-2. `alembic_codex_status`
-3. `alembic_codex_init` if the workspace is not initialized
-4. `alembic_codex_bootstrap` for first project knowledge, or `alembic_task` with `operation=prime` before coding
-
-For release validation:
-
-```bash
-npm run build
-alembic codex diagnostics --json
-npm run release:codex-plugin
-npm run release:codex-plugin:daemon   # optional localhost daemon smoke
-```
-
-For the detailed release, testing, and promotion plan, see `plugins/alembic-codex/RELEASE-PLAYBOOK.md`.
 
 ## Using in IDE
 

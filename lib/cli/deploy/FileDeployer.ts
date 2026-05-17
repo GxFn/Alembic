@@ -680,7 +680,7 @@ export class FileDeployer {
         }
 
         // 探测可用 IDE CLI
-        const cliCandidates = ['code', 'cursor', 'codex'];
+        const cliCandidates = ['code', 'cursor'];
         const installed: string[] = [];
 
         for (const cli of cliCandidates) {

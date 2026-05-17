@@ -395,7 +395,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function inferJobSource(req: Request) {
-  return req.headers['x-alembic-daemon-token'] ? 'codex' : 'dashboard';
+  return req.headers['x-alembic-daemon-token'] ? 'http' : 'dashboard';
 }
 
 function rejectInvalidProvidedDaemonToken(req: Request, res: Response): boolean {

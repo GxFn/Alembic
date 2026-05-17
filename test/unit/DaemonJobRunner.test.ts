@@ -48,7 +48,7 @@ describe('markInterruptedDaemonJobs', () => {
   test('fails active daemon jobs and logs the recovery action', () => {
     useTempAlembicHome();
     const store = new JobStore({ projectRoot: makeProjectRoot() });
-    const job = store.create({ kind: 'bootstrap', source: 'codex' });
+    const job = store.create({ kind: 'bootstrap', source: 'http' });
     store.markRunning(job.id);
     const logger = makeLogger();
 

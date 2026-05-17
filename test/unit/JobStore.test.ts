@@ -31,7 +31,7 @@ describe('JobStore', () => {
     const first = store.create({
       kind: 'bootstrap',
       request: { maxFiles: 10 },
-      source: 'codex',
+      source: 'http',
     });
     store.markRunning(first.id);
     const completed = store.complete(
@@ -94,7 +94,7 @@ describe('JobStore', () => {
   test('marks queued and running jobs interrupted without touching terminal jobs', () => {
     useTempAlembicHome();
     const store = new JobStore({ projectRoot: makeProjectRoot() });
-    const queued = store.create({ kind: 'bootstrap', source: 'codex' });
+    const queued = store.create({ kind: 'bootstrap', source: 'http' });
     const running = store.create({ kind: 'rescan', source: 'dashboard' });
     store.markRunning(running.id);
     const completed = store.create({ kind: 'bootstrap' });

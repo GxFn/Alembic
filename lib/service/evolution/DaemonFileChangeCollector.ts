@@ -1,5 +1,5 @@
 /**
- * DaemonFileChangeCollector — Codex/plugin fallback file-change collection.
+ * DaemonFileChangeCollector — daemon fallback file-change collection.
  *
  * Preferred path:
  *   VSCode extension heartbeat is fresh → extension owns file-change events.

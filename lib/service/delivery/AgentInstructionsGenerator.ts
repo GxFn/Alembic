@@ -2,7 +2,7 @@
  * AgentInstructionsGenerator — 通用 AI Agent 指令文件生成器
  *
  * Channel F: 为多种 AI 编码工具生成项目指令文件
- *   - AGENTS.md      → OpenAI Codex / 通用 Agent
+ *   - AGENTS.md      → 通用 Agent
  *   - CLAUDE.md       → Claude Code
  *   - .github/copilot-instructions.md → GitHub Copilot（动态版，替代静态模板）
  *

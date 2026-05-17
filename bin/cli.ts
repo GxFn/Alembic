@@ -5,9 +5,6 @@
  *
  * Usage:
  *   alembic setup           - 初始化项目（--repo 指定子仓库远程地址）
- *   alembic codex init      - Codex 插件模式初始化（默认 Ghost）
- *   alembic codex diagnostics - Codex 插件运行时诊断
- *   alembic codex status    - Codex 插件模式状态检查
  *   alembic ai status       - 查看 AI 配置
  *   alembic ai configure    - 写入工作区 AI 配置
  *   alembic daemon start    - 启动 Alembic daemon（动态端口 + state 文件）
@@ -91,7 +88,6 @@ program
   .option('--force', '强制覆盖已有配置')
   .option('--seed', '预置示例 Recipe（冷启动推荐）')
   .option('--ghost', 'Ghost 模式：零项目侵入，所有数据外置到 ~/.asd/workspaces/')
-  .option('--codex', 'Codex 插件 profile：默认 Ghost，并跳过 Cursor/VS Code 项目文件部署')
   .option('--repo <url>', 'recipes 子仓库的远程 Git 仓库地址（提供则 clone，不提供则为普通目录）')
   .action(async (opts) => {
     const { SetupService } = await import('../lib/cli/SetupService.js');
@@ -99,99 +95,13 @@ program
       projectRoot: resolve(opts.dir),
       force: opts.force,
       seed: opts.seed,
-      ghost: opts.codex ? true : opts.ghost,
-      profile: opts.codex ? 'codex-plugin' : 'full-ide',
+      ghost: opts.ghost,
+      profile: 'full-ide',
       subRepoUrl: opts.repo,
     });
 
     await service.run();
     service.printSummary();
-  });
-
-// ─────────────────────────────────────────────────────
-// codex 命令 — Codex 插件模式辅助入口
-// ─────────────────────────────────────────────────────
-const codex = program.command('codex').description('Codex 插件模式辅助命令');
-
-codex
-  .command('init')
-  .description('以 Codex 插件 profile 初始化 Alembic（默认 Ghost，零项目侵入）')
-  .option('-d, --dir <path>', '项目目录', '.')
-  .option('--force', '强制覆盖已有配置')
-  .option('--seed', '预置示例 Recipe')
-  .option('--repo <url>', 'recipes 子仓库的远程 Git 仓库地址')
-  .option('--standard', '写入项目目录而不是 Ghost dataRoot（不推荐用于市场插件）')
-  .option('--json', 'JSON 格式输出')
-  .action(async (opts) => {
-    const { SetupService } = await import('../lib/cli/SetupService.js');
-    const projectRoot = resolve(opts.dir);
-    const service = new SetupService({
-      projectRoot,
-      force: opts.force,
-      seed: opts.seed,
-      ghost: !opts.standard,
-      profile: 'codex-plugin',
-      quiet: opts.json,
-      subRepoUrl: opts.repo,
-    });
-
-    const results = await service.run();
-    const status = await buildCodexStatus(projectRoot);
-    const ok = results.every((r) => r.ok);
-
-    if (opts.json) {
-      cli.json({
-        ok,
-        profile: 'codex-plugin',
-        results,
-        status,
-      });
-    } else {
-      service.printSummary();
-      printCodexStatus(status);
-    }
-
-    if (!ok) {
-      process.exitCode = 1;
-    }
-  });
-
-codex
-  .command('diagnostics')
-  .description('检查 Codex 插件运行时、MCP pin、资源文件和 daemon 版本，不启动 daemon')
-  .option('-d, --dir <path>', '项目目录', '.')
-  .option('--json', 'JSON 格式输出')
-  .action(async (opts) => {
-    const { CodexMcpServer } = await import('../lib/external/mcp/CodexMcpServer.js');
-    const server = new CodexMcpServer({ projectRoot: resolve(opts.dir) });
-    const result = (await server.buildDiagnostics()) as {
-      data?: Record<string, unknown>;
-      success?: boolean;
-    };
-    const diagnostics = result.data || {};
-
-    if (opts.json) {
-      cli.json(diagnostics);
-      return;
-    }
-    printCodexDiagnostics(diagnostics);
-    if (diagnostics.ok === false) {
-      process.exitCode = 1;
-    }
-  });
-
-codex
-  .command('status')
-  .description('检查 Codex 插件模式的 Alembic 工作区状态')
-  .option('-d, --dir <path>', '项目目录', '.')
-  .option('--json', 'JSON 格式输出')
-  .action(async (opts) => {
-    const status = await buildCodexStatus(resolve(opts.dir));
-    if (opts.json) {
-      cli.json(status);
-      return;
-    }
-    printCodexStatus(status);
   });
 
 // ─────────────────────────────────────────────────────
@@ -274,7 +184,7 @@ ai.command('import-env')
   });
 
 // ─────────────────────────────────────────────────────
-// daemon 命令 — Codex/插件模式后台服务
+// daemon 命令 — 后台服务
 // ─────────────────────────────────────────────────────
 const daemon = program.command('daemon').description('管理 Alembic daemon 后台服务');
 
@@ -2433,230 +2343,6 @@ async function readAllStdin() {
     data += chunk;
   }
   return data;
-}
-
-async function buildCodexStatus(projectRootInput: string) {
-  const projectRoot = resolve(projectRootInput);
-  const resolver = WorkspaceResolver.fromProject(projectRoot);
-  const facts = resolver.toFacts();
-
-  const configPath = resolver.configPath;
-  const databasePath = resolver.databasePath;
-  const settingsStore = new WorkspaceSettingsStore(resolver);
-  const daemonStatePath = join(resolver.runtimeDir, 'daemon.json');
-  const daemonPidPath = join(resolver.runtimeDir, 'daemon.pid');
-  const { DaemonSupervisor } = await import('../lib/daemon/DaemonSupervisor.js');
-  const daemonStatus = await new DaemonSupervisor().status(projectRoot);
-
-  const runtimeExists = existsSync(resolver.runtimeDir);
-  const configExists = existsSync(configPath);
-  const databaseExists = existsSync(databasePath);
-  const knowledgeExists = existsSync(resolver.knowledgeDir);
-  const recipesExists = existsSync(resolver.recipesDir);
-  const settingsExists = existsSync(settingsStore.settingsPath);
-  const secretsExists = existsSync(settingsStore.secretsPath);
-  const daemonState = daemonStatus.state || readJsonIfExists(daemonStatePath);
-
-  const projectArtifacts = {
-    runtimeDir: join(projectRoot, DEFAULT_FOLDER_NAMES.project.runtime),
-    runtimeExists: existsSync(join(projectRoot, DEFAULT_FOLDER_NAMES.project.runtime)),
-    knowledgeDir: join(projectRoot, DEFAULT_FOLDER_NAMES.project.knowledgeBase),
-    knowledgeExists: existsSync(join(projectRoot, DEFAULT_FOLDER_NAMES.project.knowledgeBase)),
-    cursorDir: join(projectRoot, DEFAULT_IDE_FOLDER_NAMES.cursorRoot),
-    cursorDirExists: existsSync(join(projectRoot, DEFAULT_IDE_FOLDER_NAMES.cursorRoot)),
-    vscodeMcpPath: join(projectRoot, '.vscode', 'mcp.json'),
-    vscodeMcpExists: existsSync(join(projectRoot, '.vscode', 'mcp.json')),
-  };
-
-  const initialized = configExists && databaseExists && knowledgeExists && recipesExists;
-  const nextActions = initialized
-    ? [
-        'Use the Alembic Codex plugin skill and call alembic_health.',
-        'Call alembic_task(operation=prime) before non-trivial coding tasks.',
-      ]
-    : [`Run alembic codex init --dir ${projectRoot}.`];
-
-  return {
-    ok: initialized,
-    packageVersion: pkg.version,
-    profile: 'codex-plugin',
-    initialized,
-    projectRoot,
-    registry: {
-      registered: facts.registered,
-      path: facts.registryPath,
-      projectId: facts.projectId,
-      expectedProjectId: facts.expectedProjectId,
-    },
-    workspace: {
-      mode: facts.mode,
-      ghost: facts.ghost,
-      dataRoot: facts.dataRoot,
-      dataRootSource: facts.dataRootSource,
-      workspaceExists: facts.workspaceExists,
-      runtimeDir: resolver.runtimeDir,
-      runtimeExists,
-      configPath,
-      configExists,
-      databasePath,
-      databaseExists,
-      settingsPath: settingsStore.settingsPath,
-      settingsExists,
-      secretsPath: settingsStore.secretsPath,
-      secretsExists,
-      knowledgeDir: resolver.knowledgeDir,
-      knowledgeExists,
-      recipesDir: resolver.recipesDir,
-      recipesExists,
-      candidatesDir: resolver.candidatesDir,
-      skillsDir: resolver.skillsDir,
-      wikiDir: resolver.wikiDir,
-    },
-    projectArtifacts,
-    mcp: {
-      runtimeCommand: 'alembic-codex-mcp',
-      tier: process.env.ALEMBIC_MCP_TIER || 'agent',
-      requiresProjectEnv: null,
-    },
-    daemon: {
-      implemented: true,
-      status: daemonStatus.status,
-      ready: daemonStatus.ready,
-      statePath: daemonStatePath,
-      stateExists: existsSync(daemonStatePath),
-      pidPath: daemonPidPath,
-      pidExists: existsSync(daemonPidPath),
-      pidAlive: daemonStatus.pidAlive,
-      health: daemonStatus.health,
-      state: daemonState,
-    },
-    nextActions,
-  };
-}
-
-function readJsonIfExists(filePath: string): unknown | null {
-  if (!existsSync(filePath)) {
-    return null;
-  }
-  try {
-    return JSON.parse(readFileSync(filePath, 'utf8'));
-  } catch {
-    return null;
-  }
-}
-
-function printCodexDiagnostics(diagnostics: Record<string, unknown>) {
-  const node = plainRecord(diagnostics.node);
-  const commands = plainRecord(diagnostics.commands);
-  const npm = plainRecord(commands?.npm);
-  const npx = plainRecord(commands?.npx);
-  const plugin = plainRecord(diagnostics.plugin);
-  const mcp = plainRecord(plugin?.mcp);
-  const daemon = plainRecord(diagnostics.daemon);
-  const codexInfo = plainRecord(diagnostics.codex);
-  const issues = Array.isArray(diagnostics.issues) ? diagnostics.issues : [];
-  const nextActions = Array.isArray(diagnostics.nextActions) ? diagnostics.nextActions : [];
-
-  cli.log('');
-  cli.log('  Alembic Codex Diagnostics');
-  cli.log(`  ${'─'.repeat(40)}`);
-  cli.log(`  Overall:     ${diagnostics.ok === false ? 'needs attention' : 'ok'}`);
-  cli.log(`  Summary:     ${String(diagnostics.summary || 'n/a')}`);
-  cli.log(`  Node:        ${formatCheck(node?.ok)} ${String(node?.version || 'unknown')}`);
-  cli.log(`  npm:         ${formatCheck(npm?.available)} ${String(npm?.version || 'unavailable')}`);
-  cli.log(`  npx:         ${formatCheck(npx?.available)} ${String(npx?.version || 'unavailable')}`);
-  cli.log(
-    `  MCP pin:     ${formatCheck(mcp?.packagePin)} ${String(mcp?.pinnedSpecifier || 'missing')}`
-  );
-  cli.log(`  Plugin:      ${formatCheck(plugin?.ok)} ${String(plugin?.root || 'missing')}`);
-  cli.log(`  Daemon:      ${daemon?.ready ? 'ready' : String(daemon?.status || 'not running')}`);
-  cli.log(
-    `  Tier:        requested=${String(codexInfo?.requestedTier || 'agent')} effective=${String(
-      codexInfo?.effectiveTier || 'agent'
-    )}`
-  );
-
-  if (issues.length > 0) {
-    cli.log('');
-    cli.log('  Issues:');
-    for (const rawIssue of issues) {
-      const issue = plainRecord(rawIssue);
-      if (!issue) {
-        continue;
-      }
-      cli.log(
-        `    - [${String(issue.severity || 'warning')}] ${String(
-          issue.code || 'UNKNOWN'
-        )}: ${String(issue.message || '')}`
-      );
-      if (issue.action) {
-        cli.log(`      Action: ${String(issue.action)}`);
-      }
-    }
-  }
-
-  if (nextActions.length > 0) {
-    cli.log('');
-    cli.log('  Next:');
-    for (const action of nextActions) {
-      cli.log(`    - ${String(action)}`);
-    }
-  }
-  cli.blank();
-}
-
-function printCodexStatus(status: Awaited<ReturnType<typeof buildCodexStatus>>) {
-  cli.log('');
-  cli.log('  Alembic Codex Status');
-  cli.log(`  ${'─'.repeat(40)}`);
-  cli.log(`  Initialized: ${status.initialized ? 'yes' : 'no'}`);
-  cli.log(`  Profile:     ${status.profile}`);
-  cli.log(`  Version:     ${status.packageVersion}`);
-  cli.log(`  Project:     ${status.projectRoot}`);
-  cli.log(
-    `  Workspace:   ${status.workspace.ghost ? 'Ghost' : 'Standard'} (${status.workspace.dataRoot})`
-  );
-  cli.log(
-    `  Runtime:     ${status.workspace.runtimeExists ? status.workspace.runtimeDir : 'missing'}`
-  );
-  cli.log(
-    `  Database:    ${status.workspace.databaseExists ? status.workspace.databasePath : 'missing'}`
-  );
-  cli.log(
-    `  Knowledge:   ${status.workspace.knowledgeExists ? status.workspace.knowledgeDir : 'missing'}`
-  );
-  cli.log(
-    `  Daemon:      ${status.daemon.ready ? 'ready' : status.daemon.status || 'not running'}`
-  );
-
-  if (status.workspace.ghost) {
-    const artifacts = status.projectArtifacts;
-    const polluted =
-      artifacts.runtimeExists ||
-      artifacts.knowledgeExists ||
-      artifacts.cursorDirExists ||
-      artifacts.vscodeMcpExists;
-    cli.log(`  Project IO:  ${polluted ? 'project artifacts detected' : 'zero project artifacts'}`);
-  }
-
-  if (status.nextActions.length > 0) {
-    cli.log('');
-    cli.log('  Next:');
-    for (const action of status.nextActions) {
-      cli.log(`    - ${action}`);
-    }
-  }
-  cli.blank();
-}
-
-function plainRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function formatCheck(value: unknown): string {
-  return value === true ? 'ok' : 'missing';
 }
 
 function parseCliInteger(value: string | number, label: string): number {

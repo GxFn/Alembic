@@ -141,15 +141,6 @@ function destructiveTool(title: string, idempotentHint = false): ToolAnnotations
 }
 
 const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
-  alembic_codex_status: readOnlyTool('Check Alembic Codex Status'),
-  alembic_codex_diagnostics: readOnlyTool('Run Alembic Codex Diagnostics'),
-  alembic_codex_init: localWriteTool('Initialize Alembic Codex Workspace', true),
-  alembic_codex_dashboard: localWriteTool('Start Alembic Dashboard', true),
-  alembic_codex_bootstrap: aiBackedWriteTool('Start Alembic Bootstrap Job'),
-  alembic_codex_rescan: aiBackedWriteTool('Start Alembic Rescan Job'),
-  alembic_codex_job: readOnlyTool('Read Alembic Job Status'),
-  alembic_codex_stop: localWriteTool('Stop Alembic Daemon', true),
-  alembic_codex_cleanup: destructiveTool('Clean Alembic Runtime State'),
   alembic_health: readOnlyTool('Check Alembic Health'),
   alembic_search: readOnlyTool('Search Alembic Knowledge'),
   alembic_knowledge: localWriteTool('Browse Or Mark Alembic Knowledge Usage'),

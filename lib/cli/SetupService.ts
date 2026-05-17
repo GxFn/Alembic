@@ -73,7 +73,7 @@ const REPO_ROOT = PACKAGE_ROOT;
 
 // ─────────────────────────────────────────────────────
 
-export type SetupProfile = 'full-ide' | 'codex-plugin' | 'headless';
+export type SetupProfile = 'full-ide' | 'headless';
 
 export class SetupService {
   force: boolean;
@@ -107,7 +107,7 @@ export class SetupService {
     projectRoot: string;
     force?: boolean;
     seed?: boolean;
-    /** 初始化 profile：full-ide 为传统 IDE 交付，codex-plugin 为 Codex 市场插件模式 */
+    /** 初始化 profile：full-ide 为传统 IDE 交付，headless 跳过 IDE 文件部署 */
     profile?: SetupProfile;
     /** 静默输出（通常用于 JSON CLI） */
     quiet?: boolean;
@@ -127,10 +127,9 @@ export class SetupService {
     this.subRepoDir = options.subRepoDir || DEFAULT_SUB_REPO_DIR;
     this.subRepoUrl = options.subRepoUrl;
 
-    // Ghost 模式：显式配置优先；Codex 插件 profile 默认 Ghost；否则继承注册表状态
+    // Ghost 模式：显式配置优先；否则继承注册表状态
     const existingEntry = ProjectRegistry.get(this.projectRoot);
-    this.ghost =
-      options.ghost ?? (this.profile === 'codex-plugin' ? true : (existingEntry?.ghost ?? false));
+    this.ghost = options.ghost ?? existingEntry?.ghost ?? false;
 
     // ── 排除项目保护 ──────────────────────────────────
     const exclusion = isExcludedProject(this.projectRoot);
@@ -253,14 +252,14 @@ export class SetupService {
     }
     console.log('');
     console.log('  下一步：');
-    if (this.profile === 'codex-plugin') {
-      console.log('    1. 在 Codex 插件中调用 alembic_health 检查 MCP 可用性');
-      console.log('    2. 非简单编码任务前使用 alembic_task(operation=prime)');
-      console.log('    3. 写完后使用 alembic_guard 检查当前变更');
-    } else {
+    if (this.profile === 'full-ide') {
       console.log('    1. 运行 alembic ui 启动后台服务');
       console.log('    2. 打开 IDE Agent Mode，告诉它「帮我冷启动」');
       console.log('    3. 所有分析和知识提取都通过 IDE 完成，无需额外配置');
+    } else {
+      console.log('    1. 运行 alembic daemon start 启动后台服务');
+      console.log('    2. 使用 alembic-mcp 或 HTTP API 接入自动化流程');
+      console.log('    3. 通过 Dashboard 或命令行查看知识库状态');
     }
     console.log('');
   }

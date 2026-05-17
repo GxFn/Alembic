@@ -1,13 +1,6 @@
 import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
 
-export type ToolSurface =
-  | 'runtime'
-  | 'http'
-  | 'mcp'
-  | 'codex'
-  | 'dashboard'
-  | 'composer'
-  | 'system';
+export type ToolSurface = 'runtime' | 'http' | 'mcp' | 'dashboard' | 'composer' | 'system';
 
 export interface ToolActor {
   role?: string;
@@ -16,7 +9,7 @@ export interface ToolActor {
 }
 
 export interface ToolCallSource {
-  kind: 'runtime' | 'http' | 'mcp' | 'codex' | 'dashboard' | 'composer' | 'system';
+  kind: 'runtime' | 'http' | 'mcp' | 'dashboard' | 'composer' | 'system';
   name?: string;
 }
 

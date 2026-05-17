@@ -54,7 +54,7 @@ export interface DaemonJobRecord {
   id: string;
   kind: 'bootstrap' | 'rescan';
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-  source: 'codex' | 'dashboard' | 'http' | 'system';
+  source: 'dashboard' | 'http' | 'system';
   projectRoot: string;
   dataRoot: string;
   projectId: string | null;

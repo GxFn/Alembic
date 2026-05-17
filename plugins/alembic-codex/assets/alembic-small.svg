@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Alembic">
-  <rect width="64" height="64" rx="14" fill="#2563EB"/>
-  <path d="M19 47h26L34 16h-4L19 47Z" fill="#F8FAFC"/>
-  <path d="M25 39h14l-5-14h-4l-5 14Z" fill="#2563EB"/>
-  <path d="M16 48h32" stroke="#DBEAFE" stroke-width="4" stroke-linecap="round"/>
-</svg>

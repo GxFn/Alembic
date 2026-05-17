@@ -39,7 +39,6 @@ import healthRouter from './routes/health.js';
 import jobsRouter from './routes/jobs.js';
 import knowledgeRouter from './routes/knowledge.js';
 import logsRouter from './routes/logs.js';
-import mcpRouter from './routes/mcp.js';
 import modulesRouter from './routes/modules.js';
 import monitoringRouter from './routes/monitoring.js';
 import panoramaRouter from './routes/panorama.js';
@@ -268,10 +267,7 @@ export class HttpServer {
     // daemon 自检端点（供 DaemonSupervisor 校验 project/data/schema identity）
     this.app.use(`${apiPrefix}/daemon`, daemonRouter);
 
-    // 本地 MCP bridge（供轻量 Codex MCP shim 转发工具调用）
-    this.app.use(`${apiPrefix}/mcp`, mcpRouter);
-
-    // daemon job 状态与投递（Codex 断开后可恢复 job 状态）
+    // daemon job 状态与投递
     this.app.use(`${apiPrefix}/jobs`, jobsRouter);
 
     // 认证路由
