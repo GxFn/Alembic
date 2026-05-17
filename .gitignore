@@ -4,11 +4,13 @@
 
 # ─── Dependencies ────────────────────────────────────
 node_modules/
+vendor/AlembicDashboard/node_modules/
 resources/vscode-ext/node_modules/
 
 # ─── Build outputs ───────────────────────────────────
 dist/
 dashboard/dist/
+vendor/AlembicDashboard/dist/
 resources/vscode-ext/out/
 resources/vscode-ext/*.vsix
 
