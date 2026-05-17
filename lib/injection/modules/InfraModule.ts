@@ -19,7 +19,6 @@ import {
   createAlembicRepositories,
 } from '@alembic/core/repositories';
 import { MemoryRepositoryImpl } from '@alembic/core/repository/memory/MemoryRepository';
-import { unwrapRawDb } from '@alembic/core/search';
 import { KnowledgeFileWriter } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
 import { KnowledgeSyncService } from '@alembic/core/service/knowledge/KnowledgeSyncService';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
@@ -28,7 +27,6 @@ import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../infrastructure/audit/AuditStore.js';
 import { getRealtimeService as _getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
-import { RemoteCommandRepository } from '../../repository/remote/RemoteCommandRepository.js';
 import { BootstrapTaskManager } from '../../service/bootstrap/BootstrapTaskManager.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
@@ -156,14 +154,6 @@ export function register(c: ServiceContainer) {
     'proposalRepository',
     (ct: ServiceContainer) => getCoreRepositoryBundle(ct).proposalRepository
   );
-
-  c.singleton('remoteCommandRepository', (ct: ServiceContainer) => {
-    const db = ct.get('database') as unknown as { getDrizzle(): unknown };
-    return new RemoteCommandRepository(
-      unwrapRawDb(db as unknown) as ConstructorParameters<typeof RemoteCommandRepository>[0],
-      db.getDrizzle() as ConstructorParameters<typeof RemoteCommandRepository>[1]
-    );
-  });
 
   c.singleton(
     'recipeSourceRefRepository',

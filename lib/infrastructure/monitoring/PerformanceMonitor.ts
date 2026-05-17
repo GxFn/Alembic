@@ -162,9 +162,7 @@ export class PerformanceMonitor implements Disposable {
       this.metrics.responseTimes.shift();
     }
 
-    // 慢请求记录（排除设计上就是长耗时的 long-poll 端点）
-    const isLongPoll = route.includes('/remote/wait');
-    if (duration > this.config.slowRequestThreshold && !isLongPoll) {
+    if (duration > this.config.slowRequestThreshold) {
       this.metrics.slowRequests.push({
         ...requestData,
         duration,

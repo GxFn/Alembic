@@ -8,7 +8,7 @@ function makeInput(overrides: Partial<AgentRunInput> = {}): AgentRunInput {
     message: {
       content: 'hello',
       history: [{ role: 'user', content: 'previous' }],
-      metadata: { mode: 'remote-exec', lang: 'zh-CN' },
+      metadata: { mode: 'legacy-ui-mode', lang: 'zh-CN' },
       sessionId: 's1',
     },
     context: {

@@ -84,7 +84,6 @@ import type AuditLogger from '../infrastructure/audit/AuditLogger.js';
 import type AuditStore from '../infrastructure/audit/AuditStore.js';
 import type { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
 import type { AuditRepositoryImpl } from '../repository/audit/AuditRepository.js';
-import type { RemoteCommandRepository } from '../repository/remote/RemoteCommandRepository.js';
 import type { BootstrapTaskManager } from '../service/bootstrap/BootstrapTaskManager.js';
 import type { CursorDeliveryPipeline } from '../service/delivery/CursorDeliveryPipeline.js';
 import type { ModuleService } from '../service/module/ModuleService.js';
@@ -121,7 +120,6 @@ export interface ServiceMap {
   sessionRepository: SessionRepository;
   proposalRepository: EvolutionProposalRepository;
   warningRepository: EvolutionWarningRepository;
-  remoteCommandRepository: RemoteCommandRepository;
   recipeSourceRefRepository: SourceRefRepository;
   knowledgeFileWriter: KnowledgeFileWriter;
   knowledgeSyncService: KnowledgeSyncService;

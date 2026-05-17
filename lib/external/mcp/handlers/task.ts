@@ -12,7 +12,6 @@
  */
 
 import type { SignalBus } from '@alembic/core/events';
-import { notifyTaskProgress } from '#infra/notification/LarkNotifier.js';
 import type { ExtractedIntent } from '#service/task/IntentExtractor.js';
 import { extract as extractIntent } from '#service/task/IntentExtractor.js';
 import type { PrimeSearchResult } from '#service/task/PrimeSearchPipeline.js';
@@ -114,13 +113,6 @@ export async function taskHandler(ctx: McpContext, args: TaskArgs) {
         meta: { tool: 'alembic_task' },
       });
   }
-
-  // ── Lark notification (async, non-blocking) ──
-  notifyTaskProgress(args.operation!, args, result).catch((err: unknown) => {
-    process.stderr.write(
-      `[MCP/Task] Notify error: ${err instanceof Error ? err.message : String(err)}\n`
-    );
-  });
 
   return result;
 }

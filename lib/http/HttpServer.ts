@@ -43,7 +43,6 @@ import modulesRouter from './routes/modules.js';
 import monitoringRouter from './routes/monitoring.js';
 import panoramaRouter from './routes/panorama.js';
 import recipesRouter from './routes/recipes.js';
-import remoteRouter from './routes/remote.js';
 import searchRouter from './routes/search.js';
 import signalsRouter from './routes/signals.js';
 import skillsRouter from './routes/skills.js';
@@ -335,9 +334,6 @@ export class HttpServer {
 
     // Wiki 路由
     this.app.use(`${apiPrefix}/wiki`, wikiRouter);
-
-    // Remote 路由（飞书 Bot → IDE 远程指令桥接）
-    this.app.use(`${apiPrefix}/remote`, remoteRouter);
 
     // Panorama 全景路由（项目结构 + 覆盖率 + 健康度）
     this.app.use(`${apiPrefix}/panorama`, panoramaRouter);

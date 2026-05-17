@@ -14,7 +14,6 @@
  *   - extract（路径/文本提取）
  *   - auth（登录）
  *   - commands（文件读写）
- *   - remote（远程指令、通知）
  *
  * @module shared/schemas/http-requests
  */
@@ -410,28 +409,3 @@ export const FileSaveBody = z.object({
 // ═══ Wiki Routes ═════════════════════════════════
 
 /* Wiki validation stays as inline path-param check (wildcard route) */
-
-// ═══ Remote Routes ═══════════════════════════════
-
-export const RemoteSendBody = z.object({
-  command: z
-    .string()
-    .min(1, 'command is required')
-    .transform((s) => s.trim()),
-});
-
-export const RemoteNotifyBody = z.object({
-  text: z
-    .string()
-    .min(1, 'text is required')
-    .transform((s) => s.trim()),
-});
-
-export const RemoteResultBody = z.object({
-  result: z.string().optional(),
-  status: z.string().default('completed'),
-});
-
-export const RemoteHistoryQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-});

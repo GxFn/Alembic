@@ -49,18 +49,6 @@
       {
         "command": "alembic.status",
         "title": "Alembic: Show Connection Status"
-      },
-      {
-        "command": "alembic.toggleRemotePoller",
-        "title": "Alembic: Toggle Remote Command Poller"
-      },
-      {
-        "command": "alembic.startRemotePoller",
-        "title": "Alembic: Start Remote Command Poller"
-      },
-      {
-        "command": "alembic.stopRemotePoller",
-        "title": "Alembic: Stop Remote Command Poller"
       }
     ],
     "configuration": {
@@ -95,11 +83,6 @@
           "type": "number",
           "default": 2000,
           "description": "Duration (ms) to highlight inserted code"
-        },
-        "alembic.enableRemotePoller": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable remote command polling (飞书/Lark Bot → IDE bridge). When enabled, the extension polls for remote commands and injects them into Copilot Chat."
         },
         "alembic.enableReactivePopup": {
           "type": "boolean",

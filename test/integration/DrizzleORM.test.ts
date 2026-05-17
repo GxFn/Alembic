@@ -14,9 +14,7 @@ import {
   resetDrizzle,
   schema,
 } from '@alembic/core/infrastructure/database/drizzle';
-import migrate003 from '@alembic/core/infrastructure/database/migrations/003_add_remote_commands';
 import Database from 'better-sqlite3';
-import { eq } from 'drizzle-orm';
 
 describe('Integration: Drizzle ORM', () => {
   let db: InstanceType<typeof Database>;
@@ -66,14 +64,6 @@ describe('Integration: Drizzle ORM', () => {
   });
 
   describe('schema exports', () => {
-    test('should export remoteCommands table', () => {
-      expect(schema.remoteCommands).toBeDefined();
-    });
-
-    test('should export remoteState table', () => {
-      expect(schema.remoteState).toBeDefined();
-    });
-
     test('should export knowledge and other core tables', () => {
       // these are defined in the Drizzle schema
       expect(schema.knowledgeEntries).toBeDefined();
@@ -82,81 +72,37 @@ describe('Integration: Drizzle ORM', () => {
   });
 
   describe('real SQL operations via Drizzle', () => {
-    test('should insert and select from remote_commands', () => {
-      // Run migration to create table
-      migrate003(db);
+    test('should insert and select from guard_violations', () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS guard_violations (
+          id TEXT PRIMARY KEY,
+          file_path TEXT NOT NULL,
+          violations_json TEXT NOT NULL,
+          violation_count INTEGER NOT NULL DEFAULT 0,
+          summary TEXT,
+          triggered_at TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )
+      `);
       const drizzle = initDrizzle(db);
 
-      // Insert a row via Drizzle
       drizzle
-        .insert(schema.remoteCommands)
+        .insert(schema.guardViolations)
         .values({
-          id: 'test-1',
-          source: 'test',
-          command: 'hello',
-          status: 'pending',
+          id: 'guard-1',
+          filePath: 'src/App.ts',
+          violationsJson: '[]',
+          violationCount: 0,
+          summary: null,
+          triggeredAt: 'manual',
           createdAt: Math.floor(Date.now() / 1000),
         })
         .run();
 
-      // Read it back
-      const rows = drizzle.select().from(schema.remoteCommands).all();
+      const rows = drizzle.select().from(schema.guardViolations).all();
       expect(rows).toHaveLength(1);
-      expect(rows[0].id).toBe('test-1');
-      expect(rows[0].command).toBe('hello');
-      expect(rows[0].status).toBe('pending');
-    });
-
-    test('should insert and select from remote_state', () => {
-      // remote_state is created inline, create it manually
-      db.exec(
-        'CREATE TABLE IF NOT EXISTS remote_state (key TEXT PRIMARY KEY, value TEXT, updated_at INTEGER)'
-      );
-      const drizzle = initDrizzle(db);
-
-      drizzle
-        .insert(schema.remoteState)
-        .values({
-          key: 'test-key',
-          value: 'test-value',
-          updatedAt: Math.floor(Date.now() / 1000),
-        })
-        .run();
-
-      const rows = drizzle.select().from(schema.remoteState).all();
-      expect(rows).toHaveLength(1);
-      expect(rows[0].key).toBe('test-key');
-      expect(rows[0].value).toBe('test-value');
-    });
-
-    test('should handle update operations', () => {
-      migrate003(db);
-      const drizzle = initDrizzle(db);
-
-      drizzle
-        .insert(schema.remoteCommands)
-        .values({
-          id: 'upd-1',
-          source: 'test',
-          command: 'update me',
-          status: 'pending',
-          createdAt: Math.floor(Date.now() / 1000),
-        })
-        .run();
-
-      drizzle
-        .update(schema.remoteCommands)
-        .set({ status: 'running', claimedAt: Math.floor(Date.now() / 1000) })
-        .where(eq(schema.remoteCommands.id, 'upd-1'))
-        .run();
-
-      const rows = drizzle
-        .select()
-        .from(schema.remoteCommands)
-        .where(eq(schema.remoteCommands.id, 'upd-1'))
-        .all();
-      expect(rows[0].status).toBe('running');
-      expect(rows[0].claimedAt).toBeGreaterThan(0);
+      expect(rows[0].id).toBe('guard-1');
+      expect(rows[0].filePath).toBe('src/App.ts');
     });
   });
 });

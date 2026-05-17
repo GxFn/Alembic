@@ -7,7 +7,7 @@
     "replacementPhase": "wave-4-local-duplicate-deletion",
     "notes": [
       "Alembic local lib/agent duplicate implementation tree has been deleted after production consumers switched to @alembic/agent public subpaths.",
-      "CLI, daemon, HTTP/API, Dashboard/native, IDE, Lark runtime, product shell, and host adapters stay in Alembic."
+      "CLI, daemon, HTTP/API, Dashboard/native, IDE, product shell, and host adapters stay in Alembic."
     ]
   },
   "phaseEvidence": {
@@ -55,7 +55,7 @@
       "planSection": "19.4 M5",
       "completedScope": [
         "Alembic production consumers outside preserved local Agent implementation now import Agent-owned memory/context through @alembic/agent/memory and @alembic/agent/context.",
-        "Workflow completion, internal bootstrap admission/consumers/runtime initialization/restore state/input builders, Lark conversation state, and HTTP AI conversation state were switched where the Agent package exposes a stable memory/context surface.",
+        "Workflow completion, internal bootstrap admission/consumers/runtime initialization/restore state/input builders and HTTP AI conversation state were switched where the Agent package exposes a stable memory/context surface.",
         "Local service/runtime/prompts/domain remained in place at Phase 5 closure because AlembicAgent had not yet published explicit service/runtime/prompts/domain subpath exports."
       ],
       "preservedPaths": [
@@ -86,7 +86,7 @@
       "planSection": "alembic-agent-extraction-boundary-acceptance-next-plan-2026-05-17 §5.3",
       "completedScope": [
         "Alembic production consumers outside preserved local Agent implementation now import Agent-owned service, runtime, prompts, and domain contracts through @alembic/agent/service, @alembic/agent/runtime, @alembic/agent/prompts, and @alembic/agent/domain.",
-        "CLI AI scan/evolution audit, HTTP AI/extract/recipes routes, Lark transport, internal bootstrap workflow, completion consolidation, dependency injection service registration, and ServiceMap types were switched to Agent public host contract exports.",
+        "CLI AI scan/evolution audit, HTTP AI/extract/recipes routes, internal bootstrap workflow, completion consolidation, dependency injection service registration, and ServiceMap types were switched to Agent public host contract exports.",
         "Boundary lint now blocks production imports from local lib/agent/service, lib/agent/runtime, lib/agent/prompts, and lib/agent/domain while preserving the local implementation directories as deletion candidates.",
         "Panorama DI keeps a local type bridge for file-linked Core private-class identity differences introduced by consuming Agent service declarations; runtime objects remain host-owned."
       ],
@@ -224,7 +224,7 @@
       "preservedPaths": [
         "lib/tools/v2/adapter/ToolContextFactory.ts",
         "lib/tools/adapters/**",
-        "CLI/daemon/HTTP/API/Dashboard/native/IDE/Lark/product shell host wiring"
+        "CLI/daemon/HTTP/API/Dashboard/native/IDE/product shell host wiring"
       ],
       "validation": [
         "npm run lint:agent-extraction-boundary: passed; product #agent call sites 0, local Agent relative import files 0, local Agent relative imports 0, preserved local Agent files 0, duplicate generic Tool V2 files 0.",

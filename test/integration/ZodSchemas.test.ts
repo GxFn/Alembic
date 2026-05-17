@@ -33,7 +33,6 @@ import {
   BatchPublishBody,
   CreateGuardRuleBody,
   CreateKnowledgeBody,
-  RemoteSendBody,
   SearchQuery,
   UpdateKnowledgeBody,
 } from '../../lib/shared/schemas/http-requests.js';
@@ -442,16 +441,6 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
     });
   });
 
-  describe('RemoteSendBody', () => {
-    test('should trim command', () => {
-      const result = RemoteSendBody.parse({ command: '  hello world  ' });
-      expect(result.command).toBe('hello world');
-    });
-
-    test('should reject empty command', () => {
-      expect(() => RemoteSendBody.parse({ command: '' })).toThrow();
-    });
-  });
 });
 
 describe('Integration: Zod Schemas — config.ts', () => {
