@@ -6,11 +6,14 @@
  * 重量级 DI 服务 (projectGraph/searchEngine 等) 按需从容器获取。
  */
 
-import type { ToolCallRequest } from '#tools/core/ToolContracts.js';
-import { DeltaCache } from '../cache/DeltaCache.js';
-import { SearchCache } from '../cache/SearchCache.js';
-import { OutputCompressor } from '../compressor/OutputCompressor.js';
-import type { MemoryCoordinatorLike, ToolContext } from '../types.js';
+import type { ToolCallRequest } from '@alembic/agent/tools';
+import {
+  DeltaCache,
+  type MemoryCoordinatorLike,
+  OutputCompressor,
+  SearchCache,
+  type ToolContext,
+} from '@alembic/agent/tools/v2';
 
 interface ServiceContainer {
   get(name: string): unknown;

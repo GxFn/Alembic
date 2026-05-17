@@ -1,12 +1,14 @@
-import { describe, expect, test, vi } from 'vitest';
 import {
+  type CapabilityV2Def,
   generateLightweightSchemas,
   getActionNames,
   getToolNames,
   TOOL_REGISTRY,
-} from '#tools/v2/registry.js';
-import { ToolRouterV2 } from '#tools/v2/router.js';
-import type { CapabilityV2Def, ToolContext, ToolResult } from '#tools/v2/types.js';
+  type ToolContext,
+  type ToolResult,
+  ToolRouterV2,
+} from '@alembic/agent/tools/v2';
+import { describe, expect, test, vi } from 'vitest';
 
 const ALL_TOOL_NAMES = ['code', 'terminal', 'knowledge', 'graph', 'memory', 'meta'] as const;
 

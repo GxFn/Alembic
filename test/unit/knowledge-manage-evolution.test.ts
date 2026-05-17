@@ -1,6 +1,7 @@
+import { TOOL_REGISTRY, type ToolContext } from '@alembic/agent/tools/v2';
 import { describe, expect, it, vi } from 'vitest';
-import { handle } from '../../lib/tools/v2/handlers/knowledge.js';
-import type { ToolContext } from '../../lib/tools/v2/types.js';
+
+const handle = TOOL_REGISTRY.knowledge.actions.manage.handler;
 
 function makeContext(evolutionGateway: unknown): ToolContext {
   return {
@@ -27,7 +28,6 @@ describe('knowledge.manage evolution operations', () => {
     };
 
     const result = await handle(
-      'manage',
       {
         operation: 'evolve',
         id: 'recipe-1',
@@ -77,7 +77,6 @@ describe('knowledge.manage evolution operations', () => {
     };
 
     const result = await handle(
-      'manage',
       {
         operation: 'skip_evolution',
         id: 'recipe-1',
@@ -104,7 +103,6 @@ describe('knowledge.manage evolution operations', () => {
 
   it('requires EvolutionGateway for evolution decisions', async () => {
     const result = await handle(
-      'manage',
       {
         operation: 'evolve',
         id: 'recipe-1',

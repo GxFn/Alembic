@@ -9,15 +9,18 @@
  */
 
 import { BootstrapAnalyze } from '@alembic/agent/tools';
+import {
+  DeltaCache,
+  OutputCompressor,
+  SearchCache,
+  TOOL_REGISTRY,
+  type ToolCallV2,
+  type ToolContext,
+  ToolRouterV2,
+  V2CapabilityCatalog,
+  V2ToolRouterAdapter,
+} from '@alembic/agent/tools/v2';
 import { describe, expect, test } from 'vitest';
-import { V2CapabilityCatalog } from '#tools/v2/adapter/V2CapabilityCatalog.js';
-import { V2ToolRouterAdapter } from '#tools/v2/adapter/V2ToolRouterAdapter.js';
-import { DeltaCache } from '#tools/v2/cache/DeltaCache.js';
-import { SearchCache } from '#tools/v2/cache/SearchCache.js';
-import { OutputCompressor } from '#tools/v2/compressor/OutputCompressor.js';
-import { TOOL_REGISTRY } from '#tools/v2/registry.js';
-import { ToolRouterV2 } from '#tools/v2/router.js';
-import type { ToolCallV2, ToolContext } from '#tools/v2/types.js';
 
 const PROJECT_ROOT = process.cwd();
 

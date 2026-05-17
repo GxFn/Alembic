@@ -21,6 +21,7 @@ import {
   UnifiedToolCatalog,
   WorkflowRegistry,
 } from '@alembic/agent/tools';
+import { V2CapabilityCatalog, V2ToolRouterAdapter } from '@alembic/agent/tools/v2';
 import type { SignalBus } from '@alembic/core/events';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { DashboardOperationAdapter } from '#tools/adapters/DashboardOperationAdapter.js';
@@ -37,8 +38,6 @@ import { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionM
 import { TERMINAL_CAPABILITY_MANIFESTS } from '#tools/adapters/terminal-capabilities/index.js';
 import { WorkflowAdapter } from '#tools/adapters/WorkflowAdapter.js';
 import { ToolContextFactory } from '#tools/v2/adapter/ToolContextFactory.js';
-import { V2CapabilityCatalog } from '#tools/v2/adapter/V2CapabilityCatalog.js';
-import { V2ToolRouterAdapter } from '#tools/v2/adapter/V2ToolRouterAdapter.js';
 import { ToolForge } from '../../agent/forge/ToolForge.js';
 import {
   buildMcpToolCapabilities,

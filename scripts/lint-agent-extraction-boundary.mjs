@@ -109,9 +109,12 @@ const toolSystemRules = config.toolSystemImportRules ?? {};
 const toolSystemScanRoots = toolSystemRules.scanRoots ?? scanRoots;
 const toolSystemIgnoredPrefixes = new Set(toolSystemRules.ignoredPathPrefixes ?? []);
 const toolSystemPublicEntrypoint = toolSystemRules.publicEntrypoint ?? '@alembic/agent/tools';
+const toolSystemV2PublicEntrypoint =
+  toolSystemRules.publicV2Entrypoint ?? '@alembic/agent/tools/v2';
 const deferredToolImports = toolSystemRules.deferredLocalImports ?? [];
 const deferredToolImportsByPath = new Map(deferredToolImports.map((entry) => [entry.path, entry]));
 const agentToolImportsByFile = new Map();
+const agentToolV2ImportsByFile = new Map();
 const deferredToolImportsByFile = new Map();
 const localCommonToolImports = [];
 
@@ -127,6 +130,12 @@ for (const root of toolSystemScanRoots) {
     );
     if (agentToolSpecifiers.length > 0) {
       agentToolImportsByFile.set(relFile, uniqueSorted(agentToolSpecifiers));
+    }
+    const agentToolV2Specifiers = specifiers.filter(
+      (specifier) => specifier === toolSystemV2PublicEntrypoint
+    );
+    if (agentToolV2Specifiers.length > 0) {
+      agentToolV2ImportsByFile.set(relFile, uniqueSorted(agentToolV2Specifiers));
     }
 
     const allowedDeferred = deferredToolImportsByPath.get(relFile);
@@ -301,6 +310,7 @@ console.log(`  product #agent call sites: ${agentImportsByFile.size}`);
 console.log(`  @alembic/agent/ai consumer files: ${agentAiImportsByFile.size}`);
 console.log(`  local AI provider consumers: ${localAiProviderImports.length}`);
 console.log(`  @alembic/agent/tools consumer files: ${agentToolImportsByFile.size}`);
+console.log(`  @alembic/agent/tools/v2 consumer files: ${agentToolV2ImportsByFile.size}`);
 console.log(`  local common tool consumers: ${localCommonToolImports.length}`);
 console.log(`  deferred local tool import files: ${deferredToolImportsByFile.size}`);
 console.log(`  @alembic/agent/memory consumer files: ${agentMemoryImportsByFile.size}`);

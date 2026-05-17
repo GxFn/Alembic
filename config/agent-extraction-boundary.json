@@ -112,6 +112,46 @@
       ],
       "nextPhaseAllowed": true,
       "nextPhase": "Do not delete preserved local service/runtime/prompts/domain until remaining local runs/tasks/profiles/forge coverage and Tool V2 adapter contract gaps are explicitly resolved."
+    },
+    "phase7ToolV2ContractConsumption": {
+      "status": "closed",
+      "stage": "wave-2-tool-v2-consume",
+      "planSection": "alembic-agent-extraction-boundary-wave-2-acceptance-next-plan-2026-05-17 §5.1",
+      "completedScope": [
+        "Alembic production Tool V2 composition now consumes Agent-owned V2CapabilityCatalog and V2ToolRouterAdapter from @alembic/agent/tools/v2.",
+        "Alembic host ToolContextFactory now uses Agent-owned DeltaCache, SearchCache, OutputCompressor, ToolContext, and MemoryCoordinatorLike contracts from @alembic/agent/tools/v2 while preserving Alembic DI/repository/search/gateway/project-root/data-root/sandbox wiring locally.",
+        "Representative Tool V2 tests now exercise Agent-owned registry/router/cache/compressor/types through @alembic/agent/tools/v2; only ToolContextFactory remains a local deferred bridge.",
+        "Boundary lint now reports @alembic/agent/tools/v2 consumer files and classifies ToolContextFactory as host-owned instead of generic Agent Tool V2."
+      ],
+      "preservedPaths": [
+        "lib/tools/v2/adapter/ToolContextFactory.ts",
+        "lib/tools/adapters/DashboardOperationAdapter.ts",
+        "lib/tools/adapters/DashboardOperations.ts",
+        "lib/tools/adapters/MacSystemAdapter.ts",
+        "lib/tools/adapters/MacSystemCapabilities.ts",
+        "lib/tools/adapters/SkillAdapter.ts",
+        "lib/tools/adapters/SkillCapabilities.ts",
+        "lib/tools/adapters/TerminalAdapter.ts",
+        "lib/tools/adapters/WorkflowAdapter.ts",
+        "lib/tools/adapters/terminal-adapter/**",
+        "lib/tools/adapters/terminal-policy/**"
+      ],
+      "validation": [
+        "npm run lint:agent-extraction-boundary: passed; @alembic/agent/tools/v2 consumer files 4, deferred local tool import files 2, local common tool consumers 0, alembic-main-tool-v2-context-factory 1.",
+        "npm run build:check: passed.",
+        "npm run lint -- --diagnostic-level=error: passed.",
+        "Representative Tool V2 tests: 3 files / 75 tests passed.",
+        "npm run check: passed; existing repository Biome warnings are non-fatal.",
+        "npm run build: passed.",
+        "node dist/bin/cli.js status --json: passed; workspace detected, database not found in current test environment."
+      ],
+      "risks": [
+        "Local generic Tool V2 implementation files still exist as deletion candidates; this phase changes production/test consumption but does not remove files.",
+        "ToolContextFactory remains host-owned because it binds Alembic container services, repositories, search/gateway dependencies, project root, and sandbox bridge.",
+        "Deep handler subpaths are not exported by @alembic/agent; tests cover knowledge.manage through public TOOL_REGISTRY instead of importing handler files directly."
+      ],
+      "nextPhaseAllowed": true,
+      "nextPhase": "After another host smoke pass, delete or quarantine unused local generic Tool V2 implementation files while keeping host adapters and ToolContextFactory."
     }
   },
   "aiProviderRules": {
@@ -129,19 +169,27 @@
     ]
   },
   "toolSystemImportRules": {
-    "status": "consume-alembic-agent-tools",
+    "status": "consume-alembic-agent-tools-v2-contract",
     "packageName": "@alembic/agent",
     "packageRange": "file:../AlembicAgent",
     "publicEntrypoint": "@alembic/agent/tools",
+    "publicV2Entrypoint": "@alembic/agent/tools/v2",
     "localDeletionCandidates": [
       "lib/tools/core/**",
       "lib/tools/catalog/**",
       "lib/tools/workflow/**",
+      "lib/tools/v2/adapter/V2CapabilityCatalog.ts",
+      "lib/tools/v2/adapter/V2ToolRouterAdapter.ts",
+      "lib/tools/v2/cache/**",
       "lib/tools/v2/capabilities/**",
+      "lib/tools/v2/compressor/**",
+      "lib/tools/v2/handlers/**",
+      "lib/tools/v2/index.ts",
       "lib/tools/v2/registry.ts",
-      "lib/tools/v2/types.ts",
-      "lib/tools/v2/compressor/strip.ts"
+      "lib/tools/v2/router.ts",
+      "lib/tools/v2/types.ts"
     ],
+    "hostOwnedToolV2Paths": ["lib/tools/v2/adapter/ToolContextFactory.ts", "lib/tools/adapters/**"],
     "scanRoots": ["lib", "bin", "scripts", "test"],
     "ignoredPathPrefixes": [
       "lib/tools/core/",
@@ -160,50 +208,19 @@
     "deferredLocalImports": [
       {
         "path": "lib/injection/modules/AgentModule.ts",
-        "expectedSpecifiers": [
-          "#tools/v2/adapter/ToolContextFactory.js",
-          "#tools/v2/adapter/V2CapabilityCatalog.js",
-          "#tools/v2/adapter/V2ToolRouterAdapter.js"
-        ],
-        "reason": "AlembicAgent does not yet publish the V2 router adapter/context factory; Alembic keeps this host composition bridge until a public adapter contract exists."
+        "expectedSpecifiers": ["#tools/v2/adapter/ToolContextFactory.js"],
+        "reason": "Alembic consumes Agent V2 catalog/router contracts from @alembic/agent/tools/v2 but keeps concrete ToolContextFactory as the host DI/repository/search/data-root bridge."
       },
       {
         "path": "test/unit/V2ToolSystem.test.ts",
-        "expectedSpecifiers": [
-          "#tools/v2/adapter/ToolContextFactory.js",
-          "#tools/v2/adapter/V2CapabilityCatalog.js",
-          "#tools/v2/adapter/V2ToolRouterAdapter.js",
-          "#tools/v2/cache/DeltaCache.js",
-          "#tools/v2/cache/SearchCache.js",
-          "#tools/v2/compressor/OutputCompressor.js",
-          "#tools/v2/registry.js",
-          "#tools/v2/router.js",
-          "#tools/v2/types.js"
-        ],
-        "reason": "This remains a local implementation regression suite until AlembicAgent exposes the V2 adapter/router/cache surface."
-      },
-      {
-        "path": "test/unit/v2/ToolRegistryV2.test.ts",
-        "expectedSpecifiers": [
-          "#tools/v2/registry.js",
-          "#tools/v2/router.js",
-          "#tools/v2/types.js"
-        ],
-        "reason": "This test targets the local V2 implementation that is still a deletion candidate rather than a switched product consumer."
-      },
-      {
-        "path": "test/unit/knowledge-manage-evolution.test.ts",
-        "expectedSpecifiers": [
-          "../../lib/tools/v2/handlers/knowledge.js",
-          "../../lib/tools/v2/types.js"
-        ],
-        "reason": "This test targets a local V2 handler that is not yet published through the AlembicAgent tools public entrypoint."
+        "expectedSpecifiers": ["#tools/v2/adapter/ToolContextFactory.js"],
+        "reason": "The representative V2 suite now exercises Agent generic contracts and imports only the Alembic host-owned ToolContextFactory for context bridge coverage."
       }
     ],
     "notes": [
-      "Common tool contracts, capability catalog, unified catalog, router contracts, result envelopes, presenters, workflow registry, V2 public capabilities, V2 registry/types, and strip compressor are consumed through @alembic/agent/tools outside local implementation/deferred bridges.",
-      "Alembic keeps Dashboard, macOS, Skill, Terminal, Workflow, MCP, CLI, daemon, HTTP/API, native, and IDE wiring as host adapters.",
-      "Local lib/tools common trees are preserved only as deletion candidates until public adapter gaps and host smoke evidence are complete."
+      "Common tool contracts, capability catalog, unified catalog, router contracts, result envelopes, presenters, workflow registry, and Tool V2 generic contracts are consumed through @alembic/agent/tools and @alembic/agent/tools/v2 outside local implementation/deferred bridges.",
+      "Alembic keeps Dashboard, macOS, Skill, Terminal, Workflow, MCP, CLI, daemon, HTTP/API, native, IDE wiring, and concrete ToolContextFactory as host adapters.",
+      "Local lib/tools common trees are preserved only as deletion candidates until host smoke evidence confirms removal is safe."
     ]
   },
   "memoryContextImportRules": {
@@ -303,6 +320,12 @@
       "classification": "agent-common-tool-catalog",
       "switchAfter": "phase-4",
       "reason": "Capability manifests and unified catalog are common Agent tool registry infrastructure."
+    },
+    {
+      "path": "lib/tools/v2/adapter/ToolContextFactory.ts",
+      "classification": "alembic-main-tool-v2-context-factory",
+      "switchAfter": "do-not-migrate-by-default",
+      "reason": "ToolContextFactory composes Alembic-owned DI container services, repositories, search/gateway wiring, data-root/project-root context, and sandbox bridge for the Agent V2 generic router."
     },
     {
       "pathPrefix": "lib/tools/v2/",
