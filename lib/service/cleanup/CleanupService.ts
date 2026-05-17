@@ -32,7 +32,7 @@ import {
   getProjectRecipesPath,
   getProjectSkillsPath,
 } from '@alembic/core/infrastructure/config/Paths';
-import type { WriteZone } from '@alembic/core/infrastructure/io';
+import type { WriteZone } from '@alembic/core/io';
 import { CONSUMABLE_LIFECYCLES, lifecycleInSql } from '@alembic/core/knowledge';
 
 // ── 类型定义 ────────────────────────────────────────────────

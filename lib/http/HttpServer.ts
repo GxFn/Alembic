@@ -138,9 +138,7 @@ export class HttpServer {
         // 初始化错误追踪（Ghost-aware）
         const container = getServiceContainer();
         const dataRoot = resolveDataRoot(container);
-        const wz = container.get(
-          'writeZone'
-        ) as import('@alembic/core/infrastructure/io').WriteZone;
+        const wz = container.get('writeZone') as import('@alembic/core/io').WriteZone;
         this.errorTracker = initErrorTracker({
           logDirectory: join(dataRoot, '.asd', 'logs', 'errors'),
           writeZone: wz,

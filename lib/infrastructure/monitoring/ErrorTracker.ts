@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Disposable } from '@alembic/core/events';
 import { timerRegistry } from '@alembic/core/events';
-import type { DataPath, WriteZone } from '@alembic/core/infrastructure/io';
+import type { DataPath, WriteZone } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
 import { resolveDataRoot } from '@alembic/core/workspace';
 

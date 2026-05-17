@@ -20,7 +20,7 @@ import type {
   RuleLearner,
   ViolationsStore,
 } from '@alembic/core/guard';
-import type { WriteZone } from '@alembic/core/infrastructure/io';
+import type { WriteZone } from '@alembic/core/io';
 import type { KnowledgeService, RecipeProductionGateway } from '@alembic/core/knowledge';
 import type Logger from '@alembic/core/logging';
 // ── Core AST / Discovery / Enhancement ──

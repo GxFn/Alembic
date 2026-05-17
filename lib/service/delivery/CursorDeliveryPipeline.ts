@@ -20,7 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getProjectSkillsPath } from '@alembic/core/infrastructure/config/Paths';
-import type { WriteZone } from '@alembic/core/infrastructure/io';
+import type { WriteZone } from '@alembic/core/io';
 import type { KnowledgeEntryProps } from '@alembic/core/knowledge';
 import { unwrapRawDb } from '@alembic/core/search';
 import { KNOWLEDGE_CONFIDENCE } from '@alembic/core/shared/constants';

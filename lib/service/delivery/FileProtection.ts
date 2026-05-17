@@ -14,7 +14,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { type WriteZone, Zone } from '@alembic/core/infrastructure/io';
+import { type WriteZone, Zone } from '@alembic/core/io';
 
 /**
  * Alembic 文件签名模式（case-insensitive）

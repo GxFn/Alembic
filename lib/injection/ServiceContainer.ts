@@ -346,9 +346,7 @@ export class ServiceContainer {
 
     // GraphCache 使用 dataRoot 存储缓存（Ghost 模式下写到外置工作区）
     const cacheRoot = resolveDataRoot(this);
-    const wz = this.singletons.writeZone as
-      | import('@alembic/core/infrastructure/io').WriteZone
-      | undefined;
+    const wz = this.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;
     const cache = new GraphCache(cacheRoot, wz ?? undefined);
     const startTime = Date.now();
 

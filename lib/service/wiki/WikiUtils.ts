@@ -333,7 +333,7 @@ export function dedup(
   files: { path: string; hash: string }[],
   wikiDir: string,
   emit: (phase: string, progress: number, message: string) => void,
-  wz?: import('@alembic/core/infrastructure/io').WriteZone | null
+  wz?: import('@alembic/core/io').WriteZone | null
 ) {
   const removed: string[] = [];
 

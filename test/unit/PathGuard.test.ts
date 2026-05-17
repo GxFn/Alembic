@@ -1,7 +1,7 @@
 /** PathGuard — 路径安全守卫单元测试（双层防护） */
 
 import path from 'node:path';
-import pathGuard, { PathGuardError } from '@alembic/core/shared/PathGuard';
+import { PathGuardError, pathGuard } from '@alembic/core/io';
 
 describe('PathGuard', () => {
   const PROJECT_ROOT = '/Users/test/projects/MyApp';

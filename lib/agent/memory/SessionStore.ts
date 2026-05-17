@@ -25,7 +25,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Disposable } from '@alembic/core/events';
 import { timerRegistry } from '@alembic/core/events';
-import type { WriteZone } from '@alembic/core/infrastructure/io';
+import type { WriteZone } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
 import { CACHE } from '@alembic/core/shared/constants';
 import type { SessionStoreSerialized } from './session-store-schema.js';

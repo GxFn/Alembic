@@ -10,8 +10,8 @@
 import path from 'node:path';
 import { JobStore } from '@alembic/core/daemon';
 import { EventBus } from '@alembic/core/events';
-import { WriteZone } from '@alembic/core/infrastructure/io';
 import { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
+import { WriteZone } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
 import {
   type AlembicRepositoryBundle,
@@ -172,9 +172,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('knowledgeFileWriter', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
-    const wz = ct.singletons.writeZone as
-      | import('@alembic/core/infrastructure/io').WriteZone
-      | undefined;
+    const wz = ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;
     return new KnowledgeFileWriter(dataRoot, wz);
   });
 

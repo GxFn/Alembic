@@ -212,9 +212,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('feedbackStore', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
-    const wz = ct.singletons.writeZone as
-      | import('@alembic/core/infrastructure/io').WriteZone
-      | undefined;
+    const wz = ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;
     return new FeedbackStore(dataRoot, wz);
   });
 

@@ -31,9 +31,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('feedbackCollector', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
-    const wz = ct.singletons.writeZone as
-      | import('@alembic/core/infrastructure/io').WriteZone
-      | undefined;
+    const wz = ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;
     return new FeedbackCollector(dataRoot as ConstructorParameters<typeof FeedbackCollector>[0], {
       wz,
     });
@@ -74,9 +72,7 @@ export function register(c: ServiceContainer) {
         dataRoot: resolveDataRoot(ct),
         database: ct.get('database'),
         logger: ct.logger,
-        wz: ct.singletons.writeZone as
-          | import('@alembic/core/infrastructure/io').WriteZone
-          | undefined,
+        wz: ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined,
       } as unknown as ConstructorParameters<typeof CursorDeliveryPipeline>[0])
   );
 

@@ -19,7 +19,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { WriteZone } from '@alembic/core/infrastructure/io';
+import type { WriteZone } from '@alembic/core/io';
 import { WorkspaceResolver } from '@alembic/core/workspace';
 
 /** Minimal logger interface for auto-approve operations */

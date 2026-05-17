@@ -27,7 +27,7 @@ import type { ServiceContainer } from '../ServiceContainer.js';
 function registerIntentPersistence(
   signalBus: SignalBus,
   projectRoot: string,
-  writeZone?: import('@alembic/core/infrastructure/io').WriteZone
+  writeZone?: import('@alembic/core/io').WriteZone
 ): void {
   signalBus.subscribe('intent', (signal: Signal) => {
     try {
@@ -81,7 +81,7 @@ export function register(c: ServiceContainer) {
   // Register after signalBus is created — subscribe for JSONL persistence
   const signalBus = c.get('signalBus');
   const dataRoot = resolveDataRoot(c);
-  const wz = c.get('writeZone') as import('@alembic/core/infrastructure/io').WriteZone | null;
+  const wz = c.get('writeZone') as import('@alembic/core/io').WriteZone | null;
   registerIntentPersistence(signalBus, dataRoot, wz ?? undefined);
 
   // ═══ SignalBridge — SignalBus → EventBus 桥接 ═══
@@ -97,7 +97,7 @@ export function register(c: ServiceContainer) {
   c.singleton('signalTraceWriter', (ct: ServiceContainer) => {
     const bus = ct.get('signalBus') as SignalBus;
     const root = resolveDataRoot(ct);
-    const wz = ct.get('writeZone') as import('@alembic/core/infrastructure/io').WriteZone | null;
+    const wz = ct.get('writeZone') as import('@alembic/core/io').WriteZone | null;
     return new SignalTraceWriter(bus, path.join(root, '.asd', 'logs', 'signals'), wz ?? undefined);
   });
 

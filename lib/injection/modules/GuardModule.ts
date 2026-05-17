@@ -92,17 +92,13 @@ export function register(c: ServiceContainer) {
 
   c.singleton('exclusionManager', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
-    const wz = ct.singletons.writeZone as
-      | import('@alembic/core/infrastructure/io').WriteZone
-      | undefined;
+    const wz = ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;
     return new ExclusionManager(dataRoot, { wz });
   });
 
   c.singleton('ruleLearner', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
-    const wz = ct.singletons.writeZone as
-      | import('@alembic/core/infrastructure/io').WriteZone
-      | undefined;
+    const wz = ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;
     return new RuleLearner(dataRoot, {
       signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
       wz,

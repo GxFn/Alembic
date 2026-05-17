@@ -11,7 +11,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type { WriteZone } from '@alembic/core/infrastructure/io';
+import type { WriteZone } from '@alembic/core/io';
 import { DEFAULT_FOLDER_NAMES } from '@alembic/core/shared/folder-names';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/workspace';
 import { getCursorSkillsDir } from '../../shared/ide-paths.js';

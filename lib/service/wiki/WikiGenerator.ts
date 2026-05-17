@@ -33,7 +33,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { WriteZone } from '@alembic/core/infrastructure/io';
+import type { WriteZone } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
 import { LanguageService } from '@alembic/core/project-intelligence';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/workspace';

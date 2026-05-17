@@ -129,9 +129,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('vectorStore', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
-    const wz = ct.singletons.writeZone as
-      | import('@alembic/core/infrastructure/io').WriteZone
-      | undefined;
+    const wz = ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;
     const config =
       ((ct.singletons._config as Record<string, unknown> | undefined)?.vector as
         | Record<string, unknown>
