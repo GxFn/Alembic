@@ -13,8 +13,8 @@
  */
 
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import { collectSourceFilesWithContent } from '@alembic/core/service/guard/SourceFileCollector';
 import { COMPLIANCE_SCORING, QUALITY_GATE } from '@alembic/core/shared/constants';
-import { collectSourceFilesWithContent } from './SourceFileCollector.js';
 
 interface ViolationSummary {
   errors: number;

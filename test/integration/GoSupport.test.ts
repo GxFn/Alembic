@@ -483,7 +483,7 @@ describe('L7: Go Built-in Guard Rules', () => {
   let GuardCheckEngine, detectLanguage;
 
   beforeAll(async () => {
-    const mod = await import('../../lib/service/guard/GuardCheckEngine.js');
+    const mod = await import('@alembic/core/service/guard/GuardCheckEngine');
     GuardCheckEngine = mod.GuardCheckEngine;
     detectLanguage = mod.detectLanguage;
   });

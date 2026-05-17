@@ -165,7 +165,9 @@ const _lastReviewPassed = new Map(); // projectRoot → boolean
 const MAX_REVIEW_ROUNDS = 5;
 
 export async function guardCheck(ctx: McpContext, args: GuardCheckArgs) {
-  const { GuardCheckEngine, detectLanguage } = await import('#service/guard/GuardCheckEngine.js');
+  const { GuardCheckEngine, detectLanguage } = await import(
+    '@alembic/core/service/guard/GuardCheckEngine'
+  );
 
   // 输入校验：空代码直接返回
   if (!args.code || !args.code.trim()) {
@@ -231,7 +233,7 @@ export async function guardAuditFiles(ctx: McpContext, args: GuardAuditArgs) {
   }
   const scope = args.scope || 'project';
 
-  const { GuardCheckEngine } = await import('#service/guard/GuardCheckEngine.js');
+  const { GuardCheckEngine } = await import('@alembic/core/service/guard/GuardCheckEngine');
   const engine = _getOrCreateEngine(ctx, GuardCheckEngine);
 
   // 注入 Enhancement Pack Guard 规则
@@ -329,7 +331,7 @@ export async function guardAuditFiles(ctx: McpContext, args: GuardAuditArgs) {
  * @param args { files?: string[] }
  */
 export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
-  const { GuardCheckEngine } = await import('#service/guard/GuardCheckEngine.js');
+  const { GuardCheckEngine } = await import('@alembic/core/service/guard/GuardCheckEngine');
 
   const projectRoot = resolveProjectRoot(ctx.container);
 
@@ -710,7 +712,7 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
   // Guard 审计
   let guardAudit: GuardAuditResult | null = null;
   try {
-    const { GuardCheckEngine } = await import('#service/guard/GuardCheckEngine.js');
+    const { GuardCheckEngine } = await import('@alembic/core/service/guard/GuardCheckEngine');
     const engine = _getOrCreateEngine(ctx, GuardCheckEngine);
 
     // 注入 Enhancement Pack Guard 规则
@@ -892,8 +894,10 @@ interface ReverseAuditArgs {
  *   - 检查 guard pattern 匹配率是否骤降
  */
 export async function guardReverseAudit(ctx: McpContext, args: ReverseAuditArgs) {
-  const { ReverseGuard } = await import('#service/guard/ReverseGuard.js');
-  const { collectSourceFilesWithContent } = await import('#service/guard/SourceFileCollector.js');
+  const { ReverseGuard } = await import('@alembic/core/service/guard/ReverseGuard');
+  const { collectSourceFilesWithContent } = await import(
+    '@alembic/core/service/guard/SourceFileCollector'
+  );
 
   const projectRoot = resolveProjectRoot(ctx.container);
 
@@ -950,7 +954,7 @@ interface CoverageMatrixArgs {
  * 计算模块级 Guard 规则覆盖率矩阵
  */
 export async function guardCoverageMatrix(ctx: McpContext, _args: CoverageMatrixArgs) {
-  const { CoverageAnalyzer } = await import('#service/guard/CoverageAnalyzer.js');
+  const { CoverageAnalyzer } = await import('@alembic/core/service/guard/CoverageAnalyzer');
 
   const projectRoot = resolveProjectRoot(ctx.container);
 
@@ -995,7 +999,7 @@ interface ComplianceReportArgs {
  * 包含完整 uncertain 消费数据
  */
 export async function guardComplianceReport(ctx: McpContext, _args: ComplianceReportArgs) {
-  const { ComplianceReporter } = await import('#service/guard/ComplianceReporter.js');
+  const { ComplianceReporter } = await import('@alembic/core/service/guard/ComplianceReporter');
   const projectRoot = resolveProjectRoot(ctx.container);
 
   // 尝试从 DI 获取，回退到新建
@@ -1003,7 +1007,7 @@ export async function guardComplianceReport(ctx: McpContext, _args: ComplianceRe
   try {
     reporter = ctx.container.get('complianceReporter') as InstanceType<typeof ComplianceReporter>;
   } catch {
-    const { GuardCheckEngine } = await import('#service/guard/GuardCheckEngine.js');
+    const { GuardCheckEngine } = await import('@alembic/core/service/guard/GuardCheckEngine');
     const engine = _getOrCreateEngine(ctx, GuardCheckEngine);
     await _injectEnhancementGuardRules(engine, ctx);
     // ComplianceReporter(engine, violationsStore, ruleLearner, exclusionManager, config)

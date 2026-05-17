@@ -12,18 +12,21 @@ import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { GuardKnowledgeRepo } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { RawDbGuardAdapter, unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
-import { LanguageService } from '@alembic/core/shared/LanguageService';
-import { runCodeLevelChecks } from './GuardCodeChecks.js';
-import { runCrossFileChecks } from './GuardCrossFileChecks.js';
+import { runCodeLevelChecks } from '@alembic/core/service/guard/GuardCodeChecks';
+import { runCrossFileChecks } from '@alembic/core/service/guard/GuardCrossFileChecks';
 import {
   buildCommentMask,
   buildTestBlockMask,
   clearPatternCache,
   compilePattern,
   detectLanguage,
-} from './GuardPatternUtils.js';
-import type { GuardCapabilityReport, UncertainResult } from './UncertaintyCollector.js';
-import { UncertaintyCollector } from './UncertaintyCollector.js';
+} from '@alembic/core/service/guard/GuardPatternUtils';
+import type {
+  GuardCapabilityReport,
+  UncertainResult,
+} from '@alembic/core/service/guard/UncertaintyCollector';
+import { UncertaintyCollector } from '@alembic/core/service/guard/UncertaintyCollector';
+import { LanguageService } from '@alembic/core/shared/LanguageService';
 
 /** Minimal DB interface for Guard engine */
 interface DatabaseLike {
@@ -600,7 +603,7 @@ const BUILT_IN_RULES = {
 };
 
 // 向后兼容: 从 GuardPatternUtils 重新导出 detectLanguage
-export { detectLanguage } from './GuardPatternUtils.js';
+export { detectLanguage } from '@alembic/core/service/guard/GuardPatternUtils';
 
 /** GuardCheckEngine - 核心检查引擎 */
 export class GuardCheckEngine {

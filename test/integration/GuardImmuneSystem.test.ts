@@ -8,11 +8,12 @@
  *   4. CoverageAnalyzer 覆盖率矩阵
  *   5. RuleLearner 桥接
  */
+
+import { CoverageAnalyzer } from '@alembic/core/service/guard/CoverageAnalyzer';
+import { GuardCheckEngine } from '@alembic/core/service/guard/GuardCheckEngine';
+import { ReverseGuard } from '@alembic/core/service/guard/ReverseGuard';
+import { UncertaintyCollector } from '@alembic/core/service/guard/UncertaintyCollector';
 import { describe, expect, it, vi } from 'vitest';
-import { CoverageAnalyzer } from '../../lib/service/guard/CoverageAnalyzer.js';
-import { GuardCheckEngine } from '../../lib/service/guard/GuardCheckEngine.js';
-import { ReverseGuard } from '../../lib/service/guard/ReverseGuard.js';
-import { UncertaintyCollector } from '../../lib/service/guard/UncertaintyCollector.js';
 
 /** Minimal mock DB */
 function createMockDb() {
@@ -154,7 +155,7 @@ describe('Guard Immune System Integration', () => {
   describe('RuleLearner bridge', () => {
     it('should identify precision drops and emit signals', async () => {
       // Dynamic import to avoid constructor side effects
-      const { RuleLearner } = await import('../../lib/service/guard/RuleLearner.js');
+      const { RuleLearner } = await import('@alembic/core/service/guard/RuleLearner');
 
       const signalBus = { send: vi.fn() };
       const tmpDir = `/tmp/alembic-test-${Date.now()}`;
@@ -189,7 +190,7 @@ describe('Guard Immune System Integration', () => {
 
   describe('three-dimensional compliance', () => {
     it('should produce coverage and confidence scores in report', async () => {
-      const { ComplianceReporter } = await import('../../lib/service/guard/ComplianceReporter.js');
+      const { ComplianceReporter } = await import('@alembic/core/service/guard/ComplianceReporter');
 
       // Mock engine with uncertainty data
       const mockEngine = {

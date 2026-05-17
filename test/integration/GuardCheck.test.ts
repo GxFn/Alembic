@@ -9,7 +9,7 @@
  *   - 语言检测
  */
 
-import { detectLanguage, GuardCheckEngine } from '../../lib/service/guard/GuardCheckEngine.js';
+import { detectLanguage, GuardCheckEngine } from '@alembic/core/service/guard/GuardCheckEngine';
 import { createTestBootstrap } from '../fixtures/factory.js';
 
 describe('Integration: GuardCheckEngine', () => {

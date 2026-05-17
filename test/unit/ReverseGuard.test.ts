@@ -1,8 +1,9 @@
 /**
  * ReverseGuard 单元测试
  */
+
+import { ReverseGuard } from '@alembic/core/service/guard/ReverseGuard';
 import { describe, expect, it, vi } from 'vitest';
-import { ReverseGuard } from '../../lib/service/guard/ReverseGuard.js';
 
 function createMockRepos(
   options: {

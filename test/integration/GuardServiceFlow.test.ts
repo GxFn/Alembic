@@ -19,7 +19,7 @@ describe('Integration: Guard Service Full Flow', () => {
     ({ bootstrap, components } = await createTestBootstrap());
 
     // 手动创建 GuardCheckEngine（需要 DB）
-    const { GuardCheckEngine } = await import('../../lib/service/guard/GuardCheckEngine.js');
+    const { GuardCheckEngine } = await import('@alembic/core/service/guard/GuardCheckEngine');
     guardCheckEngine = new GuardCheckEngine(components.db);
   });
 
@@ -100,7 +100,7 @@ describe('Integration: Guard Service Full Flow', () => {
 
   describe('GuardFeedbackLoop', () => {
     test('should detect fixed violations', async () => {
-      const { GuardFeedbackLoop } = await import('../../lib/service/guard/GuardFeedbackLoop.js');
+      const { GuardFeedbackLoop } = await import('@alembic/core/service/guard/GuardFeedbackLoop');
 
       // Mock ViolationsStore with past violations
       const mockStore = {
@@ -135,7 +135,7 @@ describe('Integration: Guard Service Full Flow', () => {
     });
 
     test('should auto-confirm usage for fixed violations', async () => {
-      const { GuardFeedbackLoop } = await import('../../lib/service/guard/GuardFeedbackLoop.js');
+      const { GuardFeedbackLoop } = await import('@alembic/core/service/guard/GuardFeedbackLoop');
 
       const confirmations: Array<{ action: string; recipeId: string }> = [];
       const mockCollector = {
@@ -156,7 +156,7 @@ describe('Integration: Guard Service Full Flow', () => {
     });
 
     test('should run full processFixDetection flow', async () => {
-      const { GuardFeedbackLoop } = await import('../../lib/service/guard/GuardFeedbackLoop.js');
+      const { GuardFeedbackLoop } = await import('@alembic/core/service/guard/GuardFeedbackLoop');
 
       const mockStore = {
         getRunsByFile: () => [
@@ -178,7 +178,7 @@ describe('Integration: Guard Service Full Flow', () => {
     });
 
     test('should handle missing violationsStore gracefully', async () => {
-      const { GuardFeedbackLoop } = await import('../../lib/service/guard/GuardFeedbackLoop.js');
+      const { GuardFeedbackLoop } = await import('@alembic/core/service/guard/GuardFeedbackLoop');
       const loop = new GuardFeedbackLoop(null, null);
 
       const fixed = loop.detectFixedViolations({ violations: [] }, 'test.ts');
@@ -186,7 +186,7 @@ describe('Integration: Guard Service Full Flow', () => {
     });
 
     test('should report stats', async () => {
-      const { GuardFeedbackLoop } = await import('../../lib/service/guard/GuardFeedbackLoop.js');
+      const { GuardFeedbackLoop } = await import('@alembic/core/service/guard/GuardFeedbackLoop');
       const loop = new GuardFeedbackLoop(null, null, { guardCheckEngine: {} as any });
       const stats = loop.getStats();
       expect(stats.hasViolationsStore).toBe(false);

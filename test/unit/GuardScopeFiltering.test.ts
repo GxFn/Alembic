@@ -2,9 +2,10 @@
  * GuardCheckEngine — scope-based rule filtering
  * Ensures 'universal' dimension rules are NOT filtered out under any scope.
  */
+
+import { GuardCheckEngine } from '@alembic/core/service/guard/GuardCheckEngine';
 import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
-import { GuardCheckEngine } from '../../lib/service/guard/GuardCheckEngine.js';
 
 function createMinimalDB() {
   const db = new Database(':memory:');

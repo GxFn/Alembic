@@ -928,7 +928,7 @@ export async function runGuardAudit(
   let guardEngine: GuardEngineLike | null = null;
 
   try {
-    const { GuardCheckEngine } = await import('#service/guard/GuardCheckEngine.js');
+    const { GuardCheckEngine } = await import('@alembic/core/service/guard/GuardCheckEngine');
     const db = container.get('database');
     const engine = new GuardCheckEngine(db) as unknown as GuardEngineLike;
     guardEngine = engine;

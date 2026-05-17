@@ -30,6 +30,13 @@ import type { MemoryRepositoryImpl } from '@alembic/core/repository/memory/Memor
 import type { SessionRepositoryImpl } from '@alembic/core/repository/session/SessionRepository';
 import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
 import type { TokenUsageStore } from '@alembic/core/repository/token/TokenUsageStore';
+import type { ComplianceReporter } from '@alembic/core/service/guard/ComplianceReporter';
+import type { ExclusionManager } from '@alembic/core/service/guard/ExclusionManager';
+import type { GuardCheckEngine } from '@alembic/core/service/guard/GuardCheckEngine';
+import type { GuardFeedbackLoop } from '@alembic/core/service/guard/GuardFeedbackLoop';
+import type GuardService from '@alembic/core/service/guard/GuardService';
+import type { RuleLearner } from '@alembic/core/service/guard/RuleLearner';
+import type { ViolationsStore } from '@alembic/core/service/guard/ViolationsStore';
 import type { CodeEntityGraph } from '@alembic/core/service/knowledge/CodeEntityGraph';
 import type { ConfidenceRouter } from '@alembic/core/service/knowledge/ConfidenceRouter';
 import type { KnowledgeFileWriter } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
@@ -81,13 +88,6 @@ import type { AuditRepositoryImpl } from '../repository/audit/AuditRepository.js
 import type { RemoteCommandRepository } from '../repository/remote/RemoteCommandRepository.js';
 import type { BootstrapTaskManager } from '../service/bootstrap/BootstrapTaskManager.js';
 import type { CursorDeliveryPipeline } from '../service/delivery/CursorDeliveryPipeline.js';
-import type { ComplianceReporter } from '../service/guard/ComplianceReporter.js';
-import type { ExclusionManager } from '../service/guard/ExclusionManager.js';
-import type { GuardCheckEngine } from '../service/guard/GuardCheckEngine.js';
-import type { GuardFeedbackLoop } from '../service/guard/GuardFeedbackLoop.js';
-import type GuardService from '../service/guard/GuardService.js';
-import type { RuleLearner } from '../service/guard/RuleLearner.js';
-import type { ViolationsStore } from '../service/guard/ViolationsStore.js';
 import type { ModuleService } from '../service/module/ModuleService.js';
 import type { HitRecorder } from '../service/signal/HitRecorder.js';
 import type { SkillHooks } from '../service/skills/SkillHooks.js';

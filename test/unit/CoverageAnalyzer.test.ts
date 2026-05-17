@@ -1,8 +1,9 @@
 /**
  * CoverageAnalyzer 单元测试
  */
+
+import { CoverageAnalyzer } from '@alembic/core/service/guard/CoverageAnalyzer';
 import { describe, expect, it } from 'vitest';
-import { CoverageAnalyzer } from '../../lib/service/guard/CoverageAnalyzer.js';
 
 function createMockRepos(
   options: {

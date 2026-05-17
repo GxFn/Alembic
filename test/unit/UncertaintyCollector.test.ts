@@ -1,8 +1,9 @@
 /**
  * UncertaintyCollector 单元测试
  */
+
+import { UncertaintyCollector } from '@alembic/core/service/guard/UncertaintyCollector';
 import { describe, expect, it } from 'vitest';
-import { UncertaintyCollector } from '../../lib/service/guard/UncertaintyCollector.js';
 
 describe('UncertaintyCollector', () => {
   it('should start with empty state', () => {
