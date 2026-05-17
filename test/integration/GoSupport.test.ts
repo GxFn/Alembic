@@ -41,7 +41,7 @@ beforeAll(async () => {
   DimensionCopy = dcMod.DimensionCopy;
 
   await import('@alembic/core/project-intelligence');
-  const astMod = await import('@alembic/core/core/AstAnalyzer');
+  const astMod = await import('@alembic/core/project-intelligence');
   analyzeFile = astMod.analyzeFile;
   analyzeProject = astMod.analyzeProject;
 

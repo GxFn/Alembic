@@ -3504,7 +3504,7 @@ describe('Swift walker — super call extraction', () => {
 
   beforeAll(async () => {
     await import('@alembic/core/project-intelligence');
-    ({ analyzeFile } = await import('@alembic/core/core/AstAnalyzer'));
+    ({ analyzeFile } = await import('@alembic/core/project-intelligence'));
   });
 
   test('super.xxx() sets callType=super in Swift', () => {
@@ -3533,7 +3533,7 @@ describe('Java walker — super call extraction', () => {
 
   beforeAll(async () => {
     await import('@alembic/core/project-intelligence');
-    ({ analyzeFile } = await import('@alembic/core/core/AstAnalyzer'));
+    ({ analyzeFile } = await import('@alembic/core/project-intelligence'));
   });
 
   test('super.xxx() sets callType=super in Java', () => {
@@ -3563,7 +3563,7 @@ describe('Kotlin walker — super and this call extraction', () => {
 
   beforeAll(async () => {
     await import('@alembic/core/project-intelligence');
-    ({ analyzeFile } = await import('@alembic/core/core/AstAnalyzer'));
+    ({ analyzeFile } = await import('@alembic/core/project-intelligence'));
   });
 
   test('super.xxx() sets callType=super in Kotlin', () => {

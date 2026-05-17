@@ -22,7 +22,7 @@ let _LanguageService;
 beforeAll(async () => {
   // 加载 AST 插件
   await import('@alembic/core/project-intelligence');
-  const astMod = await import('@alembic/core/core/AstAnalyzer');
+  const astMod = await import('@alembic/core/project-intelligence');
   analyzeFile = astMod.analyzeFile;
   analyzeProject = astMod.analyzeProject;
   _astIsAvailable = astMod.isAvailable;

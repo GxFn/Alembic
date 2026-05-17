@@ -3,7 +3,6 @@
   "description": "Alembic Phase 1 Core import boundary baseline. Existing @alembic/core specifiers remain allowed; new specifiers require Core public API review and an allowlist update.",
   "generatedFrom": "Alembic tracked source during Phase 1 public API boundary construction",
   "allowedSpecifiers": [
-    "@alembic/core/core/AstAnalyzer",
     "@alembic/core/core/ast/lang-dart",
     "@alembic/core/core/ast/lang-go",
     "@alembic/core/core/ast/lang-java",
