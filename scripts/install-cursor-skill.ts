@@ -12,7 +12,7 @@
  * 运行方式：在项目根目录执行 npm run install:cursor-skill，或 alembic install:cursor-skill，或 node scripts/install-cursor-skill.js
  */
 
-import { INJECTABLE_SKILLS_DIR as _skillsSrc, PACKAGE_ROOT } from '../lib/shared/package-root.js';
+import { INJECTABLE_SKILLS_DIR as _skillsSrc, PACKAGE_ROOT } from '../lib/shared/package-assets.js';
 
 const __dirname = import.meta.dirname;
 
@@ -22,7 +22,7 @@ const require = createRequire(import.meta.url);
 
 import fs from 'node:fs';
 import path from 'node:path';
-import * as defaults from '../lib/infrastructure/config/Defaults.js';
+import * as defaults from '@alembic/core/infrastructure/config/Defaults';
 import { getCursorRoot, getCursorRulesDir, getCursorSkillsDir } from '../lib/shared/ide-paths.js';
 
 type FrontmatterFields = {

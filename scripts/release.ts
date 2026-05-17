@@ -12,7 +12,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-root.js';
+import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-assets.js';
 
 const require = createRequire(import.meta.url);
 // 颜色输出
@@ -109,7 +109,7 @@ class ReleaseChecker {
         silent: true,
         ignoreError: true,
       })?.trim();
-      if (behind && parseInt(behind) > 0) {
+      if (behind && parseInt(behind, 10) > 0) {
         this.warnings.push(`本地落后远程 ${behind} 个提交`);
         warning(`需要先 pull: git pull origin ${branch}`);
       } else {
@@ -125,7 +125,7 @@ class ReleaseChecker {
     header('Node.js 环境检查');
 
     const nodeVersion = process.version;
-    const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0]);
+    const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0], 10);
 
     if (majorVersion < 22) {
       this.errors.push(`Node.js 版本过低: ${nodeVersion} (需要 >=22)`);

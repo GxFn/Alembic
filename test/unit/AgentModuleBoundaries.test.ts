@@ -281,7 +281,7 @@ describe('agent module boundaries', () => {
     expect(offenders).toEqual([]);
   });
 
-  test('keeps file diff implementation on workflow naming', () => {
+  test('keeps file diff implementation owned by Core workflow naming', () => {
     const retiredSpecifiers = new Set([
       '#workflows/common-capabilities/file-diff/BootstrapSnapshot.js',
       '#workflows/common-capabilities/file-diff/IncrementalBootstrap.js',
@@ -302,10 +302,26 @@ describe('agent module boundaries', () => {
       existsSync(
         join(repoRoot, 'lib/workflows/capabilities/project-intelligence/FileDiffPlanner.ts')
       )
-    ).toBe(true);
+    ).toBe(false);
     expect(
       existsSync(
         join(repoRoot, 'lib/workflows/capabilities/project-intelligence/FileDiffSnapshotStore.ts')
+      )
+    ).toBe(false);
+    expect(
+      existsSync(
+        join(
+          repoRoot,
+          'vendor/AlembicCore/src/workflows/capabilities/project-intelligence/FileDiffPlanner.ts'
+        )
+      )
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(
+          repoRoot,
+          'vendor/AlembicCore/src/workflows/capabilities/project-intelligence/FileDiffSnapshotStore.ts'
+        )
       )
     ).toBe(true);
   });

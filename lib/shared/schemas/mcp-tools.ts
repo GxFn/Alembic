@@ -9,7 +9,6 @@
  * @module shared/schemas/mcp-tools
  */
 
-import { z } from 'zod';
 import {
   ComplexityEnum,
   ContentSchema,
@@ -20,7 +19,8 @@ import {
   ScopeEnum,
   StrictKindEnum,
   TitleField,
-} from './common.js';
+} from '@alembic/core/shared/schemas/common';
+import { z } from 'zod';
 
 // ══════════════════════════════════════════════════════
 //  1. alembic_health — 无参数

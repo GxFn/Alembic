@@ -10,7 +10,7 @@
 
 import http from 'node:http';
 import https from 'node:https';
-import * as Defaults from '../lib/infrastructure/config/Defaults.js';
+import * as Defaults from '@alembic/core/infrastructure/config/Defaults';
 
 function getBaseUrl() {
   return process.env.ALEMBIC_UI_URL || Defaults.DEFAULT_ALEMBIC_UI_URL || 'http://localhost:3000';

@@ -22,7 +22,7 @@
  *   --quiet            安静模式（无输出）
  */
 
-import { TEMPLATES_DIR } from '../lib/shared/package-root.js';
+import { TEMPLATES_DIR } from '../lib/shared/package-assets.js';
 
 const __dirname = import.meta.dirname;
 
