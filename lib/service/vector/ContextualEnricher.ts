@@ -20,7 +20,7 @@ import type {
   VectorChunkData,
   VectorChunkEnricher,
   VectorDocumentInfo,
-} from '@alembic/core/service/vector/EnrichmentTypes';
+} from '@alembic/core/vector';
 
 // ── Types ──
 

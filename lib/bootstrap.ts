@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { DatabaseConnection } from '@alembic/core/database';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
+import { unwrapRawDb } from '@alembic/core/search';
 import pathGuard from '@alembic/core/shared/PathGuard';
 import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
 import { WorkspaceSettingsStore } from '@alembic/core/shared/WorkspaceSettingsStore';

@@ -2,7 +2,7 @@
  * UncertaintyCollector 单元测试
  */
 
-import { UncertaintyCollector } from '@alembic/core/service/guard/UncertaintyCollector';
+import { UncertaintyCollector } from '@alembic/core/guard';
 import { describe, expect, it } from 'vitest';
 
 describe('UncertaintyCollector', () => {

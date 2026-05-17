@@ -13,7 +13,7 @@
  */
 
 import type { SignalBus, SignalType } from '@alembic/core/infrastructure/signal/SignalBus';
-import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
+import { unwrapRawDb } from '@alembic/core/search';
 import type { Startable } from '@alembic/core/shared/lifecycle';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 

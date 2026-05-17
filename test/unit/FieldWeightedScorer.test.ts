@@ -1,4 +1,4 @@
-import { FieldWeightedScorer } from '@alembic/core/service/search/FieldWeightedScorer';
+import { FieldWeightedScorer } from '@alembic/core/search';
 import { beforeEach, describe, expect, test } from 'vitest';
 
 /* ────────────────────────────────────────────

@@ -9,6 +9,17 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  ComplianceReporter,
+  CoverageAnalyzer,
+  ExclusionManager,
+  GuardCheckEngine,
+  GuardFeedbackLoop,
+  GuardService,
+  ReverseGuard,
+  RuleLearner,
+  ViolationsStore,
+} from '@alembic/core/guard';
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type {
   CodeEntityRepository,
@@ -16,16 +27,7 @@ import type {
   KnowledgeRepository,
   SourceRefRepository,
 } from '@alembic/core/repositories';
-import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
-import { ComplianceReporter } from '@alembic/core/service/guard/ComplianceReporter';
-import { CoverageAnalyzer } from '@alembic/core/service/guard/CoverageAnalyzer';
-import { ExclusionManager } from '@alembic/core/service/guard/ExclusionManager';
-import { GuardCheckEngine } from '@alembic/core/service/guard/GuardCheckEngine';
-import { GuardFeedbackLoop } from '@alembic/core/service/guard/GuardFeedbackLoop';
-import { GuardService } from '@alembic/core/service/guard/GuardService';
-import { ReverseGuard } from '@alembic/core/service/guard/ReverseGuard';
-import { RuleLearner } from '@alembic/core/service/guard/RuleLearner';
-import { ViolationsStore } from '@alembic/core/service/guard/ViolationsStore';
+import { unwrapRawDb } from '@alembic/core/search';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import type { ServiceContainer } from '../ServiceContainer.js';
 

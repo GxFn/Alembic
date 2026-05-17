@@ -19,8 +19,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { CANDIDATES_DIR, RECIPES_DIR } from '@alembic/core/infrastructure/config/Defaults';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { RawDbSyncAdapter, type SyncRepo } from '@alembic/core/repository/sync/SyncRepoAdapter';
+import { unwrapRawDb } from '@alembic/core/search';
 import {
   computeKnowledgeHash,
   parseKnowledgeMarkdown,

@@ -459,7 +459,7 @@ describe('L3: Go Enhancement Pack (go-web)', () => {
 // ══════════════════════════════════════════════════════════════════
 describe('L5b: Go IndexingPipeline Support', () => {
   it('IndexingPipeline SCANNABLE_EXTENSIONS should include .go', async () => {
-    const mod = await import('@alembic/core/infrastructure/vector/IndexingPipeline');
+    const mod = await import('@alembic/core/vector');
     expect(mod.IndexingPipeline).toBeDefined();
   });
 });
@@ -483,7 +483,7 @@ describe('L7: Go Built-in Guard Rules', () => {
   let GuardCheckEngine, detectLanguage;
 
   beforeAll(async () => {
-    const mod = await import('@alembic/core/service/guard/GuardCheckEngine');
+    const mod = await import('@alembic/core/guard');
     GuardCheckEngine = mod.GuardCheckEngine;
     detectLanguage = mod.detectLanguage;
   });

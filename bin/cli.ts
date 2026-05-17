@@ -993,7 +993,7 @@ program
       const code = readFileSync(filePath, 'utf8');
       const { bootstrap, container } = await initContainer();
 
-      const { detectLanguage } = await import('@alembic/core/service/guard/GuardCheckEngine');
+      const { detectLanguage } = await import('@alembic/core/guard');
       const engine = container.get('guardCheckEngine');
       const language = detectLanguage(filePath);
       const violations = engine.checkCode(code, language, { scope: opts.scope });
@@ -1140,7 +1140,7 @@ program
       }
 
       // 过滤源文件
-      const { SOURCE_EXTS } = await import('@alembic/core/service/guard/SourceFileCollector');
+      const { SOURCE_EXTS } = await import('@alembic/core/guard');
       const { extname: _extname } = await import('node:path');
       const sourceFiles = stagedFiles.filter((f) => SOURCE_EXTS.has(_extname(f).toLowerCase()));
 
@@ -1150,9 +1150,7 @@ program
 
       const { bootstrap, container } = await initContainer();
       const engine = container.get('guardCheckEngine');
-      const { detectLanguage: _detectLanguage } = await import(
-        '@alembic/core/service/guard/GuardCheckEngine'
-      );
+      const { detectLanguage: _detectLanguage } = await import('@alembic/core/guard');
 
       // 读取文件内容并检查
       const files: { path: string; content: string }[] = [];

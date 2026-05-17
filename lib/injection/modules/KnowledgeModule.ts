@@ -12,9 +12,6 @@ import { getDiscovererRegistry } from '@alembic/core/core/discovery';
 import { getEnhancementRegistry } from '@alembic/core/core/enhancement';
 import { DimensionCopy } from '@alembic/core/domain/dimension/DimensionCopy';
 import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
-import { HnswVectorAdapter } from '@alembic/core/infrastructure/vector/HnswVectorAdapter';
-import { IndexingPipeline } from '@alembic/core/infrastructure/vector/IndexingPipeline';
-import { JsonVectorAdapter } from '@alembic/core/infrastructure/vector/JsonVectorAdapter';
 import type {
   EvolutionLifecycleEventRepository,
   EvolutionProposalRepository,
@@ -22,6 +19,7 @@ import type {
   KnowledgeRepository,
   SourceRefRepository,
 } from '@alembic/core/repositories';
+import { HybridRetriever, SearchEngine } from '@alembic/core/search';
 import { findSimilarRecipes } from '@alembic/core/service/candidate/SimilarityService';
 import { ConsolidationAdvisor } from '@alembic/core/service/evolution/ConsolidationAdvisor';
 import { ContentPatcher } from '@alembic/core/service/evolution/ContentPatcher';
@@ -38,14 +36,13 @@ import { KnowledgeGraphService } from '@alembic/core/service/knowledge/Knowledge
 import { KnowledgeService } from '@alembic/core/service/knowledge/KnowledgeService';
 import { RecipeProductionGateway } from '@alembic/core/service/knowledge/RecipeProductionGateway';
 import { SourceRefReconciler } from '@alembic/core/service/knowledge/SourceRefReconciler';
-import { HybridRetriever } from '@alembic/core/service/search/HybridRetriever';
-import { SearchEngine } from '@alembic/core/service/search/SearchEngine';
 import { LanguageService } from '@alembic/core/shared/LanguageService';
 import {
   resolveDataRoot,
   resolveKnowledgeScanDirs,
   resolveProjectRoot,
 } from '@alembic/core/shared/resolveProjectRoot';
+import { HnswVectorAdapter, IndexingPipeline, JsonVectorAdapter } from '@alembic/core/vector';
 import { FileChangeHandler } from '../../service/evolution/FileChangeHandler.js';
 import { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 import type { ServiceContainer } from '../ServiceContainer.js';

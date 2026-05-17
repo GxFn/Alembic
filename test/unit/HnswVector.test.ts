@@ -16,45 +16,45 @@ let IndexingPipeline;
 let AsyncPersistence, WAL_OP, crc32;
 
 beforeAll(async () => {
-  const hnswMod = await import('@alembic/core/infrastructure/vector/HnswIndex');
+  const hnswMod = await import('@alembic/core/vector');
   HnswIndex = hnswMod.HnswIndex;
   cosineDistance = hnswMod.cosineDistance;
   MinHeap = hnswMod.MinHeap;
   MaxHeap = hnswMod.MaxHeap;
 
-  const sqMod = await import('@alembic/core/infrastructure/vector/ScalarQuantizer');
+  const sqMod = await import('@alembic/core/vector');
   ScalarQuantizer = sqMod.ScalarQuantizer;
 
-  const bpMod = await import('@alembic/core/infrastructure/vector/BinaryPersistence');
+  const bpMod = await import('@alembic/core/vector');
   BinaryPersistence = bpMod.BinaryPersistence;
 
-  const haMod = await import('@alembic/core/infrastructure/vector/HnswVectorAdapter');
+  const haMod = await import('@alembic/core/vector');
   HnswVectorAdapter = haMod.HnswVectorAdapter;
 
-  const vmMod = await import('@alembic/core/infrastructure/vector/VectorMigration');
+  const vmMod = await import('@alembic/core/vector');
   VectorMigration = vmMod.VectorMigration;
 
-  const beMod = await import('@alembic/core/infrastructure/vector/BatchEmbedder');
+  const beMod = await import('@alembic/core/vector');
   BatchEmbedder = beMod.BatchEmbedder;
 
-  const hrMod = await import('@alembic/core/service/search/HybridRetriever');
+  const hrMod = await import('@alembic/core/search');
   HybridRetriever = hrMod.HybridRetriever;
 
-  const jvMod = await import('@alembic/core/infrastructure/vector/JsonVectorAdapter');
+  const jvMod = await import('@alembic/core/vector');
   _JsonVectorAdapter = jvMod.JsonVectorAdapter;
 
-  const chunkMod = await import('@alembic/core/infrastructure/vector/Chunker');
+  const chunkMod = await import('@alembic/core/vector');
   chunk = chunkMod.chunk;
   _estimateTokens = chunkMod.estimateTokens;
   _DEFAULT_MAX_CHUNK_TOKENS = chunkMod.DEFAULT_MAX_CHUNK_TOKENS;
 
-  const astChunkerMod = await import('@alembic/core/infrastructure/vector/ASTChunker');
+  const astChunkerMod = await import('@alembic/core/vector');
   isASTChunkerAvailable = astChunkerMod.isASTChunkerAvailable;
 
-  const ipMod = await import('@alembic/core/infrastructure/vector/IndexingPipeline');
+  const ipMod = await import('@alembic/core/vector');
   IndexingPipeline = ipMod.IndexingPipeline;
 
-  const apMod = await import('@alembic/core/infrastructure/vector/AsyncPersistence');
+  const apMod = await import('@alembic/core/vector');
   AsyncPersistence = apMod.AsyncPersistence;
   WAL_OP = apMod.WAL_OP;
   crc32 = apMod.crc32;

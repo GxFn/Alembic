@@ -3,7 +3,7 @@
  * Ensures 'universal' dimension rules are NOT filtered out under any scope.
  */
 
-import { GuardCheckEngine } from '@alembic/core/service/guard/GuardCheckEngine';
+import { GuardCheckEngine } from '@alembic/core/guard';
 import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 

@@ -12,12 +12,19 @@ import type ProjectGraph from '@alembic/core/core/ast/ProjectGraph';
 import type { JobStore } from '@alembic/core/daemon';
 import type { DatabaseConnection } from '@alembic/core/database';
 import type DimensionCopy from '@alembic/core/domain/dimension/DimensionCopy';
+import type {
+  ComplianceReporter,
+  ExclusionManager,
+  GuardCheckEngine,
+  GuardFeedbackLoop,
+  GuardService,
+  RuleLearner,
+  ViolationsStore,
+} from '@alembic/core/guard';
 import type { EventBus } from '@alembic/core/infrastructure/event/EventBus';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
 import type Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
-import type { IndexingPipeline } from '@alembic/core/infrastructure/vector/IndexingPipeline';
-import type { VectorStore } from '@alembic/core/infrastructure/vector/VectorStore';
 // ── Repository Types ──
 import type {
   BootstrapRepository,
@@ -32,13 +39,7 @@ import type {
 } from '@alembic/core/repositories';
 import type { MemoryRepositoryImpl } from '@alembic/core/repository/memory/MemoryRepository';
 import type { TokenUsageStore } from '@alembic/core/repository/token/TokenUsageStore';
-import type { ComplianceReporter } from '@alembic/core/service/guard/ComplianceReporter';
-import type { ExclusionManager } from '@alembic/core/service/guard/ExclusionManager';
-import type { GuardCheckEngine } from '@alembic/core/service/guard/GuardCheckEngine';
-import type { GuardFeedbackLoop } from '@alembic/core/service/guard/GuardFeedbackLoop';
-import type GuardService from '@alembic/core/service/guard/GuardService';
-import type { RuleLearner } from '@alembic/core/service/guard/RuleLearner';
-import type { ViolationsStore } from '@alembic/core/service/guard/ViolationsStore';
+import type { HybridRetriever, SearchEngine } from '@alembic/core/search';
 import type { CodeEntityGraph } from '@alembic/core/service/knowledge/CodeEntityGraph';
 import type { ConfidenceRouter } from '@alembic/core/service/knowledge/ConfidenceRouter';
 import type { KnowledgeFileWriter } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
@@ -58,11 +59,9 @@ import type { FeedbackCollector } from '@alembic/core/service/quality/FeedbackCo
 import type { QualityScorer } from '@alembic/core/service/quality/QualityScorer';
 import type { RecipeCandidateValidator } from '@alembic/core/service/recipe/RecipeCandidateValidator';
 import type { RecipeParser } from '@alembic/core/service/recipe/RecipeParser';
-import type { HybridRetriever } from '@alembic/core/service/search/HybridRetriever';
-import type SearchEngine from '@alembic/core/service/search/SearchEngine';
-import type { VectorService } from '@alembic/core/service/vector/VectorService';
 // ── Shared Types ──
 import type { LanguageService } from '@alembic/core/shared/LanguageService';
+import type { IndexingPipeline, VectorService, VectorStore } from '@alembic/core/vector';
 // ── Service Types ──
 import type { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
 import type { UnifiedToolCatalog } from '#tools/catalog/UnifiedToolCatalog.js';

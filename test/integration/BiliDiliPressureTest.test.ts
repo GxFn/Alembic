@@ -31,18 +31,18 @@ const DB_EXISTS = fs.existsSync(BILIDILI_DB_PATH);
 /* ── 动态 import（避免顶层副作用） ── */
 let Lifecycle: typeof import('@alembic/core/domain/knowledge/Lifecycle');
 let LifecycleFns: typeof import('@alembic/core/domain/knowledge/Lifecycle');
-let GuardCheckEngine: typeof import('@alembic/core/service/guard/GuardCheckEngine').GuardCheckEngine;
-let UncertaintyCollector: typeof import('@alembic/core/service/guard/UncertaintyCollector').UncertaintyCollector;
-let ReverseGuard: typeof import('@alembic/core/service/guard/ReverseGuard').ReverseGuard;
-let CoverageAnalyzer: typeof import('@alembic/core/service/guard/CoverageAnalyzer').CoverageAnalyzer;
-let ComplianceReporter: typeof import('@alembic/core/service/guard/ComplianceReporter').ComplianceReporter;
+let GuardCheckEngine: typeof import('@alembic/core/guard').GuardCheckEngine;
+let UncertaintyCollector: typeof import('@alembic/core/guard').UncertaintyCollector;
+let ReverseGuard: typeof import('@alembic/core/guard').ReverseGuard;
+let CoverageAnalyzer: typeof import('@alembic/core/guard').CoverageAnalyzer;
+let ComplianceReporter: typeof import('@alembic/core/guard').ComplianceReporter;
 let DecayDetector: typeof import('@alembic/core/service/evolution/DecayDetector').DecayDetector;
 let StagingManager: typeof import('@alembic/core/service/evolution/StagingManager').StagingManager;
 let RedundancyAnalyzer: typeof import('@alembic/core/service/evolution/RedundancyAnalyzer').RedundancyAnalyzer;
 let ConfidenceRouter: typeof import('@alembic/core/service/knowledge/ConfidenceRouter').ConfidenceRouter;
 let SourceRefReconciler: typeof import('@alembic/core/service/knowledge/SourceRefReconciler').SourceRefReconciler;
 let SignalBus: typeof import('@alembic/core/infrastructure/signal/SignalBus').SignalBus;
-let RuleLearner: typeof import('@alembic/core/service/guard/RuleLearner').RuleLearner;
+let RuleLearner: typeof import('@alembic/core/guard').RuleLearner;
 let KnowledgeRepositoryImpl: typeof import('@alembic/core/repository/knowledge/KnowledgeRepository.impl').KnowledgeRepositoryImpl;
 let RecipeSourceRefRepositoryImpl: typeof import('@alembic/core/repository/sourceref/RecipeSourceRefRepository').RecipeSourceRefRepositoryImpl;
 let initDrizzle: typeof import('@alembic/core/infrastructure/database/drizzle').initDrizzle;
@@ -76,18 +76,18 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       drizzleMod,
     ] = await Promise.all([
       import('@alembic/core/domain/knowledge/Lifecycle'),
-      import('@alembic/core/service/guard/GuardCheckEngine'),
-      import('@alembic/core/service/guard/UncertaintyCollector'),
-      import('@alembic/core/service/guard/ReverseGuard'),
-      import('@alembic/core/service/guard/CoverageAnalyzer'),
-      import('@alembic/core/service/guard/ComplianceReporter'),
+      import('@alembic/core/guard'),
+      import('@alembic/core/guard'),
+      import('@alembic/core/guard'),
+      import('@alembic/core/guard'),
+      import('@alembic/core/guard'),
       import('@alembic/core/service/evolution/DecayDetector'),
       import('@alembic/core/service/evolution/StagingManager'),
       import('@alembic/core/service/evolution/RedundancyAnalyzer'),
       import('@alembic/core/service/knowledge/ConfidenceRouter'),
       import('@alembic/core/service/knowledge/SourceRefReconciler'),
       import('@alembic/core/infrastructure/signal/SignalBus'),
-      import('@alembic/core/service/guard/RuleLearner'),
+      import('@alembic/core/guard'),
       import('@alembic/core/repository/knowledge/KnowledgeRepository.impl'),
       import('@alembic/core/repository/sourceref/RecipeSourceRefRepository'),
       import('@alembic/core/infrastructure/database/drizzle'),

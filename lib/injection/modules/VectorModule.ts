@@ -9,7 +9,7 @@
  * 依赖 InfraModule 先注册: eventBus, database
  */
 
-import { VectorService } from '@alembic/core/service/vector/VectorService';
+import { VectorService } from '@alembic/core/vector';
 import { ContextualEnricher } from '../../service/vector/ContextualEnricher.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 

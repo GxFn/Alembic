@@ -7,7 +7,7 @@
  * 注意: 使用独立 DB 避免与其他集成测试的数据竞争。
  */
 
-import { BM25Scorer, SearchEngine, tokenize } from '@alembic/core/service/search/SearchEngine';
+import { BM25Scorer, SearchEngine, tokenize } from '@alembic/core/search';
 import Database from 'better-sqlite3';
 import { vi } from 'vitest';
 

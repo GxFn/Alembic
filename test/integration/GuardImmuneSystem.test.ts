@@ -9,10 +9,10 @@
  *   5. RuleLearner 桥接
  */
 
-import { CoverageAnalyzer } from '@alembic/core/service/guard/CoverageAnalyzer';
-import { GuardCheckEngine } from '@alembic/core/service/guard/GuardCheckEngine';
-import { ReverseGuard } from '@alembic/core/service/guard/ReverseGuard';
-import { UncertaintyCollector } from '@alembic/core/service/guard/UncertaintyCollector';
+import { CoverageAnalyzer } from '@alembic/core/guard';
+import { GuardCheckEngine } from '@alembic/core/guard';
+import { ReverseGuard } from '@alembic/core/guard';
+import { UncertaintyCollector } from '@alembic/core/guard';
 import { describe, expect, it, vi } from 'vitest';
 
 /** Minimal mock DB */
@@ -155,7 +155,7 @@ describe('Guard Immune System Integration', () => {
   describe('RuleLearner bridge', () => {
     it('should identify precision drops and emit signals', async () => {
       // Dynamic import to avoid constructor side effects
-      const { RuleLearner } = await import('@alembic/core/service/guard/RuleLearner');
+      const { RuleLearner } = await import('@alembic/core/guard');
 
       const signalBus = { send: vi.fn() };
       const tmpDir = `/tmp/alembic-test-${Date.now()}`;
@@ -190,7 +190,7 @@ describe('Guard Immune System Integration', () => {
 
   describe('three-dimensional compliance', () => {
     it('should produce coverage and confidence scores in report', async () => {
-      const { ComplianceReporter } = await import('@alembic/core/service/guard/ComplianceReporter');
+      const { ComplianceReporter } = await import('@alembic/core/guard');
 
       // Mock engine with uncertainty data
       const mockEngine = {

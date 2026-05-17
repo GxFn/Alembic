@@ -10,18 +10,18 @@
  *  - BM25Scorer             (增量 remove/update/compact, legacy 评分器)
  */
 
-import { CoarseRanker } from '@alembic/core/service/search/CoarseRanker';
-import { contextBoost } from '@alembic/core/service/search/contextBoost';
+import { CoarseRanker } from '@alembic/core/search';
+import { contextBoost } from '@alembic/core/search';
+import { MultiSignalRanker } from '@alembic/core/search';
 import {
   AuthoritySignal,
   ContextMatchSignal,
   DifficultySignal,
-  MultiSignalRanker,
   PopularitySignal,
   RecencySignal,
   RelevanceSignal,
 } from '@alembic/core/service/search/MultiSignalRanker';
-import { BM25Scorer } from '@alembic/core/service/search/SearchEngine';
+import { BM25Scorer } from '@alembic/core/search';
 import { CrossEncoderReranker } from '../../lib/service/search/CrossEncoderReranker.js';
 
 /* ════════════════════════════════════════════════════════════════════

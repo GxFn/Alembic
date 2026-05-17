@@ -2,7 +2,7 @@
  * CoverageAnalyzer 单元测试
  */
 
-import { CoverageAnalyzer } from '@alembic/core/service/guard/CoverageAnalyzer';
+import { CoverageAnalyzer } from '@alembic/core/guard';
 import { describe, expect, it } from 'vitest';
 
 function createMockRepos(

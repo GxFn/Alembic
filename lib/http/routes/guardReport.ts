@@ -69,10 +69,8 @@ router.get('/reverse', async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
     const projectRoot = resolveProjectRoot(container);
 
-    const { ReverseGuard } = await import('@alembic/core/service/guard/ReverseGuard');
-    const { collectSourceFilesWithContent } = await import(
-      '@alembic/core/service/guard/SourceFileCollector'
-    );
+    const { ReverseGuard } = await import('@alembic/core/guard');
+    const { collectSourceFilesWithContent } = await import('@alembic/core/guard');
 
     let reverseGuard: InstanceType<typeof ReverseGuard>;
     try {
@@ -122,7 +120,7 @@ router.get('/coverage', async (_req: Request, res: Response): Promise<void> => {
   try {
     const container = getServiceContainer();
 
-    const { CoverageAnalyzer } = await import('@alembic/core/service/guard/CoverageAnalyzer');
+    const { CoverageAnalyzer } = await import('@alembic/core/guard');
 
     let analyzer: InstanceType<typeof CoverageAnalyzer>;
     try {

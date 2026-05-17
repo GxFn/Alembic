@@ -6,7 +6,7 @@ import ProjectGraph from '@alembic/core/core/ast/ProjectGraph';
 import { initEnhancementRegistry } from '@alembic/core/core/enhancement';
 // ─── P3: Infrastructure ──────────────────────────────
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
+import { unwrapRawDb } from '@alembic/core/search';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
 import { GraphCache } from '../infrastructure/cache/GraphCache.js';

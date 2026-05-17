@@ -19,7 +19,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseKnowledgeMarkdown } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
-import { SearchEngine } from '@alembic/core/service/search/SearchEngine';
+import { SearchEngine } from '@alembic/core/search';
 import Database from 'better-sqlite3';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { extract as extractIntent } from '../../lib/service/task/IntentExtractor.js';

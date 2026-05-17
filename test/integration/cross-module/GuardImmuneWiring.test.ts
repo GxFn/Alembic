@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 describe('Guard Immune System Wiring', () => {
   it('GuardCheckEngine should have UncertaintyCollector wired', async () => {
-    const { GuardCheckEngine } = await import('@alembic/core/service/guard/GuardCheckEngine');
+    const { GuardCheckEngine } = await import('@alembic/core/guard');
     const engine = new GuardCheckEngine(null);
     expect(engine._uncertaintyCollector).toBeDefined();
     expect(typeof engine.getUncertaintyCollector).toBe('function');
@@ -22,7 +22,7 @@ describe('Guard Immune System Wiring', () => {
   });
 
   it('auditFiles should return capabilityReport', async () => {
-    const { GuardCheckEngine } = await import('@alembic/core/service/guard/GuardCheckEngine');
+    const { GuardCheckEngine } = await import('@alembic/core/guard');
     const mockDb = {
       prepare: () => ({ all: () => [], get: () => undefined, run: () => ({}) }),
       exec: () => {},
@@ -36,7 +36,7 @@ describe('Guard Immune System Wiring', () => {
   });
 
   it('AuditFileResult should have uncertainResults field', async () => {
-    const { GuardCheckEngine } = await import('@alembic/core/service/guard/GuardCheckEngine');
+    const { GuardCheckEngine } = await import('@alembic/core/guard');
     const mockDb = {
       prepare: () => ({ all: () => [], get: () => undefined, run: () => ({}) }),
       exec: () => {},
@@ -50,7 +50,7 @@ describe('Guard Immune System Wiring', () => {
   });
 
   it('RuleLearner should have checkPrecisionDrop method', async () => {
-    const { RuleLearner } = await import('@alembic/core/service/guard/RuleLearner');
+    const { RuleLearner } = await import('@alembic/core/guard');
     const tmpDir = `/tmp/alembic-smoke-${Date.now()}`;
     const learner = new RuleLearner(tmpDir, { knowledgeBaseDir: 'Alembic' });
     expect(typeof learner.checkPrecisionDrop).toBe('function');
@@ -59,7 +59,7 @@ describe('Guard Immune System Wiring', () => {
   });
 
   it('ReverseGuard should instantiate with mock DB', async () => {
-    const { ReverseGuard } = await import('@alembic/core/service/guard/ReverseGuard');
+    const { ReverseGuard } = await import('@alembic/core/guard');
     const mockDb = {
       prepare: () => ({ all: () => [], get: () => undefined }),
     };
@@ -69,7 +69,7 @@ describe('Guard Immune System Wiring', () => {
   });
 
   it('CoverageAnalyzer should instantiate with mock DB', async () => {
-    const { CoverageAnalyzer } = await import('@alembic/core/service/guard/CoverageAnalyzer');
+    const { CoverageAnalyzer } = await import('@alembic/core/guard');
     const mockDb = {
       prepare: () => ({ all: () => [], get: () => undefined }),
     };
@@ -79,7 +79,7 @@ describe('Guard Immune System Wiring', () => {
   });
 
   it('UncertaintyCollector types should be importable', async () => {
-    const mod = await import('@alembic/core/service/guard/UncertaintyCollector');
+    const mod = await import('@alembic/core/guard');
     expect(mod.UncertaintyCollector).toBeDefined();
     const c = new mod.UncertaintyCollector();
     expect(typeof c.recordSkip).toBe('function');

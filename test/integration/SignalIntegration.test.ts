@@ -10,8 +10,8 @@
 
 import type { Signal } from '@alembic/core/infrastructure/signal/SignalBus';
 import { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
-import { GuardCheckEngine } from '@alembic/core/service/guard/GuardCheckEngine';
-import { SearchEngine } from '@alembic/core/service/search/SearchEngine';
+import { GuardCheckEngine } from '@alembic/core/guard';
+import { SearchEngine } from '@alembic/core/search';
 import { createTestBootstrap } from '../fixtures/factory.js';
 
 describe('Integration: Signal Bus end-to-end', () => {

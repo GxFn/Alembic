@@ -11,11 +11,7 @@
  * 3. 投影使用 SearchTypes.slimSearchResult()（消除 3 处重复投影）
  */
 
-import {
-  groupByKind,
-  type SlimSearchResult,
-  slimSearchResult,
-} from '@alembic/core/service/search/SearchTypes';
+import { groupByKind, type SlimSearchResult, slimSearchResult } from '@alembic/core/search';
 import { envelope } from '../envelope.js';
 import type { McpContext, SearchArgs, SearchResultItem } from './types.js';
 
@@ -36,7 +32,7 @@ function getSearchEngine(ctx: McpContext) {
 
 /** 降级创建 SearchEngine（仅在 container 无法提供时） */
 async function getFallbackEngine(ctx: McpContext) {
-  const { SearchEngine } = await import('@alembic/core/service/search/SearchEngine');
+  const { SearchEngine } = await import('@alembic/core/search');
   const db = ctx.container.get('database');
   const knowledgeRepo = ctx.container.get('knowledgeRepository');
   const sourceRefRepo = ctx.container.get('recipeSourceRefRepository');

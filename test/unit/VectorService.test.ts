@@ -80,10 +80,10 @@ function createMockHybridRetriever() {
 
 // ── 动态导入 ──
 
-let VectorService: typeof import('@alembic/core/service/vector/VectorService').VectorService;
+let VectorService: typeof import('@alembic/core/vector').VectorService;
 
 beforeAll(async () => {
-  const mod = await import('@alembic/core/service/vector/VectorService');
+  const mod = await import('@alembic/core/vector');
   VectorService = mod.VectorService;
 });
 

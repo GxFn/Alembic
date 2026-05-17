@@ -8,8 +8,8 @@
  *   - primeSearchPipeline (for prime multi-query search — no DB dependency)
  */
 
-import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
 import { TokenUsageStore } from '@alembic/core/repository/token/TokenUsageStore';
+import { unwrapRawDb } from '@alembic/core/search';
 import { RecipeExtractor } from '@alembic/core/service/knowledge/RecipeExtractor';
 import { FeedbackCollector } from '@alembic/core/service/quality/FeedbackCollector';
 import { QualityScorer } from '@alembic/core/service/quality/QualityScorer';

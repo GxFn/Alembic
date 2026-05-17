@@ -56,10 +56,10 @@ function createMockEventBus() {
 
 // ── 动态导入 ──
 
-let SyncCoordinator: typeof import('@alembic/core/service/vector/SyncCoordinator').SyncCoordinator;
+let SyncCoordinator: typeof import('@alembic/core/vector').SyncCoordinator;
 
 beforeAll(async () => {
-  const mod = await import('@alembic/core/service/vector/SyncCoordinator');
+  const mod = await import('@alembic/core/vector');
   SyncCoordinator = mod.SyncCoordinator;
 });
 

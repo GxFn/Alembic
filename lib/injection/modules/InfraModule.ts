@@ -19,7 +19,7 @@ import {
   createAlembicRepositories,
 } from '@alembic/core/repositories';
 import { MemoryRepositoryImpl } from '@alembic/core/repository/memory/MemoryRepository';
-import { unwrapRawDb } from '@alembic/core/repository/search/SearchRepoAdapter';
+import { unwrapRawDb } from '@alembic/core/search';
 import { KnowledgeFileWriter } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
 import { KnowledgeSyncService } from '@alembic/core/service/knowledge/KnowledgeSyncService';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';

@@ -2,7 +2,7 @@
  * ReverseGuard 单元测试
  */
 
-import { ReverseGuard } from '@alembic/core/service/guard/ReverseGuard';
+import { ReverseGuard } from '@alembic/core/guard';
 import { describe, expect, it, vi } from 'vitest';
 
 function createMockRepos(

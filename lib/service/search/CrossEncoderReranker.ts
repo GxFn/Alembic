@@ -15,11 +15,8 @@
  *   - AI 不可用时自动降级到 Jaccard
  */
 
-import type {
-  SearchCrossEncoder,
-  SearchResultItem,
-} from '@alembic/core/service/search/SearchTypes';
-import { tokenize } from '@alembic/core/service/search/tokenizer';
+import type { SearchCrossEncoder, SearchResultItem } from '@alembic/core/search';
+import { tokenize } from '@alembic/core/search';
 import { jaccardSimilarity } from '@alembic/core/shared/similarity';
 
 type RerankCandidate = SearchResultItem & {

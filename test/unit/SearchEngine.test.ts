@@ -1,4 +1,4 @@
-import { BM25Scorer, SearchEngine, tokenize } from '@alembic/core/service/search/SearchEngine';
+import { BM25Scorer, SearchEngine, tokenize } from '@alembic/core/search';
 import { vi } from 'vitest';
 
 /* ────────────────────────────────────────────

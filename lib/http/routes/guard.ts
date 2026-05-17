@@ -56,9 +56,7 @@ router.post(
     }
 
     const container = getServiceContainer();
-    const { GuardCheckEngine, detectLanguage } = await import(
-      '@alembic/core/service/guard/GuardCheckEngine'
-    );
+    const { GuardCheckEngine, detectLanguage } = await import('@alembic/core/guard');
 
     // 获取 Engine（含 EP 注入）
     const engine = await _getEngine(container, GuardCheckEngine);
@@ -132,9 +130,7 @@ router.post(
     const { files } = req.body;
 
     const container = getServiceContainer();
-    const { GuardCheckEngine, detectLanguage } = await import(
-      '@alembic/core/service/guard/GuardCheckEngine'
-    );
+    const { GuardCheckEngine, detectLanguage } = await import('@alembic/core/guard');
 
     const engine = await _getEngine(container, GuardCheckEngine);
 
@@ -213,21 +209,17 @@ router.post(
 async function _getEngine(
   container: ReturnType<typeof getServiceContainer>,
   GuardCheckEngineCtor: new (
-    ...args: ConstructorParameters<
-      typeof import('@alembic/core/service/guard/GuardCheckEngine').GuardCheckEngine
-    >
-  ) => InstanceType<typeof import('@alembic/core/service/guard/GuardCheckEngine').GuardCheckEngine>
+    ...args: ConstructorParameters<typeof import('@alembic/core/guard').GuardCheckEngine>
+  ) => InstanceType<typeof import('@alembic/core/guard').GuardCheckEngine>
 ) {
-  let engine: InstanceType<
-    typeof import('@alembic/core/service/guard/GuardCheckEngine').GuardCheckEngine
-  >;
+  let engine: InstanceType<typeof import('@alembic/core/guard').GuardCheckEngine>;
   try {
     engine = container.get('guardCheckEngine');
   } catch {
     const database = container.get('database');
     engine = new GuardCheckEngineCtor(
       database as unknown as ConstructorParameters<
-        typeof import('@alembic/core/service/guard/GuardCheckEngine').GuardCheckEngine
+        typeof import('@alembic/core/guard').GuardCheckEngine
       >[0]
     );
   }
