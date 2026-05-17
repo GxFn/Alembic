@@ -63,7 +63,6 @@
     "build:core": "tsc -p vendor/AlembicCore/tsconfig.json",
     "clean:dist": "node scripts/clean-dist.mjs",
     "postbuild": "node scripts/postbuild.mjs",
-    "build:screenshot": "swiftc -O -framework ScreenCaptureKit -framework AppKit resources/native-ui/screenshot.swift -o resources/native-ui/screenshot",
     "install:vscode-ext": "npm ci --prefix resources/vscode-ext",
     "install:cursor-skill": "node dist/scripts/install-cursor-skill.js",
     "install:cursor-skill:mcp": "node dist/scripts/install-cursor-skill.js --mcp",
@@ -167,8 +166,6 @@
     "templates",
     "dashboard/dist",
     "template.json",
-    "resources/native-ui/screenshot.swift",
-    "resources/native-ui/screenshot",
     "resources/openChrome.applescript"
   ],
   "directories": {

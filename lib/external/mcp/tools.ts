@@ -208,7 +208,7 @@ export const TOOL_GATEWAY_MAP = {
           update: { action: 'update:skills', resource: 'skills' },
           delete: { action: 'delete:skills', resource: 'skills' },
         }) as Record<string, { action: string; resource: string }>
-      )[args?.operation as string] || null, // list/load/suggest are read-only
+      )[args?.operation as string] || null, // list/load are read-only
   },
   // knowledge submission (unified pipeline)
   alembic_submit_knowledge: { action: 'knowledge:create', resource: 'knowledge' },
@@ -324,7 +324,6 @@ export const TOOLS = [
       '• no params → auto-check git diff incremental files (preferred after coding)\n' +
       '• files → check specified file list\n' +
       '• code → inline check code snippet\n' +
-      '• operation: "reverse_audit" → Recipe→Code reverse validation (check if knowledge is outdated)\n' +
       '• operation: "coverage_matrix" → module-level Guard rule coverage matrix\n' +
       'Each violation includes a fix guide (doClause + coreCode). Fix accordingly and re-check.',
     inputSchema: zodToMcpSchema(GuardInput),
@@ -356,8 +355,7 @@ export const TOOLS = [
       '• load — load full Skill content for detailed guidance (requires name)\n' +
       '• create — create project-level Skill (requires name + description + content)\n' +
       '• update — update project-level Skill content\n' +
-      '• delete — delete project-level Skill (built-in cannot be deleted)\n' +
-      '• suggest — recommend Skills to create based on project analysis',
+      '• delete — delete project-level Skill (built-in cannot be deleted)',
     inputSchema: zodToMcpSchema(SkillInput),
   },
 

@@ -138,16 +138,16 @@ export type CallContextInput = z.infer<typeof CallContextInput>;
 
 export const GuardInput = z.object({
   operation: z
-    .enum(['check', 'review', 'reverse_audit', 'coverage_matrix', 'compliance_report'])
+    .enum(['check', 'review', 'coverage_matrix', 'compliance_report'])
     .optional()
     .describe(
-      'Guard 操作类型。reverse_audit: Recipe→Code 反向验证；coverage_matrix: 模块覆盖率矩阵；compliance_report: 3D 合规报告（含 uncertain）。省略则按 code/files 自动路由。'
+      'Guard 操作类型。coverage_matrix: 模块覆盖率矩阵；compliance_report: 3D 合规报告（含 uncertain）。省略则按 code/files 自动路由。'
     ),
   files: z.array(z.string()).optional(),
   code: z.string().optional(),
   language: z.string().optional(),
   filePath: z.string().optional(),
-  maxFiles: z.number().optional().describe('reverse_audit/coverage_matrix 时扫描的最大文件数'),
+  maxFiles: z.number().optional().describe('coverage_matrix 时扫描的最大文件数'),
 });
 export type GuardInput = z.infer<typeof GuardInput>;
 
@@ -242,10 +242,8 @@ export type SubmitKnowledgeInput = z.infer<typeof SubmitKnowledgeInput>;
 
 export const SkillInput = z.object({
   operation: z
-    .enum(['list', 'load', 'create', 'update', 'delete', 'suggest'])
-    .describe(
-      'list=列表 | load=加载内容(name) | create=创建 | update=更新 | delete=删除 | suggest=推荐'
-    ),
+    .enum(['list', 'load', 'create', 'update', 'delete'])
+    .describe('list=列表 | load=加载内容(name) | create=创建 | update=更新 | delete=删除'),
   name: z.string().optional().describe('Skill 名称（kebab-case，如 alembic-create）'),
   skillName: z.string().optional().describe('name 的别名，与 name 等价'),
   section: z.string().optional().describe('load 时过滤指定章节'),

@@ -149,7 +149,6 @@ export async function consolidatedGraph(ctx: McpContext, args: ConsolidatedGraph
 
 /**
  * Guard 检查：按参数自动路由
- *   operation: 'reverse_audit'      → guardReverseAudit()     (Recipe→Code 反向验证)
  *   operation: 'coverage_matrix'    → guardCoverageMatrix()    (模块覆盖率矩阵)
  *   operation: 'compliance_report'  → guardComplianceReport()  (3D 合规报告)
  *   无参数       → guardReview()    (自动 git diff 检测 + inline recipe)
@@ -158,9 +157,6 @@ export async function consolidatedGraph(ctx: McpContext, args: ConsolidatedGraph
  */
 export async function consolidatedGuard(ctx: McpContext, args: ConsolidatedGuardArgs) {
   // operation 显式路由
-  if (args.operation === 'reverse_audit') {
-    return guardHandlers.guardReverseAudit(ctx, args);
-  }
   if (args.operation === 'coverage_matrix') {
     return guardHandlers.guardCoverageMatrix(ctx, args);
   }
@@ -185,13 +181,12 @@ export async function consolidatedGuard(ctx: McpContext, args: ConsolidatedGuard
  *   create  → createSkill()
  *   update  → updateSkill()
  *   delete  → deleteSkill()
- *   suggest → suggestSkills()
  */
 export async function consolidatedSkill(ctx: McpContext, args: ConsolidatedSkillArgs) {
   const op = args.operation;
   if (!op) {
     throw new Error(
-      'Missing required parameter: operation. Expected: list, load, create, update, delete, suggest, feedback'
+      'Missing required parameter: operation. Expected: list, load, create, update, delete'
     );
   }
 
@@ -211,13 +206,9 @@ export async function consolidatedSkill(ctx: McpContext, args: ConsolidatedSkill
       return skillHandlers.updateSkill(ctx, args);
     case 'delete':
       return skillHandlers.deleteSkill(ctx, args);
-    case 'suggest':
-      return skillHandlers.suggestSkills(ctx);
-    case 'feedback':
-      return skillHandlers.recordFeedback(ctx, args as Record<string, unknown>);
     default:
       throw new Error(
-        `Unknown skill operation: ${op}. Expected: list, load, create, update, delete, suggest, feedback`
+        `Unknown skill operation: ${op}. Expected: list, load, create, update, delete`
       );
   }
 }

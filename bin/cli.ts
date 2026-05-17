@@ -1327,7 +1327,7 @@ program
 
       const { container } = await initContainer({ projectRoot });
 
-      // 连接 EventBus → Gateway（供 SignalCollector 监听事件）
+      // 连接 EventBus → Gateway（供运行时事件传播）
       try {
         const eventBus = container.get('eventBus');
         const gateway = container.get('gateway');
@@ -1377,55 +1377,6 @@ program
 
       if (hasMcpConfig) {
         console.log('💡 请确认 IDE 中 Alembic MCP 开关已打开，否则 Agent 无法调用工具');
-      }
-
-      // 启动 SignalCollector 后台 AI 分析服务
-      // [DISABLED] 暂时关闭 AI 调用和 Skills 推荐功能
-      // 恢复时删除 `if (false)` 包裹即可
-      if (false as boolean) {
-        try {
-          const { SignalCollector } = await import('../lib/service/skills/SignalCollector.js');
-          const { getRealtimeService } = await import(
-            '../lib/infrastructure/realtime/RealtimeService.js'
-          );
-          const db = container.get('database');
-          const agentService = container.get('agentService');
-          const knowledgeRepo = container.get('knowledgeRepository');
-          const auditRepo = container.get('auditRepository');
-
-          const signalCollector = new SignalCollector({
-            projectRoot,
-            knowledgeRepo: knowledgeRepo as any,
-            auditRepo: auditRepo as any,
-            agentService: agentService as any,
-            container,
-            mode: process.env.ALEMBIC_SIGNAL_MODE || 'auto',
-            intervalMs: parseInt(process.env.ALEMBIC_SIGNAL_INTERVAL || '3600000', 10),
-            onSuggestions: (suggestions: any) => {
-              try {
-                const realtime = getRealtimeService();
-                realtime.broadcastEvent('skill:suggestions', { suggestions });
-              } catch {
-                /* realtime 未就绪 */
-              }
-            },
-          });
-          signalCollector.start();
-          (globalThis as any)._signalCollector = signalCollector;
-
-          // 将 SignalCollector 绑定到 AIRecallStrategy (延迟注入)
-          try {
-            const aiStrategy = (container.singletons as Record<string, any>)._aiRecallStrategy;
-            if (aiStrategy && typeof aiStrategy.setSignalCollector === 'function') {
-              aiStrategy.setSignalCollector(signalCollector);
-            }
-          } catch {
-            /* recommendation pipeline not yet initialized */
-          }
-        } catch (scErr: any) {
-          cli.warn(`⚠️  SignalCollector failed to start: ${scErr.message}`);
-          cli.debug(scErr.stack);
-        }
       }
 
       if (opts.apiOnly) {

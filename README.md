@@ -131,7 +131,7 @@ Senses all Agent behavior. IntentExtractor extracts terms, infers language and m
 
 **Immunity — Guard**
 
-Bidirectional immune system. Forward: four-layer detection (regex → code-level multi-line → tree-sitter AST → cross-file), built-in 8-language rules, three-state output (pass / violation / uncertain). Backward: ReverseGuard verifies Recipe-referenced API symbols still exist (5 drift types). Auto-triggers Review when Agent completes a task, handing violations along with relevant Recipes to the Agent for fixing. RuleLearner tracks P/R/F1 for auto-tuning.
+Forward immune system. Four-layer detection (regex → code-level multi-line → tree-sitter AST → cross-file), built-in 8-language rules, three-state output (pass / violation / uncertain). Auto-triggers Review when Agent completes a task, handing violations along with relevant Recipes to the Agent for fixing. RuleLearner tracks P/R/F1 for auto-tuning.
 
 **Create — Tool Forge**
 

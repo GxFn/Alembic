@@ -125,11 +125,6 @@ export function registerGatewayActions(gateway: Gateway, container: { get(name: 
     return service.get(ctx.data.id);
   });
 
-  gateway.register('recipe:get_recommendations', async (ctx: GatewayContext) => {
-    const service = container.get('knowledgeService');
-    return service.list({ lifecycle: 'active' }, { page: 1, pageSize: ctx.data.limit || 10 });
-  });
-
   gateway.register('recipe:delete', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.delete(ctx.data.recipeId, {

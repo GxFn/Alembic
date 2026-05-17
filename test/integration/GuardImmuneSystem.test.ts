@@ -4,15 +4,12 @@
  * 验证 Phase 2 新增组件在真实（模拟）环境中的协同:
  *   1. UncertaintyCollector 在 GuardCheckEngine 中的集成
  *   2. ComplianceReporter 三维评分
- *   3. ReverseGuard 反向验证端到端
- *   4. CoverageAnalyzer 覆盖率矩阵
- *   5. RuleLearner 桥接
+ *   3. CoverageAnalyzer 覆盖率矩阵
+ *   4. RuleLearner 桥接
  */
 
 import { CoverageAnalyzer } from '@alembic/core/guard';
 import { GuardCheckEngine } from '@alembic/core/guard';
-import { ReverseGuard } from '@alembic/core/guard';
-import { UncertaintyCollector } from '@alembic/core/guard';
 import { describe, expect, it, vi } from 'vitest';
 
 /** Minimal mock DB */
@@ -73,48 +70,6 @@ describe('Guard Immune System Integration', () => {
       expect(result.capabilityReport.uncertainResults).toBeInstanceOf(Array);
       expect(result.capabilityReport.checkCoverage).toBeGreaterThanOrEqual(0);
       expect(result.capabilityReport.checkCoverage).toBeLessThanOrEqual(100);
-    });
-  });
-
-  describe('ReverseGuard end-to-end', () => {
-    it('should detect drift when symbols removed from codebase', () => {
-      const knowledgeRepo = {
-        findActiveRulesWithContentSync() {
-          return [
-            {
-              id: 'r-old',
-              title: 'Old API Rule',
-              coreCode: 'BDLegacyManager.fetchData()',
-              guardPattern: 'BDLegacyManager',
-              stats: null,
-            },
-          ];
-        },
-      };
-      const entityRepo = {
-        existsByName(_name: string) {
-          return false; // symbol not found → drift
-        },
-      };
-      const sourceRefRepo = {
-        findByRecipeId(_id: string) {
-          return [];
-        },
-      };
-
-      const reverseGuard = new ReverseGuard(
-        knowledgeRepo as never,
-        entityRepo as never,
-        sourceRefRepo as never
-      );
-      const results = reverseGuard.auditAllRules([
-        { path: 'a.swift', content: 'let x = BDNewManager.fetchData()' },
-      ]);
-
-      expect(results).toHaveLength(1);
-      expect(results[0].recipeId).toBe('r-old');
-      // Symbol missing → should at least investigate
-      expect(['investigate', 'decay']).toContain(results[0].recommendation);
     });
   });
 

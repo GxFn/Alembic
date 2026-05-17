@@ -3,7 +3,6 @@
  *
  * 负责注册:
  *   - agentService, toolRegistry, toolForge, skillHooks
- *   - feedbackStore, recommendationPipeline, recommendationMetrics
  */
 
 import { ToolForge } from '@alembic/agent/forge';
@@ -45,11 +44,6 @@ import {
 } from '../../external/mcp/McpCapabilityProjection.js';
 import { McpToolAdapter, type McpToolExecutor } from '../../external/mcp/McpToolAdapter.js';
 import { McpToolDiscovery } from '../../external/mcp/McpToolDiscovery.js';
-import { AIRecallStrategy } from '../../service/skills/AIRecallStrategy.js';
-import { FeedbackStore } from '../../service/skills/FeedbackStore.js';
-import { RecommendationMetrics } from '../../service/skills/RecommendationMetrics.js';
-import { RecommendationPipeline } from '../../service/skills/RecommendationPipeline.js';
-import { RuleRecallStrategy } from '../../service/skills/RuleRecallStrategy.js';
 import { SkillHooks } from '../../service/skills/SkillHooks.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
@@ -217,37 +211,5 @@ export function register(c: ServiceContainer) {
       /* skill hooks load is best-effort */
     });
     return hooks;
-  });
-
-  // ── Recommendation 子系统 ──
-
-  c.singleton('feedbackStore', (ct: ServiceContainer) => {
-    const dataRoot = resolveDataRoot(ct);
-    const wz = ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;
-    return new FeedbackStore(dataRoot, wz);
-  });
-
-  c.singleton('recommendationPipeline', (ct: ServiceContainer) => {
-    const feedbackStore = ct.get('feedbackStore') as FeedbackStore;
-    const skillHooks = ct.get('skillHooks') as SkillHooks;
-
-    const pipeline = new RecommendationPipeline({ feedbackStore, skillHooks });
-
-    // 注册召回策略
-    pipeline.addStrategy(new RuleRecallStrategy());
-
-    // AI 策略 — SignalCollector 可能尚未初始化，使用延迟绑定
-    const aiStrategy = new AIRecallStrategy(null);
-    pipeline.addStrategy(aiStrategy);
-
-    // 在 singletons 上保存 aiStrategy 引用，供后续绑定 SignalCollector
-    ct.singletons._aiRecallStrategy = aiStrategy;
-
-    return pipeline;
-  });
-
-  c.singleton('recommendationMetrics', (ct: ServiceContainer) => {
-    const feedbackStore = ct.get('feedbackStore') as FeedbackStore;
-    return new RecommendationMetrics(feedbackStore);
   });
 }

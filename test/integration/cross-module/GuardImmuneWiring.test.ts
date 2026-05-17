@@ -6,7 +6,7 @@
  *   2. auditFiles 返回 capabilityReport
  *   3. ComplianceReporter 三维评分字段存在
  *   4. RuleLearner.checkPrecisionDrop 可用
- *   5. ReverseGuard + CoverageAnalyzer 可实例化
+ *   5. CoverageAnalyzer 可实例化
  */
 import { describe, expect, it } from 'vitest';
 
@@ -56,16 +56,6 @@ describe('Guard Immune System Wiring', () => {
     expect(typeof learner.checkPrecisionDrop).toBe('function');
     const result = learner.checkPrecisionDrop();
     expect(Array.isArray(result)).toBe(true);
-  });
-
-  it('ReverseGuard should instantiate with mock DB', async () => {
-    const { ReverseGuard } = await import('@alembic/core/guard');
-    const mockDb = {
-      prepare: () => ({ all: () => [], get: () => undefined }),
-    };
-    const guard = new ReverseGuard(mockDb);
-    const results = guard.auditAllRules([]);
-    expect(Array.isArray(results)).toBe(true);
   });
 
   it('CoverageAnalyzer should instantiate with mock DB', async () => {

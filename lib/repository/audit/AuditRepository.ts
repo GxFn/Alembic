@@ -7,7 +7,7 @@
 
 import { auditLogs } from '@alembic/core/infrastructure/database/drizzle/schema';
 import { RepositoryBase } from '@alembic/core/repository/base/RepositoryBase';
-import { and, avg, count, desc, eq, gt, gte, like, lte, sql } from 'drizzle-orm';
+import { and, avg, count, desc, eq, gte, lte, sql } from 'drizzle-orm';
 
 /* ═══ 类型定义 ═══ */
 
@@ -272,82 +272,6 @@ export class AuditRepositoryImpl extends RepositoryBase<typeof auditLogs, AuditL
     } catch {
       return { deleted: 0 };
     }
-  }
-
-  /**
-   * Guard 违规规则名 TOP-N (SkillAdvisor.#getGuardPatterns)
-   */
-  async findTopGuardViolationRules(
-    minCount: number,
-    limit: number
-  ): Promise<Array<{ ruleName: string; cnt: number }>> {
-    return this.drizzle
-      .select({
-        ruleName: sql<string>`json_extract(${this.table.operationData}, '$.ruleName')`.as(
-          'ruleName'
-        ),
-        cnt: count(),
-      })
-      .from(this.table)
-      .where(and(like(this.table.action, 'guard%'), eq(this.table.result, 'violation')))
-      .groupBy(sql`json_extract(${this.table.operationData}, '$.ruleName')`)
-      .having(sql`count(*) >= ${minCount}`)
-      .orderBy(desc(count()))
-      .limit(limit)
-      .all() as Array<{ ruleName: string; cnt: number }>;
-  }
-
-  /**
-   * Guard 违规信号 (SignalCollector.#collectGuardSignals)
-   */
-  async findGuardViolationSignals(
-    limit: number
-  ): Promise<Array<{ ruleName: string; cnt: number; lastAt: number }>> {
-    return this.drizzle
-      .select({
-        ruleName: sql<string>`json_extract(${this.table.operationData}, '$.ruleName')`.as(
-          'ruleName'
-        ),
-        cnt: count(),
-        lastAt: sql<number>`MAX(${this.table.timestamp})`.as('lastAt'),
-      })
-      .from(this.table)
-      .where(and(like(this.table.action, 'guard%'), eq(this.table.result, 'violation')))
-      .groupBy(sql`json_extract(${this.table.operationData}, '$.ruleName')`)
-      .having(sql`count(*) > 0`)
-      .orderBy(desc(count()))
-      .limit(limit)
-      .all() as Array<{ ruleName: string; cnt: number; lastAt: number }>;
-  }
-
-  /**
-   * 最近动作日志 (SignalCollector.#collectActionSignals)
-   */
-  async findRecentActions(
-    sinceTs: number,
-    limit: number
-  ): Promise<
-    Array<{
-      actor: string;
-      action: string;
-      resource: string | null;
-      result: string;
-      timestamp: number;
-    }>
-  > {
-    return this.drizzle
-      .select({
-        actor: this.table.actor,
-        action: this.table.action,
-        resource: this.table.resource,
-        result: this.table.result,
-        timestamp: this.table.timestamp,
-      })
-      .from(this.table)
-      .where(gt(this.table.timestamp, sinceTs))
-      .orderBy(desc(this.table.timestamp))
-      .limit(limit)
-      .all();
   }
 
   /* ─── 内部辅助 ─── */

@@ -16,16 +16,10 @@ import {
   GuardCheckEngine,
   GuardFeedbackLoop,
   GuardService,
-  ReverseGuard,
   RuleLearner,
   ViolationsStore,
 } from '@alembic/core/guard';
-import type {
-  CodeEntityRepository,
-  GuardViolationRepository,
-  KnowledgeRepository,
-  SourceRefRepository,
-} from '@alembic/core/repositories';
+import type { GuardViolationRepository, KnowledgeRepository } from '@alembic/core/repositories';
 import { unwrapRawDb } from '@alembic/core/search';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import type { ServiceContainer } from '../ServiceContainer.js';
@@ -135,17 +129,6 @@ export function register(c: ServiceContainer) {
         } as ConstructorParameters<typeof GuardFeedbackLoop>[2]
       )
   );
-
-  c.singleton('reverseGuard', (ct: ServiceContainer) => {
-    return new ReverseGuard(
-      ct.get('knowledgeRepository') as KnowledgeRepository,
-      ct.get('codeEntityRepository') as CodeEntityRepository,
-      ct.get('recipeSourceRefRepository') as SourceRefRepository,
-      {
-        signalBus: ct.singletons.signalBus || undefined,
-      } as ConstructorParameters<typeof ReverseGuard>[3]
-    );
-  });
 
   c.singleton('coverageAnalyzer', (ct: ServiceContainer) => {
     let ruleLearner:
