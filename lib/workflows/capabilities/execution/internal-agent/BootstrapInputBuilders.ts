@@ -5,7 +5,7 @@
  * 包括消息、上下文、执行参数和子任务编排。
  */
 
-import type { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
+import type { MemoryCoordinator } from '@alembic/agent/memory';
 import type { SystemRunContext } from '#agent/runtime/SystemRunContext.js';
 import type {
   AgentRunContext,

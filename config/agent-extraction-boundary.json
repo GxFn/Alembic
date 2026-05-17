@@ -10,6 +10,77 @@
       "CLI, daemon, HTTP/API, Dashboard/native, IDE, Lark runtime, and product shell stay in Alembic."
     ]
   },
+  "phaseEvidence": {
+    "phase4ToolSystemClosure": {
+      "status": "closed",
+      "commit": "fd5f917",
+      "stage": "M4-close",
+      "planSection": "19.4 M4-close",
+      "completedScope": [
+        "Common tool contracts, capability catalog, unified catalog, lightweight router, result envelopes/presenter, workflow registry, and public V2 capability consumers use @alembic/agent/tools.",
+        "Dashboard, macOS, Skill, Terminal, Workflow, MCP, CLI, daemon, HTTP/API, native, IDE, and product wiring remain Alembic host adapters.",
+        "Four deferred local V2 tool implementation import files remain classified until AlembicAgent completes A6-2."
+      ],
+      "preservedPaths": [
+        "lib/tools/adapters/DashboardOperationAdapter.ts",
+        "lib/tools/adapters/DashboardOperations.ts",
+        "lib/tools/adapters/MacSystemAdapter.ts",
+        "lib/tools/adapters/MacSystemCapabilities.ts",
+        "lib/tools/adapters/SkillAdapter.ts",
+        "lib/tools/adapters/SkillCapabilities.ts",
+        "lib/tools/adapters/TerminalAdapter.ts",
+        "lib/tools/adapters/WorkflowAdapter.ts",
+        "lib/tools/v2/adapter/**",
+        "lib/tools/v2/cache/**",
+        "lib/tools/v2/compressor/OutputCompressor.ts",
+        "lib/tools/v2/handlers/**"
+      ],
+      "validation": [
+        "npm run lint:agent-extraction-boundary: passed; product #agent call sites 21, @alembic/agent/ai consumer files 16, local AI provider consumers 0, @alembic/agent/tools consumer files 50, local common tool consumers 0, deferred local tool import files 4, classified lib/tools files 79.",
+        "npm run build:check: passed.",
+        "npm run lint -- --diagnostic-level=error: passed.",
+        "npm run lint:core-import-boundary: passed.",
+        "npm run lint:consumer-core-imports: passed.",
+        "npm run check: passed; existing repository Biome warnings are non-fatal.",
+        "npm run build: passed.",
+        "node dist/bin/cli.js status --json: passed; workspace detected, database not found in current test environment.",
+        "Tool-focused vitest suite: 10 files / 124 tests passed under host permissions; sandboxed run is blocked by macOS sandbox-exec Operation not permitted."
+      ],
+      "nextPhaseAllowed": true,
+      "nextPhase": "M5 memory/context consumer migration"
+    },
+    "phase5MemoryContextIngress": {
+      "status": "closed",
+      "stage": "M5",
+      "planSection": "19.4 M5",
+      "completedScope": [
+        "Alembic production consumers outside preserved local Agent implementation now import Agent-owned memory/context through @alembic/agent/memory and @alembic/agent/context.",
+        "Workflow completion, internal bootstrap admission/consumers/runtime initialization/restore state/input builders, Lark conversation state, and HTTP AI conversation state were switched where the Agent package exposes a stable memory/context surface.",
+        "Local service/runtime/prompts/domain remain in place because AlembicAgent has not yet published explicit service/runtime/prompts/domain subpath exports."
+      ],
+      "preservedPaths": [
+        "lib/agent/service/**",
+        "lib/agent/runtime/**",
+        "lib/agent/prompts/**",
+        "lib/agent/domain/**",
+        "lib/agent/memory/**",
+        "lib/agent/context/**"
+      ],
+      "validation": [
+        "npm run lint:agent-extraction-boundary: passed; product #agent call sites 17, @alembic/agent/memory consumer files 7, @alembic/agent/context consumer files 3, local memory/context consumers 0.",
+        "Import scan for #agent/memory, #agent/context, and relative lib/agent/memory/context production imports outside lib/agent/**: no matches.",
+        "npm run build:check: passed.",
+        "npm run lint -- --diagnostic-level=error: passed.",
+        "Representative bootstrap/rescan/completion memory-context tests: 14 files / 46 tests passed.",
+        "npm run check: passed; existing repository Biome warnings are non-fatal.",
+        "npm run build: passed.",
+        "node dist/bin/cli.js status --json: passed; workspace detected, database not found in current test environment.",
+        "memory/context smoke import passed: MemoryCoordinator, SessionStore, PersistentMemory, ConversationStore, ContextWindow, and ExplorationTracker are exported."
+      ],
+      "nextPhaseAllowed": false,
+      "nextPhase": "Wait for AlembicAgent A6-1 before switching service/runtime/prompts/domain or deleting local Agent implementation."
+    }
+  },
   "aiProviderRules": {
     "status": "consume-alembic-agent-ai",
     "packageName": "@alembic/agent",
@@ -100,6 +171,27 @@
       "Common tool contracts, capability catalog, unified catalog, router contracts, result envelopes, presenters, workflow registry, V2 public capabilities, V2 registry/types, and strip compressor are consumed through @alembic/agent/tools outside local implementation/deferred bridges.",
       "Alembic keeps Dashboard, macOS, Skill, Terminal, Workflow, MCP, CLI, daemon, HTTP/API, native, and IDE wiring as host adapters.",
       "Local lib/tools common trees are preserved only as deletion candidates until public adapter gaps and host smoke evidence are complete."
+    ]
+  },
+  "memoryContextImportRules": {
+    "status": "consume-alembic-agent-memory-context",
+    "packageName": "@alembic/agent",
+    "packageRange": "file:../AlembicAgent",
+    "publicMemoryEntrypoint": "@alembic/agent/memory",
+    "publicContextEntrypoint": "@alembic/agent/context",
+    "localDeletionCandidates": ["lib/agent/memory/**", "lib/agent/context/**"],
+    "scanRoots": ["lib", "bin", "scripts"],
+    "ignoredPathPrefixes": ["lib/agent/"],
+    "blockedUntilAgentExports": [
+      "#agent/service/index.js",
+      "#agent/runtime/SystemRunContext.js",
+      "#agent/prompts/insight-analyst.js",
+      "#agent/domain/EpisodicConsolidator.js"
+    ],
+    "notes": [
+      "Agent-owned memory/context consumers should use @alembic/agent/memory and @alembic/agent/context outside local implementation directories.",
+      "Alembic keeps database connection construction, repository/vector construction, projectRoot/dataRoot, WriteZone/PathGuard, CLI/daemon/HTTP/API/Dashboard/native/IDE wiring, and internal workflow orchestration as host responsibilities.",
+      "Do not delete local lib/agent/service, lib/agent/runtime, lib/agent/prompts, or lib/agent/domain until AlembicAgent exposes explicit service/runtime/prompts/domain public subpaths."
     ]
   },
   "agentSourceNotes": [
@@ -198,69 +290,39 @@
       },
       {
         "path": "lib/workflows/capabilities/completion/CompletionSteps.ts",
-        "classification": "workflow-completion-agent-memory",
-        "switchAfter": "phase-5",
-        "replacement": "@alembic/agent/memory",
-        "expectedSpecifiers": [
-          "#agent/domain/EpisodicConsolidator.js",
-          "#agent/memory/MemoryEmbeddingStore.js",
-          "#agent/memory/PersistentMemory.js"
-        ],
-        "reason": "Completion workflow lazily uses Agent memory/consolidation and should wait for Agent memory persistence migration."
-      },
-      {
-        "path": "lib/workflows/capabilities/completion/WorkflowCompletionTypes.ts",
-        "classification": "workflow-completion-agent-memory-type",
-        "switchAfter": "phase-5",
-        "replacement": "@alembic/agent/memory",
-        "expectedSpecifiers": ["#agent/memory/MemoryStore.js"],
-        "reason": "Completion type surface references Agent memory database shape and should follow the memory package boundary."
+        "classification": "workflow-completion-agent-domain",
+        "switchAfter": "after-A6-1",
+        "replacement": "@alembic/agent/domain",
+        "expectedSpecifiers": ["#agent/domain/EpisodicConsolidator.js"],
+        "reason": "Completion workflow now consumes Agent memory from @alembic/agent/memory, but consolidation stays local until AlembicAgent publishes an explicit domain subpath."
       },
       {
         "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.ts",
         "classification": "workflow-bootstrap-agent-runtime",
         "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service-and-memory",
-        "expectedSpecifiers": [
-          "#agent/memory/MemoryCoordinator.js",
-          "#agent/memory/SessionStore.js",
-          "#agent/service/index.js"
-        ],
-        "reason": "Internal bootstrap consumers coordinate Alembic workflow state with Agent run and memory outputs."
-      },
-      {
-        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapDimensionAdmission.ts",
-        "classification": "workflow-bootstrap-agent-session",
-        "switchAfter": "phase-5",
-        "replacement": "@alembic/agent/memory",
-        "expectedSpecifiers": ["#agent/memory/SessionStore.js"],
-        "reason": "Dimension admission depends on Agent session restore state and should move with memory/session contracts."
+        "replacement": "@alembic/agent/service",
+        "expectedSpecifiers": ["#agent/service/index.js"],
+        "reason": "Internal bootstrap consumers coordinate Alembic workflow state with Agent run outputs; memory types now come from @alembic/agent/memory."
       },
       {
         "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.ts",
         "classification": "workflow-bootstrap-agent-runtime",
         "switchAfter": "phase-8",
-        "replacement": "@alembic/agent/service-runtime",
+        "replacement": "@alembic/agent/service-runtime-prompts",
         "expectedSpecifiers": [
-          "#agent/context/ExplorationTracker.js",
-          "#agent/memory/MemoryCoordinator.js",
           "#agent/prompts/insight-analyst.js",
           "#agent/runtime/SystemRunContext.js",
           "#agent/service/index.js"
         ],
-        "reason": "Bootstrap runtime building is a host workflow adapter around Agent context, prompt, budget, and run contracts."
+        "reason": "Bootstrap runtime building still needs local service/runtime/prompt contracts until A6-1; context and memory are consumed from @alembic/agent/context and @alembic/agent/memory."
       },
       {
         "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.ts",
         "classification": "workflow-bootstrap-agent-runtime",
         "switchAfter": "phase-8",
         "replacement": "@alembic/agent/service-runtime",
-        "expectedSpecifiers": [
-          "#agent/memory/MemoryCoordinator.js",
-          "#agent/runtime/SystemRunContext.js",
-          "#agent/service/index.js"
-        ],
-        "reason": "Bootstrap input builders assemble Alembic workflow inputs into Agent runtime inputs."
+        "expectedSpecifiers": ["#agent/runtime/SystemRunContext.js", "#agent/service/index.js"],
+        "reason": "Bootstrap input builders assemble Alembic workflow inputs into Agent runtime inputs; MemoryCoordinator now comes from @alembic/agent/memory."
       },
       {
         "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapProjections.ts",
@@ -271,33 +333,12 @@
         "reason": "Projection code shapes AgentRunResult into Alembic workflow output."
       },
       {
-        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.ts",
-        "classification": "workflow-bootstrap-agent-memory",
-        "switchAfter": "phase-5",
-        "replacement": "@alembic/agent/memory",
-        "expectedSpecifiers": [
-          "#agent/memory/MemoryCoordinator.js",
-          "#agent/memory/MemoryEmbeddingStore.js",
-          "#agent/memory/PersistentMemory.js",
-          "#agent/memory/SessionStore.js"
-        ],
-        "reason": "Bootstrap runtime initialization owns host wiring for Agent memory stores until memory migration is complete."
-      },
-      {
         "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapSessionExecutionBuilder.ts",
         "classification": "workflow-bootstrap-agent-result",
         "switchAfter": "phase-8",
         "replacement": "@alembic/agent/service",
         "expectedSpecifiers": ["#agent/service/index.js"],
         "reason": "Session execution builder uses Agent run input/result contracts at the Alembic workflow boundary."
-      },
-      {
-        "path": "lib/workflows/capabilities/execution/internal-agent/DimensionRestoreState.ts",
-        "classification": "workflow-bootstrap-agent-session",
-        "switchAfter": "phase-5",
-        "replacement": "@alembic/agent/memory",
-        "expectedSpecifiers": ["#agent/memory/SessionStore.js"],
-        "reason": "Restore state is tied to Agent session persistence and should follow memory/session extraction."
       },
       {
         "path": "lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillPreparation.ts",

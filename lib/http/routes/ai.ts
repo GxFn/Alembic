@@ -4,6 +4,7 @@
  */
 
 import { createProvider, getModelRegistry, PROVIDER_CONFIGS } from '@alembic/agent/ai';
+import { ConversationStore } from '@alembic/agent/context';
 import type { ToolCapabilityManifest, ToolResultEnvelope } from '@alembic/agent/tools';
 import Logger from '@alembic/core/logging';
 import { ValidationError } from '@alembic/core/shared/errors/index';
@@ -23,7 +24,6 @@ import {
   runTranslationJson,
   type SystemRunContextFactory,
 } from '#agent/service/index.js';
-import { ConversationStore } from '../../agent/context/ConversationStore.js';
 import { PRESETS } from '../../agent/profiles/presets.js';
 import {
   taskCheckAndSubmit,

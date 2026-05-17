@@ -223,8 +223,7 @@ async function createDefaultPersistentMemory(
   dataRoot: string,
   log: CompletionLogger
 ) {
-  const { PersistentMemory } = await import('#agent/memory/PersistentMemory.js');
-  const { MemoryEmbeddingStore } = await import('#agent/memory/MemoryEmbeddingStore.js');
+  const { MemoryEmbeddingStore, PersistentMemory } = await import('@alembic/agent/memory');
   return new PersistentMemory(db, {
     logger: {
       info: (msg: string) => log.info(msg),
@@ -236,7 +235,7 @@ async function createDefaultPersistentMemory(
 
 async function createDefaultConsolidator(semanticMemory: unknown, log: CompletionLogger) {
   const { EpisodicConsolidator } = await import('#agent/domain/EpisodicConsolidator.js');
-  const { PersistentMemory } = await import('#agent/memory/PersistentMemory.js');
+  const { PersistentMemory } = await import('@alembic/agent/memory');
   return new EpisodicConsolidator(semanticMemory as InstanceType<typeof PersistentMemory>, {
     logger: {
       info: (msg: string) => log.info(msg),

@@ -170,6 +170,47 @@ for (const entry of deferredToolImports) {
   }
 }
 
+const memoryContextRules = config.memoryContextImportRules ?? {};
+const memoryContextScanRoots = memoryContextRules.scanRoots ?? scanRoots;
+const memoryContextIgnoredPrefixes = new Set(memoryContextRules.ignoredPathPrefixes ?? []);
+const memoryPublicEntrypoint = memoryContextRules.publicMemoryEntrypoint ?? '@alembic/agent/memory';
+const contextPublicEntrypoint =
+  memoryContextRules.publicContextEntrypoint ?? '@alembic/agent/context';
+const agentMemoryImportsByFile = new Map();
+const agentContextImportsByFile = new Map();
+const localMemoryContextImports = [];
+
+for (const root of memoryContextScanRoots) {
+  for (const file of collectTypeScriptFiles(join(repoRoot, root))) {
+    const relFile = toRepoPath(file);
+    if (isIgnored(relFile, memoryContextIgnoredPrefixes)) {
+      continue;
+    }
+    const specifiers = extractImportSpecifiers(readFileSync(file, 'utf8'));
+    const memorySpecifiers = specifiers.filter((specifier) => specifier === memoryPublicEntrypoint);
+    if (memorySpecifiers.length > 0) {
+      agentMemoryImportsByFile.set(relFile, uniqueSorted(memorySpecifiers));
+    }
+    const contextSpecifiers = specifiers.filter(
+      (specifier) => specifier === contextPublicEntrypoint
+    );
+    if (contextSpecifiers.length > 0) {
+      agentContextImportsByFile.set(relFile, uniqueSorted(contextSpecifiers));
+    }
+    for (const specifier of specifiers) {
+      if (isLocalMemoryContextSpecifier(specifier, relFile)) {
+        localMemoryContextImports.push({ file: relFile, specifier });
+      }
+    }
+  }
+}
+
+for (const offender of localMemoryContextImports) {
+  violations.push(
+    `Local Agent memory/context import remains in ${offender.file}: ${offender.specifier}. Use ${memoryPublicEntrypoint} or ${contextPublicEntrypoint} outside preserved local Agent implementation files.`
+  );
+}
+
 const toolRules = config.toolBoundaryRules ?? [];
 const toolFiles = collectTypeScriptFiles(join(repoRoot, 'lib', 'tools')).map(toRepoPath);
 const toolClassificationCounts = new Map();
@@ -221,6 +262,9 @@ console.log(`  local AI provider consumers: ${localAiProviderImports.length}`);
 console.log(`  @alembic/agent/tools consumer files: ${agentToolImportsByFile.size}`);
 console.log(`  local common tool consumers: ${localCommonToolImports.length}`);
 console.log(`  deferred local tool import files: ${deferredToolImportsByFile.size}`);
+console.log(`  @alembic/agent/memory consumer files: ${agentMemoryImportsByFile.size}`);
+console.log(`  @alembic/agent/context consumer files: ${agentContextImportsByFile.size}`);
+console.log(`  local memory/context consumers: ${localMemoryContextImports.length}`);
 console.log(`  classified lib/tools files: ${toolFiles.length}`);
 for (const [classification, count] of [...toolClassificationCounts].sort(([a], [b]) =>
   a.localeCompare(b)
@@ -323,6 +367,22 @@ function isCommonToolPath(rel) {
     rel.startsWith('lib/tools/workflow/') ||
     rel.startsWith('lib/tools/v2/')
   );
+}
+
+function isLocalMemoryContextSpecifier(specifier, importerRelFile) {
+  if (specifier.startsWith('#agent/memory/')) {
+    return true;
+  }
+  if (specifier.startsWith('#agent/context/')) {
+    return true;
+  }
+  if (!specifier.startsWith('.')) {
+    return false;
+  }
+  const importerDir = dirname(join(repoRoot, importerRelFile));
+  const resolved = resolve(importerDir, specifier);
+  const rel = toRepoPath(resolved).replace(/\.js$/, '.ts');
+  return rel.startsWith('lib/agent/memory/') || rel.startsWith('lib/agent/context/');
 }
 
 function toRepoPath(file) {

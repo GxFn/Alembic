@@ -1,3 +1,5 @@
+import { ExplorationTracker } from '@alembic/agent/context';
+import type { MemoryCoordinator } from '@alembic/agent/memory';
 import { getDimensionFocusKeywords } from '@alembic/core/domain/dimension/DimensionSop';
 import type { KnowledgeRescanExecutionDecision } from '@alembic/core/host-agent-workflows';
 import {
@@ -12,8 +14,6 @@ import type {
   SnapshotCallGraphResult,
   SnapshotDependencyGraph,
 } from '@alembic/core/project-intelligence';
-import { ExplorationTracker } from '#agent/context/ExplorationTracker.js';
-import type { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import { computeAnalystBudget } from '#agent/prompts/insight-analyst.js';
 import {
   createSystemRunContext,
@@ -37,6 +37,8 @@ interface DimConfigV3Entry {
   outputType: string;
   allowedKnowledgeTypes: string[];
 }
+
+type CreateSystemRunContextOptions = Parameters<typeof createSystemRunContext>[0];
 
 export interface BootstrapDimensionConfig extends Record<string, unknown> {
   id: string;
@@ -203,12 +205,20 @@ export function createBootstrapDimensionRuntimeInput({
     projectInfo.fileCount || 0,
     contextWindow.tokenBudget
   );
+  // Memory/context are consumed from @alembic/agent now, while SystemRunContext
+  // remains local until Agent publishes explicit runtime/service exports.
   const systemRunContext = createSystemRunContext({
-    memoryCoordinator,
+    memoryCoordinator:
+      memoryCoordinator as unknown as CreateSystemRunContextOptions['memoryCoordinator'],
     scopeId: analystScopeId,
-    activeContext: memoryCoordinator.getActiveContext(analystScopeId),
+    activeContext: memoryCoordinator.getActiveContext(
+      analystScopeId
+    ) as unknown as CreateSystemRunContextOptions['activeContext'],
     contextWindow,
-    tracker: ExplorationTracker.resolve({ source: 'system', strategy: 'analyst' }, computedBudget),
+    tracker: ExplorationTracker.resolve(
+      { source: 'system', strategy: 'analyst' },
+      computedBudget
+    ) as unknown as CreateSystemRunContextOptions['tracker'],
     source: 'system',
     outputType: effectiveOutputType,
     dimId,

@@ -66,9 +66,21 @@ export interface WikiGeneratorLike {
 
 export type LoadServiceContainer = () => Promise<ServiceContainerLike> | ServiceContainerLike;
 export type ScheduleTask = (task: () => Promise<void>) => void;
+export interface PersistentMemorySqliteStatement {
+  run(...params: unknown[]): { changes: number; lastInsertRowid: number | bigint };
+  get(...params: unknown[]): Record<string, unknown> | undefined;
+  all(...params: unknown[]): Record<string, unknown>[];
+}
+
+export interface PersistentMemorySqliteDatabase {
+  prepare(sql: string): PersistentMemorySqliteStatement;
+  exec(sql: string): void;
+  transaction<T extends (...args: unknown[]) => unknown>(fn: T): T;
+}
+
 export type PersistentMemoryDb =
-  | import('#agent/memory/MemoryStore.js').SqliteDatabase
-  | { getDb(): import('#agent/memory/MemoryStore.js').SqliteDatabase };
+  | PersistentMemorySqliteDatabase
+  | { getDb(): PersistentMemorySqliteDatabase };
 
 export type ShouldAbortFn = () => boolean;
 
