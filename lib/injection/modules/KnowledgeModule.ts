@@ -11,6 +11,7 @@
 import { getEnhancementRegistry } from '@alembic/core/core/enhancement';
 import { DimensionCopy } from '@alembic/core/domain/dimension/DimensionCopy';
 import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
+import { KnowledgeService, RecipeProductionGateway } from '@alembic/core/knowledge';
 import { getDiscovererRegistry, LanguageService } from '@alembic/core/project-intelligence';
 import type {
   EvolutionLifecycleEventRepository,
@@ -33,8 +34,6 @@ import { StagingManager } from '@alembic/core/service/evolution/StagingManager';
 import { CodeEntityGraph } from '@alembic/core/service/knowledge/CodeEntityGraph';
 import { ConfidenceRouter } from '@alembic/core/service/knowledge/ConfidenceRouter';
 import { KnowledgeGraphService } from '@alembic/core/service/knowledge/KnowledgeGraphService';
-import { KnowledgeService } from '@alembic/core/service/knowledge/KnowledgeService';
-import { RecipeProductionGateway } from '@alembic/core/service/knowledge/RecipeProductionGateway';
 import { SourceRefReconciler } from '@alembic/core/service/knowledge/SourceRefReconciler';
 import { HnswVectorAdapter, IndexingPipeline, JsonVectorAdapter } from '@alembic/core/vector';
 import {

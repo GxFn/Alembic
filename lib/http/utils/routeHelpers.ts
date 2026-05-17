@@ -3,7 +3,7 @@
  * 提取自各路由文件中的重复实现
  */
 
-import { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
+import { KnowledgeEntry } from '@alembic/core/knowledge';
 import { getDeveloperIdentity } from '@alembic/core/shared/developer-identity';
 import type { Request } from 'express';
 

@@ -5,7 +5,7 @@
  * 每个主题对应一个 .mdc 文件，设 alwaysApply: false + 丰富的 description。
  */
 
-import type { KnowledgeEntryProps } from '@alembic/core/domain/knowledge/KnowledgeEntry';
+import type { KnowledgeEntryProps } from '@alembic/core/knowledge';
 
 /**
  * 主题定义

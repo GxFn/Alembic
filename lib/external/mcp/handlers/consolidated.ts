@@ -241,9 +241,7 @@ export async function consolidatedSkill(ctx: McpContext, args: ConsolidatedSkill
  *   - 单条/批量完全一致的校验与融合逻辑
  */
 export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<string, unknown>) {
-  const { RecipeProductionGateway } = await import(
-    '@alembic/core/service/knowledge/RecipeProductionGateway'
-  );
+  const { RecipeProductionGateway } = await import('@alembic/core/knowledge');
   const { findSimilarRecipes } = await import('@alembic/core/service/candidate/SimilarityService');
 
   const items = args.items as Record<string, unknown>[] | undefined;
@@ -342,8 +340,7 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
 
   const gatewayResult = await gateway.create({
     source: 'mcp-external',
-    items:
-      items as import('@alembic/core/service/knowledge/RecipeProductionGateway').CreateRecipeItem[],
+    items: items as import('@alembic/core/knowledge').CreateRecipeItem[],
     options: {
       skipConsolidation,
       supersedes,

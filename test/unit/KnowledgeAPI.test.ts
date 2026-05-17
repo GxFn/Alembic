@@ -5,8 +5,7 @@
  * 使用轻量级 mock 验证路由/handler 正确委托给 KnowledgeService
  */
 
-import { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
-import { Lifecycle } from '@alembic/core/domain/knowledge/Lifecycle';
+import { KnowledgeEntry, Lifecycle } from '@alembic/core/knowledge';
 import { vi } from 'vitest';
 
 /* ════════════════════════════════════════════

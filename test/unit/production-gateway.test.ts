@@ -2,12 +2,12 @@
  * RecipeProductionGateway — 统一生产入口单元测试
  */
 
-import { BootstrapDedup } from '@alembic/core/service/bootstrap/BootstrapDedup';
 import {
   type CreateRecipeItem,
   type GatewayDeps,
   RecipeProductionGateway,
-} from '@alembic/core/service/knowledge/RecipeProductionGateway';
+} from '@alembic/core/knowledge';
+import { BootstrapDedup } from '@alembic/core/service/bootstrap/BootstrapDedup';
 import { describe, expect, it, vi } from 'vitest';
 
 /* ═══════════════════ Mock Helpers ═══════════════════ */

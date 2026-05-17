@@ -21,6 +21,7 @@ import type {
   ViolationsStore,
 } from '@alembic/core/guard';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
+import type { KnowledgeService, RecipeProductionGateway } from '@alembic/core/knowledge';
 import type Logger from '@alembic/core/logging';
 // ── Core AST / Discovery / Enhancement ──
 // ── Shared Types ──
@@ -52,12 +53,10 @@ import type { CodeEntityGraph } from '@alembic/core/service/knowledge/CodeEntity
 import type { ConfidenceRouter } from '@alembic/core/service/knowledge/ConfidenceRouter';
 import type { KnowledgeFileWriter } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
 import type { KnowledgeGraphService } from '@alembic/core/service/knowledge/KnowledgeGraphService';
-import type { KnowledgeService } from '@alembic/core/service/knowledge/KnowledgeService';
 // ── CLI Types ──
 import type { KnowledgeSyncService } from '@alembic/core/service/knowledge/KnowledgeSyncService';
 // ── Context Types ──
 import type { RecipeExtractor } from '@alembic/core/service/knowledge/RecipeExtractor';
-import type { RecipeProductionGateway } from '@alembic/core/service/knowledge/RecipeProductionGateway';
 import type { FeedbackCollector } from '@alembic/core/service/quality/FeedbackCollector';
 import type { QualityScorer } from '@alembic/core/service/quality/QualityScorer';
 import type { RecipeCandidateValidator } from '@alembic/core/service/recipe/RecipeCandidateValidator';

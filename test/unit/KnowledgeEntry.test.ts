@@ -1,11 +1,10 @@
-import { KnowledgeEntry } from '@alembic/core/domain/knowledge/KnowledgeEntry';
-import { inferKind, isValidTransition } from '@alembic/core/domain/knowledge/Lifecycle';
 import { Constraints } from '@alembic/core/domain/knowledge/values/Constraints';
 import { Content } from '@alembic/core/domain/knowledge/values/Content';
 import { Quality } from '@alembic/core/domain/knowledge/values/Quality';
 import { Reasoning } from '@alembic/core/domain/knowledge/values/Reasoning';
 import { Relations } from '@alembic/core/domain/knowledge/values/Relations';
 import { Stats } from '@alembic/core/domain/knowledge/values/Stats';
+import { inferKind, isValidTransition, KnowledgeEntry } from '@alembic/core/knowledge';
 
 /* ════════════════════════════════════════════
  *  值对象测试

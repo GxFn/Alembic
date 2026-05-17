@@ -12,7 +12,7 @@
  *   - Channel B: 增加 Why 行（content.rationale 首句）
  *   - Channel B: coreCode 骨架化（去注释 + 截断 ≤15 行）
  */
-import type { KnowledgeEntryProps } from '@alembic/core/domain/knowledge/KnowledgeEntry';
+import type { KnowledgeEntryProps } from '@alembic/core/knowledge';
 
 /** 从 rationale 提取首句（≤120 字符），用于 Channel B 的 Why 行 */
 function _extractFirstSentence(rationale: string) {
