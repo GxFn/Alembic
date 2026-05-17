@@ -11,6 +11,19 @@
  *   5. 返回给外部 Agent 按维度执行: evolve → gap-fill → dimension_complete
  */
 
+import {
+  auditRecipesForRescan,
+  buildExternalMissionBriefing,
+  buildKnowledgeRescanPlan,
+  buildKnowledgeRescanWorkflowPlan,
+  buildRescanPrescreen,
+  createExternalKnowledgeRescanIntent,
+  createExternalWorkflowSession,
+  presentExternalKnowledgeRescanEmptyProject,
+  presentExternalKnowledgeRescanResponse,
+  projectExternalRescanEvidencePlan,
+  syncKnowledgeStoreForRescan,
+} from '@alembic/core/host-agent-workflows';
 import type { DimensionDef, ProjectSnapshot } from '@alembic/core/project-intelligence';
 import {
   buildProjectSnapshot,
@@ -18,26 +31,9 @@ import {
 } from '@alembic/core/project-intelligence';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import {
-  buildExternalMissionBriefing,
-  createExternalWorkflowSession,
-} from '@alembic/core/workflows/capabilities/execution/external/ExternalMissionWorkflow';
-import {
-  auditRecipesForRescan,
-  buildKnowledgeRescanPlan,
-  buildRescanPrescreen,
-  projectExternalRescanEvidencePlan,
-  syncKnowledgeStoreForRescan,
-} from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner';
-import {
   runForceRescanCleanPolicy,
   runRescanCleanPolicy,
 } from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
-import { createExternalKnowledgeRescanIntent } from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanIntent';
-import {
-  presentExternalKnowledgeRescanEmptyProject,
-  presentExternalKnowledgeRescanResponse,
-} from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanPresenters';
-import { buildKnowledgeRescanWorkflowPlan } from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanWorkflowPlan';
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
 

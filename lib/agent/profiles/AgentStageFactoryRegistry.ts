@@ -2,7 +2,7 @@ import {
   buildBootstrapTerminalPolicyHints,
   getBootstrapStageTerminalTools,
   resolveBootstrapTerminalToolset,
-} from '@alembic/core/workflows/capabilities/planning/dimensions/BootstrapTerminalToolset';
+} from '@alembic/core/host-agent-workflows';
 import { PRESETS } from '../profiles/presets.js';
 import {
   buildRelationsPipelineStages,

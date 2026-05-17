@@ -9,9 +9,7 @@ afterEach(() => {
 });
 
 async function loadModule() {
-  return await import(
-    '@alembic/core/workflows/capabilities/planning/dimensions/BootstrapTerminalToolset'
-  );
+  return await import('@alembic/core/host-agent-workflows');
 }
 
 function mockTerminalToolset(toolset = 'terminal-run') {

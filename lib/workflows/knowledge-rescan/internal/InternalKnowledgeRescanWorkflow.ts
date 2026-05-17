@@ -16,6 +16,22 @@
  *   7. 前端通过 Socket.io 接收维度完成进度
  */
 
+import type { WorkflowMcpContext } from '@alembic/core/host-agent-workflows';
+import {
+  auditRecipesForRescan,
+  buildInternalKnowledgeRescanTargetFileMap,
+  buildKnowledgeRescanPlan,
+  buildKnowledgeRescanWorkflowPlan,
+  buildRescanPrescreen,
+  cacheProjectAnalysisSession,
+  createInternalKnowledgeRescanIntent,
+  type InternalKnowledgeRescanArgs,
+  presentInternalKnowledgeRescanEmptyProject,
+  presentInternalKnowledgeRescanResponse,
+  projectInternalRescanGapPlan,
+  projectInternalRescanPromptRecipes,
+  syncKnowledgeStoreForRescan,
+} from '@alembic/core/host-agent-workflows';
 import type { DimensionDef, ProjectSnapshot } from '@alembic/core/project-intelligence';
 import {
   buildProjectSnapshot,
@@ -39,30 +55,10 @@ import type {
   WorkflowDatabaseLike,
   WorkflowSkillHooks,
 } from '@alembic/core/types/workflows';
-import { cacheProjectAnalysisSession } from '@alembic/core/workflows/capabilities/execution/external/SessionSupport';
-import {
-  auditRecipesForRescan,
-  buildKnowledgeRescanPlan,
-  buildRescanPrescreen,
-  projectInternalRescanGapPlan,
-  projectInternalRescanPromptRecipes,
-  syncKnowledgeStoreForRescan,
-} from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner';
 import {
   runForceRescanCleanPolicy,
   runRescanCleanPolicy,
 } from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
-import {
-  createInternalKnowledgeRescanIntent,
-  type InternalKnowledgeRescanArgs,
-} from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanIntent';
-import {
-  buildInternalKnowledgeRescanTargetFileMap,
-  presentInternalKnowledgeRescanEmptyProject,
-  presentInternalKnowledgeRescanResponse,
-} from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanPresenters';
-import { buildKnowledgeRescanWorkflowPlan } from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanWorkflowPlan';
-import type { WorkflowMcpContext } from '@alembic/core/workflows/shared/WorkflowTypes';
 import {
   dispatchInternalDimensionExecution,
   startInternalDimensionExecutionSession,

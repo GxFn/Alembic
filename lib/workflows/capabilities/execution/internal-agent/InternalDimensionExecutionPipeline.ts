@@ -79,6 +79,6 @@ export async function clearSnapshots(
   }
 }
 
-export { clearDimensionCheckpoints as clearCheckpoints } from '@alembic/core/workflows/capabilities/persistence/DimensionCheckpoint';
+export { clearDimensionCheckpoints as clearCheckpoints } from '@alembic/core/host-agent-workflows';
 
 export default runInternalDimensionExecution;

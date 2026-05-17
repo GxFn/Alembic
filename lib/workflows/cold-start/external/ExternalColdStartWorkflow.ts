@@ -11,25 +11,23 @@
  *   - 两者共享 Phase 1-4 分析逻辑 → ProjectIntelligenceRunner
  */
 
+import type { WorkflowLogger } from '@alembic/core/host-agent-workflows';
+import {
+  buildColdStartWorkflowPlan,
+  buildExternalMissionBriefing,
+  createExternalColdStartIntent,
+  createExternalWorkflowSession,
+  getActiveExternalWorkflowSession,
+  presentExternalColdStartEmptyProject,
+  presentExternalColdStartResponse,
+} from '@alembic/core/host-agent-workflows';
 import type { ProjectSnapshot } from '@alembic/core/project-intelligence';
 import {
   buildProjectSnapshot,
   ProjectIntelligenceCapability,
 } from '@alembic/core/project-intelligence';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
-import {
-  buildExternalMissionBriefing,
-  createExternalWorkflowSession,
-  getActiveExternalWorkflowSession,
-} from '@alembic/core/workflows/capabilities/execution/external/ExternalMissionWorkflow';
 import { runFullResetPolicy } from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
-import { createExternalColdStartIntent } from '@alembic/core/workflows/cold-start/ColdStartIntent';
-import { buildColdStartWorkflowPlan } from '@alembic/core/workflows/cold-start/ColdStartPlan';
-import {
-  presentExternalColdStartEmptyProject,
-  presentExternalColdStartResponse,
-} from '@alembic/core/workflows/cold-start/ColdStartPresenters';
-import type { WorkflowLogger } from '@alembic/core/workflows/shared/WorkflowTypes';
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
 
 interface McpContext {

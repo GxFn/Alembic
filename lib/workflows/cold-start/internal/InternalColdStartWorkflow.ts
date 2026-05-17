@@ -35,6 +35,18 @@
  *
  */
 
+import type { WorkflowMcpContext } from '@alembic/core/host-agent-workflows';
+import {
+  buildColdStartWorkflowPlan,
+  buildInternalColdStartReport,
+  buildInternalColdStartTargetFileMap,
+  cacheProjectAnalysisSession,
+  createInternalColdStartIntent,
+  type InternalColdStartArgs,
+  presentInternalColdStartEmptyProject,
+  presentInternalColdStartResponse,
+  selectColdStartDimensions,
+} from '@alembic/core/host-agent-workflows';
 import type { DimensionDef, ProjectSnapshot } from '@alembic/core/project-intelligence';
 import {
   buildProjectSnapshot,
@@ -47,23 +59,7 @@ import type {
   WorkflowDatabaseLike,
   WorkflowSkillHooks,
 } from '@alembic/core/types/workflows';
-import { cacheProjectAnalysisSession } from '@alembic/core/workflows/capabilities/execution/external/SessionSupport';
 import { runFullResetPolicy } from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
-import {
-  createInternalColdStartIntent,
-  type InternalColdStartArgs,
-} from '@alembic/core/workflows/cold-start/ColdStartIntent';
-import {
-  buildColdStartWorkflowPlan,
-  selectColdStartDimensions,
-} from '@alembic/core/workflows/cold-start/ColdStartPlan';
-import {
-  buildInternalColdStartReport,
-  buildInternalColdStartTargetFileMap,
-  presentInternalColdStartEmptyProject,
-  presentInternalColdStartResponse,
-} from '@alembic/core/workflows/cold-start/ColdStartPresenters';
-import type { WorkflowMcpContext } from '@alembic/core/workflows/shared/WorkflowTypes';
 import {
   dispatchInternalDimensionExecution,
   startInternalDimensionExecutionSession,

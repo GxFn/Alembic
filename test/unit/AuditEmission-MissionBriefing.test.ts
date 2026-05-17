@@ -157,9 +157,7 @@ describe('MissionBriefingBuilder panorama injection', () => {
       computedAt: Date.now(),
     };
 
-    const { buildMissionBriefing } = await import(
-      '@alembic/core/workflows/capabilities/execution/external/MissionBriefingBuilder'
-    );
+    const { buildMissionBriefing } = await import('@alembic/core/host-agent-workflows');
 
     const briefing = buildMissionBriefing({
       projectMeta: { name: 'TestProject', fileCount: 100 },
@@ -183,9 +181,7 @@ describe('MissionBriefingBuilder panorama injection', () => {
   });
 
   it('buildMissionBriefing sets panorama to null when no panoramaResult', async () => {
-    const { buildMissionBriefing } = await import(
-      '@alembic/core/workflows/capabilities/execution/external/MissionBriefingBuilder'
-    );
+    const { buildMissionBriefing } = await import('@alembic/core/host-agent-workflows');
 
     const briefing = buildMissionBriefing({
       projectMeta: { name: 'TestProject', fileCount: 10 },

@@ -1,10 +1,10 @@
 import { resolveRecipeDimensionId } from '@alembic/core/domain/dimension/RecipeDimension';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
-import { BootstrapDedup } from '@alembic/core/service/bootstrap/BootstrapDedup';
 import type {
   KnowledgeRescanExecutionDecision,
   RescanExecutionMode,
-} from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder';
+} from '@alembic/core/host-agent-workflows';
+import Logger from '@alembic/core/infrastructure/logging/Logger';
+import { BootstrapDedup } from '@alembic/core/service/bootstrap/BootstrapDedup';
 
 const logger = Logger.getInstance();
 

@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { ExternalRescanEvidencePlan } from '@alembic/core/host-agent-workflows';
+import { buildMissionBriefing } from '@alembic/core/host-agent-workflows';
 import type { DimensionDef } from '@alembic/core/project-intelligence';
-import { buildMissionBriefing } from '@alembic/core/workflows/capabilities/execution/external/MissionBriefingBuilder';
-import type { ExternalRescanEvidencePlan } from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner';
 import { describe, expect, test } from 'vitest';
 
 describe('MissionBriefing profiles', () => {

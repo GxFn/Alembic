@@ -9,9 +9,8 @@
  *   - Skill: skillWorthy 维度的 Project Skill 生成
  */
 
+import { buildTierReflection, saveDimensionCheckpoint } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import { saveDimensionCheckpoint } from '@alembic/core/workflows/capabilities/persistence/DimensionCheckpoint';
-import { buildTierReflection } from '@alembic/core/workflows/capabilities/planning/dimensions/bootstrapDimensionConfigs';
 import type { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import type { SessionStore } from '#agent/memory/SessionStore.js';
 import type { AgentRunResult } from '#agent/service/index.js';

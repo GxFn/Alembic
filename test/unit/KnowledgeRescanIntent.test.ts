@@ -1,7 +1,7 @@
 import {
   createExternalKnowledgeRescanIntent,
   createInternalKnowledgeRescanIntent,
-} from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanIntent';
+} from '@alembic/core/host-agent-workflows';
 import { describe, expect, test } from 'vitest';
 
 describe('KnowledgeRescanIntent', () => {

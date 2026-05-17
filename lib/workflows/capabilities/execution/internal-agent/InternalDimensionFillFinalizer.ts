@@ -1,6 +1,6 @@
+import type { WorkflowSnapshotSummary } from '@alembic/core/host-agent-workflows';
+import { persistWorkflowResult } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import type { WorkflowSnapshotSummary } from '@alembic/core/workflows/capabilities/persistence/WorkflowReportTypes';
-import { persistWorkflowResult } from '@alembic/core/workflows/capabilities/persistence/WorkflowResultPersistence';
 import {
   runWorkflowCompletionFinalizer,
   type WorkflowCompletionFinalizerResult,

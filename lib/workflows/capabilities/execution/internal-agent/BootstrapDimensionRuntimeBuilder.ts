@@ -1,4 +1,10 @@
 import { getDimensionFocusKeywords } from '@alembic/core/domain/dimension/DimensionSop';
+import type { KnowledgeRescanExecutionDecision } from '@alembic/core/host-agent-workflows';
+import {
+  buildEvidenceStarters,
+  DIMENSION_CONFIGS_V3,
+  getFullDimensionConfig,
+} from '@alembic/core/host-agent-workflows';
 import type {
   AstSummary,
   DimensionDef,
@@ -6,12 +12,6 @@ import type {
   SnapshotCallGraphResult,
   SnapshotDependencyGraph,
 } from '@alembic/core/project-intelligence';
-import { buildEvidenceStarters } from '@alembic/core/workflows/capabilities/execution/external/EvidenceStarterBuilder';
-import {
-  DIMENSION_CONFIGS_V3,
-  getFullDimensionConfig,
-} from '@alembic/core/workflows/capabilities/planning/dimensions/bootstrapDimensionConfigs';
-import type { KnowledgeRescanExecutionDecision } from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder';
 import { ExplorationTracker } from '#agent/context/ExplorationTracker.js';
 import type { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import { computeAnalystBudget } from '#agent/prompts/insight-analyst.js';

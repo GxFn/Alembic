@@ -1,4 +1,4 @@
-import type { KnowledgeRescanExecutionDecision } from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder';
+import type { KnowledgeRescanExecutionDecision } from '@alembic/core/host-agent-workflows';
 import { describe, expect, test, vi } from 'vitest';
 import { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import type { SystemRunContextFactory } from '#agent/service/index.js';

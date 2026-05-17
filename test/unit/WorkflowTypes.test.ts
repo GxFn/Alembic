@@ -1,7 +1,4 @@
-import {
-  normalizeDimensionIds,
-  normalizeStringArray,
-} from '@alembic/core/workflows/shared/WorkflowTypes';
+import { normalizeDimensionIds, normalizeStringArray } from '@alembic/core/host-agent-workflows';
 import { describe, expect, test } from 'vitest';
 
 describe('WorkflowTypes normalization', () => {

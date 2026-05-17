@@ -3,5 +3,5 @@ export type {
   EvolutionPrescreen,
   PrescreenAutoResolved,
   PrescreenNeedsVerification,
-} from '@alembic/core/workflows/capabilities/planning/knowledge/EvolutionPrescreen';
-export { buildEvolutionPrescreen } from '@alembic/core/workflows/capabilities/planning/knowledge/EvolutionPrescreen';
+} from '@alembic/core/host-agent-workflows';
+export { buildEvolutionPrescreen } from '@alembic/core/host-agent-workflows';

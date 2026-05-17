@@ -8,7 +8,7 @@
 import {
   type ExternalDimensionCompleteArgs,
   runExternalDimensionCompletionWorkflow,
-} from '@alembic/core/workflows/capabilities/execution/external/ExternalDimensionCompletionWorkflow';
+} from '@alembic/core/host-agent-workflows';
 import { envelope } from '#external/mcp/envelope.js';
 import type { McpContext } from './types.js';
 

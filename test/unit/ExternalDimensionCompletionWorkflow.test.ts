@@ -2,7 +2,7 @@ import {
   type ExternalDimensionCompletionContext,
   type ExternalWorkflowSession,
   runExternalDimensionCompletionWorkflow,
-} from '@alembic/core/workflows/capabilities/execution/external/ExternalDimensionCompletionWorkflow';
+} from '@alembic/core/host-agent-workflows';
 import { describe, expect, it, vi } from 'vitest';
 
 describe('ExternalDimensionCompletionWorkflow', () => {

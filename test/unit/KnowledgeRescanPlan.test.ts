@@ -1,16 +1,14 @@
-import type { DimensionDef } from '@alembic/core/project-intelligence';
-import { buildKnowledgeRescanPlan } from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder';
 import {
   auditRecipesForRescan,
+  buildKnowledgeRescanPlan,
   buildRescanPrescreen,
-  type RelevanceAuditResult,
-  type RelevanceAuditSummary,
-} from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner';
-import {
   projectExternalRescanEvidencePlan,
   projectInternalRescanGapPlan,
   projectInternalRescanPromptRecipes,
-} from '@alembic/core/workflows/capabilities/planning/knowledge/RescanEvidenceProjectors';
+  type RelevanceAuditResult,
+  type RelevanceAuditSummary,
+} from '@alembic/core/host-agent-workflows';
+import type { DimensionDef } from '@alembic/core/project-intelligence';
 import { describe, expect, test } from 'vitest';
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 
