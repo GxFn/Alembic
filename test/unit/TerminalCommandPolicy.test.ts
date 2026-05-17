@@ -8,7 +8,7 @@ import {
   evaluateTerminalPtyPolicy,
   evaluateTerminalScriptPolicy,
   evaluateTerminalShellPolicy,
-} from '../../lib/tools/adapters/terminal-policy/index.js';
+} from '@alembic/agent/tools/terminal';
 
 function policyInput(overrides = {}) {
   return {

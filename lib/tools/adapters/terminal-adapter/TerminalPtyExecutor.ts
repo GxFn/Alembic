@@ -1,19 +1,17 @@
 import type { ToolExecutionRequest, ToolResultEnvelope } from '@alembic/agent/tools';
-import type { TerminalPtyPolicyInput } from '#tools/adapters/terminal-policy/index.js';
 import {
   buildTerminalPtyPolicyInput,
+  envelopeForError,
+  envelopeForPolicyBlock,
+  envelopeForTerminalResult,
   evaluateTerminalPtyPolicy,
-} from '../terminal-policy/index.js';
+  type TerminalPtyPolicyInput,
+} from '@alembic/agent/tools/terminal';
 import {
   fileUriToPath,
   materializePtyRunnerArtifact,
   materializeTerminalOutput,
 } from './TerminalArtifacts.js';
-import {
-  envelopeForError,
-  envelopeForPolicyBlock,
-  envelopeForTerminalResult,
-} from './TerminalEnvelopes.js';
 import { buildTerminalEnvironment, summarizeTerminalEnv } from './TerminalEnvironment.js';
 import {
   type ExecFailure,

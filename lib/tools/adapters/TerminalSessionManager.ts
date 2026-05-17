@@ -1,4 +1,4 @@
-import type { TerminalSessionPlan } from '#tools/adapters/TerminalSession.js';
+import type { TerminalSessionPlan } from '@alembic/agent/tools/terminal';
 
 export type TerminalSessionStatus = 'idle' | 'busy' | 'closed';
 
@@ -9,6 +9,7 @@ export interface TerminalSessionRecord {
   cwd: string;
   envKeys: string[];
   createdAt: string;
+  updatedAt: string;
   lastUsedAt: string;
   expiresAt: string | null;
   status: TerminalSessionStatus;
@@ -93,6 +94,7 @@ export class InMemoryTerminalSessionManager implements TerminalSessionManager {
       existing.status = 'busy';
       existing.activeCallId = request.callId;
       existing.lastUsedAt = now.toISOString();
+      existing.updatedAt = existing.lastUsedAt;
       existing.expiresAt = expiresAt(now, this.#persistentTtlMs);
       return { ok: true, lease: this.#lease(existing, true) };
     }
@@ -127,6 +129,7 @@ export class InMemoryTerminalSessionManager implements TerminalSessionManager {
     record.status = 'closed';
     record.activeCallId = null;
     record.lastUsedAt = now.toISOString();
+    record.updatedAt = record.lastUsedAt;
     return true;
   }
 
@@ -156,6 +159,7 @@ export class InMemoryTerminalSessionManager implements TerminalSessionManager {
             activeCallId: null,
             commandCount: record.commandCount + 1,
             lastUsedAt: now.toISOString(),
+            updatedAt: now.toISOString(),
           });
         }
 
@@ -169,6 +173,7 @@ export class InMemoryTerminalSessionManager implements TerminalSessionManager {
         stored.activeCallId = null;
         stored.commandCount += 1;
         stored.lastUsedAt = now.toISOString();
+        stored.updatedAt = stored.lastUsedAt;
         stored.expiresAt = expiresAt(now, this.#persistentTtlMs);
         return cloneRecord(stored);
       },
@@ -193,6 +198,7 @@ function createRecord(input: {
     cwd: input.cwd,
     env: {},
     createdAt: timestamp,
+    updatedAt: timestamp,
     lastUsedAt: timestamp,
     expiresAt: input.expiresAt,
     status: 'busy',
@@ -219,6 +225,7 @@ function cloneRecord(record: StoredTerminalSessionRecord): TerminalSessionRecord
     cwd: record.cwd,
     envKeys: Object.keys(record.env).sort(),
     createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
     lastUsedAt: record.lastUsedAt,
     expiresAt: record.expiresAt,
     status: record.status,

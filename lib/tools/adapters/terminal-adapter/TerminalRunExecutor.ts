@@ -1,15 +1,13 @@
 import type { ToolExecutionRequest, ToolResultEnvelope } from '@alembic/agent/tools';
-import type { TerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
 import {
   buildTerminalCommandPolicyInput,
-  evaluateTerminalCommandPolicy,
-} from '../terminal-policy/index.js';
-import { materializeTerminalOutput } from './TerminalArtifacts.js';
-import {
   envelopeForError,
   envelopeForPolicyBlock,
   envelopeForTerminalResult,
-} from './TerminalEnvelopes.js';
+  evaluateTerminalCommandPolicy,
+} from '@alembic/agent/tools/terminal';
+import type { TerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
+import { materializeTerminalOutput } from './TerminalArtifacts.js';
 import {
   buildCommandEnvironment,
   buildTerminalEnvironment,

@@ -22,6 +22,7 @@ import {
   UnifiedToolCatalog,
   WorkflowRegistry,
 } from '@alembic/agent/tools';
+import { TERMINAL_CAPABILITY_MANIFESTS } from '@alembic/agent/tools/terminal';
 import { V2CapabilityCatalog, V2ToolRouterAdapter } from '@alembic/agent/tools/v2';
 import type { SignalBus } from '@alembic/core/events';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
@@ -36,7 +37,6 @@ import { SkillAdapter } from '#tools/adapters/SkillAdapter.js';
 import { SKILL_CAPABILITY_MANIFESTS } from '#tools/adapters/SkillCapabilities.js';
 import { TerminalAdapter } from '#tools/adapters/TerminalAdapter.js';
 import { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
-import { TERMINAL_CAPABILITY_MANIFESTS } from '#tools/adapters/terminal-capabilities/index.js';
 import { WorkflowAdapter } from '#tools/adapters/WorkflowAdapter.js';
 import { ToolContextFactory } from '#tools/v2/adapter/ToolContextFactory.js';
 import {

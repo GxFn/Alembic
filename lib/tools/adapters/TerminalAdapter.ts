@@ -6,11 +6,6 @@ import type {
   ToolResultEnvelope,
 } from '@alembic/agent/tools';
 import {
-  InMemoryTerminalSessionManager,
-  type TerminalSessionManager,
-} from '#tools/adapters/TerminalSessionManager.js';
-import { executeTerminalRequest } from './terminal-adapter/TerminalExecutors.js';
-import {
   buildTerminalCommandPolicyInput,
   buildTerminalPtyPolicyInput,
   buildTerminalScriptPolicyInput,
@@ -19,7 +14,12 @@ import {
   evaluateTerminalPtyPolicy,
   evaluateTerminalScriptPolicy,
   evaluateTerminalShellPolicy,
-} from './terminal-policy/index.js';
+} from '@alembic/agent/tools/terminal';
+import {
+  InMemoryTerminalSessionManager,
+  type TerminalSessionManager,
+} from '#tools/adapters/TerminalSessionManager.js';
+import { executeTerminalRequest } from './terminal-adapter/TerminalExecutors.js';
 
 export class TerminalAdapter implements ToolExecutionAdapter {
   readonly kind = 'terminal-profile' as const;

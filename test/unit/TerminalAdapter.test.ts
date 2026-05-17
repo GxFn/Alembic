@@ -13,7 +13,7 @@ import {
   TERMINAL_SESSION_CLOSE_CAPABILITY,
   TERMINAL_SESSION_STATUS_CAPABILITY,
   TERMINAL_SHELL_CAPABILITY,
-} from '../../lib/tools/adapters/terminal-capabilities/index.js';
+} from '@alembic/agent/tools/terminal';
 
 function request(
   args: Record<string, unknown>,

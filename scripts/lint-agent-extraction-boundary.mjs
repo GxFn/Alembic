@@ -16,6 +16,17 @@ const localToolV2Prefix = `${localToolV2Root}/`;
 const hostToolContextFactoryPath = ['lib', 'tools', 'v2', 'adapter', 'ToolContextFactory.ts'].join(
   '/'
 );
+const terminalContractEntrypoint = '@alembic/agent/tools/terminal';
+const terminalCapabilitiesRoot = ['lib', 'tools', 'adapters', 'terminal-capabilities'].join('/');
+const terminalPolicyRoot = ['lib', 'tools', 'adapters', 'terminal-policy'].join('/');
+const terminalSessionPlanPath = ['lib', 'tools', 'adapters', 'TerminalSession.ts'].join('/');
+const terminalEnvelopePath = [
+  'lib',
+  'tools',
+  'adapters',
+  'terminal-adapter',
+  'TerminalEnvelopes.ts',
+].join('/');
 
 const agentRules = config.agentImportRules ?? {};
 const scanRoots = agentRules.scanRoots ?? ['lib', 'bin'];
@@ -309,6 +320,32 @@ const duplicateCommonToolFiles = [
   ...collectSourceFiles(join(repoRoot, 'lib', 'tools', 'catalog')),
   ...collectSourceFiles(join(repoRoot, 'lib', 'tools', 'workflow')),
 ].map(toRepoPath);
+const terminalContractImportsByFile = new Map();
+const terminalContractRules = config.terminalToolContractRules ?? {};
+const terminalContractScanRoots = terminalContractRules.scanRoots ?? ['lib', 'bin', 'scripts'];
+for (const root of terminalContractScanRoots) {
+  for (const file of collectSourceFiles(join(repoRoot, root))) {
+    const relFile = toRepoPath(file);
+    const specifiers = extractImportSpecifiers(readFileSync(file, 'utf8')).filter(
+      (specifier) => specifier === terminalContractEntrypoint
+    );
+    if (specifiers.length > 0) {
+      terminalContractImportsByFile.set(relFile, uniqueSorted(specifiers));
+    }
+  }
+}
+const duplicateTerminalCapabilityFiles = collectSourceFiles(
+  join(repoRoot, terminalCapabilitiesRoot)
+).map(toRepoPath);
+const duplicateTerminalPolicyFiles = collectSourceFiles(join(repoRoot, terminalPolicyRoot)).map(
+  toRepoPath
+);
+const duplicateTerminalSessionPlanFiles = existsSync(join(repoRoot, terminalSessionPlanPath))
+  ? [terminalSessionPlanPath]
+  : [];
+const duplicateTerminalEnvelopeFiles = existsSync(join(repoRoot, terminalEnvelopePath))
+  ? [terminalEnvelopePath]
+  : [];
 
 if (preservedLocalAgentFiles.length > 0) {
   violations.push(
@@ -323,6 +360,31 @@ if (duplicateToolV2Files.length > 0) {
 if (duplicateCommonToolFiles.length > 0) {
   violations.push(
     `Wave 4 requires local generic tool core/catalog/workflow files to be deleted: ${duplicateCommonToolFiles.join(', ')}.`
+  );
+}
+if (terminalContractImportsByFile.size === 0) {
+  violations.push(
+    `Wave 5 requires Alembic to consume ${terminalContractEntrypoint} for terminal portable contract.`
+  );
+}
+if (duplicateTerminalCapabilityFiles.length > 0) {
+  violations.push(
+    `Wave 5 requires local portable terminal capability duplicate files to be deleted: ${duplicateTerminalCapabilityFiles.join(', ')}.`
+  );
+}
+if (duplicateTerminalPolicyFiles.length > 0) {
+  violations.push(
+    `Wave 5 requires local portable terminal policy duplicate files to be deleted: ${duplicateTerminalPolicyFiles.join(', ')}.`
+  );
+}
+if (duplicateTerminalSessionPlanFiles.length > 0) {
+  violations.push(
+    `Wave 5 requires local portable terminal session plan duplicate files to be deleted: ${duplicateTerminalSessionPlanFiles.join(', ')}.`
+  );
+}
+if (duplicateTerminalEnvelopeFiles.length > 0) {
+  violations.push(
+    `Wave 5 requires local portable terminal envelope duplicate files to be deleted: ${duplicateTerminalEnvelopeFiles.join(', ')}.`
   );
 }
 
@@ -374,6 +436,9 @@ console.log(`  @alembic/agent/ai consumer files: ${agentAiImportsByFile.size}`);
 console.log(`  local AI provider consumers: ${localAiProviderImports.length}`);
 console.log(`  @alembic/agent/tools consumer files: ${agentToolImportsByFile.size}`);
 console.log(`  @alembic/agent/tools/v2 consumer files: ${agentToolV2ImportsByFile.size}`);
+console.log(
+  `  @alembic/agent/tools/terminal consumer files: ${terminalContractImportsByFile.size}`
+);
 console.log(`  local common tool consumers: ${localCommonToolImports.length}`);
 console.log(`  deferred local tool import files: ${deferredToolImportsByFile.size}`);
 console.log(`  @alembic/agent/memory consumer files: ${agentMemoryImportsByFile.size}`);
@@ -391,6 +456,10 @@ console.log(`  duplicate generic Tool V2 files: ${duplicateToolV2Files.length}`)
 console.log(
   `  duplicate generic tool core/catalog/workflow files: ${duplicateCommonToolFiles.length}`
 );
+console.log(`  duplicate terminal capability files: ${duplicateTerminalCapabilityFiles.length}`);
+console.log(`  duplicate terminal policy files: ${duplicateTerminalPolicyFiles.length}`);
+console.log(`  duplicate terminal session plan files: ${duplicateTerminalSessionPlanFiles.length}`);
+console.log(`  duplicate terminal envelope files: ${duplicateTerminalEnvelopeFiles.length}`);
 for (const [classification, count] of [...toolClassificationCounts].sort(([a], [b]) =>
   a.localeCompare(b)
 )) {

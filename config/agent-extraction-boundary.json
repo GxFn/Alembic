@@ -246,6 +246,59 @@
       ],
       "nextPhaseAllowed": true,
       "nextPhase": "Wave 4 Alembic local Agent and generic Tool V2 duplicate implementation deletion is complete; next acceptance can verify docs, commit, and any downstream contract smoke without restoring local duplicate files."
+    },
+    "phase10TerminalSandboxAgentToolBoundary": {
+      "status": "closed",
+      "stage": "wave-5-terminal-sandbox-agent-tool-boundary",
+      "planSection": "alembic-terminal-sandbox-agent-tool-boundary-wave-5-plan-2026-05-17 §6.2",
+      "completedScope": [
+        "Alembic consumes @alembic/agent/tools/terminal for terminal capability manifests, portable policy builders/evaluators, session plan type, and envelope helpers.",
+        "Deleted local portable terminal capability manifests, terminal policy implementation, TerminalSession plan file, and portable TerminalEnvelopes helper.",
+        "Preserved Alembic host terminal executor, PTY/process execution, sandbox bridge, audit, artifact, environment assembly, DI wiring, and concrete in-memory session storage.",
+        "Updated boundary lint to hard gate Wave 5 deletion state for local terminal portable duplicates."
+      ],
+      "deletedPaths": [
+        "lib/tools/adapters/terminal-capabilities/**",
+        "lib/tools/adapters/terminal-policy/**",
+        "lib/tools/adapters/TerminalSession.ts",
+        "lib/tools/adapters/terminal-adapter/TerminalEnvelopes.ts"
+      ],
+      "preservedPaths": [
+        "lib/tools/adapters/TerminalAdapter.ts",
+        "lib/tools/adapters/TerminalSessionManager.ts",
+        "lib/tools/adapters/terminal-adapter/TerminalArtifacts.ts",
+        "lib/tools/adapters/terminal-adapter/TerminalAudit.ts",
+        "lib/tools/adapters/terminal-adapter/TerminalEnvironment.ts",
+        "lib/tools/adapters/terminal-adapter/TerminalExecutorShared.ts",
+        "lib/tools/adapters/terminal-adapter/TerminalExecutors.ts",
+        "lib/tools/adapters/terminal-adapter/TerminalPtyExecutor.ts",
+        "lib/tools/adapters/terminal-adapter/TerminalPtyRunner.ts",
+        "lib/tools/adapters/terminal-adapter/TerminalRunExecutor.ts",
+        "lib/tools/adapters/terminal-adapter/TerminalScriptExecutor.ts",
+        "lib/tools/adapters/terminal-adapter/TerminalSessionExecutor.ts",
+        "lib/tools/adapters/terminal-adapter/TerminalShellExecutor.ts",
+        "lib/sandbox/**"
+      ],
+      "validation": [
+        "npm run lint:agent-extraction-boundary: passed; @alembic/agent/tools/terminal consumer files 10, duplicate terminal capability files 0, duplicate terminal policy files 0, duplicate terminal session plan files 0, duplicate terminal envelope files 0.",
+        "npm run build:check: passed.",
+        "node --input-type=module terminal contract import smoke: passed; manifestCount 7 and policy/session/envelope exports present.",
+        "npm run test:unit -- test/unit/TerminalCommandPolicy.test.ts test/unit/TerminalSessionManager.test.ts test/unit/V2ToolSystem.test.ts test/unit/AgentModuleBoundaries.test.ts: passed; 4 files / 82 tests.",
+        "npm run test:unit -- test/unit/TerminalCommandPolicy.test.ts test/unit/TerminalSessionManager.test.ts test/unit/TerminalAdapter.test.ts test/unit/V2ToolSystem.test.ts test/unit/AgentModuleBoundaries.test.ts: attempted; TerminalAdapter real execution cases failed with sandbox-exec sandbox_apply Operation not permitted, while 4 non-OS-sandbox files passed.",
+        "npm run check: passed; existing repository Biome warnings are non-fatal.",
+        "npm run build: passed.",
+        "node dist/bin/cli.js status --json: passed; workspace detected, database not found in current test environment.",
+        "rg -n \"terminal-capabilities|terminal-policy|TerminalSession\" lib/tools/adapters --glob '*.ts': passed with only host-owned TerminalSessionManager references remaining.",
+        "rg -n \"terminal-capabilities|terminal-policy|TerminalEnvelopes|TerminalSession\\.js\" lib/tools/adapters --glob '*.ts': passed with no matches.",
+        "git diff --check: passed."
+      ],
+      "risks": [
+        "TerminalSessionManager remains Alembic host-owned concrete session storage and intentionally carries host project-root isolation metadata beyond the portable Agent session plan contract.",
+        "Terminal execution tests that invoke macOS Seatbelt or loopback network paths may still need a host environment with sandbox-exec and localhost permissions.",
+        "If the Agent terminal contract changes shape, Alembic should update imports and bridge code rather than restoring local portable duplicate files."
+      ],
+      "nextPhaseAllowed": true,
+      "nextPhase": "Wave 5 Alembic terminal portable contract consumption is complete; next acceptance can verify host bridge classification and downstream smoke without restoring local terminal portable duplicate files."
     }
   },
   "aiProviderRules": {
@@ -391,39 +444,21 @@
     },
     {
       "path": "lib/tools/adapters/TerminalAdapter.ts",
-      "classification": "agent-common-terminal-adapter",
-      "switchAfter": "phase-4-with-host-permission-contract",
-      "reason": "TerminalAdapter is part of the common terminal abstraction but still executes against host project roots and policy."
-    },
-    {
-      "path": "lib/tools/adapters/TerminalSession.ts",
-      "classification": "agent-common-terminal-session",
-      "switchAfter": "phase-4",
-      "reason": "Terminal session state is reusable common terminal execution infrastructure."
+      "classification": "alembic-main-terminal-host-adapter",
+      "switchAfter": "do-not-migrate-by-default",
+      "reason": "TerminalAdapter consumes Agent-owned terminal contract but executes through Alembic host project roots, session storage, sandbox bridge, audit, artifacts, and DI services."
     },
     {
       "path": "lib/tools/adapters/TerminalSessionManager.ts",
-      "classification": "agent-common-terminal-session",
-      "switchAfter": "phase-4",
-      "reason": "Session manager implementation is reusable terminal execution infrastructure."
+      "classification": "alembic-main-terminal-session-store",
+      "switchAfter": "do-not-migrate-by-default",
+      "reason": "InMemoryTerminalSessionManager is concrete Alembic host session storage; it consumes Agent session plan types while enforcing host project-root isolation and env persistence metadata."
     },
     {
       "pathPrefix": "lib/tools/adapters/terminal-adapter/",
-      "classification": "agent-common-terminal-execution",
-      "switchAfter": "phase-4",
-      "reason": "Terminal executor, environment, artifact, audit, and envelope helpers are common terminal runtime pieces."
-    },
-    {
-      "pathPrefix": "lib/tools/adapters/terminal-capabilities/",
-      "classification": "agent-common-terminal-capabilities",
-      "switchAfter": "phase-4",
-      "reason": "Terminal capability manifests and helpers describe portable terminal tool surfaces."
-    },
-    {
-      "pathPrefix": "lib/tools/adapters/terminal-policy/",
-      "classification": "agent-common-terminal-policy",
-      "switchAfter": "phase-4",
-      "reason": "Terminal risk policy and input normalization are common tool-governance pieces."
+      "classification": "alembic-main-terminal-host-execution",
+      "switchAfter": "do-not-migrate-by-default",
+      "reason": "Terminal host execution files perform process/PTY execution, sandbox bridge calls, audit, artifact, environment assembly, and session command dispatch while consuming Agent portable terminal policy/envelope contracts."
     },
     {
       "path": "lib/tools/adapters/DashboardOperationAdapter.ts",
@@ -461,5 +496,39 @@
       "switchAfter": "do-not-migrate-by-default",
       "reason": "Skill capability manifests are tied to Alembic skill packaging and host project skill files."
     }
-  ]
+  ],
+  "terminalToolContractRules": {
+    "status": "consume-alembic-agent-terminal-contract",
+    "packageName": "@alembic/agent",
+    "packageRange": "file:../AlembicAgent",
+    "publicEntrypoint": "@alembic/agent/tools/terminal",
+    "scanRoots": ["lib", "bin", "scripts", "test"],
+    "completedDeletionPaths": [
+      "lib/tools/adapters/terminal-capabilities/**",
+      "lib/tools/adapters/terminal-policy/**",
+      "lib/tools/adapters/TerminalSession.ts",
+      "lib/tools/adapters/terminal-adapter/TerminalEnvelopes.ts"
+    ],
+    "hostOwnedPaths": [
+      "lib/tools/adapters/TerminalAdapter.ts",
+      "lib/tools/adapters/TerminalSessionManager.ts",
+      "lib/tools/adapters/terminal-adapter/TerminalArtifacts.ts",
+      "lib/tools/adapters/terminal-adapter/TerminalAudit.ts",
+      "lib/tools/adapters/terminal-adapter/TerminalEnvironment.ts",
+      "lib/tools/adapters/terminal-adapter/TerminalExecutorShared.ts",
+      "lib/tools/adapters/terminal-adapter/TerminalExecutors.ts",
+      "lib/tools/adapters/terminal-adapter/TerminalPtyExecutor.ts",
+      "lib/tools/adapters/terminal-adapter/TerminalPtyRunner.ts",
+      "lib/tools/adapters/terminal-adapter/TerminalRunExecutor.ts",
+      "lib/tools/adapters/terminal-adapter/TerminalScriptExecutor.ts",
+      "lib/tools/adapters/terminal-adapter/TerminalSessionExecutor.ts",
+      "lib/tools/adapters/terminal-adapter/TerminalShellExecutor.ts",
+      "lib/sandbox/**"
+    ],
+    "notes": [
+      "Alembic consumes Agent-owned terminal capability/policy/session/envelope portable contract from @alembic/agent/tools/terminal.",
+      "Alembic keeps real process/PTY execution, macOS Seatbelt sandbox bridge, network proxy, audit/artifact/environment assembly, approval/gateway, DI wiring, and concrete session storage as host responsibilities.",
+      "Do not restore local terminal-capabilities, terminal-policy, TerminalSession plan, or TerminalEnvelopes duplicate files."
+    ]
+  }
 }
