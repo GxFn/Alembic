@@ -20,8 +20,8 @@
  * @module ActiveContext
  */
 
+import type { ToolResultEnvelope } from '@alembic/agent/tools';
 import Logger from '@alembic/core/logging';
-import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
 import type { DistilledContext } from './memory-flush-contract.js';
 
 // ═══════════════════════════════════════════════════════════

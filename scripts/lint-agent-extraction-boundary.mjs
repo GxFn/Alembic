@@ -105,6 +105,71 @@ if (packageJson.dependencies?.[expectedAgentPackage] !== expectedAgentRange) {
   );
 }
 
+const toolSystemRules = config.toolSystemImportRules ?? {};
+const toolSystemScanRoots = toolSystemRules.scanRoots ?? scanRoots;
+const toolSystemIgnoredPrefixes = new Set(toolSystemRules.ignoredPathPrefixes ?? []);
+const toolSystemPublicEntrypoint = toolSystemRules.publicEntrypoint ?? '@alembic/agent/tools';
+const deferredToolImports = toolSystemRules.deferredLocalImports ?? [];
+const deferredToolImportsByPath = new Map(deferredToolImports.map((entry) => [entry.path, entry]));
+const agentToolImportsByFile = new Map();
+const deferredToolImportsByFile = new Map();
+const localCommonToolImports = [];
+
+for (const root of toolSystemScanRoots) {
+  for (const file of collectTypeScriptFiles(join(repoRoot, root))) {
+    const relFile = toRepoPath(file);
+    if (isIgnored(relFile, toolSystemIgnoredPrefixes)) {
+      continue;
+    }
+    const specifiers = extractImportSpecifiers(readFileSync(file, 'utf8'));
+    const agentToolSpecifiers = specifiers.filter(
+      (specifier) => specifier === toolSystemPublicEntrypoint
+    );
+    if (agentToolSpecifiers.length > 0) {
+      agentToolImportsByFile.set(relFile, uniqueSorted(agentToolSpecifiers));
+    }
+
+    const allowedDeferred = deferredToolImportsByPath.get(relFile);
+    const allowedDeferredSpecifiers = new Set(allowedDeferred?.expectedSpecifiers ?? []);
+    for (const specifier of specifiers) {
+      if (!isLocalCommonToolSpecifier(specifier, relFile)) {
+        continue;
+      }
+      if (allowedDeferredSpecifiers.has(specifier)) {
+        const existing = deferredToolImportsByFile.get(relFile) ?? [];
+        existing.push(specifier);
+        deferredToolImportsByFile.set(relFile, existing);
+        continue;
+      }
+      localCommonToolImports.push({ file: relFile, specifier });
+    }
+  }
+}
+
+for (const offender of localCommonToolImports) {
+  violations.push(
+    `Local common tool import remains in ${offender.file}: ${offender.specifier}. Use ${toolSystemPublicEntrypoint} outside local implementation/deferred bridge files.`
+  );
+}
+
+for (const entry of deferredToolImports) {
+  const fullPath = join(repoRoot, entry.path);
+  if (!existsSync(fullPath)) {
+    violations.push(`Configured deferred tool import site does not exist: ${entry.path}.`);
+    continue;
+  }
+  const expected = uniqueSorted(entry.expectedSpecifiers ?? []);
+  const actual = uniqueSorted(deferredToolImportsByFile.get(entry.path) ?? []);
+  if (!sameArray(actual, expected)) {
+    violations.push(
+      `Deferred local tool import drift in ${entry.path}: expected [${expected.join(', ')}], found [${actual.join(', ')}].`
+    );
+  }
+  if (!entry.reason) {
+    violations.push(`Deferred local tool import entry is missing reason: ${entry.path}.`);
+  }
+}
+
 const toolRules = config.toolBoundaryRules ?? [];
 const toolFiles = collectTypeScriptFiles(join(repoRoot, 'lib', 'tools')).map(toRepoPath);
 const toolClassificationCounts = new Map();
@@ -153,6 +218,9 @@ console.log('Agent extraction boundary check passed');
 console.log(`  product #agent call sites: ${agentImportsByFile.size}`);
 console.log(`  @alembic/agent/ai consumer files: ${agentAiImportsByFile.size}`);
 console.log(`  local AI provider consumers: ${localAiProviderImports.length}`);
+console.log(`  @alembic/agent/tools consumer files: ${agentToolImportsByFile.size}`);
+console.log(`  local common tool consumers: ${localCommonToolImports.length}`);
+console.log(`  deferred local tool import files: ${deferredToolImportsByFile.size}`);
 console.log(`  classified lib/tools files: ${toolFiles.length}`);
 for (const [classification, count] of [...toolClassificationCounts].sort(([a], [b]) =>
   a.localeCompare(b)
@@ -177,9 +245,10 @@ function collectTypeScriptFiles(dir) {
 }
 
 function extractImportSpecifiers(source) {
+  const sourceWithoutComments = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   const specifiers = [];
   const importPattern = /(?:from\s+|import\(\s*)['"]([^'"]+)['"]/g;
-  for (const match of source.matchAll(importPattern)) {
+  for (const match of sourceWithoutComments.matchAll(importPattern)) {
     specifiers.push(match[1]);
   }
   return specifiers;
@@ -223,6 +292,37 @@ function isLocalAiProviderSpecifier(specifier, importerRelFile) {
   const resolved = resolve(importerDir, specifier);
   const rel = toRepoPath(resolved);
   return rel === 'lib/external/ai' || rel.startsWith('lib/external/ai/');
+}
+
+function isLocalCommonToolSpecifier(specifier, importerRelFile) {
+  if (specifier.startsWith('#tools/core/')) {
+    return true;
+  }
+  if (specifier.startsWith('#tools/catalog/')) {
+    return true;
+  }
+  if (specifier.startsWith('#tools/workflow/')) {
+    return true;
+  }
+  if (specifier.startsWith('#tools/v2/')) {
+    return true;
+  }
+  if (!specifier.startsWith('.')) {
+    return false;
+  }
+  const importerDir = dirname(join(repoRoot, importerRelFile));
+  const resolved = resolve(importerDir, specifier);
+  const rel = toRepoPath(resolved).replace(/\.js$/, '.ts');
+  return isCommonToolPath(rel);
+}
+
+function isCommonToolPath(rel) {
+  return (
+    rel.startsWith('lib/tools/core/') ||
+    rel.startsWith('lib/tools/catalog/') ||
+    rel.startsWith('lib/tools/workflow/') ||
+    rel.startsWith('lib/tools/v2/')
+  );
 }
 
 function toRepoPath(file) {

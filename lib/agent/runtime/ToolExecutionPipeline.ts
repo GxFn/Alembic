@@ -17,7 +17,7 @@
  * @module core/ToolExecutionPipeline
  */
 
-import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
+import type { ToolResultEnvelope } from '@alembic/agent/tools';
 import { SafetyPolicy } from '../policies/index.js';
 import type { AgentRuntime } from './AgentRuntime.js';
 import type { LoopContext } from './LoopContext.js';

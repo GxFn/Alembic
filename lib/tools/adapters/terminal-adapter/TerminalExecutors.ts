@@ -1,6 +1,5 @@
+import type { ToolExecutionRequest, ToolResultEnvelope } from '@alembic/agent/tools';
 import type { TerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
-import type { ToolExecutionRequest } from '#tools/core/ToolContracts.js';
-import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
 import { executePty } from './TerminalPtyExecutor.js';
 import { executeStructuredCommand } from './TerminalRunExecutor.js';
 import { executeScript } from './TerminalScriptExecutor.js';

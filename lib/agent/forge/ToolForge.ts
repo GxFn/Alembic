@@ -9,12 +9,15 @@
  * 瀑布逻辑：reuse → compose → generate，首个成功即返回。
  */
 
+import type {
+  CapabilityCatalog,
+  ForgedInternalToolStore,
+  ToolCapabilityManifest,
+  WorkflowHandler,
+  WorkflowRegistry,
+} from '@alembic/agent/tools';
 import type { SignalBus } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
-import type { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
-import type { ToolCapabilityManifest } from '#tools/catalog/CapabilityManifest.js';
-import type { ForgedInternalToolStore } from '#tools/core/InternalToolHandler.js';
-import type { WorkflowHandler, WorkflowRegistry } from '#tools/workflow/WorkflowRegistry.js';
 import type { CompositionSpec } from './DynamicComposer.js';
 import { DynamicComposer } from './DynamicComposer.js';
 import type { SandboxTestCase } from './SandboxRunner.js';

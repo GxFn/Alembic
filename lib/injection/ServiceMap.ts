@@ -10,6 +10,7 @@
 // ── Domain Types ──
 // ── External Types ──
 import type { AiProvider, AiProviderManager } from '@alembic/agent/ai';
+import type { UnifiedToolCatalog } from '@alembic/agent/tools';
 import type { JobStore } from '@alembic/core/daemon';
 import type { DatabaseConnection } from '@alembic/core/database';
 import type DimensionCopy from '@alembic/core/domain/dimension/DimensionCopy';
@@ -67,7 +68,6 @@ import type { RecipeParser } from '@alembic/core/service/recipe/RecipeParser';
 import type { IndexingPipeline, VectorService, VectorStore } from '@alembic/core/vector';
 // ── Service Types ──
 import type { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
-import type { UnifiedToolCatalog } from '#tools/catalog/UnifiedToolCatalog.js';
 import type {
   AgentProfileCompiler,
   AgentProfileRegistry,

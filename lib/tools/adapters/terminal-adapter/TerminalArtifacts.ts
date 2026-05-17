@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ToolExecutionRequest } from '#tools/core/ToolContracts.js';
-import type { ToolArtifactRef } from '#tools/core/ToolResultEnvelope.js';
+import type { ToolArtifactRef, ToolExecutionRequest } from '@alembic/agent/tools';
 
 const DEFAULT_MAX_OUTPUT_BYTES = 16_000;
 const SCRIPT_FILE_MODE = 0o600;

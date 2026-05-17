@@ -10,14 +10,14 @@
  *   - 支持手动续期和提前回收
  */
 
-import type { Disposable, SignalBus } from '@alembic/core/events';
-import { timerRegistry } from '@alembic/core/events';
-import Logger from '@alembic/core/logging';
 import type {
   ForgedInternalToolStore,
   InternalToolHandler,
-} from '#tools/core/InternalToolHandler.js';
-import type { WorkflowHandler } from '#tools/workflow/WorkflowRegistry.js';
+  WorkflowHandler,
+} from '@alembic/agent/tools';
+import type { Disposable, SignalBus } from '@alembic/core/events';
+import { timerRegistry } from '@alembic/core/events';
+import Logger from '@alembic/core/logging';
 
 /* ────────────────────── Types ────────────────────── */
 

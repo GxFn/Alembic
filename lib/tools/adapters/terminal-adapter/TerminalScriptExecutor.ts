@@ -1,6 +1,5 @@
+import type { ToolExecutionRequest, ToolResultEnvelope } from '@alembic/agent/tools';
 import type { TerminalScriptPolicyInput } from '#tools/adapters/terminal-policy/index.js';
-import type { ToolExecutionRequest } from '#tools/core/ToolContracts.js';
-import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
 import {
   buildTerminalScriptPolicyInput,
   evaluateTerminalScriptPolicy,

@@ -1,4 +1,4 @@
-import type { ToolCapabilityManifest } from '#tools/catalog/CapabilityManifest.js';
+import type { ToolCapabilityManifest } from '@alembic/agent/tools';
 import { TOOL_GATEWAY_MAP } from './tools.js';
 
 export interface McpToolDeclaration {

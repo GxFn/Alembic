@@ -13,7 +13,7 @@ export interface ToolCallEntry {
   name?: string;
   args: Record<string, unknown>;
   result: unknown;
-  envelope?: import('#tools/core/ToolResultEnvelope.js').ToolResultEnvelope;
+  envelope?: import('@alembic/agent/tools').ToolResultEnvelope;
   durationMs: number;
 }
 
@@ -105,7 +105,7 @@ export interface ToolMetadata {
   durationMs: number;
   dedupMessage?: string;
   isSubmit?: boolean;
-  envelope?: import('#tools/core/ToolResultEnvelope.js').ToolResultEnvelope;
+  envelope?: import('@alembic/agent/tools').ToolResultEnvelope;
 }
 
 /** File cache entry */
@@ -119,8 +119,8 @@ export interface RuntimeConfig {
   id?: string;
   presetName?: string;
   aiProvider: import('@alembic/agent/ai').AiProvider;
-  toolRegistry: import('#tools/catalog/UnifiedToolCatalog.js').UnifiedToolCatalog;
-  toolRouter?: import('#tools/core/ToolContracts.js').ToolRouterContract | null;
+  toolRegistry: import('@alembic/agent/tools').UnifiedToolCatalog;
+  toolRouter?: import('@alembic/agent/tools').ToolRouterContract | null;
   container?: Record<string, unknown> | null;
   capabilities?: import('../capabilities/index.js').Capability[];
   strategy: import('../strategies/index.js').Strategy;

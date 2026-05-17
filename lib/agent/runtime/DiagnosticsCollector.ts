@@ -1,5 +1,4 @@
-import type { ToolDiagnosticsRecorder } from '#tools/core/ToolCallContext.js';
-import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
+import type { ToolDiagnosticsRecorder, ToolResultEnvelope } from '@alembic/agent/tools';
 import type {
   AgentDiagnostics,
   AgentDiagnosticWarning,

@@ -24,6 +24,84 @@
       "The local lib/external/ai tree is preserved only as a deletion candidate until host smoke evidence is complete."
     ]
   },
+  "toolSystemImportRules": {
+    "status": "consume-alembic-agent-tools",
+    "packageName": "@alembic/agent",
+    "packageRange": "file:../AlembicAgent",
+    "publicEntrypoint": "@alembic/agent/tools",
+    "localDeletionCandidates": [
+      "lib/tools/core/**",
+      "lib/tools/catalog/**",
+      "lib/tools/workflow/**",
+      "lib/tools/v2/capabilities/**",
+      "lib/tools/v2/registry.ts",
+      "lib/tools/v2/types.ts",
+      "lib/tools/v2/compressor/strip.ts"
+    ],
+    "scanRoots": ["lib", "bin", "scripts", "test"],
+    "ignoredPathPrefixes": [
+      "lib/tools/core/",
+      "lib/tools/catalog/",
+      "lib/tools/workflow/",
+      "lib/tools/v2/adapter/",
+      "lib/tools/v2/cache/",
+      "lib/tools/v2/capabilities/",
+      "lib/tools/v2/compressor/",
+      "lib/tools/v2/handlers/",
+      "lib/tools/v2/index.ts",
+      "lib/tools/v2/registry.ts",
+      "lib/tools/v2/router.ts",
+      "lib/tools/v2/types.ts"
+    ],
+    "deferredLocalImports": [
+      {
+        "path": "lib/injection/modules/AgentModule.ts",
+        "expectedSpecifiers": [
+          "#tools/v2/adapter/ToolContextFactory.js",
+          "#tools/v2/adapter/V2CapabilityCatalog.js",
+          "#tools/v2/adapter/V2ToolRouterAdapter.js"
+        ],
+        "reason": "AlembicAgent does not yet publish the V2 router adapter/context factory; Alembic keeps this host composition bridge until a public adapter contract exists."
+      },
+      {
+        "path": "test/unit/V2ToolSystem.test.ts",
+        "expectedSpecifiers": [
+          "#tools/v2/adapter/ToolContextFactory.js",
+          "#tools/v2/adapter/V2CapabilityCatalog.js",
+          "#tools/v2/adapter/V2ToolRouterAdapter.js",
+          "#tools/v2/cache/DeltaCache.js",
+          "#tools/v2/cache/SearchCache.js",
+          "#tools/v2/compressor/OutputCompressor.js",
+          "#tools/v2/registry.js",
+          "#tools/v2/router.js",
+          "#tools/v2/types.js"
+        ],
+        "reason": "This remains a local implementation regression suite until AlembicAgent exposes the V2 adapter/router/cache surface."
+      },
+      {
+        "path": "test/unit/v2/ToolRegistryV2.test.ts",
+        "expectedSpecifiers": [
+          "#tools/v2/registry.js",
+          "#tools/v2/router.js",
+          "#tools/v2/types.js"
+        ],
+        "reason": "This test targets the local V2 implementation that is still a deletion candidate rather than a switched product consumer."
+      },
+      {
+        "path": "test/unit/knowledge-manage-evolution.test.ts",
+        "expectedSpecifiers": [
+          "../../lib/tools/v2/handlers/knowledge.js",
+          "../../lib/tools/v2/types.js"
+        ],
+        "reason": "This test targets a local V2 handler that is not yet published through the AlembicAgent tools public entrypoint."
+      }
+    ],
+    "notes": [
+      "Common tool contracts, capability catalog, unified catalog, router contracts, result envelopes, presenters, workflow registry, V2 public capabilities, V2 registry/types, and strip compressor are consumed through @alembic/agent/tools outside local implementation/deferred bridges.",
+      "Alembic keeps Dashboard, macOS, Skill, Terminal, Workflow, MCP, CLI, daemon, HTTP/API, native, and IDE wiring as host adapters.",
+      "Local lib/tools common trees are preserved only as deletion candidates until public adapter gaps and host smoke evidence are complete."
+    ]
+  },
   "agentSourceNotes": [
     {
       "path": "lib/agent/profiles/definitions/remote.profile.ts",

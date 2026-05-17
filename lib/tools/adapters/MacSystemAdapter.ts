@@ -4,12 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
-import type { ToolExecutionAdapter, ToolExecutionRequest } from '#tools/core/ToolContracts.js';
 import type {
   ToolArtifactRef,
+  ToolExecutionAdapter,
+  ToolExecutionRequest,
   ToolResultEnvelope,
   ToolResultStatus,
-} from '#tools/core/ToolResultEnvelope.js';
+} from '@alembic/agent/tools';
 import { RESOURCES_DIR } from '../../shared/package-assets.js';
 
 const execFileAsync = promisify(execFile);

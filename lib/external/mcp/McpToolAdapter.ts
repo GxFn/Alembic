@@ -1,5 +1,9 @@
-import type { ToolExecutionAdapter, ToolExecutionRequest } from '#tools/core/ToolContracts.js';
-import type { ToolResultEnvelope, ToolResultStatus } from '#tools/core/ToolResultEnvelope.js';
+import type {
+  ToolExecutionAdapter,
+  ToolExecutionRequest,
+  ToolResultEnvelope,
+  ToolResultStatus,
+} from '@alembic/agent/tools';
 
 export type McpToolExecutor = (
   toolName: string,

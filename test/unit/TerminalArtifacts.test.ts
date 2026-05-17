@@ -1,10 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { ToolCapabilityManifest, ToolExecutionRequest } from '@alembic/agent/tools';
 import { describe, expect, test } from 'vitest';
 import { materializeScriptArtifact } from '../../lib/tools/adapters/terminal-adapter/TerminalArtifacts.js';
-import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
-import type { ToolExecutionRequest } from '../../lib/tools/core/ToolContracts.js';
 
 function request(projectRoot: string, dataRoot: string): ToolExecutionRequest {
   return {

@@ -9,10 +9,13 @@
  *   - DynamicComposer 是工具组合（Tool 层），产出物是单个工具
  */
 
+import type {
+  ToolRouterContract,
+  WorkflowHandler,
+  WorkflowHandlerContext,
+} from '@alembic/agent/tools';
+import { resolveToolRouterFromContext } from '@alembic/agent/tools';
 import Logger from '@alembic/core/logging';
-import type { ToolRouterContract } from '#tools/core/ToolContracts.js';
-import { resolveToolRouterFromContext } from '#tools/core/ToolRoutingServices.js';
-import type { WorkflowHandler, WorkflowHandlerContext } from '#tools/workflow/WorkflowRegistry.js';
 
 /* ────────────────────── Types ────────────────────── */
 

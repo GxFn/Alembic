@@ -30,9 +30,9 @@
 
 import { randomUUID } from 'node:crypto';
 import type { LLMGateway, ToolSchema, UnifiedMessage } from '@alembic/agent/ai';
+import type { ToolSchemaProjection } from '@alembic/agent/tools';
+import { isToolResultEnvelope } from '@alembic/agent/tools';
 import Logger from '@alembic/core/logging';
-import type { ToolSchemaProjection } from '#tools/catalog/CapabilityManifest.js';
-import { isToolResultEnvelope } from '#tools/core/ToolResultPresenter.js';
 import { Capability, CapabilityRegistry } from '../capabilities/index.js';
 import { limitToolResult } from '../context/ContextWindow.js';
 import { PolicyEngine } from '../policies/index.js';
@@ -89,7 +89,7 @@ export class AgentRuntime {
   bus;
   aiProvider;
   toolRegistry;
-  toolRouter;
+  toolRouter: NonNullable<RuntimeConfig['toolRouter']>;
   container;
   capabilities;
   strategy;

@@ -1,4 +1,4 @@
-import type { ToolCapabilityManifest } from '#tools/catalog/CapabilityManifest.js';
+import type { ToolCapabilityManifest } from '@alembic/agent/tools';
 
 export const TERMINAL_KIND = 'terminal-profile' as const;
 export const TERMINAL_OWNER = 'agent-platform';

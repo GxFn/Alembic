@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { ToolCapabilityManifest, ToolExecutionRequest } from '@alembic/agent/tools';
 import { describe, expect, test } from 'vitest';
 import { SkillAdapter } from '../../lib/tools/adapters/SkillAdapter.js';
 import {
@@ -9,8 +10,6 @@ import {
   SKILL_SEARCH_CAPABILITY,
   SKILL_VALIDATE_CAPABILITY,
 } from '../../lib/tools/adapters/SkillCapabilities.js';
-import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
-import type { ToolExecutionRequest } from '../../lib/tools/core/ToolContracts.js';
 
 function request(
   manifest: ToolCapabilityManifest,

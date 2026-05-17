@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import type { Request, Response } from 'express';
 import type {
   ToolResultDiagnostics,
   ToolResultEnvelope,
   ToolResultTrust,
-} from '#tools/core/ToolResultEnvelope.js';
+} from '@alembic/agent/tools';
+import type { Request, Response } from 'express';
 import { sendToolEnvelopeResponse } from './tool-envelope-response.js';
 
 export interface DashboardOperationContainer {

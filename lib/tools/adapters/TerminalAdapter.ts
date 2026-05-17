@@ -1,14 +1,14 @@
+import type {
+  ToolExecutionAdapter,
+  ToolExecutionPreview,
+  ToolExecutionPreviewRequest,
+  ToolExecutionRequest,
+  ToolResultEnvelope,
+} from '@alembic/agent/tools';
 import {
   InMemoryTerminalSessionManager,
   type TerminalSessionManager,
 } from '#tools/adapters/TerminalSessionManager.js';
-import type {
-  ToolExecutionAdapter,
-  ToolExecutionPreviewRequest,
-  ToolExecutionRequest,
-} from '#tools/core/ToolContracts.js';
-import type { ToolExecutionPreview } from '#tools/core/ToolDecision.js';
-import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
 import { executeTerminalRequest } from './terminal-adapter/TerminalExecutors.js';
 import {
   buildTerminalCommandPolicyInput,

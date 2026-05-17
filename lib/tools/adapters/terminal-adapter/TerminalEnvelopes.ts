@@ -1,10 +1,10 @@
-import type { TerminalSessionRecord } from '#tools/adapters/TerminalSessionManager.js';
-import type { ToolExecutionRequest } from '#tools/core/ToolContracts.js';
 import type {
   ToolArtifactRef,
+  ToolExecutionRequest,
   ToolResultEnvelope,
   ToolResultStatus,
-} from '#tools/core/ToolResultEnvelope.js';
+} from '@alembic/agent/tools';
+import type { TerminalSessionRecord } from '#tools/adapters/TerminalSessionManager.js';
 
 type TerminalPolicyLike = {
   reason?: string;

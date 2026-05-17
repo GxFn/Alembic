@@ -1,7 +1,11 @@
-import type { ToolExecutionAdapter, ToolExecutionRequest } from '#tools/core/ToolContracts.js';
-import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
-import { resolveToolRouterFromContext } from '#tools/core/ToolRoutingServices.js';
-import type { WorkflowHandlerContext, WorkflowRegistry } from '#tools/workflow/WorkflowRegistry.js';
+import type {
+  ToolExecutionAdapter,
+  ToolExecutionRequest,
+  ToolResultEnvelope,
+  WorkflowHandlerContext,
+  WorkflowRegistry,
+} from '@alembic/agent/tools';
+import { resolveToolRouterFromContext } from '@alembic/agent/tools';
 
 export class WorkflowAdapter implements ToolExecutionAdapter {
   readonly kind = 'workflow' as const;

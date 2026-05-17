@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { ToolCapabilityManifest, ToolExecutionRequest } from '@alembic/agent/tools';
 import { describe, expect, test, vi } from 'vitest';
 import { MacSystemAdapter } from '../../lib/tools/adapters/MacSystemAdapter.js';
 import {
@@ -10,8 +11,6 @@ import {
   MAC_SYSTEM_INFO_CAPABILITY,
   MAC_WINDOW_LIST_CAPABILITY,
 } from '../../lib/tools/adapters/MacSystemCapabilities.js';
-import type { ToolCapabilityManifest } from '../../lib/tools/catalog/CapabilityManifest.js';
-import type { ToolExecutionRequest } from '../../lib/tools/core/ToolContracts.js';
 
 function request(
   manifest: ToolCapabilityManifest,

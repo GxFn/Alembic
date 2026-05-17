@@ -1,10 +1,12 @@
-import { BootstrapAnalyze } from '#tools/v2/capabilities/BootstrapAnalyze.js';
-import { BootstrapProduce } from '#tools/v2/capabilities/BootstrapProduce.js';
-import { ConversationV2 } from '#tools/v2/capabilities/ConversationV2.js';
-import { Evolution } from '#tools/v2/capabilities/Evolution.js';
-import { ScanAnalyze } from '#tools/v2/capabilities/ScanAnalyze.js';
-import { ScanProduce } from '#tools/v2/capabilities/ScanProduce.js';
-import { SystemV2 } from '#tools/v2/capabilities/SystemV2.js';
+import {
+  BootstrapAnalyze,
+  BootstrapProduce,
+  ConversationV2,
+  Evolution,
+  ScanAnalyze,
+  ScanProduce,
+  SystemV2,
+} from '@alembic/agent/tools';
 import type { Capability } from './Capability.js';
 
 type CapabilityConstructor = new (opts?: Record<string, unknown>) => Capability;

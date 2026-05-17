@@ -1,6 +1,9 @@
+import type {
+  ToolExecutionAdapter,
+  ToolExecutionRequest,
+  ToolResultEnvelope,
+} from '@alembic/agent/tools';
 import type { DashboardOperationHandler } from '#tools/adapters/DashboardOperations.js';
-import type { ToolExecutionAdapter, ToolExecutionRequest } from '#tools/core/ToolContracts.js';
-import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
 
 export class DashboardOperationAdapter implements ToolExecutionAdapter {
   readonly kind = 'dashboard-operation' as const;

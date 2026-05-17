@@ -6,6 +6,12 @@
  *   - feedbackStore, recommendationPipeline, recommendationMetrics
  */
 
+import {
+  type CapabilityCatalog,
+  LightweightRouter,
+  UnifiedToolCatalog,
+  WorkflowRegistry,
+} from '@alembic/agent/tools';
 import type { SignalBus } from '@alembic/core/events';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import {
@@ -30,13 +36,9 @@ import { TerminalAdapter } from '#tools/adapters/TerminalAdapter.js';
 import { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
 import { TERMINAL_CAPABILITY_MANIFESTS } from '#tools/adapters/terminal-capabilities/index.js';
 import { WorkflowAdapter } from '#tools/adapters/WorkflowAdapter.js';
-import type { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
-import { UnifiedToolCatalog } from '#tools/catalog/UnifiedToolCatalog.js';
-import { LightweightRouter } from '#tools/core/LightweightRouter.js';
 import { ToolContextFactory } from '#tools/v2/adapter/ToolContextFactory.js';
 import { V2CapabilityCatalog } from '#tools/v2/adapter/V2CapabilityCatalog.js';
 import { V2ToolRouterAdapter } from '#tools/v2/adapter/V2ToolRouterAdapter.js';
-import { WorkflowRegistry } from '#tools/workflow/WorkflowRegistry.js';
 import { ToolForge } from '../../agent/forge/ToolForge.js';
 import {
   buildMcpToolCapabilities,
@@ -107,7 +109,7 @@ export function register(c: ServiceContainer) {
 
     catalog.setRouter(
       new LightweightRouter({
-        catalog,
+        catalog: catalog as unknown as CapabilityCatalog,
         adapters: [
           new DashboardOperationAdapter(DASHBOARD_OPERATION_HANDLERS),
           new TerminalAdapter({
@@ -143,7 +145,7 @@ export function register(c: ServiceContainer) {
     const signalBus = ct.singletons.signalBus as SignalBus | undefined;
     return new ToolForge(catalog, {
       signalBus,
-      capabilityCatalog: ct.get('capabilityCatalog') as CapabilityCatalog,
+      capabilityCatalog: catalog as unknown as CapabilityCatalog,
       workflowRegistry: ct.get('workflowRegistry') as WorkflowRegistry,
     });
   });

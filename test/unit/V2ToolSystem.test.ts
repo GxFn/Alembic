@@ -8,12 +8,12 @@
  *   4. Capability 权限拦截
  */
 
+import { BootstrapAnalyze } from '@alembic/agent/tools';
 import { describe, expect, test } from 'vitest';
 import { V2CapabilityCatalog } from '#tools/v2/adapter/V2CapabilityCatalog.js';
 import { V2ToolRouterAdapter } from '#tools/v2/adapter/V2ToolRouterAdapter.js';
 import { DeltaCache } from '#tools/v2/cache/DeltaCache.js';
 import { SearchCache } from '#tools/v2/cache/SearchCache.js';
-import { BootstrapAnalyze } from '#tools/v2/capabilities/BootstrapAnalyze.js';
 import { OutputCompressor } from '#tools/v2/compressor/OutputCompressor.js';
 import { TOOL_REGISTRY } from '#tools/v2/registry.js';
 import { ToolRouterV2 } from '#tools/v2/router.js';

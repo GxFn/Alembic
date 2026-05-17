@@ -1,4 +1,4 @@
-import type { ToolCapabilityManifest } from '#tools/catalog/CapabilityManifest.js';
+import type { ToolCapabilityManifest } from '@alembic/agent/tools';
 import {
   COMMON_TERMINAL_FIELDS,
   SHELL_SELECTOR_FIELD,

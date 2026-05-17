@@ -1,4 +1,4 @@
-import type { ToolCapabilityManifest } from '#tools/catalog/CapabilityManifest.js';
+import type { ToolCapabilityManifest } from '@alembic/agent/tools';
 import {
   TERMINAL_EVALS,
   TERMINAL_KIND,

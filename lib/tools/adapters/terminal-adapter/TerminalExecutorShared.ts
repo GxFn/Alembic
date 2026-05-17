@@ -1,11 +1,14 @@
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
+import type {
+  ToolExecutionRequest,
+  ToolResultEnvelope,
+  ToolResultStatus,
+} from '@alembic/agent/tools';
 import { sandboxExec } from '#sandbox/SandboxExecutor.js';
 import { buildSandboxProfile } from '#sandbox/SandboxPolicy.js';
 import type { TerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
-import type { ToolExecutionRequest } from '#tools/core/ToolContracts.js';
-import type { ToolResultEnvelope, ToolResultStatus } from '#tools/core/ToolResultEnvelope.js';
 import { recordTerminalAudit } from './TerminalAudit.js';
 
 export const execFileAsync = promisify(execFile);

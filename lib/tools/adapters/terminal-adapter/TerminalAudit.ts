@@ -1,5 +1,4 @@
-import type { ToolExecutionRequest } from '#tools/core/ToolContracts.js';
-import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
+import type { ToolExecutionRequest, ToolResultEnvelope } from '@alembic/agent/tools';
 
 interface TerminalAuditSinkLike {
   log(entry: TerminalAuditEntry): void | Promise<void>;

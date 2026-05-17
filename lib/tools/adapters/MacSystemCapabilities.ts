@@ -1,4 +1,4 @@
-import type { ToolCapabilityManifest } from '#tools/catalog/CapabilityManifest.js';
+import type { ToolCapabilityManifest } from '@alembic/agent/tools';
 
 const MAC_READ_RISK = {
   sideEffect: false,

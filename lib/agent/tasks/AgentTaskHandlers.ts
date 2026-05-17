@@ -5,7 +5,7 @@
  * calls and, for relation discovery, delegate to AgentService.run().
  */
 
-import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
+import type { ToolResultEnvelope } from '@alembic/agent/tools';
 import { type AgentService, runRelationDiscovery } from '../service/index.js';
 
 interface TaskAiProvider {

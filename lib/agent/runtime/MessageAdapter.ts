@@ -11,7 +11,7 @@
  * @module core/MessageAdapter
  */
 
-import { isToolResultEnvelope } from '#tools/core/ToolResultPresenter.js';
+import { isToolResultEnvelope } from '@alembic/agent/tools';
 import type { ContextWindow } from '../context/ContextWindow.js';
 import { limitToolResult } from '../context/ContextWindow.js';
 

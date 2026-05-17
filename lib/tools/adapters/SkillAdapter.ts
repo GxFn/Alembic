@@ -1,8 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import type {
+  ToolExecutionAdapter,
+  ToolExecutionRequest,
+  ToolResultEnvelope,
+  ToolResultStatus,
+} from '@alembic/agent/tools';
 import { getProjectSkillsPath } from '@alembic/core/infrastructure/config/Paths';
-import type { ToolExecutionAdapter, ToolExecutionRequest } from '#tools/core/ToolContracts.js';
-import type { ToolResultEnvelope, ToolResultStatus } from '#tools/core/ToolResultEnvelope.js';
 import { INJECTABLE_SKILLS_DIR } from '../../shared/package-assets.js';
 
 type SkillSource = 'builtin' | 'project';

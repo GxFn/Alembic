@@ -19,17 +19,21 @@
  * 整合路由 → handlers/consolidated.js
  */
 
+import {
+  CapabilityCatalog,
+  LightweightRouter,
+  type ToolActor,
+  type ToolCallSource,
+  type ToolResultEnvelope,
+  type ToolRouterContract,
+  type ToolSurface,
+} from '@alembic/agent/tools';
 import { CapabilityProbe } from '@alembic/core/core/capability/CapabilityProbe';
 import Logger from '@alembic/core/logging';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { McpServer as SdkMcpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { CapabilityCatalog } from '#tools/catalog/CapabilityCatalog.js';
-import { LightweightRouter } from '#tools/core/LightweightRouter.js';
-import type { ToolActor, ToolCallSource, ToolSurface } from '#tools/core/ToolCallContext.js';
-import type { ToolRouterContract } from '#tools/core/ToolContracts.js';
-import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
 import { applyPendingAutoApprove, markAutoApproveNeeded } from './autoApproveInjector.js';
 import { envelope } from './envelope.js';
 import { wrapHandler } from './errorHandler.js';
