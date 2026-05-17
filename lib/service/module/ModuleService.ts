@@ -14,7 +14,7 @@ import {
   join as _pathJoin,
   relative,
 } from 'node:path';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { getDiscovererRegistry } from '@alembic/core/project-intelligence';
 import {
   type AgentService,

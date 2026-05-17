@@ -16,8 +16,8 @@
  */
 
 import { isConsumable, isDegraded } from '@alembic/core/domain/knowledge/Lifecycle';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
+import Logger from '@alembic/core/logging';
 import type { KnowledgeRepository, SourceRefRepository } from '@alembic/core/repositories';
 import {
   assessFileImpact,

@@ -215,7 +215,7 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
       }
     } catch (err: unknown) {
       // CandidateAggregator 加载失败时降级：不去重，但记录日志
-      const { default: Logger } = await import('@alembic/core/infrastructure/logging/Logger');
+      const { default: Logger } = await import('@alembic/core/logging');
       Logger.getInstance().warn(
         `[submitKnowledgeBatch] CandidateAggregator 加载失败，跳过去重: ${err instanceof Error ? err.message : String(err)}`
       );

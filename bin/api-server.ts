@@ -7,7 +7,7 @@
 
 process.env.ALEMBIC_API_SERVER = '1';
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import Bootstrap from '../lib/bootstrap.js';
 import HttpServer from '../lib/http/HttpServer.js';

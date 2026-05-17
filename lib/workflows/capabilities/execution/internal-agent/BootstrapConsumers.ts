@@ -10,7 +10,7 @@
  */
 
 import { buildTierReflection, saveDimensionCheckpoint } from '@alembic/core/host-agent-workflows';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import type { SessionStore } from '#agent/memory/SessionStore.js';
 import type { AgentRunResult } from '#agent/service/index.js';

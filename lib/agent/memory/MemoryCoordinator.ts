@@ -14,7 +14,7 @@
  * @module MemoryCoordinator
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { ActiveContext } from './ActiveContext.js';
 import type { DimensionReportInput, SessionStore } from './SessionStore.js';
 

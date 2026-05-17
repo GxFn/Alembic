@@ -18,7 +18,7 @@
  *   // 5 秒内的多次 push 会合并为一次 batch 回调
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { Disposable } from '@alembic/core/shared/lifecycle';
 
 const DEFAULT_WINDOW_MS = 5000; // 5 秒聚合窗口

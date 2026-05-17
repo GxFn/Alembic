@@ -3,7 +3,7 @@ import { extname as pathExtname, join as pathJoin, relative as pathRelative } fr
 // ─── v3.1: Multi-Language Discovery + Enhancement ────────
 import { initEnhancementRegistry } from '@alembic/core/core/enhancement';
 // ─── P3: Infrastructure ──────────────────────────────
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 // ─── v3.0: AST ProjectGraph ──────────────────────────
 import { ProjectGraph } from '@alembic/core/project-intelligence';
 import { unwrapRawDb } from '@alembic/core/search';

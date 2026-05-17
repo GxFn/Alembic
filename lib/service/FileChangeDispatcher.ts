@@ -8,7 +8,7 @@
  * 返回给路由层，路由层再透传到 HTTP 响应体（供 VSCode 扩展弹窗使用）。
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type {
   FileChangeEvent,
   FileChangeEventSource,

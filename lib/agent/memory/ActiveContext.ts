@@ -20,7 +20,7 @@
  * @module ActiveContext
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { ToolResultEnvelope } from '#tools/core/ToolResultEnvelope.js';
 import type { DistilledContext } from './memory-flush-contract.js';
 

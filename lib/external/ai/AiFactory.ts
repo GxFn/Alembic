@@ -7,7 +7,7 @@
  * 支持: google-gemini, openai, deepseek, claude, ollama, mock
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { ClaudeProvider } from './providers/ClaudeProvider.js';
 import { DeepSeekProvider } from './providers/DeepSeekProvider.js';
 import { GoogleGeminiProvider } from './providers/GoogleGeminiProvider.js';

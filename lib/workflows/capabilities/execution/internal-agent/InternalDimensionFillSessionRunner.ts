@@ -1,5 +1,5 @@
 import { TierScheduler } from '@alembic/core/host-agent-workflows';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/project-intelligence';
 import type {
   AgentRunResult,

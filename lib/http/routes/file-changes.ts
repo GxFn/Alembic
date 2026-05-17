@@ -12,7 +12,7 @@
  * @module http/routes/file-changes
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type {
   FileChangeEvent,
   FileChangeEventSource,

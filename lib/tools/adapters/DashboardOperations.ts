@@ -1,4 +1,4 @@
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { ToolCapabilityManifest } from '#tools/catalog/CapabilityManifest.js';
 import type { ToolExecutionRequest } from '#tools/core/ToolContracts.js';
 import type { ServiceContainer } from '../../injection/ServiceContainer.js';

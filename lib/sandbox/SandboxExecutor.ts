@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { buildSandboxEnvironment } from './SandboxEnvironment.js';
 import { type ProxyHandle, startSandboxProxy } from './SandboxNetworkProxy.js';
 import type { SandboxProfile } from './SandboxPolicy.js';

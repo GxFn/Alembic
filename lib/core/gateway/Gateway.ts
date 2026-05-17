@@ -1,5 +1,5 @@
 import EventEmitter from 'node:events';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { InternalError } from '@alembic/core/shared/errors/BaseError';
 import { v4 as uuidv4 } from 'uuid';
 

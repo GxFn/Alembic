@@ -14,7 +14,7 @@
  *   - 反馈闪环: 利用 FeedbackStore 调整排序权重
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { FeedbackStore } from './FeedbackStore.js';
 import type { SkillHooks } from './SkillHooks.js';
 import type {

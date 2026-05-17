@@ -10,7 +10,7 @@
  */
 
 import type { CapabilityProbe } from '@alembic/core/core/capability/CapabilityProbe';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { NextFunction, Request, Response } from 'express';
 
 const logger = Logger.getInstance();

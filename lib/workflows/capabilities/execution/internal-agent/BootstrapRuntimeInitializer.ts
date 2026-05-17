@@ -1,5 +1,5 @@
 import path from 'node:path';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { IncrementalPlan } from '@alembic/core/types/workflows';
 import { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import { MemoryEmbeddingStore } from '#agent/memory/MemoryEmbeddingStore.js';

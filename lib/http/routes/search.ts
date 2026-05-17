@@ -3,7 +3,7 @@
  * 统一搜索接口 - 搜 Recipe（含所有知识类型）
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import express, { type Request, type Response } from 'express';
 import {
   ContextAwareSearchBody,

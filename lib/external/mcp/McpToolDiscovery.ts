@@ -12,7 +12,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { McpToolDeclaration } from './McpCapabilityProjection.js';
 
 interface McpServerConfig {

@@ -4,7 +4,7 @@
  */
 
 import { basename } from 'node:path';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { LanguageService } from '@alembic/core/project-intelligence';
 import express, { type Request, type Response } from 'express';
 import {

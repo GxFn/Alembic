@@ -2,7 +2,7 @@ import {
   type DimensionCheckpoint,
   loadDimensionCheckpoints,
 } from '@alembic/core/host-agent-workflows';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { IncrementalPlan } from '@alembic/core/types/workflows';
 import type { SessionStore } from '#agent/memory/SessionStore.js';
 import type { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';

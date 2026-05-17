@@ -27,7 +27,7 @@
  * @module IntentClassifier
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { AiProvider } from '#external/ai/AiProvider.js';
 
 /** 意图类型 */

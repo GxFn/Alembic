@@ -4,7 +4,7 @@
  * 替代 recipes.js + candidates.js （旧路由继续保留用于向后兼容）
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { ioLimit } from '@alembic/core/shared/concurrency';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import {

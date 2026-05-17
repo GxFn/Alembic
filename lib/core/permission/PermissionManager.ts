@@ -1,4 +1,4 @@
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { PermissionDenied } from '@alembic/core/shared/errors/BaseError';
 import type { Constitution } from '../constitution/Constitution.js';
 

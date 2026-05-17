@@ -3,7 +3,7 @@
  * 内存缓存模式
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { type CacheService, cacheService as memoryCacheService } from './CacheService.js';
 
 export class UnifiedCacheAdapter {

@@ -18,7 +18,7 @@
 
 import crypto from 'node:crypto';
 import { readFileSync, unlinkSync } from 'node:fs';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import express, { type Request, type Response } from 'express';

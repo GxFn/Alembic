@@ -12,7 +12,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { DataPath, WriteZone } from '@alembic/core/infrastructure/io';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { computeContentHash } from '@alembic/core/shared/content-hash';
 
 export class GraphCache {

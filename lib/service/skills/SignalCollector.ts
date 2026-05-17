@@ -41,7 +41,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
 import type { Startable } from '@alembic/core/shared/lifecycle';
 import pathGuard from '@alembic/core/shared/PathGuard';

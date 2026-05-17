@@ -7,7 +7,7 @@
  */
 
 import { COUNTABLE_LIFECYCLES } from '@alembic/core/domain/knowledge/Lifecycle';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import express, { type Request, type Response } from 'express';
 import { type AgentService, runRelationDiscovery } from '#agent/service/index.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';

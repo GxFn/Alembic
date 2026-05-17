@@ -13,7 +13,7 @@
  *   4. 响应归一化 → ChatWithToolsResult
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type {
   ChatWithToolsResult,
   FunctionCallResult,

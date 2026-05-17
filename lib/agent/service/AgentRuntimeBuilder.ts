@@ -1,4 +1,4 @@
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { ToolRouterContract } from '#tools/core/ToolContracts.js';
 import { CapabilityRegistry } from '../capabilities/index.js';
 import { type Policy, PolicyEngine } from '../policies/index.js';

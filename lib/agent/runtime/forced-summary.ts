@@ -12,7 +12,7 @@
  * @module forced-summary
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { AiProvider, ChatWithToolsResult } from '#external/ai/AiProvider.js';
 import { cleanFinalAnswer } from './final-answer.js';
 

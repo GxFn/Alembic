@@ -3,7 +3,7 @@ import type {
   KnowledgeRescanExecutionDecision,
   RescanExecutionMode,
 } from '@alembic/core/host-agent-workflows';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { BootstrapDedup } from '@alembic/core/service/bootstrap/BootstrapDedup';
 
 const logger = Logger.getInstance();

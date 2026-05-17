@@ -21,8 +21,8 @@ import type {
 } from '@alembic/core/guard';
 import type { EventBus } from '@alembic/core/infrastructure/event/EventBus';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
-import type Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
+import type Logger from '@alembic/core/logging';
 // ── Core AST / Discovery / Enhancement ──
 // ── Shared Types ──
 import type {

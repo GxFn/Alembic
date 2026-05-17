@@ -15,7 +15,7 @@
  * @module insight-gate
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import {
   EvidenceCollector,
   type EvidenceCollectorResult,

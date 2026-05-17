@@ -13,7 +13,7 @@
  * 本类只负责实时聚合 + 对外暴露接口。
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { FeedbackStore } from './FeedbackStore.js';
 import type { RecommendationMetricsSnapshot, ScoredRecommendation } from './types.js';
 

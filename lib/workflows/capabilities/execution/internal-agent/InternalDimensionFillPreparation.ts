@@ -1,4 +1,4 @@
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/project-intelligence';
 import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
 import type { PipelineFillView } from '@alembic/core/types/snapshot-views';

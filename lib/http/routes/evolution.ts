@@ -14,7 +14,7 @@
  * @module http/routes/evolution
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
 import type { WarningRepository } from '@alembic/core/repository/evolution/WarningRepository';
 import type { ProposalExecutor } from '@alembic/core/service/evolution/ProposalExecutor';

@@ -13,7 +13,7 @@
  * @module EpisodicConsolidator
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 
 // ────────────────────────────────────────────────────────────
 // 本地类型定义

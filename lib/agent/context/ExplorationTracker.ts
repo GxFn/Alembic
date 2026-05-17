@@ -22,8 +22,8 @@
  * @module ExplorationTracker
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
+import Logger from '@alembic/core/logging';
 import type {
   ExplorationBudget,
   ExplorationPhase,

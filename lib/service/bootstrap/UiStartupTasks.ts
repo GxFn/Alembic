@@ -10,7 +10,7 @@
  *   6. signalSubscription:    订阅 SignalBus（信号驱动提案评估）
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 
 const logger = Logger.getInstance();
 

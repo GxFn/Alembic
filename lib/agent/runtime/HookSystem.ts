@@ -13,7 +13,7 @@
  * @module core/HookSystem
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 
 // ── Hook Events ──
 

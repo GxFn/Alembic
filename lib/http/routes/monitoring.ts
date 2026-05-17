@@ -3,7 +3,7 @@
  * 提供性能指标、错误统计和缓存状态的查询接口
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import express from 'express';
 import { getCacheAdapter } from '../../infrastructure/cache/UnifiedCacheAdapter.js';
 import { getErrorTracker } from '../../infrastructure/monitoring/ErrorTracker.js';

@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DataPath, WriteZone } from '@alembic/core/infrastructure/io';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import type { Disposable } from '@alembic/core/shared/lifecycle';
 import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';

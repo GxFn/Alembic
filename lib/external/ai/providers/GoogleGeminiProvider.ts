@@ -7,7 +7,7 @@
  *     支持 toolChoice: 'auto' | 'required' | 'none'
  */
 
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import {
   AiProvider,
   type AiProviderConfig,

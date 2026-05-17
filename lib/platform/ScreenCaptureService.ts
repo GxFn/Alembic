@@ -10,7 +10,7 @@
 import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, statSync as fstatSync } from 'node:fs';
 import { join } from 'node:path';
-import Logger from '@alembic/core/infrastructure/logging/Logger';
+import Logger from '@alembic/core/logging';
 import { RESOURCES_DIR } from '../shared/package-assets.js';
 
 const logger = Logger.getInstance();
