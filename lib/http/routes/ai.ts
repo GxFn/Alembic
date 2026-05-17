@@ -5,6 +5,7 @@
 
 import { createProvider, getModelRegistry, PROVIDER_CONFIGS } from '@alembic/agent/ai';
 import { ConversationStore } from '@alembic/agent/context';
+import { PRESETS } from '@alembic/agent/profiles';
 import {
   type AgentRunInput,
   type AgentService,
@@ -12,6 +13,13 @@ import {
   runTranslationJson,
   type SystemRunContextFactory,
 } from '@alembic/agent/service';
+import {
+  taskCheckAndSubmit,
+  taskDiscoverAllRelations,
+  taskFullEnrich,
+  taskGuardFullScan,
+  taskQualityAudit,
+} from '@alembic/agent/tasks';
 import type { ToolCapabilityManifest, ToolResultEnvelope } from '@alembic/agent/tools';
 import Logger from '@alembic/core/logging';
 import { ValidationError } from '@alembic/core/shared/errors/index';
@@ -24,14 +32,6 @@ import {
 } from '@alembic/core/shared/WorkspaceSettingsStore';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
-import { PRESETS } from '../../agent/profiles/presets.js';
-import {
-  taskCheckAndSubmit,
-  taskDiscoverAllRelations,
-  taskFullEnrich,
-  taskGuardFullScan,
-  taskQualityAudit,
-} from '../../agent/tasks/AgentTaskHandlers.js';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import {

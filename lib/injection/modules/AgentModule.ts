@@ -6,6 +6,7 @@
  *   - feedbackStore, recommendationPipeline, recommendationMetrics
  */
 
+import { ToolForge } from '@alembic/agent/forge';
 import {
   AgentProfileCompiler,
   AgentProfileRegistry,
@@ -38,7 +39,6 @@ import { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionM
 import { TERMINAL_CAPABILITY_MANIFESTS } from '#tools/adapters/terminal-capabilities/index.js';
 import { WorkflowAdapter } from '#tools/adapters/WorkflowAdapter.js';
 import { ToolContextFactory } from '#tools/v2/adapter/ToolContextFactory.js';
-import { ToolForge } from '../../agent/forge/ToolForge.js';
 import {
   buildMcpToolCapabilities,
   type McpToolDeclaration,
@@ -52,6 +52,15 @@ import { RecommendationPipeline } from '../../service/skills/RecommendationPipel
 import { RuleRecallStrategy } from '../../service/skills/RuleRecallStrategy.js';
 import { SkillHooks } from '../../service/skills/SkillHooks.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
+
+type HostToolForgeConstructor = new (
+  registry: unknown,
+  options?: {
+    signalBus?: SignalBus;
+    capabilityCatalog?: unknown;
+    workflowRegistry?: unknown;
+  }
+) => InstanceType<typeof ToolForge>;
 
 export function register(c: ServiceContainer) {
   // ── V2 Tool System ─────────────────────────────────────────────────
@@ -142,7 +151,8 @@ export function register(c: ServiceContainer) {
   c.singleton('toolForge', (ct: ServiceContainer) => {
     const catalog = ct.get('toolRegistry') as UnifiedToolCatalog;
     const signalBus = ct.singletons.signalBus as SignalBus | undefined;
-    return new ToolForge(catalog, {
+    const AgentToolForge = ToolForge as unknown as HostToolForgeConstructor;
+    return new AgentToolForge(catalog, {
       signalBus,
       capabilityCatalog: catalog as unknown as CapabilityCatalog,
       workflowRegistry: ct.get('workflowRegistry') as WorkflowRegistry,

@@ -16,17 +16,28 @@ const allowedByPath = new Map(allowedCallSites.map((entry) => [entry.path, entry
 const violations = [];
 
 const agentImportsByFile = new Map();
+const localAgentRelativeImportsByFile = new Map();
+const localAgentRelativeImports = [];
 for (const root of scanRoots) {
-  for (const file of collectTypeScriptFiles(join(repoRoot, root))) {
+  for (const file of collectSourceFiles(join(repoRoot, root))) {
     const relFile = toRepoPath(file);
     if (isIgnored(relFile, ignoredPrefixes)) {
       continue;
     }
-    const specifiers = extractImportSpecifiers(readFileSync(file, 'utf8')).filter((specifier) =>
-      specifier.startsWith('#agent/')
+    const specifiers = extractImportSpecifiers(readFileSync(file, 'utf8'));
+    const agentSpecifiers = specifiers.filter((specifier) => specifier.startsWith('#agent/'));
+    if (agentSpecifiers.length > 0) {
+      agentImportsByFile.set(relFile, uniqueSorted(agentSpecifiers));
+    }
+    const relativeAgentSpecifiers = specifiers.filter((specifier) =>
+      isLocalAgentRelativeSpecifier(specifier, relFile)
     );
-    if (specifiers.length > 0) {
-      agentImportsByFile.set(relFile, uniqueSorted(specifiers));
+    if (relativeAgentSpecifiers.length > 0) {
+      const sorted = uniqueSorted(relativeAgentSpecifiers);
+      localAgentRelativeImportsByFile.set(relFile, sorted);
+      for (const specifier of sorted) {
+        localAgentRelativeImports.push({ file: relFile, specifier });
+      }
     }
   }
 }
@@ -65,6 +76,12 @@ for (const entry of allowedCallSites) {
   }
 }
 
+for (const offender of localAgentRelativeImports) {
+  violations.push(
+    `Local Agent relative import remains in ${offender.file}: ${offender.specifier}. Use @alembic/agent public subpaths outside preserved local Agent implementation files.`
+  );
+}
+
 const aiRules = config.aiProviderRules ?? {};
 const aiScanRoots = aiRules.scanRoots ?? scanRoots;
 const aiIgnoredPrefixes = new Set(aiRules.ignoredPathPrefixes ?? ['lib/external/ai/']);
@@ -72,7 +89,7 @@ const agentAiImportsByFile = new Map();
 const localAiProviderImports = [];
 
 for (const root of aiScanRoots) {
-  for (const file of collectTypeScriptFiles(join(repoRoot, root))) {
+  for (const file of collectSourceFiles(join(repoRoot, root))) {
     const relFile = toRepoPath(file);
     if (isIgnored(relFile, aiIgnoredPrefixes)) {
       continue;
@@ -119,7 +136,7 @@ const deferredToolImportsByFile = new Map();
 const localCommonToolImports = [];
 
 for (const root of toolSystemScanRoots) {
-  for (const file of collectTypeScriptFiles(join(repoRoot, root))) {
+  for (const file of collectSourceFiles(join(repoRoot, root))) {
     const relFile = toRepoPath(file);
     if (isIgnored(relFile, toolSystemIgnoredPrefixes)) {
       continue;
@@ -190,7 +207,7 @@ const agentContextImportsByFile = new Map();
 const localMemoryContextImports = [];
 
 for (const root of memoryContextScanRoots) {
-  for (const file of collectTypeScriptFiles(join(repoRoot, root))) {
+  for (const file of collectSourceFiles(join(repoRoot, root))) {
     const relFile = toRepoPath(file);
     if (isIgnored(relFile, memoryContextIgnoredPrefixes)) {
       continue;
@@ -235,7 +252,7 @@ const hostContractImportsBySurface = new Map(
 const localHostContractImports = [];
 
 for (const root of hostContractScanRoots) {
-  for (const file of collectTypeScriptFiles(join(repoRoot, root))) {
+  for (const file of collectSourceFiles(join(repoRoot, root))) {
     const relFile = toRepoPath(file);
     if (isIgnored(relFile, hostContractIgnoredPrefixes)) {
       continue;
@@ -262,7 +279,7 @@ for (const offender of localHostContractImports) {
 }
 
 const toolRules = config.toolBoundaryRules ?? [];
-const toolFiles = collectTypeScriptFiles(join(repoRoot, 'lib', 'tools')).map(toRepoPath);
+const toolFiles = collectSourceFiles(join(repoRoot, 'lib', 'tools')).map(toRepoPath);
 const toolClassificationCounts = new Map();
 
 for (const relFile of toolFiles) {
@@ -307,6 +324,8 @@ if (violations.length > 0) {
 
 console.log('Agent extraction boundary check passed');
 console.log(`  product #agent call sites: ${agentImportsByFile.size}`);
+console.log(`  local Agent relative import files: ${localAgentRelativeImportsByFile.size}`);
+console.log(`  local Agent relative imports: ${localAgentRelativeImports.length}`);
 console.log(`  @alembic/agent/ai consumer files: ${agentAiImportsByFile.size}`);
 console.log(`  local AI provider consumers: ${localAiProviderImports.length}`);
 console.log(`  @alembic/agent/tools consumer files: ${agentToolImportsByFile.size}`);
@@ -329,7 +348,7 @@ for (const [classification, count] of [...toolClassificationCounts].sort(([a], [
   console.log(`  ${classification}: ${count}`);
 }
 
-function collectTypeScriptFiles(dir) {
+function collectSourceFiles(dir) {
   if (!existsSync(dir)) {
     return [];
   }
@@ -337,12 +356,24 @@ function collectTypeScriptFiles(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      files.push(...collectTypeScriptFiles(fullPath));
-    } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+      files.push(...collectSourceFiles(fullPath));
+    } else if (entry.isFile() && isSourceFile(entry.name)) {
       files.push(fullPath);
     }
   }
   return files;
+}
+
+function isSourceFile(name) {
+  return (
+    name.endsWith('.ts') ||
+    name.endsWith('.tsx') ||
+    name.endsWith('.mts') ||
+    name.endsWith('.cts') ||
+    name.endsWith('.js') ||
+    name.endsWith('.mjs') ||
+    name.endsWith('.cjs')
+  );
 }
 
 function extractImportSpecifiers(source) {
@@ -395,6 +426,16 @@ function isLocalAiProviderSpecifier(specifier, importerRelFile) {
   return rel === 'lib/external/ai' || rel.startsWith('lib/external/ai/');
 }
 
+function isLocalAgentRelativeSpecifier(specifier, importerRelFile) {
+  if (!specifier.startsWith('.')) {
+    return false;
+  }
+  const importerDir = dirname(join(repoRoot, importerRelFile));
+  const resolved = resolve(importerDir, specifier);
+  const rel = stripSourceExtension(toRepoPath(resolved));
+  return rel === 'lib/agent' || rel.startsWith('lib/agent/');
+}
+
 function isLocalCommonToolSpecifier(specifier, importerRelFile) {
   if (specifier.startsWith('#tools/core/')) {
     return true;
@@ -413,7 +454,7 @@ function isLocalCommonToolSpecifier(specifier, importerRelFile) {
   }
   const importerDir = dirname(join(repoRoot, importerRelFile));
   const resolved = resolve(importerDir, specifier);
-  const rel = toRepoPath(resolved).replace(/\.js$/, '.ts');
+  const rel = stripSourceExtension(toRepoPath(resolved));
   return isCommonToolPath(rel);
 }
 
@@ -438,7 +479,7 @@ function isLocalMemoryContextSpecifier(specifier, importerRelFile) {
   }
   const importerDir = dirname(join(repoRoot, importerRelFile));
   const resolved = resolve(importerDir, specifier);
-  const rel = toRepoPath(resolved).replace(/\.js$/, '.ts');
+  const rel = stripSourceExtension(toRepoPath(resolved));
   return rel.startsWith('lib/agent/memory/') || rel.startsWith('lib/agent/context/');
 }
 
@@ -456,13 +497,17 @@ function isLocalHostContractSpecifier(specifier, importerRelFile) {
   }
   const importerDir = dirname(join(repoRoot, importerRelFile));
   const resolved = resolve(importerDir, specifier);
-  const rel = toRepoPath(resolved).replace(/\.js$/, '.ts');
+  const rel = stripSourceExtension(toRepoPath(resolved));
   return (
     rel.startsWith('lib/agent/service/') ||
     rel.startsWith('lib/agent/runtime/') ||
     rel.startsWith('lib/agent/prompts/') ||
     rel.startsWith('lib/agent/domain/')
   );
+}
+
+function stripSourceExtension(rel) {
+  return rel.replace(/\.(?:c|m)?(?:t|j)sx?$/, '');
 }
 
 function toRepoPath(file) {

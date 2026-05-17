@@ -2,11 +2,11 @@
   "version": 1,
   "plan": "docs/AlembicAgent/alembic-agent-extraction-boundary-plan-2026-05-17.md",
   "localAgentPolicy": {
-    "status": "preserve-until-alembic-agent-runtime-replacement",
+    "status": "preserve-until-wave-4-deletion-review",
     "replacementPackage": "@alembic/agent",
     "replacementPhase": "phase-8-after-agent-phase-3-and-phase-4",
     "notes": [
-      "Alembic keeps lib/agent/** until AlembicAgent has provider/tool runtime coverage and host entry tests.",
+      "Alembic keeps lib/agent/** until Wave 4 deletion review confirms no production consumers remain and host entry tests cover the replacement package.",
       "CLI, daemon, HTTP/API, Dashboard/native, IDE, Lark runtime, and product shell stay in Alembic."
     ]
   },
@@ -152,6 +152,46 @@
       ],
       "nextPhaseAllowed": true,
       "nextPhase": "After another host smoke pass, delete or quarantine unused local generic Tool V2 implementation files while keeping host adapters and ToolContextFactory."
+    },
+    "phase8RemainingLocalAgentCallsiteCutover": {
+      "status": "closed",
+      "stage": "wave-3-remaining-local-agent-callsite-cutover",
+      "planSection": "alembic-agent-cutover-plugin-cleanup-wave-3-acceptance-next-plan-2026-05-17 §5.2",
+      "completedScope": [
+        "Alembic production AgentModule ToolForge wiring imports ToolForge from @alembic/agent/forge instead of the preserved local lib/agent/forge implementation.",
+        "HTTP AI routes import PRESETS from @alembic/agent/profiles and task handlers from @alembic/agent/tasks instead of the preserved local lib/agent profiles/tasks implementation.",
+        "Boundary lint now resolves relative source imports from lib/bin/scripts and blocks production-side imports that target local lib/agent/** outside preserved local implementation files."
+      ],
+      "preservedPaths": [
+        "lib/agent/**",
+        "lib/tools/v2/**",
+        "lib/tools/v2/adapter/ToolContextFactory.ts",
+        "lib/tools/adapters/**"
+      ],
+      "validation": [
+        "Agent public remaining-host-contract smoke import passed for @alembic/agent/forge, @alembic/agent/tasks, and @alembic/agent/profiles.",
+        "npm run lint:agent-extraction-boundary: passed; product #agent call sites 1, local Agent relative import files 0, local Agent relative imports 0, local service/runtime/prompts/domain consumers 0.",
+        "Production import scan for relative local lib/agent/** call sites outside lib/agent/**: no matches; only the classified #agent import remains in the local Tool V2 deletion candidate.",
+        "npm run build:check: passed.",
+        "npm run test:unit -- test/unit/AgentTaskHandlers.test.ts test/unit/ToolForgeIntegration.test.ts test/unit/AgentModuleBoundaries.test.ts: passed; 3 files / 15 tests.",
+        "npm run lint -- --diagnostic-level=error: passed.",
+        "npm run check: passed; existing repository Biome warnings are non-fatal.",
+        "npm run build: passed.",
+        "node dist/bin/cli.js status --json: passed; workspace detected, database not found in current test environment."
+      ],
+      "risks": [
+        "Local lib/agent/** remains present as a deletion candidate and may still be referenced by tests or preserved local implementation internals.",
+        "Local lib/tools/v2/** remains present as a Wave 4 deletion or quarantine candidate; ToolContextFactory stays host-owned.",
+        "The remaining #agent import lives under local Tool V2 generic deletion candidates and should be resolved by Wave 4 rather than by expanding Alembic production dependencies."
+      ],
+      "wave4EntryConditions": [
+        "Production lib/bin/scripts local lib/agent/** relative imports remain 0 outside lib/agent/**.",
+        "Agent public contract tests and self-reference import smoke for @alembic/agent/forge, @alembic/agent/tasks, and @alembic/agent/profiles pass.",
+        "Alembic boundary lint, build:check, representative Agent task/forge/module tests, check, build, and CLI status smoke pass.",
+        "Total-control acceptance documentation is backfilled with completion scope, commit hash, validation commands/results, residual risks, and next steps."
+      ],
+      "nextPhaseAllowed": true,
+      "nextPhase": "Wave 4 may delete or quarantine duplicate local Agent and Tool V2 implementation files only after total-control acceptance review confirms the recorded validation and preserves host adapters."
     }
   },
   "aiProviderRules": {
@@ -295,8 +335,17 @@
     }
   ],
   "agentImportRules": {
-    "scanRoots": ["lib", "bin"],
+    "scanRoots": ["lib", "bin", "scripts"],
     "ignoredPathPrefixes": ["lib/agent/"],
+    "relativeLocalAgentImportPolicy": {
+      "status": "blocked-outside-preserved-local-agent-implementation",
+      "replacement": "@alembic/agent public subpaths",
+      "localDeletionCandidate": "lib/agent/**",
+      "notes": [
+        "Relative imports that resolve to lib/agent/** are forbidden in production lib/bin/scripts sources outside lib/agent/**.",
+        "Wave 3 cut the final production ToolForge, profiles, and task handler call sites to @alembic/agent/forge, @alembic/agent/profiles, and @alembic/agent/tasks."
+      ]
+    },
     "allowedCallSites": [
       {
         "path": "lib/tools/v2/capabilities/CapabilityV2.ts",
