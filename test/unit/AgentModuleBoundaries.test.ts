@@ -234,16 +234,20 @@ describe('agent module boundaries', () => {
     ];
     expect(retiredFiles.filter((file) => existsSync(join(repoRoot, file)))).toEqual([]);
 
+    const retiredPersistenceSpecifiers = [
+      'checkpoint/BootstrapCheckpointStore.js',
+      'checkpoint/BootstrapRestoreState.js',
+      'reports/BootstrapCheckpointCleanup.js',
+      'reports/BootstrapReportHistoryStore.js',
+      'reports/BootstrapReportSnapshotConsumer.js',
+      'reports/BootstrapReportSnapshotWorkflow.js',
+      'reports/BootstrapReportTypes.js',
+      'reports/BootstrapReportWriter.js',
+      'reports/BootstrapSnapshotStore.js',
+    ].map((suffix) => ['#workflows', 'capabilities', 'persistence', suffix].join('/'));
+
     const retiredSpecifiers = new Set([
-      '#workflows/capabilities/persistence/checkpoint/BootstrapCheckpointStore.js',
-      '#workflows/capabilities/persistence/checkpoint/BootstrapRestoreState.js',
-      '#workflows/capabilities/persistence/reports/BootstrapCheckpointCleanup.js',
-      '#workflows/capabilities/persistence/reports/BootstrapReportHistoryStore.js',
-      '#workflows/capabilities/persistence/reports/BootstrapReportSnapshotConsumer.js',
-      '#workflows/capabilities/persistence/reports/BootstrapReportSnapshotWorkflow.js',
-      '#workflows/capabilities/persistence/reports/BootstrapReportTypes.js',
-      '#workflows/capabilities/persistence/reports/BootstrapReportWriter.js',
-      '#workflows/capabilities/persistence/reports/BootstrapSnapshotStore.js',
+      ...retiredPersistenceSpecifiers,
       '#workflows/common-capabilities/delivery/BootstrapDeliveryConsumer.js',
       '#workflows/capabilities/execution/internal-agent/consumers/BootstrapSemanticMemoryConsumer.js',
       '#external/mcp/handlers/bootstrap/shared/async-fill-helpers.js',

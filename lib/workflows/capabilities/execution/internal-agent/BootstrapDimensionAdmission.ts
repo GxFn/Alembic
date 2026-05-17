@@ -14,7 +14,7 @@ import {
   type DimensionCheckpoint,
   resolveIncrementalSkippedDimensions,
   restoreCheckpointDimensions,
-} from '#workflows/capabilities/persistence/DimensionCheckpoint.js';
+} from '#workflows/capabilities/execution/internal-agent/DimensionRestoreState.js';
 
 const logger = Logger.getInstance();
 

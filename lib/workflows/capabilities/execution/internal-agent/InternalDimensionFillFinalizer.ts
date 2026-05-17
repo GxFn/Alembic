@@ -1,4 +1,6 @@
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { WorkflowSnapshotSummary } from '@alembic/core/workflows/capabilities/persistence/WorkflowReportTypes';
+import { persistWorkflowResult } from '@alembic/core/workflows/capabilities/persistence/WorkflowResultPersistence';
 import {
   runWorkflowCompletionFinalizer,
   type WorkflowCompletionFinalizerResult,
@@ -15,8 +17,6 @@ import {
   consumeInternalDimensionCandidateRelations,
   type InternalDimensionFillSessionResult,
 } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillSessionRunner.js';
-import type { WorkflowSnapshotSummary } from '#workflows/capabilities/persistence/WorkflowReportTypes.js';
-import { persistWorkflowResult } from '#workflows/capabilities/persistence/WorkflowResultPersistence.js';
 
 type InternalDimensionFillRuntime = Awaited<ReturnType<typeof initializeBootstrapRuntime>>;
 
@@ -88,7 +88,7 @@ export async function finalizeInternalDimensionFill({
     workflowCompletion,
   });
 
-  const { totalTimeMs, snapshotId, snapshot } = await persistWorkflowResult({
+  const persistenceInput = {
     ctx: preparation.ctx,
     dataRoot: preparation.dataRoot,
     projectRoot: preparation.projectRoot,
@@ -108,7 +108,9 @@ export async function finalizeInternalDimensionFill({
     enableParallel: sessionResult.enableParallel,
     concurrency: sessionResult.concurrency,
     startedAtMs,
-  });
+  } as unknown as Parameters<typeof persistWorkflowResult>[0];
+
+  const { totalTimeMs, snapshotId, snapshot } = await persistWorkflowResult(persistenceInput);
 
   preparation.ctx.container.singletons._fileCache = null;
 

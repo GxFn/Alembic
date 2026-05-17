@@ -6,7 +6,7 @@ import { PersistentMemory } from '#agent/memory/PersistentMemory.js';
 import { SessionStore } from '#agent/memory/SessionStore.js';
 import type { IncrementalPlan } from '#types/workflows.js';
 import { DimensionContext } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
-import { syncRestoredSessionStoreDigests } from '#workflows/capabilities/persistence/DimensionCheckpoint.js';
+import { syncRestoredSessionStoreDigests } from '#workflows/capabilities/execution/internal-agent/DimensionRestoreState.js';
 
 const logger = Logger.getInstance();
 

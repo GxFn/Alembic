@@ -9,8 +9,8 @@ import {
   runWorkflowCompletionFinalizer,
   type WorkflowCompletionFinalizerDependencies,
 } from '#workflows/capabilities/completion/WorkflowCompletionFinalizer.js';
-import { BOOTSTRAP_COMPLETE_ACTIONS } from '#workflows/capabilities/execution/external/MissionBriefingSupport.js';
 import { generateSkill as generateWorkflowSkill } from '#workflows/capabilities/execution/WorkflowSkillCompletionCapability.js';
+import { BOOTSTRAP_COMPLETE_ACTIONS } from './MissionBriefingSupport.js';
 
 const logger = Logger.getInstance();
 
