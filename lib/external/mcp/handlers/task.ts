@@ -11,7 +11,7 @@
  * Architecture: Zero DB. Pure memory (IntentState) + SignalBus → JSONL signals.
  */
 
-import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
+import type { SignalBus } from '@alembic/core/events';
 import { notifyTaskProgress } from '#infra/notification/LarkNotifier.js';
 import type { ExtractedIntent } from '#service/task/IntentExtractor.js';
 import { extract as extractIntent } from '#service/task/IntentExtractor.js';

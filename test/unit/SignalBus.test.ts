@@ -1,5 +1,5 @@
-import type { Signal, SignalHandler } from '@alembic/core/infrastructure/signal/SignalBus';
-import { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
+import type { Signal, SignalHandler } from '@alembic/core/events';
+import { SignalBus } from '@alembic/core/events';
 import { describe, expect, test, vi } from 'vitest';
 
 /* ════════════════════════════════════════════

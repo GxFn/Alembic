@@ -12,8 +12,8 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join, normalize } from 'node:path';
+import { timerRegistry } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
-import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import type { FileChangeEvent } from '@alembic/core/types/reactive-evolution';
 import type { FileChangeDispatcher } from '../FileChangeDispatcher.js';
 import {

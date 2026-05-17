@@ -40,12 +40,12 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Startable } from '@alembic/core/events';
+import { timerRegistry } from '@alembic/core/events';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
 import Logger from '@alembic/core/logging';
 import type { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
-import type { Startable } from '@alembic/core/shared/lifecycle';
 import pathGuard from '@alembic/core/shared/PathGuard';
-import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import type { AgentService } from '#agent/service/index.js';
 import type { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
 import { EventAggregator } from './EventAggregator.js';
@@ -57,7 +57,7 @@ interface SignalCollectorOpts {
   auditRepo?: AuditRepositoryImpl | null;
   agentService?: AgentService | null;
   container?: ContainerLike | null;
-  signalBus?: import('@alembic/core/infrastructure/signal/SignalBus').SignalBus | null;
+  signalBus?: import('@alembic/core/events').SignalBus | null;
   mode?: string;
   intervalMs?: number;
   onSuggestions?: ((suggestions: Record<string, unknown>[]) => void) | null;
@@ -251,7 +251,7 @@ export class SignalCollector implements Startable {
   }
 
   /** 由 SignalBus 实时更新的维度信号快照 */
-  #updateDimension(signal: import('@alembic/core/infrastructure/signal/SignalBus').Signal): void {
+  #updateDimension(signal: import('@alembic/core/events').Signal): void {
     switch (signal.type) {
       case 'guard':
       case 'guard_blind_spot':

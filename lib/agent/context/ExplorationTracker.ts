@@ -22,7 +22,7 @@
  * @module ExplorationTracker
  */
 
-import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
+import type { SignalBus } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
 import type {
   ExplorationBudget,

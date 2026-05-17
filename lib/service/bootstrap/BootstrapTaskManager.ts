@@ -18,8 +18,7 @@
  *   bootstrap:all-completed — 全部任务完成
  */
 
-import type { EventBus } from '@alembic/core/infrastructure/event/EventBus';
-import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
+import type { EventBus, SignalBus } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
 import { getTestModeConfig } from '@alembic/core/shared/test-mode';
 

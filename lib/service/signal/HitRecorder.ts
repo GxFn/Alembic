@@ -12,10 +12,9 @@
  * @module service/signal/HitRecorder
  */
 
-import type { SignalBus, SignalType } from '@alembic/core/infrastructure/signal/SignalBus';
+import type { SignalBus, SignalType, Startable } from '@alembic/core/events';
+import { timerRegistry } from '@alembic/core/events';
 import { unwrapRawDb } from '@alembic/core/search';
-import type { Startable } from '@alembic/core/shared/lifecycle';
-import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 
 /** better-sqlite3 兼容类型（与 GuardCheckEngine 相同模式） */
 interface DatabaseLike {

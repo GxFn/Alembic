@@ -6,7 +6,7 @@
  *   - feedbackStore, recommendationPipeline, recommendationMetrics
  */
 
-import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
+import type { SignalBus } from '@alembic/core/events';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import {
   AgentProfileCompiler,

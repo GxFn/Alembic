@@ -9,6 +9,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { SignalBus } from '@alembic/core/events';
 import {
   ComplianceReporter,
   CoverageAnalyzer,
@@ -20,7 +21,6 @@ import {
   RuleLearner,
   ViolationsStore,
 } from '@alembic/core/guard';
-import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type {
   CodeEntityRepository,
   GuardViolationRepository,

@@ -9,7 +9,7 @@
 
 import path from 'node:path';
 import { JobStore } from '@alembic/core/daemon';
-import { EventBus } from '@alembic/core/infrastructure/event/EventBus';
+import { EventBus } from '@alembic/core/events';
 import { WriteZone } from '@alembic/core/infrastructure/io';
 import { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
 import Logger from '@alembic/core/logging';

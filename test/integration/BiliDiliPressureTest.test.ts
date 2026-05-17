@@ -41,7 +41,7 @@ let StagingManager: typeof import('@alembic/core/service/evolution/StagingManage
 let RedundancyAnalyzer: typeof import('@alembic/core/service/evolution/RedundancyAnalyzer').RedundancyAnalyzer;
 let ConfidenceRouter: typeof import('@alembic/core/service/knowledge/ConfidenceRouter').ConfidenceRouter;
 let SourceRefReconciler: typeof import('@alembic/core/service/knowledge/SourceRefReconciler').SourceRefReconciler;
-let SignalBus: typeof import('@alembic/core/infrastructure/signal/SignalBus').SignalBus;
+let SignalBus: typeof import('@alembic/core/events').SignalBus;
 let RuleLearner: typeof import('@alembic/core/guard').RuleLearner;
 let KnowledgeRepositoryImpl: typeof import('@alembic/core/repository/knowledge/KnowledgeRepository.impl').KnowledgeRepositoryImpl;
 let RecipeSourceRefRepositoryImpl: typeof import('@alembic/core/repository/sourceref/RecipeSourceRefRepository').RecipeSourceRefRepositoryImpl;
@@ -86,7 +86,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       import('@alembic/core/service/evolution/RedundancyAnalyzer'),
       import('@alembic/core/service/knowledge/ConfidenceRouter'),
       import('@alembic/core/service/knowledge/SourceRefReconciler'),
-      import('@alembic/core/infrastructure/signal/SignalBus'),
+      import('@alembic/core/events'),
       import('@alembic/core/guard'),
       import('@alembic/core/repository/knowledge/KnowledgeRepository.impl'),
       import('@alembic/core/repository/sourceref/RecipeSourceRefRepository'),

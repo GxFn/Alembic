@@ -230,9 +230,8 @@ export function register(c: ServiceContainer) {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new SourceRefReconciler(projectRoot, sourceRefRepo, knowledgeRepo, {
       signalBus:
-        (ct.singletons.signalBus as
-          | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
-          | undefined) || undefined,
+        (ct.singletons.signalBus as import('@alembic/core/events').SignalBus | undefined) ||
+        undefined,
     });
   });
 
@@ -240,9 +239,8 @@ export function register(c: ServiceContainer) {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new StagingManager(knowledgeRepo, {
       signalBus:
-        (ct.singletons.signalBus as
-          | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
-          | undefined) || undefined,
+        (ct.singletons.signalBus as import('@alembic/core/events').SignalBus | undefined) ||
+        undefined,
     });
   });
 
@@ -250,9 +248,8 @@ export function register(c: ServiceContainer) {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new DecayDetector(knowledgeRepo, {
       signalBus:
-        (ct.singletons.signalBus as
-          | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
-          | undefined) || undefined,
+        (ct.singletons.signalBus as import('@alembic/core/events').SignalBus | undefined) ||
+        undefined,
       knowledgeEdgeRepo: ct.services.knowledgeEdgeRepository
         ? (ct.get('knowledgeEdgeRepository') as KnowledgeEdgeRepository)
         : undefined,
@@ -271,9 +268,8 @@ export function register(c: ServiceContainer) {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new RedundancyAnalyzer(knowledgeRepo, {
       signalBus:
-        (ct.singletons.signalBus as
-          | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
-          | undefined) || undefined,
+        (ct.singletons.signalBus as import('@alembic/core/events').SignalBus | undefined) ||
+        undefined,
     });
   });
 
@@ -281,9 +277,8 @@ export function register(c: ServiceContainer) {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new EnhancementSuggester(knowledgeRepo, {
       signalBus:
-        (ct.singletons.signalBus as
-          | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
-          | undefined) || undefined,
+        (ct.singletons.signalBus as import('@alembic/core/events').SignalBus | undefined) ||
+        undefined,
     });
   });
 
@@ -306,9 +301,7 @@ export function register(c: ServiceContainer) {
     const lifecycleEventRepo = ct.get(
       'lifecycleEventRepository'
     ) as EvolutionLifecycleEventRepository;
-    const signalBus = ct.get(
-      'signalBus'
-    ) as import('@alembic/core/infrastructure/signal/SignalBus').SignalBus;
+    const signalBus = ct.get('signalBus') as import('@alembic/core/events').SignalBus;
     const proposalRepo = ct.get('proposalRepository') as EvolutionProposalRepository;
     return new LifecycleStateMachine(knowledgeRepo, lifecycleEventRepo, signalBus, proposalRepo);
   });
@@ -382,9 +375,8 @@ export function register(c: ServiceContainer) {
     const projectRoot = resolveProjectRoot(ct);
     return new FileChangeHandler(sourceRefRepo, knowledgeRepo, contentPatcher, {
       signalBus:
-        (ct.singletons.signalBus as
-          | import('@alembic/core/infrastructure/signal/SignalBus').SignalBus
-          | undefined) || undefined,
+        (ct.singletons.signalBus as import('@alembic/core/events').SignalBus | undefined) ||
+        undefined,
       evolutionGateway: gateway,
       dataRoot,
       projectRoot,
@@ -444,8 +436,7 @@ export function initializeKnowledgeServices(c: ServiceContainer): void {
 function await_import_EventBus() {
   // EventBus 类型已经通过 container 解析，此处只用于 TS 类型
   return {
-    EventBus:
-      Object as unknown as typeof import('@alembic/core/infrastructure/event/EventBus').EventBus,
+    EventBus: Object as unknown as typeof import('@alembic/core/events').EventBus,
   };
 }
 

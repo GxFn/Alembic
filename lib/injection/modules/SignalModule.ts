@@ -9,11 +9,11 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Signal } from '@alembic/core/events';
+import { SignalBus } from '@alembic/core/events';
 import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
 import { SignalAggregator } from '@alembic/core/infrastructure/signal/SignalAggregator';
 import { SignalBridge } from '@alembic/core/infrastructure/signal/SignalBridge';
-import type { Signal } from '@alembic/core/infrastructure/signal/SignalBus';
-import { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import { SignalTraceWriter } from '@alembic/core/infrastructure/signal/SignalTraceWriter';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import { HitRecorder } from '../../service/signal/HitRecorder.js';
@@ -88,9 +88,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('signalBridge', (ct: ServiceContainer) => {
     const bus = ct.get('signalBus') as SignalBus;
-    const eventBus = ct.get(
-      'eventBus'
-    ) as import('@alembic/core/infrastructure/event/EventBus').EventBus;
+    const eventBus = ct.get('eventBus') as import('@alembic/core/events').EventBus;
     return new SignalBridge(bus, eventBus);
   });
 

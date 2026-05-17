@@ -10,6 +10,7 @@
 import type { JobStore } from '@alembic/core/daemon';
 import type { DatabaseConnection } from '@alembic/core/database';
 import type DimensionCopy from '@alembic/core/domain/dimension/DimensionCopy';
+import type { EventBus, SignalBus } from '@alembic/core/events';
 import type {
   ComplianceReporter,
   ExclusionManager,
@@ -19,9 +20,7 @@ import type {
   RuleLearner,
   ViolationsStore,
 } from '@alembic/core/guard';
-import type { EventBus } from '@alembic/core/infrastructure/event/EventBus';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
-import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import type Logger from '@alembic/core/logging';
 // ── Core AST / Discovery / Enhancement ──
 // ── Shared Types ──

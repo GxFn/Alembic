@@ -19,9 +19,9 @@
  */
 
 import type { SqliteDatabase } from '@alembic/core/database';
+import type { Startable } from '@alembic/core/events';
+import { timerRegistry } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
-import type { Startable } from '@alembic/core/shared/lifecycle';
-import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 
 export type InvalidateHandler = () => void;
 
