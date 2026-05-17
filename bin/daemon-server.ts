@@ -13,7 +13,7 @@ import {
   getPackageVersion,
   resolveDaemonPaths,
   writeDaemonState,
-} from '@alembic/core/daemon/DaemonState';
+} from '@alembic/core/daemon';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
 import Bootstrap from '../lib/bootstrap.js';

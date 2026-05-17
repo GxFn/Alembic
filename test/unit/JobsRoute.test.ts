@@ -1,4 +1,4 @@
-import type { DaemonJobRecord } from '@alembic/core/daemon/JobStore';
+import type { DaemonJobRecord } from '@alembic/core/daemon';
 import type { Request } from 'express';
 import { describe, expect, test } from 'vitest';
 import {

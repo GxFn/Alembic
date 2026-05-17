@@ -3,7 +3,7 @@ import {
   type DaemonJobRecord,
   type DaemonJobSource,
   JobStore,
-} from '@alembic/core/daemon/JobStore';
+} from '@alembic/core/daemon';
 import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
 

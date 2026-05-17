@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { JobStore } from '@alembic/core/daemon/JobStore';
+import { JobStore } from '@alembic/core/daemon';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { markInterruptedDaemonJobs } from '../../lib/daemon/DaemonJobRunner.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';

@@ -1,9 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import type {
-  DaemonJobKind,
-  DaemonJobRecord,
-  DaemonJobStatus,
-} from '@alembic/core/daemon/JobStore';
+import type { DaemonJobKind, DaemonJobRecord, DaemonJobStatus } from '@alembic/core/daemon';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import express, { type Request, type Response } from 'express';
 import { z } from 'zod';

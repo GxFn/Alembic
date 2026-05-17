@@ -9,7 +9,7 @@
 
 // ── Core AST / Discovery / Enhancement ──
 import type ProjectGraph from '@alembic/core/core/ast/ProjectGraph';
-import type { JobStore } from '@alembic/core/daemon/JobStore';
+import type { JobStore } from '@alembic/core/daemon';
 import type DimensionCopy from '@alembic/core/domain/dimension/DimensionCopy';
 import type DatabaseConnection from '@alembic/core/infrastructure/database/DatabaseConnection';
 import type { EventBus } from '@alembic/core/infrastructure/event/EventBus';

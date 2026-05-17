@@ -1,4 +1,4 @@
-import { getPackageVersion } from '@alembic/core/daemon/DaemonState';
+import { getPackageVersion } from '@alembic/core/daemon';
 import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
 import express from 'express';
