@@ -3,9 +3,9 @@
  * 管理代码质量防护规则的 CRUD 和生命周期操作
  */
 
+import { LanguageService } from '@alembic/core/project-intelligence';
 import { ioLimit } from '@alembic/core/shared/concurrency';
 import { NotFoundError } from '@alembic/core/shared/errors/index';
-import { LanguageService } from '@alembic/core/shared/LanguageService';
 import express, { type Request, type Response } from 'express';
 import {
   BatchDisableBody,

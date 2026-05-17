@@ -2,12 +2,14 @@
  * PanoramaService 单元测试
  */
 
-import { CouplingAnalyzer } from '@alembic/core/service/panorama/CouplingAnalyzer';
-import { LayerInferrer } from '@alembic/core/service/panorama/LayerInferrer';
-import { ModuleDiscoverer } from '@alembic/core/service/panorama/ModuleDiscoverer';
-import { PanoramaAggregator } from '@alembic/core/service/panorama/PanoramaAggregator';
-import { PanoramaService } from '@alembic/core/service/panorama/PanoramaService';
-import { RoleRefiner } from '@alembic/core/service/panorama/RoleRefiner';
+import {
+  CouplingAnalyzer,
+  LayerInferrer,
+  ModuleDiscoverer,
+  PanoramaAggregator,
+  PanoramaService,
+  RoleRefiner,
+} from '@alembic/core/project-intelligence';
 import { describe, expect, it } from 'vitest';
 import {
   createMockRepos,

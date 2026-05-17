@@ -1,4 +1,4 @@
-import type { DimensionDef } from '@alembic/core/types/project-snapshot';
+import type { DimensionDef } from '@alembic/core/project-intelligence';
 import { buildKnowledgeRescanPlan } from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder';
 import {
   auditRecipesForRescan,

@@ -11,9 +11,12 @@
  *   5. 返回给外部 Agent 按维度执行: evolve → gap-fill → dimension_complete
  */
 
+import type { DimensionDef, ProjectSnapshot } from '@alembic/core/project-intelligence';
+import {
+  buildProjectSnapshot,
+  ProjectIntelligenceCapability,
+} from '@alembic/core/project-intelligence';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
-import type { DimensionDef, ProjectSnapshot } from '@alembic/core/types/project-snapshot';
-import { buildProjectSnapshot } from '@alembic/core/types/project-snapshot-builder';
 import {
   buildExternalMissionBriefing,
   createExternalWorkflowSession,
@@ -25,7 +28,6 @@ import {
   projectExternalRescanEvidencePlan,
   syncKnowledgeStoreForRescan,
 } from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner';
-import { ProjectIntelligenceCapability } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
 import {
   runForceRescanCleanPolicy,
   runRescanCleanPolicy,

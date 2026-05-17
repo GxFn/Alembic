@@ -2,11 +2,13 @@
  * PanoramaAggregator 单元测试
  */
 
-import { CouplingAnalyzer } from '@alembic/core/service/panorama/CouplingAnalyzer';
-import { LayerInferrer } from '@alembic/core/service/panorama/LayerInferrer';
-import { PanoramaAggregator } from '@alembic/core/service/panorama/PanoramaAggregator';
-import type { ModuleCandidate } from '@alembic/core/service/panorama/RoleRefiner';
-import { RoleRefiner } from '@alembic/core/service/panorama/RoleRefiner';
+import type { ModuleCandidate } from '@alembic/core/project-intelligence';
+import {
+  CouplingAnalyzer,
+  LayerInferrer,
+  PanoramaAggregator,
+  RoleRefiner,
+} from '@alembic/core/project-intelligence';
 import { describe, expect, it } from 'vitest';
 import { createMockRepos, type MockEdge, type MockRepoOptions } from '../helpers/panorama-mocks.js';
 

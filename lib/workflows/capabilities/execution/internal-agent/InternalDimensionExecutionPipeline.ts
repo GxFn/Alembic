@@ -1,5 +1,5 @@
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import type { DimensionDef } from '@alembic/core/types/project-snapshot';
+import type { DimensionDef } from '@alembic/core/project-intelligence';
 import type { PipelineFillView } from '@alembic/core/types/snapshot-views';
 import { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
 import { finalizeInternalDimensionFill as finalizeInternalDimensionExecution } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
@@ -67,9 +67,7 @@ export async function clearSnapshots(
   try {
     const db = ctx.container.get('database');
     if (db) {
-      const { FileDiffSnapshotStore } = await import(
-        '@alembic/core/workflows/capabilities/project-intelligence/FileDiffSnapshotStore'
-      );
+      const { FileDiffSnapshotStore } = await import('@alembic/core/project-intelligence');
       const snap = new FileDiffSnapshotStore(db, { logger: ctx.logger });
       snap.clearProject(projectRoot);
       ctx.logger.info('[Workflow] Cleared file-diff snapshots — forcing full rebuild');

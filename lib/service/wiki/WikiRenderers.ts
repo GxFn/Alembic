@@ -10,7 +10,7 @@
  */
 
 import path from 'node:path';
-import { LanguageService } from '@alembic/core/shared/LanguageService';
+import { LanguageService } from '@alembic/core/project-intelligence';
 import type {
   WikiAstInfo,
   WikiBuildSystem,

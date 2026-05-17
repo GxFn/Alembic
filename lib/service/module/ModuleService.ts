@@ -14,8 +14,8 @@ import {
   join as _pathJoin,
   relative,
 } from 'node:path';
-import { getDiscovererRegistry } from '@alembic/core/core/discovery';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import { getDiscovererRegistry } from '@alembic/core/project-intelligence';
 import {
   type AgentService,
   runScanAgentTask,
@@ -84,7 +84,7 @@ export class ModuleService {
 
   /** >} */
   #activeDiscoverers: Array<{
-    discoverer: import('@alembic/core/core/discovery/ProjectDiscoverer').ProjectDiscoverer;
+    discoverer: import('@alembic/core/project-intelligence').ProjectDiscoverer;
     confidence: number;
   }> = [];
 
@@ -273,7 +273,7 @@ export class ModuleService {
       const entry = this.#activeDiscoverers.find((e) => e.discoverer.id === discovererId);
       if (entry) {
         return entry.discoverer.getTargetFiles(
-          targetObj as import('@alembic/core/core/discovery/ProjectDiscoverer').DiscoveredTarget
+          targetObj as import('@alembic/core/project-intelligence').DiscoveredTarget
         );
       }
     }
@@ -284,7 +284,7 @@ export class ModuleService {
         const targets = await discoverer.listTargets();
         if (targets.some((t) => t.name === targetObj.name)) {
           return discoverer.getTargetFiles(
-            targetObj as import('@alembic/core/core/discovery/ProjectDiscoverer').DiscoveredTarget
+            targetObj as import('@alembic/core/project-intelligence').DiscoveredTarget
           );
         }
       } catch {}

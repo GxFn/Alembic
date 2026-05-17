@@ -5,13 +5,15 @@
  * CallEdgeResolver, DataFlowInferrer, CallGraphAnalyzer, CallSiteExtractor
  */
 
-import { CallEdgeResolver } from '@alembic/core/core/analysis/CallEdgeResolver';
-import { CallGraphAnalyzer } from '@alembic/core/core/analysis/CallGraphAnalyzer';
-import { extractCallSitesTS } from '@alembic/core/core/analysis/CallSiteExtractor';
-import { DataFlowInferrer } from '@alembic/core/core/analysis/DataFlowInferrer';
-import { ImportPathResolver } from '@alembic/core/core/analysis/ImportPathResolver';
-import { ImportRecord } from '@alembic/core/core/analysis/ImportRecord';
-import { SymbolTableBuilder } from '@alembic/core/core/analysis/SymbolTableBuilder';
+import {
+  CallEdgeResolver,
+  CallGraphAnalyzer,
+  DataFlowInferrer,
+  extractCallSitesTS,
+  ImportPathResolver,
+  ImportRecord,
+  SymbolTableBuilder,
+} from '@alembic/core/project-intelligence';
 
 // ─── ImportRecord ─────────────────────────────────────────
 
@@ -3301,9 +3303,9 @@ describe('CallEdgeResolver — super call resolution', () => {
   let CallEdgeResolver, SymbolTableBuilder, ImportPathResolver;
 
   beforeAll(async () => {
-    ({ CallEdgeResolver } = await import('@alembic/core/core/analysis/CallEdgeResolver'));
-    ({ SymbolTableBuilder } = await import('@alembic/core/core/analysis/SymbolTableBuilder'));
-    ({ ImportPathResolver } = await import('@alembic/core/core/analysis/ImportPathResolver'));
+    ({ CallEdgeResolver } = await import('@alembic/core/project-intelligence'));
+    ({ SymbolTableBuilder } = await import('@alembic/core/project-intelligence'));
+    ({ ImportPathResolver } = await import('@alembic/core/project-intelligence'));
   });
 
   test('super.xxx() resolves to parent class method via CHA (not self-edge)', () => {
@@ -3429,9 +3431,9 @@ describe('CallEdgeResolver — duplicate edge deduplication', () => {
   let CallEdgeResolver, SymbolTableBuilder, ImportPathResolver;
 
   beforeAll(async () => {
-    ({ CallEdgeResolver } = await import('@alembic/core/core/analysis/CallEdgeResolver'));
-    ({ SymbolTableBuilder } = await import('@alembic/core/core/analysis/SymbolTableBuilder'));
-    ({ ImportPathResolver } = await import('@alembic/core/core/analysis/ImportPathResolver'));
+    ({ CallEdgeResolver } = await import('@alembic/core/project-intelligence'));
+    ({ SymbolTableBuilder } = await import('@alembic/core/project-intelligence'));
+    ({ ImportPathResolver } = await import('@alembic/core/project-intelligence'));
   });
 
   test('same caller→callee at same line deduplicates to 1 edge', () => {
@@ -3501,7 +3503,7 @@ describe('Swift walker — super call extraction', () => {
   let analyzeFile;
 
   beforeAll(async () => {
-    await import('@alembic/core/core/ast');
+    await import('@alembic/core/project-intelligence');
     ({ analyzeFile } = await import('@alembic/core/core/AstAnalyzer'));
   });
 
@@ -3530,7 +3532,7 @@ describe('Java walker — super call extraction', () => {
   let analyzeFile;
 
   beforeAll(async () => {
-    await import('@alembic/core/core/ast');
+    await import('@alembic/core/project-intelligence');
     ({ analyzeFile } = await import('@alembic/core/core/AstAnalyzer'));
   });
 
@@ -3560,7 +3562,7 @@ describe('Kotlin walker — super and this call extraction', () => {
   let analyzeFile;
 
   beforeAll(async () => {
-    await import('@alembic/core/core/ast');
+    await import('@alembic/core/project-intelligence');
     ({ analyzeFile } = await import('@alembic/core/core/AstAnalyzer'));
   });
 

@@ -4,8 +4,11 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CustomConfigDiscoverer } from '@alembic/core/core/discovery/CustomConfigDiscoverer';
-import { parseBoxfile, parseModuleSpec } from '@alembic/core/core/discovery/parsers/RubyDslParser';
+import {
+  CustomConfigDiscoverer,
+  parseBoxfile,
+  parseModuleSpec,
+} from '@alembic/core/project-intelligence';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // ═══ RubyDslParser: parseBoxfile ═══════════════════════════

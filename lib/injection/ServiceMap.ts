@@ -7,8 +7,6 @@
  * @module ServiceMap
  */
 
-// ── Core AST / Discovery / Enhancement ──
-import type ProjectGraph from '@alembic/core/core/ast/ProjectGraph';
 import type { JobStore } from '@alembic/core/daemon';
 import type { DatabaseConnection } from '@alembic/core/database';
 import type DimensionCopy from '@alembic/core/domain/dimension/DimensionCopy';
@@ -25,6 +23,17 @@ import type { EventBus } from '@alembic/core/infrastructure/event/EventBus';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
 import type Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
+// ── Core AST / Discovery / Enhancement ──
+// ── Shared Types ──
+import type {
+  CouplingAnalyzer,
+  LanguageService,
+  LayerInferrer,
+  PanoramaAggregator,
+  PanoramaService,
+  ProjectGraph,
+  RoleRefiner,
+} from '@alembic/core/project-intelligence';
 // ── Repository Types ──
 import type {
   BootstrapRepository,
@@ -50,17 +59,10 @@ import type { KnowledgeSyncService } from '@alembic/core/service/knowledge/Knowl
 // ── Context Types ──
 import type { RecipeExtractor } from '@alembic/core/service/knowledge/RecipeExtractor';
 import type { RecipeProductionGateway } from '@alembic/core/service/knowledge/RecipeProductionGateway';
-import type { CouplingAnalyzer } from '@alembic/core/service/panorama/CouplingAnalyzer';
-import type { LayerInferrer } from '@alembic/core/service/panorama/LayerInferrer';
-import type { PanoramaAggregator } from '@alembic/core/service/panorama/PanoramaAggregator';
-import type { PanoramaService } from '@alembic/core/service/panorama/PanoramaService';
-import type { RoleRefiner } from '@alembic/core/service/panorama/RoleRefiner';
 import type { FeedbackCollector } from '@alembic/core/service/quality/FeedbackCollector';
 import type { QualityScorer } from '@alembic/core/service/quality/QualityScorer';
 import type { RecipeCandidateValidator } from '@alembic/core/service/recipe/RecipeCandidateValidator';
 import type { RecipeParser } from '@alembic/core/service/recipe/RecipeParser';
-// ── Shared Types ──
-import type { LanguageService } from '@alembic/core/shared/LanguageService';
 import type { IndexingPipeline, VectorService, VectorStore } from '@alembic/core/vector';
 // ── Service Types ──
 import type { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';

@@ -8,10 +8,10 @@
  *   - constitution, aiProvider, projectGraph
  */
 
-import { getDiscovererRegistry } from '@alembic/core/core/discovery';
 import { getEnhancementRegistry } from '@alembic/core/core/enhancement';
 import { DimensionCopy } from '@alembic/core/domain/dimension/DimensionCopy';
 import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
+import { getDiscovererRegistry, LanguageService } from '@alembic/core/project-intelligence';
 import type {
   EvolutionLifecycleEventRepository,
   EvolutionProposalRepository,
@@ -36,7 +36,6 @@ import { KnowledgeGraphService } from '@alembic/core/service/knowledge/Knowledge
 import { KnowledgeService } from '@alembic/core/service/knowledge/KnowledgeService';
 import { RecipeProductionGateway } from '@alembic/core/service/knowledge/RecipeProductionGateway';
 import { SourceRefReconciler } from '@alembic/core/service/knowledge/SourceRefReconciler';
-import { LanguageService } from '@alembic/core/shared/LanguageService';
 import {
   resolveDataRoot,
   resolveKnowledgeScanDirs,

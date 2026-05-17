@@ -11,16 +11,16 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigWatcher } from '@alembic/core/core/discovery/ConfigWatcher';
-import { CustomConfigDiscoverer } from '@alembic/core/core/discovery/CustomConfigDiscoverer';
+import type { ExternalDepProfile } from '@alembic/core/project-intelligence';
 import {
+  ConfigWatcher,
+  CouplingAnalyzer,
+  CustomConfigDiscoverer,
   extractXcodeGenDependencyEdges,
   parseXcodeGenProject,
   parseXcodeGenTarget,
-} from '@alembic/core/core/discovery/parsers/YamlConfigParser';
-import { CouplingAnalyzer } from '@alembic/core/service/panorama/CouplingAnalyzer';
-import type { ExternalDepProfile } from '@alembic/core/service/panorama/PanoramaTypes';
-import { profileTechStack } from '@alembic/core/service/panorama/TechStackProfiler';
+  profileTechStack,
+} from '@alembic/core/project-intelligence';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRepos, type MockEdge } from '../helpers/panorama-mocks.js';
 

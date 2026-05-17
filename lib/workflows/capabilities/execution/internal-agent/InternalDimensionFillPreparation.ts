@@ -1,6 +1,6 @@
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import type { DimensionDef } from '@alembic/core/project-intelligence';
 import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
-import type { DimensionDef } from '@alembic/core/types/project-snapshot';
 import type { PipelineFillView } from '@alembic/core/types/snapshot-views';
 import type { IncrementalPlan } from '@alembic/core/types/workflows';
 import type { AgentService, SystemRunContextFactory } from '#agent/service/index.js';

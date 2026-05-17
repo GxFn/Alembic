@@ -2,8 +2,8 @@
  * LayerInferrer 单元测试
  */
 
-import { LayerInferrer } from '@alembic/core/service/panorama/LayerInferrer';
-import type { CyclicDependency, Edge } from '@alembic/core/service/panorama/PanoramaTypes';
+import type { CyclicDependency, Edge } from '@alembic/core/project-intelligence';
+import { LayerInferrer } from '@alembic/core/project-intelligence';
 import { describe, expect, it } from 'vitest';
 
 describe('LayerInferrer', () => {

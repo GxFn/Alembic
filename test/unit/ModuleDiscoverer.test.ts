@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ModuleDiscoverer } from '@alembic/core/service/panorama/ModuleDiscoverer';
+import { ModuleDiscoverer } from '@alembic/core/project-intelligence';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createMockRepos, type MockEdge, type MockEntity } from '../helpers/panorama-mocks.js';
 

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import * as Paths from '@alembic/core/infrastructure/config/Paths';
-import { LanguageService } from '@alembic/core/shared/LanguageService';
+import { LanguageService } from '@alembic/core/project-intelligence';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { envelope } from '../envelope.js';
 import type { McpContext } from './types.js';
@@ -94,7 +94,7 @@ async function _getLoadedDiscoverer(ctx?: {
   }
 
   // 优先使用 DiscovererRegistry（多语言统一接口）
-  const { getDiscovererRegistry } = await import('@alembic/core/core/discovery');
+  const { getDiscovererRegistry } = await import('@alembic/core/project-intelligence');
   const registry = getDiscovererRegistry();
   const discoverer = await registry.detect(projectRoot);
   await discoverer.load(projectRoot);

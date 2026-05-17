@@ -3,7 +3,7 @@ import {
   normalizeSnapshotPath,
   reconcileSnapshotHashes,
   type SnapshotData,
-} from '@alembic/core/workflows/capabilities/project-intelligence/FileDiffSnapshotStore';
+} from '@alembic/core/project-intelligence';
 import { describe, expect, it } from 'vitest';
 
 describe('normalizeSnapshotPath', () => {

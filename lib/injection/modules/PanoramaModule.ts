@@ -13,20 +13,22 @@
  * @module PanoramaModule
  */
 
+import {
+  CouplingAnalyzer,
+  DimensionAnalyzer,
+  LayerInferrer,
+  ModuleDiscoverer,
+  PanoramaAggregator,
+  PanoramaScanner,
+  PanoramaService,
+  RoleRefiner,
+} from '@alembic/core/project-intelligence';
 import type {
   BootstrapRepository,
   CodeEntityRepository,
   KnowledgeEdgeRepository,
   KnowledgeRepository,
 } from '@alembic/core/repositories';
-import { CouplingAnalyzer } from '@alembic/core/service/panorama/CouplingAnalyzer';
-import { DimensionAnalyzer } from '@alembic/core/service/panorama/DimensionAnalyzer';
-import { LayerInferrer } from '@alembic/core/service/panorama/LayerInferrer';
-import { ModuleDiscoverer } from '@alembic/core/service/panorama/ModuleDiscoverer';
-import { PanoramaAggregator } from '@alembic/core/service/panorama/PanoramaAggregator';
-import { PanoramaScanner } from '@alembic/core/service/panorama/PanoramaScanner';
-import { PanoramaService } from '@alembic/core/service/panorama/PanoramaService';
-import { RoleRefiner } from '@alembic/core/service/panorama/RoleRefiner';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export const PanoramaModule = {
@@ -100,7 +102,7 @@ export const PanoramaModule = {
       const logger = (ct.singletons.logger ?? {
         info() {},
         warn() {},
-      }) as import('@alembic/core/service/panorama/PanoramaScanner').ScannerLogger;
+      }) as import('@alembic/core/project-intelligence').ScannerLogger;
       return new PanoramaScanner({
         projectRoot: getProjectRoot(),
         container: container,

@@ -1,5 +1,5 @@
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import type { DimensionDef } from '@alembic/core/types/project-snapshot';
+import type { DimensionDef } from '@alembic/core/project-intelligence';
 import { TierScheduler } from '@alembic/core/workflows/capabilities/planning/dimensions/TierScheduler';
 import type {
   AgentRunResult,

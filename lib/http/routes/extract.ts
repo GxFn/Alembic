@@ -5,7 +5,7 @@
 
 import { basename } from 'node:path';
 import Logger from '@alembic/core/infrastructure/logging/Logger';
-import { LanguageService } from '@alembic/core/shared/LanguageService';
+import { LanguageService } from '@alembic/core/project-intelligence';
 import express, { type Request, type Response } from 'express';
 import {
   type AgentService,

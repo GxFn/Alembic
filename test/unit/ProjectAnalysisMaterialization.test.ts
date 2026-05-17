@@ -4,7 +4,7 @@ import {
   resolveProjectAnalysisMaterialization,
   runPhase1_7_CallGraph,
   runPhase2_DependencyGraph,
-} from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceRunner';
+} from '@alembic/core/project-intelligence';
 import { describe, expect, test, vi } from 'vitest';
 
 describe('ProjectAnalysis materialization plan', () => {

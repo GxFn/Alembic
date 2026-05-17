@@ -1,11 +1,11 @@
 import { getDimensionFocusKeywords } from '@alembic/core/domain/dimension/DimensionSop';
 import type {
   AstSummary,
-  CallGraphResult,
-  DependencyGraph,
   DimensionDef,
   GuardAudit,
-} from '@alembic/core/types/project-snapshot';
+  SnapshotCallGraphResult,
+  SnapshotDependencyGraph,
+} from '@alembic/core/project-intelligence';
 import { buildEvidenceStarters } from '@alembic/core/workflows/capabilities/execution/external/EvidenceStarterBuilder';
 import {
   DIMENSION_CONFIGS_V3,
@@ -176,8 +176,8 @@ export function createBootstrapDimensionRuntimeInput({
   panoramaResult?: Record<string, unknown> | null;
   astProjectSummary?: AstSummary | null;
   guardAudit?: GuardAudit | null;
-  depGraphData?: DependencyGraph | null;
-  callGraphResult?: CallGraphResult | null;
+  depGraphData?: SnapshotDependencyGraph | null;
+  callGraphResult?: SnapshotCallGraphResult | null;
   rescanContext: BootstrapRescanContext | null;
   targetFileMap?: Record<string, unknown> | null;
   globalSubmittedTitles: Set<string>;

@@ -4,22 +4,18 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CustomConfigDiscoverer } from '@alembic/core/core/discovery/CustomConfigDiscoverer';
-import { parseCMakeProject } from '@alembic/core/core/discovery/parsers/CMakeParser';
 import {
+  CustomConfigDiscoverer,
   inferConventionRole,
-  parseGradleProject,
-} from '@alembic/core/core/discovery/parsers/GradleDslParser';
-import {
+  parseCMakeProject,
   parseFlutterPluginsDeps,
+  parseGradleProject,
+  parseMelosProject,
   parseNxWorkspace,
   parseReactNativeProject,
-} from '@alembic/core/core/discovery/parsers/JsonConfigParser';
-import {
   parseStarlarkBuildFile,
   RULE_TO_LANGUAGE,
-} from '@alembic/core/core/discovery/parsers/StarlarkParser';
-import { parseMelosProject } from '@alembic/core/core/discovery/parsers/YamlConfigParser';
+} from '@alembic/core/project-intelligence';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // ═══ StarlarkParser ═══════════════════════════════════
