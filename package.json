@@ -73,7 +73,7 @@
     "install:vscode-copilot": "node dist/scripts/install-vscode-copilot.js",
     "verify:context-api": "node dist/scripts/verify-context-api.js",
     "setup:mcp": "node dist/scripts/setup-mcp-config.js --editor vscode && node dist/scripts/setup-mcp-config.js --editor cursor",
-    "build:dashboard": "cd dashboard && npm run build",
+    "build:dashboard": "node scripts/build-dashboard.mjs",
     "build:vscode-ext": "npm --prefix resources/vscode-ext run compile",
     "package:vscode-ext": "npm --prefix resources/vscode-ext run package --",
     "dashboard": "node dist/bin/cli.js ui",
