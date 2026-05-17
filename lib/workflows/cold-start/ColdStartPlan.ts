@@ -4,7 +4,7 @@ import type {
   ProjectAnalysisPreparationOptions,
   ProjectAnalysisScanOptions,
 } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
-import type { ColdStartWorkflowIntent } from './ColdStartIntent.js';
+import type { ColdStartWorkflowIntent } from '@alembic/core/workflows/cold-start/ColdStartIntent';
 
 export interface ColdStartWorkflowPlan {
   intent: ColdStartWorkflowIntent;

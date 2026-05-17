@@ -1,14 +1,14 @@
 import { resolveRecipeDimensionId } from '@alembic/core/domain/dimension/RecipeDimension';
 import type { DimensionDef } from '@alembic/core/types/project-snapshot';
-import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 import type {
   AuditVerdict,
   KnowledgeRescanExecutionDecision,
   KnowledgeRescanPlan,
   RescanExecutionMode,
   RescanExecutionReason,
-} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
-import type { RelevanceAuditSummary } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
+} from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder';
+import type { RelevanceAuditSummary } from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner';
+import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 
 export interface InternalRescanGapPlan {
   requestedDimensions: DimensionDef[];

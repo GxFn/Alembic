@@ -1,8 +1,8 @@
-import { describe, expect, test } from 'vitest';
 import {
   normalizeDimensionIds,
   normalizeStringArray,
-} from '../../lib/workflows/shared/WorkflowTypes.js';
+} from '@alembic/core/workflows/shared/WorkflowTypes';
+import { describe, expect, test } from 'vitest';
 
 describe('WorkflowTypes normalization', () => {
   test('normalizes comma-separated and repeated dimension arguments', () => {

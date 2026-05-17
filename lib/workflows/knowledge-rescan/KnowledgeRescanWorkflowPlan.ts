@@ -4,7 +4,7 @@ import type {
   ProjectAnalysisPreparationOptions,
   ProjectAnalysisScanOptions,
 } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
-import type { KnowledgeRescanWorkflowIntent } from './KnowledgeRescanIntent.js';
+import type { KnowledgeRescanWorkflowIntent } from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanIntent';
 
 export interface KnowledgeRescanWorkflowPlan {
   intent: KnowledgeRescanWorkflowIntent;

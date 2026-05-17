@@ -1,5 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { writeWorkflowReportHistory } from '@alembic/core/workflows/capabilities/persistence/WorkflowReportHistoryStore';
+import { buildWorkflowReport } from '@alembic/core/workflows/capabilities/persistence/WorkflowReportWriter';
+import {
+  persistWorkflowResult,
+  summarizeWorkflowDimensionStats,
+} from '@alembic/core/workflows/capabilities/persistence/WorkflowResultPersistence';
 import { describe, expect, test, vi } from 'vitest';
 import type { IncrementalPlan } from '#types/workflows.js';
 import type { SessionStore } from '../../lib/agent/memory/SessionStore.js';
@@ -7,12 +13,6 @@ import type {
   CandidateResults,
   SkillResults,
 } from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import { writeWorkflowReportHistory } from '../../lib/workflows/capabilities/persistence/WorkflowReportHistoryStore.js';
-import { buildWorkflowReport } from '../../lib/workflows/capabilities/persistence/WorkflowReportWriter.js';
-import {
-  persistWorkflowResult,
-  summarizeWorkflowDimensionStats,
-} from '../../lib/workflows/capabilities/persistence/WorkflowResultPersistence.js';
 
 const candidateResults: CandidateResults = { created: 2, failed: 0, errors: [] };
 const skillResults: SkillResults = { created: 1, failed: 0, skills: ['project-api'], errors: [] };

@@ -5,11 +5,11 @@
  * `#workflows/capabilities/execution/external`.
  */
 
-import { envelope } from '#external/mcp/envelope.js';
 import {
   type ExternalDimensionCompleteArgs,
   runExternalDimensionCompletionWorkflow,
-} from '#workflows/capabilities/execution/external/ExternalDimensionCompletionWorkflow.js';
+} from '@alembic/core/workflows/capabilities/execution/external/ExternalDimensionCompletionWorkflow';
+import { envelope } from '#external/mcp/envelope.js';
 import type { McpContext } from './types.js';
 
 export async function dimensionComplete(ctx: McpContext, args: ExternalDimensionCompleteArgs) {

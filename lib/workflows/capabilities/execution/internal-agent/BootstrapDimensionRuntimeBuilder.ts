@@ -6,6 +6,12 @@ import type {
   DimensionDef,
   GuardAudit,
 } from '@alembic/core/types/project-snapshot';
+import { buildEvidenceStarters } from '@alembic/core/workflows/capabilities/execution/external/EvidenceStarterBuilder';
+import {
+  DIMENSION_CONFIGS_V3,
+  getFullDimensionConfig,
+} from '@alembic/core/workflows/capabilities/planning/dimensions/bootstrapDimensionConfigs';
+import type { KnowledgeRescanExecutionDecision } from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder';
 import { ExplorationTracker } from '#agent/context/ExplorationTracker.js';
 import type { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import { computeAnalystBudget } from '#agent/prompts/insight-analyst.js';
@@ -14,7 +20,6 @@ import {
   projectSystemRunContext,
 } from '#agent/runtime/SystemRunContext.js';
 import type { AgentRunInput, SystemRunContextFactory } from '#agent/service/index.js';
-import { buildEvidenceStarters } from '#workflows/capabilities/execution/external/EvidenceStarterBuilder.js';
 import {
   type BootstrapFileEntry,
   buildBootstrapDimensionRunInput,
@@ -27,11 +32,6 @@ import {
   projectBootstrapExistingRecipesForPrompt,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapRescanState.js';
 import type { BootstrapProjectGraphLike } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
-import {
-  DIMENSION_CONFIGS_V3,
-  getFullDimensionConfig,
-} from '#workflows/capabilities/planning/dimensions/bootstrapDimensionConfigs.js';
-import type { KnowledgeRescanExecutionDecision } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
 
 interface DimConfigV3Entry {
   outputType: string;

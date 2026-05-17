@@ -1,18 +1,18 @@
 import type { DimensionDef } from '@alembic/core/types/project-snapshot';
-import { describe, expect, test } from 'vitest';
-import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
-import { buildKnowledgeRescanPlan } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
+import { buildKnowledgeRescanPlan } from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder';
 import {
   auditRecipesForRescan,
   buildRescanPrescreen,
   type RelevanceAuditResult,
   type RelevanceAuditSummary,
-} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
+} from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner';
 import {
   projectExternalRescanEvidencePlan,
   projectInternalRescanGapPlan,
   projectInternalRescanPromptRecipes,
-} from '#workflows/capabilities/planning/knowledge/RescanEvidenceProjectors.js';
+} from '@alembic/core/workflows/capabilities/planning/knowledge/RescanEvidenceProjectors';
+import { describe, expect, test } from 'vitest';
+import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 
 const dimensions: DimensionDef[] = [
   { id: 'api', label: 'API' },

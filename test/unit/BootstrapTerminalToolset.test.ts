@@ -10,7 +10,7 @@ afterEach(() => {
 
 async function loadModule() {
   return await import(
-    '../../lib/workflows/capabilities/planning/dimensions/BootstrapTerminalToolset.js'
+    '@alembic/core/workflows/capabilities/planning/dimensions/BootstrapTerminalToolset'
   );
 }
 

@@ -39,30 +39,29 @@ import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolv
 import { applyTestDimensionFilter } from '@alembic/core/shared/test-mode';
 import type { DimensionDef, ProjectSnapshot } from '@alembic/core/types/project-snapshot';
 import { buildProjectSnapshot } from '@alembic/core/types/project-snapshot-builder';
+import { cacheProjectAnalysisSession } from '@alembic/core/workflows/capabilities/execution/external/SessionSupport';
 import { ProjectIntelligenceCapability } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
-import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '#types/workflows.js';
-import { cacheProjectAnalysisSession } from '#workflows/capabilities/execution/external/SessionSupport.js';
-import {
-  dispatchInternalDimensionExecution,
-  startInternalDimensionExecutionSession,
-} from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
-import { runFullResetPolicy } from '#workflows/capabilities/WorkflowCleanupPolicies.js';
+import { runFullResetPolicy } from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
 import {
   createInternalColdStartIntent,
   type InternalColdStartArgs,
-} from '#workflows/cold-start/ColdStartIntent.js';
+} from '@alembic/core/workflows/cold-start/ColdStartIntent';
 import {
   buildColdStartWorkflowPlan,
   selectColdStartDimensions,
-} from '#workflows/cold-start/ColdStartPlan.js';
+} from '@alembic/core/workflows/cold-start/ColdStartPlan';
 import {
   buildInternalColdStartReport,
   buildInternalColdStartTargetFileMap,
   presentInternalColdStartEmptyProject,
   presentInternalColdStartResponse,
-} from '#workflows/cold-start/ColdStartPresenters.js';
-
-import type { WorkflowMcpContext } from '#workflows/shared/WorkflowTypes.js';
+} from '@alembic/core/workflows/cold-start/ColdStartPresenters';
+import type { WorkflowMcpContext } from '@alembic/core/workflows/shared/WorkflowTypes';
+import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '#types/workflows.js';
+import {
+  dispatchInternalDimensionExecution,
+  startInternalDimensionExecutionSession,
+} from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
 
 type BootstrapMcpContext = WorkflowMcpContext & McpContext;
 

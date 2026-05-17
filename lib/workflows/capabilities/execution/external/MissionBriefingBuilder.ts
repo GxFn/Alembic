@@ -30,7 +30,7 @@ import type {
   IncrementalPlan,
   LocalPackageModule,
 } from '@alembic/core/types/project-snapshot';
-import { buildEvidenceStarters } from '#workflows/capabilities/execution/external/EvidenceStarterBuilder.js';
+import { buildEvidenceStarters } from '@alembic/core/workflows/capabilities/execution/external/EvidenceStarterBuilder';
 import {
   applyBriefingCompressionPolicy,
   type BriefingProfile,
@@ -41,8 +41,8 @@ import {
   type RescanBriefingInput,
   type ResponseBudget,
   SUBMISSION_SCHEMA,
-} from '#workflows/capabilities/execution/external/MissionBriefingSupport.js';
-import { TierScheduler } from '#workflows/capabilities/planning/dimensions/TierScheduler.js';
+} from '@alembic/core/workflows/capabilities/execution/external/MissionBriefingSupport';
+import { TierScheduler } from '@alembic/core/workflows/capabilities/planning/dimensions/TierScheduler';
 
 // ── 本地类型定义 ────────────────────────────────────────────
 
@@ -333,7 +333,7 @@ function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
   };
 }
 
-export { buildEvidenceStarters } from '#workflows/capabilities/execution/external/EvidenceStarterBuilder.js';
+export { buildEvidenceStarters } from '@alembic/core/workflows/capabilities/execution/external/EvidenceStarterBuilder';
 
 // ── AST 压缩 ────────────────────────────────────────────────
 

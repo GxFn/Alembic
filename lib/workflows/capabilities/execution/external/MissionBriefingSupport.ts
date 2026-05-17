@@ -12,8 +12,8 @@ import {
   getRequiredFieldsDescription,
 } from '@alembic/core/domain/knowledge/FieldSpec';
 import type { DimensionDef } from '@alembic/core/types/project-snapshot';
-import { TierScheduler } from '#workflows/capabilities/planning/dimensions/TierScheduler.js';
-import type { ExternalRescanEvidencePlan } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
+import { TierScheduler } from '@alembic/core/workflows/capabilities/planning/dimensions/TierScheduler';
+import type { ExternalRescanEvidencePlan } from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner';
 
 // ═══════════════════════════════════════════════════════════
 // §1 — MissionBriefingProfiles

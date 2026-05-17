@@ -1,5 +1,6 @@
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { DimensionDef } from '@alembic/core/types/project-snapshot';
+import { TierScheduler } from '@alembic/core/workflows/capabilities/planning/dimensions/TierScheduler';
 import type {
   AgentRunResult,
   AgentService,
@@ -33,7 +34,6 @@ import { prepareBootstrapRescanState } from '#workflows/capabilities/execution/i
 import type { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
 import { buildBootstrapSessionExecutionInput } from '#workflows/capabilities/execution/internal-agent/BootstrapSessionExecutionBuilder.js';
 import type { InternalDimensionFillPreparation } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillPreparation.js';
-import { TierScheduler } from '#workflows/capabilities/planning/dimensions/TierScheduler.js';
 
 const logger = Logger.getInstance();
 

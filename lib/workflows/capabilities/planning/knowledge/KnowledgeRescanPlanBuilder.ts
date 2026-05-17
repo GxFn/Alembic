@@ -1,10 +1,10 @@
 import { recipeBelongsToDimension } from '@alembic/core/domain/dimension/RecipeDimension';
 import type { DimensionDef } from '@alembic/core/types/project-snapshot';
-import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 import type {
   RelevanceAuditResult,
   RelevanceAuditSummary,
-} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
+} from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner';
+import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 
 export const TARGET_RECIPES_PER_DIMENSION = 5;
 

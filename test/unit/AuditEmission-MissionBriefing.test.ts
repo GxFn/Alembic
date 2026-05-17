@@ -158,7 +158,7 @@ describe('MissionBriefingBuilder panorama injection', () => {
     };
 
     const { buildMissionBriefing } = await import(
-      '#workflows/capabilities/execution/external/MissionBriefingBuilder.js'
+      '@alembic/core/workflows/capabilities/execution/external/MissionBriefingBuilder'
     );
 
     const briefing = buildMissionBriefing({
@@ -184,7 +184,7 @@ describe('MissionBriefingBuilder panorama injection', () => {
 
   it('buildMissionBriefing sets panorama to null when no panoramaResult', async () => {
     const { buildMissionBriefing } = await import(
-      '#workflows/capabilities/execution/external/MissionBriefingBuilder.js'
+      '@alembic/core/workflows/capabilities/execution/external/MissionBriefingBuilder'
     );
 
     const briefing = buildMissionBriefing({

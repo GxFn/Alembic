@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
 import {
   type ExternalDimensionCompletionContext,
   type ExternalWorkflowSession,
   runExternalDimensionCompletionWorkflow,
-} from '#workflows/capabilities/execution/external/ExternalDimensionCompletionWorkflow.js';
+} from '@alembic/core/workflows/capabilities/execution/external/ExternalDimensionCompletionWorkflow';
+import { describe, expect, it, vi } from 'vitest';
 
 describe('ExternalDimensionCompletionWorkflow', () => {
   it('returns validation envelopes before touching session state', async () => {
@@ -62,10 +62,11 @@ describe('ExternalDimensionCompletionWorkflow', () => {
       {
         getActiveSession: () => session,
         saveCheckpoint: checkpoint,
-        createEmitter: () => ({
-          emitDimensionComplete: (dimId, data) => emitted.push({ dimId, data }),
-          emitAllComplete: vi.fn(),
-        }),
+        onDimensionComplete: (event) =>
+          emitted.push({
+            dimId: event.dimensionId,
+            data: event as unknown as Record<string, unknown>,
+          }),
       }
     );
 
@@ -106,15 +107,16 @@ describe('ExternalDimensionCompletionWorkflow', () => {
         analysisChars: 61,
         referencedFiles: 2,
         recipeIds: ['recipe-a', 'recipe-b'],
-        skillCreated: false,
+        recipesBound: 2,
       }
     );
     expect(emitted).toHaveLength(1);
     expect(emitted[0]?.data).toMatchObject({
-      extracted: 2,
-      progress: '1/2',
+      candidateCount: 2,
+      dimensionId: 'architecture',
+      isComplete: false,
       recipesBound: 2,
-      source: 'external-agent',
+      updated: true,
     });
   });
 });

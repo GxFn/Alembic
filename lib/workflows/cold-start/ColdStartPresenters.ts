@@ -7,13 +7,13 @@ import type {
   PhaseReport,
   ProjectSnapshot,
 } from '@alembic/core/types/project-snapshot';
+import { buildInternalNextSteps } from '@alembic/core/workflows/capabilities/execution/external/MissionBriefingSupport';
 import { buildLanguageExtension as buildProjectLanguageExtension } from '@alembic/core/workflows/capabilities/presentation/LanguageExtensionBuilder';
+import { summarizePanorama as summarizeProjectPanorama } from '@alembic/core/workflows/capabilities/presentation/PanoramaSummaryPresenter';
 import { inferTargetRole } from '@alembic/core/workflows/capabilities/presentation/TargetClassifier';
+import { buildTargetFileMap as buildProjectTargetFileMap } from '@alembic/core/workflows/capabilities/presentation/TargetFileMapBuilder';
 import { envelope } from '#external/mcp/envelope.js';
 import type { CleanupResult } from '#service/cleanup/CleanupService.js';
-import { buildInternalNextSteps } from '#workflows/capabilities/execution/external/MissionBriefingSupport.js';
-import { summarizePanorama as summarizeProjectPanorama } from '#workflows/capabilities/presentation/PanoramaSummaryPresenter.js';
-import { buildTargetFileMap as buildProjectTargetFileMap } from '#workflows/capabilities/presentation/TargetFileMapBuilder.js';
 
 export type ColdStartTargetFileMap = Record<string, Array<Record<string, unknown>>>;
 

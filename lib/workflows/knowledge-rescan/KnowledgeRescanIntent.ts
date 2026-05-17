@@ -1,5 +1,8 @@
+import {
+  normalizeDimensionIds,
+  type WorkflowExecutor,
+} from '@alembic/core/workflows/shared/WorkflowTypes';
 import type { RescanInput } from '#shared/schemas/mcp-tools.js';
-import { normalizeDimensionIds, type WorkflowExecutor } from '#workflows/shared/WorkflowTypes.js';
 
 export type KnowledgeRescanExecutor = WorkflowExecutor;
 

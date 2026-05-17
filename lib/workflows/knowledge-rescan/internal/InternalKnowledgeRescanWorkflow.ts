@@ -29,15 +29,8 @@ import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolv
 import { applyTestDimensionFilter } from '@alembic/core/shared/test-mode';
 import type { DimensionDef, ProjectSnapshot } from '@alembic/core/types/project-snapshot';
 import { buildProjectSnapshot } from '@alembic/core/types/project-snapshot-builder';
-import { FileDiffPlanner } from '@alembic/core/workflows/capabilities/project-intelligence/FileDiffPlanner';
-import { ProjectIntelligenceCapability } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
-import type { PipelineFillView } from '#types/snapshot-views.js';
-import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '#types/workflows.js';
-import { cacheProjectAnalysisSession } from '#workflows/capabilities/execution/external/SessionSupport.js';
-import {
-  dispatchInternalDimensionExecution,
-  startInternalDimensionExecutionSession,
-} from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
+import type { PipelineFillView } from '@alembic/core/types/snapshot-views';
+import { cacheProjectAnalysisSession } from '@alembic/core/workflows/capabilities/execution/external/SessionSupport';
 import {
   auditRecipesForRescan,
   buildKnowledgeRescanPlan,
@@ -45,22 +38,29 @@ import {
   projectInternalRescanGapPlan,
   projectInternalRescanPromptRecipes,
   syncKnowledgeStoreForRescan,
-} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
+} from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner';
+import { FileDiffPlanner } from '@alembic/core/workflows/capabilities/project-intelligence/FileDiffPlanner';
+import { ProjectIntelligenceCapability } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
 import {
   runForceRescanCleanPolicy,
   runRescanCleanPolicy,
-} from '#workflows/capabilities/WorkflowCleanupPolicies.js';
+} from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
 import {
   createInternalKnowledgeRescanIntent,
   type InternalKnowledgeRescanArgs,
-} from '#workflows/knowledge-rescan/KnowledgeRescanIntent.js';
+} from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanIntent';
 import {
   buildInternalKnowledgeRescanTargetFileMap,
   presentInternalKnowledgeRescanEmptyProject,
   presentInternalKnowledgeRescanResponse,
-} from '#workflows/knowledge-rescan/KnowledgeRescanPresenters.js';
-import { buildKnowledgeRescanWorkflowPlan } from '#workflows/knowledge-rescan/KnowledgeRescanWorkflowPlan.js';
-import type { WorkflowMcpContext } from '#workflows/shared/WorkflowTypes.js';
+} from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanPresenters';
+import { buildKnowledgeRescanWorkflowPlan } from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanWorkflowPlan';
+import type { WorkflowMcpContext } from '@alembic/core/workflows/shared/WorkflowTypes';
+import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '#types/workflows.js';
+import {
+  dispatchInternalDimensionExecution,
+  startInternalDimensionExecutionSession,
+} from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
 import type {
   EvolutionAuditRecipe as AgentEvolutionAuditRecipe,
   EvolutionAuditResult,

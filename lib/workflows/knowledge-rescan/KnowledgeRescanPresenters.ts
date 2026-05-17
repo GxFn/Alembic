@@ -3,15 +3,15 @@ import type {
   GuardAudit,
   ProjectSnapshot,
 } from '@alembic/core/types/project-snapshot';
-import { envelope } from '#external/mcp/envelope.js';
-import type { CleanupResult, RecipeSnapshot } from '#service/cleanup/CleanupService.js';
 import type {
   ExternalRescanEvidencePlan,
   InternalRescanGapPlan,
   RelevanceAuditSummary,
-} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
-import { summarizePanorama as summarizeProjectPanorama } from '#workflows/capabilities/presentation/PanoramaSummaryPresenter.js';
-import { buildTargetFileMap as buildProjectTargetFileMap } from '#workflows/capabilities/presentation/TargetFileMapBuilder.js';
+} from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner';
+import { summarizePanorama as summarizeProjectPanorama } from '@alembic/core/workflows/capabilities/presentation/PanoramaSummaryPresenter';
+import { buildTargetFileMap as buildProjectTargetFileMap } from '@alembic/core/workflows/capabilities/presentation/TargetFileMapBuilder';
+import { envelope } from '#external/mcp/envelope.js';
+import type { CleanupResult, RecipeSnapshot } from '#service/cleanup/CleanupService.js';
 
 export type KnowledgeRescanTargetFileMap = Record<string, Array<Record<string, unknown>>>;
 

@@ -7,8 +7,8 @@
 
 import path from 'node:path';
 import type { DimensionDef, ProjectSnapshot } from '@alembic/core/types/project-snapshot';
-import { toSessionCache } from '#types/snapshot-views.js';
-import { BootstrapSessionManager } from '#workflows/capabilities/execution/external/BootstrapSession.js';
+import { toSessionCache } from '@alembic/core/types/snapshot-views';
+import { BootstrapSessionManager } from '@alembic/core/workflows/capabilities/execution/external/BootstrapSession';
 
 // ═══════════════════════════════════════════════════════════
 // §1 — WorkflowSessionManagerProvider

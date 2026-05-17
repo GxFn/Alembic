@@ -3,11 +3,10 @@ import { EvolutionPolicy } from '@alembic/core/domain/evolution/EvolutionPolicy'
 import type { RecipeSourceRefRepositoryImpl } from '@alembic/core/repository/sourceref/RecipeSourceRefRepository';
 import type { EvolutionCandidatePlan } from '@alembic/core/service/evolution/RecipeImpactPlanner';
 import type { DimensionDef } from '@alembic/core/types/project-snapshot';
-import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 import {
   buildEvolutionPrescreen,
   type EvolutionPrescreen,
-} from '#workflows/capabilities/planning/knowledge/EvolutionPrescreen.js';
+} from '@alembic/core/workflows/capabilities/planning/knowledge/EvolutionPrescreen';
 import {
   type AuditVerdict,
   type BuildKnowledgeRescanPlanOptions,
@@ -19,7 +18,7 @@ import {
   type RescanExecutionReason,
   type RescanExecutionReasonKind,
   TARGET_RECIPES_PER_DIMENSION,
-} from './KnowledgeRescanPlanBuilder.js';
+} from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder';
 import {
   type ExternalDimensionGap,
   type ExternalRescanEvidencePlan,
@@ -28,7 +27,8 @@ import {
   projectInternalRescanGapPlan,
   projectInternalRescanPromptRecipes,
   projectInternalRescanPromptRecipesFromParts,
-} from './RescanEvidenceProjectors.js';
+} from '@alembic/core/workflows/capabilities/planning/knowledge/RescanEvidenceProjectors';
+import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 
 // ── RelevanceAudit 类型定义 ──────────
 

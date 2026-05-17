@@ -4,14 +4,14 @@ import type {
   MissionBriefingResult,
   ProjectSnapshot,
 } from '@alembic/core/types/project-snapshot';
-import { buildLanguageExtension } from '@alembic/core/workflows/capabilities/presentation/LanguageExtensionBuilder';
-import { toSessionCache } from '#types/snapshot-views.js';
-import { buildMissionBriefing } from '#workflows/capabilities/execution/external/MissionBriefingBuilder.js';
+import { toSessionCache } from '@alembic/core/types/snapshot-views';
+import { buildMissionBriefing } from '@alembic/core/workflows/capabilities/execution/external/MissionBriefingBuilder';
 import type {
   BriefingProfile,
   RescanBriefingInput,
-} from '#workflows/capabilities/execution/external/MissionBriefingSupport.js';
-import { getOrCreateSessionManager } from '#workflows/capabilities/execution/external/SessionSupport.js';
+} from '@alembic/core/workflows/capabilities/execution/external/MissionBriefingSupport';
+import { getOrCreateSessionManager } from '@alembic/core/workflows/capabilities/execution/external/SessionSupport';
+import { buildLanguageExtension } from '@alembic/core/workflows/capabilities/presentation/LanguageExtensionBuilder';
 
 export type ExternalSessionContainer = Parameters<typeof getOrCreateSessionManager>[0];
 export type ExternalWorkflowSession = ReturnType<

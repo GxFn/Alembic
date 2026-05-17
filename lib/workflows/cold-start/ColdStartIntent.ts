@@ -1,4 +1,7 @@
-import { normalizeDimensionIds, type WorkflowExecutor } from '#workflows/shared/WorkflowTypes.js';
+import {
+  normalizeDimensionIds,
+  type WorkflowExecutor,
+} from '@alembic/core/workflows/shared/WorkflowTypes';
 
 export type ColdStartExecutor = WorkflowExecutor;
 

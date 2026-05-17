@@ -1,6 +1,6 @@
 import Logger from '@alembic/core/infrastructure/logging/Logger';
 import type { DimensionDef } from '@alembic/core/types/project-snapshot';
-import type { PipelineFillView } from '#types/snapshot-views.js';
+import type { PipelineFillView } from '@alembic/core/types/snapshot-views';
 import { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
 import { finalizeInternalDimensionFill as finalizeInternalDimensionExecution } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
 import {
@@ -81,6 +81,6 @@ export async function clearSnapshots(
   }
 }
 
-export { clearDimensionCheckpoints as clearCheckpoints } from '#workflows/capabilities/persistence/DimensionCheckpoint.js';
+export { clearDimensionCheckpoints as clearCheckpoints } from '@alembic/core/workflows/capabilities/persistence/DimensionCheckpoint';
 
 export default runInternalDimensionExecution;

@@ -20,8 +20,8 @@ import type {
   SnapshotFile,
   SnapshotTarget,
 } from '@alembic/core/types/project-snapshot';
-import type { EvolutionPrescreen } from '#workflows/capabilities/planning/knowledge/EvolutionPrescreen.js';
-import type { KnowledgeRescanExecutionDecision } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
+import type { EvolutionPrescreen } from '@alembic/core/workflows/capabilities/planning/knowledge/EvolutionPrescreen';
+import type { KnowledgeRescanExecutionDecision } from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder';
 
 // ─── H4: SessionCacheShape ───────────────────────────────────
 

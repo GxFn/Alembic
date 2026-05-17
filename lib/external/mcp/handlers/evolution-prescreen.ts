@@ -3,5 +3,5 @@ export type {
   EvolutionPrescreen,
   PrescreenAutoResolved,
   PrescreenNeedsVerification,
-} from '#workflows/capabilities/planning/knowledge/EvolutionPrescreen.js';
-export { buildEvolutionPrescreen } from '#workflows/capabilities/planning/knowledge/EvolutionPrescreen.js';
+} from '@alembic/core/workflows/capabilities/planning/knowledge/EvolutionPrescreen';
+export { buildEvolutionPrescreen } from '@alembic/core/workflows/capabilities/planning/knowledge/EvolutionPrescreen';

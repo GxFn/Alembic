@@ -1,3 +1,4 @@
+import type { KnowledgeRescanExecutionDecision } from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder';
 import { describe, expect, test, vi } from 'vitest';
 import { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import type { SystemRunContextFactory } from '#agent/service/index.js';
@@ -7,7 +8,6 @@ import {
   resolveBootstrapDimensionPlan,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import { prepareBootstrapRescanState } from '#workflows/capabilities/execution/internal-agent/BootstrapRescanState.js';
-import type { KnowledgeRescanExecutionDecision } from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
 
 const dimensions = [
   {

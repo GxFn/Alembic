@@ -4,7 +4,7 @@ import { BootstrapDedup } from '@alembic/core/service/bootstrap/BootstrapDedup';
 import type {
   KnowledgeRescanExecutionDecision,
   RescanExecutionMode,
-} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder.js';
+} from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanBuilder';
 
 const logger = Logger.getInstance();
 

@@ -1,8 +1,8 @@
-import { describe, expect, test } from 'vitest';
 import {
   createExternalKnowledgeRescanIntent,
   createInternalKnowledgeRescanIntent,
-} from '../../lib/workflows/knowledge-rescan/KnowledgeRescanIntent.js';
+} from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanIntent';
+import { describe, expect, test } from 'vitest';
 
 describe('KnowledgeRescanIntent', () => {
   test('uses rescan-clean as the default internal cleanup policy', () => {

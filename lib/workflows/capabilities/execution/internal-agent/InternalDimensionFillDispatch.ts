@@ -1,5 +1,5 @@
 import type { BootstrapSessionShape, DimensionDef } from '@alembic/core/types/project-snapshot';
-import type { PipelineFillView } from '#types/snapshot-views.js';
+import type { PipelineFillView } from '@alembic/core/types/snapshot-views';
 
 interface TaskDef {
   id: string;

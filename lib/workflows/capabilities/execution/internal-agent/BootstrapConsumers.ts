@@ -10,6 +10,8 @@
  */
 
 import Logger from '@alembic/core/infrastructure/logging/Logger';
+import { saveDimensionCheckpoint } from '@alembic/core/workflows/capabilities/persistence/DimensionCheckpoint';
+import { buildTierReflection } from '@alembic/core/workflows/capabilities/planning/dimensions/bootstrapDimensionConfigs';
 import type { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import type { SessionStore } from '#agent/memory/SessionStore.js';
 import type { AgentRunResult } from '#agent/service/index.js';
@@ -30,8 +32,6 @@ import {
   parseDimensionDigest,
 } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
 import { generateSkill } from '#workflows/capabilities/execution/WorkflowSkillCompletionCapability.js';
-import { saveDimensionCheckpoint } from '#workflows/capabilities/persistence/DimensionCheckpoint.js';
-import { buildTierReflection } from '#workflows/capabilities/planning/dimensions/bootstrapDimensionConfigs.js';
 
 const logger = Logger.getInstance();
 

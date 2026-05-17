@@ -14,22 +14,21 @@
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import type { ProjectSnapshot } from '@alembic/core/types/project-snapshot';
 import { buildProjectSnapshot } from '@alembic/core/types/project-snapshot-builder';
-import { ProjectIntelligenceCapability } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
-import type { ServiceContainer } from '#inject/ServiceContainer.js';
 import {
   buildExternalMissionBriefing,
   createExternalWorkflowSession,
   getActiveExternalWorkflowSession,
-} from '#workflows/capabilities/execution/external/ExternalMissionWorkflow.js';
-import { runFullResetPolicy } from '#workflows/capabilities/WorkflowCleanupPolicies.js';
-import { createExternalColdStartIntent } from '#workflows/cold-start/ColdStartIntent.js';
-import { buildColdStartWorkflowPlan } from '#workflows/cold-start/ColdStartPlan.js';
+} from '@alembic/core/workflows/capabilities/execution/external/ExternalMissionWorkflow';
+import { ProjectIntelligenceCapability } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
+import { runFullResetPolicy } from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
+import { createExternalColdStartIntent } from '@alembic/core/workflows/cold-start/ColdStartIntent';
+import { buildColdStartWorkflowPlan } from '@alembic/core/workflows/cold-start/ColdStartPlan';
 import {
   presentExternalColdStartEmptyProject,
   presentExternalColdStartResponse,
-} from '#workflows/cold-start/ColdStartPresenters.js';
-
-import type { WorkflowLogger } from '#workflows/shared/WorkflowTypes.js';
+} from '@alembic/core/workflows/cold-start/ColdStartPresenters';
+import type { WorkflowLogger } from '@alembic/core/workflows/shared/WorkflowTypes';
+import type { ServiceContainer } from '#inject/ServiceContainer.js';
 
 interface McpContext {
   container: ServiceContainer;

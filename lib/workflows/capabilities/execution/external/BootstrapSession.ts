@@ -17,10 +17,10 @@
 
 import crypto from 'node:crypto';
 import type { DimensionDef } from '@alembic/core/types/project-snapshot';
+import type { SessionCacheShape } from '@alembic/core/types/snapshot-views';
+import type { DimensionQualityReport } from '@alembic/core/workflows/capabilities/execution/external/ExternalSubmissionTracker';
+import { ExternalSubmissionTracker } from '@alembic/core/workflows/capabilities/execution/external/ExternalSubmissionTracker';
 import { SessionStore } from '#agent/memory/SessionStore.js';
-import type { SessionCacheShape } from '#types/snapshot-views.js';
-import type { DimensionQualityReport } from './ExternalSubmissionTracker.js';
-import { ExternalSubmissionTracker } from './ExternalSubmissionTracker.js';
 
 // ── 本地类型定义 ─────────────────────────────────────────────
 

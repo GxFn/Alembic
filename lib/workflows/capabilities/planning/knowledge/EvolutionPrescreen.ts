@@ -5,7 +5,7 @@ import {
 import type {
   RelevanceAuditResult,
   RelevanceAuditSummary,
-} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
+} from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner';
 
 export interface PrescreenNeedsVerification {
   recipeId: string;

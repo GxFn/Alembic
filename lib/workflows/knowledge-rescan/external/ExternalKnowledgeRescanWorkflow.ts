@@ -14,30 +14,30 @@
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import type { DimensionDef, ProjectSnapshot } from '@alembic/core/types/project-snapshot';
 import { buildProjectSnapshot } from '@alembic/core/types/project-snapshot-builder';
-import { ProjectIntelligenceCapability } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
-import type { ServiceContainer } from '#inject/ServiceContainer.js';
-import type { RescanInput } from '#shared/schemas/mcp-tools.js';
 import {
   buildExternalMissionBriefing,
   createExternalWorkflowSession,
-} from '#workflows/capabilities/execution/external/ExternalMissionWorkflow.js';
+} from '@alembic/core/workflows/capabilities/execution/external/ExternalMissionWorkflow';
 import {
   auditRecipesForRescan,
   buildKnowledgeRescanPlan,
   buildRescanPrescreen,
   projectExternalRescanEvidencePlan,
   syncKnowledgeStoreForRescan,
-} from '#workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner.js';
+} from '@alembic/core/workflows/capabilities/planning/knowledge/KnowledgeRescanPlanner';
+import { ProjectIntelligenceCapability } from '@alembic/core/workflows/capabilities/project-intelligence/ProjectIntelligenceCapability';
 import {
   runForceRescanCleanPolicy,
   runRescanCleanPolicy,
-} from '#workflows/capabilities/WorkflowCleanupPolicies.js';
-import { createExternalKnowledgeRescanIntent } from '#workflows/knowledge-rescan/KnowledgeRescanIntent.js';
+} from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
+import { createExternalKnowledgeRescanIntent } from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanIntent';
 import {
   presentExternalKnowledgeRescanEmptyProject,
   presentExternalKnowledgeRescanResponse,
-} from '#workflows/knowledge-rescan/KnowledgeRescanPresenters.js';
-import { buildKnowledgeRescanWorkflowPlan } from '#workflows/knowledge-rescan/KnowledgeRescanWorkflowPlan.js';
+} from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanPresenters';
+import { buildKnowledgeRescanWorkflowPlan } from '@alembic/core/workflows/knowledge-rescan/KnowledgeRescanWorkflowPlan';
+import type { ServiceContainer } from '#inject/ServiceContainer.js';
+import type { RescanInput } from '#shared/schemas/mcp-tools.js';
 
 /** MCP handler context */
 interface McpContext {
