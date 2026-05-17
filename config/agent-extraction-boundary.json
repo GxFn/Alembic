@@ -1,0 +1,340 @@
+{
+  "version": 1,
+  "plan": "docs/AlembicAgent/alembic-agent-extraction-boundary-plan-2026-05-17.md",
+  "localAgentPolicy": {
+    "status": "preserve-until-alembic-agent-runtime-replacement",
+    "replacementPackage": "@alembic/agent",
+    "replacementPhase": "phase-8-after-agent-phase-3-and-phase-4",
+    "notes": [
+      "Alembic keeps lib/agent/** until AlembicAgent has provider/tool runtime coverage and host entry tests.",
+      "CLI, daemon, HTTP/API, Dashboard/native, IDE, Lark runtime, and product shell stay in Alembic."
+    ]
+  },
+  "agentSourceNotes": [
+    {
+      "path": "lib/agent/profiles/definitions/remote.profile.ts",
+      "boundary": "agent-profile-with-host-supplied-tools",
+      "disposition": "keep-local-copy-until-runtime-switch",
+      "reason": "remote-exec is an Agent profile, but its executable action space is intentionally empty here; host adapters decide which remote/system tools are exposed."
+    },
+    {
+      "path": "lib/agent/profiles/definitions/signal.profile.ts",
+      "boundary": "agent-profile-used-by-product-background-analysis",
+      "disposition": "switch-call-site-after-agent-public-entrypoint",
+      "reason": "signal-analysis is a generic Agent run profile, while SignalCollector remains an Alembic daemon/product-shell service."
+    },
+    {
+      "path": "lib/tools/adapters/MacSystemAdapter.ts",
+      "boundary": "alembic-main-platform-adapter",
+      "disposition": "do-not-move-in-phase-4-without-host-adapter-contract",
+      "reason": "macOS execution depends on local native resources, TCC policy, and artifact materialization owned by the Alembic product shell."
+    },
+    {
+      "path": "lib/tools/adapters/MacSystemCapabilities.ts",
+      "boundary": "alembic-main-platform-capabilities",
+      "disposition": "do-not-move-in-phase-4-without-host-adapter-contract",
+      "reason": "macOS capability manifests expose host platform permissions and native screenshot behavior, not portable Agent tool contracts."
+    }
+  ],
+  "agentImportRules": {
+    "scanRoots": ["lib", "bin"],
+    "ignoredPathPrefixes": ["lib/agent/"],
+    "allowedCallSites": [
+      {
+        "path": "lib/external/lark/LarkTransport.ts",
+        "classification": "host-transport-agent-service",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service",
+        "expectedSpecifiers": ["#agent/service/index.js"],
+        "reason": "Lark remains a host transport and should call the future Agent service facade instead of owning runtime internals."
+      },
+      {
+        "path": "lib/http/routes/ai.ts",
+        "classification": "host-http-agent-route",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service",
+        "expectedSpecifiers": ["#agent/service/index.js"],
+        "reason": "HTTP route owns request/session presentation while delegating run execution to AgentService."
+      },
+      {
+        "path": "lib/http/routes/extract.ts",
+        "classification": "host-http-agent-route",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service",
+        "expectedSpecifiers": ["#agent/service/index.js"],
+        "reason": "HTTP extraction route is an Alembic API boundary around Agent task execution."
+      },
+      {
+        "path": "lib/http/routes/recipes.ts",
+        "classification": "host-http-agent-route",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service",
+        "expectedSpecifiers": ["#agent/service/index.js"],
+        "reason": "Recipe relation discovery should later call the Agent package facade from the route boundary."
+      },
+      {
+        "path": "lib/injection/modules/AgentModule.ts",
+        "classification": "host-dependency-injection-composition",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent plus Alembic host adapters",
+        "expectedSpecifiers": ["#agent/service/index.js"],
+        "reason": "The module composes Agent runtime classes with Alembic-owned Dashboard, Skill, Mac, Terminal, Workflow, and MCP adapters."
+      },
+      {
+        "path": "lib/service/module/ModuleService.ts",
+        "classification": "product-service-agent-task",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service",
+        "expectedSpecifiers": ["#agent/service/index.js"],
+        "reason": "Module scanning remains an Alembic service and should later delegate scan agent tasks to the Agent package."
+      },
+      {
+        "path": "lib/service/skills/SignalCollector.ts",
+        "classification": "product-background-agent-task",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service",
+        "expectedSpecifiers": ["#agent/service/index.js"],
+        "reason": "SignalCollector is an Alembic daemon feature that invokes the signal-analysis Agent profile."
+      },
+      {
+        "path": "lib/tools/v2/capabilities/CapabilityV2.ts",
+        "classification": "tool-system-agent-base-class",
+        "switchAfter": "phase-4",
+        "replacement": "@alembic/agent/tools",
+        "expectedSpecifiers": ["#agent/capabilities/Capability.js"],
+        "reason": "The V2 tool capability base currently inherits the Agent Capability type and belongs to the common tool-system migration set."
+      },
+      {
+        "path": "lib/workflows/capabilities/completion/CompletionSteps.ts",
+        "classification": "workflow-completion-agent-memory",
+        "switchAfter": "phase-5",
+        "replacement": "@alembic/agent/memory",
+        "expectedSpecifiers": [
+          "#agent/domain/EpisodicConsolidator.js",
+          "#agent/memory/MemoryEmbeddingStore.js",
+          "#agent/memory/PersistentMemory.js"
+        ],
+        "reason": "Completion workflow lazily uses Agent memory/consolidation and should wait for Agent memory persistence migration."
+      },
+      {
+        "path": "lib/workflows/capabilities/completion/WorkflowCompletionTypes.ts",
+        "classification": "workflow-completion-agent-memory-type",
+        "switchAfter": "phase-5",
+        "replacement": "@alembic/agent/memory",
+        "expectedSpecifiers": ["#agent/memory/MemoryStore.js"],
+        "reason": "Completion type surface references Agent memory database shape and should follow the memory package boundary."
+      },
+      {
+        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.ts",
+        "classification": "workflow-bootstrap-agent-runtime",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service-and-memory",
+        "expectedSpecifiers": [
+          "#agent/memory/MemoryCoordinator.js",
+          "#agent/memory/SessionStore.js",
+          "#agent/service/index.js"
+        ],
+        "reason": "Internal bootstrap consumers coordinate Alembic workflow state with Agent run and memory outputs."
+      },
+      {
+        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapDimensionAdmission.ts",
+        "classification": "workflow-bootstrap-agent-session",
+        "switchAfter": "phase-5",
+        "replacement": "@alembic/agent/memory",
+        "expectedSpecifiers": ["#agent/memory/SessionStore.js"],
+        "reason": "Dimension admission depends on Agent session restore state and should move with memory/session contracts."
+      },
+      {
+        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.ts",
+        "classification": "workflow-bootstrap-agent-runtime",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service-runtime",
+        "expectedSpecifiers": [
+          "#agent/context/ExplorationTracker.js",
+          "#agent/memory/MemoryCoordinator.js",
+          "#agent/prompts/insight-analyst.js",
+          "#agent/runtime/SystemRunContext.js",
+          "#agent/service/index.js"
+        ],
+        "reason": "Bootstrap runtime building is a host workflow adapter around Agent context, prompt, budget, and run contracts."
+      },
+      {
+        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.ts",
+        "classification": "workflow-bootstrap-agent-runtime",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service-runtime",
+        "expectedSpecifiers": [
+          "#agent/memory/MemoryCoordinator.js",
+          "#agent/runtime/SystemRunContext.js",
+          "#agent/service/index.js"
+        ],
+        "reason": "Bootstrap input builders assemble Alembic workflow inputs into Agent runtime inputs."
+      },
+      {
+        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapProjections.ts",
+        "classification": "workflow-bootstrap-agent-result",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service",
+        "expectedSpecifiers": ["#agent/service/index.js"],
+        "reason": "Projection code shapes AgentRunResult into Alembic workflow output."
+      },
+      {
+        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.ts",
+        "classification": "workflow-bootstrap-agent-memory",
+        "switchAfter": "phase-5",
+        "replacement": "@alembic/agent/memory",
+        "expectedSpecifiers": [
+          "#agent/memory/MemoryCoordinator.js",
+          "#agent/memory/MemoryEmbeddingStore.js",
+          "#agent/memory/PersistentMemory.js",
+          "#agent/memory/SessionStore.js"
+        ],
+        "reason": "Bootstrap runtime initialization owns host wiring for Agent memory stores until memory migration is complete."
+      },
+      {
+        "path": "lib/workflows/capabilities/execution/internal-agent/BootstrapSessionExecutionBuilder.ts",
+        "classification": "workflow-bootstrap-agent-result",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service",
+        "expectedSpecifiers": ["#agent/service/index.js"],
+        "reason": "Session execution builder uses Agent run input/result contracts at the Alembic workflow boundary."
+      },
+      {
+        "path": "lib/workflows/capabilities/execution/internal-agent/DimensionRestoreState.ts",
+        "classification": "workflow-bootstrap-agent-session",
+        "switchAfter": "phase-5",
+        "replacement": "@alembic/agent/memory",
+        "expectedSpecifiers": ["#agent/memory/SessionStore.js"],
+        "reason": "Restore state is tied to Agent session persistence and should follow memory/session extraction."
+      },
+      {
+        "path": "lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillPreparation.ts",
+        "classification": "workflow-bootstrap-agent-service",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service",
+        "expectedSpecifiers": ["#agent/service/index.js"],
+        "reason": "Preparation validates host availability of AgentService and SystemRunContextFactory."
+      },
+      {
+        "path": "lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillSessionRunner.ts",
+        "classification": "workflow-bootstrap-agent-service",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service",
+        "expectedSpecifiers": ["#agent/service/index.js"],
+        "reason": "Session runner delegates dimension work to AgentService while retaining Alembic workflow orchestration."
+      },
+      {
+        "path": "lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillTypes.ts",
+        "classification": "workflow-bootstrap-agent-service-type",
+        "switchAfter": "phase-8",
+        "replacement": "@alembic/agent/service",
+        "expectedSpecifiers": ["#agent/service/index.js"],
+        "reason": "Internal fill types expose AgentService/SystemRunContextFactory at the workflow boundary."
+      }
+    ]
+  },
+  "toolBoundaryRules": [
+    {
+      "pathPrefix": "lib/tools/core/",
+      "classification": "agent-common-tool-contracts",
+      "switchAfter": "phase-4",
+      "reason": "Core tool contracts, routing services, decisions, envelopes, and presenters are portable Agent tool-system code."
+    },
+    {
+      "pathPrefix": "lib/tools/catalog/",
+      "classification": "agent-common-tool-catalog",
+      "switchAfter": "phase-4",
+      "reason": "Capability manifests and unified catalog are common Agent tool registry infrastructure."
+    },
+    {
+      "pathPrefix": "lib/tools/v2/",
+      "classification": "agent-common-tool-v2",
+      "switchAfter": "phase-4",
+      "reason": "V2 router, handlers, cache, compressor, capability catalog, and context adapter are common Agent tool runtime candidates."
+    },
+    {
+      "pathPrefix": "lib/tools/workflow/",
+      "classification": "agent-common-workflow-tool-registry",
+      "switchAfter": "phase-4",
+      "reason": "Workflow registry is a generic tool-system extension point; concrete workflow handlers remain host supplied."
+    },
+    {
+      "path": "lib/tools/adapters/WorkflowAdapter.ts",
+      "classification": "agent-common-workflow-tool-adapter",
+      "switchAfter": "phase-4-with-host-workflow-registry",
+      "reason": "WorkflowAdapter is generic but must keep its handler registry injectable from the Alembic host."
+    },
+    {
+      "path": "lib/tools/adapters/TerminalAdapter.ts",
+      "classification": "agent-common-terminal-adapter",
+      "switchAfter": "phase-4-with-host-permission-contract",
+      "reason": "TerminalAdapter is part of the common terminal abstraction but still executes against host project roots and policy."
+    },
+    {
+      "path": "lib/tools/adapters/TerminalSession.ts",
+      "classification": "agent-common-terminal-session",
+      "switchAfter": "phase-4",
+      "reason": "Terminal session state is reusable common terminal execution infrastructure."
+    },
+    {
+      "path": "lib/tools/adapters/TerminalSessionManager.ts",
+      "classification": "agent-common-terminal-session",
+      "switchAfter": "phase-4",
+      "reason": "Session manager implementation is reusable terminal execution infrastructure."
+    },
+    {
+      "pathPrefix": "lib/tools/adapters/terminal-adapter/",
+      "classification": "agent-common-terminal-execution",
+      "switchAfter": "phase-4",
+      "reason": "Terminal executor, environment, artifact, audit, and envelope helpers are common terminal runtime pieces."
+    },
+    {
+      "pathPrefix": "lib/tools/adapters/terminal-capabilities/",
+      "classification": "agent-common-terminal-capabilities",
+      "switchAfter": "phase-4",
+      "reason": "Terminal capability manifests and helpers describe portable terminal tool surfaces."
+    },
+    {
+      "pathPrefix": "lib/tools/adapters/terminal-policy/",
+      "classification": "agent-common-terminal-policy",
+      "switchAfter": "phase-4",
+      "reason": "Terminal risk policy and input normalization are common tool-governance pieces."
+    },
+    {
+      "path": "lib/tools/adapters/DashboardOperationAdapter.ts",
+      "classification": "alembic-main-dashboard-bridge",
+      "switchAfter": "do-not-migrate-by-default",
+      "reason": "Dashboard operation execution is an Alembic product-shell bridge, not a portable Agent tool runtime."
+    },
+    {
+      "path": "lib/tools/adapters/DashboardOperations.ts",
+      "classification": "alembic-main-dashboard-bridge",
+      "switchAfter": "do-not-migrate-by-default",
+      "reason": "Dashboard operation manifests and handlers address Alembic Dashboard state and should stay host-owned."
+    },
+    {
+      "path": "lib/tools/adapters/MacSystemAdapter.ts",
+      "classification": "alembic-main-platform-adapter",
+      "switchAfter": "do-not-migrate-by-default",
+      "reason": "macOS execution is host platform integration requiring native resources and local privacy boundaries."
+    },
+    {
+      "path": "lib/tools/adapters/MacSystemCapabilities.ts",
+      "classification": "alembic-main-platform-capabilities",
+      "switchAfter": "do-not-migrate-by-default",
+      "reason": "macOS capability manifests expose host-specific platform permissions and native screenshot behavior."
+    },
+    {
+      "path": "lib/tools/adapters/SkillAdapter.ts",
+      "classification": "alembic-main-skill-asset-adapter",
+      "switchAfter": "do-not-migrate-by-default",
+      "reason": "Skill loading reads Alembic injectable skills and project skills from host paths."
+    },
+    {
+      "path": "lib/tools/adapters/SkillCapabilities.ts",
+      "classification": "alembic-main-skill-capabilities",
+      "switchAfter": "do-not-migrate-by-default",
+      "reason": "Skill capability manifests are tied to Alembic skill packaging and host project skill files."
+    }
+  ]
+}
