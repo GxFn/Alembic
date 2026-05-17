@@ -19,8 +19,8 @@
 import crypto from 'node:crypto';
 import { readFileSync, unlinkSync } from 'node:fs';
 import Logger from '@alembic/core/logging';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { timerRegistry } from '@alembic/core/shared/TimerRegistry';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
 import { LarkTransport } from '../../external/lark/LarkTransport.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';

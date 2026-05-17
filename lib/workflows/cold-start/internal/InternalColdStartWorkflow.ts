@@ -52,7 +52,6 @@ import {
   buildProjectSnapshot,
   ProjectIntelligenceCapability,
 } from '@alembic/core/project-intelligence';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { applyTestDimensionFilter } from '@alembic/core/shared/test-mode';
 import type {
   McpContext,
@@ -60,6 +59,7 @@ import type {
   WorkflowSkillHooks,
 } from '@alembic/core/types/workflows';
 import { runFullResetPolicy } from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import {
   dispatchInternalDimensionExecution,
   startInternalDimensionExecutionSession,

@@ -16,8 +16,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Logger from '@alembic/core/logging';
-import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/shared/ProjectMarkers';
-import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { DEFAULT_KNOWLEDGE_BASE_DIR, resolveDataRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import {

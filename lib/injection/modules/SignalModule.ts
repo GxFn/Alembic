@@ -15,7 +15,7 @@ import { SignalBridge } from '@alembic/core/infrastructure/signal/SignalBridge';
 import type { Signal } from '@alembic/core/infrastructure/signal/SignalBus';
 import { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
 import { SignalTraceWriter } from '@alembic/core/infrastructure/signal/SignalTraceWriter';
-import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveDataRoot } from '@alembic/core/workspace';
 import { HitRecorder } from '../../service/signal/HitRecorder.js';
 import { shutdown } from '../../shared/shutdown.js';
 import type { ServiceContainer } from '../ServiceContainer.js';

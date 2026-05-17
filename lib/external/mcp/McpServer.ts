@@ -21,7 +21,7 @@
 
 import { CapabilityProbe } from '@alembic/core/core/capability/CapabilityProbe';
 import Logger from '@alembic/core/logging';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { McpServer as SdkMcpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -179,7 +179,7 @@ export class McpServer {
       // ── 排除项目检查 — 防止误配置 ALEMBIC_PROJECT_DIR 到不该创建运行时数据的目录 ──
       // Ghost 模式下跳过排除检查（数据不写入项目目录）
       const { isExcludedProject } = await import('@alembic/core/shared/isOwnDevRepo');
-      const { ProjectRegistry } = await import('@alembic/core/shared/ProjectRegistry');
+      const { ProjectRegistry } = await import('@alembic/core/workspace');
       const isGhost = ProjectRegistry.isGhost(projectRoot);
       const exclusion = isExcludedProject(projectRoot);
       if (exclusion.excluded && !isGhost) {

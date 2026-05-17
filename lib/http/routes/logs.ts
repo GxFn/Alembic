@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import { resolveDataRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveDataRoot } from '@alembic/core/workspace';
 import { type Request, type Response, Router } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 

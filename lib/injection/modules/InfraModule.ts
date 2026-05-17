@@ -22,7 +22,7 @@ import { MemoryRepositoryImpl } from '@alembic/core/repository/memory/MemoryRepo
 import { unwrapRawDb } from '@alembic/core/search';
 import { KnowledgeFileWriter } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
 import { KnowledgeSyncService } from '@alembic/core/service/knowledge/KnowledgeSyncService';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import Gateway from '../../core/gateway/Gateway.js';
 import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../infrastructure/audit/AuditStore.js';
@@ -98,7 +98,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('writeZone', (ct: ServiceContainer) => {
     const resolver = ct.singletons._workspaceResolver as
-      | import('@alembic/core/shared/WorkspaceResolver').WorkspaceResolver
+      | import('@alembic/core/workspace').WorkspaceResolver
       | undefined;
     if (!resolver) {
       return null;

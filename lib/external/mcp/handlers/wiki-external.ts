@@ -17,8 +17,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
 import Logger from '@alembic/core/logging';
-import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/shared/ProjectMarkers';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import {
+  DEFAULT_KNOWLEDGE_BASE_DIR,
+  resolveDataRoot,
+  resolveProjectRoot,
+} from '@alembic/core/workspace';
 import { WikiGenerator } from '#service/wiki/WikiGenerator.js';
 import { dedup } from '#service/wiki/WikiUtils.js';
 import { envelope } from '../envelope.js';

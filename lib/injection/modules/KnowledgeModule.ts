@@ -36,12 +36,12 @@ import { KnowledgeGraphService } from '@alembic/core/service/knowledge/Knowledge
 import { KnowledgeService } from '@alembic/core/service/knowledge/KnowledgeService';
 import { RecipeProductionGateway } from '@alembic/core/service/knowledge/RecipeProductionGateway';
 import { SourceRefReconciler } from '@alembic/core/service/knowledge/SourceRefReconciler';
+import { HnswVectorAdapter, IndexingPipeline, JsonVectorAdapter } from '@alembic/core/vector';
 import {
   resolveDataRoot,
   resolveKnowledgeScanDirs,
   resolveProjectRoot,
-} from '@alembic/core/shared/resolveProjectRoot';
-import { HnswVectorAdapter, IndexingPipeline, JsonVectorAdapter } from '@alembic/core/vector';
+} from '@alembic/core/workspace';
 import { FileChangeHandler } from '../../service/evolution/FileChangeHandler.js';
 import { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 import type { ServiceContainer } from '../ServiceContainer.js';

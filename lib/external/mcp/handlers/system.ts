@@ -5,7 +5,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveProjectRoot } from '@alembic/core/workspace';
 import { PACKAGE_ROOT } from '../../../shared/package-assets.js';
 import { envelope } from '../envelope.js';
 import type { KnowledgeBaseStats, McpContext } from './types.js';

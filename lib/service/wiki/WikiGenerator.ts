@@ -36,7 +36,7 @@ import path from 'node:path';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
 import Logger from '@alembic/core/logging';
 import { LanguageService } from '@alembic/core/project-intelligence';
-import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/shared/ProjectMarkers';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/workspace';
 import {
   buildAiSystemPrompt,
   buildArticlePrompt,

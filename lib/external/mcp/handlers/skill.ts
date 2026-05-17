@@ -15,7 +15,7 @@ import path from 'node:path';
 import { getProjectSkillsPath } from '@alembic/core/infrastructure/config/Paths';
 import type { WriteZone } from '@alembic/core/infrastructure/io';
 import pathGuard from '@alembic/core/shared/PathGuard';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { getCursorRulesDir, getCursorRulesRelativePath } from '#shared/ide-paths.js';
 import { INJECTABLE_SKILLS_DIR } from '../../../shared/package-assets.js';
 import type { McpContext } from './types.js';

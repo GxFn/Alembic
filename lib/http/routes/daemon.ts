@@ -1,6 +1,5 @@
 import { getPackageVersion } from '@alembic/core/daemon';
-import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
-import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
+import { resolveProjectRoot, WorkspaceResolver } from '@alembic/core/workspace';
 import express from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 

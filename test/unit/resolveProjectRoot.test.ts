@@ -1,4 +1,4 @@
-import { resolveKnowledgeScanDirs } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveKnowledgeScanDirs } from '@alembic/core/workspace';
 import { describe, expect, it } from 'vitest';
 
 describe('resolveKnowledgeScanDirs', () => {

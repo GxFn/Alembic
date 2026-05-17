@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { LanguageService } from '@alembic/core/project-intelligence';
-import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveProjectRoot } from '@alembic/core/workspace';
 import { envelope } from '../envelope.js';
 import type { McpContext } from './types.js';
 

@@ -6,7 +6,7 @@
 import { dimensionTags } from '@alembic/core/domain/dimension/RecipeDimension';
 import { UnifiedValidator } from '@alembic/core/domain/knowledge/UnifiedValidator';
 import { getDeveloperIdentity } from '@alembic/core/shared/developer-identity';
-import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveProjectRoot } from '@alembic/core/workspace';
 import { envelope } from '../envelope.js';
 import type { McpContext, McpServiceContainer } from './types.js';
 

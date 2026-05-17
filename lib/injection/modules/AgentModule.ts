@@ -7,7 +7,7 @@
  */
 
 import type { SignalBus } from '@alembic/core/infrastructure/signal/SignalBus';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import {
   AgentProfileCompiler,
   AgentProfileRegistry,

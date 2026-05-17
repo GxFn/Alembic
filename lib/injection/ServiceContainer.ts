@@ -7,7 +7,7 @@ import Logger from '@alembic/core/logging';
 // ─── v3.0: AST ProjectGraph ──────────────────────────
 import { ProjectGraph } from '@alembic/core/project-intelligence';
 import { unwrapRawDb } from '@alembic/core/search';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
 import { GraphCache } from '../infrastructure/cache/GraphCache.js';
 import * as AgentModule from './modules/AgentModule.js';

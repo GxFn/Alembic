@@ -6,7 +6,7 @@
  *       (alembic_submit_knowledge / submit_knowledge_batch / knowledge_lifecycle)
  */
 
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { envelope } from '../envelope.js';
 import type {
   CandidateInput,

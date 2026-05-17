@@ -47,7 +47,6 @@ import {
   toEvolutionAuditRecipe,
 } from '@alembic/core/service/evolution/RecipeImpactPlanner';
 import { SourceRefReconciler } from '@alembic/core/service/knowledge/SourceRefReconciler';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
 import { applyTestDimensionFilter } from '@alembic/core/shared/test-mode';
 import type { PipelineFillView } from '@alembic/core/types/snapshot-views';
 import type {
@@ -59,6 +58,7 @@ import {
   runForceRescanCleanPolicy,
   runRescanCleanPolicy,
 } from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import {
   dispatchInternalDimensionExecution,
   startInternalDimensionExecutionSession,

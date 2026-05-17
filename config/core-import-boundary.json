@@ -89,10 +89,7 @@
     "@alembic/core/service/recipe/RecipeParser",
     "@alembic/core/service/search/MultiSignalRanker",
     "@alembic/core/shared/PathGuard",
-    "@alembic/core/shared/ProjectMarkers",
-    "@alembic/core/shared/ProjectRegistry",
     "@alembic/core/shared/TimerRegistry",
-    "@alembic/core/shared/WorkspaceResolver",
     "@alembic/core/shared/WorkspaceSettingsStore",
     "@alembic/core/shared/concurrency",
     "@alembic/core/shared/constants",
@@ -106,7 +103,6 @@
     "@alembic/core/shared/lifecycle",
     "@alembic/core/shared/markdown-utils",
     "@alembic/core/shared/recipe-tokens",
-    "@alembic/core/shared/resolveProjectRoot",
     "@alembic/core/shared/schemas/common",
     "@alembic/core/shared/schemas/config",
     "@alembic/core/shared/similarity",
@@ -116,6 +112,7 @@
     "@alembic/core/types/snapshot-views",
     "@alembic/core/types/workflows",
     "@alembic/core/vector",
+    "@alembic/core/workspace",
     "@alembic/core/workflows/capabilities/WorkflowCleanupPolicies"
   ],
   "frozenMaxOccurrences": {

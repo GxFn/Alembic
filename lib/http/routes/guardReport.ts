@@ -7,7 +7,7 @@
  *   GET /api/v1/guard/report/coverage  — CoverageAnalyzer 覆盖率矩阵
  */
 
-import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveProjectRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 

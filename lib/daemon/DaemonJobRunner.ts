@@ -4,7 +4,7 @@ import {
   type DaemonJobSource,
   JobStore,
 } from '@alembic/core/daemon';
-import { resolveProjectRoot } from '@alembic/core/shared/resolveProjectRoot';
+import { resolveProjectRoot } from '@alembic/core/workspace';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
 
 interface LoggerLike {

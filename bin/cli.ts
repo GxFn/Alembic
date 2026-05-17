@@ -34,7 +34,6 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { DEFAULT_FOLDER_NAMES } from '@alembic/core/shared/folder-names';
-import { WorkspaceResolver } from '@alembic/core/shared/WorkspaceResolver';
 import {
   collectAiEnv,
   collectAiEnvOverrides,
@@ -43,6 +42,7 @@ import {
   PROVIDER_KEY_ENV,
   WorkspaceSettingsStore,
 } from '@alembic/core/shared/WorkspaceSettingsStore';
+import { WorkspaceResolver } from '@alembic/core/workspace';
 import { Command } from 'commander';
 import { cli } from '../lib/cli/CliLogger.js';
 import { DEFAULT_IDE_FOLDER_NAMES } from '../lib/shared/ide-folder-names.js';
@@ -266,7 +266,7 @@ program
     const projectRoot = resolve(opts.dir);
 
     const { execSync: exec } = await import('node:child_process');
-    const { resolveSubRepoPath, isGitRepo } = await import('@alembic/core/shared/ProjectMarkers');
+    const { resolveSubRepoPath, isGitRepo } = await import('@alembic/core/workspace');
 
     const subRepoPath = resolveSubRepoPath(projectRoot);
 
@@ -2400,9 +2400,7 @@ program
   .argument('[action]', '操作: status | on | off | clean | list', 'status')
   .option('-d, --dir <path>', '项目目录', '.')
   .action(async (action: string, opts: { dir: string }) => {
-    const { ProjectRegistry, getGhostWorkspaceDir } = await import(
-      '@alembic/core/shared/ProjectRegistry'
-    );
+    const { ProjectRegistry, getGhostWorkspaceDir } = await import('@alembic/core/workspace');
     const fs = await import('node:fs');
     const os = await import('node:os');
     const projectRoot = resolve(opts.dir);

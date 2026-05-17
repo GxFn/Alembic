@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { isAlembicProject } from '@alembic/core/shared/ProjectMarkers';
 import {
   getGhostWorkspaceDir,
   getProjectRegistryPath,
+  isAlembicProject,
   ProjectRegistry,
-} from '@alembic/core/shared/ProjectRegistry';
-import WorkspaceResolver from '@alembic/core/shared/WorkspaceResolver';
+  WorkspaceResolver,
+} from '@alembic/core/workspace';
 import { afterEach, describe, expect, test } from 'vitest';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
