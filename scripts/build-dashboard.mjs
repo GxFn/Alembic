@@ -3,9 +3,15 @@
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { repoRoot, resolveWorkspaceSource } from './workspace-source.mjs';
 
-const repoRoot = join(import.meta.dirname, '..');
-const dashboardRepo = join(repoRoot, 'vendor', 'AlembicDashboard');
+const dashboardSource = resolveWorkspaceSource({
+  name: 'AlembicDashboard',
+  localRelative: '../AlembicDashboard',
+  vendorRelative: 'vendor/AlembicDashboard',
+  requiredFile: 'package.json',
+});
+const dashboardRepo = dashboardSource.root;
 const dashboardNodeModules = join(dashboardRepo, 'node_modules');
 const dashboardDist = join(dashboardRepo, 'dist');
 const targetDist = join(repoRoot, 'dashboard', 'dist');
@@ -16,16 +22,18 @@ function fail(message) {
 }
 
 if (!existsSync(join(dashboardRepo, 'package.json'))) {
-  fail(
-    'Missing vendor/AlembicDashboard. Run `git submodule update --init vendor/AlembicDashboard` first.'
-  );
+  fail('Missing AlembicDashboard source. Expected ../AlembicDashboard or vendor/AlembicDashboard.');
 }
 
 if (!existsSync(dashboardNodeModules)) {
   fail(
-    'Missing Dashboard dependencies. Run `npm ci --prefix vendor/AlembicDashboard` before `npm run build:dashboard`.'
+    `Missing Dashboard dependencies. Run \`npm ci --prefix ${dashboardSource.displayPath}\` before \`npm run build:dashboard\`.`
   );
 }
+
+console.log(
+  `Using ${dashboardSource.kind} AlembicDashboard source: ${dashboardSource.displayPath}`
+);
 
 const build = spawnSync('npm', ['--prefix', dashboardRepo, 'run', 'build'], {
   cwd: repoRoot,
@@ -41,7 +49,7 @@ if (build.status !== 0) {
 }
 
 if (!existsSync(join(dashboardDist, 'index.html'))) {
-  fail('Dashboard build did not produce vendor/AlembicDashboard/dist/index.html.');
+  fail(`Dashboard build did not produce ${dashboardSource.displayPath}/dist/index.html.`);
 }
 
 rmSync(targetDist, { recursive: true, force: true });

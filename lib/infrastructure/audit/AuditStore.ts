@@ -1,14 +1,51 @@
-/** AuditStore - 审计日志存储（全 Drizzle 类型安全） */
+/** AuditStore - 审计日志存储 */
 
-import type { DrizzleDB } from '@alembic/core/database';
-import { getDrizzle } from '@alembic/core/infrastructure/database/drizzle';
-import { auditLogs } from '@alembic/core/infrastructure/database/drizzle/schema';
-import { and, avg, count, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import type { SqliteDatabase } from '@alembic/core/database';
+
+interface AuditDatabaseHandle {
+  getDb(): SqliteDatabase;
+}
+
+export interface AuditLogRow {
+  id: string;
+  timestamp: number;
+  actor: string;
+  actorContext: string;
+  action: string;
+  resource: string | null;
+  operationData: string;
+  result: string;
+  errorMessage: string | null;
+  duration: number | null;
+}
+
+interface AuditLogSqlRow {
+  id: string;
+  timestamp: number;
+  actor: string;
+  actor_context: string | null;
+  action: string;
+  resource: string | null;
+  operation_data: string | null;
+  result: string;
+  error_message: string | null;
+  duration: number | null;
+}
+
+interface AuditQueryFilters {
+  actor?: string;
+  action?: string;
+  result?: string;
+  startDate?: number;
+  endDate?: number;
+  limit?: number;
+}
 
 export class AuditStore {
-  #drizzle: DrizzleDB;
-  constructor(db: { getDb: () => import('better-sqlite3').Database }, drizzle?: DrizzleDB) {
-    this.#drizzle = drizzle ?? getDrizzle();
+  #db: SqliteDatabase;
+
+  constructor(db: AuditDatabaseHandle) {
+    this.#db = db.getDb();
   }
 
   /** 保存审计日志 */
@@ -24,171 +61,128 @@ export class AuditStore {
     error_message: string | null;
     duration: number | null;
   }) {
-    this.#drizzle
-      .insert(auditLogs)
-      .values({
-        id: entry.id,
-        timestamp: entry.timestamp,
-        actor: entry.actor,
-        actorContext: entry.actor_context,
-        action: entry.action,
-        resource: entry.resource,
-        operationData: entry.operation_data,
-        result: entry.result,
-        errorMessage: entry.error_message,
-        duration: entry.duration,
-      })
-      .run();
+    this.#db
+      .prepare(
+        `INSERT INTO audit_logs (
+          id,
+          timestamp,
+          actor,
+          actor_context,
+          action,
+          resource,
+          operation_data,
+          result,
+          error_message,
+          duration
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        entry.id,
+        entry.timestamp,
+        entry.actor,
+        entry.actor_context,
+        entry.action,
+        entry.resource,
+        entry.operation_data,
+        entry.result,
+        entry.error_message,
+        entry.duration
+      );
   }
 
-  /** 查询审计日志（动态多条件，全 Drizzle） */
-  query(
-    filters: {
-      actor?: string;
-      action?: string;
-      result?: string;
-      startDate?: number;
-      endDate?: number;
-      limit?: number;
-    } = {}
-  ) {
-    const conditions = [];
+  /** 查询审计日志 */
+  query(filters: AuditQueryFilters = {}) {
+    const { whereClause, params } = buildAuditWhere(filters);
+    const limitClause = filters.limit ? ' LIMIT ?' : '';
+    const rows = this.#db
+      .prepare(`${selectAuditRowsSql()}${whereClause} ORDER BY timestamp DESC${limitClause}`)
+      .all(...params, ...(filters.limit ? [filters.limit] : [])) as AuditLogSqlRow[];
 
-    if (filters.actor) {
-      conditions.push(eq(auditLogs.actor, filters.actor));
-    }
-    if (filters.action) {
-      conditions.push(eq(auditLogs.action, filters.action));
-    }
-    if (filters.result) {
-      conditions.push(eq(auditLogs.result, filters.result));
-    }
-    if (filters.startDate) {
-      conditions.push(gte(auditLogs.timestamp, filters.startDate));
-    }
-    if (filters.endDate) {
-      conditions.push(lte(auditLogs.timestamp, filters.endDate));
-    }
-
-    const condition = conditions.length > 0 ? and(...conditions) : undefined;
-
-    let query = this.#drizzle
-      .select()
-      .from(auditLogs)
-      .where(condition)
-      .orderBy(desc(auditLogs.timestamp));
-
-    if (filters.limit) {
-      query = query.limit(filters.limit) as typeof query;
-    }
-
-    return query.all();
+    return rows.map(mapAuditRow);
   }
 
   /** 根据请求 ID 查询 */
   findByRequestId(requestId: string) {
-    return this.#drizzle.select().from(auditLogs).where(eq(auditLogs.id, requestId)).get();
+    const row = this.#db.prepare(`${selectAuditRowsSql()} WHERE id = ? LIMIT 1`).get(requestId) as
+      | AuditLogSqlRow
+      | undefined;
+
+    return row ? mapAuditRow(row) : undefined;
   }
 
   /** 根据角色查询 */
   findByActor(actor: string, limit = 100) {
-    return this.#drizzle
-      .select()
-      .from(auditLogs)
-      .where(eq(auditLogs.actor, actor))
-      .orderBy(desc(auditLogs.timestamp))
-      .limit(limit)
-      .all();
+    const rows = this.#db
+      .prepare(`${selectAuditRowsSql()} WHERE actor = ? ORDER BY timestamp DESC LIMIT ?`)
+      .all(actor, limit) as AuditLogSqlRow[];
+
+    return rows.map(mapAuditRow);
   }
 
   /** 根据操作查询 */
   findByAction(action: string, limit = 100) {
-    return this.#drizzle
-      .select()
-      .from(auditLogs)
-      .where(eq(auditLogs.action, action))
-      .orderBy(desc(auditLogs.timestamp))
-      .limit(limit)
-      .all();
+    const rows = this.#db
+      .prepare(`${selectAuditRowsSql()} WHERE action = ? ORDER BY timestamp DESC LIMIT ?`)
+      .all(action, limit) as AuditLogSqlRow[];
+
+    return rows.map(mapAuditRow);
   }
 
   /** 根据结果查询 */
   findByResult(result: string, limit = 100) {
-    return this.#drizzle
-      .select()
-      .from(auditLogs)
-      .where(eq(auditLogs.result, result))
-      .orderBy(desc(auditLogs.timestamp))
-      .limit(limit)
-      .all();
+    const rows = this.#db
+      .prepare(`${selectAuditRowsSql()} WHERE result = ? ORDER BY timestamp DESC LIMIT ?`)
+      .all(result, limit) as AuditLogSqlRow[];
+
+    return rows.map(mapAuditRow);
   }
 
-  /** 获取统计数据（全 Drizzle） */
+  /** 获取统计数据 */
   getStats(timeRange = '24h') {
     const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 168 : 720; // 30d
     const startTime = Date.now() - hours * 60 * 60 * 1000;
 
-    const startCondition = gte(auditLogs.timestamp, startTime);
-
-    // 总数
-    const [totalRow] = this.#drizzle
-      .select({ count: count() })
-      .from(auditLogs)
-      .where(startCondition)
-      .all();
-    const total = totalRow?.count ?? 0;
-
-    // 成功数
-    const [successRow] = this.#drizzle
-      .select({ count: count() })
-      .from(auditLogs)
-      .where(and(startCondition, eq(auditLogs.result, 'success')))
-      .all();
-    const successCount = successRow?.count ?? 0;
-
-    // 失败数
-    const [failureRow] = this.#drizzle
-      .select({ count: count() })
-      .from(auditLogs)
-      .where(and(startCondition, eq(auditLogs.result, 'failure')))
-      .all();
-    const failureCount = failureRow?.count ?? 0;
-
-    // 按角色统计
-    const byActor = this.#drizzle
-      .select({
-        actor: auditLogs.actor,
-        count: count(),
-      })
-      .from(auditLogs)
-      .where(startCondition)
-      .groupBy(auditLogs.actor)
-      .orderBy(desc(count()))
-      .all();
-
-    // 按操作统计
-    const byAction = this.#drizzle
-      .select({
-        action: auditLogs.action,
-        count: count(),
-      })
-      .from(auditLogs)
-      .where(startCondition)
-      .groupBy(auditLogs.action)
-      .orderBy(desc(count()))
-      .all();
-
-    // 平均响应时间
-    const [avgRow] = this.#drizzle
-      .select({
-        avg_duration: avg(auditLogs.duration),
-      })
-      .from(auditLogs)
-      .where(and(startCondition, sql`${auditLogs.duration} IS NOT NULL`))
-      .all();
-    const avgDuration = avgRow?.avg_duration
-      ? `${Math.round(Number(avgRow.avg_duration))}ms`
-      : 'N/A';
+    const total = readCount(
+      this.#db,
+      'SELECT COUNT(*) AS count FROM audit_logs WHERE timestamp >= ?',
+      [startTime]
+    );
+    const successCount = readCount(
+      this.#db,
+      'SELECT COUNT(*) AS count FROM audit_logs WHERE timestamp >= ? AND result = ?',
+      [startTime, 'success']
+    );
+    const failureCount = readCount(
+      this.#db,
+      'SELECT COUNT(*) AS count FROM audit_logs WHERE timestamp >= ? AND result = ?',
+      [startTime, 'failure']
+    );
+    const byActor = this.#db
+      .prepare(
+        `SELECT actor, COUNT(*) AS count
+         FROM audit_logs
+         WHERE timestamp >= ?
+         GROUP BY actor
+         ORDER BY count DESC`
+      )
+      .all(startTime) as Array<{ actor: string; count: number }>;
+    const byAction = this.#db
+      .prepare(
+        `SELECT action, COUNT(*) AS count
+         FROM audit_logs
+         WHERE timestamp >= ?
+         GROUP BY action
+         ORDER BY count DESC`
+      )
+      .all(startTime) as Array<{ action: string; count: number }>;
+    const avgRow = this.#db
+      .prepare(
+        `SELECT AVG(duration) AS avgDuration
+         FROM audit_logs
+         WHERE timestamp >= ? AND duration IS NOT NULL`
+      )
+      .get(startTime) as { avgDuration: number | null } | undefined;
+    const avgDuration = avgRow?.avgDuration ? `${Math.round(Number(avgRow.avgDuration))}ms` : 'N/A';
 
     return {
       timeRange,
@@ -209,10 +203,7 @@ export class AuditStore {
   cleanup({ maxAgeDays = 90 } = {}) {
     try {
       const cutoff = Date.now() - maxAgeDays * 86400000;
-      const result = this.#drizzle
-        .delete(auditLogs)
-        .where(sql`${auditLogs.timestamp} < ${cutoff}`)
-        .run();
+      const result = this.#db.prepare('DELETE FROM audit_logs WHERE timestamp < ?').run(cutoff);
       return { deleted: result.changes || 0 };
     } catch {
       return { deleted: 0 };
@@ -221,3 +212,69 @@ export class AuditStore {
 }
 
 export default AuditStore;
+
+function selectAuditRowsSql() {
+  return `SELECT
+    id,
+    timestamp,
+    actor,
+    actor_context,
+    action,
+    resource,
+    operation_data,
+    result,
+    error_message,
+    duration
+  FROM audit_logs`;
+}
+
+function buildAuditWhere(filters: AuditQueryFilters): { whereClause: string; params: unknown[] } {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (filters.actor) {
+    conditions.push('actor = ?');
+    params.push(filters.actor);
+  }
+  if (filters.action) {
+    conditions.push('action = ?');
+    params.push(filters.action);
+  }
+  if (filters.result) {
+    conditions.push('result = ?');
+    params.push(filters.result);
+  }
+  if (filters.startDate) {
+    conditions.push('timestamp >= ?');
+    params.push(filters.startDate);
+  }
+  if (filters.endDate) {
+    conditions.push('timestamp <= ?');
+    params.push(filters.endDate);
+  }
+
+  return {
+    whereClause: conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '',
+    params,
+  };
+}
+
+function mapAuditRow(row: AuditLogSqlRow): AuditLogRow {
+  return {
+    id: row.id,
+    timestamp: row.timestamp,
+    actor: row.actor,
+    actorContext: row.actor_context ?? '{}',
+    action: row.action,
+    resource: row.resource ?? null,
+    operationData: row.operation_data ?? '{}',
+    result: row.result,
+    errorMessage: row.error_message ?? null,
+    duration: row.duration ?? null,
+  };
+}
+
+function readCount(db: SqliteDatabase, sql: string, params: unknown[]) {
+  const row = db.prepare(sql).get(...params) as { count: number } | undefined;
+  return row?.count ?? 0;
+}

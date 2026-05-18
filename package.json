@@ -60,7 +60,7 @@
   "scripts": {
     "build": "npm run build:core && npm run clean:dist && tsc",
     "build:check": "npm run build:core && tsc --noEmit",
-    "build:core": "tsc -p vendor/AlembicCore/tsconfig.json",
+    "build:core": "node scripts/core-source-command.mjs build",
     "clean:dist": "node scripts/clean-dist.mjs",
     "postbuild": "node scripts/postbuild.mjs",
     "install:vscode-ext": "npm ci --prefix resources/vscode-ext",
@@ -91,8 +91,8 @@
     "lint": "biome check lib/ bin/ config/ scripts/",
     "lint:fix": "biome check --fix lib/ bin/ config/ scripts/",
     "lint:agent-extraction-boundary": "node scripts/lint-agent-extraction-boundary.mjs",
-    "lint:core-import-boundary": "node vendor/AlembicCore/scripts/lint-consumer-core-imports.mjs . --config config/core-import-boundary.json",
-    "lint:consumer-core-imports": "node vendor/AlembicCore/scripts/lint-consumer-core-imports.mjs . --config config/core-import-boundary.json",
+    "lint:core-import-boundary": "node scripts/core-source-command.mjs lint-consumer-imports",
+    "lint:consumer-core-imports": "node scripts/core-source-command.mjs lint-consumer-imports",
     "lint:repo-boundary": "node scripts/lint-repo-boundary.mjs",
     "format": "biome format --write lib/ bin/ config/ scripts/",
     "typecheck": "tsc --noEmit",
@@ -132,7 +132,7 @@
   },
   "dependencies": {
     "@alembic/agent": "file:../AlembicAgent",
-    "@alembic/core": "file:vendor/AlembicCore",
+    "@alembic/core": "file:../AlembicCore",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "ajv": "^8.20.0",
     "better-sqlite3": "^12.6.2",

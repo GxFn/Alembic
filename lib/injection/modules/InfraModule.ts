@@ -57,8 +57,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('auditStore', (ct: ServiceContainer) => {
     const db = ct.get('database') as ConstructorParameters<typeof AuditStore>[0];
-    const drizzle = (db as unknown as { getDrizzle(): unknown }).getDrizzle();
-    return new AuditStore(db, drizzle as ConstructorParameters<typeof AuditStore>[1]);
+    return new AuditStore(db);
   });
   c.singleton(
     'auditLogger',
@@ -132,9 +131,8 @@ export function register(c: ServiceContainer) {
   );
 
   c.singleton('auditRepository', (ct: ServiceContainer) => {
-    const db = ct.get('database') as unknown as { getDrizzle(): unknown };
-    const drizzle = db.getDrizzle();
-    return new AuditRepositoryImpl(drizzle as ConstructorParameters<typeof AuditRepositoryImpl>[0]);
+    const db = ct.get('database') as ConstructorParameters<typeof AuditRepositoryImpl>[0];
+    return new AuditRepositoryImpl(db);
   });
 
   c.singleton('memoryRepository', (ct: ServiceContainer) => {

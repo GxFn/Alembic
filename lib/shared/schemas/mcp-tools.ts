@@ -22,6 +22,96 @@ import {
 } from '@alembic/core/shared/schemas/common';
 import { z } from 'zod';
 
+type KnowledgeKind = 'all' | 'rule' | 'pattern' | 'fact';
+type StrictKnowledgeKind = Exclude<KnowledgeKind, 'all'>;
+type RecipeComplexity = 'beginner' | 'intermediate' | 'advanced';
+type RecipeScope = 'universal' | 'project-specific' | 'target-specific';
+
+interface SearchInputValue {
+  query: string;
+  mode: 'auto' | 'keyword' | 'bm25' | 'semantic' | 'context';
+  kind: KnowledgeKind;
+  limit: number;
+  language?: string;
+  sessionId?: string;
+  sessionHistory?: Array<Record<string, unknown>>;
+}
+
+interface KnowledgeInputValue {
+  operation: 'list' | 'get' | 'insights' | 'confirm_usage';
+  id?: string;
+  kind?: KnowledgeKind;
+  language?: string;
+  category?: string;
+  knowledgeType?: string;
+  status?: string;
+  complexity?: string;
+  limit: number;
+  usageType?: 'adoption' | 'application';
+  feedback?: string;
+}
+
+interface SubmitKnowledgeContentValue {
+  pattern?: string;
+  markdown?: string;
+  rationale: string;
+  steps?: Array<Record<string, unknown>>;
+  codeChanges?: Array<Record<string, unknown>>;
+  verification?: Record<string, unknown>;
+}
+
+interface SubmitKnowledgeReasoningValue {
+  whyStandard: string;
+  sources: string[];
+  confidence: number;
+  qualitySignals?: Record<string, unknown>;
+  alternatives?: string[];
+}
+
+interface SubmitKnowledgeItemValue {
+  title: string;
+  language: string;
+  content: SubmitKnowledgeContentValue;
+  kind: StrictKnowledgeKind;
+  doClause: string;
+  dontClause: string;
+  whenClause: string;
+  coreCode: string;
+  category: string;
+  trigger: string;
+  description: string;
+  headers: string[];
+  usageGuide: string;
+  knowledgeType: string;
+  reasoning: SubmitKnowledgeReasoningValue;
+  dimensionId?: string;
+  topicHint?: string;
+  complexity?: RecipeComplexity;
+  scope?: RecipeScope;
+  difficulty?: string;
+  tags?: string[];
+  constraints?: Record<string, unknown>;
+  relations?: Record<string, unknown>;
+  headerPaths?: string[];
+  moduleName?: string;
+  includeHeaders?: boolean;
+  source?: string;
+}
+
+interface KnowledgeLifecycleInputValue {
+  id: string;
+  action:
+    | 'submit'
+    | 'approve'
+    | 'reject'
+    | 'publish'
+    | 'deprecate'
+    | 'reactivate'
+    | 'to_draft'
+    | 'fast_track';
+  reason?: string;
+}
+
 // ══════════════════════════════════════════════════════
 //  1. alembic_health — 无参数
 // ══════════════════════════════════════════════════════
@@ -46,7 +136,7 @@ export const SearchInput = z.object({
   language: z.string().optional().describe('按编程语言过滤，如 swift/typescript'),
   sessionId: z.string().optional(),
   sessionHistory: z.array(z.record(z.string(), z.unknown())).optional(),
-});
+}) as unknown as z.ZodType<SearchInputValue>;
 export type SearchInput = z.infer<typeof SearchInput>;
 
 // ══════════════════════════════════════════════════════
@@ -80,7 +170,7 @@ export const KnowledgeInput = z
       return true;
     },
     { message: 'id is required for get/insights/confirm_usage operations' }
-  );
+  ) as unknown as z.ZodType<KnowledgeInputValue>;
 export type KnowledgeInput = z.infer<typeof KnowledgeInput>;
 
 // ══════════════════════════════════════════════════════
@@ -208,7 +298,7 @@ export const SubmitKnowledgeItemSchema = z.object({
   moduleName: z.string().optional(),
   includeHeaders: z.boolean().optional(),
   source: z.string().optional(),
-});
+}) as unknown as z.ZodType<SubmitKnowledgeItemValue>;
 
 export const SubmitKnowledgeInput = z.object({
   items: z
@@ -379,7 +469,7 @@ export const KnowledgeLifecycleInput = z.object({
       'approve/fast_track=发布 | reject=拒绝 | deprecate=废弃 | reactivate=恢复 | to_draft=回草稿'
     ),
   reason: z.string().optional().describe('reject/deprecate 时的理由'),
-});
+}) as unknown as z.ZodType<KnowledgeLifecycleInputValue>;
 export type KnowledgeLifecycleInput = z.infer<typeof KnowledgeLifecycleInput>;
 
 // 18. alembic_panorama
