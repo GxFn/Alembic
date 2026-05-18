@@ -1,7 +1,9 @@
 import {
   type AlembicRuntimeCapabilities,
+  type AlembicRuntimeProjectIdentity,
   createAlembicRuntimeCapabilities,
   createAlembicRuntimeHealthData,
+  createAlembicRuntimeProjectIdentity,
   getPackageVersion,
 } from '@alembic/core/daemon';
 import { collectAiEnvOverrides, isAiEnvReady, WorkspaceSettingsStore } from '@alembic/core/shared';
@@ -27,6 +29,16 @@ router.get('/health', (req, res) => {
     mode === 'daemon' && process.env.ALEMBIC_DAEMON_DASHBOARD_MOUNTED === '1';
   const dashboardUrl = dashboardAvailable && origin ? origin : null;
   const schemaMigrationVersion = getSchemaMigrationVersion(container);
+  const projectIdentity = buildDaemonProjectIdentity({
+    dataRoot: resolver.dataRoot,
+    dataRootSource: workspaceFacts.dataRootSource,
+    databasePath: resolver.databasePath,
+    projectId: resolver.projectId,
+    projectRoot: resolver.projectRoot,
+    runtimeDir: resolver.runtimeDir,
+    schemaMigrationVersion,
+    workspaceMode: workspaceFacts.mode,
+  });
   const internalAi = getInternalAiCapability(projectRoot);
   const fileMonitorAvailable = isDaemonFileMonitorAvailable(mode);
   const capabilities = buildDaemonCapabilities({
@@ -42,25 +54,17 @@ router.get('/health', (req, res) => {
     mode,
     origin,
     workspace: {
-      databasePath: resolver.databasePath,
-      dataRoot: resolver.dataRoot,
-      dataRootSource: workspaceFacts.dataRootSource,
+      ...projectIdentity,
+      databasePath: projectIdentity.databasePath ?? resolver.databasePath,
       ghost: resolver.ghost,
-      projectId: resolver.projectId,
-      projectRoot: resolver.projectRoot,
-      runtimeDir: resolver.runtimeDir,
     },
   });
   const healthData = createAlembicRuntimeHealthData({
     capabilities,
     dashboardUrl,
-    dataRoot: resolver.dataRoot,
-    databasePath: resolver.databasePath,
     mode,
     pid: process.pid,
-    projectId: resolver.projectId,
-    projectRoot: resolver.projectRoot,
-    schemaMigrationVersion,
+    ...projectIdentity,
     uptime: process.uptime(),
     version: getPackageVersion(),
   });
@@ -69,8 +73,6 @@ router.get('/health', (req, res) => {
     success: true,
     data: {
       ...healthData,
-      dataRootSource: workspaceFacts.dataRootSource,
-      runtimeDir: resolver.runtimeDir,
       runtimeBoundary,
       capabilities: {
         ...healthData.capabilities,
@@ -79,6 +81,14 @@ router.get('/health', (req, res) => {
     },
   });
 });
+
+export type DaemonProjectIdentityOptions = AlembicRuntimeProjectIdentity;
+
+export function buildDaemonProjectIdentity(
+  options: DaemonProjectIdentityOptions
+): AlembicRuntimeProjectIdentity {
+  return createAlembicRuntimeProjectIdentity(options);
+}
 
 export interface DaemonCapabilitiesOptions {
   dashboardAvailable: boolean;

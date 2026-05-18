@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { buildAlembicRuntimeBoundary } from '../../lib/daemon/RuntimeBoundary.js';
 import {
   buildDaemonCapabilities,
+  buildDaemonProjectIdentity,
   type DaemonCapabilitiesOptions,
 } from '../../lib/http/routes/daemon.js';
 
@@ -86,6 +87,7 @@ describe('daemon capabilities', () => {
         dataRootSource: 'project-root',
         mode: 'standard',
         projectRoot: '/tmp/project',
+        workspaceMode: 'standard',
       },
       daemon: {
         owner: 'alembic',
@@ -135,5 +137,44 @@ describe('daemon capabilities', () => {
     expect(capabilities.fileMonitor.available).toBe(false);
     expect(capabilities.fileMonitor.mode).toBe('disabled');
     expect(runtimeBoundary.fileMonitor.available).toBe(false);
+  });
+
+  test('builds project identity through the core runtime contract', () => {
+    const projectIdentity = buildDaemonProjectIdentity({
+      dataRoot: '/tmp/project',
+      dataRootSource: 'ghost-registry',
+      databasePath: '/tmp/project/.asd/alembic.db',
+      projectId: 'project-123',
+      projectRoot: '/tmp/source',
+      runtimeDir: '/tmp/project/.asd',
+      schemaMigrationVersion: '2026-05-18',
+    });
+
+    expect(projectIdentity).toEqual({
+      dataRoot: '/tmp/project',
+      dataRootSource: 'ghost-registry',
+      databasePath: '/tmp/project/.asd/alembic.db',
+      projectId: 'project-123',
+      projectRoot: '/tmp/source',
+      runtimeDir: '/tmp/project/.asd',
+      schemaMigrationVersion: '2026-05-18',
+      workspaceMode: 'ghost',
+    });
+
+    const runtimeBoundary = makeRuntimeBoundary(makeCapabilities(), {
+      workspace: {
+        ...projectIdentity,
+        databasePath: projectIdentity.databasePath ?? '/tmp/project/.asd/alembic.db',
+        ghost: true,
+      },
+    });
+
+    expect(runtimeBoundary.workspace).toMatchObject({
+      contract: '@alembic/core/workspace',
+      dataRootSource: 'ghost-registry',
+      mode: 'ghost',
+      runtimeDir: '/tmp/project/.asd',
+      workspaceMode: 'ghost',
+    });
   });
 });

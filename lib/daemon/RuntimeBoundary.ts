@@ -7,6 +7,7 @@ import {
   type AlembicInternalAiCapability,
   type AlembicRuntimeCapabilities,
   type AlembicRuntimeMode,
+  type AlembicRuntimeProjectIdentity,
 } from '@alembic/core/daemon';
 
 export const LOCAL_ALEMBIC_ROUTE: AlembicEnhancementRoute = 'local-alembic';
@@ -17,15 +18,19 @@ export type AlembicRuntimeRoute = AlembicEnhancementRoute;
 export type DaemonFileChangeEventSource = (typeof ALEMBIC_FILE_MONITOR_EVENT_SOURCES)[number];
 export type DaemonJobKind = (typeof ALEMBIC_JOB_KINDS)[number];
 export type InternalAiCapability = AlembicInternalAiCapability;
+export type RuntimeBoundaryWorkspaceMode = NonNullable<
+  AlembicRuntimeProjectIdentity['workspaceMode']
+>;
 
 export interface RuntimeBoundaryWorkspace {
-  databasePath: string;
-  dataRoot: string;
-  dataRootSource: 'ghost-registry' | 'project-root';
+  databasePath: NonNullable<AlembicRuntimeProjectIdentity['databasePath']>;
+  dataRoot: AlembicRuntimeProjectIdentity['dataRoot'];
+  dataRootSource: AlembicRuntimeProjectIdentity['dataRootSource'];
   ghost: boolean;
-  projectId: string | null;
-  projectRoot: string;
-  runtimeDir: string;
+  projectId: AlembicRuntimeProjectIdentity['projectId'];
+  projectRoot: AlembicRuntimeProjectIdentity['projectRoot'];
+  runtimeDir: AlembicRuntimeProjectIdentity['runtimeDir'];
+  workspaceMode?: AlembicRuntimeProjectIdentity['workspaceMode'];
 }
 
 export interface AlembicRuntimeBoundaryOptions {
@@ -43,11 +48,12 @@ export interface AlembicRuntimeBoundary {
     contract: '@alembic/core/workspace';
     databasePath: string;
     dataRoot: string;
-    dataRootSource: 'ghost-registry' | 'project-root';
-    mode: 'ghost' | 'standard';
+    dataRootSource: AlembicRuntimeProjectIdentity['dataRootSource'];
+    mode: RuntimeBoundaryWorkspaceMode;
     projectId: string | null;
     projectRoot: string;
     runtimeDir: string;
+    workspaceMode: RuntimeBoundaryWorkspaceMode;
   };
   daemon: {
     apiBaseUrl: string | null;
@@ -84,6 +90,9 @@ export interface AlembicRuntimeBoundary {
 export function buildAlembicRuntimeBoundary(
   options: AlembicRuntimeBoundaryOptions
 ): AlembicRuntimeBoundary {
+  const workspaceMode =
+    options.workspace.workspaceMode ?? (options.workspace.ghost ? 'ghost' : 'standard');
+
   return {
     owner: 'alembic',
     route: LOCAL_ALEMBIC_ROUTE,
@@ -92,10 +101,11 @@ export function buildAlembicRuntimeBoundary(
       databasePath: options.workspace.databasePath,
       dataRoot: options.workspace.dataRoot,
       dataRootSource: options.workspace.dataRootSource,
-      mode: options.workspace.ghost ? 'ghost' : 'standard',
+      mode: workspaceMode,
       projectId: options.workspace.projectId,
       projectRoot: options.workspace.projectRoot,
       runtimeDir: options.workspace.runtimeDir,
+      workspaceMode,
     },
     daemon: {
       apiBaseUrl: options.origin,
