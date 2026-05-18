@@ -184,26 +184,24 @@ describe('PathGuard', () => {
       ).not.toThrow();
     });
 
-    test('should block .cursor/ by default (host delivery adapter must opt in)', () => {
+    test('should block hidden project config directories by default', () => {
       expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.cursor/mcp.json'))
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.editor-config/tool.json'))
       ).toThrow(PathGuardError);
       expect(() =>
-        pathGuard.assertProjectWriteSafe(
-          path.join(PROJECT_ROOT, '.cursor/rules/alembic-skills.mdc')
-        )
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.local-tool/config.json'))
       ).toThrow(PathGuardError);
     });
 
-    test('should block .vscode/ by default (host delivery adapter must opt in)', () => {
+    test('should block hidden settings directories by default', () => {
       expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.vscode/settings.json'))
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.settings/local.json'))
       ).toThrow(PathGuardError);
     });
 
-    test('should block .github/ by default (host delivery adapter must opt in)', () => {
+    test('should block hidden instruction files by default', () => {
       expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.github/copilot-instructions.md'))
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.instructions/local.md'))
       ).toThrow(PathGuardError);
     });
 
@@ -219,24 +217,24 @@ describe('PathGuard', () => {
       );
     });
 
-    test('should allow host-declared delivery and env write extensions', () => {
+    test('should allow host-declared project write extensions', () => {
       pathGuard._reset();
       pathGuard.configure({
         projectRoot: PROJECT_ROOT,
         packageRoot: PACKAGE_ROOT,
         knowledgeBaseDir: 'Alembic',
-        extraProjectWritePrefixes: ['.cursor', '.vscode', '.github'],
+        extraProjectWritePrefixes: ['.local-tool', '.settings', '.instructions'],
         extraProjectWritableFiles: ['.env'],
       });
 
       expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.cursor/mcp.json'))
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.local-tool/config.json'))
       ).not.toThrow();
       expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.vscode/settings.json'))
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.settings/local.json'))
       ).not.toThrow();
       expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.github/copilot-instructions.md'))
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.instructions/local.md'))
       ).not.toThrow();
       expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.env'))).not.toThrow();
     });

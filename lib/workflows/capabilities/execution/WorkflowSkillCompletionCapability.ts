@@ -4,8 +4,7 @@ import { getProjectSkillsPath } from '@alembic/core/config';
 import type { WriteZone } from '@alembic/core/io';
 import { pathGuard } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
-import { getCursorRulesDir, getCursorRulesRelativePath } from '#shared/ide-paths.js';
+import { resolveDataRoot } from '@alembic/core/workspace';
 import { INJECTABLE_SKILLS_DIR } from '../../../shared/package-assets.js';
 
 const logger = Logger.getInstance();
@@ -324,74 +323,11 @@ function buildSkillFrontmatter({
 }
 
 function regenerateEditorIndex(ctx?: SkillContext | null) {
-  try {
-    const projectSkills: { name: string; summary: string }[] = [];
-    const projectSkillsDir = getProjectSkillsDir(ctx);
-    try {
-      const dirs = fs
-        .readdirSync(projectSkillsDir, { withFileTypes: true })
-        .filter((dirent) => dirent.isDirectory())
-        .map((dirent) => dirent.name);
-      for (const name of dirs) {
-        const meta = parseSkillMeta(name, projectSkillsDir);
-        projectSkills.push({ name, summary: meta.description });
-      }
-    } catch {
-      /* no project skills dir */
-    }
-
-    const writeZone = getWriteZone(ctx);
-    const projectRoot = resolveProjectRoot(ctx?.container);
-    const rulesDir = getCursorRulesDir(projectRoot);
-
-    if (projectSkills.length === 0) {
-      try {
-        if (writeZone) {
-          writeZone.remove(writeZone.project(getCursorRulesRelativePath('alembic-skills.mdc')));
-        } else {
-          fs.unlinkSync(path.join(rulesDir, 'alembic-skills.mdc'));
-        }
-      } catch {
-        /* no index */
-      }
-      return { generated: false, count: 0 };
-    }
-
-    const lines = [
-      '# Alembic Project Skills Index',
-      '',
-      'This file is generated automatically. Use alembic_skill to load full skill content.',
-      '',
-      '## Available Project Skills',
-      '',
-    ];
-    for (const skill of projectSkills) {
-      lines.push(`- **${skill.name}**: ${skill.summary}`);
-    }
-    lines.push('', '## Built-in Skill Hints', '');
-    for (const [skillName, useCase] of Object.entries(SKILL_USE_CASES)) {
-      lines.push(`- **${skillName}**: ${useCase}`);
-    }
-
-    const content = `${lines.join('\n')}\n`;
-    if (writeZone) {
-      writeZone.ensureDir(writeZone.project(getCursorRulesRelativePath()));
-      writeZone.writeFile(
-        writeZone.project(getCursorRulesRelativePath('alembic-skills.mdc')),
-        content
-      );
-    } else {
-      pathGuard.assertProjectWriteSafe(rulesDir);
-      fs.mkdirSync(rulesDir, { recursive: true });
-      fs.writeFileSync(path.join(rulesDir, 'alembic-skills.mdc'), content, 'utf8');
-    }
-    return { generated: true, count: projectSkills.length };
-  } catch (err: unknown) {
-    return {
-      generated: false,
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
+  void ctx;
+  return {
+    generated: false,
+    reason: 'Alembic main package no longer writes project editor delivery indexes.',
+  };
 }
 
 function parseSkillMeta(skillName: string, baseDir = INJECTABLE_SKILLS_DIR) {

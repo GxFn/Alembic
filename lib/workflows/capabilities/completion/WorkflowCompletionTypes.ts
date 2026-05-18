@@ -46,15 +46,6 @@ export interface ServiceContainerLike extends CompletionContainerLike {
   singletons?: Record<string, unknown>;
 }
 
-export interface DeliveryPipelineLike {
-  deliver(): Promise<{
-    channelA?: { rulesCount?: number };
-    channelB?: { topicCount?: number };
-    channelC?: { synced?: number };
-    channelF?: { filesWritten?: number };
-  }>;
-}
-
 export interface PanoramaServiceLike {
   rescan(): Promise<void>;
   getOverview(): Promise<{ moduleCount: number; gapCount: number }>;
@@ -104,9 +95,7 @@ export interface WorkflowSemanticMemoryConsolidationResult {
 }
 
 export interface WorkflowCompletionFinalizerResult {
-  deliveryVerification:
-    | import('#service/bootstrap/DeliveryVerifier.js').DeliveryVerification
-    | null;
+  deliveryVerification: null;
   semanticMemoryResult: WorkflowSemanticMemoryConsolidationResult | null;
   deliveryStatus?: WorkflowCompletionStepStatus;
   wikiStatus?: WorkflowCompletionStepStatus;

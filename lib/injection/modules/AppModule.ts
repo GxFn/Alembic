@@ -4,7 +4,7 @@
  * 负责注册:
  *   - recipeParser, recipeCandidateValidator
  *   - qualityScorer, feedbackCollector, tokenUsageStore, recipeExtractor
- *   - moduleService, cursorDeliveryPipeline
+ *   - moduleService
  *   - primeSearchPipeline (for prime multi-query search — no DB dependency)
  */
 
@@ -16,7 +16,6 @@ import { QualityScorer } from '@alembic/core/service/quality/QualityScorer';
 import { RecipeCandidateValidator } from '@alembic/core/service/recipe/RecipeCandidateValidator';
 import { RecipeParser } from '@alembic/core/service/recipe/RecipeParser';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
-import { CursorDeliveryPipeline } from '../../service/delivery/CursorDeliveryPipeline.js';
 import { ModuleService } from '../../service/module/ModuleService.js';
 import { PrimeSearchPipeline } from '../../service/task/PrimeSearchPipeline.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
@@ -62,19 +61,6 @@ export function register(c: ServiceContainer) {
       } as unknown as ConstructorParameters<typeof ModuleService>[1]
     );
   });
-
-  c.singleton(
-    'cursorDeliveryPipeline',
-    (ct: ServiceContainer) =>
-      new CursorDeliveryPipeline({
-        knowledgeService: ct.get('knowledgeService'),
-        projectRoot: resolveProjectRoot(ct),
-        dataRoot: resolveDataRoot(ct),
-        database: ct.get('database'),
-        logger: ct.logger,
-        wz: ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined,
-      } as unknown as ConstructorParameters<typeof CursorDeliveryPipeline>[0])
-  );
 
   // ═══ PrimeSearchPipeline (for prime multi-query search) ═══
 

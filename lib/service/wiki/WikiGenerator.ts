@@ -1016,48 +1016,19 @@ export class WikiGenerator {
     return files;
   }
 
-  // ═══ Phase 8: 同步 Cursor 端 MD ═══════════════════════════
+  // ═══ Phase 8: 同步外部文档 ═══════════════════════════
 
   /**
-   * 同步 Cursor 端保存的 MD 到 wiki 目录
-   *
-   * 同步源:
-   *   1. .cursor/skills/alembic-devdocs/references/ (*.md)  → wiki/documents/
-   *
-   * @returns >}
+   * Alembic 主包不再读取项目内编辑器交付目录。
    */
   _syncCursorDocs() {
     const synced: WikiFileResult[] = [];
     const isZh = this.options.language === 'zh';
 
-    // ── Source 1: Channel D devdocs ──
-    const devdocsDir = path.join(
-      this.projectRoot,
-      '.cursor',
-      'skills',
-      'alembic-devdocs',
-      'references'
-    );
-    if (fs.existsSync(devdocsDir)) {
-      this._ensureDir(path.join(this.wikiDir, 'documents'));
-      const files = fs.readdirSync(devdocsDir).filter((f) => f.endsWith('.md'));
-      for (const file of files) {
-        try {
-          const content = fs.readFileSync(path.join(devdocsDir, file), 'utf-8');
-          const header = `<!-- synced from .cursor/skills/alembic-devdocs/references/${file} -->\n\n`;
-          const result: WikiFileResult = this._writeFile(`documents/${file}`, header + content);
-          result.source = 'cursor-devdocs';
-          synced.push(result);
-        } catch {
-          /* skip */
-        }
-      }
-    }
-
     // 生成目录索引
     this._generateSyncIndex(synced, isZh);
 
-    logger.info(`[WikiGenerator] Synced ${synced.length} docs from Cursor`);
+    logger.info(`[WikiGenerator] Synced ${synced.length} external docs`);
     this._emit(WikiPhase.SYNC_DOCS, 88, `同步完成: ${synced.length} 个文档`);
     return synced;
   }

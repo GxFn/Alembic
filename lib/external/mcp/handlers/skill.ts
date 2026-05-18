@@ -15,8 +15,7 @@ import path from 'node:path';
 import { getProjectSkillsPath } from '@alembic/core/config';
 import type { WriteZone } from '@alembic/core/io';
 import { pathGuard } from '@alembic/core/io';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
-import { getCursorRulesDir, getCursorRulesRelativePath } from '#shared/ide-paths.js';
+import { resolveDataRoot } from '@alembic/core/workspace';
 import { INJECTABLE_SKILLS_DIR } from '../../../shared/package-assets.js';
 import type { McpContext } from './types.js';
 
@@ -266,8 +265,7 @@ export function loadSkill(ctx: McpContext | null, args: { skillName?: string; se
 // ═══════════════════════════════════════════════════════════
 
 /**
- * 创建项目级 Skill — 写入 {projectRoot}/Alembic/skills/<name>/SKILL.md
- * 创建后自动 regenerate 编辑器索引（.cursor/rules/alembic-skills.mdc）
+ * 创建项目级 Skill — 写入 Alembic 数据目录的 skills/<name>/SKILL.md
  *
  * @param _ctx MCP context
  * @param args { name, description, content, overwrite? }
@@ -382,7 +380,6 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
     });
   }
 
-  // ── regenerate 编辑器索引 ──
   const indexResult = _regenerateEditorIndex(ctx ?? undefined);
 
   // ── SkillHooks: onSkillCreated (fire-and-forget) ──
@@ -412,76 +409,15 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
 }
 
 /**
- * Regenerate .cursor/rules/alembic-skills.mdc 索引文件
- * 扫描所有项目级 Skills，生成摘要索引供 External Agent 被动发现
- *
- * @returns }
+ * Alembic 主包不再写入项目编辑器交付索引。
  */
 function _regenerateEditorIndex(ctx?: McpContext) {
-  try {
-    // 扫描项目级 Skills
-    const projectSkills: { name: string; summary: string }[] = [];
-    const projectSkillsDir = _getProjectSkillsDir(ctx);
-    try {
-      const dirs = fs
-        .readdirSync(projectSkillsDir, { withFileTypes: true })
-        .filter((d) => d.isDirectory())
-        .map((d) => d.name);
-      for (const name of dirs) {
-        const meta = _parseSkillMeta(name, projectSkillsDir);
-        projectSkills.push({ name, summary: meta.description });
-      }
-    } catch {
-      /* no project skills dir */
-    }
-
-    const wz = _getWriteZone(ctx);
-    const projectRoot = resolveProjectRoot(ctx?.container);
-    const rulesDir = getCursorRulesDir(projectRoot);
-
-    if (projectSkills.length === 0) {
-      try {
-        if (wz) {
-          wz.remove(wz.project(getCursorRulesRelativePath('alembic-skills.mdc')));
-        } else {
-          fs.unlinkSync(path.join(rulesDir, 'alembic-skills.mdc'));
-        }
-      } catch {
-        /* not exists */
-      }
-      return { success: true, skillCount: 0 };
-    }
-
-    const skillLines = projectSkills.map((s) => `- **${s.name}**: ${s.summary}`).join('\n');
-
-    const mdcContent = [
-      '---',
-      'description: Alembic 项目级 Skills 索引（自动生成，请勿手动编辑）',
-      'alwaysApply: true',
-      '---',
-      '',
-      '# Alembic Project Skills',
-      '',
-      `本项目已注册 ${projectSkills.length} 个自定义 Skill。使用 \`alembic_skill({ operation: "load", name })\` 加载完整内容。`,
-      '',
-      skillLines,
-      '',
-    ].join('\n');
-
-    if (wz) {
-      wz.ensureDir(wz.project(getCursorRulesRelativePath()));
-      wz.writeFile(wz.project(getCursorRulesRelativePath('alembic-skills.mdc')), mdcContent);
-    } else {
-      pathGuard.assertProjectWriteSafe(rulesDir);
-      fs.mkdirSync(rulesDir, { recursive: true });
-      fs.writeFileSync(path.join(rulesDir, 'alembic-skills.mdc'), mdcContent, 'utf8');
-    }
-    const indexPath = path.join(rulesDir, 'alembic-skills.mdc');
-
-    return { success: true, path: indexPath, skillCount: projectSkills.length };
-  } catch (err: unknown) {
-    return { success: false, error: err instanceof Error ? err.message : String(err) };
-  }
+  void ctx;
+  return {
+    success: true,
+    generated: false,
+    reason: 'Alembic main package no longer writes project editor delivery indexes.',
+  };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -489,8 +425,8 @@ function _regenerateEditorIndex(ctx?: McpContext) {
 // ═══════════════════════════════════════════════════════════
 
 /**
- * 删除项目级 Skill — 移除 {projectRoot}/Alembic/skills/<name>/ 整个目录
- * 内置 Skill 不可删除。删除后自动 regenerate 编辑器索引。
+ * 删除项目级 Skill — 移除 Alembic 数据目录的 skills/<name>/ 整个目录
+ * 内置 Skill 不可删除。
  *
  * @param _ctx MCP context
  * @param args { name: string }
@@ -551,7 +487,6 @@ export function deleteSkill(ctx: McpContext | null, args: { name?: string }) {
     });
   }
 
-  // ── regenerate 编辑器索引 ──
   const indexResult = _regenerateEditorIndex(ctx ?? undefined);
 
   // ── SkillHooks: onSkillExpired (fire-and-forget) ──
@@ -583,7 +518,7 @@ export function deleteSkill(ctx: McpContext | null, args: { name?: string }) {
 
 /**
  * 更新项目级 Skill — 修改 description 和/或 content
- * 内置 Skill 不可更新。更新后自动 regenerate 编辑器索引。
+ * 内置 Skill 不可更新。
  *
  * @param _ctx MCP context
  * @param args { name, description?, content? }
@@ -700,7 +635,6 @@ export function updateSkill(ctx: McpContext | null, args: UpdateSkillArgs) {
     });
   }
 
-  // ── regenerate 编辑器索引 ──
   const indexResult = _regenerateEditorIndex(ctx ?? undefined);
 
   return JSON.stringify({

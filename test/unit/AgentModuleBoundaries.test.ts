@@ -64,15 +64,11 @@ describe('agent module boundaries', () => {
     expect(offenders).toEqual([]);
   });
 
-  test('keeps protocol adapters at protocol boundaries', () => {
-    const mcpAdapterPath = join(repoRoot, 'lib/external/mcp/McpToolAdapter.ts');
+  test('keeps protocol presenters at protocol boundaries', () => {
     const httpPresenterPath = join(repoRoot, 'lib/http/utils/tool-envelope-response.ts');
 
-    expect(existsSync(mcpAdapterPath)).toBe(true);
     expect(existsSync(httpPresenterPath)).toBe(true);
-    expect(existsSync(join(repoRoot, 'lib/tools/adapters/McpToolAdapter.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'lib/tools/core/tool-envelope-response.ts'))).toBe(false);
-    expect(readFileSync(mcpAdapterPath, 'utf8')).not.toContain(agentAliasPrefix);
     expect(readFileSync(httpPresenterPath, 'utf8')).not.toContain(agentAliasPrefix);
   });
 
@@ -377,7 +373,9 @@ function isRetiredImportSpecifier(specifier: string, relFile: string) {
 }
 
 function agentPath(...segments: string[]) {
-  return `${join(localAgentRoot, ...segments).split('\\').join('/')}/`;
+  return `${join(localAgentRoot, ...segments)
+    .split('\\')
+    .join('/')}/`;
 }
 
 function isHandlerInternalImport(specifier: string) {

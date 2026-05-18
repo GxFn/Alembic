@@ -74,13 +74,6 @@ export function register(c: ServiceContainer) {
           eventBus: ct.services.eventBus ? ct.get('eventBus') : null,
           edgeRepo: ct.get('knowledgeEdgeRepository'),
           proposalRepo: ct.get('proposalRepository'),
-          afterPublish: () => {
-            if (!ct.services.cursorDeliveryPipeline) {
-              return;
-            }
-            const pipeline = ct.get('cursorDeliveryPipeline') as { deliver(): Promise<unknown> };
-            return pipeline.deliver();
-          },
         } as ConstructorParameters<typeof KnowledgeService>[4]
       )
   );

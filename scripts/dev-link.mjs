@@ -194,7 +194,7 @@ function verifyBuiltBins() {
     return;
   }
 
-  for (const file of ['dist/bin/cli.js', 'dist/bin/mcp-server.js']) {
+  for (const file of ['dist/bin/cli.js']) {
     const path = join(repoRoot, file);
     if (!existsSync(path)) {
       throw new Error(`Missing built bin: ${file}`);
@@ -220,17 +220,13 @@ function verifyDashboardAssets() {
 
 async function verifyGlobalInstall({ dryRun }) {
   if (dryRun) {
-    log('[dry-run] Verify global alembic and alembic-mcp commands.');
+    log('[dry-run] Verify global alembic command.');
     return;
   }
 
   const alembicPath = capture('sh', ['-lc', 'command -v alembic']).trim();
-  const mcpPath = capture('sh', ['-lc', 'command -v alembic-mcp']).trim();
   if (!alembicPath) {
     throw new Error('Global command `alembic` was not found after install.');
-  }
-  if (!mcpPath) {
-    throw new Error('Global command `alembic-mcp` was not found after install.');
   }
 
   const globalRoot = capture('npm', ['root', '-g']).trim();
@@ -249,7 +245,6 @@ async function verifyGlobalInstall({ dryRun }) {
 
   const version = capture('alembic', ['--version']).trim();
   log(`Global alembic: ${alembicPath}`);
-  log(`Global alembic-mcp: ${mcpPath}`);
   log(`Global package: ${globalPackage} -> ${globalRealpath}`);
   log(`alembic --version: ${version}`);
 }

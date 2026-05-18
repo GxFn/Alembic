@@ -15,7 +15,7 @@ const distBin = join(__dirname, '..', 'dist', 'bin');
 
 const shebang = '#!/usr/bin/env node\n';
 
-const binFiles = ['cli.js', 'mcp-server.js', 'api-server.js', 'daemon-server.js'];
+const binFiles = ['cli.js', 'api-server.js', 'daemon-server.js'];
 
 for (const file of binFiles) {
   const filePath = join(distBin, file);

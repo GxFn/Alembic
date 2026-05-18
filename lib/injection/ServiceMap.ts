@@ -85,7 +85,6 @@ import type AuditStore from '../infrastructure/audit/AuditStore.js';
 import type { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
 import type { AuditRepositoryImpl } from '../repository/audit/AuditRepository.js';
 import type { BootstrapTaskManager } from '../service/bootstrap/BootstrapTaskManager.js';
-import type { CursorDeliveryPipeline } from '../service/delivery/CursorDeliveryPipeline.js';
 import type { ModuleService } from '../service/module/ModuleService.js';
 import type { HitRecorder } from '../service/signal/HitRecorder.js';
 import type { SkillHooks } from '../service/skills/SkillHooks.js';
@@ -133,7 +132,6 @@ export interface ServiceMap {
   feedbackCollector: FeedbackCollector;
   tokenUsageStore: TokenUsageStore;
   moduleService: ModuleService;
-  cursorDeliveryPipeline: CursorDeliveryPipeline;
   primeSearchPipeline: PrimeSearchPipeline;
 
   // ═══ KnowledgeModule ═══

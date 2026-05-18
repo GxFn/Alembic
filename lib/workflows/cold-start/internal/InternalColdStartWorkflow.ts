@@ -8,7 +8,7 @@
  *   - MCP: `alembic_bootstrap` (带 knowledge 参数)
  *   - Dashboard HTTP: POST /api/bootstrap/knowledge
  *
- * 外部 Agent 路径请参见 ExternalColdStartWorkflow。
+ * Codex 宿主 Agent 路径由 AlembicPlugin 维护。
  *
  * 流程 (Async Fill):
  *
@@ -53,11 +53,7 @@ import {
   ProjectIntelligenceCapability,
 } from '@alembic/core/project-intelligence';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
-import type {
-  McpContext,
-  WorkflowDatabaseLike,
-  WorkflowSkillHooks,
-} from '@alembic/core/types';
+import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
 import { runFullResetPolicy } from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import {
@@ -74,7 +70,7 @@ type BootstrapMcpContext = WorkflowMcpContext & McpContext;
  * （注意：反模式/代码问题由 Guard 独立处理，不在 Bootstrap 覆盖范围）
  * 为每个维度自动创建 Candidate（PENDING），由内置 Analyst/Producer pipeline 分析代码。
  *
- * ⚠️ 本函数是内部 Agent 路径。外部 Agent 使用 bootstrap-external.js 的 Mission Briefing + dimension_complete 流程。
+ * ⚠️ 本函数是 Alembic internal AI 路径。Codex 宿主 Agent 流程由 AlembicPlugin 维护。
  *
  * @param ctx { container, logger }
  * @param [args.maxFiles=500] 最大扫描文件数
@@ -98,7 +94,7 @@ export async function runInternalColdStartWorkflow(
   }
 
   // ═══════════════════════════════════════════════════════════
-  // Step 0: 全量清理 (与 bootstrap-external 对齐)
+  // Step 0: 全量清理
   // 冷启动需要干净的初始状态：清除 DB + 文件系统缓存
   // ═══════════════════════════════════════════════════════════
   const db = ctx.container.get('database');
@@ -171,7 +167,7 @@ export async function runInternalColdStartWorkflow(
 
   // ═══════════════════════════════════════════════════════════
   // Phase 4.6: BootstrapSessionManager — 缓存 Phase 结果供 wiki_plan 复用
-  // （与 bootstrap-external 对齐）
+  // （与本地初始化保持一致）
   // ═══════════════════════════════════════════════════════════
   const cachedSessionId = cacheProjectAnalysisSession({
     container: ctx.container,

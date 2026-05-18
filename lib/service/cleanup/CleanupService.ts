@@ -16,22 +16,21 @@
  *
  * 保留原则:
  *   - 配置数据 (config.json, constitution.yaml, boxspec.json) 永不清理
- *   - IDE 集成配置 (.vscode/, .cursor/, .github/) 永不清理
- *   - 交付物 (.cursor/rules/alembic-*) 由 R4 重建，不在此清理
+ *   - 用户自有项目文件不清理
  *
  * @module service/cleanup/CleanupService
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { recipeDimensionIdOrUnknown } from '@alembic/core/dimensions';
-import { CANDIDATES_DIR } from '@alembic/core/config';
 import {
+  CANDIDATES_DIR,
   getContextIndexPath,
   getProjectKnowledgePath,
   getProjectRecipesPath,
   getProjectSkillsPath,
 } from '@alembic/core/config';
+import { recipeDimensionIdOrUnknown } from '@alembic/core/dimensions';
 import type { WriteZone } from '@alembic/core/io';
 import { CONSUMABLE_LIFECYCLES, lifecycleInSql } from '@alembic/core/knowledge';
 

@@ -3,8 +3,6 @@ import {
   consolidateSemanticMemory,
   generateWiki,
   refreshPanorama,
-  runCursorDelivery,
-  verifyDelivery,
 } from '#workflows/capabilities/completion/CompletionSteps.js';
 import type {
   CompletionContextLike,
@@ -67,12 +65,10 @@ export async function runWorkflowCompletionFinalizer({
       panoramaStatus: 'skipped',
     };
   }
-  let deliveryVerification: WorkflowCompletionFinalizerResult['deliveryVerification'] = null;
-  let deliveryStatus: WorkflowCompletionFinalizerResult['deliveryStatus'] = 'skipped';
+  const deliveryVerification: WorkflowCompletionFinalizerResult['deliveryVerification'] = null;
+  const deliveryStatus: WorkflowCompletionFinalizerResult['deliveryStatus'] = 'skipped';
   if (deliveryMode === 'run') {
-    await runCursorDelivery({ getServiceContainer, log });
-    deliveryVerification = await verifyDelivery({ ctx, log });
-    deliveryStatus = deliveryVerification ? 'completed' : 'skipped';
+    log.info('[CompletionFinalizer] Project delivery retired for Alembic main package');
   } else {
     log.info('[CompletionFinalizer] Target delivery skipped by workflow option');
   }

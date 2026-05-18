@@ -17,7 +17,6 @@
  *   15-16: enrich_candidates/knowledge_lifecycle
  */
 
-import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
 import {
@@ -94,6 +93,14 @@ const _ConsolidateSchema =
 
 // ─── Tier Definitions ────────────────────────────────────────
 export const TIER_ORDER = { agent: 0, admin: 1 };
+
+type ToolAnnotations = {
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+  readOnlyHint?: boolean;
+  title?: string;
+};
 
 type ToolLike = {
   annotations?: ToolAnnotations;

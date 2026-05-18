@@ -160,7 +160,7 @@ export interface McpSession {
   intent: IntentState;
 }
 
-/** MCP handler context passed from McpServer / router layer */
+/** Handler context passed from API or internal router layers */
 export interface McpContext {
   container: McpServiceContainer;
   startedAt?: number;

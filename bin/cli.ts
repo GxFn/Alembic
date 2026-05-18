@@ -18,22 +18,12 @@
  *   alembic guard:ci [path] - CI/CD Guard 合规检查
  *   alembic server          - 启动 API 服务
  *   alembic ui              - 启动 Dashboard UI
- *   alembic upgrade         - 升级 IDE 集成
- *   alembic mirror          - 镜像 .cursor/ → .qoder/ .trae/
  *   alembic status          - 环境状态
  *   alembic health          - 综合健康报告
  */
 
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { DEFAULT_FOLDER_NAMES } from '@alembic/core/workspace';
 import {
   collectAiEnv,
   collectAiEnvOverrides,
@@ -42,11 +32,9 @@ import {
   PROVIDER_KEY_ENV,
   WorkspaceSettingsStore,
 } from '@alembic/core/shared';
-import { WorkspaceResolver } from '@alembic/core/workspace';
+import { DEFAULT_FOLDER_NAMES, WorkspaceResolver } from '@alembic/core/workspace';
 import { Command } from 'commander';
 import { cli } from '../lib/cli/CliLogger.js';
-import { DEFAULT_IDE_FOLDER_NAMES } from '../lib/shared/ide-folder-names.js';
-import { getCursorRoot, getCursorRulesDir, getCursorSkillsDir } from '../lib/shared/ide-paths.js';
 import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-assets.js';
 import { shutdown } from '../lib/shared/shutdown.js';
 
@@ -83,7 +71,7 @@ program.name('alembic').description('Alembic V2 - AI 知识库管理工具').ver
 // ─────────────────────────────────────────────────────
 program
   .command('setup')
-  .description('初始化项目工作空间：目录结构、数据库、IDE 集成、模板')
+  .description('初始化项目工作空间：目录结构、数据库、模板')
   .option('-d, --dir <path>', '项目目录', '.')
   .option('--force', '强制覆盖已有配置')
   .option('--seed', '预置示例 Recipe（冷启动推荐）')
@@ -96,7 +84,6 @@ program
       force: opts.force,
       seed: opts.seed,
       ghost: opts.ghost,
-      profile: 'full-ide',
       subRepoUrl: opts.repo,
     });
 
@@ -517,8 +504,10 @@ program
         }
       } else if (!opts.json) {
         cli.log('');
-        cli.log('  📋 下一步：打开 IDE Agent Mode，告诉它「帮我冷启动」');
-        cli.log('     IDE 会自动调用 MCP 工具完成 AI 分析、提取知识模式、提交候选。');
+        cli.log(
+          '  📋 下一步：运行 alembic ai configure 配置 provider，或打开 Dashboard 查看任务。'
+        );
+        cli.log('     Codex 宿主 Agent 冷启动请使用 AlembicPlugin。');
       }
 
       await bootstrap.shutdown();
@@ -1352,33 +1341,6 @@ program
           cli.debug(`UiStartupTasks failed: ${err.message}`);
         });
 
-      // ── MCP 配置检测 ──
-      const cursorMcpPath = join(getCursorRoot(projectRoot), 'mcp.json');
-      const vscodeMcpPath = join(projectRoot, DEFAULT_IDE_FOLDER_NAMES.vscodeRoot, 'mcp.json');
-      const hasMcpConfig = (() => {
-        try {
-          const c = JSON.parse(readFileSync(cursorMcpPath, 'utf8'));
-          if ('alembic' in (c.mcpServers || {})) {
-            return true;
-          }
-        } catch {
-          /* */
-        }
-        try {
-          const v = JSON.parse(readFileSync(vscodeMcpPath, 'utf8'));
-          if ('alembic' in (v.servers || {})) {
-            return true;
-          }
-        } catch {
-          /* */
-        }
-        return false;
-      })();
-
-      if (hasMcpConfig) {
-        console.log('💡 请确认 IDE 中 Alembic MCP 开关已打开，否则 Agent 无法调用工具');
-      }
-
       if (opts.apiOnly) {
         return;
       }
@@ -1468,7 +1430,7 @@ program
         cli.log(`  AI Model:     ${aiInfo.model}`);
       }
     } else {
-      cli.log('  AI Provider:  通过 IDE Agent（无需配置）');
+      cli.log('  AI Provider:  未配置（internal AI 需要运行 alembic ai configure）');
     }
 
     // 检查数据库 (Ghost-aware)
@@ -1788,173 +1750,17 @@ program
   });
 
 // ─────────────────────────────────────────────────────
-// upgrade 命令
+// task 命令 — 本地上下文任务提示
 // ─────────────────────────────────────────────────────
-program
-  .command('upgrade')
-  .description(
-    '升级 IDE 集成（全量：MCP + Rules + Hooks + Instructions + Skills + Constitution + .gitignore）'
-  )
-  .option('-d, --dir <path>', '项目目录', '.')
-  .option('--skills-only', '仅更新 Skills')
-  .option('--mcp-only', '仅更新 MCP 配置')
-  .action(async (opts) => {
-    const { UpgradeService } = await import('../lib/cli/UpgradeService.js');
-    const service = new UpgradeService({ projectRoot: resolve(opts.dir) });
-
-    await service.run({
-      skillsOnly: opts.skillsOnly,
-      mcpOnly: opts.mcpOnly,
-    });
-  });
-
-// ─────────────────────────────────────────────────────
-// cursor-rules 命令
-// ─────────────────────────────────────────────────────
-program
-  .command('cursor-rules')
-  .description('生成 Cursor 4 通道交付物料（Rules + Skills → .cursor/）')
-  .option('-d, --dir <path>', '项目目录', '.')
-  .option('--verbose', '详细输出')
-  .action(async (opts) => {
-    const projectRoot = resolve(opts.dir);
-
-    const { bootstrap, container } = await initContainer({ projectRoot });
-    try {
-      const pipeline = container.get('cursorDeliveryPipeline');
-      const result = await pipeline.deliver();
-      cli.log('\n  Cursor Rules Delivery');
-      cli.log(`  ${'─'.repeat(40)}`);
-      cli.log(`  Channel A: ${result.channelA?.rulesCount ?? '?'} always-on rules`);
-      cli.log(
-        `  Channel B: ${result.channelB?.topicCount ?? Object.keys(result.channelB?.topics || {}).length} topic rules`
-      );
-      cli.log(
-        `  Channel C: ${result.channelC?.synced ?? '?'} skills (${result.channelC?.errors ?? 0} errors)`
-      );
-      if (result.channelC.errors > 0) {
-        cli.log(`  ⚠️  ${result.channelC.errors} skill(s) failed to deliver`);
-      }
-
-      if (opts.verbose && result.channelB.topics) {
-        cli.log('\n  Channel B Topics:');
-        for (const [topic, info] of Object.entries(result.channelB.topics)) {
-          cli.log(
-            `    ${topic}: ${(info as any).count ?? (info as any).rules?.length ?? '?'} rules`
-          );
-        }
-      }
-      cli.blank();
-    } finally {
-      await bootstrap.shutdown?.();
-    }
-  });
-
-// ─────────────────────────────────────────────────────
-// task 命令 — Task 系统已迁移到 MCP (零 DB，纯内存 + JSONL)
-// CLI task 子命令已废弃，通过 MCP alembic_task 操作
-// ─────────────────────────────────────────────────────
-const taskCmd = program
-  .command('task')
-  .description('Task 管理（已迁移到 MCP — 通过 alembic_task 操作）');
+const taskCmd = program.command('task').description('Task 管理（本地上下文提示）');
 
 taskCmd
   .command('list')
-  .description('[已废弃] Task 系统不再使用数据库。通过 MCP prime 操作获取上下文。')
+  .description('[已废弃] Task 系统不再使用数据库。')
   .action(() => {
-    cli.log('\n  ⚠️ Task 系统已迁移到 MCP（零 DB，纯内存 + JSONL）。');
-    cli.log('  使用 alembic_task({ operation: "prime" }) 加载上下文。\n');
+    cli.log('\n  ⚠️ Task 数据库子命令已废弃。');
+    cli.log('  请使用 Dashboard、HTTP API 或 internal AI job 读取上下文。\n');
   });
-
-// ─────────────────────────────────────────────────────
-// mirror 命令
-// ─────────────────────────────────────────────────────
-program
-  .command('mirror')
-  .description('镜像 .cursor/ 交付物料到其他兼容 IDE 目录（Qoder / Trae）')
-  .option('-d, --dir <path>', '项目目录', '.')
-  .option('--target <ide>', '目标 IDE：qoder, trae, all（默认 all）', 'all')
-  .action(async (opts) => {
-    const projectRoot = resolve(opts.dir);
-    const targets = opts.target === 'all' ? ['.qoder', '.trae'] : [`.${opts.target}`];
-
-    const cursorDir = getCursorRoot(projectRoot);
-    if (!existsSync(cursorDir)) {
-      cli.error('❌ 未找到 .cursor/ 目录，请先运行 alembic setup 或 alembic cursor-rules');
-      process.exit(1);
-    }
-
-    for (const target of targets) {
-      let count = 0;
-
-      // 1. 镜像 rules/ — alembic- 前缀文件（.mdc → .md 改名）
-      const cursorRulesDir = getCursorRulesDir(projectRoot);
-      if (existsSync(cursorRulesDir)) {
-        const targetRulesDir = join(projectRoot, target, DEFAULT_IDE_FOLDER_NAMES.cursorRules);
-        mkdirSync(targetRulesDir, { recursive: true });
-        const files = readdirSync(cursorRulesDir).filter(
-          (f) => f.startsWith('alembic-') && (f.endsWith('.mdc') || f.endsWith('.md'))
-        );
-        for (const file of files) {
-          const destName = file.endsWith('.mdc') ? file.replace(/\.mdc$/, '.md') : file;
-          copyFileSync(join(cursorRulesDir, file), join(targetRulesDir, destName));
-          count++;
-        }
-      }
-
-      // 2. 镜像 skills/ — alembic- 前缀目录
-      const cursorSkillsDir = getCursorSkillsDir(projectRoot);
-      if (existsSync(cursorSkillsDir)) {
-        const targetSkillsDir = join(projectRoot, target, DEFAULT_IDE_FOLDER_NAMES.cursorSkills);
-        const skillDirs = readdirSync(cursorSkillsDir, { withFileTypes: true }).filter(
-          (d) => d.isDirectory() && d.name.startsWith('alembic-')
-        );
-        for (const dir of skillDirs) {
-          _copyDirRecursive(join(cursorSkillsDir, dir.name), join(targetSkillsDir, dir.name));
-          count++;
-        }
-      }
-
-      // 3. 镜像 hooks/ — hook 脚本（全覆盖）
-      const cursorHooksDir = join(cursorDir, 'hooks');
-      if (existsSync(cursorHooksDir)) {
-        _copyDirRecursive(cursorHooksDir, join(projectRoot, target, 'hooks'));
-        count++;
-      }
-
-      // 4. 镜像 commands/ — 斜杠命令（全覆盖）
-      const cursorCommandsDir = join(cursorDir, 'commands');
-      if (existsSync(cursorCommandsDir)) {
-        _copyDirRecursive(cursorCommandsDir, join(projectRoot, target, 'commands'));
-        count++;
-      }
-
-      // 5. 镜像 hooks.json
-      const hooksJson = join(cursorDir, 'hooks.json');
-      if (existsSync(hooksJson)) {
-        mkdirSync(join(projectRoot, target), { recursive: true });
-        copyFileSync(hooksJson, join(projectRoot, target, 'hooks.json'));
-        count++;
-      }
-
-      const label = target.replace('.', '').charAt(0).toUpperCase() + target.slice(2);
-      cli.log(`  ✅ ${label}: ${count} item(s) mirrored`);
-    }
-  });
-
-/** 递归复制目录（mirror 命令用） */
-function _copyDirRecursive(src: any, dest: any) {
-  mkdirSync(dest, { recursive: true });
-  for (const entry of readdirSync(src, { withFileTypes: true })) {
-    const srcPath = join(src, entry.name);
-    const destPath = join(dest, entry.name);
-    if (entry.isDirectory()) {
-      _copyDirRecursive(srcPath, destPath);
-    } else {
-      copyFileSync(srcPath, destPath);
-    }
-  }
-}
 
 // ─────────────────────────────────────────────────────
 // sync 命令
@@ -2353,7 +2159,6 @@ program
   .action(async (action: string, opts: { dir: string }) => {
     const { ProjectRegistry, getGhostWorkspaceDir } = await import('@alembic/core/workspace');
     const fs = await import('node:fs');
-    const os = await import('node:os');
     const projectRoot = resolve(opts.dir);
 
     /** 移动目录（同卷 rename，跨卷 copy+delete） */
@@ -2392,76 +2197,6 @@ program
       } else {
         fs.writeFileSync(giPath, `${cleaned}\n`);
       }
-    }
-
-    /** 写 MCP 配置到指定路径 */
-    function writeMcpConfig(dest: string, key: string, entry: Record<string, unknown>) {
-      fs.mkdirSync(dirname(dest), { recursive: true });
-      let config: Record<string, Record<string, unknown>> = {};
-      if (fs.existsSync(dest)) {
-        try {
-          config = JSON.parse(fs.readFileSync(dest, 'utf8'));
-        } catch {
-          /* */
-        }
-      }
-      if (!config[key]) {
-        config[key] = {};
-      }
-      config[key].asd = entry;
-      fs.writeFileSync(dest, JSON.stringify(config, null, 2));
-    }
-
-    /** 移除 MCP 配置中的 alembic 条目 */
-    function removeMcpEntry(dest: string, key: string) {
-      if (!fs.existsSync(dest)) {
-        return;
-      }
-      try {
-        const config = JSON.parse(fs.readFileSync(dest, 'utf8'));
-        if (config[key]?.asd) {
-          delete config[key].asd;
-          if (Object.keys(config[key]).length === 0) {
-            delete config[key];
-          }
-          if (Object.keys(config).length === 0) {
-            fs.unlinkSync(dest);
-          } else {
-            fs.writeFileSync(dest, JSON.stringify(config, null, 2));
-          }
-        }
-      } catch {
-        /* */
-      }
-    }
-
-    /** VSCode 全局配置目录 */
-    function vscodeMcpGlobalPath() {
-      const p = process.platform;
-      if (p === 'darwin') {
-        return join(os.homedir(), 'Library', 'Application Support', 'Code', 'User', 'mcp.json');
-      }
-      if (p === 'win32') {
-        return join(process.env.APPDATA || '', 'Code', 'User', 'mcp.json');
-      }
-      return join(os.homedir(), '.config', 'Code', 'User', 'mcp.json');
-    }
-
-    /** Cursor MCP 条目（全局用 ${workspaceFolder}） */
-    const cursorMcpEntry = {
-      command: 'alembic-mcp',
-      env: { ALEMBIC_PROJECT_DIR: '${workspaceFolder}' },
-    };
-
-    /** VSCode MCP 条目 */
-    function vscodeMcpEntry(absPath: boolean) {
-      return {
-        type: 'stdio',
-        command: 'alembic-mcp',
-        env: {
-          ALEMBIC_PROJECT_DIR: absPath ? projectRoot : '${workspaceFolder}',
-        },
-      };
     }
 
     switch (action) {
@@ -2513,24 +2248,11 @@ program
 
         // 3. .gitignore Alembic section 保留 — 作为安全网防止意外产物被 git 追踪
 
-        // 4. MCP 切换：项目级 → 全局
-        //    Cursor: 项目 .cursor/mcp.json → 全局 ~/.cursor/mcp.json
-        removeMcpEntry(join(getCursorRoot(projectRoot), 'mcp.json'), 'mcpServers');
-        writeMcpConfig(
-          join(os.homedir(), DEFAULT_IDE_FOLDER_NAMES.cursorRoot, 'mcp.json'),
-          'mcpServers',
-          cursorMcpEntry
-        );
-        //    VSCode: 项目 .vscode/mcp.json → 全局（绝对路径）
-        removeMcpEntry(join(projectRoot, '.vscode', 'mcp.json'), 'servers');
-        writeMcpConfig(vscodeMcpGlobalPath(), 'servers', vscodeMcpEntry(true));
-
         console.log(`  👻 Ghost 模式已启用`);
         console.log(`  📁 工作区: ${wsDir}`);
         if (migrated) {
           console.log('  📦 已迁移 .asd/ 和 Alembic/ 到外置工作区');
         }
-        console.log('  📌 MCP 配置已切换到全局（~/.cursor/mcp.json + VSCode 全局）');
         if (!migrated) {
           console.log('  提示: 运行 alembic setup --ghost 完成初始化');
         }
@@ -2570,18 +2292,7 @@ program
         // 2. 更新注册为标准模式
         ProjectRegistry.register(projectRoot, false);
 
-        // 3. MCP 切换：全局 → 项目级
-        //    Cursor: 全局 → 项目 .cursor/mcp.json
-        removeMcpEntry(
-          join(os.homedir(), DEFAULT_IDE_FOLDER_NAMES.cursorRoot, 'mcp.json'),
-          'mcpServers'
-        );
-        writeMcpConfig(join(getCursorRoot(projectRoot), 'mcp.json'), 'mcpServers', cursorMcpEntry);
-        //    VSCode: 全局 → 项目 .vscode/mcp.json
-        removeMcpEntry(vscodeMcpGlobalPath(), 'servers');
-        writeMcpConfig(join(projectRoot, '.vscode', 'mcp.json'), 'servers', vscodeMcpEntry(false));
-
-        // 4. 清理空的外置工作区目录
+        // 3. 清理空的外置工作区目录
         if (fs.existsSync(wsDir) && fs.readdirSync(wsDir).length === 0) {
           fs.rmdirSync(wsDir);
         }
@@ -2590,8 +2301,7 @@ program
         if (migrated) {
           console.log('  📦 已迁移 .asd/ 和 Alembic/ 回项目内');
         }
-        console.log('  📌 MCP 配置已切换到项目级（.cursor/mcp.json + .vscode/mcp.json）');
-        console.log('  提示: 运行 alembic upgrade 补全 .gitignore 等配置');
+        console.log('  提示: 运行 alembic setup 补全数据目录配置');
         break;
       }
 

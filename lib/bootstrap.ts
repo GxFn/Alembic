@@ -60,7 +60,6 @@ export class Bootstrap {
         projectRoot,
         packageRoot: PACKAGE_ROOT,
         knowledgeBaseDir,
-        extraProjectWritePrefixes: ['.cursor', '.vscode', '.github'],
         extraProjectWritableFiles: ['.env'],
       });
     } else if (knowledgeBaseDir) {
@@ -85,8 +84,7 @@ export class Bootstrap {
           process.env.ALEMBIC_PROJECT_DIR || (isMcpMode ? undefined : process.cwd());
         if (!projectRoot) {
           throw new Error(
-            '[Bootstrap] MCP 模式下缺少 ALEMBIC_PROJECT_DIR 环境变量，' +
-              '且 PathGuard 未提前配置。请在 .vscode/mcp.json 中设置 ALEMBIC_PROJECT_DIR。'
+            '[Bootstrap] 缺少 ALEMBIC_PROJECT_DIR 环境变量，且 PathGuard 未提前配置。'
           );
         }
         Bootstrap.configurePathGuard(projectRoot);

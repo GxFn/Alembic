@@ -46,10 +46,7 @@ describe('WorkflowSkillCompletionCapability', () => {
       expect(skillWrite?.[1]).toContain('name: project-workflow-skill-test');
       expect(skillWrite?.[1]).toContain('# Workflow Skill Test');
       expect(skillWrite?.[1]).toContain('## Referenced Files');
-      const indexWrite = [...writes.entries()].find(([filePath]) =>
-        filePath.endsWith('.cursor/rules/alembic-skills.mdc')
-      );
-      expect(indexWrite?.[1]).toContain('Alembic Project Skills Index');
+      expect([...writes.keys()]).toHaveLength(1);
     } finally {
       fs.rmSync(dataRoot, { recursive: true, force: true });
     }

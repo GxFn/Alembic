@@ -1,7 +1,7 @@
 /**
  * InternalKnowledgeRescanWorkflow — 内部 Agent 增量知识重扫
  *
- * 与 ExternalKnowledgeRescanWorkflow（为外部 IDE Agent 生成 Mission Briefing）不同，
+ * 与 Codex 宿主 Agent rescan 不同，
  * 本文件由 AgentRuntime dimension execution 在服务端自动完成知识补齐。
  *
  * 流程:
@@ -49,9 +49,9 @@ import {
 } from '@alembic/core/service/evolution/RecipeImpactPlanner';
 import { SourceRefReconciler } from '@alembic/core/service/knowledge/SourceRefReconciler';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
-import type { PipelineFillView } from '@alembic/core/types';
 import type {
   McpContext,
+  PipelineFillView,
   WorkflowDatabaseLike,
   WorkflowSkillHooks,
 } from '@alembic/core/types';

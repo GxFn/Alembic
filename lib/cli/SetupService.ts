@@ -5,10 +5,9 @@
  *
  *   Step 1  .asd/ 运行时目录 + config.json
  *   Step 2  Alembic/ 知识库目录结构 + Alembic/recipes/（有 --repo 则 clone，无则为普通目录）
- *   Step 3  IDE 集成（VSCode MCP + Cursor MCP + copilot-instructions + cursor-rules
- *           + skills-template + cursor-workflow + claude-hooks + guard-ci + pre-commit-hook）
- *   Step 4  SQLite 数据库 + V1 数据迁移
- *   Step 5  平台相关初始化（macOS → Xcode Snippets）
+ *   Step 3  SQLite 数据库 + V1 数据迁移
+ *   Step 4  平台相关初始化（macOS → Xcode Snippets）
+ *   Step 5  向量索引初始化
  *
  * ═══════════════════════════════════════════════════════════
  *
@@ -66,18 +65,14 @@ import {
   WorkspaceResolver,
 } from '@alembic/core/workspace';
 import { PACKAGE_ROOT } from '../shared/package-assets.js';
-import { FileDeployer } from './deploy/FileDeployer.js';
 
 /** Alembic 源码仓库根目录（定位 templates/ 等资源） */
 const REPO_ROOT = PACKAGE_ROOT;
 
 // ─────────────────────────────────────────────────────
 
-export type SetupProfile = 'full-ide' | 'headless';
-
 export class SetupService {
   force: boolean;
-  profile: SetupProfile;
   projectName: string;
   projectRoot: string;
   /** Ghost 模式：所有数据写到 ~/.asd/workspaces/<id>/ */
@@ -107,8 +102,6 @@ export class SetupService {
     projectRoot: string;
     force?: boolean;
     seed?: boolean;
-    /** 初始化 profile：full-ide 为传统 IDE 交付，headless 跳过 IDE 文件部署 */
-    profile?: SetupProfile;
     /** 静默输出（通常用于 JSON CLI） */
     quiet?: boolean;
     /** Ghost 模式：零项目侵入，数据外置到 ~/.asd/workspaces/ */
@@ -122,7 +115,6 @@ export class SetupService {
     this.projectName = this.projectRoot.split('/').pop() || '';
     this.force = options.force || false;
     this.seed = options.seed || false;
-    this.profile = options.profile || 'full-ide';
     this.quiet = options.quiet || false;
     this.subRepoDir = options.subRepoDir || DEFAULT_SUB_REPO_DIR;
     this.subRepoUrl = options.subRepoUrl;
@@ -179,10 +171,6 @@ export class SetupService {
       { label: '平台相关初始化', fn: () => this.stepPlatform() },
       { label: '初始化向量索引', fn: () => this.stepVectorIndex() },
     ];
-
-    if (this.profile === 'full-ide') {
-      steps.splice(2, 0, { label: '配置 IDE 集成', fn: () => this.stepIDE() });
-    }
 
     return steps;
   }
@@ -252,15 +240,9 @@ export class SetupService {
     }
     console.log('');
     console.log('  下一步：');
-    if (this.profile === 'full-ide') {
-      console.log('    1. 运行 alembic ui 启动后台服务');
-      console.log('    2. 打开 IDE Agent Mode，告诉它「帮我冷启动」');
-      console.log('    3. 所有分析和知识提取都通过 IDE 完成，无需额外配置');
-    } else {
-      console.log('    1. 运行 alembic daemon start 启动后台服务');
-      console.log('    2. 使用 alembic-mcp 或 HTTP API 接入自动化流程');
-      console.log('    3. 通过 Dashboard 或命令行查看知识库状态');
-    }
+    console.log('    1. 运行 alembic ai configure 配置 internal AI Provider（可选）');
+    console.log('    2. 运行 alembic coldstart 或 alembic rescan 执行本地 AI 扫描');
+    console.log('    3. 运行 alembic ui 通过 Dashboard 查看知识库状态');
     console.log('');
   }
 
@@ -595,26 +577,7 @@ export class SetupService {
     );
   }
 
-  /* ═══ Step 3: IDE 集成 ═══════════════════════════════ */
-
-  stepIDE() {
-    const deployer = new FileDeployer({
-      projectRoot: this.projectRoot,
-      force: this.force,
-      ghost: this.ghost,
-    });
-    const { deployed, skipped: _skipped, errors } = deployer.deployAll('setup');
-
-    if (errors.length > 0) {
-      for (const { id, error } of errors) {
-        console.error(`   ⚠ ${id}: ${error}`);
-      }
-    }
-
-    return { configured: deployed };
-  }
-
-  /* ═══ Step 4: 数据库初始化 ═══════════════════════════ */
+  /* ═══ Step 3: 数据库初始化 ═══════════════════════════ */
 
   async stepDatabase() {
     const ConfigLoader = (await import('../infrastructure/config/AppConfigLoader.js')).default;
