@@ -1,11 +1,14 @@
-import { getPackageVersion } from '@alembic/core/daemon';
+import {
+  type AlembicRuntimeCapabilities,
+  createAlembicRuntimeCapabilities,
+  createAlembicRuntimeHealthData,
+  getPackageVersion,
+} from '@alembic/core/daemon';
 import { collectAiEnvOverrides, isAiEnvReady, WorkspaceSettingsStore } from '@alembic/core/shared';
 import { resolveProjectRoot, WorkspaceResolver } from '@alembic/core/workspace';
 import express, { type Request } from 'express';
 import {
   buildAlembicRuntimeBoundary,
-  DAEMON_FILE_CHANGE_EVENT_SOURCES,
-  DAEMON_JOB_KINDS,
   type InternalAiCapability,
 } from '../../daemon/RuntimeBoundary.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
@@ -17,6 +20,7 @@ router.get('/health', (req, res) => {
   const container = getServiceContainer();
   const projectRoot = resolveProjectRoot(container);
   const resolver = WorkspaceResolver.fromProject(projectRoot);
+  const workspaceFacts = resolver.toFacts();
   const mode = process.env.ALEMBIC_DAEMON_MODE === '1' ? 'daemon' : 'api';
   const origin = buildRequestOrigin(req);
   const dashboardAvailable =
@@ -25,42 +29,53 @@ router.get('/health', (req, res) => {
   const schemaMigrationVersion = getSchemaMigrationVersion(container);
   const internalAi = getInternalAiCapability(projectRoot);
   const fileMonitorAvailable = isDaemonFileMonitorAvailable(mode);
-  const runtimeBoundary = buildAlembicRuntimeBoundary({
+  const capabilities = buildDaemonCapabilities({
+    dashboardAvailable,
     dashboardUrl,
     fileMonitorAvailable,
     internalAi,
+    origin,
+  });
+  const runtimeBoundary = buildAlembicRuntimeBoundary({
+    capabilities,
+    dashboardUrl,
     mode,
     origin,
-    workspace: resolver,
+    workspace: {
+      databasePath: resolver.databasePath,
+      dataRoot: resolver.dataRoot,
+      dataRootSource: workspaceFacts.dataRootSource,
+      ghost: resolver.ghost,
+      projectId: resolver.projectId,
+      projectRoot: resolver.projectRoot,
+      runtimeDir: resolver.runtimeDir,
+    },
   });
+  const healthData = createAlembicRuntimeHealthData({
+    capabilities,
+    dashboardUrl,
+    dataRoot: resolver.dataRoot,
+    databasePath: resolver.databasePath,
+    mode,
+    pid: process.pid,
+    projectId: resolver.projectId,
+    projectRoot: resolver.projectRoot,
+    schemaMigrationVersion,
+    uptime: process.uptime(),
+    version: getPackageVersion(),
+  });
+
   res.json({
     success: true,
     data: {
-      mode,
-      projectRoot,
-      dataRoot: resolver.dataRoot,
-      projectId: resolver.projectId,
-      version: getPackageVersion(),
-      pid: process.pid,
-      uptime: process.uptime(),
-      databasePath: resolver.databasePath,
-      schemaMigrationVersion,
-      dashboardUrl,
-      enhancement: {
-        apiVersion: 'v1',
-        packageName: 'alembic-ai',
-        route: runtimeBoundary.route,
-        version: getPackageVersion(),
-      },
-      capabilities: buildDaemonCapabilities({
-        dashboardAvailable,
-        dashboardUrl,
-        fileMonitorAvailable,
-        internalAi,
-        mode,
-        origin,
+      ...healthData,
+      dataRootSource: workspaceFacts.dataRootSource,
+      runtimeDir: resolver.runtimeDir,
+      runtimeBoundary,
+      capabilities: {
+        ...healthData.capabilities,
         runtimeBoundary,
-      }),
+      },
     },
   });
 });
@@ -70,41 +85,21 @@ export interface DaemonCapabilitiesOptions {
   dashboardUrl: string | null;
   fileMonitorAvailable: boolean;
   internalAi: InternalAiCapability;
-  mode: 'api' | 'daemon';
   origin: string | null;
-  runtimeBoundary: ReturnType<typeof buildAlembicRuntimeBoundary>;
 }
 
-export function buildDaemonCapabilities(options: DaemonCapabilitiesOptions) {
-  return {
-    api: {
-      available: true,
-      baseUrl: options.origin,
-      healthPath: `${API_PREFIX}/daemon/health`,
-    },
-    dashboard: {
-      available: options.dashboardAvailable,
-      url: options.dashboardUrl,
-    },
-    fileMonitor: {
-      acceptedEventSources: [...DAEMON_FILE_CHANGE_EVENT_SOURCES],
-      available: options.fileMonitorAvailable,
-      compatibilityAliases: { [legacyHostEditSource()]: 'host-edit' },
-      endpoint: `${API_PREFIX}/file-changes`,
-      mode: 'daemon-git-worktree',
-    },
+export function buildDaemonCapabilities(
+  options: DaemonCapabilitiesOptions
+): AlembicRuntimeCapabilities {
+  return createAlembicRuntimeCapabilities({
+    apiBaseUrl: options.origin,
+    dashboardAvailable: options.dashboardAvailable,
+    dashboardUrl: options.dashboardUrl,
+    fileMonitorAvailable: options.fileMonitorAvailable,
+    fileMonitorEndpoint: `${API_PREFIX}/file-changes`,
+    fileMonitorMode: options.fileMonitorAvailable ? 'daemon-git-worktree' : 'disabled',
     internalAi: options.internalAi,
-    jobs: {
-      available: true,
-      endpoints: {
-        bootstrap: `${API_PREFIX}/jobs/bootstrap`,
-        list: `${API_PREFIX}/jobs`,
-        rescan: `${API_PREFIX}/jobs/rescan`,
-      },
-      kinds: [...DAEMON_JOB_KINDS],
-    },
-    runtimeBoundary: options.runtimeBoundary,
-  };
+  });
 }
 
 function isDaemonFileMonitorAvailable(mode: 'api' | 'daemon'): boolean {
@@ -138,10 +133,6 @@ function buildRequestOrigin(req: Request): string | null {
     return null;
   }
   return `${req.protocol}://${host}`;
-}
-
-function legacyHostEditSource(): string {
-  return ['ide', 'edit'].join('-');
 }
 
 function getSchemaMigrationVersion(

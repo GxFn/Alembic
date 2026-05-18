@@ -1,21 +1,27 @@
-export const LOCAL_ALEMBIC_ROUTE = 'local-alembic';
-export const DAEMON_FILE_CHANGE_EVENT_SOURCES = ['host-edit', 'git-head', 'git-worktree'] as const;
-export const DAEMON_JOB_KINDS = ['bootstrap', 'rescan'] as const;
+import {
+  ALEMBIC_FILE_CHANGES_PATH,
+  ALEMBIC_FILE_MONITOR_EVENT_SOURCES,
+  ALEMBIC_JOB_ENDPOINTS,
+  ALEMBIC_JOB_KINDS,
+  type AlembicEnhancementRoute,
+  type AlembicInternalAiCapability,
+  type AlembicRuntimeCapabilities,
+  type AlembicRuntimeMode,
+} from '@alembic/core/daemon';
 
-export type AlembicRuntimeRoute = typeof LOCAL_ALEMBIC_ROUTE;
-export type DaemonFileChangeEventSource = (typeof DAEMON_FILE_CHANGE_EVENT_SOURCES)[number];
-export type DaemonJobKind = (typeof DAEMON_JOB_KINDS)[number];
+export const LOCAL_ALEMBIC_ROUTE: AlembicEnhancementRoute = 'local-alembic';
+export const DAEMON_FILE_CHANGE_EVENT_SOURCES = ALEMBIC_FILE_MONITOR_EVENT_SOURCES;
+export const DAEMON_JOB_KINDS = ALEMBIC_JOB_KINDS;
 
-export interface InternalAiCapability {
-  available: boolean;
-  configSource: 'empty' | 'process-env' | 'workspace-settings';
-  model: string | null;
-  provider: string | null;
-}
+export type AlembicRuntimeRoute = AlembicEnhancementRoute;
+export type DaemonFileChangeEventSource = (typeof ALEMBIC_FILE_MONITOR_EVENT_SOURCES)[number];
+export type DaemonJobKind = (typeof ALEMBIC_JOB_KINDS)[number];
+export type InternalAiCapability = AlembicInternalAiCapability;
 
 export interface RuntimeBoundaryWorkspace {
   databasePath: string;
   dataRoot: string;
+  dataRootSource: 'ghost-registry' | 'project-root';
   ghost: boolean;
   projectId: string | null;
   projectRoot: string;
@@ -23,10 +29,9 @@ export interface RuntimeBoundaryWorkspace {
 }
 
 export interface AlembicRuntimeBoundaryOptions {
+  capabilities: AlembicRuntimeCapabilities;
   dashboardUrl: string | null;
-  fileMonitorAvailable: boolean;
-  internalAi: InternalAiCapability;
-  mode: 'api' | 'daemon';
+  mode: AlembicRuntimeMode;
   origin: string | null;
   workspace: RuntimeBoundaryWorkspace;
 }
@@ -38,6 +43,7 @@ export interface AlembicRuntimeBoundary {
     contract: '@alembic/core/workspace';
     databasePath: string;
     dataRoot: string;
+    dataRootSource: 'ghost-registry' | 'project-root';
     mode: 'ghost' | 'standard';
     projectId: string | null;
     projectRoot: string;
@@ -59,9 +65,9 @@ export interface AlembicRuntimeBoundary {
     acceptedEventSources: DaemonFileChangeEventSource[];
     available: boolean;
     dispatcher: 'FileChangeDispatcher';
-    endpoint: '/api/v1/file-changes';
+    endpoint: string | null;
     longLivedOwner: 'alembic-daemon';
-    source: 'daemon-git-worktree';
+    mode: AlembicRuntimeCapabilities['fileMonitor']['mode'];
   };
   internalAi: InternalAiCapability & {
     owner: 'alembic-internal-ai';
@@ -71,6 +77,7 @@ export interface AlembicRuntimeBoundary {
     kinds: DaemonJobKind[];
     owner: 'alembic';
     store: '@alembic/core/daemon/JobStore';
+    endpoints: typeof ALEMBIC_JOB_ENDPOINTS;
   };
 }
 
@@ -84,6 +91,7 @@ export function buildAlembicRuntimeBoundary(
       contract: '@alembic/core/workspace',
       databasePath: options.workspace.databasePath,
       dataRoot: options.workspace.dataRoot,
+      dataRootSource: options.workspace.dataRootSource,
       mode: options.workspace.ghost ? 'ghost' : 'standard',
       projectId: options.workspace.projectId,
       projectRoot: options.workspace.projectRoot,
@@ -102,22 +110,23 @@ export function buildAlembicRuntimeBoundary(
       url: options.dashboardUrl,
     },
     fileMonitor: {
-      acceptedEventSources: [...DAEMON_FILE_CHANGE_EVENT_SOURCES],
-      available: options.fileMonitorAvailable,
+      acceptedEventSources: [...options.capabilities.fileMonitor.acceptedEventSources],
+      available: options.capabilities.fileMonitor.available,
       dispatcher: 'FileChangeDispatcher',
-      endpoint: '/api/v1/file-changes',
+      endpoint: options.capabilities.fileMonitor.endpoint ?? ALEMBIC_FILE_CHANGES_PATH,
       longLivedOwner: 'alembic-daemon',
-      source: 'daemon-git-worktree',
+      mode: options.capabilities.fileMonitor.mode,
     },
     internalAi: {
-      ...options.internalAi,
+      ...options.capabilities.internalAi,
       owner: 'alembic-internal-ai',
       runtimeOwner: 'AlembicAgent',
     },
     jobs: {
-      kinds: [...DAEMON_JOB_KINDS],
+      kinds: [...options.capabilities.jobs.kinds],
       owner: 'alembic',
       store: '@alembic/core/daemon/JobStore',
+      endpoints: { ...ALEMBIC_JOB_ENDPOINTS },
     },
   };
 }
