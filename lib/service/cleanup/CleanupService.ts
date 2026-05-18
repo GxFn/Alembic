@@ -24,7 +24,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { recipeDimensionIdOrUnknown } from '@alembic/core/domain/dimension';
+import { recipeDimensionIdOrUnknown } from '@alembic/core/dimensions';
 import { CANDIDATES_DIR } from '@alembic/core/infrastructure/config/Defaults';
 import {
   getContextIndexPath,

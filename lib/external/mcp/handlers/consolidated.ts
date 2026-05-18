@@ -9,7 +9,7 @@
  * alembic_bootstrap 已迁移到 bootstrap-external.js（外部 Agent 路径）。
  */
 
-import { dimensionTags } from '@alembic/core/domain/dimension/RecipeDimension';
+import { dimensionTags } from '@alembic/core/dimensions';
 import { getRequiredFieldsDescription } from '@alembic/core/domain/knowledge/FieldSpec';
 import { getDeveloperIdentity } from '@alembic/core/shared/developer-identity';
 import { envelope } from '../envelope.js';

@@ -22,7 +22,7 @@ import type {
 import type { UnifiedToolCatalog } from '@alembic/agent/tools';
 import type { JobStore } from '@alembic/core/daemon';
 import type { DatabaseConnection } from '@alembic/core/database';
-import type DimensionCopy from '@alembic/core/domain/dimension/DimensionCopy';
+import type { DimensionCopy } from '@alembic/core/dimensions';
 import type { EventBus, SignalBus } from '@alembic/core/events';
 import type {
   ComplianceReporter,

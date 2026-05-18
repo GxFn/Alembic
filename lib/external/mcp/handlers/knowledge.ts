@@ -3,7 +3,7 @@
  * submitKnowledge, submitKnowledgeBatch, knowledgeLifecycle
  */
 
-import { dimensionTags } from '@alembic/core/domain/dimension/RecipeDimension';
+import { dimensionTags } from '@alembic/core/dimensions';
 import { UnifiedValidator } from '@alembic/core/domain/knowledge/UnifiedValidator';
 import { getDeveloperIdentity } from '@alembic/core/shared/developer-identity';
 import { resolveProjectRoot } from '@alembic/core/workspace';

@@ -1,4 +1,4 @@
-import { resolveRecipeDimensionId } from '@alembic/core/domain/dimension/RecipeDimension';
+import { resolveRecipeDimensionId } from '@alembic/core/dimensions';
 import type {
   KnowledgeRescanExecutionDecision,
   RescanExecutionMode,

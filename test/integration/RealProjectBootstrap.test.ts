@@ -36,7 +36,7 @@ beforeAll(async () => {
   const lsMod = await import('@alembic/core/project-intelligence');
   LanguageService = lsMod.LanguageService;
 
-  const dcMod = await import('@alembic/core/domain/dimension/DimensionCopy');
+  const dcMod = await import('@alembic/core/dimensions');
   DimensionCopy = dcMod.DimensionCopy;
 
   await import('@alembic/core/project-intelligence');

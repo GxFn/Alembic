@@ -7,7 +7,7 @@ import {
   type SystemRunContext,
 } from '@alembic/agent/runtime';
 import type { AgentRunInput, SystemRunContextFactory } from '@alembic/agent/service';
-import { getDimensionFocusKeywords } from '@alembic/core/domain/dimension/DimensionSop';
+import { getDimensionFocusKeywords } from '@alembic/core/dimensions';
 import type { KnowledgeRescanExecutionDecision } from '@alembic/core/host-agent-workflows';
 import {
   buildEvidenceStarters,

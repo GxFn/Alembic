@@ -1,7 +1,7 @@
 import {
   recipeBelongsToDimension,
   resolveRecipeDimensionId,
-} from '@alembic/core/domain/dimension/RecipeDimension';
+} from '@alembic/core/dimensions';
 import { describe, expect, test } from 'vitest';
 
 describe('RecipeDimension resolver', () => {

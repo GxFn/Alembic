@@ -9,7 +9,7 @@
  */
 
 import { getEnhancementRegistry } from '@alembic/core/core/enhancement';
-import { DimensionCopy } from '@alembic/core/domain/dimension/DimensionCopy';
+import { DimensionCopy } from '@alembic/core/dimensions';
 import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
 import { KnowledgeService, RecipeProductionGateway } from '@alembic/core/knowledge';
 import { getDiscovererRegistry, LanguageService } from '@alembic/core/project-intelligence';
