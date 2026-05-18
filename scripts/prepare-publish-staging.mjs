@@ -1,0 +1,251 @@
+#!/usr/bin/env node
+
+import { execFileSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+
+const repoRoot = resolve(import.meta.dirname, '..');
+const defaultOutputDir = join(repoRoot, '.release', 'alembic-ai');
+const args = new Set(process.argv.slice(2));
+const outputArg = process.argv.find((arg) => arg.startsWith('--output='));
+const outputDir = outputArg
+  ? resolve(repoRoot, outputArg.slice('--output='.length))
+  : defaultOutputDir;
+const shouldPackDryRun = args.has('--pack-dry-run');
+
+const rootPackage = readJson(join(repoRoot, 'package.json'));
+const corePackage = readJson(join(repoRoot, '..', 'AlembicCore', 'package.json'));
+const agentPackage = readJson(join(repoRoot, '..', 'AlembicAgent', 'package.json'));
+const dashboardPackage = readJson(join(repoRoot, '..', 'AlembicDashboard', 'package.json'));
+
+const dependencyReplacements = {
+  '@alembic/core': corePackage.version,
+  '@alembic/agent': agentPackage.version,
+};
+
+verifyRootDevManifest(rootPackage);
+prepareOutputDirectory(outputDir);
+
+const stagingPackage = createStagingPackageJson(rootPackage, dependencyReplacements);
+copyPackagePayload(stagingPackage.files ?? [], outputDir);
+copyOptionalRootFiles(outputDir);
+
+const sourceMetadata = createSourceMetadata(stagingPackage);
+writeJson(join(outputDir, 'package.json'), stagingPackage);
+writeJson(join(outputDir, 'alembic-release-source.json'), sourceMetadata);
+
+verifyStagingManifest(stagingPackage, sourceMetadata);
+writeLine(`Prepared Alembic publish staging package: ${relativeFromRepo(outputDir)}`);
+writeLine(`- @alembic/core: ${dependencyReplacements['@alembic/core']}`);
+writeLine(`- @alembic/agent: ${dependencyReplacements['@alembic/agent']}`);
+writeLine(`- Core source: ${sourceMetadata.sources.AlembicCore.commit}`);
+writeLine(`- Agent source: ${sourceMetadata.sources.AlembicAgent.commit}`);
+
+if (shouldPackDryRun) {
+  const npmCacheDir = join(repoRoot, '.release', '.npm-cache');
+  mkdirSync(npmCacheDir, { recursive: true });
+  const packOutput = execFileSync(
+    'npm',
+    ['pack', '--dry-run', '--json', '--ignore-scripts', '--cache', npmCacheDir],
+    {
+      cwd: outputDir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  );
+  writeLine(packOutput.trim());
+}
+
+function verifyRootDevManifest(packageJson) {
+  if (packageJson.name !== 'alembic-ai') {
+    throw new Error(
+      `Expected Alembic main package name to be alembic-ai, found ${packageJson.name}`
+    );
+  }
+
+  for (const dependencyName of Object.keys(dependencyReplacements)) {
+    const spec = packageJson.dependencies?.[dependencyName];
+    if (typeof spec !== 'string' || !spec.startsWith('file:../')) {
+      throw new Error(
+        `Root dev manifest must keep ${dependencyName} as a workspace-local file dependency before staging; found ${String(spec)}`
+      );
+    }
+  }
+}
+
+function prepareOutputDirectory(targetDir) {
+  const relativeTarget = relative(repoRoot, targetDir);
+  if (relativeTarget.startsWith('..') || isAbsolute(relativeTarget)) {
+    throw new Error(`Refusing to write publish staging outside this repository: ${targetDir}`);
+  }
+
+  rmSync(targetDir, { recursive: true, force: true });
+  mkdirSync(targetDir, { recursive: true });
+}
+
+function createStagingPackageJson(packageJson, replacements) {
+  const staged = structuredClone(packageJson);
+  staged.dependencies = { ...staged.dependencies };
+
+  for (const [dependencyName, version] of Object.entries(replacements)) {
+    staged.dependencies[dependencyName] = version;
+  }
+
+  if (staged.scripts && typeof staged.scripts === 'object') {
+    for (const lifecycleScript of [
+      'prepare',
+      'prepack',
+      'postpack',
+      'prepublishOnly',
+      'postpublish',
+    ]) {
+      delete staged.scripts[lifecycleScript];
+    }
+  }
+
+  const existingFiles = Array.isArray(staged.files)
+    ? staged.files.filter((filePath) => existsSync(join(repoRoot, filePath)))
+    : [];
+  staged.files = Array.from(new Set([...existingFiles, 'alembic-release-source.json']));
+
+  return staged;
+}
+
+function copyPackagePayload(files, targetDir) {
+  for (const filePath of files) {
+    if (filePath === 'alembic-release-source.json') {
+      continue;
+    }
+
+    const source = join(repoRoot, filePath);
+    if (!existsSync(source)) {
+      writeError(
+        `Warning: package files entry does not exist and will be absent from staging: ${filePath}`
+      );
+      continue;
+    }
+
+    const destination = join(targetDir, filePath);
+    mkdirSync(dirname(destination), { recursive: true });
+    cpSync(source, destination, { recursive: true, dereference: false });
+  }
+}
+
+function copyOptionalRootFiles(targetDir) {
+  for (const fileName of ['README.md', 'README_CN.md', 'LICENSE', 'CHANGELOG.md']) {
+    const source = join(repoRoot, fileName);
+    if (existsSync(source)) {
+      cpSync(source, join(targetDir, basename(fileName)));
+    }
+  }
+}
+
+function createSourceMetadata(stagingPackage) {
+  return {
+    schemaVersion: 1,
+    packageName: stagingPackage.name,
+    packageVersion: stagingPackage.version,
+    stagingKind: 'npm-publish',
+    generatedAt: new Date().toISOString(),
+    registryDependencies: dependencyReplacements,
+    sources: {
+      Alembic: gitInfo(repoRoot),
+      AlembicCore: {
+        ...gitInfo(join(repoRoot, '..', 'AlembicCore')),
+        packageName: corePackage.name,
+        packageVersion: corePackage.version,
+      },
+      AlembicAgent: {
+        ...gitInfo(join(repoRoot, '..', 'AlembicAgent')),
+        packageName: agentPackage.name,
+        packageVersion: agentPackage.version,
+      },
+      AlembicDashboard: {
+        ...gitInfo(join(repoRoot, '..', 'AlembicDashboard')),
+        packageName: dashboardPackage.name,
+        packageVersion: dashboardPackage.version,
+      },
+    },
+  };
+}
+
+function verifyStagingManifest(packageJson, metadata) {
+  const dependencySections = [
+    'dependencies',
+    'devDependencies',
+    'optionalDependencies',
+    'peerDependencies',
+    'bundleDependencies',
+    'bundledDependencies',
+  ];
+
+  const errors = [];
+  for (const section of dependencySections) {
+    const dependencies = packageJson[section];
+    if (!dependencies || typeof dependencies !== 'object') {
+      continue;
+    }
+
+    for (const [name, spec] of Object.entries(dependencies)) {
+      if (
+        typeof spec === 'string' &&
+        (spec.startsWith('file:../') || spec.startsWith('file:vendor/'))
+      ) {
+        errors.push(`Staging package ${section}.${name} still uses ${spec}`);
+      }
+    }
+  }
+
+  for (const [dependencyName, expectedVersion] of Object.entries(dependencyReplacements)) {
+    const spec = packageJson.dependencies?.[dependencyName];
+    if (spec !== expectedVersion) {
+      errors.push(
+        `Staging package dependency ${dependencyName} expected ${expectedVersion}, found ${String(spec)}`
+      );
+    }
+  }
+
+  for (const sourceName of ['Alembic', 'AlembicCore', 'AlembicAgent', 'AlembicDashboard']) {
+    if (!metadata.sources[sourceName]?.commit) {
+      errors.push(`Missing source commit metadata for ${sourceName}`);
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Publish staging verification failed:\n- ${errors.join('\n- ')}`);
+  }
+}
+
+function gitInfo(repoPath) {
+  return {
+    commit: git(repoPath, ['rev-parse', 'HEAD']),
+    dirty: git(repoPath, ['status', '--short']).trim().length > 0,
+  };
+}
+
+function git(repoPath, gitArgs) {
+  return execFileSync('git', ['-C', repoPath, ...gitArgs], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+}
+
+function readJson(path) {
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function writeJson(path, value) {
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function relativeFromRepo(path) {
+  return path.replace(`${repoRoot}/`, '');
+}
+
+function writeLine(message) {
+  process.stdout.write(`${message}\n`);
+}
+
+function writeError(message) {
+  process.stderr.write(`${message}\n`);
+}

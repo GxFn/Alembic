@@ -13,6 +13,7 @@ dashboard/dist/
 vendor/AlembicDashboard/dist/
 resources/vscode-ext/out/
 resources/vscode-ext/*.vsix
+.release/
 
 # ─── Native build products ───────────────────────────
 # Swift/ObjC binaries & intermediate build artifacts

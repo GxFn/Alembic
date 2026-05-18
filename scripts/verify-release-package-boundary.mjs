@@ -61,12 +61,9 @@ for (const packagePath of Object.keys(packageLock.packages ?? {})) {
   }
 }
 
-if (
-  packageJson.name === 'alembic-ai' &&
-  process.env.ALEMBIC_MAIN_NPM_PACKAGE_OWNER_CONFIRMED !== '1'
-) {
+if (packageJson.name !== 'alembic-ai') {
   errors.push(
-    'Root package name is alembic-ai, which is also used by AlembicPlugin. Set ALEMBIC_MAIN_NPM_PACKAGE_OWNER_CONFIRMED=1 only after the workspace release owner is explicitly resolved.'
+    `Root package name must remain alembic-ai because the workspace publish owner decision assigns that npm package to Alembic; found ${String(packageJson.name)}.`
   );
 }
 

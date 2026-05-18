@@ -82,6 +82,8 @@
     "dev:link": "npm run build && npm install -g .",
     "dev:verify": "which alembic && alembic -v",
     "release:package-guard": "node scripts/verify-release-package-boundary.mjs",
+    "release:staging:prepare": "node scripts/prepare-publish-staging.mjs",
+    "release:staging:pack": "node scripts/prepare-publish-staging.mjs --pack-dry-run",
     "release:check": "npm run build && node dist/scripts/release.js check",
     "release:patch": "npm run build && node dist/scripts/release.js patch",
     "release:minor": "npm run build && node dist/scripts/release.js minor",

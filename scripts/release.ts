@@ -115,7 +115,7 @@ class ReleaseChecker {
       } else {
         success('与远程同步');
       }
-    } catch (_err: any) {
+    } catch (_err: unknown) {
       warning('无法检查远程同步状态');
     }
   }
@@ -190,15 +190,27 @@ class ReleaseChecker {
     success('No platform-specific binaries to check');
   }
 
-  checkReleasePackageBoundary() {
-    header('Release package boundary');
+  checkDevRootPackageBoundary() {
+    header('Dev root package boundary');
 
     try {
-      exec('npm run release:package-guard');
-      success('Release package boundary passed');
-    } catch (_err: any) {
-      this.errors.push('Release package boundary failed');
-      error('Release package boundary failed');
+      exec('npm run release:package-guard', { silent: true });
+      this.errors.push('Dev root package boundary unexpectedly passed');
+      error('Dev root package boundary unexpectedly passed');
+    } catch (_err: unknown) {
+      success('Dev root package remains blocked from direct npm publish');
+    }
+  }
+
+  checkPublishStagingPackage() {
+    header('Publish staging package');
+
+    try {
+      exec('npm run release:staging:pack');
+      success('Publish staging package preview passed');
+    } catch (_err: unknown) {
+      this.errors.push('Publish staging package preview failed');
+      error('Publish staging package preview failed');
     }
   }
 
@@ -282,6 +294,10 @@ function release(versionType: any, checker: any) {
     const newVersion = `v${readPackageJson().version}`;
     success(`版本已更新: ${currentVersion} → ${newVersion}`);
 
+    info('验证 publish staging package...');
+    exec('npm run release:staging:pack');
+    success('Publish staging package 验证通过');
+
     info('请手动编辑 CHANGELOG.md，然后按回车继续...');
     // 等待用户输入
     require('node:child_process').spawnSync('read', ['-p', ''], {
@@ -324,7 +340,8 @@ function main() {
     checker.checkGitStatus();
     checker.checkNodeEnvironment();
     checker.checkBuildArtifacts();
-    checker.checkReleasePackageBoundary();
+    checker.checkDevRootPackageBoundary();
+    checker.checkPublishStagingPackage();
 
     if (checker.summary()) {
       info('\n运行 `npm run test` 来执行完整测试');
@@ -344,7 +361,8 @@ function main() {
     checker.checkNodeEnvironment();
     checker.checkBuildArtifacts();
     checker.runTests();
-    checker.checkReleasePackageBoundary();
+    checker.checkDevRootPackageBoundary();
+    checker.checkPublishStagingPackage();
 
     if (!checker.summary()) {
       error('\n发布前检查未通过，请修复后再试');

@@ -109,11 +109,19 @@ jobs:
           ASD_DISABLE_WRITE_GUARD: '1'
           ASD_DISABLE_RATE_LIMIT: '1'
 
-      - name: Verify root npm package boundary
-        run: npm run release:package-guard
+      - name: Verify dev root package remains blocked
+        run: |
+          if npm run release:package-guard; then
+            echo "::error::Dev root package unexpectedly passed publish boundary checks"
+            exit 1
+          fi
+          echo "Dev root package remains blocked from direct npm publish as expected."
 
-      - name: Preview npm package
-        run: npm pack --dry-run
+      - name: Prepare npm publish staging package
+        run: npm run release:staging:prepare
+
+      - name: Preview npm publish staging package
+        run: npm run release:staging:pack
 
       - name: Preview VS Code extension package
         run: npm run package:vscode-ext -- --out /tmp/alembic-vscode.vsix
@@ -125,9 +133,8 @@ jobs:
           path: /tmp/alembic-vscode.vsix
 
       - name: Publish to npm
-        # Build artifacts are produced above; skip prepublishOnly to avoid duplicate builds.
-        # This step remains unreachable until release:package-guard passes after package ownership
-        # and registry dependency staging are explicitly resolved.
-        run: npm publish --provenance --access public --ignore-scripts
+        # Publish the staging package only. The repository root package.json keeps local
+        # source file dependencies for development and is intentionally blocked above.
+        run: npm publish .release/alembic-ai --provenance --access public --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
