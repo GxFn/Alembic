@@ -1,6 +1,9 @@
+import { isProjectRuntimeTarget } from '@alembic/core/daemon';
 import express, { type Request, type Response } from 'express';
 import {
   ProjectRuntimeControl,
+  type ProjectRuntimeControlActionResult,
+  type ProjectRuntimeControlOptions,
   type ProjectRuntimeTarget,
 } from '../../daemon/ProjectRuntimeControl.js';
 
@@ -34,6 +37,13 @@ router.get('/current', async (_req: Request, res: Response): Promise<void> => {
 router.post('/select', async (req: Request, res: Response): Promise<void> => {
   const control = new ProjectRuntimeControl();
   const target = targetFromBody(req.body);
+  if (!target) {
+    res.status(400).json({
+      success: false,
+      error: 'Project target requires exactly one of projectId or projectRoot',
+    });
+    return;
+  }
   try {
     const snapshot = await control.selectProject(target);
     res.json({ success: true, data: snapshot });
@@ -48,6 +58,48 @@ router.delete('/select', async (_req: Request, res: Response): Promise<void> => 
   res.json({ success: true, data: snapshot });
 });
 
+router.post('/open-dashboard', async (req: Request, res: Response): Promise<void> => {
+  await sendAction(res, () =>
+    new ProjectRuntimeControl().openDashboard(undefined, controlOptionsFromBody(req.body))
+  );
+});
+
+router.post('/:projectId/start', async (req: Request, res: Response): Promise<void> => {
+  await sendAction(res, () =>
+    new ProjectRuntimeControl().startProject(
+      { projectId: singleParam(req.params.projectId) },
+      controlOptionsFromBody(req.body)
+    )
+  );
+});
+
+router.post('/:projectId/stop', async (req: Request, res: Response): Promise<void> => {
+  await sendAction(res, () =>
+    new ProjectRuntimeControl().stopProject(
+      { projectId: singleParam(req.params.projectId) },
+      controlOptionsFromBody(req.body)
+    )
+  );
+});
+
+router.post('/:projectId/open-dashboard', async (req: Request, res: Response): Promise<void> => {
+  await sendAction(res, () =>
+    new ProjectRuntimeControl().openDashboard(
+      { projectId: singleParam(req.params.projectId) },
+      controlOptionsFromBody(req.body)
+    )
+  );
+});
+
+router.post('/:projectId/switch', async (req: Request, res: Response): Promise<void> => {
+  await sendAction(res, () =>
+    new ProjectRuntimeControl().switchProject(
+      { projectId: singleParam(req.params.projectId) },
+      controlOptionsFromBody(req.body)
+    )
+  );
+});
+
 router.get('/:projectId', async (req: Request, res: Response): Promise<void> => {
   const control = new ProjectRuntimeControl();
   try {
@@ -60,19 +112,51 @@ router.get('/:projectId', async (req: Request, res: Response): Promise<void> => 
   }
 });
 
-function targetFromBody(value: unknown): ProjectRuntimeTarget {
+function targetFromBody(value: unknown): ProjectRuntimeTarget | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {};
+    return null;
   }
   const body = value as Record<string, unknown>;
-  return {
+  const target = {
     projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
     projectRoot: typeof body.projectRoot === 'string' ? body.projectRoot : undefined,
   };
+  return isProjectRuntimeTarget(target) ? target : null;
+}
+
+function controlOptionsFromBody(value: unknown): ProjectRuntimeControlOptions {
+  const body =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  return {
+    restart: body.restart === true,
+    stopWaitMs: numberOption(body.stopWaitMs),
+    waitUntilReadyMs: numberOption(body.waitUntilReadyMs ?? body.waitMs),
+  };
+}
+
+function sendActionResult(res: Response, result: ProjectRuntimeControlActionResult): void {
+  res.status(result.ok ? 200 : 409).json({ success: result.ok, data: result, error: result.error });
+}
+
+async function sendAction(
+  res: Response,
+  action: () => Promise<ProjectRuntimeControlActionResult>
+): Promise<void> {
+  try {
+    sendActionResult(res, await action());
+  } catch (error: unknown) {
+    res.status(404).json({ success: false, error: errorMessage(error) });
+  }
 }
 
 function singleParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
+}
+
+function numberOption(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function errorMessage(error: unknown): string {

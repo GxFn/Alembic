@@ -13,6 +13,7 @@ import {
 } from '@alembic/core/daemon';
 import { getProjectRegistryDir, ProjectRegistry, WorkspaceResolver } from '@alembic/core/workspace';
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import type { DaemonStatus, DaemonSupervisor } from '../../lib/daemon/DaemonSupervisor.js';
 import {
   getProjectRuntimeControlStatePath,
   ProjectRuntimeControl,
@@ -83,6 +84,97 @@ function healthResponse(state: DaemonState): Response {
     }),
     { headers: { 'content-type': 'application/json' }, status: 200 }
   );
+}
+
+function makeDaemonStatus(paths: DaemonPaths, overrides: Partial<DaemonStatus> = {}): DaemonStatus {
+  const state = makeState(paths, overrides.state ?? {});
+  const ready = overrides.ready ?? true;
+  const status = overrides.status ?? (ready ? 'ready' : 'stopped');
+  return {
+    dataRoot: paths.dataRoot,
+    health: ready ? JSON.parse(awaitlessHealthResponse(state)) : null,
+    lockDir: paths.lockDir,
+    logPath: paths.logPath,
+    message: ready ? undefined : 'daemon is not started',
+    pidAlive: ready,
+    pidPath: paths.pidPath,
+    projectId: paths.projectId,
+    projectRoot: paths.projectRoot,
+    ready,
+    state: ready ? state : null,
+    statePath: paths.statePath,
+    status,
+    ...overrides,
+  };
+}
+
+function awaitlessHealthResponse(state: DaemonState): string {
+  return JSON.stringify({
+    success: true,
+    data: {
+      capabilities: {
+        fileMonitor: { available: true, mode: 'daemon-git-worktree' },
+        internalAi: { available: false, configSource: 'empty', model: null, provider: null },
+      },
+      dashboardUrl: state.dashboardUrl,
+      dataRoot: state.dataRoot,
+      databasePath: state.databasePath,
+      mode: 'daemon',
+      projectId: state.projectId,
+      projectRoot: state.projectRoot,
+      schemaMigrationVersion: state.schemaMigrationVersion,
+      version: state.version,
+    },
+  });
+}
+
+class FakeSupervisor {
+  readonly startCalls: string[] = [];
+  readonly stopCalls: string[] = [];
+  readonly statuses = new Map<string, DaemonStatus>();
+
+  setReady(projectRoot: string): DaemonStatus {
+    const paths = resolveDaemonPaths(projectRoot);
+    const status = makeDaemonStatus(paths);
+    this.statuses.set(paths.projectRoot, status);
+    return status;
+  }
+
+  async status(projectRoot: string): Promise<DaemonStatus> {
+    const paths = resolveDaemonPaths(projectRoot);
+    return (
+      this.statuses.get(paths.projectRoot) ??
+      makeDaemonStatus(paths, {
+        health: null,
+        message: 'daemon is not started',
+        pidAlive: false,
+        ready: false,
+        state: null,
+        status: 'stopped',
+      })
+    );
+  }
+
+  async start(options: { projectRoot: string }): Promise<DaemonStatus> {
+    const paths = resolveDaemonPaths(options.projectRoot);
+    this.startCalls.push(paths.projectRoot);
+    return this.setReady(paths.projectRoot);
+  }
+
+  async stop(options: { projectRoot: string }): Promise<DaemonStatus> {
+    const paths = resolveDaemonPaths(options.projectRoot);
+    this.stopCalls.push(paths.projectRoot);
+    const status = makeDaemonStatus(paths, {
+      health: null,
+      message: 'daemon stopped',
+      pidAlive: false,
+      ready: false,
+      state: null,
+      status: 'stopped',
+    });
+    this.statuses.set(paths.projectRoot, status);
+    return status;
+  }
 }
 
 afterEach(() => {
@@ -201,5 +293,67 @@ describe('ProjectRuntimeControl', () => {
     });
     expect(ProjectRegistry.list().map((project) => project.entry.id)).toContain(entry.id);
     expect(fs.existsSync(getProjectRegistryDir())).toBe(true);
+  });
+
+  test('switch stops the current active runtime, starts target, and updates handoff state', async () => {
+    useTempAlembicHome();
+    const currentRoot = makeProjectRoot();
+    const targetRoot = makeProjectRoot();
+    const currentEntry = ProjectRegistry.register(currentRoot, true);
+    const targetEntry = ProjectRegistry.register(targetRoot, true);
+    const fake = new FakeSupervisor();
+    const control = new ProjectRuntimeControl({
+      supervisor: fake as unknown as DaemonSupervisor,
+    });
+    const currentProjectRoot = ProjectRegistry.inspect(currentRoot).projectRealpath;
+    const targetProjectRoot = ProjectRegistry.inspect(targetRoot).projectRealpath;
+    const currentStart = await control.startProject({ projectId: currentEntry.id });
+    expect(currentStart.ok).toBe(true);
+    fake.startCalls.length = 0;
+
+    const result = await control.switchProject({ projectId: targetEntry.id });
+
+    expect(result.ok).toBe(true);
+    expect(result.action).toBe('switch');
+    expect(result.previousActiveProject).toMatchObject({ projectId: currentEntry.id });
+    expect(fake.stopCalls).toEqual([currentProjectRoot]);
+    expect(fake.startCalls).toEqual([targetProjectRoot]);
+    expect(result.targetProject).toMatchObject({
+      daemon: { ready: true, status: 'ready' },
+      flags: { activeRuntime: true, selected: true },
+      projectId: targetEntry.id,
+      status: 'ready',
+    });
+    expect(result.handoff).toMatchObject({
+      dashboardUrl: 'http://127.0.0.1:48151',
+      projectId: targetEntry.id,
+    });
+    expect(control.readState()).toMatchObject({
+      activeProjectId: targetEntry.id,
+      selectedProjectId: targetEntry.id,
+    });
+  });
+
+  test('openDashboard starts the selected project and returns a real daemon handoff', async () => {
+    useTempAlembicHome();
+    const projectRoot = makeProjectRoot();
+    const entry = ProjectRegistry.register(projectRoot, true);
+    const fake = new FakeSupervisor();
+    const control = new ProjectRuntimeControl({
+      supervisor: fake as unknown as DaemonSupervisor,
+    });
+    await control.selectProject({ projectId: entry.id });
+
+    const result = await control.openDashboard();
+
+    expect(result.ok).toBe(true);
+    expect(result.action).toBe('open-dashboard');
+    expect(fake.startCalls).toEqual([ProjectRegistry.inspect(projectRoot).projectRealpath]);
+    expect(result.handoff).toMatchObject({
+      apiBaseUrl: 'http://127.0.0.1:48151',
+      dashboardUrl: 'http://127.0.0.1:48151',
+      projectId: entry.id,
+      status: 'ready',
+    });
   });
 });

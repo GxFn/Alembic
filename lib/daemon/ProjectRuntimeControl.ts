@@ -7,7 +7,22 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { type DaemonJobStatus, resolveDaemonPaths } from '@alembic/core/daemon';
+import {
+  createProjectRuntimeControlState,
+  type DaemonJobStatus,
+  isProjectRuntimeTarget,
+  PROJECT_RUNTIME_CONTROL_STATE_SCHEMA_VERSION,
+  type ProjectConnectionState,
+  type ProjectRuntimeControlSnapshot,
+  type ProjectRuntimeControlState,
+  type ProjectRuntimeDaemonSummary,
+  type ProjectRuntimeFileMonitorSummary,
+  type ProjectRuntimeInternalAiSummary,
+  type ProjectRuntimeJobsSummary,
+  type ProjectRuntimeScopeSummary,
+  type ProjectRuntimeTarget,
+  resolveDaemonPaths,
+} from '@alembic/core/daemon';
 import { collectAiEnvOverrides, isAiEnvReady, WorkspaceSettingsStore } from '@alembic/core/shared';
 import {
   getProjectRegistryDir,
@@ -16,9 +31,20 @@ import {
   type WorkspaceFacts,
   WorkspaceResolver,
 } from '@alembic/core/workspace';
-import { type DaemonStatus, type DaemonStatusKind, DaemonSupervisor } from './DaemonSupervisor.js';
+import { type DaemonStatus, DaemonSupervisor } from './DaemonSupervisor.js';
 
-const STATE_SCHEMA_VERSION = 1;
+export type {
+  ProjectConnectionState,
+  ProjectRuntimeControlSnapshot,
+  ProjectRuntimeControlState,
+  ProjectRuntimeDaemonSummary,
+  ProjectRuntimeFileMonitorSummary,
+  ProjectRuntimeInternalAiSummary,
+  ProjectRuntimeJobsSummary,
+  ProjectRuntimeScopeSummary,
+  ProjectRuntimeTarget,
+} from '@alembic/core/daemon';
+
 const DEFAULT_JOB_STATUSES: DaemonJobStatus[] = [
   'queued',
   'running',
@@ -27,111 +53,35 @@ const DEFAULT_JOB_STATUSES: DaemonJobStatus[] = [
   'cancelled',
 ];
 
-export type ProjectConnectionState = DaemonStatusKind | 'missing' | 'unavailable';
-
-export interface ProjectRuntimeTarget {
-  projectId?: string;
-  projectRoot?: string;
-}
-
-export interface ProjectRuntimeControlState {
-  activeProjectId: string | null;
-  activeProjectRoot: string | null;
-  schemaVersion: typeof STATE_SCHEMA_VERSION;
-  selectedAt: string | null;
-  selectedProjectId: string | null;
-  selectedProjectRoot: string | null;
-  updatedAt: string;
-}
-
-export interface ProjectRuntimeJobsSummary {
-  active: number;
-  byStatus: Partial<Record<DaemonJobStatus, number>>;
-  jobsDir: string;
-  latestJobId: string | null;
-  latestUpdatedAt: string | null;
-  total: number;
-}
-
-export interface ProjectRuntimeFileMonitorSummary {
-  acceptedEventSources: string[];
-  available: boolean;
-  endpoint: string | null;
-  mode: string;
-}
-
-export interface ProjectRuntimeInternalAiSummary {
-  available: boolean;
-  configSource: 'empty' | 'process-env' | 'workspace-settings' | 'unavailable';
-  model: string | null;
-  provider: string | null;
-}
-
-export interface ProjectRuntimeDaemonSummary {
-  dashboardUrl: string | null;
-  logPath: string;
-  message: string | null;
-  pid: number | null;
-  pidAlive: boolean;
-  ready: boolean;
-  statePath: string;
-  status: DaemonStatusKind | 'not-checked';
-  url: string | null;
-}
-
-export interface ProjectRuntimeScopeSummary {
-  cacheKey: string;
-  daemon: ProjectRuntimeDaemonSummary;
-  dashboardUrl: string | null;
-  dataRoot: string;
-  dataRootSource: WorkspaceFacts['dataRootSource'];
-  databasePath: string;
-  displayName: string;
-  fileMonitor: ProjectRuntimeFileMonitorSummary;
-  flags: {
-    activeRuntime: boolean;
-    missing: boolean;
-    selected: boolean;
-    stale: boolean;
-    unavailable: boolean;
-  };
-  ghost: boolean;
-  initializedBy: 'project-registry';
-  internalAi: ProjectRuntimeInternalAiSummary;
-  jobs: ProjectRuntimeJobsSummary;
-  mode: WorkspaceFacts['mode'];
-  projectExists: boolean;
-  projectId: string | null;
-  projectRealpath: string;
-  projectRoot: string;
-  registered: boolean;
-  registry: {
-    createdAt: string | null;
-    id: string | null;
-  };
-  runtimeDir: string;
-  scope: {
-    controlPlaneOwner: 'alembic';
-    daemonOwner: 'per-project-daemon';
-    jobStoreOwner: '@alembic/core/daemon/JobStore';
-    runtimeOwner: 'alembic';
-  };
-  status: ProjectConnectionState;
-  workspaceExists: boolean;
-}
-
-export interface ProjectRuntimeControlSnapshot {
-  activeRuntimeProject: ProjectRuntimeScopeSummary | null;
-  generatedAt: string;
-  projects: ProjectRuntimeScopeSummary[];
-  selectedProject: ProjectRuntimeScopeSummary | null;
-  state: ProjectRuntimeControlState;
-}
-
 interface BuildProjectSummaryOptions {
   entry: ProjectEntry | null;
   projectRoot: string;
   selectedProjectRoot?: string | null;
+}
+
+export interface ProjectRuntimeControlOptions {
+  restart?: boolean;
+  stopWaitMs?: number;
+  waitUntilReadyMs?: number;
+}
+
+export interface ProjectRuntimeHandoff {
+  apiBaseUrl: string | null;
+  dashboardUrl: string | null;
+  projectId: string | null;
+  projectRoot: string;
+  status: ProjectConnectionState;
+}
+
+export interface ProjectRuntimeControlActionResult {
+  action: 'start' | 'stop' | 'open-dashboard' | 'switch';
+  error: string | null;
+  handoff: ProjectRuntimeHandoff | null;
+  ok: boolean;
+  previousActiveProject: ProjectRuntimeScopeSummary | null;
+  snapshot: ProjectRuntimeControlSnapshot;
+  stoppedProject: ProjectRuntimeScopeSummary | null;
+  targetProject: ProjectRuntimeScopeSummary | null;
 }
 
 export function getProjectRuntimeControlStatePath(): string {
@@ -153,18 +103,17 @@ export class ProjectRuntimeControl {
       const parsed = JSON.parse(
         readFileSync(this.statePath, 'utf8')
       ) as Partial<ProjectRuntimeControlState>;
-      if (parsed.schemaVersion !== STATE_SCHEMA_VERSION) {
+      if (parsed.schemaVersion !== PROJECT_RUNTIME_CONTROL_STATE_SCHEMA_VERSION) {
         return emptyState();
       }
-      return {
+      return createProjectRuntimeControlState({
         activeProjectId: nullableString(parsed.activeProjectId),
         activeProjectRoot: nullableString(parsed.activeProjectRoot),
-        schemaVersion: STATE_SCHEMA_VERSION,
         selectedAt: nullableString(parsed.selectedAt),
         selectedProjectId: nullableString(parsed.selectedProjectId),
         selectedProjectRoot: nullableString(parsed.selectedProjectRoot),
         updatedAt: nullableString(parsed.updatedAt) ?? new Date(0).toISOString(),
-      };
+      });
     } catch {
       return emptyState();
     }
@@ -219,21 +168,242 @@ export class ProjectRuntimeControl {
   async selectProject(target: ProjectRuntimeTarget): Promise<ProjectRuntimeControlSnapshot> {
     const project = this.resolveTarget(target, { requireRegistered: true });
     const now = new Date().toISOString();
-    this.writeState({
-      activeProjectId: null,
-      activeProjectRoot: null,
-      schemaVersion: STATE_SCHEMA_VERSION,
-      selectedAt: now,
-      selectedProjectId: project.entry?.id ?? null,
-      selectedProjectRoot: project.projectRoot,
-      updatedAt: now,
-    });
+    this.writeState(
+      createProjectRuntimeControlState({
+        activeProjectId: null,
+        activeProjectRoot: null,
+        selectedAt: now,
+        selectedProjectId: project.entry?.id ?? null,
+        selectedProjectRoot: project.projectRoot,
+        updatedAt: now,
+      })
+    );
     return this.snapshot();
   }
 
   async clearSelection(): Promise<ProjectRuntimeControlSnapshot> {
     this.writeState(emptyState(new Date().toISOString()));
     return this.snapshot();
+  }
+
+  async startProject(
+    target: ProjectRuntimeTarget,
+    options: ProjectRuntimeControlOptions = {}
+  ): Promise<ProjectRuntimeControlActionResult> {
+    return this.activateProject('start', target, options);
+  }
+
+  async switchProject(
+    target: ProjectRuntimeTarget,
+    options: ProjectRuntimeControlOptions = {}
+  ): Promise<ProjectRuntimeControlActionResult> {
+    return this.activateProject('switch', target, options);
+  }
+
+  async openDashboard(
+    target?: ProjectRuntimeTarget,
+    options: ProjectRuntimeControlOptions = {}
+  ): Promise<ProjectRuntimeControlActionResult> {
+    const resolvedTarget = target ?? this.targetFromCurrentState();
+    const result = await this.activateProject('open-dashboard', resolvedTarget, options);
+    if (result.ok && !result.handoff?.dashboardUrl) {
+      return {
+        ...result,
+        error: 'Dashboard URL is unavailable for the target project',
+        ok: false,
+      };
+    }
+    return result;
+  }
+
+  async stopProject(
+    target: ProjectRuntimeTarget,
+    options: ProjectRuntimeControlOptions = {}
+  ): Promise<ProjectRuntimeControlActionResult> {
+    const before = await this.snapshot();
+    const resolved = this.resolveTarget(target, { requireRegistered: true });
+    const targetBefore = await this.buildProjectSummary({
+      entry: resolved.entry,
+      projectRoot: resolved.projectRoot,
+      selectedProjectRoot: before.state.selectedProjectRoot,
+    });
+
+    let error: string | null = null;
+    if (!targetBefore.projectExists) {
+      error = `Project path is missing: ${targetBefore.projectRoot}`;
+    } else {
+      try {
+        await this.#supervisor.stop({
+          projectRoot: targetBefore.projectRoot,
+          waitMs: options.stopWaitMs,
+        });
+      } catch (caught: unknown) {
+        error = errorMessage(caught);
+      }
+    }
+
+    const state = this.readState();
+    const targetWasSelected = sameProjectRoot(targetBefore.projectRoot, state.selectedProjectRoot);
+    const targetWasActive = sameProjectRoot(targetBefore.projectRoot, state.activeProjectRoot);
+    if (targetWasSelected || targetWasActive) {
+      this.writeState(
+        createProjectRuntimeControlState({
+          activeProjectId: targetWasActive ? null : state.activeProjectId,
+          activeProjectRoot: targetWasActive ? null : state.activeProjectRoot,
+          selectedAt: state.selectedAt,
+          selectedProjectId: state.selectedProjectId,
+          selectedProjectRoot: state.selectedProjectRoot,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+    }
+
+    const snapshot = await this.snapshot();
+    const targetProject = await this.buildProjectSummary({
+      entry: resolved.entry,
+      projectRoot: resolved.projectRoot,
+      selectedProjectRoot: snapshot.state.selectedProjectRoot,
+    });
+
+    return {
+      action: 'stop',
+      error,
+      handoff: handoffFromProject(targetProject),
+      ok: error === null,
+      previousActiveProject: before.activeRuntimeProject,
+      snapshot,
+      stoppedProject: targetProject,
+      targetProject,
+    };
+  }
+
+  async activateProject(
+    action: ProjectRuntimeControlActionResult['action'],
+    target: ProjectRuntimeTarget,
+    options: ProjectRuntimeControlOptions
+  ): Promise<ProjectRuntimeControlActionResult> {
+    const before = await this.snapshot();
+    const resolved = this.resolveTarget(target, { requireRegistered: true });
+    const targetBefore = await this.buildProjectSummary({
+      entry: resolved.entry,
+      projectRoot: resolved.projectRoot,
+      selectedProjectRoot: resolved.projectRoot,
+    });
+
+    if (!targetBefore.projectExists) {
+      return this.actionResult({
+        action,
+        error: `Project path is missing: ${targetBefore.projectRoot}`,
+        previousActiveProject: before.activeRuntimeProject,
+        stoppedProject: null,
+        targetProject: targetBefore,
+      });
+    }
+
+    let stoppedProject: ProjectRuntimeScopeSummary | null = null;
+    const currentActive = before.activeRuntimeProject;
+    if (currentActive && !sameProjectRoot(currentActive.projectRoot, targetBefore.projectRoot)) {
+      try {
+        await this.#supervisor.stop({
+          projectRoot: currentActive.projectRoot,
+          waitMs: options.stopWaitMs,
+        });
+      } catch (caught: unknown) {
+        return this.actionResult({
+          action,
+          error: `Failed to stop active runtime ${currentActive.projectRoot}: ${errorMessage(caught)}`,
+          previousActiveProject: currentActive,
+          stoppedProject: null,
+          targetProject: targetBefore,
+        });
+      }
+      stoppedProject = await this.buildProjectSummary({
+        entry: ProjectRegistry.get(currentActive.projectRoot),
+        projectRoot: currentActive.projectRoot,
+        selectedProjectRoot: targetBefore.projectRoot,
+      });
+    }
+
+    let startError: string | null = null;
+    try {
+      await this.#supervisor.start({
+        projectRoot: targetBefore.projectRoot,
+        restart: options.restart,
+        waitUntilReadyMs: options.waitUntilReadyMs,
+      });
+    } catch (caught: unknown) {
+      startError = errorMessage(caught);
+    }
+
+    const targetAfterStart = await this.buildProjectSummary({
+      entry: resolved.entry,
+      projectRoot: resolved.projectRoot,
+      selectedProjectRoot: targetBefore.projectRoot,
+    });
+    const now = new Date().toISOString();
+    this.writeState(
+      createProjectRuntimeControlState({
+        activeProjectId: targetAfterStart.daemon.ready ? targetAfterStart.projectId : null,
+        activeProjectRoot: targetAfterStart.daemon.ready ? targetAfterStart.projectRoot : null,
+        selectedAt: now,
+        selectedProjectId: targetAfterStart.projectId,
+        selectedProjectRoot: targetAfterStart.projectRoot,
+        updatedAt: now,
+      })
+    );
+
+    const snapshot = await this.snapshot();
+    const targetProject = snapshot.selectedProject ?? targetAfterStart;
+    const daemonError = startError
+      ? `Failed to start target runtime ${targetBefore.projectRoot}: ${startError}`
+      : targetProject.daemon.ready
+        ? null
+        : (targetProject.daemon.message ?? 'Target daemon did not become ready');
+
+    return {
+      action,
+      error: daemonError,
+      handoff: handoffFromProject(targetProject),
+      ok: daemonError === null,
+      previousActiveProject: before.activeRuntimeProject,
+      snapshot,
+      stoppedProject,
+      targetProject,
+    };
+  }
+
+  async actionResult(options: {
+    action: ProjectRuntimeControlActionResult['action'];
+    error: string | null;
+    previousActiveProject: ProjectRuntimeScopeSummary | null;
+    stoppedProject: ProjectRuntimeScopeSummary | null;
+    targetProject: ProjectRuntimeScopeSummary | null;
+  }): Promise<ProjectRuntimeControlActionResult> {
+    const snapshot = await this.snapshot();
+    return {
+      action: options.action,
+      error: options.error,
+      handoff: options.targetProject ? handoffFromProject(options.targetProject) : null,
+      ok: options.error === null,
+      previousActiveProject: options.previousActiveProject,
+      snapshot,
+      stoppedProject: options.stoppedProject,
+      targetProject: options.targetProject,
+    };
+  }
+
+  targetFromCurrentState(): ProjectRuntimeTarget {
+    const state = this.readState();
+    const target = firstProjectRuntimeTarget(
+      { projectId: state.activeProjectId ?? undefined },
+      { projectRoot: state.activeProjectRoot ?? undefined },
+      { projectId: state.selectedProjectId ?? undefined },
+      { projectRoot: state.selectedProjectRoot ?? undefined }
+    );
+    if (!target) {
+      throw new Error('No selected or active project runtime is available');
+    }
+    return target;
   }
 
   async buildProjectSummary(
@@ -297,6 +467,10 @@ export class ProjectRuntimeControl {
     target: ProjectRuntimeTarget,
     options: { requireRegistered: boolean }
   ): { entry: ProjectEntry | null; projectRoot: string } {
+    if (!isProjectRuntimeTarget(target)) {
+      throw new Error('Project target requires exactly one of projectId or projectRoot');
+    }
+
     if (target.projectId) {
       const match = ProjectRegistry.list().find(({ entry }) => entry.id === target.projectId);
       if (!match) {
@@ -483,15 +657,7 @@ function normalizeInternalAiSource(
 }
 
 function emptyState(updatedAt = new Date(0).toISOString()): ProjectRuntimeControlState {
-  return {
-    activeProjectId: null,
-    activeProjectRoot: null,
-    schemaVersion: STATE_SCHEMA_VERSION,
-    selectedAt: null,
-    selectedProjectId: null,
-    selectedProjectRoot: null,
-    updatedAt,
-  };
+  return createProjectRuntimeControlState({ updatedAt });
 }
 
 function sameProjectRoot(
@@ -524,4 +690,29 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : [];
+}
+
+function handoffFromProject(project: ProjectRuntimeScopeSummary): ProjectRuntimeHandoff {
+  return {
+    apiBaseUrl: project.daemon.url,
+    dashboardUrl: project.dashboardUrl,
+    projectId: project.projectId,
+    projectRoot: project.projectRoot,
+    status: project.status,
+  };
+}
+
+function firstProjectRuntimeTarget(
+  ...targets: Array<Partial<ProjectRuntimeTarget>>
+): ProjectRuntimeTarget | null {
+  for (const target of targets) {
+    if (isProjectRuntimeTarget(target)) {
+      return target;
+    }
+  }
+  return null;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

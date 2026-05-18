@@ -36,8 +36,10 @@ import { DEFAULT_FOLDER_NAMES, WorkspaceResolver } from '@alembic/core/workspace
 import { Command } from 'commander';
 import { cli } from '../lib/cli/CliLogger.js';
 import type {
+  ProjectRuntimeControlActionResult,
   ProjectRuntimeControlSnapshot,
   ProjectRuntimeScopeSummary,
+  ProjectRuntimeTarget,
 } from '../lib/daemon/ProjectRuntimeControl.js';
 import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-assets.js';
 import { shutdown } from '../lib/shared/shutdown.js';
@@ -285,6 +287,7 @@ projects
   .command('inspect [target]')
   .description('查看单个项目 runtime scope；target 默认为 projectId，路径请用 -d')
   .option('-d, --dir <path>', '项目目录')
+  .option('--project-root <path>', '项目目录（等价于 --dir，便于脚本化）')
   .option('--json', 'JSON 格式输出')
   .action(async (target: string | undefined, opts) => {
     const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
@@ -321,6 +324,7 @@ projects
   .command('select [target]')
   .description('选择一个已注册项目；target 默认为 projectId，路径请用 -d')
   .option('-d, --dir <path>', '项目目录')
+  .option('--project-root <path>', '项目目录（等价于 --dir，便于脚本化）')
   .option('--json', 'JSON 格式输出')
   .action(async (target: string | undefined, opts) => {
     const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
@@ -332,6 +336,90 @@ projects
       return;
     }
     printCurrentProjectState(snapshot);
+  });
+
+projects
+  .command('start [target]')
+  .description('启动目标项目 daemon，并将其设为 selected / active runtime')
+  .option('-d, --dir <path>', '项目目录')
+  .option('--project-root <path>', '项目目录（等价于 --dir，便于脚本化）')
+  .option('--restart', '即使目标 daemon 已就绪也重启')
+  .option('--wait <ms>', '等待 ready 的毫秒数', '10000')
+  .option('--stop-wait <ms>', '停止当前 active runtime 的等待毫秒数', '5000')
+  .option('--json', 'JSON 格式输出')
+  .action(async (target: string | undefined, opts) => {
+    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const result = await new ProjectRuntimeControl().startProject(
+      projectTargetFromCli(target, opts),
+      {
+        restart: Boolean(opts.restart),
+        stopWaitMs: parseCliInteger(opts.stopWait, 'stop-wait'),
+        waitUntilReadyMs: parseCliInteger(opts.wait, 'wait'),
+      }
+    );
+    printProjectActionResult(result, opts.json);
+  });
+
+projects
+  .command('stop [target]')
+  .description('停止目标项目 daemon；若目标是 active runtime，会清除 active 状态但保留 selected')
+  .option('-d, --dir <path>', '项目目录')
+  .option('--project-root <path>', '项目目录（等价于 --dir，便于脚本化）')
+  .option('--wait <ms>', '等待停止的毫秒数', '5000')
+  .option('--json', 'JSON 格式输出')
+  .action(async (target: string | undefined, opts) => {
+    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const result = await new ProjectRuntimeControl().stopProject(
+      projectTargetFromCli(target, opts),
+      {
+        stopWaitMs: parseCliInteger(opts.wait, 'wait'),
+      }
+    );
+    printProjectActionResult(result, opts.json);
+  });
+
+projects
+  .command('open-dashboard [target]')
+  .description('启动或复用目标项目 daemon，并返回 Dashboard handoff URL')
+  .option('-d, --dir <path>', '项目目录')
+  .option('--project-root <path>', '项目目录（等价于 --dir，便于脚本化）')
+  .option('--restart', '即使目标 daemon 已就绪也重启')
+  .option('--wait <ms>', '等待 ready 的毫秒数', '10000')
+  .option('--stop-wait <ms>', '停止当前 active runtime 的等待毫秒数', '5000')
+  .option('--json', 'JSON 格式输出')
+  .action(async (target: string | undefined, opts) => {
+    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const result = await new ProjectRuntimeControl().openDashboard(
+      optionalProjectTargetFromCli(target, opts),
+      {
+        restart: Boolean(opts.restart),
+        stopWaitMs: parseCliInteger(opts.stopWait, 'stop-wait'),
+        waitUntilReadyMs: parseCliInteger(opts.wait, 'wait'),
+      }
+    );
+    printProjectActionResult(result, opts.json);
+  });
+
+projects
+  .command('switch [target]')
+  .description('切换到目标项目：停止当前 active runtime，启动目标 daemon，并返回 handoff')
+  .option('-d, --dir <path>', '项目目录')
+  .option('--project-root <path>', '项目目录（等价于 --dir，便于脚本化）')
+  .option('--restart', '即使目标 daemon 已就绪也重启')
+  .option('--wait <ms>', '等待 ready 的毫秒数', '10000')
+  .option('--stop-wait <ms>', '停止当前 active runtime 的等待毫秒数', '5000')
+  .option('--json', 'JSON 格式输出')
+  .action(async (target: string | undefined, opts) => {
+    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const result = await new ProjectRuntimeControl().switchProject(
+      projectTargetFromCli(target, opts),
+      {
+        restart: Boolean(opts.restart),
+        stopWaitMs: parseCliInteger(opts.stopWait, 'stop-wait'),
+        waitUntilReadyMs: parseCliInteger(opts.wait, 'wait'),
+      }
+    );
+    printProjectActionResult(result, opts.json);
   });
 
 projects
@@ -2255,9 +2343,13 @@ function printDaemonStatus(status: {
   cli.blank();
 }
 
-function projectTargetFromCli(target: string | undefined, opts: { dir?: string }) {
-  if (opts.dir) {
-    return { projectRoot: resolve(opts.dir) };
+function projectTargetFromCli(
+  target: string | undefined,
+  opts: { dir?: string; projectRoot?: string }
+): ProjectRuntimeTarget {
+  const projectRoot = opts.projectRoot ?? opts.dir;
+  if (projectRoot) {
+    return { projectRoot: resolve(projectRoot) };
   }
   if (!target) {
     return { projectRoot: process.cwd() };
@@ -2271,6 +2363,27 @@ function projectTargetFromCli(target: string | undefined, opts: { dir?: string }
     return { projectRoot: resolve(target) };
   }
   return { projectId: target };
+}
+
+function optionalProjectTargetFromCli(
+  target: string | undefined,
+  opts: { dir?: string; projectRoot?: string }
+): ProjectRuntimeTarget | undefined {
+  if (!target && !opts.projectRoot && !opts.dir) {
+    return undefined;
+  }
+  return projectTargetFromCli(target, opts);
+}
+
+function printProjectActionResult(result: ProjectRuntimeControlActionResult, asJson: boolean) {
+  if (asJson) {
+    cli.json(result);
+  } else {
+    printProjectRuntimeAction(result);
+  }
+  if (!result.ok) {
+    process.exitCode = 1;
+  }
 }
 
 function printProjectsSnapshot(snapshot: ProjectRuntimeControlSnapshot) {
@@ -2349,6 +2462,33 @@ function printCurrentProjectState(snapshot: ProjectRuntimeControlSnapshot) {
     `  Active:   ${snapshot.activeRuntimeProject ? projectLabel(snapshot.activeRuntimeProject) : 'none'}`
   );
   cli.log(`  State:    ${snapshot.state.updatedAt}`);
+  cli.blank();
+}
+
+function printProjectRuntimeAction(result: ProjectRuntimeControlActionResult) {
+  cli.blank();
+  cli.log(`  Alembic Project ${result.action}`);
+  cli.log(`  ${'─'.repeat(40)}`);
+  cli.log(`  Status:   ${result.ok ? 'ok' : 'failed'}`);
+  if (result.targetProject) {
+    cli.log(`  Target:   ${projectLabel(result.targetProject)}`);
+    cli.log(`  Root:     ${result.targetProject.projectRoot}`);
+  }
+  if (result.previousActiveProject) {
+    cli.log(`  Previous: ${projectLabel(result.previousActiveProject)}`);
+  }
+  if (result.stoppedProject) {
+    cli.log(`  Stopped:  ${projectLabel(result.stoppedProject)}`);
+  }
+  if (result.handoff) {
+    cli.log(`  API:      ${result.handoff.apiBaseUrl ?? 'unavailable'}`);
+    cli.log(
+      `  Dashboard:${result.handoff.dashboardUrl ? ` ${result.handoff.dashboardUrl}` : ' unavailable'}`
+    );
+  }
+  if (result.error) {
+    cli.log(`  Error:    ${result.error}`);
+  }
   cli.blank();
 }
 
