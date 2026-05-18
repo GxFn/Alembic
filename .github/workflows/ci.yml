@@ -15,6 +15,10 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   NODE_ENV: test
 
+defaults:
+  run:
+    working-directory: Alembic
+
 jobs:
   build:
     name: Build & Lint
@@ -23,15 +27,44 @@ jobs:
       matrix:
         node-version: ['22']
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout Alembic
+        uses: actions/checkout@v5
         with:
-          submodules: true
+          path: Alembic
+      - name: Checkout AlembicCore
+        uses: actions/checkout@v5
+        with:
+          repository: GxFn/AlembicCore
+          path: AlembicCore
+      - name: Checkout AlembicAgent
+        uses: actions/checkout@v5
+        with:
+          repository: GxFn/AlembicAgent
+          path: AlembicAgent
+      - name: Checkout AlembicDashboard
+        uses: actions/checkout@v5
+        with:
+          repository: GxFn/AlembicDashboard
+          path: AlembicDashboard
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
-      - run: npm ci
-      - run: cd dashboard && npm ci
+          cache-dependency-path: |
+            Alembic/package-lock.json
+            AlembicCore/package-lock.json
+            AlembicAgent/package-lock.json
+            AlembicDashboard/package-lock.json
+      - name: Install workspace dependencies
+        run: |
+          npm ci --prefix ../AlembicCore
+          npm ci --prefix ../AlembicAgent
+          npm ci --prefix ../AlembicDashboard
+          npm ci
+      - name: Build sibling packages
+        run: |
+          npm run build --prefix ../AlembicCore
+          npm run build --prefix ../AlembicAgent
       - run: npm run install:vscode-ext
       - run: npm run build
       - run: npm run lint -- --diagnostic-level=error
@@ -45,16 +78,45 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout Alembic
+        uses: actions/checkout@v5
         with:
-          submodules: true
+          path: Alembic
+      - name: Checkout AlembicCore
+        uses: actions/checkout@v5
+        with:
+          repository: GxFn/AlembicCore
+          path: AlembicCore
+      - name: Checkout AlembicAgent
+        uses: actions/checkout@v5
+        with:
+          repository: GxFn/AlembicAgent
+          path: AlembicAgent
+      - name: Checkout AlembicDashboard
+        uses: actions/checkout@v5
+        with:
+          repository: GxFn/AlembicDashboard
+          path: AlembicDashboard
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: 'npm'
-      - run: npm ci
+          cache-dependency-path: |
+            Alembic/package-lock.json
+            AlembicCore/package-lock.json
+            AlembicAgent/package-lock.json
+            AlembicDashboard/package-lock.json
+      - name: Install workspace dependencies
+        run: |
+          npm ci --prefix ../AlembicCore
+          npm ci --prefix ../AlembicAgent
+          npm ci --prefix ../AlembicDashboard
+          npm ci
+      - name: Build sibling packages
+        run: |
+          npm run build --prefix ../AlembicCore
+          npm run build --prefix ../AlembicAgent
       - run: npm run build
-      - run: cd dashboard && npm ci
       - run: npm run install:vscode-ext
       - run: npm run build:dashboard
       - run: npm run build:vscode-ext
@@ -111,14 +173,43 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout Alembic
+        uses: actions/checkout@v5
         with:
-          submodules: true
+          path: Alembic
+      - name: Checkout AlembicCore
+        uses: actions/checkout@v5
+        with:
+          repository: GxFn/AlembicCore
+          path: AlembicCore
+      - name: Checkout AlembicAgent
+        uses: actions/checkout@v5
+        with:
+          repository: GxFn/AlembicAgent
+          path: AlembicAgent
+      - name: Checkout AlembicDashboard
+        uses: actions/checkout@v5
+        with:
+          repository: GxFn/AlembicDashboard
+          path: AlembicDashboard
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: 'npm'
-      - run: npm ci
+          cache-dependency-path: |
+            Alembic/package-lock.json
+            AlembicCore/package-lock.json
+            AlembicAgent/package-lock.json
+            AlembicDashboard/package-lock.json
+      - name: Install workspace dependencies
+        run: |
+          npm ci --prefix ../AlembicCore
+          npm ci --prefix ../AlembicAgent
+          npm ci
+      - name: Build sibling packages
+        run: |
+          npm run build --prefix ../AlembicCore
+          npm run build --prefix ../AlembicAgent
       - run: npm run build
       - run: npm run test:unit
 
@@ -127,14 +218,43 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout Alembic
+        uses: actions/checkout@v5
         with:
-          submodules: true
+          path: Alembic
+      - name: Checkout AlembicCore
+        uses: actions/checkout@v5
+        with:
+          repository: GxFn/AlembicCore
+          path: AlembicCore
+      - name: Checkout AlembicAgent
+        uses: actions/checkout@v5
+        with:
+          repository: GxFn/AlembicAgent
+          path: AlembicAgent
+      - name: Checkout AlembicDashboard
+        uses: actions/checkout@v5
+        with:
+          repository: GxFn/AlembicDashboard
+          path: AlembicDashboard
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: 'npm'
-      - run: npm ci
+          cache-dependency-path: |
+            Alembic/package-lock.json
+            AlembicCore/package-lock.json
+            AlembicAgent/package-lock.json
+            AlembicDashboard/package-lock.json
+      - name: Install workspace dependencies
+        run: |
+          npm ci --prefix ../AlembicCore
+          npm ci --prefix ../AlembicAgent
+          npm ci
+      - name: Build sibling packages
+        run: |
+          npm run build --prefix ../AlembicCore
+          npm run build --prefix ../AlembicAgent
       - run: npm run build
 
       - name: Show Node/npm version

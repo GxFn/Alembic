@@ -190,6 +190,18 @@ class ReleaseChecker {
     success('No platform-specific binaries to check');
   }
 
+  checkReleasePackageBoundary() {
+    header('Release package boundary');
+
+    try {
+      exec('npm run release:package-guard');
+      success('Release package boundary passed');
+    } catch (_err: any) {
+      this.errors.push('Release package boundary failed');
+      error('Release package boundary failed');
+    }
+  }
+
   // 运行测试
   runTests() {
     header('运行测试');
@@ -312,6 +324,7 @@ function main() {
     checker.checkGitStatus();
     checker.checkNodeEnvironment();
     checker.checkBuildArtifacts();
+    checker.checkReleasePackageBoundary();
 
     if (checker.summary()) {
       info('\n运行 `npm run test` 来执行完整测试');
@@ -331,6 +344,7 @@ function main() {
     checker.checkNodeEnvironment();
     checker.checkBuildArtifacts();
     checker.runTests();
+    checker.checkReleasePackageBoundary();
 
     if (!checker.summary()) {
       error('\n发布前检查未通过，请修复后再试');

@@ -81,6 +81,7 @@
     "test:watch": "vitest",
     "dev:link": "npm run build && npm install -g .",
     "dev:verify": "which alembic && alembic -v",
+    "release:package-guard": "node scripts/verify-release-package-boundary.mjs",
     "release:check": "npm run build && node dist/scripts/release.js check",
     "release:patch": "npm run build && node dist/scripts/release.js patch",
     "release:minor": "npm run build && node dist/scripts/release.js minor",
