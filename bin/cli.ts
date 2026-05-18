@@ -347,7 +347,7 @@ program
   .option('--skip-guard', '跳过 Guard 审计')
   .option('--no-skills', '禁用 Skill 加载')
   .option('--wait', '等待 AI 异步填充完成（默认骨架完成即退出）')
-  .option('--no-delivery', '等待异步填充时跳过写入目标项目的 Cursor/Wiki/Agent 交付')
+  .option('--no-delivery', '等待异步填充时跳过可选知识物化阶段')
   .option('--json', '以 JSON 格式输出结果')
   .action(async (opts) => {
     const projectRoot = resolve(opts.dir);

@@ -27,7 +27,7 @@ rules:
 roles:
   - id: "external_agent"
     name: "External Agent"
-    description: "IDE AI agent (Cursor / Copilot / Claude Code)"
+    description: "External host agent or adapter"
     permissions:
       - "read:recipes"
       - "read:project"

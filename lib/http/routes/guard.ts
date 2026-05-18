@@ -1,12 +1,12 @@
 /**
  * Guard 文件检查 API 路由
  *
- * 提供 HTTP 端点供 VS Code Extension 调用，触发 Guard 实时检查。
- * 返回格式面向 IDE DiagnosticCollection 优化。
+ * 提供 HTTP 端点供 Dashboard、CLI 或外部宿主调用，触发 Guard 实时检查。
+ * 返回格式面向结构化诊断消费优化。
  *
  * 端点:
- *   POST /api/v1/guard/file   — 单文件检查（Extension onDidSave 调用）
- *   POST /api/v1/guard/batch  — 批量文件检查（Extension 工作区扫描）
+ *   POST /api/v1/guard/file   — 单文件检查
+ *   POST /api/v1/guard/batch  — 批量文件检查
  */
 
 import { readFileSync } from 'node:fs';

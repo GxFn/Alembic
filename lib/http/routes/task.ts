@@ -1,7 +1,7 @@
 /**
  * Task HTTP API 路由 (v3.3 — Intent Lifecycle)
  *
- * 为 VS Code Extension `taskTool.ts` 提供 HTTP 转发端点。
+ * 为 Dashboard、CLI 或外部宿主提供 HTTP 转发端点。
  * 5 operations: prime, create, close, fail, record_decision
  *
  * 端点:

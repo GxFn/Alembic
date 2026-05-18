@@ -5,7 +5,7 @@
  * 订阅者之间相互隔离，使用 Promise.allSettled 确保单个失败不影响其他。
  *
  * 订阅者可选返回 {@link ReactiveEvolutionReport}，Dispatcher 将所有 report 合并后
- * 返回给路由层，路由层再透传到 HTTP 响应体（供 VSCode 扩展弹窗使用）。
+ * 返回给路由层，路由层再透传到 HTTP 响应体（供调用方决定是否展示复核提示）。
  */
 
 import Logger from '@alembic/core/logging';

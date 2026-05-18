@@ -2,13 +2,9 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type {
-  FileChangeEvent,
-  ReactiveEvolutionReport,
-} from '@alembic/core/types';
+import type { FileChangeEvent, ReactiveEvolutionReport } from '@alembic/core/types';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { DaemonFileChangeCollector } from '../../lib/service/evolution/DaemonFileChangeCollector.js';
-import { FileChangeSourceTracker } from '../../lib/service/evolution/FileChangeSourceTracker.js';
 import type { FileChangeDispatcher } from '../../lib/service/FileChangeDispatcher.js';
 
 const tempDirs: string[] = [];
@@ -42,26 +38,20 @@ describe('DaemonFileChangeCollector', () => {
     collector.stop();
   });
 
-  test('uses vscode heartbeat to suppress fallback duplicates, then resumes after expiry', async () => {
+  test('keeps collecting daemon worktree changes without external host gating', async () => {
     const repo = createRepo();
-    const tracker = new FileChangeSourceTracker();
-    tracker.markVscodeExtensionSeen(1_000);
-    const { collector, dispatch } = createCollector(repo, tracker);
+    const { collector, dispatch } = createCollector(repo);
 
     await collector.scanOnce(1_000);
 
-    appendFileSync(join(repo, 'src', 'index.ts'), '\nexport const handledByIde = 3;\n');
+    appendFileSync(join(repo, 'src', 'index.ts'), '\nexport const collectedByDaemon = 3;\n');
     await collector.scanOnce(2_000);
-    expect(dispatch).not.toHaveBeenCalled();
-
-    writeFileSync(join(repo, 'src', 'fallback.ts'), 'export const fallback = true;\n');
-    await collector.scanOnce(20_000);
 
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(dispatch.mock.calls[0]?.[0]).toEqual([
       {
-        type: 'created',
-        path: 'src/fallback.ts',
+        type: 'modified',
+        path: 'src/index.ts',
         eventSource: 'git-worktree',
       },
     ]);
@@ -84,15 +74,13 @@ describe('DaemonFileChangeCollector', () => {
   });
 });
 
-function createCollector(repo: string, sourceTracker = new FileChangeSourceTracker()) {
+function createCollector(repo: string) {
   const dispatch = vi.fn(async (events: FileChangeEvent[]) => makeReport(events));
   const dispatcher = { dispatch } as unknown as FileChangeDispatcher;
   const collector = new DaemonFileChangeCollector({
     projectRoot: repo,
     dispatcher,
-    sourceTracker,
     intervalMs: 999_999,
-    extensionTtlMs: 10_000,
     logger: {
       debug: vi.fn(),
       info: vi.fn(),

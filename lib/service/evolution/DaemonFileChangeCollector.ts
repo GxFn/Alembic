@@ -1,12 +1,10 @@
 /**
- * DaemonFileChangeCollector — daemon fallback file-change collection.
+ * DaemonFileChangeCollector — daemon-owned file-change collection.
  *
- * Preferred path:
- *   VSCode extension heartbeat is fresh → extension owns file-change events.
- *
- * Fallback path:
- *   No fresh heartbeat → daemon periodically samples git worktree state and
- *   dispatches newly observed changes through FileChangeDispatcher.
+ * The daemon periodically samples git worktree state and dispatches newly
+ * observed changes through FileChangeDispatcher. External hosts may still POST
+ * their own file-change events, but the main package no longer waits for editor
+ * host coordination signals before collecting local changes.
  */
 
 import { execFile } from 'node:child_process';
@@ -16,13 +14,8 @@ import { timerRegistry } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
 import type { FileChangeEvent } from '@alembic/core/types';
 import type { FileChangeDispatcher } from '../FileChangeDispatcher.js';
-import {
-  type FileChangeSourceTracker,
-  getFileChangeSourceTracker,
-} from './FileChangeSourceTracker.js';
 
 const DEFAULT_INTERVAL_MS = 60_000;
-const DEFAULT_EXTENSION_TTL_MS = 150_000;
 const GIT_TIMEOUT_MS = 5_000;
 const MAX_EVENTS_PER_SCAN = 500;
 
@@ -32,9 +25,7 @@ type AppLogger = ReturnType<typeof Logger.getInstance>;
 export interface DaemonFileChangeCollectorOptions {
   projectRoot: string;
   dispatcher: FileChangeDispatcher;
-  sourceTracker?: FileChangeSourceTracker;
   intervalMs?: number;
-  extensionTtlMs?: number;
   logger?: Pick<AppLogger, 'debug' | 'info' | 'warn'>;
 }
 
@@ -46,9 +37,7 @@ interface WorktreeSnapshot {
 export class DaemonFileChangeCollector {
   readonly #projectRoot: string;
   readonly #dispatcher: FileChangeDispatcher;
-  readonly #sourceTracker: FileChangeSourceTracker;
   readonly #intervalMs: number;
-  readonly #extensionTtlMs: number;
   readonly #logger: Pick<AppLogger, 'debug' | 'info' | 'warn'>;
 
   #timer: TimerHandle | null = null;
@@ -59,9 +48,7 @@ export class DaemonFileChangeCollector {
   constructor(options: DaemonFileChangeCollectorOptions) {
     this.#projectRoot = options.projectRoot;
     this.#dispatcher = options.dispatcher;
-    this.#sourceTracker = options.sourceTracker ?? getFileChangeSourceTracker();
     this.#intervalMs = normalizePositiveInt(options.intervalMs, DEFAULT_INTERVAL_MS);
-    this.#extensionTtlMs = normalizePositiveInt(options.extensionTtlMs, DEFAULT_EXTENSION_TTL_MS);
     this.#logger = options.logger ?? Logger.getInstance();
   }
 
@@ -87,7 +74,6 @@ export class DaemonFileChangeCollector {
     this.#logger.info('[daemon-file-change] fallback collector started', {
       projectRoot: this.#projectRoot,
       intervalMs: this.#intervalMs,
-      extensionTtlMs: this.#extensionTtlMs,
     });
   }
 
@@ -99,21 +85,13 @@ export class DaemonFileChangeCollector {
     }
   }
 
-  async scanOnce(now = Date.now()): Promise<void> {
+  async scanOnce(_now = Date.now()): Promise<void> {
     if (this.#disposed || this.#running) {
       return;
     }
     this.#running = true;
     try {
       const snapshot = await this.#collectSnapshot();
-
-      if (this.#sourceTracker.hasRecentVscodeExtension(this.#extensionTtlMs, now)) {
-        this.#lastKeys = snapshot.keys;
-        this.#logger.debug(
-          '[daemon-file-change] scan skipped: vscode extension heartbeat is fresh'
-        );
-        return;
-      }
 
       if (!this.#lastKeys) {
         this.#lastKeys = snapshot.keys;

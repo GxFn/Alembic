@@ -9,7 +9,7 @@ summary_en: English summary, ≤100 words
 headers: ["import Foundation"]  # Complete import statement array
 knowledgeType: code-pattern  # code-pattern, architecture, best-practice, code-standard, code-style, code-relation, data-flow, event-and-data-flow, module-dependency, boundary-constraint, solution, anti-pattern
 
-# V3 Cursor Delivery Required Fields
+# V3 Agent Consumption Fields
 kind: pattern  # rule = mandatory constraint | pattern = reusable pattern | fact = project fact
 doClause: "Use dependency injection via constructor"  # English imperative, verb-first, ≤60 tokens
 dontClause: "Don't instantiate services with new directly"  # English negative constraint

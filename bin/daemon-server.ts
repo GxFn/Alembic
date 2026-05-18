@@ -178,7 +178,6 @@ function startDaemonFileChangeCollector(options: {
     projectRoot: options.projectRoot,
     dispatcher,
     intervalMs: Number.parseInt(process.env.ALEMBIC_DAEMON_FILE_CHANGE_INTERVAL_MS || '', 10),
-    extensionTtlMs: Number.parseInt(process.env.ALEMBIC_VSCODE_HEARTBEAT_TTL_MS || '', 10),
     logger: options.logger,
   });
   collector.start();

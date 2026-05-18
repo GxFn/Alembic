@@ -24,7 +24,7 @@
  *   ├── patterns/             — 按分类拆分 (Recipe 较多时)
  *   │   └── {category}.md
  *   ├── protocols.md          — 协议参考 (协议较多时)
- *   ├── documents/            — 同步的 Cursor 端文档
+ *   ├── documents/            — 同步的外部宿主文档
  *   └── meta.json             — Wiki 元数据
  *
  * @module WikiGenerator
@@ -175,7 +175,7 @@ export const WikiPhase = Object.freeze({
   KNOWLEDGE: 'knowledge', // 整合已有 Recipes
   GENERATE: 'generate', // 生成 Markdown 骨架
   AI_COMPOSE: 'ai-compose', // AI 合成写作增强
-  SYNC_DOCS: 'sync-docs', // 同步 Cursor 端 MD
+  SYNC_DOCS: 'sync-docs', // 同步外部宿主文档
   DEDUP: 'dedup', // 去重
   FINALIZE: 'finalize', // 写入 meta.json
 });
@@ -288,9 +288,9 @@ export class WikiGenerator {
         return this._abortedResult();
       }
 
-      // Phase 8: Sync Cursor docs
-      this._emit(WikiPhase.SYNC_DOCS, 80, '同步 Cursor 端文档...');
-      const syncedFiles = this._syncCursorDocs();
+      // Phase 8: Sync external host docs
+      this._emit(WikiPhase.SYNC_DOCS, 80, '同步外部宿主文档...');
+      const syncedFiles = this._syncExternalDocs();
       files.push(...syncedFiles);
       if (this._aborted) {
         return this._abortedResult();
@@ -1021,7 +1021,7 @@ export class WikiGenerator {
   /**
    * Alembic 主包不再读取项目内编辑器交付目录。
    */
-  _syncCursorDocs() {
+  _syncExternalDocs() {
     const synced: WikiFileResult[] = [];
     const isZh = this.options.language === 'zh';
 
@@ -1041,7 +1041,7 @@ export class WikiGenerator {
       const lines = [
         `# ${isZh ? '开发文档' : 'Developer Documents'}`,
         '',
-        `> ${isZh ? '由 Cursor Agent 创建并同步到 Wiki 的开发文档' : 'Development documents created by Cursor Agent and synced to Wiki'}`,
+        `> ${isZh ? '由外部宿主创建并同步到 Wiki 的开发文档' : 'Development documents created by an external host and synced to Wiki'}`,
         '',
         `| ${isZh ? '文档' : 'Document'} | ${isZh ? '来源' : 'Source'} |`,
         '|--------|--------|',

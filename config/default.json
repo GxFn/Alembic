@@ -63,13 +63,6 @@
         "runtime": ".asd",
         "skills": "skills",
         "wiki": "wiki"
-      },
-      "ide": {
-        "cursorRoot": ".cursor",
-        "cursorRules": "rules",
-        "cursorSkills": "skills",
-        "githubRoot": ".github",
-        "vscodeRoot": ".vscode"
       }
     }
   },
