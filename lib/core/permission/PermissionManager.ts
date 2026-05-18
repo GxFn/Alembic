@@ -1,5 +1,5 @@
 import Logger from '@alembic/core/logging';
-import { PermissionDenied } from '@alembic/core/shared/errors/BaseError';
+import { PermissionDenied } from '@alembic/core/shared';
 import type { Constitution } from '../constitution/Constitution.js';
 
 export interface PermissionCheckResult {

@@ -52,7 +52,7 @@ import {
   buildProjectSnapshot,
   ProjectIntelligenceCapability,
 } from '@alembic/core/project-intelligence';
-import { applyTestDimensionFilter } from '@alembic/core/shared/test-mode';
+import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type {
   McpContext,
   WorkflowDatabaseLike,

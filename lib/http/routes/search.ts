@@ -419,7 +419,7 @@ router.post(
 
     try {
       const { findSimilarRecipes } = await import(
-        '@alembic/core/service/candidate/SimilarityService'
+        '@alembic/core/service/candidate'
       );
       const similar = findSimilarRecipes(dataRoot, candidateObj, { threshold: 0.3, topK: 10 });
 

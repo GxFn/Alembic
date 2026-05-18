@@ -25,13 +25,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { recipeDimensionIdOrUnknown } from '@alembic/core/dimensions';
-import { CANDIDATES_DIR } from '@alembic/core/infrastructure/config/Defaults';
+import { CANDIDATES_DIR } from '@alembic/core/config';
 import {
   getContextIndexPath,
   getProjectKnowledgePath,
   getProjectRecipesPath,
   getProjectSkillsPath,
-} from '@alembic/core/infrastructure/config/Paths';
+} from '@alembic/core/config';
 import type { WriteZone } from '@alembic/core/io';
 import { CONSUMABLE_LIFECYCLES, lifecycleInSql } from '@alembic/core/knowledge';
 

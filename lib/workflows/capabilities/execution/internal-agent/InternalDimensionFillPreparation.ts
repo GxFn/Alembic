@@ -1,7 +1,7 @@
 import type { AgentService, SystemRunContextFactory } from '@alembic/agent/service';
 import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/project-intelligence';
-import type { PipelineFillView } from '@alembic/core/types/snapshot-views';
+import type { PipelineFillView } from '@alembic/core/types';
 import type { IncrementalPlan } from '@alembic/core/types/workflows';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';

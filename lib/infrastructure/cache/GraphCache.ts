@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from '
 import { join, relative } from 'node:path';
 import type { DataPath, WriteZone } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
-import { computeContentHash } from '@alembic/core/shared/content-hash';
+import { computeContentHash } from '@alembic/core/shared';
 
 export class GraphCache {
   #cacheDir;

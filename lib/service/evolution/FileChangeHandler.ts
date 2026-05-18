@@ -30,7 +30,7 @@ import type {
   FileChangeEvent,
   ImpactLevel,
   ReactiveEvolutionReport,
-} from '@alembic/core/types/reactive-evolution';
+} from '@alembic/core/types';
 import type { FileChangeSubscriber } from '../FileChangeDispatcher.js';
 
 /** impactLevel → quality signal 权重映射（文档 §5.3）

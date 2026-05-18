@@ -22,14 +22,14 @@ import {
 } from '@alembic/agent/tasks';
 import type { ToolCapabilityManifest, ToolResultEnvelope } from '@alembic/agent/tools';
 import Logger from '@alembic/core/logging';
-import { ValidationError } from '@alembic/core/shared/errors/index';
+import { ValidationError } from '@alembic/core/shared';
 import {
   collectAiEnvOverrides,
   isAiEnvReady,
   maskAiEnvConfig,
   PROVIDER_KEY_ENV,
   WorkspaceSettingsStore,
-} from '@alembic/core/shared/WorkspaceSettingsStore';
+} from '@alembic/core/shared';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';

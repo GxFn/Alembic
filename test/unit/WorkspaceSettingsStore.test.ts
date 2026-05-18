@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { WorkspaceSettingsStore } from '@alembic/core/shared/WorkspaceSettingsStore';
+import { WorkspaceSettingsStore } from '@alembic/core/shared';
 import { ProjectRegistry } from '@alembic/core/workspace';
 import { afterEach, describe, expect, test } from 'vitest';
 import { Bootstrap } from '../../lib/bootstrap.js';

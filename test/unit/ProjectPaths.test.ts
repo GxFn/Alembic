@@ -4,7 +4,7 @@ import {
   getProjectInternalDataPath,
   getProjectRecipesPath,
   getProjectSkillsPath,
-} from '@alembic/core/infrastructure/config/Paths';
+} from '@alembic/core/config';
 import { describe, expect, test } from 'vitest';
 
 describe('project path helpers', () => {

@@ -19,7 +19,7 @@ import {
   ScopeEnum,
   StrictKindEnum,
   TitleField,
-} from '@alembic/core/shared/schemas/common';
+} from '@alembic/core/shared';
 import { z } from 'zod';
 
 type KnowledgeKind = 'all' | 'rule' | 'pattern' | 'fact';

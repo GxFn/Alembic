@@ -5,7 +5,7 @@ import {
   NotFoundError,
   PermissionDenied,
   ValidationError,
-} from '@alembic/core/shared/errors/index';
+} from '@alembic/core/shared';
 import type { ErrorRequestHandler, NextFunction, Request, RequestHandler, Response } from 'express';
 
 /** Minimal logger interface (compatible with winston.Logger) */

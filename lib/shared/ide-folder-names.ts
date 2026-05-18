@@ -1,4 +1,4 @@
-import { validateFolderNameSegment } from '@alembic/core/shared/folder-names';
+import { validateFolderNameSegment } from '@alembic/core/workspace';
 
 export interface AlembicIdeFolderNames {
   cursorRoot: string;

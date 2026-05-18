@@ -33,7 +33,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { DEFAULT_FOLDER_NAMES } from '@alembic/core/shared/folder-names';
+import { DEFAULT_FOLDER_NAMES } from '@alembic/core/workspace';
 import {
   collectAiEnv,
   collectAiEnvOverrides,
@@ -41,7 +41,7 @@ import {
   maskAiEnvConfig,
   PROVIDER_KEY_ENV,
   WorkspaceSettingsStore,
-} from '@alembic/core/shared/WorkspaceSettingsStore';
+} from '@alembic/core/shared';
 import { WorkspaceResolver } from '@alembic/core/workspace';
 import { Command } from 'commander';
 import { cli } from '../lib/cli/CliLogger.js';

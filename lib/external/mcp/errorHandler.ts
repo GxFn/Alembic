@@ -18,7 +18,7 @@ import {
   NotFoundError,
   PermissionDenied,
   ValidationError,
-} from '@alembic/core/shared/errors/index';
+} from '@alembic/core/shared';
 import { z } from 'zod';
 import { TOOL_SCHEMAS } from '#shared/schemas/mcp-tools.js';
 

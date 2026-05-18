@@ -100,7 +100,7 @@ describe('Integration: wrapHandler', () => {
 
   describe('error handling', () => {
     test('should catch business errors with inferred code', async () => {
-      const { NotFoundError } = await import('@alembic/core/shared/errors/index');
+      const { NotFoundError } = await import('@alembic/core/shared');
 
       const handler = wrapHandler(
         'test_notfound',

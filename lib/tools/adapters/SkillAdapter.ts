@@ -6,7 +6,7 @@ import type {
   ToolResultEnvelope,
   ToolResultStatus,
 } from '@alembic/agent/tools';
-import { getProjectSkillsPath } from '@alembic/core/infrastructure/config/Paths';
+import { getProjectSkillsPath } from '@alembic/core/config';
 import { INJECTABLE_SKILLS_DIR } from '../../shared/package-assets.js';
 
 type SkillSource = 'builtin' | 'project';

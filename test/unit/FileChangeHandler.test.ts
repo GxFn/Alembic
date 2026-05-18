@@ -1,4 +1,4 @@
-import type { FileChangeEvent, ImpactLevel } from '@alembic/core/types/reactive-evolution';
+import type { FileChangeEvent, ImpactLevel } from '@alembic/core/types';
 import { vi } from 'vitest';
 import { FileChangeHandler } from '../../lib/service/evolution/FileChangeHandler.js';
 

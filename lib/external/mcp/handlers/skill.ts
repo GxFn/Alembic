@@ -12,7 +12,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { getProjectSkillsPath } from '@alembic/core/infrastructure/config/Paths';
+import { getProjectSkillsPath } from '@alembic/core/config';
 import type { WriteZone } from '@alembic/core/io';
 import { pathGuard } from '@alembic/core/io';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';

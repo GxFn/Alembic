@@ -11,7 +11,7 @@
 
 import { dimensionTags } from '@alembic/core/dimensions';
 import { getRequiredFieldsDescription } from '@alembic/core/domain/knowledge/FieldSpec';
-import { getDeveloperIdentity } from '@alembic/core/shared/developer-identity';
+import { getDeveloperIdentity } from '@alembic/core/shared';
 import { envelope } from '../envelope.js';
 import * as browseHandlers from './browse.js';
 import * as guardHandlers from './guard.js';
@@ -233,7 +233,7 @@ export async function consolidatedSkill(ctx: McpContext, args: ConsolidatedSkill
  */
 export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<string, unknown>) {
   const { RecipeProductionGateway } = await import('@alembic/core/knowledge');
-  const { findSimilarRecipes } = await import('@alembic/core/service/candidate/SimilarityService');
+  const { findSimilarRecipes } = await import('@alembic/core/service/candidate');
 
   const items = args.items as Record<string, unknown>[] | undefined;
   if (!items || !Array.isArray(items) || items.length === 0) {

@@ -13,7 +13,7 @@ import type {
   FileChangeEvent,
   FileChangeEventSource,
   ReactiveEvolutionReport,
-} from '@alembic/core/types/reactive-evolution';
+} from '@alembic/core/types';
 
 const logger = Logger.getInstance();
 

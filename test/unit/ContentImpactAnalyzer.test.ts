@@ -2,13 +2,13 @@ import {
   assessDiffImpact,
   type RecipeTokens,
 } from '@alembic/core/service/evolution/ContentImpactAnalyzer';
-import { parseDiffHunks, tokenizeDiffLines } from '@alembic/core/shared/diff-parser';
-import { extractCodeBlocksFromMarkdown } from '@alembic/core/shared/markdown-utils';
+import { parseDiffHunks, tokenizeDiffLines } from '@alembic/core/shared';
+import { extractCodeBlocksFromMarkdown } from '@alembic/core/shared';
 import {
   extractApiTokens,
   extractRecipeTokens,
   tokenizeIdentifiers,
-} from '@alembic/core/shared/recipe-tokens';
+} from '@alembic/core/shared';
 
 describe('ContentImpactAnalyzer', () => {
   /* ─── tokenizeIdentifiers ─── */

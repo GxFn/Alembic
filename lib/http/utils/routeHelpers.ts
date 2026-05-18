@@ -4,7 +4,7 @@
  */
 
 import { KnowledgeEntry } from '@alembic/core/knowledge';
-import { getDeveloperIdentity } from '@alembic/core/shared/developer-identity';
+import { getDeveloperIdentity } from '@alembic/core/shared';
 import type { Request } from 'express';
 
 /**

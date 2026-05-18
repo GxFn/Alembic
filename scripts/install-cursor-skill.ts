@@ -22,7 +22,7 @@ const require = createRequire(import.meta.url);
 
 import fs from 'node:fs';
 import path from 'node:path';
-import * as defaults from '@alembic/core/infrastructure/config/Defaults';
+import * as defaults from '@alembic/core/config';
 import { getCursorRoot, getCursorRulesDir, getCursorSkillsDir } from '../lib/shared/ide-paths.js';
 
 type FrontmatterFields = {

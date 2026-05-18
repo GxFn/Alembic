@@ -5,7 +5,7 @@
 
 import { dimensionTags } from '@alembic/core/dimensions';
 import { UnifiedValidator } from '@alembic/core/domain/knowledge/UnifiedValidator';
-import { getDeveloperIdentity } from '@alembic/core/shared/developer-identity';
+import { getDeveloperIdentity } from '@alembic/core/shared';
 import { resolveProjectRoot } from '@alembic/core/workspace';
 import { envelope } from '../envelope.js';
 import type { McpContext, McpServiceContainer } from './types.js';
@@ -198,7 +198,7 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
   if (args.deduplicate !== false) {
     try {
       const { aggregateCandidates } = await import(
-        '@alembic/core/service/candidate/CandidateAggregator'
+        '@alembic/core/service/candidate'
       );
       // 对 title 字段做去重
       const readinessItems = items.map((it) => ({

@@ -9,7 +9,7 @@
  *   - 实际并发限制行为验证
  */
 
-import { cpuLimit, createLimit, ioLimit } from '@alembic/core/shared/concurrency';
+import { cpuLimit, createLimit, ioLimit } from '@alembic/core/shared';
 
 describe('Integration: Concurrency (p-limit)', () => {
   describe('presets', () => {

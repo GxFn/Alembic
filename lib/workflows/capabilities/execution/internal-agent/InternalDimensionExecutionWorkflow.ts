@@ -1,5 +1,5 @@
 import type { DimensionDef } from '@alembic/core/project-intelligence';
-import type { PipelineFillView } from '@alembic/core/types/snapshot-views';
+import type { PipelineFillView } from '@alembic/core/types';
 import { runInternalDimensionExecution } from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionPipeline.js';
 import {
   buildTaskDefs,

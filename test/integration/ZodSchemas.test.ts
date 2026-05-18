@@ -22,9 +22,9 @@ import {
   ScopeEnum,
   StrictKindEnum,
   TitleField,
-} from '@alembic/core/shared/schemas/common';
+} from '@alembic/core/shared';
 // ── config schemas ──────────────────────────────────
-import { AppConfigSchema, ConstitutionSchema } from '@alembic/core/shared/schemas/config';
+import { AppConfigSchema, ConstitutionSchema } from '@alembic/core/shared';
 import { z } from 'zod';
 
 // ── HTTP request schemas ────────────────────────────

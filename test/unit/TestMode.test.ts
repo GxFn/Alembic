@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 async function loadModule() {
-  return await import('@alembic/core/shared/test-mode');
+  return await import('@alembic/core/shared');
 }
 
 function makeDim(id: string, tierHint?: number) {

@@ -625,7 +625,7 @@ router.get('/bootstrap/status', async (req: Request, res: Response): Promise<voi
     });
   }
 
-  const { getTestModeConfig } = await import('@alembic/core/shared/test-mode');
+  const { getTestModeConfig } = await import('@alembic/core/shared');
   const sessionStatus = taskManager.getSessionStatus();
   const testMode = getTestModeConfig();
   const includeTestMode = testMode.enabled;
@@ -642,7 +642,7 @@ router.get('/bootstrap/status', async (req: Request, res: Response): Promise<voi
  * 返回当前测试模式配置（前端 Header 持久展示测试标识）
  */
 router.get('/test-mode', async (_req: Request, res: Response): Promise<void> => {
-  const { getTestModeConfig } = await import('@alembic/core/shared/test-mode');
+  const { getTestModeConfig } = await import('@alembic/core/shared');
   const cfg = getTestModeConfig();
   res.json({ success: true, data: cfg });
 });

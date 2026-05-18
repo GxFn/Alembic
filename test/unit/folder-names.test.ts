@@ -3,7 +3,7 @@ import {
   DEFAULT_FOLDER_NAMES,
   resolveFolderNames,
   validateFolderNameSegment,
-} from '@alembic/core/shared/folder-names';
+} from '@alembic/core/workspace';
 import { describe, expect, test } from 'vitest';
 import {
   DEFAULT_IDE_FOLDER_NAMES,

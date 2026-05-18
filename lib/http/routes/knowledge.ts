@@ -5,7 +5,7 @@
  */
 
 import Logger from '@alembic/core/logging';
-import { ioLimit } from '@alembic/core/shared/concurrency';
+import { ioLimit } from '@alembic/core/shared';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import {
   BatchDeleteBody,

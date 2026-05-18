@@ -6,7 +6,7 @@ import {
   NotFoundError,
   PermissionDenied,
   ValidationError,
-} from '@alembic/core/shared/errors/BaseError';
+} from '@alembic/core/shared';
 
 describe('Error Classes', () => {
   describe('BaseError', () => {

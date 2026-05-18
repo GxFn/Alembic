@@ -57,7 +57,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { isExcludedProject } from '@alembic/core/shared/isOwnDevRepo';
+import { isExcludedProject } from '@alembic/core/shared';
 import {
   DEFAULT_KNOWLEDGE_BASE_DIR,
   DEFAULT_SUB_REPO_DIR,

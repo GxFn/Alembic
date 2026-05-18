@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { PermissionDenied } from '@alembic/core/shared/errors/BaseError';
+import { PermissionDenied } from '@alembic/core/shared';
 import Constitution from '../../lib/core/constitution/Constitution.js';
 import PermissionManager from '../../lib/core/permission/PermissionManager.js';
 

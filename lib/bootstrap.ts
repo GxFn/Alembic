@@ -3,7 +3,7 @@ import { DatabaseConnection } from '@alembic/core/database';
 import { pathGuard } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
 import { unwrapRawDb } from '@alembic/core/search';
-import { WorkspaceSettingsStore } from '@alembic/core/shared/WorkspaceSettingsStore';
+import { WorkspaceSettingsStore } from '@alembic/core/shared';
 import { WorkspaceResolver } from '@alembic/core/workspace';
 import Constitution from './core/constitution/Constitution.js';
 import ConstitutionValidator from './core/constitution/ConstitutionValidator.js';

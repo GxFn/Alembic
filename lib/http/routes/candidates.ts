@@ -4,7 +4,7 @@
  */
 
 import Logger from '@alembic/core/logging';
-import { ValidationError } from '@alembic/core/shared/errors/index';
+import { ValidationError } from '@alembic/core/shared';
 import express, { type Request, type Response } from 'express';
 import {
   BootstrapRefineBody,

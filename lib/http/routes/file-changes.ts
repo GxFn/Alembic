@@ -17,7 +17,7 @@ import type {
   FileChangeEvent,
   FileChangeEventSource,
   ReactiveEvolutionReport,
-} from '@alembic/core/types/reactive-evolution';
+} from '@alembic/core/types';
 import express, { type Request, type Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { getFileChangeSourceTracker } from '../../service/evolution/FileChangeSourceTracker.js';

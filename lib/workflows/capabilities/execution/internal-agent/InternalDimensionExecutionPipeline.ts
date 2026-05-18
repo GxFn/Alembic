@@ -1,6 +1,6 @@
 import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/project-intelligence';
-import type { PipelineFillView } from '@alembic/core/types/snapshot-views';
+import type { PipelineFillView } from '@alembic/core/types';
 import { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
 import { finalizeInternalDimensionFill as finalizeInternalDimensionExecution } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
 import {

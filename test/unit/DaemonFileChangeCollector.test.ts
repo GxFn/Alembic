@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type {
   FileChangeEvent,
   ReactiveEvolutionReport,
-} from '@alembic/core/types/reactive-evolution';
+} from '@alembic/core/types';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { DaemonFileChangeCollector } from '../../lib/service/evolution/DaemonFileChangeCollector.js';
 import { FileChangeSourceTracker } from '../../lib/service/evolution/FileChangeSourceTracker.js';

@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { ConstitutionSchema } from '@alembic/core/shared/schemas/config';
+import { ConstitutionSchema } from '@alembic/core/shared';
 import yaml from 'js-yaml';
 
 export interface ConstitutionRule {

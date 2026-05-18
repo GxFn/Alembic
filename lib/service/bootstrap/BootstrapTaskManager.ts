@@ -20,7 +20,7 @@
 
 import type { EventBus, SignalBus } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
-import { getTestModeConfig } from '@alembic/core/shared/test-mode';
+import { getTestModeConfig } from '@alembic/core/shared';
 
 interface TaskMeta {
   type?: string;
