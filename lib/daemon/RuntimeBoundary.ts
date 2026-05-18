@@ -23,7 +23,7 @@ export type RuntimeBoundaryWorkspaceMode = NonNullable<
 >;
 
 export interface RuntimeBoundaryWorkspace {
-  databasePath: NonNullable<AlembicRuntimeProjectIdentity['databasePath']>;
+  databasePath: string;
   dataRoot: AlembicRuntimeProjectIdentity['dataRoot'];
   dataRootSource: AlembicRuntimeProjectIdentity['dataRootSource'];
   ghost: boolean;
