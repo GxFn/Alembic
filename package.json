@@ -59,6 +59,7 @@
   },
   "scripts": {
     "build": "npm run build:core && npm run clean:dist && tsc",
+    "build:self": "npm run clean:dist && tsc && npm run postbuild",
     "build:check": "npm run build:core && tsc --noEmit",
     "build:core": "node scripts/core-source-command.mjs build",
     "clean:dist": "node scripts/clean-dist.mjs",
@@ -79,8 +80,8 @@
     "test:e2e": "vitest run test/e2e",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "dev:link": "npm run build && npm install -g .",
-    "dev:verify": "which alembic && alembic -v",
+    "dev:link": "node scripts/dev-link.mjs",
+    "dev:verify": "node scripts/dev-link.mjs --verify-only",
     "release:package-guard": "node scripts/verify-release-package-boundary.mjs",
     "release:staging:prepare": "node scripts/prepare-publish-staging.mjs",
     "release:staging:pack": "node scripts/prepare-publish-staging.mjs --pack-dry-run",
