@@ -1,6 +1,6 @@
 import type { SessionStore } from '@alembic/agent/memory';
 import Logger from '@alembic/core/logging';
-import type { IncrementalPlan } from '@alembic/core/types/workflows';
+import type { IncrementalPlan } from '@alembic/core/types';
 import type { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
 import type {
   CandidateResults,

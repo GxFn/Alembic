@@ -54,7 +54,7 @@ import type {
   McpContext,
   WorkflowDatabaseLike,
   WorkflowSkillHooks,
-} from '@alembic/core/types/workflows';
+} from '@alembic/core/types';
 import {
   runForceRescanCleanPolicy,
   runRescanCleanPolicy,

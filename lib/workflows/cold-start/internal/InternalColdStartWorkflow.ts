@@ -57,7 +57,7 @@ import type {
   McpContext,
   WorkflowDatabaseLike,
   WorkflowSkillHooks,
-} from '@alembic/core/types/workflows';
+} from '@alembic/core/types';
 import { runFullResetPolicy } from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import {

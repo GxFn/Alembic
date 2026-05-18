@@ -6,7 +6,7 @@ import {
   SessionStore,
 } from '@alembic/agent/memory';
 import Logger from '@alembic/core/logging';
-import type { IncrementalPlan } from '@alembic/core/types/workflows';
+import type { IncrementalPlan } from '@alembic/core/types';
 import { DimensionContext } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
 import { syncRestoredSessionStoreDigests } from '#workflows/capabilities/execution/internal-agent/DimensionRestoreState.js';
 

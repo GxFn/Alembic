@@ -12,7 +12,7 @@ import path from 'node:path';
 import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/project-intelligence';
 import type { PipelineFillView } from '@alembic/core/types';
-import type { McpContext } from '@alembic/core/types/workflows';
+import type { McpContext } from '@alembic/core/types';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
 
 const logger = Logger.getInstance();

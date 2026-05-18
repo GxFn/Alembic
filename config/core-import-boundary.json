@@ -75,7 +75,6 @@
     "@alembic/core/service/recipe/RecipeParser",
     "@alembic/core/shared",
     "@alembic/core/types",
-    "@alembic/core/types/workflows",
     "@alembic/core/vector",
     "@alembic/core/workspace",
     "@alembic/core/workflows/capabilities/WorkflowCleanupPolicies"
