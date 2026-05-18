@@ -6,7 +6,7 @@ import { describe, expect, test } from 'vitest';
 import { INTERNAL_SKILLS_DIR, PACKAGE_ROOT } from '../../lib/shared/package-assets.js';
 
 const SKILL_NAME = 'progressive-chain-validation';
-const SKILL_DIR = path.join(INTERNAL_SKILLS_DIR, SKILL_NAME);
+const SKILL_DIR = resolveSkillDir();
 
 type SkillMetadata = {
   name?: unknown;
@@ -16,6 +16,15 @@ type SkillMetadata = {
 
 function readSkillFile(relativePath: string): string {
   return fs.readFileSync(path.join(SKILL_DIR, relativePath), 'utf8');
+}
+
+function resolveSkillDir(): string {
+  const flatDir = path.join(INTERNAL_SKILLS_DIR, SKILL_NAME);
+  const repoSkillDir = path.join(flatDir, SKILL_NAME);
+  if (fs.existsSync(path.join(repoSkillDir, 'SKILL.md'))) {
+    return repoSkillDir;
+  }
+  return flatDir;
 }
 
 function assertString(value: unknown, fieldName: string): asserts value is string {
@@ -49,31 +58,24 @@ describe('progressive-chain-validation internal skill', () => {
     expect(metadata.name).toBe(SKILL_NAME);
     expect(metadata.name).toMatch(/^[a-z0-9-]{1,64}$/);
     expect(metadata.description.length).toBeLessThanOrEqual(1024);
-    expect(metadata.description).toContain('Use when:');
-    expect(metadata.description).toContain('source-derived chain maps');
-    expect(metadata.description).toContain('long-chain execution plans');
-    expect(metadata.description).toContain('Alembic cold-start');
+    expect(metadata.description).toContain('source-based execution plans');
+    expect(metadata.description).toContain('validating workflow behavior node by node');
+    expect(metadata.description).toContain('coordinating multi-agent work');
     expect(metadata['argument-hint']).toContain('<workflow-or-feature>');
 
     expect(body).toContain('patient section-by-section execution');
+    expect(body).toContain('If a command would write runtime data');
     expect(body).toContain('treat `report/plan.md` as the state machine');
     expect(body).toContain('node-specific design/test plan');
-    expect(body).toContain('benchmark-style operational guidance block');
-    expect(body).toContain('goal, execution range, evidence checklist, pass standard');
     expect(body).toContain('Terminal stability constraints');
-    expect(body).toContain('Do not run unbounded synchronous terminal commands');
-    expect(body).toContain('## Node Isolation Contract');
-    expect(body).toContain('## Section Task Workflow');
-    expect(body).toContain('intake, design, fixture setup, isolated execution');
-    expect(body).toContain(
-      'it is acceptable and often correct to finish a turn with only one node improved'
-    );
-    expect(body).toContain('node-local simulated data or frozen upstream artifact');
+    expect(body).toContain('Never run unbounded synchronous terminal commands');
+    expect(body).toContain('## Source-Derived Planning');
+    expect(body).toContain('## Node Contract');
+    expect(body).toContain('## Execution Control');
+    expect(body).toContain('## Work Loop');
+    expect(body).toContain('Node-local input: simulated data');
     expect(body).toContain('scheduler, worker/start, producer, persistence, finalizer');
-    expect(body).toContain('Do not create separate manifest, nodes, chain-map');
-    expect(body).toContain('Optional attachments only when needed');
-    expect(body).toContain('## Execution Control Protocol');
-    expect(body).toContain('## Evidence Contract');
+    expect(body).toContain('Subagents can help gather independent source facts');
   });
 
   test('uses relative resource links and keeps only one plan template', () => {
@@ -85,7 +87,7 @@ describe('progressive-chain-validation internal skill', () => {
 
     expect(uniqueLinks.sort()).toEqual(
       [
-        './references/alembic-adapter.md',
+        './references/adapters/alembic.md',
         './references/artifact-layout.md',
         './references/chain-plan-generation.md',
         './references/data-location-preflight.md',
@@ -109,11 +111,20 @@ describe('progressive-chain-validation internal skill', () => {
 
     expect(plan).toContain('Required artifact: this `report/plan.md` file');
     expect(plan).toContain('Attachment rule: every optional attachment');
+    expect(plan).toContain('## Source-First Chain Analysis');
     expect(plan).toContain('## Source Chain Map');
+    expect(plan).toContain('## Analysis Chain Narrative');
+    expect(plan).toContain('## Node Cut Strategy');
+    expect(plan).toContain('## Granularity Gate');
+    expect(plan).toContain('## Branch And Degradation Paths');
+    expect(plan).toContain('## Execution Control Gate');
+    expect(plan).toContain('## Workflow Variant Orders');
     expect(plan).toContain('## Reference Alignment');
     expect(plan).toContain('## Reference Benchmark Review');
+    expect(plan).toContain('## Node-To-Test Coverage Map');
     expect(plan).toContain('## Per-Node Design/Test Plan Index');
     expect(plan).toContain('## Node Plan');
+    expect(plan).toContain('## Expanded Node Sections');
     expect(plan).toContain('Node design/test plan');
     expect(plan).toContain('Operational guidance');
     expect(plan).toContain('Terminal execution is bounded');
@@ -147,7 +158,7 @@ describe('progressive-chain-validation internal skill', () => {
     const dataPreflight = readSkillFile('references/data-location-preflight.md');
     const planQuality = readSkillFile('references/plan-quality-standard.md');
     const safety = readSkillFile('references/safety-boundaries.md');
-    const alembicAdapter = readSkillFile('references/alembic-adapter.md');
+    const alembicAdapter = readSkillFile('references/adapters/alembic.md');
     const alembicOverlay = readSkillFile('references/overlays/alembic-coldstart-rescan.md');
 
     expect(artifactLayout).toContain('Plan-Centric Layout');
@@ -173,6 +184,9 @@ describe('progressive-chain-validation internal skill', () => {
     expect(chainPlanGeneration).toContain(
       'Node Plan and Execution Log sections in `report/plan.md`'
     );
+    expect(chainPlanGeneration).toContain('## Strict Execution Driver');
+    expect(chainPlanGeneration).toContain('## Required Outputs');
+    expect(chainPlanGeneration).toContain('## Branch and Degradation Contract');
     expect(domainOverlays).toContain("plan's Source Chain Map section");
     expect(domainOverlays).toContain("plan's Reference Alignment section");
     expect(dataPreflight).toContain('N0 data-location section of `report/plan.md`');
@@ -186,7 +200,7 @@ describe('progressive-chain-validation internal skill', () => {
     expect(planQuality).toContain('Section task workflow');
     expect(planQuality).toContain('The executor may spend the whole turn on this section');
     expect(safety).toContain('## Terminal Stability Contract');
-    expect(safety).toContain('Do not use unbounded `timeout=0`');
+    expect(safety).toContain('Do not use unbounded execution');
     expect(safety).toContain('Hang recovery');
     expect(alembicAdapter).toContain('terminal stability guard');
     expect(alembicOverlay).toContain("plan's Source Chain Map section");
