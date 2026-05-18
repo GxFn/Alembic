@@ -16,6 +16,7 @@ import {
   type ProposalStatus,
   type ProposalType,
 } from '@alembic/core/repository/evolution/ProposalRepository';
+import { HOST_AGENT_SOURCE } from '@alembic/core/shared';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -24,7 +25,7 @@ function makeInput(overrides: Partial<CreateProposalInput> = {}): CreateProposal
     type: 'update',
     targetRecipeId: 'r-001',
     confidence: 0.85,
-    source: 'ide-agent',
+    source: HOST_AGENT_SOURCE,
     description: 'Test update proposal',
     ...overrides,
   };
@@ -57,7 +58,7 @@ describe('ProposalRepository', () => {
       expect(result?.type).toBe('update');
       expect(result?.targetRecipeId).toBe('r-001');
       expect(result?.confidence).toBe(0.85);
-      expect(result?.source).toBe('ide-agent');
+      expect(result?.source).toBe(HOST_AGENT_SOURCE);
       expect(result?.description).toBe('Test update proposal');
       expect(result?.relatedRecipeIds).toEqual([]);
       expect(result?.evidence).toEqual([]);

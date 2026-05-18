@@ -7,6 +7,7 @@
  */
 
 import { EvolutionGateway } from '@alembic/core/service/evolution/EvolutionGateway';
+import { HOST_AGENT_SOURCE } from '@alembic/core/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 /* ── Mock factories ── */
@@ -300,7 +301,7 @@ describe('EvolutionGateway', () => {
       const result = await gateway.submit({
         recipeId: 'r1',
         action: 'deprecate',
-        source: 'ide-agent',
+        source: HOST_AGENT_SOURCE,
         confidence: 0.9,
         reason: 'source deleted',
       });
@@ -337,7 +338,7 @@ describe('EvolutionGateway', () => {
       const result = await gateway.submit({
         recipeId: 'r1',
         action: 'deprecate',
-        source: 'ide-agent',
+        source: HOST_AGENT_SOURCE,
         confidence: 0.9,
         reason: 'deleted',
       });

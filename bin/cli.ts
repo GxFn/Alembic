@@ -1424,8 +1424,9 @@ program
     // AI 配置
     const { getAiConfigInfo } = await import('@alembic/agent/ai');
     const aiInfo = getAiConfigInfo();
-    if (aiInfo.provider && aiInfo.provider !== 'none') {
-      cli.log(`  AI Provider:  ${aiInfo.provider}`);
+    const aiProvider = aiInfo.provider && aiInfo.provider !== 'none' ? aiInfo.provider : null;
+    if (aiProvider) {
+      cli.log(`  AI Provider:  ${aiProvider}`);
       if (aiInfo.model) {
         cli.log(`  AI Model:     ${aiInfo.model}`);
       }
@@ -1490,8 +1491,8 @@ program
     if (opts.json) {
       // 简化 JSON 输出模式
       const result: Record<string, unknown> = {
-        aiProvider: aiInfo.provider ?? 'host-agent',
-        aiModel: aiInfo.model ?? null,
+        aiProvider,
+        aiModel: aiProvider ? (aiInfo.model ?? null) : null,
         database: dbExists,
         workspace: existsSync(asdDir),
       };

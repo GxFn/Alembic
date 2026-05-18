@@ -10,6 +10,7 @@ import type {
   ProposalRepository,
 } from '@alembic/core/repository/evolution/ProposalRepository';
 import { ProposalExecutor } from '@alembic/core/service/evolution/ProposalExecutor';
+import { HOST_AGENT_SOURCE } from '@alembic/core/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /* ── Mock factories ── */
@@ -21,7 +22,7 @@ function makeProposal(overrides: Partial<ProposalRecord> = {}): ProposalRecord {
     targetRecipeId: 'r-001',
     relatedRecipeIds: [],
     confidence: 0.8,
-    source: 'ide-agent',
+    source: HOST_AGENT_SOURCE,
     description: 'test proposal',
     evidence: [],
     status: 'observing',
