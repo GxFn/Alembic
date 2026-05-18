@@ -2,6 +2,12 @@ import { getPackageVersion } from '@alembic/core/daemon';
 import { collectAiEnvOverrides, isAiEnvReady, WorkspaceSettingsStore } from '@alembic/core/shared';
 import { resolveProjectRoot, WorkspaceResolver } from '@alembic/core/workspace';
 import express, { type Request } from 'express';
+import {
+  buildAlembicRuntimeBoundary,
+  DAEMON_FILE_CHANGE_EVENT_SOURCES,
+  DAEMON_JOB_KINDS,
+  type InternalAiCapability,
+} from '../../daemon/RuntimeBoundary.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 
 const router = express.Router();
@@ -17,6 +23,16 @@ router.get('/health', (req, res) => {
     mode === 'daemon' && process.env.ALEMBIC_DAEMON_DASHBOARD_MOUNTED === '1';
   const dashboardUrl = dashboardAvailable && origin ? origin : null;
   const schemaMigrationVersion = getSchemaMigrationVersion(container);
+  const internalAi = getInternalAiCapability(projectRoot);
+  const fileMonitorAvailable = isDaemonFileMonitorAvailable(mode);
+  const runtimeBoundary = buildAlembicRuntimeBoundary({
+    dashboardUrl,
+    fileMonitorAvailable,
+    internalAi,
+    mode,
+    origin,
+    workspace: resolver,
+  });
   res.json({
     success: true,
     data: {
@@ -33,33 +49,30 @@ router.get('/health', (req, res) => {
       enhancement: {
         apiVersion: 'v1',
         packageName: 'alembic-ai',
-        route: 'local-alembic',
+        route: runtimeBoundary.route,
         version: getPackageVersion(),
       },
       capabilities: buildDaemonCapabilities({
         dashboardAvailable,
         dashboardUrl,
-        internalAi: getInternalAiCapability(projectRoot),
+        fileMonitorAvailable,
+        internalAi,
         mode,
         origin,
+        runtimeBoundary,
       }),
     },
   });
 });
 
-export interface InternalAiCapability {
-  available: boolean;
-  configSource: 'empty' | 'process-env' | 'workspace-settings';
-  model: string | null;
-  provider: string | null;
-}
-
 export interface DaemonCapabilitiesOptions {
   dashboardAvailable: boolean;
   dashboardUrl: string | null;
+  fileMonitorAvailable: boolean;
   internalAi: InternalAiCapability;
   mode: 'api' | 'daemon';
   origin: string | null;
+  runtimeBoundary: ReturnType<typeof buildAlembicRuntimeBoundary>;
 }
 
 export function buildDaemonCapabilities(options: DaemonCapabilitiesOptions) {
@@ -74,8 +87,8 @@ export function buildDaemonCapabilities(options: DaemonCapabilitiesOptions) {
       url: options.dashboardUrl,
     },
     fileMonitor: {
-      acceptedEventSources: ['host-edit', 'git-head', 'git-worktree'],
-      available: options.mode === 'daemon' && process.env.ALEMBIC_DAEMON_FILE_CHANGES !== '0',
+      acceptedEventSources: [...DAEMON_FILE_CHANGE_EVENT_SOURCES],
+      available: options.fileMonitorAvailable,
       compatibilityAliases: { [legacyHostEditSource()]: 'host-edit' },
       endpoint: `${API_PREFIX}/file-changes`,
       mode: 'daemon-git-worktree',
@@ -88,9 +101,14 @@ export function buildDaemonCapabilities(options: DaemonCapabilitiesOptions) {
         list: `${API_PREFIX}/jobs`,
         rescan: `${API_PREFIX}/jobs/rescan`,
       },
-      kinds: ['bootstrap', 'rescan'],
+      kinds: [...DAEMON_JOB_KINDS],
     },
+    runtimeBoundary: options.runtimeBoundary,
   };
+}
+
+function isDaemonFileMonitorAvailable(mode: 'api' | 'daemon'): boolean {
+  return mode === 'daemon' && process.env.ALEMBIC_DAEMON_FILE_CHANGES !== '0';
 }
 
 function getInternalAiCapability(projectRoot: string): InternalAiCapability {

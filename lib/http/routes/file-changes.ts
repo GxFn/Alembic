@@ -19,6 +19,7 @@ import type {
   ReactiveEvolutionReport,
 } from '@alembic/core/types';
 import express, { type Request, type Response } from 'express';
+import { DAEMON_FILE_CHANGE_EVENT_SOURCES } from '../../daemon/RuntimeBoundary.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import type { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 
@@ -29,9 +30,7 @@ type IncomingFileChangeEventSource = FileChangeEventSource | 'host-edit';
 
 const VALID_TYPES = new Set(['created', 'renamed', 'deleted', 'modified']);
 const VALID_SOURCES = new Set<IncomingFileChangeEventSource>([
-  'host-edit',
-  'git-head',
-  'git-worktree',
+  ...DAEMON_FILE_CHANGE_EVENT_SOURCES,
   legacyHostEditSource() as IncomingFileChangeEventSource,
 ]);
 
