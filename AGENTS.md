@@ -96,13 +96,13 @@ lib/
 - Lint / Format：Biome 2.x，不使用 Prettier/ESLint。
 - 测试框架：Vitest。
 - Dashboard：React + Vite。
-- 可以使用中文注释解释迁移边界、宿主职责、复杂状态机或兼容原因；不要给自解释代码堆注释。
+- 必要时在代码旁补充简体中文说明，写清迁移边界、宿主职责、复杂状态机或兼容原因；自解释代码无需额外说明。
 
 ## 类型安全与代码规则
 
 - `catch` 块使用 `catch (err: unknown)` + 类型守卫，禁止 `catch (err: any)`。
 - Dashboard 错误处理优先使用 `dashboard/src/utils/error.ts` 的工具函数。
-- 避免 `as any`；不得已时加注释说明原因。
+- 避免 `as any`；不得已时在附近说明原因。
 - `throw` 只能抛出 `Error` 实例。
 - if/else/for/while 必须使用花括号。
 - 不要回退其他窗口或用户已有改动；如果工作区已有无关变更，只处理当前任务需要的文件。
