@@ -35,6 +35,10 @@ import {
 import { DEFAULT_FOLDER_NAMES, WorkspaceResolver } from '@alembic/core/workspace';
 import { Command } from 'commander';
 import { cli } from '../lib/cli/CliLogger.js';
+import type {
+  ProjectRuntimeControlSnapshot,
+  ProjectRuntimeScopeSummary,
+} from '../lib/daemon/ProjectRuntimeControl.js';
 import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-assets.js';
 import { shutdown } from '../lib/shared/shutdown.js';
 
@@ -240,6 +244,108 @@ daemon
       return;
     }
     printDaemonStatus(result);
+  });
+
+// ─────────────────────────────────────────────────────
+// projects 命令 — 多项目 runtime control foundation
+// ─────────────────────────────────────────────────────
+const projects = program
+  .command('projects')
+  .description('多项目 runtime control：列表、诊断和选择状态');
+
+projects
+  .command('list')
+  .description('列出 registry 中的 Alembic 项目及 runtime scope summary')
+  .option('--json', 'JSON 格式输出')
+  .action(async (opts) => {
+    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const snapshot = await new ProjectRuntimeControl().snapshot();
+    if (opts.json) {
+      cli.json(snapshot);
+      return;
+    }
+    printProjectsSnapshot(snapshot);
+  });
+
+projects
+  .command('status')
+  .description('显示所有项目 status-all 与 selected / active runtime 状态')
+  .option('--json', 'JSON 格式输出')
+  .action(async (opts) => {
+    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const snapshot = await new ProjectRuntimeControl().snapshot();
+    if (opts.json) {
+      cli.json(snapshot);
+      return;
+    }
+    printProjectsSnapshot(snapshot);
+  });
+
+projects
+  .command('inspect [target]')
+  .description('查看单个项目 runtime scope；target 默认为 projectId，路径请用 -d')
+  .option('-d, --dir <path>', '项目目录')
+  .option('--json', 'JSON 格式输出')
+  .action(async (target: string | undefined, opts) => {
+    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const project = await new ProjectRuntimeControl().inspectProject(
+      projectTargetFromCli(target, opts)
+    );
+    if (opts.json) {
+      cli.json(project);
+      return;
+    }
+    printProjectRuntimeSummary(project);
+  });
+
+projects
+  .command('current')
+  .description('显示当前 selected project 与 active runtime project')
+  .option('--json', 'JSON 格式输出')
+  .action(async (opts) => {
+    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const snapshot = await new ProjectRuntimeControl().snapshot();
+    const current = {
+      activeRuntimeProject: snapshot.activeRuntimeProject,
+      selectedProject: snapshot.selectedProject,
+      state: snapshot.state,
+    };
+    if (opts.json) {
+      cli.json(current);
+      return;
+    }
+    printCurrentProjectState(snapshot);
+  });
+
+projects
+  .command('select [target]')
+  .description('选择一个已注册项目；target 默认为 projectId，路径请用 -d')
+  .option('-d, --dir <path>', '项目目录')
+  .option('--json', 'JSON 格式输出')
+  .action(async (target: string | undefined, opts) => {
+    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const snapshot = await new ProjectRuntimeControl().selectProject(
+      projectTargetFromCli(target, opts)
+    );
+    if (opts.json) {
+      cli.json(snapshot);
+      return;
+    }
+    printCurrentProjectState(snapshot);
+  });
+
+projects
+  .command('clear')
+  .description('清除 selected project；不删除 registry 或任一项目 dataRoot')
+  .option('--json', 'JSON 格式输出')
+  .action(async (opts) => {
+    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const snapshot = await new ProjectRuntimeControl().clearSelection();
+    if (opts.json) {
+      cli.json(snapshot);
+      return;
+    }
+    printCurrentProjectState(snapshot);
   });
 
 // ─────────────────────────────────────────────────────
@@ -2147,6 +2253,107 @@ function printDaemonStatus(status: {
     cli.log(`  Message:  ${status.message}`);
   }
   cli.blank();
+}
+
+function projectTargetFromCli(target: string | undefined, opts: { dir?: string }) {
+  if (opts.dir) {
+    return { projectRoot: resolve(opts.dir) };
+  }
+  if (!target) {
+    return { projectRoot: process.cwd() };
+  }
+  if (
+    target.startsWith('.') ||
+    target.startsWith('/') ||
+    target.includes('/') ||
+    target.includes('\\')
+  ) {
+    return { projectRoot: resolve(target) };
+  }
+  return { projectId: target };
+}
+
+function printProjectsSnapshot(snapshot: ProjectRuntimeControlSnapshot) {
+  cli.blank();
+  cli.log('  Alembic Projects');
+  cli.log(`  ${'─'.repeat(40)}`);
+  cli.log(`  Count:    ${snapshot.projects.length}`);
+  cli.log(
+    `  Selected: ${snapshot.selectedProject ? projectLabel(snapshot.selectedProject) : 'none'}`
+  );
+  cli.log(
+    `  Active:   ${snapshot.activeRuntimeProject ? projectLabel(snapshot.activeRuntimeProject) : 'none'}`
+  );
+  cli.blank();
+
+  if (snapshot.projects.length === 0) {
+    cli.log('  No registered projects. Run alembic setup --ghost from a project first.');
+    cli.blank();
+    return;
+  }
+
+  for (const project of snapshot.projects) {
+    const marker = project.flags.activeRuntime ? '*' : project.flags.selected ? '>' : ' ';
+    cli.log(
+      `  ${marker} ${project.status.padEnd(11)} ${String(project.projectId ?? '-').padEnd(10)} ${project.mode.padEnd(8)} ${project.projectRoot}`
+    );
+  }
+  cli.blank();
+  cli.log('  Legend: * active runtime, > selected project');
+  cli.blank();
+}
+
+function printProjectRuntimeSummary(project: ProjectRuntimeScopeSummary) {
+  cli.blank();
+  cli.log(`  Project:  ${project.displayName}`);
+  cli.log(`  ${'─'.repeat(40)}`);
+  cli.log(`  Status:   ${project.status}`);
+  cli.log(`  ID:       ${project.projectId ?? 'none'}`);
+  cli.log(`  Root:     ${project.projectRoot}`);
+  cli.log(`  Realpath: ${project.projectRealpath}`);
+  cli.log(`  Mode:     ${project.mode}${project.ghost ? ' (ghost)' : ''}`);
+  cli.log(`  DataRoot: ${project.dataRoot}`);
+  cli.log(`  Runtime:  ${project.runtimeDir}`);
+  cli.log(`  DB:       ${project.databasePath}`);
+  cli.log(
+    `  Exists:   project=${project.projectExists ? 'yes' : 'no'} workspace=${project.workspaceExists ? 'yes' : 'no'}`
+  );
+  cli.log(`  Daemon:   ${project.daemon.status}${project.daemon.ready ? ' (ready)' : ''}`);
+  if (project.daemon.url) {
+    cli.log(`  URL:      ${project.daemon.url}`);
+  }
+  if (project.dashboardUrl) {
+    cli.log(`  Dashboard:${project.dashboardUrl ? ` ${project.dashboardUrl}` : ' none'}`);
+  }
+  cli.log(`  Jobs:     ${project.jobs.total} total, ${project.jobs.active} active`);
+  cli.log(
+    `  Monitor:  ${project.fileMonitor.available ? 'available' : 'unavailable'} (${project.fileMonitor.mode})`
+  );
+  cli.log(
+    `  AI:       ${project.internalAi.available ? 'available' : 'unavailable'} (${project.internalAi.configSource})`
+  );
+  if (project.daemon.message) {
+    cli.log(`  Message:  ${project.daemon.message}`);
+  }
+  cli.blank();
+}
+
+function printCurrentProjectState(snapshot: ProjectRuntimeControlSnapshot) {
+  cli.blank();
+  cli.log('  Alembic Project Selection');
+  cli.log(`  ${'─'.repeat(40)}`);
+  cli.log(
+    `  Selected: ${snapshot.selectedProject ? projectLabel(snapshot.selectedProject) : 'none'}`
+  );
+  cli.log(
+    `  Active:   ${snapshot.activeRuntimeProject ? projectLabel(snapshot.activeRuntimeProject) : 'none'}`
+  );
+  cli.log(`  State:    ${snapshot.state.updatedAt}`);
+  cli.blank();
+}
+
+function projectLabel(project: ProjectRuntimeScopeSummary) {
+  return `${project.projectId ?? 'unregistered'} ${project.displayName} (${project.status})`;
 }
 
 // ─────────────────────────────────────────────────────

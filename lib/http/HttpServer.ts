@@ -42,6 +42,7 @@ import logsRouter from './routes/logs.js';
 import modulesRouter from './routes/modules.js';
 import monitoringRouter from './routes/monitoring.js';
 import panoramaRouter from './routes/panorama.js';
+import projectsRouter from './routes/projects.js';
 import recipesRouter from './routes/recipes.js';
 import searchRouter from './routes/search.js';
 import signalsRouter from './routes/signals.js';
@@ -266,6 +267,9 @@ export class HttpServer {
 
     // daemon job 状态与投递
     this.app.use(`${apiPrefix}/jobs`, jobsRouter);
+
+    // 多项目 runtime control foundation（只读 summary / selected state）
+    this.app.use(`${apiPrefix}/projects`, projectsRouter);
 
     // 认证路由
     this.app.use(`${apiPrefix}/auth`, authRouter);
