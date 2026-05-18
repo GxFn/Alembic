@@ -19,9 +19,9 @@ import {
   runScanAgentTask,
   type SystemRunContextFactory,
 } from '@alembic/agent/service';
+import { inferLang } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
 import { getDiscovererRegistry } from '@alembic/core/project-intelligence';
-import { inferLang } from '../../external/mcp/handlers/LanguageExtensions.js';
 
 /** 全局排除目录 */
 const SCAN_EXCLUDE_DIRS = new Set([

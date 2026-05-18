@@ -101,6 +101,7 @@ async function main() {
   const actualPort = resolveBoundDaemonPort(httpServer, requestedPort);
   const daemonUrl = buildDaemonUrl(host, actualPort);
   const dashboardMounted = mountDashboardIfAvailable(httpServer);
+  process.env.ALEMBIC_DAEMON_DASHBOARD_MOUNTED = dashboardMounted ? '1' : '0';
   await verifyHttpServerReady(daemonUrl);
 
   const resolver = components.workspaceResolver;

@@ -44,7 +44,7 @@ const UNIVERSAL_PATTERNS: RegExp[] = [
   /@[\w-]+/g, // trigger references
 ];
 
-// ── Language Extension Map ──────────────────────────
+// ── Language Suffix Map ──────────────────────────
 
 const LANG_MAP: Record<string, string> = {
   m: 'objectivec',

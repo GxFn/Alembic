@@ -224,7 +224,7 @@
       "preservedPaths": [
         "lib/tools/v2/adapter/ToolContextFactory.ts",
         "lib/tools/adapters/**",
-        "CLI/daemon/HTTP/API/Dashboard/native/IDE/product shell host wiring"
+        "CLI/daemon/HTTP/API/Dashboard/native host/product shell wiring"
       ],
       "validation": [
         "npm run lint:agent-extraction-boundary: passed; product #agent call sites 0, local Agent relative import files 0, local Agent relative imports 0, preserved local Agent files 0, duplicate generic Tool V2 files 0.",

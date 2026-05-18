@@ -382,7 +382,6 @@ function isHandlerInternalImport(specifier: string) {
   return (
     specifier === '#external/mcp/handlers/types.js' ||
     specifier === '#external/mcp/handlers/evolution-prescreen.js' ||
-    specifier === '#external/mcp/handlers/LanguageExtensions.js' ||
     specifier === '#external/mcp/handlers/TargetClassifier.js' ||
     specifier.startsWith('#external/mcp/handlers/bootstrap/shared/')
   );

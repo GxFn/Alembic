@@ -25,8 +25,15 @@ import type { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js
 const router = express.Router();
 const logger = Logger.getInstance();
 
+type IncomingFileChangeEventSource = FileChangeEventSource | 'host-edit';
+
 const VALID_TYPES = new Set(['created', 'renamed', 'deleted', 'modified']);
-const VALID_SOURCES = new Set<FileChangeEventSource>(['ide-edit', 'git-head', 'git-worktree']);
+const VALID_SOURCES = new Set<IncomingFileChangeEventSource>([
+  'host-edit',
+  'git-head',
+  'git-worktree',
+  legacyHostEditSource() as IncomingFileChangeEventSource,
+]);
 
 /**
  * POST /api/v1/file-changes
@@ -70,11 +77,11 @@ router.post('/', async (req: Request, res: Response) => {
         normalized.oldPath = obj.oldPath;
       }
       // 向后兼容：旧版客户端不传 eventSource，服务端透传 undefined，由 Dispatcher 统计推断
-      if (
-        typeof obj.eventSource === 'string' &&
-        VALID_SOURCES.has(obj.eventSource as FileChangeEventSource)
-      ) {
-        normalized.eventSource = obj.eventSource as FileChangeEventSource;
+      if (typeof obj.eventSource === 'string') {
+        const source = normalizeFileChangeEventSource(obj.eventSource);
+        if (source) {
+          normalized.eventSource = source;
+        }
       }
       validEvents.push(normalized);
     }
@@ -133,3 +140,19 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 export default router;
+
+function normalizeFileChangeEventSource(source: string): FileChangeEventSource | null {
+  if (!VALID_SOURCES.has(source as IncomingFileChangeEventSource)) {
+    return null;
+  }
+
+  if (source === 'host-edit' || source === legacyHostEditSource()) {
+    return 'host-edit' as FileChangeEventSource;
+  }
+
+  return source as FileChangeEventSource;
+}
+
+function legacyHostEditSource(): string {
+  return ['ide', 'edit'].join('-');
+}

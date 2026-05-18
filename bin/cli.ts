@@ -1490,7 +1490,7 @@ program
     if (opts.json) {
       // 简化 JSON 输出模式
       const result: Record<string, unknown> = {
-        aiProvider: aiInfo.provider ?? 'ide-agent',
+        aiProvider: aiInfo.provider ?? 'host-agent',
         aiModel: aiInfo.model ?? null,
         database: dbExists,
         workspace: existsSync(asdDir),
