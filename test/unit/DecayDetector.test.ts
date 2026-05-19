@@ -130,7 +130,7 @@ describe('DecayDetector', () => {
     expect(result.signals.some((s) => s.strategy === 'high_false_positive')).toBe(false);
   });
 
-  it('should detect symbol_drift from audit_logs', async () => {
+  it('should ignore legacy drizzle audit-log input', async () => {
     const stats = JSON.stringify({
       lastHitAt: Date.now() - 10 * DAY_MS,
       hitsLast90d: 10,
@@ -142,7 +142,7 @@ describe('DecayDetector', () => {
     });
 
     const result = await detector.evaluate(recipe);
-    expect(result.signals.some((s) => s.strategy === 'symbol_drift')).toBe(true);
+    expect(result.signals.some((s) => s.strategy === 'symbol_drift')).toBe(false);
   });
 
   it('should detect superseded from deprecated_by edge', async () => {

@@ -12,6 +12,7 @@ on:
 
 env:
   API_BASE: http://localhost:3100/api/v1
+  API_ROOT: http://localhost:3100
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   NODE_ENV: test
 
@@ -31,6 +32,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           path: Alembic
+          submodules: recursive
       - name: Checkout AlembicCore
         uses: actions/checkout@v5
         with:
@@ -80,6 +82,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           path: Alembic
+          submodules: recursive
       - name: Checkout AlembicCore
         uses: actions/checkout@v5
         with:
@@ -147,11 +150,11 @@ jobs:
         run: |
           curl -sf $API_BASE/health/ready | jq -e '.ready == true'
 
-      - name: Root endpoint
+      - name: API spec endpoint
         run: |
-          ROOT=$(curl -sf $API_BASE/../..)
-          echo "$ROOT" | jq .
-          echo "$ROOT" | jq -e '.name == "Alembic API"'
+          SPEC=$(curl -sf $API_ROOT/api-spec)
+          echo "$SPEC" | jq .
+          echo "$SPEC" | jq -e '.info.title == "Alembic API"'
 
       - name: Knowledge listing
         run: |
@@ -173,6 +176,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           path: Alembic
+          submodules: recursive
       - name: Checkout AlembicCore
         uses: actions/checkout@v5
         with:
@@ -218,6 +222,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           path: Alembic
+          submodules: recursive
       - name: Checkout AlembicCore
         uses: actions/checkout@v5
         with:
