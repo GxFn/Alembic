@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   writeFileSync,
 } from 'node:fs';
@@ -54,12 +55,14 @@ const DEFAULT_JOB_STATUSES: DaemonJobStatus[] = [
 ];
 
 interface BuildProjectSummaryOptions {
+  activeProjectRoot?: string | null;
   entry: ProjectEntry | null;
   projectRoot: string;
   selectedProjectRoot?: string | null;
 }
 
 export interface ProjectRuntimeControlOptions {
+  deferSelfDaemonStop?: boolean;
   restart?: boolean;
   stopWaitMs?: number;
   waitUntilReadyMs?: number;
@@ -76,6 +79,7 @@ export interface ProjectRuntimeHandoff {
 export interface ProjectRuntimeControlActionResult {
   action: 'start' | 'stop' | 'open-dashboard' | 'switch';
   error: string | null;
+  deferredStopProject: ProjectRuntimeScopeSummary | null;
   handoff: ProjectRuntimeHandoff | null;
   ok: boolean;
   previousActiveProject: ProjectRuntimeScopeSummary | null;
@@ -127,6 +131,7 @@ export class ProjectRuntimeControl {
     return Promise.all(
       projects.map((project) =>
         this.buildProjectSummary({
+          activeProjectRoot: state.activeProjectRoot,
           entry: project.entry,
           projectRoot: project.projectRoot,
           selectedProjectRoot: state.selectedProjectRoot,
@@ -139,6 +144,7 @@ export class ProjectRuntimeControl {
     const state = this.readState();
     const project = this.resolveTarget(target, { requireRegistered: false });
     return this.buildProjectSummary({
+      activeProjectRoot: state.activeProjectRoot,
       entry: project.entry,
       projectRoot: project.projectRoot,
       selectedProjectRoot: state.selectedProjectRoot,
@@ -223,14 +229,18 @@ export class ProjectRuntimeControl {
     const before = await this.snapshot();
     const resolved = this.resolveTarget(target, { requireRegistered: true });
     const targetBefore = await this.buildProjectSummary({
+      activeProjectRoot: before.state.activeProjectRoot,
       entry: resolved.entry,
       projectRoot: resolved.projectRoot,
       selectedProjectRoot: before.state.selectedProjectRoot,
     });
 
     let error: string | null = null;
+    let deferredStopProject: ProjectRuntimeScopeSummary | null = null;
     if (!targetBefore.projectExists) {
       error = `Project path is missing: ${targetBefore.projectRoot}`;
+    } else if (options.deferSelfDaemonStop === true && isCurrentProcessDaemon(targetBefore)) {
+      deferredStopProject = targetBefore;
     } else {
       try {
         await this.#supervisor.stop({
@@ -260,6 +270,7 @@ export class ProjectRuntimeControl {
 
     const snapshot = await this.snapshot();
     const targetProject = await this.buildProjectSummary({
+      activeProjectRoot: snapshot.state.activeProjectRoot,
       entry: resolved.entry,
       projectRoot: resolved.projectRoot,
       selectedProjectRoot: snapshot.state.selectedProjectRoot,
@@ -267,12 +278,13 @@ export class ProjectRuntimeControl {
 
     return {
       action: 'stop',
+      deferredStopProject,
       error,
       handoff: handoffFromProject(targetProject),
       ok: error === null,
       previousActiveProject: before.activeRuntimeProject,
       snapshot,
-      stoppedProject: targetProject,
+      stoppedProject: deferredStopProject ? null : targetProject,
       targetProject,
     };
   }
@@ -285,6 +297,7 @@ export class ProjectRuntimeControl {
     const before = await this.snapshot();
     const resolved = this.resolveTarget(target, { requireRegistered: true });
     const targetBefore = await this.buildProjectSummary({
+      activeProjectRoot: before.state.activeProjectRoot,
       entry: resolved.entry,
       projectRoot: resolved.projectRoot,
       selectedProjectRoot: resolved.projectRoot,
@@ -301,8 +314,15 @@ export class ProjectRuntimeControl {
     }
 
     let stoppedProject: ProjectRuntimeScopeSummary | null = null;
+    let deferredStopProject: ProjectRuntimeScopeSummary | null = null;
     const currentActive = before.activeRuntimeProject;
-    if (currentActive && !sameProjectRoot(currentActive.projectRoot, targetBefore.projectRoot)) {
+    const shouldStopCurrent =
+      currentActive && !sameProjectRoot(currentActive.projectRoot, targetBefore.projectRoot);
+    const shouldDeferCurrentStop =
+      shouldStopCurrent &&
+      options.deferSelfDaemonStop === true &&
+      isCurrentProcessDaemon(currentActive);
+    if (shouldStopCurrent && !shouldDeferCurrentStop) {
       try {
         await this.#supervisor.stop({
           projectRoot: currentActive.projectRoot,
@@ -318,10 +338,13 @@ export class ProjectRuntimeControl {
         });
       }
       stoppedProject = await this.buildProjectSummary({
+        activeProjectRoot: null,
         entry: ProjectRegistry.get(currentActive.projectRoot),
         projectRoot: currentActive.projectRoot,
         selectedProjectRoot: targetBefore.projectRoot,
       });
+    } else if (shouldDeferCurrentStop) {
+      deferredStopProject = currentActive;
     }
 
     let startError: string | null = null;
@@ -336,10 +359,27 @@ export class ProjectRuntimeControl {
     }
 
     const targetAfterStart = await this.buildProjectSummary({
+      activeProjectRoot: shouldDeferCurrentStop ? before.state.activeProjectRoot : null,
       entry: resolved.entry,
       projectRoot: resolved.projectRoot,
       selectedProjectRoot: targetBefore.projectRoot,
     });
+    const daemonError = startError
+      ? `Failed to start target runtime ${targetBefore.projectRoot}: ${startError}`
+      : targetAfterStart.daemon.ready
+        ? null
+        : (targetAfterStart.daemon.message ?? 'Target daemon did not become ready');
+
+    if (daemonError && shouldDeferCurrentStop) {
+      return this.actionResult({
+        action,
+        error: daemonError,
+        previousActiveProject: before.activeRuntimeProject,
+        stoppedProject: null,
+        targetProject: targetAfterStart,
+      });
+    }
+
     const now = new Date().toISOString();
     this.writeState(
       createProjectRuntimeControlState({
@@ -354,14 +394,10 @@ export class ProjectRuntimeControl {
 
     const snapshot = await this.snapshot();
     const targetProject = snapshot.selectedProject ?? targetAfterStart;
-    const daemonError = startError
-      ? `Failed to start target runtime ${targetBefore.projectRoot}: ${startError}`
-      : targetProject.daemon.ready
-        ? null
-        : (targetProject.daemon.message ?? 'Target daemon did not become ready');
 
     return {
       action,
+      deferredStopProject: daemonError === null ? deferredStopProject : null,
       error: daemonError,
       handoff: handoffFromProject(targetProject),
       ok: daemonError === null,
@@ -375,6 +411,7 @@ export class ProjectRuntimeControl {
   async actionResult(options: {
     action: ProjectRuntimeControlActionResult['action'];
     error: string | null;
+    deferredStopProject?: ProjectRuntimeScopeSummary | null;
     previousActiveProject: ProjectRuntimeScopeSummary | null;
     stoppedProject: ProjectRuntimeScopeSummary | null;
     targetProject: ProjectRuntimeScopeSummary | null;
@@ -382,6 +419,7 @@ export class ProjectRuntimeControl {
     const snapshot = await this.snapshot();
     return {
       action: options.action,
+      deferredStopProject: options.deferredStopProject ?? null,
       error: options.error,
       handoff: options.targetProject ? handoffFromProject(options.targetProject) : null,
       ok: options.error === null,
@@ -415,11 +453,12 @@ export class ProjectRuntimeControl {
     const facts = resolver.toFacts();
     const projectExists = existsSync(projectRoot);
     const selected = sameProjectRoot(projectRoot, options.selectedProjectRoot ?? null);
+    const activeRuntimeState = sameProjectRoot(projectRoot, options.activeProjectRoot ?? null);
     const daemon = projectExists ? await this.safeDaemonStatus(projectRoot) : null;
     const status = projectExists ? (daemon?.status ?? 'unavailable') : 'missing';
     const healthData = asRecord(daemon?.health?.data);
     const dashboardUrl = firstString(healthData?.dashboardUrl, daemon?.state?.dashboardUrl);
-    const activeRuntime = selected && daemon?.ready === true;
+    const activeRuntime = activeRuntimeState && daemon?.ready === true;
 
     return {
       cacheKey: `project:${facts.projectId ?? facts.expectedProjectId}`,
@@ -495,13 +534,13 @@ export class ProjectRuntimeControl {
     state: ProjectRuntimeControlState,
     projects: ProjectRuntimeScopeSummary[]
   ): ProjectRuntimeControlState {
-    const selectedProject =
-      projects.find((project) => sameProjectRoot(project.projectRoot, state.selectedProjectRoot)) ??
-      null;
     const activeProject =
-      selectedProject?.daemon.ready === true && selectedProject.flags.activeRuntime
-        ? selectedProject
-        : null;
+      projects.find(
+        (project) =>
+          sameProjectRoot(project.projectRoot, state.activeProjectRoot) &&
+          project.daemon.ready === true &&
+          project.flags.activeRuntime
+      ) ?? null;
     return {
       ...state,
       activeProjectId: activeProject?.projectId ?? null,
@@ -664,7 +703,20 @@ function sameProjectRoot(
   left: string | null | undefined,
   right: string | null | undefined
 ): boolean {
-  return typeof left === 'string' && typeof right === 'string' && resolve(left) === resolve(right);
+  return (
+    typeof left === 'string' &&
+    typeof right === 'string' &&
+    comparableProjectRoot(left) === comparableProjectRoot(right)
+  );
+}
+
+function comparableProjectRoot(value: string): string {
+  const resolved = resolve(value);
+  try {
+    return realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -711,6 +763,22 @@ function firstProjectRuntimeTarget(
     }
   }
   return null;
+}
+
+function isCurrentProcessDaemon(project: ProjectRuntimeScopeSummary): boolean {
+  if (process.env.ALEMBIC_DAEMON_MODE !== '1') {
+    return false;
+  }
+  if (!sameProjectRoot(project.projectRoot, process.env.ALEMBIC_PROJECT_DIR)) {
+    return false;
+  }
+  if (project.daemon.pid === process.pid) {
+    return true;
+  }
+  return (
+    typeof process.env.ALEMBIC_DAEMON_STATE_PATH === 'string' &&
+    resolve(process.env.ALEMBIC_DAEMON_STATE_PATH) === resolve(project.daemon.statePath)
+  );
 }
 
 function errorMessage(error: unknown): string {

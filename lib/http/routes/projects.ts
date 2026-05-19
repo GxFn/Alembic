@@ -1,5 +1,6 @@
 import { isProjectRuntimeTarget } from '@alembic/core/daemon';
 import express, { type Request, type Response } from 'express';
+import { DaemonSupervisor } from '../../daemon/DaemonSupervisor.js';
 import {
   ProjectRuntimeControl,
   type ProjectRuntimeControlActionResult,
@@ -59,44 +60,63 @@ router.delete('/select', async (_req: Request, res: Response): Promise<void> => 
 });
 
 router.post('/open-dashboard', async (req: Request, res: Response): Promise<void> => {
-  await sendAction(res, () =>
-    new ProjectRuntimeControl().openDashboard(undefined, controlOptionsFromBody(req.body))
+  const options = httpControlOptionsFromBody(req.body);
+  await sendAction(
+    res,
+    () => new ProjectRuntimeControl().openDashboard(undefined, options),
+    options
   );
 });
 
 router.post('/:projectId/start', async (req: Request, res: Response): Promise<void> => {
-  await sendAction(res, () =>
-    new ProjectRuntimeControl().startProject(
-      { projectId: singleParam(req.params.projectId) },
-      controlOptionsFromBody(req.body)
-    )
+  const options = httpControlOptionsFromBody(req.body);
+  await sendAction(
+    res,
+    () =>
+      new ProjectRuntimeControl().startProject(
+        { projectId: singleParam(req.params.projectId) },
+        options
+      ),
+    options
   );
 });
 
 router.post('/:projectId/stop', async (req: Request, res: Response): Promise<void> => {
-  await sendAction(res, () =>
-    new ProjectRuntimeControl().stopProject(
-      { projectId: singleParam(req.params.projectId) },
-      controlOptionsFromBody(req.body)
-    )
+  const options = httpControlOptionsFromBody(req.body);
+  await sendAction(
+    res,
+    () =>
+      new ProjectRuntimeControl().stopProject(
+        { projectId: singleParam(req.params.projectId) },
+        options
+      ),
+    options
   );
 });
 
 router.post('/:projectId/open-dashboard', async (req: Request, res: Response): Promise<void> => {
-  await sendAction(res, () =>
-    new ProjectRuntimeControl().openDashboard(
-      { projectId: singleParam(req.params.projectId) },
-      controlOptionsFromBody(req.body)
-    )
+  const options = httpControlOptionsFromBody(req.body);
+  await sendAction(
+    res,
+    () =>
+      new ProjectRuntimeControl().openDashboard(
+        { projectId: singleParam(req.params.projectId) },
+        options
+      ),
+    options
   );
 });
 
 router.post('/:projectId/switch', async (req: Request, res: Response): Promise<void> => {
-  await sendAction(res, () =>
-    new ProjectRuntimeControl().switchProject(
-      { projectId: singleParam(req.params.projectId) },
-      controlOptionsFromBody(req.body)
-    )
+  const options = httpControlOptionsFromBody(req.body);
+  await sendAction(
+    res,
+    () =>
+      new ProjectRuntimeControl().switchProject(
+        { projectId: singleParam(req.params.projectId) },
+        options
+      ),
+    options
   );
 });
 
@@ -136,19 +156,50 @@ function controlOptionsFromBody(value: unknown): ProjectRuntimeControlOptions {
   };
 }
 
+function httpControlOptionsFromBody(value: unknown): ProjectRuntimeControlOptions {
+  return {
+    ...controlOptionsFromBody(value),
+    deferSelfDaemonStop: true,
+  };
+}
+
 function sendActionResult(res: Response, result: ProjectRuntimeControlActionResult): void {
   res.status(result.ok ? 200 : 409).json({ success: result.ok, data: result, error: result.error });
 }
 
 async function sendAction(
   res: Response,
-  action: () => Promise<ProjectRuntimeControlActionResult>
+  action: () => Promise<ProjectRuntimeControlActionResult>,
+  options: ProjectRuntimeControlOptions = {}
 ): Promise<void> {
   try {
-    sendActionResult(res, await action());
+    const result = await action();
+    scheduleDeferredStopAfterResponse(res, result, options);
+    sendActionResult(res, result);
   } catch (error: unknown) {
     res.status(404).json({ success: false, error: errorMessage(error) });
   }
+}
+
+function scheduleDeferredStopAfterResponse(
+  res: Response,
+  result: ProjectRuntimeControlActionResult,
+  options: ProjectRuntimeControlOptions
+): void {
+  const project = result.deferredStopProject;
+  if (!result.ok || !project) {
+    return;
+  }
+
+  res.once('finish', () => {
+    setTimeout(() => {
+      new DaemonSupervisor()
+        .stop({ projectRoot: project.projectRoot, waitMs: options.stopWaitMs })
+        .catch((error: unknown) => {
+          console.warn(`[projects] deferred daemon stop failed: ${errorMessage(error)}`);
+        });
+    }, 50);
+  });
 }
 
 function singleParam(value: string | string[] | undefined): string {
