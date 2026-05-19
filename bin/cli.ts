@@ -1491,6 +1491,7 @@ program
   .option('--no-open', '禁止自动打开浏览器（CI/CD 环境适用）')
   .option('-d, --dir <directory>', '指定 Alembic 项目目录（默认：当前目录）')
   .option('--api-only', '仅启动 API 服务（不启动前端）')
+  .option('--static-dashboard', '强制使用 dashboard/dist 静态产物，不启动本地 Dashboard dev server')
   .action(async (opts) => {
     const { spawn } = await import('node:child_process');
 
@@ -1531,8 +1532,8 @@ program
             cli.warn(`⚠️  UiStartupTasks completed with ${report.errors.length} error(s)`);
           }
         })
-        .catch((err: any) => {
-          cli.debug(`UiStartupTasks failed: ${err.message}`);
+        .catch((err: unknown) => {
+          cli.debug(`UiStartupTasks failed: ${toErrorMessage(err)}`);
         });
 
       if (opts.apiOnly) {
@@ -1542,11 +1543,56 @@ program
       // 2. 启动 Dashboard UI
       const dashboardDir = DASHBOARD_DIR;
       const distDir = join(dashboardDir, 'dist');
-      const dashboardSourceDir = join(PACKAGE_ROOT, 'vendor', 'AlembicDashboard');
       const hasPrebuilt = existsSync(join(distDir, 'index.html'));
-      const hasSharedDashboardSrc = existsSync(join(dashboardSourceDir, 'src'));
+      const dashboardSource = opts.staticDashboard ? null : resolveDashboardSource();
 
-      if (hasPrebuilt) {
+      if (dashboardSource) {
+        // ── 本地开发模式：优先从 workspace Dashboard 源仓库启动 Vite Dev Server ──
+        // 这样前端代码修改会即时生效，避免本地调试时误吃旧 dashboard/dist 或旧 service worker。
+        if (!existsSync(join(dashboardSource.root, 'node_modules'))) {
+          cli.error(
+            `❌ Dashboard dependencies are missing. Run \`npm ci --prefix ${dashboardSource.displayPath}\` first.`
+          );
+          if (hasPrebuilt) {
+            cli.error('   Or rerun with `--static-dashboard` to use dashboard/dist.');
+          }
+          process.exit(1);
+        }
+
+        const apiUrl = `http://127.0.0.1:${port}`;
+        // 本地 UI 默认走 127.0.0.1，避免浏览器扩展匹配 localhost 后向 /api/ext/* 注入请求。
+        const viteArgs = ['--host', '127.0.0.1'];
+        if (opts.open !== false) {
+          viteArgs.push('--open');
+        }
+
+        console.log(
+          `\n  🚀 Dashboard dev: ${dashboardSource.displayPath} (API proxy: ${apiUrl})\n`
+        );
+
+        const vite = spawn(
+          'npm',
+          ['--prefix', dashboardSource.root, 'run', 'dev', '--', ...viteArgs],
+          {
+            cwd: PACKAGE_ROOT,
+            stdio: 'inherit',
+            env: { ...process.env, VITE_API_URL: apiUrl },
+          }
+        );
+
+        vite.on('error', (err: unknown) => {
+          cli.error(`❌ Vite failed to start: ${toErrorMessage(err)}`);
+        });
+
+        process.on('SIGINT', () => {
+          vite.kill();
+          process.exit(0);
+        });
+        process.on('SIGTERM', () => {
+          vite.kill();
+          process.exit(0);
+        });
+      } else if (hasPrebuilt) {
         // ── 生产模式：API 服务器上直接托管预构建产物 ──
         // 同端口同 origin → /api 路由自然可达，无跨域问题
         httpServer.mountDashboard(distDir);
@@ -1558,44 +1604,15 @@ program
           const open = (await import('open')).default;
           open(dashUrl);
         }
-      } else if (hasSharedDashboardSrc) {
-        // ── 开发模式：从共享 Dashboard 仓库启动 Vite Dev Server ──
-        if (!existsSync(join(dashboardSourceDir, 'node_modules'))) {
-          cli.error(
-            '❌ Dashboard dependencies are missing. Run `npm ci --prefix vendor/AlembicDashboard` first.'
-          );
-          process.exit(1);
-        }
-        const viteArgs = ['--host'];
-        if (opts.open !== false) {
-          viteArgs.push('--open');
-        }
-        const vite = spawn(
-          'npm',
-          ['--prefix', dashboardSourceDir, 'run', 'dev', '--', ...viteArgs],
-          {
-            cwd: PACKAGE_ROOT,
-            stdio: 'inherit',
-            env: { ...process.env, VITE_API_URL: `http://127.0.0.1:${port}` },
-          }
-        );
-
-        vite.on('error', (err) => {
-          cli.error(`❌ Vite failed to start: ${err.message}`);
-        });
-
-        process.on('SIGINT', () => {
-          vite.kill();
-          process.exit(0);
-        });
       } else {
         cli.error('❌ Dashboard build output not found.');
+        cli.error('   Expected ../AlembicDashboard, vendor/AlembicDashboard, or dashboard/dist.');
         cli.error('   Run `npm run build:dashboard` to generate dashboard/dist/index.html.');
         process.exit(1);
       }
-    } catch (err: any) {
-      cli.error(`❌ API server failed to start: ${err.message}`);
-      if (err.code === 'EADDRINUSE') {
+    } catch (err: unknown) {
+      cli.error(`❌ API server failed to start: ${toErrorMessage(err)}`);
+      if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
         cli.error(
           `   Port ${port} is already in use. Kill it with: lsof -ti:${port} | xargs kill -9`
         );
@@ -2308,6 +2325,37 @@ function parseCliInteger(value: string | number, label: string): number {
     throw new Error(`Invalid ${label}: ${value}`);
   }
   return parsed;
+}
+
+function resolveDashboardSource(): {
+  displayPath: '../AlembicDashboard' | 'vendor/AlembicDashboard';
+  root: string;
+} | null {
+  const candidates = [
+    {
+      displayPath: '../AlembicDashboard' as const,
+      root: join(PACKAGE_ROOT, '..', 'AlembicDashboard'),
+    },
+    {
+      displayPath: 'vendor/AlembicDashboard' as const,
+      root: join(PACKAGE_ROOT, 'vendor', 'AlembicDashboard'),
+    },
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      existsSync(join(candidate.root, 'package.json')) &&
+      existsSync(join(candidate.root, 'src'))
+    ) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function toErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 function printDaemonStatus(status: {
