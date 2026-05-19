@@ -28,7 +28,12 @@ jobs:
         uses: actions/checkout@v5
         with:
           path: Alembic
-          submodules: recursive
+
+      - name: Checkout progressive-chain-validation skill
+        uses: actions/checkout@v5
+        with:
+          repository: GxFn/progressive-chain-validation
+          path: Alembic/skills/progressive-chain-validation
 
       - name: Checkout AlembicCore
         uses: actions/checkout@v5

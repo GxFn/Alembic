@@ -290,19 +290,17 @@ describe('agent module boundaries', () => {
         join(repoRoot, 'lib/workflows/capabilities/project-intelligence/FileDiffSnapshotStore.ts')
       )
     ).toBe(false);
+    const coreSourceRoot = resolveCoreSourceRoot();
     expect(
       existsSync(
-        join(
-          repoRoot,
-          'vendor/AlembicCore/src/workflows/capabilities/project-intelligence/FileDiffPlanner.ts'
-        )
+        join(coreSourceRoot, 'src/workflows/capabilities/project-intelligence/FileDiffPlanner.ts')
       )
     ).toBe(true);
     expect(
       existsSync(
         join(
-          repoRoot,
-          'vendor/AlembicCore/src/workflows/capabilities/project-intelligence/FileDiffSnapshotStore.ts'
+          coreSourceRoot,
+          'src/workflows/capabilities/project-intelligence/FileDiffSnapshotStore.ts'
         )
       )
     ).toBe(true);
@@ -332,6 +330,16 @@ function extractImportSpecifiers(source: string): string[] {
     specifiers.push(match[1]);
   }
   return specifiers;
+}
+
+function resolveCoreSourceRoot() {
+  const vendorRoot = join(repoRoot, 'vendor', 'AlembicCore');
+  const siblingRoot = join(repoRoot, '..', 'AlembicCore');
+  const sourceFile = 'src/workflows/capabilities/project-intelligence/FileDiffPlanner.ts';
+  if (existsSync(join(vendorRoot, sourceFile))) {
+    return vendorRoot;
+  }
+  return siblingRoot;
 }
 
 function isRetiredImportSpecifier(specifier: string, relFile: string) {
