@@ -93,7 +93,7 @@ export async function runWorkflowCompletionFinalizer({
   }
   let wikiStatus: WorkflowCompletionFinalizerResult['wikiStatus'] = 'skipped';
   if (wikiMode === 'schedule') {
-    scheduleTask(() => generateWiki({ getServiceContainer, projectRoot, log }));
+    scheduleTask(() => generateWiki({ getServiceContainer, projectRoot, dataRoot, log }));
     wikiStatus = 'scheduled';
   } else {
     log.info('[CompletionFinalizer] Wiki generation skipped by workflow option');

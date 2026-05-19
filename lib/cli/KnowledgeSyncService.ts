@@ -62,7 +62,7 @@ export class KnowledgeSyncService {
   /**
    * 完整同步入口 — sync + reconcile + repair
    *
-   * alembic sync CLI 和 alembic ui 启动都调用此方法。
+   * alembic sync CLI 和 Alembic 启动流程都会调用此方法。
    *
    * @param db better-sqlite3 原始句柄
    * @param opts 同步选项

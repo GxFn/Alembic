@@ -5,6 +5,7 @@
  *
  * Usage:
  *   alembic setup           - 初始化项目（--repo 指定子仓库远程地址）
+ *   alembic start           - 启动/切换项目 runtime，并打开 Dashboard
  *   alembic ai status       - 查看 AI 配置
  *   alembic ai configure    - 写入工作区 AI 配置
  *   alembic daemon start    - 启动 Alembic daemon（动态端口 + state 文件）
@@ -16,8 +17,6 @@
  *   alembic search <query>  - 搜索知识库
  *   alembic guard <file>    - Guard 检查
  *   alembic guard:ci [path] - CI/CD Guard 合规检查
- *   alembic server          - 启动 API 服务
- *   alembic ui              - 启动 Dashboard UI
  *   alembic status          - 环境状态
  *   alembic health          - 综合健康报告
  */
@@ -71,6 +70,54 @@ shutdown.install();
 
 const program = new Command();
 program.name('alembic').description('Alembic V2 - AI 知识库管理工具').version(pkg.version);
+
+// ─────────────────────────────────────────────────────
+// start 命令 — 用户统一启动入口
+// ─────────────────────────────────────────────────────
+program
+  .command('start [target]')
+  .description('启动 Alembic：项目 runtime、daemon、API 和 Dashboard')
+  .option('-d, --dir <path>', '项目目录')
+  .option('--project-root <path>', '项目目录（等价于 --dir，便于脚本化）')
+  .option('--restart', '即使目标 runtime 已就绪也重启')
+  .option('--wait <ms>', '等待 ready 的毫秒数', '10000')
+  .option('--stop-wait <ms>', '停止当前 active runtime 的等待毫秒数', '5000')
+  .option('--no-open', '只启动并输出 Dashboard URL，不自动打开浏览器')
+  .option('--json', 'JSON 格式输出')
+  .option('--dev', '开发模式：启动 API 服务和前端 dev server，不切换多项目 runtime')
+  .option('-p, --port <port>', '开发模式 API 服务端口（仅 --dev 使用）', '3000')
+  .option('--api-only', '开发模式仅启动 API 服务（隐含 --dev）')
+  .option('--static-dashboard', '开发模式强制使用 dashboard/dist 静态产物（隐含 --dev）')
+  .action(async (target: string | undefined, opts) => {
+    const devMode = Boolean(opts.dev || opts.apiOnly || opts.staticDashboard);
+    if (devMode) {
+      await runDirectStartDevServer({
+        apiOnly: opts.apiOnly,
+        dir: startDevDirFromCli(target, opts),
+        open: opts.open,
+        port: opts.port,
+        staticDashboard: opts.staticDashboard,
+      });
+      return;
+    }
+
+    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const result = await new ProjectRuntimeControl().openDashboard(
+      projectTargetFromCli(target, opts),
+      {
+        restart: Boolean(opts.restart),
+        stopWaitMs: parseCliInteger(opts.stopWait, 'stop-wait'),
+        waitUntilReadyMs: parseCliInteger(opts.wait, 'wait'),
+      }
+    );
+    printProjectActionResult(result, opts.json);
+
+    const dashboardUrl = result.handoff?.dashboardUrl;
+    if (result.ok && opts.json !== true && opts.open !== false && dashboardUrl) {
+      const open = (await import('open')).default;
+      open(dashboardUrl);
+    }
+  });
 
 // ─────────────────────────────────────────────────────
 // setup 命令
@@ -1467,161 +1514,6 @@ program
   });
 
 // ─────────────────────────────────────────────────────
-// server 命令
-// ─────────────────────────────────────────────────────
-program
-  .command('server')
-  .description('启动 API 服务器')
-  .option('-p, --port <port>', '端口', '3000')
-  .option('-H, --host <host>', '绑定地址', '127.0.0.1')
-  .action(async (opts) => {
-    // 设置环境变量后启动 api-server
-    process.env.PORT = opts.port;
-    process.env.HOST = opts.host;
-    await import('./api-server.js');
-  });
-
-// ─────────────────────────────────────────────────────
-// ui 命令 (Dashboard)
-// ─────────────────────────────────────────────────────
-program
-  .command('ui')
-  .description('启动 Dashboard UI（API 服务 + 前端开发服务器）')
-  .option('-p, --port <port>', 'API 服务端口', '3000')
-  .option('--no-open', '禁止自动打开浏览器（CI/CD 环境适用）')
-  .option('-d, --dir <directory>', '指定 Alembic 项目目录（默认：当前目录）')
-  .option('--api-only', '仅启动 API 服务（不启动前端）')
-  .option('--static-dashboard', '强制使用 dashboard/dist 静态产物，不启动本地 Dashboard dev server')
-  .action(async (opts) => {
-    const { spawn } = await import('node:child_process');
-
-    // 标记为长驻 API 服务进程（CacheCoordinator 用于判断是否启动轮询）
-    process.env.ALEMBIC_API_SERVER = '1';
-
-    // 项目根目录：-d 选项 > 环境变量 ALEMBIC_CWD > 当前目录
-    const projectRoot = opts.dir || process.env.ALEMBIC_CWD || process.cwd();
-    const port = parseCliInteger(opts.port, 'port');
-    const host = '127.0.0.1';
-    process.env.PORT = String(port);
-    process.env.HOST = host;
-
-    let httpServer;
-    try {
-      const { default: HttpServer } = await import('../lib/http/HttpServer.js');
-
-      const { container } = await initContainer({ projectRoot });
-
-      // 连接 EventBus → Gateway（供运行时事件传播）
-      try {
-        const eventBus = container.get('eventBus');
-        const gateway = container.get('gateway');
-        gateway.eventBus = eventBus;
-      } catch {
-        /* EventBus 不可用不阻塞启动 */
-      }
-
-      httpServer = new HttpServer({ port, host });
-      await httpServer.initialize();
-      await httpServer.start();
-
-      // ── UiStartupTasks: 后台异步刷新（不阻塞 UI） ──
-      import('../lib/service/bootstrap/UiStartupTasks.js')
-        .then(({ runUiStartupTasks }) => runUiStartupTasks({ projectRoot, container }))
-        .then((report) => {
-          if (report.errors.length > 0) {
-            cli.warn(`⚠️  UiStartupTasks completed with ${report.errors.length} error(s)`);
-          }
-        })
-        .catch((err: unknown) => {
-          cli.debug(`UiStartupTasks failed: ${toErrorMessage(err)}`);
-        });
-
-      if (opts.apiOnly) {
-        return;
-      }
-
-      // 2. 启动 Dashboard UI
-      const dashboardDir = DASHBOARD_DIR;
-      const distDir = join(dashboardDir, 'dist');
-      const hasPrebuilt = existsSync(join(distDir, 'index.html'));
-      const dashboardSource = opts.staticDashboard ? null : resolveDashboardSource();
-
-      if (dashboardSource) {
-        // ── 本地开发模式：优先从 workspace Dashboard 源仓库启动 Vite Dev Server ──
-        // 这样前端代码修改会即时生效，避免本地调试时误吃旧 dashboard/dist 或旧 service worker。
-        if (!existsSync(join(dashboardSource.root, 'node_modules'))) {
-          cli.error(
-            `❌ Dashboard dependencies are missing. Run \`npm ci --prefix ${dashboardSource.displayPath}\` first.`
-          );
-          if (hasPrebuilt) {
-            cli.error('   Or rerun with `--static-dashboard` to use dashboard/dist.');
-          }
-          process.exit(1);
-        }
-
-        const apiUrl = `http://127.0.0.1:${port}`;
-        // 本地 UI 默认走 127.0.0.1，避免浏览器扩展匹配 localhost 后向 /api/ext/* 注入请求。
-        const viteArgs = ['--host', '127.0.0.1'];
-        if (opts.open !== false) {
-          viteArgs.push('--open');
-        }
-
-        console.log(
-          `\n  🚀 Dashboard dev: ${dashboardSource.displayPath} (API proxy: ${apiUrl})\n`
-        );
-
-        const vite = spawn(
-          'npm',
-          ['--prefix', dashboardSource.root, 'run', 'dev', '--', ...viteArgs],
-          {
-            cwd: PACKAGE_ROOT,
-            stdio: 'inherit',
-            env: { ...process.env, VITE_API_URL: apiUrl },
-          }
-        );
-
-        vite.on('error', (err: unknown) => {
-          cli.error(`❌ Vite failed to start: ${toErrorMessage(err)}`);
-        });
-
-        process.on('SIGINT', () => {
-          vite.kill();
-          process.exit(0);
-        });
-        process.on('SIGTERM', () => {
-          vite.kill();
-          process.exit(0);
-        });
-      } else if (hasPrebuilt) {
-        // ── 生产模式：API 服务器上直接托管预构建产物 ──
-        // 同端口同 origin → /api 路由自然可达，无跨域问题
-        httpServer.mountDashboard(distDir);
-
-        const dashUrl = `http://127.0.0.1:${port}/`;
-        console.log(`\n  🚀 Dashboard: ${dashUrl}\n`);
-
-        if (opts.open !== false) {
-          const open = (await import('open')).default;
-          open(dashUrl);
-        }
-      } else {
-        cli.error('❌ Dashboard build output not found.');
-        cli.error('   Expected ../AlembicDashboard, vendor/AlembicDashboard, or dashboard/dist.');
-        cli.error('   Run `npm run build:dashboard` to generate dashboard/dist/index.html.');
-        process.exit(1);
-      }
-    } catch (err: unknown) {
-      cli.error(`❌ API server failed to start: ${toErrorMessage(err)}`);
-      if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
-        cli.error(
-          `   Port ${port} is already in use. Kill it with: lsof -ti:${port} | xargs kill -9`
-        );
-      }
-      process.exit(1);
-    }
-  });
-
-// ─────────────────────────────────────────────────────
 // status 命令
 // ─────────────────────────────────────────────────────
 program
@@ -2356,6 +2248,156 @@ function resolveDashboardSource(): {
 
 function toErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function startDevDirFromCli(
+  target: string | undefined,
+  opts: { dir?: string; projectRoot?: string }
+): string | undefined {
+  const projectRoot = opts.projectRoot ?? opts.dir;
+  if (projectRoot) {
+    return projectRoot;
+  }
+  if (!target) {
+    return undefined;
+  }
+  if (
+    target.startsWith('.') ||
+    target.startsWith('/') ||
+    target.includes('/') ||
+    target.includes('\\')
+  ) {
+    return target;
+  }
+  cli.error('`alembic start --dev` requires a project path, not a projectId. Use --project-root.');
+  process.exit(1);
+}
+
+async function runDirectStartDevServer(opts: {
+  apiOnly?: boolean;
+  dir?: string;
+  open?: boolean;
+  port?: string;
+  staticDashboard?: boolean;
+}) {
+  const { spawn } = await import('node:child_process');
+
+  // 标记为长驻 API 服务进程（CacheCoordinator 用于判断是否启动轮询）。
+  process.env.ALEMBIC_API_SERVER = '1';
+
+  // 项目根目录：命令参数 > 环境变量 ALEMBIC_CWD > 当前目录。
+  const projectRoot = opts.dir || process.env.ALEMBIC_CWD || process.cwd();
+  const port = parseCliInteger(opts.port ?? '3000', 'port');
+  const host = '127.0.0.1';
+  process.env.PORT = String(port);
+  process.env.HOST = host;
+
+  try {
+    const { default: HttpServer } = await import('../lib/http/HttpServer.js');
+
+    const { container } = await initContainer({ projectRoot });
+
+    // 连接 EventBus → Gateway（供运行时事件传播）。
+    try {
+      const eventBus = container.get('eventBus');
+      const gateway = container.get('gateway');
+      gateway.eventBus = eventBus;
+    } catch {
+      /* EventBus 不可用不阻塞启动 */
+    }
+
+    const httpServer = new HttpServer({ port, host });
+    await httpServer.initialize();
+    await httpServer.start();
+
+    // 后台异步刷新，不阻塞 Dashboard 首屏。
+    import('../lib/service/bootstrap/UiStartupTasks.js')
+      .then(({ runUiStartupTasks }) => runUiStartupTasks({ projectRoot, container }))
+      .then((report) => {
+        if (report.errors.length > 0) {
+          cli.warn(`⚠️  UiStartupTasks completed with ${report.errors.length} error(s)`);
+        }
+      })
+      .catch((err: unknown) => {
+        cli.debug(`UiStartupTasks failed: ${toErrorMessage(err)}`);
+      });
+
+    if (opts.apiOnly) {
+      return;
+    }
+
+    const distDir = join(DASHBOARD_DIR, 'dist');
+    const hasPrebuilt = existsSync(join(distDir, 'index.html'));
+    const dashboardSource = opts.staticDashboard ? null : resolveDashboardSource();
+
+    if (dashboardSource) {
+      // 本地开发模式优先从 workspace Dashboard 源仓库启动 Vite Dev Server。
+      if (!existsSync(join(dashboardSource.root, 'node_modules'))) {
+        cli.error(
+          `❌ Dashboard dependencies are missing. Run \`npm ci --prefix ${dashboardSource.displayPath}\` first.`
+        );
+        if (hasPrebuilt) {
+          cli.error('   Or rerun with `--static-dashboard` to use dashboard/dist.');
+        }
+        process.exit(1);
+      }
+
+      const apiUrl = `http://127.0.0.1:${port}`;
+      const viteArgs = ['--host', '127.0.0.1'];
+      if (opts.open !== false) {
+        viteArgs.push('--open');
+      }
+
+      console.log(`\n  🚀 Dashboard dev: ${dashboardSource.displayPath} (API proxy: ${apiUrl})\n`);
+
+      const vite = spawn(
+        'npm',
+        ['--prefix', dashboardSource.root, 'run', 'dev', '--', ...viteArgs],
+        {
+          cwd: PACKAGE_ROOT,
+          stdio: 'inherit',
+          env: { ...process.env, VITE_API_URL: apiUrl },
+        }
+      );
+
+      vite.on('error', (err: unknown) => {
+        cli.error(`❌ Vite failed to start: ${toErrorMessage(err)}`);
+      });
+
+      process.on('SIGINT', () => {
+        vite.kill();
+        process.exit(0);
+      });
+      process.on('SIGTERM', () => {
+        vite.kill();
+        process.exit(0);
+      });
+    } else if (hasPrebuilt) {
+      // 静态开发模式：API server 同端口托管 dashboard/dist。
+      httpServer.mountDashboard(distDir);
+
+      const dashUrl = `http://127.0.0.1:${port}/`;
+      console.log(`\n  🚀 Dashboard: ${dashUrl}\n`);
+
+      if (opts.open !== false) {
+        const open = (await import('open')).default;
+        open(dashUrl);
+      }
+    } else {
+      cli.error('❌ Dashboard build output not found.');
+      cli.error('   Expected ../AlembicDashboard, vendor/AlembicDashboard, or dashboard/dist.');
+      cli.error('   Run `npm run build:dashboard` to generate dashboard/dist/index.html.');
+      process.exit(1);
+    }
+  } catch (err: unknown) {
+    cli.error(`❌ API server failed to start: ${toErrorMessage(err)}`);
+    if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+      cli.error(
+        `   Port ${port} is already in use. Kill it with: lsof -ti:${port} | xargs kill -9`
+      );
+    }
+    process.exit(1);
+  }
 }
 
 function printDaemonStatus(status: {

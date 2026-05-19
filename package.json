@@ -66,7 +66,7 @@
     "postbuild": "node scripts/postbuild.mjs",
     "verify:context-api": "node dist/scripts/verify-context-api.js",
     "build:dashboard": "node scripts/build-dashboard.mjs",
-    "dashboard": "node dist/bin/cli.js ui",
+    "start": "node dist/bin/cli.js start",
     "test": "vitest run",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:integration": "vitest run test/integration",

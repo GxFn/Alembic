@@ -1,10 +1,19 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { runWorkflowCompletionFinalizer } from '#workflows/capabilities/completion/WorkflowCompletionFinalizer.js';
 import { buildInternalDimensionCompletionSummary } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
 
+const tmpDirs: string[] = [];
+
 describe('WorkflowCompletionFinalizer', () => {
+  afterEach(() => {
+    for (const dir of tmpDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test('skips retired project delivery and runs panorama before scheduling wiki', async () => {
     const events: string[] = [];
     const container = createContainer(events);
@@ -25,6 +34,32 @@ describe('WorkflowCompletionFinalizer', () => {
     expect(events).toEqual(['panorama:rescan', 'panorama:overview', 'schedule']);
     expect(result.semanticMemoryResult).toBeNull();
     expect(result.deliveryStatus).toBe('skipped');
+  });
+
+  test('schedules bootstrap wiki generation under ghost dataRoot', async () => {
+    const scheduled: Array<() => Promise<void>> = [];
+    const projectRoot = makeTempProject('alembic-wiki-project-');
+    const dataRoot = makeTempProject('alembic-wiki-data-');
+
+    await runWorkflowCompletionFinalizer({
+      ctx: { container: { get: () => undefined } },
+      session: { id: 'session-1' },
+      projectRoot,
+      dataRoot,
+      log: { info: vi.fn(), warn: vi.fn() },
+      dependencies: {
+        getServiceContainer: () => createWikiContainer(),
+        scheduleTask: (task) => scheduled.push(task),
+      },
+      steps: { panorama: 'skip' },
+      semanticMemory: { mode: 'skip' },
+    });
+
+    expect(scheduled).toHaveLength(1);
+    await scheduled[0]();
+
+    expect(existsSync(join(dataRoot, 'Alembic', 'wiki', 'meta.json'))).toBe(true);
+    expect(existsSync(join(projectRoot, 'Alembic'))).toBe(false);
   });
 
   test('scheduled semantic memory shares the same scheduler boundary as wiki', async () => {
@@ -170,6 +205,51 @@ function createContainer(events: string[]) {
     get: (name: string) => {
       if (name === 'panoramaService') {
         return panoramaService;
+      }
+      return undefined;
+    },
+  };
+}
+
+function makeTempProject(prefix: string): string {
+  const root = mkdirTemp(prefix);
+  mkdirSync(join(root, 'src'), { recursive: true });
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: prefix, version: '1.0.0' }));
+  writeFileSync(join(root, 'src', 'index.ts'), 'export const value = 1;\n');
+  return root;
+}
+
+function mkdirTemp(prefix: string): string {
+  const dir = join(tmpdir(), `${prefix}${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  mkdirSync(dir, { recursive: true });
+  tmpDirs.push(dir);
+  return dir;
+}
+
+function createWikiContainer() {
+  return {
+    services: {},
+    get: (name: string) => {
+      if (name === 'moduleService') {
+        return {
+          load: vi.fn(async () => undefined),
+          listTargets: vi.fn(async () => [
+            { name: 'App', type: 'application', path: 'src', dependencies: [] },
+          ]),
+          getProjectInfo: vi.fn(() => ({
+            name: 'GhostWikiProject',
+            primaryLanguage: 'typescript',
+            sourceFiles: [],
+            languages: { typescript: 1 },
+          })),
+          getDependencyGraph: vi.fn(async () => ({ edges: [] })),
+        };
+      }
+      if (name === 'knowledgeService') {
+        return {
+          list: vi.fn(async () => ({ data: [] })),
+          getStats: vi.fn(async () => ({ total: 0, active: 0, deprecated: 0 })),
+        };
       }
       return undefined;
     },

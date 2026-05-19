@@ -52,10 +52,12 @@ export async function refreshPanorama({
 export async function generateWiki({
   getServiceContainer,
   projectRoot,
+  dataRoot,
   log,
 }: {
   getServiceContainer: LoadServiceContainer;
   projectRoot: string;
+  dataRoot: string;
   log: CompletionLogger;
 }): Promise<void> {
   try {
@@ -69,6 +71,7 @@ export async function generateWiki({
 
     const wikiDeps: import('#service/wiki/WikiGenerator.js').WikiDeps = {
       projectRoot,
+      dataRoot,
       moduleService: moduleService as import('#service/wiki/WikiGenerator.js').WikiModuleService,
       knowledgeService:
         knowledgeService as import('#service/wiki/WikiGenerator.js').WikiKnowledgeService,
