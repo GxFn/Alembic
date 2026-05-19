@@ -71,6 +71,19 @@ describe('jobs route response decoration', () => {
           summary: {
             completed: 3,
             duration: 4200,
+            efficiency: {
+              toolCalls: 6,
+              duplicateToolCalls: 2,
+              cacheHits: 3,
+              cacheMisses: 1,
+              tokenUsage: { input: 30, output: 12, reasoning: 4, cacheHit: 8 },
+              maxCompactionLevel: 2,
+              totalCompactedItems: 9,
+              nudgeCount: 1,
+              replanCount: 1,
+              emptyRetries: 0,
+              forcedSummary: false,
+            },
             failed: 0,
             totalTasks: 3,
           },
@@ -144,6 +157,19 @@ describe('jobs route response decoration', () => {
           summary: {
             completed: 3,
             duration: 4200,
+            efficiency: {
+              toolCalls: 6,
+              duplicateToolCalls: 2,
+              cacheHits: 3,
+              cacheMisses: 1,
+              tokenUsage: { input: 30, output: 12, reasoning: 4, cacheHit: 8 },
+              maxCompactionLevel: 2,
+              totalCompactedItems: 9,
+              nudgeCount: 1,
+              replanCount: 1,
+              emptyRetries: 0,
+              forcedSummary: false,
+            },
             failed: 0,
             totalTasks: 3,
           },
@@ -164,8 +190,64 @@ describe('jobs route response decoration', () => {
     });
     expect(decorated.summary).toMatchObject({
       completed: 3,
+      efficiency: {
+        duplicateToolCalls: 2,
+        cacheHits: 3,
+        tokenUsage: { input: 30, output: 12, reasoning: 4, cacheHit: 8 },
+      },
       failed: 0,
       totalTasks: 3,
+    });
+  });
+
+  test('builds compact job summary efficiency from task results when summary is absent', () => {
+    const job = makeJob({
+      bootstrapSessionId: 'bs_live_efficiency',
+      status: 'running',
+      result: {
+        bootstrapSession: {
+          id: 'bs_live_efficiency',
+          status: 'running',
+          total: 2,
+          completed: 1,
+          failed: 0,
+          tasks: [
+            {
+              id: 'dim:one',
+              status: 'completed',
+              result: {
+                efficiency: {
+                  toolCalls: 3,
+                  duplicateToolCalls: 1,
+                  cacheHits: 2,
+                  cacheMisses: 1,
+                  tokenUsage: { input: 9, output: 4, reasoning: 2, cacheHit: 3 },
+                  maxCompactionLevel: 1,
+                  totalCompactedItems: 5,
+                  nudgeCount: 1,
+                  replanCount: 0,
+                  emptyRetries: 1,
+                  forcedSummary: false,
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    const decorated = decorateJobForResponse(job, null, { compact: true });
+
+    expect(decorated.result).toBeUndefined();
+    expect(decorated.summary).toMatchObject({
+      completed: 1,
+      totalTasks: 2,
+      efficiency: {
+        toolCalls: 3,
+        duplicateToolCalls: 1,
+        cacheHits: 2,
+        tokenUsage: { input: 9, output: 4, reasoning: 2, cacheHit: 3 },
+      },
     });
   });
 });

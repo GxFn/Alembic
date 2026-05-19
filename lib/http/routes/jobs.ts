@@ -3,6 +3,10 @@ import type { DaemonJobKind, DaemonJobRecord, DaemonJobStatus } from '@alembic/c
 import Logger from '@alembic/core/logging';
 import express, { type Request, type Response } from 'express';
 import { z } from 'zod';
+import {
+  mergeAgentEfficiencySummaries,
+  normalizeAgentEfficiencySummary,
+} from '#service/bootstrap/BootstrapEfficiency.js';
 import { cancelDaemonJob, enqueueDaemonJob, getJobStore } from '../../daemon/DaemonJobRunner.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';
@@ -335,7 +339,7 @@ function getJobSummary(
   job: DaemonJobRecord,
   session: Record<string, unknown> | null
 ): Record<string, unknown> | undefined {
-  const sessionSummary = getSummaryRecord(session);
+  const sessionSummary = buildSessionSummaryRecord(session);
   if (sessionSummary) {
     return sessionSummary;
   }
@@ -349,6 +353,64 @@ function getSummaryRecord(
   session: Record<string, unknown> | null | undefined
 ): Record<string, unknown> | null {
   return asRecordOrNull(session?.summary);
+}
+
+function buildSessionSummaryRecord(
+  session: Record<string, unknown> | null | undefined
+): Record<string, unknown> | null {
+  if (!session) {
+    return null;
+  }
+  const explicit = getSummaryRecord(session);
+  const efficiency = extractSessionEfficiency(session);
+  if (explicit) {
+    return efficiency ? { ...explicit, efficiency } : explicit;
+  }
+
+  const total = numberField(session, 'total');
+  const completed = numberField(session, 'completed');
+  const failed = numberField(session, 'failed');
+  const duration =
+    typeof numberField(session, 'completedAt') === 'number' &&
+    typeof numberField(session, 'startedAt') === 'number'
+      ? (numberField(session, 'completedAt') ?? 0) - (numberField(session, 'startedAt') ?? 0)
+      : undefined;
+  if (
+    typeof total !== 'number' &&
+    typeof completed !== 'number' &&
+    typeof failed !== 'number' &&
+    !efficiency
+  ) {
+    return null;
+  }
+  return {
+    ...(typeof duration === 'number' ? { duration } : {}),
+    ...(typeof total === 'number' ? { totalTasks: total } : {}),
+    ...(typeof completed === 'number' ? { completed } : {}),
+    ...(typeof failed === 'number' ? { failed } : {}),
+    ...(session.userCancelled === true ? { aborted: true } : {}),
+    ...(efficiency ? { efficiency } : {}),
+  };
+}
+
+function extractSessionEfficiency(session: Record<string, unknown> | null | undefined): unknown {
+  if (!session) {
+    return null;
+  }
+  const summary = getSummaryRecord(session);
+  const explicit =
+    normalizeAgentEfficiencySummary(summary?.efficiency) ||
+    normalizeAgentEfficiencySummary(session.efficiency);
+  if (explicit) {
+    return explicit;
+  }
+  const tasks = Array.isArray(session.tasks) ? session.tasks : [];
+  return mergeAgentEfficiencySummaries(
+    tasks
+      .map((task) => asRecordOrNull(task))
+      .map((task) => asRecordOrNull(task?.result)?.efficiency),
+    { cancelReason: stringField(summary, 'reason') }
+  );
 }
 
 function getJobSessionId(job: DaemonJobRecord): string | undefined {

@@ -5,7 +5,9 @@
  * 结构化数据（维度分析报告、候选提取、会话统计等），供 BootstrapConsumers 消费。
  */
 
+import type { AgentDiagnostics, AgentEfficiencySummary } from '@alembic/agent/runtime';
 import type { AgentRunResult } from '@alembic/agent/service';
+import { extractEfficiencyFromDiagnostics } from '#service/bootstrap/BootstrapEfficiency.js';
 
 export interface ToolCallRecord {
   tool?: string;
@@ -23,6 +25,8 @@ export interface AgentResultLike {
   // Agent phase results are dynamic because strategies can attach different artifacts.
   phases?: Record<string, { reply?: string; artifact?: Record<string, any>; [key: string]: any }>;
   degraded?: boolean;
+  diagnostics?: AgentDiagnostics | null;
+  efficiency?: AgentEfficiencySummary | null;
   [key: string]: unknown;
 }
 
@@ -50,6 +54,7 @@ export interface BootstrapDimensionProducerResult {
   toolCalls: ToolCallRecord[];
   reply?: string;
   tokenUsage?: { input: number; output: number };
+  efficiency?: AgentEfficiencySummary | null;
 }
 
 export interface BootstrapDimensionProjection {
@@ -60,6 +65,7 @@ export interface BootstrapDimensionProjection {
   artifact: Record<string, any>;
   runtimeToolCalls: ToolCallRecord[];
   combinedTokenUsage: { input: number; output: number };
+  efficiency: AgentEfficiencySummary | null;
   analysisReport: BootstrapDimensionAnalysisReport;
   producerResult: BootstrapDimensionProducerResult;
   submitCalls: ToolCallRecord[];
@@ -78,6 +84,7 @@ export function projectAgentRunResult(result: AgentRunResult): AgentResultLike {
     phases: result.phases as AgentResultLike['phases'],
     degraded: result.diagnostics?.degraded || false,
     diagnostics: result.diagnostics,
+    efficiency: extractEfficiencyFromDiagnostics(result.diagnostics),
     iterations: result.usage.iterations,
     durationMs: result.usage.durationMs,
   };
@@ -105,6 +112,8 @@ export function projectBootstrapDimensionAgentOutput({
 
   const runtimeToolCalls = runResult?.toolCalls || [];
   const combinedTokenUsage = runResult?.tokenUsage || { input: 0, output: 0 };
+  const efficiency =
+    runResult?.efficiency || extractEfficiencyFromDiagnostics(runResult?.diagnostics) || null;
   const referencedFiles =
     artifact.referencedFiles?.length > 0
       ? artifact.referencedFiles
@@ -138,6 +147,7 @@ export function projectBootstrapDimensionAgentOutput({
     metadata: {
       toolCallCount: runtimeToolCalls.length,
       tokenUsage: combinedTokenUsage,
+      efficiency,
       artifactVersion: artifact.metadata?.artifactVersion || 1,
     },
   };
@@ -177,6 +187,7 @@ export function projectBootstrapDimensionAgentOutput({
     artifact,
     runtimeToolCalls,
     combinedTokenUsage,
+    efficiency,
     analysisReport,
     producerResult: {
       candidateCount: needsCandidates ? successCount : 0,
@@ -184,6 +195,7 @@ export function projectBootstrapDimensionAgentOutput({
       toolCalls: runtimeToolCalls,
       reply: produceResult?.reply || analysisText,
       tokenUsage: combinedTokenUsage,
+      efficiency,
     },
     submitCalls,
     successCount,

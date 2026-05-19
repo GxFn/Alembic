@@ -1,3 +1,4 @@
+import type { MemoryCoordinator, SessionStore } from '@alembic/agent/memory';
 import { describe, expect, test, vi } from 'vitest';
 import {
   type CandidateResults,
@@ -8,8 +9,6 @@ import {
 } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 import type { BootstrapDimensionProjection } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
 import type { DimensionContext } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
-import type { MemoryCoordinator } from '@alembic/agent/memory';
-import type { SessionStore } from '@alembic/agent/memory';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
 
 function makeProjection(): BootstrapDimensionProjection {
@@ -34,6 +33,19 @@ function makeProjection(): BootstrapDimensionProjection {
     artifact: { analysisText: 'short analysis', referencedFiles: ['src/a.ts'], findings: ['one'] },
     runtimeToolCalls: [successfulSubmit, failedSubmit],
     combinedTokenUsage: { input: 3, output: 5 },
+    efficiency: {
+      toolCalls: 2,
+      duplicateToolCalls: 1,
+      cacheHits: 1,
+      cacheMisses: 1,
+      tokenUsage: { input: 3, output: 5, reasoning: 2, cacheHit: 1 },
+      maxCompactionLevel: 1,
+      totalCompactedItems: 4,
+      nudgeCount: 1,
+      replanCount: 0,
+      emptyRetries: 1,
+      forcedSummary: false,
+    },
     analysisReport: {
       dimensionId: 'api',
       analysisText: 'short analysis',
@@ -46,6 +58,19 @@ function makeProjection(): BootstrapDimensionProjection {
       toolCalls: [successfulSubmit, failedSubmit],
       reply: 'producer reply',
       tokenUsage: { input: 3, output: 5 },
+      efficiency: {
+        toolCalls: 2,
+        duplicateToolCalls: 1,
+        cacheHits: 1,
+        cacheMisses: 1,
+        tokenUsage: { input: 3, output: 5, reasoning: 2, cacheHit: 1 },
+        maxCompactionLevel: 1,
+        totalCompactedItems: 4,
+        nudgeCount: 1,
+        replanCount: 0,
+        emptyRetries: 1,
+        forcedSummary: false,
+      },
     },
     submitCalls: [successfulSubmit, failedSubmit],
     successCount: 1,
@@ -107,9 +132,21 @@ describe('bootstrap dimension consumer', () => {
     );
     expect(emitDimensionComplete).toHaveBeenCalledWith(
       'api',
-      expect.objectContaining({ type: 'skill', created: 1 })
+      expect.objectContaining({
+        type: 'skill',
+        created: 1,
+        efficiency: expect.objectContaining({ duplicateToolCalls: 1, cacheHits: 1 }),
+        tokenUsage: { input: 3, output: 5 },
+      })
     );
-    expect(dimensionStats.api).toMatchObject({ candidateCount: 1, analysisText: 'short analysis' });
+    expect(dimensionStats.api).toMatchObject({
+      candidateCount: 1,
+      analysisText: 'short analysis',
+      efficiency: expect.objectContaining({
+        tokenUsage: { input: 3, output: 5, reasoning: 2, cacheHit: 1 },
+        emptyRetries: 1,
+      }),
+    });
     expect(result).toBe(dimensionStats.api);
   });
 

@@ -77,6 +77,12 @@ export async function runDaemonJob(options: RunDaemonJobOptions): Promise<RunDae
         bootstrapSessionId,
         status: 'running',
       });
+      options.logger.info('Daemon job linked to running bootstrap session', {
+        jobId: options.jobId,
+        kind: options.kind,
+        bootstrapSessionId,
+        stage: 'bootstrap-session-running',
+      });
       linkBootstrapSessionCompletion({
         bootstrapSessionId,
         container: options.container,
@@ -89,6 +95,12 @@ export async function runDaemonJob(options: RunDaemonJobOptions): Promise<RunDae
     }
 
     const job = store.complete(options.jobId, result, { bootstrapSessionId });
+    options.logger.info('Daemon job completed', {
+      jobId: options.jobId,
+      kind: options.kind,
+      bootstrapSessionId: bootstrapSessionId || null,
+      stage: 'job-complete',
+    });
     return { job, result };
   } catch (err: unknown) {
     store.fail(options.jobId, err);
@@ -203,12 +215,20 @@ function linkBootstrapSessionCompletion(options: {
   store: JobStore;
 }): void {
   const completeFromSession = (session: Record<string, unknown>) => {
-    finalizeBootstrapJobFromSession({
+    const job = finalizeBootstrapJobFromSession({
       bootstrapSessionId: options.bootstrapSessionId,
       fallbackResult: options.fallbackResult,
       jobId: options.jobId,
       session,
       store: options.store,
+    });
+    options.logger.info('Daemon bootstrap job finalized from session', {
+      jobId: options.jobId,
+      bootstrapSessionId: options.bootstrapSessionId,
+      cancelReason: bootstrapSessionReason(session) || null,
+      sessionStatus: stringValue(session.status) || null,
+      stage: 'bootstrap-session-finalize',
+      status: job?.status || null,
     });
   };
 

@@ -218,6 +218,7 @@ function buildBootstrapDimensionChildPlan({
         dimId,
         dimConfig: plan.dimConfig,
         emitDimensionStart,
+        sessionId,
       });
       const { analystScopeId, runInput } = createDimensionRunInput(dimId, plan);
       childExecutionState.set(dimId, { dimStartTime, analystScopeId });
@@ -312,13 +313,20 @@ function beginBootstrapDimensionExecution({
   dimId,
   dimConfig,
   emitDimensionStart,
+  sessionId,
 }: {
   dimId: string;
   dimConfig: { label?: string };
   emitDimensionStart(dimId: string): void;
+  sessionId: string;
 }) {
   emitDimensionStart(dimId);
-  logger.info(`[Insight-v3] ── Dimension "${dimId}" (${dimConfig.label}) ──`);
+  logger.info(`[Insight-v3] Dimension "${dimId}" started`, {
+    sessionId,
+    dimension: dimId,
+    label: dimConfig.label || null,
+    stage: 'dimension-start',
+  });
   return Date.now();
 }
 

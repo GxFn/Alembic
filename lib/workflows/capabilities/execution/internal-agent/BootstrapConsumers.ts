@@ -13,6 +13,7 @@ import type { MemoryCoordinator, SessionStore } from '@alembic/agent/memory';
 import type { AgentRunResult } from '@alembic/agent/service';
 import { buildTierReflection, saveDimensionCheckpoint } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
+import type { AgentEfficiencySummary } from '#service/bootstrap/BootstrapEfficiency.js';
 import type { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
 import {
   type AgentResultLike,
@@ -46,6 +47,7 @@ export interface DimensionStat {
   durationMs: number;
   toolCallCount?: number;
   tokenUsage?: { input: number; output: number };
+  efficiency?: AgentEfficiencySummary | null;
   skipped?: boolean;
   restoredFromCheckpoint?: boolean;
   restoredFromIncremental?: boolean;
@@ -131,6 +133,7 @@ export async function consumeBootstrapDimensionResult({
     artifact,
     runtimeToolCalls,
     combinedTokenUsage,
+    efficiency,
     analysisReport,
     producerResult,
     submitCalls,
@@ -192,10 +195,10 @@ export async function consumeBootstrapDimensionResult({
 
   try {
     const tokenStore = ctx.container?.get?.('tokenUsageStore') as TokenUsageStoreLike | undefined;
+    const aiProv = ctx.container?.singletons?.aiProvider as
+      | { name?: string; model?: string }
+      | undefined;
     if (tokenStore) {
-      const aiProv = ctx.container?.singletons?.aiProvider as
-        | { name?: string; model?: string }
-        | undefined;
       tokenStore.record({
         source: 'system',
         dimension: dimId,
@@ -213,6 +216,30 @@ export async function consumeBootstrapDimensionResult({
       } catch {
         /* optional */
       }
+    }
+    if (efficiency) {
+      logger.info('[BootstrapEfficiency] Dimension metrics recorded', {
+        sessionId: sessionId || null,
+        dimension: dimId,
+        stage: 'dimension-complete',
+        provider: aiProv?.name || null,
+        model: aiProv?.model || null,
+        toolCalls: efficiency.toolCalls,
+        duplicateToolCalls: efficiency.duplicateToolCalls,
+        cacheHits: efficiency.cacheHits,
+        cacheMisses: efficiency.cacheMisses,
+        inputTokens: efficiency.tokenUsage.input,
+        outputTokens: efficiency.tokenUsage.output,
+        reasoningTokens: efficiency.tokenUsage.reasoning,
+        cacheHitTokens: efficiency.tokenUsage.cacheHit,
+        nudgeCount: efficiency.nudgeCount,
+        replanCount: efficiency.replanCount,
+        emptyRetries: efficiency.emptyRetries,
+        maxCompactionLevel: efficiency.maxCompactionLevel,
+        totalCompactedItems: efficiency.totalCompactedItems,
+        forcedSummary: efficiency.forcedSummary,
+        cancelReason: efficiency.cancelReason || null,
+      });
     }
   } catch {
     /* token logging should never break execution */
@@ -295,6 +322,8 @@ export async function consumeBootstrapDimensionResult({
     degraded: runResult?.degraded || false,
     durationMs: Date.now() - dimStartTime,
     toolCallCount: runtimeToolCalls.length,
+    tokenUsage: combinedTokenUsage,
+    efficiency,
     source: 'enhanced-pipeline-strategy',
   });
 
@@ -309,6 +338,7 @@ export async function consumeBootstrapDimensionResult({
     durationMs: Date.now() - dimStartTime,
     toolCallCount: runtimeToolCalls.length,
     tokenUsage: combinedTokenUsage,
+    efficiency,
     diagnostics: runResult.diagnostics || null,
     stages: summarizeDimensionStages(runResult),
     analysisText: analysisReport.analysisText,

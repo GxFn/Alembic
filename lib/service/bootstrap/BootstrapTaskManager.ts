@@ -21,6 +21,7 @@
 import type { EventBus, SignalBus } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
 import { getTestModeConfig } from '@alembic/core/shared';
+import { mergeAgentEfficiencySummaries } from './BootstrapEfficiency.js';
 
 interface TaskMeta {
   type?: string;
@@ -117,11 +118,22 @@ class BootstrapSession {
   get totalToolCalls() {
     let count = 0;
     for (const t of this.tasks.values()) {
-      if (t.result?.toolCallCount) {
-        count += t.result.toolCallCount as number;
+      const explicitCount = numberValue(t.result?.toolCallCount);
+      if (typeof explicitCount === 'number') {
+        count += explicitCount;
+        continue;
+      }
+      const efficiency = isRecord(t.result?.efficiency) ? t.result.efficiency : null;
+      const efficiencyToolCalls = numberValue(efficiency?.toolCalls);
+      if (typeof efficiencyToolCalls === 'number') {
+        count += efficiencyToolCalls;
       }
     }
     return count;
+  }
+
+  get efficiencySummary() {
+    return this.buildEfficiencySummary();
   }
 
   get progress() {
@@ -133,6 +145,7 @@ class BootstrapSession {
   }
 
   toJSON() {
+    const efficiency = this.efficiencySummary;
     return {
       id: this.id,
       status: this.status,
@@ -146,6 +159,7 @@ class BootstrapSession {
       skeleton: this.skeletonTasks,
       totalToolCalls: this.totalToolCalls,
       userCancelled: this.userCancelled,
+      ...(efficiency ? { efficiency } : {}),
       tasks: [...this.tasks.values()].map((t) => ({
         id: t.id,
         status: t.status,
@@ -157,6 +171,33 @@ class BootstrapSession {
       })),
       summary: this.summary,
     };
+  }
+
+  buildSummary(options: { aborted?: boolean; reason?: string } = {}) {
+    const summary: Record<string, unknown> = {
+      duration: (this.completedAt ?? Date.now()) - this.startedAt,
+      totalTasks: this.totalTasks,
+      completed: this.completedTasks,
+      failed: this.failedTasks,
+    };
+    if (options.aborted) {
+      summary.aborted = true;
+    }
+    if (options.reason) {
+      summary.reason = options.reason;
+    }
+    const efficiency = this.buildEfficiencySummary(options.reason);
+    if (efficiency) {
+      summary.efficiency = efficiency;
+    }
+    return summary;
+  }
+
+  buildEfficiencySummary(cancelReason?: string) {
+    return mergeAgentEfficiencySummaries(
+      [...this.tasks.values()].map((task) => task.result?.efficiency),
+      { cancelReason }
+    );
   }
 }
 
@@ -265,14 +306,7 @@ export class BootstrapTaskManager {
 
     session.status = 'aborted';
     session.completedAt = Date.now();
-    session.summary = {
-      duration: session.completedAt - session.startedAt,
-      totalTasks: session.totalTasks,
-      completed: session.completedTasks,
-      failed: session.failedTasks,
-      aborted: true,
-      reason,
-    };
+    session.summary = session.buildSummary({ aborted: true, reason });
 
     Logger.info(`[Bootstrap] Session ${session.id} aborted: ${reason}`);
     this.#emit('bootstrap:all-completed', {
@@ -403,6 +437,7 @@ export class BootstrapTaskManager {
       completed: session.completedTasks,
       total: session.totalTasks,
       totalToolCalls: session.totalToolCalls,
+      efficiency: session.efficiencySummary,
       elapsedMs: Date.now() - session.startedAt,
     });
 
@@ -489,12 +524,7 @@ export class BootstrapTaskManager {
 
     session.status = session.failedTasks > 0 ? 'completed_with_errors' : 'completed';
     session.completedAt = Date.now();
-    session.summary = {
-      duration: session.completedAt - session.startedAt,
-      totalTasks: session.totalTasks,
-      completed: session.completedTasks,
-      failed: session.failedTasks,
-    };
+    session.summary = session.buildSummary();
 
     const durationSec = ((session.completedAt - session.startedAt) / 1000).toFixed(1);
     Logger.info(
@@ -549,4 +579,12 @@ export class BootstrapTaskManager {
       }
     }
   }
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }

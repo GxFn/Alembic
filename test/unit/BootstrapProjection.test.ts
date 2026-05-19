@@ -1,10 +1,11 @@
+import type { AgentRunResult } from '@alembic/agent/service';
 import { describe, expect, test } from 'vitest';
 import {
   normalizeDimensionFindings,
+  projectAgentRunResult,
   projectBootstrapDimensionAgentOutput,
   projectBootstrapSessionResult,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
-import type { AgentRunResult } from '@alembic/agent/service';
 
 function makeRunResult(partial: Partial<AgentRunResult>): AgentRunResult {
   return {
@@ -28,6 +29,19 @@ describe('bootstrap projections', () => {
       runResult: {
         reply: 'fallback analysis',
         tokenUsage: { input: 10, output: 20 },
+        efficiency: {
+          toolCalls: 4,
+          duplicateToolCalls: 1,
+          cacheHits: 2,
+          cacheMisses: 3,
+          tokenUsage: { input: 10, output: 20, reasoning: 4, cacheHit: 6 },
+          maxCompactionLevel: 2,
+          totalCompactedItems: 7,
+          nudgeCount: 1,
+          replanCount: 1,
+          emptyRetries: 0,
+          forcedSummary: false,
+        },
         phases: {
           analyze: { reply: 'analysis text' },
           quality_gate: {
@@ -72,6 +86,11 @@ describe('bootstrap projections', () => {
       metadata: {
         toolCallCount: 4,
         tokenUsage: { input: 10, output: 20 },
+        efficiency: expect.objectContaining({
+          duplicateToolCalls: 1,
+          cacheHits: 2,
+          maxCompactionLevel: 2,
+        }),
         artifactVersion: 2,
       },
     });
@@ -80,6 +99,57 @@ describe('bootstrap projections', () => {
       rejectedCount: 1,
       reply: 'producer reply',
       tokenUsage: { input: 10, output: 20 },
+      efficiency: expect.objectContaining({
+        tokenUsage: { input: 10, output: 20, reasoning: 4, cacheHit: 6 },
+        nudgeCount: 1,
+      }),
+    });
+  });
+
+  test('projects Agent diagnostics efficiency into dimension projection', () => {
+    const projected = projectAgentRunResult(
+      makeRunResult({
+        diagnostics: {
+          degraded: false,
+          fallbackUsed: false,
+          warnings: [],
+          timedOutStages: [],
+          blockedTools: [],
+          truncatedToolCalls: 0,
+          emptyResponses: 0,
+          aiErrorCount: 0,
+          gateFailures: [],
+          efficiency: {
+            toolCalls: 3,
+            duplicateToolCalls: 1,
+            cacheHits: 1,
+            cacheMisses: 2,
+            tokenUsage: { input: 11, output: 13, reasoning: 5, cacheHit: 7 },
+            maxCompactionLevel: 1,
+            totalCompactedItems: 9,
+            nudgeCount: 2,
+            replanCount: 1,
+            emptyRetries: 1,
+            forcedSummary: true,
+            cancelReason: 'user cancelled',
+          },
+        },
+      })
+    );
+
+    expect(projected.efficiency).toMatchObject({
+      toolCalls: 3,
+      duplicateToolCalls: 1,
+      cacheHits: 1,
+      cacheMisses: 2,
+      tokenUsage: { input: 11, output: 13, reasoning: 5, cacheHit: 7 },
+      maxCompactionLevel: 1,
+      totalCompactedItems: 9,
+      nudgeCount: 2,
+      replanCount: 1,
+      emptyRetries: 1,
+      forcedSummary: true,
+      cancelReason: 'user cancelled',
     });
   });
 

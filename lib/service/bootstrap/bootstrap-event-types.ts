@@ -7,6 +7,8 @@
  * @module service/bootstrap/bootstrap-event-types
  */
 
+import type { AgentEfficiencySummary } from './BootstrapEfficiency.js';
+
 // ── DimensionComplete payload variants ───────────────────────
 
 export interface DimensionSkippedPayload {
@@ -37,6 +39,8 @@ export interface DimensionPipelineCompletePayload {
   degraded: boolean;
   durationMs: number;
   toolCallCount: number;
+  tokenUsage?: { input: number; output: number };
+  efficiency?: AgentEfficiencySummary | null;
   source: string;
 }
 

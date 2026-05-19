@@ -1,6 +1,17 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import type { WorkflowSnapshotSummary } from '@alembic/core/host-agent-workflows';
-import { persistWorkflowResult } from '@alembic/core/host-agent-workflows';
+import {
+  persistWorkflowResult,
+  type WorkflowReport,
+  writeWorkflowReportHistory,
+  writeWorkflowReportHistoryWithWriteZone,
+} from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
+import {
+  mergeAgentEfficiencySummaries,
+  normalizeAgentEfficiencySummary,
+} from '#service/bootstrap/BootstrapEfficiency.js';
 import {
   runWorkflowCompletionFinalizer,
   type WorkflowCompletionFinalizerResult,
@@ -110,7 +121,14 @@ export async function finalizeInternalDimensionFill({
     startedAtMs,
   } as unknown as Parameters<typeof persistWorkflowResult>[0];
 
-  const { totalTimeMs, snapshotId, snapshot } = await persistWorkflowResult(persistenceInput);
+  const persistenceResult = await persistWorkflowResult(persistenceInput);
+  await persistEfficiencyAugmentedWorkflowReport({
+    ctx: preparation.ctx,
+    dataRoot: preparation.dataRoot,
+    dimensionStats: sessionResult.dimensionStats,
+    report: persistenceResult.report,
+  });
+  const { totalTimeMs, snapshotId, snapshot } = persistenceResult;
 
   preparation.ctx.container.singletons._fileCache = null;
 
@@ -122,6 +140,91 @@ export async function finalizeInternalDimensionFill({
     snapshot,
     totalTimeMs,
   };
+}
+
+async function persistEfficiencyAugmentedWorkflowReport({
+  ctx,
+  dataRoot,
+  dimensionStats,
+  report,
+}: {
+  ctx: InternalDimensionFillPreparation['ctx'];
+  dataRoot: string;
+  dimensionStats: InternalDimensionFillSessionResult['dimensionStats'];
+  report: WorkflowReport | null;
+}) {
+  if (!report || !augmentWorkflowReportWithEfficiency(report, dimensionStats)) {
+    return;
+  }
+
+  try {
+    const writeZone = ctx.container.singletons?.writeZone as
+      | Parameters<typeof writeWorkflowReportHistoryWithWriteZone>[0]
+      | undefined;
+    if (writeZone) {
+      await writeZone.writeFileAsync(
+        writeZone.runtime('bootstrap-report.json'),
+        JSON.stringify(report, null, 2)
+      );
+      await writeWorkflowReportHistoryWithWriteZone(writeZone, report);
+      return;
+    }
+
+    const reportDir = path.join(dataRoot, '.asd');
+    await fs.mkdir(reportDir, { recursive: true });
+    await fs.writeFile(
+      path.join(reportDir, 'bootstrap-report.json'),
+      JSON.stringify(report, null, 2)
+    );
+    await writeWorkflowReportHistory(reportDir, report);
+  } catch (err: unknown) {
+    Logger.warn(
+      `[InternalDimensionFill] efficiency report augmentation skipped: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
+export function augmentWorkflowReportWithEfficiency(
+  report: WorkflowReport,
+  dimensionStats: InternalDimensionFillSessionResult['dimensionStats']
+): boolean {
+  const sessionEfficiency = mergeAgentEfficiencySummaries(
+    Object.values(dimensionStats).map((stat) => stat.efficiency)
+  );
+  if (!sessionEfficiency) {
+    return false;
+  }
+
+  report.efficiency = sessionEfficiency;
+  report.session = {
+    ...(report.session || {}),
+    efficiency: sessionEfficiency,
+  };
+  report.totals = {
+    ...(report.totals || {}),
+    efficiency: sessionEfficiency,
+  };
+  report.comparisonHints = {
+    ...(isRecord(report.comparisonHints) ? report.comparisonHints : {}),
+    cacheHits: sessionEfficiency.cacheHits,
+    duplicateToolCalls: sessionEfficiency.duplicateToolCalls,
+    maxCompactionLevel: sessionEfficiency.maxCompactionLevel,
+    nudgeCount: sessionEfficiency.nudgeCount,
+    replanCount: sessionEfficiency.replanCount,
+  };
+
+  for (const [dimId, stat] of Object.entries(dimensionStats)) {
+    const efficiency = normalizeAgentEfficiencySummary(stat.efficiency);
+    if (!efficiency) {
+      continue;
+    }
+    report.dimensions[dimId] = {
+      ...(report.dimensions[dimId] || {}),
+      efficiency,
+    };
+  }
+
+  return true;
 }
 
 export function buildInternalDimensionCompletionSummary({
@@ -157,4 +260,8 @@ export function buildInternalDimensionCompletionSummary({
       result: workflowCompletion.semanticMemoryResult,
     },
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
