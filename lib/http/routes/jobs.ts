@@ -40,6 +40,7 @@ export interface DaemonJobApiProgress {
 }
 
 export interface DaemonJobApiRecord extends DaemonJobRecord {
+  compact?: boolean;
   progress?: DaemonJobApiProgress;
   summary?: Record<string, unknown>;
 }
@@ -60,13 +61,14 @@ router.get('/', (req: Request, res: Response): void => {
   const kind = parseKind(req.query.kind);
   const status = parseStatus(req.query.status);
   const limit = parseLimit(req.query.limit);
+  const compact = parseBooleanQuery(req.query.compact);
 
   res.json({
     success: true,
     data: {
       jobs: store
         .list({ kind, limit: status ? 200 : limit })
-        .map((job) => decorateJobForResponse(job, liveSession))
+        .map((job) => decorateJobForResponse(job, liveSession, { compact }))
         .filter((job) => !status || job.status === status)
         .slice(0, limit),
     },
@@ -81,9 +83,10 @@ router.get('/:jobId', (req: Request, res: Response): void => {
     res.status(404).json({ success: false, error: 'Job not found' });
     return;
   }
+  const compact = parseBooleanQuery(req.query.compact);
   res.json({
     success: true,
-    data: { job: decorateJobForResponse(job, getLiveBootstrapSession(container)) },
+    data: { job: decorateJobForResponse(job, getLiveBootstrapSession(container), { compact }) },
   });
 });
 
@@ -170,7 +173,8 @@ router.post('/:jobId/cancel', validate(CancelJobBody), (req: Request, res: Respo
 
 export function decorateJobForResponse(
   job: DaemonJobRecord,
-  liveSession?: Record<string, unknown> | null
+  liveSession?: Record<string, unknown> | null,
+  options: { compact?: boolean } = {}
 ): DaemonJobApiRecord {
   const matchingLiveSession = getMatchingLiveBootstrapSession(job, liveSession);
   const embeddedSession = getEmbeddedBootstrapSession(job);
@@ -178,13 +182,20 @@ export function decorateJobForResponse(
   const status = resolveJobStatusForResponse(job, session);
   const progress = buildJobProgress(job, session, status);
   const summary = getJobSummary(job, session);
+  const base = options.compact ? omitHeavyJobPayload(job) : job;
 
   return {
-    ...job,
+    ...base,
     status,
+    ...(options.compact ? { compact: true } : {}),
     ...(progress ? { progress } : {}),
     ...(summary ? { summary } : {}),
   };
+}
+
+function omitHeavyJobPayload(job: DaemonJobRecord): Omit<DaemonJobRecord, 'result'> {
+  const { result: _omitted, ...compactJob } = job;
+  return compactJob;
 }
 
 function getLiveBootstrapSession(container: { get(name: string): unknown }) {
@@ -481,6 +492,11 @@ function parseLimit(value: unknown): number {
   const raw = Array.isArray(value) ? value[0] : value;
   const parsed = typeof raw === 'string' ? Number.parseInt(raw, 10) : Number(raw);
   return Number.isFinite(parsed) ? parsed : 50;
+}
+
+function parseBooleanQuery(value: unknown): boolean {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === true || raw === 'true' || raw === '1';
 }
 
 function singleParam(value: string | string[] | undefined): string {

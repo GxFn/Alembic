@@ -133,6 +133,41 @@ describe('jobs route response decoration', () => {
       totalTasks: 14,
     });
   });
+
+  test('can emit compact job status without the heavy final session payload', () => {
+    const job = makeJob({
+      bootstrapSessionId: 'bs_compact',
+      status: 'completed',
+      result: {
+        finalSession: {
+          sessionId: 'bs_compact',
+          summary: {
+            completed: 3,
+            duration: 4200,
+            failed: 0,
+            totalTasks: 3,
+          },
+          tasks: [{ id: 'dim:one', result: { content: 'large payload' } }],
+        },
+      },
+    });
+
+    const decorated = decorateJobForResponse(job, null, { compact: true });
+
+    expect(decorated.compact).toBe(true);
+    expect(decorated.result).toBeUndefined();
+    expect(decorated.progress).toMatchObject({
+      completed: 3,
+      percent: 100,
+      sessionId: 'bs_compact',
+      total: 3,
+    });
+    expect(decorated.summary).toMatchObject({
+      completed: 3,
+      failed: 0,
+      totalTasks: 3,
+    });
+  });
 });
 
 function makeRequest(options: {
