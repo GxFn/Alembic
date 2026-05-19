@@ -85,17 +85,11 @@ jobs:
           npm run build --prefix ../AlembicCore
           npm run build --prefix ../AlembicAgent
 
-      - name: Install VS Code extension dependencies
-        run: npm run install:vscode-ext
-
       - name: Build TypeScript
         run: npm run build
 
       - name: Build Dashboard
         run: npm run build:dashboard
-
-      - name: Build VS Code extension
-        run: npm run build:vscode-ext
 
       - name: Lint
         run: npm run lint -- --diagnostic-level=error
@@ -122,15 +116,6 @@ jobs:
 
       - name: Preview npm publish staging package
         run: npm run release:staging:pack
-
-      - name: Preview VS Code extension package
-        run: npm run package:vscode-ext -- --out /tmp/alembic-vscode.vsix
-
-      - name: Upload VS Code extension package
-        uses: actions/upload-artifact@v5
-        with:
-          name: alembic-vscode-extension
-          path: /tmp/alembic-vscode.vsix
 
       - name: Publish to npm
         # Publish the staging package only. The repository root package.json keeps local

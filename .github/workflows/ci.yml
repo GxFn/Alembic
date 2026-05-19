@@ -65,13 +65,11 @@ jobs:
         run: |
           npm run build --prefix ../AlembicCore
           npm run build --prefix ../AlembicAgent
-      - run: npm run install:vscode-ext
       - run: npm run build
       - run: npm run lint -- --diagnostic-level=error
       - run: npm run lint:core-import-boundary
       - run: npm run lint:consumer-core-imports
       - run: npm run build:dashboard
-      - run: npm run build:vscode-ext
 
   api-smoke:
     name: API Smoke Test
@@ -117,9 +115,7 @@ jobs:
           npm run build --prefix ../AlembicCore
           npm run build --prefix ../AlembicAgent
       - run: npm run build
-      - run: npm run install:vscode-ext
       - run: npm run build:dashboard
-      - run: npm run build:vscode-ext
 
       - name: Start API Server
         run: |
