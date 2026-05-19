@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { JobStore } from '@alembic/core/daemon';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { markInterruptedDaemonJobs } from '../../lib/daemon/DaemonJobRunner.js';
+import { cancelDaemonJob, markInterruptedDaemonJobs } from '../../lib/daemon/DaemonJobRunner.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
@@ -16,11 +16,14 @@ function makeProjectRoot(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-runner-project-'));
 }
 
-function makeContainer(store: JobStore): ServiceContainer {
+function makeContainer(store: JobStore, services: Record<string, unknown> = {}): ServiceContainer {
   return {
     get(name: string) {
       if (name === 'jobStore') {
         return store;
+      }
+      if (name in services) {
+        return services[name];
       }
       throw new Error(`missing service: ${name}`);
     },
@@ -89,5 +92,63 @@ describe('markInterruptedDaemonJobs', () => {
 
     expect(interrupted).toEqual([]);
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('cancelDaemonJob', () => {
+  test('persists a running bootstrap abort as a cancelled job with final session evidence', () => {
+    useTempAlembicHome();
+    const store = new JobStore({ projectRoot: makeProjectRoot() });
+    const created = store.create({ kind: 'bootstrap', source: 'dashboard' });
+    store.markRunning(created.id);
+    store.update(created.id, {
+      bootstrapSessionId: 'bs_cancel',
+      result: { bootstrapSession: { id: 'bs_cancel', status: 'running' } },
+      status: 'running',
+    });
+
+    const session = {
+      id: 'bs_cancel',
+      status: 'running',
+      summary: null,
+    } as Record<string, unknown>;
+    const taskManager = {
+      abortSession: vi.fn((reason: string) => {
+        session.status = 'aborted';
+        session.summary = {
+          aborted: true,
+          completed: 5,
+          failed: 9,
+          reason,
+          totalTasks: 14,
+        };
+      }),
+      getSessionStatus: vi.fn(() => session),
+      isRunning: true,
+      markCancelled: vi.fn(),
+    };
+
+    const cancelled = cancelDaemonJob({
+      container: makeContainer(store, { bootstrapTaskManager: taskManager }),
+      jobId: created.id,
+      reason: 'Cancelled by Dashboard Jobs view',
+    });
+
+    expect(taskManager.abortSession).toHaveBeenCalledWith('Cancelled by Dashboard Jobs view');
+    expect(cancelled).toMatchObject({
+      status: 'cancelled',
+      error: { message: 'Cancelled by Dashboard Jobs view' },
+      result: {
+        finalSession: {
+          status: 'aborted',
+          summary: {
+            aborted: true,
+            completed: 5,
+            failed: 9,
+            totalTasks: 14,
+          },
+        },
+      },
+    });
   });
 });

@@ -76,6 +76,7 @@ export function buildBootstrapSessionExecutionInput({
         primaryLang,
         projectLang,
         sessionAbortSignal,
+        taskManager,
         scheduler,
         resolvePlan,
         createDimensionRunInput,
@@ -169,6 +170,7 @@ function buildBootstrapDimensionChildPlan({
   primaryLang,
   projectLang,
   sessionAbortSignal,
+  taskManager,
   scheduler,
   resolvePlan,
   createDimensionRunInput,
@@ -180,6 +182,7 @@ function buildBootstrapDimensionChildPlan({
   primaryLang?: string | null;
   projectLang?: string | null;
   sessionAbortSignal?: AbortSignal | null;
+  taskManager?: BootstrapTaskManagerLike | null;
   scheduler: { getTierIndex(dimId: string): number };
   resolvePlan(dimId: string): BootstrapDimensionPlan | null;
   createDimensionRunInput(
@@ -206,6 +209,11 @@ function buildBootstrapDimensionChildPlan({
       sessionAbortSignal,
     }),
     lazyInputFactory: () => {
+      assertBootstrapSessionStillActive({
+        sessionAbortSignal,
+        sessionId,
+        taskManager,
+      });
       const dimStartTime = beginBootstrapDimensionExecution({
         dimId,
         dimConfig: plan.dimConfig,
@@ -216,6 +224,27 @@ function buildBootstrapDimensionChildPlan({
       return runInput;
     },
   };
+}
+
+function assertBootstrapSessionStillActive({
+  sessionAbortSignal,
+  sessionId,
+  taskManager,
+}: {
+  sessionAbortSignal?: AbortSignal | null;
+  sessionId: string;
+  taskManager?: BootstrapTaskManagerLike | null;
+}) {
+  if (sessionAbortSignal?.aborted) {
+    const reason = typeof sessionAbortSignal.reason === 'string' ? sessionAbortSignal.reason : null;
+    throw new Error(reason || 'Bootstrap session cancelled');
+  }
+  if (
+    taskManager &&
+    (!taskManager.isSessionValid(sessionId) || taskManager.isUserCancelled?.(sessionId))
+  ) {
+    throw new Error('Bootstrap session cancelled');
+  }
 }
 
 function buildBootstrapDimensionPlannedInput({

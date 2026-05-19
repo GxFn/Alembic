@@ -93,6 +93,46 @@ describe('jobs route response decoration', () => {
       totalTasks: 3,
     });
   });
+
+  test('classifies aborted bootstrap sessions as cancelled even when older records were completed', () => {
+    const job = makeJob({
+      bootstrapSessionId: 'bs_cancelled',
+      status: 'completed',
+      result: {
+        finalSession: {
+          sessionId: 'bs_cancelled',
+          status: 'aborted',
+          progress: 100,
+          summary: {
+            aborted: true,
+            completed: 5,
+            failed: 9,
+            reason: 'Cancelled by user via Dashboard',
+            totalTasks: 14,
+          },
+        },
+      },
+    });
+
+    const decorated = decorateJobForResponse(job);
+
+    expect(decorated.status).toBe('cancelled');
+    expect(decorated.progress).toMatchObject({
+      completed: 5,
+      failed: 9,
+      percent: 100,
+      sessionId: 'bs_cancelled',
+      status: 'cancelled',
+      total: 14,
+    });
+    expect(decorated.summary).toMatchObject({
+      aborted: true,
+      completed: 5,
+      failed: 9,
+      reason: 'Cancelled by user via Dashboard',
+      totalTasks: 14,
+    });
+  });
 });
 
 function makeRequest(options: {

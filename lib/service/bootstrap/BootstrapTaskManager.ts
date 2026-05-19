@@ -145,6 +145,7 @@ class BootstrapSession {
       filling: this.fillingTasks,
       skeleton: this.skeletonTasks,
       totalToolCalls: this.totalToolCalls,
+      userCancelled: this.userCancelled,
       tasks: [...this.tasks.values()].map((t) => ({
         id: t.id,
         status: t.status,
@@ -276,7 +277,9 @@ export class BootstrapTaskManager {
     Logger.info(`[Bootstrap] Session ${session.id} aborted: ${reason}`);
     this.#emit('bootstrap:all-completed', {
       sessionId: session.id,
+      status: session.status,
       summary: session.summary,
+      userCancelled: session.userCancelled,
       tasks: [...session.tasks.values()].map((t) => ({
         id: t.id,
         status: t.status,
@@ -350,7 +353,7 @@ export class BootstrapTaskManager {
   /** 标记单个任务开始填充 */
   markTaskFilling(taskId: string) {
     const session = this.#currentSession;
-    if (!session) {
+    if (!session || session.status !== 'running' || session.userCancelled) {
       return;
     }
     const task = session.getTask(taskId);
@@ -376,7 +379,7 @@ export class BootstrapTaskManager {
    */
   markTaskCompleted(taskId: string, result: Record<string, unknown> = {}) {
     const session = this.#currentSession;
-    if (!session) {
+    if (!session || session.status !== 'running' || session.userCancelled) {
       return;
     }
     const task = session.getTask(taskId);
@@ -412,7 +415,7 @@ export class BootstrapTaskManager {
   /** 标记单个任务失败 */
   markTaskFailed(taskId: string, error: unknown) {
     const session = this.#currentSession;
-    if (!session) {
+    if (!session || session.status !== 'running' || session.userCancelled) {
       return;
     }
     const task = session.getTask(taskId);
@@ -480,7 +483,7 @@ export class BootstrapTaskManager {
 
   #finishSession() {
     const session = this.#currentSession;
-    if (!session) {
+    if (!session || session.status !== 'running' || session.userCancelled) {
       return;
     }
 
@@ -500,7 +503,9 @@ export class BootstrapTaskManager {
 
     this.#emit('bootstrap:all-completed', {
       sessionId: session.id,
+      status: session.status,
       summary: session.summary,
+      userCancelled: session.userCancelled,
       tasks: [...session.tasks.values()].map((t) => ({
         id: t.id,
         status: t.status,

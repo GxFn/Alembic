@@ -2,6 +2,7 @@ import {
   type DaemonJobKind,
   type DaemonJobRecord,
   type DaemonJobSource,
+  type DaemonJobStatus,
   JobStore,
 } from '@alembic/core/daemon';
 import { resolveProjectRoot } from '@alembic/core/workspace';
@@ -101,8 +102,12 @@ export function cancelDaemonJob(options: {
   reason?: string;
 }): DaemonJobRecord | null {
   const store = getJobStore(options.container);
-  const job = store.cancel(options.jobId, options.reason || 'Cancelled');
-  const bootstrapSessionId = job?.bootstrapSessionId;
+  const job = store.get(options.jobId);
+  if (!job) {
+    return null;
+  }
+  const reason = options.reason || 'Cancelled';
+  const bootstrapSessionId = job.bootstrapSessionId;
   const taskManager = getOptionalService<{
     abortSession(reason: string): void;
     getSessionStatus(): Record<string, unknown>;
@@ -110,14 +115,21 @@ export function cancelDaemonJob(options: {
     markCancelled(): void;
   }>(options.container, 'bootstrapTaskManager');
   const status = taskManager?.getSessionStatus();
-  if (taskManager && status?.id === bootstrapSessionId) {
+  if (taskManager && bootstrapSessionId && status?.id === bootstrapSessionId) {
     if (taskManager.isRunning) {
-      taskManager.abortSession(options.reason || 'Cancelled');
+      taskManager.abortSession(reason);
     } else {
       taskManager.markCancelled();
     }
+    return finalizeBootstrapJobFromSession({
+      bootstrapSessionId,
+      fallbackResult: job.result,
+      jobId: options.jobId,
+      session: taskManager.getSessionStatus(),
+      store,
+    });
   }
-  return job;
+  return store.cancel(options.jobId, reason);
 }
 
 export function markInterruptedDaemonJobs(options: {
@@ -191,18 +203,13 @@ function linkBootstrapSessionCompletion(options: {
   store: JobStore;
 }): void {
   const completeFromSession = (session: Record<string, unknown>) => {
-    const current = options.store.get(options.jobId);
-    if (!current || current.status === 'cancelled' || current.status === 'failed') {
-      return;
-    }
-    options.store.complete(
-      options.jobId,
-      {
-        ...asRecord(options.fallbackResult),
-        finalSession: session,
-      },
-      { bootstrapSessionId: options.bootstrapSessionId }
-    );
+    finalizeBootstrapJobFromSession({
+      bootstrapSessionId: options.bootstrapSessionId,
+      fallbackResult: options.fallbackResult,
+      jobId: options.jobId,
+      session,
+      store: options.store,
+    });
   };
 
   const taskManager = getOptionalService<{ getSessionStatus(): Record<string, unknown> }>(
@@ -236,6 +243,72 @@ function linkBootstrapSessionCompletion(options: {
     completeFromSession(session);
   };
   eventBus.on('bootstrap:all-completed', listener);
+}
+
+function finalizeBootstrapJobFromSession(options: {
+  bootstrapSessionId?: string;
+  fallbackResult: unknown;
+  jobId: string;
+  session: Record<string, unknown>;
+  store: JobStore;
+}): DaemonJobRecord | null {
+  const current = options.store.get(options.jobId);
+  if (!current || isTerminalJobStatus(current.status)) {
+    return current;
+  }
+
+  const status = classifyBootstrapSessionForJob(options.session);
+  const result = {
+    ...asRecord(options.fallbackResult),
+    finalSession: options.session,
+  };
+
+  if (status === 'cancelled') {
+    return options.store.update(options.jobId, {
+      bootstrapSessionId: options.bootstrapSessionId,
+      completedAt: new Date().toISOString(),
+      error: { message: bootstrapSessionReason(options.session) || 'Cancelled' },
+      result,
+      status,
+    });
+  }
+
+  if (status === 'failed') {
+    return options.store.update(options.jobId, {
+      bootstrapSessionId: options.bootstrapSessionId,
+      completedAt: new Date().toISOString(),
+      error: {
+        message: bootstrapSessionReason(options.session) || 'Bootstrap completed with errors',
+      },
+      result,
+      status,
+    });
+  }
+
+  return options.store.complete(options.jobId, result, {
+    bootstrapSessionId: options.bootstrapSessionId,
+  });
+}
+
+function classifyBootstrapSessionForJob(session: Record<string, unknown>): DaemonJobStatus {
+  const status = stringValue(session.status);
+  const summary = asRecord(session.summary);
+  if (status === 'aborted' || summary.aborted === true || session.userCancelled === true) {
+    return 'cancelled';
+  }
+  if (status === 'failed' || status === 'completed_with_errors') {
+    return 'failed';
+  }
+  return 'completed';
+}
+
+function bootstrapSessionReason(session: Record<string, unknown>): string | undefined {
+  const summary = asRecord(session.summary);
+  return stringValue(summary.reason) || stringValue(session.error);
+}
+
+function isTerminalJobStatus(status: DaemonJobStatus): boolean {
+  return status === 'completed' || status === 'failed' || status === 'cancelled';
 }
 
 function extractBootstrapSessionId(result: unknown): string | undefined {
@@ -286,6 +359,10 @@ function unwrapEnvelope(raw: unknown): unknown {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : { value };
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function numberArg(value: unknown, fallback: number): number {

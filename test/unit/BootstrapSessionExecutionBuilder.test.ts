@@ -1,5 +1,5 @@
-import { describe, expect, test, vi } from 'vitest';
 import type { AgentRunInput, AgentRunResult } from '@alembic/agent/service';
+import { describe, expect, test, vi } from 'vitest';
 import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import {
   buildBootstrapSessionExecutionInput,
@@ -178,6 +178,38 @@ describe('bootstrap session execution builder', () => {
       consumeTierResult: vi.fn(),
     });
     expect(input.execution?.shouldAbort?.()).toBe(true);
+  });
+
+  test('does not start a lazy child input after the bootstrap session is cancelled', () => {
+    const plan = createPlan('a');
+    const createDimensionRunInput = vi.fn();
+    const emitDimensionStart = vi.fn();
+    const { input } = buildBootstrapSessionExecutionInput({
+      sessionId: 'session-1',
+      activeDimIds: ['a'],
+      skippedDimIds: [],
+      concurrency: 1,
+      scheduler: { getTierIndex: () => 0 },
+      dimensionStats: {},
+      taskManager: {
+        isSessionValid: () => true,
+        isUserCancelled: () => true,
+      },
+      resolvePlan: () => plan,
+      createDimensionRunInput,
+      emitDimensionStart,
+      consumeDimensionResult: vi.fn(),
+      consumeDimensionError: vi.fn(),
+      consumeTierResult: vi.fn(),
+    });
+
+    const factory = (input.context.childInputFactories as Record<string, Function>).a;
+
+    expect(() => factory({ plannedInput: {}, parentInput: input })).toThrow(
+      'Bootstrap session cancelled'
+    );
+    expect(emitDimensionStart).not.toHaveBeenCalled();
+    expect(createDimensionRunInput).not.toHaveBeenCalled();
   });
 
   test('resolveBootstrapDimensionTier maps tierHint to 0-based tier index', () => {

@@ -65,8 +65,10 @@ router.get('/', (req: Request, res: Response): void => {
     success: true,
     data: {
       jobs: store
-        .list({ kind, limit, status })
-        .map((job) => decorateJobForResponse(job, liveSession)),
+        .list({ kind, limit: status ? 200 : limit })
+        .map((job) => decorateJobForResponse(job, liveSession))
+        .filter((job) => !status || job.status === status)
+        .slice(0, limit),
     },
   });
 });
@@ -173,11 +175,13 @@ export function decorateJobForResponse(
   const matchingLiveSession = getMatchingLiveBootstrapSession(job, liveSession);
   const embeddedSession = getEmbeddedBootstrapSession(job);
   const session = matchingLiveSession || embeddedSession;
-  const progress = buildJobProgress(job, session);
+  const status = resolveJobStatusForResponse(job, session);
+  const progress = buildJobProgress(job, session, status);
   const summary = getJobSummary(job, session);
 
   return {
     ...job,
+    status,
     ...(progress ? { progress } : {}),
     ...(summary ? { summary } : {}),
   };
@@ -231,10 +235,16 @@ function getEmbeddedBootstrapSession(job: DaemonJobRecord): Record<string, unkno
 
 function buildJobProgress(
   job: DaemonJobRecord,
-  session: Record<string, unknown> | null
+  session: Record<string, unknown> | null,
+  responseStatus: DaemonJobStatus
 ): DaemonJobApiProgress | null {
   const summary = getSummaryRecord(session);
-  const status = stringField(session, 'status') || job.status;
+  const status = normalizeJobStatus(
+    stringField(session, 'status'),
+    responseStatus,
+    summary,
+    session?.userCancelled === true
+  );
   const total = numberField(session, 'total') ?? numberField(summary, 'totalTasks');
   const completed = numberField(session, 'completed') ?? numberField(summary, 'completed');
   const failed = numberField(session, 'failed') ?? numberField(summary, 'failed');
@@ -242,7 +252,7 @@ function buildJobProgress(
     typeof total === 'number' && total > 0 && typeof completed === 'number'
       ? Math.round((((completed || 0) + (failed || 0)) / total) * 100)
       : undefined;
-  const fallbackPercent = fallbackPercentForStatus(job.status);
+  const fallbackPercent = fallbackPercentForStatus(status);
   const percent = clampPercent(
     numberField(session, 'progress') ?? computedPercent ?? fallbackPercent
   );
@@ -273,6 +283,41 @@ function buildJobProgress(
   }
 
   return progress;
+}
+
+function resolveJobStatusForResponse(
+  job: DaemonJobRecord,
+  session: Record<string, unknown> | null
+): DaemonJobStatus {
+  return normalizeJobStatus(
+    stringField(session, 'status'),
+    job.status,
+    getSummaryRecord(session),
+    session?.userCancelled === true
+  );
+}
+
+function normalizeJobStatus(
+  rawStatus: string | undefined,
+  fallback: DaemonJobStatus,
+  summary?: Record<string, unknown> | null,
+  userCancelled = false
+): DaemonJobStatus {
+  if (userCancelled || summary?.aborted === true || rawStatus === 'aborted') {
+    return 'cancelled';
+  }
+  if (rawStatus === 'failed' || rawStatus === 'completed_with_errors') {
+    return 'failed';
+  }
+  if (
+    rawStatus === 'queued' ||
+    rawStatus === 'running' ||
+    rawStatus === 'completed' ||
+    rawStatus === 'cancelled'
+  ) {
+    return rawStatus;
+  }
+  return fallback;
 }
 
 function getJobSummary(
