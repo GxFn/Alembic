@@ -122,7 +122,7 @@ jobs:
       - name: Start API Server
         run: |
           ASD_SKIP_ENTRY_CHECK=1 ASD_DISABLE_WRITE_GUARD=1 ASD_DISABLE_RATE_LIMIT=1 \
-            npm run dashboard -- --port 3100 --no-open > /tmp/api-server.log 2>&1 &
+            npm run cli -- start --dev --api-only --port 3100 --no-open > /tmp/api-server.log 2>&1 &
           echo "PID=$!" >> $GITHUB_ENV
           sleep 2
 

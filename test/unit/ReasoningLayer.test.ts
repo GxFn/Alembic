@@ -677,7 +677,7 @@ describe('ExplorationTracker', () => {
       expect(nudge).not.toBeNull();
       expect(nudge.type).toBe('planning');
       expect(nudge.text).toContain('探索计划');
-      expect(nudge.text).toContain('30 轮');
+      expect(nudge.text).toContain('总轮次 30');
     });
 
     test('周期性反思 — 第 5 轮触发', () => {
@@ -929,7 +929,7 @@ describe('ExplorationTracker', () => {
       expect(nudge).not.toBeNull();
       expect(nudge.type).toBe('planning');
       expect(nudge.text).toContain('📋');
-      expect(nudge.text).toContain('30 轮');
+      expect(nudge.text).toContain('总轮次 30');
     });
 
     test('第 2 轮不重复注入 plan prompt', () => {

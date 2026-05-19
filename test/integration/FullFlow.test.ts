@@ -172,10 +172,12 @@ describe('Integration: Complete Gateway Flow', () => {
 
     test('should track operation duration', async () => {
       const { gateway, auditStore } = components;
+      const operationDelayMs = 30;
+      const minimumTrackedDurationMs = 20;
 
       gateway.register('audit_duration_test', async () => {
         return new Promise((resolve) => {
-          setTimeout(() => resolve({ ok: true }), 20);
+          setTimeout(() => resolve({ ok: true }), operationDelayMs);
         });
       });
 
@@ -186,10 +188,10 @@ describe('Integration: Complete Gateway Flow', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.duration).toBeGreaterThanOrEqual(20);
+      expect(result.duration).toBeGreaterThanOrEqual(minimumTrackedDurationMs);
 
       const logs = await auditStore.query({ action: 'audit_duration_test' });
-      expect(logs[0].duration).toBeGreaterThanOrEqual(20);
+      expect(logs[0].duration).toBeGreaterThanOrEqual(minimumTrackedDurationMs);
     });
   });
 

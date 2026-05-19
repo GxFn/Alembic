@@ -1,5 +1,5 @@
-import { describe, expect, test, vi } from 'vitest';
 import { createToolPipeline } from '@alembic/agent/runtime';
+import { describe, expect, test, vi } from 'vitest';
 
 function makeRuntime(structuredContent: Record<string, unknown>) {
   return {
@@ -31,7 +31,7 @@ function makeLoopCtx(sharedState: Record<string, unknown>) {
     sharedState,
     toolCalls: [],
     memoryCoordinator: null,
-    diagnostics: { recordBlockedTool: vi.fn() },
+    diagnostics: { recordBlockedTool: vi.fn(), recordEfficiencyToolCall: vi.fn() },
     abortSignal: null,
     tracker: null,
     trace: null,
