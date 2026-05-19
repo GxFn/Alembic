@@ -73,6 +73,7 @@
     "test:e2e": "vitest run test/e2e",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
+    "smoke:multi-project-control": "node scripts/smoke-multi-project-control.mjs",
     "dev:link": "node scripts/dev-link.mjs",
     "dev:verify": "node scripts/dev-link.mjs --verify-only",
     "release:package-guard": "node scripts/verify-release-package-boundary.mjs",
