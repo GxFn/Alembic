@@ -2621,8 +2621,8 @@ program
           break;
         }
 
-        // 1. 注册为 Ghost
-        const entry = ProjectRegistry.register(projectRoot, true);
+        // 1. 显式切换为 Ghost
+        const entry = ProjectRegistry.setWorkspaceMode(projectRoot, 'ghost');
         const wsDir = getGhostWorkspaceDir(entry.id);
         fs.mkdirSync(wsDir, { recursive: true });
 
@@ -2685,8 +2685,8 @@ program
           migrated = true;
         }
 
-        // 2. 更新注册为标准模式
-        ProjectRegistry.register(projectRoot, false);
+        // 2. 显式切换为标准模式
+        ProjectRegistry.setWorkspaceMode(projectRoot, 'standard');
 
         // 3. 清理空的外置工作区目录
         if (fs.existsSync(wsDir) && fs.readdirSync(wsDir).length === 0) {

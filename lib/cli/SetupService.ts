@@ -62,6 +62,7 @@ import {
   DEFAULT_SUB_REPO_DIR,
   isGitRepo,
   ProjectRegistry,
+  type WorkspaceMode,
   WorkspaceResolver,
 } from '@alembic/core/workspace';
 import { PACKAGE_ROOT } from '../shared/package-assets.js';
@@ -119,13 +120,15 @@ export class SetupService {
     this.subRepoDir = options.subRepoDir || DEFAULT_SUB_REPO_DIR;
     this.subRepoUrl = options.subRepoUrl;
 
-    // Ghost 模式：显式配置优先；否则继承注册表状态
+    // Ghost 模式：普通 setup attach 既有模式；显式开关才允许切换模式
     const existingEntry = ProjectRegistry.get(this.projectRoot);
-    this.ghost = options.ghost ?? existingEntry?.ghost ?? false;
+    const requestedMode: WorkspaceMode | null =
+      options.ghost === true ? 'ghost' : options.ghost === false ? 'standard' : null;
+    const targetGhost = requestedMode ? requestedMode === 'ghost' : (existingEntry?.ghost ?? false);
 
     // ── 排除项目保护 ──────────────────────────────────
     const exclusion = isExcludedProject(this.projectRoot);
-    if (exclusion.excluded && !this.ghost) {
+    if (exclusion.excluded && !targetGhost) {
       throw new Error(
         `[SetupService] 检测到当前目录是排除项目（${exclusion.reason}），` +
           '拒绝执行 setup 以避免创建 .asd/ 和 Alembic/ 运行时数据。' +
@@ -133,19 +136,12 @@ export class SetupService {
       );
     }
 
-    // ── Ghost 模式：注册项目 + 创建外置工作区 ──
-    if (this.ghost) {
-      const entry = ProjectRegistry.register(this.projectRoot, true);
-      this.resolver = new WorkspaceResolver({
-        projectRoot: this.projectRoot,
-        ghost: true,
-        projectId: entry.id,
-      });
-    } else {
-      // 标准模式也注册（ghost=false）
-      ProjectRegistry.register(this.projectRoot, false);
-      this.resolver = new WorkspaceResolver({ projectRoot: this.projectRoot, ghost: false });
-    }
+    const entry = requestedMode
+      ? ProjectRegistry.setWorkspaceMode(this.projectRoot, requestedMode)
+      : ProjectRegistry.register(this.projectRoot, targetGhost);
+
+    this.ghost = entry.ghost;
+    this.resolver = WorkspaceResolver.fromProject(this.projectRoot);
 
     // 使用 resolver 统一计算路径
     this.runtimeDir = this.resolver.runtimeDir;
