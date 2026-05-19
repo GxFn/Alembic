@@ -56,6 +56,7 @@ import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
 import { runFullResetPolicy } from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
+import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
   dispatchInternalDimensionExecution,
   startInternalDimensionExecutionSession,
@@ -103,6 +104,13 @@ export async function runInternalColdStartWorkflow(
     dataRoot: plan.cleanup.dataRoot,
     db,
     logger: ctx.logger,
+    createCleanupService: (cleanupCtx) =>
+      new CleanupService({
+        projectRoot: cleanupCtx.projectRoot,
+        dataRoot: cleanupCtx.dataRoot,
+        db: cleanupCtx.db,
+        logger: cleanupCtx.logger,
+      }),
   });
 
   ctx.logger.info('[Bootstrap-Internal] fullReset complete', {

@@ -60,6 +60,7 @@ import {
   runRescanCleanPolicy,
 } from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
+import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
   dispatchInternalDimensionExecution,
   startInternalDimensionExecutionSession,
@@ -173,23 +174,27 @@ export async function runInternalKnowledgeRescanWorkflow(
   if (intent.cleanupPolicy === 'force-rescan') {
     const result = await runForceRescanCleanPolicy({
       projectRoot: plan.cleanup.projectRoot,
+      dataRoot,
       db,
       logger: ctx.logger,
+      createCleanupService,
     });
     recipeSnapshot = result.recipeSnapshot;
     cleanResult = result.cleanResult;
   } else if (intent.cleanupPolicy === 'rescan-clean') {
     const result = await runRescanCleanPolicy({
       projectRoot: plan.cleanup.projectRoot,
+      dataRoot,
       db,
       logger: ctx.logger,
+      createCleanupService,
     });
     recipeSnapshot = result.recipeSnapshot;
     cleanResult = result.cleanResult;
   } else {
-    const { CleanupService } = await import('#service/cleanup/CleanupService.js');
     const cleanupService = new CleanupService({
       projectRoot: plan.cleanup.projectRoot,
+      dataRoot,
       db,
       logger: ctx.logger,
     });
@@ -618,5 +623,19 @@ export async function runInternalKnowledgeRescanWorkflow(
     evolutionAudit: evolutionAuditResult,
     reason: intent.reason,
     responseTimeMs: Date.now() - t0,
+  });
+}
+
+function createCleanupService(ctx: {
+  dataRoot?: string;
+  db?: unknown;
+  logger?: ConstructorParameters<typeof CleanupService>[0]['logger'];
+  projectRoot: string;
+}) {
+  return new CleanupService({
+    projectRoot: ctx.projectRoot,
+    dataRoot: ctx.dataRoot,
+    db: ctx.db,
+    logger: ctx.logger,
   });
 }
