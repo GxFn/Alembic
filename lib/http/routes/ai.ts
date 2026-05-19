@@ -22,12 +22,12 @@ import {
 } from '@alembic/agent/tasks';
 import type { ToolCapabilityManifest, ToolResultEnvelope } from '@alembic/agent/tools';
 import Logger from '@alembic/core/logging';
-import { ValidationError } from '@alembic/core/shared';
 import {
   collectAiEnvOverrides,
   isAiEnvReady,
   maskAiEnvConfig,
   PROVIDER_KEY_ENV,
+  ValidationError,
   WorkspaceSettingsStore,
 } from '@alembic/core/shared';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';

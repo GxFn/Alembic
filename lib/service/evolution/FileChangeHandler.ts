@@ -26,11 +26,7 @@ import {
 import type { ContentPatcher } from '@alembic/core/service/evolution/ContentPatcher';
 import type { EvolutionGateway } from '@alembic/core/service/evolution/EvolutionGateway';
 import { rewriteRecipePaths } from '@alembic/core/service/knowledge/RecipePathRewriter';
-import type {
-  FileChangeEvent,
-  ImpactLevel,
-  ReactiveEvolutionReport,
-} from '@alembic/core/types';
+import type { FileChangeEvent, ImpactLevel, ReactiveEvolutionReport } from '@alembic/core/types';
 import type { FileChangeSubscriber } from '../FileChangeDispatcher.js';
 
 /** impactLevel → quality signal 权重映射（文档 §5.3）

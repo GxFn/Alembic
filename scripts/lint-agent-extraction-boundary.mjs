@@ -150,7 +150,7 @@ if (packageJson.dependencies?.[expectedAgentPackage] !== expectedAgentRange) {
     `Expected dependency ${expectedAgentPackage}@${expectedAgentRange} for Agent AI extraction boundary.`
   );
 }
-if (Object.prototype.hasOwnProperty.call(packageJson.imports ?? {}, agentImportPattern)) {
+if (Object.hasOwn(packageJson.imports ?? {}, agentImportPattern)) {
   violations.push(`Wave 4 forbids package imports alias ${agentImportPattern}.`);
 }
 

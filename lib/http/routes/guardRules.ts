@@ -4,8 +4,7 @@
  */
 
 import { LanguageService } from '@alembic/core/project-intelligence';
-import { ioLimit } from '@alembic/core/shared';
-import { NotFoundError } from '@alembic/core/shared';
+import { ioLimit, NotFoundError } from '@alembic/core/shared';
 import express, { type Request, type Response } from 'express';
 import {
   BatchDisableBody,
