@@ -83,6 +83,18 @@ export class DaemonSupervisor {
       );
     }
 
+    if (isDaemonRuntimeOlderThanCurrentBuild(state)) {
+      return this.#statusResult(
+        paths,
+        'stale',
+        false,
+        state,
+        true,
+        null,
+        'daemon runtime is older than current build'
+      );
+    }
+
     const health = await fetchDaemonHealth(state);
     if (isMatchingHealth(state, health)) {
       return this.#statusResult(paths, 'ready', true, state, true, health);
@@ -122,7 +134,7 @@ export class DaemonSupervisor {
 
       const port = options.port ?? 0;
       const host = options.host || '127.0.0.1';
-      const entry = join(PACKAGE_ROOT, 'dist', 'bin', 'daemon-server.js');
+      const entry = getDaemonServerEntryPath();
       if (!existsSync(entry)) {
         throw new Error(`Daemon server entry not found: ${entry}. Run npm run build first.`);
       }
@@ -312,6 +324,23 @@ function isStaleLock(lockDir: string): boolean {
     return Date.now() - stat.mtimeMs > 30_000;
   } catch {
     return true;
+  }
+}
+
+function getDaemonServerEntryPath(): string {
+  return join(PACKAGE_ROOT, 'dist', 'bin', 'daemon-server.js');
+}
+
+function isDaemonRuntimeOlderThanCurrentBuild(state: DaemonState): boolean {
+  const startedAt = Date.parse(state.startedAt);
+  if (!Number.isFinite(startedAt)) {
+    return false;
+  }
+  try {
+    const entryStat = statSync(getDaemonServerEntryPath());
+    return entryStat.mtimeMs > startedAt + 1000;
+  } catch {
+    return false;
   }
 }
 

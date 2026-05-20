@@ -185,7 +185,7 @@ export function decorateJobForResponse(
   const session = matchingLiveSession || embeddedSession;
   const status = resolveJobStatusForResponse(job, session);
   const progress = buildJobProgress(job, session, status);
-  const summary = getJobSummary(job, session);
+  const summary = getJobSummary(job, session, status);
   const base = options.compact ? omitHeavyJobPayload(job) : job;
 
   return {
@@ -321,8 +321,17 @@ function normalizeJobStatus(
   if (userCancelled || summary?.aborted === true || rawStatus === 'aborted') {
     return 'cancelled';
   }
+  if (fallback === 'cancelled') {
+    return 'cancelled';
+  }
+  if (fallback === 'failed') {
+    return 'failed';
+  }
   if (rawStatus === 'failed' || rawStatus === 'completed_with_errors') {
     return 'failed';
+  }
+  if (fallback === 'completed' && (rawStatus === 'queued' || rawStatus === 'running')) {
+    return 'completed';
   }
   if (
     rawStatus === 'queued' ||
@@ -337,16 +346,22 @@ function normalizeJobStatus(
 
 function getJobSummary(
   job: DaemonJobRecord,
-  session: Record<string, unknown> | null
+  session: Record<string, unknown> | null,
+  responseStatus: DaemonJobStatus
 ): Record<string, unknown> | undefined {
-  const sessionSummary = buildSessionSummaryRecord(session);
+  const sessionSummary = buildSessionSummaryRecord(session, responseStatus, job);
   if (sessionSummary) {
     return sessionSummary;
   }
 
   const result = asRecordOrNull(job.result);
   const candidateSummary = asRecordOrNull(result?.bootstrapCandidates);
-  return candidateSummary || undefined;
+  if (candidateSummary) {
+    return normalizeSummaryForStatus(candidateSummary, responseStatus, job, session);
+  }
+
+  const terminalSummary = normalizeSummaryForStatus({}, responseStatus, job, session);
+  return Object.keys(terminalSummary).length > 0 ? terminalSummary : undefined;
 }
 
 function getSummaryRecord(
@@ -356,15 +371,22 @@ function getSummaryRecord(
 }
 
 function buildSessionSummaryRecord(
-  session: Record<string, unknown> | null | undefined
+  session: Record<string, unknown> | null | undefined,
+  responseStatus?: DaemonJobStatus,
+  job?: DaemonJobRecord
 ): Record<string, unknown> | null {
   if (!session) {
-    return null;
+    return responseStatus ? normalizeSummaryForStatus({}, responseStatus, job, null) : null;
   }
   const explicit = getSummaryRecord(session);
   const efficiency = extractSessionEfficiency(session);
   if (explicit) {
-    return efficiency ? { ...explicit, efficiency } : explicit;
+    return normalizeSummaryForStatus(
+      efficiency ? { ...explicit, efficiency } : explicit,
+      responseStatus,
+      job,
+      session
+    );
   }
 
   const total = numberField(session, 'total');
@@ -379,18 +401,74 @@ function buildSessionSummaryRecord(
     typeof total !== 'number' &&
     typeof completed !== 'number' &&
     typeof failed !== 'number' &&
-    !efficiency
+    !efficiency &&
+    !responseStatus
   ) {
     return null;
   }
-  return {
-    ...(typeof duration === 'number' ? { duration } : {}),
-    ...(typeof total === 'number' ? { totalTasks: total } : {}),
-    ...(typeof completed === 'number' ? { completed } : {}),
-    ...(typeof failed === 'number' ? { failed } : {}),
-    ...(session.userCancelled === true ? { aborted: true } : {}),
-    ...(efficiency ? { efficiency } : {}),
-  };
+  return normalizeSummaryForStatus(
+    {
+      ...(typeof duration === 'number' ? { duration } : {}),
+      ...(typeof total === 'number' ? { totalTasks: total } : {}),
+      ...(typeof completed === 'number' ? { completed } : {}),
+      ...(typeof failed === 'number' ? { failed } : {}),
+      ...(session.userCancelled === true ? { aborted: true } : {}),
+      ...(efficiency ? { efficiency } : {}),
+    },
+    responseStatus,
+    job,
+    session
+  );
+}
+
+function normalizeSummaryForStatus(
+  summary: Record<string, unknown>,
+  responseStatus?: DaemonJobStatus,
+  job?: DaemonJobRecord,
+  session?: Record<string, unknown> | null
+): Record<string, unknown> {
+  if (responseStatus === 'cancelled') {
+    return {
+      ...summary,
+      status: 'cancelled',
+      aborted: true,
+      reason: getCancellationReason(summary, session, job),
+    };
+  }
+  if (responseStatus === 'failed') {
+    const reason = getFailureReason(summary, session, job);
+    return {
+      ...summary,
+      status: 'failed',
+      ...(reason ? { reason } : {}),
+    };
+  }
+  if (responseStatus === 'completed') {
+    return { ...summary, status: 'completed' };
+  }
+  return summary;
+}
+
+function getCancellationReason(
+  summary: Record<string, unknown>,
+  session?: Record<string, unknown> | null,
+  job?: DaemonJobRecord
+): string {
+  return (
+    stringField(summary, 'reason') ||
+    stringField(session, 'reason') ||
+    stringField(session, 'cancelReason') ||
+    job?.error?.message ||
+    'Cancelled'
+  );
+}
+
+function getFailureReason(
+  summary: Record<string, unknown>,
+  session?: Record<string, unknown> | null,
+  job?: DaemonJobRecord
+): string | undefined {
+  return stringField(summary, 'reason') || stringField(session, 'reason') || job?.error?.message;
 }
 
 function extractSessionEfficiency(session: Record<string, unknown> | null | undefined): unknown {

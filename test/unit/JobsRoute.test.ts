@@ -143,7 +143,51 @@ describe('jobs route response decoration', () => {
       completed: 5,
       failed: 9,
       reason: 'Cancelled by user via Dashboard',
+      status: 'cancelled',
       totalTasks: 14,
+    });
+  });
+
+  test('keeps cancelled job responses cancelled when a late final session says completed', () => {
+    const job = makeJob({
+      bootstrapSessionId: 'bs_cancelled_late',
+      status: 'cancelled',
+      error: { code: 'CANCELLED', message: 'Cancelled via jobs API' },
+      result: {
+        finalSession: {
+          sessionId: 'bs_cancelled_late',
+          status: 'completed',
+          progress: 100,
+          summary: {
+            completed: 1,
+            failed: 0,
+            totalTasks: 1,
+          },
+          tasks: [{ id: 'dim:one', result: { content: 'large payload' } }],
+        },
+      },
+    });
+
+    const decorated = decorateJobForResponse(job, null, { compact: true });
+
+    expect(decorated.compact).toBe(true);
+    expect(decorated.result).toBeUndefined();
+    expect(decorated.status).toBe('cancelled');
+    expect(decorated.progress).toMatchObject({
+      completed: 1,
+      failed: 0,
+      percent: 100,
+      sessionId: 'bs_cancelled_late',
+      status: 'cancelled',
+      total: 1,
+    });
+    expect(decorated.summary).toMatchObject({
+      aborted: true,
+      completed: 1,
+      failed: 0,
+      reason: 'Cancelled via jobs API',
+      status: 'cancelled',
+      totalTasks: 1,
     });
   });
 
@@ -196,6 +240,7 @@ describe('jobs route response decoration', () => {
         tokenUsage: { input: 30, output: 12, reasoning: 4, cacheHit: 8 },
       },
       failed: 0,
+      status: 'completed',
       totalTasks: 3,
     });
   });

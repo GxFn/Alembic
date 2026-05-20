@@ -29,6 +29,7 @@ function makeProjectRoot(prefix = 'alembic-daemon-project-'): string {
 }
 
 function makeState(paths: DaemonPaths, overrides: Partial<DaemonState> = {}): DaemonState {
+  const now = new Date().toISOString();
   return {
     schemaVersion: DAEMON_STATE_SCHEMA_VERSION,
     projectRoot: paths.projectRoot,
@@ -42,8 +43,8 @@ function makeState(paths: DaemonPaths, overrides: Partial<DaemonState> = {}): Da
     token: 'test-token',
     version: getPackageVersion(),
     mode: 'daemon',
-    startedAt: '2026-05-08T00:00:00.000Z',
-    lastReadyAt: '2026-05-08T00:00:01.000Z',
+    startedAt: now,
+    lastReadyAt: now,
     databasePath: path.join(paths.runtimeDir, 'alembic.db'),
     schemaMigrationVersion: '001',
     ...overrides,
@@ -178,5 +179,30 @@ describe('DaemonSupervisor', () => {
     expect(stale.ready).toBe(false);
     expect(stale.status).toBe('stale');
     expect(stale.message).toBe('daemon process is alive but health identity did not match');
+  });
+
+  test('reports stale when an alive daemon predates the current built runtime', async () => {
+    useTempAlembicHome();
+    const projectRoot = makeProjectRoot();
+    const paths = resolveDaemonPaths(projectRoot);
+    ensureDaemonDirs(paths);
+    const daemonEntry = path.join(process.cwd(), 'dist', 'bin', 'daemon-server.js');
+    const daemonEntryStat = fs.statSync(daemonEntry);
+    const state = makeState(paths, {
+      startedAt: new Date(daemonEntryStat.mtimeMs - 5_000).toISOString(),
+      lastReadyAt: new Date(daemonEntryStat.mtimeMs - 4_000).toISOString(),
+    });
+    writeDaemonState(paths.statePath, state);
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => healthResponse(state));
+
+    const stale = await new DaemonSupervisor().status(projectRoot);
+
+    expect(stale.ready).toBe(false);
+    expect(stale.status).toBe('stale');
+    expect(stale.pidAlive).toBe(true);
+    expect(stale.message).toBe('daemon runtime is older than current build');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
