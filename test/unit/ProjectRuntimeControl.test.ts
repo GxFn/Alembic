@@ -35,6 +35,7 @@ function makeProjectRoot(prefix = 'alembic-project-control-'): string {
 }
 
 function makeState(paths: DaemonPaths, overrides: Partial<DaemonState> = {}): DaemonState {
+  const now = new Date().toISOString();
   return {
     schemaVersion: DAEMON_STATE_SCHEMA_VERSION,
     projectRoot: paths.projectRoot,
@@ -48,8 +49,8 @@ function makeState(paths: DaemonPaths, overrides: Partial<DaemonState> = {}): Da
     token: 'test-token',
     version: getPackageVersion(),
     mode: 'daemon',
-    startedAt: '2026-05-18T00:00:00.000Z',
-    lastReadyAt: '2026-05-18T00:00:01.000Z',
+    startedAt: now,
+    lastReadyAt: now,
     databasePath: path.join(paths.runtimeDir, 'alembic.db'),
     schemaMigrationVersion: null,
     ...overrides,
