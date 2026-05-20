@@ -23,6 +23,7 @@ import {
   type BootstrapDimensionRunIssue,
   type BootstrapSessionProjection,
   type DimensionFinding,
+  isRecoverableProducerTimeoutIssue,
   normalizeDimensionFindings,
   projectBootstrapSessionResult,
   resolveBootstrapDimensionRunIssue,
@@ -142,7 +143,19 @@ export async function consumeBootstrapDimensionResult({
     successCount,
     rejectedCount,
   } = projection;
-  const runIssue = resolveBootstrapDimensionRunIssue(runResult);
+  const rawRunIssue = resolveBootstrapDimensionRunIssue(runResult);
+  const recoveredProducerTimeout = isRecoverableProducerTimeoutIssue({
+    issue: rawRunIssue,
+    needsCandidates,
+    produceResult,
+    successCount,
+  });
+  const runIssue = recoveredProducerTimeout ? null : rawRunIssue;
+  if (recoveredProducerTimeout) {
+    logger.warn(
+      `[Producer] "${dimId}": producer summary timed out after ${successCount} successful candidate submit(s); preserving produced candidates as dimension output.`
+    );
+  }
   const isNormalCompletion = !runIssue;
   const effectiveCandidateCount = isNormalCompletion ? producerResult.candidateCount : 0;
 
@@ -356,6 +369,7 @@ export async function consumeBootstrapDimensionResult({
     efficiency,
     diagnostics: runResult.diagnostics || null,
     error: runIssue?.reason,
+    recoveredProducerTimeout,
     stages: summarizeDimensionStages(runResult),
     analysisText: analysisReport.analysisText,
     referencedFilesList: analysisReport.referencedFiles || [],
@@ -498,8 +512,10 @@ function isBootstrapDimensionRunIssue(value: unknown): value is BootstrapDimensi
       'blocked',
       'aborted',
       'error',
+      'degraded_budget_exhausted',
       'degraded_no_findings',
       'record_repair_incomplete',
+      'l4_compaction_failed_budget_exhausted',
     ].includes(value.status)
   );
 }

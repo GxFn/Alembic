@@ -36,6 +36,7 @@ export interface DaemonJobApiProgress {
   activeTaskStartedAt?: number;
   activeTaskStatus?: string;
   activeTaskUpdatedAt?: number;
+  cancelled?: number;
   completed?: number;
   failed?: number;
   filling?: number;
@@ -58,6 +59,7 @@ type DaemonJobApiProgressNumberKey =
   | 'activeTaskEventCount'
   | 'activeTaskStartedAt'
   | 'activeTaskUpdatedAt'
+  | 'cancelled'
   | 'completed'
   | 'failed'
   | 'filling'
@@ -270,10 +272,21 @@ function buildJobProgress(
   );
   const total = numberField(session, 'total') ?? numberField(summary, 'totalTasks');
   const completed = numberField(session, 'completed') ?? numberField(summary, 'completed');
-  const failed = numberField(session, 'failed') ?? numberField(summary, 'failed');
+  let failed = numberField(session, 'failed') ?? numberField(summary, 'failed');
+  let cancelled = numberField(session, 'cancelled') ?? numberField(summary, 'cancelled');
+  if (
+    status === 'cancelled' &&
+    cancelled === undefined &&
+    typeof failed === 'number' &&
+    failed > 0 &&
+    summary?.aborted === true
+  ) {
+    cancelled = failed;
+    failed = 0;
+  }
   const computedPercent =
     typeof total === 'number' && total > 0 && typeof completed === 'number'
-      ? Math.round((((completed || 0) + (failed || 0)) / total) * 100)
+      ? Math.round((((completed || 0) + (failed || 0) + (cancelled || 0)) / total) * 100)
       : undefined;
   const fallbackPercent = fallbackPercentForStatus(status);
   const percent = clampPercent(
@@ -298,6 +311,7 @@ function buildJobProgress(
   setNumber(progress, 'activeTaskStartedAt', activeTask?.startedAt);
   setNumber(progress, 'activeTaskUpdatedAt', activeTask?.updatedAt);
   setNumber(progress, 'activeTaskEventCount', activeTask?.eventCount);
+  setNumber(progress, 'cancelled', cancelled);
   setNumber(progress, 'completed', completed);
   setNumber(progress, 'failed', failed);
   setNumber(progress, 'filling', numberField(session, 'filling'));
@@ -415,6 +429,7 @@ function buildSessionSummaryRecord(
   const total = numberField(session, 'total');
   const completed = numberField(session, 'completed');
   const failed = numberField(session, 'failed');
+  const cancelled = numberField(session, 'cancelled');
   const duration =
     typeof numberField(session, 'completedAt') === 'number' &&
     typeof numberField(session, 'startedAt') === 'number'
@@ -424,6 +439,7 @@ function buildSessionSummaryRecord(
     typeof total !== 'number' &&
     typeof completed !== 'number' &&
     typeof failed !== 'number' &&
+    typeof cancelled !== 'number' &&
     !efficiency &&
     !responseStatus
   ) {
@@ -433,6 +449,7 @@ function buildSessionSummaryRecord(
     {
       ...(typeof duration === 'number' ? { duration } : {}),
       ...(typeof total === 'number' ? { totalTasks: total } : {}),
+      ...(typeof cancelled === 'number' ? { cancelled } : {}),
       ...(typeof completed === 'number' ? { completed } : {}),
       ...(typeof failed === 'number' ? { failed } : {}),
       ...(session.userCancelled === true ? { aborted: true } : {}),
@@ -452,8 +469,18 @@ function normalizeSummaryForStatus(
   session?: Record<string, unknown> | null
 ): Record<string, unknown> {
   if (responseStatus === 'cancelled') {
+    const summaryFailed = numberField(summary, 'failed');
+    const summaryCancelled = numberField(summary, 'cancelled');
+    const normalizedCounts =
+      summaryCancelled === undefined &&
+      typeof summaryFailed === 'number' &&
+      summaryFailed > 0 &&
+      summary.aborted === true
+        ? { cancelled: summaryFailed, failed: 0 }
+        : {};
     return {
       ...summary,
+      ...normalizedCounts,
       status: 'cancelled',
       aborted: true,
       reason: getCancellationReason(summary, session, job),
@@ -650,6 +677,7 @@ function isIssueStatus(status: string | undefined): boolean {
     'blocked',
     'aborted',
     'error',
+    'degraded_budget_exhausted',
     'degraded_no_findings',
     'record_repair_incomplete',
     'l4_compaction_failed_budget_exhausted',

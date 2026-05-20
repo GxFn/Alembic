@@ -117,8 +117,9 @@ describe('cancelDaemonJob', () => {
         session.status = 'aborted';
         session.summary = {
           aborted: true,
+          cancelled: 9,
           completed: 5,
-          failed: 9,
+          failed: 0,
           reason,
           totalTasks: 14,
         };
@@ -143,8 +144,9 @@ describe('cancelDaemonJob', () => {
           status: 'aborted',
           summary: {
             aborted: true,
+            cancelled: 9,
             completed: 5,
-            failed: 9,
+            failed: 0,
             totalTasks: 14,
           },
         },

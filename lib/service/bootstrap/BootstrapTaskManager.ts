@@ -8,7 +8,7 @@
  *   4. 支持查询当前 bootstrap 会话状态
  *
  * 任务状态流:
- *   skeleton → filling → completed / failed
+ *   skeleton → filling → completed / failed / cancelled
  *
  * 事件类型:
  *   bootstrap:started      — 冷启动开始，携带任务清单
@@ -60,6 +60,7 @@ export const TaskStatus = Object.freeze({
   FILLING: 'filling', // 内容正在填充中
   COMPLETED: 'completed', // 填充完成
   FAILED: 'failed', // 填充失败
+  CANCELLED: 'cancelled', // 用户取消导致未完成
 });
 
 /** 单个 Bootstrap 会话（一次冷启动的全部上下文） */
@@ -111,6 +112,9 @@ class BootstrapSession {
   get failedTasks() {
     return [...this.tasks.values()].filter((t) => t.status === TaskStatus.FAILED).length;
   }
+  get cancelledTasks() {
+    return [...this.tasks.values()].filter((t) => t.status === TaskStatus.CANCELLED).length;
+  }
   get fillingTasks() {
     return [...this.tasks.values()].filter((t) => t.status === TaskStatus.FILLING).length;
   }
@@ -152,7 +156,9 @@ class BootstrapSession {
     if (total === 0) {
       return 100;
     }
-    return Math.round(((this.completedTasks + this.failedTasks) / total) * 100);
+    return Math.round(
+      ((this.completedTasks + this.failedTasks + this.cancelledTasks) / total) * 100
+    );
   }
 
   toJSON() {
@@ -167,6 +173,7 @@ class BootstrapSession {
       total: this.totalTasks,
       completed: this.completedTasks,
       failed: this.failedTasks,
+      cancelled: this.cancelledTasks,
       filling: this.fillingTasks,
       skeleton: this.skeletonTasks,
       totalToolCalls: this.totalToolCalls,
@@ -193,6 +200,7 @@ class BootstrapSession {
       totalTasks: this.totalTasks,
       completed: this.completedTasks,
       failed: this.failedTasks,
+      cancelled: this.cancelledTasks,
     };
     if (options.aborted) {
       summary.aborted = true;
@@ -302,10 +310,10 @@ export class BootstrapTaskManager {
     }
 
     const now = Date.now();
-    // 将未完成的任务全部标记 FAILED
+    // 用户取消是独立终态，不能把未完成任务伪装成真实失败。
     for (const task of session.tasks.values()) {
       if (task.status === TaskStatus.SKELETON || task.status === TaskStatus.FILLING) {
-        task.status = TaskStatus.FAILED;
+        task.status = TaskStatus.CANCELLED;
         task.completedAt = now;
         task.updatedAt = now;
         task.eventCount += 1;
@@ -347,6 +355,7 @@ export class BootstrapTaskManager {
         reason,
         completed: session.completedTasks,
         failed: session.failedTasks,
+        cancelled: session.cancelledTasks,
       },
     });
   }
@@ -581,6 +590,7 @@ export class BootstrapTaskManager {
         sessionId: session.id,
         completed: session.completedTasks,
         failed: session.failedTasks,
+        cancelled: session.cancelledTasks,
       },
     });
   }

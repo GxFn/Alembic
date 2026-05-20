@@ -1,11 +1,13 @@
 import type { AgentRunResult } from '@alembic/agent/service';
 import { describe, expect, test } from 'vitest';
 import {
+  isRecoverableProducerTimeoutIssue,
   normalizeDimensionFindings,
   projectAgentRunResult,
   projectBootstrapDimensionAgentOutput,
   projectBootstrapSessionResult,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
+  resolveBootstrapDimensionRunIssue,
+} from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
 
 function makeRunResult(partial: Partial<AgentRunResult>): AgentRunResult {
   return {
@@ -160,6 +162,87 @@ describe('bootstrap projections', () => {
     ]);
   });
 
+  test('recovers only producer timeout after a successful candidate submit', () => {
+    const issue = resolveBootstrapDimensionRunIssue(
+      makeRunResult({
+        status: 'success',
+        reply: '[run stopped: stage_timeout]',
+        diagnostics: {
+          degraded: false,
+          fallbackUsed: false,
+          warnings: [],
+          timedOutStages: ['produce'],
+          blockedTools: [],
+          truncatedToolCalls: 0,
+          emptyResponses: 0,
+          aiErrorCount: 0,
+          gateFailures: [],
+        },
+      })
+    );
+
+    expect(
+      isRecoverableProducerTimeoutIssue({
+        issue,
+        needsCandidates: true,
+        produceResult: { reply: '[run stopped: stage_timeout]' },
+        successCount: 1,
+      })
+    ).toBe(true);
+    expect(
+      isRecoverableProducerTimeoutIssue({
+        issue: {
+          status: 'timeout',
+          reason: 'analysis timed out',
+          diagnostics: {
+            degraded: false,
+            fallbackUsed: false,
+            warnings: [],
+            timedOutStages: ['analyze'],
+            blockedTools: [],
+            truncatedToolCalls: 0,
+            emptyResponses: 0,
+            aiErrorCount: 0,
+            gateFailures: [],
+          },
+        },
+        needsCandidates: true,
+        produceResult: { reply: '[run stopped: stage_timeout]' },
+        successCount: 1,
+      })
+    ).toBe(false);
+  });
+
+  test('classifies retry budget exhaustion as a failed dimension issue', () => {
+    expect(
+      resolveBootstrapDimensionRunIssue(
+        makeRunResult({
+          status: 'success',
+          diagnostics: {
+            degraded: true,
+            fallbackUsed: false,
+            warnings: [],
+            timedOutStages: [],
+            blockedTools: [],
+            truncatedToolCalls: 0,
+            emptyResponses: 0,
+            aiErrorCount: 0,
+            gateFailures: [
+              {
+                stage: 'quality_gate',
+                action: 'degraded_budget_exhausted',
+                reason: 'Analysis retry suppressed because session input budget is exhausted.',
+              },
+            ],
+          },
+        })
+      )
+    ).toMatchObject({
+      status: 'degraded_budget_exhausted',
+      reason: 'Analysis retry suppressed because session input budget is exhausted.',
+    });
+  });
+
   test('projects bootstrap session parent result coverage', () => {
     const projection = projectBootstrapSessionResult({
       parentRunResult: makeRunResult({
@@ -171,15 +254,112 @@ describe('bootstrap projections', () => {
             api: makeRunResult({ runId: 'api:run', status: 'error' }),
             ui: makeRunResult({ runId: 'ui:run', status: 'aborted' }),
             security: makeRunResult({ runId: 'security:run', status: 'timeout' }),
+            evidence: makeRunResult({
+              runId: 'evidence:run',
+              status: 'success',
+              reply: 'l4_compaction_failed_budget_exhausted',
+              diagnostics: {
+                degraded: true,
+                fallbackUsed: false,
+                warnings: [],
+                timedOutStages: [],
+                blockedTools: [],
+                truncatedToolCalls: 0,
+                emptyResponses: 0,
+                aiErrorCount: 0,
+                gateFailures: [],
+                efficiency: {
+                  toolCalls: 3,
+                  duplicateToolCalls: 0,
+                  cacheHits: 0,
+                  cacheMisses: 0,
+                  tokenUsage: { input: 10, output: 2, reasoning: 0, cacheHit: 0 },
+                  maxCompactionLevel: 4,
+                  totalCompactedItems: 0,
+                  nudgeCount: 0,
+                  replanCount: 0,
+                  emptyRetries: 0,
+                  forcedSummary: false,
+                  cancelReason: 'l4_compaction_failed_budget_exhausted',
+                },
+              },
+            }),
+            budget: makeRunResult({
+              runId: 'budget:run',
+              status: 'success',
+              diagnostics: {
+                degraded: true,
+                fallbackUsed: false,
+                warnings: [],
+                timedOutStages: [],
+                blockedTools: [],
+                truncatedToolCalls: 0,
+                emptyResponses: 0,
+                aiErrorCount: 0,
+                gateFailures: [
+                  {
+                    stage: 'quality_gate',
+                    action: 'degraded_budget_exhausted',
+                    reason: 'Analysis retry suppressed because session input budget is exhausted.',
+                  },
+                ],
+              },
+            }),
+            producer: makeRunResult({
+              runId: 'producer:run',
+              status: 'success',
+              reply: '[run stopped: stage_timeout]',
+              phases: {
+                quality_gate: {
+                  artifact: {
+                    analysisText: 'analysis with enough evidence',
+                    referencedFiles: ['src/a.ts'],
+                    findings: ['finding'],
+                  },
+                },
+                produce: { reply: '[run stopped: stage_timeout]' },
+              },
+              toolCalls: [
+                {
+                  tool: 'knowledge',
+                  args: {
+                    action: 'submit',
+                    params: { title: 'Accepted candidate' },
+                  },
+                  result: { status: 'created' },
+                },
+              ],
+              diagnostics: {
+                degraded: false,
+                fallbackUsed: false,
+                warnings: [],
+                timedOutStages: ['produce'],
+                blockedTools: [],
+                truncatedToolCalls: 0,
+                emptyResponses: 0,
+                aiErrorCount: 0,
+                gateFailures: [],
+              },
+            }),
           },
         },
       }),
-      activeDimIds: ['overview', 'api', 'ui', 'security', 'data', 'restored'],
+      activeDimIds: [
+        'overview',
+        'api',
+        'ui',
+        'security',
+        'evidence',
+        'budget',
+        'producer',
+        'data',
+        'restored',
+      ],
       skippedDimIds: ['restored'],
     });
 
-    expect(projection.completedDimensions).toBe(4);
-    expect(projection.failedDimensionIds.sort()).toEqual(['api', 'security']);
+    expect(projection.completedDimensions).toBe(7);
+    expect(projection.failedDimensionIds.sort()).toEqual(['api', 'budget', 'evidence', 'security']);
     expect(projection.abortedDimensionIds).toEqual(['ui']);
     expect(projection.missingDimensionIds).toEqual(['data']);
     expect(projection.parentStatus).toBe('aborted');

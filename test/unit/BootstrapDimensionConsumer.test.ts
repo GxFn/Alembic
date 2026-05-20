@@ -275,4 +275,84 @@ describe('bootstrap dimension consumer', () => {
       diagnostics: expect.objectContaining({ degraded: true }),
     });
   });
+
+  test('preserves submitted candidates when only the producer summary times out', async () => {
+    const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
+    const dimensionCandidates: Record<string, DimensionCandidateData> = {};
+    const dimensionStats: Record<string, DimensionStat> = {};
+    const storeDimensionReport = vi.fn();
+    const addDimensionDigest = vi.fn();
+    const addSubmittedCandidate = vi.fn();
+    const emitDimensionComplete = vi.fn();
+    const projection = makeProjection();
+    projection.produceResult = {
+      reply: '[run stopped: stage_timeout]',
+      toolCalls: projection.runtimeToolCalls,
+    };
+
+    await consumeBootstrapDimensionResult({
+      ctx: {},
+      dimId: 'api',
+      dimConfig: { label: 'API' },
+      needsCandidates: true,
+      projection,
+      runResult: {
+        status: 'success',
+        reply: '[run stopped: stage_timeout]',
+        degraded: false,
+        diagnostics: {
+          degraded: false,
+          fallbackUsed: false,
+          warnings: [],
+          timedOutStages: ['produce'],
+          blockedTools: [],
+          truncatedToolCalls: 0,
+          emptyResponses: 0,
+          aiErrorCount: 0,
+          gateFailures: [],
+        },
+      },
+      dimStartTime: Date.now(),
+      analystScopeId: 'api:analyst',
+      memoryCoordinator: {
+        getActiveContext: () => ({
+          distill: () => ({ keyFindings: [], totalObservations: 0, toolCallSummary: [] }),
+        }),
+      } as unknown as MemoryCoordinator,
+      sessionStore: {
+        storeDimensionReport,
+        addDimensionDigest,
+        addSubmittedCandidate,
+      } as unknown as SessionStore,
+      dimContext: {
+        addDimensionDigest,
+        addSubmittedCandidate,
+      } as unknown as DimensionContext,
+      candidateResults,
+      dimensionCandidates,
+      dimensionStats,
+      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+      dataRoot: '/tmp',
+      sessionId: 'session-1',
+    });
+
+    expect(candidateResults.created).toBe(1);
+    expect(addSubmittedCandidate).toHaveBeenCalledWith(
+      'api',
+      expect.objectContaining({ title: 'Candidate' })
+    );
+    expect(emitDimensionComplete).toHaveBeenCalledWith(
+      'api',
+      expect.objectContaining({
+        status: 'v3-pipeline-complete',
+        created: 1,
+      })
+    );
+    expect(dimensionStats.api).toMatchObject({
+      status: 'v3-pipeline-complete',
+      candidateCount: 1,
+      recoveredProducerTimeout: true,
+      error: undefined,
+    });
+  });
 });

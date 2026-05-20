@@ -7,7 +7,10 @@
 
 import type { AgentDiagnostics, AgentEfficiencySummary } from '@alembic/agent/runtime';
 import type { AgentRunResult } from '@alembic/agent/service';
-import { extractEfficiencyFromDiagnostics } from '#service/bootstrap/BootstrapEfficiency.js';
+import {
+  extractEfficiencyFromDiagnostics,
+  normalizeAgentEfficiencySummary,
+} from '#service/bootstrap/BootstrapEfficiency.js';
 
 export interface ToolCallRecord {
   tool?: string;
@@ -79,8 +82,10 @@ export type BootstrapDimensionRunIssueStatus =
   | 'blocked'
   | 'aborted'
   | 'error'
+  | 'degraded_budget_exhausted'
   | 'degraded_no_findings'
-  | 'record_repair_incomplete';
+  | 'record_repair_incomplete'
+  | 'l4_compaction_failed_budget_exhausted';
 
 export interface BootstrapDimensionRunIssue {
   status: BootstrapDimensionRunIssueStatus;
@@ -88,21 +93,49 @@ export interface BootstrapDimensionRunIssue {
   diagnostics?: AgentDiagnostics | null;
 }
 
+export function isRecoverableProducerTimeoutIssue({
+  issue,
+  needsCandidates,
+  produceResult,
+  successCount,
+}: {
+  issue: BootstrapDimensionRunIssue | null;
+  needsCandidates: boolean;
+  produceResult?: { reply?: string; toolCalls?: ToolCallRecord[]; [key: string]: unknown };
+  successCount: number;
+}): boolean {
+  const timedOutStages = issue?.diagnostics?.timedOutStages || [];
+  const timeoutMatchesProducer = timedOutStages.length === 0 || timedOutStages.includes('produce');
+  return (
+    issue?.status === 'timeout' &&
+    needsCandidates &&
+    successCount > 0 &&
+    !!produceResult &&
+    timeoutMatchesProducer
+  );
+}
+
 export function projectAgentRunResult(result: AgentRunResult): AgentResultLike {
+  const usage = result.usage || {
+    inputTokens: 0,
+    outputTokens: 0,
+    iterations: 0,
+    durationMs: 0,
+  };
   return {
     reply: result.reply,
     status: result.status,
     toolCalls: result.toolCalls as unknown as ToolCallRecord[],
     tokenUsage: {
-      input: result.usage.inputTokens,
-      output: result.usage.outputTokens,
+      input: usage.inputTokens,
+      output: usage.outputTokens,
     },
     phases: result.phases as AgentResultLike['phases'],
     degraded: result.diagnostics?.degraded || false,
     diagnostics: result.diagnostics,
     efficiency: extractEfficiencyFromDiagnostics(result.diagnostics),
-    iterations: result.usage.iterations,
-    durationMs: result.usage.durationMs,
+    iterations: usage.iterations,
+    durationMs: usage.durationMs,
   };
 }
 
@@ -115,7 +148,10 @@ export function resolveBootstrapDimensionRunIssue(
   }
   const status = typeof result.status === 'string' ? result.status : 'success';
   const diagnostics = result.diagnostics || null;
-  const efficiency = diagnostics?.efficiency;
+  const efficiency =
+    extractEfficiencyFromDiagnostics(diagnostics) ||
+    normalizeAgentEfficiencySummary('efficiency' in result ? result.efficiency : null);
+  const reply = result.reply || '';
   if (
     status === 'timeout' ||
     efficiency?.cancelReason === 'stage_timeout' ||
@@ -123,28 +159,60 @@ export function resolveBootstrapDimensionRunIssue(
   ) {
     return {
       status: 'timeout',
-      reason: result.reply || 'stage_timeout',
+      reason: reply || 'stage_timeout',
+      diagnostics,
+    };
+  }
+  if (
+    efficiency?.cancelReason === 'l4_compaction_failed_budget_exhausted' ||
+    reply.includes('l4_compaction_failed_budget_exhausted')
+  ) {
+    return {
+      status: 'l4_compaction_failed_budget_exhausted',
+      reason: reply || 'l4_compaction_failed_budget_exhausted',
       diagnostics,
     };
   }
   if (status === 'blocked' || status === 'aborted' || status === 'error') {
     return {
       status,
-      reason: result.reply || (status === 'error' ? 'child-run-error' : `child-run-${status}`),
+      reason: reply || (status === 'error' ? 'child-run-error' : `child-run-${status}`),
       diagnostics,
     };
   }
   if (options.includeDegraded === false) {
     return null;
   }
-  const degradedGate = diagnostics?.gateFailures?.find(
-    (gate) => gate.action === 'degraded_no_findings' || gate.action === 'record_repair_incomplete'
-  );
+  const diagnosticsRecord = diagnostics as unknown as { gateFailures?: unknown[] } | null;
+  const gateFailures = Array.isArray(diagnosticsRecord?.gateFailures)
+    ? diagnosticsRecord.gateFailures
+    : [];
+  const degradedGate = gateFailures.find((gate): gate is { action: string; reason?: string } => {
+    if (!gate || typeof gate !== 'object' || Array.isArray(gate)) {
+      return false;
+    }
+    const action = (gate as { action?: unknown }).action;
+    return (
+      action === 'degraded_budget_exhausted' ||
+      action === 'degraded_no_findings' ||
+      action === 'record_repair_incomplete'
+    );
+  });
+  if (degradedGate?.action === 'degraded_budget_exhausted') {
+    return {
+      status: 'degraded_budget_exhausted',
+      reason:
+        (typeof degradedGate.reason === 'string' ? degradedGate.reason : '') ||
+        result.reply ||
+        'Quality gate degraded because retry would exceed the session token budget',
+      diagnostics,
+    };
+  }
   if (degradedGate?.action === 'degraded_no_findings') {
     return {
       status: 'degraded_no_findings',
       reason:
-        degradedGate.reason ||
+        (typeof degradedGate.reason === 'string' ? degradedGate.reason : '') ||
         result.reply ||
         'Quality gate degraded because required evidence findings were not recorded',
       diagnostics,
@@ -153,7 +221,10 @@ export function resolveBootstrapDimensionRunIssue(
   if (degradedGate?.action === 'record_repair_incomplete') {
     return {
       status: 'record_repair_incomplete',
-      reason: degradedGate.reason || result.reply || 'Record repair ended without enough findings',
+      reason:
+        (typeof degradedGate.reason === 'string' ? degradedGate.reason : '') ||
+        result.reply ||
+        'Record repair ended without enough findings',
       diagnostics,
     };
   }
@@ -164,6 +235,14 @@ export function resolveBootstrapDimensionRunIssue(
       return {
         status: 'record_repair_incomplete',
         reason: reply || 'Record repair ended without enough findings',
+        diagnostics,
+      };
+    }
+    if (reply.includes('degraded_budget_exhausted')) {
+      return {
+        status: 'degraded_budget_exhausted',
+        reason:
+          reply || 'Quality gate degraded because retry would exceed the session token budget',
         diagnostics,
       };
     }
@@ -331,9 +410,33 @@ export function projectBootstrapSessionResult({
   const dimensionResults = toBootstrapSessionDimensionResults(parentRunResult);
   const skipped = new Set(skippedDimIds);
   const runnableDimIds = activeDimIds.filter((dimId) => !skipped.has(dimId));
-  const failedStatuses = new Set<AgentRunResult['status']>(['error', 'blocked', 'timeout']);
   const failedDimensionIds = Object.entries(dimensionResults)
-    .filter(([, result]) => failedStatuses.has(result.status))
+    .filter(([, result]) => {
+      const issue = resolveBootstrapDimensionRunIssue(result);
+      if (issue?.status === 'timeout') {
+        const projection = projectBootstrapDimensionAgentOutput({
+          dimId: '',
+          needsCandidates: true,
+          runResult: projectAgentRunResult(result),
+        });
+        if (
+          isRecoverableProducerTimeoutIssue({
+            issue,
+            needsCandidates: true,
+            produceResult: projection.produceResult,
+            successCount: projection.successCount,
+          })
+        ) {
+          return false;
+        }
+      }
+      if (issue && issue.status !== 'aborted') {
+        return true;
+      }
+      return typeof result.reply === 'string'
+        ? result.reply.includes('l4_compaction_failed_budget_exhausted')
+        : false;
+    })
     .map(([dimId]) => dimId);
   const abortedDimensionIds = Object.entries(dimensionResults)
     .filter(([, result]) => result.status === 'aborted')

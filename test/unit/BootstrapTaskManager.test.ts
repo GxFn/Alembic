@@ -22,6 +22,7 @@ interface BootstrapTaskManagerStatus {
       toolCalls: number;
       tokenUsage: { cacheHit: number; input: number; output: number; reasoning: number };
     };
+    cancelled?: number;
     failed?: number;
     reason?: string;
     totalTasks?: number;
@@ -62,8 +63,9 @@ describe('BootstrapTaskManager cancellation semantics', () => {
     expect(status.userCancelled).toBe(true);
     expect(status.summary).toMatchObject({
       aborted: true,
+      cancelled: 2,
       completed: 0,
-      failed: 2,
+      failed: 0,
       reason: 'Cancelled by user',
       totalTasks: 2,
     });
@@ -72,13 +74,13 @@ describe('BootstrapTaskManager cancellation semantics', () => {
         error: 'Cancelled by user',
         id: 'dim:overview',
         result: null,
-        status: 'failed',
+        status: 'cancelled',
       }),
       expect.objectContaining({
         error: 'Cancelled by user',
         id: 'dim:architecture',
         result: null,
-        status: 'failed',
+        status: 'cancelled',
       }),
     ]);
   });

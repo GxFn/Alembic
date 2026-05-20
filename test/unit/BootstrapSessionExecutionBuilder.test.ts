@@ -39,6 +39,11 @@ function getCoordination(input: AgentRunInput) {
   };
 }
 
+type ChildInputFactory = (args: {
+  plannedInput: Record<string, unknown>;
+  parentInput: AgentRunInput;
+}) => AgentRunInput | Promise<AgentRunInput>;
+
 describe('bootstrap session execution builder', () => {
   test('builds parent input with unskipped child plans and lazy runtime input factories', async () => {
     const planA = createPlan('a');
@@ -80,7 +85,7 @@ describe('bootstrap session execution builder', () => {
     ).toEqual(['a', 'b']);
     expect(input.context.lang).toBe('typescript');
 
-    const factory = (input.context.childInputFactories as Record<string, Function>).b;
+    const factory = (input.context.childInputFactories as Record<string, ChildInputFactory>).b;
     expect(factory).toBeTypeOf('function');
     const runtimeInput = await factory({ plannedInput: {}, parentInput: input });
     expect(runtimeInput.params).toEqual({ dimId: 'b', runtime: true });
@@ -119,7 +124,7 @@ describe('bootstrap session execution builder', () => {
       consumeTierResult,
     });
 
-    const factory = (input.context.childInputFactories as Record<string, Function>).a;
+    const factory = (input.context.childInputFactories as Record<string, ChildInputFactory>).a;
     await factory({ plannedInput: {}, parentInput: input });
     const childInput = (input.context.childContexts as Record<string, AgentRunInput['context']>).a;
     const plannedChildInput = {
@@ -155,6 +160,50 @@ describe('bootstrap session execution builder', () => {
       dimId: 'a',
       err: expect.objectContaining({ status: 'timeout', reason: 'stage_timeout' }),
     });
+
+    const successfulSubmit = {
+      tool: 'knowledge',
+      args: {
+        action: 'submit',
+        params: { title: 'Accepted candidate' },
+      },
+      result: { status: 'created' },
+    };
+    await coordination.onChildResult({
+      childInput: plannedChildInput,
+      result: {
+        status: 'success',
+        reply: '[run stopped: stage_timeout]',
+        phases: {
+          quality_gate: {
+            artifact: {
+              analysisText: 'analysis with enough content for a produced candidate',
+              referencedFiles: ['src/a.ts'],
+              findings: ['finding'],
+            },
+          },
+          produce: {
+            reply: '[run stopped: stage_timeout]',
+            toolCalls: [successfulSubmit],
+          },
+        },
+        toolCalls: [successfulSubmit],
+        usage: { inputTokens: 1, outputTokens: 1, iterations: 1, durationMs: 1 },
+        diagnostics: {
+          degraded: false,
+          fallbackUsed: false,
+          warnings: [],
+          timedOutStages: ['produce'],
+          blockedTools: [],
+          truncatedToolCalls: 0,
+          emptyResponses: 0,
+          aiErrorCount: 0,
+          gateFailures: [],
+        },
+      } as AgentRunResult,
+    });
+    expect(consumeDimensionResult).toHaveBeenCalledTimes(2);
+    expect(consumeDimensionError).toHaveBeenCalledTimes(2);
 
     coordination.onTierComplete({ tierIndex: 0, childInputs: [plannedChildInput] });
     expect(consumeTierResult).toHaveBeenCalledWith(0, new Map([['a', dimensionStats.a]]));
@@ -215,7 +264,7 @@ describe('bootstrap session execution builder', () => {
       consumeTierResult: vi.fn(),
     });
 
-    const factory = (input.context.childInputFactories as Record<string, Function>).a;
+    const factory = (input.context.childInputFactories as Record<string, ChildInputFactory>).a;
 
     expect(() => factory({ plannedInput: {}, parentInput: input })).toThrow(
       'Bootstrap session cancelled'

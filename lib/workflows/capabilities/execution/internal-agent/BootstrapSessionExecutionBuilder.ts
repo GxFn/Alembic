@@ -7,7 +7,12 @@ import {
   type BootstrapSessionChildRunPlan,
   buildBootstrapSessionRunInput,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
-import { resolveBootstrapDimensionRunIssue } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
+import {
+  isRecoverableProducerTimeoutIssue,
+  projectAgentRunResult,
+  projectBootstrapDimensionAgentOutput,
+  resolveBootstrapDimensionRunIssue,
+} from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
 
 const logger = Logger.getInstance();
 
@@ -112,14 +117,34 @@ export function buildBootstrapSessionExecutionInput({
             return;
           }
           const runIssue = resolveBootstrapDimensionRunIssue(result, { includeDegraded: false });
-          if (runIssue) {
-            consumeDimensionError({ dimId, err: runIssue });
-            return;
-          }
           const plan = resolvePlan(dimId);
           const state = childExecutionState.get(dimId);
           if (!plan || !state) {
+            if (runIssue) {
+              consumeDimensionError({ dimId, err: runIssue });
+            }
             return;
+          }
+          if (runIssue) {
+            const projectedRun = projectAgentRunResult(result);
+            const projection = projectBootstrapDimensionAgentOutput({
+              dimId,
+              needsCandidates: plan.needsCandidates,
+              runResult: projectedRun,
+            });
+            const recoveredProducerTimeout = isRecoverableProducerTimeoutIssue({
+              issue: runIssue,
+              needsCandidates: plan.needsCandidates,
+              produceResult: projection.produceResult,
+              successCount: projection.successCount,
+            });
+            if (!recoveredProducerTimeout) {
+              consumeDimensionError({ dimId, err: runIssue });
+              return;
+            }
+            logger.warn(
+              `[Insight-v3] Dimension "${dimId}" producer summary timed out after successful candidate submit(s); continuing to consume produced candidates.`
+            );
           }
           await consumeDimensionResult({
             dimId,

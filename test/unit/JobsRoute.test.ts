@@ -119,8 +119,9 @@ describe('jobs route response decoration', () => {
           progress: 100,
           summary: {
             aborted: true,
+            cancelled: 9,
             completed: 5,
-            failed: 9,
+            failed: 0,
             reason: 'Cancelled by user via Dashboard',
             totalTasks: 14,
           },
@@ -132,8 +133,9 @@ describe('jobs route response decoration', () => {
 
     expect(decorated.status).toBe('cancelled');
     expect(decorated.progress).toMatchObject({
+      cancelled: 9,
       completed: 5,
-      failed: 9,
+      failed: 0,
       percent: 100,
       sessionId: 'bs_cancelled',
       status: 'cancelled',
@@ -141,8 +143,9 @@ describe('jobs route response decoration', () => {
     });
     expect(decorated.summary).toMatchObject({
       aborted: true,
+      cancelled: 9,
       completed: 5,
-      failed: 9,
+      failed: 0,
       reason: 'Cancelled by user via Dashboard',
       status: 'cancelled',
       totalTasks: 14,
