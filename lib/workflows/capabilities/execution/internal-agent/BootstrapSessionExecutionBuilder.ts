@@ -7,6 +7,7 @@ import {
   type BootstrapSessionChildRunPlan,
   buildBootstrapSessionRunInput,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
+import { resolveBootstrapDimensionRunIssue } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
 
 const logger = Logger.getInstance();
 
@@ -110,8 +111,9 @@ export function buildBootstrapSessionExecutionInput({
           if (!dimId) {
             return;
           }
-          if (result.status === 'error' || result.status === 'aborted') {
-            consumeDimensionError({ dimId, err: result.reply || 'child-run-error' });
+          const runIssue = resolveBootstrapDimensionRunIssue(result, { includeDegraded: false });
+          if (runIssue) {
+            consumeDimensionError({ dimId, err: runIssue });
             return;
           }
           const plan = resolvePlan(dimId);

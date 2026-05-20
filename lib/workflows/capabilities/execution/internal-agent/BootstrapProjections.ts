@@ -20,6 +20,7 @@ export interface ToolCallRecord {
 
 export interface AgentResultLike {
   reply?: string;
+  status?: AgentRunResult['status'];
   toolCalls?: ToolCallRecord[];
   tokenUsage?: { input: number; output: number };
   // Agent phase results are dynamic because strategies can attach different artifacts.
@@ -73,9 +74,24 @@ export interface BootstrapDimensionProjection {
   rejectedCount: number;
 }
 
+export type BootstrapDimensionRunIssueStatus =
+  | 'timeout'
+  | 'blocked'
+  | 'aborted'
+  | 'error'
+  | 'degraded_no_findings'
+  | 'record_repair_incomplete';
+
+export interface BootstrapDimensionRunIssue {
+  status: BootstrapDimensionRunIssueStatus;
+  reason: string;
+  diagnostics?: AgentDiagnostics | null;
+}
+
 export function projectAgentRunResult(result: AgentRunResult): AgentResultLike {
   return {
     reply: result.reply,
+    status: result.status,
     toolCalls: result.toolCalls as unknown as ToolCallRecord[],
     tokenUsage: {
       input: result.usage.inputTokens,
@@ -88,6 +104,79 @@ export function projectAgentRunResult(result: AgentRunResult): AgentResultLike {
     iterations: result.usage.iterations,
     durationMs: result.usage.durationMs,
   };
+}
+
+export function resolveBootstrapDimensionRunIssue(
+  result: AgentResultLike | AgentRunResult | null | undefined,
+  options: { includeDegraded?: boolean } = {}
+): BootstrapDimensionRunIssue | null {
+  if (!result) {
+    return null;
+  }
+  const status = typeof result.status === 'string' ? result.status : 'success';
+  const diagnostics = result.diagnostics || null;
+  const efficiency = diagnostics?.efficiency;
+  if (
+    status === 'timeout' ||
+    efficiency?.cancelReason === 'stage_timeout' ||
+    (diagnostics?.timedOutStages?.length ?? 0) > 0
+  ) {
+    return {
+      status: 'timeout',
+      reason: result.reply || 'stage_timeout',
+      diagnostics,
+    };
+  }
+  if (status === 'blocked' || status === 'aborted' || status === 'error') {
+    return {
+      status,
+      reason: result.reply || (status === 'error' ? 'child-run-error' : `child-run-${status}`),
+      diagnostics,
+    };
+  }
+  if (options.includeDegraded === false) {
+    return null;
+  }
+  const degradedGate = diagnostics?.gateFailures?.find(
+    (gate) => gate.action === 'degraded_no_findings' || gate.action === 'record_repair_incomplete'
+  );
+  if (degradedGate?.action === 'degraded_no_findings') {
+    return {
+      status: 'degraded_no_findings',
+      reason:
+        degradedGate.reason ||
+        result.reply ||
+        'Quality gate degraded because required evidence findings were not recorded',
+      diagnostics,
+    };
+  }
+  if (degradedGate?.action === 'record_repair_incomplete') {
+    return {
+      status: 'record_repair_incomplete',
+      reason: degradedGate.reason || result.reply || 'Record repair ended without enough findings',
+      diagnostics,
+    };
+  }
+  const resultDegraded = 'degraded' in result ? result.degraded : false;
+  if (diagnostics?.degraded || resultDegraded) {
+    const reply = result.reply || '';
+    if (reply.includes('record_repair_incomplete')) {
+      return {
+        status: 'record_repair_incomplete',
+        reason: reply || 'Record repair ended without enough findings',
+        diagnostics,
+      };
+    }
+    if (reply.includes('degraded_no_findings')) {
+      return {
+        status: 'degraded_no_findings',
+        reason:
+          reply || 'Quality gate degraded because required evidence findings were not recorded',
+        diagnostics,
+      };
+    }
+  }
+  return null;
 }
 
 export function projectBootstrapDimensionAgentOutput({

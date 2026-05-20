@@ -142,7 +142,19 @@ describe('bootstrap session execution builder', () => {
       childInput: plannedChildInput,
       result: { status: 'error', reply: 'failed' } as AgentRunResult,
     });
-    expect(consumeDimensionError).toHaveBeenCalledWith({ dimId: 'a', err: 'failed' });
+    expect(consumeDimensionError).toHaveBeenCalledWith({
+      dimId: 'a',
+      err: expect.objectContaining({ status: 'error', reason: 'failed' }),
+    });
+
+    await coordination.onChildResult({
+      childInput: plannedChildInput,
+      result: { status: 'timeout', reply: 'stage_timeout' } as AgentRunResult,
+    });
+    expect(consumeDimensionError).toHaveBeenCalledWith({
+      dimId: 'a',
+      err: expect.objectContaining({ status: 'timeout', reason: 'stage_timeout' }),
+    });
 
     coordination.onTierComplete({ tierIndex: 0, childInputs: [plannedChildInput] });
     expect(consumeTierResult).toHaveBeenCalledWith(0, new Map([['a', dimensionStats.a]]));

@@ -164,11 +164,115 @@ describe('bootstrap dimension consumer', () => {
     });
 
     expect(candidateResults.errors).toEqual([{ dimId: 'api', error: 'boom' }]);
-    expect(dimensionStats.api).toEqual({ candidateCount: 0, durationMs: 0, error: 'boom' });
+    expect(dimensionStats.api).toEqual({
+      status: 'error',
+      candidateCount: 0,
+      durationMs: 0,
+      error: 'boom',
+      diagnostics: null,
+    });
     expect(emitDimensionComplete).toHaveBeenCalledWith('api', {
       type: 'error',
+      status: 'error',
       reason: 'boom',
     });
     expect(result).toBe(dimensionStats.api);
+  });
+
+  test('records degraded evidence runs without marking the dimension normally complete', async () => {
+    const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
+    const dimensionCandidates: Record<string, DimensionCandidateData> = {};
+    const dimensionStats: Record<string, DimensionStat> = {};
+    const storeDimensionReport = vi.fn();
+    const addDimensionDigest = vi.fn();
+    const addSubmittedCandidate = vi.fn();
+    const emitDimensionComplete = vi.fn();
+    const projection = makeProjection();
+    projection.producerResult.candidateCount = 1;
+    projection.successCount = 1;
+    const diagnostics = {
+      degraded: true,
+      fallbackUsed: false,
+      warnings: [],
+      timedOutStages: [],
+      blockedTools: [],
+      truncatedToolCalls: 0,
+      emptyResponses: 0,
+      aiErrorCount: 0,
+      gateFailures: [
+        {
+          stage: 'quality_gate_record_repair',
+          action: 'degraded_no_findings',
+          reason: 'note_finding records were not repaired',
+        },
+      ],
+    };
+
+    await consumeBootstrapDimensionResult({
+      ctx: {},
+      dimId: 'api',
+      dimConfig: { label: 'API' },
+      needsCandidates: true,
+      projection,
+      runResult: {
+        status: 'success',
+        reply: 'degraded_no_findings',
+        degraded: true,
+        diagnostics,
+      },
+      dimStartTime: Date.now(),
+      analystScopeId: 'api:analyst',
+      memoryCoordinator: {
+        getActiveContext: () => ({
+          distill: () => ({
+            keyFindings: [{ finding: 'memory finding' }],
+            totalObservations: 1,
+            toolCallSummary: [],
+          }),
+        }),
+      } as unknown as MemoryCoordinator,
+      sessionStore: {
+        storeDimensionReport,
+        addDimensionDigest,
+        addSubmittedCandidate,
+      } as unknown as SessionStore,
+      dimContext: {
+        addDimensionDigest,
+        addSubmittedCandidate,
+      } as unknown as DimensionContext,
+      candidateResults,
+      dimensionCandidates,
+      dimensionStats,
+      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+      dataRoot: '/tmp',
+      sessionId: 'session-1',
+    });
+
+    expect(candidateResults.created).toBe(0);
+    expect(addSubmittedCandidate).not.toHaveBeenCalled();
+    expect(storeDimensionReport).toHaveBeenCalledWith(
+      'api',
+      expect.objectContaining({
+        findings: [{ finding: 'one' }],
+        workingMemoryDistilled: expect.objectContaining({
+          keyFindings: [{ finding: 'memory finding' }],
+        }),
+      })
+    );
+    expect(emitDimensionComplete).toHaveBeenCalledWith(
+      'api',
+      expect.objectContaining({
+        status: 'degraded_no_findings',
+        created: 0,
+        reason: 'note_finding records were not repaired',
+      })
+    );
+    expect(dimensionStats.api).toMatchObject({
+      status: 'degraded_no_findings',
+      candidateCount: 0,
+      rejectedCount: 2,
+      error: 'note_finding records were not repaired',
+      diagnostics: expect.objectContaining({ degraded: true }),
+    });
   });
 });

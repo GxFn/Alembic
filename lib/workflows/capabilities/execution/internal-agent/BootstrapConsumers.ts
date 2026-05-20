@@ -20,10 +20,12 @@ import {
   type BootstrapDimensionAnalysisReport,
   type BootstrapDimensionProducerResult,
   type BootstrapDimensionProjection,
+  type BootstrapDimensionRunIssue,
   type BootstrapSessionProjection,
   type DimensionFinding,
   normalizeDimensionFindings,
   projectBootstrapSessionResult,
+  resolveBootstrapDimensionRunIssue,
   type ToolCallRecord,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
 import {
@@ -140,8 +142,11 @@ export async function consumeBootstrapDimensionResult({
     successCount,
     rejectedCount,
   } = projection;
+  const runIssue = resolveBootstrapDimensionRunIssue(runResult);
+  const isNormalCompletion = !runIssue;
+  const effectiveCandidateCount = isNormalCompletion ? producerResult.candidateCount : 0;
 
-  candidateResults.created += producerResult.candidateCount;
+  candidateResults.created += effectiveCandidateCount;
   dimensionCandidates[dimId] = { analysisReport, producerResult };
 
   if (needsCandidates) {
@@ -163,7 +168,7 @@ export async function consumeBootstrapDimensionResult({
         `analysisInput=${analysisText.length} chars`
     );
 
-    if (successCount === 0 && submitCalls.length === 0) {
+    if (successCount === 0 && submitCalls.length === 0 && isNormalCompletion) {
       logger.warn(
         `[Producer] "${dimId}": ⚠ Producer 未提交任何候选。` +
           `分析文本=${analysisText.length} chars, findings=${(analysisReport.findings || []).length}, ` +
@@ -186,6 +191,14 @@ export async function consumeBootstrapDimensionResult({
     candidatesSummary: [],
     workingMemoryDistilled: distilled,
   });
+  if (runIssue) {
+    logger.warn(`[Insight-v3] Dimension "${dimId}" completed with non-normal status`, {
+      dimension: dimId,
+      status: runIssue.status,
+      reason: runIssue.reason,
+      degraded: runResult?.degraded || runResult?.diagnostics?.degraded || false,
+    });
+  }
 
   logger.info(
     `[Insight-v3] Dimension "${dimId}": analysis=${analysisReport.analysisText.length} chars, ` +
@@ -293,7 +306,7 @@ export async function consumeBootstrapDimensionResult({
     digest as Parameters<typeof sessionStore.addDimensionDigest>[1]
   );
 
-  for (const tc of submitCalls) {
+  for (const tc of isNormalCompletion ? submitCalls : []) {
     if (!isSuccessfulToolCall(tc)) {
       continue;
     }
@@ -316,23 +329,25 @@ export async function consumeBootstrapDimensionResult({
 
   emitter.emitDimensionComplete(dimId, {
     type: needsCandidates ? 'candidate' : 'skill',
-    extracted: producerResult.candidateCount,
-    created: producerResult.candidateCount,
-    status: 'v3-pipeline-complete',
+    extracted: effectiveCandidateCount,
+    created: effectiveCandidateCount,
+    status: runIssue?.status || 'v3-pipeline-complete',
+    reason: runIssue?.reason,
     degraded: runResult?.degraded || false,
     durationMs: Date.now() - dimStartTime,
     toolCallCount: runtimeToolCalls.length,
     tokenUsage: combinedTokenUsage,
     efficiency,
     source: 'enhanced-pipeline-strategy',
-  });
+  } as Parameters<BootstrapEventEmitter['emitDimensionComplete']>[1]);
 
   const qualityScores = (artifact as Record<string, unknown>).qualityReport as
     | { scores: Record<string, number>; totalScore: number; suggestions: string[] }
     | undefined;
   const dimResult = {
-    candidateCount: producerResult.candidateCount,
-    rejectedCount: producerResult.rejectedCount || 0,
+    status: runIssue?.status || 'v3-pipeline-complete',
+    candidateCount: effectiveCandidateCount,
+    rejectedCount: isNormalCompletion ? producerResult.rejectedCount || 0 : submitCalls.length,
     analysisChars: analysisReport.analysisText.length,
     referencedFiles: analysisReport.referencedFiles.length,
     durationMs: Date.now() - dimStartTime,
@@ -340,6 +355,7 @@ export async function consumeBootstrapDimensionResult({
     tokenUsage: combinedTokenUsage,
     efficiency,
     diagnostics: runResult.diagnostics || null,
+    error: runIssue?.reason,
     stages: summarizeDimensionStages(runResult),
     analysisText: analysisReport.analysisText,
     referencedFilesList: analysisReport.referencedFiles || [],
@@ -347,7 +363,8 @@ export async function consumeBootstrapDimensionResult({
       ? {
           totalScore: qualityScores.totalScore,
           scores: qualityScores.scores,
-          action: gateResult?.action || (runResult?.degraded ? 'degrade' : 'pass'),
+          action:
+            runIssue?.status || gateResult?.action || (runResult?.degraded ? 'degrade' : 'pass'),
         }
       : null,
   };
@@ -441,13 +458,50 @@ export function consumeBootstrapDimensionError({
   dimensionStats: Record<string, DimensionStat>;
   emitter: BootstrapEventEmitter;
 }) {
-  const errMsg = err instanceof Error ? err.message : String(err);
+  const issue = normalizeBootstrapDimensionError(err);
+  const errMsg = issue.reason;
   logger.error(`[Insight-v3] Dimension "${dimId}" failed: ${errMsg}`);
   candidateResults.errors.push({ dimId, error: errMsg });
-  emitter.emitDimensionComplete(dimId, { type: 'error', reason: errMsg });
-  const dimResult = { candidateCount: 0, durationMs: 0, error: errMsg };
+  emitter.emitDimensionComplete(dimId, {
+    type: 'error',
+    status: issue.status,
+    reason: errMsg,
+  } as Parameters<BootstrapEventEmitter['emitDimensionComplete']>[1]);
+  const dimResult = {
+    status: issue.status,
+    candidateCount: 0,
+    durationMs: 0,
+    error: errMsg,
+    diagnostics: issue.diagnostics || null,
+  };
   dimensionStats[dimId] = dimResult;
   return dimResult;
+}
+
+function normalizeBootstrapDimensionError(err: unknown): BootstrapDimensionRunIssue {
+  if (isBootstrapDimensionRunIssue(err)) {
+    return err;
+  }
+  return {
+    status: 'error',
+    reason: err instanceof Error ? err.message : String(err),
+  };
+}
+
+function isBootstrapDimensionRunIssue(value: unknown): value is BootstrapDimensionRunIssue {
+  return (
+    isRecord(value) &&
+    typeof value.status === 'string' &&
+    typeof value.reason === 'string' &&
+    [
+      'timeout',
+      'blocked',
+      'aborted',
+      'error',
+      'degraded_no_findings',
+      'record_repair_incomplete',
+    ].includes(value.status)
+  );
 }
 
 // ---------------------------------------------------------------------------
