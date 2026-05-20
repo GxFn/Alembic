@@ -1,9 +1,9 @@
-import { describe, expect, test } from 'vitest';
 import {
   analysisQualityGate,
   buildAnalysisArtifact,
   insightGateEvaluator,
 } from '@alembic/agent/prompts';
+import { describe, expect, test } from 'vitest';
 
 describe('insight gate analysis artifact', () => {
   const evidenceToolCalls = [
@@ -75,7 +75,7 @@ describe('insight gate analysis artifact', () => {
     });
     expect(analysisQualityGate(artifact, { outputType: 'candidate' })).toMatchObject({
       pass: false,
-      action: 'retry',
+      action: 'analysis_retry',
       reason: 'Required memory action note_finding calls are missing',
     });
   });
@@ -163,7 +163,7 @@ describe('insight gate analysis artifact', () => {
     );
     expect(analysisQualityGate(artifact, { outputType: 'candidate' })).toMatchObject({
       pass: false,
-      action: 'retry',
+      action: 'analysis_retry',
       reason: 'At least 3 memory action note_finding calls are required',
     });
   });
@@ -197,7 +197,7 @@ describe('insight gate analysis artifact', () => {
     );
 
     expect(result).toMatchObject({
-      action: 'retry',
+      action: 'analysis_retry',
       reason: 'Required memory action note_finding calls are missing',
     });
   });

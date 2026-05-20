@@ -10,12 +10,13 @@
  *   - TurnTelemetry 输出
  *   - SessionSummary 统计
  */
-import { describe, expect, test, vi } from 'vitest';
+
 import {
   BudgetController,
   type BudgetControllerConfig,
   type TokenUsageAccumulator,
 } from '@alembic/agent/runtime';
+import { describe, expect, test, vi } from 'vitest';
 
 /* ── Mock Factories ─────────────────────────────────── */
 
@@ -279,7 +280,7 @@ describe('BudgetController', () => {
         cw as unknown as Parameters<BudgetController['executeL4IfPending']>[0]
       );
 
-      expect(result).toEqual({ level: 0, removed: 0 });
+      expect(result).toEqual({ level: 0, removed: 0, failed: true });
       expect(logger.warn).toHaveBeenCalledOnce();
     });
   });

@@ -3,13 +3,13 @@
  *
  * 覆盖范围:
  *   - STRATEGY_ANALYST 阶段序列与转换条件
- *   - STRATEGY_ANALYST getToolChoice 动态切换（40% 预算后 required→auto）
+ *   - STRATEGY_ANALYST getToolChoice 动态切换（SCAN 无工具，EXPLORE 40% 预算后 required→auto）
  *   - STRATEGY_ANALYST EXPLORE→VERIFY 多条件触发
  *   - STRATEGY_ANALYST VERIFY→RECORD→SUMMARIZE 松弛退出
  *   - createBootstrapStrategy 正常 / skill-only 模式
  *   - STRATEGY_PRODUCER 基本行为
  */
-import { describe, expect, test } from 'vitest';
+
 import {
   createBootstrapStrategy,
   type ExplorationBudget,
@@ -19,6 +19,7 @@ import {
   STRATEGY_PRODUCER,
   type TransitionRule,
 } from '@alembic/agent/context';
+import { describe, expect, test } from 'vitest';
 
 function makeBudget(overrides: Partial<ExplorationBudget> = {}): ExplorationBudget {
   return {
@@ -63,8 +64,8 @@ describe('STRATEGY_ANALYST', () => {
   describe('getToolChoice', () => {
     const budget = makeBudget({ maxIterations: 34 });
 
-    test('SCAN phase always returns required', () => {
-      expect(STRATEGY_ANALYST.getToolChoice('SCAN', makeMetrics(), budget)).toBe('required');
+    test('SCAN phase seeds the briefing without tools', () => {
+      expect(STRATEGY_ANALYST.getToolChoice('SCAN', makeMetrics(), budget)).toBe('none');
     });
 
     test('EXPLORE phase returns required before 40% budget', () => {
@@ -193,16 +194,16 @@ describe('STRATEGY_ANALYST', () => {
   describe('SCAN→EXPLORE transition', () => {
     const transition = getTransition(STRATEGY_ANALYST, 'SCAN→EXPLORE');
 
-    test('triggers after 2 iterations', () => {
-      expect(transition.onMetrics!(makeMetrics({ iteration: 2 }), makeBudget())).toBe(true);
+    test('triggers after the first scan round', () => {
+      expect(transition.onMetrics!(makeMetrics({ phaseRounds: 1 }), makeBudget())).toBe(true);
     });
 
-    test('does not trigger at iteration 1', () => {
-      expect(transition.onMetrics!(makeMetrics({ iteration: 1 }), makeBudget())).toBe(false);
+    test('triggers at iteration 1 after the scan seed is available', () => {
+      expect(transition.onMetrics!(makeMetrics({ iteration: 1 }), makeBudget())).toBe(true);
     });
 
-    test('onTextResponse is false (SCAN never exits on text)', () => {
-      expect(transition.onTextResponse).toBe(false);
+    test('onTextResponse is true so SCAN can hand off after the briefing text', () => {
+      expect(transition.onTextResponse).toBe(true);
     });
   });
 });

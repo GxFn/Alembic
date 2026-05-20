@@ -1107,27 +1107,25 @@ describe('ExplorationTracker', () => {
 
   // ─── Analyst 策略特定 ─────────────────────────────────
   describe('Analyst 策略', () => {
-    test('SCAN → EXPLORE 在 iteration>=3 时转换', () => {
+    test('SCAN → EXPLORE 在首轮 scan seed 后转换', () => {
       const tracker = createTracker('analyst');
       expect(tracker.phase).toBe('SCAN');
 
-      for (let i = 0; i < 3; i++) {
-        tracker.tick();
-        tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['code'] });
-      }
+      tracker.tick();
+      tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: [] });
       expect(tracker.phase).toBe('EXPLORE');
     });
 
-    test('SCAN 阶段 toolChoice=required', () => {
+    test('SCAN 阶段 toolChoice=none', () => {
       const tracker = createTracker('analyst');
-      expect(tracker.getToolChoice()).toBe('required');
+      expect(tracker.getToolChoice()).toBe('none');
     });
 
-    test('SCAN 阶段 onTextResponse 不触发转换', () => {
+    test('SCAN 阶段 onTextResponse 触发到 EXPLORE', () => {
       const tracker = createTracker('analyst');
       tracker.tick();
       const result = tracker.onTextResponse();
-      expect(tracker.phase).toBe('SCAN'); // 仍在 SCAN
+      expect(tracker.phase).toBe('EXPLORE');
       expect(result.shouldContinue).toBe(true);
     });
   });
