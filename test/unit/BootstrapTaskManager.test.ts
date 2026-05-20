@@ -4,7 +4,9 @@ import { BootstrapTaskManager } from '../../lib/service/bootstrap/BootstrapTaskM
 interface BootstrapTaskManagerStatus {
   efficiency?: {
     cacheHits: number;
+    cancelReason?: string;
     duplicateToolCalls: number;
+    forcedSummary?: boolean;
     toolCalls: number;
     tokenUsage: { cacheHit: number; input: number; output: number; reasoning: number };
   };
@@ -14,7 +16,9 @@ interface BootstrapTaskManagerStatus {
     completed?: number;
     efficiency?: {
       cacheHits: number;
+      cancelReason?: string;
       duplicateToolCalls: number;
+      forcedSummary?: boolean;
       toolCalls: number;
       tokenUsage: { cacheHit: number; input: number; output: number; reasoning: number };
     };
@@ -24,9 +28,11 @@ interface BootstrapTaskManagerStatus {
   } | null;
   tasks: Array<{
     error: string | null;
+    eventCount?: number;
     id: string;
     result: Record<string, unknown> | null;
     status: string;
+    updatedAt?: number;
   }>;
   totalToolCalls?: number;
   userCancelled: boolean;
@@ -142,5 +148,55 @@ describe('BootstrapTaskManager cancellation semantics', () => {
         tokenUsage: { input: 24, output: 10, reasoning: 5, cacheHit: 7 },
       },
     });
+  });
+
+  test('preserves failed task payloads for progress and efficiency summary', () => {
+    const manager = new BootstrapTaskManager();
+    manager.startSession([{ id: 'dim:api', meta: { dimId: 'api', label: 'API' } }]);
+
+    manager.markTaskFilling('dim:api');
+    manager.markTaskFailed('dim:api', 'record repair did not produce findings', {
+      status: 'degraded_no_findings',
+      reason: 'record repair did not produce findings',
+      toolCallCount: 4,
+      efficiency: {
+        toolCalls: 4,
+        duplicateToolCalls: 1,
+        cacheHits: 1,
+        cacheMisses: 2,
+        tokenUsage: { input: 21, output: 8, reasoning: 3, cacheHit: 5 },
+        maxCompactionLevel: 4,
+        totalCompactedItems: 9,
+        nudgeCount: 2,
+        replanCount: 1,
+        emptyRetries: 0,
+        forcedSummary: true,
+        cancelReason: 'l4_compaction_failed_budget_exhausted',
+      },
+    });
+
+    const status = getStatus(manager);
+    expect(status.status).toBe('completed_with_errors');
+    expect(status.totalToolCalls).toBe(4);
+    expect(status.summary).toMatchObject({
+      completed: 0,
+      failed: 1,
+      efficiency: {
+        toolCalls: 4,
+        cacheHits: 1,
+        forcedSummary: true,
+        cancelReason: 'l4_compaction_failed_budget_exhausted',
+      },
+    });
+    expect(status.tasks[0]).toMatchObject({
+      status: 'failed',
+      error: 'record repair did not produce findings',
+      result: {
+        status: 'degraded_no_findings',
+        reason: 'record repair did not produce findings',
+      },
+    });
+    expect(typeof status.tasks[0].updatedAt).toBe('number');
+    expect(status.tasks[0].eventCount).toBeGreaterThanOrEqual(2);
   });
 });

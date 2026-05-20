@@ -32,11 +32,13 @@ interface TaskMeta {
 }
 
 interface TaskInfo {
+  eventCount: number;
   id: string;
   status: string;
   meta: TaskMeta;
   startedAt: number | null;
   completedAt: number | null;
+  updatedAt: number;
   result: Record<string, unknown> | null;
   error: string | null;
 }
@@ -64,6 +66,7 @@ export const TaskStatus = Object.freeze({
 class BootstrapSession {
   completedAt: number | null;
   id: string;
+  updatedAt: number;
   startedAt: number;
   status: string;
   summary: Record<string, unknown> | null;
@@ -72,6 +75,7 @@ class BootstrapSession {
   constructor(sessionId: string) {
     this.id = sessionId;
     this.startedAt = Date.now();
+    this.updatedAt = this.startedAt;
     this.completedAt = null;
     this.status = 'running'; // running | completed | failed
     this.tasks = new Map(); // taskId → TaskInfo
@@ -82,13 +86,16 @@ class BootstrapSession {
   addTask(taskId: string, meta: TaskMeta) {
     this.tasks.set(taskId, {
       id: taskId,
+      eventCount: 0,
       status: TaskStatus.SKELETON,
       meta, // { type: 'dimension'|'skill', dimId, label, skillWorthy }
       startedAt: null,
       completedAt: null,
+      updatedAt: Date.now(),
       result: null, // 填充结果摘要
       error: null,
     });
+    this.touch();
   }
 
   getTask(taskId: string) {
@@ -132,6 +139,10 @@ class BootstrapSession {
     return count;
   }
 
+  touch(timestamp = Date.now()) {
+    this.updatedAt = timestamp;
+  }
+
   get efficiencySummary() {
     return this.buildEfficiencySummary();
   }
@@ -151,6 +162,7 @@ class BootstrapSession {
       status: this.status,
       startedAt: this.startedAt,
       completedAt: this.completedAt,
+      updatedAt: this.updatedAt,
       progress: this.progress,
       total: this.totalTasks,
       completed: this.completedTasks,
@@ -166,6 +178,8 @@ class BootstrapSession {
         meta: t.meta,
         startedAt: t.startedAt,
         completedAt: t.completedAt,
+        updatedAt: t.updatedAt,
+        eventCount: t.eventCount,
         result: t.result,
         error: t.error,
       })),
@@ -287,11 +301,14 @@ export class BootstrapTaskManager {
       return;
     }
 
+    const now = Date.now();
     // 将未完成的任务全部标记 FAILED
     for (const task of session.tasks.values()) {
       if (task.status === TaskStatus.SKELETON || task.status === TaskStatus.FILLING) {
         task.status = TaskStatus.FAILED;
-        task.completedAt = Date.now();
+        task.completedAt = now;
+        task.updatedAt = now;
+        task.eventCount += 1;
         task.error = reason;
       }
     }
@@ -305,7 +322,8 @@ export class BootstrapTaskManager {
     }
 
     session.status = 'aborted';
-    session.completedAt = Date.now();
+    session.completedAt = now;
+    session.touch(now);
     session.summary = session.buildSummary({ aborted: true, reason });
 
     Logger.info(`[Bootstrap] Session ${session.id} aborted: ${reason}`);
@@ -396,7 +414,11 @@ export class BootstrapTaskManager {
     }
 
     task.status = TaskStatus.FILLING;
-    task.startedAt = Date.now();
+    const now = Date.now();
+    task.startedAt = now;
+    task.updatedAt = now;
+    task.eventCount += 1;
+    session.touch(now);
 
     Logger.info(`[Bootstrap] Task "${taskId}" filling started`);
     this.#emit('bootstrap:task-started', {
@@ -422,8 +444,12 @@ export class BootstrapTaskManager {
     }
 
     task.status = TaskStatus.COMPLETED;
-    task.completedAt = Date.now();
+    const now = Date.now();
+    task.completedAt = now;
+    task.updatedAt = now;
+    task.eventCount += 1;
     task.result = result;
+    session.touch(now);
 
     Logger.info(
       `[Bootstrap] Task "${taskId}" completed (${session.completedTasks}/${session.totalTasks})`
@@ -448,7 +474,7 @@ export class BootstrapTaskManager {
   }
 
   /** 标记单个任务失败 */
-  markTaskFailed(taskId: string, error: unknown) {
+  markTaskFailed(taskId: string, error: unknown, result: Record<string, unknown> = {}) {
     const session = this.#currentSession;
     if (!session || session.status !== 'running' || session.userCancelled) {
       return;
@@ -459,9 +485,14 @@ export class BootstrapTaskManager {
     }
 
     task.status = TaskStatus.FAILED;
-    task.completedAt = Date.now();
+    const now = Date.now();
+    task.completedAt = now;
+    task.updatedAt = now;
+    task.eventCount += 1;
     task.error =
       typeof error === 'string' ? error : error instanceof Error ? error.message : 'Unknown error';
+    task.result = Object.keys(result).length > 0 ? result : null;
+    session.touch(now);
 
     Logger.warn(`[Bootstrap] Task "${taskId}" failed: ${task.error}`);
     this.#emit('bootstrap:task-failed', {

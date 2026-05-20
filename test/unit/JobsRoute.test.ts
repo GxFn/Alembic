@@ -53,6 +53,7 @@ describe('jobs route response decoration', () => {
     expect(decorated.progress).toMatchObject({
       activeTaskId: 'dim_architecture',
       activeTaskLabel: 'Architecture',
+      activeTaskStatus: 'filling',
       completed: 2,
       percent: 40,
       sessionId: 'bs_live',
@@ -293,6 +294,99 @@ describe('jobs route response decoration', () => {
         cacheHits: 2,
         tokenUsage: { input: 9, output: 4, reasoning: 2, cacheHit: 3 },
       },
+    });
+  });
+
+  test('keeps non-normal dimension results out of the completed bucket and exposes diagnostics', () => {
+    const job = makeJob({
+      bootstrapSessionId: 'bs_evidence_issue',
+      status: 'running',
+      result: {
+        bootstrapSession: {
+          id: 'bs_evidence_issue',
+          status: 'completed_with_errors',
+          total: 2,
+          completed: 1,
+          failed: 1,
+          updatedAt: Date.parse('2026-05-08T00:01:30.000Z'),
+          tasks: [
+            {
+              id: 'dim:api',
+              status: 'failed',
+              updatedAt: Date.parse('2026-05-08T00:01:30.000Z'),
+              error: 'record repair did not produce findings',
+              result: {
+                status: 'degraded_no_findings',
+                reason: 'record repair did not produce findings',
+                efficiency: {
+                  toolCalls: 5,
+                  duplicateToolCalls: 1,
+                  cacheHits: 2,
+                  cacheMisses: 1,
+                  tokenUsage: { input: 90, output: 20, reasoning: 5, cacheHit: 10 },
+                  maxCompactionLevel: 4,
+                  totalCompactedItems: 12,
+                  nudgeCount: 2,
+                  replanCount: 1,
+                  emptyRetries: 0,
+                  forcedSummary: true,
+                  cancelReason: 'l4_compaction_failed_budget_exhausted',
+                },
+                diagnostics: {
+                  degraded: true,
+                  timedOutStages: ['quality_gate_record_repair'],
+                  gateFailures: [
+                    {
+                      stage: 'l4_compaction',
+                      action: 'degrade',
+                      reason: 'l4_compaction_failed_budget_exhausted',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    const decorated = decorateJobForResponse(job, null, { compact: true });
+
+    expect(decorated.status).toBe('failed');
+    expect(decorated.progress).toMatchObject({
+      completed: 1,
+      failed: 1,
+      percent: 100,
+      status: 'failed',
+      updatedAt: '2026-05-08T00:01:30.000Z',
+    });
+    expect(decorated.summary).toMatchObject({
+      completed: 1,
+      failed: 1,
+      status: 'failed',
+      efficiency: {
+        toolCalls: 5,
+        forcedSummary: true,
+        cancelReason: 'l4_compaction_failed_budget_exhausted',
+      },
+      diagnostics: {
+        degraded: true,
+        forcedSummary: true,
+        cancelReason: 'l4_compaction_failed_budget_exhausted',
+        statuses: {
+          degraded_no_findings: 1,
+        },
+        timedOutStages: ['quality_gate_record_repair'],
+      },
+    });
+    expect(decorated.summary?.diagnostics).toMatchObject({
+      issues: [
+        {
+          taskId: 'dim:api',
+          status: 'degraded_no_findings',
+          reason: 'record repair did not produce findings',
+        },
+      ],
     });
   });
 });

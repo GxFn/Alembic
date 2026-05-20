@@ -30,8 +30,12 @@ const CancelJobBody = z.object({
 });
 
 export interface DaemonJobApiProgress {
+  activeTaskEventCount?: number;
   activeTaskId?: string;
   activeTaskLabel?: string;
+  activeTaskStartedAt?: number;
+  activeTaskStatus?: string;
+  activeTaskUpdatedAt?: number;
   completed?: number;
   failed?: number;
   filling?: number;
@@ -41,6 +45,7 @@ export interface DaemonJobApiProgress {
   status: string;
   total?: number;
   totalToolCalls?: number;
+  updatedAt?: string;
 }
 
 export interface DaemonJobApiRecord extends DaemonJobRecord {
@@ -50,6 +55,9 @@ export interface DaemonJobApiRecord extends DaemonJobRecord {
 }
 
 type DaemonJobApiProgressNumberKey =
+  | 'activeTaskEventCount'
+  | 'activeTaskStartedAt'
+  | 'activeTaskUpdatedAt'
   | 'completed'
   | 'failed'
   | 'filling'
@@ -284,6 +292,12 @@ function buildJobProgress(
   if (activeTask?.label) {
     progress.activeTaskLabel = activeTask.label;
   }
+  if (activeTask?.status) {
+    progress.activeTaskStatus = activeTask.status;
+  }
+  setNumber(progress, 'activeTaskStartedAt', activeTask?.startedAt);
+  setNumber(progress, 'activeTaskUpdatedAt', activeTask?.updatedAt);
+  setNumber(progress, 'activeTaskEventCount', activeTask?.eventCount);
   setNumber(progress, 'completed', completed);
   setNumber(progress, 'failed', failed);
   setNumber(progress, 'filling', numberField(session, 'filling'));
@@ -291,6 +305,10 @@ function buildJobProgress(
   setNumber(progress, 'skeleton', numberField(session, 'skeleton'));
   setNumber(progress, 'total', total);
   setNumber(progress, 'totalToolCalls', numberField(session, 'totalToolCalls'));
+  const updatedAt = resolveProgressUpdatedAt(session, job);
+  if (updatedAt) {
+    progress.updatedAt = updatedAt;
+  }
 
   const sessionId = getSessionId(session);
   if (sessionId) {
@@ -380,9 +398,14 @@ function buildSessionSummaryRecord(
   }
   const explicit = getSummaryRecord(session);
   const efficiency = extractSessionEfficiency(session);
+  const diagnostics = extractSessionDiagnostics(session);
   if (explicit) {
     return normalizeSummaryForStatus(
-      efficiency ? { ...explicit, efficiency } : explicit,
+      {
+        ...explicit,
+        ...(efficiency ? { efficiency } : {}),
+        ...(diagnostics ? { diagnostics } : {}),
+      },
       responseStatus,
       job,
       session
@@ -414,6 +437,7 @@ function buildSessionSummaryRecord(
       ...(typeof failed === 'number' ? { failed } : {}),
       ...(session.userCancelled === true ? { aborted: true } : {}),
       ...(efficiency ? { efficiency } : {}),
+      ...(diagnostics ? { diagnostics } : {}),
     },
     responseStatus,
     job,
@@ -491,6 +515,78 @@ function extractSessionEfficiency(session: Record<string, unknown> | null | unde
   );
 }
 
+function extractSessionDiagnostics(
+  session: Record<string, unknown> | null | undefined
+): Record<string, unknown> | null {
+  if (!session) {
+    return null;
+  }
+  const tasks = Array.isArray(session.tasks) ? session.tasks : [];
+  const statuses: Record<string, number> = {};
+  const gateFailures: unknown[] = [];
+  const timedOutStages = new Set<string>();
+  const issues: Array<{ taskId?: string; status?: string; reason?: string }> = [];
+  let degraded = false;
+  let forcedSummary = false;
+  let cancelReason: string | undefined;
+
+  for (const taskValue of tasks) {
+    const task = asRecordOrNull(taskValue);
+    const result = asRecordOrNull(task?.result);
+    const diagnostics = asRecordOrNull(result?.diagnostics);
+    const status = stringField(result, 'status') || stringField(task, 'status');
+    if (status) {
+      statuses[status] = (statuses[status] || 0) + 1;
+    }
+    const reason =
+      stringField(result, 'reason') || stringField(result, 'error') || stringField(task, 'error');
+    if (isIssueStatus(status) || reason) {
+      issues.push({
+        ...(stringField(task, 'id') ? { taskId: stringField(task, 'id') } : {}),
+        ...(status ? { status } : {}),
+        ...(reason ? { reason } : {}),
+      });
+    }
+    if (diagnostics?.degraded === true || result?.degraded === true) {
+      degraded = true;
+    }
+    if (Array.isArray(diagnostics?.gateFailures)) {
+      gateFailures.push(...diagnostics.gateFailures);
+    }
+    if (Array.isArray(diagnostics?.timedOutStages)) {
+      for (const stage of diagnostics.timedOutStages) {
+        if (typeof stage === 'string' && stage.trim()) {
+          timedOutStages.add(stage.trim());
+        }
+      }
+    }
+    const efficiency = asRecordOrNull(result?.efficiency);
+    forcedSummary = forcedSummary || efficiency?.forcedSummary === true;
+    cancelReason = stringField(efficiency, 'cancelReason') || cancelReason;
+  }
+
+  const hasDiagnostics =
+    Object.keys(statuses).length > 0 ||
+    gateFailures.length > 0 ||
+    timedOutStages.size > 0 ||
+    issues.length > 0 ||
+    degraded ||
+    forcedSummary ||
+    Boolean(cancelReason);
+  if (!hasDiagnostics) {
+    return null;
+  }
+  return {
+    statuses,
+    ...(issues.length > 0 ? { issues } : {}),
+    ...(gateFailures.length > 0 ? { gateFailures } : {}),
+    ...(timedOutStages.size > 0 ? { timedOutStages: [...timedOutStages] } : {}),
+    ...(degraded ? { degraded: true } : {}),
+    ...(forcedSummary ? { forcedSummary: true } : {}),
+    ...(cancelReason ? { cancelReason } : {}),
+  };
+}
+
 function getJobSessionId(job: DaemonJobRecord): string | undefined {
   if (job.bootstrapSessionId) {
     return job.bootstrapSessionId;
@@ -502,9 +598,14 @@ function getSessionId(session: Record<string, unknown> | null | undefined): stri
   return stringField(session, 'id') || stringField(session, 'sessionId');
 }
 
-function getActiveTask(
-  session: Record<string, unknown> | null
-): { id?: string; label?: string } | null {
+function getActiveTask(session: Record<string, unknown> | null): {
+  eventCount?: number;
+  id?: string;
+  label?: string;
+  startedAt?: number;
+  status?: string;
+  updatedAt?: number;
+} | null {
   const tasks = Array.isArray(session?.tasks) ? session.tasks : [];
   const task = tasks
     .map((value) => asRecordOrNull(value))
@@ -514,9 +615,45 @@ function getActiveTask(
   }
   const meta = asRecordOrNull(task.meta);
   return {
+    eventCount: numberField(task, 'eventCount'),
     id: stringField(task, 'id'),
     label: stringField(meta, 'label') || stringField(meta, 'dimId') || stringField(task, 'id'),
+    startedAt: numberField(task, 'startedAt'),
+    status: stringField(task, 'status'),
+    updatedAt: numberField(task, 'updatedAt'),
   };
+}
+
+function resolveProgressUpdatedAt(
+  session: Record<string, unknown> | null,
+  job: DaemonJobRecord
+): string | undefined {
+  const sessionUpdatedAt = numberField(session, 'updatedAt');
+  if (typeof sessionUpdatedAt === 'number') {
+    return new Date(sessionUpdatedAt).toISOString();
+  }
+  const tasks = Array.isArray(session?.tasks) ? session.tasks : [];
+  const latestTaskUpdatedAt = tasks
+    .map((task) => numberField(asRecordOrNull(task), 'updatedAt'))
+    .filter((value): value is number => typeof value === 'number')
+    .reduce((latest, value) => Math.max(latest, value), 0);
+  if (latestTaskUpdatedAt > 0) {
+    return new Date(latestTaskUpdatedAt).toISOString();
+  }
+  return job.updatedAt;
+}
+
+function isIssueStatus(status: string | undefined): boolean {
+  return [
+    'failed',
+    'timeout',
+    'blocked',
+    'aborted',
+    'error',
+    'degraded_no_findings',
+    'record_repair_incomplete',
+    'l4_compaction_failed_budget_exhausted',
+  ].includes(status || '');
 }
 
 function sessionTimingFitsJob(session: Record<string, unknown>, job: DaemonJobRecord): boolean {

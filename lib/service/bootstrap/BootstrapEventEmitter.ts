@@ -54,7 +54,11 @@ export class BootstrapEventEmitter {
   emitDimensionComplete(dimId: string, data: DimensionCompletePayload) {
     // TaskManager 标记
     try {
-      this.#taskManager?.markTaskCompleted?.(dimId, data);
+      if (isNonNormalDimensionPayload(data)) {
+        this.#taskManager?.markTaskFailed?.(dimId, extractDimensionFailureReason(data), data);
+      } else {
+        this.#taskManager?.markTaskCompleted?.(dimId, data);
+      }
     } catch {
       /* non-blocking */
     }
@@ -144,6 +148,33 @@ export class BootstrapEventEmitter {
       /* non-blocking */
     }
   }
+}
+
+function isNonNormalDimensionPayload(data: DimensionCompletePayload): boolean {
+  if (data.type === 'error') {
+    return true;
+  }
+  const status = 'status' in data && typeof data.status === 'string' ? data.status : '';
+  return [
+    'timeout',
+    'blocked',
+    'aborted',
+    'error',
+    'degraded_no_findings',
+    'record_repair_incomplete',
+    'l4_compaction_failed_budget_exhausted',
+  ].includes(status);
+}
+
+function extractDimensionFailureReason(data: DimensionCompletePayload): string {
+  if ('reason' in data && typeof data.reason === 'string' && data.reason.trim()) {
+    return data.reason.trim();
+  }
+  const status = 'status' in data ? data.status : undefined;
+  if (typeof status === 'string' && status.trim()) {
+    return status.trim();
+  }
+  return data.type === 'error' ? 'dimension-error' : 'non-normal-dimension-status';
 }
 
 export default BootstrapEventEmitter;

@@ -29,6 +29,9 @@ export interface DimensionCheckpointRestoredPayload {
 export interface DimensionErrorPayload {
   type: 'error';
   reason: string;
+  status?: string;
+  diagnostics?: unknown;
+  efficiency?: AgentEfficiencySummary | null;
 }
 
 export interface DimensionPipelineCompletePayload {
@@ -36,8 +39,10 @@ export interface DimensionPipelineCompletePayload {
   extracted: number;
   created: number;
   status: string;
+  reason?: string;
   degraded: boolean;
   durationMs: number;
+  diagnostics?: unknown;
   toolCallCount: number;
   tokenUsage?: { input: number; output: number };
   efficiency?: AgentEfficiencySummary | null;
