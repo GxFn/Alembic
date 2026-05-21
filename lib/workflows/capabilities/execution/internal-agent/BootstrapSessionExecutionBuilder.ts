@@ -122,9 +122,9 @@ export function buildBootstrapSessionExecutionInput({
             dimension: dimId,
             status: result.status,
             profileId: result.profileId,
-            toolCallCount: result.toolCalls.length,
-            durationMs: result.usage.durationMs,
-            iterations: result.usage.iterations,
+            toolCallCount: getAgentRunToolCallCount(result),
+            durationMs: result.usage?.durationMs ?? null,
+            iterations: result.usage?.iterations ?? null,
             runIssue: runIssue || null,
             diagnostics: summarizeDiagnostics(result.diagnostics),
           });
@@ -162,7 +162,7 @@ export function buildBootstrapSessionExecutionInput({
                 dimension: dimId,
                 runIssue,
                 status: result.status,
-                toolCallCount: result.toolCalls.length,
+                toolCallCount: getAgentRunToolCallCount(result),
                 diagnostics: summarizeDiagnostics(result.diagnostics),
               });
               consumeDimensionError({ dimId, err: runIssue });
@@ -408,4 +408,8 @@ function summarizeDiagnostics(diagnostics: AgentRunResult['diagnostics']) {
     timedOutStages: diagnostics.timedOutStages || [],
     gateFailures: diagnostics.gateFailures || [],
   };
+}
+
+function getAgentRunToolCallCount(result: AgentRunResult): number {
+  return Array.isArray(result.toolCalls) ? result.toolCalls.length : 0;
 }
