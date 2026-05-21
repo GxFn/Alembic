@@ -1,3 +1,8 @@
+import { ConfigLoader } from '@alembic/core/config';
+import { JobStore } from '@alembic/core/daemon';
+import { ALL_DIMENSION_IDS, isKnownDimensionId } from '@alembic/core/dimensions';
+import { SignalBus } from '@alembic/core/events';
+import { createGuardCheckEngine, detectLanguage } from '@alembic/core/guard';
 import { KnowledgeEntry, KnowledgeService, Lifecycle } from '@alembic/core/knowledge';
 import {
   analyzeSourceFile,
@@ -9,7 +14,9 @@ import {
   parseXcodeGenProject,
   profileTechStack,
 } from '@alembic/core/project-intelligence';
+import { BM25Scorer, SearchEngine, tokenize } from '@alembic/core/search';
 import { chunk, HnswIndex } from '@alembic/core/vector';
+import { resolveKnowledgeScanDirs, WorkspaceResolver } from '@alembic/core/workspace';
 import { describe, expect, it } from 'vitest';
 
 describe('Core public surface smoke', () => {
@@ -62,6 +69,18 @@ describe('Core public surface smoke', () => {
     expect(chunks[0]?.metadata.sourcePath).toBe('docs/note.md');
   });
 
+  it('keeps search facade consumable without duplicating Core ranking tests', () => {
+    const scorer = new BM25Scorer();
+    scorer.addDocument('doc-1', 'URLSession retry policy', { title: 'Network retry' });
+
+    const db = { prepare: () => ({ all: () => [] }) };
+    const search = new SearchEngine(db);
+
+    expect(tokenize('URLSessionRetry')).toEqual(expect.arrayContaining(['url', 'session']));
+    expect(scorer.search('retry', 1)[0]?.id).toBe('doc-1');
+    expect(search).toBeDefined();
+  });
+
   it('keeps AST, call graph, and parser facades consumable from Alembic', () => {
     const summary = analyzeSourceFile(
       'export class UserService { findUser(id: string) { return id; } }',
@@ -94,5 +113,23 @@ describe('Core public surface smoke', () => {
     expect(entry.title).toBe('Smoke Pattern');
     expect(Lifecycle.ACTIVE).toBe('active');
     expect(KnowledgeService).toBeDefined();
+  });
+
+  it('keeps foundation facades consumable from Alembic host wiring', () => {
+    const guard = createGuardCheckEngine(null);
+
+    expect(new SignalBus()).toBeDefined();
+    expect(JobStore).toBeDefined();
+    expect(new WorkspaceResolver({ projectRoot: '/tmp/project' })).toBeDefined();
+    expect(resolveKnowledgeScanDirs({ projectRoot: '/tmp/project' })).toEqual(
+      expect.arrayContaining(['recipes', 'candidates'])
+    );
+    expect(detectLanguage('ViewController.swift')).toBe('swift');
+    expect(guard.auditFile('ViewController.swift', 'try! risky()').summary.total).toBeGreaterThan(
+      0
+    );
+    expect(ALL_DIMENSION_IDS.length).toBeGreaterThan(0);
+    expect(isKnownDimensionId(ALL_DIMENSION_IDS[0])).toBe(true);
+    expect(ConfigLoader).toBeDefined();
   });
 });
