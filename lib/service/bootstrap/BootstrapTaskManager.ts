@@ -134,8 +134,10 @@ class BootstrapSession {
         count += explicitCount;
         continue;
       }
-      const efficiency = isRecord(t.result?.efficiency) ? t.result.efficiency : null;
-      const efficiencyToolCalls = numberValue(efficiency?.toolCalls);
+      const efficiency = t.result?.efficiency;
+      const efficiencyToolCalls = isRecord(efficiency)
+        ? numberValue(efficiency.toolCalls)
+        : undefined;
       if (typeof efficiencyToolCalls === 'number') {
         count += efficiencyToolCalls;
       }
@@ -282,7 +284,13 @@ export class BootstrapTaskManager {
     }
 
     Logger.info(
-      `[Bootstrap] Session ${sessionId} started with ${taskDefs.length} tasks${testModePayload ? ' [TEST MODE]' : ''}`
+      `[Bootstrap] Session ${sessionId} started with ${taskDefs.length} tasks${testModePayload ? ' [TEST MODE]' : ''}`,
+      {
+        sessionId,
+        taskCount: taskDefs.length,
+        taskIds: taskDefs.map((task) => task.id),
+        testMode: Boolean(testModePayload),
+      }
     );
     this.#emit('bootstrap:started', {
       sessionId,
@@ -334,7 +342,15 @@ export class BootstrapTaskManager {
     session.touch(now);
     session.summary = session.buildSummary({ aborted: true, reason });
 
-    Logger.info(`[Bootstrap] Session ${session.id} aborted: ${reason}`);
+    Logger.info(`[Bootstrap] Session ${session.id} aborted: ${reason}`, {
+      sessionId: session.id,
+      reason,
+      completed: session.completedTasks,
+      failed: session.failedTasks,
+      cancelled: session.cancelledTasks,
+      filling: session.fillingTasks,
+      skeleton: session.skeletonTasks,
+    });
     this.#emit('bootstrap:all-completed', {
       sessionId: session.id,
       status: session.status,
@@ -429,7 +445,18 @@ export class BootstrapTaskManager {
     task.eventCount += 1;
     session.touch(now);
 
-    Logger.info(`[Bootstrap] Task "${taskId}" filling started`);
+    // 这条日志是 Dashboard 之外最重要的冷启动心跳：它说明某个维度已经真正
+    // 进入 Agent child run，而不是还停留在 skeleton 队列里。
+    Logger.info(`[Bootstrap] Task "${taskId}" filling started`, {
+      sessionId: session.id,
+      taskId,
+      label: task.meta.label || null,
+      dimId: task.meta.dimId || taskId,
+      startedAt: task.startedAt,
+      eventCount: task.eventCount,
+      filling: session.fillingTasks,
+      skeleton: session.skeletonTasks,
+    });
     this.#emit('bootstrap:task-started', {
       sessionId: session.id,
       taskId,
@@ -461,7 +488,22 @@ export class BootstrapTaskManager {
     session.touch(now);
 
     Logger.info(
-      `[Bootstrap] Task "${taskId}" completed (${session.completedTasks}/${session.totalTasks})`
+      `[Bootstrap] Task "${taskId}" completed (${session.completedTasks}/${session.totalTasks})`,
+      {
+        sessionId: session.id,
+        taskId,
+        label: task.meta.label || null,
+        dimId: task.meta.dimId || taskId,
+        durationMs:
+          typeof task.startedAt === 'number' && typeof task.completedAt === 'number'
+            ? task.completedAt - task.startedAt
+            : null,
+        eventCount: task.eventCount,
+        resultStatus: result.status || null,
+        toolCallCount: resolveResultToolCallCount(result),
+        created: result.created || null,
+        degraded: result.degraded === true,
+      }
     );
     this.#emit('bootstrap:task-completed', {
       sessionId: session.id,
@@ -503,7 +545,20 @@ export class BootstrapTaskManager {
     task.result = Object.keys(result).length > 0 ? result : null;
     session.touch(now);
 
-    Logger.warn(`[Bootstrap] Task "${taskId}" failed: ${task.error}`);
+    Logger.warn(`[Bootstrap] Task "${taskId}" failed: ${task.error}`, {
+      sessionId: session.id,
+      taskId,
+      label: task.meta.label || null,
+      dimId: task.meta.dimId || taskId,
+      durationMs:
+        typeof task.startedAt === 'number' && typeof task.completedAt === 'number'
+          ? task.completedAt - task.startedAt
+          : null,
+      eventCount: task.eventCount,
+      resultStatus: result.status || null,
+      reason: result.reason || task.error,
+      diagnostics: result.diagnostics || null,
+    });
     this.#emit('bootstrap:task-failed', {
       sessionId: session.id,
       taskId,
@@ -568,7 +623,16 @@ export class BootstrapTaskManager {
 
     const durationSec = ((session.completedAt - session.startedAt) / 1000).toFixed(1);
     Logger.info(
-      `[Bootstrap] Session ${session.id} finished: ${session.completedTasks} completed, ${session.failedTasks} failed (${durationSec}s)`
+      `[Bootstrap] Session ${session.id} finished: ${session.completedTasks} completed, ${session.failedTasks} failed (${durationSec}s)`,
+      {
+        sessionId: session.id,
+        status: session.status,
+        completed: session.completedTasks,
+        failed: session.failedTasks,
+        cancelled: session.cancelledTasks,
+        durationMs: (session.completedAt ?? Date.now()) - session.startedAt,
+        efficiency: session.efficiencySummary,
+      }
     );
 
     this.#emit('bootstrap:all-completed', {
@@ -628,4 +692,13 @@ function numberValue(value: unknown): number | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function resolveResultToolCallCount(result: Record<string, unknown>): number {
+  const explicit = numberValue(result.toolCallCount);
+  if (typeof explicit === 'number') {
+    return explicit;
+  }
+  const efficiency = result.efficiency;
+  return isRecord(efficiency) ? (numberValue(efficiency.toolCalls) ?? 0) : 0;
 }

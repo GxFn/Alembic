@@ -234,7 +234,35 @@ export async function runInternalDimensionAgentSession({
   });
 
   const startedAtMs = Date.now();
-  const parentRunResult = await services.agentService.run(bootstrapSessionInput);
+  logger.info('[Insight-v3] Bootstrap agent session run start', {
+    sessionId: preparation.sessionId,
+    activeDimIds,
+    skippedDimIds: admissions.skippedDimIds,
+    concurrency: enableParallel ? concurrency : 1,
+    incremental: preparation.isIncremental,
+  });
+  let parentRunResult: AgentRunResult;
+  try {
+    parentRunResult = await services.agentService.run(bootstrapSessionInput);
+    logger.info('[Insight-v3] Bootstrap agent session run complete', {
+      sessionId: preparation.sessionId,
+      durationMs: Date.now() - startedAtMs,
+      status: parentRunResult.status,
+      profileId: parentRunResult.profileId,
+      childResultCount: Object.keys(
+        (parentRunResult.phases?.dimensionResults as Record<string, unknown> | undefined) || {}
+      ).length,
+      toolCallCount: parentRunResult.toolCalls.length,
+      usage: parentRunResult.usage,
+    });
+  } catch (err: unknown) {
+    logger.warn('[Insight-v3] Bootstrap agent session run failed', {
+      sessionId: preparation.sessionId,
+      durationMs: Date.now() - startedAtMs,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
   consumeBootstrapSessionResult({ parentRunResult, durationMs: Date.now() - startedAtMs });
 
   if (bootstrapDedup.count > 0) {

@@ -42,6 +42,12 @@ export function createDaemonJob(options: DaemonJobOptions): DaemonJobRecord {
 
 export function enqueueDaemonJob(options: DaemonJobOptions): DaemonJobRecord {
   const job = createDaemonJob(options);
+  options.logger.info('Daemon job enqueued', {
+    jobId: job.id,
+    kind: options.kind,
+    source: options.source || 'system',
+    request: options.args || {},
+  });
   queueMicrotask(() => {
     void runDaemonJob({ ...options, jobId: job.id }).catch((err: unknown) => {
       options.logger.error('Daemon job failed after enqueue', {
@@ -103,6 +109,13 @@ export async function runDaemonJob(options: RunDaemonJobOptions): Promise<RunDae
     });
     return { job, result };
   } catch (err: unknown) {
+    options.logger.error('Daemon job failed', {
+      jobId: options.jobId,
+      kind: options.kind,
+      source: options.source,
+      error: err instanceof Error ? err.message : String(err),
+      stage: 'job-failed',
+    });
     store.fail(options.jobId, err);
     throw err;
   }

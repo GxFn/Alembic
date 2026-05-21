@@ -117,10 +117,28 @@ export function buildBootstrapSessionExecutionInput({
             return;
           }
           const runIssue = resolveBootstrapDimensionRunIssue(result, { includeDegraded: false });
+          logger.info('[Insight-v3] Dimension child result received', {
+            sessionId,
+            dimension: dimId,
+            status: result.status,
+            profileId: result.profileId,
+            toolCallCount: result.toolCalls.length,
+            durationMs: result.usage.durationMs,
+            iterations: result.usage.iterations,
+            runIssue: runIssue || null,
+            diagnostics: summarizeDiagnostics(result.diagnostics),
+          });
           const plan = resolvePlan(dimId);
           const state = childExecutionState.get(dimId);
           if (!plan || !state) {
             if (runIssue) {
+              logger.warn('[Insight-v3] Dimension child result missing local plan/state', {
+                sessionId,
+                dimension: dimId,
+                runIssue,
+                hasPlan: Boolean(plan),
+                hasState: Boolean(state),
+              });
               consumeDimensionError({ dimId, err: runIssue });
             }
             return;
@@ -139,6 +157,14 @@ export function buildBootstrapSessionExecutionInput({
               successCount: projection.successCount,
             });
             if (!recoveredProducerTimeout) {
+              logger.warn('[Insight-v3] Dimension child result failed', {
+                sessionId,
+                dimension: dimId,
+                runIssue,
+                status: result.status,
+                toolCallCount: result.toolCalls.length,
+                diagnostics: summarizeDiagnostics(result.diagnostics),
+              });
               consumeDimensionError({ dimId, err: runIssue });
               return;
             }
@@ -161,6 +187,11 @@ export function buildBootstrapSessionExecutionInput({
           tierIndex: number;
           childInputs: AgentRunInput[];
         }) => {
+          logger.info('[Insight-v3] Bootstrap tier complete', {
+            sessionId,
+            tierIndex,
+            dimensions: childInputs.map((childInput) => getBootstrapChildDimensionId(childInput)),
+          });
           const tierResults = new Map<string, DimensionStat>();
           for (const childInput of childInputs) {
             const dimId = getBootstrapChildDimensionId(childInput);
@@ -184,9 +215,13 @@ export function buildBootstrapSessionExecutionInput({
     presentation: { responseShape: 'system-task-result' },
   });
 
-  logger.debug?.(
-    `[Insight-v3] Prepared bootstrap-session parent input: ${(input.params?.dimensions as unknown[] | undefined)?.length || 0} child runs`
-  );
+  logger.info('[Insight-v3] Prepared bootstrap-session parent input', {
+    sessionId,
+    childRunCount: (input.params?.dimensions as unknown[] | undefined)?.length || 0,
+    concurrency,
+    activeDimIds,
+    skippedDimIds,
+  });
 
   return { input, childExecutionState };
 }
@@ -359,4 +394,18 @@ function beginBootstrapDimensionExecution({
 
 export function getBootstrapChildDimensionId(childInput: AgentRunInput) {
   return typeof childInput.params?.dimId === 'string' ? childInput.params.dimId : null;
+}
+
+function summarizeDiagnostics(diagnostics: AgentRunResult['diagnostics']) {
+  if (!diagnostics) {
+    return null;
+  }
+  return {
+    aiErrorCount: diagnostics.aiErrorCount ?? null,
+    cancelReason: diagnostics.efficiency?.cancelReason ?? null,
+    degraded: diagnostics.degraded === true,
+    emptyResponses: diagnostics.emptyResponses ?? null,
+    timedOutStages: diagnostics.timedOutStages || [],
+    gateFailures: diagnostics.gateFailures || [],
+  };
 }
