@@ -68,8 +68,14 @@ jobs:
 
       - name: Upgrade npm for trusted publishing
         run: |
-          npm install -g npm@^11.5.1
-          npm --version
+          set -euo pipefail
+          current_npm="$(npm --version)"
+          echo "Bundled npm: ${current_npm}"
+          if npm install -g npm@^11.5.1; then
+            echo "Release npm: $(npm --version)"
+          else
+            echo "::warning::Unable to upgrade npm; continuing with bundled npm ${current_npm} so the release can reach the publish boundary."
+          fi
 
       - name: Verify tag matches package version
         run: |
