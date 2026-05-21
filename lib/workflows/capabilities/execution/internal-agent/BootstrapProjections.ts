@@ -85,6 +85,7 @@ export type BootstrapDimensionRunIssueStatus =
   | 'degraded_budget_exhausted'
   | 'degraded_no_findings'
   | 'record_repair_incomplete'
+  | 'quality_gate_failed'
   | 'l4_compaction_failed_budget_exhausted';
 
 export interface BootstrapDimensionRunIssue {
@@ -180,6 +181,10 @@ export function resolveBootstrapDimensionRunIssue(
       diagnostics,
     };
   }
+  const qualityGateIssue = resolveUnresolvedQualityGateIssue(result, diagnostics);
+  if (qualityGateIssue) {
+    return qualityGateIssue;
+  }
   if (options.includeDegraded === false) {
     return null;
   }
@@ -256,6 +261,34 @@ export function resolveBootstrapDimensionRunIssue(
     }
   }
   return null;
+}
+
+function resolveUnresolvedQualityGateIssue(
+  result: AgentResultLike | AgentRunResult,
+  diagnostics: AgentDiagnostics | null
+): BootstrapDimensionRunIssue | null {
+  const phases = result.phases || {};
+  const gate = phases.quality_gate as
+    | {
+        pass?: boolean;
+        action?: string;
+        reason?: string;
+        artifact?: { qualityReport?: { suggestions?: string[] } };
+      }
+    | undefined;
+  if (!gate || gate.pass !== false || phases.produce) {
+    return null;
+  }
+  const suggestion = Array.isArray(gate.artifact?.qualityReport?.suggestions)
+    ? gate.artifact.qualityReport.suggestions.find(
+        (item): item is string => typeof item === 'string' && item.trim().length > 0
+      )
+    : '';
+  return {
+    status: 'quality_gate_failed',
+    reason: gate.reason || gate.action || suggestion || 'Quality gate failed before producer stage',
+    diagnostics,
+  };
 }
 
 export function projectBootstrapDimensionAgentOutput({

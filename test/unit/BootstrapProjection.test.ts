@@ -243,6 +243,30 @@ describe('bootstrap projections', () => {
     });
   });
 
+  test('classifies unresolved quality gate without producer as a failed dimension issue', () => {
+    expect(
+      resolveBootstrapDimensionRunIssue(
+        makeRunResult({
+          status: 'success',
+          phases: {
+            analyze: {
+              reply:
+                'Coding standards analysis returned natural language but did not record findings.',
+            },
+            quality_gate: {
+              pass: false,
+              action: 'analysis_retry',
+              reason: 'Required note_finding calls are missing',
+            },
+          },
+        })
+      )
+    ).toMatchObject({
+      status: 'quality_gate_failed',
+      reason: 'Required note_finding calls are missing',
+    });
+  });
+
   test('projects bootstrap session parent result coverage', () => {
     const projection = projectBootstrapSessionResult({
       parentRunResult: makeRunResult({
@@ -305,6 +329,17 @@ describe('bootstrap projections', () => {
                 ],
               },
             }),
+            gate: makeRunResult({
+              runId: 'gate:run',
+              status: 'success',
+              phases: {
+                quality_gate: {
+                  pass: false,
+                  action: 'analysis_retry',
+                  reason: 'Required note_finding calls are missing',
+                },
+              },
+            }),
             producer: makeRunResult({
               runId: 'producer:run',
               status: 'success',
@@ -351,6 +386,7 @@ describe('bootstrap projections', () => {
         'security',
         'evidence',
         'budget',
+        'gate',
         'producer',
         'data',
         'restored',
@@ -358,8 +394,14 @@ describe('bootstrap projections', () => {
       skippedDimIds: ['restored'],
     });
 
-    expect(projection.completedDimensions).toBe(7);
-    expect(projection.failedDimensionIds.sort()).toEqual(['api', 'budget', 'evidence', 'security']);
+    expect(projection.completedDimensions).toBe(8);
+    expect(projection.failedDimensionIds.sort()).toEqual([
+      'api',
+      'budget',
+      'evidence',
+      'gate',
+      'security',
+    ]);
     expect(projection.abortedDimensionIds).toEqual(['ui']);
     expect(projection.missingDimensionIds).toEqual(['data']);
     expect(projection.parentStatus).toBe('aborted');
