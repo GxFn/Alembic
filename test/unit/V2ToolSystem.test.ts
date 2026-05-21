@@ -424,7 +424,7 @@ describe('memory (save + recall)', () => {
     expect(findings[0].evidence).toBe('src/App.swift:12');
   });
 
-  test('note_finding falls back to sessionStore when no memoryCoordinator', async () => {
+  test('note_finding requires MemoryCoordinator instead of falling back to sessionStore', async () => {
     const saved: Array<{ key: string; content: string }> = [];
     const ctx = makeCtx({
       sessionStore: {
@@ -445,11 +445,9 @@ describe('memory (save + recall)', () => {
       },
       ctx
     );
-    expect(result.ok).toBe(true);
-    const data = result.data as { target: string };
-    expect(data.target).toBe('sessionStore');
-    expect(saved).toHaveLength(1);
-    expect(saved[0].content).toBe('Fallback test');
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('active MemoryCoordinator');
+    expect(saved).toHaveLength(0);
   });
 
   test('note_finding requires finding param', async () => {

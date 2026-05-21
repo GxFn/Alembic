@@ -61,6 +61,7 @@ function createConfig(overrides: Partial<BudgetControllerConfig> = {}): BudgetCo
     baseSystemPromptLength: 2000,
     toolSchemaCount: 10,
     logger: mockLogger(),
+    enableL4Compaction: true,
     ...overrides,
   };
 }

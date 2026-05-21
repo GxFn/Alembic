@@ -43,6 +43,7 @@ function makeMetrics(overrides: Partial<ExplorationMetrics> = {}): ExplorationMe
     roundsSinceSubmit: 0,
     roundsSinceNewInfo: 0,
     consecutiveIdleRounds: 0,
+    evidenceToolCallCount: 0,
     ...overrides,
   };
 }
@@ -74,12 +75,14 @@ describe('STRATEGY_ANALYST', () => {
     });
 
     test('EXPLORE phase returns auto after 40% budget', () => {
-      const metrics = makeMetrics({ iteration: 14 }); // 14/34 ≈ 41%
+      const metrics = makeMetrics({ iteration: 14, evidenceToolCallCount: 1 }); // 14/34 ≈ 41%
       expect(STRATEGY_ANALYST.getToolChoice('EXPLORE', metrics, budget)).toBe('auto');
     });
 
-    test('VERIFY phase returns auto', () => {
-      expect(STRATEGY_ANALYST.getToolChoice('VERIFY', makeMetrics(), budget)).toBe('auto');
+    test('VERIFY phase returns auto after enough evidence', () => {
+      expect(
+        STRATEGY_ANALYST.getToolChoice('VERIFY', makeMetrics({ evidenceToolCallCount: 2 }), budget)
+      ).toBe('auto');
     });
 
     test('RECORD phase returns required for analyst memory-only finalization', () => {
@@ -96,22 +99,26 @@ describe('STRATEGY_ANALYST', () => {
     const transition = getTransition(STRATEGY_ANALYST, 'EXPLORE→VERIFY');
 
     test('triggers when searchRoundsInPhase >= 60% of maxIterations', () => {
-      const metrics = makeMetrics({ searchRoundsInPhase: 21 }); // 21 >= floor(34*0.6)=20
+      const metrics = makeMetrics({ searchRoundsInPhase: 21, evidenceToolCallCount: 1 }); // 21 >= floor(34*0.6)=20
       expect(transition.onMetrics!(metrics, budget)).toBe(true);
     });
 
     test('triggers when roundsSinceNewInfo >= 3', () => {
-      const metrics = makeMetrics({ roundsSinceNewInfo: 3 });
+      const metrics = makeMetrics({ roundsSinceNewInfo: 3, evidenceToolCallCount: 1 });
       expect(transition.onMetrics!(metrics, budget)).toBe(true);
     });
 
     test('triggers when past 40% budget and roundsSinceNewInfo >= 2', () => {
-      const metrics = makeMetrics({ iteration: 14, roundsSinceNewInfo: 2 });
+      const metrics = makeMetrics({
+        iteration: 14,
+        roundsSinceNewInfo: 2,
+        evidenceToolCallCount: 1,
+      });
       expect(transition.onMetrics!(metrics, budget)).toBe(true);
     });
 
     test('triggers when consecutiveIdleRounds >= 2', () => {
-      const metrics = makeMetrics({ consecutiveIdleRounds: 2 });
+      const metrics = makeMetrics({ consecutiveIdleRounds: 2, evidenceToolCallCount: 1 });
       expect(transition.onMetrics!(metrics, budget)).toBe(true);
     });
 
@@ -125,7 +132,7 @@ describe('STRATEGY_ANALYST', () => {
         m: ExplorationMetrics,
         b: ExplorationBudget
       ) => boolean;
-      expect(fn(makeMetrics({ iteration: 14 }), budget)).toBe(true);
+      expect(fn(makeMetrics({ iteration: 14, evidenceToolCallCount: 1 }), budget)).toBe(true);
     });
 
     test('onTextResponse does not trigger before 40% budget', () => {
@@ -142,22 +149,27 @@ describe('STRATEGY_ANALYST', () => {
     const transition = getTransition(STRATEGY_ANALYST, 'VERIFY→RECORD');
 
     test('triggers when past 75% budget', () => {
-      const metrics = makeMetrics({ iteration: 26 }); // 26 >= floor(34*0.75)=25
+      const metrics = makeMetrics({ iteration: 26, evidenceToolCallCount: 2 }); // 26 >= floor(34*0.75)=25
       expect(transition.onMetrics!(metrics, budget)).toBe(true);
     });
 
     test('triggers when roundsSinceNewInfo >= 2', () => {
-      const metrics = makeMetrics({ roundsSinceNewInfo: 2 });
+      const metrics = makeMetrics({ roundsSinceNewInfo: 2, evidenceToolCallCount: 2 });
       expect(transition.onMetrics!(metrics, budget)).toBe(true);
     });
 
     test('triggers when consecutiveIdleRounds >= 1', () => {
-      const metrics = makeMetrics({ consecutiveIdleRounds: 1 });
+      const metrics = makeMetrics({ consecutiveIdleRounds: 1, evidenceToolCallCount: 2 });
       expect(transition.onMetrics!(metrics, budget)).toBe(true);
     });
 
-    test('onTextResponse is always true (any text = record)', () => {
-      expect(transition.onTextResponse).toBe(true);
+    test('onTextResponse requires evidence before record', () => {
+      const fn = transition.onTextResponse as (
+        m: ExplorationMetrics,
+        b: ExplorationBudget
+      ) => boolean;
+      expect(fn(makeMetrics({ evidenceToolCallCount: 0 }), budget)).toBe(false);
+      expect(fn(makeMetrics({ evidenceToolCallCount: 2 }), budget)).toBe(true);
     });
   });
 

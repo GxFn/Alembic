@@ -66,9 +66,7 @@ describe('insight gate analysis artifact', () => {
     });
     expect(artifact.qualityReport.scores.evidenceScore).toBeGreaterThanOrEqual(50);
     expect(artifact.qualityReport.suggestions).not.toContain('Findings lack file-level evidence');
-    expect(artifact.qualityReport.suggestions).toContain(
-      'Required memory action note_finding calls are missing'
-    );
+    expect(artifact.qualityReport.suggestions).toContain('Required note_finding calls are missing');
     expect(artifact.metadata).toMatchObject({
       memoryFindingCount: 0,
       derivedFindingCount: 3,
@@ -76,7 +74,7 @@ describe('insight gate analysis artifact', () => {
     expect(analysisQualityGate(artifact, { outputType: 'candidate' })).toMatchObject({
       pass: false,
       action: 'analysis_retry',
-      reason: 'Required memory action note_finding calls are missing',
+      reason: 'Required note_finding calls are missing',
     });
   });
 
@@ -159,12 +157,12 @@ describe('insight gate analysis artifact', () => {
       derivedFindingCount: 0,
     });
     expect(artifact.qualityReport.suggestions).toContain(
-      'At least 3 memory action note_finding calls are required'
+      'At least 3 note_finding calls are required'
     );
     expect(analysisQualityGate(artifact, { outputType: 'candidate' })).toMatchObject({
       pass: false,
       action: 'analysis_retry',
-      reason: 'At least 3 memory action note_finding calls are required',
+      reason: 'At least 3 note_finding calls are required',
     });
   });
 
@@ -198,7 +196,7 @@ describe('insight gate analysis artifact', () => {
 
     expect(result).toMatchObject({
       action: 'analysis_retry',
-      reason: 'Required memory action note_finding calls are missing',
+      reason: 'Required note_finding calls are missing',
     });
   });
 });
