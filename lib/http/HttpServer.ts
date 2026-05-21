@@ -39,7 +39,6 @@ import healthRouter from './routes/health.js';
 import jobsRouter from './routes/jobs.js';
 import knowledgeRouter from './routes/knowledge.js';
 import logsRouter from './routes/logs.js';
-import mcpRouter from './routes/mcp.js';
 import modulesRouter from './routes/modules.js';
 import monitoringRouter from './routes/monitoring.js';
 import panoramaRouter from './routes/panorama.js';
@@ -269,9 +268,6 @@ export class HttpServer {
 
     // daemon job 状态与投递
     this.app.use(`${apiPrefix}/jobs`, jobsRouter);
-
-    // daemon MCP bridge（供 Plugin 的 local-alembic-daemon enhancement route 调用）
-    this.app.use(`${apiPrefix}/mcp`, mcpRouter);
 
     // 多项目 runtime control foundation（只读 summary / selected state）
     this.app.use(`${apiPrefix}/projects`, projectsRouter);
