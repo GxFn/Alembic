@@ -65,6 +65,11 @@ jobs:
             AlembicAgent/package-lock.json
             AlembicDashboard/package-lock.json
 
+      - name: Upgrade npm for trusted publishing
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
+
       - name: Verify tag matches package version
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
@@ -126,6 +131,25 @@ jobs:
       - name: Publish to npm
         # Publish the staging package only. The repository root package.json keeps local
         # source file dependencies for development and is intentionally blocked above.
-        run: npm publish .release/alembic-ai --provenance --access public --ignore-scripts
+        run: |
+          set -euo pipefail
+
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "Publishing with configured NPM_TOKEN and provenance."
+            set +e
+            npm publish .release/alembic-ai --provenance --access public --ignore-scripts
+            status=$?
+            set -e
+            if [ "${status}" -eq 0 ]; then
+              exit 0
+            fi
+
+            echo "::warning::NPM_TOKEN publish failed; retrying with npm trusted publishing through GitHub OIDC."
+            unset NODE_AUTH_TOKEN
+          else
+            echo "NPM_TOKEN is not configured; publishing with npm trusted publishing through GitHub OIDC."
+          fi
+
+          npm publish .release/alembic-ai --access public --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
