@@ -58,6 +58,15 @@ describe('search route resident telemetry', () => {
       mode: 'semantic',
       query: 'needle',
       ranked: true,
+      searchMeta: {
+        actualMode: 'semantic',
+        durationMs: 7,
+        requestedMode: 'semantic',
+        resultCount: 1,
+        route: 'core-search-engine',
+        semanticUsed: true,
+        vectorUsed: true,
+      },
       total: 1,
       type: 'all',
     });
@@ -72,7 +81,9 @@ describe('search route resident telemetry', () => {
     expect(data.items).toEqual([{ id: 'recipe-1', score: 0.91, semanticScore: 0.91 }]);
     expect(searchMeta).toMatchObject({
       actualMode: 'semantic',
+      coreRoute: 'core-search-engine',
       degraded: false,
+      durationMs: 7,
       requestedMode: 'semantic',
       resultCount: 1,
       route: 'resident-search',
@@ -81,6 +92,17 @@ describe('search route resident telemetry', () => {
       service: 'alembic-daemon',
       topScore: 0.91,
       vectorUsed: true,
+    });
+    expect(searchMeta.residentVector).toMatchObject({
+      available: true,
+      endpoint: '/api/v1/search',
+      reason: null,
+      stats: {
+        count: 118,
+        dimension: 1024,
+        embedProviderAvailable: true,
+        hasIndex: true,
+      },
     });
     expect(searchMeta.vector).toMatchObject({
       available: true,
@@ -103,18 +125,23 @@ describe('search route resident telemetry', () => {
     });
   });
 
-  test('marks semantic requests degraded when the resident service falls back to weighted search', async () => {
+  test('preserves Core sparse-only RRF telemetry without reporting a vector hit', async () => {
     mocks.searchEngine.search.mockResolvedValue({
       items: [{ id: 'recipe-2', score: 0.42 }],
-      mode: 'weighted',
+      mode: 'auto(sparse-rrf,conf=0.82)',
       query: 'needle',
       ranked: true,
+      searchMeta: {
+        actualMode: 'auto(sparse-rrf,conf=0.82)',
+        durationMs: 12,
+        fallbackReason: 'embed_failed:host placeholder is not executable',
+        requestedMode: 'semantic',
+        resultCount: 1,
+        route: 'core-search-engine',
+        semanticUsed: false,
+        vectorUsed: false,
+      },
       total: 1,
-    });
-    mocks.vectorService.getStats.mockResolvedValue({
-      count: 0,
-      dimension: 0,
-      embedProviderAvailable: false,
     });
 
     const response = await getRouter(searchRouter, '/api/v1/search?q=needle&mode=semantic', {
@@ -125,16 +152,29 @@ describe('search route resident telemetry', () => {
 
     expect(data.items).toEqual([{ id: 'recipe-2', score: 0.42 }]);
     expect(searchMeta).toMatchObject({
-      actualMode: 'weighted',
+      actualMode: 'auto(sparse-rrf,conf=0.82)',
+      coreRoute: 'core-search-engine',
       degraded: true,
-      degradedReason: 'semantic search requested but resident service returned weighted',
+      degradedReason: 'embed_failed:host placeholder is not executable',
+      fallbackReason: 'embed_failed:host placeholder is not executable',
       requestedMode: 'semantic',
       semanticUsed: false,
       vectorUsed: false,
     });
+    expect(searchMeta.residentVector).toMatchObject({
+      available: true,
+      endpoint: '/api/v1/search',
+      reason: null,
+      stats: {
+        count: 118,
+        dimension: 1024,
+        embedProviderAvailable: true,
+        hasIndex: true,
+      },
+    });
     expect(searchMeta.vector).toMatchObject({
-      available: false,
-      reason: 'vector index or embedding provider is unavailable',
+      available: true,
+      reason: null,
     });
   });
 
@@ -153,12 +193,19 @@ describe('search route resident telemetry', () => {
     expect(data.totalResults).toBe(0);
     expect(searchMeta).toMatchObject({
       actualMode: 'legacy-fallback',
+      coreRoute: null,
       degraded: true,
       degradedReason: 'SearchEngine unavailable; resident service used legacy non-vector fallback',
       requestedMode: 'semantic',
       resultCount: 0,
       semanticUsed: false,
       vectorUsed: false,
+    });
+    expect(searchMeta.residentVector).toMatchObject({
+      available: false,
+      endpoint: '/api/v1/search',
+      reason: 'SearchEngine unavailable; vector route was not attempted',
+      stats: null,
     });
     expect(searchMeta.vector).toMatchObject({
       available: false,

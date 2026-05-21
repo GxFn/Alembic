@@ -4,6 +4,7 @@
  */
 
 import Logger from '@alembic/core/logging';
+import type { SearchResponse, SearchResponseMeta } from '@alembic/core/search';
 import { resolveProjectRoot, WorkspaceResolver } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
 import {
@@ -53,6 +54,7 @@ interface SearchRouteResult {
   mode?: string;
   type?: string;
   ranked?: boolean;
+  searchMeta?: SearchResponseMeta;
   [key: string]: unknown;
 }
 
@@ -68,6 +70,7 @@ interface ResidentSearchVectorStats {
 interface ResidentSearchMeta {
   route: 'resident-search';
   service: 'alembic-daemon';
+  coreRoute: string | null;
   requestedMode: string;
   actualMode: string;
   semanticRequested: boolean;
@@ -75,9 +78,16 @@ interface ResidentSearchMeta {
   vectorUsed: boolean;
   degraded: boolean;
   degradedReason: string | null;
+  fallbackReason?: string;
   durationMs: number;
   resultCount: number;
   topScore: number | null;
+  residentVector: {
+    available: boolean;
+    endpoint: '/api/v1/search';
+    reason: string | null;
+    stats: ResidentSearchVectorStats | null;
+  };
   vector: {
     available: boolean;
     reason: string | null;
@@ -96,6 +106,7 @@ interface ResidentSearchMeta {
 
 const router = express.Router();
 const logger = Logger.getInstance();
+const RESIDENT_SEARCH_ENDPOINT = '/api/v1/search';
 
 /**
  * GET /api/v1/search
@@ -120,7 +131,7 @@ router.get('/', validateQuery(SearchQuery), async (req: Request, res: Response):
       limit,
       mode,
       groupByKind,
-    })) as SearchRouteResult;
+    })) as SearchResponse & SearchRouteResult;
     const durationMs = Math.round(performance.now() - startedAt);
     const searchMeta = await buildResidentSearchMeta({
       container,
@@ -209,36 +220,55 @@ async function buildResidentSearchMeta({
   requestedMode: string;
   result: SearchRouteResult;
 }): Promise<ResidentSearchMeta> {
-  const actualMode = String(result.mode || requestedMode);
+  const coreMeta = result.searchMeta;
+  const actualMode = String(coreMeta?.actualMode || result.mode || requestedMode);
   const vectorStats = await readVectorStats(container);
+  const residentVector = buildResidentVectorMeta(vectorStats);
   const semanticRequested = requestedMode === 'semantic';
-  const semanticUsed = isSemanticActualMode(actualMode);
-  const vectorUsed = semanticUsed || hasVectorLikeScore(result.items ?? []);
-  const vectorUnavailableReason = vectorStats.available
-    ? null
-    : vectorStats.reason || 'vector service unavailable';
-  const degraded = semanticRequested && !semanticUsed;
-  const resultCount = typeof result.total === 'number' ? result.total : (result.items ?? []).length;
+  // Core SearchResponse.searchMeta 是 semantic/vector 是否真实命中的唯一事实源。
+  // Alembic resident service 只补 HTTP/workspace/vector-index 观测信息；不能用 rrf/hybrid 字符串二次推断，
+  // 否则 embed 失败后的 sparse-only RRF 会被误报成真实向量命中。
+  const semanticUsed =
+    typeof coreMeta?.semanticUsed === 'boolean'
+      ? coreMeta.semanticUsed
+      : inferLegacySemanticUsageWithoutRrf(actualMode);
+  const vectorUsed =
+    typeof coreMeta?.vectorUsed === 'boolean'
+      ? coreMeta.vectorUsed
+      : hasVectorLikeScore(result.items ?? []);
+  const fallbackReason = coreMeta?.fallbackReason ?? null;
+  const degraded = Boolean(fallbackReason) || (semanticRequested && !semanticUsed);
+  const resultCount =
+    typeof coreMeta?.resultCount === 'number'
+      ? coreMeta.resultCount
+      : typeof result.total === 'number'
+        ? result.total
+        : (result.items ?? []).length;
+  const metaDurationMs =
+    typeof coreMeta?.durationMs === 'number' ? coreMeta.durationMs : durationMs;
 
   return {
     route: 'resident-search',
     service: 'alembic-daemon',
-    requestedMode,
+    coreRoute: typeof coreMeta?.route === 'string' ? coreMeta.route : null,
+    requestedMode: coreMeta?.requestedMode ?? requestedMode,
     actualMode,
     semanticRequested,
     semanticUsed,
     vectorUsed,
     degraded,
-    degradedReason: degraded
-      ? `semantic search requested but resident service returned ${actualMode}`
-      : null,
-    durationMs,
+    degradedReason:
+      fallbackReason ??
+      (degraded ? `semantic search requested but resident service returned ${actualMode}` : null),
+    ...(fallbackReason ? { fallbackReason } : {}),
+    durationMs: metaDurationMs,
     resultCount,
     topScore: extractTopScore(result.items ?? []),
+    residentVector,
     vector: {
-      available: vectorStats.available,
-      reason: vectorUnavailableReason,
-      stats: vectorStats.stats,
+      available: residentVector.available,
+      reason: residentVector.reason,
+      stats: residentVector.stats,
     },
     workspace: buildSearchWorkspaceIdentity(container),
   };
@@ -256,6 +286,7 @@ function buildLegacySearchMeta({
   return {
     route: 'resident-search',
     service: 'alembic-daemon',
+    coreRoute: null,
     requestedMode: mode,
     actualMode: 'legacy-fallback',
     semanticRequested: mode === 'semantic',
@@ -269,12 +300,35 @@ function buildLegacySearchMeta({
     durationMs: 0,
     resultCount,
     topScore: null,
+    residentVector: {
+      available: false,
+      endpoint: RESIDENT_SEARCH_ENDPOINT,
+      reason: 'SearchEngine unavailable; vector route was not attempted',
+      stats: null,
+    },
     vector: {
       available: false,
       reason: 'SearchEngine unavailable; vector route was not attempted',
       stats: null,
     },
     workspace: buildSearchWorkspaceIdentity(container),
+  };
+}
+
+function buildResidentVectorMeta({
+  available,
+  reason,
+  stats,
+}: {
+  available: boolean;
+  reason: string | null;
+  stats: ResidentSearchVectorStats | null;
+}): ResidentSearchMeta['residentVector'] {
+  return {
+    available,
+    endpoint: RESIDENT_SEARCH_ENDPOINT,
+    reason: available ? null : reason || 'vector service unavailable',
+    stats,
   };
 }
 
@@ -354,13 +408,9 @@ function buildSearchWorkspaceIdentity(container: ReturnType<typeof getServiceCon
   }
 }
 
-function isSemanticActualMode(actualMode: string): boolean {
-  return (
-    actualMode === 'semantic' ||
-    actualMode === 'hybrid' ||
-    actualMode.includes('rrf') ||
-    actualMode.includes('semantic')
-  );
+function inferLegacySemanticUsageWithoutRrf(actualMode: string): boolean {
+  const normalized = actualMode.toLowerCase();
+  return normalized === 'semantic' || normalized.includes('semantic') || normalized === 'hybrid';
 }
 
 function hasVectorLikeScore(items: SearchRouteItem[]): boolean {
