@@ -1,6 +1,11 @@
+import { KnowledgeEntry, KnowledgeService, Lifecycle } from '@alembic/core/knowledge';
 import {
+  analyzeSourceFile,
+  CallGraphAnalyzer,
   detectConflict,
   extractXcodeGenDependencyEdges,
+  parseGradleProject,
+  parseStarlarkBuildFile,
   parseXcodeGenProject,
   profileTechStack,
 } from '@alembic/core/project-intelligence';
@@ -55,5 +60,39 @@ describe('Core public surface smoke', () => {
 
     expect(index.searchKnn([1, 0, 0], 1)[0]?.id).toBe('a');
     expect(chunks[0]?.metadata.sourcePath).toBe('docs/note.md');
+  });
+
+  it('keeps AST, call graph, and parser facades consumable from Alembic', () => {
+    const summary = analyzeSourceFile(
+      'export class UserService { findUser(id: string) { return id; } }',
+      'typescript'
+    );
+    const gradle = parseGradleProject('rootProject.name = "demo"\ninclude(":app", ":core")');
+    const starlark = parseStarlarkBuildFile('swift_library(name = "Core", deps = [":Utils"])');
+
+    expect(summary?.classes.some((item) => item.name === 'UserService')).toBe(true);
+    expect(new CallGraphAnalyzer('/project')).toBeDefined();
+    expect(gradle.includedModules.map((module) => module.path)).toEqual([':app', ':core']);
+    expect(starlark.targets[0]?.name).toBe('Core');
+  });
+
+  it('keeps knowledge facade contracts consumable from Alembic', () => {
+    const entry = new KnowledgeEntry({
+      id: 'smoke-entry',
+      title: 'Smoke Pattern',
+      trigger: '@smoke',
+      description: 'Thin Alembic consumer check',
+      language: 'typescript',
+      category: 'Boundary',
+      kind: 'pattern',
+      knowledgeType: 'code-pattern',
+      content: { pattern: 'const value = true;' },
+      reasoning: { whyStandard: 'public facade remains consumable', confidence: 0.8 },
+      lifecycle: Lifecycle.ACTIVE,
+    });
+
+    expect(entry.title).toBe('Smoke Pattern');
+    expect(Lifecycle.ACTIVE).toBe('active');
+    expect(KnowledgeService).toBeDefined();
   });
 });
