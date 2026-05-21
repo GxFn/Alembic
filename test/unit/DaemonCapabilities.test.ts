@@ -3,6 +3,7 @@ import { buildAlembicRuntimeBoundary } from '../../lib/daemon/RuntimeBoundary.js
 import {
   buildDaemonCapabilities,
   buildDaemonProjectIdentity,
+  buildResidentSearchCapability,
   type DaemonCapabilitiesOptions,
 } from '../../lib/http/routes/daemon.js';
 
@@ -79,6 +80,20 @@ describe('daemon capabilities', () => {
     });
     expect(Object.values(capabilities.fileMonitor.compatibilityAliases)).toEqual(['host-edit']);
     expect(capabilities.internalAi.available).toBe(true);
+    expect(buildResidentSearchCapability()).toEqual({
+      available: true,
+      endpoint: '/api/v1/search',
+      modes: ['keyword', 'bm25', 'semantic'],
+      owner: 'alembic',
+      route: 'resident-search',
+      telemetry: {
+        exposesActualMode: true,
+        exposesDegradedReason: true,
+        exposesDurationMs: true,
+        exposesVectorStats: true,
+        exposesWorkspaceIdentity: true,
+      },
+    });
     expect(runtimeBoundary).toMatchObject({
       owner: 'alembic',
       route: 'local-alembic',

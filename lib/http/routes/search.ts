@@ -4,6 +4,7 @@
  */
 
 import Logger from '@alembic/core/logging';
+import { resolveProjectRoot, WorkspaceResolver } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
 import {
   ContextAwareSearchBody,
@@ -37,6 +38,62 @@ interface KnowledgeItem {
   quality?: { overall?: number };
 }
 
+interface SearchRouteItem {
+  id?: string;
+  score?: number;
+  vectorScore?: number;
+  semanticScore?: number;
+  [key: string]: unknown;
+}
+
+interface SearchRouteResult {
+  items?: SearchRouteItem[];
+  total?: number;
+  query?: string;
+  mode?: string;
+  type?: string;
+  ranked?: boolean;
+  [key: string]: unknown;
+}
+
+interface ResidentSearchVectorStats {
+  count: number;
+  dimension: number;
+  embedProviderAvailable: boolean;
+  hasIndex: boolean;
+  indexSize?: number;
+  quantized?: boolean;
+}
+
+interface ResidentSearchMeta {
+  route: 'resident-search';
+  service: 'alembic-daemon';
+  requestedMode: string;
+  actualMode: string;
+  semanticRequested: boolean;
+  semanticUsed: boolean;
+  vectorUsed: boolean;
+  degraded: boolean;
+  degradedReason: string | null;
+  durationMs: number;
+  resultCount: number;
+  topScore: number | null;
+  vector: {
+    available: boolean;
+    reason: string | null;
+    stats: ResidentSearchVectorStats | null;
+  };
+  workspace: {
+    dataRoot: string | null;
+    dataRootSource: string | null;
+    databasePath: string | null;
+    projectId: string | null;
+    projectRoot: string;
+    runtimeDir: string | null;
+    workspaceMode: string | null;
+  };
+}
+
 const router = express.Router();
 const logger = Logger.getInstance();
 
@@ -57,8 +114,21 @@ router.get('/', validateQuery(SearchQuery), async (req: Request, res: Response):
   // 所有模式优先通过 SearchEngine（含 auto/bm25/semantic/keyword/ranking）
   try {
     const searchEngine = container.get('searchEngine');
-    const result = await searchEngine.search(q, { type, limit, mode, groupByKind });
-    return void res.json({ success: true, data: result });
+    const startedAt = performance.now();
+    const result = (await searchEngine.search(q, {
+      type,
+      limit,
+      mode,
+      groupByKind,
+    })) as SearchRouteResult;
+    const durationMs = Math.round(performance.now() - startedAt);
+    const searchMeta = await buildResidentSearchMeta({
+      container,
+      durationMs,
+      requestedMode: mode,
+      result,
+    });
+    return void res.json({ success: true, data: { ...result, searchMeta } });
   } catch (err: unknown) {
     logger.warn('SearchEngine 搜索失败，降级到传统搜索', { mode, error: (err as Error).message });
   }
@@ -118,10 +188,193 @@ router.get('/', validateQuery(SearchQuery), async (req: Request, res: Response):
       type,
       mode,
       totalResults,
+      searchMeta: buildLegacySearchMeta({
+        container,
+        mode,
+        resultCount: totalResults,
+      }),
       ...results,
     },
   });
 });
+
+async function buildResidentSearchMeta({
+  container,
+  durationMs,
+  requestedMode,
+  result,
+}: {
+  container: ReturnType<typeof getServiceContainer>;
+  durationMs: number;
+  requestedMode: string;
+  result: SearchRouteResult;
+}): Promise<ResidentSearchMeta> {
+  const actualMode = String(result.mode || requestedMode);
+  const vectorStats = await readVectorStats(container);
+  const semanticRequested = requestedMode === 'semantic';
+  const semanticUsed = isSemanticActualMode(actualMode);
+  const vectorUsed = semanticUsed || hasVectorLikeScore(result.items ?? []);
+  const vectorUnavailableReason = vectorStats.available
+    ? null
+    : vectorStats.reason || 'vector service unavailable';
+  const degraded = semanticRequested && !semanticUsed;
+  const resultCount = typeof result.total === 'number' ? result.total : (result.items ?? []).length;
+
+  return {
+    route: 'resident-search',
+    service: 'alembic-daemon',
+    requestedMode,
+    actualMode,
+    semanticRequested,
+    semanticUsed,
+    vectorUsed,
+    degraded,
+    degradedReason: degraded
+      ? `semantic search requested but resident service returned ${actualMode}`
+      : null,
+    durationMs,
+    resultCount,
+    topScore: extractTopScore(result.items ?? []),
+    vector: {
+      available: vectorStats.available,
+      reason: vectorUnavailableReason,
+      stats: vectorStats.stats,
+    },
+    workspace: buildSearchWorkspaceIdentity(container),
+  };
+}
+
+function buildLegacySearchMeta({
+  container,
+  mode,
+  resultCount,
+}: {
+  container: ReturnType<typeof getServiceContainer>;
+  mode: string;
+  resultCount: number;
+}): ResidentSearchMeta {
+  return {
+    route: 'resident-search',
+    service: 'alembic-daemon',
+    requestedMode: mode,
+    actualMode: 'legacy-fallback',
+    semanticRequested: mode === 'semantic',
+    semanticUsed: false,
+    vectorUsed: false,
+    degraded: mode === 'semantic',
+    degradedReason:
+      mode === 'semantic'
+        ? 'SearchEngine unavailable; resident service used legacy non-vector fallback'
+        : null,
+    durationMs: 0,
+    resultCount,
+    topScore: null,
+    vector: {
+      available: false,
+      reason: 'SearchEngine unavailable; vector route was not attempted',
+      stats: null,
+    },
+    workspace: buildSearchWorkspaceIdentity(container),
+  };
+}
+
+async function readVectorStats(container: ReturnType<typeof getServiceContainer>): Promise<{
+  available: boolean;
+  reason: string | null;
+  stats: ResidentSearchVectorStats | null;
+}> {
+  try {
+    const vectorService = container.get('vectorService') as unknown as {
+      getStats?: () => Promise<{
+        count?: number;
+        dimension?: number;
+        embedProviderAvailable?: boolean;
+        indexSize?: number;
+        quantized?: boolean;
+      }>;
+    } | null;
+    if (!vectorService || typeof vectorService.getStats !== 'function') {
+      return { available: false, reason: 'vectorService is not registered', stats: null };
+    }
+
+    const rawStats = await vectorService.getStats();
+    const count = numberFrom(rawStats.count);
+    const dimension = numberFrom(rawStats.dimension);
+    const embedProviderAvailable = rawStats.embedProviderAvailable === true;
+    return {
+      available: count > 0 && dimension > 0 && embedProviderAvailable,
+      reason:
+        count > 0 && dimension > 0 && embedProviderAvailable
+          ? null
+          : 'vector index or embedding provider is unavailable',
+      stats: {
+        count,
+        dimension,
+        embedProviderAvailable,
+        hasIndex: count > 0,
+        indexSize: numberFrom(rawStats.indexSize),
+        quantized: rawStats.quantized === true,
+      },
+    };
+  } catch (err: unknown) {
+    return {
+      available: false,
+      reason: err instanceof Error ? err.message : String(err),
+      stats: null,
+    };
+  }
+}
+
+function buildSearchWorkspaceIdentity(container: ReturnType<typeof getServiceContainer>) {
+  const projectRoot = resolveProjectRoot(container);
+  try {
+    const resolver =
+      (container.singletons?._workspaceResolver as WorkspaceResolver | undefined) ??
+      WorkspaceResolver.fromProject(projectRoot);
+    const facts = resolver.toFacts();
+    return {
+      dataRoot: resolver.dataRoot,
+      dataRootSource: facts.dataRootSource,
+      databasePath: resolver.databasePath,
+      projectId: resolver.projectId,
+      projectRoot: resolver.projectRoot,
+      runtimeDir: resolver.runtimeDir,
+      workspaceMode: facts.mode,
+    };
+  } catch {
+    return {
+      dataRoot: null,
+      dataRootSource: null,
+      databasePath: null,
+      projectId: null,
+      projectRoot,
+      runtimeDir: null,
+      workspaceMode: null,
+    };
+  }
+}
+
+function isSemanticActualMode(actualMode: string): boolean {
+  return (
+    actualMode === 'semantic' ||
+    actualMode === 'hybrid' ||
+    actualMode.includes('rrf') ||
+    actualMode.includes('semantic')
+  );
+}
+
+function hasVectorLikeScore(items: SearchRouteItem[]): boolean {
+  return items.some((item) => item.vectorScore !== undefined || item.semanticScore !== undefined);
+}
+
+function extractTopScore(items: SearchRouteItem[]): number | null {
+  const firstScore = items[0]?.score ?? items[0]?.vectorScore ?? items[0]?.semanticScore;
+  return typeof firstScore === 'number' && Number.isFinite(firstScore) ? firstScore : null;
+}
+
+function numberFrom(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
 
 /**
  * GET /api/v1/search/graph

@@ -18,6 +18,21 @@ import { getServiceContainer } from '../../injection/ServiceContainer.js';
 const router = express.Router();
 const API_PREFIX = '/api/v1';
 
+export interface ResidentSearchCapability {
+  available: boolean;
+  endpoint: string;
+  modes: Array<'keyword' | 'bm25' | 'semantic'>;
+  owner: 'alembic';
+  route: 'resident-search';
+  telemetry: {
+    exposesActualMode: boolean;
+    exposesDegradedReason: boolean;
+    exposesDurationMs: boolean;
+    exposesVectorStats: boolean;
+    exposesWorkspaceIdentity: boolean;
+  };
+}
+
 router.get('/health', (req, res) => {
   const container = getServiceContainer();
   const projectRoot = resolveProjectRoot(container);
@@ -76,6 +91,7 @@ router.get('/health', (req, res) => {
       runtimeBoundary,
       capabilities: {
         ...healthData.capabilities,
+        residentSearch: buildResidentSearchCapability(),
         runtimeBoundary,
       },
     },
@@ -110,6 +126,23 @@ export function buildDaemonCapabilities(
     fileMonitorMode: options.fileMonitorAvailable ? 'daemon-git-worktree' : 'disabled',
     internalAi: options.internalAi,
   });
+}
+
+export function buildResidentSearchCapability(): ResidentSearchCapability {
+  return {
+    available: true,
+    endpoint: `${API_PREFIX}/search`,
+    modes: ['keyword', 'bm25', 'semantic'],
+    owner: 'alembic',
+    route: 'resident-search',
+    telemetry: {
+      exposesActualMode: true,
+      exposesDegradedReason: true,
+      exposesDurationMs: true,
+      exposesVectorStats: true,
+      exposesWorkspaceIdentity: true,
+    },
+  };
 }
 
 function isDaemonFileMonitorAvailable(mode: 'api' | 'daemon'): boolean {
