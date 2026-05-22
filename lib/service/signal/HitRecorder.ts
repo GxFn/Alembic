@@ -14,7 +14,10 @@
 
 import type { SignalBus, SignalType, Startable } from '@alembic/core/events';
 import { timerRegistry } from '@alembic/core/events';
-import { unwrapRawDb } from '@alembic/core/search';
+import {
+  createHitStatsUpdateRunner,
+  unwrapSqliteDatabase,
+} from '../../infrastructure/database/SqliteDatabaseAccess.js';
 
 /** better-sqlite3 兼容类型（与 GuardCheckEngine 相同模式） */
 interface DatabaseLike {
@@ -79,7 +82,7 @@ export class HitRecorder implements Startable {
     config: HitRecorderConfig = {}
   ) {
     this.#bus = bus;
-    this.#db = unwrapRawDb<DatabaseLike>(db as DatabaseLike);
+    this.#db = (unwrapSqliteDatabase(db) ?? db) as DatabaseLike;
     this.#flushIntervalMs = config.flushIntervalMs ?? 30_000;
     this.#maxBufferSize = config.maxBufferSize ?? 100;
   }
@@ -182,22 +185,12 @@ export class HitRecorder implements Startable {
     const now = Math.floor(Date.now() / 1000);
 
     try {
-      const stmt = this.#db.prepare(
-        // @escape-hatch(permanent) — json_set() not expressible in Drizzle
-        `UPDATE knowledge_entries
-         SET stats = json_set(
-               COALESCE(stats, '{}'),
-               '$.' || ?,
-               COALESCE(json_extract(stats, '$.' || ?), 0) + ?
-             ),
-             updatedAt = ?
-         WHERE id = ?`
-      );
+      const statsUpdater = createHitStatsUpdateRunner(this.#db);
 
       for (const entry of entries) {
         const field = EVENT_TO_STATS_FIELD[entry.eventType];
         try {
-          stmt.run(field, field, entry.count, now, entry.recipeId);
+          statsUpdater.run(field, entry.count, now, entry.recipeId);
           flushed += entry.count;
         } catch {
           // Recipe 可能已被删除，静默忽略

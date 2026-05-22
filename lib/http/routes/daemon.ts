@@ -13,6 +13,7 @@ import {
   buildAlembicRuntimeBoundary,
   type InternalAiCapability,
 } from '../../daemon/RuntimeBoundary.js';
+import { readLatestSchemaMigrationVersion } from '../../infrastructure/database/SqliteDatabaseAccess.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 
 const router = express.Router();
@@ -181,18 +182,7 @@ function buildRequestOrigin(req: Request): string | null {
 function getSchemaMigrationVersion(
   container: ReturnType<typeof getServiceContainer>
 ): string | null {
-  try {
-    const db = container.get('database') as {
-      getDb?: () => { prepare: (sql: string) => { get: () => unknown } };
-    };
-    const row = db
-      .getDb?.()
-      ?.prepare('SELECT version FROM schema_migrations ORDER BY applied_at DESC LIMIT 1')
-      .get() as { version?: string } | undefined;
-    return row?.version || null;
-  } catch {
-    return null;
-  }
+  return readLatestSchemaMigrationVersion(container.get('database'));
 }
 
 export default router;

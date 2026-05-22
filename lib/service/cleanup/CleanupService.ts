@@ -33,23 +33,15 @@ import {
 import { recipeDimensionIdOrUnknown } from '@alembic/core/dimensions';
 import type { WriteZone } from '@alembic/core/io';
 import { CONSUMABLE_LIFECYCLES, lifecycleInSql } from '@alembic/core/knowledge';
+import {
+  readKnowledgeEntryColumns,
+  readRecipeSnapshotRows,
+  readTableRowsForSnapshot,
+  type SqliteDatabaseHandle,
+  unwrapSqliteDatabase,
+} from '../../infrastructure/database/SqliteDatabaseAccess.js';
 
 // ── 类型定义 ────────────────────────────────────────────────
-
-/** 最小化 better-sqlite3 Database 接口 */
-interface SqliteDb {
-  exec(sql: string): void;
-  prepare(sql: string): {
-    run(...params: unknown[]): unknown;
-    all(...params: unknown[]): unknown[];
-  };
-  close(): void;
-}
-
-/** DB 可能包含 getDb 方法的包装 */
-interface DbWrapper {
-  getDb?: () => SqliteDb;
-}
 
 /** Logger 接口 */
 interface CleanupLogger {
@@ -171,7 +163,7 @@ export class CleanupService {
   readonly #dataRoot: string;
   readonly #logger: CleanupLogger;
   readonly #wz: WriteZone | null;
-  #db: SqliteDb | null;
+  #db: SqliteDatabaseHandle | null;
 
   constructor(opts: {
     projectRoot: string;
@@ -500,32 +492,13 @@ export class CleanupService {
 
     try {
       const { sql: lcFilter, params: lcParams } = lifecycleInSql(CONSUMABLE_LIFECYCLES);
-      const columns = this.#db.prepare('PRAGMA table_info(knowledge_entries)').all() as Array<{
-        name: string;
-      }>;
+      const columns = readKnowledgeEntryColumns(this.#db);
       const hasDimensionId = columns.some((column) => column.name === 'dimensionId');
-      const rows = this.#db
-        .prepare(
-          // @escape-hatch(permanent) — dynamic lifecycle filter + json_extract
-          `SELECT id, title, trigger, ${hasDimensionId ? 'dimensionId' : "'' AS dimensionId"},
-                  category, knowledgeType, doClause,
-                  sourceFile, lifecycle, content, json_extract(reasoning, '$.sources') AS sourceRefsJson
-           FROM knowledge_entries
-           WHERE ${lcFilter}`
-        )
-        .all(...lcParams) as Array<{
-        id: string;
-        title: string;
-        trigger: string;
-        dimensionId: string | null;
-        category: string;
-        knowledgeType: string | null;
-        doClause: string | null;
-        sourceFile: string | null;
-        lifecycle: string;
-        content: string | null;
-        sourceRefsJson: string | null;
-      }>;
+      const rows = readRecipeSnapshotRows(this.#db, {
+        hasDimensionId,
+        lifecycleFilterSql: lcFilter,
+        lifecycleParams: lcParams,
+      });
 
       const entries: RecipeSnapshotEntry[] = rows.map((r) => {
         let parsedContent: RecipeSnapshotEntry['content'];
@@ -700,7 +673,7 @@ export class CleanupService {
 
     for (const table of tablesToExport) {
       try {
-        const rows = this.#db.prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[]; // @escape-hatch(permanent) — dynamic table name for backup export
+        const rows = readTableRowsForSnapshot(this.#db, table);
         for (const row of rows) {
           lines.push(JSON.stringify({ _table: table, ...row }));
           totalRows++;
@@ -860,13 +833,4 @@ export class CleanupService {
   }
 }
 
-function resolveSqliteDb(db: unknown): SqliteDb | null {
-  if (!db) {
-    return null;
-  }
-  const wrapper = db as DbWrapper;
-  if (typeof wrapper.getDb === 'function') {
-    return wrapper.getDb();
-  }
-  return db as SqliteDb;
-}
+const resolveSqliteDb = unwrapSqliteDatabase;
