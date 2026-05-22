@@ -77,8 +77,8 @@ import type { RecipeParser } from '@alembic/core/service/recipe/RecipeParser';
 import type { IndexingPipeline, VectorService, VectorStore } from '@alembic/core/vector';
 import type { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
 // ── Core Types ──
-import type Constitution from '../core/constitution/Constitution.js';
-import type Gateway from '../core/gateway/Gateway.js';
+import type Constitution from '../governance/constitution/Constitution.js';
+import type Gateway from '../governance/gateway/Gateway.js';
 // ── InfraModule Types ──
 import type AuditLogger from '../infrastructure/audit/AuditLogger.js';
 import type AuditStore from '../infrastructure/audit/AuditStore.js';

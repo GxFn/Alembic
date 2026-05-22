@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { PermissionDenied } from '@alembic/core/shared';
-import Constitution from '../../lib/core/constitution/Constitution.js';
-import PermissionManager from '../../lib/core/permission/PermissionManager.js';
+import Constitution from '../../lib/governance/constitution/Constitution.js';
+import PermissionManager from '../../lib/governance/permission/PermissionManager.js';
 
 const __dirname = import.meta.dirname;
 

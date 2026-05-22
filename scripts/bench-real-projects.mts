@@ -40,17 +40,19 @@ const PROJECTS = [
 
 // ── 加载模块 ──────────────────────────────────────────────────────
 const { getDiscovererRegistry, resetDiscovererRegistry } = await import(
-  '../lib/core/discovery/index.js'
+  '@alembic/core/core/discovery'
 );
-const { LanguageService } = await import('../lib/shared/LanguageService.js');
-const { DimensionCopy } = await import('../lib/domain/dimension/DimensionCopy.js');
+const { LanguageService } = await import('@alembic/core/shared');
+const { DimensionCopy } = await import('@alembic/core/dimensions');
 
 // AST
-await import('../lib/core/ast/index.js');
-const { analyzeProject, isAvailable: astIsAvailable } = await import('../lib/core/AstAnalyzer.js');
+await import('@alembic/core/core/ast');
+const { analyzeProject, isAvailable: astIsAvailable } = await import(
+  '@alembic/core/core/AstAnalyzer'
+);
 
 // Enhancement
-const { initEnhancementRegistry } = await import('../lib/core/enhancement/index.js');
+const { initEnhancementRegistry } = await import('@alembic/core/core/enhancement');
 
 // ── 主逻辑 ────────────────────────────────────────────────────────
 async function benchmark() {

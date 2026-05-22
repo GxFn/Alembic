@@ -24,9 +24,9 @@
       "alembic-dev": "./lib/injection/*",
       "default": "./dist/lib/injection/*"
     },
-    "#core/*": {
-      "alembic-dev": "./lib/core/*",
-      "default": "./dist/lib/core/*"
+    "#governance/*": {
+      "alembic-dev": "./lib/governance/*",
+      "default": "./dist/lib/governance/*"
     },
     "#external/*": {
       "alembic-dev": "./lib/external/*",

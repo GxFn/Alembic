@@ -22,7 +22,7 @@ import { MemoryRepositoryImpl } from '@alembic/core/repository/memory/MemoryRepo
 import { KnowledgeFileWriter } from '@alembic/core/service/knowledge/KnowledgeFileWriter';
 import { KnowledgeSyncService } from '@alembic/core/service/knowledge/KnowledgeSyncService';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
-import Gateway from '../../core/gateway/Gateway.js';
+import Gateway from '../../governance/gateway/Gateway.js';
 import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../infrastructure/audit/AuditStore.js';
 import { getRealtimeService as _getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';

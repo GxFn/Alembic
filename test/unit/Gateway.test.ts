@@ -2,10 +2,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseConnection } from '@alembic/core/database';
 import { vi } from 'vitest';
-import Constitution from '../../lib/core/constitution/Constitution.js';
-import ConstitutionValidator from '../../lib/core/constitution/ConstitutionValidator.js';
-import Gateway from '../../lib/core/gateway/Gateway.js';
-import PermissionManager from '../../lib/core/permission/PermissionManager.js';
+import Constitution from '../../lib/governance/constitution/Constitution.js';
+import ConstitutionValidator from '../../lib/governance/constitution/ConstitutionValidator.js';
+import Gateway from '../../lib/governance/gateway/Gateway.js';
+import PermissionManager from '../../lib/governance/permission/PermissionManager.js';
 import AuditLogger from '../../lib/infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../lib/infrastructure/audit/AuditStore.js';
 

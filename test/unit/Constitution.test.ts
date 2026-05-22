@@ -1,5 +1,5 @@
 import path from 'node:path';
-import Constitution from '../../lib/core/constitution/Constitution.js';
+import Constitution from '../../lib/governance/constitution/Constitution.js';
 
 const __dirname = import.meta.dirname;
 
