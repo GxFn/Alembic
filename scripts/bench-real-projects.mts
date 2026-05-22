@@ -39,17 +39,16 @@ const PROJECTS = [
 ];
 
 // ── 加载模块 ──────────────────────────────────────────────────────
-const { getDiscovererRegistry, resetDiscovererRegistry } = await import(
-  '@alembic/core/core/discovery'
-);
-const { LanguageService } = await import('@alembic/core/shared');
+const {
+  analyzeProject,
+  getDiscovererRegistry,
+  isProjectAstAvailable,
+  LanguageService,
+  loadProjectAstPlugins,
+  resetDiscovererRegistry,
+} = await import('@alembic/core/project-intelligence');
 const { DimensionCopy } = await import('@alembic/core/dimensions');
-
-// AST
-await import('@alembic/core/core/ast');
-const { analyzeProject, isAvailable: astIsAvailable } = await import(
-  '@alembic/core/core/AstAnalyzer'
-);
+await loadProjectAstPlugins();
 
 // Enhancement
 const { initEnhancementRegistry } = await import('@alembic/core/core/enhancement');
@@ -133,7 +132,7 @@ async function benchmark() {
     // Phase 3: AST
     const t5 = Date.now();
     let astSummary = null;
-    if (astIsAvailable() && primaryLang) {
+    if (isProjectAstAvailable() && primaryLang) {
       try {
         astSummary = analyzeProject(allFiles, primaryLang);
       } catch {

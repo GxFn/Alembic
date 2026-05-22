@@ -41,10 +41,9 @@ const PROJECTS = [
 ];
 
 // ── 加载 Alembic 模块 ─────────────────────────────────────────
-const { getDiscovererRegistry, resetDiscovererRegistry } = await import(
-  '@alembic/core/core/discovery'
+const { getDiscovererRegistry, LanguageService, resetDiscovererRegistry } = await import(
+  '@alembic/core/project-intelligence'
 );
-const { LanguageService } = await import('@alembic/core/shared');
 
 // ── 主逻辑 ───────────────────────────────────────────────────────
 async function collectStats() {
