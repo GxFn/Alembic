@@ -7,8 +7,8 @@
  *   GET /api/v1/signals/reports — 查询管道报告
  */
 
-import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
-import type { SignalTraceWriter } from '@alembic/core/infrastructure/signal/SignalTraceWriter';
+import type { SignalTraceWriter } from '@alembic/core/events';
+import type { ReportStore } from '@alembic/core/infrastructure/report';
 import express, { type Request, type Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 

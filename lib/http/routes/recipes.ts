@@ -136,7 +136,7 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
         try {
           const graphService = container.get(
             'knowledgeGraphService'
-          ) as import('@alembic/core/service/knowledge/KnowledgeGraphService').KnowledgeGraphService;
+          ) as import('@alembic/core/knowledge').KnowledgeGraphService;
           const knowledgeRepo = container.get('knowledgeRepository') as {
             findAllByLifecycles(
               lifecycles: readonly string[]

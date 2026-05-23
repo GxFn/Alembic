@@ -8,9 +8,9 @@
  *   - primeSearchPipeline (for prime multi-query search — no DB dependency)
  */
 
-import { TokenUsageStore } from '@alembic/core/repository/token/TokenUsageStore';
+import { RecipeExtractor } from '@alembic/core/knowledge';
+import { TokenUsageStore } from '@alembic/core/repositories';
 import { unwrapRawDb } from '@alembic/core/search';
-import { RecipeExtractor } from '@alembic/core/service/knowledge/RecipeExtractor';
 import { FeedbackCollector } from '@alembic/core/service/quality/FeedbackCollector';
 import { QualityScorer } from '@alembic/core/service/quality/QualityScorer';
 import { RecipeCandidateValidator } from '@alembic/core/service/recipe/RecipeCandidateValidator';

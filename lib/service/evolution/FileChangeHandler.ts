@@ -16,16 +16,14 @@
  */
 
 import type { SignalBus } from '@alembic/core/events';
-import { isConsumable, isDegraded } from '@alembic/core/knowledge';
+import type { ContentPatcher, EvolutionGateway } from '@alembic/core/evolution';
+import { isConsumable, isDegraded, rewriteRecipePaths } from '@alembic/core/knowledge';
 import Logger from '@alembic/core/logging';
 import type { KnowledgeRepository, SourceRefRepository } from '@alembic/core/repositories';
 import {
   assessFileImpact,
   extractRecipeTokens,
 } from '@alembic/core/service/evolution/ContentImpactAnalyzer';
-import type { ContentPatcher } from '@alembic/core/service/evolution/ContentPatcher';
-import type { EvolutionGateway } from '@alembic/core/service/evolution/EvolutionGateway';
-import { rewriteRecipePaths } from '@alembic/core/service/knowledge/RecipePathRewriter';
 import type { FileChangeEvent, ImpactLevel, ReactiveEvolutionReport } from '@alembic/core/types';
 import type { FileChangeSubscriber } from '../FileChangeDispatcher.js';
 

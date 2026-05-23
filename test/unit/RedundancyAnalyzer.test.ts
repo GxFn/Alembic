@@ -2,7 +2,7 @@
  * RedundancyAnalyzer 单元测试
  */
 
-import { RedundancyAnalyzer } from '@alembic/core/service/evolution/RedundancyAnalyzer';
+import { RedundancyAnalyzer } from '@alembic/core/evolution';
 import { describe, expect, it } from 'vitest';
 
 function mockRepo(rows: Record<string, unknown>[] = []) {

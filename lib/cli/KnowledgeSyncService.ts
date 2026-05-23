@@ -18,19 +18,16 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { CANDIDATES_DIR, RECIPES_DIR } from '@alembic/core/config';
-import Logger from '@alembic/core/logging';
-import { RawDbSyncAdapter, type SyncRepo } from '@alembic/core/repository/sync/SyncRepoAdapter';
-import { unwrapRawDb } from '@alembic/core/search';
-import {
-  computeKnowledgeHash,
-  parseKnowledgeMarkdown,
-} from '@alembic/core/service/knowledge/KnowledgeFileWriter';
 import type {
   ApplyReport,
   ReconcileReport,
   RepairReport,
   SourceRefReconciler,
-} from '@alembic/core/service/knowledge/SourceRefReconciler';
+} from '@alembic/core/knowledge';
+import { computeKnowledgeHash, parseKnowledgeMarkdown } from '@alembic/core/knowledge';
+import Logger from '@alembic/core/logging';
+import { RawDbSyncAdapter, type SyncRepo } from '@alembic/core/repositories';
+import { unwrapRawDb } from '@alembic/core/search';
 
 export interface SyncAllReport {
   synced: number;

@@ -530,7 +530,7 @@ describe('L8: RecipeExtractor Go heuristic', () => {
   let RecipeExtractor;
 
   beforeAll(async () => {
-    const mod = await import('@alembic/core/service/knowledge/RecipeExtractor');
+    const mod = await import('@alembic/core/knowledge');
     RecipeExtractor = mod.RecipeExtractor || mod.default;
   });
 

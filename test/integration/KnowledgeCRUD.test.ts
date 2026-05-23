@@ -7,7 +7,7 @@
  */
 
 import { KnowledgeEntry, KnowledgeService, Lifecycle } from '@alembic/core/knowledge';
-import { KnowledgeRepositoryImpl } from '@alembic/core/repository/knowledge/KnowledgeRepository.impl';
+import { KnowledgeRepositoryImpl } from '@alembic/core/repositories';
 import { createTestBootstrap } from '../fixtures/factory.js';
 
 describe('Integration: KnowledgeService CRUD + Lifecycle', () => {

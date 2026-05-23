@@ -17,7 +17,7 @@ import {
   resetDrizzle,
 } from '@alembic/core/infrastructure/database/drizzle';
 import migrate004 from '@alembic/core/infrastructure/database/migrations/004_evolution_proposals';
-import { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
+import { ProposalRepository } from '@alembic/core/repositories';
 import { HOST_AGENT_SOURCE } from '@alembic/core/shared';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';

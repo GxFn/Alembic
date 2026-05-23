@@ -635,9 +635,7 @@ export class SetupService {
    * 委托 KnowledgeSyncService 执行全字段同步（setup 场景跳过违规记录）
    */
   private async _syncRecipesToDB(db: unknown) {
-    const { KnowledgeSyncService } = await import(
-      '@alembic/core/service/knowledge/KnowledgeSyncService'
-    );
+    const { KnowledgeSyncService } = await import('@alembic/core/knowledge');
     const syncRoot = this.resolver?.dataRoot ?? this.projectRoot;
     const syncService = new KnowledgeSyncService(syncRoot);
     const report = syncService.sync(db as Parameters<typeof syncService.sync>[0], {

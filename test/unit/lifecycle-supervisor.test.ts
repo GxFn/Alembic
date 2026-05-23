@@ -9,7 +9,7 @@
  *   - 健康摘要
  */
 
-import { LifecycleStateMachine } from '@alembic/core/service/evolution/LifecycleStateMachine';
+import { LifecycleStateMachine } from '@alembic/core/evolution';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /* ── Mock factories ── */

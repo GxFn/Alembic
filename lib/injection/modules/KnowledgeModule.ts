@@ -10,8 +10,26 @@
 
 import { getEnhancementRegistry } from '@alembic/core/core/enhancement';
 import { DimensionCopy } from '@alembic/core/dimensions';
-import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
-import { KnowledgeService, RecipeProductionGateway } from '@alembic/core/knowledge';
+import {
+  ConsolidationAdvisor,
+  ContentPatcher,
+  DecayDetector,
+  EnhancementSuggester,
+  EvolutionGateway,
+  LifecycleStateMachine,
+  ProposalExecutor,
+  RedundancyAnalyzer,
+  StagingManager,
+} from '@alembic/core/evolution';
+import type { ReportStore } from '@alembic/core/infrastructure/report';
+import {
+  CodeEntityGraph,
+  ConfidenceRouter,
+  KnowledgeGraphService,
+  KnowledgeService,
+  RecipeProductionGateway,
+  SourceRefReconciler,
+} from '@alembic/core/knowledge';
 import { getDiscovererRegistry, LanguageService } from '@alembic/core/project-intelligence';
 import type {
   EvolutionLifecycleEventRepository,
@@ -22,19 +40,6 @@ import type {
 } from '@alembic/core/repositories';
 import { HybridRetriever, SearchEngine } from '@alembic/core/search';
 import { findSimilarRecipes } from '@alembic/core/service/candidate';
-import { ConsolidationAdvisor } from '@alembic/core/service/evolution/ConsolidationAdvisor';
-import { ContentPatcher } from '@alembic/core/service/evolution/ContentPatcher';
-import { DecayDetector } from '@alembic/core/service/evolution/DecayDetector';
-import { EnhancementSuggester } from '@alembic/core/service/evolution/EnhancementSuggester';
-import { EvolutionGateway } from '@alembic/core/service/evolution/EvolutionGateway';
-import { LifecycleStateMachine } from '@alembic/core/service/evolution/LifecycleStateMachine';
-import { ProposalExecutor } from '@alembic/core/service/evolution/ProposalExecutor';
-import { RedundancyAnalyzer } from '@alembic/core/service/evolution/RedundancyAnalyzer';
-import { StagingManager } from '@alembic/core/service/evolution/StagingManager';
-import { CodeEntityGraph } from '@alembic/core/service/knowledge/CodeEntityGraph';
-import { ConfidenceRouter } from '@alembic/core/service/knowledge/ConfidenceRouter';
-import { KnowledgeGraphService } from '@alembic/core/service/knowledge/KnowledgeGraphService';
-import { SourceRefReconciler } from '@alembic/core/service/knowledge/SourceRefReconciler';
 import { HnswVectorAdapter, IndexingPipeline, JsonVectorAdapter } from '@alembic/core/vector';
 import {
   resolveDataRoot,

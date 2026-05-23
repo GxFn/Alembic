@@ -51,17 +51,15 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
     let syncService = ctx.container.services.knowledgeSyncService
       ? (ctx.container.get(
           'knowledgeSyncService'
-        ) as import('@alembic/core/service/knowledge/KnowledgeSyncService').KnowledgeSyncService)
+        ) as import('@alembic/core/knowledge').KnowledgeSyncService)
       : null;
 
     if (!syncService) {
-      const { KnowledgeSyncService } = await import(
-        '@alembic/core/service/knowledge/KnowledgeSyncService'
-      );
+      const { KnowledgeSyncService } = await import('@alembic/core/knowledge');
       const { resolveDataRoot } = await import('@alembic/core/workspace');
       const dataRoot = resolveDataRoot(ctx.container as any) || ctx.projectRoot;
       const sourceRefReconciler = ctx.container.singletons.sourceRefReconciler as
-        | import('@alembic/core/service/knowledge/SourceRefReconciler').SourceRefReconciler
+        | import('@alembic/core/knowledge').SourceRefReconciler
         | undefined;
       syncService = new KnowledgeSyncService(dataRoot, {
         sourceRefReconciler: sourceRefReconciler || undefined,

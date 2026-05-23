@@ -17,6 +17,14 @@
  */
 
 import { type AgentService, runEvolutionAudit } from '@alembic/agent/service';
+import {
+  type EvolutionAuditRecipe as CoreEvolutionAuditRecipe,
+  type EvolutionCandidatePlan,
+  RecipeImpactPlanner,
+  type RescanImpactSubmissionResult,
+  submitRescanImpactDecisions,
+  toEvolutionAuditRecipe,
+} from '@alembic/core/evolution';
 import type { WorkflowMcpContext } from '@alembic/core/host-agent-workflows';
 import {
   auditRecipesForRescan,
@@ -33,21 +41,13 @@ import {
   projectInternalRescanPromptRecipes,
   syncKnowledgeStoreForRescan,
 } from '@alembic/core/host-agent-workflows';
+import { SourceRefReconciler } from '@alembic/core/knowledge';
 import type { DimensionDef, ProjectSnapshot } from '@alembic/core/project-intelligence';
 import {
   buildProjectSnapshot,
   FileDiffPlanner,
   ProjectIntelligenceCapability,
 } from '@alembic/core/project-intelligence';
-import {
-  type EvolutionAuditRecipe as CoreEvolutionAuditRecipe,
-  type EvolutionCandidatePlan,
-  RecipeImpactPlanner,
-  type RescanImpactSubmissionResult,
-  submitRescanImpactDecisions,
-  toEvolutionAuditRecipe,
-} from '@alembic/core/service/evolution/RecipeImpactPlanner';
-import { SourceRefReconciler } from '@alembic/core/service/knowledge/SourceRefReconciler';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type {
   McpContext,
@@ -74,10 +74,10 @@ type RescanMcpContext = WorkflowMcpContext & McpContext;
 // ── Helpers ──────────────────────────────────────────
 
 type SourceRefRepoT = InstanceType<
-  typeof import('@alembic/core/repository/sourceref/RecipeSourceRefRepository').RecipeSourceRefRepositoryImpl
+  typeof import('@alembic/core/repositories').RecipeSourceRefRepositoryImpl
 >;
 type KnowledgeRepoT = InstanceType<
-  typeof import('@alembic/core/repository/knowledge/KnowledgeRepository.impl').default
+  typeof import('@alembic/core/repositories').KnowledgeRepositoryImpl
 >;
 
 interface KnowledgeRepos {

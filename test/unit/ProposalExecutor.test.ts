@@ -5,11 +5,8 @@
  * 信号驱动架构：checkAndExecute 现为启动时兆底清理，主流程由 subscribeToSignals 接管。
  */
 
-import type {
-  ProposalRecord,
-  ProposalRepository,
-} from '@alembic/core/repository/evolution/ProposalRepository';
-import { ProposalExecutor } from '@alembic/core/service/evolution/ProposalExecutor';
+import { ProposalExecutor } from '@alembic/core/evolution';
+import type { ProposalRecord, ProposalRepository } from '@alembic/core/repositories';
 import { HOST_AGENT_SOURCE } from '@alembic/core/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

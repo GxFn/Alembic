@@ -245,7 +245,7 @@ async function createBootstrapCodeEntityGraph({
   projectRoot: string;
 }) {
   try {
-    const { CodeEntityGraph } = await import('@alembic/core/service/knowledge/CodeEntityGraph');
+    const { CodeEntityGraph } = await import('@alembic/core/knowledge');
     const entityRepo = container.get('codeEntityRepository');
     const edgeRepo = container.get('knowledgeEdgeRepository');
     if (entityRepo && edgeRepo) {

@@ -1877,9 +1877,7 @@ program
   .option('--force', '忽略 hash 强制覆盖')
   .action(async (opts) => {
     const projectRoot = resolve(opts.dir);
-    const { KnowledgeSyncService } = await import(
-      '@alembic/core/service/knowledge/KnowledgeSyncService'
-    );
+    const { KnowledgeSyncService } = await import('@alembic/core/knowledge');
     const syncService = new KnowledgeSyncService(projectRoot);
     if (opts.dryRun) {
       cli.log('ℹ️  Dry-run mode: no changes will be written');
@@ -1965,7 +1963,7 @@ program
     try {
       const warningRepo = container.get(
         'warningRepository'
-      ) as import('@alembic/core/repository/evolution/WarningRepository').WarningRepository;
+      ) as import('@alembic/core/repositories').WarningRepository;
 
       const filter: Record<string, string> = {};
       if (opts.status) {

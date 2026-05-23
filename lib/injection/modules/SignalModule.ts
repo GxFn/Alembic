@@ -10,11 +10,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Signal } from '@alembic/core/events';
-import { SignalBus } from '@alembic/core/events';
-import type { ReportStore } from '@alembic/core/infrastructure/report/ReportStore';
-import { SignalAggregator } from '@alembic/core/infrastructure/signal/SignalAggregator';
-import { SignalBridge } from '@alembic/core/infrastructure/signal/SignalBridge';
-import { SignalTraceWriter } from '@alembic/core/infrastructure/signal/SignalTraceWriter';
+import { SignalAggregator, SignalBridge, SignalBus, SignalTraceWriter } from '@alembic/core/events';
+import type { ReportStore } from '@alembic/core/infrastructure/report';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import { HitRecorder } from '../../service/signal/HitRecorder.js';
 import { shutdown } from '../../shared/shutdown.js';

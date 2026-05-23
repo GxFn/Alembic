@@ -6,7 +6,7 @@
  *   - 基本 submit 路由（update / deprecate / valid）
  */
 
-import { EvolutionGateway } from '@alembic/core/service/evolution/EvolutionGateway';
+import { EvolutionGateway } from '@alembic/core/evolution';
 import { HOST_AGENT_SOURCE } from '@alembic/core/shared';
 import { describe, expect, it, vi } from 'vitest';
 

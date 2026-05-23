@@ -19,7 +19,7 @@ import {
   Lifecycle,
   normalizeLifecycle,
 } from '@alembic/core/domain/knowledge/Lifecycle';
-import { ConfidenceRouter } from '@alembic/core/service/knowledge/ConfidenceRouter';
+import { ConfidenceRouter } from '@alembic/core/knowledge';
 import { describe, expect, it } from 'vitest';
 
 describe('Knowledge Governance Integration', () => {

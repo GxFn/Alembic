@@ -14,10 +14,9 @@
  * @module http/routes/evolution
  */
 
+import type { ProposalExecutor } from '@alembic/core/evolution';
 import Logger from '@alembic/core/logging';
-import type { ProposalRepository } from '@alembic/core/repository/evolution/ProposalRepository';
-import type { WarningRepository } from '@alembic/core/repository/evolution/WarningRepository';
-import type { ProposalExecutor } from '@alembic/core/service/evolution/ProposalExecutor';
+import type { ProposalRepository, WarningRepository } from '@alembic/core/repositories';
 import express, { type Request, type Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 
