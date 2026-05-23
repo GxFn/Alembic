@@ -4,6 +4,7 @@ import {
   buildDaemonCapabilities,
   buildDaemonProjectIdentity,
   buildResidentSearchCapability,
+  buildResidentServiceStatus,
   type DaemonCapabilitiesOptions,
 } from '../../lib/http/routes/daemon.js';
 
@@ -133,6 +134,65 @@ describe('daemon capabilities', () => {
       owner: 'alembic-internal-ai',
       runtimeOwner: 'AlembicAgent',
     });
+
+    const residentService = buildResidentServiceStatus({
+      capabilities,
+      internalAi: capabilities.internalAi,
+      origin: 'http://127.0.0.1:49152',
+      projectIdentity: buildDaemonProjectIdentity({
+        dataRoot: '/tmp/project',
+        dataRootSource: 'project-root',
+        databasePath: '/tmp/project/.asd/alembic.db',
+        projectId: 'project-123',
+        projectRoot: '/tmp/project',
+        runtimeDir: '/tmp/project/.asd',
+        schemaMigrationVersion: '2026-05-23',
+      }),
+      statePath: '/tmp/project/.asd/daemon.json',
+    });
+
+    expect(residentService).toMatchObject({
+      apiBaseUrl: 'http://127.0.0.1:49152',
+      contractVersion: 1,
+      healthPath: '/api/v1/daemon/health',
+      owner: 'alembic',
+      route: 'local-alembic-daemon',
+      serviceScope: {
+        diagnosticPaths: {
+          databasePath: '/tmp/project/.asd/alembic.db',
+          projectRoot: '/tmp/project',
+          statePath: '/tmp/project/.asd/daemon.json',
+        },
+        kind: 'current-project',
+        projectIdentity: {
+          dataRootSource: 'project-root',
+          projectId: 'project-123',
+          schemaMigrationVersion: '2026-05-23',
+          workspaceMode: 'standard',
+        },
+        scopeId: 'project:project-123',
+      },
+    });
+    expect('projectRoot' in residentService.serviceScope.projectIdentity).toBe(false);
+    expect(residentService.capabilities['status.health']).toMatchObject({
+      available: true,
+      owner: 'alembic',
+      route: 'local-alembic-daemon',
+      unavailableReason: null,
+    });
+    expect(residentService.capabilities['search.keyword'].available).toBe(true);
+    expect(residentService.capabilities['search.semantic'].available).toBe(true);
+    expect(residentService.capabilities['dashboard.handoff'].available).toBe(true);
+    expect(residentService.capabilities['file-monitor.git-worktree'].available).toBe(true);
+    expect(residentService.capabilities['jobs.internal-ai.bootstrap']).toMatchObject({
+      available: true,
+      owner: 'alembic',
+    });
+    expect(residentService.capabilities['jobs.host-agent-recoverable.bootstrap']).toMatchObject({
+      available: false,
+      owner: 'alembic-plugin',
+      unavailableReason: 'capability-unavailable',
+    });
   });
 
   test('reports file monitor unavailable when explicitly disabled', () => {
@@ -152,6 +212,34 @@ describe('daemon capabilities', () => {
     expect(capabilities.fileMonitor.available).toBe(false);
     expect(capabilities.fileMonitor.mode).toBe('disabled');
     expect(runtimeBoundary.fileMonitor.available).toBe(false);
+
+    const residentService = buildResidentServiceStatus({
+      capabilities,
+      internalAi: capabilities.internalAi,
+      origin: null,
+      projectIdentity: buildDaemonProjectIdentity({
+        dataRoot: '/tmp/project',
+        dataRootSource: 'ghost-registry',
+        databasePath: '/tmp/project/.asd/alembic.db',
+        projectId: null,
+        projectRoot: '/tmp/source',
+        runtimeDir: '/tmp/project/.asd',
+      }),
+    });
+
+    expect(residentService.serviceScope.scopeId).toBe('workspace:ghost:ghost-registry');
+    expect(residentService.capabilities['dashboard.handoff']).toMatchObject({
+      available: false,
+      unavailableReason: 'capability-unavailable',
+    });
+    expect(residentService.capabilities['file-monitor.git-worktree']).toMatchObject({
+      available: false,
+      unavailableReason: 'capability-unavailable',
+    });
+    expect(residentService.capabilities['jobs.internal-ai.rescan']).toMatchObject({
+      available: true,
+      owner: 'alembic',
+    });
   });
 
   test('builds project identity through the core runtime contract', () => {
