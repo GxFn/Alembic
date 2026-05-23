@@ -22,7 +22,7 @@ export interface FileChangeSubscriber {
   /** 订阅者名称（用于日志） */
   readonly name: string;
   /** 处理文件变更事件 */
-  onFileChanges(events: FileChangeEvent[]): Promise<ReactiveEvolutionReport | void>;
+  onFileChanges(events: FileChangeEvent[]): Promise<ReactiveEvolutionReport | undefined>;
 }
 
 /** 空 report 常量（无订阅者 / 无事件时返回） */

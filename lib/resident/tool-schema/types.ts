@@ -19,8 +19,7 @@ import type {
  * lightweight ServiceContainer interface in agent tools.
  */
 export interface McpServiceContainer {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DI container: callers know the service type
-  get(name: string): any;
+  get<T = any>(name: string): T;
   getServiceNames?(): string[];
   singletons?: Record<string, unknown>;
 }

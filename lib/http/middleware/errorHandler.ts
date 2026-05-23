@@ -6,7 +6,7 @@ import {
   PermissionDenied,
   ValidationError,
 } from '@alembic/core/shared';
-import type { ErrorRequestHandler, NextFunction, Request, RequestHandler, Response } from 'express';
+import type { ErrorRequestHandler } from 'express';
 
 /** Minimal logger interface (compatible with winston.Logger) */
 interface AppLogger {

@@ -17,7 +17,19 @@ const logger = Logger.getInstance();
 
 /* ═══ 进程内任务状态（单实例足够） ═══════════════════════ */
 
-let discoverTask: Record<string, any> = {
+interface DiscoverRelationsTask {
+  status: 'idle' | 'running' | 'done' | 'error';
+  startedAt: string | null;
+  finishedAt: string | null;
+  discovered: number;
+  totalPairs: number;
+  batchErrors: number;
+  error: string | null;
+  elapsed: number;
+  message: string | null;
+}
+
+let discoverTask: DiscoverRelationsTask = {
   status: 'idle', // idle | running | done | error
   startedAt: null,
   finishedAt: null,
@@ -57,7 +69,8 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
 
   // 如果已有任务在运行，返回当前状态
   if (discoverTask.status === 'running') {
-    const elapsed = Math.round((Date.now() - new Date(discoverTask.startedAt).getTime()) / 1000);
+    const startedAt = discoverTask.startedAt ?? new Date().toISOString();
+    const elapsed = Math.round((Date.now() - new Date(startedAt).getTime()) / 1000);
     return void res.json({
       success: true,
       data: {
@@ -202,8 +215,9 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
             if (!key) {
               return null;
             }
-            if (cache.has(key)) {
-              return cache.get(key)!;
+            const cached = cache.get(key);
+            if (cached !== undefined) {
+              return cached;
             }
 
             let id: string | null = null;
@@ -293,9 +307,9 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
       discoverTask.discovered = written;
       discoverTask.totalPairs = analyzed;
       discoverTask.batchErrors = relations.length - written;
+      const startedAt = discoverTask.startedAt ?? discoverTask.finishedAt;
       discoverTask.elapsed = Math.round(
-        (new Date(discoverTask.finishedAt).getTime() - new Date(discoverTask.startedAt).getTime()) /
-          1000
+        (new Date(discoverTask.finishedAt).getTime() - new Date(startedAt).getTime()) / 1000
       );
       logger.info('Discover relations completed', {
         discovered: discoverTask.discovered,
@@ -307,9 +321,9 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
       discoverTask.status = 'error';
       discoverTask.finishedAt = new Date().toISOString();
       discoverTask.error = (err as Error).message;
+      const startedAt = discoverTask.startedAt ?? discoverTask.finishedAt;
       discoverTask.elapsed = Math.round(
-        (new Date(discoverTask.finishedAt).getTime() - new Date(discoverTask.startedAt).getTime()) /
-          1000
+        (new Date(discoverTask.finishedAt).getTime() - new Date(startedAt).getTime()) / 1000
       );
       logger.error('Discover relations failed', { error: (err as Error).message });
     }

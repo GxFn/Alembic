@@ -21,7 +21,7 @@ import {
 } from '@alembic/core/guard';
 import type { GuardViolationRepository, KnowledgeRepository } from '@alembic/core/repositories';
 import { unwrapRawDb } from '@alembic/core/search';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
+import { resolveDataRoot } from '@alembic/core/workspace';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {

@@ -91,6 +91,11 @@ export class CrossEncoderReranker implements SearchCrossEncoder {
 
   /** 批量 AI 评分 — 单次 chatWithStructuredOutput 调用 */
   async #batchScore(query: string, candidates: SearchResultItem[]): Promise<SearchResultItem[]> {
+    const aiProvider = this.#aiProvider;
+    if (!aiProvider || typeof aiProvider.chatWithStructuredOutput !== 'function') {
+      throw new Error('AI provider is not available');
+    }
+
     const pairs = candidates.map((c: RerankCandidate, i: number) => {
       const doc = this.#extractDocText(c);
       return `[${i}] ${doc.substring(0, MAX_DOC_LEN)}`;
@@ -119,7 +124,7 @@ Score guidelines:
 
 Return ONLY a JSON array, no markdown or explanation.`;
 
-    const result = await this.#aiProvider!.chatWithStructuredOutput(prompt, {
+    const result = await aiProvider.chatWithStructuredOutput(prompt, {
       openChar: '[',
       closeChar: ']',
       temperature: 0.1,

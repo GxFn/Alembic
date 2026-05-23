@@ -32,7 +32,18 @@ const logger = Logger.getInstance();
 
 /* ═══ 进程内 Wiki 任务状态 ═══════════════════════════════ */
 
-let wikiTask: Record<string, any> = {
+interface WikiTask {
+  status: 'idle' | 'running' | 'done' | 'error';
+  phase: string | null;
+  progress: number;
+  message: string | null;
+  startedAt: number | null;
+  finishedAt: number | null;
+  result: Record<string, unknown> | null;
+  error: string | null;
+}
+
+let wikiTask: WikiTask = {
   status: 'idle', // idle | running | done | error
   phase: null,
   progress: 0,
@@ -75,7 +86,7 @@ function createGenerator(container: ReturnType<typeof getServiceContainer>) {
     (container.singletons?._projectRoot as string | undefined) ||
     process.env.ALEMBIC_PROJECT_DIR ||
     process.cwd();
-  const dataRoot = resolveDataRoot(container as any) || projectRoot;
+  const dataRoot = resolveDataRoot(container) || projectRoot;
 
   // 尝试获取可用的服务（非必须的优雅降级）
   let moduleService: unknown = null;
@@ -151,11 +162,12 @@ function createGenerator(container: ReturnType<typeof getServiceContainer>) {
 
 router.post('/generate', async (req: Request, res: Response): Promise<void> => {
   if (wikiTask.status === 'running') {
-    return void res.status(409).json({
+    res.status(409).json({
       success: false,
       error: { code: 'ALREADY_RUNNING', message: 'Wiki 生成正在进行中' },
       data: { progress: wikiTask.progress, phase: wikiTask.phase },
-    }) as unknown as void;
+    });
+    return;
   }
 
   const container = getServiceContainer();
@@ -186,7 +198,7 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
     wikiTask.finishedAt = Date.now();
     wikiTask.result = result;
     if (!result.success) {
-      wikiTask.error = result.error;
+      wikiTask.error = result.error ?? null;
     }
 
     // 推送完成事件
@@ -214,10 +226,11 @@ router.post('/generate', async (req: Request, res: Response): Promise<void> => {
 
 router.post('/update', async (req: Request, res: Response): Promise<void> => {
   if (wikiTask.status === 'running') {
-    return void res.status(409).json({
+    res.status(409).json({
       success: false,
       error: { code: 'ALREADY_RUNNING', message: 'Wiki 生成正在进行中' },
-    }) as unknown as void;
+    });
+    return;
   }
 
   const container = getServiceContainer();
@@ -240,7 +253,7 @@ router.post('/update', async (req: Request, res: Response): Promise<void> => {
     wikiTask.finishedAt = Date.now();
     wikiTask.result = result;
     if (!result.success) {
-      wikiTask.error = result.error;
+      wikiTask.error = result.error ?? null;
     }
   } catch (err: unknown) {
     wikiTask.status = 'error';
@@ -297,14 +310,15 @@ router.get('/status', async (req: Request, res: Response): Promise<void> => {
 router.get('/files', async (req: Request, res: Response): Promise<void> => {
   const container = getServiceContainer();
   const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
-  const dataRoot = resolveDataRoot(container as any) || projectRoot;
+  const dataRoot = resolveDataRoot(container) || projectRoot;
   const wikiDir = path.join(dataRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
 
   if (!fs.existsSync(wikiDir)) {
-    return void res.json({
+    res.json({
       success: true,
       data: { files: [], exists: false },
-    }) as unknown as void;
+    });
+    return;
   }
 
   const files: { path: string; name: string; size: number; modifiedAt: string }[] = [];
@@ -338,7 +352,7 @@ router.get('/files', async (req: Request, res: Response): Promise<void> => {
 router.get('/file/{*path}', async (req: Request, res: Response): Promise<void> => {
   const container = getServiceContainer();
   const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
-  const dataRoot = resolveDataRoot(container as any) || projectRoot;
+  const dataRoot = resolveDataRoot(container) || projectRoot;
   const wikiDir = path.join(dataRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
   const rawPath = req.params.path;
   const requestedPath = Array.isArray(rawPath) ? rawPath.join('/') : String(rawPath ?? '');

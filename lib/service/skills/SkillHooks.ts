@@ -159,7 +159,10 @@ export class SkillHooks {
       timeout: options?.timeout ?? DEFAULT_HANDLER_TIMEOUT,
     };
 
-    const handlers = this.hooks.get(hookName)!;
+    const handlers = this.hooks.get(hookName);
+    if (!handlers) {
+      throw new Error(`SkillHooks.tap: failed to register hook "${hookName}"`);
+    }
     handlers.push(registered);
     // 保持优先级排序
     handlers.sort((a, b) => a.priority - b.priority);
@@ -381,7 +384,11 @@ export class SkillHooks {
       priority: priority ?? DEFAULT_HANDLER_PRIORITY,
       timeout: timeout ?? DEFAULT_HANDLER_TIMEOUT,
     };
-    this.hooks.get(hookName)!.push(handler);
+    const handlers = this.hooks.get(hookName);
+    if (!handlers) {
+      throw new Error(`SkillHook not declared: ${hookName}`);
+    }
+    handlers.push(handler);
     this.logger.debug(`SkillHook registered: ${handler.name} (priority=${handler.priority})`);
   }
 

@@ -87,8 +87,9 @@ export class ContextualEnricher implements VectorChunkEnricher {
           : '';
 
         let context: string | undefined;
-        if (this.#cacheEnabled && this.#cache.has(cacheKey)) {
-          context = this.#cache.get(cacheKey)!;
+        const cachedContext = this.#cache.get(cacheKey);
+        if (this.#cacheEnabled && cachedContext !== undefined) {
+          context = cachedContext;
         } else {
           context = await this.#generateContext(systemPrompt, chunk.content);
           if (this.#cacheEnabled && context) {

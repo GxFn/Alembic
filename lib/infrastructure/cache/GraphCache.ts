@@ -11,7 +11,7 @@
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import type { DataPath, WriteZone } from '@alembic/core/io';
+import type { WriteZone } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
 import { computeContentHash } from '@alembic/core/shared';
 

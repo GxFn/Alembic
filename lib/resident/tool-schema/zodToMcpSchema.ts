@@ -27,31 +27,31 @@ function cleanJsonSchema(obj: JsonSchemaObj): JsonSchemaObj {
   const cleaned = { ...obj };
 
   // 移除顶层 $schema
-  delete cleaned['$schema'];
+  delete cleaned.$schema;
 
   // 移除 additionalProperties: false
-  if (cleaned['additionalProperties'] === false) {
-    delete cleaned['additionalProperties'];
+  if (cleaned.additionalProperties === false) {
+    delete cleaned.additionalProperties;
   }
 
   // 清理 integer 的冗余边界
-  if (cleaned['type'] === 'integer') {
-    if (cleaned['minimum'] === -9007199254740991) {
-      delete cleaned['minimum'];
+  if (cleaned.type === 'integer') {
+    if (cleaned.minimum === -9007199254740991) {
+      delete cleaned.minimum;
     }
-    if (cleaned['maximum'] === 9007199254740991) {
-      delete cleaned['maximum'];
+    if (cleaned.maximum === 9007199254740991) {
+      delete cleaned.maximum;
     }
   }
 
   // 带 default 的字段从 required 中移除
-  const properties = cleaned['properties'] as Record<string, JsonSchemaObj> | undefined;
-  if (properties && Array.isArray(cleaned['required'])) {
-    const required = (cleaned['required'] as string[]).filter((key) => {
+  const properties = cleaned.properties as Record<string, JsonSchemaObj> | undefined;
+  if (properties && Array.isArray(cleaned.required)) {
+    const required = (cleaned.required as string[]).filter((key) => {
       const prop = properties[key];
       return prop && !('default' in prop);
     });
-    cleaned['required'] = required.length > 0 ? required : [];
+    cleaned.required = required.length > 0 ? required : [];
   }
 
   // 递归处理 properties 内部的 object/array 类型
@@ -60,12 +60,12 @@ function cleanJsonSchema(obj: JsonSchemaObj): JsonSchemaObj {
     for (const [key, propSchema] of Object.entries(properties)) {
       cleanedProps[key] = cleanJsonSchema(propSchema);
     }
-    cleaned['properties'] = cleanedProps;
+    cleaned.properties = cleanedProps;
   }
 
   // 递归处理 items（数组元素）
-  if (cleaned['items'] && typeof cleaned['items'] === 'object') {
-    cleaned['items'] = cleanJsonSchema(cleaned['items'] as JsonSchemaObj);
+  if (cleaned.items && typeof cleaned.items === 'object') {
+    cleaned.items = cleanJsonSchema(cleaned.items as JsonSchemaObj);
   }
 
   // 递归处理 anyOf / oneOf / allOf（用于 union / discriminatedUnion / intersection）
@@ -95,8 +95,8 @@ export function zodToMcpSchema(schema: z.ZodType): McpInputSchema {
   // 保证 type/properties/required 字段存在
   return {
     type: 'object',
-    properties: (cleaned['properties'] as Record<string, Record<string, unknown>>) || {},
-    required: (cleaned['required'] as string[]) || [],
+    properties: (cleaned.properties as Record<string, Record<string, unknown>>) || {},
+    required: (cleaned.required as string[]) || [],
     ...cleaned,
   };
 }

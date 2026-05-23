@@ -57,7 +57,7 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
     if (!syncService) {
       const { KnowledgeSyncService } = await import('@alembic/core/knowledge');
       const { resolveDataRoot } = await import('@alembic/core/workspace');
-      const dataRoot = resolveDataRoot(ctx.container as any) || ctx.projectRoot;
+      const dataRoot = resolveDataRoot(ctx.container) || ctx.projectRoot;
       const sourceRefReconciler = ctx.container.singletons.sourceRefReconciler as
         | import('@alembic/core/knowledge').SourceRefReconciler
         | undefined;

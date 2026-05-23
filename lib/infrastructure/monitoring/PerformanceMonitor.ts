@@ -145,7 +145,10 @@ export class PerformanceMonitor implements Disposable {
       });
     }
 
-    const endpointStats = this.metrics.endpoints.get(route)!;
+    const endpointStats = this.metrics.endpoints.get(route);
+    if (!endpointStats) {
+      throw new Error(`Endpoint stats missing for route: ${route}`);
+    }
     endpointStats.count++;
     endpointStats.totalDuration += duration;
     endpointStats.minDuration = Math.min(endpointStats.minDuration, duration);

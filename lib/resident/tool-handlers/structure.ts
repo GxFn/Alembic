@@ -81,6 +81,14 @@ interface GraphArgs {
   [key: string]: unknown;
 }
 
+function requireGraphArg(args: GraphArgs, key: 'nodeId' | 'fromId' | 'toId'): string {
+  const value = args[key];
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`${key} is required`);
+  }
+  return value;
+}
+
 // ─── Discoverer 缓存 ─────────────────────────────────────
 // 同一 projectRoot 在模块生命期内只初始化一次
 let _discovererCache: DiscovererCache | null = null; // { projectRoot, discoverer, targets }
@@ -313,9 +321,10 @@ export async function getTargetMetadata(ctx: McpContext, args: StructureArgs) {
   if (!args.targetName) {
     throw new Error('targetName is required');
   }
-  const { targets } = await _getLoadedDiscoverer(ctx);
+  const cache = await _getLoadedDiscoverer(ctx);
+  const { targets } = cache;
   const target = _findTarget(targets, args.targetName);
-  const projectRoot = _discovererCache!.projectRoot;
+  const projectRoot = cache.projectRoot;
 
   // ── 基础元数据 ──
   const meta: Record<string, unknown> = {
@@ -388,17 +397,18 @@ export async function graphQuery(ctx: McpContext, args: GraphArgs) {
   }
   const nodeType = args.nodeType || 'recipe';
   const direction = args.direction || 'both';
-  let data: any;
+  const nodeId = requireGraphArg(args, 'nodeId');
+  let data: unknown;
   try {
     if (args.relation) {
-      data = await graphService.getRelated(args.nodeId!, nodeType, args.relation);
+      data = await graphService.getRelated(nodeId, nodeType, args.relation);
     } else {
-      data = await graphService.getEdges(args.nodeId!, nodeType, direction);
+      data = await graphService.getEdges(nodeId, nodeType, direction);
     }
   } catch (err: unknown) {
     // knowledge_edges 表不存在时 graceful 降级到 relations 字段
     if (err instanceof Error && err.message?.includes('no such table')) {
-      data = await _fallbackRelationsFromRecipe(ctx, args.nodeId!, args.relation, direction);
+      data = await _fallbackRelationsFromRecipe(ctx, nodeId, args.relation, direction);
       return envelope({
         success: true,
         data,
@@ -420,17 +430,22 @@ export async function graphImpact(ctx: McpContext, args: GraphArgs) {
     });
   }
   const nodeType = args.nodeType || 'recipe';
-  let impacted: any;
+  const nodeId = requireGraphArg(args, 'nodeId');
+  let impacted: unknown[] = [];
   try {
-    impacted = await graphService.getImpactAnalysis(args.nodeId!, nodeType, args.maxDepth ?? 3);
+    impacted = (await graphService.getImpactAnalysis(
+      nodeId,
+      nodeType,
+      args.maxDepth ?? 3
+    )) as unknown[];
   } catch (err: unknown) {
     // knowledge_edges 表不存在时 graceful 降级
     if (err instanceof Error && err.message?.includes('no such table')) {
-      impacted = await _fallbackImpactFromRecipe(ctx, args.nodeId!);
+      impacted = await _fallbackImpactFromRecipe(ctx, nodeId);
       return envelope({
         success: true,
         data: {
-          nodeId: args.nodeId,
+          nodeId,
           impactedCount: impacted.length,
           impacted,
           degraded: true,
@@ -443,7 +458,7 @@ export async function graphImpact(ctx: McpContext, args: GraphArgs) {
   }
   return envelope({
     success: true,
-    data: { nodeId: args.nodeId, impactedCount: impacted.length, impacted },
+    data: { nodeId, impactedCount: impacted.length, impacted },
     meta: { tool: 'alembic_graph' },
   });
 }
@@ -580,9 +595,8 @@ async function _fallbackImpactFromRecipe(ctx: McpContext, nodeId: string) {
 // ─── graph_path — 路径查找 ─────────────────────────────────
 
 export async function graphPath(ctx: McpContext, args: GraphArgs) {
-  if (!args.fromId || !args.toId) {
-    throw new Error('fromId and toId are required');
-  }
+  const fromId = requireGraphArg(args, 'fromId');
+  const toId = requireGraphArg(args, 'toId');
   const graphService = ctx.container.get('knowledgeGraphService');
   if (!graphService) {
     return envelope({
@@ -594,13 +608,13 @@ export async function graphPath(ctx: McpContext, args: GraphArgs) {
   const fromType = args.fromType || 'recipe';
   const toType = args.toType || 'recipe';
   const maxDepth = Math.min(Math.max(args.maxDepth ?? 5, 1), 10);
-  let result: any;
+  let result: unknown;
   try {
-    result = await graphService.findPath(args.fromId, fromType, args.toId, toType, maxDepth);
+    result = await graphService.findPath(fromId, fromType, toId, toType, maxDepth);
   } catch (err: unknown) {
     if (err instanceof Error && err.message?.includes('no such table')) {
       // 降级：用 relations 字段做单跳查找
-      result = await _fallbackPathFromRecipe(ctx, args.fromId, args.toId);
+      result = await _fallbackPathFromRecipe(ctx, fromId, toId);
       return envelope({
         success: true,
         data: result,
@@ -722,7 +736,7 @@ export async function graphStats(ctx: McpContext) {
       meta: { tool: 'alembic_graph' },
     });
   }
-  let stats: any;
+  let stats: unknown;
   try {
     stats = await graphService.getStats();
   } catch (err: unknown) {

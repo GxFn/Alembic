@@ -925,7 +925,6 @@ program
 
       const ora = (await import('ora')).default;
       const knowledgeRepo = container.get('knowledgeRepository');
-      const proposalRepo = container.get('proposalRepository');
 
       // ── Step 1: 收集项目文件列表 ──
       const allFiles: string[] = [];
@@ -2608,30 +2607,6 @@ program
       } catch {
         fs.cpSync(src, dest, { recursive: true });
         fs.rmSync(src, { recursive: true, force: true });
-      }
-    }
-
-    /** 清理 .gitignore 中的 Alembic managed section */
-    function removeGitignoreSection(root: string) {
-      const giPath = join(root, '.gitignore');
-      if (!fs.existsSync(giPath)) {
-        return;
-      }
-      const content = fs.readFileSync(giPath, 'utf8');
-      const BEGIN = '# >>> Alembic (managed block — do not edit) >>>';
-      const END = '# <<< Alembic <<<';
-      const beginIdx = content.indexOf(BEGIN);
-      const endIdx = content.indexOf(END);
-      if (beginIdx === -1 || endIdx === -1) {
-        return;
-      }
-      const cleaned = (content.slice(0, beginIdx) + content.slice(endIdx + END.length))
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-      if (cleaned.length === 0) {
-        fs.unlinkSync(giPath);
-      } else {
-        fs.writeFileSync(giPath, `${cleaned}\n`);
       }
     }
 

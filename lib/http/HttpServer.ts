@@ -418,7 +418,12 @@ export class HttpServer {
       };
 
       const onListening = () => {
-        const address = this.server?.address();
+        const server = this.server;
+        if (!server) {
+          onError(new Error('HTTP Server instance is not initialized') as NodeJS.ErrnoException);
+          return;
+        }
+        const address = server.address();
         if (!address || typeof address !== 'object' || address.port <= 0) {
           const error = new Error(
             `HTTP Server did not bind to a valid port: ${JSON.stringify(address)}`
@@ -437,10 +442,7 @@ export class HttpServer {
 
         // 初始化 WebSocket 服务（使用 HTTP 服务器实例）
         try {
-          this.realtimeService = initRealtimeService(this.server!) as unknown as Record<
-            string,
-            unknown
-          >;
+          this.realtimeService = initRealtimeService(server) as unknown as Record<string, unknown>;
           this.logger.info('Realtime service initialized');
 
           // 桥接 EventBus / SignalBus → RealtimeService
@@ -452,22 +454,23 @@ export class HttpServer {
             if (typeof rs?.broadcastEvent !== 'function') {
               throw new Error('broadcastEvent not available');
             }
+            const broadcastEvent = rs.broadcastEvent.bind(rs);
 
             // EventBus → lifecycle:transition
             const eventBus = container.services.eventBus ? container.get('eventBus') : null;
             if (eventBus) {
               eventBus.on('lifecycle:transition', (data: unknown) => {
-                rs.broadcastEvent!('lifecycle:transition', data);
+                broadcastEvent('lifecycle:transition', data);
               });
             }
 
             // SignalBridge 已将信号转发到 EventBus，HttpServer 只听 EventBus
             if (eventBus) {
               eventBus.on('signal:event', (signal: unknown) => {
-                rs.broadcastEvent!('signal:event', signal);
+                broadcastEvent('signal:event', signal);
               });
               eventBus.on('guard:updated', (signal: unknown) => {
-                rs.broadcastEvent!('guard:updated', signal);
+                broadcastEvent('guard:updated', signal);
               });
             }
 
@@ -481,7 +484,7 @@ export class HttpServer {
             // EventBus → audit:entry
             if (eventBus) {
               eventBus.on('audit:entry', (data: unknown) => {
-                rs.broadcastEvent!('audit:entry', data);
+                broadcastEvent('audit:entry', data);
               });
             }
           } catch {
@@ -494,7 +497,7 @@ export class HttpServer {
         }
 
         settled = true;
-        resolve(this.server!);
+        resolve(server);
       };
 
       this.server.on('error', onError);

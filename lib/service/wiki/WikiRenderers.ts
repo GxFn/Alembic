@@ -1608,6 +1608,7 @@ export function renderFolderOverview(
   projectInfo: WikiProjectInfo,
   isZh: boolean
 ) {
+  const primaryLanguage = projectInfo.primaryLanguage || 'unknown';
   const lines = [
     `# ${isZh ? '项目结构分析' : 'Project Structure Analysis'}`,
     '',
@@ -1618,8 +1619,8 @@ export function renderFolderOverview(
   // 说明为什么是文件夹分析模式
   lines.push(
     isZh
-      ? `> 💡 本项目的主要语言 (${LanguageService.displayName(projectInfo.primaryLanguage!)}) 暂不支持深度 AST 解析，因此使用文件夹画像分析来代替。`
-      : `> 💡 The project's primary language (${LanguageService.displayName(projectInfo.primaryLanguage!)}) does not support deep AST analysis yet, so folder profiling is used instead.`
+      ? `> 💡 本项目的主要语言 (${LanguageService.displayName(primaryLanguage)}) 暂不支持深度 AST 解析，因此使用文件夹画像分析来代替。`
+      : `> 💡 The project's primary language (${LanguageService.displayName(primaryLanguage)}) does not support deep AST analysis yet, so folder profiling is used instead.`
   );
   lines.push('');
 

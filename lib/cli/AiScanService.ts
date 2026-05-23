@@ -112,9 +112,14 @@ export class AiScanService {
             : content;
 
         // 委托统一 AgentService.run(scan-extract) — Agent(LLM) 直接分析
+        const agentService = this.agentService;
+        const systemRunContextFactory = this.systemRunContextFactory;
+        if (!agentService || !systemRunContextFactory) {
+          throw new Error('AI scan requires initialized AgentService and SystemRunContextFactory');
+        }
         const extractResult = await runScanAgentTask({
-          agentService: this.agentService!,
-          systemRunContextFactory: this.systemRunContextFactory!,
+          agentService,
+          systemRunContextFactory,
           label: file.targetName,
           files: [{ name: file.name, relativePath: file.relativePath, content: truncated }],
           task: 'extract',

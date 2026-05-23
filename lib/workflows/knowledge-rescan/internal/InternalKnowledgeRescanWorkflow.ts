@@ -66,6 +66,8 @@ import {
 
 type AgentEvolutionAuditRecipe = Parameters<typeof runEvolutionAudit>[0]['recipes'][number];
 type EvolutionAuditResult = Awaited<ReturnType<typeof runEvolutionAudit>>;
+type RescanCleanPolicyResult = Awaited<ReturnType<typeof runForceRescanCleanPolicy>>;
+type SourceRefReconcileReport = Awaited<ReturnType<SourceRefReconciler['reconcile']>>;
 
 type RescanMcpContext = WorkflowMcpContext & McpContext;
 
@@ -166,8 +168,8 @@ export async function runInternalKnowledgeRescanWorkflow(
   // Step 0: 清理策略（根据 intent 决定）
   // ═══════════════════════════════════════════════════════════
 
-  let recipeSnapshot;
-  let cleanResult;
+  let recipeSnapshot: RescanCleanPolicyResult['recipeSnapshot'];
+  let cleanResult: RescanCleanPolicyResult['cleanResult'];
 
   if (intent.cleanupPolicy === 'force-rescan') {
     const result = await runForceRescanCleanPolicy({
@@ -225,7 +227,7 @@ export async function runInternalKnowledgeRescanWorkflow(
   // Step 1: SourceRef 校验 + 反向清理
   // ═══════════════════════════════════════════════════════════
 
-  let reconcileReport;
+  let reconcileReport: SourceRefReconcileReport | null = null;
   try {
     const repos = resolveKnowledgeRepos(ctx.container);
     if (repos) {
@@ -276,7 +278,7 @@ export async function runInternalKnowledgeRescanWorkflow(
     allFiles,
     primaryLang,
     depGraphData,
-    astProjectSummary,
+    astProjectSummary: _astProjectSummary,
     activeDimensions: allDimensions,
     incrementalPlan: _incrementalPlan,
   } = phaseResults;

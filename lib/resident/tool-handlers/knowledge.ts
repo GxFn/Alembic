@@ -208,8 +208,8 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
       );
       // 保留原始 items 顺序中去重后的
       if (result.items && result.items.length < items.length) {
-        const titles = new Set(result.items.map((it) => it.title));
-        items = items.filter((it) => titles.has(it.title!));
+        const titles = new Set(result.items.map((it) => it.title).filter(Boolean));
+        items = items.filter((it) => typeof it.title === 'string' && titles.has(it.title));
       }
     } catch (err: unknown) {
       // CandidateAggregator 加载失败时降级：不去重，但记录日志

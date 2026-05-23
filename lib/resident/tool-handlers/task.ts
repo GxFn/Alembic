@@ -185,18 +185,20 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
   }
 
   // ─── Delivery: build response ───
-  const relatedCount = searchResult?.relatedKnowledge.length ?? 0;
-  const ruleCount = searchResult?.guardRules.length ?? 0;
+  const relatedKnowledge = searchResult?.relatedKnowledge ?? [];
+  const guardRules = searchResult?.guardRules ?? [];
+  const relatedCount = relatedKnowledge.length;
+  const ruleCount = guardRules.length;
 
   const lines: string[] = [];
   if (relatedCount > 0 || ruleCount > 0) {
     lines.push(`📋 Found ${relatedCount} recipe(s), ${ruleCount} guard rule(s).`);
-    for (const r of searchResult!.relatedKnowledge) {
+    for (const r of relatedKnowledge) {
       const hint = r.actionHint ? ` — ${r.actionHint}` : '';
       const refs = r.sourceRefs?.length ? `\n    📍 ${r.sourceRefs.join(', ')}` : '';
       lines.push(`  • ${r.trigger || r.title}${hint}${refs}`);
     }
-    for (const r of searchResult!.guardRules) {
+    for (const r of guardRules) {
       lines.push(`  • [rule] ${r.trigger || r.title}`);
     }
   } else {

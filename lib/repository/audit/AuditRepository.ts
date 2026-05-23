@@ -118,7 +118,11 @@ export class AuditRepositoryImpl {
         data.duration ?? null
       );
 
-    return (await this.findById(data.id))!;
+    const auditLog = await this.findById(data.id);
+    if (!auditLog) {
+      throw new Error(`Audit log was inserted but could not be loaded: ${data.id}`);
+    }
+    return auditLog;
   }
 
   async delete(id: string): Promise<boolean> {

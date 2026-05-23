@@ -12,8 +12,13 @@ import type { Gateway, GatewayContext } from './Gateway.js';
 
 const logger = Logger.getInstance();
 
+type GatewayService = Record<string, (...args: unknown[]) => unknown>;
+interface GatewayServiceContainer {
+  get<T = GatewayService>(name: string): T;
+}
+
 /** 注册所有 Gateway actions */
-export function registerGatewayActions(gateway: Gateway, container: { get(name: string): any }) {
+export function registerGatewayActions(gateway: Gateway, container: GatewayServiceContainer) {
   // ========== Knowledge Actions (V3: replaces Candidate + Recipe) ==========
 
   gateway.register('candidate:create', async (ctx: GatewayContext) => {

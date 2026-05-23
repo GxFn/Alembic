@@ -114,11 +114,13 @@ router.post('/enrich', validate(EnrichBody), async (req: Request, res: Response)
         }
 
         if (item.rationale && !cand.rationale) {
-          contentBase!.rationale = item.rationale;
+          contentBase ??= {};
+          contentBase.rationale = item.rationale;
           changed = true;
         }
         if (item.steps && (!cand.steps || (cand.steps as unknown[]).length === 0)) {
-          contentBase!.steps = item.steps;
+          contentBase ??= {};
+          contentBase.steps = item.steps;
           changed = true;
         }
         if (contentBase && changed) {

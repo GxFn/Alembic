@@ -54,14 +54,6 @@ const HARD_REJECT_RATIO = 0.1;
 const CONSECUTIVE_DUPE_THRESHOLD = 8;
 const STRUCTURE_CHECK_THRESHOLD = 500;
 
-const SKILL_USE_CASES: Record<string, string> = {
-  'alembic-create': '将代码模式/规则/事实提交到知识库',
-  'alembic-guard': '代码规范审计（Guard 规则检查）',
-  'alembic-recipes': '查询/使用项目标准（Recipe 上下文检索）',
-  'alembic-structure': '了解项目结构（Target / 依赖图谱 / 知识图谱）',
-  'alembic-devdocs': '保存开发文档（架构决策、调试报告、设计文档）',
-};
-
 export async function generateSkill(
   ctx: SkillContext,
   dim: SkillDimensionDef,
@@ -328,41 +320,6 @@ function regenerateEditorIndex(ctx?: SkillContext | null) {
     generated: false,
     reason: 'Alembic main package no longer writes project editor delivery indexes.',
   };
-}
-
-function parseSkillMeta(skillName: string, baseDir = INJECTABLE_SKILLS_DIR) {
-  try {
-    const content = fs.readFileSync(path.join(baseDir, skillName, 'SKILL.md'), 'utf8');
-    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
-    const meta: { description: string; createdBy: string | null; createdAt: string | null } = {
-      description: skillName,
-      createdBy: null,
-      createdAt: null,
-    };
-    if (fmMatch) {
-      const frontmatter = fmMatch[1];
-      const descMatch = frontmatter.match(/^description:\s*(.+?)$/m);
-      if (descMatch) {
-        const description = descMatch[1].trim();
-        const firstSentence = description.split(/\.\s/)[0];
-        meta.description =
-          firstSentence.length < description.length
-            ? `${firstSentence}.`
-            : description.substring(0, 120);
-      }
-      const createdByMatch = frontmatter.match(/^createdBy:\s*(.+?)$/m);
-      if (createdByMatch) {
-        meta.createdBy = createdByMatch[1].trim();
-      }
-      const createdAtMatch = frontmatter.match(/^createdAt:\s*(.+?)$/m);
-      if (createdAtMatch) {
-        meta.createdAt = createdAtMatch[1].trim();
-      }
-    }
-    return meta;
-  } catch {
-    return { description: skillName, createdBy: null, createdAt: null };
-  }
 }
 
 function normalizeLine(line: string): string {

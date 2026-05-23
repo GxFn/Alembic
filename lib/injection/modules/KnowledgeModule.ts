@@ -21,7 +21,6 @@ import {
   RedundancyAnalyzer,
   StagingManager,
 } from '@alembic/core/evolution';
-import type { ReportStore } from '@alembic/core/infrastructure/report';
 import {
   CodeEntityGraph,
   ConfidenceRouter,
