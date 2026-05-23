@@ -113,7 +113,7 @@ if (allowedCallSites.length > 0) {
 
 const aiRules = config.aiProviderRules ?? {};
 const aiScanRoots = aiRules.scanRoots ?? scanRoots;
-const aiIgnoredPrefixes = new Set(aiRules.ignoredPathPrefixes ?? ['lib/external/ai/']);
+const aiIgnoredPrefixes = new Set(aiRules.ignoredPathPrefixes ?? []);
 const agentAiImportsByFile = new Map();
 const localAiProviderImports = [];
 
@@ -138,7 +138,7 @@ for (const root of aiScanRoots) {
 
 for (const offender of localAiProviderImports) {
   violations.push(
-    `Local AI provider import remains in ${offender.file}: ${offender.specifier}. Use @alembic/agent/ai outside lib/external/ai/**.`
+    `Retired local AI provider import remains in ${offender.file}: ${offender.specifier}. Use @alembic/agent/ai and do not reintroduce lib/external/ai/**.`
   );
 }
 

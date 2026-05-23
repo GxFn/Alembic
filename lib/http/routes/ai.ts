@@ -891,7 +891,7 @@ function readLlmConfig() {
 
 /**
  * GET /api/v1/ai/env-config
- * 读取工作区 LLM 配置；路径名保留 env-config 以兼容旧 Dashboard。
+ * 读取工作区 LLM 配置；env-config 是当前 Dashboard 使用的历史路由名。
  */
 router.get('/env-config', async (_req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: readLlmConfig() });

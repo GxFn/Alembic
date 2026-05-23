@@ -306,13 +306,13 @@
     "packageName": "@alembic/agent",
     "packageRange": "file:../AlembicAgent",
     "publicEntrypoint": "@alembic/agent/ai",
-    "localDeletionCandidate": "lib/external/ai/**",
+    "retiredNegativeGuard": "lib/external/ai/**",
     "scanRoots": ["lib", "bin", "scripts", "test"],
-    "ignoredPathPrefixes": ["lib/external/ai/"],
+    "ignoredPathPrefixes": [],
     "notes": [
       "Provider execution, transports, model registry, parameter guard, and LLM gateway are consumed from @alembic/agent/ai.",
       "Alembic keeps CLI/daemon/Dashboard AI settings and environment/config persistence as host adapter responsibilities.",
-      "The local lib/external/ai tree is preserved only as a deletion candidate until host smoke evidence is complete."
+      "The retired lib/external/ai path is not preserved as a local tree; boundary lint keeps negative import detection to prevent reintroducing local AI provider code."
     ]
   },
   "toolSystemImportRules": {
