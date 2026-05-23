@@ -6,9 +6,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveProjectRoot } from '@alembic/core/workspace';
+import { envelope } from '../../../resident/tool-schema/envelope.js';
+import type { KnowledgeBaseStats, McpContext } from '../../../resident/tool-schema/types.js';
 import { PACKAGE_ROOT } from '../../../shared/package-assets.js';
-import { envelope } from '../envelope.js';
-import type { KnowledgeBaseStats, McpContext } from './types.js';
 
 export async function health(ctx: McpContext) {
   const checks = { database: false, gateway: false, vectorStore: false };

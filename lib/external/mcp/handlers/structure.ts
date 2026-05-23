@@ -9,8 +9,8 @@ import path from 'node:path';
 import * as Paths from '@alembic/core/config';
 import { LanguageService } from '@alembic/core/project-intelligence';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
-import { envelope } from '../envelope.js';
-import type { McpContext } from './types.js';
+import { envelope } from '../../../resident/tool-schema/envelope.js';
+import type { McpContext } from '../../../resident/tool-schema/types.js';
 
 // ─── Local Types ──────────────────────────────────────────
 

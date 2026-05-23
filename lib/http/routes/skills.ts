@@ -11,7 +11,7 @@ import {
   listSkills,
   loadSkill,
   updateSkill,
-} from '../../external/mcp/handlers/skill.js';
+} from '../../resident/tool-handlers/skill.js';
 import { validate } from '../middleware/validate.js';
 
 const router = express.Router();

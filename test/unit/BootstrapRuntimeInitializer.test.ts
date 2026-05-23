@@ -3,7 +3,7 @@ import {
   type BootstrapRuntimeContainer,
   initializeBootstrapRuntime,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
-import type { IncrementalPlan } from '../../lib/external/mcp/handlers/types.js';
+import type { IncrementalPlan } from '../../lib/resident/tool-schema/types.js';
 
 function makeContainer(
   overrides: Partial<BootstrapRuntimeContainer> = {}

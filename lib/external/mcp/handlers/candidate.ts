@@ -7,7 +7,7 @@
  */
 
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
-import { envelope } from '../envelope.js';
+import { envelope } from '../../../resident/tool-schema/envelope.js';
 import type {
   CandidateInput,
   CheckDuplicateArgs,
@@ -15,7 +15,7 @@ import type {
   EnrichResultEntry,
   McpContext,
   ValidateCandidateArgs,
-} from './types.js';
+} from '../../../resident/tool-schema/types.js';
 
 // ─── 校验 & 去重 ───────────────────────────────────────────
 

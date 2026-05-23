@@ -10,8 +10,8 @@
  * 从 bootstrap.js 提取为独立模块
  */
 
-import { envelope } from '../../envelope.js';
-import type { KnowledgeEntryJSON, McpContext } from '../types.js';
+import { envelope } from '../../../../resident/tool-schema/envelope.js';
+import type { KnowledgeEntryJSON, McpContext } from '../../../../resident/tool-schema/types.js';
 
 /**
  * @param ctx MCP context { container, logger }

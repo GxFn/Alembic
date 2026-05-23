@@ -415,7 +415,7 @@ describe('MCP Knowledge Handlers', () => {
  *  Part 2: MCP Tool Definition Tests
  * ════════════════════════════════════════════ */
 
-const { TOOLS, TOOL_GATEWAY_MAP } = await import('../../lib/external/mcp/tools.js');
+const { TOOLS, TOOL_GATEWAY_MAP } = await import('../../lib/resident/tool-schema/tools.js');
 
 describe('MCP Tool Definitions (V3)', () => {
   const _v3Tools = TOOLS.filter((t) => t.name.includes('knowledge'));

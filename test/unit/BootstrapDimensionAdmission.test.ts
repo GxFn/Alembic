@@ -1,15 +1,15 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, test, vi } from 'vitest';
 import type { SessionStore } from '@alembic/agent/memory';
+import { describe, expect, test, vi } from 'vitest';
 import {
   buildBootstrapDimensionAdmissionDecisions,
   resolveBootstrapDimensionAdmissions,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionAdmission.js';
 import type { BootstrapRescanContext } from '#workflows/capabilities/execution/internal-agent/BootstrapRescanState.js';
 import type { DimensionContext } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
-import type { IncrementalPlan } from '../../lib/external/mcp/handlers/types.js';
+import type { IncrementalPlan } from '../../lib/resident/tool-schema/types.js';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
 
 function makeIncrementalPlan(partial: Partial<IncrementalPlan> = {}): IncrementalPlan {

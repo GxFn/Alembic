@@ -11,7 +11,7 @@
  */
 
 import { z } from 'zod';
-import { wrapHandler } from '../../lib/external/mcp/errorHandler.js';
+import { wrapHandler } from '../../lib/resident/tool-schema/errorHandler.js';
 
 describe('Integration: wrapHandler', () => {
   const TestSchema = z.object({
