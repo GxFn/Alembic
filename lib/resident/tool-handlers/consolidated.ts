@@ -12,8 +12,7 @@
 import { dimensionTags } from '@alembic/core/dimensions';
 import { getRequiredFieldsDescription } from '@alembic/core/knowledge';
 import { getDeveloperIdentity } from '@alembic/core/shared';
-import * as skillHandlers from '../../../resident/tool-handlers/skill.js';
-import { envelope } from '../../../resident/tool-schema/envelope.js';
+import { envelope } from '../tool-schema/envelope.js';
 import type {
   ConsolidatedGraphArgs,
   ConsolidatedGuardArgs,
@@ -22,10 +21,11 @@ import type {
   ConsolidatedSkillArgs,
   ConsolidatedStructureArgs,
   McpContext,
-} from '../../../resident/tool-schema/types.js';
+} from '../tool-schema/types.js';
 import * as browseHandlers from './browse.js';
 import * as guardHandlers from './guard.js';
 import * as searchHandlers from './search.js';
+import * as skillHandlers from './skill.js';
 import * as structureHandlers from './structure.js';
 
 // ─── alembic_search (整合 4 → 1) ────────────────────────

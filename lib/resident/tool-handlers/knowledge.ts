@@ -7,8 +7,8 @@ import { dimensionTags } from '@alembic/core/dimensions';
 import { UnifiedValidator } from '@alembic/core/knowledge';
 import { getDeveloperIdentity } from '@alembic/core/shared';
 import { resolveProjectRoot } from '@alembic/core/workspace';
-import { envelope } from '../../../resident/tool-schema/envelope.js';
-import type { McpContext, McpServiceContainer } from '../../../resident/tool-schema/types.js';
+import { envelope } from '../tool-schema/envelope.js';
+import type { McpContext, McpServiceContainer } from '../tool-schema/types.js';
 
 // ─── 限流 ──────────────────────────────────────────────────
 

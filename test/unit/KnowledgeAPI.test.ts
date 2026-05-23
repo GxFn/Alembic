@@ -108,7 +108,7 @@ vi.mock('@alembic/core/shared', async (importOriginal) => {
 });
 
 const { submitKnowledge, submitKnowledgeBatch, knowledgeLifecycle } = await import(
-  '../../lib/external/mcp/handlers/knowledge.js'
+  '../../lib/resident/tool-handlers/knowledge.js'
 );
 // 从 #imports 别名导入 mock — 与 handler 内部的 dynamic import 一致
 const { checkRecipeSave } = await import('#http/middleware/RateLimiter.js');

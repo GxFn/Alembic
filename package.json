@@ -28,10 +28,6 @@
       "alembic-dev": "./lib/governance/*",
       "default": "./dist/lib/governance/*"
     },
-    "#external/*": {
-      "alembic-dev": "./lib/external/*",
-      "default": "./dist/lib/external/*"
-    },
     "#platform/*": {
       "alembic-dev": "./lib/platform/*",
       "default": "./dist/lib/platform/*"

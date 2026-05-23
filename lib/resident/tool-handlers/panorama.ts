@@ -14,8 +14,8 @@
  * All read-only except governance_cycle and staging_check (which perform state transitions).
  */
 
-import { envelope } from '../../../resident/tool-schema/envelope.js';
-import type { McpContext } from '../../../resident/tool-schema/types.js';
+import { envelope } from '../tool-schema/envelope.js';
+import type { McpContext } from '../tool-schema/types.js';
 
 interface PanoramaArgs {
   operation?: string;

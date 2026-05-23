@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { describe, expect, test } from 'vitest';
 
 const repoRoot = process.cwd();
@@ -59,4 +59,29 @@ describe('resident service HTTP boundary', () => {
     expect(existsSync(legacyRescanFile)).toBe(false);
     expect(existsSync(legacyRefineFile)).toBe(false);
   });
+
+  test('keeps retired external MCP tree free of TypeScript entrypoints', () => {
+    const legacyMcpRoot = join(repoRoot, 'lib/external/mcp');
+    const leftoverModules = collectTypeScriptFiles(legacyMcpRoot).map((file) =>
+      relative(repoRoot, file)
+    );
+
+    expect(leftoverModules).toEqual([]);
+  });
 });
+
+function collectTypeScriptFiles(dir: string): string[] {
+  if (!existsSync(dir)) {
+    return [];
+  }
+  const files: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectTypeScriptFiles(fullPath));
+    } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}

@@ -7,14 +7,14 @@
  *   - _projectForAgent → get 详情（去除噪音 ~25 字段）
  */
 
-import { envelope } from '../../../resident/tool-schema/envelope.js';
+import { envelope } from '../tool-schema/envelope.js';
 import type {
   BrowseGetArgs,
   BrowseListArgs,
   ConfirmUsageArgs,
   KnowledgeEntryJSON,
   McpContext,
-} from '../../../resident/tool-schema/types.js';
+} from '../tool-schema/types.js';
 
 // ─── 通用投影辅助 ────────────────────────────────────────────
 

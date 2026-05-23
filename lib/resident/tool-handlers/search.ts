@@ -12,12 +12,8 @@
  */
 
 import { groupByKind, type SlimSearchResult, slimSearchResult } from '@alembic/core/search';
-import { envelope } from '../../../resident/tool-schema/envelope.js';
-import type {
-  McpContext,
-  SearchArgs,
-  SearchResultItem,
-} from '../../../resident/tool-schema/types.js';
+import { envelope } from '../tool-schema/envelope.js';
+import type { McpContext, SearchArgs, SearchResultItem } from '../tool-schema/types.js';
 
 // ─── 工具函数 ────────────────────────────────────────────────
 
