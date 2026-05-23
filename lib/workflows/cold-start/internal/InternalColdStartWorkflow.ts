@@ -261,4 +261,4 @@ export async function runInternalColdStartWorkflow(
   });
 }
 
-// bootstrapRefine → 已提取到 bootstrap/refine.js（通过顶部 re-export）
+// bootstrapRefine → 已提取到 resident/tool-handlers/bootstrap/refine.js

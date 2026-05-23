@@ -1,8 +1,10 @@
 /**
- * Compatibility exports for the internal cold-start path.
+ * Compatibility alias for the resident cold-start handler surface.
  *
- * The workflow implementation lives in the outer cold-start adapter.
+ * New Alembic-owned consumers should import from resident/tool-handlers.
  */
 
-export { runInternalColdStartWorkflow as bootstrapKnowledge } from '../../../workflows/cold-start/internal/InternalColdStartWorkflow.js';
-export { bootstrapRefine } from './bootstrap/refine.js';
+export {
+  bootstrapKnowledge,
+  bootstrapRefine,
+} from '../../../resident/tool-handlers/bootstrap-internal.js';

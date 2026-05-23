@@ -1,7 +1,7 @@
 /**
- * Compatibility export for the internal knowledge-rescan path.
+ * Compatibility alias for the resident knowledge-rescan handler surface.
  *
- * The workflow implementation lives in the outer knowledge-rescan adapter.
+ * New Alembic-owned consumers should import from resident/tool-handlers.
  */
 
-export { runInternalKnowledgeRescanWorkflow as rescanInternal } from '../../../workflows/knowledge-rescan/internal/InternalKnowledgeRescanWorkflow.js';
+export { rescanInternal } from '../../../resident/tool-handlers/rescan-internal.js';

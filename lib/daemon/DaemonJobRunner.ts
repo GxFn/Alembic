@@ -188,7 +188,7 @@ export function getJobStore(container: ServiceContainer): JobStore {
 
 async function executeInternalWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
   if (options.kind === 'bootstrap') {
-    const { bootstrapKnowledge } = await import('../external/mcp/handlers/bootstrap-internal.js');
+    const { bootstrapKnowledge } = await import('../resident/tool-handlers/bootstrap-internal.js');
     const raw = await bootstrapKnowledge(
       { container: options.container, logger: options.logger },
       {
@@ -202,7 +202,7 @@ async function executeInternalWorkflow(options: RunDaemonJobOptions): Promise<un
     return { ...asRecord(result), asyncFill: true };
   }
 
-  const { rescanInternal } = await import('../external/mcp/handlers/rescan-internal.js');
+  const { rescanInternal } = await import('../resident/tool-handlers/rescan-internal.js');
   const raw = await rescanInternal(
     { container: options.container, logger: options.logger },
     {

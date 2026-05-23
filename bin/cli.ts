@@ -602,9 +602,9 @@ program
       const ora = (await import('ora')).default;
       const spinner = ora('Phase 1-4: 收集文件、AST 分析、SPM 依赖、Guard 审计...').start();
 
-      // 直接调用 bootstrap-internal handler（统一编排管线）
+      // 直接调用 resident bootstrap handler（统一编排管线）
       const { bootstrapKnowledge } = await import(
-        '../lib/external/mcp/handlers/bootstrap-internal.js'
+        '../lib/resident/tool-handlers/bootstrap-internal.js'
       );
       const logger = container.get('logger');
       const raw = await bootstrapKnowledge(
@@ -787,8 +787,8 @@ program
       const ora = (await import('ora')).default;
       const spinner = ora('Rescan: 快照 Recipe → 清理缓存 → Phase 1-4 + 证据审计...').start();
 
-      // 直接调用 rescan-internal handler（统一编排管线）
-      const { rescanInternal } = await import('../lib/external/mcp/handlers/rescan-internal.js');
+      // 直接调用 resident rescan handler（统一编排管线）
+      const { rescanInternal } = await import('../lib/resident/tool-handlers/rescan-internal.js');
       const logger = container.get('logger');
       const raw = await rescanInternal(
         { container, logger },
