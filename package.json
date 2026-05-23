@@ -65,6 +65,7 @@
     "start": "node dist/bin/cli.js start",
     "test": "vitest run",
     "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:unit:codex": "vitest run --config vitest.unit.codex.config.ts",
     "test:integration": "vitest run test/integration",
     "test:e2e": "vitest run test/e2e",
     "test:coverage": "vitest run --coverage",
