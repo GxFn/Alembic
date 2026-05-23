@@ -39,6 +39,8 @@ import {
   presentInternalKnowledgeRescanResponse,
   projectInternalRescanGapPlan,
   projectInternalRescanPromptRecipes,
+  runForceRescanCleanPolicy,
+  runRescanCleanPolicy,
   syncKnowledgeStoreForRescan,
 } from '@alembic/core/host-agent-workflows';
 import { SourceRefReconciler } from '@alembic/core/knowledge';
@@ -55,10 +57,6 @@ import type {
   WorkflowDatabaseLike,
   WorkflowSkillHooks,
 } from '@alembic/core/types';
-import {
-  runForceRescanCleanPolicy,
-  runRescanCleanPolicy,
-} from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {

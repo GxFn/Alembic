@@ -91,14 +91,6 @@ vi.mock('#http/middleware/RateLimiter.js', () => ({
   checkRecipeSave: vi.fn(() => ({ allowed: true })),
 }));
 
-// Mock RecipeReadinessChecker
-vi.mock('@alembic/core/domain/knowledge/RecipeReadinessChecker', () => ({
-  checkRecipeReadiness: vi.fn(() => ({ ready: true, missing: [], suggestions: [] })),
-}));
-vi.mock('@alembic/core/domain/knowledge/RecipeReadinessChecker', () => ({
-  checkRecipeReadiness: vi.fn(() => ({ ready: true, missing: [], suggestions: [] })),
-}));
-
 // Mock shared facade pieces used by these route tests while preserving other facade exports.
 vi.mock('@alembic/core/shared', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@alembic/core/shared')>();
@@ -120,9 +112,6 @@ const { submitKnowledge, submitKnowledgeBatch, knowledgeLifecycle } = await impo
 );
 // 从 #imports 别名导入 mock — 与 handler 内部的 dynamic import 一致
 const { checkRecipeSave } = await import('#http/middleware/RateLimiter.js');
-const { checkRecipeReadiness } = await import(
-  '@alembic/core/domain/knowledge/RecipeReadinessChecker'
-);
 
 describe('MCP Knowledge Handlers', () => {
   let svc;
@@ -185,11 +174,6 @@ describe('MCP Knowledge Handlers', () => {
     });
 
     test('Recipe-Ready 不满足时应返回 hints', async () => {
-      checkRecipeReadiness.mockReturnValueOnce({
-        ready: false,
-        missing: ['category', 'trigger'],
-        suggestions: ['add category'],
-      });
       const result = await submitKnowledge(ctx, validArgs);
       expect(result.success).toBe(true);
       expect(result.data.recipeReadyHints).toBeDefined();

@@ -9,7 +9,7 @@
  * 中间件注入 req.resolvedRole 供 gatewayMiddleware 使用。
  */
 
-import type { CapabilityProbe } from '@alembic/core/core/capability/CapabilityProbe';
+import type { CapabilityProbe } from '@alembic/core/core/capability';
 import Logger from '@alembic/core/logging';
 import type { NextFunction, Request, Response } from 'express';
 

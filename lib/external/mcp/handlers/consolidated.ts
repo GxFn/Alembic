@@ -10,7 +10,7 @@
  */
 
 import { dimensionTags } from '@alembic/core/dimensions';
-import { getRequiredFieldsDescription } from '@alembic/core/domain/knowledge/FieldSpec';
+import { getRequiredFieldsDescription } from '@alembic/core/knowledge';
 import { getDeveloperIdentity } from '@alembic/core/shared';
 import * as skillHandlers from '../../../resident/tool-handlers/skill.js';
 import { envelope } from '../../../resident/tool-schema/envelope.js';

@@ -11,10 +11,8 @@
 import { RecipeExtractor } from '@alembic/core/knowledge';
 import { TokenUsageStore } from '@alembic/core/repositories';
 import { unwrapRawDb } from '@alembic/core/search';
-import { FeedbackCollector } from '@alembic/core/service/quality/FeedbackCollector';
-import { QualityScorer } from '@alembic/core/service/quality/QualityScorer';
-import { RecipeCandidateValidator } from '@alembic/core/service/recipe/RecipeCandidateValidator';
-import { RecipeParser } from '@alembic/core/service/recipe/RecipeParser';
+import { FeedbackCollector, QualityScorer } from '@alembic/core/service/quality';
+import { RecipeCandidateValidator, RecipeParser } from '@alembic/core/service/recipe';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { ModuleService } from '../../service/module/ModuleService.js';
 import { PrimeSearchPipeline } from '../../service/task/PrimeSearchPipeline.js';

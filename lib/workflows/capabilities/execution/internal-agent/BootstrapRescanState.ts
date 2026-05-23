@@ -4,7 +4,7 @@ import type {
   RescanExecutionMode,
 } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
-import { BootstrapDedup } from '@alembic/core/service/bootstrap/BootstrapDedup';
+import { BootstrapDedup } from '@alembic/core/service/bootstrap';
 
 const logger = Logger.getInstance();
 

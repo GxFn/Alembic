@@ -45,6 +45,7 @@ import {
   type InternalColdStartArgs,
   presentInternalColdStartEmptyProject,
   presentInternalColdStartResponse,
+  runFullResetPolicy,
   selectColdStartDimensions,
 } from '@alembic/core/host-agent-workflows';
 import type { DimensionDef, ProjectSnapshot } from '@alembic/core/project-intelligence';
@@ -54,7 +55,6 @@ import {
 } from '@alembic/core/project-intelligence';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
-import { runFullResetPolicy } from '@alembic/core/workflows/capabilities/WorkflowCleanupPolicies';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {

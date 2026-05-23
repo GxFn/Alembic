@@ -14,12 +14,12 @@ import { ReportStore } from '@alembic/core/infrastructure/report';
 import { WriteZone } from '@alembic/core/io';
 import { KnowledgeFileWriter, KnowledgeSyncService } from '@alembic/core/knowledge';
 import Logger from '@alembic/core/logging';
+import { MemoryRepositoryImpl } from '@alembic/core/memory';
 import {
   type AlembicRepositoryBundle,
   type AlembicRepositoryDatabase,
   createAlembicRepositories,
 } from '@alembic/core/repositories';
-import { MemoryRepositoryImpl } from '@alembic/core/repository/memory/MemoryRepository';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import Gateway from '../../governance/gateway/Gateway.js';
 import AuditLogger from '../../infrastructure/audit/AuditLogger.js';

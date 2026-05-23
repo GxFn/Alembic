@@ -47,6 +47,7 @@ import type {
   RecipeProductionGateway,
 } from '@alembic/core/knowledge';
 import type Logger from '@alembic/core/logging';
+import type { MemoryRepositoryImpl } from '@alembic/core/memory';
 // ── Core AST / Discovery / Enhancement ──
 // ── Shared Types ──
 import type {
@@ -71,12 +72,9 @@ import type {
   SourceRefRepository,
   TokenUsageStore,
 } from '@alembic/core/repositories';
-import type { MemoryRepositoryImpl } from '@alembic/core/repository/memory/MemoryRepository';
 import type { HybridRetriever, SearchEngine } from '@alembic/core/search';
-import type { FeedbackCollector } from '@alembic/core/service/quality/FeedbackCollector';
-import type { QualityScorer } from '@alembic/core/service/quality/QualityScorer';
-import type { RecipeCandidateValidator } from '@alembic/core/service/recipe/RecipeCandidateValidator';
-import type { RecipeParser } from '@alembic/core/service/recipe/RecipeParser';
+import type { FeedbackCollector, QualityScorer } from '@alembic/core/service/quality';
+import type { RecipeCandidateValidator, RecipeParser } from '@alembic/core/service/recipe';
 import type { IndexingPipeline, VectorService, VectorStore } from '@alembic/core/vector';
 import type { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
 // ── Core Types ──
