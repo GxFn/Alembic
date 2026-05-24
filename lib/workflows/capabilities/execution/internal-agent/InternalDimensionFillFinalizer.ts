@@ -66,6 +66,7 @@ export async function finalizeInternalDimensionFill({
     dimensionCandidates: sessionResult.dimensionCandidates,
     sessionStore: runtime.sessionStore,
     emitter: preparation.emitter,
+    sessionId: preparation.sessionId,
     shouldAbort,
   });
 
@@ -127,6 +128,7 @@ export async function finalizeInternalDimensionFill({
     dataRoot: preparation.dataRoot,
     dimensionStats: sessionResult.dimensionStats,
     report: persistenceResult.report,
+    skillResults,
   });
   const { totalTimeMs, snapshotId, snapshot } = persistenceResult;
 
@@ -147,13 +149,24 @@ async function persistEfficiencyAugmentedWorkflowReport({
   dataRoot,
   dimensionStats,
   report,
+  skillResults,
 }: {
   ctx: InternalDimensionFillPreparation['ctx'];
   dataRoot: string;
   dimensionStats: InternalDimensionFillSessionResult['dimensionStats'];
   report: WorkflowReport | null;
+  skillResults: SkillResults;
 }) {
-  if (!report || !augmentWorkflowReportWithEfficiency(report, dimensionStats)) {
+  if (!report) {
+    return;
+  }
+
+  const augmentedEfficiency = augmentWorkflowReportWithEfficiency(report, dimensionStats);
+  const augmentedSkillDelivery = augmentWorkflowReportWithSkillDeliveryReceipts(
+    report,
+    skillResults
+  );
+  if (!augmentedEfficiency && !augmentedSkillDelivery) {
     return;
   }
 
@@ -179,9 +192,51 @@ async function persistEfficiencyAugmentedWorkflowReport({
     await writeWorkflowReportHistory(reportDir, report);
   } catch (err: unknown) {
     Logger.warn(
-      `[InternalDimensionFill] efficiency report augmentation skipped: ${err instanceof Error ? err.message : String(err)}`
+      `[InternalDimensionFill] workflow report augmentation skipped: ${err instanceof Error ? err.message : String(err)}`
     );
   }
+}
+
+export function augmentWorkflowReportWithSkillDeliveryReceipts(
+  report: WorkflowReport,
+  skillResults: SkillResults
+): boolean {
+  const receipts = skillResults.deliveryReceipts ?? [];
+  if (receipts.length === 0) {
+    return false;
+  }
+
+  const summaries = skillResults.deliveryReceiptSummaries ?? [];
+  const validationIssues = skillResults.deliveryReceiptValidationIssues ?? [];
+  report.projectSkillDelivery = {
+    contract: 'ProjectSkillDeliveryReceipt',
+    route: 'alembic',
+    receiptCount: receipts.length,
+    receipts,
+    summaries,
+    validationIssues,
+  };
+  report.totals = {
+    ...(report.totals || {}),
+    projectSkillDeliveryReceipts: receipts.length,
+  };
+
+  for (const receipt of receipts) {
+    if (!receipt.dimensionId) {
+      continue;
+    }
+    report.dimensions[receipt.dimensionId] = {
+      ...(report.dimensions[receipt.dimensionId] || {}),
+      projectSkillDelivery: {
+        receiptId: receipt.id,
+        runtimeExportStatus: receipt.runtimeExport.status,
+        skillName: receipt.skillName,
+        summary: receipt.shoutSummary.message,
+      },
+    };
+  }
+
+  return true;
 }
 
 export function augmentWorkflowReportWithEfficiency(

@@ -1,10 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getProjectSkillsPath } from '@alembic/core/config';
+import {
+  createAlembicProjectSkillDeliveryReceipt,
+  type ProjectSkillDeliveryReceipt,
+  type ProjectSkillDeliveryValidationResult,
+  summarizeProjectSkillDeliveryReceipt,
+  validateProjectSkillDeliveryReceipt,
+} from '@alembic/core/host-agent-workflows';
 import type { WriteZone } from '@alembic/core/io';
 import { pathGuard } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
-import { resolveDataRoot } from '@alembic/core/workspace';
+import { computeContentHash } from '@alembic/core/shared';
+import { resolveDataRoot, resolveProjectRoot, WorkspaceResolver } from '@alembic/core/workspace';
 import { INJECTABLE_SKILLS_DIR } from '../../../shared/package-assets.js';
 
 const logger = Logger.getInstance();
@@ -44,6 +52,16 @@ interface SkillCreateResult {
   error?: { code: string; message: string };
 }
 
+export interface WorkflowSkillGenerationResult {
+  success: boolean;
+  skillName: string;
+  skillPath?: string;
+  deliveryReceipt?: ProjectSkillDeliveryReceipt;
+  deliveryReceiptSummary?: string;
+  deliveryReceiptValidation?: ProjectSkillDeliveryValidationResult;
+  error?: string;
+}
+
 interface SkillHooksLike {
   has(name: string): boolean;
   run(name: string, payload: Record<string, unknown>): Promise<unknown>;
@@ -61,7 +79,7 @@ export async function generateSkill(
   referencedFiles: string[] = [],
   keyFindings: string[] = [],
   source = 'bootstrap'
-): Promise<{ success: boolean; skillName: string; error?: string }> {
+): Promise<WorkflowSkillGenerationResult> {
   const skillName = dim.skillMeta?.name || `project-${dim.id}`;
   const validation = validateSkillQuality(analysisText);
   if (!validation.pass) {
@@ -83,8 +101,30 @@ export async function generateSkill(
     });
 
     if (result.success) {
+      const skillPath = typeof result.data?.path === 'string' ? result.data.path : undefined;
+      const contentHash =
+        typeof result.data?.contentHash === 'string' ? result.data.contentHash : null;
+      const delivery = skillPath
+        ? createWorkflowSkillDeliveryReceipt({
+            ctx,
+            contentHash,
+            description: skillDescription,
+            dim,
+            referencedFiles,
+            skillName,
+            skillPath,
+            source,
+          })
+        : null;
       logger.info(`[SkillGenerator] Skill "${skillName}" created for "${dim.id}" (${source})`);
-      return { success: true, skillName };
+      return {
+        success: true,
+        skillName,
+        skillPath,
+        deliveryReceipt: delivery?.receipt,
+        deliveryReceiptSummary: delivery?.summary,
+        deliveryReceiptValidation: delivery?.validation,
+      };
     }
 
     const errorMsg = result.error?.message || 'createSkill returned failure';
@@ -94,6 +134,133 @@ export async function generateSkill(
     logger.warn(`[SkillGenerator] Skill generation failed for "${dim.id}": ${msg}`);
     return { success: false, skillName, error: msg };
   }
+}
+
+function createWorkflowSkillDeliveryReceipt({
+  ctx,
+  contentHash,
+  description,
+  dim,
+  referencedFiles,
+  skillName,
+  skillPath,
+  source,
+}: {
+  ctx: SkillContext;
+  contentHash: string | null;
+  description: string;
+  dim: SkillDimensionDef;
+  referencedFiles: string[];
+  skillName: string;
+  skillPath: string;
+  source: string;
+}): {
+  receipt: ProjectSkillDeliveryReceipt;
+  summary: string;
+  validation: ProjectSkillDeliveryValidationResult;
+} {
+  const scope = resolveWorkflowSkillDeliveryScope(ctx);
+  const hashSuffix = (contentHash || 'missing').replace(/^sha256:/, '');
+  const targetPath = path.join(scope.codexSkillRoot, skillName);
+  const markerPath = path.join(targetPath, '.alembic-managed.json');
+  const artifactRefs = [
+    {
+      dimensionId: dim.id,
+      kind: 'skill-file',
+      label: 'Generated SKILL.md',
+      ref: skillPath,
+      targetName: source,
+    },
+    ...referencedFiles.slice(0, 20).map((filePath) => ({
+      dimensionId: dim.id,
+      kind: 'source-file',
+      label: null,
+      ref: filePath,
+      targetName: source,
+    })),
+  ];
+
+  const receipt = createAlembicProjectSkillDeliveryReceipt({
+    asset: {
+      artifactRefs,
+      contentHash,
+      description,
+      dimensionId: dim.id,
+      kind: 'skill-file',
+      path: skillPath,
+      targetName: source,
+    },
+    authorization: {
+      codexSkillRoot: scope.codexSkillRoot,
+      message: 'Runtime export requires project-level Codex skill root authorization.',
+      projectScopeId: scope.projectScopeId,
+      required: true,
+      status: 'pending',
+    },
+    codexSkillRoot: scope.codexSkillRoot,
+    createdAt: new Date().toISOString(),
+    dimensionId: dim.id,
+    evidenceRefs: artifactRefs,
+    id: `alembic-skill-${scope.projectId}-${skillName}-${hashSuffix}`,
+    managedMarker: {
+      generatedSkillId: `alembic:${scope.projectScopeId}:${skillName}`,
+      generationHash: contentHash,
+      markerPath,
+    },
+    projectId: scope.projectId,
+    projectRoot: scope.projectRoot,
+    projectScopeId: scope.projectScopeId,
+    runtimeExport: {
+      codexSkillRoot: scope.codexSkillRoot,
+      linkMode: 'none',
+      message:
+        'Alembic generated the Project Skill and receipt; AlembicPlugin must export it to the Codex project skill root.',
+      projectScopeId: scope.projectScopeId,
+      refreshRequired: true,
+      status: 'pending',
+      strategy: 'symlink-first',
+      targetPath,
+      targetRoot: scope.codexSkillRoot,
+    },
+    shoutSummary: {
+      delivered: true,
+      message: `Project Skill ${skillName} generated by Alembic; Codex runtime export is pending.`,
+      runtimeVisible: false,
+      title: 'Project Skill generated',
+      trigger: skillName,
+    },
+    skillName,
+    targetName: source,
+  });
+  const validation = validateProjectSkillDeliveryReceipt(receipt);
+  return {
+    receipt,
+    summary: summarizeProjectSkillDeliveryReceipt(receipt),
+    validation,
+  };
+}
+
+function resolveWorkflowSkillDeliveryScope(ctx: SkillContext) {
+  const container = ctx.container ?? null;
+  const projectRoot = resolveProjectRoot(container);
+  let projectId: string | null = null;
+
+  try {
+    const resolver =
+      (container?.singletons?._workspaceResolver as WorkspaceResolver | undefined) ??
+      WorkspaceResolver.fromProject(projectRoot);
+    const facts = resolver.toFacts();
+    projectId = facts.projectId ?? facts.expectedProjectId;
+  } catch {
+    projectId = computeContentHash(projectRoot);
+  }
+
+  return {
+    codexSkillRoot: path.join(projectRoot, '.agents', 'skills'),
+    projectId,
+    projectRoot,
+    projectScopeId: `project:${projectId}`,
+  };
 }
 
 function createWorkflowSkill(
@@ -165,16 +332,35 @@ function createWorkflowSkill(
       title: resolvedTitle,
     });
 
+    const writtenContent = frontmatter + content;
+    const contentHash = `sha256:${computeContentHash(writtenContent)}`;
+
     if (writeZone) {
       const dataRelSkillDir = skillDir.replace(writeZone.dataRoot, '').replace(/^\//, '');
       const dataRelSkillPath = skillPath.replace(writeZone.dataRoot, '').replace(/^\//, '');
       writeZone.ensureDir(writeZone.data(dataRelSkillDir));
-      writeZone.writeFile(writeZone.data(dataRelSkillPath), frontmatter + content);
+      writeZone.writeFile(writeZone.data(dataRelSkillPath), writtenContent);
     } else {
       pathGuard.assertProjectWriteSafe(skillDir);
       fs.mkdirSync(skillDir, { recursive: true });
-      fs.writeFileSync(skillPath, frontmatter + content, 'utf8');
+      fs.writeFileSync(skillPath, writtenContent, 'utf8');
     }
+
+    const indexResult = regenerateEditorIndex(ctx ?? undefined);
+    removePendingSuggestion(name);
+    runSkillCreatedHook(ctx, { name, description, createdBy, path: skillPath });
+
+    return {
+      success: true,
+      data: {
+        skillName: name,
+        path: skillPath,
+        contentHash,
+        overwritten: fs.existsSync(skillPath) && overwrite,
+        editorIndex: indexResult,
+        hint: `Project Skill "${name}" created. Inspect ProjectSkillDeliveryReceipt for runtime export status.`,
+      },
+    };
   } catch (err: unknown) {
     return {
       success: false,
@@ -184,21 +370,6 @@ function createWorkflowSkill(
       },
     };
   }
-
-  const indexResult = regenerateEditorIndex(ctx ?? undefined);
-  removePendingSuggestion(name);
-  runSkillCreatedHook(ctx, { name, description, createdBy, path: skillPath });
-
-  return {
-    success: true,
-    data: {
-      skillName: name,
-      path: skillPath,
-      overwritten: fs.existsSync(skillPath) && overwrite,
-      editorIndex: indexResult,
-      hint: `Skill "${name}" created. Use alembic_skill({ operation: "load", name: "${name}" }) to verify content.`,
-    },
-  };
 }
 
 function validateSkillQuality(analysisText: string): SkillQualityResult {

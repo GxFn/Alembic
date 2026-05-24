@@ -403,7 +403,7 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
       path: skillPath,
       overwritten: fs.existsSync(skillPath) && overwrite,
       editorIndex: indexResult,
-      hint: `Skill "${name}" created. Use alembic_skill({ operation: "load", name: "${name}" }) to verify content.`,
+      hint: `Skill "${name}" created. Use the Skills load operation only for manual inspection; runtime consumers should rely on ProjectSkillDeliveryReceipt when available.`,
     },
   });
 }
@@ -646,7 +646,7 @@ export function updateSkill(ctx: McpContext | null, args: UpdateSkillArgs) {
         Boolean
       ),
       editorIndex: indexResult,
-      hint: `Skill "${name}" updated. Use alembic_skill({ operation: "load", name: "${name}" }) to verify content.`,
+      hint: `Skill "${name}" updated. Use the Skills load operation only for manual inspection; runtime consumers should rely on ProjectSkillDeliveryReceipt when available.`,
     },
   });
 }

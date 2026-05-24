@@ -8,6 +8,10 @@
  */
 
 import type { CreateJobProcessEventInput } from '@alembic/core/daemon';
+import type {
+  ProjectSkillDeliveryReceipt,
+  ProjectSkillDeliveryValidationResult,
+} from '@alembic/core/host-agent-workflows';
 import type { AgentEfficiencySummary } from './BootstrapEfficiency.js';
 
 // ── DimensionComplete payload variants ───────────────────────
@@ -52,6 +56,9 @@ export interface DimensionPipelineCompletePayload {
 
 export interface DimensionSkillPayload {
   type: 'skill';
+  deliveryReceipt?: ProjectSkillDeliveryReceipt;
+  deliveryReceiptSummary?: string;
+  deliveryReceiptValidation?: ProjectSkillDeliveryValidationResult;
   skillName: string;
   sourceCount: number;
 }

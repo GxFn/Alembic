@@ -11,7 +11,11 @@
 
 import type { MemoryCoordinator, SessionStore } from '@alembic/agent/memory';
 import type { AgentRunResult } from '@alembic/agent/service';
-import { buildTierReflection, saveDimensionCheckpoint } from '@alembic/core/host-agent-workflows';
+import {
+  buildTierReflection,
+  type ProjectSkillDeliveryReceipt,
+  saveDimensionCheckpoint,
+} from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
 import type { AgentEfficiencySummary } from '#service/bootstrap/BootstrapEfficiency.js';
 import type { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
@@ -33,7 +37,10 @@ import {
   type DimensionContext,
   parseDimensionDigest,
 } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
-import { generateSkill } from '#workflows/capabilities/execution/WorkflowSkillCompletionCapability.js';
+import {
+  generateSkill,
+  type WorkflowSkillGenerationResult,
+} from '#workflows/capabilities/execution/WorkflowSkillCompletionCapability.js';
 
 const logger = Logger.getInstance();
 
@@ -702,6 +709,9 @@ async function defaultGetCodeEntityGraphClass() {
 export interface SkillResults {
   created: number;
   failed: number;
+  deliveryReceiptSummaries?: string[];
+  deliveryReceiptValidationIssues?: Array<{ dimId: string; issues: string[]; skillName: string }>;
+  deliveryReceipts?: ProjectSkillDeliveryReceipt[];
   skills: string[];
   errors: Array<{ dimId: string; error: string }>;
 }
@@ -721,6 +731,7 @@ export interface ConsumeBootstrapSkillsOptions {
   dimensionCandidates: Record<string, DimensionCandidateData>;
   sessionStore: SessionStore;
   emitter: BootstrapEventEmitter;
+  sessionId?: string;
   shouldAbort?: () => boolean;
   generateSkillFn?: GenerateSkillFn;
 }
@@ -731,10 +742,19 @@ export async function consumeBootstrapSkills({
   dimensionCandidates,
   sessionStore,
   emitter,
+  sessionId,
   shouldAbort,
   generateSkillFn = generateSkill,
 }: ConsumeBootstrapSkillsOptions): Promise<SkillResults> {
-  const skillResults: SkillResults = { created: 0, failed: 0, skills: [], errors: [] };
+  const skillResults: SkillResults = {
+    created: 0,
+    deliveryReceiptSummaries: [],
+    deliveryReceiptValidationIssues: [],
+    deliveryReceipts: [],
+    failed: 0,
+    skills: [],
+    errors: [],
+  };
 
   try {
     for (const dim of dimensions) {
@@ -755,6 +775,7 @@ export async function consumeBootstrapSkills({
         dimData,
         sessionStore,
         emitter,
+        sessionId,
         skillResults,
         generateSkillFn,
       });
@@ -774,6 +795,7 @@ async function consumeSingleBootstrapSkill({
   dimData,
   sessionStore,
   emitter,
+  sessionId,
   skillResults,
   generateSkillFn,
 }: {
@@ -782,6 +804,7 @@ async function consumeSingleBootstrapSkill({
   dimData: DimensionCandidateData;
   sessionStore: SessionStore;
   emitter: BootstrapEventEmitter;
+  sessionId?: string;
   skillResults: SkillResults;
   generateSkillFn: GenerateSkillFn;
 }) {
@@ -807,10 +830,20 @@ async function consumeSingleBootstrapSkill({
     );
 
     if (result.success) {
+      recordSkillDeliveryReceipt({
+        dim,
+        emitter,
+        result,
+        sessionId,
+        skillResults,
+      });
       skillResults.created++;
       skillResults.skills.push(result.skillName);
       emitter.emitDimensionComplete(dim.id, {
         type: 'skill',
+        deliveryReceipt: result.deliveryReceipt,
+        deliveryReceiptSummary: result.deliveryReceiptSummary,
+        deliveryReceiptValidation: result.deliveryReceiptValidation,
         skillName: result.skillName,
         sourceCount: referencedFiles.length,
       });
@@ -826,6 +859,93 @@ async function consumeSingleBootstrapSkill({
     skillResults.errors.push({ dimId: dim.id, error: errMsg });
     emitter.emitDimensionFailed(dim.id, err instanceof Error ? err : new Error(errMsg));
   }
+}
+
+function recordSkillDeliveryReceipt({
+  dim,
+  emitter,
+  result,
+  sessionId,
+  skillResults,
+}: {
+  dim: BootstrapSkillDimension;
+  emitter: BootstrapEventEmitter;
+  result: WorkflowSkillGenerationResult;
+  sessionId?: string;
+  skillResults: SkillResults;
+}) {
+  if (!result.deliveryReceipt) {
+    return;
+  }
+
+  skillResults.deliveryReceipts?.push(result.deliveryReceipt);
+  if (result.deliveryReceiptSummary) {
+    skillResults.deliveryReceiptSummaries?.push(result.deliveryReceiptSummary);
+  }
+  if (result.deliveryReceiptValidation && !result.deliveryReceiptValidation.ok) {
+    skillResults.deliveryReceiptValidationIssues?.push({
+      dimId: dim.id,
+      issues: result.deliveryReceiptValidation.issues,
+      skillName: result.skillName,
+    });
+  }
+
+  if (!sessionId) {
+    return;
+  }
+
+  const emitProcessEvents = (
+    emitter as { emitProcessEvents?: BootstrapEventEmitter['emitProcessEvents'] }
+  ).emitProcessEvents;
+  emitProcessEvents?.call(emitter, {
+    dimensionId: dim.id,
+    sessionId,
+    source: 'alembic-project-skill-delivery',
+    targetName: dim.label ?? dim.id,
+    taskId: dim.id,
+    events: [
+      {
+        artifactRefs: [
+          {
+            kind: 'project-skill-delivery-receipt',
+            label: 'ProjectSkillDeliveryReceipt',
+            mimeType: 'application/json',
+            ref: `project-skill-delivery:${result.deliveryReceipt.id}`,
+          },
+          {
+            kind: 'skill-file',
+            label: 'Generated SKILL.md',
+            mimeType: 'text/markdown',
+            ref: result.deliveryReceipt.asset.path,
+          },
+        ],
+        content: {
+          data: result.deliveryReceipt,
+          language: 'json',
+          mimeType: 'application/json',
+          role: 'tool',
+          text: JSON.stringify(result.deliveryReceipt, null, 2),
+        },
+        displayPolicy: 'summary-only',
+        kind: 'artifact',
+        metadata: {
+          projectScopeId: result.deliveryReceipt.projectScopeId,
+          receiptId: result.deliveryReceipt.id,
+          route: result.deliveryReceipt.route,
+          runtimeExportStatus: result.deliveryReceipt.runtimeExport.status,
+          skillName: result.skillName,
+          validationIssues: result.deliveryReceiptValidation?.issues ?? [],
+        },
+        phase: 'skill-delivery',
+        retention: 'artifact-retained',
+        severity: result.deliveryReceiptValidation?.ok === false ? 'warning' : 'success',
+        summary:
+          result.deliveryReceiptSummary ??
+          `Project Skill ${result.skillName} generated; runtime export pending.`,
+        title: 'Project Skill delivery receipt',
+      },
+    ],
+  });
 }
 
 export function extractSkillKeyFindings(dimReport: unknown): string[] {

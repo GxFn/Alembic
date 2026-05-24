@@ -41,11 +41,26 @@ describe('WorkflowSkillCompletionCapability', () => {
         'unit-test'
       );
 
-      expect(result).toEqual({ success: true, skillName: 'project-workflow-skill-test' });
+      expect(result).toMatchObject({
+        success: true,
+        skillName: 'project-workflow-skill-test',
+        deliveryReceipt: {
+          route: 'alembic',
+          runtimeExport: {
+            status: 'pending',
+            strategy: 'symlink-first',
+          },
+          skillName: 'project-workflow-skill-test',
+        },
+        deliveryReceiptValidation: { ok: true, issues: [] },
+      });
       const skillWrite = [...writes.entries()].find(([filePath]) => filePath.endsWith('SKILL.md'));
       expect(skillWrite?.[1]).toContain('name: project-workflow-skill-test');
       expect(skillWrite?.[1]).toContain('# Workflow Skill Test');
       expect(skillWrite?.[1]).toContain('## Referenced Files');
+      expect(result.deliveryReceipt?.asset.contentHash).toMatch(/^sha256:/);
+      expect(result.deliveryReceipt?.authorization.status).toBe('pending');
+      expect(result.deliveryReceipt?.shoutSummary.runtimeVisible).toBe(false);
       expect([...writes.keys()]).toHaveLength(1);
     } finally {
       fs.rmSync(dataRoot, { recursive: true, force: true });
