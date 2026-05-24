@@ -2,6 +2,7 @@ import type { AgentRunInput } from '@alembic/agent/service';
 import { describe, expect, test } from 'vitest';
 import type { BootstrapDimensionPlan } from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import {
+  buildBootstrapAgentProgressProcessEvents,
   buildBootstrapDimensionInputProcessEvents,
   buildBootstrapDimensionResultProcessEvents,
   buildBootstrapTierReflectionProcessEvents,
@@ -53,6 +54,105 @@ describe('BootstrapProcessEvents', () => {
     expect(text).toContain('[redacted-secret]');
     expect(text).not.toContain('file content');
     expect(text).not.toContain('sk-proj-abcdefghijklmnopqrstuvwxyz');
+  });
+
+  test('maps developer-safe Agent progress process events and keeps host-owned fields out', () => {
+    const events = buildBootstrapAgentProgressProcessEvents({
+      dimId: 'architecture',
+      label: 'Architecture',
+      sessionId: 'bs_1',
+      event: {
+        type: 'agent_process_event',
+        agentId: 'agent_1',
+        preset: 'insight',
+        timestamp: 1,
+        processEvent: {
+          content: {
+            role: 'developer',
+            text: '中期反思: verify src/index.ts before producing findings',
+          },
+          createdAt: '2026-05-24T10:00:00.000Z',
+          dimensionId: 'architecture',
+          displayPolicy: 'full',
+          kind: 'llm.reflection',
+          metadata: {
+            nudgeType: 'convergence',
+            token: 'sk-proj-abcdefghijklmnopqrstuvwxyz',
+          },
+          phase: 'VERIFY',
+          retention: 'job-retained',
+          severity: 'info',
+          sourceClass: 'developer-facing',
+          summary: 'Injected convergence reflection.',
+          targetName: 'Architecture',
+          title: 'Agent 中期反思',
+        },
+      },
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      dimensionId: 'architecture',
+      kind: 'llm.reflection',
+      metadata: {
+        agentId: 'agent_1',
+        nudgeType: 'convergence',
+        preset: 'insight',
+        progressType: 'agent_process_event',
+        sessionId: 'bs_1',
+        token: '[redacted-secret]',
+      },
+      phase: 'VERIFY',
+      sourceClass: 'developer-facing',
+      targetName: 'Architecture',
+      title: 'Agent 中期反思',
+    });
+    expect(events[0].jobId).toBeUndefined();
+    expect(events[0].sequence).toBeUndefined();
+  });
+
+  test('drops Agent process progress that is not developer-visible', () => {
+    const baseEvent = {
+      type: 'agent_process_event',
+      agentId: 'agent_1',
+      preset: 'insight',
+      timestamp: 1,
+      processEvent: {
+        content: { role: 'assistant', text: 'hidden reasoning' },
+        createdAt: '2026-05-24T10:00:00.000Z',
+        dimensionId: 'architecture',
+        displayPolicy: 'full',
+        kind: 'llm.output',
+        metadata: {},
+        phase: 'THINK',
+        retention: 'transient',
+        severity: 'info',
+        sourceClass: 'hidden-reasoning',
+        title: 'Hidden reasoning',
+      },
+    } as const;
+
+    expect(
+      buildBootstrapAgentProgressProcessEvents({
+        dimId: 'architecture',
+        event: baseEvent,
+        sessionId: 'bs_1',
+      })
+    ).toEqual([]);
+    expect(
+      buildBootstrapAgentProgressProcessEvents({
+        dimId: 'architecture',
+        event: {
+          ...baseEvent,
+          processEvent: {
+            ...baseEvent.processEvent,
+            displayPolicy: 'hidden',
+            sourceClass: 'developer-facing',
+          },
+        },
+        sessionId: 'bs_1',
+      })
+    ).toEqual([]);
   });
 
   test('projects visible output, tool calls, and self-check events from AgentRunResult', () => {
@@ -114,6 +214,62 @@ describe('BootstrapProcessEvents', () => {
     expect(JSON.stringify(events)).not.toContain('Bearer abcdefghijklmnop');
   });
 
+  test('projects key findings digest from dimension digest and analysis report', () => {
+    const events = buildBootstrapDimensionResultProcessEvents({
+      dimId: 'architecture',
+      label: 'Architecture',
+      projection: {
+        analysisReport: {
+          analysisText: 'Architecture analysis',
+          dimensionId: 'architecture',
+          evidenceMap: null,
+          findings: [
+            {
+              evidence: 'lib/main.ts:42',
+              finding: 'Bootstrap bridge owns event persistence.',
+              importance: 9,
+            },
+          ],
+          referencedFiles: ['lib/main.ts'],
+        },
+        artifact: {},
+        combinedTokenUsage: { input: 1, output: 1 },
+        efficiency: null,
+        producerResult: {
+          candidateCount: 1,
+          reply:
+            '```json\n{"dimensionDigest":{"summary":"bridge summary","candidateCount":1,"keyFindings":["Dashboard can consume a findings digest event."]}}\n```',
+          toolCalls: [],
+        },
+        runtimeToolCalls: [],
+        submitCalls: [],
+      } as unknown as BootstrapDimensionProjection,
+      runResult: {
+        reply: 'final',
+        status: 'success',
+      },
+      sessionId: 'bs_1',
+    });
+
+    const digest = events.find((event) => event.phase === 'dimension-findings');
+    expect(digest).toMatchObject({
+      kind: 'summary',
+      metadata: {
+        candidateCount: 1,
+        dimensionId: 'architecture',
+        digestSummary: 'bridge summary',
+        findingCount: 2,
+        findingSources: ['dimension-digest', 'analysis-report'],
+        projection: 'dimension-findings-digest',
+      },
+      targetName: 'Architecture',
+      title: 'Bootstrap Architecture findings digest',
+    });
+    expect(digest?.content?.text).toContain('Dashboard can consume a findings digest event.');
+    expect(digest?.content?.text).toContain('Bootstrap bridge owns event persistence.');
+    expect(digest?.content?.text).toContain('lib/main.ts:42');
+  });
+
   test('projects tier reflection as a developer-safe reflection event', () => {
     const events = buildBootstrapTierReflectionProcessEvents({
       reflection: {
@@ -126,13 +282,20 @@ describe('BootstrapProcessEvents', () => {
       sessionId: 'bs_1',
     });
 
-    expect(events).toHaveLength(1);
+    expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({
       kind: 'llm.reflection',
       phase: 'tier-reflection',
       targetName: 'Tier 2',
     });
     expect(events[0].content?.text).toContain('Shared API boundary');
+    expect(events[1]).toMatchObject({
+      kind: 'summary',
+      phase: 'tier-findings',
+      targetName: 'Tier 2',
+      title: 'Bootstrap tier 2 findings digest',
+    });
+    expect(events[1].content?.text).toContain('Shared API boundary');
   });
 });
 

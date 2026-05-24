@@ -1,11 +1,12 @@
 import type { AgentRunInput, AgentRunResult } from '@alembic/agent/service';
 import { describe, expect, test, vi } from 'vitest';
-import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
+import type { BootstrapDimensionPlan } from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import {
+  attachBootstrapAgentProgressBridge,
   buildBootstrapSessionExecutionInput,
   getBootstrapChildDimensionId,
   resolveBootstrapDimensionTier,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapSessionExecutionBuilder.js';
+} from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapSessionExecutionBuilder.js';
 
 function createPlan(
   id: string,
@@ -91,6 +92,99 @@ describe('bootstrap session execution builder', () => {
     expect(runtimeInput.params).toEqual({ dimId: 'b', runtime: true });
     expect(emitDimensionStart).toHaveBeenCalledWith('b');
     expect(childExecutionState.get('b')?.analystScopeId).toBe('b:analyst');
+  });
+
+  test('bridges developer-safe Agent progress through shared dimension child input path', async () => {
+    const plan = createPlan('a');
+    const emitProcessEvents = vi.fn();
+    const previousOnProgress = vi.fn();
+    const { input } = buildBootstrapSessionExecutionInput({
+      sessionId: 'session-1',
+      activeDimIds: ['a'],
+      skippedDimIds: [],
+      concurrency: 1,
+      scheduler: { getTierIndex: () => 0 },
+      dimensionStats: {},
+      resolvePlan: () => plan,
+      createDimensionRunInput: (dimId) => ({
+        analystScopeId: `${dimId}:analyst`,
+        runInput: {
+          profile: { id: 'bootstrap-dimension' },
+          params: { dimId },
+          message: { role: 'internal', content: dimId },
+          context: { source: 'bootstrap', runtimeSource: 'system' },
+          execution: { onProgress: previousOnProgress },
+        } as AgentRunInput,
+      }),
+      emitDimensionStart: vi.fn(),
+      consumeDimensionResult: vi.fn(),
+      consumeDimensionError: vi.fn(),
+      consumeTierResult: vi.fn(),
+      emitProcessEvents,
+    });
+
+    const factory = (input.context.childInputFactories as Record<string, ChildInputFactory>).a;
+    const runtimeInput = await factory({ plannedInput: {}, parentInput: input });
+    emitProcessEvents.mockClear();
+    runtimeInput.execution?.onProgress?.({
+      type: 'agent_process_event',
+      agentId: 'agent_1',
+      preset: 'insight',
+      timestamp: 1,
+      processEvent: {
+        content: { role: 'developer', text: '阶段转换到 VERIFY' },
+        createdAt: '2026-05-24T10:00:00.000Z',
+        dimensionId: 'a',
+        displayPolicy: 'full',
+        kind: 'llm.reflection',
+        metadata: { semanticKind: 'transition-nudge' },
+        phase: 'VERIFY',
+        retention: 'job-retained',
+        severity: 'info',
+        sourceClass: 'developer-facing',
+        summary: '阶段机切换后注入 VERIFY 阶段指令。',
+        targetName: 'a Config',
+        title: 'Agent 阶段转换 Nudge: VERIFY',
+      },
+    });
+
+    expect(previousOnProgress).toHaveBeenCalled();
+    expect(emitProcessEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dimensionId: 'a',
+        sessionId: 'session-1',
+        source: 'bootstrap-agent-progress',
+        targetName: 'a Config',
+        taskId: 'a',
+        events: [
+          expect.objectContaining({
+            kind: 'llm.reflection',
+            metadata: expect.objectContaining({
+              semanticKind: 'transition-nudge',
+              sessionId: 'session-1',
+            }),
+            phase: 'VERIFY',
+            title: 'Agent 阶段转换 Nudge: VERIFY',
+          }),
+        ],
+      })
+    );
+  });
+
+  test('agent progress bridge is a no-op when process event emission is unavailable', () => {
+    const runInput = {
+      profile: { id: 'bootstrap-dimension' },
+      message: { role: 'internal', content: 'a' },
+      context: { source: 'bootstrap', runtimeSource: 'system' },
+    } as AgentRunInput;
+
+    expect(
+      attachBootstrapAgentProgressBridge({
+        dimId: 'a',
+        runInput,
+        sessionId: 'session-1',
+      })
+    ).toBe(runInput);
   });
 
   test('routes child results, errors, and tier completion callbacks', async () => {

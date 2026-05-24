@@ -1,11 +1,14 @@
+import type { AgentProgressProcessEvent, ProgressEvent } from '@alembic/agent/runtime';
 import type { AgentRunInput } from '@alembic/agent/service';
 import type { BootstrapProcessEventDraft } from '#service/bootstrap/bootstrap-event-types.js';
 import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import type {
   AgentResultLike,
   BootstrapDimensionProjection,
+  DimensionFinding,
   ToolCallRecord,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
+import { parseDimensionDigest } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
 
 const MAX_TEXT_CHARS = 6000;
 const MAX_JSON_TEXT_CHARS = 12000;
@@ -16,6 +19,20 @@ const MAX_STRING_CHARS = 1600;
 const SECRET_KEY_PATTERN = /(api[_-]?key|authorization|bearer|cookie|password|secret|token)/i;
 const SECRET_VALUE_PATTERN =
   /\b(sk-(?:proj-)?[a-zA-Z0-9_-]{12,}|AIza[a-zA-Z0-9_-]{10,}|Bearer\s+[a-zA-Z0-9._-]{12,})\b/g;
+const AGENT_PROGRESS_PROCESS_EVENT_KINDS = [
+  'llm.input',
+  'llm.reflection',
+  'llm.output',
+  'tool',
+] as const;
+const PROCESS_EVENT_DISPLAY_POLICIES = ['full', 'summary-only', 'hidden'] as const;
+const PROCESS_EVENT_RETENTION_POLICIES = [
+  'transient',
+  'job-retained',
+  'artifact-retained',
+] as const;
+const PROCESS_EVENT_SEVERITIES = ['info', 'success', 'warning', 'error'] as const;
+const PROCESS_EVENT_CONTENT_ROLES = ['system', 'developer', 'user', 'assistant', 'tool'] as const;
 
 export function buildBootstrapDimensionInputProcessEvents({
   dimId,
@@ -85,7 +102,69 @@ export function buildBootstrapDimensionResultProcessEvents({
   if (reflectionEvent) {
     events.push(reflectionEvent);
   }
+  const findingsEvent = buildFindingsDigestEvent({
+    dimId,
+    label,
+    projection,
+    runResult,
+    sessionId,
+  });
+  if (findingsEvent) {
+    events.push(findingsEvent);
+  }
   return events;
+}
+
+export function buildBootstrapAgentProgressProcessEvents({
+  dimId,
+  event,
+  label,
+  sessionId,
+}: {
+  dimId: string;
+  event: ProgressEvent;
+  label?: string | null;
+  sessionId: string;
+}): BootstrapProcessEventDraft[] {
+  if (event.type !== 'agent_process_event') {
+    return [];
+  }
+  const processEvent = event.processEvent;
+  if (!processEvent || !isDeveloperVisibleAgentProcessEvent(processEvent)) {
+    return [];
+  }
+  const kind = pickAllowedString(processEvent.kind, AGENT_PROGRESS_PROCESS_EVENT_KINDS);
+  const title = stringValue(processEvent.title);
+  if (!kind || !title) {
+    return [];
+  }
+  return [
+    {
+      content: normalizeProcessEventContent(processEvent.content),
+      correlationId: stringValue(processEvent.correlationId) || null,
+      createdAt: stringValue(processEvent.createdAt) || undefined,
+      dimensionId: stringValue(processEvent.dimensionId) || dimId,
+      displayPolicy:
+        pickAllowedString(processEvent.displayPolicy, PROCESS_EVENT_DISPLAY_POLICIES) || 'full',
+      kind,
+      metadata: {
+        ...asRecord(sanitizeValue(processEvent.metadata || {}, 0)),
+        agentId: event.agentId,
+        preset: event.preset,
+        progressType: event.type,
+        sessionId,
+      },
+      phase: stringValue(processEvent.phase) || null,
+      retention:
+        pickAllowedString(processEvent.retention, PROCESS_EVENT_RETENTION_POLICIES) ||
+        'job-retained',
+      severity: pickAllowedString(processEvent.severity, PROCESS_EVENT_SEVERITIES) || 'info',
+      sourceClass: 'developer-facing',
+      summary: stringValue(processEvent.summary) || null,
+      targetName: stringValue(processEvent.targetName) || label || dimId,
+      title,
+    },
+  ];
 }
 
 export function buildBootstrapTierReflectionProcessEvents({
@@ -102,33 +181,144 @@ export function buildBootstrapTierReflectionProcessEvents({
   sessionId: string;
 }): BootstrapProcessEventDraft[] {
   const tierNumber = reflection.tierIndex + 1;
-  return [
-    {
-      content: {
-        language: 'json',
-        mimeType: 'application/json',
-        role: 'developer',
-        text: jsonText({
-          completedDimensions: reflection.completedDimensions || [],
-          crossDimensionPatterns: reflection.crossDimensionPatterns || [],
-          suggestionsForNextTier: reflection.suggestionsForNextTier || [],
-          tierIndex: reflection.tierIndex,
-          topFindings: sanitizeValue(reflection.topFindings || [], 0),
-        }),
-      },
-      kind: 'llm.reflection',
-      metadata: {
-        completedDimensions: reflection.completedDimensions?.length || 0,
-        reflectionSource: 'tier-rule-reflection',
-        sessionId,
+  const reflectionEvent: BootstrapProcessEventDraft = {
+    content: {
+      language: 'json',
+      mimeType: 'application/json',
+      role: 'developer',
+      text: jsonText({
+        completedDimensions: reflection.completedDimensions || [],
+        crossDimensionPatterns: reflection.crossDimensionPatterns || [],
+        suggestionsForNextTier: reflection.suggestionsForNextTier || [],
         tierIndex: reflection.tierIndex,
-      },
-      phase: 'tier-reflection',
-      summary: `Tier ${tierNumber} reflection collected ${reflection.topFindings?.length || 0} top findings and ${reflection.crossDimensionPatterns?.length || 0} cross-dimension patterns.`,
-      targetName: `Tier ${tierNumber}`,
-      title: `Bootstrap tier ${tierNumber} reflection`,
+        topFindings: sanitizeValue(reflection.topFindings || [], 0),
+      }),
     },
-  ];
+    kind: 'llm.reflection',
+    metadata: {
+      completedDimensions: reflection.completedDimensions?.length || 0,
+      reflectionSource: 'tier-rule-reflection',
+      sessionId,
+      tierIndex: reflection.tierIndex,
+    },
+    phase: 'tier-reflection',
+    summary: `Tier ${tierNumber} reflection collected ${reflection.topFindings?.length || 0} top findings and ${reflection.crossDimensionPatterns?.length || 0} cross-dimension patterns.`,
+    targetName: `Tier ${tierNumber}`,
+    title: `Bootstrap tier ${tierNumber} reflection`,
+  };
+  const findings = normalizeFindingItems(reflection.topFindings || [], 'tier-reflection');
+  const findingsEvent =
+    findings.length > 0
+      ? buildFindingsSummaryEvent({
+          dimensionId: null,
+          findings,
+          metadata: {
+            findingSources: ['tier-reflection'],
+            projection: 'tier-findings-digest',
+            sessionId,
+            tierIndex: reflection.tierIndex,
+          },
+          phase: 'tier-findings',
+          sessionId,
+          targetName: `Tier ${tierNumber}`,
+          title: `Bootstrap tier ${tierNumber} findings digest`,
+        })
+      : null;
+  return [reflectionEvent, ...(findingsEvent ? [findingsEvent] : [])];
+}
+
+interface NormalizedFindingItem {
+  evidence?: string;
+  finding: string;
+  importance?: number;
+  source: string;
+}
+
+function buildFindingsDigestEvent({
+  dimId,
+  label,
+  projection,
+  runResult,
+  sessionId,
+}: {
+  dimId: string;
+  label?: string | null;
+  projection: BootstrapDimensionProjection;
+  runResult: AgentResultLike;
+  sessionId: string;
+}): BootstrapProcessEventDraft | null {
+  const digest = parseDimensionDigest(projection.producerResult?.reply || runResult.reply);
+  const digestFindings = normalizeFindingItems(digest?.keyFindings || [], 'dimension-digest');
+  const reportFindings = normalizeFindingItems(
+    projection.analysisReport?.findings || [],
+    'analysis-report'
+  );
+  const findings = dedupeFindings([...digestFindings, ...reportFindings]).slice(0, 10);
+  if (findings.length === 0) {
+    return null;
+  }
+  const findingSources = unique(findings.map((finding) => finding.source));
+  return buildFindingsSummaryEvent({
+    dimensionId: dimId,
+    findings,
+    metadata: {
+      candidateCount: digest?.candidateCount ?? projection.producerResult?.candidateCount ?? null,
+      dimensionId: dimId,
+      digestSummary: digest?.summary || null,
+      findingSources,
+      projection: 'dimension-findings-digest',
+      referencedFiles: projection.analysisReport?.referencedFiles || [],
+      sessionId,
+    },
+    phase: 'dimension-findings',
+    sessionId,
+    targetName: label || dimId,
+    title: `Bootstrap ${label || dimId} findings digest`,
+  });
+}
+
+function buildFindingsSummaryEvent({
+  dimensionId,
+  findings,
+  metadata,
+  phase,
+  sessionId,
+  targetName,
+  title,
+}: {
+  dimensionId?: string | null;
+  findings: NormalizedFindingItem[];
+  metadata: Record<string, unknown>;
+  phase: string;
+  sessionId: string;
+  targetName: string;
+  title: string;
+}): BootstrapProcessEventDraft {
+  const lines = ['## 关键发现 / Findings digest', ''];
+  for (const [index, finding] of findings.entries()) {
+    const importance = typeof finding.importance === 'number' ? ` [${finding.importance}/10]` : '';
+    const evidence = finding.evidence ? ` - ${finding.evidence}` : '';
+    lines.push(`${index + 1}. ${finding.finding}${importance}${evidence}`);
+  }
+  return {
+    content: {
+      mimeType: 'text/markdown',
+      role: 'developer',
+      text: redactSecretText(lines.join('\n')),
+    },
+    dimensionId,
+    kind: 'summary',
+    metadata: {
+      ...metadata,
+      findingCount: findings.length,
+      findings: sanitizeValue(findings, 0),
+      sessionId,
+    },
+    phase,
+    summary: `${findings.length} developer-facing key finding${findings.length === 1 ? '' : 's'} projected for ${targetName}.`,
+    targetName,
+    title,
+  };
 }
 
 function buildToolEvent({
@@ -294,6 +484,7 @@ function projectAgentRunInput(runInput: AgentRunInput): Record<string, unknown> 
     },
     execution: {
       hasAbortSignal: Boolean(asRecord(runInput.execution).abortSignal),
+      hasProgressCallback: Boolean(asRecord(runInput.execution).onProgress),
     },
     message: {
       content: sanitizeValue(message.content, 0),
@@ -403,6 +594,86 @@ function summarizeEfficiency(efficiency: unknown): Record<string, unknown> | nul
     },
     toolCalls: efficiency.toolCalls ?? null,
   };
+}
+
+function isDeveloperVisibleAgentProcessEvent(event: AgentProgressProcessEvent): boolean {
+  return event.sourceClass === 'developer-facing' && event.displayPolicy !== 'hidden';
+}
+
+function normalizeProcessEventContent(
+  content: AgentProgressProcessEvent['content'] | undefined
+): BootstrapProcessEventDraft['content'] {
+  if (!content) {
+    return null;
+  }
+  const role = pickAllowedString(content.role, PROCESS_EVENT_CONTENT_ROLES) || null;
+  return {
+    data: sanitizeValue(content.data, 0),
+    language: stringValue(content.language) || null,
+    mimeType: stringValue(content.mimeType) || null,
+    role,
+    text:
+      typeof content.text === 'string'
+        ? redactSecretText(truncateText(content.text, MAX_TEXT_CHARS))
+        : null,
+  };
+}
+
+function normalizeFindingItems(values: unknown[], source: string): NormalizedFindingItem[] {
+  return values
+    .map((value) => normalizeFindingItem(value, source))
+    .filter((value): value is NormalizedFindingItem => value !== null);
+}
+
+function normalizeFindingItem(value: unknown, source: string): NormalizedFindingItem | null {
+  if (typeof value === 'string') {
+    const finding = value.trim();
+    return finding ? { finding, source } : null;
+  }
+  if (!isRecord(value)) {
+    return null;
+  }
+  const finding = stringValue((value as DimensionFinding).finding)?.trim();
+  if (!finding) {
+    return null;
+  }
+  const evidenceValue = (value as DimensionFinding).evidence;
+  const evidence = Array.isArray(evidenceValue)
+    ? evidenceValue.filter((item): item is string => typeof item === 'string').join(', ')
+    : stringValue(evidenceValue);
+  const importanceValue = (value as DimensionFinding).importance;
+  const importance =
+    typeof importanceValue === 'number' && Number.isFinite(importanceValue)
+      ? importanceValue
+      : undefined;
+  return {
+    evidence: evidence || undefined,
+    finding,
+    importance,
+    source,
+  };
+}
+
+function dedupeFindings(findings: NormalizedFindingItem[]): NormalizedFindingItem[] {
+  const seen = new Set<string>();
+  const result: NormalizedFindingItem[] = [];
+  for (const finding of findings) {
+    const key = finding.finding.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(finding);
+  }
+  return result;
+}
+
+function pickAllowedString<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
+  return typeof value === 'string' && allowed.includes(value as T) ? (value as T) : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 function sanitizeValue(value: unknown, depth: number): unknown {

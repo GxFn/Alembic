@@ -1,3 +1,4 @@
+import type { ProgressEvent } from '@alembic/agent/runtime';
 import type { AgentRunInput, AgentRunResult } from '@alembic/agent/service';
 import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/project-intelligence';
@@ -8,13 +9,16 @@ import {
   type BootstrapSessionChildRunPlan,
   buildBootstrapSessionRunInput,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
-import { buildBootstrapDimensionInputProcessEvents } from '#workflows/capabilities/execution/internal-agent/BootstrapProcessEvents.js';
 import {
   isRecoverableProducerTimeoutIssue,
   projectAgentRunResult,
   projectBootstrapDimensionAgentOutput,
   resolveBootstrapDimensionRunIssue,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
+import {
+  buildBootstrapAgentProgressProcessEvents,
+  buildBootstrapDimensionInputProcessEvents,
+} from './BootstrapProcessEvents.js';
 
 const logger = Logger.getInstance();
 
@@ -290,6 +294,13 @@ function buildBootstrapDimensionChildPlan({
         sessionId,
       });
       const { analystScopeId, runInput } = createDimensionRunInput(dimId, plan);
+      const bridgedRunInput = attachBootstrapAgentProgressBridge({
+        dimId,
+        emitProcessEvents,
+        label: plan.dimConfig.label || plan.dim.label || dimId,
+        runInput,
+        sessionId,
+      });
       childExecutionState.set(dimId, { dimStartTime, analystScopeId });
       emitProcessEvents?.({
         dimensionId: dimId,
@@ -297,7 +308,7 @@ function buildBootstrapDimensionChildPlan({
           dimId,
           label: plan.dimConfig.label || plan.dim.label || dimId,
           plan,
-          runInput,
+          runInput: bridgedRunInput,
           sessionId,
         }),
         sessionId,
@@ -305,7 +316,56 @@ function buildBootstrapDimensionChildPlan({
         targetName: plan.dimConfig.label || plan.dim.label || dimId,
         taskId: dimId,
       });
-      return runInput;
+      return bridgedRunInput;
+    },
+  };
+}
+
+export function attachBootstrapAgentProgressBridge({
+  dimId,
+  emitProcessEvents,
+  label,
+  runInput,
+  sessionId,
+}: {
+  dimId: string;
+  emitProcessEvents?(payload: BootstrapProcessEventsPayload): void;
+  label?: string | null;
+  runInput: AgentRunInput;
+  sessionId: string;
+}): AgentRunInput {
+  if (!emitProcessEvents) {
+    return runInput;
+  }
+  const previousOnProgress = runInput.execution?.onProgress || null;
+  return {
+    ...runInput,
+    execution: {
+      ...(runInput.execution || {}),
+      onProgress: (event: ProgressEvent) => {
+        try {
+          previousOnProgress?.(event);
+        } catch {
+          /* progress observers are non-blocking */
+        }
+        const events = buildBootstrapAgentProgressProcessEvents({
+          dimId,
+          event,
+          label,
+          sessionId,
+        });
+        if (events.length === 0) {
+          return;
+        }
+        emitProcessEvents({
+          dimensionId: dimId,
+          events,
+          sessionId,
+          source: 'bootstrap-agent-progress',
+          targetName: label || dimId,
+          taskId: dimId,
+        });
+      },
     },
   };
 }
