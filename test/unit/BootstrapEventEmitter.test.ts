@@ -47,4 +47,32 @@ describe('BootstrapEventEmitter task routing', () => {
       })
     );
   });
+
+  test('routes process event drafts through task manager once when available', () => {
+    const emitProgress = vi.fn();
+    const emit = vi.fn();
+    const emitter = new BootstrapEventEmitter({
+      get(name: string) {
+        if (name === 'bootstrapTaskManager') {
+          return { emitProgress };
+        }
+        if (name === 'eventBus') {
+          return { emit };
+        }
+        return null;
+      },
+    });
+
+    emitter.emitProcessEvents({
+      sessionId: 'bs_1',
+      dimensionId: 'api',
+      events: [{ kind: 'llm.input', title: 'Input' }],
+    });
+
+    expect(emitProgress).toHaveBeenCalledWith(
+      'bootstrap:process-events',
+      expect.objectContaining({ sessionId: 'bs_1' })
+    );
+    expect(emit).not.toHaveBeenCalledWith('bootstrap:process-events', expect.anything());
+  });
 });

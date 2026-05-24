@@ -7,6 +7,7 @@ import {
 } from '@alembic/core/daemon';
 import { resolveProjectRoot } from '@alembic/core/workspace';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
+import type { BootstrapProcessEventDraft } from '../service/bootstrap/bootstrap-event-types.js';
 import {
   JobProcessEventRecorder,
   type JobProcessEventRecordInput,
@@ -20,6 +21,7 @@ interface LoggerLike {
 
 type BootstrapProcessEventName =
   | 'bootstrap:all-completed'
+  | 'bootstrap:process-events'
   | 'bootstrap:started'
   | 'bootstrap:task-completed'
   | 'bootstrap:task-failed'
@@ -332,7 +334,7 @@ export function getJobProcessEventRecorder(container: ServiceContainer): JobProc
   }
 }
 
-function attachBootstrapProcessEventBridge(options: {
+export function attachBootstrapProcessEventBridge(options: {
   container: ServiceContainer;
   jobId: string;
   logger: LoggerLike;
@@ -461,6 +463,36 @@ function attachBootstrapProcessEventBridge(options: {
       summary: `${label} completed.`,
       targetName: label,
       title: 'Bootstrap dimension completed',
+    });
+    recordBootstrapProcessEventDrafts({
+      defaults: {
+        dimensionId: extractDimensionId(event) || taskId,
+        sessionId: currentSessionId || null,
+        targetName: label,
+        taskId,
+      },
+      jobId: options.jobId,
+      payload: result.processEvents,
+      recorder: options.recorder,
+    });
+  });
+
+  subscribe('bootstrap:process-events', (payload: unknown) => {
+    const event = asRecord(payload);
+    if (!shouldAccept(event)) {
+      return;
+    }
+    const taskId = stringValue(event.taskId) || extractDimensionId(event) || undefined;
+    recordBootstrapProcessEventDrafts({
+      defaults: {
+        dimensionId: extractDimensionId(event) || taskId || null,
+        sessionId: currentSessionId || stringValue(event.sessionId) || null,
+        targetName: stringValue(event.targetName) || extractTaskLabel(event) || taskId || null,
+        taskId: taskId || null,
+      },
+      jobId: options.jobId,
+      payload: event.events,
+      recorder: options.recorder,
     });
   });
 
@@ -802,6 +834,57 @@ function recordJobProcessEvent(
   }
 }
 
+function recordBootstrapProcessEventDrafts({
+  defaults,
+  jobId,
+  payload,
+  recorder,
+}: {
+  defaults: {
+    dimensionId?: string | null;
+    sessionId?: string | null;
+    targetName?: string | null;
+    taskId?: string | null;
+  };
+  jobId: string;
+  payload: unknown;
+  recorder: JobProcessEventRecorder;
+}): void {
+  const drafts = normalizeBootstrapProcessEventDrafts(payload);
+  for (const draft of drafts) {
+    const metadata = {
+      ...asRecord(draft.metadata),
+      dimensionId: draft.dimensionId ?? defaults.dimensionId ?? null,
+      sessionId: defaults.sessionId ?? null,
+      taskId: defaults.taskId ?? null,
+    };
+    recordJobProcessEvent(recorder, {
+      ...draft,
+      dimensionId: draft.dimensionId ?? defaults.dimensionId ?? null,
+      jobId,
+      metadata,
+      targetName: draft.targetName ?? defaults.targetName ?? null,
+    });
+  }
+}
+
+function normalizeBootstrapProcessEventDrafts(payload: unknown): BootstrapProcessEventDraft[] {
+  let rawDrafts: unknown[] = [];
+  if (Array.isArray(payload)) {
+    rawDrafts = payload;
+  } else if (isRecord(payload) && Array.isArray(payload.events)) {
+    rawDrafts = payload.events;
+  }
+  return rawDrafts.filter(isBootstrapProcessEventDraft);
+}
+
+function isBootstrapProcessEventDraft(value: unknown): value is BootstrapProcessEventDraft {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return typeof value.kind === 'string' && typeof value.title === 'string';
+}
+
 function buildJobResultArtifactRefs(job: DaemonJobRecord | null | undefined) {
   if (!job) {
     return [];
@@ -867,6 +950,10 @@ function unwrapEnvelope(raw: unknown): unknown {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : { value };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
 function stringValue(value: unknown): string | undefined {

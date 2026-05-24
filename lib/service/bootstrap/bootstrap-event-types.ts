@@ -7,6 +7,7 @@
  * @module service/bootstrap/bootstrap-event-types
  */
 
+import type { CreateJobProcessEventInput } from '@alembic/core/daemon';
 import type { AgentEfficiencySummary } from './BootstrapEfficiency.js';
 
 // ── DimensionComplete payload variants ───────────────────────
@@ -79,4 +80,24 @@ export type DimensionCompletePayload =
 
 export interface ProgressPayload {
   [key: string]: unknown;
+}
+
+// ── Job process event bridge payloads ───────────────────────
+
+export type BootstrapProcessEventDraft = Omit<
+  CreateJobProcessEventInput,
+  'createdAt' | 'id' | 'jobId' | 'sequence'
+> & {
+  createdAt?: string;
+  id?: string;
+  sequence?: number;
+};
+
+export interface BootstrapProcessEventsPayload extends ProgressPayload {
+  dimensionId?: string;
+  events: BootstrapProcessEventDraft[];
+  sessionId: string;
+  source?: string;
+  targetName?: string;
+  taskId?: string;
 }

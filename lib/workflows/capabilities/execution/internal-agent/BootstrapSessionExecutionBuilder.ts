@@ -1,12 +1,14 @@
 import type { AgentRunInput, AgentRunResult } from '@alembic/agent/service';
 import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/project-intelligence';
+import type { BootstrapProcessEventsPayload } from '#service/bootstrap/bootstrap-event-types.js';
 import type { DimensionStat } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import {
   type BootstrapSessionChildRunPlan,
   buildBootstrapSessionRunInput,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
+import { buildBootstrapDimensionInputProcessEvents } from '#workflows/capabilities/execution/internal-agent/BootstrapProcessEvents.js';
 import {
   isRecoverableProducerTimeoutIssue,
   projectAgentRunResult,
@@ -52,6 +54,7 @@ export interface BuildBootstrapSessionExecutionInputOptions {
   }): Promise<unknown> | unknown;
   consumeDimensionError(args: { dimId: string; err: unknown }): unknown;
   consumeTierResult(tierIndex: number, tierResults: Map<string, DimensionStat>): unknown;
+  emitProcessEvents?(payload: BootstrapProcessEventsPayload): void;
 }
 
 export function buildBootstrapSessionExecutionInput({
@@ -71,6 +74,7 @@ export function buildBootstrapSessionExecutionInput({
   consumeDimensionResult,
   consumeDimensionError,
   consumeTierResult,
+  emitProcessEvents,
 }: BuildBootstrapSessionExecutionInputOptions) {
   const childExecutionState = new Map<string, BootstrapDimensionExecutionState>();
   const children = activeDimIds
@@ -87,6 +91,7 @@ export function buildBootstrapSessionExecutionInput({
         resolvePlan,
         createDimensionRunInput,
         emitDimensionStart,
+        emitProcessEvents,
         childExecutionState,
       })
     )
@@ -237,6 +242,7 @@ function buildBootstrapDimensionChildPlan({
   resolvePlan,
   createDimensionRunInput,
   emitDimensionStart,
+  emitProcessEvents,
   childExecutionState,
 }: {
   dimId: string;
@@ -252,6 +258,7 @@ function buildBootstrapDimensionChildPlan({
     plan: BootstrapDimensionPlan
   ): { analystScopeId: string; runInput: AgentRunInput };
   emitDimensionStart(dimId: string): void;
+  emitProcessEvents?(payload: BootstrapProcessEventsPayload): void;
   childExecutionState: Map<string, BootstrapDimensionExecutionState>;
 }): BootstrapSessionChildRunPlan | null {
   const plan = resolvePlan(dimId);
@@ -284,6 +291,20 @@ function buildBootstrapDimensionChildPlan({
       });
       const { analystScopeId, runInput } = createDimensionRunInput(dimId, plan);
       childExecutionState.set(dimId, { dimStartTime, analystScopeId });
+      emitProcessEvents?.({
+        dimensionId: dimId,
+        events: buildBootstrapDimensionInputProcessEvents({
+          dimId,
+          label: plan.dimConfig.label || plan.dim.label || dimId,
+          plan,
+          runInput,
+          sessionId,
+        }),
+        sessionId,
+        source: 'bootstrap-dimension-input',
+        targetName: plan.dimConfig.label || plan.dim.label || dimId,
+        taskId: dimId,
+      });
       return runInput;
     },
   };

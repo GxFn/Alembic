@@ -7,7 +7,11 @@
  * @module shared/BootstrapEventEmitter
  */
 
-import type { DimensionCompletePayload, ProgressPayload } from './bootstrap-event-types.js';
+import type {
+  BootstrapProcessEventsPayload,
+  DimensionCompletePayload,
+  ProgressPayload,
+} from './bootstrap-event-types.js';
 
 export class BootstrapEventEmitter {
   /** EventBus 实例 */
@@ -144,6 +148,34 @@ export class BootstrapEventEmitter {
 
     try {
       this.#taskManager?.emitProgress?.(event, data);
+    } catch {
+      /* non-blocking */
+    }
+  }
+
+  /**
+   * 推送 developer-safe job process event 草稿。
+   *
+   * DaemonJobRunner 会把这些草稿绑定到当前 daemon job，再交给
+   * JobProcessEventRecorder 做 Core contract normalization / retention / broadcast。
+   */
+  emitProcessEvents(data: BootstrapProcessEventsPayload) {
+    let emittedByTaskManager = false;
+    try {
+      if (this.#taskManager?.emitProgress) {
+        this.#taskManager.emitProgress('bootstrap:process-events', data);
+        emittedByTaskManager = true;
+      }
+    } catch {
+      /* non-blocking */
+    }
+
+    if (emittedByTaskManager) {
+      return;
+    }
+
+    try {
+      this.#eventBus?.emit?.('bootstrap:process-events', data);
     } catch {
       /* non-blocking */
     }

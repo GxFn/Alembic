@@ -1,9 +1,15 @@
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { JobStore } from '@alembic/core/daemon';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { cancelDaemonJob, markInterruptedDaemonJobs } from '../../lib/daemon/DaemonJobRunner.js';
+import {
+  attachBootstrapProcessEventBridge,
+  cancelDaemonJob,
+  markInterruptedDaemonJobs,
+} from '../../lib/daemon/DaemonJobRunner.js';
+import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
@@ -151,6 +157,93 @@ describe('cancelDaemonJob', () => {
           },
         },
       },
+    });
+  });
+});
+
+describe('attachBootstrapProcessEventBridge', () => {
+  test('records explicit bootstrap process event payloads for the active daemon job', () => {
+    const eventBus = new EventEmitter();
+    const recorder = new JobProcessEventRecorder();
+    const cleanup = attachBootstrapProcessEventBridge({
+      container: makeContainer(new JobStore({ projectRoot: makeProjectRoot() }), { eventBus }),
+      jobId: 'job_process_bridge',
+      logger: makeLogger(),
+      recorder,
+    });
+
+    eventBus.emit('bootstrap:started', { sessionId: 'bs_1', total: 1 });
+    eventBus.emit('bootstrap:process-events', {
+      sessionId: 'bs_1',
+      taskId: 'architecture',
+      targetName: 'Architecture',
+      events: [
+        {
+          kind: 'llm.input',
+          title: 'Input prepared',
+          content: { mimeType: 'text/plain', role: 'developer', text: 'safe input summary' },
+          metadata: { source: 'test' },
+        },
+      ],
+    });
+
+    cleanup?.();
+
+    const list = recorder.list('job_process_bridge', { limit: 10 });
+    expect(list.developerViews.map((event) => event.kind)).toEqual(['workflow', 'llm.input']);
+    expect(list.developerViews[1]).toMatchObject({
+      dimensionId: 'architecture',
+      metadata: {
+        sessionId: 'bs_1',
+        taskId: 'architecture',
+      },
+      targetName: 'Architecture',
+      title: 'Input prepared',
+    });
+  });
+
+  test('records process event drafts carried by completed task results', () => {
+    const eventBus = new EventEmitter();
+    const recorder = new JobProcessEventRecorder();
+    const cleanup = attachBootstrapProcessEventBridge({
+      container: makeContainer(new JobStore({ projectRoot: makeProjectRoot() }), { eventBus }),
+      jobId: 'job_task_result_bridge',
+      logger: makeLogger(),
+      recorder,
+    });
+
+    eventBus.emit('bootstrap:started', { sessionId: 'bs_1', total: 1 });
+    eventBus.emit('bootstrap:task-completed', {
+      sessionId: 'bs_1',
+      taskId: 'code-patterns',
+      meta: { dimId: 'code-patterns', label: 'Code Patterns' },
+      result: {
+        status: 'v3-pipeline-complete',
+        processEvents: [
+          {
+            kind: 'tool',
+            title: 'Tool calls',
+            content: { language: 'json', mimeType: 'application/json', role: 'tool', text: '[]' },
+          },
+        ],
+      },
+      progress: 100,
+      completed: 1,
+      total: 1,
+    });
+
+    cleanup?.();
+
+    const list = recorder.list('job_task_result_bridge', { limit: 10 });
+    expect(list.developerViews.map((event) => event.kind)).toEqual(['workflow', 'summary', 'tool']);
+    expect(list.developerViews[2]).toMatchObject({
+      dimensionId: 'code-patterns',
+      metadata: {
+        sessionId: 'bs_1',
+        taskId: 'code-patterns',
+      },
+      targetName: 'Code Patterns',
+      title: 'Tool calls',
     });
   });
 });

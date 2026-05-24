@@ -23,6 +23,10 @@ import {
   resolveBootstrapDimensionPlan as resolveBootstrapDimensionPlanData,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import {
+  buildBootstrapDimensionResultProcessEvents,
+  buildBootstrapTierReflectionProcessEvents,
+} from '#workflows/capabilities/execution/internal-agent/BootstrapProcessEvents.js';
+import {
   projectAgentRunResult,
   projectBootstrapDimensionAgentOutput,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
@@ -153,6 +157,23 @@ export async function runInternalDimensionAgentSession({
       needsCandidates: plan.needsCandidates,
       runResult,
     });
+    const processEvents = buildBootstrapDimensionResultProcessEvents({
+      dimId,
+      label: plan.dimConfig.label || plan.dim.label || dimId,
+      projection,
+      runResult,
+      sessionId: preparation.sessionId,
+    });
+    if (processEvents.length > 0) {
+      preparation.emitter.emitProcessEvents({
+        dimensionId: dimId,
+        events: processEvents,
+        sessionId: preparation.sessionId,
+        source: 'bootstrap-dimension-result',
+        targetName: plan.dimConfig.label || plan.dim.label || dimId,
+        taskId: dimId,
+      });
+    }
     return consumeBootstrapDimensionResult({
       ctx: preparation.ctx,
       dimId,
@@ -188,11 +209,23 @@ export async function runInternalDimensionAgentSession({
     tierIndex: number,
     tierResults: Map<string, DimensionStat>
   ) {
-    return consumeBootstrapTierReflection({
+    const reflection = consumeBootstrapTierReflection({
       tierIndex,
       tierResults,
       sessionStore: runtime.sessionStore,
     });
+    if (reflection) {
+      preparation.emitter.emitProcessEvents({
+        events: buildBootstrapTierReflectionProcessEvents({
+          reflection,
+          sessionId: preparation.sessionId,
+        }),
+        sessionId: preparation.sessionId,
+        source: 'bootstrap-tier-reflection',
+        targetName: `Tier ${tierIndex + 1}`,
+      });
+    }
+    return reflection;
   }
 
   function consumeBootstrapSessionResult({
@@ -231,6 +264,7 @@ export async function runInternalDimensionAgentSession({
     consumeDimensionResult: consumeBootstrapDimensionAgentResult,
     consumeDimensionError: consumeBootstrapDimensionError,
     consumeTierResult: consumeBootstrapSessionTierResult,
+    emitProcessEvents: (payload) => preparation.emitter.emitProcessEvents(payload),
   });
 
   const startedAtMs = Date.now();
