@@ -4,7 +4,7 @@ import { pathGuard } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
 import { unwrapRawDb } from '@alembic/core/search';
 import { WorkspaceSettingsStore } from '@alembic/core/shared';
-import { WorkspaceResolver } from '@alembic/core/workspace';
+import type { WorkspaceResolver } from '@alembic/core/workspace';
 import Constitution from './governance/constitution/Constitution.js';
 import ConstitutionValidator from './governance/constitution/ConstitutionValidator.js';
 import Gateway, { type GatewayConfig } from './governance/gateway/Gateway.js';
@@ -12,6 +12,7 @@ import PermissionManager from './governance/permission/PermissionManager.js';
 import AuditLogger from './infrastructure/audit/AuditLogger.js';
 import AuditStore from './infrastructure/audit/AuditStore.js';
 import ConfigLoader from './infrastructure/config/AppConfigLoader.js';
+import { resolveAlembicWorkspace } from './project-scope/ProjectScopeRegistry.js';
 import { SkillHooks } from './service/skills/SkillHooks.js';
 import { CONFIG_DIR, PACKAGE_ROOT } from './shared/package-assets.js';
 
@@ -247,7 +248,7 @@ export class Bootstrap {
     if (!projectRoot) {
       return; // PathGuard 未配置时跳过
     }
-    const resolver = WorkspaceResolver.fromProject(projectRoot);
+    const resolver = resolveAlembicWorkspace(projectRoot);
     this.components.workspaceResolver = resolver;
 
     // Ghost 模式：将外置工作区目录加入 PathGuard 白名单

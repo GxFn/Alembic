@@ -42,6 +42,7 @@ import logsRouter from './routes/logs.js';
 import modulesRouter from './routes/modules.js';
 import monitoringRouter from './routes/monitoring.js';
 import panoramaRouter from './routes/panorama.js';
+import projectScopeRouter from './routes/project-scope.js';
 import projectsRouter from './routes/projects.js';
 import recipesRouter from './routes/recipes.js';
 import searchRouter from './routes/search.js';
@@ -271,6 +272,9 @@ export class HttpServer {
 
     // 多项目 runtime control foundation（只读 summary / selected state）
     this.app.use(`${apiPrefix}/projects`, projectsRouter);
+
+    // ProjectScope producer：抽象 Project 与多个实体源码 folder 的绑定关系
+    this.app.use(`${apiPrefix}/project-scope`, projectScopeRouter);
 
     // 认证路由
     this.app.use(`${apiPrefix}/auth`, authRouter);

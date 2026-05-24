@@ -29,9 +29,10 @@ import {
   isAiEnvReady,
   maskAiEnvConfig,
   PROVIDER_KEY_ENV,
+  type ProjectScopeSummary,
   WorkspaceSettingsStore,
 } from '@alembic/core/shared';
-import { DEFAULT_FOLDER_NAMES, WorkspaceResolver } from '@alembic/core/workspace';
+import { DEFAULT_FOLDER_NAMES } from '@alembic/core/workspace';
 import { Command } from 'commander';
 import { cli } from '../lib/cli/CliLogger.js';
 import type {
@@ -40,6 +41,7 @@ import type {
   ProjectRuntimeScopeSummary,
   ProjectRuntimeTarget,
 } from '../lib/daemon/ProjectRuntimeControl.js';
+import { resolveAlembicWorkspace } from '../lib/project-scope/ProjectScopeRegistry.js';
 import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-assets.js';
 import { shutdown } from '../lib/shared/shutdown.js';
 
@@ -484,6 +486,94 @@ projects
   });
 
 // ─────────────────────────────────────────────────────
+// project-scope 命令 — 管理抽象 Project 与多个实体 folder 的绑定
+// ─────────────────────────────────────────────────────
+const projectScope = program
+  .command('project-scope')
+  .description('管理 ProjectScope：一个抽象 Project 绑定多个源码 folder');
+
+projectScope
+  .command('add <folder>')
+  .description('将源码 folder 绑定到 ProjectScope；第一版只支持 add/list/resolve')
+  .option('--control-root <path>', '控制入口目录；不会进入 folders[]')
+  .option('--project-scope-id <id>', '绑定到既有 ProjectScope')
+  .option('--display-name <name>', 'folder 显示名称')
+  .option('--role <role>', 'folder 角色: primary-source | source', 'source')
+  .option('--json', 'JSON 格式输出')
+  .action(async (folder: string, opts) => {
+    const { ProjectScopeRegistryStore } = await import(
+      '../lib/project-scope/ProjectScopeRegistry.js'
+    );
+    const result = new ProjectScopeRegistryStore().addFolder({
+      controlRoot: opts.controlRoot ? resolve(opts.controlRoot) : null,
+      displayName: opts.displayName,
+      folderPath: resolve(folder),
+      projectScopeId: opts.projectScopeId,
+      role: opts.role === 'primary-source' ? 'primary-source' : 'source',
+    });
+    if (opts.json) {
+      cli.json(result);
+      return;
+    }
+    printProjectScopeResult(result.summary, result.registryPath, result.addedFolder.id);
+  });
+
+projectScope
+  .command('list')
+  .description('列出 ProjectScope 和已绑定 folders')
+  .option('--project-scope-id <id>', '只显示指定 ProjectScope')
+  .option('--control-root <path>', '只显示指定 controlRoot 的 ProjectScope')
+  .option('--json', 'JSON 格式输出')
+  .action(async (opts) => {
+    const { ProjectScopeRegistryStore, summarizeProjectScope } = await import(
+      '../lib/project-scope/ProjectScopeRegistry.js'
+    );
+    const store = new ProjectScopeRegistryStore();
+    const scopes = opts.projectScopeId
+      ? [store.getScope(opts.projectScopeId)].filter((scope) => scope !== null)
+      : opts.controlRoot
+        ? [store.findByControlRoot(resolve(opts.controlRoot))].filter((scope) => scope !== null)
+        : store.listScopes();
+    const summaries = scopes.map((scope) => summarizeProjectScope(scope));
+    if (opts.json) {
+      cli.json({ registryPath: store.registryPath, scopes: summaries });
+      return;
+    }
+    printProjectScopeList(summaries, store.registryPath);
+  });
+
+projectScope
+  .command('resolve [folder]')
+  .description('解析 folder 属于哪个 ProjectScope')
+  .option('-d, --dir <path>', 'folder 目录；未传 argument 时使用')
+  .option('--json', 'JSON 格式输出')
+  .action(async (folder: string | undefined, opts) => {
+    const { ProjectScopeRegistryStore } = await import(
+      '../lib/project-scope/ProjectScopeRegistry.js'
+    );
+    const folderPath = resolve(folder || opts.dir || '.');
+    const store = new ProjectScopeRegistryStore();
+    const result = store.resolveFolder(folderPath);
+    if (opts.json) {
+      cli.json({
+        folderPath,
+        registryPath: store.registryPath,
+        result,
+      });
+      return;
+    }
+    if (!result) {
+      cli.log(`  未匹配 ProjectScope: ${folderPath}`);
+      return;
+    }
+    printProjectScopeResult(
+      result.summary,
+      result.registryPath,
+      result.resolution?.currentFolderId
+    );
+  });
+
+// ─────────────────────────────────────────────────────
 // remote 命令 — 将 recipes 目录转为独立子仓库并关联远程仓库
 // ─────────────────────────────────────────────────────
 program
@@ -559,7 +649,7 @@ program
 
 /** 更新 .asd/config.json 中的 core.subRepoUrl 字段 */
 function _updateConfigUrl(projectRoot: string, url: string) {
-  const configPath = join(WorkspaceResolver.fromProject(projectRoot).runtimeDir, 'config.json');
+  const configPath = join(resolveAlembicWorkspace(projectRoot).runtimeDir, 'config.json');
   if (!existsSync(configPath)) {
     return;
   }
@@ -1537,7 +1627,7 @@ program
     }
 
     // 检查数据库 (Ghost-aware)
-    const resolver = WorkspaceResolver.fromProject(process.cwd());
+    const resolver = resolveAlembicWorkspace(process.cwd());
     const dbPath = resolver.databasePath;
     const dbExists = existsSync(dbPath);
     cli.log(`  Database:     ${dbExists ? `✅ ${dbPath}` : '❌ not found'}`);
@@ -1616,7 +1706,7 @@ program
     const projectRoot = resolve(opts.dir);
 
     const { getAiConfigInfo } = await import('@alembic/agent/ai');
-    const resolver = WorkspaceResolver.fromProject(projectRoot);
+    const resolver = resolveAlembicWorkspace(projectRoot);
     const aiInfo = getAiConfigInfo();
     const aiOk = !!(aiInfo.provider && aiInfo.provider !== 'none');
 
@@ -2575,6 +2665,49 @@ function printProjectRuntimeAction(result: ProjectRuntimeControlActionResult) {
   }
   if (result.error) {
     cli.log(`  Error:    ${result.error}`);
+  }
+  cli.blank();
+}
+
+function printProjectScopeList(summaries: ProjectScopeSummary[], registryPath: string) {
+  cli.blank();
+  cli.log('  Alembic ProjectScopes');
+  cli.log(`  ${'─'.repeat(40)}`);
+  cli.log(`  Registry: ${registryPath}`);
+  cli.log(`  Count:    ${summaries.length}`);
+  cli.blank();
+  for (const summary of summaries) {
+    printProjectScopeSummary(summary);
+  }
+  if (summaries.length === 0) {
+    cli.log('  No ProjectScope entries. Run alembic project-scope add <folder> first.');
+    cli.blank();
+  }
+}
+
+function printProjectScopeResult(
+  summary: ProjectScopeSummary,
+  registryPath: string,
+  currentFolderId?: string | null
+) {
+  cli.blank();
+  cli.log('  Alembic ProjectScope');
+  cli.log(`  ${'─'.repeat(40)}`);
+  cli.log(`  Registry: ${registryPath}`);
+  printProjectScopeSummary(summary, currentFolderId);
+}
+
+function printProjectScopeSummary(summary: ProjectScopeSummary, currentFolderId?: string | null) {
+  cli.log(`  Project:  ${summary.displayName}`);
+  cli.log(`  Scope ID: ${summary.projectScopeId}`);
+  cli.log(`  Project:  ${summary.projectId}`);
+  cli.log(`  Control:  ${summary.controlRoot} (not in folders)`);
+  cli.log(`  DataRoot: ${summary.dataRoot}`);
+  cli.log(`  Storage:  ${summary.storageKind} / ${summary.dataRootSource}`);
+  cli.log(`  Folders:  ${summary.folderCount}`);
+  for (const folder of summary.folders) {
+    const marker = folder.folderId === (currentFolderId ?? summary.currentFolderId) ? '*' : ' ';
+    cli.log(`    ${marker} ${folder.folderId}  ${folder.role}  ${folder.path}`);
   }
   cli.blank();
 }

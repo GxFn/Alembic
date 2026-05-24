@@ -1,3 +1,4 @@
+import { createProjectDescriptor, summarizeProjectScopeDescriptor } from '@alembic/core/shared';
 import { afterEach, describe, expect, test } from 'vitest';
 import { buildAlembicRuntimeBoundary } from '../../lib/daemon/RuntimeBoundary.js';
 import {
@@ -77,6 +78,22 @@ describe('daemon capabilities', () => {
       available: true,
       endpoint: '/api/v1/jobs/:jobId/events',
       supportedKinds: expect.arrayContaining(['workflow', 'summary', 'error']),
+    });
+    expect(capabilities.projectScope).toMatchObject({
+      available: true,
+      endpoints: {
+        addFolder: '/api/v1/project-scope/folders',
+        listFolders: '/api/v1/project-scope/folders',
+        readScope: '/api/v1/project-scope',
+        resolveFolder: '/api/v1/project-scope/resolve-folder',
+      },
+      storageKind: 'ghost',
+      supportedOperations: [
+        'project-scope.read',
+        'project-folders.add',
+        'project-folders.list',
+        'project-folders.resolve',
+      ],
     });
     expect(capabilities.fileMonitor).toMatchObject({
       acceptedEventSources: ['host-edit', 'git-head', 'git-worktree'],
@@ -265,6 +282,8 @@ describe('daemon capabilities', () => {
       databasePath: '/tmp/project/.asd/alembic.db',
       projectId: 'project-123',
       projectRoot: '/tmp/source',
+      projectScope: null,
+      projectScopeId: null,
       runtimeDir: '/tmp/project/.asd',
       schemaMigrationVersion: '2026-05-18',
       workspaceMode: 'ghost',
@@ -284,6 +303,73 @@ describe('daemon capabilities', () => {
       mode: 'ghost',
       runtimeDir: '/tmp/project/.asd',
       workspaceMode: 'ghost',
+    });
+  });
+
+  test('exposes ProjectScope identity through daemon health and resident service scope', () => {
+    const projectScope = createProjectDescriptor({
+      controlRoot: '/tmp/workspace',
+      dataRoot: '/tmp/alembic-data',
+      displayName: 'Alembic workspace',
+      folders: [
+        {
+          path: '/tmp/workspace/Alembic',
+          role: 'primary-source',
+        },
+        {
+          path: '/tmp/workspace/AlembicCore',
+          role: 'source',
+        },
+      ],
+      projectId: 'project-scope-project',
+      projectScopeId: 'project-scope-123',
+    });
+    const projectScopeSummary = summarizeProjectScopeDescriptor(
+      projectScope,
+      projectScope.folders[1]?.id ?? null
+    );
+    const projectIdentity = buildDaemonProjectIdentity({
+      dataRoot: projectScopeSummary.dataRoot,
+      dataRootSource: 'ghost-registry',
+      databasePath: '/tmp/alembic-data/.asd/alembic.db',
+      projectId: projectScopeSummary.projectId,
+      projectRoot: '/tmp/workspace/AlembicCore',
+      projectScope: projectScopeSummary,
+      runtimeDir: '/tmp/alembic-data/.asd',
+    });
+    const residentService = buildResidentServiceStatus({
+      capabilities: makeCapabilities(),
+      internalAi: makeCapabilities().internalAi,
+      origin: 'http://127.0.0.1:49152',
+      projectIdentity,
+      statePath: '/tmp/alembic-data/.asd/daemon.json',
+    });
+
+    expect(projectIdentity).toMatchObject({
+      dataRoot: '/tmp/alembic-data',
+      dataRootSource: 'ghost-registry',
+      projectId: 'project-scope-project',
+      projectScope: {
+        controlRoot: '/tmp/workspace',
+        projectScopeId: 'project-scope-123',
+        storageKind: 'ghost',
+      },
+      projectScopeId: 'project-scope-123',
+      projectRoot: '/tmp/workspace/AlembicCore',
+      workspaceMode: 'ghost',
+    });
+    expect(residentService.serviceScope).toMatchObject({
+      diagnosticPaths: {
+        controlRoot: '/tmp/workspace',
+        dataRoot: '/tmp/alembic-data',
+        projectRoot: '/tmp/workspace/AlembicCore',
+        runtimeDir: '/tmp/alembic-data/.asd',
+      },
+      displayName: 'Alembic workspace',
+      projectIdentity: {
+        projectScopeId: 'project-scope-123',
+      },
+      scopeId: 'project-scope:project-scope-123',
     });
   });
 });

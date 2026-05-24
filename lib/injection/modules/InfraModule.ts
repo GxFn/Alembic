@@ -26,6 +26,7 @@ import Gateway from '../../governance/gateway/Gateway.js';
 import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../infrastructure/audit/AuditStore.js';
 import { getRealtimeService as _getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
+import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
 import { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
 import { BootstrapTaskManager } from '../../service/bootstrap/BootstrapTaskManager.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
@@ -88,7 +89,8 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('jobStore', (ct: ServiceContainer) => {
-    return new JobStore({ projectRoot: resolveProjectRoot(ct) });
+    const resolver = resolveAlembicWorkspace(resolveProjectRoot(ct));
+    return new JobStore({ projectRoot: resolver.dataRoot });
   });
 
   c.singleton('jobProcessEventRecorder', () => {

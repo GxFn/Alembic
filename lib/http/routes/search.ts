@@ -5,7 +5,7 @@
 
 import Logger from '@alembic/core/logging';
 import type { SearchResponse, SearchResponseMeta } from '@alembic/core/search';
-import { resolveProjectRoot, WorkspaceResolver } from '@alembic/core/workspace';
+import { resolveProjectRoot, type WorkspaceResolver } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
 import {
   ContextAwareSearchBody,
@@ -15,6 +15,7 @@ import {
   SimilarityBody,
 } from '#shared/schemas/http-requests.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 import { safeInt } from '../utils/routeHelpers.js';
 
@@ -384,13 +385,15 @@ function buildSearchWorkspaceIdentity(container: ReturnType<typeof getServiceCon
   try {
     const resolver =
       (container.singletons?._workspaceResolver as WorkspaceResolver | undefined) ??
-      WorkspaceResolver.fromProject(projectRoot);
+      resolveAlembicWorkspace(projectRoot);
     const facts = resolver.toFacts();
     return {
       dataRoot: resolver.dataRoot,
       dataRootSource: facts.dataRootSource,
       databasePath: resolver.databasePath,
       projectId: resolver.projectId,
+      projectScope: facts.projectScope,
+      projectScopeId: facts.projectScopeId,
       projectRoot: resolver.projectRoot,
       runtimeDir: resolver.runtimeDir,
       workspaceMode: facts.mode,

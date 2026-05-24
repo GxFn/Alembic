@@ -7,6 +7,7 @@ import {
 } from '@alembic/core/daemon';
 import { resolveProjectRoot } from '@alembic/core/workspace';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
+import { resolveAlembicWorkspace } from '../project-scope/ProjectScopeRegistry.js';
 import type { BootstrapProcessEventDraft } from '../service/bootstrap/bootstrap-event-types.js';
 import {
   JobProcessEventRecorder,
@@ -322,7 +323,8 @@ export function getJobStore(container: ServiceContainer): JobStore {
   try {
     return container.get('jobStore');
   } catch {
-    return new JobStore({ projectRoot: resolveProjectRoot(container) });
+    const resolver = resolveAlembicWorkspace(resolveProjectRoot(container));
+    return new JobStore({ projectRoot: resolver.dataRoot });
   }
 }
 

@@ -17,8 +17,8 @@ import {
   getPackageVersion,
   readDaemonState,
   removeDaemonState,
-  resolveDaemonPaths,
 } from '@alembic/core/daemon';
+import { resolveAlembicDaemonPaths } from '../project-scope/ProjectScopeRegistry.js';
 import { PACKAGE_ROOT } from '../shared/package-assets.js';
 
 export type DaemonStatusKind = 'ready' | 'starting' | 'stopped' | 'stale' | 'failed';
@@ -55,7 +55,7 @@ export interface StopDaemonOptions {
 export class DaemonSupervisor {
   async status(projectRootInput: string): Promise<DaemonStatus> {
     const projectRoot = resolve(projectRootInput);
-    const paths = resolveDaemonPaths(projectRoot);
+    const paths = resolveAlembicDaemonPaths(projectRoot);
     const state = readDaemonState(paths.statePath);
     const pidAlive = state?.pid ? isProcessAlive(state.pid) : false;
 
@@ -113,7 +113,7 @@ export class DaemonSupervisor {
 
   async start(options: StartDaemonOptions): Promise<DaemonStatus> {
     const projectRoot = resolve(options.projectRoot);
-    const paths = resolveDaemonPaths(projectRoot);
+    const paths = resolveAlembicDaemonPaths(projectRoot);
     ensureDaemonDirs(paths);
 
     const existing = await this.status(projectRoot);
@@ -192,7 +192,7 @@ export class DaemonSupervisor {
 
   async stop(options: StopDaemonOptions): Promise<DaemonStatus> {
     const projectRoot = resolve(options.projectRoot);
-    const paths = resolveDaemonPaths(projectRoot);
+    const paths = resolveAlembicDaemonPaths(projectRoot);
     const state = readDaemonState(paths.statePath);
 
     if (state?.pid && isProcessAlive(state.pid)) {

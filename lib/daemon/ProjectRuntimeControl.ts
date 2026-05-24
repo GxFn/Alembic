@@ -22,7 +22,6 @@ import {
   type ProjectRuntimeJobsSummary,
   type ProjectRuntimeScopeSummary,
   type ProjectRuntimeTarget,
-  resolveDaemonPaths,
 } from '@alembic/core/daemon';
 import { collectAiEnvOverrides, isAiEnvReady, WorkspaceSettingsStore } from '@alembic/core/shared';
 import {
@@ -30,8 +29,12 @@ import {
   type ProjectEntry,
   ProjectRegistry,
   type WorkspaceFacts,
-  WorkspaceResolver,
 } from '@alembic/core/workspace';
+import {
+  ProjectScopeRegistryStore,
+  resolveAlembicDaemonPaths,
+  resolveAlembicWorkspace,
+} from '../project-scope/ProjectScopeRegistry.js';
 import { type DaemonStatus, DaemonSupervisor } from './DaemonSupervisor.js';
 
 export type {
@@ -125,9 +128,7 @@ export class ProjectRuntimeControl {
 
   async listProjects(): Promise<ProjectRuntimeScopeSummary[]> {
     const state = this.readState();
-    const projects = ProjectRegistry.list().sort((a, b) =>
-      a.projectRoot.localeCompare(b.projectRoot)
-    );
+    const projects = collectRuntimeProjectTargets();
     return Promise.all(
       projects.map((project) =>
         this.buildProjectSummary({
@@ -449,7 +450,7 @@ export class ProjectRuntimeControl {
   ): Promise<ProjectRuntimeScopeSummary> {
     const projectRoot = resolve(options.projectRoot);
     const inspection = ProjectRegistry.inspect(projectRoot);
-    const resolver = WorkspaceResolver.fromProject(projectRoot);
+    const resolver = resolveAlembicWorkspace(projectRoot);
     const facts = resolver.toFacts();
     const projectExists = existsSync(projectRoot);
     const selected = sameProjectRoot(projectRoot, options.selectedProjectRoot ?? null);
@@ -479,12 +480,14 @@ export class ProjectRuntimeControl {
       ghost: facts.ghost,
       initializedBy: 'project-registry',
       internalAi: summarizeInternalAi(projectRoot, healthData),
-      jobs: summarizeJobs(resolveDaemonPaths(projectRoot).jobsDir),
+      jobs: summarizeJobs(resolveAlembicDaemonPaths(projectRoot).jobsDir),
       mode: facts.mode,
       projectExists,
       projectId: facts.projectId ?? options.entry?.id ?? inspection.projectId,
       projectRealpath: facts.projectRealpath,
       projectRoot: facts.targetProjectRoot,
+      projectScope: facts.projectScope,
+      projectScopeId: facts.projectScopeId,
       registered: options.entry !== null || inspection.registered,
       registry: {
         createdAt: options.entry?.createdAt ?? inspection.entry?.createdAt ?? null,
@@ -513,7 +516,18 @@ export class ProjectRuntimeControl {
     if (target.projectId) {
       const match = ProjectRegistry.list().find(({ entry }) => entry.id === target.projectId);
       if (!match) {
-        throw new Error(`Project is not registered: ${target.projectId}`);
+        const scope = new ProjectScopeRegistryStore()
+          .listScopes()
+          .find(
+            (candidate) =>
+              candidate.projectId === target.projectId ||
+              candidate.projectScopeId === target.projectId
+          );
+        if (!scope) {
+          throw new Error(`Project is not registered: ${target.projectId}`);
+        }
+        const projectRoot = scope.folders[0]?.path ?? scope.controlRoot.path;
+        return { entry: ProjectRegistry.get(projectRoot), projectRoot };
       }
       return match;
     }
@@ -524,7 +538,8 @@ export class ProjectRuntimeControl {
 
     const projectRoot = resolve(target.projectRoot);
     const entry = ProjectRegistry.get(projectRoot);
-    if (options.requireRegistered && !entry) {
+    const projectScopeMatch = new ProjectScopeRegistryStore().resolveFolder(projectRoot);
+    if (options.requireRegistered && !entry && !projectScopeMatch) {
       throw new Error(`Project is not registered: ${projectRoot}`);
     }
     return { entry, projectRoot };
@@ -693,6 +708,27 @@ function normalizeInternalAiSource(
     return value;
   }
   return 'unavailable';
+}
+
+function collectRuntimeProjectTargets(): Array<{
+  entry: ProjectEntry | null;
+  projectRoot: string;
+}> {
+  const byRoot = new Map<string, { entry: ProjectEntry | null; projectRoot: string }>();
+  for (const project of ProjectRegistry.list()) {
+    byRoot.set(comparableProjectRoot(project.projectRoot), project);
+  }
+  for (const scope of new ProjectScopeRegistryStore().listScopes()) {
+    for (const folder of scope.folders) {
+      const key = comparableProjectRoot(folder.path);
+      if (!byRoot.has(key)) {
+        byRoot.set(key, { entry: ProjectRegistry.get(folder.path), projectRoot: folder.path });
+      }
+    }
+  }
+  return [...byRoot.values()].sort((left, right) =>
+    left.projectRoot.localeCompare(right.projectRoot)
+  );
 }
 
 function emptyState(updatedAt = new Date(0).toISOString()): ProjectRuntimeControlState {

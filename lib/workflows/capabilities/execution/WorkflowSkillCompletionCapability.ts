@@ -12,7 +12,12 @@ import type { WriteZone } from '@alembic/core/io';
 import { pathGuard } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
 import { computeContentHash } from '@alembic/core/shared';
-import { resolveDataRoot, resolveProjectRoot, WorkspaceResolver } from '@alembic/core/workspace';
+import {
+  resolveDataRoot,
+  resolveProjectRoot,
+  type WorkspaceResolver,
+} from '@alembic/core/workspace';
+import { resolveAlembicWorkspace } from '../../../project-scope/ProjectScopeRegistry.js';
 import { INJECTABLE_SKILLS_DIR } from '../../../shared/package-assets.js';
 
 const logger = Logger.getInstance();
@@ -248,7 +253,7 @@ function resolveWorkflowSkillDeliveryScope(ctx: SkillContext) {
   try {
     const resolver =
       (container?.singletons?._workspaceResolver as WorkspaceResolver | undefined) ??
-      WorkspaceResolver.fromProject(projectRoot);
+      resolveAlembicWorkspace(projectRoot);
     const facts = resolver.toFacts();
     projectId = facts.projectId ?? facts.expectedProjectId;
   } catch {

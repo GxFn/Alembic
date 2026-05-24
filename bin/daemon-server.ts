@@ -11,7 +11,6 @@ import { join, resolve } from 'node:path';
 import {
   DAEMON_STATE_SCHEMA_VERSION,
   getPackageVersion,
-  resolveDaemonPaths,
   writeDaemonState,
 } from '@alembic/core/daemon';
 import { timerRegistry } from '@alembic/core/events';
@@ -21,6 +20,7 @@ import { markInterruptedDaemonJobs } from '../lib/daemon/DaemonJobRunner.js';
 import HttpServer from '../lib/http/HttpServer.js';
 import { readLatestSchemaMigrationVersion } from '../lib/infrastructure/database/SqliteDatabaseAccess.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
+import { resolveAlembicDaemonPaths } from '../lib/project-scope/ProjectScopeRegistry.js';
 import { DaemonFileChangeCollector } from '../lib/service/evolution/DaemonFileChangeCollector.js';
 import { DASHBOARD_DIR } from '../lib/shared/package-assets.js';
 import { shutdown } from '../lib/shared/shutdown.js';
@@ -50,7 +50,7 @@ async function main() {
     10
   );
   const token = process.env.ALEMBIC_DAEMON_TOKEN || randomBytes(32).toString('hex');
-  const paths = resolveDaemonPaths(projectRoot);
+  const paths = resolveAlembicDaemonPaths(projectRoot);
   const statePath = process.env.ALEMBIC_DAEMON_STATE_PATH || paths.statePath;
 
   process.env.ALEMBIC_PROJECT_DIR = projectRoot;

@@ -11,7 +11,7 @@ import {
   getPackageVersion,
 } from '@alembic/core/daemon';
 import { collectAiEnvOverrides, isAiEnvReady, WorkspaceSettingsStore } from '@alembic/core/shared';
-import { resolveProjectRoot, WorkspaceResolver } from '@alembic/core/workspace';
+import { resolveProjectRoot } from '@alembic/core/workspace';
 import express, { type Request } from 'express';
 import {
   buildAlembicRuntimeBoundary,
@@ -19,6 +19,7 @@ import {
 } from '../../daemon/RuntimeBoundary.js';
 import { readLatestSchemaMigrationVersion } from '../../infrastructure/database/SqliteDatabaseAccess.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
 
 const router = express.Router();
 const API_PREFIX = '/api/v1';
@@ -41,7 +42,7 @@ export interface ResidentSearchCapability {
 router.get('/health', (req, res) => {
   const container = getServiceContainer();
   const projectRoot = resolveProjectRoot(container);
-  const resolver = WorkspaceResolver.fromProject(projectRoot);
+  const resolver = resolveAlembicWorkspace(projectRoot);
   const workspaceFacts = resolver.toFacts();
   const mode = process.env.ALEMBIC_DAEMON_MODE === '1' ? 'daemon' : 'api';
   const origin = buildRequestOrigin(req);
@@ -54,6 +55,8 @@ router.get('/health', (req, res) => {
     dataRootSource: workspaceFacts.dataRootSource,
     databasePath: resolver.databasePath,
     projectId: resolver.projectId,
+    projectScope: workspaceFacts.projectScope,
+    projectScopeId: workspaceFacts.projectScopeId,
     projectRoot: resolver.projectRoot,
     runtimeDir: resolver.runtimeDir,
     schemaMigrationVersion,
@@ -150,6 +153,9 @@ export function buildDaemonCapabilities(
       available: true,
       endpoint: ALEMBIC_JOB_PROCESS_EVENTS_PATH,
     },
+    projectScope: {
+      available: true,
+    },
   });
 }
 
@@ -203,18 +209,24 @@ export function buildResidentServiceStatus(
     route: 'local-alembic-daemon',
     serviceScope: {
       diagnosticPaths: {
+        controlRoot: options.projectIdentity.projectScope?.controlRoot ?? null,
         databasePath: options.projectIdentity.databasePath ?? null,
         dataRoot: options.projectIdentity.dataRoot,
         projectRoot: options.projectIdentity.projectRoot,
         runtimeDir: options.projectIdentity.runtimeDir,
         statePath: options.statePath ?? null,
       },
-      displayName: options.projectIdentity.projectId ?? 'Alembic current service scope',
+      displayName:
+        options.projectIdentity.projectScope?.displayName ??
+        options.projectIdentity.projectId ??
+        'Alembic current service scope',
       kind: 'current-project',
       // projectIdentity 只携带非路径身份摘要；路径只作为 diagnosticPaths 给排障使用。
       projectIdentity: {
         dataRootSource: options.projectIdentity.dataRootSource,
         projectId: options.projectIdentity.projectId,
+        projectScope: options.projectIdentity.projectScope ?? null,
+        projectScopeId: options.projectIdentity.projectScopeId ?? null,
         schemaMigrationVersion: options.projectIdentity.schemaMigrationVersion ?? null,
         workspaceMode: options.projectIdentity.workspaceMode ?? null,
       },
@@ -241,6 +253,9 @@ export function buildResidentSearchCapability(): ResidentSearchCapability {
 }
 
 function buildResidentServiceScopeId(identity: AlembicRuntimeProjectIdentity): string {
+  if (identity.projectScopeId) {
+    return `project-scope:${identity.projectScopeId}`;
+  }
   if (identity.projectId) {
     return `project:${identity.projectId}`;
   }
