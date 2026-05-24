@@ -21,6 +21,7 @@ import {
   createAlembicRepositories,
 } from '@alembic/core/repositories';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
+import { JobProcessEventRecorder } from '../../daemon/JobProcessEventRecorder.js';
 import Gateway from '../../governance/gateway/Gateway.js';
 import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../infrastructure/audit/AuditStore.js';
@@ -88,6 +89,18 @@ export function register(c: ServiceContainer) {
 
   c.singleton('jobStore', (ct: ServiceContainer) => {
     return new JobStore({ projectRoot: resolveProjectRoot(ct) });
+  });
+
+  c.singleton('jobProcessEventRecorder', () => {
+    return new JobProcessEventRecorder({
+      broadcast: (payload) => {
+        try {
+          _getRealtimeService().broadcastJobProcessEvent(payload);
+        } catch {
+          /* RealtimeService is unavailable in CLI and some tests. */
+        }
+      },
+    });
   });
 
   // ═══ WriteZone ═══

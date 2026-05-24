@@ -1,5 +1,10 @@
 import { timingSafeEqual } from 'node:crypto';
-import type { DaemonJobKind, DaemonJobRecord, DaemonJobStatus } from '@alembic/core/daemon';
+import {
+  ALEMBIC_JOB_PROCESS_EVENTS_PATH,
+  type DaemonJobKind,
+  type DaemonJobRecord,
+  type DaemonJobStatus,
+} from '@alembic/core/daemon';
 import Logger from '@alembic/core/logging';
 import express, { type Request, type Response } from 'express';
 import { z } from 'zod';
@@ -7,7 +12,12 @@ import {
   mergeAgentEfficiencySummaries,
   normalizeAgentEfficiencySummary,
 } from '#service/bootstrap/BootstrapEfficiency.js';
-import { cancelDaemonJob, enqueueDaemonJob, getJobStore } from '../../daemon/DaemonJobRunner.js';
+import {
+  cancelDaemonJob,
+  enqueueDaemonJob,
+  getJobProcessEventRecorder,
+  getJobStore,
+} from '../../daemon/DaemonJobRunner.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';
 
@@ -89,6 +99,29 @@ router.get('/', (req: Request, res: Response): void => {
   });
 });
 
+router.get('/:jobId/events', (req: Request, res: Response): void => {
+  const container = getServiceContainer();
+  const store = getJobStore(container);
+  const jobId = singleParam(req.params.jobId);
+  const job = store.get(jobId);
+  if (!job) {
+    res.status(404).json({ success: false, error: 'Job not found' });
+    return;
+  }
+
+  const recorder = getJobProcessEventRecorder(container);
+  const events = buildJobProcessEventsResponse({
+    afterSequence: parseSequence(req.query.afterSequence ?? req.query.after),
+    jobId,
+    limit: parseLimit(req.query.limit),
+    recorder,
+  });
+  res.json({
+    success: true,
+    data: events,
+  });
+});
+
 router.get('/:jobId', (req: Request, res: Response): void => {
   const container = getServiceContainer();
   const store = getJobStore(container);
@@ -122,6 +155,7 @@ router.post('/bootstrap', validate(BootstrapJobBody), (req: Request, res: Respon
       job: decorateJobForResponse(job, getLiveBootstrapSession(container)),
       jobId: job.id,
       statusUrl: buildJobStatusUrl(req, job.id),
+      eventsUrl: buildJobProcessEventsUrl(req, job.id),
       dashboardUrl: buildJobsApiOrigin(req),
     },
   });
@@ -145,6 +179,7 @@ router.post('/rescan', validate(RescanJobBody), (req: Request, res: Response): v
       job: decorateJobForResponse(job, getLiveBootstrapSession(container)),
       jobId: job.id,
       statusUrl: buildJobStatusUrl(req, job.id),
+      eventsUrl: buildJobProcessEventsUrl(req, job.id),
       dashboardUrl: buildJobsApiOrigin(req),
     },
   });
@@ -163,6 +198,27 @@ export function buildJobsApiOrigin(request: Request): string {
 
 export function buildJobStatusUrl(request: Request, jobId: string): string {
   return `${buildJobsApiOrigin(request)}/api/v1/jobs/${encodeURIComponent(jobId)}`;
+}
+
+export function buildJobProcessEventsUrl(request: Request, jobId: string): string {
+  return `${buildJobsApiOrigin(request)}${ALEMBIC_JOB_PROCESS_EVENTS_PATH.replace(
+    ':jobId',
+    encodeURIComponent(jobId)
+  )}`;
+}
+
+export function buildJobProcessEventsResponse(options: {
+  afterSequence?: number;
+  includeHidden?: boolean;
+  jobId: string;
+  limit?: number;
+  recorder: ReturnType<typeof getJobProcessEventRecorder>;
+}) {
+  return options.recorder.list(options.jobId, {
+    afterSequence: options.afterSequence,
+    includeHidden: options.includeHidden,
+    limit: options.limit,
+  });
 }
 
 router.post('/:jobId/cancel', validate(CancelJobBody), (req: Request, res: Response): void => {
@@ -797,6 +853,15 @@ function parseLimit(value: unknown): number {
   const raw = Array.isArray(value) ? value[0] : value;
   const parsed = typeof raw === 'string' ? Number.parseInt(raw, 10) : Number(raw);
   return Number.isFinite(parsed) ? parsed : 50;
+}
+
+function parseSequence(value: unknown): number | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === undefined || raw === null || raw === '') {
+    return undefined;
+  }
+  const parsed = typeof raw === 'string' ? Number.parseInt(raw, 10) : Number(raw);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : undefined;
 }
 
 function parseBooleanQuery(value: unknown): boolean {

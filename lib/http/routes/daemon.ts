@@ -1,4 +1,5 @@
 import {
+  ALEMBIC_JOB_PROCESS_EVENTS_PATH,
   type AlembicResidentCapabilityOverrides,
   type AlembicResidentServiceStatus,
   type AlembicRuntimeCapabilities,
@@ -145,6 +146,10 @@ export function buildDaemonCapabilities(
     fileMonitorEndpoint: `${API_PREFIX}/file-changes`,
     fileMonitorMode: options.fileMonitorAvailable ? 'daemon-git-worktree' : 'disabled',
     internalAi: options.internalAi,
+    jobProcessEvents: {
+      available: true,
+      endpoint: ALEMBIC_JOB_PROCESS_EVENTS_PATH,
+    },
   });
 }
 

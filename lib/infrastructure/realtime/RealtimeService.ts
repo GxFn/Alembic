@@ -5,6 +5,7 @@
 
 import Logger from '@alembic/core/logging';
 import { Server as SocketIOServer } from 'socket.io';
+import type { JobProcessEventBroadcastPayload } from '../../daemon/JobProcessEventRecorder.js';
 
 export class RealtimeService {
   io: SocketIOServer;
@@ -132,6 +133,14 @@ export class RealtimeService {
   broadcastEvent(eventName: string, data: unknown) {
     // 直接透传 data（不包装 type/timestamp），保持与前端 hook 期望的数据结构一致
     this.io.to('notifications').emit(eventName, data);
+  }
+
+  /** 广播 Job 过程事件（只承载 Core developer view，不泄露 raw/secret 内容） */
+  broadcastJobProcessEvent(payload: JobProcessEventBroadcastPayload) {
+    this.io.to('notifications').emit('job:process-event', {
+      ...payload,
+      timestamp: Date.now(),
+    });
   }
 
   /** 获取 Socket.io 实例 */

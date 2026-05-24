@@ -1,7 +1,10 @@
 import type { DaemonJobRecord } from '@alembic/core/daemon';
 import type { Request } from 'express';
 import { describe, expect, test } from 'vitest';
+import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
 import {
+  buildJobProcessEventsResponse,
+  buildJobProcessEventsUrl,
   buildJobStatusUrl,
   buildJobsApiOrigin,
   decorateJobForResponse,
@@ -15,12 +18,56 @@ describe('jobs route URL helpers', () => {
     expect(buildJobStatusUrl(request, 'bootstrap_abc')).toBe(
       'http://127.0.0.1:39127/api/v1/jobs/bootstrap_abc'
     );
+    expect(buildJobProcessEventsUrl(request, 'bootstrap_abc')).toBe(
+      'http://127.0.0.1:39127/api/v1/jobs/bootstrap_abc/events'
+    );
   });
 
   test('falls back to the local socket address and port', () => {
     const request = makeRequest({ localAddress: '0.0.0.0', localPort: 39127 });
 
     expect(buildJobsApiOrigin(request)).toBe('http://127.0.0.1:39127');
+  });
+});
+
+describe('jobs process event response', () => {
+  test('returns bounded Core process event views for Dashboard consumption', () => {
+    const recorder = new JobProcessEventRecorder({ maxEventsPerJob: 5 });
+    recorder.record({
+      jobId: 'bootstrap_live',
+      kind: 'workflow',
+      phase: 'session',
+      summary: 'Bootstrap session started',
+      title: 'Bootstrap session started',
+    });
+    recorder.record({
+      jobId: 'bootstrap_live',
+      kind: 'summary',
+      phase: 'dimension',
+      severity: 'success',
+      summary: 'Architecture completed',
+      title: 'Bootstrap dimension completed',
+    });
+
+    const response = buildJobProcessEventsResponse({
+      afterSequence: 1,
+      jobId: 'bootstrap_live',
+      limit: 10,
+      recorder,
+    });
+
+    expect(response.endpointCapability).toMatchObject({
+      available: true,
+      endpoint: '/api/v1/jobs/:jobId/events',
+    });
+    expect(response.events).toHaveLength(1);
+    expect(response.developerViews).toEqual([
+      expect.objectContaining({
+        eventId: 'bootstrap_live_process_0002',
+        sequence: 2,
+        title: 'Bootstrap dimension completed',
+      }),
+    ]);
   });
 });
 

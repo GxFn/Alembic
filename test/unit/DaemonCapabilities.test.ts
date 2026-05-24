@@ -73,6 +73,11 @@ describe('daemon capabilities', () => {
     });
     expect(capabilities).not.toHaveProperty('runtimeBoundary');
     expect(capabilities.jobs.kinds).toEqual(['bootstrap', 'rescan']);
+    expect(capabilities.jobs.processEvents).toMatchObject({
+      available: true,
+      endpoint: '/api/v1/jobs/:jobId/events',
+      supportedKinds: expect.arrayContaining(['workflow', 'summary', 'error']),
+    });
     expect(capabilities.fileMonitor).toMatchObject({
       acceptedEventSources: ['host-edit', 'git-head', 'git-worktree'],
       available: true,
@@ -122,6 +127,7 @@ describe('daemon capabilities', () => {
       jobs: {
         endpoints: {
           bootstrap: '/api/v1/jobs/bootstrap',
+          events: '/api/v1/jobs/:jobId/events',
           list: '/api/v1/jobs',
           rescan: '/api/v1/jobs/rescan',
         },
