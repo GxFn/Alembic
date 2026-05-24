@@ -111,6 +111,102 @@ describe('BootstrapProcessEvents', () => {
     expect(events[0].sequence).toBeUndefined();
   });
 
+  test('keeps short Agent LLM output metadata without marking Alembic truncation', () => {
+    const visibleText = 'Received 394 visible character(s) from the provider.';
+
+    const events = buildBootstrapAgentProgressProcessEvents({
+      dimId: 'architecture',
+      label: 'Architecture',
+      sessionId: 'bs_1',
+      event: {
+        type: 'agent_process_event',
+        agentId: 'agent_1',
+        preset: 'insight',
+        timestamp: 1,
+        processEvent: {
+          content: {
+            role: 'assistant',
+            text: visibleText,
+          },
+          createdAt: '2026-05-24T10:00:00.000Z',
+          dimensionId: 'architecture',
+          displayPolicy: 'full',
+          kind: 'llm.output',
+          metadata: {
+            finishReason: 'length',
+            reasoningContentOmitted: true,
+            visibleTextChars: visibleText.length,
+          },
+          phase: 'RUN',
+          retention: 'job-retained',
+          severity: 'info',
+          sourceClass: 'developer-facing',
+          summary: 'LLM output received.',
+          targetName: 'Architecture',
+          title: 'LLM output received',
+        },
+      },
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0].content?.text).toBe(visibleText);
+    expect(events[0].metadata).toMatchObject({
+      contentOriginalChars: visibleText.length,
+      contentRetainedChars: visibleText.length,
+      contentTruncated: false,
+      contentTruncatedChars: 0,
+      contentTruncationLimit: 6000,
+      finishReason: 'length',
+      reasoningContentOmitted: true,
+      visibleTextChars: visibleText.length,
+    });
+    expect(events[0].metadata).not.toHaveProperty('contentTruncationSource');
+  });
+
+  test('marks long Agent LLM output truncation with machine-readable fields', () => {
+    const longText = 'x'.repeat(6105);
+
+    const events = buildBootstrapAgentProgressProcessEvents({
+      dimId: 'architecture',
+      sessionId: 'bs_1',
+      event: {
+        type: 'agent_process_event',
+        agentId: 'agent_1',
+        preset: 'insight',
+        timestamp: 1,
+        processEvent: {
+          content: {
+            role: 'assistant',
+            text: longText,
+          },
+          displayPolicy: 'full',
+          kind: 'llm.output',
+          metadata: {
+            finishReason: 'stop',
+            visibleTextChars: longText.length,
+          },
+          retention: 'job-retained',
+          sourceClass: 'developer-facing',
+          title: 'LLM output received',
+        },
+      },
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0].content?.text?.startsWith('x'.repeat(6000))).toBe(true);
+    expect(events[0].content?.text).toContain('...[truncated 105 chars]');
+    expect(events[0].metadata).toMatchObject({
+      contentOriginalChars: 6105,
+      contentRetainedChars: 6000,
+      contentTruncated: true,
+      contentTruncatedChars: 105,
+      contentTruncationLimit: 6000,
+      contentTruncationSource: 'alembic-process-event-bridge',
+      finishReason: 'stop',
+      visibleTextChars: 6105,
+    });
+  });
+
   test('drops Agent process progress that is not developer-visible', () => {
     const baseEvent = {
       type: 'agent_process_event',
@@ -153,6 +249,21 @@ describe('BootstrapProcessEvents', () => {
         sessionId: 'bs_1',
       })
     ).toEqual([]);
+    for (const sourceClass of ['raw-provider', 'secret'] as const) {
+      expect(
+        buildBootstrapAgentProgressProcessEvents({
+          dimId: 'architecture',
+          event: {
+            ...baseEvent,
+            processEvent: {
+              ...baseEvent.processEvent,
+              sourceClass,
+            },
+          },
+          sessionId: 'bs_1',
+        })
+      ).toEqual([]);
+    }
   });
 
   test('projects visible output, tool calls, and self-check events from AgentRunResult', () => {
@@ -212,6 +323,54 @@ describe('BootstrapProcessEvents', () => {
     expect(JSON.stringify(events)).toContain('Producer output');
     expect(JSON.stringify(events)).toContain('quality-gate-diagnostics');
     expect(JSON.stringify(events)).not.toContain('Bearer abcdefghijklmnop');
+  });
+
+  test('marks truncated dimension visible output by section', () => {
+    const longAnalyzeOutput = 'A'.repeat(6012);
+    const finalOutput = 'Final short';
+    const events = buildBootstrapDimensionResultProcessEvents({
+      dimId: 'architecture',
+      label: 'Architecture',
+      projection: {
+        analyzeResult: { reply: longAnalyzeOutput },
+        runtimeToolCalls: [],
+      } as unknown as BootstrapDimensionProjection,
+      runResult: {
+        reply: finalOutput,
+        status: 'success',
+      },
+      sessionId: 'bs_1',
+    });
+
+    const outputEvent = events.find((event) => event.kind === 'llm.output');
+    const metadata = outputEvent?.metadata as Record<string, unknown>;
+    expect(outputEvent?.content?.text).toContain('...[truncated 12 chars]');
+    expect(metadata).toMatchObject({
+      contentOriginalChars: longAnalyzeOutput.length + finalOutput.length,
+      contentRetainedChars: 6000 + finalOutput.length,
+      contentTruncated: true,
+      contentTruncatedChars: 12,
+      contentTruncationLimit: 6000,
+      contentTruncationSource: 'alembic-process-event-bridge',
+      outputSections: ['Analyze', 'Final'],
+      outputTruncatedSections: ['Analyze'],
+    });
+    expect(metadata.outputSectionStats).toEqual([
+      expect.objectContaining({
+        name: 'Analyze',
+        originalChars: longAnalyzeOutput.length,
+        retainedChars: 6000,
+        truncated: true,
+        truncatedChars: 12,
+      }),
+      expect.objectContaining({
+        name: 'Final',
+        originalChars: finalOutput.length,
+        retainedChars: finalOutput.length,
+        truncated: false,
+        truncatedChars: 0,
+      }),
+    ]);
   });
 
   test('projects key findings digest from dimension digest and analysis report', () => {

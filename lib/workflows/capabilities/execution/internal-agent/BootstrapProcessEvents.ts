@@ -138,9 +138,10 @@ export function buildBootstrapAgentProgressProcessEvents({
   if (!kind || !title) {
     return [];
   }
+  const normalizedContent = normalizeProcessEventContent(processEvent.content);
   return [
     {
-      content: normalizeProcessEventContent(processEvent.content),
+      content: normalizedContent.content,
       correlationId: stringValue(processEvent.correlationId) || null,
       createdAt: stringValue(processEvent.createdAt) || undefined,
       dimensionId: stringValue(processEvent.dimensionId) || dimId,
@@ -149,6 +150,7 @@ export function buildBootstrapAgentProgressProcessEvents({
       kind,
       metadata: {
         ...asRecord(sanitizeValue(processEvent.metadata || {}, 0)),
+        ...normalizedContent.metadata,
         agentId: event.agentId,
         preset: event.preset,
         progressType: event.type,
@@ -232,6 +234,25 @@ interface NormalizedFindingItem {
   finding: string;
   importance?: number;
   source: string;
+}
+
+interface NormalizedProcessEventContent {
+  content: BootstrapProcessEventDraft['content'];
+  metadata: Record<string, unknown>;
+}
+
+interface TextProjection {
+  limit: number;
+  originalChars: number;
+  retainedChars: number;
+  text: string;
+  truncated: boolean;
+  truncatedChars: number;
+}
+
+interface OutputSectionProjection {
+  name: string;
+  projection: TextProjection;
 }
 
 function buildFindingsDigestEvent({
@@ -384,10 +405,14 @@ function buildVisibleOutputEvent({
     ['Produce', projection.produceResult?.reply],
     ['Final', runResult.reply],
   ]);
+  const projectedSections = sections.map(([name, value]) => ({
+    name,
+    projection: projectText(value, MAX_TEXT_CHARS),
+  }));
   const text =
-    sections.length > 0
-      ? sections
-          .map(([name, value]) => `## ${name}\n\n${truncateText(value, MAX_TEXT_CHARS)}`)
+    projectedSections.length > 0
+      ? projectedSections
+          .map(({ name, projection: textProjection }) => `## ${name}\n\n${textProjection.text}`)
           .join('\n\n')
       : '';
   if (!text && !projection.combinedTokenUsage) {
@@ -404,8 +429,9 @@ function buildVisibleOutputEvent({
     dimensionId: dimId,
     kind: 'llm.output',
     metadata: {
+      ...buildOutputSectionTruncationMetadata(projectedSections),
       dimensionId: dimId,
-      outputSections: sections.map(([name]) => name),
+      outputSections: projectedSections.map(({ name }) => name),
       sessionId,
       status: runResult.status || null,
       tokenUsage: projection.combinedTokenUsage,
@@ -602,20 +628,82 @@ function isDeveloperVisibleAgentProcessEvent(event: AgentProgressProcessEvent): 
 
 function normalizeProcessEventContent(
   content: AgentProgressProcessEvent['content'] | undefined
-): BootstrapProcessEventDraft['content'] {
+): NormalizedProcessEventContent {
   if (!content) {
-    return null;
+    return {
+      content: null,
+      metadata: buildContentTruncationMetadata(emptyTextProjection()),
+    };
   }
   const role = pickAllowedString(content.role, PROCESS_EVENT_CONTENT_ROLES) || null;
+  const textProjection =
+    typeof content.text === 'string'
+      ? projectText(content.text, MAX_TEXT_CHARS)
+      : emptyTextProjection();
   return {
-    data: sanitizeValue(content.data, 0),
-    language: stringValue(content.language) || null,
-    mimeType: stringValue(content.mimeType) || null,
-    role,
-    text:
-      typeof content.text === 'string'
-        ? redactSecretText(truncateText(content.text, MAX_TEXT_CHARS))
-        : null,
+    content: {
+      data: sanitizeValue(content.data, 0),
+      language: stringValue(content.language) || null,
+      mimeType: stringValue(content.mimeType) || null,
+      role,
+      text: typeof content.text === 'string' ? textProjection.text : null,
+    },
+    metadata: buildContentTruncationMetadata(textProjection),
+  };
+}
+
+function buildOutputSectionTruncationMetadata(
+  sections: OutputSectionProjection[]
+): Record<string, unknown> {
+  const totals = summarizeTextProjections(sections.map(({ projection }) => projection));
+  return {
+    ...buildContentTruncationMetadata(totals),
+    outputSectionStats: sections.map(({ name, projection }) => ({
+      name,
+      originalChars: projection.originalChars,
+      retainedChars: projection.retainedChars,
+      truncated: projection.truncated,
+      truncatedChars: projection.truncatedChars,
+    })),
+    outputTruncatedSections: sections
+      .filter(({ projection }) => projection.truncated)
+      .map(({ name }) => name),
+  };
+}
+
+function buildContentTruncationMetadata(projection: TextProjection): Record<string, unknown> {
+  return {
+    contentOriginalChars: projection.originalChars,
+    contentRetainedChars: projection.retainedChars,
+    contentTruncated: projection.truncated,
+    contentTruncatedChars: projection.truncatedChars,
+    contentTruncationLimit: projection.limit,
+    ...(projection.truncated ? { contentTruncationSource: 'alembic-process-event-bridge' } : {}),
+  };
+}
+
+function summarizeTextProjections(projections: TextProjection[]): TextProjection {
+  const totals = projections.reduce(
+    (acc, projection) => ({
+      originalChars: acc.originalChars + projection.originalChars,
+      retainedChars: acc.retainedChars + projection.retainedChars,
+      truncated: acc.truncated || projection.truncated,
+      truncatedChars: acc.truncatedChars + projection.truncatedChars,
+    }),
+    {
+      originalChars: 0,
+      retainedChars: 0,
+      truncated: false,
+      truncatedChars: 0,
+    }
+  );
+  return {
+    limit: MAX_TEXT_CHARS,
+    originalChars: totals.originalChars,
+    retainedChars: totals.retainedChars,
+    text: '',
+    truncated: totals.truncated,
+    truncatedChars: totals.truncatedChars,
   };
 }
 
@@ -735,6 +823,40 @@ function dedupeSections(sections: Array<[string, unknown]>): Array<[string, stri
 
 function redactSecretText(text: string): string {
   return text.replace(SECRET_VALUE_PATTERN, '[redacted-secret]');
+}
+
+function projectText(text: string, maxChars: number): TextProjection {
+  const safeText = redactSecretText(text);
+  if (safeText.length <= maxChars) {
+    return {
+      limit: maxChars,
+      originalChars: safeText.length,
+      retainedChars: safeText.length,
+      text: safeText,
+      truncated: false,
+      truncatedChars: 0,
+    };
+  }
+  const retainedText = safeText.slice(0, maxChars);
+  return {
+    limit: maxChars,
+    originalChars: safeText.length,
+    retainedChars: retainedText.length,
+    text: `${retainedText}\n...[truncated ${safeText.length - maxChars} chars]`,
+    truncated: true,
+    truncatedChars: safeText.length - maxChars,
+  };
+}
+
+function emptyTextProjection(): TextProjection {
+  return {
+    limit: MAX_TEXT_CHARS,
+    originalChars: 0,
+    retainedChars: 0,
+    text: '',
+    truncated: false,
+    truncatedChars: 0,
+  };
 }
 
 function truncateText(text: string, maxChars: number): string {

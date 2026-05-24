@@ -69,6 +69,54 @@ describe('jobs process event response', () => {
       }),
     ]);
   });
+
+  test('preserves process event completeness metadata in developer views', () => {
+    const recorder = new JobProcessEventRecorder({ maxEventsPerJob: 5 });
+    recorder.record({
+      content: {
+        mimeType: 'text/markdown',
+        role: 'assistant',
+        text: 'Received 394 visible character(s).',
+      },
+      jobId: 'bootstrap_live',
+      kind: 'llm.output',
+      metadata: {
+        contentOriginalChars: 34,
+        contentRetainedChars: 34,
+        contentTruncated: false,
+        contentTruncatedChars: 0,
+        contentTruncationLimit: 6000,
+        finishReason: 'length',
+        reasoningContentOmitted: true,
+        visibleTextChars: 394,
+      },
+      phase: 'dimension-output',
+      summary: 'LLM output received.',
+      title: 'LLM output received',
+    });
+
+    const response = buildJobProcessEventsResponse({
+      jobId: 'bootstrap_live',
+      limit: 10,
+      recorder,
+    });
+
+    expect(response.developerViews).toEqual([
+      expect.objectContaining({
+        content: expect.objectContaining({
+          text: 'Received 394 visible character(s).',
+        }),
+        kind: 'llm.output',
+        metadata: expect.objectContaining({
+          contentTruncated: false,
+          contentTruncationLimit: 6000,
+          finishReason: 'length',
+          reasoningContentOmitted: true,
+          visibleTextChars: 394,
+        }),
+      }),
+    ]);
+  });
 });
 
 describe('jobs route response decoration', () => {
