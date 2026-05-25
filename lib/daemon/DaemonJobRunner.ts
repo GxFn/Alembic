@@ -14,6 +14,7 @@ import {
   JobProcessEventRecorder,
   type JobProcessEventRecordInput,
 } from './JobProcessEventRecorder.js';
+import { attachPcvN9ObservabilityCarry } from './PcvObservabilityLinkage.js';
 
 interface LoggerLike {
   error(message: string, meta?: Record<string, unknown>): void;
@@ -897,6 +898,12 @@ function recordBootstrapProcessEventDrafts({
         };
       }
     }
+    metadata = attachPcvN9ObservabilityCarry({
+      artifactRefs,
+      draft,
+      jobId,
+      metadata,
+    });
     recordJobProcessEvent(recorder, {
       ...draft,
       artifactRefs,

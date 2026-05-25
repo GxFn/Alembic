@@ -297,6 +297,180 @@ describe('attachBootstrapProcessEventBridge', () => {
     expect(artifact?.content).toBe(fullPrompt);
   });
 
+  test('carries PCV N9 artifact, trace, metrics, and source refs through job process events', () => {
+    const eventBus = new EventEmitter();
+    const recorder = new JobProcessEventRecorder();
+    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-runner-data-'));
+    const cleanup = attachBootstrapProcessEventBridge({
+      container: makeContainer(
+        new JobStore({ projectRoot: dataRoot }),
+        { eventBus },
+        { _workspaceResolver: { dataRoot } }
+      ),
+      jobId: 'job_pcv_n9_linked',
+      logger: makeLogger(),
+      recorder,
+    });
+
+    const fullPrompt = 'Analyze src/index.ts and record source-backed findings.';
+    eventBus.emit('bootstrap:process-events', {
+      sessionId: 'bs_n9',
+      taskId: 'architecture',
+      targetName: 'Architecture',
+      events: [
+        {
+          kind: 'llm.input',
+          title: 'N9 LLM input prepared',
+          content: {
+            mimeType: 'text/markdown',
+            role: 'developer',
+            text: 'Timeline input summary',
+          },
+          metadata: {
+            inputStageProfile: 'analyze',
+            llmMetrics: { estimatedTokens: 13, messageCount: 2 },
+            sourceRefs: ['src/index.ts:42'],
+            traceEnvelope: {
+              chainNodeId: 'N9-agent-analyze-quality',
+              correlationId: 'trace-n9-1',
+              sessionId: 'bs_n9',
+              stageId: 'analyze',
+            },
+          },
+          phase: 'analyze',
+          textArtifactCandidate: {
+            kind: 'llm-input-full-redacted',
+            label: 'Full redacted N9 LLM input',
+            mimeType: 'text/markdown; charset=utf-8',
+            originalChars: fullPrompt.length,
+            redactionState: 'developer-visible-redacted',
+            text: fullPrompt,
+          },
+        },
+      ],
+    });
+
+    cleanup?.();
+
+    const list = recorder.list('job_pcv_n9_linked', { limit: 10 });
+    const event = list.developerViews.find(
+      (candidate) => candidate.title === 'N9 LLM input prepared'
+    );
+    expect(event).toBeDefined();
+    expect(event?.artifactRefs[0]?.ref).toMatch(
+      /^\/api\/v1\/jobs\/job_pcv_n9_linked\/artifacts\/llm-input-full-redacted-architecture-[a-f0-9]+\.md$/
+    );
+    expect(event?.metadata).toMatchObject({
+      pcvN9Observability: {
+        evidenceLinks: {
+          artifactRefs: [event?.artifactRefs[0]?.ref],
+          metricsPath: 'metadata.llmMetrics',
+          sourceRefs: ['src/index.ts:42'],
+          traceId: 'trace-n9-1',
+        },
+        jobId: 'job_pcv_n9_linked',
+        linkageStatus: 'linked',
+        missingLinkReasons: [],
+        nodeId: 'N9-agent-analyze-quality',
+        nodeIdentitySource: 'agent-explicit',
+        sessionId: 'bs_n9',
+      },
+      traceEnvelope: {
+        artifactRefs: [event?.artifactRefs[0]?.ref],
+        chainNodeId: 'N9-agent-analyze-quality',
+        jobId: 'job_pcv_n9_linked',
+        metricsPath: 'metadata.llmMetrics',
+        nodeId: 'N9-agent-analyze-quality',
+        pcvNodeId: 'N9-agent-analyze-quality',
+        sourceRefs: ['src/index.ts:42'],
+        traceId: 'trace-n9-1',
+      },
+    });
+
+    const artifactId = String(event?.metadata.artifactId);
+    const artifact = readJobProcessEventArtifact({
+      artifactId,
+      dataRoot,
+      jobId: 'job_pcv_n9_linked',
+    });
+    expect(artifact?.content).toBe(fullPrompt);
+  });
+
+  test('reports precise PCV N9 missing-link reasons when Agent evidence is incomplete', () => {
+    const eventBus = new EventEmitter();
+    const recorder = new JobProcessEventRecorder();
+    const cleanup = attachBootstrapProcessEventBridge({
+      container: makeContainer(new JobStore({ projectRoot: makeProjectRoot() }), { eventBus }),
+      jobId: 'job_pcv_n9_gap',
+      logger: makeLogger(),
+      recorder,
+    });
+
+    eventBus.emit('bootstrap:process-events', {
+      sessionId: 'bs_n9_gap',
+      taskId: 'architecture',
+      targetName: 'Architecture',
+      events: [
+        {
+          kind: 'llm.input',
+          title: 'Analyze input without full linkage',
+          content: {
+            mimeType: 'text/markdown',
+            role: 'developer',
+            text: 'Analyze only.',
+          },
+          metadata: {
+            inputStageProfile: 'analyze',
+          },
+          phase: 'analyze',
+        },
+      ],
+    });
+
+    cleanup?.();
+
+    const event = recorder
+      .list('job_pcv_n9_gap', { limit: 10 })
+      .developerViews.find((candidate) => candidate.title === 'Analyze input without full linkage');
+    expect(event?.metadata).toMatchObject({
+      pcvN9Observability: {
+        evidenceLinks: {
+          artifactRefs: [],
+          metricsPath: null,
+          sourceRefs: [],
+          traceId: null,
+        },
+        firstFix: [
+          'Attach a redacted analysis artifactRef or report field to the N9 process event.',
+          'Carry correlationId/traceId through the N9 process event trace envelope.',
+          'Attach llmMetrics to the N9 LLM input/output or quality-gate process event.',
+          'Carry file-level sourceRefs or referencedFiles used by N9 note_finding evidence.',
+        ],
+        jobId: 'job_pcv_n9_gap',
+        linkageStatus: 'blocked-by-observability-gap',
+        missingLinkReasons: [
+          'artifact_missing',
+          'trace_id_missing',
+          'metrics_missing',
+          'source_ref_missing',
+        ],
+        nodeId: 'N9-agent-analyze-quality',
+        nodeIdentitySource: 'host-stage-profile',
+        sessionId: 'bs_n9_gap',
+      },
+      traceEnvelope: {
+        artifactRefs: [],
+        chainNodeId: 'N9-agent-analyze-quality',
+        jobId: 'job_pcv_n9_gap',
+        metricsPath: null,
+        nodeId: 'N9-agent-analyze-quality',
+        pcvNodeId: 'N9-agent-analyze-quality',
+        sourceRefs: [],
+        traceId: null,
+      },
+    });
+  });
+
   test('records process event drafts carried by completed task results', () => {
     const eventBus = new EventEmitter();
     const recorder = new JobProcessEventRecorder();
