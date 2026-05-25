@@ -139,15 +139,24 @@ function resolvePcvN9NodeIdentity({
   nodeId: typeof PCV_N9_NODE_ID | null;
   source: PcvN9NodeIdentitySource | null;
 } {
-  const explicitNodeId =
-    stringValue(metadata.pcvNodeId) ||
-    stringValue(metadata.nodeId) ||
-    stringValue(metadata.chainNodeId) ||
-    stringValue(asRecord(metadata.pcvNode)?.nodeId) ||
-    stringValue(traceEnvelope?.pcvNodeId) ||
-    stringValue(traceEnvelope?.nodeId) ||
-    stringValue(traceEnvelope?.chainNodeId);
-  if (explicitNodeId === PCV_N9_NODE_ID) {
+  const pcvNode = asRecord(metadata.pcvNode);
+  const pcvNodeEvidence = asRecord(metadata.pcvNodeEvidence);
+  const explicitNodeIds = [
+    metadata.pcvNodeId,
+    metadata.nodeId,
+    metadata.chainNodeId,
+    pcvNode?.nodeId,
+    // AlembicAgent 当前把 N9 compact evidence 放在 nested metadata.pcvNodeEvidence。
+    // 这里把 nested node id 视作 explicit identity，避免退回 host-stage 推断。
+    pcvNodeEvidence?.nodeId,
+    pcvNodeEvidence?.chainNodeId,
+    traceEnvelope?.pcvNodeId,
+    traceEnvelope?.nodeId,
+    traceEnvelope?.chainNodeId,
+  ]
+    .map((value) => stringValue(value))
+    .filter((value): value is string => Boolean(value));
+  if (explicitNodeIds.includes(PCV_N9_NODE_ID)) {
     return { applies: true, nodeId: PCV_N9_NODE_ID, source: 'agent-explicit' };
   }
 
@@ -226,10 +235,14 @@ function firstFixForMissingLinks(reasons: PcvN9MissingLinkReason[]): string[] {
 }
 
 function collectSourceRefs(metadata: Record<string, unknown>): string[] {
+  const pcvNodeEvidence = asRecord(metadata.pcvNodeEvidence);
   const refs = [
     ...stringArray(metadata.sourceRefs),
+    ...stringArray(pcvNodeEvidence?.sourceRefs),
     ...stringArray(metadata.referencedFiles),
+    ...stringArray(pcvNodeEvidence?.referencedFiles),
     ...sourceRefsFromFindings(metadata.findings),
+    ...sourceRefsFromFindings(pcvNodeEvidence?.findings),
   ];
   return [...new Set(refs.map((ref) => ref.trim()).filter(Boolean))];
 }

@@ -396,6 +396,95 @@ describe('attachBootstrapProcessEventBridge', () => {
     expect(artifact?.content).toBe(fullPrompt);
   });
 
+  test('consumes nested PCV N9 evidence without top-level source refs', () => {
+    const eventBus = new EventEmitter();
+    const recorder = new JobProcessEventRecorder();
+    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-runner-data-'));
+    const cleanup = attachBootstrapProcessEventBridge({
+      container: makeContainer(
+        new JobStore({ projectRoot: dataRoot }),
+        { eventBus },
+        { _workspaceResolver: { dataRoot } }
+      ),
+      jobId: 'job_pcv_n9_nested',
+      logger: makeLogger(),
+      recorder,
+    });
+
+    eventBus.emit('bootstrap:process-events', {
+      sessionId: 'bs_n9_nested',
+      taskId: 'architecture',
+      targetName: 'Architecture',
+      events: [
+        {
+          kind: 'llm.input',
+          title: 'Nested N9 evidence prepared',
+          content: {
+            mimeType: 'text/markdown',
+            role: 'developer',
+            text: 'Nested evidence input summary',
+          },
+          metadata: {
+            inputStageProfile: 'analyze',
+            llmMetrics: { estimatedTokens: 17, messageCount: 2 },
+            pcvNodeEvidence: {
+              chainNodeId: 'N9-agent-analyze-quality',
+              nodeId: 'N9-agent-analyze-quality',
+              sourceRefs: ['src/index.ts:42'],
+            },
+            traceEnvelope: {
+              correlationId: 'trace-n9-nested',
+              sessionId: 'bs_n9_nested',
+              stageId: 'analyze',
+            },
+          },
+          phase: 'analyze',
+          textArtifactCandidate: {
+            kind: 'llm-input-full-redacted',
+            label: 'Full redacted nested N9 LLM input',
+            mimeType: 'text/markdown; charset=utf-8',
+            originalChars: 23,
+            redactionState: 'developer-visible-redacted',
+            text: 'Nested source-backed prompt.',
+          },
+        },
+      ],
+    });
+
+    cleanup?.();
+
+    const event = recorder
+      .list('job_pcv_n9_nested', { limit: 10 })
+      .developerViews.find((candidate) => candidate.title === 'Nested N9 evidence prepared');
+    expect(event?.metadata).toMatchObject({
+      pcvN9Observability: {
+        evidenceLinks: {
+          artifactRefs: [event?.artifactRefs[0]?.ref],
+          metricsPath: 'metadata.llmMetrics',
+          sourceRefs: ['src/index.ts:42'],
+          traceId: 'trace-n9-nested',
+        },
+        firstFix: [],
+        jobId: 'job_pcv_n9_nested',
+        linkageStatus: 'linked',
+        missingLinkReasons: [],
+        nodeId: 'N9-agent-analyze-quality',
+        nodeIdentitySource: 'agent-explicit',
+        sessionId: 'bs_n9_nested',
+      },
+      traceEnvelope: {
+        artifactRefs: [event?.artifactRefs[0]?.ref],
+        chainNodeId: 'N9-agent-analyze-quality',
+        jobId: 'job_pcv_n9_nested',
+        metricsPath: 'metadata.llmMetrics',
+        nodeId: 'N9-agent-analyze-quality',
+        pcvNodeId: 'N9-agent-analyze-quality',
+        sourceRefs: ['src/index.ts:42'],
+        traceId: 'trace-n9-nested',
+      },
+    });
+  });
+
   test('reports precise PCV N9 missing-link reasons when Agent evidence is incomplete', () => {
     const eventBus = new EventEmitter();
     const recorder = new JobProcessEventRecorder();
