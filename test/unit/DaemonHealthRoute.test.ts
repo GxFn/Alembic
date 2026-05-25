@@ -9,7 +9,15 @@ const mocks = vi.hoisted(() => {
     projectId: 'project-route',
     projectRoot: '/tmp/alembic-project',
     runtimeDir: '/tmp/alembic-data/runtime',
-    toFacts: () => ({ dataRootSource: 'ghost-registry', mode: 'ghost' }),
+    toFacts: () => ({
+      controlRoot: null,
+      currentFolderId: null,
+      dataRootSource: 'ghost-registry',
+      folders: [],
+      mode: 'ghost',
+      projectScope: null,
+      projectScopeId: null,
+    }),
   };
   return {
     container: { get: vi.fn() },
@@ -25,7 +33,12 @@ vi.mock('../../lib/infrastructure/database/SqliteDatabaseAccess.js', () => ({
   readLatestSchemaMigrationVersion: vi.fn(() => 'schema-route'),
 }));
 
+vi.mock('../../lib/project-scope/ProjectScopeRegistry.js', () => ({
+  resolveAlembicWorkspace: vi.fn(() => mocks.resolver),
+}));
+
 vi.mock('@alembic/core/workspace', () => ({
+  getProjectRegistryDir: vi.fn(() => '/tmp/alembic-registry'),
   resolveProjectRoot: vi.fn(() => '/tmp/alembic-project'),
   WorkspaceResolver: {
     fromProject: vi.fn(() => mocks.resolver),
@@ -93,6 +106,8 @@ describe('daemon health resident service contract', () => {
     expect(projectIdentity).toEqual({
       dataRootSource: 'ghost-registry',
       projectId: 'project-route',
+      projectScope: null,
+      projectScopeId: null,
       schemaMigrationVersion: 'schema-route',
       workspaceMode: 'ghost',
     });
