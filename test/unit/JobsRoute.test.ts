@@ -3,6 +3,7 @@ import type { Request } from 'express';
 import { describe, expect, test } from 'vitest';
 import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
 import {
+  buildJobProcessArtifactUrl,
   buildJobProcessEventsResponse,
   buildJobProcessEventsUrl,
   buildJobStatusUrl,
@@ -20,6 +21,9 @@ describe('jobs route URL helpers', () => {
     );
     expect(buildJobProcessEventsUrl(request, 'bootstrap_abc')).toBe(
       'http://127.0.0.1:39127/api/v1/jobs/bootstrap_abc/events'
+    );
+    expect(buildJobProcessArtifactUrl(request, 'bootstrap_abc', 'llm-input.md')).toBe(
+      'http://127.0.0.1:39127/api/v1/jobs/bootstrap_abc/artifacts/llm-input.md'
     );
   });
 

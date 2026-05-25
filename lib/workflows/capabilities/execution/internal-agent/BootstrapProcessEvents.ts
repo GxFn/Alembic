@@ -1,6 +1,9 @@
 import type { AgentProgressProcessEvent, ProgressEvent } from '@alembic/agent/runtime';
 import type { AgentRunInput } from '@alembic/agent/service';
-import type { BootstrapProcessEventDraft } from '#service/bootstrap/bootstrap-event-types.js';
+import type {
+  BootstrapProcessEventDraft,
+  BootstrapProcessEventTextArtifactCandidate,
+} from '#service/bootstrap/bootstrap-event-types.js';
 import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import type {
   AgentResultLike,
@@ -138,25 +141,57 @@ export function buildBootstrapAgentProgressProcessEvents({
   if (!kind || !title) {
     return [];
   }
-  const normalizedContent = normalizeProcessEventContent(processEvent.content);
+  const processMetadata = asRecord(processEvent.metadata || {});
+  const dimensionId = stringValue(processEvent.dimensionId) || dimId;
+  const phase = stringValue(processEvent.phase) || null;
+  const normalizedContent = normalizeProcessEventContent(processEvent.content, kind);
+  const correlationId =
+    stringValue(processEvent.correlationId) ||
+    buildProcessEventCorrelationId({
+      dimensionId,
+      kind,
+      metadata: processMetadata,
+      phase,
+      sessionId,
+    });
+  const parentEventId = stringValue(asRecord(processEvent).parentEventId) || null;
+  const llmMetrics = buildLlmEventMetrics({
+    kind,
+    metadata: processMetadata,
+    projection: normalizedContent.projection,
+  });
   return [
     {
+      ...(normalizedContent.artifactCandidate
+        ? { textArtifactCandidate: normalizedContent.artifactCandidate }
+        : {}),
       content: normalizedContent.content,
-      correlationId: stringValue(processEvent.correlationId) || null,
+      correlationId,
       createdAt: stringValue(processEvent.createdAt) || undefined,
-      dimensionId: stringValue(processEvent.dimensionId) || dimId,
+      dimensionId,
       displayPolicy:
         pickAllowedString(processEvent.displayPolicy, PROCESS_EVENT_DISPLAY_POLICIES) || 'full',
       kind,
       metadata: {
-        ...asRecord(sanitizeValue(processEvent.metadata || {}, 0)),
+        ...asRecord(sanitizeValue(processMetadata, 0)),
         ...normalizedContent.metadata,
         agentId: event.agentId,
+        ...(llmMetrics ? { llmMetrics } : {}),
         preset: event.preset,
         progressType: event.type,
         sessionId,
+        traceEnvelope: buildProcessTraceEnvelope({
+          correlationId,
+          dimensionId,
+          kind,
+          metadata: processMetadata,
+          parentEventId,
+          phase,
+          sessionId,
+        }),
       },
-      phase: stringValue(processEvent.phase) || null,
+      parentEventId,
+      phase,
       retention:
         pickAllowedString(processEvent.retention, PROCESS_EVENT_RETENTION_POLICIES) ||
         'job-retained',
@@ -237,8 +272,10 @@ interface NormalizedFindingItem {
 }
 
 interface NormalizedProcessEventContent {
+  artifactCandidate?: BootstrapProcessEventTextArtifactCandidate;
   content: BootstrapProcessEventDraft['content'];
   metadata: Record<string, unknown>;
+  projection: TextProjection;
 }
 
 interface TextProjection {
@@ -415,10 +452,29 @@ function buildVisibleOutputEvent({
           .map(({ name, projection: textProjection }) => `## ${name}\n\n${textProjection.text}`)
           .join('\n\n')
       : '';
+  const fullText =
+    sections.length > 0
+      ? sections.map(([name, value]) => `## ${name}\n\n${redactSecretText(value)}`).join('\n\n')
+      : '';
+  const outputProjectionTotals = summarizeTextProjections(
+    projectedSections.map(({ projection: textProjection }) => textProjection)
+  );
   if (!text && !projection.combinedTokenUsage) {
     return null;
   }
   return {
+    ...(fullText
+      ? {
+          textArtifactCandidate: {
+            kind: 'llm-output-full-redacted',
+            label: `Full redacted LLM output for ${label || dimId}`,
+            mimeType: 'text/markdown; charset=utf-8',
+            originalChars: fullText.length,
+            redactionState: 'developer-visible-redacted',
+            text: fullText,
+          } satisfies BootstrapProcessEventTextArtifactCandidate,
+        }
+      : {}),
     content: text
       ? {
           mimeType: 'text/markdown',
@@ -431,6 +487,18 @@ function buildVisibleOutputEvent({
     metadata: {
       ...buildOutputSectionTruncationMetadata(projectedSections),
       dimensionId: dimId,
+      llmMetrics: {
+        chars: {
+          original: outputProjectionTotals.originalChars,
+          retained: outputProjectionTotals.retainedChars,
+          truncated: outputProjectionTotals.truncated,
+          truncatedChars: outputProjectionTotals.truncatedChars,
+          truncationLimit: outputProjectionTotals.limit,
+        },
+        estimatedTokens: estimateTokens(outputProjectionTotals.originalChars),
+        outputSectionCount: projectedSections.length,
+        tokenUsage: projection.combinedTokenUsage,
+      },
       outputSections: projectedSections.map(({ name }) => name),
       sessionId,
       status: runResult.status || null,
@@ -627,20 +695,30 @@ function isDeveloperVisibleAgentProcessEvent(event: AgentProgressProcessEvent): 
 }
 
 function normalizeProcessEventContent(
-  content: AgentProgressProcessEvent['content'] | undefined
+  content: AgentProgressProcessEvent['content'] | undefined,
+  kind: (typeof AGENT_PROGRESS_PROCESS_EVENT_KINDS)[number]
 ): NormalizedProcessEventContent {
   if (!content) {
+    const projection = emptyTextProjection();
     return {
       content: null,
-      metadata: buildContentTruncationMetadata(emptyTextProjection()),
+      metadata: buildContentTruncationMetadata(projection),
+      projection,
     };
   }
   const role = pickAllowedString(content.role, PROCESS_EVENT_CONTENT_ROLES) || null;
-  const textProjection =
-    typeof content.text === 'string'
-      ? projectText(content.text, MAX_TEXT_CHARS)
-      : emptyTextProjection();
+  const fullRedactedText =
+    typeof content.text === 'string' ? redactSecretText(content.text) : undefined;
+  const textProjection = fullRedactedText
+    ? projectRedactedText(fullRedactedText, MAX_TEXT_CHARS)
+    : emptyTextProjection();
+  const artifactCandidate = buildProcessTextArtifactCandidate({
+    content,
+    fullRedactedText,
+    kind,
+  });
   return {
+    ...(artifactCandidate ? { artifactCandidate } : {}),
     content: {
       data: sanitizeValue(content.data, 0),
       language: stringValue(content.language) || null,
@@ -649,7 +727,135 @@ function normalizeProcessEventContent(
       text: typeof content.text === 'string' ? textProjection.text : null,
     },
     metadata: buildContentTruncationMetadata(textProjection),
+    projection: textProjection,
   };
+}
+
+function buildProcessTextArtifactCandidate({
+  content,
+  fullRedactedText,
+  kind,
+}: {
+  content: NonNullable<AgentProgressProcessEvent['content']>;
+  fullRedactedText?: string;
+  kind: (typeof AGENT_PROGRESS_PROCESS_EVENT_KINDS)[number];
+}): BootstrapProcessEventTextArtifactCandidate | undefined {
+  if (!fullRedactedText || (kind !== 'llm.input' && kind !== 'llm.output')) {
+    return undefined;
+  }
+  const artifactKind =
+    kind === 'llm.input' ? 'llm-input-full-redacted' : 'llm-output-full-redacted';
+  return {
+    kind: artifactKind,
+    label: kind === 'llm.input' ? 'Full redacted LLM input' : 'Full redacted LLM output',
+    mimeType: stringValue(content.mimeType) || 'text/markdown; charset=utf-8',
+    originalChars: fullRedactedText.length,
+    redactionState: 'developer-visible-redacted',
+    text: fullRedactedText,
+  };
+}
+
+function buildProcessTraceEnvelope({
+  correlationId,
+  dimensionId,
+  kind,
+  metadata,
+  parentEventId,
+  phase,
+  sessionId,
+}: {
+  correlationId: string | null;
+  dimensionId: string | null;
+  kind: string;
+  metadata: Record<string, unknown>;
+  parentEventId: string | null;
+  phase: string | null;
+  sessionId: string;
+}): Record<string, unknown> {
+  const inputStageProfile = stringValue(metadata.inputStageProfile);
+  return {
+    chainNodeId: stringValue(metadata.chainNodeId) || null,
+    correlationId,
+    dimensionId,
+    eventKind: kind,
+    iteration: finiteNumber(metadata.iteration),
+    jobId: null,
+    parentEventId,
+    phase,
+    sessionId,
+    stageId: stringValue(metadata.stageId) || inputStageProfile || phase || null,
+  };
+}
+
+function buildProcessEventCorrelationId({
+  dimensionId,
+  kind,
+  metadata,
+  phase,
+  sessionId,
+}: {
+  dimensionId: string | null;
+  kind: string;
+  metadata: Record<string, unknown>;
+  phase: string | null;
+  sessionId: string;
+}): string | null {
+  const iteration = finiteNumber(metadata.iteration);
+  if (!dimensionId && iteration === null && !phase) {
+    return null;
+  }
+  return [
+    'llm',
+    sessionId,
+    dimensionId || 'global',
+    phase || 'unknown-phase',
+    iteration === null ? 'unknown-iteration' : `iteration-${iteration}`,
+    kind,
+  ]
+    .map((part) => part.replace(/[^a-zA-Z0-9._-]/g, '_'))
+    .join(':');
+}
+
+function buildLlmEventMetrics({
+  kind,
+  metadata,
+  projection,
+}: {
+  kind: (typeof AGENT_PROGRESS_PROCESS_EVENT_KINDS)[number];
+  metadata: Record<string, unknown>;
+  projection: TextProjection;
+}): Record<string, unknown> | null {
+  if (kind !== 'llm.input' && kind !== 'llm.output') {
+    return null;
+  }
+  const out: Record<string, unknown> = {
+    chars: {
+      original: projection.originalChars,
+      retained: projection.retainedChars,
+      truncated: projection.truncated,
+      truncatedChars: projection.truncatedChars,
+      truncationLimit: projection.limit,
+    },
+    estimatedTokens: estimateTokens(projection.originalChars),
+  };
+  addMetric(out, 'durationMs', finiteNumber(metadata.durationMs));
+  addMetric(out, 'finishReason', stringValue(metadata.finishReason));
+  addMetric(out, 'messageCount', finiteNumber(metadata.messageCount));
+  addMetric(out, 'toolSchemaCount', arrayLength(metadata.toolSchemaNames));
+  addMetric(out, 'requestedToolChoice', stringValue(metadata.requestedToolChoice));
+  addMetric(out, 'effectiveToolChoice', stringValue(metadata.effectiveToolChoice));
+  addMetric(out, 'inputStageProfile', stringValue(metadata.inputStageProfile));
+  addMetric(out, 'sectionCount', arrayLength(metadata.inputSectionIds));
+  addMetric(out, 'outputSectionCount', arrayLength(metadata.outputSections));
+  addMetric(out, 'duplicateToolCalls', finiteNumber(metadata.duplicateToolCalls));
+  addMetric(out, 'emptyRetries', finiteNumber(metadata.emptyRetries));
+  addMetric(out, 'cacheHits', finiteNumber(metadata.cacheHits));
+  addMetric(out, 'cacheMisses', finiteNumber(metadata.cacheMisses));
+  const tokenUsage = normalizeTokenUsage(metadata.tokenUsage);
+  if (tokenUsage) {
+    out.tokenUsage = tokenUsage;
+  }
+  return out;
 }
 
 function buildOutputSectionTruncationMetadata(
@@ -826,7 +1032,10 @@ function redactSecretText(text: string): string {
 }
 
 function projectText(text: string, maxChars: number): TextProjection {
-  const safeText = redactSecretText(text);
+  return projectRedactedText(redactSecretText(text), maxChars);
+}
+
+function projectRedactedText(safeText: string, maxChars: number): TextProjection {
   if (safeText.length <= maxChars) {
     return {
       limit: maxChars,
@@ -846,6 +1055,45 @@ function projectText(text: string, maxChars: number): TextProjection {
     truncated: true,
     truncatedChars: safeText.length - maxChars,
   };
+}
+
+function addMetric(out: Record<string, unknown>, key: string, value: unknown): void {
+  if (value !== null && value !== undefined) {
+    out[key] = value;
+  }
+}
+
+function normalizeTokenUsage(value: unknown): Record<string, number> | null {
+  const tokenUsage = asRecord(value);
+  const out: Record<string, number> = {};
+  for (const [sourceKey, targetKey] of [
+    ['input', 'input'],
+    ['inputTokens', 'input'],
+    ['output', 'output'],
+    ['outputTokens', 'output'],
+    ['reasoning', 'reasoning'],
+    ['reasoningTokens', 'reasoning'],
+    ['cacheHit', 'cacheHit'],
+    ['cacheHitTokens', 'cacheHit'],
+  ] as const) {
+    const numberValue = finiteNumber(tokenUsage[sourceKey]);
+    if (numberValue !== null && out[targetKey] === undefined) {
+      out[targetKey] = numberValue;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function estimateTokens(chars: number): number {
+  return chars > 0 ? Math.ceil(chars / 4) : 0;
+}
+
+function arrayLength(value: unknown): number | null {
+  return Array.isArray(value) ? value.length : null;
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function emptyTextProjection(): TextProjection {

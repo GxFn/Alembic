@@ -203,7 +203,30 @@ describe('BootstrapProcessEvents', () => {
       contentTruncationLimit: 6000,
       contentTruncationSource: 'alembic-process-event-bridge',
       finishReason: 'stop',
+      llmMetrics: {
+        chars: {
+          original: 6105,
+          retained: 6000,
+          truncated: true,
+          truncatedChars: 105,
+          truncationLimit: 6000,
+        },
+        estimatedTokens: 1527,
+        finishReason: 'stop',
+      },
+      traceEnvelope: {
+        dimensionId: 'architecture',
+        eventKind: 'llm.output',
+        jobId: null,
+        sessionId: 'bs_1',
+      },
       visibleTextChars: 6105,
+    });
+    expect(events[0].textArtifactCandidate).toMatchObject({
+      kind: 'llm-output-full-redacted',
+      originalChars: 6105,
+      redactionState: 'developer-visible-redacted',
+      text: longText,
     });
   });
 

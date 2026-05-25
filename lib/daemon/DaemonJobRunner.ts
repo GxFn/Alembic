@@ -5,10 +5,11 @@ import {
   type DaemonJobStatus,
   JobStore,
 } from '@alembic/core/daemon';
-import { resolveProjectRoot } from '@alembic/core/workspace';
+import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
 import { resolveAlembicWorkspace } from '../project-scope/ProjectScopeRegistry.js';
 import type { BootstrapProcessEventDraft } from '../service/bootstrap/bootstrap-event-types.js';
+import { materializeJobProcessEventTextArtifact } from './JobProcessEventArtifacts.js';
 import {
   JobProcessEventRecorder,
   type JobProcessEventRecordInput,
@@ -475,6 +476,7 @@ export function attachBootstrapProcessEventBridge(options: {
       },
       jobId: options.jobId,
       payload: result.processEvents,
+      container: options.container,
       recorder: options.recorder,
     });
   });
@@ -494,6 +496,7 @@ export function attachBootstrapProcessEventBridge(options: {
       },
       jobId: options.jobId,
       payload: event.events,
+      container: options.container,
       recorder: options.recorder,
     });
   });
@@ -837,11 +840,13 @@ function recordJobProcessEvent(
 }
 
 function recordBootstrapProcessEventDrafts({
+  container,
   defaults,
   jobId,
   payload,
   recorder,
 }: {
+  container: ServiceContainer;
   defaults: {
     dimensionId?: string | null;
     sessionId?: string | null;
@@ -854,20 +859,91 @@ function recordBootstrapProcessEventDrafts({
 }): void {
   const drafts = normalizeBootstrapProcessEventDrafts(payload);
   for (const draft of drafts) {
-    const metadata = {
+    let metadata: Record<string, unknown> = {
       ...asRecord(draft.metadata),
       dimensionId: draft.dimensionId ?? defaults.dimensionId ?? null,
       sessionId: defaults.sessionId ?? null,
       taskId: defaults.taskId ?? null,
     };
+    metadata = attachTraceEnvelopeJobId({
+      draft,
+      jobId,
+      metadata,
+      sessionId: defaults.sessionId ?? null,
+    });
+    const artifactRefs = [...(draft.artifactRefs || [])];
+    const artifactCandidate = draft.textArtifactCandidate;
+    if (artifactCandidate) {
+      try {
+        const materialized = materializeJobProcessEventTextArtifact({
+          candidate: artifactCandidate,
+          dataRoot: resolveDataRoot(container),
+          dimensionId: draft.dimensionId ?? defaults.dimensionId ?? null,
+          iteration:
+            (isRecord(metadata.traceEnvelope) ? metadata.traceEnvelope.iteration : undefined) ??
+            metadata.iteration,
+          jobId,
+        });
+        artifactRefs.unshift(materialized.artifactRef);
+        metadata = {
+          ...metadata,
+          ...materialized.metadata,
+        };
+      } catch (err: unknown) {
+        metadata = {
+          ...metadata,
+          artifactRetained: false,
+          artifactRetainError: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }
     recordJobProcessEvent(recorder, {
       ...draft,
+      artifactRefs,
       dimensionId: draft.dimensionId ?? defaults.dimensionId ?? null,
       jobId,
       metadata,
       targetName: draft.targetName ?? defaults.targetName ?? null,
     });
   }
+}
+
+function attachTraceEnvelopeJobId({
+  draft,
+  jobId,
+  metadata,
+  sessionId,
+}: {
+  draft: BootstrapProcessEventDraft;
+  jobId: string;
+  metadata: Record<string, unknown>;
+  sessionId: string | null;
+}): Record<string, unknown> {
+  const traceEnvelope = isRecord(metadata.traceEnvelope)
+    ? (metadata.traceEnvelope as Record<string, unknown>)
+    : {};
+  if (Object.keys(traceEnvelope).length === 0 && !isLlmEventDraft(draft)) {
+    return metadata;
+  }
+  return {
+    ...metadata,
+    traceEnvelope: {
+      chainNodeId: traceEnvelope.chainNodeId ?? null,
+      correlationId: draft.correlationId ?? traceEnvelope.correlationId ?? null,
+      dimensionId: draft.dimensionId ?? metadata.dimensionId ?? traceEnvelope.dimensionId ?? null,
+      eventKind: draft.kind,
+      iteration: traceEnvelope.iteration ?? finiteNumber(metadata.iteration),
+      jobId,
+      parentEventId: draft.parentEventId ?? traceEnvelope.parentEventId ?? null,
+      phase: draft.phase ?? traceEnvelope.phase ?? null,
+      sessionId: sessionId ?? traceEnvelope.sessionId ?? null,
+      stageId: traceEnvelope.stageId ?? draft.phase ?? null,
+    },
+  };
+}
+
+function isLlmEventDraft(draft: BootstrapProcessEventDraft): boolean {
+  return draft.kind === 'llm.input' || draft.kind === 'llm.output';
 }
 
 function normalizeBootstrapProcessEventDrafts(payload: unknown): BootstrapProcessEventDraft[] {
@@ -964,6 +1040,10 @@ function stringValue(value: unknown): string | undefined {
 
 function numberValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function numberArg(value: unknown, fallback: number): number {

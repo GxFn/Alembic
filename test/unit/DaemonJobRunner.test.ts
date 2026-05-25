@@ -9,6 +9,7 @@ import {
   cancelDaemonJob,
   markInterruptedDaemonJobs,
 } from '../../lib/daemon/DaemonJobRunner.js';
+import { readJobProcessEventArtifact } from '../../lib/daemon/JobProcessEventArtifacts.js';
 import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
 
@@ -22,8 +23,13 @@ function makeProjectRoot(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-runner-project-'));
 }
 
-function makeContainer(store: JobStore, services: Record<string, unknown> = {}): ServiceContainer {
+function makeContainer(
+  store: JobStore,
+  services: Record<string, unknown> = {},
+  singletons: Record<string, unknown> = {}
+): ServiceContainer {
   return {
+    singletons,
     get(name: string) {
       if (name === 'jobStore') {
         return store;
@@ -200,6 +206,95 @@ describe('attachBootstrapProcessEventBridge', () => {
       targetName: 'Architecture',
       title: 'Input prepared',
     });
+  });
+
+  test('materializes full redacted LLM text artifacts before Timeline projection is recorded', () => {
+    const eventBus = new EventEmitter();
+    const recorder = new JobProcessEventRecorder();
+    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-runner-data-'));
+    const cleanup = attachBootstrapProcessEventBridge({
+      container: makeContainer(
+        new JobStore({ projectRoot: dataRoot }),
+        { eventBus },
+        { _workspaceResolver: { dataRoot } }
+      ),
+      jobId: 'job_artifact_bridge',
+      logger: makeLogger(),
+      recorder,
+    });
+
+    const fullPrompt = `${'full redacted prompt\n'.repeat(400)}final line`;
+    eventBus.emit('bootstrap:process-events', {
+      sessionId: 'bs_1',
+      taskId: 'architecture',
+      targetName: 'Architecture',
+      events: [
+        {
+          kind: 'llm.input',
+          title: 'LLM input prepared',
+          content: {
+            mimeType: 'text/markdown',
+            role: 'developer',
+            text: 'Timeline summary only',
+          },
+          metadata: {
+            inputStageProfile: 'analyze',
+            iteration: 3,
+            traceEnvelope: {
+              correlationId: 'llm:bs_1:architecture:analyze:iteration-3:llm.input',
+              iteration: 3,
+              phase: 'analyze',
+              sessionId: 'bs_1',
+              stageId: 'analyze',
+            },
+          },
+          phase: 'analyze',
+          textArtifactCandidate: {
+            kind: 'llm-input-full-redacted',
+            label: 'Full redacted LLM input',
+            mimeType: 'text/markdown; charset=utf-8',
+            originalChars: fullPrompt.length,
+            redactionState: 'developer-visible-redacted',
+            text: fullPrompt,
+          },
+        },
+      ],
+    });
+
+    cleanup?.();
+
+    const list = recorder.list('job_artifact_bridge', { limit: 10 });
+    const event = list.developerViews.find((candidate) => candidate.kind === 'llm.input');
+    expect(event).toBeDefined();
+    expect(event?.content?.text).toBe('Timeline summary only');
+    expect(event?.artifactRefs[0]).toMatchObject({
+      kind: 'llm-input-full-redacted',
+      mimeType: 'text/markdown; charset=utf-8',
+    });
+    expect(event?.artifactRefs[0]?.ref).toMatch(
+      /^\/api\/v1\/jobs\/job_artifact_bridge\/artifacts\/llm-input-full-redacted-architecture-i3-[a-f0-9]+\.md$/
+    );
+    expect(event?.metadata).toMatchObject({
+      artifactDataRootScoped: true,
+      artifactOriginalChars: fullPrompt.length,
+      artifactRedactionState: 'developer-visible-redacted',
+      artifactRetained: true,
+      artifactRetainedChars: fullPrompt.length,
+      traceEnvelope: {
+        jobId: 'job_artifact_bridge',
+        sessionId: 'bs_1',
+        stageId: 'analyze',
+      },
+    });
+
+    const artifactId = String(event?.metadata.artifactId);
+    const artifact = readJobProcessEventArtifact({
+      artifactId,
+      dataRoot,
+      jobId: 'job_artifact_bridge',
+    });
+    expect(artifact?.absolutePath.startsWith(path.join(dataRoot, '.asd'))).toBe(true);
+    expect(artifact?.content).toBe(fullPrompt);
   });
 
   test('records process event drafts carried by completed task results', () => {

@@ -6,6 +6,7 @@ import {
   type DaemonJobStatus,
 } from '@alembic/core/daemon';
 import Logger from '@alembic/core/logging';
+import { resolveDataRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
 import { z } from 'zod';
 import {
@@ -18,6 +19,7 @@ import {
   getJobProcessEventRecorder,
   getJobStore,
 } from '../../daemon/DaemonJobRunner.js';
+import { readJobProcessEventArtifact } from '../../daemon/JobProcessEventArtifacts.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';
 
@@ -122,6 +124,29 @@ router.get('/:jobId/events', (req: Request, res: Response): void => {
   });
 });
 
+router.get('/:jobId/artifacts/:artifactId', (req: Request, res: Response): void => {
+  const container = getServiceContainer();
+  const store = getJobStore(container);
+  const jobId = singleParam(req.params.jobId);
+  const artifactId = singleParam(req.params.artifactId);
+  const job = store.get(jobId);
+  if (!job) {
+    res.status(404).json({ success: false, error: 'Job not found' });
+    return;
+  }
+
+  const artifact = readJobProcessEventArtifact({
+    artifactId,
+    dataRoot: resolveDataRoot(container),
+    jobId,
+  });
+  if (!artifact) {
+    res.status(404).json({ success: false, error: 'Artifact not found' });
+    return;
+  }
+  res.type(artifact.mimeType).send(artifact.content);
+});
+
 router.get('/:jobId', (req: Request, res: Response): void => {
   const container = getServiceContainer();
   const store = getJobStore(container);
@@ -205,6 +230,16 @@ export function buildJobProcessEventsUrl(request: Request, jobId: string): strin
     ':jobId',
     encodeURIComponent(jobId)
   )}`;
+}
+
+export function buildJobProcessArtifactUrl(
+  request: Request,
+  jobId: string,
+  artifactId: string
+): string {
+  return `${buildJobsApiOrigin(request)}/api/v1/jobs/${encodeURIComponent(
+    jobId
+  )}/artifacts/${encodeURIComponent(artifactId)}`;
 }
 
 export function buildJobProcessEventsResponse(options: {

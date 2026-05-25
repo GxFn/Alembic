@@ -95,10 +95,20 @@ export type BootstrapProcessEventDraft = Omit<
   CreateJobProcessEventInput,
   'createdAt' | 'id' | 'jobId' | 'sequence'
 > & {
+  textArtifactCandidate?: BootstrapProcessEventTextArtifactCandidate;
   createdAt?: string;
   id?: string;
   sequence?: number;
 };
+
+export interface BootstrapProcessEventTextArtifactCandidate {
+  kind: string;
+  label: string | null;
+  mimeType: string | null;
+  originalChars: number;
+  redactionState: 'developer-visible-redacted';
+  text: string;
+}
 
 export interface BootstrapProcessEventsPayload extends ProgressPayload {
   dimensionId?: string;
