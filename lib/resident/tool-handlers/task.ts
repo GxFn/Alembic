@@ -12,6 +12,12 @@
  */
 
 import type { SignalBus } from '@alembic/core/events';
+import type {
+  IntentEpisodeHostIntentMeta,
+  IntentEpisodeRecord,
+  IntentEpisodeSearchMeta,
+  IntentEpisodeStore,
+} from '#service/task/IntentEpisodeStore.js';
 import type { ExtractedIntent } from '#service/task/IntentExtractor.js';
 import { extract as extractIntent } from '#service/task/IntentExtractor.js';
 import type { PrimeSearchOptions, PrimeSearchResult } from '#service/task/PrimeSearchPipeline.js';
@@ -213,6 +219,24 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
     };
   }
 
+  const episode = _startIntentEpisode(ctx, {
+    activeFile: hostIntentContext.activeFile,
+    hostIntent: hostIntentMeta,
+    language: extracted.language,
+    module: extracted.module,
+    query: hostIntentContext.userQuery || '',
+    scenario: extracted.scenario,
+    searchMeta: freshIntent.searchMeta,
+    sessionId: ctx.session?.id,
+    sourceRefs: hostIntentContext.sourceRefs,
+    turnId:
+      _stringProperty(args.hostTurnMeta, 'turnId') ?? _stringProperty(args.hostTurnMeta, 'id'),
+  });
+  if (episode) {
+    freshIntent.episodeId = episode.episodeId;
+    freshIntent.episodeSessionKey = episode.sessionKey;
+  }
+
   // Bind intent to session
   if (ctx.session) {
     ctx.session.intent = freshIntent;
@@ -249,6 +273,13 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
           }
         : null,
       searchMeta: searchResult?.searchMeta ?? null,
+      intentEpisode: episode
+        ? {
+            episodeId: episode.episodeId,
+            sessionKey: episode.sessionKey,
+            status: episode.status,
+          }
+        : null,
       intentContext: hostIntentMeta,
       _taskRules,
     },
@@ -275,11 +306,18 @@ async function _create(ctx: McpContext, args: TaskArgs) {
   if (intent && intent.phase === 'active') {
     intent.taskId = taskId;
     intent.taskTitle = args.title;
+    _attachIntentEpisodeTask(ctx, intent, taskId);
   }
 
   return envelope({
     success: true,
-    data: { id: taskId, title: args.title },
+    data: {
+      id: taskId,
+      intentEpisode: intent?.episodeId
+        ? { episodeId: intent.episodeId, sessionKey: intent.episodeSessionKey ?? null }
+        : null,
+      title: args.title,
+    },
     message: `📌 Created: ${taskId} — ${args.title}`,
     meta: { tool: 'alembic_task' },
   });
@@ -460,6 +498,8 @@ function _persistIntentChain(
   } catch {
     // signalBus unavailable — silent failure, non-blocking
   }
+
+  _updateIntentEpisodeOutcome(ctx, intent, outcome, reason);
 }
 
 function _computeDriftScore(intent: IntentState): number {
@@ -491,4 +531,117 @@ function _getPipeline(container: McpServiceContainer): PipelineLike | null {
     );
     return null;
   }
+}
+
+interface IntentEpisodeStartContext {
+  activeFile?: string;
+  hostIntent: IntentEpisodeHostIntentMeta | null;
+  language: string | null;
+  module: string | null;
+  query: string;
+  scenario: string;
+  searchMeta?: IntentEpisodeSearchMeta | null;
+  sessionId?: string;
+  sourceRefs?: string[];
+  turnId?: string;
+}
+
+function _startIntentEpisode(
+  ctx: McpContext,
+  input: IntentEpisodeStartContext
+): IntentEpisodeRecord | null {
+  const store = _getIntentEpisodeStore(ctx.container);
+  if (!store) {
+    return null;
+  }
+  try {
+    return store.start({
+      activeFile: input.activeFile,
+      hostIntent: input.hostIntent,
+      language: input.language,
+      module: input.module,
+      query: input.query,
+      scenario: input.scenario,
+      searchMeta: input.searchMeta ?? null,
+      sessionId: input.sessionId,
+      sourceRefs: input.sourceRefs,
+      turnId: input.turnId,
+    });
+  } catch (err: unknown) {
+    process.stderr.write(
+      `[ResidentTool/Task] intent episode start failed: ${
+        err instanceof Error ? err.stack || err.message : String(err)
+      }\n`
+    );
+    return null;
+  }
+}
+
+function _attachIntentEpisodeTask(ctx: McpContext, intent: IntentState, taskId: string): void {
+  if (!intent.episodeId) {
+    return;
+  }
+  const store = _getIntentEpisodeStore(ctx.container);
+  if (!store) {
+    return;
+  }
+  try {
+    store.attachTask(intent.episodeId, taskId);
+  } catch (err: unknown) {
+    process.stderr.write(
+      `[ResidentTool/Task] intent episode task attach failed: ${
+        err instanceof Error ? err.stack || err.message : String(err)
+      }\n`
+    );
+  }
+}
+
+function _updateIntentEpisodeOutcome(
+  ctx: McpContext,
+  intent: IntentState,
+  outcome: 'completed' | 'failed' | 'abandoned',
+  reason?: string
+): void {
+  if (!intent.episodeId) {
+    return;
+  }
+  const store = _getIntentEpisodeStore(ctx.container);
+  if (!store) {
+    return;
+  }
+  try {
+    store.updateOutcome(intent.episodeId, {
+      reason,
+      searchMeta: intent.searchMeta ?? null,
+      status: outcome,
+      taskId: intent.taskId,
+    });
+  } catch (err: unknown) {
+    process.stderr.write(
+      `[ResidentTool/Task] intent episode outcome update failed: ${
+        err instanceof Error ? err.stack || err.message : String(err)
+      }\n`
+    );
+  }
+}
+
+function _getIntentEpisodeStore(container: McpServiceContainer): IntentEpisodeStore | null {
+  try {
+    return container.get('intentEpisodeStore') as IntentEpisodeStore;
+  } catch (err: unknown) {
+    process.stderr.write(
+      `[ResidentTool/Task] _getIntentEpisodeStore failed: ${
+        err instanceof Error ? err.message : String(err)
+      }\n`
+    );
+    return null;
+  }
+}
+
+function _stringProperty(value: unknown, key: string): string | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const raw = (value as Record<string, unknown>)[key];
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
 }

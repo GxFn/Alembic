@@ -288,6 +288,33 @@ export const TaskDispatchBody = z
   })
   .passthrough();
 
+// ═══ Intent Episode ═════════════════════════════
+
+export const IntentEpisodeStartBody = z
+  .object({
+    activeFile: z.string().optional(),
+    hostIntent: z.record(z.string(), z.unknown()).optional(),
+    language: z.string().optional(),
+    module: z.string().optional(),
+    query: z.string().optional(),
+    scenario: z.string().optional(),
+    searchMeta: z.record(z.string(), z.unknown()).optional(),
+    sessionId: z.string().optional(),
+    sourceRefs: z.array(z.string()).optional(),
+    taskId: z.string().optional(),
+    turnId: z.string().optional(),
+  })
+  .passthrough();
+
+export const IntentEpisodeOutcomeBody = z
+  .object({
+    reason: z.string().optional(),
+    searchMeta: z.record(z.string(), z.unknown()).optional(),
+    status: z.enum(['completed', 'failed', 'abandoned']),
+    taskId: z.string().optional(),
+  })
+  .passthrough();
+
 // ═══ Modules ═════════════════════════════════════
 
 export const ScanFolderBody = z.object({

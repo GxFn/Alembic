@@ -81,6 +81,8 @@ export interface IntentState {
   };
 
   // ─── Anchor (set after create) ───
+  episodeId?: string;
+  episodeSessionKey?: string;
   taskId?: string;
   taskTitle?: string;
 

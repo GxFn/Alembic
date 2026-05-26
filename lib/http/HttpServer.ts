@@ -36,6 +36,7 @@ import guardRouter from './routes/guard.js';
 import guardReportRouter from './routes/guardReport.js';
 import guardRuleRouter from './routes/guardRules.js';
 import healthRouter from './routes/health.js';
+import intentEpisodesRouter from './routes/intent-episodes.js';
 import jobsRouter from './routes/jobs.js';
 import knowledgeRouter from './routes/knowledge.js';
 import logsRouter from './routes/logs.js';
@@ -310,6 +311,9 @@ export class HttpServer {
 
     // TaskGraph 路由（Dashboard、CLI 或外部宿主转发调用）
     this.app.use(`${apiPrefix}/task`, taskRouter);
+
+    // IntentEpisode 持久化：ProjectScope scoped prime/close continuity
+    this.app.use(`${apiPrefix}/intent-episodes`, intentEpisodesRouter);
 
     // 搜索路由
     this.app.use(`${apiPrefix}/search`, searchRouter);
