@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { getRouter } from '../helpers/express.js';
+import { getRouter, invokeRouter } from '../helpers/express.js';
 
 const mocks = vi.hoisted(() => {
   const container = {
@@ -175,6 +175,72 @@ describe('search route resident telemetry', () => {
     expect(searchMeta.vector).toMatchObject({
       available: true,
       reason: null,
+    });
+  });
+
+  test('passes resident intent context through POST search without breaking query-only GET', async () => {
+    mocks.searchEngine.search.mockResolvedValue({
+      items: [{ id: 'recipe-3', score: 0.64 }],
+      mode: 'bm25',
+      query: 'service factory',
+      ranked: true,
+      searchMeta: {
+        actualMode: 'bm25',
+        durationMs: 9,
+        requestedMode: 'bm25',
+        resultCount: 1,
+        route: 'core-search-engine',
+        semanticUsed: false,
+        vectorUsed: false,
+      },
+      total: 1,
+    });
+
+    const response = await invokeRouter(searchRouter, {
+      body: {
+        hostDeclaredIntent: {
+          confidence: 0.82,
+          intent: 'generate',
+          query: 'service factory',
+          sourceRefs: ['host:intent'],
+        },
+        hostTurnMeta: {
+          language: 'typescript',
+          sessionHistory: [{ content: 'previous turn' }],
+        },
+        mode: 'bm25',
+        query: 'fallback query',
+      },
+      method: 'POST',
+      mountPath: '/api/v1/search',
+      path: '/api/v1/search',
+    });
+    const data = response.body.data as Record<string, unknown>;
+    const searchMeta = data.searchMeta as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(mocks.searchEngine.search).toHaveBeenCalledWith(
+      'service factory',
+      expect.objectContaining({
+        context: {
+          intent: 'generate',
+          language: 'typescript',
+          sessionHistory: [{ content: 'previous turn' }],
+        },
+        groupByKind: false,
+        limit: 20,
+        mode: 'bm25',
+        type: 'all',
+      })
+    );
+    expect(data.query).toBe('service factory');
+    expect(searchMeta).toMatchObject({
+      actualMode: 'bm25',
+      degraded: false,
+      hostIntentApplied: true,
+      hostIntentConfidence: 0.82,
+      hostIntentDegraded: false,
+      hostIntentSourceRefs: ['host:intent'],
     });
   });
 

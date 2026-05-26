@@ -168,6 +168,31 @@ export const SearchQuery = PaginationQuery.extend({
     .transform((v) => v === 'true'),
 });
 
+export const ResidentSearchBody = z
+  .object({
+    q: z.string().min(1).optional(),
+    query: z.string().min(1).optional(),
+    type: z.enum(['all', 'recipe', 'solution', 'rule', 'candidate']).default('all'),
+    mode: z.enum(['keyword', 'bm25', 'semantic', 'auto']).default('keyword'),
+    page: z.number().int().min(1).default(1),
+    limit: z.number().int().min(1).max(100).default(20),
+    groupByKind: z.boolean().default(false),
+    language: z.string().optional(),
+    sessionHistory: z.array(z.record(z.string(), z.unknown())).optional(),
+    sourceRefs: z.array(z.string().min(1)).max(50).optional(),
+    confidence: z.number().min(0).max(1).optional(),
+    degraded: z.boolean().optional(),
+    degradedReason: z.string().optional(),
+    searchIntent: z.string().optional(),
+    scenario: z.string().optional(),
+    hostDeclaredIntent: z.record(z.string(), z.unknown()).optional(),
+    hostTurnMeta: z.record(z.string(), z.unknown()).optional(),
+    intentContext: z.record(z.string(), z.unknown()).optional(),
+  })
+  .refine((data) => Boolean(data.q || data.query), {
+    message: 'Either q or query is required',
+  });
+
 export const ContextAwareSearchBody = z.object({
   keyword: z.string().min(1, 'keyword is required'),
   limit: z.number().int().min(1).max(100).default(10),

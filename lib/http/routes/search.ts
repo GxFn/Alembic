@@ -7,15 +7,22 @@ import Logger from '@alembic/core/logging';
 import type { SearchResponse, SearchResponseMeta } from '@alembic/core/search';
 import { resolveProjectRoot, type WorkspaceResolver } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
+import type { z } from 'zod';
+import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
+import {
+  createHostIntentContextMeta,
+  type HostIntentContextMeta,
+  normalizeHostIntentContext,
+} from '../../service/task/HostIntentContext.js';
 import {
   ContextAwareSearchBody,
   GraphImpactQuery,
   GraphQuery,
+  ResidentSearchBody,
   SearchQuery,
   SimilarityBody,
-} from '#shared/schemas/http-requests.js';
-import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
+} from '../../shared/schemas/http-requests.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 import { safeInt } from '../utils/routeHelpers.js';
 
@@ -59,6 +66,26 @@ interface SearchRouteResult {
   [key: string]: unknown;
 }
 
+interface ResidentSearchInput {
+  confidence?: number;
+  degraded?: boolean;
+  degradedReason?: string;
+  groupByKind: boolean;
+  hostDeclaredIntent?: unknown;
+  hostTurnMeta?: unknown;
+  intentContext?: unknown;
+  language?: string;
+  limit: number;
+  mode: string;
+  page: number;
+  q: string;
+  scenario?: string;
+  searchIntent?: string;
+  sessionHistory?: Array<Record<string, unknown>>;
+  sourceRefs?: string[];
+  type: string;
+}
+
 interface ResidentSearchVectorStats {
   count: number;
   dimension: number;
@@ -80,6 +107,11 @@ interface ResidentSearchMeta {
   degraded: boolean;
   degradedReason: string | null;
   fallbackReason?: string;
+  hostIntentApplied?: boolean;
+  hostIntentConfidence?: number;
+  hostIntentDegraded?: boolean;
+  hostIntentDegradedReason?: string;
+  hostIntentSourceRefs?: string[];
   durationMs: number;
   resultCount: number;
   topScore: number | null;
@@ -116,74 +148,153 @@ const RESIDENT_SEARCH_ENDPOINT = '/api/v1/search';
  */
 router.get('/', validateQuery(SearchQuery), async (req: Request, res: Response): Promise<void> => {
   const { q, type = 'all', mode = 'keyword' } = req.query as Record<string, string>;
-  const limit = safeInt(req.query.limit, 20, 1, 100);
-  const page = safeInt(req.query.page, 1);
-  const groupByKind =
-    req.query.groupByKind === 'true' || (req.query as Record<string, unknown>).groupByKind === true;
+  return handleResidentSearch(req, res, {
+    groupByKind:
+      req.query.groupByKind === 'true' ||
+      (req.query as Record<string, unknown>).groupByKind === true,
+    limit: safeInt(req.query.limit, 20, 1, 100),
+    mode,
+    page: safeInt(req.query.page, 1),
+    q,
+    type,
+  });
+});
 
+router.post(
+  '/',
+  validate(ResidentSearchBody),
+  async (req: Request, res: Response): Promise<void> => {
+    const body = req.body as z.infer<typeof ResidentSearchBody>;
+    return handleResidentSearch(req, res, {
+      confidence: body.confidence,
+      degraded: body.degraded,
+      degradedReason: body.degradedReason,
+      groupByKind: body.groupByKind,
+      hostDeclaredIntent: body.hostDeclaredIntent,
+      hostTurnMeta: body.hostTurnMeta,
+      intentContext: body.intentContext,
+      language: body.language,
+      limit: body.limit,
+      mode: body.mode,
+      page: body.page,
+      q: body.query ?? body.q ?? '',
+      scenario: body.scenario,
+      searchIntent: body.searchIntent,
+      sessionHistory: body.sessionHistory,
+      sourceRefs: body.sourceRefs,
+      type: body.type,
+    });
+  }
+);
+
+async function handleResidentSearch(
+  _req: Request,
+  res: Response,
+  input: ResidentSearchInput
+): Promise<void> {
   const container = getServiceContainer();
+  const hostIntentContext = normalizeHostIntentContext({
+    confidence: input.confidence,
+    degraded: input.degraded,
+    degradedReason: input.degradedReason,
+    hostDeclaredIntent: input.hostDeclaredIntent,
+    hostTurnMeta: input.hostTurnMeta,
+    intentContext: input.intentContext,
+    language: input.language,
+    scenario: input.scenario,
+    searchIntent: input.searchIntent,
+    sessionHistory: input.sessionHistory,
+    sourceRefs: input.sourceRefs,
+    userQuery: input.q,
+  });
+  const hostIntentMeta = createHostIntentContextMeta(hostIntentContext);
+  const query = hostIntentContext.userQuery || input.q;
 
   // 所有模式优先通过 SearchEngine（含 auto/bm25/semantic/keyword/ranking）
   try {
     const searchEngine = container.get('searchEngine');
     const startedAt = performance.now();
-    const result = (await searchEngine.search(q, {
-      type,
-      limit,
-      mode,
-      groupByKind,
+    const result = (await searchEngine.search(query, {
+      type: input.type,
+      limit: input.limit,
+      mode: input.mode,
+      groupByKind: input.groupByKind,
+      ...(hostIntentMeta
+        ? {
+            context: {
+              intent: hostIntentContext.searchIntent ?? hostIntentContext.scenario ?? 'search',
+              language: hostIntentContext.language,
+              sessionHistory: hostIntentContext.sessionHistory,
+            },
+          }
+        : {}),
     })) as SearchResponse & SearchRouteResult;
     const durationMs = Math.round(performance.now() - startedAt);
     const searchMeta = await buildResidentSearchMeta({
       container,
       durationMs,
-      requestedMode: mode,
+      hostIntent: hostIntentMeta,
+      requestedMode: input.mode,
       result,
     });
-    return void res.json({ success: true, data: { ...result, searchMeta } });
+    return void res.json({ success: true, data: { ...result, query, searchMeta } });
   } catch (err: unknown) {
-    logger.warn('SearchEngine 搜索失败，降级到传统搜索', { mode, error: (err as Error).message });
+    logger.warn('SearchEngine 搜索失败，降级到传统搜索', {
+      mode: input.mode,
+      error: (err as Error).message,
+    });
   }
 
   const results: Record<string, { data?: unknown[]; pagination?: Record<string, unknown> }> = {};
-  const pagination = { page, pageSize: limit };
+  const pagination = { page: input.page, pageSize: input.limit };
 
   // SearchEngine 不可用时的降级路径（Dashboard 冷启动场景）
   // recipes + candidates 共用 knowledgeService.search()，避免重复查询
-  if (type === 'all' || type === 'recipe' || type === 'solution' || type === 'candidate') {
+  if (
+    input.type === 'all' ||
+    input.type === 'recipe' ||
+    input.type === 'solution' ||
+    input.type === 'candidate'
+  ) {
     try {
       const knowledgeService = container.get('knowledgeService');
-      const searchResult = await knowledgeService.search(q, pagination);
-      if (type === 'all') {
+      const searchResult = await knowledgeService.search(query, pagination);
+      if (input.type === 'all') {
         results.recipes = searchResult;
         results.candidates = searchResult; // 同源数据，避免二次查询
-      } else if (type === 'candidate') {
+      } else if (input.type === 'candidate') {
         results.candidates = searchResult;
       } else {
         results.recipes = searchResult;
       }
     } catch (err: unknown) {
-      logger.warn('Knowledge 搜索失败', { query: q, error: (err as Error).message });
-      if (type === 'all' || type === 'recipe' || type === 'solution') {
-        results.recipes = { data: [], pagination: { page, pageSize: limit, total: 0, pages: 0 } };
+      logger.warn('Knowledge 搜索失败', { query, error: (err as Error).message });
+      if (input.type === 'all' || input.type === 'recipe' || input.type === 'solution') {
+        results.recipes = {
+          data: [],
+          pagination: { page: input.page, pageSize: input.limit, total: 0, pages: 0 },
+        };
       }
-      if (type === 'all' || type === 'candidate') {
+      if (input.type === 'all' || input.type === 'candidate') {
         results.candidates = {
           data: [],
-          pagination: { page, pageSize: limit, total: 0, pages: 0 },
+          pagination: { page: input.page, pageSize: input.limit, total: 0, pages: 0 },
         };
       }
     }
   }
 
   // 搜索 Guard Rule（boundary-constraint 类型的 Recipe）
-  if (type === 'all' || type === 'rule') {
+  if (input.type === 'all' || input.type === 'rule') {
     try {
       const guardService = container.get('guardService');
-      results.rules = await guardService.searchRules(q, pagination);
+      results.rules = await guardService.searchRules(query, pagination);
     } catch (err: unknown) {
-      logger.warn('Guard Rule 搜索失败', { query: q, error: (err as Error).message });
-      results.rules = { data: [], pagination: { page, pageSize: limit, total: 0, pages: 0 } };
+      logger.warn('Guard Rule 搜索失败', { query, error: (err as Error).message });
+      results.rules = {
+        data: [],
+        pagination: { page: input.page, pageSize: input.limit, total: 0, pages: 0 },
+      };
     }
   }
 
@@ -196,28 +307,31 @@ router.get('/', validateQuery(SearchQuery), async (req: Request, res: Response):
   res.json({
     success: true,
     data: {
-      query: q,
-      type,
-      mode,
+      query,
+      type: input.type,
+      mode: input.mode,
       totalResults,
       searchMeta: buildLegacySearchMeta({
         container,
-        mode,
+        hostIntent: hostIntentMeta,
+        mode: input.mode,
         resultCount: totalResults,
       }),
       ...results,
     },
   });
-});
+}
 
 async function buildResidentSearchMeta({
   container,
   durationMs,
+  hostIntent,
   requestedMode,
   result,
 }: {
   container: ReturnType<typeof getServiceContainer>;
   durationMs: number;
+  hostIntent?: HostIntentContextMeta | null;
   requestedMode: string;
   result: SearchRouteResult;
 }): Promise<ResidentSearchMeta> {
@@ -238,7 +352,10 @@ async function buildResidentSearchMeta({
       ? coreMeta.vectorUsed
       : hasVectorLikeScore(result.items ?? []);
   const fallbackReason = coreMeta?.fallbackReason ?? null;
-  const degraded = Boolean(fallbackReason) || (semanticRequested && !semanticUsed);
+  const degraded =
+    Boolean(fallbackReason) ||
+    (semanticRequested && !semanticUsed) ||
+    Boolean(hostIntent?.degraded);
   const resultCount =
     typeof coreMeta?.resultCount === 'number'
       ? coreMeta.resultCount
@@ -260,8 +377,18 @@ async function buildResidentSearchMeta({
     degraded,
     degradedReason:
       fallbackReason ??
+      hostIntent?.degradedReason ??
       (degraded ? `semantic search requested but resident service returned ${actualMode}` : null),
     ...(fallbackReason ? { fallbackReason } : {}),
+    ...(hostIntent
+      ? {
+          hostIntentApplied: true,
+          hostIntentConfidence: hostIntent.confidence,
+          hostIntentDegraded: hostIntent.degraded,
+          hostIntentDegradedReason: hostIntent.degradedReason,
+          hostIntentSourceRefs: hostIntent.sourceRefs,
+        }
+      : {}),
     durationMs: metaDurationMs,
     resultCount,
     topScore: extractTopScore(result.items ?? []),
@@ -277,13 +404,16 @@ async function buildResidentSearchMeta({
 
 function buildLegacySearchMeta({
   container,
+  hostIntent,
   mode,
   resultCount,
 }: {
   container: ReturnType<typeof getServiceContainer>;
+  hostIntent?: HostIntentContextMeta | null;
   mode: string;
   resultCount: number;
 }): ResidentSearchMeta {
+  const degraded = mode === 'semantic' || Boolean(hostIntent?.degraded);
   return {
     route: 'resident-search',
     service: 'alembic-daemon',
@@ -293,11 +423,20 @@ function buildLegacySearchMeta({
     semanticRequested: mode === 'semantic',
     semanticUsed: false,
     vectorUsed: false,
-    degraded: mode === 'semantic',
+    degraded,
     degradedReason:
       mode === 'semantic'
         ? 'SearchEngine unavailable; resident service used legacy non-vector fallback'
-        : null,
+        : (hostIntent?.degradedReason ?? null),
+    ...(hostIntent
+      ? {
+          hostIntentApplied: true,
+          hostIntentConfidence: hostIntent.confidence,
+          hostIntentDegraded: hostIntent.degraded,
+          hostIntentDegradedReason: hostIntent.degradedReason,
+          hostIntentSourceRefs: hostIntent.sourceRefs,
+        }
+      : {}),
     durationMs: 0,
     resultCount,
     topScore: null,

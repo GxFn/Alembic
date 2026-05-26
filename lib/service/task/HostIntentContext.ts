@@ -15,6 +15,12 @@ export interface HostIntentContextInput {
   activeFile?: unknown;
   language?: unknown;
   sessionHistory?: unknown;
+  sourceRefs?: unknown;
+  confidence?: unknown;
+  degraded?: unknown;
+  degradedReason?: unknown;
+  searchIntent?: unknown;
+  scenario?: unknown;
   hostDeclaredIntent?: unknown;
   hostTurnMeta?: unknown;
   intentContext?: unknown;
@@ -81,6 +87,7 @@ export function normalizeHostIntentContext(
     turn?.recentTurns,
   ]);
   const sourceRefs = uniqueStrings([
+    ...stringsFrom(input.sourceRefs),
     ...stringsFrom(declared?.sourceRefs),
     ...stringsFrom(context?.sourceRefs),
     ...stringsFrom(turn?.sourceRefs),
@@ -109,15 +116,30 @@ export function normalizeHostIntentContext(
     firstString([declared?.language, context?.language, turn?.language, input.language]) ??
     undefined;
   const scenario = scenarioValue(
-    firstString([declared?.scenario, context?.scenario, declared?.intent, context?.intent])
+    firstString([
+      input.scenario,
+      declared?.scenario,
+      context?.scenario,
+      declared?.intent,
+      context?.intent,
+    ])
   );
   const searchIntent =
-    firstString([declared?.intent, context?.intent, declared?.label, context?.label]) ?? scenario;
-  const confidence = numberValue(firstDefined([declared?.confidence, context?.confidence]));
+    firstString([
+      input.searchIntent,
+      declared?.intent,
+      context?.intent,
+      declared?.label,
+      context?.label,
+    ]) ?? scenario;
+  const confidence = numberValue(
+    firstDefined([declared?.confidence, context?.confidence, input.confidence])
+  );
   const degradedReason =
     firstString([
       declared?.degradedReason,
       context?.degradedReason,
+      input.degradedReason,
       declared?.fallbackReason,
       context?.fallbackReason,
     ]) ?? undefined;
@@ -125,6 +147,7 @@ export function normalizeHostIntentContext(
     declared?.degraded === true ||
     context?.degraded === true ||
     turn?.degraded === true ||
+    input.degraded === true ||
     Boolean(degradedReason);
   const sources = [
     declared ? 'hostDeclaredIntent' : null,
@@ -136,7 +159,9 @@ export function normalizeHostIntentContext(
     sessionHistory.length > 0 ||
     sourceRefs.length > 0 ||
     queryHints.length > 0 ||
-    keywordHints.length > 0;
+    keywordHints.length > 0 ||
+    confidence !== undefined ||
+    degraded;
 
   return {
     activeFile,
