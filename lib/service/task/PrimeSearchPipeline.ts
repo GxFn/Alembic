@@ -9,6 +9,7 @@
 
 import type { SearchResultItem, SlimSearchResult } from '@alembic/core/search';
 import { slimSearchResult } from '@alembic/core/search';
+import type { HostIntentContextMeta } from './HostIntentContext.js';
 import type { ExtractedIntent } from './IntentExtractor.js';
 
 // ── Types ───────────────────────────────────────────
@@ -23,6 +24,11 @@ export interface PrimeSearchMeta {
   module: string | null;
   resultCount: number;
   filteredCount: number;
+  hostIntentApplied?: boolean;
+  hostIntentConfidence?: number;
+  hostIntentDegraded?: boolean;
+  hostIntentDegradedReason?: string;
+  hostIntentSourceRefs?: string[];
 }
 
 export interface PrimeSearchResult {
@@ -48,6 +54,11 @@ interface SearchEngineLike {
   ): Promise<{ items?: unknown[] }>;
 }
 
+export interface PrimeSearchOptions {
+  hostIntent?: HostIntentContextMeta | null;
+  sessionHistory?: Array<{ content?: string }>;
+}
+
 // ── Constants ───────────────────────────────────────
 
 /** Absolute minimum score — items below this are definitely noise */
@@ -70,7 +81,10 @@ export class PrimeSearchPipeline {
   /**
    * Core method: multi-query search + scenario routing + result merging.
    */
-  async search(intent: ExtractedIntent): Promise<PrimeSearchResult | null> {
+  async search(
+    intent: ExtractedIntent,
+    options: PrimeSearchOptions = {}
+  ): Promise<PrimeSearchResult | null> {
     if (!intent.queries.length || !intent.queries[0]?.trim()) {
       return null;
     }
@@ -78,8 +92,8 @@ export class PrimeSearchPipeline {
     // Build ranking context
     const context = {
       language: intent.language ?? undefined,
-      intent: intent.scenario,
-      sessionHistory: this.#buildSessionHistory(),
+      intent: options.hostIntent?.searchIntent ?? intent.scenario,
+      sessionHistory: this.#buildSessionHistory(options.sessionHistory),
     };
 
     // Multi-query parallel search (auto mode + keyword mode for cross-language)
@@ -113,6 +127,15 @@ export class PrimeSearchPipeline {
         module: intent.module,
         resultCount: allResults.length,
         filteredCount: filtered.length,
+        ...(options.hostIntent
+          ? {
+              hostIntentApplied: true,
+              hostIntentConfidence: options.hostIntent.confidence,
+              hostIntentDegraded: options.hostIntent.degraded,
+              hostIntentDegradedReason: options.hostIntent.degradedReason,
+              hostIntentSourceRefs: options.hostIntent.sourceRefs,
+            }
+          : {}),
       },
     };
   }
@@ -256,7 +279,13 @@ export class PrimeSearchPipeline {
   /**
    * Build sessionHistory for contextBoost (last 5 queries).
    */
-  #buildSessionHistory(): Array<{ content: string }> {
-    return this.#sessionQueries.slice(-5).map((q) => ({ content: q }));
+  #buildSessionHistory(extra: Array<{ content?: string }> = []): Array<{ content: string }> {
+    const extraHistory = extra
+      .map((entry) => (typeof entry.content === 'string' ? entry.content.trim() : ''))
+      .filter(Boolean)
+      .map((content) => ({ content }));
+    return [...extraHistory, ...this.#sessionQueries.slice(-5).map((q) => ({ content: q }))].slice(
+      -8
+    );
   }
 }

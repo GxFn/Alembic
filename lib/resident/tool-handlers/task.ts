@@ -14,7 +14,12 @@
 import type { SignalBus } from '@alembic/core/events';
 import type { ExtractedIntent } from '#service/task/IntentExtractor.js';
 import { extract as extractIntent } from '#service/task/IntentExtractor.js';
-import type { PrimeSearchResult } from '#service/task/PrimeSearchPipeline.js';
+import type { PrimeSearchOptions, PrimeSearchResult } from '#service/task/PrimeSearchPipeline.js';
+import {
+  applyHostIntentContext,
+  createHostIntentContextMeta,
+  normalizeHostIntentContext,
+} from '../../service/task/HostIntentContext.js';
 import { envelope } from '../tool-schema/envelope.js';
 import type {
   DecisionRecord,
@@ -38,6 +43,10 @@ interface TaskArgs {
   userQuery?: string;
   activeFile?: string;
   language?: string;
+  hostDeclaredIntent?: unknown;
+  hostTurnMeta?: unknown;
+  intentContext?: unknown;
+  sessionHistory?: unknown[];
   [key: string]: unknown;
 }
 
@@ -127,15 +136,35 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
     _persistIntentChain(ctx, intent, 'abandoned', 'New prime received');
   }
 
-  // ─── Intake: extract intent signals ───
-  const extracted = extractIntent(args.userQuery || '', args.activeFile, args.language);
+  // ─── Intake: consume optional Plugin host intent context, then fall back to legacy args ───
+  const hostIntentContext = normalizeHostIntentContext({
+    activeFile: args.activeFile,
+    hostDeclaredIntent: args.hostDeclaredIntent,
+    hostTurnMeta: args.hostTurnMeta,
+    intentContext: args.intentContext,
+    language: args.language,
+    sessionHistory: args.sessionHistory,
+    userQuery: args.userQuery,
+  });
+  const hostIntentMeta = createHostIntentContextMeta(hostIntentContext);
+  const extracted = applyHostIntentContext(
+    extractIntent(
+      hostIntentContext.userQuery || '',
+      hostIntentContext.activeFile,
+      hostIntentContext.language
+    ),
+    hostIntentContext
+  );
 
   // ─── Enrichment: multi-query search via PrimeSearchPipeline ───
   const pipeline = _getPipeline(ctx.container);
   let searchResult: PrimeSearchResult | null = null;
   if (pipeline && extracted.queries[0]?.trim()) {
     try {
-      searchResult = await pipeline.search(extracted);
+      searchResult = await pipeline.search(extracted, {
+        hostIntent: hostIntentMeta,
+        sessionHistory: hostIntentContext.sessionHistory,
+      });
       if (!searchResult) {
         process.stderr.write(
           '[ResidentTool/Task] prime: pipeline.search returned null (all filtered)\n'
@@ -161,8 +190,8 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
   // ─── Lifecycle: initialize IntentState ───
   const freshIntent = createIdleIntent();
   freshIntent.phase = 'active';
-  freshIntent.primeQuery = args.userQuery || '';
-  freshIntent.primeActiveFile = args.activeFile;
+  freshIntent.primeQuery = hostIntentContext.userQuery || '';
+  freshIntent.primeActiveFile = hostIntentContext.activeFile;
   freshIntent.primeLanguage = extracted.language;
   freshIntent.primeModule = extracted.module;
   freshIntent.primeScenario = extracted.scenario;
@@ -176,6 +205,11 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
       queries: searchResult.searchMeta.queries,
       resultCount: searchResult.searchMeta.resultCount,
       filteredCount: searchResult.searchMeta.filteredCount,
+      hostIntentApplied: searchResult.searchMeta.hostIntentApplied,
+      hostIntentConfidence: searchResult.searchMeta.hostIntentConfidence,
+      hostIntentDegraded: searchResult.searchMeta.hostIntentDegraded,
+      hostIntentDegradedReason: searchResult.searchMeta.hostIntentDegradedReason,
+      hostIntentSourceRefs: searchResult.searchMeta.hostIntentSourceRefs,
     };
   }
 
@@ -215,6 +249,7 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
           }
         : null,
       searchMeta: searchResult?.searchMeta ?? null,
+      intentContext: hostIntentMeta,
       _taskRules,
     },
     message: lines.join('\n'),
@@ -438,7 +473,7 @@ function _computeDriftScore(intent: IntentState): number {
 // ═══ PrimeSearchPipeline accessor ═══════════════════════
 
 interface PipelineLike {
-  search(intent: ExtractedIntent): Promise<PrimeSearchResult | null>;
+  search(intent: ExtractedIntent, options?: PrimeSearchOptions): Promise<PrimeSearchResult | null>;
 }
 
 function _getPipeline(container: McpServiceContainer): PipelineLike | null {

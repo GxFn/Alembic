@@ -73,6 +73,11 @@ export interface IntentState {
     queries: string[];
     resultCount: number;
     filteredCount: number;
+    hostIntentApplied?: boolean;
+    hostIntentConfidence?: number;
+    hostIntentDegraded?: boolean;
+    hostIntentDegradedReason?: string;
+    hostIntentSourceRefs?: string[];
   };
 
   // ─── Anchor (set after create) ───
@@ -129,6 +134,11 @@ export interface IntentChainRecord {
     queries: string[];
     resultCount: number;
     filteredCount: number;
+    hostIntentApplied?: boolean;
+    hostIntentConfidence?: number;
+    hostIntentDegraded?: boolean;
+    hostIntentDegradedReason?: string;
+    hostIntentSourceRefs?: string[];
   };
 
   toolCalls: ToolCallRecord[];
@@ -172,12 +182,16 @@ export interface McpContext {
 /** Common search handler args */
 export interface SearchArgs {
   query: string;
+  activeFile?: string;
   limit?: number;
   kind?: string;
   type?: string;
   mode?: string;
   language?: string;
   sessionHistory?: unknown[];
+  hostDeclaredIntent?: unknown;
+  hostTurnMeta?: unknown;
+  intentContext?: unknown;
   [key: string]: unknown;
 }
 

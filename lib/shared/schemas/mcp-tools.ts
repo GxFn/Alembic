@@ -32,9 +32,13 @@ interface SearchInputValue {
   mode: 'auto' | 'keyword' | 'bm25' | 'semantic' | 'context';
   kind: KnowledgeKind;
   limit: number;
+  activeFile?: string;
   language?: string;
   sessionId?: string;
   sessionHistory?: Array<Record<string, unknown>>;
+  hostDeclaredIntent?: Record<string, unknown>;
+  hostTurnMeta?: Record<string, unknown>;
+  intentContext?: Record<string, unknown>;
 }
 
 interface KnowledgeInputValue {
@@ -133,9 +137,26 @@ export const SearchInput = z.object({
     ),
   kind: KindEnum.default('all').describe('过滤知识类型: all/rule/pattern/fact'),
   limit: z.number().int().min(1).max(100).default(10),
+  activeFile: z.string().optional().describe('Currently active file path in IDE'),
   language: z.string().optional().describe('按编程语言过滤，如 swift/typescript'),
   sessionId: z.string().optional(),
   sessionHistory: z.array(z.record(z.string(), z.unknown())).optional(),
+  hostDeclaredIntent: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe(
+      'Optional Plugin-provided host intent frame; Alembic consumes only an allowlisted subset'
+    ),
+  hostTurnMeta: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe(
+      'Optional Plugin-provided turn metadata; raw thread ids and private host payloads are not required'
+    ),
+  intentContext: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe('Optional normalized intent context for backward-compatible Plugin/Alembic handoff'),
 }) as unknown as z.ZodType<SearchInputValue>;
 export type SearchInput = z.infer<typeof SearchInput>;
 
@@ -435,6 +456,19 @@ export const TaskInput = z.object({
     .describe('User current input / prompt text for knowledge-aware search'),
   activeFile: z.string().optional().describe('Currently active file path in IDE'),
   language: z.string().optional().describe('Current programming language'),
+  sessionHistory: z.array(z.record(z.string(), z.unknown())).optional(),
+  hostDeclaredIntent: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe('Optional Plugin-provided host intent frame; legacy args remain valid'),
+  hostTurnMeta: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe('Optional Plugin-provided redacted turn metadata'),
+  intentContext: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe('Optional normalized intent context for prime/search consumption'),
 });
 export type TaskInput = z.infer<typeof TaskInput>;
 

@@ -12,6 +12,10 @@
  */
 
 import { groupByKind, type SlimSearchResult, slimSearchResult } from '@alembic/core/search';
+import {
+  createHostIntentContextMeta,
+  normalizeHostIntentContext,
+} from '../../service/task/HostIntentContext.js';
 import { envelope } from '../tool-schema/envelope.js';
 import type { McpContext, SearchArgs, SearchResultItem } from '../tool-schema/types.js';
 
@@ -68,7 +72,17 @@ function filterByKind(items: SearchResultItem[], kind: string) {
 export async function search(ctx: McpContext, args: SearchArgs) {
   const t0 = Date.now();
   const engine = getSearchEngine(ctx) || (await getFallbackEngine(ctx));
-  const query = args.query;
+  const hostIntentContext = normalizeHostIntentContext({
+    activeFile: args.activeFile,
+    hostDeclaredIntent: args.hostDeclaredIntent,
+    hostTurnMeta: args.hostTurnMeta,
+    intentContext: args.intentContext,
+    language: args.language,
+    sessionHistory: args.sessionHistory,
+    userQuery: args.query,
+  });
+  const hostIntentMeta = createHostIntentContextMeta(hostIntentContext);
+  const query = hostIntentContext.userQuery || args.query;
   const mode = args.mode || 'auto';
   const kind = args.kind || args.type || 'all';
 
@@ -82,11 +96,12 @@ export async function search(ctx: McpContext, args: SearchArgs) {
   const rank = mode !== 'keyword';
 
   // context 模式额外传递会话上下文
-  const context = isContext
+  const shouldPassContext = isContext || hostIntentContext.applied;
+  const context = shouldPassContext
     ? {
-        intent: 'search',
-        language: args.language,
-        sessionHistory: args.sessionHistory || [],
+        intent: hostIntentContext.searchIntent ?? hostIntentContext.scenario ?? 'search',
+        language: hostIntentContext.language ?? args.language,
+        sessionHistory: hostIntentContext.sessionHistory,
       }
     : undefined;
 
@@ -135,6 +150,7 @@ export async function search(ctx: McpContext, args: SearchArgs) {
       totalResults: slimItems.length,
       items: slimItems,
       byKind: byKindGroups,
+      ...(hostIntentMeta ? { intentContext: hostIntentMeta } : {}),
       kindCounts: {
         rule: byKindGroups.rule.length,
         pattern: byKindGroups.pattern.length,
