@@ -10,6 +10,7 @@ import type {
   LoggerLike,
   SaveSnapshotParams,
 } from '@alembic/core/types';
+import type { IntentSearchPlan } from '../../service/task/IntentSearchPlan.js';
 
 // ─── DI Container (minimal shape) ────────────────────────
 
@@ -78,6 +79,7 @@ export interface IntentState {
     hostIntentDegraded?: boolean;
     hostIntentDegradedReason?: string;
     hostIntentSourceRefs?: string[];
+    intentSearchPlan?: IntentSearchPlan;
   };
 
   // ─── Anchor (set after create) ───
@@ -141,6 +143,7 @@ export interface IntentChainRecord {
     hostIntentDegraded?: boolean;
     hostIntentDegradedReason?: string;
     hostIntentSourceRefs?: string[];
+    intentSearchPlan?: IntentSearchPlan;
   };
 
   toolCalls: ToolCallRecord[];

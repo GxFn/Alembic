@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
   return {
     container,
     guardService: { searchRules: vi.fn() },
+    intentEpisodeStore: { latest: vi.fn(), recent: vi.fn() },
     knowledgeService: { search: vi.fn() },
     searchEngine: { search: vi.fn() },
     vectorService: { getStats: vi.fn() },
@@ -37,12 +38,15 @@ describe('search route resident telemetry', () => {
     mocks.container.get.mockImplementation((name: string) => {
       const services: Record<string, unknown> = {
         guardService: mocks.guardService,
+        intentEpisodeStore: mocks.intentEpisodeStore,
         knowledgeService: mocks.knowledgeService,
         searchEngine: mocks.searchEngine,
         vectorService: mocks.vectorService,
       };
       return services[name];
     });
+    mocks.intentEpisodeStore.latest.mockReturnValue(null);
+    mocks.intentEpisodeStore.recent.mockReturnValue([]);
     mocks.vectorService.getStats.mockResolvedValue({
       count: 118,
       dimension: 1024,
@@ -241,6 +245,145 @@ describe('search route resident telemetry', () => {
       hostIntentConfidence: 0.82,
       hostIntentDegraded: false,
       hostIntentSourceRefs: ['host:intent'],
+    });
+  });
+
+  test('builds an IntentSearchPlan that changes keyword/BM25 query with episode continuity evidence', async () => {
+    mocks.intentEpisodeStore.latest.mockReturnValue({
+      episodeId: 'episode-prev',
+      query: 'previous continuity query',
+      sessionKey: 'sha256:previous',
+      sourceRefs: ['knowledge:previous'],
+      status: 'completed',
+      version: 1,
+    });
+    mocks.intentEpisodeStore.recent.mockReturnValue([
+      {
+        episodeId: 'episode-prev',
+        query: 'previous continuity query',
+        sessionKey: 'sha256:previous',
+        sourceRefs: ['knowledge:previous'],
+        status: 'completed',
+        version: 1,
+      },
+    ]);
+    mocks.searchEngine.search.mockResolvedValue({
+      items: [{ id: 'recipe-plan', score: 0.77 }],
+      mode: 'bm25',
+      ranked: true,
+      searchMeta: {
+        actualMode: 'bm25',
+        durationMs: 5,
+        requestedMode: 'bm25',
+        resultCount: 1,
+        route: 'core-search-engine',
+        semanticUsed: false,
+        vectorUsed: false,
+      },
+      total: 1,
+    });
+
+    const response = await invokeRouter(searchRouter, {
+      body: {
+        hostTurnMeta: {
+          language: 'typescript',
+          threadIdHash: 'thread-hash',
+        },
+        intentContext: {
+          keywords: ['factory'],
+          recognizedIntentDraft: {
+            confidence: 0.88,
+            constraints: ['dependency injection'],
+            query: 'compose service factory',
+            sourceRefs: ['/Users/private/project/src/service.ts:42'],
+            status: 'recognized',
+            target: 'ServiceFactory',
+          },
+        },
+        mode: 'bm25',
+        query: 'fallback query',
+      },
+      method: 'POST',
+      mountPath: '/api/v1/search',
+      path: '/api/v1/search',
+    });
+    const data = response.body.data as Record<string, unknown>;
+    const searchMeta = data.searchMeta as Record<string, unknown>;
+    const plan = searchMeta.intentSearchPlan as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(mocks.intentEpisodeStore.latest).toHaveBeenCalledWith({
+      sessionId: 'thread:thread-hash',
+    });
+    expect(mocks.searchEngine.search).toHaveBeenCalledWith(
+      expect.stringContaining('compose service factory'),
+      expect.objectContaining({ mode: 'bm25' })
+    );
+    expect(data.query).toContain('dependency injection');
+    expect(data.query).toContain('previous continuity query');
+    expect(plan).toMatchObject({
+      applied: true,
+      rankingProfile: 'bm25-intent',
+      sourceRefs: expect.arrayContaining(['[absolute-path]/service.ts:42', 'knowledge:previous']),
+      whySelected: expect.arrayContaining([
+        'recognizedIntentDraft.query',
+        'intentEpisode.latest.query',
+      ]),
+    });
+    expect(JSON.stringify(plan)).not.toContain('/Users/private');
+  });
+
+  test('does not force low confidence recognized intent into keyword search', async () => {
+    mocks.searchEngine.search.mockResolvedValue({
+      items: [{ id: 'recipe-low-confidence', score: 0.51 }],
+      mode: 'keyword',
+      ranked: false,
+      searchMeta: {
+        actualMode: 'keyword',
+        durationMs: 3,
+        requestedMode: 'keyword',
+        resultCount: 1,
+        route: 'core-search-engine',
+        semanticUsed: false,
+        vectorUsed: false,
+      },
+      total: 1,
+    });
+
+    const response = await invokeRouter(searchRouter, {
+      body: {
+        intentContext: {
+          recognizedIntentDraft: {
+            confidence: 0.2,
+            query: 'risky inferred query',
+            status: 'needs-confirmation',
+          },
+        },
+        mode: 'keyword',
+        query: 'fallback query',
+      },
+      method: 'POST',
+      mountPath: '/api/v1/search',
+      path: '/api/v1/search',
+    });
+    const searchMeta = ((response.body.data as Record<string, unknown>).searchMeta ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const plan = searchMeta.intentSearchPlan as Record<string, unknown>;
+
+    expect(mocks.searchEngine.search).toHaveBeenCalledWith(
+      'fallback query',
+      expect.objectContaining({ mode: 'keyword' })
+    );
+    expect(plan).toMatchObject({
+      applied: false,
+      executableQuery: 'fallback query',
+      omitted: expect.arrayContaining([
+        'recognizedIntentDraft.lowConfidence',
+        'recognizedIntentDraft.status:needs-confirmation',
+      ]),
+      rankingProfile: 'raw-fallback',
     });
   });
 

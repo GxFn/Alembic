@@ -26,6 +26,10 @@ import {
   createHostIntentContextMeta,
   normalizeHostIntentContext,
 } from '../../service/task/HostIntentContext.js';
+import {
+  buildIntentSearchPlan,
+  summarizeIntentSearchPlan,
+} from '../../service/task/IntentSearchPlan.js';
 import { envelope } from '../tool-schema/envelope.js';
 import type {
   DecisionRecord,
@@ -161,6 +165,15 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
     ),
     hostIntentContext
   );
+  const intentSearchPlan = buildIntentSearchPlan({
+    episodeStore: _getIntentEpisodeStore(ctx.container, { logMissing: false }),
+    hostDeclaredIntent: args.hostDeclaredIntent,
+    hostIntentContext,
+    hostTurnMeta: args.hostTurnMeta,
+    intentContext: args.intentContext,
+    mode: 'prime',
+    rawQuery: args.userQuery ?? hostIntentContext.userQuery,
+  });
 
   // ─── Enrichment: multi-query search via PrimeSearchPipeline ───
   const pipeline = _getPipeline(ctx.container);
@@ -169,6 +182,7 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
     try {
       searchResult = await pipeline.search(extracted, {
         hostIntent: hostIntentMeta,
+        intentSearchPlan,
         sessionHistory: hostIntentContext.sessionHistory,
       });
       if (!searchResult) {
@@ -216,6 +230,7 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
       hostIntentDegraded: searchResult.searchMeta.hostIntentDegraded,
       hostIntentDegradedReason: searchResult.searchMeta.hostIntentDegradedReason,
       hostIntentSourceRefs: searchResult.searchMeta.hostIntentSourceRefs,
+      intentSearchPlan: searchResult.searchMeta.intentSearchPlan,
     };
   }
 
@@ -273,6 +288,7 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
           }
         : null,
       searchMeta: searchResult?.searchMeta ?? null,
+      intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan),
       intentEpisode: episode
         ? {
             episodeId: episode.episodeId,
@@ -625,15 +641,20 @@ function _updateIntentEpisodeOutcome(
   }
 }
 
-function _getIntentEpisodeStore(container: McpServiceContainer): IntentEpisodeStore | null {
+function _getIntentEpisodeStore(
+  container: McpServiceContainer,
+  options: { logMissing?: boolean } = {}
+): IntentEpisodeStore | null {
   try {
     return container.get('intentEpisodeStore') as IntentEpisodeStore;
   } catch (err: unknown) {
-    process.stderr.write(
-      `[ResidentTool/Task] _getIntentEpisodeStore failed: ${
-        err instanceof Error ? err.message : String(err)
-      }\n`
-    );
+    if (options.logMissing !== false) {
+      process.stderr.write(
+        `[ResidentTool/Task] _getIntentEpisodeStore failed: ${
+          err instanceof Error ? err.message : String(err)
+        }\n`
+      );
+    }
     return null;
   }
 }

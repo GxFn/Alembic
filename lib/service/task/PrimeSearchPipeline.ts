@@ -11,6 +11,11 @@ import type { SearchResultItem, SlimSearchResult } from '@alembic/core/search';
 import { slimSearchResult } from '@alembic/core/search';
 import type { HostIntentContextMeta } from './HostIntentContext.js';
 import type { ExtractedIntent } from './IntentExtractor.js';
+import {
+  applyIntentSearchPlanToExtractedIntent,
+  type IntentSearchPlan,
+  summarizeIntentSearchPlan,
+} from './IntentSearchPlan.js';
 
 // ── Types ───────────────────────────────────────────
 
@@ -29,6 +34,7 @@ export interface PrimeSearchMeta {
   hostIntentDegraded?: boolean;
   hostIntentDegradedReason?: string;
   hostIntentSourceRefs?: string[];
+  intentSearchPlan?: IntentSearchPlan;
 }
 
 export interface PrimeSearchResult {
@@ -56,6 +62,7 @@ interface SearchEngineLike {
 
 export interface PrimeSearchOptions {
   hostIntent?: HostIntentContextMeta | null;
+  intentSearchPlan?: IntentSearchPlan | null;
   sessionHistory?: Array<{ content?: string }>;
 }
 
@@ -85,21 +92,22 @@ export class PrimeSearchPipeline {
     intent: ExtractedIntent,
     options: PrimeSearchOptions = {}
   ): Promise<PrimeSearchResult | null> {
-    if (!intent.queries.length || !intent.queries[0]?.trim()) {
+    const plannedIntent = applyIntentSearchPlanToExtractedIntent(intent, options.intentSearchPlan);
+    if (!plannedIntent.queries.length || !plannedIntent.queries[0]?.trim()) {
       return null;
     }
 
     // Build ranking context
     const context = {
-      language: intent.language ?? undefined,
-      intent: options.hostIntent?.searchIntent ?? intent.scenario,
+      language: plannedIntent.language ?? undefined,
+      intent: options.hostIntent?.searchIntent ?? plannedIntent.scenario,
       sessionHistory: this.#buildSessionHistory(options.sessionHistory),
     };
 
     // Multi-query parallel search (auto mode + keyword mode for cross-language)
     const allResults = await this.#multiQuerySearch(
-      intent.queries,
-      intent.keywordQueries ?? [],
+      plannedIntent.queries,
+      plannedIntent.keywordQueries ?? [],
       context
     );
 
@@ -115,18 +123,21 @@ export class PrimeSearchPipeline {
     const rules = filtered.filter((r) => r.kind === 'rule').slice(0, 3);
 
     // Record search to session history
-    this.#sessionQueries.push(intent.raw.userQuery);
+    this.#sessionQueries.push(plannedIntent.raw.userQuery);
 
     return {
       relatedKnowledge: knowledge,
       guardRules: rules,
       searchMeta: {
-        queries: intent.queries,
-        scenario: intent.scenario,
-        language: intent.language,
-        module: intent.module,
+        queries: plannedIntent.queries,
+        scenario: plannedIntent.scenario,
+        language: plannedIntent.language,
+        module: plannedIntent.module,
         resultCount: allResults.length,
         filteredCount: filtered.length,
+        ...(options.intentSearchPlan
+          ? { intentSearchPlan: summarizeIntentSearchPlan(options.intentSearchPlan) }
+          : {}),
         ...(options.hostIntent
           ? {
               hostIntentApplied: true,

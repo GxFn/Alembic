@@ -16,6 +16,11 @@ import {
   createHostIntentContextMeta,
   normalizeHostIntentContext,
 } from '../../service/task/HostIntentContext.js';
+import type { IntentEpisodeStore } from '../../service/task/IntentEpisodeStore.js';
+import {
+  buildIntentSearchPlan,
+  summarizeIntentSearchPlan,
+} from '../../service/task/IntentSearchPlan.js';
 import { envelope } from '../tool-schema/envelope.js';
 import type { McpContext, SearchArgs, SearchResultItem } from '../tool-schema/types.js';
 
@@ -82,9 +87,19 @@ export async function search(ctx: McpContext, args: SearchArgs) {
     userQuery: args.query,
   });
   const hostIntentMeta = createHostIntentContextMeta(hostIntentContext);
-  const query = hostIntentContext.userQuery || args.query;
   const mode = args.mode || 'auto';
   const kind = args.kind || args.type || 'all';
+  const intentSearchPlan = buildIntentSearchPlan({
+    episodeStore: getIntentEpisodeStore(ctx),
+    hostDeclaredIntent: args.hostDeclaredIntent,
+    hostIntentContext,
+    hostTurnMeta: args.hostTurnMeta,
+    intentContext: args.intentContext,
+    kind,
+    mode,
+    rawQuery: args.query,
+  });
+  const query = intentSearchPlan.executableQuery || hostIntentContext.userQuery || args.query;
 
   // ── Mode-specific 参数适配 ──
 
@@ -151,6 +166,7 @@ export async function search(ctx: McpContext, args: SearchArgs) {
       items: slimItems,
       byKind: byKindGroups,
       ...(hostIntentMeta ? { intentContext: hostIntentMeta } : {}),
+      intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan),
       kindCounts: {
         rule: byKindGroups.rule.length,
         pattern: byKindGroups.pattern.length,
@@ -180,6 +196,14 @@ export async function search(ctx: McpContext, args: SearchArgs) {
     },
     meta: { tool: toolName, source, responseTimeMs: elapsed },
   });
+}
+
+function getIntentEpisodeStore(ctx: McpContext): IntentEpisodeStore | null {
+  try {
+    return ctx.container.get('intentEpisodeStore') as IntentEpisodeStore;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Backward-compatible aliases ────────────────────────────

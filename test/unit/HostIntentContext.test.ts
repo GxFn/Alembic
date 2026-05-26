@@ -125,14 +125,18 @@ describe('host intent context consumption', () => {
         }),
         scenario: 'generate',
       }),
-      {
+      expect.objectContaining({
         hostIntent: expect.objectContaining({
           applied: true,
           confidence: 0.9,
           sourceRefs: ['host:intent'],
         }),
+        intentSearchPlan: expect.objectContaining({
+          applied: false,
+          executableQuery: 'service factory',
+        }),
         sessionHistory: [{ content: 'previous turn' }],
-      }
+      })
     );
     expect(result).toMatchObject({
       success: true,

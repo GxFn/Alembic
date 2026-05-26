@@ -15,6 +15,12 @@ import {
   type HostIntentContextMeta,
   normalizeHostIntentContext,
 } from '../../service/task/HostIntentContext.js';
+import type { IntentEpisodeStore } from '../../service/task/IntentEpisodeStore.js';
+import {
+  buildIntentSearchPlan,
+  type IntentSearchPlan,
+  summarizeIntentSearchPlan,
+} from '../../service/task/IntentSearchPlan.js';
 import {
   ContextAwareSearchBody,
   GraphImpactQuery,
@@ -112,6 +118,7 @@ interface ResidentSearchMeta {
   hostIntentDegraded?: boolean;
   hostIntentDegradedReason?: string;
   hostIntentSourceRefs?: string[];
+  intentSearchPlan?: IntentSearchPlan;
   durationMs: number;
   resultCount: number;
   topScore: number | null;
@@ -208,7 +215,17 @@ async function handleResidentSearch(
     userQuery: input.q,
   });
   const hostIntentMeta = createHostIntentContextMeta(hostIntentContext);
-  const query = hostIntentContext.userQuery || input.q;
+  const intentSearchPlan = buildIntentSearchPlan({
+    episodeStore: getOptionalIntentEpisodeStore(container),
+    hostDeclaredIntent: input.hostDeclaredIntent,
+    hostIntentContext,
+    hostTurnMeta: input.hostTurnMeta,
+    intentContext: input.intentContext,
+    kind: input.type,
+    mode: input.mode,
+    rawQuery: input.q,
+  });
+  const query = intentSearchPlan.executableQuery || hostIntentContext.userQuery || input.q;
 
   // 所有模式优先通过 SearchEngine（含 auto/bm25/semantic/keyword/ranking）
   try {
@@ -234,6 +251,7 @@ async function handleResidentSearch(
       container,
       durationMs,
       hostIntent: hostIntentMeta,
+      intentSearchPlan,
       requestedMode: input.mode,
       result,
     });
@@ -314,6 +332,7 @@ async function handleResidentSearch(
       searchMeta: buildLegacySearchMeta({
         container,
         hostIntent: hostIntentMeta,
+        intentSearchPlan,
         mode: input.mode,
         resultCount: totalResults,
       }),
@@ -326,12 +345,14 @@ async function buildResidentSearchMeta({
   container,
   durationMs,
   hostIntent,
+  intentSearchPlan,
   requestedMode,
   result,
 }: {
   container: ReturnType<typeof getServiceContainer>;
   durationMs: number;
   hostIntent?: HostIntentContextMeta | null;
+  intentSearchPlan?: IntentSearchPlan | null;
   requestedMode: string;
   result: SearchRouteResult;
 }): Promise<ResidentSearchMeta> {
@@ -389,6 +410,7 @@ async function buildResidentSearchMeta({
           hostIntentSourceRefs: hostIntent.sourceRefs,
         }
       : {}),
+    ...(intentSearchPlan ? { intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan) } : {}),
     durationMs: metaDurationMs,
     resultCount,
     topScore: extractTopScore(result.items ?? []),
@@ -405,11 +427,13 @@ async function buildResidentSearchMeta({
 function buildLegacySearchMeta({
   container,
   hostIntent,
+  intentSearchPlan,
   mode,
   resultCount,
 }: {
   container: ReturnType<typeof getServiceContainer>;
   hostIntent?: HostIntentContextMeta | null;
+  intentSearchPlan?: IntentSearchPlan | null;
   mode: string;
   resultCount: number;
 }): ResidentSearchMeta {
@@ -437,6 +461,7 @@ function buildLegacySearchMeta({
           hostIntentSourceRefs: hostIntent.sourceRefs,
         }
       : {}),
+    ...(intentSearchPlan ? { intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan) } : {}),
     durationMs: 0,
     resultCount,
     topScore: null,
@@ -547,6 +572,16 @@ function buildSearchWorkspaceIdentity(container: ReturnType<typeof getServiceCon
       runtimeDir: null,
       workspaceMode: null,
     };
+  }
+}
+
+function getOptionalIntentEpisodeStore(
+  container: ReturnType<typeof getServiceContainer>
+): IntentEpisodeStore | null {
+  try {
+    return container.get('intentEpisodeStore') as IntentEpisodeStore;
+  } catch {
+    return null;
   }
 }
 

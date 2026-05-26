@@ -8,6 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
+import type { IntentSearchPlan } from './IntentSearchPlan.js';
 
 export type IntentEpisodeStatus = 'active' | 'completed' | 'failed' | 'abandoned';
 
@@ -37,6 +38,7 @@ export interface IntentEpisodeSearchMeta {
   hostIntentDegraded?: boolean;
   hostIntentDegradedReason?: string;
   hostIntentSourceRefs?: string[];
+  intentSearchPlan?: IntentSearchPlan | Record<string, unknown>;
   queries?: string[];
   resultCount?: number;
 }
@@ -396,10 +398,28 @@ function sanitizeSearchMeta(
       ? { hostIntentDegradedReason: sanitizeText(value.hostIntentDegradedReason, 300) }
       : {}),
     hostIntentSourceRefs: collectSourceRefs(value.hostIntentSourceRefs, null, null),
+    ...(value.intentSearchPlan && typeof value.intentSearchPlan === 'object'
+      ? { intentSearchPlan: sanitizeIntentSearchPlanMeta(value.intentSearchPlan) }
+      : {}),
     queries: stringsFrom(value.queries).slice(0, 8),
     ...(typeof value.resultCount === 'number' && Number.isFinite(value.resultCount)
       ? { resultCount: Math.max(0, Math.floor(value.resultCount)) }
       : {}),
+  };
+}
+
+function sanitizeIntentSearchPlanMeta(value: object): Record<string, unknown> {
+  const plan = value as Record<string, unknown>;
+  return {
+    applied: plan.applied === true,
+    degraded: plan.degraded === true,
+    degradedReasons: stringsFrom(plan.degradedReasons).slice(0, 8),
+    executableQuery: sanitizeText(plan.executableQuery, 280),
+    lexicalQueries: stringsFrom(plan.lexicalQueries).slice(0, 6),
+    omitted: stringsFrom(plan.omitted).slice(0, 8),
+    rankingProfile: sanitizeText(plan.rankingProfile, 80),
+    sourceRefs: collectSourceRefs(plan.sourceRefs, null, null),
+    whySelected: stringsFrom(plan.whySelected).slice(0, 8),
   };
 }
 
