@@ -59,6 +59,21 @@ describe('PrimeSearchPipeline IntentSearchPlan consumption', () => {
       sourceRefs: ['host:intent'],
       whySelected: expect.arrayContaining(['recognizedIntentDraft.query']),
     });
+    expect(result?.searchMeta.intentEvidence).toMatchObject({
+      semanticAnchors: expect.arrayContaining([
+        expect.objectContaining({ value: expect.stringContaining('compose service factory') }),
+      ]),
+      topAnchorMatches: expect.arrayContaining([
+        expect.objectContaining({ itemId: 'recipe-1', matchType: 'text' }),
+      ]),
+      scoreBreakdown: expect.arrayContaining([
+        expect.objectContaining({
+          finalScore: 0.91,
+          itemId: 'recipe-1',
+          lexicalScore: 0.91,
+        }),
+      ]),
+    });
     expect(result?.searchMeta.queries[0]).toContain('compose service factory');
   });
 });

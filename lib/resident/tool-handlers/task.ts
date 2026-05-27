@@ -27,6 +27,10 @@ import {
   normalizeHostIntentContext,
 } from '../../service/task/HostIntentContext.js';
 import {
+  buildIntentEvidence,
+  type RelationEvidenceProvider,
+} from '../../service/task/IntentEvidence.js';
+import {
   buildIntentSearchPlan,
   summarizeIntentSearchPlan,
 } from '../../service/task/IntentSearchPlan.js';
@@ -185,6 +189,17 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
         intentSearchPlan,
         sessionHistory: hostIntentContext.sessionHistory,
       });
+      if (searchResult) {
+        searchResult.searchMeta.intentEvidence = await buildIntentEvidence({
+          actualMode: 'prime',
+          intentSearchPlan,
+          items: [...searchResult.relatedKnowledge, ...searchResult.guardRules],
+          relationProvider: _getRelationProvider(ctx.container),
+          requestedMode: 'prime',
+          semanticUsed: false,
+          vectorUsed: false,
+        });
+      }
       if (!searchResult) {
         process.stderr.write(
           '[ResidentTool/Task] prime: pipeline.search returned null (all filtered)\n'
@@ -230,6 +245,7 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
       hostIntentDegraded: searchResult.searchMeta.hostIntentDegraded,
       hostIntentDegradedReason: searchResult.searchMeta.hostIntentDegradedReason,
       hostIntentSourceRefs: searchResult.searchMeta.hostIntentSourceRefs,
+      intentEvidence: searchResult.searchMeta.intentEvidence,
       intentSearchPlan: searchResult.searchMeta.intentSearchPlan,
     };
   }
@@ -655,6 +671,14 @@ function _getIntentEpisodeStore(
         }\n`
       );
     }
+    return null;
+  }
+}
+
+function _getRelationProvider(container: McpServiceContainer): RelationEvidenceProvider | null {
+  try {
+    return container.get('knowledgeGraphService') as RelationEvidenceProvider;
+  } catch {
     return null;
   }
 }

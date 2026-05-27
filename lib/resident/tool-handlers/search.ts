@@ -18,6 +18,10 @@ import {
 } from '../../service/task/HostIntentContext.js';
 import type { IntentEpisodeStore } from '../../service/task/IntentEpisodeStore.js';
 import {
+  buildIntentEvidence,
+  type RelationEvidenceProvider,
+} from '../../service/task/IntentEvidence.js';
+import {
   buildIntentSearchPlan,
   summarizeIntentSearchPlan,
 } from '../../service/task/IntentSearchPlan.js';
@@ -135,7 +139,7 @@ export async function search(ctx: McpContext, args: SearchArgs) {
     context,
   });
 
-  let items = result?.items || [];
+  let items = (result?.items || []) as SearchResultItem[];
   const actualMode = result?.mode || mode;
 
   // ── Kind 过滤 + 截断 ──
@@ -146,6 +150,18 @@ export async function search(ctx: McpContext, args: SearchArgs) {
   const slimItems = items.map(slimSearchResult);
   const byKindGroups = groupByKind(slimItems);
   const elapsed = Date.now() - t0;
+  const intentEvidence = await buildIntentEvidence({
+    actualMode,
+    intentSearchPlan,
+    items,
+    relationProvider: getRelationProvider(ctx),
+    requestedMode: mode,
+    semanticUsed: actualMode === 'semantic',
+    vectorUsed: items.some(
+      (item: SearchResultItem) =>
+        typeof item.vectorScore === 'number' || typeof item.semanticScore === 'number'
+    ),
+  });
 
   // ── 构造工具名称 ──
   const toolName = _toolName(mode);
@@ -167,6 +183,7 @@ export async function search(ctx: McpContext, args: SearchArgs) {
       byKind: byKindGroups,
       ...(hostIntentMeta ? { intentContext: hostIntentMeta } : {}),
       intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan),
+      intentEvidence,
       kindCounts: {
         rule: byKindGroups.rule.length,
         pattern: byKindGroups.pattern.length,
@@ -201,6 +218,14 @@ export async function search(ctx: McpContext, args: SearchArgs) {
 function getIntentEpisodeStore(ctx: McpContext): IntentEpisodeStore | null {
   try {
     return ctx.container.get('intentEpisodeStore') as IntentEpisodeStore;
+  } catch {
+    return null;
+  }
+}
+
+function getRelationProvider(ctx: McpContext): RelationEvidenceProvider | null {
+  try {
+    return ctx.container.get('knowledgeGraphService') as RelationEvidenceProvider;
   } catch {
     return null;
   }

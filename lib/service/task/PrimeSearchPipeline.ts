@@ -10,6 +10,7 @@
 import type { SearchResultItem, SlimSearchResult } from '@alembic/core/search';
 import { slimSearchResult } from '@alembic/core/search';
 import type { HostIntentContextMeta } from './HostIntentContext.js';
+import { buildIntentEvidence, type IntentEvidence } from './IntentEvidence.js';
 import type { ExtractedIntent } from './IntentExtractor.js';
 import {
   applyIntentSearchPlanToExtractedIntent,
@@ -34,6 +35,7 @@ export interface PrimeSearchMeta {
   hostIntentDegraded?: boolean;
   hostIntentDegradedReason?: string;
   hostIntentSourceRefs?: string[];
+  intentEvidence?: IntentEvidence;
   intentSearchPlan?: IntentSearchPlan;
 }
 
@@ -121,6 +123,14 @@ export class PrimeSearchPipeline {
     // Classify: knowledge vs rules
     const knowledge = filtered.filter((r) => r.kind !== 'rule').slice(0, 5);
     const rules = filtered.filter((r) => r.kind === 'rule').slice(0, 3);
+    const intentEvidence = await buildIntentEvidence({
+      actualMode: 'prime',
+      intentSearchPlan: options.intentSearchPlan,
+      items: filtered,
+      requestedMode: 'prime',
+      semanticUsed: false,
+      vectorUsed: false,
+    });
 
     // Record search to session history
     this.#sessionQueries.push(plannedIntent.raw.userQuery);
@@ -138,6 +148,7 @@ export class PrimeSearchPipeline {
         ...(options.intentSearchPlan
           ? { intentSearchPlan: summarizeIntentSearchPlan(options.intentSearchPlan) }
           : {}),
+        intentEvidence,
         ...(options.hostIntent
           ? {
               hostIntentApplied: true,

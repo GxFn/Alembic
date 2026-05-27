@@ -17,6 +17,11 @@ import {
 } from '../../service/task/HostIntentContext.js';
 import type { IntentEpisodeStore } from '../../service/task/IntentEpisodeStore.js';
 import {
+  buildIntentEvidence,
+  type IntentEvidence,
+  type RelationEvidenceProvider,
+} from '../../service/task/IntentEvidence.js';
+import {
   buildIntentSearchPlan,
   type IntentSearchPlan,
   summarizeIntentSearchPlan,
@@ -118,6 +123,7 @@ interface ResidentSearchMeta {
   hostIntentDegraded?: boolean;
   hostIntentDegradedReason?: string;
   hostIntentSourceRefs?: string[];
+  intentEvidence?: IntentEvidence;
   intentSearchPlan?: IntentSearchPlan;
   durationMs: number;
   resultCount: number;
@@ -329,7 +335,7 @@ async function handleResidentSearch(
       type: input.type,
       mode: input.mode,
       totalResults,
-      searchMeta: buildLegacySearchMeta({
+      searchMeta: await buildLegacySearchMeta({
         container,
         hostIntent: hostIntentMeta,
         intentSearchPlan,
@@ -385,6 +391,16 @@ async function buildResidentSearchMeta({
         : (result.items ?? []).length;
   const metaDurationMs =
     typeof coreMeta?.durationMs === 'number' ? coreMeta.durationMs : durationMs;
+  const intentEvidence = await buildIntentEvidence({
+    actualMode,
+    intentSearchPlan,
+    items: result.items ?? [],
+    relationProvider: getOptionalRelationProvider(container),
+    requestedMode,
+    semanticUsed,
+    vectorAvailable: residentVector.available,
+    vectorUsed,
+  });
 
   return {
     route: 'resident-search',
@@ -411,6 +427,7 @@ async function buildResidentSearchMeta({
         }
       : {}),
     ...(intentSearchPlan ? { intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan) } : {}),
+    intentEvidence,
     durationMs: metaDurationMs,
     resultCount,
     topScore: extractTopScore(result.items ?? []),
@@ -424,7 +441,7 @@ async function buildResidentSearchMeta({
   };
 }
 
-function buildLegacySearchMeta({
+async function buildLegacySearchMeta({
   container,
   hostIntent,
   intentSearchPlan,
@@ -436,8 +453,17 @@ function buildLegacySearchMeta({
   intentSearchPlan?: IntentSearchPlan | null;
   mode: string;
   resultCount: number;
-}): ResidentSearchMeta {
+}): Promise<ResidentSearchMeta> {
   const degraded = mode === 'semantic' || Boolean(hostIntent?.degraded);
+  const intentEvidence = await buildIntentEvidence({
+    intentSearchPlan,
+    items: [],
+    relationProvider: getOptionalRelationProvider(container),
+    requestedMode: mode,
+    semanticUsed: false,
+    vectorAvailable: false,
+    vectorUsed: false,
+  });
   return {
     route: 'resident-search',
     service: 'alembic-daemon',
@@ -462,6 +488,7 @@ function buildLegacySearchMeta({
         }
       : {}),
     ...(intentSearchPlan ? { intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan) } : {}),
+    intentEvidence,
     durationMs: 0,
     resultCount,
     topScore: null,
@@ -478,6 +505,16 @@ function buildLegacySearchMeta({
     },
     workspace: buildSearchWorkspaceIdentity(container),
   };
+}
+
+function getOptionalRelationProvider(
+  container: ReturnType<typeof getServiceContainer>
+): RelationEvidenceProvider | null {
+  try {
+    return container.get('knowledgeGraphService') as RelationEvidenceProvider;
+  } catch {
+    return null;
+  }
 }
 
 function buildResidentVectorMeta({

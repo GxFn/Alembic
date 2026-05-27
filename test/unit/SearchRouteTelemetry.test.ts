@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     container,
     guardService: { searchRules: vi.fn() },
     intentEpisodeStore: { latest: vi.fn(), recent: vi.fn() },
+    knowledgeGraphService: { getEdges: vi.fn() },
     knowledgeService: { search: vi.fn() },
     searchEngine: { search: vi.fn() },
     vectorService: { getStats: vi.fn() },
@@ -39,6 +40,7 @@ describe('search route resident telemetry', () => {
       const services: Record<string, unknown> = {
         guardService: mocks.guardService,
         intentEpisodeStore: mocks.intentEpisodeStore,
+        knowledgeGraphService: mocks.knowledgeGraphService,
         knowledgeService: mocks.knowledgeService,
         searchEngine: mocks.searchEngine,
         vectorService: mocks.vectorService,
@@ -47,6 +49,7 @@ describe('search route resident telemetry', () => {
     });
     mocks.intentEpisodeStore.latest.mockReturnValue(null);
     mocks.intentEpisodeStore.recent.mockReturnValue([]);
+    mocks.knowledgeGraphService.getEdges.mockResolvedValue([]);
     mocks.vectorService.getStats.mockResolvedValue({
       count: 118,
       dimension: 1024,
@@ -268,7 +271,17 @@ describe('search route resident telemetry', () => {
       },
     ]);
     mocks.searchEngine.search.mockResolvedValue({
-      items: [{ id: 'recipe-plan', score: 0.77 }],
+      items: [
+        {
+          description: 'Use dependency injection to compose a service factory.',
+          id: 'recipe-plan',
+          score: 0.77,
+          semanticScore: 0.42,
+          sourceRefs: ['/Users/private/project/src/recipe.ts:12'],
+          title: 'Compose service factory',
+          trigger: 'compose service factory',
+        },
+      ],
       mode: 'bm25',
       ranked: true,
       searchMeta: {
@@ -282,6 +295,15 @@ describe('search route resident telemetry', () => {
       },
       total: 1,
     });
+    mocks.knowledgeGraphService.getEdges.mockResolvedValue([
+      {
+        fromId: 'recipe-plan',
+        fromType: 'recipe',
+        relation: 'related',
+        toId: 'recipe-related',
+        toType: 'recipe',
+      },
+    ]);
 
     const response = await invokeRouter(searchRouter, {
       body: {
@@ -310,6 +332,7 @@ describe('search route resident telemetry', () => {
     const data = response.body.data as Record<string, unknown>;
     const searchMeta = data.searchMeta as Record<string, unknown>;
     const plan = searchMeta.intentSearchPlan as Record<string, unknown>;
+    const evidence = searchMeta.intentEvidence as Record<string, unknown>;
 
     expect(response.status).toBe(200);
     expect(mocks.intentEpisodeStore.latest).toHaveBeenCalledWith({
@@ -330,7 +353,36 @@ describe('search route resident telemetry', () => {
         'intentEpisode.latest.query',
       ]),
     });
+    expect(evidence).toMatchObject({
+      semanticAnchors: expect.arrayContaining([
+        expect.objectContaining({
+          source: 'intentSearchPlan.executableQuery',
+          value: expect.stringContaining('compose service factory'),
+        }),
+      ]),
+      topAnchorMatches: expect.arrayContaining([
+        expect.objectContaining({
+          itemId: 'recipe-plan',
+          matchType: 'text',
+        }),
+      ]),
+      scoreBreakdown: expect.arrayContaining([
+        expect.objectContaining({
+          finalScore: 0.77,
+          itemId: 'recipe-plan',
+          semanticScore: 0.42,
+        }),
+      ]),
+      relationEvidence: expect.arrayContaining([
+        expect.objectContaining({
+          itemId: 'recipe-plan',
+          relatedId: 'recipe-related',
+          relation: 'related',
+        }),
+      ]),
+    });
     expect(JSON.stringify(plan)).not.toContain('/Users/private');
+    expect(JSON.stringify(evidence)).not.toContain('/Users/private');
   });
 
   test('does not force low confidence recognized intent into keyword search', async () => {

@@ -8,6 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
+import type { IntentEvidence } from './IntentEvidence.js';
 import type { IntentSearchPlan } from './IntentSearchPlan.js';
 
 export type IntentEpisodeStatus = 'active' | 'completed' | 'failed' | 'abandoned';
@@ -38,6 +39,7 @@ export interface IntentEpisodeSearchMeta {
   hostIntentDegraded?: boolean;
   hostIntentDegradedReason?: string;
   hostIntentSourceRefs?: string[];
+  intentEvidence?: IntentEvidence | Record<string, unknown>;
   intentSearchPlan?: IntentSearchPlan | Record<string, unknown>;
   queries?: string[];
   resultCount?: number;
@@ -398,6 +400,9 @@ function sanitizeSearchMeta(
       ? { hostIntentDegradedReason: sanitizeText(value.hostIntentDegradedReason, 300) }
       : {}),
     hostIntentSourceRefs: collectSourceRefs(value.hostIntentSourceRefs, null, null),
+    ...(value.intentEvidence && typeof value.intentEvidence === 'object'
+      ? { intentEvidence: sanitizeIntentEvidenceMeta(value.intentEvidence) }
+      : {}),
     ...(value.intentSearchPlan && typeof value.intentSearchPlan === 'object'
       ? { intentSearchPlan: sanitizeIntentSearchPlanMeta(value.intentSearchPlan) }
       : {}),
@@ -406,6 +411,43 @@ function sanitizeSearchMeta(
       ? { resultCount: Math.max(0, Math.floor(value.resultCount)) }
       : {}),
   };
+}
+
+function sanitizeIntentEvidenceMeta(value: object): Record<string, unknown> {
+  const evidence = value as Record<string, unknown>;
+  return {
+    degraded: evidence.degraded === true,
+    degradedReasons: stringsFrom(evidence.degradedReasons).slice(0, 8),
+    relationEvidence: arrayRecords(evidence.relationEvidence).slice(0, 12),
+    scoreBreakdown: arrayRecords(evidence.scoreBreakdown).slice(0, 8),
+    semanticAnchors: arrayRecords(evidence.semanticAnchors).slice(0, 12),
+    topAnchorMatches: arrayRecords(evidence.topAnchorMatches).slice(0, 10),
+    version: 1,
+  };
+}
+
+function arrayRecords(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return [];
+    }
+    const output: Record<string, unknown> = {};
+    for (const [key, raw] of Object.entries(item as Record<string, unknown>)) {
+      if (Array.isArray(raw)) {
+        output[key] = stringsFrom(raw).map(sanitizePathRef).filter(Boolean).slice(0, 12);
+      } else if (typeof raw === 'string') {
+        output[key] = sanitizePathRef(raw);
+      } else if (typeof raw === 'number' && Number.isFinite(raw)) {
+        output[key] = raw;
+      } else if (typeof raw === 'boolean' || raw === null) {
+        output[key] = raw;
+      }
+    }
+    return [output];
+  });
 }
 
 function sanitizeIntentSearchPlanMeta(value: object): Record<string, unknown> {
