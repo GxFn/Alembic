@@ -16,7 +16,7 @@ describe('task handler intent episode integration', () => {
     const pipeline = {
       search: vi.fn().mockResolvedValue({
         guardRules: [],
-        relatedKnowledge: [{ id: 'recipe-1', title: 'Recipe' }],
+        relatedKnowledge: [{ id: 'recipe-1', sourceRefs: ['src/recipe.ts:1'], title: 'Recipe' }],
         searchMeta: {
           filteredCount: 0,
           hostIntentApplied: true,
@@ -81,6 +81,11 @@ describe('task handler intent episode integration', () => {
         searchMeta: expect.objectContaining({
           hostIntentApplied: true,
           hostIntentSourceRefs: ['host:intent'],
+          primeInjectionPackage: expect.objectContaining({
+            selectedKnowledge: expect.arrayContaining([
+              expect.objectContaining({ itemId: 'recipe-1', sourceRefs: ['src/recipe.ts:1'] }),
+            ]),
+          }),
           queries: ['episode store'],
         }),
         sessionId: 'raw-session-id',
@@ -93,6 +98,11 @@ describe('task handler intent episode integration', () => {
           episodeId: 'episode_1',
           sessionKey: 'sha256:session',
         },
+        primeInjectionPackage: expect.objectContaining({
+          selectedKnowledge: expect.arrayContaining([
+            expect.objectContaining({ itemId: 'recipe-1' }),
+          ]),
+        }),
       },
       success: true,
     });

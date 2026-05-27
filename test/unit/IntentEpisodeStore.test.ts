@@ -49,6 +49,19 @@ describe('IntentEpisodeStore', () => {
       searchMeta: {
         filteredCount: 1,
         hostIntentSourceRefs: ['/Users/secret/project/src/search.ts:7'],
+        primeInjectionPackage: {
+          injection: { selectedCount: 1, status: 'ready' },
+          intent: { sourceRefs: ['/Users/secret/project/src/intent.ts:3'] },
+          selectedKnowledge: [
+            {
+              itemId: 'recipe-1',
+              scoreBreakdown: { finalScore: 0.9, itemId: 'recipe-1' },
+              sourceRefs: ['/Users/secret/project/src/recipe.ts:8'],
+            },
+          ],
+          trace: { sourceRefs: ['/Users/secret/project/src/trace.ts:9'] },
+          version: 1,
+        },
         queries: ['persist intent episode'],
         resultCount: 2,
       },

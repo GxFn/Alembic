@@ -17,6 +17,7 @@ import {
   type IntentSearchPlan,
   summarizeIntentSearchPlan,
 } from './IntentSearchPlan.js';
+import { buildPrimeInjectionPackage, type PrimeInjectionPackage } from './PrimeInjectionPackage.js';
 
 // ── Types ───────────────────────────────────────────
 
@@ -37,6 +38,7 @@ export interface PrimeSearchMeta {
   hostIntentSourceRefs?: string[];
   intentEvidence?: IntentEvidence;
   intentSearchPlan?: IntentSearchPlan;
+  primeInjectionPackage?: PrimeInjectionPackage;
 }
 
 export interface PrimeSearchResult {
@@ -131,6 +133,23 @@ export class PrimeSearchPipeline {
       semanticUsed: false,
       vectorUsed: false,
     });
+    const selectedItems = [...knowledge, ...rules];
+    const primeInjectionPackage = buildPrimeInjectionPackage({
+      hostIntent: options.hostIntent,
+      intentEvidence,
+      intentSearchPlan: options.intentSearchPlan,
+      items: selectedItems,
+      search: {
+        actualMode: 'prime',
+        filteredCount: filtered.length,
+        query: plannedIntent.raw.userQuery,
+        queries: plannedIntent.queries,
+        requestedMode: 'prime',
+        resultCount: allResults.length,
+      },
+      semanticUsed: false,
+      vectorUsed: false,
+    });
 
     // Record search to session history
     this.#sessionQueries.push(plannedIntent.raw.userQuery);
@@ -149,6 +168,7 @@ export class PrimeSearchPipeline {
           ? { intentSearchPlan: summarizeIntentSearchPlan(options.intentSearchPlan) }
           : {}),
         intentEvidence,
+        primeInjectionPackage,
         ...(options.hostIntent
           ? {
               hostIntentApplied: true,

@@ -27,6 +27,10 @@ import {
   summarizeIntentSearchPlan,
 } from '../../service/task/IntentSearchPlan.js';
 import {
+  buildPrimeInjectionPackage,
+  type PrimeInjectionPackage,
+} from '../../service/task/PrimeInjectionPackage.js';
+import {
   ContextAwareSearchBody,
   GraphImpactQuery,
   GraphQuery,
@@ -125,6 +129,7 @@ interface ResidentSearchMeta {
   hostIntentSourceRefs?: string[];
   intentEvidence?: IntentEvidence;
   intentSearchPlan?: IntentSearchPlan;
+  primeInjectionPackage?: PrimeInjectionPackage;
   durationMs: number;
   resultCount: number;
   topScore: number | null;
@@ -258,6 +263,7 @@ async function handleResidentSearch(
       durationMs,
       hostIntent: hostIntentMeta,
       intentSearchPlan,
+      query,
       requestedMode: input.mode,
       result,
     });
@@ -352,6 +358,7 @@ async function buildResidentSearchMeta({
   durationMs,
   hostIntent,
   intentSearchPlan,
+  query,
   requestedMode,
   result,
 }: {
@@ -359,6 +366,7 @@ async function buildResidentSearchMeta({
   durationMs: number;
   hostIntent?: HostIntentContextMeta | null;
   intentSearchPlan?: IntentSearchPlan | null;
+  query: string;
   requestedMode: string;
   result: SearchRouteResult;
 }): Promise<ResidentSearchMeta> {
@@ -401,6 +409,23 @@ async function buildResidentSearchMeta({
     vectorAvailable: residentVector.available,
     vectorUsed,
   });
+  const primeInjectionPackage = buildPrimeInjectionPackage({
+    hostIntent,
+    intentEvidence,
+    intentSearchPlan,
+    items: result.items ?? [],
+    search: {
+      actualMode,
+      filteredCount: resultCount,
+      query,
+      queries: intentSearchPlan?.lexicalQueries,
+      requestedMode,
+      resultCount,
+    },
+    semanticUsed,
+    vectorAvailable: residentVector.available,
+    vectorUsed,
+  });
 
   return {
     route: 'resident-search',
@@ -428,6 +453,7 @@ async function buildResidentSearchMeta({
       : {}),
     ...(intentSearchPlan ? { intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan) } : {}),
     intentEvidence,
+    primeInjectionPackage,
     durationMs: metaDurationMs,
     resultCount,
     topScore: extractTopScore(result.items ?? []),
@@ -464,6 +490,23 @@ async function buildLegacySearchMeta({
     vectorAvailable: false,
     vectorUsed: false,
   });
+  const primeInjectionPackage = buildPrimeInjectionPackage({
+    hostIntent,
+    intentEvidence,
+    intentSearchPlan,
+    items: [],
+    search: {
+      actualMode: 'legacy-fallback',
+      filteredCount: 0,
+      query: intentSearchPlan?.executableQuery,
+      queries: intentSearchPlan?.lexicalQueries,
+      requestedMode: mode,
+      resultCount,
+    },
+    semanticUsed: false,
+    vectorAvailable: false,
+    vectorUsed: false,
+  });
   return {
     route: 'resident-search',
     service: 'alembic-daemon',
@@ -489,6 +532,7 @@ async function buildLegacySearchMeta({
       : {}),
     ...(intentSearchPlan ? { intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan) } : {}),
     intentEvidence,
+    primeInjectionPackage,
     durationMs: 0,
     resultCount,
     topScore: null,

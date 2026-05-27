@@ -25,6 +25,7 @@ import {
   buildIntentSearchPlan,
   summarizeIntentSearchPlan,
 } from '../../service/task/IntentSearchPlan.js';
+import { buildPrimeInjectionPackage } from '../../service/task/PrimeInjectionPackage.js';
 import { envelope } from '../tool-schema/envelope.js';
 import type { McpContext, SearchArgs, SearchResultItem } from '../tool-schema/types.js';
 
@@ -150,6 +151,10 @@ export async function search(ctx: McpContext, args: SearchArgs) {
   const slimItems = items.map(slimSearchResult);
   const byKindGroups = groupByKind(slimItems);
   const elapsed = Date.now() - t0;
+  const vectorUsed = items.some(
+    (item: SearchResultItem) =>
+      typeof item.vectorScore === 'number' || typeof item.semanticScore === 'number'
+  );
   const intentEvidence = await buildIntentEvidence({
     actualMode,
     intentSearchPlan,
@@ -157,10 +162,23 @@ export async function search(ctx: McpContext, args: SearchArgs) {
     relationProvider: getRelationProvider(ctx),
     requestedMode: mode,
     semanticUsed: actualMode === 'semantic',
-    vectorUsed: items.some(
-      (item: SearchResultItem) =>
-        typeof item.vectorScore === 'number' || typeof item.semanticScore === 'number'
-    ),
+    vectorUsed,
+  });
+  const primeInjectionPackage = buildPrimeInjectionPackage({
+    hostIntent: hostIntentMeta,
+    intentEvidence,
+    intentSearchPlan,
+    items,
+    search: {
+      actualMode,
+      filteredCount: items.length,
+      query,
+      queries: intentSearchPlan.lexicalQueries,
+      requestedMode: mode,
+      resultCount: result?.total ?? items.length,
+    },
+    semanticUsed: actualMode === 'semantic',
+    vectorUsed,
   });
 
   // ── 构造工具名称 ──
@@ -184,6 +202,7 @@ export async function search(ctx: McpContext, args: SearchArgs) {
       ...(hostIntentMeta ? { intentContext: hostIntentMeta } : {}),
       intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan),
       intentEvidence,
+      primeInjectionPackage,
       kindCounts: {
         rule: byKindGroups.rule.length,
         pattern: byKindGroups.pattern.length,

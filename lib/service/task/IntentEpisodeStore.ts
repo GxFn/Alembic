@@ -10,6 +10,7 @@ import {
 import path from 'node:path';
 import type { IntentEvidence } from './IntentEvidence.js';
 import type { IntentSearchPlan } from './IntentSearchPlan.js';
+import type { PrimeInjectionPackage } from './PrimeInjectionPackage.js';
 
 export type IntentEpisodeStatus = 'active' | 'completed' | 'failed' | 'abandoned';
 
@@ -41,6 +42,7 @@ export interface IntentEpisodeSearchMeta {
   hostIntentSourceRefs?: string[];
   intentEvidence?: IntentEvidence | Record<string, unknown>;
   intentSearchPlan?: IntentSearchPlan | Record<string, unknown>;
+  primeInjectionPackage?: PrimeInjectionPackage | Record<string, unknown>;
   queries?: string[];
   resultCount?: number;
 }
@@ -406,6 +408,9 @@ function sanitizeSearchMeta(
     ...(value.intentSearchPlan && typeof value.intentSearchPlan === 'object'
       ? { intentSearchPlan: sanitizeIntentSearchPlanMeta(value.intentSearchPlan) }
       : {}),
+    ...(value.primeInjectionPackage && typeof value.primeInjectionPackage === 'object'
+      ? { primeInjectionPackage: sanitizePrimeInjectionPackageMeta(value.primeInjectionPackage) }
+      : {}),
     queries: stringsFrom(value.queries).slice(0, 8),
     ...(typeof value.resultCount === 'number' && Number.isFinite(value.resultCount)
       ? { resultCount: Math.max(0, Math.floor(value.resultCount)) }
@@ -440,6 +445,8 @@ function arrayRecords(value: unknown): Record<string, unknown>[] {
         output[key] = stringsFrom(raw).map(sanitizePathRef).filter(Boolean).slice(0, 12);
       } else if (typeof raw === 'string') {
         output[key] = sanitizePathRef(raw);
+      } else if (raw && typeof raw === 'object') {
+        output[key] = sanitizeRecord(raw, 8);
       } else if (typeof raw === 'number' && Number.isFinite(raw)) {
         output[key] = raw;
       } else if (typeof raw === 'boolean' || raw === null) {
@@ -448,6 +455,58 @@ function arrayRecords(value: unknown): Record<string, unknown>[] {
     }
     return [output];
   });
+}
+
+function sanitizePrimeInjectionPackageMeta(value: object): Record<string, unknown> {
+  const pkg = value as Record<string, unknown>;
+  const relations = objectRecord(pkg.relations);
+  const vector = objectRecord(pkg.vector);
+  return {
+    injection: sanitizeRecord(pkg.injection, 12),
+    intent: sanitizeRecord(pkg.intent, 12),
+    omitted: arrayRecords(pkg.omitted).slice(0, 16),
+    relations: {
+      evidence: arrayRecords(relations.evidence).slice(0, 12),
+      omitted: stringsFrom(relations.omitted).slice(0, 8),
+    },
+    search: sanitizeRecord(pkg.search, 12),
+    selectedKnowledge: arrayRecords(pkg.selectedKnowledge).slice(0, 8),
+    trace: sanitizeRecord(pkg.trace, 12),
+    vector: {
+      ...sanitizeRecord(vector, 12),
+      scoreBreakdown: arrayRecords(vector.scoreBreakdown).slice(0, 8),
+      semanticAnchors: arrayRecords(vector.semanticAnchors).slice(0, 12),
+      topAnchorMatches: arrayRecords(vector.topAnchorMatches).slice(0, 10),
+    },
+    version: 1,
+  };
+}
+
+function sanitizeRecord(value: unknown, maxKeys: number): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  const output: Record<string, unknown> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>).slice(0, maxKeys)) {
+    if (Array.isArray(raw)) {
+      output[key] = stringsFrom(raw).map(sanitizePathRef).filter(Boolean).slice(0, 16);
+    } else if (raw && typeof raw === 'object') {
+      output[key] = sanitizeRecord(raw, 8);
+    } else if (typeof raw === 'string') {
+      output[key] = sanitizePathRef(raw);
+    } else if (typeof raw === 'number' && Number.isFinite(raw)) {
+      output[key] = raw;
+    } else if (typeof raw === 'boolean' || raw === null) {
+      output[key] = raw;
+    }
+  }
+  return output;
+}
+
+function objectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function sanitizeIntentSearchPlanMeta(value: object): Record<string, unknown> {

@@ -34,6 +34,7 @@ import {
   buildIntentSearchPlan,
   summarizeIntentSearchPlan,
 } from '../../service/task/IntentSearchPlan.js';
+import { buildPrimeInjectionPackage } from '../../service/task/PrimeInjectionPackage.js';
 import { envelope } from '../tool-schema/envelope.js';
 import type {
   DecisionRecord,
@@ -199,6 +200,22 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
           semanticUsed: false,
           vectorUsed: false,
         });
+        searchResult.searchMeta.primeInjectionPackage = buildPrimeInjectionPackage({
+          hostIntent: hostIntentMeta,
+          intentEvidence: searchResult.searchMeta.intentEvidence,
+          intentSearchPlan,
+          items: [...searchResult.relatedKnowledge, ...searchResult.guardRules],
+          search: {
+            actualMode: 'prime',
+            filteredCount: searchResult.searchMeta.filteredCount,
+            query: hostIntentContext.userQuery || '',
+            queries: searchResult.searchMeta.queries,
+            requestedMode: 'prime',
+            resultCount: searchResult.searchMeta.resultCount,
+          },
+          semanticUsed: false,
+          vectorUsed: false,
+        });
       }
       if (!searchResult) {
         process.stderr.write(
@@ -247,6 +264,7 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
       hostIntentSourceRefs: searchResult.searchMeta.hostIntentSourceRefs,
       intentEvidence: searchResult.searchMeta.intentEvidence,
       intentSearchPlan: searchResult.searchMeta.intentSearchPlan,
+      primeInjectionPackage: searchResult.searchMeta.primeInjectionPackage,
     };
   }
 
@@ -305,6 +323,7 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
         : null,
       searchMeta: searchResult?.searchMeta ?? null,
       intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan),
+      primeInjectionPackage: searchResult?.searchMeta.primeInjectionPackage ?? null,
       intentEpisode: episode
         ? {
             episodeId: episode.episodeId,

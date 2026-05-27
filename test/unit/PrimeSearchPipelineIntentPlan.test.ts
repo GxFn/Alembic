@@ -15,6 +15,7 @@ describe('PrimeSearchPipeline IntentSearchPlan consumption', () => {
             kind: 'pattern',
             language: 'typescript',
             score: 0.91,
+            sourceRefs: ['src/service.ts:12'],
             title: `Recipe ${query}`,
             trigger: query,
           },
@@ -73,6 +74,26 @@ describe('PrimeSearchPipeline IntentSearchPlan consumption', () => {
           lexicalScore: 0.91,
         }),
       ]),
+    });
+    expect(result?.searchMeta.primeInjectionPackage).toMatchObject({
+      injection: expect.objectContaining({
+        selectedCount: expect.any(Number),
+        status: 'degraded',
+      }),
+      selectedKnowledge: expect.arrayContaining([
+        expect.objectContaining({
+          evidenceRefs: expect.arrayContaining([
+            'scoreBreakdown:recipe-1',
+            'topAnchorMatch:recipe-1',
+          ]),
+          injectionStatus: 'selected',
+          itemId: 'recipe-1',
+          sourceRefs: ['src/service.ts:12'],
+        }),
+      ]),
+      trace: expect.objectContaining({
+        sourceRefs: expect.arrayContaining(['host:intent', 'src/service.ts:12']),
+      }),
     });
     expect(result?.searchMeta.queries[0]).toContain('compose service factory');
   });

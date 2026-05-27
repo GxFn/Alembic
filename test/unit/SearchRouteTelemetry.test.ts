@@ -333,6 +333,7 @@ describe('search route resident telemetry', () => {
     const searchMeta = data.searchMeta as Record<string, unknown>;
     const plan = searchMeta.intentSearchPlan as Record<string, unknown>;
     const evidence = searchMeta.intentEvidence as Record<string, unknown>;
+    const primeInjectionPackage = searchMeta.primeInjectionPackage as Record<string, unknown>;
 
     expect(response.status).toBe(200);
     expect(mocks.intentEpisodeStore.latest).toHaveBeenCalledWith({
@@ -381,8 +382,35 @@ describe('search route resident telemetry', () => {
         }),
       ]),
     });
+    expect(primeInjectionPackage).toMatchObject({
+      injection: expect.objectContaining({
+        selectedCount: 1,
+        status: 'degraded',
+      }),
+      selectedKnowledge: expect.arrayContaining([
+        expect.objectContaining({
+          evidenceRefs: expect.arrayContaining([
+            'scoreBreakdown:recipe-plan',
+            'topAnchorMatch:recipe-plan',
+            'relationEvidence:recipe-plan',
+          ]),
+          injectionStatus: 'selected',
+          itemId: 'recipe-plan',
+          scoreBreakdown: expect.objectContaining({ semanticScore: 0.42 }),
+          sourceRefs: ['[absolute-path]/recipe.ts:12'],
+        }),
+      ]),
+      trace: expect.objectContaining({
+        sourceRefs: expect.arrayContaining([
+          '[absolute-path]/service.ts:42',
+          '[absolute-path]/recipe.ts:12',
+          'knowledge:previous',
+        ]),
+      }),
+    });
     expect(JSON.stringify(plan)).not.toContain('/Users/private');
     expect(JSON.stringify(evidence)).not.toContain('/Users/private');
+    expect(JSON.stringify(primeInjectionPackage)).not.toContain('/Users/private');
   });
 
   test('does not force low confidence recognized intent into keyword search', async () => {
@@ -423,6 +451,7 @@ describe('search route resident telemetry', () => {
       unknown
     >;
     const plan = searchMeta.intentSearchPlan as Record<string, unknown>;
+    const primeInjectionPackage = searchMeta.primeInjectionPackage as Record<string, unknown>;
 
     expect(mocks.searchEngine.search).toHaveBeenCalledWith(
       'fallback query',
@@ -436,6 +465,12 @@ describe('search route resident telemetry', () => {
         'recognizedIntentDraft.status:needs-confirmation',
       ]),
       rankingProfile: 'raw-fallback',
+    });
+    expect(primeInjectionPackage).toMatchObject({
+      injection: expect.objectContaining({ status: 'needs-confirmation' }),
+      omitted: expect.arrayContaining([
+        expect.objectContaining({ reason: 'recognizedIntentDraft.lowConfidence' }),
+      ]),
     });
   });
 
