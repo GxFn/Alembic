@@ -26,6 +26,7 @@
 ### VAD 最小门禁
 
 - Automation 只是唤醒信封，不改变本窗口职责，也不扩大任务范围；具体任务仍以 claim 结果和当前计划为准。
+- VAD heartbeat 提示词只承载动态变量、规则名和 skill 指向；不得把提示词当成完整命令手册。用 `currentWindow` / `taskId` / `controlDoc` 等变量按 target skill 推导命令，变量缺失或冲突时停止回报。
 - VAD 模式下只允许 claim / finish `Alembic` 对应任务；`claim --json` 没有返回本窗口任务时必须停止。
 - 只有 finish JSON 同时明确允许下一跳时，才可创建下一条 heartbeat；否则停止并回报总控。
 - 非 TestWindow 不得创建、处理或验证 TestWindow heartbeat，除非当前计划和 finish JSON 同时显式授权。
