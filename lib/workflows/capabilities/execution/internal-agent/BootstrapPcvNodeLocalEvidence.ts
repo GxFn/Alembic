@@ -75,6 +75,16 @@ export interface PcvSourceRefValidationContext {
   targetFileMap?: unknown;
 }
 
+export interface PcvN11SourceRefReplayInput {
+  acceptedCount?: number;
+  dimId: string;
+  maxInvalidSourceRefs?: number;
+  projectRoot?: string | null;
+  rejectedCount?: number;
+  sourceRefs: string[];
+  validSourceRefs: string[];
+}
+
 export interface PcvN8StagePolicy {
   additionalTools: string[];
   stage: string;
@@ -286,6 +296,44 @@ export function buildPcvN11ProduceEvidence({
   };
 }
 
+export function buildPcvN11SourceRefReplayEvidence({
+  acceptedCount = 1,
+  dimId,
+  maxInvalidSourceRefs,
+  projectRoot = null,
+  rejectedCount = 0,
+  sourceRefs,
+  validSourceRefs,
+}: PcvN11SourceRefReplayInput): PcvN11ProduceEvidence {
+  const projection: BootstrapDimensionProjection = {
+    analysisReport: {
+      analysisText: `Deterministic N11 sourceRef replay for ${dimId}.`,
+      dimensionId: dimId,
+      findings: [],
+      referencedFiles: sourceRefs,
+    },
+    produceResult: {
+      reply: 'deterministic N11 sourceRef replay',
+      toolCalls: buildReplayProducerToolCalls({ acceptedCount, rejectedCount, sourceRefs }),
+    },
+    rejectedCount,
+    runtimeToolCalls: [],
+    successCount: acceptedCount,
+  } as unknown as BootstrapDimensionProjection;
+
+  return buildPcvN11ProduceEvidence({
+    dimId,
+    needsCandidates: true,
+    projection,
+    sourceRefValidation: {
+      allFiles: validSourceRefs.map((ref) => ({ relativePath: ref })),
+      fileExists: () => false,
+      maxInvalidSourceRefs,
+      projectRoot,
+    },
+  });
+}
+
 export function buildPcvN12ConsumerPersistenceEvidence({
   acceptedSubmitCalls,
   dimId,
@@ -385,6 +433,40 @@ export function successfulProducerSubmitCalls(
   return resolveProducerToolCalls(projection).filter(
     (call) => isKnowledgeSubmitToolCall(call) && isSuccessfulToolCall(call)
   );
+}
+
+function buildReplayProducerToolCalls({
+  acceptedCount,
+  rejectedCount,
+  sourceRefs,
+}: {
+  acceptedCount: number;
+  rejectedCount: number;
+  sourceRefs: string[];
+}): ToolCallRecord[] {
+  const acceptedCalls = Array.from({ length: acceptedCount }, (_, index) => ({
+    args: {
+      action: 'submit',
+      params: {
+        sourceRefs: index === 0 ? sourceRefs : [],
+        title: `Deterministic N11 replay candidate ${index + 1}`,
+      },
+    },
+    result: { status: 'created', title: `Deterministic N11 replay candidate ${index + 1}` },
+    tool: 'knowledge',
+  }));
+  const rejectedCalls = Array.from({ length: rejectedCount }, (_, index) => ({
+    args: {
+      action: 'submit',
+      params: {
+        sourceRefs: [],
+        title: `Rejected deterministic N11 replay candidate ${index + 1}`,
+      },
+    },
+    result: { error: 'deterministic replay rejected candidate' },
+    tool: 'knowledge',
+  }));
+  return [...acceptedCalls, ...rejectedCalls] as ToolCallRecord[];
 }
 
 function compileBootstrapDimensionStagePolicies(runInput: AgentRunInput): PcvN8StagePolicy[] {
