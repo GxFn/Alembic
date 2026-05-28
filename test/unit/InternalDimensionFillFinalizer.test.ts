@@ -203,17 +203,45 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
             dimensionId: 'api',
             evidenceKind: 'producer-cut',
             gapLimit: null,
-            missingLinkReasons: [],
+            invalidSourceRefCount: 1,
+            invalidSourceRefRatio: 0.5,
+            invalidSourceRefs: [
+              {
+                normalizedPath: 'src/missing.ts',
+                reason: 'file-not-found',
+                ref: 'src/missing.ts',
+              },
+            ],
+            missingLinkReasons: ['producer_source_refs_invalid'],
             noTerminalProof: true,
             nodeId: 'N11-produce',
             producerOnlyCut: true,
             producerToolCalls: [{ action: 'submit', status: 'created', tool: 'knowledge' }],
             rejectedCount: 0,
-            sourceRefs: ['src/api.ts'],
-            status: 'linked',
+            sourceRefs: ['src/api.ts', 'src/missing.ts'],
+            sourceRefValidity: {
+              checked: true,
+              invalidSourceRefCount: 1,
+              invalidSourceRefRatio: 0.5,
+              invalidSourceRefs: [
+                {
+                  normalizedPath: 'src/missing.ts',
+                  reason: 'file-not-found',
+                  ref: 'src/missing.ts',
+                },
+              ],
+              status: 'invalid',
+              totalSourceRefCount: 2,
+              uncheckedReason: null,
+              validSourceRefCount: 1,
+            },
+            sourceRefValidityStatus: 'invalid',
+            status: 'blocked-by-observability-gap',
             submittedCount: 1,
-            summary: 'n11 linked',
+            summary: 'n11 invalid source refs surfaced',
             terminalToolCallCount: 0,
+            totalSourceRefCount: 2,
+            validSourceRefCount: 1,
           },
         },
       },
@@ -223,18 +251,30 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
     expect(report.pcvScorecard).toMatchObject({
       contract: 'PCVColdStartNodeLocalBaseline',
       scope: 'alembic-cold-start-bootstrap-node-local',
-      summary: { blockedNodes: 0, dimensionCount: 1, linkedNodes: 2, nodeCount: 2 },
+      nodes: {
+        n11: {
+          sourceRefValidity: {
+            invalidSourceRefCount: 1,
+            invalidSourceRefRatio: 0.5,
+            statuses: { invalid: 1 },
+            totalSourceRefCount: 2,
+            validSourceRefCount: 1,
+          },
+        },
+      },
+      summary: { blockedNodes: 1, dimensionCount: 1, linkedNodes: 1, nodeCount: 2 },
     });
     expect(report.dimensions.api).toMatchObject({
       pcvNodeEvidence: {
         n8: { status: 'linked' },
-        n11: { acceptedCount: 1, status: 'linked' },
+        n11: { acceptedCount: 1, status: 'blocked-by-observability-gap' },
       },
     });
     expect(report.totals).toMatchObject({
+      pcvNodeLocalBlockedNodes: 1,
       pcvNodeLocalEvidenceDimensions: 1,
       pcvNodeLocalEvidenceNodes: 2,
-      pcvNodeLocalLinkedNodes: 2,
+      pcvNodeLocalLinkedNodes: 1,
     });
   });
 });

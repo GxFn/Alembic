@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import * as path from 'node:path';
 import type { AgentRunInput } from '@alembic/agent/service';
 import {
   AgentProfileCompiler,
@@ -39,6 +41,40 @@ export interface PcvNodeLocalEvidenceBase {
   summary: string;
 }
 
+export type PcvN11SourceRefValidityStatus =
+  | 'valid'
+  | 'invalid'
+  | 'empty'
+  | 'not-checked'
+  | 'not-applicable';
+
+export type PcvN11InvalidSourceRefReason = 'file-not-found' | 'outside-project-root';
+
+export interface PcvN11InvalidSourceRef {
+  normalizedPath: string | null;
+  reason: PcvN11InvalidSourceRefReason;
+  ref: string;
+}
+
+export interface PcvN11SourceRefValiditySummary {
+  checked: boolean;
+  invalidSourceRefCount: number;
+  invalidSourceRefRatio: number;
+  invalidSourceRefs: PcvN11InvalidSourceRef[];
+  status: PcvN11SourceRefValidityStatus;
+  totalSourceRefCount: number;
+  uncheckedReason: string | null;
+  validSourceRefCount: number;
+}
+
+export interface PcvSourceRefValidationContext {
+  allFiles?: Array<{ name?: string; path?: string; relativePath?: string }> | null;
+  fileExists?: (absolutePath: string) => boolean;
+  maxInvalidSourceRefs?: number;
+  projectRoot?: string | null;
+  targetFileMap?: unknown;
+}
+
 export interface PcvN8StagePolicy {
   additionalTools: string[];
   stage: string;
@@ -64,13 +100,20 @@ export interface PcvN11ProduceEvidence extends PcvNodeLocalEvidenceBase {
   acceptedCount: number;
   evidenceKind: 'producer-cut';
   gapLimit: number | null;
+  invalidSourceRefCount: number;
+  invalidSourceRefRatio: number;
+  invalidSourceRefs: PcvN11InvalidSourceRef[];
   noTerminalProof: boolean;
   producerOnlyCut: boolean;
   producerToolCalls: Array<{ action: string | null; status: string | null; tool: string }>;
   rejectedCount: number;
   sourceRefs: string[];
+  sourceRefValidity: PcvN11SourceRefValiditySummary;
+  sourceRefValidityStatus: PcvN11SourceRefValidityStatus;
   submittedCount: number;
   terminalToolCallCount: number;
+  totalSourceRefCount: number;
+  validSourceRefCount: number;
 }
 
 export interface PcvN12ConsumerPersistenceEvidence extends PcvNodeLocalEvidenceBase {
@@ -89,6 +132,8 @@ export interface BootstrapPcvNodeEvidenceSet {
 }
 
 const TERMINAL_TOOL_IDS = new Set(['terminal', 'terminal_shell', 'terminal_pty']);
+const MAX_INVALID_SOURCE_REFS = 12;
+const PRODUCER_SOURCE_REFS_INVALID_REASON = 'producer_source_refs_invalid';
 
 export function buildPcvN8StageFactoryEvidence({
   dimId,
@@ -162,16 +207,24 @@ export function buildPcvN11ProduceEvidence({
   dimId,
   needsCandidates,
   projection,
+  sourceRefValidation,
 }: {
   dimId: string;
   needsCandidates: boolean;
   projection: BootstrapDimensionProjection;
+  sourceRefValidation?: PcvSourceRefValidationContext | null;
 }): PcvN11ProduceEvidence {
   const producerOnlyCut = Array.isArray(projection.produceResult?.toolCalls);
   const producerToolCalls = resolveProducerToolCalls(projection);
   const producerSubmitCalls = producerToolCalls.filter(isKnowledgeSubmitToolCall);
   const acceptedCount = producerSubmitCalls.filter(isSuccessfulToolCall).length;
   const rejectedCount = producerSubmitCalls.length - acceptedCount;
+  const sourceRefs = collectSourceRefsFromProjection(projection);
+  const sourceRefValidity = buildSourceRefValiditySummary({
+    needsCandidates,
+    sourceRefs,
+    validation: sourceRefValidation,
+  });
   const terminalToolCallCount = producerToolCalls.filter((call) =>
     TERMINAL_TOOL_IDS.has(toolName(call))
   ).length;
@@ -189,6 +242,9 @@ export function buildPcvN11ProduceEvidence({
   if (needsCandidates && rejectedCount !== projection.rejectedCount) {
     missingLinkReasons.push('producer_rejected_count_mismatch');
   }
+  if (needsCandidates && sourceRefValidity.invalidSourceRefCount > 0) {
+    missingLinkReasons.push(PRODUCER_SOURCE_REFS_INVALID_REASON);
+  }
 
   const status = !needsCandidates
     ? 'not-applicable'
@@ -203,6 +259,9 @@ export function buildPcvN11ProduceEvidence({
     dimensionId: dimId,
     evidenceKind: 'producer-cut',
     gapLimit: null,
+    invalidSourceRefCount: sourceRefValidity.invalidSourceRefCount,
+    invalidSourceRefRatio: sourceRefValidity.invalidSourceRefRatio,
+    invalidSourceRefs: sourceRefValidity.invalidSourceRefs,
     missingLinkReasons,
     noTerminalProof: terminalToolCallCount === 0,
     nodeId: PCV_N11_NODE_ID,
@@ -213,13 +272,17 @@ export function buildPcvN11ProduceEvidence({
       tool: toolName(call),
     })),
     rejectedCount,
-    sourceRefs: collectSourceRefsFromProjection(projection),
+    sourceRefs,
+    sourceRefValidity,
+    sourceRefValidityStatus: sourceRefValidity.status,
     status,
     submittedCount: producerSubmitCalls.length,
     summary: needsCandidates
       ? `Producer submitted ${producerSubmitCalls.length} candidate call(s): ${acceptedCount} accepted, ${rejectedCount} rejected.`
       : 'Producer node is not applicable for skill-only bootstrap dimensions.',
     terminalToolCallCount,
+    totalSourceRefCount: sourceRefValidity.totalSourceRefCount,
+    validSourceRefCount: sourceRefValidity.validSourceRefCount,
   };
 }
 
@@ -424,11 +487,318 @@ function sourceRefsFromValue(value: unknown): string[] {
       refs.push(entry);
     }
   }
+  const nestedParams = value.params;
+  if (isRecord(nestedParams)) {
+    refs.push(...sourceRefsFromValue(nestedParams));
+  }
   return refs.filter(looksLikeSourceRef);
 }
 
 function looksLikeSourceRef(value: string): boolean {
-  return /[\w/.-]+\.[\w]+(?::\d+)?$/.test(value.trim());
+  return /^(?:file:\/\/)?[\w/.-]+\.[\w]+(?::\d+)?(?::\d+)?$/.test(value.trim());
+}
+
+function buildSourceRefValiditySummary({
+  needsCandidates,
+  sourceRefs,
+  validation,
+}: {
+  needsCandidates: boolean;
+  sourceRefs: string[];
+  validation?: PcvSourceRefValidationContext | null;
+}): PcvN11SourceRefValiditySummary {
+  if (!needsCandidates) {
+    return sourceRefValiditySummary({
+      checked: false,
+      invalidRefs: [],
+      sourceRefs,
+      status: 'not-applicable',
+      uncheckedReason: 'dimension_does_not_need_candidates',
+      validCount: 0,
+    });
+  }
+  if (sourceRefs.length === 0) {
+    return sourceRefValiditySummary({
+      checked: true,
+      invalidRefs: [],
+      sourceRefs,
+      status: 'empty',
+      uncheckedReason: null,
+      validCount: 0,
+    });
+  }
+
+  const index = buildSourceRefValidationIndex(validation);
+  if (!index) {
+    return sourceRefValiditySummary({
+      checked: false,
+      invalidRefs: [],
+      sourceRefs,
+      status: 'not-checked',
+      uncheckedReason: 'project_file_index_unavailable',
+      validCount: 0,
+    });
+  }
+
+  let validCount = 0;
+  const invalidRefs: PcvN11InvalidSourceRef[] = [];
+  for (const ref of sourceRefs) {
+    const result = validateSourceRef(ref, index);
+    if (result.valid) {
+      validCount++;
+    } else {
+      invalidRefs.push({
+        normalizedPath: result.normalizedPath,
+        reason: result.reason,
+        ref,
+      });
+    }
+  }
+
+  return sourceRefValiditySummary({
+    checked: true,
+    invalidRefs,
+    sourceRefs,
+    status: invalidRefs.length > 0 ? 'invalid' : 'valid',
+    uncheckedReason: null,
+    validCount,
+    maxInvalidRefs: validation?.maxInvalidSourceRefs,
+  });
+}
+
+function sourceRefValiditySummary({
+  checked,
+  invalidRefs,
+  maxInvalidRefs,
+  sourceRefs,
+  status,
+  uncheckedReason,
+  validCount,
+}: {
+  checked: boolean;
+  invalidRefs: PcvN11InvalidSourceRef[];
+  maxInvalidRefs?: number;
+  sourceRefs: string[];
+  status: PcvN11SourceRefValidityStatus;
+  uncheckedReason: string | null;
+  validCount: number;
+}): PcvN11SourceRefValiditySummary {
+  const total = sourceRefs.length;
+  const invalidCount = invalidRefs.length;
+  const invalidSourceRefRatio = total > 0 ? Number((invalidCount / total).toFixed(4)) : 0;
+  const limit =
+    typeof maxInvalidRefs === 'number' && Number.isFinite(maxInvalidRefs)
+      ? Math.max(0, Math.floor(maxInvalidRefs))
+      : MAX_INVALID_SOURCE_REFS;
+  return {
+    checked,
+    invalidSourceRefCount: invalidCount,
+    invalidSourceRefRatio,
+    invalidSourceRefs: invalidRefs.slice(0, limit),
+    status,
+    totalSourceRefCount: total,
+    uncheckedReason,
+    validSourceRefCount: validCount,
+  };
+}
+
+interface SourceRefValidationIndex {
+  fileExists: (absolutePath: string) => boolean;
+  fileSet: Set<string>;
+  projectRoot: string | null;
+  projectRootName: string | null;
+}
+
+function buildSourceRefValidationIndex(
+  validation?: PcvSourceRefValidationContext | null
+): SourceRefValidationIndex | null {
+  const projectRoot = normalizeAbsolutePath(validation?.projectRoot || null);
+  const fileSet = new Set<string>();
+  for (const file of validation?.allFiles || []) {
+    addSourceFileRef(fileSet, file.relativePath, projectRoot);
+    addSourceFileRef(fileSet, file.path, projectRoot);
+    addSourceFileRef(fileSet, file.name, projectRoot);
+  }
+  for (const ref of sourceRefsFromTargetFileMap(validation?.targetFileMap)) {
+    addSourceFileRef(fileSet, ref, projectRoot);
+  }
+  if (!projectRoot && fileSet.size === 0) {
+    return null;
+  }
+  return {
+    fileExists: validation?.fileExists || existsSync,
+    fileSet,
+    projectRoot,
+    projectRootName: projectRoot ? path.basename(projectRoot) : null,
+  };
+}
+
+function addSourceFileRef(fileSet: Set<string>, value: unknown, projectRoot: string | null): void {
+  if (typeof value !== 'string' || !value.trim()) {
+    return;
+  }
+  const normalized = normalizeKnownFilePath(value, projectRoot);
+  if (normalized) {
+    fileSet.add(normalized);
+  }
+}
+
+function sourceRefsFromTargetFileMap(value: unknown, depth = 0): string[] {
+  if (depth > 5 || value == null) {
+    return [];
+  }
+  if (typeof value === 'string') {
+    return looksLikeSourceRef(value) ? [value] : [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => sourceRefsFromTargetFileMap(item, depth + 1));
+  }
+  if (!isRecord(value)) {
+    return [];
+  }
+  const refs: string[] = [];
+  for (const key of ['relativePath', 'path', 'filePath', 'name']) {
+    const entry = value[key];
+    if (typeof entry === 'string' && looksLikeSourceRef(entry)) {
+      refs.push(entry);
+    }
+  }
+  for (const entry of Object.values(value)) {
+    refs.push(...sourceRefsFromTargetFileMap(entry, depth + 1));
+    if (refs.length >= 2000) {
+      break;
+    }
+  }
+  return refs.slice(0, 2000);
+}
+
+function validateSourceRef(
+  ref: string,
+  index: SourceRefValidationIndex
+):
+  | { normalizedPath: string; valid: true }
+  | { normalizedPath: string | null; reason: PcvN11InvalidSourceRefReason; valid: false } {
+  const resolution = resolveSourceRefCandidates(ref, index);
+  if (!resolution || resolution.outsideProjectRoot) {
+    return {
+      normalizedPath: resolution?.normalizedPath || null,
+      reason: 'outside-project-root',
+      valid: false,
+    };
+  }
+  for (const candidate of resolution.candidates) {
+    if (index.fileSet.has(candidate)) {
+      return { normalizedPath: candidate, valid: true };
+    }
+    if (index.projectRoot) {
+      const absolutePath = path.join(index.projectRoot, ...candidate.split('/'));
+      if (index.fileExists(absolutePath)) {
+        return { normalizedPath: candidate, valid: true };
+      }
+    }
+  }
+  return {
+    normalizedPath: resolution.normalizedPath,
+    reason: 'file-not-found',
+    valid: false,
+  };
+}
+
+function resolveSourceRefCandidates(
+  ref: string,
+  index: SourceRefValidationIndex
+): { candidates: string[]; normalizedPath: string; outsideProjectRoot: boolean } | null {
+  const cleaned = stripSourceRefLineSuffix(stripFileUrl(safeDecodeURIComponent(ref.trim())));
+  if (!cleaned) {
+    return null;
+  }
+
+  const platformPath = cleaned.replace(/\//g, path.sep);
+  let normalizedPath: string | null = null;
+  let outsideProjectRoot = false;
+
+  if (path.isAbsolute(platformPath)) {
+    const absolutePath = path.resolve(platformPath);
+    if (index.projectRoot) {
+      if (!isPathInsideProjectRoot(absolutePath, index.projectRoot)) {
+        outsideProjectRoot = true;
+      } else {
+        normalizedPath = toPosixPath(path.relative(index.projectRoot, absolutePath));
+      }
+    } else {
+      normalizedPath = toPosixPath(path.normalize(absolutePath));
+    }
+  } else {
+    normalizedPath = normalizeRelativeSourcePath(cleaned);
+    outsideProjectRoot =
+      !normalizedPath || normalizedPath === '..' || normalizedPath.startsWith('../');
+  }
+
+  if (!normalizedPath || normalizedPath === '.' || outsideProjectRoot) {
+    return { candidates: [], normalizedPath: normalizedPath || cleaned, outsideProjectRoot: true };
+  }
+
+  const candidates = [normalizedPath];
+  if (index.projectRootName && normalizedPath.startsWith(`${index.projectRootName}/`)) {
+    candidates.push(normalizedPath.slice(index.projectRootName.length + 1));
+  }
+  return { candidates: [...new Set(candidates)], normalizedPath, outsideProjectRoot: false };
+}
+
+function normalizeKnownFilePath(value: string, projectRoot: string | null): string | null {
+  const cleaned = stripSourceRefLineSuffix(stripFileUrl(safeDecodeURIComponent(value.trim())));
+  if (!cleaned) {
+    return null;
+  }
+  const platformPath = cleaned.replace(/\//g, path.sep);
+  if (path.isAbsolute(platformPath)) {
+    const absolutePath = path.resolve(platformPath);
+    if (projectRoot && isPathInsideProjectRoot(absolutePath, projectRoot)) {
+      return toPosixPath(path.relative(projectRoot, absolutePath));
+    }
+    return toPosixPath(path.normalize(absolutePath));
+  }
+  return normalizeRelativeSourcePath(cleaned);
+}
+
+function normalizeAbsolutePath(value: string | null): string | null {
+  if (!value || !value.trim()) {
+    return null;
+  }
+  return path.resolve(value.trim());
+}
+
+function normalizeRelativeSourcePath(value: string): string | null {
+  const normalized = path.posix.normalize(toPosixPath(value).replace(/^\.\//, ''));
+  if (!normalized || normalized === '.') {
+    return null;
+  }
+  return normalized;
+}
+
+function stripFileUrl(value: string): string {
+  return value.startsWith('file://') ? value.slice('file://'.length) : value;
+}
+
+function stripSourceRefLineSuffix(value: string): string {
+  return value.replace(/:(\d+)(?::\d+)?$/, '');
+}
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function isPathInsideProjectRoot(absolutePath: string, projectRoot: string): boolean {
+  const relative = path.relative(projectRoot, absolutePath);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function toPosixPath(value: string): string {
+  return value.replace(/\\/g, '/');
 }
 
 function isKnowledgeSubmitToolCall(call: ToolCallRecord): boolean {

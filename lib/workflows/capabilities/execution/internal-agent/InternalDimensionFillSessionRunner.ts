@@ -78,6 +78,11 @@ export async function runInternalDimensionAgentSession({
   const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
   const dimensionCandidates: Record<string, DimensionCandidateData> = {};
   const dimensionStats: Record<string, DimensionStat> = {};
+  const sourceRefValidation = {
+    allFiles: preparation.allFiles,
+    projectRoot: preparation.projectRoot,
+    targetFileMap: preparation.targetFileMap,
+  };
 
   const admissions = await resolveBootstrapDimensionAdmissions({
     dataRoot: preparation.dataRoot,
@@ -164,6 +169,7 @@ export async function runInternalDimensionAgentSession({
       projection,
       runResult,
       sessionId: preparation.sessionId,
+      sourceRefValidation,
     });
     if (processEvents.length > 0) {
       preparation.emitter.emitProcessEvents({
@@ -193,6 +199,7 @@ export async function runInternalDimensionAgentSession({
       emitter: preparation.emitter,
       dataRoot: preparation.dataRoot,
       sessionId: preparation.sessionId,
+      sourceRefValidation,
     });
   }
 

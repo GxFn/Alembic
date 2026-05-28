@@ -16,6 +16,7 @@ import {
   buildPcvN8StageFactoryEvidence,
   buildPcvN11ProduceEvidence,
   type PcvN11ProduceEvidence,
+  type PcvSourceRefValidationContext,
 } from './BootstrapPcvNodeLocalEvidence.js';
 
 const MAX_TEXT_CHARS = 6000;
@@ -97,6 +98,7 @@ export function buildBootstrapDimensionResultProcessEvents({
   projection,
   runResult,
   sessionId,
+  sourceRefValidation,
 }: {
   dimId: string;
   label?: string | null;
@@ -104,13 +106,19 @@ export function buildBootstrapDimensionResultProcessEvents({
   projection: BootstrapDimensionProjection;
   runResult: AgentResultLike;
   sessionId: string;
+  sourceRefValidation?: PcvSourceRefValidationContext | null;
 }): BootstrapProcessEventDraft[] {
   const events: BootstrapProcessEventDraft[] = [];
   const toolEvent = buildToolEvent({ dimId, label, projection, sessionId });
   if (toolEvent) {
     events.push(toolEvent);
   }
-  const pcvN11Evidence = buildPcvN11ProduceEvidence({ dimId, needsCandidates, projection });
+  const pcvN11Evidence = buildPcvN11ProduceEvidence({
+    dimId,
+    needsCandidates,
+    projection,
+    sourceRefValidation,
+  });
   const outputEvent = buildVisibleOutputEvent({
     dimId,
     label,

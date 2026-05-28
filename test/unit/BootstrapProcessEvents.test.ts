@@ -367,6 +367,80 @@ describe('BootstrapProcessEvents', () => {
     });
   });
 
+  test('marks N11 sourceRef validity gaps in output event metadata', () => {
+    const events = buildBootstrapDimensionResultProcessEvents({
+      dimId: 'architecture',
+      label: 'Architecture',
+      projection: {
+        analysisReport: {
+          analysisText: 'Architecture analysis',
+          dimensionId: 'architecture',
+          findings: [],
+          referencedFiles: ['src/a.ts'],
+        },
+        produceResult: {
+          reply: 'Producer output',
+          toolCalls: [
+            {
+              tool: 'knowledge',
+              args: {
+                action: 'submit',
+                params: {
+                  sourceRefs: [
+                    'BiliDili/Sources/Feature/View.swift:12',
+                    'Sources/Missing/OldView.swift',
+                  ],
+                  title: 'Candidate',
+                },
+              },
+              result: { status: 'created', title: 'Candidate' },
+            },
+          ],
+        },
+        runtimeToolCalls: [],
+        successCount: 1,
+        rejectedCount: 0,
+      } as unknown as BootstrapDimensionProjection,
+      runResult: {
+        reply: 'Final visible output',
+        status: 'success',
+      },
+      sessionId: 'bs_1',
+      sourceRefValidation: {
+        allFiles: [
+          { path: '/tmp/BiliDili/src/a.ts', relativePath: 'src/a.ts' },
+          {
+            path: '/tmp/BiliDili/Sources/Feature/View.swift',
+            relativePath: 'Sources/Feature/View.swift',
+          },
+        ],
+        projectRoot: '/tmp/BiliDili',
+      },
+    });
+
+    const outputMetadata = events.find((event) => event.kind === 'llm.output')?.metadata;
+    expect(outputMetadata).toMatchObject({
+      pcvNodeEvidence: {
+        n11: {
+          invalidSourceRefCount: 1,
+          invalidSourceRefRatio: 0.3333,
+          invalidSourceRefs: [
+            {
+              normalizedPath: 'Sources/Missing/OldView.swift',
+              reason: 'file-not-found',
+              ref: 'Sources/Missing/OldView.swift',
+            },
+          ],
+          missingLinkReasons: ['producer_source_refs_invalid'],
+          sourceRefValidityStatus: 'invalid',
+          status: 'blocked-by-observability-gap',
+          totalSourceRefCount: 3,
+          validSourceRefCount: 2,
+        },
+      },
+    });
+  });
+
   test('marks truncated dimension visible output by section', () => {
     const longAnalyzeOutput = 'A'.repeat(6012);
     const finalOutput = 'Final short';

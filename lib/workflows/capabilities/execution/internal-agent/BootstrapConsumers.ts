@@ -46,6 +46,7 @@ import {
   buildPcvN12ConsumerPersistenceEvidence,
   buildPcvN12ErrorEvidence,
   mergeBootstrapPcvNodeEvidence,
+  type PcvSourceRefValidationContext,
   successfulProducerSubmitCalls,
 } from './BootstrapPcvNodeLocalEvidence.js';
 
@@ -122,6 +123,7 @@ export interface ConsumeBootstrapDimensionResultOptions {
   emitter: BootstrapEventEmitter;
   dataRoot: string;
   sessionId: string;
+  sourceRefValidation?: PcvSourceRefValidationContext | null;
 }
 
 export async function consumeBootstrapDimensionResult({
@@ -142,6 +144,7 @@ export async function consumeBootstrapDimensionResult({
   emitter,
   dataRoot,
   sessionId,
+  sourceRefValidation,
 }: ConsumeBootstrapDimensionResultOptions): Promise<DimensionStat> {
   const {
     gateResult,
@@ -372,7 +375,7 @@ export async function consumeBootstrapDimensionResult({
     | { scores: Record<string, number>; totalScore: number; suggestions: string[] }
     | undefined;
   const pcvNodeEvidence = mergeBootstrapPcvNodeEvidence(dimensionStats[dimId]?.pcvNodeEvidence, {
-    n11: buildPcvN11ProduceEvidence({ dimId, needsCandidates, projection }),
+    n11: buildPcvN11ProduceEvidence({ dimId, needsCandidates, projection, sourceRefValidation }),
     n12: buildPcvN12ConsumerPersistenceEvidence({
       acceptedSubmitCalls: isNormalCompletion ? successfulProducerSubmitCalls(projection) : [],
       dimId,
