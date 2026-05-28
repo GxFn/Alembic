@@ -12,6 +12,7 @@ import {
   RefineApplyBody,
   RefinePreviewBody,
 } from '#shared/schemas/http-requests.js';
+import { getAiRuntimeStatus, getAiUnavailableMessage } from '../../injection/AiRuntimeStatus.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';
 import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
@@ -68,11 +69,12 @@ router.post('/enrich', validate(EnrichBody), async (req: Request, res: Response)
   const results: Record<string, unknown>[] = [];
 
   if (aiProvider) {
-    // Mock 模式下跳过 AI enrichment
-    if (aiProvider.name === 'mock') {
+    const aiStatus = getAiRuntimeStatus(container);
+    if (!aiStatus.ready || aiProvider.name === 'mock') {
       return void res.json({
         success: true,
-        data: { enriched: 0, total: candidates.length, results: [], mock: true },
+        data: { enriched: 0, total: candidates.length, results: [], noAi: true },
+        warning: getAiUnavailableMessage(aiStatus),
       });
     }
 
@@ -474,8 +476,9 @@ router.post('/refine-preview', validate(RefinePreviewBody), async (req: Request,
   const container = getServiceContainer();
   const knowledgeService = container.get('knowledgeService');
   const aiProvider = container.get('aiProvider');
-  if (!aiProvider || aiProvider.name === 'mock') {
-    throw new ValidationError('AI Provider 未配置，当前为 Mock 模式。请先配置 API Key。');
+  const aiStatus = getAiRuntimeStatus(container);
+  if (!aiProvider || !aiStatus.ready || aiProvider.name === 'mock') {
+    throw new ValidationError(getAiUnavailableMessage(aiStatus));
   }
 
   const entry = await knowledgeService.get(candidateId);
@@ -526,8 +529,9 @@ router.post(
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
     const aiProvider = container.get('aiProvider');
-    if (!aiProvider || aiProvider.name === 'mock') {
-      throw new ValidationError('AI Provider 未配置，当前为 Mock 模式。请先配置 API Key。');
+    const aiStatus = getAiRuntimeStatus(container);
+    if (!aiProvider || !aiStatus.ready || aiProvider.name === 'mock') {
+      throw new ValidationError(getAiUnavailableMessage(aiStatus));
     }
 
     const entry = await knowledgeService.get(candidateId);

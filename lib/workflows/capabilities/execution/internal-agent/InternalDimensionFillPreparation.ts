@@ -3,6 +3,7 @@ import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/project-intelligence';
 import type { IncrementalPlan, PipelineFillView } from '@alembic/core/types';
 import { resolveDataRoot } from '@alembic/core/workspace';
+import { getAiRuntimeStatus } from '#inject/AiRuntimeStatus.js';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
 import type { BootstrapFileEntry } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
 import type {
@@ -37,7 +38,7 @@ export interface InternalDimensionFillPreparation {
   allFiles: BootstrapFileEntry[] | null;
   agentService: AgentService | null;
   systemRunContextFactory: SystemRunContextFactory | null;
-  isMockMode: boolean;
+  aiUnavailable: boolean;
   skipTargetDelivery: boolean;
 }
 
@@ -63,11 +64,9 @@ export function prepareInternalDimensionFillRun(
 
   let agentService: AgentService | null = null;
   let systemRunContextFactory: SystemRunContextFactory | null = null;
-  let isMockMode = false;
+  const aiStatus = getAiRuntimeStatus(ctx.container);
   try {
-    const manager = ctx.container.singletons?._aiProviderManager as { isMock: boolean } | undefined;
-    isMockMode = manager?.isMock ?? false;
-    if (!isMockMode) {
+    if (aiStatus.ready) {
       agentService = ctx.container.get('agentService');
       systemRunContextFactory = ctx.container.get('systemRunContextFactory');
     }
@@ -104,7 +103,7 @@ export function prepareInternalDimensionFillRun(
     allFiles: snapshot.allFiles as unknown as BootstrapFileEntry[] | null,
     agentService,
     systemRunContextFactory,
-    isMockMode,
+    aiUnavailable: !aiStatus.ready,
     skipTargetDelivery: view.skipTargetDelivery === true,
   };
 }

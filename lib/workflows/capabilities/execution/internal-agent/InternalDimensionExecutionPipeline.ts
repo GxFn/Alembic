@@ -1,4 +1,3 @@
-import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/project-intelligence';
 import type { PipelineFillView } from '@alembic/core/types';
 import { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
@@ -12,9 +11,6 @@ import type {
   BootstrapWorkflowContainer as InternalDimensionExecutionContainer,
   BootstrapWorkflowContext as InternalDimensionExecutionContext,
 } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillTypes.js';
-import { fillDimensionsMock } from '#workflows/capabilities/execution/internal-agent/MockBootstrapPipeline.js';
-
-const logger = Logger.getInstance();
 
 export type { InternalDimensionExecutionContainer, InternalDimensionExecutionContext };
 
@@ -25,16 +21,11 @@ export async function runInternalDimensionExecution(
   const preparation = prepareInternalDimensionExecutionRun(view, dimensions);
 
   if (
-    (!preparation.agentService || !preparation.systemRunContextFactory) &&
-    !preparation.isMockMode
+    preparation.aiUnavailable ||
+    !preparation.agentService ||
+    !preparation.systemRunContextFactory
   ) {
     emitInternalDimensionExecutionAiUnavailable(preparation);
-    return;
-  }
-
-  if (preparation.isMockMode) {
-    logger.info('[InternalDimensionExecution] Mock AI detected — routing to mock-pipeline');
-    await fillDimensionsMock(view, dimensions);
     return;
   }
 

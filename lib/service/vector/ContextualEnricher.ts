@@ -71,7 +71,7 @@ export class ContextualEnricher implements VectorChunkEnricher {
       return [];
     }
 
-    // Mock 模式下跳过 AI enrichment，直接返回原始 chunks
+    // 历史 fake provider 不参与产品向量增强，真实运行态应在构造前完成 AI readiness 检查。
     if (this.#aiProvider.name === 'mock') {
       return chunks;
     }

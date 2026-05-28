@@ -155,7 +155,7 @@ export interface ServiceMap {
   dimensionCopy: typeof DimensionCopy;
   constitution: Constitution | null;
   aiProvider: AiProvider | null;
-  aiProviderManager: AiProviderManager;
+  aiProviderManager: AiProviderManager | null;
   projectGraph: ProjectGraph | null;
 
   // ═══ VectorModule ═══

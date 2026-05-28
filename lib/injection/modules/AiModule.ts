@@ -14,6 +14,7 @@
  */
 
 import { AiProviderManager, type ManagedAiProvider } from '@alembic/agent/ai';
+import { getAiRuntimeStatus } from '../AiRuntimeStatus.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 /**
@@ -43,9 +44,15 @@ export async function initialize(c: ServiceContainer) {
       if (typeof aiFactory.autoDetectProvider === 'function') {
         c.singletons.aiProvider = aiFactory.autoDetectProvider();
         const provider = c.singletons.aiProvider as Record<string, unknown> | null;
-        logger.info('AI provider injected into container', {
-          provider: (provider?.constructor as { name?: string } | undefined)?.name || 'unknown',
-        });
+        if (provider?.name === 'mock') {
+          logger.warn(
+            'AI provider auto-detect returned disabled mock provider; treating AI as unavailable'
+          );
+        } else {
+          logger.info('AI provider injected into container', {
+            provider: (provider?.constructor as { name?: string } | undefined)?.name || 'unknown',
+          });
+        }
       }
     } catch {
       c.singletons.aiProvider = null;
@@ -53,33 +60,13 @@ export async function initialize(c: ServiceContainer) {
   }
 
   // ── 创建 AiProviderManager（统一管理层）──
-  const manager = new AiProviderManager(
-    (c.singletons.aiProvider as ManagedAiProvider) || { name: 'mock', model: 'mock-fallback' }
-  );
-  c.singletons._aiProviderManager = manager;
-
-  // 绑定: DI 数据管道同步（切换时更新 singletons 中的 provider 引用，供工厂函数读取）
-  manager._bindDiSync((provider, embed) => {
-    c.singletons.aiProvider = provider;
-    c.singletons._embedProvider = embed;
-  });
-
-  // 绑定: DI 级联清理回调
-  manager._bindDependentClearer(() => {
-    const cleared: string[] = [];
-    for (const key of c._aiDependentSingletons || []) {
-      if (c.singletons[key]) {
-        c.singletons[key] = null;
-        cleared.push(key);
-      }
-    }
-    return cleared;
-  });
-
-  // 绑定: Embedding fallback 初始化器
-  manager._bindEmbedFallbackInit((currentProvider) => {
-    return createEmbedFallback(c, currentProvider);
-  });
+  // 无真实 provider 时保持 manager 缺席，调用方统一得到 AI unavailable，
+  // 避免把未配置状态伪装成产品 mock provider。
+  const manager = ensureManagerForProvider(c, c.singletons.aiProvider as ManagedAiProvider | null);
+  if (!manager) {
+    logger.warn('AI provider unavailable at startup; real provider configuration is required');
+    return;
+  }
 
   // Token 追踪 AOP（manager 自身已在构造时 wire，此处延迟注入 recorder）
   // recorder 注入放到 register() 之后（tokenUsageStore 需先注册）
@@ -176,7 +163,61 @@ export function register(c: ServiceContainer) {
   c.register('aiProviderManager', () => c.singletons._aiProviderManager);
 
   // 延迟注入 TokenRecorder 到 manager（tokenUsageStore 在 AppModule 中注册）
-  const manager = c.singletons._aiProviderManager as AiProviderManager;
+  const manager = c.singletons._aiProviderManager as AiProviderManager | null;
+  if (!manager) {
+    return;
+  }
+  attachTokenRecorder(c, manager);
+}
+
+export function ensureManagerForProvider(
+  c: ServiceContainer,
+  provider: ManagedAiProvider | null
+): AiProviderManager | null {
+  if (!provider || provider.name === 'mock') {
+    c.singletons._aiProviderManager = null;
+    c.singletons.aiProvider = provider?.name === 'mock' ? null : provider;
+    return null;
+  }
+
+  const existing = c.singletons._aiProviderManager as AiProviderManager | null | undefined;
+  if (existing) {
+    return existing;
+  }
+
+  const manager = new AiProviderManager(provider);
+  c.singletons.aiProvider = provider;
+  c.singletons._aiProviderManager = manager;
+
+  // 绑定: DI 数据管道同步（切换时更新 singletons 中的 provider 引用，供工厂函数读取）
+  manager._bindDiSync((nextProvider, embed) => {
+    c.singletons.aiProvider = nextProvider;
+    c.singletons._embedProvider = embed;
+  });
+
+  // 绑定: DI 级联清理回调
+  manager._bindDependentClearer(() => clearAiDependentSingletons(c));
+
+  // 绑定: Embedding fallback 初始化器
+  manager._bindEmbedFallbackInit((currentProvider) => {
+    return createEmbedFallback(c, currentProvider);
+  });
+
+  return manager;
+}
+
+export function clearAiDependentSingletons(c: ServiceContainer): string[] {
+  const cleared: string[] = [];
+  for (const key of c._aiDependentSingletons || []) {
+    if (c.singletons[key]) {
+      c.singletons[key] = null;
+      cleared.push(key);
+    }
+  }
+  return cleared;
+}
+
+export function attachTokenRecorder(c: ServiceContainer, manager: AiProviderManager): void {
   const containerRef = c;
   manager.setTokenRecorder({
     record(r: {
@@ -196,4 +237,8 @@ export function register(c: ServiceContainer) {
       }
     },
   });
+}
+
+export function isAiRuntimeReady(c: ServiceContainer): boolean {
+  return getAiRuntimeStatus(c).ready;
 }

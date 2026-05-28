@@ -4,7 +4,6 @@
  * 覆盖: ModelRegistry resolve 路径、ParameterGuard 边界、Provider 集成
  */
 
-import { beforeAll, describe, expect, test } from 'vitest';
 import {
   getModelRegistry,
   type ModelDef,
@@ -12,6 +11,7 @@ import {
   ParameterGuard,
   type ProviderId,
 } from '@alembic/agent/ai';
+import { beforeAll, describe, expect, test } from 'vitest';
 
 // ─── ModelRegistry ────────────────────────────────
 
@@ -95,9 +95,9 @@ describe('ModelRegistry', () => {
 
   test('register() 运行时注册自定义模型', () => {
     const custom: ModelDef = {
-      id: 'mock:test-model',
+      id: 'openai:test-model',
       displayName: 'Test Model',
-      provider: 'mock',
+      provider: 'openai',
       apiModelId: 'test-model',
       contextWindow: 32_000,
       maxOutputTokens: 4_096,
@@ -114,7 +114,7 @@ describe('ModelRegistry', () => {
       },
     };
     reg.register(custom);
-    expect(reg.get('mock:test-model')).toBe(custom);
+    expect(reg.get('openai:test-model')).toBe(custom);
   });
 
   test('getModelRegistry() 返回单例', () => {
@@ -144,7 +144,7 @@ describe('ParameterGuard', () => {
   const makeModel = (overrides: Partial<ModelDef> = {}): ModelDef => ({
     id: 'test:model',
     displayName: 'Test Model',
-    provider: 'mock',
+    provider: 'openai',
     apiModelId: 'model',
     contextWindow: 128_000,
     maxOutputTokens: 8_192,

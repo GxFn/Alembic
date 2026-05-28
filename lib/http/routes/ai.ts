@@ -33,6 +33,7 @@ import {
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
+import { getAiRuntimeStatus, getAiUnavailableMessage } from '../../injection/AiRuntimeStatus.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import {
   AiChatBody,
@@ -138,13 +139,25 @@ function getContainer() {
 /** 检查 AI Provider 是否可用（非 mock），不可用则抛 ValidationError */
 function requireAiReady() {
   const container = getContainer();
-  const manager = container.singletons?._aiProviderManager as { isMock: boolean } | undefined;
-  if (manager?.isMock) {
-    throw new ValidationError(
-      'AI Provider 未配置，当前为 Mock 模式。请先在 Alembic Dashboard 的 AI Settings 中配置 API Key。'
-    );
+  const aiStatus = getAiRuntimeStatus(container);
+  if (!aiStatus.ready) {
+    throw new ValidationError(getAiUnavailableMessage(aiStatus));
   }
   return container;
+}
+
+function isDisabledMockProvider(provider: unknown): boolean {
+  return typeof provider === 'string' && provider.trim().toLowerCase() === 'mock';
+}
+
+function rejectDisabledMockProvider(res: Response): void {
+  res.status(400).json({
+    success: false,
+    error: {
+      code: 'AI_PROVIDER_UNAVAILABLE',
+      message: 'AI Provider mock 模式已从产品运行态移除。请配置真实 AI Provider。',
+    },
+  });
 }
 
 function hasDeveloperRole(req: Request) {
@@ -265,61 +278,51 @@ router.get('/providers', async (req: Request, res: Response): Promise<void> => {
   const registry = getModelRegistry();
 
   const container = getServiceContainer();
-  const manager = container.singletons?._aiProviderManager as
-    | {
-        name?: string;
-        model?: string;
-      }
-    | undefined;
-  const activeProvider = manager?.name || process.env.ALEMBIC_AI_PROVIDER || '';
-  const activeModel = manager?.model || process.env.ALEMBIC_AI_MODEL || '';
+  const aiStatus = getAiRuntimeStatus(container);
+  const envProvider = isDisabledMockProvider(process.env.ALEMBIC_AI_PROVIDER)
+    ? ''
+    : process.env.ALEMBIC_AI_PROVIDER || '';
+  const activeProvider = aiStatus.ready ? aiStatus.providerName || '' : envProvider;
+  const activeModel = aiStatus.ready ? aiStatus.model || '' : process.env.ALEMBIC_AI_MODEL || '';
 
-  const providers = [
-    ...PROVIDER_CONFIGS.map((cfg) => {
-      const hasKey = cfg.keyEnvVar ? !!process.env[cfg.keyEnvVar] : true;
-      const models = registry.listByProvider(cfg.id).map((m) => ({
-        id: m.apiModelId,
-        name: m.displayName,
-        contextWindow: m.contextWindow,
-        maxOutputTokens: m.maxOutputTokens,
-        deprecated: !!m.deprecated,
-        capabilities: m.capabilities,
-        reasoning: {
-          supported: m.reasoning.supported,
-          mode: m.reasoning.mode,
-          defaultEffort: m.reasoning.defaultEffort,
-          effortLevels: m.reasoning.effortLevels,
-        },
-      }));
-      return {
-        id: cfg.id,
-        label: cfg.displayName,
-        defaultModel:
-          registry.get(cfg.defaultModelId)?.apiModelId ?? cfg.defaultModelId.split(':')[1],
-        models,
-        hasKey,
-        isActive: cfg.id === activeProvider,
-        keyEnvVar: cfg.keyEnvVar,
-        baseUrl: cfg.baseUrl,
-      };
-    }),
-    {
-      id: 'mock',
-      label: 'Mock (测试)',
-      defaultModel: 'mock-l3',
-      models: [],
-      hasKey: true,
-      isActive: activeProvider === 'mock',
-      keyEnvVar: '',
-      baseUrl: '',
-    },
-  ];
+  const providers = PROVIDER_CONFIGS.filter((cfg) => cfg.id !== 'mock').map((cfg) => {
+    const hasKey = cfg.keyEnvVar ? !!process.env[cfg.keyEnvVar] : true;
+    const models = registry.listByProvider(cfg.id).map((m) => ({
+      id: m.apiModelId,
+      name: m.displayName,
+      contextWindow: m.contextWindow,
+      maxOutputTokens: m.maxOutputTokens,
+      deprecated: !!m.deprecated,
+      capabilities: m.capabilities,
+      reasoning: {
+        supported: m.reasoning.supported,
+        mode: m.reasoning.mode,
+        defaultEffort: m.reasoning.defaultEffort,
+        effortLevels: m.reasoning.effortLevels,
+      },
+    }));
+    return {
+      id: cfg.id,
+      label: cfg.displayName,
+      defaultModel:
+        registry.get(cfg.defaultModelId)?.apiModelId ?? cfg.defaultModelId.split(':')[1],
+      models,
+      hasKey,
+      isActive: cfg.id === activeProvider,
+      keyEnvVar: cfg.keyEnvVar,
+      baseUrl: cfg.baseUrl,
+    };
+  });
 
   res.json({
     success: true,
     data: {
       providers,
       active: { provider: activeProvider, model: activeModel },
+      ai: {
+        ready: aiStatus.ready,
+        unavailableReason: aiStatus.reason,
+      },
     },
   });
 });
@@ -335,6 +338,9 @@ router.post('/probe', async (req: Request, res: Response): Promise<void> => {
     return void res
       .status(400)
       .json({ success: false, error: { message: 'provider is required' } });
+  }
+  if (isDisabledMockProvider(providerName)) {
+    return void rejectDisabledMockProvider(res);
   }
 
   try {
@@ -378,14 +384,16 @@ router.post('/probe', async (req: Request, res: Response): Promise<void> => {
  */
 router.get('/config', async (req: Request, res: Response): Promise<void> => {
   const container = getServiceContainer();
-  const manager = container.singletons?._aiProviderManager as {
-    name: string;
-    model: string;
-    isMock: boolean;
-  };
+  const aiStatus = getAiRuntimeStatus(container);
   res.json({
     success: true,
-    data: { provider: manager.name, model: manager.model, isMock: manager.isMock },
+    data: {
+      provider: aiStatus.ready ? aiStatus.providerName : null,
+      model: aiStatus.ready ? aiStatus.model : null,
+      isMock: false,
+      isReady: aiStatus.ready,
+      unavailableReason: aiStatus.reason,
+    },
   });
 });
 
@@ -398,6 +406,9 @@ router.post(
   validate(AiConfigBody),
   async (req: Request, res: Response): Promise<void> => {
     const { provider, model } = req.body;
+    if (isDisabledMockProvider(provider)) {
+      return void rejectDisabledMockProvider(res);
+    }
 
     // 创建新的 provider 实例验证配置有效
     let newProvider: ReturnType<typeof createProvider>;
@@ -428,61 +439,6 @@ router.post(
     });
   }
 );
-
-/**
- * POST /api/v1/ai/mock/cleanup
- * 清理 Mock 模式产生的候选数据
- */
-router.post('/mock/cleanup', async (_req: Request, res: Response): Promise<void> => {
-  const container = getContainer();
-  const knowledgeService = container.get('knowledgeService');
-  const knowledgeRepo = container.get('knowledgeRepository') as {
-    findIdsBySource(source: string): Promise<string[]>;
-  };
-
-  // 查找所有 mock 来源的候选
-  const mockSources = ['mock-bootstrap', 'mock-pipeline'];
-  let totalDeleted = 0;
-
-  for (const source of mockSources) {
-    const ids = await knowledgeRepo.findIdsBySource(source);
-
-    for (const id of ids) {
-      try {
-        await knowledgeService.delete(id, { userId: 'system:mock-cleanup' });
-        totalDeleted++;
-      } catch {
-        logger.debug(`Mock cleanup: failed to delete ${id}`);
-      }
-    }
-  }
-
-  // 清理 bootstrap 来源的 semantic_memories
-  try {
-    const memoryRepo = container.get('memoryRepository') as
-      | {
-          clearBootstrapMemories(): Promise<number>;
-        }
-      | undefined;
-    if (memoryRepo) {
-      await memoryRepo.clearBootstrapMemories();
-    }
-  } catch {
-    // memoryRepository 可能未注册
-  }
-
-  logger.info(`Mock cleanup completed: ${totalDeleted} entries deleted`);
-
-  const rt = getRealtimeService();
-  if (rt) {
-    rt.broadcastEvent('mock-cleanup-completed', { deleted: totalDeleted });
-  }
-
-  res.json({
-    success: true,
-    data: { deleted: totalDeleted },
-  });
-});
 
 /**
  * POST /api/v1/ai/summarize
@@ -885,7 +841,7 @@ function readLlmConfig() {
     settingsPath: settingsConfig.settingsPath,
     secretsPath: settingsConfig.secretsPath,
     configSource: hasProcessConfig ? 'process-env' : hasSettings ? 'workspace-settings' : 'empty',
-    llmReady: isAiEnvReady(rawVars),
+    llmReady: isDisabledMockProvider(rawVars.ALEMBIC_AI_PROVIDER) ? false : isAiEnvReady(rawVars),
   };
 }
 
@@ -923,6 +879,10 @@ router.post(
       embedApiKey,
       providerKeys,
     } = req.body;
+
+    if (isDisabledMockProvider(provider) || isDisabledMockProvider(embedProvider)) {
+      return void rejectDisabledMockProvider(res);
+    }
 
     const updates: Record<string, string> = {
       ALEMBIC_AI_PROVIDER: provider,

@@ -153,18 +153,19 @@ describe('E2E: Full Pipeline', () => {
 
   describe('AI Provider hot reload', () => {
     test('should reload without crashing', () => {
-      // 模拟 AI Provider
-      const mockProvider = {
-        name: 'mock-test',
+      // 模拟测试边界内的 AI Provider
+      const testProvider = {
+        name: 'test-provider',
+        model: 'test-model',
         chat: vi.fn(),
         chatWithTools: vi.fn(),
         supportsEmbedding: () => true,
         embed: vi.fn(),
-        constructor: { name: 'MockProvider' },
+        constructor: { name: 'TestProvider' },
       };
 
-      expect(() => container.reloadAiProvider(mockProvider)).not.toThrow();
-      expect(container.singletons.aiProvider).toBe(mockProvider);
+      expect(() => container.reloadAiProvider(testProvider)).not.toThrow();
+      expect(container.singletons.aiProvider).toBe(testProvider);
     });
 
     test('should clear AI-dependent singletons on reload', () => {
@@ -176,7 +177,7 @@ describe('E2E: Full Pipeline', () => {
       expect(svc).toEqual({ created: true });
 
       // 热重载 AI Provider (null 被忽略，需传非 null provider)
-      container.reloadAiProvider({ type: 'mock-reload' });
+      container.reloadAiProvider({ name: 'test-reload', model: 'test-model' });
 
       // singleton 缓存应该被清除（下次 get 会重建）
       expect(container.singletons.testAiDep).toBeNull();

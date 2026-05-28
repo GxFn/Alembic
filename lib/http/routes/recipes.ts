@@ -10,6 +10,7 @@ import { type AgentService, runRelationDiscovery } from '@alembic/agent/service'
 import { COUNTABLE_LIFECYCLES } from '@alembic/core/knowledge';
 import Logger from '@alembic/core/logging';
 import express, { type Request, type Response } from 'express';
+import { getAiRuntimeStatus, getAiUnavailableMessage } from '../../injection/AiRuntimeStatus.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 
 const router = express.Router();
@@ -94,12 +95,12 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
     });
   }
 
-  // Mock 模式下跳过 AI 关系发现
-  const aiManager = container.singletons?._aiProviderManager as { isMock?: boolean } | undefined;
-  if (aiManager?.isMock) {
+  // AI 未配置时跳过 AI 关系发现
+  const aiStatus = getAiRuntimeStatus(container);
+  if (!aiStatus.ready) {
     return void res.json({
       success: true,
-      data: { status: 'error', error: 'AI Provider 未配置，当前为 Mock 模式。请先配置 API Key。' },
+      data: { status: 'error', error: getAiUnavailableMessage(aiStatus) },
     });
   }
 

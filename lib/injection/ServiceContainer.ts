@@ -189,10 +189,27 @@ export class ServiceContainer {
       this.logger.warn('[ServiceContainer] reloadAiProvider called with null — ignored');
       return;
     }
-    const manager = this.singletons._aiProviderManager as {
-      switchProvider: (p: Record<string, unknown>) => unknown;
-    };
-    manager.switchProvider(newProvider);
+    const provider = newProvider as unknown as import('@alembic/agent/ai').ManagedAiProvider;
+    if (provider.name === 'mock') {
+      this.logger.warn(
+        '[ServiceContainer] mock AI provider reload rejected — configure a real provider'
+      );
+      return;
+    }
+
+    const manager = this.singletons._aiProviderManager as
+      | {
+          switchProvider: (p: Record<string, unknown>) => unknown;
+        }
+      | null
+      | undefined;
+    if (manager) {
+      manager.switchProvider(newProvider);
+      return;
+    }
+
+    AiModule.ensureManagerForProvider(this, provider);
+    AiModule.clearAiDependentSingletons(this);
   }
 
   // ─── 跨进程缓存协调 ─────

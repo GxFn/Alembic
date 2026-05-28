@@ -17,6 +17,7 @@ import {
 } from '@alembic/agent/service';
 import Logger from '@alembic/core/logging';
 import { LanguageService } from '@alembic/core/project-intelligence';
+import { getAiRuntimeStatus, getAiUnavailableMessage } from '../injection/AiRuntimeStatus.js';
 
 export class AiScanService {
   agentService: AgentService | null;
@@ -65,9 +66,9 @@ export class AiScanService {
         'systemRunContextFactory'
       ) as SystemRunContextFactory;
       // 通过 AiProviderManager 统一检查 AI 可用性
-      const manager = this.container.singletons?._aiProviderManager as { isMock: boolean };
-      if (manager.isMock) {
-        throw new Error('AI Provider 为 mock 模式');
+      const aiStatus = getAiRuntimeStatus(this.container);
+      if (!aiStatus.ready) {
+        throw new Error(getAiUnavailableMessage(aiStatus));
       }
     } catch (err: unknown) {
       throw new Error(

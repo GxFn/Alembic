@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ── Mock AI Provider ──
+// ── Test AI Provider ──
 
 function createMockAiProvider() {
   return {

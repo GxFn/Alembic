@@ -1,5 +1,6 @@
 import type { ToolCapabilityManifest, ToolExecutionRequest } from '@alembic/agent/tools';
 import Logger from '@alembic/core/logging';
+import { getAiRuntimeStatus, getAiUnavailableMessage } from '../../injection/AiRuntimeStatus.js';
 import type { ServiceContainer } from '../../injection/ServiceContainer.js';
 
 export type DashboardOperationHandler = (request: ToolExecutionRequest) => Promise<unknown>;
@@ -130,9 +131,9 @@ async function updateModuleMap(request: ToolExecutionRequest) {
 
 async function rebuildSemanticIndex(request: ToolExecutionRequest) {
   const container = getContainer(request);
-  const manager = container.singletons?._aiProviderManager as { isMock?: boolean } | undefined;
-  if (manager?.isMock) {
-    return { error: 'AI Provider 未配置，当前为 Mock 模式。Embedding 不可用。' };
+  const aiStatus = getAiRuntimeStatus(container);
+  if (!aiStatus.ready) {
+    return { error: `${getAiUnavailableMessage(aiStatus)} Embedding 不可用。` };
   }
 
   const clear = request.args.clear !== false;

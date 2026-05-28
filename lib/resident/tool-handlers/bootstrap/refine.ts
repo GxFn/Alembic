@@ -10,6 +10,7 @@
  * 从 bootstrap.js 提取为独立模块
  */
 
+import { getAiRuntimeStatus, getAiUnavailableMessage } from '../../../injection/AiRuntimeStatus.js';
 import { envelope } from '../../tool-schema/envelope.js';
 import type { KnowledgeEntryJSON, McpContext } from '../../tool-schema/types.js';
 
@@ -36,12 +37,12 @@ export async function bootstrapRefine(ctx: McpContext, args: BootstrapRefineArgs
     });
   }
 
-  // Mock 模式下跳过 AI 润色
-  if (aiProvider.name === 'mock') {
+  const aiStatus = getAiRuntimeStatus(ctx.container);
+  if (!aiStatus.ready || aiProvider.name === 'mock') {
     return envelope({
       success: false,
-      message: 'AI Provider 未配置，当前为 Mock 模式。请先配置 API Key。',
-      errorCode: 'MOCK_MODE',
+      message: getAiUnavailableMessage(aiStatus),
+      errorCode: 'AI_PROVIDER_UNAVAILABLE',
     });
   }
 

@@ -2,7 +2,6 @@
  * LLMGateway + Transport 层单元测试
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ClaudeTransport,
   DeepSeekTransport,
@@ -17,6 +16,7 @@ import {
   type TransportResponse,
   type UnifiedMessage,
 } from '@alembic/agent/ai';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ─── Transport 基础测试 ─────────────────────────────────
 
@@ -363,7 +363,7 @@ describe('LLMGateway', () => {
   describe('error handling', () => {
     it('throws on unsupported provider', () => {
       const gw = new LLMGateway();
-      expect(() => gw.getModelDef('mock:test')).not.toThrow();
+      expect(() => gw.getModelDef('openai:gpt-custom')).not.toThrow();
     });
 
     it('propagates API errors', async () => {

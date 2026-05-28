@@ -22,6 +22,7 @@ import {
 import { inferLang } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
 import { getDiscovererRegistry } from '@alembic/core/project-intelligence';
+import { getAiRuntimeStatus } from '../../injection/AiRuntimeStatus.js';
 
 /** 全局排除目录 */
 const SCAN_EXCLUDE_DIRS = new Set([
@@ -446,10 +447,9 @@ export class ModuleService {
     const scannedFiles = files.map((f) => ({ name: f.name, path: f.relativePath }));
     this.#logger.info(`[ModuleService] scanTarget: ${targetName}, ${files.length} files`);
 
-    // 3. AI 提取 — mock 模式或无 AgentService 时直接跳过
-    const aiManager = (this.#container?.singletons as Record<string, unknown> | undefined)
-      ?._aiProviderManager as { isMock: boolean } | undefined;
-    if (!this.#agentService || !this.#systemRunContextFactory || aiManager?.isMock) {
+    // 3. AI 提取 — 无真实 Provider 或无 AgentService 时直接跳过
+    const aiStatus = getAiRuntimeStatus(this.#container ?? null);
+    if (!this.#agentService || !this.#systemRunContextFactory || !aiStatus.ready) {
       return {
         recipes: [],
         scannedFiles,
@@ -572,16 +572,15 @@ export class ModuleService {
       targetName: f.targetName,
     }));
 
-    // 3. AI 提取 Recipes — mock 模式跳过
+    // 3. AI 提取 Recipes — 无真实 Provider 时跳过
     const allRecipes: Record<string, unknown>[] = [];
     const PER_BATCH_TIMEOUT = options.batchTimeout || 90000;
     const startTime = Date.now();
     const TOTAL_TIMEOUT = options.totalTimeout || 540000;
     let timedOut = false;
-    const scanAiMgr = (this.#container?.singletons as Record<string, unknown> | undefined)
-      ?._aiProviderManager as { isMock: boolean } | undefined;
+    const scanAiStatus = getAiRuntimeStatus(this.#container ?? null);
 
-    if (this.#agentService && this.#systemRunContextFactory && !scanAiMgr?.isMock) {
+    if (this.#agentService && this.#systemRunContextFactory && scanAiStatus.ready) {
       const BATCH_SIZE = options.batchSize || 20;
 
       for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
