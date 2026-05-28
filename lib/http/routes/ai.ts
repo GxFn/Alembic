@@ -285,7 +285,7 @@ router.get('/providers', async (req: Request, res: Response): Promise<void> => {
   const activeProvider = aiStatus.ready ? aiStatus.providerName || '' : envProvider;
   const activeModel = aiStatus.ready ? aiStatus.model || '' : process.env.ALEMBIC_AI_MODEL || '';
 
-  const providers = PROVIDER_CONFIGS.filter((cfg) => cfg.id !== 'mock').map((cfg) => {
+  const providers = PROVIDER_CONFIGS.filter((cfg) => String(cfg.id) !== 'mock').map((cfg) => {
     const hasKey = cfg.keyEnvVar ? !!process.env[cfg.keyEnvVar] : true;
     const models = registry.listByProvider(cfg.id).map((m) => ({
       id: m.apiModelId,
