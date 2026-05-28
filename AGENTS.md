@@ -21,6 +21,7 @@
 2. 再读父级 `../AGENTS.md`。
 3. 再读 `../codex-control-workspace/.workspace-active/workspace/index.md` 和 `../codex-control-workspace/.workspace-active/workspace/current/workspace-current-status.md`。
 4. 如果有当前计划、任务包或 VAD heartbeat，只按 `../codex-control-workspace/.workspace-active/workspace/current` 中明确分配给 `Alembic` 的内容执行。
+5. 目标、范围、禁止事项、验证命令和回填字段以当前计划 / 任务包和本仓库规则为准；提示词只是唤醒入口，不是唯一任务说明。
 
 ### VAD 最小门禁
 
