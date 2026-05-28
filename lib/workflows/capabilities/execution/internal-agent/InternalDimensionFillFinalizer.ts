@@ -28,6 +28,11 @@ import {
   consumeInternalDimensionCandidateRelations,
   type InternalDimensionFillSessionResult,
 } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillSessionRunner.js';
+import {
+  type BootstrapPcvNodeEvidenceSet,
+  PCV_COLD_START_NODE_LOCAL_CONTRACT,
+  PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION,
+} from './BootstrapPcvNodeLocalEvidence.js';
 
 type InternalDimensionFillRuntime = Awaited<ReturnType<typeof initializeBootstrapRuntime>>;
 
@@ -166,7 +171,11 @@ async function persistEfficiencyAugmentedWorkflowReport({
     report,
     skillResults
   );
-  if (!augmentedEfficiency && !augmentedSkillDelivery) {
+  const augmentedPcvNodeLocal = augmentWorkflowReportWithPcvNodeLocalBaseline(
+    report,
+    dimensionStats
+  );
+  if (!augmentedEfficiency && !augmentedSkillDelivery && !augmentedPcvNodeLocal) {
     return;
   }
 
@@ -280,6 +289,115 @@ export function augmentWorkflowReportWithEfficiency(
   }
 
   return true;
+}
+
+export function augmentWorkflowReportWithPcvNodeLocalBaseline(
+  report: WorkflowReport,
+  dimensionStats: InternalDimensionFillSessionResult['dimensionStats']
+): boolean {
+  const dimensionEvidence = Object.fromEntries(
+    Object.entries(dimensionStats)
+      .map(([dimId, stat]) => [dimId, normalizePcvNodeEvidenceSet(stat.pcvNodeEvidence)] as const)
+      .filter(([, evidence]) => Boolean(evidence))
+  ) as Record<string, BootstrapPcvNodeEvidenceSet>;
+  const dimensionIds = Object.keys(dimensionEvidence);
+  if (dimensionIds.length === 0) {
+    return false;
+  }
+
+  const nodeSummary = summarizePcvNodeEvidence(dimensionEvidence);
+  report.pcvScorecard = {
+    contract: PCV_COLD_START_NODE_LOCAL_CONTRACT,
+    contractVersion: PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION,
+    dimensions: dimensionEvidence,
+    nodes: nodeSummary.nodes,
+    scope: 'alembic-cold-start-bootstrap-node-local',
+    summary: {
+      blockedNodes: nodeSummary.blockedNodes,
+      dimensionCount: dimensionIds.length,
+      linkedNodes: nodeSummary.linkedNodes,
+      nodeCount: nodeSummary.nodeCount,
+    },
+  };
+  report.totals = {
+    ...(report.totals || {}),
+    pcvNodeLocalBlockedNodes: nodeSummary.blockedNodes,
+    pcvNodeLocalEvidenceDimensions: dimensionIds.length,
+    pcvNodeLocalEvidenceNodes: nodeSummary.nodeCount,
+    pcvNodeLocalLinkedNodes: nodeSummary.linkedNodes,
+  };
+  report.comparisonHints = {
+    ...(isRecord(report.comparisonHints) ? report.comparisonHints : {}),
+    pcvNodeLocalBlockedNodes: nodeSummary.blockedNodes,
+    pcvNodeLocalLinkedNodes: nodeSummary.linkedNodes,
+  };
+
+  for (const [dimId, evidence] of Object.entries(dimensionEvidence)) {
+    report.dimensions[dimId] = {
+      ...(report.dimensions[dimId] || {}),
+      pcvNodeEvidence: evidence,
+    };
+  }
+
+  return true;
+}
+
+function normalizePcvNodeEvidenceSet(value: unknown): BootstrapPcvNodeEvidenceSet | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const evidence: BootstrapPcvNodeEvidenceSet = {};
+  if (isRecord(value.n8)) {
+    evidence.n8 = value.n8 as unknown as NonNullable<BootstrapPcvNodeEvidenceSet['n8']>;
+  }
+  if (isRecord(value.n11)) {
+    evidence.n11 = value.n11 as unknown as NonNullable<BootstrapPcvNodeEvidenceSet['n11']>;
+  }
+  if (isRecord(value.n12)) {
+    evidence.n12 = value.n12 as unknown as NonNullable<BootstrapPcvNodeEvidenceSet['n12']>;
+  }
+  return Object.keys(evidence).length > 0 ? evidence : null;
+}
+
+function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcvNodeEvidenceSet>) {
+  const nodes: Record<string, Record<string, unknown>> = {};
+  let linkedNodes = 0;
+  let blockedNodes = 0;
+  let nodeCount = 0;
+
+  for (const nodeKey of ['n8', 'n11', 'n12'] as const) {
+    const statuses: Record<string, number> = {};
+    const missingLinkReasons = new Set<string>();
+    let dimensionsWithEvidence = 0;
+    for (const evidence of Object.values(dimensionEvidence)) {
+      const nodeEvidence = evidence[nodeKey];
+      if (!nodeEvidence) {
+        continue;
+      }
+      dimensionsWithEvidence++;
+      nodeCount++;
+      statuses[nodeEvidence.status] = (statuses[nodeEvidence.status] || 0) + 1;
+      for (const reason of nodeEvidence.missingLinkReasons || []) {
+        missingLinkReasons.add(reason);
+      }
+      if (nodeEvidence.status === 'linked') {
+        linkedNodes++;
+      }
+      if (nodeEvidence.status === 'blocked-by-observability-gap') {
+        blockedNodes++;
+      }
+    }
+    if (dimensionsWithEvidence === 0) {
+      continue;
+    }
+    nodes[nodeKey] = {
+      dimensionsWithEvidence,
+      missingLinkReasons: [...missingLinkReasons],
+      statuses,
+    };
+  }
+
+  return { blockedNodes, linkedNodes, nodeCount, nodes };
 }
 
 export function buildInternalDimensionCompletionSummary({

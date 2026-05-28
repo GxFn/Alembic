@@ -1,15 +1,15 @@
 import type { MemoryCoordinator, SessionStore } from '@alembic/agent/memory';
 import { describe, expect, test, vi } from 'vitest';
+import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
 import {
   type CandidateResults,
   consumeBootstrapDimensionError,
   consumeBootstrapDimensionResult,
   type DimensionCandidateData,
   type DimensionStat,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import type { BootstrapDimensionProjection } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
-import type { DimensionContext } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
-import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
+} from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
+import type { BootstrapDimensionProjection } from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
+import type { DimensionContext } from '../../lib/workflows/capabilities/execution/internal-agent/DimensionContext.js';
 
 function makeProjection(): BootstrapDimensionProjection {
   const successfulSubmit = {
@@ -106,6 +106,11 @@ describe('bootstrap dimension consumer', () => {
         storeDimensionReport,
         addDimensionDigest,
         addSubmittedCandidate,
+        toJSON: () => ({
+          submittedCandidates: {
+            api: [{ title: 'Candidate', subTopic: 'api', summary: 'Summary' }],
+          },
+        }),
       } as unknown as SessionStore,
       dimContext: {
         addDimensionDigest,
@@ -146,6 +151,18 @@ describe('bootstrap dimension consumer', () => {
         tokenUsage: { input: 3, output: 5, reasoning: 2, cacheHit: 1 },
         emptyRetries: 1,
       }),
+      pcvNodeEvidence: {
+        n11: {
+          acceptedCount: 1,
+          nodeId: 'N11-produce',
+          status: 'not-applicable',
+        },
+        n12: {
+          findableCandidateTitles: ['Candidate'],
+          nodeId: 'N12-consumers-persistence',
+          status: 'linked',
+        },
+      },
     });
     expect(result).toBe(dimensionStats.api);
   });
@@ -164,12 +181,19 @@ describe('bootstrap dimension consumer', () => {
     });
 
     expect(candidateResults.errors).toEqual([{ dimId: 'api', error: 'boom' }]);
-    expect(dimensionStats.api).toEqual({
+    expect(dimensionStats.api).toMatchObject({
       status: 'error',
       candidateCount: 0,
       durationMs: 0,
       error: 'boom',
       diagnostics: null,
+      pcvNodeEvidence: {
+        n12: {
+          nodeId: 'N12-consumers-persistence',
+          persistedFailureReason: 'boom',
+          status: 'linked',
+        },
+      },
     });
     expect(emitDimensionComplete).toHaveBeenCalledWith('api', {
       type: 'error',
@@ -235,6 +259,7 @@ describe('bootstrap dimension consumer', () => {
         storeDimensionReport,
         addDimensionDigest,
         addSubmittedCandidate,
+        toJSON: () => ({ submittedCandidates: { api: [] } }),
       } as unknown as SessionStore,
       dimContext: {
         addDimensionDigest,
@@ -273,6 +298,16 @@ describe('bootstrap dimension consumer', () => {
       rejectedCount: 2,
       error: 'note_finding records were not repaired',
       diagnostics: expect.objectContaining({ degraded: true }),
+      pcvNodeEvidence: {
+        n11: {
+          nodeId: 'N11-produce',
+          status: 'blocked-by-observability-gap',
+        },
+        n12: {
+          persistedFailureReason: 'note_finding records were not repaired',
+          status: 'linked',
+        },
+      },
     });
   });
 
@@ -323,6 +358,7 @@ describe('bootstrap dimension consumer', () => {
         storeDimensionReport,
         addDimensionDigest,
         addSubmittedCandidate,
+        toJSON: () => ({ submittedCandidates: { api: [{ title: 'Candidate' }] } }),
       } as unknown as SessionStore,
       dimContext: {
         addDimensionDigest,
@@ -353,6 +389,16 @@ describe('bootstrap dimension consumer', () => {
       candidateCount: 1,
       recoveredProducerTimeout: true,
       error: undefined,
+      pcvNodeEvidence: {
+        n11: {
+          acceptedCount: 1,
+          status: 'linked',
+        },
+        n12: {
+          findableCandidateTitles: ['Candidate'],
+          status: 'linked',
+        },
+      },
     });
   });
 });

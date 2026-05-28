@@ -51,9 +51,20 @@ describe('BootstrapProcessEvents', () => {
     });
     const text = events[0].content?.text || '';
     expect(text).toContain('"fileCount": 1');
+    expect(text).toContain('"N8-stage-factory-tool-policy"');
     expect(text).toContain('[redacted-secret]');
     expect(text).not.toContain('file content');
     expect(text).not.toContain('sk-proj-abcdefghijklmnopqrstuvwxyz');
+    expect(events[0].metadata).toMatchObject({
+      pcvNodeEvidence: {
+        n8: {
+          nodeId: 'N8-stage-factory-tool-policy',
+          producerToolRestriction: { noTerminalProof: true },
+          stageOrder: ['analyze', 'quality_gate', 'produce', 'rejection_gate'],
+          status: 'linked',
+        },
+      },
+    });
   });
 
   test('maps developer-safe Agent progress process events and keeps host-owned fields out', () => {
@@ -346,6 +357,14 @@ describe('BootstrapProcessEvents', () => {
     expect(JSON.stringify(events)).toContain('Producer output');
     expect(JSON.stringify(events)).toContain('quality-gate-diagnostics');
     expect(JSON.stringify(events)).not.toContain('Bearer abcdefghijklmnop');
+    expect(events.find((event) => event.kind === 'llm.output')?.metadata).toMatchObject({
+      pcvNodeEvidence: {
+        n11: {
+          nodeId: 'N11-produce',
+          terminalToolCallCount: 0,
+        },
+      },
+    });
   });
 
   test('marks truncated dimension visible output by section', () => {

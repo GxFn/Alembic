@@ -41,6 +41,13 @@ import {
   generateSkill,
   type WorkflowSkillGenerationResult,
 } from '#workflows/capabilities/execution/WorkflowSkillCompletionCapability.js';
+import {
+  buildPcvN11ProduceEvidence,
+  buildPcvN12ConsumerPersistenceEvidence,
+  buildPcvN12ErrorEvidence,
+  mergeBootstrapPcvNodeEvidence,
+  successfulProducerSubmitCalls,
+} from './BootstrapPcvNodeLocalEvidence.js';
 
 const logger = Logger.getInstance();
 
@@ -364,6 +371,15 @@ export async function consumeBootstrapDimensionResult({
   const qualityScores = (artifact as Record<string, unknown>).qualityReport as
     | { scores: Record<string, number>; totalScore: number; suggestions: string[] }
     | undefined;
+  const pcvNodeEvidence = mergeBootstrapPcvNodeEvidence(dimensionStats[dimId]?.pcvNodeEvidence, {
+    n11: buildPcvN11ProduceEvidence({ dimId, needsCandidates, projection }),
+    n12: buildPcvN12ConsumerPersistenceEvidence({
+      acceptedSubmitCalls: isNormalCompletion ? successfulProducerSubmitCalls(projection) : [],
+      dimId,
+      runIssueReason: runIssue?.reason || null,
+      sessionStore,
+    }),
+  });
   const dimResult = {
     status: runIssue?.status || 'v3-pipeline-complete',
     candidateCount: effectiveCandidateCount,
@@ -377,6 +393,7 @@ export async function consumeBootstrapDimensionResult({
     diagnostics: runResult.diagnostics || null,
     error: runIssue?.reason,
     recoveredProducerTimeout,
+    pcvNodeEvidence,
     stages: summarizeDimensionStages(runResult),
     analysisText: analysisReport.analysisText,
     referencedFilesList: analysisReport.referencedFiles || [],
@@ -494,6 +511,9 @@ export function consumeBootstrapDimensionError({
     durationMs: 0,
     error: errMsg,
     diagnostics: issue.diagnostics || null,
+    pcvNodeEvidence: mergeBootstrapPcvNodeEvidence(dimensionStats[dimId]?.pcvNodeEvidence, {
+      n12: buildPcvN12ErrorEvidence({ dimId, error: errMsg }),
+    }),
   };
   dimensionStats[dimId] = dimResult;
   return dimResult;

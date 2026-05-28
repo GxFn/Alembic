@@ -5,8 +5,9 @@ import {
 import { describe, expect, test } from 'vitest';
 import {
   augmentWorkflowReportWithEfficiency,
+  augmentWorkflowReportWithPcvNodeLocalBaseline,
   augmentWorkflowReportWithSkillDeliveryReceipts,
-} from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
+} from '../../lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
 
 describe('internal dimension fill finalizer efficiency report augmentation', () => {
   test('writes aggregate and per-dimension efficiency into workflow reports', () => {
@@ -142,6 +143,98 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
         runtimeExportStatus: 'pending',
         skillName: 'project-api',
       },
+    });
+  });
+
+  test('exposes PCV node-local baseline evidence in workflow reports', () => {
+    const report = {
+      version: '2.7.0',
+      timestamp: '2026-05-28T00:00:00.000Z',
+      project: { name: 'Alembic', files: 1, lang: 'ts' },
+      duration: { totalMs: 100, totalSec: 0 },
+      dimensions: { api: {} },
+      totals: {},
+      checkpoints: { restored: [] },
+      incremental: null,
+      semanticMemory: null,
+      session: { id: 'session-1' },
+    } as WorkflowReport;
+
+    const changed = augmentWorkflowReportWithPcvNodeLocalBaseline(report, {
+      api: {
+        candidateCount: 1,
+        durationMs: 10,
+        pcvNodeEvidence: {
+          n8: {
+            chainNodeId: 'N8-stage-factory-tool-policy',
+            contract: 'PCVColdStartNodeLocalBaseline',
+            contractVersion: 1,
+            dimensionId: 'api',
+            evidenceKind: 'stage-factory-tool-policy',
+            missingLinkReasons: [],
+            nodeId: 'N8-stage-factory-tool-policy',
+            producerToolRestriction: {
+              gapLimit: null,
+              noTerminalProof: true,
+              producerStagePresent: true,
+              requiredSubmitTool: 'knowledge',
+              terminalToolIds: [],
+            },
+            sourceRefs: [],
+            stageOrder: ['analyze', 'quality_gate', 'produce', 'rejection_gate'],
+            stageToolPolicies: [],
+            status: 'linked',
+            summary: 'n8 linked',
+            terminalCapabilityHints: {
+              terminalCapability: {
+                enabled: true,
+                modes: ['run'],
+                scriptAllowed: false,
+                toolset: 'terminal-run',
+              },
+              constraints: [],
+            },
+          },
+          n11: {
+            acceptedCount: 1,
+            chainNodeId: 'N11-produce',
+            contract: 'PCVColdStartNodeLocalBaseline',
+            contractVersion: 1,
+            dimensionId: 'api',
+            evidenceKind: 'producer-cut',
+            gapLimit: null,
+            missingLinkReasons: [],
+            noTerminalProof: true,
+            nodeId: 'N11-produce',
+            producerOnlyCut: true,
+            producerToolCalls: [{ action: 'submit', status: 'created', tool: 'knowledge' }],
+            rejectedCount: 0,
+            sourceRefs: ['src/api.ts'],
+            status: 'linked',
+            submittedCount: 1,
+            summary: 'n11 linked',
+            terminalToolCallCount: 0,
+          },
+        },
+      },
+    });
+
+    expect(changed).toBe(true);
+    expect(report.pcvScorecard).toMatchObject({
+      contract: 'PCVColdStartNodeLocalBaseline',
+      scope: 'alembic-cold-start-bootstrap-node-local',
+      summary: { blockedNodes: 0, dimensionCount: 1, linkedNodes: 2, nodeCount: 2 },
+    });
+    expect(report.dimensions.api).toMatchObject({
+      pcvNodeEvidence: {
+        n8: { status: 'linked' },
+        n11: { acceptedCount: 1, status: 'linked' },
+      },
+    });
+    expect(report.totals).toMatchObject({
+      pcvNodeLocalEvidenceDimensions: 1,
+      pcvNodeLocalEvidenceNodes: 2,
+      pcvNodeLocalLinkedNodes: 2,
     });
   });
 });

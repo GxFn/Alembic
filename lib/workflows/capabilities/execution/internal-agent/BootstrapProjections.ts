@@ -353,7 +353,10 @@ export function projectBootstrapDimensionAgentOutput({
     },
   };
 
-  const submitCalls = runtimeToolCalls.filter((tc: ToolCallRecord) => {
+  const producerToolCalls = Array.isArray(produceResult?.toolCalls)
+    ? produceResult.toolCalls
+    : runtimeToolCalls;
+  const submitCalls = producerToolCalls.filter((tc: ToolCallRecord) => {
     const tool = tc?.tool || tc?.name;
     if (tool !== 'knowledge') {
       return false;
@@ -393,7 +396,7 @@ export function projectBootstrapDimensionAgentOutput({
     producerResult: {
       candidateCount: needsCandidates ? successCount : 0,
       rejectedCount: needsCandidates ? rejectedCount : 0,
-      toolCalls: runtimeToolCalls,
+      toolCalls: producerToolCalls,
       reply: produceResult?.reply || analysisText,
       tokenUsage: combinedTokenUsage,
       efficiency,

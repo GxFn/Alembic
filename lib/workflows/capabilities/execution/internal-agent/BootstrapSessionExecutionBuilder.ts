@@ -16,6 +16,10 @@ import {
   resolveBootstrapDimensionRunIssue,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
 import {
+  buildPcvN8StageFactoryEvidence,
+  mergeBootstrapPcvNodeEvidence,
+} from './BootstrapPcvNodeLocalEvidence.js';
+import {
   buildBootstrapAgentProgressProcessEvents,
   buildBootstrapDimensionInputProcessEvents,
 } from './BootstrapProcessEvents.js';
@@ -96,6 +100,7 @@ export function buildBootstrapSessionExecutionInput({
         createDimensionRunInput,
         emitDimensionStart,
         emitProcessEvents,
+        dimensionStats,
         childExecutionState,
       })
     )
@@ -247,6 +252,7 @@ function buildBootstrapDimensionChildPlan({
   createDimensionRunInput,
   emitDimensionStart,
   emitProcessEvents,
+  dimensionStats,
   childExecutionState,
 }: {
   dimId: string;
@@ -263,6 +269,7 @@ function buildBootstrapDimensionChildPlan({
   ): { analystScopeId: string; runInput: AgentRunInput };
   emitDimensionStart(dimId: string): void;
   emitProcessEvents?(payload: BootstrapProcessEventsPayload): void;
+  dimensionStats: Record<string, DimensionStat>;
   childExecutionState: Map<string, BootstrapDimensionExecutionState>;
 }): BootstrapSessionChildRunPlan | null {
   const plan = resolvePlan(dimId);
@@ -301,6 +308,21 @@ function buildBootstrapDimensionChildPlan({
         runInput,
         sessionId,
       });
+      const pcvN8Evidence = buildPcvN8StageFactoryEvidence({
+        dimId,
+        label: plan.dimConfig.label || plan.dim.label || dimId,
+        plan,
+        runInput: bridgedRunInput,
+      });
+      dimensionStats[dimId] = {
+        ...(dimensionStats[dimId] || {
+          candidateCount: 0,
+          durationMs: 0,
+        }),
+        pcvNodeEvidence: mergeBootstrapPcvNodeEvidence(dimensionStats[dimId]?.pcvNodeEvidence, {
+          n8: pcvN8Evidence,
+        }),
+      };
       childExecutionState.set(dimId, { dimStartTime, analystScopeId });
       emitProcessEvents?.({
         dimensionId: dimId,

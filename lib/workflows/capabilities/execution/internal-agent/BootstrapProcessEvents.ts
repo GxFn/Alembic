@@ -12,6 +12,11 @@ import type {
   ToolCallRecord,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
 import { parseDimensionDigest } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
+import {
+  buildPcvN8StageFactoryEvidence,
+  buildPcvN11ProduceEvidence,
+  type PcvN11ProduceEvidence,
+} from './BootstrapPcvNodeLocalEvidence.js';
 
 const MAX_TEXT_CHARS = 6000;
 const MAX_JSON_TEXT_CHARS = 12000;
@@ -52,13 +57,17 @@ export function buildBootstrapDimensionInputProcessEvents({
 }): BootstrapProcessEventDraft[] {
   const title = `Bootstrap ${label || dimId} input prepared`;
   const inputProjection = projectAgentRunInput(runInput);
+  const pcvN8Evidence = buildPcvN8StageFactoryEvidence({ dimId, label, plan, runInput });
   return [
     {
       content: {
         language: 'json',
         mimeType: 'application/json',
         role: 'developer',
-        text: jsonText(inputProjection),
+        text: jsonText({
+          ...inputProjection,
+          pcvNodeEvidence: { n8: pcvN8Evidence },
+        }),
       },
       dimensionId: dimId,
       kind: 'llm.input',
@@ -67,6 +76,8 @@ export function buildBootstrapDimensionInputProcessEvents({
         hasExistingRecipes: plan.hasExistingRecipes,
         inputProjection: 'agent-run-input-summary',
         needsCandidates: plan.needsCandidates,
+        pcvNodeEvidence: { n8: pcvN8Evidence },
+        pcvObservability: { n8: pcvN8Evidence },
         rawProviderPayload: false,
         sessionId,
       },
@@ -82,12 +93,14 @@ export function buildBootstrapDimensionInputProcessEvents({
 export function buildBootstrapDimensionResultProcessEvents({
   dimId,
   label,
+  needsCandidates = true,
   projection,
   runResult,
   sessionId,
 }: {
   dimId: string;
   label?: string | null;
+  needsCandidates?: boolean;
   projection: BootstrapDimensionProjection;
   runResult: AgentResultLike;
   sessionId: string;
@@ -97,7 +110,15 @@ export function buildBootstrapDimensionResultProcessEvents({
   if (toolEvent) {
     events.push(toolEvent);
   }
-  const outputEvent = buildVisibleOutputEvent({ dimId, label, projection, runResult, sessionId });
+  const pcvN11Evidence = buildPcvN11ProduceEvidence({ dimId, needsCandidates, projection });
+  const outputEvent = buildVisibleOutputEvent({
+    dimId,
+    label,
+    pcvN11Evidence,
+    projection,
+    runResult,
+    sessionId,
+  });
   if (outputEvent) {
     events.push(outputEvent);
   }
@@ -427,12 +448,14 @@ function buildToolEvent({
 function buildVisibleOutputEvent({
   dimId,
   label,
+  pcvN11Evidence,
   projection,
   runResult,
   sessionId,
 }: {
   dimId: string;
   label?: string | null;
+  pcvN11Evidence: PcvN11ProduceEvidence;
   projection: BootstrapDimensionProjection;
   runResult: AgentResultLike;
   sessionId: string;
@@ -500,6 +523,8 @@ function buildVisibleOutputEvent({
         tokenUsage: projection.combinedTokenUsage,
       },
       outputSections: projectedSections.map(({ name }) => name),
+      pcvNodeEvidence: { n11: pcvN11Evidence },
+      pcvObservability: { n11: pcvN11Evidence },
       sessionId,
       status: runResult.status || null,
       tokenUsage: projection.combinedTokenUsage,

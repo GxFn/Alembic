@@ -61,6 +61,9 @@ describe('bootstrap session execution builder', () => {
     }));
     const emitDimensionStart = vi.fn();
     const consumeDimensionResult = vi.fn();
+    const dimensionStats: Parameters<
+      typeof buildBootstrapSessionExecutionInput
+    >[0]['dimensionStats'] = {};
 
     const { input, childExecutionState } = buildBootstrapSessionExecutionInput({
       sessionId: 'session-1',
@@ -70,7 +73,7 @@ describe('bootstrap session execution builder', () => {
       primaryLang: 'typescript',
       projectLang: 'javascript',
       scheduler: { getTierIndex: (dimId) => (dimId === 'b' ? 1 : 0) },
-      dimensionStats: {},
+      dimensionStats,
       resolvePlan,
       createDimensionRunInput,
       emitDimensionStart,
@@ -92,6 +95,16 @@ describe('bootstrap session execution builder', () => {
     expect(runtimeInput.params).toEqual({ dimId: 'b', runtime: true });
     expect(emitDimensionStart).toHaveBeenCalledWith('b');
     expect(childExecutionState.get('b')?.analystScopeId).toBe('b:analyst');
+    expect(dimensionStats.b).toMatchObject({
+      pcvNodeEvidence: {
+        n8: {
+          nodeId: 'N8-stage-factory-tool-policy',
+          producerToolRestriction: { noTerminalProof: true },
+          stageOrder: ['analyze', 'quality_gate', 'produce', 'rejection_gate'],
+          status: 'linked',
+        },
+      },
+    });
   });
 
   test('bridges developer-safe Agent progress through shared dimension child input path', async () => {

@@ -54,7 +54,21 @@ describe('bootstrap projections', () => {
               metadata: { artifactVersion: 2 },
             },
           },
-          produce: { reply: 'producer reply' },
+          produce: {
+            reply: 'producer reply',
+            toolCalls: [
+              {
+                tool: 'knowledge',
+                args: { action: 'submit', params: { title: 'Accepted candidate' } },
+                result: { status: 'accepted' },
+              },
+              {
+                tool: 'knowledge',
+                args: { action: 'submit', params: { title: 'Rejected candidate' } },
+                result: { status: 'rejected' },
+              },
+            ],
+          },
         },
         toolCalls: [
           {
@@ -68,13 +82,8 @@ describe('bootstrap projections', () => {
           },
           {
             tool: 'knowledge',
-            args: { action: 'submit', params: { title: 'Accepted candidate' } },
+            args: { action: 'submit', params: { title: 'Analyzer should not count' } },
             result: { status: 'accepted' },
-          },
-          {
-            tool: 'knowledge',
-            args: { action: 'submit', params: { title: 'Rejected candidate' } },
-            result: { status: 'rejected' },
           },
         ],
       },
@@ -86,7 +95,7 @@ describe('bootstrap projections', () => {
       findings: ['important finding'],
       referencedFiles: ['src/a.ts'],
       metadata: {
-        toolCallCount: 4,
+        toolCallCount: 3,
         tokenUsage: { input: 10, output: 20 },
         efficiency: expect.objectContaining({
           duplicateToolCalls: 1,
@@ -105,7 +114,16 @@ describe('bootstrap projections', () => {
         tokenUsage: { input: 10, output: 20, reasoning: 4, cacheHit: 6 },
         nudgeCount: 1,
       }),
+      toolCalls: [
+        expect.objectContaining({
+          args: { action: 'submit', params: { title: 'Accepted candidate' } },
+        }),
+        expect.objectContaining({
+          args: { action: 'submit', params: { title: 'Rejected candidate' } },
+        }),
+      ],
     });
+    expect(projection.submitCalls).toHaveLength(2);
   });
 
   test('projects Agent diagnostics efficiency into dimension projection', () => {
