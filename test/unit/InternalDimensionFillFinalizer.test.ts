@@ -195,6 +195,37 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
               constraints: [],
             },
           },
+          groundingLedger: {
+            burnCount: 3,
+            chainNodeId: 'analyze-evidence-grounding-ledger',
+            classifications: {
+              'deterministic-evidence-consumed': 1,
+              'evidence-produced': 1,
+              'invalid-no-evidence': 1,
+              'planning-only': 0,
+              'record-only': 0,
+              'summary-only': 0,
+              'verification-only': 0,
+            },
+            contract: 'PCVColdStartNodeLocalBaseline',
+            contractVersion: 1,
+            deepseekV4NoForcedToolChoiceCount: 1,
+            deterministicEvidenceConsumedCount: 1,
+            dimensionId: 'api',
+            evidenceKind: 'analyze-grounding-ledger',
+            evidenceProducedCount: 1,
+            invalidNoEvidenceCount: 1,
+            missingLinkReasons: ['analyze_grounding_invalid_no_evidence'],
+            nodeId: 'analyze-evidence-grounding-ledger',
+            planningOnlyCount: 0,
+            recordOnlyCount: 0,
+            sourceRefs: [],
+            status: 'partial-evidence',
+            summary: 'api analyze grounding ledger recorded 3 burns',
+            summaryOnlyCount: 0,
+            toolSchemasVisibleCount: 2,
+            verificationOnlyCount: 0,
+          },
           n11: {
             acceptedCount: 1,
             chainNodeId: 'N11-produce',
@@ -264,8 +295,24 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
       },
       summary: { blockedNodes: 1, dimensionCount: 1, linkedNodes: 1, nodeCount: 2 },
     });
+    expect(report.pcvScorecard).toMatchObject({
+      processMetrics: {
+        analyzeGrounding: {
+          burnCount: 3,
+          deepseekV4NoForcedToolChoiceCount: 1,
+          dimensionsWithEvidence: 1,
+          evidenceProducedCount: 1,
+          invalidNoEvidenceCount: 1,
+          toolSchemasVisibleCount: 2,
+        },
+      },
+    });
     expect(report.dimensions.api).toMatchObject({
       pcvNodeEvidence: {
+        groundingLedger: {
+          burnCount: 3,
+          invalidNoEvidenceCount: 1,
+        },
         n8: { status: 'linked' },
         n11: { acceptedCount: 1, status: 'blocked-by-observability-gap' },
       },
@@ -275,6 +322,8 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
       pcvNodeLocalEvidenceDimensions: 1,
       pcvNodeLocalEvidenceNodes: 2,
       pcvNodeLocalLinkedNodes: 1,
+      pcvAnalyzeGroundingBurns: 3,
+      pcvAnalyzeGroundingInvalidNoEvidence: 1,
     });
   });
 });

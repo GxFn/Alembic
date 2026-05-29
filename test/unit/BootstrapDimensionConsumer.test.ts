@@ -167,6 +167,87 @@ describe('bootstrap dimension consumer', () => {
     expect(result).toBe(dimensionStats.api);
   });
 
+  test('summarizes Agent analyze grounding ledger into dimension PCV evidence', async () => {
+    const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
+    const dimensionCandidates: Record<string, DimensionCandidateData> = {};
+    const dimensionStats: Record<string, DimensionStat> = {};
+
+    await consumeBootstrapDimensionResult({
+      ctx: {},
+      dimId: 'api',
+      dimConfig: { label: 'API' },
+      needsCandidates: false,
+      projection: makeProjection(),
+      runResult: {
+        degraded: false,
+        phases: {
+          analyze: {
+            pcvNodeEvidence: {
+              groundingLedger: [
+                {
+                  classification: 'invalid-no-evidence',
+                  deepseekV4ToolChoiceMode: 'tools-visible-no-forced-tool-choice',
+                  ref: 'burn-1',
+                  toolSchemasVisible: true,
+                },
+                {
+                  classification: 'deterministic-evidence-consumed',
+                  ref: 'burn-2',
+                  toolSchemaNames: ['code'],
+                },
+                {
+                  classification: 'evidence-produced',
+                  ref: 'burn-3',
+                  toolSchemasVisible: false,
+                },
+              ],
+              nodeId: 'agent:analyze:api',
+              schemaVersion: 1,
+            },
+            reply: 'analysis without raw prompt',
+          },
+        },
+      },
+      dimStartTime: Date.now(),
+      analystScopeId: 'api:analyst',
+      memoryCoordinator: {
+        getActiveContext: () => ({
+          distill: () => ({ keyFindings: [], totalObservations: 0, toolCallSummary: [] }),
+        }),
+      } as unknown as MemoryCoordinator,
+      sessionStore: {
+        storeDimensionReport: vi.fn(),
+        addDimensionDigest: vi.fn(),
+        addSubmittedCandidate: vi.fn(),
+        toJSON: () => ({ submittedCandidates: { api: [] } }),
+      } as unknown as SessionStore,
+      dimContext: {
+        addDimensionDigest: vi.fn(),
+        addSubmittedCandidate: vi.fn(),
+      } as unknown as DimensionContext,
+      candidateResults,
+      dimensionCandidates,
+      dimensionStats,
+      emitter: { emitDimensionComplete: vi.fn() } as unknown as BootstrapEventEmitter,
+      dataRoot: '/tmp',
+      sessionId: 'session-1',
+    });
+
+    expect(dimensionStats.api?.pcvNodeEvidence).toMatchObject({
+      groundingLedger: {
+        burnCount: 3,
+        deepseekV4NoForcedToolChoiceCount: 1,
+        deterministicEvidenceConsumedCount: 1,
+        evidenceProducedCount: 1,
+        invalidNoEvidenceCount: 1,
+        missingLinkReasons: ['analyze_grounding_invalid_no_evidence'],
+        nodeId: 'analyze-evidence-grounding-ledger',
+        toolSchemasVisibleCount: 2,
+      },
+    });
+    expect(JSON.stringify(dimensionStats.api?.pcvNodeEvidence)).not.toContain('raw prompt');
+  });
+
   test('records dimension errors through explicit dependencies', () => {
     const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
     const dimensionStats: Record<string, DimensionStat> = {};

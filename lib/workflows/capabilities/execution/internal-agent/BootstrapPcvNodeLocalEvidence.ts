@@ -13,6 +13,7 @@ import {
 } from '@alembic/core/host-agent-workflows';
 import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import type {
+  AgentResultLike,
   BootstrapDimensionProjection,
   ToolCallRecord,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
@@ -20,6 +21,7 @@ import type {
 export const PCV_COLD_START_NODE_LOCAL_CONTRACT = 'PCVColdStartNodeLocalBaseline';
 export const PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION = 1;
 export const PCV_N8_NODE_ID = 'N8-stage-factory-tool-policy';
+export const PCV_ANALYZE_GROUNDING_NODE_ID = 'analyze-evidence-grounding-ledger';
 export const PCV_N11_NODE_ID = 'N11-produce';
 export const PCV_N12_NODE_ID = 'N12-consumers-persistence';
 
@@ -106,6 +108,30 @@ export interface PcvN8StageFactoryEvidence extends PcvNodeLocalEvidenceBase {
   terminalCapabilityHints: ReturnType<typeof buildBootstrapTerminalPolicyHints>;
 }
 
+export type PcvAnalyzeGroundingClassification =
+  | 'deterministic-evidence-consumed'
+  | 'evidence-produced'
+  | 'verification-only'
+  | 'record-only'
+  | 'planning-only'
+  | 'invalid-no-evidence'
+  | 'summary-only';
+
+export interface PcvAnalyzeGroundingLedgerSummary extends PcvNodeLocalEvidenceBase {
+  burnCount: number;
+  classifications: Record<PcvAnalyzeGroundingClassification, number>;
+  deepseekV4NoForcedToolChoiceCount: number;
+  deterministicEvidenceConsumedCount: number;
+  evidenceKind: 'analyze-grounding-ledger';
+  evidenceProducedCount: number;
+  invalidNoEvidenceCount: number;
+  planningOnlyCount: number;
+  recordOnlyCount: number;
+  summaryOnlyCount: number;
+  toolSchemasVisibleCount: number;
+  verificationOnlyCount: number;
+}
+
 export interface PcvN11ProduceEvidence extends PcvNodeLocalEvidenceBase {
   acceptedCount: number;
   evidenceKind: 'producer-cut';
@@ -137,6 +163,7 @@ export interface PcvN12ConsumerPersistenceEvidence extends PcvNodeLocalEvidenceB
 
 export interface BootstrapPcvNodeEvidenceSet {
   n8?: PcvN8StageFactoryEvidence;
+  groundingLedger?: PcvAnalyzeGroundingLedgerSummary;
   n11?: PcvN11ProduceEvidence;
   n12?: PcvN12ConsumerPersistenceEvidence;
 }
@@ -293,6 +320,93 @@ export function buildPcvN11ProduceEvidence({
     terminalToolCallCount,
     totalSourceRefCount: sourceRefValidity.totalSourceRefCount,
     validSourceRefCount: sourceRefValidity.validSourceRefCount,
+  };
+}
+
+export function buildPcvAnalyzeGroundingLedgerSummary({
+  dimId,
+  label,
+  runResult,
+}: {
+  dimId: string;
+  label?: string | null;
+  runResult: AgentResultLike;
+}): PcvAnalyzeGroundingLedgerSummary | null {
+  const entries = collectPcvAnalyzeGroundingLedgerEntries(runResult);
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const classifications = emptyGroundingClassifications();
+  let toolSchemasVisibleCount = 0;
+  let deepseekV4NoForcedToolChoiceCount = 0;
+
+  for (const entry of entries) {
+    const classification = groundingClassification(entry);
+    classifications[classification] += 1;
+    if (
+      entry.toolSchemasVisible === true ||
+      (entry.toolSchemasVisible !== false && stringArray(entry.toolSchemaNames).length > 0)
+    ) {
+      toolSchemasVisibleCount += 1;
+    }
+    if (entry.deepseekV4ToolChoiceMode === 'tools-visible-no-forced-tool-choice') {
+      deepseekV4NoForcedToolChoiceCount += 1;
+    }
+  }
+
+  const invalidNoEvidenceCount = classifications['invalid-no-evidence'];
+  const planningOnlyCount = classifications['planning-only'];
+  const evidenceProducedCount = classifications['evidence-produced'];
+  const deterministicEvidenceConsumedCount = classifications['deterministic-evidence-consumed'];
+  const verificationOnlyCount = classifications['verification-only'];
+  const recordOnlyCount = classifications['record-only'];
+  const summaryOnlyCount = classifications['summary-only'];
+  const evidenceThroughCount =
+    evidenceProducedCount +
+    deterministicEvidenceConsumedCount +
+    verificationOnlyCount +
+    recordOnlyCount;
+  const missingLinkReasons: string[] = [];
+
+  if (invalidNoEvidenceCount > 0) {
+    missingLinkReasons.push('analyze_grounding_invalid_no_evidence');
+  }
+  if (evidenceThroughCount === 0 && planningOnlyCount > 0) {
+    missingLinkReasons.push('analyze_grounding_planning_only');
+  }
+
+  return {
+    burnCount: entries.length,
+    chainNodeId: PCV_ANALYZE_GROUNDING_NODE_ID,
+    classifications,
+    contract: PCV_COLD_START_NODE_LOCAL_CONTRACT,
+    contractVersion: PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION,
+    deepseekV4NoForcedToolChoiceCount,
+    deterministicEvidenceConsumedCount,
+    dimensionId: dimId,
+    evidenceKind: 'analyze-grounding-ledger',
+    evidenceProducedCount,
+    invalidNoEvidenceCount,
+    missingLinkReasons,
+    nodeId: PCV_ANALYZE_GROUNDING_NODE_ID,
+    planningOnlyCount,
+    recordOnlyCount,
+    sourceRefs: [
+      'lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.ts',
+      'lib/workflows/capabilities/execution/internal-agent/BootstrapPcvNodeLocalEvidence.ts',
+      'node_modules/@alembic/agent/src/agent/runtime/PcvNodeEvidence.ts',
+    ],
+    status:
+      missingLinkReasons.length > 0
+        ? 'partial-evidence'
+        : evidenceThroughCount > 0
+          ? 'linked'
+          : 'not-applicable',
+    summary: `${label || dimId} analyze grounding ledger recorded ${entries.length} burn(s): ${evidenceProducedCount} produced evidence, ${deterministicEvidenceConsumedCount} consumed deterministic evidence, ${invalidNoEvidenceCount} lacked evidence.`,
+    summaryOnlyCount,
+    toolSchemasVisibleCount,
+    verificationOnlyCount,
   };
 }
 
@@ -467,6 +581,74 @@ function buildReplayProducerToolCalls({
     tool: 'knowledge',
   }));
   return [...acceptedCalls, ...rejectedCalls] as ToolCallRecord[];
+}
+
+function collectPcvAnalyzeGroundingLedgerEntries(
+  runResult: AgentResultLike
+): Array<Record<string, unknown>> {
+  const candidates: unknown[] = [runResult];
+  const phases = runResult.phases || {};
+  const analyze = phases.analyze;
+  const qualityGate = phases.quality_gate;
+  candidates.push(analyze);
+  if (isRecord(qualityGate)) {
+    candidates.push(qualityGate.artifact);
+  }
+  for (const phase of Object.values(phases)) {
+    candidates.push(phase);
+  }
+
+  const entries: Array<Record<string, unknown>> = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const pcvNodeEvidence = isRecord(candidate) ? candidate.pcvNodeEvidence : null;
+    const ledger = isRecord(pcvNodeEvidence) ? pcvNodeEvidence.groundingLedger : null;
+    if (!Array.isArray(ledger)) {
+      continue;
+    }
+    for (const item of ledger) {
+      if (!isRecord(item)) {
+        continue;
+      }
+      const ref = stringValue(item.ref) || JSON.stringify(item);
+      if (seen.has(ref)) {
+        continue;
+      }
+      seen.add(ref);
+      entries.push(item);
+    }
+  }
+  return entries;
+}
+
+function emptyGroundingClassifications(): Record<PcvAnalyzeGroundingClassification, number> {
+  return {
+    'deterministic-evidence-consumed': 0,
+    'evidence-produced': 0,
+    'invalid-no-evidence': 0,
+    'planning-only': 0,
+    'record-only': 0,
+    'summary-only': 0,
+    'verification-only': 0,
+  };
+}
+
+function groundingClassification(
+  entry: Record<string, unknown>
+): PcvAnalyzeGroundingClassification {
+  const classification = stringValue(entry.classification);
+  if (
+    classification === 'deterministic-evidence-consumed' ||
+    classification === 'evidence-produced' ||
+    classification === 'verification-only' ||
+    classification === 'record-only' ||
+    classification === 'planning-only' ||
+    classification === 'invalid-no-evidence' ||
+    classification === 'summary-only'
+  ) {
+    return classification;
+  }
+  return 'summary-only';
 }
 
 function compileBootstrapDimensionStagePolicies(runInput: AgentRunInput): PcvN8StagePolicy[] {

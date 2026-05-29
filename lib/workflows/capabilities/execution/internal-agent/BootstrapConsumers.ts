@@ -42,6 +42,7 @@ import {
   type WorkflowSkillGenerationResult,
 } from '#workflows/capabilities/execution/WorkflowSkillCompletionCapability.js';
 import {
+  buildPcvAnalyzeGroundingLedgerSummary,
   buildPcvN11ProduceEvidence,
   buildPcvN12ConsumerPersistenceEvidence,
   buildPcvN12ErrorEvidence,
@@ -374,7 +375,13 @@ export async function consumeBootstrapDimensionResult({
   const qualityScores = (artifact as Record<string, unknown>).qualityReport as
     | { scores: Record<string, number>; totalScore: number; suggestions: string[] }
     | undefined;
+  const groundingLedger = buildPcvAnalyzeGroundingLedgerSummary({
+    dimId,
+    label: dimConfig.label,
+    runResult,
+  });
   const pcvNodeEvidence = mergeBootstrapPcvNodeEvidence(dimensionStats[dimId]?.pcvNodeEvidence, {
+    ...(groundingLedger ? { groundingLedger } : {}),
     n11: buildPcvN11ProduceEvidence({ dimId, needsCandidates, projection, sourceRefValidation }),
     n12: buildPcvN12ConsumerPersistenceEvidence({
       acceptedSubmitCalls: isNormalCompletion ? successfulProducerSubmitCalls(projection) : [],
