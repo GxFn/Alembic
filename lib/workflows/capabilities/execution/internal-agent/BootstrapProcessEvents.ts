@@ -59,6 +59,8 @@ export function buildBootstrapDimensionInputProcessEvents({
   const title = `Bootstrap ${label || dimId} input prepared`;
   const inputProjection = projectAgentRunInput(runInput);
   const pcvN8Evidence = buildPcvN8StageFactoryEvidence({ dimId, label, plan, runInput });
+  const pcvStageNodeMap = resolvePcvInputContextMap(runInput, 'pcvStageNodeMap');
+  const pcvChainNodes = resolvePcvInputContextMap(runInput, 'pcvChainNodes');
   return [
     {
       content: {
@@ -67,6 +69,8 @@ export function buildBootstrapDimensionInputProcessEvents({
         role: 'developer',
         text: jsonText({
           ...inputProjection,
+          pcvStageNodeMap: sanitizeValue(pcvStageNodeMap, 0),
+          pcvChainNodes: sanitizeValue(pcvChainNodes, 0),
           pcvNodeEvidence: { n8: pcvN8Evidence },
         }),
       },
@@ -77,6 +81,8 @@ export function buildBootstrapDimensionInputProcessEvents({
         hasExistingRecipes: plan.hasExistingRecipes,
         inputProjection: 'agent-run-input-summary',
         needsCandidates: plan.needsCandidates,
+        pcvStageNodeMap: sanitizeValue(pcvStageNodeMap, 0),
+        pcvChainNodes: sanitizeValue(pcvChainNodes, 0),
         pcvNodeEvidence: { n8: pcvN8Evidence },
         pcvObservability: { n8: pcvN8Evidence },
         rawProviderPayload: false,
@@ -622,6 +628,49 @@ function projectAgentRunInput(runInput: AgentRunInput): Record<string, unknown> 
     params: sanitizeValue(runInput.params || {}, 0),
     profile: sanitizeValue(runInput.profile || {}, 0),
   };
+}
+
+function resolvePcvInputContextMap(
+  runInput: AgentRunInput,
+  key: 'pcvStageNodeMap' | 'pcvChainNodes'
+): Record<string, unknown> | null {
+  const context = asRecord(runInput.context);
+  const strategyContext = asRecord(context.strategyContext);
+  const sharedState = asRecord(context.sharedState);
+  const promptContext = asRecord(context.promptContext);
+  const messageContext = asRecord(asRecord(asRecord(runInput.message).metadata).context);
+  const strategySharedState = asRecord(strategyContext.sharedState);
+
+  const candidates =
+    key === 'pcvStageNodeMap'
+      ? [
+          context.pcvStageNodeMap,
+          messageContext.pcvStageNodeMap,
+          strategyContext.pcvStageNodeMap,
+          promptContext.pcvStageNodeMap,
+          sharedState._pcvStageNodeMap,
+          sharedState.pcvStageNodeMap,
+          strategySharedState._pcvStageNodeMap,
+          strategySharedState.pcvStageNodeMap,
+        ]
+      : [
+          context.pcvChainNodes,
+          messageContext.pcvChainNodes,
+          strategyContext.pcvChainNodes,
+          promptContext.pcvChainNodes,
+          sharedState._pcvChainNodes,
+          sharedState.pcvChainNodes,
+          strategySharedState._pcvChainNodes,
+          strategySharedState.pcvChainNodes,
+        ];
+
+  for (const candidate of candidates) {
+    const record = asRecord(candidate);
+    if (Object.keys(record).length > 0) {
+      return record;
+    }
+  }
+  return null;
 }
 
 function projectToolCall(call: ToolCallRecord, index: number): Record<string, unknown> {

@@ -88,11 +88,71 @@ describe('bootstrap session execution builder', () => {
       (input.params?.dimensions as Array<{ id: string; tier: number }>).map((dim) => dim.id)
     ).toEqual(['a', 'b']);
     expect(input.context.lang).toBe('typescript');
+    expect(
+      (input.params?.dimensions as Array<{ promptContext: Record<string, unknown> }>)[0]
+    ).toMatchObject({
+      promptContext: {
+        pcvStageNodeMap: {
+          analyze: {
+            pcvNodeId: 'pcvm:n9:analyze',
+            chainNodeId: 'pcvm:cold-start:n9',
+          },
+        },
+        pcvChainNodes: {
+          produce: {
+            pcvNodeId: 'pcvm:n11:produce',
+            chainNodeId: 'pcvm:cold-start:n11',
+          },
+        },
+      },
+    });
+    expect(
+      (input.context.childContexts as Record<string, Record<string, unknown>>).b
+    ).toMatchObject({
+      pcvStageNodeMap: {
+        quality_gate: {
+          pcvNodeId: 'pcvm:n9:quality_gate',
+          chainNodeId: 'pcvm:cold-start:n9:quality',
+        },
+      },
+      pcvChainNodes: {
+        record_repair: {
+          pcvNodeId: 'pcvm:n9:record_repair',
+          chainNodeId: 'pcvm:cold-start:n9:repair',
+        },
+      },
+    });
 
     const factory = (input.context.childInputFactories as Record<string, ChildInputFactory>).b;
     expect(factory).toBeTypeOf('function');
     const runtimeInput = await factory({ plannedInput: {}, parentInput: input });
     expect(runtimeInput.params).toEqual({ dimId: 'b', runtime: true });
+    expect(runtimeInput.message.metadata?.context).toMatchObject({
+      pcvStageNodeMap: {
+        analyze: { pcvNodeId: 'pcvm:n9:analyze' },
+        produce: { chainNodeId: 'pcvm:cold-start:n11' },
+      },
+      pcvChainNodes: {
+        quality_gate: { pcvNodeId: 'pcvm:n9:quality_gate' },
+        record_repair: { chainNodeId: 'pcvm:cold-start:n9:repair' },
+      },
+    });
+    expect(runtimeInput.context.strategyContext).toMatchObject({
+      pcvStageNodeMap: {
+        analyze: { chainNodeId: 'pcvm:cold-start:n9' },
+      },
+      pcvChainNodes: {
+        produce: { pcvNodeId: 'pcvm:n11:produce' },
+      },
+      sharedState: {
+        _pcvStageNodeMap: {
+          record_repair: { pcvNodeId: 'pcvm:n9:record_repair' },
+        },
+        _pcvChainNodes: {
+          quality_gate: { chainNodeId: 'pcvm:cold-start:n9:quality' },
+        },
+      },
+    });
     expect(emitDimensionStart).toHaveBeenCalledWith('b');
     expect(childExecutionState.get('b')?.analystScopeId).toBe('b:analyst');
     expect(dimensionStats.b).toMatchObject({

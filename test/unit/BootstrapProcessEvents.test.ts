@@ -21,7 +21,17 @@ describe('BootstrapProcessEvents', () => {
         message: {
           role: 'internal',
           content: 'Bootstrap dimension: Architecture',
-          metadata: { sessionId: 'bs_1' },
+          metadata: {
+            sessionId: 'bs_1',
+            context: {
+              pcvStageNodeMap: {
+                analyze: {
+                  pcvNodeId: 'pcvm:n9:analyze',
+                  chainNodeId: 'pcvm:cold-start:n9',
+                },
+              },
+            },
+          },
           sessionId: 'bs_1',
         },
         context: {
@@ -33,6 +43,26 @@ describe('BootstrapProcessEvents', () => {
               content: 'file content sk-proj-abcdefghijklmnopqrstuvwxyz',
             },
           ],
+          pcvStageNodeMap: {
+            analyze: {
+              pcvNodeId: 'pcvm:n9:analyze',
+              chainNodeId: 'pcvm:cold-start:n9',
+            },
+            produce: {
+              pcvNodeId: 'pcvm:n11:produce',
+              chainNodeId: 'pcvm:cold-start:n11',
+            },
+          },
+          pcvChainNodes: {
+            quality_gate: {
+              pcvNodeId: 'pcvm:n9:quality_gate',
+              chainNodeId: 'pcvm:cold-start:n9:quality',
+            },
+            record_repair: {
+              pcvNodeId: 'pcvm:n9:record_repair',
+              chainNodeId: 'pcvm:cold-start:n9:repair',
+            },
+          },
           promptContext: { dimensionId: 'architecture' },
           strategyContext: { large: true },
           systemRunContext: { secret: 'do not serialize' },
@@ -52,10 +82,32 @@ describe('BootstrapProcessEvents', () => {
     const text = events[0].content?.text || '';
     expect(text).toContain('"fileCount": 1');
     expect(text).toContain('"N8-stage-factory-tool-policy"');
+    expect(text).toContain('"pcvm:n9:analyze"');
+    expect(text).toContain('"pcvm:n11:produce"');
     expect(text).toContain('[redacted-secret]');
     expect(text).not.toContain('file content');
     expect(text).not.toContain('sk-proj-abcdefghijklmnopqrstuvwxyz');
     expect(events[0].metadata).toMatchObject({
+      pcvStageNodeMap: {
+        analyze: {
+          pcvNodeId: 'pcvm:n9:analyze',
+          chainNodeId: 'pcvm:cold-start:n9',
+        },
+        produce: {
+          pcvNodeId: 'pcvm:n11:produce',
+          chainNodeId: 'pcvm:cold-start:n11',
+        },
+      },
+      pcvChainNodes: {
+        quality_gate: {
+          pcvNodeId: 'pcvm:n9:quality_gate',
+          chainNodeId: 'pcvm:cold-start:n9:quality',
+        },
+        record_repair: {
+          pcvNodeId: 'pcvm:n9:record_repair',
+          chainNodeId: 'pcvm:cold-start:n9:repair',
+        },
+      },
       pcvNodeEvidence: {
         n8: {
           nodeId: 'N8-stage-factory-tool-policy',

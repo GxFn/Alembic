@@ -14,6 +14,7 @@ import type {
   AgentRunMessage,
   AgentRunPresentationOptions,
 } from '@alembic/agent/service';
+import { buildBootstrapPcvStageNodeContext } from '#workflows/capabilities/execution/internal-agent/BootstrapPcvNodeLocalEvidence.js';
 
 // ── Dimension input builder ──────────────────────────────
 
@@ -57,6 +58,30 @@ export function buildBootstrapDimensionRunInput({
   sessionAbortSignal,
 }: BuildBootstrapDimensionRunInputOptions): AgentRunInput {
   const analystScopeId = systemRunContext.scopeId || `${dimId}:analyst`;
+  const pcvStageNodeContext = buildBootstrapPcvStageNodeContext();
+  const sharedState = {
+    ...asRecord(systemRunContext.sharedState),
+    _pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+    _pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+    pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+    pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+  };
+  const enrichedStrategyContext = {
+    ...strategyContext,
+    pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+    pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+    pcvStageNodeMapContract: {
+      contract: pcvStageNodeContext.contract,
+      contractVersion: pcvStageNodeContext.contractVersion,
+    },
+    sharedState: {
+      ...asRecord(strategyContext.sharedState),
+      _pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+      _pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+      pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+      pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+    },
+  };
   return {
     profile: { id: 'bootstrap-dimension' },
     params: {
@@ -73,6 +98,10 @@ export function buildBootstrapDimensionRunInput({
         sessionId,
         dimension: dimId,
         phase: 'bootstrap',
+        context: {
+          pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+          pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+        },
       },
     },
     context: {
@@ -81,22 +110,33 @@ export function buildBootstrapDimensionRunInput({
       lang: primaryLang || projectLang || null,
       fileCache: allFiles,
       systemRunContext,
-      strategyContext,
+      pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+      pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+      strategyContext: enrichedStrategyContext,
       contextWindow: systemRunContext.contextWindow,
       trace: systemRunContext.trace,
       memoryCoordinator,
-      sharedState: systemRunContext.sharedState,
+      sharedState,
       promptContext: {
         dimensionScopeId: analystScopeId,
         dimId,
         dimensionId: dimId,
+        pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+        pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
       },
-    },
+    } as unknown as AgentRunContext,
     execution: {
       abortSignal: sessionAbortSignal || undefined,
     },
     presentation: { responseShape: 'system-task-result' },
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
 }
 
 // ── Session input builder ────────────────────────────────

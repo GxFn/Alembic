@@ -25,6 +25,7 @@ import {
   type BootstrapFileEntry,
   buildBootstrapDimensionRunInput,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
+import { buildBootstrapPcvStageNodeContext } from '#workflows/capabilities/execution/internal-agent/BootstrapPcvNodeLocalEvidence.js';
 import {
   type BootstrapExistingRecipe,
   type BootstrapRescanContext,
@@ -201,6 +202,7 @@ export function createBootstrapDimensionRuntimeInput({
     outputType: effectiveOutputType,
     allowedKnowledgeTypes: dimConfig.allowedKnowledgeTypes || [],
   };
+  const pcvStageNodeContext = buildBootstrapPcvStageNodeContext();
   const contextWindow = systemRunContextFactory.createContextWindow({ isSystem: true });
   const computedBudget = computeAnalystBudget(
     projectInfo.fileCount || 0,
@@ -230,9 +232,19 @@ export function createBootstrapDimensionRuntimeInput({
       submittedPatterns: globalSubmittedPatterns,
       submittedTriggers: globalSubmittedTriggers,
       _bootstrapDedup: bootstrapDedup,
+      _pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+      _pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+      pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+      pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
     },
     extraFields: {
       _computedBudget: computedBudget,
+      pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+      pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+      pcvStageNodeMapContract: {
+        contract: pcvStageNodeContext.contract,
+        contractVersion: pcvStageNodeContext.contractVersion,
+      },
       needsCandidates,
       dimConfig,
       projectInfo,

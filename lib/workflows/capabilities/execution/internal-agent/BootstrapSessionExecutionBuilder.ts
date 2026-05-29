@@ -16,6 +16,7 @@ import {
   resolveBootstrapDimensionRunIssue,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
 import {
+  buildBootstrapPcvStageNodeContext,
   buildPcvN8StageFactoryEvidence,
   mergeBootstrapPcvNodeEvidence,
 } from './BootstrapPcvNodeLocalEvidence.js';
@@ -305,7 +306,7 @@ function buildBootstrapDimensionChildPlan({
         dimId,
         emitProcessEvents,
         label: plan.dimConfig.label || plan.dim.label || dimId,
-        runInput,
+        runInput: injectBootstrapPcvStageNodeContext(runInput),
         sessionId,
       });
       const pcvN8Evidence = buildPcvN8StageFactoryEvidence({
@@ -428,6 +429,13 @@ function buildBootstrapDimensionPlannedInput({
   projectLang?: string | null;
   sessionAbortSignal?: AbortSignal | null;
 }): AgentRunInput {
+  const pcvStageNodeContext = buildBootstrapPcvStageNodeContext();
+  const sharedState = {
+    _pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+    _pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+    pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+    pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+  };
   return {
     profile: { id: 'bootstrap-dimension' },
     params: {
@@ -444,21 +452,91 @@ function buildBootstrapDimensionPlannedInput({
         sessionId,
         dimension: dimId,
         phase: 'bootstrap',
+        context: {
+          pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+          pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+        },
       },
     },
     context: {
       source: 'bootstrap',
       runtimeSource: 'system',
       lang: primaryLang || projectLang || null,
+      pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+      pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+      strategyContext: {
+        pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+        pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+        pcvStageNodeMapContract: {
+          contract: pcvStageNodeContext.contract,
+          contractVersion: pcvStageNodeContext.contractVersion,
+        },
+        sharedState,
+      },
+      sharedState,
       promptContext: {
         dimId,
         dimensionId: dimId,
+        pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+        pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
       },
-    },
+    } as unknown as AgentRunInput['context'],
     execution: {
       abortSignal: sessionAbortSignal || undefined,
     },
     presentation: { responseShape: 'system-task-result' },
+  };
+}
+
+function injectBootstrapPcvStageNodeContext(runInput: AgentRunInput): AgentRunInput {
+  const pcvStageNodeContext = buildBootstrapPcvStageNodeContext();
+  const context = runInput.context || {};
+  const messageMetadata = asRecord(runInput.message.metadata);
+  const sharedState = {
+    ...asRecord(context.sharedState),
+    _pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+    _pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+    pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+    pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+  };
+
+  return {
+    ...runInput,
+    message: {
+      ...runInput.message,
+      metadata: {
+        ...messageMetadata,
+        context: {
+          ...asRecord(messageMetadata.context),
+          pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+          pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+        },
+      },
+    },
+    context: {
+      ...context,
+      pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+      pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+      strategyContext: {
+        ...asRecord(context.strategyContext),
+        pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+        pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+        pcvStageNodeMapContract: {
+          contract: pcvStageNodeContext.contract,
+          contractVersion: pcvStageNodeContext.contractVersion,
+        },
+        sharedState: {
+          ...asRecord(asRecord(context.strategyContext).sharedState),
+          ...sharedState,
+        },
+      },
+      sharedState,
+      promptContext: {
+        ...asRecord(context.promptContext),
+        pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
+        pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
+      },
+    } as unknown as AgentRunInput['context'],
   };
 }
 
@@ -515,4 +593,11 @@ function summarizeDiagnostics(diagnostics: AgentRunResult['diagnostics']) {
 
 function getAgentRunToolCallCount(result: AgentRunResult): number {
   return Array.isArray(result.toolCalls) ? result.toolCalls.length : 0;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
 }

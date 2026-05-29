@@ -1,7 +1,7 @@
-import type { KnowledgeRescanExecutionDecision } from '@alembic/core/host-agent-workflows';
-import { describe, expect, test, vi } from 'vitest';
 import { MemoryCoordinator } from '@alembic/agent/memory';
 import type { SystemRunContextFactory } from '@alembic/agent/service';
+import type { KnowledgeRescanExecutionDecision } from '@alembic/core/host-agent-workflows';
+import { describe, expect, test, vi } from 'vitest';
 import {
   buildPanoramaContext,
   createBootstrapDimensionRuntimeInput,
@@ -141,6 +141,47 @@ describe('bootstrap dimension runtime builder', () => {
       submittedTitles: globalSubmittedTitles,
       submittedPatterns: globalSubmittedPatterns,
       submittedTriggers: globalSubmittedTriggers,
+      _pcvStageNodeMap: {
+        analyze: {
+          pcvNodeId: 'pcvm:n9:analyze',
+          chainNodeId: 'pcvm:cold-start:n9',
+        },
+        produce: {
+          pcvNodeId: 'pcvm:n11:produce',
+          chainNodeId: 'pcvm:cold-start:n11',
+        },
+      },
+      _pcvChainNodes: {
+        quality_gate: {
+          pcvNodeId: 'pcvm:n9:quality_gate',
+          chainNodeId: 'pcvm:cold-start:n9:quality',
+        },
+        record_repair: {
+          pcvNodeId: 'pcvm:n9:record_repair',
+          chainNodeId: 'pcvm:cold-start:n9:repair',
+        },
+      },
+    });
+    expect(strategyContext).toMatchObject({
+      pcvStageNodeMap: {
+        analyze: { pcvNodeId: 'pcvm:n9:analyze' },
+        produce: { chainNodeId: 'pcvm:cold-start:n11' },
+      },
+      pcvChainNodes: {
+        record_repair: { pcvNodeId: 'pcvm:n9:record_repair' },
+      },
+      pcvStageNodeMapContract: {
+        contract: 'PCVBootstrapStageNodeMap',
+        contractVersion: 1,
+      },
+    });
+    expect(result.runInput.context.promptContext).toMatchObject({
+      pcvStageNodeMap: {
+        quality_gate: { chainNodeId: 'pcvm:cold-start:n9:quality' },
+      },
+      pcvChainNodes: {
+        produce: { pcvNodeId: 'pcvm:n11:produce' },
+      },
     });
     expect(strategyContext.rescanContext).toMatchObject({ gap: 4, existing: 1 });
     expect(strategyContext.existingRecipes).toEqual([

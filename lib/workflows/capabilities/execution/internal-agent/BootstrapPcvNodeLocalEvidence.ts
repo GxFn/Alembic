@@ -24,6 +24,24 @@ export const PCV_N8_NODE_ID = 'N8-stage-factory-tool-policy';
 export const PCV_ANALYZE_GROUNDING_NODE_ID = 'analyze-evidence-grounding-ledger';
 export const PCV_N11_NODE_ID = 'N11-produce';
 export const PCV_N12_NODE_ID = 'N12-consumers-persistence';
+export const PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT = 'PCVBootstrapStageNodeMap';
+export const PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT_VERSION = 1;
+
+export type PcvBootstrapStageKey = 'analyze' | 'quality_gate' | 'record_repair' | 'produce';
+
+export interface PcvBootstrapStageNodeIdentity {
+  pcvNodeId: string;
+  chainNodeId: string;
+}
+
+export type PcvBootstrapStageNodeMap = Record<PcvBootstrapStageKey, PcvBootstrapStageNodeIdentity>;
+
+export interface PcvBootstrapStageNodeContext {
+  contract: typeof PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT;
+  contractVersion: typeof PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT_VERSION;
+  pcvStageNodeMap: PcvBootstrapStageNodeMap;
+  pcvChainNodes: PcvBootstrapStageNodeMap;
+}
 
 export type PcvNodeLocalStatus =
   | 'linked'
@@ -168,9 +186,51 @@ export interface BootstrapPcvNodeEvidenceSet {
   n12?: PcvN12ConsumerPersistenceEvidence;
 }
 
+const BOOTSTRAP_STAGE_NODE_MAP: PcvBootstrapStageNodeMap = {
+  analyze: {
+    chainNodeId: 'pcvm:cold-start:n9',
+    pcvNodeId: 'pcvm:n9:analyze',
+  },
+  quality_gate: {
+    chainNodeId: 'pcvm:cold-start:n9:quality',
+    pcvNodeId: 'pcvm:n9:quality_gate',
+  },
+  record_repair: {
+    chainNodeId: 'pcvm:cold-start:n9:repair',
+    pcvNodeId: 'pcvm:n9:record_repair',
+  },
+  produce: {
+    chainNodeId: 'pcvm:cold-start:n11',
+    pcvNodeId: 'pcvm:n11:produce',
+  },
+};
+
 const TERMINAL_TOOL_IDS = new Set(['terminal', 'terminal_shell', 'terminal_pty']);
 const MAX_INVALID_SOURCE_REFS = 12;
 const PRODUCER_SOURCE_REFS_INVALID_REASON = 'producer_source_refs_invalid';
+
+export function buildBootstrapPcvStageNodeMap(): PcvBootstrapStageNodeMap {
+  return cloneBootstrapStageNodeMap(BOOTSTRAP_STAGE_NODE_MAP);
+}
+
+export function buildBootstrapPcvStageNodeContext(): PcvBootstrapStageNodeContext {
+  const pcvStageNodeMap = buildBootstrapPcvStageNodeMap();
+  return {
+    contract: PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT,
+    contractVersion: PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT_VERSION,
+    pcvStageNodeMap,
+    pcvChainNodes: cloneBootstrapStageNodeMap(pcvStageNodeMap),
+  };
+}
+
+function cloneBootstrapStageNodeMap(map: PcvBootstrapStageNodeMap): PcvBootstrapStageNodeMap {
+  return {
+    analyze: { ...map.analyze },
+    quality_gate: { ...map.quality_gate },
+    record_repair: { ...map.record_repair },
+    produce: { ...map.produce },
+  };
+}
 
 export function buildPcvN8StageFactoryEvidence({
   dimId,

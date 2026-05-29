@@ -1,10 +1,10 @@
+import type { MemoryCoordinator } from '@alembic/agent/memory';
+import type { SystemRunContext } from '@alembic/agent/runtime';
 import { describe, expect, test } from 'vitest';
 import {
   type BootstrapFileEntry,
   buildBootstrapDimensionRunInput,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
-import type { MemoryCoordinator } from '@alembic/agent/memory';
-import type { SystemRunContext } from '@alembic/agent/runtime';
 
 function makeSystemRunContext(): SystemRunContext {
   const memoryCoordinator = { marker: 'memory' } as unknown as MemoryCoordinator;
@@ -89,5 +89,64 @@ describe('buildBootstrapDimensionRunInput', () => {
       presentation: { responseShape: 'system-task-result' },
     });
     expect(input.execution?.abortSignal).toBe(abortController.signal);
+    expect(input.message.metadata?.context).toMatchObject({
+      pcvStageNodeMap: {
+        analyze: {
+          pcvNodeId: 'pcvm:n9:analyze',
+          chainNodeId: 'pcvm:cold-start:n9',
+        },
+        produce: {
+          pcvNodeId: 'pcvm:n11:produce',
+          chainNodeId: 'pcvm:cold-start:n11',
+        },
+      },
+      pcvChainNodes: {
+        quality_gate: {
+          pcvNodeId: 'pcvm:n9:quality_gate',
+          chainNodeId: 'pcvm:cold-start:n9:quality',
+        },
+        record_repair: {
+          pcvNodeId: 'pcvm:n9:record_repair',
+          chainNodeId: 'pcvm:cold-start:n9:repair',
+        },
+      },
+    });
+    expect(input.context.strategyContext).toMatchObject({
+      pcvStageNodeMap: {
+        analyze: { pcvNodeId: 'pcvm:n9:analyze' },
+        produce: { chainNodeId: 'pcvm:cold-start:n11' },
+      },
+      pcvChainNodes: {
+        record_repair: { pcvNodeId: 'pcvm:n9:record_repair' },
+      },
+      pcvStageNodeMapContract: {
+        contract: 'PCVBootstrapStageNodeMap',
+        contractVersion: 1,
+      },
+      sharedState: {
+        _pcvStageNodeMap: {
+          quality_gate: { chainNodeId: 'pcvm:cold-start:n9:quality' },
+        },
+        _pcvChainNodes: {
+          produce: { pcvNodeId: 'pcvm:n11:produce' },
+        },
+      },
+    });
+    expect(input.context.promptContext).toMatchObject({
+      pcvStageNodeMap: {
+        analyze: { chainNodeId: 'pcvm:cold-start:n9' },
+      },
+      pcvChainNodes: {
+        produce: { chainNodeId: 'pcvm:cold-start:n11' },
+      },
+    });
+    expect(input.context.sharedState).toMatchObject({
+      _pcvStageNodeMap: {
+        analyze: { pcvNodeId: 'pcvm:n9:analyze' },
+      },
+      _pcvChainNodes: {
+        produce: { chainNodeId: 'pcvm:cold-start:n11' },
+      },
+    });
   });
 });
