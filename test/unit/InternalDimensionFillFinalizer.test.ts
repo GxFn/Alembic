@@ -197,7 +197,7 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
           },
           groundingLedger: {
             burnCount: 3,
-            chainNodeId: 'analyze-evidence-grounding-ledger',
+            chainNodeId: 'pcvm:cold-start:n9',
             classifications: {
               'deterministic-evidence-consumed': 1,
               'evidence-produced': 1,
@@ -216,7 +216,7 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
             evidenceProducedCount: 1,
             invalidNoEvidenceCount: 1,
             missingLinkReasons: ['analyze_grounding_invalid_no_evidence'],
-            nodeId: 'analyze-evidence-grounding-ledger',
+            nodeId: 'pcvm:n9:analyze',
             planningOnlyCount: 0,
             recordOnlyCount: 0,
             sourceRefs: [],
@@ -228,7 +228,7 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
           },
           n11: {
             acceptedCount: 1,
-            chainNodeId: 'N11-produce',
+            chainNodeId: 'pcvm:cold-start:n11',
             contract: 'PCVColdStartNodeLocalBaseline',
             contractVersion: 1,
             dimensionId: 'api',
@@ -245,7 +245,7 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
             ],
             missingLinkReasons: ['producer_source_refs_invalid'],
             noTerminalProof: true,
-            nodeId: 'N11-produce',
+            nodeId: 'pcvm:n11:produce',
             producerOnlyCut: true,
             producerToolCalls: [{ action: 'submit', status: 'created', tool: 'knowledge' }],
             rejectedCount: 0,
@@ -284,6 +284,8 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
       scope: 'alembic-cold-start-bootstrap-node-local',
       nodes: {
         n11: {
+          chainNodeIds: ['pcvm:cold-start:n11'],
+          nodeIds: ['pcvm:n11:produce'],
           sourceRefValidity: {
             invalidSourceRefCount: 1,
             invalidSourceRefRatio: 0.5,
@@ -299,14 +301,20 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
       processMetrics: {
         analyzeGrounding: {
           burnCount: 3,
+          chainNodeIds: ['pcvm:cold-start:n9'],
           deepseekV4NoForcedToolChoiceCount: 1,
           dimensionsWithEvidence: 1,
           evidenceProducedCount: 1,
           invalidNoEvidenceCount: 1,
+          nodeIds: ['pcvm:n9:analyze'],
           toolSchemasVisibleCount: 2,
         },
       },
     });
+    expect(JSON.stringify(report.pcvScorecard)).toContain('pcvm:n9:analyze');
+    expect(JSON.stringify(report.pcvScorecard)).toContain('pcvm:n11:produce');
+    expect(JSON.stringify(report.pcvScorecard)).not.toContain('analyze-evidence-grounding-ledger');
+    expect(JSON.stringify(report.pcvScorecard)).not.toContain('N11-produce');
     expect(report.dimensions.api).toMatchObject({
       pcvNodeEvidence: {
         groundingLedger: {

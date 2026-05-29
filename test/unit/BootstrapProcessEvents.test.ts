@@ -412,7 +412,7 @@ describe('BootstrapProcessEvents', () => {
     expect(events.find((event) => event.kind === 'llm.output')?.metadata).toMatchObject({
       pcvNodeEvidence: {
         n11: {
-          nodeId: 'N11-produce',
+          nodeId: 'pcvm:n11:produce',
           terminalToolCallCount: 0,
         },
       },

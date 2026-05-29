@@ -311,6 +311,7 @@ export function buildPcvN11ProduceEvidence({
   projection: BootstrapDimensionProjection;
   sourceRefValidation?: PcvSourceRefValidationContext | null;
 }): PcvN11ProduceEvidence {
+  const produceNodeIdentity = buildBootstrapPcvStageNodeMap().produce;
   const producerOnlyCut = Array.isArray(projection.produceResult?.toolCalls);
   const producerToolCalls = resolveProducerToolCalls(projection);
   const producerSubmitCalls = producerToolCalls.filter(isKnowledgeSubmitToolCall);
@@ -350,7 +351,7 @@ export function buildPcvN11ProduceEvidence({
       : 'linked';
   return {
     acceptedCount,
-    chainNodeId: PCV_N11_NODE_ID,
+    chainNodeId: produceNodeIdentity.chainNodeId,
     contract: PCV_COLD_START_NODE_LOCAL_CONTRACT,
     contractVersion: PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION,
     dimensionId: dimId,
@@ -361,7 +362,7 @@ export function buildPcvN11ProduceEvidence({
     invalidSourceRefs: sourceRefValidity.invalidSourceRefs,
     missingLinkReasons,
     noTerminalProof: terminalToolCallCount === 0,
-    nodeId: PCV_N11_NODE_ID,
+    nodeId: produceNodeIdentity.pcvNodeId,
     producerOnlyCut,
     producerToolCalls: producerToolCalls.map((call) => ({
       action: actionName(call),
@@ -397,6 +398,7 @@ export function buildPcvAnalyzeGroundingLedgerSummary({
     return null;
   }
 
+  const analyzeNodeIdentity = buildBootstrapPcvStageNodeMap().analyze;
   const classifications = emptyGroundingClassifications();
   let toolSchemasVisibleCount = 0;
   let deepseekV4NoForcedToolChoiceCount = 0;
@@ -438,7 +440,7 @@ export function buildPcvAnalyzeGroundingLedgerSummary({
 
   return {
     burnCount: entries.length,
-    chainNodeId: PCV_ANALYZE_GROUNDING_NODE_ID,
+    chainNodeId: analyzeNodeIdentity.chainNodeId,
     classifications,
     contract: PCV_COLD_START_NODE_LOCAL_CONTRACT,
     contractVersion: PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION,
@@ -449,7 +451,7 @@ export function buildPcvAnalyzeGroundingLedgerSummary({
     evidenceProducedCount,
     invalidNoEvidenceCount,
     missingLinkReasons,
-    nodeId: PCV_ANALYZE_GROUNDING_NODE_ID,
+    nodeId: analyzeNodeIdentity.pcvNodeId,
     planningOnlyCount,
     recordOnlyCount,
     sourceRefs: [

@@ -943,6 +943,8 @@ function attachTraceEnvelopeJobId({
       jobId,
       parentEventId: draft.parentEventId ?? traceEnvelope.parentEventId ?? null,
       phase: draft.phase ?? traceEnvelope.phase ?? null,
+      nodeId: traceEnvelope.nodeId ?? null,
+      pcvNodeId: traceEnvelope.pcvNodeId ?? traceEnvelope.nodeId ?? null,
       sessionId: sessionId ?? traceEnvelope.sessionId ?? null,
       stageId: traceEnvelope.stageId ?? draft.phase ?? null,
     },

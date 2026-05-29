@@ -21,6 +21,7 @@ type PcvN9MissingLinkReason =
 
 export interface PcvN9ObservabilityCarry {
   contractVersion: typeof PCV_N9_OBSERVABILITY_CONTRACT_VERSION;
+  chainNodeId: string;
   evidenceLinks: {
     artifactRefs: string[];
     metricsPath: string | null;
@@ -31,7 +32,7 @@ export interface PcvN9ObservabilityCarry {
   jobId: string;
   linkageStatus: PcvN9LinkageStatus;
   missingLinkReasons: PcvN9MissingLinkReason[];
-  nodeId: typeof PCV_N9_NODE_ID;
+  nodeId: string;
   nodeIdentitySource: PcvN9NodeIdentitySource | null;
   sessionId: string | null;
 }
@@ -83,13 +84,14 @@ export function attachPcvN9ObservabilityCarry({
   const linkageStatus: PcvN9LinkageStatus =
     missingLinkReasons.length === 0 ? 'linked' : 'blocked-by-observability-gap';
   const nodeId = nodeIdentity.nodeId ?? PCV_N9_NODE_ID;
+  const chainNodeId = nodeIdentity.chainNodeId ?? nodeId;
   const sessionId =
     stringValue(metadata.sessionId) || stringValue(rawTraceEnvelope?.sessionId) || null;
 
   const traceEnvelope = {
     ...(rawTraceEnvelope || {}),
     artifactRefs: artifactRefValues,
-    chainNodeId: stringValue(rawTraceEnvelope?.chainNodeId) || nodeId,
+    chainNodeId,
     jobId,
     metricsPath: hasMetrics ? 'metadata.llmMetrics' : null,
     nodeId,
@@ -99,6 +101,7 @@ export function attachPcvN9ObservabilityCarry({
     traceId,
   };
   const pcvN9Observability: PcvN9ObservabilityCarry = {
+    chainNodeId,
     contractVersion: PCV_N9_OBSERVABILITY_CONTRACT_VERSION,
     evidenceLinks: {
       artifactRefs: artifactRefValues,
@@ -136,28 +139,35 @@ function resolvePcvN9NodeIdentity({
   traceEnvelope: Record<string, unknown> | null;
 }): {
   applies: boolean;
-  nodeId: typeof PCV_N9_NODE_ID | null;
+  chainNodeId: string | null;
+  nodeId: string | null;
   source: PcvN9NodeIdentitySource | null;
 } {
   const pcvNode = asRecord(metadata.pcvNode);
   const pcvNodeEvidence = asRecord(metadata.pcvNodeEvidence);
-  const explicitNodeIds = [
-    metadata.pcvNodeId,
-    metadata.nodeId,
-    metadata.chainNodeId,
-    pcvNode?.nodeId,
-    // AlembicAgent 当前把 N9 compact evidence 放在 nested metadata.pcvNodeEvidence。
-    // 这里把 nested node id 视作 explicit identity，避免退回 host-stage 推断。
-    pcvNodeEvidence?.nodeId,
-    pcvNodeEvidence?.chainNodeId,
-    traceEnvelope?.pcvNodeId,
-    traceEnvelope?.nodeId,
-    traceEnvelope?.chainNodeId,
-  ]
-    .map((value) => stringValue(value))
-    .filter((value): value is string => Boolean(value));
-  if (explicitNodeIds.includes(PCV_N9_NODE_ID)) {
-    return { applies: true, nodeId: PCV_N9_NODE_ID, source: 'agent-explicit' };
+  const explicitNodeIdentities = [
+    buildExplicitNodeIdentity({
+      chainNodeId: metadata.chainNodeId,
+      nodeId: metadata.pcvNodeId ?? metadata.nodeId,
+    }),
+    buildExplicitNodeIdentity({
+      chainNodeId: pcvNode?.chainNodeId,
+      nodeId: pcvNode?.pcvNodeId ?? pcvNode?.nodeId,
+    }),
+    // AlembicAgent 当前把 PCV compact evidence 放在 nested metadata.pcvNodeEvidence。
+    // 这里优先承接 nested canonical identity，避免 report/carry 退回 legacy id。
+    buildExplicitNodeIdentity({
+      chainNodeId: pcvNodeEvidence?.chainNodeId,
+      nodeId: pcvNodeEvidence?.pcvNodeId ?? pcvNodeEvidence?.nodeId,
+    }),
+    buildExplicitNodeIdentity({
+      chainNodeId: traceEnvelope?.chainNodeId,
+      nodeId: traceEnvelope?.pcvNodeId ?? traceEnvelope?.nodeId,
+    }),
+  ].filter((identity): identity is { chainNodeId: string; nodeId: string } => Boolean(identity));
+  const explicitN9Identity = explicitNodeIdentities.find(isPcvN9Identity);
+  if (explicitN9Identity) {
+    return { applies: true, ...explicitN9Identity, source: 'agent-explicit' };
   }
 
   const stageProfile = normalizeStage(
@@ -167,17 +177,32 @@ function resolvePcvN9NodeIdentity({
       stringValue(metadata.phase)
   );
   if (stageProfile === 'analyze' || stageProfile === 'verify' || stageProfile === 'record') {
-    return { applies: true, nodeId: PCV_N9_NODE_ID, source: 'host-stage-profile' };
+    return {
+      applies: true,
+      chainNodeId: PCV_N9_NODE_ID,
+      nodeId: PCV_N9_NODE_ID,
+      source: 'host-stage-profile',
+    };
   }
 
   if (stringValue(metadata.reflectionSource) === 'quality-gate-diagnostics') {
-    return { applies: true, nodeId: PCV_N9_NODE_ID, source: 'host-quality-gate' };
+    return {
+      applies: true,
+      chainNodeId: PCV_N9_NODE_ID,
+      nodeId: PCV_N9_NODE_ID,
+      source: 'host-quality-gate',
+    };
   }
   if (stringValue(metadata.projection) === 'dimension-findings-digest') {
-    return { applies: true, nodeId: PCV_N9_NODE_ID, source: 'host-findings-digest' };
+    return {
+      applies: true,
+      chainNodeId: PCV_N9_NODE_ID,
+      nodeId: PCV_N9_NODE_ID,
+      source: 'host-findings-digest',
+    };
   }
 
-  return { applies: false, nodeId: null, source: null };
+  return { applies: false, chainNodeId: null, nodeId: null, source: null };
 }
 
 function buildMissingLinkReasons({
@@ -190,7 +215,7 @@ function buildMissingLinkReasons({
   artifactRefValues: string[];
   hasMetrics: boolean;
   nodeIdentity: {
-    nodeId: typeof PCV_N9_NODE_ID | null;
+    nodeId: string | null;
   };
   sourceRefs: string[];
   traceId: string | null;
@@ -212,6 +237,33 @@ function buildMissingLinkReasons({
     missing.push('source_ref_missing');
   }
   return missing;
+}
+
+function buildExplicitNodeIdentity({
+  chainNodeId,
+  nodeId,
+}: {
+  chainNodeId: unknown;
+  nodeId: unknown;
+}): { chainNodeId: string; nodeId: string } | null {
+  const explicitNodeId = stringValue(nodeId);
+  const explicitChainNodeId = stringValue(chainNodeId);
+  if (!explicitNodeId && !explicitChainNodeId) {
+    return null;
+  }
+  return {
+    chainNodeId: explicitChainNodeId || explicitNodeId || PCV_N9_NODE_ID,
+    nodeId: explicitNodeId || explicitChainNodeId || PCV_N9_NODE_ID,
+  };
+}
+
+function isPcvN9Identity(identity: { chainNodeId: string; nodeId: string }): boolean {
+  return (
+    identity.nodeId === PCV_N9_NODE_ID ||
+    identity.chainNodeId === PCV_N9_NODE_ID ||
+    identity.nodeId.startsWith('pcvm:n9:') ||
+    identity.chainNodeId.startsWith('pcvm:cold-start:n9')
+  );
 }
 
 function firstFixForMissingLinks(reasons: PcvN9MissingLinkReason[]): string[] {

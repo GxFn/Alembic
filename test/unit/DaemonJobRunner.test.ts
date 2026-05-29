@@ -331,8 +331,9 @@ describe('attachBootstrapProcessEventBridge', () => {
             llmMetrics: { estimatedTokens: 13, messageCount: 2 },
             sourceRefs: ['src/index.ts:42'],
             traceEnvelope: {
-              chainNodeId: 'N9-agent-analyze-quality',
+              chainNodeId: 'pcvm:cold-start:n9',
               correlationId: 'trace-n9-1',
+              pcvNodeId: 'pcvm:n9:analyze',
               sessionId: 'bs_n9',
               stageId: 'analyze',
             },
@@ -371,17 +372,18 @@ describe('attachBootstrapProcessEventBridge', () => {
         jobId: 'job_pcv_n9_linked',
         linkageStatus: 'linked',
         missingLinkReasons: [],
-        nodeId: 'N9-agent-analyze-quality',
+        chainNodeId: 'pcvm:cold-start:n9',
+        nodeId: 'pcvm:n9:analyze',
         nodeIdentitySource: 'agent-explicit',
         sessionId: 'bs_n9',
       },
       traceEnvelope: {
         artifactRefs: [event?.artifactRefs[0]?.ref],
-        chainNodeId: 'N9-agent-analyze-quality',
+        chainNodeId: 'pcvm:cold-start:n9',
         jobId: 'job_pcv_n9_linked',
         metricsPath: 'metadata.llmMetrics',
-        nodeId: 'N9-agent-analyze-quality',
-        pcvNodeId: 'N9-agent-analyze-quality',
+        nodeId: 'pcvm:n9:analyze',
+        pcvNodeId: 'pcvm:n9:analyze',
         sourceRefs: ['src/index.ts:42'],
         traceId: 'trace-n9-1',
       },
@@ -428,8 +430,8 @@ describe('attachBootstrapProcessEventBridge', () => {
             inputStageProfile: 'analyze',
             llmMetrics: { estimatedTokens: 17, messageCount: 2 },
             pcvNodeEvidence: {
-              chainNodeId: 'N9-agent-analyze-quality',
-              nodeId: 'N9-agent-analyze-quality',
+              chainNodeId: 'pcvm:cold-start:n9:quality',
+              nodeId: 'pcvm:n9:quality_gate',
               sourceRefs: ['src/index.ts:42'],
             },
             traceEnvelope: {
@@ -468,19 +470,85 @@ describe('attachBootstrapProcessEventBridge', () => {
         jobId: 'job_pcv_n9_nested',
         linkageStatus: 'linked',
         missingLinkReasons: [],
-        nodeId: 'N9-agent-analyze-quality',
+        chainNodeId: 'pcvm:cold-start:n9:quality',
+        nodeId: 'pcvm:n9:quality_gate',
         nodeIdentitySource: 'agent-explicit',
         sessionId: 'bs_n9_nested',
       },
       traceEnvelope: {
         artifactRefs: [event?.artifactRefs[0]?.ref],
-        chainNodeId: 'N9-agent-analyze-quality',
+        chainNodeId: 'pcvm:cold-start:n9:quality',
         jobId: 'job_pcv_n9_nested',
         metricsPath: 'metadata.llmMetrics',
-        nodeId: 'N9-agent-analyze-quality',
-        pcvNodeId: 'N9-agent-analyze-quality',
+        nodeId: 'pcvm:n9:quality_gate',
+        pcvNodeId: 'pcvm:n9:quality_gate',
         sourceRefs: ['src/index.ts:42'],
         traceId: 'trace-n9-nested',
+      },
+    });
+  });
+
+  test('preserves canonical PCV N9 record repair evidence in job process events', () => {
+    const eventBus = new EventEmitter();
+    const recorder = new JobProcessEventRecorder();
+    const cleanup = attachBootstrapProcessEventBridge({
+      container: makeContainer(new JobStore({ projectRoot: makeProjectRoot() }), { eventBus }),
+      jobId: 'job_pcv_n9_record_repair',
+      logger: makeLogger(),
+      recorder,
+    });
+
+    eventBus.emit('bootstrap:process-events', {
+      sessionId: 'bs_n9_record_repair',
+      taskId: 'architecture',
+      targetName: 'Architecture',
+      events: [
+        {
+          kind: 'llm.reflection',
+          title: 'Record repair evidence prepared',
+          content: {
+            mimeType: 'text/markdown',
+            role: 'developer',
+            text: 'Repair evidence summary',
+          },
+          metadata: {
+            llmMetrics: { estimatedTokens: 5 },
+            pcvNodeEvidence: {
+              chainNodeId: 'pcvm:cold-start:n9:repair',
+              nodeId: 'pcvm:n9:record_repair',
+              sourceRefs: ['src/repair.ts:7'],
+            },
+            traceEnvelope: {
+              correlationId: 'trace-n9-record-repair',
+              sessionId: 'bs_n9_record_repair',
+              stageId: 'record_repair',
+            },
+          },
+          phase: 'record_repair',
+        },
+      ],
+    });
+
+    cleanup?.();
+
+    const event = recorder
+      .list('job_pcv_n9_record_repair', { limit: 10 })
+      .developerViews.find((candidate) => candidate.title === 'Record repair evidence prepared');
+    expect(event?.metadata).toMatchObject({
+      pcvN9Observability: {
+        chainNodeId: 'pcvm:cold-start:n9:repair',
+        evidenceLinks: {
+          metricsPath: 'metadata.llmMetrics',
+          sourceRefs: ['src/repair.ts:7'],
+          traceId: 'trace-n9-record-repair',
+        },
+        nodeId: 'pcvm:n9:record_repair',
+        nodeIdentitySource: 'agent-explicit',
+      },
+      traceEnvelope: {
+        chainNodeId: 'pcvm:cold-start:n9:repair',
+        nodeId: 'pcvm:n9:record_repair',
+        pcvNodeId: 'pcvm:n9:record_repair',
       },
     });
   });

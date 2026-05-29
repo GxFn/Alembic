@@ -154,7 +154,7 @@ describe('bootstrap dimension consumer', () => {
       pcvNodeEvidence: {
         n11: {
           acceptedCount: 1,
-          nodeId: 'N11-produce',
+          nodeId: 'pcvm:n11:produce',
           status: 'not-applicable',
         },
         n12: {
@@ -241,7 +241,7 @@ describe('bootstrap dimension consumer', () => {
         evidenceProducedCount: 1,
         invalidNoEvidenceCount: 1,
         missingLinkReasons: ['analyze_grounding_invalid_no_evidence'],
-        nodeId: 'analyze-evidence-grounding-ledger',
+        nodeId: 'pcvm:n9:analyze',
         toolSchemasVisibleCount: 2,
       },
     });
@@ -461,7 +461,7 @@ describe('bootstrap dimension consumer', () => {
       diagnostics: expect.objectContaining({ degraded: true }),
       pcvNodeEvidence: {
         n11: {
-          nodeId: 'N11-produce',
+          nodeId: 'pcvm:n11:produce',
           status: 'blocked-by-observability-gap',
         },
         n12: {

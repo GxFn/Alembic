@@ -38,12 +38,14 @@ type InternalDimensionFillRuntime = Awaited<ReturnType<typeof initializeBootstra
 
 interface PcvAnalyzeGroundingProcessMetric {
   burnCount: number;
+  chainNodeIds: string[];
   deepseekV4NoForcedToolChoiceCount: number;
   deterministicEvidenceConsumedCount: number;
   dimensionsWithEvidence: number;
   evidenceProducedCount: number;
   invalidNoEvidenceCount: number;
   missingLinkReasons: string[];
+  nodeIds: string[];
   planningOnlyCount: number;
   recordOnlyCount: number;
   statuses: Record<string, number>;
@@ -411,6 +413,8 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
   for (const nodeKey of ['n8', 'n11', 'n12'] as const) {
     const statuses: Record<string, number> = {};
     const missingLinkReasons = new Set<string>();
+    const nodeIds = new Set<string>();
+    const chainNodeIds = new Set<string>();
     let dimensionsWithEvidence = 0;
     let sourceRefTotal = 0;
     let sourceRefValid = 0;
@@ -426,6 +430,14 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
       statuses[nodeEvidence.status] = (statuses[nodeEvidence.status] || 0) + 1;
       for (const reason of nodeEvidence.missingLinkReasons || []) {
         missingLinkReasons.add(reason);
+      }
+      const nodeId = stringValue(nodeEvidence.nodeId);
+      const chainNodeId = stringValue(nodeEvidence.chainNodeId);
+      if (nodeId) {
+        nodeIds.add(nodeId);
+      }
+      if (chainNodeId) {
+        chainNodeIds.add(chainNodeId);
       }
       if (nodeEvidence.status === 'linked') {
         linkedNodes++;
@@ -450,8 +462,10 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
       continue;
     }
     const summary: Record<string, unknown> = {
+      chainNodeIds: [...chainNodeIds],
       dimensionsWithEvidence,
       missingLinkReasons: [...missingLinkReasons],
+      nodeIds: [...nodeIds],
       statuses,
     };
     if (nodeKey === 'n11') {
@@ -487,6 +501,8 @@ function summarizePcvAnalyzeGrounding(
   let deepseekV4NoForcedToolChoiceCount = 0;
   const statuses: Record<string, number> = {};
   const missingLinkReasons = new Set<string>();
+  const nodeIds = new Set<string>();
+  const chainNodeIds = new Set<string>();
 
   for (const evidence of Object.values(dimensionEvidence)) {
     const grounding = evidence.groundingLedger;
@@ -508,6 +524,14 @@ function summarizePcvAnalyzeGrounding(
     for (const reason of grounding.missingLinkReasons || []) {
       missingLinkReasons.add(reason);
     }
+    const nodeId = stringValue(grounding.nodeId);
+    const chainNodeId = stringValue(grounding.chainNodeId);
+    if (nodeId) {
+      nodeIds.add(nodeId);
+    }
+    if (chainNodeId) {
+      chainNodeIds.add(chainNodeId);
+    }
   }
 
   if (dimensionsWithEvidence === 0) {
@@ -517,12 +541,14 @@ function summarizePcvAnalyzeGrounding(
   return {
     analyzeGrounding: {
       burnCount,
+      chainNodeIds: [...chainNodeIds],
       deepseekV4NoForcedToolChoiceCount,
       deterministicEvidenceConsumedCount,
       dimensionsWithEvidence,
       evidenceProducedCount,
       invalidNoEvidenceCount,
       missingLinkReasons: [...missingLinkReasons],
+      nodeIds: [...nodeIds],
       planningOnlyCount,
       recordOnlyCount,
       statuses,
