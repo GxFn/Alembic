@@ -475,7 +475,7 @@ describe('BootstrapProcessEvents', () => {
       pcvNodeEvidence: {
         n11: {
           invalidSourceRefCount: 1,
-          invalidSourceRefRatio: 0.3333,
+          invalidSourceRefRatio: 0.5,
           invalidSourceRefs: [
             {
               attributions: [
@@ -507,8 +507,23 @@ describe('BootstrapProcessEvents', () => {
           },
           sourceRefValidityStatus: 'invalid',
           status: 'blocked-by-observability-gap',
-          totalSourceRefCount: 3,
-          validSourceRefCount: 2,
+          totalSourceRefCount: 2,
+          validSourceRefCount: 1,
+          analysisReferencedFileValidity: {
+            invalidSourceRefCount: 0,
+            totalSourceRefCount: 1,
+            validSourceRefCount: 1,
+          },
+          collectorSourceBreakdown: {
+            analysisReferencedFiles: {
+              invalidSourceRefCount: 0,
+              totalSourceRefCount: 1,
+            },
+            acceptedCandidate: {
+              invalidSourceRefCount: 1,
+              totalSourceRefCount: 2,
+            },
+          },
         },
       },
     });

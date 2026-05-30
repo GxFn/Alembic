@@ -645,6 +645,19 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
     const sourceRefReasonCounts: Record<string, number> = {};
     const sourceRefValidityStatuses: Record<string, number> = {};
     const sourceRefValidationModes = new Set<string>();
+    const acceptedCandidateValidity = createSourceRefValidityAggregate();
+    const analysisReferencedFileValidity = createSourceRefValidityAggregate();
+    const producerSourceRefValidity = createSourceRefValidityAggregate();
+    const collectorSourceBreakdown: Record<string, SourceRefValidityAggregate> = {};
+    const rejectedCandidateReasonSummary = {
+      errorCategories: {} as Record<string, number>,
+      missingTypedReasonCount: 0,
+      nonSourceRefRejectedCount: 0,
+      rejectedCount: 0,
+      sourceRefInvalidCount: 0,
+      sourceRefRelatedRejectedCount: 0,
+      typedRejectedReasonCount: 0,
+    };
     for (const evidence of Object.values(dimensionEvidence)) {
       const nodeEvidence = evidence[nodeKey];
       if (!nodeEvidence) {
@@ -725,6 +738,28 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
         if (validationMode) {
           sourceRefValidationModes.add(validationMode);
         }
+        accumulateSourceRefValidityAggregate(
+          acceptedCandidateValidity,
+          nodeEvidence.acceptedCandidateSourceRefValidity
+        );
+        accumulateSourceRefValidityAggregate(
+          analysisReferencedFileValidity,
+          nodeEvidence.analysisReferencedFileValidity
+        );
+        accumulateSourceRefValidityAggregate(
+          producerSourceRefValidity,
+          nodeEvidence.producerSourceRefValidity || nodeEvidence.sourceRefValidity
+        );
+        if (isRecord(nodeEvidence.collectorSourceBreakdown)) {
+          for (const [origin, value] of Object.entries(nodeEvidence.collectorSourceBreakdown)) {
+            collectorSourceBreakdown[origin] ??= createSourceRefValidityAggregate();
+            accumulateSourceRefValidityAggregate(collectorSourceBreakdown[origin], value);
+          }
+        }
+        accumulateRejectedCandidateReasonSummary(
+          rejectedCandidateReasonSummary,
+          nodeEvidence.rejectedCandidateReasonSummary
+        );
       }
     }
     if (dimensionsWithEvidence === 0) {
@@ -753,12 +788,101 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
         validationModes: [...sourceRefValidationModes],
         warningSourceRefCount,
       };
+      summary.acceptedCandidateSourceRefValidity =
+        sourceRefValidityAggregateToSummary(acceptedCandidateValidity);
+      summary.analysisReferencedFileValidity = sourceRefValidityAggregateToSummary(
+        analysisReferencedFileValidity
+      );
+      summary.producerSourceRefValidity =
+        sourceRefValidityAggregateToSummary(producerSourceRefValidity);
+      summary.collectorSourceBreakdown = Object.fromEntries(
+        Object.entries(collectorSourceBreakdown).map(([origin, aggregate]) => [
+          origin,
+          sourceRefValidityAggregateToSummary(aggregate),
+        ])
+      );
+      summary.rejectedCandidateReasonSummary = rejectedCandidateReasonSummary;
     }
     nodes[nodeKey] = summary;
   }
 
   const processMetrics = summarizePcvAnalyzeGrounding(dimensionEvidence);
   return { blockedNodes, linkedNodes, nodeCount, nodes, processMetrics };
+}
+
+interface SourceRefValidityAggregate {
+  invalidSourceRefCount: number;
+  reasonCounts: Record<string, number>;
+  statuses: Record<string, number>;
+  totalSourceRefCount: number;
+  validSourceRefCount: number;
+}
+
+function createSourceRefValidityAggregate(): SourceRefValidityAggregate {
+  return {
+    invalidSourceRefCount: 0,
+    reasonCounts: {},
+    statuses: {},
+    totalSourceRefCount: 0,
+    validSourceRefCount: 0,
+  };
+}
+
+function accumulateSourceRefValidityAggregate(
+  aggregate: SourceRefValidityAggregate,
+  value: unknown
+): void {
+  if (!isRecord(value)) {
+    return;
+  }
+  aggregate.totalSourceRefCount += numberValue(value.totalSourceRefCount) ?? 0;
+  aggregate.validSourceRefCount += numberValue(value.validSourceRefCount) ?? 0;
+  aggregate.invalidSourceRefCount += numberValue(value.invalidSourceRefCount) ?? 0;
+  mergeNumericRecord(aggregate.reasonCounts, value.reasonCounts);
+  const status = stringValue(value.status);
+  if (status) {
+    aggregate.statuses[status] = (aggregate.statuses[status] || 0) + 1;
+  }
+}
+
+function sourceRefValidityAggregateToSummary(
+  aggregate: SourceRefValidityAggregate
+): Record<string, unknown> {
+  return {
+    invalidSourceRefCount: aggregate.invalidSourceRefCount,
+    invalidSourceRefRatio:
+      aggregate.totalSourceRefCount > 0
+        ? Number((aggregate.invalidSourceRefCount / aggregate.totalSourceRefCount).toFixed(4))
+        : 0,
+    reasonCounts: aggregate.reasonCounts,
+    statuses: aggregate.statuses,
+    totalSourceRefCount: aggregate.totalSourceRefCount,
+    validSourceRefCount: aggregate.validSourceRefCount,
+  };
+}
+
+function accumulateRejectedCandidateReasonSummary(
+  target: {
+    errorCategories: Record<string, number>;
+    missingTypedReasonCount: number;
+    nonSourceRefRejectedCount: number;
+    rejectedCount: number;
+    sourceRefInvalidCount: number;
+    sourceRefRelatedRejectedCount: number;
+    typedRejectedReasonCount: number;
+  },
+  value: unknown
+): void {
+  if (!isRecord(value)) {
+    return;
+  }
+  target.missingTypedReasonCount += numberValue(value.missingTypedReasonCount) ?? 0;
+  target.nonSourceRefRejectedCount += numberValue(value.nonSourceRefRejectedCount) ?? 0;
+  target.rejectedCount += numberValue(value.rejectedCount) ?? 0;
+  target.sourceRefInvalidCount += numberValue(value.sourceRefInvalidCount) ?? 0;
+  target.sourceRefRelatedRejectedCount += numberValue(value.sourceRefRelatedRejectedCount) ?? 0;
+  target.typedRejectedReasonCount += numberValue(value.typedRejectedReasonCount) ?? 0;
+  mergeNumericRecord(target.errorCategories, value.errorCategories);
 }
 
 function summarizePcvAnalyzeGrounding(

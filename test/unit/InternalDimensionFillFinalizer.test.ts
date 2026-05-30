@@ -768,6 +768,154 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
       },
     });
   });
+
+  test('projects P11 sourceRef collector split fields into the PCV scorecard', () => {
+    const report = {
+      version: '2.7.0',
+      timestamp: '2026-05-30T00:00:00.000Z',
+      project: { name: 'Alembic', files: 1, lang: 'ts' },
+      duration: { totalMs: 100, totalSec: 0 },
+      dimensions: { api: {} },
+      totals: {},
+      checkpoints: { restored: [] },
+      incremental: null,
+      semanticMemory: null,
+      session: { id: 'session-1' },
+    } as WorkflowReport;
+
+    const changed = augmentWorkflowReportWithPcvNodeLocalBaseline(report, {
+      api: {
+        candidateCount: 1,
+        durationMs: 10,
+        pcvNodeEvidence: {
+          n11: {
+            acceptedCandidateSourceRefValidity: {
+              invalidSourceRefCount: 0,
+              invalidSourceRefRatio: 0,
+              invalidSourceRefs: [],
+              reasonCounts: {},
+              sourceRefs: ['src/valid.ts'],
+              status: 'valid',
+              totalSourceRefCount: 1,
+              validSourceRefCount: 1,
+            },
+            acceptedCount: 1,
+            analysisReferencedFileValidity: {
+              invalidSourceRefCount: 1,
+              invalidSourceRefRatio: 0.5,
+              reasonCounts: { 'entity-not-file': 1 },
+              status: 'invalid',
+              totalSourceRefCount: 2,
+              validSourceRefCount: 1,
+            },
+            chainNodeId: 'pcvm:cold-start:n11',
+            collectorSourceBreakdown: {
+              acceptedCandidate: {
+                invalidSourceRefCount: 0,
+                invalidSourceRefRatio: 0,
+                reasonCounts: {},
+                status: 'valid',
+                totalSourceRefCount: 1,
+                validSourceRefCount: 1,
+              },
+              analysisReferencedFiles: {
+                invalidSourceRefCount: 1,
+                invalidSourceRefRatio: 0.5,
+                reasonCounts: { 'entity-not-file': 1 },
+                status: 'invalid',
+                totalSourceRefCount: 2,
+                validSourceRefCount: 1,
+              },
+              rejectedCandidate: {
+                invalidSourceRefCount: 1,
+                invalidSourceRefRatio: 1,
+                reasonCounts: { 'entity-not-file': 1 },
+                status: 'invalid',
+                totalSourceRefCount: 1,
+                validSourceRefCount: 0,
+              },
+            },
+            contract: 'PCVColdStartNodeLocalBaseline',
+            contractVersion: 1,
+            dimensionId: 'api',
+            evidenceKind: 'producer-cut',
+            invalidSourceRefCount: 1,
+            invalidSourceRefRatio: 0.5,
+            missingLinkReasons: ['producer_source_refs_invalid'],
+            nodeId: 'pcvm:n11:produce',
+            producerSourceRefValidity: {
+              invalidSourceRefCount: 1,
+              invalidSourceRefRatio: 0.5,
+              reasonCounts: { 'entity-not-file': 1 },
+              status: 'invalid',
+              totalSourceRefCount: 2,
+              validSourceRefCount: 1,
+            },
+            rejectedCandidateReasonSummary: {
+              errorCategories: { source_ref_validation_failed: 1 },
+              missingTypedReasonCount: 0,
+              nonSourceRefRejectedCount: 0,
+              rejectedCount: 1,
+              sourceRefInvalidCount: 1,
+              sourceRefRelatedRejectedCount: 1,
+              typedRejectedReasonCount: 1,
+            },
+            rejectedCount: 1,
+            sourceRefValidity: {
+              invalidSourceRefCount: 1,
+              invalidSourceRefRatio: 0.5,
+              reasonCounts: { 'entity-not-file': 1 },
+              status: 'invalid',
+              totalSourceRefCount: 2,
+              validSourceRefCount: 1,
+            },
+            sourceRefValidityStatus: 'invalid',
+            sourceRefs: ['src/valid.ts', 'MissingConcept.swift'],
+            status: 'blocked-by-observability-gap',
+            summary: 'n11 split projection',
+            totalSourceRefCount: 2,
+            validSourceRefCount: 1,
+          },
+        },
+      },
+    });
+
+    expect(changed).toBe(true);
+    expect(report.pcvScorecard).toMatchObject({
+      nodes: {
+        n11: {
+          acceptedCandidateSourceRefValidity: {
+            invalidSourceRefCount: 0,
+            invalidSourceRefRatio: 0,
+          },
+          analysisReferencedFileValidity: {
+            invalidSourceRefCount: 1,
+            invalidSourceRefRatio: 0.5,
+          },
+          collectorSourceBreakdown: {
+            analysisReferencedFiles: {
+              invalidSourceRefCount: 1,
+              invalidSourceRefRatio: 0.5,
+            },
+            rejectedCandidate: {
+              invalidSourceRefCount: 1,
+              invalidSourceRefRatio: 1,
+            },
+          },
+          producerSourceRefValidity: {
+            invalidSourceRefCount: 1,
+            invalidSourceRefRatio: 0.5,
+          },
+          rejectedCandidateReasonSummary: {
+            errorCategories: { source_ref_validation_failed: 1 },
+            rejectedCount: 1,
+            sourceRefRelatedRejectedCount: 1,
+            typedRejectedReasonCount: 1,
+          },
+        },
+      },
+    });
+  });
 });
 
 function makePreparation({

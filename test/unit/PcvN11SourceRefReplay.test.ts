@@ -343,4 +343,161 @@ describe('PCV N11 sourceRef replay', () => {
       toolCallIndex: 1,
     });
   });
+
+  test('splits P11 producer sourceRefs from analysis refs and carries rejected reasons', () => {
+    const validProducerRefs = [
+      'BiliDili/AppCoordinator.swift',
+      'BiliDili/AppDelegate.swift',
+      'Sources/Infrastructure/Account/AccountManager.swift',
+      'Sources/Features/Home/HomeViewController.swift',
+      'Packages/AOXFoundationKit/Sources/AOXFoundationKit/ModuleKit/ServiceRegistry.swift',
+      'Sources/Infrastructure/Networking/Core/WBISigner.swift',
+      'Sources/Infrastructure/Networking/Repository/FeedRepository.swift',
+      'Sources/Infrastructure/Networking/Middleware/AuthMiddleware.swift',
+      'Sources/Core/ServiceKit/ServiceProtocols.swift',
+      'docs/Architecture.md',
+      'README.md',
+    ];
+    const projection: BootstrapDimensionProjection = {
+      analysisReport: {
+        analysisText: '',
+        findings: [],
+        referencedFiles: [
+          'RouteMiddleware.swift',
+          'CookieProviding.self',
+          '/fixture/BiliDili/BiliDili/AppCoordinator.swift',
+          'BiliDili/AppCoordinator.swift',
+        ],
+      },
+      analysisText: '',
+      artifact: {},
+      combinedTokenUsage: { input: 0, output: 0 },
+      efficiency: null,
+      producerResult: { candidateCount: 1, rejectedCount: 1, toolCalls: [] },
+      produceResult: {
+        toolCalls: [
+          {
+            args: {
+              params: {
+                action: 'submit',
+                content: {
+                  markdown:
+                    'Uses `BiliDili/AppCoordinator.swift`; ServiceRegistry.shared.register and Protocol.self are symbols.',
+                },
+                id: 'candidate-valid',
+                sourceRefs: validProducerRefs,
+                title: 'Valid Candidate Sources',
+              },
+            },
+            result: { id: 'candidate-valid', status: 'created', title: 'Valid Candidate Sources' },
+            tool: 'knowledge',
+          },
+          {
+            args: {
+              params: {
+                action: 'submit',
+                id: 'candidate-rejected',
+                sourceRefs: ['MissingConcept.swift'],
+                title: 'Rejected Candidate',
+              },
+            },
+            result: {
+              data: {
+                sourceRefValidation: {
+                  invalidSourceRefCount: 1,
+                  mode: 'strict',
+                  policy: { mode: 'strict' },
+                  rejectedSourceRefs: [{ reason: 'entity-not-file', ref: 'MissingConcept.swift' }],
+                  repairedSourceRefs: [],
+                  status: 'rejected',
+                  warnings: [],
+                },
+              },
+              error: 'source_ref_validation_failed',
+              status: 'error',
+            },
+            tool: 'knowledge',
+          },
+        ],
+      },
+      rejectedCount: 1,
+      runtimeToolCalls: [],
+      submitCalls: [],
+      successCount: 1,
+    };
+
+    const evidence = buildPcvN11ProduceEvidence({
+      dimId: 'design-patterns',
+      needsCandidates: true,
+      projection,
+      sourceRefValidation: {
+        allFiles: validProducerRefs.map((relativePath) => ({ relativePath })),
+        projectRoot: '/fixture/BiliDili',
+      },
+    });
+
+    expect(evidence.acceptedCandidateInvalidSourceRefRatio).toBe(0);
+    expect(evidence.acceptedCandidateSourceRefValidity).toMatchObject({
+      invalidSourceRefCount: 0,
+      status: 'valid',
+      totalSourceRefCount: validProducerRefs.length,
+      validSourceRefCount: validProducerRefs.length,
+    });
+    expect(evidence.producerSourceRefInvalidRatio).toBeLessThanOrEqual(0.1);
+    expect(evidence.producerSourceRefValidity).toMatchObject({
+      invalidSourceRefCount: 1,
+      totalSourceRefCount: validProducerRefs.length + 1,
+    });
+    expect(evidence.noTerminalProof).toBe(true);
+    expect(evidence.terminalToolCallCount).toBe(0);
+    expect(evidence.analysisReferencedFileInvalidRatio).toBe(0.5);
+    expect(evidence.analysisReferencedFileValidity).toMatchObject({
+      invalidSourceRefCount: 2,
+      totalSourceRefCount: 4,
+    });
+    expect(evidence.sourceRefs).not.toContain('RouteMiddleware.swift');
+    expect(evidence.sourceRefs).not.toContain('CookieProviding.self');
+    expect(evidence.sourceRefs).not.toContain('ServiceRegistry.shared.register');
+    expect(evidence.sourceRefs).not.toContain('Protocol.self');
+    expect(evidence.collectorSourceBreakdown).toMatchObject({
+      acceptedCandidate: {
+        invalidSourceRefCount: 0,
+        totalSourceRefCount: validProducerRefs.length,
+      },
+      analysisReferencedFiles: {
+        invalidSourceRefCount: 2,
+        totalSourceRefCount: 4,
+      },
+      rejectedCandidate: {
+        invalidSourceRefCount: 1,
+        totalSourceRefCount: 1,
+      },
+      reportFallback: {
+        invalidSourceRefCount: 0,
+        totalSourceRefCount: 0,
+      },
+    });
+    expect(evidence.rejectedCandidateReasonSummary).toMatchObject({
+      rejectedCount: 1,
+      sourceRefInvalidCount: 1,
+      sourceRefRelatedRejectedCount: 1,
+      typedRejectedReasonCount: 1,
+    });
+    expect(evidence.rejectedCandidateReasons[0]).toMatchObject({
+      candidateId: 'candidate-rejected',
+      candidateIndex: 1,
+      candidateTitle: 'Rejected Candidate',
+      errorCategory: 'source_ref_validation_failed',
+      sourceRefRelated: true,
+      status: 'error',
+      toolCallIndex: 1,
+    });
+    expect(evidence.rejectedCandidateReasons[0]?.invalidSourceRefs).toMatchObject([
+      {
+        origin: 'rejectedCandidate',
+        reason: 'entity-not-file',
+        ref: 'MissingConcept.swift',
+      },
+    ]);
+  });
 });
