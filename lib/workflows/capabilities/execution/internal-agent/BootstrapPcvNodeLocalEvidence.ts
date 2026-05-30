@@ -159,7 +159,8 @@ export interface PcvN9StageProjectionEvidence extends PcvNodeLocalEvidenceBase {
   action: string | null;
   evidenceKind: 'n9-stage-projection';
   pass: boolean | null;
-  phasePresent: true;
+  phasePresent: boolean;
+  projectionSource: 'phase' | 'stage-map';
   stageId: PcvN9StageProjectionKey;
   timedOut: boolean;
 }
@@ -501,7 +502,7 @@ export function buildPcvN9StageProjectionEvidence({
   runResult: AgentResultLike;
   stage: PcvN9StageProjectionKey;
 }): PcvN9StageProjectionEvidence | null {
-  const phase = runResult.phases?.[stage];
+  const phase = resolvePcvN9ProjectionPhase(runResult, stage);
   if (!isRecord(phase)) {
     return null;
   }
@@ -526,6 +527,7 @@ export function buildPcvN9StageProjectionEvidence({
     nodeId: identity.pcvNodeId,
     pass,
     phasePresent: true,
+    projectionSource: 'phase',
     sourceRefs: [
       'lib/workflows/capabilities/execution/internal-agent/BootstrapPcvNodeLocalEvidence.ts',
       'lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.ts',
@@ -536,6 +538,50 @@ export function buildPcvN9StageProjectionEvidence({
     summary: `${label || dimId} ${stage} stage was observed and projected to report-facing PCV scorecard evidence.`,
     timedOut,
   };
+}
+
+// record_repair 可能只是作为 PCV stage map 的可执行节点进入 input/events，
+// 并不会在 quality_gate 已通过时真正形成 phase；报告面仍要保留 canonical identity。
+export function buildPcvN9RecordRepairStageMapEvidence({
+  dimId,
+  label,
+}: {
+  dimId: string;
+  label?: string | null;
+}): PcvN9StageProjectionEvidence {
+  const identity = buildBootstrapPcvStageNodeMap().record_repair;
+  return {
+    action: 'stage-map-available',
+    chainNodeId: identity.chainNodeId,
+    contract: PCV_COLD_START_NODE_LOCAL_CONTRACT,
+    contractVersion: PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION,
+    dimensionId: dimId,
+    evidenceKind: 'n9-stage-projection',
+    missingLinkReasons: [],
+    nodeId: identity.pcvNodeId,
+    pass: null,
+    phasePresent: false,
+    projectionSource: 'stage-map',
+    sourceRefs: [
+      'lib/workflows/capabilities/execution/internal-agent/BootstrapSessionExecutionBuilder.ts',
+      'lib/workflows/capabilities/execution/internal-agent/BootstrapPcvNodeLocalEvidence.ts',
+    ],
+    stageId: 'record_repair',
+    status: 'not-applicable',
+    summary: `${label || dimId} record_repair stage identity is available in the bootstrap PCV stage map; no repair phase execution was required.`,
+    timedOut: false,
+  };
+}
+
+function resolvePcvN9ProjectionPhase(
+  runResult: AgentResultLike,
+  stage: PcvN9StageProjectionKey
+): unknown {
+  const phases = runResult.phases || {};
+  if (stage === 'record_repair') {
+    return phases.record_repair || phases.quality_gate_record_repair;
+  }
+  return phases[stage];
 }
 
 export function buildPcvN11SourceRefReplayEvidence({

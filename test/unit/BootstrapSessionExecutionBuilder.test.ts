@@ -163,6 +163,15 @@ describe('bootstrap session execution builder', () => {
           stageOrder: ['analyze', 'quality_gate', 'produce', 'rejection_gate'],
           status: 'linked',
         },
+        n9RecordRepair: {
+          action: 'stage-map-available',
+          chainNodeId: 'pcvm:cold-start:n9:repair',
+          nodeId: 'pcvm:n9:record_repair',
+          phasePresent: false,
+          projectionSource: 'stage-map',
+          stageId: 'record_repair',
+          status: 'not-applicable',
+        },
       },
     });
   });

@@ -389,7 +389,7 @@ describe('bootstrap dimension consumer', () => {
             action: 'pass',
             pass: true,
           },
-          record_repair: {
+          quality_gate_record_repair: {
             action: 'record_repair_incomplete',
           },
           produce: {},
@@ -433,6 +433,7 @@ describe('bootstrap dimension consumer', () => {
         action: 'record_repair_incomplete',
         chainNodeId: 'pcvm:cold-start:n9:repair',
         nodeId: 'pcvm:n9:record_repair',
+        projectionSource: 'phase',
         stageId: 'record_repair',
         status: 'linked',
       },

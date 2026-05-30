@@ -18,6 +18,7 @@ import {
 import {
   buildBootstrapPcvStageNodeContext,
   buildPcvN8StageFactoryEvidence,
+  buildPcvN9RecordRepairStageMapEvidence,
   mergeBootstrapPcvNodeEvidence,
 } from './BootstrapPcvNodeLocalEvidence.js';
 import {
@@ -315,6 +316,10 @@ function buildBootstrapDimensionChildPlan({
         plan,
         runInput: bridgedRunInput,
       });
+      const pcvN9RecordRepairMapEvidence = buildPcvN9RecordRepairStageMapEvidence({
+        dimId,
+        label: plan.dimConfig.label || plan.dim.label || dimId,
+      });
       dimensionStats[dimId] = {
         ...(dimensionStats[dimId] || {
           candidateCount: 0,
@@ -322,6 +327,7 @@ function buildBootstrapDimensionChildPlan({
         }),
         pcvNodeEvidence: mergeBootstrapPcvNodeEvidence(dimensionStats[dimId]?.pcvNodeEvidence, {
           n8: pcvN8Evidence,
+          n9RecordRepair: pcvN9RecordRepairMapEvidence,
         }),
       };
       childExecutionState.set(dimId, { dimStartTime, analystScopeId });
