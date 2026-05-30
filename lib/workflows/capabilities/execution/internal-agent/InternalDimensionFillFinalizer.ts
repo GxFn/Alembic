@@ -60,13 +60,63 @@ interface PcvProcessMetrics {
   analyzeGrounding: PcvAnalyzeGroundingProcessMetric;
 }
 
+type WorkflowResultPersistenceInput = Parameters<typeof persistWorkflowResult>[0];
+
+export interface InternalDimensionFillFinalizerStepMap {
+  cacheWarmupCleanup: 'clearInternalDimensionSessionDedupCache';
+  skillConsumption: 'consumeInternalDimensionSkillsStep';
+  candidateRelations: 'consumeInternalDimensionCandidateRelationsStep';
+  completion: 'runInternalDimensionCompletionStep';
+  persistence: 'buildInternalDimensionPersistenceInput';
+  reportAugmentation: 'augmentInternalDimensionWorkflowReport';
+  historyRewrite: 'persistEfficiencyAugmentedWorkflowReport';
+  runtimeCacheCleanup: 'cleanupInternalDimensionRuntimeCaches';
+}
+
+export interface InternalDimensionCompletionStepResult {
+  completionSummary: WorkflowCompletionSummary;
+  consolidationResult: WorkflowSemanticMemoryConsolidationResult | null;
+  pipelineMode: 'bootstrap' | 'rescan';
+  workflowCompletion: WorkflowCompletionFinalizerResult;
+}
+
+export interface InternalDimensionReportAugmentationResult {
+  changed: boolean;
+  efficiency: boolean;
+  historyRewrite: boolean;
+  pcvNodeLocal: boolean;
+  skillDelivery: boolean;
+  warningOnly: boolean;
+}
+
+export interface InternalDimensionRuntimeCacheCleanupResult {
+  bootstrapDedupCleared?: boolean;
+  fileCacheCleared?: boolean;
+}
+
 export interface InternalDimensionFillFinalizationResult {
   skillResults: SkillResults;
   consolidationResult: WorkflowSemanticMemoryConsolidationResult | null;
   completionSummary: WorkflowCompletionSummary;
+  finalizerStepMap: InternalDimensionFillFinalizerStepMap;
+  reportAugmentation: InternalDimensionReportAugmentationResult;
+  runtimeCacheCleanup: InternalDimensionRuntimeCacheCleanupResult;
   snapshotId: string | null;
   snapshot: WorkflowSnapshotSummary;
   totalTimeMs: number;
+}
+
+export function buildInternalDimensionFinalizerStepMap(): InternalDimensionFillFinalizerStepMap {
+  return {
+    cacheWarmupCleanup: 'clearInternalDimensionSessionDedupCache',
+    skillConsumption: 'consumeInternalDimensionSkillsStep',
+    candidateRelations: 'consumeInternalDimensionCandidateRelationsStep',
+    completion: 'runInternalDimensionCompletionStep',
+    persistence: 'buildInternalDimensionPersistenceInput',
+    reportAugmentation: 'augmentInternalDimensionWorkflowReport',
+    historyRewrite: 'persistEfficiencyAugmentedWorkflowReport',
+    runtimeCacheCleanup: 'cleanupInternalDimensionRuntimeCaches',
+  };
 }
 
 export async function finalizeInternalDimensionFill({
@@ -80,16 +130,93 @@ export async function finalizeInternalDimensionFill({
   sessionResult: InternalDimensionFillSessionResult;
   startedAtMs: number;
 }): Promise<InternalDimensionFillFinalizationResult> {
-  sessionResult.bootstrapDedup.clear();
+  const finalizerStepMap = buildInternalDimensionFinalizerStepMap();
+  const dedupCleanup = clearInternalDimensionSessionDedupCache(sessionResult);
+  const shouldAbort = createInternalDimensionAbortGuard(preparation);
 
-  const shouldAbort = () =>
+  const skillResults = await consumeInternalDimensionSkillsStep({
+    preparation,
+    runtime,
+    sessionResult,
+    shouldAbort,
+  });
+
+  await consumeInternalDimensionCandidateRelationsStep({ preparation, sessionResult });
+
+  const { completionSummary, consolidationResult } = await runInternalDimensionCompletionStep({
+    preparation,
+    runtime,
+    shouldAbort,
+  });
+
+  const persistenceInput = buildInternalDimensionPersistenceInput({
+    completionSummary,
+    consolidationResult,
+    preparation,
+    runtime,
+    sessionResult,
+    skillResults,
+    startedAtMs,
+  });
+
+  const persistenceResult = await persistWorkflowResult(persistenceInput);
+  const reportAugmentation = await persistEfficiencyAugmentedWorkflowReport({
+    ctx: preparation.ctx,
+    dataRoot: preparation.dataRoot,
+    dimensionStats: sessionResult.dimensionStats,
+    report: persistenceResult.report,
+    skillResults,
+  });
+  const { totalTimeMs, snapshotId, snapshot } = persistenceResult;
+
+  const runtimeCacheCleanup = {
+    ...dedupCleanup,
+    ...cleanupInternalDimensionRuntimeCaches(preparation),
+  };
+
+  return {
+    skillResults,
+    consolidationResult,
+    completionSummary,
+    finalizerStepMap,
+    reportAugmentation,
+    runtimeCacheCleanup,
+    snapshotId,
+    snapshot,
+    totalTimeMs,
+  };
+}
+
+export function clearInternalDimensionSessionDedupCache(
+  sessionResult: Pick<InternalDimensionFillSessionResult, 'bootstrapDedup'>
+): InternalDimensionRuntimeCacheCleanupResult {
+  sessionResult.bootstrapDedup.clear();
+  return { bootstrapDedupCleared: true };
+}
+
+export function createInternalDimensionAbortGuard(
+  preparation: Pick<InternalDimensionFillPreparation, 'sessionId' | 'taskManager'>
+): () => boolean {
+  return () =>
     !!(
       preparation.taskManager &&
       (!preparation.taskManager.isSessionValid(preparation.sessionId) ||
         preparation.taskManager.isUserCancelled?.(preparation.sessionId))
     );
+}
 
-  const skillResults: SkillResults = await consumeBootstrapSkills({
+export async function consumeInternalDimensionSkillsStep({
+  preparation,
+  runtime,
+  sessionResult,
+  shouldAbort,
+}: {
+  preparation: InternalDimensionFillPreparation;
+  runtime: InternalDimensionFillRuntime;
+  sessionResult: InternalDimensionFillSessionResult;
+  shouldAbort: () => boolean;
+}): Promise<SkillResults> {
+  return consumeBootstrapSkills({
     ctx: preparation.ctx,
     dimensions: preparation.dimensions,
     dimensionCandidates: sessionResult.dimensionCandidates,
@@ -98,11 +225,30 @@ export async function finalizeInternalDimensionFill({
     sessionId: preparation.sessionId,
     shouldAbort,
   });
+}
 
+export async function consumeInternalDimensionCandidateRelationsStep({
+  preparation,
+  sessionResult,
+}: {
+  preparation: InternalDimensionFillPreparation;
+  sessionResult: InternalDimensionFillSessionResult;
+}): Promise<{ consumed: true }> {
   await consumeInternalDimensionCandidateRelations({ preparation, sessionResult });
+  return { consumed: true };
+}
 
+export async function runInternalDimensionCompletionStep({
+  preparation,
+  runtime,
+  shouldAbort,
+}: {
+  preparation: InternalDimensionFillPreparation;
+  runtime: InternalDimensionFillRuntime;
+  shouldAbort: () => boolean;
+}): Promise<InternalDimensionCompletionStepResult> {
   const pipelineMode = preparation.view.mode ?? 'bootstrap';
-  let workflowCompletion: Awaited<ReturnType<typeof runWorkflowCompletionFinalizer>>;
+  let workflowCompletion: WorkflowCompletionFinalizerResult;
 
   if (pipelineMode === 'rescan') {
     Logger.info(
@@ -123,13 +269,36 @@ export async function finalizeInternalDimensionFill({
       shouldAbort,
     });
   }
-  const consolidationResult = workflowCompletion.semanticMemoryResult;
-  const completionSummary = buildInternalDimensionCompletionSummary({
+
+  return {
+    completionSummary: buildInternalDimensionCompletionSummary({
+      pipelineMode,
+      workflowCompletion,
+    }),
+    consolidationResult: workflowCompletion.semanticMemoryResult,
     pipelineMode,
     workflowCompletion,
-  });
+  };
+}
 
-  const persistenceInput = {
+export function buildInternalDimensionPersistenceInput({
+  completionSummary,
+  consolidationResult,
+  preparation,
+  runtime,
+  sessionResult,
+  skillResults,
+  startedAtMs,
+}: {
+  completionSummary: WorkflowCompletionSummary;
+  consolidationResult: WorkflowSemanticMemoryConsolidationResult | null;
+  preparation: InternalDimensionFillPreparation;
+  runtime: InternalDimensionFillRuntime;
+  sessionResult: InternalDimensionFillSessionResult;
+  skillResults: SkillResults;
+  startedAtMs: number;
+}): WorkflowResultPersistenceInput {
+  return {
     ctx: preparation.ctx,
     dataRoot: preparation.dataRoot,
     projectRoot: preparation.projectRoot,
@@ -149,28 +318,14 @@ export async function finalizeInternalDimensionFill({
     enableParallel: sessionResult.enableParallel,
     concurrency: sessionResult.concurrency,
     startedAtMs,
-  } as unknown as Parameters<typeof persistWorkflowResult>[0];
+  } as unknown as WorkflowResultPersistenceInput;
+}
 
-  const persistenceResult = await persistWorkflowResult(persistenceInput);
-  await persistEfficiencyAugmentedWorkflowReport({
-    ctx: preparation.ctx,
-    dataRoot: preparation.dataRoot,
-    dimensionStats: sessionResult.dimensionStats,
-    report: persistenceResult.report,
-    skillResults,
-  });
-  const { totalTimeMs, snapshotId, snapshot } = persistenceResult;
-
+export function cleanupInternalDimensionRuntimeCaches(
+  preparation: Pick<InternalDimensionFillPreparation, 'ctx'>
+): InternalDimensionRuntimeCacheCleanupResult {
   preparation.ctx.container.singletons._fileCache = null;
-
-  return {
-    skillResults,
-    consolidationResult,
-    completionSummary,
-    snapshotId,
-    snapshot,
-    totalTimeMs,
-  };
+  return { fileCacheCleared: true };
 }
 
 async function persistEfficiencyAugmentedWorkflowReport({
@@ -185,22 +340,18 @@ async function persistEfficiencyAugmentedWorkflowReport({
   dimensionStats: InternalDimensionFillSessionResult['dimensionStats'];
   report: WorkflowReport | null;
   skillResults: SkillResults;
-}) {
+}): Promise<InternalDimensionReportAugmentationResult> {
   if (!report) {
-    return;
+    return emptyInternalDimensionReportAugmentationResult();
   }
 
-  const augmentedEfficiency = augmentWorkflowReportWithEfficiency(report, dimensionStats);
-  const augmentedSkillDelivery = augmentWorkflowReportWithSkillDeliveryReceipts(
+  const result = augmentInternalDimensionWorkflowReport({
+    dimensionStats,
     report,
-    skillResults
-  );
-  const augmentedPcvNodeLocal = augmentWorkflowReportWithPcvNodeLocalBaseline(
-    report,
-    dimensionStats
-  );
-  if (!augmentedEfficiency && !augmentedSkillDelivery && !augmentedPcvNodeLocal) {
-    return;
+    skillResults,
+  });
+  if (!result.changed) {
+    return result;
   }
 
   try {
@@ -213,7 +364,7 @@ async function persistEfficiencyAugmentedWorkflowReport({
         JSON.stringify(report, null, 2)
       );
       await writeWorkflowReportHistoryWithWriteZone(writeZone, report);
-      return;
+      return { ...result, historyRewrite: true };
     }
 
     const reportDir = path.join(dataRoot, '.asd');
@@ -223,11 +374,46 @@ async function persistEfficiencyAugmentedWorkflowReport({
       JSON.stringify(report, null, 2)
     );
     await writeWorkflowReportHistory(reportDir, report);
+    return { ...result, historyRewrite: true };
   } catch (err: unknown) {
     Logger.warn(
       `[InternalDimensionFill] workflow report augmentation skipped: ${err instanceof Error ? err.message : String(err)}`
     );
+    return { ...result, historyRewrite: false, warningOnly: true };
   }
+}
+
+export function augmentInternalDimensionWorkflowReport({
+  dimensionStats,
+  report,
+  skillResults,
+}: {
+  dimensionStats: InternalDimensionFillSessionResult['dimensionStats'];
+  report: WorkflowReport;
+  skillResults: SkillResults;
+}): InternalDimensionReportAugmentationResult {
+  const efficiency = augmentWorkflowReportWithEfficiency(report, dimensionStats);
+  const skillDelivery = augmentWorkflowReportWithSkillDeliveryReceipts(report, skillResults);
+  const pcvNodeLocal = augmentWorkflowReportWithPcvNodeLocalBaseline(report, dimensionStats);
+  return {
+    changed: efficiency || skillDelivery || pcvNodeLocal,
+    efficiency,
+    historyRewrite: false,
+    pcvNodeLocal,
+    skillDelivery,
+    warningOnly: false,
+  };
+}
+
+function emptyInternalDimensionReportAugmentationResult(): InternalDimensionReportAugmentationResult {
+  return {
+    changed: false,
+    efficiency: false,
+    historyRewrite: false,
+    pcvNodeLocal: false,
+    skillDelivery: false,
+    warningOnly: false,
+  };
 }
 
 export function augmentWorkflowReportWithSkillDeliveryReceipts(

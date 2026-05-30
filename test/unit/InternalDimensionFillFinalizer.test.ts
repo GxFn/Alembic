@@ -4,12 +4,233 @@ import {
 } from '@alembic/core/host-agent-workflows';
 import { describe, expect, test } from 'vitest';
 import {
+  augmentInternalDimensionWorkflowReport,
   augmentWorkflowReportWithEfficiency,
   augmentWorkflowReportWithPcvNodeLocalBaseline,
   augmentWorkflowReportWithSkillDeliveryReceipts,
+  buildInternalDimensionFinalizerStepMap,
+  buildInternalDimensionPersistenceInput,
+  cleanupInternalDimensionRuntimeCaches,
+  clearInternalDimensionSessionDedupCache,
+  createInternalDimensionAbortGuard,
+  runInternalDimensionCompletionStep,
 } from '../../lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
+import type { InternalDimensionFillPreparation } from '../../lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillPreparation.js';
+import type { InternalDimensionFillSessionResult } from '../../lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillSessionRunner.js';
 
 describe('internal dimension fill finalizer efficiency report augmentation', () => {
+  test('exposes explicit finalizer step map for side-effect attribution', () => {
+    expect(buildInternalDimensionFinalizerStepMap()).toEqual({
+      cacheWarmupCleanup: 'clearInternalDimensionSessionDedupCache',
+      skillConsumption: 'consumeInternalDimensionSkillsStep',
+      candidateRelations: 'consumeInternalDimensionCandidateRelationsStep',
+      completion: 'runInternalDimensionCompletionStep',
+      persistence: 'buildInternalDimensionPersistenceInput',
+      reportAugmentation: 'augmentInternalDimensionWorkflowReport',
+      historyRewrite: 'persistEfficiencyAugmentedWorkflowReport',
+      runtimeCacheCleanup: 'cleanupInternalDimensionRuntimeCaches',
+    });
+  });
+
+  test('builds persistence input as an isolated finalizer step', () => {
+    const preparation = makePreparation();
+    const runtime = makeRuntime();
+    const sessionResult = makeSessionResult();
+    const skillResults = { created: 1, failed: 0, skills: ['project-api'], errors: [] };
+    const completionSummary = {
+      mode: 'rescan' as const,
+      isolation: 'pipeline-isolation' as const,
+      reason: 'rescan skips delivery/wiki/semantic memory to avoid rebuilding downstream artifacts',
+      delivery: { status: 'skipped' as const, verification: null },
+      wiki: { status: 'skipped' as const },
+      semanticMemory: { status: 'skipped' as const, result: null },
+    };
+
+    const input = buildInternalDimensionPersistenceInput({
+      completionSummary,
+      consolidationResult: null,
+      preparation,
+      runtime,
+      sessionResult,
+      skillResults,
+      startedAtMs: 123,
+    }) as Record<string, unknown>;
+
+    expect(input).toMatchObject({
+      dataRoot: '/tmp/alembic-data',
+      projectRoot: '/tmp/alembic-project',
+      sessionId: 'session-1',
+      completionSummary,
+      enableParallel: true,
+      concurrency: 2,
+      startedAtMs: 123,
+    });
+    expect(input.skillResults).toBe(skillResults);
+    expect(input.dimensionStats).toBe(sessionResult.dimensionStats);
+    expect(input.sessionStore).toBe(runtime.sessionStore);
+  });
+
+  test('summarizes rescan completion without opening delivery or memory surfaces', async () => {
+    const result = await runInternalDimensionCompletionStep({
+      preparation: makePreparation({ mode: 'rescan' }),
+      runtime: makeRuntime(),
+      shouldAbort: () => false,
+    });
+
+    expect(result.consolidationResult).toBeNull();
+    expect(result.workflowCompletion).toEqual({
+      deliveryVerification: null,
+      semanticMemoryResult: null,
+    });
+    expect(result.completionSummary).toMatchObject({
+      mode: 'rescan',
+      isolation: 'pipeline-isolation',
+      delivery: { status: 'skipped' },
+      wiki: { status: 'skipped' },
+      semanticMemory: { status: 'skipped' },
+    });
+  });
+
+  test('isolates finalizer cache cleanup decisions', () => {
+    const sessionResult = makeSessionResult();
+    sessionResult.bootstrapDedup.add('api');
+    expect(sessionResult.bootstrapDedup.size).toBe(1);
+
+    expect(clearInternalDimensionSessionDedupCache(sessionResult)).toEqual({
+      bootstrapDedupCleared: true,
+    });
+    expect(sessionResult.bootstrapDedup.size).toBe(0);
+
+    const preparation = makePreparation();
+    preparation.ctx.container.singletons._fileCache = { stale: true };
+    expect(cleanupInternalDimensionRuntimeCaches(preparation)).toEqual({ fileCacheCleared: true });
+    expect(preparation.ctx.container.singletons._fileCache).toBeNull();
+  });
+
+  test('keeps abort checks local to the finalizer steps', () => {
+    const taskManager = {
+      isSessionValid: () => false,
+      isUserCancelled: () => false,
+    };
+    const shouldAbort = createInternalDimensionAbortGuard(makePreparation({ taskManager }));
+
+    expect(shouldAbort()).toBe(true);
+  });
+
+  test('reports which workflow report augmentation branches changed', () => {
+    const report = {
+      version: '2.7.0',
+      timestamp: '2026-05-30T00:00:00.000Z',
+      project: { name: 'Alembic', files: 1, lang: 'ts' },
+      duration: { totalMs: 100, totalSec: 0 },
+      dimensions: { api: {} },
+      totals: {},
+      checkpoints: { restored: [] },
+      incremental: null,
+      semanticMemory: null,
+      session: { id: 'session-1' },
+    } as WorkflowReport;
+    const receipt = createAlembicProjectSkillDeliveryReceipt({
+      asset: {
+        contentHash: 'sha256:abc123',
+        dimensionId: 'api',
+        path: '/tmp/project/Alembic/skills/project-api/SKILL.md',
+      },
+      authorization: {
+        codexSkillRoot: '/tmp/project/.agents/skills',
+        projectScopeId: 'project:test',
+        status: 'pending',
+      },
+      codexSkillRoot: '/tmp/project/.agents/skills',
+      createdAt: '2026-05-24T12:00:00Z',
+      dimensionId: 'api',
+      id: 'receipt-api',
+      managedMarker: {
+        generatedSkillId: 'alembic:project:test:project-api',
+        markerPath: '/tmp/project/.agents/skills/project-api/.alembic-managed.json',
+      },
+      projectId: 'test',
+      projectRoot: '/tmp/project',
+      projectScopeId: 'project:test',
+      runtimeExport: {
+        codexSkillRoot: '/tmp/project/.agents/skills',
+        projectScopeId: 'project:test',
+        status: 'pending',
+      },
+      skillName: 'project-api',
+    });
+
+    const result = augmentInternalDimensionWorkflowReport({
+      report,
+      skillResults: {
+        created: 1,
+        failed: 0,
+        skills: ['project-api'],
+        errors: [],
+        deliveryReceipts: [receipt],
+      },
+      dimensionStats: {
+        api: {
+          candidateCount: 0,
+          durationMs: 10,
+          efficiency: {
+            cacheHits: 1,
+            cacheMisses: 0,
+            duplicateToolCalls: 0,
+            emptyRetries: 0,
+            forcedSummary: false,
+            maxCompactionLevel: 0,
+            nudgeCount: 0,
+            replanCount: 0,
+            tokenUsage: { cacheHit: 0, input: 1, output: 2, reasoning: 0 },
+            toolCalls: 1,
+            totalCompactedItems: 0,
+          },
+          pcvNodeEvidenceEnvelope: {
+            contract: 'PcvNodeEvidenceEnvelope',
+            contractVersion: 1,
+            dimensionId: 'api',
+            evidenceScope: 'unit',
+            source: 'bootstrap-dimension-consumer',
+            evidence: {
+              n12: {
+                acceptedCandidateTitles: [],
+                chainNodeId: 'pcvm:cold-start:n12',
+                contract: 'PCVColdStartNodeLocalBaseline',
+                contractVersion: 1,
+                dimensionId: 'api',
+                evidenceKind: 'consumer-persistence',
+                failureDetailsPersisted: true,
+                findableCandidateTitles: [],
+                missingLinkReasons: [],
+                nodeId: 'N12-consumers-persistence',
+                persistedFailureReason: null,
+                sessionStoreSnapshotAvailable: true,
+                sourceRefs: [],
+                status: 'linked',
+                summary: 'n12 linked',
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(result).toEqual({
+      changed: true,
+      efficiency: true,
+      historyRewrite: false,
+      pcvNodeLocal: true,
+      skillDelivery: true,
+      warningOnly: false,
+    });
+    expect(report).toMatchObject({
+      efficiency: { toolCalls: 1 },
+      projectSkillDelivery: { receiptCount: 1 },
+      pcvScorecard: { summary: { dimensionCount: 1, linkedNodes: 1 } },
+    });
+  });
+
   test('writes aggregate and per-dimension efficiency into workflow reports', () => {
     const report = {
       version: '2.7.0',
@@ -444,3 +665,59 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
     });
   });
 });
+
+function makePreparation({
+  mode = 'bootstrap',
+  taskManager = null,
+}: {
+  mode?: 'bootstrap' | 'rescan';
+  taskManager?: unknown;
+} = {}): InternalDimensionFillPreparation {
+  return {
+    allFiles: [{ content: 'export {}', path: '/tmp/alembic-project/src/api.ts' }],
+    ctx: {
+      container: {
+        get: () => undefined,
+        singletons: {},
+      },
+    },
+    dataRoot: '/tmp/alembic-data',
+    dimensions: [{ id: 'api', label: 'API' }],
+    emitter: { emitDimensionComplete: () => undefined },
+    incrementalPlan: null,
+    isIncremental: false,
+    projectRoot: '/tmp/alembic-project',
+    sessionId: 'session-1',
+    skipTargetDelivery: false,
+    taskManager,
+    view: { mode },
+  } as unknown as InternalDimensionFillPreparation;
+}
+
+function makeRuntime() {
+  return {
+    projectInfo: { fileCount: 1, lang: 'ts', name: 'Alembic' },
+    sessionStore: {
+      getCompletedDimensions: () => [],
+      toJSON: () => ({}),
+    },
+  } as unknown as Parameters<typeof buildInternalDimensionPersistenceInput>[0]['runtime'];
+}
+
+function makeSessionResult(): InternalDimensionFillSessionResult {
+  return {
+    bootstrapDedup: new Set<string>(),
+    candidateResults: { created: 1, failed: 0, errors: [] },
+    concurrency: 2,
+    dimensionCandidates: {},
+    dimensionStats: {
+      api: {
+        candidateCount: 1,
+        durationMs: 10,
+      },
+    },
+    enableParallel: true,
+    incrementalSkippedDims: [],
+    skippedDims: [],
+  } as unknown as InternalDimensionFillSessionResult;
+}
