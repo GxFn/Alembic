@@ -364,6 +364,81 @@ describe('bootstrap dimension consumer', () => {
     });
   });
 
+  test('records canonical N9 stage projection evidence from quality gate and repair phases', async () => {
+    const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
+    const dimensionCandidates: Record<string, DimensionCandidateData> = {};
+    const dimensionStats: Record<string, DimensionStat> = {};
+    const storeDimensionReport = vi.fn();
+    const addDimensionDigest = vi.fn();
+    const addSubmittedCandidate = vi.fn();
+    const emitDimensionComplete = vi.fn();
+    const projection = makeProjection();
+    projection.producerResult.candidateCount = 1;
+    projection.successCount = 1;
+
+    await consumeBootstrapDimensionResult({
+      ctx: {},
+      dimId: 'api',
+      dimConfig: { label: 'API' },
+      needsCandidates: true,
+      projection,
+      runResult: {
+        degraded: false,
+        phases: {
+          quality_gate: {
+            action: 'pass',
+            pass: true,
+          },
+          record_repair: {
+            action: 'record_repair_incomplete',
+          },
+          produce: {},
+        },
+        status: 'success',
+      },
+      dimStartTime: Date.now(),
+      analystScopeId: 'api:analyst',
+      memoryCoordinator: {
+        getActiveContext: () => ({
+          distill: () => ({ keyFindings: [], totalObservations: 0, toolCallSummary: [] }),
+        }),
+      } as unknown as MemoryCoordinator,
+      sessionStore: {
+        storeDimensionReport,
+        addDimensionDigest,
+        addSubmittedCandidate,
+        toJSON: () => ({ submittedCandidates: { api: [{ title: 'Candidate' }] } }),
+      } as unknown as SessionStore,
+      dimContext: {
+        addDimensionDigest,
+        addSubmittedCandidate,
+      } as unknown as DimensionContext,
+      candidateResults,
+      dimensionCandidates,
+      dimensionStats,
+      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+      dataRoot: '/tmp',
+      sessionId: 'session-1',
+    });
+
+    expect(dimensionStats.api?.pcvNodeEvidence).toMatchObject({
+      n9QualityGate: {
+        action: 'pass',
+        chainNodeId: 'pcvm:cold-start:n9:quality',
+        nodeId: 'pcvm:n9:quality_gate',
+        stageId: 'quality_gate',
+        status: 'linked',
+      },
+      n9RecordRepair: {
+        action: 'record_repair_incomplete',
+        chainNodeId: 'pcvm:cold-start:n9:repair',
+        nodeId: 'pcvm:n9:record_repair',
+        stageId: 'record_repair',
+        status: 'linked',
+      },
+    });
+  });
+
   test('records degraded evidence runs without marking the dimension normally complete', async () => {
     const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
     const dimensionCandidates: Record<string, DimensionCandidateData> = {};

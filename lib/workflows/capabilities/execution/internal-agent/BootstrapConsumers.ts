@@ -43,6 +43,7 @@ import {
 } from '#workflows/capabilities/execution/WorkflowSkillCompletionCapability.js';
 import {
   buildPcvAnalyzeGroundingLedgerSummary,
+  buildPcvN9StageProjectionEvidence,
   buildPcvN11ProduceEvidence,
   buildPcvN12ConsumerPersistenceEvidence,
   buildPcvN12ErrorEvidence,
@@ -380,8 +381,22 @@ export async function consumeBootstrapDimensionResult({
     label: dimConfig.label,
     runResult,
   });
+  const n9QualityGate = buildPcvN9StageProjectionEvidence({
+    dimId,
+    label: dimConfig.label,
+    runResult,
+    stage: 'quality_gate',
+  });
+  const n9RecordRepair = buildPcvN9StageProjectionEvidence({
+    dimId,
+    label: dimConfig.label,
+    runResult,
+    stage: 'record_repair',
+  });
   const pcvNodeEvidence = mergeBootstrapPcvNodeEvidence(dimensionStats[dimId]?.pcvNodeEvidence, {
     ...(groundingLedger ? { groundingLedger } : {}),
+    ...(n9QualityGate ? { n9QualityGate } : {}),
+    ...(n9RecordRepair ? { n9RecordRepair } : {}),
     n11: buildPcvN11ProduceEvidence({ dimId, needsCandidates, projection, sourceRefValidation }),
     n12: buildPcvN12ConsumerPersistenceEvidence({
       acceptedSubmitCalls: isNormalCompletion ? successfulProducerSubmitCalls(projection) : [],

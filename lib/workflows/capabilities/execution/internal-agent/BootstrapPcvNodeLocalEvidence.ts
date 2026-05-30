@@ -150,6 +150,20 @@ export interface PcvAnalyzeGroundingLedgerSummary extends PcvNodeLocalEvidenceBa
   verificationOnlyCount: number;
 }
 
+export type PcvN9StageProjectionKey = Extract<
+  PcvBootstrapStageKey,
+  'quality_gate' | 'record_repair'
+>;
+
+export interface PcvN9StageProjectionEvidence extends PcvNodeLocalEvidenceBase {
+  action: string | null;
+  evidenceKind: 'n9-stage-projection';
+  pass: boolean | null;
+  phasePresent: true;
+  stageId: PcvN9StageProjectionKey;
+  timedOut: boolean;
+}
+
 export interface PcvN11ProduceEvidence extends PcvNodeLocalEvidenceBase {
   acceptedCount: number;
   evidenceKind: 'producer-cut';
@@ -182,6 +196,8 @@ export interface PcvN12ConsumerPersistenceEvidence extends PcvNodeLocalEvidenceB
 export interface BootstrapPcvNodeEvidenceSet {
   n8?: PcvN8StageFactoryEvidence;
   groundingLedger?: PcvAnalyzeGroundingLedgerSummary;
+  n9QualityGate?: PcvN9StageProjectionEvidence;
+  n9RecordRepair?: PcvN9StageProjectionEvidence;
   n11?: PcvN11ProduceEvidence;
   n12?: PcvN12ConsumerPersistenceEvidence;
 }
@@ -469,6 +485,56 @@ export function buildPcvAnalyzeGroundingLedgerSummary({
     summaryOnlyCount,
     toolSchemasVisibleCount,
     verificationOnlyCount,
+  };
+}
+
+// report / persisted report 不能直接依赖 raw process events；这里把已执行的 N9
+// 子阶段投成稳定的 pcvScorecard evidence，避免 canonical stage identity 只停在 events。
+export function buildPcvN9StageProjectionEvidence({
+  dimId,
+  label,
+  runResult,
+  stage,
+}: {
+  dimId: string;
+  label?: string | null;
+  runResult: AgentResultLike;
+  stage: PcvN9StageProjectionKey;
+}): PcvN9StageProjectionEvidence | null {
+  const phase = runResult.phases?.[stage];
+  if (!isRecord(phase)) {
+    return null;
+  }
+
+  const identity = buildBootstrapPcvStageNodeMap()[stage];
+  const pass = typeof phase.pass === 'boolean' ? phase.pass : null;
+  const timedOut = phase.timedOut === true;
+  const action =
+    stringValue(phase.action) ||
+    stringValue(phase.status) ||
+    (pass === true ? 'pass' : pass === false ? 'fail' : null);
+  const missingLinkReasons = timedOut ? [`${stage}_timed_out`] : [];
+
+  return {
+    action,
+    chainNodeId: identity.chainNodeId,
+    contract: PCV_COLD_START_NODE_LOCAL_CONTRACT,
+    contractVersion: PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION,
+    dimensionId: dimId,
+    evidenceKind: 'n9-stage-projection',
+    missingLinkReasons,
+    nodeId: identity.pcvNodeId,
+    pass,
+    phasePresent: true,
+    sourceRefs: [
+      'lib/workflows/capabilities/execution/internal-agent/BootstrapPcvNodeLocalEvidence.ts',
+      'lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.ts',
+      'node_modules/@alembic/agent/src/agent/strategies/PipelineStrategy.ts',
+    ],
+    stageId: stage,
+    status: missingLinkReasons.length > 0 ? 'partial-evidence' : 'linked',
+    summary: `${label || dimId} ${stage} stage was observed and projected to report-facing PCV scorecard evidence.`,
+    timedOut,
   };
 }
 

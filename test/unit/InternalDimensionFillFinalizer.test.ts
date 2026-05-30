@@ -226,6 +226,40 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
             toolSchemasVisibleCount: 2,
             verificationOnlyCount: 0,
           },
+          n9QualityGate: {
+            action: 'pass',
+            chainNodeId: 'pcvm:cold-start:n9:quality',
+            contract: 'PCVColdStartNodeLocalBaseline',
+            contractVersion: 1,
+            dimensionId: 'api',
+            evidenceKind: 'n9-stage-projection',
+            missingLinkReasons: [],
+            nodeId: 'pcvm:n9:quality_gate',
+            pass: true,
+            phasePresent: true,
+            sourceRefs: [],
+            stageId: 'quality_gate',
+            status: 'linked',
+            summary: 'api quality gate stage projected',
+            timedOut: false,
+          },
+          n9RecordRepair: {
+            action: 'record_repair_incomplete',
+            chainNodeId: 'pcvm:cold-start:n9:repair',
+            contract: 'PCVColdStartNodeLocalBaseline',
+            contractVersion: 1,
+            dimensionId: 'api',
+            evidenceKind: 'n9-stage-projection',
+            missingLinkReasons: [],
+            nodeId: 'pcvm:n9:record_repair',
+            pass: null,
+            phasePresent: true,
+            sourceRefs: [],
+            stageId: 'record_repair',
+            status: 'linked',
+            summary: 'api record repair stage projected',
+            timedOut: false,
+          },
           n11: {
             acceptedCount: 1,
             chainNodeId: 'pcvm:cold-start:n11',
@@ -283,6 +317,14 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
       contract: 'PCVColdStartNodeLocalBaseline',
       scope: 'alembic-cold-start-bootstrap-node-local',
       nodes: {
+        n9QualityGate: {
+          chainNodeIds: ['pcvm:cold-start:n9:quality'],
+          nodeIds: ['pcvm:n9:quality_gate'],
+        },
+        n9RecordRepair: {
+          chainNodeIds: ['pcvm:cold-start:n9:repair'],
+          nodeIds: ['pcvm:n9:record_repair'],
+        },
         n11: {
           chainNodeIds: ['pcvm:cold-start:n11'],
           nodeIds: ['pcvm:n11:produce'],
@@ -295,7 +337,7 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
           },
         },
       },
-      summary: { blockedNodes: 1, dimensionCount: 1, linkedNodes: 1, nodeCount: 2 },
+      summary: { blockedNodes: 1, dimensionCount: 1, linkedNodes: 3, nodeCount: 4 },
     });
     expect(report.pcvScorecard).toMatchObject({
       processMetrics: {
@@ -312,6 +354,8 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
       },
     });
     expect(JSON.stringify(report.pcvScorecard)).toContain('pcvm:n9:analyze');
+    expect(JSON.stringify(report.pcvScorecard)).toContain('pcvm:n9:quality_gate');
+    expect(JSON.stringify(report.pcvScorecard)).toContain('pcvm:n9:record_repair');
     expect(JSON.stringify(report.pcvScorecard)).toContain('pcvm:n11:produce');
     expect(JSON.stringify(report.pcvScorecard)).not.toContain('analyze-evidence-grounding-ledger');
     expect(JSON.stringify(report.pcvScorecard)).not.toContain('N11-produce');
@@ -322,14 +366,16 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
           invalidNoEvidenceCount: 1,
         },
         n8: { status: 'linked' },
+        n9QualityGate: { nodeId: 'pcvm:n9:quality_gate', status: 'linked' },
+        n9RecordRepair: { nodeId: 'pcvm:n9:record_repair', status: 'linked' },
         n11: { acceptedCount: 1, status: 'blocked-by-observability-gap' },
       },
     });
     expect(report.totals).toMatchObject({
       pcvNodeLocalBlockedNodes: 1,
       pcvNodeLocalEvidenceDimensions: 1,
-      pcvNodeLocalEvidenceNodes: 2,
-      pcvNodeLocalLinkedNodes: 1,
+      pcvNodeLocalEvidenceNodes: 4,
+      pcvNodeLocalLinkedNodes: 3,
       pcvAnalyzeGroundingBurns: 3,
       pcvAnalyzeGroundingInvalidNoEvidence: 1,
     });

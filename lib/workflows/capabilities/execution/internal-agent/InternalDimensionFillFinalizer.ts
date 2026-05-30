@@ -395,6 +395,16 @@ function normalizePcvNodeEvidenceSet(value: unknown): BootstrapPcvNodeEvidenceSe
       BootstrapPcvNodeEvidenceSet['groundingLedger']
     >;
   }
+  if (isRecord(value.n9QualityGate)) {
+    evidence.n9QualityGate = value.n9QualityGate as unknown as NonNullable<
+      BootstrapPcvNodeEvidenceSet['n9QualityGate']
+    >;
+  }
+  if (isRecord(value.n9RecordRepair)) {
+    evidence.n9RecordRepair = value.n9RecordRepair as unknown as NonNullable<
+      BootstrapPcvNodeEvidenceSet['n9RecordRepair']
+    >;
+  }
   if (isRecord(value.n11)) {
     evidence.n11 = value.n11 as unknown as NonNullable<BootstrapPcvNodeEvidenceSet['n11']>;
   }
@@ -410,7 +420,7 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
   let blockedNodes = 0;
   let nodeCount = 0;
 
-  for (const nodeKey of ['n8', 'n11', 'n12'] as const) {
+  for (const nodeKey of ['n8', 'n9QualityGate', 'n9RecordRepair', 'n11', 'n12'] as const) {
     const statuses: Record<string, number> = {};
     const missingLinkReasons = new Set<string>();
     const nodeIds = new Set<string>();
