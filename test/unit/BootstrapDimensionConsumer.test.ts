@@ -163,6 +163,25 @@ describe('bootstrap dimension consumer', () => {
           status: 'linked',
         },
       },
+      pcvNodeEvidenceEnvelope: {
+        contract: 'PcvNodeEvidenceEnvelope',
+        contractVersion: 1,
+        dimensionId: 'api',
+        evidenceScope: 'fixture',
+        source: 'bootstrap-dimension-consumer',
+        evidence: {
+          n11: {
+            acceptedCount: 1,
+            nodeId: 'pcvm:n11:produce',
+            status: 'not-applicable',
+          },
+          n12: {
+            findableCandidateTitles: ['Candidate'],
+            nodeId: 'N12-consumers-persistence',
+            status: 'linked',
+          },
+        },
+      },
     });
     expect(result).toBe(dimensionStats.api);
   });
@@ -275,6 +294,20 @@ describe('bootstrap dimension consumer', () => {
           status: 'linked',
         },
       },
+      pcvNodeEvidenceEnvelope: {
+        contract: 'PcvNodeEvidenceEnvelope',
+        contractVersion: 1,
+        dimensionId: 'api',
+        evidenceScope: 'fixture',
+        source: 'bootstrap-dimension-error',
+        evidence: {
+          n12: {
+            nodeId: 'N12-consumers-persistence',
+            persistedFailureReason: 'boom',
+            status: 'linked',
+          },
+        },
+      },
     });
     expect(emitDimensionComplete).toHaveBeenCalledWith('api', {
       type: 'error',
@@ -297,7 +330,10 @@ describe('bootstrap dimension consumer', () => {
       reply: 'producer reply',
       toolCalls: projection.runtimeToolCalls,
     };
-    const successfulSubmit = projection.runtimeToolCalls[0]!;
+    const successfulSubmit = projection.runtimeToolCalls[0];
+    if (!successfulSubmit) {
+      throw new Error('Expected projection fixture to include a submit tool call');
+    }
     (successfulSubmit.args as { params: Record<string, unknown> }).params.sourceRefs = [
       'src/a.ts',
       'src/missing.ts',

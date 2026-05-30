@@ -382,4 +382,65 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
       pcvAnalyzeGroundingInvalidNoEvidence: 1,
     });
   });
+
+  test('accepts PCV node evidence envelopes as the report-facing contract', () => {
+    const report = {
+      version: '2.7.0',
+      timestamp: '2026-05-30T00:00:00.000Z',
+      project: { name: 'Alembic', files: 1, lang: 'ts' },
+      duration: { totalMs: 100, totalSec: 0 },
+      dimensions: { api: {} },
+      totals: {},
+      checkpoints: { restored: [] },
+      incremental: null,
+      semanticMemory: null,
+      session: { id: 'session-1' },
+    } as WorkflowReport;
+
+    const changed = augmentWorkflowReportWithPcvNodeLocalBaseline(report, {
+      api: {
+        candidateCount: 0,
+        durationMs: 10,
+        pcvNodeEvidenceEnvelope: {
+          contract: 'PcvNodeEvidenceEnvelope',
+          contractVersion: 1,
+          dimensionId: 'api',
+          evidenceScope: 'unit',
+          source: 'bootstrap-dimension-consumer',
+          evidence: {
+            n12: {
+              acceptedCandidateTitles: [],
+              chainNodeId: 'pcvm:cold-start:n12',
+              contract: 'PCVColdStartNodeLocalBaseline',
+              contractVersion: 1,
+              dimensionId: 'api',
+              evidenceKind: 'consumer-persistence',
+              failureDetailsPersisted: true,
+              findableCandidateTitles: [],
+              missingLinkReasons: [],
+              nodeId: 'N12-consumers-persistence',
+              persistedFailureReason: null,
+              sessionStoreSnapshotAvailable: true,
+              sourceRefs: [],
+              status: 'linked',
+              summary: 'n12 linked',
+            },
+          },
+        },
+      },
+    });
+
+    expect(changed).toBe(true);
+    expect(report.pcvScorecard).toMatchObject({
+      summary: { blockedNodes: 0, dimensionCount: 1, linkedNodes: 1, nodeCount: 1 },
+    });
+    expect(report.dimensions.api).toMatchObject({
+      pcvNodeEvidence: {
+        n12: {
+          nodeId: 'N12-consumers-persistence',
+          status: 'linked',
+        },
+      },
+    });
+  });
 });

@@ -37,6 +37,7 @@
 
 import type { WorkflowMcpContext } from '@alembic/core/host-agent-workflows';
 import {
+  buildColdStartSelectionSummary,
   buildColdStartWorkflowPlan,
   buildInternalColdStartReport,
   buildInternalColdStartTargetFileMap,
@@ -147,7 +148,7 @@ export async function runInternalColdStartWorkflow(
     report: phaseResults.report,
   });
 
-  const report = buildInternalColdStartReport({
+  const report: Record<string, unknown> = buildInternalColdStartReport({
     snapshot,
     maxFiles: intent.projectAnalysis.maxFiles,
     skipGuard: intent.projectAnalysis.skipGuard,
@@ -167,10 +168,20 @@ export async function runInternalColdStartWorkflow(
     >[0],
     'bootstrap'
   ) as DimensionDef[];
+  const selectionSummary = buildColdStartSelectionSummary({
+    snapshot,
+    intent,
+    selectedDimensions: dimensions,
+  });
+  report.dimensionSelection = selectionSummary;
 
   // 如果调用方指定了维度子集，只保留匹配的维度
   if (intent.dimensionIds?.length) {
-    ctx.logger.info(`[Bootstrap] Dimension filter: ${dimensions.map((d) => d.id).join(', ')}`);
+    ctx.logger.info(
+      `[Bootstrap] Dimension filter: selected=${dimensions.map((d) => d.id).join(', ') || 'none'}, ` +
+        `unknown=${selectionSummary.unknownRequestedDimensionIds.join(', ') || 'none'}, ` +
+        `duplicateCollapsed=${selectionSummary.duplicateCollapsedCount}`
+    );
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -255,6 +266,7 @@ export async function runInternalColdStartWorkflow(
     targetFileMap,
     dimensions,
     cachedSessionId,
+    selectionSummary,
     taskCount: taskDefs.length,
     bootstrapSession,
     responseTimeMs: Date.now() - t0,

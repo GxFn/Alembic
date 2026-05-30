@@ -20,6 +20,8 @@ import type {
 
 export const PCV_COLD_START_NODE_LOCAL_CONTRACT = 'PCVColdStartNodeLocalBaseline';
 export const PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION = 1;
+export const PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT = 'PcvNodeEvidenceEnvelope';
+export const PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT_VERSION = 1;
 export const PCV_N8_NODE_ID = 'N8-stage-factory-tool-policy';
 export const PCV_ANALYZE_GROUNDING_NODE_ID = 'analyze-evidence-grounding-ledger';
 export const PCV_N11_NODE_ID = 'N11-produce';
@@ -201,6 +203,24 @@ export interface BootstrapPcvNodeEvidenceSet {
   n9RecordRepair?: PcvN9StageProjectionEvidence;
   n11?: PcvN11ProduceEvidence;
   n12?: PcvN12ConsumerPersistenceEvidence;
+}
+
+export interface PcvNodeEvidenceEnvelope {
+  contract: typeof PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT;
+  contractVersion: typeof PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT_VERSION;
+  dimensionId: string;
+  evidence: BootstrapPcvNodeEvidenceSet;
+  evidenceScope:
+    | 'fixture'
+    | 'unit'
+    | 'targeted-integration'
+    | 'live-ai-local'
+    | 'runtime-dashboard'
+    | 'delivery';
+  source:
+    | 'bootstrap-dimension-consumer'
+    | 'bootstrap-dimension-error'
+    | 'bootstrap-session-builder';
 }
 
 const BOOTSTRAP_STAGE_NODE_MAP: PcvBootstrapStageNodeMap = {
@@ -704,6 +724,27 @@ export function mergeBootstrapPcvNodeEvidence(
     ...(isRecord(existing) ? existing : {}),
     ...next,
   } as BootstrapPcvNodeEvidenceSet;
+}
+
+export function buildPcvNodeEvidenceEnvelope({
+  dimId,
+  evidence,
+  evidenceScope = 'fixture',
+  source,
+}: {
+  dimId: string;
+  evidence: BootstrapPcvNodeEvidenceSet;
+  evidenceScope?: PcvNodeEvidenceEnvelope['evidenceScope'];
+  source: PcvNodeEvidenceEnvelope['source'];
+}): PcvNodeEvidenceEnvelope {
+  return {
+    contract: PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT,
+    contractVersion: PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT_VERSION,
+    dimensionId: dimId,
+    evidence,
+    evidenceScope,
+    source,
+  };
 }
 
 export function resolveProducerToolCalls(

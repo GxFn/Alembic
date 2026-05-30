@@ -47,7 +47,9 @@ import {
   buildPcvN11ProduceEvidence,
   buildPcvN12ConsumerPersistenceEvidence,
   buildPcvN12ErrorEvidence,
+  buildPcvNodeEvidenceEnvelope,
   mergeBootstrapPcvNodeEvidence,
+  type PcvNodeEvidenceEnvelope,
   type PcvSourceRefValidationContext,
   successfulProducerSubmitCalls,
 } from './BootstrapPcvNodeLocalEvidence.js';
@@ -73,6 +75,7 @@ export interface DimensionStat {
   restoredFromIncremental?: boolean;
   analysisText?: string;
   error?: string;
+  pcvNodeEvidenceEnvelope?: PcvNodeEvidenceEnvelope;
   [key: string]: unknown;
 }
 
@@ -405,6 +408,11 @@ export async function consumeBootstrapDimensionResult({
       sessionStore,
     }),
   });
+  const pcvNodeEvidenceEnvelope = buildPcvNodeEvidenceEnvelope({
+    dimId,
+    evidence: pcvNodeEvidence,
+    source: 'bootstrap-dimension-consumer',
+  });
   const dimResult = {
     status: runIssue?.status || 'v3-pipeline-complete',
     candidateCount: effectiveCandidateCount,
@@ -419,6 +427,7 @@ export async function consumeBootstrapDimensionResult({
     error: runIssue?.reason,
     recoveredProducerTimeout,
     pcvNodeEvidence,
+    pcvNodeEvidenceEnvelope,
     stages: summarizeDimensionStages(runResult),
     analysisText: analysisReport.analysisText,
     referencedFilesList: analysisReport.referencedFiles || [],
@@ -530,14 +539,20 @@ export function consumeBootstrapDimensionError({
     status: issue.status,
     reason: errMsg,
   } as Parameters<BootstrapEventEmitter['emitDimensionComplete']>[1]);
+  const pcvNodeEvidence = mergeBootstrapPcvNodeEvidence(dimensionStats[dimId]?.pcvNodeEvidence, {
+    n12: buildPcvN12ErrorEvidence({ dimId, error: errMsg }),
+  });
   const dimResult = {
     status: issue.status,
     candidateCount: 0,
     durationMs: 0,
     error: errMsg,
     diagnostics: issue.diagnostics || null,
-    pcvNodeEvidence: mergeBootstrapPcvNodeEvidence(dimensionStats[dimId]?.pcvNodeEvidence, {
-      n12: buildPcvN12ErrorEvidence({ dimId, error: errMsg }),
+    pcvNodeEvidence,
+    pcvNodeEvidenceEnvelope: buildPcvNodeEvidenceEnvelope({
+      dimId,
+      evidence: pcvNodeEvidence,
+      source: 'bootstrap-dimension-error',
     }),
   };
   dimensionStats[dimId] = dimResult;

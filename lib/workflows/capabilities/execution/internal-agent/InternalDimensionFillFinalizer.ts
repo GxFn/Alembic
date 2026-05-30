@@ -32,6 +32,8 @@ import {
   type BootstrapPcvNodeEvidenceSet,
   PCV_COLD_START_NODE_LOCAL_CONTRACT,
   PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION,
+  PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT,
+  PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT_VERSION,
 } from './BootstrapPcvNodeLocalEvidence.js';
 
 type InternalDimensionFillRuntime = Awaited<ReturnType<typeof initializeBootstrapRuntime>>;
@@ -319,7 +321,14 @@ export function augmentWorkflowReportWithPcvNodeLocalBaseline(
 ): boolean {
   const dimensionEvidence = Object.fromEntries(
     Object.entries(dimensionStats)
-      .map(([dimId, stat]) => [dimId, normalizePcvNodeEvidenceSet(stat.pcvNodeEvidence)] as const)
+      .map(
+        ([dimId, stat]) =>
+          [
+            dimId,
+            normalizePcvNodeEvidenceEnvelope(stat.pcvNodeEvidenceEnvelope) ??
+              normalizePcvNodeEvidenceSet(stat.pcvNodeEvidence),
+          ] as const
+      )
       .filter(([, evidence]) => Boolean(evidence))
   ) as Record<string, BootstrapPcvNodeEvidenceSet>;
   const dimensionIds = Object.keys(dimensionEvidence);
@@ -380,6 +389,19 @@ export function augmentWorkflowReportWithPcvNodeLocalBaseline(
   }
 
   return true;
+}
+
+function normalizePcvNodeEvidenceEnvelope(value: unknown): BootstrapPcvNodeEvidenceSet | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (
+    value.contract !== PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT ||
+    value.contractVersion !== PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT_VERSION
+  ) {
+    return null;
+  }
+  return normalizePcvNodeEvidenceSet(value.evidence);
 }
 
 function normalizePcvNodeEvidenceSet(value: unknown): BootstrapPcvNodeEvidenceSet | null {
