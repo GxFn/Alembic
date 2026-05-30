@@ -478,9 +478,22 @@ describe('BootstrapProcessEvents', () => {
           invalidSourceRefRatio: 0.3333,
           invalidSourceRefs: [
             {
+              attributions: [
+                {
+                  candidateTitle: 'Candidate',
+                  contentField: 'sourceRefs[]',
+                  fieldPath: 'args.params.sourceRefs[1]',
+                  tool: 'knowledge',
+                  toolCallIndex: 0,
+                },
+              ],
+              candidateTitle: 'Candidate',
+              contentField: 'sourceRefs[]',
+              fieldPath: 'args.params.sourceRefs[1]',
               normalizedPath: 'Sources/Missing/OldView.swift',
               reason: 'file-not-found',
               ref: 'Sources/Missing/OldView.swift',
+              toolCallIndex: 0,
             },
           ],
           missingLinkReasons: ['producer_source_refs_invalid'],

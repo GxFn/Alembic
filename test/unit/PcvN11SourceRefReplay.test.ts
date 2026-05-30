@@ -243,4 +243,104 @@ describe('PCV N11 sourceRef replay', () => {
       'docs/MissingThing.md': 'file-not-found',
     });
   });
+
+  test('attributes report-fallback invalid refs to accepted candidate content fields', () => {
+    const projection: BootstrapDimensionProjection = {
+      analysisReport: { analysisText: '', findings: [], referencedFiles: [] },
+      analysisText: '',
+      artifact: {},
+      combinedTokenUsage: { input: 0, output: 0 },
+      efficiency: null,
+      producerResult: { candidateCount: 2, rejectedCount: 0, toolCalls: [] },
+      produceResult: {
+        toolCalls: [
+          {
+            args: {
+              params: {
+                action: 'submit',
+                content: {
+                  markdown: 'Uses `RouteMiddleware.swift` near `BiliDili/AppCoordinator.swift`.',
+                },
+                id: 'candidate-route',
+                sourceRefs: ['BiliDili/AppCoordinator.swift'],
+                title: 'Route Middleware Pattern',
+              },
+            },
+            result: {
+              id: 'candidate-route',
+              status: 'created',
+              title: 'Route Middleware Pattern',
+            },
+            tool: 'knowledge',
+          },
+          {
+            args: {
+              params: {
+                action: 'submit',
+                sourceRefs: ['AccountModule.swift'],
+                title: 'Account Module Pattern',
+              },
+            },
+            result: {
+              status: 'created',
+              title: 'Account Module Pattern',
+            },
+            tool: 'knowledge',
+          },
+        ],
+      },
+      rejectedCount: 0,
+      runtimeToolCalls: [],
+      submitCalls: [],
+      successCount: 2,
+    };
+
+    const evidence = buildPcvN11ProduceEvidence({
+      dimId: 'design-patterns',
+      needsCandidates: true,
+      projection,
+      sourceRefValidation: {
+        allFiles: [{ relativePath: 'BiliDili/AppCoordinator.swift' }],
+        projectRoot: '/fixture/BiliDili',
+      },
+    });
+
+    expect(evidence).toMatchObject({
+      attributedInvalidSourceRefCount: 2,
+      invalidSourceRefCount: 2,
+      sourceRefValidityStatus: 'invalid',
+      unattributedInvalidSourceRefCount: 0,
+    });
+
+    const routeInvalid = evidence.invalidSourceRefs.find(
+      (entry) => entry.ref === 'RouteMiddleware.swift'
+    );
+    expect(routeInvalid).toMatchObject({
+      candidateId: 'candidate-route',
+      candidateTitle: 'Route Middleware Pattern',
+      contentField: 'content.markdown',
+      fieldPath: 'args.params.content.markdown',
+      reason: 'entity-not-file',
+      toolCallIndex: 0,
+    });
+    expect(routeInvalid?.attributions?.[0]).toMatchObject({
+      candidateId: 'candidate-route',
+      candidateTitle: 'Route Middleware Pattern',
+      contentField: 'content.markdown',
+      fieldPath: 'args.params.content.markdown',
+      tool: 'knowledge',
+      toolCallIndex: 0,
+    });
+
+    const accountInvalid = evidence.invalidSourceRefs.find(
+      (entry) => entry.ref === 'AccountModule.swift'
+    );
+    expect(accountInvalid).toMatchObject({
+      candidateTitle: 'Account Module Pattern',
+      contentField: 'sourceRefs[]',
+      fieldPath: 'args.params.sourceRefs[0]',
+      reason: 'entity-not-file',
+      toolCallIndex: 1,
+    });
+  });
 });

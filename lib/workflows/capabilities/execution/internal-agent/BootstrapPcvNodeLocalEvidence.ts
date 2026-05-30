@@ -81,14 +81,31 @@ export type PcvN11SourceRefReason =
 
 export type PcvN11InvalidSourceRefReason = PcvN11SourceRefReason;
 
+export interface PcvN11SourceRefAttribution {
+  action: string | null;
+  candidateId: string | null;
+  candidateTitle: string | null;
+  contentField: string;
+  fieldPath: string;
+  status: string | null;
+  tool: string;
+  toolCallIndex: number | null;
+}
+
 export interface PcvN11InvalidSourceRef {
+  attributions?: PcvN11SourceRefAttribution[];
   candidates?: string[];
+  candidateId?: string | null;
+  candidateTitle?: string | null;
+  contentField?: string | null;
+  fieldPath?: string | null;
   normalizedPath: string | null;
   rawReason?: string | null;
   reason: PcvN11InvalidSourceRefReason;
   ref: string;
   source?: 'agent' | 'report-fallback';
   suggestedRef?: string | null;
+  toolCallIndex?: number | null;
 }
 
 export interface PcvN11RepairedSourceRef {
@@ -108,6 +125,7 @@ export interface PcvN11WarningSourceRef extends PcvN11InvalidSourceRef {
 }
 
 export interface PcvN11SourceRefValiditySummary {
+  attributedInvalidSourceRefCount: number;
   checked: boolean;
   invalidSourceRefCount: number;
   invalidSourceRefRatio: number;
@@ -119,6 +137,7 @@ export interface PcvN11SourceRefValiditySummary {
   rejectedSourceRefs: PcvN11RejectedSourceRef[];
   status: PcvN11SourceRefValidityStatus;
   totalSourceRefCount: number;
+  unattributedInvalidSourceRefCount: number;
   uncheckedReason: string | null;
   validSourceRefCount: number;
   validationMode: string | null;
@@ -207,6 +226,7 @@ export interface PcvN9StageProjectionEvidence extends PcvNodeLocalEvidenceBase {
 
 export interface PcvN11ProduceEvidence extends PcvNodeLocalEvidenceBase {
   acceptedCount: number;
+  attributedInvalidSourceRefCount: number;
   evidenceKind: 'producer-cut';
   gapLimit: number | null;
   invalidSourceRefCount: number;
@@ -229,6 +249,7 @@ export interface PcvN11ProduceEvidence extends PcvNodeLocalEvidenceBase {
   submittedCount: number;
   terminalToolCallCount: number;
   totalSourceRefCount: number;
+  unattributedInvalidSourceRefCount: number;
   validSourceRefCount: number;
   warningSourceRefCount: number;
   warningSourceRefs: PcvN11WarningSourceRef[];
@@ -401,10 +422,12 @@ export function buildPcvN11ProduceEvidence({
   const producerSubmitCalls = producerToolCalls.filter(isKnowledgeSubmitToolCall);
   const acceptedCount = producerSubmitCalls.filter(isSuccessfulToolCall).length;
   const rejectedCount = producerSubmitCalls.length - acceptedCount;
-  const sourceRefs = collectSourceRefsFromProjection(projection);
+  const sourceRefCollection = collectSourceRefsFromProjection(projection);
+  const { attributionByRef, sourceRefs } = sourceRefCollection;
   const agentSourceRefValidation = collectAgentSourceRefValidation(producerSubmitCalls);
   const sourceRefValidity = buildSourceRefValiditySummary({
     agentValidation: agentSourceRefValidation,
+    attributionByRef,
     needsCandidates,
     sourceRefs,
     validation: sourceRefValidation,
@@ -437,6 +460,7 @@ export function buildPcvN11ProduceEvidence({
       : 'linked';
   return {
     acceptedCount,
+    attributedInvalidSourceRefCount: sourceRefValidity.attributedInvalidSourceRefCount,
     chainNodeId: produceNodeIdentity.chainNodeId,
     contract: PCV_COLD_START_NODE_LOCAL_CONTRACT,
     contractVersion: PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION,
@@ -473,6 +497,7 @@ export function buildPcvN11ProduceEvidence({
       : 'Producer node is not applicable for skill-only bootstrap dimensions.',
     terminalToolCallCount,
     totalSourceRefCount: sourceRefValidity.totalSourceRefCount,
+    unattributedInvalidSourceRefCount: sourceRefValidity.unattributedInvalidSourceRefCount,
     validSourceRefCount: sourceRefValidity.validSourceRefCount,
     warningSourceRefCount: sourceRefValidity.warningSourceRefCount,
     warningSourceRefs: sourceRefValidity.warningSourceRefs,
@@ -991,68 +1016,157 @@ function resolveProducerGapLimit(plan: BootstrapDimensionPlan): number | null {
     : null;
 }
 
-function collectSourceRefsFromProjection(projection: BootstrapDimensionProjection): string[] {
+interface SourceRefCollection {
+  attributionByRef: Map<string, PcvN11SourceRefAttribution[]>;
+  sourceRefs: string[];
+}
+
+interface SourceRefOccurrence {
+  fieldPath: string;
+  ref: string;
+}
+
+interface ToolCallAttributionContext {
+  action: string | null;
+  candidateId: string | null;
+  candidateTitle: string | null;
+  status: string | null;
+  tool: string;
+  toolCallIndex: number;
+}
+
+function collectSourceRefsFromProjection(
+  projection: BootstrapDimensionProjection
+): SourceRefCollection {
   const refs = new Set<string>();
+  const attributionByRef = new Map<string, PcvN11SourceRefAttribution[]>();
   for (const ref of projection.analysisReport?.referencedFiles || []) {
     refs.add(ref);
   }
-  for (const call of resolveProducerToolCalls(projection)) {
-    for (const ref of sourceRefsFromValue([call.args, call.params, call.result])) {
-      refs.add(ref);
+  for (const [toolCallIndex, call] of resolveProducerToolCalls(projection).entries()) {
+    const context = buildToolCallAttributionContext(call, toolCallIndex);
+    for (const root of [
+      { fieldPath: 'args', value: call.args },
+      { fieldPath: 'params', value: call.params },
+      { fieldPath: 'result', value: call.result },
+    ]) {
+      for (const occurrence of sourceRefOccurrencesFromValue(root.value, root.fieldPath)) {
+        refs.add(occurrence.ref);
+        addSourceRefAttribution(attributionByRef, occurrence, context);
+      }
     }
   }
-  return [...refs].slice(0, 50);
+  const sourceRefs = [...refs].slice(0, 50);
+  const includedRefs = new Set(sourceRefs);
+  for (const ref of [...attributionByRef.keys()]) {
+    if (!includedRefs.has(ref)) {
+      attributionByRef.delete(ref);
+    }
+  }
+  return { attributionByRef, sourceRefs };
 }
 
-function sourceRefsFromValue(value: unknown, depth = 0): string[] {
+function sourceRefOccurrencesFromValue(
+  value: unknown,
+  fieldPath: string,
+  depth = 0
+): SourceRefOccurrence[] {
   if (depth > 5) {
     return [];
   }
   if (Array.isArray(value)) {
-    return value.flatMap((item) => sourceRefsFromValue(item, depth + 1));
+    return value.flatMap((item, index) =>
+      sourceRefOccurrencesFromValue(item, `${fieldPath}[${index}]`, depth + 1)
+    );
   }
   if (!isRecord(value)) {
-    return typeof value === 'string' && looksLikeSourceRef(value) ? [value] : [];
+    if (typeof value !== 'string') {
+      return [];
+    }
+    if (looksLikeSourceRef(value)) {
+      return [{ fieldPath, ref: value }];
+    }
+    if (shouldExtractEmbeddedSourceRefs(fieldPath)) {
+      return extractEmbeddedSourceRefs(value).map((ref) => ({ fieldPath, ref }));
+    }
+    return [];
   }
-  const refs: string[] = [];
+  const occurrences: SourceRefOccurrence[] = [];
   for (const key of ['sourceRefs', 'referencedFiles', 'filePaths']) {
     const entry = value[key];
     if (Array.isArray(entry)) {
-      refs.push(...entry.filter((item): item is string => typeof item === 'string'));
+      occurrences.push(
+        ...entry.flatMap((item, index) =>
+          typeof item === 'string'
+            ? [{ fieldPath: `${fieldPath}.${key}[${index}]`, ref: item }]
+            : []
+        )
+      );
     }
   }
   for (const key of ['sourceRef', 'referencedFile', 'filePath']) {
     const entry = value[key];
     if (typeof entry === 'string') {
-      refs.push(entry);
+      occurrences.push({ fieldPath: `${fieldPath}.${key}`, ref: entry });
     }
   }
   const nestedParams = value.params;
   if (isRecord(nestedParams)) {
-    refs.push(...sourceRefsFromValue(nestedParams, depth + 1));
+    occurrences.push(
+      ...sourceRefOccurrencesFromValue(nestedParams, `${fieldPath}.params`, depth + 1)
+    );
   }
   const sourceRefValidation = value.sourceRefValidation;
   if (isRecord(sourceRefValidation)) {
-    refs.push(...sourceRefsFromAgentValidationRecord(sourceRefValidation));
+    occurrences.push(
+      ...sourceRefOccurrencesFromAgentValidationRecord(
+        sourceRefValidation,
+        `${fieldPath}.sourceRefValidation`
+      )
+    );
   }
-  for (const key of ['data', 'item', 'items', 'candidate', 'candidates', 'result']) {
-    refs.push(...sourceRefsFromValue(value[key], depth + 1));
+  for (const key of [
+    'data',
+    'item',
+    'items',
+    'candidate',
+    'candidates',
+    'result',
+    'content',
+    'reasoning',
+  ]) {
+    occurrences.push(
+      ...sourceRefOccurrencesFromValue(value[key], `${fieldPath}.${key}`, depth + 1)
+    );
   }
-  return refs.filter(looksLikeSourceRef);
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === 'string' && shouldExtractEmbeddedSourceRefs(`${fieldPath}.${key}`)) {
+      occurrences.push(
+        ...extractEmbeddedSourceRefs(entry).map((ref) => ({
+          fieldPath: `${fieldPath}.${key}`,
+          ref,
+        }))
+      );
+    }
+  }
+  return occurrences.filter((occurrence) => looksLikeSourceRef(occurrence.ref));
 }
 
-function sourceRefsFromAgentValidationRecord(validation: Record<string, unknown>): string[] {
-  const refs: string[] = [];
+function sourceRefOccurrencesFromAgentValidationRecord(
+  validation: Record<string, unknown>,
+  fieldPath: string
+): SourceRefOccurrence[] {
+  const occurrences: SourceRefOccurrence[] = [];
   for (const repair of recordArray(validation.repairedSourceRefs)) {
     for (const key of ['from', 'to', 'ref', 'sourceRef', 'normalizedRef', 'normalizedPath']) {
       const value = repair[key];
       if (typeof value === 'string') {
-        refs.push(value);
+        occurrences.push({ fieldPath: `${fieldPath}.repairedSourceRefs.${key}`, ref: value });
       }
     }
   }
   for (const key of ['rejectedSourceRefs', 'invalidSourceRefs', 'warnings']) {
-    for (const invalid of recordArray(validation[key])) {
+    for (const [index, invalid] of recordArray(validation[key]).entries()) {
       for (const sourceKey of [
         'ref',
         'sourceRef',
@@ -1063,12 +1177,87 @@ function sourceRefsFromAgentValidationRecord(validation: Record<string, unknown>
       ]) {
         const value = invalid[sourceKey];
         if (typeof value === 'string') {
-          refs.push(value);
+          occurrences.push({
+            fieldPath: `${fieldPath}.${key}[${index}].${sourceKey}`,
+            ref: value,
+          });
         }
       }
     }
   }
-  return refs.filter(looksLikeSourceRef);
+  return occurrences.filter((occurrence) => looksLikeSourceRef(occurrence.ref));
+}
+
+function buildToolCallAttributionContext(
+  call: ToolCallRecord,
+  toolCallIndex: number
+): ToolCallAttributionContext {
+  return {
+    action: actionName(call),
+    candidateId: candidateId(call),
+    candidateTitle: candidateTitle(call),
+    status: resultStatus(call),
+    tool: toolName(call),
+    toolCallIndex,
+  };
+}
+
+function addSourceRefAttribution(
+  attributionByRef: Map<string, PcvN11SourceRefAttribution[]>,
+  occurrence: SourceRefOccurrence,
+  context: ToolCallAttributionContext
+): void {
+  const attributions = attributionByRef.get(occurrence.ref) || [];
+  const attribution: PcvN11SourceRefAttribution = {
+    action: context.action,
+    candidateId: context.candidateId,
+    candidateTitle: context.candidateTitle,
+    contentField: contentFieldFromPath(occurrence.fieldPath),
+    fieldPath: occurrence.fieldPath,
+    status: context.status,
+    tool: context.tool,
+    toolCallIndex: context.toolCallIndex,
+  };
+  if (
+    attributions.some(
+      (entry) =>
+        entry.fieldPath === attribution.fieldPath &&
+        entry.toolCallIndex === attribution.toolCallIndex
+    )
+  ) {
+    return;
+  }
+  attributionByRef.set(occurrence.ref, [...attributions, attribution]);
+}
+
+function shouldExtractEmbeddedSourceRefs(fieldPath: string): boolean {
+  const normalized = fieldPath.toLowerCase();
+  return (
+    normalized.includes('.content') ||
+    normalized.endsWith('.markdown') ||
+    normalized.endsWith('.summary') ||
+    normalized.endsWith('.description') ||
+    normalized.includes('.reasoning') ||
+    normalized.includes('.sources') ||
+    normalized.includes('.evidence')
+  );
+}
+
+function extractEmbeddedSourceRefs(value: string): string[] {
+  const refs = new Set<string>();
+  for (const match of value.matchAll(/`([^`\s]+\.[\w]+(?::\d+)?(?::\d+)?)`/g)) {
+    refs.add(match[1]);
+  }
+  for (const match of value.matchAll(
+    /\b(?:file:\/\/)?[\w/.-]+\.[A-Za-z0-9]+(?::\d+)?(?::\d+)?\b/g
+  )) {
+    refs.add(match[0]);
+  }
+  return [...refs].filter(looksLikeSourceRef);
+}
+
+function contentFieldFromPath(fieldPath: string): string {
+  return fieldPath.replace(/^(args|params|result)(\.params)?\./, '').replace(/\[\d+\]/g, '[]');
 }
 
 function looksLikeSourceRef(value: string): boolean {
@@ -1329,11 +1518,13 @@ function recordArray(value: unknown): Record<string, unknown>[] {
 
 function buildSourceRefValiditySummary({
   agentValidation,
+  attributionByRef,
   needsCandidates,
   sourceRefs,
   validation,
 }: {
   agentValidation?: AgentSourceRefValidationCarry;
+  attributionByRef?: Map<string, PcvN11SourceRefAttribution[]>;
   needsCandidates: boolean;
   sourceRefs: string[];
   validation?: PcvSourceRefValidationContext | null;
@@ -1365,7 +1556,7 @@ function buildSourceRefValiditySummary({
   const agentInvalidRefs = dedupeInvalidSourceRefs([
     ...(agentValidation?.rejectedSourceRefs || []),
     ...(agentValidation?.warningSourceRefs || []),
-  ]);
+  ]).map((invalid) => attachSourceRefAttributions(invalid, attributionByRef));
   const index = buildSourceRefValidationIndex(validation);
   if (!index) {
     if (agentValidation?.validationMode || agentInvalidRefs.length > 0) {
@@ -1402,6 +1593,7 @@ function buildSourceRefValiditySummary({
     const result = validateSourceRef(ref, index);
     if (!result.valid) {
       invalidRefs.push({
+        ...sourceRefAttributionFields(ref, attributionByRef),
         candidates: result.candidates,
         normalizedPath: result.normalizedPath,
         rawReason: result.rawReason,
@@ -1447,6 +1639,9 @@ function sourceRefValiditySummary({
 }): PcvN11SourceRefValiditySummary {
   const total = sourceRefs.length;
   const invalidCount = invalidRefs.length;
+  const attributedInvalidSourceRefCount = invalidRefs.filter(
+    (invalid) => (invalid.attributions || []).length > 0
+  ).length;
   const invalidSourceRefRatio = total > 0 ? Number((invalidCount / total).toFixed(4)) : 0;
   const reasonCounts = mergeSourceRefReasonCounts(agentValidation, invalidRefs);
   const limit =
@@ -1454,6 +1649,7 @@ function sourceRefValiditySummary({
       ? Math.max(0, Math.floor(maxInvalidRefs))
       : MAX_INVALID_SOURCE_REFS;
   return {
+    attributedInvalidSourceRefCount,
     checked,
     invalidSourceRefCount: invalidCount,
     invalidSourceRefRatio,
@@ -1465,6 +1661,7 @@ function sourceRefValiditySummary({
     rejectedSourceRefs: agentValidation?.rejectedSourceRefs || [],
     status,
     totalSourceRefCount: total,
+    unattributedInvalidSourceRefCount: Math.max(0, invalidCount - attributedInvalidSourceRefCount),
     uncheckedReason,
     validSourceRefCount: validCount,
     validationMode: agentValidation?.validationMode || (checked ? 'report-fallback' : null),
@@ -1498,9 +1695,48 @@ function dedupeInvalidSourceRefs(invalidRefs: PcvN11InvalidSourceRef[]): PcvN11I
     const existing = refs.get(key);
     if (!existing || existing.source !== 'agent') {
       refs.set(key, invalid);
+      continue;
+    }
+    if ((invalid.attributions || []).length > 0 && (existing.attributions || []).length === 0) {
+      refs.set(key, {
+        ...existing,
+        ...sourceRefAttributionFields(
+          invalid.ref,
+          new Map([[invalid.ref, invalid.attributions || []]])
+        ),
+      });
     }
   }
   return [...refs.values()];
+}
+
+function attachSourceRefAttributions(
+  invalid: PcvN11InvalidSourceRef,
+  attributionByRef?: Map<string, PcvN11SourceRefAttribution[]>
+): PcvN11InvalidSourceRef {
+  return {
+    ...invalid,
+    ...sourceRefAttributionFields(invalid.ref, attributionByRef),
+  };
+}
+
+function sourceRefAttributionFields(
+  ref: string,
+  attributionByRef?: Map<string, PcvN11SourceRefAttribution[]>
+): Pick<
+  PcvN11InvalidSourceRef,
+  'attributions' | 'candidateId' | 'candidateTitle' | 'contentField' | 'fieldPath' | 'toolCallIndex'
+> {
+  const attributions = attributionByRef?.get(ref) || [];
+  const primary = attributions[0] || null;
+  return {
+    attributions,
+    candidateId: primary?.candidateId ?? null,
+    candidateTitle: primary?.candidateTitle ?? null,
+    contentField: primary?.contentField ?? null,
+    fieldPath: primary?.fieldPath ?? null,
+    toolCallIndex: primary?.toolCallIndex ?? null,
+  };
 }
 
 function countValidSourceRefs(sourceRefs: string[], invalidRefs: PcvN11InvalidSourceRef[]): number {
@@ -1877,6 +2113,22 @@ function candidateTitle(call: ToolCallRecord): string | null {
   const nested = isRecord(args.params) ? args.params : args;
   const result = isRecord(call.result) ? call.result : {};
   return stringValue(nested.title) || stringValue(result.title);
+}
+
+function candidateId(call: ToolCallRecord): string | null {
+  const args = call.args || call.params || {};
+  const nested = isRecord(args.params) ? args.params : args;
+  const result = isRecord(call.result) ? call.result : {};
+  return (
+    stringValue(nested.id) ||
+    stringValue(nested.candidateId) ||
+    stringValue(nested.client_id) ||
+    stringValue(nested.clientId) ||
+    stringValue(result.id) ||
+    stringValue(result.candidateId) ||
+    stringValue(result.client_id) ||
+    stringValue(result.clientId)
+  );
 }
 
 function resultStatus(call: ToolCallRecord): string | null {

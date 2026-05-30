@@ -637,8 +637,10 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
     let sourceRefTotal = 0;
     let sourceRefValid = 0;
     let sourceRefInvalid = 0;
+    let attributedInvalidSourceRefCount = 0;
     let repairedSourceRefCount = 0;
     let rejectedSourceRefCount = 0;
+    let unattributedInvalidSourceRefCount = 0;
     let warningSourceRefCount = 0;
     const sourceRefReasonCounts: Record<string, number> = {};
     const sourceRefValidityStatuses: Record<string, number> = {};
@@ -674,6 +676,26 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
           (Array.isArray(nodeEvidence.sourceRefs) ? nodeEvidence.sourceRefs.length : 0);
         sourceRefValid += numberValue(nodeEvidence.validSourceRefCount) ?? 0;
         sourceRefInvalid += numberValue(nodeEvidence.invalidSourceRefCount) ?? 0;
+        const explicitAttributedInvalid = numberValue(nodeEvidence.attributedInvalidSourceRefCount);
+        const explicitUnattributedInvalid = numberValue(
+          nodeEvidence.unattributedInvalidSourceRefCount
+        );
+        if (explicitAttributedInvalid != null || explicitUnattributedInvalid != null) {
+          attributedInvalidSourceRefCount += explicitAttributedInvalid ?? 0;
+          unattributedInvalidSourceRefCount += explicitUnattributedInvalid ?? 0;
+        } else if (Array.isArray(nodeEvidence.invalidSourceRefs)) {
+          const attributed = nodeEvidence.invalidSourceRefs.filter(
+            (invalid) =>
+              isRecord(invalid) &&
+              Array.isArray(invalid.attributions) &&
+              invalid.attributions.length > 0
+          ).length;
+          attributedInvalidSourceRefCount += attributed;
+          unattributedInvalidSourceRefCount += Math.max(
+            0,
+            nodeEvidence.invalidSourceRefs.length - attributed
+          );
+        }
         repairedSourceRefCount +=
           numberValue(nodeEvidence.repairedSourceRefCount) ??
           (Array.isArray(nodeEvidence.repairedSourceRefs)
@@ -720,11 +742,13 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
         invalidSourceRefCount: sourceRefInvalid,
         invalidSourceRefRatio:
           sourceRefTotal > 0 ? Number((sourceRefInvalid / sourceRefTotal).toFixed(4)) : 0,
+        attributedInvalidSourceRefCount,
         reasonCounts: sourceRefReasonCounts,
         repairedSourceRefCount,
         rejectedSourceRefCount,
         statuses: sourceRefValidityStatuses,
         totalSourceRefCount: sourceRefTotal,
+        unattributedInvalidSourceRefCount,
         validSourceRefCount: sourceRefValid,
         validationModes: [...sourceRefValidationModes],
         warningSourceRefCount,
