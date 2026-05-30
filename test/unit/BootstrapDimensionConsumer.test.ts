@@ -2,11 +2,17 @@ import type { MemoryCoordinator, SessionStore } from '@alembic/agent/memory';
 import { describe, expect, test, vi } from 'vitest';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
 import {
+  applyBootstrapDimensionCandidateAccounting,
+  buildBootstrapDimensionCompleteEventPayload,
+  buildBootstrapDimensionPcvEvidenceEnvelope,
   type CandidateResults,
   consumeBootstrapDimensionError,
   consumeBootstrapDimensionResult,
   type DimensionCandidateData,
   type DimensionStat,
+  decideBootstrapDimensionCheckpoint,
+  recordBootstrapDimensionTokenUsage,
+  resolveBootstrapDimensionConsumerRunIssue,
 } from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
 import type { BootstrapDimensionProjection } from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
 import type { DimensionContext } from '../../lib/workflows/capabilities/execution/internal-agent/DimensionContext.js';
@@ -79,6 +85,190 @@ function makeProjection(): BootstrapDimensionProjection {
 }
 
 describe('bootstrap dimension consumer', () => {
+  test('separates run issue recovery from candidate accounting', () => {
+    const projection = makeProjection();
+    projection.produceResult = {
+      reply: '[run stopped: stage_timeout]',
+      toolCalls: projection.runtimeToolCalls,
+    };
+    const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
+    const dimensionCandidates: Record<string, DimensionCandidateData> = {};
+
+    const runIssueState = resolveBootstrapDimensionConsumerRunIssue({
+      needsCandidates: true,
+      projection,
+      runResult: {
+        status: 'success',
+        reply: '[run stopped: stage_timeout]',
+        diagnostics: {
+          degraded: false,
+          fallbackUsed: false,
+          warnings: [],
+          timedOutStages: ['produce'],
+          blockedTools: [],
+          truncatedToolCalls: 0,
+          emptyResponses: 0,
+          aiErrorCount: 0,
+          gateFailures: [],
+        },
+      },
+    });
+
+    const accounting = applyBootstrapDimensionCandidateAccounting({
+      candidateResults,
+      dimId: 'api',
+      dimensionCandidates,
+      projection,
+      runIssueState,
+    });
+
+    expect(runIssueState).toMatchObject({
+      effectiveCandidateCount: 1,
+      isNormalCompletion: true,
+      recoveredProducerTimeout: true,
+      runIssue: null,
+    });
+    expect(candidateResults.created).toBe(1);
+    expect(dimensionCandidates.api?.producerResult.candidateCount).toBe(1);
+    expect(accounting.submittedCandidateSummaries).toEqual([
+      { title: 'Candidate', subTopic: 'api', summary: 'Summary' },
+    ]);
+  });
+
+  test('builds event payload and checkpoint decision through explicit helpers', () => {
+    const projection = makeProjection();
+    const runIssueState = resolveBootstrapDimensionConsumerRunIssue({
+      needsCandidates: true,
+      projection,
+      runResult: { degraded: false },
+    });
+    const accounting = applyBootstrapDimensionCandidateAccounting({
+      candidateResults: { created: 0, failed: 0, errors: [] },
+      dimId: 'api',
+      dimensionCandidates: {},
+      projection,
+      runIssueState,
+    });
+
+    expect(
+      buildBootstrapDimensionCompleteEventPayload({
+        candidateAccounting: accounting,
+        combinedTokenUsage: projection.combinedTokenUsage,
+        dimStartTime: Date.now(),
+        efficiency: projection.efficiency,
+        needsCandidates: true,
+        runIssueState,
+        runResult: { degraded: false },
+        runtimeToolCalls: projection.runtimeToolCalls,
+      })
+    ).toMatchObject({
+      created: 1,
+      source: 'enhanced-pipeline-strategy',
+      status: 'v3-pipeline-complete',
+      tokenUsage: { input: 3, output: 5 },
+      type: 'candidate',
+    });
+    expect(decideBootstrapDimensionCheckpoint({ analysisText: 'x'.repeat(50) })).toEqual({
+      reason: null,
+      shouldSave: true,
+    });
+    expect(decideBootstrapDimensionCheckpoint({ analysisText: 'x'.repeat(49) })).toEqual({
+      reason: 'analysisText 过短 (49 chars)',
+      shouldSave: false,
+    });
+  });
+
+  test('keeps optional token and realtime side effects non-fatal', () => {
+    const record = vi.fn();
+    const broadcastTokenUsageUpdated = vi.fn(() => {
+      throw new Error('socket closed');
+    });
+    const get = vi.fn((key: string) =>
+      key === 'tokenUsageStore'
+        ? { record }
+        : key === 'realtimeService'
+          ? { broadcastTokenUsageUpdated }
+          : undefined
+    );
+
+    expect(() =>
+      recordBootstrapDimensionTokenUsage({
+        combinedTokenUsage: { input: 1, output: 2 },
+        ctx: {
+          container: {
+            get,
+            singletons: { aiProvider: { name: 'test', model: 'fixture' } },
+          },
+        },
+        dimId: 'api',
+        dimStartTime: Date.now(),
+        efficiency: null,
+        runtimeToolCalls: [],
+        sessionId: 'session-1',
+      })
+    ).not.toThrow();
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ dimension: 'api', inputTokens: 1, outputTokens: 2 })
+    );
+    expect(broadcastTokenUsageUpdated).toHaveBeenCalled();
+
+    expect(() =>
+      recordBootstrapDimensionTokenUsage({
+        combinedTokenUsage: { input: 1, output: 2 },
+        ctx: {
+          container: {
+            get: () => ({
+              record: () => {
+                throw new Error('token store unavailable');
+              },
+            }),
+          },
+        },
+        dimId: 'api',
+        dimStartTime: Date.now(),
+        efficiency: null,
+        runtimeToolCalls: [],
+        sessionId: 'session-1',
+      })
+    ).not.toThrow();
+  });
+
+  test('builds PCV evidence envelope in an isolated helper', () => {
+    const projection = makeProjection();
+    const runIssueState = resolveBootstrapDimensionConsumerRunIssue({
+      needsCandidates: true,
+      projection,
+      runResult: { degraded: false },
+    });
+
+    const result = buildBootstrapDimensionPcvEvidenceEnvelope({
+      dimConfig: { label: 'API' },
+      dimId: 'api',
+      needsCandidates: true,
+      projection,
+      runIssueState,
+      runResult: { degraded: false },
+      sessionStore: {
+        toJSON: () => ({ submittedCandidates: { api: [{ title: 'Candidate' }] } }),
+      } as unknown as SessionStore,
+    });
+
+    expect(result.pcvNodeEvidence).toMatchObject({
+      n11: { acceptedCount: 1, nodeId: 'pcvm:n11:produce' },
+      n12: {
+        findableCandidateTitles: ['Candidate'],
+        nodeId: 'N12-consumers-persistence',
+        status: 'linked',
+      },
+    });
+    expect(result.pcvNodeEvidenceEnvelope).toMatchObject({
+      contract: 'PcvNodeEvidenceEnvelope',
+      dimensionId: 'api',
+      evidence: result.pcvNodeEvidence,
+      source: 'bootstrap-dimension-consumer',
+    });
+  });
+
   test('writes dimension result side effects through explicit dependencies', async () => {
     const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
     const dimensionCandidates: Record<string, DimensionCandidateData> = {};

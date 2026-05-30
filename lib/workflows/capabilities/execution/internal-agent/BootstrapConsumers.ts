@@ -42,6 +42,7 @@ import {
   type WorkflowSkillGenerationResult,
 } from '#workflows/capabilities/execution/WorkflowSkillCompletionCapability.js';
 import {
+  type BootstrapPcvNodeEvidenceSet,
   buildPcvAnalyzeGroundingLedgerSummary,
   buildPcvN9StageProjectionEvidence,
   buildPcvN11ProduceEvidence,
@@ -110,6 +111,10 @@ interface RealtimeServiceLike {
   broadcastTokenUsageUpdated?(): void;
 }
 
+type BootstrapDimensionCompleteEventPayload = Parameters<
+  BootstrapEventEmitter['emitDimensionComplete']
+>[1];
+
 export interface ConsumeBootstrapDimensionResultOptions {
   ctx: BootstrapDimensionConsumerContext;
   dimId: string;
@@ -131,87 +136,109 @@ export interface ConsumeBootstrapDimensionResultOptions {
   sourceRefValidation?: PcvSourceRefValidationContext | null;
 }
 
-export async function consumeBootstrapDimensionResult({
-  ctx,
-  dimId,
-  dimConfig,
+export interface BootstrapDimensionRunIssueState {
+  effectiveCandidateCount: number;
+  isNormalCompletion: boolean;
+  rawRunIssue: BootstrapDimensionRunIssue | null;
+  recoveredProducerTimeout: boolean;
+  runIssue: BootstrapDimensionRunIssue | null;
+}
+
+export interface BootstrapDimensionCandidateAccountingResult {
+  acceptedSubmitCalls: ToolCallRecord[];
+  effectiveCandidateCount: number;
+  rejectedCount: number;
+  submittedCandidateSummaries: Array<{
+    subTopic: string;
+    summary: string;
+    title: string;
+  }>;
+}
+
+export interface BootstrapDimensionCheckpointDecision {
+  reason: string | null;
+  shouldSave: boolean;
+}
+
+export interface BootstrapDimensionPcvEvidenceResult {
+  pcvNodeEvidence: BootstrapPcvNodeEvidenceSet;
+  pcvNodeEvidenceEnvelope: PcvNodeEvidenceEnvelope;
+}
+
+export function resolveBootstrapDimensionConsumerRunIssue({
   needsCandidates,
   projection,
   runResult,
-  dimStartTime,
-  analystScopeId,
-  memoryCoordinator,
-  sessionStore,
-  dimContext,
-  candidateResults,
-  dimensionCandidates,
-  dimensionStats,
-  emitter,
-  dataRoot,
-  sessionId,
-  sourceRefValidation,
-}: ConsumeBootstrapDimensionResultOptions): Promise<DimensionStat> {
-  const {
-    gateResult,
-    produceResult,
-    analysisText,
-    artifact,
-    runtimeToolCalls,
-    combinedTokenUsage,
-    efficiency,
-    analysisReport,
-    producerResult,
-    submitCalls,
-    successCount,
-    rejectedCount,
-  } = projection;
+}: {
+  needsCandidates: boolean;
+  projection: BootstrapDimensionProjection;
+  runResult: AgentResultLike;
+}): BootstrapDimensionRunIssueState {
   const rawRunIssue = resolveBootstrapDimensionRunIssue(runResult);
   const recoveredProducerTimeout = isRecoverableProducerTimeoutIssue({
     issue: rawRunIssue,
     needsCandidates,
-    produceResult,
-    successCount,
+    produceResult: projection.produceResult,
+    successCount: projection.successCount,
   });
   const runIssue = recoveredProducerTimeout ? null : rawRunIssue;
-  if (recoveredProducerTimeout) {
-    logger.warn(
-      `[Producer] "${dimId}": producer summary timed out after ${successCount} successful candidate submit(s); preserving produced candidates as dimension output.`
-    );
-  }
   const isNormalCompletion = !runIssue;
-  const effectiveCandidateCount = isNormalCompletion ? producerResult.candidateCount : 0;
+  return {
+    effectiveCandidateCount: isNormalCompletion ? projection.producerResult.candidateCount : 0,
+    isNormalCompletion,
+    rawRunIssue,
+    recoveredProducerTimeout,
+    runIssue,
+  };
+}
 
-  candidateResults.created += effectiveCandidateCount;
-  dimensionCandidates[dimId] = { analysisReport, producerResult };
+export function applyBootstrapDimensionCandidateAccounting({
+  candidateResults,
+  dimId,
+  dimensionCandidates,
+  projection,
+  runIssueState,
+}: {
+  candidateResults: CandidateResults;
+  dimId: string;
+  dimensionCandidates: Record<string, DimensionCandidateData>;
+  projection: BootstrapDimensionProjection;
+  runIssueState: BootstrapDimensionRunIssueState;
+}): BootstrapDimensionCandidateAccountingResult {
+  candidateResults.created += runIssueState.effectiveCandidateCount;
+  dimensionCandidates[dimId] = {
+    analysisReport: projection.analysisReport,
+    producerResult: projection.producerResult,
+  };
 
-  if (needsCandidates) {
-    const producerToolCalls = produceResult?.toolCalls || [];
-    const producerToolNames = producerToolCalls.map(
-      (tc: ToolCallRecord) => tc?.tool || tc?.name || 'unknown'
-    );
-    const toolBreakdown: Record<string, number> = {};
-    for (const name of producerToolNames) {
-      toolBreakdown[name] = (toolBreakdown[name] || 0) + 1;
-    }
-    const breakdownStr = Object.entries(toolBreakdown)
-      .map(([k, v]) => `${k}=${v}`)
-      .join(', ');
+  const acceptedSubmitCalls = runIssueState.isNormalCompletion
+    ? projection.submitCalls.filter(isSuccessfulToolCall)
+    : [];
+  return {
+    acceptedSubmitCalls,
+    effectiveCandidateCount: runIssueState.effectiveCandidateCount,
+    rejectedCount: runIssueState.isNormalCompletion
+      ? projection.producerResult.rejectedCount || 0
+      : projection.submitCalls.length,
+    submittedCandidateSummaries: acceptedSubmitCalls.map((call) =>
+      buildSubmittedCandidateSummary(call, dimId)
+    ),
+  };
+}
 
-    logger.info(
-      `[Producer] "${dimId}": submitted=${submitCalls.length}, accepted=${successCount}, rejected=${rejectedCount}, ` +
-        `producerToolCalls=${producerToolCalls.length} (${breakdownStr || 'none'}), ` +
-        `analysisInput=${analysisText.length} chars`
-    );
-
-    if (successCount === 0 && submitCalls.length === 0 && isNormalCompletion) {
-      logger.warn(
-        `[Producer] "${dimId}": ⚠ Producer 未提交任何候选。` +
-          `分析文本=${analysisText.length} chars, findings=${(analysisReport.findings || []).length}, ` +
-          `producerIterations=${producerToolCalls.length}, degraded=${runResult?.degraded || false}`
-      );
-    }
-  }
-
+function writeBootstrapDimensionReport({
+  analysisReport,
+  analystScopeId,
+  dimId,
+  memoryCoordinator,
+  sessionStore,
+}: {
+  analysisReport: BootstrapDimensionAnalysisReport;
+  analystScopeId: string;
+  dimId: string;
+  memoryCoordinator: MemoryCoordinator;
+  sessionStore: SessionStore;
+}) {
   const ac = memoryCoordinator.getActiveContext(analystScopeId);
   const distilled = ac
     ? ac.distill()
@@ -226,21 +253,180 @@ export async function consumeBootstrapDimensionResult({
     candidatesSummary: [],
     workingMemoryDistilled: distilled,
   });
-  if (runIssue) {
-    logger.warn(`[Insight-v3] Dimension "${dimId}" completed with non-normal status`, {
-      dimension: dimId,
-      status: runIssue.status,
-      reason: runIssue.reason,
-      degraded: runResult?.degraded || runResult?.diagnostics?.degraded || false,
-    });
-  }
+  return distilled;
+}
 
-  logger.info(
-    `[Insight-v3] Dimension "${dimId}": analysis=${analysisReport.analysisText.length} chars, ` +
-      `files=${analysisReport.referencedFiles.length}, findings=${(analysisReport.findings || distilled.keyFindings).length}, ` +
-      `toolCalls=${runtimeToolCalls.length}, degraded=${runResult?.degraded || false} (${Date.now() - dimStartTime}ms)`
+function writeBootstrapDimensionDigestAndCandidates({
+  analysisReport,
+  candidateAccounting,
+  dimContext,
+  dimId,
+  producerResult,
+  sessionStore,
+}: {
+  analysisReport: BootstrapDimensionAnalysisReport;
+  candidateAccounting: BootstrapDimensionCandidateAccountingResult;
+  dimContext: DimensionContext;
+  dimId: string;
+  producerResult: BootstrapDimensionProducerResult;
+  sessionStore: SessionStore;
+}) {
+  const digest = parseDimensionDigest(producerResult.reply) || {
+    summary: `v3 分析: ${analysisReport.analysisText.substring(0, 200)}...`,
+    candidateCount: producerResult.candidateCount,
+    keyFindings: [] as string[],
+    crossRefs: {},
+    gaps: [] as string[],
+  };
+  dimContext.addDimensionDigest(
+    dimId,
+    digest as Parameters<typeof dimContext.addDimensionDigest>[1]
+  );
+  sessionStore.addDimensionDigest(
+    dimId,
+    digest as Parameters<typeof sessionStore.addDimensionDigest>[1]
   );
 
+  for (const candidateSummary of candidateAccounting.submittedCandidateSummaries) {
+    dimContext.addSubmittedCandidate(
+      dimId,
+      candidateSummary as Parameters<typeof dimContext.addSubmittedCandidate>[1]
+    );
+    sessionStore.addSubmittedCandidate(
+      dimId,
+      candidateSummary as Parameters<typeof sessionStore.addSubmittedCandidate>[1]
+    );
+  }
+  return digest;
+}
+
+export function buildBootstrapDimensionCompleteEventPayload({
+  candidateAccounting,
+  combinedTokenUsage,
+  dimStartTime,
+  efficiency,
+  needsCandidates,
+  runIssueState,
+  runResult,
+  runtimeToolCalls,
+}: {
+  candidateAccounting: BootstrapDimensionCandidateAccountingResult;
+  combinedTokenUsage: { input: number; output: number };
+  dimStartTime: number;
+  efficiency: AgentEfficiencySummary | null | undefined;
+  needsCandidates: boolean;
+  runIssueState: BootstrapDimensionRunIssueState;
+  runResult: AgentResultLike;
+  runtimeToolCalls: ToolCallRecord[];
+}): BootstrapDimensionCompleteEventPayload {
+  return {
+    type: needsCandidates ? 'candidate' : 'skill',
+    extracted: candidateAccounting.effectiveCandidateCount,
+    created: candidateAccounting.effectiveCandidateCount,
+    status: runIssueState.runIssue?.status || 'v3-pipeline-complete',
+    reason: runIssueState.runIssue?.reason,
+    degraded: runResult?.degraded || false,
+    durationMs: Date.now() - dimStartTime,
+    toolCallCount: runtimeToolCalls.length,
+    tokenUsage: combinedTokenUsage,
+    efficiency,
+    source: 'enhanced-pipeline-strategy',
+  } as BootstrapDimensionCompleteEventPayload;
+}
+
+export function buildBootstrapDimensionPcvEvidenceEnvelope({
+  dimConfig,
+  dimId,
+  existingEvidence,
+  needsCandidates,
+  projection,
+  runIssueState,
+  runResult,
+  sessionStore,
+  sourceRefValidation,
+}: {
+  dimConfig: { label?: string };
+  dimId: string;
+  existingEvidence?: unknown;
+  needsCandidates: boolean;
+  projection: BootstrapDimensionProjection;
+  runIssueState: BootstrapDimensionRunIssueState;
+  runResult: AgentResultLike;
+  sessionStore: SessionStore;
+  sourceRefValidation?: PcvSourceRefValidationContext | null;
+}): BootstrapDimensionPcvEvidenceResult {
+  const groundingLedger = buildPcvAnalyzeGroundingLedgerSummary({
+    dimId,
+    label: dimConfig.label,
+    runResult,
+  });
+  const n9QualityGate = buildPcvN9StageProjectionEvidence({
+    dimId,
+    label: dimConfig.label,
+    runResult,
+    stage: 'quality_gate',
+  });
+  const n9RecordRepair = buildPcvN9StageProjectionEvidence({
+    dimId,
+    label: dimConfig.label,
+    runResult,
+    stage: 'record_repair',
+  });
+  const pcvNodeEvidence = mergeBootstrapPcvNodeEvidence(existingEvidence, {
+    ...(groundingLedger ? { groundingLedger } : {}),
+    ...(n9QualityGate ? { n9QualityGate } : {}),
+    ...(n9RecordRepair ? { n9RecordRepair } : {}),
+    n11: buildPcvN11ProduceEvidence({ dimId, needsCandidates, projection, sourceRefValidation }),
+    n12: buildPcvN12ConsumerPersistenceEvidence({
+      acceptedSubmitCalls: runIssueState.isNormalCompletion
+        ? successfulProducerSubmitCalls(projection)
+        : [],
+      dimId,
+      runIssueReason: runIssueState.runIssue?.reason || null,
+      sessionStore,
+    }),
+  });
+  return {
+    pcvNodeEvidence,
+    pcvNodeEvidenceEnvelope: buildPcvNodeEvidenceEnvelope({
+      dimId,
+      evidence: pcvNodeEvidence,
+      source: 'bootstrap-dimension-consumer',
+    }),
+  };
+}
+
+export function decideBootstrapDimensionCheckpoint({
+  analysisText,
+}: {
+  analysisText: string;
+}): BootstrapDimensionCheckpointDecision {
+  if (analysisText.length >= 50) {
+    return { reason: null, shouldSave: true };
+  }
+  return {
+    reason: `analysisText 过短 (${analysisText.length} chars)`,
+    shouldSave: false,
+  };
+}
+
+export function recordBootstrapDimensionTokenUsage({
+  combinedTokenUsage,
+  ctx,
+  dimId,
+  dimStartTime,
+  efficiency,
+  runtimeToolCalls,
+  sessionId,
+}: {
+  combinedTokenUsage: { input: number; output: number };
+  ctx: BootstrapDimensionConsumerContext;
+  dimId: string;
+  dimStartTime: number;
+  efficiency: AgentEfficiencySummary | null | undefined;
+  runtimeToolCalls: ToolCallRecord[];
+  sessionId: string;
+}): void {
   try {
     const tokenStore = ctx.container?.get?.('tokenUsageStore') as TokenUsageStoreLike | undefined;
     const aiProv = ctx.container?.singletons?.aiProvider as
@@ -292,6 +478,163 @@ export async function consumeBootstrapDimensionResult({
   } catch {
     /* token logging should never break execution */
   }
+}
+
+export function applyBootstrapDimensionErrorAccounting({
+  candidateResults,
+  dimId,
+  issue,
+}: {
+  candidateResults: CandidateResults;
+  dimId: string;
+  issue: BootstrapDimensionRunIssue;
+}): void {
+  candidateResults.errors.push({ dimId, error: issue.reason });
+}
+
+export function buildBootstrapDimensionErrorEventPayload(
+  issue: BootstrapDimensionRunIssue
+): BootstrapDimensionCompleteEventPayload {
+  return {
+    type: 'error',
+    status: issue.status,
+    reason: issue.reason,
+  } as BootstrapDimensionCompleteEventPayload;
+}
+
+export function buildBootstrapDimensionErrorPcvEvidenceEnvelope({
+  dimId,
+  error,
+  existingEvidence,
+}: {
+  dimId: string;
+  error: string;
+  existingEvidence?: unknown;
+}): BootstrapDimensionPcvEvidenceResult {
+  const pcvNodeEvidence = mergeBootstrapPcvNodeEvidence(existingEvidence, {
+    n12: buildPcvN12ErrorEvidence({ dimId, error }),
+  });
+  return {
+    pcvNodeEvidence,
+    pcvNodeEvidenceEnvelope: buildPcvNodeEvidenceEnvelope({
+      dimId,
+      evidence: pcvNodeEvidence,
+      source: 'bootstrap-dimension-error',
+    }),
+  };
+}
+
+export async function consumeBootstrapDimensionResult({
+  ctx,
+  dimId,
+  dimConfig,
+  needsCandidates,
+  projection,
+  runResult,
+  dimStartTime,
+  analystScopeId,
+  memoryCoordinator,
+  sessionStore,
+  dimContext,
+  candidateResults,
+  dimensionCandidates,
+  dimensionStats,
+  emitter,
+  dataRoot,
+  sessionId,
+  sourceRefValidation,
+}: ConsumeBootstrapDimensionResultOptions): Promise<DimensionStat> {
+  const {
+    gateResult,
+    produceResult,
+    analysisText,
+    artifact,
+    runtimeToolCalls,
+    combinedTokenUsage,
+    efficiency,
+    analysisReport,
+    producerResult,
+    submitCalls,
+    successCount,
+    rejectedCount,
+  } = projection;
+  const runIssueState = resolveBootstrapDimensionConsumerRunIssue({
+    needsCandidates,
+    projection,
+    runResult,
+  });
+  if (runIssueState.recoveredProducerTimeout) {
+    logger.warn(
+      `[Producer] "${dimId}": producer summary timed out after ${successCount} successful candidate submit(s); preserving produced candidates as dimension output.`
+    );
+  }
+  const candidateAccounting = applyBootstrapDimensionCandidateAccounting({
+    candidateResults,
+    dimId,
+    dimensionCandidates,
+    projection,
+    runIssueState,
+  });
+
+  if (needsCandidates) {
+    const producerToolCalls = produceResult?.toolCalls || [];
+    const producerToolNames = producerToolCalls.map(
+      (tc: ToolCallRecord) => tc?.tool || tc?.name || 'unknown'
+    );
+    const toolBreakdown: Record<string, number> = {};
+    for (const name of producerToolNames) {
+      toolBreakdown[name] = (toolBreakdown[name] || 0) + 1;
+    }
+    const breakdownStr = Object.entries(toolBreakdown)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(', ');
+
+    logger.info(
+      `[Producer] "${dimId}": submitted=${submitCalls.length}, accepted=${successCount}, rejected=${rejectedCount}, ` +
+        `producerToolCalls=${producerToolCalls.length} (${breakdownStr || 'none'}), ` +
+        `analysisInput=${analysisText.length} chars`
+    );
+
+    if (successCount === 0 && submitCalls.length === 0 && runIssueState.isNormalCompletion) {
+      logger.warn(
+        `[Producer] "${dimId}": ⚠ Producer 未提交任何候选。` +
+          `分析文本=${analysisText.length} chars, findings=${(analysisReport.findings || []).length}, ` +
+          `producerIterations=${producerToolCalls.length}, degraded=${runResult?.degraded || false}`
+      );
+    }
+  }
+
+  const distilled = writeBootstrapDimensionReport({
+    analysisReport,
+    analystScopeId,
+    dimId,
+    memoryCoordinator,
+    sessionStore,
+  });
+  if (runIssueState.runIssue) {
+    logger.warn(`[Insight-v3] Dimension "${dimId}" completed with non-normal status`, {
+      dimension: dimId,
+      status: runIssueState.runIssue.status,
+      reason: runIssueState.runIssue.reason,
+      degraded: runResult?.degraded || runResult?.diagnostics?.degraded || false,
+    });
+  }
+
+  logger.info(
+    `[Insight-v3] Dimension "${dimId}": analysis=${analysisReport.analysisText.length} chars, ` +
+      `files=${analysisReport.referencedFiles.length}, findings=${(analysisReport.findings || distilled.keyFindings).length}, ` +
+      `toolCalls=${runtimeToolCalls.length}, degraded=${runResult?.degraded || false} (${Date.now() - dimStartTime}ms)`
+  );
+
+  recordBootstrapDimensionTokenUsage({
+    combinedTokenUsage,
+    ctx,
+    dimId,
+    dimStartTime,
+    efficiency,
+    runtimeToolCalls,
+    sessionId,
+  });
 
   if (needsCandidates && analysisReport.analysisText.length < 100) {
     const findings = analysisReport.findings || [];
@@ -325,98 +668,52 @@ export async function consumeBootstrapDimensionResult({
     }
   }
 
-  const digest = parseDimensionDigest(producerResult.reply) || {
-    summary: `v3 分析: ${analysisReport.analysisText.substring(0, 200)}...`,
-    candidateCount: producerResult.candidateCount,
-    keyFindings: [] as string[],
-    crossRefs: {},
-    gaps: [] as string[],
-  };
-  dimContext.addDimensionDigest(
+  const digest = writeBootstrapDimensionDigestAndCandidates({
+    analysisReport,
+    candidateAccounting,
+    dimContext,
     dimId,
-    digest as Parameters<typeof dimContext.addDimensionDigest>[1]
-  );
-  sessionStore.addDimensionDigest(
+    producerResult,
+    sessionStore,
+  });
+
+  emitter.emitDimensionComplete(
     dimId,
-    digest as Parameters<typeof sessionStore.addDimensionDigest>[1]
+    buildBootstrapDimensionCompleteEventPayload({
+      candidateAccounting,
+      combinedTokenUsage,
+      dimStartTime,
+      efficiency,
+      needsCandidates,
+      runIssueState,
+      runResult,
+      runtimeToolCalls,
+    })
   );
-
-  for (const tc of isNormalCompletion ? submitCalls : []) {
-    if (!isSuccessfulToolCall(tc)) {
-      continue;
-    }
-    const params = extractSubmitParams(tc);
-    const result = isRecord(tc.result) ? tc.result : {};
-    const candidateSummary = {
-      title: pickString(params.title) || pickString(result.title),
-      subTopic: pickString(params.category) || pickString(params.knowledgeType) || dimId,
-      summary: pickString(params.summary) || pickString(params.description),
-    };
-    dimContext.addSubmittedCandidate(
-      dimId,
-      candidateSummary as Parameters<typeof dimContext.addSubmittedCandidate>[1]
-    );
-    sessionStore.addSubmittedCandidate(
-      dimId,
-      candidateSummary as Parameters<typeof sessionStore.addSubmittedCandidate>[1]
-    );
-  }
-
-  emitter.emitDimensionComplete(dimId, {
-    type: needsCandidates ? 'candidate' : 'skill',
-    extracted: effectiveCandidateCount,
-    created: effectiveCandidateCount,
-    status: runIssue?.status || 'v3-pipeline-complete',
-    reason: runIssue?.reason,
-    degraded: runResult?.degraded || false,
-    durationMs: Date.now() - dimStartTime,
-    toolCallCount: runtimeToolCalls.length,
-    tokenUsage: combinedTokenUsage,
-    efficiency,
-    source: 'enhanced-pipeline-strategy',
-  } as Parameters<BootstrapEventEmitter['emitDimensionComplete']>[1]);
 
   const qualityScores = (artifact as Record<string, unknown>).qualityReport as
     | { scores: Record<string, number>; totalScore: number; suggestions: string[] }
     | undefined;
-  const groundingLedger = buildPcvAnalyzeGroundingLedgerSummary({
+  const { pcvNodeEvidence, pcvNodeEvidenceEnvelope } = buildBootstrapDimensionPcvEvidenceEnvelope({
+    dimConfig,
     dimId,
-    label: dimConfig.label,
+    existingEvidence: dimensionStats[dimId]?.pcvNodeEvidence,
+    needsCandidates,
+    projection,
+    runIssueState,
     runResult,
+    sessionStore,
+    sourceRefValidation,
   });
-  const n9QualityGate = buildPcvN9StageProjectionEvidence({
-    dimId,
-    label: dimConfig.label,
-    runResult,
-    stage: 'quality_gate',
-  });
-  const n9RecordRepair = buildPcvN9StageProjectionEvidence({
-    dimId,
-    label: dimConfig.label,
-    runResult,
-    stage: 'record_repair',
-  });
-  const pcvNodeEvidence = mergeBootstrapPcvNodeEvidence(dimensionStats[dimId]?.pcvNodeEvidence, {
-    ...(groundingLedger ? { groundingLedger } : {}),
-    ...(n9QualityGate ? { n9QualityGate } : {}),
-    ...(n9RecordRepair ? { n9RecordRepair } : {}),
-    n11: buildPcvN11ProduceEvidence({ dimId, needsCandidates, projection, sourceRefValidation }),
-    n12: buildPcvN12ConsumerPersistenceEvidence({
-      acceptedSubmitCalls: isNormalCompletion ? successfulProducerSubmitCalls(projection) : [],
-      dimId,
-      runIssueReason: runIssue?.reason || null,
-      sessionStore,
-    }),
-  });
-  const pcvNodeEvidenceEnvelope = buildPcvNodeEvidenceEnvelope({
-    dimId,
-    evidence: pcvNodeEvidence,
-    source: 'bootstrap-dimension-consumer',
+  const status = runIssueState.runIssue?.status || 'v3-pipeline-complete';
+  const error = runIssueState.runIssue?.reason;
+  const checkpointDecision = decideBootstrapDimensionCheckpoint({
+    analysisText: analysisReport.analysisText,
   });
   const dimResult = {
-    status: runIssue?.status || 'v3-pipeline-complete',
-    candidateCount: effectiveCandidateCount,
-    rejectedCount: isNormalCompletion ? producerResult.rejectedCount || 0 : submitCalls.length,
+    status,
+    candidateCount: candidateAccounting.effectiveCandidateCount,
+    rejectedCount: candidateAccounting.rejectedCount,
     analysisChars: analysisReport.analysisText.length,
     referencedFiles: analysisReport.referencedFiles.length,
     durationMs: Date.now() - dimStartTime,
@@ -424,8 +721,8 @@ export async function consumeBootstrapDimensionResult({
     tokenUsage: combinedTokenUsage,
     efficiency,
     diagnostics: runResult.diagnostics || null,
-    error: runIssue?.reason,
-    recoveredProducerTimeout,
+    error,
+    recoveredProducerTimeout: runIssueState.recoveredProducerTimeout,
     pcvNodeEvidence,
     pcvNodeEvidenceEnvelope,
     stages: summarizeDimensionStages(runResult),
@@ -436,14 +733,16 @@ export async function consumeBootstrapDimensionResult({
           totalScore: qualityScores.totalScore,
           scores: qualityScores.scores,
           action:
-            runIssue?.status || gateResult?.action || (runResult?.degraded ? 'degrade' : 'pass'),
+            runIssueState.runIssue?.status ||
+            gateResult?.action ||
+            (runResult?.degraded ? 'degrade' : 'pass'),
         }
       : null,
   };
 
   dimensionStats[dimId] = dimResult;
 
-  if (analysisReport.analysisText.length >= 50) {
+  if (checkpointDecision.shouldSave) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- digest shape compatible at runtime
     await saveDimensionCheckpoint(
       dataRoot,
@@ -453,12 +752,20 @@ export async function consumeBootstrapDimensionResult({
       digest as unknown as Parameters<typeof saveDimensionCheckpoint>[4]
     );
   } else {
-    logger.warn(
-      `[Insight-v3] ⚠ 跳过 checkpoint 保存: "${dimId}" analysisText 过短 (${analysisReport.analysisText.length} chars)`
-    );
+    logger.warn(`[Insight-v3] ⚠ 跳过 checkpoint 保存: "${dimId}" ${checkpointDecision.reason}`);
   }
 
   return dimResult;
+}
+
+function buildSubmittedCandidateSummary(tc: ToolCallRecord, dimId: string) {
+  const params = extractSubmitParams(tc);
+  const result = isRecord(tc.result) ? tc.result : {};
+  return {
+    title: pickString(params.title) || pickString(result.title),
+    subTopic: pickString(params.category) || pickString(params.knowledgeType) || dimId,
+    summary: pickString(params.summary) || pickString(params.description),
+  };
 }
 
 function extractSubmitParams(tc: ToolCallRecord): Record<string, unknown> {
@@ -533,15 +840,14 @@ export function consumeBootstrapDimensionError({
   const issue = normalizeBootstrapDimensionError(err);
   const errMsg = issue.reason;
   logger.error(`[Insight-v3] Dimension "${dimId}" failed: ${errMsg}`);
-  candidateResults.errors.push({ dimId, error: errMsg });
-  emitter.emitDimensionComplete(dimId, {
-    type: 'error',
-    status: issue.status,
-    reason: errMsg,
-  } as Parameters<BootstrapEventEmitter['emitDimensionComplete']>[1]);
-  const pcvNodeEvidence = mergeBootstrapPcvNodeEvidence(dimensionStats[dimId]?.pcvNodeEvidence, {
-    n12: buildPcvN12ErrorEvidence({ dimId, error: errMsg }),
-  });
+  applyBootstrapDimensionErrorAccounting({ candidateResults, dimId, issue });
+  emitter.emitDimensionComplete(dimId, buildBootstrapDimensionErrorEventPayload(issue));
+  const { pcvNodeEvidence, pcvNodeEvidenceEnvelope } =
+    buildBootstrapDimensionErrorPcvEvidenceEnvelope({
+      dimId,
+      error: errMsg,
+      existingEvidence: dimensionStats[dimId]?.pcvNodeEvidence,
+    });
   const dimResult = {
     status: issue.status,
     candidateCount: 0,
@@ -549,11 +855,7 @@ export function consumeBootstrapDimensionError({
     error: errMsg,
     diagnostics: issue.diagnostics || null,
     pcvNodeEvidence,
-    pcvNodeEvidenceEnvelope: buildPcvNodeEvidenceEnvelope({
-      dimId,
-      evidence: pcvNodeEvidence,
-      source: 'bootstrap-dimension-error',
-    }),
+    pcvNodeEvidenceEnvelope,
   };
   dimensionStats[dimId] = dimResult;
   return dimResult;
