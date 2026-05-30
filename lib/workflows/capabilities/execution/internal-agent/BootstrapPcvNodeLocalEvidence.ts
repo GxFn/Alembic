@@ -70,12 +70,41 @@ export type PcvN11SourceRefValidityStatus =
   | 'not-checked'
   | 'not-applicable';
 
-export type PcvN11InvalidSourceRefReason = 'file-not-found' | 'outside-project-root';
+export type PcvN11SourceRefReason =
+  | 'ambiguous-basename'
+  | 'entity-not-file'
+  | 'file-not-found'
+  | 'missing-prefix'
+  | 'outside-project-root'
+  | 'package-path-mismatch'
+  | 'wrong-extension';
+
+export type PcvN11InvalidSourceRefReason = PcvN11SourceRefReason;
 
 export interface PcvN11InvalidSourceRef {
+  candidates?: string[];
   normalizedPath: string | null;
+  rawReason?: string | null;
   reason: PcvN11InvalidSourceRefReason;
   ref: string;
+  source?: 'agent' | 'report-fallback';
+  suggestedRef?: string | null;
+}
+
+export interface PcvN11RepairedSourceRef {
+  from: string;
+  rawReason?: string | null;
+  reason: Extract<PcvN11SourceRefReason, 'missing-prefix' | 'wrong-extension'>;
+  source: 'agent';
+  to: string;
+}
+
+export interface PcvN11RejectedSourceRef extends PcvN11InvalidSourceRef {
+  source: 'agent';
+}
+
+export interface PcvN11WarningSourceRef extends PcvN11InvalidSourceRef {
+  source: 'agent';
 }
 
 export interface PcvN11SourceRefValiditySummary {
@@ -83,10 +112,19 @@ export interface PcvN11SourceRefValiditySummary {
   invalidSourceRefCount: number;
   invalidSourceRefRatio: number;
   invalidSourceRefs: PcvN11InvalidSourceRef[];
+  reasonCounts: Record<PcvN11SourceRefReason, number>;
+  repairedSourceRefCount: number;
+  repairedSourceRefs: PcvN11RepairedSourceRef[];
+  rejectedSourceRefCount: number;
+  rejectedSourceRefs: PcvN11RejectedSourceRef[];
   status: PcvN11SourceRefValidityStatus;
   totalSourceRefCount: number;
   uncheckedReason: string | null;
   validSourceRefCount: number;
+  validationMode: string | null;
+  validationPolicy: Record<string, unknown> | null;
+  warningSourceRefCount: number;
+  warningSourceRefs: PcvN11WarningSourceRef[];
 }
 
 export interface PcvSourceRefValidationContext {
@@ -177,14 +215,23 @@ export interface PcvN11ProduceEvidence extends PcvNodeLocalEvidenceBase {
   noTerminalProof: boolean;
   producerOnlyCut: boolean;
   producerToolCalls: Array<{ action: string | null; status: string | null; tool: string }>;
+  repairedSourceRefCount: number;
+  repairedSourceRefs: PcvN11RepairedSourceRef[];
   rejectedCount: number;
+  rejectedSourceRefCount: number;
+  rejectedSourceRefs: PcvN11RejectedSourceRef[];
+  sourceRefReasonCounts: Record<PcvN11SourceRefReason, number>;
   sourceRefs: string[];
   sourceRefValidity: PcvN11SourceRefValiditySummary;
   sourceRefValidityStatus: PcvN11SourceRefValidityStatus;
+  sourceRefValidationMode: string | null;
+  sourceRefValidationPolicy: Record<string, unknown> | null;
   submittedCount: number;
   terminalToolCallCount: number;
   totalSourceRefCount: number;
   validSourceRefCount: number;
+  warningSourceRefCount: number;
+  warningSourceRefs: PcvN11WarningSourceRef[];
 }
 
 export interface PcvN12ConsumerPersistenceEvidence extends PcvNodeLocalEvidenceBase {
@@ -355,7 +402,9 @@ export function buildPcvN11ProduceEvidence({
   const acceptedCount = producerSubmitCalls.filter(isSuccessfulToolCall).length;
   const rejectedCount = producerSubmitCalls.length - acceptedCount;
   const sourceRefs = collectSourceRefsFromProjection(projection);
+  const agentSourceRefValidation = collectAgentSourceRefValidation(producerSubmitCalls);
   const sourceRefValidity = buildSourceRefValiditySummary({
+    agentValidation: agentSourceRefValidation,
     needsCandidates,
     sourceRefs,
     validation: sourceRefValidation,
@@ -406,10 +455,17 @@ export function buildPcvN11ProduceEvidence({
       status: resultStatus(call),
       tool: toolName(call),
     })),
+    repairedSourceRefCount: sourceRefValidity.repairedSourceRefCount,
+    repairedSourceRefs: sourceRefValidity.repairedSourceRefs,
     rejectedCount,
+    rejectedSourceRefCount: sourceRefValidity.rejectedSourceRefCount,
+    rejectedSourceRefs: sourceRefValidity.rejectedSourceRefs,
+    sourceRefReasonCounts: sourceRefValidity.reasonCounts,
     sourceRefs,
     sourceRefValidity,
     sourceRefValidityStatus: sourceRefValidity.status,
+    sourceRefValidationMode: sourceRefValidity.validationMode,
+    sourceRefValidationPolicy: sourceRefValidity.validationPolicy,
     status,
     submittedCount: producerSubmitCalls.length,
     summary: needsCandidates
@@ -418,6 +474,8 @@ export function buildPcvN11ProduceEvidence({
     terminalToolCallCount,
     totalSourceRefCount: sourceRefValidity.totalSourceRefCount,
     validSourceRefCount: sourceRefValidity.validSourceRefCount,
+    warningSourceRefCount: sourceRefValidity.warningSourceRefCount,
+    warningSourceRefs: sourceRefValidity.warningSourceRefs,
   };
 }
 
@@ -946,9 +1004,12 @@ function collectSourceRefsFromProjection(projection: BootstrapDimensionProjectio
   return [...refs].slice(0, 50);
 }
 
-function sourceRefsFromValue(value: unknown): string[] {
+function sourceRefsFromValue(value: unknown, depth = 0): string[] {
+  if (depth > 5) {
+    return [];
+  }
   if (Array.isArray(value)) {
-    return value.flatMap(sourceRefsFromValue);
+    return value.flatMap((item) => sourceRefsFromValue(item, depth + 1));
   }
   if (!isRecord(value)) {
     return typeof value === 'string' && looksLikeSourceRef(value) ? [value] : [];
@@ -968,7 +1029,44 @@ function sourceRefsFromValue(value: unknown): string[] {
   }
   const nestedParams = value.params;
   if (isRecord(nestedParams)) {
-    refs.push(...sourceRefsFromValue(nestedParams));
+    refs.push(...sourceRefsFromValue(nestedParams, depth + 1));
+  }
+  const sourceRefValidation = value.sourceRefValidation;
+  if (isRecord(sourceRefValidation)) {
+    refs.push(...sourceRefsFromAgentValidationRecord(sourceRefValidation));
+  }
+  for (const key of ['data', 'item', 'items', 'candidate', 'candidates', 'result']) {
+    refs.push(...sourceRefsFromValue(value[key], depth + 1));
+  }
+  return refs.filter(looksLikeSourceRef);
+}
+
+function sourceRefsFromAgentValidationRecord(validation: Record<string, unknown>): string[] {
+  const refs: string[] = [];
+  for (const repair of recordArray(validation.repairedSourceRefs)) {
+    for (const key of ['from', 'to', 'ref', 'sourceRef', 'normalizedRef', 'normalizedPath']) {
+      const value = repair[key];
+      if (typeof value === 'string') {
+        refs.push(value);
+      }
+    }
+  }
+  for (const key of ['rejectedSourceRefs', 'invalidSourceRefs', 'warnings']) {
+    for (const invalid of recordArray(validation[key])) {
+      for (const sourceKey of [
+        'ref',
+        'sourceRef',
+        'from',
+        'normalizedPath',
+        'suggestedRef',
+        'to',
+      ]) {
+        const value = invalid[sourceKey];
+        if (typeof value === 'string') {
+          refs.push(value);
+        }
+      }
+    }
   }
   return refs.filter(looksLikeSourceRef);
 }
@@ -977,75 +1075,359 @@ function looksLikeSourceRef(value: string): boolean {
   return /^(?:file:\/\/)?[\w/.-]+\.[\w]+(?::\d+)?(?::\d+)?$/.test(value.trim());
 }
 
+interface AgentSourceRefValidationCarry {
+  reasonCounts: Record<PcvN11SourceRefReason, number>;
+  repairedSourceRefs: PcvN11RepairedSourceRef[];
+  rejectedSourceRefs: PcvN11RejectedSourceRef[];
+  validationMode: string | null;
+  validationPolicy: Record<string, unknown> | null;
+  warningSourceRefs: PcvN11WarningSourceRef[];
+}
+
+function collectAgentSourceRefValidation(
+  producerSubmitCalls: ToolCallRecord[]
+): AgentSourceRefValidationCarry {
+  const reasonCounts = emptySourceRefReasonCounts();
+  const modes = new Set<string>();
+  let validationPolicy: Record<string, unknown> | null = null;
+  const repaired = new Map<string, PcvN11RepairedSourceRef>();
+  const rejected = new Map<string, PcvN11RejectedSourceRef>();
+  const warnings = new Map<string, PcvN11WarningSourceRef>();
+
+  for (const call of producerSubmitCalls) {
+    for (const validation of sourceRefValidationRecordsFromToolCall(call)) {
+      const mode = stringValue(validation.mode);
+      if (mode) {
+        modes.add(mode);
+      }
+      if (!validationPolicy && isRecord(validation.policy)) {
+        validationPolicy = { ...validation.policy };
+      }
+      for (const entry of recordArray(validation.repairedSourceRefs)) {
+        const repair = normalizeAgentRepairedSourceRef(entry);
+        if (!repair) {
+          continue;
+        }
+        const key = `${repair.from}\u0000${repair.to}\u0000${repair.reason}`;
+        if (!repaired.has(key)) {
+          repaired.set(key, repair);
+          incrementSourceRefReasonCount(reasonCounts, repair.reason);
+        }
+      }
+      for (const entry of recordArray(validation.rejectedSourceRefs)) {
+        const invalid = normalizeAgentRejectedSourceRef(entry);
+        if (!invalid) {
+          continue;
+        }
+        const key = `${invalid.ref}\u0000${invalid.reason}`;
+        if (!rejected.has(key)) {
+          rejected.set(key, invalid);
+          incrementSourceRefReasonCount(reasonCounts, invalid.reason);
+        }
+      }
+      for (const entry of recordArray(validation.invalidSourceRefs)) {
+        const warning = normalizeAgentWarningSourceRef(entry);
+        if (!warning) {
+          continue;
+        }
+        const key = `${warning.ref}\u0000${warning.reason}`;
+        if (!warnings.has(key)) {
+          warnings.set(key, warning);
+          incrementSourceRefReasonCount(reasonCounts, warning.reason);
+        }
+      }
+      for (const entry of recordArray(validation.warnings)) {
+        const warning = normalizeAgentWarningSourceRef(entry);
+        if (!warning) {
+          continue;
+        }
+        const key = `${warning.ref}\u0000${warning.reason}`;
+        if (!warnings.has(key)) {
+          warnings.set(key, warning);
+          incrementSourceRefReasonCount(reasonCounts, warning.reason);
+        }
+      }
+    }
+  }
+
+  return {
+    reasonCounts,
+    repairedSourceRefs: [...repaired.values()],
+    rejectedSourceRefs: [...rejected.values()],
+    validationMode: [...modes].sort().join('+') || null,
+    validationPolicy,
+    warningSourceRefs: [...warnings.values()],
+  };
+}
+
+function sourceRefValidationRecordsFromToolCall(call: ToolCallRecord): Record<string, unknown>[] {
+  const records: Record<string, unknown>[] = [];
+  for (const value of [call.result, call.args, call.params]) {
+    records.push(...findSourceRefValidationRecords(value));
+  }
+  return records;
+}
+
+function findSourceRefValidationRecords(value: unknown, depth = 0): Record<string, unknown>[] {
+  if (depth > 5 || value == null) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => findSourceRefValidationRecords(entry, depth + 1));
+  }
+  if (!isRecord(value)) {
+    return [];
+  }
+  const records: Record<string, unknown>[] = [];
+  if (isRecord(value.sourceRefValidation)) {
+    records.push(value.sourceRefValidation);
+  }
+  for (const key of ['data', 'item', 'items', 'candidate', 'candidates', 'result', 'params']) {
+    records.push(...findSourceRefValidationRecords(value[key], depth + 1));
+  }
+  return records;
+}
+
+function normalizeAgentRepairedSourceRef(
+  entry: Record<string, unknown>
+): PcvN11RepairedSourceRef | null {
+  const from = stringValue(entry.from) || stringValue(entry.ref) || stringValue(entry.sourceRef);
+  const to =
+    stringValue(entry.to) ||
+    stringValue(entry.normalizedRef) ||
+    stringValue(entry.normalizedPath) ||
+    stringValue(entry.path);
+  if (!from || !to || from === to) {
+    return null;
+  }
+  const rawReason = stringValue(entry.reason);
+  return {
+    from,
+    rawReason,
+    reason: normalizeSourceRefRepairReason(rawReason),
+    source: 'agent',
+    to,
+  };
+}
+
+function normalizeAgentRejectedSourceRef(
+  entry: Record<string, unknown>
+): PcvN11RejectedSourceRef | null {
+  const ref = stringValue(entry.ref) || stringValue(entry.sourceRef) || stringValue(entry.from);
+  if (!ref) {
+    return null;
+  }
+  const rawReason = stringValue(entry.reason);
+  return {
+    candidates: stringArray(entry.candidates),
+    normalizedPath: stringValue(entry.normalizedPath),
+    rawReason,
+    reason: normalizeSourceRefReason(rawReason, 'file-not-found'),
+    ref,
+    source: 'agent',
+    suggestedRef: stringValue(entry.suggestedRef) || stringValue(entry.to),
+  };
+}
+
+function normalizeAgentWarningSourceRef(
+  entry: Record<string, unknown>
+): PcvN11WarningSourceRef | null {
+  const ref = stringValue(entry.ref) || stringValue(entry.sourceRef) || stringValue(entry.from);
+  if (!ref) {
+    return null;
+  }
+  const rawReason = stringValue(entry.reason) || stringValue(entry.message);
+  return {
+    candidates: stringArray(entry.candidates),
+    normalizedPath: stringValue(entry.normalizedPath),
+    rawReason,
+    reason: normalizeSourceRefReason(rawReason, 'file-not-found'),
+    ref,
+    source: 'agent',
+    suggestedRef: stringValue(entry.suggestedRef) || stringValue(entry.to),
+  };
+}
+
+function normalizeSourceRefRepairReason(
+  reason: string | null
+): Extract<PcvN11SourceRefReason, 'missing-prefix' | 'wrong-extension'> {
+  return normalizeSourceRefReason(reason, 'missing-prefix') === 'wrong-extension'
+    ? 'wrong-extension'
+    : 'missing-prefix';
+}
+
+function normalizeSourceRefReason(
+  reason: string | null | undefined,
+  fallback: PcvN11SourceRefReason
+): PcvN11SourceRefReason {
+  const normalized = (reason || '').trim().toLowerCase();
+  if (isPcvN11SourceRefReason(normalized)) {
+    return normalized;
+  }
+  if (normalized.includes('wrong-extension') || normalized.includes('extension')) {
+    return 'wrong-extension';
+  }
+  if (
+    normalized.includes('missing-prefix') ||
+    normalized.includes('unique-basename') ||
+    normalized.includes('basename-match')
+  ) {
+    return 'missing-prefix';
+  }
+  if (normalized.includes('package-path') || normalized.includes('path-mismatch')) {
+    return 'package-path-mismatch';
+  }
+  if (normalized.includes('entity')) {
+    return 'entity-not-file';
+  }
+  if (normalized.includes('ambiguous')) {
+    return 'ambiguous-basename';
+  }
+  if (normalized.includes('outside')) {
+    return 'outside-project-root';
+  }
+  return fallback;
+}
+
+function isPcvN11SourceRefReason(value: string): value is PcvN11SourceRefReason {
+  return (
+    value === 'ambiguous-basename' ||
+    value === 'entity-not-file' ||
+    value === 'file-not-found' ||
+    value === 'missing-prefix' ||
+    value === 'outside-project-root' ||
+    value === 'package-path-mismatch' ||
+    value === 'wrong-extension'
+  );
+}
+
+function emptySourceRefReasonCounts(): Record<PcvN11SourceRefReason, number> {
+  return {
+    'ambiguous-basename': 0,
+    'entity-not-file': 0,
+    'file-not-found': 0,
+    'missing-prefix': 0,
+    'outside-project-root': 0,
+    'package-path-mismatch': 0,
+    'wrong-extension': 0,
+  };
+}
+
+function incrementSourceRefReasonCount(
+  counts: Record<PcvN11SourceRefReason, number>,
+  reason: PcvN11SourceRefReason
+): void {
+  counts[reason] += 1;
+}
+
+function recordArray(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(isRecord);
+}
+
 function buildSourceRefValiditySummary({
+  agentValidation,
   needsCandidates,
   sourceRefs,
   validation,
 }: {
+  agentValidation?: AgentSourceRefValidationCarry;
   needsCandidates: boolean;
   sourceRefs: string[];
   validation?: PcvSourceRefValidationContext | null;
 }): PcvN11SourceRefValiditySummary {
+  const mergedSourceRefs = mergeSourceRefsWithAgentValidation(sourceRefs, agentValidation);
   if (!needsCandidates) {
     return sourceRefValiditySummary({
+      agentValidation,
       checked: false,
       invalidRefs: [],
-      sourceRefs,
+      sourceRefs: mergedSourceRefs,
       status: 'not-applicable',
       uncheckedReason: 'dimension_does_not_need_candidates',
       validCount: 0,
     });
   }
-  if (sourceRefs.length === 0) {
+  if (mergedSourceRefs.length === 0) {
     return sourceRefValiditySummary({
+      agentValidation,
       checked: true,
       invalidRefs: [],
-      sourceRefs,
+      sourceRefs: mergedSourceRefs,
       status: 'empty',
       uncheckedReason: null,
       validCount: 0,
     });
   }
 
+  const agentInvalidRefs = dedupeInvalidSourceRefs([
+    ...(agentValidation?.rejectedSourceRefs || []),
+    ...(agentValidation?.warningSourceRefs || []),
+  ]);
   const index = buildSourceRefValidationIndex(validation);
   if (!index) {
+    if (agentValidation?.validationMode || agentInvalidRefs.length > 0) {
+      return sourceRefValiditySummary({
+        agentValidation,
+        checked: true,
+        invalidRefs: agentInvalidRefs,
+        sourceRefs: mergedSourceRefs,
+        status: agentInvalidRefs.length > 0 ? 'invalid' : 'valid',
+        uncheckedReason: null,
+        validCount: countValidSourceRefs(mergedSourceRefs, agentInvalidRefs),
+        maxInvalidRefs: validation?.maxInvalidSourceRefs,
+      });
+    }
     return sourceRefValiditySummary({
+      agentValidation,
       checked: false,
       invalidRefs: [],
-      sourceRefs,
+      sourceRefs: mergedSourceRefs,
       status: 'not-checked',
       uncheckedReason: 'project_file_index_unavailable',
       validCount: 0,
     });
   }
 
-  let validCount = 0;
+  const repairedRefs = new Set(
+    (agentValidation?.repairedSourceRefs || []).map((entry) => entry.from)
+  );
   const invalidRefs: PcvN11InvalidSourceRef[] = [];
-  for (const ref of sourceRefs) {
+  for (const ref of mergedSourceRefs) {
+    if (repairedRefs.has(ref)) {
+      continue;
+    }
     const result = validateSourceRef(ref, index);
-    if (result.valid) {
-      validCount++;
-    } else {
+    if (!result.valid) {
       invalidRefs.push({
+        candidates: result.candidates,
         normalizedPath: result.normalizedPath,
+        rawReason: result.rawReason,
         reason: result.reason,
         ref,
+        source: 'report-fallback',
+        suggestedRef: result.suggestedRef,
       });
     }
   }
+  const mergedInvalidRefs = dedupeInvalidSourceRefs([...agentInvalidRefs, ...invalidRefs]);
 
   return sourceRefValiditySummary({
+    agentValidation,
     checked: true,
-    invalidRefs,
-    sourceRefs,
-    status: invalidRefs.length > 0 ? 'invalid' : 'valid',
+    invalidRefs: mergedInvalidRefs,
+    sourceRefs: mergedSourceRefs,
+    status: mergedInvalidRefs.length > 0 ? 'invalid' : 'valid',
     uncheckedReason: null,
-    validCount,
+    validCount: countValidSourceRefs(mergedSourceRefs, mergedInvalidRefs),
     maxInvalidRefs: validation?.maxInvalidSourceRefs,
   });
 }
 
 function sourceRefValiditySummary({
+  agentValidation,
   checked,
   invalidRefs,
   maxInvalidRefs,
@@ -1054,6 +1436,7 @@ function sourceRefValiditySummary({
   uncheckedReason,
   validCount,
 }: {
+  agentValidation?: AgentSourceRefValidationCarry;
   checked: boolean;
   invalidRefs: PcvN11InvalidSourceRef[];
   maxInvalidRefs?: number;
@@ -1065,6 +1448,7 @@ function sourceRefValiditySummary({
   const total = sourceRefs.length;
   const invalidCount = invalidRefs.length;
   const invalidSourceRefRatio = total > 0 ? Number((invalidCount / total).toFixed(4)) : 0;
+  const reasonCounts = mergeSourceRefReasonCounts(agentValidation, invalidRefs);
   const limit =
     typeof maxInvalidRefs === 'number' && Number.isFinite(maxInvalidRefs)
       ? Math.max(0, Math.floor(maxInvalidRefs))
@@ -1074,14 +1458,73 @@ function sourceRefValiditySummary({
     invalidSourceRefCount: invalidCount,
     invalidSourceRefRatio,
     invalidSourceRefs: invalidRefs.slice(0, limit),
+    reasonCounts,
+    repairedSourceRefCount: agentValidation?.repairedSourceRefs.length || 0,
+    repairedSourceRefs: agentValidation?.repairedSourceRefs || [],
+    rejectedSourceRefCount: agentValidation?.rejectedSourceRefs.length || 0,
+    rejectedSourceRefs: agentValidation?.rejectedSourceRefs || [],
     status,
     totalSourceRefCount: total,
     uncheckedReason,
     validSourceRefCount: validCount,
+    validationMode: agentValidation?.validationMode || (checked ? 'report-fallback' : null),
+    validationPolicy: agentValidation?.validationPolicy || null,
+    warningSourceRefCount: agentValidation?.warningSourceRefs.length || 0,
+    warningSourceRefs: agentValidation?.warningSourceRefs || [],
   };
 }
 
+function mergeSourceRefsWithAgentValidation(
+  sourceRefs: string[],
+  agentValidation?: AgentSourceRefValidationCarry
+): string[] {
+  const refs = new Set(sourceRefs);
+  for (const repair of agentValidation?.repairedSourceRefs || []) {
+    refs.add(repair.from);
+  }
+  for (const invalid of [
+    ...(agentValidation?.rejectedSourceRefs || []),
+    ...(agentValidation?.warningSourceRefs || []),
+  ]) {
+    refs.add(invalid.ref);
+  }
+  return [...refs];
+}
+
+function dedupeInvalidSourceRefs(invalidRefs: PcvN11InvalidSourceRef[]): PcvN11InvalidSourceRef[] {
+  const refs = new Map<string, PcvN11InvalidSourceRef>();
+  for (const invalid of invalidRefs) {
+    const key = `${invalid.ref}\u0000${invalid.reason}`;
+    const existing = refs.get(key);
+    if (!existing || existing.source !== 'agent') {
+      refs.set(key, invalid);
+    }
+  }
+  return [...refs.values()];
+}
+
+function countValidSourceRefs(sourceRefs: string[], invalidRefs: PcvN11InvalidSourceRef[]): number {
+  const invalidRefNames = new Set(invalidRefs.map((entry) => entry.ref));
+  return Math.max(0, sourceRefs.filter((ref) => !invalidRefNames.has(ref)).length);
+}
+
+function mergeSourceRefReasonCounts(
+  agentValidation: AgentSourceRefValidationCarry | undefined,
+  invalidRefs: PcvN11InvalidSourceRef[]
+): Record<PcvN11SourceRefReason, number> {
+  const counts = { ...(agentValidation?.reasonCounts || emptySourceRefReasonCounts()) };
+  for (const invalid of invalidRefs) {
+    if (invalid.source === 'agent') {
+      continue;
+    }
+    incrementSourceRefReasonCount(counts, invalid.reason);
+  }
+  return counts;
+}
+
 interface SourceRefValidationIndex {
+  byBasename: Map<string, string[]>;
+  byStem: Map<string, string[]>;
   fileExists: (absolutePath: string) => boolean;
   fileSet: Set<string>;
   projectRoot: string | null;
@@ -1105,11 +1548,33 @@ function buildSourceRefValidationIndex(
     return null;
   }
   return {
+    byBasename: buildSourceRefBasenameIndex(fileSet),
+    byStem: buildSourceRefStemIndex(fileSet),
     fileExists: validation?.fileExists || existsSync,
     fileSet,
     projectRoot,
     projectRootName: projectRoot ? path.basename(projectRoot) : null,
   };
+}
+
+function buildSourceRefBasenameIndex(fileSet: Set<string>): Map<string, string[]> {
+  const byBasename = new Map<string, string[]>();
+  for (const file of fileSet) {
+    const basename = path.posix.basename(file);
+    byBasename.set(basename, [...(byBasename.get(basename) || []), file]);
+  }
+  return byBasename;
+}
+
+function buildSourceRefStemIndex(fileSet: Set<string>): Map<string, string[]> {
+  const byStem = new Map<string, string[]>();
+  for (const file of fileSet) {
+    const parsed = path.posix.parse(file);
+    const key = `${path.posix.dirname(file)}/${parsed.name}`;
+    byStem.set(key, [...(byStem.get(key) || []), file]);
+    byStem.set(parsed.name, [...(byStem.get(parsed.name) || []), file]);
+  }
+  return byStem;
 }
 
 function addSourceFileRef(fileSet: Set<string>, value: unknown, projectRoot: string | null): void {
@@ -1156,10 +1621,18 @@ function validateSourceRef(
   index: SourceRefValidationIndex
 ):
   | { normalizedPath: string; valid: true }
-  | { normalizedPath: string | null; reason: PcvN11InvalidSourceRefReason; valid: false } {
+  | {
+      candidates?: string[];
+      normalizedPath: string | null;
+      rawReason?: string | null;
+      reason: PcvN11InvalidSourceRefReason;
+      suggestedRef?: string | null;
+      valid: false;
+    } {
   const resolution = resolveSourceRefCandidates(ref, index);
   if (!resolution || resolution.outsideProjectRoot) {
     return {
+      candidates: [],
       normalizedPath: resolution?.normalizedPath || null,
       reason: 'outside-project-root',
       valid: false,
@@ -1176,11 +1649,99 @@ function validateSourceRef(
       }
     }
   }
+  return classifyInvalidSourceRef(resolution.normalizedPath, index);
+}
+
+function classifyInvalidSourceRef(
+  normalizedPath: string,
+  index: SourceRefValidationIndex
+): {
+  candidates?: string[];
+  normalizedPath: string;
+  rawReason?: string | null;
+  reason: PcvN11InvalidSourceRefReason;
+  suggestedRef?: string | null;
+  valid: false;
+} {
+  const basename = path.posix.basename(normalizedPath);
+  const parsed = path.posix.parse(normalizedPath);
+  const dirname = path.posix.dirname(normalizedPath);
+  const directoryStemMatches = uniqueStrings(index.byStem.get(`${dirname}/${parsed.name}`) || []);
+  if (directoryStemMatches.length === 1 && directoryStemMatches[0] !== normalizedPath) {
+    return {
+      candidates: directoryStemMatches,
+      normalizedPath,
+      reason: 'wrong-extension',
+      suggestedRef: directoryStemMatches[0],
+      valid: false,
+    };
+  }
+  if (directoryStemMatches.length > 1) {
+    return {
+      candidates: directoryStemMatches,
+      normalizedPath,
+      reason: 'ambiguous-basename',
+      valid: false,
+    };
+  }
+
+  const basenameMatches = uniqueStrings(index.byBasename.get(basename) || []);
+  if (basenameMatches.length === 1) {
+    return {
+      candidates: basenameMatches,
+      normalizedPath,
+      reason: normalizedPath.includes('/') ? 'package-path-mismatch' : 'missing-prefix',
+      suggestedRef: basenameMatches[0],
+      valid: false,
+    };
+  }
+  if (basenameMatches.length > 1) {
+    return {
+      candidates: basenameMatches,
+      normalizedPath,
+      reason: 'ambiguous-basename',
+      valid: false,
+    };
+  }
+
+  const stemMatches = uniqueStrings(index.byStem.get(parsed.name) || []);
+  if (stemMatches.length === 1) {
+    return {
+      candidates: stemMatches,
+      normalizedPath,
+      reason: 'wrong-extension',
+      suggestedRef: stemMatches[0],
+      valid: false,
+    };
+  }
+  if (stemMatches.length > 1) {
+    return {
+      candidates: stemMatches,
+      normalizedPath,
+      reason: 'ambiguous-basename',
+      valid: false,
+    };
+  }
+
+  if (!normalizedPath.includes('/') && parsed.ext) {
+    return {
+      candidates: [],
+      normalizedPath,
+      reason: 'entity-not-file',
+      valid: false,
+    };
+  }
+
   return {
-    normalizedPath: resolution.normalizedPath,
+    candidates: [],
+    normalizedPath,
     reason: 'file-not-found',
     valid: false,
   };
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)].sort();
 }
 
 function resolveSourceRefCandidates(

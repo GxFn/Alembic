@@ -484,6 +484,14 @@ describe('BootstrapProcessEvents', () => {
             },
           ],
           missingLinkReasons: ['producer_source_refs_invalid'],
+          sourceRefReasonCounts: {
+            'file-not-found': 1,
+          },
+          sourceRefValidity: {
+            reasonCounts: {
+              'file-not-found': 1,
+            },
+          },
           sourceRefValidityStatus: 'invalid',
           status: 'blocked-by-observability-gap',
           totalSourceRefCount: 3,

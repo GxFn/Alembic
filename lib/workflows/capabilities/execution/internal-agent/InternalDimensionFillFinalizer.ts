@@ -637,7 +637,12 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
     let sourceRefTotal = 0;
     let sourceRefValid = 0;
     let sourceRefInvalid = 0;
+    let repairedSourceRefCount = 0;
+    let rejectedSourceRefCount = 0;
+    let warningSourceRefCount = 0;
+    const sourceRefReasonCounts: Record<string, number> = {};
     const sourceRefValidityStatuses: Record<string, number> = {};
+    const sourceRefValidationModes = new Set<string>();
     for (const evidence of Object.values(dimensionEvidence)) {
       const nodeEvidence = evidence[nodeKey];
       if (!nodeEvidence) {
@@ -669,10 +674,34 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
           (Array.isArray(nodeEvidence.sourceRefs) ? nodeEvidence.sourceRefs.length : 0);
         sourceRefValid += numberValue(nodeEvidence.validSourceRefCount) ?? 0;
         sourceRefInvalid += numberValue(nodeEvidence.invalidSourceRefCount) ?? 0;
+        repairedSourceRefCount +=
+          numberValue(nodeEvidence.repairedSourceRefCount) ??
+          (Array.isArray(nodeEvidence.repairedSourceRefs)
+            ? nodeEvidence.repairedSourceRefs.length
+            : 0);
+        rejectedSourceRefCount +=
+          numberValue(nodeEvidence.rejectedSourceRefCount) ??
+          (Array.isArray(nodeEvidence.rejectedSourceRefs)
+            ? nodeEvidence.rejectedSourceRefs.length
+            : 0);
+        warningSourceRefCount +=
+          numberValue(nodeEvidence.warningSourceRefCount) ??
+          (Array.isArray(nodeEvidence.warningSourceRefs)
+            ? nodeEvidence.warningSourceRefs.length
+            : 0);
+        const hasTopLevelReasonCounts = isRecord(nodeEvidence.sourceRefReasonCounts);
+        mergeNumericRecord(sourceRefReasonCounts, nodeEvidence.sourceRefReasonCounts);
+        if (!hasTopLevelReasonCounts && isRecord(nodeEvidence.sourceRefValidity)) {
+          mergeNumericRecord(sourceRefReasonCounts, nodeEvidence.sourceRefValidity.reasonCounts);
+        }
         const validityStatus = stringValue(nodeEvidence.sourceRefValidityStatus);
         if (validityStatus) {
           sourceRefValidityStatuses[validityStatus] =
             (sourceRefValidityStatuses[validityStatus] || 0) + 1;
+        }
+        const validationMode = stringValue(nodeEvidence.sourceRefValidationMode);
+        if (validationMode) {
+          sourceRefValidationModes.add(validationMode);
         }
       }
     }
@@ -691,9 +720,14 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
         invalidSourceRefCount: sourceRefInvalid,
         invalidSourceRefRatio:
           sourceRefTotal > 0 ? Number((sourceRefInvalid / sourceRefTotal).toFixed(4)) : 0,
+        reasonCounts: sourceRefReasonCounts,
+        repairedSourceRefCount,
+        rejectedSourceRefCount,
         statuses: sourceRefValidityStatuses,
         totalSourceRefCount: sourceRefTotal,
         validSourceRefCount: sourceRefValid,
+        validationModes: [...sourceRefValidationModes],
+        warningSourceRefCount,
       };
     }
     nodes[nodeKey] = summary;
@@ -818,6 +852,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function numberValue(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function mergeNumericRecord(target: Record<string, number>, value: unknown): void {
+  if (!isRecord(value)) {
+    return;
+  }
+  for (const [key, entry] of Object.entries(value)) {
+    const count = numberValue(entry);
+    if (count == null) {
+      continue;
+    }
+    target[key] = (target[key] || 0) + count;
+  }
 }
 
 function stringValue(value: unknown): string | null {
