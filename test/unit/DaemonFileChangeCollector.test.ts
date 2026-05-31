@@ -38,6 +38,64 @@ describe('DaemonFileChangeCollector', () => {
     collector.stop();
   });
 
+  test('exposes git worktree fallback lifecycle status', async () => {
+    const repo = createRepo();
+    const { collector } = createCollector(repo);
+
+    collector.start();
+    expect(collector.getStatus()).toMatchObject({
+      activeEventSource: 'git-worktree',
+      degradedReason: 'native watcher unavailable; using git worktree fallback',
+      fallback: {
+        active: true,
+        eventSource: 'git-worktree',
+      },
+      nativeWatcher: {
+        status: 'unsupported',
+      },
+      state: 'degraded',
+    });
+
+    collector.stop();
+    expect(collector.getStatus()).toMatchObject({
+      activeEventSource: null,
+      state: 'disabled',
+    });
+  });
+
+  test('reports unsupported when started outside a git worktree', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'alembic-daemon-file-change-non-git-'));
+    tempDirs.push(dir);
+    const { collector } = createCollector(dir);
+
+    collector.start();
+
+    expect(collector.getStatus()).toMatchObject({
+      activeEventSource: null,
+      fallback: {
+        active: false,
+        reason: 'project-is-not-git-worktree',
+      },
+      state: 'unsupported',
+    });
+  });
+
+  test('reports error when git fallback scan fails', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'alembic-daemon-file-change-bad-git-'));
+    tempDirs.push(dir);
+    mkdirSync(join(dir, '.git'), { recursive: true });
+    const { collector } = createCollector(dir);
+
+    await collector.scanOnce(1_000);
+
+    expect(collector.getStatus()).toMatchObject({
+      activeEventSource: 'git-worktree',
+      state: 'error',
+    });
+    expect(collector.getStatus().lastError).toContain('git ');
+    expect(collector.getStatus().lastError).toContain('failed');
+  });
+
   test('keeps collecting daemon worktree changes without external host gating', async () => {
     const repo = createRepo();
     const { collector, dispatch } = createCollector(repo);

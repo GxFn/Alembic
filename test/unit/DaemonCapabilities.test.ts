@@ -1,5 +1,9 @@
 import { createProjectDescriptor, summarizeProjectScopeDescriptor } from '@alembic/core/shared';
 import { afterEach, describe, expect, test } from 'vitest';
+import {
+  createDisabledFileMonitorStatus,
+  createGitFallbackFileMonitorStatus,
+} from '../../lib/daemon/FileMonitorStatus.js';
 import { buildAlembicRuntimeBoundary } from '../../lib/daemon/RuntimeBoundary.js';
 import {
   buildDaemonCapabilities,
@@ -97,9 +101,16 @@ describe('daemon capabilities', () => {
     });
     expect(capabilities.fileMonitor).toMatchObject({
       acceptedEventSources: ['host-edit', 'git-head', 'git-worktree'],
+      activeEventSource: 'git-worktree',
       available: true,
+      degraded: true,
+      degradedReason: 'native watcher unavailable; using git worktree fallback',
       endpoint: '/api/v1/file-changes',
       mode: 'daemon-git-worktree',
+      nativeWatcher: {
+        status: 'unsupported',
+      },
+      status: 'degraded',
     });
     expect(Object.values(capabilities.fileMonitor.compatibilityAliases)).toEqual(['host-edit']);
     expect(capabilities.internalAi.available).toBe(true);
@@ -138,8 +149,11 @@ describe('daemon capabilities', () => {
       },
       fileMonitor: {
         acceptedEventSources: ['host-edit', 'git-head', 'git-worktree'],
+        activeEventSource: 'git-worktree',
+        degraded: true,
         longLivedOwner: 'alembic-daemon',
         mode: 'daemon-git-worktree',
+        status: 'degraded',
       },
       jobs: {
         endpoints: {
@@ -224,6 +238,7 @@ describe('daemon capabilities', () => {
       dashboardAvailable: false,
       dashboardUrl: null,
       fileMonitorAvailable: false,
+      fileMonitorStatus: createDisabledFileMonitorStatus('disabled-by-env'),
       internalAi: { available: false, configSource: 'empty', model: null, provider: null },
       origin: null,
     });
@@ -234,7 +249,16 @@ describe('daemon capabilities', () => {
 
     expect(capabilities.fileMonitor.available).toBe(false);
     expect(capabilities.fileMonitor.mode).toBe('disabled');
+    expect(capabilities.fileMonitor).toMatchObject({
+      activeEventSource: null,
+      fallback: {
+        active: false,
+        reason: 'disabled-by-env',
+      },
+      status: 'disabled',
+    });
     expect(runtimeBoundary.fileMonitor.available).toBe(false);
+    expect(runtimeBoundary.fileMonitor.status).toBe('disabled');
 
     const residentService = buildResidentServiceStatus({
       capabilities,
@@ -303,6 +327,27 @@ describe('daemon capabilities', () => {
       mode: 'ghost',
       runtimeDir: '/tmp/project/.asd',
       workspaceMode: 'ghost',
+    });
+  });
+
+  test('uses explicit collector status instead of daemon env shortcuts', () => {
+    const capabilities = makeCapabilities({
+      fileMonitorAvailable: false,
+      fileMonitorStatus: createGitFallbackFileMonitorStatus({
+        intervalMs: 12_000,
+        lastDispatchAt: '2026-05-31T01:02:03.000Z',
+        lastScanAt: '2026-05-31T01:02:02.000Z',
+      }),
+    });
+
+    expect(capabilities.fileMonitor).toMatchObject({
+      activeEventSource: 'git-worktree',
+      available: true,
+      degraded: true,
+      lastDispatchAt: '2026-05-31T01:02:03.000Z',
+      lastScanAt: '2026-05-31T01:02:02.000Z',
+      mode: 'daemon-git-worktree',
+      status: 'degraded',
     });
   });
 

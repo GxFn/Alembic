@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
     }),
   };
   return {
-    container: { get: vi.fn() },
+    container: { get: vi.fn(), singletons: {} as Record<string, unknown> },
     resolver,
   };
 });
@@ -59,6 +59,7 @@ vi.mock('@alembic/core/shared', () => ({
   },
 }));
 
+import { createGitFallbackFileMonitorStatus } from '../../lib/daemon/FileMonitorStatus.js';
 import daemonRouter from '../../lib/http/routes/daemon.js';
 
 describe('daemon health resident service contract', () => {
@@ -71,6 +72,15 @@ describe('daemon health resident service contract', () => {
     process.env.ALEMBIC_DAEMON_DASHBOARD_MOUNTED = '1';
     delete process.env.ALEMBIC_DAEMON_FILE_CHANGES;
     process.env.ALEMBIC_DAEMON_MODE = '1';
+    mocks.container.singletons = {
+      daemonFileChangeCollector: {
+        getStatus: () =>
+          createGitFallbackFileMonitorStatus({
+            intervalMs: 60_000,
+            lastScanAt: '2026-05-31T01:02:03.000Z',
+          }),
+      },
+    };
   });
 
   afterEach(() => {
@@ -134,6 +144,15 @@ describe('daemon health resident service contract', () => {
       owner: 'alembic-plugin',
     });
     expect((data.capabilities as Record<string, unknown>).residentSearch).toBeDefined();
+    expect(
+      (data.capabilities as Record<string, Record<string, unknown>>).fileMonitor
+    ).toMatchObject({
+      activeEventSource: 'git-worktree',
+      available: true,
+      degraded: true,
+      lastScanAt: '2026-05-31T01:02:03.000Z',
+      status: 'degraded',
+    });
     expect(data.runtimeBoundary).toBeDefined();
   });
 });

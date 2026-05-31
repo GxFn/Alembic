@@ -17,6 +17,7 @@ import { timerRegistry } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
 import Bootstrap from '../lib/bootstrap.js';
 import { markInterruptedDaemonJobs } from '../lib/daemon/DaemonJobRunner.js';
+import { createDisabledFileMonitorStatus } from '../lib/daemon/FileMonitorStatus.js';
 import HttpServer from '../lib/http/HttpServer.js';
 import { readLatestSchemaMigrationVersion } from '../lib/infrastructure/database/SqliteDatabaseAccess.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
@@ -169,6 +170,8 @@ function startDaemonFileChangeCollector(options: {
   projectRoot: string;
 }): DaemonFileChangeCollector | null {
   if (process.env.ALEMBIC_DAEMON_FILE_CHANGES === '0') {
+    options.container.singletons.daemonFileChangeCollectorStatus =
+      createDisabledFileMonitorStatus('disabled-by-env');
     options.logger.info('[daemon-file-change] disabled by ALEMBIC_DAEMON_FILE_CHANGES=0');
     return null;
   }
@@ -182,7 +185,9 @@ function startDaemonFileChangeCollector(options: {
     intervalMs: Number.parseInt(process.env.ALEMBIC_DAEMON_FILE_CHANGE_INTERVAL_MS || '', 10),
     logger: options.logger,
   });
+  options.container.singletons.daemonFileChangeCollector = collector;
   collector.start();
+  options.container.singletons.daemonFileChangeCollectorStatus = collector.getStatus();
   return collector;
 }
 

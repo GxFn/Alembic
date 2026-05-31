@@ -13,6 +13,15 @@ import { join, normalize } from 'node:path';
 import { timerRegistry } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
 import type { FileChangeEvent } from '@alembic/core/types';
+import {
+  cloneFileMonitorStatus,
+  createDisabledFileMonitorStatus,
+  createErroredFileMonitorStatus,
+  createGitFallbackFileMonitorStatus,
+  createStartingFileMonitorStatus,
+  createUnsupportedFileMonitorStatus,
+  type DaemonFileMonitorRuntimeStatus,
+} from '../../daemon/FileMonitorStatus.js';
 import type { FileChangeDispatcher } from '../FileChangeDispatcher.js';
 
 const DEFAULT_INTERVAL_MS = 60_000;
@@ -42,27 +51,52 @@ export class DaemonFileChangeCollector {
 
   #timer: TimerHandle | null = null;
   #lastKeys: Set<string> | null = null;
+  #lastDispatchAt: string | null = null;
+  #lastScanAt: string | null = null;
   #running = false;
   #disposed = false;
+  #status: DaemonFileMonitorRuntimeStatus;
 
   constructor(options: DaemonFileChangeCollectorOptions) {
     this.#projectRoot = options.projectRoot;
     this.#dispatcher = options.dispatcher;
     this.#intervalMs = normalizePositiveInt(options.intervalMs, DEFAULT_INTERVAL_MS);
     this.#logger = options.logger ?? Logger.getInstance();
+    this.#status = createDisabledFileMonitorStatus('collector-not-started', {
+      intervalMs: this.#intervalMs,
+    });
+  }
+
+  getStatus(): DaemonFileMonitorRuntimeStatus {
+    return cloneFileMonitorStatus(this.#status);
   }
 
   start(): void {
     if (this.#disposed || this.#timer) {
       return;
     }
+    this.#status = createStartingFileMonitorStatus('collector-starting', {
+      intervalMs: this.#intervalMs,
+      lastDispatchAt: this.#lastDispatchAt,
+      lastScanAt: this.#lastScanAt,
+    });
     if (!existsSync(join(this.#projectRoot, '.git'))) {
+      this.#status = createUnsupportedFileMonitorStatus('project-is-not-git-worktree', {
+        intervalMs: this.#intervalMs,
+        lastDispatchAt: this.#lastDispatchAt,
+        lastScanAt: this.#lastScanAt,
+      });
       this.#logger.debug('[daemon-file-change] skipped: project is not a git worktree', {
         projectRoot: this.#projectRoot,
       });
       return;
     }
 
+    this.#status = createGitFallbackFileMonitorStatus({
+      intervalMs: this.#intervalMs,
+      lastDispatchAt: this.#lastDispatchAt,
+      lastScanAt: this.#lastScanAt,
+    });
     void this.scanOnce();
     this.#timer = timerRegistry.setInterval(
       () => {
@@ -83,6 +117,11 @@ export class DaemonFileChangeCollector {
       timerRegistry.clear(this.#timer);
       this.#timer = null;
     }
+    this.#status = createDisabledFileMonitorStatus('collector-stopped', {
+      intervalMs: this.#intervalMs,
+      lastDispatchAt: this.#lastDispatchAt,
+      lastScanAt: this.#lastScanAt,
+    });
   }
 
   async scanOnce(_now = Date.now()): Promise<void> {
@@ -92,6 +131,12 @@ export class DaemonFileChangeCollector {
     this.#running = true;
     try {
       const snapshot = await this.#collectSnapshot();
+      this.#lastScanAt = new Date(_now).toISOString();
+      this.#status = createGitFallbackFileMonitorStatus({
+        intervalMs: this.#intervalMs,
+        lastDispatchAt: this.#lastDispatchAt,
+        lastScanAt: this.#lastScanAt,
+      });
 
       if (!this.#lastKeys) {
         this.#lastKeys = snapshot.keys;
@@ -117,14 +162,27 @@ export class DaemonFileChangeCollector {
       }
 
       const report = await this.#dispatcher.dispatch(events);
+      this.#lastDispatchAt = new Date(_now).toISOString();
+      this.#status = createGitFallbackFileMonitorStatus({
+        intervalMs: this.#intervalMs,
+        lastDispatchAt: this.#lastDispatchAt,
+        lastScanAt: this.#lastScanAt,
+      });
       this.#logger.info('[daemon-file-change] dispatched fallback file changes', {
         events: events.length,
         needsReview: report.needsReview,
         eventSource: report.eventSource,
       });
     } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.#lastScanAt = new Date(_now).toISOString();
+      this.#status = createErroredFileMonitorStatus(message, {
+        intervalMs: this.#intervalMs,
+        lastDispatchAt: this.#lastDispatchAt,
+        lastScanAt: this.#lastScanAt,
+      });
       this.#logger.warn('[daemon-file-change] scan failed', {
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       });
     } finally {
       this.#running = false;
@@ -225,13 +283,19 @@ function isIgnoredPath(filePath: string): boolean {
 }
 
 function execGit(args: string[], cwd: string): Promise<string> {
-  return new Promise((resolve) => {
-    execFile('git', args, { cwd, timeout: GIT_TIMEOUT_MS, encoding: 'utf8' }, (error, stdout) => {
-      if (error) {
-        resolve('');
-        return;
+  return new Promise((resolve, reject) => {
+    execFile(
+      'git',
+      args,
+      { cwd, timeout: GIT_TIMEOUT_MS, encoding: 'utf8' },
+      (error, stdout, stderr) => {
+        if (error) {
+          const detail = stderr?.trim() || error.message;
+          reject(new Error(`git ${args.join(' ')} failed: ${detail}`));
+          return;
+        }
+        resolve(stdout.trim());
       }
-      resolve(stdout.trim());
-    });
+    );
   });
 }

@@ -14,6 +14,16 @@ import { collectAiEnvOverrides, isAiEnvReady, WorkspaceSettingsStore } from '@al
 import { resolveProjectRoot } from '@alembic/core/workspace';
 import express, { type Request } from 'express';
 import {
+  createDisabledFileMonitorStatus,
+  createGitFallbackFileMonitorStatus,
+  createStartingFileMonitorStatus,
+  createUnsupportedFileMonitorStatus,
+  type DaemonFileMonitorActiveEventSource,
+  type DaemonFileMonitorRuntimeState,
+  type DaemonFileMonitorRuntimeStatus,
+  isFileMonitorRuntimeAvailable,
+} from '../../daemon/FileMonitorStatus.js';
+import {
   buildAlembicRuntimeBoundary,
   type InternalAiCapability,
 } from '../../daemon/RuntimeBoundary.js';
@@ -40,6 +50,20 @@ export interface ResidentSearchCapability {
   };
 }
 
+type RuntimeFileMonitorCapability = AlembicRuntimeCapabilities['fileMonitor'] & {
+  activeEventSource: DaemonFileMonitorActiveEventSource;
+  degraded: boolean;
+  degradedReason: string | null;
+  fallback: DaemonFileMonitorRuntimeStatus['fallback'];
+  lastDispatchAt: string | null;
+  lastError: string | null;
+  lastScanAt: string | null;
+  nativeWatcher: DaemonFileMonitorRuntimeStatus['nativeWatcher'];
+  producerKind: DaemonFileMonitorRuntimeStatus['producerKind'];
+  runtimeState: DaemonFileMonitorRuntimeState;
+  status: DaemonFileMonitorRuntimeState;
+};
+
 router.get('/health', (req, res) => {
   const container = getServiceContainer();
   const projectRoot = resolveProjectRoot(container);
@@ -64,11 +88,11 @@ router.get('/health', (req, res) => {
     workspaceMode: workspaceFacts.mode,
   });
   const internalAi = getInternalAiCapability(projectRoot);
-  const fileMonitorAvailable = isDaemonFileMonitorAvailable(mode);
+  const fileMonitorStatus = resolveDaemonFileMonitorRuntimeStatus({ container, mode });
   const capabilities = buildDaemonCapabilities({
     dashboardAvailable,
     dashboardUrl,
-    fileMonitorAvailable,
+    fileMonitorStatus,
     internalAi,
     origin,
   });
@@ -127,7 +151,8 @@ export function buildDaemonProjectIdentity(
 export interface DaemonCapabilitiesOptions {
   dashboardAvailable: boolean;
   dashboardUrl: string | null;
-  fileMonitorAvailable: boolean;
+  fileMonitorAvailable?: boolean;
+  fileMonitorStatus?: DaemonFileMonitorRuntimeStatus;
   internalAi: InternalAiCapability;
   origin: string | null;
 }
@@ -143,13 +168,17 @@ export interface ResidentServiceStatusOptions {
 export function buildDaemonCapabilities(
   options: DaemonCapabilitiesOptions
 ): AlembicRuntimeCapabilities {
-  return createAlembicRuntimeCapabilities({
+  const fileMonitorStatus =
+    options.fileMonitorStatus ??
+    buildLegacyFileMonitorStatus(options.fileMonitorAvailable === true);
+  const fileMonitorAvailable = isFileMonitorRuntimeAvailable(fileMonitorStatus);
+  const capabilities = createAlembicRuntimeCapabilities({
     apiBaseUrl: options.origin,
     dashboardAvailable: options.dashboardAvailable,
     dashboardUrl: options.dashboardUrl,
-    fileMonitorAvailable: options.fileMonitorAvailable,
+    fileMonitorAvailable,
     fileMonitorEndpoint: `${API_PREFIX}/file-changes`,
-    fileMonitorMode: options.fileMonitorAvailable ? 'daemon-git-worktree' : 'disabled',
+    fileMonitorMode: fileMonitorAvailable ? 'daemon-git-worktree' : 'disabled',
     internalAi: options.internalAi,
     jobProcessEvents: {
       available: true,
@@ -159,11 +188,30 @@ export function buildDaemonCapabilities(
       available: true,
     },
   });
+
+  return {
+    ...capabilities,
+    fileMonitor: {
+      ...capabilities.fileMonitor,
+      activeEventSource: fileMonitorStatus.activeEventSource,
+      degraded: fileMonitorStatus.state === 'degraded',
+      degradedReason: fileMonitorStatus.degradedReason,
+      fallback: fileMonitorStatus.fallback,
+      lastDispatchAt: fileMonitorStatus.lastDispatchAt,
+      lastError: fileMonitorStatus.lastError,
+      lastScanAt: fileMonitorStatus.lastScanAt,
+      nativeWatcher: fileMonitorStatus.nativeWatcher,
+      producerKind: fileMonitorStatus.producerKind,
+      runtimeState: fileMonitorStatus.state,
+      status: fileMonitorStatus.state,
+    } satisfies RuntimeFileMonitorCapability,
+  } as AlembicRuntimeCapabilities;
 }
 
 export function buildResidentServiceStatus(
   options: ResidentServiceStatusOptions
 ): AlembicResidentServiceStatus {
+  const fileMonitor = options.capabilities.fileMonitor as RuntimeFileMonitorCapability;
   const capabilityOverrides: AlembicResidentCapabilityOverrides = {
     'dashboard.handoff': {
       available: options.capabilities.dashboard.available,
@@ -173,11 +221,10 @@ export function buildResidentServiceStatus(
     },
     'file-monitor.git-worktree': {
       available:
-        options.capabilities.fileMonitor.available &&
-        options.capabilities.fileMonitor.mode === 'daemon-git-worktree',
-      message: options.capabilities.fileMonitor.available
-        ? `Alembic daemon file monitor is running in ${options.capabilities.fileMonitor.mode} mode.`
-        : 'Alembic daemon file monitor is unavailable.',
+        fileMonitor.available &&
+        fileMonitor.mode === 'daemon-git-worktree' &&
+        fileMonitor.activeEventSource === 'git-worktree',
+      message: buildFileMonitorCapabilityMessage(fileMonitor),
     },
     'jobs.internal-ai.bootstrap': {
       available:
@@ -237,6 +284,30 @@ export function buildResidentServiceStatus(
   });
 }
 
+export function resolveDaemonFileMonitorRuntimeStatus(options: {
+  container: ReturnType<typeof getServiceContainer>;
+  mode: 'api' | 'daemon';
+}): DaemonFileMonitorRuntimeStatus {
+  if (process.env.ALEMBIC_DAEMON_FILE_CHANGES === '0') {
+    return createDisabledFileMonitorStatus('disabled-by-env');
+  }
+  if (options.mode !== 'daemon') {
+    return createUnsupportedFileMonitorStatus('daemon-mode-required');
+  }
+
+  const singletons = (options.container as { singletons?: Record<string, unknown> | undefined })
+    .singletons;
+  const collector = singletons?.daemonFileChangeCollector;
+  if (hasFileMonitorStatus(collector)) {
+    return collector.getStatus();
+  }
+  const status = singletons?.daemonFileChangeCollectorStatus;
+  if (isDaemonFileMonitorRuntimeStatus(status)) {
+    return status;
+  }
+  return createStartingFileMonitorStatus('collector-status-unavailable');
+}
+
 export function buildResidentSearchCapability(): ResidentSearchCapability {
   return {
     available: true,
@@ -275,8 +346,39 @@ function buildInternalAiJobMessage(
   return `Alembic local daemon exposes internal AI ${operation} job routes; provider config is ${internalAi.configSource}.`;
 }
 
-function isDaemonFileMonitorAvailable(mode: 'api' | 'daemon'): boolean {
-  return mode === 'daemon' && process.env.ALEMBIC_DAEMON_FILE_CHANGES !== '0';
+function buildLegacyFileMonitorStatus(available: boolean): DaemonFileMonitorRuntimeStatus {
+  return available
+    ? createGitFallbackFileMonitorStatus({ intervalMs: null })
+    : createDisabledFileMonitorStatus('file-monitor-unavailable');
+}
+
+function buildFileMonitorCapabilityMessage(fileMonitor: RuntimeFileMonitorCapability): string {
+  if (fileMonitor.available) {
+    return `Alembic daemon file monitor is ${fileMonitor.status} via ${fileMonitor.activeEventSource} mode.`;
+  }
+  if (fileMonitor.lastError) {
+    return `Alembic daemon file monitor is ${fileMonitor.status}: ${fileMonitor.lastError}`;
+  }
+  return `Alembic daemon file monitor is ${fileMonitor.status}.`;
+}
+
+function hasFileMonitorStatus(
+  value: unknown
+): value is { getStatus(): DaemonFileMonitorRuntimeStatus } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { getStatus?: unknown }).getStatus === 'function'
+  );
+}
+
+function isDaemonFileMonitorRuntimeStatus(value: unknown): value is DaemonFileMonitorRuntimeStatus {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as DaemonFileMonitorRuntimeStatus).state === 'string' &&
+    (value as DaemonFileMonitorRuntimeStatus).producerKind === 'alembic-file-monitor'
+  );
 }
 
 function getInternalAiCapability(projectRoot: string): InternalAiCapability {

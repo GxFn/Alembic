@@ -9,6 +9,10 @@ import {
   type AlembicRuntimeMode,
   type AlembicRuntimeProjectIdentity,
 } from '@alembic/core/daemon';
+import type {
+  DaemonFileMonitorActiveEventSource,
+  DaemonFileMonitorRuntimeState,
+} from './FileMonitorStatus.js';
 
 export const LOCAL_ALEMBIC_ROUTE: AlembicEnhancementRoute = 'local-alembic';
 export const DAEMON_FILE_CHANGE_EVENT_SOURCES = ALEMBIC_FILE_MONITOR_EVENT_SOURCES;
@@ -69,11 +73,15 @@ export interface AlembicRuntimeBoundary {
   };
   fileMonitor: {
     acceptedEventSources: DaemonFileChangeEventSource[];
+    activeEventSource: DaemonFileMonitorActiveEventSource;
     available: boolean;
+    degraded: boolean;
+    degradedReason: string | null;
     dispatcher: 'FileChangeDispatcher';
     endpoint: string | null;
     longLivedOwner: 'alembic-daemon';
     mode: AlembicRuntimeCapabilities['fileMonitor']['mode'];
+    status: DaemonFileMonitorRuntimeState;
   };
   internalAi: InternalAiCapability & {
     owner: 'alembic-internal-ai';
@@ -92,6 +100,7 @@ export function buildAlembicRuntimeBoundary(
 ): AlembicRuntimeBoundary {
   const workspaceMode =
     options.workspace.workspaceMode ?? (options.workspace.ghost ? 'ghost' : 'standard');
+  const fileMonitor = options.capabilities.fileMonitor as unknown as Record<string, unknown>;
 
   return {
     owner: 'alembic',
@@ -121,11 +130,15 @@ export function buildAlembicRuntimeBoundary(
     },
     fileMonitor: {
       acceptedEventSources: [...options.capabilities.fileMonitor.acceptedEventSources],
+      activeEventSource: readFileMonitorActiveEventSource(fileMonitor.activeEventSource),
       available: options.capabilities.fileMonitor.available,
+      degraded: fileMonitor.degraded === true,
+      degradedReason: readNullableString(fileMonitor.degradedReason),
       dispatcher: 'FileChangeDispatcher',
       endpoint: options.capabilities.fileMonitor.endpoint ?? ALEMBIC_FILE_CHANGES_PATH,
       longLivedOwner: 'alembic-daemon',
       mode: options.capabilities.fileMonitor.mode,
+      status: readFileMonitorStatus(fileMonitor.status),
     },
     internalAi: {
       ...options.capabilities.internalAi,
@@ -139,4 +152,29 @@ export function buildAlembicRuntimeBoundary(
       endpoints: { ...ALEMBIC_JOB_ENDPOINTS },
     },
   };
+}
+
+function readFileMonitorActiveEventSource(value: unknown): DaemonFileMonitorActiveEventSource {
+  if (value === 'native-watch' || value === 'git-worktree') {
+    return value;
+  }
+  return null;
+}
+
+function readFileMonitorStatus(value: unknown): DaemonFileMonitorRuntimeState {
+  if (
+    value === 'disabled' ||
+    value === 'unsupported' ||
+    value === 'starting' ||
+    value === 'running' ||
+    value === 'degraded' ||
+    value === 'error'
+  ) {
+    return value;
+  }
+  return 'disabled';
+}
+
+function readNullableString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
 }
