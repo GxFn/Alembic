@@ -51,7 +51,6 @@ import {
   buildPcvNodeEvidenceEnvelope,
   mergeBootstrapPcvNodeEvidence,
   type PcvNodeEvidenceEnvelope,
-  type PcvSourceRefValidationContext,
   successfulProducerSubmitCalls,
 } from './BootstrapPcvNodeLocalEvidence.js';
 
@@ -133,7 +132,6 @@ export interface ConsumeBootstrapDimensionResultOptions {
   emitter: BootstrapEventEmitter;
   dataRoot: string;
   sessionId: string;
-  sourceRefValidation?: PcvSourceRefValidationContext | null;
 }
 
 export interface BootstrapDimensionRunIssueState {
@@ -343,7 +341,6 @@ export function buildBootstrapDimensionPcvEvidenceEnvelope({
   runIssueState,
   runResult,
   sessionStore,
-  sourceRefValidation,
 }: {
   dimConfig: { label?: string };
   dimId: string;
@@ -353,7 +350,6 @@ export function buildBootstrapDimensionPcvEvidenceEnvelope({
   runIssueState: BootstrapDimensionRunIssueState;
   runResult: AgentResultLike;
   sessionStore: SessionStore;
-  sourceRefValidation?: PcvSourceRefValidationContext | null;
 }): BootstrapDimensionPcvEvidenceResult {
   const groundingLedger = buildPcvAnalyzeGroundingLedgerSummary({
     dimId,
@@ -376,7 +372,7 @@ export function buildBootstrapDimensionPcvEvidenceEnvelope({
     ...(groundingLedger ? { groundingLedger } : {}),
     ...(n9QualityGate ? { n9QualityGate } : {}),
     ...(n9RecordRepair ? { n9RecordRepair } : {}),
-    n11: buildPcvN11ProduceEvidence({ dimId, needsCandidates, projection, sourceRefValidation }),
+    n11: buildPcvN11ProduceEvidence({ dimId, needsCandidates, projection }),
     n12: buildPcvN12ConsumerPersistenceEvidence({
       acceptedSubmitCalls: runIssueState.isNormalCompletion
         ? successfulProducerSubmitCalls(projection)
@@ -542,7 +538,6 @@ export async function consumeBootstrapDimensionResult({
   emitter,
   dataRoot,
   sessionId,
-  sourceRefValidation,
 }: ConsumeBootstrapDimensionResultOptions): Promise<DimensionStat> {
   const {
     gateResult,
@@ -703,7 +698,6 @@ export async function consumeBootstrapDimensionResult({
     runIssueState,
     runResult,
     sessionStore,
-    sourceRefValidation,
   });
   const status = runIssueState.runIssue?.status || 'v3-pipeline-complete';
   const error = runIssueState.runIssue?.reason;
