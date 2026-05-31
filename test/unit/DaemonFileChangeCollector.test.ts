@@ -1,10 +1,21 @@
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FileChangeEvent, ReactiveEvolutionReport } from '@alembic/core/types';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { DaemonFileChangeCollector } from '../../lib/service/evolution/DaemonFileChangeCollector.js';
+import {
+  DaemonFileChangeCollector,
+  type NativeWatcherFactory,
+} from '../../lib/service/evolution/DaemonFileChangeCollector.js';
 import type { FileChangeDispatcher } from '../../lib/service/FileChangeDispatcher.js';
 
 const tempDirs: string[] = [];
@@ -38,20 +49,96 @@ describe('DaemonFileChangeCollector', () => {
     collector.stop();
   });
 
-  test('exposes git worktree fallback lifecycle status', async () => {
+  test('starts native watcher as the primary lifecycle path', () => {
+    const repo = createNativeProject();
+    const nativeWatcherFactory = vi.fn<NativeWatcherFactory>(() => ({
+      close: vi.fn(),
+      on: vi.fn(),
+    }));
+    const { collector } = createCollector(repo, { nativeWatcherFactory });
+
+    collector.start();
+
+    expect(nativeWatcherFactory).toHaveBeenCalledWith(repo, expect.any(Function));
+    expect(collector.getStatus()).toMatchObject({
+      activeEventSource: 'native-watch',
+      fallback: {
+        active: false,
+      },
+      nativeWatcher: {
+        status: 'running',
+      },
+      state: 'running',
+    });
+
+    collector.stop();
+    expect(collector.getStatus()).toMatchObject({
+      activeEventSource: null,
+      state: 'disabled',
+    });
+  });
+
+  test('dispatches native modify/create/delete/rename events and filters ignored paths', async () => {
+    const repo = createNativeProject();
+    const { collector, dispatch } = createCollector(repo, {
+      nativeWatcherFactory: () => ({ close: vi.fn(), on: vi.fn() }),
+    });
+
+    collector.start();
+
+    appendFileSync(join(repo, 'src', 'index.ts'), '\nexport const next = 2;\n');
+    writeFileSync(join(repo, 'src', 'created.ts'), 'export const created = true;\n');
+    unlinkSync(join(repo, 'src', 'deleted.ts'));
+    renameSync(join(repo, 'src', 'old-name.ts'), join(repo, 'src', 'new-name.ts'));
+    mkdirSync(join(repo, '.asd'), { recursive: true });
+    writeFileSync(join(repo, '.asd', 'state.json'), '{}\n');
+
+    await collector.scanNativeOnce(2_000);
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch.mock.calls[0]?.[0]).toEqual(
+      expect.arrayContaining([
+        { type: 'modified', path: 'src/index.ts', eventSource: 'host-edit' },
+        { type: 'created', path: 'src/created.ts', eventSource: 'host-edit' },
+        { type: 'deleted', path: 'src/deleted.ts', eventSource: 'host-edit' },
+        {
+          type: 'renamed',
+          oldPath: 'src/old-name.ts',
+          path: 'src/new-name.ts',
+          eventSource: 'host-edit',
+        },
+      ])
+    );
+    expect(dispatch.mock.calls[0]?.[0]).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: '.asd/state.json' })])
+    );
+    expect(collector.getStatus()).toMatchObject({
+      activeEventSource: 'native-watch',
+      state: 'running',
+    });
+
+    collector.stop();
+  });
+
+  test('falls back to git worktree lifecycle status when native watcher cannot start', async () => {
     const repo = createRepo();
-    const { collector } = createCollector(repo);
+    const { collector } = createCollector(repo, {
+      nativeWatcherFactory: () => {
+        throw new Error('native recursive watch unsupported');
+      },
+    });
 
     collector.start();
     expect(collector.getStatus()).toMatchObject({
       activeEventSource: 'git-worktree',
-      degradedReason: 'native watcher unavailable; using git worktree fallback',
+      degradedReason: expect.stringContaining('using git worktree fallback'),
       fallback: {
         active: true,
         eventSource: 'git-worktree',
       },
       nativeWatcher: {
-        status: 'unsupported',
+        reason: 'native recursive watch unsupported',
+        status: 'error',
       },
       state: 'degraded',
     });
@@ -63,10 +150,14 @@ describe('DaemonFileChangeCollector', () => {
     });
   });
 
-  test('reports unsupported when started outside a git worktree', () => {
+  test('reports unsupported when native watcher fails outside a git worktree', () => {
     const dir = mkdtempSync(join(tmpdir(), 'alembic-daemon-file-change-non-git-'));
     tempDirs.push(dir);
-    const { collector } = createCollector(dir);
+    const { collector } = createCollector(dir, {
+      nativeWatcherFactory: () => {
+        throw new Error('native recursive watch unsupported');
+      },
+    });
 
     collector.start();
 
@@ -132,7 +223,10 @@ describe('DaemonFileChangeCollector', () => {
   });
 });
 
-function createCollector(repo: string) {
+function createCollector(
+  repo: string,
+  options: { nativeWatcherFactory?: NativeWatcherFactory } = {}
+) {
   const dispatch = vi.fn(async (events: FileChangeEvent[]) => makeReport(events));
   const dispatcher = { dispatch } as unknown as FileChangeDispatcher;
   const collector = new DaemonFileChangeCollector({
@@ -144,8 +238,21 @@ function createCollector(repo: string) {
       info: vi.fn(),
       warn: vi.fn(),
     },
+    nativeWatcherFactory: options.nativeWatcherFactory,
   });
   return { collector, dispatch };
+}
+
+function createNativeProject(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'alembic-native-file-change-'));
+  tempDirs.push(dir);
+
+  mkdirSync(join(dir, 'src'), { recursive: true });
+  writeFileSync(join(dir, 'src', 'index.ts'), 'export const value = 1;\n');
+  writeFileSync(join(dir, 'src', 'deleted.ts'), 'export const removed = true;\n');
+  writeFileSync(join(dir, 'src', 'old-name.ts'), 'export const renamed = true;\n');
+
+  return dir;
 }
 
 function createRepo(): string {

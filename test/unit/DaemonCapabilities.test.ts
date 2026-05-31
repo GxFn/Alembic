@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 import {
   createDisabledFileMonitorStatus,
   createGitFallbackFileMonitorStatus,
+  createNativeFileMonitorStatus,
 } from '../../lib/daemon/FileMonitorStatus.js';
 import { buildAlembicRuntimeBoundary } from '../../lib/daemon/RuntimeBoundary.js';
 import {
@@ -348,6 +349,51 @@ describe('daemon capabilities', () => {
       lastScanAt: '2026-05-31T01:02:02.000Z',
       mode: 'daemon-git-worktree',
       status: 'degraded',
+    });
+  });
+
+  test('reports native watcher as running and git fallback inactive', () => {
+    const capabilities = makeCapabilities({
+      fileMonitorStatus: createNativeFileMonitorStatus({
+        lastScanAt: '2026-05-31T02:03:04.000Z',
+      }),
+    });
+    const runtimeBoundary = makeRuntimeBoundary(capabilities);
+    const residentService = buildResidentServiceStatus({
+      capabilities,
+      internalAi: capabilities.internalAi,
+      origin: 'http://127.0.0.1:49152',
+      projectIdentity: buildDaemonProjectIdentity({
+        dataRoot: '/tmp/project',
+        dataRootSource: 'project-root',
+        databasePath: '/tmp/project/.asd/alembic.db',
+        projectId: 'project-123',
+        projectRoot: '/tmp/project',
+        runtimeDir: '/tmp/project/.asd',
+      }),
+    });
+
+    expect(capabilities.fileMonitor).toMatchObject({
+      activeEventSource: 'native-watch',
+      available: true,
+      degraded: false,
+      lastScanAt: '2026-05-31T02:03:04.000Z',
+      mode: 'host-event-bridge',
+      nativeWatcher: {
+        status: 'running',
+      },
+      status: 'running',
+    });
+    expect(runtimeBoundary.fileMonitor).toMatchObject({
+      activeEventSource: 'native-watch',
+      available: true,
+      degraded: false,
+      mode: 'host-event-bridge',
+      status: 'running',
+    });
+    expect(residentService.capabilities['file-monitor.git-worktree']).toMatchObject({
+      available: false,
+      message: 'Alembic daemon native file monitor is running; git worktree fallback is inactive.',
     });
   });
 

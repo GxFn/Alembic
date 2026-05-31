@@ -59,7 +59,10 @@ vi.mock('@alembic/core/shared', () => ({
   },
 }));
 
-import { createGitFallbackFileMonitorStatus } from '../../lib/daemon/FileMonitorStatus.js';
+import {
+  createGitFallbackFileMonitorStatus,
+  createNativeFileMonitorStatus,
+} from '../../lib/daemon/FileMonitorStatus.js';
 import daemonRouter from '../../lib/http/routes/daemon.js';
 
 describe('daemon health resident service contract', () => {
@@ -154,6 +157,43 @@ describe('daemon health resident service contract', () => {
       status: 'degraded',
     });
     expect(data.runtimeBoundary).toBeDefined();
+  });
+
+  test('GET /daemon/health reports native watcher runtime status', async () => {
+    mocks.container.singletons = {
+      daemonFileChangeCollector: {
+        getStatus: () =>
+          createNativeFileMonitorStatus({
+            lastScanAt: '2026-05-31T03:04:05.000Z',
+          }),
+      },
+    };
+
+    const response = await getRouter(daemonRouter, '/api/v1/daemon/health', {
+      headers: { host: '127.0.0.1:49152' },
+      mountPath: '/api/v1/daemon',
+    });
+    const data = response.body.data as Record<string, unknown>;
+    const capabilities = data.capabilities as Record<string, Record<string, unknown>>;
+    const residentService = data.residentService as Record<string, unknown>;
+    const residentCapabilities = residentService.capabilities as Record<
+      string,
+      Record<string, unknown>
+    >;
+
+    expect(response.status).toBe(200);
+    expect(capabilities.fileMonitor).toMatchObject({
+      activeEventSource: 'native-watch',
+      available: true,
+      degraded: false,
+      lastScanAt: '2026-05-31T03:04:05.000Z',
+      mode: 'host-event-bridge',
+      status: 'running',
+    });
+    expect(residentCapabilities['file-monitor.git-worktree']).toMatchObject({
+      available: false,
+      message: 'Alembic daemon native file monitor is running; git worktree fallback is inactive.',
+    });
   });
 });
 

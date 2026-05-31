@@ -1,5 +1,8 @@
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { FileChangeEvent } from '@alembic/core/types';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { invokeRouter } from '../helpers/express.js';
 
 const mockAssessFileImpact = vi.fn();
@@ -25,8 +28,11 @@ vi.mock('../../lib/injection/ServiceContainer.js', () => ({
 }));
 
 import fileChangesRouter from '../../lib/http/routes/file-changes.js';
+import { DaemonFileChangeCollector } from '../../lib/service/evolution/DaemonFileChangeCollector.js';
 import { FileChangeHandler } from '../../lib/service/evolution/FileChangeHandler.js';
 import { FileChangeDispatcher } from '../../lib/service/FileChangeDispatcher.js';
+
+const tempDirs: string[] = [];
 
 describe('file-changes route', () => {
   beforeEach(() => {
@@ -39,6 +45,12 @@ describe('file-changes route', () => {
       score: 0.42,
     });
     mockExtractRecipeTokens.mockReturnValue({ tokens: new Set(), sources: new Map() });
+  });
+
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { force: true, recursive: true });
+    }
   });
 
   test('routes git fallback file-change events into reviewable evolution proposals', async () => {
@@ -113,6 +125,66 @@ describe('file-changes route', () => {
       })
     );
     expect(contentPatcher.applyProposal).not.toHaveBeenCalled();
+  });
+
+  test('native watcher events enter dispatcher and create reviewable proposals', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'alembic-native-proposal-'));
+    tempDirs.push(projectRoot);
+    mkdirSync(join(projectRoot, 'Sources'), { recursive: true });
+    writeFileSync(
+      join(projectRoot, 'Sources', 'RetryPolicy.swift'),
+      'final class NetworkKitRetryPolicy {}\n'
+    );
+    const sourceRefRepo = mockSourceRefRepo();
+    const knowledgeRepo = mockKnowledgeRepo();
+    const contentPatcher = mockContentPatcher();
+    const signalBus = mockSignalBus();
+    const gateway = mockGateway();
+    sourceRefRepo._seed('recipe-1', 'Sources/RetryPolicy.swift');
+    knowledgeRepo._seed('recipe-1', {
+      coreCode: 'final class NetworkKitRetryPolicy {}',
+      lifecycle: 'active',
+      title: 'RetryPolicy pattern',
+    });
+
+    const dispatcher = new FileChangeDispatcher();
+    dispatcher.register(
+      new FileChangeHandler(
+        sourceRefRepo as never,
+        knowledgeRepo as never,
+        contentPatcher as never,
+        {
+          evolutionGateway: gateway as never,
+          projectRoot,
+          signalBus: signalBus as never,
+        }
+      )
+    );
+    const collector = new DaemonFileChangeCollector({
+      dispatcher,
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+      nativeWatcherFactory: () => ({ close: vi.fn(), on: vi.fn() }),
+      projectRoot,
+    });
+
+    collector.start();
+    appendFileSync(join(projectRoot, 'Sources', 'RetryPolicy.swift'), '\nfunc retry() {}\n');
+    await collector.scanNativeOnce(2_000);
+
+    expect(collector.getStatus()).toMatchObject({
+      activeEventSource: 'native-watch',
+      state: 'running',
+    });
+    expect(gateway.submit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'update',
+        recipeId: 'recipe-1',
+        source: 'file-change',
+      })
+    );
+    expect(contentPatcher.applyProposal).not.toHaveBeenCalled();
+
+    collector.stop();
   });
 });
 

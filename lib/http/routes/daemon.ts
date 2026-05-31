@@ -178,7 +178,7 @@ export function buildDaemonCapabilities(
     dashboardUrl: options.dashboardUrl,
     fileMonitorAvailable,
     fileMonitorEndpoint: `${API_PREFIX}/file-changes`,
-    fileMonitorMode: fileMonitorAvailable ? 'daemon-git-worktree' : 'disabled',
+    fileMonitorMode: fileMonitorAvailable ? resolveFileMonitorMode(fileMonitorStatus) : 'disabled',
     internalAi: options.internalAi,
     jobProcessEvents: {
       available: true,
@@ -353,6 +353,9 @@ function buildLegacyFileMonitorStatus(available: boolean): DaemonFileMonitorRunt
 }
 
 function buildFileMonitorCapabilityMessage(fileMonitor: RuntimeFileMonitorCapability): string {
+  if (fileMonitor.activeEventSource === 'native-watch' && fileMonitor.status === 'running') {
+    return 'Alembic daemon native file monitor is running; git worktree fallback is inactive.';
+  }
   if (fileMonitor.available) {
     return `Alembic daemon file monitor is ${fileMonitor.status} via ${fileMonitor.activeEventSource} mode.`;
   }
@@ -360,6 +363,18 @@ function buildFileMonitorCapabilityMessage(fileMonitor: RuntimeFileMonitorCapabi
     return `Alembic daemon file monitor is ${fileMonitor.status}: ${fileMonitor.lastError}`;
   }
   return `Alembic daemon file monitor is ${fileMonitor.status}.`;
+}
+
+function resolveFileMonitorMode(
+  status: DaemonFileMonitorRuntimeStatus
+): AlembicRuntimeCapabilities['fileMonitor']['mode'] {
+  if (status.activeEventSource === 'native-watch') {
+    return 'host-event-bridge';
+  }
+  if (status.activeEventSource === 'git-worktree') {
+    return 'daemon-git-worktree';
+  }
+  return 'disabled';
 }
 
 function hasFileMonitorStatus(

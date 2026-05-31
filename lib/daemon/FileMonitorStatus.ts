@@ -46,7 +46,7 @@ export function createDisabledFileMonitorStatus(
     lastScanAt: null,
     nativeWatcher: {
       status: 'unsupported',
-      reason: 'native watcher is not wired in this Alembic build',
+      reason: 'native watcher is not running',
     },
     producerKind: 'alembic-file-monitor',
     state: 'disabled',
@@ -98,10 +98,35 @@ export function createGitFallbackFileMonitorStatus(
     lastScanAt: null,
     nativeWatcher: {
       status: 'unsupported',
-      reason: 'native watcher is not wired in this Alembic build',
+      reason: 'native watcher is unavailable',
     },
     producerKind: 'alembic-file-monitor',
     state: 'degraded',
+    ...options,
+  };
+}
+
+export function createNativeFileMonitorStatus(
+  options: Partial<DaemonFileMonitorRuntimeStatus> = {}
+): DaemonFileMonitorRuntimeStatus {
+  return {
+    activeEventSource: 'native-watch',
+    degradedReason: null,
+    fallback: {
+      active: false,
+      eventSource: 'git-worktree',
+      reason: null,
+    },
+    intervalMs: null,
+    lastDispatchAt: null,
+    lastError: null,
+    lastScanAt: null,
+    nativeWatcher: {
+      status: 'running',
+      reason: null,
+    },
+    producerKind: 'alembic-file-monitor',
+    state: 'running',
     ...options,
   };
 }
