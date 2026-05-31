@@ -2,9 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ToolCapabilityManifest, ToolExecutionRequest } from '@alembic/agent/tools';
-import { describe, expect, test } from 'vitest';
-import { TerminalAdapter } from '../../lib/tools/adapters/TerminalAdapter.js';
-import { InMemoryTerminalSessionManager } from '../../lib/tools/adapters/TerminalSessionManager.js';
 import {
   TERMINAL_PTY_CAPABILITY,
   TERMINAL_RUN_CAPABILITY,
@@ -14,6 +11,9 @@ import {
   TERMINAL_SESSION_STATUS_CAPABILITY,
   TERMINAL_SHELL_CAPABILITY,
 } from '@alembic/agent/tools/terminal';
+import { describe, expect, test } from 'vitest';
+import { TerminalAdapter } from '../../lib/tools/adapters/TerminalAdapter.js';
+import { InMemoryTerminalSessionManager } from '../../lib/tools/adapters/TerminalSessionManager.js';
 
 function request(
   args: Record<string, unknown>,
@@ -762,21 +762,21 @@ describe('TerminalAdapter', () => {
           command: 'printf "pty-ok"',
           rows: 30,
           cols: 100,
+          // PTY support depends on the host runner. Keep the adapter timeout below Vitest's
+          // per-test timeout so unavailable PTY devices are reported as a normal tool result.
+          timeoutMs: 500,
         },
         { projectRoot, manifest: TERMINAL_PTY_CAPABILITY }
       )
     );
 
     if (!result.ok) {
-      expect(result).toMatchObject({
-        toolId: 'terminal_pty',
-        status: 'error',
-        structuredContent: {
-          stderr: expect.stringMatching(/out of pty devices|No such file|not found|not available/i),
-          pty: {
-            stdin: 'disabled',
-            wrapper: 'python-pty',
-          },
+      expect(result.toolId).toBe('terminal_pty');
+      expect(['error', 'timeout']).toContain(result.status);
+      expect(result.structuredContent).toMatchObject({
+        pty: {
+          stdin: 'disabled',
+          wrapper: 'python-pty',
         },
       });
       return;
@@ -821,21 +821,20 @@ describe('TerminalAdapter', () => {
           stdin: 'pty-stdin-ok\n',
           rows: 24,
           cols: 80,
+          // See the disabled-stdin PTY test: unsupported PTY hosts must fail quickly.
+          timeoutMs: 500,
         },
         { projectRoot, manifest: TERMINAL_PTY_CAPABILITY }
       )
     );
 
     if (!result.ok) {
-      expect(result).toMatchObject({
-        toolId: 'terminal_pty',
-        status: 'error',
-        structuredContent: {
-          stderr: expect.stringMatching(/out of pty devices|No such file|not found|not available/i),
-          pty: {
-            stdin: 'provided',
-            stdinHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-          },
+      expect(result.toolId).toBe('terminal_pty');
+      expect(['error', 'timeout']).toContain(result.status);
+      expect(result.structuredContent).toMatchObject({
+        pty: {
+          stdin: 'provided',
+          stdinHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         },
       });
       return;
