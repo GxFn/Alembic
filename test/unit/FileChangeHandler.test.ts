@@ -213,8 +213,8 @@ describe('FileChangeHandler', () => {
       );
     });
 
-    test('无 sourceRef 匹配 → 跳过', async () => {
-      const { handler } = createHandler();
+    test('无 sourceRef 匹配 → no-hit 跳过且不创建 proposal', async () => {
+      const { handler, gateway } = createHandler();
 
       const report = await handler.handleFileChanges([
         { type: 'modified', path: 'Sources/Unknown.swift' },
@@ -222,6 +222,23 @@ describe('FileChangeHandler', () => {
 
       expect(report.needsReview).toBe(0);
       expect(report.skipped).toBe(1);
+      expect(gateway.submit).not.toHaveBeenCalled();
+    });
+
+    test('ignored path → 跳过且不进入 proposal/review', async () => {
+      const { handler, sourceRefRepo, knowledgeRepo, gateway } = createHandler();
+      sourceRefRepo._seed('r1', 'node_modules/pkg/index.js');
+      knowledgeRepo._seed('r1', { title: 'Ignored Recipe', coreCode: '' });
+
+      const report = await handler.handleFileChanges([
+        { type: 'modified', path: 'node_modules/pkg/index.js' },
+        { type: 'renamed', oldPath: '.git/index.lock', path: 'Sources/A.swift' },
+      ]);
+
+      expect(report.skipped).toBe(2);
+      expect(report.needsReview).toBe(0);
+      expect(report.details).toHaveLength(0);
+      expect(gateway.submit).not.toHaveBeenCalled();
     });
   });
 
@@ -315,13 +332,16 @@ describe('FileChangeHandler', () => {
     });
 
     test('仅 skip/created → suggestReview=false', async () => {
-      const { handler } = createHandler();
+      const { handler, gateway } = createHandler();
 
       const report = await handler.handleFileChanges([
         { type: 'created', path: 'Sources/New.swift' },
       ]);
 
+      expect(report.skipped).toBe(1);
+      expect(report.needsReview).toBe(0);
       expect(report.suggestReview).toBe(false);
+      expect(gateway.submit).not.toHaveBeenCalled();
     });
   });
 
@@ -337,12 +357,20 @@ describe('FileChangeHandler', () => {
         { type: 'deleted', path: 'Sources/Dead.swift' },
       ]);
 
-      expect(report.deprecated).toBe(1);
+      expect(report.deprecated).toBe(0);
+      expect(report.needsReview).toBe(1);
+      expect(report.details[0]).toMatchObject({
+        action: 'needs-review',
+        impactLevel: 'direct',
+        modifiedPath: 'Sources/Dead.swift',
+        recipeId: 'r1',
+      });
       expect(gateway.submit).toHaveBeenCalledWith(
         expect.objectContaining({
           recipeId: 'r1',
           action: 'deprecate',
-          confidence: 0.9,
+          confidence: 0.7,
+          source: 'file-change',
         })
       );
     });
@@ -366,8 +394,8 @@ describe('FileChangeHandler', () => {
   /* ─── renamed 事件 ─── */
 
   describe('renamed 事件', () => {
-    test('成功修复路径 → fixed', async () => {
-      const { handler, sourceRefRepo, knowledgeRepo } = createHandler();
+    test('路径重命名 → 创建 update proposal，不自动改 Recipe/sourceRefs', async () => {
+      const { handler, sourceRefRepo, knowledgeRepo, contentPatcher, gateway } = createHandler();
       sourceRefRepo._seed('r1', 'Sources/Old.swift');
       knowledgeRepo._seed('r1', { title: 'Renamed Recipe', coreCode: '' });
 
@@ -375,13 +403,35 @@ describe('FileChangeHandler', () => {
         { type: 'renamed', path: 'Sources/New.swift', oldPath: 'Sources/Old.swift' },
       ]);
 
-      expect(report.fixed).toBe(1);
-      expect(sourceRefRepo.replaceSourcePath).toHaveBeenCalledWith(
-        'r1',
-        'Sources/Old.swift',
-        'Sources/New.swift',
-        expect.any(Number)
+      expect(report.fixed).toBe(0);
+      expect(report.needsReview).toBe(1);
+      expect(report.details[0]).toMatchObject({
+        action: 'needs-review',
+        impactLevel: 'direct',
+        modifiedPath: 'Sources/New.swift',
+        recipeId: 'r1',
+      });
+      expect(gateway.submit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'update',
+          recipeId: 'r1',
+          source: 'file-change',
+        })
       );
+      expect(sourceRefRepo.replaceSourcePath).not.toHaveBeenCalled();
+      expect(contentPatcher.applyProposal).not.toHaveBeenCalled();
+    });
+
+    test('路径重命名 no-hit → 跳过且不创建 proposal', async () => {
+      const { handler, gateway } = createHandler();
+
+      const report = await handler.handleFileChanges([
+        { type: 'renamed', path: 'Sources/New.swift', oldPath: 'Sources/Old.swift' },
+      ]);
+
+      expect(report.skipped).toBe(1);
+      expect(report.needsReview).toBe(0);
+      expect(gateway.submit).not.toHaveBeenCalled();
     });
   });
 
@@ -500,8 +550,11 @@ describe('FileChangeHandler', () => {
         { type: 'deleted', path: 'Sources/Core/ServiceRegistry.swift' },
       ]);
 
-      expect(report.deprecated).toBe(1);
-      expect(gateway.submit).toHaveBeenCalledWith(expect.objectContaining({ action: 'deprecate' }));
+      expect(report.deprecated).toBe(0);
+      expect(report.needsReview).toBe(1);
+      expect(gateway.submit).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'deprecate', source: 'file-change' })
+      );
     });
 
     test('[回归] modified 事件信号发射包含正确的 recipeId', async () => {

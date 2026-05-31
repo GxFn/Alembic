@@ -330,6 +330,27 @@ describe('EvolutionGateway', () => {
       );
     });
 
+    it('file-change deprecate below immediate threshold → creates review proposal', async () => {
+      const { gateway, lifecycle, proposalRepo } = createGateway();
+
+      const result = await gateway.submit({
+        recipeId: 'r1',
+        action: 'deprecate',
+        source: 'file-change',
+        confidence: 0.7,
+        description: 'source file deleted',
+      });
+
+      expect(result.outcome).toBe('proposal-created');
+      expect(lifecycle.transition).not.toHaveBeenCalled();
+      expect(proposalRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'file-change',
+          type: 'deprecate',
+        })
+      );
+    });
+
     it('guard rejects immediate deprecate → falls back to proposal', async () => {
       const lifecycle = createMockLifecycle();
       lifecycle.transition.mockResolvedValue({ success: false, error: 'guard rejected' });

@@ -2,8 +2,8 @@
  * FileChangeHandler — 文件变更驱动的 Recipe 实时进化
  *
  * 核心策略：
- *   - 能自动修复的（路径重命名）→ ContentPatcher 修复
- *   - 修不了的（文件/路径删除）→ 通过 Gateway 提交 deprecate
+ *   - 路径重命名 → 通过 Gateway 提交 update proposal，等待人工 review
+ *   - 文件/路径删除 → 通过 Gateway 提交 deprecate proposal，等待人工 review
  *   - 项目结构变化（modified）→ 标记受影响 Recipe + 返回变更摘要供 Agent 进化检查
  *
  * 不做全量扫描，仅处理传入的 FileChangeEvent 列表。
@@ -22,7 +22,7 @@ import {
   type EvolutionGateway,
   extractRecipeTokens,
 } from '@alembic/core/evolution';
-import { isConsumable, isDegraded, rewriteRecipePaths } from '@alembic/core/knowledge';
+import { isConsumable, isDegraded } from '@alembic/core/knowledge';
 import Logger from '@alembic/core/logging';
 import type { KnowledgeRepository, SourceRefRepository } from '@alembic/core/repositories';
 import type { FileChangeEvent, ImpactLevel, ReactiveEvolutionReport } from '@alembic/core/types';
@@ -47,17 +47,15 @@ export class FileChangeHandler implements FileChangeSubscriber {
   readonly name = 'FileChangeHandler';
   readonly #sourceRefRepo: SourceRefRepository;
   readonly #knowledgeRepo: KnowledgeRepository;
-  readonly #contentPatcher: ContentPatcher;
   readonly #signalBus: SignalBus | null;
   readonly #gateway: EvolutionGateway;
-  readonly #dataRoot: string;
   readonly #projectRoot: string;
   readonly #logger = Logger.getInstance();
 
   constructor(
     sourceRefRepo: SourceRefRepository,
     knowledgeRepo: KnowledgeRepository,
-    contentPatcher: ContentPatcher,
+    _contentPatcher: ContentPatcher,
     options: {
       signalBus?: SignalBus;
       evolutionGateway: EvolutionGateway;
@@ -67,10 +65,8 @@ export class FileChangeHandler implements FileChangeSubscriber {
   ) {
     this.#sourceRefRepo = sourceRefRepo;
     this.#knowledgeRepo = knowledgeRepo;
-    this.#contentPatcher = contentPatcher;
     this.#signalBus = options.signalBus ?? null;
     this.#gateway = options.evolutionGateway;
-    this.#dataRoot = options.dataRoot ?? process.cwd();
     this.#projectRoot = options.projectRoot ?? process.cwd();
   }
 
@@ -85,8 +81,8 @@ export class FileChangeHandler implements FileChangeSubscriber {
    * 统一入口 — 处理一批文件变更事件
    *
    * 每个事件按类型分派:
-   *   renamed  → 自动修复 sourceRef 路径
-   *   deleted  → 检查是否还有其他 active ref，无则弃用
+   *   renamed  → 创建 update proposal，不自动改 Recipe/sourceRefs
+   *   deleted  → 检查是否还有其他 active ref，无则创建 deprecate proposal
    *   modified → 跳过（结构变化由 Agent 增量扫描处理）
    *   created  → 跳过（新文件不影响已有 Recipe）
    */
@@ -101,6 +97,11 @@ export class FileChangeHandler implements FileChangeSubscriber {
     };
 
     for (const event of events) {
+      if (isIgnoredFileChangePath(event.path) || isIgnoredFileChangePath(event.oldPath ?? '')) {
+        report.skipped++;
+        continue;
+      }
+
       switch (event.type) {
         case 'renamed': {
           const oldP = event.oldPath ?? event.path;
@@ -158,11 +159,11 @@ export class FileChangeHandler implements FileChangeSubscriber {
   /* ═══════════════════ Renamed ═══════════════════ */
 
   /**
-   * 文件重命名 → 修复所有引用该路径的 Recipe
+   * 文件重命名 → 为所有引用旧路径的 Recipe 创建 update proposal
    *
    * 1. 查 recipe_source_refs 找到受影响 Recipe
-   * 2. 用 ContentPatcher 替换 sourceRefs 中的旧路径
-   * 3. 更新 recipe_source_refs 记录
+   * 2. 记录 oldPath/newPath evidence
+   * 3. 不自动改 Recipe/sourceRefs，交给 review consumer 或后续 Agent enrichment
    */
   async #handleRenamed(
     oldPath: string,
@@ -178,63 +179,49 @@ export class FileChangeHandler implements FileChangeSubscriber {
 
     for (const ref of affected) {
       try {
-        // 用 ContentPatcher 修复 Recipe 的 sourceRefs 字段
-        const patchResult = await this.#contentPatcher.applyProposal(
-          {
-            id: `reactive-rename-${ref.recipeId}-${Date.now()}`,
-            type: 'update',
-            targetRecipeId: ref.recipeId,
-            evidence: [
-              {
-                suggestedChanges: JSON.stringify({
-                  patchVersion: 1,
-                  changes: [
-                    {
-                      field: 'sourceRefs',
-                      action: 'replace-item',
-                      oldValue: oldPath,
-                      newValue: newPath,
-                    },
-                  ],
-                  reasoning: `File renamed: ${oldPath} → ${newPath}`,
-                }),
-              },
-            ],
-          },
-          'correction'
-        );
-
-        // 更新 recipe_source_refs 桥接表
-        this.#sourceRefRepo.replaceSourcePath(ref.recipeId, oldPath, newPath, Date.now());
-
-        // 全量替换 DB 文本字段 + .md 文件中的路径引用
-        const rewriteResult = await rewriteRecipePaths(
-          this.#knowledgeRepo,
-          ref.recipeId,
-          [{ oldPath, newPath }],
-          this.#dataRoot
-        );
-
         const title = await this.#getRecipeTitle(ref.recipeId);
-        report.fixed++;
+        const reason = `Source file renamed: ${oldPath} → ${newPath}; review Recipe sourceRefs before applying.`;
+        const gatewayResult = await this.#gateway.submit({
+          recipeId: ref.recipeId,
+          action: 'update',
+          source: 'file-change',
+          confidence: 0.85,
+          description: reason,
+          evidence: [
+            {
+              changeKind: 'renamed',
+              detectedAt: Date.now(),
+              newPath,
+              oldPath,
+              producerKind: 'alembic-file-monitor',
+            },
+          ],
+        });
+
+        if (gatewayResult.outcome === 'error') {
+          this.#logger.warn('[FileChangeHandler] Gateway rename proposal failed', {
+            recipeId: ref.recipeId,
+            error: gatewayResult.error,
+          });
+          report.skipped++;
+          continue;
+        }
+
+        report.needsReview++;
         report.details.push({
           recipeId: ref.recipeId,
           recipeTitle: title,
-          action: 'fix-rename',
-          reason: `sourceRef path updated: ${oldPath} → ${newPath} (patch: ${patchResult.success ? 'ok' : 'skipped'}, fields: ${rewriteResult.updatedFields.join(',') || 'none'})`,
+          action: 'needs-review',
+          reason,
+          impactLevel: 'direct',
+          modifiedPath: newPath,
         });
       } catch (err: unknown) {
-        this.#logger.warn('[FileChangeHandler] rename fix failed', {
+        this.#logger.warn('[FileChangeHandler] rename proposal failed', {
           recipeId: ref.recipeId,
           error: (err as Error).message,
         });
-        // 修复失败 → 标记 stale，不弃用
-        this.#sourceRefRepo.upsert({
-          recipeId: ref.recipeId,
-          sourcePath: oldPath,
-          status: 'stale',
-          verifiedAt: Date.now(),
-        });
+        report.skipped++;
       }
     }
   }
@@ -244,7 +231,7 @@ export class FileChangeHandler implements FileChangeSubscriber {
   /**
    * 文件删除 → 检查 Recipe 是否还有其他 active sourceRef
    *   - 还有 → 只标记该 ref 为 stale
-   *   - 没了 → 直接弃用整条 Recipe
+   *   - 没了 → 创建 deprecate proposal，不立即弃用 Recipe
    */
   async #handleDeleted(deletedPath: string, report: ReactiveEvolutionReport): Promise<void> {
     const affected = this.#sourceRefRepo.findBySourcePath(deletedPath);
@@ -273,26 +260,35 @@ export class FileChangeHandler implements FileChangeSubscriber {
         const title = await this.#getRecipeTitle(ref.recipeId);
 
         if (activeRefs.length === 0) {
-          // 所有来源都没了 → 通过 Gateway 统一处理弃用
+          // 所有来源都没了 → 通过 Gateway 统一创建 deprecate proposal
           const reason = `All source references lost (deleted: ${deletedPath})`;
 
           const gatewayResult = await this.#gateway.submit({
             recipeId: ref.recipeId,
             action: 'deprecate',
             source: 'file-change',
-            confidence: 0.9,
+            confidence: 0.7,
             description: reason,
-            evidence: [{ deletedPath, remainingActiveRefs: 0 }],
+            evidence: [
+              {
+                changeKind: 'deleted',
+                deletedPath,
+                detectedAt: Date.now(),
+                producerKind: 'alembic-file-monitor',
+                remainingActiveRefs: 0,
+              },
+            ],
           });
 
           if (gatewayResult.outcome !== 'error') {
-            report.deprecated++;
+            report.needsReview++;
             report.details.push({
               recipeId: ref.recipeId,
               recipeTitle: title,
-              action: 'deprecate',
-              reason,
+              action: 'needs-review',
+              reason: `${reason}; deprecate proposal requires review.`,
               impactLevel: 'direct',
+              modifiedPath: deletedPath,
             });
           } else {
             this.#logger.warn('[FileChangeHandler] Gateway deprecation failed', {
@@ -399,7 +395,16 @@ export class FileChangeHandler implements FileChangeSubscriber {
             source: 'file-change',
             confidence: Math.min(0.5 + score, 0.9),
             description: reason,
-            evidence: [{ modifiedPath, score, matchedTokens, detectedAt: Date.now() }],
+            evidence: [
+              {
+                changeKind: 'modified',
+                detectedAt: Date.now(),
+                matchedTokens,
+                modifiedPath,
+                producerKind: 'alembic-file-monitor',
+                score,
+              },
+            ],
           });
         } catch {
           // 提案创建失败不影响主流程（signal 仍然发射）
@@ -480,4 +485,15 @@ export { FileChangeHandler as ReactiveEvolutionService };
 
 function isEvolutionTrackableLifecycle(lifecycle: unknown): boolean {
   return typeof lifecycle === 'string' && (isConsumable(lifecycle) || isDegraded(lifecycle));
+}
+
+function isIgnoredFileChangePath(filePath: string): boolean {
+  return (
+    filePath === '.asd' ||
+    filePath === '.git' ||
+    filePath === 'node_modules' ||
+    filePath.startsWith('.asd/') ||
+    filePath.startsWith('.git/') ||
+    filePath.startsWith('node_modules/')
+  );
 }
