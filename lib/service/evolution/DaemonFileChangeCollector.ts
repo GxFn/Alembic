@@ -65,6 +65,8 @@ interface WorktreeSnapshot {
 }
 
 interface NativeSnapshotEntry {
+  dev: number;
+  ino: number;
   mtimeMs: number;
   path: string;
   size: number;
@@ -473,6 +475,8 @@ function collectNativeFileSnapshotFromDirectory(
         continue;
       }
       snapshot.set(relativePath, {
+        dev: stat.dev,
+        ino: stat.ino,
         mtimeMs: stat.mtimeMs,
         path: relativePath,
         size: stat.size,
@@ -534,12 +538,19 @@ function diffNativeSnapshots(previous: NativeSnapshot, next: NativeSnapshot): Fi
 function groupBySignature(entries: NativeSnapshotEntry[]): Map<string, NativeSnapshotEntry[]> {
   const grouped = new Map<string, NativeSnapshotEntry[]>();
   for (const entry of entries) {
-    const signature = `${entry.size}:${entry.mtimeMs}`;
+    const signature = getNativeRenameSignature(entry);
     const values = grouped.get(signature) ?? [];
     values.push(entry);
     grouped.set(signature, values);
   }
   return grouped;
+}
+
+function getNativeRenameSignature(entry: NativeSnapshotEntry): string {
+  if (Number.isFinite(entry.dev) && Number.isFinite(entry.ino) && entry.ino !== 0) {
+    return `inode:${entry.dev}:${entry.ino}`;
+  }
+  return `content:${entry.size}:${entry.mtimeMs}`;
 }
 
 function addNameStatusEvents(target: Map<string, FileChangeEvent>, output: string): void {
