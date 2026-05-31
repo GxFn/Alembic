@@ -12,11 +12,7 @@ import type {
   ToolCallRecord,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
 import { parseDimensionDigest } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
-import {
-  buildPcvN8StageFactoryEvidence,
-  buildPcvN11ProduceEvidence,
-  type PcvN11ProduceEvidence,
-} from './BootstrapPcvNodeLocalEvidence.js';
+import { buildPcvN8StageFactoryEvidence } from './BootstrapPcvNodeLocalEvidence.js';
 
 const MAX_TEXT_CHARS = 6000;
 const MAX_JSON_TEXT_CHARS = 12000;
@@ -99,14 +95,12 @@ export function buildBootstrapDimensionInputProcessEvents({
 export function buildBootstrapDimensionResultProcessEvents({
   dimId,
   label,
-  needsCandidates = true,
   projection,
   runResult,
   sessionId,
 }: {
   dimId: string;
   label?: string | null;
-  needsCandidates?: boolean;
   projection: BootstrapDimensionProjection;
   runResult: AgentResultLike;
   sessionId: string;
@@ -116,15 +110,9 @@ export function buildBootstrapDimensionResultProcessEvents({
   if (toolEvent) {
     events.push(toolEvent);
   }
-  const pcvN11Evidence = buildPcvN11ProduceEvidence({
-    dimId,
-    needsCandidates,
-    projection,
-  });
   const outputEvent = buildVisibleOutputEvent({
     dimId,
     label,
-    pcvN11Evidence,
     projection,
     runResult,
     sessionId,
@@ -458,14 +446,12 @@ function buildToolEvent({
 function buildVisibleOutputEvent({
   dimId,
   label,
-  pcvN11Evidence,
   projection,
   runResult,
   sessionId,
 }: {
   dimId: string;
   label?: string | null;
-  pcvN11Evidence: PcvN11ProduceEvidence;
   projection: BootstrapDimensionProjection;
   runResult: AgentResultLike;
   sessionId: string;
@@ -533,8 +519,6 @@ function buildVisibleOutputEvent({
         tokenUsage: projection.combinedTokenUsage,
       },
       outputSections: projectedSections.map(({ name }) => name),
-      pcvNodeEvidence: { n11: pcvN11Evidence },
-      pcvObservability: { n11: pcvN11Evidence },
       sessionId,
       status: runResult.status || null,
       tokenUsage: projection.combinedTokenUsage,

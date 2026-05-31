@@ -45,7 +45,6 @@ import {
   type BootstrapPcvNodeEvidenceSet,
   buildPcvAnalyzeGroundingLedgerSummary,
   buildPcvN9StageProjectionEvidence,
-  buildPcvN11ProduceEvidence,
   buildPcvN12ConsumerPersistenceEvidence,
   buildPcvN12ErrorEvidence,
   buildPcvNodeEvidenceEnvelope,
@@ -372,7 +371,6 @@ export function buildBootstrapDimensionPcvEvidenceEnvelope({
     ...(groundingLedger ? { groundingLedger } : {}),
     ...(n9QualityGate ? { n9QualityGate } : {}),
     ...(n9RecordRepair ? { n9RecordRepair } : {}),
-    n11: buildPcvN11ProduceEvidence({ dimId, needsCandidates, projection }),
     n12: buildPcvN12ConsumerPersistenceEvidence({
       acceptedSubmitCalls: runIssueState.isNormalCompletion
         ? successfulProducerSubmitCalls(projection)

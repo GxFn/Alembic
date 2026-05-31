@@ -613,9 +613,6 @@ function normalizePcvNodeEvidenceSet(value: unknown): BootstrapPcvNodeEvidenceSe
       BootstrapPcvNodeEvidenceSet['n9RecordRepair']
     >;
   }
-  if (isRecord(value.n11)) {
-    evidence.n11 = value.n11 as unknown as NonNullable<BootstrapPcvNodeEvidenceSet['n11']>;
-  }
   if (isRecord(value.n12)) {
     evidence.n12 = value.n12 as unknown as NonNullable<BootstrapPcvNodeEvidenceSet['n12']>;
   }
@@ -628,13 +625,12 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
   let blockedNodes = 0;
   let nodeCount = 0;
 
-  for (const nodeKey of ['n8', 'n9QualityGate', 'n9RecordRepair', 'n11', 'n12'] as const) {
+  for (const nodeKey of ['n8', 'n9QualityGate', 'n9RecordRepair', 'n12'] as const) {
     const statuses: Record<string, number> = {};
     const missingLinkReasons = new Set<string>();
     const nodeIds = new Set<string>();
     const chainNodeIds = new Set<string>();
     let dimensionsWithEvidence = 0;
-    let sourceRefTotal = 0;
     for (const evidence of Object.values(dimensionEvidence)) {
       const nodeEvidence = evidence[nodeKey];
       if (!nodeEvidence) {
@@ -660,11 +656,6 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
       if (nodeEvidence.status === 'blocked-by-observability-gap') {
         blockedNodes++;
       }
-      if (nodeKey === 'n11' && isRecord(nodeEvidence)) {
-        sourceRefTotal +=
-          numberValue(nodeEvidence.totalSourceRefCount) ??
-          (Array.isArray(nodeEvidence.sourceRefs) ? nodeEvidence.sourceRefs.length : 0);
-      }
     }
     if (dimensionsWithEvidence === 0) {
       continue;
@@ -676,11 +667,6 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
       nodeIds: [...nodeIds],
       statuses,
     };
-    if (nodeKey === 'n11') {
-      // 总报告只汇总最终候选 sourceRefs 数量。
-      // 之前 AI 错误生成 invalid/repair/reason/collector 分类，导致指标混乱和重大资源浪费；不得在这里复活。
-      summary.finalSourceRefs = { totalSourceRefCount: sourceRefTotal };
-    }
     nodes[nodeKey] = summary;
   }
 
@@ -799,10 +785,6 @@ export function buildInternalDimensionCompletionSummary({
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
-function numberValue(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function stringValue(value: unknown): string | null {

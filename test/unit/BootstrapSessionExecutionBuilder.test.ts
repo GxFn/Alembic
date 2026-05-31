@@ -98,12 +98,7 @@ describe('bootstrap session execution builder', () => {
             chainNodeId: 'pcvm:cold-start:n9',
           },
         },
-        pcvChainNodes: {
-          produce: {
-            pcvNodeId: 'pcvm:n11:produce',
-            chainNodeId: 'pcvm:cold-start:n11',
-          },
-        },
+        pcvChainNodes: {},
       },
     });
     expect(
@@ -130,7 +125,6 @@ describe('bootstrap session execution builder', () => {
     expect(runtimeInput.message.metadata?.context).toMatchObject({
       pcvStageNodeMap: {
         analyze: { pcvNodeId: 'pcvm:n9:analyze' },
-        produce: { chainNodeId: 'pcvm:cold-start:n11' },
       },
       pcvChainNodes: {
         quality_gate: { pcvNodeId: 'pcvm:n9:quality_gate' },
@@ -141,9 +135,7 @@ describe('bootstrap session execution builder', () => {
       pcvStageNodeMap: {
         analyze: { chainNodeId: 'pcvm:cold-start:n9' },
       },
-      pcvChainNodes: {
-        produce: { pcvNodeId: 'pcvm:n11:produce' },
-      },
+      pcvChainNodes: {},
       sharedState: {
         _pcvStageNodeMap: {
           record_repair: { pcvNodeId: 'pcvm:n9:record_repair' },

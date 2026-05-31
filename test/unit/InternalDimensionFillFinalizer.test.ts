@@ -206,7 +206,6 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
                 nodeId: 'N12-consumers-persistence',
                 persistedFailureReason: null,
                 sessionStoreSnapshotAvailable: true,
-                sourceRefs: [],
                 status: 'linked',
                 summary: 'n12 linked',
               },
@@ -381,11 +380,13 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
       session: { id: 'session-1' },
     } as WorkflowReport;
 
-    const changed = augmentWorkflowReportWithPcvNodeLocalBaseline(report, {
-      api: {
-        candidateCount: 1,
-        durationMs: 10,
-        pcvNodeEvidence: {
+    const changed = augmentWorkflowReportWithPcvNodeLocalBaseline(
+      report,
+      {
+        api: {
+          candidateCount: 1,
+          durationMs: 10,
+          pcvNodeEvidence: {
           n8: {
             chainNodeId: 'N8-stage-factory-tool-policy',
             contract: 'PCVColdStartNodeLocalBaseline',
@@ -401,7 +402,6 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
               requiredSubmitTool: 'knowledge',
               terminalToolIds: [],
             },
-            sourceRefs: [],
             stageOrder: ['analyze', 'quality_gate', 'produce', 'rejection_gate'],
             stageToolPolicies: [],
             status: 'linked',
@@ -440,7 +440,6 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
             nodeId: 'pcvm:n9:analyze',
             planningOnlyCount: 0,
             recordOnlyCount: 0,
-            sourceRefs: [],
             status: 'partial-evidence',
             summary: 'api analyze grounding ledger recorded 3 burns',
             summaryOnlyCount: 0,
@@ -459,7 +458,6 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
             pass: true,
             phasePresent: true,
             projectionSource: 'phase',
-            sourceRefs: [],
             stageId: 'quality_gate',
             status: 'linked',
             summary: 'api quality gate stage projected',
@@ -477,36 +475,15 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
             pass: null,
             phasePresent: true,
             projectionSource: 'phase',
-            sourceRefs: [],
             stageId: 'record_repair',
             status: 'linked',
             summary: 'api record repair stage projected',
             timedOut: false,
           },
-          n11: {
-            acceptedCount: 1,
-            chainNodeId: 'pcvm:cold-start:n11',
-            contract: 'PCVColdStartNodeLocalBaseline',
-            contractVersion: 1,
-            dimensionId: 'api',
-            evidenceKind: 'producer-cut',
-            gapLimit: null,
-            missingLinkReasons: ['producer_terminal_tool_missing'],
-            noTerminalProof: true,
-            nodeId: 'pcvm:n11:produce',
-            producerOnlyCut: true,
-            producerToolCalls: [{ action: 'submit', status: 'created', tool: 'knowledge' }],
-            rejectedCount: 0,
-            sourceRefs: ['src/api.ts', 'Sources/Infrastructure/Account/CookieManager.swift'],
-            status: 'blocked-by-observability-gap',
-            submittedCount: 1,
-            summary: 'n11 producer cut surfaced terminal proof gap',
-            terminalToolCallCount: 0,
-            totalSourceRefCount: 2,
           },
         },
-      },
-    });
+      }
+    );
 
     expect(changed).toBe(true);
     expect(report.pcvScorecard).toMatchObject({
@@ -521,13 +498,8 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
           chainNodeIds: ['pcvm:cold-start:n9:repair'],
           nodeIds: ['pcvm:n9:record_repair'],
         },
-        n11: {
-          chainNodeIds: ['pcvm:cold-start:n11'],
-          finalSourceRefs: { totalSourceRefCount: 2 },
-          nodeIds: ['pcvm:n11:produce'],
-        },
       },
-      summary: { blockedNodes: 1, dimensionCount: 1, linkedNodes: 3, nodeCount: 4 },
+      summary: { blockedNodes: 0, dimensionCount: 1, linkedNodes: 3, nodeCount: 3 },
     });
     expect(report.pcvScorecard).toMatchObject({
       processMetrics: {
@@ -546,9 +518,7 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
     expect(JSON.stringify(report.pcvScorecard)).toContain('pcvm:n9:analyze');
     expect(JSON.stringify(report.pcvScorecard)).toContain('pcvm:n9:quality_gate');
     expect(JSON.stringify(report.pcvScorecard)).toContain('pcvm:n9:record_repair');
-    expect(JSON.stringify(report.pcvScorecard)).toContain('pcvm:n11:produce');
     expect(JSON.stringify(report.pcvScorecard)).not.toContain('analyze-evidence-grounding-ledger');
-    expect(JSON.stringify(report.pcvScorecard)).not.toContain('N11-produce');
     expect(report.dimensions.api).toMatchObject({
       pcvNodeEvidence: {
         groundingLedger: {
@@ -558,13 +528,12 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
         n8: { status: 'linked' },
         n9QualityGate: { nodeId: 'pcvm:n9:quality_gate', status: 'linked' },
         n9RecordRepair: { nodeId: 'pcvm:n9:record_repair', status: 'linked' },
-        n11: { acceptedCount: 1, status: 'blocked-by-observability-gap' },
       },
     });
     expect(report.totals).toMatchObject({
-      pcvNodeLocalBlockedNodes: 1,
+      pcvNodeLocalBlockedNodes: 0,
       pcvNodeLocalEvidenceDimensions: 1,
-      pcvNodeLocalEvidenceNodes: 4,
+      pcvNodeLocalEvidenceNodes: 3,
       pcvNodeLocalLinkedNodes: 3,
       pcvAnalyzeGroundingBurns: 3,
       pcvAnalyzeGroundingInvalidNoEvidence: 1,
@@ -609,7 +578,6 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
               nodeId: 'N12-consumers-persistence',
               persistedFailureReason: null,
               sessionStoreSnapshotAvailable: true,
-              sourceRefs: [],
               status: 'linked',
               summary: 'n12 linked',
             },

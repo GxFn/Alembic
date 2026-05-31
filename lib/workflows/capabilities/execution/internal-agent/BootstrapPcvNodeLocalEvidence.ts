@@ -22,12 +22,11 @@ export const PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT = 'PcvNodeEvidenceEnvelope';
 export const PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT_VERSION = 1;
 export const PCV_N8_NODE_ID = 'N8-stage-factory-tool-policy';
 export const PCV_ANALYZE_GROUNDING_NODE_ID = 'analyze-evidence-grounding-ledger';
-export const PCV_N11_NODE_ID = 'N11-produce';
 export const PCV_N12_NODE_ID = 'N12-consumers-persistence';
 export const PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT = 'PCVBootstrapStageNodeMap';
 export const PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT_VERSION = 1;
 
-export type PcvBootstrapStageKey = 'analyze' | 'quality_gate' | 'record_repair' | 'produce';
+export type PcvBootstrapStageKey = 'analyze' | 'quality_gate' | 'record_repair';
 
 export interface PcvBootstrapStageNodeIdentity {
   pcvNodeId: string;
@@ -56,7 +55,6 @@ export interface PcvNodeLocalEvidenceBase {
   dimensionId: string;
   missingLinkReasons: string[];
   nodeId: string;
-  sourceRefs: string[];
   status: PcvNodeLocalStatus;
   summary: string;
 }
@@ -121,20 +119,6 @@ export interface PcvN9StageProjectionEvidence extends PcvNodeLocalEvidenceBase {
   timedOut: boolean;
 }
 
-export interface PcvN11ProduceEvidence extends PcvNodeLocalEvidenceBase {
-  acceptedCount: number;
-  evidenceKind: 'producer-cut';
-  gapLimit: number | null;
-  noTerminalProof: boolean;
-  producerOnlyCut: boolean;
-  producerToolCalls: Array<{ action: string | null; status: string | null; tool: string }>;
-  rejectedCount: number;
-  sourceRefs: string[];
-  submittedCount: number;
-  terminalToolCallCount: number;
-  totalSourceRefCount: number;
-}
-
 export interface PcvN12ConsumerPersistenceEvidence extends PcvNodeLocalEvidenceBase {
   acceptedCandidateTitles: string[];
   evidenceKind: 'consumer-persistence';
@@ -149,7 +133,6 @@ export interface BootstrapPcvNodeEvidenceSet {
   groundingLedger?: PcvAnalyzeGroundingLedgerSummary;
   n9QualityGate?: PcvN9StageProjectionEvidence;
   n9RecordRepair?: PcvN9StageProjectionEvidence;
-  n11?: PcvN11ProduceEvidence;
   n12?: PcvN12ConsumerPersistenceEvidence;
 }
 
@@ -184,14 +167,9 @@ const BOOTSTRAP_STAGE_NODE_MAP: PcvBootstrapStageNodeMap = {
     chainNodeId: 'pcvm:cold-start:n9:repair',
     pcvNodeId: 'pcvm:n9:record_repair',
   },
-  produce: {
-    chainNodeId: 'pcvm:cold-start:n11',
-    pcvNodeId: 'pcvm:n11:produce',
-  },
 };
 
 const TERMINAL_TOOL_IDS = new Set(['terminal', 'terminal_shell', 'terminal_pty']);
-const MAX_INVALID_SOURCE_REFS = 12;
 
 export function buildBootstrapPcvStageNodeMap(): PcvBootstrapStageNodeMap {
   return cloneBootstrapStageNodeMap(BOOTSTRAP_STAGE_NODE_MAP);
@@ -212,7 +190,6 @@ function cloneBootstrapStageNodeMap(map: PcvBootstrapStageNodeMap): PcvBootstrap
     analyze: { ...map.analyze },
     quality_gate: { ...map.quality_gate },
     record_repair: { ...map.record_repair },
-    produce: { ...map.produce },
   };
 }
 
@@ -270,86 +247,11 @@ export function buildPcvN8StageFactoryEvidence({
       requiredSubmitTool: 'knowledge',
       terminalToolIds,
     },
-    sourceRefs: [
-      'lib/workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.ts',
-      'lib/workflows/capabilities/execution/internal-agent/BootstrapSessionExecutionBuilder.ts',
-      'node_modules/@alembic/agent/src/agent/profiles/AgentStageFactoryRegistry.ts',
-      'vendor/AlembicCore/src/workflows/capabilities/planning/dimensions/BootstrapTerminalToolset.ts',
-    ],
     stageOrder,
     stageToolPolicies,
     status,
     summary: `${label || dimId} bootstrap stage factory resolved ${stageOrder.length} stage(s); producer terminal tools are ${terminalToolIds.length === 0 ? 'blocked' : 'allowed'}.`,
     terminalCapabilityHints,
-  };
-}
-
-export function buildPcvN11ProduceEvidence({
-  dimId,
-  needsCandidates,
-  projection,
-}: {
-  dimId: string;
-  needsCandidates: boolean;
-  projection: BootstrapDimensionProjection;
-}): PcvN11ProduceEvidence {
-  const produceNodeIdentity = buildBootstrapPcvStageNodeMap().produce;
-  const producerOnlyCut = Array.isArray(projection.produceResult?.toolCalls);
-  const producerToolCalls = resolveProducerToolCalls(projection);
-  const producerSubmitCalls = producerToolCalls.filter(isKnowledgeSubmitToolCall);
-  const acceptedCount = producerSubmitCalls.filter(isSuccessfulToolCall).length;
-  const rejectedCount = producerSubmitCalls.length - acceptedCount;
-  // N11 只记录最终已接受候选显式携带的 sourceRefs，不再生成 invalid/repair/reason/breakdown 分类。
-  // 之前 AI 错误把 sourceRef 设计成多类指标和报告 taxonomy，导致 20-30 轮资源浪费；此处是防止复活的边界。
-  const sourceRefs = collectAcceptedCandidateSourceRefs(projection);
-  const terminalToolCallCount = producerToolCalls.filter((call) =>
-    TERMINAL_TOOL_IDS.has(toolName(call))
-  ).length;
-  const missingLinkReasons: string[] = [];
-
-  if (needsCandidates && !producerOnlyCut) {
-    missingLinkReasons.push('producer_stage_tool_calls_missing');
-  }
-  if (terminalToolCallCount > 0) {
-    missingLinkReasons.push('producer_terminal_tool_call_detected');
-  }
-  if (needsCandidates && acceptedCount !== projection.successCount) {
-    missingLinkReasons.push('producer_accepted_count_mismatch');
-  }
-  if (needsCandidates && rejectedCount !== projection.rejectedCount) {
-    missingLinkReasons.push('producer_rejected_count_mismatch');
-  }
-  const status = !needsCandidates
-    ? 'not-applicable'
-    : missingLinkReasons.length > 0
-      ? 'blocked-by-observability-gap'
-      : 'linked';
-  return {
-    acceptedCount,
-    chainNodeId: produceNodeIdentity.chainNodeId,
-    contract: PCV_COLD_START_NODE_LOCAL_CONTRACT,
-    contractVersion: PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION,
-    dimensionId: dimId,
-    evidenceKind: 'producer-cut',
-    gapLimit: null,
-    missingLinkReasons,
-    noTerminalProof: terminalToolCallCount === 0,
-    nodeId: produceNodeIdentity.pcvNodeId,
-    producerOnlyCut,
-    producerToolCalls: producerToolCalls.map((call) => ({
-      action: actionName(call),
-      status: resultStatus(call),
-      tool: toolName(call),
-    })),
-    rejectedCount,
-    sourceRefs,
-    status,
-    submittedCount: producerSubmitCalls.length,
-    summary: needsCandidates
-      ? `Producer submitted ${producerSubmitCalls.length} candidate call(s): ${acceptedCount} accepted, ${rejectedCount} rejected.`
-      : 'Producer node is not applicable for skill-only bootstrap dimensions.',
-    terminalToolCallCount,
-    totalSourceRefCount: sourceRefs.length,
   };
 }
 
@@ -423,11 +325,6 @@ export function buildPcvAnalyzeGroundingLedgerSummary({
     nodeId: analyzeNodeIdentity.pcvNodeId,
     planningOnlyCount,
     recordOnlyCount,
-    sourceRefs: [
-      'lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.ts',
-      'lib/workflows/capabilities/execution/internal-agent/BootstrapPcvNodeLocalEvidence.ts',
-      'node_modules/@alembic/agent/src/agent/runtime/PcvNodeEvidence.ts',
-    ],
     status:
       missingLinkReasons.length > 0
         ? 'partial-evidence'
@@ -480,11 +377,6 @@ export function buildPcvN9StageProjectionEvidence({
     pass,
     phasePresent: true,
     projectionSource: 'phase',
-    sourceRefs: [
-      'lib/workflows/capabilities/execution/internal-agent/BootstrapPcvNodeLocalEvidence.ts',
-      'lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.ts',
-      'node_modules/@alembic/agent/src/agent/strategies/PipelineStrategy.ts',
-    ],
     stageId: stage,
     status: missingLinkReasons.length > 0 ? 'partial-evidence' : 'linked',
     summary: `${label || dimId} ${stage} stage was observed and projected to report-facing PCV scorecard evidence.`,
@@ -514,10 +406,6 @@ export function buildPcvN9RecordRepairStageMapEvidence({
     pass: null,
     phasePresent: false,
     projectionSource: 'stage-map',
-    sourceRefs: [
-      'lib/workflows/capabilities/execution/internal-agent/BootstrapSessionExecutionBuilder.ts',
-      'lib/workflows/capabilities/execution/internal-agent/BootstrapPcvNodeLocalEvidence.ts',
-    ],
     stageId: 'record_repair',
     status: 'not-applicable',
     summary: `${label || dimId} record_repair stage identity is available in the bootstrap PCV stage map; no repair phase execution was required.`,
@@ -582,11 +470,6 @@ export function buildPcvN12ConsumerPersistenceEvidence({
     nodeId: PCV_N12_NODE_ID,
     persistedFailureReason: runIssueReason || null,
     sessionStoreSnapshotAvailable: Boolean(sessionSnapshot),
-    sourceRefs: [
-      'lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.ts',
-      'node_modules/@alembic/agent/src/agent/memory/SessionStore.ts',
-      'lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.ts',
-    ],
     status: missingLinkReasons.length > 0 ? 'blocked-by-observability-gap' : 'linked',
     summary:
       acceptedCandidateTitles.length > 0
@@ -656,20 +539,6 @@ export function successfulProducerSubmitCalls(
   return resolveProducerToolCalls(projection).filter(
     (call) => isKnowledgeSubmitToolCall(call) && isSuccessfulToolCall(call)
   );
-}
-
-function collectAcceptedCandidateSourceRefs(projection: BootstrapDimensionProjection): string[] {
-  const refs: string[] = [];
-  for (const call of successfulProducerSubmitCalls(projection)) {
-    const args = isRecord(call.args) ? call.args : isRecord(call.params) ? call.params : {};
-    const params = isRecord(args.params) ? args.params : args;
-    refs.push(...stringArray(params.sourceRefs));
-    refs.push(...stringArray(params.filePaths));
-    if (isRecord(params.reasoning)) {
-      refs.push(...stringArray(params.reasoning.sources));
-    }
-  }
-  return uniqueStrings(refs.filter(looksLikeSourceRef)).slice(0, 50);
 }
 
 function collectPcvAnalyzeGroundingLedgerEntries(
@@ -807,14 +676,6 @@ function resolveProducerGapLimit(plan: BootstrapDimensionPlan): number | null {
     : null;
 }
 
-function looksLikeSourceRef(value: string): boolean {
-  return /^(?:file:\/\/)?[\w/+.-]+\.[\w]+(?::\d+)?(?::\d+)?$/.test(value.trim());
-}
-
-function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort();
-}
-
 function isKnowledgeSubmitToolCall(call: ToolCallRecord): boolean {
   return toolName(call) === 'knowledge' && actionName(call) === 'submit';
 }
@@ -851,36 +712,6 @@ function candidateTitle(call: ToolCallRecord): string | null {
   const nested = isRecord(args.params) ? args.params : args;
   const result = isRecord(call.result) ? call.result : {};
   return stringValue(nested.title) || stringValue(result.title);
-}
-
-function candidateId(call: ToolCallRecord): string | null {
-  const args = call.args || call.params || {};
-  const nested = isRecord(args.params) ? args.params : args;
-  const result = isRecord(call.result) ? call.result : {};
-  return (
-    stringValue(nested.id) ||
-    stringValue(nested.candidateId) ||
-    stringValue(nested.client_id) ||
-    stringValue(nested.clientId) ||
-    stringValue(result.id) ||
-    stringValue(result.candidateId) ||
-    stringValue(result.client_id) ||
-    stringValue(result.clientId)
-  );
-}
-
-function resultStatus(call: ToolCallRecord): string | null {
-  const result = call.result;
-  if (typeof result === 'string') {
-    return result.includes('rejected') || result.includes('error') ? 'error' : 'ok';
-  }
-  if (!isRecord(result)) {
-    return result ? 'ok' : null;
-  }
-  return (
-    stringValue(result.status) ||
-    (result.error ? 'error' : result.submitted === false ? 'rejected' : 'ok')
-  );
 }
 
 function toolName(call: ToolCallRecord): string {

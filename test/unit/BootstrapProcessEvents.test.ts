@@ -48,10 +48,6 @@ describe('BootstrapProcessEvents', () => {
               pcvNodeId: 'pcvm:n9:analyze',
               chainNodeId: 'pcvm:cold-start:n9',
             },
-            produce: {
-              pcvNodeId: 'pcvm:n11:produce',
-              chainNodeId: 'pcvm:cold-start:n11',
-            },
           },
           pcvChainNodes: {
             quality_gate: {
@@ -83,7 +79,6 @@ describe('BootstrapProcessEvents', () => {
     expect(text).toContain('"fileCount": 1');
     expect(text).toContain('"N8-stage-factory-tool-policy"');
     expect(text).toContain('"pcvm:n9:analyze"');
-    expect(text).toContain('"pcvm:n11:produce"');
     expect(text).toContain('[redacted-secret]');
     expect(text).not.toContain('file content');
     expect(text).not.toContain('sk-proj-abcdefghijklmnopqrstuvwxyz');
@@ -92,10 +87,6 @@ describe('BootstrapProcessEvents', () => {
         analyze: {
           pcvNodeId: 'pcvm:n9:analyze',
           chainNodeId: 'pcvm:cold-start:n9',
-        },
-        produce: {
-          pcvNodeId: 'pcvm:n11:produce',
-          chainNodeId: 'pcvm:cold-start:n11',
         },
       },
       pcvChainNodes: {
@@ -409,14 +400,6 @@ describe('BootstrapProcessEvents', () => {
     expect(JSON.stringify(events)).toContain('Producer output');
     expect(JSON.stringify(events)).toContain('quality-gate-diagnostics');
     expect(JSON.stringify(events)).not.toContain('Bearer abcdefghijklmnop');
-    expect(events.find((event) => event.kind === 'llm.output')?.metadata).toMatchObject({
-      pcvNodeEvidence: {
-        n11: {
-          nodeId: 'pcvm:n11:produce',
-          terminalToolCallCount: 0,
-        },
-      },
-    });
   });
 
   test('marks truncated dimension visible output by section', () => {

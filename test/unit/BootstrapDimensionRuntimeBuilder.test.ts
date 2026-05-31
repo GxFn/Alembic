@@ -146,10 +146,6 @@ describe('bootstrap dimension runtime builder', () => {
           pcvNodeId: 'pcvm:n9:analyze',
           chainNodeId: 'pcvm:cold-start:n9',
         },
-        produce: {
-          pcvNodeId: 'pcvm:n11:produce',
-          chainNodeId: 'pcvm:cold-start:n11',
-        },
       },
       _pcvChainNodes: {
         quality_gate: {
@@ -165,7 +161,6 @@ describe('bootstrap dimension runtime builder', () => {
     expect(strategyContext).toMatchObject({
       pcvStageNodeMap: {
         analyze: { pcvNodeId: 'pcvm:n9:analyze' },
-        produce: { chainNodeId: 'pcvm:cold-start:n11' },
       },
       pcvChainNodes: {
         record_repair: { pcvNodeId: 'pcvm:n9:record_repair' },
@@ -180,7 +175,6 @@ describe('bootstrap dimension runtime builder', () => {
         quality_gate: { chainNodeId: 'pcvm:cold-start:n9:quality' },
       },
       pcvChainNodes: {
-        produce: { pcvNodeId: 'pcvm:n11:produce' },
       },
     });
     expect(strategyContext.rescanContext).toMatchObject({ gap: 4, existing: 1 });
@@ -197,6 +191,10 @@ describe('bootstrap dimension runtime builder', () => {
       modules: ['src'],
     });
     expect(strategyContext.projectGraph).toBeTruthy();
+    expect(systemRunContext).not.toHaveProperty('projectGraph');
+    expect(systemRunContext).not.toHaveProperty('evidenceStarters');
+    expect(systemRunContext).not.toHaveProperty('existingRecipes');
+    expect(systemRunContext).not.toHaveProperty('projectOverview');
   });
 
   test('turns verify-only rescan decisions into analyze-only dimension runs', () => {

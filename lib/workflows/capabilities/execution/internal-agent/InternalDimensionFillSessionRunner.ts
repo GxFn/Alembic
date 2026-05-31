@@ -160,7 +160,6 @@ export async function runInternalDimensionAgentSession({
     const processEvents = buildBootstrapDimensionResultProcessEvents({
       dimId,
       label: plan.dimConfig.label || plan.dim.label || dimId,
-      needsCandidates: plan.needsCandidates,
       projection,
       runResult,
       sessionId: preparation.sessionId,

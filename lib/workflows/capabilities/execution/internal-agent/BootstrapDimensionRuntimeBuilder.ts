@@ -208,6 +208,31 @@ export function createBootstrapDimensionRuntimeInput({
     projectInfo.fileCount || 0,
     contextWindow.tokenBudget
   );
+  const bootstrapStrategyFields = {
+    needsCandidates,
+    dimConfig,
+    projectInfo,
+    dimContext,
+    sessionStore,
+    semanticMemory,
+    codeEntityGraph: codeEntityGraphInst,
+    projectGraph,
+    panorama: buildPanoramaContext(panoramaResult),
+    evidenceStarters: buildEvidenceStarters(plan.dim, {
+      astData: astProjectSummary,
+      guardAudit,
+      depGraphData,
+      callGraphResult,
+      panoramaResult,
+    }),
+    rescanContext: projectBootstrapDimensionRescanContext({ rescanContext, dimId }),
+    existingRecipes: projectBootstrapExistingRecipesForPrompt(dimExistingRecipes),
+    projectOverview: {
+      primaryLang: primaryLang || projectInfo.lang || 'unknown',
+      fileCount: projectInfo.fileCount || 0,
+      modules: Object.keys(targetFileMap || {}),
+    },
+  };
   const systemRunContext = createSystemRunContext({
     memoryCoordinator:
       memoryCoordinator as unknown as CreateSystemRunContextOptions['memoryCoordinator'],
@@ -245,32 +270,15 @@ export function createBootstrapDimensionRuntimeInput({
         contract: pcvStageNodeContext.contract,
         contractVersion: pcvStageNodeContext.contractVersion,
       },
-      needsCandidates,
-      dimConfig,
-      projectInfo,
-      dimContext,
-      sessionStore,
-      semanticMemory,
-      codeEntityGraph: codeEntityGraphInst,
-      projectGraph,
-      panorama: buildPanoramaContext(panoramaResult),
-      evidenceStarters: buildEvidenceStarters(plan.dim, {
-        astData: astProjectSummary,
-        guardAudit,
-        depGraphData,
-        callGraphResult,
-        panoramaResult,
-      }),
-      rescanContext: projectBootstrapDimensionRescanContext({ rescanContext, dimId }),
-      existingRecipes: projectBootstrapExistingRecipesForPrompt(dimExistingRecipes),
-      projectOverview: {
-        primaryLang: primaryLang || projectInfo.lang || 'unknown',
-        fileCount: projectInfo.fileCount || 0,
-        modules: Object.keys(targetFileMap || {}),
-      },
     },
   });
-  const strategyContext = projectSystemRunContext(systemRunContext);
+  const compactSystemRunContext = compactBootstrapSystemRunContext(systemRunContext);
+  // PCVM token-efficiency: runtime references stay in systemRunContext, while
+  // bulky project/evidence facts have one owner surface: strategyContext.
+  const strategyContext = {
+    ...projectSystemRunContext(compactSystemRunContext),
+    ...bootstrapStrategyFields,
+  };
   return {
     analystScopeId,
     runInput: buildBootstrapDimensionRunInput({
@@ -283,11 +291,35 @@ export function createBootstrapDimensionRuntimeInput({
       primaryLang,
       projectLang: projectInfo.lang || null,
       allFiles,
-      systemRunContext: systemRunContext as SystemRunContext,
+      systemRunContext: compactSystemRunContext as SystemRunContext,
       strategyContext,
       memoryCoordinator,
       sessionAbortSignal,
     }),
+  };
+}
+
+function compactBootstrapSystemRunContext(systemRunContext: SystemRunContext): SystemRunContext {
+  return {
+    scopeId: systemRunContext.scopeId,
+    contextWindow: systemRunContext.contextWindow || null,
+    tracker: systemRunContext.tracker || null,
+    trace: systemRunContext.trace,
+    activeContext: systemRunContext.activeContext,
+    memoryCoordinator: systemRunContext.memoryCoordinator,
+    sharedState: systemRunContext.sharedState,
+    source: systemRunContext.source,
+    outputType: systemRunContext.outputType,
+    dimId: systemRunContext.dimId,
+    dimensionId: systemRunContext.dimensionId,
+    dimensionLabel: systemRunContext.dimensionLabel,
+    projectLanguage: systemRunContext.projectLanguage,
+    submitToolName: systemRunContext.submitToolName,
+    pipelineType: systemRunContext.pipelineType,
+    _computedBudget: systemRunContext._computedBudget,
+    pcvStageNodeMap: systemRunContext.pcvStageNodeMap,
+    pcvChainNodes: systemRunContext.pcvChainNodes,
+    pcvStageNodeMapContract: systemRunContext.pcvStageNodeMapContract,
   };
 }
 

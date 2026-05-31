@@ -254,7 +254,6 @@ describe('bootstrap dimension consumer', () => {
     });
 
     expect(result.pcvNodeEvidence).toMatchObject({
-      n11: { acceptedCount: 1, nodeId: 'pcvm:n11:produce' },
       n12: {
         findableCandidateTitles: ['Candidate'],
         nodeId: 'N12-consumers-persistence',
@@ -342,11 +341,6 @@ describe('bootstrap dimension consumer', () => {
         emptyRetries: 1,
       }),
       pcvNodeEvidence: {
-        n11: {
-          acceptedCount: 1,
-          nodeId: 'pcvm:n11:produce',
-          status: 'not-applicable',
-        },
         n12: {
           findableCandidateTitles: ['Candidate'],
           nodeId: 'N12-consumers-persistence',
@@ -360,11 +354,6 @@ describe('bootstrap dimension consumer', () => {
         evidenceScope: 'fixture',
         source: 'bootstrap-dimension-consumer',
         evidence: {
-          n11: {
-            acceptedCount: 1,
-            nodeId: 'pcvm:n11:produce',
-            status: 'not-applicable',
-          },
           n12: {
             findableCandidateTitles: ['Candidate'],
             nodeId: 'N12-consumers-persistence',
@@ -679,10 +668,6 @@ describe('bootstrap dimension consumer', () => {
       error: 'note_finding records were not repaired',
       diagnostics: expect.objectContaining({ degraded: true }),
       pcvNodeEvidence: {
-        n11: {
-          nodeId: 'pcvm:n11:produce',
-          status: 'blocked-by-observability-gap',
-        },
         n12: {
           persistedFailureReason: 'note_finding records were not repaired',
           status: 'linked',
@@ -770,10 +755,6 @@ describe('bootstrap dimension consumer', () => {
       recoveredProducerTimeout: true,
       error: undefined,
       pcvNodeEvidence: {
-        n11: {
-          acceptedCount: 1,
-          status: 'linked',
-        },
         n12: {
           findableCandidateTitles: ['Candidate'],
           status: 'linked',

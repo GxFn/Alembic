@@ -59,8 +59,9 @@ export function buildBootstrapDimensionRunInput({
 }: BuildBootstrapDimensionRunInputOptions): AgentRunInput {
   const analystScopeId = systemRunContext.scopeId || `${dimId}:analyst`;
   const pcvStageNodeContext = buildBootstrapPcvStageNodeContext();
+  const compactSystemRunContext = compactBootstrapSystemRunContext(systemRunContext);
   const sharedState = {
-    ...asRecord(systemRunContext.sharedState),
+    ...asRecord(compactSystemRunContext.sharedState),
     _pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
     _pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
     pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
@@ -109,12 +110,12 @@ export function buildBootstrapDimensionRunInput({
       runtimeSource: 'system',
       lang: primaryLang || projectLang || null,
       fileCache: allFiles,
-      systemRunContext,
+      systemRunContext: compactSystemRunContext,
       pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
       pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
       strategyContext: enrichedStrategyContext,
-      contextWindow: systemRunContext.contextWindow,
-      trace: systemRunContext.trace,
+      contextWindow: compactSystemRunContext.contextWindow,
+      trace: compactSystemRunContext.trace,
       memoryCoordinator,
       sharedState,
       promptContext: {
@@ -129,6 +130,30 @@ export function buildBootstrapDimensionRunInput({
       abortSignal: sessionAbortSignal || undefined,
     },
     presentation: { responseShape: 'system-task-result' },
+  };
+}
+
+function compactBootstrapSystemRunContext(systemRunContext: SystemRunContext): SystemRunContext {
+  return {
+    scopeId: systemRunContext.scopeId,
+    contextWindow: systemRunContext.contextWindow || null,
+    tracker: systemRunContext.tracker || null,
+    trace: systemRunContext.trace,
+    activeContext: systemRunContext.activeContext,
+    memoryCoordinator: systemRunContext.memoryCoordinator,
+    sharedState: systemRunContext.sharedState,
+    source: systemRunContext.source,
+    outputType: systemRunContext.outputType,
+    dimId: systemRunContext.dimId,
+    dimensionId: systemRunContext.dimensionId,
+    dimensionLabel: systemRunContext.dimensionLabel,
+    projectLanguage: systemRunContext.projectLanguage,
+    submitToolName: systemRunContext.submitToolName,
+    pipelineType: systemRunContext.pipelineType,
+    _computedBudget: systemRunContext._computedBudget,
+    pcvStageNodeMap: systemRunContext.pcvStageNodeMap,
+    pcvChainNodes: systemRunContext.pcvChainNodes,
+    pcvStageNodeMapContract: systemRunContext.pcvStageNodeMapContract,
   };
 }
 

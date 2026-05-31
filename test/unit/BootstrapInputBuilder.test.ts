@@ -95,10 +95,6 @@ describe('buildBootstrapDimensionRunInput', () => {
           pcvNodeId: 'pcvm:n9:analyze',
           chainNodeId: 'pcvm:cold-start:n9',
         },
-        produce: {
-          pcvNodeId: 'pcvm:n11:produce',
-          chainNodeId: 'pcvm:cold-start:n11',
-        },
       },
       pcvChainNodes: {
         quality_gate: {
@@ -114,7 +110,6 @@ describe('buildBootstrapDimensionRunInput', () => {
     expect(input.context.strategyContext).toMatchObject({
       pcvStageNodeMap: {
         analyze: { pcvNodeId: 'pcvm:n9:analyze' },
-        produce: { chainNodeId: 'pcvm:cold-start:n11' },
       },
       pcvChainNodes: {
         record_repair: { pcvNodeId: 'pcvm:n9:record_repair' },
@@ -127,9 +122,6 @@ describe('buildBootstrapDimensionRunInput', () => {
         _pcvStageNodeMap: {
           quality_gate: { chainNodeId: 'pcvm:cold-start:n9:quality' },
         },
-        _pcvChainNodes: {
-          produce: { pcvNodeId: 'pcvm:n11:produce' },
-        },
       },
     });
     expect(input.context.promptContext).toMatchObject({
@@ -137,7 +129,6 @@ describe('buildBootstrapDimensionRunInput', () => {
         analyze: { chainNodeId: 'pcvm:cold-start:n9' },
       },
       pcvChainNodes: {
-        produce: { chainNodeId: 'pcvm:cold-start:n11' },
       },
     });
     expect(input.context.sharedState).toMatchObject({
@@ -145,7 +136,6 @@ describe('buildBootstrapDimensionRunInput', () => {
         analyze: { pcvNodeId: 'pcvm:n9:analyze' },
       },
       _pcvChainNodes: {
-        produce: { chainNodeId: 'pcvm:cold-start:n11' },
       },
     });
   });
