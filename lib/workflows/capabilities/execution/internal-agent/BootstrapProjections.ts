@@ -11,6 +11,10 @@ import {
   extractEfficiencyFromDiagnostics,
   normalizeAgentEfficiencySummary,
 } from '#service/bootstrap/BootstrapEfficiency.js';
+import {
+  normalizeProjectScopeSourceRefsForRuntime,
+  type ProjectScopeSourceIdentity,
+} from '../../../../project-scope/ProjectScopeAnalysis.js';
 
 export interface ToolCallRecord {
   tool?: string;
@@ -295,10 +299,12 @@ export function projectBootstrapDimensionAgentOutput({
   dimId,
   needsCandidates,
   runResult,
+  projectScopeSourceIdentities = [],
 }: {
   dimId: string;
   needsCandidates: boolean;
   runResult: AgentResultLike;
+  projectScopeSourceIdentities?: ProjectScopeSourceIdentity[];
 }): BootstrapDimensionProjection {
   const analyzeResult = runResult?.phases?.analyze;
   const gateResult = runResult?.phases?.quality_gate;
@@ -315,7 +321,7 @@ export function projectBootstrapDimensionAgentOutput({
   const combinedTokenUsage = runResult?.tokenUsage || { input: 0, output: 0 };
   const efficiency =
     runResult?.efficiency || extractEfficiencyFromDiagnostics(runResult?.diagnostics) || null;
-  const referencedFiles =
+  const rawReferencedFiles =
     artifact.referencedFiles?.length > 0
       ? artifact.referencedFiles
       : [
@@ -337,6 +343,14 @@ export function projectBootstrapDimensionAgentOutput({
             })
           ),
         ];
+  const referencedFilesNormalization = normalizeProjectScopeSourceRefsForRuntime(
+    rawReferencedFiles,
+    projectScopeSourceIdentities
+  );
+  const referencedFiles =
+    projectScopeSourceIdentities.length > 0
+      ? referencedFilesNormalization.activeSourceRefs
+      : rawReferencedFiles;
 
   const analysisReport = {
     dimensionId: dimId,
@@ -350,6 +364,17 @@ export function projectBootstrapDimensionAgentOutput({
       tokenUsage: combinedTokenUsage,
       efficiency,
       artifactVersion: artifact.metadata?.artifactVersion || 1,
+      ...(referencedFilesNormalization.rejected.length > 0
+        ? {
+            projectScopeSourceRefRejections: referencedFilesNormalization.rejected.map(
+              (rejection) => ({
+                input: rejection.input,
+                reason: rejection.reason,
+                status: rejection.status,
+              })
+            ),
+          }
+        : {}),
     },
   };
 

@@ -63,6 +63,7 @@ import {
   startInternalDimensionExecutionSession,
 } from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
 import {
+  attachProjectScopeSourceIdentitiesToView,
   attachProjectScopeToScanOptions,
   buildProjectScopeAnalysisLogMeta,
   collectProjectScopeSourceIdentities,
@@ -572,13 +573,16 @@ export async function runInternalKnowledgeRescanWorkflow(
 
     const allExistingRecipes = projectInternalRescanPromptRecipes(knowledgeRescanPlan);
     dispatchInternalDimensionExecution({
-      view: {
-        ...fillView,
-        existingRecipes: allExistingRecipes,
-        evolutionPrescreen: prescreen,
-        rescanExecutionDecisions: knowledgeRescanPlan.executionDecisions,
-        mode: 'rescan',
-      },
+      view: attachProjectScopeSourceIdentitiesToView(
+        {
+          ...fillView,
+          existingRecipes: allExistingRecipes,
+          evolutionPrescreen: prescreen,
+          rescanExecutionDecisions: knowledgeRescanPlan.executionDecisions,
+          mode: 'rescan',
+        },
+        sourceIdentities
+      ),
       dimensions: executionDimensions,
       logPrefix: 'Rescan-Internal',
     });

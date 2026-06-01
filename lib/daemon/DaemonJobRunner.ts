@@ -7,6 +7,7 @@ import {
 } from '@alembic/core/daemon';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
+import { resolveProjectScopeSourceIdentitiesFromContainer } from '../project-scope/ProjectScopeAnalysis.js';
 import { resolveAlembicWorkspace } from '../project-scope/ProjectScopeRegistry.js';
 import type { BootstrapProcessEventDraft } from '../service/bootstrap/bootstrap-event-types.js';
 import { materializeJobProcessEventTextArtifact } from './JobProcessEventArtifacts.js';
@@ -903,6 +904,7 @@ function recordBootstrapProcessEventDrafts({
       draft,
       jobId,
       metadata,
+      sourceIdentities: resolveProjectScopeSourceIdentitiesFromContainer(container),
     });
     recordJobProcessEvent(recorder, {
       ...draft,

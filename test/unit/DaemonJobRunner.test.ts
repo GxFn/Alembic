@@ -488,6 +488,103 @@ describe('attachBootstrapProcessEventBridge', () => {
     });
   });
 
+  test('normalizes ProjectScope source refs before carrying PCV N9 process metadata', () => {
+    const eventBus = new EventEmitter();
+    const recorder = new JobProcessEventRecorder();
+    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-runner-data-'));
+    const cleanup = attachBootstrapProcessEventBridge({
+      container: makeContainer(
+        new JobStore({ projectRoot: dataRoot }),
+        { eventBus },
+        {
+          _projectScopeSourceIdentities: [
+            {
+              absolutePath: '/workspace/Alembic/src/index.ts',
+              folderDisplayName: 'Alembic',
+              folderId: 'folder-alembic',
+              folderPath: '/workspace/Alembic',
+              folderRelativeRoot: 'Alembic',
+              legacyPath: 'src/index.ts',
+              projectScopeId: 'scope-a',
+              qualifiedPath: 'Alembic/src/index.ts',
+              relativePath: 'src/index.ts',
+            },
+          ],
+          _workspaceResolver: { dataRoot },
+        }
+      ),
+      jobId: 'job_pcv_project_scope_refs',
+      logger: makeLogger(),
+      recorder,
+    });
+
+    eventBus.emit('bootstrap:process-events', {
+      sessionId: 'bs_project_scope_refs',
+      taskId: 'architecture',
+      targetName: 'Architecture',
+      events: [
+        {
+          kind: 'llm.input',
+          title: 'ProjectScope N9 source refs prepared',
+          content: {
+            mimeType: 'text/markdown',
+            role: 'developer',
+            text: 'ProjectScope source-backed input summary',
+          },
+          metadata: {
+            inputStageProfile: 'analyze',
+            llmMetrics: { estimatedTokens: 17, messageCount: 2 },
+            pcvNodeEvidence: {
+              chainNodeId: 'pcvm:cold-start:n9',
+              nodeId: 'pcvm:n9:analyze',
+              sourceRefs: ['src/index.ts:42'],
+            },
+            sourceRefs: ['src/index.ts:42', 'AlembicCore/src/core/database.ts'],
+            traceEnvelope: {
+              correlationId: 'trace-project-scope-ref',
+              sessionId: 'bs_project_scope_refs',
+              sourceRefs: ['src/index.ts:42'],
+              stageId: 'analyze',
+            },
+          },
+          phase: 'analyze',
+        },
+      ],
+    });
+
+    cleanup?.();
+
+    const event = recorder
+      .list('job_pcv_project_scope_refs', { limit: 10 })
+      .developerViews.find(
+        (candidate) => candidate.title === 'ProjectScope N9 source refs prepared'
+      );
+    expect(event?.metadata).toMatchObject({
+      pcvN9Observability: {
+        evidenceLinks: {
+          sourceRefs: ['Alembic/src/index.ts:42'],
+          traceId: 'trace-project-scope-ref',
+        },
+      },
+      pcvNodeEvidence: {
+        sourceRefs: ['Alembic/src/index.ts:42'],
+      },
+      sourceRefs: ['Alembic/src/index.ts:42'],
+      traceEnvelope: {
+        sourceRefs: ['Alembic/src/index.ts:42'],
+      },
+    });
+    expect(event?.metadata.projectScopeSourceRefRejections).toEqual([
+      {
+        field: 'sourceRefs',
+        input: 'AlembicCore/src/core/database.ts',
+        reason: 'not-found',
+        status: 'missing',
+      },
+    ]);
+    expect(JSON.stringify(event?.metadata)).not.toContain('"src/index.ts:42"');
+  });
+
   test('preserves canonical PCV N9 record repair evidence in job process events', () => {
     const eventBus = new EventEmitter();
     const recorder = new JobProcessEventRecorder();

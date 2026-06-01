@@ -1,8 +1,12 @@
-import {
-  type ProjectAnalysisResult,
-  type ProjectAnalysisScanOptions,
+import type {
+  ProjectAnalysisResult,
+  ProjectAnalysisScanOptions,
 } from '@alembic/core/project-intelligence';
-import type { ProjectDescriptor } from '@alembic/core/shared';
+import {
+  buildProjectScopeSourceRefIndex,
+  type NormalizedProjectScopeSourceRef,
+  type ProjectDescriptor,
+} from '@alembic/core/shared';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { resolveAlembicWorkspace } from './ProjectScopeRegistry.js';
 
@@ -40,6 +44,45 @@ export interface ProjectScopeSourceIdentity {
   projectScopeId: string | null;
   qualifiedPath: string;
   relativePath: string;
+}
+
+export const PROJECT_SCOPE_SOURCE_IDENTITY_MAP_CONTRACT = 'ProjectScopeSourceIdentityMap';
+export const PROJECT_SCOPE_SOURCE_IDENTITY_MAP_CONTRACT_VERSION = 1;
+
+export interface ProjectScopeSourceIdentityMapEntry {
+  absolutePath: string | null;
+  folderDisplayName: string | null;
+  folderId: string | null;
+  folderPath: string | null;
+  folderRelativeRoot: string | null;
+  legacyPath: string;
+  projectScopeId: string | null;
+  qualifiedPath: string;
+  relativePath: string;
+}
+
+export interface ProjectScopeSourceIdentityMap {
+  ambiguousBasenames: string[];
+  ambiguousLegacyPaths: string[];
+  contract: typeof PROJECT_SCOPE_SOURCE_IDENTITY_MAP_CONTRACT;
+  contractVersion: typeof PROJECT_SCOPE_SOURCE_IDENTITY_MAP_CONTRACT_VERSION;
+  entries: ProjectScopeSourceIdentityMapEntry[];
+  preferredRef: 'qualifiedPath';
+  rejectPolicy: {
+    ambiguousLegacyPath: 'reject';
+    missingPath: 'reject';
+  };
+  sourceCount: number;
+}
+
+export interface ProjectScopeRejectedSourceRef extends NormalizedProjectScopeSourceRef {
+  input: string;
+}
+
+export interface ProjectScopeSourceRefNormalizationResult {
+  activeSourceRefs: string[];
+  normalized: NormalizedProjectScopeSourceRef[];
+  rejected: ProjectScopeRejectedSourceRef[];
 }
 
 // Alembic 侧只做结构化适配：新 Core 会产出 sourceIdentity，旧 Core 没有该字段时保持空集合。
@@ -97,9 +140,161 @@ export function buildProjectScopeAnalysisLogMeta(
 export function collectProjectScopeSourceIdentities(
   result: ProjectAnalysisResult
 ): ProjectScopeSourceIdentity[] {
-  return result.allFiles
-    .map((file) => getFileSourceIdentity(file))
+  return collectProjectScopeSourceIdentitiesFromFiles(result.allFiles);
+}
+
+export function collectProjectScopeSourceIdentitiesFromFiles(
+  files: unknown
+): ProjectScopeSourceIdentity[] {
+  if (!Array.isArray(files)) {
+    return [];
+  }
+  return files
+    .map((file) => (isProjectScopeSourceIdentity(file) ? file : getFileSourceIdentity(file)))
     .filter((identity): identity is ProjectScopeSourceIdentity => Boolean(identity));
+}
+
+export function buildProjectScopeSourceIdentityMap(
+  sourceIdentities: readonly ProjectScopeSourceIdentity[]
+): ProjectScopeSourceIdentityMap | null {
+  const identities = dedupeSourceIdentities(sourceIdentities);
+  if (identities.length === 0) {
+    return null;
+  }
+  const index = buildProjectScopeSourceRefIndex(identities);
+  return {
+    ambiguousBasenames: [...(index.ambiguousBasenames ?? [])].sort(),
+    ambiguousLegacyPaths: [...index.ambiguousLegacyPaths].sort(),
+    contract: PROJECT_SCOPE_SOURCE_IDENTITY_MAP_CONTRACT,
+    contractVersion: PROJECT_SCOPE_SOURCE_IDENTITY_MAP_CONTRACT_VERSION,
+    entries: identities.map((identity) => ({
+      absolutePath: identity.absolutePath,
+      folderDisplayName: identity.folderDisplayName,
+      folderId: identity.folderId,
+      folderPath: identity.folderPath,
+      folderRelativeRoot: identity.folderRelativeRoot,
+      legacyPath: identity.legacyPath,
+      projectScopeId: identity.projectScopeId,
+      qualifiedPath: identity.qualifiedPath,
+      relativePath: identity.relativePath,
+    })),
+    preferredRef: 'qualifiedPath',
+    rejectPolicy: {
+      ambiguousLegacyPath: 'reject',
+      missingPath: 'reject',
+    },
+    sourceCount: identities.length,
+  };
+}
+
+export function normalizeProjectScopeSourceRefsForRuntime(
+  sourceRefs: readonly string[],
+  sourceIdentities: readonly ProjectScopeSourceIdentity[]
+): ProjectScopeSourceRefNormalizationResult {
+  const rawRefs = uniqueStrings(sourceRefs);
+  const identities = dedupeSourceIdentities(sourceIdentities);
+  if (identities.length === 0) {
+    return {
+      activeSourceRefs: rawRefs,
+      normalized: [],
+      rejected: [],
+    };
+  }
+
+  const index = buildProjectScopeSourceRefIndex(identities);
+  const activeSourceRefs: string[] = [];
+  const normalized: NormalizedProjectScopeSourceRef[] = [];
+  const rejected: ProjectScopeRejectedSourceRef[] = [];
+
+  for (const rawRef of rawRefs) {
+    const { pathPart, suffix } = splitSourceRefLocation(rawRef);
+    const result = normalizeProjectScopeSourceRefForRuntime(pathPart, index);
+    if (result.status === 'active' && result.normalizedRef) {
+      const normalizedRef = `${result.normalizedRef}${suffix}`;
+      activeSourceRefs.push(normalizedRef);
+      normalized.push({
+        ...result,
+        input: rawRef,
+        normalizedRef,
+      });
+      continue;
+    }
+    rejected.push({
+      ...result,
+      input: rawRef,
+    });
+  }
+
+  return {
+    activeSourceRefs: uniqueStrings(activeSourceRefs),
+    normalized,
+    rejected,
+  };
+}
+
+function normalizeProjectScopeSourceRefForRuntime(
+  sourceRef: string,
+  index: ReturnType<typeof buildProjectScopeSourceRefIndex>
+): NormalizedProjectScopeSourceRef {
+  const normalized = normalizeComparableSourcePath(sourceRef);
+  const qualified = index.byQualifiedPath.get(normalized);
+  if (qualified) {
+    return normalizedActiveSourceRef(sourceRef, qualified, 'qualified-path');
+  }
+  if (index.ambiguousLegacyPaths.has(normalized)) {
+    return normalizedRejectedSourceRef(sourceRef, 'ambiguous-legacy-path', 'ambiguous');
+  }
+  const legacy = index.byLegacyPath.get(normalized);
+  if (legacy) {
+    return normalizedActiveSourceRef(sourceRef, legacy, 'unique-legacy-path');
+  }
+  if (!normalized.includes('/')) {
+    if (index.ambiguousBasenames?.has(normalized)) {
+      return normalizedRejectedSourceRef(sourceRef, 'ambiguous-basename', 'ambiguous');
+    }
+    const basename = index.byBasename?.get(normalized);
+    if (basename) {
+      return normalizedActiveSourceRef(sourceRef, basename, 'unique-basename');
+    }
+  }
+  return normalizedRejectedSourceRef(sourceRef, 'not-found', 'missing');
+}
+
+export function attachProjectScopeSourceIdentitiesToView<T extends object>(
+  view: T,
+  sourceIdentities: readonly ProjectScopeSourceIdentity[]
+): T {
+  const identities = dedupeSourceIdentities(sourceIdentities);
+  if (identities.length === 0) {
+    return view;
+  }
+  return {
+    ...view,
+    projectScopeSourceIdentities: identities,
+    projectScopeSourceIdentityMap: buildProjectScopeSourceIdentityMap(identities),
+  };
+}
+
+export function resolveProjectScopeSourceIdentitiesFromCarrier(
+  value: unknown
+): ProjectScopeSourceIdentity[] {
+  const record = isRecord(value) ? value : null;
+  const explicit = collectProjectScopeSourceIdentitiesFromFiles(
+    record?.projectScopeSourceIdentities
+  );
+  if (explicit.length > 0) {
+    return explicit;
+  }
+  const snapshot = isRecord(record?.snapshot) ? record.snapshot : null;
+  return collectProjectScopeSourceIdentitiesFromFiles(snapshot?.allFiles);
+}
+
+export function resolveProjectScopeSourceIdentitiesFromContainer(
+  container: ContainerLike | null | undefined
+): ProjectScopeSourceIdentity[] {
+  return collectProjectScopeSourceIdentitiesFromFiles(
+    container?.singletons?._projectScopeSourceIdentities
+  );
 }
 
 function getContainerWorkspaceResolver(
@@ -158,6 +353,83 @@ function isProjectScopeSourceIdentity(value: unknown): value is ProjectScopeSour
     typeof value.qualifiedPath === 'string' &&
     typeof value.relativePath === 'string'
   );
+}
+
+function dedupeSourceIdentities(
+  identities: readonly ProjectScopeSourceIdentity[]
+): ProjectScopeSourceIdentity[] {
+  const byQualifiedPath = new Map<string, ProjectScopeSourceIdentity>();
+  for (const identity of identities) {
+    if (!identity.qualifiedPath.trim()) {
+      continue;
+    }
+    byQualifiedPath.set(identity.qualifiedPath, identity);
+  }
+  return [...byQualifiedPath.values()].sort((left, right) =>
+    left.qualifiedPath.localeCompare(right.qualifiedPath)
+  );
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function splitSourceRefLocation(sourceRef: string): { pathPart: string; suffix: string } {
+  const trimmed = sourceRef.trim();
+  const match = /^(.*?)(:\d+(?::\d+)?)$/.exec(trimmed);
+  if (!match || !match[1]) {
+    return { pathPart: trimmed, suffix: '' };
+  }
+  return {
+    pathPart: match[1],
+    suffix: match[2] ?? '',
+  };
+}
+
+function normalizedActiveSourceRef(
+  input: string,
+  identity: ProjectScopeSourceIdentity,
+  reason: NormalizedProjectScopeSourceRef['reason']
+): NormalizedProjectScopeSourceRef {
+  return {
+    absolutePath: identity.absolutePath,
+    folderDisplayName: identity.folderDisplayName,
+    folderId: identity.folderId,
+    folderPath: identity.folderPath,
+    input,
+    legacyPath: identity.legacyPath,
+    normalizedRef: identity.qualifiedPath,
+    projectScopeId: identity.projectScopeId,
+    qualifiedPath: identity.qualifiedPath,
+    reason,
+    relativePath: identity.relativePath,
+    status: 'active',
+  };
+}
+
+function normalizedRejectedSourceRef(
+  input: string,
+  reason: NormalizedProjectScopeSourceRef['reason'],
+  status: NormalizedProjectScopeSourceRef['status']
+): NormalizedProjectScopeSourceRef {
+  return {
+    absolutePath: null,
+    folderDisplayName: null,
+    folderId: null,
+    folderPath: null,
+    input,
+    legacyPath: null,
+    normalizedRef: null,
+    projectScopeId: null,
+    qualifiedPath: null,
+    reason,
+    relativePath: null,
+    status,
+  };
+}
+
+function normalizeComparableSourcePath(value: string): string {
+  return value.trim().replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+/g, '/');
 }
 
 function stringValue(value: unknown): string | null {

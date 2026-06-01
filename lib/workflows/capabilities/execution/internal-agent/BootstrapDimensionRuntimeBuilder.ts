@@ -34,6 +34,7 @@ import {
   projectBootstrapExistingRecipesForPrompt,
 } from '#workflows/capabilities/execution/internal-agent/BootstrapRescanState.js';
 import type { BootstrapProjectGraphLike } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
+import type { ProjectScopeSourceIdentityMap } from '../../../../project-scope/ProjectScopeAnalysis.js';
 
 interface DimConfigV3Entry {
   outputType: string;
@@ -164,6 +165,7 @@ export function createBootstrapDimensionRuntimeInput({
   bootstrapDedup,
   sessionId,
   allFiles,
+  projectScopeSourceIdentityMap,
   sessionAbortSignal,
 }: {
   dimId: string;
@@ -190,6 +192,7 @@ export function createBootstrapDimensionRuntimeInput({
   bootstrapDedup: unknown;
   sessionId: string;
   allFiles: BootstrapFileEntry[] | null;
+  projectScopeSourceIdentityMap?: ProjectScopeSourceIdentityMap | null;
   sessionAbortSignal?: AbortSignal | null;
 }): BootstrapDimensionRuntimeBuildResult {
   const { dimConfig, needsCandidates, dimExistingRecipes, hasExistingRecipes, prescreenDone } =
@@ -232,6 +235,7 @@ export function createBootstrapDimensionRuntimeInput({
       fileCount: projectInfo.fileCount || 0,
       modules: Object.keys(targetFileMap || {}),
     },
+    ...(projectScopeSourceIdentityMap ? { projectScopeSourceIdentityMap } : {}),
   };
   const systemRunContext = createSystemRunContext({
     memoryCoordinator:
@@ -257,6 +261,9 @@ export function createBootstrapDimensionRuntimeInput({
       submittedPatterns: globalSubmittedPatterns,
       submittedTriggers: globalSubmittedTriggers,
       _bootstrapDedup: bootstrapDedup,
+      ...(projectScopeSourceIdentityMap
+        ? { _projectScopeSourceIdentityMap: projectScopeSourceIdentityMap }
+        : {}),
       _pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
       _pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
       pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
@@ -270,6 +277,7 @@ export function createBootstrapDimensionRuntimeInput({
         contract: pcvStageNodeContext.contract,
         contractVersion: pcvStageNodeContext.contractVersion,
       },
+      ...(projectScopeSourceIdentityMap ? { projectScopeSourceIdentityMap } : {}),
     },
   });
   const compactSystemRunContext = compactBootstrapSystemRunContext(systemRunContext);
@@ -294,6 +302,7 @@ export function createBootstrapDimensionRuntimeInput({
       systemRunContext: compactSystemRunContext as SystemRunContext,
       strategyContext,
       memoryCoordinator,
+      projectScopeSourceIdentityMap,
       sessionAbortSignal,
     }),
   };

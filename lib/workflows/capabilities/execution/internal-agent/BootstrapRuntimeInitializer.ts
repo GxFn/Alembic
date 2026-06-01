@@ -9,6 +9,10 @@ import Logger from '@alembic/core/logging';
 import type { IncrementalPlan } from '@alembic/core/types';
 import { DimensionContext } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
 import { syncRestoredSessionStoreDigests } from '#workflows/capabilities/execution/internal-agent/DimensionRestoreState.js';
+import {
+  buildProjectScopeSourceIdentityMap,
+  type ProjectScopeSourceIdentity,
+} from '../../../../project-scope/ProjectScopeAnalysis.js';
 
 const logger = Logger.getInstance();
 
@@ -42,6 +46,7 @@ export interface InitializeBootstrapRuntimeOptions {
   guardAudit?: Record<string, unknown> | null;
   isIncremental?: boolean | null;
   incrementalPlan?: IncrementalPlan | null;
+  projectScopeSourceIdentities?: ProjectScopeSourceIdentity[];
 }
 
 export async function initializeBootstrapRuntime({
@@ -56,6 +61,7 @@ export async function initializeBootstrapRuntime({
   guardAudit,
   isIncremental,
   incrementalPlan,
+  projectScopeSourceIdentities = [],
 }: InitializeBootstrapRuntimeOptions) {
   const projectGraph = await buildBootstrapProjectGraph({ container, projectRoot });
   logger.info(
@@ -63,6 +69,11 @@ export async function initializeBootstrapRuntime({
   );
 
   container.singletons._fileCache = allFiles;
+  const projectScopeSourceIdentityMap = buildProjectScopeSourceIdentityMap(
+    projectScopeSourceIdentities
+  );
+  container.singletons._projectScopeSourceIdentities = projectScopeSourceIdentities;
+  container.singletons._projectScopeSourceIdentityMap = projectScopeSourceIdentityMap;
   const projectInfo = {
     name: path.basename(projectRoot),
     lang: primaryLang || 'unknown',
@@ -111,6 +122,8 @@ export async function initializeBootstrapRuntime({
     semanticMemory,
     codeEntityGraphInst,
     memoryCoordinator,
+    projectScopeSourceIdentities,
+    projectScopeSourceIdentityMap,
   };
 }
 

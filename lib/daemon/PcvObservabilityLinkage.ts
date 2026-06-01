@@ -1,5 +1,10 @@
 import type { JobProcessEventArtifactRef } from '@alembic/core/daemon';
 import type { BootstrapProcessEventDraft } from '#service/bootstrap/bootstrap-event-types.js';
+import {
+  normalizeProjectScopeSourceRefsForRuntime,
+  type ProjectScopeSourceIdentity,
+  type ProjectScopeSourceRefNormalizationResult,
+} from '../project-scope/ProjectScopeAnalysis.js';
 
 export const PCV_N9_NODE_ID = 'N9-agent-analyze-quality';
 export const PCV_N9_OBSERVABILITY_CONTRACT_VERSION = 1;
@@ -49,23 +54,26 @@ export function attachPcvN9ObservabilityCarry({
   draft,
   jobId,
   metadata,
+  sourceIdentities = [],
 }: {
   artifactRefs: JobProcessEventArtifactRef[];
   draft: BootstrapProcessEventDraft;
   jobId: string;
   metadata: Record<string, unknown>;
+  sourceIdentities?: ProjectScopeSourceIdentity[];
 }): Record<string, unknown> {
-  const rawTraceEnvelope = asRecord(metadata.traceEnvelope);
+  const normalizedMetadata = normalizeMetadataSourceRefs(metadata, sourceIdentities);
+  const rawTraceEnvelope = asRecord(normalizedMetadata.traceEnvelope);
   const nodeIdentity = resolvePcvN9NodeIdentity({
     draft,
-    metadata,
+    metadata: normalizedMetadata,
     traceEnvelope: rawTraceEnvelope,
   });
   if (!nodeIdentity.applies) {
-    return metadata;
+    return normalizedMetadata;
   }
 
-  const sourceRefs = collectSourceRefs(metadata);
+  const sourceRefs = collectSourceRefs(normalizedMetadata, sourceIdentities);
   const artifactRefValues = artifactRefs.map((artifactRef) => artifactRef.ref).filter(Boolean);
   const traceId =
     stringValue(rawTraceEnvelope?.traceId) ||
@@ -119,10 +127,10 @@ export function attachPcvN9ObservabilityCarry({
   };
 
   return {
-    ...metadata,
+    ...normalizedMetadata,
     pcvN9Observability,
     pcvObservability: {
-      ...(isRecord(metadata.pcvObservability) ? metadata.pcvObservability : {}),
+      ...(isRecord(normalizedMetadata.pcvObservability) ? normalizedMetadata.pcvObservability : {}),
       n9: pcvN9Observability,
     },
     traceEnvelope,
@@ -286,7 +294,10 @@ function firstFixForMissingLinks(reasons: PcvN9MissingLinkReason[]): string[] {
   return fixes;
 }
 
-function collectSourceRefs(metadata: Record<string, unknown>): string[] {
+function collectSourceRefs(
+  metadata: Record<string, unknown>,
+  sourceIdentities: ProjectScopeSourceIdentity[]
+): string[] {
   const pcvNodeEvidence = asRecord(metadata.pcvNodeEvidence);
   const refs = [
     ...stringArray(metadata.sourceRefs),
@@ -296,7 +307,114 @@ function collectSourceRefs(metadata: Record<string, unknown>): string[] {
     ...sourceRefsFromFindings(metadata.findings),
     ...sourceRefsFromFindings(pcvNodeEvidence?.findings),
   ];
-  return [...new Set(refs.map((ref) => ref.trim()).filter(Boolean))];
+  return normalizeSourceRefs(refs, sourceIdentities).activeSourceRefs;
+}
+
+function normalizeMetadataSourceRefs(
+  metadata: Record<string, unknown>,
+  sourceIdentities: ProjectScopeSourceIdentity[]
+): Record<string, unknown> {
+  if (sourceIdentities.length === 0) {
+    return metadata;
+  }
+  let normalized = { ...metadata };
+  const topLevel = normalizeSourceRefs(stringArray(metadata.sourceRefs), sourceIdentities);
+  if (Array.isArray(metadata.sourceRefs)) {
+    normalized.sourceRefs = topLevel.activeSourceRefs;
+  }
+  const topReferenced = normalizeSourceRefs(
+    stringArray(metadata.referencedFiles),
+    sourceIdentities
+  );
+  if (Array.isArray(metadata.referencedFiles)) {
+    normalized.referencedFiles = topReferenced.activeSourceRefs;
+  }
+
+  const traceEnvelope = asRecord(metadata.traceEnvelope);
+  if (traceEnvelope) {
+    const traceSourceRefs = normalizeSourceRefs(
+      stringArray(traceEnvelope.sourceRefs),
+      sourceIdentities
+    );
+    normalized.traceEnvelope = {
+      ...traceEnvelope,
+      ...(Array.isArray(traceEnvelope.sourceRefs)
+        ? { sourceRefs: traceSourceRefs.activeSourceRefs }
+        : {}),
+    };
+    normalized = appendSourceRefNormalization(
+      normalized,
+      traceSourceRefs,
+      'traceEnvelope.sourceRefs'
+    );
+  }
+
+  const pcvNodeEvidence = asRecord(metadata.pcvNodeEvidence);
+  if (pcvNodeEvidence) {
+    const evidenceSourceRefs = normalizeSourceRefs(
+      stringArray(pcvNodeEvidence.sourceRefs),
+      sourceIdentities
+    );
+    const evidenceReferencedFiles = normalizeSourceRefs(
+      stringArray(pcvNodeEvidence.referencedFiles),
+      sourceIdentities
+    );
+    normalized.pcvNodeEvidence = {
+      ...pcvNodeEvidence,
+      ...(Array.isArray(pcvNodeEvidence.sourceRefs)
+        ? { sourceRefs: evidenceSourceRefs.activeSourceRefs }
+        : {}),
+      ...(Array.isArray(pcvNodeEvidence.referencedFiles)
+        ? { referencedFiles: evidenceReferencedFiles.activeSourceRefs }
+        : {}),
+    };
+    normalized = appendSourceRefNormalization(
+      normalized,
+      evidenceSourceRefs,
+      'pcvNodeEvidence.sourceRefs'
+    );
+    normalized = appendSourceRefNormalization(
+      normalized,
+      evidenceReferencedFiles,
+      'pcvNodeEvidence.referencedFiles'
+    );
+  }
+
+  normalized = appendSourceRefNormalization(normalized, topLevel, 'sourceRefs');
+  normalized = appendSourceRefNormalization(normalized, topReferenced, 'referencedFiles');
+  return normalized;
+}
+
+function normalizeSourceRefs(
+  sourceRefs: readonly string[],
+  sourceIdentities: ProjectScopeSourceIdentity[]
+): ProjectScopeSourceRefNormalizationResult {
+  return normalizeProjectScopeSourceRefsForRuntime(sourceRefs, sourceIdentities);
+}
+
+function appendSourceRefNormalization(
+  metadata: Record<string, unknown>,
+  normalization: ProjectScopeSourceRefNormalizationResult,
+  field: string
+): Record<string, unknown> {
+  if (normalization.rejected.length === 0) {
+    return metadata;
+  }
+  const existing = Array.isArray(metadata.projectScopeSourceRefRejections)
+    ? metadata.projectScopeSourceRefRejections
+    : [];
+  return {
+    ...metadata,
+    projectScopeSourceRefRejections: [
+      ...existing,
+      ...normalization.rejected.map((rejection) => ({
+        field,
+        input: rejection.input,
+        reason: rejection.reason,
+        status: rejection.status,
+      })),
+    ],
+  };
 }
 
 function sourceRefsFromFindings(value: unknown): string[] {

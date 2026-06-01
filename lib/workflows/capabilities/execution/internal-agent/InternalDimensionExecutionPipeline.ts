@@ -41,6 +41,7 @@ export async function runInternalDimensionExecution(
     guardAudit: preparation.guardAudit as Record<string, unknown> | null,
     isIncremental: preparation.isIncremental,
     incrementalPlan: preparation.incrementalPlan,
+    projectScopeSourceIdentities: preparation.projectScopeSourceIdentities,
   });
 
   const startedAtMs = Date.now();

@@ -45,6 +45,10 @@ import {
   resolveKnowledgeScanDirs,
   resolveProjectRoot,
 } from '@alembic/core/workspace';
+import {
+  normalizeProjectScopeSourceRefsForRuntime,
+  resolveProjectScopeSourceIdentitiesFromContainer,
+} from '../../project-scope/ProjectScopeAnalysis.js';
 import { FileChangeHandler } from '../../service/evolution/FileChangeHandler.js';
 import { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
@@ -222,8 +226,10 @@ export function register(c: ServiceContainer) {
     const projectRoot = resolveProjectRoot();
     const sourceRefRepo = ct.get('recipeSourceRefRepository') as SourceRefRepository;
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
+    const sourceIdentities = resolveProjectScopeSourceIdentitiesFromContainer(ct);
     return new SourceRefReconciler(projectRoot, sourceRefRepo, knowledgeRepo, {
       signalBus: ct.singletons.signalBus || undefined,
+      ...(sourceIdentities.length > 0 ? { sourceIdentities } : {}),
     } as ConstructorParameters<typeof SourceRefReconciler>[3]);
   });
 
@@ -450,6 +456,14 @@ async function _populateSourceRefsForEntry(c: ServiceContainer, entryId: string)
         : [];
     } catch {
       return;
+    }
+
+    const sourceIdentities = resolveProjectScopeSourceIdentitiesFromContainer(c);
+    if (sourceIdentities.length > 0) {
+      sources = normalizeProjectScopeSourceRefsForRuntime(
+        sources,
+        sourceIdentities
+      ).activeSourceRefs;
     }
 
     if (sources.length === 0) {

@@ -7,7 +7,9 @@ import { WorkspaceResolver } from '@alembic/core/workspace';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   attachProjectScopeToScanOptions,
+  buildProjectScopeSourceIdentityMap,
   collectProjectScopeSourceIdentities,
+  normalizeProjectScopeSourceRefsForRuntime,
   resolveProjectScopeAnalysisContext,
 } from '../../lib/project-scope/ProjectScopeAnalysis.js';
 
@@ -80,10 +82,11 @@ describe('ProjectScope analysis wiring', () => {
       'lib/index.ts',
       'lib/index.ts',
     ]);
-    expect(collectProjectScopeSourceIdentities(result).map((ref) => ref.qualifiedPath).sort()).toEqual([
-      'AlembicCore/lib/index.ts',
-      'AlembicPlugin/lib/index.ts',
-    ]);
+    expect(
+      collectProjectScopeSourceIdentities(result)
+        .map((ref) => ref.qualifiedPath)
+        .sort()
+    ).toEqual(['AlembicCore/lib/index.ts', 'AlembicPlugin/lib/index.ts']);
     expect(result.allFiles.map((file) => file.path)).not.toEqual(
       expect.arrayContaining([
         join(controlRoot, 'lib', 'control.ts'),
@@ -91,12 +94,76 @@ describe('ProjectScope analysis wiring', () => {
       ])
     );
   });
+
+  test('normalizes sourceRefs to qualified ProjectScope refs and rejects ambiguous or missing refs', () => {
+    const controlRoot = mkdtempSync(join(tmpdir(), 'alembic-project-scope-refs-'));
+    tempDirs.push(controlRoot);
+    const coreRepo = createNodeProject(controlRoot, 'AlembicCore');
+    const pluginRepo = createNodeProject(controlRoot, 'AlembicPlugin');
+    const serverRepo = createNodeProject(controlRoot, 'Alembic');
+
+    const identities = [
+      {
+        absolutePath: join(coreRepo, 'lib', 'index.ts'),
+        folderDisplayName: 'AlembicCore',
+        folderId: 'folder-core',
+        folderPath: coreRepo,
+        folderRelativeRoot: 'AlembicCore',
+        legacyPath: 'lib/index.ts',
+        projectScopeId: 'scope-a',
+        qualifiedPath: 'AlembicCore/lib/index.ts',
+        relativePath: 'lib/index.ts',
+      },
+      {
+        absolutePath: join(pluginRepo, 'lib', 'index.ts'),
+        folderDisplayName: 'AlembicPlugin',
+        folderId: 'folder-plugin',
+        folderPath: pluginRepo,
+        folderRelativeRoot: 'AlembicPlugin',
+        legacyPath: 'lib/index.ts',
+        projectScopeId: 'scope-a',
+        qualifiedPath: 'AlembicPlugin/lib/index.ts',
+        relativePath: 'lib/index.ts',
+      },
+      {
+        absolutePath: join(serverRepo, 'bin', 'api-server.ts'),
+        folderDisplayName: 'Alembic',
+        folderId: 'folder-alembic',
+        folderPath: serverRepo,
+        folderRelativeRoot: 'Alembic',
+        legacyPath: 'bin/api-server.ts',
+        projectScopeId: 'scope-a',
+        qualifiedPath: 'Alembic/bin/api-server.ts',
+        relativePath: 'bin/api-server.ts',
+      },
+    ];
+
+    const identityMap = buildProjectScopeSourceIdentityMap(identities);
+    const normalized = normalizeProjectScopeSourceRefsForRuntime(
+      ['bin/api-server.ts:12', 'lib/index.ts', 'AlembicCore/src/core/database.ts'],
+      identities
+    );
+
+    expect(identityMap).toMatchObject({
+      ambiguousLegacyPaths: ['lib/index.ts'],
+      preferredRef: 'qualifiedPath',
+      sourceCount: 3,
+    });
+    expect(normalized.activeSourceRefs).toEqual(['Alembic/bin/api-server.ts:12']);
+    expect(normalized.rejected.map((ref) => [ref.input, ref.reason])).toEqual([
+      ['lib/index.ts', 'ambiguous-legacy-path'],
+      ['AlembicCore/src/core/database.ts', 'not-found'],
+    ]);
+  });
 });
 
 function createNodeProject(root: string, name: string): string {
   const projectRoot = join(root, name);
   mkdirSync(join(projectRoot, 'lib'), { recursive: true });
   writeFileSync(join(projectRoot, 'package.json'), `${JSON.stringify({ name })}\n`);
-  writeFileSync(join(projectRoot, 'lib', 'index.ts'), `export const name = ${JSON.stringify(name)};\n`);
+  writeFileSync(
+    join(projectRoot, 'lib', 'index.ts'),
+    `export const name = ${JSON.stringify(name)};\n`
+  );
   return projectRoot;
 }

@@ -62,8 +62,10 @@ import {
   startInternalDimensionExecutionSession,
 } from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
 import {
+  attachProjectScopeSourceIdentitiesToView,
   attachProjectScopeToScanOptions,
   buildProjectScopeAnalysisLogMeta,
+  collectProjectScopeSourceIdentities,
   resolveProjectScopeAnalysisContext,
 } from '../../../project-scope/ProjectScopeAnalysis.js';
 
@@ -138,6 +140,7 @@ export async function runInternalColdStartWorkflow(
     scan: attachProjectScopeToScanOptions(plan.projectAnalysis.scan, analysisScope),
     materialize: plan.projectAnalysis.materialize,
   });
+  const sourceIdentities = collectProjectScopeSourceIdentities(phaseResults);
 
   if (phaseResults.isEmpty) {
     return presentInternalColdStartEmptyProject({
@@ -182,6 +185,14 @@ export async function runInternalColdStartWorkflow(
     selectedDimensions: dimensions,
   });
   report.dimensionSelection = selectionSummary;
+  report.projectScopeSourceIdentities = {
+    projectScopeId: analysisScope.projectScopeId,
+    sourceCount: sourceIdentities.length,
+  };
+  ctx.logger.info('[Bootstrap-Internal] ProjectScope source identities prepared', {
+    projectScopeId: analysisScope.projectScopeId,
+    sourceIdentities: sourceIdentities.length,
+  });
 
   // 如果调用方指定了维度子集，只保留匹配的维度
   if (intent.dimensionIds?.length) {
@@ -229,15 +240,18 @@ export async function runInternalColdStartWorkflow(
   // skipAsyncFill: CLI 非 --wait 模式跳过异步填充，避免进程退出后 DB 断连
   if (!intent.internalExecution?.skipAsyncFill) {
     dispatchInternalDimensionExecution({
-      view: {
-        snapshot,
-        ctx: ctx as BootstrapMcpContext,
-        bootstrapSession,
-        targetFileMap,
-        projectRoot,
-        mode: 'bootstrap',
-        skipTargetDelivery: intent.internalExecution?.skipTargetDelivery === true,
-      },
+      view: attachProjectScopeSourceIdentitiesToView(
+        {
+          snapshot,
+          ctx: ctx as BootstrapMcpContext,
+          bootstrapSession,
+          targetFileMap,
+          projectRoot,
+          mode: 'bootstrap',
+          skipTargetDelivery: intent.internalExecution?.skipTargetDelivery === true,
+        },
+        sourceIdentities
+      ),
       dimensions,
       logPrefix: 'Bootstrap',
     });

@@ -2,12 +2,14 @@ import { MemoryCoordinator } from '@alembic/agent/memory';
 import type { SystemRunContextFactory } from '@alembic/agent/service';
 import type { KnowledgeRescanExecutionDecision } from '@alembic/core/host-agent-workflows';
 import { describe, expect, test, vi } from 'vitest';
+import { buildProjectScopeSourceIdentityMap } from '../../lib/project-scope/ProjectScopeAnalysis.js';
 import {
   buildPanoramaContext,
   createBootstrapDimensionRuntimeInput,
   resolveBootstrapDimensionPlan,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
-import { prepareBootstrapRescanState } from '#workflows/capabilities/execution/internal-agent/BootstrapRescanState.js';
+} from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
+import { buildBootstrapDimensionRunInput } from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
+import { prepareBootstrapRescanState } from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapRescanState.js';
 
 const dimensions = [
   {
@@ -98,6 +100,19 @@ describe('bootstrap dimension runtime builder', () => {
     expect(plan.prescreenDone).toBe(true);
 
     const memoryCoordinator = new MemoryCoordinator({ mode: 'bootstrap' });
+    const projectScopeSourceIdentityMap = buildProjectScopeSourceIdentityMap([
+      {
+        absolutePath: '/workspace/AlembicCore/lib/index.ts',
+        folderDisplayName: 'AlembicCore',
+        folderId: 'folder-core',
+        folderPath: '/workspace/AlembicCore',
+        folderRelativeRoot: 'AlembicCore',
+        legacyPath: 'lib/index.ts',
+        projectScopeId: 'scope-a',
+        qualifiedPath: 'AlembicCore/lib/index.ts',
+        relativePath: 'lib/index.ts',
+      },
+    ]);
     const result = createBootstrapDimensionRuntimeInput({
       dimId: 'custom-dual-dim',
       plan,
@@ -123,6 +138,7 @@ describe('bootstrap dimension runtime builder', () => {
       bootstrapDedup: {},
       sessionId: 'session-1',
       allFiles: [],
+      projectScopeSourceIdentityMap,
       sessionAbortSignal: null,
     });
     const strategyContext = result.runInput.context?.strategyContext as Record<string, unknown>;
@@ -174,8 +190,7 @@ describe('bootstrap dimension runtime builder', () => {
       pcvStageNodeMap: {
         quality_gate: { chainNodeId: 'pcvm:cold-start:n9:quality' },
       },
-      pcvChainNodes: {
-      },
+      pcvChainNodes: {},
     });
     expect(strategyContext.rescanContext).toMatchObject({ gap: 4, existing: 1 });
     expect(strategyContext.existingRecipes).toEqual([
@@ -190,11 +205,74 @@ describe('bootstrap dimension runtime builder', () => {
       fileCount: 10,
       modules: ['src'],
     });
+    expect(strategyContext.projectScopeSourceIdentityMap).toMatchObject({
+      contract: 'ProjectScopeSourceIdentityMap',
+      entries: [{ qualifiedPath: 'AlembicCore/lib/index.ts' }],
+      preferredRef: 'qualifiedPath',
+    });
+    expect(systemRunContext.sharedState).toMatchObject({
+      _projectScopeSourceIdentityMap: {
+        entries: [{ legacyPath: 'lib/index.ts', qualifiedPath: 'AlembicCore/lib/index.ts' }],
+      },
+    });
     expect(strategyContext.projectGraph).toBeTruthy();
     expect(systemRunContext).not.toHaveProperty('projectGraph');
     expect(systemRunContext).not.toHaveProperty('evidenceStarters');
     expect(systemRunContext).not.toHaveProperty('existingRecipes');
     expect(systemRunContext).not.toHaveProperty('projectOverview');
+  });
+
+  test('carries ProjectScope source identity map through dimension run input surfaces', () => {
+    const memoryCoordinator = new MemoryCoordinator({ mode: 'bootstrap' });
+    const projectScopeSourceIdentityMap = buildProjectScopeSourceIdentityMap([
+      {
+        absolutePath: '/workspace/AlembicCore/lib/index.ts',
+        folderDisplayName: 'AlembicCore',
+        folderId: 'folder-core',
+        folderPath: '/workspace/AlembicCore',
+        folderRelativeRoot: 'AlembicCore',
+        legacyPath: 'lib/index.ts',
+        projectScopeId: 'scope-a',
+        qualifiedPath: 'AlembicCore/lib/index.ts',
+        relativePath: 'lib/index.ts',
+      },
+    ]);
+
+    const runInput = buildBootstrapDimensionRunInput({
+      dimId: 'custom-dual-dim',
+      dimConfig: { label: 'Custom Dual' },
+      needsCandidates: true,
+      hasExistingRecipes: false,
+      prescreenDone: false,
+      sessionId: 'session-1',
+      primaryLang: 'typescript',
+      projectLang: 'typescript',
+      allFiles: [],
+      systemRunContext: {
+        contextWindow: null,
+        memoryCoordinator,
+        scopeId: 'custom-dual-dim:analyst',
+        sharedState: {},
+        source: 'system',
+        trace: null,
+      } as never,
+      strategyContext: {},
+      memoryCoordinator,
+      projectScopeSourceIdentityMap,
+    });
+
+    expect(runInput.context.strategyContext).toMatchObject({
+      projectScopeSourceIdentityMap: { sourceCount: 1 },
+    });
+    expect(runInput.context.promptContext).toMatchObject({
+      projectScopeSourceIdentityMap: { sourceCount: 1 },
+    });
+    expect(runInput.context.sharedState).toMatchObject({
+      _projectScopeSourceIdentityMap: { sourceCount: 1 },
+    });
+    expect(runInput.message.metadata?.context).toMatchObject({
+      projectScopeSourceIdentityMap: { sourceCount: 1 },
+    });
   });
 
   test('turns verify-only rescan decisions into analyze-only dimension runs', () => {

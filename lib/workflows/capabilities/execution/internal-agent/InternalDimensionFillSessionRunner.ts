@@ -134,6 +134,7 @@ export async function runInternalDimensionAgentSession({
       bootstrapDedup,
       sessionId: preparation.sessionId,
       allFiles: preparation.allFiles,
+      projectScopeSourceIdentityMap: runtime.projectScopeSourceIdentityMap,
       sessionAbortSignal: preparation.sessionAbortSignal,
     });
   }
@@ -156,6 +157,7 @@ export async function runInternalDimensionAgentSession({
       dimId,
       needsCandidates: plan.needsCandidates,
       runResult,
+      projectScopeSourceIdentities: runtime.projectScopeSourceIdentities,
     });
     const processEvents = buildBootstrapDimensionResultProcessEvents({
       dimId,

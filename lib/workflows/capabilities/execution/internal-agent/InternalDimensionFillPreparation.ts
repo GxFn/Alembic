@@ -10,6 +10,10 @@ import type {
   BootstrapTaskManagerLike,
   BootstrapWorkflowContext,
 } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillTypes.js';
+import {
+  type ProjectScopeSourceIdentity,
+  resolveProjectScopeSourceIdentitiesFromCarrier,
+} from '../../../../project-scope/ProjectScopeAnalysis.js';
 
 const logger = Logger.getInstance();
 
@@ -36,6 +40,7 @@ export interface InternalDimensionFillPreparation {
   isIncremental: boolean;
   emitter: BootstrapEventEmitter;
   allFiles: BootstrapFileEntry[] | null;
+  projectScopeSourceIdentities: ProjectScopeSourceIdentity[];
   agentService: AgentService | null;
   systemRunContextFactory: SystemRunContextFactory | null;
   aiUnavailable: boolean;
@@ -48,6 +53,7 @@ export function prepareInternalDimensionFillRun(
 ): InternalDimensionFillPreparation {
   const { snapshot, projectRoot } = view;
   const ctx = view.ctx as BootstrapWorkflowContext;
+  const projectScopeSourceIdentities = resolveProjectScopeSourceIdentitiesFromCarrier(view);
   const dataRoot =
     resolveDataRoot(ctx.container as { singletons?: Record<string, unknown> }) || projectRoot;
   const incrementalPlan = snapshot.incrementalPlan as IncrementalPlan | null;
@@ -101,6 +107,7 @@ export function prepareInternalDimensionFillRun(
     isIncremental,
     emitter,
     allFiles: snapshot.allFiles as unknown as BootstrapFileEntry[] | null,
+    projectScopeSourceIdentities,
     agentService,
     systemRunContextFactory,
     aiUnavailable: !aiStatus.ready,

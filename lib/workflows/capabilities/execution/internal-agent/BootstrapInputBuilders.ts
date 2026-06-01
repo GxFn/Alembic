@@ -15,6 +15,7 @@ import type {
   AgentRunPresentationOptions,
 } from '@alembic/agent/service';
 import { buildBootstrapPcvStageNodeContext } from '#workflows/capabilities/execution/internal-agent/BootstrapPcvNodeLocalEvidence.js';
+import type { ProjectScopeSourceIdentityMap } from '../../../../project-scope/ProjectScopeAnalysis.js';
 
 // ── Dimension input builder ──────────────────────────────
 
@@ -39,6 +40,7 @@ export interface BuildBootstrapDimensionRunInputOptions {
   systemRunContext: SystemRunContext;
   strategyContext: Record<string, unknown>;
   memoryCoordinator: MemoryCoordinator;
+  projectScopeSourceIdentityMap?: ProjectScopeSourceIdentityMap | null;
   sessionAbortSignal?: AbortSignal | null;
 }
 
@@ -55,6 +57,7 @@ export function buildBootstrapDimensionRunInput({
   systemRunContext,
   strategyContext,
   memoryCoordinator,
+  projectScopeSourceIdentityMap,
   sessionAbortSignal,
 }: BuildBootstrapDimensionRunInputOptions): AgentRunInput {
   const analystScopeId = systemRunContext.scopeId || `${dimId}:analyst`;
@@ -62,6 +65,9 @@ export function buildBootstrapDimensionRunInput({
   const compactSystemRunContext = compactBootstrapSystemRunContext(systemRunContext);
   const sharedState = {
     ...asRecord(compactSystemRunContext.sharedState),
+    ...(projectScopeSourceIdentityMap
+      ? { _projectScopeSourceIdentityMap: projectScopeSourceIdentityMap }
+      : {}),
     _pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
     _pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
     pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
@@ -69,6 +75,7 @@ export function buildBootstrapDimensionRunInput({
   };
   const enrichedStrategyContext = {
     ...strategyContext,
+    ...(projectScopeSourceIdentityMap ? { projectScopeSourceIdentityMap } : {}),
     pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
     pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
     pcvStageNodeMapContract: {
@@ -77,6 +84,9 @@ export function buildBootstrapDimensionRunInput({
     },
     sharedState: {
       ...asRecord(strategyContext.sharedState),
+      ...(projectScopeSourceIdentityMap
+        ? { _projectScopeSourceIdentityMap: projectScopeSourceIdentityMap }
+        : {}),
       _pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
       _pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
       pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
@@ -100,6 +110,7 @@ export function buildBootstrapDimensionRunInput({
         dimension: dimId,
         phase: 'bootstrap',
         context: {
+          ...(projectScopeSourceIdentityMap ? { projectScopeSourceIdentityMap } : {}),
           pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
           pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
         },
@@ -122,6 +133,7 @@ export function buildBootstrapDimensionRunInput({
         dimensionScopeId: analystScopeId,
         dimId,
         dimensionId: dimId,
+        ...(projectScopeSourceIdentityMap ? { projectScopeSourceIdentityMap } : {}),
         pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
         pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
       },
