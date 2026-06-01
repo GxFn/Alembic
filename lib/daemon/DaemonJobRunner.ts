@@ -50,6 +50,39 @@ export interface RunDaemonJobResult {
   result: unknown;
 }
 
+export interface DaemonRescanWorkflowArgs {
+  [key: string]: unknown;
+  contentMaxLines?: unknown;
+  dimensions?: string[];
+  maxFiles?: unknown;
+  reason: string;
+}
+
+export function buildDaemonRescanWorkflowArgs(options: {
+  args?: Record<string, unknown>;
+  source?: DaemonJobSource;
+}): DaemonRescanWorkflowArgs {
+  const args = options.args ?? {};
+  const workflowArgs: DaemonRescanWorkflowArgs = {
+    reason:
+      typeof args.reason === 'string' && args.reason.trim().length > 0
+        ? args.reason
+        : `${options.source || 'daemon'}-rescan`,
+    dimensions: Array.isArray(args.dimensions)
+      ? args.dimensions.filter((dimension): dimension is string => typeof dimension === 'string')
+      : undefined,
+  };
+
+  if (args.maxFiles !== undefined) {
+    workflowArgs.maxFiles = args.maxFiles;
+  }
+  if (args.contentMaxLines !== undefined) {
+    workflowArgs.contentMaxLines = args.contentMaxLines;
+  }
+
+  return workflowArgs;
+}
+
 export function createDaemonJob(options: DaemonJobOptions): DaemonJobRecord {
   const store = getJobStore(options.container);
   return store.create({
@@ -590,15 +623,7 @@ async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unkno
   const { rescanKnowledge } = await import('../resident/tool-handlers/knowledge-rescan.js');
   const raw = await rescanKnowledge(
     { container: options.container, logger: options.logger },
-    {
-      reason:
-        (options.args?.reason as string | undefined) || `${options.source || 'daemon'}-rescan`,
-      dimensions: Array.isArray(options.args?.dimensions)
-        ? options.args.dimensions.filter(
-            (dimension): dimension is string => typeof dimension === 'string'
-          )
-        : undefined,
-    }
+    buildDaemonRescanWorkflowArgs({ args: options.args, source: options.source })
   );
   const result = unwrapEnvelope(raw);
   return { ...asRecord(result), asyncFill: true };

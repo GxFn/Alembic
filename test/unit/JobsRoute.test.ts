@@ -9,6 +9,7 @@ import {
   buildJobStatusUrl,
   buildJobsApiOrigin,
   decorateJobForResponse,
+  parseRescanJobBody,
 } from '../../lib/http/routes/jobs.js';
 
 describe('jobs route URL helpers', () => {
@@ -120,6 +121,47 @@ describe('jobs process event response', () => {
         }),
       }),
     ]);
+  });
+});
+
+describe('jobs rescan request parsing', () => {
+  test('keeps legacy reason and dimensions requests delegated to Core defaults', () => {
+    const body = parseRescanJobBody({
+      reason: 'legacy-rescan',
+      dimensions: ['architecture', 'security'],
+    });
+
+    expect(body).toEqual({
+      reason: 'legacy-rescan',
+      dimensions: ['architecture', 'security'],
+    });
+    expect(body.maxFiles).toBeUndefined();
+    expect(body.contentMaxLines).toBeUndefined();
+  });
+
+  test('accepts non-truncated analysis options for daemon rescan jobs', () => {
+    const body = parseRescanJobBody({
+      reason: 'wide-rescan',
+      dimensions: ['architecture'],
+      maxFiles: 15_000,
+      contentMaxLines: 1_500,
+    });
+
+    expect(body).toMatchObject({
+      reason: 'wide-rescan',
+      dimensions: ['architecture'],
+      maxFiles: 15_000,
+      contentMaxLines: 1_500,
+    });
+  });
+
+  test('rejects route-level rescan analysis options outside the Core contract bounds', () => {
+    expect(() =>
+      parseRescanJobBody({
+        reason: 'too-wide-rescan',
+        maxFiles: 20_001,
+      })
+    ).toThrow();
   });
 });
 

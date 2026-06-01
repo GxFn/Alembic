@@ -6,6 +6,7 @@ import { JobStore } from '@alembic/core/daemon';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   attachBootstrapProcessEventBridge,
+  buildDaemonRescanWorkflowArgs,
   cancelDaemonJob,
   markInterruptedDaemonJobs,
 } from '../../lib/daemon/DaemonJobRunner.js';
@@ -163,6 +164,44 @@ describe('cancelDaemonJob', () => {
           },
         },
       },
+    });
+  });
+});
+
+describe('buildDaemonRescanWorkflowArgs', () => {
+  test('keeps legacy rescan daemon payloads on Core default analysis limits', () => {
+    const args = buildDaemonRescanWorkflowArgs({
+      args: {
+        reason: 'legacy-rescan',
+        dimensions: ['architecture', 123, 'security'],
+      },
+      source: 'http',
+    });
+
+    expect(args).toEqual({
+      reason: 'legacy-rescan',
+      dimensions: ['architecture', 'security'],
+    });
+    expect(args.maxFiles).toBeUndefined();
+    expect(args.contentMaxLines).toBeUndefined();
+  });
+
+  test('passes non-truncated rescan analysis options through to the workflow', () => {
+    const args = buildDaemonRescanWorkflowArgs({
+      args: {
+        reason: 'wide-rescan',
+        dimensions: ['architecture'],
+        maxFiles: 15_000,
+        contentMaxLines: 1_500,
+      },
+      source: 'http',
+    });
+
+    expect(args).toEqual({
+      reason: 'wide-rescan',
+      dimensions: ['architecture'],
+      maxFiles: 15_000,
+      contentMaxLines: 1_500,
     });
   });
 });

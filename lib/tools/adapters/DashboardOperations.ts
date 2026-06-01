@@ -236,7 +236,7 @@ async function cancelBootstrap(request: ToolExecutionRequest) {
 async function rescanProject(request: ToolExecutionRequest) {
   const container = getContainer(request);
   const { createDaemonJob, runDaemonJob } = await import('../../daemon/DaemonJobRunner.js');
-  const args = {
+  const args: Record<string, unknown> = {
     reason: (request.args.reason as string | undefined) || 'dashboard-rescan',
     dimensions: Array.isArray(request.args.dimensions)
       ? request.args.dimensions.filter(
@@ -244,6 +244,12 @@ async function rescanProject(request: ToolExecutionRequest) {
         )
       : undefined,
   };
+  if (request.args.maxFiles !== undefined) {
+    args.maxFiles = request.args.maxFiles;
+  }
+  if (request.args.contentMaxLines !== undefined) {
+    args.contentMaxLines = request.args.contentMaxLines;
+  }
   logger.info('Rescan initiated via dashboard router', {
     reason: args.reason,
     dimensions: args.dimensions,

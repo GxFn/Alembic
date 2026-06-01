@@ -32,6 +32,19 @@ describe('KnowledgeRescanIntent', () => {
     expect(intent.cleanupPolicy).toBe('force-rescan');
   });
 
+  test('passes explicit internal rescan analysis limits into the workflow intent', () => {
+    const intent = createInternalKnowledgeRescanIntent({
+      reason: 'wide-rescan',
+      maxFiles: 15_000,
+      contentMaxLines: 1_500,
+    });
+
+    expect(intent.projectAnalysis).toMatchObject({
+      maxFiles: 15_000,
+      contentMaxLines: 1_500,
+    });
+  });
+
   test('keeps host-agent rescan aligned with internal cleanup semantics', () => {
     const intent = createHostAgentKnowledgeRescanIntent({
       reason: 'host-agent-rescan',

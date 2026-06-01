@@ -5,6 +5,10 @@ import {
   type DaemonJobRecord,
   type DaemonJobStatus,
 } from '@alembic/core/daemon';
+import {
+  MAX_KNOWLEDGE_RESCAN_CONTENT_MAX_LINES,
+  MAX_KNOWLEDGE_RESCAN_MAX_FILES,
+} from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
@@ -35,7 +39,19 @@ const BootstrapJobBody = z.object({
 const RescanJobBody = z.object({
   reason: z.string().optional(),
   dimensions: z.array(z.string()).optional(),
+  maxFiles: z.coerce.number().int().min(1).max(MAX_KNOWLEDGE_RESCAN_MAX_FILES).optional(),
+  contentMaxLines: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_KNOWLEDGE_RESCAN_CONTENT_MAX_LINES)
+    .optional(),
 });
+export type RescanJobRequest = z.infer<typeof RescanJobBody>;
+
+export function parseRescanJobBody(input: unknown): RescanJobRequest {
+  return RescanJobBody.parse(input);
+}
 
 const CancelJobBody = z.object({
   reason: z.string().optional(),
