@@ -29,7 +29,6 @@
     "@alembic/core/memory",
     "@alembic/core/project-intelligence",
     "@alembic/core/repositories",
-    "@alembic/core/repository/base/RepositoryBase",
     "@alembic/core/search",
     "@alembic/core/service/bootstrap",
     "@alembic/core/service/candidate",
@@ -49,8 +48,7 @@
     "@alembic/core/core/ast/lang-swift": 2,
     "@alembic/core/infrastructure/database/drizzle": 3,
     "@alembic/core/infrastructure/database/drizzle/schema": 5,
-    "@alembic/core/infrastructure/database/migrations/004_evolution_proposals": 2,
-    "@alembic/core/repository/base/RepositoryBase": 1
+    "@alembic/core/infrastructure/database/migrations/004_evolution_proposals": 2
   },
   "scanRoots": ["bin", "lib", "scripts", "test", "config"],
   "referenceLimits": {
@@ -62,7 +60,6 @@
     "@alembic/core/core/ast/lang-swift": 2,
     "@alembic/core/infrastructure/database/drizzle": 3,
     "@alembic/core/infrastructure/database/drizzle/schema": 5,
-    "@alembic/core/infrastructure/database/migrations/004_evolution_proposals": 2,
-    "@alembic/core/repository/base/RepositoryBase": 1
+    "@alembic/core/infrastructure/database/migrations/004_evolution_proposals": 2
   }
 }
