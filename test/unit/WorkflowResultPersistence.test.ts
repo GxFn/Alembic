@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import type { SessionStore } from '@alembic/agent/memory';
 import {
   buildWorkflowReport,
   persistWorkflowResult,
@@ -8,11 +9,10 @@ import {
 } from '@alembic/core/host-agent-workflows';
 import type { IncrementalPlan } from '@alembic/core/types';
 import { describe, expect, test, vi } from 'vitest';
-import type { SessionStore } from '@alembic/agent/memory';
 import type {
   CandidateResults,
   SkillResults,
-} from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
+} from '../../lib/workflows/ai-execution/BootstrapConsumers.js';
 
 const candidateResults: CandidateResults = { created: 2, failed: 0, errors: [] };
 const skillResults: SkillResults = { created: 1, failed: 0, skills: ['project-api'], errors: [] };

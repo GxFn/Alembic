@@ -30,10 +30,10 @@ describe('resident service HTTP boundary', () => {
       join(repoRoot, 'lib/http/routes/candidates.ts'),
       'utf8'
     );
-    const oldBootstrapPath = 'external' + '/mcp/handlers/bootstrap-internal.js';
-    const oldRescanPath = 'external' + '/mcp/handlers/rescan-internal.js';
-    const residentBootstrapPath = 'resident' + '/tool-handlers/bootstrap-internal.js';
-    const residentRescanPath = 'resident' + '/tool-handlers/rescan-internal.js';
+    const oldBootstrapPath = 'external' + '/mcp/handlers/cold-start.js';
+    const oldRescanPath = 'external' + '/mcp/handlers/knowledge-rescan.js';
+    const residentBootstrapPath = 'resident' + '/tool-handlers/cold-start.js';
+    const residentRescanPath = 'resident' + '/tool-handlers/knowledge-rescan.js';
 
     expect(cliSource).not.toContain(oldBootstrapPath);
     expect(cliSource).not.toContain(oldRescanPath);
@@ -51,8 +51,8 @@ describe('resident service HTTP boundary', () => {
 
   test('removes legacy external MCP bootstrap/rescan compatibility aliases', () => {
     const legacyHandlersDir = join(repoRoot, 'lib/external/mcp/handlers');
-    const legacyBootstrapFile = join(legacyHandlersDir, 'bootstrap-internal.ts');
-    const legacyRescanFile = join(legacyHandlersDir, 'rescan-internal.ts');
+    const legacyBootstrapFile = join(legacyHandlersDir, 'cold-start.ts');
+    const legacyRescanFile = join(legacyHandlersDir, 'knowledge-rescan.ts');
     const legacyRefineFile = join(legacyHandlersDir, 'bootstrap', 'refine.ts');
 
     expect(existsSync(legacyBootstrapFile)).toBe(false);

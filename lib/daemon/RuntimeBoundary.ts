@@ -4,11 +4,11 @@ import {
   ALEMBIC_JOB_ENDPOINTS,
   ALEMBIC_JOB_KINDS,
   type AlembicEnhancementRoute,
-  type AlembicInternalAiCapability,
   type AlembicRuntimeCapabilities,
   type AlembicRuntimeMode,
   type AlembicRuntimeProjectIdentity,
 } from '@alembic/core/daemon';
+import { type ApiAiCapability, readApiAiCapability } from './ApiAiCompatibility.js';
 import type {
   DaemonFileMonitorActiveEventSource,
   DaemonFileMonitorRuntimeState,
@@ -21,7 +21,6 @@ export const DAEMON_JOB_KINDS = ALEMBIC_JOB_KINDS;
 export type AlembicRuntimeRoute = AlembicEnhancementRoute;
 export type DaemonFileChangeEventSource = (typeof ALEMBIC_FILE_MONITOR_EVENT_SOURCES)[number];
 export type DaemonJobKind = (typeof ALEMBIC_JOB_KINDS)[number];
-export type InternalAiCapability = AlembicInternalAiCapability;
 export type RuntimeBoundaryWorkspaceMode = NonNullable<
   AlembicRuntimeProjectIdentity['workspaceMode']
 >;
@@ -83,8 +82,8 @@ export interface AlembicRuntimeBoundary {
     mode: AlembicRuntimeCapabilities['fileMonitor']['mode'];
     status: DaemonFileMonitorRuntimeState;
   };
-  internalAi: InternalAiCapability & {
-    owner: 'alembic-internal-ai';
+  apiAi: ApiAiCapability & {
+    owner: 'alembic-api-ai';
     runtimeOwner: 'AlembicAgent';
   };
   jobs: {
@@ -101,6 +100,7 @@ export function buildAlembicRuntimeBoundary(
   const workspaceMode =
     options.workspace.workspaceMode ?? (options.workspace.ghost ? 'ghost' : 'standard');
   const fileMonitor = options.capabilities.fileMonitor as unknown as Record<string, unknown>;
+  const apiAi = readApiAiCapability(options.capabilities);
 
   return {
     owner: 'alembic',
@@ -140,9 +140,9 @@ export function buildAlembicRuntimeBoundary(
       mode: options.capabilities.fileMonitor.mode,
       status: readFileMonitorStatus(fileMonitor.status),
     },
-    internalAi: {
-      ...options.capabilities.internalAi,
-      owner: 'alembic-internal-ai',
+    apiAi: {
+      ...apiAi,
+      owner: 'alembic-api-ai',
       runtimeOwner: 'AlembicAgent',
     },
     jobs: {

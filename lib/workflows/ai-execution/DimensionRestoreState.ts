@@ -10,8 +10,8 @@ import type {
   CandidateResults,
   DimensionCandidateData,
   DimensionStat,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import type { DimensionContext } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
+} from './BootstrapConsumers.js';
+import type { DimensionContext } from './DimensionContext.js';
 
 export type { DimensionCheckpoint };
 

@@ -693,9 +693,7 @@ program
       const spinner = ora('Phase 1-4: 收集文件、AST 分析、SPM 依赖、Guard 审计...').start();
 
       // 直接调用 resident bootstrap handler（统一编排管线）
-      const { bootstrapKnowledge } = await import(
-        '../lib/resident/tool-handlers/bootstrap-internal.js'
-      );
+      const { bootstrapKnowledge } = await import('../lib/resident/tool-handlers/cold-start.js');
       const logger = container.get('logger');
       const raw = await bootstrapKnowledge(
         { container, logger },
@@ -878,9 +876,9 @@ program
       const spinner = ora('Rescan: 快照 Recipe → 清理缓存 → Phase 1-4 + 证据审计...').start();
 
       // 直接调用 resident rescan handler（统一编排管线）
-      const { rescanInternal } = await import('../lib/resident/tool-handlers/rescan-internal.js');
+      const { rescanKnowledge } = await import('../lib/resident/tool-handlers/knowledge-rescan.js');
       const logger = container.get('logger');
-      const raw = await rescanInternal(
+      const raw = await rescanKnowledge(
         { container, logger },
         {
           reason: opts.reason || 'cli-rescan',
@@ -1623,7 +1621,7 @@ program
         cli.log(`  AI Model:     ${aiInfo.model}`);
       }
     } else {
-      cli.log('  AI Provider:  未配置（internal AI 需要运行 alembic ai configure）');
+      cli.log('  AI Provider:  未配置（API AI 需要运行 alembic ai configure）');
     }
 
     // 检查数据库 (Ghost-aware)
@@ -1952,7 +1950,7 @@ taskCmd
   .description('[已废弃] Task 系统不再使用数据库。')
   .action(() => {
     cli.log('\n  ⚠️ Task 数据库子命令已废弃。');
-    cli.log('  请使用 Dashboard、HTTP API 或 internal AI job 读取上下文。\n');
+    cli.log('  请使用 Dashboard、HTTP API 或 API AI job 读取上下文。\n');
   });
 
 // ─────────────────────────────────────────────────────
@@ -2620,7 +2618,7 @@ function printProjectRuntimeSummary(project: ProjectRuntimeScopeSummary) {
     `  Monitor:  ${project.fileMonitor.available ? 'available' : 'unavailable'} (${project.fileMonitor.mode})`
   );
   cli.log(
-    `  AI:       ${project.internalAi.available ? 'available' : 'unavailable'} (${project.internalAi.configSource})`
+    `  AI:       ${project.apiAi.available ? 'available' : 'unavailable'} (${project.apiAi.configSource})`
   );
   if (project.daemon.message) {
     cli.log(`  Message:  ${project.daemon.message}`);

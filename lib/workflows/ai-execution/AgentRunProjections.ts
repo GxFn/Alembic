@@ -14,7 +14,7 @@ import {
 import {
   normalizeProjectScopeSourceRefsForRuntime,
   type ProjectScopeSourceIdentity,
-} from '../../../../project-scope/ProjectScopeAnalysis.js';
+} from '../../project-scope/ProjectScopeAnalysis.js';
 
 export interface ToolCallRecord {
   tool?: string;

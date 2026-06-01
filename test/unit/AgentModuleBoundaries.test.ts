@@ -86,7 +86,7 @@ describe('agent module boundaries', () => {
     expect(offenders).toEqual([]);
   });
 
-  test('keeps internal dimension execution off retired fill entrypoints', () => {
+  test('keeps AI dimension execution off retired fill entrypoints', () => {
     const offenders: Array<{ file: string; token: string }> = [];
 
     for (const file of collectTypeScriptFiles(join(repoRoot, 'lib', 'workflows'))) {
@@ -112,7 +112,7 @@ describe('agent module boundaries', () => {
     for (const file of collectTypeScriptFiles(join(repoRoot, 'lib', 'workflows'))) {
       const relFile = relative(repoRoot, file);
       const source = readFileSync(file, 'utf8');
-      for (const token of ['#workflows/incremental-scan/', 'IncrementalScan']) {
+      for (const token of ['../../lib/workflows/incremental-scan/', 'IncrementalScan']) {
         if (source.includes(token)) {
           offenders.push({ file: relFile, token });
         }
@@ -230,8 +230,8 @@ describe('agent module boundaries', () => {
 
     const retiredSpecifiers = new Set([
       ...retiredPersistenceSpecifiers,
-      '#workflows/common-capabilities/delivery/BootstrapDeliveryConsumer.js',
-      '#workflows/capabilities/execution/internal-agent/consumers/BootstrapSemanticMemoryConsumer.js',
+      '../../lib/workflows/common-capabilities/delivery/BootstrapDeliveryConsumer.js',
+      '../../lib/workflows/ai-execution/consumers/BootstrapSemanticMemoryConsumer.js',
       '#external/mcp/handlers/bootstrap/shared/async-fill-helpers.js',
       '#external/mcp/handlers/bootstrap/shared/audit-helpers.js',
       '#external/mcp/handlers/bootstrap/shared/handler-types.js',
@@ -265,8 +265,8 @@ describe('agent module boundaries', () => {
 
   test('keeps file diff implementation owned by Core workflow naming', () => {
     const retiredSpecifiers = new Set([
-      '#workflows/common-capabilities/file-diff/BootstrapSnapshot.js',
-      '#workflows/common-capabilities/file-diff/IncrementalBootstrap.js',
+      '../../lib/workflows/common-capabilities/file-diff/BootstrapSnapshot.js',
+      '../../lib/workflows/common-capabilities/file-diff/IncrementalBootstrap.js',
     ]);
     const offenders: Array<{ file: string; specifier: string }> = [];
 

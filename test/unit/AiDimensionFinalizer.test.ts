@@ -4,31 +4,31 @@ import {
 } from '@alembic/core/host-agent-workflows';
 import { describe, expect, test } from 'vitest';
 import {
-  augmentInternalDimensionWorkflowReport,
+  augmentAiDimensionWorkflowReport,
   augmentWorkflowReportWithEfficiency,
   augmentWorkflowReportWithPcvNodeLocalBaseline,
   augmentWorkflowReportWithSkillDeliveryReceipts,
-  buildInternalDimensionFinalizerStepMap,
-  buildInternalDimensionPersistenceInput,
-  cleanupInternalDimensionRuntimeCaches,
-  clearInternalDimensionSessionDedupCache,
-  createInternalDimensionAbortGuard,
-  runInternalDimensionCompletionStep,
-} from '../../lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
-import type { InternalDimensionFillPreparation } from '../../lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillPreparation.js';
-import type { InternalDimensionFillSessionResult } from '../../lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillSessionRunner.js';
+  buildAiDimensionFinalizerStepMap,
+  buildAiDimensionPersistenceInput,
+  cleanupAiDimensionRuntimeCaches,
+  clearAiDimensionSessionDedupCache,
+  createAiDimensionAbortGuard,
+  runAiDimensionCompletionStep,
+} from '../../lib/workflows/ai-execution/AiDimensionFinalizer.js';
+import type { AiDimensionPreparation } from '../../lib/workflows/ai-execution/AiDimensionPreparation.js';
+import type { AiDimensionSessionResult } from '../../lib/workflows/ai-execution/AiDimensionSessionRunner.js';
 
-describe('internal dimension fill finalizer efficiency report augmentation', () => {
+describe('AI dimension finalizer efficiency report augmentation', () => {
   test('exposes explicit finalizer step map for side-effect attribution', () => {
-    expect(buildInternalDimensionFinalizerStepMap()).toEqual({
-      cacheWarmupCleanup: 'clearInternalDimensionSessionDedupCache',
-      skillConsumption: 'consumeInternalDimensionSkillsStep',
-      candidateRelations: 'consumeInternalDimensionCandidateRelationsStep',
-      completion: 'runInternalDimensionCompletionStep',
-      persistence: 'buildInternalDimensionPersistenceInput',
-      reportAugmentation: 'augmentInternalDimensionWorkflowReport',
+    expect(buildAiDimensionFinalizerStepMap()).toEqual({
+      cacheWarmupCleanup: 'clearAiDimensionSessionDedupCache',
+      skillConsumption: 'consumeAiDimensionSkillsStep',
+      candidateRelations: 'consumeAiDimensionCandidateRelationsStep',
+      completion: 'runAiDimensionCompletionStep',
+      persistence: 'buildAiDimensionPersistenceInput',
+      reportAugmentation: 'augmentAiDimensionWorkflowReport',
       historyRewrite: 'persistEfficiencyAugmentedWorkflowReport',
-      runtimeCacheCleanup: 'cleanupInternalDimensionRuntimeCaches',
+      runtimeCacheCleanup: 'cleanupAiDimensionRuntimeCaches',
     });
   });
 
@@ -46,7 +46,7 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
       semanticMemory: { status: 'skipped' as const, result: null },
     };
 
-    const input = buildInternalDimensionPersistenceInput({
+    const input = buildAiDimensionPersistenceInput({
       completionSummary,
       consolidationResult: null,
       preparation,
@@ -71,7 +71,7 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
   });
 
   test('summarizes rescan completion without opening delivery or memory surfaces', async () => {
-    const result = await runInternalDimensionCompletionStep({
+    const result = await runAiDimensionCompletionStep({
       preparation: makePreparation({ mode: 'rescan' }),
       runtime: makeRuntime(),
       shouldAbort: () => false,
@@ -96,14 +96,14 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
     sessionResult.bootstrapDedup.add('api');
     expect(sessionResult.bootstrapDedup.size).toBe(1);
 
-    expect(clearInternalDimensionSessionDedupCache(sessionResult)).toEqual({
+    expect(clearAiDimensionSessionDedupCache(sessionResult)).toEqual({
       bootstrapDedupCleared: true,
     });
     expect(sessionResult.bootstrapDedup.size).toBe(0);
 
     const preparation = makePreparation();
     preparation.ctx.container.singletons._fileCache = { stale: true };
-    expect(cleanupInternalDimensionRuntimeCaches(preparation)).toEqual({ fileCacheCleared: true });
+    expect(cleanupAiDimensionRuntimeCaches(preparation)).toEqual({ fileCacheCleared: true });
     expect(preparation.ctx.container.singletons._fileCache).toBeNull();
   });
 
@@ -112,7 +112,7 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
       isSessionValid: () => false,
       isUserCancelled: () => false,
     };
-    const shouldAbort = createInternalDimensionAbortGuard(makePreparation({ taskManager }));
+    const shouldAbort = createAiDimensionAbortGuard(makePreparation({ taskManager }));
 
     expect(shouldAbort()).toBe(true);
   });
@@ -160,7 +160,7 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
       skillName: 'project-api',
     });
 
-    const result = augmentInternalDimensionWorkflowReport({
+    const result = augmentAiDimensionWorkflowReport({
       report,
       skillResults: {
         created: 1,
@@ -380,13 +380,11 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
       session: { id: 'session-1' },
     } as WorkflowReport;
 
-    const changed = augmentWorkflowReportWithPcvNodeLocalBaseline(
-      report,
-      {
-        api: {
-          candidateCount: 1,
-          durationMs: 10,
-          pcvNodeEvidence: {
+    const changed = augmentWorkflowReportWithPcvNodeLocalBaseline(report, {
+      api: {
+        candidateCount: 1,
+        durationMs: 10,
+        pcvNodeEvidence: {
           n8: {
             chainNodeId: 'N8-stage-factory-tool-policy',
             contract: 'PCVColdStartNodeLocalBaseline',
@@ -480,10 +478,9 @@ describe('internal dimension fill finalizer efficiency report augmentation', () 
             summary: 'api record repair stage projected',
             timedOut: false,
           },
-          },
         },
-      }
-    );
+      },
+    });
 
     expect(changed).toBe(true);
     expect(report.pcvScorecard).toMatchObject({
@@ -607,7 +604,7 @@ function makePreparation({
 }: {
   mode?: 'bootstrap' | 'rescan';
   taskManager?: unknown;
-} = {}): InternalDimensionFillPreparation {
+} = {}): AiDimensionPreparation {
   return {
     allFiles: [{ content: 'export {}', path: '/tmp/alembic-project/src/api.ts' }],
     ctx: {
@@ -626,7 +623,7 @@ function makePreparation({
     skipTargetDelivery: false,
     taskManager,
     view: { mode },
-  } as unknown as InternalDimensionFillPreparation;
+  } as unknown as AiDimensionPreparation;
 }
 
 function makeRuntime() {
@@ -636,10 +633,10 @@ function makeRuntime() {
       getCompletedDimensions: () => [],
       toJSON: () => ({}),
     },
-  } as unknown as Parameters<typeof buildInternalDimensionPersistenceInput>[0]['runtime'];
+  } as unknown as Parameters<typeof buildAiDimensionPersistenceInput>[0]['runtime'];
 }
 
-function makeSessionResult(): InternalDimensionFillSessionResult {
+function makeSessionResult(): AiDimensionSessionResult {
   return {
     bootstrapDedup: new Set<string>(),
     candidateResults: { created: 1, failed: 0, errors: [] },
@@ -654,5 +651,5 @@ function makeSessionResult(): InternalDimensionFillSessionResult {
     enableParallel: true,
     incrementalSkippedDims: [],
     skippedDims: [],
-  } as unknown as InternalDimensionFillSessionResult;
+  } as unknown as AiDimensionSessionResult;
 }

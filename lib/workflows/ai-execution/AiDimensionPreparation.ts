@@ -5,19 +5,16 @@ import type { IncrementalPlan, PipelineFillView } from '@alembic/core/types';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import { getAiRuntimeStatus } from '#inject/AiRuntimeStatus.js';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
-import type { BootstrapFileEntry } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
-import type {
-  BootstrapTaskManagerLike,
-  BootstrapWorkflowContext,
-} from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillTypes.js';
 import {
   type ProjectScopeSourceIdentity,
   resolveProjectScopeSourceIdentitiesFromCarrier,
-} from '../../../../project-scope/ProjectScopeAnalysis.js';
+} from '../../project-scope/ProjectScopeAnalysis.js';
+import type { BootstrapFileEntry } from './AgentRunInputBuilders.js';
+import type { BootstrapTaskManagerLike, BootstrapWorkflowContext } from './AiDimensionTypes.js';
 
 const logger = Logger.getInstance();
 
-export interface InternalDimensionFillPreparation {
+export interface AiDimensionPreparation {
   view: PipelineFillView;
   dimensions: DimensionDef[];
   ctx: BootstrapWorkflowContext;
@@ -47,10 +44,10 @@ export interface InternalDimensionFillPreparation {
   skipTargetDelivery: boolean;
 }
 
-export function prepareInternalDimensionFillRun(
+export function prepareAiDimensionPipeline(
   view: PipelineFillView,
   dimensions: DimensionDef[]
-): InternalDimensionFillPreparation {
+): AiDimensionPreparation {
   const { snapshot, projectRoot } = view;
   const ctx = view.ctx as BootstrapWorkflowContext;
   const projectScopeSourceIdentities = resolveProjectScopeSourceIdentitiesFromCarrier(view);
@@ -80,9 +77,7 @@ export function prepareInternalDimensionFillRun(
     /* not available */
   }
 
-  logger.info(
-    `[InternalDimensionExecution] ═══ entered — ${isIncremental ? 'INCREMENTAL' : 'FULL'} pipeline`
-  );
+  logger.info(`[AiDimension] ═══ entered — ${isIncremental ? 'INCREMENTAL' : 'FULL'} pipeline`);
 
   return {
     view,
@@ -115,9 +110,7 @@ export function prepareInternalDimensionFillRun(
   };
 }
 
-export function emitInternalDimensionFillAiUnavailable(
-  preparation: InternalDimensionFillPreparation
-): void {
+export function emitAiDimensionAiUnavailable(preparation: AiDimensionPreparation): void {
   logger.error('[Insight-v3] AI Provider not available — bootstrap requires AI');
   preparation.emitter.emitProgress('bootstrap:ai-unavailable', {
     message:

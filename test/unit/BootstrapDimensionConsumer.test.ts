@@ -1,6 +1,7 @@
 import type { MemoryCoordinator, SessionStore } from '@alembic/agent/memory';
 import { describe, expect, test, vi } from 'vitest';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
+import type { BootstrapDimensionProjection } from '../../lib/workflows/ai-execution/AgentRunProjections.js';
 import {
   applyBootstrapDimensionCandidateAccounting,
   buildBootstrapDimensionCompleteEventPayload,
@@ -13,9 +14,8 @@ import {
   decideBootstrapDimensionCheckpoint,
   recordBootstrapDimensionTokenUsage,
   resolveBootstrapDimensionConsumerRunIssue,
-} from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import type { BootstrapDimensionProjection } from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
-import type { DimensionContext } from '../../lib/workflows/capabilities/execution/internal-agent/DimensionContext.js';
+} from '../../lib/workflows/ai-execution/BootstrapConsumers.js';
+import type { DimensionContext } from '../../lib/workflows/ai-execution/DimensionContext.js';
 
 function makeProjection(): BootstrapDimensionProjection {
   const successfulSubmit = {

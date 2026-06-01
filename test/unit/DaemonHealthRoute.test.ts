@@ -138,7 +138,7 @@ describe('daemon health resident service contract', () => {
     expect(capabilities['search.semantic'].available).toBe(true);
     expect(capabilities['dashboard.handoff'].available).toBe(true);
     expect(capabilities['file-monitor.git-worktree'].available).toBe(true);
-    expect(capabilities['jobs.internal-ai.bootstrap']).toMatchObject({
+    expect(capabilities['jobs.api-ai.bootstrap']).toMatchObject({
       available: true,
       owner: 'alembic',
     });

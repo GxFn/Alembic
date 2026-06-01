@@ -69,7 +69,7 @@ function healthResponse(state: DaemonState): Response {
             endpoint: '/api/v1/file-changes',
             mode: 'daemon-git-worktree',
           },
-          internalAi: {
+          apiAi: {
             available: true,
             configSource: 'workspace-settings',
             model: 'gpt-test',
@@ -118,7 +118,7 @@ function awaitlessHealthResponse(state: DaemonState): string {
     data: {
       capabilities: {
         fileMonitor: { available: true, mode: 'daemon-git-worktree' },
-        internalAi: { available: false, configSource: 'empty', model: null, provider: null },
+        apiAi: { available: false, configSource: 'empty', model: null, provider: null },
       },
       dashboardUrl: state.dashboardUrl,
       dataRoot: state.dataRoot,
@@ -276,7 +276,7 @@ describe('ProjectRuntimeControl', () => {
       available: true,
       mode: 'daemon-git-worktree',
     });
-    expect(ghostProject?.internalAi).toMatchObject({
+    expect(ghostProject?.apiAi).toMatchObject({
       available: true,
       configSource: 'workspace-settings',
     });

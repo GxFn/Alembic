@@ -9,18 +9,17 @@ import {
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import {
+  type ProjectRuntimeControlSnapshot as CoreProjectRuntimeControlSnapshot,
+  type ProjectRuntimeScopeSummary as CoreProjectRuntimeScopeSummary,
   createProjectRuntimeControlState,
   type DaemonJobStatus,
   isProjectRuntimeTarget,
   PROJECT_RUNTIME_CONTROL_STATE_SCHEMA_VERSION,
   type ProjectConnectionState,
-  type ProjectRuntimeControlSnapshot,
   type ProjectRuntimeControlState,
   type ProjectRuntimeDaemonSummary,
   type ProjectRuntimeFileMonitorSummary,
-  type ProjectRuntimeInternalAiSummary,
   type ProjectRuntimeJobsSummary,
-  type ProjectRuntimeScopeSummary,
   type ProjectRuntimeTarget,
 } from '@alembic/core/daemon';
 import { collectAiEnvOverrides, isAiEnvReady, WorkspaceSettingsStore } from '@alembic/core/shared';
@@ -35,19 +34,33 @@ import {
   resolveAlembicDaemonPaths,
   resolveAlembicWorkspace,
 } from '../project-scope/ProjectScopeRegistry.js';
+import {
+  type ProjectRuntimeApiAiSummary,
+  readApiAiCompatibilityValue,
+  withCoreProjectRuntimeApiAiSummary,
+} from './ApiAiCompatibility.js';
 import { type DaemonStatus, DaemonSupervisor } from './DaemonSupervisor.js';
 
 export type {
   ProjectConnectionState,
-  ProjectRuntimeControlSnapshot,
   ProjectRuntimeControlState,
   ProjectRuntimeDaemonSummary,
   ProjectRuntimeFileMonitorSummary,
-  ProjectRuntimeInternalAiSummary,
   ProjectRuntimeJobsSummary,
-  ProjectRuntimeScopeSummary,
   ProjectRuntimeTarget,
 } from '@alembic/core/daemon';
+
+export type ProjectRuntimeScopeSummary = CoreProjectRuntimeScopeSummary & {
+  apiAi: ProjectRuntimeApiAiSummary;
+};
+export type ProjectRuntimeControlSnapshot = Omit<
+  CoreProjectRuntimeControlSnapshot,
+  'activeRuntimeProject' | 'projects' | 'selectedProject'
+> & {
+  activeRuntimeProject: ProjectRuntimeScopeSummary | null;
+  projects: ProjectRuntimeScopeSummary[];
+  selectedProject: ProjectRuntimeScopeSummary | null;
+};
 
 const DEFAULT_JOB_STATUSES: DaemonJobStatus[] = [
   'queued',
@@ -460,8 +473,9 @@ export class ProjectRuntimeControl {
     const healthData = asRecord(daemon?.health?.data);
     const dashboardUrl = firstString(healthData?.dashboardUrl, daemon?.state?.dashboardUrl);
     const activeRuntime = activeRuntimeState && daemon?.ready === true;
+    const apiAi = summarizeApiAi(projectRoot, healthData);
 
-    return {
+    return withCoreProjectRuntimeApiAiSummary({
       cacheKey: `project:${facts.projectId ?? facts.expectedProjectId}`,
       daemon: summarizeDaemonStatus(daemon, facts),
       dashboardUrl,
@@ -479,7 +493,7 @@ export class ProjectRuntimeControl {
       },
       ghost: facts.ghost,
       initializedBy: 'project-registry',
-      internalAi: summarizeInternalAi(projectRoot, healthData),
+      apiAi,
       jobs: summarizeJobs(resolveAlembicDaemonPaths(projectRoot).jobsDir),
       mode: facts.mode,
       projectExists,
@@ -502,7 +516,7 @@ export class ProjectRuntimeControl {
       },
       status,
       workspaceExists: facts.workspaceExists,
-    };
+    });
   }
 
   resolveTarget(
@@ -609,18 +623,18 @@ function summarizeFileMonitor(
   };
 }
 
-function summarizeInternalAi(
+function summarizeApiAi(
   projectRoot: string,
   healthData: Record<string, unknown> | null
-): ProjectRuntimeInternalAiSummary {
+): ProjectRuntimeApiAiSummary {
   const capabilities = asRecord(healthData?.capabilities);
-  const internalAi = asRecord(capabilities?.internalAi);
-  if (internalAi) {
+  const apiAi = asRecord(readApiAiCompatibilityValue(capabilities));
+  if (apiAi) {
     return {
-      available: internalAi.available === true,
-      configSource: normalizeInternalAiSource(internalAi.configSource),
-      model: firstString(internalAi.model),
-      provider: firstString(internalAi.provider),
+      available: apiAi.available === true,
+      configSource: normalizeApiAiSource(apiAi.configSource),
+      model: firstString(apiAi.model),
+      provider: firstString(apiAi.provider),
     };
   }
 
@@ -701,9 +715,7 @@ function normalizeJobStatus(value: unknown): DaemonJobStatus | null {
     : null;
 }
 
-function normalizeInternalAiSource(
-  value: unknown
-): ProjectRuntimeInternalAiSummary['configSource'] {
+function normalizeApiAiSource(value: unknown): ProjectRuntimeApiAiSummary['configSource'] {
   if (value === 'empty' || value === 'process-env' || value === 'workspace-settings') {
     return value;
   }

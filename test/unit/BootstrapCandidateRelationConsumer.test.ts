@@ -3,7 +3,7 @@ import {
   consumeBootstrapCandidateRelations,
   type DimensionCandidateData,
   extractBootstrapCandidateRelations,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
+} from '../../lib/workflows/ai-execution/BootstrapConsumers.js';
 
 function createDimensionCandidates(): Record<string, DimensionCandidateData> {
   return {

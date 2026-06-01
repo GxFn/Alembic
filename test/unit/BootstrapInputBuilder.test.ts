@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest';
 import {
   type BootstrapFileEntry,
   buildBootstrapDimensionRunInput,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
+} from '../../lib/workflows/ai-execution/AgentRunInputBuilders.js';
 
 function makeSystemRunContext(): SystemRunContext {
   const memoryCoordinator = { marker: 'memory' } as unknown as MemoryCoordinator;
@@ -128,15 +128,13 @@ describe('buildBootstrapDimensionRunInput', () => {
       pcvStageNodeMap: {
         analyze: { chainNodeId: 'pcvm:cold-start:n9' },
       },
-      pcvChainNodes: {
-      },
+      pcvChainNodes: {},
     });
     expect(input.context.sharedState).toMatchObject({
       _pcvStageNodeMap: {
         analyze: { pcvNodeId: 'pcvm:n9:analyze' },
       },
-      _pcvChainNodes: {
-      },
+      _pcvChainNodes: {},
     });
   });
 });

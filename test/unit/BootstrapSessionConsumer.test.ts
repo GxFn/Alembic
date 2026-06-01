@@ -1,11 +1,11 @@
+import type { SessionStore } from '@alembic/agent/memory';
+import type { AgentRunResult } from '@alembic/agent/service';
 import { describe, expect, test, vi } from 'vitest';
 import {
   consumeBootstrapSessionResult,
   consumeMissingBootstrapDimensions,
   type DimensionStat,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import type { SessionStore } from '@alembic/agent/memory';
-import type { AgentRunResult } from '@alembic/agent/service';
+} from '../../lib/workflows/ai-execution/BootstrapConsumers.js';
 
 function makeRunResult(partial: Partial<AgentRunResult>): AgentRunResult {
   return {

@@ -1,6 +1,6 @@
 import type { AgentService, SystemRunContextFactory } from '@alembic/agent/service';
-import type { BootstrapFileEntry } from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
-import type { BootstrapProjectGraphLike } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
+import type { BootstrapFileEntry } from './AgentRunInputBuilders.js';
+import type { BootstrapProjectGraphLike } from './RuntimeInitializer.js';
 
 interface BootstrapWorkflowSingletons {
   aiProvider?: {

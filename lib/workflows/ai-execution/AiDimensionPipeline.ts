@@ -1,31 +1,28 @@
 import type { DimensionDef } from '@alembic/core/project-intelligence';
 import type { PipelineFillView } from '@alembic/core/types';
-import { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
-import { finalizeInternalDimensionFill as finalizeInternalDimensionExecution } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
+import { finalizeAiDimensionPipeline as finalizeAiDimension } from './AiDimensionFinalizer.js';
 import {
-  emitInternalDimensionFillAiUnavailable as emitInternalDimensionExecutionAiUnavailable,
-  prepareInternalDimensionFillRun as prepareInternalDimensionExecutionRun,
-} from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillPreparation.js';
-import { runInternalDimensionAgentSession } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillSessionRunner.js';
+  emitAiDimensionAiUnavailable,
+  prepareAiDimensionPipeline as prepareAiDimensionRun,
+} from './AiDimensionPreparation.js';
+import { runAiDimensionSession } from './AiDimensionSessionRunner.js';
 import type {
-  BootstrapWorkflowContainer as InternalDimensionExecutionContainer,
-  BootstrapWorkflowContext as InternalDimensionExecutionContext,
-} from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillTypes.js';
+  BootstrapWorkflowContainer as AiDimensionContainer,
+  BootstrapWorkflowContext as AiDimensionContext,
+} from './AiDimensionTypes.js';
+import { initializeBootstrapRuntime } from './RuntimeInitializer.js';
 
-export type { InternalDimensionExecutionContainer, InternalDimensionExecutionContext };
+export type { AiDimensionContainer, AiDimensionContext };
 
-export async function runInternalDimensionExecution(
-  view: PipelineFillView,
-  dimensions: DimensionDef[]
-) {
-  const preparation = prepareInternalDimensionExecutionRun(view, dimensions);
+export async function runAiDimensionPipeline(view: PipelineFillView, dimensions: DimensionDef[]) {
+  const preparation = prepareAiDimensionRun(view, dimensions);
 
   if (
     preparation.aiUnavailable ||
     !preparation.agentService ||
     !preparation.systemRunContextFactory
   ) {
-    emitInternalDimensionExecutionAiUnavailable(preparation);
+    emitAiDimensionAiUnavailable(preparation);
     return;
   }
 
@@ -45,14 +42,14 @@ export async function runInternalDimensionExecution(
   });
 
   const startedAtMs = Date.now();
-  const sessionResult = await runInternalDimensionAgentSession({ preparation, runtime });
-  await finalizeInternalDimensionExecution({ preparation, runtime, sessionResult, startedAtMs });
+  const sessionResult = await runAiDimensionSession({ preparation, runtime });
+  await finalizeAiDimension({ preparation, runtime, sessionResult, startedAtMs });
 }
 
 export async function clearSnapshots(
   projectRoot: string,
   ctx: {
-    container: InternalDimensionExecutionContainer;
+    container: AiDimensionContainer;
     logger: { info(...args: unknown[]): void; warn(...args: unknown[]): void };
   }
 ) {
@@ -73,4 +70,4 @@ export async function clearSnapshots(
 
 export { clearDimensionCheckpoints as clearCheckpoints } from '@alembic/core/host-agent-workflows';
 
-export default runInternalDimensionExecution;
+export default runAiDimensionPipeline;

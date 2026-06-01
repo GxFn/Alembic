@@ -1,13 +1,13 @@
 import type { AgentRunInput } from '@alembic/agent/service';
 import { describe, expect, test } from 'vitest';
-import type { BootstrapDimensionPlan } from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import {
   buildBootstrapAgentProgressProcessEvents,
   buildBootstrapDimensionInputProcessEvents,
   buildBootstrapDimensionResultProcessEvents,
   buildBootstrapTierReflectionProcessEvents,
-} from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapProcessEvents.js';
-import type { BootstrapDimensionProjection } from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
+} from '../../lib/workflows/ai-execution/AgentRunProcessEvents.js';
+import type { BootstrapDimensionProjection } from '../../lib/workflows/ai-execution/AgentRunProjections.js';
+import type { BootstrapDimensionPlan } from '../../lib/workflows/ai-execution/DimensionRuntimeBuilder.js';
 
 describe('BootstrapProcessEvents', () => {
   test('projects safe bootstrap dimension input without file content or secrets', () => {

@@ -14,6 +14,12 @@ import { collectAiEnvOverrides, isAiEnvReady, WorkspaceSettingsStore } from '@al
 import { resolveProjectRoot } from '@alembic/core/workspace';
 import express, { type Request } from 'express';
 import {
+  type ApiAiCapability,
+  normalizeApiAiResidentJobCapabilities,
+  withCoreApiAiCapability,
+  withCoreApiAiResidentJobOverrides,
+} from '../../daemon/ApiAiCompatibility.js';
+import {
   createDisabledFileMonitorStatus,
   createGitFallbackFileMonitorStatus,
   createStartingFileMonitorStatus,
@@ -23,10 +29,7 @@ import {
   type DaemonFileMonitorRuntimeStatus,
   isFileMonitorRuntimeAvailable,
 } from '../../daemon/FileMonitorStatus.js';
-import {
-  buildAlembicRuntimeBoundary,
-  type InternalAiCapability,
-} from '../../daemon/RuntimeBoundary.js';
+import { buildAlembicRuntimeBoundary } from '../../daemon/RuntimeBoundary.js';
 import { readLatestSchemaMigrationVersion } from '../../infrastructure/database/SqliteDatabaseAccess.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
@@ -64,6 +67,10 @@ type RuntimeFileMonitorCapability = AlembicRuntimeCapabilities['fileMonitor'] & 
   status: DaemonFileMonitorRuntimeState;
 };
 
+export type DaemonCapabilities = AlembicRuntimeCapabilities & {
+  apiAi: ApiAiCapability;
+};
+
 router.get('/health', (req, res) => {
   const container = getServiceContainer();
   const projectRoot = resolveProjectRoot(container);
@@ -87,13 +94,13 @@ router.get('/health', (req, res) => {
     schemaMigrationVersion,
     workspaceMode: workspaceFacts.mode,
   });
-  const internalAi = getInternalAiCapability(projectRoot);
+  const apiAi = getApiAiCapability(projectRoot);
   const fileMonitorStatus = resolveDaemonFileMonitorRuntimeStatus({ container, mode });
   const capabilities = buildDaemonCapabilities({
+    apiAi,
     dashboardAvailable,
     dashboardUrl,
     fileMonitorStatus,
-    internalAi,
     origin,
   });
   const runtimeBoundary = buildAlembicRuntimeBoundary({
@@ -108,8 +115,8 @@ router.get('/health', (req, res) => {
     },
   });
   const residentService = buildResidentServiceStatus({
+    apiAi,
     capabilities,
-    internalAi,
     origin,
     projectIdentity,
     statePath: `${resolver.runtimeDir}/daemon.json`,
@@ -149,48 +156,51 @@ export function buildDaemonProjectIdentity(
 }
 
 export interface DaemonCapabilitiesOptions {
+  apiAi: ApiAiCapability;
   dashboardAvailable: boolean;
   dashboardUrl: string | null;
   fileMonitorAvailable?: boolean;
   fileMonitorStatus?: DaemonFileMonitorRuntimeStatus;
-  internalAi: InternalAiCapability;
   origin: string | null;
 }
 
 export interface ResidentServiceStatusOptions {
-  capabilities: AlembicRuntimeCapabilities;
-  internalAi: InternalAiCapability;
+  apiAi: ApiAiCapability;
+  capabilities: DaemonCapabilities;
   origin: string | null;
   projectIdentity: AlembicRuntimeProjectIdentity;
   statePath?: string | null;
 }
 
-export function buildDaemonCapabilities(
-  options: DaemonCapabilitiesOptions
-): AlembicRuntimeCapabilities {
+export function buildDaemonCapabilities(options: DaemonCapabilitiesOptions): DaemonCapabilities {
   const fileMonitorStatus =
     options.fileMonitorStatus ??
     buildLegacyFileMonitorStatus(options.fileMonitorAvailable === true);
   const fileMonitorAvailable = isFileMonitorRuntimeAvailable(fileMonitorStatus);
-  const capabilities = createAlembicRuntimeCapabilities({
-    apiBaseUrl: options.origin,
-    dashboardAvailable: options.dashboardAvailable,
-    dashboardUrl: options.dashboardUrl,
-    fileMonitorAvailable,
-    fileMonitorEndpoint: `${API_PREFIX}/file-changes`,
-    fileMonitorMode: fileMonitorAvailable ? resolveFileMonitorMode(fileMonitorStatus) : 'disabled',
-    internalAi: options.internalAi,
-    jobProcessEvents: {
-      available: true,
-      endpoint: ALEMBIC_JOB_PROCESS_EVENTS_PATH,
-    },
-    projectScope: {
-      available: true,
-    },
-  });
+  const capabilities = createAlembicRuntimeCapabilities(
+    withCoreApiAiCapability({
+      apiBaseUrl: options.origin,
+      apiAi: options.apiAi,
+      dashboardAvailable: options.dashboardAvailable,
+      dashboardUrl: options.dashboardUrl,
+      fileMonitorAvailable,
+      fileMonitorEndpoint: `${API_PREFIX}/file-changes`,
+      fileMonitorMode: fileMonitorAvailable
+        ? resolveFileMonitorMode(fileMonitorStatus)
+        : 'disabled',
+      jobProcessEvents: {
+        available: true,
+        endpoint: ALEMBIC_JOB_PROCESS_EVENTS_PATH,
+      },
+      projectScope: {
+        available: true,
+      },
+    })
+  );
 
   return {
     ...capabilities,
+    apiAi: options.apiAi,
     fileMonitor: {
       ...capabilities.fileMonitor,
       activeEventSource: fileMonitorStatus.activeEventSource,
@@ -205,83 +215,89 @@ export function buildDaemonCapabilities(
       runtimeState: fileMonitorStatus.state,
       status: fileMonitorStatus.state,
     } satisfies RuntimeFileMonitorCapability,
-  } as AlembicRuntimeCapabilities;
+  } as DaemonCapabilities;
 }
 
 export function buildResidentServiceStatus(
   options: ResidentServiceStatusOptions
 ): AlembicResidentServiceStatus {
   const fileMonitor = options.capabilities.fileMonitor as RuntimeFileMonitorCapability;
-  const capabilityOverrides: AlembicResidentCapabilityOverrides = {
-    'dashboard.handoff': {
-      available: options.capabilities.dashboard.available,
-      message: options.capabilities.dashboard.available
-        ? 'Alembic Dashboard handoff is available from the local daemon.'
-        : 'Alembic Dashboard is not mounted on this daemon.',
-    },
-    'file-monitor.git-worktree': {
-      available:
-        fileMonitor.available &&
-        fileMonitor.mode === 'daemon-git-worktree' &&
-        fileMonitor.activeEventSource === 'git-worktree',
-      message: buildFileMonitorCapabilityMessage(fileMonitor),
-    },
-    'jobs.internal-ai.bootstrap': {
-      available:
-        options.capabilities.jobs.available &&
-        options.capabilities.jobs.kinds.includes('bootstrap'),
-      message: buildInternalAiJobMessage('bootstrap', options.internalAi),
-    },
-    'jobs.internal-ai.rescan': {
-      available:
-        options.capabilities.jobs.available && options.capabilities.jobs.kinds.includes('rescan'),
-      message: buildInternalAiJobMessage('rescan', options.internalAi),
-    },
-    'search.keyword': {
-      available: true,
-      message: 'Alembic resident search supports keyword and BM25-compatible modes.',
-    },
-    'search.semantic': {
-      available: true,
-      message: 'Alembic resident search reports semantic/vector telemetry from /api/v1/search.',
-    },
-    'status.health': {
-      available: true,
-      message: 'Alembic daemon health endpoint is available.',
-    },
-  };
+  const capabilityOverrides = withCoreApiAiResidentJobOverrides(
+    {
+      'dashboard.handoff': {
+        available: options.capabilities.dashboard.available,
+        message: options.capabilities.dashboard.available
+          ? 'Alembic Dashboard handoff is available from the local daemon.'
+          : 'Alembic Dashboard is not mounted on this daemon.',
+      },
+      'file-monitor.git-worktree': {
+        available:
+          fileMonitor.available &&
+          fileMonitor.mode === 'daemon-git-worktree' &&
+          fileMonitor.activeEventSource === 'git-worktree',
+        message: buildFileMonitorCapabilityMessage(fileMonitor),
+      },
+      'search.keyword': {
+        available: true,
+        message: 'Alembic resident search supports keyword and BM25-compatible modes.',
+      },
+      'search.semantic': {
+        available: true,
+        message: 'Alembic resident search reports semantic/vector telemetry from /api/v1/search.',
+      },
+      'status.health': {
+        available: true,
+        message: 'Alembic daemon health endpoint is available.',
+      },
+    } as AlembicResidentCapabilityOverrides,
+    {
+      bootstrap: {
+        available:
+          options.capabilities.jobs.available &&
+          options.capabilities.jobs.kinds.includes('bootstrap'),
+        message: buildApiAiJobMessage('bootstrap', options.apiAi),
+      },
+      rescan: {
+        available:
+          options.capabilities.jobs.available && options.capabilities.jobs.kinds.includes('rescan'),
+        message: buildApiAiJobMessage('rescan', options.apiAi),
+      },
+    }
+  );
 
-  return createAlembicResidentServiceStatus({
-    apiBaseUrl: options.origin,
-    capabilityOverrides,
-    owner: 'alembic',
-    route: 'local-alembic-daemon',
-    serviceScope: {
-      diagnosticPaths: {
-        controlRoot: options.projectIdentity.projectScope?.controlRoot ?? null,
-        databasePath: options.projectIdentity.databasePath ?? null,
-        dataRoot: options.projectIdentity.dataRoot,
-        projectRoot: options.projectIdentity.projectRoot,
-        runtimeDir: options.projectIdentity.runtimeDir,
-        statePath: options.statePath ?? null,
+  return normalizeApiAiResidentJobCapabilities(
+    createAlembicResidentServiceStatus({
+      apiBaseUrl: options.origin,
+      capabilityOverrides,
+      owner: 'alembic',
+      route: 'local-alembic-daemon',
+      serviceScope: {
+        diagnosticPaths: {
+          controlRoot: options.projectIdentity.projectScope?.controlRoot ?? null,
+          databasePath: options.projectIdentity.databasePath ?? null,
+          dataRoot: options.projectIdentity.dataRoot,
+          projectRoot: options.projectIdentity.projectRoot,
+          runtimeDir: options.projectIdentity.runtimeDir,
+          statePath: options.statePath ?? null,
+        },
+        displayName:
+          options.projectIdentity.projectScope?.displayName ??
+          options.projectIdentity.projectId ??
+          'Alembic current service scope',
+        kind: 'current-project',
+        // projectIdentity 只携带非路径身份摘要；路径只作为 diagnosticPaths 给排障使用。
+        projectIdentity: {
+          dataRootSource: options.projectIdentity.dataRootSource,
+          projectId: options.projectIdentity.projectId,
+          projectScope: options.projectIdentity.projectScope ?? null,
+          projectScopeId: options.projectIdentity.projectScopeId ?? null,
+          schemaMigrationVersion: options.projectIdentity.schemaMigrationVersion ?? null,
+          workspaceMode: options.projectIdentity.workspaceMode ?? null,
+        },
+        scopeId: buildResidentServiceScopeId(options.projectIdentity),
       },
-      displayName:
-        options.projectIdentity.projectScope?.displayName ??
-        options.projectIdentity.projectId ??
-        'Alembic current service scope',
-      kind: 'current-project',
-      // projectIdentity 只携带非路径身份摘要；路径只作为 diagnosticPaths 给排障使用。
-      projectIdentity: {
-        dataRootSource: options.projectIdentity.dataRootSource,
-        projectId: options.projectIdentity.projectId,
-        projectScope: options.projectIdentity.projectScope ?? null,
-        projectScopeId: options.projectIdentity.projectScopeId ?? null,
-        schemaMigrationVersion: options.projectIdentity.schemaMigrationVersion ?? null,
-        workspaceMode: options.projectIdentity.workspaceMode ?? null,
-      },
-      scopeId: buildResidentServiceScopeId(options.projectIdentity),
-    },
-  });
+    })
+  );
 }
 
 export function resolveDaemonFileMonitorRuntimeStatus(options: {
@@ -336,14 +352,11 @@ function buildResidentServiceScopeId(identity: AlembicRuntimeProjectIdentity): s
   return `workspace:${workspaceMode}:${identity.dataRootSource}`;
 }
 
-function buildInternalAiJobMessage(
-  operation: 'bootstrap' | 'rescan',
-  internalAi: InternalAiCapability
-): string {
-  if (internalAi.available) {
-    return `Alembic local daemon can enqueue internal AI ${operation} jobs.`;
+function buildApiAiJobMessage(operation: 'bootstrap' | 'rescan', apiAi: ApiAiCapability): string {
+  if (apiAi.available) {
+    return `Alembic local daemon can enqueue API AI ${operation} jobs.`;
   }
-  return `Alembic local daemon exposes internal AI ${operation} job routes; provider config is ${internalAi.configSource}.`;
+  return `Alembic local daemon exposes API AI ${operation} job routes; provider config is ${apiAi.configSource}.`;
 }
 
 function buildLegacyFileMonitorStatus(available: boolean): DaemonFileMonitorRuntimeStatus {
@@ -396,7 +409,7 @@ function isDaemonFileMonitorRuntimeStatus(value: unknown): value is DaemonFileMo
   );
 }
 
-function getInternalAiCapability(projectRoot: string): InternalAiCapability {
+function getApiAiCapability(projectRoot: string): ApiAiCapability {
   try {
     const settingsConfig = WorkspaceSettingsStore.fromProject(projectRoot).readAiConfig();
     const processConfig = collectAiEnvOverrides(settingsConfig.env, process.env);

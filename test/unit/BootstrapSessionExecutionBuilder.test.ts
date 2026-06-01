@@ -1,12 +1,12 @@
 import type { AgentRunInput, AgentRunResult } from '@alembic/agent/service';
 import { describe, expect, test, vi } from 'vitest';
-import type { BootstrapDimensionPlan } from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
+import type { BootstrapDimensionPlan } from '../../lib/workflows/ai-execution/DimensionRuntimeBuilder.js';
 import {
   attachBootstrapAgentProgressBridge,
   buildBootstrapSessionExecutionInput,
   getBootstrapChildDimensionId,
   resolveBootstrapDimensionTier,
-} from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapSessionExecutionBuilder.js';
+} from '../../lib/workflows/ai-execution/SessionExecutionBuilder.js';
 
 function createPlan(
   id: string,

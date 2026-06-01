@@ -3,6 +3,15 @@ import { TierScheduler } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/project-intelligence';
 import {
+  buildBootstrapDimensionResultProcessEvents,
+  buildBootstrapTierReflectionProcessEvents,
+} from './AgentRunProcessEvents.js';
+import {
+  projectAgentRunResult,
+  projectBootstrapDimensionAgentOutput,
+} from './AgentRunProjections.js';
+import type { AiDimensionPreparation } from './AiDimensionPreparation.js';
+import {
   type CandidateResults,
   consumeBootstrapCandidateRelations,
   consumeBootstrapDimensionError as consumeBootstrapDimensionErrorSideEffects,
@@ -11,35 +20,26 @@ import {
   consumeBootstrapTierReflection,
   type DimensionCandidateData,
   type DimensionStat,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
+} from './BootstrapConsumers.js';
 import {
   applyBootstrapDimensionAdmissions,
   type BootstrapDimensionAdmissionResult,
   resolveBootstrapDimensionAdmissions,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionAdmission.js';
+} from './DimensionAdmission.js';
 import {
   type BootstrapDimensionPlan,
   createBootstrapDimensionRuntimeInput,
   resolveBootstrapDimensionPlan as resolveBootstrapDimensionPlanData,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
-import {
-  buildBootstrapDimensionResultProcessEvents,
-  buildBootstrapTierReflectionProcessEvents,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapProcessEvents.js';
-import {
-  projectAgentRunResult,
-  projectBootstrapDimensionAgentOutput,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
-import { prepareBootstrapRescanState } from '#workflows/capabilities/execution/internal-agent/BootstrapRescanState.js';
-import type { initializeBootstrapRuntime } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
-import { buildBootstrapSessionExecutionInput } from '#workflows/capabilities/execution/internal-agent/BootstrapSessionExecutionBuilder.js';
-import type { InternalDimensionFillPreparation } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillPreparation.js';
+} from './DimensionRuntimeBuilder.js';
+import { prepareBootstrapRescanState } from './RescanContext.js';
+import type { initializeBootstrapRuntime } from './RuntimeInitializer.js';
+import { buildBootstrapSessionExecutionInput } from './SessionExecutionBuilder.js';
 
 const logger = Logger.getInstance();
 
-type InternalDimensionFillRuntime = Awaited<ReturnType<typeof initializeBootstrapRuntime>>;
+type AiDimensionRuntime = Awaited<ReturnType<typeof initializeBootstrapRuntime>>;
 
-export interface InternalDimensionFillSessionResult {
+export interface AiDimensionSessionResult {
   activeDimIds: string[];
   incrementalSkippedDims: string[];
   skippedDims: string[];
@@ -52,16 +52,16 @@ export interface InternalDimensionFillSessionResult {
   concurrency: number;
 }
 
-export async function runInternalDimensionAgentSession({
+export async function runAiDimensionSession({
   preparation,
   runtime,
 }: {
-  preparation: InternalDimensionFillPreparation;
-  runtime: InternalDimensionFillRuntime;
-}): Promise<InternalDimensionFillSessionResult> {
-  const services = resolveInternalDimensionServices(preparation);
+  preparation: AiDimensionPreparation;
+  runtime: AiDimensionRuntime;
+}): Promise<AiDimensionSessionResult> {
+  const services = resolveAiDimensionServices(preparation);
 
-  const { enableParallel, concurrency } = resolveInternalDimensionExecutionConcurrency();
+  const { enableParallel, concurrency } = resolveAiDimensionConcurrency();
   const scheduler = new TierScheduler();
   const activeDimIds = preparation.dimensions.map((dimension: DimensionDef) => dimension.id);
   const {
@@ -321,7 +321,7 @@ export async function runInternalDimensionAgentSession({
   };
 }
 
-export function resolveInternalDimensionExecutionConcurrency(env: NodeJS.ProcessEnv = process.env) {
+export function resolveAiDimensionConcurrency(env: NodeJS.ProcessEnv = process.env) {
   const enableParallel = env.ALEMBIC_PARALLEL_BOOTSTRAP !== 'false';
   const rawConcurrency =
     env.ALEMBIC_PARALLEL_CONCURRENCY ?? env.ALEMBIC_BOOTSTRAP_CONCURRENCY ?? '3';
@@ -334,12 +334,12 @@ export function resolveInternalDimensionExecutionConcurrency(env: NodeJS.Process
   };
 }
 
-function resolveInternalDimensionServices(preparation: InternalDimensionFillPreparation): {
+function resolveAiDimensionServices(preparation: AiDimensionPreparation): {
   agentService: AgentService;
   systemRunContextFactory: SystemRunContextFactory;
 } {
   if (!preparation.agentService || !preparation.systemRunContextFactory) {
-    throw new Error('Internal dimension fill requires AgentService and SystemRunContextFactory');
+    throw new Error('AI dimension pipeline requires AgentService and SystemRunContextFactory');
   }
   return {
     agentService: preparation.agentService,
@@ -347,12 +347,12 @@ function resolveInternalDimensionServices(preparation: InternalDimensionFillPrep
   };
 }
 
-export async function consumeInternalDimensionCandidateRelations({
+export async function consumeAiDimensionCandidateRelations({
   preparation,
   sessionResult,
 }: {
-  preparation: InternalDimensionFillPreparation;
-  sessionResult: InternalDimensionFillSessionResult;
+  preparation: AiDimensionPreparation;
+  sessionResult: AiDimensionSessionResult;
 }) {
   return consumeBootstrapCandidateRelations({
     ctx: preparation.ctx,

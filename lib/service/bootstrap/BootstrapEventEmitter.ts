@@ -51,7 +51,7 @@ export class BootstrapEventEmitter {
    * @param data 事件数据
    * @param [data.type] 'skill' | 'candidate' | 'dual'
    * @param [data.extracted] 提取的候选数量
-   * @param [data.source] 'internal-agent' | 'external-agent'
+   * @param [data.source] 'api-ai' | 'host-agent'
    * @param [data.skillCreated] 是否生成了 Skill
    * @param [data.recipesBound] 关联的 recipe 数量
    */

@@ -20,6 +20,10 @@ import Logger from '@alembic/core/logging';
 import type { AgentEfficiencySummary } from '#service/bootstrap/BootstrapEfficiency.js';
 import type { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
 import {
+  generateSkill,
+  type WorkflowSkillGenerationResult,
+} from '../skill-delivery/SkillCompletionCapability.js';
+import {
   type AgentResultLike,
   type BootstrapDimensionAnalysisReport,
   type BootstrapDimensionProducerResult,
@@ -32,15 +36,8 @@ import {
   projectBootstrapSessionResult,
   resolveBootstrapDimensionRunIssue,
   type ToolCallRecord,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
-import {
-  type DimensionContext,
-  parseDimensionDigest,
-} from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
-import {
-  generateSkill,
-  type WorkflowSkillGenerationResult,
-} from '#workflows/capabilities/execution/WorkflowSkillCompletionCapability.js';
+} from './AgentRunProjections.js';
+import { type DimensionContext, parseDimensionDigest } from './DimensionContext.js';
 import {
   type BootstrapPcvNodeEvidenceSet,
   buildPcvAnalyzeGroundingLedgerSummary,
@@ -51,7 +48,7 @@ import {
   mergeBootstrapPcvNodeEvidence,
   type PcvNodeEvidenceEnvelope,
   successfulProducerSubmitCalls,
-} from './BootstrapPcvNodeLocalEvidence.js';
+} from './PcvNodeEvidence.js';
 
 const logger = Logger.getInstance();
 

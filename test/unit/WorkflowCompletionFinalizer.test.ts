@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { runWorkflowCompletionFinalizer } from '#workflows/capabilities/completion/WorkflowCompletionFinalizer.js';
-import { buildInternalDimensionCompletionSummary } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.js';
+import { buildAiDimensionCompletionSummary } from '../../lib/workflows/ai-execution/AiDimensionFinalizer.js';
+import { runWorkflowCompletionFinalizer } from '../../lib/workflows/completion/CompletionFinalizer.js';
 
 const tmpDirs: string[] = [];
 
@@ -109,10 +109,7 @@ describe('WorkflowCompletionFinalizer', () => {
 
   test('internal finalizer delegates completion side effects to workflow finalizer', () => {
     const source = readFileSync(
-      join(
-        process.cwd(),
-        'lib/workflows/capabilities/execution/internal-agent/InternalDimensionFillFinalizer.ts'
-      ),
+      join(process.cwd(), 'lib/workflows/ai-execution/AiDimensionFinalizer.ts'),
       'utf8'
     );
 
@@ -123,7 +120,7 @@ describe('WorkflowCompletionFinalizer', () => {
 
   test('summarizes rescan finalizer as pipeline isolation', () => {
     expect(
-      buildInternalDimensionCompletionSummary({
+      buildAiDimensionCompletionSummary({
         pipelineMode: 'rescan',
         workflowCompletion: { deliveryVerification: null, semanticMemoryResult: null },
       })
@@ -138,7 +135,7 @@ describe('WorkflowCompletionFinalizer', () => {
 
   test('summarizes bootstrap finalizer as full completion', () => {
     expect(
-      buildInternalDimensionCompletionSummary({
+      buildAiDimensionCompletionSummary({
         pipelineMode: 'bootstrap',
         workflowCompletion: {
           deliveryVerification: null,
@@ -159,7 +156,7 @@ describe('WorkflowCompletionFinalizer', () => {
 
   test('summarizes skipped bootstrap delivery and wiki from finalizer result', () => {
     expect(
-      buildInternalDimensionCompletionSummary({
+      buildAiDimensionCompletionSummary({
         pipelineMode: 'bootstrap',
         workflowCompletion: {
           deliveryVerification: null,
@@ -179,7 +176,7 @@ describe('WorkflowCompletionFinalizer', () => {
 
   test('keeps completion side effects in dedicated step modules', () => {
     const source = readFileSync(
-      join(process.cwd(), 'lib/workflows/capabilities/completion/WorkflowCompletionFinalizer.ts'),
+      join(process.cwd(), 'lib/workflows/completion/CompletionFinalizer.ts'),
       'utf8'
     );
 

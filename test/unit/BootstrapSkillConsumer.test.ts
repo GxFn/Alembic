@@ -1,13 +1,13 @@
 import type { SessionStore } from '@alembic/agent/memory';
 import { createAlembicProjectSkillDeliveryReceipt } from '@alembic/core/host-agent-workflows';
 import { describe, expect, test, vi } from 'vitest';
+import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
 import {
   buildEffectiveSkillAnalysisText,
   consumeBootstrapSkills,
   type DimensionCandidateData,
   extractSkillKeyFindings,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
+} from '../../lib/workflows/ai-execution/BootstrapConsumers.js';
 
 function makeCandidate(analysisText: string): DimensionCandidateData {
   return {

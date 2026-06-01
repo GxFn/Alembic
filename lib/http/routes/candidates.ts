@@ -196,7 +196,7 @@ router.post(
     const container = getServiceContainer();
 
     // 复用 resident bootstrap handler 的 bootstrapRefine 逻辑
-    const { bootstrapRefine } = await import('../../resident/tool-handlers/bootstrap-internal.js');
+    const { bootstrapRefine } = await import('../../resident/tool-handlers/cold-start.js');
     const ctx = { container, logger };
     const result = await bootstrapRefine(ctx, { candidateIds, userPrompt, dryRun });
 

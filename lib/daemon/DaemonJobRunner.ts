@@ -141,7 +141,7 @@ export async function runDaemonJob(options: RunDaemonJobOptions): Promise<RunDae
   });
 
   try {
-    const result = await executeInternalWorkflow(options);
+    const result = await executeApiAiWorkflow(options);
     const bootstrapSessionId = extractBootstrapSessionId(result);
 
     if (bootstrapSessionId && isBootstrapSessionRunning(result, options.container)) {
@@ -571,9 +571,9 @@ export function attachBootstrapProcessEventBridge(options: {
   return cleanup;
 }
 
-async function executeInternalWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
+async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
   if (options.kind === 'bootstrap') {
-    const { bootstrapKnowledge } = await import('../resident/tool-handlers/bootstrap-internal.js');
+    const { bootstrapKnowledge } = await import('../resident/tool-handlers/cold-start.js');
     const raw = await bootstrapKnowledge(
       { container: options.container, logger: options.logger },
       {
@@ -587,8 +587,8 @@ async function executeInternalWorkflow(options: RunDaemonJobOptions): Promise<un
     return { ...asRecord(result), asyncFill: true };
   }
 
-  const { rescanInternal } = await import('../resident/tool-handlers/rescan-internal.js');
-  const raw = await rescanInternal(
+  const { rescanKnowledge } = await import('../resident/tool-handlers/knowledge-rescan.js');
+  const raw = await rescanKnowledge(
     { container: options.container, logger: options.logger },
     {
       reason:

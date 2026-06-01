@@ -7,7 +7,7 @@ import {
   projectBootstrapDimensionAgentOutput,
   projectBootstrapSessionResult,
   resolveBootstrapDimensionRunIssue,
-} from '../../lib/workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
+} from '../../lib/workflows/ai-execution/AgentRunProjections.js';
 
 function makeRunResult(partial: Partial<AgentRunResult>): AgentRunResult {
   return {

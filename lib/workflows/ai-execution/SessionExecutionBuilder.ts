@@ -3,28 +3,28 @@ import type { AgentRunInput, AgentRunResult } from '@alembic/agent/service';
 import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/project-intelligence';
 import type { BootstrapProcessEventsPayload } from '#service/bootstrap/bootstrap-event-types.js';
-import type { DimensionStat } from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import {
   type BootstrapSessionChildRunPlan,
   buildBootstrapSessionRunInput,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
+} from './AgentRunInputBuilders.js';
+import {
+  buildBootstrapAgentProgressProcessEvents,
+  buildBootstrapDimensionInputProcessEvents,
+} from './AgentRunProcessEvents.js';
 import {
   isRecoverableProducerTimeoutIssue,
   projectAgentRunResult,
   projectBootstrapDimensionAgentOutput,
   resolveBootstrapDimensionRunIssue,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
+} from './AgentRunProjections.js';
+import type { DimensionStat } from './BootstrapConsumers.js';
+import type { BootstrapDimensionPlan } from './DimensionRuntimeBuilder.js';
 import {
   buildBootstrapPcvStageNodeContext,
   buildPcvN8StageFactoryEvidence,
   buildPcvN9RecordRepairStageMapEvidence,
   mergeBootstrapPcvNodeEvidence,
-} from './BootstrapPcvNodeLocalEvidence.js';
-import {
-  buildBootstrapAgentProgressProcessEvents,
-  buildBootstrapDimensionInputProcessEvents,
-} from './BootstrapProcessEvents.js';
+} from './PcvNodeEvidence.js';
 
 const logger = Logger.getInstance();
 

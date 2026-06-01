@@ -14,8 +14,8 @@ import type {
   AgentRunMessage,
   AgentRunPresentationOptions,
 } from '@alembic/agent/service';
-import { buildBootstrapPcvStageNodeContext } from '#workflows/capabilities/execution/internal-agent/BootstrapPcvNodeLocalEvidence.js';
-import type { ProjectScopeSourceIdentityMap } from '../../../../project-scope/ProjectScopeAnalysis.js';
+import type { ProjectScopeSourceIdentityMap } from '../../project-scope/ProjectScopeAnalysis.js';
+import { buildBootstrapPcvStageNodeContext } from './PcvNodeEvidence.js';
 
 // ── Dimension input builder ──────────────────────────────
 

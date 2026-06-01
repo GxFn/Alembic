@@ -1,9 +1,9 @@
+import type { AgentRunInput } from '@alembic/agent/service';
 import { describe, expect, test } from 'vitest';
 import {
   type BootstrapSessionChildRunPlan,
   buildBootstrapSessionRunInput,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
-import type { AgentRunInput } from '@alembic/agent/service';
+} from '../../lib/workflows/ai-execution/AgentRunInputBuilders.js';
 
 function makeChild(id: string, tier: number): BootstrapSessionChildRunPlan {
   return {

@@ -6,15 +6,15 @@ import type {
   CandidateResults,
   DimensionCandidateData,
   DimensionStat,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import type { BootstrapRescanContext } from '#workflows/capabilities/execution/internal-agent/BootstrapRescanState.js';
-import type { DimensionContext } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
+} from './BootstrapConsumers.js';
+import type { DimensionContext } from './DimensionContext.js';
 import {
   applyRestoredDimensionState,
   type DimensionCheckpoint,
   resolveIncrementalSkippedDimensions,
   restoreCheckpointDimensions,
-} from '#workflows/capabilities/execution/internal-agent/DimensionRestoreState.js';
+} from './DimensionRestoreState.js';
+import type { BootstrapRescanContext } from './RescanContext.js';
 
 const logger = Logger.getInstance();
 

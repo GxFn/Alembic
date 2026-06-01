@@ -21,20 +21,20 @@ import type {
   SnapshotCallGraphResult,
   SnapshotDependencyGraph,
 } from '@alembic/core/project-intelligence';
+import type { ProjectScopeSourceIdentityMap } from '../../project-scope/ProjectScopeAnalysis.js';
 import {
   type BootstrapFileEntry,
   buildBootstrapDimensionRunInput,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapInputBuilders.js';
-import { buildBootstrapPcvStageNodeContext } from '#workflows/capabilities/execution/internal-agent/BootstrapPcvNodeLocalEvidence.js';
+} from './AgentRunInputBuilders.js';
+import { buildBootstrapPcvStageNodeContext } from './PcvNodeEvidence.js';
 import {
   type BootstrapExistingRecipe,
   type BootstrapRescanContext,
   getBootstrapDimensionExistingRecipes,
   projectBootstrapDimensionRescanContext,
   projectBootstrapExistingRecipesForPrompt,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapRescanState.js';
-import type { BootstrapProjectGraphLike } from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
-import type { ProjectScopeSourceIdentityMap } from '../../../../project-scope/ProjectScopeAnalysis.js';
+} from './RescanContext.js';
+import type { BootstrapProjectGraphLike } from './RuntimeInitializer.js';
 
 interface DimConfigV3Entry {
   outputType: string;

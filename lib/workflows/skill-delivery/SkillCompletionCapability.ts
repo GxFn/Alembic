@@ -17,8 +17,8 @@ import {
   resolveProjectRoot,
   type WorkspaceResolver,
 } from '@alembic/core/workspace';
-import { resolveAlembicWorkspace } from '../../../project-scope/ProjectScopeRegistry.js';
-import { INJECTABLE_SKILLS_DIR } from '../../../shared/package-assets.js';
+import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
+import { INJECTABLE_SKILLS_DIR } from '../../shared/package-assets.js';
 
 const logger = Logger.getInstance();
 

@@ -1,9 +1,9 @@
+import type { SessionStore } from '@alembic/agent/memory';
 import { describe, expect, test, vi } from 'vitest';
 import {
   consumeBootstrapTierReflection,
   type DimensionStat,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapConsumers.js';
-import type { SessionStore } from '@alembic/agent/memory';
+} from '../../lib/workflows/ai-execution/BootstrapConsumers.js';
 
 describe('bootstrap tier reflection consumer', () => {
   test('builds and stores tier reflection from completed dimension stats', () => {

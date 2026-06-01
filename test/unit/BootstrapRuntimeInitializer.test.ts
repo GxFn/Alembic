@@ -1,9 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
+import type { IncrementalPlan } from '../../lib/resident/tool-schema/types.js';
 import {
   type BootstrapRuntimeContainer,
   initializeBootstrapRuntime,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapRuntimeInitializer.js';
-import type { IncrementalPlan } from '../../lib/resident/tool-schema/types.js';
+} from '../../lib/workflows/ai-execution/RuntimeInitializer.js';
 
 function makeContainer(
   overrides: Partial<BootstrapRuntimeContainer> = {}

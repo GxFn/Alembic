@@ -1,8 +1,7 @@
 /**
- * InternalKnowledgeRescanWorkflow — 内部 Agent 增量知识重扫
+ * KnowledgeRescanWorkflow — Alembic API AI 增量知识重扫
  *
- * 与 Codex 宿主 Agent rescan 不同，
- * 本文件由 AgentRuntime dimension execution 在服务端自动完成知识补齐。
+ * 本文件由 Alembic API AI 配置驱动 AgentRuntime，在服务端自动完成知识补齐。
  *
  * 流程:
  *   1. snapshotRecipes — 快照保留知识
@@ -12,7 +11,7 @@
  *   4. 覆盖分类 — RecipeImpactPlanner + SourceRef + lifecycle 三层评估
  *   5. 计算 gap 维度（需要补齐的维度）
  *   5.5 缓存 Phase 结果供复用 (SessionSupport)
- *   6. 快速返回骨架 → 异步 internal dimension execution 填充 gap 维度
+ *   6. 快速返回骨架 → 异步 AI dimension execution 填充 gap 维度
  *   7. 前端通过 Socket.io 接收维度完成进度
  */
 
@@ -28,17 +27,17 @@ import {
 import type { WorkflowMcpContext } from '@alembic/core/host-agent-workflows';
 import {
   auditRecipesForRescan,
-  buildInternalKnowledgeRescanTargetFileMap,
   buildKnowledgeRescanPlan,
+  buildInternalKnowledgeRescanTargetFileMap as buildKnowledgeRescanTargetFileMap,
   buildKnowledgeRescanWorkflowPlan,
   buildRescanPrescreen,
   cacheProjectAnalysisSession,
-  createInternalKnowledgeRescanIntent,
-  type InternalKnowledgeRescanArgs,
-  presentInternalKnowledgeRescanEmptyProject,
-  presentInternalKnowledgeRescanResponse,
-  projectInternalRescanGapPlan,
-  projectInternalRescanPromptRecipes,
+  createInternalKnowledgeRescanIntent as createKnowledgeRescanIntent,
+  type InternalKnowledgeRescanArgs as KnowledgeRescanArgs,
+  presentInternalKnowledgeRescanEmptyProject as presentKnowledgeRescanEmptyProject,
+  presentInternalKnowledgeRescanResponse as presentKnowledgeRescanResponse,
+  projectInternalRescanGapPlan as projectKnowledgeRescanGapPlan,
+  projectInternalRescanPromptRecipes as projectKnowledgeRescanPromptRecipes,
   runForceRescanCleanPolicy,
   runRescanCleanPolicy,
   syncKnowledgeStoreForRescan,
@@ -59,16 +58,16 @@ import type {
 } from '@alembic/core/types';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
-  dispatchInternalDimensionExecution,
-  startInternalDimensionExecutionSession,
-} from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
-import {
   attachProjectScopeSourceIdentitiesToView,
   attachProjectScopeToScanOptions,
   buildProjectScopeAnalysisLogMeta,
   collectProjectScopeSourceIdentities,
   resolveProjectScopeAnalysisContext,
-} from '../../../project-scope/ProjectScopeAnalysis.js';
+} from '../../project-scope/ProjectScopeAnalysis.js';
+import {
+  dispatchAiDimensionRuns,
+  startAiDimensionSession,
+} from '../ai-execution/AiDimensionDispatcher.js';
 
 type AgentEvolutionAuditRecipe = Parameters<typeof runEvolutionAudit>[0]['recipes'][number];
 type EvolutionAuditResult = Awaited<ReturnType<typeof runEvolutionAudit>>;
@@ -154,23 +153,20 @@ function countImpactImmediateDeprecations(result: RescanImpactSubmissionResult |
 // ── 主入口 ──────────────────────────────────────────────
 
 /**
- * rescanInternal — 内部 Agent 知识重扫
+ * rescanKnowledge — Alembic API AI 知识重扫
  *
  * 同步返回骨架（含 audit 摘要 + 异步会话 ID），
- * 后台通过 internal dimension execution 对 gap 维度执行 AI 补齐。
+ * 后台通过 AI dimension execution 对 gap 维度执行 AI 补齐。
  */
-export async function runInternalKnowledgeRescanWorkflow(
-  ctx: RescanMcpContext,
-  args: InternalKnowledgeRescanArgs
-) {
+export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: KnowledgeRescanArgs) {
   const t0 = Date.now();
   const analysisScope = resolveProjectScopeAnalysisContext(ctx.container);
   const { dataRoot, projectRoot } = analysisScope;
   const db = ctx.container.get('database');
-  const intent = createInternalKnowledgeRescanIntent(args);
+  const intent = createKnowledgeRescanIntent(args);
   const plan = buildKnowledgeRescanWorkflowPlan({ intent, projectRoot, dataRoot });
   ctx.logger.info(
-    '[Rescan-Internal] ProjectScope analysis context resolved',
+    '[KnowledgeRescanWorkflow] ProjectScope analysis context resolved',
     buildProjectScopeAnalysisLogMeta(analysisScope)
   );
 
@@ -217,7 +213,7 @@ export async function runInternalKnowledgeRescanWorkflow(
     };
   }
 
-  ctx.logger.info(`[Rescan-Internal] Preserved ${recipeSnapshot.count} recipes`, {
+  ctx.logger.info(`[KnowledgeRescanWorkflow] Preserved ${recipeSnapshot.count} recipes`, {
     cleanupPolicy: intent.cleanupPolicy,
     coverageByDimension: recipeSnapshot.coverageByDimension,
   });
@@ -230,7 +226,7 @@ export async function runInternalKnowledgeRescanWorkflow(
     container: ctx.container,
     db,
     logger: ctx.logger,
-    logPrefix: 'Rescan-Internal',
+    logPrefix: 'KnowledgeRescanWorkflow',
   });
 
   // ═══════════════════════════════════════════════════════════
@@ -246,7 +242,7 @@ export async function runInternalKnowledgeRescanWorkflow(
   });
 
   if (phaseResults.isEmpty) {
-    return presentInternalKnowledgeRescanEmptyProject({ responseTimeMs: Date.now() - t0 });
+    return presentKnowledgeRescanEmptyProject({ responseTimeMs: Date.now() - t0 });
   }
 
   const {
@@ -261,7 +257,7 @@ export async function runInternalKnowledgeRescanWorkflow(
   // ── Build immutable ProjectSnapshot ──
   const snapshot: ProjectSnapshot = buildProjectSnapshot({
     projectRoot,
-    sourceTag: 'rescan-internal',
+    sourceTag: 'knowledge-rescan',
     ...phaseResults,
     report: phaseResults.report,
   });
@@ -298,7 +294,7 @@ export async function runInternalKnowledgeRescanWorkflow(
       reconcileReport = await reconciler.reconcile({ force: true });
       await reconciler.repairRenames();
       await reconciler.applyRepairs();
-      ctx.logger.info('[Rescan-Internal] SourceRef reconcile complete', {
+      ctx.logger.info('[KnowledgeRescanWorkflow] SourceRef reconcile complete', {
         active: reconcileReport.active,
         cleaned: reconcileReport.cleaned ?? 0,
         inserted: reconcileReport.inserted,
@@ -308,7 +304,7 @@ export async function runInternalKnowledgeRescanWorkflow(
       });
     }
   } catch (err: unknown) {
-    ctx.logger.warn('[Rescan-Internal] SourceRef reconcile failed, continuing', {
+    ctx.logger.warn('[KnowledgeRescanWorkflow] SourceRef reconcile failed, continuing', {
       error: err instanceof Error ? err.message : String(err),
     });
   }
@@ -328,10 +324,10 @@ export async function runInternalKnowledgeRescanWorkflow(
         repos.knowledgeRepo
       );
       candidatePlan = await impactPlanner.plan(diff);
-      ctx.logger.info('[Rescan-Internal] Impact planning complete', candidatePlan.summary);
+      ctx.logger.info('[KnowledgeRescanWorkflow] Impact planning complete', candidatePlan.summary);
     }
   } catch (err: unknown) {
-    ctx.logger.warn('[Rescan-Internal] Impact planning failed, continuing', {
+    ctx.logger.warn('[KnowledgeRescanWorkflow] Impact planning failed, continuing', {
       error: (err as Error).message,
     });
   }
@@ -351,7 +347,7 @@ export async function runInternalKnowledgeRescanWorkflow(
         impactSubmissionResult = await submitRescanImpactDecisions(candidatePlan, gateway, {
           source: 'rescan-evolution',
         });
-        ctx.logger.info('[Rescan-Internal] Impact decisions submitted', {
+        ctx.logger.info('[KnowledgeRescanWorkflow] Impact decisions submitted', {
           submitted: impactSubmissionResult.submitted,
           skipped: impactSubmissionResult.skipped,
           errors: impactSubmissionResult.errors.length,
@@ -359,7 +355,7 @@ export async function runInternalKnowledgeRescanWorkflow(
         });
       }
     } catch (err: unknown) {
-      ctx.logger.warn('[Rescan-Internal] Impact decision submission failed', {
+      ctx.logger.warn('[KnowledgeRescanWorkflow] Impact decision submission failed', {
         error: (err as Error).message,
       });
     }
@@ -386,7 +382,7 @@ export async function runInternalKnowledgeRescanWorkflow(
             },
             proposalSource: 'rescan-evolution',
           });
-          ctx.logger.info('[Rescan-Internal] Evolution audit complete', {
+          ctx.logger.info('[KnowledgeRescanWorkflow] Evolution audit complete', {
             proposed: evolutionAuditResult.proposed,
             deprecated: evolutionAuditResult.deprecated,
             skipped: evolutionAuditResult.skipped,
@@ -394,12 +390,12 @@ export async function runInternalKnowledgeRescanWorkflow(
           });
         } else {
           ctx.logger.info(
-            '[Rescan-Internal] Evolution audit skipped — impact decisions covered all candidates'
+            '[KnowledgeRescanWorkflow] Evolution audit skipped — impact decisions covered all candidates'
           );
         }
       }
     } catch (err: unknown) {
-      ctx.logger.warn('[Rescan-Internal] Evolution audit failed', {
+      ctx.logger.warn('[KnowledgeRescanWorkflow] Evolution audit failed', {
         error: (err as Error).message,
       });
     }
@@ -429,7 +425,7 @@ export async function runInternalKnowledgeRescanWorkflow(
       (evolutionAuditResult?.deprecated ?? 0),
   };
 
-  ctx.logger.info('[Rescan-Internal] Relevance audit complete', {
+  ctx.logger.info('[KnowledgeRescanWorkflow] Relevance audit complete', {
     total: auditSummary.totalAudited,
     healthy: auditSummary.healthy,
     watch: auditSummary.watch,
@@ -469,7 +465,7 @@ export async function runInternalKnowledgeRescanWorkflow(
     knowledgeRescanPlan.requestedDimensions
   );
 
-  ctx.logger.info('[Rescan-Internal] Evolution prescreen built', {
+  ctx.logger.info('[KnowledgeRescanWorkflow] Evolution prescreen built', {
     needsVerification: prescreen.needsVerification.length,
     autoResolved: prescreen.autoResolved.length,
   });
@@ -479,7 +475,7 @@ export async function runInternalKnowledgeRescanWorkflow(
   );
 
   if (evolutionCandidates.length > 0) {
-    ctx.logger.info('[Rescan-Internal] Evolution candidates collected', {
+    ctx.logger.info('[KnowledgeRescanWorkflow] Evolution candidates collected', {
       count: evolutionCandidates.length,
       byVerdict: {
         decay: evolutionCandidates.filter((c: { verdict: string }) => c.verdict === 'decay').length,
@@ -497,7 +493,7 @@ export async function runInternalKnowledgeRescanWorkflow(
   //   - active/evolving: 确认知识，始终计入
   //   - staging + audit healthy/watch: 有效候选，计入
   //   - staging + audit decay/severe/dead: 过时候选，不计入覆盖
-  const gapPlan = projectInternalRescanGapPlan(knowledgeRescanPlan);
+  const gapPlan = projectKnowledgeRescanGapPlan(knowledgeRescanPlan);
   const {
     requestedDimensions,
     executionDimensions,
@@ -507,7 +503,7 @@ export async function runInternalKnowledgeRescanWorkflow(
     targetPerDimension,
   } = gapPlan;
 
-  ctx.logger.info('[Rescan-Internal] Gap analysis', {
+  ctx.logger.info('[KnowledgeRescanWorkflow] Gap analysis', {
     totalDimensions: requestedDimensions.length,
     executionDimensions: executionDimensions.length,
     produceDimensions: produceDimensions.length,
@@ -526,7 +522,7 @@ export async function runInternalKnowledgeRescanWorkflow(
 
   // ═══════════════════════════════════════════════════════════
   // Step 5.5: BootstrapSessionManager — 缓存 Phase 结果供复用
-  // （与 bootstrap-internal Phase 4.6 对齐）
+  // （与 cold-start Phase 4.6 对齐）
   // ═══════════════════════════════════════════════════════════
 
   const sessionId = cacheProjectAnalysisSession({
@@ -538,24 +534,24 @@ export async function runInternalKnowledgeRescanWorkflow(
     fileCount: allFiles.length,
     moduleCount: depGraphData?.nodes?.length || 0,
     logger: ctx.logger,
-    logPrefix: 'Rescan-Internal',
+    logPrefix: 'KnowledgeRescanWorkflow',
   });
 
   // ═══════════════════════════════════════════════════════════
   // Step 6: 构建 targetFileMap + 任务清单 → 快速返回骨架
   // ═══════════════════════════════════════════════════════════
 
-  const targetFileMap = buildInternalKnowledgeRescanTargetFileMap(
+  const targetFileMap = buildKnowledgeRescanTargetFileMap(
     snapshot,
     intent.projectAnalysis.contentMaxLines
   );
 
   // 任务定义由统一 Rescan plan 决定：coverage gap、recipe decay、file diff 都可触发。
-  const { bootstrapSession } = startInternalDimensionExecutionSession({
+  const { bootstrapSession } = startAiDimensionSession({
     container: ctx.container,
     dimensions: executionDimensions,
     logger: ctx.logger,
-    logPrefix: 'Rescan-Internal',
+    logPrefix: 'KnowledgeRescanWorkflow',
   });
 
   // ═══════════════════════════════════════════════════════════
@@ -571,8 +567,8 @@ export async function runInternalKnowledgeRescanWorkflow(
       projectRoot,
     };
 
-    const allExistingRecipes = projectInternalRescanPromptRecipes(knowledgeRescanPlan);
-    dispatchInternalDimensionExecution({
+    const allExistingRecipes = projectKnowledgeRescanPromptRecipes(knowledgeRescanPlan);
+    dispatchAiDimensionRuns({
       view: attachProjectScopeSourceIdentitiesToView(
         {
           ...fillView,
@@ -584,11 +580,11 @@ export async function runInternalKnowledgeRescanWorkflow(
         sourceIdentities
       ),
       dimensions: executionDimensions,
-      logPrefix: 'Rescan-Internal',
+      logPrefix: 'KnowledgeRescanWorkflow',
     });
   } else if (executionDimensions.length === 0) {
     ctx.logger.info(
-      '[Rescan-Internal] All dimensions fully covered and healthy — no async fill needed'
+      '[KnowledgeRescanWorkflow] All dimensions fully covered and healthy — no async fill needed'
     );
     try {
       const fileDiffPlanner = new FileDiffPlanner(db, projectRoot, { logger: ctx.logger });
@@ -603,9 +599,11 @@ export async function runInternalKnowledgeRescanWorkflow(
         },
         plan: _incrementalPlan,
       });
-      ctx.logger.info('[Rescan-Internal] Snapshot saved for no-fill rescan', { snapshotId });
+      ctx.logger.info('[KnowledgeRescanWorkflow] Snapshot saved for no-fill rescan', {
+        snapshotId,
+      });
     } catch (err: unknown) {
-      ctx.logger.warn('[Rescan-Internal] Snapshot save skipped for no-fill rescan', {
+      ctx.logger.warn('[KnowledgeRescanWorkflow] Snapshot save skipped for no-fill rescan', {
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -637,7 +635,7 @@ export async function runInternalKnowledgeRescanWorkflow(
     /* skillHooks not available */
   }
 
-  return presentInternalKnowledgeRescanResponse({
+  return presentKnowledgeRescanResponse({
     recipeSnapshot,
     cleanResult,
     auditSummary,

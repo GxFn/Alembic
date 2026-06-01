@@ -30,7 +30,7 @@ describe('daemon capabilities', () => {
       dashboardAvailable: true,
       dashboardUrl: 'http://127.0.0.1:49152',
       fileMonitorAvailable: true,
-      internalAi: {
+      apiAi: {
         available: true,
         configSource: 'workspace-settings',
         model: 'gpt-test',
@@ -114,7 +114,7 @@ describe('daemon capabilities', () => {
       status: 'degraded',
     });
     expect(Object.values(capabilities.fileMonitor.compatibilityAliases)).toEqual(['host-edit']);
-    expect(capabilities.internalAi.available).toBe(true);
+    expect(capabilities.apiAi.available).toBe(true);
     expect(buildResidentSearchCapability()).toEqual({
       available: true,
       endpoint: '/api/v1/search',
@@ -168,14 +168,14 @@ describe('daemon capabilities', () => {
         store: '@alembic/core/daemon/JobStore',
       },
     });
-    expect(runtimeBoundary.internalAi).toMatchObject({
-      owner: 'alembic-internal-ai',
+    expect(runtimeBoundary.apiAi).toMatchObject({
+      owner: 'alembic-api-ai',
       runtimeOwner: 'AlembicAgent',
     });
 
     const residentService = buildResidentServiceStatus({
       capabilities,
-      internalAi: capabilities.internalAi,
+      apiAi: capabilities.apiAi,
       origin: 'http://127.0.0.1:49152',
       projectIdentity: buildDaemonProjectIdentity({
         dataRoot: '/tmp/project',
@@ -222,7 +222,7 @@ describe('daemon capabilities', () => {
     expect(residentService.capabilities['search.semantic'].available).toBe(true);
     expect(residentService.capabilities['dashboard.handoff'].available).toBe(true);
     expect(residentService.capabilities['file-monitor.git-worktree'].available).toBe(true);
-    expect(residentService.capabilities['jobs.internal-ai.bootstrap']).toMatchObject({
+    expect(residentService.capabilities['jobs.api-ai.bootstrap']).toMatchObject({
       available: true,
       owner: 'alembic',
     });
@@ -240,7 +240,7 @@ describe('daemon capabilities', () => {
       dashboardUrl: null,
       fileMonitorAvailable: false,
       fileMonitorStatus: createDisabledFileMonitorStatus('disabled-by-env'),
-      internalAi: { available: false, configSource: 'empty', model: null, provider: null },
+      apiAi: { available: false, configSource: 'empty', model: null, provider: null },
       origin: null,
     });
     const runtimeBoundary = makeRuntimeBoundary(capabilities, {
@@ -263,7 +263,7 @@ describe('daemon capabilities', () => {
 
     const residentService = buildResidentServiceStatus({
       capabilities,
-      internalAi: capabilities.internalAi,
+      apiAi: capabilities.apiAi,
       origin: null,
       projectIdentity: buildDaemonProjectIdentity({
         dataRoot: '/tmp/project',
@@ -284,7 +284,7 @@ describe('daemon capabilities', () => {
       available: false,
       unavailableReason: 'capability-unavailable',
     });
-    expect(residentService.capabilities['jobs.internal-ai.rescan']).toMatchObject({
+    expect(residentService.capabilities['jobs.api-ai.rescan']).toMatchObject({
       available: true,
       owner: 'alembic',
     });
@@ -361,7 +361,7 @@ describe('daemon capabilities', () => {
     const runtimeBoundary = makeRuntimeBoundary(capabilities);
     const residentService = buildResidentServiceStatus({
       capabilities,
-      internalAi: capabilities.internalAi,
+      apiAi: capabilities.apiAi,
       origin: 'http://127.0.0.1:49152',
       projectIdentity: buildDaemonProjectIdentity({
         dataRoot: '/tmp/project',
@@ -430,7 +430,7 @@ describe('daemon capabilities', () => {
     });
     const residentService = buildResidentServiceStatus({
       capabilities: makeCapabilities(),
-      internalAi: makeCapabilities().internalAi,
+      apiAi: makeCapabilities().apiAi,
       origin: 'http://127.0.0.1:49152',
       projectIdentity,
       statePath: '/tmp/alembic-data/.asd/daemon.json',

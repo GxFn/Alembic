@@ -15,7 +15,7 @@ import type {
   PersistentMemoryDb,
   WikiGeneratorLike,
   WorkflowSemanticMemoryConsolidationResult,
-} from '#workflows/capabilities/completion/WorkflowCompletionTypes.js';
+} from './CompletionTypes.js';
 
 // ── PanoramaCompletionStep ──
 

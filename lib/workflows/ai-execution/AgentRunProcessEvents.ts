@@ -4,15 +4,15 @@ import type {
   BootstrapProcessEventDraft,
   BootstrapProcessEventTextArtifactCandidate,
 } from '#service/bootstrap/bootstrap-event-types.js';
-import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import type {
   AgentResultLike,
   BootstrapDimensionProjection,
   DimensionFinding,
   ToolCallRecord,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
-import { parseDimensionDigest } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
-import { buildPcvN8StageFactoryEvidence } from './BootstrapPcvNodeLocalEvidence.js';
+} from './AgentRunProjections.js';
+import { parseDimensionDigest } from './DimensionContext.js';
+import type { BootstrapDimensionPlan } from './DimensionRuntimeBuilder.js';
+import { buildPcvN8StageFactoryEvidence } from './PcvNodeEvidence.js';
 
 const MAX_TEXT_CHARS = 6000;
 const MAX_JSON_TEXT_CHARS = 12000;

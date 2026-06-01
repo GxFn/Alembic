@@ -1,5 +1,5 @@
 /**
- * InternalColdStartWorkflow — 内部 Agent 冷启动知识库初始化
+ * ColdStartWorkflow — Alembic API AI 冷启动知识库初始化
  *
  * 由 Alembic AgentRuntime 自动完成知识提取。需要配置 AI Provider (API Key)。
  *
@@ -37,15 +37,15 @@
 
 import type { WorkflowMcpContext } from '@alembic/core/host-agent-workflows';
 import {
+  buildInternalColdStartReport as buildColdStartReport,
   buildColdStartSelectionSummary,
+  buildInternalColdStartTargetFileMap as buildColdStartTargetFileMap,
   buildColdStartWorkflowPlan,
-  buildInternalColdStartReport,
-  buildInternalColdStartTargetFileMap,
+  type InternalColdStartArgs as ColdStartArgs,
   cacheProjectAnalysisSession,
-  createInternalColdStartIntent,
-  type InternalColdStartArgs,
-  presentInternalColdStartEmptyProject,
-  presentInternalColdStartResponse,
+  createInternalColdStartIntent as createColdStartIntent,
+  presentInternalColdStartEmptyProject as presentColdStartEmptyProject,
+  presentInternalColdStartResponse as presentColdStartResponse,
   runFullResetPolicy,
   selectColdStartDimensions,
 } from '@alembic/core/host-agent-workflows';
@@ -58,16 +58,16 @@ import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
-  dispatchInternalDimensionExecution,
-  startInternalDimensionExecutionSession,
-} from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
-import {
   attachProjectScopeSourceIdentitiesToView,
   attachProjectScopeToScanOptions,
   buildProjectScopeAnalysisLogMeta,
   collectProjectScopeSourceIdentities,
   resolveProjectScopeAnalysisContext,
-} from '../../../project-scope/ProjectScopeAnalysis.js';
+} from '../../project-scope/ProjectScopeAnalysis.js';
+import {
+  dispatchAiDimensionRuns,
+  startAiDimensionSession,
+} from '../ai-execution/AiDimensionDispatcher.js';
 
 type BootstrapMcpContext = WorkflowMcpContext & McpContext;
 
@@ -78,7 +78,7 @@ type BootstrapMcpContext = WorkflowMcpContext & McpContext;
  * （注意：反模式/代码问题由 Guard 独立处理，不在 Bootstrap 覆盖范围）
  * 为每个维度自动创建 Candidate（PENDING），由内置 Analyst/Producer pipeline 分析代码。
  *
- * ⚠️ 本函数是 Alembic internal AI 路径。Codex 宿主 Agent 流程由 AlembicPlugin 维护。
+ * ⚠️ 本函数是 Alembic API AI 工作流路径。Codex 宿主 Agent 流程由 AlembicPlugin 维护。
  *
  * @param ctx { container, logger }
  * @param [args.maxFiles=500] 最大扫描文件数
@@ -86,22 +86,19 @@ type BootstrapMcpContext = WorkflowMcpContext & McpContext;
  * @param [args.contentMaxLines=120] 每文件读取最大行数
  * @param [args.incremental] 冷启动忽略文件快照增量；需要历史复用时应走 knowledge-rescan
  */
-export async function runInternalColdStartWorkflow(
-  ctx: BootstrapMcpContext,
-  args: InternalColdStartArgs
-) {
+export async function runColdStartWorkflow(ctx: BootstrapMcpContext, args: ColdStartArgs) {
   const t0 = Date.now();
   const analysisScope = resolveProjectScopeAnalysisContext(ctx.container);
   const { dataRoot, projectRoot } = analysisScope;
-  const intent = createInternalColdStartIntent(args);
+  const intent = createColdStartIntent(args);
   const plan = buildColdStartWorkflowPlan({ intent, projectRoot, dataRoot });
   ctx.logger.info(
-    '[Bootstrap-Internal] ProjectScope analysis context resolved',
+    '[ColdStartWorkflow] ProjectScope analysis context resolved',
     buildProjectScopeAnalysisLogMeta(analysisScope)
   );
   if (intent.ignoredFileDiffIncremental) {
     ctx.logger.warn(
-      '[Bootstrap-Internal] Ignoring file-diff incremental=true for cold-start; full-reset workflows always run full project analysis'
+      '[ColdStartWorkflow] Ignoring file-diff incremental=true for cold-start; full-reset workflows always run full project analysis'
     );
   }
 
@@ -124,7 +121,7 @@ export async function runInternalColdStartWorkflow(
       }),
   });
 
-  ctx.logger.info('[Bootstrap-Internal] fullReset complete', {
+  ctx.logger.info('[ColdStartWorkflow] fullReset complete', {
     tables: cleanupResult.clearedTables.length,
     files: cleanupResult.deletedFiles,
     errors: cleanupResult.errors.length,
@@ -143,7 +140,7 @@ export async function runInternalColdStartWorkflow(
   const sourceIdentities = collectProjectScopeSourceIdentities(phaseResults);
 
   if (phaseResults.isEmpty) {
-    return presentInternalColdStartEmptyProject({
+    return presentColdStartEmptyProject({
       report: phaseResults.report,
       responseTimeMs: Date.now() - t0,
     });
@@ -159,7 +156,7 @@ export async function runInternalColdStartWorkflow(
     report: phaseResults.report,
   });
 
-  const report: Record<string, unknown> = buildInternalColdStartReport({
+  const report: Record<string, unknown> = buildColdStartReport({
     snapshot,
     maxFiles: intent.projectAnalysis.maxFiles,
     skipGuard: intent.projectAnalysis.skipGuard,
@@ -168,7 +165,7 @@ export async function runInternalColdStartWorkflow(
   // ═══════════════════════════════════════════════════════════
   // Phase 4.5: 构建响应 — filesByTarget + analysisFramework
   // ═══════════════════════════════════════════════════════════
-  const targetFileMap = buildInternalColdStartTargetFileMap(
+  const targetFileMap = buildColdStartTargetFileMap(
     snapshot,
     intent.projectAnalysis.contentMaxLines
   );
@@ -189,7 +186,7 @@ export async function runInternalColdStartWorkflow(
     projectScopeId: analysisScope.projectScopeId,
     sourceCount: sourceIdentities.length,
   };
-  ctx.logger.info('[Bootstrap-Internal] ProjectScope source identities prepared', {
+  ctx.logger.info('[ColdStartWorkflow] ProjectScope source identities prepared', {
     projectScopeId: analysisScope.projectScopeId,
     sourceIdentities: sourceIdentities.length,
   });
@@ -216,7 +213,7 @@ export async function runInternalColdStartWorkflow(
     fileCount: snapshot.allFiles.length,
     moduleCount: snapshot.dependencyGraph?.nodes?.length || 0,
     logger: ctx.logger,
-    logPrefix: 'Bootstrap-Internal',
+    logPrefix: 'ColdStartWorkflow',
   });
 
   // ═══════════════════════════════════════════════════════════
@@ -229,7 +226,7 @@ export async function runInternalColdStartWorkflow(
   // ═══════════════════════════════════════════════════════════
 
   // 构建任务定义列表
-  const { taskDefs, bootstrapSession } = startInternalDimensionExecutionSession({
+  const { taskDefs, bootstrapSession } = startAiDimensionSession({
     container: ctx.container,
     dimensions,
     logger: ctx.logger,
@@ -239,7 +236,7 @@ export async function runInternalColdStartWorkflow(
   // ── 异步后台填充（fire-and-forget）──
   // skipAsyncFill: CLI 非 --wait 模式跳过异步填充，避免进程退出后 DB 断连
   if (!intent.internalExecution?.skipAsyncFill) {
-    dispatchInternalDimensionExecution({
+    dispatchAiDimensionRuns({
       view: attachProjectScopeSourceIdentitiesToView(
         {
           snapshot,
@@ -281,7 +278,7 @@ export async function runInternalColdStartWorkflow(
     /* skillHooks not available */
   }
 
-  return presentInternalColdStartResponse({
+  return presentColdStartResponse({
     cleanupResult,
     snapshot,
     report,

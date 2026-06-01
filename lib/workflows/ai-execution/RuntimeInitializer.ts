@@ -7,12 +7,12 @@ import {
 } from '@alembic/agent/memory';
 import Logger from '@alembic/core/logging';
 import type { IncrementalPlan } from '@alembic/core/types';
-import { DimensionContext } from '#workflows/capabilities/execution/internal-agent/DimensionContext.js';
-import { syncRestoredSessionStoreDigests } from '#workflows/capabilities/execution/internal-agent/DimensionRestoreState.js';
 import {
   buildProjectScopeSourceIdentityMap,
   type ProjectScopeSourceIdentity,
-} from '../../../../project-scope/ProjectScopeAnalysis.js';
+} from '../../project-scope/ProjectScopeAnalysis.js';
+import { DimensionContext } from './DimensionContext.js';
+import { syncRestoredSessionStoreDigests } from './DimensionRestoreState.js';
 
 const logger = Logger.getInstance();
 

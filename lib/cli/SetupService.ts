@@ -236,7 +236,7 @@ export class SetupService {
     }
     console.log('');
     console.log('  下一步：');
-    console.log('    1. 运行 alembic ai configure 配置 internal AI Provider（可选）');
+    console.log('    1. 运行 alembic ai configure 配置 API AI Provider（可选）');
     console.log('    2. 运行 alembic coldstart 或 alembic rescan 执行本地 AI 扫描');
     console.log('    3. 运行 alembic start 启动 Alembic 并打开 Dashboard');
     console.log('');

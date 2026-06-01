@@ -63,7 +63,7 @@ export interface DimensionSkillPayload {
   sourceCount: number;
 }
 
-export interface DimensionExternalCompletePayload {
+export interface DimensionHostCompletePayload {
   type: 'skill' | 'candidate';
   extracted: number;
   skillCreated: boolean;
@@ -81,7 +81,7 @@ export type DimensionCompletePayload =
   | DimensionErrorPayload
   | DimensionPipelineCompletePayload
   | DimensionSkillPayload
-  | DimensionExternalCompletePayload;
+  | DimensionHostCompletePayload;
 
 // ── Other event payloads ─────────────────────────────────────
 

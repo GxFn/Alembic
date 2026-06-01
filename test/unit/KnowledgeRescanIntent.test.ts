@@ -5,7 +5,7 @@ import {
 import { describe, expect, test } from 'vitest';
 
 describe('KnowledgeRescanIntent', () => {
-  test('uses rescan-clean as the default internal cleanup policy', () => {
+  test('uses rescan-clean as the default cleanup policy', () => {
     const intent = createInternalKnowledgeRescanIntent({
       reason: 'n2-intent-smoke',
       dimensions: ['design-patterns', 'error-resilience'],
@@ -13,7 +13,6 @@ describe('KnowledgeRescanIntent', () => {
     });
 
     expect(intent).toMatchObject({
-      executor: 'internal-agent',
       analysisMode: 'incremental',
       cleanupPolicy: 'rescan-clean',
       completionPolicy: 'auto-fill',

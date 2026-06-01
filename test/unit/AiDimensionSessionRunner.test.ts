@@ -1,23 +1,23 @@
 import { describe, expect, test } from 'vitest';
-import { resolveInternalDimensionExecutionConcurrency } from '#workflows/capabilities/execution/internal-agent/InternalDimensionFillSessionRunner.js';
+import { resolveAiDimensionConcurrency } from '../../lib/workflows/ai-execution/AiDimensionSessionRunner.js';
 
-describe('internal dimension fill session runner settings', () => {
+describe('AI dimension session runner settings', () => {
   test('uses sanitized workflow concurrency settings', () => {
     expect(
-      resolveInternalDimensionExecutionConcurrency({
+      resolveAiDimensionConcurrency({
         ALEMBIC_PARALLEL_CONCURRENCY: '5',
       })
     ).toEqual({ enableParallel: true, concurrency: 5 });
 
     expect(
-      resolveInternalDimensionExecutionConcurrency({
+      resolveAiDimensionConcurrency({
         ALEMBIC_PARALLEL_BOOTSTRAP: 'false',
         ALEMBIC_PARALLEL_CONCURRENCY: '5',
       })
     ).toEqual({ enableParallel: false, concurrency: 1 });
 
     expect(
-      resolveInternalDimensionExecutionConcurrency({
+      resolveAiDimensionConcurrency({
         ALEMBIC_PARALLEL_CONCURRENCY: '0',
       })
     ).toEqual({ enableParallel: true, concurrency: 3 });
@@ -25,7 +25,7 @@ describe('internal dimension fill session runner settings', () => {
 
   test('accepts the profile-level concurrency env as a compatibility fallback', () => {
     expect(
-      resolveInternalDimensionExecutionConcurrency({
+      resolveAiDimensionConcurrency({
         ALEMBIC_BOOTSTRAP_CONCURRENCY: '4',
       })
     ).toEqual({ enableParallel: true, concurrency: 4 });

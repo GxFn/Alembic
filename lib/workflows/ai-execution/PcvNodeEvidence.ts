@@ -9,12 +9,12 @@ import {
   getBootstrapStageTerminalTools,
   resolveBootstrapTerminalToolset,
 } from '@alembic/core/host-agent-workflows';
-import type { BootstrapDimensionPlan } from '#workflows/capabilities/execution/internal-agent/BootstrapDimensionRuntimeBuilder.js';
 import type {
   AgentResultLike,
   BootstrapDimensionProjection,
   ToolCallRecord,
-} from '#workflows/capabilities/execution/internal-agent/BootstrapProjections.js';
+} from './AgentRunProjections.js';
+import type { BootstrapDimensionPlan } from './DimensionRuntimeBuilder.js';
 
 export const PCV_COLD_START_NODE_LOCAL_CONTRACT = 'PCVColdStartNodeLocalBaseline';
 export const PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION = 1;

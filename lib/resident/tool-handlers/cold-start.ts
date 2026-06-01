@@ -5,5 +5,5 @@
  * Alembic-owned CLI, daemon, and HTTP consumers a non-MCP import path.
  */
 
-export { runInternalColdStartWorkflow as bootstrapKnowledge } from '../../workflows/cold-start/internal/InternalColdStartWorkflow.js';
+export { runColdStartWorkflow as bootstrapKnowledge } from '../../workflows/cold-start/ColdStartWorkflow.js';
 export { bootstrapRefine } from './bootstrap/refine.js';
