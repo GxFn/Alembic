@@ -16,6 +16,7 @@ import {
   isProjectRuntimeTarget,
   PROJECT_RUNTIME_CONTROL_STATE_SCHEMA_VERSION,
   type ProjectConnectionState,
+  type ProjectRuntimeApiAiSummary,
   type ProjectRuntimeControlState,
   type ProjectRuntimeDaemonSummary,
   type ProjectRuntimeFileMonitorSummary,
@@ -34,11 +35,6 @@ import {
   resolveAlembicDaemonPaths,
   resolveAlembicWorkspace,
 } from '../project-scope/ProjectScopeRegistry.js';
-import {
-  type ProjectRuntimeApiAiSummary,
-  readApiAiCompatibilityValue,
-  withCoreProjectRuntimeApiAiSummary,
-} from './ApiAiCompatibility.js';
 import { type DaemonStatus, DaemonSupervisor } from './DaemonSupervisor.js';
 
 export type {
@@ -50,9 +46,7 @@ export type {
   ProjectRuntimeTarget,
 } from '@alembic/core/daemon';
 
-export type ProjectRuntimeScopeSummary = CoreProjectRuntimeScopeSummary & {
-  apiAi: ProjectRuntimeApiAiSummary;
-};
+export type ProjectRuntimeScopeSummary = CoreProjectRuntimeScopeSummary;
 export type ProjectRuntimeControlSnapshot = Omit<
   CoreProjectRuntimeControlSnapshot,
   'activeRuntimeProject' | 'projects' | 'selectedProject'
@@ -475,7 +469,7 @@ export class ProjectRuntimeControl {
     const activeRuntime = activeRuntimeState && daemon?.ready === true;
     const apiAi = summarizeApiAi(projectRoot, healthData);
 
-    return withCoreProjectRuntimeApiAiSummary({
+    return {
       cacheKey: `project:${facts.projectId ?? facts.expectedProjectId}`,
       daemon: summarizeDaemonStatus(daemon, facts),
       dashboardUrl,
@@ -516,7 +510,7 @@ export class ProjectRuntimeControl {
       },
       status,
       workspaceExists: facts.workspaceExists,
-    });
+    };
   }
 
   resolveTarget(
@@ -628,7 +622,7 @@ function summarizeApiAi(
   healthData: Record<string, unknown> | null
 ): ProjectRuntimeApiAiSummary {
   const capabilities = asRecord(healthData?.capabilities);
-  const apiAi = asRecord(readApiAiCompatibilityValue(capabilities));
+  const apiAi = asRecord(capabilities?.apiAi);
   if (apiAi) {
     return {
       available: apiAi.available === true,

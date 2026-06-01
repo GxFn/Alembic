@@ -27,16 +27,25 @@ describe('workflow naming boundary', () => {
     expect(existsSync(join(repoRoot, 'lib/workflows/knowledge-rescan/internal'))).toBe(false);
   });
 
-  test('isolates legacy Core API AI names behind the daemon compatibility bridge', () => {
-    const libFiles = collectTypeScriptFiles(join(repoRoot, 'lib')).filter(
-      (file) => !file.endsWith('/lib/daemon/ApiAiCompatibility.ts')
-    );
-    const libSource = libFiles.map((file) => readFileSync(file, 'utf8')).join('\n');
+  test('keeps active API AI runtime contract free of retired producer names', () => {
+    expect(existsSync(join(repoRoot, 'lib/daemon/ApiAiCompatibility.ts'))).toBe(false);
 
-    expect(libSource).not.toContain('internalAi');
-    expect(libSource).not.toContain('internal-ai');
-    expect(libSource).not.toContain('internal AI');
-    expect(libSource).not.toContain('InternalAi');
+    const libFiles = collectTypeScriptFiles(join(repoRoot, 'lib'));
+    const libSource = libFiles.map((file) => readFileSync(file, 'utf8')).join('\n');
+    const retiredApiAiContractTokens = [
+      ['internal', 'Ai'].join(''),
+      ['internal', 'ai'].join('-'),
+      ['internal', ' AI'].join(''),
+      ['Internal', 'Ai'].join(''),
+      ['Internal', ' AI'].join(''),
+      ['jobs', ['internal', 'ai'].join('-')].join('.'),
+      ['Alembic', 'Internal', 'Ai'].join(''),
+      ['ProjectRuntime', 'Internal', 'Ai'].join(''),
+    ];
+
+    for (const token of retiredApiAiContractTokens) {
+      expect(libSource).not.toContain(token);
+    }
   });
 
   test('keeps host-owned single-file modules out of redundant nesting', () => {

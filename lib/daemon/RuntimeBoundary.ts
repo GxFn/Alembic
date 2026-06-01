@@ -3,12 +3,12 @@ import {
   ALEMBIC_FILE_MONITOR_EVENT_SOURCES,
   ALEMBIC_JOB_ENDPOINTS,
   ALEMBIC_JOB_KINDS,
+  type AlembicApiAiCapability,
   type AlembicEnhancementRoute,
   type AlembicRuntimeCapabilities,
   type AlembicRuntimeMode,
   type AlembicRuntimeProjectIdentity,
 } from '@alembic/core/daemon';
-import { type ApiAiCapability, readApiAiCapability } from './ApiAiCompatibility.js';
 import type {
   DaemonFileMonitorActiveEventSource,
   DaemonFileMonitorRuntimeState,
@@ -82,7 +82,7 @@ export interface AlembicRuntimeBoundary {
     mode: AlembicRuntimeCapabilities['fileMonitor']['mode'];
     status: DaemonFileMonitorRuntimeState;
   };
-  apiAi: ApiAiCapability & {
+  apiAi: AlembicApiAiCapability & {
     owner: 'alembic-api-ai';
     runtimeOwner: 'AlembicAgent';
   };
@@ -100,7 +100,7 @@ export function buildAlembicRuntimeBoundary(
   const workspaceMode =
     options.workspace.workspaceMode ?? (options.workspace.ghost ? 'ghost' : 'standard');
   const fileMonitor = options.capabilities.fileMonitor as unknown as Record<string, unknown>;
-  const apiAi = readApiAiCapability(options.capabilities);
+  const apiAi = options.capabilities.apiAi;
 
   return {
     owner: 'alembic',
