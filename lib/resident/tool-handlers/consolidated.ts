@@ -12,11 +12,7 @@
 import { dimensionTags } from '@alembic/core/dimensions';
 import { getRequiredFieldsDescription } from '@alembic/core/knowledge';
 import { getDeveloperIdentity } from '@alembic/core/shared';
-import {
-  normalizeProjectScopeSourceRefsForRuntime,
-  type ProjectScopeSourceIdentity,
-  resolveProjectScopeSourceIdentitiesFromContainer,
-} from '../../project-scope/ProjectScopeAnalysis.js';
+import { attachProjectScopeSourceRefGateToRecipeProductionGateway } from '../../project-scope/RecipeProductionSourceRefGate.js';
 import { envelope } from '../tool-schema/envelope.js';
 import type {
   ConsolidatedGraphArgs,
@@ -240,7 +236,7 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
   const { RecipeProductionGateway } = await import('@alembic/core/knowledge');
   const { findSimilarRecipes } = await import('@alembic/core/service/candidate');
 
-  let items = args.items as Record<string, unknown>[] | undefined;
+  const items = args.items as Record<string, unknown>[] | undefined;
   if (!items || !Array.isArray(items) || items.length === 0) {
     return envelope({
       success: false,
@@ -288,19 +284,6 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     }
   }
 
-  const sourceRefNormalizationReports: ProjectScopeSourceRefItemReport[] = [];
-  const sourceIdentities = resolveProjectScopeSourceIdentitiesFromContainer(ctx.container);
-  if (sourceIdentities.length > 0) {
-    items = items.map((item, index) =>
-      normalizeProjectScopeCreateRecipeItemSources({
-        item,
-        index,
-        sourceIdentities,
-        reports: sourceRefNormalizationReports,
-      })
-    );
-  }
-
   // 获取 bootstrapSession 已提交标题用于跨维度去重
   let existingTitles: Set<string> | undefined;
   let existingTriggers: Set<string> | undefined;
@@ -338,14 +321,17 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     /* not registered */
   }
 
-  const gateway = new RecipeProductionGateway({
-    knowledgeService,
-    projectRoot: dataRoot,
-    consolidationAdvisor: consolidationAdvisor ?? null,
-    proposalRepository: proposalRepository ?? null,
-    evolutionGateway: evolutionGateway ?? null,
-    findSimilarRecipes,
-  });
+  const gateway = attachProjectScopeSourceRefGateToRecipeProductionGateway(
+    new RecipeProductionGateway({
+      knowledgeService,
+      projectRoot: dataRoot,
+      consolidationAdvisor: consolidationAdvisor ?? null,
+      proposalRepository: proposalRepository ?? null,
+      evolutionGateway: evolutionGateway ?? null,
+      findSimilarRecipes,
+    }),
+    ctx.container
+  );
 
   const gatewayResult = await gateway.create({
     source: 'mcp-external',
@@ -379,11 +365,6 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     count: successCount,
     total: items.length,
   };
-  if (sourceRefNormalizationReports.length > 0) {
-    data.projectScopeSourceRefNormalization = summarizeProjectScopeSourceRefReports(
-      sourceRefNormalizationReports
-    );
-  }
 
   if (gatewayResult.created.length > 0) {
     data.ids = gatewayResult.created.map((c) => c.id);
@@ -499,89 +480,6 @@ interface SessionTrackerLike {
     recordSubmission(dimId: string, item: unknown, recipeId: string): void;
   };
   getProgress(): { remainingDimIds: string[] };
-}
-
-interface ProjectScopeSourceRefItemReport {
-  field: string;
-  index: number;
-  input: string;
-  reason: string;
-  status: string;
-  title: string;
-}
-
-function normalizeProjectScopeCreateRecipeItemSources({
-  item,
-  index,
-  reports,
-  sourceIdentities,
-}: {
-  item: Record<string, unknown>;
-  index: number;
-  reports: ProjectScopeSourceRefItemReport[];
-  sourceIdentities: ProjectScopeSourceIdentity[];
-}): Record<string, unknown> {
-  const next: Record<string, unknown> = { ...item };
-  const title = typeof item.title === 'string' && item.title.trim() ? item.title : '(untitled)';
-  const sourceRefs = stringArray(item.sourceRefs);
-  if (Array.isArray(item.sourceRefs)) {
-    const normalization = normalizeProjectScopeSourceRefsForRuntime(sourceRefs, sourceIdentities);
-    next.sourceRefs = normalization.activeSourceRefs;
-    reports.push(
-      ...normalization.rejected.map((rejection) => ({
-        field: 'sourceRefs',
-        index,
-        input: rejection.input,
-        reason: rejection.reason,
-        status: rejection.status,
-        title,
-      }))
-    );
-  }
-
-  const reasoning = asRecord(item.reasoning);
-  if (reasoning && Array.isArray(reasoning.sources)) {
-    const normalization = normalizeProjectScopeSourceRefsForRuntime(
-      stringArray(reasoning.sources),
-      sourceIdentities
-    );
-    next.reasoning = {
-      ...reasoning,
-      sources: normalization.activeSourceRefs,
-    };
-    reports.push(
-      ...normalization.rejected.map((rejection) => ({
-        field: 'reasoning.sources',
-        index,
-        input: rejection.input,
-        reason: rejection.reason,
-        status: rejection.status,
-        title,
-      }))
-    );
-  }
-  return next;
-}
-
-function summarizeProjectScopeSourceRefReports(reports: ProjectScopeSourceRefItemReport[]) {
-  return {
-    rejected: reports.slice(0, 20),
-    rejectedCount: reports.length,
-    truncated: reports.length > 20,
-  };
-}
-
-function stringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((item): item is string => typeof item === 'string');
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
 }
 
 function _getSession(ctx: McpContext): { session: SessionTrackerLike; dimId: string } | null {
