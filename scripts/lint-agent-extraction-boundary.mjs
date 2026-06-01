@@ -13,9 +13,7 @@ const localAgentRoot = ['lib', 'agent'].join('/');
 const localAgentPrefix = `${localAgentRoot}/`;
 const localToolV2Root = ['lib', 'tools', 'v2'].join('/');
 const localToolV2Prefix = `${localToolV2Root}/`;
-const hostToolContextFactoryPath = ['lib', 'tools', 'v2', 'adapter', 'ToolContextFactory.ts'].join(
-  '/'
-);
+const hostToolContextFactoryPath = ['lib', 'tools', 'v2', 'ToolContextFactory.ts'].join('/');
 const distLocalAgentRoot = ['dist', 'lib', 'agent'].join('/');
 const distLocalToolV2Root = ['dist', 'lib', 'tools', 'v2'].join('/');
 const terminalContractEntrypoint = '@alembic/agent/tools/terminal';
@@ -356,8 +354,8 @@ const staleDistArtifactFiles = [
   ...collectSourceFiles(join(repoRoot, distLocalToolV2Root)).filter(
     (file) =>
       ![
-        join(repoRoot, 'dist', 'lib', 'tools', 'v2', 'adapter', 'ToolContextFactory.js'),
-        join(repoRoot, 'dist', 'lib', 'tools', 'v2', 'adapter', 'ToolContextFactory.d.ts'),
+        join(repoRoot, 'dist', 'lib', 'tools', 'v2', 'ToolContextFactory.js'),
+        join(repoRoot, 'dist', 'lib', 'tools', 'v2', 'ToolContextFactory.d.ts'),
       ].includes(file)
   ),
   ...collectSourceFiles(

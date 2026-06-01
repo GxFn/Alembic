@@ -37,7 +37,7 @@ import { SKILL_CAPABILITY_MANIFESTS } from '#tools/adapters/SkillCapabilities.js
 import { TerminalAdapter } from '#tools/adapters/TerminalAdapter.js';
 import { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
 import { WorkflowAdapter } from '#tools/adapters/WorkflowAdapter.js';
-import { ToolContextFactory } from '#tools/v2/adapter/ToolContextFactory.js';
+import { ToolContextFactory } from '#tools/v2/ToolContextFactory.js';
 import { SkillHooks } from '../../service/skills/SkillHooks.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 

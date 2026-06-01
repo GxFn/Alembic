@@ -124,7 +124,7 @@
         "Boundary lint now reports @alembic/agent/tools/v2 consumer files and classifies ToolContextFactory as host-owned instead of generic Agent Tool V2."
       ],
       "preservedPaths": [
-        "lib/tools/v2/adapter/ToolContextFactory.ts",
+        "lib/tools/v2/ToolContextFactory.ts",
         "lib/tools/adapters/DashboardOperationAdapter.ts",
         "lib/tools/adapters/DashboardOperations.ts",
         "lib/tools/adapters/MacSystemAdapter.ts",
@@ -165,7 +165,7 @@
       "preservedPaths": [
         "lib/agent/**",
         "lib/tools/v2/**",
-        "lib/tools/v2/adapter/ToolContextFactory.ts",
+        "lib/tools/v2/ToolContextFactory.ts",
         "lib/tools/adapters/**"
       ],
       "validation": [
@@ -200,7 +200,7 @@
       "completedScope": [
         "Deleted Alembic local lib/agent duplicate implementation tree after Wave 3 cutover completed production consumers.",
         "Deleted local generic Tool V2 implementation files and local tool core/catalog/workflow duplicate files.",
-        "Preserved lib/tools/v2/adapter/ToolContextFactory.ts and host adapters as Alembic-owned DI/repository/search/gateway/project-root/data-root/sandbox bridge code.",
+        "Preserved lib/tools/v2/ToolContextFactory.ts and host adapters as Alembic-owned DI/repository/search/gateway/project-root/data-root/sandbox bridge code.",
         "Removed package imports alias for #agent/* and cleared configured #agent allowed call sites.",
         "Updated boundary lint to hard gate Wave 4 deletion state: local Agent files 0, production #agent imports 0, package #agent alias absent, generic Tool V2 duplicate files 0."
       ],
@@ -222,7 +222,7 @@
         "lib/tools/v2/types.ts"
       ],
       "preservedPaths": [
-        "lib/tools/v2/adapter/ToolContextFactory.ts",
+        "lib/tools/v2/ToolContextFactory.ts",
         "lib/tools/adapters/**",
         "CLI/daemon/HTTP/API/Dashboard/native host/product shell wiring"
       ],
@@ -236,7 +236,7 @@
         "node dist/bin/cli.js status --json: passed; workspace detected, database not found in current test environment.",
         "rg -n \"#agent/|../agent/|../../agent/|lib/agent/\" lib bin scripts test --glob '*.ts' --glob '*.js' --glob '*.mjs': passed with no matches.",
         "find lib/agent -type f | sort: passed as deletion evidence; lib/agent no longer exists.",
-        "find lib/tools/v2 -type f | sort: passed; only lib/tools/v2/adapter/ToolContextFactory.ts remains.",
+        "find lib/tools/v2 -type f | sort: passed; only lib/tools/v2/ToolContextFactory.ts remains.",
         "npm run test:unit: attempted; blocked by local sandbox environment, with SandboxNetworkProxy.listen EPERM on 127.0.0.1 and TerminalAdapter sandbox-exec sandbox_apply Operation not permitted; targeted Wave 4 suites passed."
       ],
       "risks": [
@@ -322,18 +322,18 @@
     "publicEntrypoint": "@alembic/agent/tools",
     "publicV2Entrypoint": "@alembic/agent/tools/v2",
     "localDeletionCandidates": [],
-    "hostOwnedToolV2Paths": ["lib/tools/v2/adapter/ToolContextFactory.ts", "lib/tools/adapters/**"],
+    "hostOwnedToolV2Paths": ["lib/tools/v2/ToolContextFactory.ts", "lib/tools/adapters/**"],
     "scanRoots": ["lib", "bin", "scripts", "test"],
-    "ignoredPathPrefixes": ["lib/tools/v2/adapter/"],
+    "ignoredPathPrefixes": [],
     "deferredLocalImports": [
       {
         "path": "lib/injection/modules/AgentModule.ts",
-        "expectedSpecifiers": ["#tools/v2/adapter/ToolContextFactory.js"],
+        "expectedSpecifiers": ["#tools/v2/ToolContextFactory.js"],
         "reason": "Alembic consumes Agent V2 catalog/router contracts from @alembic/agent/tools/v2 but keeps concrete ToolContextFactory as the host DI/repository/search/data-root bridge."
       },
       {
         "path": "test/unit/V2ToolSystem.test.ts",
-        "expectedSpecifiers": ["#tools/v2/adapter/ToolContextFactory.js"],
+        "expectedSpecifiers": ["#tools/v2/ToolContextFactory.js"],
         "reason": "The representative V2 suite now exercises Agent generic contracts and imports only the Alembic host-owned ToolContextFactory for context bridge coverage."
       }
     ],
@@ -431,7 +431,7 @@
   },
   "toolBoundaryRules": [
     {
-      "path": "lib/tools/v2/adapter/ToolContextFactory.ts",
+      "path": "lib/tools/v2/ToolContextFactory.ts",
       "classification": "alembic-main-tool-v2-context-factory",
       "switchAfter": "do-not-migrate-by-default",
       "reason": "ToolContextFactory composes Alembic-owned DI container services, repositories, search/gateway wiring, data-root/project-root context, and sandbox bridge for the Agent V2 generic router."

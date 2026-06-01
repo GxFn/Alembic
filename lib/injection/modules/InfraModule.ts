@@ -27,7 +27,7 @@ import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../infrastructure/audit/AuditStore.js';
 import { getRealtimeService as _getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
-import { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
+import { AuditRepositoryImpl } from '../../repository/AuditRepository.js';
 import { BootstrapTaskManager } from '../../service/bootstrap/BootstrapTaskManager.js';
 import { IntentEpisodeStore } from '../../service/task/IntentEpisodeStore.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
