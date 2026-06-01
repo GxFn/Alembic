@@ -56,12 +56,16 @@ import {
 } from '@alembic/core/project-intelligence';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
   dispatchInternalDimensionExecution,
   startInternalDimensionExecutionSession,
 } from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
+import {
+  attachProjectScopeToScanOptions,
+  buildProjectScopeAnalysisLogMeta,
+  resolveProjectScopeAnalysisContext,
+} from '../../../project-scope/ProjectScopeAnalysis.js';
 
 type BootstrapMcpContext = WorkflowMcpContext & McpContext;
 
@@ -85,10 +89,14 @@ export async function runInternalColdStartWorkflow(
   args: InternalColdStartArgs
 ) {
   const t0 = Date.now();
-  const projectRoot = resolveProjectRoot(ctx.container);
-  const dataRoot = resolveDataRoot(ctx.container) || projectRoot;
+  const analysisScope = resolveProjectScopeAnalysisContext(ctx.container);
+  const { dataRoot, projectRoot } = analysisScope;
   const intent = createInternalColdStartIntent(args);
   const plan = buildColdStartWorkflowPlan({ intent, projectRoot, dataRoot });
+  ctx.logger.info(
+    '[Bootstrap-Internal] ProjectScope analysis context resolved',
+    buildProjectScopeAnalysisLogMeta(analysisScope)
+  );
   if (intent.ignoredFileDiffIncremental) {
     ctx.logger.warn(
       '[Bootstrap-Internal] Ignoring file-diff incremental=true for cold-start; full-reset workflows always run full project analysis'
@@ -127,7 +135,7 @@ export async function runInternalColdStartWorkflow(
     projectRoot: plan.projectAnalysis.projectRoot,
     ctx,
     prepare: plan.projectAnalysis.prepare,
-    scan: plan.projectAnalysis.scan,
+    scan: attachProjectScopeToScanOptions(plan.projectAnalysis.scan, analysisScope),
     materialize: plan.projectAnalysis.materialize,
   });
 

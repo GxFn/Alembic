@@ -57,12 +57,17 @@ import type {
   WorkflowDatabaseLike,
   WorkflowSkillHooks,
 } from '@alembic/core/types';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
   dispatchInternalDimensionExecution,
   startInternalDimensionExecutionSession,
 } from '#workflows/capabilities/execution/internal-agent/InternalDimensionExecutionWorkflow.js';
+import {
+  attachProjectScopeToScanOptions,
+  buildProjectScopeAnalysisLogMeta,
+  collectProjectScopeSourceIdentities,
+  resolveProjectScopeAnalysisContext,
+} from '../../../project-scope/ProjectScopeAnalysis.js';
 
 type AgentEvolutionAuditRecipe = Parameters<typeof runEvolutionAudit>[0]['recipes'][number];
 type EvolutionAuditResult = Awaited<ReturnType<typeof runEvolutionAudit>>;
@@ -158,11 +163,15 @@ export async function runInternalKnowledgeRescanWorkflow(
   args: InternalKnowledgeRescanArgs
 ) {
   const t0 = Date.now();
-  const projectRoot = resolveProjectRoot(ctx.container);
-  const dataRoot = resolveDataRoot(ctx.container);
+  const analysisScope = resolveProjectScopeAnalysisContext(ctx.container);
+  const { dataRoot, projectRoot } = analysisScope;
   const db = ctx.container.get('database');
   const intent = createInternalKnowledgeRescanIntent(args);
   const plan = buildKnowledgeRescanWorkflowPlan({ intent, projectRoot, dataRoot });
+  ctx.logger.info(
+    '[Rescan-Internal] ProjectScope analysis context resolved',
+    buildProjectScopeAnalysisLogMeta(analysisScope)
+  );
 
   // ═══════════════════════════════════════════════════════════
   // Step 0: 清理策略（根据 intent 决定）
@@ -224,49 +233,14 @@ export async function runInternalKnowledgeRescanWorkflow(
   });
 
   // ═══════════════════════════════════════════════════════════
-  // Step 1: SourceRef 校验 + 反向清理
-  // ═══════════════════════════════════════════════════════════
-
-  let reconcileReport: SourceRefReconcileReport | null = null;
-  try {
-    const repos = resolveKnowledgeRepos(ctx.container);
-    if (repos) {
-      const signalBus = ctx.container.get('signalBus') as ConstructorParameters<
-        typeof SourceRefReconciler
-      >[3] extends { signalBus?: infer S }
-        ? S
-        : never;
-      const reconciler = new SourceRefReconciler(
-        projectRoot,
-        repos.sourceRefRepo,
-        repos.knowledgeRepo,
-        { signalBus }
-      );
-      reconcileReport = await reconciler.reconcile({ force: true });
-      await reconciler.repairRenames();
-      await reconciler.applyRepairs();
-      ctx.logger.info('[Rescan-Internal] SourceRef reconcile complete', {
-        inserted: reconcileReport.inserted,
-        active: reconcileReport.active,
-        stale: reconcileReport.stale,
-        cleaned: reconcileReport.cleaned ?? 0,
-      });
-    }
-  } catch (err: unknown) {
-    ctx.logger.warn('[Rescan-Internal] SourceRef reconcile failed, continuing', {
-      error: (err as Error).message,
-    });
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // Step 2: Phase 1-4 项目分析（含增量 diff 计算）
+  // Step 1: Phase 1-4 项目分析（含增量 diff 计算）
   // ═══════════════════════════════════════════════════════════
 
   const phaseResults = await ProjectIntelligenceCapability.run({
     projectRoot: plan.projectAnalysis.projectRoot,
     ctx,
     prepare: plan.projectAnalysis.prepare,
-    scan: plan.projectAnalysis.scan,
+    scan: attachProjectScopeToScanOptions(plan.projectAnalysis.scan, analysisScope),
     materialize: plan.projectAnalysis.materialize,
   });
 
@@ -292,7 +266,48 @@ export async function runInternalKnowledgeRescanWorkflow(
   });
 
   // ═══════════════════════════════════════════════════════════
-  // Step 2.5: 构建进化候选（基于增量 diff）
+  // Step 1.5: SourceRef 校验 + ProjectScope 反向清理
+  // ═══════════════════════════════════════════════════════════
+
+  const sourceIdentities = collectProjectScopeSourceIdentities(phaseResults);
+  let reconcileReport: SourceRefReconcileReport | null = null;
+  try {
+    const repos = resolveKnowledgeRepos(ctx.container);
+    if (repos) {
+      const signalBus = ctx.container.get('signalBus') as ConstructorParameters<
+        typeof SourceRefReconciler
+      >[3] extends { signalBus?: infer S }
+        ? S
+        : never;
+      const reconciler = new SourceRefReconciler(
+        projectRoot,
+        repos.sourceRefRepo,
+        repos.knowledgeRepo,
+        {
+          signalBus,
+          sourceIdentities: sourceIdentities.length > 0 ? sourceIdentities : undefined,
+        }
+      );
+      reconcileReport = await reconciler.reconcile({ force: true });
+      await reconciler.repairRenames();
+      await reconciler.applyRepairs();
+      ctx.logger.info('[Rescan-Internal] SourceRef reconcile complete', {
+        active: reconcileReport.active,
+        cleaned: reconcileReport.cleaned ?? 0,
+        inserted: reconcileReport.inserted,
+        projectScopeId: analysisScope.projectScopeId,
+        sourceIdentities: sourceIdentities.length,
+        stale: reconcileReport.stale,
+      });
+    }
+  } catch (err: unknown) {
+    ctx.logger.warn('[Rescan-Internal] SourceRef reconcile failed, continuing', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // Step 2: 构建进化候选（基于增量 diff）
   // ═══════════════════════════════════════════════════════════
 
   let candidatePlan: EvolutionCandidatePlan | null = null;
