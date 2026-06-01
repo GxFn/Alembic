@@ -279,14 +279,20 @@ export async function runInternalKnowledgeRescanWorkflow(
       >[3] extends { signalBus?: infer S }
         ? S
         : never;
+      type SourceRefReconcilerOptions = NonNullable<
+        ConstructorParameters<typeof SourceRefReconciler>[3]
+      > & {
+        sourceIdentities?: typeof sourceIdentities;
+      };
+      const sourceRefReconcilerOptions: SourceRefReconcilerOptions = {
+        signalBus,
+        ...(sourceIdentities.length > 0 ? { sourceIdentities } : {}),
+      };
       const reconciler = new SourceRefReconciler(
         projectRoot,
         repos.sourceRefRepo,
         repos.knowledgeRepo,
-        {
-          signalBus,
-          sourceIdentities: sourceIdentities.length > 0 ? sourceIdentities : undefined,
-        }
+        sourceRefReconcilerOptions
       );
       reconcileReport = await reconciler.reconcile({ force: true });
       await reconciler.repairRenames();

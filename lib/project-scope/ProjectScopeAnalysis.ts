@@ -2,7 +2,7 @@ import {
   type ProjectAnalysisResult,
   type ProjectAnalysisScanOptions,
 } from '@alembic/core/project-intelligence';
-import type { CanonicalSourceIdentity, ProjectDescriptor } from '@alembic/core/shared';
+import type { ProjectDescriptor } from '@alembic/core/shared';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { resolveAlembicWorkspace } from './ProjectScopeRegistry.js';
 
@@ -30,12 +30,19 @@ export interface ProjectScopeAnalysisContext {
   projectScopeId: string | null;
 }
 
-/**
- * Bridges Alembic's ProjectScopeRegistry / WorkspaceResolver folder identity
- * into Core ProjectIntelligence. Without a ProjectScope this preserves the old
- * single-projectRoot behavior; with a ProjectScope Core Phase 1 scans only
- * scope.folders.
- */
+export interface ProjectScopeSourceIdentity {
+  absolutePath: string | null;
+  folderDisplayName: string | null;
+  folderId: string | null;
+  folderPath: string | null;
+  folderRelativeRoot: string | null;
+  legacyPath: string;
+  projectScopeId: string | null;
+  qualifiedPath: string;
+  relativePath: string;
+}
+
+// Alembic 侧只做结构化适配：新 Core 会产出 sourceIdentity，旧 Core 没有该字段时保持空集合。
 export function resolveProjectScopeAnalysisContext(
   container: ContainerLike | null | undefined
 ): ProjectScopeAnalysisContext {
@@ -89,10 +96,10 @@ export function buildProjectScopeAnalysisLogMeta(
 
 export function collectProjectScopeSourceIdentities(
   result: ProjectAnalysisResult
-): CanonicalSourceIdentity[] {
+): ProjectScopeSourceIdentity[] {
   return result.allFiles
-    .map((file) => file.sourceIdentity)
-    .filter((identity): identity is CanonicalSourceIdentity => Boolean(identity));
+    .map((file) => getFileSourceIdentity(file))
+    .filter((identity): identity is ProjectScopeSourceIdentity => Boolean(identity));
 }
 
 function getContainerWorkspaceResolver(
@@ -129,10 +136,38 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function getFileSourceIdentity(file: unknown): ProjectScopeSourceIdentity | null {
+  if (!isRecord(file)) {
+    return null;
+  }
+  return isProjectScopeSourceIdentity(file.sourceIdentity) ? file.sourceIdentity : null;
+}
+
+function isProjectScopeSourceIdentity(value: unknown): value is ProjectScopeSourceIdentity {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    isNullableString(value.absolutePath) &&
+    isNullableString(value.folderDisplayName) &&
+    isNullableString(value.folderId) &&
+    isNullableString(value.folderPath) &&
+    isNullableString(value.folderRelativeRoot) &&
+    typeof value.legacyPath === 'string' &&
+    isNullableString(value.projectScopeId) &&
+    typeof value.qualifiedPath === 'string' &&
+    typeof value.relativePath === 'string'
+  );
+}
+
 function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 function nullableStringValue(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === 'string';
 }
