@@ -10,6 +10,7 @@
 import {
   CANDIDATE_STATES,
   CONSUMABLE_STATES,
+  ConfidenceRouter,
   DEGRADED_STATES,
   isCandidate,
   isConsumable,
@@ -18,8 +19,7 @@ import {
   isValidTransition,
   Lifecycle,
   normalizeLifecycle,
-} from '@alembic/core/domain/knowledge/Lifecycle';
-import { ConfidenceRouter } from '@alembic/core/knowledge';
+} from '@alembic/core/knowledge';
 import { describe, expect, it } from 'vitest';
 
 describe('Knowledge Governance Integration', () => {

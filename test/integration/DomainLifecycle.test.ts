@@ -16,10 +16,10 @@ import {
   isCandidate,
   isValidLifecycle,
   isValidTransition,
+  KnowledgeEntry,
   Lifecycle,
   normalizeLifecycle,
-} from '@alembic/core/domain/knowledge/Lifecycle';
-import { KnowledgeEntry } from '@alembic/core/knowledge';
+} from '@alembic/core/knowledge';
 
 describe('Integration: KnowledgeEntry & Lifecycle', () => {
   // ─── Lifecycle State Machine ─────────────────
