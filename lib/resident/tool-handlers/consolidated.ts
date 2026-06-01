@@ -6,7 +6,7 @@
  *
  * 不包含业务逻辑，仅做参数解构 → 路由 → 转发。
  *
- * alembic_bootstrap 已迁移到 bootstrap-external.js（外部 Agent 路径）。
+ * alembic_bootstrap 已迁移到 host-agent recoverable workflow 路径。
  */
 
 import { dimensionTags } from '@alembic/core/dimensions';

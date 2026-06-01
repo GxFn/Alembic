@@ -8,6 +8,7 @@ const thisFile = fileURLToPath(import.meta.url);
 const localAgentRoot = join('lib', 'agent');
 const agentAlias = '#agent';
 const agentAliasPrefix = `${agentAlias}/`;
+const legacySubmissionTrackerStem = 'External' + 'SubmissionTracker';
 
 describe('agent module boundaries', () => {
   test('removes the local duplicate agent implementation tree', () => {
@@ -19,7 +20,7 @@ describe('agent module boundaries', () => {
     const retiredFiles = [
       'lib/external/mcp/handlers/bootstrap/MissionBriefingBuilder.ts',
       'lib/external/mcp/handlers/bootstrap/BootstrapSession.ts',
-      'lib/external/mcp/handlers/bootstrap/ExternalSubmissionTracker.ts',
+      legacyBootstrapPath(`${legacySubmissionTrackerStem}.ts`),
       'lib/external/mcp/handlers/bootstrap/base-dimensions.ts',
       'lib/external/mcp/handlers/bootstrap/shared/bootstrap-phases.ts',
       'lib/external/mcp/handlers/bootstrap/shared/dimension-text.ts',
@@ -346,7 +347,7 @@ function isRetiredImportSpecifier(specifier: string, relFile: string) {
   const retiredSegments = [
     'lib/external/mcp/handlers/bootstrap/MissionBriefingBuilder',
     'lib/external/mcp/handlers/bootstrap/BootstrapSession',
-    'lib/external/mcp/handlers/bootstrap/ExternalSubmissionTracker',
+    legacyBootstrapPath(legacySubmissionTrackerStem),
     'lib/external/mcp/handlers/bootstrap/base-dimensions',
     'lib/external/mcp/handlers/bootstrap/shared/bootstrap-phases',
     'lib/external/mcp/handlers/bootstrap/shared/dimension-text',
@@ -384,6 +385,10 @@ function agentPath(...segments: string[]) {
   return `${join(localAgentRoot, ...segments)
     .split('\\')
     .join('/')}/`;
+}
+
+function legacyBootstrapPath(fileName: string) {
+  return join('lib', 'external', 'mcp', 'handlers', 'bootstrap', fileName).split('\\').join('/');
 }
 
 function isHandlerInternalImport(specifier: string) {

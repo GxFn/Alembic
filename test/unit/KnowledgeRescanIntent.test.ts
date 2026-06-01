@@ -1,5 +1,5 @@
 import {
-  createExternalKnowledgeRescanIntent,
+  createHostAgentKnowledgeRescanIntent,
   createInternalKnowledgeRescanIntent,
 } from '@alembic/core/host-agent-workflows';
 import { describe, expect, test } from 'vitest';
@@ -32,18 +32,21 @@ describe('KnowledgeRescanIntent', () => {
     expect(intent.cleanupPolicy).toBe('force-rescan');
   });
 
-  test('keeps external rescan aligned with internal cleanup semantics', () => {
-    const intent = createExternalKnowledgeRescanIntent({
-      reason: 'external-rescan',
+  test('keeps host-agent rescan aligned with internal cleanup semantics', () => {
+    const intent = createHostAgentKnowledgeRescanIntent({
+      reason: 'host-agent-rescan',
       dimensions: ['architecture'],
     });
 
     expect(intent).toMatchObject({
-      executor: 'external-agent',
+      executor: 'host-agent',
       analysisMode: 'incremental',
       cleanupPolicy: 'rescan-clean',
-      completionPolicy: 'external-dimension-complete',
+      completionPolicy: 'host-agent-dimension-complete',
       dimensionIds: ['architecture'],
+      projectAnalysis: {
+        sourceTag: 'rescan-host-agent',
+      },
     });
   });
 });

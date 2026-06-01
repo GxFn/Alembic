@@ -2,7 +2,7 @@ import {
   auditRecipesForRescan,
   buildKnowledgeRescanPlan,
   buildRescanPrescreen,
-  projectExternalRescanEvidencePlan,
+  projectHostAgentRescanEvidencePlan,
   projectInternalRescanGapPlan,
   projectInternalRescanPromptRecipes,
   type RelevanceAuditResult,
@@ -157,7 +157,7 @@ describe('KnowledgeRescanPlan', () => {
     });
   });
 
-  test('projects external evidence from the same domain plan', () => {
+  test('projects host-agent evidence from the same domain plan', () => {
     const plan = buildKnowledgeRescanPlan({
       recipeEntries: recipes,
       auditSummary,
@@ -165,7 +165,7 @@ describe('KnowledgeRescanPlan', () => {
       requestedDimensionIds: ['api', 'ui', 'storage'],
       targetPerDimension: 2,
     });
-    const evidencePlan = projectExternalRescanEvidencePlan(plan);
+    const evidencePlan = projectHostAgentRescanEvidencePlan(plan);
 
     expect(evidencePlan.allRecipes.map((entry) => entry.id)).not.toContain('network-dead');
     expect(evidencePlan.dimensionGaps).toEqual([
