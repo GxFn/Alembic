@@ -49,7 +49,6 @@ import {
   normalizeProjectScopeSourceRefsForRuntime,
   resolveProjectScopeSourceIdentitiesFromContainer,
 } from '../../project-scope/ProjectScopeAnalysis.js';
-import { attachProjectScopeSourceRefGateToRecipeProductionGateway } from '../../project-scope/RecipeProductionSourceRefGate.js';
 import { FileChangeHandler } from '../../service/evolution/FileChangeHandler.js';
 import { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
@@ -341,7 +340,7 @@ export function register(c: ServiceContainer) {
     } catch {
       /* optional */
     }
-    const gateway = new RecipeProductionGateway({
+    return new RecipeProductionGateway({
       knowledgeService: knowledgeService as unknown as ConstructorParameters<
         typeof RecipeProductionGateway
       >[0]['knowledgeService'],
@@ -357,7 +356,6 @@ export function register(c: ServiceContainer) {
       >[0]['evolutionGateway'],
       findSimilarRecipes,
     });
-    return attachProjectScopeSourceRefGateToRecipeProductionGateway(gateway, ct);
   });
 
   c.singleton('fileChangeHandler', (ct: ServiceContainer) => {

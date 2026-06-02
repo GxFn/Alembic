@@ -12,7 +12,6 @@
 import { dimensionTags } from '@alembic/core/dimensions';
 import { getRequiredFieldsDescription } from '@alembic/core/knowledge';
 import { getDeveloperIdentity } from '@alembic/core/shared';
-import { attachProjectScopeSourceRefGateToRecipeProductionGateway } from '../../project-scope/RecipeProductionSourceRefGate.js';
 import { envelope } from '../tool-schema/envelope.js';
 import type {
   ConsolidatedGraphArgs,
@@ -321,17 +320,14 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     /* not registered */
   }
 
-  const gateway = attachProjectScopeSourceRefGateToRecipeProductionGateway(
-    new RecipeProductionGateway({
-      knowledgeService,
-      projectRoot: dataRoot,
-      consolidationAdvisor: consolidationAdvisor ?? null,
-      proposalRepository: proposalRepository ?? null,
-      evolutionGateway: evolutionGateway ?? null,
-      findSimilarRecipes,
-    }),
-    ctx.container
-  );
+  const gateway = new RecipeProductionGateway({
+    knowledgeService,
+    projectRoot: dataRoot,
+    consolidationAdvisor: consolidationAdvisor ?? null,
+    proposalRepository: proposalRepository ?? null,
+    evolutionGateway: evolutionGateway ?? null,
+    findSimilarRecipes,
+  });
 
   const gatewayResult = await gateway.create({
     source: 'mcp-external',
