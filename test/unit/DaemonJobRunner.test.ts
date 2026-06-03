@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { JobStore } from '@alembic/core/daemon';
+import { JobStore, validateJobDisplaySnapshot } from '@alembic/core/daemon';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   attachBootstrapProcessEventBridge,
@@ -10,6 +10,7 @@ import {
   cancelDaemonJob,
   markInterruptedDaemonJobs,
 } from '../../lib/daemon/DaemonJobRunner.js';
+import { JobDisplaySnapshotStore } from '../../lib/daemon/JobDisplaySnapshotStore.js';
 import { readJobProcessEventArtifact } from '../../lib/daemon/JobProcessEventArtifacts.js';
 import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
@@ -334,6 +335,91 @@ describe('attachBootstrapProcessEventBridge', () => {
     });
     expect(artifact?.absolutePath.startsWith(path.join(dataRoot, '.asd'))).toBe(true);
     expect(artifact?.content).toBe(fullPrompt);
+  });
+
+  test('writes durable display snapshots as bootstrap process evidence is recorded', () => {
+    const eventBus = new EventEmitter();
+    const recorder = new JobProcessEventRecorder();
+    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-runner-snapshot-'));
+    const store = new JobStore({ projectRoot: dataRoot });
+    const job = store.create({ kind: 'bootstrap', source: 'dashboard' });
+    store.markRunning(job.id);
+    const snapshotStore = new JobDisplaySnapshotStore({ dataRoot });
+    const cleanup = attachBootstrapProcessEventBridge({
+      container: makeContainer(
+        store,
+        { eventBus, jobDisplaySnapshotStore: snapshotStore },
+        { _workspaceResolver: { dataRoot } }
+      ),
+      jobId: job.id,
+      logger: makeLogger(),
+      recorder,
+    });
+
+    const fullPrompt = 'Analyze src/index.ts and preserve LLM IO evidence.';
+    eventBus.emit('bootstrap:process-events', {
+      sessionId: 'bs_snapshot',
+      taskId: 'architecture',
+      targetName: 'Architecture',
+      events: [
+        {
+          kind: 'llm.input',
+          title: 'Snapshot LLM input prepared',
+          content: {
+            mimeType: 'text/markdown',
+            role: 'developer',
+            text: 'Timeline input summary',
+          },
+          metadata: {
+            findings: [{ sourceRef: 'src/index.ts:42', title: 'Source-backed snapshot' }],
+            inputStageProfile: 'analyze',
+            sourceRefs: ['src/index.ts:42'],
+          },
+          phase: 'analyze',
+          textArtifactCandidate: {
+            kind: 'llm-input-full-redacted',
+            label: 'Full redacted LLM input',
+            mimeType: 'text/markdown; charset=utf-8',
+            originalChars: fullPrompt.length,
+            redactionState: 'developer-visible-redacted',
+            text: fullPrompt,
+          },
+        },
+      ],
+    });
+
+    cleanup?.();
+
+    const read = snapshotStore.read(job.id);
+    expect(read?.absolutePath).toBe(
+      path.join(dataRoot, '.asd', 'job-display-snapshots', job.id, 'snapshot.json')
+    );
+    expect(read?.validation.valid).toBe(true);
+    expect(read ? validateJobDisplaySnapshot(read.snapshot).valid : false).toBe(true);
+    expect(read?.snapshot.snapshot.ref).toBe(`/api/v1/jobs/${job.id}/display-snapshot`);
+    expect(read?.snapshot.manifest.llmIoEntryCount).toBe(1);
+    expect(read?.snapshot.llmIo.entries[0]).toMatchObject({
+      kind: 'llm.input',
+      title: 'Snapshot LLM input prepared',
+    });
+    expect(read?.snapshot.artifacts).toEqual([
+      expect.objectContaining({
+        originalChars: fullPrompt.length,
+        redactionState: 'redacted',
+        retained: true,
+        storageKind: 'job-artifact',
+      }),
+    ]);
+    expect(read?.snapshot.sourceRefs.map((item) => item.sourceRef)).toContain('src/index.ts:42');
+    expect(read?.snapshot.findings).toEqual([
+      expect.objectContaining({
+        sourceRef: 'src/index.ts:42',
+        title: 'Source-backed snapshot',
+      }),
+    ]);
+    expect(read?.snapshot.evidenceIncomplete.map((item) => item.reason)).toContain(
+      'snapshot_redacted'
+    );
   });
 
   test('carries PCV N9 artifact, trace, metrics, and source refs through job process events', () => {

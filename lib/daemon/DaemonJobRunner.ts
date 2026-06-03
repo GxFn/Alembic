@@ -10,6 +10,7 @@ import type { ServiceContainer } from '../injection/ServiceContainer.js';
 import { resolveProjectScopeSourceIdentitiesFromContainer } from '../project-scope/ProjectScopeAnalysis.js';
 import { resolveAlembicWorkspace } from '../project-scope/ProjectScopeRegistry.js';
 import type { BootstrapProcessEventDraft } from '../service/bootstrap/bootstrap-event-types.js';
+import { JobDisplaySnapshotStore } from './JobDisplaySnapshotStore.js';
 import { materializeJobProcessEventTextArtifact } from './JobProcessEventArtifacts.js';
 import {
   JobProcessEventRecorder,
@@ -32,6 +33,7 @@ type BootstrapProcessEventName =
   | 'bootstrap:task-started';
 
 const fallbackJobProcessEventRecorder = new JobProcessEventRecorder();
+const fallbackJobDisplaySnapshotStores = new Map<string, JobDisplaySnapshotStore>();
 
 export interface DaemonJobOptions {
   args?: Record<string, unknown>;
@@ -119,6 +121,12 @@ export function enqueueDaemonJob(options: DaemonJobOptions): DaemonJobRecord {
     summary: `${options.kind} job accepted by the daemon queue.`,
     title: 'Daemon job enqueued',
   });
+  refreshJobDisplaySnapshot({
+    container: options.container,
+    jobId: job.id,
+    logger: options.logger,
+    recorder,
+  });
   options.logger.info('Daemon job enqueued', {
     jobId: job.id,
     kind: options.kind,
@@ -167,6 +175,13 @@ export async function runDaemonJob(options: RunDaemonJobOptions): Promise<RunDae
     summary: `${options.kind} job execution started.`,
     title: 'Daemon job started',
   });
+  refreshJobDisplaySnapshot({
+    container: options.container,
+    jobId: options.jobId,
+    logger: options.logger,
+    recorder,
+    store,
+  });
   options.logger.info('Daemon job started', {
     jobId: options.jobId,
     kind: options.kind,
@@ -196,6 +211,13 @@ export async function runDaemonJob(options: RunDaemonJobOptions): Promise<RunDae
         phase: 'session',
         summary: 'Daemon job is now following the live bootstrap session.',
         title: 'Bootstrap session linked',
+      });
+      refreshJobDisplaySnapshot({
+        container: options.container,
+        jobId: options.jobId,
+        logger: options.logger,
+        recorder,
+        store,
       });
       keepBootstrapBridge = true;
       linkBootstrapSessionCompletion({
@@ -235,6 +257,13 @@ export async function runDaemonJob(options: RunDaemonJobOptions): Promise<RunDae
       summary: `${options.kind} job completed.`,
       title: 'Daemon job completed',
     });
+    refreshJobDisplaySnapshot({
+      container: options.container,
+      jobId: options.jobId,
+      logger: options.logger,
+      recorder,
+      store,
+    });
     options.logger.info('Daemon job completed', {
       jobId: options.jobId,
       kind: options.kind,
@@ -266,6 +295,13 @@ export async function runDaemonJob(options: RunDaemonJobOptions): Promise<RunDae
       phase: 'failed',
       summary: err instanceof Error ? err.message : String(err),
       title: 'Daemon job failed',
+    });
+    refreshJobDisplaySnapshot({
+      container: options.container,
+      jobId: options.jobId,
+      logger: options.logger,
+      recorder,
+      store,
     });
     throw err;
   } finally {
@@ -310,7 +346,7 @@ export function cancelDaemonJob(options: {
     } else {
       taskManager.markCancelled();
     }
-    return finalizeBootstrapJobFromSession({
+    const finalized = finalizeBootstrapJobFromSession({
       bootstrapSessionId,
       fallbackResult: job.result,
       jobId: options.jobId,
@@ -318,6 +354,13 @@ export function cancelDaemonJob(options: {
       session: taskManager.getSessionStatus(),
       store,
     });
+    refreshJobDisplaySnapshot({
+      container: options.container,
+      jobId: options.jobId,
+      recorder,
+      store,
+    });
+    return finalized;
   }
   const cancelled = store.cancel(options.jobId, reason);
   if (cancelled) {
@@ -329,6 +372,12 @@ export function cancelDaemonJob(options: {
       severity: 'warning',
       summary: reason,
       title: 'Daemon job cancelled',
+    });
+    refreshJobDisplaySnapshot({
+      container: options.container,
+      jobId: options.jobId,
+      recorder,
+      store,
     });
   }
   return cancelled;
@@ -369,6 +418,51 @@ export function getJobProcessEventRecorder(container: ServiceContainer): JobProc
     return container.get('jobProcessEventRecorder');
   } catch {
     return fallbackJobProcessEventRecorder;
+  }
+}
+
+export function getJobDisplaySnapshotStore(container: ServiceContainer): JobDisplaySnapshotStore {
+  try {
+    return container.get('jobDisplaySnapshotStore');
+  } catch {
+    const resolver = resolveAlembicWorkspace(resolveProjectRoot(container));
+    return getFallbackJobDisplaySnapshotStore(resolver.dataRoot);
+  }
+}
+
+function getFallbackJobDisplaySnapshotStore(dataRoot: string): JobDisplaySnapshotStore {
+  const existing = fallbackJobDisplaySnapshotStores.get(dataRoot);
+  if (existing) {
+    return existing;
+  }
+  const store = new JobDisplaySnapshotStore({ dataRoot });
+  fallbackJobDisplaySnapshotStores.set(dataRoot, store);
+  return store;
+}
+
+function refreshJobDisplaySnapshot(options: {
+  container: ServiceContainer;
+  jobId: string;
+  logger?: LoggerLike;
+  recorder?: JobProcessEventRecorder | null;
+  store?: JobStore;
+}): void {
+  try {
+    const store = options.store ?? getJobStore(options.container);
+    const job = store.get(options.jobId);
+    if (!job) {
+      return;
+    }
+    getJobDisplaySnapshotStore(options.container).writeFromJob({
+      job,
+      recorder: options.recorder,
+    });
+  } catch (err: unknown) {
+    options.logger?.warn('Job display snapshot refresh failed', {
+      error: err instanceof Error ? err.message : String(err),
+      jobId: options.jobId,
+      stage: 'job-display-snapshot-refresh',
+    });
   }
 }
 
@@ -423,6 +517,15 @@ export function attachBootstrapProcessEventBridge(options: {
     return !currentSessionId;
   };
 
+  const refreshSnapshot = () => {
+    refreshJobDisplaySnapshot({
+      container: options.container,
+      jobId: options.jobId,
+      logger: options.logger,
+      recorder: options.recorder,
+    });
+  };
+
   subscribe('bootstrap:started', (payload: unknown) => {
     const event = asRecord(payload);
     if (!shouldAccept(event)) {
@@ -440,6 +543,7 @@ export function attachBootstrapProcessEventBridge(options: {
       summary: `Bootstrap session started with ${numberValue(event.total) ?? 0} tasks.`,
       title: 'Bootstrap session started',
     });
+    refreshSnapshot();
   });
 
   subscribe('bootstrap:task-started', (payload: unknown) => {
@@ -463,6 +567,7 @@ export function attachBootstrapProcessEventBridge(options: {
       targetName: label,
       title: 'Bootstrap dimension started',
     });
+    refreshSnapshot();
   });
 
   subscribe('bootstrap:task-completed', (payload: unknown) => {
@@ -514,6 +619,7 @@ export function attachBootstrapProcessEventBridge(options: {
       container: options.container,
       recorder: options.recorder,
     });
+    refreshSnapshot();
   });
 
   subscribe('bootstrap:process-events', (payload: unknown) => {
@@ -534,6 +640,7 @@ export function attachBootstrapProcessEventBridge(options: {
       container: options.container,
       recorder: options.recorder,
     });
+    refreshSnapshot();
   });
 
   subscribe('bootstrap:task-failed', (payload: unknown) => {
@@ -563,6 +670,7 @@ export function attachBootstrapProcessEventBridge(options: {
       targetName: label,
       title: 'Bootstrap dimension failed',
     });
+    refreshSnapshot();
   });
 
   subscribe('bootstrap:all-completed', (payload: unknown) => {
@@ -595,6 +703,7 @@ export function attachBootstrapProcessEventBridge(options: {
       summary: `Bootstrap session ${status}.`,
       title: 'Bootstrap session completed',
     });
+    refreshSnapshot();
     cleanup();
   });
 
@@ -645,6 +754,13 @@ function linkBootstrapSessionCompletion(options: {
       jobId: options.jobId,
       recorder: options.recorder,
       session,
+      store: options.store,
+    });
+    refreshJobDisplaySnapshot({
+      container: options.container,
+      jobId: options.jobId,
+      logger: options.logger,
+      recorder: options.recorder,
       store: options.store,
     });
     options.logger.info('Daemon bootstrap job finalized from session', {

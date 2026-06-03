@@ -21,6 +21,7 @@ import {
   createAlembicRepositories,
 } from '@alembic/core/repositories';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
+import { JobDisplaySnapshotStore } from '../../daemon/JobDisplaySnapshotStore.js';
 import { JobProcessEventRecorder } from '../../daemon/JobProcessEventRecorder.js';
 import Gateway from '../../governance/gateway/Gateway.js';
 import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
@@ -92,6 +93,11 @@ export function register(c: ServiceContainer) {
   c.singleton('jobStore', (ct: ServiceContainer) => {
     const resolver = resolveAlembicWorkspace(resolveProjectRoot(ct));
     return new JobStore({ projectRoot: resolver.dataRoot });
+  });
+
+  c.singleton('jobDisplaySnapshotStore', (ct: ServiceContainer) => {
+    const resolver = resolveAlembicWorkspace(resolveProjectRoot(ct));
+    return new JobDisplaySnapshotStore({ dataRoot: resolver.dataRoot });
   });
 
   c.singleton('jobProcessEventRecorder', () => {

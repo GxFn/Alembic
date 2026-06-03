@@ -1,9 +1,12 @@
 import { timingSafeEqual } from 'node:crypto';
 import {
+  ALEMBIC_JOB_DISPLAY_SNAPSHOT_PATH,
   ALEMBIC_JOB_PROCESS_EVENTS_PATH,
   type DaemonJobKind,
   type DaemonJobRecord,
   type DaemonJobStatus,
+  type JobDisplaySnapshot,
+  validateJobDisplaySnapshot,
 } from '@alembic/core/daemon';
 import {
   MAX_KNOWLEDGE_RESCAN_CONTENT_MAX_LINES,
@@ -20,9 +23,15 @@ import {
 import {
   cancelDaemonJob,
   enqueueDaemonJob,
+  getJobDisplaySnapshotStore,
   getJobProcessEventRecorder,
   getJobStore,
 } from '../../daemon/DaemonJobRunner.js';
+import {
+  buildJobDisplaySnapshotApiRef,
+  type JobDisplaySnapshotStore,
+  summarizeJobDisplaySnapshotForApi,
+} from '../../daemon/JobDisplaySnapshotStore.js';
 import { readJobProcessEventArtifact } from '../../daemon/JobProcessEventArtifacts.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';
@@ -79,6 +88,7 @@ export interface DaemonJobApiProgress {
 
 export interface DaemonJobApiRecord extends DaemonJobRecord {
   compact?: boolean;
+  displaySnapshot?: Record<string, unknown> | null;
   progress?: DaemonJobApiProgress;
   summary?: Record<string, unknown>;
 }
@@ -100,6 +110,7 @@ router.get('/', (req: Request, res: Response): void => {
   const container = getServiceContainer();
   const store = getJobStore(container);
   const liveSession = getLiveBootstrapSession(container);
+  const snapshotStore = getJobDisplaySnapshotStore(container);
   const kind = parseKind(req.query.kind);
   const status = parseStatus(req.query.status);
   const limit = parseLimit(req.query.limit);
@@ -110,7 +121,12 @@ router.get('/', (req: Request, res: Response): void => {
     data: {
       jobs: store
         .list({ kind, limit: status ? 200 : limit })
-        .map((job) => decorateJobForResponse(job, liveSession, { compact }))
+        .map((job) =>
+          decorateJobForResponse(job, liveSession, {
+            compact,
+            displaySnapshot: buildJobDisplaySnapshotSummary(job, snapshotStore),
+          })
+        )
         .filter((job) => !status || job.status === status)
         .slice(0, limit),
     },
@@ -137,6 +153,26 @@ router.get('/:jobId/events', (req: Request, res: Response): void => {
   res.json({
     success: true,
     data: events,
+  });
+});
+
+router.get('/:jobId/display-snapshot', (req: Request, res: Response): void => {
+  const container = getServiceContainer();
+  const store = getJobStore(container);
+  const jobId = singleParam(req.params.jobId);
+  const job = store.get(jobId);
+  if (!job) {
+    res.status(404).json({ success: false, error: 'Job not found' });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: buildJobDisplaySnapshotResponse({
+      job,
+      recorder: getJobProcessEventRecorder(container),
+      snapshotStore: getJobDisplaySnapshotStore(container),
+    }),
   });
 });
 
@@ -172,9 +208,15 @@ router.get('/:jobId', (req: Request, res: Response): void => {
     return;
   }
   const compact = parseBooleanQuery(req.query.compact);
+  const snapshotStore = getJobDisplaySnapshotStore(container);
   res.json({
     success: true,
-    data: { job: decorateJobForResponse(job, getLiveBootstrapSession(container), { compact }) },
+    data: {
+      job: decorateJobForResponse(job, getLiveBootstrapSession(container), {
+        compact,
+        displaySnapshot: buildJobDisplaySnapshotSummary(job, snapshotStore),
+      }),
+    },
   });
 });
 
@@ -197,6 +239,7 @@ router.post('/bootstrap', validate(BootstrapJobBody), (req: Request, res: Respon
       jobId: job.id,
       statusUrl: buildJobStatusUrl(req, job.id),
       eventsUrl: buildJobProcessEventsUrl(req, job.id),
+      displaySnapshotUrl: buildJobDisplaySnapshotUrl(req, job.id),
       dashboardUrl: buildJobsApiOrigin(req),
     },
   });
@@ -221,6 +264,7 @@ router.post('/rescan', validate(RescanJobBody), (req: Request, res: Response): v
       jobId: job.id,
       statusUrl: buildJobStatusUrl(req, job.id),
       eventsUrl: buildJobProcessEventsUrl(req, job.id),
+      displaySnapshotUrl: buildJobDisplaySnapshotUrl(req, job.id),
       dashboardUrl: buildJobsApiOrigin(req),
     },
   });
@@ -243,6 +287,13 @@ export function buildJobStatusUrl(request: Request, jobId: string): string {
 
 export function buildJobProcessEventsUrl(request: Request, jobId: string): string {
   return `${buildJobsApiOrigin(request)}${ALEMBIC_JOB_PROCESS_EVENTS_PATH.replace(
+    ':jobId',
+    encodeURIComponent(jobId)
+  )}`;
+}
+
+export function buildJobDisplaySnapshotUrl(request: Request, jobId: string): string {
+  return `${buildJobsApiOrigin(request)}${ALEMBIC_JOB_DISPLAY_SNAPSHOT_PATH.replace(
     ':jobId',
     encodeURIComponent(jobId)
   )}`;
@@ -272,6 +323,54 @@ export function buildJobProcessEventsResponse(options: {
   });
 }
 
+export interface JobDisplaySnapshotResponse {
+  persisted: boolean;
+  snapshot: JobDisplaySnapshot;
+  snapshotPath: string | null;
+  validation: ReturnType<typeof validateJobDisplaySnapshot>;
+}
+
+export function buildJobDisplaySnapshotResponse(options: {
+  job: DaemonJobRecord;
+  recorder: ReturnType<typeof getJobProcessEventRecorder>;
+  snapshotStore: JobDisplaySnapshotStore;
+}): JobDisplaySnapshotResponse {
+  const persisted = options.snapshotStore.read(options.job.id);
+  if (persisted) {
+    return {
+      persisted: true,
+      snapshot: persisted.snapshot,
+      snapshotPath: persisted.absolutePath,
+      validation: persisted.validation,
+    };
+  }
+
+  const events = options.recorder.list(options.job.id, {
+    includeHidden: true,
+    limit: options.recorder.maxEventsPerJob,
+  });
+  if (events.retainedCount > 0 || events.events.length > 0) {
+    const written = options.snapshotStore.writeFromJob({
+      job: options.job,
+      recorder: options.recorder,
+    });
+    return {
+      persisted: true,
+      snapshot: written.snapshot,
+      snapshotPath: written.absolutePath,
+      validation: written.validation,
+    };
+  }
+
+  const snapshot = options.snapshotStore.buildIncompleteSnapshot({ job: options.job });
+  return {
+    persisted: false,
+    snapshot,
+    snapshotPath: null,
+    validation: validateJobDisplaySnapshot(snapshot),
+  };
+}
+
 router.post('/:jobId/cancel', validate(CancelJobBody), (req: Request, res: Response): void => {
   if (!rejectInvalidProvidedDaemonToken(req, res)) {
     return;
@@ -295,7 +394,7 @@ router.post('/:jobId/cancel', validate(CancelJobBody), (req: Request, res: Respo
 export function decorateJobForResponse(
   job: DaemonJobRecord,
   liveSession?: Record<string, unknown> | null,
-  options: { compact?: boolean } = {}
+  options: { compact?: boolean; displaySnapshot?: Record<string, unknown> | null } = {}
 ): DaemonJobApiRecord {
   const matchingLiveSession = getMatchingLiveBootstrapSession(job, liveSession);
   const embeddedSession = getEmbeddedBootstrapSession(job);
@@ -309,8 +408,25 @@ export function decorateJobForResponse(
     ...base,
     status,
     ...(options.compact ? { compact: true } : {}),
+    ...(options.displaySnapshot !== undefined ? { displaySnapshot: options.displaySnapshot } : {}),
     ...(progress ? { progress } : {}),
     ...(summary ? { summary } : {}),
+  };
+}
+
+function buildJobDisplaySnapshotSummary(
+  job: DaemonJobRecord,
+  snapshotStore: JobDisplaySnapshotStore
+): Record<string, unknown> {
+  const existing = snapshotStore.read(job.id);
+  const summary = summarizeJobDisplaySnapshotForApi(existing?.snapshot);
+  if (summary) {
+    return summary;
+  }
+  return {
+    available: false,
+    reason: 'snapshot_missing',
+    ref: buildJobDisplaySnapshotApiRef(job.id),
   };
 }
 

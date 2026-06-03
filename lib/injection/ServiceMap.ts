@@ -77,6 +77,7 @@ import type { FeedbackCollector, QualityScorer } from '@alembic/core/service/qua
 import type { RecipeCandidateValidator, RecipeParser } from '@alembic/core/service/recipe';
 import type { IndexingPipeline, VectorService, VectorStore } from '@alembic/core/vector';
 import type { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
+import type { JobDisplaySnapshotStore } from '../daemon/JobDisplaySnapshotStore.js';
 import type { JobProcessEventRecorder } from '../daemon/JobProcessEventRecorder.js';
 // ── Core Types ──
 import type Constitution from '../governance/constitution/Constitution.js';
@@ -112,6 +113,7 @@ export interface ServiceMap {
   eventBus: EventBus;
   bootstrapTaskManager: BootstrapTaskManager;
   intentEpisodeStore: IntentEpisodeStore;
+  jobDisplaySnapshotStore: JobDisplaySnapshotStore;
   jobProcessEventRecorder: JobProcessEventRecorder;
   jobStore: JobStore;
   knowledgeRepository: KnowledgeRepository;

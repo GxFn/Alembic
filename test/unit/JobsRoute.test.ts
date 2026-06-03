@@ -1,8 +1,14 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { DaemonJobRecord } from '@alembic/core/daemon';
 import type { Request } from 'express';
 import { describe, expect, test } from 'vitest';
+import { JobDisplaySnapshotStore } from '../../lib/daemon/JobDisplaySnapshotStore.js';
 import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
 import {
+  buildJobDisplaySnapshotResponse,
+  buildJobDisplaySnapshotUrl,
   buildJobProcessArtifactUrl,
   buildJobProcessEventsResponse,
   buildJobProcessEventsUrl,
@@ -22,6 +28,9 @@ describe('jobs route URL helpers', () => {
     );
     expect(buildJobProcessEventsUrl(request, 'bootstrap_abc')).toBe(
       'http://127.0.0.1:39127/api/v1/jobs/bootstrap_abc/events'
+    );
+    expect(buildJobDisplaySnapshotUrl(request, 'bootstrap_abc')).toBe(
+      'http://127.0.0.1:39127/api/v1/jobs/bootstrap_abc/display-snapshot'
     );
     expect(buildJobProcessArtifactUrl(request, 'bootstrap_abc', 'llm-input.md')).toBe(
       'http://127.0.0.1:39127/api/v1/jobs/bootstrap_abc/artifacts/llm-input.md'
@@ -119,6 +128,93 @@ describe('jobs process event response', () => {
           reasoningContentOmitted: true,
           visibleTextChars: 394,
         }),
+      }),
+    ]);
+  });
+});
+
+describe('jobs display snapshot response', () => {
+  test('persists display snapshots from retained process events for restart-safe readback', () => {
+    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-jobs-snapshot-'));
+    const recorder = new JobProcessEventRecorder({ maxEventsPerJob: 5 });
+    const snapshotStore = new JobDisplaySnapshotStore({ dataRoot });
+    const job = makeJob({
+      dataRoot,
+      id: 'bootstrap_snapshot',
+      projectRoot: dataRoot,
+      status: 'running',
+    });
+    recorder.record({
+      content: {
+        mimeType: 'text/plain',
+        role: 'assistant',
+        text: 'Timeline response summary',
+      },
+      jobId: job.id,
+      kind: 'llm.output',
+      metadata: {
+        findings: [{ sourceRef: 'lib/index.ts:3', title: 'Source-backed finding' }],
+        sourceRefs: ['lib/index.ts:3'],
+      },
+      phase: 'dimension-output',
+      summary: 'LLM output retained',
+      title: 'LLM output received',
+    });
+
+    const response = buildJobDisplaySnapshotResponse({ job, recorder, snapshotStore });
+
+    expect(response.persisted).toBe(true);
+    expect(response.validation.valid).toBe(true);
+    expect(response.snapshotPath?.startsWith(path.join(dataRoot, '.asd'))).toBe(true);
+    expect(response.snapshotPath ? fs.existsSync(response.snapshotPath) : false).toBe(true);
+    expect(response.snapshot.snapshot.ref).toBe('/api/v1/jobs/bootstrap_snapshot/display-snapshot');
+    expect(response.snapshot.llmIo.entries).toEqual([
+      expect.objectContaining({
+        eventId: 'bootstrap_snapshot_process_0001',
+        kind: 'llm.output',
+        title: 'LLM output received',
+      }),
+    ]);
+    expect(response.snapshot.sourceRefs.map((item) => item.sourceRef)).toContain('lib/index.ts:3');
+    expect(response.snapshot.findings).toEqual([
+      expect.objectContaining({
+        sourceRef: 'lib/index.ts:3',
+        title: 'Source-backed finding',
+      }),
+    ]);
+    expect(snapshotStore.read(job.id)?.snapshot.snapshot.checksum).toBe(
+      response.snapshot.snapshot.checksum
+    );
+  });
+
+  test('returns explicit evidenceIncomplete warnings when no durable event evidence exists', () => {
+    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-jobs-snapshot-missing-'));
+    const recorder = new JobProcessEventRecorder({ maxEventsPerJob: 5 });
+    const snapshotStore = new JobDisplaySnapshotStore({ dataRoot });
+    const job = makeJob({
+      completedAt: '2026-05-08T00:01:00.000Z',
+      dataRoot,
+      id: 'bootstrap_missing_snapshot',
+      projectRoot: dataRoot,
+      status: 'completed',
+      updatedAt: '2026-05-08T00:01:00.000Z',
+    });
+
+    const response = buildJobDisplaySnapshotResponse({ job, recorder, snapshotStore });
+
+    expect(response.persisted).toBe(false);
+    expect(response.snapshotPath).toBeNull();
+    expect(response.validation.valid).toBe(true);
+    expect(response.snapshot.evidenceIncomplete).toEqual([
+      expect.objectContaining({
+        reason: 'events_missing_after_restart',
+        section: 'events',
+      }),
+    ]);
+    expect(response.snapshot.warnings).toEqual([
+      expect.objectContaining({
+        evidenceIncompleteReason: 'events_missing_after_restart',
+        severity: 'warning',
       }),
     ]);
   });
