@@ -322,6 +322,67 @@ describe('ProjectRuntimeControl', () => {
     ).toBe(false);
   });
 
+  test('publishes runtime-control source of truth as read-only diagnostics', async () => {
+    useTempAlembicHome();
+    const projectRoot = makeProjectRoot();
+    const entry = ProjectRegistry.register(projectRoot, true);
+    const control = new ProjectRuntimeControl();
+    await control.selectProject({ projectId: entry.id });
+    const beforeState = control.readState();
+
+    const snapshot = await control.snapshot();
+
+    expect(control.readState()).toEqual(beforeState);
+    expect(snapshot.sourceOfTruth).toMatchObject({
+      contractVersion: 1,
+      owner: 'alembic',
+      readiness: {
+        ready: false,
+        reasonCode: 'daemon-not-running',
+        status: 'stopped',
+      },
+      route: 'project-runtime-control',
+      targetProject: {
+        activeRuntime: false,
+        projectId: entry.id,
+        ready: false,
+        selected: true,
+        status: 'stopped',
+      },
+    });
+    expect(snapshot.sourceOfTruth.operation).toEqual({
+      explicitRuntimeActionRequired: true,
+      implicitRuntimeActionAllowed: false,
+      mode: 'diagnostics-read',
+      readOnly: true,
+    });
+    expect(snapshot.sourceOfTruth.writePolicy).toMatchObject({
+      activeStateWriteAllowed: false,
+      daemonLifecycleWriteAllowed: false,
+      projectScopeRegistryWriteAllowed: false,
+      selectedStateWriteAllowed: false,
+    });
+    expect(snapshot.sourceOfTruth.runtimeControl).toMatchObject({
+      activeProject: null,
+      activeReadyProject: null,
+      activeStateTrusted: false,
+      projects: { ready: 0, total: 1 },
+      readOnly: true,
+      selectedProject: {
+        projectId: entry.id,
+        selected: true,
+        status: 'stopped',
+      },
+      statePath: getProjectRuntimeControlStatePath(),
+    });
+    expect(snapshot.sourceOfTruth.failure).toMatchObject({
+      blockedFallbacks: ['plugin-selected-root-fallback', 'implicit-runtime-control-write'],
+      observedSource: 'alembic-source-of-truth',
+      reasonCode: 'daemon-not-running',
+      retryable: true,
+    });
+  });
+
   test('keeps missing registered projects visible instead of deleting them', async () => {
     useTempAlembicHome();
     const projectRoot = makeProjectRoot();

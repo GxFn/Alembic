@@ -36,6 +36,10 @@ import {
   resolveAlembicWorkspace,
 } from '../project-scope/ProjectScopeRegistry.js';
 import { type DaemonStatus, DaemonSupervisor } from './DaemonSupervisor.js';
+import {
+  buildProjectRuntimeControlSourceOfTruth,
+  type ProjectRuntimeSourceOfTruth,
+} from './ProjectRuntimeSourceOfTruth.js';
 
 export type {
   ProjectConnectionState,
@@ -54,6 +58,7 @@ export type ProjectRuntimeControlSnapshot = Omit<
   activeRuntimeProject: ProjectRuntimeScopeSummary | null;
   projects: ProjectRuntimeScopeSummary[];
   selectedProject: ProjectRuntimeScopeSummary | null;
+  sourceOfTruth: ProjectRuntimeSourceOfTruth;
 };
 
 const DEFAULT_JOB_STATUSES: DaemonJobStatus[] = [
@@ -175,6 +180,13 @@ export class ProjectRuntimeControl {
       generatedAt: new Date().toISOString(),
       projects,
       selectedProject,
+      sourceOfTruth: buildProjectRuntimeControlSourceOfTruth({
+        activeRuntimeProject,
+        projects,
+        selectedProject,
+        state,
+        statePath: this.statePath,
+      }),
       state,
     };
   }

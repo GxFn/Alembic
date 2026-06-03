@@ -38,6 +38,16 @@ vi.mock('../../lib/project-scope/ProjectScopeRegistry.js', () => ({
 }));
 
 vi.mock('@alembic/core/workspace', () => ({
+  DEFAULT_FOLDER_NAMES: {
+    package: {
+      config: 'config',
+      dashboard: 'dashboard',
+      injectableSkills: 'injectable-skills',
+      internalSkills: 'skills',
+      resources: 'resources',
+      templates: 'templates',
+    },
+  },
   getProjectRegistryDir: vi.fn(() => '/tmp/alembic-registry'),
   resolveProjectRoot: vi.fn(() => '/tmp/alembic-project'),
   WorkspaceResolver: {
@@ -99,6 +109,7 @@ describe('daemon health resident service contract', () => {
     });
     const data = response.body.data as Record<string, unknown>;
     const residentService = data.residentService as Record<string, unknown>;
+    const projectRuntimeSourceOfTruth = data.projectRuntimeSourceOfTruth as Record<string, unknown>;
     const serviceScope = residentService.serviceScope as Record<string, unknown>;
     const diagnosticPaths = serviceScope.diagnosticPaths as Record<string, unknown>;
     const projectIdentity = serviceScope.projectIdentity as Record<string, unknown>;
@@ -147,6 +158,47 @@ describe('daemon health resident service contract', () => {
       owner: 'alembic-plugin',
     });
     expect((data.capabilities as Record<string, unknown>).residentSearch).toBeDefined();
+    expect(projectRuntimeSourceOfTruth).toMatchObject({
+      contractVersion: 1,
+      owner: 'alembic',
+      projectIdentity: {
+        dataRoot: '/tmp/alembic-data',
+        dataRootSource: 'ghost-registry',
+        projectId: 'project-route',
+        projectRoot: '/tmp/alembic-project',
+      },
+      readiness: {
+        ready: true,
+        reasonCode: 'ready',
+        status: 'ready',
+      },
+      route: 'daemon-health',
+    });
+    expect(projectRuntimeSourceOfTruth.operation).toEqual({
+      explicitRuntimeActionRequired: true,
+      implicitRuntimeActionAllowed: false,
+      mode: 'diagnostics-read',
+      readOnly: true,
+    });
+    expect(projectRuntimeSourceOfTruth.writePolicy).toMatchObject({
+      activeStateWriteAllowed: false,
+      daemonLifecycleWriteAllowed: false,
+      projectScopeRegistryWriteAllowed: false,
+      selectedStateWriteAllowed: false,
+      writeOwner: 'alembic',
+    });
+    expect(projectRuntimeSourceOfTruth.runtimeControl).toMatchObject({
+      activeMatchesCurrentProject: false,
+      readOnly: true,
+      selectedMatchesCurrentProject: false,
+      statePath: '/tmp/alembic-registry/runtime-control.json',
+    });
+    expect(
+      (
+        (projectRuntimeSourceOfTruth.explicitActions as Record<string, string[]>).runtimeControl ??
+        []
+      ).sort()
+    ).toEqual(['DELETE /api/v1/projects/select', 'POST /api/v1/projects/select']);
     expect(
       (data.capabilities as Record<string, Record<string, unknown>>).fileMonitor
     ).toMatchObject({

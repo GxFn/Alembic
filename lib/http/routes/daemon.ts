@@ -24,6 +24,8 @@ import {
   type DaemonFileMonitorRuntimeStatus,
   isFileMonitorRuntimeAvailable,
 } from '../../daemon/FileMonitorStatus.js';
+import { ProjectRuntimeControl } from '../../daemon/ProjectRuntimeControl.js';
+import { buildDaemonProjectRuntimeSourceOfTruth } from '../../daemon/ProjectRuntimeSourceOfTruth.js';
 import { buildAlembicRuntimeBoundary } from '../../daemon/RuntimeBoundary.js';
 import { readLatestSchemaMigrationVersion } from '../../infrastructure/database/SqliteDatabaseAccess.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
@@ -116,6 +118,17 @@ router.get('/health', (req, res) => {
     projectIdentity,
     statePath: `${resolver.runtimeDir}/daemon.json`,
   });
+  const runtimeControl = new ProjectRuntimeControl();
+  const projectRuntimeSourceOfTruth = buildDaemonProjectRuntimeSourceOfTruth({
+    capabilities,
+    dashboardUrl,
+    mode,
+    origin,
+    projectIdentity,
+    runtimeControlState: runtimeControl.readState(),
+    runtimeControlStatePath: runtimeControl.statePath,
+    statePath: `${resolver.runtimeDir}/daemon.json`,
+  });
   const healthData = createAlembicRuntimeHealthData({
     capabilities,
     dashboardUrl,
@@ -130,6 +143,7 @@ router.get('/health', (req, res) => {
     success: true,
     data: {
       ...healthData,
+      projectRuntimeSourceOfTruth,
       residentService,
       runtimeBoundary,
       capabilities: {

@@ -30,6 +30,7 @@ router.get('/current', async (_req: Request, res: Response): Promise<void> => {
     data: {
       activeRuntimeProject: snapshot.activeRuntimeProject,
       selectedProject: snapshot.selectedProject,
+      sourceOfTruth: snapshot.sourceOfTruth,
       state: snapshot.state,
     },
   });
