@@ -10,6 +10,11 @@ import express, { type Request, type Response } from 'express';
 import type { z } from 'zod';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
+import type {
+  DecisionRegisterSearchableDocument,
+  DecisionRegisterSearchableView,
+  DecisionRegisterStore,
+} from '../../service/task/DecisionRegisterStore.js';
 import {
   createHostIntentContextMeta,
   type HostIntentContextMeta,
@@ -130,6 +135,29 @@ interface ResidentSearchMeta {
   intentEvidence?: IntentEvidence;
   intentSearchPlan?: IntentSearchPlan;
   primeInjectionPackage?: PrimeInjectionPackage;
+  decisionRegister: {
+    acceptedCount: number;
+    acceptedDecisionRefs: string[];
+    auditExcludedCount: number;
+    available: boolean;
+    defaultLifecycle: 'active-effective-only';
+    endpoint: '/api/v1/decision-register/searchable';
+    excludedStatuses: string[];
+    vectorAdmission: 'accepted-only';
+  };
+  feedback: {
+    observeOnly: true;
+    recorder: 'HitRecorder';
+    supportedSignals: string[];
+    version: 1;
+  };
+  retrievalQuality: {
+    decisionRefCount: number;
+    feedbackSignalCount: number;
+    relationEvidenceCount: number;
+    sourceRefCoverage: number;
+    version: 1;
+  };
   durationMs: number;
   resultCount: number;
   topScore: number | null;
@@ -237,6 +265,7 @@ async function handleResidentSearch(
     rawQuery: input.q,
   });
   const query = intentSearchPlan.executableQuery || hostIntentContext.userQuery || input.q;
+  const decisionRegisterView = readDecisionRegisterSearchableView(container, input, query);
 
   // 所有模式优先通过 SearchEngine（含 auto/bm25/semantic/keyword/ranking）
   try {
@@ -257,17 +286,19 @@ async function handleResidentSearch(
           }
         : {}),
     })) as SearchResponse & SearchRouteResult;
+    const mergedResult = mergeDecisionRegisterResults(result, decisionRegisterView, input);
     const durationMs = Math.round(performance.now() - startedAt);
     const searchMeta = await buildResidentSearchMeta({
       container,
+      decisionRegisterView,
       durationMs,
       hostIntent: hostIntentMeta,
       intentSearchPlan,
       query,
       requestedMode: input.mode,
-      result,
+      result: mergedResult,
     });
-    return void res.json({ success: true, data: { ...result, query, searchMeta } });
+    return void res.json({ success: true, data: { ...mergedResult, query, searchMeta } });
   } catch (err: unknown) {
     logger.warn('SearchEngine 搜索失败，降级到传统搜索', {
       mode: input.mode,
@@ -328,6 +359,23 @@ async function handleResidentSearch(
     }
   }
 
+  if (decisionRegisterView && shouldReadDecisionRegister(input.type)) {
+    const documents = decisionRegisterView.documents.filter(
+      (document) => document.acceptedForRetrieval
+    );
+    if (documents.length > 0) {
+      results.decisions = {
+        data: documents.map(decisionDocumentToSearchItem),
+        pagination: {
+          page: input.page,
+          pageSize: input.limit,
+          total: documents.length,
+          pages: 1,
+        },
+      };
+    }
+  }
+
   const totalResults = Object.values(results).reduce(
     (sum, r) =>
       sum + ((r.pagination as Record<string, number> | undefined)?.total || r.data?.length || 0),
@@ -343,8 +391,10 @@ async function handleResidentSearch(
       totalResults,
       searchMeta: await buildLegacySearchMeta({
         container,
+        decisionRegisterView,
         hostIntent: hostIntentMeta,
         intentSearchPlan,
+        items: legacyDecisionRegisterItems(decisionRegisterView, input),
         mode: input.mode,
         resultCount: totalResults,
       }),
@@ -355,6 +405,7 @@ async function handleResidentSearch(
 
 async function buildResidentSearchMeta({
   container,
+  decisionRegisterView,
   durationMs,
   hostIntent,
   intentSearchPlan,
@@ -363,6 +414,7 @@ async function buildResidentSearchMeta({
   result,
 }: {
   container: ReturnType<typeof getServiceContainer>;
+  decisionRegisterView?: DecisionRegisterSearchableView | null;
   durationMs: number;
   hostIntent?: HostIntentContextMeta | null;
   intentSearchPlan?: IntentSearchPlan | null;
@@ -401,6 +453,7 @@ async function buildResidentSearchMeta({
     typeof coreMeta?.durationMs === 'number' ? coreMeta.durationMs : durationMs;
   const intentEvidence = await buildIntentEvidence({
     actualMode,
+    decisionRegister: decisionRegisterContext(decisionRegisterView),
     intentSearchPlan,
     items: result.items ?? [],
     relationProvider: getOptionalRelationProvider(container),
@@ -410,6 +463,7 @@ async function buildResidentSearchMeta({
     vectorUsed,
   });
   const primeInjectionPackage = buildPrimeInjectionPackage({
+    decisionRegister: decisionRegisterContext(decisionRegisterView),
     hostIntent,
     intentEvidence,
     intentSearchPlan,
@@ -426,6 +480,7 @@ async function buildResidentSearchMeta({
     vectorAvailable: residentVector.available,
     vectorUsed,
   });
+  const decisionRegister = buildDecisionRegisterMeta(decisionRegisterView);
 
   return {
     route: 'resident-search',
@@ -454,6 +509,9 @@ async function buildResidentSearchMeta({
     ...(intentSearchPlan ? { intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan) } : {}),
     intentEvidence,
     primeInjectionPackage,
+    decisionRegister,
+    feedback: primeInjectionPackage.feedback,
+    retrievalQuality: primeInjectionPackage.retrievalQuality,
     durationMs: metaDurationMs,
     resultCount,
     topScore: extractTopScore(result.items ?? []),
@@ -469,21 +527,26 @@ async function buildResidentSearchMeta({
 
 async function buildLegacySearchMeta({
   container,
+  decisionRegisterView,
   hostIntent,
   intentSearchPlan,
+  items,
   mode,
   resultCount,
 }: {
   container: ReturnType<typeof getServiceContainer>;
+  decisionRegisterView?: DecisionRegisterSearchableView | null;
   hostIntent?: HostIntentContextMeta | null;
   intentSearchPlan?: IntentSearchPlan | null;
+  items?: SearchRouteItem[];
   mode: string;
   resultCount: number;
 }): Promise<ResidentSearchMeta> {
   const degraded = mode === 'semantic' || Boolean(hostIntent?.degraded);
   const intentEvidence = await buildIntentEvidence({
+    decisionRegister: decisionRegisterContext(decisionRegisterView),
     intentSearchPlan,
-    items: [],
+    items: items ?? [],
     relationProvider: getOptionalRelationProvider(container),
     requestedMode: mode,
     semanticUsed: false,
@@ -491,10 +554,11 @@ async function buildLegacySearchMeta({
     vectorUsed: false,
   });
   const primeInjectionPackage = buildPrimeInjectionPackage({
+    decisionRegister: decisionRegisterContext(decisionRegisterView),
     hostIntent,
     intentEvidence,
     intentSearchPlan,
-    items: [],
+    items: items ?? [],
     search: {
       actualMode: 'legacy-fallback',
       filteredCount: 0,
@@ -507,6 +571,7 @@ async function buildLegacySearchMeta({
     vectorAvailable: false,
     vectorUsed: false,
   });
+  const decisionRegister = buildDecisionRegisterMeta(decisionRegisterView);
   return {
     route: 'resident-search',
     service: 'alembic-daemon',
@@ -533,6 +598,9 @@ async function buildLegacySearchMeta({
     ...(intentSearchPlan ? { intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan) } : {}),
     intentEvidence,
     primeInjectionPackage,
+    decisionRegister,
+    feedback: primeInjectionPackage.feedback,
+    retrievalQuality: primeInjectionPackage.retrievalQuality,
     durationMs: 0,
     resultCount,
     topScore: null,
@@ -664,6 +732,149 @@ function getOptionalIntentEpisodeStore(
   } catch {
     return null;
   }
+}
+
+function readDecisionRegisterSearchableView(
+  container: ReturnType<typeof getServiceContainer>,
+  input: ResidentSearchInput,
+  query: string
+): DecisionRegisterSearchableView | null {
+  if (!shouldReadDecisionRegister(input.type)) {
+    return null;
+  }
+  try {
+    const store = container.get('decisionRegisterStore') as DecisionRegisterStore | null;
+    if (!store || typeof store.searchable !== 'function') {
+      return null;
+    }
+    return store.searchable({
+      limit: input.limit,
+      query,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function shouldReadDecisionRegister(type: string): boolean {
+  return type === 'all' || type === 'decision' || type === 'decision-register';
+}
+
+function isDecisionRegisterOnly(type: string): boolean {
+  return type === 'decision' || type === 'decision-register';
+}
+
+function mergeDecisionRegisterResults(
+  result: SearchRouteResult,
+  view: DecisionRegisterSearchableView | null,
+  input: ResidentSearchInput
+): SearchRouteResult {
+  if (!view || !shouldReadDecisionRegister(input.type)) {
+    return result;
+  }
+  const decisionItems = view.documents
+    .filter((document) => document.acceptedForRetrieval)
+    .map(decisionDocumentToSearchItem);
+  if (decisionItems.length === 0 && !isDecisionRegisterOnly(input.type)) {
+    return result;
+  }
+  const existingItems = Array.isArray(result.items) ? result.items : [];
+  const mergedItems = dedupeSearchItems([
+    ...decisionItems,
+    ...(isDecisionRegisterOnly(input.type) ? [] : existingItems),
+  ]).slice(0, input.limit);
+  const existingTotal = typeof result.total === 'number' ? result.total : existingItems.length;
+  return {
+    ...result,
+    items: mergedItems,
+    total: isDecisionRegisterOnly(input.type)
+      ? decisionItems.length
+      : existingTotal + decisionItems.length,
+  };
+}
+
+function legacyDecisionRegisterItems(
+  view: DecisionRegisterSearchableView | null,
+  input: ResidentSearchInput
+): SearchRouteItem[] {
+  if (!view || !shouldReadDecisionRegister(input.type)) {
+    return [];
+  }
+  return view.documents
+    .filter((document) => document.acceptedForRetrieval)
+    .map(decisionDocumentToSearchItem)
+    .slice(0, input.limit);
+}
+
+function decisionDocumentToSearchItem(
+  document: DecisionRegisterSearchableDocument
+): SearchRouteItem {
+  return {
+    acceptedForRetrieval: document.acceptedForRetrieval,
+    content: document.content,
+    decision: document.decision,
+    decisionId: document.decisionId,
+    id: document.id,
+    kind: document.kind,
+    knowledgeType: document.knowledgeType,
+    metadata: document.metadata,
+    retrievalLifecycle: document.retrievalLifecycle,
+    score: document.score,
+    sourceRefs: document.sourceRefs,
+    status: document.status,
+    tags: document.tags,
+    title: document.title,
+    trigger: document.trigger,
+    whySelected: document.whySelected,
+  };
+}
+
+function dedupeSearchItems(items: SearchRouteItem[]): SearchRouteItem[] {
+  const seen = new Set<string>();
+  const output: SearchRouteItem[] = [];
+  for (const item of items) {
+    const id = typeof item.id === 'string' ? item.id : '';
+    const key = id || JSON.stringify(item);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    output.push(item);
+  }
+  return output;
+}
+
+function decisionRegisterContext(view: DecisionRegisterSearchableView | null | undefined) {
+  if (!view) {
+    return null;
+  }
+  return {
+    acceptedDecisionRefs: view.documents
+      .filter((document) => document.acceptedForRetrieval)
+      .map((document) => document.id),
+    auditExcludedCount: view.auditExcludedCount,
+    available: true,
+  };
+}
+
+function buildDecisionRegisterMeta(
+  view: DecisionRegisterSearchableView | null | undefined
+): ResidentSearchMeta['decisionRegister'] {
+  const acceptedDecisionRefs =
+    view?.documents
+      .filter((document) => document.acceptedForRetrieval)
+      .map((document) => document.id)
+      .slice(0, 16) ?? [];
+  return {
+    acceptedCount: acceptedDecisionRefs.length,
+    acceptedDecisionRefs,
+    auditExcludedCount: view?.auditExcludedCount ?? 0,
+    available: Boolean(view),
+    defaultLifecycle: 'active-effective-only',
+    endpoint: '/api/v1/decision-register/searchable',
+    excludedStatuses: ['revoked', 'deleted'],
+    vectorAdmission: 'accepted-only',
+  };
 }
 
 function inferLegacySemanticUsageWithoutRrf(actualMode: string): boolean {

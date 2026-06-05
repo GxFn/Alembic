@@ -38,6 +38,22 @@ export interface PrimeInjectionOmission {
 }
 
 export interface PrimeInjectionPackage {
+  decisionRegister: {
+    acceptedDecisionRefs: string[];
+    auditExcludedCount: number;
+    available: boolean;
+    defaultLifecycle: 'active-effective-only';
+    excludedStatuses: string[];
+    route: '/api/v1/decision-register/searchable';
+    source: 'alembic-decision-register';
+    vectorAdmission: 'accepted-only';
+  };
+  feedback: {
+    observeOnly: true;
+    recorder: 'HitRecorder';
+    supportedSignals: string[];
+    version: 1;
+  };
   injection: {
     degradedReasons: string[];
     omittedCount: number;
@@ -59,6 +75,14 @@ export interface PrimeInjectionPackage {
   relations: {
     evidence: RelationEvidence[];
     omitted: string[];
+  };
+  retrievalQuality: {
+    decisionRefCount: number;
+    feedbackSignalCount: number;
+    relationEvidenceCount: number;
+    selectedWithSourceRefs: number;
+    sourceRefCoverage: number;
+    version: 1;
   };
   search: {
     actualMode?: string;
@@ -99,6 +123,11 @@ interface PrimeInjectionItem {
 }
 
 export interface BuildPrimeInjectionPackageOptions {
+  decisionRegister?: {
+    acceptedDecisionRefs?: string[];
+    auditExcludedCount?: number;
+    available?: boolean;
+  } | null;
   hostIntent?: {
     confidence?: number;
     degraded?: boolean;
@@ -133,6 +162,14 @@ export function buildPrimeInjectionPackage(
   const items = (options.items ?? []).slice(0, options.maxSelected ?? MAX_SELECTED);
   const selectedKnowledge = buildSelectedKnowledge(items, plan, evidence);
   const omitted = buildOmitted(options, selectedKnowledge);
+  const decisionRegister = buildDecisionRegisterMeta(options, selectedKnowledge);
+  const feedback = buildFeedbackMeta();
+  const retrievalQuality = buildRetrievalQualityMeta({
+    evidence,
+    feedback,
+    selectedKnowledge,
+    decisionRegister,
+  });
   const degradedReasons = uniqueStrings([
     ...(plan?.degradedReasons ?? []),
     ...(evidence?.degradedReasons ?? []),
@@ -156,6 +193,8 @@ export function buildPrimeInjectionPackage(
   ]).map(redactRef);
 
   return {
+    decisionRegister,
+    feedback,
     injection: {
       degradedReasons,
       omittedCount: omitted.length,
@@ -181,6 +220,7 @@ export function buildPrimeInjectionPackage(
       evidence: (evidence?.relationEvidence ?? []).slice(0, 12),
       omitted: relationOmissions(evidence),
     },
+    retrievalQuality,
     search: {
       ...(options.search?.actualMode ? { actualMode: options.search.actualMode } : {}),
       ...(typeof options.search?.filteredCount === 'number'
@@ -215,6 +255,67 @@ export function buildPrimeInjectionPackage(
         : {}),
       ...(typeof options.vectorUsed === 'boolean' ? { vectorUsed: options.vectorUsed } : {}),
     },
+    version: 1,
+  };
+}
+
+function buildDecisionRegisterMeta(
+  options: BuildPrimeInjectionPackageOptions,
+  selectedKnowledge: PrimeSelectedKnowledge[]
+): PrimeInjectionPackage['decisionRegister'] {
+  const selectedDecisionRefs = selectedKnowledge
+    .filter(
+      (item) =>
+        item.kind === 'decision' ||
+        item.knowledgeType === 'decision-register' ||
+        item.itemId.startsWith('decision:')
+    )
+    .map((item) => item.itemId);
+  return {
+    acceptedDecisionRefs: uniqueStrings([
+      ...(options.decisionRegister?.acceptedDecisionRefs ?? []),
+      ...selectedDecisionRefs,
+    ]).slice(0, 16),
+    auditExcludedCount: Math.max(0, Math.floor(options.decisionRegister?.auditExcludedCount ?? 0)),
+    available: options.decisionRegister?.available === true || selectedDecisionRefs.length > 0,
+    defaultLifecycle: 'active-effective-only',
+    excludedStatuses: ['revoked', 'deleted'],
+    route: '/api/v1/decision-register/searchable',
+    source: 'alembic-decision-register',
+    vectorAdmission: 'accepted-only',
+  };
+}
+
+function buildFeedbackMeta(): PrimeInjectionPackage['feedback'] {
+  return {
+    observeOnly: true,
+    recorder: 'HitRecorder',
+    supportedSignals: ['searchHit', 'view', 'adoption', 'application', 'guardHit'],
+    version: 1,
+  };
+}
+
+function buildRetrievalQualityMeta({
+  decisionRegister,
+  evidence,
+  feedback,
+  selectedKnowledge,
+}: {
+  decisionRegister: PrimeInjectionPackage['decisionRegister'];
+  evidence: IntentEvidence | null;
+  feedback: PrimeInjectionPackage['feedback'];
+  selectedKnowledge: PrimeSelectedKnowledge[];
+}): PrimeInjectionPackage['retrievalQuality'] {
+  const selectedWithSourceRefs = selectedKnowledge.filter(
+    (item) => item.sourceRefs.length > 0
+  ).length;
+  return {
+    decisionRefCount: decisionRegister.acceptedDecisionRefs.length,
+    feedbackSignalCount: feedback.supportedSignals.length,
+    relationEvidenceCount: evidence?.relationEvidence.length ?? 0,
+    selectedWithSourceRefs,
+    sourceRefCoverage:
+      selectedKnowledge.length === 0 ? 0 : selectedWithSourceRefs / selectedKnowledge.length,
     version: 1,
   };
 }

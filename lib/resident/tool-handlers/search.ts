@@ -12,6 +12,11 @@
  */
 
 import { groupByKind, type SlimSearchResult, slimSearchResult } from '@alembic/core/search';
+import type {
+  DecisionRegisterSearchableDocument,
+  DecisionRegisterSearchableView,
+  DecisionRegisterStore,
+} from '../../service/task/DecisionRegisterStore.js';
 import {
   createHostIntentContextMeta,
   normalizeHostIntentContext,
@@ -141,10 +146,12 @@ export async function search(ctx: McpContext, args: SearchArgs) {
   });
 
   let items = (result?.items || []) as SearchResultItem[];
+  const decisionRegisterView = readDecisionRegisterSearchableView(ctx, kind, query, limit);
   const actualMode = result?.mode || mode;
 
   // ── Kind 过滤 + 截断 ──
   items = filterByKind(items, kind);
+  items = mergeDecisionRegisterItems(items, decisionRegisterView, kind);
   items = items.slice(0, limit);
 
   // ── 统一投影: slimSearchResult() ──
@@ -157,6 +164,7 @@ export async function search(ctx: McpContext, args: SearchArgs) {
   );
   const intentEvidence = await buildIntentEvidence({
     actualMode,
+    decisionRegister: decisionRegisterContext(decisionRegisterView),
     intentSearchPlan,
     items,
     relationProvider: getRelationProvider(ctx),
@@ -165,6 +173,7 @@ export async function search(ctx: McpContext, args: SearchArgs) {
     vectorUsed,
   });
   const primeInjectionPackage = buildPrimeInjectionPackage({
+    decisionRegister: decisionRegisterContext(decisionRegisterView),
     hostIntent: hostIntentMeta,
     intentEvidence,
     intentSearchPlan,
@@ -248,6 +257,98 @@ function getRelationProvider(ctx: McpContext): RelationEvidenceProvider | null {
   } catch {
     return null;
   }
+}
+
+function readDecisionRegisterSearchableView(
+  ctx: McpContext,
+  kind: string,
+  query: string,
+  limit: number
+): DecisionRegisterSearchableView | null {
+  if (!shouldReadDecisionRegister(kind)) {
+    return null;
+  }
+  try {
+    const store = ctx.container.get('decisionRegisterStore') as DecisionRegisterStore | null;
+    if (!store || typeof store.searchable !== 'function') {
+      return null;
+    }
+    return store.searchable({ limit, query });
+  } catch {
+    return null;
+  }
+}
+
+function shouldReadDecisionRegister(kind: string): boolean {
+  return kind === 'all' || kind === 'decision' || kind === 'decision-register';
+}
+
+function isDecisionRegisterOnly(kind: string): boolean {
+  return kind === 'decision' || kind === 'decision-register';
+}
+
+function mergeDecisionRegisterItems(
+  items: SearchResultItem[],
+  view: DecisionRegisterSearchableView | null,
+  kind: string
+): SearchResultItem[] {
+  if (!view || !shouldReadDecisionRegister(kind)) {
+    return items;
+  }
+  const decisionItems = view.documents
+    .filter((document) => document.acceptedForRetrieval)
+    .map(decisionDocumentToSearchItem);
+  return dedupeSearchItems([...decisionItems, ...(isDecisionRegisterOnly(kind) ? [] : items)]);
+}
+
+function decisionDocumentToSearchItem(
+  document: DecisionRegisterSearchableDocument
+): SearchResultItem {
+  return {
+    acceptedForRetrieval: document.acceptedForRetrieval,
+    decision: document.decision,
+    decisionId: document.decisionId,
+    description: document.content,
+    id: document.id,
+    kind: document.kind,
+    knowledgeType: document.knowledgeType,
+    metadata: document.metadata,
+    retrievalLifecycle: document.retrievalLifecycle,
+    score: document.score,
+    sourceRefs: document.sourceRefs,
+    status: document.status,
+    tags: document.tags,
+    title: document.title,
+    trigger: document.trigger,
+    whySelected: document.whySelected,
+  };
+}
+
+function dedupeSearchItems(items: SearchResultItem[]): SearchResultItem[] {
+  const seen = new Set<string>();
+  const result: SearchResultItem[] = [];
+  for (const item of items) {
+    const key = item.id || JSON.stringify(item);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
+function decisionRegisterContext(view: DecisionRegisterSearchableView | null | undefined) {
+  if (!view) {
+    return null;
+  }
+  return {
+    acceptedDecisionRefs: view.documents
+      .filter((document) => document.acceptedForRetrieval)
+      .map((document) => document.id),
+    auditExcludedCount: view.auditExcludedCount,
+    available: true,
+  };
 }
 
 // ─── Backward-compatible aliases ────────────────────────────

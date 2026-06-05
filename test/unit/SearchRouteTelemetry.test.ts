@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
   };
   return {
     container,
+    decisionRegisterStore: { searchable: vi.fn() },
     guardService: { searchRules: vi.fn() },
     intentEpisodeStore: { latest: vi.fn(), recent: vi.fn() },
     knowledgeGraphService: { getEdges: vi.fn() },
@@ -39,6 +40,7 @@ describe('search route resident telemetry', () => {
     mocks.container.get.mockImplementation((name: string) => {
       const services: Record<string, unknown> = {
         guardService: mocks.guardService,
+        decisionRegisterStore: mocks.decisionRegisterStore,
         intentEpisodeStore: mocks.intentEpisodeStore,
         knowledgeGraphService: mocks.knowledgeGraphService,
         knowledgeService: mocks.knowledgeService,
@@ -50,6 +52,7 @@ describe('search route resident telemetry', () => {
     mocks.intentEpisodeStore.latest.mockReturnValue(null);
     mocks.intentEpisodeStore.recent.mockReturnValue([]);
     mocks.knowledgeGraphService.getEdges.mockResolvedValue([]);
+    mocks.decisionRegisterStore.searchable.mockReturnValue(undefined);
     mocks.vectorService.getStats.mockResolvedValue({
       count: 118,
       dimension: 1024,
@@ -508,5 +511,161 @@ describe('search route resident telemetry', () => {
       reason: 'SearchEngine unavailable; vector route was not attempted',
       stats: null,
     });
+  });
+
+  test('uses Decision Register effective searchable view for decision resident search metadata', async () => {
+    mocks.decisionRegisterStore.searchable.mockReturnValue({
+      acceptedCount: 1,
+      auditCount: 0,
+      auditExcludedCount: 2,
+      documents: [
+        {
+          acceptedForRetrieval: true,
+          content: 'Active retrieval decision\n\nUse active decisions in resident search.',
+          createdAt: '2026-06-05T04:20:00.000Z',
+          decision: 'Use active decisions in resident search.',
+          decisionId: 'decision_active_retrieval',
+          detailRefKeys: [],
+          detailRefs: ['docs/retrieval.md'],
+          id: 'decision:decision_active_retrieval',
+          kind: 'decision',
+          knowledgeType: 'decision-register',
+          metadata: {
+            decisionRegister: {
+              acceptedForRetrieval: true,
+              defaultLifecycle: 'active-effective-only',
+              decisionId: 'decision_active_retrieval',
+              retrievalLifecycle: 'effective',
+              status: 'active',
+              vectorAdmission: 'accepted-only',
+            },
+            quality: {
+              detailRefCount: 1,
+              sourceRefCount: 1,
+              tagCount: 1,
+            },
+          },
+          projectId: 'project-test',
+          projectScopeId: 'scope-test',
+          retrievalLifecycle: 'effective',
+          revision: 1,
+          score: 0.99,
+          sourceRefKeys: ['sha256:active'],
+          sourceRefs: ['[absolute-path]/active-decision.ts:12'],
+          status: 'active',
+          tags: ['retrieval'],
+          title: 'Active retrieval decision',
+          trigger: 'Active retrieval decision',
+          updatedAt: '2026-06-05T04:20:00.000Z',
+          whySelected: ['decisionRegister.status:active', 'decisionRegister.lifecycle:effective'],
+          workspaceMode: 'standard',
+        },
+      ],
+      policy: {
+        acceptedStatuses: ['active'],
+        auditReadback: { includeAudit: true, status: 'all' },
+        defaultLifecycle: 'active-effective-only',
+        excludedStatuses: ['revoked', 'deleted'],
+        sourceRefGate: 'observe-only',
+        vectorAdmission: 'accepted-only',
+      },
+      query: 'retrieval decision',
+      status: 'active',
+      totalMatched: 3,
+    });
+    mocks.searchEngine.search.mockResolvedValue({
+      items: [{ id: 'core-stale-decision', kind: 'decision', score: 0.4 }],
+      mode: 'keyword',
+      ranked: false,
+      searchMeta: {
+        actualMode: 'keyword',
+        durationMs: 4,
+        requestedMode: 'keyword',
+        resultCount: 1,
+        route: 'core-search-engine',
+        semanticUsed: false,
+        vectorUsed: false,
+      },
+      total: 1,
+    });
+
+    const response = await getRouter(
+      searchRouter,
+      '/api/v1/search?q=retrieval%20decision&type=decision-register&mode=keyword',
+      {
+        mountPath: '/api/v1/search',
+      }
+    );
+    const data = response.body.data as Record<string, unknown>;
+    const items = data.items as Array<Record<string, unknown>>;
+    const searchMeta = data.searchMeta as Record<string, unknown>;
+    const intentEvidence = searchMeta.intentEvidence as Record<string, unknown>;
+    const primeInjectionPackage = searchMeta.primeInjectionPackage as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(mocks.decisionRegisterStore.searchable).toHaveBeenCalledWith({
+      limit: 20,
+      query: 'retrieval decision',
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      acceptedForRetrieval: true,
+      decisionId: 'decision_active_retrieval',
+      id: 'decision:decision_active_retrieval',
+      kind: 'decision',
+      knowledgeType: 'decision-register',
+      retrievalLifecycle: 'effective',
+      sourceRefs: ['[absolute-path]/active-decision.ts:12'],
+      status: 'active',
+    });
+    expect(JSON.stringify(items)).not.toContain('core-stale-decision');
+    expect(searchMeta.decisionRegister).toMatchObject({
+      acceptedCount: 1,
+      acceptedDecisionRefs: ['decision:decision_active_retrieval'],
+      auditExcludedCount: 2,
+      available: true,
+      defaultLifecycle: 'active-effective-only',
+      excludedStatuses: ['revoked', 'deleted'],
+      vectorAdmission: 'accepted-only',
+    });
+    expect(intentEvidence).toMatchObject({
+      decisionRegister: {
+        acceptedDecisionRefs: ['decision:decision_active_retrieval'],
+        auditExcludedCount: 2,
+        available: true,
+        defaultLifecycle: 'active-effective-only',
+      },
+      retrievalQuality: {
+        decisionRefCount: 1,
+        feedbackSignalCount: 5,
+      },
+    });
+    expect(primeInjectionPackage).toMatchObject({
+      decisionRegister: {
+        acceptedDecisionRefs: ['decision:decision_active_retrieval'],
+        auditExcludedCount: 2,
+        available: true,
+        defaultLifecycle: 'active-effective-only',
+      },
+      feedback: {
+        observeOnly: true,
+        recorder: 'HitRecorder',
+      },
+      retrievalQuality: {
+        decisionRefCount: 1,
+        feedbackSignalCount: 5,
+        selectedWithSourceRefs: 1,
+      },
+      selectedKnowledge: expect.arrayContaining([
+        expect.objectContaining({
+          injectionStatus: 'selected',
+          itemId: 'decision:decision_active_retrieval',
+          kind: 'decision',
+          knowledgeType: 'decision-register',
+          sourceRefs: ['[absolute-path]/active-decision.ts:12'],
+        }),
+      ]),
+    });
+    expect(JSON.stringify(data)).not.toContain('/Users/private');
   });
 });

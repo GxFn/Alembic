@@ -171,4 +171,114 @@ describe('decision register route', () => {
       success: false,
     });
   });
+
+  test('serves active effective searchable decisions and explicit audit readback', async () => {
+    const activeCreate = await invokeRouter(decisionRegisterRouter, {
+      body: {
+        decision: 'Use active decision register entries in retrieval.',
+        sourceRefs: ['/Users/private/project/src/active-route.ts:4'],
+        title: 'Active route retrieval decision',
+      },
+      method: 'POST',
+      mountPath: '/api/v1/decision-register',
+      path: '/api/v1/decision-register',
+    });
+    const active = (activeCreate.body.data as Record<string, Record<string, unknown>>).decision;
+
+    const revokedCreate = await invokeRouter(decisionRegisterRouter, {
+      body: {
+        decision: 'Revoked entries are audit-only for retrieval.',
+        sourceRefs: ['/Users/private/project/src/revoked-route.ts:4'],
+        title: 'Revoked route retrieval decision',
+      },
+      method: 'POST',
+      mountPath: '/api/v1/decision-register',
+      path: '/api/v1/decision-register',
+    });
+    const revoked = (revokedCreate.body.data as Record<string, Record<string, unknown>>).decision;
+
+    const deletedCreate = await invokeRouter(decisionRegisterRouter, {
+      body: {
+        decision: 'Deleted entries are audit-only for retrieval.',
+        sourceRefs: ['/Users/private/project/src/deleted-route.ts:4'],
+        title: 'Deleted route retrieval decision',
+      },
+      method: 'POST',
+      mountPath: '/api/v1/decision-register',
+      path: '/api/v1/decision-register',
+    });
+    const deleted = (deletedCreate.body.data as Record<string, Record<string, unknown>>).decision;
+
+    await invokeRouter(decisionRegisterRouter, {
+      body: { reason: 'superseded' },
+      method: 'POST',
+      mountPath: '/api/v1/decision-register',
+      path: `/api/v1/decision-register/${String(revoked.decisionId)}/revoke`,
+    });
+    await invokeRouter(decisionRegisterRouter, {
+      body: { reason: 'cleanup' },
+      method: 'DELETE',
+      mountPath: '/api/v1/decision-register',
+      path: `/api/v1/decision-register/${String(deleted.decisionId)}`,
+    });
+
+    const effective = await invokeRouter(decisionRegisterRouter, {
+      method: 'GET',
+      mountPath: '/api/v1/decision-register',
+      path: '/api/v1/decision-register/searchable?q=retrieval',
+    });
+    const effectiveData = effective.body.data as Record<string, unknown>;
+    const effectiveDocs = effectiveData.documents as Array<Record<string, unknown>>;
+
+    expect(effective.status).toBe(200);
+    expect(effectiveData).toMatchObject({
+      acceptedCount: 1,
+      auditCount: 0,
+      auditExcludedCount: 2,
+      count: 1,
+      policy: {
+        defaultLifecycle: 'active-effective-only',
+        excludedStatuses: ['revoked', 'deleted'],
+        vectorAdmission: 'accepted-only',
+      },
+      status: 'active',
+    });
+    expect(effectiveDocs).toHaveLength(1);
+    expect(effectiveDocs[0]).toMatchObject({
+      acceptedForRetrieval: true,
+      decisionId: active.decisionId,
+      retrievalLifecycle: 'effective',
+      sourceRefs: ['[absolute-path]/active-route.ts:4'],
+      status: 'active',
+    });
+    expect(JSON.stringify(effectiveData)).not.toContain('/Users/private');
+
+    const audit = await invokeRouter(decisionRegisterRouter, {
+      method: 'GET',
+      mountPath: '/api/v1/decision-register',
+      path: '/api/v1/decision-register/searchable?q=retrieval&includeAudit=true&status=all',
+    });
+    const auditData = audit.body.data as Record<string, unknown>;
+    const auditDocs = auditData.documents as Array<Record<string, unknown>>;
+
+    expect(audit.status).toBe(200);
+    expect(auditData).toMatchObject({
+      acceptedCount: 1,
+      auditCount: 2,
+      auditExcludedCount: 2,
+      count: 3,
+      status: 'all',
+    });
+    expect(auditDocs.map((document) => document.status).sort()).toEqual([
+      'active',
+      'deleted',
+      'revoked',
+    ]);
+    expect(
+      auditDocs
+        .filter((document) => document.status !== 'active')
+        .every((document) => document.acceptedForRetrieval === false)
+    ).toBe(true);
+    expect(JSON.stringify(auditData)).not.toContain('/Users/private');
+  });
 });

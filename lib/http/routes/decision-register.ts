@@ -16,10 +16,11 @@ import {
 } from '../../service/task/DecisionRegisterStore.js';
 import {
   DecisionRegisterCreateBody,
+  DecisionRegisterSearchableQuery,
   DecisionRegisterTerminalBody,
   DecisionRegisterUpdateBody,
 } from '../../shared/schemas/http-requests.js';
-import { validate } from '../middleware/validate.js';
+import { validate, validateQuery } from '../middleware/validate.js';
 
 const router = express.Router();
 
@@ -49,6 +50,36 @@ router.get('/', (req: Request, res: Response): void => {
     },
   });
 });
+
+router.get(
+  '/searchable',
+  validateQuery(DecisionRegisterSearchableQuery),
+  (req: Request, res: Response): void => {
+    const query = req.query as unknown as z.infer<typeof DecisionRegisterSearchableQuery>;
+    const view = getDecisionRegisterStore().searchable({
+      includeAudit: query.includeAudit,
+      limit: query.limit,
+      query: query.q,
+      sessionId: query.sessionId,
+      status: query.status,
+    });
+    res.json({
+      success: true,
+      data: {
+        acceptedCount: view.acceptedCount,
+        auditCount: view.auditCount,
+        auditExcludedCount: view.auditExcludedCount,
+        capability: buildDecisionRegisterCapability(),
+        count: view.documents.length,
+        documents: view.documents,
+        policy: view.policy,
+        query: view.query,
+        status: view.status,
+        totalMatched: view.totalMatched,
+      },
+    });
+  }
+);
 
 router.get('/:decisionId', (req: Request, res: Response): void => {
   const decision = getDecisionRegisterStore().get(singleParam(req.params.decisionId));
@@ -119,10 +150,22 @@ export function buildDecisionRegisterCapability() {
       list: '/api/v1/decision-register',
       read: '/api/v1/decision-register/:decisionId',
       revoke: '/api/v1/decision-register/:decisionId/revoke',
+      searchable: '/api/v1/decision-register/searchable',
       update: '/api/v1/decision-register/:decisionId',
     },
-    lifecycle: ['create', 'update', 'revoke', 'delete', 'read', 'list'],
+    lifecycle: ['create', 'update', 'revoke', 'delete', 'read', 'list', 'searchable'],
     owner: 'alembic',
+    retrieval: {
+      auditReadback: {
+        includeAudit: true,
+        status: 'all',
+      },
+      defaultLifecycle: 'active-effective-only',
+      defaultView: '/api/v1/decision-register/searchable',
+      excludedStatuses: ['revoked', 'deleted'],
+      sourceRefGate: 'observe-only',
+      vectorAdmission: 'accepted-only',
+    },
     route: 'decision-register',
     storage: {
       audit: 'append-only-jsonl',

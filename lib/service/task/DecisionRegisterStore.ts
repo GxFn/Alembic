@@ -11,6 +11,7 @@ import path from 'node:path';
 
 export type DecisionRegisterStatus = 'active' | 'revoked' | 'deleted';
 export type DecisionRegisterEvent = 'created' | 'updated' | 'revoked' | 'deleted';
+export type DecisionRegisterRetrievalLifecycle = 'effective' | 'audit';
 
 export interface DecisionRegisterWorkspaceIdentity {
   dataRootSource?: string | null;
@@ -104,6 +105,82 @@ export interface DecisionRegisterListOptions {
   limit?: number;
   sessionId?: unknown;
   status?: DecisionRegisterStatus | 'all';
+}
+
+export interface DecisionRegisterSearchableOptions {
+  includeAudit?: boolean;
+  limit?: number;
+  query?: unknown;
+  sessionId?: unknown;
+  status?: DecisionRegisterStatus | 'all';
+}
+
+export interface DecisionRegisterSearchablePolicy {
+  acceptedStatuses: DecisionRegisterStatus[];
+  auditReadback: {
+    includeAudit: true;
+    status: 'all';
+  };
+  defaultLifecycle: 'active-effective-only';
+  excludedStatuses: DecisionRegisterStatus[];
+  sourceRefGate: 'observe-only';
+  vectorAdmission: 'accepted-only';
+}
+
+export interface DecisionRegisterSearchableDocument {
+  acceptedForRetrieval: boolean;
+  content: string;
+  createdAt: string;
+  decision: string;
+  decisionId: string;
+  detailRefs: string[];
+  detailRefKeys: string[];
+  id: string;
+  intentRef?: string;
+  kind: 'decision';
+  knowledgeType: 'decision-register';
+  metadata: {
+    decisionRegister: {
+      acceptedForRetrieval: boolean;
+      defaultLifecycle: 'active-effective-only';
+      decisionId: string;
+      retrievalLifecycle: DecisionRegisterRetrievalLifecycle;
+      status: DecisionRegisterStatus;
+      vectorAdmission: 'accepted-only';
+    };
+    quality: {
+      detailRefCount: number;
+      sourceRefCount: number;
+      tagCount: number;
+    };
+  };
+  projectId?: string | null;
+  projectScopeId?: string | null;
+  rationale?: string;
+  retrievalLifecycle: DecisionRegisterRetrievalLifecycle;
+  revision: number;
+  score: number;
+  sourceRefKeys: string[];
+  sourceRefs: string[];
+  status: DecisionRegisterStatus;
+  tags: string[];
+  title: string;
+  trigger: string;
+  updatedAt: string;
+  whySelected: string[];
+  workRef?: string;
+  workspaceMode?: string | null;
+}
+
+export interface DecisionRegisterSearchableView {
+  acceptedCount: number;
+  auditCount: number;
+  auditExcludedCount: number;
+  documents: DecisionRegisterSearchableDocument[];
+  policy: DecisionRegisterSearchablePolicy;
+  query: string | null;
+  status: DecisionRegisterStatus | 'all';
+  totalMatched: number;
 }
 
 export interface DecisionRegisterStoreOptions {
@@ -362,6 +439,42 @@ export class DecisionRegisterStore {
       .map(cloneRecord);
   }
 
+  searchable(options: DecisionRegisterSearchableOptions = {}): DecisionRegisterSearchableView {
+    const limit = Math.max(1, Math.min(options.limit ?? 20, this.maxRecent));
+    const sessionKey = optionalKey(options.sessionId, toDecisionRegisterSessionKey);
+    const query = sanitizeText(options.query, 500);
+    const includeAudit = options.includeAudit === true || options.status === 'all';
+    const status = includeAudit ? (options.status ?? 'all') : 'active';
+    const policy = buildSearchablePolicy();
+    const queryMatched = this.#readIndex().decisions.filter((record) => {
+      if (sessionKey && record.sessionKey !== sessionKey) {
+        return false;
+      }
+      return decisionMatchesQuery(record, query);
+    });
+    const lifecycleMatched = queryMatched.filter((record) => {
+      if (!includeAudit) {
+        return record.status === 'active';
+      }
+      return status === 'all' ? true : record.status === status;
+    });
+    const documents = lifecycleMatched
+      .map((record) => toSearchableDocument(record, query, policy))
+      .sort(compareSearchableDocuments)
+      .slice(0, limit);
+
+    return {
+      acceptedCount: documents.filter((document) => document.acceptedForRetrieval).length,
+      auditCount: documents.filter((document) => !document.acceptedForRetrieval).length,
+      auditExcludedCount: queryMatched.filter((record) => record.status !== 'active').length,
+      documents,
+      policy,
+      query: query || null,
+      status,
+      totalMatched: queryMatched.length,
+    };
+  }
+
   storeSummary(): { dataRoot: string; recordsDir: string; storeDir: string } {
     return {
       dataRoot: this.dataRoot,
@@ -469,6 +582,164 @@ export function toDecisionRegisterRefKey(value: unknown): string {
 function createDecisionId(now: string): string {
   const compactTime = now.replace(/[^0-9]/g, '').slice(0, 17);
   return `decision_${compactTime}_${randomUUID().slice(0, 8)}`;
+}
+
+function buildSearchablePolicy(): DecisionRegisterSearchablePolicy {
+  return {
+    acceptedStatuses: ['active'],
+    auditReadback: {
+      includeAudit: true,
+      status: 'all',
+    },
+    defaultLifecycle: 'active-effective-only',
+    excludedStatuses: ['revoked', 'deleted'],
+    sourceRefGate: 'observe-only',
+    vectorAdmission: 'accepted-only',
+  };
+}
+
+function decisionMatchesQuery(record: DecisionRegisterRecord, query: string): boolean {
+  if (!query) {
+    return true;
+  }
+  return decisionSearchText(record).includes(query.toLowerCase());
+}
+
+function decisionSearchText(record: DecisionRegisterRecord): string {
+  return [
+    record.decisionId,
+    record.title,
+    record.decision,
+    record.rationale,
+    record.intentRef,
+    record.workRef,
+    ...record.tags,
+    ...record.sourceRefs,
+    ...record.detailRefs,
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase();
+}
+
+function toSearchableDocument(
+  record: DecisionRegisterRecord,
+  query: string,
+  policy: DecisionRegisterSearchablePolicy
+): DecisionRegisterSearchableDocument {
+  const acceptedForRetrieval = record.status === 'active';
+  const retrievalLifecycle: DecisionRegisterRetrievalLifecycle = acceptedForRetrieval
+    ? 'effective'
+    : 'audit';
+  return {
+    acceptedForRetrieval,
+    content: [record.title, record.decision, record.rationale].filter(Boolean).join('\n\n'),
+    createdAt: record.createdAt,
+    decision: record.decision,
+    decisionId: record.decisionId,
+    detailRefKeys: [...record.detailRefKeys],
+    detailRefs: [...record.detailRefs],
+    id: `decision:${record.decisionId}`,
+    ...(record.intentRef ? { intentRef: record.intentRef } : {}),
+    kind: 'decision',
+    knowledgeType: 'decision-register',
+    metadata: {
+      decisionRegister: {
+        acceptedForRetrieval,
+        defaultLifecycle: policy.defaultLifecycle,
+        decisionId: record.decisionId,
+        retrievalLifecycle,
+        status: record.status,
+        vectorAdmission: policy.vectorAdmission,
+      },
+      quality: {
+        detailRefCount: record.detailRefs.length,
+        sourceRefCount: record.sourceRefs.length,
+        tagCount: record.tags.length,
+      },
+    },
+    projectId: record.projectId ?? null,
+    projectScopeId: record.projectScopeId ?? null,
+    ...(record.rationale ? { rationale: record.rationale } : {}),
+    retrievalLifecycle,
+    revision: record.revision,
+    score: decisionSearchScore(record, query),
+    sourceRefKeys: [...record.sourceRefKeys],
+    sourceRefs: [...record.sourceRefs],
+    status: record.status,
+    tags: [...record.tags],
+    title: record.title,
+    trigger: record.title,
+    updatedAt: record.updatedAt,
+    whySelected: decisionWhySelected(record, query, acceptedForRetrieval),
+    ...(record.workRef ? { workRef: record.workRef } : {}),
+    workspaceMode: record.workspaceMode ?? null,
+  };
+}
+
+function decisionSearchScore(record: DecisionRegisterRecord, query: string): number {
+  if (!query) {
+    return record.status === 'active' ? 0.75 : 0.1;
+  }
+  const normalized = query.toLowerCase();
+  if (record.title.toLowerCase().includes(normalized)) {
+    return 0.99;
+  }
+  if (record.decision.toLowerCase().includes(normalized)) {
+    return 0.92;
+  }
+  if ((record.rationale ?? '').toLowerCase().includes(normalized)) {
+    return 0.84;
+  }
+  if (record.tags.some((tag) => tag.toLowerCase().includes(normalized))) {
+    return 0.78;
+  }
+  if (
+    [...record.sourceRefs, ...record.detailRefs].some((ref) =>
+      ref.toLowerCase().includes(normalized)
+    )
+  ) {
+    return 0.7;
+  }
+  return record.status === 'active' ? 0.5 : 0.05;
+}
+
+function decisionWhySelected(
+  record: DecisionRegisterRecord,
+  query: string,
+  acceptedForRetrieval: boolean
+): string[] {
+  const reasons = [
+    acceptedForRetrieval
+      ? 'decisionRegister.status:active'
+      : `decisionRegister.status:${record.status}`,
+    acceptedForRetrieval
+      ? 'decisionRegister.lifecycle:effective'
+      : 'decisionRegister.lifecycle:audit-only',
+  ];
+  if (query) {
+    reasons.push('decisionRegister.query-match');
+  }
+  if (record.sourceRefs.length > 0) {
+    reasons.push('decisionRegister.sourceRefs:present');
+  }
+  if (record.detailRefs.length > 0) {
+    reasons.push('decisionRegister.detailRefs:present');
+  }
+  return reasons.slice(0, 8);
+}
+
+function compareSearchableDocuments(
+  left: DecisionRegisterSearchableDocument,
+  right: DecisionRegisterSearchableDocument
+): number {
+  if (left.acceptedForRetrieval !== right.acceptedForRetrieval) {
+    return left.acceptedForRetrieval ? -1 : 1;
+  }
+  if (left.score !== right.score) {
+    return right.score - left.score;
+  }
+  return right.updatedAt.localeCompare(left.updatedAt);
 }
 
 function collectRefSet(value: unknown): DecisionRegisterRefSet {

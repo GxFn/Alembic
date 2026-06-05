@@ -160,7 +160,9 @@ export const ComplianceQuery = z.object({
 
 export const SearchQuery = PaginationQuery.extend({
   q: z.string().min(1, 'search query is required'),
-  type: z.enum(['all', 'recipe', 'solution', 'rule', 'candidate']).default('all'),
+  type: z
+    .enum(['all', 'recipe', 'solution', 'rule', 'candidate', 'decision', 'decision-register'])
+    .default('all'),
   mode: z.enum(['keyword', 'bm25', 'semantic']).default('keyword'),
   groupByKind: z
     .enum(['true', 'false'])
@@ -172,7 +174,9 @@ export const ResidentSearchBody = z
   .object({
     q: z.string().min(1).optional(),
     query: z.string().min(1).optional(),
-    type: z.enum(['all', 'recipe', 'solution', 'rule', 'candidate']).default('all'),
+    type: z
+      .enum(['all', 'recipe', 'solution', 'rule', 'candidate', 'decision', 'decision-register'])
+      .default('all'),
     mode: z.enum(['keyword', 'bm25', 'semantic', 'auto']).default('keyword'),
     page: z.number().int().min(1).default(1),
     limit: z.number().int().min(1).max(100).default(20),
@@ -380,6 +384,17 @@ export const DecisionRegisterTerminalBody = z
     updatedBy: z.string().optional(),
   })
   .passthrough();
+
+export const DecisionRegisterSearchableQuery = z.object({
+  includeAudit: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => v === 'true'),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  q: z.string().optional(),
+  sessionId: z.string().optional(),
+  status: z.enum(['active', 'revoked', 'deleted', 'all']).optional(),
+});
 
 // ═══ Modules ═════════════════════════════════════
 

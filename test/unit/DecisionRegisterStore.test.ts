@@ -133,4 +133,91 @@ describe('DecisionRegisterStore', () => {
       expect((err as DecisionRegisterStoreError).statusCode).toBe(409);
     }
   });
+
+  test('exposes only active effective decisions in the default searchable view', () => {
+    const store = new DecisionRegisterStore({
+      dataRoot: tempRoot(),
+      now: () => new Date('2026-06-05T04:10:00.000Z'),
+    });
+
+    const active = store.create({
+      decision: 'Use the active producer decision in resident retrieval.',
+      detailRefs: ['docs/retrieval.md'],
+      sourceRefs: ['/Users/private/project/src/active.ts:12'],
+      tags: ['retrieval', 'producer'],
+      title: 'Active retrieval decision',
+    });
+    const revoked = store.create({
+      decision: 'Do not expose revoked decisions to default retrieval.',
+      sourceRefs: ['/Users/private/project/src/revoked.ts:9'],
+      title: 'Revoked retrieval decision',
+    });
+    const deleted = store.create({
+      decision: 'Do not expose deleted decisions to default retrieval.',
+      sourceRefs: ['/Users/private/project/src/deleted.ts:7'],
+      title: 'Deleted retrieval decision',
+    });
+    store.revoke(revoked.decisionId, { reason: 'stale' });
+    store.delete(deleted.decisionId, { reason: 'removed' });
+
+    const effective = store.searchable({ query: 'retrieval' });
+    expect(effective).toMatchObject({
+      acceptedCount: 1,
+      auditCount: 0,
+      auditExcludedCount: 2,
+      policy: {
+        acceptedStatuses: ['active'],
+        defaultLifecycle: 'active-effective-only',
+        excludedStatuses: ['revoked', 'deleted'],
+        sourceRefGate: 'observe-only',
+        vectorAdmission: 'accepted-only',
+      },
+      status: 'active',
+    });
+    expect(effective.documents).toHaveLength(1);
+    expect(effective.documents[0]).toMatchObject({
+      acceptedForRetrieval: true,
+      decisionId: active.decisionId,
+      id: `decision:${active.decisionId}`,
+      kind: 'decision',
+      knowledgeType: 'decision-register',
+      metadata: {
+        decisionRegister: {
+          acceptedForRetrieval: true,
+          defaultLifecycle: 'active-effective-only',
+          retrievalLifecycle: 'effective',
+          status: 'active',
+        },
+      },
+      retrievalLifecycle: 'effective',
+      sourceRefs: ['[absolute-path]/active.ts:12'],
+      status: 'active',
+    });
+    expect(effective.documents.map((document) => document.decisionId)).not.toContain(
+      revoked.decisionId
+    );
+    expect(effective.documents.map((document) => document.decisionId)).not.toContain(
+      deleted.decisionId
+    );
+
+    const audit = store.searchable({
+      includeAudit: true,
+      query: 'retrieval',
+      status: 'all',
+    });
+    expect(audit.documents.map((document) => document.status).sort()).toEqual([
+      'active',
+      'deleted',
+      'revoked',
+    ]);
+    expect(
+      audit.documents
+        .filter((document) => document.status !== 'active')
+        .every(
+          (document) =>
+            document.acceptedForRetrieval === false && document.retrievalLifecycle === 'audit'
+        )
+    ).toBe(true);
+    expect(JSON.stringify(audit)).not.toContain('/Users/private');
+  });
 });

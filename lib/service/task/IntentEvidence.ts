@@ -39,9 +39,29 @@ export interface RelationEvidence {
 }
 
 export interface IntentEvidence {
+  decisionRegister: {
+    acceptedDecisionRefs: string[];
+    auditExcludedCount: number;
+    available: boolean;
+    defaultLifecycle: 'active-effective-only';
+    excludedStatuses: string[];
+    route: '/api/v1/decision-register/searchable';
+  };
   degraded: boolean;
   degradedReasons: string[];
+  feedback: {
+    observeOnly: true;
+    supportedSignals: string[];
+    version: 1;
+  };
   relationEvidence: RelationEvidence[];
+  retrievalQuality: {
+    decisionRefCount: number;
+    feedbackSignalCount: number;
+    relationEvidenceCount: number;
+    sourceRefCoverage: number;
+    version: 1;
+  };
   scoreBreakdown: IntentScoreBreakdown[];
   semanticAnchors: SemanticAnchor[];
   topAnchorMatches: TopAnchorMatch[];
@@ -57,6 +77,8 @@ interface IntentEvidenceItem {
   content?: unknown;
   description?: unknown;
   id?: unknown;
+  kind?: unknown;
+  knowledgeType?: unknown;
   metadata?: unknown;
   score?: unknown;
   semanticScore?: unknown;
@@ -68,6 +90,11 @@ interface IntentEvidenceItem {
 
 export interface BuildIntentEvidenceOptions {
   actualMode?: string;
+  decisionRegister?: {
+    acceptedDecisionRefs?: string[];
+    auditExcludedCount?: number;
+    available?: boolean;
+  } | null;
   intentSearchPlan?: IntentSearchPlan | null;
   items?: IntentEvidenceItem[];
   maxItems?: number;
@@ -104,6 +131,14 @@ export async function buildIntentEvidence(
   const semanticAnchors = buildSemanticAnchors(options.intentSearchPlan);
   const relationEvidence = await collectRelationEvidence(items, options.relationProvider);
   const scoreBreakdown = buildScoreBreakdown(items, relationEvidence);
+  const decisionRegister = buildDecisionRegisterEvidence(options, items);
+  const feedback = buildFeedbackEvidence();
+  const retrievalQuality = buildRetrievalQualityEvidence({
+    decisionRegister,
+    feedback,
+    items,
+    relationEvidence,
+  });
   const topAnchorMatches = buildTopAnchorMatches({
     anchors: semanticAnchors,
     items,
@@ -113,9 +148,12 @@ export async function buildIntentEvidence(
   const degradedReasons = buildDegradedReasons(options, semanticAnchors, relationEvidence);
 
   return {
+    decisionRegister,
     degraded: degradedReasons.length > 0,
     degradedReasons,
+    feedback,
     relationEvidence,
+    retrievalQuality,
     scoreBreakdown,
     semanticAnchors,
     topAnchorMatches,
@@ -125,12 +163,71 @@ export async function buildIntentEvidence(
 
 export function summarizeIntentEvidence(evidence: IntentEvidence): IntentEvidence {
   return {
+    decisionRegister: {
+      ...evidence.decisionRegister,
+      acceptedDecisionRefs: evidence.decisionRegister.acceptedDecisionRefs.slice(0, 8),
+    },
     degraded: evidence.degraded,
     degradedReasons: evidence.degradedReasons.slice(0, 8),
+    feedback: {
+      ...evidence.feedback,
+      supportedSignals: evidence.feedback.supportedSignals.slice(0, 8),
+    },
     relationEvidence: evidence.relationEvidence.slice(0, MAX_RELATIONS),
+    retrievalQuality: evidence.retrievalQuality,
     scoreBreakdown: evidence.scoreBreakdown.slice(0, MAX_SCORE_ITEMS),
     semanticAnchors: evidence.semanticAnchors.slice(0, MAX_ANCHORS),
     topAnchorMatches: evidence.topAnchorMatches.slice(0, MAX_MATCHES),
+    version: 1,
+  };
+}
+
+function buildDecisionRegisterEvidence(
+  options: BuildIntentEvidenceOptions,
+  items: IntentEvidenceItem[]
+): IntentEvidence['decisionRegister'] {
+  const itemDecisionRefs = items
+    .filter(isDecisionRegisterItem)
+    .map((item) => stringValue(item.id))
+    .filter((value): value is string => Boolean(value));
+  return {
+    acceptedDecisionRefs: uniqueStrings([
+      ...(options.decisionRegister?.acceptedDecisionRefs ?? []),
+      ...itemDecisionRefs,
+    ]).slice(0, 16),
+    auditExcludedCount: Math.max(0, Math.floor(options.decisionRegister?.auditExcludedCount ?? 0)),
+    available: options.decisionRegister?.available === true || itemDecisionRefs.length > 0,
+    defaultLifecycle: 'active-effective-only',
+    excludedStatuses: ['revoked', 'deleted'],
+    route: '/api/v1/decision-register/searchable',
+  };
+}
+
+function buildFeedbackEvidence(): IntentEvidence['feedback'] {
+  return {
+    observeOnly: true,
+    supportedSignals: ['searchHit', 'view', 'adoption', 'application', 'guardHit'],
+    version: 1,
+  };
+}
+
+function buildRetrievalQualityEvidence({
+  decisionRegister,
+  feedback,
+  items,
+  relationEvidence,
+}: {
+  decisionRegister: IntentEvidence['decisionRegister'];
+  feedback: IntentEvidence['feedback'];
+  items: IntentEvidenceItem[];
+  relationEvidence: RelationEvidence[];
+}): IntentEvidence['retrievalQuality'] {
+  const sourceRefItems = items.filter((item) => collectSourceRefs(item).length > 0).length;
+  return {
+    decisionRefCount: decisionRegister.acceptedDecisionRefs.length,
+    feedbackSignalCount: feedback.supportedSignals.length,
+    relationEvidenceCount: relationEvidence.length,
+    sourceRefCoverage: items.length === 0 ? 0 : sourceRefItems / items.length,
     version: 1,
   };
 }
@@ -412,6 +509,17 @@ function itemText(item: IntentEvidenceItem): string {
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+function isDecisionRegisterItem(item: IntentEvidenceItem): boolean {
+  const metadata = asRecord(item.metadata);
+  const decisionMetadata = asRecord(metadata?.decisionRegister);
+  return (
+    stringValue(item.kind) === 'decision' ||
+    stringValue(item.knowledgeType) === 'decision-register' ||
+    stringValue(item.id)?.startsWith('decision:') === true ||
+    stringValue(decisionMetadata?.decisionId) !== undefined
+  );
 }
 
 function textFromContent(value: unknown): string {
