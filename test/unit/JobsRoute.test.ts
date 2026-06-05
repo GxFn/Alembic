@@ -187,6 +187,48 @@ describe('jobs display snapshot response', () => {
     );
   });
 
+  test('uses the job dataRoot when the container snapshot store falls back to another root', () => {
+    const storeDataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-jobs-store-root-'));
+    const jobDataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-jobs-real-root-'));
+    const recorder = new JobProcessEventRecorder({ maxEventsPerJob: 5 });
+    const snapshotStore = new JobDisplaySnapshotStore({ dataRoot: storeDataRoot });
+    const job = makeJob({
+      dataRoot: jobDataRoot,
+      id: 'bootstrap_job_root_snapshot',
+      projectRoot: jobDataRoot,
+      status: 'running',
+    });
+    recorder.record({
+      content: {
+        mimeType: 'text/plain',
+        role: 'assistant',
+        text: 'Job-root scoped response summary',
+      },
+      jobId: job.id,
+      kind: 'llm.output',
+      phase: 'dimension-output',
+      summary: 'LLM output retained',
+      title: 'LLM output received',
+    });
+
+    const response = buildJobDisplaySnapshotResponse({ job, recorder, snapshotStore });
+
+    expect(response.persisted).toBe(true);
+    expect(response.snapshotPath).toBe(
+      path.join(jobDataRoot, '.asd', 'job-display-snapshots', job.id, 'snapshot.json')
+    );
+    expect(fs.existsSync(response.snapshotPath ?? '')).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(storeDataRoot, '.asd', 'job-display-snapshots', job.id, 'snapshot.json')
+      )
+    ).toBe(false);
+    expect(snapshotStore.read(job.id)).toBeNull();
+    expect(snapshotStore.readForJob(job)?.snapshot.snapshot.checksum).toBe(
+      response.snapshot.snapshot.checksum
+    );
+  });
+
   test('returns explicit evidenceIncomplete warnings when no durable event evidence exists', () => {
     const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-jobs-snapshot-missing-'));
     const recorder = new JobProcessEventRecorder({ maxEventsPerJob: 5 });

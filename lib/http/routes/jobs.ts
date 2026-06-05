@@ -189,7 +189,7 @@ router.get('/:jobId/artifacts/:artifactId', (req: Request, res: Response): void 
 
   const artifact = readJobProcessEventArtifact({
     artifactId,
-    dataRoot: resolveDataRoot(container),
+    dataRoot: job.dataRoot || resolveDataRoot(container),
     jobId,
   });
   if (!artifact) {
@@ -335,7 +335,7 @@ export function buildJobDisplaySnapshotResponse(options: {
   recorder: ReturnType<typeof getJobProcessEventRecorder>;
   snapshotStore: JobDisplaySnapshotStore;
 }): JobDisplaySnapshotResponse {
-  const persisted = options.snapshotStore.read(options.job.id);
+  const persisted = options.snapshotStore.readForJob(options.job);
   if (persisted) {
     return {
       persisted: true,
@@ -418,7 +418,7 @@ function buildJobDisplaySnapshotSummary(
   job: DaemonJobRecord,
   snapshotStore: JobDisplaySnapshotStore
 ): Record<string, unknown> {
-  const existing = snapshotStore.read(job.id);
+  const existing = snapshotStore.readForJob(job);
   const summary = summarizeJobDisplaySnapshotForApi(existing?.snapshot);
   if (summary) {
     return summary;

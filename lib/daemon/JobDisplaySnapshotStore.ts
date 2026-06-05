@@ -59,10 +59,18 @@ export class JobDisplaySnapshotStore {
   }
 
   read(jobId: string): JobDisplaySnapshotReadResult | null {
+    return this.#readAtDataRoot(jobId, this.dataRoot);
+  }
+
+  readForJob(job: DaemonJobRecord): JobDisplaySnapshotReadResult | null {
+    return this.#readAtDataRoot(job.id, this.#dataRootForJob(job));
+  }
+
+  #readAtDataRoot(jobId: string, dataRoot: string): JobDisplaySnapshotReadResult | null {
     if (!isSafePathPart(jobId)) {
       return null;
     }
-    const absolutePath = this.#snapshotPath(jobId);
+    const absolutePath = this.#snapshotPath(jobId, dataRoot);
     try {
       const snapshot = JSON.parse(fs.readFileSync(absolutePath, 'utf8')) as JobDisplaySnapshot;
       return {
@@ -79,8 +87,9 @@ export class JobDisplaySnapshotStore {
     job: DaemonJobRecord;
     recorder?: JobProcessEventRecorder | null;
   }): JobDisplaySnapshotWriteResult {
+    const dataRoot = this.#dataRootForJob(options.job);
     const now = new Date().toISOString();
-    const existing = this.read(options.job.id)?.snapshot ?? null;
+    const existing = this.readForJob(options.job)?.snapshot ?? null;
     const eventList = options.recorder
       ? options.recorder.list(options.job.id, {
           includeHidden: true,
@@ -93,8 +102,8 @@ export class JobDisplaySnapshotStore {
       job: options.job,
       now,
     });
-    const absolutePath = this.#snapshotPath(options.job.id);
-    assertPathInside(absolutePath, this.#jobRoot(options.job.id));
+    const absolutePath = this.#snapshotPath(options.job.id, dataRoot);
+    assertPathInside(absolutePath, this.#jobRoot(options.job.id, dataRoot));
     fs.mkdirSync(path.dirname(absolutePath), { recursive: true, mode: SNAPSHOT_DIR_MODE });
     fs.writeFileSync(absolutePath, JSON.stringify(snapshot, null, 2), {
       encoding: 'utf8',
@@ -116,8 +125,9 @@ export class JobDisplaySnapshotStore {
   }): JobDisplaySnapshot {
     const now = options.now ?? new Date().toISOString();
     const eventList = options.eventList ?? createEmptyEventList(options.job.id);
+    const dataRoot = this.#dataRootForJob(options.job);
     const artifacts = collectSnapshotArtifacts({
-      dataRoot: this.dataRoot,
+      dataRoot,
       events: eventList.events,
       jobId: options.job.id,
     });
@@ -197,12 +207,18 @@ export class JobDisplaySnapshotStore {
     });
   }
 
-  #jobRoot(jobId: string): string {
-    return path.join(this.dataRoot, '.asd', JOB_DISPLAY_SNAPSHOT_ROOT, safePathPart(jobId));
+  #dataRootForJob(job: DaemonJobRecord): string {
+    return typeof job.dataRoot === 'string' && job.dataRoot.length > 0
+      ? job.dataRoot
+      : this.dataRoot;
   }
 
-  #snapshotPath(jobId: string): string {
-    return path.join(this.#jobRoot(jobId), SNAPSHOT_FILE_NAME);
+  #jobRoot(jobId: string, dataRoot: string): string {
+    return path.join(dataRoot, '.asd', JOB_DISPLAY_SNAPSHOT_ROOT, safePathPart(jobId));
+  }
+
+  #snapshotPath(jobId: string, dataRoot: string): string {
+    return path.join(this.#jobRoot(jobId, dataRoot), SNAPSHOT_FILE_NAME);
   }
 }
 

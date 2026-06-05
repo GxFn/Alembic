@@ -112,7 +112,8 @@ describe('markInterruptedDaemonJobs', () => {
 describe('cancelDaemonJob', () => {
   test('persists a running bootstrap abort as a cancelled job with final session evidence', () => {
     useTempAlembicHome();
-    const store = new JobStore({ projectRoot: makeProjectRoot() });
+    const projectRoot = makeProjectRoot();
+    const store = new JobStore({ projectRoot });
     const created = store.create({ kind: 'bootstrap', source: 'dashboard' });
     store.markRunning(created.id);
     store.update(created.id, {
@@ -166,6 +167,16 @@ describe('cancelDaemonJob', () => {
         },
       },
     });
+    expect(
+      fs.existsSync(
+        path.join(projectRoot, '.asd', 'job-display-snapshots', created.id, 'snapshot.json')
+      )
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(process.cwd(), '.asd', 'job-display-snapshots', created.id, 'snapshot.json')
+      )
+    ).toBe(false);
   });
 });
 
