@@ -38,7 +38,10 @@ import {
 import { type DaemonStatus, DaemonSupervisor } from './DaemonSupervisor.js';
 import {
   buildProjectRuntimeControlSourceOfTruth,
+  type ProjectRuntimeControlDiagnostic,
+  type ProjectRuntimeControlStateCleanup,
   type ProjectRuntimeSourceOfTruth,
+  type ProjectRuntimeSourceOfTruthReason,
 } from './ProjectRuntimeSourceOfTruth.js';
 
 export type {
@@ -56,9 +59,11 @@ export type ProjectRuntimeControlSnapshot = Omit<
   'activeRuntimeProject' | 'projects' | 'selectedProject'
 > & {
   activeRuntimeProject: ProjectRuntimeScopeSummary | null;
+  diagnostics: ProjectRuntimeControlDiagnostic[];
   projects: ProjectRuntimeScopeSummary[];
   selectedProject: ProjectRuntimeScopeSummary | null;
   sourceOfTruth: ProjectRuntimeSourceOfTruth;
+  stateCleanup: ProjectRuntimeControlStateCleanup;
 };
 
 const DEFAULT_JOB_STATUSES: DaemonJobStatus[] = [
@@ -74,6 +79,13 @@ interface BuildProjectSummaryOptions {
   entry: ProjectEntry | null;
   projectRoot: string;
   selectedProjectRoot?: string | null;
+}
+
+interface PreparedRuntimeControlState {
+  diagnostics: ProjectRuntimeControlDiagnostic[];
+  initialProjects: ProjectRuntimeScopeSummary[];
+  state: ProjectRuntimeControlState;
+  stateCleanup: ProjectRuntimeControlStateCleanup;
 }
 
 export interface ProjectRuntimeControlOptions {
@@ -139,7 +151,12 @@ export class ProjectRuntimeControl {
   }
 
   async listProjects(): Promise<ProjectRuntimeScopeSummary[]> {
-    const state = this.readState();
+    return this.listProjectsForState(this.readState());
+  }
+
+  async listProjectsForState(
+    state: ProjectRuntimeControlState
+  ): Promise<ProjectRuntimeScopeSummary[]> {
     const projects = collectRuntimeProjectTargets();
     return Promise.all(
       projects.map((project) =>
@@ -165,8 +182,14 @@ export class ProjectRuntimeControl {
   }
 
   async snapshot(): Promise<ProjectRuntimeControlSnapshot> {
-    const projects = await this.listProjects();
-    const state = this.withActiveProject(this.readState(), projects);
+    const initialState = this.readState();
+    const initialProjects = await this.listProjectsForState(initialState);
+    const prepared = this.prepareRuntimeControlState(initialState, initialProjects);
+    const projects =
+      prepared.stateCleanup.activeState.cleaned === true
+        ? await this.listProjectsForState(prepared.state)
+        : prepared.initialProjects;
+    const state = this.withActiveProject(prepared.state, projects);
     const selectedProject =
       projects.find((project) => sameProjectRoot(project.projectRoot, state.selectedProjectRoot)) ??
       null;
@@ -177,17 +200,21 @@ export class ProjectRuntimeControl {
 
     return {
       activeRuntimeProject,
+      diagnostics: prepared.diagnostics,
       generatedAt: new Date().toISOString(),
       projects,
       selectedProject,
       sourceOfTruth: buildProjectRuntimeControlSourceOfTruth({
         activeRuntimeProject,
+        diagnostics: prepared.diagnostics,
         projects,
         selectedProject,
         state,
+        stateCleanup: prepared.stateCleanup,
         statePath: this.statePath,
       }),
       state,
+      stateCleanup: prepared.stateCleanup,
     };
   }
 
@@ -583,6 +610,111 @@ export class ProjectRuntimeControl {
     };
   }
 
+  prepareRuntimeControlState(
+    state: ProjectRuntimeControlState,
+    projects: ProjectRuntimeScopeSummary[]
+  ): PreparedRuntimeControlState {
+    // Alembic 拥有 runtime-control 持久化：缺失 / stale active state 可在这里清理；
+    // ready 但 selected/active 不一致的 daemon 只能诊断，避免静默丢失后续显式 stop/switch 入口。
+    const diagnostics: ProjectRuntimeControlDiagnostic[] = [];
+    const activeStateProject = findProjectByRuntimeState(
+      projects,
+      state.activeProjectId,
+      state.activeProjectRoot
+    );
+    const selectedStateProject = findProjectByRuntimeState(
+      projects,
+      state.selectedProjectId,
+      state.selectedProjectRoot
+    );
+    const activeStatePresent = hasRuntimeControlTarget(
+      state.activeProjectId,
+      state.activeProjectRoot
+    );
+    const selectedStatePresent = hasRuntimeControlTarget(
+      state.selectedProjectId,
+      state.selectedProjectRoot
+    );
+
+    if (selectedStatePresent && !selectedStateProject) {
+      diagnostics.push({
+        action: 'explicit-runtime-action-required',
+        code: 'selected-project-missing',
+        message: `Selected runtime project is no longer registered: ${state.selectedProjectRoot ?? state.selectedProjectId}`,
+        projectId: state.selectedProjectId,
+        projectRoot: state.selectedProjectRoot,
+        reasonCode: 'project-missing',
+        severity: 'error',
+        source: 'runtime-control-state',
+      });
+    }
+
+    let stateCleanup = emptyStateCleanup();
+    let preparedState = state;
+    if (activeStatePresent) {
+      const staleReason = activeStateStaleReason(activeStateProject);
+      const activeReady = staleReason === null;
+      const selectedMismatch =
+        activeReady &&
+        selectedStateProject !== null &&
+        !sameProjectRoot(activeStateProject?.projectRoot, selectedStateProject.projectRoot);
+
+      if (selectedMismatch && activeStateProject) {
+        diagnostics.push({
+          action: 'explicit-runtime-action-required',
+          code: 'selected-active-mismatch',
+          message: `Selected runtime project ${selectedStateProject.projectRoot} does not match active daemon state ${activeStateProject.projectRoot}.`,
+          projectId: activeStateProject.projectId,
+          projectRoot: activeStateProject.projectRoot,
+          reasonCode: 'runtime-control-selected-mismatch',
+          severity: 'error',
+          source: 'runtime-control-state',
+        });
+      } else if (staleReason) {
+        const message = activeStateProject
+          ? `Cleared stale active runtime state for ${activeStateProject.projectRoot}: ${staleReason.message}`
+          : `Cleared stale active runtime state for ${state.activeProjectRoot ?? state.activeProjectId}: project is not registered.`;
+        const cleanedAt = new Date().toISOString();
+        diagnostics.push({
+          action: 'cleared-active-state',
+          code: staleReason.code,
+          message,
+          projectId: state.activeProjectId,
+          projectRoot: state.activeProjectRoot,
+          reasonCode: staleReason.reasonCode,
+          severity: 'error',
+          source: staleReason.source,
+        });
+        preparedState = createProjectRuntimeControlState({
+          activeProjectId: null,
+          activeProjectRoot: null,
+          selectedAt: state.selectedAt,
+          selectedProjectId: state.selectedProjectId,
+          selectedProjectRoot: state.selectedProjectRoot,
+          updatedAt: cleanedAt,
+        });
+        this.writeState(preparedState);
+        stateCleanup = {
+          activeState: {
+            cleaned: true,
+            cleanedAt,
+            message,
+            previousProjectId: state.activeProjectId,
+            previousProjectRoot: state.activeProjectRoot,
+            reasonCode: staleReason.reasonCode,
+          },
+        };
+      }
+    }
+
+    return {
+      diagnostics,
+      initialProjects: projects,
+      state: preparedState,
+      stateCleanup,
+    };
+  }
+
   async safeDaemonStatus(projectRoot: string): Promise<DaemonStatus | null> {
     try {
       return await this.#supervisor.status(projectRoot);
@@ -747,6 +879,102 @@ function collectRuntimeProjectTargets(): Array<{
   return [...byRoot.values()].sort((left, right) =>
     left.projectRoot.localeCompare(right.projectRoot)
   );
+}
+
+function findProjectByRuntimeState(
+  projects: ProjectRuntimeScopeSummary[],
+  projectId: string | null,
+  projectRoot: string | null
+): ProjectRuntimeScopeSummary | null {
+  return (
+    projects.find((project) => {
+      if (projectId && project.projectId === projectId) {
+        return true;
+      }
+      return sameProjectRoot(project.projectRoot, projectRoot);
+    }) ?? null
+  );
+}
+
+function hasRuntimeControlTarget(projectId: string | null, projectRoot: string | null): boolean {
+  return Boolean(projectId || projectRoot);
+}
+
+function activeStateStaleReason(project: ProjectRuntimeScopeSummary | null): {
+  code: ProjectRuntimeControlDiagnostic['code'];
+  message: string;
+  reasonCode: ProjectRuntimeSourceOfTruthReason;
+  source: ProjectRuntimeControlDiagnostic['source'];
+} | null {
+  if (!project) {
+    return {
+      code: 'active-runtime-state-stale',
+      message: 'project is not registered',
+      reasonCode: 'project-missing',
+      source: 'runtime-control-state',
+    };
+  }
+  if (!project.projectExists || project.status === 'missing') {
+    return {
+      code: 'active-runtime-state-stale',
+      message: 'project path is missing',
+      reasonCode: 'project-missing',
+      source: 'runtime-control-state',
+    };
+  }
+  if (project.daemon.ready && project.status === 'ready') {
+    return null;
+  }
+  if (project.daemon.status === 'not-checked' || project.status === 'stopped') {
+    return {
+      code: 'daemon-state-missing',
+      message: project.daemon.message ?? 'daemon state is missing',
+      reasonCode: 'daemon-missing',
+      source: 'daemon-status',
+    };
+  }
+  if (project.status === 'stale') {
+    return {
+      code: 'active-runtime-state-stale',
+      message: project.daemon.message ?? 'daemon state is stale',
+      reasonCode: 'runtime-control-active-stale',
+      source: 'daemon-status',
+    };
+  }
+  if (project.status === 'failed') {
+    return {
+      code: 'active-runtime-state-stale',
+      message: project.daemon.message ?? 'daemon failed',
+      reasonCode: 'daemon-failed',
+      source: 'daemon-status',
+    };
+  }
+  if (project.status === 'starting') {
+    return {
+      code: 'active-runtime-state-stale',
+      message: project.daemon.message ?? 'daemon is still starting',
+      reasonCode: 'daemon-starting',
+      source: 'daemon-status',
+    };
+  }
+  return {
+    code: 'active-runtime-state-stale',
+    message: project.daemon.message ?? 'daemon is unavailable',
+    reasonCode: 'unavailable',
+    source: 'daemon-status',
+  };
+}
+
+function emptyStateCleanup(): ProjectRuntimeControlStateCleanup {
+  return {
+    activeState: {
+      cleaned: false,
+      message: null,
+      previousProjectId: null,
+      previousProjectRoot: null,
+      reasonCode: null,
+    },
+  };
 }
 
 function emptyState(updatedAt = new Date(0).toISOString()): ProjectRuntimeControlState {

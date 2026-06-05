@@ -359,8 +359,11 @@ projects
     const snapshot = await new ProjectRuntimeControl().snapshot();
     const current = {
       activeRuntimeProject: snapshot.activeRuntimeProject,
+      diagnostics: snapshot.diagnostics,
       selectedProject: snapshot.selectedProject,
+      sourceOfTruth: snapshot.sourceOfTruth,
       state: snapshot.state,
+      stateCleanup: snapshot.stateCleanup,
     };
     if (opts.json) {
       cli.json(current);
@@ -2637,6 +2640,11 @@ function printCurrentProjectState(snapshot: ProjectRuntimeControlSnapshot) {
     `  Active:   ${snapshot.activeRuntimeProject ? projectLabel(snapshot.activeRuntimeProject) : 'none'}`
   );
   cli.log(`  State:    ${snapshot.state.updatedAt}`);
+  if (snapshot.diagnostics.length > 0) {
+    for (const diagnostic of snapshot.diagnostics) {
+      cli.log(`  Diagnostic: ${diagnostic.code} - ${diagnostic.message}`);
+    }
+  }
   cli.blank();
 }
 

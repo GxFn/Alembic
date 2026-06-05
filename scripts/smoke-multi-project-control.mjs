@@ -104,6 +104,13 @@ try {
       currentFromA.body?.data?.activeRuntimeProject?.projectId === projectAId,
     'project-a current state mismatch'
   );
+  const sourceOfTruthA = currentFromA.body.data.sourceOfTruth;
+  assert(
+    sourceOfTruthA?.readiness?.ready === true &&
+      sourceOfTruthA?.failure === null &&
+      sourceOfTruthA?.runtimeControl?.stateCleanup?.activeState?.cleaned === false,
+    'project-a source-of-truth ready contract mismatch'
+  );
 
   const openA = await postJson(`${apiA}/api/v1/projects/${projectAId}/open-dashboard`, {
     waitUntilReadyMs: 10000,
@@ -158,6 +165,13 @@ try {
       currentFromB.body?.data?.activeRuntimeProject?.projectId === projectBId,
     'project-b current state mismatch'
   );
+  const sourceOfTruthB = currentFromB.body.data.sourceOfTruth;
+  assert(
+    sourceOfTruthB?.readiness?.ready === true &&
+      sourceOfTruthB?.failure === null &&
+      sourceOfTruthB?.runtimeControl?.stateCleanup?.activeState?.cleaned === false,
+    'project-b source-of-truth ready contract mismatch'
+  );
 
   const listFromB = await fetchJson(`${apiB}/api/v1/projects`);
   assert(listFromB.status === 200 && listFromB.body?.success === true, 'project-b list failed');
@@ -198,12 +212,24 @@ try {
       cliCurrentAfterStop.selectedProject?.projectId === projectBId,
     'CLI current state after stop mismatch'
   );
+  assert(
+    cliCurrentAfterStop.sourceOfTruth?.failure?.blockedFallbacks?.includes(
+      'plugin-selected-root-fallback'
+    ) && cliCurrentAfterStop.sourceOfTruth?.failure?.observedSource === 'alembic-source-of-truth',
+    'CLI current failure envelope missing blocked fallback contract'
+  );
 
   evidence.http.projectsApi = {
     listCountFromA: listFromA.body.data.projects.length,
     listCountFromB: listFromB.body.data.projects.length,
     selectedFromA: currentFromA.body.data.selectedProject.projectId,
     selectedFromB: currentFromB.body.data.selectedProject.projectId,
+  };
+  evidence.http.sourceOfTruth = {
+    projectAReadyReason: sourceOfTruthA.readiness.reasonCode,
+    projectAStateCleanup: sourceOfTruthA.runtimeControl.stateCleanup.activeState.cleaned,
+    projectBReadyReason: sourceOfTruthB.readiness.reasonCode,
+    projectBStateCleanup: sourceOfTruthB.runtimeControl.stateCleanup.activeState.cleaned,
   };
   evidence.http.openDashboard = {
     sameProjectAReusedDashboardUrl: openA.body.data.handoff.dashboardUrl === dashboardA,
@@ -230,6 +256,11 @@ try {
   evidence.postConditions = {
     activeRuntimeProject: cliCurrentAfterStop.activeRuntimeProject,
     selectedProjectId: cliCurrentAfterStop.selectedProject.projectId,
+    sourceOfTruthFailure: {
+      blockedFallbacks: cliCurrentAfterStop.sourceOfTruth.failure.blockedFallbacks,
+      reasonCode: cliCurrentAfterStop.sourceOfTruth.failure.reasonCode,
+      stateCleanup: cliCurrentAfterStop.sourceOfTruth.runtimeControl.stateCleanup.activeState,
+    },
   };
 
   smokeSucceeded = true;

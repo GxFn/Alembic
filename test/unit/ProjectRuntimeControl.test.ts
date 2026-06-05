@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  createProjectRuntimeControlState,
   DAEMON_STATE_SCHEMA_VERSION,
   type DaemonPaths,
   type DaemonState,
@@ -380,6 +381,148 @@ describe('ProjectRuntimeControl', () => {
       observedSource: 'alembic-source-of-truth',
       reasonCode: 'daemon-not-running',
       retryable: true,
+    });
+  });
+
+  test('reports selected and active runtime mismatch without clearing a ready daemon state', async () => {
+    useTempAlembicHome();
+    const selectedRoot = makeProjectRoot();
+    const activeRoot = makeProjectRoot();
+    const selectedEntry = ProjectRegistry.register(selectedRoot, true);
+    const activeEntry = ProjectRegistry.register(activeRoot, true);
+    const selectedProjectRoot = ProjectRegistry.inspect(selectedRoot).projectRealpath;
+    const activeProjectRoot = ProjectRegistry.inspect(activeRoot).projectRealpath;
+    const fake = new FakeSupervisor();
+    fake.setReady(activeProjectRoot);
+    const control = new ProjectRuntimeControl({
+      supervisor: fake as unknown as DaemonSupervisor,
+    });
+    control.writeState(
+      createProjectRuntimeControlState({
+        activeProjectId: activeEntry.id,
+        activeProjectRoot,
+        selectedAt: '2026-06-05T01:02:03.000Z',
+        selectedProjectId: selectedEntry.id,
+        selectedProjectRoot,
+        updatedAt: '2026-06-05T01:02:03.000Z',
+      })
+    );
+
+    const snapshot = await control.snapshot();
+
+    expect(snapshot.activeRuntimeProject).toBeNull();
+    expect(snapshot.state).toMatchObject({
+      activeProjectId: activeEntry.id,
+      selectedProjectId: selectedEntry.id,
+    });
+    expect(control.readState()).toMatchObject({
+      activeProjectId: activeEntry.id,
+      selectedProjectId: selectedEntry.id,
+    });
+    expect(snapshot.stateCleanup.activeState.cleaned).toBe(false);
+    expect(snapshot.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: 'explicit-runtime-action-required',
+          code: 'selected-active-mismatch',
+          projectId: activeEntry.id,
+          reasonCode: 'runtime-control-selected-mismatch',
+          severity: 'error',
+        }),
+      ])
+    );
+    expect(snapshot.sourceOfTruth).toMatchObject({
+      failure: {
+        blockingCondition: expect.stringContaining('does not match active daemon state'),
+        observedSource: 'alembic-source-of-truth',
+        reasonCode: 'runtime-control-selected-mismatch',
+        retryable: false,
+      },
+      readiness: {
+        ready: false,
+        reasonCode: 'runtime-control-selected-mismatch',
+        stale: true,
+        status: 'stale',
+      },
+      runtimeControl: {
+        activeStateTrusted: false,
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({ code: 'selected-active-mismatch' }),
+        ]),
+        stateCleanup: {
+          activeState: {
+            cleaned: false,
+          },
+        },
+      },
+    });
+  });
+
+  test('clears stale active state when the persisted daemon state is missing', async () => {
+    useTempAlembicHome();
+    const projectRoot = makeProjectRoot();
+    const entry = ProjectRegistry.register(projectRoot, true);
+    const projectRealpath = ProjectRegistry.inspect(projectRoot).projectRealpath;
+    const control = new ProjectRuntimeControl();
+    control.writeState(
+      createProjectRuntimeControlState({
+        activeProjectId: entry.id,
+        activeProjectRoot: projectRealpath,
+        selectedAt: '2026-06-05T04:05:06.000Z',
+        selectedProjectId: entry.id,
+        selectedProjectRoot: projectRealpath,
+        updatedAt: '2026-06-05T04:05:06.000Z',
+      })
+    );
+
+    const snapshot = await control.snapshot();
+
+    expect(snapshot.activeRuntimeProject).toBeNull();
+    expect(snapshot.state).toMatchObject({
+      activeProjectId: null,
+      selectedProjectId: entry.id,
+    });
+    expect(control.readState()).toMatchObject({
+      activeProjectId: null,
+      selectedProjectId: entry.id,
+    });
+    expect(snapshot.stateCleanup.activeState).toMatchObject({
+      cleaned: true,
+      previousProjectId: entry.id,
+      previousProjectRoot: projectRealpath,
+      reasonCode: 'daemon-missing',
+    });
+    expect(snapshot.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: 'cleared-active-state',
+          code: 'daemon-state-missing',
+          reasonCode: 'daemon-missing',
+          severity: 'error',
+        }),
+      ])
+    );
+    expect(snapshot.sourceOfTruth).toMatchObject({
+      failure: {
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({ code: 'daemon-state-missing' }),
+        ]),
+        observedSource: 'alembic-source-of-truth',
+        reasonCode: 'daemon-missing',
+      },
+      readiness: {
+        ready: false,
+        reasonCode: 'daemon-missing',
+      },
+      runtimeControl: {
+        activeProject: null,
+        stateCleanup: {
+          activeState: {
+            cleaned: true,
+            reasonCode: 'daemon-missing',
+          },
+        },
+      },
     });
   });
 
