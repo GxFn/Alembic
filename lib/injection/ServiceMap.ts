@@ -91,6 +91,7 @@ import type { BootstrapTaskManager } from '../service/bootstrap/BootstrapTaskMan
 import type { ModuleService } from '../service/module/ModuleService.js';
 import type { HitRecorder } from '../service/signal/HitRecorder.js';
 import type { SkillHooks } from '../service/skills/SkillHooks.js';
+import type { DecisionRegisterStore } from '../service/task/DecisionRegisterStore.js';
 import type { IntentEpisodeStore } from '../service/task/IntentEpisodeStore.js';
 import type { PrimeSearchPipeline } from '../service/task/PrimeSearchPipeline.js';
 // ── Vector Service Types ──
@@ -112,6 +113,7 @@ export interface ServiceMap {
   gateway: Gateway;
   eventBus: EventBus;
   bootstrapTaskManager: BootstrapTaskManager;
+  decisionRegisterStore: DecisionRegisterStore;
   intentEpisodeStore: IntentEpisodeStore;
   jobDisplaySnapshotStore: JobDisplaySnapshotStore;
   jobProcessEventRecorder: JobProcessEventRecorder;

@@ -29,6 +29,7 @@ import authRouter from './routes/auth.js';
 import candidatesRouter from './routes/candidates.js';
 import commandsRouter from './routes/commands.js';
 import daemonRouter from './routes/daemon.js';
+import decisionRegisterRouter from './routes/decision-register.js';
 import evolutionRouter from './routes/evolution.js';
 import extractRouter from './routes/extract.js';
 import fileChangesRouter from './routes/file-changes.js';
@@ -314,6 +315,9 @@ export class HttpServer {
 
     // IntentEpisode 持久化：ProjectScope scoped prime/close continuity
     this.app.use(`${apiPrefix}/intent-episodes`, intentEpisodesRouter);
+
+    // Decision Register 持久化：ProjectScope scoped durable CRUD producer
+    this.app.use(`${apiPrefix}/decision-register`, decisionRegisterRouter);
 
     // 搜索路由
     this.app.use(`${apiPrefix}/search`, searchRouter);

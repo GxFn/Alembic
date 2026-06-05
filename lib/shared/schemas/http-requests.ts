@@ -315,6 +315,72 @@ export const IntentEpisodeOutcomeBody = z
   })
   .passthrough();
 
+// ═══ Decision Register ══════════════════════════
+
+const DecisionRegisterScopeBody = z
+  .object({
+    dataRootSource: z.string().optional(),
+    projectId: z.string().optional(),
+    projectScopeId: z.string().optional(),
+    workspaceMode: z.string().optional(),
+  })
+  .passthrough();
+
+const DecisionRegisterRefs = z.array(z.string().min(1)).max(80).optional();
+
+export const DecisionRegisterCreateBody = z
+  .object({
+    createdBy: z.string().optional(),
+    decision: z.string().optional(),
+    decisionId: z.string().optional(),
+    description: z.string().optional(),
+    detailRefs: DecisionRegisterRefs,
+    intentRef: z.string().optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+    rationale: z.string().optional(),
+    scope: DecisionRegisterScopeBody.optional(),
+    sessionId: z.string().optional(),
+    sourceRefs: DecisionRegisterRefs,
+    tags: z.array(z.string()).max(50).optional(),
+    title: z.string().min(1, 'title is required'),
+    turnId: z.string().optional(),
+    workRef: z.string().optional(),
+  })
+  .passthrough()
+  .refine((data) => Boolean(data.decision || data.description), {
+    message: 'Either decision or description is required',
+  });
+
+export const DecisionRegisterUpdateBody = z
+  .object({
+    decision: z.string().optional(),
+    description: z.string().optional(),
+    detailRefs: DecisionRegisterRefs,
+    intentRef: z.string().optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+    rationale: z.string().optional(),
+    scope: DecisionRegisterScopeBody.optional(),
+    sessionId: z.string().optional(),
+    sourceRefs: DecisionRegisterRefs,
+    tags: z.array(z.string()).max(50).optional(),
+    title: z.string().optional(),
+    turnId: z.string().optional(),
+    updatedBy: z.string().optional(),
+    workRef: z.string().optional(),
+  })
+  .passthrough()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'At least one field must be provided for update',
+  });
+
+export const DecisionRegisterTerminalBody = z
+  .object({
+    reason: z.string().optional(),
+    scope: DecisionRegisterScopeBody.optional(),
+    updatedBy: z.string().optional(),
+  })
+  .passthrough();
+
 // ═══ Modules ═════════════════════════════════════
 
 export const ScanFolderBody = z.object({
