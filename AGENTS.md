@@ -20,16 +20,16 @@
 1. 先读本文件。
 2. 再读父级 `../AGENTS.md`。
 3. 再读 `../codex-control-workspace/.workspace-active/workspace/index.md` 和 `../codex-control-workspace/.workspace-active/workspace/current/workspace-current-status.md`。
-4. 如果有当前计划、任务包或 Codex Automation heartbeat，只按 `../codex-control-workspace/.workspace-active/workspace/current` 中明确分配给 `Alembic` 的内容执行。
+4. 如果有当前计划、任务包或 direct-thread delivery，只按 `../codex-control-workspace/.workspace-active/workspace/current` 中明确分配给`Alembic`的内容执行。
 5. 目标、范围、禁止事项、验证命令和回填字段以当前计划 / 任务包和本仓库规则为准；提示词只是唤醒入口，不是唯一任务说明。
 
-### Codex Automation 最小门禁
+### Direct Thread Dispatch 最小门禁
 
-- Automation 只是一次性唤醒 / 投递信封，不改变本窗口职责，也不扩大任务范围；具体任务以 dispatch packet、当前计划和本仓库规则为准。
-- Heartbeat 提示词只承载动态变量、规则名和 skill 指向；不得把提示词当成完整命令手册。用 `currentWindow` / `taskId` / `dispatchGroup` / `controlPlan` 等变量按 `codex-automation-target` skill 执行，变量缺失或冲突时停止回报。
+- Direct-thread delivery 是正常工作投递流水线，不改变本窗口职责，也不扩大任务范围；具体任务以 dispatch packet、当前计划和本仓库规则为准。
+- Delivery prompt 只承载少量动态变量和 skill 指向；不得把提示词当成完整命令手册。状态机路线的可见变量只需要 `currentWindow` / `taskId` / `stateRoot` / 可选 `dispatchGroup`；`controllerWindow`、`returnPolicy`、`humanContextRef`、`stateRevision` 等机器字段从 state root、dispatch group 和 delivery envelope 读取。缺少 `stateRoot` 或变量冲突时停止回报。
 - 本窗口只处理 `Alembic` 对应的 dispatch packet，并返回 `TargetResultEnvelope`；不得代领、代验或处理其它窗口任务。
-- 子窗口默认不创建目标窗口下一跳 heartbeat；补证、重派和下一阶段都由总控 review 后决定。若 delivery `returnRoute=controller` 且 `review-results` 显示本组结果已齐件或阻塞，只允许通过 `build-controller-return` 创建一次总控回跳。
-- 非 TestWindow 不得创建、处理或验证 TestWindow heartbeat，除非当前计划和 delivery envelope 同时显式授权。
+- 子窗口默认不创建目标窗口下一跳 delivery；补证、重派和下一阶段都由总控 review 后决定。若 delivery `returnRoute=controller` 且 `review-results` 显示 `DispatchGroup.returnPolicy` 允许回调，只允许通过 `build-controller-return` 创建一次总控回跳 envelope，并默认回到 `DispatchGroup.controllerWindow` 指定的原发起总控；之后必须继续完成真实 direct-thread send、readback 和 `record-delivery-run`。只有存在 `status=sent` 且 `readback.ok=true` 的 `DirectThreadDeliveryRun`，才算真实回跳完成。完整 group snapshot 留在 controller-return envelope；可见 prompt 只显示非空异常 targets，不能把单个回填误判为整组完成。
+- 非 TestWindow 不得创建、处理或验证 TestWindow delivery，除非当前计划和 delivery envelope 同时显式授权。
 - Thread id 只能写入 control workspace 的本地 runtime；不得写入 tracked 文档、回填正文或 GitHub。
 
 ### 文档落点
