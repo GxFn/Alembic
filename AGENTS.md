@@ -1,41 +1,41 @@
 # Alembic Agent Instructions
 
-<!-- codex-control-workspace:scope:start -->
-## Workspace 接入卡
+<!-- wakeflow:scope:start -->
+## Workspace Access Card
 
-本节由 control workspace 安装脚本维护，只记录本窗口接入坐标和自动化最小门禁。硬规则以父级 AGENTS 与本文件的“本窗口最高停止卡”为准；不要在这里重复仓库专属规则。
+This section is maintained by the Wakeflow runtime installer. It records this window access coordinates and the minimum automation gate. Hard rules come from the parent AGENTS and this file; do not duplicate repository-specific rules here.
 
-### 坐标
+### Coordinates
 
-- Control workspace: `../codex-control-workspace`
+- Wakeflow runtime: `..`
 - Window name: `Alembic`
 - Parent workspace AGENTS: `../AGENTS.md`
-- Active workspace index: `../codex-control-workspace/.workspace-active/workspace/index.md`
-- Active workspace status: `../codex-control-workspace/.workspace-active/workspace/current/workspace-current-status.md`
-- Current plan directory: `../codex-control-workspace/.workspace-active/workspace/current`
-- Window ledger: `../workspace-ledger/Alembic`
+- Active workspace index: `../.workspace-active/workspace/index.md`
+- Active workspace status: `../.workspace-active/workspace/current/workspace-current-status.md`
+- Current plan directory: `../.workspace-active/workspace/current`
+- Window ledger: `../wakeflow-ledger/Alembic`
 
-### 领取 workspace 任务时
+### When claiming workspace work
 
-1. 先读本文件。
-2. 再读父级 `../AGENTS.md`。
-3. 再读 `../codex-control-workspace/.workspace-active/workspace/index.md` 和 `../codex-control-workspace/.workspace-active/workspace/current/workspace-current-status.md`。
-4. 如果有当前计划、任务包或 direct-thread delivery，只按 `../codex-control-workspace/.workspace-active/workspace/current` 中明确分配给`Alembic`的内容执行。
-5. 目标、范围、禁止事项、验证命令和回填字段以当前计划 / 任务包和本仓库规则为准；提示词只是唤醒入口，不是唯一任务说明。
+1. Read this file first.
+2. Then read parent `../AGENTS.md`.
+3. Then read `../.workspace-active/workspace/index.md` and `../.workspace-active/workspace/current/workspace-current-status.md`.
+4. If there is a current plan, task package, or direct-thread delivery, execute only the content under `../.workspace-active/workspace/current` explicitly assigned to `Alembic`.
+5. Goals, scope, forbidden actions, validation commands, and backfill fields come from the current plan, task package, and repository rules. Prompts are only wakeup entrypoints, not the full task specification.
 
-### Direct Thread Dispatch 最小门禁
+### Direct Thread Dispatch Minimum Gate
 
-- Direct-thread delivery 是正常工作投递流水线，不改变本窗口职责，也不扩大任务范围；具体任务以 dispatch packet、当前计划和本仓库规则为准。
-- Delivery prompt 只承载少量动态变量和 skill 指向；不得把提示词当成完整命令手册。状态机路线的可见变量只需要 `currentWindow` / `taskId` / `stateRoot` / 可选 `dispatchGroup`；`controllerWindow`、`returnPolicy`、`humanContextRef`、`stateRevision` 等机器字段从 state root、dispatch group 和 delivery envelope 读取。缺少 `stateRoot` 或变量冲突时停止回报。
-- 本窗口只处理 `Alembic` 对应的 dispatch packet，并返回 `TargetResultEnvelope`；不得代领、代验或处理其它窗口任务。
-- 子窗口默认不创建目标窗口下一跳 delivery；补证、重派和下一阶段都由总控 review 后决定。若 delivery `returnRoute=controller` 且 `review-results` 显示 `DispatchGroup.returnPolicy` 允许回调，只允许通过 `build-controller-return` 创建一次总控回跳 envelope，并默认回到 `DispatchGroup.controllerWindow` 指定的原发起总控；之后必须继续完成真实 direct-thread send、readback 和 `record-delivery-run`。只有存在 `status=sent` 且 `readback.ok=true` 的 `DirectThreadDeliveryRun`，才算真实回跳完成。完整 group snapshot 留在 controller-return envelope；可见 prompt 只显示非空异常 targets，不能把单个回填误判为整组完成。
-- 非 TestWindow 不得创建、处理或验证 TestWindow delivery，除非当前计划和 delivery envelope 同时显式授权。
-- Thread id 只能写入 control workspace 的本地 runtime；不得写入 tracked 文档、回填正文或 GitHub。
+- Direct-thread delivery is the normal work transport. It does not change this window responsibility or expand task scope. Specific work comes from the dispatch packet, current plan, and repository rules.
+- Delivery prompts carry only a few dynamic variables and a skill pointer. Do not treat the prompt as a full command manual. State-machine routes need only visible `currentWindow` / `taskId` / `stateRoot` / optional `dispatchGroup`. Machine fields such as `controllerWindow`, `returnPolicy`, `humanContextRef`, and `stateRevision` are read from the state root, dispatch group, and delivery envelope. Stop and report if `stateRoot` is missing or variables conflict.
+- This window only handles dispatch packets for `Alembic` and returns `TargetResultEnvelope`. Do not claim, accept, or process other window tasks.
+- Child windows do not create target-to-target next-hop delivery by default. Evidence repair, redispatch, and next phases are decided by controller review. If delivery has `returnRoute=controller` and `review-results` shows that `DispatchGroup.returnPolicy` allows a callback, create exactly one controller-return envelope with `build-controller-return`, returning by default to the original controller named by `DispatchGroup.controllerWindow`. Then complete the real direct-thread send, readback, and `record-delivery-run`. A controller return is complete only when a `DirectThreadDeliveryRun` exists with `status=sent` and `readback.ok=true`. The full group snapshot stays in the controller-return envelope; the visible prompt shows only non-empty exceptional targets and must not treat one target backfill as whole-group completion.
+- Non-Test windows must not create, process, or verify Test delivery unless both the current plan and delivery envelope explicitly authorize it.
+- Thread ids may only be written to Wakeflow local runtime. Do not write them to tracked documents, backfill text, or GitHub.
 
-### 文档落点
+### Document Destinations
 
-- 长期跨仓库协作文档、计划、验收、扫描和边界记录写入 `../workspace-ledger/Alembic`；本仓库 `docs/` 只放随源码维护的产品、发布或用户文档。
-<!-- codex-control-workspace:scope:end -->
+- Long-term cross-repository collaboration docs, plans, acceptance records, scans, and boundary records go to `../wakeflow-ledger/Alembic`. This repository `docs/` is only for product, release, or user docs maintained with the source.
+<!-- wakeflow:scope:end -->
 
 ## 本窗口最高停止卡
 
