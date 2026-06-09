@@ -71,6 +71,53 @@ describe('Alembic provider contracts', () => {
     });
   });
 
+  test('declares resident search provider routes and scopes fallback as compatibility metadata', () => {
+    expect(ALEMBIC_PROVIDER_ROUTE_CONTRACTS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: 'get',
+          operationId: 'searchKnowledge',
+          path: '/search',
+          registryRowId: 'I22',
+        }),
+        expect.objectContaining({
+          method: 'post',
+          operationId: 'searchKnowledgeWithHostIntent',
+          path: '/search',
+          registryRowId: 'I22',
+        }),
+      ])
+    );
+
+    const searchFixtures = ALEMBIC_PROVIDER_FIXTURES.filter((fixture) =>
+      fixture.fixtureId.startsWith('search.')
+    );
+    expect(searchFixtures.map((fixture) => fixture.fixtureId)).toEqual([
+      'search.success',
+      'search.compatibility-fallback',
+    ]);
+    expect(searchFixtures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fixtureId: 'search.compatibility-fallback',
+          payload: expect.objectContaining({
+            data: expect.objectContaining({
+              searchMeta: expect.objectContaining({
+                actualMode: 'legacy-fallback',
+                compatibility: expect.objectContaining({
+                  contractId: 'I22.search.compatibility-fallback',
+                  fallback: true,
+                  reason: 'search-engine-unavailable',
+                }),
+              }),
+            }),
+          }),
+        }),
+      ])
+    );
+    expect(JSON.stringify(searchFixtures)).not.toContain('legacyDecisionRegisterItems');
+  });
+
   test('keeps HttpServer mounted API routes aligned with the provider mount manifest', () => {
     const source = readFileSync(path.join(process.cwd(), 'lib/http/HttpServer.ts'), 'utf8');
     const mounted = extractMountedProviderPaths(source);

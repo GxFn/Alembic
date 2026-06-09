@@ -70,4 +70,49 @@ describe('JobProcessEventRecorder', () => {
     ]);
     expect(broadcast).toHaveBeenCalledTimes(2);
   });
+
+  test('keeps large job artifacts behind artifact refs in developer views', () => {
+    const recorder = new JobProcessEventRecorder({ maxEventsPerJob: 5 });
+
+    recorder.record({
+      artifactRefs: [
+        {
+          kind: 'llm-output',
+          label: 'Full LLM output',
+          mimeType: 'text/markdown',
+          ref: '/api/v1/jobs/job_1/artifacts/llm-output-full.md',
+        },
+      ],
+      content: null,
+      jobId: 'job_1',
+      kind: 'llm.output',
+      metadata: {
+        contentOriginalChars: 64_000,
+        contentRetainedChars: 0,
+        contentTruncated: true,
+      },
+      phase: 'dimension-output',
+      summary: 'LLM output stored as artifact.',
+      title: 'LLM output artifact available',
+    });
+
+    const publicList = recorder.list('job_1', { limit: 10 });
+
+    expect(publicList.developerViews).toEqual([
+      expect.objectContaining({
+        artifactRefs: [
+          expect.objectContaining({
+            kind: 'llm-output',
+            ref: '/api/v1/jobs/job_1/artifacts/llm-output-full.md',
+          }),
+        ],
+        content: null,
+        metadata: expect.objectContaining({
+          contentOriginalChars: 64_000,
+          contentTruncated: true,
+        }),
+        summary: 'LLM output stored as artifact.',
+      }),
+    ]);
+  });
 });

@@ -492,6 +492,13 @@ describe('search route resident telemetry', () => {
     expect(data.totalResults).toBe(0);
     expect(searchMeta).toMatchObject({
       actualMode: 'legacy-fallback',
+      compatibility: {
+        contractId: 'I22.search.compatibility-fallback',
+        fallback: true,
+        legacyRoute: 'knowledgeService+guardService',
+        reason: 'search-engine-unavailable',
+        source: 'search-engine-unavailable-fallback',
+      },
       coreRoute: null,
       degraded: true,
       degradedReason: 'SearchEngine unavailable; resident service used legacy non-vector fallback',

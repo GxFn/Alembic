@@ -39,6 +39,15 @@ describe('IntentEpisodeStore', () => {
       activeFile: '/Users/secret/project/src/service.ts',
       hostIntent: {
         applied: true,
+        compatibility: {
+          consumer: 'alembic-plugin',
+          fallbackAllowed: true,
+          fallbackFields: ['userQuery', 'activeFile'],
+          mode: 'mixed-host-intent-and-legacy-args',
+          redacted: true,
+          removalCondition:
+            'Remove legacy userQuery/activeFile/language fallback after the Plugin host-intent frame is the only current consumer input path.',
+        },
         confidence: 0.82,
         scenario: 'generate',
         sourceRefs: ['/Users/secret/project/src/service.ts:42', 'host:intent'],
@@ -97,6 +106,15 @@ describe('IntentEpisodeStore', () => {
       outcomeReason: 'done',
       status: 'completed',
       taskId: 'task-1',
+    });
+    expect(started.hostIntent).toMatchObject({
+      compatibility: {
+        consumer: 'alembic-plugin',
+        fallbackAllowed: true,
+        fallbackFields: ['userQuery', 'activeFile'],
+        mode: 'mixed-host-intent-and-legacy-args',
+        redacted: true,
+      },
     });
     expect(store.latest()).toMatchObject({ episodeId: started.episodeId, status: 'completed' });
     expect(store.latest({ sessionId: 'raw-thread-id' })).toMatchObject({

@@ -13,7 +13,6 @@ import {
   type JobDisplaySnapshotLlmIoKind,
   type JobDisplaySnapshotPhaseStatus,
   type JobDisplaySnapshotPhaseTimelineItem,
-  type JobDisplaySnapshotSection,
   type JobDisplaySnapshotValidationResult,
   type JobDisplaySnapshotWarning,
   validateJobDisplaySnapshot,

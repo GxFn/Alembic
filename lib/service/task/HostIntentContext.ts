@@ -30,6 +30,7 @@ export interface NormalizedHostIntentContext {
   activeFile?: string;
   applied: boolean;
   confidence?: number;
+  compatibility: HostIntentCompatibilityPolicy;
   degraded: boolean;
   degradedReason?: string;
   keywordHints: string[];
@@ -46,6 +47,7 @@ export interface NormalizedHostIntentContext {
 export interface HostIntentContextMeta {
   applied: boolean;
   confidence?: number;
+  compatibility: HostIntentCompatibilityPolicy;
   degraded: boolean;
   degradedReason?: string;
   scenario?: SearchScenario;
@@ -53,6 +55,15 @@ export interface HostIntentContextMeta {
   sessionHistoryCount: number;
   sourceRefs: string[];
   sources: string[];
+}
+
+export interface HostIntentCompatibilityPolicy {
+  consumer: 'alembic-plugin';
+  fallbackAllowed: boolean;
+  fallbackFields: string[];
+  mode: 'host-intent-frame' | 'mixed-host-intent-and-legacy-args' | 'legacy-args-only';
+  redacted: true;
+  removalCondition: string;
 }
 
 export function normalizeHostIntentContext(
@@ -95,26 +106,9 @@ export function normalizeHostIntentContext(
     ...stringsFrom(context?.referencedFiles),
   ]).slice(0, 20);
 
-  const userQuery =
-    firstString([
-      declared?.query,
-      declared?.normalizedQuery,
-      context?.query,
-      turn?.userQuery,
-      turn?.prompt,
-      input.userQuery,
-    ]) ?? '';
-  const activeFile =
-    firstString([
-      turn?.activeFile,
-      turn?.currentFile,
-      context?.activeFile,
-      declared?.activeFile,
-      input.activeFile,
-    ]) ?? undefined;
-  const language =
-    firstString([declared?.language, context?.language, turn?.language, input.language]) ??
-    undefined;
+  const userQuery = resolveHostIntentUserQuery(input, declared, context, turn);
+  const activeFile = resolveHostIntentActiveFile(input, declared, context, turn);
+  const language = resolveHostIntentLanguage(input, declared, context, turn);
   const scenario = scenarioValue(
     firstString([
       input.scenario,
@@ -150,23 +144,25 @@ export function normalizeHostIntentContext(
     input.degraded === true ||
     Boolean(degradedReason);
   const sources = [
-    declared ? 'hostDeclaredIntent' : null,
-    context ? 'intentContext' : null,
-    turn ? 'hostTurnMeta' : null,
+    sourceName(declared, 'hostDeclaredIntent'),
+    sourceName(context, 'intentContext'),
+    sourceName(turn, 'hostTurnMeta'),
   ].filter((source): source is string => Boolean(source));
-  const applied =
-    records.length > 0 ||
-    sessionHistory.length > 0 ||
-    sourceRefs.length > 0 ||
-    queryHints.length > 0 ||
-    keywordHints.length > 0 ||
-    confidence !== undefined ||
-    degraded;
+  const applied = hasAppliedHostIntentContext({
+    confidence,
+    degraded,
+    keywordHints,
+    queryHints,
+    records,
+    sessionHistory,
+    sourceRefs,
+  });
 
   return {
     activeFile,
     applied,
     confidence,
+    compatibility: buildHostIntentCompatibilityPolicy(input, records.length > 0),
     degraded,
     degradedReason,
     keywordHints,
@@ -211,6 +207,7 @@ export function createHostIntentContextMeta(
   return {
     applied: true,
     confidence: context.confidence,
+    compatibility: context.compatibility,
     degraded: context.degraded,
     degradedReason: context.degradedReason,
     scenario: context.scenario,
@@ -280,6 +277,111 @@ function stringsFrom(value: unknown): string[] {
     return stringValue(value) ? [stringValue(value) as string] : [];
   }
   return [];
+}
+
+function sourceName(record: Record<string, unknown> | null, name: string): string | null {
+  return record ? name : null;
+}
+
+function resolveHostIntentUserQuery(
+  input: HostIntentContextInput,
+  declared: Record<string, unknown> | null,
+  context: Record<string, unknown> | null,
+  turn: Record<string, unknown> | null
+): string {
+  return (
+    firstString([
+      declared?.query,
+      declared?.normalizedQuery,
+      context?.query,
+      turn?.userQuery,
+      turn?.prompt,
+      input.userQuery,
+    ]) ?? ''
+  );
+}
+
+function resolveHostIntentActiveFile(
+  input: HostIntentContextInput,
+  declared: Record<string, unknown> | null,
+  context: Record<string, unknown> | null,
+  turn: Record<string, unknown> | null
+): string | undefined {
+  return (
+    firstString([
+      turn?.activeFile,
+      turn?.currentFile,
+      context?.activeFile,
+      declared?.activeFile,
+      input.activeFile,
+    ]) ?? undefined
+  );
+}
+
+function resolveHostIntentLanguage(
+  input: HostIntentContextInput,
+  declared: Record<string, unknown> | null,
+  context: Record<string, unknown> | null,
+  turn: Record<string, unknown> | null
+): string | undefined {
+  return (
+    firstString([declared?.language, context?.language, turn?.language, input.language]) ??
+    undefined
+  );
+}
+
+function hasAppliedHostIntentContext(options: {
+  confidence?: number;
+  degraded: boolean;
+  keywordHints: string[];
+  queryHints: string[];
+  records: Record<string, unknown>[];
+  sessionHistory: Array<{ content: string }>;
+  sourceRefs: string[];
+}): boolean {
+  return (
+    options.records.length > 0 ||
+    options.sessionHistory.length > 0 ||
+    options.sourceRefs.length > 0 ||
+    options.queryHints.length > 0 ||
+    options.keywordHints.length > 0 ||
+    options.confidence !== undefined ||
+    options.degraded
+  );
+}
+
+function buildHostIntentCompatibilityPolicy(
+  input: HostIntentContextInput,
+  hostIntentFramePresent: boolean
+): HostIntentCompatibilityPolicy {
+  const fallbackFields = hostIntentLegacyFields(input);
+  return {
+    consumer: 'alembic-plugin',
+    fallbackAllowed: fallbackFields.length > 0,
+    fallbackFields,
+    mode: hostIntentFramePresent
+      ? fallbackFields.length > 0
+        ? 'mixed-host-intent-and-legacy-args'
+        : 'host-intent-frame'
+      : 'legacy-args-only',
+    redacted: true,
+    removalCondition:
+      'Remove legacy userQuery/activeFile/language fallback after the Plugin host-intent frame is the only current consumer input path.',
+  };
+}
+
+function hostIntentLegacyFields(input: HostIntentContextInput): string[] {
+  const fields: string[] = [];
+  if (stringValue(input.userQuery)) {
+    fields.push('userQuery');
+  }
+  if (stringValue(input.activeFile)) {
+    fields.push('activeFile');
+  }
+  if (stringValue(input.language)) {
+    fields.push('language');
+  }
+  return fields;
 }
 
 function uniqueStrings(values: Array<string | undefined>): string[] {

@@ -86,6 +86,11 @@ interface SearchRouteResult {
   [key: string]: unknown;
 }
 
+type SearchFallbackResults = Record<
+  string,
+  { data?: unknown[]; pagination?: Record<string, unknown> }
+>;
+
 interface ResidentSearchInput {
   confidence?: number;
   degraded?: boolean;
@@ -118,6 +123,14 @@ interface ResidentSearchVectorStats {
 interface ResidentSearchMeta {
   route: 'resident-search';
   service: 'alembic-daemon';
+  compatibility?: {
+    contractId: 'I22.search.compatibility-fallback';
+    fallback: boolean;
+    legacyRoute: 'knowledgeService+guardService';
+    reason: 'search-engine-unavailable';
+    removalCondition: string;
+    source: 'search-engine-unavailable-fallback';
+  };
   coreRoute: string | null;
   requestedMode: string;
   actualMode: string;
@@ -306,81 +319,12 @@ async function handleResidentSearch(
     });
   }
 
-  const results: Record<string, { data?: unknown[]; pagination?: Record<string, unknown> }> = {};
-  const pagination = { page: input.page, pageSize: input.limit };
-
-  // SearchEngine 不可用时的降级路径（Dashboard 冷启动场景）
-  // recipes + candidates 共用 knowledgeService.search()，避免重复查询
-  if (
-    input.type === 'all' ||
-    input.type === 'recipe' ||
-    input.type === 'solution' ||
-    input.type === 'candidate'
-  ) {
-    try {
-      const knowledgeService = container.get('knowledgeService');
-      const searchResult = await knowledgeService.search(query, pagination);
-      if (input.type === 'all') {
-        results.recipes = searchResult;
-        results.candidates = searchResult; // 同源数据，避免二次查询
-      } else if (input.type === 'candidate') {
-        results.candidates = searchResult;
-      } else {
-        results.recipes = searchResult;
-      }
-    } catch (err: unknown) {
-      logger.warn('Knowledge 搜索失败', { query, error: (err as Error).message });
-      if (input.type === 'all' || input.type === 'recipe' || input.type === 'solution') {
-        results.recipes = {
-          data: [],
-          pagination: { page: input.page, pageSize: input.limit, total: 0, pages: 0 },
-        };
-      }
-      if (input.type === 'all' || input.type === 'candidate') {
-        results.candidates = {
-          data: [],
-          pagination: { page: input.page, pageSize: input.limit, total: 0, pages: 0 },
-        };
-      }
-    }
-  }
-
-  // 搜索 Guard Rule（boundary-constraint 类型的 Recipe）
-  if (input.type === 'all' || input.type === 'rule') {
-    try {
-      const guardService = container.get('guardService');
-      results.rules = await guardService.searchRules(query, pagination);
-    } catch (err: unknown) {
-      logger.warn('Guard Rule 搜索失败', { query, error: (err as Error).message });
-      results.rules = {
-        data: [],
-        pagination: { page: input.page, pageSize: input.limit, total: 0, pages: 0 },
-      };
-    }
-  }
-
-  if (decisionRegisterView && shouldReadDecisionRegister(input.type)) {
-    const documents = decisionRegisterView.documents.filter(
-      (document) => document.acceptedForRetrieval
-    );
-    if (documents.length > 0) {
-      results.decisions = {
-        data: documents.map(decisionDocumentToSearchItem),
-        pagination: {
-          page: input.page,
-          pageSize: input.limit,
-          total: documents.length,
-          pages: 1,
-        },
-      };
-    }
-  }
-
-  const totalResults = Object.values(results).reduce(
-    (sum, r) =>
-      sum + ((r.pagination as Record<string, number> | undefined)?.total || r.data?.length || 0),
-    0
-  );
+  const fallback = await buildSearchCompatibilityFallback({
+    container,
+    decisionRegisterView,
+    input,
+    query,
+  });
 
   res.json({
     success: true,
@@ -388,19 +332,163 @@ async function handleResidentSearch(
       query,
       type: input.type,
       mode: input.mode,
-      totalResults,
+      totalResults: fallback.totalResults,
       searchMeta: await buildLegacySearchMeta({
         container,
         decisionRegisterView,
         hostIntent: hostIntentMeta,
         intentSearchPlan,
-        items: legacyDecisionRegisterItems(decisionRegisterView, input),
+        items: fallback.decisionItems,
         mode: input.mode,
-        resultCount: totalResults,
+        resultCount: fallback.totalResults,
       }),
-      ...results,
+      ...fallback.results,
     },
   });
+}
+
+async function buildSearchCompatibilityFallback({
+  container,
+  decisionRegisterView,
+  input,
+  query,
+}: {
+  container: ReturnType<typeof getServiceContainer>;
+  decisionRegisterView?: DecisionRegisterSearchableView | null;
+  input: ResidentSearchInput;
+  query: string;
+}): Promise<{
+  decisionItems: SearchRouteItem[];
+  results: SearchFallbackResults;
+  totalResults: number;
+}> {
+  const results: SearchFallbackResults = {};
+  const pagination = { page: input.page, pageSize: input.limit };
+  await appendKnowledgeFallbackResults({ container, input, pagination, query, results });
+  await appendGuardFallbackResults({ container, input, pagination, query, results });
+  appendDecisionRegisterFallbackResults({ decisionRegisterView, input, results });
+  return {
+    decisionItems: legacyDecisionRegisterItems(decisionRegisterView ?? null, input),
+    results,
+    totalResults: countSearchFallbackResults(results),
+  };
+}
+
+async function appendKnowledgeFallbackResults({
+  container,
+  input,
+  pagination,
+  query,
+  results,
+}: {
+  container: ReturnType<typeof getServiceContainer>;
+  input: ResidentSearchInput;
+  pagination: { page: number; pageSize: number };
+  query: string;
+  results: SearchFallbackResults;
+}): Promise<void> {
+  if (!shouldReadKnowledgeFallback(input.type)) {
+    return;
+  }
+  try {
+    const knowledgeService = container.get('knowledgeService');
+    const searchResult = await knowledgeService.search(query, pagination);
+    if (input.type === 'all') {
+      results.recipes = searchResult;
+      results.candidates = searchResult;
+    } else if (input.type === 'candidate') {
+      results.candidates = searchResult;
+    } else {
+      results.recipes = searchResult;
+    }
+  } catch (err: unknown) {
+    logger.warn('Knowledge 搜索失败', { query, error: (err as Error).message });
+    if (input.type === 'all' || input.type === 'recipe' || input.type === 'solution') {
+      results.recipes = emptyFallbackPage(input);
+    }
+    if (input.type === 'all' || input.type === 'candidate') {
+      results.candidates = emptyFallbackPage(input);
+    }
+  }
+}
+
+async function appendGuardFallbackResults({
+  container,
+  input,
+  pagination,
+  query,
+  results,
+}: {
+  container: ReturnType<typeof getServiceContainer>;
+  input: ResidentSearchInput;
+  pagination: { page: number; pageSize: number };
+  query: string;
+  results: SearchFallbackResults;
+}): Promise<void> {
+  if (input.type !== 'all' && input.type !== 'rule') {
+    return;
+  }
+  try {
+    const guardService = container.get('guardService');
+    results.rules = await guardService.searchRules(query, pagination);
+  } catch (err: unknown) {
+    logger.warn('Guard Rule 搜索失败', { query, error: (err as Error).message });
+    results.rules = emptyFallbackPage(input);
+  }
+}
+
+function appendDecisionRegisterFallbackResults({
+  decisionRegisterView,
+  input,
+  results,
+}: {
+  decisionRegisterView?: DecisionRegisterSearchableView | null;
+  input: ResidentSearchInput;
+  results: SearchFallbackResults;
+}): void {
+  if (!decisionRegisterView || !shouldReadDecisionRegister(input.type)) {
+    return;
+  }
+  const documents = decisionRegisterView.documents.filter(
+    (document) => document.acceptedForRetrieval
+  );
+  if (documents.length === 0) {
+    return;
+  }
+  results.decisions = {
+    data: documents.map(decisionDocumentToSearchItem),
+    pagination: {
+      page: input.page,
+      pageSize: input.limit,
+      total: documents.length,
+      pages: 1,
+    },
+  };
+}
+
+function shouldReadKnowledgeFallback(type: string): boolean {
+  return type === 'all' || type === 'recipe' || type === 'solution' || type === 'candidate';
+}
+
+function emptyFallbackPage(input: ResidentSearchInput): {
+  data: never[];
+  pagination: { page: number; pageSize: number; total: number; pages: number };
+} {
+  return {
+    data: [],
+    pagination: { page: input.page, pageSize: input.limit, total: 0, pages: 0 },
+  };
+}
+
+function countSearchFallbackResults(results: SearchFallbackResults): number {
+  return Object.values(results).reduce(
+    (sum, result) =>
+      sum +
+      ((result.pagination as Record<string, number> | undefined)?.total ||
+        result.data?.length ||
+        0),
+    0
+  );
 }
 
 async function buildResidentSearchMeta({
@@ -575,6 +663,15 @@ async function buildLegacySearchMeta({
   return {
     route: 'resident-search',
     service: 'alembic-daemon',
+    compatibility: {
+      contractId: 'I22.search.compatibility-fallback',
+      fallback: true,
+      legacyRoute: 'knowledgeService+guardService',
+      reason: 'search-engine-unavailable',
+      removalCondition:
+        'Remove this fallback after SearchEngine availability is enforced for resident search provider responses.',
+      source: 'search-engine-unavailable-fallback',
+    },
     coreRoute: null,
     requestedMode: mode,
     actualMode: 'legacy-fallback',

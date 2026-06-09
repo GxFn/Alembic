@@ -230,11 +230,17 @@ const routeRows = {
     scenarios: ['success', 'failure'],
   },
   I22: {
-    artifactPolicy: 'Workflow summaries inline; reports/snapshots by artifactRef.',
+    artifactPolicy:
+      'Workflow and resident search summaries inline; reports/snapshots by artifactRef and degraded search fallback by compatibility metadata.',
     capabilityDiscovery: ['/api/v1/knowledge', '/api/v1/modules', '/api/v1/candidates'],
     errorKinds: ['invalid-input', 'unavailable', 'timeout', 'not-found', 'internal-error'],
     exposureClasses: ['public', 'consumer-needed', 'diagnostic'],
-    fixtureIds: ['knowledge.success', 'workflow.unavailable'],
+    fixtureIds: [
+      'knowledge.success',
+      'search.success',
+      'search.compatibility-fallback',
+      'workflow.unavailable',
+    ],
     scenarios: ['success', 'unavailable-runtime'],
   },
   I23: {
@@ -347,6 +353,10 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
   route('I21', 'get', '/rules', 'listGuardRules', 'Guard rules route family', ['Guard']),
   route('I21', 'get', '/violations', 'listViolations', 'Violations route family', ['Guard']),
   route('I22', 'get', '/knowledge', 'listKnowledge', 'Knowledge route family', ['Knowledge']),
+  route('I22', 'get', '/search', 'searchKnowledge', 'Resident search query', ['Knowledge']),
+  route('I22', 'post', '/search', 'searchKnowledgeWithHostIntent', 'Resident search command', [
+    'Knowledge',
+  ]),
   route('I22', 'get', '/recipes', 'listRecipes', 'Recipe route family', ['Knowledge']),
   route('I22', 'post', '/candidates/enrich', 'enrichCandidates', 'Candidate enrichment command', [
     'Knowledge',
@@ -585,6 +595,48 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
   fixture('I22', 'I22.knowledge.get', 'knowledge.success', 'success', {
     success: true,
     data: { items: [{ id: 'knowledge-alpha', title: 'Boundary rule' }], total: 1 },
+  }),
+  fixture('I22', 'I22.search.get', 'search.success', 'success', {
+    success: true,
+    data: {
+      query: 'decision register scope',
+      items: [{ id: 'knowledge-alpha', kind: 'pattern', title: 'Boundary rule' }],
+      searchMeta: {
+        actualMode: 'bm25',
+        decisionRegister: {
+          acceptedDecisionRefs: ['decision-alpha'],
+          defaultLifecycle: 'active-effective-only',
+          endpoint: '/api/v1/decision-register/searchable',
+          vectorAdmission: 'accepted-only',
+        },
+        vectorUsed: false,
+      },
+    },
+  }),
+  fixture('I22', 'I22.search.get', 'search.compatibility-fallback', 'success', {
+    success: true,
+    data: {
+      query: 'decision register scope',
+      totalResults: 0,
+      searchMeta: {
+        actualMode: 'legacy-fallback',
+        compatibility: {
+          contractId: 'I22.search.compatibility-fallback',
+          fallback: true,
+          legacyRoute: 'knowledgeService+guardService',
+          reason: 'search-engine-unavailable',
+          source: 'search-engine-unavailable-fallback',
+        },
+        decisionRegister: {
+          defaultLifecycle: 'active-effective-only',
+          endpoint: '/api/v1/decision-register/searchable',
+          vectorAdmission: 'accepted-only',
+        },
+        degraded: true,
+        semanticUsed: false,
+        vectorUsed: false,
+      },
+    },
   }),
   fixture('I22', 'I22.workflow', 'workflow.unavailable', 'unavailable-runtime', {
     success: false,

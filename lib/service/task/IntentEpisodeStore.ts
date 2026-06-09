@@ -23,6 +23,14 @@ export interface IntentEpisodeWorkspaceIdentity {
 
 export interface IntentEpisodeHostIntentMeta {
   applied?: boolean;
+  compatibility?: {
+    consumer?: string;
+    fallbackAllowed?: boolean;
+    fallbackFields?: string[];
+    mode?: string;
+    redacted?: boolean;
+    removalCondition?: string;
+  };
   confidence?: number;
   degraded?: boolean;
   degradedReason?: string;
@@ -359,6 +367,9 @@ function sanitizeHostIntent(
   }
   return {
     applied: value.applied === true,
+    ...(value.compatibility && typeof value.compatibility === 'object'
+      ? { compatibility: sanitizeHostIntentCompatibility(value.compatibility) }
+      : {}),
     ...(typeof value.confidence === 'number' && Number.isFinite(value.confidence)
       ? { confidence: Math.max(0, Math.min(1, value.confidence)) }
       : {}),
@@ -375,6 +386,21 @@ function sanitizeHostIntent(
       : {}),
     sourceRefs: collectSourceRefs(value.sourceRefs, null, null),
     sources: stringsFrom(value.sources).slice(0, 8),
+  };
+}
+
+function sanitizeHostIntentCompatibility(
+  value: NonNullable<IntentEpisodeHostIntentMeta['compatibility']>
+): NonNullable<IntentEpisodeHostIntentMeta['compatibility']> {
+  return {
+    ...(sanitizeText(value.consumer, 80) ? { consumer: sanitizeText(value.consumer, 80) } : {}),
+    fallbackAllowed: value.fallbackAllowed === true,
+    fallbackFields: stringsFrom(value.fallbackFields).slice(0, 8),
+    ...(sanitizeText(value.mode, 120) ? { mode: sanitizeText(value.mode, 120) } : {}),
+    redacted: value.redacted === true,
+    ...(sanitizeText(value.removalCondition, 300)
+      ? { removalCondition: sanitizeText(value.removalCondition, 300) }
+      : {}),
   };
 }
 

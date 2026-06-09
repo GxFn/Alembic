@@ -4,6 +4,7 @@ import { taskHandler } from '../../lib/resident/tool-handlers/task.js';
 import { createIdleIntent } from '../../lib/resident/tool-schema/types.js';
 import {
   applyHostIntentContext,
+  createHostIntentContextMeta,
   normalizeHostIntentContext,
 } from '../../lib/service/task/HostIntentContext.js';
 import { extract } from '../../lib/service/task/IntentExtractor.js';
@@ -35,6 +36,13 @@ describe('host intent context consumption', () => {
     expect(context).toMatchObject({
       activeFile: 'src/service.ts',
       applied: true,
+      compatibility: {
+        consumer: 'alembic-plugin',
+        fallbackAllowed: true,
+        fallbackFields: ['userQuery', 'activeFile', 'language'],
+        mode: 'mixed-host-intent-and-legacy-args',
+        redacted: true,
+      },
       confidence: 0.83,
       language: 'typescript',
       scenario: 'generate',
@@ -55,6 +63,18 @@ describe('host intent context consumption', () => {
       scenario: 'generate',
     });
     expect(extracted.keywordQueries.join(' ')).toContain('factory');
+
+    const meta = createHostIntentContextMeta(context);
+    expect(meta).toMatchObject({
+      compatibility: {
+        consumer: 'alembic-plugin',
+        fallbackFields: ['userQuery', 'activeFile', 'language'],
+        mode: 'mixed-host-intent-and-legacy-args',
+        redacted: true,
+      },
+    });
+    expect(JSON.stringify(meta)).not.toContain('fallback query');
+    expect(JSON.stringify(meta)).not.toContain('src/fallback.py');
   });
 
   test('task prime passes host context into PrimeSearchPipeline and response metadata', async () => {
