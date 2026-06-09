@@ -76,6 +76,7 @@ const DEFAULT_JOB_STATUSES: DaemonJobStatus[] = [
 
 interface BuildProjectSummaryOptions {
   activeProjectRoot?: string | null;
+  daemonStatus?: DaemonStatus | null;
   entry: ProjectEntry | null;
   projectRoot: string;
   selectedProjectRoot?: string | null;
@@ -395,8 +396,9 @@ export class ProjectRuntimeControl {
     }
 
     let startError: string | null = null;
+    let startStatus: DaemonStatus | null = null;
     try {
-      await this.#supervisor.start({
+      startStatus = await this.#supervisor.start({
         projectRoot: targetBefore.projectRoot,
         restart: options.restart,
         waitUntilReadyMs: options.waitUntilReadyMs,
@@ -407,15 +409,18 @@ export class ProjectRuntimeControl {
 
     const targetAfterStart = await this.buildProjectSummary({
       activeProjectRoot: shouldDeferCurrentStop ? before.state.activeProjectRoot : null,
+      daemonStatus: startStatus,
       entry: resolved.entry,
       projectRoot: resolved.projectRoot,
       selectedProjectRoot: targetBefore.projectRoot,
     });
     const daemonError = startError
       ? `Failed to start target runtime ${targetBefore.projectRoot}: ${startError}`
-      : targetAfterStart.daemon.ready
-        ? null
-        : (targetAfterStart.daemon.message ?? 'Target daemon did not become ready');
+      : startStatus && !startStatus.ready
+        ? (startStatus.message ?? `Target daemon did not become ready; see ${startStatus.logPath}`)
+        : targetAfterStart.daemon.ready
+          ? null
+          : (targetAfterStart.daemon.message ?? 'Target daemon did not become ready');
 
     if (daemonError && shouldDeferCurrentStop) {
       return this.actionResult({
@@ -440,7 +445,9 @@ export class ProjectRuntimeControl {
     );
 
     const snapshot = await this.snapshot();
-    const targetProject = snapshot.selectedProject ?? targetAfterStart;
+    const targetProject = daemonError
+      ? targetAfterStart
+      : (snapshot.selectedProject ?? targetAfterStart);
 
     return {
       action,
@@ -501,7 +508,8 @@ export class ProjectRuntimeControl {
     const projectExists = existsSync(projectRoot);
     const selected = sameProjectRoot(projectRoot, options.selectedProjectRoot ?? null);
     const activeRuntimeState = sameProjectRoot(projectRoot, options.activeProjectRoot ?? null);
-    const daemon = projectExists ? await this.safeDaemonStatus(projectRoot) : null;
+    const daemon =
+      options.daemonStatus ?? (projectExists ? await this.safeDaemonStatus(projectRoot) : null);
     const status = projectExists ? (daemon?.status ?? 'unavailable') : 'missing';
     const healthData = asRecord(daemon?.health?.data);
     const dashboardUrl = firstString(healthData?.dashboardUrl, daemon?.state?.dashboardUrl);

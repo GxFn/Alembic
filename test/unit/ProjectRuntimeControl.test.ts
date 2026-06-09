@@ -138,6 +138,7 @@ class FakeSupervisor {
   readonly startCalls: string[] = [];
   readonly stopCalls: string[] = [];
   readonly statuses = new Map<string, DaemonStatus>();
+  readonly transientFailedStartRoots = new Set<string>();
 
   setReady(projectRoot: string): DaemonStatus {
     const paths = resolveDaemonPaths(projectRoot);
@@ -146,10 +147,15 @@ class FakeSupervisor {
     return status;
   }
 
-  setStartFailure(projectRoot: string): void {
+  setStartFailure(projectRoot: string, options: { transient?: boolean } = {}): void {
     const paths = resolveDaemonPaths(projectRoot);
     this.failedStartRoots.add(paths.projectRoot);
-    this.failedStartRoots.add(ProjectRegistry.inspect(projectRoot).projectRealpath);
+    const realpath = ProjectRegistry.inspect(projectRoot).projectRealpath;
+    this.failedStartRoots.add(realpath);
+    if (options.transient) {
+      this.transientFailedStartRoots.add(paths.projectRoot);
+      this.transientFailedStartRoots.add(realpath);
+    }
   }
 
   async status(projectRoot: string): Promise<DaemonStatus> {
@@ -179,7 +185,9 @@ class FakeSupervisor {
         state: null,
         status: 'failed',
       });
-      this.statuses.set(paths.projectRoot, status);
+      if (!this.transientFailedStartRoots.has(paths.projectRoot)) {
+        this.statuses.set(paths.projectRoot, status);
+      }
       return status;
     }
     return this.setReady(paths.projectRoot);
@@ -381,6 +389,54 @@ describe('ProjectRuntimeControl', () => {
       observedSource: 'alembic-source-of-truth',
       reasonCode: 'daemon-not-running',
       retryable: true,
+    });
+  });
+
+  test('start action preserves transient daemon start failure diagnostics', async () => {
+    useTempAlembicHome();
+    const projectRoot = makeProjectRoot();
+    const entry = ProjectRegistry.register(projectRoot, true);
+    const fake = new FakeSupervisor();
+    fake.setStartFailure(projectRoot, { transient: true });
+    const control = new ProjectRuntimeControl({
+      supervisor: fake as unknown as DaemonSupervisor,
+    });
+
+    const result = await control.startProject({ projectId: entry.id });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('daemon failed to become ready');
+    expect(result.targetProject).toMatchObject({
+      daemon: {
+        message: 'daemon failed to become ready',
+        ready: false,
+        status: 'failed',
+      },
+      flags: {
+        activeRuntime: false,
+        selected: true,
+        unavailable: true,
+      },
+      projectId: entry.id,
+      status: 'failed',
+    });
+    expect(result.handoff).toMatchObject({
+      apiBaseUrl: null,
+      dashboardUrl: null,
+      projectId: entry.id,
+      status: 'failed',
+    });
+    expect(result.snapshot.selectedProject).toMatchObject({
+      daemon: {
+        message: 'daemon is not started',
+        status: 'stopped',
+      },
+      projectId: entry.id,
+      status: 'stopped',
+    });
+    expect(control.readState()).toMatchObject({
+      activeProjectId: null,
+      selectedProjectId: entry.id,
     });
   });
 
