@@ -5,6 +5,7 @@ import {
   createHttpChatAgentRunInput,
   ensureAiConfigUpdateAllowed,
   ensureDirectToolAllowed,
+  httpStatusForToolEnvelope,
   sendToolEnvelopeResponse,
 } from '../../lib/http/routes/ai.js';
 
@@ -251,6 +252,26 @@ describe('AI route direct tool governance', () => {
     sendToolEnvelopeResponse(res, envelope);
 
     expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: envelope });
+  });
+
+  test('maps partial direct tool envelopes to HTTP partial success', () => {
+    const res = mockResponse();
+    const envelope = toolEnvelope({
+      status: 'partial',
+      text: 'partial tool output available',
+      structuredContent: { completed: 1, failed: 1 },
+      diagnostics: {
+        ...toolEnvelope().diagnostics,
+        warnings: [{ code: 'partial-result', message: 'one item failed', stage: 'execute' }],
+      },
+    });
+
+    expect(httpStatusForToolEnvelope('partial')).toBe(206);
+
+    sendToolEnvelopeResponse(res, envelope);
+
+    expect(res.status).toHaveBeenCalledWith(206);
     expect(res.json).toHaveBeenCalledWith({ success: true, data: envelope });
   });
 
