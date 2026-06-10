@@ -10,7 +10,7 @@ import {
 import { extract } from '../../lib/service/task/IntentExtractor.js';
 
 describe('host intent context consumption', () => {
-  test('normalizes Plugin host intent context without losing legacy fallback values', () => {
+  test('normalizes Plugin host intent context while preserving canonical host values', () => {
     const context = normalizeHostIntentContext({
       activeFile: 'src/fallback.py',
       hostDeclaredIntent: {

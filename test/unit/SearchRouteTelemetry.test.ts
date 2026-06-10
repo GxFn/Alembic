@@ -477,7 +477,7 @@ describe('search route resident telemetry', () => {
     });
   });
 
-  test('reports legacy fallback metadata when SearchEngine is unavailable', async () => {
+  test('reports degraded search telemetry when SearchEngine is unavailable', async () => {
     mocks.searchEngine.search.mockRejectedValue(new Error('offline'));
     mocks.knowledgeService.search.mockResolvedValue({ data: [], pagination: { total: 0 } });
     mocks.guardService.searchRules.mockResolvedValue({ data: [], pagination: { total: 0 } });
