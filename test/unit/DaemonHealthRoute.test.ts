@@ -213,6 +213,9 @@ describe('daemon health resident service contract', () => {
       lastScanAt: '2026-05-31T01:02:03.000Z',
       status: 'degraded',
     });
+    expect(
+      (data.capabilities as Record<string, Record<string, unknown>>).fileMonitor
+    ).not.toHaveProperty('compatibilityAliases');
     expect(data.runtimeBoundary).toBeDefined();
   });
 
@@ -247,6 +250,7 @@ describe('daemon health resident service contract', () => {
       mode: 'host-event-bridge',
       status: 'running',
     });
+    expect(capabilities.fileMonitor).not.toHaveProperty('compatibilityAliases');
     expect(residentCapabilities['file-monitor.git-worktree']).toMatchObject({
       available: false,
       message: 'Alembic daemon native file monitor is running; git worktree fallback is inactive.',

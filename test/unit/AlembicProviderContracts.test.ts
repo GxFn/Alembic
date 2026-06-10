@@ -99,20 +99,23 @@ describe('Alembic provider contracts', () => {
     );
     expect(searchFixtures.map((fixture) => fixture.fixtureId)).toEqual([
       'search.success',
-      'search.compatibility-fallback',
+      'search.degraded',
     ]);
     expect(searchFixtures).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          fixtureId: 'search.compatibility-fallback',
+          fixtureId: 'search.degraded',
           payload: expect.objectContaining({
             data: expect.objectContaining({
               searchMeta: expect.objectContaining({
                 actualMode: 'legacy-fallback',
-                compatibility: expect.objectContaining({
-                  contractId: 'I22.search.compatibility-fallback',
-                  fallback: true,
-                  reason: 'search-engine-unavailable',
+                degraded: true,
+                degradedReason:
+                  'SearchEngine unavailable; resident service used legacy non-vector fallback',
+                residentVector: expect.objectContaining({
+                  available: false,
+                  endpoint: '/api/v1/search',
+                  reason: 'SearchEngine unavailable; vector route was not attempted',
                 }),
               }),
             }),
@@ -120,6 +123,7 @@ describe('Alembic provider contracts', () => {
         }),
       ])
     );
+    expect(JSON.stringify(searchFixtures)).not.toContain('compatibility');
     expect(JSON.stringify(searchFixtures)).not.toContain('legacyDecisionRegisterItems');
   });
 

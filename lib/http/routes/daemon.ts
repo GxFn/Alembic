@@ -51,7 +51,10 @@ export interface ResidentSearchCapability {
   };
 }
 
-type RuntimeFileMonitorCapability = AlembicRuntimeCapabilities['fileMonitor'] & {
+type RuntimeFileMonitorCapability = Omit<
+  AlembicRuntimeCapabilities['fileMonitor'],
+  'compatibilityAliases'
+> & {
   activeEventSource: DaemonFileMonitorActiveEventSource;
   degraded: boolean;
   degradedReason: string | null;
@@ -65,8 +68,9 @@ type RuntimeFileMonitorCapability = AlembicRuntimeCapabilities['fileMonitor'] & 
   status: DaemonFileMonitorRuntimeState;
 };
 
-export type DaemonCapabilities = AlembicRuntimeCapabilities & {
+export type DaemonCapabilities = Omit<AlembicRuntimeCapabilities, 'fileMonitor'> & {
   apiAi: AlembicApiAiCapability;
+  fileMonitor: RuntimeFileMonitorCapability;
 };
 
 router.get('/health', (req, res) => {
@@ -101,8 +105,9 @@ router.get('/health', (req, res) => {
     fileMonitorStatus,
     origin,
   });
+  const coreCompatibleCapabilities = capabilities as unknown as AlembicRuntimeCapabilities;
   const runtimeBoundary = buildAlembicRuntimeBoundary({
-    capabilities,
+    capabilities: coreCompatibleCapabilities,
     dashboardUrl,
     mode,
     origin,
@@ -121,7 +126,7 @@ router.get('/health', (req, res) => {
   });
   const runtimeControl = new ProjectRuntimeControl();
   const projectRuntimeSourceOfTruth = buildDaemonProjectRuntimeSourceOfTruth({
-    capabilities,
+    capabilities: coreCompatibleCapabilities,
     dashboardUrl,
     mode,
     origin,
@@ -131,7 +136,7 @@ router.get('/health', (req, res) => {
     statePath: `${resolver.runtimeDir}/daemon.json`,
   });
   const healthData = createAlembicRuntimeHealthData({
-    capabilities,
+    capabilities: coreCompatibleCapabilities,
     dashboardUrl,
     mode,
     pid: process.pid,
@@ -204,12 +209,14 @@ export function buildDaemonCapabilities(options: DaemonCapabilitiesOptions): Dae
       available: true,
     },
   });
+  const { compatibilityAliases: _coreCompatibilityAliases, ...fileMonitorCapability } =
+    capabilities.fileMonitor;
 
   return {
     ...capabilities,
     apiAi: options.apiAi,
     fileMonitor: {
-      ...capabilities.fileMonitor,
+      ...fileMonitorCapability,
       activeEventSource: fileMonitorStatus.activeEventSource,
       degraded: fileMonitorStatus.state === 'degraded',
       degradedReason: fileMonitorStatus.degradedReason,

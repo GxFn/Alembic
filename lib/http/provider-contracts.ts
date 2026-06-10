@@ -352,7 +352,7 @@ const routeRows = {
     fixtureIds: [
       'knowledge.success',
       'search.success',
-      'search.compatibility-fallback',
+      'search.degraded',
       'workflow.unavailable',
       'workflow.degraded',
       'workflow.partial',
@@ -806,26 +806,27 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
       },
     },
   }),
-  fixture('I22', 'I22.search.get', 'search.compatibility-fallback', 'success', {
+  fixture('I22', 'I22.search.get', 'search.degraded', 'degraded', {
     success: true,
     data: {
       query: 'decision register scope',
       totalResults: 0,
       searchMeta: {
         actualMode: 'legacy-fallback',
-        compatibility: {
-          contractId: 'I22.search.compatibility-fallback',
-          fallback: true,
-          legacyRoute: 'knowledgeService+guardService',
-          reason: 'search-engine-unavailable',
-          source: 'search-engine-unavailable-fallback',
-        },
         decisionRegister: {
           defaultLifecycle: 'active-effective-only',
           endpoint: '/api/v1/decision-register/searchable',
           vectorAdmission: 'accepted-only',
         },
         degraded: true,
+        degradedReason:
+          'SearchEngine unavailable; resident service used legacy non-vector fallback',
+        residentVector: {
+          available: false,
+          endpoint: '/api/v1/search',
+          reason: 'SearchEngine unavailable; vector route was not attempted',
+          stats: null,
+        },
         semanticUsed: false,
         vectorUsed: false,
       },

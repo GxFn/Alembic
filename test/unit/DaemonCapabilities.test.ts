@@ -113,7 +113,7 @@ describe('daemon capabilities', () => {
       },
       status: 'degraded',
     });
-    expect(Object.values(capabilities.fileMonitor.compatibilityAliases)).toEqual(['host-edit']);
+    expect(capabilities.fileMonitor).not.toHaveProperty('compatibilityAliases');
     expect(capabilities.apiAi.available).toBe(true);
     expect(buildResidentSearchCapability()).toEqual({
       available: true,

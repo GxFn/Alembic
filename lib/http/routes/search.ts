@@ -123,14 +123,6 @@ interface ResidentSearchVectorStats {
 interface ResidentSearchMeta {
   route: 'resident-search';
   service: 'alembic-daemon';
-  compatibility?: {
-    contractId: 'I22.search.compatibility-fallback';
-    fallback: boolean;
-    legacyRoute: 'knowledgeService+guardService';
-    reason: 'search-engine-unavailable';
-    removalCondition: string;
-    source: 'search-engine-unavailable-fallback';
-  };
   coreRoute: string | null;
   requestedMode: string;
   actualMode: string;
@@ -663,15 +655,6 @@ async function buildLegacySearchMeta({
   return {
     route: 'resident-search',
     service: 'alembic-daemon',
-    compatibility: {
-      contractId: 'I22.search.compatibility-fallback',
-      fallback: true,
-      legacyRoute: 'knowledgeService+guardService',
-      reason: 'search-engine-unavailable',
-      removalCondition:
-        'Remove this fallback after SearchEngine availability is enforced for resident search provider responses.',
-      source: 'search-engine-unavailable-fallback',
-    },
     coreRoute: null,
     requestedMode: mode,
     actualMode: 'legacy-fallback',
