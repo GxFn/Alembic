@@ -10,26 +10,27 @@ import {
   type ProjectRuntimeScopeSummary,
   type ProjectRuntimeTarget,
 } from '../../daemon/ProjectRuntimeControl.js';
+import {
+  type AlembicHttpProblem,
+  type AlembicHttpProblemReason,
+  buildAlembicHttpProblem,
+} from '../problem-taxonomy.js';
 
 const router = express.Router();
 
-type ProjectRuntimeProblemReason =
+type ProjectRuntimeProblemReason = Extract<
+  AlembicHttpProblemReason,
+  | 'cancelled'
+  | 'conflict'
+  | 'internal-error'
   | 'invalid-input'
   | 'not-found'
-  | 'conflict'
-  | 'timeout'
-  | 'cancelled'
   | 'permission-denied'
+  | 'timeout'
   | 'unavailable'
-  | 'internal-error';
+>;
 
-interface ProjectRuntimeProblem {
-  code: string;
-  message: string;
-  reasonCode: ProjectRuntimeProblemReason;
-  retryable?: boolean;
-  status: number;
-}
+type ProjectRuntimeProblem = AlembicHttpProblem;
 
 interface ProjectActionPublicData {
   action: ProjectRuntimeControlActionResult['action'];
@@ -271,25 +272,20 @@ function errorMessage(error: unknown): string {
 }
 
 function invalidProjectTargetProblem(): ProjectRuntimeProblem {
-  return {
-    code: 'INVALID_PROJECT_TARGET',
-    message: 'Project target requires exactly one of projectId or projectRoot',
-    reasonCode: 'invalid-input',
-    status: 400,
-  };
+  return buildProjectRuntimeProblem(
+    'INVALID_PROJECT_TARGET',
+    'Project target requires exactly one of projectId or projectRoot',
+    'invalid-input'
+  );
 }
 
 function problemFromActionResult(result: ProjectRuntimeControlActionResult): ProjectRuntimeProblem {
   const message = result.error ?? 'Project runtime action failed';
   const reasonCode = classifyProjectRuntimeProblem(message);
   const status = statusForProjectRuntimeReason(reasonCode);
-  return {
-    code: codeForProjectRuntimeReason(reasonCode),
-    message,
-    reasonCode,
-    ...(reasonCode === 'timeout' || reasonCode === 'unavailable' ? { retryable: true } : {}),
+  return buildProjectRuntimeProblem(codeForProjectRuntimeReason(reasonCode), message, reasonCode, {
     status,
-  };
+  });
 }
 
 function problemFromError(
@@ -300,13 +296,20 @@ function problemFromError(
   const message = errorMessage(error);
   const reasonCode = message ? classifyProjectRuntimeProblem(message) : fallbackReason;
   const status = message ? statusForProjectRuntimeReason(reasonCode) : fallbackStatus;
-  return {
-    code: codeForProjectRuntimeReason(reasonCode),
-    message,
-    reasonCode,
-    ...(reasonCode === 'timeout' || reasonCode === 'unavailable' ? { retryable: true } : {}),
+  return buildProjectRuntimeProblem(codeForProjectRuntimeReason(reasonCode), message, reasonCode, {
     status,
-  };
+  });
+}
+
+function buildProjectRuntimeProblem(
+  code: string,
+  message: string,
+  reasonCode: ProjectRuntimeProblemReason,
+  options: { status?: number } = {}
+): ProjectRuntimeProblem {
+  return buildAlembicHttpProblem(code, message, reasonCode, {
+    status: options.status ?? statusForProjectRuntimeReason(reasonCode),
+  });
 }
 
 function classifyProjectRuntimeProblem(message: string): ProjectRuntimeProblemReason {

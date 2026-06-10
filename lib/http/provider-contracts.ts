@@ -1,9 +1,20 @@
 import {
   CORE_CONTRACT_SPINE_ROWS,
   CORE_CONTRACT_SPINE_VERSION,
+  CORE_FAILURE_PROBLEM_CLASSES,
+  CORE_FAILURE_REF_POLICIES,
+  CORE_FAILURE_RETRY_POLICIES,
+  CORE_FAILURE_STATUSES,
+  CORE_FAILURE_TAXONOMY,
+  CORE_FAILURE_TAXONOMY_VERSION,
+  CORE_FIELD_CLASSES,
+  CORE_FIELD_FAILURE_KINDS,
   type CoreContractFunctionClass,
   type CoreContractSpineRowId,
+  type CoreFieldFailureKind,
+  getCoreFailureTaxonomyEntry,
 } from '@alembic/core/shared';
+import { buildAlembicHttpProblem } from './problem-taxonomy.js';
 
 export const ALEMBIC_PROVIDER_CONTRACT_VERSION = 1;
 
@@ -12,13 +23,8 @@ export type AlembicProviderRouteRowId = Exclude<AlembicProviderRegistryRowId, 'I
 export type AlembicProviderFixtureScenario =
   | 'success'
   | 'failure'
-  | 'partial'
-  | 'cancelled'
-  | 'conflict'
-  | 'not-found'
-  | 'permission-denied'
-  | 'timeout'
-  | 'unavailable-runtime';
+  | 'unavailable-runtime'
+  | CoreFieldFailureKind;
 export type AlembicProviderTransport = 'http' | 'rest-recovery' | 'socket.io' | 'sse';
 export type HttpMethod = 'get' | 'post' | 'patch' | 'delete';
 export type JsonSchema = {
@@ -29,7 +35,7 @@ export interface AlembicProviderRouteContract {
   readonly artifactPolicy: string;
   readonly capabilityDiscovery: readonly string[];
   readonly contractId: string;
-  readonly errorKinds: readonly string[];
+  readonly errorKinds: readonly CoreFieldFailureKind[];
   readonly exposureClasses: readonly string[];
   readonly fixtureIds: readonly string[];
   readonly functionClass: CoreContractFunctionClass | 'rest-command';
@@ -104,6 +110,34 @@ const refArraySchema = {
   items: { type: 'string' },
 } as const satisfies JsonSchema;
 
+const coreFailureStableIds = CORE_FAILURE_TAXONOMY.map((entry) => entry.stableId);
+const coreFailureAgentBranches = uniqueStrings(
+  CORE_FAILURE_TAXONOMY.map((entry) => entry.agentBranch)
+);
+const coreFailureMcpErrorCodes = CORE_FAILURE_TAXONOMY.map((entry) => entry.mcpErrorCode);
+
+const problemDetailRequiredFields = [
+  'agentBranch',
+  'canonicalHttpStatus',
+  'code',
+  'dashboardState',
+  'detailExposureClass',
+  'exposureClass',
+  'failureId',
+  'failureStatus',
+  'mcpErrorCode',
+  'mcpStatus',
+  'message',
+  'privateDataSafe',
+  'problemClass',
+  'reasonCode',
+  'refPolicy',
+  'retryPolicy',
+  'retryable',
+  'status',
+  'taxonomyVersion',
+] as const;
+
 const objectSchema = typedExtensionObjectSchema({
   consumer: 'Dashboard API adapter, Plugin resident client, and controller fixture replay',
   description:
@@ -123,34 +157,31 @@ const typedCompatibilityMetadataSchema = typedExtensionObjectSchema({
 
 const problemDetailSchema = {
   type: 'object',
-  required: ['code', 'message', 'reasonCode'],
+  required: problemDetailRequiredFields,
   additionalProperties: false,
   properties: {
+    agentBranch: { enum: coreFailureAgentBranches },
     artifactRefs: refArraySchema,
+    canonicalHttpStatus: { type: 'number' },
     code: { type: 'string' },
     compatibility: typedCompatibilityMetadataSchema,
+    dashboardState: { enum: CORE_FIELD_FAILURE_KINDS },
+    detailExposureClass: { enum: CORE_FIELD_CLASSES },
     detailRefs: refArraySchema,
+    exposureClass: { enum: CORE_FIELD_CLASSES },
+    failureId: { enum: coreFailureStableIds },
+    failureStatus: { enum: CORE_FAILURE_STATUSES },
+    mcpErrorCode: { enum: coreFailureMcpErrorCodes },
+    mcpStatus: { enum: CORE_FIELD_FAILURE_KINDS },
     message: { type: 'string' },
-    reasonCode: {
-      enum: [
-        'invalid-input',
-        'unavailable',
-        'capability-mismatch',
-        'conflict',
-        'timeout',
-        'cancelled',
-        'not-found',
-        'permission-denied',
-        'partial',
-        'degraded',
-        'artifact-missing',
-        'artifact-unreadable',
-        'checksum-mismatch',
-        'internal-error',
-      ],
-    },
+    privateDataSafe: { const: true },
+    problemClass: { enum: CORE_FAILURE_PROBLEM_CLASSES },
+    reasonCode: { enum: CORE_FIELD_FAILURE_KINDS },
+    refPolicy: { enum: CORE_FAILURE_REF_POLICIES },
+    retryPolicy: { enum: CORE_FAILURE_RETRY_POLICIES },
     retryable: { type: 'boolean' },
     status: { type: 'number' },
+    taxonomyVersion: { const: CORE_FAILURE_TAXONOMY_VERSION },
   },
 } as const satisfies JsonSchema;
 
@@ -213,7 +244,7 @@ const routeRows = {
   I03: {
     artifactPolicy: 'Health summary inline; logs and state snapshots by detailRef.',
     capabilityDiscovery: ['GET /api/v1/daemon/health capabilities'],
-    errorKinds: ['unavailable', 'capability-mismatch', 'stale-runtime', 'internal-error'],
+    errorKinds: ['unavailable', 'capability-mismatch', 'degraded', 'internal-error'],
     exposureClasses: ['public', 'consumer-needed', 'diagnostic'],
     fixtureIds: ['runtime-health.ready', 'runtime-health.partial', 'runtime-health.unavailable'],
     scenarios: ['success', 'partial', 'unavailable-runtime'],
@@ -239,7 +270,7 @@ const routeRows = {
     capabilityDiscovery: ['daemon health jobs capability'],
     errorKinds: ['invalid-input', 'timeout', 'cancelled', 'conflict', 'not-found'],
     exposureClasses: ['public', 'consumer-needed', 'diagnostic'],
-    fixtureIds: ['jobs.queued', 'jobs.cancelled', 'jobs.unavailable'],
+    fixtureIds: ['jobs.queued', 'jobs.cancelled', 'jobs.cancelled-problem', 'jobs.unavailable'],
     scenarios: ['success', 'cancelled', 'unavailable-runtime'],
   },
   I07: {
@@ -254,7 +285,7 @@ const routeRows = {
   I08: {
     artifactPolicy: 'Snapshot manifest inline; large reports, logs, and LLM IO by artifactRef.',
     capabilityDiscovery: ['jobs capability', 'snapshot manifest'],
-    errorKinds: ['not-found', 'artifact-missing', 'artifact-unreadable', 'checksum-mismatch'],
+    errorKinds: ['not-found', 'schema-drift', 'internal-error'],
     exposureClasses: ['public', 'developer-facing', 'diagnostic', 'sensitive'],
     fixtureIds: ['job-snapshot.success', 'job-artifact.missing'],
     scenarios: ['success', 'not-found'],
@@ -270,10 +301,20 @@ const routeRows = {
   I10: {
     artifactPolicy: 'Compact decision summary inline; large evidence payloads by ref.',
     capabilityDiscovery: ['/api/v1/decision-register/capability'],
-    errorKinds: ['invalid-input', 'unavailable', 'capability-mismatch', 'conflict'],
+    errorKinds: [
+      'invalid-input',
+      'unavailable',
+      'capability-mismatch',
+      'conflict',
+      'needs-confirmation',
+    ],
     exposureClasses: ['public', 'consumer-needed', 'diagnostic'],
-    fixtureIds: ['decision-register.success', 'decision-register.scope-mismatch'],
-    scenarios: ['success', 'conflict'],
+    fixtureIds: [
+      'decision-register.success',
+      'decision-register.scope-mismatch',
+      'decision-register.needs-confirmation',
+    ],
+    scenarios: ['success', 'conflict', 'needs-confirmation'],
   },
   I11: {
     artifactPolicy: 'Intent/work summaries inline; long histories by detailRef.',
@@ -295,30 +336,62 @@ const routeRows = {
     artifactPolicy:
       'Workflow and resident search summaries inline; reports/snapshots by artifactRef and degraded search fallback by compatibility metadata.',
     capabilityDiscovery: ['/api/v1/knowledge', '/api/v1/modules', '/api/v1/candidates'],
-    errorKinds: ['invalid-input', 'unavailable', 'timeout', 'not-found', 'internal-error'],
+    errorKinds: [
+      'invalid-input',
+      'unavailable',
+      'timeout',
+      'not-found',
+      'degraded',
+      'partial',
+      'capability-mismatch',
+      'provider-error',
+      'host-failure',
+      'internal-error',
+    ],
     exposureClasses: ['public', 'consumer-needed', 'diagnostic'],
     fixtureIds: [
       'knowledge.success',
       'search.success',
       'search.compatibility-fallback',
       'workflow.unavailable',
+      'workflow.degraded',
+      'workflow.partial',
+      'workflow.capability-mismatch',
+      'workflow.provider-error',
+      'workflow.host-failure',
+      'workflow.internal-error',
     ],
-    scenarios: ['success', 'unavailable-runtime'],
+    scenarios: [
+      'success',
+      'unavailable-runtime',
+      'degraded',
+      'partial',
+      'capability-mismatch',
+      'provider-error',
+      'host-failure',
+      'internal-error',
+    ],
   },
   I23: {
     artifactPolicy: 'Diagnostic summaries inline; logs and reports as detailRef.',
     capabilityDiscovery: ['runtime health fileMonitor capability', 'diagnostic routes'],
-    errorKinds: ['invalid-input', 'unavailable', 'permission-denied', 'not-found'],
+    errorKinds: [
+      'invalid-input',
+      'unavailable',
+      'permission-denied',
+      'not-found',
+      'internal-error',
+    ],
     exposureClasses: ['diagnostic', 'internal', 'consumer-needed', 'sensitive'],
-    fixtureIds: ['diagnostic.success', 'diagnostic.failure'],
-    scenarios: ['success', 'unavailable-runtime'],
+    fixtureIds: ['diagnostic.success', 'diagnostic.failure', 'diagnostic.internal-error'],
+    scenarios: ['success', 'unavailable-runtime', 'internal-error'],
   },
 } as const satisfies Record<
   AlembicProviderRouteRowId,
   {
     readonly artifactPolicy: string;
     readonly capabilityDiscovery: readonly string[];
-    readonly errorKinds: readonly string[];
+    readonly errorKinds: readonly CoreFieldFailureKind[];
     readonly exposureClasses: readonly string[];
     readonly fixtureIds: readonly string[];
     readonly scenarios: readonly AlembicProviderFixtureScenario[];
@@ -609,6 +682,12 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
     success: true,
     data: { job: { id: 'job-bootstrap-1', status: 'cancelled', reasonCode: 'user-cancelled' } },
   }),
+  fixture('I06', 'I06.jobs.cancel.post', 'jobs.cancelled-problem', 'cancelled', {
+    success: false,
+    error: providerProblem('JOB_CANCELLED', 'Bootstrap job was cancelled', 'cancelled', {
+      status: 409,
+    }),
+  }),
   fixture('I06', 'I06.jobs.get', 'jobs.unavailable', 'unavailable-runtime', {
     success: false,
     error: providerProblem('UNAVAILABLE_RUNTIME', 'Job store unavailable', 'unavailable', {
@@ -643,7 +722,8 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
   }),
   fixture('I08', 'I08.job-artifact.get', 'job-artifact.missing', 'not-found', {
     success: false,
-    error: providerProblem('ARTIFACT_MISSING', 'Artifact not found', 'artifact-missing', {
+    error: providerProblem('ARTIFACT_MISSING', 'Artifact not found', 'not-found', {
+      artifactRefs: ['artifact://job-bootstrap-1/missing-report'],
       status: 404,
     }),
   }),
@@ -674,6 +754,21 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
       { status: 409 }
     ),
   }),
+  fixture(
+    'I10',
+    'I10.decision-register.post',
+    'decision-register.needs-confirmation',
+    'needs-confirmation',
+    {
+      success: false,
+      error: providerProblem(
+        'DECISION_REQUIRES_CONFIRMATION',
+        'Decision mutation requires explicit confirmation',
+        'needs-confirmation',
+        { status: 412 }
+      ),
+    }
+  ),
   fixture('I11', 'I11.intent-episodes.post', 'intent-episode.success', 'success', {
     success: true,
     data: { episode: { episodeId: 'intent-alpha', status: 'open' } },
@@ -748,6 +843,58 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
       }
     ),
   }),
+  fixture('I22', 'I22.workflow', 'workflow.degraded', 'degraded', {
+    success: false,
+    error: providerProblem('WORKFLOW_DEGRADED', 'Workflow capability is degraded', 'degraded', {
+      detailRefs: ['diagnostics://workflow/degraded'],
+      retryable: true,
+      status: 503,
+    }),
+  }),
+  fixture('I22', 'I22.workflow', 'workflow.partial', 'partial', {
+    success: false,
+    error: providerProblem('WORKFLOW_PARTIAL', 'Workflow returned a partial result', 'partial', {
+      artifactRefs: ['artifact://workflow/partial-result'],
+      retryable: true,
+      status: 206,
+    }),
+  }),
+  fixture('I22', 'I22.workflow', 'workflow.capability-mismatch', 'capability-mismatch', {
+    success: false,
+    error: providerProblem(
+      'CAPABILITY_MISMATCH',
+      'Provider route does not support the requested capability',
+      'capability-mismatch',
+      { detailRefs: ['diagnostics://workflow/capability-mismatch'], status: 501 }
+    ),
+  }),
+  fixture('I22', 'I22.workflow', 'workflow.provider-error', 'provider-error', {
+    success: false,
+    error: providerProblem(
+      'PROVIDER_ERROR',
+      'Upstream provider returned an error',
+      'provider-error',
+      {
+        detailRefs: ['diagnostics://provider/error-redacted'],
+        retryable: true,
+        status: 502,
+      }
+    ),
+  }),
+  fixture('I22', 'I22.workflow', 'workflow.host-failure', 'host-failure', {
+    success: false,
+    error: providerProblem('HOST_FAILURE', 'Host runtime failed the workflow', 'host-failure', {
+      detailRefs: ['diagnostics://host/failure-redacted'],
+      status: 424,
+    }),
+  }),
+  fixture('I22', 'I22.workflow', 'workflow.internal-error', 'internal-error', {
+    success: false,
+    error: providerProblem('INTERNAL_ERROR', 'Workflow failed internally', 'internal-error', {
+      detailRefs: ['diagnostics://workflow/internal-error'],
+      status: 500,
+    }),
+  }),
   fixture('I22', 'I22.ai-chat.sse', 'sse.ai-chat.success', 'success', {
     event: 'message',
     data: { type: 'text_delta', text: 'Ready' },
@@ -773,6 +920,18 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
       {
         retryable: true,
         status: 503,
+      }
+    ),
+  }),
+  fixture('I23', 'I23.diagnostics.get', 'diagnostic.internal-error', 'internal-error', {
+    success: false,
+    error: providerProblem(
+      'DIAGNOSTIC_INTERNAL_ERROR',
+      'Diagnostic route failed',
+      'internal-error',
+      {
+        detailRefs: ['diagnostics://route/internal-error'],
+        status: 500,
       }
     ),
   }),
@@ -867,7 +1026,7 @@ function route(
     operationId,
     path,
     registryRowId,
-    responseSchemas: responseSchemasFor(row.scenarios),
+    responseSchemas: responseSchemasFor(row.errorKinds, row.scenarios),
     summary,
     supportedScenarios: row.scenarios,
     tags,
@@ -916,11 +1075,15 @@ function fixture(
 }
 
 function responseSchemasFor(
+  errorKinds: readonly CoreFieldFailureKind[],
   scenarios: readonly AlembicProviderFixtureScenario[]
 ): Readonly<Record<string, JsonSchema>> {
   const schemas: Record<string, JsonSchema> = {
     200: dataEnvelope(objectSchema),
   };
+  for (const errorKind of errorKinds) {
+    schemas[providerStatusForFailureKind(errorKind)] = problemSchema;
+  }
   if (scenarios.includes('success') && scenarios.includes('unavailable-runtime')) {
     schemas[503] = problemSchema;
   }
@@ -944,10 +1107,21 @@ function responseSchemasFor(
   if (scenarios.includes('timeout')) {
     schemas[504] = problemSchema;
   }
-  if (scenarios.includes('partial')) {
+  if (scenarios.includes('partial') && !errorKinds.includes('partial')) {
     schemas[206] = dataEnvelope(objectSchema);
   }
   return schemas;
+}
+
+function providerStatusForFailureKind(errorKind: CoreFieldFailureKind): number {
+  switch (errorKind) {
+    case 'cancelled':
+      return 409;
+    case 'timeout':
+      return 504;
+    default:
+      return getCoreFailureTaxonomyEntry(errorKind).httpStatus;
+  }
 }
 
 function typedExtensionObjectSchema(options: {
@@ -974,16 +1148,15 @@ function typedExtensionObjectSchema(options: {
 function providerProblem(
   code: string,
   message: string,
-  reasonCode: string,
-  options: { retryable?: boolean; status: number }
-): Record<string, unknown> {
-  return {
-    code,
-    message,
-    reasonCode,
-    ...(options.retryable === undefined ? {} : { retryable: options.retryable }),
-    status: options.status,
-  };
+  reasonCode: CoreFieldFailureKind,
+  options: {
+    artifactRefs?: readonly string[];
+    detailRefs?: readonly string[];
+    retryable?: boolean;
+    status?: number;
+  }
+) {
+  return buildAlembicHttpProblem(code, message, reasonCode, options);
 }
 
 function functionClassFor(

@@ -119,11 +119,20 @@ describe('projects route runtime source of truth', () => {
     expect(response.status).toBe(504);
     expect(response.body.success).toBe(false);
     expect(response.body.error).toMatchObject({
+      canonicalHttpStatus: 408,
       code: 'PROJECT_RUNTIME_TIMEOUT',
+      detailExposureClass: 'diagnostic',
+      exposureClass: 'public',
+      failureId: 'core.failure.timeout',
+      failureStatus: 'failed',
       message: 'Target daemon did not become ready',
+      problemClass: 'time-problem',
       reasonCode: 'timeout',
+      refPolicy: 'detailRef',
+      retryPolicy: 'retryable',
       retryable: true,
       status: 504,
+      taxonomyVersion: 1,
     });
     const data = response.body.data as Record<string, unknown>;
     expect(data).toMatchObject({

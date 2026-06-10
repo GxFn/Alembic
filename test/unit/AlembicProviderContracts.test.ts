@@ -1,5 +1,10 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import {
+  CORE_D25_REQUIRED_FAILURE_KINDS,
+  type CoreFieldFailureKind,
+  getCoreFailureTaxonomyEntry,
+} from '@alembic/core/shared';
 import { describe, expect, test } from 'vitest';
 import apiSpec from '../../lib/http/api-spec.js';
 import {
@@ -182,27 +187,82 @@ describe('Alembic provider contracts', () => {
 
     const problemProperties = schemas.ProblemEnvelope?.properties as Record<string, unknown>;
     const errorSchema = problemProperties.error as Record<string, unknown>;
-    expect(errorSchema.required).toEqual(['code', 'message', 'reasonCode']);
+    expect(errorSchema.required).toEqual(
+      expect.arrayContaining([
+        'canonicalHttpStatus',
+        'code',
+        'detailExposureClass',
+        'exposureClass',
+        'failureId',
+        'failureStatus',
+        'mcpErrorCode',
+        'message',
+        'problemClass',
+        'reasonCode',
+        'refPolicy',
+        'retryPolicy',
+        'retryable',
+        'status',
+        'taxonomyVersion',
+      ])
+    );
     expect(errorSchema.oneOf).toBeUndefined();
     expect(errorSchema.type).toBe('object');
   });
 
-  test('normalizes failure fixtures to typed provider problem objects', () => {
+  test('normalizes failure fixtures to Core D25 provider problem taxonomy objects', () => {
+    const representativeFailureKinds = [
+      'invalid-input',
+      'not-found',
+      'conflict',
+      'permission-denied',
+      'timeout',
+      'cancelled',
+      'unavailable',
+      'degraded',
+      'partial',
+      'capability-mismatch',
+      'needs-confirmation',
+      'provider-error',
+      'host-failure',
+      'internal-error',
+    ] as const satisfies readonly CoreFieldFailureKind[];
+    const observedFailureKinds = new Set<CoreFieldFailureKind>();
+
     for (const fixture of ALEMBIC_PROVIDER_FIXTURES) {
       if (fixture.payload.success !== false) {
         continue;
       }
       const payload = fixture.payload as Record<string, unknown>;
       const error = payload.error as Record<string, unknown>;
+      const reasonCode = error.reasonCode as CoreFieldFailureKind;
+      const taxonomy = getCoreFailureTaxonomyEntry(reasonCode);
+      observedFailureKinds.add(reasonCode);
       expect(error).toMatchObject({
+        canonicalHttpStatus: taxonomy.httpStatus,
         code: expect.any(String),
+        detailExposureClass: taxonomy.detailExposureClass,
+        exposureClass: taxonomy.exposureClass,
+        failureId: taxonomy.stableId,
+        failureStatus: taxonomy.status,
+        mcpErrorCode: taxonomy.mcpErrorCode,
         message: expect.any(String),
-        reasonCode: expect.any(String),
+        privateDataSafe: true,
+        problemClass: taxonomy.problemClass,
+        reasonCode,
+        refPolicy: taxonomy.refPolicy,
+        retryPolicy: taxonomy.retryPolicy,
         status: expect.any(Number),
+        taxonomyVersion: 1,
       });
       expect(typeof payload.error).toBe('object');
       expect(payload.reasonCode).toBeUndefined();
     }
+
+    expect([...observedFailureKinds]).toEqual(expect.arrayContaining(representativeFailureKinds));
+    expect([...observedFailureKinds]).toEqual(
+      expect.arrayContaining([...CORE_D25_REQUIRED_FAILURE_KINDS])
+    );
   });
 
   test('event manifest covers socket, recovery, and SSE provider events', () => {
