@@ -1,6 +1,18 @@
+import {
+  type AgentInterfaceContractBranch,
+  type AgentInterfaceContractBranchFixture,
+  ALEMBIC_AGENT_INTERFACE_CONTRACT,
+  validateAgentInterfaceContract,
+} from '@alembic/agent/runtime';
 import type { AgentRunResult } from '@alembic/agent/service';
+import {
+  projectToolResultOrdinaryOutput,
+  type ToolResultEnvelope,
+  type ToolResultStatus,
+} from '@alembic/agent/tools';
 import { describe, expect, test } from 'vitest';
 import {
+  type BootstrapDimensionRunIssueStatus,
   isRecoverableProducerTimeoutIssue,
   normalizeDimensionFindings,
   projectAgentRunResult,
@@ -23,7 +35,336 @@ function makeRunResult(partial: Partial<AgentRunResult>): AgentRunResult {
   };
 }
 
+type D24ReplayFailureOwner =
+  | 'none'
+  | 'agent-fixture-producer'
+  | 'alembic-consumer'
+  | 'contract-registry';
+
+type D24ReplayExpectation = {
+  agentRunStatus: AgentRunResult['status'];
+  issueStatus: BootstrapDimensionRunIssueStatus | null;
+  toolEnvelopeReplay: boolean;
+};
+
+type D24ReplayResult = {
+  branch: AgentInterfaceContractBranch;
+  failureOwner: D24ReplayFailureOwner;
+  issueStatus: BootstrapDimensionRunIssueStatus | null;
+  reason: string;
+  toolStatus: ToolResultStatus | null;
+};
+
+const D24_BRANCH_EXPECTATIONS = {
+  success: { agentRunStatus: 'success', issueStatus: null, toolEnvelopeReplay: true },
+  failure: { agentRunStatus: 'error', issueStatus: 'error', toolEnvelopeReplay: true },
+  cancellation: { agentRunStatus: 'aborted', issueStatus: 'aborted', toolEnvelopeReplay: true },
+  timeout: { agentRunStatus: 'timeout', issueStatus: 'timeout', toolEnvelopeReplay: true },
+  'permission-denial': {
+    agentRunStatus: 'blocked',
+    issueStatus: 'blocked',
+    toolEnvelopeReplay: true,
+  },
+  'needs-confirmation': {
+    agentRunStatus: 'blocked',
+    issueStatus: 'blocked',
+    toolEnvelopeReplay: true,
+  },
+  'partial-result': {
+    agentRunStatus: 'success',
+    issueStatus: null,
+    toolEnvelopeReplay: true,
+  },
+  'provider-error': { agentRunStatus: 'error', issueStatus: 'error', toolEnvelopeReplay: true },
+  'host-failure': { agentRunStatus: 'error', issueStatus: 'error', toolEnvelopeReplay: true },
+  'host-adapter': { agentRunStatus: 'error', issueStatus: 'error', toolEnvelopeReplay: false },
+} satisfies Record<AgentInterfaceContractBranch, D24ReplayExpectation>;
+
+function replayAgentBranchFixture(
+  fixture: AgentInterfaceContractBranchFixture,
+  options: {
+    expectation?: D24ReplayExpectation;
+    registryFailures?: string[];
+  } = {}
+): D24ReplayResult {
+  const registryFailures = options.registryFailures ?? validateAgentInterfaceContract();
+  if (registryFailures.length > 0) {
+    return {
+      branch: fixture.branch,
+      failureOwner: 'contract-registry',
+      issueStatus: null,
+      reason: registryFailures.join('; '),
+      toolStatus: fixture.toolStatus,
+    };
+  }
+
+  const publicFixtureFields = new Set([
+    ...fixture.providerPublicFields,
+    ...fixture.observabilityKeys,
+  ]);
+  const forbiddenPublicFields =
+    ALEMBIC_AGENT_INTERFACE_CONTRACT.forbiddenOrdinaryOutputFields.filter((field) =>
+      publicFixtureFields.has(field)
+    );
+  const hiddenPublicFields = fixture.hiddenProviderFields.filter((field) =>
+    publicFixtureFields.has(field)
+  );
+  if (forbiddenPublicFields.length > 0 || hiddenPublicFields.length > 0) {
+    return {
+      branch: fixture.branch,
+      failureOwner: 'agent-fixture-producer',
+      issueStatus: null,
+      reason: [...forbiddenPublicFields, ...hiddenPublicFields].join(', '),
+      toolStatus: fixture.toolStatus,
+    };
+  }
+
+  const expectation = options.expectation ?? D24_BRANCH_EXPECTATIONS[fixture.branch];
+  const runResult = makeRunResult({
+    diagnostics: diagnosticsForBranch(fixture),
+    profileId: 'd24-agent-branch-replay',
+    reply: `agent-branch:${fixture.branch}:${fixture.errorKind}`,
+    runId: `d24:${fixture.branch}`,
+    status: expectation.agentRunStatus,
+    toolCalls: fixture.toolStatus ? [toolCallForBranch(fixture, fixture.toolStatus)] : [],
+  });
+  const projectedRun = projectAgentRunResult(runResult);
+  const issue = resolveBootstrapDimensionRunIssue(projectedRun);
+  const issueStatus = issue?.status ?? null;
+  const dimensionProjection = projectBootstrapDimensionAgentOutput({
+    dimId: `d24-${fixture.branch}`,
+    needsCandidates: false,
+    runResult: projectedRun,
+  });
+  const ordinaryToolResults = (projectedRun.toolCalls || []).map((toolCall) => ({
+    result: toolCall.result,
+    tool: toolCall.tool || toolCall.name,
+  }));
+  const projectedKeys = collectObjectKeys({
+    analysisReport: dimensionProjection.analysisReport,
+    issue: issue ? { reason: issue.reason, status: issue.status } : null,
+    producerResult: {
+      ...dimensionProjection.producerResult,
+      toolCalls: ordinaryToolResults,
+    },
+    toolCalls: ordinaryToolResults,
+  });
+  const leakedForbiddenFields =
+    ALEMBIC_AGENT_INTERFACE_CONTRACT.forbiddenOrdinaryOutputFields.filter((field) =>
+      projectedKeys.has(field)
+    );
+
+  if (
+    issueStatus !== expectation.issueStatus ||
+    leakedForbiddenFields.length > 0 ||
+    (expectation.toolEnvelopeReplay && projectedRun.toolCalls?.length === 0)
+  ) {
+    return {
+      branch: fixture.branch,
+      failureOwner: 'alembic-consumer',
+      issueStatus,
+      reason:
+        leakedForbiddenFields.length > 0
+          ? `forbidden fields leaked: ${leakedForbiddenFields.join(', ')}`
+          : `expected issue ${expectation.issueStatus ?? 'none'}, got ${issueStatus ?? 'none'}`,
+      toolStatus: fixture.toolStatus,
+    };
+  }
+
+  return {
+    branch: fixture.branch,
+    failureOwner: 'none',
+    issueStatus,
+    reason: issue?.reason ?? 'ok',
+    toolStatus: fixture.toolStatus,
+  };
+}
+
+function toolCallForBranch(
+  fixture: AgentInterfaceContractBranchFixture,
+  status: ToolResultStatus
+): AgentRunResult['toolCalls'][number] {
+  const envelope = toolEnvelopeForBranch(fixture, status);
+  const ordinaryOutput = projectToolResultOrdinaryOutput(envelope, {
+    forbiddenFields: ALEMBIC_AGENT_INTERFACE_CONTRACT.forbiddenOrdinaryOutputFields,
+  });
+  return {
+    args: { branch: fixture.branch, registryRows: [...fixture.registryRows] },
+    durationMs: envelope.durationMs,
+    envelope,
+    result: ordinaryOutput,
+    tool: `agent-branch.${fixture.branch}`,
+  };
+}
+
+function toolEnvelopeForBranch(
+  fixture: AgentInterfaceContractBranchFixture,
+  status: ToolResultStatus
+): ToolResultEnvelope<Record<string, unknown>> {
+  return {
+    callId: `call-${fixture.branch}`,
+    diagnostics: diagnosticsForBranch(fixture),
+    durationMs: 17,
+    ok: fixture.ok,
+    startedAt: '2026-06-10T00:00:00.000Z',
+    status,
+    structuredContent: ordinaryContentForBranch(fixture),
+    text: fixture.title,
+    toolId: `agent-branch.${fixture.branch}`,
+    trust: {
+      containsSecrets: false,
+      containsUntrustedText: false,
+      sanitized: true,
+      source: 'internal',
+    },
+  };
+}
+
+function ordinaryContentForBranch(
+  fixture: AgentInterfaceContractBranchFixture
+): Record<string, unknown> {
+  const publicFields = Object.fromEntries(
+    fixture.providerPublicFields.map((field) => [field, `${fixture.branch}:${field}`])
+  );
+  const observability = Object.fromEntries(
+    fixture.observabilityKeys.map((field) => [field, `${fixture.branch}:${field}`])
+  );
+  return {
+    branch: fixture.branch,
+    consumerScenario: `agent-branch:${fixture.branch}`,
+    data: { result: 'legacy nested result must be redacted' },
+    errorCode: 'legacy-error-code',
+    hiddenReasoning: 'provider-private reasoning',
+    hostCredential: 'host-private-credential',
+    legacyCompatibility: true,
+    message: 'legacy message field',
+    observability,
+    publicFields,
+    rawProviderRequest: { prompt: 'private request' },
+    rawProviderResponse: { body: 'private response' },
+    reasoning_content: 'provider-native reasoning',
+    reasoningContent: 'provider reasoning',
+    success: fixture.ok,
+    threadId: 'thread-private',
+    thoughtSignature: 'provider-private-signature',
+  };
+}
+
+function diagnosticsForBranch(
+  fixture: AgentInterfaceContractBranchFixture
+): NonNullable<AgentRunResult['diagnostics']> {
+  return {
+    aiErrorCount: fixture.errorKind === 'internal-provider-error' ? 1 : 0,
+    blockedTools:
+      fixture.toolStatus === 'blocked' || fixture.toolStatus === 'needs-confirmation'
+        ? [{ reason: fixture.errorKind, tool: `agent-branch.${fixture.branch}` }]
+        : [],
+    degraded: fixture.branch === 'partial-result',
+    emptyResponses: 0,
+    fallbackUsed: fixture.branch === 'host-adapter',
+    gateFailures:
+      fixture.branch === 'needs-confirmation' || fixture.branch === 'host-adapter'
+        ? [
+            {
+              action: fixture.branch,
+              reason: fixture.errorKind,
+              stage: fixture.hostAdapterPath ?? fixture.boundaryArea,
+            },
+          ]
+        : [],
+    timedOutStages: fixture.errorKind === 'timeout' ? ['produce'] : [],
+    truncatedToolCalls: 0,
+    warnings: [{ code: `d24-${fixture.branch}`, message: fixture.title, stage: 'd24-replay' }],
+  };
+}
+
+function collectObjectKeys(value: unknown): Set<string> {
+  const keys = new Set<string>();
+  const visit = (node: unknown, path: string[]) => {
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        visit(item, path);
+      }
+      return;
+    }
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+    for (const [key, child] of Object.entries(node)) {
+      const childPath = [...path, key];
+      keys.add(key);
+      keys.add(childPath.join('.'));
+      visit(child, childPath);
+    }
+  };
+  visit(value, []);
+  return keys;
+}
+
 describe('bootstrap projections', () => {
+  test('replays AlembicAgent D23 branch fixtures through Alembic AgentRun consumers', () => {
+    const replayResults = ALEMBIC_AGENT_INTERFACE_CONTRACT.branches.map((fixture) =>
+      replayAgentBranchFixture(fixture)
+    );
+
+    expect(replayResults.map((result) => result.branch)).toEqual(
+      ALEMBIC_AGENT_INTERFACE_CONTRACT.branches.map((fixture) => fixture.branch)
+    );
+    expect(replayResults.map((result) => [result.branch, result.issueStatus])).toEqual([
+      ['success', null],
+      ['failure', 'error'],
+      ['cancellation', 'aborted'],
+      ['timeout', 'timeout'],
+      ['permission-denial', 'blocked'],
+      ['needs-confirmation', 'blocked'],
+      ['partial-result', null],
+      ['provider-error', 'error'],
+      ['host-failure', 'error'],
+      ['host-adapter', 'error'],
+    ]);
+    expect(replayResults.filter((result) => result.failureOwner !== 'none')).toEqual([]);
+
+    const partial = replayResults.find((result) => result.branch === 'partial-result');
+    const confirmation = replayResults.find((result) => result.branch === 'needs-confirmation');
+    const hostAdapter = replayResults.find((result) => result.branch === 'host-adapter');
+    expect(partial).toMatchObject({ issueStatus: null, toolStatus: 'partial' });
+    expect(confirmation).toMatchObject({
+      issueStatus: 'blocked',
+      toolStatus: 'needs-confirmation',
+    });
+    expect(hostAdapter).toMatchObject({ issueStatus: 'error', toolStatus: null });
+  });
+
+  test('classifies D24 replay failures by producer, consumer, or registry owner', () => {
+    const successFixture = ALEMBIC_AGENT_INTERFACE_CONTRACT.branches.find(
+      (fixture) => fixture.branch === 'success'
+    );
+    expect(successFixture).toBeDefined();
+    if (!successFixture) {
+      return;
+    }
+
+    expect(
+      replayAgentBranchFixture({
+        ...successFixture,
+        providerPublicFields: [...successFixture.providerPublicFields, 'rawProviderResponse'],
+      }).failureOwner
+    ).toBe('agent-fixture-producer');
+    expect(
+      replayAgentBranchFixture(successFixture, {
+        registryFailures: ['missing required branch: timeout'],
+      }).failureOwner
+    ).toBe('contract-registry');
+    expect(
+      replayAgentBranchFixture(successFixture, {
+        expectation: {
+          ...D24_BRANCH_EXPECTATIONS.success,
+          issueStatus: 'error',
+        },
+      }).failureOwner
+    ).toBe('alembic-consumer');
+  });
+
   test('projects dimension agent output into analysis and producer summaries', () => {
     const projection = projectBootstrapDimensionAgentOutput({
       dimId: 'overview',
