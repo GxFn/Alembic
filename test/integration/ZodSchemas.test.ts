@@ -436,7 +436,7 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
         title: 'Decision',
         decision: 'Use typed provider problems',
         scope: {
-          legacyPath: 'legacy/path',
+          opaquePath: 'legacy/path',
           projectId: 'project-alpha',
           qualifiedPath: 'project-alpha:legacy/path',
           workspaceMode: 'single',
@@ -444,11 +444,11 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
         },
       });
       expect(result.scope).toMatchObject({
-        legacyPath: 'legacy/path',
         projectId: 'project-alpha',
         qualifiedPath: 'project-alpha:legacy/path',
         workspaceMode: 'single',
       });
+      expect((result.scope as Record<string, unknown>).opaquePath).toBeUndefined();
       expect((result.scope as Record<string, unknown>).privateThreadId).toBeUndefined();
     });
   });

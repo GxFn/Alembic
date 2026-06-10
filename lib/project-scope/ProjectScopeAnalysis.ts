@@ -2,11 +2,7 @@ import type {
   ProjectAnalysisResult,
   ProjectAnalysisScanOptions,
 } from '@alembic/core/project-intelligence';
-import {
-  buildProjectScopeSourceRefIndex,
-  type NormalizedProjectScopeSourceRef,
-  type ProjectDescriptor,
-} from '@alembic/core/shared';
+import type { ProjectDescriptor } from '@alembic/core/shared';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { resolveAlembicWorkspace } from './ProjectScopeRegistry.js';
 
@@ -40,7 +36,6 @@ export interface ProjectScopeSourceIdentity {
   folderId: string | null;
   folderPath: string | null;
   folderRelativeRoot: string | null;
-  legacyPath: string;
   projectScopeId: string | null;
   qualifiedPath: string;
   relativePath: string;
@@ -55,24 +50,37 @@ export interface ProjectScopeSourceIdentityMapEntry {
   folderId: string | null;
   folderPath: string | null;
   folderRelativeRoot: string | null;
-  legacyPath: string;
   projectScopeId: string | null;
   qualifiedPath: string;
   relativePath: string;
 }
 
 export interface ProjectScopeSourceIdentityMap {
-  ambiguousBasenames: string[];
-  ambiguousLegacyPaths: string[];
   contract: typeof PROJECT_SCOPE_SOURCE_IDENTITY_MAP_CONTRACT;
   contractVersion: typeof PROJECT_SCOPE_SOURCE_IDENTITY_MAP_CONTRACT_VERSION;
   entries: ProjectScopeSourceIdentityMapEntry[];
   preferredRef: 'qualifiedPath';
   rejectPolicy: {
-    ambiguousLegacyPath: 'reject';
     missingPath: 'reject';
   };
   sourceCount: number;
+}
+
+export type ProjectScopeSourceRefNormalizationReason = 'qualified-path' | 'not-found';
+export type ProjectScopeSourceRefNormalizationStatus = 'active' | 'missing';
+
+export interface NormalizedProjectScopeSourceRef {
+  absolutePath: string | null;
+  folderDisplayName: string | null;
+  folderId: string | null;
+  folderPath: string | null;
+  input: string;
+  normalizedRef: string | null;
+  projectScopeId: string | null;
+  qualifiedPath: string | null;
+  reason: ProjectScopeSourceRefNormalizationReason;
+  relativePath: string | null;
+  status: ProjectScopeSourceRefNormalizationStatus;
 }
 
 export interface ProjectScopeRejectedSourceRef extends NormalizedProjectScopeSourceRef {
@@ -161,10 +169,7 @@ export function buildProjectScopeSourceIdentityMap(
   if (identities.length === 0) {
     return null;
   }
-  const index = buildProjectScopeSourceRefIndex(identities);
   return {
-    ambiguousBasenames: [...(index.ambiguousBasenames ?? [])].sort(),
-    ambiguousLegacyPaths: [...index.ambiguousLegacyPaths].sort(),
     contract: PROJECT_SCOPE_SOURCE_IDENTITY_MAP_CONTRACT,
     contractVersion: PROJECT_SCOPE_SOURCE_IDENTITY_MAP_CONTRACT_VERSION,
     entries: identities.map((identity) => ({
@@ -173,14 +178,12 @@ export function buildProjectScopeSourceIdentityMap(
       folderId: identity.folderId,
       folderPath: identity.folderPath,
       folderRelativeRoot: identity.folderRelativeRoot,
-      legacyPath: identity.legacyPath,
       projectScopeId: identity.projectScopeId,
       qualifiedPath: identity.qualifiedPath,
       relativePath: identity.relativePath,
     })),
     preferredRef: 'qualifiedPath',
     rejectPolicy: {
-      ambiguousLegacyPath: 'reject',
       missingPath: 'reject',
     },
     sourceCount: identities.length,
@@ -201,7 +204,7 @@ export function normalizeProjectScopeSourceRefsForRuntime(
     };
   }
 
-  const index = buildProjectScopeSourceRefIndex(identities);
+  const index = buildProjectScopeSourceIdentityIndex(identities);
   const activeSourceRefs: string[] = [];
   const normalized: NormalizedProjectScopeSourceRef[] = [];
   const rejected: ProjectScopeRejectedSourceRef[] = [];
@@ -234,28 +237,12 @@ export function normalizeProjectScopeSourceRefsForRuntime(
 
 function normalizeProjectScopeSourceRefForRuntime(
   sourceRef: string,
-  index: ReturnType<typeof buildProjectScopeSourceRefIndex>
+  index: ProjectScopeSourceIdentityIndex
 ): NormalizedProjectScopeSourceRef {
   const normalized = normalizeComparableSourcePath(sourceRef);
   const qualified = index.byQualifiedPath.get(normalized);
   if (qualified) {
     return normalizedActiveSourceRef(sourceRef, qualified, 'qualified-path');
-  }
-  if (index.ambiguousLegacyPaths.has(normalized)) {
-    return normalizedRejectedSourceRef(sourceRef, 'ambiguous-legacy-path', 'ambiguous');
-  }
-  const legacy = index.byLegacyPath.get(normalized);
-  if (legacy) {
-    return normalizedActiveSourceRef(sourceRef, legacy, 'unique-legacy-path');
-  }
-  if (!normalized.includes('/')) {
-    if (index.ambiguousBasenames?.has(normalized)) {
-      return normalizedRejectedSourceRef(sourceRef, 'ambiguous-basename', 'ambiguous');
-    }
-    const basename = index.byBasename?.get(normalized);
-    if (basename) {
-      return normalizedActiveSourceRef(sourceRef, basename, 'unique-basename');
-    }
   }
   return normalizedRejectedSourceRef(sourceRef, 'not-found', 'missing');
 }
@@ -348,7 +335,6 @@ function isProjectScopeSourceIdentity(value: unknown): value is ProjectScopeSour
     isNullableString(value.folderId) &&
     isNullableString(value.folderPath) &&
     isNullableString(value.folderRelativeRoot) &&
-    typeof value.legacyPath === 'string' &&
     isNullableString(value.projectScopeId) &&
     typeof value.qualifiedPath === 'string' &&
     typeof value.relativePath === 'string'
@@ -370,6 +356,20 @@ function dedupeSourceIdentities(
   );
 }
 
+interface ProjectScopeSourceIdentityIndex {
+  byQualifiedPath: Map<string, ProjectScopeSourceIdentity>;
+}
+
+function buildProjectScopeSourceIdentityIndex(
+  identities: readonly ProjectScopeSourceIdentity[]
+): ProjectScopeSourceIdentityIndex {
+  const byQualifiedPath = new Map<string, ProjectScopeSourceIdentity>();
+  for (const identity of identities) {
+    byQualifiedPath.set(normalizeComparableSourcePath(identity.qualifiedPath), identity);
+  }
+  return { byQualifiedPath };
+}
+
 function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
@@ -389,7 +389,7 @@ function splitSourceRefLocation(sourceRef: string): { pathPart: string; suffix: 
 function normalizedActiveSourceRef(
   input: string,
   identity: ProjectScopeSourceIdentity,
-  reason: NormalizedProjectScopeSourceRef['reason']
+  reason: ProjectScopeSourceRefNormalizationReason
 ): NormalizedProjectScopeSourceRef {
   return {
     absolutePath: identity.absolutePath,
@@ -397,7 +397,6 @@ function normalizedActiveSourceRef(
     folderId: identity.folderId,
     folderPath: identity.folderPath,
     input,
-    legacyPath: identity.legacyPath,
     normalizedRef: identity.qualifiedPath,
     projectScopeId: identity.projectScopeId,
     qualifiedPath: identity.qualifiedPath,
@@ -409,8 +408,8 @@ function normalizedActiveSourceRef(
 
 function normalizedRejectedSourceRef(
   input: string,
-  reason: NormalizedProjectScopeSourceRef['reason'],
-  status: NormalizedProjectScopeSourceRef['status']
+  reason: ProjectScopeSourceRefNormalizationReason,
+  status: ProjectScopeSourceRefNormalizationStatus
 ): NormalizedProjectScopeSourceRef {
   return {
     absolutePath: null,
@@ -418,7 +417,6 @@ function normalizedRejectedSourceRef(
     folderId: null,
     folderPath: null,
     input,
-    legacyPath: null,
     normalizedRef: null,
     projectScopeId: null,
     qualifiedPath: null,

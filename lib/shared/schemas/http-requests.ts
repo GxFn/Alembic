@@ -334,7 +334,6 @@ export const IntentEpisodeOutcomeBody = z.object({
 
 const DecisionRegisterScopeBody = z.object({
   dataRootSource: z.string().optional(),
-  legacyPath: z.string().optional(),
   projectId: z.string().optional(),
   qualifiedPath: z.string().optional(),
   projectScopeId: z.string().optional(),

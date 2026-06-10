@@ -226,10 +226,8 @@ export function register(c: ServiceContainer) {
     const projectRoot = resolveProjectRoot();
     const sourceRefRepo = ct.get('recipeSourceRefRepository') as SourceRefRepository;
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
-    const sourceIdentities = resolveProjectScopeSourceIdentitiesFromContainer(ct);
     return new SourceRefReconciler(projectRoot, sourceRefRepo, knowledgeRepo, {
       signalBus: ct.singletons.signalBus || undefined,
-      ...(sourceIdentities.length > 0 ? { sourceIdentities } : {}),
     } as ConstructorParameters<typeof SourceRefReconciler>[3]);
   });
 

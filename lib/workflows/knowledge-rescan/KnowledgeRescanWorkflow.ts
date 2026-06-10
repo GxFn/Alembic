@@ -278,12 +278,9 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
         : never;
       type SourceRefReconcilerOptions = NonNullable<
         ConstructorParameters<typeof SourceRefReconciler>[3]
-      > & {
-        sourceIdentities?: typeof sourceIdentities;
-      };
+      >;
       const sourceRefReconcilerOptions: SourceRefReconcilerOptions = {
         signalBus,
-        ...(sourceIdentities.length > 0 ? { sourceIdentities } : {}),
       };
       const reconciler = new SourceRefReconciler(
         projectRoot,

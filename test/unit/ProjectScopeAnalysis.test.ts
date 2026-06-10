@@ -109,7 +109,6 @@ describe('ProjectScope analysis wiring', () => {
         folderId: 'folder-core',
         folderPath: coreRepo,
         folderRelativeRoot: 'AlembicCore',
-        legacyPath: 'lib/index.ts',
         projectScopeId: 'scope-a',
         qualifiedPath: 'AlembicCore/lib/index.ts',
         relativePath: 'lib/index.ts',
@@ -120,7 +119,6 @@ describe('ProjectScope analysis wiring', () => {
         folderId: 'folder-plugin',
         folderPath: pluginRepo,
         folderRelativeRoot: 'AlembicPlugin',
-        legacyPath: 'lib/index.ts',
         projectScopeId: 'scope-a',
         qualifiedPath: 'AlembicPlugin/lib/index.ts',
         relativePath: 'lib/index.ts',
@@ -131,7 +129,6 @@ describe('ProjectScope analysis wiring', () => {
         folderId: 'folder-alembic',
         folderPath: serverRepo,
         folderRelativeRoot: 'Alembic',
-        legacyPath: 'bin/api-server.ts',
         projectScopeId: 'scope-a',
         qualifiedPath: 'Alembic/bin/api-server.ts',
         relativePath: 'bin/api-server.ts',
@@ -140,18 +137,17 @@ describe('ProjectScope analysis wiring', () => {
 
     const identityMap = buildProjectScopeSourceIdentityMap(identities);
     const normalized = normalizeProjectScopeSourceRefsForRuntime(
-      ['bin/api-server.ts:12', 'lib/index.ts', 'AlembicCore/src/core/database.ts'],
+      ['Alembic/bin/api-server.ts:12', 'lib/index.ts', 'AlembicCore/src/core/database.ts'],
       identities
     );
 
     expect(identityMap).toMatchObject({
-      ambiguousLegacyPaths: ['lib/index.ts'],
       preferredRef: 'qualifiedPath',
       sourceCount: 3,
     });
     expect(normalized.activeSourceRefs).toEqual(['Alembic/bin/api-server.ts:12']);
     expect(normalized.rejected.map((ref) => [ref.input, ref.reason])).toEqual([
-      ['lib/index.ts', 'ambiguous-legacy-path'],
+      ['lib/index.ts', 'not-found'],
       ['AlembicCore/src/core/database.ts', 'not-found'],
     ]);
   });

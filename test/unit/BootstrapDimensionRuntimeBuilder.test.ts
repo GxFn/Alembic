@@ -107,7 +107,6 @@ describe('bootstrap dimension runtime builder', () => {
         folderId: 'folder-core',
         folderPath: '/workspace/AlembicCore',
         folderRelativeRoot: 'AlembicCore',
-        legacyPath: 'lib/index.ts',
         projectScopeId: 'scope-a',
         qualifiedPath: 'AlembicCore/lib/index.ts',
         relativePath: 'lib/index.ts',
@@ -212,7 +211,7 @@ describe('bootstrap dimension runtime builder', () => {
     });
     expect(systemRunContext.sharedState).toMatchObject({
       _projectScopeSourceIdentityMap: {
-        entries: [{ legacyPath: 'lib/index.ts', qualifiedPath: 'AlembicCore/lib/index.ts' }],
+        entries: [{ qualifiedPath: 'AlembicCore/lib/index.ts' }],
       },
     });
     expect(strategyContext.projectGraph).toBeTruthy();
@@ -231,7 +230,6 @@ describe('bootstrap dimension runtime builder', () => {
         folderId: 'folder-core',
         folderPath: '/workspace/AlembicCore',
         folderRelativeRoot: 'AlembicCore',
-        legacyPath: 'lib/index.ts',
         projectScopeId: 'scope-a',
         qualifiedPath: 'AlembicCore/lib/index.ts',
         relativePath: 'lib/index.ts',
