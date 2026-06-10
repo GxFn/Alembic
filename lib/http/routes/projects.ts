@@ -5,10 +5,43 @@ import {
   ProjectRuntimeControl,
   type ProjectRuntimeControlActionResult,
   type ProjectRuntimeControlOptions,
+  type ProjectRuntimeControlSnapshot,
+  type ProjectRuntimeHandoff,
+  type ProjectRuntimeScopeSummary,
   type ProjectRuntimeTarget,
 } from '../../daemon/ProjectRuntimeControl.js';
 
 const router = express.Router();
+
+type ProjectRuntimeProblemReason =
+  | 'invalid-input'
+  | 'not-found'
+  | 'conflict'
+  | 'timeout'
+  | 'cancelled'
+  | 'permission-denied'
+  | 'unavailable'
+  | 'internal-error';
+
+interface ProjectRuntimeProblem {
+  code: string;
+  message: string;
+  reasonCode: ProjectRuntimeProblemReason;
+  retryable?: boolean;
+  status: number;
+}
+
+interface ProjectActionPublicData {
+  action: ProjectRuntimeControlActionResult['action'];
+  deferredStopProject: ProjectRuntimeScopeSummary | null;
+  error: string | null;
+  handoff: ProjectRuntimeHandoff | null;
+  ok: boolean;
+  previousActiveProject: ProjectRuntimeScopeSummary | null;
+  snapshot: ProjectRuntimeControlSnapshot;
+  stoppedProject: ProjectRuntimeScopeSummary | null;
+  targetProject: ProjectRuntimeScopeSummary | null;
+}
 
 router.get('/', async (_req: Request, res: Response): Promise<void> => {
   const control = new ProjectRuntimeControl();
@@ -40,17 +73,15 @@ router.post('/select', async (req: Request, res: Response): Promise<void> => {
   const control = new ProjectRuntimeControl();
   const target = targetFromBody(req.body);
   if (!target) {
-    res.status(400).json({
-      success: false,
-      error: 'Project target requires exactly one of projectId or projectRoot',
-    });
+    res.status(400).json({ success: false, error: invalidProjectTargetProblem() });
     return;
   }
   try {
     const snapshot = await control.selectProject(target);
     res.json({ success: true, data: snapshot });
   } catch (error: unknown) {
-    res.status(404).json({ success: false, error: errorMessage(error) });
+    const problem = problemFromError(error, 'not-found', 404);
+    res.status(problem.status).json({ success: false, error: problem });
   }
 });
 
@@ -129,7 +160,8 @@ router.get('/:projectId', async (req: Request, res: Response): Promise<void> => 
     });
     res.json({ success: true, data: { project } });
   } catch (error: unknown) {
-    res.status(404).json({ success: false, error: errorMessage(error) });
+    const problem = problemFromError(error, 'not-found', 404);
+    res.status(problem.status).json({ success: false, error: problem });
   }
 });
 
@@ -165,7 +197,13 @@ function httpControlOptionsFromBody(value: unknown): ProjectRuntimeControlOption
 }
 
 function sendActionResult(res: Response, result: ProjectRuntimeControlActionResult): void {
-  res.status(result.ok ? 200 : 409).json({ success: result.ok, data: result, error: result.error });
+  const data = projectActionPublicData(result);
+  if (result.ok) {
+    res.status(200).json({ success: true, data });
+    return;
+  }
+  const problem = problemFromActionResult(result);
+  res.status(problem.status).json({ success: false, data, error: problem });
 }
 
 async function sendAction(
@@ -178,8 +216,25 @@ async function sendAction(
     scheduleDeferredStopAfterResponse(res, result, options);
     sendActionResult(res, result);
   } catch (error: unknown) {
-    res.status(404).json({ success: false, error: errorMessage(error) });
+    const problem = problemFromError(error, 'not-found', 404);
+    res.status(problem.status).json({ success: false, error: problem });
   }
+}
+
+function projectActionPublicData(
+  result: ProjectRuntimeControlActionResult
+): ProjectActionPublicData {
+  return {
+    action: result.action,
+    deferredStopProject: result.deferredStopProject,
+    error: result.error,
+    handoff: result.handoff,
+    ok: result.ok,
+    previousActiveProject: result.previousActiveProject,
+    snapshot: result.snapshot,
+    stoppedProject: result.stoppedProject,
+    targetProject: result.targetProject,
+  };
 }
 
 function scheduleDeferredStopAfterResponse(
@@ -213,6 +268,122 @@ function numberOption(value: unknown): number | undefined {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function invalidProjectTargetProblem(): ProjectRuntimeProblem {
+  return {
+    code: 'INVALID_PROJECT_TARGET',
+    message: 'Project target requires exactly one of projectId or projectRoot',
+    reasonCode: 'invalid-input',
+    status: 400,
+  };
+}
+
+function problemFromActionResult(result: ProjectRuntimeControlActionResult): ProjectRuntimeProblem {
+  const message = result.error ?? 'Project runtime action failed';
+  const reasonCode = classifyProjectRuntimeProblem(message);
+  const status = statusForProjectRuntimeReason(reasonCode);
+  return {
+    code: codeForProjectRuntimeReason(reasonCode),
+    message,
+    reasonCode,
+    ...(reasonCode === 'timeout' || reasonCode === 'unavailable' ? { retryable: true } : {}),
+    status,
+  };
+}
+
+function problemFromError(
+  error: unknown,
+  fallbackReason: ProjectRuntimeProblemReason,
+  fallbackStatus: number
+): ProjectRuntimeProblem {
+  const message = errorMessage(error);
+  const reasonCode = message ? classifyProjectRuntimeProblem(message) : fallbackReason;
+  const status = message ? statusForProjectRuntimeReason(reasonCode) : fallbackStatus;
+  return {
+    code: codeForProjectRuntimeReason(reasonCode),
+    message,
+    reasonCode,
+    ...(reasonCode === 'timeout' || reasonCode === 'unavailable' ? { retryable: true } : {}),
+    status,
+  };
+}
+
+function classifyProjectRuntimeProblem(message: string): ProjectRuntimeProblemReason {
+  const normalized = message.toLowerCase();
+  if (normalized.includes('permission') || normalized.includes('forbidden')) {
+    return 'permission-denied';
+  }
+  if (
+    normalized.includes('timeout') ||
+    normalized.includes('timed out') ||
+    normalized.includes('did not become ready')
+  ) {
+    return 'timeout';
+  }
+  if (normalized.includes('cancel')) {
+    return 'cancelled';
+  }
+  if (
+    normalized.includes('missing') ||
+    normalized.includes('not found') ||
+    normalized.includes('not registered') ||
+    normalized.includes('no selected')
+  ) {
+    return 'not-found';
+  }
+  if (normalized.includes('unavailable') || normalized.includes('not available')) {
+    return 'unavailable';
+  }
+  if (
+    normalized.includes('already') ||
+    normalized.includes('mismatch') ||
+    normalized.includes('conflict')
+  ) {
+    return 'conflict';
+  }
+  return 'internal-error';
+}
+
+function statusForProjectRuntimeReason(reasonCode: ProjectRuntimeProblemReason): number {
+  switch (reasonCode) {
+    case 'invalid-input':
+      return 400;
+    case 'permission-denied':
+      return 403;
+    case 'not-found':
+      return 404;
+    case 'conflict':
+    case 'cancelled':
+      return 409;
+    case 'timeout':
+      return 504;
+    case 'unavailable':
+      return 503;
+    case 'internal-error':
+      return 500;
+  }
+}
+
+function codeForProjectRuntimeReason(reasonCode: ProjectRuntimeProblemReason): string {
+  switch (reasonCode) {
+    case 'invalid-input':
+      return 'INVALID_PROJECT_TARGET';
+    case 'permission-denied':
+      return 'PROJECT_RUNTIME_PERMISSION_DENIED';
+    case 'not-found':
+      return 'PROJECT_RUNTIME_NOT_FOUND';
+    case 'conflict':
+      return 'PROJECT_RUNTIME_CONFLICT';
+    case 'cancelled':
+      return 'PROJECT_RUNTIME_CANCELLED';
+    case 'timeout':
+      return 'PROJECT_RUNTIME_TIMEOUT';
+    case 'unavailable':
+      return 'PROJECT_RUNTIME_UNAVAILABLE';
+    case 'internal-error':
+      return 'PROJECT_RUNTIME_ERROR';
+  }
 }
 
 export default router;

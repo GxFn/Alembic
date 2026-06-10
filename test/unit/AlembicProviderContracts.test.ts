@@ -131,7 +131,17 @@ describe('Alembic provider contracts', () => {
       ALEMBIC_PROVIDER_FIXTURES.map((fixture) => fixture.scenario)
     );
     expect([...scenarios]).toEqual(
-      expect.arrayContaining(['success', 'failure', 'partial', 'cancelled', 'unavailable-runtime'])
+      expect.arrayContaining([
+        'success',
+        'failure',
+        'partial',
+        'cancelled',
+        'conflict',
+        'not-found',
+        'permission-denied',
+        'timeout',
+        'unavailable-runtime',
+      ])
     );
 
     for (const route of ALEMBIC_PROVIDER_ROUTE_CONTRACTS) {
@@ -151,6 +161,48 @@ describe('Alembic provider contracts', () => {
     expect(serialized).not.toContain('singletons');
     expect(serialized).not.toContain('storeDir');
     expect(serialized).not.toContain('rawProviderPayload');
+  });
+
+  test('closes ordinary provider schemas and names typed extension points', () => {
+    const generated = buildAlembicProviderOpenApiSpec();
+    const serialized = JSON.stringify(generated);
+    expect(serialized).not.toContain('"additionalProperties":true');
+
+    const schemas = generated.components.schemas as Record<string, Record<string, unknown>>;
+    expect(schemas.SuccessEnvelope?.additionalProperties).toBe(false);
+    expect(schemas.ProblemEnvelope?.additionalProperties).toBe(false);
+
+    const routeData = schemas.RouteFamilyResponse?.properties as Record<string, unknown>;
+    const dataSchema = routeData.data as Record<string, unknown>;
+    expect(dataSchema['x-alembic-extension-point']).toMatchObject({
+      name: 'provider.route-data',
+      owner: 'Alembic provider route contract',
+      schemaClosurePolicy: 'typed-extension',
+    });
+
+    const problemProperties = schemas.ProblemEnvelope?.properties as Record<string, unknown>;
+    const errorSchema = problemProperties.error as Record<string, unknown>;
+    expect(errorSchema.required).toEqual(['code', 'message', 'reasonCode']);
+    expect(errorSchema.oneOf).toBeUndefined();
+    expect(errorSchema.type).toBe('object');
+  });
+
+  test('normalizes failure fixtures to typed provider problem objects', () => {
+    for (const fixture of ALEMBIC_PROVIDER_FIXTURES) {
+      if (fixture.payload.success !== false) {
+        continue;
+      }
+      const payload = fixture.payload as Record<string, unknown>;
+      const error = payload.error as Record<string, unknown>;
+      expect(error).toMatchObject({
+        code: expect.any(String),
+        message: expect.any(String),
+        reasonCode: expect.any(String),
+        status: expect.any(Number),
+      });
+      expect(typeof payload.error).toBe('object');
+      expect(payload.reasonCode).toBeUndefined();
+    }
   });
 
   test('event manifest covers socket, recovery, and SSE provider events', () => {

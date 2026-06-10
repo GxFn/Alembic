@@ -10,8 +10,11 @@
  */
 
 // ── common schemas ──────────────────────────────────
+// ── config schemas ──────────────────────────────────
 import {
+  AppConfigSchema,
   ComplexityEnum,
+  ConstitutionSchema,
   ContentSchema,
   IdField,
   KindEnum,
@@ -23,8 +26,6 @@ import {
   StrictKindEnum,
   TitleField,
 } from '@alembic/core/shared';
-// ── config schemas ──────────────────────────────────
-import { AppConfigSchema, ConstitutionSchema } from '@alembic/core/shared';
 import { z } from 'zod';
 
 // ── HTTP request schemas ────────────────────────────
@@ -33,7 +34,10 @@ import {
   BatchPublishBody,
   CreateGuardRuleBody,
   CreateKnowledgeBody,
+  DecisionRegisterCreateBody,
+  IntentEpisodeStartBody,
   SearchQuery,
+  TaskDispatchBody,
   UpdateKnowledgeBody,
 } from '../../lib/shared/schemas/http-requests.js';
 // ── MCP tools schemas ───────────────────────────────
@@ -272,8 +276,8 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
     });
 
     test('should accept code + language', () => {
-      const result = GuardInput.parse({ code: 'eval("x")', language: 'js' });
-      expect(result.code).toBe('eval("x")');
+      const result = GuardInput.parse({ code: 'console.log("x")', language: 'js' });
+      expect(result.code).toBe('console.log("x")');
     });
   });
 
@@ -363,6 +367,18 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
       expect(result.content).toEqual({ pattern: 'x', markdown: 'y' });
     });
 
+    test('keeps caller metadata but strips unnamed public extras', () => {
+      const result = CreateKnowledgeBody.parse({
+        title: 'Test',
+        content: 'Some content',
+        metadata: { owner: 'client' },
+        accidentalBackendField: 'not-public',
+      });
+      const record = result as Record<string, unknown>;
+      expect(record.metadata).toEqual({ owner: 'client' });
+      expect(record.accidentalBackendField).toBeUndefined();
+    });
+
     test('should reject empty title', () => {
       expect(() => CreateKnowledgeBody.parse({ title: '', content: 'x' })).toThrow();
     });
@@ -380,6 +396,60 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
 
     test('should reject empty object', () => {
       expect(() => UpdateKnowledgeBody.parse({})).toThrow();
+    });
+  });
+
+  describe('TaskDispatchBody', () => {
+    test('keeps named operation params and strips unnamed passthrough fields', () => {
+      const result = TaskDispatchBody.parse({
+        operation: 'prime',
+        userQuery: 'Find decisions',
+        hostDeclaredIntent: { source: 'codex' },
+        params: { mode: 'safe' },
+        rawProviderPayload: { secret: true },
+      });
+      const record = result as Record<string, unknown>;
+      expect(record.userQuery).toBe('Find decisions');
+      expect(record.hostDeclaredIntent).toEqual({ source: 'codex' });
+      expect(record.params).toEqual({ mode: 'safe' });
+      expect(record.rawProviderPayload).toBeUndefined();
+    });
+  });
+
+  describe('IntentEpisodeStartBody', () => {
+    test('keeps host intent context and strips unnamed host fields', () => {
+      const result = IntentEpisodeStartBody.parse({
+        query: 'Create handoff',
+        sessionId: 'session-1',
+        hostIntent: { hostDeclaredIntent: { label: 'handoff' } },
+        threadId: 'private-thread',
+      });
+      const record = result as Record<string, unknown>;
+      expect(record.hostIntent).toEqual({ hostDeclaredIntent: { label: 'handoff' } });
+      expect(record.threadId).toBeUndefined();
+    });
+  });
+
+  describe('DecisionRegisterCreateBody', () => {
+    test('keeps typed scope identity fields and strips unnamed scope extras', () => {
+      const result = DecisionRegisterCreateBody.parse({
+        title: 'Decision',
+        decision: 'Use typed provider problems',
+        scope: {
+          legacyPath: 'legacy/path',
+          projectId: 'project-alpha',
+          qualifiedPath: 'project-alpha:legacy/path',
+          workspaceMode: 'single',
+          privateThreadId: 'thread-1',
+        },
+      });
+      expect(result.scope).toMatchObject({
+        legacyPath: 'legacy/path',
+        projectId: 'project-alpha',
+        qualifiedPath: 'project-alpha:legacy/path',
+        workspaceMode: 'single',
+      });
+      expect((result.scope as Record<string, unknown>).privateThreadId).toBeUndefined();
     });
   });
 
@@ -440,7 +510,6 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
       expect(result.username).toBe('admin');
     });
   });
-
 });
 
 describe('Integration: Zod Schemas — config.ts', () => {

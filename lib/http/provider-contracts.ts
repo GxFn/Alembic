@@ -14,6 +14,10 @@ export type AlembicProviderFixtureScenario =
   | 'failure'
   | 'partial'
   | 'cancelled'
+  | 'conflict'
+  | 'not-found'
+  | 'permission-denied'
+  | 'timeout'
   | 'unavailable-runtime';
 export type AlembicProviderTransport = 'http' | 'rest-recovery' | 'socket.io' | 'sse';
 export type HttpMethod = 'get' | 'post' | 'patch' | 'delete';
@@ -77,15 +81,77 @@ export interface AlembicProviderContractSummary {
 const envelopeBase = {
   type: 'object',
   required: ['success'],
-  additionalProperties: true,
+  additionalProperties: false,
   properties: {
     success: { type: 'boolean' },
   },
 } as const satisfies JsonSchema;
 
-const objectSchema = {
+const jsonValueSchema = {
+  oneOf: [
+    { type: 'string' },
+    { type: 'number' },
+    { type: 'integer' },
+    { type: 'boolean' },
+    { type: 'null' },
+    { type: 'array', items: {} },
+    { type: 'object' },
+  ],
+} as const satisfies JsonSchema;
+
+const refArraySchema = {
+  type: 'array',
+  items: { type: 'string' },
+} as const satisfies JsonSchema;
+
+const objectSchema = typedExtensionObjectSchema({
+  consumer: 'Dashboard API adapter, Plugin resident client, and controller fixture replay',
+  description:
+    'Route-specific provider data. Consumers may only depend on fields declared by the owning route family or a named typed extension point.',
+  exposureClasses: ['public', 'consumer-needed', 'diagnostic'],
+  name: 'provider.route-data',
+  owner: 'Alembic provider route contract',
+});
+
+const typedCompatibilityMetadataSchema = typedExtensionObjectSchema({
+  consumer: 'Dashboard and Plugin compatibility replay',
+  description: 'Named compatibility metadata retained until D24 replay and D29 no-consumer proof.',
+  exposureClasses: ['compatibility-private', 'diagnostic'],
+  name: 'provider.compatibility-metadata',
+  owner: 'Alembic provider route contract',
+});
+
+const problemDetailSchema = {
   type: 'object',
-  additionalProperties: true,
+  required: ['code', 'message', 'reasonCode'],
+  additionalProperties: false,
+  properties: {
+    artifactRefs: refArraySchema,
+    code: { type: 'string' },
+    compatibility: typedCompatibilityMetadataSchema,
+    detailRefs: refArraySchema,
+    message: { type: 'string' },
+    reasonCode: {
+      enum: [
+        'invalid-input',
+        'unavailable',
+        'capability-mismatch',
+        'conflict',
+        'timeout',
+        'cancelled',
+        'not-found',
+        'permission-denied',
+        'partial',
+        'degraded',
+        'artifact-missing',
+        'artifact-unreadable',
+        'checksum-mismatch',
+        'internal-error',
+      ],
+    },
+    retryable: { type: 'boolean' },
+    status: { type: 'number' },
+  },
 } as const satisfies JsonSchema;
 
 const problemSchema = {
@@ -93,21 +159,16 @@ const problemSchema = {
   required: ['success', 'error'],
   additionalProperties: false,
   properties: {
+    data: typedExtensionObjectSchema({
+      consumer: 'Dashboard action normalizer and Plugin resident diagnostics',
+      description:
+        'Optional route-owned failure context. The stable problem remains in error; data is limited to the route public projection.',
+      exposureClasses: ['consumer-needed', 'diagnostic'],
+      name: 'provider.problem-failure-data',
+      owner: 'Alembic provider route contract',
+    }),
     success: { const: false },
-    error: {
-      oneOf: [
-        { type: 'string' },
-        {
-          type: 'object',
-          additionalProperties: true,
-          properties: {
-            code: { type: 'string' },
-            message: { type: 'string' },
-            reasonCode: { type: 'string' },
-          },
-        },
-      ],
-    },
+    error: problemDetailSchema,
   },
 } as const satisfies JsonSchema;
 
@@ -129,6 +190,7 @@ const eventMetadataSchema = {
 function dataEnvelope(dataSchema: JsonSchema): JsonSchema {
   return {
     ...envelopeBase,
+    required: ['success', 'data'],
     properties: {
       ...((envelopeBase.properties as Record<string, unknown>) ?? {}),
       data: dataSchema,
@@ -139,7 +201,7 @@ function dataEnvelope(dataSchema: JsonSchema): JsonSchema {
 function arrayDataEnvelope(itemSchema: JsonSchema): JsonSchema {
   return dataEnvelope({
     type: 'object',
-    additionalProperties: true,
+    additionalProperties: false,
     properties: {
       items: { type: 'array', items: itemSchema },
       total: { type: 'number' },
@@ -161,8 +223,8 @@ const routeRows = {
     capabilityDiscovery: ['GET /api/v1/daemon/health', 'GET /api/v1/projects/status'],
     errorKinds: ['conflict', 'timeout', 'cancelled', 'not-found', 'internal-error'],
     exposureClasses: ['consumer-needed', 'diagnostic'],
-    fixtureIds: ['project-runtime.success', 'project-runtime.conflict'],
-    scenarios: ['success', 'failure'],
+    fixtureIds: ['project-runtime.success', 'project-runtime.conflict', 'project-runtime.timeout'],
+    scenarios: ['success', 'conflict', 'timeout'],
   },
   I05: {
     artifactPolicy: 'ProjectScope summary inline; registry snapshots by artifactRef.',
@@ -195,15 +257,15 @@ const routeRows = {
     errorKinds: ['not-found', 'artifact-missing', 'artifact-unreadable', 'checksum-mismatch'],
     exposureClasses: ['public', 'developer-facing', 'diagnostic', 'sensitive'],
     fixtureIds: ['job-snapshot.success', 'job-artifact.missing'],
-    scenarios: ['success', 'failure'],
+    scenarios: ['success', 'not-found'],
   },
   I09: {
     artifactPolicy: 'Route summaries inline; long reports/logs via artifact routes.',
     capabilityDiscovery: ['/api-spec', '/api/v1/daemon/health'],
     errorKinds: ['invalid-input', 'permission-denied', 'unavailable', 'timeout', 'not-found'],
     exposureClasses: ['public', 'consumer-needed', 'diagnostic'],
-    fixtureIds: ['api-spec.success', 'route.not-found'],
-    scenarios: ['success', 'failure'],
+    fixtureIds: ['api-spec.success', 'route.not-found', 'route.permission-denied'],
+    scenarios: ['success', 'not-found', 'permission-denied'],
   },
   I10: {
     artifactPolicy: 'Compact decision summary inline; large evidence payloads by ref.',
@@ -211,7 +273,7 @@ const routeRows = {
     errorKinds: ['invalid-input', 'unavailable', 'capability-mismatch', 'conflict'],
     exposureClasses: ['public', 'consumer-needed', 'diagnostic'],
     fixtureIds: ['decision-register.success', 'decision-register.scope-mismatch'],
-    scenarios: ['success', 'failure'],
+    scenarios: ['success', 'conflict'],
   },
   I11: {
     artifactPolicy: 'Intent/work summaries inline; long histories by detailRef.',
@@ -219,7 +281,7 @@ const routeRows = {
     errorKinds: ['invalid-input', 'unavailable', 'capability-mismatch', 'not-found'],
     exposureClasses: ['public', 'consumer-needed', 'diagnostic'],
     fixtureIds: ['intent-episode.success', 'intent-episode.not-found'],
-    scenarios: ['success', 'failure'],
+    scenarios: ['success', 'not-found'],
   },
   I21: {
     artifactPolicy: 'Compact guard findings inline; full reports by artifactRef.',
@@ -249,7 +311,7 @@ const routeRows = {
     errorKinds: ['invalid-input', 'unavailable', 'permission-denied', 'not-found'],
     exposureClasses: ['diagnostic', 'internal', 'consumer-needed', 'sensitive'],
     fixtureIds: ['diagnostic.success', 'diagnostic.failure'],
-    scenarios: ['success', 'failure'],
+    scenarios: ['success', 'unavailable-runtime'],
   },
 } as const satisfies Record<
   AlembicProviderRouteRowId,
@@ -500,15 +562,34 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
   }),
   fixture('I03', 'I03.runtime-health.get', 'runtime-health.unavailable', 'unavailable-runtime', {
     success: false,
-    error: { code: 'UNAVAILABLE_RUNTIME', message: 'Alembic daemon is not ready' },
+    error: providerProblem('UNAVAILABLE_RUNTIME', 'Alembic daemon is not ready', 'unavailable', {
+      retryable: true,
+      status: 503,
+    }),
   }),
   fixture('I04', 'I04.projects.get', 'project-runtime.success', 'success', {
     success: true,
     data: { state: { activeProjectId: 'project-alpha' }, projects: [{ id: 'project-alpha' }] },
   }),
-  fixture('I04', 'I04.projects.get', 'project-runtime.conflict', 'failure', {
+  fixture('I04', 'I04.projects.get', 'project-runtime.conflict', 'conflict', {
     success: false,
-    data: { ok: false, error: 'Project is already switching', reasonCode: 'conflict' },
+    data: { action: 'switch', error: 'Project is already switching', ok: false },
+    error: providerProblem('PROJECT_RUNTIME_CONFLICT', 'Project is already switching', 'conflict', {
+      status: 409,
+    }),
+  }),
+  fixture('I04', 'I04.projects.start.post', 'project-runtime.timeout', 'timeout', {
+    success: false,
+    data: { action: 'start', error: 'Target daemon did not become ready', ok: false },
+    error: providerProblem(
+      'PROJECT_RUNTIME_TIMEOUT',
+      'Target daemon did not become ready',
+      'timeout',
+      {
+        retryable: true,
+        status: 504,
+      }
+    ),
   }),
   fixture('I05', 'I05.project-scope.get', 'project-scope.success', 'success', {
     success: true,
@@ -516,7 +597,9 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
   }),
   fixture('I05', 'I05.project-scope.get', 'project-scope.failure', 'failure', {
     success: false,
-    error: { code: 'INVALID_INPUT', message: 'folder path is required' },
+    error: providerProblem('INVALID_INPUT', 'folder path is required', 'invalid-input', {
+      status: 400,
+    }),
   }),
   fixture('I06', 'I06.jobs.get', 'jobs.queued', 'success', {
     success: true,
@@ -528,7 +611,10 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
   }),
   fixture('I06', 'I06.jobs.get', 'jobs.unavailable', 'unavailable-runtime', {
     success: false,
-    error: { code: 'UNAVAILABLE_RUNTIME', message: 'Job store unavailable' },
+    error: providerProblem('UNAVAILABLE_RUNTIME', 'Job store unavailable', 'unavailable', {
+      retryable: true,
+      status: 503,
+    }),
   }),
   fixture('I07', 'I07.job-events.get', 'job-event.visible', 'success', {
     jobId: 'job-bootstrap-1',
@@ -555,34 +641,46 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
       validation: { valid: true, issues: [] },
     },
   }),
-  fixture('I08', 'I08.job-artifact.get', 'job-artifact.missing', 'failure', {
+  fixture('I08', 'I08.job-artifact.get', 'job-artifact.missing', 'not-found', {
     success: false,
-    error: 'Artifact not found',
+    error: providerProblem('ARTIFACT_MISSING', 'Artifact not found', 'artifact-missing', {
+      status: 404,
+    }),
   }),
   fixture('I09', 'I09.api-spec.get', 'api-spec.success', 'success', {
     openapi: '3.0.0',
     info: { title: 'Alembic API', version: '2.0.0' },
   }),
-  fixture('I09', 'I09.route.not-found', 'route.not-found', 'failure', {
+  fixture('I09', 'I09.route.not-found', 'route.not-found', 'not-found', {
     success: false,
-    error: { code: 'NOT_FOUND', message: 'Route not found' },
+    error: providerProblem('NOT_FOUND', 'Route not found', 'not-found', { status: 404 }),
+  }),
+  fixture('I09', 'I09.route.permission-denied', 'route.permission-denied', 'permission-denied', {
+    success: false,
+    error: providerProblem('PERMISSION_DENIED', 'Permission denied', 'permission-denied', {
+      status: 403,
+    }),
   }),
   fixture('I10', 'I10.decision-register.post', 'decision-register.success', 'success', {
     success: true,
     data: { decision: { decisionId: 'decision-alpha', status: 'active' } },
   }),
-  fixture('I10', 'I10.decision-register.post', 'decision-register.scope-mismatch', 'failure', {
+  fixture('I10', 'I10.decision-register.post', 'decision-register.scope-mismatch', 'conflict', {
     success: false,
-    reasonCode: 'project-scope-mismatch',
-    error: 'Decision scope does not match current Alembic workspace',
+    error: providerProblem(
+      'PROJECT_SCOPE_MISMATCH',
+      'Decision scope does not match current Alembic workspace',
+      'conflict',
+      { status: 409 }
+    ),
   }),
   fixture('I11', 'I11.intent-episodes.post', 'intent-episode.success', 'success', {
     success: true,
     data: { episode: { episodeId: 'intent-alpha', status: 'open' } },
   }),
-  fixture('I11', 'I11.intent-episodes.patch', 'intent-episode.not-found', 'failure', {
+  fixture('I11', 'I11.intent-episodes.patch', 'intent-episode.not-found', 'not-found', {
     success: false,
-    error: 'IntentEpisode not found',
+    error: providerProblem('NOT_FOUND', 'IntentEpisode not found', 'not-found', { status: 404 }),
   }),
   fixture('I21', 'I21.guard.post', 'guard.success', 'success', {
     success: true,
@@ -590,7 +688,7 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
   }),
   fixture('I21', 'I21.guard.post', 'guard.invalid-input', 'failure', {
     success: false,
-    error: { code: 'INVALID_INPUT', message: 'code is required' },
+    error: providerProblem('INVALID_INPUT', 'code is required', 'invalid-input', { status: 400 }),
   }),
   fixture('I22', 'I22.knowledge.get', 'knowledge.success', 'success', {
     success: true,
@@ -640,7 +738,15 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
   }),
   fixture('I22', 'I22.workflow', 'workflow.unavailable', 'unavailable-runtime', {
     success: false,
-    error: { code: 'UNAVAILABLE_RUNTIME', message: 'Provider capability is unavailable' },
+    error: providerProblem(
+      'UNAVAILABLE_RUNTIME',
+      'Provider capability is unavailable',
+      'unavailable',
+      {
+        retryable: true,
+        status: 503,
+      }
+    ),
   }),
   fixture('I22', 'I22.ai-chat.sse', 'sse.ai-chat.success', 'success', {
     event: 'message',
@@ -658,9 +764,17 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
     success: true,
     data: { source: 'alembic-daemon', operation: 'diagnostic.read', detailRefs: [] },
   }),
-  fixture('I23', 'I23.diagnostics.get', 'diagnostic.failure', 'failure', {
+  fixture('I23', 'I23.diagnostics.get', 'diagnostic.failure', 'unavailable-runtime', {
     success: false,
-    error: { code: 'DIAGNOSTIC_UNAVAILABLE', message: 'Diagnostic source unavailable' },
+    error: providerProblem(
+      'DIAGNOSTIC_UNAVAILABLE',
+      'Diagnostic source unavailable',
+      'unavailable',
+      {
+        retryable: true,
+        status: 503,
+      }
+    ),
   }),
 ] as const satisfies readonly AlembicProviderFixture[];
 
@@ -818,10 +932,58 @@ function responseSchemasFor(
   if (scenarios.includes('cancelled')) {
     schemas[409] = problemSchema;
   }
+  if (scenarios.includes('conflict')) {
+    schemas[409] = problemSchema;
+  }
+  if (scenarios.includes('not-found')) {
+    schemas[404] = problemSchema;
+  }
+  if (scenarios.includes('permission-denied')) {
+    schemas[403] = problemSchema;
+  }
+  if (scenarios.includes('timeout')) {
+    schemas[504] = problemSchema;
+  }
   if (scenarios.includes('partial')) {
     schemas[206] = dataEnvelope(objectSchema);
   }
   return schemas;
+}
+
+function typedExtensionObjectSchema(options: {
+  consumer: string;
+  description: string;
+  exposureClasses: readonly string[];
+  name: string;
+  owner: string;
+}): JsonSchema {
+  return {
+    type: 'object',
+    additionalProperties: jsonValueSchema,
+    description: options.description,
+    'x-alembic-extension-point': {
+      consumer: options.consumer,
+      exposureClasses: options.exposureClasses,
+      name: options.name,
+      owner: options.owner,
+      schemaClosurePolicy: 'typed-extension',
+    },
+  };
+}
+
+function providerProblem(
+  code: string,
+  message: string,
+  reasonCode: string,
+  options: { retryable?: boolean; status: number }
+): Record<string, unknown> {
+  return {
+    code,
+    message,
+    reasonCode,
+    ...(options.retryable === undefined ? {} : { retryable: options.retryable }),
+    status: options.status,
+  };
 }
 
 function functionClassFor(

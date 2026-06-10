@@ -2,10 +2,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ProjectRegistry } from '@alembic/core/workspace';
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { ProjectRuntimeControl } from '../../lib/daemon/ProjectRuntimeControl.js';
 import projectsRouter from '../../lib/http/routes/projects.js';
-import { getRouter } from '../helpers/express.js';
+import { getRouter, invokeRouter } from '../helpers/express.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
 
@@ -18,6 +18,7 @@ function makeProjectRoot(): string {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   if (ORIGINAL_ALEMBIC_HOME === undefined) {
     delete process.env.ALEMBIC_HOME;
   } else {
@@ -72,5 +73,68 @@ describe('projects route runtime source of truth', () => {
       projectScopeRegistryWriteAllowed: false,
       selectedStateWriteAllowed: false,
     });
+  });
+
+  test('POST project action returns a public projection with typed problem details', async () => {
+    useTempAlembicHome();
+    const projectRoot = makeProjectRoot();
+    const entry = ProjectRegistry.register(projectRoot, true);
+    const snapshot = await new ProjectRuntimeControl().snapshot();
+    const targetProject =
+      snapshot.projects.find((project) => project.projectId === entry.id) ?? null;
+    const actionResult = {
+      action: 'switch',
+      deferredStopProject: null,
+      error: 'Target daemon did not become ready',
+      handoff: targetProject
+        ? {
+            apiBaseUrl: null,
+            dashboardUrl: null,
+            projectId: targetProject.projectId,
+            projectRoot: targetProject.projectRoot,
+            status: targetProject.status,
+          }
+        : null,
+      internalOnly: true,
+      ok: false,
+      previousActiveProject: null,
+      snapshot,
+      stoppedProject: null,
+      targetProject,
+    } satisfies Awaited<ReturnType<ProjectRuntimeControl['switchProject']>> & {
+      internalOnly: boolean;
+    };
+    const switchSpy = vi
+      .spyOn(ProjectRuntimeControl.prototype, 'switchProject')
+      .mockResolvedValueOnce(actionResult);
+
+    const response = await invokeRouter(projectsRouter, {
+      body: { waitMs: 250 },
+      method: 'POST',
+      mountPath: '/api/v1/projects',
+      path: `/api/v1/projects/${entry.id}/switch`,
+      timeoutMs: 3_000,
+    });
+
+    expect(response.status).toBe(504);
+    expect(response.body.success).toBe(false);
+    expect(response.body.error).toMatchObject({
+      code: 'PROJECT_RUNTIME_TIMEOUT',
+      message: 'Target daemon did not become ready',
+      reasonCode: 'timeout',
+      retryable: true,
+      status: 504,
+    });
+    const data = response.body.data as Record<string, unknown>;
+    expect(data).toMatchObject({
+      action: 'switch',
+      error: 'Target daemon did not become ready',
+      ok: false,
+    });
+    expect(data.internalOnly).toBeUndefined();
+    expect(switchSpy).toHaveBeenCalledWith(
+      { projectId: entry.id },
+      { deferSelfDaemonStop: true, restart: false, stopWaitMs: undefined, waitUntilReadyMs: 250 }
+    );
   });
 });

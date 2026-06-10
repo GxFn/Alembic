@@ -29,6 +29,8 @@ const BatchIds = z.object({
   ids: z.array(z.string().min(1)).min(1).max(MAX_BATCH_SIZE),
 });
 
+const MetadataRecord = z.record(z.string(), z.unknown());
+
 const PaginationQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(1000).default(20),
@@ -36,32 +38,31 @@ const PaginationQuery = z.object({
 
 // ═══ Knowledge ═══════════════════════════════════
 
-export const CreateKnowledgeBody = z
-  .object({
-    title: z.string().min(1, 'title is required'),
-    content: z.union([z.string().min(1), z.record(z.string(), z.unknown())]),
-    description: z.string().optional(),
-    kind: z.enum(['rule', 'pattern', 'fact']).nullish(),
-    language: z.string().optional(),
-    category: z.string().optional(),
-    knowledgeType: z.string().optional(),
-    complexity: z.string().nullish(),
-    scope: z.string().nullish(),
-    tags: z.array(z.string()).optional(),
-  })
-  .loose();
+export const CreateKnowledgeBody = z.object({
+  title: z.string().min(1, 'title is required'),
+  content: z.union([z.string().min(1), MetadataRecord]),
+  description: z.string().optional(),
+  kind: z.enum(['rule', 'pattern', 'fact']).nullish(),
+  language: z.string().optional(),
+  category: z.string().optional(),
+  knowledgeType: z.string().optional(),
+  complexity: z.string().nullish(),
+  metadata: MetadataRecord.optional(),
+  scope: z.string().nullish(),
+  tags: z.array(z.string()).optional(),
+});
 
 export const UpdateKnowledgeBody = z
   .object({
     title: z.string().min(1).optional(),
     description: z.string().optional(),
-    content: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
+    content: z.union([z.string(), MetadataRecord]).optional(),
     kind: z.enum(['rule', 'pattern', 'fact']).nullish(),
     language: z.string().optional(),
     category: z.string().optional(),
+    metadata: MetadataRecord.optional(),
     tags: z.array(z.string()).optional(),
   })
-  .loose()
   .refine((data) => Object.keys(data).length > 0, {
     message: 'At least one field must be provided for update',
   });
@@ -134,7 +135,7 @@ export const CheckCodeBody = z.object({
 
 export const ImportFromRecipeBody = z.object({
   recipeId: z.string().min(1, 'recipeId is required'),
-  rules: z.array(z.record(z.string(), z.unknown())).min(1, 'rules array must not be empty'),
+  rules: z.array(MetadataRecord).min(1, 'rules array must not be empty'),
 });
 
 export const GuardRulesListQuery = PaginationQuery.extend({
@@ -182,16 +183,16 @@ export const ResidentSearchBody = z
     limit: z.number().int().min(1).max(100).default(20),
     groupByKind: z.boolean().default(false),
     language: z.string().optional(),
-    sessionHistory: z.array(z.record(z.string(), z.unknown())).optional(),
+    sessionHistory: z.array(MetadataRecord).optional(),
     sourceRefs: z.array(z.string().min(1)).max(50).optional(),
     confidence: z.number().min(0).max(1).optional(),
     degraded: z.boolean().optional(),
     degradedReason: z.string().optional(),
     searchIntent: z.string().optional(),
     scenario: z.string().optional(),
-    hostDeclaredIntent: z.record(z.string(), z.unknown()).optional(),
-    hostTurnMeta: z.record(z.string(), z.unknown()).optional(),
-    intentContext: z.record(z.string(), z.unknown()).optional(),
+    hostDeclaredIntent: MetadataRecord.optional(),
+    hostTurnMeta: MetadataRecord.optional(),
+    intentContext: MetadataRecord.optional(),
   })
   .refine((data) => Boolean(data.q || data.query), {
     message: 'Either q or query is required',
@@ -201,7 +202,7 @@ export const ContextAwareSearchBody = z.object({
   keyword: z.string().min(1, 'keyword is required'),
   limit: z.number().int().min(1).max(100).default(10),
   language: z.string().optional(),
-  sessionHistory: z.array(z.record(z.string(), z.unknown())).optional(),
+  sessionHistory: z.array(MetadataRecord).optional(),
 });
 
 export const SimilarityBody = z.object({
@@ -240,7 +241,7 @@ export const RefinePreviewBody = z.object({
 export const RefineApplyBody = z.object({
   candidateId: z.string().min(1, 'candidateId is required'),
   userPrompt: z.string().optional(),
-  preview: z.record(z.string(), z.unknown()).optional(),
+  preview: MetadataRecord.optional(),
 });
 
 // ═══ Guard (file check) ══════════════════════════
@@ -285,50 +286,60 @@ export const UpdateSkillBody = z
 
 // ═══ Task (unified dispatch) ═════════════════════
 
-export const TaskDispatchBody = z
-  .object({
-    operation: z.string().min(1, 'operation is required'),
-    // 各操作的参数透传为 passthrough（具体校验在 handler 中）
-  })
-  .passthrough();
+export const TaskDispatchBody = z.object({
+  activeFile: z.string().optional(),
+  description: z.string().optional(),
+  hostDeclaredIntent: MetadataRecord.optional(),
+  hostTurnMeta: MetadataRecord.optional(),
+  id: z.string().optional(),
+  intentContext: MetadataRecord.optional(),
+  language: z.string().optional(),
+  metadata: MetadataRecord.optional(),
+  operation: z.string().min(1, 'operation is required'),
+  params: MetadataRecord.optional(),
+  rationale: z.string().optional(),
+  reason: z.string().optional(),
+  sessionHistory: z.array(MetadataRecord).optional(),
+  sourceRefs: z.array(z.string().min(1)).max(50).optional(),
+  tags: z.array(z.string()).max(50).optional(),
+  taskId: z.string().optional(),
+  title: z.string().optional(),
+  userQuery: z.string().optional(),
+});
 
 // ═══ Intent Episode ═════════════════════════════
 
-export const IntentEpisodeStartBody = z
-  .object({
-    activeFile: z.string().optional(),
-    hostIntent: z.record(z.string(), z.unknown()).optional(),
-    language: z.string().optional(),
-    module: z.string().optional(),
-    query: z.string().optional(),
-    scenario: z.string().optional(),
-    searchMeta: z.record(z.string(), z.unknown()).optional(),
-    sessionId: z.string().optional(),
-    sourceRefs: z.array(z.string()).optional(),
-    taskId: z.string().optional(),
-    turnId: z.string().optional(),
-  })
-  .passthrough();
+export const IntentEpisodeStartBody = z.object({
+  activeFile: z.string().optional(),
+  hostIntent: MetadataRecord.optional(),
+  language: z.string().optional(),
+  module: z.string().optional(),
+  query: z.string().optional(),
+  scenario: z.string().optional(),
+  searchMeta: MetadataRecord.optional(),
+  sessionId: z.string().optional(),
+  sourceRefs: z.array(z.string()).optional(),
+  taskId: z.string().optional(),
+  turnId: z.string().optional(),
+});
 
-export const IntentEpisodeOutcomeBody = z
-  .object({
-    reason: z.string().optional(),
-    searchMeta: z.record(z.string(), z.unknown()).optional(),
-    status: z.enum(['completed', 'failed', 'abandoned']),
-    taskId: z.string().optional(),
-  })
-  .passthrough();
+export const IntentEpisodeOutcomeBody = z.object({
+  reason: z.string().optional(),
+  searchMeta: MetadataRecord.optional(),
+  status: z.enum(['completed', 'failed', 'abandoned']),
+  taskId: z.string().optional(),
+});
 
 // ═══ Decision Register ══════════════════════════
 
-const DecisionRegisterScopeBody = z
-  .object({
-    dataRootSource: z.string().optional(),
-    projectId: z.string().optional(),
-    projectScopeId: z.string().optional(),
-    workspaceMode: z.string().optional(),
-  })
-  .passthrough();
+const DecisionRegisterScopeBody = z.object({
+  dataRootSource: z.string().optional(),
+  legacyPath: z.string().optional(),
+  projectId: z.string().optional(),
+  qualifiedPath: z.string().optional(),
+  projectScopeId: z.string().optional(),
+  workspaceMode: z.string().optional(),
+});
 
 const DecisionRegisterRefs = z.array(z.string().min(1)).max(80).optional();
 
@@ -340,7 +351,7 @@ export const DecisionRegisterCreateBody = z
     description: z.string().optional(),
     detailRefs: DecisionRegisterRefs,
     intentRef: z.string().optional(),
-    metadata: z.record(z.string(), z.unknown()).optional(),
+    metadata: MetadataRecord.optional(),
     rationale: z.string().optional(),
     scope: DecisionRegisterScopeBody.optional(),
     sessionId: z.string().optional(),
@@ -350,7 +361,6 @@ export const DecisionRegisterCreateBody = z
     turnId: z.string().optional(),
     workRef: z.string().optional(),
   })
-  .passthrough()
   .refine((data) => Boolean(data.decision || data.description), {
     message: 'Either decision or description is required',
   });
@@ -361,7 +371,7 @@ export const DecisionRegisterUpdateBody = z
     description: z.string().optional(),
     detailRefs: DecisionRegisterRefs,
     intentRef: z.string().optional(),
-    metadata: z.record(z.string(), z.unknown()).optional(),
+    metadata: MetadataRecord.optional(),
     rationale: z.string().optional(),
     scope: DecisionRegisterScopeBody.optional(),
     sessionId: z.string().optional(),
@@ -372,18 +382,15 @@ export const DecisionRegisterUpdateBody = z
     updatedBy: z.string().optional(),
     workRef: z.string().optional(),
   })
-  .passthrough()
   .refine((data) => Object.keys(data).length > 0, {
     message: 'At least one field must be provided for update',
   });
 
-export const DecisionRegisterTerminalBody = z
-  .object({
-    reason: z.string().optional(),
-    scope: DecisionRegisterScopeBody.optional(),
-    updatedBy: z.string().optional(),
-  })
-  .passthrough();
+export const DecisionRegisterTerminalBody = z.object({
+  reason: z.string().optional(),
+  scope: DecisionRegisterScopeBody.optional(),
+  updatedBy: z.string().optional(),
+});
 
 export const DecisionRegisterSearchableQuery = z.object({
   includeAudit: z
@@ -400,21 +407,21 @@ export const DecisionRegisterSearchableQuery = z.object({
 
 export const ScanFolderBody = z.object({
   path: z.string().min(1, 'path is required'),
-  options: z.record(z.string(), z.unknown()).optional(),
+  options: MetadataRecord.optional(),
 });
 
 export const ScanTargetBody = z
   .object({
-    target: z.record(z.string(), z.unknown()).optional(),
+    target: MetadataRecord.optional(),
     targetName: z.string().optional(),
-    options: z.record(z.string(), z.unknown()).optional(),
+    options: MetadataRecord.optional(),
   })
   .refine((data) => data.target || data.targetName, {
     message: 'Either target or targetName is required',
   });
 
 export const ScanProjectBody = z.object({
-  options: z.record(z.string(), z.unknown()).optional(),
+  options: MetadataRecord.optional(),
 });
 
 export const ModuleBootstrapBody = z.object({
@@ -466,7 +473,7 @@ export const AiTranslateBody = z.object({
 
 export const AiChatBody = z.object({
   prompt: z.string().min(1, 'prompt is required'),
-  history: z.array(z.record(z.string(), z.unknown())).default([]),
+  history: z.array(MetadataRecord).default([]),
   lang: z.string().optional(),
   conversationId: z.string().optional(),
   sseSessionId: z.string().optional(),
@@ -474,18 +481,18 @@ export const AiChatBody = z.object({
 
 export const AiStreamBody = z.object({
   prompt: z.string().min(1, 'prompt is required'),
-  history: z.array(z.record(z.string(), z.unknown())).default([]),
+  history: z.array(MetadataRecord).default([]),
   lang: z.string().optional(),
 });
 
 export const AiToolBody = z.object({
   tool: z.string().min(1, 'tool name is required'),
-  params: z.record(z.string(), z.unknown()).default({}),
+  params: MetadataRecord.default({}),
 });
 
 export const AiTaskBody = z.object({
   task: z.string().min(1, 'task name is required'),
-  params: z.record(z.string(), z.unknown()).default({}),
+  params: MetadataRecord.default({}),
 });
 
 export const AiFormatUsageGuideBody = z.object({
