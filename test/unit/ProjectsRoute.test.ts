@@ -109,7 +109,7 @@ describe('projects route runtime source of truth', () => {
       .mockResolvedValueOnce(actionResult);
 
     const response = await invokeRouter(projectsRouter, {
-      body: { waitMs: 250 },
+      body: { waitUntilReadyMs: 250 },
       method: 'POST',
       mountPath: '/api/v1/projects',
       path: `/api/v1/projects/${entry.id}/switch`,
@@ -144,6 +144,49 @@ describe('projects route runtime source of truth', () => {
     expect(switchSpy).toHaveBeenCalledWith(
       { projectId: entry.id },
       { deferSelfDaemonStop: true, restart: false, stopWaitMs: undefined, waitUntilReadyMs: 250 }
+    );
+  });
+
+  test('POST project action no longer treats waitMs as public action wait alias', async () => {
+    useTempAlembicHome();
+    const projectRoot = makeProjectRoot();
+    const entry = ProjectRegistry.register(projectRoot, true);
+    const snapshot = await new ProjectRuntimeControl().snapshot();
+    const targetProject =
+      snapshot.projects.find((project) => project.projectId === entry.id) ?? null;
+    const actionResult = {
+      action: 'switch',
+      deferredStopProject: null,
+      error: null,
+      handoff: null,
+      ok: true,
+      previousActiveProject: null,
+      snapshot,
+      stoppedProject: null,
+      targetProject,
+    } satisfies Awaited<ReturnType<ProjectRuntimeControl['switchProject']>>;
+    const switchSpy = vi
+      .spyOn(ProjectRuntimeControl.prototype, 'switchProject')
+      .mockResolvedValueOnce(actionResult);
+
+    const response = await invokeRouter(projectsRouter, {
+      body: { waitMs: 250 },
+      method: 'POST',
+      mountPath: '/api/v1/projects',
+      path: `/api/v1/projects/${entry.id}/switch`,
+      timeoutMs: 3_000,
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(switchSpy).toHaveBeenCalledWith(
+      { projectId: entry.id },
+      {
+        deferSelfDaemonStop: true,
+        restart: false,
+        stopWaitMs: undefined,
+        waitUntilReadyMs: undefined,
+      }
     );
   });
 });

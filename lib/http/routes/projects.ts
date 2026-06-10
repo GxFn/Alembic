@@ -186,7 +186,7 @@ function controlOptionsFromBody(value: unknown): ProjectRuntimeControlOptions {
   return {
     restart: body.restart === true,
     stopWaitMs: numberOption(body.stopWaitMs),
-    waitUntilReadyMs: numberOption(body.waitUntilReadyMs ?? body.waitMs),
+    waitUntilReadyMs: numberOption(body.waitUntilReadyMs),
   };
 }
 
