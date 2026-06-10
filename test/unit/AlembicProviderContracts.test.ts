@@ -76,7 +76,7 @@ describe('Alembic provider contracts', () => {
     });
   });
 
-  test('declares resident search provider routes and scopes fallback as compatibility metadata', () => {
+  test('declares resident search provider routes and scopes degraded search as canonical telemetry', () => {
     expect(ALEMBIC_PROVIDER_ROUTE_CONTRACTS).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -147,14 +147,6 @@ const objectSchema = typedExtensionObjectSchema({
   owner: 'Alembic provider route contract',
 });
 
-const typedCompatibilityMetadataSchema = typedExtensionObjectSchema({
-  consumer: 'Dashboard and Plugin compatibility replay',
-  description: 'Named compatibility metadata retained until D24 replay and D29 no-consumer proof.',
-  exposureClasses: ['compatibility-private', 'diagnostic'],
-  name: 'provider.compatibility-metadata',
-  owner: 'Alembic provider route contract',
-});
-
 const problemDetailSchema = {
   type: 'object',
   required: problemDetailRequiredFields,
@@ -164,7 +156,6 @@ const problemDetailSchema = {
     artifactRefs: refArraySchema,
     canonicalHttpStatus: { type: 'number' },
     code: { type: 'string' },
-    compatibility: typedCompatibilityMetadataSchema,
     dashboardState: { enum: CORE_FIELD_FAILURE_KINDS },
     detailExposureClass: { enum: CORE_FIELD_CLASSES },
     detailRefs: refArraySchema,
@@ -334,7 +325,7 @@ const routeRows = {
   },
   I22: {
     artifactPolicy:
-      'Workflow and resident search summaries inline; reports/snapshots by artifactRef and degraded search fallback by compatibility metadata.',
+      'Workflow and resident search summaries inline; reports/snapshots by artifactRef and degraded resident search state by canonical degraded telemetry.',
     capabilityDiscovery: ['/api/v1/knowledge', '/api/v1/modules', '/api/v1/candidates'],
     errorKinds: [
       'invalid-input',
