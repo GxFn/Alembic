@@ -2,6 +2,10 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  resolveDashboardSource,
+  verifyDashboardArtifactFreshness,
+} from './dashboard-artifact-metadata.mjs';
 
 const repoRoot = join(import.meta.dirname, '..');
 const packageJson = readJson('package.json');
@@ -10,6 +14,7 @@ const stagingPackagePath = join('.release', 'alembic-ai', 'package.json');
 const stagingSourcePath = join('.release', 'alembic-ai', 'alembic-release-source.json');
 const stagingPackage = readOptionalJson(stagingPackagePath);
 const stagingSource = readOptionalJson(stagingSourcePath);
+const dashboardSource = resolveDashboardSource();
 
 const dependencySections = [
   'dependencies',
@@ -103,6 +108,34 @@ if (!stagingSource) {
     if (!source?.commit) {
       errors.push(`Release source metadata missing ${sourceName}.commit.`);
     }
+  }
+
+  const dashboardArtifact = verifyDashboardArtifactFreshness({
+    artifactDir: join(repoRoot, '.release', 'alembic-ai', 'dashboard', 'dist'),
+    expectedSource: dashboardSource,
+  });
+  for (const error of dashboardArtifact.errors) {
+    errors.push(`Staging dashboard artifact: ${error}`);
+  }
+  const dashboardMetadata = dashboardArtifact.metadata?.source;
+  const dashboardReleaseSource = stagingSource.sources?.AlembicDashboard;
+  if (
+    dashboardMetadata &&
+    dashboardReleaseSource &&
+    dashboardMetadata.commit !== dashboardReleaseSource.commit
+  ) {
+    errors.push(
+      `Staging dashboard metadata commit ${String(dashboardMetadata.commit)} does not match release source ${String(dashboardReleaseSource.commit)}.`
+    );
+  }
+  if (
+    dashboardMetadata &&
+    dashboardReleaseSource &&
+    dashboardMetadata.sourceFingerprint !== dashboardReleaseSource.sourceFingerprint
+  ) {
+    errors.push(
+      `Staging dashboard metadata sourceFingerprint ${String(dashboardMetadata.sourceFingerprint)} does not match release source ${String(dashboardReleaseSource.sourceFingerprint)}.`
+    );
   }
 }
 

@@ -3,6 +3,10 @@
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import {
+  resolveDashboardSource,
+  verifyDashboardArtifactFreshness,
+} from './dashboard-artifact-metadata.mjs';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 const defaultOutputDir = join(repoRoot, '.release', 'alembic-ai');
@@ -12,11 +16,16 @@ const outputDir = outputArg
   ? resolve(repoRoot, outputArg.slice('--output='.length))
   : defaultOutputDir;
 const shouldPackDryRun = args.has('--pack-dry-run');
+const shouldSkipDashboardBuild = args.has('--skip-dashboard-build');
 
 const rootPackage = readJson(join(repoRoot, 'package.json'));
 const corePackage = readJson(join(repoRoot, '..', 'AlembicCore', 'package.json'));
 const agentPackage = readJson(join(repoRoot, '..', 'AlembicAgent', 'package.json'));
-const dashboardPackage = readJson(join(repoRoot, '..', 'AlembicDashboard', 'package.json'));
+const dashboardSource = resolveDashboardSource();
+const dashboardPackage = {
+  name: dashboardSource.packageName,
+  version: dashboardSource.packageVersion,
+};
 
 const dependencyReplacements = {
   '@alembic/core': corePackage.version,
@@ -24,6 +33,11 @@ const dependencyReplacements = {
 };
 
 verifyRootDevManifest(rootPackage);
+if (!shouldSkipDashboardBuild) {
+  writeLine('Building Dashboard assets before publish staging.');
+  execFileSync('npm', ['run', 'build:dashboard'], { cwd: repoRoot, stdio: 'inherit' });
+}
+verifyDashboardArtifact('Dashboard artifact', join(repoRoot, 'dashboard', 'dist'), dashboardSource);
 prepareOutputDirectory(outputDir);
 
 const stagingPackage = createStagingPackageJson(rootPackage, dependencyReplacements);
@@ -34,12 +48,15 @@ const sourceMetadata = createSourceMetadata(stagingPackage);
 writeJson(join(outputDir, 'package.json'), stagingPackage);
 writeJson(join(outputDir, 'alembic-release-source.json'), sourceMetadata);
 
-verifyStagingManifest(stagingPackage, sourceMetadata);
+verifyStagingManifest(stagingPackage, sourceMetadata, outputDir, dashboardSource);
 writeLine(`Prepared Alembic publish staging package: ${relativeFromRepo(outputDir)}`);
 writeLine(`- @alembic/core: ${dependencyReplacements['@alembic/core']}`);
 writeLine(`- @alembic/agent: ${dependencyReplacements['@alembic/agent']}`);
 writeLine(`- Core source: ${sourceMetadata.sources.AlembicCore.commit}`);
 writeLine(`- Agent source: ${sourceMetadata.sources.AlembicAgent.commit}`);
+writeLine(
+  `- Dashboard source: ${sourceMetadata.sources.AlembicDashboard.commit} (${dashboardSource.displayPath})`
+);
 
 if (shouldPackDryRun) {
   const npmCacheDir = join(repoRoot, '.release', '.npm-cache');
@@ -161,15 +178,19 @@ function createSourceMetadata(stagingPackage) {
         packageVersion: agentPackage.version,
       },
       AlembicDashboard: {
-        ...gitInfo(join(repoRoot, '..', 'AlembicDashboard')),
+        commit: dashboardSource.commit,
+        dirty: dashboardSource.dirty,
+        displayPath: dashboardSource.displayPath,
+        kind: dashboardSource.kind,
         packageName: dashboardPackage.name,
         packageVersion: dashboardPackage.version,
+        sourceFingerprint: dashboardSource.sourceFingerprint,
       },
     },
   };
 }
 
-function verifyStagingManifest(packageJson, metadata) {
+function verifyStagingManifest(packageJson, metadata, targetDir, expectedDashboardSource) {
   const dependencySections = [
     'dependencies',
     'devDependencies',
@@ -211,9 +232,52 @@ function verifyStagingManifest(packageJson, metadata) {
     }
   }
 
+  const dashboardArtifact = verifyDashboardArtifact(
+    'Staging dashboard artifact',
+    join(targetDir, 'dashboard', 'dist'),
+    expectedDashboardSource,
+    { collectOnly: true }
+  );
+  errors.push(...dashboardArtifact.errors);
+  const dashboardMetadata = dashboardArtifact.metadata?.source;
+  const dashboardSourceMetadata = metadata.sources.AlembicDashboard;
+  if (
+    dashboardMetadata &&
+    dashboardSourceMetadata &&
+    dashboardMetadata.commit !== dashboardSourceMetadata.commit
+  ) {
+    errors.push(
+      `Staging dashboard metadata commit ${String(dashboardMetadata.commit)} does not match release source ${String(dashboardSourceMetadata.commit)}.`
+    );
+  }
+  if (
+    dashboardMetadata &&
+    dashboardSourceMetadata &&
+    dashboardMetadata.sourceFingerprint !== dashboardSourceMetadata.sourceFingerprint
+  ) {
+    errors.push(
+      `Staging dashboard metadata sourceFingerprint ${String(dashboardMetadata.sourceFingerprint)} does not match release source ${String(dashboardSourceMetadata.sourceFingerprint)}.`
+    );
+  }
+
   if (errors.length > 0) {
     throw new Error(`Publish staging verification failed:\n- ${errors.join('\n- ')}`);
   }
+}
+
+function verifyDashboardArtifact(label, artifactDir, expectedSource, options = {}) {
+  const result = verifyDashboardArtifactFreshness({
+    artifactDir,
+    expectedSource,
+  });
+  if (result.ok || options.collectOnly) {
+    return {
+      errors: result.errors.map((error) => `${label}: ${error}`),
+      metadata: result.metadata,
+      ok: result.ok,
+    };
+  }
+  throw new Error(`${label} freshness check failed:\n- ${result.errors.join('\n- ')}`);
 }
 
 function gitInfo(repoPath) {

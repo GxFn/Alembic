@@ -17,7 +17,10 @@
  */
 
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
+const repoRoot = join(import.meta.dirname, '..');
 const PATTERN = '\\.(prepare|getDb)\\s*\\(';
 
 const ALLOWED_DIRS = ['lib/infrastructure/database/', 'test/'];
@@ -58,6 +61,7 @@ for (const line of lines) {
 
 // ── Escape-hatch count tracking ──────────────────────────────
 const ESCAPE_HATCH_THRESHOLD = 75; // alert when approaching this count
+const escapeHatchBaseline = loadEscapeHatchBaseline();
 const escapeHatchLines = lines.filter(
   (l) => l.includes('@escape-hatch(permanent)') || l.includes('@escape-hatch(temporary)')
 );
@@ -103,10 +107,44 @@ console.log(`📊  @escape-hatch count: ${escapeHatchCount} / ${ESCAPE_HATCH_THR
 console.log(
   `   permanent: ${permanentEscapeHatches.length}, temporary: ${temporaryEscapeHatches.length}`
 );
+console.log(`   shrink-only baseline: ${escapeHatchBaseline}`);
 if (escapeHatchCount > ESCAPE_HATCH_THRESHOLD) {
   console.error(
     `\n⚠️   @escape-hatch count (${escapeHatchCount}) exceeds threshold (${ESCAPE_HATCH_THRESHOLD}).`
   );
   console.error('   Consider migrating some @escape-hatch usages to proper Repository methods.\n');
   process.exit(1);
+}
+if (escapeHatchCount > escapeHatchBaseline) {
+  console.error(
+    `\n⚠️   @escape-hatch count (${escapeHatchCount}) exceeds shrink-only baseline (${escapeHatchBaseline}).`
+  );
+  console.error(
+    '   Reduce the count or update the baseline only after a deliberate AO gate decision.\n'
+  );
+  process.exit(1);
+}
+if (escapeHatchCount < escapeHatchBaseline) {
+  console.log(
+    `   ratchet can shrink: current count ${escapeHatchCount} is below baseline ${escapeHatchBaseline}`
+  );
+}
+
+function loadEscapeHatchBaseline() {
+  const envValue = process.env.ALEMBIC_ESCAPE_HATCH_BASELINE;
+  if (envValue !== undefined) {
+    return parseNonNegativeInteger(envValue, 'ALEMBIC_ESCAPE_HATCH_BASELINE');
+  }
+
+  const configPath = join(repoRoot, 'config', 'repo-boundary-ratchet.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  return parseNonNegativeInteger(config.escapeHatchBaseline, `${configPath}.escapeHatchBaseline`);
+}
+
+function parseNonNegativeInteger(value, label) {
+  const numberValue = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+  if (!Number.isInteger(numberValue) || numberValue < 0) {
+    throw new Error(`${label} must be a non-negative integer, found ${String(value)}`);
+  }
+  return numberValue;
 }

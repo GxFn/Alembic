@@ -3,14 +3,14 @@
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { repoRoot, resolveWorkspaceSource } from './workspace-source.mjs';
+import {
+  createDashboardArtifactMetadata,
+  resolveDashboardSource,
+  writeDashboardArtifactMetadata,
+} from './dashboard-artifact-metadata.mjs';
+import { repoRoot } from './workspace-source.mjs';
 
-const dashboardSource = resolveWorkspaceSource({
-  name: 'AlembicDashboard',
-  localRelative: '../AlembicDashboard',
-  vendorRelative: 'vendor/AlembicDashboard',
-  requiredFile: 'package.json',
-});
+const dashboardSource = resolveDashboardSource();
 const dashboardRepo = dashboardSource.root;
 const dashboardNodeModules = join(dashboardRepo, 'node_modules');
 const dashboardDist = join(dashboardRepo, 'dist');
@@ -55,9 +55,13 @@ if (!existsSync(join(dashboardDist, 'index.html'))) {
 rmSync(targetDist, { recursive: true, force: true });
 mkdirSync(dirname(targetDist), { recursive: true });
 cpSync(dashboardDist, targetDist, { recursive: true });
+writeDashboardArtifactMetadata(
+  targetDist,
+  createDashboardArtifactMetadata({ source: dashboardSource })
+);
 
 if (!existsSync(join(targetDist, 'index.html'))) {
   fail('Dashboard asset copy did not produce dashboard/dist/index.html.');
 }
 
-console.log('Dashboard assets copied to dashboard/dist.');
+console.log('Dashboard assets copied to dashboard/dist with source metadata.');

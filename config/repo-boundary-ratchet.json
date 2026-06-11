@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "escapeHatchBaseline": 1,
+  "updatedAt": "2026-06-12",
+  "rationale": "AO4 shrink-only ratchet: repository boundary escape-hatch count may stay at or below this baseline, but it must not grow."
+}

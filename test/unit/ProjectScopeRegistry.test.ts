@@ -185,7 +185,9 @@ interface ProjectScopeRouterLayer {
   route?: {
     methods: Partial<Record<ProjectScopeRouteMethod, boolean>>;
     path: string;
-    stack: Array<{ handle: (req: Request, res: Response) => void }>;
+    stack: Array<{
+      handle: (req: Request, res: Response, next?: (error?: unknown) => void) => void;
+    }>;
   };
 }
 
@@ -210,18 +212,35 @@ function invokeProjectScopeRoute(
   if (!handler) {
     throw new Error(`ProjectScope route not found: ${method.toUpperCase()} ${routePath}`);
   }
+  const request = {
+    body: input.body ?? {},
+    query: input.query ?? {},
+  } as Request;
   const response = createMockResponse();
-  handler(
-    {
-      body: input.body ?? {},
-      query: input.query ?? {},
-    } as Request,
-    response as unknown as Response
-  );
+  runProjectScopeRouteStack(layer.route.stack, request, response as unknown as Response);
   return {
     body: response.body,
     statusCode: response.statusCode,
   };
+}
+
+function runProjectScopeRouteStack(
+  stack: ProjectScopeRouterLayer['route']['stack'],
+  req: Request,
+  res: Response
+): void {
+  let index = 0;
+  const next = (error?: unknown): void => {
+    if (error) {
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+    const current = stack[index++];
+    if (!current) {
+      return;
+    }
+    current.handle(req, res, next);
+  };
+  next();
 }
 
 function createMockResponse() {
