@@ -1,5 +1,6 @@
 import { isProjectRuntimeTarget } from '@alembic/core/daemon';
 import express, { type Request, type Response } from 'express';
+import { z } from 'zod';
 import { DaemonSupervisor } from '../../daemon/DaemonSupervisor.js';
 import {
   ProjectRuntimeControl,
@@ -10,6 +11,7 @@ import {
   type ProjectRuntimeScopeSummary,
   type ProjectRuntimeTarget,
 } from '../../daemon/ProjectRuntimeControl.js';
+import { validate, validateParams } from '../middleware/validate.js';
 import {
   type AlembicHttpProblem,
   type AlembicHttpProblemReason,
@@ -44,6 +46,42 @@ interface ProjectActionPublicData {
   targetProject: ProjectRuntimeScopeSummary | null;
 }
 
+const blankToUndefined = (value: unknown): unknown => (value === '' ? undefined : value);
+const blankToUndefinedOrInvalidNumber = (value: unknown): unknown => {
+  if (value === '' || value === undefined) {
+    return undefined;
+  }
+  return typeof value === 'number' || typeof value === 'string' ? value : Number.NaN;
+};
+const optionalNonEmptyString = z.preprocess(blankToUndefined, z.string().trim().min(1).optional());
+const optionalNonNegativeInt = z.preprocess(
+  blankToUndefinedOrInvalidNumber,
+  z.coerce.number().int().nonnegative().optional()
+);
+
+const ProjectSelectBody = z
+  .object({
+    projectId: optionalNonEmptyString,
+    projectRoot: optionalNonEmptyString,
+  })
+  .passthrough()
+  .refine((body) => Number(Boolean(body.projectId)) + Number(Boolean(body.projectRoot)) === 1, {
+    message: 'Project target requires exactly one of projectId or projectRoot',
+  });
+
+const ProjectRuntimeOptionsBody = z
+  .object({
+    restart: z.boolean().optional(),
+    stopWaitMs: optionalNonNegativeInt,
+    waitUntilReadyMs: optionalNonNegativeInt,
+  })
+  .passthrough();
+
+const ProjectIdParams = z.object({
+  projectId: z.string().trim().min(1),
+});
+
+// AO1 route-input-exempt: runtime diagnostics reads use no body/query and keep ignored query strings.
 router.get('/', async (_req: Request, res: Response): Promise<void> => {
   const control = new ProjectRuntimeControl();
   const snapshot = await control.snapshot();
@@ -70,101 +108,123 @@ router.get('/current', async (_req: Request, res: Response): Promise<void> => {
   });
 });
 
-router.post('/select', async (req: Request, res: Response): Promise<void> => {
-  const control = new ProjectRuntimeControl();
-  const target = targetFromBody(req.body);
-  if (!target) {
-    res.status(400).json({ success: false, error: invalidProjectTargetProblem() });
-    return;
+router.post(
+  '/select',
+  validate(ProjectSelectBody),
+  async (req: Request, res: Response): Promise<void> => {
+    const control = new ProjectRuntimeControl();
+    const target = targetFromBody(req.body);
+    if (!target) {
+      res.status(400).json({ success: false, error: invalidProjectTargetProblem() });
+      return;
+    }
+    try {
+      const snapshot = await control.selectProject(target);
+      res.json({ success: true, data: snapshot });
+    } catch (error: unknown) {
+      const problem = problemFromError(error, 'not-found', 404);
+      res.status(problem.status).json({ success: false, error: problem });
+    }
   }
-  try {
-    const snapshot = await control.selectProject(target);
-    res.json({ success: true, data: snapshot });
-  } catch (error: unknown) {
-    const problem = problemFromError(error, 'not-found', 404);
-    res.status(problem.status).json({ success: false, error: problem });
-  }
-});
+);
 
+// AO1 route-input-exempt: selection clear has no body/query/params.
 router.delete('/select', async (_req: Request, res: Response): Promise<void> => {
   const control = new ProjectRuntimeControl();
   const snapshot = await control.clearSelection();
   res.json({ success: true, data: snapshot });
 });
 
-router.post('/open-dashboard', async (req: Request, res: Response): Promise<void> => {
-  const options = httpControlOptionsFromBody(req.body);
-  await sendAction(
-    res,
-    () => new ProjectRuntimeControl().openDashboard(undefined, options),
-    options
-  );
-});
-
-router.post('/:projectId/start', async (req: Request, res: Response): Promise<void> => {
-  const options = httpControlOptionsFromBody(req.body);
-  await sendAction(
-    res,
-    () =>
-      new ProjectRuntimeControl().startProject(
-        { projectId: singleParam(req.params.projectId) },
-        options
-      ),
-    options
-  );
-});
-
-router.post('/:projectId/stop', async (req: Request, res: Response): Promise<void> => {
-  const options = httpControlOptionsFromBody(req.body);
-  await sendAction(
-    res,
-    () =>
-      new ProjectRuntimeControl().stopProject(
-        { projectId: singleParam(req.params.projectId) },
-        options
-      ),
-    options
-  );
-});
-
-router.post('/:projectId/open-dashboard', async (req: Request, res: Response): Promise<void> => {
-  const options = httpControlOptionsFromBody(req.body);
-  await sendAction(
-    res,
-    () =>
-      new ProjectRuntimeControl().openDashboard(
-        { projectId: singleParam(req.params.projectId) },
-        options
-      ),
-    options
-  );
-});
-
-router.post('/:projectId/switch', async (req: Request, res: Response): Promise<void> => {
-  const options = httpControlOptionsFromBody(req.body);
-  await sendAction(
-    res,
-    () =>
-      new ProjectRuntimeControl().switchProject(
-        { projectId: singleParam(req.params.projectId) },
-        options
-      ),
-    options
-  );
-});
-
-router.get('/:projectId', async (req: Request, res: Response): Promise<void> => {
-  const control = new ProjectRuntimeControl();
-  try {
-    const project = await control.inspectProject({
-      projectId: singleParam(req.params.projectId),
-    });
-    res.json({ success: true, data: { project } });
-  } catch (error: unknown) {
-    const problem = problemFromError(error, 'not-found', 404);
-    res.status(problem.status).json({ success: false, error: problem });
+router.post(
+  '/open-dashboard',
+  validate(ProjectRuntimeOptionsBody),
+  async (req: Request, res: Response): Promise<void> => {
+    const options = httpControlOptionsFromBody(req.body);
+    await sendAction(
+      res,
+      () => new ProjectRuntimeControl().openDashboard(undefined, options),
+      options
+    );
   }
-});
+);
+
+router.post(
+  '/:projectId/start',
+  validateParams(ProjectIdParams),
+  validate(ProjectRuntimeOptionsBody),
+  async (req: Request, res: Response): Promise<void> => {
+    const options = httpControlOptionsFromBody(req.body);
+    const params = req.params as z.infer<typeof ProjectIdParams>;
+    await sendAction(
+      res,
+      () => new ProjectRuntimeControl().startProject({ projectId: params.projectId }, options),
+      options
+    );
+  }
+);
+
+router.post(
+  '/:projectId/stop',
+  validateParams(ProjectIdParams),
+  validate(ProjectRuntimeOptionsBody),
+  async (req: Request, res: Response): Promise<void> => {
+    const options = httpControlOptionsFromBody(req.body);
+    const params = req.params as z.infer<typeof ProjectIdParams>;
+    await sendAction(
+      res,
+      () => new ProjectRuntimeControl().stopProject({ projectId: params.projectId }, options),
+      options
+    );
+  }
+);
+
+router.post(
+  '/:projectId/open-dashboard',
+  validateParams(ProjectIdParams),
+  validate(ProjectRuntimeOptionsBody),
+  async (req: Request, res: Response): Promise<void> => {
+    const options = httpControlOptionsFromBody(req.body);
+    const params = req.params as z.infer<typeof ProjectIdParams>;
+    await sendAction(
+      res,
+      () => new ProjectRuntimeControl().openDashboard({ projectId: params.projectId }, options),
+      options
+    );
+  }
+);
+
+router.post(
+  '/:projectId/switch',
+  validateParams(ProjectIdParams),
+  validate(ProjectRuntimeOptionsBody),
+  async (req: Request, res: Response): Promise<void> => {
+    const options = httpControlOptionsFromBody(req.body);
+    const params = req.params as z.infer<typeof ProjectIdParams>;
+    await sendAction(
+      res,
+      () => new ProjectRuntimeControl().switchProject({ projectId: params.projectId }, options),
+      options
+    );
+  }
+);
+
+router.get(
+  '/:projectId',
+  validateParams(ProjectIdParams),
+  async (req: Request, res: Response): Promise<void> => {
+    const control = new ProjectRuntimeControl();
+    const params = req.params as z.infer<typeof ProjectIdParams>;
+    try {
+      const project = await control.inspectProject({
+        projectId: params.projectId,
+      });
+      res.json({ success: true, data: { project } });
+    } catch (error: unknown) {
+      const problem = problemFromError(error, 'not-found', 404);
+      res.status(problem.status).json({ success: false, error: problem });
+    }
+  }
+);
 
 function targetFromBody(value: unknown): ProjectRuntimeTarget | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -257,10 +317,6 @@ function scheduleDeferredStopAfterResponse(
         });
     }, 50);
   });
-}
-
-function singleParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
 }
 
 function numberOption(value: unknown): number | undefined {

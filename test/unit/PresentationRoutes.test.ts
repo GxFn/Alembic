@@ -217,6 +217,12 @@ describe('Phase 5: Panorama Route', () => {
     expect(status).toBe(404);
     expect(body.success).toBe(false);
   });
+
+  it('GET /panorama rejects invalid refresh query', async () => {
+    const { status, body } = await testGet('/api/v1/panorama?refresh=maybe');
+    expect(status).toBe(400);
+    expect(body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
 });
 
 describe('Phase 5: Guard Report Route', () => {
@@ -241,6 +247,12 @@ describe('Phase 5: Guard Report Route', () => {
         maxFiles: 100,
       })
     );
+  });
+
+  it('GET /guard/report rejects invalid numeric query', async () => {
+    const { status, body } = await testGet('/api/v1/guard/report?minScore=abc');
+    expect(status).toBe(400);
+    expect(body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 });
 
@@ -268,5 +280,11 @@ describe('Phase 5: Audit Route', () => {
   it('GET /audit caps limit at 500', async () => {
     await testGet('/api/v1/audit?limit=999');
     expect(mockAuditStore.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 500 }));
+  });
+
+  it('GET /audit rejects invalid numeric query', async () => {
+    const { status, body } = await testGet('/api/v1/audit?limit=abc');
+    expect(status).toBe(400);
+    expect(body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 });

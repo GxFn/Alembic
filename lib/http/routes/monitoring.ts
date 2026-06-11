@@ -5,17 +5,34 @@
 
 import Logger from '@alembic/core/logging';
 import express from 'express';
+import { z } from 'zod';
 import { getCacheAdapter } from '../../infrastructure/cache/UnifiedCacheAdapter.js';
 import { getErrorTracker } from '../../infrastructure/monitoring/ErrorTracker.js';
 import { getPerformanceMonitor } from '../../infrastructure/monitoring/PerformanceMonitor.js';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
+import { validate, validateQuery } from '../middleware/validate.js';
 
 const router = express.Router();
+
+const blankToUndefined = (value: unknown): unknown => (value === '' ? undefined : value);
+const optionalNonEmptyString = z.preprocess(blankToUndefined, z.string().trim().min(1).optional());
+
+const MonitoringErrorsSearchQuery = z.object({
+  endDate: optionalNonEmptyString,
+  limit: z.preprocess(blankToUndefined, z.coerce.number().int().positive().default(100)),
+  route: optionalNonEmptyString,
+  severity: optionalNonEmptyString,
+  startDate: optionalNonEmptyString,
+  type: optionalNonEmptyString,
+});
+
+const EmptyWriteBody = z.object({}).passthrough();
 
 /**
  * GET /api/v1/monitoring/health
  * 系统健康检查
  */
+// AO1 route-input-exempt: health read uses no body/query/params and preserves ignored query strings.
 router.get('/health', async (req, res) => {
   try {
     const cacheAdapter = getCacheAdapter();
@@ -62,6 +79,7 @@ router.get('/health', async (req, res) => {
  * GET /api/v1/monitoring/performance
  * 性能统计
  */
+// AO1 route-input-exempt: performance read uses no body/query/params.
 router.get('/performance', (req, res) => {
   try {
     const performanceMonitor = getPerformanceMonitor();
@@ -84,6 +102,7 @@ router.get('/performance', (req, res) => {
  * GET /api/v1/monitoring/errors
  * 错误统计
  */
+// AO1 route-input-exempt: errors summary read uses no body/query/params.
 router.get('/errors', (req, res) => {
   try {
     const errorTracker = getErrorTracker();
@@ -106,18 +125,18 @@ router.get('/errors', (req, res) => {
  * GET /api/v1/monitoring/errors/search
  * 搜索错误
  */
-router.get('/errors/search', (req, res) => {
+router.get('/errors/search', validateQuery(MonitoringErrorsSearchQuery), (req, res) => {
   try {
     const errorTracker = getErrorTracker();
-    const { type, route, severity, startDate, endDate, limit } = req.query;
+    const query = req.query as unknown as z.infer<typeof MonitoringErrorsSearchQuery>;
 
     const results = errorTracker.searchErrors({
-      type: type as string | undefined,
-      route: route as string | undefined,
-      severity: severity as string | undefined,
-      startDate: startDate as string | undefined,
-      endDate: endDate as string | undefined,
-      limit: limit ? parseInt(limit as string, 10) : 100,
+      type: query.type,
+      route: query.route,
+      severity: query.severity,
+      startDate: query.startDate,
+      endDate: query.endDate,
+      limit: query.limit,
     });
 
     res.json({
@@ -140,6 +159,7 @@ router.get('/errors/search', (req, res) => {
  * GET /api/v1/monitoring/cache
  * 缓存统计
  */
+// AO1 route-input-exempt: cache read uses no body/query/params.
 router.get('/cache', (req, res) => {
   try {
     const cacheAdapter = getCacheAdapter();
@@ -162,7 +182,7 @@ router.get('/cache', (req, res) => {
  * POST /api/v1/monitoring/cache/clear
  * 清空缓存（仅限 developer）
  */
-router.post('/cache/clear', async (req, res) => {
+router.post('/cache/clear', validate(EmptyWriteBody), async (req, res) => {
   // 角色检查：仅 admin 可操作
   const role = req.resolvedRole || 'visitor';
   if (role !== 'developer') {
@@ -196,6 +216,7 @@ router.post('/cache/clear', async (req, res) => {
  * GET /api/v1/monitoring/realtime
  * 实时连接统计
  */
+// AO1 route-input-exempt: realtime read uses no body/query/params.
 router.get('/realtime', (req, res) => {
   try {
     const realtimeService = getRealtimeService();
@@ -225,6 +246,7 @@ router.get('/realtime', (req, res) => {
  * GET /api/v1/monitoring/dashboard
  * 综合监控仪表盘数据
  */
+// AO1 route-input-exempt: dashboard read uses no body/query/params.
 router.get('/dashboard', async (req, res) => {
   try {
     const performanceMonitor = getPerformanceMonitor();
@@ -288,7 +310,7 @@ router.get('/dashboard', async (req, res) => {
  * POST /api/v1/monitoring/reset
  * 重置监控统计（仅限开发环境 + developer）
  */
-router.post('/reset', (req, res) => {
+router.post('/reset', validate(EmptyWriteBody), (req, res) => {
   if (process.env.NODE_ENV === 'production') {
     res.status(403).json({
       success: false,

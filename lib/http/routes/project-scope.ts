@@ -1,19 +1,47 @@
 import { resolveProjectRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
+import { z } from 'zod';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import {
   createProjectScopeCapability,
   ProjectScopeRegistryStore,
   summarizeProjectScope,
 } from '../../project-scope/ProjectScopeRegistry.js';
+import { validate, validateQuery } from '../middleware/validate.js';
 
 const router = express.Router();
 
-router.get('/', (req: Request, res: Response): void => {
+const blankToUndefined = (value: unknown): unknown => (value === '' ? undefined : value);
+const optionalNonEmptyString = z.preprocess(blankToUndefined, z.string().trim().min(1).optional());
+
+const ProjectScopeLookupQuery = z.object({
+  controlRoot: optionalNonEmptyString,
+  folderPath: optionalNonEmptyString,
+  projectScopeId: optionalNonEmptyString,
+});
+
+const ProjectScopeFolderBody = z
+  .object({
+    controlRoot: optionalNonEmptyString,
+    displayName: optionalNonEmptyString,
+    folderPath: optionalNonEmptyString,
+    path: optionalNonEmptyString,
+    projectScopeId: optionalNonEmptyString,
+    role: z.preprocess(blankToUndefined, z.enum(['primary-source', 'source']).optional()),
+  })
+  .passthrough();
+
+const ProjectScopeResolveQuery = z.object({
+  folderPath: optionalNonEmptyString,
+  path: optionalNonEmptyString,
+});
+
+router.get('/', validateQuery(ProjectScopeLookupQuery), (req: Request, res: Response): void => {
   const store = new ProjectScopeRegistryStore();
-  const target = firstString(req.query.projectScopeId);
-  const controlRoot = firstString(req.query.controlRoot);
-  const folderPath = firstString(req.query.folderPath) ?? resolveProjectRoot(getServiceContainer());
+  const query = req.query as z.infer<typeof ProjectScopeLookupQuery>;
+  const target = firstString(query.projectScopeId);
+  const controlRoot = firstString(query.controlRoot);
+  const folderPath = firstString(query.folderPath) ?? resolveProjectRoot(getServiceContainer());
 
   const scope = target
     ? store.getScope(target)
@@ -49,29 +77,34 @@ router.get('/', (req: Request, res: Response): void => {
   });
 });
 
-router.get('/folders', (req: Request, res: Response): void => {
-  const store = new ProjectScopeRegistryStore();
-  const projectScopeId = firstString(req.query.projectScopeId);
-  const controlRoot = firstString(req.query.controlRoot);
-  const folderPath = firstString(req.query.folderPath) ?? resolveProjectRoot(getServiceContainer());
-  const scope = projectScopeId
-    ? store.getScope(projectScopeId)
-    : controlRoot
-      ? store.findByControlRoot(controlRoot)
-      : store.resolveFolder(folderPath)?.projectScope;
+router.get(
+  '/folders',
+  validateQuery(ProjectScopeLookupQuery),
+  (req: Request, res: Response): void => {
+    const store = new ProjectScopeRegistryStore();
+    const query = req.query as z.infer<typeof ProjectScopeLookupQuery>;
+    const projectScopeId = firstString(query.projectScopeId);
+    const controlRoot = firstString(query.controlRoot);
+    const folderPath = firstString(query.folderPath) ?? resolveProjectRoot(getServiceContainer());
+    const scope = projectScopeId
+      ? store.getScope(projectScopeId)
+      : controlRoot
+        ? store.findByControlRoot(controlRoot)
+        : store.resolveFolder(folderPath)?.projectScope;
 
-  res.json({
-    success: true,
-    data: {
-      capability: createProjectScopeCapability(true),
-      folders: scope ? summarizeProjectScope(scope).folders : [],
-      projectScopeId: scope?.projectScopeId ?? null,
-      registryPath: store.registryPath,
-    },
-  });
-});
+    res.json({
+      success: true,
+      data: {
+        capability: createProjectScopeCapability(true),
+        folders: scope ? summarizeProjectScope(scope).folders : [],
+        projectScopeId: scope?.projectScopeId ?? null,
+        registryPath: store.registryPath,
+      },
+    });
+  }
+);
 
-router.post('/folders', (req: Request, res: Response): void => {
+router.post('/folders', validate(ProjectScopeFolderBody), (req: Request, res: Response): void => {
   const store = new ProjectScopeRegistryStore();
   const body = requestBody(req);
   const folderPath = firstString(body.folderPath, body.path);
@@ -94,13 +127,21 @@ router.post('/folders', (req: Request, res: Response): void => {
   }
 });
 
-router.post('/resolve-folder', (req: Request, res: Response): void => {
-  sendResolveFolder(res, requestBody(req));
-});
+router.post(
+  '/resolve-folder',
+  validate(ProjectScopeFolderBody),
+  (req: Request, res: Response): void => {
+    sendResolveFolder(res, requestBody(req));
+  }
+);
 
-router.get('/resolve-folder', (req: Request, res: Response): void => {
-  sendResolveFolder(res, req.query);
-});
+router.get(
+  '/resolve-folder',
+  validateQuery(ProjectScopeResolveQuery),
+  (req: Request, res: Response): void => {
+    sendResolveFolder(res, req.query as z.infer<typeof ProjectScopeResolveQuery>);
+  }
+);
 
 function sendResolveFolder(res: Response, input: Record<string, unknown>): void {
   const folderPath = firstString(input.folderPath, input.path);

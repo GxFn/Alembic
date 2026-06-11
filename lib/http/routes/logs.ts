@@ -10,9 +10,20 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import { type Request, type Response, Router } from 'express';
+import { z } from 'zod';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { validateQuery } from '../middleware/validate.js';
 
 const router = Router();
+
+const blankToUndefined = (value: unknown): unknown => (value === '' ? undefined : value);
+
+const LogsQuery = z.object({
+  file: z.preprocess(blankToUndefined, z.enum(['combined', 'error', 'audit']).default('combined')),
+  level: z.preprocess(blankToUndefined, z.enum(['error', 'warn', 'info', 'debug']).optional()),
+  limit: z.preprocess(blankToUndefined, z.coerce.number().int().positive().default(200)),
+  search: z.preprocess(blankToUndefined, z.string().trim().min(1).optional()),
+});
 
 /**
  * 从文件末尾读取最后 N 行（逐行反向读取）
@@ -46,7 +57,7 @@ async function tailLines(filePath: string, maxLines: number): Promise<string[]> 
  *   level  — 级别过滤: error | warn | info | debug
  *   search — 文本搜索
  */
-router.get('/', async (req: Request, res: Response): Promise<void> => {
+router.get('/', validateQuery(LogsQuery), async (req: Request, res: Response): Promise<void> => {
   try {
     const dataRoot = resolveDataRoot(getServiceContainer());
     if (!dataRoot) {
@@ -57,13 +68,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const validFiles = new Set(['combined', 'error', 'audit']);
-    const fileName = validFiles.has(req.query.file as string)
-      ? (req.query.file as string)
-      : 'combined';
-    const limit = Math.min(Number(req.query.limit) || 200, 1000);
-    const levelFilter = req.query.level as string | undefined;
-    const searchFilter = req.query.search as string | undefined;
+    const query = req.query as unknown as z.infer<typeof LogsQuery>;
+    const fileName = query.file;
+    const limit = Math.min(query.limit, 1000);
+    const levelFilter = query.level;
+    const searchFilter = query.search;
 
     const logsDir = path.resolve(dataRoot, '.asd/logs');
     const filePath = path.join(logsDir, `${fileName}.log`);

@@ -19,9 +19,11 @@ import type {
   ReactiveEvolutionReport,
 } from '@alembic/core/types';
 import express, { type Request, type Response } from 'express';
+import { z } from 'zod';
 import { DAEMON_FILE_CHANGE_EVENT_SOURCES } from '../../daemon/RuntimeBoundary.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import type { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
+import { validate } from '../middleware/validate.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();
@@ -34,6 +36,12 @@ const VALID_SOURCES = new Set<IncomingFileChangeEventSource>([
   legacyHostEditSource() as IncomingFileChangeEventSource,
 ]);
 
+const FileChangesBody = z
+  .object({
+    events: z.array(z.unknown()).min(1, 'events must be a non-empty array'),
+  })
+  .passthrough();
+
 /**
  * POST /api/v1/file-changes
  *
@@ -44,17 +52,9 @@ const VALID_SOURCES = new Set<IncomingFileChangeEventSource>([
  *   200 { success: true, data: { empty report } }          — 事件全被过滤
  *   400 { success: false, error }                         — 入参非法
  */
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', validate(FileChangesBody), async (req: Request, res: Response) => {
   try {
-    const { events } = req.body as { events?: unknown };
-
-    if (!Array.isArray(events) || events.length === 0) {
-      res.status(400).json({
-        success: false,
-        error: { code: 'INVALID_INPUT', message: 'events must be a non-empty array' },
-      });
-      return;
-    }
+    const { events } = req.body as z.infer<typeof FileChangesBody>;
 
     const validEvents: FileChangeEvent[] = [];
 

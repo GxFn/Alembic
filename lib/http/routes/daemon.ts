@@ -73,6 +73,7 @@ export type DaemonCapabilities = Omit<AlembicRuntimeCapabilities, 'fileMonitor'>
   fileMonitor: RuntimeFileMonitorCapability;
 };
 
+// AO1 route-input-exempt: daemon health is a diagnostics read with no body/query/params.
 router.get('/health', (req, res) => {
   const container = getServiceContainer();
   const projectRoot = resolveProjectRoot(container);

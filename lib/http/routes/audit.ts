@@ -6,10 +6,23 @@
  */
 
 import express, { type Request, type Response } from 'express';
+import { z } from 'zod';
 
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { validateQuery } from '../middleware/validate.js';
 
 const router = express.Router();
+
+const blankToUndefined = (value: unknown): unknown => (value === '' ? undefined : value);
+
+const AuditQuery = z.object({
+  action: z.preprocess(blankToUndefined, z.string().trim().min(1).optional()),
+  actor: z.preprocess(blankToUndefined, z.string().trim().min(1).optional()),
+  endDate: z.preprocess(blankToUndefined, z.coerce.number().int().nonnegative().optional()),
+  limit: z.preprocess(blankToUndefined, z.coerce.number().int().positive().default(100)),
+  result: z.preprocess(blankToUndefined, z.enum(['success', 'failure']).optional()),
+  startDate: z.preprocess(blankToUndefined, z.coerce.number().int().nonnegative().optional()),
+});
 
 /**
  * GET /api/v1/audit
@@ -23,7 +36,7 @@ const router = express.Router();
  *   endDate   — 结束时间戳 (毫秒)
  *   limit     — 返回条数上限 (默认 100, 最大 500)
  */
-router.get('/', async (req: Request, res: Response): Promise<void> => {
+router.get('/', validateQuery(AuditQuery), async (req: Request, res: Response): Promise<void> => {
   try {
     const container = getServiceContainer();
     const auditStore = container.get('auditStore');
@@ -36,15 +49,15 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    const query = req.query as unknown as z.infer<typeof AuditQuery>;
 
     const logs = auditStore.query({
-      actor: req.query.actor as string | undefined,
-      action: req.query.action as string | undefined,
-      result: req.query.result as string | undefined,
-      startDate: req.query.startDate ? Number(req.query.startDate) : undefined,
-      endDate: req.query.endDate ? Number(req.query.endDate) : undefined,
-      limit,
+      actor: query.actor,
+      action: query.action,
+      result: query.result,
+      startDate: query.startDate,
+      endDate: query.endDate,
+      limit: Math.min(query.limit, 500),
     });
 
     res.json({ success: true, data: { logs, total: logs.length } });
