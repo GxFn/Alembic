@@ -88,7 +88,7 @@ This section is maintained by the Wakeflow runtime installer. It records this wi
 
 - `lib/cli/**`、`bin/**`：CLI 命令和用户交互。
 - `lib/daemon/**`、`lib/http/**`：daemon、HTTP server、routes、实时服务。
-- `dashboard/**`：Dashboard 前端。
+- `dashboard/**`：Dashboard 构建产物托管与后端服务边界（前端源码在 `AlembicDashboard` 仓库维护）。
 - `@alembic/agent` public subpaths、`lib/tools/**`：Agent 公共 contract 消费与主仓库 host-owned tool adapter / platform bridge。
 - `lib/platform/**`、`lib/sandbox/**`、`lib/injection/**`、`resources/**`：平台、沙盒、注入、native/IDE 资源。
 - AI provider、API key 管理、release/install/dev link、本地环境探测等宿主能力。
@@ -114,25 +114,27 @@ This section is maintained by the Wakeflow runtime installer. It records this wi
 - 正式文档：`docs/`。
 - 开发临时文档：`docs-dev/`（不跟随 git）。
 - 临时测试脚本：`scratch/`（不跟随 git）。
-- Dashboard：`dashboard/`。
+- Dashboard 构建产物：`dashboard/`（仅存放构建输出 `dashboard/dist`，由 `npm run build:dashboard` 从 `AlembicDashboard` 仓库构建并复制而来；前端源码唯一权威仓库是 `AlembicDashboard`，不要在本仓库新增 Dashboard 前端源码）。
 - 注入资源和原生资源：`injectable-skills/`、`resources/`。
+- 内部技能挂载点：`skills/`（配置的运行时挂载目录：`config/default.json` 将 package `internalSkills` 与 project `skills` 映射到该目录，`lib/bootstrap.ts` 启动时扫描 `skills/*/hooks.js` 加载技能钩子；仓库内保持空目录是正常预留状态，不要删除）。
 - Core 本地源码：`../AlembicCore`；Core vendor fallback / release snapshot：`vendor/AlembicCore`。
 - workspace 级长期协作文档按 Workspace 接入卡中的 `Window ledger` 归档。
 
-当前主要源码分层：
+当前主要源码分层（与 `ls lib/` 实际目录一致，2026-06-11 校准；`lib/agent/` 与 `lib/external/` 已随迁移移除）：
 
 ```text
 lib/
-├── agent
+├── bootstrap.ts
 ├── cli
 ├── daemon
-├── external
 ├── governance
 ├── http
 ├── infrastructure
 ├── injection
 ├── platform
+├── project-scope
 ├── repository
+├── resident
 ├── sandbox
 ├── service
 ├── shared

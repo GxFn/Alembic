@@ -11,7 +11,7 @@
  * 3. 投影使用 SearchTypes.slimSearchResult()（消除 3 处重复投影）
  */
 
-import { groupByKind, type SlimSearchResult, slimSearchResult } from '@alembic/core/search';
+import { groupByKind, slimSearchResult } from '@alembic/core/search';
 import type {
   DecisionRegisterSearchableDocument,
   DecisionRegisterSearchableView,
@@ -383,12 +383,4 @@ function _toolName(mode: string): string {
     default:
       return 'alembic_search';
   }
-}
-
-// ─── Re-export slim projection for backward compatibility ────
-// (部分内部模块可能直接 import 了这些)
-
-/** @deprecated Use `slimSearchResult` from `SearchTypes.ts` instead */
-export function _slimSearchItem(item: SearchResultItem): SlimSearchResult {
-  return slimSearchResult(item as Parameters<typeof slimSearchResult>[0]);
 }
