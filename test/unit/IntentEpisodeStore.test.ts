@@ -40,10 +40,13 @@ describe('IntentEpisodeStore', () => {
       hostIntent: {
         applied: true,
         compatibility: {
+          cleanupTrigger:
+            'Remove legacy userQuery/activeFile/language fallback after the Plugin host-intent frame is the only current consumer input path.',
           consumer: 'alembic-plugin',
           fallbackAllowed: true,
           fallbackFields: ['userQuery', 'activeFile'],
           mode: 'mixed-host-intent-and-legacy-args',
+          owner: 'alembic-main',
           redacted: true,
           removalCondition:
             'Remove legacy userQuery/activeFile/language fallback after the Plugin host-intent frame is the only current consumer input path.',
@@ -113,6 +116,7 @@ describe('IntentEpisodeStore', () => {
         fallbackAllowed: true,
         fallbackFields: ['userQuery', 'activeFile'],
         mode: 'mixed-host-intent-and-legacy-args',
+        owner: 'alembic-main',
         redacted: true,
       },
     });

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { SearchModeLabel } from '../../shared/semantic-taxonomy.js';
 import type {
   IntentEvidence,
   IntentScoreBreakdown,
@@ -67,7 +68,7 @@ export interface PrimeInjectionPackage {
     degradedReasons: string[];
     executableQuery: string | null;
     rankingProfile?: string;
-    requestedMode?: string;
+    requestedMode?: SearchModeLabel;
     sourceRefs: string[];
     whySelected: string[];
   };
@@ -85,11 +86,11 @@ export interface PrimeInjectionPackage {
     version: 1;
   };
   search: {
-    actualMode?: string;
+    actualMode?: SearchModeLabel;
     filteredCount?: number;
     query?: string;
     queries: string[];
-    requestedMode?: string;
+    requestedMode?: SearchModeLabel;
     resultCount?: number;
   };
   selectedKnowledge: PrimeSelectedKnowledge[];

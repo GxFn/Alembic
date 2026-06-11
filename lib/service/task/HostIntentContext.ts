@@ -1,11 +1,17 @@
 /**
  * Plugin host intent context consumer adapter.
  *
- * Stage 1 keeps the contract Alembic-side and permissive: Plugin may pass a
- * small host-declared intent frame, while Alembic still falls back to the
- * legacy userQuery / activeFile / language path when that frame is absent.
+ * AO2 keeps the resident MCP input schema stable while making the internal mode
+ * explicit. Plugin may pass a small host-declared intent frame; Alembic still
+ * owns the legacy userQuery / activeFile / language fallback until the recorded
+ * cleanup trigger is satisfied.
  */
 
+import {
+  HOST_INTENT_CONTEXT_MODES,
+  HOST_INTENT_LEGACY_COMPATIBILITY,
+  type HostIntentContextMode,
+} from '../../shared/semantic-taxonomy.js';
 import type { ExtractedIntent, SearchScenario } from './IntentExtractor.js';
 
 const VALID_SCENARIOS = new Set<SearchScenario>(['lint', 'generate', 'search', 'learning']);
@@ -21,6 +27,7 @@ export interface HostIntentContextInput {
   degradedReason?: unknown;
   searchIntent?: unknown;
   scenario?: unknown;
+  hostIntentMode?: unknown;
   hostDeclaredIntent?: unknown;
   hostTurnMeta?: unknown;
   intentContext?: unknown;
@@ -35,6 +42,7 @@ export interface NormalizedHostIntentContext {
   degradedReason?: string;
   keywordHints: string[];
   language?: string;
+  mode: HostIntentContextMode;
   queryHints: string[];
   scenario?: SearchScenario;
   searchIntent?: string;
@@ -50,6 +58,7 @@ export interface HostIntentContextMeta {
   compatibility: HostIntentCompatibilityPolicy;
   degraded: boolean;
   degradedReason?: string;
+  mode: HostIntentContextMode;
   scenario?: SearchScenario;
   searchIntent?: string;
   sessionHistoryCount: number;
@@ -59,9 +68,11 @@ export interface HostIntentContextMeta {
 
 export interface HostIntentCompatibilityPolicy {
   consumer: 'alembic-plugin';
+  cleanupTrigger: string;
   fallbackAllowed: boolean;
   fallbackFields: string[];
-  mode: 'host-intent-frame' | 'mixed-host-intent-and-legacy-args' | 'legacy-args-only';
+  mode: HostIntentContextMode;
+  owner: 'alembic-main';
   redacted: true;
   removalCondition: string;
 }
@@ -148,6 +159,11 @@ export function normalizeHostIntentContext(
     sourceName(context, 'intentContext'),
     sourceName(turn, 'hostTurnMeta'),
   ].filter((source): source is string => Boolean(source));
+  const legacyFields = hostIntentLegacyFields(input);
+  const mode = resolveHostIntentMode(input.hostIntentMode, {
+    hostIntentFramePresent: records.length > 0,
+    legacyFields,
+  });
   const applied = hasAppliedHostIntentContext({
     confidence,
     degraded,
@@ -162,11 +178,12 @@ export function normalizeHostIntentContext(
     activeFile,
     applied,
     confidence,
-    compatibility: buildHostIntentCompatibilityPolicy(input, records.length > 0),
+    compatibility: buildHostIntentCompatibilityPolicy(mode, legacyFields),
     degraded,
     degradedReason,
     keywordHints,
     language,
+    mode,
     queryHints,
     scenario,
     searchIntent,
@@ -210,6 +227,7 @@ export function createHostIntentContextMeta(
     compatibility: context.compatibility,
     degraded: context.degraded,
     degradedReason: context.degradedReason,
+    mode: context.mode,
     scenario: context.scenario,
     searchIntent: context.searchIntent,
     sessionHistoryCount: context.sessionHistory.length,
@@ -351,23 +369,35 @@ function hasAppliedHostIntentContext(options: {
 }
 
 function buildHostIntentCompatibilityPolicy(
-  input: HostIntentContextInput,
-  hostIntentFramePresent: boolean
+  mode: HostIntentContextMode,
+  fallbackFields: string[]
 ): HostIntentCompatibilityPolicy {
-  const fallbackFields = hostIntentLegacyFields(input);
   return {
-    consumer: 'alembic-plugin',
+    cleanupTrigger: HOST_INTENT_LEGACY_COMPATIBILITY.cleanupTrigger,
+    consumer: HOST_INTENT_LEGACY_COMPATIBILITY.consumer,
     fallbackAllowed: fallbackFields.length > 0,
     fallbackFields,
-    mode: hostIntentFramePresent
-      ? fallbackFields.length > 0
-        ? 'mixed-host-intent-and-legacy-args'
-        : 'host-intent-frame'
-      : 'legacy-args-only',
+    mode,
+    owner: HOST_INTENT_LEGACY_COMPATIBILITY.owner,
     redacted: true,
-    removalCondition:
-      'Remove legacy userQuery/activeFile/language fallback after the Plugin host-intent frame is the only current consumer input path.',
+    removalCondition: HOST_INTENT_LEGACY_COMPATIBILITY.cleanupTrigger,
   };
+}
+
+function resolveHostIntentMode(
+  explicitMode: unknown,
+  options: { hostIntentFramePresent: boolean; legacyFields: string[] }
+): HostIntentContextMode {
+  const normalized = stringValue(explicitMode);
+  if (normalized && HOST_INTENT_CONTEXT_MODES.includes(normalized as HostIntentContextMode)) {
+    return normalized as HostIntentContextMode;
+  }
+  if (options.hostIntentFramePresent) {
+    return options.legacyFields.length > 0
+      ? 'mixed-host-intent-and-legacy-args'
+      : 'host-intent-frame';
+  }
+  return 'legacy-args-only';
 }
 
 function hostIntentLegacyFields(input: HostIntentContextInput): string[] {

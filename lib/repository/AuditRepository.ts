@@ -1,7 +1,9 @@
 /**
- * AuditRepository — 审计日志的仓储实现
+ * AuditRepository — Alembic main-owned audit raw-db boundary
  *
- * 从 AuditStore 提取的数据操作，使用 raw SQLite 操作 Core 拥有的 audit_logs 表。
+ * AO2 deliberately keeps this as the only file allowed under lib/repository.
+ * It isolates audit_logs raw SQLite calls for the host-owned AuditLogger path;
+ * new raw-db repository work belongs in lib/infrastructure/database instead.
  */
 
 import type { SqliteDatabase } from '@alembic/core/database';

@@ -3,8 +3,8 @@
  * lint-repo-boundary.mjs — Repository-layer boundary check
  *
  * Ensures `db.prepare()` and `getDb()` calls only appear in:
- *   - lib/repository/**
  *   - lib/infrastructure/database/**
+ *   - lib/repository/AuditRepository.ts (explicit main-owned audit boundary)
  *   - test/**
  *
  * Allowed escape-hatch format:
@@ -20,7 +20,8 @@ import { execSync } from 'node:child_process';
 
 const PATTERN = '\\.(prepare|getDb)\\s*\\(';
 
-const ALLOWED_DIRS = ['lib/repository/', 'lib/infrastructure/database/', 'test/'];
+const ALLOWED_DIRS = ['lib/infrastructure/database/', 'test/'];
+const ALLOWED_FILES = new Set(['lib/repository/AuditRepository.ts']);
 
 const result = execSync(`grep -rnE '${PATTERN}' lib/ bin/ --include='*.ts' || true`, {
   encoding: 'utf8',
@@ -31,8 +32,9 @@ const violations = [];
 const malformedEscapeHatches = [];
 
 for (const line of lines) {
+  const filePath = line.slice(0, line.indexOf(':'));
   // Allowed directories
-  if (ALLOWED_DIRS.some((dir) => line.startsWith(dir))) {
+  if (ALLOWED_FILES.has(filePath) || ALLOWED_DIRS.some((dir) => line.startsWith(dir))) {
     continue;
   }
   // Escape-hatch comment — must use @escape-hatch(permanent) or @escape-hatch(temporary)
@@ -72,7 +74,7 @@ const temporaryEscapeHatches = escapeHatchLines.filter((l) =>
 if (violations.length > 0) {
   console.error(`\n❌  Repository boundary violations (${violations.length}):\n`);
   console.error(
-    '   db.prepare() / getDb() calls must be inside lib/repository/ or lib/infrastructure/database/.'
+    '   db.prepare() / getDb() calls must be inside lib/infrastructure/database/ or the explicit lib/repository/AuditRepository.ts audit boundary.'
   );
   console.error('   To suppress a specific line, add: // @escape-hatch(permanent) — reason\n');
   for (const v of violations) {

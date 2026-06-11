@@ -24,10 +24,12 @@ export interface IntentEpisodeWorkspaceIdentity {
 export interface IntentEpisodeHostIntentMeta {
   applied?: boolean;
   compatibility?: {
+    cleanupTrigger?: string;
     consumer?: string;
     fallbackAllowed?: boolean;
     fallbackFields?: string[];
     mode?: string;
+    owner?: string;
     redacted?: boolean;
     removalCondition?: string;
   };
@@ -393,10 +395,14 @@ function sanitizeHostIntentCompatibility(
   value: NonNullable<IntentEpisodeHostIntentMeta['compatibility']>
 ): NonNullable<IntentEpisodeHostIntentMeta['compatibility']> {
   return {
+    ...(sanitizeText(value.cleanupTrigger, 300)
+      ? { cleanupTrigger: sanitizeText(value.cleanupTrigger, 300) }
+      : {}),
     ...(sanitizeText(value.consumer, 80) ? { consumer: sanitizeText(value.consumer, 80) } : {}),
     fallbackAllowed: value.fallbackAllowed === true,
     fallbackFields: stringsFrom(value.fallbackFields).slice(0, 8),
     ...(sanitizeText(value.mode, 120) ? { mode: sanitizeText(value.mode, 120) } : {}),
+    ...(sanitizeText(value.owner, 80) ? { owner: sanitizeText(value.owner, 80) } : {}),
     redacted: value.redacted === true,
     ...(sanitizeText(value.removalCondition, 300)
       ? { removalCondition: sanitizeText(value.removalCondition, 300) }

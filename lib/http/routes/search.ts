@@ -43,6 +43,7 @@ import {
   SearchQuery,
   SimilarityBody,
 } from '../../shared/schemas/http-requests.js';
+import type { SearchModeLabel } from '../../shared/semantic-taxonomy.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 import { safeInt } from '../utils/routeHelpers.js';
 
@@ -124,8 +125,8 @@ interface ResidentSearchMeta {
   route: 'resident-search';
   service: 'alembic-daemon';
   coreRoute: string | null;
-  requestedMode: string;
-  actualMode: string;
+  requestedMode: SearchModeLabel;
+  actualMode: SearchModeLabel;
   semanticRequested: boolean;
   semanticUsed: boolean;
   vectorUsed: boolean;

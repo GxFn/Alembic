@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { SearchModeLabel } from '../../shared/semantic-taxonomy.js';
 import type { IntentSearchPlan } from './IntentSearchPlan.js';
 
 export interface SemanticAnchor {
@@ -89,7 +90,7 @@ interface IntentEvidenceItem {
 }
 
 export interface BuildIntentEvidenceOptions {
-  actualMode?: string;
+  actualMode?: SearchModeLabel;
   decisionRegister?: {
     acceptedDecisionRefs?: string[];
     auditExcludedCount?: number;
@@ -99,7 +100,7 @@ export interface BuildIntentEvidenceOptions {
   items?: IntentEvidenceItem[];
   maxItems?: number;
   relationProvider?: RelationEvidenceProvider | null;
-  requestedMode?: string;
+  requestedMode?: SearchModeLabel;
   semanticUsed?: boolean;
   vectorAvailable?: boolean;
   vectorUsed?: boolean;

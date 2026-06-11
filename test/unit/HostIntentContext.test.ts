@@ -37,14 +37,18 @@ describe('host intent context consumption', () => {
       activeFile: 'src/service.ts',
       applied: true,
       compatibility: {
+        cleanupTrigger:
+          'Remove legacy userQuery/activeFile/language fallback after the Plugin host-intent frame is the only current consumer input path.',
         consumer: 'alembic-plugin',
         fallbackAllowed: true,
         fallbackFields: ['userQuery', 'activeFile', 'language'],
         mode: 'mixed-host-intent-and-legacy-args',
+        owner: 'alembic-main',
         redacted: true,
       },
       confidence: 0.83,
       language: 'typescript',
+      mode: 'mixed-host-intent-and-legacy-args',
       scenario: 'generate',
       searchIntent: 'generate',
       sourceRefs: ['host:intent'],
@@ -70,11 +74,35 @@ describe('host intent context consumption', () => {
         consumer: 'alembic-plugin',
         fallbackFields: ['userQuery', 'activeFile', 'language'],
         mode: 'mixed-host-intent-and-legacy-args',
+        owner: 'alembic-main',
         redacted: true,
       },
+      mode: 'mixed-host-intent-and-legacy-args',
     });
     expect(JSON.stringify(meta)).not.toContain('fallback query');
     expect(JSON.stringify(meta)).not.toContain('src/fallback.py');
+  });
+
+  test('exposes an explicit legacy-only mode without applying host intent', () => {
+    const context = normalizeHostIntentContext({
+      activeFile: 'src/legacy.ts',
+      language: 'typescript',
+      userQuery: 'legacy query',
+    });
+
+    expect(context).toMatchObject({
+      applied: false,
+      compatibility: {
+        consumer: 'alembic-plugin',
+        fallbackAllowed: true,
+        fallbackFields: ['userQuery', 'activeFile', 'language'],
+        mode: 'legacy-args-only',
+        owner: 'alembic-main',
+      },
+      mode: 'legacy-args-only',
+      userQuery: 'legacy query',
+    });
+    expect(createHostIntentContextMeta(context)).toBeNull();
   });
 
   test('task prime passes host context into PrimeSearchPipeline and response metadata', async () => {

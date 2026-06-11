@@ -51,6 +51,11 @@ describe('workflow naming boundary', () => {
   test('keeps host-owned single-file modules out of redundant nesting', () => {
     expect(existsSync(join(repoRoot, 'lib/tools/v2/adapter'))).toBe(false);
     expect(existsSync(join(repoRoot, 'lib/repository/audit'))).toBe(false);
+    expect(
+      collectTypeScriptFiles(join(repoRoot, 'lib/repository')).map((file) =>
+        relative(repoRoot, file)
+      )
+    ).toEqual(['lib/repository/AuditRepository.ts']);
 
     const sourceFiles = [
       ...collectTypeScriptFiles(join(repoRoot, 'lib')),
