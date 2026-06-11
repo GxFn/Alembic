@@ -24,6 +24,7 @@ import { DAEMON_FILE_CHANGE_EVENT_SOURCES } from '../../daemon/RuntimeBoundary.j
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import type { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 import { validate } from '../middleware/validate.js';
+import { buildAlembicHttpProblem } from '../problem-taxonomy.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();
@@ -57,6 +58,7 @@ router.post('/', validate(FileChangesBody), async (req: Request, res: Response) 
     const { events } = req.body as z.infer<typeof FileChangesBody>;
 
     const validEvents: FileChangeEvent[] = [];
+    const unsafePaths: string[] = [];
 
     for (const event of events) {
       if (
@@ -68,11 +70,19 @@ router.post('/', validate(FileChangesBody), async (req: Request, res: Response) 
         continue;
       }
       const obj = event as Record<string, unknown>;
+      if (!isSafeProjectRelativePath(obj.path as string)) {
+        unsafePaths.push(obj.path as string);
+        continue;
+      }
       const normalized: FileChangeEvent = {
         type: obj.type as FileChangeEvent['type'],
         path: obj.path as string,
       };
       if (typeof obj.oldPath === 'string') {
+        if (!isSafeProjectRelativePath(obj.oldPath)) {
+          unsafePaths.push(obj.oldPath);
+          continue;
+        }
         normalized.oldPath = obj.oldPath;
       }
       // 向后兼容：旧版客户端不传 eventSource，服务端透传 undefined，由 Dispatcher 统计推断
@@ -83,6 +93,20 @@ router.post('/', validate(FileChangesBody), async (req: Request, res: Response) 
         }
       }
       validEvents.push(normalized);
+    }
+
+    if (unsafePaths.length > 0) {
+      const problem = buildAlembicHttpProblem(
+        'INVALID_FILE_CHANGE_PATH',
+        'File-change events must use project-relative paths.',
+        'invalid-input',
+        { status: 400, retryable: false }
+      );
+      logger.warn('[file-changes] rejected unsafe event path', {
+        count: unsafePaths.length,
+      });
+      res.status(problem.status).json({ success: false, error: problem });
+      return;
     }
 
     if (validEvents.length === 0) {
@@ -108,15 +132,22 @@ router.post('/', validate(FileChangesBody), async (req: Request, res: Response) 
     try {
       report = await dispatcher.dispatch(validEvents);
     } catch (err: unknown) {
-      logger.warn('[file-changes] dispatch error', { error: (err as Error).message });
-      report = {
-        fixed: 0,
-        deprecated: 0,
-        skipped: 0,
-        needsReview: 0,
-        suggestReview: false,
-        details: [],
-      };
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const problem = buildAlembicHttpProblem(
+        'FILE_CHANGE_DISPATCH_FAILED',
+        'File-change dispatch failed before reactive evolution completed.',
+        'internal-error',
+        { status: 500, retryable: true }
+      );
+      logger.warn('[file-changes] dispatch error', { error: errorMessage });
+      res.status(problem.status).json({
+        success: false,
+        error: {
+          ...problem,
+          detailRefs: ['diagnostics://file-changes/dispatch-failed'],
+        },
+      });
+      return;
     }
 
     logger.info('[file-changes] handled', {
@@ -154,4 +185,15 @@ function normalizeFileChangeEventSource(source: string): FileChangeEventSource |
 
 function legacyHostEditSource(): string {
   return ['ide', 'edit'].join('-');
+}
+
+function isSafeProjectRelativePath(filePath: string): boolean {
+  const normalized = filePath.trim().replaceAll('\\', '/');
+  if (!normalized || normalized.includes('\0') || normalized === '.') {
+    return false;
+  }
+  if (normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized)) {
+    return false;
+  }
+  return !normalized.split('/').some((part) => part === '..');
 }

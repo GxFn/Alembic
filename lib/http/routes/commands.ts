@@ -8,6 +8,7 @@ import { DASHBOARD_OPERATION_IDS } from '#tools/adapters/DashboardOperations.js'
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { FileReadQuery, FileSaveBody } from '../../shared/schemas/http-requests.js';
 import { validate, validateQuery } from '../middleware/validate.js';
+import { buildAlembicHttpProblem } from '../problem-taxonomy.js';
 import {
   executeDashboardOperation,
   sendDashboardOperationResponse,
@@ -183,19 +184,15 @@ router.get(
     const path = await import('node:path');
     const container = getServiceContainer();
     const projectRoot = (container.singletons?._projectRoot as string | undefined) || process.cwd();
-    const resolved = path.default.resolve(projectRoot, filePath);
+    const resolved = resolveProjectRelativeFilePath(path.default, projectRoot, filePath);
 
-    // 防止路径遍历：确保解析后的路径在 projectRoot 内
-    if (!resolved.startsWith(projectRoot + path.default.sep) && resolved !== projectRoot) {
-      return void res.status(403).json({
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Access denied: path outside project root' },
-      });
+    if (!resolved.ok) {
+      return void sendFilePathProblem(res, resolved.message);
     }
 
     const fs = await import('node:fs');
     try {
-      const content = fs.default.readFileSync(resolved, 'utf8');
+      const content = fs.default.readFileSync(resolved.absolutePath, 'utf8');
       res.json({ success: true, data: { content } });
     } catch {
       res
@@ -218,14 +215,10 @@ router.post(
     const pathMod = await import('node:path');
     const container = getServiceContainer();
     const projectRoot = (container.singletons?._projectRoot as string | undefined) || process.cwd();
-    const resolved = pathMod.default.resolve(projectRoot, filePath);
+    const resolved = resolveProjectRelativeFilePath(pathMod.default, projectRoot, filePath);
 
-    // 防止路径遍历：确保解析后的路径在 projectRoot 内
-    if (!resolved.startsWith(projectRoot + pathMod.default.sep) && resolved !== projectRoot) {
-      return void res.status(403).json({
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Access denied: path outside project root' },
-      });
+    if (!resolved.ok) {
+      return void sendFilePathProblem(res, resolved.message);
     }
 
     try {
@@ -233,11 +226,21 @@ router.post(
         | import('@alembic/core/io').WriteZone
         | undefined;
       if (wz) {
-        const rel = resolved.replace(wz.projectRoot, '').replace(/^\//, '');
-        wz.writeFile(wz.project(rel), content);
+        const writeZoneRelativePath = pathMod.default.relative(
+          wz.projectRoot,
+          resolved.absolutePath
+        );
+        if (
+          !writeZoneRelativePath ||
+          writeZoneRelativePath.startsWith('..') ||
+          pathMod.default.isAbsolute(writeZoneRelativePath)
+        ) {
+          throw new Error('Resolved path is outside the configured write zone.');
+        }
+        wz.writeFile(wz.project(writeZoneRelativePath), content);
       } else {
         const fs = await import('node:fs');
-        fs.default.writeFileSync(resolved, content, 'utf8');
+        fs.default.writeFileSync(resolved.absolutePath, content, 'utf8');
       }
       res.json({ success: true });
     } catch (err: unknown) {
@@ -250,3 +253,40 @@ router.post(
 );
 
 export default router;
+
+function resolveProjectRelativeFilePath(
+  pathApi: typeof import('node:path'),
+  projectRootInput: string,
+  filePathInput: string
+): { ok: true; absolutePath: string; relativePath: string } | { ok: false; message: string } {
+  const filePath = filePathInput.trim();
+  if (!filePath || filePath.includes('\0')) {
+    return { ok: false, message: 'File path must be a non-empty project-relative path.' };
+  }
+  if (pathApi.isAbsolute(filePath) || /^[A-Za-z]:[\\/]/.test(filePath)) {
+    return { ok: false, message: 'Absolute file paths are not allowed.' };
+  }
+
+  const normalizedInput = filePath.replaceAll('\\', pathApi.sep);
+  const projectRoot = pathApi.resolve(projectRootInput);
+  const absolutePath = pathApi.resolve(projectRoot, normalizedInput);
+  const relativePath = pathApi.relative(projectRoot, absolutePath);
+  if (
+    !relativePath ||
+    relativePath.startsWith('..') ||
+    pathApi.isAbsolute(relativePath) ||
+    relativePath.split(pathApi.sep).includes('..')
+  ) {
+    return { ok: false, message: 'Access denied: path outside project root.' };
+  }
+
+  return { ok: true, absolutePath, relativePath };
+}
+
+function sendFilePathProblem(res: Response, message: string): void {
+  const problem = buildAlembicHttpProblem('INVALID_FILE_PATH', message, 'invalid-input', {
+    status: 400,
+    retryable: false,
+  });
+  res.status(problem.status).json({ success: false, error: problem });
+}

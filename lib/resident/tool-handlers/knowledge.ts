@@ -5,6 +5,7 @@
 
 import { dimensionTags } from '@alembic/core/dimensions';
 import { UnifiedValidator } from '@alembic/core/knowledge';
+import Logger from '@alembic/core/logging';
 import { getDeveloperIdentity } from '@alembic/core/shared';
 import { resolveProjectRoot } from '@alembic/core/workspace';
 import { envelope } from '../tool-schema/envelope.js';
@@ -179,9 +180,8 @@ interface SubmitBatchArgs {
 }
 
 export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArgs) {
-  if (!args.target_name || !Array.isArray(args.items) || args.items.length === 0) {
-    throw new Error('需要 target_name 与 items（非空数组）');
-  }
+  assertSubmitKnowledgeBatchArgs(args);
+  const logger = Logger.getInstance();
 
   // 限流
   const blocked = await _checkRateLimit(
@@ -224,6 +224,7 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
   const source = typeof args.source === 'string' ? args.source : 'cursor-scan';
   let count = 0;
   const itemErrors: { index: number; title: string; error: string }[] = [];
+  const qualityWarnings: { id: string; index: number; title: string; warning: string }[] = [];
   const rejectedItems: {
     index: number;
     title: string;
@@ -231,6 +232,7 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
     suggestions: string[];
   }[] = [];
   const successIds: string[] = []; // 成功入库的 recipe ID 列表，供 dimension_complete 使用
+  const trackerWarnings: { index: number; title: string; warning: string }[] = [];
 
   // v2: 获取 BootstrapSession tracker（静默降级）
   interface BatchSessionLike {
@@ -286,8 +288,12 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
             items[i].title || '(untitled)',
             validation.errors.join(', ')
           );
-        } catch {
-          /* best effort */
+        } catch (error: unknown) {
+          trackerWarnings.push({
+            index: i,
+            title: items[i].title || '(untitled)',
+            warning: error instanceof Error ? error.message : String(error),
+          });
         }
       }
       // 记录标题/指纹供后续去重检测
@@ -308,24 +314,33 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
         ctx.container
       );
       const entry = await service.create(itemData, { userId: getDeveloperIdentity() });
+      // Tracker consistency is tied to the persisted entry, not to best-effort quality scoring.
+      if (session?.submissionTracker && effectiveDimensionId && entry?.id) {
+        try {
+          session.submissionTracker.recordSubmission(effectiveDimensionId, items[i], entry.id);
+        } catch (error: unknown) {
+          trackerWarnings.push({
+            index: i,
+            title: items[i].title || '(untitled)',
+            warning: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
       // ── QualityScorer 自动评分（R9: create 后置执行）──
       try {
         await service.updateQuality(entry.id, { userId: getDeveloperIdentity() });
-      } catch {
-        /* best effort — 不阻塞批量提交 */
+      } catch (error: unknown) {
+        qualityWarnings.push({
+          id: entry.id,
+          index: i,
+          title: items[i].title || '(untitled)',
+          warning: error instanceof Error ? error.message : String(error),
+        });
       }
       count++;
       successIds.push(entry.id);
       // 记录标题/指纹供后续去重检测
       validator.recordSubmission(items[i].title as string, items[i].content?.pattern as string);
-      // v2: 记录成功提交到 tracker
-      if (session?.submissionTracker && currentDimId && entry?.id) {
-        try {
-          session.submissionTracker.recordSubmission(currentDimId, items[i], entry.id);
-        } catch {
-          /* best effort */
-        }
-      }
     } catch (err: unknown) {
       itemErrors.push({
         index: i,
@@ -346,6 +361,17 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
   if (itemErrors.length > 0) {
     data.errors = itemErrors;
   }
+  if (qualityWarnings.length > 0 || trackerWarnings.length > 0) {
+    data.diagnostics = {
+      ...(qualityWarnings.length > 0 ? { qualityWarnings } : {}),
+      ...(trackerWarnings.length > 0 ? { trackerWarnings } : {}),
+    };
+    logger.warn('[submitKnowledgeBatch] persisted with follow-up diagnostics', {
+      qualityWarningCount: qualityWarnings.length,
+      trackerWarningCount: trackerWarnings.length,
+      targetName: args.target_name,
+    });
+  }
 
   // 被拒绝的条目：告知 Agent 需补齐哪些字段
   if (rejectedItems.length > 0) {
@@ -365,6 +391,25 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
     message: `已提交 ${count}/${items.length} 条知识条目。`,
     meta: { tool: 'alembic_submit_knowledge_batch' },
   });
+}
+
+function assertSubmitKnowledgeBatchArgs(
+  args: SubmitBatchArgs
+): asserts args is SubmitBatchArgs & { items: KnowledgeItemInput[]; target_name: string } {
+  if (
+    !args ||
+    typeof args !== 'object' ||
+    typeof args.target_name !== 'string' ||
+    args.target_name.trim().length === 0 ||
+    !Array.isArray(args.items) ||
+    args.items.length === 0
+  ) {
+    throw new Error('需要 target_name 与 items（非空数组）');
+  }
+  const invalidIndex = args.items.findIndex((item) => !item || typeof item !== 'object');
+  if (invalidIndex >= 0) {
+    throw new Error(`items[${invalidIndex}] must be an object`);
+  }
 }
 
 /**

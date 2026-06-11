@@ -127,6 +127,54 @@ describe('file-changes route', () => {
     expect(contentPatcher.applyProposal).not.toHaveBeenCalled();
   });
 
+  test('rejects unsafe file-change paths instead of dispatching them', async () => {
+    const response = await invokeRouter(fileChangesRouter, {
+      body: {
+        events: [{ path: '../secret.txt', type: 'modified' }],
+      },
+      method: 'POST',
+      mountPath: '/api/v1/file-changes',
+      path: '/api/v1/file-changes',
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.error).toMatchObject({
+      code: 'INVALID_FILE_CHANGE_PATH',
+      reasonCode: 'invalid-input',
+    });
+    expect(mocks.container.get).not.toHaveBeenCalled();
+  });
+
+  test('returns a typed failure when file-change dispatch fails', async () => {
+    const dispatch = vi.fn(async () => {
+      throw new Error('dispatcher unavailable');
+    });
+    mocks.container.get.mockImplementation((name: string) => {
+      if (name === 'fileChangeDispatcher') {
+        return { dispatch };
+      }
+      throw new Error(`Unexpected service requested: ${name}`);
+    });
+
+    const response = await invokeRouter(fileChangesRouter, {
+      body: {
+        events: [{ eventSource: 'host-edit', path: 'Sources/RetryPolicy.swift', type: 'modified' }],
+      },
+      method: 'POST',
+      mountPath: '/api/v1/file-changes',
+      path: '/api/v1/file-changes',
+    });
+
+    expect(response.status).toBe(500);
+    expect(response.body.success).toBe(false);
+    expect(response.body.error).toMatchObject({
+      code: 'FILE_CHANGE_DISPATCH_FAILED',
+      reasonCode: 'internal-error',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+
   test('native watcher events enter dispatcher and create reviewable proposals', async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'alembic-native-proposal-'));
     tempDirs.push(projectRoot);

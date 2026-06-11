@@ -213,6 +213,7 @@ export class DaemonSupervisor {
 
   async #withLock<T>(paths: DaemonPaths, waitMs: number, fn: () => Promise<T>): Promise<T> {
     const startedAt = Date.now();
+    let lockAttempt = 0;
     while (true) {
       try {
         mkdirSync(paths.lockDir, { mode: 0o700 });
@@ -236,7 +237,7 @@ export class DaemonSupervisor {
           }
           throw new Error(`Timed out waiting for daemon lock: ${paths.lockDir}`);
         }
-        await sleep(200);
+        await sleep(computeDaemonLockBackoffMs(lockAttempt++));
       }
     }
 
@@ -307,6 +308,12 @@ async function waitForReady(paths: DaemonPaths, waitMs: number): Promise<DaemonS
     await sleep(200);
   }
   return supervisor.status(paths.projectRoot);
+}
+
+export function computeDaemonLockBackoffMs(attempt: number): number {
+  const normalizedAttempt = Math.max(0, Math.floor(attempt));
+  const exponentialMs = 100 * 2 ** Math.min(normalizedAttempt, 4);
+  return Math.min(exponentialMs, 1_000);
 }
 
 function isProcessAlive(pid: number): boolean {

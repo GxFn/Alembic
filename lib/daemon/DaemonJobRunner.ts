@@ -135,10 +135,12 @@ export function enqueueDaemonJob(options: DaemonJobOptions): DaemonJobRecord {
   });
   queueMicrotask(() => {
     void runDaemonJob({ ...options, jobId: job.id }).catch((err: unknown) => {
+      const failedJob = recordDaemonJobAsyncFailure({ ...options, error: err, jobId: job.id });
       options.logger.error('Daemon job failed after enqueue', {
         jobId: job.id,
         kind: options.kind,
         error: err instanceof Error ? err.message : String(err),
+        status: failedJob?.status ?? 'missing',
       });
     });
   });
@@ -309,6 +311,47 @@ export async function runDaemonJob(options: RunDaemonJobOptions): Promise<RunDae
       bootstrapBridge?.();
     }
   }
+}
+
+export function recordDaemonJobAsyncFailure(
+  options: RunDaemonJobOptions & { error: unknown }
+): DaemonJobRecord | null {
+  const store = getJobStore(options.container);
+  const current = store.get(options.jobId);
+  if (!current || isTerminalJobStatus(current.status)) {
+    return current;
+  }
+
+  const recorder = getJobProcessEventRecorder(options.container);
+  const errorMessage =
+    options.error instanceof Error ? options.error.message : String(options.error);
+  const failedJob = store.fail(options.jobId, options.error);
+  recordJobProcessEvent(recorder, {
+    content: {
+      mimeType: 'text/plain',
+      role: 'assistant',
+      text: errorMessage,
+    },
+    jobId: options.jobId,
+    kind: 'error',
+    metadata: {
+      kind: options.kind,
+      source: options.source || 'system',
+      status: failedJob?.status ?? 'failed',
+    },
+    phase: 'failed',
+    severity: 'error',
+    summary: errorMessage,
+    title: 'Daemon job failed after enqueue',
+  });
+  refreshJobDisplaySnapshot({
+    container: options.container,
+    jobId: options.jobId,
+    logger: options.logger,
+    recorder,
+    store,
+  });
+  return failedJob;
 }
 
 export function cancelDaemonJob(options: {

@@ -9,6 +9,7 @@ import {
   buildDaemonRescanWorkflowArgs,
   cancelDaemonJob,
   markInterruptedDaemonJobs,
+  recordDaemonJobAsyncFailure,
 } from '../../lib/daemon/DaemonJobRunner.js';
 import { JobDisplaySnapshotStore } from '../../lib/daemon/JobDisplaySnapshotStore.js';
 import { readJobProcessEventArtifact } from '../../lib/daemon/JobProcessEventArtifacts.js';
@@ -62,6 +63,46 @@ afterEach(() => {
 });
 
 describe('markInterruptedDaemonJobs', () => {
+  test('persists an async failure for a queued job and refreshes display evidence', () => {
+    useTempAlembicHome();
+    const store = new JobStore({ projectRoot: makeProjectRoot() });
+    const job = store.create({ kind: 'rescan', source: 'http' });
+    const recorder = new JobProcessEventRecorder();
+    const displayStore = { writeFromJob: vi.fn() };
+    const logger = makeLogger();
+
+    const failed = recordDaemonJobAsyncFailure({
+      container: makeContainer(store, {
+        jobDisplaySnapshotStore: displayStore,
+        jobProcessEventRecorder: recorder,
+      }),
+      error: new Error('async worker crashed'),
+      jobId: job.id,
+      kind: 'rescan',
+      logger,
+      source: 'http',
+    });
+
+    expect(failed).toMatchObject({
+      id: job.id,
+      status: 'failed',
+      error: { message: 'async worker crashed' },
+    });
+    expect(store.get(job.id)).toMatchObject({ status: 'failed' });
+    expect(recorder.list(job.id, { limit: 10 }).developerViews).toEqual([
+      expect.objectContaining({
+        summary: 'async worker crashed',
+        title: 'Daemon job failed after enqueue',
+      }),
+    ]);
+    expect(displayStore.writeFromJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        job: expect.objectContaining({ id: job.id, status: 'failed' }),
+        recorder,
+      })
+    );
+  });
+
   test('fails active daemon jobs and logs the recovery action', () => {
     useTempAlembicHome();
     const store = new JobStore({ projectRoot: makeProjectRoot() });

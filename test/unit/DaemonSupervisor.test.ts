@@ -14,7 +14,7 @@ import {
 } from '@alembic/core/daemon';
 import { getGhostWorkspaceDir, ProjectRegistry } from '@alembic/core/workspace';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { DaemonSupervisor } from '../../lib/daemon/DaemonSupervisor.js';
+import { computeDaemonLockBackoffMs, DaemonSupervisor } from '../../lib/daemon/DaemonSupervisor.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
 
@@ -138,6 +138,12 @@ describe('DaemonState', () => {
 });
 
 describe('DaemonSupervisor', () => {
+  test('uses bounded increasing lock retry backoff', () => {
+    expect([0, 1, 2, 3, 4, 5].map(computeDaemonLockBackoffMs)).toEqual([
+      100, 200, 400, 800, 1000, 1000,
+    ]);
+  });
+
   test('reports stale when a state file points to a dead pid', async () => {
     useTempAlembicHome();
     const projectRoot = makeProjectRoot();

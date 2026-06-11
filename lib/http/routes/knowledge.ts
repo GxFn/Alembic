@@ -18,6 +18,7 @@ import {
 } from '#shared/schemas/http-requests.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';
+import { buildAlembicHttpProblem } from '../problem-taxonomy.js';
 import {
   getContext,
   safeInt,
@@ -38,8 +39,9 @@ const router = express.Router();
 function requirePermission(action: string, resource: string) {
   return (req: Request, res: Response, next: NextFunction) => {
     const role = (req.resolvedRole as string) || 'anonymous';
+    let container: { get(name: string): unknown } | null = null;
     try {
-      const container = getServiceContainer();
+      container = getServiceContainer();
       const permissionManager = container.get('permissionManager');
       if (permissionManager) {
         const result = (
@@ -64,11 +66,78 @@ function requirePermission(action: string, resource: string) {
           return;
         }
       }
-    } catch {
-      // PermissionManager 不可用时降级放行（向后兼容）
+    } catch (error: unknown) {
+      const problem = buildAlembicHttpProblem(
+        'PERMISSION_CHECK_UNAVAILABLE',
+        'Permission check unavailable; request rejected.',
+        'permission-denied',
+        { status: 403, retryable: false }
+      );
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      _logger.error('Knowledge route permission check unavailable', {
+        action,
+        resource,
+        role,
+        error: errorMessage,
+      });
+      recordPermissionAuditFailure(container, {
+        action,
+        error: errorMessage,
+        resource,
+        role,
+      });
+      res.status(problem.status).json({
+        success: false,
+        error: problem,
+      });
+      return;
     }
     next();
   };
+}
+
+function recordPermissionAuditFailure(
+  container: { get(name: string): unknown } | null,
+  event: { action: string; error: string; resource: string; role: string }
+): void {
+  try {
+    const auditLogger = container?.get('auditLogger') as
+      | {
+          log(input: {
+            action: string;
+            actor: string;
+            data?: Record<string, unknown>;
+            error?: string;
+            resource: string;
+            result: 'failure' | 'success';
+          }): Promise<unknown> | unknown;
+        }
+      | undefined;
+    if (!auditLogger?.log) {
+      return;
+    }
+    void Promise.resolve(
+      auditLogger.log({
+        action: 'knowledge.permission.check',
+        actor: event.role,
+        data: {
+          requestedAction: event.action,
+          requestedResource: event.resource,
+        },
+        error: event.error,
+        resource: `knowledge:${event.resource}`,
+        result: 'failure',
+      })
+    ).catch((auditError: unknown) => {
+      _logger.warn('Knowledge route permission audit write failed', {
+        error: auditError instanceof Error ? auditError.message : String(auditError),
+      });
+    });
+  } catch (auditError: unknown) {
+    _logger.warn('Knowledge route permission audit unavailable', {
+      error: auditError instanceof Error ? auditError.message : String(auditError),
+    });
+  }
 }
 
 /* ═══ 查询 ═══════════════════════════════════════════════ */

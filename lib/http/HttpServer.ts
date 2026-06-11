@@ -75,10 +75,13 @@ export class HttpServer {
   capabilityProbe: CapabilityProbe | null;
   config: HttpServerConfig;
   errorTracker: ErrorTracker | null;
+  activeRequestCount: number;
+  activeStreamingResponses: Set<Response>;
   logger: AppLogger;
   performanceMonitor: { middleware(): express.RequestHandler; shutdown(): void } | null;
   realtimeService: Record<string, unknown> | null;
   server: Server | null;
+  stopping: boolean;
   constructor(config: Partial<HttpServerConfig> = {}) {
     this.config = {
       port: config.port ?? 3000,
@@ -91,11 +94,14 @@ export class HttpServer {
     this.logger = Logger.getInstance();
     this.app = express();
     this.server = null;
+    this.activeRequestCount = 0;
+    this.activeStreamingResponses = new Set();
     this.performanceMonitor = null;
     this.errorTracker = null;
     this.cacheAdapter = null;
     this.realtimeService = null;
     this.capabilityProbe = null;
+    this.stopping = false;
   }
 
   /** 初始化服务器 */
@@ -185,6 +191,11 @@ export class HttpServer {
     // 请求日志
     this.app.use(requestLogger(this.logger));
 
+    // 跟踪普通请求与 SSE/EventSource 响应，用于停服时协调关闭。
+    this.app.use((req: Request, res: Response, next: NextFunction) => {
+      this.trackRequestLifecycle(req, res, next);
+    });
+
     // 解析 JSON 请求体
     this.app.use(express.json({ limit: '10mb' }));
 
@@ -237,6 +248,30 @@ export class HttpServer {
       req.setTimeout(isLongRunning ? 600000 : isStreaming ? 300000 : 60000); // AI 扫描 10分钟, SSE/EventSource 5分钟, 其他 60秒
       next();
     });
+  }
+
+  trackRequestLifecycle(req: Request, res: Response, next: NextFunction): void {
+    if (this.stopping) {
+      res.setHeader('Connection', 'close');
+    }
+    this.activeRequestCount += 1;
+    const isStreaming = req.path.includes('/stream') || req.path.includes('/events/');
+    if (isStreaming) {
+      this.activeStreamingResponses.add(res);
+    }
+
+    let released = false;
+    const release = () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      this.activeRequestCount = Math.max(0, this.activeRequestCount - 1);
+      this.activeStreamingResponses.delete(res);
+    };
+    res.once('finish', release);
+    res.once('close', release);
+    next();
   }
 
   /** 注册 Gateway Actions */
@@ -466,10 +501,19 @@ export class HttpServer {
             if (typeof rs?.broadcastEvent !== 'function') {
               throw new Error('broadcastEvent not available');
             }
-            const broadcastEvent = rs.broadcastEvent.bind(rs);
+            const broadcastEvent = (name: string, data: unknown) => {
+              try {
+                rs.broadcastEvent?.(name, data);
+              } catch (error: unknown) {
+                this.logger.warn('Realtime broadcast failed', {
+                  eventName: name,
+                  error: error instanceof Error ? error.message : String(error),
+                });
+              }
+            };
 
             // EventBus → lifecycle:transition
-            const eventBus = container.services.eventBus ? container.get('eventBus') : null;
+            const eventBus = container.services?.eventBus ? container.get('eventBus') : null;
             if (eventBus) {
               eventBus.on('lifecycle:transition', (data: unknown) => {
                 broadcastEvent('lifecycle:transition', data);
@@ -489,8 +533,10 @@ export class HttpServer {
             // 确保 SignalBridge 已初始化（触发 lazy singleton）
             try {
               container.get('signalBridge');
-            } catch {
-              // SignalBridge 未注册时静默跳过
+            } catch (error: unknown) {
+              this.logger.warn('SignalBridge unavailable for realtime bridge', {
+                error: error instanceof Error ? error.message : String(error),
+              });
             }
 
             // EventBus → audit:entry
@@ -499,8 +545,10 @@ export class HttpServer {
                 broadcastEvent('audit:entry', data);
               });
             }
-          } catch {
-            // EventBus/SignalBus 不可用时静默跳过
+          } catch (error: unknown) {
+            this.logger.warn('Realtime event bridge unavailable', {
+              error: error instanceof Error ? error.message : String(error),
+            });
           }
         } catch (error: unknown) {
           this.logger.warn('Failed to initialize realtime service', {
@@ -531,6 +579,13 @@ export class HttpServer {
     if (!this.server) {
       return resolve(undefined);
     }
+    this.stopping = true;
+    this.closeActiveStreamingResponses();
+    this.logger.info('HTTP Server stopping', {
+      activeRequests: this.activeRequestCount,
+      activeStreams: this.activeStreamingResponses.size,
+      timestamp: new Date().toISOString(),
+    });
 
     // 停止性能监控
     if (this.performanceMonitor) {
@@ -568,6 +623,23 @@ export class HttpServer {
       resolve(undefined);
     });
     return promise;
+  }
+
+  closeActiveStreamingResponses(): void {
+    for (const res of [...this.activeStreamingResponses]) {
+      try {
+        if (!res.headersSent) {
+          res.status(503);
+          res.setHeader('Content-Type', 'text/event-stream');
+        }
+        res.write('event: shutdown\ndata: {"reason":"server_shutdown"}\n\n');
+        res.end();
+      } catch (error: unknown) {
+        this.logger.warn('Error closing active streaming response', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
   }
 
   /** 获取 Express 应用实例 */

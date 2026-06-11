@@ -115,4 +115,40 @@ describe('JobProcessEventRecorder', () => {
       }),
     ]);
   });
+
+  test('keeps diagnostics when realtime broadcast fails', () => {
+    const logger = { warn: vi.fn() };
+    const recorder = new JobProcessEventRecorder({
+      broadcast: () => {
+        throw new Error('socket unavailable');
+      },
+      logger,
+      maxEventsPerJob: 5,
+    });
+
+    recorder.record({
+      jobId: 'job_broadcast_failure',
+      kind: 'summary',
+      summary: 'Job still retained by recorder.',
+      title: 'Broadcast failure probe',
+    });
+
+    const list = recorder.list('job_broadcast_failure', { limit: 10 });
+    expect(list.developerViews).toHaveLength(1);
+    expect(list.diagnostics?.broadcastFailures).toEqual([
+      expect.objectContaining({
+        error: 'socket unavailable',
+        eventId: 'job_broadcast_failure_process_0001',
+        jobId: 'job_broadcast_failure',
+        sequence: 1,
+      }),
+    ]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Job process event broadcast failed',
+      expect.objectContaining({
+        error: 'socket unavailable',
+        jobId: 'job_broadcast_failure',
+      })
+    );
+  });
 });

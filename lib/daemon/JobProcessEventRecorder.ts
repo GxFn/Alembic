@@ -29,6 +29,14 @@ export interface JobProcessEventBroadcastPayload {
   type: 'job_process_event';
 }
 
+export interface JobProcessEventBroadcastFailure {
+  error: string;
+  eventId: string;
+  jobId: string;
+  occurredAt: string;
+  sequence: number;
+}
+
 export interface JobProcessEventListOptions {
   afterSequence?: number;
   includeHidden?: boolean;
@@ -38,6 +46,9 @@ export interface JobProcessEventListOptions {
 export interface JobProcessEventListResult {
   count: number;
   developerViews: JobProcessDeveloperView[];
+  diagnostics?: {
+    broadcastFailures: JobProcessEventBroadcastFailure[];
+  };
   endpointCapability: JobProcessEventEndpointCapability;
   events: JobProcessEvent[];
   hiddenCount: number;
@@ -48,6 +59,7 @@ export interface JobProcessEventListResult {
 
 interface JobProcessEventRecorderOptions {
   broadcast?: (payload: JobProcessEventBroadcastPayload) => void;
+  logger?: { warn(message: string, meta?: Record<string, unknown>): void };
   maxEventsPerJob?: number;
   maxGlobalEvents?: number;
 }
@@ -57,8 +69,10 @@ export class JobProcessEventRecorder {
   readonly maxGlobalEvents: number;
 
   #broadcast: ((payload: JobProcessEventBroadcastPayload) => void) | null;
+  #broadcastFailuresByJob = new Map<string, JobProcessEventBroadcastFailure[]>();
   #eventsByJob = new Map<string, JobProcessEvent[]>();
   #lastSequenceByJob = new Map<string, number>();
+  #logger: { warn(message: string, meta?: Record<string, unknown>): void } | null;
 
   constructor(options: JobProcessEventRecorderOptions = {}) {
     this.maxEventsPerJob = Math.max(1, options.maxEventsPerJob ?? DEFAULT_JOB_PROCESS_EVENT_LIMIT);
@@ -67,6 +81,7 @@ export class JobProcessEventRecorder {
       options.maxGlobalEvents ?? DEFAULT_GLOBAL_PROCESS_EVENT_LIMIT
     );
     this.#broadcast = options.broadcast ?? null;
+    this.#logger = options.logger ?? null;
   }
 
   record(input: JobProcessEventRecordInput): {
@@ -122,10 +137,15 @@ export class JobProcessEventRecorder {
       .filter((view): view is JobProcessDeveloperView => Boolean(view));
     const hiddenCount =
       afterCursor.length - afterCursor.filter(isJobProcessEventDeveloperVisible).length;
+    const broadcastFailures = (this.#broadcastFailuresByJob.get(jobId) ?? [])
+      .filter((failure) => failure.sequence > afterSequence)
+      .slice(-limit)
+      .map((failure) => ({ ...failure }));
 
     return {
       count: events.length,
       developerViews,
+      ...(broadcastFailures.length > 0 ? { diagnostics: { broadcastFailures } } : {}),
       endpointCapability: createAvailableJobProcessEventCapability(),
       events,
       hiddenCount,
@@ -138,6 +158,7 @@ export class JobProcessEventRecorder {
   resetJob(jobId: string): void {
     this.#eventsByJob.delete(jobId);
     this.#lastSequenceByJob.delete(jobId);
+    this.#broadcastFailuresByJob.delete(jobId);
   }
 
   #append(event: JobProcessEvent): void {
@@ -155,17 +176,42 @@ export class JobProcessEventRecorder {
     if (!this.#broadcast) {
       return;
     }
+    const payload = {
+      event,
+      eventId: event.eventId,
+      jobId: event.jobId,
+      sequence: event.sequence,
+      type: 'job_process_event' as const,
+    };
     try {
       this.#broadcast({
-        event,
+        ...payload,
+      });
+    } catch (error: unknown) {
+      const failure: JobProcessEventBroadcastFailure = {
+        error: error instanceof Error ? error.message : String(error),
         eventId: event.eventId,
         jobId: event.jobId,
+        occurredAt: new Date().toISOString(),
         sequence: event.sequence,
-        type: 'job_process_event',
+      };
+      this.#appendBroadcastFailure(failure);
+      this.#logger?.warn('Job process event broadcast failed', {
+        error: failure.error,
+        eventId: failure.eventId,
+        jobId: failure.jobId,
+        sequence: failure.sequence,
       });
-    } catch {
-      // Realtime is best-effort; the bounded recorder remains the API source of truth.
     }
+  }
+
+  #appendBroadcastFailure(failure: JobProcessEventBroadcastFailure): void {
+    const failures = this.#broadcastFailuresByJob.get(failure.jobId) ?? [];
+    failures.push({ ...failure });
+    if (failures.length > this.maxEventsPerJob) {
+      failures.splice(0, failures.length - this.maxEventsPerJob);
+    }
+    this.#broadcastFailuresByJob.set(failure.jobId, failures);
   }
 
   #nextSequence(jobId: string, explicitSequence?: number): number {

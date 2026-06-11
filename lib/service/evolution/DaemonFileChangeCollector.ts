@@ -86,6 +86,8 @@ export class DaemonFileChangeCollector {
   #lastDispatchAt: string | null = null;
   #lastGitKeys: Set<string> | null = null;
   #lastScanAt: string | null = null;
+  #gitScanQueued = false;
+  #nativeScanQueued = false;
   #nativeScanRunning = false;
   #nativeScanTimer: TimerHandle | null = null;
   #nativeSnapshot: NativeSnapshot | null = null;
@@ -146,7 +148,11 @@ export class DaemonFileChangeCollector {
   }
 
   async scanNativeOnce(_now = Date.now()): Promise<void> {
-    if (this.#disposed || this.#nativeScanRunning) {
+    if (this.#disposed) {
+      return;
+    }
+    if (this.#nativeScanRunning) {
+      this.#nativeScanQueued = true;
       return;
     }
     this.#nativeScanRunning = true;
@@ -156,9 +162,11 @@ export class DaemonFileChangeCollector {
       this.#nativeSnapshot = next;
       this.#lastScanAt = new Date(_now).toISOString();
 
-      const events = diffNativeSnapshots(previous, next)
-        .filter((event) => !isIgnoredPath(event.path) && !isIgnoredPath(event.oldPath ?? ''))
-        .slice(0, MAX_EVENTS_PER_SCAN);
+      const events = dedupeFileChangeEvents(
+        diffNativeSnapshots(previous, next)
+          .filter((event) => !isIgnoredPath(event.path) && !isIgnoredPath(event.oldPath ?? ''))
+          .slice(0, MAX_EVENTS_PER_SCAN)
+      );
 
       if (events.length === 0) {
         this.#status = createNativeFileMonitorStatus({
@@ -168,7 +176,10 @@ export class DaemonFileChangeCollector {
         return;
       }
 
-      const report = await this.#dispatcher.dispatch(events);
+      const idempotencyToken = createFileChangeDispatchToken('native-watch', events);
+      const report = await this.#dispatcher.dispatch(
+        attachFileChangeDispatchToken(events, idempotencyToken)
+      );
       this.#lastDispatchAt = new Date(_now).toISOString();
       this.#status = createNativeFileMonitorStatus({
         lastDispatchAt: this.#lastDispatchAt,
@@ -177,6 +188,7 @@ export class DaemonFileChangeCollector {
       this.#logger.info('[daemon-file-change] dispatched native file changes', {
         events: events.length,
         eventSource: report.eventSource,
+        idempotencyToken,
         needsReview: report.needsReview,
       });
     } catch (err: unknown) {
@@ -200,11 +212,19 @@ export class DaemonFileChangeCollector {
       this.#handleNativeWatcherError(message);
     } finally {
       this.#nativeScanRunning = false;
+      if (this.#nativeScanQueued && !this.#disposed) {
+        this.#nativeScanQueued = false;
+        void this.scanNativeOnce();
+      }
     }
   }
 
   async scanOnce(_now = Date.now()): Promise<void> {
-    if (this.#disposed || this.#running) {
+    if (this.#disposed) {
+      return;
+    }
+    if (this.#running) {
+      this.#gitScanQueued = true;
       return;
     }
     this.#running = true;
@@ -236,11 +256,16 @@ export class DaemonFileChangeCollector {
       }
       this.#lastGitKeys = snapshot.keys;
 
-      if (events.length === 0) {
+      const dedupedEvents = dedupeFileChangeEvents(events);
+
+      if (dedupedEvents.length === 0) {
         return;
       }
 
-      const report = await this.#dispatcher.dispatch(events);
+      const idempotencyToken = createFileChangeDispatchToken('git-worktree', dedupedEvents);
+      const report = await this.#dispatcher.dispatch(
+        attachFileChangeDispatchToken(dedupedEvents, idempotencyToken)
+      );
       this.#lastDispatchAt = new Date(_now).toISOString();
       this.#status = createGitFallbackFileMonitorStatus({
         intervalMs: this.#intervalMs,
@@ -248,8 +273,9 @@ export class DaemonFileChangeCollector {
         lastScanAt: this.#lastScanAt,
       });
       this.#logger.info('[daemon-file-change] dispatched git fallback file changes', {
-        events: events.length,
+        events: dedupedEvents.length,
         eventSource: report.eventSource,
+        idempotencyToken,
         needsReview: report.needsReview,
       });
     } catch (error: unknown) {
@@ -265,6 +291,10 @@ export class DaemonFileChangeCollector {
       });
     } finally {
       this.#running = false;
+      if (this.#gitScanQueued && !this.#disposed) {
+        this.#gitScanQueued = false;
+        void this.scanOnce();
+      }
     }
   }
 
@@ -599,6 +629,44 @@ function addUntrackedEvents(target: Map<string, FileChangeEvent>, output: string
       eventSource: 'git-worktree',
     });
   }
+}
+
+export function dedupeFileChangeEvents(events: FileChangeEvent[]): FileChangeEvent[] {
+  const byKey = new Map<string, FileChangeEvent>();
+  for (const event of events) {
+    byKey.set(fileChangeEventKey(event), event);
+  }
+  return [...byKey.values()];
+}
+
+export function createFileChangeDispatchToken(
+  eventSource: 'git-worktree' | 'native-watch',
+  events: FileChangeEvent[]
+): string {
+  const keys = events.map(fileChangeEventKey).sort();
+  return `${eventSource}:${keys.join('|')}`;
+}
+
+function attachFileChangeDispatchToken(
+  events: FileChangeEvent[],
+  idempotencyToken: string
+): FileChangeEvent[] {
+  return events.map(
+    (event) =>
+      ({
+        ...event,
+        idempotencyToken,
+      }) as FileChangeEvent
+  );
+}
+
+function fileChangeEventKey(event: FileChangeEvent): string {
+  return [
+    event.eventSource ?? 'unknown-source',
+    event.type,
+    normalizeGitPath(event.oldPath ?? ''),
+    normalizeGitPath(event.path),
+  ].join(':');
 }
 
 function splitLines(output: string): string[] {

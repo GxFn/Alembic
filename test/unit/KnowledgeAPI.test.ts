@@ -325,6 +325,58 @@ describe('MCP Knowledge Handlers', () => {
         userId: 'mcp',
       });
     });
+
+    test('持久化成功后即记录 tracker，quality 失败作为 diagnostics 返回', async () => {
+      const tracker = {
+        getAllSubmittedTitles: vi.fn(() => new Set<string>()),
+        recordRejection: vi.fn(),
+        recordSubmission: vi.fn(),
+      };
+      ctx.container.get.mockImplementation((name) => {
+        if (name === 'knowledgeService') {
+          return svc;
+        }
+        if (name === 'bootstrapSessionManager') {
+          return {
+            getSession: () => ({
+              getProgress: () => ({ remainingDimIds: ['remaining-dim'] }),
+              submissionTracker: tracker,
+            }),
+          };
+        }
+        return null;
+      });
+      svc.updateQuality.mockRejectedValueOnce(new Error('quality scorer unavailable'));
+
+      const args = {
+        ...validBatchArgs,
+        dimensionId: 'batch-dim',
+        items: [{ ...validBatchArgs.items[0], dimensionId: 'item-dim' }, validBatchArgs.items[1]],
+      };
+      const result = await submitKnowledgeBatch(ctx, args);
+
+      expect(result.success).toBe(true);
+      expect(result.data.count).toBe(2);
+      expect(tracker.recordSubmission).toHaveBeenNthCalledWith(
+        1,
+        'item-dim',
+        expect.objectContaining({ title: 'Network Request Service' }),
+        'test-api-001'
+      );
+      expect(tracker.recordSubmission).toHaveBeenNthCalledWith(
+        2,
+        'batch-dim',
+        expect.objectContaining({ title: 'View Layout Setup' }),
+        'test-api-001'
+      );
+      expect(result.data.diagnostics).toMatchObject({
+        qualityWarnings: [
+          expect.objectContaining({
+            warning: 'quality scorer unavailable',
+          }),
+        ],
+      });
+    });
   });
 
   /* ── knowledgeLifecycle ──────────────────────────── */

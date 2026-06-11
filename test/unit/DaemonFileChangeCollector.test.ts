@@ -13,7 +13,9 @@ import { join } from 'node:path';
 import type { FileChangeEvent, ReactiveEvolutionReport } from '@alembic/core/types';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
+  createFileChangeDispatchToken,
   DaemonFileChangeCollector,
+  dedupeFileChangeEvents,
   type NativeWatcherFactory,
 } from '../../lib/service/evolution/DaemonFileChangeCollector.js';
 import type { FileChangeDispatcher } from '../../lib/service/FileChangeDispatcher.js';
@@ -39,11 +41,12 @@ describe('DaemonFileChangeCollector', () => {
 
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(dispatch.mock.calls[0]?.[0]).toEqual([
-      {
+      expect.objectContaining({
         type: 'modified',
         path: 'src/index.ts',
         eventSource: 'git-worktree',
-      },
+        idempotencyToken: expect.stringContaining('git-worktree:'),
+      }),
     ]);
 
     collector.stop();
@@ -98,15 +101,31 @@ describe('DaemonFileChangeCollector', () => {
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(dispatch.mock.calls[0]?.[0]).toEqual(
       expect.arrayContaining([
-        { type: 'modified', path: 'src/index.ts', eventSource: 'host-edit' },
-        { type: 'created', path: 'src/created.ts', eventSource: 'host-edit' },
-        { type: 'deleted', path: 'src/deleted.ts', eventSource: 'host-edit' },
-        {
+        expect.objectContaining({
+          type: 'modified',
+          path: 'src/index.ts',
+          eventSource: 'host-edit',
+          idempotencyToken: expect.stringContaining('native-watch:'),
+        }),
+        expect.objectContaining({
+          type: 'created',
+          path: 'src/created.ts',
+          eventSource: 'host-edit',
+          idempotencyToken: expect.stringContaining('native-watch:'),
+        }),
+        expect.objectContaining({
+          type: 'deleted',
+          path: 'src/deleted.ts',
+          eventSource: 'host-edit',
+          idempotencyToken: expect.stringContaining('native-watch:'),
+        }),
+        expect.objectContaining({
           type: 'renamed',
           oldPath: 'src/old-name.ts',
           path: 'src/new-name.ts',
           eventSource: 'host-edit',
-        },
+          idempotencyToken: expect.stringContaining('native-watch:'),
+        }),
       ])
     );
     expect(dispatch.mock.calls[0]?.[0]).not.toEqual(
@@ -198,11 +217,12 @@ describe('DaemonFileChangeCollector', () => {
 
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(dispatch.mock.calls[0]?.[0]).toEqual([
-      {
+      expect.objectContaining({
         type: 'modified',
         path: 'src/index.ts',
         eventSource: 'git-worktree',
-      },
+        idempotencyToken: expect.stringContaining('git-worktree:'),
+      }),
     ]);
 
     collector.stop();
@@ -220,6 +240,20 @@ describe('DaemonFileChangeCollector', () => {
 
     expect(dispatch).not.toHaveBeenCalled();
     collector.stop();
+  });
+
+  test('dedupes file-change events and creates a stable dispatch token', () => {
+    const events: FileChangeEvent[] = [
+      { eventSource: 'host-edit', path: 'src/index.ts', type: 'modified' },
+      { eventSource: 'host-edit', path: 'src/index.ts', type: 'modified' },
+      { eventSource: 'host-edit', oldPath: 'src/old.ts', path: 'src/new.ts', type: 'renamed' },
+    ];
+
+    const deduped = dedupeFileChangeEvents(events);
+    expect(deduped).toHaveLength(2);
+    expect(createFileChangeDispatchToken('native-watch', deduped)).toBe(
+      createFileChangeDispatchToken('native-watch', [...deduped].reverse())
+    );
   });
 });
 
