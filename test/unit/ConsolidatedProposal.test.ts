@@ -11,15 +11,16 @@
  * 本测试通过对 ProposalRepository.create 的行为验证核心逻辑。
  */
 
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
-  getDrizzle,
-  initDrizzle,
-  resetDrizzle,
-} from '@alembic/core/infrastructure/database/drizzle';
-import migrate004 from '@alembic/core/infrastructure/database/migrations/004_evolution_proposals';
+  createDatabaseConnection,
+  type DatabaseConnection,
+  type SqliteDatabase,
+} from '@alembic/core/database';
 import { ProposalRepository } from '@alembic/core/repositories';
-import { HOST_AGENT_SOURCE } from '@alembic/core/shared';
-import Database from 'better-sqlite3';
+import { HOST_AGENT_SOURCE, pathGuard } from '@alembic/core/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 describe('Consolidated Proposal creation logic', () => {
@@ -77,21 +78,34 @@ describe('Consolidated Proposal creation logic', () => {
     return null;
   }
 
-  let sqlite: InstanceType<typeof Database>;
+  let tmpDir: string;
+  let connection: DatabaseConnection;
+  let sqlite: SqliteDatabase;
   let repo: ProposalRepository;
 
-  beforeEach(() => {
-    resetDrizzle();
-    sqlite = new Database(':memory:');
+  beforeEach(async () => {
+    // Schema comes from the stable database facade: a full migration run on a
+    // fresh DB under an isolated temp projectRoot. PathGuard must point at the
+    // temp root because the Alembic source repo itself is an excluded project,
+    // which would otherwise redirect the DB path out of the test sandbox.
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'consolidated-proposal-'));
+    process.env.ALEMBIC_QUIET = '1';
+    pathGuard._reset();
+    pathGuard.configure({ projectRoot: tmpDir, knowledgeBaseDir: 'Alembic' });
+    connection = createDatabaseConnection({ path: '.asd/alembic.db' });
+    sqlite = await connection.connect();
+    await connection.runMigrations();
+    // Proposals below target synthetic recipe ids with no knowledge_entries
+    // rows; keep FK enforcement off exactly as the original setup did
+    // (connect() turns foreign_keys back on).
     sqlite.pragma('foreign_keys = OFF');
-    migrate004(sqlite);
-    initDrizzle(sqlite);
-    repo = new ProposalRepository(getDrizzle());
+    repo = new ProposalRepository(connection.getDrizzle());
   });
 
   afterEach(() => {
-    resetDrizzle();
-    sqlite.close();
+    connection.close();
+    pathGuard._reset();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   describe('merge advice → update Proposal', () => {

@@ -21,7 +21,6 @@
     "@alembic/core/host-agent-workflows",
     "@alembic/core/infrastructure/database/drizzle",
     "@alembic/core/infrastructure/database/drizzle/schema",
-    "@alembic/core/infrastructure/database/migrations/004_evolution_proposals",
     "@alembic/core/infrastructure/report",
     "@alembic/core/io",
     "@alembic/core/knowledge",
@@ -47,8 +46,7 @@
     "@alembic/core/core/ast/lang-rust": 2,
     "@alembic/core/core/ast/lang-swift": 2,
     "@alembic/core/infrastructure/database/drizzle": 3,
-    "@alembic/core/infrastructure/database/drizzle/schema": 5,
-    "@alembic/core/infrastructure/database/migrations/004_evolution_proposals": 2
+    "@alembic/core/infrastructure/database/drizzle/schema": 5
   },
   "scanRoots": ["bin", "lib", "scripts", "test", "config"],
   "referenceLimits": {
@@ -59,7 +57,6 @@
     "@alembic/core/core/ast/lang-rust": 2,
     "@alembic/core/core/ast/lang-swift": 2,
     "@alembic/core/infrastructure/database/drizzle": 3,
-    "@alembic/core/infrastructure/database/drizzle/schema": 5,
-    "@alembic/core/infrastructure/database/migrations/004_evolution_proposals": 2
+    "@alembic/core/infrastructure/database/drizzle/schema": 5
   }
 }
