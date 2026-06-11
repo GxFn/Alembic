@@ -74,3 +74,4 @@ nohup.out
 .cache/
 .git-commit-msg.tmp
 prettier-output.log
+.claude/settings.local.json
