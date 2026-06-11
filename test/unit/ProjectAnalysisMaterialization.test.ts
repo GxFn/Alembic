@@ -16,6 +16,7 @@ describe('ProjectAnalysis materialization plan', () => {
       moduleEntities: true,
       guardViolations: true,
       panorama: true,
+      sourceGraph: true,
     });
   });
 
@@ -27,6 +28,7 @@ describe('ProjectAnalysis materialization plan', () => {
       moduleEntities: false,
       guardViolations: false,
       panorama: false,
+      sourceGraph: false,
     });
   });
 
