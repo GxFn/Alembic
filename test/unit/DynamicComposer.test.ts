@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-
 import { DynamicComposer } from '@alembic/agent/forge';
+import { describe, expect, it, vi } from 'vitest';
 
 /* ────────── Mock ToolRegistry ────────── */
 
@@ -256,11 +255,17 @@ describe('DynamicComposer', () => {
         },
       } as never);
 
+      // 上游契约（AlembicAgent d63ce7d，D23 结果内容清理）：失败子调用统一经
+      // projectToolResultOrdinaryOutput 投影为 ordinary output（ok/toolId/status/text/
+      // diagnosticSummary），旧 { error, tool, envelope } 兼容袋已移除，不再泄露原始 envelope。
       expect(output).toMatchObject({
-        error: "Capability 'submit_knowledge' is not composable",
+        ok: false,
         status: 'blocked',
-        tool: 'submit_knowledge',
+        toolId: 'submit_knowledge',
+        text: "Capability 'submit_knowledge' is not composable",
       });
+      expect(output).not.toHaveProperty('error');
+      expect(output).not.toHaveProperty('envelope');
       expect(executeChildCall).toHaveBeenCalledWith(
         expect.objectContaining({
           toolId: 'submit_knowledge',
@@ -403,7 +408,15 @@ describe('DynamicComposer', () => {
         const { context } = createComposerContext(tools);
         const output = (await result.handler({}, context)) as Record<string, unknown>;
         expect(output.ok_tool).toEqual({ data: 'ok' });
-        expect(output.bad_tool).toMatchObject({ error: 'fail', status: 'error' });
+        // 上游契约（AlembicAgent d63ce7d，D23）：失败子 envelope 投影为 ordinary output，
+        // 错误信息在 text 字段，不再有顶层 error 字段。
+        expect(output.bad_tool).toMatchObject({
+          ok: false,
+          status: 'error',
+          toolId: 'bad_tool',
+          text: 'fail',
+        });
+        expect(output.bad_tool).not.toHaveProperty('error');
       });
     });
   });

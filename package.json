@@ -91,7 +91,7 @@
     "lint:core-import-boundary": "node scripts/core-source-command.mjs lint-consumer-imports",
     "lint:consumer-core-imports": "node scripts/core-source-command.mjs lint-consumer-imports",
     "lint:repo-boundary": "node scripts/lint-repo-boundary.mjs",
-    "check:shared-asset-drift": "node scripts/check-shared-asset-drift.mjs --allow-pending-sync",
+    "check:shared-asset-drift": "node scripts/check-shared-asset-drift.mjs",
     "format": "biome format --write lib/ bin/ config/ scripts/",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run lint && npm run lint:agent-extraction-boundary && npm run lint:core-import-boundary && npm run lint:consumer-core-imports && npm run check:shared-asset-drift",
