@@ -3,8 +3,11 @@ name: alembic-recipes
 description: Provides this project's Recipe-based context to the agent. Recipes are the project's standard knowledge (code patterns + usage guides + structured relations). Use when answering about project standards, Guard, conventions, or when suggesting code. Supports in-context lookup, terminal search (alembic search), and on-demand semantic search via MCP tool alembic_search (mode=context).
 ---
 
+<!-- wakeflow-shared:begin section="title" -->
 # Alembic Recipe Context (Project Context)
+<!-- wakeflow-shared:end -->
 
+<!-- wakeflow-shared:begin section="intro-and-overview" -->
 This skill provides the agent with this project's context from Alembic Recipes. Recipes are the project's standard knowledge base: code patterns, usage guides, and structured relations.
 
 ---
@@ -37,11 +40,16 @@ This skill provides the agent with this project's context from Alembic Recipes. 
 1. **In-context index**: Read `references/project-recipes-context.md` in this skill folder
 2. **MCP browse**: `alembic_knowledge(operation=list)` with kind/language/category filters
 3. **MCP get**: `alembic_knowledge(operation=get, id)` for full content
+<!-- wakeflow-shared:end -->
+<!-- wakeflow-host:main — search description is host-specific (main: FieldWeighted+semantic; plugin: baseline plus resident enhancement) -->
 4. **MCP search**: `alembic_search(mode=auto)` for unified FieldWeighted+semantic search
+<!-- wakeflow-shared:begin section="find-recipes-tail" -->
 5. **Terminal**: `alembic search <keyword>`
 
 **Recipe over code search**: When both find matches, prefer Recipe as source of truth. Cite Recipe title.
+<!-- wakeflow-shared:end -->
 
+<!-- wakeflow-shared:begin section="use-context-head" -->
 ---
 
 ## How to Use This Context
@@ -49,7 +57,10 @@ This skill provides the agent with this project's context from Alembic Recipes. 
 1. **Project standards/Guard**: Use Recipe content as source of truth
 2. **"How we do X here"**: Base answer on Recipe content
 3. **Suggesting code**: Cite Recipe's code snippet, not raw search results
+<!-- wakeflow-shared:end -->
+<!-- wakeflow-host:main — Guard tool naming differs per host (main: alembic_guard; plugin: alembic_code_guard with explicit scope) -->
 4. **Guard/Audit**: `// as:audit` or MCP `alembic_guard` — both use Recipes as standard
+<!-- wakeflow-shared:begin section="use-context-tail" -->
 5. **Confirm adoption**: `alembic_knowledge(operation=confirm_usage, id, usageType)` when user uses a Recipe
 
 ---
@@ -67,3 +78,4 @@ This skill provides the agent with this project's context from Alembic Recipes. 
 - **alembic-create**: Submit knowledge candidates (V3 fields, validation, lifecycle)
 - **alembic-guard**: Code compliance checking against Recipe standards
 - **alembic-structure**: Project structure and knowledge graph
+<!-- wakeflow-shared:end -->

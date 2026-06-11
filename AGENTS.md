@@ -95,6 +95,31 @@ This section is maintained by the Wakeflow runtime installer. It records this wi
 
 这些能力不能因为 Core 存在而被移动、空壳化或删除。
 
+## 共享资产单源与漂移门禁（Alembic ↔ AlembicPlugin）
+
+- 权威清单（机器可读）：`config/shared-asset-manifest.json`；漂移门禁：`scripts/check-shared-asset-drift.mjs`，已接入 `npm run check`（`check:shared-asset-drift`）。
+- 修改流程（edit-in-authority-then-sync）：先在权威侧修改 → 把共享内容逐字同步到另一侧（SKILL.md 只同步 `wakeflow-shared` 标记段，host 段各自维护）→ 在双仓运行漂移门禁确认绿色。禁止直接在非权威侧改共享内容。
+- SKILL.md 标记约定：`<!-- wakeflow-shared:begin section="..." -->` / `<!-- wakeflow-shared:end -->` 包住共享段；标记外内容默认是宿主差异段，可用 `<!-- wakeflow-host:main ... -->` 注释说明差异原因。工具契约段（main: `alembic_guard` / `alembic_enrich_candidates` / `alembic_knowledge_lifecycle` / `alembic_bootstrap`；plugin: `alembic_code_guard` / source-graph / 26 codex tools）是已验证的有意分叉，禁止互相合并。
+- 过渡态：AlembicPlugin 侧落标记与脚本/清单副本之前（RC5 p2），门禁以 `--allow-pending-sync` 报告 pending-sync 而不拦截；p2 完成后应从 `check:shared-asset-drift` 移除该旗标。兄弟仓库 checkout 不存在时门禁打印通知后跳过（standalone clone 安全）。
+
+### 差异声明表（variance table）
+
+| 资产 | 权威 | 比较方式 | 已声明差异 |
+|------|------|----------|------------|
+| `injectable-skills/{alembic-create,alembic-guard,alembic-recipes,alembic-structure}/SKILL.md` | 共享段：主仓库；host 段：各宿主 | 仅比较 `wakeflow-shared` 标记段 | frontmatter description、Envelope vs structuredContent 前置说明、工具契约段、插件主动触发措辞均为宿主差异 |
+| `injectable-skills/alembic-devdocs/` | main-only | 插件侧必须不存在 | 插件技能注册表只硬编码另外 4 个技能（`ProjectSkillService.ts`），有意的范围差异 |
+| `templates/instructions/` | main-only | 插件侧必须不存在 | 插件没有 instructions 注入注册表 |
+| `templates/constitution.yaml` | per-host | 整文件比较，3 条声明变体行替换占位符后须一致 | 角色命名/描述按宿主（见下方角色映射表） |
+| `config/default.json` | per-host | JSON 深比较，排除顶层 `ai` 块 | plugin-as-guest 设计：provider 配置由宿主注入，`ai` 块仅存在于主仓库 |
+| `templates/recipes-setup/` | main | 目录逐文件精确比较 | `_template.md` 的 "V3 ..." 标题行是声明的宿主变体；README mode 路由搜索措辞已于 2026-06-12 从插件回迁（RC5 p1） |
+
+### constitution.yaml 角色映射表（内容未改，仅记录语义）
+
+| role id | Alembic（main） | AlembicPlugin | 语义说明 |
+|---------|-----------------|---------------|----------|
+| `external_agent` | `External Agent`／外部宿主 Agent（例如 Codex 插件） | `Codex Host Agent`／Codex 宿主 Agent | 同一角色与同一权限集；显示名按宿主具体化 |
+| `chat_agent` | `ChatAgent`／Alembic 内置 AI Agent（Dashboard 对话 / 程序化调用） | `ChatAgent`／宿主管理的对话式执行者（程序化 / admin 工作流） | id、name、权限集相同；执行者归属语义按宿主：main＝内置 AI Agent，plugin＝宿主管理的执行者 |
+
 ## 验证与回填
 
 - `npm run build:check`：包含 Core build 和本仓库 no-emit 检查。
@@ -102,6 +127,7 @@ This section is maintained by the Wakeflow runtime installer. It records this wi
 - `npm run test` / `npm run test:unit` / `npm run test:integration` / `npm run test:e2e`：按改动范围选择。
 - `npm run lint`：Biome 检查。
 - `npm run lint:repo-boundary`：仓库边界扫描。
+- `npm run check:shared-asset-drift`：共享资产漂移门禁（详见上方差异声明表）。
 - Dashboard 改动需要运行 `npm run build:dashboard`。
 - 本地 CLI 链接验证使用 `npm run dev:link`，再在真实测试项目中执行命令；不要在 Alembic 仓库内冒充用户项目。
 - 回填必须写清完成范围、提交 hash、验证命令、验证结果、遗留风险和下一步建议。

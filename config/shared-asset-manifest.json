@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "description": "Shared-asset single-source manifest between Alembic (main) and AlembicPlugin (sibling). Consumed by scripts/check-shared-asset-drift.mjs. Edit-in-authority-then-sync; see AGENTS.md '共享资产单源与漂移门禁'.",
+  "sibling": {
+    "name": "AlembicPlugin",
+    "envVar": "ALEMBIC_PLUGIN_PATH",
+    "defaultPath": "../AlembicPlugin",
+    "sanityPath": "injectable-skills"
+  },
+  "selfCheckFiles": ["config/shared-asset-manifest.json", "scripts/check-shared-asset-drift.mjs"],
+  "assets": [
+    {
+      "id": "skill-alembic-create",
+      "path": "injectable-skills/alembic-create/SKILL.md",
+      "mode": "skill-shared-sections",
+      "authority": "shared sections: main; host sections: each host",
+      "notes": "Frontmatter description, envelope-vs-structuredContent prerequisite, alembic_enrich_candidates / alembic_knowledge_lifecycle references are intentional host divergence (tool contract). Gate compares wakeflow-shared sections only."
+    },
+    {
+      "id": "skill-alembic-guard",
+      "path": "injectable-skills/alembic-guard/SKILL.md",
+      "mode": "skill-shared-sections",
+      "authority": "shared sections: main; host sections: each host",
+      "notes": "Main MCP exposes alembic_guard; plugin exposes alembic_code_guard with files/code/workRef scopes (RC0-verified). Tool-contract sections must never be merged."
+    },
+    {
+      "id": "skill-alembic-recipes",
+      "path": "injectable-skills/alembic-recipes/SKILL.md",
+      "mode": "skill-shared-sections",
+      "authority": "shared sections: main; host sections: each host",
+      "notes": "Search-mode description and Guard tool naming are host-specific; plugin-only alembic_prime / alembic_codex_* guidance stays as plugin host overlay."
+    },
+    {
+      "id": "skill-alembic-structure",
+      "path": "injectable-skills/alembic-structure/SKILL.md",
+      "mode": "skill-shared-sections",
+      "authority": "shared sections: main; host sections: each host",
+      "notes": "Plugin-only source-graph guidance (alembic_source_graph_status / alembic_code_explore / alembic_symbol_search) stays as plugin host overlay between shared regions."
+    },
+    {
+      "id": "skill-alembic-devdocs",
+      "path": "injectable-skills/alembic-devdocs",
+      "mode": "main-only",
+      "authority": "main",
+      "notes": "Intentional scope gap: plugin skill registry hardcodes the other 4 skills (AlembicPlugin lib/.../ProjectSkillService.ts). Gate fails if an undeclared copy appears on the plugin side."
+    },
+    {
+      "id": "templates-instructions",
+      "path": "templates/instructions",
+      "mode": "main-only",
+      "authority": "main",
+      "notes": "Plugin has no instructions injection registry; main-only by design."
+    },
+    {
+      "id": "templates-constitution",
+      "path": "templates/constitution.yaml",
+      "mode": "line-variants",
+      "authority": "per-host",
+      "variants": [
+        {
+          "key": "roles.external_agent.name",
+          "mainLine": "name: \"External Agent\"",
+          "pluginLine": "name: \"Codex Host Agent\""
+        },
+        {
+          "key": "roles.external_agent.description",
+          "mainLine": "description: \"外部宿主 Agent（例如 Codex 插件）\"",
+          "pluginLine": "description: \"Codex 宿主 Agent\""
+        },
+        {
+          "key": "roles.chat_agent.description",
+          "mainLine": "description: \"Alembic 内置 AI Agent（Dashboard 对话 / 程序化调用）\"",
+          "pluginLine": "description: \"宿主管理的对话式执行者（程序化 / admin 工作流）\""
+        }
+      ],
+      "notes": "Role ids and permission sets are shared; display name/description per host. Mapping table recorded in AGENTS.md. Any other line difference is drift."
+    },
+    {
+      "id": "config-default",
+      "path": "config/default.json",
+      "mode": "json-exclude-paths",
+      "authority": "per-host",
+      "excludePaths": ["ai"],
+      "notes": "Plugin-as-guest design: the host injects provider config, so the top-level ai block exists only in main. Everything else must deep-equal."
+    },
+    {
+      "id": "templates-recipes-setup",
+      "path": "templates/recipes-setup",
+      "mode": "directory-exact",
+      "authority": "main",
+      "fileVariants": {
+        "_template.md": [
+          {
+            "key": "v3-fields-heading",
+            "mainLine": "# V3 Agent Consumption Fields",
+            "pluginLine": "# V3 Host Agent Required Fields"
+          }
+        ]
+      },
+      "notes": "README mode-routed-search wording backported from plugin 2026-06-12 (RC5 p1); files must match exactly except the declared _template.md heading variant."
+    }
+  ]
+}

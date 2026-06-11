@@ -3,10 +3,13 @@ name: alembic-structure
 description: Discover project structure (targets, files, dependency graph) and browse the knowledge graph (relations between Recipes). Use when the user asks about module structure, project targets, dependency relationships, or knowledge graph navigation.
 ---
 
+<!-- wakeflow-shared:begin section="title-intro" -->
 # Alembic — Structure & Dependencies & Knowledge Graph
 
 Use this skill when the user asks about **project structure**, **module targets**, **dependency graph**, or **knowledge graph relationships**.
+<!-- wakeflow-shared:end -->
 
+<!-- wakeflow-shared:begin section="tools-and-graph" -->
 ---
 
 ## Project Structure Tools
@@ -53,3 +56,4 @@ SPM dependency structure: `Alembic/Alembic.spmmap.json`
 
 - **alembic-recipes**: Recipe content used as project standards
 - **alembic-create**: After understanding structure, submit knowledge candidates
+<!-- wakeflow-shared:end -->
