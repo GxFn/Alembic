@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "description": "SN3 naming lint config (Alembic, ported from the SN2/SN1 shape). Codifies THIS repo's as-found dominants per SN0 user gate #1 (codify, do not redesign): lib modules are camelCase (toolkits/middleware), PascalCase (class/contract/model positions), or all-lowercase/kebab (the deliberate wire/contract module family SN0 §2 did not census as Alembic stragglers — their reclassification is a recorded SN6 observation, not this lint's job); snake_case and mixed-case-kebab are blocked everywhere in lib. lib/ui .tsx components are PascalCase-or-camel per the same alternation. bin entrypoints and scripts are kebab-case (packet rule); configs are kebab-case (default.json single-word allowed by the kebab pattern). test/ filenames are mixed as-found (PascalCase.test.ts and kebab.test.ts both live) and stay unscoped until an SN wave censuses them, mirroring the SN2 decision. Exceptions require {file, owner, reason}.",
+  "rules": [
+    {
+      "scope": "lib",
+      "filePattern": "\\.tsx?$",
+      "namePattern": "^([a-zA-Z][A-Za-z0-9]*|[a-z0-9]+(-[a-z0-9]+)+)(\\.d)?\\.tsx?$",
+      "label": "lib modules are camelCase/PascalCase or kebab (no snake_case, no mixed-case kebab)"
+    },
+    {
+      "scope": "bin",
+      "filePattern": "\\.ts$",
+      "namePattern": "^[a-z0-9]+(-[a-z0-9]+)*\\.ts$",
+      "label": "bin entrypoints are kebab-case"
+    },
+    {
+      "scope": "scripts",
+      "filePattern": "\\.(mjs|cjs|js)$",
+      "namePattern": "^[a-z0-9]+(-[a-z0-9]+)*\\.(mjs|cjs|js)$",
+      "label": "scripts are kebab-case"
+    },
+    {
+      "scope": "scripts",
+      "filePattern": "\\.ts$",
+      "namePattern": "^[a-z0-9]+(-[a-z0-9]+)*\\.ts$",
+      "label": "TypeScript scripts are kebab-case"
+    },
+    {
+      "scope": "config",
+      "filePattern": "\\.json$",
+      "namePattern": "^[a-z0-9]+(-[a-z0-9]+)*\\.json$",
+      "label": "configs are kebab-case"
+    }
+  ],
+  "barrelNames": ["index.ts"],
+  "exemptScopes": [],
+  "exceptions": []
+}
