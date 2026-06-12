@@ -14,8 +14,10 @@ import { unwrapRawDb } from '@alembic/core/search';
 import { FeedbackCollector, QualityScorer } from '@alembic/core/service/quality';
 import { RecipeCandidateValidator, RecipeParser } from '@alembic/core/service/recipe';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
+import { RecipeSaveRateLimiter } from '../../infrastructure/rate-limit/RecipeSaveRateLimiter.js';
 import { ModuleService } from '../../service/module/ModuleService.js';
 import { PrimeSearchPipeline } from '../../service/task/PrimeSearchPipeline.js';
+import { getAiRuntimeStatus } from '../AiRuntimeStatus.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {
@@ -42,6 +44,10 @@ export function register(c: ServiceContainer) {
     );
   });
 
+  // ═══ Rate limiting (AD4: container-managed lifecycle) ═══
+
+  c.singleton('recipeSaveRateLimiter', () => new RecipeSaveRateLimiter());
+
   // ═══ Module ═══
 
   c.singleton('moduleService', (ct: ServiceContainer) => {
@@ -51,7 +57,9 @@ export function register(c: ServiceContainer) {
       {
         agentService: ct.get('agentService'),
         systemRunContextFactory: ct.get('systemRunContextFactory'),
-        container: ct,
+        // AD4 constructed injection: status projector instead of handing the
+        // container into the service area (former layer-contract exception).
+        aiStatus: () => getAiRuntimeStatus(ct),
         qualityScorer: ct.get('qualityScorer'),
         recipeExtractor: ct.singletons._recipeExtractor || null,
         guardCheckEngine: ct.get('guardCheckEngine'),

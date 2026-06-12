@@ -1,9 +1,18 @@
 import type { ToolCapabilityManifest, ToolExecutionRequest } from '@alembic/agent';
 import Logger from '@alembic/core/logging';
-import { getAiRuntimeStatus, getAiUnavailableMessage } from '../../injection/AiRuntimeStatus.js';
+// Type-only bridges: the layer contract forbids tools -> injection runtime
+// imports (AD4 remediated the former getAiRuntimeStatus reach-through); the
+// AI-status helpers now arrive via createDashboardOperationHandlers deps.
+import type { AiRuntimeStatus } from '../../injection/AiRuntimeStatus.js';
 import type { ServiceContainer } from '../../injection/ServiceContainer.js';
 
 export type DashboardOperationHandler = (request: ToolExecutionRequest) => Promise<unknown>;
+
+/** Constructed injection (AD4): AI-status projection over the request's service container. */
+export interface DashboardOperationAiDeps {
+  aiStatus: (container: ServiceContainer) => AiRuntimeStatus;
+  aiUnavailableMessage: (status: AiRuntimeStatus) => string;
+}
 
 const logger = Logger.getInstance();
 
@@ -59,14 +68,19 @@ export const DASHBOARD_OPERATION_MANIFESTS: ToolCapabilityManifest[] = [
   }),
 ];
 
-export const DASHBOARD_OPERATION_HANDLERS: Record<string, DashboardOperationHandler> = {
-  [DASHBOARD_OPERATION_IDS.updateModuleMap]: updateModuleMap,
-  [DASHBOARD_OPERATION_IDS.rebuildSemanticIndex]: rebuildSemanticIndex,
-  [DASHBOARD_OPERATION_IDS.scanProject]: scanProject,
-  [DASHBOARD_OPERATION_IDS.bootstrapProject]: bootstrapProject,
-  [DASHBOARD_OPERATION_IDS.cancelBootstrap]: cancelBootstrap,
-  [DASHBOARD_OPERATION_IDS.rescanProject]: rescanProject,
-};
+export function createDashboardOperationHandlers(
+  deps: DashboardOperationAiDeps
+): Record<string, DashboardOperationHandler> {
+  return {
+    [DASHBOARD_OPERATION_IDS.updateModuleMap]: updateModuleMap,
+    [DASHBOARD_OPERATION_IDS.rebuildSemanticIndex]: (request) =>
+      rebuildSemanticIndex(request, deps),
+    [DASHBOARD_OPERATION_IDS.scanProject]: scanProject,
+    [DASHBOARD_OPERATION_IDS.bootstrapProject]: bootstrapProject,
+    [DASHBOARD_OPERATION_IDS.cancelBootstrap]: cancelBootstrap,
+    [DASHBOARD_OPERATION_IDS.rescanProject]: rescanProject,
+  };
+}
 
 function manifest(input: {
   id: string;
@@ -129,11 +143,11 @@ async function updateModuleMap(request: ToolExecutionRequest) {
   return result;
 }
 
-async function rebuildSemanticIndex(request: ToolExecutionRequest) {
+async function rebuildSemanticIndex(request: ToolExecutionRequest, deps: DashboardOperationAiDeps) {
   const container = getContainer(request);
-  const aiStatus = getAiRuntimeStatus(container);
+  const aiStatus = deps.aiStatus(container);
   if (!aiStatus.ready) {
-    return { error: `${getAiUnavailableMessage(aiStatus)} Embedding 不可用。` };
+    return { error: `${deps.aiUnavailableMessage(aiStatus)} Embedding 不可用。` };
   }
 
   const clear = request.args.clear !== false;

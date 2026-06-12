@@ -253,11 +253,17 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
   const supersedes = args.supersedes as string | undefined;
 
   // ── Step 1: 限流 ──
-  const { checkRecipeSave } = await import('#http/middleware/RateLimiter.js');
+  // AD4: limiter relocated to infrastructure (former resident -> http inversion)
+  const { resolveRecipeSaveRateLimiter } = await import(
+    '../../infrastructure/rate-limit/RecipeSaveRateLimiter.js'
+  );
   const { resolveDataRoot, resolveProjectRoot } = await import('@alembic/core/workspace');
   const projectRoot = resolveProjectRoot(ctx.container);
   const dataRoot = resolveDataRoot(ctx.container as never) || projectRoot;
-  const limitCheck = checkRecipeSave(projectRoot, clientId || process.env.USER || 'mcp-client');
+  const limitCheck = resolveRecipeSaveRateLimiter(ctx.container).check(
+    projectRoot,
+    clientId || process.env.USER || 'mcp-client'
+  );
   if (!limitCheck.allowed) {
     return envelope({
       success: false,

@@ -82,13 +82,18 @@ function mockKnowledgeService() {
  *  Part 1: MCP Knowledge Handler Tests
  * ════════════════════════════════════════════ */
 
-// Mock RateLimiter — 默认放行
-// 必须同时 mock 相对路径 + #imports 别名，确保动态 import 和静态 import 都被拦截
-vi.mock('../../lib/http/middleware/RateLimiter.js', () => ({
-  checkRecipeSave: vi.fn(() => ({ allowed: true })),
+// Mock RecipeSaveRateLimiter — 默认放行（AD4 relocation: infrastructure home;
+// handlers 经相对路径动态 import，单个 mock 即可拦截）
+const rateLimitDecision = vi.hoisted(() => ({
+  value: { allowed: true } as { allowed: boolean; retryAfter?: number },
 }));
-vi.mock('#http/middleware/RateLimiter.js', () => ({
-  checkRecipeSave: vi.fn(() => ({ allowed: true })),
+vi.mock('../../lib/infrastructure/rate-limit/RecipeSaveRateLimiter.js', () => ({
+  RecipeSaveRateLimiter: class {
+    check = () => rateLimitDecision.value;
+  },
+  getDefaultRecipeSaveRateLimiter: () => ({ check: () => rateLimitDecision.value }),
+  resetDefaultRecipeSaveRateLimiter: () => {},
+  resolveRecipeSaveRateLimiter: () => ({ check: () => rateLimitDecision.value }),
 }));
 
 // Mock shared facade pieces used by these route tests while preserving other facade exports.
@@ -110,8 +115,6 @@ vi.mock('@alembic/core/shared', async (importOriginal) => {
 const { submitKnowledge, submitKnowledgeBatch, knowledgeLifecycle } = await import(
   '../../lib/resident/tool-handlers/knowledge.js'
 );
-// 从 #imports 别名导入 mock — 与 handler 内部的 dynamic import 一致
-const { checkRecipeSave } = await import('#http/middleware/RateLimiter.js');
 
 describe('MCP Knowledge Handlers', () => {
   let svc;
@@ -166,11 +169,15 @@ describe('MCP Knowledge Handlers', () => {
     });
 
     test('限流时应返回 RATE_LIMIT', async () => {
-      checkRecipeSave.mockReturnValueOnce({ allowed: false, retryAfter: 30 });
-      const result = await submitKnowledge(ctx, validArgs);
-      expect(result.success).toBe(false);
-      expect(result.errorCode).toBe('RATE_LIMIT');
-      expect(svc.create).not.toHaveBeenCalled();
+      rateLimitDecision.value = { allowed: false, retryAfter: 30 };
+      try {
+        const result = await submitKnowledge(ctx, validArgs);
+        expect(result.success).toBe(false);
+        expect(result.errorCode).toBe('RATE_LIMIT');
+        expect(svc.create).not.toHaveBeenCalled();
+      } finally {
+        rateLimitDecision.value = { allowed: true };
+      }
     });
 
     test('Recipe-Ready 不满足时应返回 hints', async () => {
@@ -312,10 +319,14 @@ describe('MCP Knowledge Handlers', () => {
     });
 
     test('限流时应返回 RATE_LIMIT', async () => {
-      checkRecipeSave.mockReturnValueOnce({ allowed: false, retryAfter: 60 });
-      const result = await submitKnowledgeBatch(ctx, validBatchArgs);
-      expect(result.success).toBe(false);
-      expect(result.errorCode).toBe('RATE_LIMIT');
+      rateLimitDecision.value = { allowed: false, retryAfter: 60 };
+      try {
+        const result = await submitKnowledgeBatch(ctx, validBatchArgs);
+        expect(result.success).toBe(false);
+        expect(result.errorCode).toBe('RATE_LIMIT');
+      } finally {
+        rateLimitDecision.value = { allowed: true };
+      }
     });
 
     test('应使用自定义 source', async () => {

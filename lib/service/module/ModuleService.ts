@@ -22,7 +22,20 @@ import {
 import { inferLang } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
 import { getDiscovererRegistry } from '@alembic/core/project-intelligence';
-import { getAiRuntimeStatus } from '../../injection/AiRuntimeStatus.js';
+// Type-only bridge: the layer contract forbids service -> injection runtime
+// imports (AD4 remediated the former getAiRuntimeStatus reach-through); the
+// status now arrives via constructed injection (aiStatus option).
+import type { AiRuntimeStatus } from '../../injection/AiRuntimeStatus.js';
+
+// Mirrors getAiRuntimeStatus(null): constructions without an aiStatus
+// provider (guard handler, CLI scan) previously passed no container and got
+// this exact not-configured status — preserved verbatim.
+const AI_STATUS_NOT_CONFIGURED: AiRuntimeStatus = Object.freeze({
+  ready: false,
+  reason: 'not-configured',
+  providerName: null,
+  model: null,
+});
 
 /** 全局排除目录 */
 const SCAN_EXCLUDE_DIRS = new Set([
@@ -96,7 +109,7 @@ export class ModuleService {
   // AI pipeline deps
   #agentService;
   #systemRunContextFactory;
-  #container;
+  #aiStatus;
   #qualityScorer;
   #recipeExtractor;
   #guardCheckEngine;
@@ -107,7 +120,8 @@ export class ModuleService {
     options: {
       agentService?: AgentService | null;
       systemRunContextFactory?: SystemRunContextFactory | null;
-      container?: Record<string, unknown> | null;
+      /** Constructed injection (AD4): AI runtime status provider; absent = not-configured. */
+      aiStatus?: (() => AiRuntimeStatus) | null;
       qualityScorer?: Record<string, unknown> | null;
       recipeExtractor?: Record<string, unknown> | null;
       guardCheckEngine?: Record<string, unknown> | null;
@@ -119,7 +133,7 @@ export class ModuleService {
     this.#logger = Logger.getInstance();
     this.#agentService = options.agentService || null;
     this.#systemRunContextFactory = options.systemRunContextFactory || null;
-    this.#container = options.container || null;
+    this.#aiStatus = options.aiStatus || null;
     this.#qualityScorer = options.qualityScorer || null;
     this.#recipeExtractor = options.recipeExtractor || null;
     this.#guardCheckEngine = options.guardCheckEngine || null;
@@ -448,7 +462,7 @@ export class ModuleService {
     this.#logger.info(`[ModuleService] scanTarget: ${targetName}, ${files.length} files`);
 
     // 3. AI 提取 — 无真实 Provider 或无 AgentService 时直接跳过
-    const aiStatus = getAiRuntimeStatus(this.#container ?? null);
+    const aiStatus = this.#aiStatus?.() ?? AI_STATUS_NOT_CONFIGURED;
     if (!this.#agentService || !this.#systemRunContextFactory || !aiStatus.ready) {
       return {
         recipes: [],
@@ -578,7 +592,7 @@ export class ModuleService {
     const startTime = Date.now();
     const TOTAL_TIMEOUT = options.totalTimeout || 540000;
     let timedOut = false;
-    const scanAiStatus = getAiRuntimeStatus(this.#container ?? null);
+    const scanAiStatus = this.#aiStatus?.() ?? AI_STATUS_NOT_CONFIGURED;
 
     if (this.#agentService && this.#systemRunContextFactory && scanAiStatus.ready) {
       const BATCH_SIZE = options.batchSize || 20;

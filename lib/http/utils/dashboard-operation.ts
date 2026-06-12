@@ -27,7 +27,7 @@ const DEFAULT_TRUST: ToolResultTrust = {
 };
 
 /**
- * Dashboard Operations 直接分派到 DASHBOARD_OPERATION_HANDLERS，
+ * Dashboard Operations 直接分派到 createDashboardOperationHandlers 构建的处理器表，
  * 不经过 V2 ToolRouter（dashboard 操作不是 LLM 工具）。
  */
 export async function executeDashboardOperation(
@@ -41,10 +41,20 @@ export async function executeDashboardOperation(
   const t0 = Date.now();
 
   try {
-    const { DASHBOARD_OPERATION_HANDLERS, DASHBOARD_OPERATION_MANIFESTS } = await import(
+    const { createDashboardOperationHandlers, DASHBOARD_OPERATION_MANIFESTS } = await import(
       '#tools/adapters/DashboardOperations.js'
     );
-    const handler = DASHBOARD_OPERATION_HANDLERS[toolId];
+    // AD4 constructed injection: the http area wires the AI-status helpers
+    // into the tools-area handler factory (http -> injection is an allowed
+    // contract edge; tools no longer reaches into injection at runtime).
+    const { getAiRuntimeStatus, getAiUnavailableMessage } = await import(
+      '#inject/AiRuntimeStatus.js'
+    );
+    const handlers = createDashboardOperationHandlers({
+      aiStatus: getAiRuntimeStatus,
+      aiUnavailableMessage: getAiUnavailableMessage,
+    });
+    const handler = handlers[toolId];
     if (!handler) {
       return errorEnvelope(toolId, callId, startedAt, `Unknown dashboard operation: ${toolId}`);
     }

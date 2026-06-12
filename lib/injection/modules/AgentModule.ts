@@ -27,7 +27,7 @@ import type { SignalBus } from '@alembic/core/events';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { DashboardOperationAdapter } from '#tools/adapters/DashboardOperationAdapter.js';
 import {
-  DASHBOARD_OPERATION_HANDLERS,
+  createDashboardOperationHandlers,
   DASHBOARD_OPERATION_MANIFESTS,
 } from '#tools/adapters/DashboardOperations.js';
 import { MacSystemAdapter } from '#tools/adapters/MacSystemAdapter.js';
@@ -39,6 +39,7 @@ import { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionM
 import { WorkflowAdapter } from '#tools/adapters/WorkflowAdapter.js';
 import { ToolContextFactory } from '#tools/v2/ToolContextFactory.js';
 import { SkillHooks } from '../../service/skills/SkillHooks.js';
+import { getAiRuntimeStatus, getAiUnavailableMessage } from '../AiRuntimeStatus.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 type HostToolForgeConstructor = new (
@@ -91,7 +92,12 @@ export function register(c: ServiceContainer) {
       new LightweightRouter({
         catalog: catalog as unknown as CapabilityCatalog,
         adapters: [
-          new DashboardOperationAdapter(DASHBOARD_OPERATION_HANDLERS),
+          new DashboardOperationAdapter(
+            createDashboardOperationHandlers({
+              aiStatus: getAiRuntimeStatus,
+              aiUnavailableMessage: getAiUnavailableMessage,
+            })
+          ),
           new TerminalAdapter({
             sessionManager: ct.get('terminalSessionManager') as InMemoryTerminalSessionManager,
           }),
