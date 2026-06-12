@@ -160,8 +160,32 @@ interface ModuleServiceLike {
 
 // ═══ Review 轮次追踪（模块私有） ═══════════════════
 
-const _reviewRounds = new Map(); // projectRoot → round count
-const _lastReviewPassed = new Map(); // projectRoot → boolean
+/**
+ * AD4 managed lifecycle: per-project review round/pass tracking lives inside
+ * this state object instead of bare module maps; clear() is the disposal
+ * (test/shutdown) path. Same keys and transitions as before.
+ */
+class GuardReviewState {
+  rounds = new Map<string, number>(); // projectRoot → round count
+  lastPassed = new Map<string, boolean>(); // projectRoot → boolean
+
+  clear() {
+    this.rounds.clear();
+    this.lastPassed.clear();
+  }
+}
+
+let _defaultGuardReviewState: GuardReviewState | null = null;
+
+function getGuardReviewState(): GuardReviewState {
+  _defaultGuardReviewState ??= new GuardReviewState();
+  return _defaultGuardReviewState;
+}
+
+/** 重置 review 状态（测试用） */
+export function resetGuardReviewState() {
+  _defaultGuardReviewState?.clear();
+}
 const MAX_REVIEW_ROUNDS = 5;
 
 export async function guardCheck(ctx: McpContext, args: GuardCheckArgs) {
@@ -334,12 +358,13 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
   const projectRoot = resolveProjectRoot(ctx.container);
 
   // 轮次追踪（基于 projectRoot，不绑定 task）
-  const round = (_reviewRounds.get(projectRoot) || 0) + 1;
-  _reviewRounds.set(projectRoot, round);
+  const reviewState = getGuardReviewState();
+  const round = (reviewState.rounds.get(projectRoot) || 0) + 1;
+  reviewState.rounds.set(projectRoot, round);
 
   if (round > MAX_REVIEW_ROUNDS) {
-    _reviewRounds.delete(projectRoot);
-    _lastReviewPassed.set(projectRoot, true); // 强制通过
+    reviewState.rounds.delete(projectRoot);
+    reviewState.lastPassed.set(projectRoot, true); // 强制通过
     return envelope({
       success: true,
       data: {
@@ -373,8 +398,8 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
   }
 
   if (!filePaths.length) {
-    _reviewRounds.delete(projectRoot);
-    _lastReviewPassed.set(projectRoot, true);
+    reviewState.rounds.delete(projectRoot);
+    reviewState.lastPassed.set(projectRoot, true);
     return envelope({
       success: true,
       data: { passed: true, files: [], totalViolations: 0, reviewRound: round, fileSource },
@@ -460,10 +485,10 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
 
   // 5. 更新共享状态
   if (passed) {
-    _reviewRounds.delete(projectRoot);
-    _lastReviewPassed.set(projectRoot, true);
+    reviewState.rounds.delete(projectRoot);
+    reviewState.lastPassed.set(projectRoot, true);
   } else {
-    _lastReviewPassed.set(projectRoot, false);
+    reviewState.lastPassed.set(projectRoot, false);
   }
 
   // 6. 写入 ViolationsStore

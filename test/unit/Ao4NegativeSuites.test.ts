@@ -158,6 +158,47 @@ describe('AO4 negative suites', () => {
     });
   });
 
+  test('HTTP auth lazy config (AD4): reset regenerates the secret and invalidates old tokens', async () => {
+    const { _resetAuthConfigForTests } = await import('../../lib/http/routes/auth.js');
+    const originalSecret = process.env.ALEMBIC_AUTH_SECRET;
+    try {
+      // Force the generated-secret path (no env secret) — the documented
+      // restart semantics: a fresh process secret invalidates earlier tokens.
+      delete process.env.ALEMBIC_AUTH_SECRET;
+      _resetAuthConfigForTests();
+
+      const loginResponse = await invokeRouter(authRouter, {
+        body: { password: 'alembic', username: 'admin' },
+        method: 'POST',
+        mountPath: '/api/v1/auth',
+        path: '/api/v1/auth/login',
+      });
+      const token = (loginResponse.body.data as { token?: string } | undefined)?.token;
+      expect(loginResponse.status).toBe(200);
+      // Lazy init writes the generated secret back to the env (child-process
+      // inheritance parity with the old import-time behavior).
+      expect(process.env.ALEMBIC_AUTH_SECRET).toEqual(expect.any(String));
+
+      // Simulated restart: reset + drop the env secret → new secret → old token rejected.
+      delete process.env.ALEMBIC_AUTH_SECRET;
+      _resetAuthConfigForTests();
+      const meResponse = await invokeRouter(authRouter, {
+        headers: { authorization: `Bearer ${token}` },
+        method: 'GET',
+        mountPath: '/api/v1/auth',
+        path: '/api/v1/auth/me',
+      });
+      expect(meResponse.status).toBe(401);
+    } finally {
+      if (originalSecret === undefined) {
+        delete process.env.ALEMBIC_AUTH_SECRET;
+      } else {
+        process.env.ALEMBIC_AUTH_SECRET = originalSecret;
+      }
+      _resetAuthConfigForTests();
+    }
+  });
+
   test('HTTP auth rejects malformed bearer tokens', async () => {
     const response = await invokeRouter(authRouter, {
       headers: {

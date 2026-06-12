@@ -203,7 +203,15 @@ router.post(
 
     const streamSession = createStreamSession('scan');
     const sessionId = streamSession.sessionId;
-    const session = getStreamSession(sessionId);
+    // AD4 LATENT DEFECT (reported, NOT fixed here — the fix is a behavior
+    // change needing a controller ruling): SSE sessions expose
+    // send/end/error, never push(). Every push() below has always thrown at
+    // runtime when this stream path runs; the old untyped session map hid it
+    // from tsc. The cast preserves the pre-existing runtime behavior under
+    // the typed registry. Proposed fix: push -> send + a final end().
+    const session = getStreamSession(sessionId) as unknown as
+      | { push(event: Record<string, unknown>): void }
+      | undefined;
 
     res.json({ sessionId });
 

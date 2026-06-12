@@ -32,8 +32,48 @@ type BootstrapProcessEventName =
   | 'bootstrap:task-failed'
   | 'bootstrap:task-started';
 
-const fallbackJobProcessEventRecorder = new JobProcessEventRecorder();
-const fallbackJobDisplaySnapshotStores = new Map<string, JobDisplaySnapshotStore>();
+/**
+ * AD4 managed lifecycle: daemon-job fallbacks (used when a container lacks
+ * the registered recorder/snapshot-store singletons) live inside this lazy,
+ * disposable registry instead of eager module-scope instances — the recorder
+ * is no longer constructed at import time.
+ */
+class DaemonJobFallbacks {
+  #recorder: JobProcessEventRecorder | null = null;
+  #snapshotStores = new Map<string, JobDisplaySnapshotStore>();
+
+  get recorder(): JobProcessEventRecorder {
+    this.#recorder ??= new JobProcessEventRecorder();
+    return this.#recorder;
+  }
+
+  snapshotStore(dataRoot: string): JobDisplaySnapshotStore {
+    const existing = this.#snapshotStores.get(dataRoot);
+    if (existing) {
+      return existing;
+    }
+    const store = new JobDisplaySnapshotStore({ dataRoot });
+    this.#snapshotStores.set(dataRoot, store);
+    return store;
+  }
+
+  clear() {
+    this.#recorder = null;
+    this.#snapshotStores.clear();
+  }
+}
+
+let _defaultDaemonJobFallbacks: DaemonJobFallbacks | null = null;
+
+function getDaemonJobFallbacks(): DaemonJobFallbacks {
+  _defaultDaemonJobFallbacks ??= new DaemonJobFallbacks();
+  return _defaultDaemonJobFallbacks;
+}
+
+/** 重置 fallback 状态（测试用） */
+export function resetDaemonJobFallbacks() {
+  _defaultDaemonJobFallbacks?.clear();
+}
 
 export interface DaemonJobOptions {
   args?: Record<string, unknown>;
@@ -460,7 +500,7 @@ export function getJobProcessEventRecorder(container: ServiceContainer): JobProc
   try {
     return container.get('jobProcessEventRecorder');
   } catch {
-    return fallbackJobProcessEventRecorder;
+    return getDaemonJobFallbacks().recorder;
   }
 }
 
@@ -474,13 +514,7 @@ export function getJobDisplaySnapshotStore(container: ServiceContainer): JobDisp
 }
 
 function getFallbackJobDisplaySnapshotStore(dataRoot: string): JobDisplaySnapshotStore {
-  const existing = fallbackJobDisplaySnapshotStores.get(dataRoot);
-  if (existing) {
-    return existing;
-  }
-  const store = new JobDisplaySnapshotStore({ dataRoot });
-  fallbackJobDisplaySnapshotStores.set(dataRoot, store);
-  return store;
+  return getDaemonJobFallbacks().snapshotStore(dataRoot);
 }
 
 function refreshJobDisplaySnapshot(options: {

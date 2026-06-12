@@ -20,24 +20,54 @@ const router = express.Router();
 //  Configuration
 // ═══════════════════════════════════════════════════════
 
-const AUTH_USERNAME = process.env.ALEMBIC_AUTH_USERNAME || 'admin';
-const AUTH_PASSWORD = process.env.ALEMBIC_AUTH_PASSWORD || 'alembic';
-const TOKEN_SECRET = process.env.ALEMBIC_AUTH_SECRET || crypto.randomBytes(32).toString('hex');
-
-// 安全警告：仅在认证启用且使用默认凭据时提示
-const authEnabled =
-  process.env.VITE_AUTH_ENABLED === 'true' || process.env.ALEMBIC_AUTH_ENABLED === 'true';
-if (authEnabled && (!process.env.ALEMBIC_AUTH_USERNAME || !process.env.ALEMBIC_AUTH_PASSWORD)) {
-  console.warn(
-    '[auth] WARNING: Using default credentials (admin/alembic). ' +
-      'Set ALEMBIC_AUTH_USERNAME and ALEMBIC_AUTH_PASSWORD environment variables for production.'
-  );
-}
 const TOKEN_TTL = 7 * 24 * 60 * 60 * 1000; // 7 天
 
-// 将 secret 写回环境变量，供 roleResolver 等模块共享
-if (!process.env.ALEMBIC_AUTH_SECRET) {
-  process.env.ALEMBIC_AUTH_SECRET = TOKEN_SECRET;
+// ── AD4: 懒初始化认证配置（消除 import-time 随机数与告警副作用） ──
+//
+// RESTART SEMANTICS (documented, unchanged from the import-time version):
+// without ALEMBIC_AUTH_SECRET set, a fresh random secret is generated once
+// per process on FIRST auth use — every token issued before a process
+// restart becomes invalid after it. Set ALEMBIC_AUTH_SECRET to keep tokens
+// valid across restarts. The env write-back is kept for child-process
+// inheritance parity with the old import-time behavior (no in-repo module
+// reads it back today). The default-credentials warning now fires once on
+// first auth use instead of at import — same condition, later (and more
+// relevant) timing.
+interface AuthRuntimeConfig {
+  username: string;
+  password: string;
+  tokenSecret: string;
+}
+
+let _authConfig: AuthRuntimeConfig | null = null;
+
+function getAuthConfig(): AuthRuntimeConfig {
+  if (_authConfig) {
+    return _authConfig;
+  }
+  const tokenSecret = process.env.ALEMBIC_AUTH_SECRET || crypto.randomBytes(32).toString('hex');
+  if (!process.env.ALEMBIC_AUTH_SECRET) {
+    process.env.ALEMBIC_AUTH_SECRET = tokenSecret;
+  }
+  const authEnabled =
+    process.env.VITE_AUTH_ENABLED === 'true' || process.env.ALEMBIC_AUTH_ENABLED === 'true';
+  if (authEnabled && (!process.env.ALEMBIC_AUTH_USERNAME || !process.env.ALEMBIC_AUTH_PASSWORD)) {
+    console.warn(
+      '[auth] WARNING: Using default credentials (admin/alembic). ' +
+        'Set ALEMBIC_AUTH_USERNAME and ALEMBIC_AUTH_PASSWORD environment variables for production.'
+    );
+  }
+  _authConfig = {
+    username: process.env.ALEMBIC_AUTH_USERNAME || 'admin',
+    password: process.env.ALEMBIC_AUTH_PASSWORD || 'alembic',
+    tokenSecret,
+  };
+  return _authConfig;
+}
+
+/** 重置懒初始化配置（测试用） */
+export function _resetAuthConfigForTests() {
+  _authConfig = null;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -52,7 +82,10 @@ function createToken(username: string) {
     exp: Date.now() + TOKEN_TTL,
   };
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(payloadB64).digest('base64url');
+  const sig = crypto
+    .createHmac('sha256', getAuthConfig().tokenSecret)
+    .update(payloadB64)
+    .digest('base64url');
   return `${payloadB64}.${sig}`;
 }
 
@@ -66,7 +99,7 @@ function verifyToken(token: string | undefined) {
   }
 
   const expectedSig = crypto
-    .createHmac('sha256', TOKEN_SECRET)
+    .createHmac('sha256', getAuthConfig().tokenSecret)
     .update(payloadB64)
     .digest('base64url');
   if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) {
@@ -96,12 +129,13 @@ router.post('/login', validate(AuthLoginBody), async (req: Request, res: Respons
   const { username, password } = req.body;
 
   // 恒时比较防止时序攻击
+  const authConfig = getAuthConfig();
   const userOk =
-    username.length === AUTH_USERNAME.length &&
-    crypto.timingSafeEqual(Buffer.from(username), Buffer.from(AUTH_USERNAME));
+    username.length === authConfig.username.length &&
+    crypto.timingSafeEqual(Buffer.from(username), Buffer.from(authConfig.username));
   const passOk =
-    password.length === AUTH_PASSWORD.length &&
-    crypto.timingSafeEqual(Buffer.from(password), Buffer.from(AUTH_PASSWORD));
+    password.length === authConfig.password.length &&
+    crypto.timingSafeEqual(Buffer.from(password), Buffer.from(authConfig.password));
 
   if (!userOk || !passOk) {
     return void res.status(401).json({

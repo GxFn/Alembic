@@ -113,15 +113,37 @@ function graphArgProblemEnvelope(operation: string, missing: string[]) {
 }
 
 // ─── Discoverer 缓存 ─────────────────────────────────────
-// 同一 projectRoot 在模块生命期内只初始化一次
-let _discovererCache: DiscovererCache | null = null; // { projectRoot, discoverer, targets }
+// AD4 managed lifecycle: single-slot per-projectRoot cache with an explicit
+// policy — same projectRoot reuses the loaded discoverer for the process
+// lifetime; a different projectRoot replaces the slot; clear() disposes
+// (test/shutdown). Same hit/replace behavior as the former bare module slot.
+class DiscovererCacheSlot {
+  value: DiscovererCache | null = null; // { projectRoot, discoverer, targets }
+
+  clear() {
+    this.value = null;
+  }
+}
+
+let _defaultDiscovererCache: DiscovererCacheSlot | null = null;
+
+function getDiscovererCacheSlot(): DiscovererCacheSlot {
+  _defaultDiscovererCache ??= new DiscovererCacheSlot();
+  return _defaultDiscovererCache;
+}
+
+/** 重置 discoverer 缓存（测试用） */
+export function resetDiscovererCache() {
+  _defaultDiscovererCache?.clear();
+}
 
 async function _getLoadedDiscoverer(ctx?: {
   container?: { singletons?: { _projectRoot?: unknown } };
 }) {
   const projectRoot = resolveProjectRoot(ctx?.container);
-  if (_discovererCache && _discovererCache.projectRoot === projectRoot) {
-    return _discovererCache;
+  const cacheSlot = getDiscovererCacheSlot();
+  if (cacheSlot.value && cacheSlot.value.projectRoot === projectRoot) {
+    return cacheSlot.value;
   }
 
   // 优先使用 DiscovererRegistry（多语言统一接口）
@@ -131,12 +153,12 @@ async function _getLoadedDiscoverer(ctx?: {
   await discoverer.load(projectRoot);
   const targets = (await discoverer.listTargets()) || [];
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- structural duck-typing across module boundary
-  _discovererCache = {
+  cacheSlot.value = {
     projectRoot,
     discoverer: discoverer as unknown as DiscovererLike,
     targets: targets as unknown as TargetInfo[],
   };
-  return _discovererCache;
+  return cacheSlot.value;
 }
 
 function _findTarget(targets: TargetInfo[], targetName: string): TargetInfo {
