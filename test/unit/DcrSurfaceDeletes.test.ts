@@ -17,6 +17,7 @@ import {
   ALEMBIC_PROVIDER_ROUTE_CONTRACTS,
   ALEMBIC_PROVIDER_ROUTE_MOUNTS,
 } from '../../lib/http/provider-contracts.js';
+import candidatesRouter from '../../lib/http/routes/candidates.js';
 import { TOOLS } from '../../lib/resident/tool-schema/tools.js';
 import { TOOL_SCHEMAS } from '../../lib/shared/schemas/mcp-tools.js';
 
@@ -48,9 +49,11 @@ describe('DCR surface deletes (Train B)', () => {
     expect(mountHit).toBeUndefined();
   });
 
-  test('route-negative: candidates router no longer registers an /enrich handler', async () => {
-    const candidatesModule = await import('../../lib/http/routes/candidates.js');
-    const router = candidatesModule.default;
+  test('route-negative: candidates router no longer registers an /enrich handler', () => {
+    // Statically imported above: the express route module graph is heavy, and
+    // loading it inside the test body flaked on the 10s timeout under
+    // parallel-suite + cross-window load.
+    const router = candidatesRouter;
     const layerPaths: string[] = [];
     for (const layer of router.stack ?? []) {
       if (layer.route?.path) {
