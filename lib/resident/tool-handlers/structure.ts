@@ -10,6 +10,7 @@ import * as Paths from '@alembic/core/config';
 import { LanguageService } from '@alembic/core/project-intelligence';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { envelope } from '../tool-schema/envelope.js';
+import { buildToolUsageProblem } from '../tool-schema/problem.js';
 import type { McpContext } from '../tool-schema/types.js';
 
 // ─── Local Types ──────────────────────────────────────────
@@ -81,12 +82,34 @@ interface GraphArgs {
   [key: string]: unknown;
 }
 
-function requireGraphArg(args: GraphArgs, key: 'nodeId' | 'fromId' | 'toId'): string {
+function readGraphArg(args: GraphArgs, key: 'nodeId' | 'fromId' | 'toId'): string | null {
   const value = args[key];
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`${key} is required`);
-  }
-  return value;
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/**
+ * Cross-field usage gate (MT3): the schema marks nodeId/fromId/toId optional
+ * because requirements depend on `operation`; missing values answer with a
+ * structured problem envelope instead of an opaque thrown Error.
+ */
+function graphArgProblemEnvelope(operation: string, missing: string[]) {
+  return envelope({
+    success: false,
+    errorCode: 'GRAPH_ARG_MISSING',
+    message: `operation=${operation} requires ${missing.join(' and ')}.`,
+    problem: buildToolUsageProblem({
+      code: 'GRAPH_ARG_MISSING',
+      reasonCode: 'invalid-input',
+      failingStep: 'graph-argument-validation',
+      nextAction: `Provide ${missing.join(' and ')} and call alembic_graph again with operation=${operation}.`,
+      retryable: true,
+      fieldProblems: missing.map((field) => ({
+        field,
+        error: `${field} is required when operation=${operation}`,
+      })),
+    }),
+    meta: { tool: 'alembic_graph' },
+  });
 }
 
 // ─── Discoverer 缓存 ─────────────────────────────────────
@@ -397,7 +420,10 @@ export async function graphQuery(ctx: McpContext, args: GraphArgs) {
   }
   const nodeType = args.nodeType || 'recipe';
   const direction = args.direction || 'both';
-  const nodeId = requireGraphArg(args, 'nodeId');
+  const nodeId = readGraphArg(args, 'nodeId');
+  if (!nodeId) {
+    return graphArgProblemEnvelope('query', ['nodeId']);
+  }
   let data: unknown;
   try {
     if (args.relation) {
@@ -430,7 +456,10 @@ export async function graphImpact(ctx: McpContext, args: GraphArgs) {
     });
   }
   const nodeType = args.nodeType || 'recipe';
-  const nodeId = requireGraphArg(args, 'nodeId');
+  const nodeId = readGraphArg(args, 'nodeId');
+  if (!nodeId) {
+    return graphArgProblemEnvelope('impact', ['nodeId']);
+  }
   let impacted: unknown[] = [];
   try {
     impacted = (await graphService.getImpactAnalysis(
@@ -595,8 +624,12 @@ async function _fallbackImpactFromRecipe(ctx: McpContext, nodeId: string) {
 // ─── graph_path — 路径查找 ─────────────────────────────────
 
 export async function graphPath(ctx: McpContext, args: GraphArgs) {
-  const fromId = requireGraphArg(args, 'fromId');
-  const toId = requireGraphArg(args, 'toId');
+  const fromId = readGraphArg(args, 'fromId');
+  const toId = readGraphArg(args, 'toId');
+  if (!fromId || !toId) {
+    const missing = [...(fromId ? [] : ['fromId']), ...(toId ? [] : ['toId'])];
+    return graphArgProblemEnvelope('path', missing);
+  }
   const graphService = ctx.container.get('knowledgeGraphService');
   if (!graphService) {
     return envelope({

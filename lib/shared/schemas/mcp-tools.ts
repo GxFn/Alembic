@@ -229,6 +229,39 @@ export const GraphInput = z.object({
 });
 export type GraphInput = z.infer<typeof GraphInput>;
 
+/**
+ * Cross-field-checked graph schema (MT3 schema honesty): nodeId/fromId/toId
+ * stay optional in the base object because their requirement depends on
+ * `operation`; this refinement makes the dependency explicit at validation
+ * time. zodToMcpSchema consumes the plain object above; validation layers
+ * (TOOL_SCHEMAS / wrapHandler) consume this checked variant.
+ */
+export const GraphInputChecked = GraphInput.superRefine((value, ctx) => {
+  if ((value.operation === 'query' || value.operation === 'impact') && !value.nodeId) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['nodeId'],
+      message: `nodeId is required when operation=${value.operation}`,
+    });
+  }
+  if (value.operation === 'path') {
+    if (!value.fromId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['fromId'],
+        message: 'fromId is required when operation=path',
+      });
+    }
+    if (!value.toId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['toId'],
+        message: 'toId is required when operation=path',
+      });
+    }
+  }
+});
+
 // ══════════════════════════════════════════════════════
 //  6. alembic_call_context
 // ══════════════════════════════════════════════════════
@@ -566,7 +599,7 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   alembic_search: SearchInput,
   alembic_knowledge: KnowledgeInput,
   alembic_structure: StructureInput,
-  alembic_graph: GraphInput,
+  alembic_graph: GraphInputChecked,
   alembic_call_context: CallContextInput,
   alembic_guard: GuardInput,
   alembic_submit_knowledge: SubmitKnowledgeInput,

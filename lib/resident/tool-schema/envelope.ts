@@ -15,12 +15,16 @@ export interface EnvelopeMeta {
   [key: string]: unknown;
 }
 
+import type { ToolUsageProblem } from './problem.js';
+
 export interface EnvelopeOptions<T = unknown> {
   success: boolean;
   data?: T | null;
   message?: string;
   meta?: EnvelopeMeta;
   errorCode?: string | null;
+  /** Structured usage-problem object (MT3/D25): taxonomy reason code, failing step, next action, retry safety. */
+  problem?: ToolUsageProblem | null;
 }
 
 export function envelope<T = unknown>({
@@ -29,6 +33,7 @@ export function envelope<T = unknown>({
   message = '',
   meta = {},
   errorCode = null,
+  problem = null,
 }: EnvelopeOptions<T>) {
   const respTime = typeof meta.responseTimeMs === 'number' ? meta.responseTimeMs : undefined;
   const tool = typeof meta.tool === 'string' ? meta.tool : undefined;
@@ -40,6 +45,7 @@ export function envelope<T = unknown>({
     errorCode: errorCode || null,
     message: message || '',
     data,
+    ...(problem ? { problem } : {}),
     meta: {
       ...(tool ? { tool } : {}),
       version,

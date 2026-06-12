@@ -986,7 +986,10 @@ export async function guardComplianceReport(ctx: McpContext, _args: ComplianceRe
       summary: report.summary,
       uncertainSummary: report.uncertainSummary || null,
       boundaries: report.boundaries || [],
+      // MT3 cap honesty: declare the slice instead of silently dropping rows.
       topViolations: (report.topViolations || []).slice(0, 10),
+      topViolationsTotal: (report.topViolations || []).length,
+      topViolationsTruncated: (report.topViolations || []).length > 10,
       trend: report.trend || null,
     },
     meta: { tool: 'alembic_guard', operation: 'compliance_report' },

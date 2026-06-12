@@ -13,6 +13,7 @@ import { dimensionTags } from '@alembic/core/dimensions';
 import { getRequiredFieldsDescription } from '@alembic/core/knowledge';
 import { getDeveloperIdentity } from '@alembic/core/shared';
 import { envelope } from '../tool-schema/envelope.js';
+import { buildToolUsageProblem } from '../tool-schema/problem.js';
 import type {
   ConsolidatedGraphArgs,
   ConsolidatedGuardArgs,
@@ -440,18 +441,36 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     };
   }
 
-  // 全部拒绝 → 特殊错误响应
+  // 全部拒绝 → 特殊错误响应（MT3: 附带 taxonomy problem + 字段级细节，
+  // 修复认证矩阵标记的 zh-only 无结构拒绝）
   if (successCount === 0 && gatewayResult.rejected.length === items.length) {
     const allMissing = [...new Set(gatewayResult.rejected.flatMap((it) => it.errors))];
+    const fieldProblems = gatewayResult.rejected.flatMap((it, idx) =>
+      it.errors.map((error: string) => ({
+        field: `items[${typeof it.index === 'number' ? it.index : idx}]`,
+        error,
+      }))
+    );
     return envelope({
       success: false,
       errorCode: 'INCOMPLETE_SUBMISSION',
-      message: `全部 ${items.length} 条知识条目被拒绝。请在单次调用中补齐所有字段后重新提交。`,
+      message:
+        `全部 ${items.length} 条知识条目被拒绝。请在单次调用中补齐所有字段后重新提交。` +
+        ` All ${items.length} items were rejected; see problem.fieldProblems for per-item missing fields.`,
       data: {
         rejectedItems: data.rejectedItems,
         requiredFields: getRequiredFieldsDescription(),
         commonErrors: allMissing,
       },
+      problem: buildToolUsageProblem({
+        code: 'INCOMPLETE_SUBMISSION',
+        reasonCode: 'invalid-input',
+        failingStep: 'recipe-production-gateway-validation',
+        nextAction:
+          'Fill the missing required fields listed in problem.fieldProblems (full contract in data.requiredFields) and resubmit ALL items in one call.',
+        retryable: true,
+        fieldProblems,
+      }),
       meta: { tool: 'alembic_submit_knowledge' },
     });
   }

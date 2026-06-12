@@ -24,6 +24,30 @@ interface BootstrapRefineArgs {
   dryRun?: boolean;
 }
 
+/** Prompt cap for published-recipe titles; beyond it the prompt must say so. */
+export const PUBLISHED_TITLES_PROMPT_CAP = 20;
+
+/**
+ * Render the published-recipe title list for the refine prompt with an
+ * explicit truncation declaration (MT3 cap honesty): a silently truncated
+ * list makes the AI believe only the first N recipes are valid relation
+ * targets.
+ */
+export function formatPublishedTitles(
+  titles: string[],
+  cap: number = PUBLISHED_TITLES_PROMPT_CAP
+): string {
+  if (titles.length === 0) {
+    return '（尚无已发布的 Recipe）';
+  }
+  if (titles.length <= cap) {
+    return `已发布的 Recipe: ${titles.join(', ')}`;
+  }
+  return `已发布的 Recipe（仅展示前 ${cap} 个，共 ${titles.length} 个；未列出的同样是合法关联目标）: ${titles
+    .slice(0, cap)
+    .join(', ')}`;
+}
+
 export async function bootstrapRefine(ctx: McpContext, args: BootstrapRefineArgs) {
   const t0 = Date.now();
   const knowledgeService = ctx.container.get('knowledgeService');
@@ -90,6 +114,8 @@ export async function bootstrapRefine(ctx: McpContext, args: BootstrapRefineArgs
   });
 
   // 2. 收集已发布 Recipe 标题（关联关系只能指向已发布 Recipe，不能在候选之间互关联）
+  // 提示词只展示前 PUBLISHED_TITLES_PROMPT_CAP 个；超出时在提示词中声明截断
+  // （MT3 cap honesty — 隐藏的截断会让 AI 误以为关联目标只有前 20 个）。
   let publishedTitles: string[] = [];
   try {
     const published = await knowledgeService.list(
@@ -192,7 +218,7 @@ ${before.aiInsight || '（空）'}
 【agentNotes】Agent 笔记
 ${JSON.stringify(before.agentNotes || [])}
 
-${publishedTitles.length > 0 ? `已发布的 Recipe: ${publishedTitles.slice(0, 20).join(', ')}` : '（尚无已发布的 Recipe）'}
+${formatPublishedTitles(publishedTitles)}
 
 ## 润色指令
 
