@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "description": "Machine-readable Alembic internal layer contract (P2 AD3, Core CO2 pattern). Codifies the AS-IS lib/ cross-area runtime import graph derived on 2026-06-12 via scripts/lint-layer-contract.mjs --report at baseline 9bcc272 (194 runtime edges, 49 type-only bridges) — the contract records reality; redesigns go through controller-decided waves. Enforced by scripts/lint-layer-contract.mjs as a blocking step in npm run check. Imports resolve through both relative specifiers and the package.json '#alias/*' subpath map.",
+  "typeOnlyImportsExempt": true,
+  "typeOnlyNote": "import type / export type imports are type bridges and do not create runtime coupling; runtime imports must follow allowedRuntimeImports.",
+  "layerRationale": [
+    "Base leaves (import nothing or shared only): shared, types, platform, infrastructure, governance, project-scope, repository, sandbox, generated.",
+    "Mid: service (domain orchestration over daemon contracts/infrastructure), tools (host adapters over sandbox), workflows (cold-start/rescan flows over service).",
+    "Injection is the DI/composition area: it wires daemon, repositories, services, and tools; many areas also reach INTO it via the service-locator pattern (getAiRuntimeStatus/getServiceContainer) — those reach-through edges are codified as-is here and are AD4 remediation scope, not silently legal forever.",
+    "Hosts: http, resident, daemon, cli sit on top and may reach the areas they observably consume; lib/bootstrap.ts ('root') is the composition entry with a wildcard, and cli may invoke it (SetupService bootstraps the app).",
+    "generated holds committed codegen artifacts (dashboard api-types) and imports nothing."
+  ],
+  "areas": [
+    "cli",
+    "daemon",
+    "generated",
+    "governance",
+    "http",
+    "infrastructure",
+    "injection",
+    "platform",
+    "project-scope",
+    "repository",
+    "resident",
+    "root",
+    "sandbox",
+    "service",
+    "shared",
+    "tools",
+    "types",
+    "workflows"
+  ],
+  "allowedRuntimeImports": {
+    "cli": ["infrastructure", "injection", "root", "service", "shared"],
+    "daemon": ["project-scope", "resident", "shared"],
+    "generated": [],
+    "governance": [],
+    "http": [
+      "daemon",
+      "governance",
+      "infrastructure",
+      "injection",
+      "project-scope",
+      "resident",
+      "service",
+      "shared",
+      "tools"
+    ],
+    "infrastructure": ["shared"],
+    "injection": [
+      "daemon",
+      "governance",
+      "infrastructure",
+      "project-scope",
+      "repository",
+      "service",
+      "shared",
+      "tools"
+    ],
+    "platform": ["shared"],
+    "project-scope": [],
+    "repository": [],
+    "resident": ["injection", "service", "shared", "workflows"],
+    "root": ["*"],
+    "sandbox": [],
+    "service": ["daemon", "infrastructure", "shared"],
+    "shared": [],
+    "tools": ["daemon", "sandbox", "shared"],
+    "types": [],
+    "workflows": ["injection", "project-scope", "service", "shared"]
+  },
+  "blessedImports": [
+    {
+      "file": "lib/service/module/ModuleService.ts",
+      "to": "injection",
+      "reason": "Minority side of the injection<->service cycle (injection->service x10 is the layering; this single getAiRuntimeStatus reach-through is the inversion). Service-locator pattern pending port injection.",
+      "owner": "Alembic window",
+      "cleanupTrigger": "AD4 service-locator remediation (getServiceContainer/getAiRuntimeStatus route sites)"
+    },
+    {
+      "file": "lib/tools/adapters/DashboardOperations.ts",
+      "to": "injection",
+      "reason": "Minority side of the injection<->tools cycle (injection->tools x10 is the layering; this single getAiRuntimeStatus/getAiUnavailableMessage reach-through is the inversion).",
+      "owner": "Alembic window",
+      "cleanupTrigger": "AD4 service-locator remediation"
+    },
+    {
+      "file": "lib/resident/tool-handlers/knowledge.ts",
+      "to": "http",
+      "reason": "Minority side of the http<->resident cycle (http->resident x3 is the layering; the submit rate-limit gate lives in http/middleware/RateLimiter and resident handlers reach it dynamically).",
+      "owner": "Alembic window",
+      "cleanupTrigger": "AD4/AD5: move the shared rate-limit capability out of the http host area (infrastructure or service) so both hosts consume it downward"
+    },
+    {
+      "file": "lib/resident/tool-handlers/consolidated.ts",
+      "to": "http",
+      "reason": "Same http<->resident cycle minority side as knowledge.ts (dynamic RateLimiter import in the submit pipeline).",
+      "owner": "Alembic window",
+      "cleanupTrigger": "AD4/AD5: same RateLimiter relocation"
+    }
+  ],
+  "cycleFindings": [
+    {
+      "cycle": "http <-> resident",
+      "majority": "http -> resident (3 edges: route modules invoke resident handlers)",
+      "minority": "resident -> http (2 edges: dynamic RateLimiter imports, blessed above)",
+      "status": "recorded 2026-06-12; resolution owned by AD4/AD5 RateLimiter relocation"
+    },
+    {
+      "cycle": "injection <-> service",
+      "majority": "injection -> service (10 edges: DI composition)",
+      "minority": "service -> injection (1 edge: ModuleService getAiRuntimeStatus, blessed above)",
+      "status": "recorded 2026-06-12; resolution owned by AD4 service-locator remediation"
+    },
+    {
+      "cycle": "injection <-> tools",
+      "majority": "injection -> tools (10 edges: DI composition)",
+      "minority": "tools -> injection (1 edge: DashboardOperations getAiRuntimeStatus, blessed above)",
+      "status": "recorded 2026-06-12; resolution owned by AD4 service-locator remediation"
+    }
+  ]
+}
