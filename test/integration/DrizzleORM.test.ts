@@ -73,6 +73,10 @@ describe('Integration: Drizzle ORM', () => {
 
   describe('real SQL operations via Drizzle', () => {
     test('should insert and select from guard_violations', () => {
+      // Mirrors migrations 001+011: the nullable tool/surface attribution
+      // columns exist in the current Core drizzle schema and are harmless
+      // extra columns under the pre-011 schema, so this DDL is valid against
+      // both Core baselines.
       db.exec(`
         CREATE TABLE IF NOT EXISTS guard_violations (
           id TEXT PRIMARY KEY,
@@ -81,7 +85,9 @@ describe('Integration: Drizzle ORM', () => {
           violation_count INTEGER NOT NULL DEFAULT 0,
           summary TEXT,
           triggered_at TEXT NOT NULL,
-          created_at INTEGER NOT NULL
+          created_at INTEGER NOT NULL,
+          tool TEXT,
+          surface TEXT
         )
       `);
       const drizzle = initDrizzle(db);
