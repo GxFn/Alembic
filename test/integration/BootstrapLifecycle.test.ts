@@ -74,7 +74,7 @@ describe('Integration: Bootstrap Lifecycle', () => {
 
   describe('Multiple lifecycle cycles', () => {
     test('should support sequential init/shutdown', async () => {
-      const { Bootstrap } = await import('../../lib/bootstrap.js');
+      const { Bootstrap } = await import('../../lib/Bootstrap.js');
 
       // 第一个实例
       const b1 = new Bootstrap({ env: 'test' });
@@ -92,7 +92,7 @@ describe('Integration: Bootstrap Lifecycle', () => {
 
   describe('PathGuard configuration', () => {
     test('should configure PathGuard with project root', async () => {
-      const { Bootstrap } = await import('../../lib/bootstrap.js');
+      const { Bootstrap } = await import('../../lib/Bootstrap.js');
       // Static method should not throw
       expect(() => {
         Bootstrap.configurePathGuard('/tmp/test-project');
@@ -100,7 +100,7 @@ describe('Integration: Bootstrap Lifecycle', () => {
     });
 
     test('should accept knowledge base dir', async () => {
-      const { Bootstrap } = await import('../../lib/bootstrap.js');
+      const { Bootstrap } = await import('../../lib/Bootstrap.js');
       expect(() => {
         Bootstrap.configurePathGuard('/tmp/test-project', 'Alembic');
       }).not.toThrow();

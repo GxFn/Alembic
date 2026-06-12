@@ -27,7 +27,7 @@ const _PROJECT_ROOT = path.resolve(__dirname, '../..');
  */
 export async function createTestBootstrap() {
   // 动态 import 避免顶层加载问题
-  const { Bootstrap } = await import('../../lib/bootstrap.js');
+  const { Bootstrap } = await import('../../lib/Bootstrap.js');
   const bootstrap = new Bootstrap({ env: 'test' });
   const components = await bootstrap.initialize();
   return { bootstrap, components };

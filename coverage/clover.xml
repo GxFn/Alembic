@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1781282244894" clover="3.2.0">
+  <project timestamp="1781282244894" name="All files">
+    <metrics statements="148" coveredstatements="122" conditionals="111" coveredconditionals="88" methods="39" coveredmethods="32" elements="298" coveredelements="242" complexity="0" loc="148" ncloc="148" packages="3" files="3" classes="3"/>
+    <package name="http.middleware">
+      <metrics statements="21" coveredstatements="12" conditionals="8" coveredconditionals="4" methods="6" coveredmethods="4"/>
+      <file name="validate.ts" path="/Users/gaoxuefeng/Documents/AlembicWorkspace/Alembic/lib/http/middleware/validate.ts">
+        <metrics statements="21" coveredstatements="12" conditionals="8" coveredconditionals="4" methods="6" coveredmethods="4"/>
+        <line num="29" count="16" type="stmt"/>
+        <line num="30" count="12" type="cond" truecount="1" falsecount="1"/>
+        <line num="31" count="12" type="cond" truecount="2" falsecount="0"/>
+        <line num="32" count="1" type="stmt"/>
+        <line num="40" count="1" type="stmt"/>
+        <line num="43" count="11" type="stmt"/>
+        <line num="44" count="11" type="stmt"/>
+        <line num="55" count="7" type="stmt"/>
+        <line num="56" count="1" type="stmt"/>
+        <line num="57" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="58" count="0" type="stmt"/>
+        <line num="66" count="0" type="stmt"/>
+        <line num="69" count="1" type="stmt"/>
+        <line num="70" count="1" type="stmt"/>
+        <line num="81" count="0" type="stmt"/>
+        <line num="82" count="0" type="stmt"/>
+        <line num="83" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="84" count="0" type="stmt"/>
+        <line num="92" count="0" type="stmt"/>
+        <line num="94" count="0" type="stmt"/>
+        <line num="99" count="0" type="stmt"/>
+      </file>
+    </package>
+    <package name="http.routes">
+      <metrics statements="48" coveredstatements="45" conditionals="45" coveredconditionals="41" methods="6" coveredmethods="6"/>
+      <file name="auth.ts" path="/Users/gaoxuefeng/Documents/AlembicWorkspace/Alembic/lib/http/routes/auth.ts">
+        <metrics statements="48" coveredstatements="45" conditionals="45" coveredconditionals="41" methods="6" coveredmethods="6"/>
+        <line num="17" count="1" type="stmt"/>
+        <line num="23" count="1" type="stmt"/>
+        <line num="42" count="1" type="stmt"/>
+        <line num="45" count="7" type="cond" truecount="2" falsecount="0"/>
+        <line num="46" count="4" type="stmt"/>
+        <line num="48" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="49" count="7" type="cond" truecount="2" falsecount="0"/>
+        <line num="50" count="3" type="stmt"/>
+        <line num="53" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="54" count="7" type="cond" truecount="2" falsecount="3"/>
+        <line num="55" count="0" type="stmt"/>
+        <line num="60" count="3" type="stmt"/>
+        <line num="65" count="7" type="stmt"/>
+        <line num="70" count="3" type="stmt"/>
+        <line num="78" count="2" type="stmt"/>
+        <line num="84" count="2" type="stmt"/>
+        <line num="85" count="2" type="stmt"/>
+        <line num="89" count="2" type="stmt"/>
+        <line num="93" count="4" type="cond" truecount="4" falsecount="0"/>
+        <line num="94" count="1" type="stmt"/>
+        <line num="96" count="3" type="stmt"/>
+        <line num="97" count="3" type="cond" truecount="4" falsecount="0"/>
+        <line num="98" count="1" type="stmt"/>
+        <line num="101" count="2" type="stmt"/>
+        <line num="105" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="106" count="1" type="stmt"/>
+        <line num="109" count="1" type="stmt"/>
+        <line num="110" count="1" type="stmt"/>
+        <line num="111" count="1" type="cond" truecount="3" falsecount="1"/>
+        <line num="112" count="0" type="stmt"/>
+        <line num="114" count="1" type="stmt"/>
+        <line num="116" count="0" type="stmt"/>
+        <line num="128" count="1" type="stmt"/>
+        <line num="129" count="3" type="stmt"/>
+        <line num="132" count="3" type="stmt"/>
+        <line num="134" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="137" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="140" count="3" type="cond" truecount="4" falsecount="0"/>
+        <line num="141" count="1" type="stmt"/>
+        <line num="147" count="2" type="stmt"/>
+        <line num="149" count="2" type="stmt"/>
+        <line num="162" count="1" type="stmt"/>
+        <line num="163" count="4" type="cond" truecount="2" falsecount="0"/>
+        <line num="164" count="4" type="cond" truecount="2" falsecount="0"/>
+        <line num="165" count="4" type="stmt"/>
+        <line num="167" count="4" type="cond" truecount="2" falsecount="0"/>
+        <line num="168" count="3" type="stmt"/>
+        <line num="174" count="1" type="stmt"/>
+      </file>
+    </package>
+    <package name="project-scope">
+      <metrics statements="79" coveredstatements="65" conditionals="58" coveredconditionals="43" methods="27" coveredmethods="22"/>
+      <file name="ProjectScopeRegistry.ts" path="/Users/gaoxuefeng/Documents/AlembicWorkspace/Alembic/lib/project-scope/ProjectScopeRegistry.ts">
+        <metrics statements="79" coveredstatements="65" conditionals="58" coveredconditionals="43" methods="27" coveredmethods="22"/>
+        <line num="36" count="3" type="stmt"/>
+        <line num="69" count="13" type="stmt"/>
+        <line num="73" count="15" type="stmt"/>
+        <line num="82" count="13" type="cond" truecount="2" falsecount="0"/>
+        <line num="83" count="13" type="cond" truecount="2" falsecount="0"/>
+        <line num="87" count="15" type="stmt"/>
+        <line num="88" count="15" type="cond" truecount="2" falsecount="0"/>
+        <line num="89" count="5" type="stmt"/>
+        <line num="91" count="10" type="stmt"/>
+        <line num="94" count="10" type="cond" truecount="4" falsecount="1"/>
+        <line num="95" count="0" type="stmt"/>
+        <line num="97" count="10" type="stmt"/>
+        <line num="99" count="0" type="stmt"/>
+        <line num="104" count="5" type="stmt"/>
+        <line num="105" count="5" type="stmt"/>
+        <line num="106" count="5" type="stmt"/>
+        <line num="107" count="5" type="stmt"/>
+        <line num="111" count="0" type="stmt"/>
+        <line num="112" count="0" type="stmt"/>
+        <line num="117" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="121" count="0" type="stmt"/>
+        <line num="122" count="0" type="stmt"/>
+        <line num="124" count="0" type="stmt"/>
+        <line num="130" count="7" type="stmt"/>
+        <line num="131" count="7" type="stmt"/>
+        <line num="132" count="7" type="stmt"/>
+        <line num="133" count="7" type="stmt"/>
+        <line num="134" count="7" type="stmt"/>
+        <line num="135" count="7" type="cond" truecount="2" falsecount="0"/>
+        <line num="138" count="7" type="stmt"/>
+        <line num="139" count="7" type="stmt"/>
+        <line num="140" count="7" type="stmt"/>
+        <line num="142" count="7" type="stmt"/>
+        <line num="146" count="7" type="cond" truecount="1" falsecount="2"/>
+        <line num="150" count="7" type="stmt"/>
+        <line num="161" count="7" type="stmt"/>
+        <line num="162" count="7" type="stmt"/>
+        <line num="163" count="7" type="cond" truecount="2" falsecount="0"/>
+        <line num="166" count="7" type="cond" truecount="1" falsecount="1"/>
+        <line num="167" count="0" type="stmt"/>
+        <line num="169" count="7" type="stmt"/>
+        <line num="179" count="4" type="stmt"/>
+        <line num="180" count="4" type="stmt"/>
+        <line num="181" count="4" type="cond" truecount="1" falsecount="1"/>
+        <line num="182" count="0" type="stmt"/>
+        <line num="184" count="4" type="stmt"/>
+        <line num="195" count="7" type="stmt"/>
+        <line num="196" count="7" type="cond" truecount="2" falsecount="0"/>
+        <line num="197" count="3" type="stmt"/>
+        <line num="198" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="199" count="1" type="stmt"/>
+        <line num="201" count="2" type="stmt"/>
+        <line num="204" count="4" type="stmt"/>
+        <line num="205" count="4" type="cond" truecount="1" falsecount="1"/>
+        <line num="206" count="4" type="stmt"/>
+        <line num="209" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="217" count="4" type="stmt"/>
+        <line num="220" count="4" type="stmt"/>
+        <line num="221" count="4" type="stmt"/>
+        <line num="222" count="4" type="stmt"/>
+        <line num="242" count="6" type="stmt"/>
+        <line num="258" count="5" type="stmt"/>
+        <line num="260" count="1" type="stmt"/>
+        <line num="269" count="1" type="stmt"/>
+        <line num="270" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="271" count="0" type="stmt"/>
+        <line num="273" count="1" type="stmt"/>
+        <line num="278" count="4" type="stmt"/>
+        <line num="282" count="1" type="stmt"/>
+        <line num="283" count="1" type="stmt"/>
+        <line num="297" count="1" type="stmt"/>
+        <line num="301" count="0" type="stmt"/>
+        <line num="305" count="6" type="stmt"/>
+        <line num="306" count="6" type="stmt"/>
+        <line num="308" count="0" type="stmt"/>
+        <line num="313" count="25" type="cond" truecount="4" falsecount="0"/>
+        <line num="317" count="1" type="cond" truecount="3" falsecount="1"/>
+        <line num="318" count="0" type="stmt"/>
+        <line num="320" count="1" type="stmt"/>
+      </file>
+    </package>
+  </project>
+</coverage>

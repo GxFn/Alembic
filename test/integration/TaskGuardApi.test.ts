@@ -7,7 +7,7 @@
  *   ✓ 错误处理
  */
 
-import Bootstrap from '../../lib/bootstrap.js';
+import Bootstrap from '../../lib/Bootstrap.js';
 import { HttpServer } from '../../lib/http/HttpServer.js';
 import { getServiceContainer } from '../../lib/injection/ServiceContainer.js';
 import { getTestPort } from '../fixtures/factory.js';

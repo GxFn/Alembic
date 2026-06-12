@@ -9,7 +9,7 @@ process.env.ALEMBIC_API_SERVER = '1';
 
 import { timerRegistry } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
-import Bootstrap from '../lib/bootstrap.js';
+import Bootstrap from '../lib/Bootstrap.js';
 import HttpServer from '../lib/http/HttpServer.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
 import { shutdown } from '../lib/shared/shutdown.js';

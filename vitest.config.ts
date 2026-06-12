@@ -16,7 +16,7 @@ export default defineConfig({
     setupFiles: ['test/setup.ts'],
     coverage: {
       include: ['lib/**/*.ts'],
-      exclude: ['lib/**/index.ts', 'lib/bootstrap.ts'],
+      exclude: ['lib/**/index.ts', 'lib/Bootstrap.ts'],
       thresholds: {
         branches: 75,
         functions: 75,

@@ -142,7 +142,7 @@ This section is maintained by the Wakeflow runtime installer. It records this wi
 - 临时测试脚本：`scratch/`（不跟随 git）。
 - Dashboard 构建产物：`dashboard/`（仅存放构建输出 `dashboard/dist`，由 `npm run build:dashboard` 从 `AlembicDashboard` 仓库构建并复制而来；前端源码唯一权威仓库是 `AlembicDashboard`，不要在本仓库新增 Dashboard 前端源码）。
 - 注入资源和原生资源：`injectable-skills/`、`resources/`。
-- 内部技能挂载点：`skills/`（配置的运行时挂载目录：`config/default.json` 将 package `internalSkills` 与 project `skills` 映射到该目录，`lib/bootstrap.ts` 启动时扫描 `skills/*/hooks.js` 加载技能钩子；仓库内保持空目录是正常预留状态，不要删除）。
+- 内部技能挂载点：`skills/`（配置的运行时挂载目录：`config/default.json` 将 package `internalSkills` 与 project `skills` 映射到该目录，`lib/Bootstrap.ts` 启动时扫描 `skills/*/hooks.js` 加载技能钩子；仓库内保持空目录是正常预留状态，不要删除）。
 - Core 本地源码：`../AlembicCore`；Core vendor fallback / release snapshot：`vendor/AlembicCore`。
 - workspace 级长期协作文档按 Workspace 接入卡中的 `Window ledger` 归档。
 

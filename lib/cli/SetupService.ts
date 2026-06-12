@@ -577,7 +577,7 @@ export class SetupService {
 
   async stepDatabase() {
     const ConfigLoader = (await import('../infrastructure/config/AppConfigLoader.js')).default;
-    const Bootstrap = (await import('../bootstrap.js')).default;
+    const Bootstrap = (await import('../Bootstrap.js')).default;
 
     const previousCwd = process.cwd();
     const previousProjectDir = process.env.ALEMBIC_PROJECT_DIR;

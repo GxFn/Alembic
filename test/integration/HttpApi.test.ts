@@ -16,7 +16,7 @@
  *   ✓ 角色驱动的访问控制（x-user-id header）
  */
 
-import Bootstrap from '../../lib/bootstrap.js';
+import Bootstrap from '../../lib/Bootstrap.js';
 import { HttpServer } from '../../lib/http/HttpServer.js';
 import { getServiceContainer } from '../../lib/injection/ServiceContainer.js';
 import { getTestPort } from '../fixtures/factory.js';

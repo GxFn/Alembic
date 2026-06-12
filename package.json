@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "description": "Alembic — Auto Source Distill. Distill project knowledge from source code into structured recipes for humans and AI agents.",
   "type": "module",
-  "main": "dist/lib/bootstrap.js",
+  "main": "dist/lib/Bootstrap.js",
   "engines": {
     "node": ">=22.0.0"
   },

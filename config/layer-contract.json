@@ -7,7 +7,7 @@
     "Base leaves (import nothing or shared only): shared, types, platform, infrastructure, governance, project-scope, repository, sandbox, generated.",
     "Mid: service (domain orchestration over daemon contracts/infrastructure), tools (host adapters over sandbox), workflows (cold-start/rescan flows over service).",
     "Injection is the DI/composition area: it wires daemon, repositories, services, and tools; many areas also reach INTO it via the service-locator pattern (getAiRuntimeStatus/getServiceContainer) — those reach-through edges are codified as-is here and are AD4 remediation scope, not silently legal forever.",
-    "Hosts: http, resident, daemon, cli sit on top and may reach the areas they observably consume; lib/bootstrap.ts ('root') is the composition entry with a wildcard, and cli may invoke it (SetupService bootstraps the app). resident additionally consumes the relocated rate-limit infrastructure leaf (AD4).",
+    "Hosts: http, resident, daemon, cli sit on top and may reach the areas they observably consume; lib/Bootstrap.ts ('root') is the composition entry with a wildcard, and cli may invoke it (SetupService bootstraps the app). resident additionally consumes the relocated rate-limit infrastructure leaf (AD4).",
     "generated holds committed codegen artifacts (dashboard api-types) and imports nothing."
   ],
   "areas": [

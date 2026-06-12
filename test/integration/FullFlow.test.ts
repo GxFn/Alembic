@@ -1,5 +1,5 @@
 import path from 'node:path';
-import Bootstrap from '../../lib/bootstrap.js';
+import Bootstrap from '../../lib/Bootstrap.js';
 
 const __dirname = import.meta.dirname;
 

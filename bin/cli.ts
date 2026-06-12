@@ -2099,7 +2099,7 @@ program
 // 辅助函数
 // ─────────────────────────────────────────────────────
 async function initBootstrap() {
-  const { default: Bootstrap } = await import('../lib/bootstrap.js');
+  const { default: Bootstrap } = await import('../lib/Bootstrap.js');
   const bootstrap = new Bootstrap();
   await bootstrap.initialize();
   return bootstrap;
@@ -2120,7 +2120,7 @@ async function initContainer(opts: any = {}) {
   }
 
   // 配置路径安全守卫 — 阻止写操作逃逸到项目外
-  const { default: Bootstrap } = await import('../lib/bootstrap.js');
+  const { default: Bootstrap } = await import('../lib/Bootstrap.js');
   (Bootstrap as any).configurePathGuard(projectRoot);
 
   const bootstrap = await initBootstrap();
