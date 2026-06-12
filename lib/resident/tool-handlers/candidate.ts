@@ -1,6 +1,6 @@
 /**
  * MCP Handlers — 候选校验 & 字段诊断 (V3: 使用 knowledgeService)
- * validateCandidate, checkDuplicate, enrichCandidates
+ * validateCandidate, checkDuplicate
  *
  * 注意: submitSingle, submitBatch, submitDrafts 已移至 V3 knowledge handlers
  *       (alembic_submit_knowledge / submit_knowledge_batch / knowledge_lifecycle)
@@ -11,8 +11,6 @@ import { envelope } from '../tool-schema/envelope.js';
 import type {
   CandidateInput,
   CheckDuplicateArgs,
-  EnrichCandidatesArgs,
-  EnrichResultEntry,
   McpContext,
   ValidateCandidateArgs,
 } from '../tool-schema/types.js';
@@ -129,133 +127,6 @@ export async function checkDuplicate(ctx: McpContext, args: CheckDuplicateArgs) 
   });
 }
 
-// ─── 语义字段缺失诊断（无 AI 依赖） ──────────────────────────
-
-export async function enrichCandidates(ctx: McpContext, args: EnrichCandidatesArgs) {
-  const ids = args.candidateIds;
-  if (!Array.isArray(ids) || ids.length === 0) {
-    throw new Error('candidateIds array is required and must not be empty');
-  }
-  if (ids.length > 20) {
-    throw new Error('Max 20 candidates per enrichment call');
-  }
-
-  const knowledgeService = ctx.container.get('knowledgeService');
-  if (!knowledgeService) {
-    throw new Error('KnowledgeService not available');
-  }
-
-  const SEMANTIC_KEYS = [
-    'content.rationale',
-    'knowledgeType',
-    'complexity',
-    'scope',
-    'content.steps',
-    'constraints',
-  ];
-  const RECIPE_READY_KEYS = [
-    {
-      key: 'category',
-      check: (v: unknown) =>
-        typeof v === 'string' &&
-        ['View', 'Service', 'Tool', 'Model', 'Network', 'Storage', 'UI', 'Utility'].includes(v),
-      hint: 'category 必须为 8 标准值之一',
-    },
-    {
-      key: 'trigger',
-      check: (v: unknown) => typeof v === 'string' && v.startsWith('@'),
-      hint: 'trigger 必须以 @ 开头',
-    },
-    { key: 'description', check: (v: unknown) => !!v, hint: '知识条目描述' },
-    {
-      key: 'headers',
-      check: (v: unknown) => Array.isArray(v) && v.length > 0,
-      hint: '完整 import 语句数组',
-    },
-  ];
-
-  const results: EnrichResultEntry[] = [];
-  let needsEnrichment = 0;
-  let needsRecipeFields = 0;
-  for (const id of ids) {
-    try {
-      const entry = await knowledgeService.get(id);
-      if (!entry) {
-        results.push({ id, found: false, missingFields: [], recipeReadyMissing: [] });
-        continue;
-      }
-      const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
-
-      // 语义字段检查
-      const missing: string[] = [];
-      for (const keyPath of SEMANTIC_KEYS) {
-        const parts = keyPath.split('.');
-        let val = json;
-        for (const p of parts) {
-          val = val?.[p];
-        }
-        if (
-          val === undefined ||
-          val === null ||
-          val === '' ||
-          (typeof val === 'string' && val.trim() === '') ||
-          (Array.isArray(val) && val.length === 0) ||
-          (typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length === 0)
-        ) {
-          missing.push(keyPath);
-        }
-      }
-
-      // Recipe-Ready 字段检查
-      const recipeReadyMissing: { field: string; hint: string }[] = [];
-      for (const { key, check, hint } of RECIPE_READY_KEYS) {
-        const val = json[key];
-        if (!check(val)) {
-          recipeReadyMissing.push({ field: key, hint });
-        }
-      }
-
-      results.push({
-        id,
-        found: true,
-        title: json.title || '',
-        language: json.language,
-        lifecycle: json.lifecycle,
-        kind: json.kind,
-        missingFields: missing,
-        recipeReadyMissing,
-        complete: missing.length === 0 && recipeReadyMissing.length === 0,
-      });
-      if (missing.length > 0) {
-        needsEnrichment++;
-      }
-      if (recipeReadyMissing.length > 0) {
-        needsRecipeFields++;
-      }
-    } catch (err: unknown) {
-      results.push({
-        id,
-        found: false,
-        error: err instanceof Error ? err.message : String(err),
-        missingFields: [],
-        recipeReadyMissing: [],
-      });
-    }
-  }
-
-  return envelope({
-    success: true,
-    data: {
-      total: ids.length,
-      needsEnrichment,
-      needsRecipeFields,
-      fullyComplete: ids.length - Math.max(needsEnrichment, needsRecipeFields),
-      entries: results,
-      hint:
-        needsEnrichment > 0 || needsRecipeFields > 0
-          ? '请 Agent 根据 missingFields（语义）和 recipeReadyMissing（必填）自行补全后重新提交'
-          : '所有条目字段完整',
-    },
-    meta: { tool: 'alembic_enrich_candidates' },
-  });
-}
+// enrichCandidates (alembic_enrich_candidates) was deleted in the Train B DCR
+// wave: P0 all-delete verdict, zero external consumers (route-negative +
+// tool-registry negative proofs in the Train B evidence).

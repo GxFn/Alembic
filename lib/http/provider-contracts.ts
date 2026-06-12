@@ -484,9 +484,8 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
     'Knowledge',
   ]),
   route('I22', 'get', '/recipes', 'listRecipes', 'Recipe route family', ['Knowledge']),
-  route('I22', 'post', '/candidates/enrich', 'enrichCandidates', 'Candidate enrichment command', [
-    'Knowledge',
-  ]),
+  // POST /candidates/enrich (I22) deleted in the Train B DCR wave (P0 all-delete
+  // verdict, zero external consumers).
   route('I22', 'post', '/modules/scan', 'scanModules', 'Module scan command', ['Knowledge']),
   route('I22', 'post', '/wiki/generate', 'generateWiki', 'Wiki generation command', ['Knowledge']),
   route('I22', 'get', '/panorama', 'getPanorama', 'Panorama route family', ['Knowledge']),

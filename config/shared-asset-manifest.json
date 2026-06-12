@@ -14,7 +14,7 @@
       "path": "injectable-skills/alembic-create/SKILL.md",
       "mode": "skill-shared-sections",
       "authority": "shared sections: main; host sections: each host",
-      "notes": "Frontmatter description, envelope-vs-structuredContent prerequisite, alembic_enrich_candidates / alembic_knowledge_lifecycle references are intentional host divergence (tool contract). Gate compares wakeflow-shared sections only."
+      "notes": "Frontmatter description, envelope-vs-structuredContent prerequisite, alembic_knowledge_lifecycle references are intentional host divergence (tool contract; alembic_enrich_candidates was deleted in the Train B DCR wave). Gate compares wakeflow-shared sections only."
     },
     {
       "id": "skill-alembic-guard",

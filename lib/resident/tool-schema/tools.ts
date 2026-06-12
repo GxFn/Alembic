@@ -1,21 +1,18 @@
 /**
- * Alembic Resident Tool Definitions — V3 Consolidated (15 agent + 2 admin = 17 tools)
+ * Alembic Resident Tool Definitions — V3 Consolidated (16 agent + 1 admin = 17 tools)
  *
  * Each tool declaration contains name, tier (agent/admin), description, and inputSchema.
  * description is the key for Agent tool selection — use bullet list to enumerate all operations and their purposes.
  * inputSchema is auto-generated from Zod Schema (zodToMcpSchema); parameter .describe() translates to JSON Schema description.
  * The schema remains MCP-compatible, but the implementation belongs to Alembic's local resident service.
  *
- * Agent tools (14):
- *   1-7:   Query tools (health/search/knowledge/structure/graph/call_context/guard)
- *   8:     Write tool (submit_knowledge — unified pipeline, single/batch)
- *   9:     Skill management (skill)
- *   10-12: Cold-start (bootstrap/dimension_complete/wiki)
- *   13:    Project panorama (panorama)
- *   14:    Task management (task — 5 ops: prime/create/close/fail/record_decision)
+ * DCR deletions (Train B, P0 all-delete verdicts): alembic_wiki and
+ * alembic_enrich_candidates were removed with zero external consumers.
  *
- * Admin tools (2):
- *   15-16: enrich_candidates/knowledge_lifecycle
+ * Agent tools: query (health/search/knowledge/structure/graph/call_context/guard),
+ * submit_knowledge, skill, cold-start (bootstrap/rescan/dimension_complete),
+ * evolution (evolve/consolidate), panorama, task.
+ * Admin tools: knowledge_lifecycle.
  */
 
 import { z } from 'zod';
@@ -25,7 +22,6 @@ import {
   CallContextInput,
   ConsolidateInput,
   DimensionCompleteInput,
-  EnrichCandidatesInput,
   EvolveInput,
   GraphInput,
   GuardInput,
@@ -39,7 +35,6 @@ import {
   StructureInput,
   SubmitKnowledgeInput,
   TaskInput,
-  WikiInput,
 } from '#shared/schemas/mcp-tools.js';
 import { zodToMcpSchema } from './zodToMcpSchema.js';
 
@@ -163,10 +158,8 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   alembic_evolve: destructiveTool('Apply Alembic Evolution Decision'),
   alembic_consolidate: localWriteTool('Review Alembic Consolidation Decision'),
   alembic_dimension_complete: localWriteTool('Complete Alembic Dimension Analysis'),
-  alembic_wiki: localWriteTool('Plan Or Finalize Alembic Wiki'),
   alembic_panorama: localWriteTool('Query Or Refresh Alembic Panorama'),
   alembic_task: localWriteTool('Manage Alembic Task State'),
-  alembic_enrich_candidates: readOnlyTool('Diagnose Alembic Candidate Fields'),
   alembic_knowledge_lifecycle: destructiveTool('Update Alembic Knowledge Lifecycle'),
 };
 
@@ -195,11 +188,6 @@ export const TOOL_GATEWAY_MAP = {
   alembic_rescan: { action: 'knowledge:bootstrap', resource: 'knowledge' },
   // dimension_complete — write operation (recipe tagging + skill creation + checkpoint)
   alembic_dimension_complete: { action: 'knowledge:bootstrap', resource: 'knowledge' },
-  // wiki — finalize is a write operation (meta.json)
-  alembic_wiki: {
-    resolver: (args: Record<string, unknown>) =>
-      args?.operation === 'finalize' ? { action: 'knowledge:create', resource: 'knowledge' } : null, // plan is read-only
-  },
   // guard write operation (files mode only)
   alembic_guard: {
     resolver: (args: Record<string, unknown>) =>
@@ -237,7 +225,6 @@ export const TOOL_GATEWAY_MAP = {
       )[args?.operation as string] || null, // prime is read-only
   },
   // admin tools
-  alembic_enrich_candidates: { action: 'knowledge:update', resource: 'knowledge' },
   alembic_knowledge_lifecycle: { action: 'knowledge:update', resource: 'knowledge' },
 };
 
@@ -433,18 +420,7 @@ export const TOOLS = [
     inputSchema: zodToMcpSchema(DimensionCompleteInput),
   },
 
-  // 12. Wiki Documentation Generation
-  {
-    name: 'alembic_wiki',
-    tier: 'agent',
-    description:
-      'Wiki documentation generation.\n' +
-      '• plan — plan topics + data packages (integrates project structure and knowledge base; returns topic list + per-topic data package for Agent to write)\n' +
-      '• finalize — complete generation (write meta.json, dedup check, validate completeness; call after all articles are written)',
-    inputSchema: zodToMcpSchema(WikiInput),
-  },
-
-  // 13. Project Panorama
+  // 12. Project Panorama
   {
     name: 'alembic_panorama',
     tier: 'agent',
@@ -461,7 +437,7 @@ export const TOOLS = [
     inputSchema: zodToMcpSchema(PanoramaInput),
   },
 
-  // 14. Task & Decision Management
+  // 13. Task & Decision Management
   {
     name: 'alembic_task',
     tier: 'agent',
@@ -476,19 +452,10 @@ export const TOOLS = [
   },
 
   // ══════════════════════════════════════════════════════
-  //  Tier: admin — Admin/CI Tools (+2)
+  //  Tier: admin — Admin/CI Tools (+1)
   // ══════════════════════════════════════════════════════
 
-  // 15. Candidate Field Diagnosis
-  {
-    name: 'alembic_enrich_candidates',
-    tier: 'admin',
-    description:
-      'Diagnose field completeness of candidate entries (no AI). Returns missingFields list per candidate for Agent to fill in and resubmit.',
-    inputSchema: zodToMcpSchema(EnrichCandidatesInput),
-  },
-
-  // 16. Knowledge Lifecycle
+  // 14. Knowledge Lifecycle
   {
     name: 'alembic_knowledge_lifecycle',
     tier: 'admin',

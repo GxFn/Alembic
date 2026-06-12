@@ -223,10 +223,6 @@ export const SimilarityBody = z.object({
 
 // ═══ Candidates ══════════════════════════════════
 
-export const EnrichBody = z.object({
-  candidateIds: z.array(z.string().min(1)).min(1).max(20),
-});
-
 export const BootstrapRefineBody = z.object({
   candidateIds: z.array(z.string().min(1)).optional(),
   userPrompt: z.string().optional(),

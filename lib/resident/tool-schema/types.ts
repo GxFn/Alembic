@@ -367,11 +367,6 @@ export interface CheckDuplicateArgs {
   [key: string]: unknown;
 }
 
-export interface EnrichCandidatesArgs {
-  candidateIds?: string[];
-  [key: string]: unknown;
-}
-
 // ─── Consolidated handler args ───────────────────────────
 
 export interface ConsolidatedSearchArgs extends SearchArgs {
@@ -432,21 +427,6 @@ export interface KnowledgeBaseStats {
   };
   candidates: { total: number; pending: number };
   vectorIndex?: { documentCount: number };
-}
-
-// ─── Enrichment result entry ─────────────────────────────
-
-export interface EnrichResultEntry {
-  id: string;
-  found: boolean;
-  title?: string;
-  language?: string;
-  lifecycle?: string;
-  kind?: string;
-  missingFields: string[];
-  recipeReadyMissing: { field: string; hint: string }[];
-  complete?: boolean;
-  error?: string;
 }
 
 // ─── Bootstrap / Incremental ─────────────────────────────

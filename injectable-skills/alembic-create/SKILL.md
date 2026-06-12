@@ -114,14 +114,13 @@ Submit multiple entries at once. Each is validated independently; failures are r
 ### Standard Flow (Agent via MCP)
 <!-- wakeflow-shared:end -->
 
-<!-- wakeflow-host:main — step 4 references the main-only MCP tool alembic_enrich_candidates -->
+<!-- wakeflow-host:main — host-specific submission flow wording -->
 ```
 1. Analyze code → construct V3 fields
 2. alembic_submit_knowledge → stored as pending
 3. Check response:
    - Success → inform user "Submitted. Review in Dashboard Candidates."
    - Has rejectedItems → fill in missing fields per rejectedSummary.commonMissingFields, retry
-4. [Optional] alembic_enrich_candidates → diagnose candidate field completeness
 ```
 
 <!-- wakeflow-shared:begin section="workflow-rules" -->
@@ -144,13 +143,12 @@ Splitting principle: different use cases, different API endpoints, different con
 
 ---
 
-<!-- wakeflow-host:main — management table is host tool-contract (main MCP has alembic_enrich_candidates and alembic_knowledge_lifecycle approve/publish/fast_track) -->
+<!-- wakeflow-host:main — management table is host tool-contract (main MCP has alembic_knowledge_lifecycle approve/publish/fast_track) -->
 ## Post-Submission Management
 
 | Need | Tool |
 |------|------|
 | Check candidate status | `alembic_knowledge(operation=list)` |
-| Diagnose missing fields | `alembic_enrich_candidates` |
 | Review/publish | `alembic_knowledge_lifecycle(operation=approve/publish/fast_track)` |
 | Search existing knowledge to avoid duplicates | `alembic_search(mode=context, query=...)` |
 

@@ -408,22 +408,6 @@ export const DimensionCompleteInput = z.object({
 export type DimensionCompleteInput = z.infer<typeof DimensionCompleteInput>;
 
 // ══════════════════════════════════════════════════════
-//  11c. alembic_wiki (merged: plan + finalize)
-// ══════════════════════════════════════════════════════
-
-export const WikiInput = z.object({
-  operation: z
-    .enum(['plan', 'finalize'])
-    .describe('plan — 规划主题 + 数据包; finalize — 写入 meta.json + 验证'),
-  // plan 参数
-  language: z.enum(['zh', 'en']).optional().describe('Wiki 语言，默认 zh'),
-  sessionId: z.string().optional(),
-  // finalize 参数
-  articlesWritten: z.array(z.string()).optional(),
-});
-export type WikiInput = z.infer<typeof WikiInput>;
-
-// ══════════════════════════════════════════════════════
 //  12. alembic_capabilities — 无参数
 // ══════════════════════════════════════════════════════
 
@@ -476,16 +460,7 @@ export type TaskInput = z.infer<typeof TaskInput>;
 //  Admin Tools
 // ══════════════════════════════════════════════════════
 
-// 14. alembic_enrich_candidates
-export const EnrichCandidatesInput = z.object({
-  candidateIds: z
-    .array(z.string())
-    .min(1, 'at least one candidate ID required')
-    .max(20, 'max 20 candidates per call'),
-});
-export type EnrichCandidatesInput = z.infer<typeof EnrichCandidatesInput>;
-
-// 15. alembic_knowledge_lifecycle
+// 14. alembic_knowledge_lifecycle
 export const KnowledgeLifecycleInput = z.object({
   id: IdField,
   action: z
@@ -599,9 +574,7 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   alembic_bootstrap: BootstrapInput,
   alembic_rescan: RescanInput,
   alembic_dimension_complete: DimensionCompleteInput,
-  alembic_wiki: WikiInput,
   alembic_task: TaskInput,
-  alembic_enrich_candidates: EnrichCandidatesInput,
   alembic_knowledge_lifecycle: KnowledgeLifecycleInput,
   alembic_panorama: PanoramaInput,
   alembic_evolve: EvolveInput,

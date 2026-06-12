@@ -332,9 +332,7 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
         'alembic_skill',
         'alembic_bootstrap',
         'alembic_dimension_complete',
-        'alembic_wiki',
         'alembic_task',
-        'alembic_enrich_candidates',
         'alembic_knowledge_lifecycle',
       ];
       for (const tool of expectedTools) {
@@ -343,8 +341,14 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
       }
     });
 
-    test('should have at least 15 entries', () => {
-      expect(Object.keys(TOOL_SCHEMAS).length).toBeGreaterThanOrEqual(15);
+    test('DCR-deleted tools stay absent from the schema map', () => {
+      // Train B DCR wave: P0 all-delete verdicts with zero external consumers.
+      expect(TOOL_SCHEMAS.alembic_wiki).toBeUndefined();
+      expect(TOOL_SCHEMAS.alembic_enrich_candidates).toBeUndefined();
+    });
+
+    test('should have at least 13 entries', () => {
+      expect(Object.keys(TOOL_SCHEMAS).length).toBeGreaterThanOrEqual(13);
     });
   });
 });

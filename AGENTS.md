@@ -99,7 +99,7 @@ This section is maintained by the Wakeflow runtime installer. It records this wi
 
 - 权威清单（机器可读）：`config/shared-asset-manifest.json`；漂移门禁：`scripts/check-shared-asset-drift.mjs`，已接入 `npm run check`（`check:shared-asset-drift`）。
 - 修改流程（edit-in-authority-then-sync）：先在权威侧修改 → 把共享内容逐字同步到另一侧（SKILL.md 只同步 `wakeflow-shared` 标记段，host 段各自维护）→ 在双仓运行漂移门禁确认绿色。禁止直接在非权威侧改共享内容。
-- SKILL.md 标记约定：`<!-- wakeflow-shared:begin section="..." -->` / `<!-- wakeflow-shared:end -->` 包住共享段；标记外内容默认是宿主差异段，可用 `<!-- wakeflow-host:main ... -->` 注释说明差异原因。工具契约段（main: `alembic_guard` / `alembic_enrich_candidates` / `alembic_knowledge_lifecycle` / `alembic_bootstrap`；plugin: `alembic_code_guard` / source-graph / 26 codex tools）是已验证的有意分叉，禁止互相合并。
+- SKILL.md 标记约定：`<!-- wakeflow-shared:begin section="..." -->` / `<!-- wakeflow-shared:end -->` 包住共享段；标记外内容默认是宿主差异段，可用 `<!-- wakeflow-host:main ... -->` 注释说明差异原因。工具契约段（main: `alembic_guard` / `alembic_knowledge_lifecycle` / `alembic_bootstrap`；plugin: `alembic_code_guard` / source-graph / 26 codex tools）是已验证的有意分叉，禁止互相合并。（`alembic_enrich_candidates` 已在 Train B DCR 波次删除。）
 - 门禁运行在严格模式（RC5 p2 已在插件侧落地标记与脚本/清单副本，`--allow-pending-sync` 过渡旗标已于 2026-06-12 RC7 移除）；pending-sync 即失败。兄弟仓库 checkout 不存在时门禁打印通知后跳过（standalone clone 安全）。
 
 ### 差异声明表（variance table）
