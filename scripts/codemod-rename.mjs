@@ -37,7 +37,11 @@ const renames = JSON.parse(
 
 const CODE_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
 const TEXT_SCAN_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|json|md|html)$/;
-const SCAN_DIR_EXCLUDES = new Set(['.git', 'node_modules', 'dist', '.vite']);
+// Alembic delta (SN continuation b2): vendor/ holds pinned upstream
+// snapshots (mutating them violates the vendor rule and would desync the
+// pinned semantics) and .release/ is untracked staging output — neither
+// may receive codemod rewrites. Core/Agent lineage repos have neither dir.
+const SCAN_DIR_EXCLUDES = new Set(['.git', 'node_modules', 'dist', '.vite', 'vendor', '.release']);
 
 function caseSensitiveExists(repoRelative) {
   const absolute = path.join(root, repoRelative);
