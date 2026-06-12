@@ -49,6 +49,8 @@ test/temp/
 test/integration/reports/
 /test-*.js
 /diagnose-*.js
+# Generated istanbul output, accidentally tracked by 1dec328; coverage enforcement wiring stays pending user decision C4 — this entry is hygiene only.
+coverage/
 
 # ─── Logs ────────────────────────────────────────────
 logs/
