@@ -65,6 +65,8 @@
     "clean:dist": "node scripts/clean-dist.mjs",
     "postbuild": "node scripts/postbuild.mjs",
     "verify:context-api": "node dist/scripts/verify-context-api.js",
+    "generate:dashboard-types": "node dist/scripts/generate-dashboard-types.js --write",
+    "check:dashboard-types-drift": "node dist/scripts/generate-dashboard-types.js --check",
     "build:dashboard": "node scripts/build-dashboard.mjs",
     "start": "node dist/bin/cli.js start",
     "test": "vitest run",

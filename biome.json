@@ -3,6 +3,7 @@
   "files": {
     "includes": [
       "lib/**",
+      "!lib/generated/**",
       "bin/**",
       "config/**",
       "scripts/**",
@@ -31,7 +32,11 @@
   },
   "overrides": [
     {
-      "includes": ["bin/**", "scripts/**", "lib/cli/**"],
+      "includes": [
+        "bin/**",
+        "scripts/**",
+        "lib/cli/**"
+      ],
       "linter": {
         "rules": {
           "suspicious": {
@@ -41,7 +46,10 @@
       }
     },
     {
-      "includes": ["bin/**", "scripts/**"],
+      "includes": [
+        "bin/**",
+        "scripts/**"
+      ],
       "linter": {
         "rules": {
           "style": {
@@ -94,7 +102,10 @@
         "noConsole": {
           "level": "warn",
           "options": {
-            "allow": ["warn", "error"]
+            "allow": [
+              "warn",
+              "error"
+            ]
           }
         }
       }
