@@ -1,11 +1,17 @@
 ---
 name: alembic-devdocs
-description: Generate and publish project Wiki documentation using alembic_wiki MCP tool (plan → write → finalize). Use when user says "generate wiki/docs", "write documentation", or agent needs to produce structured project documentation from the knowledge base.
+description: Generate and browse project Wiki documentation through the Alembic resident daemon's wiki HTTP API (generate → status → files). Use when user says "generate wiki/docs", "write documentation", or agent needs structured project documentation produced from the knowledge base.
 ---
 
 # Alembic — Wiki Documentation Generation
 
-This skill guides the agent through generating structured **Wiki documentation** from the Alembic knowledge base using the `alembic_wiki` MCP tool.
+This skill guides the agent through generating structured **Wiki documentation**
+from the Alembic knowledge base via the resident daemon's **wiki HTTP API**.
+
+> There is NO `alembic_wiki` MCP tool. The former tool contract was removed in
+> the Train B cleanup wave (it never had a connected handler); wiki generation
+> is owned by the resident service (`WikiGenerator`) behind the daemon HTTP
+> routes below. Calling a tool named `alembic_wiki` will fail.
 
 ## When to use this skill
 
@@ -14,69 +20,46 @@ This skill guides the agent through generating structured **Wiki documentation**
 - When the user says "generate docs" / "write wiki" / "create documentation"
 - After significant **knowledge base changes** — refresh documentation
 
-## MCP Tools
+## Wiki HTTP API (resident daemon, `/api/v1/wiki/*`)
 
-| Tool | Operation | Description |
-|------|-----------|-------------|
-| `alembic_wiki` | `plan` | Plan topics + data packages (returns topic list + per-topic data for writing) |
-| `alembic_wiki` | `finalize` | Complete generation (write meta.json, dedup check, validate completeness) |
-| `alembic_search` | — | Search knowledge for additional context during writing |
-| `alembic_knowledge` | `get` | Retrieve full Recipe content for reference |
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/api/v1/wiki/generate` | POST | Trigger full wiki generation (AI-driven; topics planned from project structure + knowledge base) |
+| `/api/v1/wiki/update` | POST | Incremental update after knowledge changes |
+| `/api/v1/wiki/abort` | POST | Abort a running generation |
+| `/api/v1/wiki/status` | GET | Generation status / progress |
+| `/api/v1/wiki/files` | GET | List generated wiki files |
+| `/api/v1/wiki/file/:path` | GET | Read one wiki file's content |
+
+The resident daemon must be running (`alembic start`); the Dashboard's Wiki
+view drives the same routes interactively.
 
 ## Workflow
 
-### Step 1: Plan topics
+### Step 1: Trigger generation
 
-```json
-{
-  "operation": "plan",
-  "language": "en"
-}
-```
+`POST /api/v1/wiki/generate` (use `/update` for an incremental refresh after
+knowledge changes). Generation is asynchronous and AI-driven — the service
+plans topics and writes the articles itself; the agent does not hand-write
+wiki articles.
 
-Returns:
-- **topics[]** — Recommended documentation topics based on knowledge base content
-- **dataPackages** — Per-topic data bundles (related Recipes, code patterns, architecture info)
-- **sessionId** — Session identifier for the finalize step
+### Step 2: Monitor
 
-### Step 2: Write articles
+Poll `GET /api/v1/wiki/status` until generation completes (or abort with
+`POST /api/v1/wiki/abort`).
 
-For each topic in the plan:
-1. Read the **dataPackage** for that topic
-2. Write a well-structured Markdown article to the wiki directory (`Alembic/wiki/`)
-3. Use Recipe content as source of truth — cite Recipe titles
-4. Follow the structure: Overview → Details → Code Examples → Related Topics
+### Step 3: Browse the result
 
-### Step 3: Finalize
+- `GET /api/v1/wiki/files` — list the generated articles
+- `GET /api/v1/wiki/file/:path` — read a specific article
+- Or open the Dashboard Wiki view.
 
-```json
-{
-  "operation": "finalize",
-  "sessionId": "<from plan>",
-  "articlesWritten": ["Alembic/wiki/topic-1.md", "Alembic/wiki/topic-2.md"]
-}
-```
+## Supporting MCP tools (context lookups, unchanged)
 
-This triggers:
-- **meta.json** generation — topic index with cross-references
-- **Dedup check** — detect overlapping articles
-- **Completeness validation** — ensure all planned topics are covered
-
-## Writing guidelines
-
-- Use **clear headings** (`##`, `###`) — helps search and scanning
-- Include a **summary section** at the top of each article
-- Reference **file paths** and **class names** concretely — improves search relevance
-- Cite **Recipe triggers** (e.g., `@bilidili-feature-url-routing`) as knowledge sources
-- For architecture docs: Context → Design → Implementation → Trade-offs
-- For pattern docs: When to Use → How to Use → Code Example → Anti-patterns
-
-## Language parameter
-
-| Value | Effect |
-|-------|--------|
-| `"en"` | English documentation (default) |
-| `"zh"` | Chinese documentation |
+| Tool | Operation | Description |
+|------|-----------|-------------|
+| `alembic_search` | — | Search knowledge for additional context |
+| `alembic_knowledge` | `get` | Retrieve full Recipe content for reference |
 
 ## Related Skills
 
