@@ -203,15 +203,13 @@ router.post(
 
     const streamSession = createStreamSession('scan');
     const sessionId = streamSession.sessionId;
-    // AD4 LATENT DEFECT (reported, NOT fixed here — the fix is a behavior
-    // change needing a controller ruling): SSE sessions expose
-    // send/end/error, never push(). Every push() below has always thrown at
-    // runtime when this stream path runs; the old untyped session map hid it
-    // from tsc. The cast preserves the pre-existing runtime behavior under
-    // the typed registry. Proposed fix: push -> send + a final end().
-    const session = getStreamSession(sessionId) as unknown as
-      | { push(event: Record<string, unknown>): void }
-      | undefined;
+    // AD6 ruled fix (TODO AD4-MODULES-STREAM-PUSH-DEFECT): this route had
+    // always called a nonexistent session.push() — every stream event threw
+    // at runtime (the old untyped session map hid it from tsc). Restored to
+    // the documented SSE session contract: send() for events, end() to
+    // complete (emits stream:done; EventSource consumers close on it),
+    // error() for failures (emits stream:error).
+    const session = getStreamSession(sessionId);
 
     res.json({ sessionId });
 
@@ -222,26 +220,25 @@ router.post(
           ...options,
           onProgress: (evt: Record<string, unknown>) => {
             if (session) {
-              session.push(evt);
+              session.send(evt);
             }
           },
         });
 
         if (session) {
-          session.push({
+          session.send({
             type: 'scan:result',
             recipes: result.recipes || [],
             scannedFiles: result.scannedFiles || [],
             message: result.message || '',
             noAi: !!result.noAi,
           });
-          session.push({ type: 'scan:done' });
+          session.end();
         }
       } catch (err: unknown) {
         logger.error(`[modules] scan-folder/stream error: ${(err as Error).message}`);
         if (session) {
-          session.push({ type: 'scan:error', message: (err as Error).message });
-          session.push({ type: 'scan:done' });
+          session.error((err as Error).message, 'SCAN_FOLDER_STREAM_ERROR');
         }
       }
     });

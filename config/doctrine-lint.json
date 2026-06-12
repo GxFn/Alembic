@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "description": "AD6 side-effect doctrine lint config (Alembic). Enforces the AD0 doctrine's machine-checkable pattern classes over lib/: (A) module-scope mutable `let` bindings outside the managed-lifecycle idiom (`let _x: T | null = null` accessor slots are the sanctioned shape), and (B) module-scope EMPTY new Map()/new Set() accumulators (literal-seeded const lookups are immutable and exempt by construction). Blessed entries carry owner/reason/cleanupTrigger like the layer contract's exceptions; the lint is blocking in npm run check via scripts/lint-doctrine.mjs.",
+  "scanRoot": "lib",
+  "blessedEntries": [
+    {
+      "file": "lib/resident/tool-handlers/task.ts",
+      "binding": "_taskCounter",
+      "reason": "Module-scope task id counter predating AD4; not in the P0-census enumerated remediation set. Needs a managed-lifecycle slot or container ownership.",
+      "owner": "Alembic window",
+      "cleanupTrigger": "B6 ruling follow-up wave (service-locator/doctrine remediation)"
+    },
+    {
+      "file": "lib/http/routes/wiki.ts",
+      "binding": "wikiTask",
+      "reason": "Module-scope wiki generation task state predating AD4; same class as discoverTask. Needs a managed-lifecycle slot.",
+      "owner": "Alembic window",
+      "cleanupTrigger": "B6 ruling follow-up wave"
+    },
+    {
+      "file": "lib/http/routes/recipes.ts",
+      "binding": "discoverTask",
+      "reason": "Module-scope relation-discovery task state predating AD4. Needs a managed-lifecycle slot.",
+      "owner": "Alembic window",
+      "cleanupTrigger": "B6 ruling follow-up wave"
+    }
+  ]
+}
