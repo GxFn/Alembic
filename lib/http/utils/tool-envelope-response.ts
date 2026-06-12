@@ -1,4 +1,4 @@
-import type { ToolResultEnvelope, ToolResultStatus } from '@alembic/agent/tools';
+import type { ToolResultEnvelope, ToolResultStatus } from '@alembic/agent';
 import type { Response } from 'express';
 
 export function httpStatusForToolEnvelope(status: ToolResultStatus): number {

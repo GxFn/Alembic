@@ -1,11 +1,7 @@
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
-import type {
-  ToolExecutionRequest,
-  ToolResultEnvelope,
-  ToolResultStatus,
-} from '@alembic/agent/tools';
+import type { ToolExecutionRequest, ToolResultEnvelope, ToolResultStatus } from '@alembic/agent';
 import { sandboxExec } from '#sandbox/SandboxExecutor.js';
 import { buildSandboxProfile } from '#sandbox/SandboxPolicy.js';
 import type { TerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';

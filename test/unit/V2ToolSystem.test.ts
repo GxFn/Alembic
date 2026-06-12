@@ -8,7 +8,7 @@
  *   4. Capability 权限拦截
  */
 
-import { BootstrapAnalyze } from '@alembic/agent/tools';
+import { BootstrapAnalyze } from '@alembic/agent';
 import {
   DeltaCache,
   OutputCompressor,

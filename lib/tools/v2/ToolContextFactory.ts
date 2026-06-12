@@ -6,7 +6,7 @@
  * 重量级 DI 服务 (projectGraph/searchEngine 等) 按需从容器获取。
  */
 
-import type { ToolCallRequest } from '@alembic/agent/tools';
+import type { ToolCallRequest } from '@alembic/agent';
 import {
   DeltaCache,
   type MemoryCoordinatorLike,

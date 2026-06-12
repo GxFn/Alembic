@@ -1,4 +1,4 @@
-import type { ToolExecutionRequest, ToolResultEnvelope } from '@alembic/agent/tools';
+import type { ToolExecutionRequest, ToolResultEnvelope } from '@alembic/agent';
 import { envelopeForError, envelopeForSessionResult } from '@alembic/agent/tools/terminal';
 import type { TerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
 import { getTerminalSessionManager, recordAndReturn } from './TerminalExecutorShared.js';

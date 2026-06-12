@@ -2,7 +2,7 @@ import type {
   ToolExecutionAdapter,
   ToolExecutionRequest,
   ToolResultEnvelope,
-} from '@alembic/agent/tools';
+} from '@alembic/agent';
 import type { DashboardOperationHandler } from '#tools/adapters/DashboardOperations.js';
 
 export class DashboardOperationAdapter implements ToolExecutionAdapter {

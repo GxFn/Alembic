@@ -1,4 +1,4 @@
-import type { ToolExecutionRequest, ToolResultEnvelope } from '@alembic/agent/tools';
+import type { ToolExecutionRequest, ToolResultEnvelope } from '@alembic/agent';
 import {
   buildTerminalPtyPolicyInput,
   envelopeForError,

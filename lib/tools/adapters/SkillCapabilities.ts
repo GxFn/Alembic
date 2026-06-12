@@ -1,4 +1,4 @@
-import type { ToolCapabilityManifest } from '@alembic/agent/tools';
+import type { ToolCapabilityManifest } from '@alembic/agent';
 
 const SKILL_RISK = {
   sideEffect: false,

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { ToolCapabilityManifest, ToolExecutionRequest } from '@alembic/agent/tools';
+import type { ToolCapabilityManifest, ToolExecutionRequest } from '@alembic/agent';
 import {
   TERMINAL_PTY_CAPABILITY,
   TERMINAL_RUN_CAPABILITY,

@@ -4,7 +4,7 @@ import type {
   ToolExecutionPreviewRequest,
   ToolExecutionRequest,
   ToolResultEnvelope,
-} from '@alembic/agent/tools';
+} from '@alembic/agent';
 import {
   buildTerminalCommandPolicyInput,
   buildTerminalPtyPolicyInput,

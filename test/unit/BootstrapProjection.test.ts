@@ -1,15 +1,15 @@
 import {
+  projectToolResultOrdinaryOutput,
+  type ToolResultEnvelope,
+  type ToolResultStatus,
+} from '@alembic/agent';
+import {
   type AgentInterfaceContractBranch,
   type AgentInterfaceContractBranchFixture,
   ALEMBIC_AGENT_INTERFACE_CONTRACT,
   validateAgentInterfaceContract,
 } from '@alembic/agent/runtime';
 import type { AgentRunResult } from '@alembic/agent/service';
-import {
-  projectToolResultOrdinaryOutput,
-  type ToolResultEnvelope,
-  type ToolResultStatus,
-} from '@alembic/agent/tools';
 import { describe, expect, test } from 'vitest';
 import {
   type BootstrapDimensionRunIssueStatus,

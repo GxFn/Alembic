@@ -4,8 +4,8 @@ import type {
   ToolResultEnvelope,
   WorkflowHandlerContext,
   WorkflowRegistry,
-} from '@alembic/agent/tools';
-import { resolveToolRouterFromContext } from '@alembic/agent/tools';
+} from '@alembic/agent';
+import { resolveToolRouterFromContext } from '@alembic/agent';
 
 export class WorkflowAdapter implements ToolExecutionAdapter {
   readonly kind = 'workflow' as const;

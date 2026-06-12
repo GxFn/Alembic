@@ -1,9 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  ToolResultDiagnostics,
-  ToolResultEnvelope,
-  ToolResultTrust,
-} from '@alembic/agent/tools';
+import type { ToolResultDiagnostics, ToolResultEnvelope, ToolResultTrust } from '@alembic/agent';
 import type { Request, Response } from 'express';
 import { sendToolEnvelopeResponse } from './tool-envelope-response.js';
 

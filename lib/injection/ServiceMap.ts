@@ -7,6 +7,7 @@
  * @module ServiceMap
  */
 
+import type { UnifiedToolCatalog } from '@alembic/agent';
 // ── Domain Types ──
 // ── External Types ──
 import type { AiProvider, AiProviderManager } from '@alembic/agent/ai';
@@ -19,7 +20,6 @@ import type {
   AgentStageFactoryRegistry,
   SystemRunContextFactory,
 } from '@alembic/agent/service';
-import type { UnifiedToolCatalog } from '@alembic/agent/tools';
 import type { JobStore } from '@alembic/core/daemon';
 import type { DatabaseConnection } from '@alembic/core/database';
 import type { DimensionCopy } from '@alembic/core/dimensions';

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ToolArtifactRef, ToolExecutionRequest } from '@alembic/agent/tools';
+import type { ToolArtifactRef, ToolExecutionRequest } from '@alembic/agent';
 
 const DEFAULT_MAX_OUTPUT_BYTES = 16_000;
 const SCRIPT_FILE_MODE = 0o600;

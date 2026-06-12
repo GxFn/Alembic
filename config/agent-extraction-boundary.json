@@ -316,10 +316,10 @@
     ]
   },
   "toolSystemImportRules": {
-    "status": "local-generic-tool-duplicates-deleted",
+    "status": "tools-aggregate-migrated-to-root-facade",
     "packageName": "@alembic/agent",
     "packageRange": "file:../AlembicAgent",
-    "publicEntrypoint": "@alembic/agent/tools",
+    "publicEntrypoint": "@alembic/agent",
     "publicV2Entrypoint": "@alembic/agent/tools/v2",
     "localDeletionCandidates": [],
     "hostOwnedToolV2Paths": ["lib/tools/v2/ToolContextFactory.ts", "lib/tools/adapters/**"],
@@ -338,7 +338,7 @@
       }
     ],
     "notes": [
-      "Common tool contracts, catalog, workflow registry, router contracts, result envelopes, presenters, and Tool V2 generic runtime are consumed through @alembic/agent/tools and @alembic/agent/tools/v2.",
+      "Common tool contracts, catalog, workflow registry, router contracts, result envelopes, and presenters are consumed through the stable @alembic/agent root facade (Train B IC3: the deprecated @alembic/agent/tools aggregate has zero Alembic imports; Agent retires the export in pB3). Tool V2 generic runtime stays on @alembic/agent/tools/v2; terminal contracts stay on @alembic/agent/tools/terminal.",
       "Alembic keeps Dashboard, macOS, Skill, Terminal, Workflow, MCP, CLI, daemon, HTTP/API, native, IDE wiring, and concrete ToolContextFactory as host adapters.",
       "Wave 4 deleted local duplicate tool implementation trees; do not restore them in Alembic."
     ],

@@ -470,8 +470,8 @@ console.log(`  local Agent relative import files: ${localAgentRelativeImportsByF
 console.log(`  local Agent relative imports: ${localAgentRelativeImports.length}`);
 console.log(`  @alembic/agent/ai consumer files: ${agentAiImportsByFile.size}`);
 console.log(`  local AI provider consumers: ${localAiProviderImports.length}`);
-console.log(`  @alembic/agent/tools consumer files: ${agentToolImportsByFile.size}`);
-console.log(`  @alembic/agent/tools/v2 consumer files: ${agentToolV2ImportsByFile.size}`);
+console.log(`  ${toolSystemPublicEntrypoint} consumer files: ${agentToolImportsByFile.size}`);
+console.log(`  ${toolSystemV2PublicEntrypoint} consumer files: ${agentToolV2ImportsByFile.size}`);
 console.log(
   `  @alembic/agent/tools/terminal consumer files: ${terminalContractImportsByFile.size}`
 );

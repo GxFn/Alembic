@@ -1,4 +1,4 @@
-import type { ToolCapabilityManifest, ToolExecutionRequest } from '@alembic/agent/tools';
+import type { ToolCapabilityManifest, ToolExecutionRequest } from '@alembic/agent';
 import Logger from '@alembic/core/logging';
 import { getAiRuntimeStatus, getAiUnavailableMessage } from '../../injection/AiRuntimeStatus.js';
 import type { ServiceContainer } from '../../injection/ServiceContainer.js';

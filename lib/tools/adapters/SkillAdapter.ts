@@ -5,7 +5,7 @@ import type {
   ToolExecutionRequest,
   ToolResultEnvelope,
   ToolResultStatus,
-} from '@alembic/agent/tools';
+} from '@alembic/agent';
 import { getProjectSkillsPath } from '@alembic/core/config';
 import { INJECTABLE_SKILLS_DIR } from '../../shared/package-assets.js';
 

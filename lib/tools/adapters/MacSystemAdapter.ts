@@ -4,7 +4,7 @@ import type {
   ToolExecutionRequest,
   ToolResultEnvelope,
   ToolResultStatus,
-} from '@alembic/agent/tools';
+} from '@alembic/agent';
 
 export class MacSystemAdapter implements ToolExecutionAdapter {
   readonly kind = 'macos-adapter' as const;

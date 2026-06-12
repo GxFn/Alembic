@@ -1,4 +1,4 @@
-import type { ToolCapabilityManifest, ToolResultEnvelope } from '@alembic/agent/tools';
+import type { ToolCapabilityManifest, ToolResultEnvelope } from '@alembic/agent';
 import type { Request, Response } from 'express';
 import { describe, expect, test, vi } from 'vitest';
 import {

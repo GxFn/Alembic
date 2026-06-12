@@ -3,6 +3,7 @@
  * AI 提供商管理、摘要、翻译、对话、工作区 LLM 配置
  */
 
+import type { ToolCapabilityManifest, ToolResultEnvelope } from '@alembic/agent';
 import { createProvider, getModelRegistry, PROVIDER_CONFIGS } from '@alembic/agent/ai';
 import { ConversationStore } from '@alembic/agent/context';
 import { PRESETS } from '@alembic/agent/profiles';
@@ -20,7 +21,6 @@ import {
   taskGuardFullScan,
   taskQualityAudit,
 } from '@alembic/agent/tasks';
-import type { ToolCapabilityManifest, ToolResultEnvelope } from '@alembic/agent/tools';
 import Logger from '@alembic/core/logging';
 import {
   collectAiEnvOverrides,

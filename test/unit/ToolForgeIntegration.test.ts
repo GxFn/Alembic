@@ -1,6 +1,6 @@
-import { CapabilityCatalog, type ToolCapabilityManifest } from '@alembic/agent/tools';
-import { describe, expect, it, vi } from 'vitest';
+import { CapabilityCatalog, type ToolCapabilityManifest } from '@alembic/agent';
 import { ToolForge } from '@alembic/agent/forge';
+import { describe, expect, it, vi } from 'vitest';
 
 /**
  * Tool Forge 集成测试
