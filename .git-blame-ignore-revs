@@ -1,0 +1,3 @@
+# Commits whose diffs are mechanical renames (SN protocol user gate 3)
+# SN continuation b2: lib/bootstrap.ts -> lib/Bootstrap.ts
+1dec328620db4a4270bca9fb1a8b7ed0fa870bb9
