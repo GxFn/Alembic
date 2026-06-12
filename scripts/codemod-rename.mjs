@@ -195,14 +195,24 @@ for (const filePath of allFiles.filter((file) => TEXT_SCAN_EXTENSIONS.test(file)
     }
   }
 }
+// ── print the plan ──
+// SN4a delta: the b04e58c lineage lost the SN1 plan-printing console.log
+// lines (empty husk loops shipped instead), so dry-run produced no plan to
+// review — masked in SN3 only because its rename map was empty. Restored
+// verbatim from the SN1 pilot (Dashboard 9710a14); recorded as a tooling
+// lesson for SN5+.
+console.log(`codemod-rename plan (${apply ? 'APPLY' : 'dry-run'}):`);
 for (const { from, to } of renames) {
+  console.log(`  git mv ${from} ${to}`);
 }
 for (const [filePath, plans] of [...filePlans.entries()].sort()) {
-  const _relative = path.relative(root, filePath).replaceAll(path.sep, '/');
-  for (const _plan of plans) {
+  const relative = path.relative(root, filePath).replaceAll(path.sep, '/');
+  for (const plan of plans) {
+    console.log(`  rewrite [${plan.kind}] ${relative}: ${plan.before} -> ${plan.after}`);
   }
 }
 if (!apply) {
+  console.log('dry-run complete; re-run with --apply to execute.');
   process.exit(0);
 }
 
@@ -225,3 +235,4 @@ for (const [filePath, plans] of filePlans.entries()) {
   }
   writeFileSync(targetPath, text);
 }
+console.log('codemod-rename applied.');
