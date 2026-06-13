@@ -25,7 +25,7 @@ function request(
       callId: 'call-skill',
       toolId: manifest.id,
       surface: 'runtime',
-      actor: { role: 'developer' },
+      actor: { role: 'runtime' },
       source: { kind: 'runtime', name: 'skill-adapter-test' },
       projectRoot,
       ...(dataRoot ? { dataRoot } : {}),

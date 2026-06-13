@@ -28,7 +28,6 @@ describe('E2E: Full Pipeline', () => {
       db: components.db,
       auditLogger: components.auditLogger,
       gateway: components.gateway,
-      constitution: components.constitution,
       config: components.config,
       skillHooks: components.skillHooks,
     });
@@ -221,7 +220,7 @@ describe('E2E: Full Pipeline', () => {
       }));
 
       const result = await gateway.execute({
-        actor: 'developer',
+        actor: 'http-request',
         action: 'e2e_test_action',
         resource: '/e2e',
       });
@@ -230,18 +229,19 @@ describe('E2E: Full Pipeline', () => {
       expect(result.data.status).toBe('ok');
     });
 
-    test('should reject unauthorized external agent writes', async () => {
+    test('should route write-shaped action through the registered handler', async () => {
       const { gateway } = components;
 
       gateway.register('e2e_write_test', async () => ({ id: 'new' }));
 
       const result = await gateway.execute({
-        actor: 'external_agent',
+        actor: 'http-request',
         action: 'e2e_write_test',
         resource: '/recipes',
       });
 
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({ id: 'new' });
     });
   });
 

@@ -5,7 +5,7 @@
  *   - common.ts 基础 schema（PaginationSchema, ContentSchema, ReasoningSchema 等）
  *   - mcp-tools.ts MCP 工具输入 schema（SearchInput, KnowledgeInput, TaskInput 等）
  *   - http-requests.ts HTTP 路由 schema（CRUD + 批量 + 搜索）
- *   - config.ts 配置文件 schema（AppConfigSchema, ConstitutionSchema）
+ *   - config.ts 配置文件 schema（AppConfigSchema）
  *   - TOOL_SCHEMAS 映射表完整性
  */
 
@@ -14,7 +14,6 @@
 import {
   AppConfigSchema,
   ComplexityEnum,
-  ConstitutionSchema,
   ContentSchema,
   IdField,
   KindEnum,
@@ -506,12 +505,12 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
   describe('AuthLoginBody', () => {
     test('should require username and password', () => {
       expect(() => AuthLoginBody.parse({})).toThrow();
-      expect(() => AuthLoginBody.parse({ username: 'admin' })).toThrow();
+      expect(() => AuthLoginBody.parse({ username: 'legacy-user' })).toThrow();
     });
 
     test('should accept valid credentials', () => {
-      const result = AuthLoginBody.parse({ username: 'admin', password: 'pass' });
-      expect(result.username).toBe('admin');
+      const result = AuthLoginBody.parse({ username: 'legacy-user', password: 'pass' });
+      expect(result.username).toBe('legacy-user');
     });
   });
 });
@@ -552,40 +551,6 @@ describe('Integration: Zod Schemas — config.ts', () => {
     test('should allow passthrough fields', () => {
       const result = AppConfigSchema.parse({ customField: 'value' });
       expect((result as Record<string, unknown>).customField).toBe('value');
-    });
-  });
-
-  describe('ConstitutionSchema', () => {
-    test('should accept empty constitution', () => {
-      const result = ConstitutionSchema.parse({});
-      expect(result.rules).toEqual([]);
-      expect(result.capabilities).toEqual({});
-    });
-
-    test('should accept valid constitution', () => {
-      const result = ConstitutionSchema.parse({
-        version: '1.0',
-        rules: [{ id: 'r1', check: 'no-eval' }],
-        roles: [{ id: 'dev', name: 'Developer' }],
-      });
-      expect(result.rules).toHaveLength(1);
-      expect(result.roles).toHaveLength(1);
-    });
-
-    test('should reject rule without id', () => {
-      expect(() =>
-        ConstitutionSchema.parse({
-          rules: [{ check: 'something' }],
-        })
-      ).toThrow();
-    });
-
-    test('should reject role without name', () => {
-      expect(() =>
-        ConstitutionSchema.parse({
-          roles: [{ id: 'dev' }],
-        })
-      ).toThrow();
     });
   });
 });

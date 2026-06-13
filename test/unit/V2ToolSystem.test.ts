@@ -548,7 +548,7 @@ describe('V2ToolRouterAdapter', () => {
       toolId: 'code',
       args: { action: 'structure', params: { depth: 1 } },
       surface: 'runtime',
-      actor: { role: 'developer', user: 'test' },
+      actor: { role: 'runtime', user: 'test' },
       source: { kind: 'runtime', name: 'test' },
     });
 
@@ -575,7 +575,7 @@ describe('V2ToolRouterAdapter', () => {
       toolId: 'nonexistent',
       args: { action: 'foo', params: {} },
       surface: 'runtime',
-      actor: { role: 'developer', user: 'test' },
+      actor: { role: 'runtime', user: 'test' },
       source: { kind: 'runtime', name: 'test' },
     });
 

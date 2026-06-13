@@ -122,7 +122,8 @@ function manifest(input: {
       auditLevel: 'checkOnly',
       policyProfile: input.policyProfile,
       approvalPolicy: 'explain-then-run',
-      allowedRoles: ['admin', 'developer', 'owner'],
+      // Mainline safety is operation-specific; this field stays empty for the Agent contract.
+      allowedRoles: [],
       allowInComposer: false,
       allowInRemoteMcp: false,
       allowInNonInteractive: false,

@@ -40,7 +40,7 @@ function request(
       callId: 'call-terminal',
       toolId: manifest.id,
       surface: 'runtime',
-      actor: { role: 'developer' },
+      actor: { role: 'runtime' },
       source: { kind: 'runtime', name: 'terminal-adapter-test' },
       projectRoot,
       services: {

@@ -101,7 +101,7 @@ export function mockCandidate(overrides = {}) {
     language: 'javascript',
     category: 'utility',
     status: 'pending',
-    source: { type: 'manual', actor: 'developer' },
+    source: { type: 'manual', actor: 'manual-source' },
     metadata: {
       capturedAt: new Date().toISOString(),
       context: 'test',
@@ -163,7 +163,7 @@ export function mockGuardRule(overrides = {}) {
 /** 生成带 reasoning 的完整 Gateway 请求数据 */
 export function mockGatewayRequest(overrides = {}) {
   return {
-    actor: 'developer',
+    actor: 'http-request',
     action: 'test_action',
     resource: '/test',
     data: {
@@ -197,7 +197,7 @@ const DEFAULT_TOKEN_SECRET = 'test-secret-key-for-integration-tests';
 export function createTestToken(payload = {}, secret = DEFAULT_TOKEN_SECRET) {
   const fullPayload = {
     sub: 'test-user',
-    role: 'developer',
+    role: 'http-request',
     iat: Date.now(),
     exp: Date.now() + 3600_000, // 1 小时
     ...payload,

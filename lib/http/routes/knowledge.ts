@@ -225,7 +225,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
 /**
  * PATCH /api/v1/knowledge/:id/publish
- * 发布 (pending → active) — 仅开发者
+ * 发布 (pending → active)
  */
 router.patch('/:id/publish', async (req: Request, res: Response) => {
   const id = String(req.params.id);

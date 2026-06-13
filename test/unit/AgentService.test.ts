@@ -1,6 +1,6 @@
-import { describe, expect, test, vi } from 'vitest';
 import type { AgentMessage } from '@alembic/agent/runtime';
 import { type AgentRunInput, AgentService } from '@alembic/agent/service';
+import { describe, expect, test, vi } from 'vitest';
 
 function makeInput(overrides: Partial<AgentRunInput> = {}): AgentRunInput {
   return {
@@ -14,7 +14,7 @@ function makeInput(overrides: Partial<AgentRunInput> = {}): AgentRunInput {
     context: {
       source: 'http-chat',
       lang: 'zh-CN',
-      actor: { user: 'u1', role: 'developer', sessionId: 's1' },
+      actor: { user: 'u1', role: 'http-request', sessionId: 's1' },
     },
     ...overrides,
   };

@@ -3,7 +3,7 @@
  *
  * 这是连接 Gateway ↔ Service 的桥梁：
  * - 路由层格式化 Gateway 请求 {actor, action, resource, data}
- * - Gateway 执行权限/宪法/审计
+ * - Gateway 执行路由、请求格式检查和审计封装
  * - GatewayActionRegistry 将 action 路由到正确的 Service 方法
  */
 

@@ -67,7 +67,7 @@ describe('Knowledge Governance Integration', () => {
       const entry = {
         title: 'Use BD prefix for all custom classes',
         doClause: 'Always use BD prefix',
-        source: 'developer',
+        source: 'manual-source',
         reasoning: { confidence: 0.92, isValid: () => true },
         content: {
           hasContent: () => true,

@@ -666,7 +666,7 @@ router.post(
             toolId: name,
             args: p,
             surface: 'system',
-            actor: { role: 'chat_agent', user: 'agent-task' },
+            actor: { role: 'agent-task', user: 'agent-task' },
             source: { kind: 'system', name: '/api/v1/ai/agent/task' },
             runtime: createHttpToolRuntimeContext(container),
           }),

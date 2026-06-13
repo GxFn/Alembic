@@ -1,7 +1,4 @@
-import path from 'node:path';
 import Bootstrap from '../../lib/Bootstrap.js';
-
-const __dirname = import.meta.dirname;
 
 describe('Integration: Complete Gateway Flow', () => {
   let bootstrap;
@@ -17,18 +14,16 @@ describe('Integration: Complete Gateway Flow', () => {
   });
 
   describe('Full request flow', () => {
-    test('should handle complete read operation', async () => {
+    test('handles a complete read operation', async () => {
       const { gateway } = components;
 
-      gateway.register('read_recipes', async (context) => {
-        return [
-          { id: '1', name: 'Recipe 1' },
-          { id: '2', name: 'Recipe 2' },
-        ];
-      });
+      gateway.register('read_recipes', async () => [
+        { id: '1', name: 'Recipe 1' },
+        { id: '2', name: 'Recipe 2' },
+      ]);
 
       const result = await gateway.execute({
-        actor: 'external_agent',
+        actor: 'http-request',
         action: 'read_recipes',
         resource: '/recipes',
       });
@@ -38,52 +33,14 @@ describe('Integration: Complete Gateway Flow', () => {
       expect(result.requestId).toBeDefined();
     });
 
-    test('should block unauthorized creation', async () => {
+    test('routes write-shaped actions without actor authority checks', async () => {
       const { gateway } = components;
 
-      gateway.register('create_recipe', async (context) => {
-        return { recipeId: '123' };
-      });
+      gateway.register('create_recipe', async () => ({ recipeId: '123' }));
 
       const result = await gateway.execute({
-        actor: 'external_agent',
+        actor: 'http-request',
         action: 'create_recipe',
-        resource: '/recipes',
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error.statusCode).toBe(403);
-    });
-
-    test('should enforce constitution validation', async () => {
-      const { gateway } = components;
-
-      gateway.register('create', async (context) => {
-        return { candidateId: '456' };
-      });
-
-      // 没有 code 和 reasoning
-      const result = await gateway.execute({
-        actor: 'external_agent',
-        action: 'create',
-        resource: '/candidates',
-        data: { name: 'Test' },
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain('Constitution');
-    });
-
-    test('should allow admin to create recipes', async () => {
-      const { gateway } = components;
-
-      gateway.register('admin_create_recipe', async (context) => {
-        return { recipeId: 'new-123' };
-      });
-
-      const result = await gateway.execute({
-        actor: 'developer',
-        action: 'admin_create_recipe',
         resource: '/recipes',
         data: {
           name: 'New Recipe',
@@ -92,18 +49,19 @@ describe('Integration: Complete Gateway Flow', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data.recipeId).toBe('new-123');
+      expect(result.data.recipeId).toBe('123');
     });
 
-    test('should allow candidate creation with complete data', async () => {
+    test('passes complete candidate data to the registered handler', async () => {
       const { gateway } = components;
 
-      gateway.register('submit_knowledge', async (context) => {
-        return { candidateId: 'cand-123' };
-      });
+      gateway.register('submit_knowledge', async (context) => ({
+        candidateId: 'cand-123',
+        title: context.data.name,
+      }));
 
       const result = await gateway.execute({
-        actor: 'external_agent',
+        actor: 'http-request',
         action: 'submit_knowledge',
         resource: '/candidates',
         data: {
@@ -120,34 +78,31 @@ describe('Integration: Complete Gateway Flow', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data.candidateId).toBe('cand-123');
+      expect(result.data).toMatchObject({ candidateId: 'cand-123', title: 'Good Candidate' });
     });
   });
 
   describe('Audit integration', () => {
-    test('should record successful operations', async () => {
+    test('records successful operations', async () => {
       const { gateway, auditStore } = components;
 
-      gateway.register('audit_success_test', async () => {
-        return { status: 'ok' };
-      });
+      gateway.register('audit_success_test', async () => ({ status: 'ok' }));
 
       const result = await gateway.execute({
-        actor: 'developer',
+        actor: 'http-request',
         action: 'audit_success_test',
         resource: '/test',
       });
 
       expect(result.success).toBe(true);
 
-      // 查询审计日志
       const logs = await auditStore.query({ action: 'audit_success_test' });
       expect(logs.length).toBeGreaterThan(0);
-      const log = logs[0];
-      expect(log.result).toBe('success');
+      expect(logs[0].result).toBe('success');
+      expect(logs[0].actor).toBe('http-request');
     });
 
-    test('should record failed operations', async () => {
+    test('records failed operations', async () => {
       const { gateway, auditStore } = components;
 
       gateway.register('audit_fail_test', async () => {
@@ -155,22 +110,20 @@ describe('Integration: Complete Gateway Flow', () => {
       });
 
       const result = await gateway.execute({
-        actor: 'developer',
+        actor: 'http-request',
         action: 'audit_fail_test',
         resource: '/test',
       });
 
       expect(result.success).toBe(false);
 
-      // 查询审计日志
       const logs = await auditStore.query({ action: 'audit_fail_test' });
       expect(logs.length).toBeGreaterThan(0);
-      const log = logs[0];
-      expect(log.result).toBe('failure');
-      expect(log.errorMessage).toBeDefined();
+      expect(logs[0].result).toBe('failure');
+      expect(logs[0].errorMessage).toBeDefined();
     });
 
-    test('should track operation duration', async () => {
+    test('tracks operation duration', async () => {
       const { gateway, auditStore } = components;
       const operationDelayMs = 30;
       const minimumTrackedDurationMs = 20;
@@ -182,7 +135,7 @@ describe('Integration: Complete Gateway Flow', () => {
       });
 
       const result = await gateway.execute({
-        actor: 'developer',
+        actor: 'http-request',
         action: 'audit_duration_test',
         resource: '/test',
       });
@@ -195,121 +148,51 @@ describe('Integration: Complete Gateway Flow', () => {
     });
   });
 
-  describe('Permission matrix verification', () => {
-    const testCases = [
-      // (actor, action, resource, shouldSucceed)
-      ['developer', 'read', '/recipes', true],
-      ['developer', 'create', '/recipes', true],
-      ['developer', 'delete', '/candidates', true],
-      ['external_agent', 'read', '/recipes', true],
-      ['external_agent', 'create', '/candidates', true], // external_agent 有 create:candidates 权限
-      ['external_agent', 'create', '/recipes', false],
-      ['external_agent', 'delete', '/candidates', false],
-      ['chat_agent', 'read', '/candidates', true],
-      ['chat_agent', 'create', '/recipes', false],
-    ];
+  describe('Source-label invariance', () => {
+    const sourceLabels = ['http-request', 'dashboard-source', 'batch-runner'];
 
-    testCases.forEach(([actor, action, resource, shouldSucceed]) => {
-      test(`${actor} should ${shouldSucceed ? 'be able' : 'NOT be able'} to ${action} ${resource}`, async () => {
+    for (const actor of sourceLabels) {
+      test(`routes ${actor} through the same registered handler`, async () => {
         const { gateway } = components;
+        const action = `source_invariance_${actor.replace(/[^a-z0-9]/gi, '_')}`;
 
-        // 创建唯一的 action 名称，包含 resource 以避免重复注册
-        const resourceKey = resource.replace(/\//g, '_').substring(1);
-        const actionName = `perm_${actor}_${action}_${resourceKey}`;
-
-        gateway.register(actionName, async () => {
-          return { success: true };
-        });
+        gateway.register(action, async (context) => ({
+          actor: context.actor,
+          accepted: true,
+        }));
 
         const result = await gateway.execute({
           actor,
-          action: actionName,
-          resource,
-          data: {
-            code: 'test code',
-            confirmed: true,
-            reasoning: {
-              whyStandard: 'test',
-              sources: ['test'],
-              qualitySignals: {},
-              alternatives: [],
-              confidence: 0.8,
-            },
-          },
+          action,
+          resource: '/test',
         });
 
-        if (shouldSucceed) {
-          expect(result.success).toBe(true);
-        } else {
-          expect(result.success).toBe(false);
-          // 可能是权限错误 (403) 或宪法错误 (400)
-          expect([400, 403]).toContain(result.error.statusCode);
-        }
+        expect(result.success).toBe(true);
+        expect(result.data).toEqual({ actor, accepted: true });
       });
-    });
-  });
-
-  describe('Constitution rule verification', () => {
-    test('should require confirmation for delete', async () => {
-      const { gateway } = components;
-
-      gateway.register('const_delete', async () => {
-        return { deleted: true };
-      });
-
-      const result = await gateway.execute({
-        actor: 'developer',
-        action: 'const_delete',
-        resource: '/candidates/123',
-        data: {},
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain('Constitution');
-    });
-
-    test('should allow delete with confirmation', async () => {
-      const { gateway } = components;
-
-      gateway.register('const_delete_confirmed', async () => {
-        return { deleted: true };
-      });
-
-      const result = await gateway.execute({
-        actor: 'developer',
-        action: 'const_delete_confirmed',
-        resource: '/candidates/123',
-        data: { confirmed: true },
-      });
-
-      expect(result.success).toBe(true);
-    });
+    }
   });
 
   describe('Error recovery', () => {
-    test('should continue operation after handler error', async () => {
+    test('continues operation after handler error', async () => {
       const { gateway } = components;
 
-      // 第一个操作失败
       gateway.register('error_action', async () => {
         throw new Error('Handler crashed');
       });
 
       const result1 = await gateway.execute({
-        actor: 'developer',
+        actor: 'http-request',
         action: 'error_action',
         resource: '/test',
       });
 
       expect(result1.success).toBe(false);
 
-      // 第二个操作应该成功
-      gateway.register('success_action', async () => {
-        return { ok: true };
-      });
+      gateway.register('success_action', async () => ({ ok: true }));
 
       const result2 = await gateway.execute({
-        actor: 'developer',
+        actor: 'http-request',
         action: 'success_action',
         resource: '/test',
       });

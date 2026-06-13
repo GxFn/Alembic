@@ -22,7 +22,7 @@ function request(
       callId: `call-${manifest.id}`,
       toolId: manifest.id,
       surface: 'runtime',
-      actor: { role: 'developer' },
+      actor: { role: 'runtime' },
       source: { kind: 'runtime', name: 'macos-adapter-test' },
       projectRoot,
       services: {

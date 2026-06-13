@@ -14,15 +14,8 @@ const SKILL_GOVERNANCE = {
   auditLevel: 'checkOnly',
   policyProfile: 'read',
   approvalPolicy: 'auto',
-  allowedRoles: [
-    'owner',
-    'admin',
-    'developer',
-    'agent',
-    'external_agent',
-    'contributor',
-    'visitor',
-  ],
+  // Mainline safety is operation-specific; this field stays empty for the Agent contract.
+  allowedRoles: [],
   allowInComposer: true,
   allowInRemoteMcp: true,
   allowInNonInteractive: true,

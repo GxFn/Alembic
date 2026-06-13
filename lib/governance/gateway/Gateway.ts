@@ -49,8 +49,8 @@ export interface GatewayDependencies {
 /**
  * Gateway - route wrapper and audit envelope.
  *
- * Operation-specific HTTP routes own write safeguards. Gateway no longer acts
- * as a central Constitution/RBAC authority.
+ * Operation-specific HTTP routes own write safeguards. Gateway only keeps
+ * routing, request-shape checks, and audit emission.
  */
 export class Gateway extends EventEmitter {
   auditLogger: AuditLogger | null;
@@ -219,7 +219,7 @@ export class Gateway extends EventEmitter {
     }
   }
 
-  /** guard — central role/RBAC checks were removed from mainline. */
+  /** guard — reserved for operation-neutral request checks. */
   async guard(_context: GatewayContext) {
     return;
   }

@@ -14,7 +14,8 @@ const MAC_GOVERNANCE = {
   auditLevel: 'full',
   policyProfile: 'system',
   approvalPolicy: 'auto',
-  allowedRoles: ['owner', 'admin', 'developer'],
+  // Mainline safety is operation-specific; this field stays empty for the Agent contract.
+  allowedRoles: [],
   allowInComposer: false,
   allowInRemoteMcp: false,
   allowInNonInteractive: true,

@@ -303,7 +303,7 @@ export class SetupService {
     // else: 无 URL → recipes/ 是普通目录，随主仓库提交，不执行 git init
 
     // constitution.yaml — entrypoint safety policy
-    this._writeConstitution();
+    this._writeEntrypointSafetyPolicy();
 
     // boxspec.json — 项目规格
     this._writeBoxspec();
@@ -348,8 +348,8 @@ export class SetupService {
     };
   }
 
-  /** 写入 constitution.yaml（优先从模板复制） */
-  private _writeConstitution() {
+  /** 写入入口安全策略（优先从模板复制） */
+  private _writeEntrypointSafetyPolicy() {
     const dest = join(this.coreDir, 'constitution.yaml');
     if (existsSync(dest) && !this.force) {
       return;

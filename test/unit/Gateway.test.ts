@@ -57,7 +57,7 @@ describe('Gateway', () => {
       expect(result.data).toEqual({ recipeId: '123' });
     });
 
-    test('does not apply central Constitution validation before route execution', async () => {
+    test('does not apply central content validation before route execution', async () => {
       gateway.register('create_candidate_without_content', async () => ({ candidateId: '456' }));
 
       const result = await gateway.execute({

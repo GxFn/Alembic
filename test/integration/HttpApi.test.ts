@@ -29,7 +29,7 @@ describe('Integration: HTTP API Endpoints', () => {
   let httpServer;
 
   beforeAll(async () => {
-    // 1. 初始化 Bootstrap（DB + Gateway + Constitution 等）
+    // 1. 初始化 Bootstrap（DB + Gateway + audit 等）
     bootstrap = new Bootstrap({ env: 'test' });
     const components = await bootstrap.initialize();
 

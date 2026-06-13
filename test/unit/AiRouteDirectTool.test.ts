@@ -186,7 +186,7 @@ describe('AI route direct tool governance', () => {
     const allowed = await ensureDirectToolAllowed(
       catalog(manifest({ id: 'search_recipes' })),
       'search_recipes',
-      mockRequest({ resolvedRole: 'external_agent', headers: { 'x-session-id': 's1' } }),
+      mockRequest({ resolvedRole: 'mcp-source', headers: { 'x-session-id': 's1' } }),
       res,
       { checkOnly }
     );
@@ -201,7 +201,7 @@ describe('AI route direct tool governance', () => {
     const allowed = await ensureDirectToolAllowed(
       catalog(manifest({ id: 'read_project_file' })),
       'read_project_file',
-      mockRequest({ resolvedRole: 'external_agent' }),
+      mockRequest({ resolvedRole: 'mcp-source' }),
       res,
       null
     );
@@ -216,7 +216,7 @@ describe('AI route direct tool governance', () => {
     const allowed = await ensureDirectToolAllowed(
       catalog(manifest({ id: 'get_tool_details' })),
       'get_tool_details',
-      mockRequest({ resolvedRole: 'external_agent' }),
+      mockRequest({ resolvedRole: 'mcp-source' }),
       res,
       { checkOnly }
     );
