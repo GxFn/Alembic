@@ -34,6 +34,15 @@ This section is maintained by the Wakeflow runtime installer. It records this wi
 
 - Claude Code subagents (the Task/Agent tool) are recommended for bounded parallel assistance such as code search, log triage, test localization, and evidence summarization. Treat subagent output as evidence or advice only; it must not accept work, dispatch another window, write controller state, or expand repository boundaries.
 
+### Functional Completeness Self-Check
+
+Before returning a `TargetResultEnvelope` or handoff, this child window must self-check the assigned feature or evidence path for functional completeness. Do not rely on the controller to discover obvious gaps.
+
+- Re-read the state root, task package, current plan, repository rules, and acceptance/evidence requirements.
+- Verify the implementation or evidence covers the requested behavior end to end, including edge cases, integration boundaries, docs/config/API surfaces, and tests that the target window can reasonably run.
+- Compare the final diff/evidence against the original user goal and explicit non-goals; do not downgrade a complete capability into a thin adapter, placeholder, mock-only flow, or partial scaffold.
+- If completeness cannot be proven inside this window boundary, return `blocked` or `needs-review` with the missing evidence and next recommendation instead of reporting `completed`.
+
 ### Document Destinations
 
 - Long-term cross-repository collaboration docs, plans, acceptance records, scans, and boundary records go to `../wakeflow-ledger/Alembic`. This repository `docs/` is only for product, release, or user docs maintained with the source.
