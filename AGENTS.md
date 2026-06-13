@@ -32,6 +32,10 @@ This section is maintained by the Wakeflow runtime installer. It records this wi
 - Non-Test windows must not create, process, or verify Test delivery unless both the current plan and delivery envelope explicitly authorize it.
 - Thread ids may only be written to Wakeflow local runtime. Do not write them to tracked documents, backfill text, or GitHub.
 
+### Skill Assistance
+
+- Codex subagents are recommended for bounded parallel assistance such as code search, log triage, test localization, and evidence summarization. Treat subagent output as evidence or advice only; it must not accept work, dispatch another window, write controller state, or expand repository boundaries.
+
 ### Document Destinations
 
 - Long-term cross-repository collaboration docs, plans, acceptance records, scans, and boundary records go to `../wakeflow-ledger/Alembic`. This repository `docs/` is only for product, release, or user docs maintained with the source.
