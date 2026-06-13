@@ -6,6 +6,7 @@
  *   - skill-shared-sections: 仅比较 SKILL.md 中 wakeflow-shared 标记段（host 段是声明的宿主差异）
  *   - main-only:             资产只允许存在于主仓库，插件侧出现未声明副本即失败
  *   - line-variants:         整文件比较，声明的 per-host 变体行替换为占位符后必须完全一致
+ *   - exact:                 单文件精确比较（仅归一化换行、行尾空白和首尾空行）
  *   - json-exclude-paths:    JSON 深比较，排除声明的键路径（如 config/default.json 的 ai 块）
  *   - directory-exact:       目录逐文件精确比较，可对单文件声明变体行
  * 另外自检 selfCheckFiles（manifest + 本脚本）在插件侧的副本是否一致。
@@ -241,6 +242,25 @@ function checkLineVariants(asset) {
   }
 }
 
+// ── exact：单文件精确比较（仅归一化换行、行尾空白和首尾空行） ───
+function checkExactFile(asset) {
+  const mainContent = readFileOrNull(path.join(repoRoot, asset.path));
+  const pluginContent = readFileOrNull(path.join(siblingPath, asset.path));
+  if (mainContent === null || pluginContent === null) {
+    record(
+      'drift',
+      asset.id,
+      `file missing: ${asset.path} (main=${mainContent !== null} plugin=${pluginContent !== null})`
+    );
+    return;
+  }
+  if (normalizeBlock(mainContent) !== normalizeBlock(pluginContent)) {
+    record('drift', asset.id, `content differs: ${asset.path}`);
+  } else {
+    record('ok', asset.id, 'files in sync');
+  }
+}
+
 // ── json-exclude-paths：JSON 深比较，排除声明键路径 ──────────
 function deleteJsonPath(obj, dotPath) {
   const keys = dotPath.split('.');
@@ -395,6 +415,7 @@ const MODE_HANDLERS = {
   'skill-shared-sections': checkSkillSharedSections,
   'main-only': checkMainOnly,
   'line-variants': checkLineVariants,
+  exact: checkExactFile,
   'json-exclude-paths': checkJsonExcludePaths,
   'directory-exact': checkDirectoryExact,
 };

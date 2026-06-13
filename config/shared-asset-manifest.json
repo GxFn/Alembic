@@ -54,26 +54,9 @@
     {
       "id": "templates-constitution",
       "path": "templates/constitution.yaml",
-      "mode": "line-variants",
-      "authority": "per-host",
-      "variants": [
-        {
-          "key": "roles.external_agent.name",
-          "mainLine": "name: \"External Agent\"",
-          "pluginLine": "name: \"Codex Host Agent\""
-        },
-        {
-          "key": "roles.external_agent.description",
-          "mainLine": "description: \"外部宿主 Agent（例如 Codex 插件）\"",
-          "pluginLine": "description: \"Codex 宿主 Agent\""
-        },
-        {
-          "key": "roles.chat_agent.description",
-          "mainLine": "description: \"Alembic 内置 AI Agent（Dashboard 对话 / 程序化调用）\"",
-          "pluginLine": "description: \"宿主管理的对话式执行者（程序化 / admin 工作流）\""
-        }
-      ],
-      "notes": "Role ids and permission sets are shared; display name/description per host. Mapping table recorded in AGENTS.md. Any other line difference is drift."
+      "mode": "exact",
+      "authority": "main",
+      "notes": "Compatibility policy document for operation-level safeguards. Runtime roles and permission matrices are retired; Plugin must not carry host-specific role variants."
     },
     {
       "id": "config-default",
