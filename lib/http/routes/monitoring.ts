@@ -10,6 +10,7 @@ import { getCacheAdapter } from '../../infrastructure/cache/UnifiedCacheAdapter.
 import { getErrorTracker } from '../../infrastructure/monitoring/ErrorTracker.js';
 import { getPerformanceMonitor } from '../../infrastructure/monitoring/PerformanceMonitor.js';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
+import { rejectInProduction, rejectUnlessConfirmed } from '../entrypoint-safety.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 
 const router = express.Router();
@@ -180,16 +181,10 @@ router.get('/cache', (req, res) => {
 
 /**
  * POST /api/v1/monitoring/cache/clear
- * 清空缓存（仅限 developer）
+ * 清空缓存（需要操作确认）
  */
 router.post('/cache/clear', validate(EmptyWriteBody), async (req, res) => {
-  // 角色检查：仅 admin 可操作
-  const role = req.resolvedRole || 'visitor';
-  if (role !== 'developer') {
-    res.status(403).json({
-      success: false,
-      error: { message: '仅管理员可清空缓存' },
-    });
+  if (!rejectUnlessConfirmed(req, res, 'monitoring cache clear')) {
     return;
   }
 
@@ -308,24 +303,13 @@ router.get('/dashboard', async (req, res) => {
 
 /**
  * POST /api/v1/monitoring/reset
- * 重置监控统计（仅限开发环境 + developer）
+ * 重置监控统计（仅限非生产环境 + 操作确认）
  */
 router.post('/reset', validate(EmptyWriteBody), (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    res.status(403).json({
-      success: false,
-      error: { message: '生产环境不允许重置监控统计' },
-    });
+  if (rejectInProduction(res, 'monitoring reset')) {
     return;
   }
-
-  // 角色检查：仅 admin 可操作
-  const role = req.resolvedRole || 'visitor';
-  if (role !== 'developer') {
-    res.status(403).json({
-      success: false,
-      error: { message: '仅管理员可重置监控统计' },
-    });
+  if (!rejectUnlessConfirmed(req, res, 'monitoring reset')) {
     return;
   }
 

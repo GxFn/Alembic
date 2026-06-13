@@ -13,6 +13,7 @@ import {
 } from '#shared/schemas/http-requests.js';
 import { getAiRuntimeStatus, getAiUnavailableMessage } from '../../injection/AiRuntimeStatus.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { operationContext, rejectUnlessConfirmed } from '../entrypoint-safety.js';
 import { validate } from '../middleware/validate.js';
 import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
 
@@ -35,6 +36,9 @@ router.post(
   validate(BootstrapRefineBody),
   async (req: Request, res: Response) => {
     const { candidateIds, userPrompt, dryRun } = req.body;
+    if (!dryRun && !rejectUnlessConfirmed(req, res, 'candidate bootstrap-refine apply')) {
+      return;
+    }
 
     const container = getServiceContainer();
 
@@ -582,6 +586,9 @@ router.post(
   '/refine-apply',
   validate(RefineApplyBody),
   async (req: Request, res: Response): Promise<void> => {
+    if (!rejectUnlessConfirmed(req, res, 'candidate refine-apply')) {
+      return;
+    }
     const { candidateId, userPrompt, preview } = req.body;
 
     const container = getServiceContainer();
@@ -649,7 +656,7 @@ router.post(
         };
       }
 
-      await knowledgeService.update(candidateId, finalUpdate, { userId: 'dashboard-refine' });
+      await knowledgeService.update(candidateId, finalUpdate, operationContext(req));
     }
 
     // 返回更新后的条目

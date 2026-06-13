@@ -27,6 +27,7 @@ const MAX_BATCH_SIZE = 100;
 
 const BatchIds = z.object({
   ids: z.array(z.string().min(1)).min(1).max(MAX_BATCH_SIZE),
+  confirmed: z.boolean().optional(),
 });
 
 const MetadataRecord = z.record(z.string(), z.unknown());
@@ -125,6 +126,7 @@ export const BatchDisableBody = BatchIds.extend({
 
 export const DisableRuleBody = z.object({
   reason: z.string().optional(),
+  confirmed: z.boolean().optional(),
 });
 
 export const CheckCodeBody = z.object({
@@ -136,6 +138,7 @@ export const CheckCodeBody = z.object({
 export const ImportFromRecipeBody = z.object({
   recipeId: z.string().min(1, 'recipeId is required'),
   rules: z.array(MetadataRecord).min(1, 'rules array must not be empty'),
+  confirmed: z.boolean().optional(),
 });
 
 export const GuardRulesListQuery = PaginationQuery.extend({
@@ -227,6 +230,7 @@ export const BootstrapRefineBody = z.object({
   candidateIds: z.array(z.string().min(1)).optional(),
   userPrompt: z.string().optional(),
   dryRun: z.boolean().default(false),
+  confirmed: z.boolean().optional(),
 });
 
 export const RefinePreviewBody = z.object({
@@ -238,6 +242,7 @@ export const RefineApplyBody = z.object({
   candidateId: z.string().min(1, 'candidateId is required'),
   userPrompt: z.string().optional(),
   preview: MetadataRecord.optional(),
+  confirmed: z.boolean().optional(),
 });
 
 // ═══ Guard (file check) ══════════════════════════

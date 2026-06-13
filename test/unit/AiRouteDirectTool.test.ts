@@ -22,8 +22,8 @@ function mockResponse() {
 
 function mockRequest(overrides: Partial<Request> = {}) {
   return {
-    resolvedRole: 'developer',
-    resolvedUser: 'local',
+    resolvedRole: 'http-request',
+    resolvedUser: 'http-request',
     headers: {},
     ip: '127.0.0.1',
     ...overrides,
@@ -93,7 +93,7 @@ function manifest(overrides: Partial<ToolCapabilityManifest> = {}): ToolCapabili
       auditLevel: 'none',
       policyProfile: 'read',
       approvalPolicy: 'auto',
-      allowedRoles: ['developer'],
+      allowedRoles: [],
       allowInComposer: true,
       allowInRemoteMcp: false,
       allowInNonInteractive: true,
@@ -114,7 +114,7 @@ describe('AI route direct tool governance', () => {
     const input = createHttpChatAgentRunInput(
       mockRequest({
         body: { mode: 'legacy-ui-mode' },
-        resolvedRole: 'developer',
+        resolvedRole: 'http-request',
         resolvedUser: 'local-user',
       }),
       {
@@ -133,7 +133,7 @@ describe('AI route direct tool governance', () => {
     });
     expect(input.context).toMatchObject({
       source: 'http-chat',
-      actor: { role: 'developer', user: 'local-user', sessionId: 'conv-1' },
+      actor: { role: 'http-request', user: 'local-user', sessionId: 'conv-1' },
     });
     expect(input.message.metadata).not.toHaveProperty('mode');
   });
@@ -225,17 +225,17 @@ describe('AI route direct tool governance', () => {
     expect(checkOnly).not.toHaveBeenCalled();
   });
 
-  test('does not block direct tools at route layer when Gateway would deny later', async () => {
+  test('does not block direct tools at route layer when downstream governance would deny later', async () => {
     const res = mockResponse();
     const checkOnly = vi.fn().mockResolvedValue({
       success: false,
       requestId: 'gw-denied',
-      error: { code: 'PERMISSION_DENIED', statusCode: 403, message: 'Permission denied' },
+      error: { code: 'DOWNSTREAM_DENIED', statusCode: 403, message: 'Downstream denied' },
     });
     const allowed = await ensureDirectToolAllowed(
       catalog(manifest({ id: 'query_audit_log' })),
       'query_audit_log',
-      mockRequest({ resolvedRole: 'visitor' }),
+      mockRequest({ resolvedRole: 'http-request' }),
       res,
       { checkOnly }
     );
@@ -299,44 +299,30 @@ describe('AI route direct tool governance', () => {
     });
   });
 
-  test('runs Gateway checkOnly before AI env config writes', async () => {
+  test('accepts AI env config writes without route-level Gateway checks', async () => {
     const res = mockResponse();
     const checkOnly = vi.fn().mockResolvedValue({ success: true, requestId: 'gw-config' });
     const allowed = await ensureAiConfigUpdateAllowed(
-      mockRequest({ resolvedRole: 'developer', headers: { 'x-session-id': 's-config' } }),
+      mockRequest({ headers: { 'x-session-id': 's-config' } }),
       res,
       { checkOnly },
       { ALEMBIC_AI_PROVIDER: 'openai', ALEMBIC_OPENAI_API_KEY: 'secret' }
     );
 
     expect(allowed).toBe(true);
-    expect(checkOnly).toHaveBeenCalledWith({
-      actor: 'developer',
-      action: 'update:config',
-      resource: 'ai_config',
-      data: expect.objectContaining({
-        keys: ['ALEMBIC_AI_PROVIDER', 'ALEMBIC_OPENAI_API_KEY'],
-        _resolvedUser: 'local',
-      }),
-      session: 's-config',
-    });
+    expect(checkOnly).not.toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  test('fails closed when AI env config Gateway check is unavailable', async () => {
+  test('rejects AI env config writes with no persisted updates', async () => {
     const res = mockResponse();
-    const allowed = await ensureAiConfigUpdateAllowed(
-      mockRequest({ resolvedRole: 'developer' }),
-      res,
-      null,
-      { ALEMBIC_AI_PROVIDER: 'openai' }
-    );
+    const allowed = await ensureAiConfigUpdateAllowed(mockRequest(), res, null, {});
 
     expect(allowed).toBe(false);
-    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        error: expect.objectContaining({ code: 'GATEWAY_UNAVAILABLE' }),
+        error: expect.objectContaining({ code: 'AI_CONFIG_NO_UPDATES' }),
       })
     );
   });

@@ -6,7 +6,6 @@
 
 import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
-import { CapabilityProbe } from '@alembic/core/core/capability';
 import Logger from '@alembic/core/logging';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import cors from 'cors';
@@ -72,7 +71,6 @@ type AppLogger = ReturnType<typeof Logger.getInstance>;
 export class HttpServer {
   app: Application;
   cacheAdapter: unknown;
-  capabilityProbe: CapabilityProbe | null;
   config: HttpServerConfig;
   errorTracker: ErrorTracker | null;
   activeRequestCount: number;
@@ -100,7 +98,6 @@ export class HttpServer {
     this.errorTracker = null;
     this.cacheAdapter = null;
     this.realtimeService = null;
-    this.capabilityProbe = null;
     this.stopping = false;
   }
 
@@ -220,18 +217,8 @@ export class HttpServer {
       })
     );
 
-    // 角色解析中间件（双路径：token / 探针）
-    try {
-      const constitution = getServiceContainer().get('constitution');
-      const caps = (constitution?.config?.capabilities?.git_write || {}) as Record<string, unknown>;
-      this.capabilityProbe = new CapabilityProbe({
-        cacheTTL: (caps.cache_ttl as number) || 86400,
-        noRemote: ((caps.no_remote as string) || 'allow') as 'allow' | 'deny',
-      });
-    } catch {
-      this.capabilityProbe = new CapabilityProbe();
-    }
-    this.app.use(roleResolverMiddleware({ capabilityProbe: this.capabilityProbe }));
+    // 请求来源解析；不使用 git/probe/login 推导运行时权限。
+    this.app.use(roleResolverMiddleware());
 
     // Gateway 中间件 (注入 req.gw)
     this.app.use(gatewayMiddleware());
@@ -318,16 +305,11 @@ export class HttpServer {
 
     // 权限探针端点
     this.app.get(`${apiPrefix}/auth/probe`, (req: Request, res: Response) => {
-      const role = req.resolvedRole || 'visitor';
+      const source = req.resolvedRole || 'http-request';
       const user = req.resolvedUser || 'anonymous';
-      const mode =
-        process.env.VITE_AUTH_ENABLED === 'true' || process.env.ALEMBIC_AUTH_ENABLED === 'true'
-          ? 'token'
-          : 'probe';
-      const probeCache = this.capabilityProbe ? this.capabilityProbe.getCacheStatus() : null;
       res.json({
         success: true,
-        data: { role, user, mode, probeCache },
+        data: { source, user, mode: 'source' },
       });
     });
 

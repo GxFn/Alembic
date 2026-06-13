@@ -13,6 +13,7 @@ import express, { type Request, type Response } from 'express';
 import { z } from 'zod';
 import { getAiRuntimeStatus, getAiUnavailableMessage } from '../../injection/AiRuntimeStatus.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { rejectUnlessConfirmed } from '../entrypoint-safety.js';
 import { validate } from '../middleware/validate.js';
 
 const router = express.Router();
@@ -82,6 +83,9 @@ router.post(
   '/discover-relations',
   validate(DiscoverRelationsBody),
   async (req: Request, res: Response): Promise<void> => {
+    if (!rejectUnlessConfirmed(req, res, 'recipe discover-relations')) {
+      return;
+    }
     const { batchSize: _batchSize } = req.body as z.infer<typeof DiscoverRelationsBody>;
 
     // 如果已有任务在运行，返回当前状态

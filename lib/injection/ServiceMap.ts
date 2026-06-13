@@ -80,7 +80,6 @@ import type { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSes
 import type { JobDisplaySnapshotStore } from '../daemon/JobDisplaySnapshotStore.js';
 import type { JobProcessEventRecorder } from '../daemon/JobProcessEventRecorder.js';
 // ── Core Types ──
-import type Constitution from '../governance/constitution/Constitution.js';
 import type Gateway from '../governance/gateway/Gateway.js';
 // ── InfraModule Types ──
 import type AuditLogger from '../infrastructure/audit/AuditLogger.js';
@@ -157,7 +156,6 @@ export interface ServiceMap {
   enhancementRegistry: unknown; // dynamic registry, type varies
   languageService: typeof LanguageService;
   dimensionCopy: typeof DimensionCopy;
-  constitution: Constitution | null;
   aiProvider: AiProvider | null;
   aiProviderManager: AiProviderManager | null;
   projectGraph: ProjectGraph | null;

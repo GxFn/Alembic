@@ -3,9 +3,9 @@ import 'express-serve-static-core';
 
 declare module 'express-serve-static-core' {
   interface Request {
-    /** Resolved RBAC role (set by roleResolverMiddleware) */
+    /** Request source label retained for legacy call surfaces. */
     resolvedRole?: string;
-    /** Resolved user identifier (set by roleResolverMiddleware) */
+    /** Request source identifier retained for audit context. */
     resolvedUser?: string;
     /** Gateway shortcut (set by gatewayMiddleware) */
     gw: (

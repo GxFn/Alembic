@@ -86,33 +86,33 @@ describe('Integration: HTTP API Endpoints', () => {
   // ═══════════════════════════════════════════════════════
 
   describe('Auth Endpoints', () => {
-    test('POST /auth/login — 正确凭证返回 token', async () => {
+    test('POST /auth/login — valid legacy body returns retired auth response', async () => {
       const res = await fetch(`${BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: process.env.ALEMBIC_AUTH_USERNAME || 'admin',
+          username: process.env.ALEMBIC_AUTH_USERNAME || 'legacy-user',
           password: process.env.ALEMBIC_AUTH_PASSWORD || 'alembic',
         }),
       });
       const body = await res.json();
 
-      expect(res.status).toBe(200);
-      expect(body.success).toBe(true);
-      expect(body.data.token).toBeDefined();
-      expect(body.data.user.role).toBe('developer');
+      expect(res.status).toBe(410);
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('AUTH_MODEL_RETIRED');
     });
 
-    test('POST /auth/login — 错误密码返回 401', async () => {
+    test('POST /auth/login — legacy credentials do not change retirement response', async () => {
       const res = await fetch(`${BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'admin', password: 'wrong' }),
+        body: JSON.stringify({ username: 'legacy-user', password: 'wrong' }),
       });
       const body = await res.json();
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(410);
       expect(body.success).toBe(false);
+      expect(body.error.code).toBe('AUTH_MODEL_RETIRED');
     });
 
     test('POST /auth/login — 空 body 返回 400', async () => {
@@ -127,47 +127,34 @@ describe('Integration: HTTP API Endpoints', () => {
       expect(body.success).toBe(false);
     });
 
-    test('GET /auth/me — 有效 token', async () => {
-      // 先登录获取 token
-      const loginRes = await fetch(`${BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: process.env.ALEMBIC_AUTH_USERNAME || 'admin',
-          password: process.env.ALEMBIC_AUTH_PASSWORD || 'alembic',
-        }),
-      });
-      const {
-        data: { token },
-      } = await loginRes.json();
-
+    test('GET /auth/me — bearer tokens are not interpreted', async () => {
       const res = await fetch(`${BASE}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: 'Bearer retired-token' },
       });
       const body = await res.json();
 
-      expect(res.status).toBe(200);
-      expect(body.success).toBe(true);
-      expect(body.data.user.role).toBe('developer');
+      expect(res.status).toBe(410);
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('AUTH_MODEL_RETIRED');
     });
 
-    test('GET /auth/me — 无 token 返回 401', async () => {
+    test('GET /auth/me — no token returns retired auth response', async () => {
       const res = await fetch(`${BASE}/auth/me`);
       const body = await res.json();
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(410);
       expect(body.success).toBe(false);
+      expect(body.error.code).toBe('AUTH_MODEL_RETIRED');
     });
 
-    test('GET /auth/probe — 返回当前角色', async () => {
+    test('GET /auth/probe — returns request source metadata', async () => {
       const res = await fetch(`${BASE}/auth/probe`);
       const body = await res.json();
 
       expect(res.status).toBe(200);
       expect(body.success).toBe(true);
-      expect(body.data.role).toBeDefined();
-      expect(body.data.mode).toBeDefined();
-      expect(['token', 'probe']).toContain(body.data.mode);
+      expect(body.data.source).toBeDefined();
+      expect(body.data.mode).toBe('source');
     });
   });
 
@@ -198,12 +185,12 @@ describe('Integration: HTTP API Endpoints', () => {
       expect(body.success).toBe(false);
     });
 
-    test('POST /knowledge — admin 可创建', async () => {
+    test('POST /knowledge — valid body reaches create entrypoint', async () => {
       const res = await fetch(`${BASE}/knowledge`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-User-Id': 'developer',
+          'X-User-Id': 'http-request',
         },
         body: JSON.stringify({
           title: 'Test Knowledge from HTTP',
@@ -233,20 +220,20 @@ describe('Integration: HTTP API Endpoints', () => {
   });
 
   // ═══════════════════════════════════════════════════════
-  //  角色访问控制
+  //  请求来源 header 兼容
   // ═══════════════════════════════════════════════════════
 
-  describe('Role-based Access Control via Header', () => {
-    test('external_agent 可以 GET /knowledge', async () => {
+  describe('Request source header compatibility', () => {
+    test('untrusted source header does not block GET /knowledge', async () => {
       const res = await fetch(`${BASE}/knowledge`, {
-        headers: { 'X-User-Id': 'external_agent' },
+        headers: { 'X-User-Id': 'source-a' },
       });
       expect(res.status).toBe(200);
     });
 
-    test('chat_agent 可以 GET /knowledge', async () => {
+    test('another untrusted source header also does not block GET /knowledge', async () => {
       const res = await fetch(`${BASE}/knowledge`, {
-        headers: { 'X-User-Id': 'chat_agent' },
+        headers: { 'X-User-Id': 'source-b' },
       });
       expect(res.status).toBe(200);
     });

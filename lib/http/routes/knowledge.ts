@@ -4,9 +4,8 @@
  * 替代 recipes.js + candidates.js （旧路由继续保留用于向后兼容）
  */
 
-import Logger from '@alembic/core/logging';
 import { ioLimit } from '@alembic/core/shared';
-import express, { type NextFunction, type Request, type Response } from 'express';
+import express, { type Request, type Response } from 'express';
 import {
   BatchDeleteBody,
   BatchDeprecateBody,
@@ -17,8 +16,8 @@ import {
   UpdateKnowledgeBody,
 } from '#shared/schemas/http-requests.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { rejectUnlessConfirmed } from '../entrypoint-safety.js';
 import { validate } from '../middleware/validate.js';
-import { buildAlembicHttpProblem } from '../problem-taxonomy.js';
 import {
   getContext,
   safeInt,
@@ -26,119 +25,7 @@ import {
   sanitizePaginatedForAPI,
 } from '../utils/routeHelpers.js';
 
-const _logger = Logger.getInstance();
 const router = express.Router();
-
-/* ═══ 权限中间件 ═════════════════════════════════════════ */
-
-/**
- * 路由级权限检查中间件
- * 使用 roleResolver 已解析的 req.resolvedRole + PermissionManager 校验
- * 当角色缺少指定 action:resource 权限时返回 403
- */
-function requirePermission(action: string, resource: string) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const role = (req.resolvedRole as string) || 'anonymous';
-    let container: { get(name: string): unknown } | null = null;
-    try {
-      container = getServiceContainer();
-      const permissionManager = container.get('permissionManager');
-      if (permissionManager) {
-        const result = (
-          permissionManager as unknown as {
-            check: (r: string, a: string, res: string) => { allowed: boolean; reason?: string };
-          }
-        ).check(role, action, resource);
-        if (!result.allowed) {
-          _logger.warn('Knowledge route permission denied', {
-            role,
-            action,
-            resource,
-            reason: result.reason,
-          });
-          res.status(403).json({
-            success: false,
-            error: {
-              message: `Permission denied: role '${role}' cannot ${action} on ${resource}. ${result.reason}`,
-              code: 'PERMISSION_DENIED',
-            },
-          });
-          return;
-        }
-      }
-    } catch (error: unknown) {
-      const problem = buildAlembicHttpProblem(
-        'PERMISSION_CHECK_UNAVAILABLE',
-        'Permission check unavailable; request rejected.',
-        'permission-denied',
-        { status: 403, retryable: false }
-      );
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      _logger.error('Knowledge route permission check unavailable', {
-        action,
-        resource,
-        role,
-        error: errorMessage,
-      });
-      recordPermissionAuditFailure(container, {
-        action,
-        error: errorMessage,
-        resource,
-        role,
-      });
-      res.status(problem.status).json({
-        success: false,
-        error: problem,
-      });
-      return;
-    }
-    next();
-  };
-}
-
-function recordPermissionAuditFailure(
-  container: { get(name: string): unknown } | null,
-  event: { action: string; error: string; resource: string; role: string }
-): void {
-  try {
-    const auditLogger = container?.get('auditLogger') as
-      | {
-          log(input: {
-            action: string;
-            actor: string;
-            data?: Record<string, unknown>;
-            error?: string;
-            resource: string;
-            result: 'failure' | 'success';
-          }): Promise<unknown> | unknown;
-        }
-      | undefined;
-    if (!auditLogger?.log) {
-      return;
-    }
-    void Promise.resolve(
-      auditLogger.log({
-        action: 'knowledge.permission.check',
-        actor: event.role,
-        data: {
-          requestedAction: event.action,
-          requestedResource: event.resource,
-        },
-        error: event.error,
-        resource: `knowledge:${event.resource}`,
-        result: 'failure',
-      })
-    ).catch((auditError: unknown) => {
-      _logger.warn('Knowledge route permission audit write failed', {
-        error: auditError instanceof Error ? auditError.message : String(auditError),
-      });
-    });
-  } catch (auditError: unknown) {
-    _logger.warn('Knowledge route permission audit unavailable', {
-      error: auditError instanceof Error ? auditError.message : String(auditError),
-    });
-  }
-}
 
 /* ═══ 查询 ═══════════════════════════════════════════════ */
 
@@ -251,6 +138,9 @@ router.get('/lifecycle', async (req: Request, res: Response) => {
  * 批量重新计算所有条目的质量评分
  */
 router.post('/quality/refresh-all', async (_req: Request, res: Response) => {
+  if (!rejectUnlessConfirmed(_req, res, 'knowledge quality refresh-all')) {
+    return;
+  }
   const container = getServiceContainer();
   const knowledgeService = container.get('knowledgeService');
   const result = await knowledgeService.list({}, { page: 1, pageSize: 10000 });
@@ -286,61 +176,50 @@ router.get('/:id', async (req: Request, res: Response) => {
  * POST /api/v1/knowledge
  * 创建知识条目（wire format 直通）
  */
-router.post(
-  '/',
-  requirePermission('knowledge', 'create'),
-  validate(CreateKnowledgeBody),
-  async (req: Request, res: Response) => {
-    const data = req.body;
+router.post('/', validate(CreateKnowledgeBody), async (req: Request, res: Response) => {
+  const data = req.body;
 
-    const container = getServiceContainer();
-    const knowledgeService = container.get('knowledgeService');
-    const context = getContext(req);
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const context = getContext(req);
 
-    const entry = await knowledgeService.create(data, context);
-    res.status(201).json({
-      success: true,
-      data: sanitizeForAPI(entry),
-    });
-  }
-);
+  const entry = await knowledgeService.create(data, context);
+  res.status(201).json({
+    success: true,
+    data: sanitizeForAPI(entry),
+  });
+});
 
 /**
  * PATCH /api/v1/knowledge/:id
  * 更新知识条目（白名单字段）
  */
-router.patch(
-  '/:id',
-  requirePermission('knowledge', 'update'),
-  validate(UpdateKnowledgeBody),
-  async (req: Request, res: Response) => {
-    const id = String(req.params.id);
-    const container = getServiceContainer();
-    const knowledgeService = container.get('knowledgeService');
-    const context = getContext(req);
+router.patch('/:id', validate(UpdateKnowledgeBody), async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const context = getContext(req);
 
-    const entry = await knowledgeService.update(id, req.body, context);
-    res.json({ success: true, data: sanitizeForAPI(entry) });
-  }
-);
+  const entry = await knowledgeService.update(id, req.body, context);
+  res.json({ success: true, data: sanitizeForAPI(entry) });
+});
 
 /**
  * DELETE /api/v1/knowledge/:id
  * 删除知识条目
  */
-router.delete(
-  '/:id',
-  requirePermission('knowledge', 'delete'),
-  async (req: Request, res: Response) => {
-    const id = String(req.params.id);
-    const container = getServiceContainer();
-    const knowledgeService = container.get('knowledgeService');
-    const context = getContext(req);
-
-    const result = await knowledgeService.delete(id, context);
-    res.json({ success: true, data: result });
+router.delete('/:id', async (req: Request, res: Response) => {
+  if (!rejectUnlessConfirmed(req, res, 'knowledge delete')) {
+    return;
   }
-);
+  const id = String(req.params.id);
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const context = getContext(req);
+
+  const result = await knowledgeService.delete(id, context);
+  res.json({ success: true, data: result });
+});
 
 /* ═══ 生命周期操作（6 态: pending / staging / active / evolving / decaying / deprecated）═══ */
 
@@ -348,19 +227,15 @@ router.delete(
  * PATCH /api/v1/knowledge/:id/publish
  * 发布 (pending → active) — 仅开发者
  */
-router.patch(
-  '/:id/publish',
-  requirePermission('knowledge', 'publish'),
-  async (req: Request, res: Response) => {
-    const id = String(req.params.id);
-    const container = getServiceContainer();
-    const knowledgeService = container.get('knowledgeService');
-    const context = getContext(req);
+router.patch('/:id/publish', async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const context = getContext(req);
 
-    const entry = await knowledgeService.publish(id, context);
-    res.json({ success: true, data: sanitizeForAPI(entry) });
-  }
-);
+  const entry = await knowledgeService.publish(id, context);
+  res.json({ success: true, data: sanitizeForAPI(entry) });
+});
 
 /**
  * PATCH /api/v1/knowledge/:id/deprecate
@@ -368,7 +243,6 @@ router.patch(
  */
 router.patch(
   '/:id/deprecate',
-  requirePermission('knowledge', 'deprecate'),
   validate(DeprecateKnowledgeBody),
   async (req: Request, res: Response) => {
     const id = String(req.params.id);
@@ -387,91 +261,71 @@ router.patch(
  * PATCH /api/v1/knowledge/:id/reactivate
  * 重新激活 (deprecated → pending)
  */
-router.patch(
-  '/:id/reactivate',
-  requirePermission('knowledge', 'update'),
-  async (req: Request, res: Response) => {
-    const id = String(req.params.id);
-    const container = getServiceContainer();
-    const knowledgeService = container.get('knowledgeService');
-    const context = getContext(req);
+router.patch('/:id/reactivate', async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const context = getContext(req);
 
-    const entry = await knowledgeService.reactivate(id, context);
-    res.json({ success: true, data: sanitizeForAPI(entry) });
-  }
-);
+  const entry = await knowledgeService.reactivate(id, context);
+  res.json({ success: true, data: sanitizeForAPI(entry) });
+});
 
 /**
  * PATCH /api/v1/knowledge/:id/stage
  * 暂存 (pending → staging)
  */
-router.patch(
-  '/:id/stage',
-  requirePermission('knowledge', 'update'),
-  async (req: Request, res: Response) => {
-    const id = String(req.params.id);
-    const container = getServiceContainer();
-    const knowledgeService = container.get('knowledgeService');
-    const context = getContext(req);
+router.patch('/:id/stage', async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const context = getContext(req);
 
-    const entry = await knowledgeService.stage(id, context);
-    res.json({ success: true, data: sanitizeForAPI(entry) });
-  }
-);
+  const entry = await knowledgeService.stage(id, context);
+  res.json({ success: true, data: sanitizeForAPI(entry) });
+});
 
 /**
  * PATCH /api/v1/knowledge/:id/evolve
  * 进化 (active → evolving)
  */
-router.patch(
-  '/:id/evolve',
-  requirePermission('knowledge', 'update'),
-  async (req: Request, res: Response) => {
-    const id = String(req.params.id);
-    const container = getServiceContainer();
-    const knowledgeService = container.get('knowledgeService');
-    const context = getContext(req);
+router.patch('/:id/evolve', async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const context = getContext(req);
 
-    const entry = await knowledgeService.evolve(id, context);
-    res.json({ success: true, data: sanitizeForAPI(entry) });
-  }
-);
+  const entry = await knowledgeService.evolve(id, context);
+  res.json({ success: true, data: sanitizeForAPI(entry) });
+});
 
 /**
  * PATCH /api/v1/knowledge/:id/decay
  * 衰退 (active|evolving → decaying)
  */
-router.patch(
-  '/:id/decay',
-  requirePermission('knowledge', 'update'),
-  async (req: Request, res: Response) => {
-    const id = String(req.params.id);
-    const container = getServiceContainer();
-    const knowledgeService = container.get('knowledgeService');
-    const context = getContext(req);
+router.patch('/:id/decay', async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const context = getContext(req);
 
-    const entry = await knowledgeService.decay(id, context);
-    res.json({ success: true, data: sanitizeForAPI(entry) });
-  }
-);
+  const entry = await knowledgeService.decay(id, context);
+  res.json({ success: true, data: sanitizeForAPI(entry) });
+});
 
 /**
  * PATCH /api/v1/knowledge/:id/restore
  * 恢复为已发布 (decaying|evolving → active)
  */
-router.patch(
-  '/:id/restore',
-  requirePermission('knowledge', 'update'),
-  async (req: Request, res: Response) => {
-    const id = String(req.params.id);
-    const container = getServiceContainer();
-    const knowledgeService = container.get('knowledgeService');
-    const context = getContext(req);
+router.patch('/:id/restore', async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const context = getContext(req);
 
-    const entry = await knowledgeService.restore(id, context);
-    res.json({ success: true, data: sanitizeForAPI(entry) });
-  }
-);
+  const entry = await knowledgeService.restore(id, context);
+  res.json({ success: true, data: sanitizeForAPI(entry) });
+});
 
 /* ═══ 批量操作 ═══════════════════════════════════════════ */
 
@@ -480,76 +334,72 @@ router.patch(
  * 批量发布 (pending → active)
  * 支持 autoApprovableOnly=true 参数，只发布 autoApprovable 的条目
  */
-router.post(
-  '/batch-publish',
-  requirePermission('knowledge', 'publish'),
-  validate(BatchPublishBody),
-  async (req: Request, res: Response) => {
-    const { ids } = req.body;
-
-    const container = getServiceContainer();
-    const knowledgeService = container.get('knowledgeService');
-    const context = getContext(req);
-
-    const results = await Promise.allSettled(
-      ids.map((id: string) => ioLimit(() => knowledgeService.publish(id, context)))
-    );
-
-    const published = results
-      .filter((r) => r.status === 'fulfilled')
-      .map((r) => sanitizeForAPI(r.value));
-    const failed = results
-      .map((r, i) => (r.status === 'rejected' ? { id: ids[i], error: r.reason?.message } : null))
-      .filter(Boolean);
-
-    res.json({
-      success: true,
-      data: {
-        published,
-        failed,
-        total: ids.length,
-        successCount: published.length,
-        failureCount: failed.length,
-      },
-    });
+router.post('/batch-publish', validate(BatchPublishBody), async (req: Request, res: Response) => {
+  if (!rejectUnlessConfirmed(req, res, 'knowledge batch-publish')) {
+    return;
   }
-);
+  const { ids } = req.body;
+
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const context = getContext(req);
+
+  const results = await Promise.allSettled(
+    ids.map((id: string) => ioLimit(() => knowledgeService.publish(id, context)))
+  );
+
+  const published = results
+    .filter((r) => r.status === 'fulfilled')
+    .map((r) => sanitizeForAPI(r.value));
+  const failed = results
+    .map((r, i) => (r.status === 'rejected' ? { id: ids[i], error: r.reason?.message } : null))
+    .filter(Boolean);
+
+  res.json({
+    success: true,
+    data: {
+      published,
+      failed,
+      total: ids.length,
+      successCount: published.length,
+      failureCount: failed.length,
+    },
+  });
+});
 
 /**
  * POST /api/v1/knowledge/batch-delete
  * 批量删除知识条目
  */
-router.post(
-  '/batch-delete',
-  requirePermission('knowledge', 'delete'),
-  validate(BatchDeleteBody),
-  async (req: Request, res: Response) => {
-    const { ids } = req.body;
-
-    const container = getServiceContainer();
-    const knowledgeService = container.get('knowledgeService');
-    const context = getContext(req);
-
-    const results = await Promise.allSettled(
-      ids.map((id: string) => ioLimit(() => knowledgeService.delete(id, context)))
-    );
-
-    const deleted = results.filter((r) => r.status === 'fulfilled').length;
-    const failed = results
-      .map((r, i) => (r.status === 'rejected' ? { id: ids[i], error: r.reason?.message } : null))
-      .filter(Boolean);
-
-    res.json({
-      success: true,
-      data: {
-        total: ids.length,
-        deletedCount: deleted,
-        failureCount: failed.length,
-        failed,
-      },
-    });
+router.post('/batch-delete', validate(BatchDeleteBody), async (req: Request, res: Response) => {
+  if (!rejectUnlessConfirmed(req, res, 'knowledge batch-delete')) {
+    return;
   }
-);
+  const { ids } = req.body;
+
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const context = getContext(req);
+
+  const results = await Promise.allSettled(
+    ids.map((id: string) => ioLimit(() => knowledgeService.delete(id, context)))
+  );
+
+  const deleted = results.filter((r) => r.status === 'fulfilled').length;
+  const failed = results
+    .map((r, i) => (r.status === 'rejected' ? { id: ids[i], error: r.reason?.message } : null))
+    .filter(Boolean);
+
+  res.json({
+    success: true,
+    data: {
+      total: ids.length,
+      deletedCount: deleted,
+      failureCount: failed.length,
+      failed,
+    },
+  });
+});
 
 /**
  * POST /api/v1/knowledge/batch-deprecate
@@ -557,9 +407,11 @@ router.post(
  */
 router.post(
   '/batch-deprecate',
-  requirePermission('knowledge', 'publish'),
   validate(BatchDeprecateBody),
   async (req: Request, res: Response) => {
+    if (!rejectUnlessConfirmed(req, res, 'knowledge batch-deprecate')) {
+      return;
+    }
     const { ids, reason } = req.body;
 
     const container = getServiceContainer();

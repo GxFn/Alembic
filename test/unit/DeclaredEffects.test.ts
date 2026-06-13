@@ -4,7 +4,7 @@
  * (PathGuard configured to a temp dir — never the real ~/.asd).
  *
  * Representatives:
- *  - zero-effect paths: HTTP auth login (whole-route), resident graph
+ *  - zero-effect paths: HTTP auth tombstone (whole-route), resident graph
  *    usage-gate (problem envelope) — sandbox tree must be byte-identical;
  *  - the shared DB-write funnel every write family delegates to: stable
  *    database facade + migrations + a drizzle insert — only .asd/alembic.db*
@@ -74,13 +74,13 @@ describe('Declared effects (AD6 no-undeclared-effects audit)', () => {
   test('zero-effect family paths leave the sandbox byte-identical (HTTP auth, resident usage gate)', async () => {
     const before = snapshotTree(sandboxRoot);
 
-    const loginResponse = await invokeRouter(authRouter, {
-      body: { password: 'alembic', username: 'admin' },
+    const authResponse = await invokeRouter(authRouter, {
+      body: { password: 'alembic', username: 'legacy-user' },
       method: 'POST',
       mountPath: '/api/v1/auth',
       path: '/api/v1/auth/login',
     });
-    expect(loginResponse.status).toBe(200);
+    expect(authResponse.status).toBe(410);
 
     const gateResult = await graphQuery(
       { container: { get: () => ({}) }, logger: console } as never,

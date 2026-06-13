@@ -4,7 +4,6 @@
  */
 
 import { KnowledgeEntry } from '@alembic/core/knowledge';
-import { getDeveloperIdentity } from '@alembic/core/shared';
 import type { Request } from 'express';
 
 /**
@@ -13,7 +12,7 @@ import type { Request } from 'express';
  */
 export function getContext(req: Request) {
   return {
-    userId: String(req.headers['x-user-id'] || getDeveloperIdentity()),
+    userId: req.resolvedUser || req.resolvedRole || 'http-request',
     ip: req.ip || '',
     userAgent: req.headers['user-agent'] || '',
   };

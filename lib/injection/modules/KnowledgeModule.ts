@@ -5,7 +5,7 @@
  *   - knowledgeService, knowledgeGraphService, codeEntityGraph, confidenceRouter
  *   - searchEngine, vectorStore, indexingPipeline
  *   - discovererRegistry, enhancementRegistry, languageService, dimensionCopy
- *   - constitution, aiProvider, projectGraph
+ *   - aiProvider, projectGraph
  */
 
 import { getEnhancementRegistry } from '@alembic/core/core/enhancement';
@@ -216,7 +216,6 @@ export function register(c: ServiceContainer) {
   c.register('enhancementRegistry', () => getEnhancementRegistry());
   c.register('languageService', () => LanguageService);
   c.register('dimensionCopy', () => DimensionCopy);
-  c.register('constitution', () => c.singletons.constitution || null);
   c.register('aiProvider', () => c.singletons.aiProvider || null);
   c.register('projectGraph', () => c.singletons.projectGraph || null);
 

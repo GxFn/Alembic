@@ -42,41 +42,21 @@ interface EventBus {
   emit(event: string, data: Record<string, unknown>): void;
 }
 
-interface ConstitutionLike {
-  getRules?(): unknown[];
-  rules?: unknown[];
-}
-
-interface ConstitutionValidatorLike {
-  enforce(request: Record<string, unknown>): Promise<unknown>;
-}
-
-interface PermissionManagerLike {
-  enforce(actor: string, action: string, resource: string | undefined): void;
-}
-
 export interface GatewayDependencies {
-  constitution?: ConstitutionLike | null;
-  constitutionValidator?: ConstitutionValidatorLike | null;
-  permissionManager?: PermissionManagerLike | null;
   auditLogger?: AuditLogger | null;
 }
 
 /**
- * Gateway - 统一网关
- * 所有操作的唯一入口。
+ * Gateway - route wrapper and audit envelope.
  *
- * Pipeline (4 步):
- *   validate → guard → route → audit
+ * Operation-specific HTTP routes own write safeguards. Gateway no longer acts
+ * as a central Constitution/RBAC authority.
  */
 export class Gateway extends EventEmitter {
   auditLogger: AuditLogger | null;
   config: GatewayConfig | undefined;
-  constitution: ConstitutionLike | null;
-  constitutionValidator: ConstitutionValidatorLike | null;
   eventBus: EventBus | null;
   logger;
-  permissionManager: PermissionManagerLike | null;
   routes: Map<string, (ctx: GatewayContext) => Promise<unknown>>;
   constructor(config?: GatewayConfig) {
     super();
@@ -84,24 +64,12 @@ export class Gateway extends EventEmitter {
     this.logger = Logger.getInstance();
     this.routes = new Map();
 
-    // 依赖注入（稍后设置）
-    this.constitution = null;
-    this.constitutionValidator = null;
-    this.permissionManager = null;
     this.auditLogger = null;
     this.eventBus = null; // 可选：外部注入 EventBus 实例
   }
 
   /** 设置依赖 */
-  setDependencies({
-    constitution,
-    constitutionValidator,
-    permissionManager,
-    auditLogger,
-  }: GatewayDependencies) {
-    this.constitution = constitution ?? null;
-    this.constitutionValidator = constitutionValidator ?? null;
-    this.permissionManager = permissionManager ?? null;
+  setDependencies({ auditLogger }: GatewayDependencies) {
     this.auditLogger = auditLogger ?? null;
   }
 
@@ -144,7 +112,7 @@ export class Gateway extends EventEmitter {
       // 1. validate — 请求格式
       this.validateRequest(request);
 
-      // 2. guard — 权限 + 宪法规则
+      // 2. guard — reserved for operation-neutral request checks
       await this.guard(context);
 
       // 3. route — 路由到处理器
@@ -196,8 +164,7 @@ export class Gateway extends EventEmitter {
   }
 
   /**
-   * 仅检查权限与宪法（不执行业务逻辑）
-   * 用于 MCP Gateway gating
+   * 仅检查请求格式并审计（不执行业务逻辑）。
    */
   async checkOnly(request: GatewayRequest) {
     const requestId = uuidv4();
@@ -252,22 +219,9 @@ export class Gateway extends EventEmitter {
     }
   }
 
-  /** guard — 权限检查 + 宪法验证 */
-  async guard(context: GatewayContext) {
-    // 权限检查
-    if (this.permissionManager) {
-      this.permissionManager.enforce(context.actor, context.action, context.resource);
-    }
-
-    // 宪法数据完整性规则
-    if (this.constitutionValidator) {
-      await this.constitutionValidator.enforce({
-        actor: context.actor,
-        action: context.action,
-        resource: context.resource,
-        data: context.data,
-      });
-    }
+  /** guard — central role/RBAC checks were removed from mainline. */
+  async guard(_context: GatewayContext) {
+    return;
   }
 
   /** route — 路由到处理器 */

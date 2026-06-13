@@ -59,9 +59,6 @@ export {
 const router = express.Router();
 const logger = Logger.getInstance();
 
-const AI_CONFIG_GATEWAY_ACTION = 'update:config';
-const AI_CONFIG_GATEWAY_RESOURCE = 'ai_config';
-
 export function createHttpChatAgentRunInput(
   req: Request,
   options: {
@@ -160,64 +157,23 @@ function rejectDisabledMockProvider(res: Response): void {
   });
 }
 
-function hasDeveloperRole(req: Request) {
-  return ['admin', 'developer', 'owner'].includes(req.resolvedRole || '');
-}
-
-function requireDeveloperRole(req: Request, res: Response) {
-  if (hasDeveloperRole(req)) {
-    return true;
-  }
-  res.status(403).json({
-    success: false,
-    error: { code: 'FORBIDDEN', message: '需要 developer 权限才能修改 AI 配置' },
-  });
-  return false;
-}
-
 export async function ensureAiConfigUpdateAllowed(
-  req: Request,
+  _req: Request,
   res: Response,
-  gateway?: GatewayCheckOnlyLike | null,
+  _gateway?: GatewayCheckOnlyLike | null,
   updates: Record<string, string> = {}
 ) {
-  if (!gateway?.checkOnly) {
-    res.status(503).json({
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({
       success: false,
       error: {
-        code: 'GATEWAY_UNAVAILABLE',
-        message: 'AI 配置写入需要 Gateway 权限检查，但 Gateway 不可用',
+        code: 'AI_CONFIG_NO_UPDATES',
+        message: 'AI config update requires at least one persisted setting.',
       },
     });
     return false;
   }
-
-  const result = await gateway.checkOnly({
-    actor: req.resolvedRole || 'anonymous',
-    action: AI_CONFIG_GATEWAY_ACTION,
-    resource: AI_CONFIG_GATEWAY_RESOURCE,
-    data: {
-      keys: Object.keys(updates),
-      _ip: req.ip,
-      _userAgent: req.headers['user-agent'] || '',
-      _resolvedUser: req.resolvedUser || undefined,
-    },
-    session: req.headers['x-session-id'] as string | undefined,
-  });
-
-  if (result.success) {
-    return true;
-  }
-
-  res.status(result.error?.statusCode || 403).json({
-    success: false,
-    error: {
-      code: result.error?.code || 'GATEWAY_DENIED',
-      message: result.error?.message || 'AI 配置写入未通过 Gateway 权限检查',
-      requestId: result.requestId,
-    },
-  });
-  return false;
+  return true;
 }
 
 export async function ensureDirectToolAllowed(
@@ -863,10 +819,6 @@ router.post(
   '/env-config',
   validate(AiEnvConfigBody),
   async (req: Request, res: Response): Promise<void> => {
-    if (!requireDeveloperRole(req, res)) {
-      return;
-    }
-
     const {
       provider,
       model,
@@ -930,9 +882,7 @@ router.post(
       }
     }
 
-    const container = getServiceContainer();
-    const gateway = container.get('gateway') as GatewayCheckOnlyLike;
-    if (!(await ensureAiConfigUpdateAllowed(req, res, gateway, updates))) {
+    if (!(await ensureAiConfigUpdateAllowed(req, res, null, updates))) {
       return;
     }
 

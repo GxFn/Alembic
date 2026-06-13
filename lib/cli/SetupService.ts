@@ -11,10 +11,10 @@
  *
  * ═══════════════════════════════════════════════════════════
  *
- * 数据架构（核心数据在子仓库，受 git 权限保护）
+ * 数据架构（核心数据在知识目录，写入由入口校验保护）
  * ─────────────────────────────────────────────
  *   Alembic/  (知识库根目录)
- *     ├─ constitution.yaml    权限宪法：角色 + 权限矩阵 + 治理规则 + 能力探测
+ *     ├─ constitution.yaml    入口安全策略（兼容文件，不定义运行时角色）
  *     ├─ boxspec.json         项目规格定义
  *     ├─ recipes/             Git 子仓库 = 唯一真实来源 Source of Truth
  *     │   └─ *.md             统一知识实体（代码规范/模式/架构/调用链/数据流/...）
@@ -30,17 +30,14 @@
  *
  * 数据流
  * ─────
- *   写入：编辑子仓库文件 → git push（需权限）→ alembic sync → 更新 DB 缓存
+ *   写入：入口 schema/确认/scope 校验 → 服务持久化 → 更新 DB 缓存
  *   读取：查询 SQLite（快速索引）
- *   核心数据（统一 Recipe 实体）修改必须经过 git，普通用户无法绕过
+ *   核心数据（统一 Recipe 实体）修改必须经过对应入口和服务层
  *
- * 权限模型（三层架构）
+ * 入口安全模型
  * ──────────────────
- *   ① 能力层 WriteGuard  — git push --dry-run：探测子仓库写权限（物理信号）
- *   ② 角色层 Permission  — constitution.yaml 角色权限矩阵（逻辑裁决）
- *   ③ 治理层 Constitution — constitution.yaml 优先级规则引擎（业务裁决）
- *
- *   子仓库 git 权限只是"一种能力（capability）"，最终裁决权在 Constitution YAML。
+ *   删除、批量写入、后台 apply、路径/项目范围写入等操作由对应入口命名并校验。
+ *   Alembic 主线不使用登录身份、运行时角色或中央权限矩阵作为写入裁决。
  */
 
 import { execSync } from 'node:child_process';
@@ -305,7 +302,7 @@ export class SetupService {
     }
     // else: 无 URL → recipes/ 是普通目录，随主仓库提交，不执行 git init
 
-    // constitution.yaml — 权限宪法
+    // constitution.yaml — entrypoint safety policy
     this._writeConstitution();
 
     // boxspec.json — 项目规格
@@ -362,48 +359,26 @@ export class SetupService {
     if (existsSync(tmpl)) {
       copyFileSync(tmpl, dest);
     } else {
-      // 内联生成最小宪法（模板文件不可用时的 fallback）
+      // 内联生成最小入口安全策略（模板文件不可用时的 fallback）
       writeFileSync(
         dest,
         [
-          '# Alembic Constitution',
-          'version: "2.0"',
-          '',
-          'capabilities:',
-          '  git_write:',
-          '    description: "recipes 子仓库 git push 权限"',
-          '    probe: "git push --dry-run"',
-          '    no_subrepo: "allow"',
-          '    no_remote: "allow"',
-          '    cache_ttl: 86400',
+          '# Alembic Entrypoint Safety Policy',
+          'version: "4.0"',
           '',
           'rules:',
           '  - id: destructive_confirm',
-          '    check: "删除操作必须有 confirmed: true"',
+          '    description: "Destructive writes require confirmed: true at their HTTP entrypoint"',
+          '    check: "destructive_needs_confirmation"',
           '  - id: content_required',
-          '    check: "创建 candidate/recipe 必须提供 code 或 content"',
+          '    description: "Create/update entrypoints validate non-empty content with route schemas"',
+          '    check: "creation_needs_content"',
           '  - id: ai_no_direct_recipe',
-          '    check: "AI actor 不能直接创建或批准 Recipe"',
+          '    description: "AI-produced changes are preview/apply flows; apply entrypoints own confirmation"',
+          '    check: "ai_cannot_approve_recipe"',
           '  - id: batch_authorized',
-          '    check: "批量操作必须有 authorized: true"',
-          '',
-          'roles:',
-          '  - id: "developer"',
-          '    name: "Developer"',
-          '    permissions: ["*"]',
-          '    requires_capability: ["git_write"]',
-          '  - id: "contributor"',
-          '    name: "Contributor"',
-          '    permissions: ["read:recipes", "read:candidates", "read:guard_rules", "read:audit_logs:self"]',
-          '  - id: "visitor"',
-          '    name: "Visitor"',
-          '    permissions: ["read:recipes", "read:guard_rules"]',
-          '  - id: "external_agent"',
-          '    name: "External Agent"',
-          '    permissions: ["read:recipes", "read:guard_rules", "create:candidates", "submit:knowledge"]',
-          '  - id: "chat_agent"',
-          '    name: "AgentRuntime"',
-          '    permissions: ["read:recipes", "read:candidates", "create:candidates", "read:guard_rules"]',
+          '    description: "Batch writes require confirmed: true at their HTTP entrypoint"',
+          '    check: "batch_needs_authorization"',
           '',
         ].join('\n')
       );
@@ -495,7 +470,7 @@ export class SetupService {
         '',
         '```',
         'Alembic/',
-        '├── constitution.yaml   权限宪法（角色 + 权限 + 治理规则 + 能力探测）',
+        '├── constitution.yaml   入口安全策略（兼容文件；不定义运行时角色）',
         '├── boxspec.json        项目规格',
         ...(this.subRepoUrl
           ? [
@@ -530,17 +505,10 @@ export class SetupService {
         '| code-style | 代码风格 |',
         '| solution | 问题解决方案 |',
         '',
-        '## 权限模型',
+        '## 入口安全模型',
         '',
-        'Alembic 使用 **三层权限架构**：',
-        '',
-        '| 层级 | 机制 | 职责 |',
-        '|------|------|------|',
-        '| ① 能力层 | `git push --dry-run` | 探测 recipes 子仓库物理写权限 |',
-        '| ② 角色层 | `constitution.yaml` roles | 角色权限矩阵 (action:resource) |',
-        '| ③ 治理层 | `constitution.yaml` priorities | 业务规则引擎 |',
-        '',
-        'git 权限只是"能力信号"，**最终裁决权在 Constitution YAML**。',
+        'Alembic 主线不使用运行时角色、登录身份或中央权限矩阵作为写入裁决。',
+        '写入安全由具体入口负责：请求 schema 校验、删除/批量写入确认、路径与项目范围校验、dry-run/force 语义以及持久化前置条件。',
         '',
         ...(this.subRepoUrl
           ? [

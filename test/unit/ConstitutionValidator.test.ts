@@ -17,7 +17,7 @@ describe('ConstitutionValidator', () => {
   describe('validate - destructive_confirm rule', () => {
     test('should require confirmation for delete operations', async () => {
       const request = {
-        actor: 'developer',
+        actor: 'http-request',
         action: 'delete',
         resource: '/candidates/123',
         data: {},
@@ -29,7 +29,7 @@ describe('ConstitutionValidator', () => {
 
     test('should allow delete with confirmation', async () => {
       const request = {
-        actor: 'developer',
+        actor: 'http-request',
         action: 'delete',
         resource: '/candidates/123',
         data: { confirmed: true },
@@ -83,9 +83,9 @@ describe('ConstitutionValidator', () => {
       expect(result.violations.some((v) => v.rule === 'ai_no_direct_recipe')).toBe(true);
     });
 
-    test('should allow developer to create recipes', async () => {
+    test('should allow non-AI source to create recipes', async () => {
       const request = {
-        actor: 'developer',
+        actor: 'http-request',
         action: 'create',
         resource: '/recipes',
         data: { name: 'Test Recipe', code: 'xxx' },
@@ -99,7 +99,7 @@ describe('ConstitutionValidator', () => {
   describe('validate - batch_authorized rule', () => {
     test('should require authorization for batch operations', async () => {
       const request = {
-        actor: 'developer',
+        actor: 'http-request',
         action: 'batch_update',
         resource: '/candidates',
         data: {},
@@ -111,7 +111,7 @@ describe('ConstitutionValidator', () => {
 
     test('should allow batch operations with authorization', async () => {
       const request = {
-        actor: 'developer',
+        actor: 'http-request',
         action: 'batch_update',
         resource: '/candidates',
         data: { authorized: true },
@@ -136,7 +136,7 @@ describe('ConstitutionValidator', () => {
 
     test('should return result on compliant request', async () => {
       const request = {
-        actor: 'developer',
+        actor: 'http-request',
         action: 'read',
         resource: '/recipes',
         data: {},

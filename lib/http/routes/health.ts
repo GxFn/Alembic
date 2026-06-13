@@ -35,13 +35,13 @@ router.get('/ready', (req, res) => {
 
 /**
  * GET /api/v1/health/identity
- * 当前开发者身份（从 git config / 环境变量解析）
+ * 当前来源元数据（从 git config / 环境变量解析，仅用于 provenance）
  */
 // AO1 route-input-exempt: identity read uses no body/query/params.
 router.get('/identity', (_req, res) => {
   res.json({
     success: true,
-    developer: getDeveloperIdentity(),
+    provenanceIdentity: getDeveloperIdentity(),
   });
 });
 

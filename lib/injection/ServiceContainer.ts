@@ -97,10 +97,6 @@ export class ServiceContainer {
       if (bootstrapComponents.gateway) {
         this.singletons.gateway = bootstrapComponents.gateway;
       }
-      if (bootstrapComponents.constitution) {
-        this.singletons.constitution = bootstrapComponents.constitution;
-      }
-
       if (bootstrapComponents.projectRoot) {
         this.singletons._projectRoot = bootstrapComponents.projectRoot;
       }

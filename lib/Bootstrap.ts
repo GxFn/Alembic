@@ -1,20 +1,16 @@
-import path from 'node:path';
 import { DatabaseConnection } from '@alembic/core/database';
 import { pathGuard } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
 import { unwrapRawDb } from '@alembic/core/search';
 import { WorkspaceSettingsStore } from '@alembic/core/shared';
 import type { WorkspaceResolver } from '@alembic/core/workspace';
-import Constitution from './governance/constitution/Constitution.js';
-import ConstitutionValidator from './governance/constitution/ConstitutionValidator.js';
 import Gateway, { type GatewayConfig } from './governance/gateway/Gateway.js';
-import PermissionManager from './governance/permission/PermissionManager.js';
 import AuditLogger from './infrastructure/audit/AuditLogger.js';
 import AuditStore from './infrastructure/audit/AuditStore.js';
 import ConfigLoader from './infrastructure/config/AppConfigLoader.js';
 import { resolveAlembicWorkspace } from './project-scope/ProjectScopeRegistry.js';
 import { SkillHooks } from './service/skills/SkillHooks.js';
-import { CONFIG_DIR, PACKAGE_ROOT } from './shared/package-assets.js';
+import { PACKAGE_ROOT } from './shared/package-assets.js';
 
 /** Bootstrap - 应用程序启动器 */
 /** Bootstrap 初始化选项 */
@@ -30,9 +26,6 @@ interface BootstrapComponents {
   config?: typeof ConfigLoader;
   logger?: ReturnType<typeof Logger.getInstance>;
   db?: InstanceType<typeof DatabaseConnection>;
-  constitution?: InstanceType<typeof Constitution>;
-  constitutionValidator?: InstanceType<typeof ConstitutionValidator>;
-  permissionManager?: InstanceType<typeof PermissionManager>;
   auditStore?: InstanceType<typeof AuditStore>;
   auditLogger?: InstanceType<typeof AuditLogger>;
   gateway?: InstanceType<typeof Gateway>;
@@ -116,16 +109,13 @@ export class Bootstrap {
       // 3. 连接数据库
       await this.initializeDatabase();
 
-      // 4. 加载宪法
-      await this.loadConstitution();
-
-      // 5. 初始化核心组件
+      // 4. 初始化核心组件
       await this.initializeCoreComponents();
 
-      // 6. 初始化网关
+      // 5. 初始化网关
       await this.initializeGateway();
 
-      // 7. 注册路由（稍后由各服务注册）
+      // 6. 注册路由（稍后由各服务注册）
       // await this.registerRoutes();
 
       const duration = Date.now() - startTime;
@@ -181,29 +171,10 @@ export class Bootstrap {
     this.#requireComponent('logger').info('Database connected and migrated');
   }
 
-  /** 加载宪法 */
-  async loadConstitution() {
-    const constitutionPath = path.join(CONFIG_DIR, 'constitution.yaml');
-    const constitution = new Constitution(constitutionPath);
-    this.components.constitution = constitution;
-    this.#requireComponent('logger').info('Constitution loaded', constitution.toJSON());
-  }
-
   /** 初始化核心组件 */
   async initializeCoreComponents() {
-    const constitution = this.#requireComponent('constitution');
     const db = this.#requireComponent('db');
     const logger = this.#requireComponent('logger');
-
-    // Constitution Validator
-    const constitutionValidator = new ConstitutionValidator(constitution);
-    this.components.constitutionValidator = constitutionValidator;
-    logger.info('ConstitutionValidator initialized');
-
-    // Permission Manager
-    const permissionManager = new PermissionManager(constitution);
-    this.components.permissionManager = permissionManager;
-    logger.info('PermissionManager initialized');
 
     // Audit System
     const auditStore = new AuditStore(db);
@@ -229,9 +200,6 @@ export class Bootstrap {
 
     // 注入依赖
     gateway.setDependencies({
-      constitution: this.components.constitution,
-      constitutionValidator: this.components.constitutionValidator,
-      permissionManager: this.components.permissionManager,
       auditLogger: this.components.auditLogger,
     });
 

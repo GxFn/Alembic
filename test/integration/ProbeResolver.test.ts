@@ -1,5 +1,5 @@
 /**
- * 集成测试：CapabilityProbe + roleResolver 双路径
+ * 集成测试：CapabilityProbe legacy classifier + HTTP source resolver
  *
  * 覆盖范围：
  *   ✓ CapabilityProbe — 真实 temp git repo 测试
@@ -9,10 +9,8 @@
  *     - 目录存在但非 git repo → 'admin'
  *     - 缓存命中 / 过期 / 失效
  *   ✓ roleResolver 中间件
- *     - Path A (AUTH_ENABLED=true): token 解析
- *     - Path B (AUTH_ENABLED=false): probe 驱动
  *     - x-user-id header 直接信任
- *     - 无效 / 过期 token → visitor
+ *     - untrusted/default requests use a neutral source label
  */
 
 import { CapabilityProbe } from '@alembic/core/core/capability';
@@ -236,7 +234,7 @@ describe('Integration: roleResolver middleware', () => {
     middleware(req as never, res as never, next as never);
     expect(wasNextCalled()).toBe(true);
     // 走到 probe-based 或 token-based 路径，不再是 'anonymous'
-    expect(req.resolvedRole).toBeDefined();
+    expect(req.resolvedRole).toBe('http-request');
   });
 
   test('x-user-id = "dashboard" 不直接信任', () => {
@@ -246,13 +244,13 @@ describe('Integration: roleResolver middleware', () => {
     });
 
     middleware(req as never, res as never, next as never);
-    expect(req.resolvedRole).toBeDefined();
+    expect(req.resolvedRole).toBe('http-request');
     // dashboard 不被直接信任，走正常路径
   });
 
-  // ── Path B: Probe-based (AUTH_ENABLED=false) ──
+  // ── Source resolver does not consume CapabilityProbe ──
 
-  test('Path B: 使用 CapabilityProbe（无子仓库 → admin）', () => {
+  test('CapabilityProbe input does not create a runtime role', () => {
     setEnv('VITE_AUTH_ENABLED', undefined);
     setEnv('ALEMBIC_AUTH_ENABLED', undefined);
 
@@ -264,11 +262,11 @@ describe('Integration: roleResolver middleware', () => {
     middleware(req as never, res as never, next as never);
 
     expect(wasNextCalled()).toBe(true);
-    expect(req.resolvedRole).toBe('developer');
-    expect(req.resolvedUser).toContain('probe:');
+    expect(req.resolvedRole).toBe('http-request');
+    expect(req.resolvedUser).toBe('http-request');
   });
 
-  test('Path B: 无 CapabilityProbe 实例 → 默认 developer（向后兼容）', () => {
+  test('without trusted source headers defaults to neutral request source', () => {
     setEnv('VITE_AUTH_ENABLED', undefined);
     setEnv('ALEMBIC_AUTH_ENABLED', undefined);
 
@@ -276,8 +274,8 @@ describe('Integration: roleResolver middleware', () => {
     const { req, res, next } = mockExpress({});
 
     middleware(req as never, res as never, next as never);
-    expect(req.resolvedRole).toBe('developer');
-    expect(req.resolvedUser).toBe('local');
+    expect(req.resolvedRole).toBe('http-request');
+    expect(req.resolvedUser).toBe('http-request');
   });
 
   // ── Path A: Token-based ──
@@ -287,7 +285,7 @@ describe('Integration: roleResolver middleware', () => {
 
   // 测试 token 生成与验证的一致性
   test('createTestToken 生成的 token 格式正确', () => {
-    const token = createTestToken({ sub: 'admin', role: 'developer' }, TOKEN_SECRET);
+    const token = createTestToken({ sub: 'source', role: 'http-request' }, TOKEN_SECRET);
 
     expect(typeof token).toBe('string');
     const parts = token.split('.');
@@ -295,13 +293,13 @@ describe('Integration: roleResolver middleware', () => {
 
     // 反序列化 payload
     const payload = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
-    expect(payload.sub).toBe('admin');
-    expect(payload.role).toBe('developer');
+    expect(payload.sub).toBe('source');
+    expect(payload.role).toBe('http-request');
     expect(payload.exp).toBeGreaterThan(Date.now());
   });
 
   test('createExpiredToken 生成的 token 已过期', () => {
-    const token = createExpiredToken({ sub: 'admin', role: 'developer' }, TOKEN_SECRET);
+    const token = createExpiredToken({ sub: 'source', role: 'http-request' }, TOKEN_SECRET);
 
     const parts = token.split('.');
     const payload = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
@@ -322,7 +320,7 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
     }
   });
 
-  test('真实 git repo (无 remote) 通过 middleware → developer', () => {
+  test('真实 git repo (无 remote) 通过 middleware → neutral source', () => {
     const { repoPath, cleanup } = createTempGitRepo({ withRemote: false });
     repos.push({ repoPath, cleanup });
 
@@ -343,10 +341,10 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
     );
 
     expect(nextCalled).toBe(true);
-    expect(req.resolvedRole).toBe('developer');
+    expect(req.resolvedRole).toBe('http-request');
   });
 
-  test('真实 git repo (无 remote, deny) 通过 middleware → visitor', () => {
+  test('真实 git repo (无 remote, deny) 通过 middleware → neutral source', () => {
     const { repoPath, cleanup } = createTempGitRepo({ withRemote: false });
     repos.push({ repoPath, cleanup });
 
@@ -367,6 +365,6 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
     );
 
     expect(nextCalled).toBe(true);
-    expect(req.resolvedRole).toBe('visitor');
+    expect(req.resolvedRole).toBe('http-request');
   });
 });

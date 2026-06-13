@@ -18,9 +18,6 @@ const mocks = vi.hoisted(() => ({
   knowledgeService: {
     create: vi.fn(),
   },
-  permissionManager: {
-    check: vi.fn(),
-  },
 }));
 
 vi.mock('../../lib/injection/ServiceContainer.js', () => ({
@@ -38,8 +35,6 @@ const tempRoots: string[] = [];
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.knowledgeService.create.mockReset();
-  mocks.permissionManager.check.mockReset();
-  mocks.permissionManager.check.mockReturnValue({ allowed: true });
   const decisionStore = new DecisionRegisterStore({
     dataRoot: tempRoot('alembic-ao4-decision-store-'),
     now: () => new Date('2026-06-12T00:00:00.000Z'),
@@ -60,9 +55,6 @@ beforeEach(() => {
     if (name === 'knowledgeService') {
       return mocks.knowledgeService;
     }
-    if (name === 'permissionManager') {
-      return mocks.permissionManager;
-    }
     throw new Error(`unexpected service: ${name}`);
   });
 });
@@ -80,34 +72,34 @@ afterEach(() => {
 });
 
 describe('AO4 negative suites', () => {
-  test('HTTP auth returns 401 for missing bearer token', async () => {
+  test('HTTP auth me endpoint is retired', async () => {
     const response = await invokeRouter(authRouter, {
       method: 'GET',
       mountPath: '/api/v1/auth',
       path: '/api/v1/auth/me',
     });
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(410);
     expect(response.body).toMatchObject({
-      error: { code: 'UNAUTHORIZED' },
+      error: { code: 'AUTH_MODEL_RETIRED' },
       success: false,
     });
   });
 
-  test('HTTP auth returns 401 for invalid credentials', async () => {
+  test('HTTP auth login endpoint is retired after request validation', async () => {
     const response = await invokeRouter(authRouter, {
       body: {
         password: 'wrong-password',
-        username: 'admin',
+        username: 'legacy-user',
       },
       method: 'POST',
       mountPath: '/api/v1/auth',
       path: '/api/v1/auth/login',
     });
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(410);
     expect(response.body).toMatchObject({
-      error: { code: 'UNAUTHORIZED' },
+      error: { code: 'AUTH_MODEL_RETIRED' },
       success: false,
     });
   });
@@ -127,79 +119,47 @@ describe('AO4 negative suites', () => {
     });
   });
 
-  test('HTTP auth accepts valid credentials and returns the signed user', async () => {
+  test('HTTP auth does not issue tokens for valid legacy credentials', async () => {
     const loginResponse = await invokeRouter(authRouter, {
       body: {
         password: 'alembic',
-        username: 'admin',
+        username: 'legacy-user',
       },
       method: 'POST',
       mountPath: '/api/v1/auth',
       path: '/api/v1/auth/login',
     });
-    const loginData = loginResponse.body.data as { token?: string } | undefined;
-
-    expect(loginResponse.status).toBe(200);
-    expect(loginData?.token).toEqual(expect.any(String));
-
-    const meResponse = await invokeRouter(authRouter, {
-      headers: {
-        authorization: `Bearer ${loginData?.token}`,
-      },
-      method: 'GET',
-      mountPath: '/api/v1/auth',
-      path: '/api/v1/auth/me',
-    });
-
-    expect(meResponse.status).toBe(200);
-    expect(meResponse.body).toMatchObject({
-      data: { user: { role: 'developer', username: 'admin' } },
-      success: true,
+    expect(loginResponse.status).toBe(410);
+    expect(loginResponse.body).toMatchObject({
+      error: { code: 'AUTH_MODEL_RETIRED' },
+      success: false,
     });
   });
 
-  test('HTTP auth lazy config (AD4): reset regenerates the secret and invalidates old tokens', async () => {
-    const { _resetAuthConfigForTests } = await import('../../lib/http/routes/auth.js');
+  test('HTTP auth retirement does not create a process token secret', async () => {
     const originalSecret = process.env.ALEMBIC_AUTH_SECRET;
     try {
-      // Force the generated-secret path (no env secret) — the documented
-      // restart semantics: a fresh process secret invalidates earlier tokens.
       delete process.env.ALEMBIC_AUTH_SECRET;
-      _resetAuthConfigForTests();
 
-      const loginResponse = await invokeRouter(authRouter, {
-        body: { password: 'alembic', username: 'admin' },
+      const response = await invokeRouter(authRouter, {
+        body: { password: 'alembic', username: 'legacy-user' },
         method: 'POST',
         mountPath: '/api/v1/auth',
         path: '/api/v1/auth/login',
       });
-      const token = (loginResponse.body.data as { token?: string } | undefined)?.token;
-      expect(loginResponse.status).toBe(200);
-      // Lazy init writes the generated secret back to the env (child-process
-      // inheritance parity with the old import-time behavior).
-      expect(process.env.ALEMBIC_AUTH_SECRET).toEqual(expect.any(String));
 
-      // Simulated restart: reset + drop the env secret → new secret → old token rejected.
-      delete process.env.ALEMBIC_AUTH_SECRET;
-      _resetAuthConfigForTests();
-      const meResponse = await invokeRouter(authRouter, {
-        headers: { authorization: `Bearer ${token}` },
-        method: 'GET',
-        mountPath: '/api/v1/auth',
-        path: '/api/v1/auth/me',
-      });
-      expect(meResponse.status).toBe(401);
+      expect(response.status).toBe(410);
+      expect(process.env.ALEMBIC_AUTH_SECRET).toBeUndefined();
     } finally {
       if (originalSecret === undefined) {
         delete process.env.ALEMBIC_AUTH_SECRET;
       } else {
         process.env.ALEMBIC_AUTH_SECRET = originalSecret;
       }
-      _resetAuthConfigForTests();
     }
   });
 
-  test('HTTP auth rejects malformed bearer tokens', async () => {
+  test('HTTP auth ignores malformed bearer tokens because the model is retired', async () => {
     const response = await invokeRouter(authRouter, {
       headers: {
         authorization: 'Bearer not-a-token',
@@ -209,35 +169,26 @@ describe('AO4 negative suites', () => {
       path: '/api/v1/auth/me',
     });
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(410);
     expect(response.body).toMatchObject({
-      error: { code: 'UNAUTHORIZED' },
+      error: { code: 'AUTH_MODEL_RETIRED' },
       success: false,
     });
   });
 
-  test('HTTP permission boundary returns 403 for disallowed knowledge writes', async () => {
-    mocks.permissionManager.check.mockReturnValue({
-      allowed: false,
-      reason: 'AO4 forbidden write',
-    });
-
+  test('HTTP knowledge create no longer calls the old permission boundary', async () => {
     const response = await invokeRouter(knowledgeRouter, {
       body: {
-        content: 'writes require permission',
-        title: 'AO4 permission check',
+        content: 'writes use entrypoint validation',
+        title: 'AO4 entrypoint validation',
       },
       method: 'POST',
       mountPath: '/api/v1/knowledge',
       path: '/api/v1/knowledge',
     });
 
-    expect(response.status).toBe(403);
-    expect(response.body).toMatchObject({
-      error: { code: 'PERMISSION_DENIED' },
-      success: false,
-    });
-    expect(mocks.knowledgeService.create).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(mocks.knowledgeService.create).toHaveBeenCalled();
   });
 
   test('job cancellation persists the final cancelled state', () => {

@@ -3,10 +3,7 @@
  * 为 Express 请求注入 Gateway 执行能力
  * 路由层通过 req.gw(action, resource, data) 发起 Gateway 请求
  *
- * actor 来源优先级：
- *   1. req.resolvedRole  — roleResolver 中间件已解析（双路径）
- *   2. req.headers['x-user-id'] — 内部 / MCP 调用
- *   3. 'anonymous' — 兜底
+ * actor 是审计来源标签，不是运行时权限角色。
  */
 
 import type { NextFunction, Request, Response } from 'express';
@@ -40,8 +37,7 @@ export function gatewayMiddleware() {
       const container = getServiceContainer();
       const gateway = container.get('gateway');
 
-      // 优先使用 roleResolver 解析的角色，其次 header，最后兜底
-      const actor = req.resolvedRole || String(req.headers['x-user-id'] || '') || 'anonymous';
+      const actor = req.resolvedUser || req.resolvedRole || 'http-request';
 
       const result = await gateway.execute({
         actor,

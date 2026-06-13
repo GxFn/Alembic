@@ -11,9 +11,11 @@ import {
   BatchEnableBody,
   CheckCodeBody,
   CreateGuardRuleBody,
+  DisableRuleBody,
   ImportFromRecipeBody,
 } from '#shared/schemas/http-requests.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { rejectUnlessConfirmed } from '../entrypoint-safety.js';
 import { validate } from '../middleware/validate.js';
 import { getContext, safeInt } from '../utils/routeHelpers.js';
 
@@ -168,7 +170,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/rules
- * 创建防护规则 (Gateway 管控: 权限 + 宪法 + 审计)
+ * 创建防护规则 (schema validation + Gateway audit envelope)
  * 兼容前端字段: { ruleId, message, pattern, languages, note, dimension }
  * 同时兼容 V2 字段: { name, description, pattern, severity, category }
  */
@@ -202,6 +204,9 @@ router.post('/', validate(CreateGuardRuleBody), async (req: Request, res: Respon
  * 批量启用防护规则
  */
 router.post('/batch-enable', validate(BatchEnableBody), async (req: Request, res: Response) => {
+  if (!rejectUnlessConfirmed(req, res, 'guard rule batch-enable')) {
+    return;
+  }
   const { ids } = req.body;
 
   const container = getServiceContainer();
@@ -234,6 +239,9 @@ router.post('/batch-enable', validate(BatchEnableBody), async (req: Request, res
  * 批量禁用防护规则
  */
 router.post('/batch-disable', validate(BatchDisableBody), async (req: Request, res: Response) => {
+  if (!rejectUnlessConfirmed(req, res, 'guard rule batch-disable')) {
+    return;
+  }
   const { ids, reason } = req.body;
 
   const container = getServiceContainer();
@@ -266,6 +274,9 @@ router.post('/batch-disable', validate(BatchDisableBody), async (req: Request, r
  * 启用防护规则
  */
 router.patch('/:id/enable', async (req: Request, res: Response) => {
+  if (!rejectUnlessConfirmed(req, res, 'guard rule enable')) {
+    return;
+  }
   const { id } = req.params;
   const container = getServiceContainer();
   const guardService = container.get('guardService');
@@ -279,7 +290,10 @@ router.patch('/:id/enable', async (req: Request, res: Response) => {
  * PATCH /api/v1/rules/:id/disable
  * 禁用防护规则
  */
-router.patch('/:id/disable', async (req: Request, res: Response) => {
+router.patch('/:id/disable', validate(DisableRuleBody), async (req: Request, res: Response) => {
+  if (!rejectUnlessConfirmed(req, res, 'guard rule disable')) {
+    return;
+  }
   const { id } = req.params;
   const { reason } = req.body;
 
@@ -315,6 +329,9 @@ router.post(
   '/import-from-recipe',
   validate(ImportFromRecipeBody),
   async (req: Request, res: Response) => {
+    if (!rejectUnlessConfirmed(req, res, 'guard rule import-from-recipe')) {
+      return;
+    }
     const { recipeId, rules } = req.body;
 
     const container = getServiceContainer();
