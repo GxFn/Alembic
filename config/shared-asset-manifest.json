@@ -5,41 +5,41 @@
     "name": "AlembicPlugin",
     "envVar": "ALEMBIC_PLUGIN_PATH",
     "defaultPath": "../AlembicPlugin",
-    "sanityPath": "injectable-skills"
+    "sanityPath": "skills"
   },
   "selfCheckFiles": ["config/shared-asset-manifest.json", "scripts/check-shared-asset-drift.mjs"],
   "assets": [
     {
       "id": "skill-alembic-create",
-      "path": "injectable-skills/alembic-create/SKILL.md",
+      "path": "skills/alembic-create/SKILL.md",
       "mode": "skill-shared-sections",
       "authority": "shared sections: main; host sections: each host",
       "notes": "Frontmatter description, envelope-vs-structuredContent prerequisite, alembic_knowledge_lifecycle references are intentional host divergence (tool contract; alembic_enrich_candidates was deleted in the Train B DCR wave). Gate compares wakeflow-shared sections only."
     },
     {
       "id": "skill-alembic-guard",
-      "path": "injectable-skills/alembic-guard/SKILL.md",
+      "path": "skills/alembic-guard/SKILL.md",
       "mode": "skill-shared-sections",
       "authority": "shared sections: main; host sections: each host",
       "notes": "Main MCP exposes alembic_guard; plugin exposes alembic_code_guard with files/code/workRef scopes (RC0-verified). Tool-contract sections must never be merged."
     },
     {
       "id": "skill-alembic-recipes",
-      "path": "injectable-skills/alembic-recipes/SKILL.md",
+      "path": "skills/alembic-recipes/SKILL.md",
       "mode": "skill-shared-sections",
       "authority": "shared sections: main; host sections: each host",
       "notes": "Search-mode description and Guard tool naming are host-specific; plugin-only alembic_prime / alembic_codex_* guidance stays as plugin host overlay."
     },
     {
       "id": "skill-alembic-structure",
-      "path": "injectable-skills/alembic-structure/SKILL.md",
+      "path": "skills/alembic-structure/SKILL.md",
       "mode": "skill-shared-sections",
       "authority": "shared sections: main; host sections: each host",
       "notes": "Plugin-only source-graph guidance (alembic_source_graph_status / alembic_code_explore / alembic_symbol_search) stays as plugin host overlay between shared regions."
     },
     {
       "id": "skill-alembic-devdocs",
-      "path": "injectable-skills/alembic-devdocs",
+      "path": "skills/alembic-devdocs",
       "mode": "main-only",
       "authority": "main",
       "notes": "Intentional scope gap: plugin skill registry hardcodes the other 4 skills (AlembicPlugin lib/.../ProjectSkillService.ts). Gate fails if an undeclared copy appears on the plugin side."

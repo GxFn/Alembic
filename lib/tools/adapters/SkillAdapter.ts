@@ -7,7 +7,7 @@ import type {
   ToolResultStatus,
 } from '@alembic/agent';
 import { getProjectSkillsPath } from '@alembic/core/config';
-import { INJECTABLE_SKILLS_DIR } from '../../shared/package-assets.js';
+import { PACKAGE_SKILLS_DIR } from '../../shared/package-assets.js';
 
 type SkillSource = 'builtin' | 'project';
 type SkillSourceFilter = 'all' | SkillSource;
@@ -28,7 +28,7 @@ export class SkillAdapter implements ToolExecutionAdapter {
   readonly #builtinSkillsDir: string;
 
   constructor(options: { builtinSkillsDir?: string } = {}) {
-    this.#builtinSkillsDir = options.builtinSkillsDir ?? INJECTABLE_SKILLS_DIR;
+    this.#builtinSkillsDir = options.builtinSkillsDir ?? PACKAGE_SKILLS_DIR;
   }
 
   async execute(request: ToolExecutionRequest): Promise<ToolResultEnvelope> {

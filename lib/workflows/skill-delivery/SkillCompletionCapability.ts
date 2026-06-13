@@ -18,7 +18,7 @@ import {
   type WorkspaceResolver,
 } from '@alembic/core/workspace';
 import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
-import { INJECTABLE_SKILLS_DIR } from '../../shared/package-assets.js';
+import { PACKAGE_SKILLS_DIR } from '../../shared/package-assets.js';
 
 const logger = Logger.getInstance();
 
@@ -298,7 +298,7 @@ function createWorkflowSkill(
     };
   }
 
-  const builtinSkillPath = path.join(INJECTABLE_SKILLS_DIR, name, 'SKILL.md');
+  const builtinSkillPath = path.join(PACKAGE_SKILLS_DIR, name, 'SKILL.md');
   if (fs.existsSync(builtinSkillPath)) {
     return {
       success: false,

@@ -42,7 +42,7 @@ vi.mock('@alembic/core/workspace', () => ({
     package: {
       config: 'config',
       dashboard: 'dashboard',
-      injectableSkills: 'injectable-skills',
+      injectableSkills: 'skills',
       internalSkills: 'skills',
       resources: 'resources',
       templates: 'templates',

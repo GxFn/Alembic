@@ -488,7 +488,7 @@
       "path": "lib/tools/adapters/SkillAdapter.ts",
       "classification": "alembic-main-skill-asset-adapter",
       "switchAfter": "do-not-migrate-by-default",
-      "reason": "Skill loading reads Alembic injectable skills and project skills from host paths."
+      "reason": "Skill loading reads Alembic package skills and project skills from host paths."
     },
     {
       "path": "lib/tools/adapters/SkillCapabilities.ts",

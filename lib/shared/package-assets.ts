@@ -2,7 +2,7 @@
  * Alembic package asset paths.
  *
  * Core owns generic package-root primitives; this adapter keeps Alembic-owned
- * config, templates, resources, dashboard, and injectable skill paths anchored
+ * config, templates, resources, dashboard, and package skill paths anchored
  * to the outer `alembic-ai` package.
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -38,18 +38,13 @@ export const PACKAGE_ROOT = findAlembicPackageRoot();
 
 export const CONFIG_DIR = path.join(PACKAGE_ROOT, DEFAULT_FOLDER_NAMES.package.config);
 
-export const INTERNAL_SKILLS_DIR = path.join(
+export const PACKAGE_SKILLS_DIR = path.join(
   PACKAGE_ROOT,
   DEFAULT_FOLDER_NAMES.package.internalSkills
 );
 
-export const INJECTABLE_SKILLS_DIR = path.join(
-  PACKAGE_ROOT,
-  DEFAULT_FOLDER_NAMES.package.injectableSkills
-);
-
-/** @deprecated Use INJECTABLE_SKILLS_DIR for product builtin skills. */
-export const SKILLS_DIR = INJECTABLE_SKILLS_DIR;
+export const INTERNAL_SKILLS_DIR = PACKAGE_SKILLS_DIR;
+export const SKILLS_DIR = PACKAGE_SKILLS_DIR;
 
 export const TEMPLATES_DIR = path.join(PACKAGE_ROOT, DEFAULT_FOLDER_NAMES.package.templates);
 

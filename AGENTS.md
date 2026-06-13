@@ -110,8 +110,8 @@ This section is maintained by the Wakeflow runtime installer. It records this wi
 
 | 资产 | 权威 | 比较方式 | 已声明差异 |
 |------|------|----------|------------|
-| `injectable-skills/{alembic-create,alembic-guard,alembic-recipes,alembic-structure}/SKILL.md` | 共享段：主仓库；host 段：各宿主 | 仅比较 `wakeflow-shared` 标记段 | frontmatter description、Envelope vs structuredContent 前置说明、工具契约段、插件主动触发措辞均为宿主差异 |
-| `injectable-skills/alembic-devdocs/` | main-only | 插件侧必须不存在 | 插件技能注册表只硬编码另外 4 个技能（`ProjectSkillService.ts`），有意的范围差异 |
+| `skills/{alembic-create,alembic-guard,alembic-recipes,alembic-structure}/SKILL.md` | 共享段：主仓库；host 段：各宿主 | 仅比较 `wakeflow-shared` 标记段 | frontmatter description、Envelope vs structuredContent 前置说明、工具契约段、插件主动触发措辞均为宿主差异 |
+| `skills/alembic-devdocs/` | main-only | 插件侧必须不存在 | 插件技能注册表只硬编码另外 4 个技能（`ProjectSkillService.ts`），有意的范围差异 |
 | `templates/instructions/` | main-only | 插件侧必须不存在 | 插件没有 instructions 注入注册表 |
 | `templates/constitution.yaml` | per-host | 整文件比较，3 条声明变体行替换占位符后须一致 | 角色命名/描述按宿主（见下方角色映射表） |
 | `config/default.json` | per-host | JSON 深比较，排除顶层 `ai` 块 | plugin-as-guest 设计：provider 配置由宿主注入，`ai` 块仅存在于主仓库 |
@@ -145,8 +145,8 @@ This section is maintained by the Wakeflow runtime installer. It records this wi
 - 开发临时文档：`docs-dev/`（不跟随 git）。
 - 临时测试脚本：`scratch/`（不跟随 git）。
 - Dashboard 构建产物：`dashboard/`（仅存放构建输出 `dashboard/dist`，由 `npm run build:dashboard` 从 `AlembicDashboard` 仓库构建并复制而来；前端源码唯一权威仓库是 `AlembicDashboard`，不要在本仓库新增 Dashboard 前端源码）。
-- 注入资源和原生资源：`injectable-skills/`、`resources/`。
-- 内部技能挂载点：`skills/`（配置的运行时挂载目录：`config/default.json` 将 package `internalSkills` 与 project `skills` 映射到该目录，`lib/Bootstrap.ts` 启动时扫描 `skills/*/hooks.js` 加载技能钩子；仓库内保持空目录是正常预留状态，不要删除）。
+- 包内置技能和原生资源：`skills/`、`resources/`。
+- 项目级技能挂载点：`Alembic/skills/`（运行时数据目录，由 `config/default.json` 的 project `skills` 映射；`lib/Bootstrap.ts` 启动时先扫描包内置 `skills/*/hooks.js`，再扫描项目级 `Alembic/skills/*/hooks.js` 覆盖同名钩子）。
 - Core 本地源码：`../AlembicCore`；Core vendor fallback / release snapshot：`vendor/AlembicCore`。
 - workspace 级长期协作文档按 Workspace 接入卡中的 `Window ledger` 归档。
 

@@ -162,7 +162,7 @@
     "config",
     "scripts/clean-dist.mjs",
     "scripts/postbuild.mjs",
-    "injectable-skills",
+    "skills",
     "templates",
     "dashboard/dist",
     "template.json",
