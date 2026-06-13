@@ -49,7 +49,7 @@ export function rejectInProduction(res: Response, operation: string): boolean {
 
 export function operationContext(req: Request) {
   return {
-    userId: req.resolvedUser || req.resolvedRole || 'http-request',
+    userId: req.resolvedSourceActor || req.resolvedSource || 'http-request',
     ip: req.ip || '',
     userAgent: req.headers['user-agent'] || '',
   };

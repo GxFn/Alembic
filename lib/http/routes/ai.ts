@@ -87,8 +87,8 @@ export function createHttpChatAgentRunInput(
       source,
       lang: options.lang,
       actor: {
-        role: req.resolvedRole || 'user',
-        user: req.resolvedUser || req.ip || 'http-user',
+        role: req.resolvedSource || 'user',
+        user: req.resolvedSourceActor || req.ip || 'http-user',
         sessionId: options.conversationId || undefined,
       },
     },
@@ -615,8 +615,8 @@ router.post(
       args: params,
       surface: 'http',
       actor: {
-        role: req.resolvedRole || 'anonymous',
-        user: req.resolvedUser || undefined,
+        role: req.resolvedSource || 'anonymous',
+        user: req.resolvedSourceActor || undefined,
         sessionId: req.headers['x-session-id'] as string | undefined,
       },
       source: { kind: 'http', name: '/api/v1/ai/agent/tool' },
@@ -687,8 +687,8 @@ router.post(
       args: params,
       surface: 'http',
       actor: {
-        role: req.resolvedRole || 'anonymous',
-        user: req.resolvedUser || undefined,
+        role: req.resolvedSource || 'anonymous',
+        user: req.resolvedSourceActor || undefined,
         sessionId: req.headers['x-session-id'] as string | undefined,
       },
       source: { kind: 'http', name: '/api/v1/ai/agent/task' },

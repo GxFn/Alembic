@@ -9,17 +9,17 @@
  */
 
 import { CapabilityProbe } from '@alembic/core/core/capability';
-import { roleResolverMiddleware } from '../../lib/http/middleware/roleResolver.js';
+import { sourceResolverMiddleware } from '../../lib/http/middleware/sourceResolver.js';
 import { createExpiredToken, createTempGitRepo, createTestToken } from '../fixtures/factory.js';
 
 type RepoHandle = { repoPath: string; cleanup: () => void };
 type TestReq = {
   headers: Record<string, string>;
-  resolvedRole?: string;
-  resolvedUser?: string;
+  resolvedSource?: string;
+  resolvedSourceActor?: string;
 };
 
-describe('Integration: roleResolver middleware', () => {
+describe('Integration: sourceResolver middleware', () => {
   const TOKEN_SECRET = 'test-resolver-secret';
   const envBackup: Record<string, string | undefined> = {};
 
@@ -58,7 +58,7 @@ describe('Integration: roleResolver middleware', () => {
 
   test('trusted x-user-id header becomes a source label', () => {
     setEnv('ALEMBIC_INTERNAL_TOKEN', 'test-internal-token');
-    const middleware = roleResolverMiddleware({});
+    const middleware = sourceResolverMiddleware({});
     const { req, res, next, wasNextCalled } = mockExpress({
       'x-user-id': 'batch-runner',
       'x-alembic-internal-token': 'test-internal-token',
@@ -66,28 +66,29 @@ describe('Integration: roleResolver middleware', () => {
 
     middleware(req as never, res as never, next as never);
     expect(wasNextCalled()).toBe(true);
-    expect(req.resolvedRole).toBe('batch-runner');
+    expect(req.resolvedSource).toBe('batch-runner');
+    expect(req.resolvedSourceActor).toBe('header:batch-runner');
   });
 
   test('x-user-id = "anonymous" is not trusted directly', () => {
-    const middleware = roleResolverMiddleware({});
+    const middleware = sourceResolverMiddleware({});
     const { req, res, next, wasNextCalled } = mockExpress({
       'x-user-id': 'anonymous',
     });
 
     middleware(req as never, res as never, next as never);
     expect(wasNextCalled()).toBe(true);
-    expect(req.resolvedRole).toBe('http-request');
+    expect(req.resolvedSource).toBe('http-request');
   });
 
   test('x-user-id = "dashboard" is not trusted directly', () => {
-    const middleware = roleResolverMiddleware({});
+    const middleware = sourceResolverMiddleware({});
     const { req, res, next } = mockExpress({
       'x-user-id': 'dashboard',
     });
 
     middleware(req as never, res as never, next as never);
-    expect(req.resolvedRole).toBe('http-request');
+    expect(req.resolvedSource).toBe('http-request');
   });
 
   test('CapabilityProbe input does not create a runtime source label', () => {
@@ -95,26 +96,26 @@ describe('Integration: roleResolver middleware', () => {
     setEnv('ALEMBIC_AUTH_ENABLED', undefined);
 
     const probe = new CapabilityProbe({ subRepoPath: `/tmp/nonexistent-probe-test-${Date.now()}` });
-    const middleware = roleResolverMiddleware({ capabilityProbe: probe });
+    const middleware = sourceResolverMiddleware({ capabilityProbe: probe });
 
     const { req, res, next, wasNextCalled } = mockExpress({});
     middleware(req as never, res as never, next as never);
 
     expect(wasNextCalled()).toBe(true);
-    expect(req.resolvedRole).toBe('http-request');
-    expect(req.resolvedUser).toBe('http-request');
+    expect(req.resolvedSource).toBe('http-request');
+    expect(req.resolvedSourceActor).toBe('http-request');
   });
 
   test('without trusted source headers defaults to neutral request source', () => {
     setEnv('VITE_AUTH_ENABLED', undefined);
     setEnv('ALEMBIC_AUTH_ENABLED', undefined);
 
-    const middleware = roleResolverMiddleware({});
+    const middleware = sourceResolverMiddleware({});
     const { req, res, next } = mockExpress({});
 
     middleware(req as never, res as never, next as never);
-    expect(req.resolvedRole).toBe('http-request');
-    expect(req.resolvedUser).toBe('http-request');
+    expect(req.resolvedSource).toBe('http-request');
+    expect(req.resolvedSourceActor).toBe('http-request');
   });
 
   test('createTestToken emits the expected two-part token shape', () => {
@@ -139,7 +140,7 @@ describe('Integration: roleResolver middleware', () => {
   });
 });
 
-describe('Integration: roleResolver + real CapabilityProbe', () => {
+describe('Integration: sourceResolver + real CapabilityProbe', () => {
   const repos: RepoHandle[] = [];
 
   afterAll(() => {
@@ -157,7 +158,7 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
       noRemote: 'allow',
     });
 
-    const middleware = roleResolverMiddleware({ capabilityProbe: probe });
+    const middleware = sourceResolverMiddleware({ capabilityProbe: probe });
     const req: TestReq = { headers: {} };
     let nextCalled = false;
     middleware(
@@ -169,7 +170,7 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
     );
 
     expect(nextCalled).toBe(true);
-    expect(req.resolvedRole).toBe('http-request');
+    expect(req.resolvedSource).toBe('http-request');
   });
 
   test('real git repo with noRemote=deny still resolves to the neutral request source', () => {
@@ -181,7 +182,7 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
       noRemote: 'deny',
     });
 
-    const middleware = roleResolverMiddleware({ capabilityProbe: probe });
+    const middleware = sourceResolverMiddleware({ capabilityProbe: probe });
     const req: TestReq = { headers: {} };
     let nextCalled = false;
     middleware(
@@ -193,6 +194,6 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
     );
 
     expect(nextCalled).toBe(true);
-    expect(req.resolvedRole).toBe('http-request');
+    expect(req.resolvedSource).toBe('http-request');
   });
 });

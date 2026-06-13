@@ -21,7 +21,7 @@ import apiSpec from './api-spec.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { gatewayMiddleware } from './middleware/gatewayMiddleware.js';
 import { requestLogger } from './middleware/requestLogger.js';
-import { roleResolverMiddleware } from './middleware/roleResolver.js';
+import { sourceResolverMiddleware } from './middleware/sourceResolver.js';
 import aiRouter from './routes/ai.js';
 import auditRouter from './routes/audit.js';
 import authRouter from './routes/auth.js';
@@ -218,7 +218,7 @@ export class HttpServer {
     );
 
     // 请求来源解析；不使用 git/probe/login 推导运行时权限。
-    this.app.use(roleResolverMiddleware());
+    this.app.use(sourceResolverMiddleware());
 
     // Gateway 中间件 (注入 req.gw)
     this.app.use(gatewayMiddleware());
@@ -303,13 +303,13 @@ export class HttpServer {
     // 认证路由
     this.app.use(`${apiPrefix}/auth`, authRouter);
 
-    // 权限探针端点
+    // 请求来源探针端点
     this.app.get(`${apiPrefix}/auth/probe`, (req: Request, res: Response) => {
-      const source = req.resolvedRole || 'http-request';
-      const user = req.resolvedUser || 'anonymous';
+      const source = req.resolvedSource || 'http-request';
+      const sourceActor = req.resolvedSourceActor || 'anonymous';
       res.json({
         success: true,
-        data: { source, user, mode: 'source' },
+        data: { source, sourceActor, mode: 'source' },
       });
     });
 

@@ -37,7 +37,7 @@ export function gatewayMiddleware() {
       const container = getServiceContainer();
       const gateway = container.get('gateway');
 
-      const actor = req.resolvedUser || req.resolvedRole || 'http-request';
+      const actor = req.resolvedSourceActor || req.resolvedSource || 'http-request';
 
       const result = await gateway.execute({
         actor,
@@ -47,7 +47,7 @@ export function gatewayMiddleware() {
           ...data,
           _ip: req.ip,
           _userAgent: req.headers['user-agent'] || '',
-          _resolvedUser: req.resolvedUser || undefined,
+          _resolvedSourceActor: req.resolvedSourceActor || undefined,
         },
         session: req.headers['x-session-id'] as string | undefined,
       });

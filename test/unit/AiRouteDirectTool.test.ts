@@ -22,8 +22,8 @@ function mockResponse() {
 
 function mockRequest(overrides: Partial<Request> = {}) {
   return {
-    resolvedRole: 'http-request',
-    resolvedUser: 'http-request',
+    resolvedSource: 'http-request',
+    resolvedSourceActor: 'http-request',
     headers: {},
     ip: '127.0.0.1',
     ...overrides,
@@ -114,8 +114,8 @@ describe('AI route direct tool governance', () => {
     const input = createHttpChatAgentRunInput(
       mockRequest({
         body: { mode: 'legacy-ui-mode' },
-        resolvedRole: 'http-request',
-        resolvedUser: 'local-user',
+        resolvedSource: 'http-request',
+        resolvedSourceActor: 'local-user',
       }),
       {
         prompt: 'hello',
@@ -186,7 +186,7 @@ describe('AI route direct tool governance', () => {
     const allowed = await ensureDirectToolAllowed(
       catalog(manifest({ id: 'search_recipes' })),
       'search_recipes',
-      mockRequest({ resolvedRole: 'mcp-source', headers: { 'x-session-id': 's1' } }),
+      mockRequest({ resolvedSource: 'mcp-source', headers: { 'x-session-id': 's1' } }),
       res,
       { checkOnly }
     );
@@ -201,7 +201,7 @@ describe('AI route direct tool governance', () => {
     const allowed = await ensureDirectToolAllowed(
       catalog(manifest({ id: 'read_project_file' })),
       'read_project_file',
-      mockRequest({ resolvedRole: 'mcp-source' }),
+      mockRequest({ resolvedSource: 'mcp-source' }),
       res,
       null
     );
@@ -216,7 +216,7 @@ describe('AI route direct tool governance', () => {
     const allowed = await ensureDirectToolAllowed(
       catalog(manifest({ id: 'get_tool_details' })),
       'get_tool_details',
-      mockRequest({ resolvedRole: 'mcp-source' }),
+      mockRequest({ resolvedSource: 'mcp-source' }),
       res,
       { checkOnly }
     );
@@ -235,7 +235,7 @@ describe('AI route direct tool governance', () => {
     const allowed = await ensureDirectToolAllowed(
       catalog(manifest({ id: 'query_audit_log' })),
       'query_audit_log',
-      mockRequest({ resolvedRole: 'http-request' }),
+      mockRequest({ resolvedSource: 'http-request' }),
       res,
       { checkOnly }
     );

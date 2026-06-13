@@ -1,8 +1,8 @@
 /**
- * roleResolver 中间件 — 请求来源解析
+ * sourceResolver 中间件 — 请求来源解析
  *
- * req.resolvedRole 是旧 HTTP 调用面保留的来源标签字段，不再表示 Alembic
- * runtime 权限角色，也不再由 git/probe/login 决定权限。
+ * req.resolvedSource / req.resolvedSourceActor 只表达请求来源，不表达
+ * Alembic runtime 权限角色，也不由 git/probe/login 决定权限。
  */
 
 import Logger from '@alembic/core/logging';
@@ -33,32 +33,32 @@ function getTrustedHeaderActor(req: Request) {
     return null;
   }
   if (!TRUST_X_USER_ID && !hasTrustedInternalToken(req)) {
-    logger.warn('roleResolver: ignored untrusted x-user-id header', { actor });
+    logger.warn('sourceResolver: ignored untrusted x-user-id header', { actor });
     return null;
   }
   return actor;
 }
 
 /** 创建请求来源解析中间件 */
-export function roleResolverMiddleware(_options: Record<string, unknown> = {}) {
+export function sourceResolverMiddleware(_options: Record<string, unknown> = {}) {
   return (req: Request, _res: Response, next: NextFunction) => {
     // x-user-id 仅在显式可信内部通道中生效，避免外部 HTTP 客户端自报身份。
-    const trustedHeaderActor = getTrustedHeaderActor(req);
-    if (trustedHeaderActor) {
-      req.resolvedRole = trustedHeaderActor;
-      req.resolvedUser = `header:${trustedHeaderActor}`;
+    const trustedHeaderSource = getTrustedHeaderActor(req);
+    if (trustedHeaderSource) {
+      req.resolvedSource = trustedHeaderSource;
+      req.resolvedSourceActor = `header:${trustedHeaderSource}`;
     } else {
-      req.resolvedRole = 'http-request';
-      req.resolvedUser = 'http-request';
+      req.resolvedSource = 'http-request';
+      req.resolvedSourceActor = 'http-request';
     }
 
-    logger.debug('roleResolver: resolved source', {
-      source: req.resolvedRole,
-      user: req.resolvedUser,
+    logger.debug('sourceResolver: resolved request source', {
+      source: req.resolvedSource,
+      sourceActor: req.resolvedSourceActor,
     });
 
     next();
   };
 }
 
-export default roleResolverMiddleware;
+export default sourceResolverMiddleware;

@@ -67,8 +67,8 @@ export async function executeDashboardOperation(
         services: container,
         projectRoot: '',
         actor: {
-          role: req.resolvedRole || 'dashboard',
-          user: req.resolvedUser || undefined,
+          role: req.resolvedSource || 'dashboard',
+          user: req.resolvedSourceActor || undefined,
           sessionId: req.headers['x-session-id'] as string | undefined,
         },
         surface: 'dashboard',

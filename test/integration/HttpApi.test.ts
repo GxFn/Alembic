@@ -13,7 +13,7 @@
  *   ✓ 404 路由兜底
  *   ✓ 错误格式一致性
  *   ✓ CORS headers
- *   ✓ 角色驱动的访问控制（x-user-id header）
+ *   ✓ 请求来源 header 兼容（x-user-id header）
  */
 
 import Bootstrap from '../../lib/Bootstrap.js';
