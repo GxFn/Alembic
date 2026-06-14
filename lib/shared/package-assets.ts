@@ -7,9 +7,10 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DEFAULT_FOLDER_NAMES } from '@alembic/core/workspace';
 
-const __dirname = import.meta.dirname;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function findAlembicPackageRoot(): string {
   let dir = __dirname;
@@ -44,6 +45,8 @@ export const PACKAGE_SKILLS_DIR = path.join(
 );
 
 export const INTERNAL_SKILLS_DIR = PACKAGE_SKILLS_DIR;
+/** @deprecated Use PACKAGE_SKILLS_DIR for product builtin skills. */
+export const INJECTABLE_SKILLS_DIR = PACKAGE_SKILLS_DIR;
 
 export const TEMPLATES_DIR = path.join(PACKAGE_ROOT, DEFAULT_FOLDER_NAMES.package.templates);
 
