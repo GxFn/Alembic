@@ -41,6 +41,7 @@ Before returning a `TargetResultEnvelope` or handoff, this child window must sel
 - Re-read the state root, task package, current plan, repository rules, and acceptance/evidence requirements.
 - Verify the implementation or evidence covers the requested behavior end to end, including edge cases, integration boundaries, docs/config/API surfaces, and tests that the target window can reasonably run.
 - Compare the final diff/evidence against the original user goal and explicit non-goals; do not downgrade a complete capability into a thin adapter, placeholder, mock-only flow, or partial scaffold.
+- If the gap is not a product-code bug but a mismatch between the current effect and the user's intended outcome, stop the point-fix loop and return `needs-review` or `blocked` recommending Design outcome redesign instead of inventing a new solution in this window.
 - If completeness cannot be proven inside this window boundary, return `blocked` or `needs-review` with the missing evidence and next recommendation instead of reporting `completed`.
 
 ### Document Destinations
