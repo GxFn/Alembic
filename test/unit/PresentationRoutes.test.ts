@@ -183,39 +183,39 @@ describe('Phase 5: Panorama Route', () => {
     vi.clearAllMocks();
   });
 
-  it('GET /panorama returns overview', async () => {
+  it('GET /panorama returns retired ProjectContext handoff', async () => {
     const { status, body } = await testGet('/api/v1/panorama');
-    expect(status).toBe(200);
-    expect(body.success).toBe(true);
-    expect((body.data as Record<string, unknown>).moduleCount).toBe(5);
-    expect(mockPanoramaService.getOverview).toHaveBeenCalled();
-  });
-
-  it('GET /panorama/health returns health', async () => {
-    const { status, body } = await testGet('/api/v1/panorama/health');
-    expect(status).toBe(200);
-    expect((body.data as Record<string, unknown>).healthScore).toBe(65);
-    expect(mockPanoramaService.getHealth).toHaveBeenCalled();
-  });
-
-  it('GET /panorama/gaps returns gaps', async () => {
-    const { status, body } = await testGet('/api/v1/panorama/gaps');
-    expect(status).toBe(200);
-    expect(Array.isArray(body.data)).toBe(true);
-    expect((body.data as unknown[]).length).toBe(2);
-  });
-
-  it('GET /panorama/module/:name returns detail', async () => {
-    const { status, body } = await testGet('/api/v1/panorama/module/Utils');
-    expect(status).toBe(200);
-    expect((body.data as Record<string, unknown>).layerName).toBe('Foundation');
-    expect(mockPanoramaService.getModule).toHaveBeenCalledWith('Utils');
-  });
-
-  it('GET /panorama/module/:name 404 for unknown', async () => {
-    const { status, body } = await testGet('/api/v1/panorama/module/Unknown');
-    expect(status).toBe(404);
+    expect(status).toBe(410);
     expect(body.success).toBe(false);
+    expect(body.error).toMatchObject({ code: 'RETIRED_PROJECT_INFO_ROUTE' });
+    expect(mockPanoramaService.getOverview).not.toHaveBeenCalled();
+  });
+
+  it('GET /panorama/health returns retired ProjectContext handoff', async () => {
+    const { status, body } = await testGet('/api/v1/panorama/health');
+    expect(status).toBe(410);
+    expect(body.error).toMatchObject({ code: 'RETIRED_PROJECT_INFO_ROUTE' });
+    expect(mockPanoramaService.getHealth).not.toHaveBeenCalled();
+  });
+
+  it('GET /panorama/gaps returns retired ProjectContext handoff', async () => {
+    const { status, body } = await testGet('/api/v1/panorama/gaps');
+    expect(status).toBe(410);
+    expect(body.error).toMatchObject({ code: 'RETIRED_PROJECT_INFO_ROUTE' });
+  });
+
+  it('GET /panorama/module/:name returns retired ProjectContext handoff', async () => {
+    const { status, body } = await testGet('/api/v1/panorama/module/Utils');
+    expect(status).toBe(410);
+    expect(body.error).toMatchObject({ code: 'RETIRED_PROJECT_INFO_ROUTE' });
+    expect(mockPanoramaService.getModule).not.toHaveBeenCalled();
+  });
+
+  it('GET /panorama/module/:name does not expose retired module lookup 404s', async () => {
+    const { status, body } = await testGet('/api/v1/panorama/module/Unknown');
+    expect(status).toBe(410);
+    expect(body.success).toBe(false);
+    expect(body.error).toMatchObject({ code: 'RETIRED_PROJECT_INFO_ROUTE' });
   });
 
   it('GET /panorama rejects invalid refresh query', async () => {

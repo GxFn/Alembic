@@ -31,13 +31,13 @@ function makeIncrementalPlan(
 }
 
 describe('initializeBootstrapRuntime', () => {
-  test('builds project graph, project info, runtime stores and memory coordinator', async () => {
-    const projectGraph = {
+  test('initializes project info, runtime stores and memory coordinator without legacy graph', async () => {
+    const legacyGraphBuilder = vi.fn(async () => ({
       getOverview: vi.fn(() => ({ totalClasses: 2, totalProtocols: 1, buildTimeMs: 10 })),
-    };
-    const container = makeContainer({
-      buildProjectGraph: vi.fn(async () => projectGraph),
-    });
+    }));
+    const container = makeContainer();
+    (container as BootstrapRuntimeContainer & { buildProjectGraph?: unknown }).buildProjectGraph =
+      legacyGraphBuilder;
 
     const runtime = await initializeBootstrapRuntime({
       container,
@@ -54,7 +54,8 @@ describe('initializeBootstrapRuntime', () => {
     });
 
     expect(container.singletons._fileCache).toEqual([{ relativePath: 'a.ts' }]);
-    expect(runtime.projectGraph).toBe(projectGraph);
+    expect(legacyGraphBuilder).not.toHaveBeenCalled();
+    expect(runtime.projectGraph).toBeNull();
     expect(runtime.projectInfo).toEqual({ name: 'Alembic', lang: 'ts', fileCount: 1 });
     expect(runtime.dimContext.projectContext).toMatchObject({
       projectName: 'Alembic',
@@ -111,13 +112,15 @@ describe('initializeBootstrapRuntime', () => {
     });
   });
 
-  test('continues when ProjectGraph creation fails', async () => {
+  test('keeps legacy graph failures out of runtime initialization', async () => {
+    const legacyGraphBuilder = vi.fn(async () => {
+      throw new Error('graph failed');
+    });
+    const container = makeContainer();
+    (container as BootstrapRuntimeContainer & { buildProjectGraph?: unknown }).buildProjectGraph =
+      legacyGraphBuilder;
     const runtime = await initializeBootstrapRuntime({
-      container: makeContainer({
-        buildProjectGraph: vi.fn(async () => {
-          throw new Error('graph failed');
-        }),
-      }),
+      container,
       projectRoot: '/repo/Alembic',
       dataRoot: '/data',
       primaryLang: null,
@@ -125,6 +128,7 @@ describe('initializeBootstrapRuntime', () => {
       targetFileMap: null,
     });
 
+    expect(legacyGraphBuilder).not.toHaveBeenCalled();
     expect(runtime.projectGraph).toBeNull();
     expect(runtime.projectInfo).toEqual({ name: 'Alembic', lang: 'unknown', fileCount: 0 });
   });

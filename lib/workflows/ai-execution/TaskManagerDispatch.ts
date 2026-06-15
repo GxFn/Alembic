@@ -1,4 +1,5 @@
-import type { BootstrapSessionShape, DimensionDef, PipelineFillView } from '@alembic/core/types';
+import type { BootstrapSessionShape, DimensionDef } from '@alembic/core/types';
+import type { ProjectContextFillView } from '../project-context/ProjectContextWorkflowFacts.js';
 
 interface TaskDef {
   id: string;
@@ -52,9 +53,9 @@ export function startTaskManagerSession(
 }
 
 export function dispatchPipelineFill(
-  view: PipelineFillView,
+  view: ProjectContextFillView,
   dimensions: DimensionDef[],
-  fillDimensions: (view: PipelineFillView, dimensions: DimensionDef[]) => Promise<void>,
+  fillDimensions: (view: ProjectContextFillView, dimensions: DimensionDef[]) => Promise<void>,
   logPrefix: string
 ): void {
   const ctxLogger = view.ctx.logger as

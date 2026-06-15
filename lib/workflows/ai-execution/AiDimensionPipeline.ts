@@ -1,4 +1,5 @@
-import type { DimensionDef, PipelineFillView } from '@alembic/core/types';
+import type { DimensionDef } from '@alembic/core/types';
+import type { ProjectContextFillView } from '../project-context/ProjectContextWorkflowFacts.js';
 import { finalizeAiDimensionPipeline as finalizeAiDimension } from './AiDimensionFinalizer.js';
 import {
   emitAiDimensionAiUnavailable,
@@ -13,7 +14,10 @@ import { initializeBootstrapRuntime } from './RuntimeInitializer.js';
 
 export type { AiDimensionContainer, AiDimensionContext };
 
-export async function runAiDimensionPipeline(view: PipelineFillView, dimensions: DimensionDef[]) {
+export async function runAiDimensionPipeline(
+  view: ProjectContextFillView,
+  dimensions: DimensionDef[]
+) {
   const preparation = prepareAiDimensionRun(view, dimensions);
 
   if (
@@ -54,13 +58,15 @@ export async function clearSnapshots(
 ) {
   try {
     const db = ctx.container.get('database');
-    if (db) {
-      const { FileDiffSnapshotStore } = await import(
-        '@alembic/core/workflows/capabilities/project-intelligence'
-      );
-      const snap = new FileDiffSnapshotStore(db, { logger: ctx.logger });
-      snap.clearProject(projectRoot);
-      ctx.logger.info('[Workflow] Cleared file-diff snapshots — forcing full rebuild');
+    const target = db as
+      | { prepare?: (sql: string) => { run(...values: unknown[]): unknown } }
+      | null
+      | undefined;
+    if (target?.prepare) {
+      target
+        .prepare('DELETE FROM project_context_file_snapshots WHERE project_root = ?')
+        .run(projectRoot);
+      ctx.logger.info('[Workflow] Cleared ProjectContext file snapshots — forcing full rebuild');
     }
   } catch (err: unknown) {
     ctx.logger.warn(

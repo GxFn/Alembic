@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Logger from '@alembic/core/logging';
-import { LanguageService } from '@alembic/core/project-intelligence';
+import { LanguageService } from '@alembic/core/shared';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/workspace';
 
 const logger = Logger.getInstance();

@@ -25,7 +25,6 @@ import {
   WikiGenerator,
   type WikiKnowledgeService,
   type WikiModuleService,
-  type WikiProjectGraph,
 } from '../../service/wiki/WikiGenerator.js';
 import { validate, validateParams } from '../middleware/validate.js';
 
@@ -117,12 +116,6 @@ function createGenerator(container: ReturnType<typeof getServiceContainer>) {
     /* ok */
   }
 
-  // 尝试获取已缓存的 ProjectGraph（可能在 bootstrap 中构建过）
-  const projectGraph = (container.singletons?.projectGraph || null) as Record<
-    string,
-    unknown
-  > | null;
-
   // 获取 RealtimeService 用于推送进度
   let realtimeService: { broadcastEvent?: (name: string, data: unknown) => void } | null = null;
   try {
@@ -136,7 +129,6 @@ function createGenerator(container: ReturnType<typeof getServiceContainer>) {
     dataRoot,
     moduleService: moduleService as WikiModuleService | null,
     knowledgeService: knowledgeService as WikiKnowledgeService | null,
-    projectGraph: projectGraph as WikiProjectGraph | null,
     codeEntityGraph: codeEntityGraph as Record<string, unknown> | null,
     aiProvider: (container.singletons?.aiProvider || null) as WikiAiProvider | null,
     onProgress: (phase: string, progress: number, message: string) => {

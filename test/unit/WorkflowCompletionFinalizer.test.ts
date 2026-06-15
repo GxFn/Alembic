@@ -14,7 +14,7 @@ describe('WorkflowCompletionFinalizer', () => {
     }
   });
 
-  test('skips retired project delivery and runs panorama before scheduling wiki', async () => {
+  test('skips retired project delivery and schedules wiki after retired project refresh', async () => {
     const events: string[] = [];
     const container = createContainer(events);
 
@@ -31,7 +31,7 @@ describe('WorkflowCompletionFinalizer', () => {
       semanticMemory: { mode: 'immediate' },
     });
 
-    expect(events).toEqual(['panorama:rescan', 'panorama:overview', 'schedule']);
+    expect(events).toEqual(['schedule']);
     expect(result.semanticMemoryResult).toBeNull();
     expect(result.deliveryStatus).toBe('skipped');
   });
@@ -97,7 +97,7 @@ describe('WorkflowCompletionFinalizer', () => {
       steps: { delivery: 'skip', wiki: 'skip' },
     });
 
-    expect(events).toEqual(['panorama:rescan', 'panorama:overview']);
+    expect(events).toEqual([]);
     expect(scheduled).toHaveLength(1);
     expect(result).toMatchObject({
       deliveryVerification: null,
@@ -188,23 +188,10 @@ describe('WorkflowCompletionFinalizer', () => {
 });
 
 function createContainer(events: string[]) {
-  const panoramaService = {
-    rescan: vi.fn(async () => {
-      events.push('panorama:rescan');
-    }),
-    getOverview: vi.fn(async () => {
-      events.push('panorama:overview');
-      return { moduleCount: 1, gapCount: 0 };
-    }),
-  };
+  void events;
   return {
-    services: { panoramaService: true },
-    get: (name: string) => {
-      if (name === 'panoramaService') {
-        return panoramaService;
-      }
-      return undefined;
-    },
+    services: {},
+    get: () => undefined,
   };
 }
 

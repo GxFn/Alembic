@@ -16,11 +16,6 @@ import { syncRestoredSessionStoreDigests } from './DimensionRestoreState.js';
 
 const logger = Logger.getInstance();
 
-export interface BootstrapProjectGraphLike {
-  getOverview(): { totalClasses: number; totalProtocols: number; [key: string]: unknown };
-  [key: string]: unknown;
-}
-
 export interface BootstrapRuntimeContainer {
   get(name: string): unknown;
   singletons: {
@@ -28,10 +23,6 @@ export interface BootstrapRuntimeContainer {
     _embedProvider?: Record<string, unknown> | null;
     [key: string]: unknown;
   };
-  buildProjectGraph?(
-    projectRoot: string,
-    options?: Record<string, unknown>
-  ): Promise<BootstrapProjectGraphLike | null>;
 }
 
 export interface InitializeBootstrapRuntimeOptions {
@@ -63,7 +54,7 @@ export async function initializeBootstrapRuntime({
   incrementalPlan,
   projectScopeSourceIdentities = [],
 }: InitializeBootstrapRuntimeOptions) {
-  const projectGraph = await buildBootstrapProjectGraph({ container, projectRoot });
+  const projectGraph = null;
   logger.info(
     '[Insight-v7] Using unified AgentRuntime pipeline (no legacy Analyst/Producer wrappers)'
   );
@@ -168,34 +159,6 @@ function restoreBootstrapSessionStore(
       `[BootstrapRuntime] Failed to restore SessionStore: ${
         err instanceof Error ? err.message : String(err)
       }`
-    );
-    return null;
-  }
-}
-
-async function buildBootstrapProjectGraph({
-  container,
-  projectRoot,
-}: {
-  container: BootstrapRuntimeContainer;
-  projectRoot: string;
-}) {
-  try {
-    const projectGraph =
-      (await container.buildProjectGraph?.(projectRoot, {
-        maxFiles: 500,
-        timeoutMs: 15_000,
-      })) ?? null;
-    if (projectGraph) {
-      const overview = await projectGraph.getOverview();
-      logger.info(
-        `[Insight-v3] ProjectGraph: ${overview.totalClasses} classes, ${overview.totalProtocols} protocols (${(overview as Record<string, unknown>).buildTimeMs}ms)`
-      );
-    }
-    return projectGraph;
-  } catch (e: unknown) {
-    logger.warn(
-      `[Insight-v3] ProjectGraph build failed: ${e instanceof Error ? e.message : String(e)}`
     );
     return null;
   }

@@ -20,7 +20,6 @@ import type {
   AgentStageFactoryRegistry,
   SystemRunContextFactory,
 } from '@alembic/agent/service';
-import type ProjectGraph from '@alembic/core/core/ast/ProjectGraph';
 import type { JobStore } from '@alembic/core/daemon';
 import type { DatabaseConnection } from '@alembic/core/database';
 import type { DimensionCopy } from '@alembic/core/dimensions';
@@ -63,15 +62,7 @@ import type {
   TokenUsageStore,
 } from '@alembic/core/repositories';
 import type { HybridRetriever, SearchEngine } from '@alembic/core/search';
-// ── Core AST / Discovery / Enhancement ──
 // ── Shared Types ──
-import type {
-  CouplingAnalyzer,
-  LayerInferrer,
-  PanoramaAggregator,
-  PanoramaService,
-  RoleRefiner,
-} from '@alembic/core/service/panorama';
 import type { FeedbackCollector, QualityScorer } from '@alembic/core/service/quality';
 import type { RecipeCandidateValidator, RecipeParser } from '@alembic/core/service/recipe';
 import type { LanguageService } from '@alembic/core/shared';
@@ -152,13 +143,11 @@ export interface ServiceMap {
   vectorStore: VectorStore;
   indexingPipeline: IndexingPipeline;
   hybridRetriever: HybridRetriever;
-  discovererRegistry: unknown; // dynamic registry, type varies
   enhancementRegistry: unknown; // dynamic registry, type varies
   languageService: typeof LanguageService;
   dimensionCopy: typeof DimensionCopy;
   aiProvider: AiProvider | null;
   aiProviderManager: AiProviderManager | null;
-  projectGraph: ProjectGraph | null;
 
   // ═══ VectorModule ═══
   vectorService: VectorService;
@@ -187,13 +176,6 @@ export interface ServiceMap {
   // ═══ SignalModule ═══
   signalBus: SignalBus;
   hitRecorder: HitRecorder;
-
-  // ═══ PanoramaModule ═══
-  roleRefiner: RoleRefiner;
-  couplingAnalyzer: CouplingAnalyzer;
-  layerInferrer: LayerInferrer;
-  panoramaAggregator: PanoramaAggregator;
-  panoramaService: PanoramaService;
 
   // ═══ Cross-Process Cache ═══
   cacheCoordinator: CacheCoordinator;

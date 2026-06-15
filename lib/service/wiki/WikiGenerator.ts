@@ -2,7 +2,7 @@
  * WikiGenerator — Repo Wiki 生成引擎 (V3 Content-First)
  *
  * 自动分析项目代码结构，生成结构化的项目文档 Wiki。
- * 结合 Alembic 的 AST 深度分析能力（ProjectGraph、CodeEntityGraph、SPM 依赖图）
+ * 结合 Alembic 的 ProjectContext 模块事实、CodeEntityGraph、SPM 依赖图
  * 做到深层代码洞察。
  *
  * V3 核心设计: "内容驱动 + AI 优先"
@@ -35,7 +35,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { WriteZone } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
-import { LanguageService } from '@alembic/core/project-intelligence';
+import { LanguageService } from '@alembic/core/shared';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '@alembic/core/workspace';
 import {
   buildAiSystemPrompt,
@@ -74,22 +74,12 @@ export interface WikiDeps {
   dataRoot?: string;
   moduleService?: WikiModuleService | null;
   knowledgeService?: WikiKnowledgeService | null;
-  projectGraph?: WikiProjectGraph | null;
   codeEntityGraph?: Record<string, unknown> | null;
   aiProvider?: WikiAiProvider | null;
   onProgress?: (phase: string, progress: number, message: string) => void;
   options?: Partial<WikiOptions>;
   writeZone?: WriteZone | null;
   [key: string]: unknown;
-}
-
-/** Minimal ProjectGraph interface */
-export interface WikiProjectGraph {
-  getOverview(): Record<string, unknown>;
-  getAllClassNames(): string[];
-  getAllProtocolNames(): string[];
-  getClassInfo(name: string): { filePath?: string } | null;
-  getProtocolInfo(name: string): { filePath?: string } | null;
 }
 
 /** Minimal ModuleService interface */
@@ -204,7 +194,6 @@ export class WikiGenerator {
   moduleService: WikiModuleService | null;
   onProgress: (phase: string, progress: number, message: string) => void;
   options: WikiOptions;
-  projectGraph: WikiProjectGraph | null;
   #wz: WriteZone | null;
   /**
    * @param [deps.spmService] 向后兼容
@@ -215,7 +204,6 @@ export class WikiGenerator {
     const dataRoot = deps.dataRoot || deps.projectRoot;
     this.moduleService = deps.moduleService || null;
     this.knowledgeService = deps.knowledgeService || null;
-    this.projectGraph = deps.projectGraph || null;
     this.codeEntityGraph = deps.codeEntityGraph || null;
     this.aiProvider = deps.aiProvider || null;
     this.onProgress = deps.onProgress || (() => {});
@@ -460,60 +448,9 @@ export class WikiGenerator {
     return info;
   }
 
-  /** AST 分析 — 利用已有 ProjectGraph 或重新构建 */
+  /** AST 分析占位 — 项目事实由 ProjectContext-backed 模块服务提供 */
   async _analyzeAST() {
-    if (this.projectGraph) {
-      const overview = await this.projectGraph.getOverview();
-      const allClasses = this.projectGraph.getAllClassNames();
-      const allProtocols = this.projectGraph.getAllProtocolNames();
-
-      // 按模块分组类名和协议名 (通过 filePath 推断所属模块)
-      const classNamesByModule: Record<string, string[]> = {};
-      const protocolNamesByModule: Record<string, string[]> = {};
-
-      for (const name of allClasses) {
-        const info = this.projectGraph.getClassInfo(name);
-        if (info?.filePath) {
-          const mod = inferModuleFromPath(info.filePath);
-          if (mod) {
-            if (!classNamesByModule[mod]) {
-              classNamesByModule[mod] = [];
-            }
-            classNamesByModule[mod].push(name);
-          }
-        }
-      }
-
-      for (const name of allProtocols) {
-        const info = this.projectGraph.getProtocolInfo(name);
-        if (info?.filePath) {
-          const mod = inferModuleFromPath(info.filePath);
-          if (mod) {
-            if (!protocolNamesByModule[mod]) {
-              protocolNamesByModule[mod] = [];
-            }
-            protocolNamesByModule[mod].push(name);
-          }
-        }
-      }
-
-      this._emit(
-        WikiPhase.AST_ANALYZE,
-        25,
-        `AST 分析: ${overview.totalClasses} 个类, ${overview.totalProtocols} 个协议`
-      );
-      return {
-        overview,
-        classes: allClasses,
-        protocols: allProtocols,
-        classNamesByModule,
-        protocolNamesByModule,
-      };
-    }
-
-    // 没有现成的 ProjectGraph — 返回空壳（不阻塞生成）
     return {
-      overview: null,
       classes: [],
       protocols: [],
       classNamesByModule: {},

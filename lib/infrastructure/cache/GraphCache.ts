@@ -4,7 +4,7 @@
  * 功能:
  * 1. 将图数据序列化为 JSON 写入磁盘
  * 2. 基于 contentHash 判断缓存是否有效（Package.swift / 源文件）
- * 3. 支持 SPM 依赖图和 AST ProjectGraph 两种场景
+ * 3. 支持结构图类缓存场景
  *
  * 缓存位置: {projectRoot}/.asd/cache/
  */

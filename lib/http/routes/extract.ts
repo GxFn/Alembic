@@ -10,7 +10,7 @@ import {
   type SystemRunContextFactory,
 } from '@alembic/agent/service';
 import Logger from '@alembic/core/logging';
-import { LanguageService } from '@alembic/core/project-intelligence';
+import { LanguageService } from '@alembic/core/shared';
 import express, { type Request, type Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ExtractPathBody, ExtractTextBody } from '../../shared/schemas/http-requests.js';

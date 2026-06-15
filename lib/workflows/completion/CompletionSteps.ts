@@ -1,7 +1,7 @@
 /**
  * CompletionSteps — Workflow 完成阶段的各步骤实现
  *
- * 包含 Panorama 刷新、Wiki 生成和语义记忆固化，
+ * 包含退役项目信息刷新占位、Wiki 生成和语义记忆固化，
  * 由 WorkflowCompletionFinalizer 按顺序调用。
  */
 
@@ -11,7 +11,6 @@ import type {
   CompletionSessionLike,
   CompletionSessionStoreLike,
   LoadServiceContainer,
-  PanoramaServiceLike,
   PersistentMemoryDb,
   WikiGeneratorLike,
   WorkflowSemanticMemoryConsolidationResult,
@@ -20,31 +19,14 @@ import type {
 // ── PanoramaCompletionStep ──
 
 export async function refreshPanorama({
-  getServiceContainer,
   log,
 }: {
   getServiceContainer: LoadServiceContainer;
   log: CompletionLogger;
 }): Promise<void> {
-  try {
-    const container = await getServiceContainer();
-    const panoramaService = container.services?.panoramaService
-      ? (container.get?.('panoramaService') as PanoramaServiceLike | undefined)
-      : undefined;
-    if (!panoramaService || typeof panoramaService.rescan !== 'function') {
-      return;
-    }
-
-    await panoramaService.rescan();
-    const overview = await panoramaService.getOverview();
-    log.info(
-      `[DimensionComplete] Panorama refreshed — ${overview.moduleCount} modules, ${overview.gapCount} gaps`
-    );
-  } catch (err: unknown) {
-    log.warn(
-      `[DimensionComplete] Panorama refresh failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
-    );
-  }
+  log.info(
+    '[DimensionComplete] Project-information refresh skipped; ProjectContext is authoritative'
+  );
 }
 
 // ── WikiCompletionStep ──
@@ -62,19 +44,20 @@ export async function generateWiki({
 }): Promise<void> {
   try {
     const container = await getServiceContainer();
-    const { WikiGenerator } = await import('#service/wiki/WikiGenerator.js');
+    const { WikiGenerator } = await import('../../service/wiki/WikiGenerator.js');
     const moduleService = container.get?.('moduleService');
     const knowledgeService = container.get?.('knowledgeService');
     if (!moduleService || !knowledgeService) {
       return;
     }
 
-    const wikiDeps: import('#service/wiki/WikiGenerator.js').WikiDeps = {
+    const wikiDeps: import('../../service/wiki/WikiGenerator.js').WikiDeps = {
       projectRoot,
       dataRoot,
-      moduleService: moduleService as import('#service/wiki/WikiGenerator.js').WikiModuleService,
+      moduleService:
+        moduleService as import('../../service/wiki/WikiGenerator.js').WikiModuleService,
       knowledgeService:
-        knowledgeService as import('#service/wiki/WikiGenerator.js').WikiKnowledgeService,
+        knowledgeService as import('../../service/wiki/WikiGenerator.js').WikiKnowledgeService,
       options: { mode: 'bootstrap' },
     };
     const wikiGenerator: WikiGeneratorLike = new WikiGenerator(wikiDeps);

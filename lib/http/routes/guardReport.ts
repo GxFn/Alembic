@@ -10,6 +10,7 @@ import { resolveProjectRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
 import { z } from 'zod';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { projectContextModuleFiles } from '../../project-context/ProjectContextConsumerFacts.js';
 import { validateQuery } from '../middleware/validate.js';
 
 const router = express.Router();
@@ -94,22 +95,12 @@ router.get('/coverage', async (_req: Request, res: Response): Promise<void> => {
       );
     }
 
-    // 从 Panorama 或目录结构获取模块文件
-    const moduleFiles = new Map<string, string[]>();
+    // ProjectContext-backed module files. If unavailable, CoverageAnalyzer receives an empty map.
+    let moduleFiles = new Map<string, string[]>();
     try {
-      const panorama = container.get('panoramaService') as unknown as {
-        getOverview(): Promise<{ modules: { name: string; files: string[] }[] }>;
-      };
-      const overview = await panorama.getOverview();
-      if (overview?.modules) {
-        for (const mod of overview.modules) {
-          if (mod.files?.length > 0) {
-            moduleFiles.set(mod.name, mod.files);
-          }
-        }
-      }
+      moduleFiles = await projectContextModuleFiles(resolveProjectRoot(container));
     } catch {
-      /* PanoramaService not available */
+      /* ProjectContext may be unavailable for empty or unsupported projects. */
     }
 
     const matrix = analyzer.analyze(moduleFiles);

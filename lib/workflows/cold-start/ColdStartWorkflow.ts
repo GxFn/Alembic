@@ -37,40 +37,38 @@
 
 import type { WorkflowMcpContext } from '@alembic/core/host-agent-workflows';
 import {
-  buildInternalColdStartReport as buildColdStartReport,
-  buildColdStartSelectionSummary,
-  buildInternalColdStartTargetFileMap as buildColdStartTargetFileMap,
   buildColdStartWorkflowPlan,
   type InternalColdStartArgs as ColdStartArgs,
-  cacheProjectAnalysisSession,
   createInternalColdStartIntent as createColdStartIntent,
-  presentInternalColdStartEmptyProject as presentColdStartEmptyProject,
-  presentInternalColdStartResponse as presentColdStartResponse,
   runFullResetPolicy,
-  selectColdStartDimensions,
 } from '@alembic/core/host-agent-workflows';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
-import {
-  buildProjectSnapshot,
-  type DimensionDef,
-  type McpContext,
-  type ProjectSnapshot,
-  type WorkflowDatabaseLike,
-  type WorkflowSkillHooks,
+import type {
+  DimensionDef,
+  McpContext,
+  WorkflowDatabaseLike,
+  WorkflowSkillHooks,
 } from '@alembic/core/types';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
   attachProjectScopeSourceIdentitiesToView,
-  attachProjectScopeToScanOptions,
   buildProjectScopeAnalysisLogMeta,
   collectProjectScopeSourceIdentities,
   resolveProjectScopeAnalysisContext,
 } from '../../project-scope/ProjectScopeAnalysis.js';
-import { runAgentProjectContextAnalysis } from '../agent-project-context/AgentProjectContextAnalysis.js';
 import {
   dispatchAiDimensionRuns,
   startAiDimensionSession,
 } from '../ai-execution/AiDimensionDispatcher.js';
+import {
+  buildProjectContextFillView,
+  buildProjectContextMissionArtifacts,
+  buildProjectContextWorkflowFacts,
+  createProjectContextWorkflowSession,
+  presentProjectContextColdStartEmptyProject,
+  presentProjectContextColdStartResponse,
+  selectProjectContextWorkflowDimensions,
+} from '../project-context/ProjectContextWorkflowFacts.js';
 
 type BootstrapMcpContext = WorkflowMcpContext & McpContext;
 
@@ -133,60 +131,38 @@ export async function runColdStartWorkflow(ctx: BootstrapMcpContext, args: ColdS
   // ═══════════════════════════════════════════════════════════
   // Phase 1-4: 共享管线（文件收集→AST→依赖→Guard→维度解析）
   // ═══════════════════════════════════════════════════════════
-  const phaseResults = await runAgentProjectContextAnalysis({
+  const projectContextFacts = await buildProjectContextWorkflowFacts({
     analysisScope,
     projectRoot: plan.projectAnalysis.projectRoot,
+    contentMaxLines: intent.projectAnalysis.contentMaxLines,
     ctx,
-    prepare: plan.projectAnalysis.prepare,
-    scan: attachProjectScopeToScanOptions(plan.projectAnalysis.scan, analysisScope),
-    materialize: plan.projectAnalysis.materialize,
+    maxFiles: intent.projectAnalysis.maxFiles,
+    source: 'alembic-main-bootstrap',
   });
-  const sourceIdentities = collectProjectScopeSourceIdentities(phaseResults);
+  const sourceIdentities = collectProjectScopeSourceIdentities(projectContextFacts);
 
-  if (phaseResults.isEmpty) {
-    return presentColdStartEmptyProject({
-      report: phaseResults.report,
+  if (projectContextFacts.isEmpty) {
+    return presentProjectContextColdStartEmptyProject({
+      facts: projectContextFacts,
       responseTimeMs: Date.now() - t0,
     });
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 构建 ProjectSnapshot — 统一数据来源
-  // ═══════════════════════════════════════════════════════════
-  const snapshot: ProjectSnapshot = buildProjectSnapshot({
-    projectRoot,
-    sourceTag: 'bootstrap',
-    ...phaseResults,
-    report: phaseResults.report,
-  });
-
-  const report: Record<string, unknown> = buildColdStartReport({
-    snapshot,
-    maxFiles: intent.projectAnalysis.maxFiles,
-    skipGuard: intent.projectAnalysis.skipGuard,
-  });
-
-  // ═══════════════════════════════════════════════════════════
-  // Phase 4.5: 构建响应 — filesByTarget + analysisFramework
-  // ═══════════════════════════════════════════════════════════
-  const targetFileMap = buildColdStartTargetFileMap(
-    snapshot,
-    intent.projectAnalysis.contentMaxLines
-  );
-
+  // ProjectContext 是本轮唯一 project-information carrier；后续只做维度选择与响应格式化。
   const dimensions = applyTestDimensionFilter(
-    selectColdStartDimensions(snapshot, intent) as unknown as Parameters<
-      typeof applyTestDimensionFilter
-    >[0],
+    selectProjectContextWorkflowDimensions(
+      projectContextFacts.dimensions,
+      intent.dimensionIds
+    ) as unknown as Parameters<typeof applyTestDimensionFilter>[0],
     'bootstrap'
   ) as DimensionDef[];
-  const selectionSummary = buildColdStartSelectionSummary({
-    snapshot,
-    intent,
+  const selectionSummary = buildProjectContextDimensionSelectionSummary({
+    requestedDimensionIds: intent.dimensionIds,
     selectedDimensions: dimensions,
+    sourceDimensions: projectContextFacts.dimensions,
   });
-  report.dimensionSelection = selectionSummary;
-  report.projectScopeSourceIdentities = {
+  projectContextFacts.report.dimensionSelection = selectionSummary;
+  projectContextFacts.report.projectScopeSourceIdentities = {
     projectScopeId: analysisScope.projectScopeId,
     sourceCount: sourceIdentities.length,
   };
@@ -208,17 +184,23 @@ export async function runColdStartWorkflow(ctx: BootstrapMcpContext, args: ColdS
   // Phase 4.6: BootstrapSessionManager — 缓存 Phase 结果供 wiki_plan 复用
   // （与本地初始化保持一致）
   // ═══════════════════════════════════════════════════════════
-  const cachedSessionId = cacheProjectAnalysisSession({
+  const workflowSession = createProjectContextWorkflowSession({
     container: ctx.container,
-    projectRoot,
     dimensions,
-    snapshot,
-    primaryLang: snapshot.language.primaryLang,
-    fileCount: snapshot.allFiles.length,
-    moduleCount: snapshot.dependencyGraph?.nodes?.length || 0,
-    logger: ctx.logger,
-    logPrefix: 'ColdStartWorkflow',
+    facts: projectContextFacts,
+    projectRoot,
   });
+  const cachedSessionId = workflowSession.id;
+  const projectContextArtifacts = buildProjectContextMissionArtifacts({
+    dimensions,
+    facts: projectContextFacts,
+    profile: 'cold-start',
+    session: workflowSession,
+  });
+  projectContextFacts.report.projectContextMissionBriefing = {
+    briefingMeta: projectContextArtifacts.briefing.meta,
+    ideAgentProfile: projectContextArtifacts.ideAgentPacket.profile,
+  };
 
   // ═══════════════════════════════════════════════════════════
   // Phase 5: 创建异步任务 — 骨架先返回，内容后填充
@@ -243,13 +225,15 @@ export async function runColdStartWorkflow(ctx: BootstrapMcpContext, args: ColdS
     dispatchAiDimensionRuns({
       view: attachProjectScopeSourceIdentitiesToView(
         {
-          snapshot,
+          ...buildProjectContextFillView({
+            bootstrapSession,
+            ctx: ctx as Record<string, unknown>,
+            facts: projectContextFacts,
+            mode: 'bootstrap',
+            projectRoot,
+            skipTargetDelivery: intent.internalExecution?.skipTargetDelivery === true,
+          }),
           ctx: ctx as BootstrapMcpContext,
-          bootstrapSession,
-          targetFileMap,
-          projectRoot,
-          mode: 'bootstrap',
-          skipTargetDelivery: intent.internalExecution?.skipTargetDelivery === true,
         },
         sourceIdentities
       ),
@@ -268,8 +252,8 @@ export async function runColdStartWorkflow(ctx: BootstrapMcpContext, args: ColdS
       .run(
         'onBootstrapComplete',
         {
-          filesScanned: snapshot.allFiles.length,
-          targetsFound: snapshot.allTargets.length,
+          filesScanned: projectContextFacts.fileCount,
+          targetsFound: projectContextFacts.targetCount,
           candidatesCreated: 0, // 异步填充中，初始为 0
           candidatesFailed: 0,
           autoSkillsCreated: 0,
@@ -282,12 +266,10 @@ export async function runColdStartWorkflow(ctx: BootstrapMcpContext, args: ColdS
     /* skillHooks not available */
   }
 
-  return presentColdStartResponse({
+  return presentProjectContextColdStartResponse({
     cleanupResult,
-    snapshot,
-    report,
-    targetFileMap,
     dimensions,
+    facts: projectContextFacts,
     cachedSessionId,
     selectionSummary,
     taskCount: taskDefs.length,
@@ -297,3 +279,18 @@ export async function runColdStartWorkflow(ctx: BootstrapMcpContext, args: ColdS
 }
 
 // bootstrapRefine → 已提取到 resident/tool-handlers/bootstrap/refine.js
+
+function buildProjectContextDimensionSelectionSummary(input: {
+  requestedDimensionIds?: readonly string[];
+  selectedDimensions: readonly DimensionDef[];
+  sourceDimensions: readonly DimensionDef[];
+}) {
+  const known = new Set(input.sourceDimensions.map((dimension) => dimension.id));
+  return {
+    duplicateCollapsedCount: 0,
+    selectedDimensionIds: input.selectedDimensions.map((dimension) => dimension.id),
+    unknownRequestedDimensionIds: (input.requestedDimensionIds ?? []).filter(
+      (id) => !known.has(id)
+    ),
+  };
+}

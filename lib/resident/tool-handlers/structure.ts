@@ -3,12 +3,16 @@
  * getTargets, getTargetFiles, getTargetMetadata, graphQuery, graphImpact, graphPath, graphStats
  */
 
-import fs from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
-import * as Paths from '@alembic/core/config';
-import { LanguageService } from '@alembic/core/project-intelligence';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
+import {
+  ProjectContext,
+  type ProjectContextEnvelope,
+  type ProjectContextRef,
+  type ProjectContextResult,
+  type RepoContext,
+  type SourceSliceContext,
+} from '@alembic/core/project-context';
+import { LanguageService } from '@alembic/core/shared';
+import { resolveProjectRoot } from '@alembic/core/workspace';
 import { envelope } from '../tool-schema/envelope.js';
 import { buildToolUsageProblem } from '../tool-schema/problem.js';
 import type { McpContext } from '../tool-schema/types.js';
@@ -26,36 +30,6 @@ export interface TargetInfo {
   targetDir?: string;
   info?: { path?: string; sources?: string; dependencies?: unknown[] };
   metadata?: { dependencies?: unknown[] };
-  [key: string]: unknown;
-}
-
-interface FileInfo {
-  name: string;
-  path: string;
-  relativePath: string;
-  size?: number;
-  [key: string]: unknown;
-}
-
-interface DiscovererLike {
-  load(projectRoot: string): Promise<void>;
-  listTargets(): Promise<TargetInfo[]>;
-  getTargetFiles(target: TargetInfo): Promise<FileInfo[]>;
-  getDependencyGraph?(): unknown;
-}
-
-interface DiscovererCache {
-  projectRoot: string;
-  discoverer: DiscovererLike;
-  targets: TargetInfo[];
-}
-
-interface GraphEdge {
-  fromId?: string;
-  toId?: string;
-  fromType?: string;
-  toType?: string;
-  relation?: string;
   [key: string]: unknown;
 }
 
@@ -112,53 +86,9 @@ function graphArgProblemEnvelope(operation: string, missing: string[]) {
   });
 }
 
-// ─── Discoverer 缓存 ─────────────────────────────────────
-// AD4 managed lifecycle: single-slot per-projectRoot cache with an explicit
-// policy — same projectRoot reuses the loaded discoverer for the process
-// lifetime; a different projectRoot replaces the slot; clear() disposes
-// (test/shutdown). Same hit/replace behavior as the former bare module slot.
-class DiscovererCacheSlot {
-  value: DiscovererCache | null = null; // { projectRoot, discoverer, targets }
-
-  clear() {
-    this.value = null;
-  }
-}
-
-let _defaultDiscovererCache: DiscovererCacheSlot | null = null;
-
-function getDiscovererCacheSlot(): DiscovererCacheSlot {
-  _defaultDiscovererCache ??= new DiscovererCacheSlot();
-  return _defaultDiscovererCache;
-}
-
-/** 重置 discoverer 缓存（测试用） */
+/** 旧 discoverer 缓存已退休；保留测试入口为 no-op，避免测试工具依赖私有状态。 */
 export function resetDiscovererCache() {
-  _defaultDiscovererCache?.clear();
-}
-
-async function _getLoadedDiscoverer(ctx?: {
-  container?: { singletons?: { _projectRoot?: unknown } };
-}) {
-  const projectRoot = resolveProjectRoot(ctx?.container);
-  const cacheSlot = getDiscovererCacheSlot();
-  if (cacheSlot.value && cacheSlot.value.projectRoot === projectRoot) {
-    return cacheSlot.value;
-  }
-
-  // 优先使用 DiscovererRegistry（多语言统一接口）
-  const { getDiscovererRegistry } = await import('@alembic/core/project-intelligence');
-  const registry = getDiscovererRegistry();
-  const discoverer = await registry.detect(projectRoot);
-  await discoverer.load(projectRoot);
-  const targets = (await discoverer.listTargets()) || [];
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- structural duck-typing across module boundary
-  cacheSlot.value = {
-    projectRoot,
-    discoverer: discoverer as unknown as DiscovererLike,
-    targets: targets as unknown as TargetInfo[],
-  };
-  return cacheSlot.value;
+  /* no-op */
 }
 
 function _findTarget(targets: TargetInfo[], targetName: string): TargetInfo {
@@ -216,13 +146,119 @@ function _inferTargetRole(targetName: string): string {
   return 'feature';
 }
 
+type ProjectContextRefCarrier = ProjectContextRef;
+
+async function getResidentRepoContext(ctx: McpContext): Promise<RepoContext> {
+  const projectRoot = resolveProjectRoot(ctx.container as { singletons?: Record<string, unknown> });
+  const response = await ProjectContext.execute({
+    kind: 'repo',
+    payload: { includeMapSummary: true },
+    project: {
+      displayName: projectRoot.split(/[\\/]/).pop() || projectRoot,
+      projectRoot,
+      source: 'alembic-main-resident',
+    },
+    scope: { projectRoot },
+  });
+  if (isRepoContext(response.data)) {
+    return response.data;
+  }
+  throw new Error(
+    `ProjectContext repo context unavailable: ${projectContextUnavailableReason(response)}`
+  );
+}
+
+async function getResidentSourceSlice(
+  ctx: McpContext,
+  filePath: string,
+  contentMaxLines: number
+): Promise<SourceSliceContext | null> {
+  const projectRoot = resolveProjectRoot(ctx.container as { singletons?: Record<string, unknown> });
+  const response = await ProjectContext.execute({
+    kind: 'source-slice',
+    payload: {
+      endLine: contentMaxLines,
+      filePath,
+      includeText: true,
+      startLine: 1,
+    },
+    project: {
+      displayName: projectRoot.split(/[\\/]/).pop() || projectRoot,
+      projectRoot,
+      source: 'alembic-main-resident',
+    },
+    scope: { projectRoot },
+  });
+  return isSourceSliceContext(response.data) ? response.data : null;
+}
+
+function projectContextTargetToTargetInfo(target: RepoContext['targets'][number]): TargetInfo {
+  return {
+    name: target.name,
+    type: target.kind ?? 'target',
+    refs: target.refs,
+    projectInformationSource: 'project-context',
+  };
+}
+
+function isRepoContext(value: ProjectContextResult): value is RepoContext {
+  return 'repo' in value && 'targets' in value && 'sourceRoots' in value;
+}
+
+function isSourceSliceContext(value: ProjectContextResult): value is SourceSliceContext {
+  return 'file' in value && 'range' in value && 'nextRefs' in value;
+}
+
+function projectContextUnavailableReason(
+  response: ProjectContextEnvelope<ProjectContextResult>
+): string {
+  const data = response.data;
+  if ('available' in data && data.available === false) {
+    return `${data.kind}: ${data.reason}`;
+  }
+  return response.errors?.map((error) => error.message).join('; ') || 'unexpected response';
+}
+
+function graphUnavailableEnvelope(message: string) {
+  return envelope({
+    success: false,
+    errorCode: 'KNOWLEDGE_GRAPH_UNAVAILABLE',
+    message,
+    meta: { tool: 'alembic_graph', source: 'knowledgeGraphService' },
+  });
+}
+
+function retiredCallContextEnvelope(methodName: string) {
+  return envelope({
+    success: false,
+    errorCode: 'RETIRED_PROJECT_INFO_ROUTE',
+    message:
+      'alembic_call_context no longer reads CodeEntityGraph as a project-information provider. Use ProjectContext-backed file-flow, file-symbols, source-slice, or anchor-range requests for source context.',
+    problem: buildToolUsageProblem({
+      code: 'RETIRED_PROJECT_INFO_ROUTE',
+      failingStep: 'call-context-project-information-route',
+      nextAction:
+        'Route method-level source questions through ProjectContext file-flow/file-symbols/source-slice/anchor-range instead of alembic_call_context.',
+      reasonCode: 'capability-mismatch',
+      retryable: false,
+    }),
+    meta: {
+      methodName,
+      projectInformationSource: 'project-context',
+      retired: true,
+      tool: 'alembic_call_context',
+    },
+  });
+}
+
 // ═══════════════════════════════════════════════════════════
 // Handler: getTargets
 // ═══════════════════════════════════════════════════════════
 
 export async function getTargets(ctx: McpContext, args: StructureArgs = {}) {
-  const { discoverer, targets } = await _getLoadedDiscoverer(ctx);
+  const repo = await getResidentRepoContext(ctx);
   const includeSummary = args.includeSummary !== false; // 默认 true
+  const targets = repo.targets.map(projectContextTargetToTargetInfo);
 
   if (!includeSummary) {
     return envelope({ success: true, data: { targets }, meta: { tool: 'alembic_structure' } });
@@ -243,16 +279,15 @@ export async function getTargets(ctx: McpContext, args: StructureArgs = {}) {
   for (const t of targets) {
     let fileCount = 0;
     const langStats: Record<string, number> = {};
-    try {
-      const fileList = await discoverer.getTargetFiles(t);
-      fileCount = fileList.length;
-      for (const f of fileList) {
-        const lang = _inferLang(f.name);
-        langStats[lang] = (langStats[lang] || 0) + 1;
-        globalLangStats[lang] = (globalLangStats[lang] || 0) + 1;
+    for (const ref of (t.refs as Array<{ scope?: { filePath?: string } }> | undefined) ?? []) {
+      const filePath = ref.scope?.filePath;
+      if (!filePath) {
+        continue;
       }
-    } catch {
-      /* skip */
+      const lang = _inferLang(filePath);
+      fileCount += 1;
+      langStats[lang] = (langStats[lang] || 0) + 1;
+      globalLangStats[lang] = (globalLangStats[lang] || 0) + 1;
     }
     totalFiles += fileCount;
     enriched.push({
@@ -283,11 +318,12 @@ export async function getTargetFiles(ctx: McpContext, args: StructureArgs) {
   if (!args.targetName) {
     throw new Error('targetName is required');
   }
-  const { discoverer, targets } = await _getLoadedDiscoverer(ctx);
+  const repo = await getResidentRepoContext(ctx);
+  const targets = repo.targets.map(projectContextTargetToTargetInfo);
   const target = _findTarget(targets, args.targetName);
-
-  // 使用 Discoverer.getTargetFiles — 统一接口定位源文件
-  const rawFiles = await discoverer.getTargetFiles(target);
+  const rawFiles = ((target.refs as ProjectContextRefCarrier[] | undefined) ?? [])
+    .map((ref) => ref.scope?.filePath)
+    .filter((filePath): filePath is string => typeof filePath === 'string' && filePath.length > 0);
 
   const includeContent = args.includeContent || false;
   const contentMaxLines = args.contentMaxLines || 100;
@@ -303,10 +339,11 @@ export async function getTargetFiles(ctx: McpContext, args: StructureArgs) {
     totalLines?: number;
     truncated?: boolean;
   }> = [];
-  for (const f of rawFiles) {
+  for (const filePath of rawFiles) {
     if (files.length >= maxFiles) {
       break;
     }
+    const name = filePath.split(/[\\/]/).pop() || filePath;
     const entry: {
       name: string;
       path: string;
@@ -317,24 +354,20 @@ export async function getTargetFiles(ctx: McpContext, args: StructureArgs) {
       totalLines?: number;
       truncated?: boolean;
     } = {
-      name: f.name,
-      path: f.path,
-      relativePath: f.relativePath,
-      language: _inferLang(f.name),
-      size: f.size || 0,
+      name,
+      path: filePath,
+      relativePath: filePath,
+      language: _inferLang(name),
+      size: 0,
     };
     if (includeContent) {
-      try {
-        const raw = await readFile(f.path, 'utf8');
-        const lines = raw.split('\n');
-        entry.content = lines.slice(0, contentMaxLines).join('\n');
-        entry.totalLines = lines.length;
-        entry.truncated = lines.length > contentMaxLines;
-      } catch {
-        entry.content = null;
-        entry.totalLines = 0;
-        entry.truncated = false;
-      }
+      const sourceSlice = await getResidentSourceSlice(ctx, filePath, contentMaxLines);
+      entry.content = sourceSlice?.text ?? null;
+      entry.totalLines = sourceSlice?.file.lineCount ?? 0;
+      entry.truncated =
+        typeof sourceSlice?.file.lineCount === 'number'
+          ? sourceSlice.file.lineCount > contentMaxLines
+          : false;
     }
     files.push(entry);
   }
@@ -366,10 +399,9 @@ export async function getTargetMetadata(ctx: McpContext, args: StructureArgs) {
   if (!args.targetName) {
     throw new Error('targetName is required');
   }
-  const cache = await _getLoadedDiscoverer(ctx);
-  const { targets } = cache;
+  const repo = await getResidentRepoContext(ctx);
+  const targets = repo.targets.map(projectContextTargetToTargetInfo);
   const target = _findTarget(targets, args.targetName);
-  const projectRoot = cache.projectRoot;
 
   // ── 基础元数据 ──
   const meta: Record<string, unknown> = {
@@ -385,48 +417,9 @@ export async function getTargetMetadata(ctx: McpContext, args: StructureArgs) {
     sourcesPath: target.info?.path || null,
     sources: target.info?.sources || null,
     dependencies: target.info?.dependencies || target.metadata?.dependencies || [],
+    projectInformationSource: 'project-context',
+    refs: target.refs ?? [],
   };
-
-  // ── SPM 图谱 (spmmap.json) ──
-  try {
-    const dataRoot = resolveDataRoot(ctx?.container as never) || projectRoot;
-    const knowledgeDir = Paths.getProjectKnowledgePath(dataRoot);
-    const mapPath = path.join(knowledgeDir, 'Alembic.spmmap.json');
-    if (fs.existsSync(mapPath)) {
-      const raw = await readFile(mapPath, 'utf8');
-      const graph = JSON.parse(raw)?.graph || null;
-      if (target.packageName && graph?.packages?.[target.packageName]) {
-        const pkg = graph.packages[target.packageName];
-        meta.packageDir = pkg.packageDir;
-        meta.packageSwift = pkg.packageSwift;
-        meta.packageTargets = pkg.targets || [];
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-
-  // ── 知识图谱关系 (knowledge_edges) ──
-  try {
-    const graphService = ctx.container?.get('knowledgeGraphService');
-    if (graphService) {
-      const edges = await graphService.getEdges(target.name, 'module', 'both');
-      meta.graphEdges = {
-        outgoing: (edges.outgoing || []).map((e: GraphEdge) => ({
-          toId: e.toId,
-          toType: e.toType,
-          relation: e.relation,
-        })),
-        incoming: (edges.incoming || []).map((e: GraphEdge) => ({
-          fromId: e.fromId,
-          fromType: e.fromType,
-          relation: e.relation,
-        })),
-      };
-    }
-  } catch {
-    /* knowledge_edges may not exist */
-  }
 
   return envelope({ success: true, data: meta, meta: { tool: 'alembic_structure' } });
 }
@@ -454,14 +447,10 @@ export async function graphQuery(ctx: McpContext, args: GraphArgs) {
       data = await graphService.getEdges(nodeId, nodeType, direction);
     }
   } catch (err: unknown) {
-    // knowledge_edges 表不存在时 graceful 降级到 relations 字段
     if (err instanceof Error && err.message?.includes('no such table')) {
-      data = await _fallbackRelationsFromRecipe(ctx, nodeId, args.relation, direction);
-      return envelope({
-        success: true,
-        data,
-        meta: { tool: 'alembic_graph', source: 'relations-fallback' },
-      });
+      return graphUnavailableEnvelope(
+        'Knowledge graph edges are unavailable. Recipe relation fallback is retired for project-information routes.'
+      );
     }
     throw err;
   }
@@ -490,20 +479,10 @@ export async function graphImpact(ctx: McpContext, args: GraphArgs) {
       args.maxDepth ?? 3
     )) as unknown[];
   } catch (err: unknown) {
-    // knowledge_edges 表不存在时 graceful 降级
     if (err instanceof Error && err.message?.includes('no such table')) {
-      impacted = await _fallbackImpactFromRecipe(ctx, nodeId);
-      return envelope({
-        success: true,
-        data: {
-          nodeId,
-          impactedCount: impacted.length,
-          impacted,
-          degraded: true,
-          degradedReason: 'knowledge_edges 表不存在，仅从 relations 字段反查',
-        },
-        meta: { tool: 'alembic_graph', source: 'relations-fallback' },
-      });
+      return graphUnavailableEnvelope(
+        'Knowledge graph impact analysis is unavailable. Recipe relation fallback is retired for project-information routes.'
+      );
     }
     throw err;
   }
@@ -512,135 +491,6 @@ export async function graphImpact(ctx: McpContext, args: GraphArgs) {
     data: { nodeId, impactedCount: impacted.length, impacted },
     meta: { tool: 'alembic_graph' },
   });
-}
-
-/** 降级：从 knowledge_entries.relations 提取关系（不依赖 knowledge_edges 表） */
-async function _fallbackRelationsFromRecipe(
-  ctx: McpContext,
-  nodeId: string,
-  relation: string | undefined,
-  direction: string
-) {
-  try {
-    const knowledgeService = ctx.container.get('knowledgeService');
-    const entry = await knowledgeService.get(nodeId);
-    if (!entry) {
-      return { outgoing: [], incoming: [] };
-    }
-
-    const relJson =
-      typeof entry.relations?.toJSON === 'function'
-        ? entry.relations.toJSON()
-        : entry.relations || {};
-    const outgoing: {
-      fromId: string;
-      fromType: string;
-      toId: string;
-      toType: string;
-      relation: string;
-    }[] = [];
-    if (direction === 'both' || direction === 'out') {
-      for (const [relType, targets] of Object.entries(relJson)) {
-        if (relation && relType !== relation) {
-          continue;
-        }
-        for (const t of Array.isArray(targets) ? targets : []) {
-          outgoing.push({
-            fromId: nodeId,
-            fromType: 'knowledge',
-            toId: t.target || t.id || t,
-            toType: 'knowledge',
-            relation: relType,
-          });
-        }
-      }
-    }
-
-    // 反向查找：其他条目中 relations 包含当前 nodeId
-    const incoming: {
-      fromId: string;
-      fromType: string;
-      toId: string;
-      toType: string;
-      relation: string;
-    }[] = [];
-    if (direction === 'both' || direction === 'in') {
-      const knowledgeRepo = ctx.container.get('knowledgeRepository') as {
-        findByRelationLike(
-          nodeId: string,
-          excludeId: string
-        ): Promise<Array<{ id: string; title: string; relations: string }>>;
-      };
-      const reverseRows = await knowledgeRepo.findByRelationLike(nodeId, nodeId);
-      for (const row of reverseRows) {
-        try {
-          const rels = JSON.parse(row.relations || '{}');
-          for (const [relType, targets] of Object.entries(rels)) {
-            if (relation && relType !== relation) {
-              continue;
-            }
-            for (const t of Array.isArray(targets) ? targets : []) {
-              const targetId = t.target || t.id || t;
-              if (targetId === nodeId) {
-                incoming.push({
-                  fromId: row.id,
-                  fromType: 'knowledge',
-                  toId: nodeId,
-                  toType: 'knowledge',
-                  relation: relType,
-                });
-              }
-            }
-          }
-        } catch {
-          /* ignore parse error */
-        }
-      }
-    }
-
-    return { outgoing, incoming };
-  } catch {
-    return { outgoing: [], incoming: [] };
-  }
-}
-
-/** 降级：从 knowledge_entries.relations 反查受影响的条目 */
-async function _fallbackImpactFromRecipe(ctx: McpContext, nodeId: string) {
-  try {
-    const knowledgeRepo = ctx.container.get('knowledgeRepository') as {
-      findByRelationLike(
-        nodeId: string,
-        excludeId: string
-      ): Promise<Array<{ id: string; title: string; relations: string }>>;
-    };
-    const rows = await knowledgeRepo.findByRelationLike(nodeId, nodeId);
-
-    const impacted: { id: string; title: string; type: string; relation: string; depth: number }[] =
-      [];
-    for (const row of rows) {
-      try {
-        const rels = JSON.parse(row.relations || '{}');
-        for (const [relType, targets] of Object.entries(rels)) {
-          for (const t of Array.isArray(targets) ? targets : []) {
-            if ((t.target || t.id || t) === nodeId) {
-              impacted.push({
-                id: row.id,
-                title: row.title,
-                type: 'knowledge',
-                relation: relType,
-                depth: 1,
-              });
-            }
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    return impacted;
-  } catch {
-    return [];
-  }
 }
 
 // ─── graph_path — 路径查找 ─────────────────────────────────
@@ -668,54 +518,13 @@ export async function graphPath(ctx: McpContext, args: GraphArgs) {
     result = await graphService.findPath(fromId, fromType, toId, toType, maxDepth);
   } catch (err: unknown) {
     if (err instanceof Error && err.message?.includes('no such table')) {
-      // 降级：用 relations 字段做单跳查找
-      result = await _fallbackPathFromRecipe(ctx, fromId, toId);
-      return envelope({
-        success: true,
-        data: result,
-        meta: { tool: 'alembic_graph', source: 'relations-fallback' },
-      });
+      return graphUnavailableEnvelope(
+        'Knowledge graph path search is unavailable. Recipe relation fallback is retired for project-information routes.'
+      );
     }
     throw err;
   }
   return envelope({ success: true, data: result, meta: { tool: 'alembic_graph' } });
-}
-
-/** 降级路径查找：只能发现 1-hop 直接关系 */
-async function _fallbackPathFromRecipe(ctx: McpContext, fromId: string, toId: string) {
-  try {
-    const knowledgeService = ctx.container.get('knowledgeService');
-    const entry = await knowledgeService.get(fromId);
-    if (!entry) {
-      return { found: false, path: [], depth: -1 };
-    }
-
-    const relJson =
-      typeof entry.relations?.toJSON === 'function'
-        ? entry.relations.toJSON()
-        : entry.relations || {};
-    for (const [relType, targets] of Object.entries(relJson)) {
-      for (const t of Array.isArray(targets) ? targets : []) {
-        const targetId = t.target || t.id || t;
-        if (targetId === toId) {
-          return {
-            found: true,
-            path: [
-              {
-                from: { id: fromId, type: 'knowledge' },
-                to: { id: toId, type: 'knowledge' },
-                relation: relType,
-              },
-            ],
-            depth: 1,
-          };
-        }
-      }
-    }
-    return { found: false, path: [], depth: -1 };
-  } catch {
-    return { found: false, path: [], depth: -1 };
-  }
 }
 
 // ─── call_context — 调用链上下文 (Phase 5) ──────────────────
@@ -729,55 +538,7 @@ export async function callContext(ctx: McpContext, args: GraphArgs) {
     throw new Error('Missing required parameter: methodName');
   }
 
-  const ceg = ctx.container.get('codeEntityGraph');
-  if (!ceg) {
-    return envelope({
-      success: false,
-      message: 'CodeEntityGraph not available — 请先运行 bootstrap',
-      meta: { tool: 'alembic_call_context' },
-    });
-  }
-
-  const direction = args.direction || 'both';
-  const maxDepth = Math.min(Math.max(args.maxDepth ?? 2, 1), 5);
-  const result: Record<string, unknown> = {};
-
-  try {
-    if (direction === 'callers' || direction === 'both') {
-      result.callers = ceg.getCallers(args.methodName, maxDepth);
-    }
-    if (direction === 'callees' || direction === 'both') {
-      result.callees = ceg.getCallees(args.methodName, maxDepth);
-    }
-    if (direction === 'impact') {
-      result.impact = ceg.getCallImpactRadius(args.methodName);
-    }
-  } catch (err: unknown) {
-    if (err instanceof Error && err.message?.includes('no such table')) {
-      return envelope({
-        success: true,
-        data: {
-          methodName: args.methodName,
-          callers: [],
-          callees: [],
-          note: 'knowledge_edges 表不存在，请运行 bootstrap 后再查询',
-        },
-        meta: { tool: 'alembic_call_context' },
-      });
-    }
-    throw err;
-  }
-
-  return envelope({
-    success: true,
-    data: {
-      methodName: args.methodName,
-      direction,
-      maxDepth,
-      ...result,
-    },
-    meta: { tool: 'alembic_call_context' },
-  });
+  return retiredCallContextEnvelope(args.methodName);
 }
 
 // ─── graph_stats — 图谱统计 ────────────────────────────────

@@ -26,6 +26,17 @@ const PanoramaModuleParams = z.object({
   name: z.string().trim().min(1),
 });
 
+function sendRetiredProjectInfoRoute(res: Response): void {
+  res.status(410).json({
+    success: false,
+    error: {
+      code: 'RETIRED_PROJECT_INFO_ROUTE',
+      message:
+        'Project information is served by ProjectContext-backed module and structure routes.',
+    },
+  });
+}
+
 /**
  * GET /api/v1/panorama
  * 返回项目全景概览（层级、模块、覆盖率）
@@ -33,37 +44,8 @@ const PanoramaModuleParams = z.object({
 router.get(
   '/',
   validateQuery(PanoramaRefreshQuery),
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const container = getServiceContainer();
-      const panoramaService = container.get('panoramaService');
-      const query = req.query as z.infer<typeof PanoramaRefreshQuery>;
-
-      if (!panoramaService) {
-        res.status(503).json({
-          success: false,
-          error: { code: 'SERVICE_UNAVAILABLE', message: 'PanoramaService not available' },
-        });
-        return;
-      }
-
-      if (query.refresh === 'true' && typeof panoramaService.invalidate === 'function') {
-        panoramaService.invalidate();
-      }
-
-      if (typeof panoramaService.ensureData === 'function') {
-        await panoramaService.ensureData();
-      }
-
-      const overview = await panoramaService.getOverview();
-
-      res.json({ success: true, data: overview });
-    } catch (err: unknown) {
-      res.status(500).json({
-        success: false,
-        error: { code: 'PANORAMA_ERROR', message: (err as Error).message },
-      });
-    }
+  async (_req: Request, res: Response): Promise<void> => {
+    sendRetiredProjectInfoRoute(res);
   }
 );
 
@@ -74,37 +56,8 @@ router.get(
 router.get(
   '/health',
   validateQuery(PanoramaRefreshQuery),
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const container = getServiceContainer();
-      const panoramaService = container.get('panoramaService');
-      const query = req.query as z.infer<typeof PanoramaRefreshQuery>;
-
-      if (!panoramaService) {
-        res.status(503).json({
-          success: false,
-          error: { code: 'SERVICE_UNAVAILABLE', message: 'PanoramaService not available' },
-        });
-        return;
-      }
-
-      if (query.refresh === 'true' && typeof panoramaService.invalidate === 'function') {
-        panoramaService.invalidate();
-      }
-
-      if (typeof panoramaService.ensureData === 'function') {
-        await panoramaService.ensureData();
-      }
-
-      const health = await panoramaService.getHealth();
-
-      res.json({ success: true, data: health });
-    } catch (err: unknown) {
-      res.status(500).json({
-        success: false,
-        error: { code: 'PANORAMA_ERROR', message: (err as Error).message },
-      });
-    }
+  async (_req: Request, res: Response): Promise<void> => {
+    sendRetiredProjectInfoRoute(res);
   }
 );
 
@@ -115,37 +68,8 @@ router.get(
 router.get(
   '/gaps',
   validateQuery(PanoramaRefreshQuery),
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const container = getServiceContainer();
-      const panoramaService = container.get('panoramaService');
-      const query = req.query as z.infer<typeof PanoramaRefreshQuery>;
-
-      if (!panoramaService) {
-        res.status(503).json({
-          success: false,
-          error: { code: 'SERVICE_UNAVAILABLE', message: 'PanoramaService not available' },
-        });
-        return;
-      }
-
-      if (query.refresh === 'true' && typeof panoramaService.invalidate === 'function') {
-        panoramaService.invalidate();
-      }
-
-      if (typeof panoramaService.ensureData === 'function') {
-        await panoramaService.ensureData();
-      }
-
-      const gaps = await panoramaService.getGaps();
-
-      res.json({ success: true, data: gaps });
-    } catch (err: unknown) {
-      res.status(500).json({
-        success: false,
-        error: { code: 'PANORAMA_ERROR', message: (err as Error).message },
-      });
-    }
+  async (_req: Request, res: Response): Promise<void> => {
+    sendRetiredProjectInfoRoute(res);
   }
 );
 
@@ -156,82 +80,8 @@ router.get(
 router.get(
   '/coverage',
   validateQuery(PanoramaRefreshQuery),
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const container = getServiceContainer();
-      const panoramaService = container.get('panoramaService');
-      const query = req.query as z.infer<typeof PanoramaRefreshQuery>;
-
-      if (!panoramaService) {
-        res.status(503).json({
-          success: false,
-          error: { code: 'SERVICE_UNAVAILABLE', message: 'PanoramaService not available' },
-        });
-        return;
-      }
-
-      if (query.refresh === 'true' && typeof panoramaService.invalidate === 'function') {
-        panoramaService.invalidate();
-      }
-
-      if (typeof panoramaService.ensureData === 'function') {
-        await panoramaService.ensureData();
-      }
-
-      const overview = await panoramaService.getOverview();
-      const gaps = (await panoramaService.getGaps?.()) ?? [];
-
-      // 构建模块级覆盖率数据：从 overview.layers 中提取每个模块的文件数和 recipe 数
-      const modules: {
-        name: string;
-        layer: string;
-        fileCount: number;
-        recipeCount: number;
-        coverage: number;
-      }[] = [];
-
-      for (const layer of overview.layers || []) {
-        const layerModules = layer.modules || [];
-        for (const mod of layerModules) {
-          const fileCount = mod.fileCount || 0;
-          const recipeCount = mod.recipeCount || 0;
-          const coverage = fileCount > 0 ? Math.round((recipeCount / fileCount) * 100) : 0;
-          modules.push({
-            name: mod.name || 'unknown',
-            layer: layer.name,
-            fileCount,
-            recipeCount,
-            coverage: Math.min(coverage, 100),
-          });
-        }
-      }
-
-      // 按覆盖率升序（低覆盖在前，方便高亮）
-      modules.sort((a, b) => a.coverage - b.coverage);
-
-      // 空白区按维度聚合
-      const gapsByDimension: Record<string, number> = {};
-      for (const gap of gaps) {
-        const dim = gap.dimensionName || 'unknown';
-        gapsByDimension[dim] = (gapsByDimension[dim] || 0) + 1;
-      }
-
-      res.json({
-        success: true,
-        data: {
-          modules,
-          gapsByDimension,
-          overallCoverage: overview.overallCoverage ?? 0,
-          totalFiles: overview.totalFiles ?? 0,
-          totalRecipes: overview.totalRecipes ?? 0,
-        },
-      });
-    } catch (err: unknown) {
-      res.status(500).json({
-        success: false,
-        error: { code: 'PANORAMA_ERROR', message: (err as Error).message },
-      });
-    }
+  async (_req: Request, res: Response): Promise<void> => {
+    sendRetiredProjectInfoRoute(res);
   }
 );
 
@@ -242,41 +92,8 @@ router.get(
 router.get(
   '/module/:name',
   validateParams(PanoramaModuleParams),
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const container = getServiceContainer();
-      const panoramaService = container.get('panoramaService');
-      const params = req.params as z.infer<typeof PanoramaModuleParams>;
-
-      if (!panoramaService) {
-        res.status(503).json({
-          success: false,
-          error: { code: 'SERVICE_UNAVAILABLE', message: 'PanoramaService not available' },
-        });
-        return;
-      }
-
-      if (typeof panoramaService.ensureData === 'function') {
-        await panoramaService.ensureData();
-      }
-
-      const detail = await panoramaService.getModule(params.name);
-
-      if (!detail) {
-        res.status(404).json({
-          success: false,
-          error: { code: 'MODULE_NOT_FOUND', message: `Module "${params.name}" not found` },
-        });
-        return;
-      }
-
-      res.json({ success: true, data: detail });
-    } catch (err: unknown) {
-      res.status(500).json({
-        success: false,
-        error: { code: 'PANORAMA_ERROR', message: (err as Error).message },
-      });
-    }
+  async (_req: Request, res: Response): Promise<void> => {
+    sendRetiredProjectInfoRoute(res);
   }
 );
 

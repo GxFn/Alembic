@@ -28,14 +28,11 @@ import type { WorkflowMcpContext } from '@alembic/core/host-agent-workflows';
 import {
   auditRecipesForRescan,
   buildKnowledgeRescanPlan,
-  buildInternalKnowledgeRescanTargetFileMap as buildKnowledgeRescanTargetFileMap,
   buildKnowledgeRescanWorkflowPlan,
   buildRescanPrescreen,
-  cacheProjectAnalysisSession,
   createInternalKnowledgeRescanIntent as createKnowledgeRescanIntent,
   type InternalKnowledgeRescanArgs as KnowledgeRescanArgs,
   presentInternalKnowledgeRescanEmptyProject as presentKnowledgeRescanEmptyProject,
-  presentInternalKnowledgeRescanResponse as presentKnowledgeRescanResponse,
   projectInternalRescanGapPlan as projectKnowledgeRescanGapPlan,
   projectInternalRescanPromptRecipes as projectKnowledgeRescanPromptRecipes,
   runForceRescanCleanPolicy,
@@ -47,26 +44,28 @@ import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type {
   DimensionDef,
   McpContext,
-  PipelineFillView,
-  ProjectSnapshot,
   WorkflowDatabaseLike,
   WorkflowSkillHooks,
 } from '@alembic/core/types';
-import { buildProjectSnapshot } from '@alembic/core/types';
-import { FileDiffPlanner } from '@alembic/core/workflows/capabilities/project-intelligence';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
   attachProjectScopeSourceIdentitiesToView,
-  attachProjectScopeToScanOptions,
   buildProjectScopeAnalysisLogMeta,
   collectProjectScopeSourceIdentities,
   resolveProjectScopeAnalysisContext,
 } from '../../project-scope/ProjectScopeAnalysis.js';
-import { runAgentProjectContextAnalysis } from '../agent-project-context/AgentProjectContextAnalysis.js';
 import {
   dispatchAiDimensionRuns,
   startAiDimensionSession,
 } from '../ai-execution/AiDimensionDispatcher.js';
+import {
+  buildProjectContextFillView,
+  buildProjectContextMissionArtifacts,
+  buildProjectContextWorkflowFacts,
+  createProjectContextWorkflowSession,
+  presentProjectContextRescanResponse,
+  saveProjectContextFileSnapshot,
+} from '../project-context/ProjectContextWorkflowFacts.js';
 
 type AgentEvolutionAuditRecipe = Parameters<typeof runEvolutionAudit>[0]['recipes'][number];
 type EvolutionAuditResult = Awaited<ReturnType<typeof runEvolutionAudit>>;
@@ -232,41 +231,31 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
   // Step 1: Phase 1-4 项目分析（含增量 diff 计算）
   // ═══════════════════════════════════════════════════════════
 
-  const phaseResults = await runAgentProjectContextAnalysis({
+  const projectContextFacts = await buildProjectContextWorkflowFacts({
     analysisScope,
     projectRoot: plan.projectAnalysis.projectRoot,
+    contentMaxLines: intent.projectAnalysis.contentMaxLines,
     ctx,
-    prepare: plan.projectAnalysis.prepare,
-    scan: attachProjectScopeToScanOptions(plan.projectAnalysis.scan, analysisScope),
-    materialize: plan.projectAnalysis.materialize,
+    maxFiles: intent.projectAnalysis.maxFiles,
+    source: 'alembic-main-rescan',
   });
 
-  if (phaseResults.isEmpty) {
+  if (projectContextFacts.isEmpty) {
     return presentKnowledgeRescanEmptyProject({ responseTimeMs: Date.now() - t0 });
   }
 
   const {
     allFiles,
     primaryLang,
-    depGraphData,
-    astProjectSummary: _astProjectSummary,
-    activeDimensions: allDimensions,
+    dimensions: allDimensions,
     incrementalPlan: _incrementalPlan,
-  } = phaseResults;
-
-  // ── Build immutable ProjectSnapshot ──
-  const snapshot: ProjectSnapshot = buildProjectSnapshot({
-    projectRoot,
-    sourceTag: 'knowledge-rescan',
-    ...phaseResults,
-    report: phaseResults.report,
-  });
+  } = projectContextFacts;
 
   // ═══════════════════════════════════════════════════════════
   // Step 1.5: SourceRef 校验 + ProjectScope 反向清理
   // ═══════════════════════════════════════════════════════════
 
-  const sourceIdentities = collectProjectScopeSourceIdentities(phaseResults);
+  const sourceIdentities = collectProjectScopeSourceIdentities(projectContextFacts);
   let reconcileReport: SourceRefReconcileReport | null = null;
   try {
     const repos = resolveKnowledgeRepos(ctx.container);
@@ -375,7 +364,9 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
             projectOverview: {
               primaryLang: primaryLang || 'unknown',
               fileCount: allFiles.length,
-              modules: depGraphData?.nodes?.map((n: { name?: string }) => n.name || '') || [],
+              modules: projectContextFacts.presenterInput.modules.map(
+                (module) => module.module.name
+              ),
             },
             proposalSource: 'rescan-evolution',
           });
@@ -522,26 +513,27 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
   // （与 cold-start Phase 4.6 对齐）
   // ═══════════════════════════════════════════════════════════
 
-  const sessionId = cacheProjectAnalysisSession({
+  const workflowSession = createProjectContextWorkflowSession({
     container: ctx.container,
-    projectRoot,
     dimensions: executionDimensions,
-    snapshot,
-    primaryLang,
-    fileCount: allFiles.length,
-    moduleCount: depGraphData?.nodes?.length || 0,
-    logger: ctx.logger,
-    logPrefix: 'KnowledgeRescanWorkflow',
+    facts: projectContextFacts,
+    projectRoot,
   });
+  const sessionId = workflowSession.id;
+  const projectContextArtifacts = buildProjectContextMissionArtifacts({
+    dimensions: executionDimensions,
+    facts: projectContextFacts,
+    profile: 'rescan',
+    session: workflowSession,
+  });
+  projectContextFacts.report.projectContextMissionBriefing = {
+    briefingMeta: projectContextArtifacts.briefing.meta,
+    ideAgentProfile: projectContextArtifacts.ideAgentPacket.profile,
+  };
 
   // ═══════════════════════════════════════════════════════════
   // Step 6: 构建 targetFileMap + 任务清单 → 快速返回骨架
   // ═══════════════════════════════════════════════════════════
-
-  const targetFileMap = buildKnowledgeRescanTargetFileMap(
-    snapshot,
-    intent.projectAnalysis.contentMaxLines
-  );
 
   // 任务定义由统一 Rescan plan 决定：coverage gap、recipe decay、file diff 都可触发。
   const { bootstrapSession } = startAiDimensionSession({
@@ -556,23 +548,24 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
   // ═══════════════════════════════════════════════════════════
 
   if (executionDimensions.length > 0 && !intent.internalExecution?.skipAsyncFill) {
-    const fillView: PipelineFillView = {
-      snapshot,
-      ctx: ctx as RescanMcpContext,
-      bootstrapSession,
-      targetFileMap,
-      projectRoot,
-    };
-
     const allExistingRecipes = projectKnowledgeRescanPromptRecipes(knowledgeRescanPlan);
     dispatchAiDimensionRuns({
       view: attachProjectScopeSourceIdentitiesToView(
         {
-          ...fillView,
+          ...buildProjectContextFillView({
+            bootstrapSession,
+            ctx: ctx as Record<string, unknown>,
+            existingRecipes: allExistingRecipes,
+            evolutionPrescreen: prescreen,
+            facts: projectContextFacts,
+            mode: 'rescan',
+            projectRoot,
+            rescanExecutionDecisions: knowledgeRescanPlan.executionDecisions,
+          }),
+          ctx: ctx as RescanMcpContext,
           existingRecipes: allExistingRecipes,
           evolutionPrescreen: prescreen,
           rescanExecutionDecisions: knowledgeRescanPlan.executionDecisions,
-          mode: 'rescan',
         },
         sourceIdentities
       ),
@@ -584,16 +577,12 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
       '[KnowledgeRescanWorkflow] All dimensions fully covered and healthy — no async fill needed'
     );
     try {
-      const fileDiffPlanner = new FileDiffPlanner(db, projectRoot, { logger: ctx.logger });
-      const snapshotId = fileDiffPlanner.saveSnapshot({
+      const snapshotId = saveProjectContextFileSnapshot({
+        ctx,
+        projectRoot,
         sessionId: bootstrapSession?.id ?? sessionId ?? `rescan-${Date.now()}`,
         allFiles,
-        dimensionStats: {},
-        episodicMemory: null,
-        meta: {
-          primaryLang: primaryLang || undefined,
-          candidateCount: 0,
-        },
+        primaryLang,
         plan: _incrementalPlan,
       });
       ctx.logger.info('[KnowledgeRescanWorkflow] Snapshot saved for no-fill rescan', {
@@ -615,7 +604,7 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
         'onRescanComplete',
         {
           filesScanned: allFiles.length,
-          targetsFound: snapshot.allTargets.length,
+          targetsFound: projectContextFacts.targetCount,
           gapDimensions: gapDimensions.length,
           executionDimensions: executionDimensions.length,
           preservedRecipes: recipeSnapshot.count,
@@ -632,15 +621,15 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
     /* skillHooks not available */
   }
 
-  return presentKnowledgeRescanResponse({
+  return presentProjectContextRescanResponse({
     recipeSnapshot,
-    cleanResult,
+    cleanResult: cleanResult as unknown as Record<string, unknown>,
     auditSummary,
     gapPlan,
-    snapshot,
+    facts: projectContextFacts,
     bootstrapSession,
     sessionId,
-    evolutionAudit: evolutionAuditResult,
+    evolutionAudit: evolutionAuditResult as unknown as Record<string, unknown> | null,
     reason: intent.reason,
     responseTimeMs: Date.now() - t0,
   });

@@ -1,6 +1,5 @@
 import type { AgentService, SystemRunContextFactory } from '@alembic/agent/service';
 import type { BootstrapFileEntry } from './AgentRunInputBuilders.js';
-import type { BootstrapProjectGraphLike } from './RuntimeInitializer.js';
 
 interface BootstrapWorkflowSingletons {
   aiProvider?: {
@@ -28,10 +27,6 @@ export interface BootstrapWorkflowContainer {
   get<K extends keyof BootstrapWorkflowServiceKeys>(name: K): BootstrapWorkflowServiceKeys[K];
   get(name: string): unknown;
   singletons: BootstrapWorkflowSingletons;
-  buildProjectGraph?(
-    projectRoot: string,
-    options?: Record<string, unknown>
-  ): Promise<BootstrapProjectGraphLike | null>;
   [key: string]: unknown;
 }
 

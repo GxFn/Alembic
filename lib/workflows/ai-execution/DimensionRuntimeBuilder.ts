@@ -34,7 +34,6 @@ import {
   projectBootstrapDimensionRescanContext,
   projectBootstrapExistingRecipesForPrompt,
 } from './RescanContext.js';
-import type { BootstrapProjectGraphLike } from './RuntimeInitializer.js';
 
 interface DimConfigV3Entry {
   outputType: string;
@@ -178,7 +177,7 @@ export function createBootstrapDimensionRuntimeInput({
   sessionStore: unknown;
   semanticMemory: unknown;
   codeEntityGraphInst: unknown;
-  projectGraph: BootstrapProjectGraphLike | null;
+  projectGraph: unknown | null;
   panoramaResult?: Record<string, unknown> | null;
   astProjectSummary?: AstSummary | null;
   guardAudit?: GuardAudit | null;

@@ -1,6 +1,6 @@
 import type { AgentService, SystemRunContextFactory } from '@alembic/agent/service';
 import Logger from '@alembic/core/logging';
-import type { DimensionDef, IncrementalPlan, PipelineFillView } from '@alembic/core/types';
+import type { DimensionDef, IncrementalPlan } from '@alembic/core/types';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import { getAiRuntimeStatus } from '#inject/AiRuntimeStatus.js';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
@@ -8,28 +8,29 @@ import {
   type ProjectScopeSourceIdentity,
   resolveProjectScopeSourceIdentitiesFromCarrier,
 } from '../../project-scope/ProjectScopeAnalysis.js';
+import type { ProjectContextFillView } from '../project-context/ProjectContextWorkflowFacts.js';
 import type { BootstrapFileEntry } from './AgentRunInputBuilders.js';
 import type { BootstrapTaskManagerLike, BootstrapWorkflowContext } from './AiDimensionTypes.js';
 
 const logger = Logger.getInstance();
 
 export interface AiDimensionPreparation {
-  view: PipelineFillView;
+  view: ProjectContextFillView;
   dimensions: DimensionDef[];
   ctx: BootstrapWorkflowContext;
   projectRoot: string;
   dataRoot: string;
-  depGraphData: PipelineFillView['snapshot']['dependencyGraph'];
-  guardAudit: PipelineFillView['snapshot']['guardAudit'];
+  depGraphData: null;
+  guardAudit: null;
   primaryLang: string;
-  astProjectSummary: PipelineFillView['snapshot']['ast'];
+  astProjectSummary: null;
   incrementalPlan: IncrementalPlan | null;
   panoramaResult: Record<string, unknown> | null;
-  callGraphResult: PipelineFillView['snapshot']['callGraph'];
+  callGraphResult: null;
   existingRecipes: unknown;
   evolutionPrescreen: unknown;
-  rescanExecutionDecisions: PipelineFillView['rescanExecutionDecisions'];
-  targetFileMap: PipelineFillView['targetFileMap'];
+  rescanExecutionDecisions: ProjectContextFillView['rescanExecutionDecisions'];
+  targetFileMap: ProjectContextFillView['targetFileMap'];
   taskManager: BootstrapTaskManagerLike | null;
   sessionId: string;
   sessionAbortSignal: AbortSignal | null;
@@ -44,15 +45,15 @@ export interface AiDimensionPreparation {
 }
 
 export function prepareAiDimensionPipeline(
-  view: PipelineFillView,
+  view: ProjectContextFillView,
   dimensions: DimensionDef[]
 ): AiDimensionPreparation {
-  const { snapshot, projectRoot } = view;
+  const { projectContextFacts, projectRoot } = view;
   const ctx = view.ctx as BootstrapWorkflowContext;
   const projectScopeSourceIdentities = resolveProjectScopeSourceIdentitiesFromCarrier(view);
   const dataRoot =
     resolveDataRoot(ctx.container as { singletons?: Record<string, unknown> }) || projectRoot;
-  const incrementalPlan = snapshot.incrementalPlan as IncrementalPlan | null;
+  const incrementalPlan = projectContextFacts.incrementalPlan;
   const isIncremental =
     incrementalPlan?.canIncremental === true && incrementalPlan.mode === 'incremental';
   const emitter = new BootstrapEventEmitter(ctx.container);
@@ -84,13 +85,13 @@ export function prepareAiDimensionPipeline(
     ctx,
     projectRoot,
     dataRoot,
-    depGraphData: snapshot.dependencyGraph,
-    guardAudit: snapshot.guardAudit,
-    primaryLang: snapshot.language.primaryLang ?? 'unknown',
-    astProjectSummary: snapshot.ast,
+    depGraphData: null,
+    guardAudit: null,
+    primaryLang: projectContextFacts.primaryLang ?? 'unknown',
+    astProjectSummary: null,
     incrementalPlan,
-    panoramaResult: snapshot.panorama as Record<string, unknown> | null,
-    callGraphResult: snapshot.callGraph,
+    panoramaResult: null,
+    callGraphResult: null,
     existingRecipes: view.existingRecipes ?? null,
     evolutionPrescreen: view.evolutionPrescreen ?? null,
     rescanExecutionDecisions: view.rescanExecutionDecisions,
@@ -100,7 +101,7 @@ export function prepareAiDimensionPipeline(
     sessionAbortSignal: taskManager?.getSessionAbortSignal?.() ?? null,
     isIncremental,
     emitter,
-    allFiles: snapshot.allFiles as unknown as BootstrapFileEntry[] | null,
+    allFiles: projectContextFacts.allFiles as BootstrapFileEntry[] | null,
     projectScopeSourceIdentities,
     agentService,
     systemRunContextFactory,

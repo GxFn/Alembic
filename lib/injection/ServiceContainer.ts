@@ -1,7 +1,3 @@
-import { type Dirent, readdirSync, statSync } from 'node:fs';
-import { extname as pathExtname, join as pathJoin, relative as pathRelative } from 'node:path';
-// ─── v3.0: AST ProjectGraph ──────────────────────────
-import ProjectGraph from '@alembic/core/core/ast/ProjectGraph';
 // ─── v3.1: Multi-Language Discovery + Enhancement ────────
 import { initEnhancementRegistry } from '@alembic/core/core/enhancement';
 // ─── P3: Infrastructure ──────────────────────────────
@@ -9,7 +5,6 @@ import Logger from '@alembic/core/logging';
 import { unwrapRawDb } from '@alembic/core/search';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
-import { GraphCache } from '../infrastructure/cache/GraphCache.js';
 import * as AgentModule from './modules/AgentModule.js';
 import * as AiModule from './modules/AiModule.js';
 import * as AppModule from './modules/AppModule.js';
@@ -17,7 +12,6 @@ import * as GuardModule from './modules/GuardModule.js';
 // ─── DI Modules ──────────────────────────────────────
 import * as InfraModule from './modules/InfraModule.js';
 import * as KnowledgeModule from './modules/KnowledgeModule.js';
-import { PanoramaModule } from './modules/PanoramaModule.js';
 import * as SignalModule from './modules/SignalModule.js';
 import * as VectorModule from './modules/VectorModule.js';
 import type { ServiceMap } from './ServiceMap.js';
@@ -141,7 +135,6 @@ export class ServiceContainer {
       GuardModule.register(this);
       AgentModule.register(this);
       AiModule.register(this);
-      PanoramaModule.register(this);
 
       // v3.1: 初始化 Enhancement Pack 注册表（异步加载所有框架增强包）
       try {
@@ -214,7 +207,6 @@ export class ServiceContainer {
    * 初始化 CacheCoordinator：当其他进程写入 DB 后，自动清除本进程的内存缓存。
    *
    * 订阅的服务：
-   *   - panoramaService: invalidate() — 模块图 + 全景分析
    *   - guardCheckEngine: clearCache() — 规则缓存
    *   - searchEngine: buildIndex() — 搜索索引
    *
@@ -238,12 +230,6 @@ export class ServiceContainer {
       const coordinator = new CacheCoordinator(rawDb);
       this.singletons.cacheCoordinator = coordinator;
       this.register('cacheCoordinator', () => coordinator);
-
-      // 懒订阅：仅在对应服务已初始化时绑定
-      coordinator.subscribe('panoramaService', () => {
-        const svc = this.singletons.panoramaService as { invalidate?: () => void } | undefined;
-        svc?.invalidate?.();
-      });
 
       coordinator.subscribe('guardCheckEngine', () => {
         const svc = this.singletons.guardCheckEngine as { clearCache?: () => void } | undefined;
@@ -344,157 +330,6 @@ export class ServiceContainer {
   /** 获取所有已注册的服务名 */
   getServiceNames() {
     return Object.keys(this.services);
-  }
-
-  /**
-   * 构建 ProjectGraph (v3.0 AST 结构图)
-   * 优先从磁盘缓存加载，支持 per-file hash 增量更新
-   * @param projectRoot 项目根目录
-   * @param [options] 传递给 ProjectGraph.build() 的选项
-   */
-  async buildProjectGraph(projectRoot: string, options: Record<string, unknown> = {}) {
-    if (this.singletons.projectGraph) {
-      return this.singletons.projectGraph;
-    }
-
-    // GraphCache 使用 dataRoot 存储缓存（Ghost 模式下写到外置工作区）
-    const cacheRoot = resolveDataRoot(this);
-    const wz = this.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;
-    const cache = new GraphCache(cacheRoot, wz ?? undefined);
-    const startTime = Date.now();
-
-    try {
-      // ── 尝试从缓存恢复 + 增量更新 ──
-      const cached = cache.load('project-graph');
-      if (cached?.data && cached.fileHashes) {
-        const graph = ProjectGraph.fromJSON(cached.data);
-        const currentFiles = this.#collectSourceFilePaths(projectRoot, options);
-        const oldHashes = cached.fileHashes || {};
-
-        // 计算差异：新增 / 变更 / 删除
-        const changedPaths: string[] = [];
-        const newHashes: Record<string, string> = {};
-        for (const fp of currentFiles) {
-          const rel = pathRelative(projectRoot, fp);
-          const h = cache.computeFileHash(fp);
-          newHashes[rel] = h;
-          if (!oldHashes[rel] || oldHashes[rel] !== h) {
-            changedPaths.push(fp);
-          }
-        }
-        const deletedPaths = Object.keys(oldHashes).filter((rel) => !newHashes[rel]);
-
-        if (changedPaths.length === 0 && deletedPaths.length === 0) {
-          // 完全命中
-          this.singletons.projectGraph = graph;
-          this.logger.info(
-            `[ServiceContainer] ProjectGraph ⚡ 缓存命中 (${(await graph.getOverview())?.totalClasses} classes, ` +
-              `${Date.now() - startTime}ms)`
-          );
-          return graph;
-        }
-
-        // 增量更新
-        const diff = await graph.incrementalUpdate(changedPaths, deletedPaths, options);
-        this.singletons.projectGraph = graph;
-
-        // 写回缓存
-        cache.save('project-graph', graph.toJSON(), { fileHashes: newHashes });
-
-        const overview = await graph.getOverview();
-        if (!overview) {
-          throw new Error('ProjectGraph overview unavailable after incremental update');
-        }
-        this.logger.info(
-          `[ServiceContainer] ProjectGraph 增量更新: +${diff.added} ~${diff.updated} -${diff.deleted} ` +
-            `(${overview.totalClasses} classes, ${Date.now() - startTime}ms)`
-        );
-        return graph;
-      }
-
-      // ── 无缓存，全量构建 ──
-      const graph = await ProjectGraph.build(projectRoot, options);
-      this.singletons.projectGraph = graph;
-      const overview = await graph.getOverview();
-      if (!overview) {
-        throw new Error('ProjectGraph overview unavailable after full build');
-      }
-
-      // 计算文件 hash 并写入缓存
-      const currentFiles = this.#collectSourceFilePaths(projectRoot, options);
-      const fileHashes = cache.computeFileHashes(currentFiles, projectRoot);
-      cache.save('project-graph', graph.toJSON(), { fileHashes });
-
-      this.logger.info(
-        `[ServiceContainer] ProjectGraph built: ${overview.totalClasses} classes, ` +
-          `${overview.totalProtocols} protocols, ${overview.totalCategories} categories ` +
-          `(${overview.buildTimeMs}ms) — 缓存已写入`
-      );
-      return graph;
-    } catch (err: unknown) {
-      this.logger.warn(`[ServiceContainer] ProjectGraph build failed: ${(err as Error).message}`);
-      return null;
-    }
-  }
-
-  /** 收集项目源码文件路径（用于 hash 计算） */
-  #collectSourceFilePaths(projectRoot: string, options: Record<string, unknown> = {}) {
-    const DEFAULTS_EXT = { '.m': true, '.h': true, '.swift': true };
-    const extSet = new Set(
-      (options.extensions as string[] | undefined) || Object.keys(DEFAULTS_EXT)
-    );
-    const excludePatterns = (options.excludePatterns as string[] | undefined) || [
-      'Pods/',
-      'Carthage/',
-      'node_modules/',
-      '.build/',
-      'build/',
-      'DerivedData/',
-      'vendor/',
-      '.git/',
-      '__tests__/',
-      'Tests/',
-    ];
-    const maxFiles = (options.maxFiles as number | undefined) || 500;
-    const maxFileSizeBytes = (options.maxFileSizeBytes as number | undefined) || 500_000;
-    const results: string[] = [];
-
-    function walk(dir: string) {
-      if (results.length >= maxFiles) {
-        return;
-      }
-      let entries: Dirent[];
-      try {
-        entries = readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (results.length >= maxFiles) {
-          return;
-        }
-        const fullPath = pathJoin(dir, entry.name);
-        const relativePath = pathRelative(projectRoot, fullPath);
-        if (excludePatterns.some((p) => relativePath.includes(p))) {
-          continue;
-        }
-        if (entry.isDirectory()) {
-          walk(fullPath);
-        } else if (entry.isFile() && extSet.has(pathExtname(entry.name))) {
-          try {
-            const stat = statSync(fullPath);
-            if (stat.size <= maxFileSizeBytes) {
-              results.push(fullPath);
-            }
-          } catch {
-            /* skip */
-          }
-        }
-      }
-    }
-
-    walk(projectRoot);
-    return results;
   }
 }
 

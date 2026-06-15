@@ -1525,81 +1525,22 @@ program
   .option('--gaps', '仅显示知识空白区')
   .option('--health', '仅显示健康度评分')
   .action(async (scanPath, opts) => {
-    try {
-      const projectRoot = resolve(scanPath || '.');
-      const { bootstrap, container } = await initContainer({ projectRoot });
-      const panoramaService = container.get('panoramaService');
-      await panoramaService.ensureData();
-
-      if (opts.gaps) {
-        const gaps = await panoramaService.getGaps();
-        if (opts.json) {
-          cli.log(JSON.stringify(gaps, null, 2));
-        } else {
-          cli.log(`\n🔍 Knowledge Gaps: ${gaps.length} found\n`);
-          for (const g of gaps.slice(0, 20)) {
-            const priority = g.priority === 'high' ? '🔴' : g.priority === 'medium' ? '🟡' : '🔵';
-            cli.log(
-              `  ${priority} [${g.dimensionName}] ${g.recipeCount} recipes (${g.status}) — ${g.suggestedTopics.join(', ')}`
-            );
-          }
-          if (gaps.length > 20) {
-            cli.log(`\n  ... and ${gaps.length - 20} more gaps`);
-          }
-        }
-        await bootstrap.shutdown();
-        return;
-      }
-
-      if (opts.health) {
-        const health = await panoramaService.getHealth();
-        if (opts.json) {
-          cli.log(JSON.stringify(health, null, 2));
-        } else {
-          const icon = health.healthScore >= 80 ? '✅' : health.healthScore >= 50 ? '⚠️' : '❌';
-          cli.log(`\n${icon} Panorama Health: ${health.healthScore}/100\n`);
-          cli.log(`  Dimension Coverage: ${health.healthRadar.dimensionCoverage}%`);
-          cli.log(`  Avg Coupling: ${health.avgCoupling}`);
-          cli.log(`  Modules:      ${health.moduleCount}`);
-          cli.log(`  Cycles:       ${health.cycleCount}`);
-          cli.log(`  Gaps:         ${health.gapCount} (${health.highPriorityGaps} high-priority)`);
-        }
-        await bootstrap.shutdown();
-        return;
-      }
-
-      // 默认: 全景概览
-      const overview = await panoramaService.getOverview();
-      if (opts.json) {
-        cli.log(JSON.stringify(overview, null, 2));
-      } else {
-        cli.log(`\n📐 Panorama Overview\n`);
-        cli.log(`  Project:  ${overview.projectRoot}`);
-        cli.log(`  Modules:  ${overview.moduleCount}`);
-        cli.log(`  Layers:   ${overview.layerCount}`);
-        cli.log(`  Files:    ${overview.totalFiles}`);
-        cli.log(`  Recipes:  ${overview.totalRecipes}`);
-        cli.log(`  Coverage: ${overview.overallCoverage}%`);
-        cli.log(`  Cycles:   ${overview.cycleCount}`);
-        cli.log(`  Gaps:     ${overview.gapCount}`);
-
-        if (overview.layers && overview.layers.length > 0) {
-          cli.log(`\n  Layers:`);
-          for (const layer of overview.layers) {
-            const totalFiles = layer.modules.reduce(
-              (sum: number, m: { fileCount: number }) => sum + m.fileCount,
-              0
-            );
-            cli.log(`    ${layer.name}: ${layer.modules.length} modules, ${totalFiles} files`);
-          }
-        }
-      }
-
-      await bootstrap.shutdown();
-    } catch (err: any) {
-      cli.error(`Error: ${err.message}`);
-      cli.debug(err.stack);
-      process.exit(1);
+    const projectRoot = resolve(scanPath || '.');
+    const retired = {
+      success: false,
+      error: {
+        code: 'RETIRED_PROJECT_INFO_ROUTE',
+        message:
+          'Project information is served by ProjectContext-backed module and structure routes.',
+      },
+      projectRoot,
+    };
+    if (opts.json) {
+      cli.log(JSON.stringify(retired, null, 2));
+    } else {
+      cli.log('\nPanorama project-information commands have been retired.\n');
+      cli.log(retired.error.message);
+      cli.log(`Project: ${projectRoot}`);
     }
   });
 

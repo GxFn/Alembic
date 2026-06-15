@@ -16,7 +16,7 @@ import {
   type SystemRunContextFactory,
 } from '@alembic/agent/service';
 import Logger from '@alembic/core/logging';
-import { LanguageService } from '@alembic/core/project-intelligence';
+import { LanguageService } from '@alembic/core/shared';
 import { getAiRuntimeStatus, getAiUnavailableMessage } from '../injection/AiRuntimeStatus.js';
 
 export class AiScanService {

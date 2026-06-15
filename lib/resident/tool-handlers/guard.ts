@@ -11,8 +11,9 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { LanguageService } from '@alembic/core/project-intelligence';
+import { LanguageService } from '@alembic/core/shared';
 import { resolveProjectRoot } from '@alembic/core/workspace';
+import { projectContextModuleFiles } from '../../project-context/ProjectContextConsumerFacts.js';
 import { envelope } from '../tool-schema/envelope.js';
 import type { McpContext } from '../tool-schema/types.js';
 
@@ -1021,29 +1022,18 @@ export async function guardComplianceReport(ctx: McpContext, _args: ComplianceRe
   });
 }
 
-/** 从 Panorama 或目录结构构建模块→文件映射 */
+/** 从 ProjectContext 构建模块→文件映射 */
 async function _buildModuleFiles(
-  ctx: McpContext,
+  _ctx: McpContext,
   projectRoot: string
 ): Promise<Map<string, string[]>> {
-  const moduleFiles = new Map<string, string[]>();
-
   try {
-    const panorama = ctx.container.get('panoramaService') as {
-      getResult(): Promise<{ modules: Map<string, { name: string; files: string[] }> }>;
-    };
-    const result = await panorama.getResult();
-    if (result?.modules) {
-      for (const [name, mod] of result.modules) {
-        if (mod.files?.length > 0) {
-          moduleFiles.set(name, mod.files);
-        }
-      }
-    }
+    return await projectContextModuleFiles(projectRoot);
   } catch {
-    /* PanoramaService not available */
+    /* ProjectContext may be unavailable for empty or unsupported projects. */
   }
 
+  const moduleFiles = new Map<string, string[]>();
   if (moduleFiles.size === 0) {
     const { readdirSync, existsSync } = await import('node:fs');
     const srcDirs = ['Sources', 'BiliDili/Modules', 'src', 'lib'];

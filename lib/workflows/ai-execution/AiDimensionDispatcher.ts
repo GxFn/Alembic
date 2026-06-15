@@ -1,4 +1,5 @@
-import type { DimensionDef, PipelineFillView } from '@alembic/core/types';
+import type { DimensionDef } from '@alembic/core/types';
+import type { ProjectContextFillView } from '../project-context/ProjectContextWorkflowFacts.js';
 import { runAiDimensionPipeline } from './AiDimensionPipeline.js';
 import {
   buildTaskDefs,
@@ -37,7 +38,7 @@ export function startAiDimensionSession(opts: {
 }
 
 export function dispatchAiDimensionRuns(opts: {
-  view: PipelineFillView;
+  view: ProjectContextFillView;
   dimensions: DimensionDef[];
   logPrefix: string;
 }): void {

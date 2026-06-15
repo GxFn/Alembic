@@ -69,7 +69,7 @@ export class CacheCoordinator implements Startable {
   /**
    * 注册缓存失效回调
    *
-   * @param name  标识名（用于日志，如 'panoramaService'）
+   * @param name  标识名（用于日志，如 'searchEngine'）
    * @param handler 失效时调用的清除函数
    * @returns 取消注册函数
    */

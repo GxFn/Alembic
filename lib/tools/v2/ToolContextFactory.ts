@@ -3,7 +3,7 @@
  *
  * 长生命周期资源 (DeltaCache/SearchCache/Compressor/SessionStore)
  * 在 Factory 构造时创建一次，跨调用复用。
- * 重量级 DI 服务 (projectGraph/searchEngine 等) 按需从容器获取。
+ * 重量级 DI 服务 (searchEngine 等) 按需从容器获取。
  */
 
 import type { ToolCallRequest } from '@alembic/agent';
@@ -130,7 +130,7 @@ export class ToolContextFactory {
     return {
       projectRoot: this.#deps.projectRoot,
 
-      projectGraph: tryGet(c, 'projectGraph'),
+      projectGraph: null,
       codeEntityGraph: tryGet(c, 'codeEntityGraph'),
       searchEngine: tryGet(c, 'searchEngine'),
       recipeGateway: tryGet(c, 'recipeProductionGateway'),

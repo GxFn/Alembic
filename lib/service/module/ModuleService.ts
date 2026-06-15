@@ -1,9 +1,7 @@
 /**
  * ModuleService — 多语言统一模块扫描服务
  *
- * 通过 DiscovererRegistry 自动检测项目类型，
- * 统一 SPM / Node / Go / JVM / Python / Generic 等语言的模块扫描、依赖分析、AI 提取管线。
- * 语言特有操作（如 SPM 依赖管理）由对应的 Discoverer / Service 直接暴露，不经此类代理。
+ * 通过 ProjectContext repo/map facts 统一提供模块扫描、依赖摘要与 AI 提取输入。
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -21,11 +19,18 @@ import {
 } from '@alembic/agent/service';
 import { inferLang } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
-import { getDiscovererRegistry } from '@alembic/core/project-intelligence';
 // Type-only bridge: the layer contract forbids service -> injection runtime
 // imports (AD4 remediated the former getAiRuntimeStatus reach-through); the
 // status now arrives via constructed injection (aiStatus option).
 import type { AiRuntimeStatus } from '../../injection/AiRuntimeStatus.js';
+import {
+  loadProjectContextRepo,
+  type ProjectContextTargetEntry,
+  projectContextDependencyGraph,
+  projectContextFilesForTarget,
+  projectContextProjectInfo,
+  projectContextTargets,
+} from '../../project-context/ProjectContextConsumerFacts.js';
 
 // Mirrors getAiRuntimeStatus(null): constructions without an aiStatus
 // provider (guard handler, CLI scan) previously passed no container and got
@@ -94,13 +99,9 @@ const SOURCE_CODE_EXTS = new Set([
 export class ModuleService {
   #projectRoot;
 
-  #registry;
+  #repoContext: Awaited<ReturnType<typeof loadProjectContextRepo>> | null = null;
 
-  /** >} */
-  #activeDiscoverers: Array<{
-    discoverer: import('@alembic/core/project-intelligence').ProjectDiscoverer;
-    confidence: number;
-  }> = [];
+  #targets: ProjectContextTargetEntry[] = [];
 
   #loaded = false;
 
@@ -129,7 +130,6 @@ export class ModuleService {
     } = {}
   ) {
     this.#projectRoot = projectRoot;
-    this.#registry = getDiscovererRegistry();
     this.#logger = Logger.getInstance();
     this.#agentService = options.agentService || null;
     this.#systemRunContextFactory = options.systemRunContextFactory || null;
@@ -144,31 +144,25 @@ export class ModuleService {
   //  Lifecycle
   // ═══════════════════════════════════════════════════════
 
-  /** 自动检测项目类型并加载所有匹配的 Discoverer */
+  /** 加载 ProjectContext repo facts 并缓存目标列表 */
   async load() {
     if (this.#loaded) {
       return;
     }
 
-    const matches = await this.#registry.detectAll(this.#projectRoot);
-    this.#activeDiscoverers = [];
-
-    for (const { discoverer, confidence } of matches) {
-      try {
-        await discoverer.load(this.#projectRoot);
-        this.#activeDiscoverers.push({ discoverer, confidence });
-        this.#logger.info(
-          `[ModuleService] Loaded discoverer: ${discoverer.displayName} (confidence=${confidence.toFixed(2)})`
-        );
-      } catch (err: unknown) {
-        this.#logger.warn(
-          `[ModuleService] Failed to load discoverer ${discoverer.id}: ${(err as Error).message}`
-        );
-      }
-    }
-
-    if (this.#activeDiscoverers.length === 0) {
-      this.#logger.warn('[ModuleService] No discoverer matched, using empty state');
+    try {
+      this.#repoContext = await loadProjectContextRepo(this.#projectRoot);
+      this.#targets = projectContextTargets(this.#repoContext, this.#projectRoot);
+      this.#logger.info('[ModuleService] ProjectContext repo facts loaded', {
+        projectInformationSource: 'project-context',
+        targets: this.#targets.length,
+      });
+    } catch (err: unknown) {
+      this.#repoContext = null;
+      this.#targets = [];
+      this.#logger.warn(
+        `[ModuleService] ProjectContext repo facts unavailable: ${(err as Error).message}`
+      );
     }
 
     this.#loaded = true;
@@ -177,7 +171,8 @@ export class ModuleService {
   /** 清除缓存，重新检测 */
   async reload() {
     this.#loaded = false;
-    this.#activeDiscoverers = [];
+    this.#repoContext = null;
+    this.#targets = [];
     await this.load();
   }
 
@@ -189,86 +184,13 @@ export class ModuleService {
   }
 
   // ═══════════════════════════════════════════════════════
-  //  Query — 委托到 Discoverer
+  //  Query — ProjectContext facts
   // ═══════════════════════════════════════════════════════
 
-  /** 列出所有模块/Target（合并所有 Discoverer 的结果） */
+  /** 列出所有模块/Target（ProjectContext repo targets） */
   async listTargets() {
     await this.#ensureLoaded();
-
-    const allTargets: Record<string, unknown>[] = [];
-    const seenNames = new Set();
-    let hasRealDiscovererTargets = false;
-
-    // 第一遍：加载非 generic 的 Discoverer（真实项目结构识别器）
-    for (const { discoverer } of this.#activeDiscoverers) {
-      if (discoverer.id === 'generic') {
-        continue;
-      }
-      try {
-        const targets = await discoverer.listTargets();
-        for (const t of targets) {
-          const key = `${discoverer.id}::${t.name}`;
-          if (seenNames.has(key)) {
-            continue;
-          }
-          seenNames.add(key);
-          allTargets.push(this.#normalizeTarget(t, discoverer));
-          hasRealDiscovererTargets = true;
-        }
-      } catch (err: unknown) {
-        this.#logger.warn(
-          `[ModuleService] listTargets failed for ${discoverer.id}: ${(err as Error).message}`
-        );
-      }
-    }
-
-    // 第二遍：仅当没有真实 Discoverer 产出 target 时，才加载 GenericDiscoverer 的结果（兜底）
-    if (!hasRealDiscovererTargets) {
-      for (const { discoverer } of this.#activeDiscoverers) {
-        if (discoverer.id !== 'generic') {
-          continue;
-        }
-        try {
-          const targets = await discoverer.listTargets();
-          for (const t of targets) {
-            const key = `${discoverer.id}::${t.name}`;
-            if (seenNames.has(key)) {
-              continue;
-            }
-            seenNames.add(key);
-            allTargets.push(this.#normalizeTarget(t, discoverer));
-          }
-        } catch (err: unknown) {
-          this.#logger.warn(
-            `[ModuleService] listTargets failed for ${discoverer.id}: ${(err as Error).message}`
-          );
-        }
-      }
-    }
-
-    return allTargets;
-  }
-
-  /**
-   * 统一 target 格式 — 兼容前端 ModuleTarget 接口
-   * 各 Discoverer 返回 { name, path, type, language, framework, metadata }
-   * 前端还需要 { packageName, packagePath, targetDir, info } 等扩展字段
-   */
-  #normalizeTarget(t: Record<string, unknown>, discoverer: { id: string; displayName: string }) {
-    return {
-      ...t,
-      // 兼容字段 — 如果 discoverer 已设置则保留，否则从通用字段推导
-      packageName: t.packageName || (t.metadata as Record<string, unknown>)?.modulePath || t.name,
-      packagePath: t.packagePath || t.path || '',
-      targetDir: t.targetDir || t.path || '',
-      info: t.info || t.metadata || {},
-      // discoverer 来源
-      discovererId: discoverer.id,
-      discovererName: discoverer.displayName,
-      // 确保语言字段始终存在
-      language: t.language || discoverer.id || 'unknown',
-    };
+    return [...this.#targets];
   }
 
   /** 获取 Target 的文件列表 */
@@ -283,26 +205,12 @@ export class ModuleService {
       return this.#collectFolderFiles(targetObj.path as string);
     }
 
-    // 如果指定了 discovererId，直接找对应的 discoverer
-    if (discovererId) {
-      const entry = this.#activeDiscoverers.find((e) => e.discoverer.id === discovererId);
-      if (entry) {
-        return entry.discoverer.getTargetFiles(
-          targetObj as import('@alembic/core/project-intelligence').DiscoveredTarget
-        );
-      }
-    }
-
-    // 否则遍历所有 discoverer 找到第一个有该 target 的
-    for (const { discoverer } of this.#activeDiscoverers) {
-      try {
-        const targets = await discoverer.listTargets();
-        if (targets.some((t) => t.name === targetObj.name)) {
-          return discoverer.getTargetFiles(
-            targetObj as import('@alembic/core/project-intelligence').DiscoveredTarget
-          );
-        }
-      } catch {}
+    const contextTarget =
+      discovererId === 'project-context'
+        ? (targetObj as unknown as ProjectContextTargetEntry)
+        : this.#targets.find((candidate) => candidate.name === targetObj.name);
+    if (contextTarget) {
+      return projectContextFilesForTarget(contextTarget, this.#projectRoot);
     }
 
     // 兜底：如果 target 有 path 属性且目录存在，直接收集
@@ -323,79 +231,32 @@ export class ModuleService {
    */
   async getDependencyGraph(options: { level?: 'package' | 'target' } = {}) {
     await this.#ensureLoaded();
-
-    // 合并所有 Discoverer 的依赖图
-    const allNodes: Record<string, unknown>[] = [];
-    const allEdges: { from: string; to: string; type: string; source: string }[] = [];
-
-    // 如果有专业 Discoverer（非 generic），则跳过 GenericDiscoverer 的依赖图
-    // 避免 generic fallback 生成的冗余根节点（如项目名本身）干扰图结构
-    const hasSpecializedDiscoverer = this.#activeDiscoverers.some(
-      ({ discoverer }) => discoverer.id !== 'generic'
+    const graph = await projectContextDependencyGraph(
+      this.#projectRoot,
+      this.#repoContext ?? undefined
     );
-
-    for (const { discoverer } of this.#activeDiscoverers) {
-      if (hasSpecializedDiscoverer && discoverer.id === 'generic') {
-        continue;
-      }
-      try {
-        const graph = await discoverer.getDependencyGraph();
-        for (const _n of graph.nodes || []) {
-          const n = _n as string | Record<string, unknown>;
-          const id = typeof n === 'string' ? n : n.id || _n;
-          allNodes.push({
-            id: `${discoverer.id}::${id}`,
-            label: typeof n === 'string' ? n : ((n.label || n.id) as string),
-            type: (typeof n === 'object' && n.type) || options.level || 'module',
-            discovererId: discoverer.id,
-            ...(typeof n === 'object' && n.fullPath ? { fullPath: n.fullPath } : {}),
-            ...(typeof n === 'object' && n.indirect != null ? { indirect: n.indirect } : {}),
-          });
-        }
-        for (const e of graph.edges || []) {
-          allEdges.push({
-            from: `${discoverer.id}::${e.from}`,
-            to: `${discoverer.id}::${e.to}`,
-            type: e.type || 'depends_on',
-            source: discoverer.id,
-          });
-        }
-      } catch (err: unknown) {
-        this.#logger.warn(
-          `[ModuleService] getDependencyGraph failed for ${discoverer.id}: ${(err as Error).message}`
-        );
-      }
-    }
-
     return {
-      nodes: allNodes,
-      edges: allEdges,
-      projectRoot: this.#projectRoot,
-      generatedAt: new Date().toISOString(),
+      ...graph,
+      nodes: graph.nodes.map((node) => ({
+        ...node,
+        type: node.type || options.level || 'module',
+      })),
     };
   }
 
   /** 项目信息摘要 */
   getProjectInfo() {
-    const discoverers = this.#activeDiscoverers.map((e) => ({
-      id: e.discoverer.id,
-      name: e.discoverer.displayName,
-      confidence: e.confidence,
-    }));
-
-    const languages = [...new Set(discoverers.map((d) => d.id).filter((id) => id !== 'generic'))];
-    const primaryDiscoverer = discoverers[0] || null;
-
-    return {
-      projectRoot: this.#projectRoot,
-      projectName: _pathBasename(this.#projectRoot) || '',
-      primaryLanguage: primaryDiscoverer
-        ? this.#discovererToLanguage(primaryDiscoverer.id)
-        : 'unknown',
-      discoverers,
-      languages,
-      hasSpm: this.#activeDiscoverers.some((d) => d.discoverer.id === 'spm'),
-    };
+    return this.#repoContext
+      ? projectContextProjectInfo(this.#repoContext, this.#projectRoot)
+      : {
+          projectRoot: this.#projectRoot,
+          projectName: _pathBasename(this.#projectRoot) || '',
+          primaryLanguage: 'unknown',
+          discoverers: [],
+          languages: [],
+          hasSpm: false,
+          projectInformationSource: 'project-context',
+        };
   }
 
   // ═══════════════════════════════════════════════════════
@@ -680,7 +541,7 @@ export class ModuleService {
 
   /** 刷新模块映射（替代 updateDependencyMap） */
   async updateModuleMap(options: Record<string, unknown> = {}) {
-    // 重新加载 discoverer
+    // 重新加载 ProjectContext facts
     await this.reload();
     const targets = await this.listTargets();
     const graph = await this.getDependencyGraph();
@@ -774,20 +635,6 @@ export class ModuleService {
   // ═══════════════════════════════════════════════════════
   //  Private Helpers
   // ═══════════════════════════════════════════════════════
-
-  /** Discoverer ID → 语言映射 */
-  #discovererToLanguage(id: string) {
-    const map: Record<string, string> = {
-      spm: 'swift',
-      node: 'javascript',
-      go: 'go',
-      jvm: 'java',
-      python: 'python',
-      customConfig: 'swift',
-      generic: 'unknown',
-    };
-    return map[id] || 'unknown';
-  }
 
   /**
    * AI 提取 Recipes — 委托 AgentService.run(scan-extract)
