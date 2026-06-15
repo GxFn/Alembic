@@ -299,11 +299,13 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
             title: 'ASQ source-backed publication route',
           },
         ],
+        requireProductionSession: true,
         sessionId: 'bs-asq',
       });
 
       expect(result.sessionId).toBe('bs-asq');
       expect(result.bootstrapSessionRef).toBe('bootstrap-session:bs-asq');
+      expect(result.requireProductionSession).toBe(true);
       expect(result.items[0]).toMatchObject({
         graphRefs: ['sourceGraph:search-handler'],
         moduleName: 'resident-tools',

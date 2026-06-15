@@ -122,6 +122,20 @@ interface KnowledgeLifecycleInputValue {
   reason?: string;
 }
 
+interface SubmitKnowledgeInputValue {
+  items: Record<string, unknown>[];
+  target_name?: string;
+  source?: string;
+  skipConsolidation: boolean;
+  skipDuplicateCheck: boolean;
+  client_id?: string;
+  dimensionId?: string;
+  sessionId?: string;
+  bootstrapSessionRef?: string;
+  requireProductionSession?: boolean;
+  supersedes?: string;
+}
+
 // ══════════════════════════════════════════════════════
 //  1. alembic_health — 无参数
 // ══════════════════════════════════════════════════════
@@ -391,13 +405,19 @@ export const SubmitKnowledgeInput = z.object({
     .string()
     .optional()
     .describe('可选：调用方持有的 bootstrap-session:<id> 引用，用于诊断 session 绑定'),
+  requireProductionSession: z
+    .boolean()
+    .optional()
+    .describe(
+      '可选：要求本次提交绑定可用的 bootstrap/rescan produce session；ASQ/controller 生产证明应设置。'
+    ),
   supersedes: z
     .string()
     .optional()
     .describe(
       '声明新 Recipe 替代旧 Recipe 的 ID。提交后系统将创建 supersede 提案，观察窗口内对比新旧表现后自动执行。'
     ),
-});
+}) as unknown as z.ZodType<SubmitKnowledgeInputValue>;
 export type SubmitKnowledgeInput = z.infer<typeof SubmitKnowledgeInput>;
 
 // ══════════════════════════════════════════════════════

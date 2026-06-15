@@ -9,6 +9,7 @@
  * alembic_bootstrap 已迁移到 host-agent recoverable workflow 路径。
  */
 
+import { resolve } from 'node:path';
 import { dimensionTags } from '@alembic/core/dimensions';
 import { getRequiredFieldsDescription } from '@alembic/core/knowledge';
 import { getDeveloperIdentity } from '@alembic/core/shared';
@@ -254,7 +255,21 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
 
   // ── Step 2: MCP 特有预处理 ──
   prepareSubmitKnowledgeItems(items, options);
-  const routeDiagnostics = describeSubmitKnowledgeProductionRoute(ctx, args, items);
+  const routeDiagnostics = describeSubmitKnowledgeProductionRoute(
+    ctx,
+    args,
+    items,
+    saveContext.projectRoot
+  );
+  const productionSessionGate = evaluateSubmitKnowledgeProductionSessionGate(
+    args,
+    items,
+    options,
+    routeDiagnostics
+  );
+  if (!productionSessionGate.allowed) {
+    return buildProductionSessionBlockedResponse(items, routeDiagnostics, productionSessionGate);
+  }
 
   // 获取 bootstrapSession 已提交标题用于跨维度去重
   const submissionSets = readBootstrapSubmissionSets(ctx);
@@ -310,6 +325,7 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
 interface SubmitKnowledgeOptions {
   clientId?: string;
   dimensionId?: string;
+  requireProductionSession: boolean;
   skipConsolidation: boolean;
   source: string;
   supersedes?: string;
@@ -340,6 +356,10 @@ function readSubmitKnowledgeOptions(args: Record<string, unknown>): SubmitKnowle
   return {
     clientId: args.client_id as string | undefined,
     dimensionId: args.dimensionId as string | undefined,
+    requireProductionSession:
+      args.requireProductionSession === true ||
+      args.productionSessionRequired === true ||
+      args.requireProductionRouteSession === true,
     skipConsolidation: (args.skipConsolidation as boolean) === true,
     source: (args.source as string) || 'mcp',
     supersedes: args.supersedes as string | undefined,
@@ -371,7 +391,7 @@ async function resolveSubmitKnowledgeSaveContext(ctx: McpContext, clientId: stri
     };
   }
 
-  return { allowed: true as const, dataRoot };
+  return { allowed: true as const, dataRoot, projectRoot };
 }
 
 function prepareSubmitKnowledgeItems(
@@ -620,10 +640,138 @@ function buildAllRejectedSubmitKnowledgeResponse(
   });
 }
 
+type ProductionSessionGateResult =
+  | { allowed: true; required: false; trigger: null }
+  | { allowed: true; required: true; trigger: string }
+  | {
+      allowed: false;
+      required: true;
+      reason: string;
+      sessionStatus: string;
+      trigger: string;
+    };
+
+function evaluateSubmitKnowledgeProductionSessionGate(
+  args: Record<string, unknown>,
+  items: readonly Record<string, unknown>[],
+  options: SubmitKnowledgeOptions,
+  routeDiagnostics: ReturnType<typeof describeSubmitKnowledgeProductionRoute>
+): ProductionSessionGateResult {
+  const trigger = detectProductionSessionGateTrigger(args, items, options);
+  if (!trigger.required) {
+    return { allowed: true, required: false, trigger: null };
+  }
+
+  const session = routeDiagnostics.session;
+  if (session.usable === true) {
+    return { allowed: true, required: true, trigger: trigger.reason };
+  }
+
+  return {
+    allowed: false,
+    required: true,
+    reason:
+      typeof session.reason === 'string'
+        ? session.reason
+        : 'Production session is not usable for controller-authorized submission.',
+    sessionStatus: typeof session.status === 'string' ? session.status : 'unavailable',
+    trigger: trigger.reason,
+  };
+}
+
+function detectProductionSessionGateTrigger(
+  args: Record<string, unknown>,
+  items: readonly Record<string, unknown>[],
+  options: SubmitKnowledgeOptions
+): { required: boolean; reason: string } {
+  if (options.requireProductionSession) {
+    return { required: true, reason: 'explicit-production-session-required' };
+  }
+  if (normalizeSessionRef(args.sessionId ?? args.bootstrapSessionRef)) {
+    return { required: true, reason: 'session-bound-production-claim' };
+  }
+  if (hasProductionRouteMarker(options.source) || hasProductionRouteMarker(args.source)) {
+    return { required: true, reason: 'asq-controller-source' };
+  }
+  if (hasProductionRouteMarker(options.dimensionId) || hasProductionRouteMarker(args.dimensionId)) {
+    return { required: true, reason: 'asq-controller-dimension' };
+  }
+  if (
+    items.some((item) =>
+      [item.source, item.dimensionId, item.sourceCandidateId, item.trigger, item.topicHint].some(
+        hasProductionRouteMarker
+      )
+    )
+  ) {
+    return { required: true, reason: 'asq-controller-item-metadata' };
+  }
+  return { required: false, reason: 'ordinary-mcp-submission' };
+}
+
+function hasProductionRouteMarker(value: unknown): boolean {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  return /(^|[-_:/.\s])(asq|controller|wakeflow)([-_:/.\s]|$)/i.test(value.trim());
+}
+
+function buildProductionSessionBlockedResponse(
+  items: readonly Record<string, unknown>[],
+  routeDiagnostics: ReturnType<typeof describeSubmitKnowledgeProductionRoute>,
+  gate: Extract<ProductionSessionGateResult, { allowed: false }>
+) {
+  return envelope({
+    success: false,
+    errorCode: 'PRODUCTION_SESSION_BLOCKED',
+    message:
+      `生产 session 不可用，已阻止 ${items.length} 条 ASQ/controller 知识提交进入 RecipeProductionGateway。` +
+      ` Reason: ${gate.reason}`,
+    data: {
+      count: 0,
+      total: items.length,
+      blocker: {
+        owner: 'controller-or-alembic-production-session-route',
+        reasonCode: gate.sessionStatus,
+        retryable: true,
+        nextAction:
+          'Open or pass a valid non-destructive bootstrap/rescan produce session for the same project root before claiming ASQ/controller production-route proof.',
+      },
+      productionRoute: {
+        ...routeDiagnostics,
+        createdIds: [],
+        gate: {
+          gatewayCalled: false,
+          reasonCode: gate.sessionStatus,
+          required: true,
+          status: 'blocked',
+          trigger: gate.trigger,
+        },
+        pendingPublication: false,
+      },
+    },
+    problem: buildToolUsageProblem({
+      code: 'PRODUCTION_SESSION_BLOCKED',
+      reasonCode: 'conflict',
+      failingStep: 'production-session-gate',
+      nextAction:
+        'Open or pass a valid non-destructive bootstrap/rescan produce session for the same project root before claiming ASQ/controller production-route proof.',
+      retryable: true,
+      fieldProblems: [
+        {
+          field: 'sessionId|bootstrapSessionRef',
+          error: `${gate.sessionStatus}: ${gate.reason}`,
+        },
+      ],
+    }),
+    meta: { tool: 'alembic_submit_knowledge' },
+  });
+}
+
 // ── BootstrapSession 提交追踪辅助函数 ───────────────────────
 
 interface SessionTrackerLike {
   id?: string;
+  projectRoot?: string;
   submissionTracker?: {
     getAllSubmittedTriggers?(): Set<string>;
     recordRejection(dimId: string, title: string, reason: string): void;
@@ -689,10 +837,11 @@ function _trackRejection(
 export function describeSubmitKnowledgeProductionRoute(
   ctx: McpContext,
   args: Record<string, unknown>,
-  items: readonly Record<string, unknown>[]
+  items: readonly Record<string, unknown>[],
+  expectedProjectRoot?: string
 ) {
   return {
-    session: describeActiveSubmissionSession(ctx, args),
+    session: describeActiveSubmissionSession(ctx, args, expectedProjectRoot),
     metadata: summarizeSubmitKnowledgeMetadata(items),
     publication: {
       defaultAgentPublishAllowed: false,
@@ -722,7 +871,11 @@ export function describeSubmitKnowledgeProductionRoute(
   };
 }
 
-function describeActiveSubmissionSession(ctx: McpContext, args: Record<string, unknown>) {
+function describeActiveSubmissionSession(
+  ctx: McpContext,
+  args: Record<string, unknown>,
+  expectedProjectRoot?: string
+) {
   const requestedSessionId = normalizeSessionRef(args.sessionId ?? args.bootstrapSessionRef);
   try {
     const sessionManager = ctx.container.get('bootstrapSessionManager') as
@@ -741,6 +894,19 @@ function describeActiveSubmissionSession(ctx: McpContext, args: Record<string, u
     }
 
     const sessionId = readSessionId(session);
+    const activeProjectRoot = readSessionProjectRoot(session);
+    if (isProjectRootMismatch(activeProjectRoot, expectedProjectRoot)) {
+      return {
+        status: 'project-mismatch',
+        usable: false,
+        requestedSessionId,
+        activeSessionId: sessionId,
+        projectRoot: expectedProjectRoot,
+        activeProjectRoot,
+        reason: 'Active production session belongs to a different project root.',
+      };
+    }
+
     if (requestedSessionId && sessionId && requestedSessionId !== sessionId) {
       return {
         status: 'invalid-session',
@@ -829,6 +995,28 @@ function readSessionId(session: SessionTrackerLike): string | null {
   const snapshot = safeSessionSnapshot(session);
   const id = snapshot?.id;
   return typeof id === 'string' && id.length > 0 ? id : null;
+}
+
+function readSessionProjectRoot(session: SessionTrackerLike): string | null {
+  if (typeof session.projectRoot === 'string' && session.projectRoot.length > 0) {
+    return session.projectRoot;
+  }
+  const snapshot = safeSessionSnapshot(session);
+  const projectRoot = snapshot?.projectRoot;
+  return typeof projectRoot === 'string' && projectRoot.length > 0 ? projectRoot : null;
+}
+
+function isProjectRootMismatch(activeProjectRoot: string | null, expectedProjectRoot?: string) {
+  const active = normalizeProjectRootForCompare(activeProjectRoot);
+  const expected = normalizeProjectRootForCompare(expectedProjectRoot);
+  return Boolean(active && expected && active !== expected);
+}
+
+function normalizeProjectRootForCompare(projectRoot: string | null | undefined): string | null {
+  if (typeof projectRoot !== 'string' || projectRoot.trim().length === 0) {
+    return null;
+  }
+  return resolve(projectRoot);
 }
 
 function safeSessionProgress(session: SessionTrackerLike): { remainingDimIds: string[] } | null {
