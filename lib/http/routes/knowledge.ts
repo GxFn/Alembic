@@ -228,13 +228,28 @@ router.delete('/:id', async (req: Request, res: Response) => {
  * 发布 (pending → active)
  */
 router.patch('/:id/publish', async (req: Request, res: Response) => {
+  if (!rejectUnlessConfirmed(req, res, 'knowledge publish')) {
+    return;
+  }
   const id = String(req.params.id);
   const container = getServiceContainer();
   const knowledgeService = container.get('knowledgeService');
   const context = getContext(req);
 
   const entry = await knowledgeService.publish(id, context);
-  res.json({ success: true, data: sanitizeForAPI(entry) });
+  const searchFreshness = await refreshKnowledgeSearchSurface(container, 'knowledge publish');
+  res.json({
+    success: true,
+    data: {
+      ...(sanitizeForAPI(entry) as Record<string, unknown>),
+      publication: {
+        route: 'admin/controller',
+        confirmed: true,
+        lifecycle: 'active',
+      },
+      searchFreshness,
+    },
+  });
 });
 
 /**
@@ -354,6 +369,7 @@ router.post('/batch-publish', validate(BatchPublishBody), async (req: Request, r
   const failed = results
     .map((r, i) => (r.status === 'rejected' ? { id: ids[i], error: r.reason?.message } : null))
     .filter(Boolean);
+  const searchFreshness = await refreshKnowledgeSearchSurface(container, 'knowledge batch-publish');
 
   res.json({
     success: true,
@@ -363,6 +379,12 @@ router.post('/batch-publish', validate(BatchPublishBody), async (req: Request, r
       total: ids.length,
       successCount: published.length,
       failureCount: failed.length,
+      publication: {
+        route: 'admin/controller',
+        confirmed: true,
+        lifecycle: 'active',
+      },
+      searchFreshness,
     },
   });
 });
@@ -478,3 +500,59 @@ router.patch('/:id/quality', async (req: Request, res: Response) => {
 });
 
 export default router;
+
+interface KnowledgeRouteContainer {
+  get(name: string): unknown;
+  services?: Record<string, unknown>;
+}
+
+async function refreshKnowledgeSearchSurface(container: KnowledgeRouteContainer, reason: string) {
+  const report: {
+    reason: string;
+    searchIndex: { attempted: boolean; refreshed: boolean; error?: string };
+    vectorReconcile: { attempted: boolean; reconciled: boolean; error?: string };
+  } = {
+    reason,
+    searchIndex: { attempted: false, refreshed: false },
+    vectorReconcile: { attempted: false, reconciled: false },
+  };
+
+  try {
+    if (container.services?.searchEngine) {
+      const searchEngine = container.get('searchEngine') as {
+        refreshIndex?: (opts?: { force?: boolean }) => void | Promise<void>;
+      };
+      if (typeof searchEngine?.refreshIndex === 'function') {
+        report.searchIndex.attempted = true;
+        await searchEngine.refreshIndex({ force: true });
+        report.searchIndex.refreshed = true;
+      }
+    }
+  } catch (err: unknown) {
+    report.searchIndex.error = err instanceof Error ? err.message : String(err);
+  }
+
+  try {
+    if (container.services?.vectorService) {
+      const vectorService = container.get('vectorService') as {
+        syncCoordinator?: {
+          reconcile?: () => Promise<{ missingQueued?: number; orphansRemoved?: number }>;
+        };
+      };
+      const reconcile = vectorService?.syncCoordinator?.reconcile;
+      if (typeof reconcile === 'function') {
+        report.vectorReconcile.attempted = true;
+        const result = await reconcile.call(vectorService.syncCoordinator);
+        report.vectorReconcile.reconciled = true;
+        Object.assign(report.vectorReconcile, {
+          missingQueued: result?.missingQueued ?? 0,
+          orphansRemoved: result?.orphansRemoved ?? 0,
+        });
+      }
+    }
+  } catch (err: unknown) {
+    report.vectorReconcile.error = err instanceof Error ? err.message : String(err);
+  }
+
+  return report;
+}

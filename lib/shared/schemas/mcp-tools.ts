@@ -100,6 +100,12 @@ interface SubmitKnowledgeItemValue {
   moduleName?: string;
   includeHeaders?: boolean;
   source?: string;
+  sourceFile?: string;
+  sourceCandidateId?: string;
+  sourceRefs?: string[];
+  graphRefs?: string[];
+  sourceGraphRefs?: string[];
+  sourceGraph?: Record<string, unknown>;
 }
 
 interface KnowledgeLifecycleInputValue {
@@ -352,6 +358,12 @@ export const SubmitKnowledgeItemSchema = z.object({
   moduleName: z.string().optional(),
   includeHeaders: z.boolean().optional(),
   source: z.string().optional(),
+  sourceFile: z.string().optional(),
+  sourceCandidateId: z.string().optional(),
+  sourceRefs: z.array(z.string()).optional(),
+  graphRefs: z.array(z.string()).optional(),
+  sourceGraphRefs: z.array(z.string()).optional(),
+  sourceGraph: z.record(z.string(), z.unknown()).optional(),
 }) as unknown as z.ZodType<SubmitKnowledgeItemValue>;
 
 export const SubmitKnowledgeInput = z.object({
@@ -371,6 +383,14 @@ export const SubmitKnowledgeInput = z.object({
   skipDuplicateCheck: z.boolean().default(false),
   client_id: z.string().optional(),
   dimensionId: z.string().optional().describe('冷启动/增量扫描关联维度 ID'),
+  sessionId: z
+    .string()
+    .optional()
+    .describe('可选：调用方期望绑定的 rescan/bootstrap produce session id'),
+  bootstrapSessionRef: z
+    .string()
+    .optional()
+    .describe('可选：调用方持有的 bootstrap-session:<id> 引用，用于诊断 session 绑定'),
   supersedes: z
     .string()
     .optional()

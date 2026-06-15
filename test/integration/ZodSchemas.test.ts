@@ -280,6 +280,40 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
     });
   });
 
+  describe('SubmitKnowledgeInput', () => {
+    test('accepts source-backed production metadata and session references', () => {
+      const result = SubmitKnowledgeInput.parse({
+        bootstrapSessionRef: 'bootstrap-session:bs-asq',
+        items: [
+          {
+            graphRefs: ['sourceGraph:search-handler'],
+            headerPaths: ['lib/resident/tool-handlers/consolidated.ts'],
+            includeHeaders: true,
+            moduleName: 'resident-tools',
+            relations: { related: [{ target: 'knowledge:k-asq' }] },
+            sourceCandidateId: 'cand-asq',
+            sourceFile: 'lib/resident/tool-handlers/consolidated.ts',
+            sourceGraph: { ref: 'sourceGraph:search-handler' },
+            sourceGraphRefs: ['sourceGraph:search-handler'],
+            sourceRefs: ['lib/resident/tool-handlers/consolidated.ts:220'],
+            title: 'ASQ source-backed publication route',
+          },
+        ],
+        sessionId: 'bs-asq',
+      });
+
+      expect(result.sessionId).toBe('bs-asq');
+      expect(result.bootstrapSessionRef).toBe('bootstrap-session:bs-asq');
+      expect(result.items[0]).toMatchObject({
+        graphRefs: ['sourceGraph:search-handler'],
+        moduleName: 'resident-tools',
+        sourceCandidateId: 'cand-asq',
+        sourceFile: 'lib/resident/tool-handlers/consolidated.ts',
+        sourceGraphRefs: ['sourceGraph:search-handler'],
+      });
+    });
+  });
+
   describe('TaskInput', () => {
     test('should require operation', () => {
       expect(() => TaskInput.parse({})).toThrow();

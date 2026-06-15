@@ -246,13 +246,107 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     });
   }
 
-  const skipConsolidation = (args.skipConsolidation as boolean) === true;
-  const source = (args.source as string) || 'mcp';
-  const dimensionId = args.dimensionId as string | undefined;
-  const clientId = args.client_id as string | undefined;
-  const supersedes = args.supersedes as string | undefined;
+  const options = readSubmitKnowledgeOptions(args);
+  const saveContext = await resolveSubmitKnowledgeSaveContext(ctx, options.clientId);
+  if (!saveContext.allowed) {
+    return saveContext.response;
+  }
 
-  // ── Step 1: 限流 ──
+  // ── Step 2: MCP 特有预处理 ──
+  prepareSubmitKnowledgeItems(items, options);
+  const routeDiagnostics = describeSubmitKnowledgeProductionRoute(ctx, args, items);
+
+  // 获取 bootstrapSession 已提交标题用于跨维度去重
+  const submissionSets = readBootstrapSubmissionSets(ctx);
+
+  // ── Step 3: 委托 RecipeProductionGateway 统一管道 ──
+  const gateway = createRecipeProductionGateway(
+    ctx,
+    RecipeProductionGateway,
+    saveContext.dataRoot,
+    findSimilarRecipes
+  );
+  const gatewayResult = (await gateway.create({
+    source: 'mcp-external',
+    items: items as import('@alembic/core/knowledge').CreateRecipeItem[],
+    options: {
+      skipConsolidation: options.skipConsolidation,
+      supersedes: options.supersedes,
+      existingTitles: submissionSets.existingTitles,
+      existingTriggers: submissionSets.existingTriggers,
+      userId: getDeveloperIdentity(),
+    },
+  })) as RecipeGatewayResultLike;
+
+  // ── Step 4: Bootstrap session 追踪 ──
+  trackGatewayResult(ctx, items, options.dimensionId, gatewayResult);
+
+  // ── Step 5: 构建统一响应 ──
+  const successCount = gatewayResult.created.length;
+  const data = buildSubmitKnowledgeResponseData(
+    items,
+    gatewayResult,
+    routeDiagnostics,
+    options.supersedes
+  );
+
+  // 全部拒绝 → 特殊错误响应（MT3: 附带 taxonomy problem + 字段级细节，
+  // 修复认证矩阵标记的 zh-only 无结构拒绝）
+  if (successCount === 0 && gatewayResult.rejected.length === items.length) {
+    return buildAllRejectedSubmitKnowledgeResponse(items, gatewayResult, data);
+  }
+
+  const allOk = successCount === items.length;
+  return envelope({
+    success: successCount > 0,
+    data,
+    message: allOk
+      ? `已提交 ${successCount} 条知识条目。`
+      : `已提交 ${successCount}/${items.length} 条知识条目。`,
+    meta: { tool: 'alembic_submit_knowledge' },
+  });
+}
+
+interface SubmitKnowledgeOptions {
+  clientId?: string;
+  dimensionId?: string;
+  skipConsolidation: boolean;
+  source: string;
+  supersedes?: string;
+}
+
+interface RecipeGatewayResultLike {
+  blocked: unknown[];
+  created: Array<{ id: string; title: string }>;
+  merged: Array<{
+    expiresAt: number;
+    message: string;
+    proposalId: string;
+    status: string;
+    targetRecipeId: string;
+    targetTitle: string;
+    type: string;
+  }>;
+  pendingSemanticReview?: Array<{ reason?: string }>;
+  rejected: Array<{ errors: string[]; index: number; title: string; warnings?: unknown }>;
+  supersedeProposal?: { proposalId: string };
+}
+
+type RecipeProductionGatewayConstructor =
+  typeof import('@alembic/core/knowledge').RecipeProductionGateway;
+type FindSimilarRecipes = typeof import('@alembic/core/service/candidate').findSimilarRecipes;
+
+function readSubmitKnowledgeOptions(args: Record<string, unknown>): SubmitKnowledgeOptions {
+  return {
+    clientId: args.client_id as string | undefined,
+    dimensionId: args.dimensionId as string | undefined,
+    skipConsolidation: (args.skipConsolidation as boolean) === true,
+    source: (args.source as string) || 'mcp',
+    supersedes: args.supersedes as string | undefined,
+  };
+}
+
+async function resolveSubmitKnowledgeSaveContext(ctx: McpContext, clientId: string | undefined) {
   // AD4: limiter relocated to infrastructure (former resident -> http inversion)
   const { resolveRecipeSaveRateLimiter } = await import(
     '../../infrastructure/rate-limit/RecipeSaveRateLimiter.js'
@@ -264,23 +358,32 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     projectRoot,
     clientId || process.env.USER || 'mcp-client'
   );
+
   if (!limitCheck.allowed) {
-    return envelope({
-      success: false,
-      message: `提交过于频繁，请 ${limitCheck.retryAfter}s 后再试。`,
-      errorCode: 'RATE_LIMIT',
-      meta: { tool: 'alembic_submit_knowledge' },
-    });
+    return {
+      allowed: false as const,
+      response: envelope({
+        success: false,
+        message: `提交过于频繁，请 ${limitCheck.retryAfter}s 后再试。`,
+        errorCode: 'RATE_LIMIT',
+        meta: { tool: 'alembic_submit_knowledge' },
+      }),
+    };
   }
 
-  // ── Step 2: MCP 特有预处理 ──
-  // 注入批次级选项到各条目
+  return { allowed: true as const, dataRoot };
+}
+
+function prepareSubmitKnowledgeItems(
+  items: Record<string, unknown>[],
+  options: SubmitKnowledgeOptions
+) {
   for (const item of items) {
     if (!item.source) {
-      item.source = source;
+      item.source = options.source;
     }
-    if (dimensionId && !item.dimensionId) {
-      item.dimensionId = dimensionId;
+    if (options.dimensionId && !item.dimensionId) {
+      item.dimensionId = options.dimensionId;
     }
     if (item.dimensionId && typeof item.dimensionId === 'string') {
       const existingTags = Array.isArray(item.tags)
@@ -289,8 +392,9 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
       item.tags = dimensionTags(item.dimensionId, existingTags);
     }
   }
+}
 
-  // 获取 bootstrapSession 已提交标题用于跨维度去重
+function readBootstrapSubmissionSets(ctx: McpContext) {
   let existingTitles: Set<string> | undefined;
   let existingTriggers: Set<string> | undefined;
   try {
@@ -305,50 +409,39 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
   } catch {
     /* best effort */
   }
+  return { existingTitles, existingTriggers };
+}
 
-  // ── Step 3: 委托 RecipeProductionGateway 统一管道 ──
-  const knowledgeService = ctx.container.get('knowledgeService');
-  let consolidationAdvisor = null;
-  try {
-    consolidationAdvisor = ctx.container.get('consolidationAdvisor');
-  } catch {
-    /* not registered */
-  }
-  let proposalRepository = null;
-  try {
-    proposalRepository = ctx.container.get('proposalRepository');
-  } catch {
-    /* not registered */
-  }
-  let evolutionGateway = null;
-  try {
-    evolutionGateway = ctx.container.get('evolutionGateway');
-  } catch {
-    /* not registered */
-  }
-
-  const gateway = new RecipeProductionGateway({
-    knowledgeService,
+function createRecipeProductionGateway(
+  ctx: McpContext,
+  RecipeProductionGateway: RecipeProductionGatewayConstructor,
+  dataRoot: string,
+  findSimilarRecipes: FindSimilarRecipes
+) {
+  return new RecipeProductionGateway({
+    knowledgeService: ctx.container.get('knowledgeService'),
     projectRoot: dataRoot,
-    consolidationAdvisor: consolidationAdvisor ?? null,
-    proposalRepository: proposalRepository ?? null,
-    evolutionGateway: evolutionGateway ?? null,
+    consolidationAdvisor: getOptionalService(ctx, 'consolidationAdvisor'),
+    proposalRepository: getOptionalService(ctx, 'proposalRepository'),
+    evolutionGateway: getOptionalService(ctx, 'evolutionGateway'),
     findSimilarRecipes,
   });
+}
 
-  const gatewayResult = await gateway.create({
-    source: 'mcp-external',
-    items: items as import('@alembic/core/knowledge').CreateRecipeItem[],
-    options: {
-      skipConsolidation,
-      supersedes,
-      existingTitles,
-      existingTriggers,
-      userId: getDeveloperIdentity(),
-    },
-  });
+function getOptionalService(ctx: McpContext, name: string) {
+  try {
+    return ctx.container.get(name) ?? null;
+  } catch {
+    return null;
+  }
+}
 
-  // ── Step 4: Bootstrap session 追踪 ──
+function trackGatewayResult(
+  ctx: McpContext,
+  items: Record<string, unknown>[],
+  dimensionId: string | undefined,
+  gatewayResult: RecipeGatewayResultLike
+) {
   for (const created of gatewayResult.created) {
     _trackSubmission(
       ctx,
@@ -358,56 +451,100 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     );
   }
   for (const rej of gatewayResult.rejected) {
-    const item = items[rej.index] || {};
-    _trackRejection(ctx, item, dimensionId);
+    _trackRejection(ctx, items[rej.index] || {}, dimensionId);
   }
+}
 
-  // ── Step 5: 构建统一响应 ──
-  const successCount = gatewayResult.created.length;
+function buildSubmitKnowledgeResponseData(
+  items: Record<string, unknown>[],
+  gatewayResult: RecipeGatewayResultLike,
+  routeDiagnostics: ReturnType<typeof describeSubmitKnowledgeProductionRoute>,
+  supersedes: string | undefined
+) {
   const data: Record<string, unknown> = {
-    count: successCount,
+    count: gatewayResult.created.length,
     total: items.length,
   };
 
   if (gatewayResult.created.length > 0) {
     data.ids = gatewayResult.created.map((c) => c.id);
   }
+  data.productionRoute = {
+    ...routeDiagnostics,
+    createdIds: gatewayResult.created.map((c) => c.id),
+    pendingPublication: gatewayResult.created.length > 0,
+  };
+  appendRejectedResponseData(data, gatewayResult, items.length);
+  appendBlockedResponseData(data, gatewayResult);
+  appendProposalResponseData(data, gatewayResult, supersedes);
+  appendPendingSemanticReviewResponseData(data, gatewayResult);
+  return data;
+}
 
-  if (gatewayResult.rejected.length > 0) {
-    const rejectedItems = gatewayResult.rejected.map((r) => ({
-      index: r.index,
-      title: r.title,
-      errors: r.errors,
-      warnings: r.warnings,
-    }));
-    const allMissing = [...new Set(rejectedItems.flatMap((it) => it.errors))];
-    data.rejectedItems = rejectedItems;
-    data.rejectedSummary = {
-      rejectedCount: rejectedItems.length,
-      commonErrors: allMissing,
-      message: `${rejectedItems.length}/${items.length} 条知识条目因校验未通过被拒绝。`,
-    };
+function appendRejectedResponseData(
+  data: Record<string, unknown>,
+  gatewayResult: RecipeGatewayResultLike,
+  itemCount: number
+) {
+  if (gatewayResult.rejected.length === 0) {
+    return;
   }
+  const rejectedItems = gatewayResult.rejected.map((r) => ({
+    index: r.index,
+    title: r.title,
+    errors: r.errors,
+    warnings: r.warnings,
+  }));
+  data.rejectedItems = rejectedItems;
+  data.rejectedSummary = {
+    rejectedCount: rejectedItems.length,
+    commonErrors: [...new Set(rejectedItems.flatMap((it) => it.errors))],
+    message: `${rejectedItems.length}/${itemCount} 条知识条目因校验未通过被拒绝。`,
+  };
+}
 
-  if (gatewayResult.blocked.length > 0) {
-    data.blockedItems = gatewayResult.blocked;
-    data.blockedSummary = {
-      blockedCount: gatewayResult.blocked.length,
-      message: `${gatewayResult.blocked.length} 条因融合分析被阻塞（与已有 Recipe 重叠或实质性不足）。设 skipConsolidation: true 可跳过。`,
-    };
+function appendBlockedResponseData(
+  data: Record<string, unknown>,
+  gatewayResult: RecipeGatewayResultLike
+) {
+  if (gatewayResult.blocked.length === 0) {
+    return;
   }
+  data.blockedItems = gatewayResult.blocked;
+  data.blockedSummary = {
+    blockedCount: gatewayResult.blocked.length,
+    message: `${gatewayResult.blocked.length} 条因融合分析被阻塞（与已有 Recipe 重叠或实质性不足）。设 skipConsolidation: true 可跳过。`,
+  };
+}
 
-  const createdProposals: unknown[] = [];
-  for (const m of gatewayResult.merged) {
-    createdProposals.push({
-      proposalId: m.proposalId,
-      type: m.type,
-      targetRecipe: { id: m.targetRecipeId, title: m.targetTitle },
-      status: m.status,
-      expiresAt: m.expiresAt,
-      message: m.message,
-    });
+function appendProposalResponseData(
+  data: Record<string, unknown>,
+  gatewayResult: RecipeGatewayResultLike,
+  supersedes: string | undefined
+) {
+  const createdProposals = buildCreatedProposals(gatewayResult, supersedes);
+  if (createdProposals.length === 0) {
+    return;
   }
+  data.proposals = createdProposals;
+  data.proposalSummary = {
+    proposalCount: createdProposals.length,
+    message: `${createdProposals.length} 条已创建进化提案，系统将在观察窗口到期后自动执行。无需额外操作。`,
+  };
+}
+
+function buildCreatedProposals(
+  gatewayResult: RecipeGatewayResultLike,
+  supersedes: string | undefined
+) {
+  const createdProposals: unknown[] = gatewayResult.merged.map((m) => ({
+    proposalId: m.proposalId,
+    type: m.type,
+    targetRecipe: { id: m.targetRecipeId, title: m.targetTitle },
+    status: m.status,
+    expiresAt: m.expiresAt,
+    message: m.message,
+  }));
 
   if (gatewayResult.supersedeProposal) {
     createdProposals.push({
@@ -419,75 +556,66 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
       message: `已创建替代提案。`,
     });
   }
+  return createdProposals;
+}
 
-  if (createdProposals.length > 0) {
-    data.proposals = createdProposals;
-    data.proposalSummary = {
-      proposalCount: createdProposals.length,
-      message: `${createdProposals.length} 条已创建进化提案，系统将在观察窗口到期后自动执行。无需额外操作。`,
-    };
+function appendPendingSemanticReviewResponseData(
+  data: Record<string, unknown>,
+  gatewayResult: RecipeGatewayResultLike
+) {
+  const pendingSemanticReview = gatewayResult.pendingSemanticReview ?? [];
+  if (pendingSemanticReview.length === 0) {
+    return;
   }
+  data.pendingSemanticReview = pendingSemanticReview;
+  data.nextAction = {
+    tool: 'alembic_consolidate',
+    args: {
+      decisions: pendingSemanticReview.map((r) => ({
+        newRecipeId: '',
+        action: 'keep',
+        reasoning: r.reason,
+      })),
+    },
+    required: false,
+    reason:
+      `${pendingSemanticReview.length} 条候选处于相似度模糊区间（0.4-0.65），` +
+      `字段分析不明确，建议阅读源代码后调用 alembic_consolidate 判断是否需要合并。`,
+  };
+}
 
-  // ── pendingSemanticReview → nextAction tail instruction ──
-  if (gatewayResult.pendingSemanticReview && gatewayResult.pendingSemanticReview.length > 0) {
-    data.pendingSemanticReview = gatewayResult.pendingSemanticReview;
-    data.nextAction = {
-      tool: 'alembic_consolidate',
-      args: {
-        decisions: gatewayResult.pendingSemanticReview.map((r) => ({
-          newRecipeId: '',
-          action: 'keep',
-          reasoning: r.reason,
-        })),
-      },
-      required: false,
-      reason:
-        `${gatewayResult.pendingSemanticReview.length} 条候选处于相似度模糊区间（0.4-0.65），` +
-        `字段分析不明确，建议阅读源代码后调用 alembic_consolidate 判断是否需要合并。`,
-    };
-  }
-
-  // 全部拒绝 → 特殊错误响应（MT3: 附带 taxonomy problem + 字段级细节，
-  // 修复认证矩阵标记的 zh-only 无结构拒绝）
-  if (successCount === 0 && gatewayResult.rejected.length === items.length) {
-    const allMissing = [...new Set(gatewayResult.rejected.flatMap((it) => it.errors))];
-    const fieldProblems = gatewayResult.rejected.flatMap((it, idx) =>
-      it.errors.map((error: string) => ({
-        field: `items[${typeof it.index === 'number' ? it.index : idx}]`,
-        error,
-      }))
-    );
-    return envelope({
-      success: false,
-      errorCode: 'INCOMPLETE_SUBMISSION',
-      message:
-        `全部 ${items.length} 条知识条目被拒绝。请在单次调用中补齐所有字段后重新提交。` +
-        ` All ${items.length} items were rejected; see problem.fieldProblems for per-item missing fields.`,
-      data: {
-        rejectedItems: data.rejectedItems,
-        requiredFields: getRequiredFieldsDescription(),
-        commonErrors: allMissing,
-      },
-      problem: buildToolUsageProblem({
-        code: 'INCOMPLETE_SUBMISSION',
-        reasonCode: 'invalid-input',
-        failingStep: 'recipe-production-gateway-validation',
-        nextAction:
-          'Fill the missing required fields listed in problem.fieldProblems (full contract in data.requiredFields) and resubmit ALL items in one call.',
-        retryable: true,
-        fieldProblems,
-      }),
-      meta: { tool: 'alembic_submit_knowledge' },
-    });
-  }
-
-  const allOk = successCount === items.length;
+function buildAllRejectedSubmitKnowledgeResponse(
+  items: Record<string, unknown>[],
+  gatewayResult: RecipeGatewayResultLike,
+  data: Record<string, unknown>
+) {
+  const allMissing = [...new Set(gatewayResult.rejected.flatMap((it) => it.errors))];
+  const fieldProblems = gatewayResult.rejected.flatMap((it, idx) =>
+    it.errors.map((error: string) => ({
+      field: `items[${typeof it.index === 'number' ? it.index : idx}]`,
+      error,
+    }))
+  );
   return envelope({
-    success: successCount > 0,
-    data,
-    message: allOk
-      ? `已提交 ${successCount} 条知识条目。`
-      : `已提交 ${successCount}/${items.length} 条知识条目。`,
+    success: false,
+    errorCode: 'INCOMPLETE_SUBMISSION',
+    message:
+      `全部 ${items.length} 条知识条目被拒绝。请在单次调用中补齐所有字段后重新提交。` +
+      ` All ${items.length} items were rejected; see problem.fieldProblems for per-item missing fields.`,
+    data: {
+      rejectedItems: data.rejectedItems,
+      requiredFields: getRequiredFieldsDescription(),
+      commonErrors: allMissing,
+    },
+    problem: buildToolUsageProblem({
+      code: 'INCOMPLETE_SUBMISSION',
+      reasonCode: 'invalid-input',
+      failingStep: 'recipe-production-gateway-validation',
+      nextAction:
+        'Fill the missing required fields listed in problem.fieldProblems (full contract in data.requiredFields) and resubmit ALL items in one call.',
+      retryable: true,
+      fieldProblems,
+    }),
     meta: { tool: 'alembic_submit_knowledge' },
   });
 }
@@ -495,12 +623,14 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
 // ── BootstrapSession 提交追踪辅助函数 ───────────────────────
 
 interface SessionTrackerLike {
+  id?: string;
   submissionTracker?: {
     getAllSubmittedTriggers?(): Set<string>;
     recordRejection(dimId: string, title: string, reason: string): void;
     recordSubmission(dimId: string, item: unknown, recipeId: string): void;
   };
   getProgress(): { remainingDimIds: string[] };
+  toJSON?(): Record<string, unknown>;
 }
 
 function _getSession(ctx: McpContext): { session: SessionTrackerLike; dimId: string } | null {
@@ -554,4 +684,179 @@ function _trackRejection(
   } catch {
     /* best effort */
   }
+}
+
+export function describeSubmitKnowledgeProductionRoute(
+  ctx: McpContext,
+  args: Record<string, unknown>,
+  items: readonly Record<string, unknown>[]
+) {
+  return {
+    session: describeActiveSubmissionSession(ctx, args),
+    metadata: summarizeSubmitKnowledgeMetadata(items),
+    publication: {
+      defaultAgentPublishAllowed: false,
+      reason:
+        'alembic_submit_knowledge creates reviewed pending entries only; publish remains an explicit admin/controller route.',
+      authorizedRoutes: [
+        {
+          method: 'PATCH',
+          path: '/api/v1/knowledge/:id/publish',
+          requiredFlag: 'confirmed=true',
+        },
+        {
+          method: 'POST',
+          path: '/api/v1/knowledge/batch-publish',
+          requiredFlag: 'confirmed=true',
+        },
+      ],
+    },
+    searchFreshness: {
+      submitBehavior:
+        'submit does not make pending entries searchable as active knowledge by itself',
+      publishBehavior:
+        'authorized publish routes refresh the resident search index and return searchFreshness diagnostics',
+      eventBusBehavior:
+        'when EventBus/SearchEngine are bound, knowledge:changed also refreshes SearchEngine best-effort',
+    },
+  };
+}
+
+function describeActiveSubmissionSession(ctx: McpContext, args: Record<string, unknown>) {
+  const requestedSessionId = normalizeSessionRef(args.sessionId ?? args.bootstrapSessionRef);
+  try {
+    const sessionManager = ctx.container.get('bootstrapSessionManager') as
+      | { getSession?: () => SessionTrackerLike | null }
+      | null
+      | undefined;
+    const session = sessionManager?.getSession?.();
+    if (!session) {
+      return {
+        status: 'missing',
+        usable: false,
+        requestedSessionId,
+        reason:
+          'No active bootstrap/rescan produce session is available; use alembic_rescan output or an authorized controller gap-fill session before claiming session-bound production.',
+      };
+    }
+
+    const sessionId = readSessionId(session);
+    if (requestedSessionId && sessionId && requestedSessionId !== sessionId) {
+      return {
+        status: 'invalid-session',
+        usable: false,
+        requestedSessionId,
+        activeSessionId: sessionId,
+        reason: 'Requested session id does not match the active production session.',
+      };
+    }
+
+    const progress = safeSessionProgress(session);
+    const remainingDimIds = progress?.remainingDimIds ?? [];
+    const snapshot = safeSessionSnapshot(session);
+    const taskCount =
+      numberFromRecord(snapshot, 'total') ?? numberFromRecord(snapshot, 'totalTasks');
+    const hasProduceWork =
+      remainingDimIds.length > 0 || (typeof taskCount === 'number' && taskCount > 0);
+    if (!hasProduceWork) {
+      return {
+        status: 'no-produce-session',
+        usable: false,
+        requestedSessionId,
+        activeSessionId: sessionId,
+        remainingDimIds,
+        reason:
+          'An active session exists, but it has no remaining produce dimensions/tasks for submit tracking.',
+      };
+    }
+
+    return {
+      status: 'active',
+      usable: true,
+      requestedSessionId,
+      activeSessionId: sessionId,
+      remainingDimIds,
+    };
+  } catch (err: unknown) {
+    return {
+      status: 'unavailable',
+      usable: false,
+      requestedSessionId,
+      reason: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+function summarizeSubmitKnowledgeMetadata(items: readonly Record<string, unknown>[]) {
+  const countWith = (field: string) => items.filter((item) => item[field] !== undefined).length;
+  return {
+    itemCount: items.length,
+    preservedFields: [
+      'relations',
+      'moduleName',
+      'headerPaths',
+      'includeHeaders',
+      'source',
+      'sourceFile',
+      'sourceCandidateId',
+      'sourceRefs',
+      'graphRefs',
+      'sourceGraphRefs',
+      'sourceGraph',
+    ],
+    itemsWithRelations: countWith('relations'),
+    itemsWithModuleName: countWith('moduleName'),
+    itemsWithHeaderPaths: countWith('headerPaths'),
+    itemsWithIncludeHeaders: countWith('includeHeaders'),
+    itemsWithSourceFile: countWith('sourceFile'),
+    itemsWithSourceCandidateId: countWith('sourceCandidateId'),
+    itemsWithSourceGraph:
+      countWith('sourceGraph') + countWith('sourceGraphRefs') + countWith('graphRefs'),
+  };
+}
+
+function normalizeSessionRef(value: unknown): string | null {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return null;
+  }
+  return value.trim().replace(/^bootstrap-session:/, '');
+}
+
+function readSessionId(session: SessionTrackerLike): string | null {
+  if (typeof session.id === 'string' && session.id.length > 0) {
+    return session.id;
+  }
+  const snapshot = safeSessionSnapshot(session);
+  const id = snapshot?.id;
+  return typeof id === 'string' && id.length > 0 ? id : null;
+}
+
+function safeSessionProgress(session: SessionTrackerLike): { remainingDimIds: string[] } | null {
+  try {
+    const progress = session.getProgress?.();
+    if (!progress || !Array.isArray(progress.remainingDimIds)) {
+      return null;
+    }
+    return {
+      remainingDimIds: progress.remainingDimIds.filter(
+        (dimId): dimId is string => typeof dimId === 'string' && dimId.length > 0
+      ),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function safeSessionSnapshot(session: SessionTrackerLike): Record<string, unknown> | null {
+  try {
+    const snapshot = session.toJSON?.();
+    return snapshot && typeof snapshot === 'object' ? snapshot : null;
+  } catch {
+    return null;
+  }
+}
+
+function numberFromRecord(record: Record<string, unknown> | null, key: string): number | null {
+  const value = record?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
