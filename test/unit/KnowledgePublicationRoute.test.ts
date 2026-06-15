@@ -1,3 +1,4 @@
+import type { DimensionDef } from '@alembic/core/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpContext } from '../../lib/resident/tool-schema/types.js';
 
@@ -26,6 +27,11 @@ import {
   describeSubmitKnowledgeProductionRoute,
   enhancedSubmitKnowledge,
 } from '../../lib/resident/tool-handlers/consolidated.js';
+import {
+  buildProduceSessionProjection,
+  buildProduceSessionRoutePlan,
+  readControllerProduceSessionRequest,
+} from '../../lib/workflows/knowledge-rescan/ProduceSessionRoute.js';
 
 function ctxWithServices(services: Record<string, unknown>, projectRoot = '/repo/asq'): McpContext {
   return {
@@ -168,6 +174,73 @@ describe('knowledge publication production route', () => {
       publication: {
         defaultAgentPublishAllowed: false,
       },
+      session: {
+        activeSessionId: 'bs-asq',
+        status: 'active',
+        usable: true,
+      },
+    });
+  });
+
+  it('accepts a controller produce-session route session id for ASQ publication', async () => {
+    const request = readControllerProduceSessionRequest({
+      produceSession: {
+        controllerAuthorized: true,
+        gaps: [
+          {
+            createBudget: 2,
+            dimensionId: 'asq-publication',
+            gapId: 'asq4b1b-knowledge-pack',
+          },
+        ],
+        source: 'asq-controller',
+      },
+    });
+    const plan = buildProduceSessionRoutePlan({
+      allDimensions: [
+        {
+          id: 'asq-publication',
+          label: 'ASQ publication',
+          skillWorthy: false,
+        } as DimensionDef,
+      ],
+      gapPlan: { executionDecisions: [], occupiedTriggers: [], produceDimensions: [] },
+      request,
+    });
+    const session = productionSession();
+    const projection = buildProduceSessionProjection({
+      plan,
+      projectRoot: '/repo/asq',
+      session,
+    });
+    expect(projection).toMatchObject({
+      bootstrapSessionRef: 'bootstrap-session:bs-asq',
+      sessionId: 'bs-asq',
+      status: 'active',
+      usable: true,
+    });
+
+    const ctx = ctxWithServices({
+      bootstrapSessionManager: { getSession: vi.fn(() => session) },
+      knowledgeService: {},
+    });
+    mocks.createRecipe.mockResolvedValueOnce({
+      blocked: [],
+      created: [{ id: 'k-asq', title: 'ASQ source-backed publication route' }],
+      merged: [],
+      pendingSemanticReview: [],
+      rejected: [],
+    });
+
+    const result = await submitAsqKnowledge(ctx, {
+      requireProductionSession: true,
+      sessionId: projection.sessionId,
+    });
+
+    expect(result.success).toBe(true);
+    expect(mocks.createRecipe).toHaveBeenCalledTimes(1);
+    const data = result.data as Record<string, unknown>;
+    expect(data.productionRoute).toMatchObject({
       session: {
         activeSessionId: 'bs-asq',
         status: 'active',

@@ -45,6 +45,7 @@ import {
   GuardInput,
   HealthInput,
   KnowledgeInput,
+  RescanInput,
   SearchInput,
   SkillInput,
   StructureInput,
@@ -312,6 +313,32 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
         sourceCandidateId: 'cand-asq',
         sourceFile: 'lib/resident/tool-handlers/consolidated.ts',
         sourceGraphRefs: ['sourceGraph:search-handler'],
+      });
+    });
+  });
+
+  describe('RescanInput', () => {
+    test('accepts controller-authorized produce session route input', () => {
+      const result = RescanInput.parse({
+        produceSession: {
+          controllerAuthorized: true,
+          gaps: [
+            {
+              createBudget: 2,
+              dimensionId: 'asq-publication',
+              gapId: 'asq4b1b-knowledge-pack',
+              triggerPrefix: 'asq4b1b',
+            },
+          ],
+          source: 'asq-controller',
+        },
+        reason: 'asq-produce-session-route',
+      });
+
+      expect(result.produceSession?.gaps?.[0]).toMatchObject({
+        createBudget: 2,
+        dimensionId: 'asq-publication',
+        gapId: 'asq4b1b-knowledge-pack',
       });
     });
   });

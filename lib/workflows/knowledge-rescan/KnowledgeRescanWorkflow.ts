@@ -63,9 +63,15 @@ import {
   buildProjectContextMissionArtifacts,
   buildProjectContextWorkflowFacts,
   createProjectContextWorkflowSession,
+  openOrReturnProjectContextWorkflowSession,
   presentProjectContextRescanResponse,
   saveProjectContextFileSnapshot,
 } from '../project-context/ProjectContextWorkflowFacts.js';
+import {
+  buildProduceSessionProjection,
+  buildProduceSessionRoutePlan,
+  readControllerProduceSessionRequest,
+} from './ProduceSessionRoute.js';
 
 type AgentEvolutionAuditRecipe = Parameters<typeof runEvolutionAudit>[0]['recipes'][number];
 type EvolutionAuditResult = Awaited<ReturnType<typeof runEvolutionAudit>>;
@@ -490,10 +496,25 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
     skippedDimensions,
     targetPerDimension,
   } = gapPlan;
+  const controllerProduceSessionRequest = readControllerProduceSessionRequest(args);
+  const produceSessionPlan = buildProduceSessionRoutePlan({
+    allDimensions: allDimensions as DimensionDef[],
+    gapPlan: {
+      executionDecisions: knowledgeRescanPlan.executionDecisions,
+      occupiedTriggers: knowledgeRescanPlan.occupiedTriggers,
+      produceDimensions,
+    },
+    request: controllerProduceSessionRequest,
+  });
+  const sessionDimensions = controllerProduceSessionRequest.enabled
+    ? produceSessionPlan.dimensions
+    : executionDimensions;
 
   ctx.logger.info('[KnowledgeRescanWorkflow] Gap analysis', {
+    controllerProduceSessionRequested: controllerProduceSessionRequest.enabled,
     totalDimensions: requestedDimensions.length,
     executionDimensions: executionDimensions.length,
+    produceSessionDimensions: sessionDimensions.map((dimension) => dimension.id),
     produceDimensions: produceDimensions.length,
     gapDimensions: gapDimensions.length,
     skippedDimensions: skippedDimensions.length,
@@ -513,41 +534,79 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
   // （与 cold-start Phase 4.6 对齐）
   // ═══════════════════════════════════════════════════════════
 
-  const workflowSession = createProjectContextWorkflowSession({
-    container: ctx.container,
-    dimensions: executionDimensions,
-    facts: projectContextFacts,
+  const workflowSessionState =
+    controllerProduceSessionRequest.enabled && sessionDimensions.length === 0
+      ? { reusedExisting: false, session: null }
+      : controllerProduceSessionRequest.enabled
+        ? openOrReturnProjectContextWorkflowSession({
+            container: ctx.container,
+            dimensions: sessionDimensions,
+            facts: projectContextFacts,
+            projectRoot,
+          })
+        : {
+            reusedExisting: false,
+            session: createProjectContextWorkflowSession({
+              container: ctx.container,
+              dimensions: sessionDimensions,
+              facts: projectContextFacts,
+              projectRoot,
+            }),
+          };
+  const workflowSession = workflowSessionState.session;
+  const sessionId = workflowSession?.id ?? null;
+  if (workflowSession) {
+    const projectContextArtifacts = buildProjectContextMissionArtifacts({
+      dimensions: sessionDimensions,
+      facts: projectContextFacts,
+      profile: 'rescan',
+      session: workflowSession,
+    });
+    projectContextFacts.report.projectContextMissionBriefing = {
+      briefingMeta: projectContextArtifacts.briefing.meta,
+      ideAgentProfile: projectContextArtifacts.ideAgentPacket.profile,
+    };
+  }
+  const produceSession = buildProduceSessionProjection({
+    occupiedTriggers: knowledgeRescanPlan.occupiedTriggers,
+    plan: produceSessionPlan,
     projectRoot,
-  });
-  const sessionId = workflowSession.id;
-  const projectContextArtifacts = buildProjectContextMissionArtifacts({
-    dimensions: executionDimensions,
-    facts: projectContextFacts,
-    profile: 'rescan',
+    reusedExistingSession: workflowSessionState.reusedExisting,
     session: workflowSession,
   });
-  projectContextFacts.report.projectContextMissionBriefing = {
-    briefingMeta: projectContextArtifacts.briefing.meta,
-    ideAgentProfile: projectContextArtifacts.ideAgentPacket.profile,
-  };
+  if (controllerProduceSessionRequest.enabled) {
+    ctx.logger.info('[KnowledgeRescanWorkflow] Controller produce session route resolved', {
+      dimensions: produceSession.dimensions.map((dimension) => dimension.id),
+      reusedExistingSession: produceSession.reusedExistingSession,
+      sessionId: produceSession.sessionId ?? null,
+      status: produceSession.status,
+      usable: produceSession.usable,
+    });
+  }
 
   // ═══════════════════════════════════════════════════════════
   // Step 6: 构建 targetFileMap + 任务清单 → 快速返回骨架
   // ═══════════════════════════════════════════════════════════
 
   // 任务定义由统一 Rescan plan 决定：coverage gap、recipe decay、file diff 都可触发。
-  const { bootstrapSession } = startAiDimensionSession({
-    container: ctx.container,
-    dimensions: executionDimensions,
-    logger: ctx.logger,
-    logPrefix: 'KnowledgeRescanWorkflow',
-  });
+  const bootstrapSession = controllerProduceSessionRequest.enabled
+    ? null
+    : startAiDimensionSession({
+        container: ctx.container,
+        dimensions: executionDimensions,
+        logger: ctx.logger,
+        logPrefix: 'KnowledgeRescanWorkflow',
+      }).bootstrapSession;
 
   // ═══════════════════════════════════════════════════════════
   // Step 7: 异步后台填充 gap 维度
   // ═══════════════════════════════════════════════════════════
 
-  if (executionDimensions.length > 0 && !intent.internalExecution?.skipAsyncFill) {
+  if (
+    !controllerProduceSessionRequest.enabled &&
+    executionDimensions.length > 0 &&
+    !intent.internalExecution?.skipAsyncFill
+  ) {
     const allExistingRecipes = projectKnowledgeRescanPromptRecipes(knowledgeRescanPlan);
     dispatchAiDimensionRuns({
       view: attachProjectScopeSourceIdentitiesToView(
@@ -628,6 +687,7 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
     gapPlan,
     facts: projectContextFacts,
     bootstrapSession,
+    produceSession: produceSession as unknown as Record<string, unknown>,
     sessionId,
     evolutionAudit: evolutionAuditResult as unknown as Record<string, unknown> | null,
     reason: intent.reason,

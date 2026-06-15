@@ -449,6 +449,28 @@ export type BootstrapInput = z.infer<typeof BootstrapInput>;
 //  11a. alembic_rescan — 增量知识更新
 // ══════════════════════════════════════════════════════
 
+const ProduceSessionGapInput = z
+  .object({
+    createBudget: z.number().int().positive().max(20).optional(),
+    dimensionId: z.string().optional(),
+    gapId: z.string().optional(),
+    source: z.string().optional(),
+    triggerPrefix: z.string().optional(),
+  })
+  .passthrough();
+
+const ProduceSessionRouteInput = z
+  .object({
+    controllerAuthorized: z.boolean().optional(),
+    createBudget: z.number().int().positive().max(20).optional(),
+    dimensions: z.array(z.string()).optional(),
+    enabled: z.boolean().optional(),
+    gaps: z.array(ProduceSessionGapInput).optional(),
+    reason: z.string().optional(),
+    source: z.string().optional(),
+  })
+  .passthrough();
+
 export const RescanInput = z.object({
   dimensions: z.array(z.string()).optional().describe('指定维度列表，空 = 全部活跃维度'),
   reason: z.string().optional().describe('触发原因（记录到报告）'),
@@ -456,6 +478,18 @@ export const RescanInput = z.object({
     .boolean()
     .optional()
     .describe('强制全量重扫（清会话态缓存 + 全量 Phase 1-4，但保留增量快照）'),
+  produceSession: ProduceSessionRouteInput.optional().describe(
+    '可选：打开或返回 controller 授权的非破坏性 produce session，供 alembic_submit_knowledge 绑定 sessionId/bootstrapSessionRef 使用'
+  ),
+  controllerAuthorizedGaps: z
+    .array(ProduceSessionGapInput)
+    .optional()
+    .describe('可选：produceSession.gaps 的兼容顶层别名'),
+  produceSessionDimensions: z
+    .array(z.string())
+    .optional()
+    .describe('可选：produceSession.dimensions 的兼容顶层别名'),
+  controllerAuthorized: z.boolean().optional().describe('可选：顶层 controller 授权标志'),
 });
 export type RescanInput = z.infer<typeof RescanInput>;
 

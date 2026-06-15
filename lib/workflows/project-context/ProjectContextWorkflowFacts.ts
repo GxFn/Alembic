@@ -286,7 +286,39 @@ export function createProjectContextWorkflowSession(input: {
   projectRoot: string;
 }): ReturnType<ReturnType<typeof getOrCreateSessionManager>['createSession']> {
   const sessionManager = getOrCreateSessionManager(input.container);
-  return sessionManager.createSession({
+  return sessionManager.createSession(buildProjectContextWorkflowSessionOptions(input));
+}
+
+export function openOrReturnProjectContextWorkflowSession(input: {
+  container: ProjectContextContainer;
+  dimensions: DimensionDef[];
+  facts: ProjectContextWorkflowFacts;
+  projectRoot: string;
+}): {
+  reusedExisting: boolean;
+  session: ReturnType<ReturnType<typeof getOrCreateSessionManager>['createSession']>;
+} {
+  const sessionManager = getOrCreateSessionManager(input.container);
+  try {
+    return {
+      reusedExisting: false,
+      session: sessionManager.createSession(buildProjectContextWorkflowSessionOptions(input)),
+    };
+  } catch (err: unknown) {
+    const existing = sessionManager.getSession(undefined, { projectRoot: input.projectRoot });
+    if (existing) {
+      return { reusedExisting: true, session: existing };
+    }
+    throw err;
+  }
+}
+
+function buildProjectContextWorkflowSessionOptions(input: {
+  dimensions: DimensionDef[];
+  facts: ProjectContextWorkflowFacts;
+  projectRoot: string;
+}) {
+  return {
     dimensions: input.dimensions.map((dimension) => ({
       ...dimension,
       skillMeta: dimension.skillMeta ?? undefined,
@@ -299,7 +331,7 @@ export function createProjectContextWorkflowSession(input: {
       projectName: basename(input.projectRoot),
     },
     projectRoot: input.projectRoot,
-  });
+  };
 }
 
 export function selectProjectContextWorkflowDimensions(
@@ -384,11 +416,17 @@ export function presentProjectContextRescanResponse(input: {
   recipeSnapshot: { count: number };
   responseTimeMs: number;
   sessionId: string | null;
+  produceSession?: Record<string, unknown> | null;
 }) {
   const executionDimensionCount = input.gapPlan.executionDimensions.length;
+  const produceSession = input.produceSession ?? null;
+  const produceSessionRequired = isRecord(produceSession) && produceSession.required === true;
+  const produceSessionBlocked =
+    produceSessionRequired && produceSession.status === 'no-produce-session';
+  const asyncFill = !produceSessionRequired && executionDimensionCount > 0;
   return workflowEnvelope({
     data: {
-      asyncFill: executionDimensionCount > 0,
+      asyncFill,
       bootstrapSession: input.bootstrapSession ? input.bootstrapSession.toJSON() : null,
       evolutionAudit: input.evolutionAudit ?? null,
       files: input.facts.fileCount,
@@ -404,6 +442,7 @@ export function presentProjectContextRescanResponse(input: {
       languageStats: input.facts.languageStats,
       primaryLanguage: input.facts.primaryLang,
       projectContext: input.facts.projectContextSummary,
+      produceSession,
       reason: input.reason ?? null,
       relevanceAudit: input.auditSummary,
       rescan: {
@@ -415,11 +454,16 @@ export function presentProjectContextRescanResponse(input: {
         reason: input.reason ?? null,
       },
       sessionId: input.sessionId,
-      status: executionDimensionCount > 0 ? 'filling' : 'complete',
+      status: asyncFill ? 'filling' : 'complete',
       targets: input.facts.targetCount,
       warnings: input.facts.warnings.length > 0 ? input.facts.warnings : undefined,
     },
+    errorCode: produceSessionBlocked ? 'NO_PRODUCE_SESSION' : null,
+    message: produceSessionBlocked
+      ? 'No controller-authorized produce session could be opened for this rescan.'
+      : undefined,
     meta: { tool: 'alembic_rescan', responseTimeMs: input.responseTimeMs },
+    success: !produceSessionBlocked,
   });
 }
 
@@ -765,12 +809,24 @@ function buildAnalysisFramework(dimensions: readonly DimensionDef[], selectionSu
   };
 }
 
-function workflowEnvelope(input: { data: Record<string, unknown>; meta: Record<string, unknown> }) {
+function workflowEnvelope(input: {
+  data: Record<string, unknown>;
+  errorCode?: string | null;
+  message?: string;
+  meta: Record<string, unknown>;
+  success?: boolean;
+}) {
   return {
     data: input.data,
+    ...(input.errorCode ? { errorCode: input.errorCode } : {}),
+    ...(input.message ? { message: input.message } : {}),
     meta: input.meta,
-    success: true,
+    success: input.success ?? true,
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function sourceSliceText(slice: SourceSliceContext): string {
