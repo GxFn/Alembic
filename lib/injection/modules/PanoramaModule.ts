@@ -22,7 +22,7 @@ import {
   PanoramaScanner,
   PanoramaService,
   RoleRefiner,
-} from '@alembic/core/project-intelligence';
+} from '@alembic/core/service/panorama';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export const PanoramaModule = {
@@ -108,7 +108,7 @@ export const PanoramaModule = {
       const logger = (ct.singletons.logger ?? {
         info() {},
         warn() {},
-      }) as import('@alembic/core/project-intelligence').ScannerLogger;
+      }) as import('@alembic/core/service/panorama').ScannerLogger;
       return new PanoramaScanner({
         projectRoot: getProjectRoot(),
         container: container,

@@ -49,13 +49,15 @@ import {
   runFullResetPolicy,
   selectColdStartDimensions,
 } from '@alembic/core/host-agent-workflows';
-import type { DimensionDef, ProjectSnapshot } from '@alembic/core/project-intelligence';
+import { applyTestDimensionFilter } from '@alembic/core/shared';
 import {
   buildProjectSnapshot,
-  ProjectIntelligenceCapability,
-} from '@alembic/core/project-intelligence';
-import { applyTestDimensionFilter } from '@alembic/core/shared';
-import type { McpContext, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
+  type DimensionDef,
+  type McpContext,
+  type ProjectSnapshot,
+  type WorkflowDatabaseLike,
+  type WorkflowSkillHooks,
+} from '@alembic/core/types';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
   attachProjectScopeSourceIdentitiesToView,
@@ -64,6 +66,7 @@ import {
   collectProjectScopeSourceIdentities,
   resolveProjectScopeAnalysisContext,
 } from '../../project-scope/ProjectScopeAnalysis.js';
+import { runAgentProjectContextAnalysis } from '../agent-project-context/AgentProjectContextAnalysis.js';
 import {
   dispatchAiDimensionRuns,
   startAiDimensionSession,
@@ -130,7 +133,8 @@ export async function runColdStartWorkflow(ctx: BootstrapMcpContext, args: ColdS
   // ═══════════════════════════════════════════════════════════
   // Phase 1-4: 共享管线（文件收集→AST→依赖→Guard→维度解析）
   // ═══════════════════════════════════════════════════════════
-  const phaseResults = await ProjectIntelligenceCapability.run({
+  const phaseResults = await runAgentProjectContextAnalysis({
+    analysisScope,
     projectRoot: plan.projectAnalysis.projectRoot,
     ctx,
     prepare: plan.projectAnalysis.prepare,

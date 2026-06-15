@@ -1,5 +1,4 @@
-import type { DimensionDef } from '@alembic/core/project-intelligence';
-import type { PipelineFillView } from '@alembic/core/types';
+import type { DimensionDef, PipelineFillView } from '@alembic/core/types';
 import { runAiDimensionPipeline } from './AiDimensionPipeline.js';
 import {
   buildTaskDefs,

@@ -1,7 +1,7 @@
 import type { AgentRunResult, AgentService, SystemRunContextFactory } from '@alembic/agent/service';
 import { TierScheduler } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
-import type { DimensionDef } from '@alembic/core/project-intelligence';
+import type { DimensionDef } from '@alembic/core/types';
 import {
   buildBootstrapDimensionResultProcessEvents,
   buildBootstrapTierReflectionProcessEvents,

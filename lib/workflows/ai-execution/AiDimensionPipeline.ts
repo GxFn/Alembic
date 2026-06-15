@@ -1,5 +1,4 @@
-import type { DimensionDef } from '@alembic/core/project-intelligence';
-import type { PipelineFillView } from '@alembic/core/types';
+import type { DimensionDef, PipelineFillView } from '@alembic/core/types';
 import { finalizeAiDimensionPipeline as finalizeAiDimension } from './AiDimensionFinalizer.js';
 import {
   emitAiDimensionAiUnavailable,
@@ -56,7 +55,9 @@ export async function clearSnapshots(
   try {
     const db = ctx.container.get('database');
     if (db) {
-      const { FileDiffSnapshotStore } = await import('@alembic/core/project-intelligence');
+      const { FileDiffSnapshotStore } = await import(
+        '@alembic/core/workflows/capabilities/project-intelligence'
+      );
       const snap = new FileDiffSnapshotStore(db, { logger: ctx.logger });
       snap.clearProject(projectRoot);
       ctx.logger.info('[Workflow] Cleared file-diff snapshots — forcing full rebuild');

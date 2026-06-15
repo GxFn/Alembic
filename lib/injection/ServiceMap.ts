@@ -20,6 +20,7 @@ import type {
   AgentStageFactoryRegistry,
   SystemRunContextFactory,
 } from '@alembic/agent/service';
+import type ProjectGraph from '@alembic/core/core/ast/ProjectGraph';
 import type { JobStore } from '@alembic/core/daemon';
 import type { DatabaseConnection } from '@alembic/core/database';
 import type { DimensionCopy } from '@alembic/core/dimensions';
@@ -48,17 +49,6 @@ import type {
 } from '@alembic/core/knowledge';
 import type Logger from '@alembic/core/logging';
 import type { MemoryRepositoryImpl } from '@alembic/core/memory';
-// ── Core AST / Discovery / Enhancement ──
-// ── Shared Types ──
-import type {
-  CouplingAnalyzer,
-  LanguageService,
-  LayerInferrer,
-  PanoramaAggregator,
-  PanoramaService,
-  ProjectGraph,
-  RoleRefiner,
-} from '@alembic/core/project-intelligence';
 // ── Repository Types ──
 import type {
   BootstrapRepository,
@@ -73,8 +63,18 @@ import type {
   TokenUsageStore,
 } from '@alembic/core/repositories';
 import type { HybridRetriever, SearchEngine } from '@alembic/core/search';
+// ── Core AST / Discovery / Enhancement ──
+// ── Shared Types ──
+import type {
+  CouplingAnalyzer,
+  LayerInferrer,
+  PanoramaAggregator,
+  PanoramaService,
+  RoleRefiner,
+} from '@alembic/core/service/panorama';
 import type { FeedbackCollector, QualityScorer } from '@alembic/core/service/quality';
 import type { RecipeCandidateValidator, RecipeParser } from '@alembic/core/service/recipe';
+import type { LanguageService } from '@alembic/core/shared';
 import type { IndexingPipeline, VectorService, VectorStore } from '@alembic/core/vector';
 import type { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
 import type { JobDisplaySnapshotStore } from '../daemon/JobDisplaySnapshotStore.js';

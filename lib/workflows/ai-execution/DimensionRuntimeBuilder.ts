@@ -18,9 +18,9 @@ import type {
   AstSummary,
   DimensionDef,
   GuardAudit,
-  SnapshotCallGraphResult,
-  SnapshotDependencyGraph,
-} from '@alembic/core/project-intelligence';
+  CallGraphResult as SnapshotCallGraphResult,
+  DependencyGraph as SnapshotDependencyGraph,
+} from '@alembic/core/types';
 import type { ProjectScopeSourceIdentityMap } from '../../project-scope/ProjectScopeAnalysis.js';
 import {
   type BootstrapFileEntry,

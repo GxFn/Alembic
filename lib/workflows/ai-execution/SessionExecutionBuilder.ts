@@ -1,7 +1,7 @@
 import type { ProgressEvent } from '@alembic/agent/runtime';
 import type { AgentRunInput, AgentRunResult } from '@alembic/agent/service';
 import Logger from '@alembic/core/logging';
-import type { DimensionDef } from '@alembic/core/project-intelligence';
+import type { DimensionDef } from '@alembic/core/types';
 import type { BootstrapProcessEventsPayload } from '#service/bootstrap/bootstrap-event-types.js';
 import {
   type BootstrapSessionChildRunPlan,

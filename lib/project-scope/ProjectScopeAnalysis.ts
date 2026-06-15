@@ -1,7 +1,3 @@
-import type {
-  ProjectAnalysisResult,
-  ProjectAnalysisScanOptions,
-} from '@alembic/core/project-intelligence';
 import type { ProjectDescriptor } from '@alembic/core/shared';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { resolveAlembicWorkspace } from './ProjectScopeRegistry.js';
@@ -113,7 +109,7 @@ export function resolveProjectScopeAnalysisContext(
   };
 }
 
-export function attachProjectScopeToScanOptions<T extends ProjectAnalysisScanOptions>(
+export function attachProjectScopeToScanOptions<T extends Record<string, unknown>>(
   scan: T,
   analysis: ProjectScopeAnalysisContext
 ): T {
@@ -145,9 +141,9 @@ export function buildProjectScopeAnalysisLogMeta(
   };
 }
 
-export function collectProjectScopeSourceIdentities(
-  result: ProjectAnalysisResult
-): ProjectScopeSourceIdentity[] {
+export function collectProjectScopeSourceIdentities(result: {
+  allFiles: unknown;
+}): ProjectScopeSourceIdentity[] {
   return collectProjectScopeSourceIdentitiesFromFiles(result.allFiles);
 }
 

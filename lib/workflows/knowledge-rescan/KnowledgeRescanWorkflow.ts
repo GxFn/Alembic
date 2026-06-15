@@ -7,7 +7,7 @@
  *   1. snapshotRecipes — 快照保留知识
  *   2. rescanClean — 清理衍生缓存
  *   2.5 Recipe 文件 ↔ DB 一致性恢复 (SourceRefReconciler)
- *   3. Phase 1-4 全量分析 (ProjectIntelligenceCapability)
+ *   3. Phase 1-4 全量分析 (ProjectContext facade)
  *   4. 覆盖分类 — RecipeImpactPlanner + SourceRef + lifecycle 三层评估
  *   5. 计算 gap 维度（需要补齐的维度）
  *   5.5 缓存 Phase 结果供复用 (SessionSupport)
@@ -43,19 +43,17 @@ import {
   syncKnowledgeStoreForRescan,
 } from '@alembic/core/host-agent-workflows';
 import { SourceRefReconciler } from '@alembic/core/knowledge';
-import type { DimensionDef, ProjectSnapshot } from '@alembic/core/project-intelligence';
-import {
-  buildProjectSnapshot,
-  FileDiffPlanner,
-  ProjectIntelligenceCapability,
-} from '@alembic/core/project-intelligence';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type {
+  DimensionDef,
   McpContext,
   PipelineFillView,
+  ProjectSnapshot,
   WorkflowDatabaseLike,
   WorkflowSkillHooks,
 } from '@alembic/core/types';
+import { buildProjectSnapshot } from '@alembic/core/types';
+import { FileDiffPlanner } from '@alembic/core/workflows/capabilities/project-intelligence';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
   attachProjectScopeSourceIdentitiesToView,
@@ -64,6 +62,7 @@ import {
   collectProjectScopeSourceIdentities,
   resolveProjectScopeAnalysisContext,
 } from '../../project-scope/ProjectScopeAnalysis.js';
+import { runAgentProjectContextAnalysis } from '../agent-project-context/AgentProjectContextAnalysis.js';
 import {
   dispatchAiDimensionRuns,
   startAiDimensionSession,
@@ -233,7 +232,8 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
   // Step 1: Phase 1-4 项目分析（含增量 diff 计算）
   // ═══════════════════════════════════════════════════════════
 
-  const phaseResults = await ProjectIntelligenceCapability.run({
+  const phaseResults = await runAgentProjectContextAnalysis({
+    analysisScope,
     projectRoot: plan.projectAnalysis.projectRoot,
     ctx,
     prepare: plan.projectAnalysis.prepare,
