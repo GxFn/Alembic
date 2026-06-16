@@ -23,11 +23,11 @@ import {
   type SourceSliceContext,
   type SpaceContext,
 } from '@alembic/core/project-context';
-import type {
-  BootstrapSessionShape,
-  FileDiffPlan,
-  WorkflowDatabaseLike,
-} from '@alembic/core/types';
+import type { BootstrapSessionShape, FileDiffPlan } from '@alembic/core/types';
+import {
+  readLatestProjectContextFileSnapshotRow,
+  saveProjectContextFileSnapshotRow,
+} from '../../infrastructure/database/SqliteDatabaseAccess.js';
 import type { ProjectScopeAnalysisContext } from '../../project-scope/ProjectScopeAnalysis.js';
 import type { BootstrapFileEntry } from '../ai-execution/AgentRunInputBuilders.js';
 
@@ -527,35 +527,25 @@ export function saveProjectContextFileSnapshot(input: {
   sessionId: string;
 }): string | null {
   try {
-    const db = input.ctx.container.get('database') as WorkflowDatabaseLike | null | undefined;
-    const target = db as { prepare?: (sql: string) => { run(...values: unknown[]): unknown } };
-    if (!target?.prepare) {
+    const db = input.ctx.container.get('database');
+    const id = `pc-${Date.now()}`;
+    const saved = saveProjectContextFileSnapshotRow(db, {
+      id,
+      projectRoot: input.projectRoot,
+      sessionId: input.sessionId,
+      payload: JSON.stringify({
+        allFiles: input.allFiles.map((file) => ({
+          path: file.path,
+          relativePath: file.relativePath,
+        })),
+        isIncremental: input.plan?.mode === 'incremental',
+        primaryLang: input.primaryLang,
+      }),
+      createdAt: Date.now(),
+    });
+    if (!saved) {
       return null;
     }
-    target
-      .prepare(
-        'CREATE TABLE IF NOT EXISTS project_context_file_snapshots (id TEXT PRIMARY KEY, project_root TEXT NOT NULL, session_id TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL)'
-      )
-      .run();
-    const id = `pc-${Date.now()}`;
-    target
-      .prepare(
-        'INSERT INTO project_context_file_snapshots (id, project_root, session_id, payload, created_at) VALUES (?, ?, ?, ?, ?)'
-      )
-      .run(
-        id,
-        input.projectRoot,
-        input.sessionId,
-        JSON.stringify({
-          allFiles: input.allFiles.map((file) => ({
-            path: file.path,
-            relativePath: file.relativePath,
-          })),
-          isIncremental: input.plan?.mode === 'incremental',
-          primaryLang: input.primaryLang,
-        }),
-        Date.now()
-      );
     return id;
   } catch (err: unknown) {
     input.ctx.logger.warn('[ProjectContextWorkflowFacts] File snapshot save skipped', {
@@ -643,31 +633,16 @@ function loadLatestProjectContextFileSnapshot(
   projectRoot: string
 ): { files: string[]; id: string } | null {
   try {
-    const db = ctx.container.get('database') as WorkflowDatabaseLike | null | undefined;
-    const target = db as {
-      prepare?: (sql: string) => { get(...values: unknown[]): unknown };
-    };
-    if (!target?.prepare) {
+    const row = readLatestProjectContextFileSnapshotRow(ctx.container.get('database'), projectRoot);
+    if (!row) {
       return null;
     }
-    const row = target
-      .prepare(
-        'SELECT id, payload FROM project_context_file_snapshots WHERE project_root = ? ORDER BY created_at DESC LIMIT 1'
-      )
-      .get(projectRoot);
-    if (!row || typeof row !== 'object') {
-      return null;
-    }
-    const record = row as { id?: unknown; payload?: unknown };
-    if (typeof record.id !== 'string' || typeof record.payload !== 'string') {
-      return null;
-    }
-    const payload = JSON.parse(record.payload) as { allFiles?: Array<{ relativePath?: string }> };
+    const payload = JSON.parse(row.payload) as { allFiles?: Array<{ relativePath?: string }> };
     return {
       files: (payload.allFiles ?? [])
         .map((file) => file.relativePath)
         .filter((file): file is string => typeof file === 'string'),
-      id: record.id,
+      id: row.id,
     };
   } catch {
     return null;

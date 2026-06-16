@@ -1,103 +1,29 @@
 /**
- * Panorama DI Wiring 跨模块冒烟测试
+ * Panorama compatibility wiring smoke test.
  *
- * 验证 PanoramaModule 在 ServiceContainer 中正确注册且可解析。
+ * The legacy project-intelligence services moved out of the Alembic consumer
+ * surface. PanoramaModule remains importable as a compatibility target, but it
+ * must not re-register retired internal services.
  */
 import { describe, expect, it } from 'vitest';
+import { PanoramaModule } from '../../../lib/injection/modules/PanoramaModule.js';
 import { ServiceContainer } from '../../../lib/injection/ServiceContainer.js';
 
-describe('PanoramaModule DI Wiring', () => {
-  let container: ServiceContainer;
+describe('PanoramaModule DI compatibility', () => {
+  const retiredServices = ['roleRefiner', 'couplingAnalyzer', 'layerInferrer', 'panoramaService'];
 
-  // 创建容器并初始化（同 SignalBusWiring 模式）
-  async function getContainer(): Promise<ServiceContainer> {
-    if (container) {
-      return container;
-    }
-    container = new ServiceContainer();
-    try {
-      await container.initialize();
-    } catch {
-      // Dev repo 环境可能缺少某些配置，忽略非关键错误
-    }
-    return container;
-  }
-
-  it('should register roleRefiner as singleton', async () => {
-    const ct = await getContainer();
-    try {
-      const refiner = ct.get('roleRefiner');
-      expect(refiner).toBeDefined();
-      expect(refiner).toBe(ct.get('roleRefiner')); // singleton
-    } catch (err: unknown) {
-      // 开发仓库保护可能阻止 DB 初始化
-      const msg = String(err).toLowerCase();
-      if (msg.includes('pathguard') || msg.includes('isowndevrepo') || msg.includes('database')) {
-        expect(true).toBe(true); // acceptable
-      } else {
-        throw err;
-      }
-    }
+  it('keeps the compatibility module importable', () => {
+    expect(PanoramaModule).toBeDefined();
+    expect(typeof PanoramaModule.register).toBe('function');
   });
 
-  it('should register couplingAnalyzer as singleton', async () => {
-    const ct = await getContainer();
-    try {
-      const analyzer = ct.get('couplingAnalyzer');
-      expect(analyzer).toBeDefined();
-    } catch (err: unknown) {
-      const msg = String(err).toLowerCase();
-      if (msg.includes('pathguard') || msg.includes('isowndevrepo') || msg.includes('database')) {
-        expect(true).toBe(true);
-      } else {
-        throw err;
-      }
-    }
-  });
+  it('does not register retired project-intelligence services', () => {
+    const container = new ServiceContainer();
 
-  it('should register layerInferrer as singleton', async () => {
-    const ct = await getContainer();
-    try {
-      const inferrer = ct.get('layerInferrer');
-      expect(inferrer).toBeDefined();
-    } catch (err: unknown) {
-      const msg = String(err).toLowerCase();
-      if (msg.includes('pathguard') || msg.includes('isowndevrepo') || msg.includes('database')) {
-        expect(true).toBe(true);
-      } else {
-        throw err;
-      }
-    }
-  });
+    expect(() => PanoramaModule.register(container)).not.toThrow();
 
-  it('should register panoramaService as singleton', async () => {
-    const ct = await getContainer();
-    try {
-      const service = ct.get('panoramaService');
-      expect(service).toBeDefined();
-      expect(service).toBe(ct.get('panoramaService')); // singleton
-    } catch (err: unknown) {
-      const msg = String(err).toLowerCase();
-      if (msg.includes('pathguard') || msg.includes('isowndevrepo') || msg.includes('database')) {
-        expect(true).toBe(true);
-      } else {
-        throw err;
-      }
-    }
-  });
-
-  it('should have panoramaService with invalidate() method', async () => {
-    const ct = await getContainer();
-    try {
-      const service = ct.get('panoramaService');
-      expect(typeof (service as Record<string, unknown>).invalidate).toBe('function');
-    } catch (err: unknown) {
-      const msg = String(err).toLowerCase();
-      if (msg.includes('pathguard') || msg.includes('isowndevrepo') || msg.includes('database')) {
-        expect(true).toBe(true);
-      } else {
-        throw err;
-      }
+    for (const serviceName of retiredServices) {
+      expect(() => container.get(serviceName)).toThrow(`Service '${serviceName}' not found`);
     }
   });
 });

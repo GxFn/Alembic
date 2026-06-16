@@ -30,22 +30,22 @@ let analyzeFile, analyzeProject;
 let initEnhancementRegistry;
 
 beforeAll(async () => {
-  const dMod = await import('@alembic/core/project-intelligence');
+  const dMod = await import('../../lib/core-adapters/ProjectIntelligenceCompatibility.js');
   getDiscovererRegistry = dMod.getDiscovererRegistry;
   resetDiscovererRegistry = dMod.resetDiscovererRegistry;
 
-  const lsMod = await import('@alembic/core/project-intelligence');
+  const lsMod = await import('../../lib/core-adapters/ProjectIntelligenceCompatibility.js');
   LanguageService = lsMod.LanguageService;
 
   const dcMod = await import('@alembic/core/dimensions');
   DimensionCopy = dcMod.DimensionCopy;
 
-  await import('@alembic/core/project-intelligence');
-  const astMod = await import('@alembic/core/project-intelligence');
+  await dMod.loadProjectAstPlugins();
+  const astMod = await import('../../lib/core-adapters/ProjectIntelligenceCompatibility.js');
   analyzeFile = astMod.analyzeFile;
   analyzeProject = astMod.analyzeProject;
 
-  const enhMod = await import('@alembic/core/core/enhancement');
+  const enhMod = await import('../../lib/core-adapters/ProjectIntelligenceCompatibility.js');
   initEnhancementRegistry = enhMod.initEnhancementRegistry;
 });
 

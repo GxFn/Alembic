@@ -12,7 +12,10 @@ import {
   type SourceRefsBridgeStatus,
 } from '@alembic/core/vector';
 import {
+  type ActiveRecipeRegionSqlRow,
+  readActiveRecipeRegionRows,
   readKnowledgeEntryColumns,
+  readRecipeSourceRefRows,
   type SqliteDatabaseHandle,
   unwrapSqliteDatabase,
 } from '../../infrastructure/database/SqliteDatabaseAccess.js';
@@ -78,43 +81,10 @@ export interface RecipeRegionFixtureGenerationResult {
   proof: RecipeRegionFixtureVectorIndexProof;
 }
 
-interface RecipeRegionSqlRow {
-  id: string;
-  title: string | null;
-  description: string | null;
-  lifecycle: string | null;
-  language: string | null;
-  dimensionId: string | null;
-  category: string | null;
-  kind: string | null;
-  knowledgeType: string | null;
-  tags: string | null;
-  trigger: string | null;
-  topicHint: string | null;
-  whenClause: string | null;
-  doClause: string | null;
-  dontClause: string | null;
-  coreCode: string | null;
-  usageGuide: string | null;
-  content: string | null;
-  reasoning: string | null;
-  sourceFile: string | null;
-  moduleName: string | null;
-  contentHash: string | null;
-  updatedAt: number | string | null;
-}
-
 export function loadActiveRecipeRegionEntries(database: unknown): LoadedRecipeRegionEntries {
   const db = requireSqliteDatabase(database);
   const columns = new Set(readKnowledgeEntryColumns(db).map((column) => column.name));
-  const rows = db
-    .prepare(
-      `SELECT ${recipeRegionProjection(columns)}
-       FROM knowledge_entries
-       WHERE lower(COALESCE(lifecycle, '')) = 'active'
-       ORDER BY id`
-    )
-    .all() as RecipeRegionSqlRow[];
+  const rows = readActiveRecipeRegionRows(db, recipeRegionProjection(columns));
 
   const entries = rows.map(recipeRegionSourceEntryFromRow);
   return {
@@ -260,7 +230,7 @@ function recipeRegionProjection(columns: Set<string>): string {
     .join(', ');
 }
 
-function recipeRegionSourceEntryFromRow(row: RecipeRegionSqlRow): RecipeRegionSourceEntry {
+function recipeRegionSourceEntryFromRow(row: ActiveRecipeRegionSqlRow): RecipeRegionSourceEntry {
   return {
     id: row.id,
     title: compactString(row.title),
@@ -296,23 +266,7 @@ function readSourceRefsBridgeByRecipeId(
   for (const recipeId of recipeIds) {
     bridge[recipeId] = { status: 'missing', refs: [] };
   }
-  if (recipeIds.length === 0 || !hasTable(db, 'recipe_source_refs')) {
-    return bridge;
-  }
-
-  const placeholders = recipeIds.map(() => '?').join(', ');
-  const rows = db
-    .prepare(
-      `SELECT recipe_id, source_path, status
-       FROM recipe_source_refs
-       WHERE recipe_id IN (${placeholders})
-       ORDER BY recipe_id, source_path`
-    )
-    .all(...recipeIds) as Array<{
-    recipe_id: string;
-    source_path: string | null;
-    status: string | null;
-  }>;
+  const rows = readRecipeSourceRefRows(db, recipeIds);
 
   const grouped = new Map<string, Array<{ ref: string; status: string }>>();
   for (const row of rows) {
@@ -455,13 +409,6 @@ function sourceRefsBridgeStatusFor(statuses: string[]): SourceRefsBridgeStatus {
     return 'missing';
   }
   return statuses.every((status) => status === 'active') ? 'active' : 'partial';
-}
-
-function hasTable(db: SqliteDatabaseHandle, tableName: string): boolean {
-  const row = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-    .get(tableName) as { name?: string } | undefined;
-  return row?.name === tableName;
 }
 
 function emptyRegionClassDistribution(): Record<RecipeSemanticRegionClass, number> {

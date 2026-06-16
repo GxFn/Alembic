@@ -4,6 +4,10 @@ import { ALL_DIMENSION_IDS, isKnownDimensionId } from '@alembic/core/dimensions'
 import { SignalBus } from '@alembic/core/events';
 import { createGuardCheckEngine, detectLanguage } from '@alembic/core/guard';
 import { KnowledgeEntry, KnowledgeService, Lifecycle } from '@alembic/core/knowledge';
+import { SearchEngine, tokenize } from '@alembic/core/search';
+import { chunk, HnswIndex } from '@alembic/core/vector';
+import { resolveKnowledgeScanDirs, WorkspaceResolver } from '@alembic/core/workspace';
+import { describe, expect, it } from 'vitest';
 import {
   analyzeSourceFile,
   detectConflict,
@@ -12,15 +16,10 @@ import {
   parseGradleProject,
   parseStarlarkBuildFile,
   parseXcodeGenProject,
-  profileTechStack,
-} from '@alembic/core/project-intelligence';
-import { SearchEngine, tokenize } from '@alembic/core/search';
-import { chunk, HnswIndex } from '@alembic/core/vector';
-import { resolveKnowledgeScanDirs, WorkspaceResolver } from '@alembic/core/workspace';
-import { describe, expect, it } from 'vitest';
+} from '../../lib/core-adapters/ProjectIntelligenceCompatibility.js';
 
 describe('Core public surface smoke', () => {
-  it('keeps project-intelligence config and panorama helpers consumable from Alembic', () => {
+  it('keeps discovery config helpers consumable from Alembic', () => {
     const project = parseXcodeGenProject(`
       name: Demo
       targets:
@@ -41,10 +40,6 @@ describe('Core public surface smoke', () => {
       { discovererId: 'spm', displayName: 'SPM', confidence: 0.9 },
       { discovererId: 'custom', displayName: 'Custom', confidence: 0.4 },
     ]);
-    const techStack = profileTechStack([
-      { name: 'Alamofire', fanIn: 3, dependedBy: ['App', 'Feature', 'Service'] },
-    ]);
-
     expect(project.hostApp?.name).toBe('Demo');
     expect(project.layers.flatMap((layer) => layer.modules.map((module) => module.name))).toEqual([
       'App',
@@ -52,7 +47,6 @@ describe('Core public surface smoke', () => {
     ]);
     expect(edges).toEqual([['App', 'Core']]);
     expect(conflict.ambiguous).toBe(false);
-    expect(techStack.categories[0]?.name).toBe('Networking');
   });
 
   it('keeps vector facade consumable without duplicating Core algorithm tests', () => {

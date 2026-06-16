@@ -1,4 +1,5 @@
 import type { DimensionDef } from '@alembic/core/types';
+import { clearProjectContextFileSnapshots } from '../../infrastructure/database/SqliteDatabaseAccess.js';
 import type { ProjectContextFillView } from '../project-context/ProjectContextWorkflowFacts.js';
 import { finalizeAiDimensionPipeline as finalizeAiDimension } from './AiDimensionFinalizer.js';
 import {
@@ -58,14 +59,7 @@ export async function clearSnapshots(
 ) {
   try {
     const db = ctx.container.get('database');
-    const target = db as
-      | { prepare?: (sql: string) => { run(...values: unknown[]): unknown } }
-      | null
-      | undefined;
-    if (target?.prepare) {
-      target
-        .prepare('DELETE FROM project_context_file_snapshots WHERE project_root = ?')
-        .run(projectRoot);
+    if (clearProjectContextFileSnapshots(db, projectRoot)) {
       ctx.logger.info('[Workflow] Cleared ProjectContext file snapshots — forcing full rebuild');
     }
   } catch (err: unknown) {

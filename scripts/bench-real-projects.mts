@@ -41,17 +41,15 @@ const PROJECTS = [
 // ── 加载模块 ──────────────────────────────────────────────────────
 const {
   analyzeProject,
+  DimensionCopy,
   getDiscovererRegistry,
+  initEnhancementRegistry,
   isProjectAstAvailable,
   LanguageService,
   loadProjectAstPlugins,
   resetDiscovererRegistry,
-} = await import('@alembic/core/project-intelligence');
-const { DimensionCopy } = await import('@alembic/core/dimensions');
+} = await import('../lib/core-adapters/ProjectIntelligenceCompatibility.js');
 await loadProjectAstPlugins();
-
-// Enhancement
-const { initEnhancementRegistry } = await import('@alembic/core/core/enhancement');
 
 // ── 主逻辑 ────────────────────────────────────────────────────────
 async function benchmark() {

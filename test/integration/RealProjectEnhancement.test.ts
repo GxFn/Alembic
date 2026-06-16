@@ -20,14 +20,14 @@ let getDiscovererRegistry, resetDiscovererRegistry;
 let LanguageService;
 
 beforeAll(async () => {
-  const enhMod = await import('@alembic/core/core/enhancement');
+  const enhMod = await import('../../lib/core-adapters/ProjectIntelligenceCompatibility.js');
   initEnhancementRegistry = enhMod.initEnhancementRegistry;
 
-  const dMod = await import('@alembic/core/project-intelligence');
+  const dMod = await import('../../lib/core-adapters/ProjectIntelligenceCompatibility.js');
   getDiscovererRegistry = dMod.getDiscovererRegistry;
   resetDiscovererRegistry = dMod.resetDiscovererRegistry;
 
-  const lsMod = await import('@alembic/core/project-intelligence');
+  const lsMod = await import('../../lib/core-adapters/ProjectIntelligenceCompatibility.js');
   LanguageService = lsMod.LanguageService;
 });
 

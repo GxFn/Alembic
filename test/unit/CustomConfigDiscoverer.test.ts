@@ -4,12 +4,12 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   CustomConfigDiscoverer,
   parseBoxfile,
   parseModuleSpec,
-} from '@alembic/core/project-intelligence';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+} from '../../lib/core-adapters/ProjectIntelligenceCompatibility.js';
 
 // ═══ RubyDslParser: parseBoxfile ═══════════════════════════
 

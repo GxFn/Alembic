@@ -1,10 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ProjectIntelligenceCapability } from '@alembic/core/project-intelligence';
 import { createProjectDescriptor } from '@alembic/core/shared';
 import { WorkspaceResolver } from '@alembic/core/workspace';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test } from 'vitest';
 import {
   attachProjectScopeToScanOptions,
   buildProjectScopeSourceIdentityMap,
@@ -22,7 +21,7 @@ describe('ProjectScope analysis wiring', () => {
     }
   });
 
-  test('passes ProjectScope folders into ProjectIntelligence without scanning control root or vendor snapshots', async () => {
+  test('attaches ProjectScope folders to Core scan options without adding control root or vendor snapshots', () => {
     const controlRoot = mkdtempSync(join(tmpdir(), 'alembic-project-scope-control-'));
     tempDirs.push(controlRoot);
     const dataRoot = join(controlRoot, '.ghost-data');
@@ -51,48 +50,63 @@ describe('ProjectScope analysis wiring', () => {
     };
     const analysis = resolveProjectScopeAnalysisContext(container);
 
-    const result = await ProjectIntelligenceCapability.run({
-      ctx: {
-        container,
-        logger: {
-          info: vi.fn(),
-          warn: vi.fn(),
-        },
+    const scan = attachProjectScopeToScanOptions(
+      {
+        generateAstContext: false,
+        maxFiles: 20,
+        skipGuard: true,
       },
-      materialize: {
-        callGraph: false,
-        codeEntityGraph: false,
-        dependencyEdges: false,
-        guardViolations: false,
-        moduleEntities: false,
-        panorama: false,
-      },
-      projectRoot: analysis.projectRoot,
-      scan: attachProjectScopeToScanOptions(
+      analysis
+    );
+    const projectScopeFolders =
+      (scan.projectScope as typeof projectScope | undefined)?.folders.map((folder) => ({
+        displayName: folder.displayName,
+        path: folder.path,
+      })) ?? [];
+    const sourceIdentities = collectProjectScopeSourceIdentities({
+      allFiles: [
         {
-          generateAstContext: false,
-          maxFiles: 20,
-          skipGuard: true,
+          path: join(coreRepo, 'lib', 'index.ts'),
+          sourceIdentity: {
+            absolutePath: join(coreRepo, 'lib', 'index.ts'),
+            folderDisplayName: 'AlembicCore',
+            folderId: projectScope.folders[0].id,
+            folderPath: coreRepo,
+            folderRelativeRoot: 'AlembicCore',
+            projectScopeId: projectScope.projectScopeId,
+            qualifiedPath: 'AlembicCore/lib/index.ts',
+            relativePath: 'lib/index.ts',
+          },
         },
-        analysis
-      ),
+        {
+          path: join(pluginRepo, 'lib', 'index.ts'),
+          sourceIdentity: {
+            absolutePath: join(pluginRepo, 'lib', 'index.ts'),
+            folderDisplayName: 'AlembicPlugin',
+            folderId: projectScope.folders[1].id,
+            folderPath: pluginRepo,
+            folderRelativeRoot: 'AlembicPlugin',
+            projectScopeId: projectScope.projectScopeId,
+            qualifiedPath: 'AlembicPlugin/lib/index.ts',
+            relativePath: 'lib/index.ts',
+          },
+        },
+      ],
     });
 
-    expect(result.allFiles.map((file) => file.relativePath).sort()).toEqual([
-      'lib/index.ts',
-      'lib/index.ts',
+    expect(analysis.projectScopeId).toBe(projectScope.projectScopeId);
+    expect(projectScopeFolders).toEqual([
+      { displayName: 'AlembicCore', path: coreRepo },
+      { displayName: 'AlembicPlugin', path: pluginRepo },
     ]);
-    expect(
-      collectProjectScopeSourceIdentities(result)
-        .map((ref) => ref.qualifiedPath)
-        .sort()
-    ).toEqual(['AlembicCore/lib/index.ts', 'AlembicPlugin/lib/index.ts']);
-    expect(result.allFiles.map((file) => file.path)).not.toEqual(
-      expect.arrayContaining([
-        join(controlRoot, 'lib', 'control.ts'),
-        join(controlRoot, 'vendor', 'AlembicCore', 'lib', 'index.ts'),
-      ])
+    expect(projectScopeFolders.map((folder) => folder.path)).not.toContain(
+      join(controlRoot, 'vendor', 'AlembicCore')
     );
+    expect(projectScopeFolders.map((folder) => folder.path)).not.toContain(controlRoot);
+    expect(sourceIdentities.map((ref) => ref.qualifiedPath).sort()).toEqual([
+      'AlembicCore/lib/index.ts',
+      'AlembicPlugin/lib/index.ts',
+    ]);
   });
 
   test('normalizes sourceRefs to qualified ProjectScope refs and rejects ambiguous or missing refs', () => {

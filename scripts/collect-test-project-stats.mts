@@ -42,7 +42,7 @@ const PROJECTS = [
 
 // ── 加载 Alembic 模块 ─────────────────────────────────────────
 const { getDiscovererRegistry, LanguageService, resetDiscovererRegistry } = await import(
-  '@alembic/core/project-intelligence'
+  '../lib/core-adapters/ProjectIntelligenceCompatibility.js'
 );
 
 // ── 主逻辑 ───────────────────────────────────────────────────────

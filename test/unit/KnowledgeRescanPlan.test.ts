@@ -8,7 +8,7 @@ import {
   type RelevanceAuditResult,
   type RelevanceAuditSummary,
 } from '@alembic/core/host-agent-workflows';
-import type { DimensionDef } from '@alembic/core/project-intelligence';
+import type { DimensionDef } from '@alembic/core/types';
 import { describe, expect, test } from 'vitest';
 import type { RecipeSnapshotEntry } from '#service/cleanup/CleanupService.js';
 
