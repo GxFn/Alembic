@@ -35,6 +35,7 @@ import {
   CreateKnowledgeBody,
   DecisionRegisterCreateBody,
   IntentEpisodeStartBody,
+  ResidentSearchBody,
   SearchQuery,
   TaskDispatchBody,
   UpdateKnowledgeBody,
@@ -222,13 +223,25 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
       expect(() => SearchInput.parse({ query: 'x', mode: 'invalid' })).toThrow();
     });
 
-    test('should accept optional fields', () => {
+    test('should accept explicit metadata filter fields', () => {
       const result = SearchInput.parse({
-        query: 'test',
+        dimensionId: 'dim-1',
+        filters: { scope: 'project-specific' },
+        knowledgeType: 'code-pattern',
         language: 'typescript',
-        sessionId: 'sess-1',
+        query: 'test',
+        tags: ['search', 'telemetry'],
       });
+      expect(result.dimensionId).toBe('dim-1');
+      expect(result.filters).toEqual({ scope: 'project-specific' });
+      expect(result.knowledgeType).toBe('code-pattern');
       expect(result.language).toBe('typescript');
+      expect(result.tags).toEqual(['search', 'telemetry']);
+    });
+
+    test('should reject retired public search modes', () => {
+      expect(() => SearchInput.parse({ query: 'x', mode: 'bm25' })).toThrow();
+      expect(() => SearchInput.parse({ query: 'x', mode: 'context' })).toThrow();
     });
   });
 
@@ -562,6 +575,35 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
       const result = SearchQuery.parse({ q: 'auth' });
       expect(result.type).toBe('all');
       expect(result.mode).toBe('keyword');
+    });
+
+    test('should reject retired public GET modes', () => {
+      expect(() => SearchQuery.parse({ q: 'auth', mode: 'bm25' })).toThrow();
+      expect(() => SearchQuery.parse({ q: 'auth', mode: 'context' })).toThrow();
+    });
+  });
+
+  describe('ResidentSearchBody', () => {
+    test('should accept explicit metadata filter fields', () => {
+      const result = ResidentSearchBody.parse({
+        dimensionId: 'dim-1',
+        filters: { scope: 'project-specific' },
+        knowledgeType: 'code-pattern',
+        mode: 'semantic',
+        query: 'auth',
+        tags: ['search', 'telemetry'],
+      });
+
+      expect(result.dimensionId).toBe('dim-1');
+      expect(result.filters).toEqual({ scope: 'project-specific' });
+      expect(result.knowledgeType).toBe('code-pattern');
+      expect(result.mode).toBe('semantic');
+      expect(result.tags).toEqual(['search', 'telemetry']);
+    });
+
+    test('should reject retired public POST modes', () => {
+      expect(() => ResidentSearchBody.parse({ query: 'auth', mode: 'bm25' })).toThrow();
+      expect(() => ResidentSearchBody.parse({ query: 'auth', mode: 'context' })).toThrow();
     });
   });
 

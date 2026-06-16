@@ -1,8 +1,7 @@
 /**
  * MCP Handlers — 搜索类
  *
- * v2: 合并原 4 个搜索函数（search / contextSearch / keywordSearch / semanticSearch）
- * 为统一 search() 入口，通过 mode 参数路由。
+ * v2: 合并搜索函数，为统一 search() 入口，通过 mode 参数路由。
  * consolidated.ts 的 mode 路由直接指向本函数。
  *
  * 设计原则：
@@ -11,28 +10,33 @@
  * 3. 投影使用 SearchTypes.slimSearchResult()（消除 3 处重复投影）
  */
 
-import { groupByKind, slimSearchResult } from '@alembic/core/search';
-import type {
-  DecisionRegisterSearchableDocument,
-  DecisionRegisterSearchableView,
-  DecisionRegisterStore,
-} from '../../service/task/DecisionRegisterStore.js';
+import { groupByKind, type SearchResponseMeta, slimSearchResult } from '@alembic/core/search';
 import {
-  createHostIntentContextMeta,
-  normalizeHostIntentContext,
-} from '../../service/task/HostIntentContext.js';
-import type { IntentEpisodeStore } from '../../service/task/IntentEpisodeStore.js';
-import {
-  buildIntentEvidence,
-  type RelationEvidenceProvider,
-} from '../../service/task/IntentEvidence.js';
-import {
-  buildIntentSearchPlan,
-  summarizeIntentSearchPlan,
-} from '../../service/task/IntentSearchPlan.js';
-import { buildPrimeInjectionPackage } from '../../service/task/PrimeInjectionPackage.js';
+  hasSearchFilters,
+  type NormalizedSearchFilters,
+  normalizeSearchFilters,
+  toSearchFilterRecord,
+} from '../../shared/search-filters.js';
 import { envelope } from '../tool-schema/envelope.js';
+import { buildToolUsageProblem } from '../tool-schema/problem.js';
 import type { McpContext, SearchArgs, SearchResultItem } from '../tool-schema/types.js';
+
+const PUBLIC_SEARCH_MODES = new Set(['auto', 'keyword', 'semantic']);
+
+interface ResidentToolSearchMeta {
+  actualMode: string;
+  appliedFilters: NormalizedSearchFilters;
+  degraded: boolean;
+  degradedReason?: string;
+  durationMs: number;
+  fallbackReason?: string;
+  filterOnly: boolean;
+  requestedMode: string;
+  resultCount: number;
+  semanticUsed: boolean;
+  topScore: number | null;
+  vectorUsed: boolean;
+}
 
 // ─── 工具函数 ────────────────────────────────────────────────
 
@@ -71,132 +75,70 @@ function filterByKind(items: SearchResultItem[], kind: string) {
 // ─── 统一搜索入口 ────────────────────────────────────────────
 
 /**
- * 统一搜索入口 — 支持 auto / keyword / weighted / semantic / context 五种模式
+ * 统一搜索入口 — 支持 auto / keyword / semantic 三种 public 模式。
  *
- * 合并了原 search / contextSearch / keywordSearch / semanticSearch 4 个函数。
  * mode 路由:
  *   - auto (默认): FieldWeighted + semantic 融合 + Ranking Pipeline
  *   - keyword: SQL LIKE 精确匹配，适合已知函数名/类名
- *   - weighted: 加权字段评分搜索（原 bm25 模式，已替换为 FieldWeightedScorer）
- *   - bm25: weighted 的向后兼容别名
  *   - semantic: 向量语义搜索（不可用时降级 weighted）
- *   - context: weighted + Ranking Pipeline + 会话上下文加成
  *
  * 所有模式共享: kind 过滤 → slimSearchResult 投影 → byKind 分组
  */
 export async function search(ctx: McpContext, args: SearchArgs) {
   const t0 = Date.now();
+  const mode = typeof args.mode === 'string' && args.mode.length > 0 ? args.mode : 'auto';
+  if (!PUBLIC_SEARCH_MODES.has(mode)) {
+    return unsupportedSearchMode(mode, t0, _toolName(mode));
+  }
+
   const engine = getSearchEngine(ctx) || (await getFallbackEngine(ctx));
-  const hostIntentContext = normalizeHostIntentContext({
-    activeFile: args.activeFile,
-    hostDeclaredIntent: args.hostDeclaredIntent,
-    hostTurnMeta: args.hostTurnMeta,
-    intentContext: args.intentContext,
-    language: args.language,
-    sessionHistory: args.sessionHistory,
-    userQuery: args.query,
-  });
-  const hostIntentMeta = createHostIntentContextMeta(hostIntentContext);
-  const mode = args.mode || 'auto';
   const kind = args.kind || args.type || 'all';
-  const intentSearchPlan = buildIntentSearchPlan({
-    episodeStore: getIntentEpisodeStore(ctx),
-    hostDeclaredIntent: args.hostDeclaredIntent,
-    hostIntentContext,
-    hostTurnMeta: args.hostTurnMeta,
-    intentContext: args.intentContext,
-    kind,
-    mode,
-    rawQuery: args.query,
+  const query = args.query;
+  const limit = readLimit(args.limit, 10);
+  const searchFilters = normalizeSearchFilters({
+    category: args.category,
+    dimensionId: args.dimensionId,
+    filters: args.filters,
+    kind: kind === 'all' ? undefined : kind,
+    knowledgeType: args.knowledgeType,
+    language: args.language,
+    scope: args.scope,
+    tags: args.tags,
   });
-  const query = intentSearchPlan.executableQuery || hostIntentContext.userQuery || args.query;
+  const filterRecord = toSearchFilterRecord(searchFilters);
 
-  // ── Mode-specific 参数适配 ──
-
-  // context 模式: 默认 limit=5, 传递 sessionHistory
-  const isContext = mode === 'context';
-  const limit = args.limit ?? (isContext ? 5 : 10);
-
-  // keyword 模式不排序（默认），其他模式排序
-  const rank = mode !== 'keyword';
-
-  // context 模式额外传递会话上下文
-  const shouldPassContext = isContext || hostIntentContext.applied;
-  const context = shouldPassContext
-    ? {
-        intent: hostIntentContext.searchIntent ?? hostIntentContext.scenario ?? 'search',
-        language: hostIntentContext.language ?? args.language,
-        sessionHistory: hostIntentContext.sessionHistory,
-      }
-    : undefined;
-
-  // kind 过滤时过采样 2x 以保证过滤后仍有足够结果
   const recallLimit = kind !== 'all' ? limit * 2 : limit;
-
-  // semantic 模式也过采样 2x（向量搜索可能有噪声）
   const engineLimit = mode === 'semantic' ? recallLimit * 2 : recallLimit;
+  const rank = typeof args.rank === 'boolean' ? args.rank : mode !== 'keyword';
 
-  // ── 统一调用 SearchEngine ──
   const result = await engine.search(query, {
-    mode: isContext ? 'bm25' : mode,
+    mode,
     limit: engineLimit,
     rank,
     groupByKind: true,
-    context,
+    type: kind,
+    ...filterRecord,
   });
 
   let items = (result?.items || []) as SearchResultItem[];
-  const decisionRegisterView = readDecisionRegisterSearchableView(ctx, kind, query, limit);
   const actualMode = result?.mode || mode;
 
-  // ── Kind 过滤 + 截断 ──
   items = filterByKind(items, kind);
-  items = mergeDecisionRegisterItems(items, decisionRegisterView, kind);
   items = items.slice(0, limit);
 
-  // ── 统一投影: slimSearchResult() ──
   const slimItems = items.map(slimSearchResult);
   const byKindGroups = groupByKind(slimItems);
   const elapsed = Date.now() - t0;
-  const vectorUsed = items.some(
-    (item: SearchResultItem) =>
-      typeof item.vectorScore === 'number' || typeof item.semanticScore === 'number'
-  );
-  const intentEvidence = await buildIntentEvidence({
+  const searchMeta = buildSearchMeta({
     actualMode,
-    decisionRegister: decisionRegisterContext(decisionRegisterView),
-    intentSearchPlan,
+    coreMeta: result?.searchMeta as SearchResponseMeta | undefined,
+    durationMs: elapsed,
+    filters: searchFilters,
     items,
-    relationProvider: getRelationProvider(ctx),
     requestedMode: mode,
-    semanticUsed: actualMode === 'semantic',
-    vectorUsed,
+    total: result?.total,
   });
-  const primeInjectionPackage = buildPrimeInjectionPackage({
-    decisionRegister: decisionRegisterContext(decisionRegisterView),
-    hostIntent: hostIntentMeta,
-    intentEvidence,
-    intentSearchPlan,
-    items,
-    search: {
-      actualMode,
-      filteredCount: items.length,
-      query,
-      queries: intentSearchPlan.lexicalQueries,
-      requestedMode: mode,
-      resultCount: result?.total ?? items.length,
-    },
-    semanticUsed: actualMode === 'semantic',
-    vectorUsed,
-  });
-
-  // ── 构造工具名称 ──
-  const toolName = _toolName(mode);
-
-  // ── semantic 降级提示 ──
-  const degraded = mode === 'semantic' && actualMode !== 'semantic';
-
-  // ── 统一响应格式 ──
+  const degraded = Boolean(searchMeta.degraded);
   const source = result?.ranked ? 'search-engine+ranking' : 'search-engine';
 
   return envelope({
@@ -208,147 +150,23 @@ export async function search(ctx: McpContext, args: SearchArgs) {
       totalResults: slimItems.length,
       items: slimItems,
       byKind: byKindGroups,
-      ...(hostIntentMeta ? { intentContext: hostIntentMeta } : {}),
-      intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan),
-      intentEvidence,
-      primeInjectionPackage,
+      searchMeta,
       kindCounts: {
         rule: byKindGroups.rule.length,
         pattern: byKindGroups.pattern.length,
         fact: byKindGroups.fact.length,
       },
-      // semantic 模式专属: 降级提示
       ...(mode === 'semantic'
         ? {
             degraded,
-            degradedReason: degraded ? 'vectorStore/aiProvider 不可用，已降级到 BM25' : undefined,
-          }
-        : {}),
-      // context 模式专属: metadata 包装（保持向后兼容）
-      ...(isContext
-        ? {
-            metadata: {
-              responseTimeMs: elapsed,
-              totalResults: slimItems.length,
-              kindCounts: {
-                rule: byKindGroups.rule.length,
-                pattern: byKindGroups.pattern.length,
-                fact: byKindGroups.fact.length,
-              },
-            },
+            degradedReason: degraded
+              ? searchMeta.fallbackReason || searchMeta.degradedReason
+              : undefined,
           }
         : {}),
     },
-    meta: { tool: toolName, source, responseTimeMs: elapsed },
+    meta: { tool: _toolName(mode), source, responseTimeMs: elapsed },
   });
-}
-
-function getIntentEpisodeStore(ctx: McpContext): IntentEpisodeStore | null {
-  try {
-    return ctx.container.get('intentEpisodeStore') as IntentEpisodeStore;
-  } catch {
-    return null;
-  }
-}
-
-function getRelationProvider(ctx: McpContext): RelationEvidenceProvider | null {
-  try {
-    return ctx.container.get('knowledgeGraphService') as RelationEvidenceProvider;
-  } catch {
-    return null;
-  }
-}
-
-function readDecisionRegisterSearchableView(
-  ctx: McpContext,
-  kind: string,
-  query: string,
-  limit: number
-): DecisionRegisterSearchableView | null {
-  if (!shouldReadDecisionRegister(kind)) {
-    return null;
-  }
-  try {
-    const store = ctx.container.get('decisionRegisterStore') as DecisionRegisterStore | null;
-    if (!store || typeof store.searchable !== 'function') {
-      return null;
-    }
-    return store.searchable({ limit, query });
-  } catch {
-    return null;
-  }
-}
-
-function shouldReadDecisionRegister(kind: string): boolean {
-  return kind === 'all' || kind === 'decision' || kind === 'decision-register';
-}
-
-function isDecisionRegisterOnly(kind: string): boolean {
-  return kind === 'decision' || kind === 'decision-register';
-}
-
-function mergeDecisionRegisterItems(
-  items: SearchResultItem[],
-  view: DecisionRegisterSearchableView | null,
-  kind: string
-): SearchResultItem[] {
-  if (!view || !shouldReadDecisionRegister(kind)) {
-    return items;
-  }
-  const decisionItems = view.documents
-    .filter((document) => document.acceptedForRetrieval)
-    .map(decisionDocumentToSearchItem);
-  return dedupeSearchItems([...decisionItems, ...(isDecisionRegisterOnly(kind) ? [] : items)]);
-}
-
-function decisionDocumentToSearchItem(
-  document: DecisionRegisterSearchableDocument
-): SearchResultItem {
-  return {
-    acceptedForRetrieval: document.acceptedForRetrieval,
-    decision: document.decision,
-    decisionId: document.decisionId,
-    description: document.content,
-    id: document.id,
-    kind: document.kind,
-    knowledgeType: document.knowledgeType,
-    metadata: document.metadata,
-    retrievalLifecycle: document.retrievalLifecycle,
-    score: document.score,
-    sourceRefs: document.sourceRefs,
-    status: document.status,
-    tags: document.tags,
-    title: document.title,
-    trigger: document.trigger,
-    whySelected: document.whySelected,
-  };
-}
-
-function dedupeSearchItems(items: SearchResultItem[]): SearchResultItem[] {
-  const seen = new Set<string>();
-  const result: SearchResultItem[] = [];
-  for (const item of items) {
-    const key = item.id || JSON.stringify(item);
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    result.push(item);
-  }
-  return result;
-}
-
-function decisionRegisterContext(view: DecisionRegisterSearchableView | null | undefined) {
-  if (!view) {
-    return null;
-  }
-  return {
-    acceptedDecisionRefs: view.documents
-      .filter((document) => document.acceptedForRetrieval)
-      .map((document) => document.id),
-    auditExcludedCount: view.auditExcludedCount,
-    available: true,
-  };
 }
 
 // ─── Backward-compatible aliases ────────────────────────────
@@ -370,6 +188,103 @@ export function semanticSearch(ctx: McpContext, args: SearchArgs) {
 }
 
 // ─── 内部辅助 ────────────────────────────────────────────────
+
+function unsupportedSearchMode(mode: string, startedAt: number, tool: string) {
+  return envelope({
+    success: false,
+    errorCode: 'UNSUPPORTED_SEARCH_MODE',
+    message: `Search mode "${mode}" is retired. Use auto, keyword, or semantic.`,
+    problem: buildToolUsageProblem({
+      code: 'UNSUPPORTED_SEARCH_MODE',
+      reasonCode: 'invalid-input',
+      failingStep: 'search-mode-validation',
+      nextAction:
+        'Use mode auto, keyword, or semantic with explicit metadata filters. Public bm25/context modes are retired.',
+      fieldProblems: [{ field: 'mode', error: 'unsupported retired public search mode' }],
+    }),
+    meta: { tool, responseTimeMs: Date.now() - startedAt },
+  });
+}
+
+function buildSearchMeta({
+  actualMode,
+  coreMeta,
+  durationMs,
+  filters,
+  items,
+  requestedMode,
+  total,
+}: {
+  actualMode: string;
+  coreMeta?: SearchResponseMeta;
+  durationMs: number;
+  filters: NormalizedSearchFilters;
+  items: SearchResultItem[];
+  requestedMode: string;
+  total?: number;
+}): ResidentToolSearchMeta {
+  const semanticUsed =
+    typeof coreMeta?.semanticUsed === 'boolean' ? coreMeta.semanticUsed : actualMode === 'semantic';
+  const vectorUsed =
+    typeof coreMeta?.vectorUsed === 'boolean'
+      ? coreMeta.vectorUsed
+      : items.some(
+          (item) => typeof item.vectorScore === 'number' || typeof item.semanticScore === 'number'
+        );
+  const fallbackReason =
+    typeof coreMeta?.fallbackReason === 'string' && coreMeta.fallbackReason.length > 0
+      ? coreMeta.fallbackReason
+      : undefined;
+  const degraded = Boolean(fallbackReason) || (requestedMode === 'semantic' && !semanticUsed);
+  const appliedFilters =
+    readCoreAppliedFilters(coreMeta) ?? (hasSearchFilters(filters) ? filters : {});
+
+  return {
+    actualMode: String(coreMeta?.actualMode || actualMode),
+    appliedFilters,
+    degraded,
+    ...(degraded
+      ? {
+          degradedReason:
+            fallbackReason ||
+            `semantic search requested but resident service returned ${actualMode}`,
+        }
+      : {}),
+    durationMs: typeof coreMeta?.durationMs === 'number' ? coreMeta.durationMs : durationMs,
+    ...(fallbackReason ? { fallbackReason } : {}),
+    filterOnly: hasSearchFilters(appliedFilters),
+    requestedMode: String(coreMeta?.requestedMode || requestedMode),
+    resultCount:
+      typeof coreMeta?.resultCount === 'number'
+        ? coreMeta.resultCount
+        : typeof total === 'number'
+          ? total
+          : items.length,
+    semanticUsed,
+    topScore: extractTopScore(items),
+    vectorUsed,
+  };
+}
+
+function readCoreAppliedFilters(
+  coreMeta: SearchResponseMeta | undefined
+): NormalizedSearchFilters | null {
+  const raw = (coreMeta as { appliedFilters?: unknown } | undefined)?.appliedFilters;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const normalized = normalizeSearchFilters(raw as Record<string, unknown>);
+  return hasSearchFilters(normalized) ? normalized : null;
+}
+
+function extractTopScore(items: SearchResultItem[]): number | null {
+  const firstScore = items[0]?.score ?? items[0]?.vectorScore ?? items[0]?.semanticScore;
+  return typeof firstScore === 'number' && Number.isFinite(firstScore) ? firstScore : null;
+}
+
+function readLimit(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback;
+}
 
 /** 根据 mode 返回对应的 MCP 工具名称 */
 function _toolName(mode: string): string {

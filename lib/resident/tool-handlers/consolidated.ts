@@ -37,7 +37,7 @@ import * as structureHandlers from './structure.js';
  *   auto (默认) → search()
  *   keyword     → keywordSearch()
  *   semantic    → semanticSearch()
- *   context     → contextSearch()
+ *   context     → contextSearch() retired-mode error
  */
 export async function consolidatedSearch(ctx: McpContext, args: ConsolidatedSearchArgs) {
   const mode = args.mode || 'auto';

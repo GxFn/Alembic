@@ -205,7 +205,7 @@ describe('host intent context consumption', () => {
     expect(ctx.session.intent.primeActiveFile).toBe('src/service.ts');
   });
 
-  test('resident search maps host context into SearchEngine query context', async () => {
+  test('resident search ignores host context and passes only explicit public filters', async () => {
     const searchEngine = {
       search: vi.fn().mockResolvedValue({
         items: [
@@ -219,8 +219,20 @@ describe('host intent context consumption', () => {
             trigger: 'intent search',
           },
         ],
-        mode: 'bm25',
-        ranked: true,
+        mode: 'keyword',
+        ranked: false,
+        searchMeta: {
+          actualMode: 'keyword',
+          appliedFilters: {
+            dimensionId: 'dim-1',
+            language: 'typescript',
+            tags: ['search'],
+          },
+          requestedMode: 'keyword',
+          resultCount: 1,
+          semanticUsed: false,
+          vectorUsed: false,
+        },
       }),
     };
     const ctx = {
@@ -235,6 +247,7 @@ describe('host intent context consumption', () => {
     };
 
     const result = await search(ctx, {
+      dimensionId: 'dim-1',
       hostDeclaredIntent: {
         intent: 'search',
         query: 'semantic source refs',
@@ -244,29 +257,73 @@ describe('host intent context consumption', () => {
         language: 'typescript',
         sessionHistory: [{ content: 'previous search turn' }],
       },
-      mode: 'bm25',
+      language: 'typescript',
+      mode: 'keyword',
       query: 'fallback query',
+      tags: ['search'],
     });
 
     expect(searchEngine.search).toHaveBeenCalledWith(
-      'semantic source refs',
+      'fallback query',
       expect.objectContaining({
-        context: {
-          intent: 'search',
-          language: 'typescript',
-          sessionHistory: [{ content: 'previous search turn' }],
-        },
+        dimensionId: 'dim-1',
+        groupByKind: true,
+        language: 'typescript',
+        limit: 10,
+        mode: 'keyword',
+        rank: false,
+        tags: ['search'],
+        type: 'all',
       })
+    );
+    expect(searchEngine.search).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ context: expect.anything() })
     );
     expect(result).toMatchObject({
       success: true,
       data: {
-        intentContext: {
-          applied: true,
-          sourceRefs: ['host:intent'],
+        query: 'fallback query',
+        searchMeta: {
+          actualMode: 'keyword',
+          appliedFilters: {
+            dimensionId: 'dim-1',
+            language: 'typescript',
+            tags: ['search'],
+          },
         },
-        query: 'semantic source refs',
       },
+    });
+    expect(JSON.stringify(result)).not.toContain('semantic source refs');
+    expect(JSON.stringify(result)).not.toContain('intentContext');
+  });
+
+  test('resident search rejects retired bm25 mode before SearchEngine execution', async () => {
+    const searchEngine = { search: vi.fn() };
+    const ctx = {
+      container: {
+        get: vi.fn((name: string) => {
+          if (name === 'searchEngine') {
+            return searchEngine;
+          }
+          throw new Error(`unexpected service: ${name}`);
+        }),
+      },
+    };
+
+    const result = await search(ctx, {
+      mode: 'bm25',
+      query: 'fallback query',
+    });
+
+    expect(searchEngine.search).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      errorCode: 'UNSUPPORTED_SEARCH_MODE',
+      problem: {
+        failingStep: 'search-mode-validation',
+        reasonCode: 'invalid-input',
+      },
+      success: false,
     });
   });
 });

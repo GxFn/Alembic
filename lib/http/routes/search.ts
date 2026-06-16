@@ -10,31 +10,6 @@ import express, { type Request, type Response } from 'express';
 import type { z } from 'zod';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
-import type {
-  DecisionRegisterSearchableDocument,
-  DecisionRegisterSearchableView,
-  DecisionRegisterStore,
-} from '../../service/task/DecisionRegisterStore.js';
-import {
-  createHostIntentContextMeta,
-  type HostIntentContextMeta,
-  normalizeHostIntentContext,
-} from '../../service/task/HostIntentContext.js';
-import type { IntentEpisodeStore } from '../../service/task/IntentEpisodeStore.js';
-import {
-  buildIntentEvidence,
-  type IntentEvidence,
-  type RelationEvidenceProvider,
-} from '../../service/task/IntentEvidence.js';
-import {
-  buildIntentSearchPlan,
-  type IntentSearchPlan,
-  summarizeIntentSearchPlan,
-} from '../../service/task/IntentSearchPlan.js';
-import {
-  buildPrimeInjectionPackage,
-  type PrimeInjectionPackage,
-} from '../../service/task/PrimeInjectionPackage.js';
 import {
   ContextAwareSearchBody,
   GraphImpactQuery,
@@ -43,30 +18,15 @@ import {
   SearchQuery,
   SimilarityBody,
 } from '../../shared/schemas/http-requests.js';
+import {
+  hasSearchFilters,
+  type NormalizedSearchFilters,
+  normalizeSearchFilters,
+  toSearchFilterRecord,
+} from '../../shared/search-filters.js';
 import type { SearchModeLabel } from '../../shared/semantic-taxonomy.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 import { safeInt } from '../utils/routeHelpers.js';
-
-/** Search result from SearchEngine */
-interface SearchEngineItem {
-  title?: string;
-  id?: string;
-  content?: string | Record<string, string>;
-  score?: number;
-  authorityScore?: number;
-  qualityScore?: number;
-  usageCount?: number;
-  code?: string;
-  trigger?: string;
-}
-
-/** Knowledge entry from KnowledgeService */
-interface KnowledgeItem {
-  title?: string;
-  id?: string;
-  content?: { pattern?: string; markdown?: string };
-  quality?: { overall?: number };
-}
 
 interface SearchRouteItem {
   id?: string;
@@ -93,22 +53,20 @@ type SearchFallbackResults = Record<
 >;
 
 interface ResidentSearchInput {
-  confidence?: number;
-  degraded?: boolean;
-  degradedReason?: string;
+  category?: string;
+  dimensionId?: string;
+  filters?: Record<string, unknown>;
   groupByKind: boolean;
-  hostDeclaredIntent?: unknown;
-  hostTurnMeta?: unknown;
-  intentContext?: unknown;
+  kind?: string;
+  knowledgeType?: string;
   language?: string;
   limit: number;
   mode: string;
   page: number;
   q: string;
-  scenario?: string;
-  searchIntent?: string;
-  sessionHistory?: Array<Record<string, unknown>>;
-  sourceRefs?: string[];
+  rank?: boolean;
+  scope?: string;
+  tags?: string[];
   type: string;
 }
 
@@ -133,37 +91,8 @@ interface ResidentSearchMeta {
   degraded: boolean;
   degradedReason: string | null;
   fallbackReason?: string;
-  hostIntentApplied?: boolean;
-  hostIntentConfidence?: number;
-  hostIntentDegraded?: boolean;
-  hostIntentDegradedReason?: string;
-  hostIntentSourceRefs?: string[];
-  intentEvidence?: IntentEvidence;
-  intentSearchPlan?: IntentSearchPlan;
-  primeInjectionPackage?: PrimeInjectionPackage;
-  decisionRegister: {
-    acceptedCount: number;
-    acceptedDecisionRefs: string[];
-    auditExcludedCount: number;
-    available: boolean;
-    defaultLifecycle: 'active-effective-only';
-    endpoint: '/api/v1/decision-register/searchable';
-    excludedStatuses: string[];
-    vectorAdmission: 'accepted-only';
-  };
-  feedback: {
-    observeOnly: true;
-    recorder: 'HitRecorder';
-    supportedSignals: string[];
-    version: 1;
-  };
-  retrievalQuality: {
-    decisionRefCount: number;
-    feedbackSignalCount: number;
-    relationEvidenceCount: number;
-    sourceRefCoverage: number;
-    version: 1;
-  };
+  appliedFilters: NormalizedSearchFilters;
+  filterOnly: boolean;
   durationMs: number;
   resultCount: number;
   topScore: number | null;
@@ -196,18 +125,26 @@ const RESIDENT_SEARCH_ENDPOINT = '/api/v1/search';
 /**
  * GET /api/v1/search
  * 统一搜索
- * ?q=keyword&type=all|recipe|solution|rule&limit=20&mode=keyword|bm25|semantic&groupByKind=true
+ * ?q=keyword&type=all|recipe|solution|rule&limit=20&mode=auto|keyword|semantic&groupByKind=true
  */
 router.get('/', validateQuery(SearchQuery), async (req: Request, res: Response): Promise<void> => {
-  const { q, type = 'all', mode = 'keyword' } = req.query as Record<string, string>;
+  const query = req.query as Record<string, string | string[] | boolean | undefined>;
+  const { q, type = 'all', mode = 'keyword' } = query as Record<string, string>;
   return handleResidentSearch(req, res, {
+    category: stringParam(query.category),
+    dimensionId: stringParam(query.dimensionId),
     groupByKind:
       req.query.groupByKind === 'true' ||
       (req.query as Record<string, unknown>).groupByKind === true,
+    kind: stringParam(query.kind),
+    knowledgeType: stringParam(query.knowledgeType),
+    language: stringParam(query.language),
     limit: safeInt(req.query.limit, 20, 1, 100),
     mode,
     page: safeInt(req.query.page, 1),
     q,
+    scope: stringParam(query.scope),
+    tags: stringArrayParam(query.tags ?? query.tag),
     type,
   });
 });
@@ -218,22 +155,20 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     const body = req.body as z.infer<typeof ResidentSearchBody>;
     return handleResidentSearch(req, res, {
-      confidence: body.confidence,
-      degraded: body.degraded,
-      degradedReason: body.degradedReason,
+      category: body.category,
+      dimensionId: body.dimensionId,
+      filters: body.filters,
       groupByKind: body.groupByKind,
-      hostDeclaredIntent: body.hostDeclaredIntent,
-      hostTurnMeta: body.hostTurnMeta,
-      intentContext: body.intentContext,
+      kind: body.kind,
+      knowledgeType: body.knowledgeType,
       language: body.language,
       limit: body.limit,
       mode: body.mode,
       page: body.page,
       q: body.query ?? body.q ?? '',
-      scenario: body.scenario,
-      searchIntent: body.searchIntent,
-      sessionHistory: body.sessionHistory,
-      sourceRefs: body.sourceRefs,
+      rank: body.rank,
+      scope: body.scope,
+      tags: body.tags,
       type: body.type,
     });
   }
@@ -245,35 +180,21 @@ async function handleResidentSearch(
   input: ResidentSearchInput
 ): Promise<void> {
   const container = getServiceContainer();
-  const hostIntentContext = normalizeHostIntentContext({
-    confidence: input.confidence,
-    degraded: input.degraded,
-    degradedReason: input.degradedReason,
-    hostDeclaredIntent: input.hostDeclaredIntent,
-    hostTurnMeta: input.hostTurnMeta,
-    intentContext: input.intentContext,
+  const query = input.q;
+  const searchFilters = normalizeSearchFilters({
+    category: input.category,
+    dimensionId: input.dimensionId,
+    filters: input.filters,
+    kind: input.kind,
+    knowledgeType: input.knowledgeType,
     language: input.language,
-    scenario: input.scenario,
-    searchIntent: input.searchIntent,
-    sessionHistory: input.sessionHistory,
-    sourceRefs: input.sourceRefs,
-    userQuery: input.q,
+    scope: input.scope,
+    tags: input.tags,
   });
-  const hostIntentMeta = createHostIntentContextMeta(hostIntentContext);
-  const intentSearchPlan = buildIntentSearchPlan({
-    episodeStore: getOptionalIntentEpisodeStore(container),
-    hostDeclaredIntent: input.hostDeclaredIntent,
-    hostIntentContext,
-    hostTurnMeta: input.hostTurnMeta,
-    intentContext: input.intentContext,
-    kind: input.type,
-    mode: input.mode,
-    rawQuery: input.q,
-  });
-  const query = intentSearchPlan.executableQuery || hostIntentContext.userQuery || input.q;
-  const decisionRegisterView = readDecisionRegisterSearchableView(container, input, query);
+  const filterRecord = toSearchFilterRecord(searchFilters);
 
-  // 所有模式优先通过 SearchEngine（含 auto/bm25/semantic/keyword/ranking）
+  // Public resident search is direct-search only. Prime/intent context belongs
+  // to prime-owned routes, so this route passes only explicit query + filters.
   try {
     const searchEngine = container.get('searchEngine');
     const startedAt = performance.now();
@@ -282,29 +203,18 @@ async function handleResidentSearch(
       limit: input.limit,
       mode: input.mode,
       groupByKind: input.groupByKind,
-      ...(hostIntentMeta
-        ? {
-            context: {
-              intent: hostIntentContext.searchIntent ?? hostIntentContext.scenario ?? 'search',
-              language: hostIntentContext.language,
-              sessionHistory: hostIntentContext.sessionHistory,
-            },
-          }
-        : {}),
+      ...(typeof input.rank === 'boolean' ? { rank: input.rank } : {}),
+      ...filterRecord,
     })) as SearchResponse & SearchRouteResult;
-    const mergedResult = mergeDecisionRegisterResults(result, decisionRegisterView, input);
     const durationMs = Math.round(performance.now() - startedAt);
     const searchMeta = await buildResidentSearchMeta({
       container,
-      decisionRegisterView,
       durationMs,
-      hostIntent: hostIntentMeta,
-      intentSearchPlan,
-      query,
+      filters: searchFilters,
       requestedMode: input.mode,
-      result: mergedResult,
+      result,
     });
-    return void res.json({ success: true, data: { ...mergedResult, query, searchMeta } });
+    return void res.json({ success: true, data: { ...result, query, searchMeta } });
   } catch (err: unknown) {
     logger.warn('SearchEngine 搜索失败，降级到传统搜索', {
       mode: input.mode,
@@ -314,7 +224,6 @@ async function handleResidentSearch(
 
   const fallback = await buildSearchCompatibilityFallback({
     container,
-    decisionRegisterView,
     input,
     query,
   });
@@ -328,10 +237,7 @@ async function handleResidentSearch(
       totalResults: fallback.totalResults,
       searchMeta: await buildLegacySearchMeta({
         container,
-        decisionRegisterView,
-        hostIntent: hostIntentMeta,
-        intentSearchPlan,
-        items: fallback.decisionItems,
+        filters: searchFilters,
         mode: input.mode,
         resultCount: fallback.totalResults,
       }),
@@ -342,16 +248,13 @@ async function handleResidentSearch(
 
 async function buildSearchCompatibilityFallback({
   container,
-  decisionRegisterView,
   input,
   query,
 }: {
   container: ReturnType<typeof getServiceContainer>;
-  decisionRegisterView?: DecisionRegisterSearchableView | null;
   input: ResidentSearchInput;
   query: string;
 }): Promise<{
-  decisionItems: SearchRouteItem[];
   results: SearchFallbackResults;
   totalResults: number;
 }> {
@@ -359,9 +262,7 @@ async function buildSearchCompatibilityFallback({
   const pagination = { page: input.page, pageSize: input.limit };
   await appendKnowledgeFallbackResults({ container, input, pagination, query, results });
   await appendGuardFallbackResults({ container, input, pagination, query, results });
-  appendDecisionRegisterFallbackResults({ decisionRegisterView, input, results });
   return {
-    decisionItems: legacyDecisionRegisterItems(decisionRegisterView ?? null, input),
     results,
     totalResults: countSearchFallbackResults(results),
   };
@@ -430,35 +331,6 @@ async function appendGuardFallbackResults({
   }
 }
 
-function appendDecisionRegisterFallbackResults({
-  decisionRegisterView,
-  input,
-  results,
-}: {
-  decisionRegisterView?: DecisionRegisterSearchableView | null;
-  input: ResidentSearchInput;
-  results: SearchFallbackResults;
-}): void {
-  if (!decisionRegisterView || !shouldReadDecisionRegister(input.type)) {
-    return;
-  }
-  const documents = decisionRegisterView.documents.filter(
-    (document) => document.acceptedForRetrieval
-  );
-  if (documents.length === 0) {
-    return;
-  }
-  results.decisions = {
-    data: documents.map(decisionDocumentToSearchItem),
-    pagination: {
-      page: input.page,
-      pageSize: input.limit,
-      total: documents.length,
-      pages: 1,
-    },
-  };
-}
-
 function shouldReadKnowledgeFallback(type: string): boolean {
   return type === 'all' || type === 'recipe' || type === 'solution' || type === 'candidate';
 }
@@ -486,20 +358,14 @@ function countSearchFallbackResults(results: SearchFallbackResults): number {
 
 async function buildResidentSearchMeta({
   container,
-  decisionRegisterView,
   durationMs,
-  hostIntent,
-  intentSearchPlan,
-  query,
+  filters,
   requestedMode,
   result,
 }: {
   container: ReturnType<typeof getServiceContainer>;
-  decisionRegisterView?: DecisionRegisterSearchableView | null;
   durationMs: number;
-  hostIntent?: HostIntentContextMeta | null;
-  intentSearchPlan?: IntentSearchPlan | null;
-  query: string;
+  filters: NormalizedSearchFilters;
   requestedMode: string;
   result: SearchRouteResult;
 }): Promise<ResidentSearchMeta> {
@@ -520,10 +386,7 @@ async function buildResidentSearchMeta({
       ? coreMeta.vectorUsed
       : hasVectorLikeScore(result.items ?? []);
   const fallbackReason = coreMeta?.fallbackReason ?? null;
-  const degraded =
-    Boolean(fallbackReason) ||
-    (semanticRequested && !semanticUsed) ||
-    Boolean(hostIntent?.degraded);
+  const degraded = Boolean(fallbackReason) || (semanticRequested && !semanticUsed);
   const resultCount =
     typeof coreMeta?.resultCount === 'number'
       ? coreMeta.resultCount
@@ -532,36 +395,8 @@ async function buildResidentSearchMeta({
         : (result.items ?? []).length;
   const metaDurationMs =
     typeof coreMeta?.durationMs === 'number' ? coreMeta.durationMs : durationMs;
-  const intentEvidence = await buildIntentEvidence({
-    actualMode,
-    decisionRegister: decisionRegisterContext(decisionRegisterView),
-    intentSearchPlan,
-    items: result.items ?? [],
-    relationProvider: getOptionalRelationProvider(container),
-    requestedMode,
-    semanticUsed,
-    vectorAvailable: residentVector.available,
-    vectorUsed,
-  });
-  const primeInjectionPackage = buildPrimeInjectionPackage({
-    decisionRegister: decisionRegisterContext(decisionRegisterView),
-    hostIntent,
-    intentEvidence,
-    intentSearchPlan,
-    items: result.items ?? [],
-    search: {
-      actualMode,
-      filteredCount: resultCount,
-      query,
-      queries: intentSearchPlan?.lexicalQueries,
-      requestedMode,
-      resultCount,
-    },
-    semanticUsed,
-    vectorAvailable: residentVector.available,
-    vectorUsed,
-  });
-  const decisionRegister = buildDecisionRegisterMeta(decisionRegisterView);
+  const appliedFilters =
+    readCoreAppliedFilters(coreMeta) ?? (hasSearchFilters(filters) ? filters : {});
 
   return {
     route: 'resident-search',
@@ -575,24 +410,10 @@ async function buildResidentSearchMeta({
     degraded,
     degradedReason:
       fallbackReason ??
-      hostIntent?.degradedReason ??
       (degraded ? `semantic search requested but resident service returned ${actualMode}` : null),
     ...(fallbackReason ? { fallbackReason } : {}),
-    ...(hostIntent
-      ? {
-          hostIntentApplied: true,
-          hostIntentConfidence: hostIntent.confidence,
-          hostIntentDegraded: hostIntent.degraded,
-          hostIntentDegradedReason: hostIntent.degradedReason,
-          hostIntentSourceRefs: hostIntent.sourceRefs,
-        }
-      : {}),
-    ...(intentSearchPlan ? { intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan) } : {}),
-    intentEvidence,
-    primeInjectionPackage,
-    decisionRegister,
-    feedback: primeInjectionPackage.feedback,
-    retrievalQuality: primeInjectionPackage.retrievalQuality,
+    appliedFilters,
+    filterOnly: hasSearchFilters(appliedFilters),
     durationMs: metaDurationMs,
     resultCount,
     topScore: extractTopScore(result.items ?? []),
@@ -608,51 +429,16 @@ async function buildResidentSearchMeta({
 
 async function buildLegacySearchMeta({
   container,
-  decisionRegisterView,
-  hostIntent,
-  intentSearchPlan,
-  items,
+  filters,
   mode,
   resultCount,
 }: {
   container: ReturnType<typeof getServiceContainer>;
-  decisionRegisterView?: DecisionRegisterSearchableView | null;
-  hostIntent?: HostIntentContextMeta | null;
-  intentSearchPlan?: IntentSearchPlan | null;
-  items?: SearchRouteItem[];
+  filters: NormalizedSearchFilters;
   mode: string;
   resultCount: number;
 }): Promise<ResidentSearchMeta> {
-  const degraded = mode === 'semantic' || Boolean(hostIntent?.degraded);
-  const intentEvidence = await buildIntentEvidence({
-    decisionRegister: decisionRegisterContext(decisionRegisterView),
-    intentSearchPlan,
-    items: items ?? [],
-    relationProvider: getOptionalRelationProvider(container),
-    requestedMode: mode,
-    semanticUsed: false,
-    vectorAvailable: false,
-    vectorUsed: false,
-  });
-  const primeInjectionPackage = buildPrimeInjectionPackage({
-    decisionRegister: decisionRegisterContext(decisionRegisterView),
-    hostIntent,
-    intentEvidence,
-    intentSearchPlan,
-    items: items ?? [],
-    search: {
-      actualMode: 'legacy-fallback',
-      filteredCount: 0,
-      query: intentSearchPlan?.executableQuery,
-      queries: intentSearchPlan?.lexicalQueries,
-      requestedMode: mode,
-      resultCount,
-    },
-    semanticUsed: false,
-    vectorAvailable: false,
-    vectorUsed: false,
-  });
-  const decisionRegister = buildDecisionRegisterMeta(decisionRegisterView);
+  const degraded = mode === 'semantic';
   return {
     route: 'resident-search',
     service: 'alembic-daemon',
@@ -666,22 +452,9 @@ async function buildLegacySearchMeta({
     degradedReason:
       mode === 'semantic'
         ? 'SearchEngine unavailable; resident service used legacy non-vector fallback'
-        : (hostIntent?.degradedReason ?? null),
-    ...(hostIntent
-      ? {
-          hostIntentApplied: true,
-          hostIntentConfidence: hostIntent.confidence,
-          hostIntentDegraded: hostIntent.degraded,
-          hostIntentDegradedReason: hostIntent.degradedReason,
-          hostIntentSourceRefs: hostIntent.sourceRefs,
-        }
-      : {}),
-    ...(intentSearchPlan ? { intentSearchPlan: summarizeIntentSearchPlan(intentSearchPlan) } : {}),
-    intentEvidence,
-    primeInjectionPackage,
-    decisionRegister,
-    feedback: primeInjectionPackage.feedback,
-    retrievalQuality: primeInjectionPackage.retrievalQuality,
+        : null,
+    appliedFilters: filters,
+    filterOnly: hasSearchFilters(filters),
     durationMs: 0,
     resultCount,
     topScore: null,
@@ -698,16 +471,6 @@ async function buildLegacySearchMeta({
     },
     workspace: buildSearchWorkspaceIdentity(container),
   };
-}
-
-function getOptionalRelationProvider(
-  container: ReturnType<typeof getServiceContainer>
-): RelationEvidenceProvider | null {
-  try {
-    return container.get('knowledgeGraphService') as RelationEvidenceProvider;
-  } catch {
-    return null;
-  }
 }
 
 function buildResidentVectorMeta({
@@ -805,159 +568,6 @@ function buildSearchWorkspaceIdentity(container: ReturnType<typeof getServiceCon
   }
 }
 
-function getOptionalIntentEpisodeStore(
-  container: ReturnType<typeof getServiceContainer>
-): IntentEpisodeStore | null {
-  try {
-    return container.get('intentEpisodeStore') as IntentEpisodeStore;
-  } catch {
-    return null;
-  }
-}
-
-function readDecisionRegisterSearchableView(
-  container: ReturnType<typeof getServiceContainer>,
-  input: ResidentSearchInput,
-  query: string
-): DecisionRegisterSearchableView | null {
-  if (!shouldReadDecisionRegister(input.type)) {
-    return null;
-  }
-  try {
-    const store = container.get('decisionRegisterStore') as DecisionRegisterStore | null;
-    if (!store || typeof store.searchable !== 'function') {
-      return null;
-    }
-    return store.searchable({
-      limit: input.limit,
-      query,
-    });
-  } catch {
-    return null;
-  }
-}
-
-function shouldReadDecisionRegister(type: string): boolean {
-  return type === 'all' || type === 'decision' || type === 'decision-register';
-}
-
-function isDecisionRegisterOnly(type: string): boolean {
-  return type === 'decision' || type === 'decision-register';
-}
-
-function mergeDecisionRegisterResults(
-  result: SearchRouteResult,
-  view: DecisionRegisterSearchableView | null,
-  input: ResidentSearchInput
-): SearchRouteResult {
-  if (!view || !shouldReadDecisionRegister(input.type)) {
-    return result;
-  }
-  const decisionItems = view.documents
-    .filter((document) => document.acceptedForRetrieval)
-    .map(decisionDocumentToSearchItem);
-  if (decisionItems.length === 0 && !isDecisionRegisterOnly(input.type)) {
-    return result;
-  }
-  const existingItems = Array.isArray(result.items) ? result.items : [];
-  const mergedItems = dedupeSearchItems([
-    ...decisionItems,
-    ...(isDecisionRegisterOnly(input.type) ? [] : existingItems),
-  ]).slice(0, input.limit);
-  const existingTotal = typeof result.total === 'number' ? result.total : existingItems.length;
-  return {
-    ...result,
-    items: mergedItems,
-    total: isDecisionRegisterOnly(input.type)
-      ? decisionItems.length
-      : existingTotal + decisionItems.length,
-  };
-}
-
-function legacyDecisionRegisterItems(
-  view: DecisionRegisterSearchableView | null,
-  input: ResidentSearchInput
-): SearchRouteItem[] {
-  if (!view || !shouldReadDecisionRegister(input.type)) {
-    return [];
-  }
-  return view.documents
-    .filter((document) => document.acceptedForRetrieval)
-    .map(decisionDocumentToSearchItem)
-    .slice(0, input.limit);
-}
-
-function decisionDocumentToSearchItem(
-  document: DecisionRegisterSearchableDocument
-): SearchRouteItem {
-  return {
-    acceptedForRetrieval: document.acceptedForRetrieval,
-    content: document.content,
-    decision: document.decision,
-    decisionId: document.decisionId,
-    id: document.id,
-    kind: document.kind,
-    knowledgeType: document.knowledgeType,
-    metadata: document.metadata,
-    retrievalLifecycle: document.retrievalLifecycle,
-    score: document.score,
-    sourceRefs: document.sourceRefs,
-    status: document.status,
-    tags: document.tags,
-    title: document.title,
-    trigger: document.trigger,
-    whySelected: document.whySelected,
-  };
-}
-
-function dedupeSearchItems(items: SearchRouteItem[]): SearchRouteItem[] {
-  const seen = new Set<string>();
-  const output: SearchRouteItem[] = [];
-  for (const item of items) {
-    const id = typeof item.id === 'string' ? item.id : '';
-    const key = id || JSON.stringify(item);
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    output.push(item);
-  }
-  return output;
-}
-
-function decisionRegisterContext(view: DecisionRegisterSearchableView | null | undefined) {
-  if (!view) {
-    return null;
-  }
-  return {
-    acceptedDecisionRefs: view.documents
-      .filter((document) => document.acceptedForRetrieval)
-      .map((document) => document.id),
-    auditExcludedCount: view.auditExcludedCount,
-    available: true,
-  };
-}
-
-function buildDecisionRegisterMeta(
-  view: DecisionRegisterSearchableView | null | undefined
-): ResidentSearchMeta['decisionRegister'] {
-  const acceptedDecisionRefs =
-    view?.documents
-      .filter((document) => document.acceptedForRetrieval)
-      .map((document) => document.id)
-      .slice(0, 16) ?? [];
-  return {
-    acceptedCount: acceptedDecisionRefs.length,
-    acceptedDecisionRefs,
-    auditExcludedCount: view?.auditExcludedCount ?? 0,
-    available: Boolean(view),
-    defaultLifecycle: 'active-effective-only',
-    endpoint: '/api/v1/decision-register/searchable',
-    excludedStatuses: ['revoked', 'deleted'],
-    vectorAdmission: 'accepted-only',
-  };
-}
-
 function inferLegacySemanticUsageWithoutRrf(actualMode: string): boolean {
   const normalized = actualMode.toLowerCase();
   return normalized === 'semantic' || normalized.includes('semantic') || normalized === 'hybrid';
@@ -974,6 +584,41 @@ function extractTopScore(items: SearchRouteItem[]): number | null {
 
 function numberFrom(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function readCoreAppliedFilters(
+  coreMeta: SearchResponseMeta | undefined
+): NormalizedSearchFilters | null {
+  const raw = (coreMeta as { appliedFilters?: unknown } | undefined)?.appliedFilters;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const normalized = normalizeSearchFilters(raw as Record<string, unknown>);
+  return hasSearchFilters(normalized) ? normalized : null;
+}
+
+function stringParam(value: string | string[] | boolean | undefined): string | undefined {
+  if (Array.isArray(value)) {
+    return value.find((entry) => entry.trim().length > 0);
+  }
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function stringArrayParam(value: string | string[] | boolean | undefined): string[] | undefined {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => splitStringParam(entry));
+  }
+  if (typeof value === 'string') {
+    return splitStringParam(value);
+  }
+  return undefined;
+}
+
+function splitStringParam(value: string): string[] {
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 /**
@@ -1121,89 +766,23 @@ router.get('/graph/stats', async (req: Request, res: Response): Promise<void> =>
 
 /**
  * POST /api/v1/search/context-aware
- * 上下文感知搜索 — SearchEngine 内置 Ranking Pipeline（CoarseRanker + MultiSignalRanker + ContextBoost）
+ * Retired public search route. Use POST /api/v1/search with explicit filters.
  */
 router.post(
   '/context-aware',
   validate(ContextAwareSearchBody),
   async (req: Request, res: Response): Promise<void> => {
-    const { keyword, limit, language, sessionHistory } = req.body;
     const t0 = Date.now();
-    const container = getServiceContainer();
-    const pageSize = Math.min(limit || 10, 100);
-    let results: Record<string, unknown>[] = [];
-    let source = 'knowledgeService';
-
-    // SearchEngine BM25 + 内置 Ranking Pipeline
-    try {
-      const searchEngine = container.get('searchEngine');
-      const result = await searchEngine.search(keyword, {
-        mode: 'bm25',
-        limit: pageSize,
-        rank: true,
-        context: { intent: 'search', language, sessionHistory: sessionHistory || [] },
-      });
-      const items = result?.items || [];
-      if (items.length > 0) {
-        source = result.ranked ? 'search-engine+ranking' : 'search-engine';
-        results = items.map((r: SearchEngineItem) => {
-          let contentStr = '';
-          try {
-            const c =
-              typeof r.content === 'string' && r.content.startsWith('{')
-                ? JSON.parse(r.content)
-                : r.content || {};
-            contentStr = c.pattern || c.markdown || c.code || '';
-          } catch {
-            contentStr = (r.content || r.code || '') as string;
-          }
-          return {
-            name: `${r.title || r.id}.md`,
-            content: contentStr,
-            similarity: r.score || 0,
-            authority: r.authorityScore || 0,
-            matchType: result.ranked ? 'ranked' : 'bm25',
-            qualityScore: r.qualityScore || 0,
-            usageCount: r.usageCount || 0,
-          };
-        });
-      }
-    } catch (err: unknown) {
-      logger.warn('SearchEngine context-aware 失败，降级到 KnowledgeService', {
-        error: (err as Error).message,
-      });
-    }
-
-    // 降级: SearchEngine 完全不可用时，KnowledgeService SQL LIKE (Dashboard 冷启动)
-    if (results.length === 0) {
-      try {
-        const knowledgeService = container.get('knowledgeService');
-        const list = await knowledgeService.search(keyword, { page: 1, pageSize });
-        const items = list.data || [];
-        results = items.map((r: KnowledgeItem) => ({
-          name: `${r.title || r.id}.md`,
-          content: r.content?.pattern || r.content?.markdown || '',
-          similarity: 1,
-          authority: r.quality?.overall || 0,
-          matchType: 'keyword',
-          qualityScore: r.quality?.overall || 0,
-        }));
-        source = 'knowledgeService';
-      } catch {
-        /* 全部失败 */
-      }
-    }
-
-    const elapsed = Date.now() - t0;
-    res.json({
-      success: true,
+    res.status(410).json({
+      success: false,
+      errorCode: 'UNSUPPORTED_SEARCH_ROUTE',
+      message:
+        'The public context-aware search route is retired. Use /api/v1/search with mode auto, keyword, or semantic and explicit metadata filters.',
       data: {
-        results,
-        context: {},
-        total: results.length,
-        hasAiEvaluation: false,
-        searchTime: elapsed,
-        source,
+        retiredRoute: '/api/v1/search/context-aware',
+        supportedEndpoint: '/api/v1/search',
+        supportedModes: ['auto', 'keyword', 'semantic'],
+        searchTime: Date.now() - t0,
       },
     });
   }

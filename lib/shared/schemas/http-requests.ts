@@ -167,11 +167,19 @@ export const SearchQuery = PaginationQuery.extend({
   type: z
     .enum(['all', 'recipe', 'solution', 'rule', 'candidate', 'decision', 'decision-register'])
     .default('all'),
-  mode: z.enum(['keyword', 'bm25', 'semantic']).default('keyword'),
+  mode: z.enum(['auto', 'keyword', 'semantic']).default('keyword'),
   groupByKind: z
     .enum(['true', 'false'])
     .optional()
     .transform((v) => v === 'true'),
+  category: z.string().optional(),
+  dimensionId: z.string().optional(),
+  kind: z.string().optional(),
+  knowledgeType: z.string().optional(),
+  language: z.string().optional(),
+  scope: z.string().optional(),
+  tag: z.string().optional(),
+  tags: z.union([z.string(), z.array(z.string())]).optional(),
 });
 
 export const ResidentSearchBody = z
@@ -181,21 +189,20 @@ export const ResidentSearchBody = z
     type: z
       .enum(['all', 'recipe', 'solution', 'rule', 'candidate', 'decision', 'decision-register'])
       .default('all'),
-    mode: z.enum(['keyword', 'bm25', 'semantic', 'auto']).default('keyword'),
+    mode: z.enum(['auto', 'keyword', 'semantic']).default('keyword'),
     page: z.number().int().min(1).default(1),
     limit: z.number().int().min(1).max(100).default(20),
     groupByKind: z.boolean().default(false),
+    category: z.string().optional(),
+    dimensionId: z.string().optional(),
+    filters: MetadataRecord.optional(),
+    kind: z.string().optional(),
+    knowledgeType: z.string().optional(),
     language: z.string().optional(),
-    sessionHistory: z.array(MetadataRecord).optional(),
-    sourceRefs: z.array(z.string().min(1)).max(50).optional(),
-    confidence: z.number().min(0).max(1).optional(),
-    degraded: z.boolean().optional(),
-    degradedReason: z.string().optional(),
-    searchIntent: z.string().optional(),
-    scenario: z.string().optional(),
-    hostDeclaredIntent: MetadataRecord.optional(),
-    hostTurnMeta: MetadataRecord.optional(),
-    intentContext: MetadataRecord.optional(),
+    rank: z.boolean().optional(),
+    scope: z.string().optional(),
+    tag: z.string().optional(),
+    tags: z.array(z.string()).optional(),
   })
   .refine((data) => Boolean(data.q || data.query), {
     message: 'Either q or query is required',

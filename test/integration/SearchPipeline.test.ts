@@ -7,7 +7,7 @@
  * 注意: 使用独立 DB 避免与其他集成测试的数据竞争。
  */
 
-import { BM25Scorer, SearchEngine, tokenize } from '@alembic/core/search';
+import { SearchEngine, tokenize } from '@alembic/core/search';
 import Database from 'better-sqlite3';
 import { vi } from 'vitest';
 
@@ -73,7 +73,7 @@ function createInMemoryDb() {
 }
 
 describe('Integration: Search Pipeline', () => {
-  let db;
+  let db: ReturnType<typeof createInMemoryDb>;
 
   beforeAll(() => {
     db = createInMemoryDb();
@@ -115,48 +115,10 @@ describe('Integration: Search Pipeline', () => {
     });
   });
 
-  // ── BM25Scorer 独立测试 ───────────────────────────────
-
-  describe('BM25Scorer 评分排序', () => {
-    let scorer;
-
-    beforeEach(() => {
-      scorer = new BM25Scorer();
-    });
-
-    it('应按相关性排序', () => {
-      scorer.addDocument('r1', 'Swift URLSession networking request');
-      scorer.addDocument('r2', 'Swift TableView delegate datasource');
-      scorer.addDocument('r3', 'URLSession download upload networking');
-
-      const results = scorer.search('URLSession networking');
-      expect(results.length).toBeGreaterThanOrEqual(2);
-      // r1 和 r3 都双词命中，应出现在结果中
-      const resultIds = results.map((r) => r.id);
-      expect(resultIds).toContain('r1');
-      expect(resultIds).toContain('r3');
-      // r2 无匹配词，不应出现在结果中
-      expect(resultIds).not.toContain('r2');
-    });
-
-    it('无匹配时返回空', () => {
-      scorer.addDocument('r1', 'Swift class');
-      const results = scorer.search('Python Django');
-      expect(results).toHaveLength(0);
-    });
-
-    it('clear 后索引为空', () => {
-      scorer.addDocument('r1', 'Swift class');
-      scorer.clear();
-      expect(scorer.totalDocs).toBe(0);
-      expect(scorer.search('Swift')).toHaveLength(0);
-    });
-  });
-
   // ── SearchEngine 端到端 ───────────────────────────────
 
   describe('SearchEngine 端到端搜索', () => {
-    let engine;
+    let engine: SearchEngine;
 
     /** 向 knowledge_entries 表插入测试条目 */
     function seedEntry(overrides = {}) {

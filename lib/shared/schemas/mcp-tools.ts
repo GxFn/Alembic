@@ -29,16 +29,16 @@ type RecipeScope = 'universal' | 'project-specific' | 'target-specific';
 
 interface SearchInputValue {
   query: string;
-  mode: 'auto' | 'keyword' | 'bm25' | 'semantic' | 'context';
+  mode: 'auto' | 'keyword' | 'semantic';
   kind: KnowledgeKind;
   limit: number;
-  activeFile?: string;
+  category?: string;
+  dimensionId?: string;
+  filters?: Record<string, unknown>;
+  knowledgeType?: string;
   language?: string;
-  sessionId?: string;
-  sessionHistory?: Array<Record<string, unknown>>;
-  hostDeclaredIntent?: Record<string, unknown>;
-  hostTurnMeta?: Record<string, unknown>;
-  intentContext?: Record<string, unknown>;
+  scope?: string;
+  tags?: string[];
 }
 
 interface KnowledgeInputValue {
@@ -150,33 +150,23 @@ export type HealthInput = z.infer<typeof HealthInput>;
 export const SearchInput = z.object({
   query: z.string().min(1, 'query is required').describe('搜索关键词或自然语言描述'),
   mode: z
-    .enum(['auto', 'keyword', 'bm25', 'semantic', 'context'])
+    .enum(['auto', 'keyword', 'semantic'])
     .default('auto')
     .describe(
-      'auto=自动选策略 | keyword=精确匹配 | bm25=全文检索 | semantic=向量语义 | context=综合+上下文'
+      'auto=关键词/过滤 + 可用语义通道 | keyword=直接关键词/过滤 | semantic=resident 语义通道'
     ),
   kind: KindEnum.default('all').describe('过滤知识类型: all/rule/pattern/fact'),
   limit: z.number().int().min(1).max(100).default(10),
-  activeFile: z.string().optional().describe('Currently active file path in IDE'),
+  category: z.string().optional().describe('按 Recipe category 过滤'),
+  dimensionId: z.string().optional().describe('按 Alembic dimensionId 过滤'),
+  filters: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe('显式 Recipe/knowledge metadata filters'),
+  knowledgeType: z.string().optional().describe('按 knowledgeType 过滤'),
   language: z.string().optional().describe('按编程语言过滤，如 swift/typescript'),
-  sessionId: z.string().optional(),
-  sessionHistory: z.array(z.record(z.string(), z.unknown())).optional(),
-  hostDeclaredIntent: z
-    .record(z.string(), z.unknown())
-    .optional()
-    .describe(
-      'Optional Plugin-provided host intent frame; Alembic consumes only an allowlisted subset'
-    ),
-  hostTurnMeta: z
-    .record(z.string(), z.unknown())
-    .optional()
-    .describe(
-      'Optional Plugin-provided turn metadata; raw thread ids and private host payloads are not required'
-    ),
-  intentContext: z
-    .record(z.string(), z.unknown())
-    .optional()
-    .describe('Optional normalized intent context for backward-compatible Plugin/Alembic handoff'),
+  scope: z.string().optional().describe('按 Recipe scope 过滤'),
+  tags: z.array(z.string()).optional().describe('按 tags 过滤，多个 tag 为 OR'),
 }) as unknown as z.ZodType<SearchInputValue>;
 export type SearchInput = z.infer<typeof SearchInput>;
 

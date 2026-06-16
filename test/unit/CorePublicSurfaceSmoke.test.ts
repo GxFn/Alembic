@@ -6,15 +6,15 @@ import { createGuardCheckEngine, detectLanguage } from '@alembic/core/guard';
 import { KnowledgeEntry, KnowledgeService, Lifecycle } from '@alembic/core/knowledge';
 import {
   analyzeSourceFile,
-  CallGraphAnalyzer,
   detectConflict,
+  ensureProjectGrammarResources,
   extractXcodeGenDependencyEdges,
   parseGradleProject,
   parseStarlarkBuildFile,
   parseXcodeGenProject,
   profileTechStack,
 } from '@alembic/core/project-intelligence';
-import { BM25Scorer, SearchEngine, tokenize } from '@alembic/core/search';
+import { SearchEngine, tokenize } from '@alembic/core/search';
 import { chunk, HnswIndex } from '@alembic/core/vector';
 import { resolveKnowledgeScanDirs, WorkspaceResolver } from '@alembic/core/workspace';
 import { describe, expect, it } from 'vitest';
@@ -70,18 +70,15 @@ describe('Core public surface smoke', () => {
   });
 
   it('keeps search facade consumable without duplicating Core ranking tests', () => {
-    const scorer = new BM25Scorer();
-    scorer.addDocument('doc-1', 'URLSession retry policy', { title: 'Network retry' });
-
     const db = { prepare: () => ({ all: () => [] }) };
     const search = new SearchEngine(db);
 
     expect(tokenize('URLSessionRetry')).toEqual(expect.arrayContaining(['url', 'session']));
-    expect(scorer.search('retry', 1)[0]?.id).toBe('doc-1');
-    expect(search).toBeDefined();
+    expect(typeof search.search).toBe('function');
   });
 
-  it('keeps AST, call graph, and parser facades consumable from Alembic', () => {
+  it('keeps AST and parser facades consumable from Alembic', async () => {
+    await ensureProjectGrammarResources({ ts: 1 });
     const summary = analyzeSourceFile(
       'export class UserService { findUser(id: string) { return id; } }',
       'typescript'
@@ -90,7 +87,6 @@ describe('Core public surface smoke', () => {
     const starlark = parseStarlarkBuildFile('swift_library(name = "Core", deps = [":Utils"])');
 
     expect(summary?.classes.some((item) => item.name === 'UserService')).toBe(true);
-    expect(new CallGraphAnalyzer('/project')).toBeDefined();
     expect(gradle.includedModules.map((module) => module.path)).toEqual([':app', ':core']);
     expect(starlark.targets[0]?.name).toBe('Core');
   });

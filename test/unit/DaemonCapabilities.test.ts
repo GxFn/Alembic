@@ -118,7 +118,7 @@ describe('daemon capabilities', () => {
     expect(buildResidentSearchCapability()).toEqual({
       available: true,
       endpoint: '/api/v1/search',
-      modes: ['keyword', 'bm25', 'semantic'],
+      modes: ['auto', 'keyword', 'semantic'],
       owner: 'alembic',
       route: 'resident-search',
       telemetry: {

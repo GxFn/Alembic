@@ -785,13 +785,9 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
       query: 'decision register scope',
       items: [{ id: 'knowledge-alpha', kind: 'pattern', title: 'Boundary rule' }],
       searchMeta: {
-        actualMode: 'bm25',
-        decisionRegister: {
-          acceptedDecisionRefs: ['decision-alpha'],
-          defaultLifecycle: 'active-effective-only',
-          endpoint: '/api/v1/decision-register/searchable',
-          vectorAdmission: 'accepted-only',
-        },
+        actualMode: 'keyword',
+        appliedFilters: { language: 'typescript' },
+        semanticUsed: false,
         vectorUsed: false,
       },
     },
@@ -803,11 +799,7 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
       totalResults: 0,
       searchMeta: {
         actualMode: 'legacy-fallback',
-        decisionRegister: {
-          defaultLifecycle: 'active-effective-only',
-          endpoint: '/api/v1/decision-register/searchable',
-          vectorAdmission: 'accepted-only',
-        },
+        appliedFilters: {},
         degraded: true,
         degradedReason:
           'SearchEngine unavailable; resident service used legacy non-vector fallback',

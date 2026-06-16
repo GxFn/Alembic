@@ -39,7 +39,7 @@ const API_PREFIX = '/api/v1';
 export interface ResidentSearchCapability {
   available: boolean;
   endpoint: string;
-  modes: Array<'keyword' | 'bm25' | 'semantic'>;
+  modes: Array<'auto' | 'keyword' | 'semantic'>;
   owner: 'alembic';
   route: 'resident-search';
   telemetry: {
@@ -264,7 +264,7 @@ export function buildResidentServiceStatus(
     },
     'search.keyword': {
       available: true,
-      message: 'Alembic resident search supports keyword and BM25-compatible modes.',
+      message: 'Alembic resident search supports auto, keyword, and explicit filter modes.',
     },
     'search.semantic': {
       available: true,
@@ -337,7 +337,7 @@ export function buildResidentSearchCapability(): ResidentSearchCapability {
   return {
     available: true,
     endpoint: `${API_PREFIX}/search`,
-    modes: ['keyword', 'bm25', 'semantic'],
+    modes: ['auto', 'keyword', 'semantic'],
     owner: 'alembic',
     route: 'resident-search',
     telemetry: {
