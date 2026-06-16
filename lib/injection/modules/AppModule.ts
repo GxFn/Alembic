@@ -5,7 +5,7 @@
  *   - recipeParser, recipeCandidateValidator
  *   - qualityScorer, feedbackCollector, tokenUsageStore, recipeExtractor
  *   - moduleService
- *   - primeSearchPipeline (for prime multi-query search — no DB dependency)
+ *   - primeSearchPipeline (for prime multi-query search + optional resident vector evidence)
  */
 
 import { RecipeExtractor } from '@alembic/core/knowledge';
@@ -68,13 +68,20 @@ export function register(c: ServiceContainer) {
     );
   });
 
-  // ═══ PrimeSearchPipeline (for prime multi-query search) ═══
+  // ═══ PrimeSearchPipeline (for prime multi-query search + resident region evidence) ═══
 
   c.singleton(
     'primeSearchPipeline',
     (ct: ServiceContainer) =>
       new PrimeSearchPipeline(
-        ct.get('searchEngine') as unknown as ConstructorParameters<typeof PrimeSearchPipeline>[0]
+        ct.get('searchEngine') as unknown as ConstructorParameters<typeof PrimeSearchPipeline>[0],
+        {
+          vectorService: ct.services.vectorService
+            ? (ct.get('vectorService') as NonNullable<
+                ConstructorParameters<typeof PrimeSearchPipeline>[1]
+              >['vectorService'])
+            : null,
+        }
       )
   );
 }

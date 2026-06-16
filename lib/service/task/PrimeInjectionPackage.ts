@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { RecipeSemanticRegionClass } from '@alembic/core/vector';
 import type { SearchModeLabel } from '../../shared/semantic-taxonomy.js';
 import type {
   IntentEvidence,
@@ -22,6 +23,8 @@ export interface PrimeSelectedKnowledge {
   itemId: string;
   kind?: string;
   knowledgeType?: string;
+  matchedRegionClasses?: RecipeSemanticRegionClass[];
+  matchedRegions?: PrimeMatchedRegionEvidence[];
   rank: number;
   score: number | null;
   scoreBreakdown?: IntentScoreBreakdown;
@@ -29,6 +32,42 @@ export interface PrimeSelectedKnowledge {
   title?: string;
   trigger?: string;
   whySelected: string[];
+}
+
+export interface PrimeMatchedRegionEvidence {
+  regionClass: RecipeSemanticRegionClass;
+  score: number;
+  snippet: string;
+  sourceRefs: string[];
+  sourceRefsBridge?: string;
+  vectorId: string;
+}
+
+export interface PrimeResidentRegionRecipeEvidence {
+  matchedRegionClasses: RecipeSemanticRegionClass[];
+  matchedRegions: PrimeMatchedRegionEvidence[];
+  recipeId: string;
+  score: number;
+  sourceRefs: string[];
+  title?: string;
+  trigger?: string;
+}
+
+export interface PrimeResidentRegionRetrieval {
+  attempted: boolean;
+  degradedReasons: string[];
+  metadataOnlyFallback: {
+    attempted: boolean;
+    reason?: string;
+    used: boolean;
+  };
+  queryCount: number;
+  regionHitCount: number;
+  route: 'resident-vector-recipe-semantic-region';
+  selectedRecipes: PrimeResidentRegionRecipeEvidence[];
+  used: boolean;
+  vectorAvailable: boolean;
+  wholeEntryOnlyRejectedCount: number;
 }
 
 export interface PrimeInjectionOmission {
@@ -77,6 +116,7 @@ export interface PrimeInjectionPackage {
     evidence: RelationEvidence[];
     omitted: string[];
   };
+  residentRegionRetrieval?: PrimeResidentRegionRetrieval;
   retrievalQuality: {
     decisionRefCount: number;
     feedbackSignalCount: number;
@@ -147,6 +187,7 @@ export interface BuildPrimeInjectionPackageOptions {
     requestedMode?: string;
     resultCount?: number;
   };
+  residentRegionRetrieval?: PrimeResidentRegionRetrieval;
   semanticUsed?: boolean;
   vectorAvailable?: boolean;
   vectorUsed?: boolean;
@@ -178,6 +219,7 @@ export function buildPrimeInjectionPackage(
     ...selectedKnowledge
       .filter((item) => item.injectionStatus === 'candidate')
       .map((item) => `selectedKnowledge:${item.itemId}:sourceRefs-missing`),
+    ...(options.residentRegionRetrieval?.degradedReasons ?? []),
   ]).slice(0, MAX_OMITTED);
   const status = resolveInjectionStatus({
     degradedReasons,
@@ -221,6 +263,9 @@ export function buildPrimeInjectionPackage(
       evidence: (evidence?.relationEvidence ?? []).slice(0, 12),
       omitted: relationOmissions(evidence),
     },
+    ...(options.residentRegionRetrieval
+      ? { residentRegionRetrieval: options.residentRegionRetrieval }
+      : {}),
     retrievalQuality,
     search: {
       ...(options.search?.actualMode ? { actualMode: options.search.actualMode } : {}),
@@ -335,6 +380,7 @@ function buildSelectedKnowledge(
     if (!itemId) {
       return [];
     }
+    const regionEvidence = collectResidentRegionEvidence(item);
     const scoreBreakdown = scoreById.get(itemId);
     const sourceRefs = collectItemSourceRefs(item);
     const evidenceRefs = uniqueStrings([
@@ -357,6 +403,12 @@ function buildSelectedKnowledge(
         ...(stringValue(item.kind) ? { kind: stringValue(item.kind) } : {}),
         ...(stringValue(item.knowledgeType)
           ? { knowledgeType: stringValue(item.knowledgeType) }
+          : {}),
+        ...(regionEvidence
+          ? {
+              matchedRegionClasses: regionEvidence.matchedRegionClasses,
+              matchedRegions: regionEvidence.matchedRegions,
+            }
           : {}),
         rank: index + 1,
         score: numberValue(item.score),
@@ -388,6 +440,9 @@ function buildOmitted(
   }
   for (const reason of evidence?.degradedReasons ?? []) {
     omitted.push({ reason, source: 'intentEvidence' });
+  }
+  for (const reason of options.residentRegionRetrieval?.degradedReasons ?? []) {
+    omitted.push({ reason, source: 'residentRegionRetrieval' });
   }
   for (const item of selectedKnowledge) {
     if (item.sourceRefs.length === 0) {
@@ -497,6 +552,60 @@ function collectItemSourceRefs(item: PrimeInjectionItem): string[] {
   ])
     .map(redactRef)
     .slice(0, 8);
+}
+
+function collectResidentRegionEvidence(
+  item: PrimeInjectionItem
+): PrimeResidentRegionRecipeEvidence | null {
+  const metadata = asRecord(item.metadata);
+  const evidence = asRecord(metadata?.residentRegionEvidence);
+  const recipeId = stringValue(evidence?.recipeId) ?? stringValue(item.id);
+  const matchedRegions = Array.isArray(evidence?.matchedRegions)
+    ? evidence.matchedRegions.flatMap((region) => {
+        const record = asRecord(region);
+        const regionClass = stringValue(record?.regionClass) as
+          | RecipeSemanticRegionClass
+          | undefined;
+        const vectorId = stringValue(record?.vectorId);
+        const snippet = stringValue(record?.snippet);
+        const score = numberValue(record?.score);
+        if (!regionClass || !vectorId || !snippet || score === null) {
+          return [];
+        }
+        const matchedRegion: PrimeMatchedRegionEvidence = {
+          regionClass,
+          score,
+          snippet,
+          sourceRefs: stringsFrom(record?.sourceRefs).map(redactRef).slice(0, 8),
+          ...(stringValue(record?.sourceRefsBridge)
+            ? { sourceRefsBridge: stringValue(record?.sourceRefsBridge) }
+            : {}),
+          vectorId,
+        };
+        return [matchedRegion];
+      })
+    : [];
+  const matchedRegionClasses = uniqueStrings([
+    ...stringsFrom(evidence?.matchedRegionClasses),
+    ...matchedRegions.map((region) => region.regionClass),
+  ]) as RecipeSemanticRegionClass[];
+  if (!recipeId || matchedRegions.length === 0) {
+    return null;
+  }
+  return {
+    matchedRegionClasses,
+    matchedRegions,
+    recipeId,
+    score: numberValue(evidence?.score) ?? numberValue(item.score) ?? 0,
+    sourceRefs: uniqueStrings([
+      ...stringsFrom(evidence?.sourceRefs),
+      ...matchedRegions.flatMap((region) => region.sourceRefs),
+    ])
+      .map(redactRef)
+      .slice(0, 12),
+    ...(stringValue(evidence?.title) ? { title: stringValue(evidence?.title) } : {}),
+    ...(stringValue(evidence?.trigger) ? { trigger: stringValue(evidence?.trigger) } : {}),
+  };
 }
 
 function dedupeOmitted(omitted: PrimeInjectionOmission[]): PrimeInjectionOmission[] {

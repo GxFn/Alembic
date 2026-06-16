@@ -10,7 +10,10 @@ import {
 import path from 'node:path';
 import type { IntentEvidence } from './IntentEvidence.js';
 import type { IntentSearchPlan } from './IntentSearchPlan.js';
-import type { PrimeInjectionPackage } from './PrimeInjectionPackage.js';
+import type {
+  PrimeInjectionPackage,
+  PrimeResidentRegionRetrieval,
+} from './PrimeInjectionPackage.js';
 
 export type IntentEpisodeStatus = 'active' | 'completed' | 'failed' | 'abandoned';
 
@@ -54,6 +57,7 @@ export interface IntentEpisodeSearchMeta {
   intentSearchPlan?: IntentSearchPlan | Record<string, unknown>;
   primeInjectionPackage?: PrimeInjectionPackage | Record<string, unknown>;
   queries?: string[];
+  residentRegionRetrieval?: PrimeResidentRegionRetrieval | Record<string, unknown>;
   resultCount?: number;
 }
 
@@ -444,6 +448,9 @@ function sanitizeSearchMeta(
       ? { primeInjectionPackage: sanitizePrimeInjectionPackageMeta(value.primeInjectionPackage) }
       : {}),
     queries: stringsFrom(value.queries).slice(0, 8),
+    ...(value.residentRegionRetrieval && typeof value.residentRegionRetrieval === 'object'
+      ? { residentRegionRetrieval: sanitizeRecord(value.residentRegionRetrieval, 12) }
+      : {}),
     ...(typeof value.resultCount === 'number' && Number.isFinite(value.resultCount)
       ? { resultCount: Math.max(0, Math.floor(value.resultCount)) }
       : {}),
@@ -503,6 +510,9 @@ function sanitizePrimeInjectionPackageMeta(value: object): Record<string, unknow
     },
     search: sanitizeRecord(pkg.search, 12),
     selectedKnowledge: arrayRecords(pkg.selectedKnowledge).slice(0, 8),
+    ...(pkg.residentRegionRetrieval && typeof pkg.residentRegionRetrieval === 'object'
+      ? { residentRegionRetrieval: sanitizeRecord(pkg.residentRegionRetrieval, 12) }
+      : {}),
     trace: sanitizeRecord(pkg.trace, 12),
     vector: {
       ...sanitizeRecord(vector, 12),

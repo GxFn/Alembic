@@ -12,7 +12,10 @@ import type {
 } from '@alembic/core/types';
 import type { IntentEvidence } from '../../service/task/IntentEvidence.js';
 import type { IntentSearchPlan } from '../../service/task/IntentSearchPlan.js';
-import type { PrimeInjectionPackage } from '../../service/task/PrimeInjectionPackage.js';
+import type {
+  PrimeInjectionPackage,
+  PrimeResidentRegionRetrieval,
+} from '../../service/task/PrimeInjectionPackage.js';
 
 // ─── DI Container (minimal shape) ────────────────────────
 
@@ -84,6 +87,7 @@ export interface IntentState {
     intentEvidence?: IntentEvidence;
     intentSearchPlan?: IntentSearchPlan;
     primeInjectionPackage?: PrimeInjectionPackage;
+    residentRegionRetrieval?: PrimeResidentRegionRetrieval;
   };
 
   // ─── Anchor (set after create) ───
@@ -150,6 +154,7 @@ export interface IntentChainRecord {
     intentEvidence?: IntentEvidence;
     intentSearchPlan?: IntentSearchPlan;
     primeInjectionPackage?: PrimeInjectionPackage;
+    residentRegionRetrieval?: PrimeResidentRegionRetrieval;
   };
 
   toolCalls: ToolCallRecord[];

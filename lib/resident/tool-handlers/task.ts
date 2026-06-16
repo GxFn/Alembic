@@ -32,6 +32,7 @@ import {
 } from '../../service/task/IntentEvidence.js';
 import {
   buildIntentSearchPlan,
+  type IntentSearchPlan,
   summarizeIntentSearchPlan,
 } from '../../service/task/IntentSearchPlan.js';
 import { buildPrimeInjectionPackage } from '../../service/task/PrimeInjectionPackage.js';
@@ -180,64 +181,14 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
     rawQuery: args.userQuery ?? hostIntentContext.userQuery,
   });
 
-  // ─── Enrichment: multi-query search via PrimeSearchPipeline ───
-  const pipeline = _getPipeline(ctx.container);
-  let searchResult: PrimeSearchResult | null = null;
-  if (pipeline && extracted.queries[0]?.trim()) {
-    try {
-      searchResult = await pipeline.search(extracted, {
-        hostIntent: hostIntentMeta,
-        intentSearchPlan,
-        sessionHistory: hostIntentContext.sessionHistory,
-      });
-      if (searchResult) {
-        searchResult.searchMeta.intentEvidence = await buildIntentEvidence({
-          actualMode: 'prime',
-          intentSearchPlan,
-          items: [...searchResult.relatedKnowledge, ...searchResult.guardRules],
-          relationProvider: _getRelationProvider(ctx.container),
-          requestedMode: 'prime',
-          semanticUsed: false,
-          vectorUsed: false,
-        });
-        searchResult.searchMeta.primeInjectionPackage = buildPrimeInjectionPackage({
-          hostIntent: hostIntentMeta,
-          intentEvidence: searchResult.searchMeta.intentEvidence,
-          intentSearchPlan,
-          items: [...searchResult.relatedKnowledge, ...searchResult.guardRules],
-          search: {
-            actualMode: 'prime',
-            filteredCount: searchResult.searchMeta.filteredCount,
-            query: hostIntentContext.userQuery || '',
-            queries: searchResult.searchMeta.queries,
-            requestedMode: 'prime',
-            resultCount: searchResult.searchMeta.resultCount,
-          },
-          semanticUsed: false,
-          vectorUsed: false,
-        });
-      }
-      if (!searchResult) {
-        process.stderr.write(
-          '[ResidentTool/Task] prime: pipeline.search returned null (all filtered)\n'
-        );
-      }
-    } catch (err: unknown) {
-      process.stderr.write(
-        `[ResidentTool/Task] prime search error: ${
-          err instanceof Error ? err.stack || err.message : String(err)
-        }\n`
-      );
-    }
-  } else if (!pipeline) {
-    process.stderr.write('[ResidentTool/Task] prime: pipeline is null, skipping search\n');
-  } else {
-    process.stderr.write(
-      `[ResidentTool/Task] prime: queries empty, skipping search. queries=${JSON.stringify(
-        extracted.queries
-      )}\n`
-    );
-  }
+  const searchResult = await _runPrimeSearch({
+    ctx,
+    extracted,
+    hostIntentMeta,
+    intentSearchPlan,
+    query: hostIntentContext.userQuery || '',
+    sessionHistory: hostIntentContext.sessionHistory,
+  });
 
   // ─── Lifecycle: initialize IntentState ───
   const freshIntent = createIdleIntent();
@@ -249,24 +200,7 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
   freshIntent.primeScenario = extracted.scenario;
   freshIntent.primeAt = Date.now();
 
-  if (searchResult) {
-    freshIntent.primeRecipeIds = [...searchResult.relatedKnowledge, ...searchResult.guardRules]
-      .map((r) => r.id)
-      .filter(Boolean);
-    freshIntent.searchMeta = {
-      queries: searchResult.searchMeta.queries,
-      resultCount: searchResult.searchMeta.resultCount,
-      filteredCount: searchResult.searchMeta.filteredCount,
-      hostIntentApplied: searchResult.searchMeta.hostIntentApplied,
-      hostIntentConfidence: searchResult.searchMeta.hostIntentConfidence,
-      hostIntentDegraded: searchResult.searchMeta.hostIntentDegraded,
-      hostIntentDegradedReason: searchResult.searchMeta.hostIntentDegradedReason,
-      hostIntentSourceRefs: searchResult.searchMeta.hostIntentSourceRefs,
-      intentEvidence: searchResult.searchMeta.intentEvidence,
-      intentSearchPlan: searchResult.searchMeta.intentSearchPlan,
-      primeInjectionPackage: searchResult.searchMeta.primeInjectionPackage,
-    };
-  }
+  _bindPrimeSearchResult(freshIntent, searchResult);
 
   const episode = _startIntentEpisode(ctx, {
     activeFile: hostIntentContext.activeFile,
@@ -291,27 +225,6 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
     ctx.session.intent = freshIntent;
   }
 
-  // ─── Delivery: build response ───
-  const relatedKnowledge = searchResult?.relatedKnowledge ?? [];
-  const guardRules = searchResult?.guardRules ?? [];
-  const relatedCount = relatedKnowledge.length;
-  const ruleCount = guardRules.length;
-
-  const lines: string[] = [];
-  if (relatedCount > 0 || ruleCount > 0) {
-    lines.push(`📋 Found ${relatedCount} recipe(s), ${ruleCount} guard rule(s).`);
-    for (const r of relatedKnowledge) {
-      const hint = r.actionHint ? ` — ${r.actionHint}` : '';
-      const refs = r.sourceRefs?.length ? `\n    📍 ${r.sourceRefs.join(', ')}` : '';
-      lines.push(`  • ${r.trigger || r.title}${hint}${refs}`);
-    }
-    for (const r of guardRules) {
-      lines.push(`  • [rule] ${r.trigger || r.title}`);
-    }
-  } else {
-    lines.push('No matching recipes found.');
-  }
-
   return envelope({
     success: true,
     data: {
@@ -334,9 +247,154 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
       intentContext: hostIntentMeta,
       _taskRules,
     },
-    message: lines.join('\n'),
+    message: _primeMessage(searchResult),
     meta: { tool: 'alembic_task' },
   });
+}
+
+async function _runPrimeSearch({
+  ctx,
+  extracted,
+  hostIntentMeta,
+  intentSearchPlan,
+  query,
+  sessionHistory,
+}: {
+  ctx: McpContext;
+  extracted: ExtractedIntent;
+  hostIntentMeta: ReturnType<typeof createHostIntentContextMeta>;
+  intentSearchPlan: IntentSearchPlan;
+  query: string;
+  sessionHistory: PrimeSearchOptions['sessionHistory'];
+}): Promise<PrimeSearchResult | null> {
+  const pipeline = _getPipeline(ctx.container);
+  if (!pipeline) {
+    process.stderr.write('[ResidentTool/Task] prime: pipeline is null, skipping search\n');
+    return null;
+  }
+  if (!extracted.queries[0]?.trim()) {
+    process.stderr.write(
+      `[ResidentTool/Task] prime: queries empty, skipping search. queries=${JSON.stringify(
+        extracted.queries
+      )}\n`
+    );
+    return null;
+  }
+
+  try {
+    const searchResult = await pipeline.search(extracted, {
+      hostIntent: hostIntentMeta,
+      intentSearchPlan,
+      sessionHistory,
+    });
+    if (!searchResult) {
+      process.stderr.write(
+        '[ResidentTool/Task] prime: pipeline.search returned null (all filtered)\n'
+      );
+      return null;
+    }
+    await _refreshPrimeSearchMeta({ ctx, hostIntentMeta, intentSearchPlan, query, searchResult });
+    return searchResult;
+  } catch (err: unknown) {
+    process.stderr.write(
+      `[ResidentTool/Task] prime search error: ${
+        err instanceof Error ? err.stack || err.message : String(err)
+      }\n`
+    );
+    return null;
+  }
+}
+
+async function _refreshPrimeSearchMeta({
+  ctx,
+  hostIntentMeta,
+  intentSearchPlan,
+  query,
+  searchResult,
+}: {
+  ctx: McpContext;
+  hostIntentMeta: ReturnType<typeof createHostIntentContextMeta>;
+  intentSearchPlan: IntentSearchPlan;
+  query: string;
+  searchResult: PrimeSearchResult;
+}): Promise<void> {
+  const regionMeta = searchResult.searchMeta.residentRegionRetrieval;
+  const regionUsed = regionMeta?.used === true;
+  const items = [...searchResult.relatedKnowledge, ...searchResult.guardRules];
+  searchResult.searchMeta.intentEvidence = await buildIntentEvidence({
+    actualMode: 'prime',
+    intentSearchPlan,
+    items,
+    relationProvider: _getRelationProvider(ctx.container),
+    requestedMode: 'prime',
+    semanticUsed: regionUsed,
+    vectorAvailable: regionMeta?.vectorAvailable,
+    vectorUsed: regionUsed,
+  });
+  searchResult.searchMeta.primeInjectionPackage = buildPrimeInjectionPackage({
+    hostIntent: hostIntentMeta,
+    intentEvidence: searchResult.searchMeta.intentEvidence,
+    intentSearchPlan,
+    items,
+    search: {
+      actualMode: 'prime',
+      filteredCount: searchResult.searchMeta.filteredCount,
+      query,
+      queries: searchResult.searchMeta.queries,
+      requestedMode: 'prime',
+      resultCount: searchResult.searchMeta.resultCount,
+    },
+    residentRegionRetrieval: regionMeta,
+    semanticUsed: regionUsed,
+    vectorAvailable: regionMeta?.vectorAvailable,
+    vectorUsed: regionUsed,
+  });
+}
+
+function _bindPrimeSearchResult(intent: IntentState, searchResult: PrimeSearchResult | null): void {
+  if (!searchResult) {
+    return;
+  }
+  intent.primeRecipeIds = [...searchResult.relatedKnowledge, ...searchResult.guardRules]
+    .map((r) => r.id)
+    .filter(Boolean);
+  intent.searchMeta = {
+    queries: searchResult.searchMeta.queries,
+    resultCount: searchResult.searchMeta.resultCount,
+    filteredCount: searchResult.searchMeta.filteredCount,
+    hostIntentApplied: searchResult.searchMeta.hostIntentApplied,
+    hostIntentConfidence: searchResult.searchMeta.hostIntentConfidence,
+    hostIntentDegraded: searchResult.searchMeta.hostIntentDegraded,
+    hostIntentDegradedReason: searchResult.searchMeta.hostIntentDegradedReason,
+    hostIntentSourceRefs: searchResult.searchMeta.hostIntentSourceRefs,
+    intentEvidence: searchResult.searchMeta.intentEvidence,
+    intentSearchPlan: searchResult.searchMeta.intentSearchPlan,
+    primeInjectionPackage: searchResult.searchMeta.primeInjectionPackage,
+    residentRegionRetrieval: searchResult.searchMeta.residentRegionRetrieval,
+  };
+}
+
+function _primeMessage(searchResult: PrimeSearchResult | null): string {
+  const relatedKnowledge = searchResult?.relatedKnowledge ?? [];
+  const guardRules = searchResult?.guardRules ?? [];
+  const relatedCount = relatedKnowledge.length;
+  const ruleCount = guardRules.length;
+  const lines: string[] = [];
+
+  if (relatedCount === 0 && ruleCount === 0) {
+    return 'No matching recipes found.';
+  }
+
+  lines.push(`📋 Found ${relatedCount} recipe(s), ${ruleCount} guard rule(s).`);
+  for (const r of relatedKnowledge) {
+    const hint = r.actionHint ? ` — ${r.actionHint}` : '';
+    const refs = r.sourceRefs?.length ? `\n    📍 ${r.sourceRefs.join(', ')}` : '';
+    lines.push(`  • ${r.trigger || r.title}${hint}${refs}`);
+  }
+  for (const r of guardRules) {
+    lines.push(`  • [rule] ${r.trigger || r.title}`);
+  }
+  return lines.join('\n');
 }
 
 // ═══ create ═════════════════════════════════════════════
