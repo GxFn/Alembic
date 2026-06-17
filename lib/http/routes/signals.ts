@@ -8,7 +8,7 @@
  */
 
 import type { SignalTraceWriter } from '@alembic/core/events';
-import type { ReportStore } from '@alembic/core/infrastructure/report';
+import type { ReportStore } from '@alembic/core/report';
 import express, { type Request, type Response } from 'express';
 import { z } from 'zod';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';

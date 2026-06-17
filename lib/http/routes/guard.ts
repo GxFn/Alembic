@@ -225,16 +225,16 @@ async function _getEngine(
   }
 
   // 注入 Enhancement Pack Guard 规则
+  // RIC-4 (§A=a): consume enhancement Guard rules through the high-level
+  // @alembic/core/guard facade instead of the low-level core/enhancement registry.
+  // resolveEnhancementGuardRules() (no options) == registry.all().flatMap(getGuardRules)
+  // — behavior-identical; it returns [] gracefully when the registry is unavailable.
   if (!engine.isEpInjected()) {
     try {
-      const { getEnhancementRegistry } = await import('@alembic/core/core/enhancement');
-      const registry = getEnhancementRegistry();
-      if (registry) {
-        const packs = registry.all();
-        const guardRules = packs.flatMap((pack) => pack.getGuardRules());
-        engine.injectExternalRules(guardRules);
-        engine.markEpInjected();
-      }
+      const { resolveEnhancementGuardRules } = await import('@alembic/core/guard');
+      const guardRules = resolveEnhancementGuardRules();
+      engine.injectExternalRules(guardRules);
+      engine.markEpInjected();
     } catch {
       /* EP not available */
     }

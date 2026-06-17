@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Signal } from '@alembic/core/events';
 import { SignalAggregator, SignalBridge, SignalBus, SignalTraceWriter } from '@alembic/core/events';
-import type { ReportStore } from '@alembic/core/infrastructure/report';
+import type { ReportStore } from '@alembic/core/report';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import { HitRecorder } from '../../service/signal/HitRecorder.js';
 import { shutdown } from '../../shared/shutdown.js';
