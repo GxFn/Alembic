@@ -33,7 +33,6 @@ import evolutionRouter from './routes/evolution.js';
 import extractRouter from './routes/extract.js';
 import fileChangesRouter from './routes/file-changes.js';
 import guardRouter from './routes/guard.js';
-import guardReportRouter from './routes/guardReport.js';
 import guardRuleRouter from './routes/guardRules.js';
 import healthRouter from './routes/health.js';
 import intentEpisodesRouter from './routes/intent-episodes.js';
@@ -320,9 +319,6 @@ export class HttpServer {
 
     // Guard 实时检查路由（Dashboard、CLI 或外部宿主调用）
     this.app.use(`${apiPrefix}/guard`, guardRouter);
-
-    // Guard 合规报告路由
-    this.app.use(`${apiPrefix}/guard/report`, guardReportRouter);
 
     // 守护规则路由
     this.app.use(`${apiPrefix}/rules`, guardRuleRouter);

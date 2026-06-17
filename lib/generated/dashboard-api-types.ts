@@ -544,7 +544,7 @@ export const DASHBOARD_JOB_KINDS: readonly DashboardJobKind[] = [
 ];
 
 // ════════════════════════════════════════════════════════════════════
-// HTTP route contract table (34 routes, contract version 1)
+// HTTP route contract table (33 routes, contract version 1)
 // ════════════════════════════════════════════════════════════════════
 
 export const DASHBOARD_API_CONTRACT_VERSION = 1;
@@ -1724,51 +1724,6 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
     "path": "/guard",
     "registryRowId": "I21",
     "summary": "Guard check route family",
-    "supportedScenarios": [
-      "success",
-      "failure"
-    ],
-    "tags": [
-      "Guard"
-    ],
-    "responseSchemas": {
-      "200": "schema-1",
-      "400": "schema-2",
-      "404": "schema-2",
-      "409": "schema-2",
-      "500": "schema-2",
-      "501": "schema-2",
-      "503": "schema-2"
-    }
-  },
-  {
-    "artifactPolicy": "Compact guard findings inline; full reports by artifactRef.",
-    "capabilityDiscovery": [
-      "/api/v1/guard",
-      "/api/v1/rules"
-    ],
-    "contractId": "I21.getGuardReport",
-    "errorKinds": [
-      "invalid-input",
-      "unavailable",
-      "capability-mismatch",
-      "internal-error"
-    ],
-    "exposureClasses": [
-      "public",
-      "consumer-needed",
-      "diagnostic"
-    ],
-    "fixtureIds": [
-      "guard.success",
-      "guard.invalid-input"
-    ],
-    "functionClass": "rest-command",
-    "method": "get",
-    "operationId": "getGuardReport",
-    "path": "/guard/report",
-    "registryRowId": "I21",
-    "summary": "Guard report route family",
     "supportedScenarios": [
       "success",
       "failure"

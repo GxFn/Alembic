@@ -475,7 +475,6 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
     ['Intent']
   ),
   route('I21', 'post', '/guard', 'runGuard', 'Guard check route family', ['Guard']),
-  route('I21', 'get', '/guard/report', 'getGuardReport', 'Guard report route family', ['Guard']),
   route('I21', 'get', '/rules', 'listGuardRules', 'Guard rules route family', ['Guard']),
   route('I21', 'get', '/violations', 'listViolations', 'Violations route family', ['Guard']),
   route('I22', 'get', '/knowledge', 'listKnowledge', 'Knowledge route family', ['Knowledge']),
@@ -521,7 +520,6 @@ export const ALEMBIC_PROVIDER_ROUTE_MOUNTS = [
   mount('I09', '/api/v1/auth/probe'),
   mount('I23', '/api/v1/monitoring'),
   mount('I21', '/api/v1/guard'),
-  mount('I21', '/api/v1/guard/report'),
   mount('I21', '/api/v1/rules'),
   mount('I09', '/api/v1/task'),
   mount('I11', '/api/v1/intent-episodes'),

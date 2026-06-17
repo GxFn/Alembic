@@ -1,7 +1,7 @@
 /**
  * Phase 5: Presentation Layer HTTP Routes — 单元测试
  *
- * 测试 panorama / guardReport / audit 三个新路由对 DI 服务的调用
+ * 测试 panorama / audit 路由对 DI 服务的调用（guardReport 路由已随 CCR-1 下线）
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRouter } from '../helpers/express.js';
@@ -84,20 +84,6 @@ const mockModuleDetail = {
   summary: 'Utils is a Foundation layer module.',
 };
 
-const mockReport = {
-  timestamp: '2024-01-01T00:00:00.000Z',
-  projectRoot: '/test',
-  qualityGate: { status: 'PASS', score: 85, thresholds: {} },
-  complianceScore: 85,
-  coverageScore: 90,
-  confidenceScore: 95,
-  summary: { filesScanned: 50, errors: 2, warnings: 5, infos: 3, totalViolations: 10 },
-  topViolations: [],
-  fileHotspots: [],
-  ruleHealth: [],
-  trend: { errorsChange: 0, warningsChange: 0, hasHistory: false },
-};
-
 const mockAuditLogs = [
   {
     id: 'audit_1',
@@ -128,10 +114,6 @@ const mockPanoramaService = {
     .mockImplementation((name: string) => (name === 'Utils' ? mockModuleDetail : null)),
 };
 
-const mockComplianceReporter = {
-  generate: vi.fn().mockResolvedValue(mockReport),
-};
-
 const mockAuditStore = {
   query: vi.fn().mockReturnValue(mockAuditLogs),
 };
@@ -141,7 +123,6 @@ vi.mock('../../lib/injection/ServiceContainer.js', () => ({
     get: (name: string) => {
       const map: Record<string, unknown> = {
         panoramaService: mockPanoramaService,
-        complianceReporter: mockComplianceReporter,
         auditStore: mockAuditStore,
       };
       return map[name] ?? null;
@@ -158,7 +139,6 @@ vi.mock('@alembic/core/workspace', () => ({
 /* ═══ Import routes (after mocks) ═════════════════════════ */
 
 import auditRouter from '../../lib/http/routes/audit.js';
-import guardReportRouter from '../../lib/http/routes/guardReport.js';
 import panoramaRouter from '../../lib/http/routes/panorama.js';
 
 /* ═══ Test helper ═════════════════════════════════════════ */
@@ -166,9 +146,6 @@ import panoramaRouter from '../../lib/http/routes/panorama.js';
 async function testGet(path: string): Promise<{ status: number; body: Record<string, unknown> }> {
   if (path.startsWith('/api/v1/panorama')) {
     return getRouter(panoramaRouter, path, { mountPath: '/api/v1/panorama' });
-  }
-  if (path.startsWith('/api/v1/guard/report')) {
-    return getRouter(guardReportRouter, path, { mountPath: '/api/v1/guard/report' });
   }
   if (path.startsWith('/api/v1/audit')) {
     return getRouter(auditRouter, path, { mountPath: '/api/v1/audit' });
@@ -220,37 +197,6 @@ describe('Phase 5: Panorama Route', () => {
 
   it('GET /panorama rejects invalid refresh query', async () => {
     const { status, body } = await testGet('/api/v1/panorama?refresh=maybe');
-    expect(status).toBe(400);
-    expect(body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
-  });
-});
-
-describe('Phase 5: Guard Report Route', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('GET /guard/report returns compliance report', async () => {
-    const { status, body } = await testGet('/api/v1/guard/report');
-    expect(status).toBe(200);
-    expect(body.success).toBe(true);
-    expect((body.data as Record<string, unknown>).complianceScore).toBe(85);
-    expect(mockComplianceReporter.generate).toHaveBeenCalled();
-  });
-
-  it('GET /guard/report passes query params', async () => {
-    await testGet('/api/v1/guard/report?minScore=80&maxFiles=100');
-    expect(mockComplianceReporter.generate).toHaveBeenCalledWith(
-      '/test',
-      expect.objectContaining({
-        qualityGate: { minScore: 80, maxErrors: undefined },
-        maxFiles: 100,
-      })
-    );
-  });
-
-  it('GET /guard/report rejects invalid numeric query', async () => {
-    const { status, body } = await testGet('/api/v1/guard/report?minScore=abc');
     expect(status).toBe(400);
     expect(body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
   });
