@@ -792,7 +792,9 @@ export function attachBootstrapProcessEventBridge(options: {
 
 async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
   if (options.kind === 'bootstrap') {
-    const { bootstrapKnowledge } = await import('../resident/tool-handlers/cold-start.js');
+    const { runColdStartWorkflow: bootstrapKnowledge } = await import(
+      '../workflows/cold-start/ColdStartWorkflow.js'
+    );
     const raw = await bootstrapKnowledge(
       { container: options.container, logger: options.logger },
       {
@@ -806,7 +808,9 @@ async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unkno
     return { ...asRecord(result), asyncFill: true };
   }
 
-  const { rescanKnowledge } = await import('../resident/tool-handlers/knowledge-rescan.js');
+  const { runKnowledgeRescanWorkflow: rescanKnowledge } = await import(
+    '../workflows/knowledge-rescan/KnowledgeRescanWorkflow.js'
+  );
   const raw = await rescanKnowledge(
     { container: options.container, logger: options.logger },
     buildDaemonRescanWorkflowArgs({ args: options.args, source: options.source })

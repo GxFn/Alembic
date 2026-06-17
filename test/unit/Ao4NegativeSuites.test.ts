@@ -27,7 +27,6 @@ vi.mock('../../lib/injection/ServiceContainer.js', () => ({
 import authRouter from '../../lib/http/routes/auth.js';
 import decisionRegisterRouter from '../../lib/http/routes/decision-register.js';
 import knowledgeRouter from '../../lib/http/routes/knowledge.js';
-import { submitKnowledgeBatch } from '../../lib/resident/tool-handlers/knowledge.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
 const tempRoots: string[] = [];
@@ -250,20 +249,6 @@ describe('AO4 negative suites', () => {
       reasonCode: 'project-scope-mismatch',
       success: false,
     });
-  });
-
-  test('resident batch submission rejects invalid item arguments before persistence', async () => {
-    await expect(
-      submitKnowledgeBatch(
-        {
-          container: {
-            get: vi.fn(),
-          },
-          logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-        } as never,
-        { items: [null as never], target_name: 'AO4' }
-      )
-    ).rejects.toThrow('items[0] must be an object');
   });
 });
 

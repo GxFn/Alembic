@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { IncrementalPlan } from '../../lib/resident/tool-schema/types.js';
+import type { IncrementalPlan } from '../../lib/service/handler-runtime/types.js';
 import {
   type BootstrapRuntimeContainer,
   initializeBootstrapRuntime,

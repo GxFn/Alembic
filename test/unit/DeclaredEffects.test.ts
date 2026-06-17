@@ -18,7 +18,6 @@ import path from 'node:path';
 import { createDatabaseConnection, type DatabaseConnection } from '@alembic/core/database';
 import { pathGuard } from '@alembic/core/shared';
 import authRouter from '../../lib/http/routes/auth.js';
-import { graphQuery } from '../../lib/resident/tool-handlers/structure.js';
 import { invokeRouter } from '../helpers/express.js';
 
 function snapshotTree(root: string): Map<string, string> {
@@ -71,7 +70,7 @@ describe('Declared effects (AD6 no-undeclared-effects audit)', () => {
     fs.rmSync(sandboxRoot, { recursive: true, force: true });
   });
 
-  test('zero-effect family paths leave the sandbox byte-identical (HTTP auth, resident usage gate)', async () => {
+  test('zero-effect family paths leave the sandbox byte-identical (HTTP auth)', async () => {
     const before = snapshotTree(sandboxRoot);
 
     const authResponse = await invokeRouter(authRouter, {
@@ -81,12 +80,6 @@ describe('Declared effects (AD6 no-undeclared-effects audit)', () => {
       path: '/api/v1/auth/login',
     });
     expect(authResponse.status).toBe(410);
-
-    const gateResult = await graphQuery(
-      { container: { get: () => ({}) }, logger: console } as never,
-      { operation: 'query' }
-    );
-    expect(gateResult.success).toBe(false);
 
     expect(changedPaths(before, snapshotTree(sandboxRoot))).toEqual([]);
   });

@@ -278,7 +278,7 @@ export async function runColdStartWorkflow(ctx: BootstrapMcpContext, args: ColdS
   });
 }
 
-// bootstrapRefine → 已提取到 resident/tool-handlers/bootstrap/refine.js
+// bootstrapRefine → 已迁至 service/bootstrap/BootstrapRefine.js (RIC-3)
 
 function buildProjectContextDimensionSelectionSummary(input: {
   requestedDimensionIds?: readonly string[];

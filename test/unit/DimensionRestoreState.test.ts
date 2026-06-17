@@ -3,8 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import type { SessionStore } from '@alembic/agent/memory';
 import { describe, expect, test, vi } from 'vitest';
-import type { IncrementalPlan } from '../../lib/resident/tool-schema/types.js';
 import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
+import type { IncrementalPlan } from '../../lib/service/handler-runtime/types.js';
 import type {
   CandidateResults,
   DimensionCandidateData,

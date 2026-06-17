@@ -11,7 +11,7 @@ import {
   listSkills,
   loadSkill,
   updateSkill,
-} from '../../resident/tool-handlers/skill.js';
+} from '../../service/skills/SkillFileService.js';
 import { validate } from '../middleware/validate.js';
 
 const router = express.Router();

@@ -21,30 +21,27 @@ import type {
 import type { ExtractedIntent } from '#service/task/IntentExtractor.js';
 import { extract as extractIntent } from '#service/task/IntentExtractor.js';
 import type { PrimeSearchOptions, PrimeSearchResult } from '#service/task/PrimeSearchPipeline.js';
-import {
-  applyHostIntentContext,
-  createHostIntentContextMeta,
-  normalizeHostIntentContext,
-} from '../../service/task/HostIntentContext.js';
-import {
-  buildIntentEvidence,
-  type RelationEvidenceProvider,
-} from '../../service/task/IntentEvidence.js';
-import {
-  buildIntentSearchPlan,
-  type IntentSearchPlan,
-  summarizeIntentSearchPlan,
-} from '../../service/task/IntentSearchPlan.js';
-import { buildPrimeInjectionPackage } from '../../service/task/PrimeInjectionPackage.js';
-import { envelope } from '../tool-schema/envelope.js';
+import { envelope } from '../handler-runtime/envelope.js';
 import type {
   DecisionRecord,
   IntentChainRecord,
   IntentState,
   McpContext,
   McpServiceContainer,
-} from '../tool-schema/types.js';
-import { createIdleIntent } from '../tool-schema/types.js';
+} from '../handler-runtime/types.js';
+import { createIdleIntent } from '../handler-runtime/types.js';
+import {
+  applyHostIntentContext,
+  createHostIntentContextMeta,
+  normalizeHostIntentContext,
+} from './HostIntentContext.js';
+import { buildIntentEvidence, type RelationEvidenceProvider } from './IntentEvidence.js';
+import {
+  buildIntentSearchPlan,
+  type IntentSearchPlan,
+  summarizeIntentSearchPlan,
+} from './IntentSearchPlan.js';
+import { buildPrimeInjectionPackage } from './PrimeInjectionPackage.js';
 
 // ─── Local Types ──────────────────────────────────────────
 

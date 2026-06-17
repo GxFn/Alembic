@@ -11,8 +11,8 @@
 import express, { type Request, type Response } from 'express';
 import { TaskDispatchBody } from '#shared/schemas/http-requests.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { taskHandler } from '../../resident/tool-handlers/task.js';
-import type { McpContext } from '../../resident/tool-schema/types.js';
+import type { McpContext } from '../../service/handler-runtime/types.js';
+import { taskHandler } from '../../service/task/TaskDispatchService.js';
 import { validate } from '../middleware/validate.js';
 
 const router = express.Router();

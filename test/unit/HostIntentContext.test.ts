@@ -1,13 +1,12 @@
 import { describe, expect, test, vi } from 'vitest';
-import { search } from '../../lib/resident/tool-handlers/search.js';
-import { taskHandler } from '../../lib/resident/tool-handlers/task.js';
-import { createIdleIntent } from '../../lib/resident/tool-schema/types.js';
+import { createIdleIntent } from '../../lib/service/handler-runtime/types.js';
 import {
   applyHostIntentContext,
   createHostIntentContextMeta,
   normalizeHostIntentContext,
 } from '../../lib/service/task/HostIntentContext.js';
 import { extract } from '../../lib/service/task/IntentExtractor.js';
+import { taskHandler } from '../../lib/service/task/TaskDispatchService.js';
 
 describe('host intent context consumption', () => {
   test('normalizes Plugin host intent context while preserving canonical host values', () => {
@@ -203,127 +202,5 @@ describe('host intent context consumption', () => {
     });
     expect(ctx.session.intent.primeQuery).toBe('service factory');
     expect(ctx.session.intent.primeActiveFile).toBe('src/service.ts');
-  });
-
-  test('resident search ignores host context and passes only explicit public filters', async () => {
-    const searchEngine = {
-      search: vi.fn().mockResolvedValue({
-        items: [
-          {
-            description: 'A matching recipe',
-            id: 'recipe-2',
-            kind: 'pattern',
-            language: 'typescript',
-            score: 0.7,
-            title: 'Intent Search',
-            trigger: 'intent search',
-          },
-        ],
-        mode: 'keyword',
-        ranked: false,
-        searchMeta: {
-          actualMode: 'keyword',
-          appliedFilters: {
-            dimensionId: 'dim-1',
-            language: 'typescript',
-            tags: ['search'],
-          },
-          requestedMode: 'keyword',
-          resultCount: 1,
-          semanticUsed: false,
-          vectorUsed: false,
-        },
-      }),
-    };
-    const ctx = {
-      container: {
-        get: vi.fn((name: string) => {
-          if (name === 'searchEngine') {
-            return searchEngine;
-          }
-          throw new Error(`unexpected service: ${name}`);
-        }),
-      },
-    };
-
-    const result = await search(ctx, {
-      dimensionId: 'dim-1',
-      hostDeclaredIntent: {
-        intent: 'search',
-        query: 'semantic source refs',
-        sourceRefs: ['host:intent'],
-      },
-      hostTurnMeta: {
-        language: 'typescript',
-        sessionHistory: [{ content: 'previous search turn' }],
-      },
-      language: 'typescript',
-      mode: 'keyword',
-      query: 'fallback query',
-      tags: ['search'],
-    });
-
-    expect(searchEngine.search).toHaveBeenCalledWith(
-      'fallback query',
-      expect.objectContaining({
-        dimensionId: 'dim-1',
-        groupByKind: true,
-        language: 'typescript',
-        limit: 10,
-        mode: 'keyword',
-        rank: false,
-        tags: ['search'],
-        type: 'all',
-      })
-    );
-    expect(searchEngine.search).not.toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ context: expect.anything() })
-    );
-    expect(result).toMatchObject({
-      success: true,
-      data: {
-        query: 'fallback query',
-        searchMeta: {
-          actualMode: 'keyword',
-          appliedFilters: {
-            dimensionId: 'dim-1',
-            language: 'typescript',
-            tags: ['search'],
-          },
-        },
-      },
-    });
-    expect(JSON.stringify(result)).not.toContain('semantic source refs');
-    expect(JSON.stringify(result)).not.toContain('intentContext');
-  });
-
-  test('resident search rejects retired bm25 mode before SearchEngine execution', async () => {
-    const searchEngine = { search: vi.fn() };
-    const ctx = {
-      container: {
-        get: vi.fn((name: string) => {
-          if (name === 'searchEngine') {
-            return searchEngine;
-          }
-          throw new Error(`unexpected service: ${name}`);
-        }),
-      },
-    };
-
-    const result = await search(ctx, {
-      mode: 'bm25',
-      query: 'fallback query',
-    });
-
-    expect(searchEngine.search).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      errorCode: 'UNSUPPORTED_SEARCH_MODE',
-      problem: {
-        failingStep: 'search-mode-validation',
-        reasonCode: 'invalid-input',
-      },
-      success: false,
-    });
   });
 });

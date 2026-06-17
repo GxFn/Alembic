@@ -695,8 +695,10 @@ program
       const ora = (await import('ora')).default;
       const spinner = ora('Phase 1-4: 收集文件、AST 分析、SPM 依赖、Guard 审计...').start();
 
-      // 直接调用 resident bootstrap handler（统一编排管线）
-      const { bootstrapKnowledge } = await import('../lib/resident/tool-handlers/cold-start.js');
+      // 直接调用 cold-start workflow（统一编排管线；MCP 归一 Plugin 后不再经 resident 镜像）
+      const { runColdStartWorkflow: bootstrapKnowledge } = await import(
+        '../lib/workflows/cold-start/ColdStartWorkflow.js'
+      );
       const logger = container.get('logger');
       const raw = await bootstrapKnowledge(
         { container, logger },
@@ -878,8 +880,10 @@ program
       const ora = (await import('ora')).default;
       const spinner = ora('Rescan: 快照 Recipe → 清理缓存 → Phase 1-4 + 证据审计...').start();
 
-      // 直接调用 resident rescan handler（统一编排管线）
-      const { rescanKnowledge } = await import('../lib/resident/tool-handlers/knowledge-rescan.js');
+      // 直接调用 knowledge-rescan workflow（统一编排管线；MCP 归一 Plugin 后不再经 resident 镜像）
+      const { runKnowledgeRescanWorkflow: rescanKnowledge } = await import(
+        '../lib/workflows/knowledge-rescan/KnowledgeRescanWorkflow.js'
+      );
       const logger = container.get('logger');
       const raw = await rescanKnowledge(
         { container, logger },

@@ -42,8 +42,8 @@ router.post(
 
     const container = getServiceContainer();
 
-    // 复用 resident bootstrap handler 的 bootstrapRefine 逻辑
-    const { bootstrapRefine } = await import('../../resident/tool-handlers/cold-start.js');
+    // bootstrapRefine 逻辑（RIC-3：从已删的 resident MCP-mirror 迁入 service/bootstrap）
+    const { bootstrapRefine } = await import('../../service/bootstrap/BootstrapRefine.js');
     const ctx = { container, logger };
     const result = await bootstrapRefine(ctx, { candidateIds, userPrompt, dryRun });
 

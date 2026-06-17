@@ -20,7 +20,7 @@ describe('resident service HTTP boundary', () => {
     expect(existsSync(removedDispatcherFile)).toBe(false);
   });
 
-  test('keeps Alembic-owned bootstrap and rescan consumers on resident handler paths', () => {
+  test('routes Alembic-owned bootstrap/rescan/refine consumers to workflow/service paths (RIC-3: off resident)', () => {
     const cliSource = readFileSync(join(repoRoot, 'bin/cli.ts'), 'utf8');
     const daemonRunnerSource = readFileSync(
       join(repoRoot, 'lib/daemon/DaemonJobRunner.ts'),
@@ -32,9 +32,12 @@ describe('resident service HTTP boundary', () => {
     );
     const oldBootstrapPath = 'external' + '/mcp/handlers/cold-start.js';
     const oldRescanPath = 'external' + '/mcp/handlers/knowledge-rescan.js';
-    const residentBootstrapPath = 'resident' + '/tool-handlers/cold-start.js';
-    const residentRescanPath = 'resident' + '/tool-handlers/knowledge-rescan.js';
+    const residentHandlerPath = 'resident' + '/tool-handlers/';
+    const workflowBootstrapPath = 'workflows' + '/cold-start/ColdStartWorkflow.js';
+    const workflowRescanPath = 'workflows' + '/knowledge-rescan/KnowledgeRescanWorkflow.js';
+    const bootstrapRefinePath = 'service' + '/bootstrap/BootstrapRefine.js';
 
+    // Legacy external MCP bridge handler paths stay gone.
     expect(cliSource).not.toContain(oldBootstrapPath);
     expect(cliSource).not.toContain(oldRescanPath);
     expect(daemonRunnerSource).not.toContain(oldBootstrapPath);
@@ -42,11 +45,18 @@ describe('resident service HTTP boundary', () => {
     expect(candidatesRouteSource).not.toContain(oldBootstrapPath);
     expect(candidatesRouteSource).not.toContain(oldRescanPath);
 
-    expect(cliSource).toContain(residentBootstrapPath);
-    expect(cliSource).toContain(residentRescanPath);
-    expect(daemonRunnerSource).toContain(residentBootstrapPath);
-    expect(daemonRunnerSource).toContain(residentRescanPath);
-    expect(candidatesRouteSource).toContain(residentBootstrapPath);
+    // RIC-3 (B1): the lib/resident/ MCP-mirror layer is deleted — no consumer touches it.
+    expect(cliSource).not.toContain(residentHandlerPath);
+    expect(daemonRunnerSource).not.toContain(residentHandlerPath);
+    expect(candidatesRouteSource).not.toContain(residentHandlerPath);
+
+    // Consumers now route straight to the non-resident cold-start/knowledge-rescan
+    // workflows and the relocated bootstrap-refine service.
+    expect(cliSource).toContain(workflowBootstrapPath);
+    expect(cliSource).toContain(workflowRescanPath);
+    expect(daemonRunnerSource).toContain(workflowBootstrapPath);
+    expect(daemonRunnerSource).toContain(workflowRescanPath);
+    expect(candidatesRouteSource).toContain(bootstrapRefinePath);
   });
 
   test('removes legacy external MCP bootstrap/rescan compatibility aliases', () => {

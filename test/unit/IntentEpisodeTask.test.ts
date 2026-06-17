@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
-import { taskHandler } from '../../lib/resident/tool-handlers/task.js';
-import { createIdleIntent } from '../../lib/resident/tool-schema/types.js';
+import { createIdleIntent } from '../../lib/service/handler-runtime/types.js';
+import { taskHandler } from '../../lib/service/task/TaskDispatchService.js';
 
 describe('task handler intent episode integration', () => {
   test('starts, attaches, and closes an intent episode across resident task lifecycle', async () => {

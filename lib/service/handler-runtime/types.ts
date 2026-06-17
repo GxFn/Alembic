@@ -1,6 +1,11 @@
 /**
- * Shared type definitions for Alembic resident tool handler modules.
+ * Shared type definitions for Alembic daemon handler-runtime modules
+ * (task dispatch, skill file service, bootstrap refine) consumed by HTTP routes.
  * Runtime-free — only interfaces and type aliases.
+ *
+ * RIC-3: relocated out of the deleted lib/resident/ MCP-mirror layer. Some
+ * handler-arg interfaces here are now orphaned (their handlers were deleted with
+ * the MCP mirror) and can be trimmed in RIC-4.
  */
 
 import type {
@@ -10,12 +15,12 @@ import type {
   LoggerLike,
   SaveSnapshotParams,
 } from '@alembic/core/types';
-import type { IntentEvidence } from '../../service/task/IntentEvidence.js';
-import type { IntentSearchPlan } from '../../service/task/IntentSearchPlan.js';
+import type { IntentEvidence } from '../task/IntentEvidence.js';
+import type { IntentSearchPlan } from '../task/IntentSearchPlan.js';
 import type {
   PrimeInjectionPackage,
   PrimeResidentRegionRetrieval,
-} from '../../service/task/PrimeInjectionPackage.js';
+} from '../task/PrimeInjectionPackage.js';
 
 // ─── DI Container (minimal shape) ────────────────────────
 

@@ -12,7 +12,7 @@
  * the live served surface is the TOOL_SCHEMAS schema map.)
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import {
@@ -58,11 +58,10 @@ describe('DCR surface deletes (Train B)', () => {
     expect(layerPaths).not.toContain('/enrich');
   });
 
-  test('handler-export negative: enrichCandidates handler export is removed', () => {
-    const candidateHandlerSource = readFileSync(
-      join(repoRoot, 'lib/resident/tool-handlers/candidate.ts'),
-      'utf8'
-    );
-    expect(candidateHandlerSource).not.toContain('export async function enrichCandidates');
+  test('handler-export negative: resident candidate handler surface is deleted (RIC-3)', () => {
+    // RIC-3 (B1) deleted the whole lib/resident/ MCP-mirror layer, so the
+    // enrichCandidates handler and its candidate.ts host no longer exist at all.
+    expect(existsSync(join(repoRoot, 'lib/resident/tool-handlers/candidate.ts'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'lib/resident'))).toBe(false);
   });
 });

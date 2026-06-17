@@ -10,9 +10,9 @@
  * 从 bootstrap.js 提取为独立模块
  */
 
-import { getAiRuntimeStatus, getAiUnavailableMessage } from '../../../injection/AiRuntimeStatus.js';
-import { envelope } from '../../tool-schema/envelope.js';
-import type { KnowledgeEntryJSON, McpContext } from '../../tool-schema/types.js';
+import { getAiRuntimeStatus, getAiUnavailableMessage } from '../../injection/AiRuntimeStatus.js';
+import { envelope } from '../handler-runtime/envelope.js';
+import type { KnowledgeEntryJSON, McpContext } from '../handler-runtime/types.js';
 
 /**
  * @param ctx MCP context { container, logger }
