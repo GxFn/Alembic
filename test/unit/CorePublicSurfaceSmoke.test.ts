@@ -8,47 +8,12 @@ import { SearchEngine, tokenize } from '@alembic/core/search';
 import { chunk, HnswIndex } from '@alembic/core/vector';
 import { resolveKnowledgeScanDirs, WorkspaceResolver } from '@alembic/core/workspace';
 import { describe, expect, it } from 'vitest';
-import {
-  analyzeSourceFile,
-  detectConflict,
-  ensureProjectGrammarResources,
-  extractXcodeGenDependencyEdges,
-  parseGradleProject,
-  parseStarlarkBuildFile,
-  parseXcodeGenProject,
-} from '../../lib/core-adapters/ProjectIntelligenceCompatibility.js';
 
+// RIC-4c: the discovery/AST/parser facade smoke cases were removed with the
+// ProjectIntelligenceCompatibility shim — their coverage now lives in Core
+// (MultiFileAstAndDiscovery / MultiLanguageParsers / AstGrammar). The vector /
+// search / knowledge / foundation facade smokes below stay (allowlisted Core).
 describe('Core public surface smoke', () => {
-  it('keeps discovery config helpers consumable from Alembic', () => {
-    const project = parseXcodeGenProject(`
-      name: Demo
-      targets:
-        App:
-          type: application
-          dependencies:
-            - target: Core
-        Core:
-          type: framework
-    `);
-    const edges = extractXcodeGenDependencyEdges(`
-      targets:
-        App:
-          dependencies:
-            - target: Core
-    `);
-    const conflict = detectConflict([
-      { discovererId: 'spm', displayName: 'SPM', confidence: 0.9 },
-      { discovererId: 'custom', displayName: 'Custom', confidence: 0.4 },
-    ]);
-    expect(project.hostApp?.name).toBe('Demo');
-    expect(project.layers.flatMap((layer) => layer.modules.map((module) => module.name))).toEqual([
-      'App',
-      'Core',
-    ]);
-    expect(edges).toEqual([['App', 'Core']]);
-    expect(conflict.ambiguous).toBe(false);
-  });
-
   it('keeps vector facade consumable without duplicating Core algorithm tests', () => {
     const index = new HnswIndex({ M: 4, efConstruct: 8, efSearch: 8 });
     index.addPoint('a', [1, 0, 0]);
@@ -69,20 +34,6 @@ describe('Core public surface smoke', () => {
 
     expect(tokenize('URLSessionRetry')).toEqual(expect.arrayContaining(['url', 'session']));
     expect(typeof search.search).toBe('function');
-  });
-
-  it('keeps AST and parser facades consumable from Alembic', async () => {
-    await ensureProjectGrammarResources({ ts: 1 });
-    const summary = analyzeSourceFile(
-      'export class UserService { findUser(id: string) { return id; } }',
-      'typescript'
-    );
-    const gradle = parseGradleProject('rootProject.name = "demo"\ninclude(":app", ":core")');
-    const starlark = parseStarlarkBuildFile('swift_library(name = "Core", deps = [":Utils"])');
-
-    expect(summary?.classes.some((item) => item.name === 'UserService')).toBe(true);
-    expect(gradle.includedModules.map((module) => module.path)).toEqual([':app', ':core']);
-    expect(starlark.targets[0]?.name).toBe('Core');
   });
 
   it('keeps knowledge facade contracts consumable from Alembic', () => {
