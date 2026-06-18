@@ -2,8 +2,8 @@
  * V2 Tool System — 单元测试
  *
  * 验证:
- *   1. ToolRouterV2 解析 + 分发
- *   2. V2ToolRouterAdapter ↔ ToolResultEnvelope 转换
+ *   1. ToolRouter 解析 + 分发
+ *   2. ToolRouterAdapter ↔ ToolResultEnvelope 转换
  *   3. DeltaCache / SearchCache / OutputCompressor 集成
  *   4. Capability 权限拦截
  */
@@ -12,13 +12,13 @@ import { BootstrapAnalyze } from '@alembic/agent';
 import {
   DeltaCache,
   OutputCompressor,
+  type ParsedToolCall,
+  RuntimeCapabilityCatalog,
   SearchCache,
   TOOL_REGISTRY,
-  type ToolCallV2,
   type ToolContext,
-  ToolRouterV2,
-  V2CapabilityCatalog,
-  V2ToolRouterAdapter,
+  ToolRouter,
+  ToolRouterAdapter,
 } from '@alembic/agent/tools/runtime';
 import { describe, expect, test } from 'vitest';
 
@@ -86,7 +86,7 @@ describe('V2 Registry', () => {
 // ─────────────────────────────────────────────────
 
 describe('V2 Router', () => {
-  const router = new ToolRouterV2();
+  const router = new ToolRouter();
 
   test('parseToolCall extracts action + params', () => {
     const result = router.parseToolCall('code', {
@@ -131,7 +131,7 @@ describe('V2 Router', () => {
   });
 
   test('capability check blocks unauthorized action', async () => {
-    const restrictedRouter = new ToolRouterV2({
+    const restrictedRouter = new ToolRouter({
       capability: {
         name: 'test',
         description: 'test',
@@ -259,7 +259,7 @@ describe('V2 Router', () => {
 
   test('executeParallel splits token budget', async () => {
     const ctx = makeCtx({ tokenBudget: 6000 });
-    const calls: ToolCallV2[] = [
+    const calls: ParsedToolCall[] = [
       { tool: 'meta', action: 'tools', params: {} },
       { tool: 'meta', action: 'tools', params: {} },
       { tool: 'meta', action: 'tools', params: {} },
@@ -339,7 +339,7 @@ describe('V2 Router', () => {
 // ─────────────────────────────────────────────────
 
 describe('memory (save + recall)', () => {
-  const router = new ToolRouterV2();
+  const router = new ToolRouter();
 
   test('save then recall', async () => {
     const ctx = makeCtx({
@@ -505,7 +505,7 @@ describe('memory (save + recall)', () => {
 // ─────────────────────────────────────────────────
 
 describe('meta.tools', () => {
-  const router = new ToolRouterV2();
+  const router = new ToolRouter();
   const ctx = makeCtx();
 
   test('returns all tool specs', async () => {
@@ -531,10 +531,10 @@ describe('meta.tools', () => {
 });
 
 // ─────────────────────────────────────────────────
-//  §5 V2ToolRouterAdapter — V1 接口兼容
+//  §5 ToolRouterAdapter — V1 接口兼容
 // ─────────────────────────────────────────────────
 
-describe('V2ToolRouterAdapter', () => {
+describe('ToolRouterAdapter', () => {
   test('execute returns ToolResultEnvelope', async () => {
     const { ToolContextFactory } = await import('#tools/v2/ToolContextFactory.js');
     const factory = new ToolContextFactory({
@@ -542,7 +542,7 @@ describe('V2ToolRouterAdapter', () => {
       projectRoot: PROJECT_ROOT,
       dataRoot: PROJECT_ROOT,
     });
-    const adapter = new V2ToolRouterAdapter({ contextFactory: factory });
+    const adapter = new ToolRouterAdapter({ contextFactory: factory });
 
     const envelope = await adapter.execute({
       toolId: 'code',
@@ -569,7 +569,7 @@ describe('V2ToolRouterAdapter', () => {
       projectRoot: PROJECT_ROOT,
       dataRoot: PROJECT_ROOT,
     });
-    const adapter = new V2ToolRouterAdapter({ contextFactory: factory });
+    const adapter = new ToolRouterAdapter({ contextFactory: factory });
 
     const envelope = await adapter.execute({
       toolId: 'nonexistent',
@@ -585,11 +585,11 @@ describe('V2ToolRouterAdapter', () => {
 });
 
 // ─────────────────────────────────────────────────
-//  §6 V2CapabilityCatalog — Schema 生成
+//  §6 RuntimeCapabilityCatalog — Schema 生成
 // ─────────────────────────────────────────────────
 
-describe('V2CapabilityCatalog', () => {
-  const catalog = new V2CapabilityCatalog();
+describe('RuntimeCapabilityCatalog', () => {
+  const catalog = new RuntimeCapabilityCatalog();
 
   test('toToolSchemas returns all 6 tools by default', () => {
     const schemas = catalog.toToolSchemas();
@@ -624,7 +624,7 @@ describe('V2CapabilityCatalog', () => {
 //  §7 Capability V2 — 权限 + prompt 生成
 // ─────────────────────────────────────────────────
 
-describe('CapabilityV2', () => {
+describe('RuntimeCapability', () => {
   test('BootstrapAnalyze returns V2 tool names', () => {
     const cap = new BootstrapAnalyze();
     expect(cap.name).toBe('code_analysis');
@@ -644,7 +644,7 @@ describe('CapabilityV2', () => {
     expect(prompt).toContain('read');
   });
 
-  test('toDef produces valid CapabilityV2Def', () => {
+  test('toDef produces valid CapabilityDef', () => {
     const cap = new BootstrapAnalyze();
     const def = cap.toDef();
     expect(def.name).toBe('code_analysis');

@@ -1,12 +1,12 @@
 import {
-  type CapabilityV2Def,
+  type CapabilityDef,
   generateLightweightSchemas,
   getActionNames,
   getToolNames,
   TOOL_REGISTRY,
   type ToolContext,
   type ToolResult,
-  ToolRouterV2,
+  ToolRouter,
 } from '@alembic/agent/tools/runtime';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -120,13 +120,13 @@ describe('generateLightweightSchemas', () => {
 });
 
 /* ================================================================ */
-/*  ToolRouterV2                                                     */
+/*  ToolRouter                                                     */
 /* ================================================================ */
 
-describe('ToolRouterV2', () => {
+describe('ToolRouter', () => {
   describe('parseToolCall', () => {
     test('parses valid LLM raw arguments (object)', () => {
-      const router = new ToolRouterV2();
+      const router = new ToolRouter();
       const result = router.parseToolCall('code', {
         action: 'search',
         params: { patterns: ['TODO'] },
@@ -139,7 +139,7 @@ describe('ToolRouterV2', () => {
     });
 
     test('parses valid LLM raw arguments (JSON string)', () => {
-      const router = new ToolRouterV2();
+      const router = new ToolRouter();
       const result = router.parseToolCall(
         'terminal',
         JSON.stringify({ action: 'exec', params: { command: 'ls' } })
@@ -152,20 +152,20 @@ describe('ToolRouterV2', () => {
     });
 
     test('defaults params to empty object when omitted', () => {
-      const router = new ToolRouterV2();
+      const router = new ToolRouter();
       const result = router.parseToolCall('graph', { action: 'overview' });
       expect(result).toEqual({ tool: 'graph', action: 'overview', params: {} });
     });
 
     test('returns error when action is missing', () => {
-      const router = new ToolRouterV2();
+      const router = new ToolRouter();
       const result = router.parseToolCall('code', { params: { path: 'a.ts' } });
       expect('error' in result).toBe(true);
       expect((result as { error: string }).error).toContain('Missing "action"');
     });
 
     test('returns error for malformed JSON string', () => {
-      const router = new ToolRouterV2();
+      const router = new ToolRouter();
       const result = router.parseToolCall('code', '{invalid json}');
       expect('error' in result).toBe(true);
     });
@@ -173,7 +173,7 @@ describe('ToolRouterV2', () => {
 
   describe('execute', () => {
     test('returns fail for unknown tool', async () => {
-      const router = new ToolRouterV2();
+      const router = new ToolRouter();
       const result = await router.execute(
         { tool: 'nonexistent', action: 'foo', params: {} },
         stubCtx()
@@ -183,7 +183,7 @@ describe('ToolRouterV2', () => {
     });
 
     test('returns fail for unknown action', async () => {
-      const router = new ToolRouterV2();
+      const router = new ToolRouter();
       const result = await router.execute(
         { tool: 'code', action: 'nonexistent', params: {} },
         stubCtx()
@@ -204,7 +204,7 @@ describe('ToolRouterV2', () => {
       TOOL_REGISTRY.meta.actions.review.handler = mockHandler;
 
       try {
-        const router = new ToolRouterV2();
+        const router = new ToolRouter();
         const result = await router.execute(
           { tool: 'meta', action: 'review', params: {} },
           stubCtx()
@@ -228,7 +228,7 @@ describe('ToolRouterV2', () => {
       TOOL_REGISTRY.meta.actions.review.handler = throwingHandler;
 
       try {
-        const router = new ToolRouterV2();
+        const router = new ToolRouter();
         const result = await router.execute(
           { tool: 'meta', action: 'review', params: {} },
           stubCtx()
@@ -253,7 +253,7 @@ describe('ToolRouterV2', () => {
       TOOL_REGISTRY.code.actions.write.handler = mockHandler;
 
       try {
-        const router = new ToolRouterV2();
+        const router = new ToolRouter();
         const result = await router.execute(
           { tool: 'code', action: 'write', params: { path: 'x', content: 'y' } },
           stubCtx()
@@ -266,12 +266,12 @@ describe('ToolRouterV2', () => {
     });
 
     test('denies tool not in capability allowedTools', async () => {
-      const cap: CapabilityV2Def = {
+      const cap: CapabilityDef = {
         name: 'test-cap',
         description: 'test',
         allowedTools: { code: ['search', 'read'] },
       };
-      const router = new ToolRouterV2({ capability: cap });
+      const router = new ToolRouter({ capability: cap });
       const result = await router.execute(
         { tool: 'terminal', action: 'exec', params: { command: 'ls' } },
         stubCtx()
@@ -282,12 +282,12 @@ describe('ToolRouterV2', () => {
     });
 
     test('denies action not in capability allowed actions', async () => {
-      const cap: CapabilityV2Def = {
+      const cap: CapabilityDef = {
         name: 'test-cap',
         description: 'test',
         allowedTools: { code: ['search', 'read'] },
       };
-      const router = new ToolRouterV2({ capability: cap });
+      const router = new ToolRouter({ capability: cap });
       const result = await router.execute(
         { tool: 'code', action: 'write', params: { path: 'x', content: 'y' } },
         stubCtx()
@@ -308,12 +308,12 @@ describe('ToolRouterV2', () => {
       TOOL_REGISTRY.code.actions.search.handler = mockHandler;
 
       try {
-        const cap: CapabilityV2Def = {
+        const cap: CapabilityDef = {
           name: 'test-cap',
           description: 'test',
           allowedTools: { code: ['search', 'read'] },
         };
-        const router = new ToolRouterV2({ capability: cap });
+        const router = new ToolRouter({ capability: cap });
         const result = await router.execute(
           { tool: 'code', action: 'search', params: { patterns: ['x'] } },
           stubCtx()
@@ -328,13 +328,13 @@ describe('ToolRouterV2', () => {
 
   describe('getSchemas', () => {
     test('returns all schemas when no capability is set', () => {
-      const router = new ToolRouterV2();
+      const router = new ToolRouter();
       const schemas = router.getSchemas();
       expect(schemas).toHaveLength(6);
     });
 
     test('filters schemas by capability allowedTools', () => {
-      const cap: CapabilityV2Def = {
+      const cap: CapabilityDef = {
         name: 'restricted',
         description: 'test',
         allowedTools: {
@@ -342,7 +342,7 @@ describe('ToolRouterV2', () => {
           memory: ['recall'],
         },
       };
-      const router = new ToolRouterV2({ capability: cap });
+      const router = new ToolRouter({ capability: cap });
       const schemas = router.getSchemas();
       expect(schemas).toHaveLength(2);
 

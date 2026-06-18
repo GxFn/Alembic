@@ -20,7 +20,7 @@ import {
   AgentStageFactoryRegistry,
   SystemRunContextFactory,
 } from '@alembic/agent/service';
-import { V2CapabilityCatalog, V2ToolRouterAdapter } from '@alembic/agent/tools/runtime';
+import { RuntimeCapabilityCatalog, ToolRouterAdapter } from '@alembic/agent/tools/runtime';
 import { TERMINAL_CAPABILITY_MANIFESTS } from '@alembic/agent/tools/terminal';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { DashboardOperationAdapter } from '#tools/adapters/DashboardOperationAdapter.js';
@@ -41,13 +41,13 @@ import { getAiRuntimeStatus, getAiUnavailableMessage } from '../AiRuntimeStatus.
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {
-  // ── V2 Tool System ─────────────────────────────────────────────────
-  // capabilityCatalog: V2CapabilityCatalog 直接从 TOOL_REGISTRY 生成 schema
-  c.singleton('capabilityCatalog', () => new V2CapabilityCatalog());
+  // ── Tool System ─────────────────────────────────────────────────
+  // capabilityCatalog: RuntimeCapabilityCatalog 直接从 TOOL_REGISTRY 生成 schema
+  c.singleton('capabilityCatalog', () => new RuntimeCapabilityCatalog());
 
-  // V2 ToolContextFactory: 长生命周期，持有 DeltaCache/SearchCache/Compressor
+  // ToolContextFactory: 长生命周期，持有 DeltaCache/SearchCache/Compressor
   c.singleton(
-    'v2ToolContextFactory',
+    'toolContextFactory',
     (ct: ServiceContainer) =>
       new ToolContextFactory({
         container: ct,
@@ -55,12 +55,12 @@ export function register(c: ServiceContainer) {
       })
   );
 
-  // toolRouter: V2ToolRouterAdapter 实现 ToolRouterContract
+  // toolRouter: ToolRouterAdapter 实现 ToolRouterContract
   c.singleton(
     'toolRouter',
     (ct: ServiceContainer) =>
-      new V2ToolRouterAdapter({
-        contextFactory: ct.get('v2ToolContextFactory') as ToolContextFactory,
+      new ToolRouterAdapter({
+        contextFactory: ct.get('toolContextFactory') as ToolContextFactory,
       })
   );
 
