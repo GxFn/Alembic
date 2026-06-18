@@ -1384,7 +1384,7 @@ program
       // Collect project source files directly (the retired compliance/coverage reporter used to do
       // this) and gate on GuardCheckEngine.auditFiles — keeps CI exit-code semantics, drops the
       // compliance/coverage SCORING.
-      const { SOURCE_EXTS } = await import('@alembic/core/guard');
+      const { LanguageService } = await import('@alembic/core/shared');
       const { readdirSync, statSync } = await import('node:fs');
       const { extname, join } = await import('node:path');
       const SKIP_DIRS = new Set([
@@ -1430,7 +1430,7 @@ program
             if (!SKIP_DIRS.has(name)) {
               walk(full);
             }
-          } else if (SOURCE_EXTS.has(extname(name).toLowerCase())) {
+          } else if (LanguageService.sourceExts.has(extname(name).toLowerCase())) {
             try {
               collected.push({ path: full, content: readFileSync(full, 'utf8') });
             } catch {
@@ -1563,9 +1563,11 @@ program
       }
 
       // 过滤源文件
-      const { SOURCE_EXTS } = await import('@alembic/core/guard');
+      const { LanguageService } = await import('@alembic/core/shared');
       const { extname: _extname } = await import('node:path');
-      const sourceFiles = stagedFiles.filter((f) => SOURCE_EXTS.has(_extname(f).toLowerCase()));
+      const sourceFiles = stagedFiles.filter((f) =>
+        LanguageService.sourceExts.has(_extname(f).toLowerCase())
+      );
 
       if (sourceFiles.length === 0) {
         process.exit(0);
