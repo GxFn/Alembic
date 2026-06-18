@@ -156,11 +156,6 @@ describe('daemon health resident service contract', () => {
       available: false,
       owner: 'alembic-plugin',
     });
-    expect((data.capabilities as Record<string, unknown>).decisionRegister).toMatchObject({
-      available: true,
-      owner: 'alembic',
-      route: 'decision-register',
-    });
     expect((data.capabilities as Record<string, unknown>).residentSearch).toBeDefined();
     expect(projectRuntimeSourceOfTruth).toMatchObject({
       contractVersion: 1,

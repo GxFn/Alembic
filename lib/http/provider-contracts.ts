@@ -18,7 +18,7 @@ import { buildAlembicHttpProblem } from './problem-taxonomy.js';
 
 export const ALEMBIC_PROVIDER_CONTRACT_VERSION = 1;
 
-export type AlembicProviderRegistryRowId = CoreContractSpineRowId | 'I09' | 'I10' | 'I11' | 'I22';
+export type AlembicProviderRegistryRowId = CoreContractSpineRowId | 'I09' | 'I11' | 'I22';
 export type AlembicProviderRouteRowId = Exclude<AlembicProviderRegistryRowId, 'I01'>;
 export type AlembicProviderFixtureScenario =
   | 'success'
@@ -289,24 +289,6 @@ const routeRows = {
     fixtureIds: ['api-spec.success', 'route.not-found', 'route.permission-denied'],
     scenarios: ['success', 'not-found', 'permission-denied'],
   },
-  I10: {
-    artifactPolicy: 'Compact decision summary inline; large evidence payloads by ref.',
-    capabilityDiscovery: ['/api/v1/decision-register/capability'],
-    errorKinds: [
-      'invalid-input',
-      'unavailable',
-      'capability-mismatch',
-      'conflict',
-      'needs-confirmation',
-    ],
-    exposureClasses: ['public', 'consumer-needed', 'diagnostic'],
-    fixtureIds: [
-      'decision-register.success',
-      'decision-register.scope-mismatch',
-      'decision-register.needs-confirmation',
-    ],
-    scenarios: ['success', 'conflict', 'needs-confirmation'],
-  },
   I11: {
     artifactPolicy: 'Intent/work summaries inline; long histories by detailRef.',
     capabilityDiscovery: ['/api/v1/intent-episodes capability block'],
@@ -447,22 +429,6 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
     'Job artifact read',
     ['Jobs']
   ),
-  route(
-    'I10',
-    'post',
-    '/decision-register',
-    'createDecisionRegisterRecord',
-    'Decision Register create',
-    ['DecisionRegister']
-  ),
-  route(
-    'I10',
-    'get',
-    '/decision-register/searchable',
-    'searchDecisionRegister',
-    'Decision Register searchable view',
-    ['DecisionRegister']
-  ),
   route('I11', 'post', '/intent-episodes', 'startIntentEpisode', 'Intent/work continuity start', [
     'Intent',
   ]),
@@ -523,7 +489,6 @@ export const ALEMBIC_PROVIDER_ROUTE_MOUNTS = [
   mount('I21', '/api/v1/rules'),
   mount('I09', '/api/v1/task'),
   mount('I11', '/api/v1/intent-episodes'),
-  mount('I10', '/api/v1/decision-register'),
   mount('I22', '/api/v1/search'),
   mount('I22', '/api/v1/ai'),
   mount('I22', '/api/v1/extract'),
@@ -729,34 +694,6 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
       status: 403,
     }),
   }),
-  fixture('I10', 'I10.decision-register.post', 'decision-register.success', 'success', {
-    success: true,
-    data: { decision: { decisionId: 'decision-alpha', status: 'active' } },
-  }),
-  fixture('I10', 'I10.decision-register.post', 'decision-register.scope-mismatch', 'conflict', {
-    success: false,
-    error: providerProblem(
-      'PROJECT_SCOPE_MISMATCH',
-      'Decision scope does not match current Alembic workspace',
-      'conflict',
-      { status: 409 }
-    ),
-  }),
-  fixture(
-    'I10',
-    'I10.decision-register.post',
-    'decision-register.needs-confirmation',
-    'needs-confirmation',
-    {
-      success: false,
-      error: providerProblem(
-        'DECISION_REQUIRES_CONFIRMATION',
-        'Decision mutation requires explicit confirmation',
-        'needs-confirmation',
-        { status: 412 }
-      ),
-    }
-  ),
   fixture('I11', 'I11.intent-episodes.post', 'intent-episode.success', 'success', {
     success: true,
     data: { episode: { episodeId: 'intent-alpha', status: 'open' } },

@@ -31,7 +31,6 @@ describe('Alembic provider contracts', () => {
         'I07',
         'I08',
         'I09',
-        'I10',
         'I11',
         'I21',
         'I22',
@@ -226,7 +225,8 @@ describe('Alembic provider contracts', () => {
       'degraded',
       'partial',
       'capability-mismatch',
-      'needs-confirmation',
+      // 'needs-confirmation' dropped from the D25 required floor (AlembicCore 987511c) —
+      // Alembic no longer produces it once the decision-register HTTP entry was retired (DRR-2).
       'provider-error',
       'host-failure',
       'internal-error',

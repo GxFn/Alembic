@@ -25,7 +25,6 @@ vi.mock('../../lib/injection/ServiceContainer.js', () => ({
 }));
 
 import authRouter from '../../lib/http/routes/auth.js';
-import decisionRegisterRouter from '../../lib/http/routes/decision-register.js';
 import knowledgeRouter from '../../lib/http/routes/knowledge.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
@@ -230,25 +229,6 @@ describe('AO4 negative suites', () => {
       status: 'cancelled',
     });
     expect(store.get(job.id)).toMatchObject({ status: 'cancelled' });
-  });
-
-  test('wrong ProjectScope is rejected with a structured blocker', async () => {
-    const response = await invokeRouter(decisionRegisterRouter, {
-      body: {
-        decision: 'wrong scope must not write',
-        scope: { projectScopeId: 'other-scope' },
-        title: 'AO4 wrong scope',
-      },
-      method: 'POST',
-      mountPath: '/api/v1/decision-register',
-      path: '/api/v1/decision-register',
-    });
-
-    expect(response.status).toBe(409);
-    expect(response.body).toMatchObject({
-      reasonCode: 'project-scope-mismatch',
-      success: false,
-    });
   });
 });
 

@@ -544,7 +544,7 @@ export const DASHBOARD_JOB_KINDS: readonly DashboardJobKind[] = [
 ];
 
 // ════════════════════════════════════════════════════════════════════
-// HTTP route contract table (33 routes, contract version 1)
+// HTTP route contract table (31 routes, contract version 1)
 // ════════════════════════════════════════════════════════════════════
 
 export const DASHBOARD_API_CONTRACT_VERSION = 1;
@@ -1518,98 +1518,6 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
       "404": "schema-2",
       "422": "schema-2",
       "500": "schema-2"
-    }
-  },
-  {
-    "artifactPolicy": "Compact decision summary inline; large evidence payloads by ref.",
-    "capabilityDiscovery": [
-      "/api/v1/decision-register/capability"
-    ],
-    "contractId": "I10.createDecisionRegisterRecord",
-    "errorKinds": [
-      "invalid-input",
-      "unavailable",
-      "capability-mismatch",
-      "conflict",
-      "needs-confirmation"
-    ],
-    "exposureClasses": [
-      "public",
-      "consumer-needed",
-      "diagnostic"
-    ],
-    "fixtureIds": [
-      "decision-register.success",
-      "decision-register.scope-mismatch",
-      "decision-register.needs-confirmation"
-    ],
-    "functionClass": "rest-command",
-    "method": "post",
-    "operationId": "createDecisionRegisterRecord",
-    "path": "/decision-register",
-    "registryRowId": "I10",
-    "summary": "Decision Register create",
-    "supportedScenarios": [
-      "success",
-      "conflict",
-      "needs-confirmation"
-    ],
-    "tags": [
-      "DecisionRegister"
-    ],
-    "responseSchemas": {
-      "200": "schema-1",
-      "400": "schema-2",
-      "409": "schema-2",
-      "412": "schema-2",
-      "501": "schema-2",
-      "503": "schema-2"
-    }
-  },
-  {
-    "artifactPolicy": "Compact decision summary inline; large evidence payloads by ref.",
-    "capabilityDiscovery": [
-      "/api/v1/decision-register/capability"
-    ],
-    "contractId": "I10.searchDecisionRegister",
-    "errorKinds": [
-      "invalid-input",
-      "unavailable",
-      "capability-mismatch",
-      "conflict",
-      "needs-confirmation"
-    ],
-    "exposureClasses": [
-      "public",
-      "consumer-needed",
-      "diagnostic"
-    ],
-    "fixtureIds": [
-      "decision-register.success",
-      "decision-register.scope-mismatch",
-      "decision-register.needs-confirmation"
-    ],
-    "functionClass": "rest-command",
-    "method": "get",
-    "operationId": "searchDecisionRegister",
-    "path": "/decision-register/searchable",
-    "registryRowId": "I10",
-    "summary": "Decision Register searchable view",
-    "supportedScenarios": [
-      "success",
-      "conflict",
-      "needs-confirmation"
-    ],
-    "tags": [
-      "DecisionRegister"
-    ],
-    "responseSchemas": {
-      "200": "schema-1",
-      "400": "schema-2",
-      "409": "schema-2",
-      "412": "schema-2",
-      "501": "schema-2",
-      "503": "schema-2"
     }
   },
   {
