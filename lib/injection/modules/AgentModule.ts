@@ -2,7 +2,7 @@
  * AgentModule — Agent 架构服务注册
  *
  * 负责注册:
- *   - agentService, toolRegistry, toolForge, skillHooks
+ *   - agentService, toolRegistry, skillHooks
  */
 
 import {
@@ -11,7 +11,6 @@ import {
   UnifiedToolCatalog,
   WorkflowRegistry,
 } from '@alembic/agent';
-import { ToolForge } from '@alembic/agent/forge';
 import {
   AgentProfileCompiler,
   AgentProfileRegistry,
@@ -23,7 +22,6 @@ import {
 } from '@alembic/agent/service';
 import { TERMINAL_CAPABILITY_MANIFESTS } from '@alembic/agent/tools/terminal';
 import { V2CapabilityCatalog, V2ToolRouterAdapter } from '@alembic/agent/tools/v2';
-import type { SignalBus } from '@alembic/core/events';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { DashboardOperationAdapter } from '#tools/adapters/DashboardOperationAdapter.js';
 import {
@@ -41,15 +39,6 @@ import { ToolContextFactory } from '#tools/v2/ToolContextFactory.js';
 import { SkillHooks } from '../../service/skills/SkillHooks.js';
 import { getAiRuntimeStatus, getAiUnavailableMessage } from '../AiRuntimeStatus.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
-
-type HostToolForgeConstructor = new (
-  registry: unknown,
-  options?: {
-    signalBus?: SignalBus;
-    capabilityCatalog?: unknown;
-    workflowRegistry?: unknown;
-  }
-) => InstanceType<typeof ToolForge>;
 
 export function register(c: ServiceContainer) {
   // ── V2 Tool System ─────────────────────────────────────────────────
@@ -115,17 +104,6 @@ export function register(c: ServiceContainer) {
 
   c.singleton('workflowRegistry', () => new WorkflowRegistry());
   c.singleton('terminalSessionManager', () => new InMemoryTerminalSessionManager());
-
-  c.singleton('toolForge', (ct: ServiceContainer) => {
-    const catalog = ct.get('toolRegistry') as UnifiedToolCatalog;
-    const signalBus = ct.singletons.signalBus as SignalBus | undefined;
-    const AgentToolForge = ToolForge as unknown as HostToolForgeConstructor;
-    return new AgentToolForge(catalog, {
-      signalBus,
-      capabilityCatalog: catalog as unknown as CapabilityCatalog,
-      workflowRegistry: ct.get('workflowRegistry') as WorkflowRegistry,
-    });
-  });
 
   c.singleton('agentProfileRegistry', () => new AgentProfileRegistry(), { aiDependent: false });
 
