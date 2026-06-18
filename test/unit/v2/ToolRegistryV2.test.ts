@@ -7,7 +7,7 @@ import {
   type ToolContext,
   type ToolResult,
   ToolRouterV2,
-} from '@alembic/agent/tools/v2';
+} from '@alembic/agent/tools/runtime';
 import { describe, expect, test, vi } from 'vitest';
 
 const ALL_TOOL_NAMES = ['code', 'terminal', 'knowledge', 'graph', 'memory', 'meta'] as const;

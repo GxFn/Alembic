@@ -19,7 +19,7 @@ import {
   ToolRouterV2,
   V2CapabilityCatalog,
   V2ToolRouterAdapter,
-} from '@alembic/agent/tools/v2';
+} from '@alembic/agent/tools/runtime';
 import { describe, expect, test } from 'vitest';
 
 const PROJECT_ROOT = process.cwd();

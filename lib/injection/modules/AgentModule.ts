@@ -20,8 +20,8 @@ import {
   AgentStageFactoryRegistry,
   SystemRunContextFactory,
 } from '@alembic/agent/service';
+import { V2CapabilityCatalog, V2ToolRouterAdapter } from '@alembic/agent/tools/runtime';
 import { TERMINAL_CAPABILITY_MANIFESTS } from '@alembic/agent/tools/terminal';
-import { V2CapabilityCatalog, V2ToolRouterAdapter } from '@alembic/agent/tools/v2';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { DashboardOperationAdapter } from '#tools/adapters/DashboardOperationAdapter.js';
 import {

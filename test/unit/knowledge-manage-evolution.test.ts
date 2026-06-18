@@ -1,4 +1,4 @@
-import { TOOL_REGISTRY, type ToolContext } from '@alembic/agent/tools/v2';
+import { TOOL_REGISTRY, type ToolContext } from '@alembic/agent/tools/runtime';
 import { describe, expect, it, vi } from 'vitest';
 
 const handle = TOOL_REGISTRY.knowledge.actions.manage.handler;

@@ -13,7 +13,7 @@ import {
   OutputCompressor,
   SearchCache,
   type ToolContext,
-} from '@alembic/agent/tools/v2';
+} from '@alembic/agent/tools/runtime';
 
 interface ServiceContainer {
   get(name: string): unknown;
