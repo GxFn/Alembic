@@ -4,9 +4,7 @@
  * 验证:
  *   1. GuardCheckEngine._uncertaintyCollector 存在
  *   2. auditFiles 返回 capabilityReport
- *   3. ComplianceReporter 三维评分字段存在
- *   4. RuleLearner.checkPrecisionDrop 可用
- *   5. CoverageAnalyzer 可实例化
+ *   3. RuleLearner.checkPrecisionDrop 可用
  */
 import { describe, expect, it } from 'vitest';
 
@@ -56,16 +54,6 @@ describe('Guard Immune System Wiring', () => {
     expect(typeof learner.checkPrecisionDrop).toBe('function');
     const result = learner.checkPrecisionDrop();
     expect(Array.isArray(result)).toBe(true);
-  });
-
-  it('CoverageAnalyzer should instantiate with mock DB', async () => {
-    const { CoverageAnalyzer } = await import('@alembic/core/guard');
-    const mockDb = {
-      prepare: () => ({ all: () => [], get: () => undefined }),
-    };
-    const analyzer = new CoverageAnalyzer(mockDb);
-    const result = analyzer.analyze(new Map([['Mod', ['a.swift']]]));
-    expect(result.modules).toHaveLength(1);
   });
 
   it('UncertaintyCollector types should be importable', async () => {

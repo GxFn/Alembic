@@ -25,7 +25,6 @@ import type { DatabaseConnection } from '@alembic/core/database';
 import type { DimensionCopy } from '@alembic/core/dimensions';
 import type { EventBus, SignalBus } from '@alembic/core/events';
 import type {
-  ComplianceReporter,
   ExclusionManager,
   GuardCheckEngine,
   GuardFeedbackLoop,
@@ -157,7 +156,6 @@ export interface ServiceMap {
   exclusionManager: ExclusionManager;
   ruleLearner: RuleLearner;
   violationsStore: ViolationsStore;
-  complianceReporter: ComplianceReporter;
   guardFeedbackLoop: GuardFeedbackLoop;
 
   // ═══ AgentModule ═══

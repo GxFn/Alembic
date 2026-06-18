@@ -1379,50 +1379,149 @@ program
     try {
       const projectRoot = resolve(scanPath || '.');
       const { bootstrap, container } = await initContainer({ projectRoot });
-      const reporter = container.get('complianceReporter');
+      const engine = container.get('guardCheckEngine');
 
-      const report = await reporter.generate(projectRoot, {
-        qualityGate: {
-          maxErrors: 0,
-          maxWarnings: parseInt(opts.maxWarnings, 10),
-          minScore: parseInt(opts.minScore, 10),
-        },
-        maxFiles: parseInt(opts.maxFiles, 10),
-      });
+      // Collect project source files directly (the retired compliance/coverage reporter used to do
+      // this) and gate on GuardCheckEngine.auditFiles — keeps CI exit-code semantics, drops the
+      // compliance/coverage SCORING.
+      const { SOURCE_EXTS } = await import('@alembic/core/guard');
+      const { readdirSync, statSync } = await import('node:fs');
+      const { extname, join } = await import('node:path');
+      const SKIP_DIRS = new Set([
+        'node_modules',
+        '.git',
+        'dist',
+        'build',
+        'coverage',
+        'out',
+        'vendor',
+        '.asd',
+        '.next',
+        '.workspace-active',
+        '.workspace-local',
+      ]);
+      const maxFiles = parseInt(opts.maxFiles, 10) || 500;
+      const collected: { path: string; content: string }[] = [];
+      const walk = (dir: string): void => {
+        if (collected.length >= maxFiles) {
+          return;
+        }
+        let names: string[];
+        try {
+          names = readdirSync(dir);
+        } catch {
+          return;
+        }
+        for (const name of names) {
+          if (collected.length >= maxFiles) {
+            return;
+          }
+          if (name.startsWith('.')) {
+            continue;
+          }
+          const full = join(dir, name);
+          let isDir = false;
+          try {
+            isDir = statSync(full).isDirectory();
+          } catch {
+            continue;
+          }
+          if (isDir) {
+            if (!SKIP_DIRS.has(name)) {
+              walk(full);
+            }
+          } else if (SOURCE_EXTS.has(extname(name).toLowerCase())) {
+            try {
+              collected.push({ path: full, content: readFileSync(full, 'utf8') });
+            } catch {
+              /* skip unreadable */
+            }
+          }
+        }
+      };
+      walk(projectRoot);
 
-      // 输出报告
+      const result = engine.auditFiles(collected, { scope: 'project' });
+
+      let errors = 0;
+      let warnings = 0;
+      for (const f of result.files as any[]) {
+        errors += f.summary?.errors ?? 0;
+        warnings += f.summary?.warnings ?? 0;
+      }
+      const uncertain = result.summary?.totalUncertain ?? 0;
+      const checkCoverage = result.capabilityReport?.checkCoverage ?? 100;
+      const totalViolations = result.summary?.totalViolations ?? errors + warnings;
+
+      const writeReport = async () => {
+        const { writeFileSync } = await import('node:fs');
+        writeFileSync(
+          opts.output,
+          JSON.stringify(
+            {
+              files: result.files,
+              summary: result.summary,
+              capabilityReport: result.capabilityReport,
+            },
+            null,
+            2
+          ),
+          'utf8'
+        );
+        cli.log(`Report written to ${opts.output}`);
+      };
+
       if (opts.report === 'json') {
-        const output = JSON.stringify(report, null, 2);
+        const output = JSON.stringify(
+          {
+            files: result.files,
+            summary: result.summary,
+            capabilityReport: result.capabilityReport,
+          },
+          null,
+          2
+        );
         if (opts.output) {
-          const { writeFileSync } = await import('node:fs');
-          writeFileSync(opts.output, output, 'utf8');
-          cli.log(`Report written to ${opts.output}`);
+          await writeReport();
         } else {
           cli.log(output);
         }
       } else {
-        reporter.printReport(report, { format: opts.report });
-      }
-
-      // 如果也要写文件（非 JSON 格式）
-      if (opts.output && opts.report !== 'json') {
-        const { writeFileSync } = await import('node:fs');
-        writeFileSync(opts.output, JSON.stringify(report, null, 2), 'utf8');
+        cli.log(
+          `\n🔍 Guard:CI — ${totalViolations} violation(s) in ${collected.length} file(s): ${errors} error(s), ${warnings} warning(s), ${uncertain} uncertain; check coverage ${checkCoverage}%\n`
+        );
+        const filesWithIssues = (result.files as any[]).filter((f) => f.summary?.total > 0);
+        for (const file of filesWithIssues.slice(0, 20)) {
+          cli.log(`  📄 ${file.filePath}`);
+          for (const v of file.violations.slice(0, 5)) {
+            const icon = v.severity === 'error' ? '❌' : '⚠️';
+            cli.log(`    ${icon} [${v.ruleId}] ${v.message}`);
+          }
+          if (file.violations.length > 5) {
+            cli.log(`    ... and ${file.violations.length - 5} more`);
+          }
+        }
+        cli.blank();
+        if (opts.output) {
+          await writeReport();
+        }
       }
 
       await bootstrap.shutdown();
 
-      // Exit code: 0=PASS, 1=FAIL(violations), 2=WARN(uncertain/warnings), 3=FAIL(coverage)
+      // CI exit codes (gate on GuardCheckEngine signals; the compliance/quality-score gate is retired):
+      //   0=PASS · 1=error present · 2=warnings/uncertain over threshold · 3=check coverage below --min-coverage
+      const maxWarnings = parseInt(opts.maxWarnings, 10);
       const maxUncertain = parseInt(opts.maxUncertain, 10);
       const minCoverage = parseInt(opts.minCoverage, 10);
 
-      if (report.qualityGate.status === 'FAIL') {
-        process.exit(report.summary.errors > 0 ? 1 : 2);
+      if (errors > 0) {
+        process.exit(1);
       }
-      if (minCoverage > 0 && (report.coverageScore ?? 100) < minCoverage) {
+      if (minCoverage > 0 && checkCoverage < minCoverage) {
         process.exit(3);
       }
-      if (maxUncertain > 0 && (report.uncertainSummary?.total ?? 0) > maxUncertain) {
+      if (warnings > maxWarnings || (maxUncertain > 0 && uncertain > maxUncertain)) {
         process.exit(2);
       }
       process.exit(0);
@@ -1663,9 +1762,6 @@ program
     let dbEntries = 0;
     let guardRuleCount = 0;
     let knowledgeStats: Record<string, number> = {};
-    let complianceScore = 0;
-    let coverageScore = 0;
-    let confidencePct = 0;
     let signalEmitted = 0;
     let signalListeners = 0;
 
@@ -1701,19 +1797,6 @@ program
         }
 
         try {
-          const reporter = container.get('complianceReporter');
-          const report = await reporter.generate(projectRoot, {
-            qualityGate: { maxErrors: 0, maxWarnings: 100, minScore: 0 },
-            maxFiles: 200,
-          });
-          complianceScore = report.complianceScore ?? 0;
-          coverageScore = report.coverageScore ?? 0;
-          confidencePct = report.confidenceScore ?? 0;
-        } catch {
-          /* compliance reporter 不可用 */
-        }
-
-        try {
           const signalBus = container.get('signalBus') as {
             emitCount?: number;
             listenerCount?: number;
@@ -1744,11 +1827,6 @@ program
         evolving: knowledgeStats.evolving ?? 0,
         decaying: knowledgeStats.decaying ?? 0,
       },
-      guard: {
-        compliance: complianceScore,
-        coverage: coverageScore,
-        confidence: confidencePct,
-      },
       signals: {
         emitted: signalEmitted,
         listeners: signalListeners,
@@ -1767,9 +1845,6 @@ program
       cli.log(`🔧 System:  AI:${aiIcon}  DB:${dbStatus}  Guard:${guardRuleCount} rules`);
       cli.log(
         `📊 Knowledge: Active:${healthData.knowledge.active} Staging:${healthData.knowledge.staging} Evolving:${healthData.knowledge.evolving} Decaying:${healthData.knowledge.decaying}`
-      );
-      cli.log(
-        `🛡️ Guard: Compliance:${complianceScore} Coverage:${coverageScore} Confidence:${confidencePct}%`
       );
       cli.log(`📡 Signals: emitted:${signalEmitted} listeners:${signalListeners}`);
       cli.blank();

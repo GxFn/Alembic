@@ -3,12 +3,9 @@
  *
  * 验证 Phase 2 新增组件在真实（模拟）环境中的协同:
  *   1. UncertaintyCollector 在 GuardCheckEngine 中的集成
- *   2. ComplianceReporter 三维评分
- *   3. CoverageAnalyzer 覆盖率矩阵
- *   4. RuleLearner 桥接
+ *   2. RuleLearner 桥接
  */
 
-import { CoverageAnalyzer } from '@alembic/core/guard';
 import { GuardCheckEngine } from '@alembic/core/guard';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -73,40 +70,6 @@ describe('Guard Immune System Integration', () => {
     });
   });
 
-  describe('CoverageAnalyzer with real module structure', () => {
-    it('should produce coverage matrix from multi-module project', () => {
-      const knowledgeRepo = {
-        findActiveRuleIdsSync() {
-          return [
-            { id: 'r1', language: 'swift' },
-            { id: 'r2', language: 'objectivec' },
-            { id: 'r3', language: 'swift' },
-          ];
-        },
-      };
-      const guardViolationRepo = {
-        findRecentViolationsJson(_limit: number) {
-          return [];
-        },
-      };
-
-      const analyzer = new CoverageAnalyzer(knowledgeRepo as never, guardViolationRepo as never);
-      const moduleFiles = new Map([
-        ['BDUIKit', ['BDUIKit/A.swift', 'BDUIKit/B.swift']],
-        ['BDNet', ['BDNet/C.m', 'BDNet/D.h']],
-        ['BDAuth', []], // zero coverage
-      ]);
-
-      const result = analyzer.analyze(moduleFiles);
-      expect(result.modules).toHaveLength(3);
-      expect(result.zeroModules).toContain('BDAuth');
-      // BDUIKit has 2 swift rules for 2 files → 100%
-      const uiKit = result.modules.find((m) => m.module === 'BDUIKit');
-      expect(uiKit).toBeDefined();
-      expect(uiKit!.coverage).toBe(100);
-    });
-  });
-
   describe('RuleLearner bridge', () => {
     it('should identify precision drops and emit signals', async () => {
       // Dynamic import to avoid constructor side effects
@@ -140,68 +103,6 @@ describe('Guard Immune System Integration', () => {
         expect.any(Number),
         expect.objectContaining({ target: 'bad-rule' })
       );
-    });
-  });
-
-  describe('three-dimensional compliance', () => {
-    it('should produce coverage and confidence scores in report', async () => {
-      const { ComplianceReporter } = await import('@alembic/core/guard');
-
-      // Mock engine with uncertainty data
-      const mockEngine = {
-        auditFiles() {
-          return {
-            files: [
-              {
-                filePath: 'a.swift',
-                violations: [{ ruleId: 'r1', severity: 'warning', message: 'test' }],
-                uncertainResults: [
-                  {
-                    ruleId: 'r2',
-                    message: 'AST unavailable',
-                    layer: 'ast',
-                    reason: 'ast_unavailable',
-                    detail: 'No tree-sitter',
-                  },
-                ],
-                summary: { total: 1, errors: 0, warnings: 1, infos: 0, uncertain: 1 },
-              },
-            ],
-            crossFileViolations: [],
-            capabilityReport: {
-              checkCoverage: 75,
-              uncertainResults: [
-                {
-                  ruleId: 'r2',
-                  message: 'AST unavailable',
-                  layer: 'ast',
-                  reason: 'ast_unavailable',
-                  detail: 'No tree-sitter',
-                },
-              ],
-              boundaries: [
-                {
-                  type: 'ast_language_gap',
-                  description: 'AST skipped',
-                  affectedRules: ['r2'],
-                  suggestedAction: 'Install tree-sitter',
-                },
-              ],
-            },
-          };
-        },
-      };
-
-      const reporter = new ComplianceReporter(mockEngine as any, null, null, null);
-      const report = await reporter.generate('/tmp/test-project');
-
-      expect(report.complianceScore).toBeDefined();
-      expect(report.coverageScore).toBe(75);
-      expect(report.confidenceScore).toBeDefined();
-      expect(report.confidenceScore).toBeLessThan(100); // has uncertain items
-      expect(report.uncertainSummary.total).toBe(1);
-      expect(report.uncertainSummary.byLayer.ast).toBe(1);
-      expect(report.boundaries).toHaveLength(1);
     });
   });
 });

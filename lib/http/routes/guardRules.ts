@@ -352,31 +352,4 @@ router.post(
   }
 );
 
-/**
- * GET /api/v1/rules/compliance
- * 生成全项目合规报告
- * Query params:
- *   - path: 扫描根目录（默认 projectRoot）
- *   - maxErrors: Quality Gate 最大 error 数（默认 0）
- *   - maxWarnings: Quality Gate 最大 warning 数（默认 20）
- *   - minScore: Quality Gate 最低分（默认 70）
- *   - maxFiles: 最大扫描文件数（默认 500）
- */
-router.get('/compliance', async (req: Request, res: Response) => {
-  const container = getServiceContainer();
-  const reporter = container.get('complianceReporter');
-  const projectRoot = String(req.query.path || process.env.ALEMBIC_PROJECT_DIR || process.cwd());
-
-  const report = await reporter.generate(projectRoot, {
-    qualityGate: {
-      maxErrors: parseInt(req.query.maxErrors as string, 10) || 0,
-      maxWarnings: parseInt(req.query.maxWarnings as string, 10) || 20,
-      minScore: parseInt(req.query.minScore as string, 10) || 70,
-    },
-    maxFiles: parseInt(req.query.maxFiles as string, 10) || 500,
-  });
-
-  res.json({ success: true, data: report });
-});
-
 export default router;
