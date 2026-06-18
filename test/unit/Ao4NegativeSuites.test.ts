@@ -5,7 +5,6 @@ import { JobStore } from '@alembic/core/daemon';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cancelDaemonJob } from '../../lib/daemon/DaemonJobRunner.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
-import { DecisionRegisterStore } from '../../lib/service/task/DecisionRegisterStore.js';
 import { invokeRouter } from '../helpers/express.js';
 
 const mocks = vi.hoisted(() => ({
@@ -33,22 +32,9 @@ const tempRoots: string[] = [];
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.knowledgeService.create.mockReset();
-  const decisionStore = new DecisionRegisterStore({
-    dataRoot: tempRoot('alembic-ao4-decision-store-'),
-    now: () => new Date('2026-06-12T00:00:00.000Z'),
-    workspace: {
-      dataRootSource: 'ghost-registry',
-      projectId: 'project-ao4',
-      projectScopeId: 'scope-ao4',
-      workspaceMode: 'ghost',
-    },
-  });
   mocks.container.get.mockImplementation((name: string) => {
     if (name === 'auditLogger') {
       return mocks.auditLogger;
-    }
-    if (name === 'decisionRegisterStore') {
-      return decisionStore;
     }
     if (name === 'knowledgeService') {
       return mocks.knowledgeService;

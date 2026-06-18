@@ -33,7 +33,6 @@ import {
   BatchPublishBody,
   CreateGuardRuleBody,
   CreateKnowledgeBody,
-  DecisionRegisterCreateBody,
   IntentEpisodeStartBody,
   ResidentSearchBody,
   SearchQuery,
@@ -506,29 +505,6 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
       const record = result as Record<string, unknown>;
       expect(record.hostIntent).toEqual({ hostDeclaredIntent: { label: 'handoff' } });
       expect(record.threadId).toBeUndefined();
-    });
-  });
-
-  describe('DecisionRegisterCreateBody', () => {
-    test('keeps typed scope identity fields and strips unnamed scope extras', () => {
-      const result = DecisionRegisterCreateBody.parse({
-        title: 'Decision',
-        decision: 'Use typed provider problems',
-        scope: {
-          opaquePath: 'legacy/path',
-          projectId: 'project-alpha',
-          qualifiedPath: 'project-alpha:legacy/path',
-          workspaceMode: 'single',
-          privateThreadId: 'thread-1',
-        },
-      });
-      expect(result.scope).toMatchObject({
-        projectId: 'project-alpha',
-        qualifiedPath: 'project-alpha:legacy/path',
-        workspaceMode: 'single',
-      });
-      expect((result.scope as Record<string, unknown>).opaquePath).toBeUndefined();
-      expect((result.scope as Record<string, unknown>).privateThreadId).toBeUndefined();
     });
   });
 
