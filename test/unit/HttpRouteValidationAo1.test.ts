@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import fileChangesRouter from '../../lib/http/routes/file-changes.js';
 import logsRouter from '../../lib/http/routes/logs.js';
-import monitoringRouter from '../../lib/http/routes/monitoring.js';
 import projectScopeRouter from '../../lib/http/routes/project-scope.js';
 import projectsRouter from '../../lib/http/routes/projects.js';
 import recipesRouter from '../../lib/http/routes/recipes.js';
@@ -15,18 +14,6 @@ describe('AO1 HTTP route input validation', () => {
     const response = await getRouter(logsRouter, '/api/v1/logs?file=../../secret', {
       mountPath: '/api/v1/logs',
     });
-
-    expectValidationError(response.status, response.body);
-  });
-
-  test('monitoring error search rejects invalid numeric limit', async () => {
-    const response = await getRouter(
-      monitoringRouter,
-      '/api/v1/monitoring/errors/search?limit=abc',
-      {
-        mountPath: '/api/v1/monitoring',
-      }
-    );
 
     expectValidationError(response.status, response.body);
   });

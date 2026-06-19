@@ -42,7 +42,6 @@ describe('Integration: HTTP API Endpoints', () => {
       port: PORT,
       host: 'localhost',
       enableRedis: false,
-      enableMonitoring: false,
       cacheMode: 'memory',
     });
     await httpServer.initialize();

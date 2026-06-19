@@ -1,20 +1,17 @@
 /**
  * HTTP Server - Alembic 2.0
  * 基于 Express 框架的 REST API 服务器
- * 集成监控、缓存和错误追踪
+ * 集成缓存
  */
 
 import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
 import Logger from '@alembic/core/logging';
-import { resolveDataRoot } from '@alembic/core/workspace';
 import cors from 'cors';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import { registerGatewayActions } from '../governance/gateway/GatewayActionRegistry.js';
 import { initCacheAdapter } from '../infrastructure/cache/UnifiedCacheAdapter.js';
-import { type ErrorTracker, initErrorTracker } from '../infrastructure/monitoring/ErrorTracker.js';
-import { initPerformanceMonitor } from '../infrastructure/monitoring/PerformanceMonitor.js';
 import { initRealtimeService } from '../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../injection/ServiceContainer.js';
 import apiSpec from './api-spec.js';
@@ -38,7 +35,6 @@ import jobsRouter from './routes/jobs.js';
 import knowledgeRouter from './routes/knowledge.js';
 import logsRouter from './routes/logs.js';
 import modulesRouter from './routes/modules.js';
-import monitoringRouter from './routes/monitoring.js';
 import panoramaRouter from './routes/panorama.js';
 import projectScopeRouter from './routes/project-scope.js';
 import projectsRouter from './routes/projects.js';
@@ -53,7 +49,6 @@ import wikiRouter from './routes/wiki.js';
 interface HttpServerConfig {
   port: number;
   host: string;
-  enableMonitoring: boolean;
   cacheMode: string;
   corsOrigin?: string;
   [key: string]: unknown;
@@ -69,11 +64,9 @@ export class HttpServer {
   app: Application;
   cacheAdapter: unknown;
   config: HttpServerConfig;
-  errorTracker: ErrorTracker | null;
   activeRequestCount: number;
   activeStreamingResponses: Set<Response>;
   logger: AppLogger;
-  performanceMonitor: { middleware(): express.RequestHandler; shutdown(): void } | null;
   realtimeService: Record<string, unknown> | null;
   server: Server | null;
   stopping: boolean;
@@ -81,7 +74,6 @@ export class HttpServer {
     this.config = {
       port: config.port ?? 3000,
       host: config.host || 'localhost',
-      enableMonitoring: config.enableMonitoring !== false,
       cacheMode: 'memory',
       ...config,
     } as HttpServerConfig;
@@ -91,8 +83,6 @@ export class HttpServer {
     this.server = null;
     this.activeRequestCount = 0;
     this.activeStreamingResponses = new Set();
-    this.performanceMonitor = null;
-    this.errorTracker = null;
     this.cacheAdapter = null;
     this.realtimeService = null;
     this.stopping = false;
@@ -119,12 +109,11 @@ export class HttpServer {
       port: this.config.port,
       host: this.config.host,
       cacheMode: this.config.cacheMode,
-      monitoringEnabled: this.config.enableMonitoring,
       timestamp: new Date().toISOString(),
     });
   }
 
-  /** 初始化服务（监控、缓存等） */
+  /** 初始化服务（缓存等） */
   async initializeServices() {
     try {
       // 初始化缓存适配器（纯内存模式）
@@ -132,22 +121,6 @@ export class HttpServer {
         mode: 'memory',
       });
       this.logger.info('Cache adapter initialized');
-
-      // 初始化性能监控
-      if (this.config.enableMonitoring) {
-        this.performanceMonitor = initPerformanceMonitor();
-        this.logger.info('Performance monitor initialized');
-
-        // 初始化错误追踪（Ghost-aware）
-        const container = getServiceContainer();
-        const dataRoot = resolveDataRoot(container);
-        const wz = container.get('writeZone') as import('@alembic/core/io').WriteZone;
-        this.errorTracker = initErrorTracker({
-          logDirectory: join(dataRoot, '.asd', 'logs', 'errors'),
-          writeZone: wz,
-        });
-        this.logger.info('Error tracker initialized');
-      }
     } catch (error: unknown) {
       this.logger.error('Failed to initialize services', {
         error: (error as Error).message,
@@ -159,11 +132,6 @@ export class HttpServer {
 
   /** 设置中间件 */
   setupMiddleware() {
-    // 性能监控中间件（优先级最高）
-    if (this.performanceMonitor) {
-      this.app.use(this.performanceMonitor.middleware());
-    }
-
     // 安全头（放宽 CSP 以兼容 Vite 构建的 Dashboard SPA：script/style 需要内联和 crossorigin）
     this.app.use(
       helmet({
@@ -307,11 +275,6 @@ export class HttpServer {
       });
     });
 
-    // 监控端点
-    if (this.config.enableMonitoring) {
-      this.app.use(`${apiPrefix}/monitoring`, monitoringRouter);
-    }
-
     // Guard 实时检查路由（Dashboard、CLI 或外部宿主调用）
     this.app.use(`${apiPrefix}/guard`, guardRouter);
 
@@ -399,13 +362,8 @@ export class HttpServer {
 
   /** 设置错误处理 */
   setupErrorHandling() {
-    // 使用错误追踪器的错误处理中间件（如果启用）
-    if (this.errorTracker) {
-      this.app.use(this.errorTracker.errorHandler() as express.ErrorRequestHandler);
-    } else {
-      // 全局错误处理中间件（备用）
-      this.app.use(errorHandler(this.logger));
-    }
+    // 全局错误处理中间件
+    this.app.use(errorHandler(this.logger));
   }
 
   /** 启动服务器 */
@@ -556,16 +514,6 @@ export class HttpServer {
       activeStreams: this.activeStreamingResponses.size,
       timestamp: new Date().toISOString(),
     });
-
-    // 停止性能监控
-    if (this.performanceMonitor) {
-      this.performanceMonitor.shutdown();
-    }
-
-    // 停止错误追踪
-    if (this.errorTracker) {
-      this.errorTracker.shutdown();
-    }
 
     // 关闭 WebSocket 连接
     if (this.realtimeService && typeof this.realtimeService.shutdown === 'function') {

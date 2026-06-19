@@ -483,7 +483,6 @@ export const ALEMBIC_PROVIDER_ROUTE_MOUNTS = [
   mount('I04', '/api/v1/projects'),
   mount('I05', '/api/v1/project-scope'),
   mount('I09', '/api/v1/auth/probe'),
-  mount('I23', '/api/v1/monitoring'),
   mount('I21', '/api/v1/guard'),
   mount('I21', '/api/v1/rules'),
   mount('I09', '/api/v1/task'),

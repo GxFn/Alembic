@@ -39,7 +39,6 @@ describe('Integration: TaskGraph + Guard HTTP API', () => {
       port: PORT,
       host: 'localhost',
       enableRedis: false,
-      enableMonitoring: false,
       cacheMode: 'memory',
     });
     await httpServer.initialize();
