@@ -1,7 +1,7 @@
 /**
  * CompletionSteps — Workflow 完成阶段的各步骤实现
  *
- * 包含退役项目信息刷新占位、Wiki 生成和语义记忆固化，
+ * 包含 Wiki 生成和语义记忆固化，
  * 由 WorkflowCompletionFinalizer 按顺序调用。
  */
 
@@ -15,19 +15,6 @@ import type {
   WikiGeneratorLike,
   WorkflowSemanticMemoryConsolidationResult,
 } from './CompletionTypes.js';
-
-// ── PanoramaCompletionStep ──
-
-export async function refreshPanorama({
-  log,
-}: {
-  getServiceContainer: LoadServiceContainer;
-  log: CompletionLogger;
-}): Promise<void> {
-  log.info(
-    '[DimensionComplete] Project-information refresh skipped; ProjectContext is authoritative'
-  );
-}
 
 // ── WikiCompletionStep ──
 

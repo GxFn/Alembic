@@ -4,8 +4,8 @@
  * (PathGuard configured to a temp dir — never the real ~/.asd).
  *
  * Representatives:
- *  - zero-effect paths: HTTP auth tombstone (whole-route), resident graph
- *    usage-gate (problem envelope) — sandbox tree must be byte-identical;
+ *  - zero-effect paths: resident graph usage-gate (problem envelope) —
+ *    sandbox tree must be byte-identical;
  *  - the shared DB-write funnel every write family delegates to: stable
  *    database facade + migrations + a drizzle insert — only .asd/alembic.db*
  *    may change.
@@ -17,8 +17,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { createDatabaseConnection, type DatabaseConnection } from '@alembic/core/database';
 import { pathGuard } from '@alembic/core/shared';
-import authRouter from '../../lib/http/routes/auth.js';
-import { invokeRouter } from '../helpers/express.js';
 
 function snapshotTree(root: string): Map<string, string> {
   const entries = new Map<string, string>();
@@ -68,20 +66,6 @@ describe('Declared effects (AD6 no-undeclared-effects audit)', () => {
   afterEach(() => {
     pathGuard._reset();
     fs.rmSync(sandboxRoot, { recursive: true, force: true });
-  });
-
-  test('zero-effect family paths leave the sandbox byte-identical (HTTP auth)', async () => {
-    const before = snapshotTree(sandboxRoot);
-
-    const authResponse = await invokeRouter(authRouter, {
-      body: { password: 'alembic', username: 'legacy-user' },
-      method: 'POST',
-      mountPath: '/api/v1/auth',
-      path: '/api/v1/auth/login',
-    });
-    expect(authResponse.status).toBe(410);
-
-    expect(changedPaths(before, snapshotTree(sandboxRoot))).toEqual([]);
   });
 
   test('the shared DB-write funnel touches only .asd/alembic.db* in the sandbox', async () => {

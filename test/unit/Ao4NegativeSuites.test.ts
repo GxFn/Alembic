@@ -23,7 +23,6 @@ vi.mock('../../lib/injection/ServiceContainer.js', () => ({
   getServiceContainer: vi.fn(() => mocks.container),
 }));
 
-import authRouter from '../../lib/http/routes/auth.js';
 import knowledgeRouter from '../../lib/http/routes/knowledge.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
@@ -56,110 +55,6 @@ afterEach(() => {
 });
 
 describe('AO4 negative suites', () => {
-  test('HTTP auth me endpoint is retired', async () => {
-    const response = await invokeRouter(authRouter, {
-      method: 'GET',
-      mountPath: '/api/v1/auth',
-      path: '/api/v1/auth/me',
-    });
-
-    expect(response.status).toBe(410);
-    expect(response.body).toMatchObject({
-      error: { code: 'AUTH_MODEL_RETIRED' },
-      success: false,
-    });
-  });
-
-  test('HTTP auth login endpoint is retired after request validation', async () => {
-    const response = await invokeRouter(authRouter, {
-      body: {
-        password: 'wrong-password',
-        username: 'legacy-user',
-      },
-      method: 'POST',
-      mountPath: '/api/v1/auth',
-      path: '/api/v1/auth/login',
-    });
-
-    expect(response.status).toBe(410);
-    expect(response.body).toMatchObject({
-      error: { code: 'AUTH_MODEL_RETIRED' },
-      success: false,
-    });
-  });
-
-  test('HTTP auth rejects invalid login bodies before credential checks', async () => {
-    const response = await invokeRouter(authRouter, {
-      body: {},
-      method: 'POST',
-      mountPath: '/api/v1/auth',
-      path: '/api/v1/auth/login',
-    });
-
-    expect(response.status).toBe(400);
-    expect(response.body).toMatchObject({
-      error: { code: 'VALIDATION_ERROR' },
-      success: false,
-    });
-  });
-
-  test('HTTP auth does not issue tokens for valid legacy credentials', async () => {
-    const loginResponse = await invokeRouter(authRouter, {
-      body: {
-        password: 'alembic',
-        username: 'legacy-user',
-      },
-      method: 'POST',
-      mountPath: '/api/v1/auth',
-      path: '/api/v1/auth/login',
-    });
-    expect(loginResponse.status).toBe(410);
-    expect(loginResponse.body).toMatchObject({
-      error: { code: 'AUTH_MODEL_RETIRED' },
-      success: false,
-    });
-  });
-
-  test('HTTP auth retirement does not create a process token secret', async () => {
-    const originalSecret = process.env.ALEMBIC_AUTH_SECRET;
-    try {
-      delete process.env.ALEMBIC_AUTH_SECRET;
-
-      const response = await invokeRouter(authRouter, {
-        body: { password: 'alembic', username: 'legacy-user' },
-        method: 'POST',
-        mountPath: '/api/v1/auth',
-        path: '/api/v1/auth/login',
-      });
-
-      expect(response.status).toBe(410);
-      expect(process.env.ALEMBIC_AUTH_SECRET).toBeUndefined();
-    } finally {
-      if (originalSecret === undefined) {
-        delete process.env.ALEMBIC_AUTH_SECRET;
-      } else {
-        process.env.ALEMBIC_AUTH_SECRET = originalSecret;
-      }
-    }
-  });
-
-  test('HTTP auth ignores malformed bearer tokens because the model is retired', async () => {
-    const response = await invokeRouter(authRouter, {
-      headers: {
-        authorization: 'Bearer not-a-token',
-      },
-      method: 'GET',
-      mountPath: '/api/v1/auth',
-      path: '/api/v1/auth/me',
-    });
-
-    expect(response.status).toBe(410);
-    expect(response.body).toMatchObject({
-      error: { code: 'AUTH_MODEL_RETIRED' },
-      success: false,
-    });
-  });
-
   test('HTTP knowledge create no longer calls the old permission boundary', async () => {
     const response = await invokeRouter(knowledgeRouter, {
       body: {

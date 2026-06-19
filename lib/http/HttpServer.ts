@@ -24,7 +24,6 @@ import { requestLogger } from './middleware/requestLogger.js';
 import { sourceResolverMiddleware } from './middleware/sourceResolver.js';
 import aiRouter from './routes/ai.js';
 import auditRouter from './routes/audit.js';
-import authRouter from './routes/auth.js';
 import candidatesRouter from './routes/candidates.js';
 import commandsRouter from './routes/commands.js';
 import daemonRouter from './routes/daemon.js';
@@ -297,9 +296,6 @@ export class HttpServer {
 
     // ProjectScope producer：抽象 Project 与多个实体源码 folder 的绑定关系
     this.app.use(`${apiPrefix}/project-scope`, projectScopeRouter);
-
-    // 认证路由
-    this.app.use(`${apiPrefix}/auth`, authRouter);
 
     // 请求来源探针端点
     this.app.get(`${apiPrefix}/auth/probe`, (req: Request, res: Response) => {

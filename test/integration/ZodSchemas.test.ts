@@ -29,7 +29,6 @@ import { z } from 'zod';
 
 // ── HTTP request schemas ────────────────────────────
 import {
-  AuthLoginBody,
   BatchPublishBody,
   CreateGuardRuleBody,
   CreateKnowledgeBody,
@@ -580,18 +579,6 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
     test('should reject retired public POST modes', () => {
       expect(() => ResidentSearchBody.parse({ query: 'auth', mode: 'bm25' })).toThrow();
       expect(() => ResidentSearchBody.parse({ query: 'auth', mode: 'context' })).toThrow();
-    });
-  });
-
-  describe('AuthLoginBody', () => {
-    test('should require username and password', () => {
-      expect(() => AuthLoginBody.parse({})).toThrow();
-      expect(() => AuthLoginBody.parse({ username: 'legacy-user' })).toThrow();
-    });
-
-    test('should accept valid credentials', () => {
-      const result = AuthLoginBody.parse({ username: 'legacy-user', password: 'pass' });
-      expect(result.username).toBe('legacy-user');
     });
   });
 });

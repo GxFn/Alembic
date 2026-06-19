@@ -463,13 +463,6 @@ export const ExtractTextBody = z.object({
   projectRoot: z.string().optional(),
 });
 
-// ═══ Auth Routes ═════════════════════════════════
-
-export const AuthLoginBody = z.object({
-  username: z.string().min(1, '用户名不能为空'),
-  password: z.string().min(1, '密码不能为空'),
-});
-
 // ═══ Commands Routes ═════════════════════════════
 
 export const FileReadQuery = z.object({

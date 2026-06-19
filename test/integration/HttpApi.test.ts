@@ -86,67 +86,6 @@ describe('Integration: HTTP API Endpoints', () => {
   // ═══════════════════════════════════════════════════════
 
   describe('Auth Endpoints', () => {
-    test('POST /auth/login — valid legacy body returns retired auth response', async () => {
-      const res = await fetch(`${BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: process.env.ALEMBIC_AUTH_USERNAME || 'legacy-user',
-          password: process.env.ALEMBIC_AUTH_PASSWORD || 'alembic',
-        }),
-      });
-      const body = await res.json();
-
-      expect(res.status).toBe(410);
-      expect(body.success).toBe(false);
-      expect(body.error.code).toBe('AUTH_MODEL_RETIRED');
-    });
-
-    test('POST /auth/login — legacy credentials do not change retirement response', async () => {
-      const res = await fetch(`${BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'legacy-user', password: 'wrong' }),
-      });
-      const body = await res.json();
-
-      expect(res.status).toBe(410);
-      expect(body.success).toBe(false);
-      expect(body.error.code).toBe('AUTH_MODEL_RETIRED');
-    });
-
-    test('POST /auth/login — 空 body 返回 400', async () => {
-      const res = await fetch(`${BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const body = await res.json();
-
-      expect(res.status).toBe(400);
-      expect(body.success).toBe(false);
-    });
-
-    test('GET /auth/me — bearer tokens are not interpreted', async () => {
-      const res = await fetch(`${BASE}/auth/me`, {
-        headers: { Authorization: 'Bearer retired-token' },
-      });
-      const body = await res.json();
-
-      expect(res.status).toBe(410);
-      expect(body.success).toBe(false);
-      expect(body.error.code).toBe('AUTH_MODEL_RETIRED');
-    });
-
-    test('GET /auth/me — no token returns retired auth response', async () => {
-      const res = await fetch(`${BASE}/auth/me`);
-      const body = await res.json();
-
-      expect(res.status).toBe(410);
-      expect(body.success).toBe(false);
-      expect(body.error.code).toBe('AUTH_MODEL_RETIRED');
-    });
-
     test('GET /auth/probe — returns request source metadata', async () => {
       const res = await fetch(`${BASE}/auth/probe`);
       const body = await res.json();

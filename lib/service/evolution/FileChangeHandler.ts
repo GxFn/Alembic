@@ -480,9 +480,6 @@ export class FileChangeHandler implements FileChangeSubscriber {
   }
 }
 
-/** @deprecated Use FileChangeHandler instead */
-export { FileChangeHandler as ReactiveEvolutionService };
-
 function isEvolutionTrackableLifecycle(lifecycle: unknown): boolean {
   return typeof lifecycle === 'string' && (isConsumable(lifecycle) || isDegraded(lifecycle));
 }

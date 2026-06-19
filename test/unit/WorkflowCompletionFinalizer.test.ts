@@ -51,7 +51,6 @@ describe('WorkflowCompletionFinalizer', () => {
         getServiceContainer: () => createWikiContainer(),
         scheduleTask: (task) => scheduled.push(task),
       },
-      steps: { panorama: 'skip' },
       semanticMemory: { mode: 'skip' },
     });
 
@@ -103,7 +102,6 @@ describe('WorkflowCompletionFinalizer', () => {
       deliveryVerification: null,
       deliveryStatus: 'skipped',
       wikiStatus: 'skipped',
-      panoramaStatus: 'completed',
     });
   });
 
@@ -181,7 +179,6 @@ describe('WorkflowCompletionFinalizer', () => {
     );
 
     expect(source).toContain('CompletionSteps.js');
-    expect(source).toContain('refreshPanorama');
     expect(source).toContain('generateWiki');
     expect(source).toContain('consolidateSemanticMemory');
   });

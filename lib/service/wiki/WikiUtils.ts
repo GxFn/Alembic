@@ -510,13 +510,6 @@ export function getLangTerms(langId: string) {
 }
 
 /**
- * 已知的构建系统标志文件 → 生态类型映射
- *
- * @deprecated 请使用 LanguageService.buildSystemMarkers。此处保留为只读引用以保持向后兼容。
- */
-export const BUILD_SYSTEM_MARKERS = LanguageService.buildSystemMarkers;
-
-/**
  * 检测项目根目录中存在的构建系统标志
  *
  * 两级检测:

@@ -46,11 +46,6 @@ export interface ServiceContainerLike extends CompletionContainerLike {
   singletons?: Record<string, unknown>;
 }
 
-export interface PanoramaServiceLike {
-  rescan(): Promise<void>;
-  getOverview(): Promise<{ moduleCount: number; gapCount: number }>;
-}
-
 export interface WikiGeneratorLike {
   generate(): Promise<Record<string, unknown>>;
 }
@@ -85,7 +80,6 @@ export type WorkflowSemanticMemoryMode = 'scheduled' | 'immediate' | 'skip';
 export interface WorkflowCompletionStepOptions {
   delivery?: 'run' | 'skip';
   wiki?: 'schedule' | 'skip';
-  panorama?: 'run' | 'skip';
 }
 
 export interface WorkflowSemanticMemoryConsolidationResult {
@@ -99,7 +93,6 @@ export interface WorkflowCompletionFinalizerResult {
   semanticMemoryResult: WorkflowSemanticMemoryConsolidationResult | null;
   deliveryStatus?: WorkflowCompletionStepStatus;
   wikiStatus?: WorkflowCompletionStepStatus;
-  panoramaStatus?: WorkflowCompletionStepStatus;
 }
 
 export type WorkflowCompletionStepStatus = 'completed' | 'scheduled' | 'skipped';

@@ -351,7 +351,6 @@ function createWorkflowSkill(
       fs.writeFileSync(skillPath, writtenContent, 'utf8');
     }
 
-    const indexResult = regenerateEditorIndex(ctx ?? undefined);
     removePendingSuggestion(name);
     runSkillCreatedHook(ctx, { name, description, createdBy, path: skillPath });
 
@@ -362,7 +361,6 @@ function createWorkflowSkill(
         path: skillPath,
         contentHash,
         overwritten: fs.existsSync(skillPath) && overwrite,
-        editorIndex: indexResult,
         hint: `Project Skill "${name}" created. Inspect ProjectSkillDeliveryReceipt for runtime export status.`,
       },
     };
@@ -488,14 +486,6 @@ function buildSkillFrontmatter({
     ''
   );
   return fmLines.join('\n');
-}
-
-function regenerateEditorIndex(ctx?: SkillContext | null) {
-  void ctx;
-  return {
-    generated: false,
-    reason: 'Alembic main package no longer writes project editor delivery indexes.',
-  };
 }
 
 function normalizeLine(line: string): string {

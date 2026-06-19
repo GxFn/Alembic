@@ -1,5 +1,5 @@
 import Logger from '@alembic/core/logging';
-import { consolidateSemanticMemory, generateWiki, refreshPanorama } from './CompletionSteps.js';
+import { consolidateSemanticMemory, generateWiki } from './CompletionSteps.js';
 import type {
   CompletionContextLike,
   CompletionLogger,
@@ -47,8 +47,6 @@ export async function runWorkflowCompletionFinalizer({
   const getServiceContainer = dependencies.getServiceContainer ?? defaultGetServiceContainer;
   const scheduleTask = dependencies.scheduleTask ?? defaultScheduleTask;
   const semanticMemoryMode = semanticMemory.mode ?? 'scheduled';
-  const deliveryMode = steps.delivery ?? 'run';
-  const panoramaMode = steps.panorama ?? 'run';
   const wikiMode = steps.wiki ?? 'schedule';
 
   if (shouldAbort?.()) {
@@ -58,24 +56,10 @@ export async function runWorkflowCompletionFinalizer({
       semanticMemoryResult: null,
       deliveryStatus: 'skipped',
       wikiStatus: 'skipped',
-      panoramaStatus: 'skipped',
     };
   }
   const deliveryVerification: WorkflowCompletionFinalizerResult['deliveryVerification'] = null;
   const deliveryStatus: WorkflowCompletionFinalizerResult['deliveryStatus'] = 'skipped';
-  if (deliveryMode === 'run') {
-    log.info('[CompletionFinalizer] Project delivery retired for Alembic main package');
-  } else {
-    log.info('[CompletionFinalizer] Target delivery skipped by workflow option');
-  }
-
-  let panoramaStatus: WorkflowCompletionFinalizerResult['panoramaStatus'] = 'skipped';
-  if (panoramaMode === 'run') {
-    await refreshPanorama({ getServiceContainer, log });
-    panoramaStatus = 'completed';
-  } else {
-    log.info('[CompletionFinalizer] Panorama refresh skipped by workflow option');
-  }
 
   if (shouldAbort?.()) {
     log.info('[CompletionFinalizer] Aborted before wiki/memory — user cancelled');
@@ -84,7 +68,6 @@ export async function runWorkflowCompletionFinalizer({
       semanticMemoryResult: null,
       deliveryStatus,
       wikiStatus: 'skipped',
-      panoramaStatus,
     };
   }
   let wikiStatus: WorkflowCompletionFinalizerResult['wikiStatus'] = 'skipped';
@@ -107,7 +90,7 @@ export async function runWorkflowCompletionFinalizer({
     }
   }
 
-  return { deliveryVerification, semanticMemoryResult, deliveryStatus, wikiStatus, panoramaStatus };
+  return { deliveryVerification, semanticMemoryResult, deliveryStatus, wikiStatus };
 }
 
 async function defaultGetServiceContainer(): Promise<ServiceContainerLike> {

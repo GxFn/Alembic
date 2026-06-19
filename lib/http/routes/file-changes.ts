@@ -4,7 +4,7 @@
  * POST /api/v1/file-changes
  *
  * 接收 daemon 或外部宿主推送的文件变更事件，交由 FileChangeDispatcher 分发。
- * 不直接依赖任何业务服务（如 ReactiveEvolutionService）。
+ * 不直接依赖任何业务服务。
  *
  * 响应体回传 {@link ReactiveEvolutionReport}（文档 §5.1 I1）——
  * 调用方可据此决定是否展示复核提示或继续自动化流程。
