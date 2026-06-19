@@ -18,7 +18,7 @@ import { buildAlembicHttpProblem } from './problem-taxonomy.js';
 
 export const ALEMBIC_PROVIDER_CONTRACT_VERSION = 1;
 
-export type AlembicProviderRegistryRowId = CoreContractSpineRowId | 'I09' | 'I11' | 'I22';
+export type AlembicProviderRegistryRowId = CoreContractSpineRowId | 'I09' | 'I22';
 export type AlembicProviderRouteRowId = Exclude<AlembicProviderRegistryRowId, 'I01'>;
 export type AlembicProviderFixtureScenario =
   | 'success'
@@ -289,14 +289,6 @@ const routeRows = {
     fixtureIds: ['api-spec.success', 'route.not-found', 'route.permission-denied'],
     scenarios: ['success', 'not-found', 'permission-denied'],
   },
-  I11: {
-    artifactPolicy: 'Intent/work summaries inline; long histories by detailRef.',
-    capabilityDiscovery: ['/api/v1/intent-episodes capability block'],
-    errorKinds: ['invalid-input', 'unavailable', 'capability-mismatch', 'not-found'],
-    exposureClasses: ['public', 'consumer-needed', 'diagnostic'],
-    fixtureIds: ['intent-episode.success', 'intent-episode.not-found'],
-    scenarios: ['success', 'not-found'],
-  },
   I21: {
     artifactPolicy: 'Compact guard findings inline; full reports by artifactRef.',
     capabilityDiscovery: ['/api/v1/guard', '/api/v1/rules'],
@@ -429,17 +421,6 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
     'Job artifact read',
     ['Jobs']
   ),
-  route('I11', 'post', '/intent-episodes', 'startIntentEpisode', 'Intent/work continuity start', [
-    'Intent',
-  ]),
-  route(
-    'I11',
-    'patch',
-    '/intent-episodes/{episodeId}',
-    'updateIntentEpisode',
-    'Intent/work continuity outcome',
-    ['Intent']
-  ),
   route('I21', 'post', '/guard', 'runGuard', 'Guard check route family', ['Guard']),
   route('I21', 'get', '/rules', 'listGuardRules', 'Guard rules route family', ['Guard']),
   route('I21', 'get', '/violations', 'listViolations', 'Violations route family', ['Guard']),
@@ -469,9 +450,6 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
     'Diagnostics',
   ]),
   route('I23', 'get', '/audit', 'listAuditEntries', 'Audit route family', ['Diagnostics']),
-  route('I23', 'get', '/monitoring/health', 'getMonitoringHealth', 'Monitoring health route', [
-    'Diagnostics',
-  ]),
   route('I23', 'get', '/logs', 'listLogs', 'Log route family', ['Diagnostics']),
 ] as const satisfies readonly AlembicProviderRouteContract[];
 
@@ -689,14 +667,6 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
     error: providerProblem('PERMISSION_DENIED', 'Permission denied', 'permission-denied', {
       status: 403,
     }),
-  }),
-  fixture('I11', 'I11.intent-episodes.post', 'intent-episode.success', 'success', {
-    success: true,
-    data: { episode: { episodeId: 'intent-alpha', status: 'open' } },
-  }),
-  fixture('I11', 'I11.intent-episodes.patch', 'intent-episode.not-found', 'not-found', {
-    success: false,
-    error: providerProblem('NOT_FOUND', 'IntentEpisode not found', 'not-found', { status: 404 }),
   }),
   fixture('I21', 'I21.guard.post', 'guard.success', 'success', {
     success: true,

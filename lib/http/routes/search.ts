@@ -11,7 +11,6 @@ import type { z } from 'zod';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
 import {
-  ContextAwareSearchBody,
   GraphImpactQuery,
   GraphQuery,
   ResidentSearchBody,
@@ -763,30 +762,6 @@ router.get('/graph/stats', async (req: Request, res: Response): Promise<void> =>
   const stats = await graphService.getStats(statsNodeType);
   res.json({ success: true, data: stats });
 });
-
-/**
- * POST /api/v1/search/context-aware
- * Retired public search route. Use POST /api/v1/search with explicit filters.
- */
-router.post(
-  '/context-aware',
-  validate(ContextAwareSearchBody),
-  async (req: Request, res: Response): Promise<void> => {
-    const t0 = Date.now();
-    res.status(410).json({
-      success: false,
-      errorCode: 'UNSUPPORTED_SEARCH_ROUTE',
-      message:
-        'The public context-aware search route is retired. Use /api/v1/search with mode auto, keyword, or semantic and explicit metadata filters.',
-      data: {
-        retiredRoute: '/api/v1/search/context-aware',
-        supportedEndpoint: '/api/v1/search',
-        supportedModes: ['auto', 'keyword', 'semantic'],
-        searchTime: Date.now() - t0,
-      },
-    });
-  }
-);
 
 /* ═══ 相似度检测 ════════════════════════════════════════ */
 

@@ -544,7 +544,7 @@ export const DASHBOARD_JOB_KINDS: readonly DashboardJobKind[] = [
 ];
 
 // ════════════════════════════════════════════════════════════════════
-// HTTP route contract table (31 routes, contract version 1)
+// HTTP route contract table (28 routes, contract version 1)
 // ════════════════════════════════════════════════════════════════════
 
 export const DASHBOARD_API_CONTRACT_VERSION = 1;
@@ -1521,90 +1521,6 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
     }
   },
   {
-    "artifactPolicy": "Intent/work summaries inline; long histories by detailRef.",
-    "capabilityDiscovery": [
-      "/api/v1/intent-episodes capability block"
-    ],
-    "contractId": "I11.startIntentEpisode",
-    "errorKinds": [
-      "invalid-input",
-      "unavailable",
-      "capability-mismatch",
-      "not-found"
-    ],
-    "exposureClasses": [
-      "public",
-      "consumer-needed",
-      "diagnostic"
-    ],
-    "fixtureIds": [
-      "intent-episode.success",
-      "intent-episode.not-found"
-    ],
-    "functionClass": "rest-command",
-    "method": "post",
-    "operationId": "startIntentEpisode",
-    "path": "/intent-episodes",
-    "registryRowId": "I11",
-    "summary": "Intent/work continuity start",
-    "supportedScenarios": [
-      "success",
-      "not-found"
-    ],
-    "tags": [
-      "Intent"
-    ],
-    "responseSchemas": {
-      "200": "schema-1",
-      "400": "schema-2",
-      "404": "schema-2",
-      "501": "schema-2",
-      "503": "schema-2"
-    }
-  },
-  {
-    "artifactPolicy": "Intent/work summaries inline; long histories by detailRef.",
-    "capabilityDiscovery": [
-      "/api/v1/intent-episodes capability block"
-    ],
-    "contractId": "I11.updateIntentEpisode",
-    "errorKinds": [
-      "invalid-input",
-      "unavailable",
-      "capability-mismatch",
-      "not-found"
-    ],
-    "exposureClasses": [
-      "public",
-      "consumer-needed",
-      "diagnostic"
-    ],
-    "fixtureIds": [
-      "intent-episode.success",
-      "intent-episode.not-found"
-    ],
-    "functionClass": "rest-command",
-    "method": "patch",
-    "operationId": "updateIntentEpisode",
-    "path": "/intent-episodes/{episodeId}",
-    "registryRowId": "I11",
-    "summary": "Intent/work continuity outcome",
-    "supportedScenarios": [
-      "success",
-      "not-found"
-    ],
-    "tags": [
-      "Intent"
-    ],
-    "responseSchemas": {
-      "200": "schema-1",
-      "400": "schema-2",
-      "404": "schema-2",
-      "501": "schema-2",
-      "503": "schema-2"
-    }
-  },
-  {
     "artifactPolicy": "Compact guard findings inline; full reports by artifactRef.",
     "capabilityDiscovery": [
       "/api/v1/guard",
@@ -2418,54 +2334,6 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
     "path": "/audit",
     "registryRowId": "I23",
     "summary": "Audit route family",
-    "supportedScenarios": [
-      "success",
-      "unavailable-runtime",
-      "internal-error"
-    ],
-    "tags": [
-      "Diagnostics"
-    ],
-    "responseSchemas": {
-      "200": "schema-1",
-      "400": "schema-2",
-      "403": "schema-2",
-      "404": "schema-2",
-      "500": "schema-2",
-      "503": "schema-2"
-    }
-  },
-  {
-    "artifactPolicy": "Diagnostic summaries inline; logs and reports as detailRef.",
-    "capabilityDiscovery": [
-      "runtime health fileMonitor capability",
-      "diagnostic routes"
-    ],
-    "contractId": "I23.getMonitoringHealth",
-    "errorKinds": [
-      "invalid-input",
-      "unavailable",
-      "permission-denied",
-      "not-found",
-      "internal-error"
-    ],
-    "exposureClasses": [
-      "diagnostic",
-      "internal",
-      "consumer-needed",
-      "sensitive"
-    ],
-    "fixtureIds": [
-      "diagnostic.success",
-      "diagnostic.failure",
-      "diagnostic.internal-error"
-    ],
-    "functionClass": "diagnostic-observability",
-    "method": "get",
-    "operationId": "getMonitoringHealth",
-    "path": "/monitoring/health",
-    "registryRowId": "I23",
-    "summary": "Monitoring health route",
     "supportedScenarios": [
       "success",
       "unavailable-runtime",

@@ -208,13 +208,6 @@ export const ResidentSearchBody = z
     message: 'Either q or query is required',
   });
 
-export const ContextAwareSearchBody = z.object({
-  keyword: z.string().min(1, 'keyword is required'),
-  limit: z.number().int().min(1).max(100).default(10),
-  language: z.string().optional(),
-  sessionHistory: z.array(MetadataRecord).optional(),
-});
-
 export const SimilarityBody = z.object({
   code: z.string().optional(),
   targetName: z.string().optional(),

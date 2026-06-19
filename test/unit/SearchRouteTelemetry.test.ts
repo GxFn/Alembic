@@ -256,23 +256,12 @@ describe('search route resident telemetry', () => {
     expect(JSON.stringify(data)).not.toContain('should not affect public search');
   });
 
-  test('rejects retired public search modes and routes', async () => {
+  test('rejects retired public search modes', async () => {
     const getResponse = await getRouter(searchRouter, '/api/v1/search?q=needle&mode=bm25', {
       mountPath: '/api/v1/search',
     });
-    const contextResponse = await invokeRouter(searchRouter, {
-      body: { keyword: 'needle', sessionHistory: [{ content: 'ignored' }] },
-      method: 'POST',
-      mountPath: '/api/v1/search',
-      path: '/api/v1/search/context-aware',
-    });
 
     expect(getResponse.status).toBe(400);
-    expect(contextResponse.status).toBe(410);
-    expect(contextResponse.body).toMatchObject({
-      errorCode: 'UNSUPPORTED_SEARCH_ROUTE',
-      success: false,
-    });
     expect(mocks.searchEngine.search).not.toHaveBeenCalled();
   });
 

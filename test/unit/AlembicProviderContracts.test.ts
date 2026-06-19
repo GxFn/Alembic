@@ -23,19 +23,7 @@ describe('Alembic provider contracts', () => {
     const summary = summarizeAlembicProviderContracts();
     expect(summary.version).toBe(ALEMBIC_PROVIDER_CONTRACT_VERSION);
     expect(summary.rowIds).toEqual(
-      expect.arrayContaining([
-        'I03',
-        'I04',
-        'I05',
-        'I06',
-        'I07',
-        'I08',
-        'I09',
-        'I11',
-        'I21',
-        'I22',
-        'I23',
-      ])
+      expect.arrayContaining(['I03', 'I04', 'I05', 'I06', 'I07', 'I08', 'I09', 'I21', 'I22', 'I23'])
     );
 
     const routeRows = new Set(ALEMBIC_PROVIDER_ROUTE_CONTRACTS.map((route) => route.registryRowId));
