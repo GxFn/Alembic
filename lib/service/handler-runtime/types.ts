@@ -15,12 +15,6 @@ import type {
   LoggerLike,
   SaveSnapshotParams,
 } from '@alembic/core/types';
-import type { IntentEvidence } from '../task/IntentEvidence.js';
-import type { IntentSearchPlan } from '../task/IntentSearchPlan.js';
-import type {
-  PrimeInjectionPackage,
-  PrimeResidentRegionRetrieval,
-} from '../task/PrimeInjectionPackage.js';
 
 // ─── DI Container (minimal shape) ────────────────────────
 
@@ -63,121 +57,6 @@ export interface DriftEvent {
   primeOverlap: number;
 }
 
-/** Intent lifecycle state machine — tracks user intent from prime to close/fail */
-export interface IntentState {
-  // ─── Lifecycle ───
-  phase: 'idle' | 'active' | 'ended';
-
-  // ─── Prime baseline (set when phase = active) ───
-  primeQuery: string;
-  primeActiveFile?: string;
-  primeRecipeIds: string[];
-  primeAt: number;
-
-  // ─── Prime baseline (enriched by IntentExtractor) ───
-  primeLanguage: string | null;
-  primeModule: string | null;
-  primeScenario: string;
-
-  // ─── Search metadata (set by PrimeSearchPipeline) ───
-  searchMeta?: {
-    queries: string[];
-    resultCount: number;
-    filteredCount: number;
-    hostIntentApplied?: boolean;
-    hostIntentConfidence?: number;
-    hostIntentDegraded?: boolean;
-    hostIntentDegradedReason?: string;
-    hostIntentSourceRefs?: string[];
-    intentEvidence?: IntentEvidence;
-    intentSearchPlan?: IntentSearchPlan;
-    primeInjectionPackage?: PrimeInjectionPackage;
-    residentRegionRetrieval?: PrimeResidentRegionRetrieval;
-  };
-
-  // ─── Anchor (set after create) ───
-  episodeId?: string;
-  episodeSessionKey?: string;
-  taskId?: string;
-  taskTitle?: string;
-
-  // ─── Context accumulation (appended on each tool call) ───
-  toolCalls: ToolCallRecord[];
-  searchQueries: string[];
-  mentionedFiles: string[];
-  mentionedModules: Set<string>;
-  decisions: DecisionRecord[];
-
-  // ─── Drift tracking ───
-  driftEvents: DriftEvent[];
-}
-
-/** Create a fresh idle IntentState */
-export function createIdleIntent(): IntentState {
-  return {
-    phase: 'idle',
-    primeQuery: '',
-    primeRecipeIds: [],
-    primeAt: 0,
-    primeLanguage: null,
-    primeModule: null,
-    primeScenario: 'search',
-    toolCalls: [],
-    searchQueries: [],
-    mentionedFiles: [],
-    mentionedModules: new Set(),
-    decisions: [],
-    driftEvents: [],
-  };
-}
-
-// ─── JSONL Signal Record ─────────────────────────────────
-
-/** A complete intent chain record, written to JSONL on close/fail */
-export interface IntentChainRecord {
-  sessionId: string;
-  taskId?: string;
-  outcome: 'completed' | 'failed' | 'abandoned';
-
-  primeQuery: string;
-  primeActiveFile?: string;
-  primeRecipeIds: string[];
-  primeAt: number;
-  primeLanguage: string | null;
-  primeModule: string | null;
-  primeScenario: string;
-
-  searchMeta?: {
-    queries: string[];
-    resultCount: number;
-    filteredCount: number;
-    hostIntentApplied?: boolean;
-    hostIntentConfidence?: number;
-    hostIntentDegraded?: boolean;
-    hostIntentDegradedReason?: string;
-    hostIntentSourceRefs?: string[];
-    intentEvidence?: IntentEvidence;
-    intentSearchPlan?: IntentSearchPlan;
-    primeInjectionPackage?: PrimeInjectionPackage;
-    residentRegionRetrieval?: PrimeResidentRegionRetrieval;
-  };
-
-  toolCalls: ToolCallRecord[];
-  searchQueries: string[];
-  mentionedFiles: string[];
-  decisions: DecisionRecord[];
-
-  driftEvents: DriftEvent[];
-  driftScore: number;
-
-  closeReason?: string;
-  failReason?: string;
-  guardViolations?: number;
-  startedAt: number;
-  endedAt: number;
-  duration: number;
-}
-
 // ─── Resident Tool Handler Context ───────────────────────
 
 /** MCP session tracking */
@@ -187,7 +66,6 @@ export interface McpSession {
   toolCallCount: number;
   toolsUsed: Set<string>;
   lastActivityAt: number;
-  intent: IntentState;
 }
 
 /** Handler context passed from API or internal router layers */

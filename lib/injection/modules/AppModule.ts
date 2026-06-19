@@ -5,7 +5,6 @@
  *   - recipeParser, recipeCandidateValidator
  *   - qualityScorer, feedbackCollector, tokenUsageStore, recipeExtractor
  *   - moduleService
- *   - primeSearchPipeline (for prime multi-query search + optional resident vector evidence)
  */
 
 import { RecipeExtractor } from '@alembic/core/knowledge';
@@ -16,7 +15,6 @@ import { RecipeCandidateValidator, RecipeParser } from '@alembic/core/service/re
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { RecipeSaveRateLimiter } from '../../infrastructure/rate-limit/RecipeSaveRateLimiter.js';
 import { ModuleService } from '../../service/module/ModuleService.js';
-import { PrimeSearchPipeline } from '../../service/task/PrimeSearchPipeline.js';
 import { getAiRuntimeStatus } from '../AiRuntimeStatus.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
@@ -67,23 +65,6 @@ export function register(c: ServiceContainer) {
       } as unknown as ConstructorParameters<typeof ModuleService>[1]
     );
   });
-
-  // ═══ PrimeSearchPipeline (for prime multi-query search + resident region evidence) ═══
-
-  c.singleton(
-    'primeSearchPipeline',
-    (ct: ServiceContainer) =>
-      new PrimeSearchPipeline(
-        ct.get('searchEngine') as unknown as ConstructorParameters<typeof PrimeSearchPipeline>[0],
-        {
-          vectorService: ct.services.vectorService
-            ? (ct.get('vectorService') as NonNullable<
-                ConstructorParameters<typeof PrimeSearchPipeline>[1]
-              >['vectorService'])
-            : null,
-        }
-      )
-  );
 }
 
 /** 初始化 RecipeExtractor 实例 (在 initialize 期间调用) */

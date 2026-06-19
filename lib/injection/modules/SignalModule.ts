@@ -3,83 +3,20 @@
  *
  * 注册:
  *   - signalBus:   统一信号总线（基础设施层）
- *   - hitRecorder:  批量使用信号采集器（服务层）
- *   - intent JSONL persistence subscriber
+ *   - signalBridge / signalTraceWriter / signalAggregator
  */
 
-import fs from 'node:fs';
 import path from 'node:path';
-import type { Signal } from '@alembic/core/events';
 import { SignalAggregator, SignalBridge, SignalBus, SignalTraceWriter } from '@alembic/core/events';
 import type { ReportStore } from '@alembic/core/report';
 import { resolveDataRoot } from '@alembic/core/workspace';
-import { HitRecorder } from '../../service/signal/HitRecorder.js';
 import { shutdown } from '../../shared/shutdown.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
-
-/**
- * Register intent signal subscriber for JSONL persistence.
- * Replaces standalone SignalLogger — writes IntentChainRecord to .asd/logs/signals/YYYY-MM-DD.jsonl.
- */
-function registerIntentPersistence(
-  signalBus: SignalBus,
-  projectRoot: string,
-  writeZone?: import('@alembic/core/io').WriteZone
-): void {
-  signalBus.subscribe('intent', (signal: Signal) => {
-    try {
-      const chain = signal.metadata?.chain;
-      if (!chain) {
-        return;
-      }
-      const line = `${JSON.stringify(chain)}\n`;
-      const d = new Date(signal.timestamp);
-      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-      if (writeZone) {
-        const target = writeZone.runtime(`logs/signals/${dateStr}.jsonl`);
-        writeZone.ensureDir(writeZone.runtime('logs/signals'));
-        writeZone.appendFile(target, line);
-      } else {
-        const dir = path.join(projectRoot, '.asd', 'logs', 'signals');
-        fs.mkdirSync(dir, { recursive: true });
-        const filePath = path.join(dir, `${dateStr}.jsonl`);
-        fs.appendFileSync(filePath, line, 'utf8');
-      }
-    } catch {
-      // Write failure is non-blocking
-    }
-  });
-}
 
 export function register(c: ServiceContainer) {
   // ═══ Infrastructure ═══
 
   c.singleton('signalBus', () => new SignalBus());
-
-  // ═══ Service ═══
-
-  c.singleton('hitRecorder', (ct: ServiceContainer) => {
-    const bus = ct.get('signalBus');
-    const db = ct.get('database');
-    const recorder = new HitRecorder(bus, db);
-    recorder.start();
-
-    // shutdown hook: 在 DB close 之前 flush buffer
-    shutdown.register(async () => {
-      await recorder.stop();
-    }, 'hitRecorder');
-
-    return recorder;
-  });
-
-  // ═══ Intent Signal Persistence ═══
-
-  // Register after signalBus is created — subscribe for JSONL persistence
-  const signalBus = c.get('signalBus');
-  const dataRoot = resolveDataRoot(c);
-  const wz = c.get('writeZone') as import('@alembic/core/io').WriteZone | null;
-  registerIntentPersistence(signalBus, dataRoot, wz ?? undefined);
 
   // ═══ SignalBridge — SignalBus → EventBus 桥接 ═══
 

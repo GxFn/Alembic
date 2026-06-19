@@ -1,8 +1,7 @@
 /**
- * 集成测试：Task HTTP API + Guard HTTP API
+ * 集成测试：Guard HTTP API
  *
  * 覆盖范围：
- *   ✓ POST /api/v1/task — Intent Lifecycle handler (create)
  *   ✓ POST /api/v1/guard/file — Guard 文件检查
  *   ✓ 错误处理
  */
@@ -24,7 +23,7 @@ async function post(path, body) {
   return res.json();
 }
 
-describe('Integration: TaskGraph + Guard HTTP API', () => {
+describe('Integration: Guard HTTP API', () => {
   let bootstrap;
   let httpServer;
 
@@ -52,16 +51,6 @@ describe('Integration: TaskGraph + Guard HTTP API', () => {
     if (bootstrap) {
       await bootstrap.shutdown();
     }
-  });
-
-  // ── Task HTTP API (v3.3 — Intent Lifecycle) ──────
-
-  describe('POST /task', () => {
-    it('should create a task via intent lifecycle handler', async () => {
-      const res = await post('/task', { operation: 'create', title: 'test' });
-      expect(res.success).toBe(true);
-      expect(res.data).toHaveProperty('id');
-    });
   });
 
   // ── Guard 文件检查 ──────────────────────────

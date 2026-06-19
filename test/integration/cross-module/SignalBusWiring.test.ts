@@ -2,7 +2,7 @@
  * Cross-module smoke test: Signal Bus → end-to-end DI wiring
  *
  * Phase 0 完成度验证:
- *   - ServiceContainer 正确注册 signalBus 和 hitRecorder
+ *   - ServiceContainer 正确注册 signalBus
  *   - GuardCheckEngine._signalBus 已连接
  *   - SearchEngine._signalBus 已连接
  *   - GuardFeedbackLoop._signalBus 已连接
@@ -43,12 +43,6 @@ describe('Cross-module: Signal Bus DI wiring', () => {
     expect(typeof bus.emit).toBe('function');
     expect(typeof bus.subscribe).toBe('function');
     expect(typeof bus.send).toBe('function');
-  });
-
-  it('should resolve hitRecorder singleton', () => {
-    const recorder = container.get('hitRecorder');
-    expect(recorder).toBeDefined();
-    expect(typeof recorder.record).toBe('function');
   });
 
   it('signalBus should be same instance across container', () => {

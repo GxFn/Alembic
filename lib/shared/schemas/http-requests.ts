@@ -292,52 +292,6 @@ export const UpdateSkillBody = z
     message: 'At least one of description or content must be provided',
   });
 
-// ═══ Task (unified dispatch) ═════════════════════
-
-export const TaskDispatchBody = z.object({
-  activeFile: z.string().optional(),
-  description: z.string().optional(),
-  hostDeclaredIntent: MetadataRecord.optional(),
-  hostTurnMeta: MetadataRecord.optional(),
-  id: z.string().optional(),
-  intentContext: MetadataRecord.optional(),
-  language: z.string().optional(),
-  metadata: MetadataRecord.optional(),
-  operation: z.string().min(1, 'operation is required'),
-  params: MetadataRecord.optional(),
-  rationale: z.string().optional(),
-  reason: z.string().optional(),
-  sessionHistory: z.array(MetadataRecord).optional(),
-  sourceRefs: z.array(z.string().min(1)).max(50).optional(),
-  tags: z.array(z.string()).max(50).optional(),
-  taskId: z.string().optional(),
-  title: z.string().optional(),
-  userQuery: z.string().optional(),
-});
-
-// ═══ Intent Episode ═════════════════════════════
-
-export const IntentEpisodeStartBody = z.object({
-  activeFile: z.string().optional(),
-  hostIntent: MetadataRecord.optional(),
-  language: z.string().optional(),
-  module: z.string().optional(),
-  query: z.string().optional(),
-  scenario: z.string().optional(),
-  searchMeta: MetadataRecord.optional(),
-  sessionId: z.string().optional(),
-  sourceRefs: z.array(z.string()).optional(),
-  taskId: z.string().optional(),
-  turnId: z.string().optional(),
-});
-
-export const IntentEpisodeOutcomeBody = z.object({
-  reason: z.string().optional(),
-  searchMeta: MetadataRecord.optional(),
-  status: z.enum(['completed', 'failed', 'abandoned']),
-  taskId: z.string().optional(),
-});
-
 // ═══ Modules ═════════════════════════════════════
 
 export const ScanFolderBody = z.object({

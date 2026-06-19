@@ -30,7 +30,6 @@ import { buildAlembicRuntimeBoundary } from '../../daemon/RuntimeBoundary.js';
 import { readLatestSchemaMigrationVersion } from '../../infrastructure/database/SqliteDatabaseAccess.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
-import { buildIntentEpisodeCapability } from './intent-episodes.js';
 
 const router = express.Router();
 const API_PREFIX = '/api/v1';
@@ -154,7 +153,6 @@ router.get('/health', (req, res) => {
       runtimeBoundary,
       capabilities: {
         ...healthData.capabilities,
-        intentEpisodes: buildIntentEpisodeCapability(),
         residentSearch: buildResidentSearchCapability(),
         runtimeBoundary,
       },

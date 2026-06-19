@@ -512,48 +512,6 @@ export const CapabilitiesInput = z.object({});
 export type CapabilitiesInput = z.infer<typeof CapabilitiesInput>;
 
 // ══════════════════════════════════════════════════════
-//  13. alembic_task (5 operations)
-// ══════════════════════════════════════════════════════
-
-export const TaskInput = z.object({
-  operation: z
-    .enum(['prime', 'create', 'close', 'fail', 'record_decision'])
-    .describe(
-      'prime=加载知识上下文 | create=创建任务锚点 | close=完成+Guard | fail=放弃 | record_decision=记录用户偏好'
-    ),
-  title: z.string().optional().describe('Task or decision title (create / record_decision)'),
-  description: z.string().optional().describe('Decision description (record_decision)'),
-  id: z
-    .string()
-    .optional()
-    .describe('Task ID (close / fail). Optional if a task was created in the current session.'),
-  taskId: z.string().optional().describe('Alias for id (accepted for convenience)'),
-  reason: z.string().optional().describe('Close reason or fail reason'),
-  rationale: z.string().optional().describe('Decision rationale (record_decision)'),
-  tags: z.array(z.string()).optional().describe('Decision tags (record_decision)'),
-  userQuery: z
-    .string()
-    .optional()
-    .describe('User current input / prompt text for knowledge-aware search'),
-  activeFile: z.string().optional().describe('Currently active file path in IDE'),
-  language: z.string().optional().describe('Current programming language'),
-  sessionHistory: z.array(z.record(z.string(), z.unknown())).optional(),
-  hostDeclaredIntent: z
-    .record(z.string(), z.unknown())
-    .optional()
-    .describe('Optional Plugin-provided host intent frame; legacy args remain valid'),
-  hostTurnMeta: z
-    .record(z.string(), z.unknown())
-    .optional()
-    .describe('Optional Plugin-provided redacted turn metadata'),
-  intentContext: z
-    .record(z.string(), z.unknown())
-    .optional()
-    .describe('Optional normalized intent context for prime/search consumption'),
-});
-export type TaskInput = z.infer<typeof TaskInput>;
-
-// ══════════════════════════════════════════════════════
 //  Admin Tools
 // ══════════════════════════════════════════════════════
 
@@ -671,7 +629,6 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   alembic_bootstrap: BootstrapInput,
   alembic_rescan: RescanInput,
   alembic_dimension_complete: DimensionCompleteInput,
-  alembic_task: TaskInput,
   alembic_knowledge_lifecycle: KnowledgeLifecycleInput,
   alembic_panorama: PanoramaInput,
   alembic_evolve: EvolveInput,

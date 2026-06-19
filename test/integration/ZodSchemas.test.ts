@@ -3,7 +3,7 @@
  *
  * 覆盖范围:
  *   - common.ts 基础 schema（PaginationSchema, ContentSchema, ReasoningSchema 等）
- *   - mcp-tools.ts MCP 工具输入 schema（SearchInput, KnowledgeInput, TaskInput 等）
+ *   - mcp-tools.ts MCP 工具输入 schema（SearchInput, KnowledgeInput 等）
  *   - http-requests.ts HTTP 路由 schema（CRUD + 批量 + 搜索）
  *   - config.ts 配置文件 schema（AppConfigSchema）
  *   - TOOL_SCHEMAS 映射表完整性
@@ -32,10 +32,8 @@ import {
   BatchPublishBody,
   CreateGuardRuleBody,
   CreateKnowledgeBody,
-  IntentEpisodeStartBody,
   ResidentSearchBody,
   SearchQuery,
-  TaskDispatchBody,
   UpdateKnowledgeBody,
 } from '../../lib/shared/schemas/http-requests.js';
 // ── MCP tools schemas ───────────────────────────────
@@ -49,7 +47,6 @@ import {
   SkillInput,
   StructureInput,
   SubmitKnowledgeInput,
-  TaskInput,
   TOOL_SCHEMAS,
 } from '../../lib/shared/schemas/mcp-tools.js';
 
@@ -354,31 +351,6 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
     });
   });
 
-  describe('TaskInput', () => {
-    test('should require operation', () => {
-      expect(() => TaskInput.parse({})).toThrow();
-    });
-
-    test('should accept create with title', () => {
-      const result = TaskInput.parse({ operation: 'create', title: 'Fix bug' });
-      expect(result.operation).toBe('create');
-      expect(result.title).toBe('Fix bug');
-    });
-
-    test('should accept close with id and reason', () => {
-      const result = TaskInput.parse({ operation: 'close', id: 'asd-123', reason: 'done' });
-      expect(result.operation).toBe('close');
-      expect(result.id).toBe('asd-123');
-    });
-
-    test('should accept all valid operations', () => {
-      const ops = ['prime', 'create', 'close', 'fail', 'record_decision'];
-      for (const op of ops) {
-        expect(TaskInput.parse({ operation: op }).operation).toBe(op);
-      }
-    });
-  });
-
   describe('SkillInput', () => {
     test('should require operation', () => {
       expect(() => SkillInput.parse({})).toThrow();
@@ -405,7 +377,6 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
         'alembic_skill',
         'alembic_bootstrap',
         'alembic_dimension_complete',
-        'alembic_task',
         'alembic_knowledge_lifecycle',
       ];
       for (const tool of expectedTools) {
@@ -473,37 +444,6 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
 
     test('should reject empty object', () => {
       expect(() => UpdateKnowledgeBody.parse({})).toThrow();
-    });
-  });
-
-  describe('TaskDispatchBody', () => {
-    test('keeps named operation params and strips unnamed passthrough fields', () => {
-      const result = TaskDispatchBody.parse({
-        operation: 'prime',
-        userQuery: 'Find decisions',
-        hostDeclaredIntent: { source: 'codex' },
-        params: { mode: 'safe' },
-        rawProviderPayload: { secret: true },
-      });
-      const record = result as Record<string, unknown>;
-      expect(record.userQuery).toBe('Find decisions');
-      expect(record.hostDeclaredIntent).toEqual({ source: 'codex' });
-      expect(record.params).toEqual({ mode: 'safe' });
-      expect(record.rawProviderPayload).toBeUndefined();
-    });
-  });
-
-  describe('IntentEpisodeStartBody', () => {
-    test('keeps host intent context and strips unnamed host fields', () => {
-      const result = IntentEpisodeStartBody.parse({
-        query: 'Create handoff',
-        sessionId: 'session-1',
-        hostIntent: { hostDeclaredIntent: { label: 'handoff' } },
-        threadId: 'private-thread',
-      });
-      const record = result as Record<string, unknown>;
-      expect(record.hostIntent).toEqual({ hostDeclaredIntent: { label: 'handoff' } });
-      expect(record.threadId).toBeUndefined();
     });
   });
 

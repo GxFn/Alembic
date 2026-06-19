@@ -30,7 +30,6 @@ import { getRealtimeService as _getRealtimeService } from '../../infrastructure/
 import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
 import { AuditRepositoryImpl } from '../../repository/AuditRepository.js';
 import { BootstrapTaskManager } from '../../service/bootstrap/BootstrapTaskManager.js';
-import { IntentEpisodeStore } from '../../service/task/IntentEpisodeStore.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function getCoreRepositoryBundle(ct: ServiceContainer): AlembicRepositoryBundle {
@@ -108,21 +107,6 @@ export function register(c: ServiceContainer) {
         } catch {
           /* RealtimeService is unavailable in CLI and some tests. */
         }
-      },
-    });
-  });
-
-  c.singleton('intentEpisodeStore', (ct: ServiceContainer) => {
-    const projectRoot = resolveProjectRoot(ct);
-    const resolver = resolveAlembicWorkspace(projectRoot);
-    const facts = resolver.toFacts();
-    return new IntentEpisodeStore({
-      dataRoot: resolver.dataRoot,
-      workspace: {
-        dataRootSource: facts.dataRootSource,
-        projectId: resolver.projectId,
-        projectScopeId: facts.projectScopeId,
-        workspaceMode: facts.mode,
       },
     });
   });

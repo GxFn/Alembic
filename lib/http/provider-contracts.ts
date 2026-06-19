@@ -485,8 +485,6 @@ export const ALEMBIC_PROVIDER_ROUTE_MOUNTS = [
   mount('I09', '/api/v1/auth/probe'),
   mount('I21', '/api/v1/guard'),
   mount('I21', '/api/v1/rules'),
-  mount('I09', '/api/v1/task'),
-  mount('I11', '/api/v1/intent-episodes'),
   mount('I22', '/api/v1/search'),
   mount('I22', '/api/v1/ai'),
   mount('I22', '/api/v1/extract'),
