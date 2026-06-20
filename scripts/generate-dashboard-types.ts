@@ -121,15 +121,27 @@ function toJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
+function readCoreKnowledgeWireTypes(repoRoot: string): string {
+  const candidateRelpaths = [
+    'node_modules/@alembic/core/dist/types/KnowledgeWire.d.ts',
+    'node_modules/@alembic/core/dist/types/knowledge-wire.d.ts',
+  ];
+  for (const relpath of candidateRelpaths) {
+    const dtsPath = path.join(repoRoot, relpath);
+    if (existsSync(dtsPath)) {
+      return readFileSync(dtsPath, 'utf8').trimEnd();
+    }
+  }
+  throw new Error(
+    `Could not locate Core knowledge wire declarations. Tried: ${candidateRelpaths.join(', ')}`
+  );
+}
+
 export function generateDashboardApiTypes(
   repoRoot: string = findRepoRoot(__dirnameSafe())
 ): string {
   // ── Knowledge wire contract: verbatim Core declaration text ──
-  const wireDtsPath = path.join(
-    repoRoot,
-    'node_modules/@alembic/core/dist/types/knowledge-wire.d.ts'
-  );
-  const wireTypes = readFileSync(wireDtsPath, 'utf8').trimEnd();
+  const wireTypes = readCoreKnowledgeWireTypes(repoRoot);
 
   // ── Failure taxonomy projection ──
   const failureKinds = [...CORE_FIELD_FAILURE_KINDS];
@@ -187,7 +199,7 @@ export function generateDashboardApiTypes(
  * Alembic provider-contracts route table with a deduplicated
  * response-schema registry.
  *
- * Authority chain: @alembic/core src/types/knowledge-wire.ts +
+ * Authority chain: @alembic/core src/types/KnowledgeWire.ts +
  * src/shared/FailureTaxonomy.ts, Alembic lib/http/provider-contracts.ts +
  * lib/http/problem-taxonomy.ts.
  * Regenerate (in Alembic): npm run build && npm run generate:dashboard-types
@@ -196,7 +208,7 @@ export function generateDashboardApiTypes(
  */
 
 // ════════════════════════════════════════════════════════════════════
-// Knowledge wire contract (verbatim from @alembic/core dist/types/knowledge-wire.d.ts)
+// Knowledge wire contract (verbatim from @alembic/core dist/types/KnowledgeWire.d.ts)
 // ════════════════════════════════════════════════════════════════════
 
 ${wireTypes}
