@@ -96,6 +96,10 @@ export interface PcvAnalyzeGroundingLedgerSummary extends PcvNodeLocalEvidenceBa
   deterministicEvidenceConsumedCount: number;
   evidenceKind: 'analyze-grounding-ledger';
   evidenceProducedCount: number;
+  // AP-6：本 summary 被解读时所处的 grounding enforcement 模式（审计语义）。仅当上游 AP-4 additive 标记
+  // 可读时出现：'off'=observe-only（invalid-no-evidence 记为审计材料、不算 linkage 回归，R6），
+  // 'guard'=enforcement 生效（保持原质量判定）。标记缺失（旧/异源数据）时字段省略、按原判定处理。
+  groundingEnforcement?: 'off' | 'guard';
   invalidNoEvidenceCount: number;
   planningOnlyCount: number;
   recordOnlyCount: number;
@@ -302,7 +306,13 @@ export function buildPcvAnalyzeGroundingLedgerSummary({
     recordOnlyCount;
   const missingLinkReasons: string[] = [];
 
-  if (invalidNoEvidenceCount > 0) {
+  // AP-6：据上游 AP-4 标记把 grounding ledger 解读为审计语义（R6）。observe-only（'off'）下增多的
+  // invalid-no-evidence 是 PCV 纯观察的预期产物——记为审计材料、不推 missingLink、不降级 status 误判回归；
+  // 'guard' 或标记缺失时保持原质量判定（invalid-no-evidence 仍是真实信号）。计数本身始终保留作审计材料。
+  const groundingEnforcement = collectPcvAnalyzeGroundingEnforcement(runResult);
+  const groundingObserveOnly = groundingEnforcement === 'off';
+
+  if (invalidNoEvidenceCount > 0 && !groundingObserveOnly) {
     missingLinkReasons.push('analyze_grounding_invalid_no_evidence');
   }
   if (evidenceThroughCount === 0 && planningOnlyCount > 0) {
@@ -320,6 +330,7 @@ export function buildPcvAnalyzeGroundingLedgerSummary({
     dimensionId: dimId,
     evidenceKind: 'analyze-grounding-ledger',
     evidenceProducedCount,
+    ...(groundingEnforcement ? { groundingEnforcement } : {}),
     invalidNoEvidenceCount,
     missingLinkReasons,
     nodeId: analyzeNodeIdentity.pcvNodeId,
@@ -331,7 +342,11 @@ export function buildPcvAnalyzeGroundingLedgerSummary({
         : evidenceThroughCount > 0
           ? 'linked'
           : 'not-applicable',
-    summary: `${label || dimId} analyze grounding ledger recorded ${entries.length} burn(s): ${evidenceProducedCount} produced evidence, ${deterministicEvidenceConsumedCount} consumed deterministic evidence, ${invalidNoEvidenceCount} lacked evidence.`,
+    summary:
+      `${label || dimId} analyze grounding ledger recorded ${entries.length} burn(s): ${evidenceProducedCount} produced evidence, ${deterministicEvidenceConsumedCount} consumed deterministic evidence, ${invalidNoEvidenceCount} lacked evidence.` +
+      (groundingObserveOnly && invalidNoEvidenceCount > 0
+        ? ' Observe-only grounding enforcement: invalid-no-evidence recorded as audit material, not a linkage regression.'
+        : ''),
     summaryOnlyCount,
     toolSchemasVisibleCount,
     verificationOnlyCount,
@@ -577,6 +592,35 @@ function collectPcvAnalyzeGroundingLedgerEntries(
     }
   }
   return entries;
+}
+
+// AP-6：从同一组 candidate（runResult + phases）的 pcvNodeEvidence 读取上游 AP-4 additive 标记
+// groundingEnforcement（'off'=observe-only / 'guard'=AnalyzeGroundingGuard 生效），与 ledger entries 同源
+// 遍历，取首个携带该标记的 candidate。标记缺失（旧/异源数据）返回 undefined，调用方据此回落到原质量判定，
+// 保持纯 additive（老数据/老路径行为不变）。纯观察，不驱动控流。
+function collectPcvAnalyzeGroundingEnforcement(
+  runResult: AgentResultLike
+): 'off' | 'guard' | undefined {
+  const candidates: unknown[] = [runResult];
+  const phases = runResult.phases || {};
+  const qualityGate = phases.quality_gate;
+  candidates.push(phases.analyze);
+  if (isRecord(qualityGate)) {
+    candidates.push(qualityGate.artifact);
+  }
+  for (const phase of Object.values(phases)) {
+    candidates.push(phase);
+  }
+  for (const candidate of candidates) {
+    const pcvNodeEvidence = isRecord(candidate) ? candidate.pcvNodeEvidence : null;
+    const enforcement = isRecord(pcvNodeEvidence)
+      ? pcvNodeEvidence.groundingEnforcement
+      : undefined;
+    if (enforcement === 'off' || enforcement === 'guard') {
+      return enforcement;
+    }
+  }
+  return undefined;
 }
 
 function emptyGroundingClassifications(): Record<PcvAnalyzeGroundingClassification, number> {
