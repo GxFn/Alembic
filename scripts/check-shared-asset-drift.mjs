@@ -3,7 +3,9 @@
  * check-shared-asset-drift.mjs — Shared-asset drift gate (Alembic ↔ AlembicPlugin)
  *
  * 按 config/shared-asset-manifest.json 比较本仓库与兄弟仓库 AlembicPlugin 的共享资产：
- *   - skill-shared-sections: 仅比较 SKILL.md 中 wakeflow-shared 标记段（host 段是声明的宿主差异）
+ *   - skill-shared-sections: 比较 SKILL.md 中 wakeflow-shared 标记段（标记段外的 host overlay 是声明的宿主差异）；
+ *                            manifest 的 perHostSections 列出的段承载真 host-divergent 工具面，从 cross-host
+ *                            coherence 排除（每侧即该 host 的 per-host 权威），其余 shared 段仍须 codex/cc 一致
  *   - main-only:             资产只允许存在于主仓库，插件侧出现未声明副本即失败
  *   - line-variants:         整文件比较，声明的 per-host 变体行替换为占位符后必须完全一致
  *   - exact:                 单文件精确比较（仅归一化换行、行尾空白和首尾空行）
@@ -161,21 +163,41 @@ function checkSkillSharedSections(asset) {
   if (mainName !== pluginName) {
     problems.push(`frontmatter name differs: main=${mainName} plugin=${pluginName}`);
   }
-  const mainNames = mainSections.map((s) => s.name).join(',');
-  const pluginNames = pluginSections.map((s) => s.name).join(',');
+  // ── per-host 段处理（DH-4b：dual-host 工具面分叉） ──────────────
+  // perHostSections 声明的共享段承载真 host-divergent 的工具面（codex/main: alembic_knowledge /
+  // alembic_guard / alembic_structure(...) ↔ claude-code/plugin: alembic_search / alembic_code_guard /
+  // alembic_project_matrix(...)）。这些段从 cross-host coherence 比较中排除：每侧文件就是该 host 的
+  // per-host 权威，互不比较，避免强行对齐改掉某一宿主四工具对外语义。其余非 host 的 shared 段仍须
+  // codex/cc 一致（cross-host coherence 保留）。
+  const perHostSections = new Set(asset.perHostSections ?? []);
+  const mainCoherence = mainSections.filter((s) => !perHostSections.has(s.name));
+  const pluginCoherence = pluginSections.filter((s) => !perHostSections.has(s.name));
+  const mainNames = mainCoherence.map((s) => s.name).join(',');
+  const pluginNames = pluginCoherence.map((s) => s.name).join(',');
   if (mainNames !== pluginNames) {
     problems.push(`shared section sequence differs: main=[${mainNames}] plugin=[${pluginNames}]`);
   } else {
-    for (let i = 0; i < mainSections.length; i++) {
-      if (mainSections[i].content !== pluginSections[i].content) {
-        problems.push(`shared section "${mainSections[i].name}" content drifted`);
+    for (let i = 0; i < mainCoherence.length; i++) {
+      if (mainCoherence[i].content !== pluginCoherence[i].content) {
+        problems.push(`shared section "${mainCoherence[i].name}" content drifted`);
       }
+    }
+  }
+  // 声明的 per-host 段必须存在于 main（codex/main 权威）侧，防止 manifest 声明与源文件脱节后静默漏检
+  const mainSectionNames = new Set(mainSections.map((s) => s.name));
+  for (const name of perHostSections) {
+    if (!mainSectionNames.has(name)) {
+      problems.push(`declared per-host section "${name}" missing from main authority`);
     }
   }
   if (problems.length > 0) {
     record('drift', asset.id, problems.join('; '));
   } else {
-    record('ok', asset.id, `${mainSections.length} shared sections in sync`);
+    const perHostNote =
+      perHostSections.size > 0
+        ? `, ${perHostSections.size} per-host section(s) coherence-skipped`
+        : '';
+    record('ok', asset.id, `${mainCoherence.length} shared sections in sync${perHostNote}`);
   }
 }
 

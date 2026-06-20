@@ -28,14 +28,16 @@
       "path": "skills/alembic-recipes/SKILL.md",
       "mode": "skill-shared-sections",
       "authority": "shared sections: main; host sections: each host",
-      "notes": "Search-mode description and Guard tool naming are host-specific; plugin-only alembic_prime / alembic_codex_* guidance stays as plugin host overlay."
+      "perHostSections": ["intro-and-overview", "use-context-tail"],
+      "notes": "DH-4b per-host: intro-and-overview / use-context-tail carry host-divergent tool surfaces (main/codex alembic_knowledge / confirm_usage \u2194 plugin/cc alembic_search(operation=search|get|expand)); declared per-host so cross-host coherence skips them while title / find-recipes-tail / use-context-head stay coherence-checked. Plugin-only alembic_prime / alembic_codex_* guidance stays as plugin host overlay between shared regions."
     },
     {
       "id": "skill-alembic-structure",
       "path": "skills/alembic-structure/SKILL.md",
       "mode": "skill-shared-sections",
       "authority": "shared sections: main; host sections: each host",
-      "notes": "Plugin-only source-graph guidance (alembic_source_graph_status / alembic_code_explore / alembic_symbol_search) stays as plugin host overlay between shared regions."
+      "perHostSections": ["title-intro", "tools-and-graph"],
+      "notes": "DH-4b per-host: both shared sections are host-divergent tool surfaces (main/codex alembic_structure(targets|files|metadata) + knowledge-graph \u2194 plugin/cc alembic_project_matrix + project-graph); declared per-host so cross-host coherence skips them (each side is its own per-host authority). Plugin-only source-graph guidance (alembic_source_graph_status / alembic_code_explore / alembic_symbol_search) stays as plugin host overlay between shared regions."
     },
     {
       "id": "skill-alembic-devdocs",
@@ -78,9 +80,26 @@
             "mainLine": "# V3 Agent Consumption Fields",
             "pluginLine": "# V3 Host Agent Required Fields"
           }
+        ],
+        "README.md": [
+          {
+            "key": "tools-search-row",
+            "mainLine": "| `alembic_search` | mode 路由搜索（mode=auto: FieldWeighted + 语义融合，mode=context: 智能上下文检索） |",
+            "pluginLine": "| `alembic_search` | compact search/get/expand 路由（operation=search/get/expand；mode=auto/keyword/semantic 用于检索策略） |"
+          },
+          {
+            "key": "tools-confirm-usage-row",
+            "mainLine": "| `alembic_knowledge(operation=confirm_usage)` | 确认 Recipe 被采纳/应用 |",
+            "pluginLine": "| Dashboard Candidates | 用户 review/publish 候选知识的默认界面 |"
+          },
+          {
+            "key": "tools-insights-row",
+            "mainLine": "| `alembic_knowledge(operation=insights)` | 获取 Recipe 质量洞察（只读） |",
+            "pluginLine": "| `alembic_project_matrix` / `alembic_graph` | 项目导航和项目内部关系上下文 |"
+          }
         ]
       },
-      "notes": "README mode-routed-search wording backported from plugin 2026-06-12 (RC5 p1); files must match exactly except the declared _template.md heading variant."
+      "notes": "README + _template.md per-host: _template.md heading variant (RC5 p1) plus three README tool-table rows that are host-divergent tool surfaces (main/codex alembic_search mode-routing + alembic_knowledge(confirm_usage|insights) \u2194 plugin/cc compact alembic_search operation routing + Dashboard Candidates + alembic_project_matrix/alembic_graph). All other files must match exactly."
     }
   ]
 }
