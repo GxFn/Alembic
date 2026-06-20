@@ -12,7 +12,6 @@ import {
 import {
   buildProjectContextPresenterInput,
   type ModuleContext,
-  ProjectContext,
   type ProjectContextEnvelope,
   type ProjectContextPresenterInput,
   type ProjectContextRef,
@@ -23,6 +22,7 @@ import {
   type SourceSliceContext,
   type SpaceContext,
 } from '@alembic/core/project-context';
+import { ProjectContextCapabilities } from '@alembic/core/project-context-capabilities';
 import type { BootstrapSessionShape, FileDiffPlan } from '@alembic/core/types';
 import {
   readLatestProjectContextFileSnapshotRow,
@@ -561,7 +561,7 @@ async function executeProjectContextRequest(
   source: ProjectContextWorkflowSource,
   payload?: Record<string, unknown>
 ): Promise<ProjectContextEnvelope<ProjectContextResult>> {
-  return ProjectContext.execute({
+  return ProjectContextCapabilities.execute({
     kind,
     payload,
     project: {

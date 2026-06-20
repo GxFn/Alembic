@@ -8,7 +8,7 @@
  *   - test-token helpers keep payload shape compatibility
  */
 
-import { CapabilityProbe } from '@alembic/core/core/capability';
+import { CapabilityProbe } from '@alembic/core/test-fixtures';
 import { sourceResolverMiddleware } from '../../lib/http/middleware/sourceResolver.js';
 import { createExpiredToken, createTempGitRepo, createTestToken } from '../fixtures/factory.js';
 

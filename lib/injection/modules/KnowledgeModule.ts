@@ -8,8 +8,8 @@
  *   - aiProvider
  */
 
-import { getEnhancementRegistry } from '@alembic/core/core/enhancement';
 import { DimensionCopy } from '@alembic/core/dimensions';
+import { getFrameworkEnhancements } from '@alembic/core/enhancement';
 import {
   ConsolidationAdvisor,
   ContentPatcher,
@@ -212,7 +212,7 @@ export function register(c: ServiceContainer) {
 
   // ═══ Shared ═══
 
-  c.register('enhancementRegistry', () => getEnhancementRegistry());
+  c.register('enhancementRegistry', () => getFrameworkEnhancements());
   c.register('languageService', () => LanguageService);
   c.register('dimensionCopy', () => DimensionCopy);
   c.register('aiProvider', () => c.singletons.aiProvider || null);

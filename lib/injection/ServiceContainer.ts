@@ -1,5 +1,5 @@
 // ─── v3.1: Multi-Language Discovery + Enhancement ────────
-import { initEnhancementRegistry } from '@alembic/core/core/enhancement';
+import { initFrameworkEnhancements } from '@alembic/core/enhancement';
 // ─── P3: Infrastructure ──────────────────────────────
 import Logger from '@alembic/core/logging';
 import { unwrapRawDb } from '@alembic/core/search';
@@ -138,7 +138,7 @@ export class ServiceContainer {
 
       // v3.1: 初始化 Enhancement Pack 注册表（异步加载所有框架增强包）
       try {
-        await initEnhancementRegistry();
+        await initFrameworkEnhancements();
       } catch (e: unknown) {
         this.logger.warn('Enhancement registry init failed (non-blocking)', {
           error: (e as Error).message,

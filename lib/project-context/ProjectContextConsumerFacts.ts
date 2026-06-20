@@ -7,7 +7,7 @@ import type {
   ProjectMap,
   RepoContext,
 } from '@alembic/core/project-context';
-import { ProjectContext } from '@alembic/core/project-context';
+import { ProjectContextCapabilities } from '@alembic/core/project-context-capabilities';
 import { LanguageService } from '@alembic/core/shared';
 
 const PROJECT_CONTEXT_SOURCE = 'alembic-main-consumer';
@@ -213,7 +213,7 @@ function executeProjectContextRequest(
   projectRoot: string,
   payload?: Record<string, unknown>
 ): Promise<ProjectContextEnvelope<ProjectContextResult>> {
-  return ProjectContext.execute({
+  return ProjectContextCapabilities.execute({
     kind,
     payload,
     project: {
