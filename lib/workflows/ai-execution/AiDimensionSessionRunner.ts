@@ -62,6 +62,7 @@ export async function runAiDimensionSession({
   const services = resolveAiDimensionServices(preparation);
 
   const { enableParallel, concurrency } = resolveAiDimensionConcurrency();
+  const groundingEnforcement = resolveBootstrapGroundingEnforcement();
   const scheduler = new TierScheduler();
   const activeDimIds = preparation.dimensions.map((dimension: DimensionDef) => dimension.id);
   const {
@@ -257,6 +258,7 @@ export async function runAiDimensionSession({
     primaryLang: preparation.primaryLang,
     projectLang: runtime.projectInfo.lang || null,
     sessionAbortSignal: preparation.sessionAbortSignal,
+    groundingEnforcement,
     taskManager: preparation.taskManager,
     scheduler,
     dimensionStats,
@@ -332,6 +334,17 @@ export function resolveAiDimensionConcurrency(env: NodeJS.ProcessEnv = process.e
     enableParallel,
     concurrency: enableParallel ? configuredConcurrency : 1,
   };
+}
+
+// AP-7：质量验证会话（PCVM/Test）per-invocation 显式开 grounding guard 的 opt-in 信号（PD6 真实消费者 + PD7
+// per-invocation 粒度）。读 env ALEMBIC_GROUNDING_ENFORCEMENT：'guard'=恢复 analyze grounding 阻断+nudge+rollback；
+// 'off'=显式 observe-only。未设或非法值 → undefined → 不覆盖、子运行回退 runtime 全局默认（observe-only），
+// 普通 bootstrap/rescan/增量运行零可见行为变更。供 PCVM/Test 质量验证链路在发起 bootstrap 前设置该 env。
+export function resolveBootstrapGroundingEnforcement(
+  env: NodeJS.ProcessEnv = process.env
+): 'off' | 'guard' | undefined {
+  const raw = env.ALEMBIC_GROUNDING_ENFORCEMENT;
+  return raw === 'guard' || raw === 'off' ? raw : undefined;
 }
 
 function resolveAiDimensionServices(preparation: AiDimensionPreparation): {

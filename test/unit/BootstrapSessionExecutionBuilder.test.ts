@@ -459,4 +459,43 @@ describe('bootstrap session execution builder', () => {
       resolveBootstrapDimensionTier('neg', makeTestDim(undefined), { getTierIndex: () => -1 })
     ).toBe(0);
   });
+
+  test('AP-7: session execution carries the per-invocation guard opt-in only when set (default observe-only)', () => {
+    const makeOpts = () => ({
+      sessionId: 'session-1',
+      activeDimIds: ['a'],
+      skippedDimIds: [],
+      concurrency: 1,
+      scheduler: { getTierIndex: () => 0 },
+      dimensionStats: {},
+      resolvePlan: () => createPlan('a'),
+      createDimensionRunInput: (dimId: string) => ({
+        analystScopeId: `${dimId}:analyst`,
+        runInput: {
+          profile: { id: 'bootstrap-dimension' },
+          params: { dimId },
+          message: { role: 'internal', content: dimId },
+          context: { source: 'bootstrap', runtimeSource: 'system' },
+        } as AgentRunInput,
+      }),
+      emitDimensionStart: vi.fn(),
+      consumeDimensionResult: vi.fn(),
+      consumeDimensionError: vi.fn(),
+      consumeTierResult: vi.fn(),
+    });
+
+    // opt-in 设置 → session execution 携带 guard（经 coordinator 均匀传播全子维度 → AgentRuntime → grounding guard）。
+    const guarded = buildBootstrapSessionExecutionInput({
+      ...makeOpts(),
+      groundingEnforcement: 'guard',
+    });
+    expect(guarded.input.execution?.groundingEnforcement).toBe('guard');
+    // 既有 abortSignal/shouldAbort 字段不回归。
+    expect(typeof guarded.input.execution?.shouldAbort).toBe('function');
+
+    // 未设 → 不附加，session execution 无 groundingEnforcement（子运行回退默认 observe-only，零行为变更）。
+    const defaulted = buildBootstrapSessionExecutionInput(makeOpts());
+    expect(defaulted.input.execution?.groundingEnforcement).toBeUndefined();
+    expect(typeof defaulted.input.execution?.shouldAbort).toBe('function');
+  });
 });

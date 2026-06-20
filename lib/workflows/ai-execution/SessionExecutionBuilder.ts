@@ -46,6 +46,8 @@ export interface BuildBootstrapSessionExecutionInputOptions {
   primaryLang?: string | null;
   projectLang?: string | null;
   sessionAbortSignal?: AbortSignal | null;
+  // AP-7：质量验证会话（PCVM/Test）per-invocation 显式开 guard 的 opt-in；未设→不覆盖→默认 observe-only（零行为变更）。
+  groundingEnforcement?: 'off' | 'guard';
   taskManager?: BootstrapTaskManagerLike | null;
   scheduler: { getTierIndex(dimId: string): number };
   dimensionStats: Record<string, DimensionStat>;
@@ -75,6 +77,7 @@ export function buildBootstrapSessionExecutionInput({
   primaryLang,
   projectLang,
   sessionAbortSignal,
+  groundingEnforcement,
   taskManager,
   scheduler,
   dimensionStats,
@@ -227,6 +230,9 @@ export function buildBootstrapSessionExecutionInput({
           taskManager &&
           (!taskManager.isSessionValid(sessionId) || taskManager.isUserCancelled?.(sessionId))
         ),
+      // AP-7：仅当质量验证会话显式 opt-in 时附加 per-run guard；经 coordinator 均匀传播全子维度 → AgentRuntime
+      // → analyze grounding guard。未设则字段省略，子运行回退 runtime 全局默认 observe-only（零行为变更）。
+      ...(groundingEnforcement ? { groundingEnforcement } : {}),
     },
     presentation: { responseShape: 'system-task-result' },
   });
