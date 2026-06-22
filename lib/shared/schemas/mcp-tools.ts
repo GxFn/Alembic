@@ -536,27 +536,6 @@ export const KnowledgeLifecycleInput = z.object({
 }) as unknown as z.ZodType<KnowledgeLifecycleInputValue>;
 export type KnowledgeLifecycleInput = z.infer<typeof KnowledgeLifecycleInput>;
 
-// 18. alembic_panorama
-export const PanoramaInput = z.object({
-  operation: z
-    .enum([
-      'overview',
-      'module',
-      'gaps',
-      'health',
-      'governance_cycle',
-      'decay_report',
-      'staging_check',
-      'enhancement_suggestions',
-    ])
-    .default('overview')
-    .describe(
-      'overview=项目骨架+层级+模块角色 | module=单模块详情+邻居关系 | gaps=知识空白区 | health=全景健康度 | governance_cycle=新陈代谢完整周期 | decay_report=衰退报告 | staging_check=staging检查+自动发布 | enhancement_suggestions=增强建议'
-    ),
-  module: z.string().optional().describe('模块名称（operation=module 时必填）'),
-});
-export type PanoramaInput = z.infer<typeof PanoramaInput>;
-
 // 19. alembic_evolve
 const EvolveDecisionSchema = z.object({
   recipeId: z.string().describe('目标 Recipe ID'),
@@ -630,7 +609,6 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   alembic_rescan: RescanInput,
   alembic_dimension_complete: DimensionCompleteInput,
   alembic_knowledge_lifecycle: KnowledgeLifecycleInput,
-  alembic_panorama: PanoramaInput,
   alembic_evolve: EvolveInput,
   alembic_consolidate: ConsolidateInput,
 };

@@ -27,6 +27,7 @@ import daemonRouter from './routes/daemon.js';
 import evolutionRouter from './routes/evolution.js';
 import extractRouter from './routes/extract.js';
 import fileChangesRouter from './routes/file-changes.js';
+import governanceRouter from './routes/governance.js';
 import guardRouter from './routes/guard.js';
 import guardRuleRouter from './routes/guardRules.js';
 import healthRouter from './routes/health.js';
@@ -34,7 +35,6 @@ import jobsRouter from './routes/jobs.js';
 import knowledgeRouter from './routes/knowledge.js';
 import logsRouter from './routes/logs.js';
 import modulesRouter from './routes/modules.js';
-import panoramaRouter from './routes/panorama.js';
 import projectScopeRouter from './routes/project-scope.js';
 import projectsRouter from './routes/projects.js';
 import recipesRouter from './routes/recipes.js';
@@ -312,8 +312,8 @@ export class HttpServer {
     // Wiki 路由
     this.app.use(`${apiPrefix}/wiki`, wikiRouter);
 
-    // Panorama 全景路由（项目结构 + 覆盖率 + 健康度）
-    this.app.use(`${apiPrefix}/panorama`, panoramaRouter);
+    // 治理路由（Panorama 已退场，保留非 Panorama 的 decay/staging/enhancement 能力）
+    this.app.use(`${apiPrefix}/governance`, governanceRouter);
 
     // 进化路由（文件变更驱动 Recipe 修复/弃用）
     this.app.use(`${apiPrefix}/evolution`, evolutionRouter);

@@ -2076,7 +2076,7 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
       "/api/v1/modules",
       "/api/v1/candidates"
     ],
-    "contractId": "I22.getPanorama",
+    "contractId": "I22.getGovernance",
     "errorKinds": [
       "invalid-input",
       "unavailable",
@@ -2108,10 +2108,10 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
     ],
     "functionClass": "rest-command",
     "method": "get",
-    "operationId": "getPanorama",
-    "path": "/panorama",
+    "operationId": "getGovernance",
+    "path": "/governance",
     "registryRowId": "I22",
-    "summary": "Panorama route family",
+    "summary": "Governance route family",
     "supportedScenarios": [
       "success",
       "unavailable-runtime",

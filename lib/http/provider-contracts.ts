@@ -434,7 +434,7 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
   // verdict, zero external consumers).
   route('I22', 'post', '/modules/scan', 'scanModules', 'Module scan command', ['Knowledge']),
   route('I22', 'post', '/wiki/generate', 'generateWiki', 'Wiki generation command', ['Knowledge']),
-  route('I22', 'get', '/panorama', 'getPanorama', 'Panorama route family', ['Knowledge']),
+  route('I22', 'get', '/governance', 'getGovernance', 'Governance route family', ['Knowledge']),
   route(
     'I22',
     'get',
@@ -474,7 +474,7 @@ export const ALEMBIC_PROVIDER_ROUTE_MOUNTS = [
   mount('I22', '/api/v1/knowledge'),
   mount('I22', '/api/v1/recipes'),
   mount('I22', '/api/v1/wiki'),
-  mount('I22', '/api/v1/panorama'),
+  mount('I22', '/api/v1/governance'),
   mount('I22', '/api/v1/evolution'),
   mount('I23', '/api/v1/file-changes'),
   mount('I23', '/api/v1/signals'),

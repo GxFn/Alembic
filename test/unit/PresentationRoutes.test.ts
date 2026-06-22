@@ -1,88 +1,12 @@
 /**
  * Phase 5: Presentation Layer HTTP Routes — 单元测试
  *
- * 测试 panorama / audit 路由对 DI 服务的调用（guardReport 路由已随 CCR-1 下线）
+ * 测试 governance / audit 路由对 DI 服务的调用（guardReport 路由已随 CCR-1 下线）
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getRouter } from '../helpers/express.js';
+import { getRouter, invokeRouter } from '../helpers/express.js';
 
 /* ═══ Mock data ═══════════════════════════════════════════ */
-
-const mockOverview = {
-  projectRoot: '/test',
-  moduleCount: 5,
-  layerCount: 3,
-  totalFiles: 100,
-  totalRecipes: 20,
-  overallCoverage: 0.2,
-  layers: [
-    {
-      level: 0,
-      name: 'Foundation',
-      modules: [{ name: 'Utils', role: 'utility', fileCount: 10, recipeCount: 2 }],
-    },
-  ],
-  cycleCount: 1,
-  gapCount: 2,
-  healthRadar: {
-    dimensions: [],
-    overallScore: 20,
-    totalRecipes: 20,
-    coveredDimensions: 2,
-    totalDimensions: 11,
-    dimensionCoverage: 0.18,
-  },
-  computedAt: Date.now(),
-  stale: false,
-};
-
-const mockHealth = {
-  healthRadar: {
-    dimensions: [],
-    overallScore: 20,
-    totalRecipes: 20,
-    coveredDimensions: 2,
-    totalDimensions: 11,
-    dimensionCoverage: 0.18,
-  },
-  avgCoupling: 3.5,
-  cycleCount: 1,
-  gapCount: 2,
-  highPriorityGaps: 1,
-  moduleCount: 5,
-  healthScore: 65,
-};
-
-const mockGaps = [
-  {
-    dimension: 'error-handling',
-    dimensionName: '错误处理',
-    recipeCount: 0,
-    status: 'missing',
-    priority: 'high',
-    suggestedTopics: ['exception-pattern'],
-    affectedRoles: ['service'],
-  },
-  {
-    dimension: 'concurrency',
-    dimensionName: '并发与线程',
-    recipeCount: 1,
-    status: 'weak',
-    priority: 'medium',
-    suggestedTopics: ['thread-safety'],
-    affectedRoles: [],
-  },
-];
-
-const mockModuleDetail = {
-  module: { name: 'Utils', fileCount: 10 },
-  layerName: 'Foundation',
-  neighbors: [],
-  fileGroups: [{ group: '(root)', files: [], count: 10 }],
-  recipes: [],
-  uncoveredFileCount: 10,
-  summary: 'Utils is a Foundation layer module.',
-};
 
 const mockAuditLogs = [
   {
@@ -105,13 +29,17 @@ const mockAuditLogs = [
 
 /* ═══ Mock services ════════════════════════════════════════ */
 
-const mockPanoramaService = {
-  getOverview: vi.fn().mockReturnValue(mockOverview),
-  getHealth: vi.fn().mockReturnValue(mockHealth),
-  getGaps: vi.fn().mockReturnValue(mockGaps),
-  getModule: vi
-    .fn()
-    .mockImplementation((name: string) => (name === 'Utils' ? mockModuleDetail : null)),
+const mockDecayDetector = {
+  scanAll: vi.fn().mockResolvedValue([{ id: 'decay-1', status: 'watch' }]),
+};
+
+const mockStagingManager = {
+  checkAndPromote: vi.fn().mockResolvedValue({ promoted: 1 }),
+  listStaging: vi.fn().mockResolvedValue([{ id: 'staging-1' }]),
+};
+
+const mockEnhancementSuggester = {
+  analyzeAll: vi.fn().mockResolvedValue([{ id: 'enhancement-1' }]),
 };
 
 const mockAuditStore = {
@@ -122,8 +50,10 @@ vi.mock('../../lib/injection/ServiceContainer.js', () => ({
   getServiceContainer: vi.fn(() => ({
     get: (name: string) => {
       const map: Record<string, unknown> = {
-        panoramaService: mockPanoramaService,
         auditStore: mockAuditStore,
+        decayDetector: mockDecayDetector,
+        enhancementSuggester: mockEnhancementSuggester,
+        stagingManager: mockStagingManager,
       };
       return map[name] ?? null;
     },
@@ -139,13 +69,13 @@ vi.mock('@alembic/core/workspace', () => ({
 /* ═══ Import routes (after mocks) ═════════════════════════ */
 
 import auditRouter from '../../lib/http/routes/audit.js';
-import panoramaRouter from '../../lib/http/routes/panorama.js';
+import governanceRouter from '../../lib/http/routes/governance.js';
 
 /* ═══ Test helper ═════════════════════════════════════════ */
 
 async function testGet(path: string): Promise<{ status: number; body: Record<string, unknown> }> {
-  if (path.startsWith('/api/v1/panorama')) {
-    return getRouter(panoramaRouter, path, { mountPath: '/api/v1/panorama' });
+  if (path.startsWith('/api/v1/governance')) {
+    return getRouter(governanceRouter, path, { mountPath: '/api/v1/governance' });
   }
   if (path.startsWith('/api/v1/audit')) {
     return getRouter(auditRouter, path, { mountPath: '/api/v1/audit' });
@@ -153,52 +83,57 @@ async function testGet(path: string): Promise<{ status: number; body: Record<str
   throw new Error(`Unknown route under test: ${path}`);
 }
 
+async function testPost(path: string): Promise<{ status: number; body: Record<string, unknown> }> {
+  if (path.startsWith('/api/v1/governance')) {
+    return invokeRouter(governanceRouter, {
+      method: 'POST',
+      mountPath: '/api/v1/governance',
+      path,
+    });
+  }
+  throw new Error(`Unknown route under test: ${path}`);
+}
+
 /* ═══ Tests ════════════════════════════════════════════════ */
 
-describe('Phase 5: Panorama Route', () => {
+describe('Phase 5: Governance Route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('GET /panorama returns retired ProjectContext handoff', async () => {
-    const { status, body } = await testGet('/api/v1/panorama');
+  it('POST /governance/cycle returns the retired metabolism signal', async () => {
+    const { status, body } = await testPost('/api/v1/governance/cycle');
     expect(status).toBe(410);
     expect(body.success).toBe(false);
-    expect(body.error).toMatchObject({ code: 'RETIRED_PROJECT_INFO_ROUTE' });
-    expect(mockPanoramaService.getOverview).not.toHaveBeenCalled();
+    expect(body.error).toMatchObject({ code: 'REMOVED' });
   });
 
-  it('GET /panorama/health returns retired ProjectContext handoff', async () => {
-    const { status, body } = await testGet('/api/v1/panorama/health');
-    expect(status).toBe(410);
-    expect(body.error).toMatchObject({ code: 'RETIRED_PROJECT_INFO_ROUTE' });
-    expect(mockPanoramaService.getHealth).not.toHaveBeenCalled();
+  it('GET /governance/decay returns active decay results', async () => {
+    const { status, body } = await testGet('/api/v1/governance/decay');
+    expect(status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data).toMatchObject({ results: [{ id: 'decay-1', status: 'watch' }] });
+    expect(mockDecayDetector.scanAll).toHaveBeenCalledTimes(1);
   });
 
-  it('GET /panorama/gaps returns retired ProjectContext handoff', async () => {
-    const { status, body } = await testGet('/api/v1/panorama/gaps');
-    expect(status).toBe(410);
-    expect(body.error).toMatchObject({ code: 'RETIRED_PROJECT_INFO_ROUTE' });
+  it('POST /governance/staging-check keeps staging governance active', async () => {
+    const { status, body } = await testPost('/api/v1/governance/staging-check');
+    expect(status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data).toMatchObject({
+      checkResult: { promoted: 1 },
+      currentStaging: [{ id: 'staging-1' }],
+    });
+    expect(mockStagingManager.checkAndPromote).toHaveBeenCalledTimes(1);
+    expect(mockStagingManager.listStaging).toHaveBeenCalledTimes(1);
   });
 
-  it('GET /panorama/module/:name returns retired ProjectContext handoff', async () => {
-    const { status, body } = await testGet('/api/v1/panorama/module/Utils');
-    expect(status).toBe(410);
-    expect(body.error).toMatchObject({ code: 'RETIRED_PROJECT_INFO_ROUTE' });
-    expect(mockPanoramaService.getModule).not.toHaveBeenCalled();
-  });
-
-  it('GET /panorama/module/:name does not expose retired module lookup 404s', async () => {
-    const { status, body } = await testGet('/api/v1/panorama/module/Unknown');
-    expect(status).toBe(410);
-    expect(body.success).toBe(false);
-    expect(body.error).toMatchObject({ code: 'RETIRED_PROJECT_INFO_ROUTE' });
-  });
-
-  it('GET /panorama rejects invalid refresh query', async () => {
-    const { status, body } = await testGet('/api/v1/panorama?refresh=maybe');
-    expect(status).toBe(400);
-    expect(body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
+  it('GET /governance/enhancements returns active enhancement suggestions', async () => {
+    const { status, body } = await testGet('/api/v1/governance/enhancements');
+    expect(status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data).toMatchObject({ suggestions: [{ id: 'enhancement-1' }] });
+    expect(mockEnhancementSuggester.analyzeAll).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -1621,35 +1621,6 @@ program
   });
 
 // ─────────────────────────────────────────────────────
-// panorama 命令
-// ─────────────────────────────────────────────────────
-program
-  .command('panorama [path]')
-  .description('项目全景分析：架构层级、覆盖率、知识空白')
-  .option('--json', '以 JSON 格式输出')
-  .option('--gaps', '仅显示知识空白区')
-  .option('--health', '仅显示健康度评分')
-  .action(async (scanPath, opts) => {
-    const projectRoot = resolve(scanPath || '.');
-    const retired = {
-      success: false,
-      error: {
-        code: 'RETIRED_PROJECT_INFO_ROUTE',
-        message:
-          'Project information is served by ProjectContext-backed module and structure routes.',
-      },
-      projectRoot,
-    };
-    if (opts.json) {
-      cli.log(JSON.stringify(retired, null, 2));
-    } else {
-      cli.log('\nPanorama project-information commands have been retired.\n');
-      cli.log(retired.error.message);
-      cli.log(`Project: ${projectRoot}`);
-    }
-  });
-
-// ─────────────────────────────────────────────────────
 // status 命令
 // ─────────────────────────────────────────────────────
 program
