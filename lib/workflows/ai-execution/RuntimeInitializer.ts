@@ -95,10 +95,6 @@ export async function initializeBootstrapRuntime({
     container,
     dataRoot,
   });
-  const codeEntityGraphInst = await createBootstrapCodeEntityGraph({
-    container,
-    projectRoot,
-  });
   const memoryCoordinator = new MemoryCoordinator({
     persistentMemory: semanticMemory,
     sessionStore,
@@ -111,7 +107,6 @@ export async function initializeBootstrapRuntime({
     dimContext,
     sessionStore,
     semanticMemory,
-    codeEntityGraphInst,
     memoryCoordinator,
     projectScopeSourceIdentities,
     projectScopeSourceIdentityMap,
@@ -211,37 +206,4 @@ function createBootstrapSemanticMemory({
     );
     return null;
   }
-}
-
-async function createBootstrapCodeEntityGraph({
-  container,
-  projectRoot,
-}: {
-  container: BootstrapRuntimeContainer;
-  projectRoot: string;
-}) {
-  try {
-    const { CodeEntityGraph } = await import('@alembic/core/knowledge');
-    const entityRepo = container.get('codeEntityRepository');
-    const edgeRepo = container.get('knowledgeEdgeRepository');
-    if (entityRepo && edgeRepo) {
-      const codeEntityGraphInst = new CodeEntityGraph(
-        entityRepo as ConstructorParameters<typeof CodeEntityGraph>[0],
-        edgeRepo as ConstructorParameters<typeof CodeEntityGraph>[1],
-        { projectRoot, logger }
-      );
-      const topo = await codeEntityGraphInst.getTopology();
-      if (topo.totalEntities > 0) {
-        logger.info(
-          `[Insight-v3] CodeEntityGraph: ${topo.totalEntities} entities, ${topo.totalEdges} edges`
-        );
-      }
-      return codeEntityGraphInst;
-    }
-  } catch (cegErr: unknown) {
-    logger.warn(
-      `[Insight-v3] CodeEntityGraph init failed (non-blocking): ${cegErr instanceof Error ? cegErr.message : String(cegErr)}`
-    );
-  }
-  return null;
 }

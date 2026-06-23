@@ -66,7 +66,6 @@ describe('initializeBootstrapRuntime', () => {
     });
     expect(runtime.sessionStore.getStats()).toMatchObject({ completedDimensions: 0 });
     expect(runtime.semanticMemory).toBeNull();
-    expect(runtime.codeEntityGraphInst).toBeNull();
     expect(runtime.memoryCoordinator).toBeTruthy();
   });
 

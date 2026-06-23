@@ -136,11 +136,6 @@ export function register(c: ServiceContainer) {
   );
 
   c.singleton(
-    'codeEntityRepository',
-    (ct: ServiceContainer) => getCoreRepositoryBundle(ct).codeEntityRepository
-  );
-
-  c.singleton(
     'bootstrapRepository',
     (ct: ServiceContainer) => getCoreRepositoryBundle(ct).bootstrapRepository
   );

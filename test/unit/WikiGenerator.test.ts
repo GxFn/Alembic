@@ -139,7 +139,6 @@ function makeDeps(overrides: Partial<WikiDeps> = {}): WikiDeps {
     moduleService: mockModuleService(),
     knowledgeService: mockKnowledgeService(),
     projectGraph: mockProjectGraph(),
-    codeEntityGraph: null,
     aiProvider: mockAiProvider(),
     onProgress: vi.fn(),
     ...overrides,
@@ -386,7 +385,6 @@ describe('WikiGenerator', () => {
           moduleService: null,
           knowledgeService: null,
           projectGraph: null,
-          codeEntityGraph: null,
           aiProvider: null,
         })
       );

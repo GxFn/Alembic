@@ -284,43 +284,6 @@ export function inferModulePurpose(
 }
 
 /**
- * 从 CodeEntityGraph 提取继承根节点
- * @returns >}
- */
-export function getInheritanceRoots(
-  codeEntityGraph: {
-    queryEntities?: (filter: Record<string, unknown>) => Array<{ entityId: string; name: string }>;
-    queryEdges?: (
-      filter: Record<string, unknown>
-    ) => Array<{ toId?: string; to_id?: string; fromId?: string }>;
-  } | null
-) {
-  if (!codeEntityGraph) {
-    return [];
-  }
-  try {
-    // 尝试查询继承关系
-    const entities = codeEntityGraph.queryEntities?.({ entityType: 'class', limit: 50 }) || [];
-    const roots: { name: string; children: string[] }[] = [];
-    for (const e of entities) {
-      const _parents =
-        codeEntityGraph.queryEdges?.({ toId: e.entityId, relation: 'inherits' }) || [];
-      const children =
-        codeEntityGraph.queryEdges?.({ fromId: e.entityId, relation: 'inherits' }) || [];
-      if (children.length > 0) {
-        roots.push({
-          name: e.name,
-          children: children.map((c: { toId?: string; to_id?: string }) => c.toId || c.to_id || ''),
-        });
-      }
-    }
-    return roots.sort((a, b) => (b.children?.length || 0) - (a.children?.length || 0));
-  } catch {
-    return [];
-  }
-}
-
-/**
  * 两层去重
  *
  * Layer 1: Title slug 碰撞 — 同名文件不同目录 → hash 相同则删除副本

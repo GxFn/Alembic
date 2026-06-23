@@ -131,7 +131,6 @@ export class ToolContextFactory {
       projectRoot: this.#deps.projectRoot,
 
       projectGraph: null,
-      codeEntityGraph: tryGet(c, 'codeEntityGraph'),
       searchEngine: tryGet(c, 'searchEngine'),
       recipeGateway: tryGet(c, 'recipeProductionGateway'),
       knowledgeRepo: tryGet(c, 'knowledgeRepository'),

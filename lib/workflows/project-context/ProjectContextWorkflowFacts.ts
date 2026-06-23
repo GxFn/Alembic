@@ -7,7 +7,6 @@ import {
   type DimensionDef,
   getOrCreateSessionManager,
   type KnowledgeRescanExecutionDecision,
-  resolveActiveDimensions,
 } from '@alembic/core/host-agent-workflows';
 import {
   buildProjectContextPresenterInput,
@@ -215,7 +214,7 @@ export async function buildProjectContextWorkflowFacts(
   const presenterInput = buildProjectContextPresenterInput(envelopes);
   const primaryLang = inferProjectContextPrimaryLanguage(presenterInput);
   const secondaryLanguages = inferProjectContextSecondaryLanguages(presenterInput, primaryLang);
-  const dimensions = resolveActiveDimensions(baseDimensions, primaryLang, []);
+  const dimensions: DimensionDef[] = [...baseDimensions];
   const allFiles = buildWorkflowFiles(presenterInput);
   const allTargets = buildWorkflowTargets(presenterInput);
   const filesByTarget = buildProjectContextTargetFileMap(allFiles);

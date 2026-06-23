@@ -98,7 +98,6 @@ function createGenerator(container: ReturnType<typeof getServiceContainer>) {
   // 尝试获取可用的服务（非必须的优雅降级）
   let moduleService: unknown = null;
   let knowledgeService: unknown = null;
-  let codeEntityGraph: unknown = null;
 
   try {
     moduleService = container.get('moduleService');
@@ -107,11 +106,6 @@ function createGenerator(container: ReturnType<typeof getServiceContainer>) {
   }
   try {
     knowledgeService = container.get('knowledgeService');
-  } catch {
-    /* ok */
-  }
-  try {
-    codeEntityGraph = container.get('codeEntityGraph');
   } catch {
     /* ok */
   }
@@ -129,7 +123,6 @@ function createGenerator(container: ReturnType<typeof getServiceContainer>) {
     dataRoot,
     moduleService: moduleService as WikiModuleService | null,
     knowledgeService: knowledgeService as WikiKnowledgeService | null,
-    codeEntityGraph: codeEntityGraph as Record<string, unknown> | null,
     aiProvider: (container.singletons?.aiProvider || null) as WikiAiProvider | null,
     onProgress: (phase: string, progress: number, message: string) => {
       wikiTask.phase = phase;

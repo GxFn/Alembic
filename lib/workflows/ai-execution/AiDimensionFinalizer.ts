@@ -19,10 +19,7 @@ import {
   type WorkflowSemanticMemoryConsolidationResult,
 } from '../completion/CompletionFinalizer.js';
 import type { AiDimensionPreparation } from './AiDimensionPreparation.js';
-import {
-  type AiDimensionSessionResult,
-  consumeAiDimensionCandidateRelations,
-} from './AiDimensionSessionRunner.js';
+import type { AiDimensionSessionResult } from './AiDimensionSessionRunner.js';
 import { consumeBootstrapSkills, type SkillResults } from './BootstrapConsumers.js';
 import {
   type BootstrapPcvNodeEvidenceSet,
@@ -62,7 +59,6 @@ type WorkflowResultPersistenceInput = Parameters<typeof persistWorkflowResult>[0
 export interface AiDimensionFinalizerStepMap {
   cacheWarmupCleanup: 'clearAiDimensionSessionDedupCache';
   skillConsumption: 'consumeAiDimensionSkillsStep';
-  candidateRelations: 'consumeAiDimensionCandidateRelationsStep';
   completion: 'runAiDimensionCompletionStep';
   persistence: 'buildAiDimensionPersistenceInput';
   reportAugmentation: 'augmentAiDimensionWorkflowReport';
@@ -107,7 +103,6 @@ export function buildAiDimensionFinalizerStepMap(): AiDimensionFinalizerStepMap 
   return {
     cacheWarmupCleanup: 'clearAiDimensionSessionDedupCache',
     skillConsumption: 'consumeAiDimensionSkillsStep',
-    candidateRelations: 'consumeAiDimensionCandidateRelationsStep',
     completion: 'runAiDimensionCompletionStep',
     persistence: 'buildAiDimensionPersistenceInput',
     reportAugmentation: 'augmentAiDimensionWorkflowReport',
@@ -137,8 +132,6 @@ export async function finalizeAiDimensionPipeline({
     sessionResult,
     shouldAbort,
   });
-
-  await consumeAiDimensionCandidateRelationsStep({ preparation, sessionResult });
 
   const { completionSummary, consolidationResult } = await runAiDimensionCompletionStep({
     preparation,
@@ -222,17 +215,6 @@ export async function consumeAiDimensionSkillsStep({
     sessionId: preparation.sessionId,
     shouldAbort,
   });
-}
-
-export async function consumeAiDimensionCandidateRelationsStep({
-  preparation,
-  sessionResult,
-}: {
-  preparation: AiDimensionPreparation;
-  sessionResult: AiDimensionSessionResult;
-}): Promise<{ consumed: true }> {
-  await consumeAiDimensionCandidateRelations({ preparation, sessionResult });
-  return { consumed: true };
 }
 
 export async function runAiDimensionCompletionStep({

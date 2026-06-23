@@ -36,7 +36,6 @@ import type { WriteZone } from '@alembic/core/io';
 // ── CLI Types ──
 // ── Context Types ──
 import type {
-  CodeEntityGraph,
   ConfidenceRouter,
   KnowledgeFileWriter,
   KnowledgeGraphService,
@@ -50,7 +49,6 @@ import type { MemoryRepositoryImpl } from '@alembic/core/memory';
 // ── Repository Types ──
 import type {
   BootstrapRepository,
-  CodeEntityRepository,
   EvolutionProposalRepository,
   EvolutionWarningRepository,
   GuardViolationRepository,
@@ -103,7 +101,6 @@ export interface ServiceMap {
   jobStore: JobStore;
   knowledgeRepository: KnowledgeRepository;
   knowledgeEdgeRepository: KnowledgeEdgeRepository;
-  codeEntityRepository: CodeEntityRepository;
   bootstrapRepository: BootstrapRepository;
   guardViolationRepository: GuardViolationRepository;
   auditRepository: AuditRepositoryImpl;
@@ -130,7 +127,6 @@ export interface ServiceMap {
   knowledgeService: KnowledgeService;
   recipeProductionGateway: RecipeProductionGateway;
   knowledgeGraphService: KnowledgeGraphService;
-  codeEntityGraph: CodeEntityGraph;
   searchEngine: SearchEngine;
   vectorStore: VectorStore;
   indexingPipeline: IndexingPipeline;

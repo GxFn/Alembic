@@ -2,7 +2,7 @@
  * WikiGenerator — Repo Wiki 生成引擎 (V3 Content-First)
  *
  * 自动分析项目代码结构，生成结构化的项目文档 Wiki。
- * 结合 Alembic 的 ProjectContext 模块事实、CodeEntityGraph、SPM 依赖图
+ * 结合 Alembic 的 ProjectContext 模块事实与 SPM 依赖图
  * 做到深层代码洞察。
  *
  * V3 核心设计: "内容驱动 + AI 优先"
@@ -74,7 +74,6 @@ export interface WikiDeps {
   dataRoot?: string;
   moduleService?: WikiModuleService | null;
   knowledgeService?: WikiKnowledgeService | null;
-  codeEntityGraph?: Record<string, unknown> | null;
   aiProvider?: WikiAiProvider | null;
   onProgress?: (phase: string, progress: number, message: string) => void;
   options?: Partial<WikiOptions>;
@@ -188,7 +187,6 @@ export class WikiGenerator {
   wikiDir: string;
   _aborted: boolean;
   aiProvider: WikiAiProvider | null;
-  codeEntityGraph: Record<string, unknown> | null;
   knowledgeService: WikiKnowledgeService | null;
   metaPath: string;
   moduleService: WikiModuleService | null;
@@ -204,7 +202,6 @@ export class WikiGenerator {
     const dataRoot = deps.dataRoot || deps.projectRoot;
     this.moduleService = deps.moduleService || null;
     this.knowledgeService = deps.knowledgeService || null;
-    this.codeEntityGraph = deps.codeEntityGraph || null;
     this.aiProvider = deps.aiProvider || null;
     this.onProgress = deps.onProgress || (() => {});
     this.options = { ...DEFAULTS, ...deps.options } as WikiOptions;
@@ -550,9 +547,8 @@ export class WikiGenerator {
     const hasMultiModule =
       moduleInfo.targets.length >= 2 || moduleKeys.length >= 2 || sourceModuleKeys.length >= 2;
     const hasDepGraph = moduleInfo.depGraph != null;
-    const hasInheritance = this.codeEntityGraph != null;
 
-    if (hasMultiModule || hasDepGraph || hasInheritance) {
+    if (hasMultiModule || hasDepGraph) {
       topics.push({
         id: 'architecture',
         path: 'architecture.md',
@@ -878,7 +874,7 @@ export class WikiGenerator {
       // === 1. 尝试 AI 撰写完整文章 ===
       if (this.aiProvider) {
         try {
-          const prompt = buildArticlePrompt(topic, structuredData, isZh, this.codeEntityGraph);
+          const prompt = buildArticlePrompt(topic, structuredData, isZh);
           const aiResult = await Promise.race([
             this.aiProvider.chat(prompt, { systemPrompt, temperature: 0.3, maxTokens: 4096 }),
             new Promise((_, reject) =>
@@ -899,7 +895,7 @@ export class WikiGenerator {
 
       // === 2. 降级: 丰富的模板内容 ===
       if (!content) {
-        content = buildFallbackArticle(topic, structuredData, isZh, this.codeEntityGraph);
+        content = buildFallbackArticle(topic, structuredData, isZh);
       }
 
       // === 3. 质量关卡 ===
@@ -912,10 +908,7 @@ export class WikiGenerator {
 
       // 写入文件
       const fileInfo: WikiFileResult = this._writeFile(topic.path, content);
-      if (
-        composed > 0 &&
-        content !== buildFallbackArticle(topic, structuredData, isZh, this.codeEntityGraph)
-      ) {
+      if (composed > 0 && content !== buildFallbackArticle(topic, structuredData, isZh)) {
         fileInfo.polished = true;
       }
       files.push(fileInfo);
@@ -929,12 +922,7 @@ export class WikiGenerator {
       let overviewContent: string | null = null;
       // overview 始终存在于 files 中（因为 priority 最高且始终生成）
       // 重新用实际 writtenTopics 渲染
-      overviewContent = buildFallbackArticle(
-        overviewTopic,
-        structuredData,
-        isZh,
-        this.codeEntityGraph
-      );
+      overviewContent = buildFallbackArticle(overviewTopic, structuredData, isZh);
       // 如果之前 AI compose 过 overview，保留 AI 版本（AI 版本已在初次写入时处理导航）
       const overviewFile = files.find((f) => f.path === overviewTopic.path);
       if (overviewFile && !overviewFile.polished && overviewContent) {

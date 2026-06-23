@@ -13,7 +13,6 @@ import {
 import type { AiDimensionPreparation } from './AiDimensionPreparation.js';
 import {
   type CandidateResults,
-  consumeBootstrapCandidateRelations,
   consumeBootstrapDimensionError as consumeBootstrapDimensionErrorSideEffects,
   consumeBootstrapDimensionResult,
   consumeBootstrapSessionResult as consumeBootstrapSessionResultSideEffects,
@@ -120,7 +119,6 @@ export async function runAiDimensionSession({
       dimContext: runtime.dimContext,
       sessionStore: runtime.sessionStore,
       semanticMemory: runtime.semanticMemory,
-      codeEntityGraphInst: runtime.codeEntityGraphInst,
       projectGraph: runtime.projectGraph,
       panoramaResult: preparation.panoramaResult,
       astProjectSummary: preparation.astProjectSummary,
@@ -358,18 +356,4 @@ function resolveAiDimensionServices(preparation: AiDimensionPreparation): {
     agentService: preparation.agentService,
     systemRunContextFactory: preparation.systemRunContextFactory,
   };
-}
-
-export async function consumeAiDimensionCandidateRelations({
-  preparation,
-  sessionResult,
-}: {
-  preparation: AiDimensionPreparation;
-  sessionResult: AiDimensionSessionResult;
-}) {
-  return consumeBootstrapCandidateRelations({
-    ctx: preparation.ctx,
-    projectRoot: preparation.projectRoot,
-    dimensionCandidates: sessionResult.dimensionCandidates,
-  });
 }

@@ -86,13 +86,6 @@ export interface WikiKnowledgeInfo {
   recipes: WikiRecipe[];
 }
 
-export interface WikiCodeEntityGraph {
-  queryEntities?: (filter: Record<string, unknown>) => Array<{ entityId: string; name: string }>;
-  queryEdges?: (
-    filter: Record<string, unknown>
-  ) => Array<{ toId?: string; to_id?: string; fromId?: string }>;
-}
-
 export interface WikiFolderProfile {
   name: string;
   relPath: string;

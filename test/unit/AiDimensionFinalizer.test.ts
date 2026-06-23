@@ -23,7 +23,6 @@ describe('AI dimension finalizer efficiency report augmentation', () => {
     expect(buildAiDimensionFinalizerStepMap()).toEqual({
       cacheWarmupCleanup: 'clearAiDimensionSessionDedupCache',
       skillConsumption: 'consumeAiDimensionSkillsStep',
-      candidateRelations: 'consumeAiDimensionCandidateRelationsStep',
       completion: 'runAiDimensionCompletionStep',
       persistence: 'buildAiDimensionPersistenceInput',
       reportAugmentation: 'augmentAiDimensionWorkflowReport',

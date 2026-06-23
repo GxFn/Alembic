@@ -2,7 +2,7 @@
  * KnowledgeModule — 知识 + 搜索 + 向量服务注册
  *
  * 负责注册:
- *   - knowledgeService, knowledgeGraphService, codeEntityGraph, confidenceRouter
+ *   - knowledgeService, knowledgeGraphService, confidenceRouter
  *   - searchEngine, vectorStore, indexingPipeline
  *   - enhancementRegistry, languageService, dimensionCopy
  *   - aiProvider
@@ -22,7 +22,6 @@ import {
   StagingManager,
 } from '@alembic/core/evolution';
 import {
-  CodeEntityGraph,
   ConfidenceRouter,
   KnowledgeGraphService,
   KnowledgeService,
@@ -93,15 +92,6 @@ export function register(c: ServiceContainer) {
         ct.get('knowledgeEdgeRepository') as ConstructorParameters<typeof KnowledgeGraphService>[0]
       )
   );
-
-  c.singleton('codeEntityGraph', (ct: ServiceContainer) => {
-    const projectRoot = resolveProjectRoot(ct);
-    return new CodeEntityGraph(
-      ct.get('codeEntityRepository') as ConstructorParameters<typeof CodeEntityGraph>[0],
-      ct.get('knowledgeEdgeRepository') as ConstructorParameters<typeof CodeEntityGraph>[1],
-      { projectRoot }
-    );
-  });
 
   // ═══ Search + Vector ═══
 

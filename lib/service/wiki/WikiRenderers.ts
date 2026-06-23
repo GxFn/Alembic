@@ -14,7 +14,6 @@ import { LanguageService } from '@alembic/core/shared';
 import type {
   WikiAstInfo,
   WikiBuildSystem,
-  WikiCodeEntityGraph,
   WikiData,
   WikiDependency,
   WikiFolderProfile,
@@ -29,7 +28,6 @@ import type {
   WikiTopic,
 } from './WikiTypes.js';
 import {
-  getInheritanceRoots,
   getLangTerms,
   getModuleSourceFiles,
   inferModulePurpose,
@@ -49,12 +47,7 @@ export type { WikiData } from './WikiTypes.js';
  *
  * @param data { projectInfo, astInfo, moduleInfo, knowledgeInfo }
  */
-export function buildArticlePrompt(
-  topic: WikiTopic,
-  data: WikiData,
-  isZh: boolean,
-  codeEntityGraph: WikiCodeEntityGraph | null
-) {
+export function buildArticlePrompt(topic: WikiTopic, data: WikiData, isZh: boolean) {
   const { projectInfo, astInfo, moduleInfo, knowledgeInfo } = data;
   const parts: string[] = [];
   const langTerms = getLangTerms(projectInfo.primaryLanguage || 'unknown');
@@ -171,20 +164,11 @@ export function buildArticlePrompt(
         parts.push('');
       }
 
-      const roots = getInheritanceRoots(codeEntityGraph);
-      if (roots.length > 0) {
-        parts.push('### 核心继承关系');
-        for (const r of roots.slice(0, 10)) {
-          parts.push(`- ${r.name} → ${(r.children || []).slice(0, 5).join(', ')}`);
-        }
-        parts.push('');
-      }
-
       parts.push('要求: 撰写架构分析文档。');
       parts.push(
         '包含: 模块依赖图(使用 Mermaid graph TD 语法)、分层架构分析(解释每层的职责)、模块间协作关系、架构设计决策阐述。'
       );
-      parts.push('用 Mermaid 绘制依赖关系图和继承层次图。分析为什么采用这种架构。');
+      parts.push('用 Mermaid 绘制依赖关系图。分析为什么采用这种架构。');
       break;
     }
 
@@ -520,12 +504,7 @@ export function buildArticlePrompt(
  *
  * @param data { projectInfo, astInfo, moduleInfo, knowledgeInfo }
  */
-export function buildFallbackArticle(
-  topic: WikiTopic,
-  data: WikiData,
-  isZh: boolean,
-  codeEntityGraph: WikiCodeEntityGraph | null
-) {
+export function buildFallbackArticle(topic: WikiTopic, data: WikiData, isZh: boolean) {
   const { projectInfo, astInfo, moduleInfo, knowledgeInfo } = data;
 
   switch (topic.type) {
@@ -539,7 +518,7 @@ export function buildFallbackArticle(
         topic._allTopics || []
       );
     case 'architecture':
-      return renderArchitecture(projectInfo, astInfo, moduleInfo, isZh, codeEntityGraph);
+      return renderArchitecture(projectInfo, astInfo, moduleInfo, isZh);
     case 'getting-started':
       return renderGettingStarted(projectInfo, moduleInfo, astInfo, isZh);
     case 'module':
@@ -771,8 +750,7 @@ export function renderArchitecture(
   project: WikiProjectInfo,
   ast: WikiAstInfo,
   modules: WikiModuleInfo,
-  isZh: boolean,
-  codeEntityGraph: WikiCodeEntityGraph | null
+  isZh: boolean
 ) {
   const lines = [
     `# ${isZh ? '架构总览' : 'Architecture Overview'}`,
@@ -874,29 +852,6 @@ export function renderArchitecture(
         lines.push(`- \`${ep}\``);
       }
       lines.push('');
-    }
-  }
-
-  // 继承层次 (from CodeEntityGraph)
-  if (codeEntityGraph) {
-    try {
-      const topClasses = getInheritanceRoots(codeEntityGraph);
-      if (topClasses.length > 0) {
-        lines.push(`## ${isZh ? '核心继承层次' : 'Key Inheritance Hierarchy'}`);
-        lines.push('');
-        lines.push('```mermaid');
-        lines.push('classDiagram');
-        for (const root of topClasses.slice(0, 20)) {
-          lines.push(`    class ${mermaidId(root.name)}`);
-          for (const child of root.children || []) {
-            lines.push(`    ${mermaidId(root.name)} <|-- ${mermaidId(child)}`);
-          }
-        }
-        lines.push('```');
-        lines.push('');
-      }
-    } catch {
-      /* non-critical */
     }
   }
 

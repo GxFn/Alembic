@@ -149,7 +149,6 @@ export function createBootstrapDimensionRuntimeInput({
   dimContext,
   sessionStore,
   semanticMemory,
-  codeEntityGraphInst,
   projectGraph,
   panoramaResult,
   astProjectSummary,
@@ -176,7 +175,6 @@ export function createBootstrapDimensionRuntimeInput({
   dimContext: unknown;
   sessionStore: unknown;
   semanticMemory: unknown;
-  codeEntityGraphInst: unknown;
   projectGraph: unknown | null;
   panoramaResult?: Record<string, unknown> | null;
   astProjectSummary?: AstSummary | null;
@@ -217,7 +215,6 @@ export function createBootstrapDimensionRuntimeInput({
     dimContext,
     sessionStore,
     semanticMemory,
-    codeEntityGraph: codeEntityGraphInst,
     projectGraph,
     panorama: buildPanoramaContext(panoramaResult),
     evidenceStarters: buildEvidenceStarters(plan.dim, {
