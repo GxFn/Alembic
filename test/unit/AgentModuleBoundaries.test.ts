@@ -293,10 +293,18 @@ describe('agent module boundaries', () => {
     ).toBe(false);
     const coreSourceRoot = resolveCoreSourceRoot();
     expect(
+      existsSync(join(coreSourceRoot, 'src/workflows/capabilities/persistence/FileDiffPlanner.ts'))
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(coreSourceRoot, 'src/workflows/capabilities/persistence/FileDiffSnapshotStore.ts')
+      )
+    ).toBe(true);
+    expect(
       existsSync(
         join(coreSourceRoot, 'src/workflows/capabilities/project-intelligence/FileDiffPlanner.ts')
       )
-    ).toBe(true);
+    ).toBe(false);
     expect(
       existsSync(
         join(
@@ -304,7 +312,7 @@ describe('agent module boundaries', () => {
           'src/workflows/capabilities/project-intelligence/FileDiffSnapshotStore.ts'
         )
       )
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 
@@ -336,7 +344,7 @@ function extractImportSpecifiers(source: string): string[] {
 function resolveCoreSourceRoot() {
   const vendorRoot = join(repoRoot, 'vendor', 'AlembicCore');
   const siblingRoot = join(repoRoot, '..', 'AlembicCore');
-  const sourceFile = 'src/workflows/capabilities/project-intelligence/FileDiffPlanner.ts';
+  const sourceFile = 'src/workflows/capabilities/persistence/FileDiffPlanner.ts';
   if (existsSync(join(vendorRoot, sourceFile))) {
     return vendorRoot;
   }
