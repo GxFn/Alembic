@@ -12,6 +12,7 @@ import {
   type MemoryCoordinatorLike,
   OutputCompressor,
   SearchCache,
+  type ToolAuditSinkLike,
   type ToolContext,
 } from '@alembic/agent/tools/runtime';
 
@@ -62,7 +63,12 @@ class SandboxExecutorBridge {
   async exec(
     command: string,
     opts: { cwd: string; projectRoot: string; timeout: number; signal?: AbortSignal }
-  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  ): Promise<{
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+    diagnostics: { sandboxed: boolean; fallbackUsed: boolean; degradeReason?: string };
+  }> {
     const { sandboxExec } = await import('#sandbox/SandboxExecutor.js');
     const { buildSandboxProfile } = await import('#sandbox/SandboxPolicy.js');
 
@@ -93,7 +99,16 @@ class SandboxExecutorBridge {
       },
       profile
     );
-    return { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode };
+    return {
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.exitCode,
+      diagnostics: {
+        sandboxed: result.sandboxed,
+        fallbackUsed: result.sandboxed === false,
+        ...(result.degradeReason ? { degradeReason: result.degradeReason } : {}),
+      },
+    };
   }
 }
 
@@ -138,6 +153,7 @@ export class ToolContextFactory {
       astAnalyzer: tryGet(c, 'astAnalyzer'),
       safetyPolicy: request.runtime?.safetyPolicy ?? undefined,
       sandboxExecutor: this.#sandboxBridge,
+      auditSink: tryGetAuditSink(c, 'auditLogger'),
 
       deltaCache: this.#deltaCache,
       searchCache: this.#searchCache,
@@ -158,4 +174,18 @@ function tryGet(container: ServiceContainer, name: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+function tryGetAuditSink(container: ServiceContainer, name: string): ToolAuditSinkLike | undefined {
+  const service = tryGet(container, name);
+  if (isAuditSinkLike(service)) {
+    return service;
+  }
+  return undefined;
+}
+
+function isAuditSinkLike(value: unknown): value is ToolAuditSinkLike {
+  return Boolean(
+    value && typeof value === 'object' && typeof (value as { log?: unknown }).log === 'function'
+  );
 }
