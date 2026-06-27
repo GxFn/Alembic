@@ -6,7 +6,10 @@ import {
   emitAiDimensionAiUnavailable,
   prepareAiDimensionPipeline as prepareAiDimensionRun,
 } from './AiDimensionPreparation.js';
-import { runAiDimensionSession } from './AiDimensionSessionRunner.js';
+import {
+  type AiDimensionSessionResult,
+  runAiDimensionSession,
+} from './AiDimensionSessionRunner.js';
 import type {
   BootstrapWorkflowContainer as AiDimensionContainer,
   BootstrapWorkflowContext as AiDimensionContext,
@@ -15,10 +18,15 @@ import { initializeBootstrapRuntime } from './RuntimeInitializer.js';
 
 export type { AiDimensionContainer, AiDimensionContext };
 
-export async function runAiDimensionPipeline(
+export interface AiDimensionPipelineResult {
+  sessionResult: AiDimensionSessionResult | null;
+  skippedReason?: 'ai-unavailable';
+}
+
+export async function runAiDimensionPipelineForResult(
   view: ProjectContextFillView,
   dimensions: DimensionDef[]
-) {
+): Promise<AiDimensionPipelineResult> {
   const preparation = prepareAiDimensionRun(view, dimensions);
 
   if (
@@ -27,7 +35,7 @@ export async function runAiDimensionPipeline(
     !preparation.systemRunContextFactory
   ) {
     emitAiDimensionAiUnavailable(preparation);
-    return;
+    return { sessionResult: null, skippedReason: 'ai-unavailable' };
   }
 
   const runtime = await initializeBootstrapRuntime({
@@ -48,6 +56,14 @@ export async function runAiDimensionPipeline(
   const startedAtMs = Date.now();
   const sessionResult = await runAiDimensionSession({ preparation, runtime });
   await finalizeAiDimension({ preparation, runtime, sessionResult, startedAtMs });
+  return { sessionResult };
+}
+
+export async function runAiDimensionPipeline(
+  view: ProjectContextFillView,
+  dimensions: DimensionDef[]
+) {
+  await runAiDimensionPipelineForResult(view, dimensions);
 }
 
 export async function clearSnapshots(

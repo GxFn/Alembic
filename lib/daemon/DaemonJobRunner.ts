@@ -117,6 +117,9 @@ export interface DaemonRescanWorkflowArgs {
   [key: string]: unknown;
   contentMaxLines?: unknown;
   dimensions?: string[];
+  internalExecution?: {
+    runAsyncFillInline?: boolean;
+  };
   maxFiles?: unknown;
   miningMode?: 'deepMining' | 'moduleMining' | 'per-module';
   moduleDimensionTargets?: ModuleDimensionTarget[];
@@ -162,6 +165,10 @@ export function buildDaemonRescanWorkflowArgs(options: {
   if (args.contentMaxLines !== undefined) {
     workflowArgs.contentMaxLines = args.contentMaxLines;
   }
+  const internalExecution = normalizeDaemonRescanInternalExecution(args.internalExecution);
+  if (internalExecution) {
+    workflowArgs.internalExecution = internalExecution;
+  }
 
   if (isMiningRescanArgs(args)) {
     const moduleScope = stringArrayArg(args.moduleScope);
@@ -188,6 +195,21 @@ export function buildDaemonRescanWorkflowArgs(options: {
   }
 
   return workflowArgs;
+}
+
+function normalizeDaemonRescanInternalExecution(value: unknown):
+  | {
+      runAsyncFillInline?: boolean;
+    }
+  | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const internalExecution: { runAsyncFillInline?: boolean } = {};
+  if (value.runAsyncFillInline === true) {
+    internalExecution.runAsyncFillInline = true;
+  }
+  return Object.keys(internalExecution).length > 0 ? internalExecution : undefined;
 }
 
 interface BootstrapPlanGateResult {
@@ -1083,6 +1105,7 @@ async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise<unknow
           contentMaxLines: planGate.projection.budget.contentMaxLines,
           dimensions: planGate.projection.executionDimensions,
           generationStage: 'deepMining',
+          internalExecution: { runAsyncFillInline: true },
           maxFiles: planGate.projection.budget.maxFiles,
           miningMode: 'deepMining',
           moduleDimensionTargets: planContext.moduleDimensionTargets,

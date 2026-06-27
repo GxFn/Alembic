@@ -554,6 +554,11 @@ export function presentProjectContextRescanResponse(input: {
   };
   miningMode?: 'deepMining' | 'moduleMining' | 'per-module' | null;
   moduleMining?: Record<string, unknown> | null;
+  inlineFill?: {
+    coverageSkippedDimensions: number;
+    coverageWrittenCells: number;
+    newRecipesThisRound: number;
+  } | null;
   reason?: string | null;
   recipeSnapshot: { count: number };
   responseTimeMs: number;
@@ -562,10 +567,11 @@ export function presentProjectContextRescanResponse(input: {
 }) {
   const executionDimensionCount = input.gapPlan.executionDimensions.length;
   const produceSession = input.produceSession ?? null;
+  const inlineFill = input.inlineFill ?? null;
   const produceSessionRequired = isRecord(produceSession) && produceSession.required === true;
   const produceSessionBlocked =
     produceSessionRequired && produceSession.status === 'no-produce-session';
-  const asyncFill = !produceSessionRequired && executionDimensionCount > 0;
+  const asyncFill = !produceSessionRequired && executionDimensionCount > 0 && !inlineFill;
   return workflowEnvelope({
     data: {
       asyncFill,
@@ -584,6 +590,15 @@ export function presentProjectContextRescanResponse(input: {
       languageStats: input.facts.languageStats,
       miningMode: input.miningMode ?? null,
       moduleMining: input.moduleMining ?? null,
+      ...(inlineFill
+        ? {
+            coverageLedger: {
+              skippedDimensions: inlineFill.coverageSkippedDimensions,
+              writtenCells: inlineFill.coverageWrittenCells,
+            },
+            newRecipesThisRound: inlineFill.newRecipesThisRound,
+          }
+        : {}),
       primaryLanguage: input.facts.primaryLang,
       projectContext: input.facts.projectContextSummary,
       produceSession,

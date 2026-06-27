@@ -628,6 +628,98 @@ describe('DaemonJobRunner deepMining plan gate', () => {
     );
   });
 
+  test('counts only inline source-ref-backed deepMining production before advisor review', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const coverageLedgerRepository = makeCoverageLedgerRepository();
+    const container = makeContainer(store, { coverageLedgerRepository });
+    const projectRoot = (
+      container as unknown as {
+        singletons: { _workspaceResolver: { projectRoot: string } };
+      }
+    ).singletons._workspaceResolver.projectRoot;
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: { generationStage: 'deepMining', maxRounds: 1 },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(makeProjectMapFacts(1));
+    vi.mocked(runPlanAgent).mockResolvedValueOnce({
+      dimensions: ['architecture'],
+      generationStage: 'deepMining',
+      moduleBindings: [
+        {
+          dimensions: ['architecture'],
+          moduleId: 'mod-1',
+          modulePath: 'src/module-1',
+          priority: 1,
+          targetRecipes: 1,
+        },
+      ],
+      scale: { k: 1, maxRounds: 1, totalRecipeBudget: 1 },
+    });
+    vi.mocked(runKnowledgeRescanWorkflow).mockImplementationOnce(async (_ctx, args) => {
+      expect(args).toMatchObject({
+        internalExecution: { runAsyncFillInline: true },
+        miningMode: 'deepMining',
+        roundIndex: 1,
+      });
+      coverageLedgerRepository.upsertCell({
+        coveredCount: 1,
+        coveredSourceRefs: ['src/module-1/index.ts'],
+        dimensionId: 'architecture',
+        grade: 'partial',
+        lastRound: args.roundIndex,
+        moduleId: 'mod-1',
+        projectRoot,
+        totalCandidateCount: 1,
+        valueScore: 50,
+      });
+      return {
+        data: {
+          coverageLedger: { writtenCells: 1 },
+          newRecipesThisRound: 1,
+        },
+      };
+    });
+
+    await expect(
+      runDaemonJob({
+        args: { generationStage: 'deepMining', maxRounds: 1 },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).resolves.toMatchObject({
+      job: { status: 'completed' },
+      result: {
+        deepMining: {
+          rounds: [expect.objectContaining({ newRecipesThisRound: 1, roundIndex: 1 })],
+          stopReason: 'converged',
+        },
+      },
+    });
+
+    expect(coverageLedgerRepository.listByProjectRoot(projectRoot)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          coveredCount: 1,
+          coveredSourceRefs: ['src/module-1/index.ts'],
+          dimensionId: 'architecture',
+          grade: 'partial',
+          lastRound: 1,
+          moduleId: 'mod-1',
+        }),
+      ])
+    );
+    expect(coverageLedgerRepository.upsertRound).toHaveBeenCalledWith(
+      expect.objectContaining({ newRecipesThisRound: 1, roundIndex: 1 })
+    );
+  });
+
   test('aborts before the next rescan when a later deepMining round plan gate fails', async () => {
     const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
     const coverageLedgerRepository = makeCoverageLedgerRepository();

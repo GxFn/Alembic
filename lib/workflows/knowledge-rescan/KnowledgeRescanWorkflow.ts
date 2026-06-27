@@ -68,12 +68,14 @@ import {
   dispatchAiDimensionRuns,
   startAiDimensionSession,
 } from '../ai-execution/AiDimensionDispatcher.js';
+import { runAiDimensionPipelineForResult } from '../ai-execution/AiDimensionPipeline.js';
 import {
   buildProjectContextFillView,
   buildProjectContextMissionArtifacts,
   buildProjectContextWorkflowFacts,
   createProjectContextWorkflowSession,
   openOrReturnProjectContextWorkflowSession,
+  type ProjectContextDimensionResultHookInput,
   type ProjectContextWorkflowFacts,
   presentProjectContextRescanResponse,
   registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion,
@@ -92,6 +94,12 @@ type RescanCleanPolicyResult = Awaited<ReturnType<typeof runForceRescanCleanPoli
 type SourceRefReconcileReport = Awaited<ReturnType<SourceRefReconciler['reconcile']>>;
 
 type RescanMcpContext = WorkflowMcpContext & McpContext;
+
+interface KnowledgeRescanInlineFillSummary {
+  coverageSkippedDimensions: number;
+  coverageWrittenCells: number;
+  newRecipesThisRound: number;
+}
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -182,6 +190,8 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
   const db = ctx.container.get('database');
   const intent = createKnowledgeRescanIntent(args);
   const miningMode = knowledgeRescanMiningModeArg(args.miningMode);
+  const runInternalFillInline = shouldRunInternalRescanFillInline(args);
+  let inlineFillSummary: KnowledgeRescanInlineFillSummary | null = null;
   const plan = buildKnowledgeRescanWorkflowPlan({ intent, projectRoot, dataRoot });
   ctx.logger.info(
     '[KnowledgeRescanWorkflow] ProjectScope analysis context resolved',
@@ -627,12 +637,12 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
           logger: ctx.logger,
           logPrefix: 'KnowledgeRescanWorkflow',
         }).bootstrapSession;
-  const willDispatchInternalRescanFill =
+  const willRunInternalRescanFill =
     !controllerProduceSessionRequest.enabled &&
     !perModuleMining &&
     executionDimensions.length > 0 &&
     !intent.internalExecution?.skipAsyncFill;
-  if (willDispatchInternalRescanFill && workflowSession && bootstrapSession) {
+  if (willRunInternalRescanFill && workflowSession && bootstrapSession) {
     registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion({
       bootstrapSessionId: bootstrapSession.id,
       container: ctx.container,
@@ -686,40 +696,63 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
     !intent.internalExecution?.skipAsyncFill
   ) {
     const allExistingRecipes = projectKnowledgeRescanPromptRecipes(knowledgeRescanPlan);
-    dispatchAiDimensionRuns({
-      view: attachProjectScopeSourceIdentitiesToView(
-        {
-          ...buildProjectContextFillView({
-            bootstrapSession,
-            ctx: ctx as Record<string, unknown>,
-            existingRecipes: allExistingRecipes,
-            evolutionPrescreen: prescreen,
-            facts: projectContextFacts,
-            mode: 'rescan',
-            projectRoot,
-            rescanExecutionDecisions: knowledgeRescanPlan.executionDecisions,
-          }),
-          ctx: ctx as RescanMcpContext,
+    const fillSummary: KnowledgeRescanInlineFillSummary = {
+      coverageSkippedDimensions: 0,
+      coverageWrittenCells: 0,
+      newRecipesThisRound: 0,
+    };
+    const fillView = attachProjectScopeSourceIdentitiesToView(
+      {
+        ...buildProjectContextFillView({
+          bootstrapSession,
+          ctx: ctx as Record<string, unknown>,
           existingRecipes: allExistingRecipes,
           evolutionPrescreen: prescreen,
-          onDimensionResult: (result) => {
-            writeKnowledgeRescanCoverageLedgerForDimension({
-              candidateCount: result.candidateCount,
-              ctx,
-              dimensionId: result.dimensionId,
-              projectContextFacts,
-              projectRoot,
-              referencedFiles: result.referencedFiles,
-              roundIndex: nonNegativeInteger((args as Record<string, unknown>).roundIndex),
-            });
-          },
+          facts: projectContextFacts,
+          mode: 'rescan',
+          projectRoot,
           rescanExecutionDecisions: knowledgeRescanPlan.executionDecisions,
+        }),
+        ctx: ctx as RescanMcpContext,
+        existingRecipes: allExistingRecipes,
+        evolutionPrescreen: prescreen,
+        onDimensionResult: (result: ProjectContextDimensionResultHookInput) => {
+          const coverageResult = writeKnowledgeRescanCoverageLedgerForDimension({
+            candidateCount: result.candidateCount,
+            ctx,
+            dimensionId: result.dimensionId,
+            projectContextFacts,
+            projectRoot,
+            referencedFiles: result.referencedFiles,
+            roundIndex: nonNegativeInteger((args as Record<string, unknown>).roundIndex),
+          });
+          if ('writtenCells' in coverageResult) {
+            fillSummary.coverageWrittenCells += coverageResult.writtenCells;
+            if (coverageResult.writtenCells > 0) {
+              fillSummary.newRecipesThisRound += Math.max(0, result.candidateCount);
+            }
+          } else {
+            fillSummary.coverageSkippedDimensions += 1;
+          }
         },
-        sourceIdentities
-      ),
-      dimensions: executionDimensions,
-      logPrefix: 'KnowledgeRescanWorkflow',
-    });
+        rescanExecutionDecisions: knowledgeRescanPlan.executionDecisions,
+      },
+      sourceIdentities
+    );
+    if (runInternalFillInline) {
+      ctx.logger.info('[KnowledgeRescanWorkflow] Running internal AI dimension fill inline', {
+        dimensions: executionDimensions.map((dimension) => dimension.id),
+        miningMode,
+      });
+      await runAiDimensionPipelineForResult(fillView, executionDimensions);
+      inlineFillSummary = fillSummary;
+    } else {
+      dispatchAiDimensionRuns({
+        view: fillView,
+        dimensions: executionDimensions,
+        logPrefix: 'KnowledgeRescanWorkflow',
+      });
+    }
   } else if (executionDimensions.length === 0) {
     ctx.logger.info(
       '[KnowledgeRescanWorkflow] All dimensions fully covered and healthy — no async fill needed'
@@ -790,6 +823,7 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
     evolutionAudit: evolutionAuditResult as unknown as Record<string, unknown> | null,
     miningMode,
     moduleMining: moduleMiningResult,
+    inlineFill: inlineFillSummary,
     reason: intent.reason,
     responseTimeMs: Date.now() - t0,
   });
@@ -1109,6 +1143,11 @@ function normalizeModuleDimensionTargets(value: unknown): ModuleDimensionTarget[
       },
     ];
   });
+}
+
+function shouldRunInternalRescanFillInline(args: KnowledgeRescanArgs): boolean {
+  const internalExecution = args.internalExecution;
+  return isRecord(internalExecution) && internalExecution.runAsyncFillInline === true;
 }
 
 function positiveInteger(value: unknown): number | undefined {
