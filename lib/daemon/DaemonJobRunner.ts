@@ -860,6 +860,14 @@ async function runBootstrapPlanGate(
       generationStage: 'coldStart',
       projectContextFacts,
     });
+
+    // coldStart 的 plan gate 是硬前置：shape 合法但 stage 错误的 selection 也不能驱动 coldStart。
+    if (selection.generationStage !== 'coldStart') {
+      throw new Error(
+        `Plan agent returned generationStage=${selection.generationStage} for coldStart.`
+      );
+    }
+
     const projection = applyPlanSelection(selection);
 
     if (projection.executionDimensions.length === 0) {

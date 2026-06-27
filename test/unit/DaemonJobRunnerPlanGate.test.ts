@@ -195,6 +195,56 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
     expect(store.get(job.id)?.status).toBe('failed');
   });
 
+  test('rejects a wrong-stage plan selection before coldStart', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const recorder = new JobProcessEventRecorder();
+    const container = makeContainer(store, { recorder });
+    const logger = makeLogger();
+    const job = store.create({ kind: 'bootstrap', source: 'dashboard' });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockResolvedValue({
+      dimensions: ['architecture'],
+      generationStage: 'deepMining',
+      moduleBindings: [],
+      scale: { totalRecipeBudget: 3 },
+    });
+
+    await expect(
+      runDaemonJob({
+        container,
+        jobId: job.id,
+        kind: 'bootstrap',
+        logger,
+        source: 'dashboard',
+      })
+    ).rejects.toThrow(
+      'Bootstrap plan gate failed: Plan agent returned generationStage=deepMining for coldStart.'
+    );
+
+    expect(runColdStartWorkflow).not.toHaveBeenCalled();
+    expect(store.get(job.id)).toMatchObject({
+      status: 'failed',
+      error: {
+        message:
+          'Bootstrap plan gate failed: Plan agent returned generationStage=deepMining for coldStart.',
+      },
+    });
+    expect(recorder.list(job.id, { limit: 20 }).developerViews).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          phase: 'plan-gate',
+          summary:
+            'Bootstrap plan gate failed before coldStart: Plan agent returned generationStage=deepMining for coldStart.',
+          title: 'Bootstrap plan gate failed',
+        }),
+      ])
+    );
+    expect(JSON.stringify(logger.error.mock.calls)).not.toMatch(/fallback[- ]?to[- ]?full/iu);
+    expect(JSON.stringify(recorder.list(job.id, { limit: 20 }).developerViews)).not.toMatch(
+      /fallback[- ]?to[- ]?full|回退全量/iu
+    );
+  });
+
   test('passes legal narrow plan projection and scale budget into coldStart', async () => {
     const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
     const projectContextFacts = makeFacts();
