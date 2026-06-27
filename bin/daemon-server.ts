@@ -23,6 +23,11 @@ import { readLatestSchemaMigrationVersion } from '../lib/infrastructure/database
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
 import { resolveAlembicDaemonPaths } from '../lib/project-scope/ProjectScopeRegistry.js';
 import { DaemonFileChangeCollector } from '../lib/service/evolution/DaemonFileChangeCollector.js';
+import {
+  EvolutionMaintenanceSweep,
+  resolveEvolutionMaintenanceSweepCap,
+  resolveEvolutionMaintenanceSweepIntervalMs,
+} from '../lib/service/evolution/EvolutionMaintenanceSweep.js';
 import { DASHBOARD_DIR } from '../lib/shared/package-assets.js';
 import { shutdown } from '../lib/shared/shutdown.js';
 
@@ -100,6 +105,10 @@ async function main() {
     logger,
     projectRoot,
   });
+  const evolutionMaintenanceSweep = startEvolutionMaintenanceSweep({
+    container,
+    logger,
+  });
   const actualPort = resolveBoundDaemonPort(httpServer, requestedPort);
   const daemonUrl = buildDaemonUrl(host, actualPort);
   const dashboardMounted = mountDashboardIfAvailable(httpServer);
@@ -155,6 +164,9 @@ async function main() {
     fileChangeCollector?.stop();
   }, 'daemon-file-change-collector');
   shutdown.register(() => {
+    evolutionMaintenanceSweep?.stop();
+  }, 'evolution-maintenance-sweep');
+  shutdown.register(() => {
     markInterruptedDaemonJobs({
       code: 'DAEMON_SHUTDOWN',
       container,
@@ -189,6 +201,28 @@ function startDaemonFileChangeCollector(options: {
   collector.start();
   options.container.singletons.daemonFileChangeCollectorStatus = collector.getStatus();
   return collector;
+}
+
+function startEvolutionMaintenanceSweep(options: {
+  container: ReturnType<typeof getServiceContainer>;
+  logger: ReturnType<typeof Logger.getInstance>;
+}): EvolutionMaintenanceSweep | null {
+  if (process.env.ALEMBIC_EVOLUTION_MAINTENANCE_SWEEP === '0') {
+    options.logger.info(
+      '[EvolutionMaintenanceSweep] disabled by ALEMBIC_EVOLUTION_MAINTENANCE_SWEEP=0'
+    );
+    return null;
+  }
+
+  const sweep = new EvolutionMaintenanceSweep({
+    cap: resolveEvolutionMaintenanceSweepCap(),
+    container: options.container,
+    intervalMs: resolveEvolutionMaintenanceSweepIntervalMs(),
+    logger: options.logger,
+  });
+  options.container.singletons.evolutionMaintenanceSweep = sweep;
+  sweep.start();
+  return sweep;
 }
 
 function resolveBoundDaemonPort(httpServer: HttpServer, requestedPort: number): number {

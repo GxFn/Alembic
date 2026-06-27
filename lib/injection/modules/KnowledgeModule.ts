@@ -235,6 +235,9 @@ export function register(c: ServiceContainer) {
       sourceRefRepo: ct.services.recipeSourceRefRepository
         ? (ct.get('recipeSourceRefRepository') as SourceRefRepository)
         : undefined,
+      lifecycleStateMachine: ct.services.lifecycleStateMachine
+        ? (ct.get('lifecycleStateMachine') as LifecycleStateMachine)
+        : undefined,
       drizzle: (
         ct.get('database') as unknown as {
           getDrizzle(): import('@alembic/core/database').DrizzleDB;
