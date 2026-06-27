@@ -428,31 +428,46 @@ describe('DaemonJobRunner deepMining plan gate', () => {
     const logger = makeLogger();
     const job = store.create({
       kind: 'rescan',
-      request: { generationStage: 'deepMining', maxRounds: 3 },
+      request: { generationStage: 'deepMining', maxRounds: 1 },
       source: 'dashboard',
     });
     store.markRunning(job.id);
-    vi.mocked(runPlanAgent).mockResolvedValue({
-      dimensions: ['architecture'],
-      generationStage: 'deepMining',
-      moduleBindings: [
-        {
-          dimensions: ['architecture'],
-          moduleId: 'lib-api',
-          modulePath: 'lib/api',
-          priority: 1,
-          targetRecipes: 8,
-        },
-      ],
-      scale: { contentMaxLines: 80, maxFiles: 240, totalRecipeBudget: 8 },
-    });
+    vi.mocked(runPlanAgent)
+      .mockResolvedValueOnce({
+        dimensions: ['architecture'],
+        generationStage: 'deepMining',
+        moduleBindings: [
+          {
+            dimensions: ['architecture'],
+            moduleId: 'lib-api',
+            modulePath: 'lib/api',
+            priority: 1,
+            targetRecipes: 8,
+          },
+        ],
+        scale: { contentMaxLines: 80, maxFiles: 240, totalRecipeBudget: 8 },
+      })
+      .mockResolvedValueOnce({
+        dimensions: ['coding-standards'],
+        generationStage: 'deepMining',
+        moduleBindings: [
+          {
+            dimensions: ['coding-standards'],
+            moduleId: 'lib-core',
+            modulePath: 'lib/core',
+            priority: 1,
+            targetRecipes: 3,
+          },
+        ],
+        scale: { contentMaxLines: 90, maxFiles: 300, totalRecipeBudget: 3 },
+      });
     vi.mocked(runKnowledgeRescanWorkflow)
       .mockResolvedValueOnce({ data: { newRecipesThisRound: 2 } })
       .mockResolvedValueOnce({ data: { newRecipesThisRound: 0 } });
 
     await expect(
       runDaemonJob({
-        args: { generationStage: 'deepMining', maxRounds: 3 },
+        args: { generationStage: 'deepMining', maxRounds: 1 },
         container,
         jobId: job.id,
         kind: 'rescan',
@@ -472,6 +487,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       },
     });
 
+    expect(runPlanAgent).toHaveBeenCalledTimes(2);
     expect(runKnowledgeRescanWorkflow).toHaveBeenCalledTimes(2);
     expect(vi.mocked(runKnowledgeRescanWorkflow).mock.calls[0]?.[1]).toMatchObject({
       contentMaxLines: 80,
@@ -491,6 +507,19 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       roundIndex: 1,
     });
     expect(vi.mocked(runKnowledgeRescanWorkflow).mock.calls[1]?.[1]).toMatchObject({
+      contentMaxLines: 90,
+      dimensions: ['coding-standards'],
+      maxFiles: 300,
+      moduleDimensionTargets: [
+        {
+          dimensionId: 'coding-standards',
+          moduleId: 'lib-core',
+          moduleName: 'core',
+          targetRecipes: 3,
+        },
+      ],
+      moduleScope: ['lib/core'],
+      perDimensionTargets: { 'coding-standards': 3 },
       roundIndex: 2,
     });
     expect(coverageLedgerRepository.upsertRound).toHaveBeenCalledWith(
@@ -499,6 +528,123 @@ describe('DaemonJobRunner deepMining plan gate', () => {
     expect(coverageLedgerRepository.upsertRound).toHaveBeenCalledWith(
       expect.objectContaining({ newRecipesThisRound: 0, roundIndex: 2 })
     );
+  });
+
+  test('aborts before the next rescan when a later deepMining round plan gate fails', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const coverageLedgerRepository = makeCoverageLedgerRepository();
+    const recorder = new JobProcessEventRecorder();
+    const container = makeContainer(store, { coverageLedgerRepository, recorder });
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: { generationStage: 'deepMining' },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent)
+      .mockResolvedValueOnce({
+        dimensions: ['architecture'],
+        generationStage: 'deepMining',
+        moduleBindings: [
+          {
+            dimensions: ['architecture'],
+            moduleId: 'lib-api',
+            modulePath: 'lib/api',
+            priority: 1,
+            targetRecipes: 8,
+          },
+        ],
+        scale: { totalRecipeBudget: 8 },
+      })
+      .mockRejectedValueOnce(new Error('provider unavailable in round 2'));
+    vi.mocked(runKnowledgeRescanWorkflow).mockResolvedValueOnce({
+      data: { newRecipesThisRound: 2 },
+    });
+
+    await expect(
+      runDaemonJob({
+        args: { generationStage: 'deepMining' },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).rejects.toThrow('DeepMining plan gate failed: provider unavailable in round 2');
+
+    expect(runPlanAgent).toHaveBeenCalledTimes(2);
+    expect(runKnowledgeRescanWorkflow).toHaveBeenCalledTimes(1);
+    expect(recorder.list(job.id).events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          phase: 'plan-gate',
+          severity: 'error',
+          summary: 'DeepMining plan gate failed before deepMining: provider unavailable in round 2',
+        }),
+      ])
+    );
+  });
+
+  test('uses deepMining K and maxRounds from plan scale before job args', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const coverageLedgerRepository = makeCoverageLedgerRepository();
+    const container = makeContainer(store, { coverageLedgerRepository });
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: { generationStage: 'deepMining', maxRounds: 99, minNewRecipes: 99 },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    const scaleWithAdvisorOverrides = {
+      contentMaxLines: 80,
+      k: 4,
+      maxFiles: 240,
+      maxRounds: 1,
+      totalRecipeBudget: 8,
+    } as unknown as { contentMaxLines: number; maxFiles: number; totalRecipeBudget: number };
+    vi.mocked(runPlanAgent).mockResolvedValue({
+      dimensions: ['architecture'],
+      generationStage: 'deepMining',
+      moduleBindings: [
+        {
+          dimensions: ['architecture'],
+          moduleId: 'lib-api',
+          modulePath: 'lib/api',
+          priority: 1,
+          targetRecipes: 8,
+        },
+      ],
+      scale: scaleWithAdvisorOverrides,
+    });
+    vi.mocked(runKnowledgeRescanWorkflow).mockResolvedValueOnce({
+      data: { newRecipesThisRound: 5 },
+    });
+
+    await expect(
+      runDaemonJob({
+        args: { generationStage: 'deepMining', maxRounds: 99, minNewRecipes: 99 },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).resolves.toMatchObject({
+      result: {
+        deepMining: {
+          advisor: {
+            k: 4,
+            maxRounds: 1,
+          },
+          rounds: [expect.objectContaining({ roundIndex: 1 })],
+          stopReason: 'round-cap',
+        },
+      },
+    });
+
+    expect(runKnowledgeRescanWorkflow).toHaveBeenCalledTimes(1);
   });
 });
 

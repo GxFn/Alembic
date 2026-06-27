@@ -195,6 +195,14 @@ interface BootstrapPlanGateResult {
   selection: PlanSelection;
 }
 
+interface DeepMiningRoundPlanContext {
+  moduleCount: number;
+  moduleDimensionTargets: ModuleDimensionTarget[];
+  perDimensionTargets: Record<string, number>;
+  planK?: number;
+  planMaxRounds?: number;
+}
+
 export function createDaemonJob(options: DaemonJobOptions): DaemonJobRecord {
   const store = getJobStore(options.container);
   return store.create({
@@ -1010,11 +1018,6 @@ async function runPlanSelectionGate(
 }
 
 async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise<unknown> {
-  const planGate = await runPlanSelectionGate(options, {
-    generationStage: 'deepMining',
-    label: 'DeepMining',
-    source: 'alembic-main-rescan',
-  });
   const coverageLedgerRepository = getOptionalService<EvolutionCoverageLedgerRepository>(
     options.container,
     'coverageLedgerRepository'
@@ -1028,39 +1031,42 @@ async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise<unknow
   );
   const analysisScope = resolveProjectScopeAnalysisContext(options.container);
   const projectRoot = analysisScope.projectRoot;
-  const moduleDimensionTargets = buildPlanModuleDimensionTargets(planGate.selection);
-  if (moduleDimensionTargets.length === 0) {
-    throw new Error('deepMining requires plan moduleBindings with module×dimension targets.');
-  }
-  ensureCoverageLedgerCells({
-    projectRoot,
-    repository: coverageLedgerRepository,
-    targets: moduleDimensionTargets,
-  });
 
-  const moduleCount = Math.max(
-    1,
-    planGate.projectContextFacts.projectMapModules.length ||
-      planGate.projectContextFacts.moduleCount ||
-      planGate.projection.moduleScope.length ||
-      1
-  );
-  const planK = positiveIntegerArg(options.args?.minNewRecipes);
-  const planMaxRounds = positiveIntegerArg(options.args?.maxRounds);
   const rounds: Array<Record<string, unknown>> = [];
-
   let latestRound = latestDeepMiningRound(
     coverageLedgerRepository.listRoundsByProjectRoot(projectRoot)
   );
-  let advisor = adviseCoverageLedger({
-    cells: coverageLedgerRepository.listByProjectRoot(projectRoot),
-    latestRound,
-    moduleCount,
-    planK,
-    planMaxRounds,
-  });
+  let advisor: ReturnType<typeof adviseCoverageLedger> | null = null;
+  let latestPlanGate: BootstrapPlanGateResult | null = null;
+  let latestModuleCount = 1;
 
-  while (!advisor.shouldStop) {
+  while (true) {
+    const planGate = await runPlanSelectionGate(options, {
+      generationStage: 'deepMining',
+      label: 'DeepMining',
+      source: 'alembic-main-rescan',
+    });
+    latestPlanGate = planGate;
+    const planContext = buildDeepMiningRoundPlanContext(planGate);
+    latestModuleCount = planContext.moduleCount;
+
+    ensureCoverageLedgerCells({
+      projectRoot,
+      repository: coverageLedgerRepository,
+      targets: planContext.moduleDimensionTargets,
+    });
+
+    advisor = adviseCoverageLedger({
+      cells: coverageLedgerRepository.listByProjectRoot(projectRoot),
+      latestRound,
+      moduleCount: planContext.moduleCount,
+      planK: planContext.planK,
+      planMaxRounds: planContext.planMaxRounds,
+    });
+    if (advisor.shouldStop) {
+      break;
+    }
+
     const roundIndex = (latestRound?.roundIndex ?? 0) + 1;
     const rescanId = `${options.jobId}:deepMining:${roundIndex}`;
     const startedAt = Date.now();
@@ -1082,9 +1088,9 @@ async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise<unknow
           generationStage: 'deepMining',
           maxFiles: planGate.projection.budget.maxFiles,
           miningMode: 'deepMining',
-          moduleDimensionTargets,
+          moduleDimensionTargets: planContext.moduleDimensionTargets,
           moduleScope: planGate.projection.moduleScope,
-          perDimensionTargets: buildPlanPerDimensionTargets(planGate.selection),
+          perDimensionTargets: planContext.perDimensionTargets,
           reason: `${options.source || 'daemon'}-deepMining-round-${roundIndex}`,
           roundIndex,
         },
@@ -1105,9 +1111,9 @@ async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise<unknow
     advisor = adviseCoverageLedger({
       cells: coverageLedgerRepository.listByProjectRoot(projectRoot),
       latestRound,
-      moduleCount,
-      planK,
-      planMaxRounds,
+      moduleCount: planContext.moduleCount,
+      planK: planContext.planK,
+      planMaxRounds: planContext.planMaxRounds,
     });
     rounds.push({
       newRecipesThisRound,
@@ -1129,17 +1135,24 @@ async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise<unknow
       summary: `deepMining round ${roundIndex} produced ${newRecipesThisRound} new recipe(s).`,
       title: 'DeepMining round completed',
     });
+    if (advisor.shouldStop) {
+      break;
+    }
+  }
+
+  if (!advisor || !latestPlanGate) {
+    throw new Error('deepMining plan gate did not produce an advisor decision.');
   }
 
   return {
     asyncFill: false,
     deepMining: {
       advisor,
-      moduleCount,
+      moduleCount: latestModuleCount,
       rounds,
       stopReason: advisor.stopReason,
     },
-    planSelectionProjection: planGate.projection,
+    planSelectionProjection: latestPlanGate.projection,
     status: 'complete',
   };
 }
@@ -1669,6 +1682,16 @@ function positiveIntegerArg(value: unknown): number | undefined {
   return Math.floor(numericValue);
 }
 
+function firstPositiveIntegerArg(...values: unknown[]): number | undefined {
+  for (const value of values) {
+    const parsed = positiveIntegerArg(value);
+    if (parsed !== undefined) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
 function stringArrayArg(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
@@ -1780,6 +1803,32 @@ function buildPlanModuleDimensionTargets(selection: PlanSelection): ModuleDimens
       targetRecipes,
     }));
   });
+}
+
+function buildDeepMiningRoundPlanContext(
+  planGate: BootstrapPlanGateResult
+): DeepMiningRoundPlanContext {
+  const moduleDimensionTargets = buildPlanModuleDimensionTargets(planGate.selection);
+  if (moduleDimensionTargets.length === 0) {
+    throw new Error('deepMining requires plan moduleBindings with module×dimension targets.');
+  }
+
+  const scale = asRecord(planGate.selection.scale);
+  return {
+    moduleCount: Math.max(
+      1,
+      planGate.projectContextFacts.projectMapModules.length ||
+        planGate.projectContextFacts.moduleCount ||
+        planGate.projection.moduleScope.length ||
+        1
+    ),
+    moduleDimensionTargets,
+    perDimensionTargets: buildPlanPerDimensionTargets(planGate.selection),
+    // Core 目前没有把 K/maxRounds 放进 typed PlanSelection.scale；若运行时 plan 显式给出就消费，
+    // 否则保持 undefined，让 CoverageLedgerAdvisor 使用 D2 默认表。
+    planK: firstPositiveIntegerArg(scale.k, scale.minNewRecipes),
+    planMaxRounds: positiveIntegerArg(scale.maxRounds),
+  };
 }
 
 function moduleNameFromBinding(binding: PlanModuleBinding): string {
