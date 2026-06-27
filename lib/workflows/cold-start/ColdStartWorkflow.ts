@@ -69,6 +69,7 @@ import {
   type ProjectContextWorkflowFacts,
   presentProjectContextColdStartEmptyProject,
   presentProjectContextColdStartResponse,
+  registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion,
   selectProjectContextWorkflowDimensions,
 } from '../project-context/ProjectContextWorkflowFacts.js';
 
@@ -232,6 +233,16 @@ export async function runColdStartWorkflow(
     logger: ctx.logger,
     logPrefix: 'Bootstrap',
   });
+  if (!intent.internalExecution?.skipAsyncFill) {
+    registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion({
+      bootstrapSessionId: bootstrapSession?.id,
+      container: ctx.container,
+      logger: ctx.logger,
+      projectRoot,
+      workflow: 'cold-start',
+      workflowSessionId: cachedSessionId,
+    });
+  }
 
   // ── 异步后台填充（fire-and-forget）──
   // skipAsyncFill: CLI 非 --wait 模式跳过异步填充，避免进程退出后 DB 断连

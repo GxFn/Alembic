@@ -42,6 +42,11 @@ interface ProjectContextLogger {
   warn(...args: unknown[]): void;
 }
 
+interface ProjectContextWorkflowEventBus {
+  off?(eventName: string, listener: (payload: unknown) => void): void;
+  on(eventName: string, listener: (payload: unknown) => void): void;
+}
+
 export interface ProjectContextWorkflowContext {
   container: ProjectContextContainer;
   logger: ProjectContextLogger;
@@ -102,6 +107,10 @@ export interface ProjectContextMissionArtifacts {
   briefing: { meta?: unknown; [key: string]: unknown };
   ideAgentPacket: { profile?: unknown; [key: string]: unknown };
 }
+
+type ProjectContextWorkflowSession = ReturnType<
+  ReturnType<typeof getOrCreateSessionManager>['createSession']
+>;
 
 type ProjectContextMissionRescanInput = NonNullable<
   Parameters<typeof buildProjectContextMissionBriefing>[0]['rescan']
@@ -323,7 +332,7 @@ export function createProjectContextWorkflowSession(input: {
   dimensions: DimensionDef[];
   facts: ProjectContextWorkflowFacts;
   projectRoot: string;
-}): ReturnType<ReturnType<typeof getOrCreateSessionManager>['createSession']> {
+}): ProjectContextWorkflowSession {
   const sessionManager = getOrCreateSessionManager(input.container);
   return sessionManager.createSession(buildProjectContextWorkflowSessionOptions(input));
 }
@@ -335,7 +344,7 @@ export function openOrReturnProjectContextWorkflowSession(input: {
   projectRoot: string;
 }): {
   reusedExisting: boolean;
-  session: ReturnType<ReturnType<typeof getOrCreateSessionManager>['createSession']>;
+  session: ProjectContextWorkflowSession;
 } {
   const sessionManager = getOrCreateSessionManager(input.container);
   try {
@@ -350,6 +359,98 @@ export function openOrReturnProjectContextWorkflowSession(input: {
     }
     throw err;
   }
+}
+
+export function releaseProjectContextWorkflowSession(input: {
+  container: ProjectContextContainer;
+  logger: ProjectContextLogger;
+  projectRoot: string;
+  reason: string;
+  workflowSessionId: string;
+}): boolean {
+  const sessionManager = getOrCreateSessionManager(input.container);
+  const existing = sessionManager.getAnySession(input.workflowSessionId, {
+    projectRoot: input.projectRoot,
+  });
+  if (!existing) {
+    input.logger.info('[ProjectContextWorkflowFacts] Workflow session release skipped', {
+      projectRoot: input.projectRoot,
+      reason: input.reason,
+      workflowSessionId: input.workflowSessionId,
+    });
+    return false;
+  }
+
+  sessionManager.clearSession(input.workflowSessionId);
+  const released =
+    sessionManager.getAnySession(input.workflowSessionId, { projectRoot: input.projectRoot }) ===
+    null;
+  input.logger.info('[ProjectContextWorkflowFacts] Workflow session lease released', {
+    projectRoot: input.projectRoot,
+    reason: input.reason,
+    released,
+    workflowSessionId: input.workflowSessionId,
+  });
+  return released;
+}
+
+export function registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion(input: {
+  bootstrapSessionId: string | null | undefined;
+  container: ProjectContextContainer;
+  logger: ProjectContextLogger;
+  projectRoot: string;
+  workflow: 'cold-start' | 'rescan';
+  workflowSessionId: string;
+}): (() => void) | null {
+  if (!input.bootstrapSessionId) {
+    input.logger.warn('[ProjectContextWorkflowFacts] Workflow session release hook skipped', {
+      reason: 'missing-bootstrap-session',
+      workflow: input.workflow,
+      workflowSessionId: input.workflowSessionId,
+    });
+    return null;
+  }
+
+  const eventBus = resolveProjectContextWorkflowEventBus(input.container);
+  if (!eventBus) {
+    input.logger.warn('[ProjectContextWorkflowFacts] Workflow session release hook skipped', {
+      bootstrapSessionId: input.bootstrapSessionId,
+      reason: 'missing-event-bus',
+      workflow: input.workflow,
+      workflowSessionId: input.workflowSessionId,
+    });
+    return null;
+  }
+
+  const listener = (payload: unknown) => {
+    const event = asRecord(payload);
+    if (stringValue(event.sessionId) !== input.bootstrapSessionId) {
+      return;
+    }
+
+    eventBus.off?.('bootstrap:all-completed', listener);
+    if (!isReleasableBootstrapCompletionEvent(event)) {
+      input.logger.warn('[ProjectContextWorkflowFacts] Workflow session lease retained', {
+        bootstrapSessionId: input.bootstrapSessionId,
+        reason: 'bootstrap-session-not-clean-complete',
+        status: stringValue(event.status) ?? null,
+        workflow: input.workflow,
+        workflowSessionId: input.workflowSessionId,
+      });
+      return;
+    }
+
+    releaseProjectContextWorkflowSession({
+      container: input.container,
+      logger: input.logger,
+      projectRoot: input.projectRoot,
+      reason: `${input.workflow}:bootstrap-session-completed`,
+      workflowSessionId: input.workflowSessionId,
+    });
+  };
+
+  eventBus.on('bootstrap:all-completed', listener);
+  return () => eventBus.off?.('bootstrap:all-completed', listener);
 }
 
 function buildProjectContextWorkflowSessionOptions(input: {
@@ -515,7 +616,7 @@ export function buildProjectContextMissionArtifacts(input: {
   facts: ProjectContextWorkflowFacts;
   profile: 'cold-start' | 'rescan';
   rescan?: ProjectContextMissionRescanInput;
-  session: ReturnType<ReturnType<typeof getOrCreateSessionManager>['createSession']>;
+  session: ProjectContextWorkflowSession;
 }): ProjectContextMissionArtifacts {
   const briefing = buildProjectContextMissionBriefing({
     activeDimensions: input.dimensions,
@@ -536,6 +637,49 @@ export function buildProjectContextMissionArtifacts(input: {
     briefing: briefing as ProjectContextMissionArtifacts['briefing'],
     ideAgentPacket: ideAgentPacket as unknown as ProjectContextMissionArtifacts['ideAgentPacket'],
   };
+}
+
+function resolveProjectContextWorkflowEventBus(
+  container: ProjectContextContainer
+): ProjectContextWorkflowEventBus | null {
+  try {
+    const eventBus = container.get('eventBus') as ProjectContextWorkflowEventBus | null;
+    return eventBus && typeof eventBus.on === 'function' ? eventBus : null;
+  } catch {
+    return null;
+  }
+}
+
+function isReleasableBootstrapCompletionEvent(event: Record<string, unknown>): boolean {
+  if (stringValue(event.status) !== 'completed') {
+    return false;
+  }
+
+  const tasks = Array.isArray(event.tasks) ? event.tasks.filter(isRecord) : [];
+  return tasks.every((task) => {
+    if (stringValue(task.status) !== 'completed') {
+      return false;
+    }
+    const result = asRecord(task.result);
+    const resultType = stringValue(result.type);
+    const resultStatus = stringValue(result.status);
+    if (result.degraded === true) {
+      return false;
+    }
+    if (resultType === 'error' || resultType === 'skipped') {
+      return false;
+    }
+    return ![
+      'timeout',
+      'blocked',
+      'aborted',
+      'error',
+      'skipped',
+      'degraded_no_findings',
+      'record_repair_incomplete',
+      'l4_compaction_failed_budget_exhausted',
+    ].includes(resultStatus ?? '');
+  });
 }
 
 export function buildProjectContextFillView(input: {
@@ -1223,6 +1367,14 @@ function workflowEnvelope(input: {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 function sourceSliceText(slice: SourceSliceContext): string {

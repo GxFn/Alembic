@@ -76,6 +76,8 @@ import {
   openOrReturnProjectContextWorkflowSession,
   type ProjectContextWorkflowFacts,
   presentProjectContextRescanResponse,
+  registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion,
+  releaseProjectContextWorkflowSession,
   saveProjectContextFileSnapshot,
 } from '../project-context/ProjectContextWorkflowFacts.js';
 import {
@@ -625,6 +627,21 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
           logger: ctx.logger,
           logPrefix: 'KnowledgeRescanWorkflow',
         }).bootstrapSession;
+  const willDispatchInternalRescanFill =
+    !controllerProduceSessionRequest.enabled &&
+    !perModuleMining &&
+    executionDimensions.length > 0 &&
+    !intent.internalExecution?.skipAsyncFill;
+  if (willDispatchInternalRescanFill && workflowSession && bootstrapSession) {
+    registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion({
+      bootstrapSessionId: bootstrapSession.id,
+      container: ctx.container,
+      logger: ctx.logger,
+      projectRoot,
+      workflow: 'rescan',
+      workflowSessionId: workflowSession.id,
+    });
+  }
 
   // ═══════════════════════════════════════════════════════════
   // Step 7: 异步后台填充 gap 维度
@@ -654,6 +671,15 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
       scaleCap,
     });
     moduleMiningResult = result as unknown as Record<string, unknown>;
+    if (workflowSession) {
+      releaseProjectContextWorkflowSession({
+        container: ctx.container,
+        logger: ctx.logger,
+        projectRoot,
+        reason: 'rescan:module-mining-completed',
+        workflowSessionId: workflowSession.id,
+      });
+    }
   } else if (
     !controllerProduceSessionRequest.enabled &&
     executionDimensions.length > 0 &&
@@ -713,6 +739,15 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
     } catch (err: unknown) {
       ctx.logger.warn('[KnowledgeRescanWorkflow] Snapshot save skipped for no-fill rescan', {
         error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    if (workflowSession && !controllerProduceSessionRequest.enabled) {
+      releaseProjectContextWorkflowSession({
+        container: ctx.container,
+        logger: ctx.logger,
+        projectRoot,
+        reason: 'rescan:no-fill-completed',
+        workflowSessionId: workflowSession.id,
       });
     }
   }

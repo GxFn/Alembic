@@ -1,10 +1,19 @@
+import { EventEmitter } from 'node:events';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import {
+  BootstrapSessionLeaseError,
+  BootstrapSessionManager,
+  type DimensionDef,
+} from '@alembic/core/host-agent-workflows';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   buildProjectContextMissionArtifacts,
   buildProjectContextWorkflowFacts,
+  createProjectContextWorkflowSession,
+  type ProjectContextWorkflowFacts,
+  registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion,
 } from '../../lib/workflows/project-context/ProjectContextWorkflowFacts.js';
 
 const fixtures: string[] = [];
@@ -35,6 +44,118 @@ afterEach(async () => {
 });
 
 describe('ProjectContextWorkflowFacts', () => {
+  test('releases completed coldStart ProjectContext workflow leases for subsequent rescan sessions', () => {
+    const projectRoot = '/tmp/alembic-session-release-project';
+    const manager = new BootstrapSessionManager();
+    const eventBus = new EventEmitter();
+    const container = createSessionContainer(manager, eventBus);
+    const logger = createSessionLogger();
+    const dimensions = createWorkflowDimensions();
+    const facts = createWorkflowFacts(projectRoot);
+
+    const coldStartSession = createProjectContextWorkflowSession({
+      container,
+      dimensions,
+      facts,
+      projectRoot,
+    });
+    registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion({
+      bootstrapSessionId: 'bootstrap-session-complete',
+      container,
+      logger,
+      projectRoot,
+      workflow: 'cold-start',
+      workflowSessionId: coldStartSession.id,
+    });
+
+    expect(() =>
+      createProjectContextWorkflowSession({ container, dimensions, facts, projectRoot })
+    ).toThrow(BootstrapSessionLeaseError);
+
+    eventBus.emit('bootstrap:all-completed', {
+      sessionId: 'bootstrap-session-other',
+      status: 'completed',
+      tasks: [completedBootstrapTask()],
+    });
+    expect(() =>
+      createProjectContextWorkflowSession({ container, dimensions, facts, projectRoot })
+    ).toThrow(BootstrapSessionLeaseError);
+
+    eventBus.emit('bootstrap:all-completed', {
+      sessionId: 'bootstrap-session-complete',
+      status: 'completed',
+      tasks: [completedBootstrapTask()],
+    });
+
+    const rescanSession = createProjectContextWorkflowSession({
+      container,
+      dimensions,
+      facts,
+      projectRoot,
+    });
+    expect(rescanSession.id).not.toBe(coldStartSession.id);
+    expect(logger.info).toHaveBeenCalledWith(
+      '[ProjectContextWorkflowFacts] Workflow session lease released',
+      expect.objectContaining({
+        reason: 'cold-start:bootstrap-session-completed',
+        released: true,
+        workflowSessionId: coldStartSession.id,
+      })
+    );
+  });
+
+  test('retains partial coldStart workflow leases instead of silently deleting evidence', () => {
+    const projectRoot = '/tmp/alembic-session-partial-project';
+    const manager = new BootstrapSessionManager();
+    const eventBus = new EventEmitter();
+    const container = createSessionContainer(manager, eventBus);
+    const logger = createSessionLogger();
+    const dimensions = createWorkflowDimensions();
+    const facts = createWorkflowFacts(projectRoot);
+
+    const coldStartSession = createProjectContextWorkflowSession({
+      container,
+      dimensions,
+      facts,
+      projectRoot,
+    });
+    registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion({
+      bootstrapSessionId: 'bootstrap-session-partial',
+      container,
+      logger,
+      projectRoot,
+      workflow: 'cold-start',
+      workflowSessionId: coldStartSession.id,
+    });
+
+    eventBus.emit('bootstrap:all-completed', {
+      sessionId: 'bootstrap-session-partial',
+      status: 'completed_with_errors',
+      tasks: [
+        {
+          id: 'architecture',
+          status: 'failed',
+          result: { status: 'error', type: 'error' },
+        },
+      ],
+    });
+
+    expect(manager.getAnySession(coldStartSession.id, { projectRoot })?.id).toBe(
+      coldStartSession.id
+    );
+    expect(() =>
+      createProjectContextWorkflowSession({ container, dimensions, facts, projectRoot })
+    ).toThrow(BootstrapSessionLeaseError);
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[ProjectContextWorkflowFacts] Workflow session lease retained',
+      expect.objectContaining({
+        reason: 'bootstrap-session-not-clean-complete',
+        status: 'completed_with_errors',
+        workflowSessionId: coldStartSession.id,
+      })
+    );
+  });
+
   test('executes direct ProjectContext facts for built-in Agent workflow output', async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), 'alembic-pci4-project-context-'));
     fixtures.push(projectRoot);
@@ -591,6 +712,52 @@ function makeProjectContextRef(
       filePath: input.filePath,
       projectRoot,
       repoId: 'repo',
+    },
+  };
+}
+
+function createSessionContainer(manager: BootstrapSessionManager, eventBus: EventEmitter) {
+  return {
+    get(name: string) {
+      if (name === 'bootstrapSessionManager') {
+        return manager;
+      }
+      if (name === 'eventBus') {
+        return eventBus;
+      }
+      return null;
+    },
+  };
+}
+
+function createSessionLogger() {
+  return {
+    info: vi.fn(),
+    warn: vi.fn(),
+  };
+}
+
+function createWorkflowDimensions(): DimensionDef[] {
+  return [{ id: 'architecture', label: 'Architecture' }];
+}
+
+function createWorkflowFacts(projectRoot: string): ProjectContextWorkflowFacts {
+  return {
+    fileCount: 1,
+    moduleCount: 1,
+    primaryLang: 'typescript',
+    projectRoot,
+  } as ProjectContextWorkflowFacts;
+}
+
+function completedBootstrapTask() {
+  return {
+    id: 'architecture',
+    status: 'completed',
+    result: {
+      created: 1,
+      status: 'v3-pipeline-complete',
+      type: 'candidate',
     },
   };
 }
