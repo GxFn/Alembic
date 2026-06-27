@@ -39,6 +39,8 @@ import {
   projectHostAgentRescanEvidencePlan as projectKnowledgeRescanEvidencePlan,
   projectInternalRescanGapPlan as projectKnowledgeRescanGapPlan,
   projectInternalRescanPromptRecipes as projectKnowledgeRescanPromptRecipes,
+  resolveModuleTier,
+  resolvePerCellTargetDefault,
   runForceRescanCleanPolicy,
   runRescanCleanPolicy,
   syncKnowledgeStoreForRescan,
@@ -53,10 +55,6 @@ import type {
   WorkflowDatabaseLike,
   WorkflowSkillHooks,
 } from '@alembic/core/types';
-import {
-  resolveModuleTier,
-  resolvePerCellTargetDefault,
-} from '@alembic/core/workflows/capabilities/planning/knowledge';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
   attachProjectScopeSourceIdentitiesToView,
