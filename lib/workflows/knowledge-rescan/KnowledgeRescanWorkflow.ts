@@ -30,6 +30,9 @@ import {
   buildKnowledgeRescanPlan,
   buildKnowledgeRescanWorkflowPlan,
   buildRescanPrescreen,
+  type CoverageLedgerCandidate,
+  type CoverageLedgerModuleAxis,
+  type CoverageLedgerWriteResult,
   createInternalKnowledgeRescanIntent as createKnowledgeRescanIntent,
   type InternalKnowledgeRescanArgs as KnowledgeRescanArgs,
   presentInternalKnowledgeRescanEmptyProject as presentKnowledgeRescanEmptyProject,
@@ -39,8 +42,10 @@ import {
   runForceRescanCleanPolicy,
   runRescanCleanPolicy,
   syncKnowledgeStoreForRescan,
+  writeCoverageLedgerForCompletion,
 } from '@alembic/core/host-agent-workflows';
 import { SourceRefReconciler } from '@alembic/core/knowledge';
+import type { EvolutionCoverageLedgerRepository } from '@alembic/core/repositories';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type {
   DimensionDef,
@@ -48,6 +53,10 @@ import type {
   WorkflowDatabaseLike,
   WorkflowSkillHooks,
 } from '@alembic/core/types';
+import {
+  resolveModuleTier,
+  resolvePerCellTargetDefault,
+} from '@alembic/core/workflows/capabilities/planning/knowledge';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
   attachProjectScopeSourceIdentitiesToView,
@@ -667,6 +676,17 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
           ctx: ctx as RescanMcpContext,
           existingRecipes: allExistingRecipes,
           evolutionPrescreen: prescreen,
+          onDimensionResult: (result) => {
+            writeKnowledgeRescanCoverageLedgerForDimension({
+              candidateCount: result.candidateCount,
+              ctx,
+              dimensionId: result.dimensionId,
+              projectContextFacts,
+              projectRoot,
+              referencedFiles: result.referencedFiles,
+              roundIndex: nonNegativeInteger((args as Record<string, unknown>).roundIndex),
+            });
+          },
           rescanExecutionDecisions: knowledgeRescanPlan.executionDecisions,
         },
         sourceIdentities
@@ -759,6 +779,150 @@ interface CoverageLedgerRepositoryLike {
   }>;
 }
 
+export interface KnowledgeRescanCoverageLedgerWriteInput {
+  candidateCount: number;
+  ctx: RescanMcpContext;
+  dimensionId: string;
+  projectContextFacts: Pick<ProjectContextWorkflowFacts, 'projectMapModules'>;
+  projectRoot: string;
+  referencedFiles: readonly string[];
+  roundIndex?: number | null;
+}
+
+export interface KnowledgeRescanCoverageLedgerSkippedResult {
+  reason: string;
+  skipped: true;
+}
+
+export type KnowledgeRescanCoverageLedgerWriteResult =
+  | (CoverageLedgerWriteResult & { skipped?: false })
+  | KnowledgeRescanCoverageLedgerSkippedResult;
+
+export function writeKnowledgeRescanCoverageLedgerForDimension(
+  input: KnowledgeRescanCoverageLedgerWriteInput
+): KnowledgeRescanCoverageLedgerWriteResult {
+  if (input.candidateCount <= 0) {
+    return { skipped: true, reason: 'no-accepted-candidates' };
+  }
+
+  const repository = getCoverageLedgerRepository(input.ctx.container);
+  if (!repository) {
+    input.ctx.logger.debug?.(
+      '[KnowledgeRescanWorkflow] coverage ledger write skipped: repository unavailable'
+    );
+    return { skipped: true, reason: 'repository-unavailable' };
+  }
+
+  const modules = buildKnowledgeRescanCoverageLedgerModules(input.projectContextFacts);
+  if (modules.length === 0) {
+    input.ctx.logger.debug?.(
+      '[KnowledgeRescanWorkflow] coverage ledger write skipped: no ProjectMap modules'
+    );
+    return { skipped: true, reason: 'no-project-map-modules' };
+  }
+
+  const coveredPaths = uniqueStrings(
+    input.referencedFiles.map(stripSourceRefLineAnchor).filter((path) => path.length > 0)
+  );
+  if (coveredPaths.length === 0) {
+    input.ctx.logger.debug?.(
+      '[KnowledgeRescanWorkflow] coverage ledger write skipped: accepted candidates without source refs'
+    );
+    return { skipped: true, reason: 'no-source-refs' };
+  }
+
+  const candidates = buildKnowledgeRescanCoverageLedgerCandidates({
+    coveredPaths,
+    dimensionId: input.dimensionId,
+    modules,
+  });
+  const tier = resolveModuleTier(modules.length);
+  const perCellTarget = resolvePerCellTargetDefault(tier);
+  const latestRound =
+    input.roundIndex ?? latestCoverageLedgerRoundIndex(repository, input.projectRoot) ?? null;
+
+  const result = writeCoverageLedgerForCompletion({
+    repository,
+    projectRoot: input.projectRoot,
+    modules,
+    dimensionIds: [input.dimensionId],
+    candidates,
+    coveredPaths,
+    perCellTarget,
+    lastRound: latestRound,
+    logger: input.ctx.logger,
+  });
+  return { ...result, skipped: false };
+}
+
+function buildKnowledgeRescanCoverageLedgerModules(
+  facts: Pick<ProjectContextWorkflowFacts, 'projectMapModules'>
+): CoverageLedgerModuleAxis[] {
+  return facts.projectMapModules.flatMap((module) => {
+    const ownedFiles = uniqueStrings(module.ownedFiles ?? []);
+    const ownedPaths =
+      ownedFiles.length > 0
+        ? ownedFiles
+        : module.modulePath && module.modulePath.trim().length > 0
+          ? [module.modulePath.trim()]
+          : [];
+    if (module.moduleId.trim().length === 0 || ownedPaths.length === 0) {
+      return [];
+    }
+    return [
+      {
+        moduleId: module.moduleId,
+        moduleName: module.moduleName || module.moduleId,
+        ownedPaths,
+      },
+    ];
+  });
+}
+
+function buildKnowledgeRescanCoverageLedgerCandidates({
+  coveredPaths,
+  dimensionId,
+  modules,
+}: {
+  coveredPaths: readonly string[];
+  dimensionId: string;
+  modules: readonly CoverageLedgerModuleAxis[];
+}): CoverageLedgerCandidate[] {
+  return [
+    ...coveredPaths.map((path) => ({
+      dimensionIds: [dimensionId],
+      sourceRefPaths: [path],
+      importance: 60,
+    })),
+    ...modules.map((module) => ({
+      dimensionIds: [dimensionId],
+      sourceRefPaths: [...module.ownedPaths],
+      importance: 50,
+    })),
+  ];
+}
+
+function latestCoverageLedgerRoundIndex(
+  repository: EvolutionCoverageLedgerRepository,
+  projectRoot: string
+): number | null {
+  return repository.listRoundsByProjectRoot(projectRoot).reduce<number | null>((latest, round) => {
+    const roundIndex = nonNegativeInteger(round.roundIndex);
+    if (roundIndex === null) {
+      return latest;
+    }
+    return latest === null || roundIndex > latest ? roundIndex : latest;
+  }, null);
+}
+
+function stripSourceRefLineAnchor(sourceRef: string): string {
+  return sourceRef.trim().replace(/:\d+(?:-\d+)?$/, '');
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter((value) => value.length > 0))];
+}
+
 function buildKnowledgeRescanMiningPlanOptions(input: {
   args: KnowledgeRescanArgs;
   ctx: RescanMcpContext;
@@ -842,15 +1006,18 @@ function selectKnowledgeRescanModuleMiningModules(
 
 function getCoverageLedgerRepository(container: {
   get(name: string): unknown;
-}): CoverageLedgerRepositoryLike | null {
+}): EvolutionCoverageLedgerRepository | null {
   try {
     const repository = container.get('coverageLedgerRepository');
     if (
       repository &&
       typeof (repository as CoverageLedgerRepositoryLike).getCell === 'function' &&
-      typeof (repository as CoverageLedgerRepositoryLike).listByProjectRoot === 'function'
+      typeof (repository as CoverageLedgerRepositoryLike).listByProjectRoot === 'function' &&
+      typeof (repository as { listRoundsByProjectRoot?: unknown }).listRoundsByProjectRoot ===
+        'function' &&
+      typeof (repository as { upsertCell?: unknown }).upsertCell === 'function'
     ) {
-      return repository as CoverageLedgerRepositoryLike;
+      return repository as EvolutionCoverageLedgerRepository;
     }
   } catch {
     return null;

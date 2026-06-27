@@ -19,6 +19,7 @@ import {
 import Logger from '@alembic/core/logging';
 import type { AgentEfficiencySummary } from '#service/bootstrap/BootstrapEfficiency.js';
 import type { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
+import type { ProjectContextDimensionResultHook } from '../project-context/ProjectContextWorkflowFacts.js';
 import {
   generateSkill,
   type WorkflowSkillGenerationResult,
@@ -128,6 +129,7 @@ export interface ConsumeBootstrapDimensionResultOptions {
   emitter: BootstrapEventEmitter;
   dataRoot: string;
   sessionId: string;
+  onDimensionResult?: ProjectContextDimensionResultHook;
 }
 
 export interface BootstrapDimensionRunIssueState {
@@ -533,6 +535,7 @@ export async function consumeBootstrapDimensionResult({
   emitter,
   dataRoot,
   sessionId,
+  onDimensionResult,
 }: ConsumeBootstrapDimensionResultOptions): Promise<DimensionStat> {
   const {
     gateResult,
@@ -564,6 +567,13 @@ export async function consumeBootstrapDimensionResult({
     dimensionCandidates,
     projection,
     runIssueState,
+  });
+  await notifyProjectContextDimensionResult({
+    candidateCount: candidateAccounting.effectiveCandidateCount,
+    dimensionId: dimId,
+    onDimensionResult,
+    referencedFiles: analysisReport.referencedFiles || [],
+    rejectedCount: candidateAccounting.rejectedCount,
   });
 
   if (needsCandidates) {
@@ -745,6 +755,37 @@ export async function consumeBootstrapDimensionResult({
   }
 
   return dimResult;
+}
+
+async function notifyProjectContextDimensionResult({
+  candidateCount,
+  dimensionId,
+  onDimensionResult,
+  referencedFiles,
+  rejectedCount,
+}: {
+  candidateCount: number;
+  dimensionId: string;
+  onDimensionResult?: ProjectContextDimensionResultHook;
+  referencedFiles: readonly string[];
+  rejectedCount: number;
+}) {
+  if (!onDimensionResult) {
+    return;
+  }
+  try {
+    await onDimensionResult({
+      candidateCount,
+      dimensionId,
+      referencedFiles,
+      rejectedCount,
+    });
+  } catch (err: unknown) {
+    logger.warn('[Insight-v3] Dimension result hook failed', {
+      dimension: dimensionId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 function buildSubmittedCandidateSummary(tc: ToolCallRecord, dimId: string) {

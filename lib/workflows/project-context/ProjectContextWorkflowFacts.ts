@@ -79,12 +79,24 @@ export interface ProjectContextFillView {
   readonly existingRecipes?: unknown;
   readonly evolutionPrescreen?: unknown;
   readonly mode?: 'bootstrap' | 'rescan';
+  readonly onDimensionResult?: ProjectContextDimensionResultHook;
   readonly projectContextFacts: ProjectContextWorkflowFacts;
   readonly projectRoot: string;
   readonly rescanExecutionDecisions?: readonly KnowledgeRescanExecutionDecision[];
   readonly skipTargetDelivery?: boolean;
   readonly targetFileMap: Record<string, unknown[]>;
 }
+
+export interface ProjectContextDimensionResultHookInput {
+  readonly candidateCount: number;
+  readonly dimensionId: string;
+  readonly referencedFiles: readonly string[];
+  readonly rejectedCount: number;
+}
+
+export type ProjectContextDimensionResultHook = (
+  input: ProjectContextDimensionResultHookInput
+) => Promise<void> | void;
 
 export interface ProjectContextMissionArtifacts {
   briefing: { meta?: unknown; [key: string]: unknown };
@@ -533,6 +545,7 @@ export function buildProjectContextFillView(input: {
   evolutionPrescreen?: unknown;
   facts: ProjectContextWorkflowFacts;
   mode: 'bootstrap' | 'rescan';
+  onDimensionResult?: ProjectContextDimensionResultHook;
   projectRoot: string;
   rescanExecutionDecisions?: readonly KnowledgeRescanExecutionDecision[];
   skipTargetDelivery?: boolean;
@@ -543,6 +556,7 @@ export function buildProjectContextFillView(input: {
     existingRecipes: input.existingRecipes,
     evolutionPrescreen: input.evolutionPrescreen,
     mode: input.mode,
+    onDimensionResult: input.onDimensionResult,
     projectContextFacts: input.facts,
     projectRoot: input.projectRoot,
     rescanExecutionDecisions: input.rescanExecutionDecisions,

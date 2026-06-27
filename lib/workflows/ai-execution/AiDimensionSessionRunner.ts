@@ -193,6 +193,7 @@ export async function runAiDimensionSession({
       emitter: preparation.emitter,
       dataRoot: preparation.dataRoot,
       sessionId: preparation.sessionId,
+      onDimensionResult: preparation.onDimensionResult,
     });
   }
 

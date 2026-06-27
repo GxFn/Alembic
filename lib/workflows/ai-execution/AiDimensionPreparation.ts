@@ -38,6 +38,7 @@ export interface AiDimensionPreparation {
   emitter: BootstrapEventEmitter;
   allFiles: BootstrapFileEntry[] | null;
   projectScopeSourceIdentities: ProjectScopeSourceIdentity[];
+  onDimensionResult: ProjectContextFillView['onDimensionResult'];
   agentService: AgentService | null;
   systemRunContextFactory: SystemRunContextFactory | null;
   aiUnavailable: boolean;
@@ -103,6 +104,7 @@ export function prepareAiDimensionPipeline(
     emitter,
     allFiles: projectContextFacts.allFiles as BootstrapFileEntry[] | null,
     projectScopeSourceIdentities,
+    onDimensionResult: view.onDimensionResult,
     agentService,
     systemRunContextFactory,
     aiUnavailable: !aiStatus.ready,

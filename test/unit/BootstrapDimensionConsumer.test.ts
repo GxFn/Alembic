@@ -276,6 +276,7 @@ describe('bootstrap dimension consumer', () => {
     const addDimensionDigest = vi.fn();
     const addSubmittedCandidate = vi.fn();
     const emitDimensionComplete = vi.fn();
+    const onDimensionResult = vi.fn();
 
     const result = await consumeBootstrapDimensionResult({
       ctx: {},
@@ -311,6 +312,7 @@ describe('bootstrap dimension consumer', () => {
       emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
       dataRoot: '/tmp',
       sessionId: 'session-1',
+      onDimensionResult,
     });
 
     expect(candidateResults.created).toBe(1);
@@ -333,6 +335,12 @@ describe('bootstrap dimension consumer', () => {
         tokenUsage: { input: 3, output: 5 },
       })
     );
+    expect(onDimensionResult).toHaveBeenCalledWith({
+      candidateCount: 1,
+      dimensionId: 'api',
+      referencedFiles: ['src/a.ts'],
+      rejectedCount: 0,
+    });
     expect(dimensionStats.api).toMatchObject({
       candidateCount: 1,
       analysisText: 'short analysis',
