@@ -738,7 +738,7 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
       sourceIdentities
     );
     if (runInternalFillInline) {
-      ctx.logger.info('[KnowledgeRescanWorkflow] Running internal AI dimension fill inline', {
+      ctx.logger.info('[KnowledgeRescanWorkflow] Running rescan dimension fill inline', {
         dimensions: executionDimensions.map((dimension) => dimension.id),
         miningMode,
       });
