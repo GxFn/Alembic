@@ -155,13 +155,39 @@ function makeCoverageLedgerRepository() {
   };
 }
 
+function makeModuleMiningPersistenceRepositories() {
+  const entries: Array<Record<string, unknown>> = [];
+  const sourceRefs: Array<Record<string, unknown>> = [];
+  const knowledgeRepository = {
+    findWithPagination: vi.fn(() => ({
+      data: [...entries],
+      pagination: { page: 1, pageSize: 50_000, pages: 1, total: entries.length },
+    })),
+  };
+  const recipeSourceRefRepository = {
+    findAll: vi.fn(() => [...sourceRefs]),
+  };
+  return {
+    addEntry(entry: Record<string, unknown>) {
+      entries.push(entry);
+    },
+    addSourceRef(sourceRef: Record<string, unknown>) {
+      sourceRefs.push(sourceRef);
+    },
+    knowledgeRepository,
+    recipeSourceRefRepository,
+  };
+}
+
 function makeContainer(
   store: JobStore,
   options: {
     agentService?: unknown;
     coverageLedgerRepository?: unknown;
     dataRoot?: string;
+    knowledgeRepository?: unknown;
     recorder?: JobProcessEventRecorder;
+    recipeSourceRefRepository?: unknown;
   } = {}
 ): ServiceContainer {
   const dataRoot = options.dataRoot ?? fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-plan-gate-'));
@@ -192,6 +218,12 @@ function makeContainer(
       }
       if (name === 'jobStore') {
         return store;
+      }
+      if (name === 'knowledgeRepository' && options.knowledgeRepository) {
+        return options.knowledgeRepository;
+      }
+      if (name === 'recipeSourceRefRepository' && options.recipeSourceRefRepository) {
+        return options.recipeSourceRefRepository;
       }
       throw new Error(`missing service: ${name}`);
     },
@@ -1012,5 +1044,132 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
       })
     ).rejects.toThrow('moduleMining requires at least one ProjectMap module.');
     expect(runModuleMining).not.toHaveBeenCalled();
+  });
+
+  test('counts source-ref-backed persisted moduleMining recipes when the agent result projection reports zero', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const facts = makeProjectMapFacts(2);
+    const persistence = makeModuleMiningPersistenceRepositories();
+    persistence.addEntry({ id: 'existing-recipe', lifecycle: 'staging' });
+    persistence.addSourceRef({
+      recipeId: 'existing-recipe',
+      sourcePath: 'src/module-1/existing.ts',
+      status: 'active',
+    });
+    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(facts);
+    const container = makeContainer(store, {
+      knowledgeRepository: persistence.knowledgeRepository,
+      recipeSourceRefRepository: persistence.recipeSourceRefRepository,
+    });
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: { generationStage: 'moduleMining' },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockResolvedValue({
+      dimensions: ['architecture'],
+      generationStage: 'moduleMining',
+      moduleBindings: facts.projectMapModules.map((module) => ({
+        dimensions: ['architecture'],
+        moduleId: module.moduleId,
+        modulePath: module.modulePath ?? module.moduleId,
+        priority: 1,
+        targetRecipes: 2,
+      })),
+      scale: { contentMaxLines: 120, maxFiles: 500, totalRecipeBudget: 2 },
+    });
+    vi.mocked(runModuleMining).mockImplementationOnce(async () => {
+      persistence.addEntry({ id: 'accepted-1', lifecycle: 'staging' });
+      persistence.addEntry({ id: 'accepted-2', lifecycle: 'staging' });
+      persistence.addSourceRef({
+        recipeId: 'accepted-1',
+        sourcePath: 'src/module-1/index.ts',
+        status: 'active',
+      });
+      persistence.addSourceRef({
+        recipeId: 'accepted-2',
+        sourcePath: 'src/module-2/index.ts',
+        status: 'active',
+      });
+      return { phases: { moduleResults: {} }, status: 'success' };
+    });
+
+    await expect(
+      runDaemonJob({
+        args: { generationStage: 'moduleMining' },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).resolves.toMatchObject({
+      job: { status: 'completed' },
+      result: {
+        moduleMining: {
+          newRecipes: 2,
+          persistedNewRecipes: 2,
+          persistedSourceRefCount: 2,
+          reportedNewRecipes: 0,
+        },
+      },
+    });
+    expect(store.get(job.id)).toMatchObject({ status: 'completed' });
+  });
+
+  test('still fails true zero-output moduleMining when no new source-ref-backed recipes are persisted', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const facts = makeProjectMapFacts(1);
+    const persistence = makeModuleMiningPersistenceRepositories();
+    persistence.addEntry({ id: 'existing-recipe', lifecycle: 'staging' });
+    persistence.addSourceRef({
+      recipeId: 'existing-recipe',
+      sourcePath: 'src/module-1/existing.ts',
+      status: 'active',
+    });
+    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(facts);
+    const container = makeContainer(store, {
+      knowledgeRepository: persistence.knowledgeRepository,
+      recipeSourceRefRepository: persistence.recipeSourceRefRepository,
+    });
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: { generationStage: 'moduleMining' },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockResolvedValue({
+      dimensions: ['architecture'],
+      generationStage: 'moduleMining',
+      moduleBindings: [
+        {
+          dimensions: ['architecture'],
+          moduleId: 'mod-1',
+          modulePath: 'src/module-1',
+          priority: 1,
+          targetRecipes: 2,
+        },
+      ],
+      scale: { contentMaxLines: 120, maxFiles: 500, totalRecipeBudget: 1 },
+    });
+    vi.mocked(runModuleMining).mockResolvedValueOnce({ phases: { moduleResults: {} } });
+
+    await expect(
+      runDaemonJob({
+        args: { generationStage: 'moduleMining' },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).rejects.toThrow('moduleMining produced zero recipes.');
+    expect(store.get(job.id)).toMatchObject({
+      error: { message: 'moduleMining produced zero recipes.' },
+      status: 'failed',
+    });
   });
 });
