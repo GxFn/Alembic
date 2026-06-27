@@ -45,17 +45,51 @@ const BootstrapJobBody = z.object({
   contentMaxLines: z.number().int().min(1).max(10000).default(120),
 });
 
-const RescanJobBody = z.object({
-  reason: z.string().optional(),
-  dimensions: z.array(z.string()).optional(),
-  maxFiles: z.coerce.number().int().min(1).max(MAX_KNOWLEDGE_RESCAN_MAX_FILES).optional(),
-  contentMaxLines: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(MAX_KNOWLEDGE_RESCAN_CONTENT_MAX_LINES)
-    .optional(),
-});
+const RescanJobBody = z
+  .object({
+    reason: z.string().optional(),
+    dimensions: z.array(z.string()).optional(),
+    maxFiles: z.coerce.number().int().min(1).max(MAX_KNOWLEDGE_RESCAN_MAX_FILES).optional(),
+    contentMaxLines: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_KNOWLEDGE_RESCAN_CONTENT_MAX_LINES)
+      .optional(),
+    generationStage: z.enum(['deepMining', 'moduleMining']).optional(),
+    maxRounds: z.coerce.number().int().min(1).max(100).optional(),
+    minNewRecipes: z.coerce.number().int().min(1).max(500).optional(),
+    scaleCap: z.coerce.number().int().min(1).max(500).optional(),
+    miningMode: z.enum(['deepMining', 'moduleMining', 'per-module']).optional(),
+    moduleScope: z.array(z.string().min(1)).optional(),
+    perDimensionTargets: z.record(z.string().min(1), z.coerce.number().int().min(0)).optional(),
+    moduleDimensionTargets: z
+      .array(
+        z.object({
+          dimensionId: z.string().min(1),
+          moduleId: z.string().min(1).optional(),
+          moduleName: z.string().min(1).optional(),
+          targetRecipes: z.coerce.number().int().min(1).max(500),
+        })
+      )
+      .optional(),
+    roundIndex: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .superRefine((body, ctx) => {
+    if (!body.generationStage || !body.miningMode) {
+      return;
+    }
+    const miningModeMatchesStage =
+      body.miningMode === body.generationStage ||
+      (body.generationStage === 'moduleMining' && body.miningMode === 'per-module');
+    if (!miningModeMatchesStage) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'miningMode must match generationStage',
+        path: ['miningMode'],
+      });
+    }
+  });
 export type RescanJobRequest = z.infer<typeof RescanJobBody>;
 
 export function parseRescanJobBody(input: unknown): RescanJobRequest {

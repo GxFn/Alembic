@@ -2,12 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 
 const evolutionMock = vi.hoisted(() => {
   const decayDetectorOptions: unknown[] = [];
+  const stagingManagerOptions: unknown[] = [];
   return {
     DecayDetector: vi.fn(function MockDecayDetector(_knowledgeRepo: unknown, options: unknown) {
       decayDetectorOptions.push(options);
       return { scanAll: vi.fn() };
     }),
     decayDetectorOptions,
+    StagingManager: vi.fn(function MockStagingManager(_knowledgeRepo: unknown, options: unknown) {
+      stagingManagerOptions.push(options);
+      return { checkAndPromote: vi.fn() };
+    }),
+    stagingManagerOptions,
   };
 });
 
@@ -16,6 +22,7 @@ vi.mock('@alembic/core/evolution', async (importOriginal) => {
   return {
     ...actual,
     DecayDetector: evolutionMock.DecayDetector,
+    StagingManager: evolutionMock.StagingManager,
   };
 });
 
@@ -36,6 +43,22 @@ describe('KnowledgeModule evolution wiring', () => {
     expect(evolutionMock.DecayDetector).toHaveBeenCalledTimes(1);
     expect(evolutionMock.decayDetectorOptions[0]).toMatchObject({
       lifecycleStateMachine,
+    });
+  });
+
+  it('injects lifecycleStateMachine into StagingManager options', () => {
+    const container = new FakeContainer();
+    KnowledgeModule.register(container as never);
+
+    const lifecycleStateMachine = { transition: vi.fn() };
+    container.services.knowledgeRepository = () => ({});
+    container.services.lifecycleStateMachine = () => lifecycleStateMachine;
+
+    container.get('stagingManager');
+
+    expect(evolutionMock.StagingManager).toHaveBeenCalledTimes(1);
+    expect(evolutionMock.stagingManagerOptions[0]).toMatchObject({
+      lifecycle: lifecycleStateMachine,
     });
   });
 });

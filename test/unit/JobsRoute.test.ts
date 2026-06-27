@@ -293,11 +293,77 @@ describe('jobs rescan request parsing', () => {
     });
   });
 
+  test('preserves bounded mining stage controls for daemon rescan jobs', () => {
+    const body = parseRescanJobBody({
+      contentMaxLines: 20,
+      generationStage: 'deepMining',
+      maxFiles: 5,
+      maxRounds: 2,
+      miningMode: 'deepMining',
+      minNewRecipes: 1,
+      moduleDimensionTargets: [
+        {
+          dimensionId: 'architecture',
+          moduleId: 'core',
+          moduleName: 'Core',
+          targetRecipes: 2,
+        },
+      ],
+      moduleScope: ['Sources/Core'],
+      perDimensionTargets: { architecture: 2 },
+      reason: 'deep-mining',
+      roundIndex: 1,
+      scaleCap: 3,
+    });
+
+    expect(body).toMatchObject({
+      contentMaxLines: 20,
+      generationStage: 'deepMining',
+      maxFiles: 5,
+      maxRounds: 2,
+      miningMode: 'deepMining',
+      minNewRecipes: 1,
+      moduleDimensionTargets: [
+        {
+          dimensionId: 'architecture',
+          moduleId: 'core',
+          moduleName: 'Core',
+          targetRecipes: 2,
+        },
+      ],
+      moduleScope: ['Sources/Core'],
+      perDimensionTargets: { architecture: 2 },
+      reason: 'deep-mining',
+      roundIndex: 1,
+      scaleCap: 3,
+    });
+  });
+
   test('rejects route-level rescan analysis options outside the Core contract bounds', () => {
     expect(() =>
       parseRescanJobBody({
         reason: 'too-wide-rescan',
         maxFiles: 20_001,
+      })
+    ).toThrow();
+  });
+
+  test('rejects invalid mining stage controls instead of silently stripping them', () => {
+    expect(() =>
+      parseRescanJobBody({
+        generationStage: 'coldStart',
+      })
+    ).toThrow();
+    expect(() =>
+      parseRescanJobBody({
+        generationStage: 'deepMining',
+        maxRounds: 0,
+      })
+    ).toThrow();
+    expect(() =>
+      parseRescanJobBody({
+        generationStage: 'moduleMining',
+        miningMode: 'deepMining',
       })
     ).toThrow();
   });

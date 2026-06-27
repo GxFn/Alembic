@@ -90,6 +90,10 @@ export interface ProjectContextMissionArtifacts {
   ideAgentPacket: { profile?: unknown; [key: string]: unknown };
 }
 
+type ProjectContextMissionRescanInput = NonNullable<
+  Parameters<typeof buildProjectContextMissionBriefing>[0]['rescan']
+>;
+
 interface BuildProjectContextWorkflowFactsInput {
   analysisScope?: ProjectScopeAnalysisContext;
   contentMaxLines?: number;
@@ -231,6 +235,9 @@ export async function buildProjectContextWorkflowFacts(
   const allTargets = buildWorkflowTargets(presenterInput);
   const filesByTarget = buildProjectContextTargetFileMap(allFiles);
   const projectMapModules = buildProjectMapModules(presenterInput.map);
+  if (projectMapModules.length === 0) {
+    projectMapModules.push(...buildProjectMapModulesFromTargets(presenterInput, allFiles));
+  }
   const incrementalPlan =
     input.source === 'alembic-main-rescan'
       ? buildProjectContextFileDiffPlan({
@@ -488,12 +495,14 @@ export function buildProjectContextMissionArtifacts(input: {
   dimensions: DimensionDef[];
   facts: ProjectContextWorkflowFacts;
   profile: 'cold-start' | 'rescan';
+  rescan?: ProjectContextMissionRescanInput;
   session: ReturnType<ReturnType<typeof getOrCreateSessionManager>['createSession']>;
 }): ProjectContextMissionArtifacts {
   const briefing = buildProjectContextMissionBriefing({
     activeDimensions: input.dimensions,
     projectContext: input.facts.presenterInput,
     profile: input.profile === 'cold-start' ? 'cold-start-host-agent' : 'rescan-host-agent',
+    rescan: input.profile === 'rescan' ? input.rescan : undefined,
     session: input.session,
   });
   const ideAgentPacket = buildIDEAgentAnalysisPacketFromProjectContext({
@@ -717,6 +726,150 @@ function buildProjectMapModules(map: ProjectMap | undefined): ProjectContextModu
       return moduleEntry;
     })
     .filter((module) => module.moduleId.length > 0 && module.moduleName.length > 0);
+}
+
+function buildProjectMapModulesFromTargets(
+  input: ProjectContextPresenterInput,
+  allFiles: readonly BootstrapFileEntry[]
+): ProjectContextModule[] {
+  const modules: ProjectContextModule[] = [];
+  for (const target of input.repo?.targets ?? []) {
+    const moduleName = target.name.trim();
+    if (!moduleName) {
+      continue;
+    }
+
+    const targetPath = inferTargetModulePath(input, target, allFiles);
+    const ownedFiles = inferTargetOwnedFiles(input, moduleName, targetPath, allFiles);
+    const modulePath = targetPath ?? inferCommonModulePath(ownedFiles);
+    if (!modulePath || ownedFiles.length === 0) {
+      continue;
+    }
+
+    modules.push({
+      kind: target.kind,
+      moduleId: `target:${moduleName}:${modulePath}`,
+      moduleName,
+      modulePath,
+      ownedFileCount: ownedFiles.length,
+      ownedFiles,
+      ref: target.refs[0],
+      role: target.kind ?? 'target',
+    });
+  }
+  return dedupeProjectContextModules(modules);
+}
+
+function inferTargetModulePath(
+  input: ProjectContextPresenterInput,
+  target: NonNullable<ProjectContextPresenterInput['repo']>['targets'][number],
+  allFiles: readonly BootstrapFileEntry[]
+): string | undefined {
+  const fromRef = target.refs
+    .map((ref) => normalizeRefModulePath(ref))
+    .find((pathValue): pathValue is string => Boolean(pathValue));
+  if (fromRef) {
+    return fromRef;
+  }
+
+  const fromPackage = input.repo?.localPackages
+    .filter((pkg) => pkg.name === target.name)
+    .map((pkg) => normalizeModulePath(pkg.path))
+    .find((pathValue): pathValue is string => Boolean(pathValue));
+  if (fromPackage) {
+    return fromPackage;
+  }
+
+  return inferCommonModulePath(inferTargetOwnedFiles(input, target.name, undefined, allFiles));
+}
+
+function normalizeRefModulePath(ref: ProjectContextRef): string | undefined {
+  const normalized = normalizeModulePath(ref.scope.filePath);
+  if (!normalized) {
+    return undefined;
+  }
+  if (normalized === 'Package.swift') {
+    return undefined;
+  }
+  if (normalized.endsWith('/Package.swift')) {
+    return normalizeModulePath(dirname(normalized));
+  }
+  return normalized;
+}
+
+function inferTargetOwnedFiles(
+  input: ProjectContextPresenterInput,
+  targetName: string,
+  modulePath: string | undefined,
+  allFiles: readonly BootstrapFileEntry[]
+): string[] {
+  const prefixes = buildTargetPathPrefixes(input, targetName, modulePath);
+  return dedupeStrings(
+    allFiles
+      .map((file) => file.relativePath)
+      .filter((filePath): filePath is string => Boolean(filePath))
+      .filter((filePath) =>
+        prefixes.some((prefix) => filePath === prefix || filePath.startsWith(`${prefix}/`))
+      )
+  );
+}
+
+function buildTargetPathPrefixes(
+  input: ProjectContextPresenterInput,
+  targetName: string,
+  modulePath: string | undefined
+): string[] {
+  const normalizedTargetName = normalizeModulePath(targetName);
+  return dedupeStrings([
+    ...(modulePath ? [modulePath] : []),
+    ...(normalizedTargetName
+      ? [
+          normalizedTargetName,
+          `Sources/${normalizedTargetName}`,
+          `Source/${normalizedTargetName}`,
+          `Tests/${normalizedTargetName}`,
+          `Packages/${normalizedTargetName}`,
+          `src/${normalizedTargetName}`,
+        ]
+      : []),
+    ...(input.repo?.localPackages ?? [])
+      .filter((pkg) => pkg.name === targetName)
+      .map((pkg) => normalizeModulePath(pkg.path))
+      .filter((pathValue): pathValue is string => Boolean(pathValue)),
+  ]);
+}
+
+function inferCommonModulePath(ownedFiles: readonly string[]): string | undefined {
+  const directories = ownedFiles
+    .map((filePath) => normalizeModulePath(dirname(filePath)))
+    .filter((pathValue): pathValue is string => Boolean(pathValue));
+  if (directories.length === 0) {
+    return undefined;
+  }
+  const commonSegments = directories[0].split('/');
+  for (const directory of directories.slice(1)) {
+    const segments = directory.split('/');
+    while (
+      commonSegments.length > 0 &&
+      commonSegments.join('/') !== segments.slice(0, commonSegments.length).join('/')
+    ) {
+      commonSegments.pop();
+    }
+  }
+  return normalizeModulePath(commonSegments.join('/'));
+}
+
+function dedupeProjectContextModules(
+  modules: readonly ProjectContextModule[]
+): ProjectContextModule[] {
+  const byKey = new Map<string, ProjectContextModule>();
+  for (const module of modules) {
+    const key = `${module.moduleId}:${module.modulePath ?? ''}`;
+    if (!byKey.has(key)) {
+      byKey.set(key, module);
+    }
+  }
+  return [...byKey.values()];
 }
 
 function buildProjectContextTargetFileMap(

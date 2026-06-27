@@ -33,6 +33,7 @@ import {
   createInternalKnowledgeRescanIntent as createKnowledgeRescanIntent,
   type InternalKnowledgeRescanArgs as KnowledgeRescanArgs,
   presentInternalKnowledgeRescanEmptyProject as presentKnowledgeRescanEmptyProject,
+  projectHostAgentRescanEvidencePlan as projectKnowledgeRescanEvidencePlan,
   projectInternalRescanGapPlan as projectKnowledgeRescanGapPlan,
   projectInternalRescanPromptRecipes as projectKnowledgeRescanPromptRecipes,
   runForceRescanCleanPolicy,
@@ -570,6 +571,10 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
       dimensions: sessionDimensions,
       facts: projectContextFacts,
       profile: 'rescan',
+      rescan: {
+        evidencePlan: projectKnowledgeRescanEvidencePlan(knowledgeRescanPlan),
+        prescreen,
+      },
       session: workflowSession,
     });
     projectContextFacts.report.projectContextMissionBriefing = {

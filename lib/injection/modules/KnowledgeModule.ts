@@ -221,6 +221,9 @@ export function register(c: ServiceContainer) {
   c.singleton('stagingManager', (ct: ServiceContainer) => {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new StagingManager(knowledgeRepo, {
+      lifecycle: ct.services.lifecycleStateMachine
+        ? (ct.get('lifecycleStateMachine') as LifecycleStateMachine)
+        : undefined,
       signalBus: ct.singletons.signalBus || undefined,
     } as ConstructorParameters<typeof StagingManager>[1]);
   });
