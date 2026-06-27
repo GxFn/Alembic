@@ -88,6 +88,123 @@ describe('ProjectContextWorkflowFacts', () => {
     expect(facts.moduleCount).toBeGreaterThan(0);
   });
 
+  test('derives BiliDili-style SwiftPM modules from root target refs and filesystem-owned files', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'alembic-bilidili-module-facts-'));
+    fixtures.push(projectRoot);
+    const targets = [
+      ['ServiceKit', 'Sources/Core/ServiceKit/ServiceProtocols.swift'],
+      ['PaginationKit', 'Sources/Core/PaginationKit/PaginationController.swift'],
+      ['Networking', 'Sources/Infrastructure/Networking/Client.swift'],
+      ['Account', 'Sources/Infrastructure/Account/AccountManager.swift'],
+      ['Home', 'Sources/Features/Home/HomeViewController.swift'],
+      ['VideoFeed', 'Sources/Features/VideoFeed/VideoFeedViewController.swift'],
+      ['Profile', 'Sources/Features/Profile/ProfileViewController.swift'],
+      ['LiveChat', 'Sources/Features/LiveChat/LiveChatViewController.swift'],
+    ] as const;
+
+    await import('node:fs/promises').then(async (fs) => {
+      await fs.writeFile(
+        join(projectRoot, 'Package.swift'),
+        `// swift-tools-version: 6.0
+import PackageDescription
+
+let package = Package(
+  name: "BiliDili",
+  targets: [
+${targets
+  .map(
+    ([name, filePath]) =>
+      `    .target(name: "${name}", path: "${filePath.split('/').slice(0, -1).join('/')}")`
+  )
+  .join(',\n')}
+  ]
+)
+`
+      );
+      for (const [, filePath] of targets) {
+        await fs.mkdir(join(projectRoot, filePath.split('/').slice(0, -1).join('/')), {
+          recursive: true,
+        });
+        await fs.writeFile(join(projectRoot, filePath), 'public struct Fixture {}\n');
+      }
+    });
+    mockBiliDiliLikeProjectContext(
+      projectRoot,
+      targets.map(([name]) => name)
+    );
+
+    const facts = await buildProjectContextWorkflowFacts({
+      contentMaxLines: 80,
+      ctx: { container: { get: () => null }, logger: console },
+      projectRoot,
+      source: 'alembic-main-rescan',
+    });
+
+    expect(facts.projectMapModules).toHaveLength(targets.length);
+    expect(facts.projectMapModules).toContainEqual(
+      expect.objectContaining({
+        moduleName: 'Home',
+        modulePath: 'Sources/Features/Home',
+        ownedFiles: ['Sources/Features/Home/HomeViewController.swift'],
+      })
+    );
+    expect(facts.moduleCount).toBe(targets.length);
+  });
+
+  test('prefers nested local Swift package target paths over package root refs', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'alembic-local-package-module-facts-'));
+    fixtures.push(projectRoot);
+
+    await import('node:fs/promises').then(async (fs) => {
+      await fs.writeFile(
+        join(projectRoot, 'Package.swift'),
+        `// swift-tools-version: 6.0
+import PackageDescription
+
+let package = Package(
+  name: "BiliDili",
+  dependencies: [.package(path: "Packages/AOXFoundationKit")]
+)
+`
+      );
+      await fs.mkdir(join(projectRoot, 'Packages/AOXFoundationKit/Sources/AOXFoundationKit'), {
+        recursive: true,
+      });
+      await fs.writeFile(
+        join(projectRoot, 'Packages/AOXFoundationKit/Package.swift'),
+        `// swift-tools-version: 6.0
+import PackageDescription
+
+let package = Package(
+  name: "AOXFoundationKit",
+  targets: [.target(name: "AOXFoundationKit")]
+)
+`
+      );
+      await fs.writeFile(
+        join(projectRoot, 'Packages/AOXFoundationKit/Sources/AOXFoundationKit/Logger.swift'),
+        'public struct Logger {}\n'
+      );
+      await fs.writeFile(join(projectRoot, 'Packages/AOXFoundationKit/LICENSE'), 'MIT\n');
+    });
+    mockLocalSwiftPackageProjectContext(projectRoot);
+
+    const facts = await buildProjectContextWorkflowFacts({
+      contentMaxLines: 80,
+      ctx: { container: { get: () => null }, logger: console },
+      projectRoot,
+      source: 'alembic-main-rescan',
+    });
+
+    expect(facts.projectMapModules).toContainEqual(
+      expect.objectContaining({
+        moduleName: 'AOXFoundationKit',
+        modulePath: 'Packages/AOXFoundationKit/Sources/AOXFoundationKit',
+        ownedFiles: ['Packages/AOXFoundationKit/Sources/AOXFoundationKit/Logger.swift'],
+      })
+    );
+  });
+
   test('passes rescan evidence into ProjectContext mission briefing artifacts', async () => {
     const projectRoot = '/tmp/alembic-swift-target-project';
     mockSwiftTargetProjectContext(projectRoot);
@@ -250,6 +367,184 @@ function mockSwiftTargetProjectContext(projectRoot: string): void {
           available: false,
           kind: request.kind,
           nextRefs: [fileRef],
+          reason: 'fixture unavailable',
+        });
+      default:
+        return projectContextEnvelope(projectRoot, request.kind, {
+          available: false,
+          kind: request.kind,
+          nextRefs: [],
+          reason: 'fixture unavailable',
+        });
+    }
+  };
+}
+
+function mockBiliDiliLikeProjectContext(projectRoot: string, targetNames: readonly string[]): void {
+  const rootRef = makeProjectContextRef(projectRoot, 'path:repo:.', {
+    filePath: '.',
+    kind: 'path',
+    label: '.',
+  });
+  const packageRef = makeProjectContextRef(projectRoot, 'file:repo:Package.swift', {
+    filePath: 'Package.swift',
+    kind: 'file',
+    label: 'Package.swift',
+  });
+  const repoRef = makeProjectContextRef(projectRoot, 'repo:repo', {
+    kind: 'repo',
+    label: 'BiliDili',
+  });
+
+  projectContextCapabilitiesMock.executeOverride = async (request) => {
+    switch (request.kind) {
+      case 'space':
+        return projectContextEnvelope(projectRoot, 'space', {
+          boundaries: [],
+          nextRefs: [packageRef],
+          repos: [],
+          sourceFolders: [],
+          space: { id: 'space', ref: repoRef },
+          structuralHotspots: [],
+        });
+      case 'repo':
+        return projectContextEnvelope(
+          projectRoot,
+          'repo',
+          {
+            buildSystems: [],
+            commands: [],
+            configFiles: [],
+            entrypoints: [],
+            languages: [{ fileCount: 1, language: 'swift' }],
+            localPackages: [],
+            nextRefs: [packageRef],
+            packageSystems: [],
+            repo: { name: 'BiliDili', ref: repoRef },
+            sourceRoots: [],
+            targets: targetNames.map((name) => ({ kind: 'target', name, refs: [rootRef] })),
+            topAreas: [],
+          },
+          [repoRef, rootRef, packageRef]
+        );
+      case 'source-slice':
+        return projectContextEnvelope(
+          projectRoot,
+          'source-slice',
+          {
+            file: {
+              filePath: 'Package.swift',
+              language: 'swift',
+              lineCount: 30,
+              ref: packageRef,
+              repoId: 'repo',
+            },
+            nextRefs: [],
+            range: { endLine: 30, startLine: 1 },
+            text: 'let package = Package(name: "BiliDili")',
+          },
+          [packageRef]
+        );
+      case 'map':
+      case 'module':
+      case 'module-layers':
+      case 'file-flow':
+      case 'file-symbols':
+      case 'anchor-range':
+        return projectContextEnvelope(projectRoot, request.kind, {
+          available: false,
+          kind: request.kind,
+          nextRefs: [packageRef],
+          reason: 'fixture unavailable',
+        });
+      default:
+        return projectContextEnvelope(projectRoot, request.kind, {
+          available: false,
+          kind: request.kind,
+          nextRefs: [],
+          reason: 'fixture unavailable',
+        });
+    }
+  };
+}
+
+function mockLocalSwiftPackageProjectContext(projectRoot: string): void {
+  const packageRef = makeProjectContextRef(projectRoot, 'path:repo:Packages/AOXFoundationKit', {
+    filePath: 'Packages/AOXFoundationKit',
+    kind: 'path',
+    label: 'AOXFoundationKit',
+  });
+  const rootPackageRef = makeProjectContextRef(projectRoot, 'file:repo:Package.swift', {
+    filePath: 'Package.swift',
+    kind: 'file',
+    label: 'Package.swift',
+  });
+  const repoRef = makeProjectContextRef(projectRoot, 'repo:repo', {
+    kind: 'repo',
+    label: 'BiliDili',
+  });
+
+  projectContextCapabilitiesMock.executeOverride = async (request) => {
+    switch (request.kind) {
+      case 'space':
+        return projectContextEnvelope(projectRoot, 'space', {
+          boundaries: [],
+          nextRefs: [rootPackageRef],
+          repos: [],
+          sourceFolders: [],
+          space: { id: 'space', ref: repoRef },
+          structuralHotspots: [],
+        });
+      case 'repo':
+        return projectContextEnvelope(
+          projectRoot,
+          'repo',
+          {
+            buildSystems: [],
+            commands: [],
+            configFiles: [],
+            entrypoints: [],
+            languages: [{ fileCount: 1, language: 'swift' }],
+            localPackages: [
+              { kind: 'package', name: 'AOXFoundationKit', path: 'Packages/AOXFoundationKit' },
+            ],
+            nextRefs: [rootPackageRef],
+            packageSystems: [],
+            repo: { name: 'BiliDili', ref: repoRef },
+            sourceRoots: [],
+            targets: [{ kind: 'target', name: 'AOXFoundationKit', refs: [packageRef] }],
+            topAreas: [],
+          },
+          [repoRef, packageRef, rootPackageRef]
+        );
+      case 'source-slice':
+        return projectContextEnvelope(
+          projectRoot,
+          'source-slice',
+          {
+            file: {
+              filePath: 'Package.swift',
+              language: 'swift',
+              lineCount: 10,
+              ref: rootPackageRef,
+              repoId: 'repo',
+            },
+            nextRefs: [],
+            range: { endLine: 10, startLine: 1 },
+            text: 'let package = Package(name: "BiliDili")',
+          },
+          [rootPackageRef]
+        );
+      case 'map':
+      case 'module':
+      case 'module-layers':
+      case 'file-flow':
+      case 'file-symbols':
+      case 'anchor-range':
+        return projectContextEnvelope(projectRoot, request.kind, {
+          available: false,
+          kind: request.kind,
+          nextRefs: [rootPackageRef],
           reason: 'fixture unavailable',
         });
       default:
