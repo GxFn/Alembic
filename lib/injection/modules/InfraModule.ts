@@ -173,6 +173,11 @@ export function register(c: ServiceContainer) {
     (ct: ServiceContainer) => getCoreRepositoryBundle(ct).recipeSourceRefRepository
   );
 
+  c.singleton(
+    'coverageLedgerRepository',
+    (ct: ServiceContainer) => getCoreRepositoryBundle(ct).coverageLedgerRepository
+  );
+
   c.singleton('knowledgeFileWriter', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
     const wz = ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;

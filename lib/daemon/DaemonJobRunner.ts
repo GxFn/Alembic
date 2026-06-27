@@ -6,7 +6,18 @@ import {
   type DaemonJobStatus,
   JobStore,
 } from '@alembic/core/daemon';
-import { applyPlanSelection, type PlanSelectionProjection } from '@alembic/core/plans';
+import { adviseCoverageLedger } from '@alembic/core/host-agent-workflows';
+import {
+  applyPlanSelection,
+  type PlanModuleBinding,
+  type PlanSelection,
+  type PlanSelectionProjection,
+  type PlanStageId,
+} from '@alembic/core/plans';
+import type {
+  DeepMiningRoundRecord,
+  EvolutionCoverageLedgerRepository,
+} from '@alembic/core/repositories';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
 import {
@@ -106,7 +117,27 @@ export interface DaemonRescanWorkflowArgs {
   contentMaxLines?: unknown;
   dimensions?: string[];
   maxFiles?: unknown;
+  miningMode?: 'deepMining' | 'moduleMining' | 'per-module';
+  moduleDimensionTargets?: ModuleDimensionTarget[];
+  moduleScope?: string[];
+  perDimensionTargets?: Record<string, number>;
   reason: string;
+  roundIndex?: number;
+}
+
+interface ModuleDimensionTarget {
+  dimensionId: string;
+  moduleId?: string;
+  moduleName?: string;
+  targetRecipes: number;
+}
+
+interface ModuleMiningModule {
+  [key: string]: unknown;
+  moduleId: string;
+  moduleName: string;
+  modulePath?: string;
+  ownedFiles?: string[];
 }
 
 export function buildDaemonRescanWorkflowArgs(options: {
@@ -131,12 +162,37 @@ export function buildDaemonRescanWorkflowArgs(options: {
     workflowArgs.contentMaxLines = args.contentMaxLines;
   }
 
+  if (isMiningRescanArgs(args)) {
+    const moduleScope = stringArrayArg(args.moduleScope);
+    const perDimensionTargets = normalizeNumberRecord(args.perDimensionTargets);
+    const moduleDimensionTargets = normalizeModuleDimensionTargets(args.moduleDimensionTargets);
+    const miningMode = miningModeArg(args.miningMode) ?? miningModeArg(args.generationStage);
+    const roundIndex = positiveIntegerArg(args.roundIndex);
+
+    if (miningMode) {
+      workflowArgs.miningMode = miningMode;
+    }
+    if (moduleScope) {
+      workflowArgs.moduleScope = moduleScope;
+    }
+    if (perDimensionTargets && Object.keys(perDimensionTargets).length > 0) {
+      workflowArgs.perDimensionTargets = perDimensionTargets;
+    }
+    if (moduleDimensionTargets.length > 0) {
+      workflowArgs.moduleDimensionTargets = moduleDimensionTargets;
+    }
+    if (roundIndex !== undefined) {
+      workflowArgs.roundIndex = roundIndex;
+    }
+  }
+
   return workflowArgs;
 }
 
 interface BootstrapPlanGateResult {
   projectContextFacts: ProjectContextWorkflowFacts;
   projection: PlanSelectionProjection;
+  selection: PlanSelection;
 }
 
 export function createDaemonJob(options: DaemonJobOptions): DaemonJobRecord {
@@ -826,6 +882,14 @@ async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unkno
     return { ...asRecord(result), asyncFill: true };
   }
 
+  const generationStage = generationStageArg(options.args?.generationStage);
+  if (generationStage === 'deepMining') {
+    return runDeepMiningRounds(options);
+  }
+  if (generationStage === 'moduleMining') {
+    return runModuleMiningWorkflow(options);
+  }
+
   const { runKnowledgeRescanWorkflow: rescanKnowledge } = await import(
     '../workflows/knowledge-rescan/KnowledgeRescanWorkflow.js'
   );
@@ -840,9 +904,25 @@ async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unkno
 async function runBootstrapPlanGate(
   options: RunDaemonJobOptions
 ): Promise<BootstrapPlanGateResult> {
+  return runPlanSelectionGate(options, {
+    generationStage: 'coldStart',
+    label: 'Bootstrap',
+    source: 'alembic-main-bootstrap',
+  });
+}
+
+async function runPlanSelectionGate(
+  options: RunDaemonJobOptions,
+  gate: {
+    generationStage: PlanStageId;
+    label: string;
+    source: 'alembic-main-bootstrap' | 'alembic-main-rescan';
+  }
+): Promise<BootstrapPlanGateResult> {
   const recorder = getJobProcessEventRecorder(options.container);
   const maxFiles = numberArg(options.args?.maxFiles, 500);
   const contentMaxLines = numberArg(options.args?.contentMaxLines, 120);
+  const eventTitlePrefix = `${gate.label} plan gate`;
 
   try {
     const analysisScope = resolveProjectScopeAnalysisContext(options.container);
@@ -852,34 +932,34 @@ async function runBootstrapPlanGate(
       ctx: { container: options.container, logger: options.logger },
       maxFiles,
       projectRoot: analysisScope.projectRoot,
-      source: 'alembic-main-bootstrap',
+      source: gate.source,
     });
     const { runPlanAgent } = await import('@alembic/agent/service');
     const selection = await runPlanAgent({
       agentService: options.container.get('agentService') as Pick<AgentService, 'run'>,
-      generationStage: 'coldStart',
+      generationStage: gate.generationStage,
       projectContextFacts,
     });
 
-    // coldStart 的 plan gate 是硬前置：shape 合法但 stage 错误的 selection 也不能驱动 coldStart。
-    if (selection.generationStage !== 'coldStart') {
+    // Plan gate is a hard prerequisite: shape-valid but wrong-stage selections cannot drive execution.
+    if (selection.generationStage !== gate.generationStage) {
       throw new Error(
-        `Plan agent returned generationStage=${selection.generationStage} for coldStart.`
+        `Plan agent returned generationStage=${selection.generationStage} for ${gate.generationStage}.`
       );
     }
 
     const projection = applyPlanSelection(selection);
 
     if (projection.executionDimensions.length === 0) {
-      throw new Error('Plan agent returned no executable dimensions for coldStart.');
+      throw new Error(`Plan agent returned no executable dimensions for ${gate.generationStage}.`);
     }
 
-    options.logger.info('Bootstrap plan gate completed', {
+    options.logger.info(`${eventTitlePrefix} completed`, {
       budget: projection.budget,
       executionDimensions: projection.executionDimensions,
       jobId: options.jobId,
       moduleScope: projection.moduleScope,
-      stage: 'bootstrap-plan-gate',
+      stage: `${gate.generationStage}-plan-gate`,
       unknownDimensionIds: projection.unknownDimensionIds ?? [],
     });
     recordJobProcessEvent(recorder, {
@@ -888,45 +968,228 @@ async function runBootstrapPlanGate(
       metadata: {
         budget: projection.budget,
         executionDimensions: projection.executionDimensions,
-        generationStage: 'coldStart',
+        generationStage: gate.generationStage,
         moduleScope: projection.moduleScope,
         source: options.source || 'system',
         unknownDimensionIds: projection.unknownDimensionIds ?? [],
       },
       phase: 'plan-gate',
       severity: 'success',
-      summary: `Plan agent selected ${projection.executionDimensions.length} coldStart dimension(s).`,
-      title: 'Bootstrap plan gate completed',
+      summary: `Plan agent selected ${projection.executionDimensions.length} ${gate.generationStage} dimension(s).`,
+      title: `${eventTitlePrefix} completed`,
     });
 
-    return { projectContextFacts, projection };
+    return { projectContextFacts, projection, selection };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    options.logger.error('Bootstrap plan gate failed; aborting bootstrap job', {
+    options.logger.error(`${eventTitlePrefix} failed; aborting ${gate.generationStage} job`, {
       error: message,
-      generationStage: 'coldStart',
+      generationStage: gate.generationStage,
       jobId: options.jobId,
-      stage: 'bootstrap-plan-gate',
+      stage: `${gate.generationStage}-plan-gate`,
     });
     recordJobProcessEvent(recorder, {
       content: {
         mimeType: 'text/plain',
         role: 'assistant',
-        text: `Bootstrap plan gate failed before coldStart: ${message}`,
+        text: `${eventTitlePrefix} failed before ${gate.generationStage}: ${message}`,
       },
       jobId: options.jobId,
       kind: 'error',
       metadata: {
-        generationStage: 'coldStart',
+        generationStage: gate.generationStage,
         source: options.source || 'system',
       },
       phase: 'plan-gate',
       severity: 'error',
-      summary: `Bootstrap plan gate failed before coldStart: ${message}`,
-      title: 'Bootstrap plan gate failed',
+      summary: `${eventTitlePrefix} failed before ${gate.generationStage}: ${message}`,
+      title: `${eventTitlePrefix} failed`,
     });
-    throw new Error(`Bootstrap plan gate failed: ${message}`);
+    throw new Error(`${eventTitlePrefix} failed: ${message}`);
   }
+}
+
+async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise<unknown> {
+  const planGate = await runPlanSelectionGate(options, {
+    generationStage: 'deepMining',
+    label: 'DeepMining',
+    source: 'alembic-main-rescan',
+  });
+  const coverageLedgerRepository = getOptionalService<EvolutionCoverageLedgerRepository>(
+    options.container,
+    'coverageLedgerRepository'
+  );
+  if (!coverageLedgerRepository) {
+    throw new Error('Coverage ledger repository is required for deepMining.');
+  }
+
+  const { runKnowledgeRescanWorkflow: rescanKnowledge } = await import(
+    '../workflows/knowledge-rescan/KnowledgeRescanWorkflow.js'
+  );
+  const analysisScope = resolveProjectScopeAnalysisContext(options.container);
+  const projectRoot = analysisScope.projectRoot;
+  const moduleDimensionTargets = buildPlanModuleDimensionTargets(planGate.selection);
+  if (moduleDimensionTargets.length === 0) {
+    throw new Error('deepMining requires plan moduleBindings with module×dimension targets.');
+  }
+  ensureCoverageLedgerCells({
+    projectRoot,
+    repository: coverageLedgerRepository,
+    targets: moduleDimensionTargets,
+  });
+
+  const moduleCount = Math.max(
+    1,
+    planGate.projectContextFacts.projectMapModules.length ||
+      planGate.projectContextFacts.moduleCount ||
+      planGate.projection.moduleScope.length ||
+      1
+  );
+  const planK = positiveIntegerArg(options.args?.minNewRecipes);
+  const planMaxRounds = positiveIntegerArg(options.args?.maxRounds);
+  const rounds: Array<Record<string, unknown>> = [];
+
+  let latestRound = latestDeepMiningRound(
+    coverageLedgerRepository.listRoundsByProjectRoot(projectRoot)
+  );
+  let advisor = adviseCoverageLedger({
+    cells: coverageLedgerRepository.listByProjectRoot(projectRoot),
+    latestRound,
+    moduleCount,
+    planK,
+    planMaxRounds,
+  });
+
+  while (!advisor.shouldStop) {
+    const roundIndex = (latestRound?.roundIndex ?? 0) + 1;
+    const rescanId = `${options.jobId}:deepMining:${roundIndex}`;
+    const startedAt = Date.now();
+    coverageLedgerRepository.upsertRound({
+      projectRoot,
+      rescanId,
+      roundIndex,
+      startedAt,
+      triggerActor: 'daemon-job-runner',
+    });
+
+    const raw = await rescanKnowledge(
+      { container: options.container, logger: options.logger },
+      buildDaemonRescanWorkflowArgs({
+        args: {
+          ...options.args,
+          contentMaxLines: planGate.projection.budget.contentMaxLines,
+          dimensions: planGate.projection.executionDimensions,
+          generationStage: 'deepMining',
+          maxFiles: planGate.projection.budget.maxFiles,
+          miningMode: 'deepMining',
+          moduleDimensionTargets,
+          moduleScope: planGate.projection.moduleScope,
+          perDimensionTargets: buildPlanPerDimensionTargets(planGate.selection),
+          reason: `${options.source || 'daemon'}-deepMining-round-${roundIndex}`,
+          roundIndex,
+        },
+        source: options.source,
+      })
+    );
+    const result = unwrapEnvelope(raw);
+    const newRecipesThisRound = extractNewRecipesThisRound(result);
+    latestRound = coverageLedgerRepository.upsertRound({
+      completedAt: Date.now(),
+      newRecipesThisRound,
+      projectRoot,
+      rescanId,
+      roundIndex,
+      startedAt,
+      triggerActor: 'daemon-job-runner',
+    });
+    advisor = adviseCoverageLedger({
+      cells: coverageLedgerRepository.listByProjectRoot(projectRoot),
+      latestRound,
+      moduleCount,
+      planK,
+      planMaxRounds,
+    });
+    rounds.push({
+      newRecipesThisRound,
+      rescanId,
+      roundIndex,
+      stopReasonAfterRound: advisor.stopReason,
+    });
+    recordJobProcessEvent(getJobProcessEventRecorder(options.container), {
+      jobId: options.jobId,
+      kind: 'checkpoint',
+      metadata: {
+        advisor,
+        newRecipesThisRound,
+        rescanId,
+        roundIndex,
+      },
+      phase: 'deep-mining',
+      severity: advisor.shouldStop ? 'success' : 'info',
+      summary: `deepMining round ${roundIndex} produced ${newRecipesThisRound} new recipe(s).`,
+      title: 'DeepMining round completed',
+    });
+  }
+
+  return {
+    asyncFill: false,
+    deepMining: {
+      advisor,
+      moduleCount,
+      rounds,
+      stopReason: advisor.stopReason,
+    },
+    planSelectionProjection: planGate.projection,
+    status: 'complete',
+  };
+}
+
+async function runModuleMiningWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
+  const planGate = await runPlanSelectionGate(options, {
+    generationStage: 'moduleMining',
+    label: 'ModuleMining',
+    source: 'alembic-main-rescan',
+  });
+  const modules = selectModuleMiningModules({
+    facts: planGate.projectContextFacts,
+    projection: planGate.projection,
+    selection: planGate.selection,
+  });
+  if (modules.length === 0) {
+    throw new Error('moduleMining requires at least one ProjectMap module.');
+  }
+
+  const explicitScaleCap = positiveIntegerArg(options.args?.scaleCap);
+  const scaleCap =
+    explicitScaleCap ?? Math.min(modules.length, planGate.projection.budget.totalRecipeBudget);
+  const selectedModules = modules.slice(0, scaleCap);
+  if (selectedModules.length === 0) {
+    throw new Error('moduleMining scaleCap selected zero ProjectMap modules.');
+  }
+
+  const { runModuleMining } = await import('@alembic/agent/service');
+  const result = await runModuleMining({
+    agentService: options.container.get('agentService') as Pick<AgentService, 'run'>,
+    budget: { ...planGate.projection.budget },
+    modules: selectedModules,
+    projectFacts: planGate.projectContextFacts,
+    scaleCap,
+  });
+  const newRecipes = extractNewRecipesThisRound(result);
+  if (newRecipes <= 0) {
+    throw new Error('moduleMining produced zero recipes.');
+  }
+
+  return {
+    ...asRecord(result),
+    asyncFill: false,
+    moduleMining: {
+      moduleCount: selectedModules.length,
+      newRecipes,
+      scaleCap,
+    },
+    planSelectionProjection: planGate.projection,
+  };
 }
 
 function linkBootstrapSessionCompletion(options: {
@@ -1393,6 +1656,19 @@ function numberArg(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
+function positiveIntegerArg(value: unknown): number | undefined {
+  const numericValue =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim().length > 0
+        ? Number(value)
+        : null;
+  if (numericValue === null || !Number.isFinite(numericValue) || numericValue < 1) {
+    return undefined;
+  }
+  return Math.floor(numericValue);
+}
+
 function stringArrayArg(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
@@ -1401,4 +1677,261 @@ function stringArrayArg(value: unknown): string[] | undefined {
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter((item) => item.length > 0);
   return values.length > 0 ? values : undefined;
+}
+
+function generationStageArg(value: unknown): PlanStageId | undefined {
+  return value === 'coldStart' || value === 'deepMining' || value === 'moduleMining'
+    ? value
+    : undefined;
+}
+
+function miningModeArg(value: unknown): DaemonRescanWorkflowArgs['miningMode'] | undefined {
+  return value === 'deepMining' || value === 'moduleMining' || value === 'per-module'
+    ? value
+    : undefined;
+}
+
+function isMiningRescanArgs(args: Record<string, unknown>): boolean {
+  return (
+    generationStageArg(args.generationStage) === 'deepMining' ||
+    generationStageArg(args.generationStage) === 'moduleMining' ||
+    miningModeArg(args.miningMode) !== undefined
+  );
+}
+
+function normalizeNumberRecord(value: unknown): Record<string, number> | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const entries = Object.entries(value)
+    .map(([key, raw]) => [key.trim(), nonNegativeNumber(raw)] as const)
+    .filter(
+      (entry): entry is readonly [string, number] => entry[0].length > 0 && entry[1] !== null
+    );
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function normalizeModuleDimensionTargets(value: unknown): ModuleDimensionTarget[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    if (!isRecord(item)) {
+      return [];
+    }
+    const dimensionId = stringValue(item.dimensionId);
+    const targetRecipes = nonNegativeNumber(item.targetRecipes);
+    if (!dimensionId || targetRecipes === null) {
+      return [];
+    }
+    const target: ModuleDimensionTarget = {
+      dimensionId,
+      targetRecipes,
+    };
+    const moduleId = stringValue(item.moduleId);
+    const moduleName = stringValue(item.moduleName);
+    if (moduleId) {
+      target.moduleId = moduleId;
+    }
+    if (moduleName) {
+      target.moduleName = moduleName;
+    }
+    return [target];
+  });
+}
+
+function nonNegativeNumber(value: unknown): number | null {
+  const numericValue =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim().length > 0
+        ? Number(value)
+        : null;
+  if (numericValue === null || !Number.isFinite(numericValue) || numericValue < 0) {
+    return null;
+  }
+  return Math.floor(numericValue);
+}
+
+function buildPlanPerDimensionTargets(selection: PlanSelection): Record<string, number> {
+  const targets: Record<string, number> = {};
+  for (const binding of selection.moduleBindings) {
+    const targetRecipes = nonNegativeNumber(binding.targetRecipes);
+    if (targetRecipes === null) {
+      continue;
+    }
+    for (const dimensionId of binding.dimensions) {
+      targets[dimensionId] = Math.max(targets[dimensionId] ?? 0, targetRecipes);
+    }
+  }
+  return targets;
+}
+
+function buildPlanModuleDimensionTargets(selection: PlanSelection): ModuleDimensionTarget[] {
+  return selection.moduleBindings.flatMap((binding) => {
+    const targetRecipes = nonNegativeNumber(binding.targetRecipes);
+    if (targetRecipes === null) {
+      return [];
+    }
+    return binding.dimensions.map((dimensionId) => ({
+      dimensionId,
+      moduleId: binding.moduleId || binding.modulePath,
+      moduleName: moduleNameFromBinding(binding),
+      targetRecipes,
+    }));
+  });
+}
+
+function moduleNameFromBinding(binding: PlanModuleBinding): string {
+  return (
+    binding.modulePath.split('/').filter(Boolean).at(-1) || binding.moduleId || binding.modulePath
+  );
+}
+
+function ensureCoverageLedgerCells(input: {
+  projectRoot: string;
+  repository: EvolutionCoverageLedgerRepository;
+  targets: readonly ModuleDimensionTarget[];
+}): void {
+  for (const target of input.targets) {
+    const moduleId = target.moduleId || target.moduleName;
+    if (!moduleId) {
+      continue;
+    }
+    const existing = input.repository.getCell({
+      dimensionId: target.dimensionId,
+      moduleId,
+      projectRoot: input.projectRoot,
+    });
+    if (existing) {
+      continue;
+    }
+    input.repository.upsertCell({
+      coveredCount: 0,
+      dimensionId: target.dimensionId,
+      grade: 'empty',
+      moduleId,
+      projectRoot: input.projectRoot,
+      totalCandidateCount: target.targetRecipes,
+    });
+  }
+}
+
+function latestDeepMiningRound(
+  rounds: readonly DeepMiningRoundRecord[]
+): DeepMiningRoundRecord | null {
+  return [...rounds].sort((left, right) => right.roundIndex - left.roundIndex)[0] ?? null;
+}
+
+function selectModuleMiningModules(input: {
+  facts: ProjectContextWorkflowFacts;
+  projection: PlanSelectionProjection;
+  selection: PlanSelection;
+}): ModuleMiningModule[] {
+  const bindings = input.selection.moduleBindings;
+  const bindingDimensions = new Map<string, Set<string>>();
+  const moduleBindingKeys = new Set<string>();
+  const executionDimensions = new Set(input.projection.executionDimensions);
+
+  for (const binding of bindings) {
+    const keys = moduleBindingCandidateKeys(binding);
+    for (const key of keys) {
+      moduleBindingKeys.add(key);
+      const dimensions = bindingDimensions.get(key) ?? new Set<string>();
+      for (const dimension of binding.dimensions) {
+        if (executionDimensions.has(dimension)) {
+          dimensions.add(dimension);
+        }
+      }
+      bindingDimensions.set(key, dimensions);
+    }
+  }
+
+  const scopedModules = new Set(input.projection.moduleScope);
+  return input.facts.projectMapModules
+    .filter((module) => {
+      const moduleKeys = projectMapModuleCandidateKeys(module);
+      const matchesModuleBinding =
+        moduleBindingKeys.size === 0 || moduleKeys.some((key) => moduleBindingKeys.has(key));
+      const matchesModuleScope =
+        scopedModules.size === 0 || moduleKeys.some((key) => scopedModules.has(key));
+      return matchesModuleBinding && matchesModuleScope;
+    })
+    .map((module): ModuleMiningModule => {
+      const moduleKeys = projectMapModuleCandidateKeys(module);
+      const plannedDimensions = uniqueStrings(
+        moduleKeys.flatMap((key) => [...(bindingDimensions.get(key) ?? [])])
+      );
+      return {
+        dimensions:
+          plannedDimensions.length > 0 ? plannedDimensions : input.projection.executionDimensions,
+        moduleId: module.moduleId,
+        moduleName: module.moduleName,
+        modulePath: module.modulePath,
+        ownedFiles: module.ownedFiles,
+        role: module.role,
+      };
+    })
+    .filter((module) => module.moduleName.trim().length > 0);
+}
+
+function moduleBindingCandidateKeys(binding: PlanModuleBinding): string[] {
+  return uniqueStrings([
+    binding.moduleId ?? '',
+    binding.modulePath,
+    moduleNameFromBinding(binding),
+  ]);
+}
+
+function projectMapModuleCandidateKeys(module: {
+  moduleId: string;
+  moduleName: string;
+  modulePath?: string;
+}): string[] {
+  return uniqueStrings([module.moduleId, module.moduleName, module.modulePath ?? '']);
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function extractNewRecipesThisRound(result: unknown): number {
+  const record = asRecord(result);
+  const numericCandidates = [
+    record.newRecipesThisRound,
+    record.newRecipes,
+    record.created,
+    record.createdCount,
+    asRecord(record.summary).newRecipes,
+    asRecord(record.summary).created,
+    asRecord(record.bootstrapCandidates).created,
+    asRecord(record.moduleMining).newRecipes,
+  ];
+  for (const candidate of numericCandidates) {
+    const value = nonNegativeNumber(candidate);
+    if (value !== null) {
+      return value;
+    }
+  }
+  return countRecipeArrayFields(result);
+}
+
+function countRecipeArrayFields(value: unknown, depth = 0): number {
+  if (depth > 6 || !isRecord(value)) {
+    return 0;
+  }
+  let count = 0;
+  for (const [key, child] of Object.entries(value)) {
+    if (
+      Array.isArray(child) &&
+      (key === 'recipes' || key === 'newRecipes' || key === 'createdRecipes')
+    ) {
+      count += child.length;
+      continue;
+    }
+    if (isRecord(child)) {
+      count += countRecipeArrayFields(child, depth + 1);
+    }
+  }
+  return count;
 }

@@ -257,6 +257,45 @@ describe('buildDaemonRescanWorkflowArgs', () => {
       contentMaxLines: 1_500,
     });
   });
+
+  test('passes mining-only targets while leaving ordinary rescan payloads unchanged', () => {
+    const args = buildDaemonRescanWorkflowArgs({
+      args: {
+        generationStage: 'deepMining',
+        miningMode: 'deepMining',
+        moduleDimensionTargets: [
+          {
+            dimensionId: 'architecture',
+            moduleId: 'core',
+            moduleName: 'Core',
+            targetRecipes: 8,
+          },
+          { dimensionId: 'ignored', targetRecipes: -1 },
+        ],
+        moduleScope: ['src/core', 42, 'src/shared'],
+        perDimensionTargets: { architecture: 8, covered: 0, ignored: -1 },
+        reason: 'deep-mining',
+        roundIndex: 2,
+      },
+      source: 'dashboard',
+    });
+
+    expect(args).toMatchObject({
+      miningMode: 'deepMining',
+      moduleDimensionTargets: [
+        {
+          dimensionId: 'architecture',
+          moduleId: 'core',
+          moduleName: 'Core',
+          targetRecipes: 8,
+        },
+      ],
+      moduleScope: ['src/core', 'src/shared'],
+      perDimensionTargets: { architecture: 8, covered: 0 },
+      reason: 'deep-mining',
+      roundIndex: 2,
+    });
+  });
 });
 
 describe('attachBootstrapProcessEventBridge', () => {

@@ -110,6 +110,7 @@ export interface KnowledgeEntryWire {
         by?: string;
     }>;
     autoApprovable: boolean;
+    stagingDeadline: number | null;
     language: string;
     dimensionId: string;
     category: string;

@@ -1,19 +1,21 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runPlanAgent } from '@alembic/agent/service';
+import { runModuleMining, runPlanAgent } from '@alembic/agent/service';
 import { JobStore } from '@alembic/core/daemon';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { runDaemonJob } from '../../lib/daemon/DaemonJobRunner.js';
 import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
 import { runColdStartWorkflow } from '../../lib/workflows/cold-start/ColdStartWorkflow.js';
+import { runKnowledgeRescanWorkflow } from '../../lib/workflows/knowledge-rescan/KnowledgeRescanWorkflow.js';
 import {
   buildProjectContextWorkflowFacts,
   type ProjectContextWorkflowFacts,
 } from '../../lib/workflows/project-context/ProjectContextWorkflowFacts.js';
 
 vi.mock('@alembic/agent/service', () => ({
+  runModuleMining: vi.fn(),
   runPlanAgent: vi.fn(),
 }));
 
@@ -23,6 +25,10 @@ vi.mock('../../lib/workflows/project-context/ProjectContextWorkflowFacts.js', ()
 
 vi.mock('../../lib/workflows/cold-start/ColdStartWorkflow.js', () => ({
   runColdStartWorkflow: vi.fn(),
+}));
+
+vi.mock('../../lib/workflows/knowledge-rescan/KnowledgeRescanWorkflow.js', () => ({
+  runKnowledgeRescanWorkflow: vi.fn(),
 }));
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
@@ -53,6 +59,14 @@ function makeFacts(): ProjectContextWorkflowFacts {
     isMultiLang: false,
     languageStats: { typescript: 1 },
     moduleCount: 1,
+    projectMapModules: [
+      {
+        moduleId: 'lib-api',
+        moduleName: 'api',
+        modulePath: 'lib/api',
+        ownedFiles: ['lib/api/index.ts'],
+      },
+    ],
     moduleSeeds: [],
     presenterInput: {
       files: [],
@@ -74,10 +88,78 @@ function makeFacts(): ProjectContextWorkflowFacts {
   } as unknown as ProjectContextWorkflowFacts;
 }
 
+function makeProjectMapFacts(count: number): ProjectContextWorkflowFacts {
+  return {
+    ...makeFacts(),
+    moduleCount: count,
+    moduleSeeds: [
+      {
+        moduleName: 'seed-only',
+        modulePath: 'seed/only',
+      },
+    ],
+    projectMapModules: Array.from({ length: count }, (_, index) => ({
+      moduleId: `mod-${index + 1}`,
+      moduleName: `module-${index + 1}`,
+      modulePath: `src/module-${index + 1}`,
+      ownedFiles: [`src/module-${index + 1}/index.ts`],
+    })),
+  };
+}
+
+function makeCoverageLedgerRepository() {
+  const cells = new Map<string, Record<string, unknown>>();
+  const rounds = new Map<number, Record<string, unknown>>();
+  return {
+    getCell: vi.fn((scope: { dimensionId: string; moduleId: string; projectRoot: string }) => {
+      return cells.get(`${scope.projectRoot}:${scope.moduleId}:${scope.dimensionId}`) ?? null;
+    }),
+    listByProjectRoot: vi.fn((projectRoot: string) =>
+      [...cells.values()].filter((cell) => cell.projectRoot === projectRoot)
+    ),
+    listRoundsByProjectRoot: vi.fn((projectRoot: string) =>
+      [...rounds.values()]
+        .filter((round) => round.projectRoot === projectRoot)
+        .sort((left, right) => Number(left.roundIndex) - Number(right.roundIndex))
+    ),
+    upsertCell: vi.fn((input: Record<string, unknown>) => {
+      const key = `${input.projectRoot}:${input.moduleId}:${input.dimensionId}`;
+      const saved = {
+        coveredCount: 0,
+        createdAt: Date.now(),
+        deferred: false,
+        exhausted: false,
+        exhaustedReason: null,
+        exhaustedSource: null,
+        grade: 'empty',
+        totalCandidateCount: 0,
+        uncoveredHints: [],
+        updatedAt: Date.now(),
+        valueScore: 1,
+        ...input,
+      };
+      cells.set(key, saved);
+      return saved;
+    }),
+    upsertRound: vi.fn((input: Record<string, unknown>) => {
+      const saved = {
+        createdAt: Date.now(),
+        newRecipesThisRound: 0,
+        updatedAt: Date.now(),
+        ...rounds.get(Number(input.roundIndex)),
+        ...input,
+      };
+      rounds.set(Number(saved.roundIndex), saved);
+      return saved;
+    }),
+  };
+}
+
 function makeContainer(
   store: JobStore,
   options: {
     agentService?: unknown;
+    coverageLedgerRepository?: unknown;
     dataRoot?: string;
     recorder?: JobProcessEventRecorder;
   } = {}
@@ -99,6 +181,9 @@ function makeContainer(
       if (name === 'agentService') {
         return options.agentService ?? { run: vi.fn() };
       }
+      if (name === 'coverageLedgerRepository') {
+        return options.coverageLedgerRepository;
+      }
       if (name === 'jobDisplaySnapshotStore') {
         return displayStore;
       }
@@ -117,6 +202,11 @@ beforeEach(() => {
   process.env.ALEMBIC_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-plan-gate-home-'));
   vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(makeFacts());
   vi.mocked(runColdStartWorkflow).mockResolvedValue({ data: { ok: true } });
+  vi.mocked(runKnowledgeRescanWorkflow).mockResolvedValue({ data: { ok: true } });
+  vi.mocked(runModuleMining).mockResolvedValue({
+    phases: { moduleResults: { core: { recipes: [{ id: 'r1' }] } } },
+    status: 'success',
+  });
 });
 
 afterEach(() => {
@@ -295,5 +385,223 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
         projectContextFacts,
       })
     );
+  });
+});
+
+describe('DaemonJobRunner deepMining plan gate', () => {
+  test('aborts before rescan when the deepMining plan gate fails', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const container = makeContainer(store, {
+      coverageLedgerRepository: makeCoverageLedgerRepository(),
+    });
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: { generationStage: 'deepMining' },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockRejectedValue(new Error('provider unavailable'));
+
+    await expect(
+      runDaemonJob({
+        args: { generationStage: 'deepMining' },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).rejects.toThrow('DeepMining plan gate failed: provider unavailable');
+
+    expect(runKnowledgeRescanWorkflow).not.toHaveBeenCalled();
+    expect(store.get(job.id)).toMatchObject({
+      status: 'failed',
+      error: { message: 'DeepMining plan gate failed: provider unavailable' },
+    });
+  });
+
+  test('runs deepMining as one daemon job across rounds and passes plan targets to rescan', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const coverageLedgerRepository = makeCoverageLedgerRepository();
+    const container = makeContainer(store, { coverageLedgerRepository });
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: { generationStage: 'deepMining', maxRounds: 3 },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockResolvedValue({
+      dimensions: ['architecture'],
+      generationStage: 'deepMining',
+      moduleBindings: [
+        {
+          dimensions: ['architecture'],
+          moduleId: 'lib-api',
+          modulePath: 'lib/api',
+          priority: 1,
+          targetRecipes: 8,
+        },
+      ],
+      scale: { contentMaxLines: 80, maxFiles: 240, totalRecipeBudget: 8 },
+    });
+    vi.mocked(runKnowledgeRescanWorkflow)
+      .mockResolvedValueOnce({ data: { newRecipesThisRound: 2 } })
+      .mockResolvedValueOnce({ data: { newRecipesThisRound: 0 } });
+
+    await expect(
+      runDaemonJob({
+        args: { generationStage: 'deepMining', maxRounds: 3 },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).resolves.toMatchObject({
+      job: { status: 'completed' },
+      result: {
+        deepMining: {
+          rounds: [
+            expect.objectContaining({ newRecipesThisRound: 2, roundIndex: 1 }),
+            expect.objectContaining({ newRecipesThisRound: 0, roundIndex: 2 }),
+          ],
+          stopReason: 'diminishing-returns',
+        },
+      },
+    });
+
+    expect(runKnowledgeRescanWorkflow).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(runKnowledgeRescanWorkflow).mock.calls[0]?.[1]).toMatchObject({
+      contentMaxLines: 80,
+      dimensions: ['architecture'],
+      maxFiles: 240,
+      miningMode: 'deepMining',
+      moduleDimensionTargets: [
+        {
+          dimensionId: 'architecture',
+          moduleId: 'lib-api',
+          moduleName: 'api',
+          targetRecipes: 8,
+        },
+      ],
+      moduleScope: ['lib/api'],
+      perDimensionTargets: { architecture: 8 },
+      roundIndex: 1,
+    });
+    expect(vi.mocked(runKnowledgeRescanWorkflow).mock.calls[1]?.[1]).toMatchObject({
+      roundIndex: 2,
+    });
+    expect(coverageLedgerRepository.upsertRound).toHaveBeenCalledWith(
+      expect.objectContaining({ roundIndex: 1 })
+    );
+    expect(coverageLedgerRepository.upsertRound).toHaveBeenCalledWith(
+      expect.objectContaining({ newRecipesThisRound: 0, roundIndex: 2 })
+    );
+  });
+});
+
+describe('DaemonJobRunner moduleMining plan gate', () => {
+  test('fans out from ProjectMap modules instead of moduleSeeds and applies scaleCap as module cap', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const facts = makeProjectMapFacts(8);
+    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(facts);
+    const container = makeContainer(store);
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: { generationStage: 'moduleMining' },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockResolvedValue({
+      dimensions: ['architecture'],
+      generationStage: 'moduleMining',
+      moduleBindings: facts.projectMapModules.map((module) => ({
+        dimensions: ['architecture'],
+        moduleId: module.moduleId,
+        modulePath: module.modulePath ?? module.moduleId,
+        priority: 1,
+        targetRecipes: 2,
+      })),
+      scale: { contentMaxLines: 120, maxFiles: 500, totalRecipeBudget: 3 },
+    });
+    vi.mocked(runModuleMining).mockResolvedValue({
+      phases: {
+        moduleResults: {
+          'mod-1': { recipes: [{ id: 'r1' }] },
+          'mod-2': { recipes: [{ id: 'r2' }] },
+          'mod-3': { recipes: [{ id: 'r3' }] },
+        },
+      },
+      status: 'success',
+    });
+
+    await expect(
+      runDaemonJob({
+        args: { generationStage: 'moduleMining' },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).resolves.toMatchObject({
+      job: { status: 'completed' },
+      result: {
+        moduleMining: {
+          moduleCount: 3,
+          newRecipes: 3,
+          scaleCap: 3,
+        },
+      },
+    });
+
+    expect(runModuleMining).toHaveBeenCalledWith(
+      expect.objectContaining({
+        budget: { contentMaxLines: 120, maxFiles: 500, totalRecipeBudget: 3 },
+        modules: [
+          expect.objectContaining({ moduleName: 'module-1' }),
+          expect.objectContaining({ moduleName: 'module-2' }),
+          expect.objectContaining({ moduleName: 'module-3' }),
+        ],
+        scaleCap: 3,
+      })
+    );
+    expect(JSON.stringify(vi.mocked(runModuleMining).mock.calls[0]?.[0].modules)).not.toContain(
+      'seed-only'
+    );
+  });
+
+  test('fails moduleMining when ProjectMap modules are empty', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(makeProjectMapFacts(0));
+    const container = makeContainer(store);
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: { generationStage: 'moduleMining' },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockResolvedValue({
+      dimensions: ['architecture'],
+      generationStage: 'moduleMining',
+      moduleBindings: [],
+      scale: { totalRecipeBudget: 3 },
+    });
+
+    await expect(
+      runDaemonJob({
+        args: { generationStage: 'moduleMining' },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).rejects.toThrow('moduleMining requires at least one ProjectMap module.');
+    expect(runModuleMining).not.toHaveBeenCalled();
   });
 });

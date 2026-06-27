@@ -15,7 +15,7 @@
  *   7. 前端通过 Socket.io 接收维度完成进度
  */
 
-import { type AgentService, runEvolutionAudit } from '@alembic/agent/service';
+import { type AgentService, runEvolutionAudit, runModuleMining } from '@alembic/agent/service';
 import {
   type EvolutionAuditRecipe as CoreEvolutionAuditRecipe,
   type EvolutionCandidatePlan,
@@ -64,6 +64,7 @@ import {
   buildProjectContextWorkflowFacts,
   createProjectContextWorkflowSession,
   openOrReturnProjectContextWorkflowSession,
+  type ProjectContextWorkflowFacts,
   presentProjectContextRescanResponse,
   saveProjectContextFileSnapshot,
 } from '../project-context/ProjectContextWorkflowFacts.js';
@@ -168,6 +169,7 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
   const { dataRoot, projectRoot } = analysisScope;
   const db = ctx.container.get('database');
   const intent = createKnowledgeRescanIntent(args);
+  const miningMode = knowledgeRescanMiningModeArg(args.miningMode);
   const plan = buildKnowledgeRescanWorkflowPlan({ intent, projectRoot, dataRoot });
   ctx.logger.info(
     '[KnowledgeRescanWorkflow] ProjectScope analysis context resolved',
@@ -418,6 +420,13 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
       countImpactImmediateDeprecations(impactSubmissionResult) +
       (evolutionAuditResult?.deprecated ?? 0),
   };
+  const miningPlanOptions = buildKnowledgeRescanMiningPlanOptions({
+    args,
+    ctx,
+    miningMode,
+    projectContextFacts,
+    projectRoot,
+  });
 
   ctx.logger.info('[KnowledgeRescanWorkflow] Relevance audit complete', {
     total: auditSummary.totalAudited,
@@ -436,6 +445,7 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
       'rescan'
     ) as DimensionDef[],
     requestedDimensionIds: intent.dimensionIds,
+    ...miningPlanOptions.planOptions,
     fileDiff: _incrementalPlan?.diff
       ? {
           affectedDimensionIds: _incrementalPlan.affectedDimensions,
@@ -589,20 +599,48 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
   // ═══════════════════════════════════════════════════════════
 
   // 任务定义由统一 Rescan plan 决定：coverage gap、recipe decay、file diff 都可触发。
+  const perModuleMining = miningMode === 'moduleMining' || miningMode === 'per-module';
+  let moduleMiningResult: Record<string, unknown> | null = null;
   const bootstrapSession = controllerProduceSessionRequest.enabled
     ? null
-    : startAiDimensionSession({
-        container: ctx.container,
-        dimensions: executionDimensions,
-        logger: ctx.logger,
-        logPrefix: 'KnowledgeRescanWorkflow',
-      }).bootstrapSession;
+    : perModuleMining
+      ? null
+      : startAiDimensionSession({
+          container: ctx.container,
+          dimensions: executionDimensions,
+          logger: ctx.logger,
+          logPrefix: 'KnowledgeRescanWorkflow',
+        }).bootstrapSession;
 
   // ═══════════════════════════════════════════════════════════
   // Step 7: 异步后台填充 gap 维度
   // ═══════════════════════════════════════════════════════════
 
   if (
+    perModuleMining &&
+    !controllerProduceSessionRequest.enabled &&
+    !intent.internalExecution?.skipAsyncFill
+  ) {
+    const modules = selectKnowledgeRescanModuleMiningModules(
+      projectContextFacts,
+      miningPlanOptions.moduleScope
+    );
+    if (modules.length === 0) {
+      throw new Error('KnowledgeRescanWorkflow moduleMining requires ProjectMap modules.');
+    }
+    const scaleCap = positiveInteger(args.scaleCap) ?? modules.length;
+    const result = await runModuleMining({
+      agentService: ctx.container.get('agentService') as Pick<AgentService, 'run'>,
+      budget: {
+        contentMaxLines: intent.projectAnalysis.contentMaxLines,
+        maxFiles: intent.projectAnalysis.maxFiles,
+      },
+      modules: modules.slice(0, scaleCap),
+      projectFacts: projectContextFacts,
+      scaleCap,
+    });
+    moduleMiningResult = result as unknown as Record<string, unknown>;
+  } else if (
     !controllerProduceSessionRequest.enabled &&
     executionDimensions.length > 0 &&
     !intent.internalExecution?.skipAsyncFill
@@ -690,9 +728,206 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
     produceSession: produceSession as unknown as Record<string, unknown>,
     sessionId,
     evolutionAudit: evolutionAuditResult as unknown as Record<string, unknown> | null,
+    miningMode,
+    moduleMining: moduleMiningResult,
     reason: intent.reason,
     responseTimeMs: Date.now() - t0,
   });
+}
+
+type KnowledgeRescanMiningMode = 'deepMining' | 'moduleMining' | 'per-module';
+
+interface ModuleDimensionTarget {
+  dimensionId: string;
+  moduleId?: string;
+  moduleName?: string;
+  targetRecipes: number;
+}
+
+interface CoverageLedgerRepositoryLike {
+  getCell(scope: { dimensionId: string; moduleId: string; projectRoot: string }): {
+    coveredCount: number;
+  } | null;
+  listByProjectRoot(projectRoot: string): Array<{
+    coveredCount: number;
+    dimensionId: string;
+  }>;
+}
+
+function buildKnowledgeRescanMiningPlanOptions(input: {
+  args: KnowledgeRescanArgs;
+  ctx: RescanMcpContext;
+  miningMode?: KnowledgeRescanMiningMode;
+  projectContextFacts: ProjectContextWorkflowFacts;
+  projectRoot: string;
+}) {
+  const moduleScope = normalizeStringArray(input.args.moduleScope);
+  if (!input.miningMode) {
+    return { moduleScope, planOptions: {} };
+  }
+
+  const coverageLedgerRepository = getCoverageLedgerRepository(input.ctx.container);
+  const moduleDimensionTargets = normalizeModuleDimensionTargets(input.args.moduleDimensionTargets);
+  const moduleBindings = moduleDimensionTargets.map((target) => {
+    const moduleId = target.moduleId || target.moduleName;
+    const cell =
+      moduleId && coverageLedgerRepository
+        ? coverageLedgerRepository.getCell({
+            dimensionId: target.dimensionId,
+            moduleId,
+            projectRoot: input.projectRoot,
+          })
+        : null;
+    return {
+      dimensionId: target.dimensionId,
+      moduleId,
+      moduleName: target.moduleName,
+      perCellCoverage: cell?.coveredCount ?? 0,
+      targetRecipes: target.targetRecipes,
+    };
+  });
+
+  return {
+    moduleScope,
+    planOptions: {
+      ledgerCoverageByDimension: coverageLedgerRepository
+        ? buildLedgerCoverageByDimension(coverageLedgerRepository, input.projectRoot)
+        : undefined,
+      moduleBindings: moduleBindings.length > 0 ? moduleBindings : undefined,
+      moduleCount:
+        input.projectContextFacts.projectMapModules.length || input.projectContextFacts.moduleCount,
+      perDimensionTargets: normalizeNumberRecord(input.args.perDimensionTargets),
+    },
+  };
+}
+
+function buildLedgerCoverageByDimension(
+  repository: CoverageLedgerRepositoryLike,
+  projectRoot: string
+): Record<string, number> {
+  const coverage: Record<string, number> = {};
+  for (const cell of repository.listByProjectRoot(projectRoot)) {
+    coverage[cell.dimensionId] = (coverage[cell.dimensionId] ?? 0) + cell.coveredCount;
+  }
+  return coverage;
+}
+
+function selectKnowledgeRescanModuleMiningModules(
+  facts: ProjectContextWorkflowFacts,
+  moduleScope: readonly string[]
+) {
+  const scoped = new Set(moduleScope);
+  return facts.projectMapModules
+    .filter((module) => {
+      if (scoped.size === 0) {
+        return true;
+      }
+      return [module.moduleId, module.moduleName, module.modulePath ?? ''].some((key) =>
+        scoped.has(key)
+      );
+    })
+    .map((module) => ({
+      moduleId: module.moduleId,
+      moduleName: module.moduleName,
+      modulePath: module.modulePath,
+      ownedFiles: module.ownedFiles,
+      role: module.role,
+    }));
+}
+
+function getCoverageLedgerRepository(container: {
+  get(name: string): unknown;
+}): CoverageLedgerRepositoryLike | null {
+  try {
+    const repository = container.get('coverageLedgerRepository');
+    if (
+      repository &&
+      typeof (repository as CoverageLedgerRepositoryLike).getCell === 'function' &&
+      typeof (repository as CoverageLedgerRepositoryLike).listByProjectRoot === 'function'
+    ) {
+      return repository as CoverageLedgerRepositoryLike;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function knowledgeRescanMiningModeArg(value: unknown): KnowledgeRescanMiningMode | undefined {
+  return value === 'deepMining' || value === 'moduleMining' || value === 'per-module'
+    ? value
+    : undefined;
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter((item) => item.length > 0);
+}
+
+function normalizeNumberRecord(value: unknown): Record<string, number> | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const entries = Object.entries(value)
+    .map(([key, raw]) => [key.trim(), nonNegativeInteger(raw)] as const)
+    .filter(
+      (entry): entry is readonly [string, number] => entry[0].length > 0 && entry[1] !== null
+    );
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function normalizeModuleDimensionTargets(value: unknown): ModuleDimensionTarget[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    if (!isRecord(item)) {
+      return [];
+    }
+    const dimensionId = stringValue(item.dimensionId);
+    const targetRecipes = nonNegativeInteger(item.targetRecipes);
+    if (!dimensionId || targetRecipes === null) {
+      return [];
+    }
+    return [
+      {
+        dimensionId,
+        moduleId: stringValue(item.moduleId),
+        moduleName: stringValue(item.moduleName),
+        targetRecipes,
+      },
+    ];
+  });
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  const normalized = nonNegativeInteger(value);
+  return normalized !== null && normalized > 0 ? normalized : undefined;
+}
+
+function nonNegativeInteger(value: unknown): number | null {
+  const numericValue =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim().length > 0
+        ? Number(value)
+        : null;
+  if (numericValue === null || !Number.isFinite(numericValue) || numericValue < 0) {
+    return null;
+  }
+  return Math.floor(numericValue);
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
 function createCleanupService(ctx: {

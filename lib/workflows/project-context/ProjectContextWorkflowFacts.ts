@@ -58,6 +58,7 @@ export interface ProjectContextWorkflowFacts {
   isMultiLang: boolean;
   languageStats: Record<string, number>;
   moduleCount: number;
+  projectMapModules: ProjectContextModule[];
   moduleSeeds: ProjectContextModuleSeed[];
   presenterInput: ProjectContextPresenterInput;
   primaryLang: string;
@@ -106,6 +107,17 @@ interface ProjectContextModuleSeed {
   kind?: string;
   moduleName: string;
   modulePath?: string;
+  ownedFiles?: string[];
+  ref?: ProjectContextRef;
+  role?: string;
+}
+
+export interface ProjectContextModule {
+  kind?: string;
+  moduleId: string;
+  moduleName: string;
+  modulePath?: string;
+  ownedFileCount?: number;
   ownedFiles?: string[];
   ref?: ProjectContextRef;
   role?: string;
@@ -218,6 +230,7 @@ export async function buildProjectContextWorkflowFacts(
   const allFiles = buildWorkflowFiles(presenterInput);
   const allTargets = buildWorkflowTargets(presenterInput);
   const filesByTarget = buildProjectContextTargetFileMap(allFiles);
+  const projectMapModules = buildProjectMapModules(presenterInput.map);
   const incrementalPlan =
     input.source === 'alembic-main-rescan'
       ? buildProjectContextFileDiffPlan({
@@ -227,7 +240,7 @@ export async function buildProjectContextWorkflowFacts(
           projectRoot: input.projectRoot,
         })
       : null;
-  const moduleCount = presenterInput.modules.length || presenterInput.map?.modules.length || 0;
+  const moduleCount = projectMapModules.length || presenterInput.modules.length || 0;
   const warnings = [
     ...presenterInput.warnings.map((warning) => `${warning.queryLevel}:${warning.message}`),
     ...presenterInput.unavailable.map(
@@ -255,6 +268,7 @@ export async function buildProjectContextWorkflowFacts(
     isMultiLang: secondaryLanguages.length > 0,
     languageStats: buildLanguageStats(presenterInput),
     moduleCount,
+    projectMapModules,
     moduleSeeds,
     presenterInput,
     primaryLang,
@@ -411,6 +425,8 @@ export function presentProjectContextRescanResponse(input: {
     executionDecisions?: KnowledgeRescanExecutionDecision[];
     coverageByDimension?: Record<string, number>;
   };
+  miningMode?: 'deepMining' | 'moduleMining' | 'per-module' | null;
+  moduleMining?: Record<string, unknown> | null;
   reason?: string | null;
   recipeSnapshot: { count: number };
   responseTimeMs: number;
@@ -439,6 +455,8 @@ export function presentProjectContextRescanResponse(input: {
         totalDimensions: input.gapPlan.requestedDimensions.length,
       },
       languageStats: input.facts.languageStats,
+      miningMode: input.miningMode ?? null,
+      moduleMining: input.moduleMining ?? null,
       primaryLanguage: input.facts.primaryLang,
       projectContext: input.facts.projectContextSummary,
       produceSession,
@@ -678,6 +696,27 @@ function buildWorkflowTargets(input: ProjectContextPresenterInput): Array<Record
     name: module.module.name,
     type: module.module.kind ?? 'module',
   }));
+}
+
+function buildProjectMapModules(map: ProjectMap | undefined): ProjectContextModule[] {
+  return (map?.modules ?? [])
+    .map((module) => {
+      const modulePath = normalizeModulePath(module.ref?.scope.filePath);
+      const moduleEntry: ProjectContextModule = {
+        kind: module.kind,
+        moduleId: module.id,
+        moduleName: module.name,
+        ownedFileCount: module.ownedFileCount,
+        ref: module.ref,
+        role: module.role,
+      };
+      if (modulePath) {
+        moduleEntry.modulePath = modulePath;
+        moduleEntry.ownedFiles = [modulePath];
+      }
+      return moduleEntry;
+    })
+    .filter((module) => module.moduleId.length > 0 && module.moduleName.length > 0);
 }
 
 function buildProjectContextTargetFileMap(

@@ -49,6 +49,7 @@ import type { MemoryRepositoryImpl } from '@alembic/core/memory';
 // ── Repository Types ──
 import type {
   BootstrapRepository,
+  EvolutionCoverageLedgerRepository,
   EvolutionProposalRepository,
   EvolutionWarningRepository,
   GuardViolationRepository,
@@ -108,6 +109,7 @@ export interface ServiceMap {
   sessionRepository: SessionRepository;
   proposalRepository: EvolutionProposalRepository;
   warningRepository: EvolutionWarningRepository;
+  coverageLedgerRepository: EvolutionCoverageLedgerRepository;
   recipeSourceRefRepository: SourceRefRepository;
   knowledgeFileWriter: KnowledgeFileWriter;
   knowledgeSyncService: KnowledgeSyncService;

@@ -66,4 +66,17 @@ describe('ProjectContextWorkflowFacts', () => {
     expect(combined).not.toContain('ProjectSnapshot');
     expect(combined).not.toContain('@alembic/core/workflows/capabilities/project-intelligence');
   });
+
+  test('keeps the moduleSeeds detail loop separate from ProjectMap module fan-out facts', async () => {
+    const source = await readFile(
+      join(process.cwd(), 'lib/workflows/project-context/ProjectContextWorkflowFacts.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain('for (const seed of moduleSeeds.slice(0, maxModuleDetails)) {');
+    expect(source).toContain(
+      'const projectMapModules = buildProjectMapModules(presenterInput.map);'
+    );
+    expect(source).toContain('projectMapModules,');
+  });
 });
