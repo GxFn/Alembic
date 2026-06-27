@@ -9,7 +9,7 @@ process.env.ALEMBIC_API_SERVER = '1';
 
 import { timerRegistry } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
-import Bootstrap from '../lib/Bootstrap.js';
+import AppRuntime from '../lib/Bootstrap.js';
 import HttpServer from '../lib/http/HttpServer.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
 import { shutdown } from '../lib/shared/shutdown.js';
@@ -53,11 +53,11 @@ async function main() {
       process.chdir(projectRoot);
     }
 
-    Bootstrap.configurePathGuard(projectRoot);
+    AppRuntime.configurePathGuard(projectRoot);
 
     // 初始化应用程序引导
-    const bootstrap = new Bootstrap({ env: process.env.NODE_ENV || 'development' });
-    const components = await bootstrap.initialize();
+    const appRuntime = new AppRuntime({ env: process.env.NODE_ENV || 'development' });
+    const components = await appRuntime.initialize();
     logger.info('Bootstrap initialized successfully');
 
     // 初始化 DI 容器，注入 Bootstrap 组件
@@ -86,9 +86,9 @@ async function main() {
     });
 
     // 注册 shutdown hooks（LIFO 顺序：先注册的后执行）
-    // 1. bootstrap.shutdown() — 关闭 DB（含 WAL checkpoint）
+    // 1. appRuntime.shutdown() — 关闭 DB（含 WAL checkpoint）
     shutdown.register(async () => {
-      await bootstrap.shutdown();
+      await appRuntime.shutdown();
     }, 'bootstrap');
     // 2. HTTP server — 停止接受新连接并等待进行中请求完成
     shutdown.register(async () => {

@@ -545,12 +545,12 @@ export class SetupService {
 
   async stepDatabase() {
     const ConfigLoader = (await import('../infrastructure/config/AppConfigLoader.js')).default;
-    const Bootstrap = (await import('../Bootstrap.js')).default;
+    const AppRuntime = (await import('../Bootstrap.js')).default;
 
     const previousCwd = process.cwd();
     const previousProjectDir = process.env.ALEMBIC_PROJECT_DIR;
     const previousQuiet = process.env.ALEMBIC_QUIET;
-    let bootstrap: InstanceType<typeof Bootstrap> | null = null;
+    let appRuntime: InstanceType<typeof AppRuntime> | null = null;
 
     try {
       process.env.ALEMBIC_PROJECT_DIR = this.projectRoot;
@@ -561,16 +561,16 @@ export class SetupService {
         process.chdir(this.projectRoot);
       }
 
-      Bootstrap.configurePathGuard(this.projectRoot, this.resolver?.knowledgeBaseDir);
+      AppRuntime.configurePathGuard(this.projectRoot, this.resolver?.knowledgeBaseDir);
 
       const env = process.env.NODE_ENV || 'development';
       ConfigLoader.load(env);
       ConfigLoader.set('database.path', '.asd/alembic.db');
 
-      bootstrap = new Bootstrap({ env });
-      await bootstrap.initialize();
+      appRuntime = new AppRuntime({ env });
+      await appRuntime.initialize();
 
-      const db = bootstrap.components?.db?.getDb?.();
+      const db = appRuntime.components?.db?.getDb?.();
       if (db) {
         // 从子仓库文件同步核心数据到 DB 缓存（统一 Recipe 模型）
         await this._syncRecipesToDB(db);
@@ -578,8 +578,8 @@ export class SetupService {
 
       return { dbPath: this.dbPath };
     } finally {
-      if (bootstrap) {
-        await bootstrap.shutdown();
+      if (appRuntime) {
+        await appRuntime.shutdown();
       }
       ConfigLoader.config = null; // 重置静态状态
       if (previousProjectDir === undefined) {

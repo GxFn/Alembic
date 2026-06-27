@@ -2092,14 +2092,14 @@ program
 // 辅助函数
 // ─────────────────────────────────────────────────────
 async function initBootstrap() {
-  const { default: Bootstrap } = await import('../lib/Bootstrap.js');
-  const bootstrap = new Bootstrap();
-  await bootstrap.initialize();
-  return bootstrap;
+  const { default: AppRuntime } = await import('../lib/Bootstrap.js');
+  const appRuntime = new AppRuntime();
+  await appRuntime.initialize();
+  return appRuntime;
 }
 
 /**
- * Bootstrap → ServiceContainer 统一初始化
+ * AppRuntime → ServiceContainer 统一初始化
  * 所有需要服务层的 CLI 命令共用此入口，保证依赖注入一致性
  * @param [opts.projectRoot] 项目根目录（默认 cwd）
  * @returns >}
@@ -2113,23 +2113,23 @@ async function initContainer(opts: any = {}) {
   }
 
   // 配置路径安全守卫 — 阻止写操作逃逸到项目外
-  const { default: Bootstrap } = await import('../lib/Bootstrap.js');
-  (Bootstrap as any).configurePathGuard(projectRoot);
+  const { default: AppRuntime } = await import('../lib/Bootstrap.js');
+  AppRuntime.configurePathGuard(projectRoot);
 
-  const bootstrap = await initBootstrap();
+  const appRuntime = await initBootstrap();
   const { getServiceContainer } = await import('../lib/injection/ServiceContainer.js');
   const container = getServiceContainer();
   await container.initialize({
-    db: bootstrap.components.db,
-    auditLogger: bootstrap.components.auditLogger,
-    gateway: bootstrap.components.gateway,
-    constitution: bootstrap.components.constitution,
-    config: bootstrap.components.config,
-    skillHooks: bootstrap.components.skillHooks,
+    db: appRuntime.components.db,
+    auditLogger: appRuntime.components.auditLogger,
+    gateway: appRuntime.components.gateway,
+    constitution: appRuntime.components.constitution,
+    config: appRuntime.components.config,
+    skillHooks: appRuntime.components.skillHooks,
     projectRoot,
-    workspaceResolver: bootstrap.components.workspaceResolver,
+    workspaceResolver: appRuntime.components.workspaceResolver,
   });
-  return { bootstrap, container };
+  return { bootstrap: appRuntime, container };
 }
 
 interface AiConfigureOptions {

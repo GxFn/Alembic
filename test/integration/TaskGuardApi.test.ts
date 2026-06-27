@@ -6,7 +6,7 @@
  *   ✓ 错误处理
  */
 
-import Bootstrap from '../../lib/Bootstrap.js';
+import AppRuntime from '../../lib/Bootstrap.js';
 import { HttpServer } from '../../lib/http/HttpServer.js';
 import { getServiceContainer } from '../../lib/injection/ServiceContainer.js';
 import { getTestPort } from '../fixtures/factory.js';
@@ -24,12 +24,12 @@ async function post(path, body) {
 }
 
 describe('Integration: Guard HTTP API', () => {
-  let bootstrap;
+  let appRuntime;
   let httpServer;
 
   beforeAll(async () => {
-    bootstrap = new Bootstrap({ env: 'test' });
-    const components = await bootstrap.initialize();
+    appRuntime = new AppRuntime({ env: 'test' });
+    const components = await appRuntime.initialize();
 
     const container = getServiceContainer();
     await container.initialize(components);
@@ -48,8 +48,8 @@ describe('Integration: Guard HTTP API', () => {
     if (httpServer) {
       await httpServer.stop();
     }
-    if (bootstrap) {
-      await bootstrap.shutdown();
+    if (appRuntime) {
+      await appRuntime.shutdown();
     }
   });
 

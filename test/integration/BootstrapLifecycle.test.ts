@@ -64,16 +64,16 @@ describe('Integration: Bootstrap Lifecycle', () => {
 
   describe('Multiple lifecycle cycles', () => {
     test('should support sequential init/shutdown', async () => {
-      const { Bootstrap } = await import('../../lib/Bootstrap.js');
+      const { AppRuntime } = await import('../../lib/Bootstrap.js');
 
       // 第一个实例
-      const b1 = new Bootstrap({ env: 'test' });
+      const b1 = new AppRuntime({ env: 'test' });
       const c1 = await b1.initialize();
       expect(c1.gateway).toBeDefined();
       await b1.shutdown();
 
       // 第二个实例
-      const b2 = new Bootstrap({ env: 'test' });
+      const b2 = new AppRuntime({ env: 'test' });
       const c2 = await b2.initialize();
       expect(c2.gateway).toBeDefined();
       await b2.shutdown();
@@ -81,18 +81,28 @@ describe('Integration: Bootstrap Lifecycle', () => {
   });
 
   describe('PathGuard configuration', () => {
+    test('should expose AppRuntime while keeping the Bootstrap compatibility alias', async () => {
+      const {
+        default: DefaultAppRuntime,
+        AppRuntime,
+        Bootstrap,
+      } = await import('../../lib/Bootstrap.js');
+      expect(DefaultAppRuntime).toBe(AppRuntime);
+      expect(Bootstrap).toBe(AppRuntime);
+    });
+
     test('should configure PathGuard with project root', async () => {
-      const { Bootstrap } = await import('../../lib/Bootstrap.js');
+      const { AppRuntime } = await import('../../lib/Bootstrap.js');
       // Static method should not throw
       expect(() => {
-        Bootstrap.configurePathGuard('/tmp/test-project');
+        AppRuntime.configurePathGuard('/tmp/test-project');
       }).not.toThrow();
     });
 
     test('should accept knowledge base dir', async () => {
-      const { Bootstrap } = await import('../../lib/Bootstrap.js');
+      const { AppRuntime } = await import('../../lib/Bootstrap.js');
       expect(() => {
-        Bootstrap.configurePathGuard('/tmp/test-project', 'Alembic');
+        AppRuntime.configurePathGuard('/tmp/test-project', 'Alembic');
       }).not.toThrow();
     });
   });

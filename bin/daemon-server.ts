@@ -15,7 +15,7 @@ import {
 } from '@alembic/core/daemon';
 import { timerRegistry } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
-import Bootstrap from '../lib/Bootstrap.js';
+import AppRuntime from '../lib/Bootstrap.js';
 import { markInterruptedDaemonJobs } from '../lib/daemon/DaemonJobRunner.js';
 import { createDisabledFileMonitorStatus } from '../lib/daemon/FileMonitorStatus.js';
 import HttpServer from '../lib/http/HttpServer.js';
@@ -33,7 +33,7 @@ import { shutdown } from '../lib/shared/shutdown.js';
 
 shutdown.install();
 
-type WorkspaceResolver = Awaited<ReturnType<Bootstrap['initialize']>>['workspaceResolver'];
+type WorkspaceResolver = Awaited<ReturnType<AppRuntime['initialize']>>['workspaceResolver'];
 
 process.on('uncaughtException', (error) => {
   const logger = Logger.getInstance();
@@ -68,10 +68,10 @@ async function main() {
     process.chdir(projectRoot);
   }
 
-  Bootstrap.configurePathGuard(projectRoot);
+  AppRuntime.configurePathGuard(projectRoot);
 
-  const bootstrap = new Bootstrap({ env: process.env.NODE_ENV || 'development' });
-  const components = await bootstrap.initialize();
+  const appRuntime = new AppRuntime({ env: process.env.NODE_ENV || 'development' });
+  const components = await appRuntime.initialize();
   const container = getServiceContainer();
   await container.initialize({
     db: components.db,
@@ -152,7 +152,7 @@ async function main() {
     rmSync(paths.pidPath, { force: true });
   }, 'daemon-state');
   shutdown.register(async () => {
-    await bootstrap.shutdown();
+    await appRuntime.shutdown();
   }, 'bootstrap');
   shutdown.register(async () => {
     await httpServer.stop();

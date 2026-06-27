@@ -27,10 +27,10 @@ const _PROJECT_ROOT = path.resolve(__dirname, '../..');
  */
 export async function createTestBootstrap() {
   // 动态 import 避免顶层加载问题
-  const { Bootstrap } = await import('../../lib/Bootstrap.js');
-  const bootstrap = new Bootstrap({ env: 'test' });
-  const components = await bootstrap.initialize();
-  return { bootstrap, components };
+  const { AppRuntime } = await import('../../lib/Bootstrap.js');
+  const appRuntime = new AppRuntime({ env: 'test' });
+  const components = await appRuntime.initialize();
+  return { bootstrap: appRuntime, components };
 }
 
 // ═══════════════════════════════════════════════════════

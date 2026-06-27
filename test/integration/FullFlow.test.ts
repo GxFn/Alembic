@@ -1,16 +1,16 @@
-import Bootstrap from '../../lib/Bootstrap.js';
+import AppRuntime from '../../lib/Bootstrap.js';
 
 describe('Integration: Complete Gateway Flow', () => {
-  let bootstrap;
+  let appRuntime;
   let components;
 
   beforeAll(async () => {
-    bootstrap = new Bootstrap({ env: 'test' });
-    components = await bootstrap.initialize();
+    appRuntime = new AppRuntime({ env: 'test' });
+    components = await appRuntime.initialize();
   });
 
   afterAll(async () => {
-    await bootstrap.shutdown();
+    await appRuntime.shutdown();
   });
 
   describe('Full request flow', () => {

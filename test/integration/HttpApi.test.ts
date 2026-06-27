@@ -16,7 +16,7 @@
  *   ✓ 请求来源 header 兼容（x-user-id header）
  */
 
-import Bootstrap from '../../lib/Bootstrap.js';
+import AppRuntime from '../../lib/Bootstrap.js';
 import { HttpServer } from '../../lib/http/HttpServer.js';
 import { getServiceContainer } from '../../lib/injection/ServiceContainer.js';
 import { getTestPort } from '../fixtures/factory.js';
@@ -25,13 +25,13 @@ const PORT = getTestPort();
 const BASE = `http://localhost:${PORT}/api/v1`;
 
 describe('Integration: HTTP API Endpoints', () => {
-  let bootstrap;
+  let appRuntime;
   let httpServer;
 
   beforeAll(async () => {
     // 1. 初始化 Bootstrap（DB + Gateway + audit 等）
-    bootstrap = new Bootstrap({ env: 'test' });
-    const components = await bootstrap.initialize();
+    appRuntime = new AppRuntime({ env: 'test' });
+    const components = await appRuntime.initialize();
 
     // 2. 初始化 ServiceContainer（注入 bootstrap 组件）
     const container = getServiceContainer();
@@ -52,8 +52,8 @@ describe('Integration: HTTP API Endpoints', () => {
     if (httpServer) {
       await httpServer.stop();
     }
-    if (bootstrap) {
-      await bootstrap.shutdown();
+    if (appRuntime) {
+      await appRuntime.shutdown();
     }
   });
 

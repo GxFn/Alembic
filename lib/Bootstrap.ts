@@ -12,17 +12,17 @@ import { resolveAlembicWorkspace } from './project-scope/ProjectScopeRegistry.js
 import { SkillHooks } from './service/skills/SkillHooks.js';
 import { PACKAGE_ROOT } from './shared/package-assets.js';
 
-/** Bootstrap - 应用程序启动器 */
-/** Bootstrap 初始化选项 */
-interface BootstrapOptions {
+/** AppRuntime - 应用程序启动器 */
+/** AppRuntime 初始化选项 */
+interface AppRuntimeOptions {
   configPath?: string;
   dbPath?: string;
   logLevel?: string;
   [key: string]: unknown;
 }
 
-/** Bootstrap 管理的组件集合 */
-interface BootstrapComponents {
+/** AppRuntime 管理的组件集合 */
+interface AppRuntimeComponents {
   config?: typeof ConfigLoader;
   logger?: ReturnType<typeof Logger.getInstance>;
   db?: InstanceType<typeof DatabaseConnection>;
@@ -34,22 +34,22 @@ interface BootstrapComponents {
   [key: string]: unknown;
 }
 
-export class Bootstrap {
-  components: BootstrapComponents;
-  options: BootstrapOptions;
-  constructor(options: BootstrapOptions = {}) {
+export class AppRuntime {
+  components: AppRuntimeComponents;
+  options: AppRuntimeOptions;
+  constructor(options: AppRuntimeOptions = {}) {
     this.options = options;
     this.components = {};
   }
 
-  #requireComponent<K extends keyof BootstrapComponents>(
+  #requireComponent<K extends keyof AppRuntimeComponents>(
     name: K
-  ): NonNullable<BootstrapComponents[K]> {
+  ): NonNullable<AppRuntimeComponents[K]> {
     const component = this.components[name];
     if (component == null) {
       throw new Error(`[Bootstrap] Component not initialized: ${String(name)}`);
     }
-    return component as NonNullable<BootstrapComponents[K]>;
+    return component as NonNullable<AppRuntimeComponents[K]>;
   }
 
   /**
@@ -91,7 +91,7 @@ export class Bootstrap {
             '[Bootstrap] 缺少 ALEMBIC_PROJECT_DIR 环境变量，且 PathGuard 未提前配置。'
           );
         }
-        Bootstrap.configurePathGuard(projectRoot);
+        AppRuntime.configurePathGuard(projectRoot);
       }
 
       // 0.8 创建 WorkspaceResolver（Ghost 模式感知的路径解析器）
@@ -257,4 +257,5 @@ export class Bootstrap {
   }
 }
 
-export default Bootstrap;
+export { AppRuntime as Bootstrap };
+export default AppRuntime;
