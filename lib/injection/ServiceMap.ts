@@ -65,7 +65,6 @@ import type { FeedbackCollector, QualityScorer } from '@alembic/core/service/qua
 import type { RecipeCandidateValidator, RecipeParser } from '@alembic/core/service/recipe';
 import type { LanguageService } from '@alembic/core/shared';
 import type { IndexingPipeline, VectorService, VectorStore } from '@alembic/core/vector';
-import type { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
 import type { JobDisplaySnapshotStore } from '../daemon/JobDisplaySnapshotStore.js';
 import type { JobProcessEventRecorder } from '../daemon/JobProcessEventRecorder.js';
 // ── Core Types ──
@@ -113,7 +112,6 @@ export interface ServiceMap {
   recipeSourceRefRepository: SourceRefRepository;
   knowledgeFileWriter: KnowledgeFileWriter;
   knowledgeSyncService: KnowledgeSyncService;
-  terminalSessionManager: InMemoryTerminalSessionManager;
 
   // ═══ AppModule ═══
   qualityScorer: QualityScorer;

@@ -14,7 +14,6 @@ export default mergeConfig(
         '**/node_modules/**',
         '**/.git/**',
         'test/unit/SandboxNetworkProxy.test.ts',
-        'test/unit/TerminalAdapter.test.ts',
       ],
       testTimeout: 10_000,
       hookTimeout: 10_000,

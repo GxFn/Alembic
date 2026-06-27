@@ -335,11 +335,16 @@
         "path": "test/unit/V2ToolSystem.test.ts",
         "expectedSpecifiers": ["#tools/v2/ToolContextFactory.js"],
         "reason": "The representative V2 suite now exercises Agent generic contracts and imports only the Alembic host-owned ToolContextFactory for context bridge coverage."
+      },
+      {
+        "path": "test/unit/ToolContextFactory.test.ts",
+        "expectedSpecifiers": ["../../lib/tools/v2/ToolContextFactory.js"],
+        "reason": "ToolContextFactory has a dedicated host bridge test because it owns Alembic DI, audit sink, project-root, and sandbox executor wiring around the Agent V2 router."
       }
     ],
     "notes": [
-      "Common tool contracts, catalog, workflow registry, router contracts, result envelopes, and presenters are consumed through the stable @alembic/agent root facade (Train B IC3: the deprecated @alembic/agent/tools aggregate has zero Alembic imports; Agent retires the export in pB3). Tool V2 generic runtime stays on @alembic/agent/tools/v2; terminal contracts stay on @alembic/agent/tools/terminal.",
-      "Alembic keeps Dashboard, macOS, Skill, Terminal, Workflow, MCP, CLI, daemon, HTTP/API, native, IDE wiring, and concrete ToolContextFactory as host adapters.",
+      "Common tool contracts, catalog, workflow registry, router contracts, result envelopes, and presenters are consumed through the stable @alembic/agent root facade (Train B IC3: the deprecated @alembic/agent/tools aggregate has zero Alembic imports; Agent retires the export in pB3). Tool V2 generic runtime stays on @alembic/agent/tools/v2; E-3 branch A retires Main's terminal contract subpath consumption.",
+      "Alembic keeps Dashboard, Skill, Workflow, MCP, CLI, daemon, HTTP/API, native, IDE wiring, and concrete ToolContextFactory as host adapters.",
       "Wave 4 deleted local duplicate tool implementation trees; do not restore them in Alembic."
     ],
     "completedDeletionPaths": [
@@ -443,24 +448,6 @@
       "reason": "WorkflowAdapter is generic but must keep its handler registry injectable from the Alembic host."
     },
     {
-      "path": "lib/tools/adapters/TerminalAdapter.ts",
-      "classification": "alembic-main-terminal-host-adapter",
-      "switchAfter": "do-not-migrate-by-default",
-      "reason": "TerminalAdapter consumes Agent-owned terminal contract but executes through Alembic host project roots, session storage, sandbox bridge, audit, artifacts, and DI services."
-    },
-    {
-      "path": "lib/tools/adapters/TerminalSessionManager.ts",
-      "classification": "alembic-main-terminal-session-store",
-      "switchAfter": "do-not-migrate-by-default",
-      "reason": "InMemoryTerminalSessionManager is concrete Alembic host session storage; it consumes Agent session plan types while enforcing host project-root isolation and env persistence metadata."
-    },
-    {
-      "pathPrefix": "lib/tools/adapters/terminal-adapter/",
-      "classification": "alembic-main-terminal-host-execution",
-      "switchAfter": "do-not-migrate-by-default",
-      "reason": "Terminal host execution files perform process/PTY execution, sandbox bridge calls, audit, artifact, environment assembly, and session command dispatch while consuming Agent portable terminal policy/envelope contracts."
-    },
-    {
       "path": "lib/tools/adapters/DashboardOperationAdapter.ts",
       "classification": "alembic-main-dashboard-bridge",
       "switchAfter": "do-not-migrate-by-default",
@@ -471,12 +458,6 @@
       "classification": "alembic-main-dashboard-bridge",
       "switchAfter": "do-not-migrate-by-default",
       "reason": "Dashboard operation manifests and handlers address Alembic Dashboard state and should stay host-owned."
-    },
-    {
-      "path": "lib/tools/adapters/MacSystemAdapter.ts",
-      "classification": "alembic-main-platform-adapter",
-      "switchAfter": "do-not-migrate-by-default",
-      "reason": "macOS execution is host platform integration requiring native resources and local privacy boundaries."
     },
     {
       "path": "lib/tools/adapters/MacSystemCapabilities.ts",
@@ -498,7 +479,8 @@
     }
   ],
   "terminalToolContractRules": {
-    "status": "consume-alembic-agent-terminal-contract",
+    "status": "retired-main-consumption-after-e3-branch-a",
+    "retired": true,
     "packageName": "@alembic/agent",
     "packageRange": "file:../AlembicAgent",
     "publicEntrypoint": "@alembic/agent/tools/terminal",
@@ -509,7 +491,7 @@
       "lib/tools/adapters/TerminalSession.ts",
       "lib/tools/adapters/terminal-adapter/TerminalEnvelopes.ts"
     ],
-    "hostOwnedPaths": [
+    "retiredHostOwnedPaths": [
       "lib/tools/adapters/TerminalAdapter.ts",
       "lib/tools/adapters/TerminalSessionManager.ts",
       "lib/tools/adapters/terminal-adapter/TerminalArtifacts.ts",
@@ -522,13 +504,13 @@
       "lib/tools/adapters/terminal-adapter/TerminalRunExecutor.ts",
       "lib/tools/adapters/terminal-adapter/TerminalScriptExecutor.ts",
       "lib/tools/adapters/terminal-adapter/TerminalSessionExecutor.ts",
-      "lib/tools/adapters/terminal-adapter/TerminalShellExecutor.ts",
-      "lib/sandbox/**"
+      "lib/tools/adapters/terminal-adapter/TerminalShellExecutor.ts"
     ],
+    "hostOwnedPaths": ["lib/sandbox/**"],
     "notes": [
-      "Alembic consumes Agent-owned terminal capability/policy/session/envelope portable contract from @alembic/agent/tools/terminal.",
-      "Alembic keeps real process/PTY execution, macOS Seatbelt sandbox bridge, network proxy, audit/artifact/environment assembly, approval/gateway, DI wiring, and concrete session storage as host responsibilities.",
-      "Do not restore local terminal-capabilities, terminal-policy, TerminalSession plan, or TerminalEnvelopes duplicate files."
+      "E-3 branch A removes Alembic Main consumption of @alembic/agent/tools/terminal and the dead host terminal adapter stack.",
+      "Live terminal execution is now the Agent runtime terminal.exec path wired through ToolContextFactory and the v2 ToolRouterAdapter.",
+      "Do not restore local terminal-capabilities, terminal-policy, TerminalSession plan, TerminalEnvelopes, terminal-adapter files, or @alembic/agent/tools/terminal imports in Main."
     ]
   }
 }

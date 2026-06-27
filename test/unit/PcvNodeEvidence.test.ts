@@ -1,6 +1,15 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test } from 'vitest';
 import type { AgentResultLike } from '../../lib/workflows/ai-execution/AgentRunProjections.js';
-import { buildPcvAnalyzeGroundingLedgerSummary } from '../../lib/workflows/ai-execution/PcvNodeEvidence.js';
+import {
+  buildPcvAnalyzeGroundingLedgerSummary,
+  buildPcvN8StageFactoryEvidence,
+} from '../../lib/workflows/ai-execution/PcvNodeEvidence.js';
+
+const envBackup = { ...process.env };
+
+afterEach(() => {
+  process.env = { ...envBackup };
+});
 
 // AP-6：主体消费方据上游 AP-4 标记 groundingEnforcement 把 analyze grounding ledger summary 改判审计语义。
 // 两模式 + 标记缺失三态，固定 ledger（1 evidence-produced + 1 invalid-no-evidence）只改 enforcement，
@@ -58,5 +67,34 @@ describe('buildPcvAnalyzeGroundingLedgerSummary grounding enforcement audit sema
     expect(summary?.missingLinkReasons).toContain('analyze_grounding_invalid_no_evidence');
     expect(summary?.status).toBe('partial-evidence');
     expect(summary?.groundingEnforcement).toBeUndefined();
+  });
+});
+
+describe('buildPcvN8StageFactoryEvidence terminal policy projection', () => {
+  test('projects legacy terminal toolset config as the live exec-only terminal surface', () => {
+    process.env.ALEMBIC_TERMINAL_TOOLSET = 'terminal-pty';
+
+    const evidence = buildPcvN8StageFactoryEvidence({
+      dimId: 'api',
+      plan: {
+        hasExistingRecipes: false,
+        needsCandidates: true,
+        prescreenDone: false,
+      } as never,
+      runInput: {
+        context: {},
+        params: {},
+        profile: { id: 'missing-profile' },
+      } as never,
+    });
+
+    const analyzePolicy = evidence.stageToolPolicies.find((stage) => stage.stage === 'analyze');
+    expect(analyzePolicy).toMatchObject({
+      terminalAllowed: true,
+      terminalTools: ['terminal'],
+    });
+    expect(evidence.stageToolPolicies.flatMap((stage) => stage.terminalTools)).toEqual(
+      expect.arrayContaining(['terminal'])
+    );
   });
 });

@@ -173,7 +173,7 @@ const BOOTSTRAP_STAGE_NODE_MAP: PcvBootstrapStageNodeMap = {
   },
 };
 
-const TERMINAL_TOOL_IDS = new Set(['terminal', 'terminal_shell', 'terminal_pty']);
+const TERMINAL_TOOL_IDS = new Set(['terminal']);
 
 export function buildBootstrapPcvStageNodeMap(): PcvBootstrapStageNodeMap {
   return cloneBootstrapStageNodeMap(BOOTSTRAP_STAGE_NODE_MAP);

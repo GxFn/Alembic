@@ -5,12 +5,7 @@
  *   - agentService, toolRegistry, skillHooks
  */
 
-import {
-  type CapabilityCatalog,
-  LightweightRouter,
-  UnifiedToolCatalog,
-  WorkflowRegistry,
-} from '@alembic/agent';
+import { UnifiedToolCatalog, WorkflowRegistry } from '@alembic/agent';
 import {
   AgentProfileCompiler,
   AgentProfileRegistry,
@@ -21,23 +16,11 @@ import {
   SystemRunContextFactory,
 } from '@alembic/agent/service';
 import { RuntimeCapabilityCatalog, ToolRouterAdapter } from '@alembic/agent/tools/runtime';
-import { TERMINAL_CAPABILITY_MANIFESTS } from '@alembic/agent/tools/terminal';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
-import { DashboardOperationAdapter } from '#tools/adapters/DashboardOperationAdapter.js';
-import {
-  createDashboardOperationHandlers,
-  DASHBOARD_OPERATION_MANIFESTS,
-} from '#tools/adapters/DashboardOperations.js';
-import { MacSystemAdapter } from '#tools/adapters/MacSystemAdapter.js';
-import { MAC_SYSTEM_CAPABILITY_MANIFESTS } from '#tools/adapters/MacSystemCapabilities.js';
-import { SkillAdapter } from '#tools/adapters/SkillAdapter.js';
+import { DASHBOARD_OPERATION_MANIFESTS } from '#tools/adapters/DashboardOperations.js';
 import { SKILL_CAPABILITY_MANIFESTS } from '#tools/adapters/SkillCapabilities.js';
-import { TerminalAdapter } from '#tools/adapters/TerminalAdapter.js';
-import { InMemoryTerminalSessionManager } from '#tools/adapters/TerminalSessionManager.js';
-import { WorkflowAdapter } from '#tools/adapters/WorkflowAdapter.js';
 import { ToolContextFactory } from '#tools/v2/ToolContextFactory.js';
 import { SkillHooks } from '../../service/skills/SkillHooks.js';
-import { getAiRuntimeStatus, getAiUnavailableMessage } from '../AiRuntimeStatus.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {
@@ -64,46 +47,20 @@ export function register(c: ServiceContainer) {
       })
   );
 
-  // toolRegistry: 非 Agent 表面 (Dashboard/Terminal/Skill/Mac) 的工具注册
-  c.singleton('toolRegistry', (ct: ServiceContainer) => {
+  // toolRegistry 只保留 manifest / self-introspection store；runtime 执行统一走 v2 toolRouter。
+  // E-3 分支 A 退掉旧轻量 router 与 terminal adapter 栈，避免继续消费退役的
+  // terminal public subpath。
+  c.singleton('toolRegistry', () => {
     const catalog = new UnifiedToolCatalog();
 
-    for (const m of [
-      ...DASHBOARD_OPERATION_MANIFESTS,
-      ...TERMINAL_CAPABILITY_MANIFESTS,
-      ...SKILL_CAPABILITY_MANIFESTS,
-      ...MAC_SYSTEM_CAPABILITY_MANIFESTS,
-    ]) {
+    for (const m of [...DASHBOARD_OPERATION_MANIFESTS, ...SKILL_CAPABILITY_MANIFESTS]) {
       catalog.register(m);
     }
 
-    catalog.setRouter(
-      new LightweightRouter({
-        catalog: catalog as unknown as CapabilityCatalog,
-        adapters: [
-          new DashboardOperationAdapter(
-            createDashboardOperationHandlers({
-              aiStatus: getAiRuntimeStatus,
-              aiUnavailableMessage: getAiUnavailableMessage,
-            })
-          ),
-          new TerminalAdapter({
-            sessionManager: ct.get('terminalSessionManager') as InMemoryTerminalSessionManager,
-          }),
-          new SkillAdapter(),
-          new MacSystemAdapter(),
-          new WorkflowAdapter(ct.get('workflowRegistry') as WorkflowRegistry),
-        ],
-        projectRoot: resolveProjectRoot(ct),
-        dataRoot: resolveDataRoot(ct),
-        services: ct,
-      })
-    );
     return catalog;
   });
 
   c.singleton('workflowRegistry', () => new WorkflowRegistry());
-  c.singleton('terminalSessionManager', () => new InMemoryTerminalSessionManager());
 
   c.singleton('agentProfileRegistry', () => new AgentProfileRegistry(), { aiDependent: false });
 

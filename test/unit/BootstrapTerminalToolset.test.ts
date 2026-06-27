@@ -55,24 +55,17 @@ describe('BootstrapTerminalToolset', () => {
     expect(getBootstrapStageTerminalTools('analyze', config)).toEqual([]);
   });
 
-  test('supports wider terminal toolsets through explicit configuration', async () => {
+  test('collapses legacy wider terminal toolsets to live terminal exec', async () => {
     mockTerminalToolset('terminal-pty');
     const { resolveBootstrapTerminalToolset, getBootstrapStageTerminalTools } = await loadModule();
     const config = resolveBootstrapTerminalToolset();
 
     expect(config).toEqual({
       enabled: true,
-      toolset: 'terminal-pty',
-      modes: ['run', 'shell', 'pty'],
+      toolset: 'terminal-run',
+      modes: ['run'],
     });
-    expect(getBootstrapStageTerminalTools('analyze', config)).toEqual([
-      'terminal',
-      'terminal_shell',
-      'terminal_pty',
-    ]);
-    expect(getBootstrapStageTerminalTools('evolve', config)).toEqual([
-      'terminal',
-      'terminal_shell',
-    ]);
+    expect(getBootstrapStageTerminalTools('analyze', config)).toEqual(['terminal']);
+    expect(getBootstrapStageTerminalTools('evolve', config)).toEqual(['terminal']);
   });
 });

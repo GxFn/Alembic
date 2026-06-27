@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const configPath = join(repoRoot, 'config', 'agent-extraction-boundary.json');
 const config = JSON.parse(readFileSync(configPath, 'utf8'));
+const terminalContractRules = config.terminalToolContractRules ?? {};
+const terminalPublicEntrypointRetired =
+  terminalContractRules.retired === true ||
+  String(terminalContractRules.status ?? '').includes('retired');
 const agentImportPrefix = `${['#agent', ''].join('/')}`;
 const agentImportPattern = `${agentImportPrefix}*`;
 const localAgentRoot = ['lib', 'agent'].join('/');
@@ -16,7 +20,8 @@ const localToolV2Prefix = `${localToolV2Root}/`;
 const hostToolContextFactoryPath = ['lib', 'tools', 'v2', 'ToolContextFactory.ts'].join('/');
 const distLocalAgentRoot = ['dist', 'lib', 'agent'].join('/');
 const distLocalToolV2Root = ['dist', 'lib', 'tools', 'v2'].join('/');
-const terminalContractEntrypoint = '@alembic/agent/tools/terminal';
+const terminalContractEntrypoint =
+  terminalContractRules.publicEntrypoint ?? '@alembic/agent/tools/terminal';
 const terminalCapabilitiesRoot = ['lib', 'tools', 'adapters', 'terminal-capabilities'].join('/');
 const terminalPolicyRoot = ['lib', 'tools', 'adapters', 'terminal-policy'].join('/');
 const terminalSessionPlanPath = ['lib', 'tools', 'adapters', 'TerminalSession.ts'].join('/');
@@ -321,7 +326,6 @@ const duplicateCommonToolFiles = [
   ...collectSourceFiles(join(repoRoot, 'lib', 'tools', 'workflow')),
 ].map(toRepoPath);
 const terminalContractImportsByFile = new Map();
-const terminalContractRules = config.terminalToolContractRules ?? {};
 const terminalContractScanRoots = terminalContractRules.scanRoots ?? ['lib', 'bin', 'scripts'];
 for (const root of terminalContractScanRoots) {
   for (const file of collectSourceFiles(join(repoRoot, root))) {
@@ -393,7 +397,13 @@ if (duplicateCommonToolFiles.length > 0) {
     `Wave 4 requires local generic tool core/catalog/workflow files to be deleted: ${duplicateCommonToolFiles.join(', ')}.`
   );
 }
-if (terminalContractImportsByFile.size === 0) {
+if (terminalPublicEntrypointRetired && terminalContractImportsByFile.size > 0) {
+  violations.push(
+    `E-3 retired Main consumption of ${terminalContractEntrypoint}; remove remaining imports: ${[
+      ...terminalContractImportsByFile.keys(),
+    ].join(', ')}.`
+  );
+} else if (!terminalPublicEntrypointRetired && terminalContractImportsByFile.size === 0) {
   violations.push(
     `Wave 5 requires Alembic to consume ${terminalContractEntrypoint} for terminal portable contract.`
   );
