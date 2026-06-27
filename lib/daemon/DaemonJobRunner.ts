@@ -9,6 +9,7 @@ import {
 import { adviseCoverageLedger } from '@alembic/core/host-agent-workflows';
 import {
   applyPlanSelection,
+  assertPlanSelectionStageRequirements,
   type PlanModuleBinding,
   type PlanSelection,
   type PlanSelectionProjection,
@@ -949,12 +950,8 @@ async function runPlanSelectionGate(
       projectContextFacts,
     });
 
-    // Plan gate is a hard prerequisite: shape-valid but wrong-stage selections cannot drive execution.
-    if (selection.generationStage !== gate.generationStage) {
-      throw new Error(
-        `Plan agent returned generationStage=${selection.generationStage} for ${gate.generationStage}.`
-      );
-    }
+    // 主仓库执行边界复用 Core 阶段约束，避免 deepMining/moduleMining 空模块目标先报 gate 成功。
+    assertPlanSelectionStageRequirements(selection, { expectedStage: gate.generationStage });
 
     const projection = applyPlanSelection(selection);
 

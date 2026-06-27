@@ -308,7 +308,7 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
         source: 'dashboard',
       })
     ).rejects.toThrow(
-      'Bootstrap plan gate failed: Plan agent returned generationStage=deepMining for coldStart.'
+      'Bootstrap plan gate failed: Invalid PlanSelection stage requirements: generationStage must be coldStart'
     );
 
     expect(runColdStartWorkflow).not.toHaveBeenCalled();
@@ -316,7 +316,7 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
       status: 'failed',
       error: {
         message:
-          'Bootstrap plan gate failed: Plan agent returned generationStage=deepMining for coldStart.',
+          'Bootstrap plan gate failed: Invalid PlanSelection stage requirements: generationStage must be coldStart',
       },
     });
     expect(recorder.list(job.id, { limit: 20 }).developerViews).toEqual(
@@ -324,7 +324,7 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
         expect.objectContaining({
           phase: 'plan-gate',
           summary:
-            'Bootstrap plan gate failed before coldStart: Plan agent returned generationStage=deepMining for coldStart.',
+            'Bootstrap plan gate failed before coldStart: Invalid PlanSelection stage requirements: generationStage must be coldStart',
           title: 'Bootstrap plan gate failed',
         }),
       ])
@@ -332,6 +332,50 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
     expect(JSON.stringify(logger.error.mock.calls)).not.toMatch(/fallback[- ]?to[- ]?full/iu);
     expect(JSON.stringify(recorder.list(job.id, { limit: 20 }).developerViews)).not.toMatch(
       /fallback[- ]?to[- ]?full|回退全量/iu
+    );
+  });
+
+  test('allows coldStart plans without module bindings', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const projectContextFacts = makeFacts();
+    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(projectContextFacts);
+    const container = makeContainer(store);
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'bootstrap',
+      request: { dimensions: ['architecture'] },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockResolvedValue({
+      dimensions: ['architecture'],
+      generationStage: 'coldStart',
+      moduleBindings: [],
+      scale: { contentMaxLines: 70, maxFiles: 180, totalRecipeBudget: 2 },
+    });
+
+    await expect(
+      runDaemonJob({
+        args: { dimensions: ['architecture'] },
+        container,
+        jobId: job.id,
+        kind: 'bootstrap',
+        logger,
+        source: 'dashboard',
+      })
+    ).resolves.toMatchObject({ job: { status: 'completed' } });
+
+    expect(runColdStartWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({ container }),
+      expect.objectContaining({
+        dimensions: ['architecture'],
+        planSelectionProjection: {
+          budget: { contentMaxLines: 70, maxFiles: 180, totalRecipeBudget: 2 },
+          executionDimensions: ['architecture'],
+          moduleScope: [],
+        },
+        projectContextFacts,
+      })
     );
   });
 
@@ -419,6 +463,60 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       status: 'failed',
       error: { message: 'DeepMining plan gate failed: provider unavailable' },
     });
+  });
+
+  test('rejects deepMining plans without module bindings before rescan starts', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const coverageLedgerRepository = makeCoverageLedgerRepository();
+    const recorder = new JobProcessEventRecorder();
+    const container = makeContainer(store, { coverageLedgerRepository, recorder });
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: { generationStage: 'deepMining' },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockResolvedValue({
+      dimensions: ['architecture'],
+      generationStage: 'deepMining',
+      moduleBindings: [],
+      scale: { totalRecipeBudget: 3 },
+    });
+
+    await expect(
+      runDaemonJob({
+        args: { generationStage: 'deepMining' },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).rejects.toThrow(
+      'DeepMining plan gate failed: Invalid PlanSelection stage requirements: deepMining requires moduleBindings with module×dimension targets'
+    );
+
+    expect(runKnowledgeRescanWorkflow).not.toHaveBeenCalled();
+    expect(coverageLedgerRepository.upsertRound).not.toHaveBeenCalled();
+    expect(store.get(job.id)).toMatchObject({
+      status: 'failed',
+      error: {
+        message: expect.stringContaining(
+          'DeepMining plan gate failed: Invalid PlanSelection stage requirements'
+        ),
+      },
+    });
+    expect(recorder.list(job.id, { limit: 20 }).events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          phase: 'plan-gate',
+          severity: 'error',
+          summary: expect.stringContaining('deepMining requires moduleBindings'),
+          title: 'DeepMining plan gate failed',
+        }),
+      ])
+    );
   });
 
   test('runs deepMining as one daemon job across rounds and passes plan targets to rescan', async () => {
@@ -701,6 +799,18 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
           newRecipes: 3,
           scaleCap: 3,
         },
+        planSelectionProjection: {
+          moduleScope: [
+            'src/module-1',
+            'src/module-2',
+            'src/module-3',
+            'src/module-4',
+            'src/module-5',
+            'src/module-6',
+            'src/module-7',
+            'src/module-8',
+          ],
+        },
       },
     });
 
@@ -720,6 +830,59 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
     );
   });
 
+  test('rejects moduleMining plans without module bindings before module mining starts', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(makeProjectMapFacts(2));
+    const recorder = new JobProcessEventRecorder();
+    const container = makeContainer(store, { recorder });
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: { generationStage: 'moduleMining' },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockResolvedValue({
+      dimensions: ['architecture'],
+      generationStage: 'moduleMining',
+      moduleBindings: [],
+      scale: { totalRecipeBudget: 3 },
+    });
+
+    await expect(
+      runDaemonJob({
+        args: { generationStage: 'moduleMining' },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).rejects.toThrow(
+      'ModuleMining plan gate failed: Invalid PlanSelection stage requirements: moduleMining requires moduleBindings with module×dimension targets'
+    );
+
+    expect(runModuleMining).not.toHaveBeenCalled();
+    expect(store.get(job.id)).toMatchObject({
+      status: 'failed',
+      error: {
+        message: expect.stringContaining(
+          'ModuleMining plan gate failed: Invalid PlanSelection stage requirements'
+        ),
+      },
+    });
+    expect(recorder.list(job.id, { limit: 20 }).events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          phase: 'plan-gate',
+          severity: 'error',
+          summary: expect.stringContaining('moduleMining requires moduleBindings'),
+          title: 'ModuleMining plan gate failed',
+        }),
+      ])
+    );
+  });
+
   test('fails moduleMining when ProjectMap modules are empty', async () => {
     const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
     vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(makeProjectMapFacts(0));
@@ -734,7 +897,15 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
     vi.mocked(runPlanAgent).mockResolvedValue({
       dimensions: ['architecture'],
       generationStage: 'moduleMining',
-      moduleBindings: [],
+      moduleBindings: [
+        {
+          dimensions: ['architecture'],
+          moduleId: 'mod-1',
+          modulePath: 'src/module-1',
+          priority: 1,
+          targetRecipes: 2,
+        },
+      ],
       scale: { totalRecipeBudget: 3 },
     });
 
