@@ -22,7 +22,13 @@ function makeProjection(): BootstrapDimensionProjection {
     tool: 'knowledge',
     args: {
       action: 'submit',
-      params: { title: 'Candidate', category: 'api', summary: 'Summary' },
+      params: {
+        title: 'Candidate',
+        category: 'api',
+        summary: 'Summary',
+        sourceRefs: ['src/candidate.ts:10'],
+        reasoning: { sources: ['src/reasoned.ts:12'] },
+      },
     },
     result: { status: 'created', title: 'Candidate' },
   };
@@ -30,7 +36,7 @@ function makeProjection(): BootstrapDimensionProjection {
     tool: 'knowledge',
     args: {
       action: 'submit',
-      params: { category: 'api', summary: 'Missing title' },
+      params: { category: 'api', summary: 'Missing title', sourceRefs: ['src/rejected.ts:1'] },
     },
     result: { error: 'Missing required param: title' },
   };
@@ -130,6 +136,7 @@ describe('bootstrap dimension consumer', () => {
     });
     expect(candidateResults.created).toBe(1);
     expect(dimensionCandidates.api?.producerResult.candidateCount).toBe(1);
+    expect(accounting.acceptedSourceRefs).toEqual(['src/candidate.ts:10', 'src/reasoned.ts:12']);
     expect(accounting.submittedCandidateSummaries).toEqual([
       { title: 'Candidate', subTopic: 'api', summary: 'Summary' },
     ]);
@@ -336,6 +343,7 @@ describe('bootstrap dimension consumer', () => {
       })
     );
     expect(onDimensionResult).toHaveBeenCalledWith({
+      acceptedSourceRefs: ['src/candidate.ts:10', 'src/reasoned.ts:12'],
       candidateCount: 1,
       dimensionId: 'api',
       referencedFiles: ['src/a.ts'],

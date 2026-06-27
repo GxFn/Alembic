@@ -148,6 +148,32 @@ describe('knowledge rescan coverage ledger write', () => {
     expect(upserts[0]?.coveredCount).toBeGreaterThanOrEqual(5);
   });
 
+  test('uses accepted recipe source refs instead of coarse dimension referenced files', () => {
+    const { repository, upserts } = createFakeCoverageLedgerRepository();
+
+    const result = writeKnowledgeRescanCoverageLedgerForDimension(
+      makeInput({
+        ctx: {
+          container: {
+            get: (name: string) => (name === 'coverageLedgerRepository' ? repository : undefined),
+          },
+          logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+        },
+        acceptedSourceRefs: ['src/auth/login.ts:42'],
+        referencedFiles: ['Package.swift'],
+      })
+    );
+
+    expect(result).toMatchObject({ skipped: false, writtenCells: 2 });
+    const authCell = upserts.find((upsert) => upsert.moduleId === 'auth');
+    expect(authCell).toMatchObject({
+      coveredSourceRefs: ['src/auth/login.ts'],
+      grade: 'partial',
+      moduleId: 'auth',
+    });
+    expect(authCell?.coveredCount).toBeGreaterThan(0);
+  });
+
   test('rejected or source-ref-less output does not increase coverage', () => {
     const { repository, upserts, upsertRound } = createFakeCoverageLedgerRepository();
     const ctx = {
@@ -169,9 +195,10 @@ describe('knowledge rescan coverage ledger write', () => {
     expect(
       writeKnowledgeRescanCoverageLedgerForDimension(
         makeInput({
+          acceptedSourceRefs: [],
           candidateCount: 1,
           ctx,
-          referencedFiles: [],
+          referencedFiles: ['src/auth/login.ts:42'],
         })
       )
     ).toEqual({ skipped: true, reason: 'no-source-refs' });

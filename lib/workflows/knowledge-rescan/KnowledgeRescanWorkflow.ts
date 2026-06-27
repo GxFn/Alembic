@@ -716,6 +716,7 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
         evolutionPrescreen: prescreen,
         onDimensionResult: (result: ProjectContextDimensionResultHookInput) => {
           const coverageResult = writeKnowledgeRescanCoverageLedgerForDimension({
+            acceptedSourceRefs: result.acceptedSourceRefs,
             candidateCount: result.candidateCount,
             ctx,
             dimensionId: result.dimensionId,
@@ -847,6 +848,7 @@ interface CoverageLedgerRepositoryLike {
 }
 
 export interface KnowledgeRescanCoverageLedgerWriteInput {
+  acceptedSourceRefs?: readonly string[];
   candidateCount: number;
   ctx: RescanMcpContext;
   dimensionId: string;
@@ -888,8 +890,9 @@ export function writeKnowledgeRescanCoverageLedgerForDimension(
     return { skipped: true, reason: 'no-project-map-modules' };
   }
 
+  const sourceRefsForCoverage = input.acceptedSourceRefs ?? input.referencedFiles;
   const coveredPaths = uniqueStrings(
-    input.referencedFiles.map(stripSourceRefLineAnchor).filter((path) => path.length > 0)
+    sourceRefsForCoverage.map(stripSourceRefLineAnchor).filter((path) => path.length > 0)
   );
   if (coveredPaths.length === 0) {
     input.ctx.logger.debug?.(

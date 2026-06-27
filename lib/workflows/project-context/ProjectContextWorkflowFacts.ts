@@ -93,6 +93,7 @@ export interface ProjectContextFillView {
 }
 
 export interface ProjectContextDimensionResultHookInput {
+  readonly acceptedSourceRefs: readonly string[];
   readonly candidateCount: number;
   readonly dimensionId: string;
   readonly referencedFiles: readonly string[];

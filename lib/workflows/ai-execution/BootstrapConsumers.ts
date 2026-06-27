@@ -142,6 +142,7 @@ export interface BootstrapDimensionRunIssueState {
 
 export interface BootstrapDimensionCandidateAccountingResult {
   acceptedSubmitCalls: ToolCallRecord[];
+  acceptedSourceRefs: string[];
   effectiveCandidateCount: number;
   rejectedCount: number;
   submittedCandidateSummaries: Array<{
@@ -212,6 +213,7 @@ export function applyBootstrapDimensionCandidateAccounting({
     : [];
   return {
     acceptedSubmitCalls,
+    acceptedSourceRefs: collectAcceptedSubmitCallSourceRefs(acceptedSubmitCalls),
     effectiveCandidateCount: runIssueState.effectiveCandidateCount,
     rejectedCount: runIssueState.isNormalCompletion
       ? projection.producerResult.rejectedCount || 0
@@ -569,6 +571,7 @@ export async function consumeBootstrapDimensionResult({
     runIssueState,
   });
   await notifyProjectContextDimensionResult({
+    acceptedSourceRefs: candidateAccounting.acceptedSourceRefs,
     candidateCount: candidateAccounting.effectiveCandidateCount,
     dimensionId: dimId,
     onDimensionResult,
@@ -758,12 +761,14 @@ export async function consumeBootstrapDimensionResult({
 }
 
 async function notifyProjectContextDimensionResult({
+  acceptedSourceRefs,
   candidateCount,
   dimensionId,
   onDimensionResult,
   referencedFiles,
   rejectedCount,
 }: {
+  acceptedSourceRefs: readonly string[];
   candidateCount: number;
   dimensionId: string;
   onDimensionResult?: ProjectContextDimensionResultHook;
@@ -775,6 +780,7 @@ async function notifyProjectContextDimensionResult({
   }
   try {
     await onDimensionResult({
+      acceptedSourceRefs,
       candidateCount,
       dimensionId,
       referencedFiles,
@@ -796,6 +802,19 @@ function buildSubmittedCandidateSummary(tc: ToolCallRecord, dimId: string) {
     subTopic: pickString(params.category) || pickString(params.knowledgeType) || dimId,
     summary: pickString(params.summary) || pickString(params.description),
   };
+}
+
+function collectAcceptedSubmitCallSourceRefs(acceptedSubmitCalls: readonly ToolCallRecord[]) {
+  const refs = acceptedSubmitCalls.flatMap((tc) => {
+    const params = extractSubmitParams(tc);
+    const reasoningRefs = isRecord(params.reasoning) ? stringArray(params.reasoning.sources) : [];
+    return [
+      ...stringArray(params.sourceRefs),
+      ...stringArray(params.referencedFiles),
+      ...reasoningRefs,
+    ];
+  });
+  return uniqueStrings(refs);
 }
 
 function extractSubmitParams(tc: ToolCallRecord): Record<string, unknown> {
@@ -823,6 +842,19 @@ function isSuccessfulToolCall(tc: ToolCallRecord): boolean {
 
 function pickString(value: unknown): string {
   return typeof value === 'string' ? value : '';
+}
+
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter((item) => item.length > 0);
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter((value) => value.length > 0))];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
