@@ -1,3 +1,4 @@
+import type { AgentService } from '@alembic/agent/service';
 import {
   type DaemonJobKind,
   type DaemonJobRecord,
@@ -5,11 +6,19 @@ import {
   type DaemonJobStatus,
   JobStore,
 } from '@alembic/core/daemon';
+import { applyPlanSelection, type PlanSelectionProjection } from '@alembic/core/plans';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
-import { resolveProjectScopeSourceIdentitiesFromContainer } from '../project-scope/ProjectScopeAnalysis.js';
+import {
+  resolveProjectScopeAnalysisContext,
+  resolveProjectScopeSourceIdentitiesFromContainer,
+} from '../project-scope/ProjectScopeAnalysis.js';
 import { resolveAlembicWorkspace } from '../project-scope/ProjectScopeRegistry.js';
 import type { BootstrapProcessEventDraft } from '../service/bootstrap/bootstrap-event-types.js';
+import {
+  buildProjectContextWorkflowFacts,
+  type ProjectContextWorkflowFacts,
+} from '../workflows/project-context/ProjectContextWorkflowFacts.js';
 import { JobDisplaySnapshotStore } from './JobDisplaySnapshotStore.js';
 import { materializeJobProcessEventTextArtifact } from './JobProcessEventArtifacts.js';
 import {
@@ -123,6 +132,11 @@ export function buildDaemonRescanWorkflowArgs(options: {
   }
 
   return workflowArgs;
+}
+
+interface BootstrapPlanGateResult {
+  projectContextFacts: ProjectContextWorkflowFacts;
+  projection: PlanSelectionProjection;
 }
 
 export function createDaemonJob(options: DaemonJobOptions): DaemonJobRecord {
@@ -792,16 +806,20 @@ export function attachBootstrapProcessEventBridge(options: {
 
 async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
   if (options.kind === 'bootstrap') {
+    const planGate = await runBootstrapPlanGate(options);
     const { runColdStartWorkflow: bootstrapKnowledge } = await import(
       '../workflows/cold-start/ColdStartWorkflow.js'
     );
     const raw = await bootstrapKnowledge(
       { container: options.container, logger: options.logger },
       {
-        maxFiles: numberArg(options.args?.maxFiles, 500),
+        maxFiles: planGate.projection.budget.maxFiles,
         skipGuard: Boolean(options.args?.skipGuard || false),
-        contentMaxLines: numberArg(options.args?.contentMaxLines, 120),
+        contentMaxLines: planGate.projection.budget.contentMaxLines,
+        dimensions: stringArrayArg(options.args?.dimensions),
         loadSkills: true,
+        planSelectionProjection: planGate.projection,
+        projectContextFacts: planGate.projectContextFacts,
       }
     );
     const result = unwrapEnvelope(raw);
@@ -817,6 +835,90 @@ async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unkno
   );
   const result = unwrapEnvelope(raw);
   return { ...asRecord(result), asyncFill: true };
+}
+
+async function runBootstrapPlanGate(
+  options: RunDaemonJobOptions
+): Promise<BootstrapPlanGateResult> {
+  const recorder = getJobProcessEventRecorder(options.container);
+  const maxFiles = numberArg(options.args?.maxFiles, 500);
+  const contentMaxLines = numberArg(options.args?.contentMaxLines, 120);
+
+  try {
+    const analysisScope = resolveProjectScopeAnalysisContext(options.container);
+    const projectContextFacts = await buildProjectContextWorkflowFacts({
+      analysisScope,
+      contentMaxLines,
+      ctx: { container: options.container, logger: options.logger },
+      maxFiles,
+      projectRoot: analysisScope.projectRoot,
+      source: 'alembic-main-bootstrap',
+    });
+    const { runPlanAgent } = await import('@alembic/agent/service');
+    const selection = await runPlanAgent({
+      agentService: options.container.get('agentService') as Pick<AgentService, 'run'>,
+      generationStage: 'coldStart',
+      projectContextFacts,
+    });
+    const projection = applyPlanSelection(selection);
+
+    if (projection.executionDimensions.length === 0) {
+      throw new Error('Plan agent returned no executable dimensions for coldStart.');
+    }
+
+    options.logger.info('Bootstrap plan gate completed', {
+      budget: projection.budget,
+      executionDimensions: projection.executionDimensions,
+      jobId: options.jobId,
+      moduleScope: projection.moduleScope,
+      stage: 'bootstrap-plan-gate',
+      unknownDimensionIds: projection.unknownDimensionIds ?? [],
+    });
+    recordJobProcessEvent(recorder, {
+      jobId: options.jobId,
+      kind: 'checkpoint',
+      metadata: {
+        budget: projection.budget,
+        executionDimensions: projection.executionDimensions,
+        generationStage: 'coldStart',
+        moduleScope: projection.moduleScope,
+        source: options.source || 'system',
+        unknownDimensionIds: projection.unknownDimensionIds ?? [],
+      },
+      phase: 'plan-gate',
+      severity: 'success',
+      summary: `Plan agent selected ${projection.executionDimensions.length} coldStart dimension(s).`,
+      title: 'Bootstrap plan gate completed',
+    });
+
+    return { projectContextFacts, projection };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    options.logger.error('Bootstrap plan gate failed; aborting bootstrap job', {
+      error: message,
+      generationStage: 'coldStart',
+      jobId: options.jobId,
+      stage: 'bootstrap-plan-gate',
+    });
+    recordJobProcessEvent(recorder, {
+      content: {
+        mimeType: 'text/plain',
+        role: 'assistant',
+        text: `Bootstrap plan gate failed before coldStart: ${message}`,
+      },
+      jobId: options.jobId,
+      kind: 'error',
+      metadata: {
+        generationStage: 'coldStart',
+        source: options.source || 'system',
+      },
+      phase: 'plan-gate',
+      severity: 'error',
+      summary: `Bootstrap plan gate failed before coldStart: ${message}`,
+      title: 'Bootstrap plan gate failed',
+    });
+    throw new Error(`Bootstrap plan gate failed: ${message}`);
+  }
 }
 
 function linkBootstrapSessionCompletion(options: {
@@ -1281,4 +1383,14 @@ function finiteNumber(value: unknown): number | null {
 
 function numberArg(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function stringArrayArg(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const values = value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter((item) => item.length > 0);
+  return values.length > 0 ? values : undefined;
 }

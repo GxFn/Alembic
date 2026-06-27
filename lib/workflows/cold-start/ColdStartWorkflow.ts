@@ -42,6 +42,7 @@ import {
   createInternalColdStartIntent as createColdStartIntent,
   runFullResetPolicy,
 } from '@alembic/core/host-agent-workflows';
+import type { PlanSelectionProjection } from '@alembic/core/plans';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type {
   DimensionDef,
@@ -65,12 +66,18 @@ import {
   buildProjectContextMissionArtifacts,
   buildProjectContextWorkflowFacts,
   createProjectContextWorkflowSession,
+  type ProjectContextWorkflowFacts,
   presentProjectContextColdStartEmptyProject,
   presentProjectContextColdStartResponse,
   selectProjectContextWorkflowDimensions,
 } from '../project-context/ProjectContextWorkflowFacts.js';
 
 type BootstrapMcpContext = WorkflowMcpContext & McpContext;
+type ColdStartDimensionSelectionSource = 'base' | 'explicit' | 'plan';
+type AlembicMainColdStartArgs = ColdStartArgs & {
+  planSelectionProjection?: PlanSelectionProjection;
+  projectContextFacts?: ProjectContextWorkflowFacts;
+};
 
 /**
  * bootstrapKnowledge — 一键初始化知识库 (Skill-aware)
@@ -87,7 +94,10 @@ type BootstrapMcpContext = WorkflowMcpContext & McpContext;
  * @param [args.contentMaxLines=120] 每文件读取最大行数
  * @param [args.incremental] 冷启动忽略文件快照增量；需要历史复用时应走 knowledge-rescan
  */
-export async function runColdStartWorkflow(ctx: BootstrapMcpContext, args: ColdStartArgs) {
+export async function runColdStartWorkflow(
+  ctx: BootstrapMcpContext,
+  args: AlembicMainColdStartArgs
+) {
   const t0 = Date.now();
   const analysisScope = resolveProjectScopeAnalysisContext(ctx.container);
   const { dataRoot, projectRoot } = analysisScope;
@@ -131,14 +141,16 @@ export async function runColdStartWorkflow(ctx: BootstrapMcpContext, args: ColdS
   // ═══════════════════════════════════════════════════════════
   // Phase 1-4: 共享管线（文件收集→AST→依赖→Guard→维度解析）
   // ═══════════════════════════════════════════════════════════
-  const projectContextFacts = await buildProjectContextWorkflowFacts({
-    analysisScope,
-    projectRoot: plan.projectAnalysis.projectRoot,
-    contentMaxLines: intent.projectAnalysis.contentMaxLines,
-    ctx,
-    maxFiles: intent.projectAnalysis.maxFiles,
-    source: 'alembic-main-bootstrap',
-  });
+  const projectContextFacts =
+    args.projectContextFacts ??
+    (await buildProjectContextWorkflowFacts({
+      analysisScope,
+      projectRoot: plan.projectAnalysis.projectRoot,
+      contentMaxLines: intent.projectAnalysis.contentMaxLines,
+      ctx,
+      maxFiles: intent.projectAnalysis.maxFiles,
+      source: 'alembic-main-bootstrap',
+    }));
   const sourceIdentities = collectProjectScopeSourceIdentities(projectContextFacts);
 
   if (projectContextFacts.isEmpty) {
@@ -148,20 +160,22 @@ export async function runColdStartWorkflow(ctx: BootstrapMcpContext, args: ColdS
     });
   }
 
-  // ProjectContext 是本轮唯一 project-information carrier；后续只做维度选择与响应格式化。
-  const dimensions = applyTestDimensionFilter(
-    selectProjectContextWorkflowDimensions(
-      projectContextFacts.dimensions,
-      intent.dimensionIds
-    ) as unknown as Parameters<typeof applyTestDimensionFilter>[0],
-    'bootstrap'
-  ) as DimensionDef[];
-  const selectionSummary = buildProjectContextDimensionSelectionSummary({
-    requestedDimensionIds: intent.dimensionIds,
-    selectedDimensions: dimensions,
-    sourceDimensions: projectContextFacts.dimensions,
+  // ProjectContext 仍保留全量 baseDimensions 供 plan 决策；coldStart 执行维度在这里按
+  // 显式输入或 plan projection 裁剪，禁止 plan 失败时静默扩大回全量。
+  const { dimensions, selectionSummary } = resolveColdStartWorkflowDimensionSelection({
+    intentDimensionIds: intent.dimensionIds,
+    planSelectionProjection: args.planSelectionProjection,
+    projectContextDimensions: projectContextFacts.dimensions,
   });
   projectContextFacts.report.dimensionSelection = selectionSummary;
+  if (args.planSelectionProjection) {
+    projectContextFacts.report.planSelectionProjection = {
+      budget: args.planSelectionProjection.budget,
+      executionDimensions: args.planSelectionProjection.executionDimensions,
+      moduleScope: args.planSelectionProjection.moduleScope,
+      unknownDimensionIds: args.planSelectionProjection.unknownDimensionIds ?? [],
+    };
+  }
   projectContextFacts.report.projectScopeSourceIdentities = {
     projectScopeId: analysisScope.projectScopeId,
     sourceCount: sourceIdentities.length,
@@ -171,10 +185,10 @@ export async function runColdStartWorkflow(ctx: BootstrapMcpContext, args: ColdS
     sourceIdentities: sourceIdentities.length,
   });
 
-  // 如果调用方指定了维度子集，只保留匹配的维度
-  if (intent.dimensionIds?.length) {
+  // 如果调用方指定了维度子集，只保留匹配的维度；否则按 plan projection 执行。
+  if (selectionSummary.source !== 'base') {
     ctx.logger.info(
-      `[Bootstrap] Dimension filter: selected=${dimensions.map((d) => d.id).join(', ') || 'none'}, ` +
+      `[Bootstrap] Dimension filter (${selectionSummary.source}): selected=${dimensions.map((d) => d.id).join(', ') || 'none'}, ` +
         `unknown=${selectionSummary.unknownRequestedDimensionIds.join(', ') || 'none'}, ` +
         `duplicateCollapsed=${selectionSummary.duplicateCollapsedCount}`
     );
@@ -284,13 +298,72 @@ function buildProjectContextDimensionSelectionSummary(input: {
   requestedDimensionIds?: readonly string[];
   selectedDimensions: readonly DimensionDef[];
   sourceDimensions: readonly DimensionDef[];
+  source: ColdStartDimensionSelectionSource;
 }) {
   const known = new Set(input.sourceDimensions.map((dimension) => dimension.id));
   return {
     duplicateCollapsedCount: 0,
     selectedDimensionIds: input.selectedDimensions.map((dimension) => dimension.id),
+    source: input.source,
     unknownRequestedDimensionIds: (input.requestedDimensionIds ?? []).filter(
       (id) => !known.has(id)
     ),
   };
+}
+
+export function resolveColdStartWorkflowDimensionSelection(input: {
+  intentDimensionIds?: readonly string[];
+  planSelectionProjection?: PlanSelectionProjection;
+  projectContextDimensions: readonly DimensionDef[];
+}): {
+  dimensions: DimensionDef[];
+  selectionSummary: ReturnType<typeof buildProjectContextDimensionSelectionSummary>;
+} {
+  const explicitDimensionIds = normalizeDimensionIds(input.intentDimensionIds);
+  const planDimensionIds = normalizeDimensionIds(
+    input.planSelectionProjection?.executionDimensions
+  );
+  const source: ColdStartDimensionSelectionSource =
+    explicitDimensionIds.length > 0 ? 'explicit' : input.planSelectionProjection ? 'plan' : 'base';
+  const requestedDimensionIds =
+    source === 'explicit' ? explicitDimensionIds : source === 'plan' ? planDimensionIds : undefined;
+
+  if (source === 'plan' && planDimensionIds.length === 0) {
+    throw new Error('Plan gate selected no executable dimensions for coldStart.');
+  }
+
+  const dimensions = applyTestDimensionFilter(
+    selectProjectContextWorkflowDimensions(
+      input.projectContextDimensions,
+      requestedDimensionIds
+    ) as unknown as Parameters<typeof applyTestDimensionFilter>[0],
+    'bootstrap'
+  ) as DimensionDef[];
+
+  if (source === 'plan' && dimensions.length === 0) {
+    throw new Error('Plan gate selected no known ProjectContext dimensions for coldStart.');
+  }
+
+  return {
+    dimensions,
+    selectionSummary: buildProjectContextDimensionSelectionSummary({
+      requestedDimensionIds,
+      selectedDimensions: dimensions,
+      source,
+      sourceDimensions: input.projectContextDimensions,
+    }),
+  };
+}
+
+function normalizeDimensionIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return [
+    ...new Set(
+      value
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter((item) => item.length > 0)
+    ),
+  ];
 }
