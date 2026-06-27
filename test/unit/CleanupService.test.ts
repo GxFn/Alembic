@@ -14,6 +14,49 @@ afterEach(() => {
 });
 
 describe('CleanupService', () => {
+  test('fullReset clears post-initial Core and Alembic data tables', async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-cleanup-'));
+    const executedSql: string[] = [];
+    const db = {
+      exec(sql: string) {
+        executedSql.push(sql);
+      },
+      prepare() {
+        return {
+          run() {},
+          all() {
+            return [];
+          },
+          get() {
+            return undefined;
+          },
+        };
+      },
+      close() {},
+    };
+
+    const service = new CleanupService({ projectRoot: '/project', dataRoot: tmpDir, db });
+    const result = await service.fullReset();
+
+    const expectedFullResetTables = [
+      'coverage_ledger',
+      'deep_mining_rounds',
+      'recipe_warnings',
+      'source_graph_generations',
+      'source_graph_files',
+      'source_graph_symbols',
+      'source_graph_edges',
+      'git_diff_checkpoints',
+      'project_context_file_snapshots',
+      'token_usage',
+    ];
+
+    for (const table of expectedFullResetTables) {
+      expect(executedSql).toContain(`DELETE FROM ${table}`);
+      expect(result.clearedTables).toContain(table);
+    }
+  });
+
   test('rescanClean preserves incremental evidence tables', async () => {
     const executedSql: string[] = [];
     const db = {
@@ -37,6 +80,8 @@ describe('CleanupService', () => {
     expect(executedSql).not.toContain('DELETE FROM bootstrap_snapshots');
     expect(executedSql).not.toContain('DELETE FROM bootstrap_dim_files');
     expect(executedSql).not.toContain('DELETE FROM recipe_source_refs');
+    expect(executedSql).not.toContain('DELETE FROM coverage_ledger');
+    expect(executedSql).not.toContain('DELETE FROM deep_mining_rounds');
   });
 
   test('rescanClean removes the runtime bootstrap report from dataRoot', async () => {

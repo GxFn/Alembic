@@ -115,12 +115,16 @@ const DB_SNAPSHOT_FILE = 'db-snapshot.jsonl';
  *   lifecycle_transition_events → knowledge_entries, evolution_proposals
  *   evolution_proposals         → knowledge_entries
  *   recipe_source_refs          → knowledge_entries (CASCADE)
+ *   recipe_warnings             → knowledge_entries
  *   bootstrap_dim_files         → bootstrap_snapshots (CASCADE)
+ *   coverage_ledger / deep_mining_rounds 是 Core deepMining 的 measured 状态；
+ *   fullReset 必须清空，避免 coldStart rebuild 后 advisor 读取旧轮次。
  */
 const ALL_DATA_TABLES = [
   // ── FK 子表先删 ──
   'lifecycle_transition_events',
   'recipe_source_refs',
+  'recipe_warnings',
   'evolution_proposals',
   'knowledge_edges',
   'bootstrap_dim_files',
@@ -131,8 +135,17 @@ const ALL_DATA_TABLES = [
   'guard_violations',
   'audit_logs',
   'sessions',
+  'token_usage',
   'semantic_memories',
   'code_entities',
+  'source_graph_edges',
+  'source_graph_symbols',
+  'source_graph_files',
+  'source_graph_generations',
+  'git_diff_checkpoints',
+  'coverage_ledger',
+  'deep_mining_rounds',
+  'project_context_file_snapshots',
 ];
 
 /** rescanClean 时清除的 DB 表（保留知识/进化/增量证据相关表） */
@@ -664,6 +677,9 @@ export class CleanupService {
       'lifecycle_transition_events',
       'evolution_proposals',
       'recipe_source_refs',
+      'recipe_warnings',
+      'coverage_ledger',
+      'deep_mining_rounds',
       'guard_violations',
     ];
 
