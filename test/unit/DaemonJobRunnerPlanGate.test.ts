@@ -750,6 +750,17 @@ describe('DaemonJobRunner deepMining plan gate', () => {
     expect(coverageLedgerRepository.upsertRound).toHaveBeenCalledWith(
       expect.objectContaining({ newRecipesThisRound: 1, roundIndex: 1 })
     );
+    const inlineCoverageWriteOrder =
+      coverageLedgerRepository.upsertCell.mock.invocationCallOrder.at(-1);
+    const roundCloseCallIndex = coverageLedgerRepository.upsertRound.mock.calls.findIndex(
+      ([input]) => input.newRecipesThisRound === 1 && input.roundIndex === 1
+    );
+    const roundCloseOrder =
+      coverageLedgerRepository.upsertRound.mock.invocationCallOrder[roundCloseCallIndex];
+    if (inlineCoverageWriteOrder === undefined || roundCloseOrder === undefined) {
+      throw new Error('Expected inline coverage write and round close calls to be observed.');
+    }
+    expect(inlineCoverageWriteOrder).toBeLessThan(roundCloseOrder);
   });
 
   test('aborts before the next rescan when a later deepMining round plan gate fails', async () => {
