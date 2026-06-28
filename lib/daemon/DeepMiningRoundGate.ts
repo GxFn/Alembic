@@ -1,6 +1,7 @@
 import { adviseCoverageLedger } from '@alembic/core/host-agent-workflows';
 import type { PlanModuleBinding, PlanSelection } from '@alembic/core/plans';
 import type {
+  CoverageLedgerRecord,
   DeepMiningRoundRecord,
   EvolutionCoverageLedgerRepository,
 } from '@alembic/core/repositories';
@@ -167,10 +168,22 @@ export async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise
     throw new Error('deepMining plan gate did not produce an advisor decision.');
   }
 
+  const coverageLedgerSeed = buildCoverageLedgerSeed(
+    coverageLedgerRepository.listByProjectRoot(projectRoot)
+  );
+  recordCoverageLedgerSeedEvent({ coverageLedgerSeed, options });
+  options.logger.info('DeepMining coverage ledger seed retained', {
+    coverageLedgerSeed,
+    jobId: options.jobId,
+    stage: 'deep-mining-coverage-ledger-seed',
+  });
+
   return {
     asyncFill: false,
+    coverageLedgerSeed,
     deepMining: {
       advisor,
+      coverageLedgerSeed,
       moduleCount: latestModuleCount,
       rounds,
       stopReason: advisor.stopReason,
@@ -178,6 +191,144 @@ export async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise
     planSelectionProjection: latestPlanGate.projection,
     status: 'complete',
   };
+}
+
+interface CoverageLedgerSeedSummary {
+  aggregateOrRootModuleIds: string[];
+  coveredPathCount: number;
+  dimensionIds: string[];
+  measuredCells: number;
+  moduleCount: number;
+  reason?: 'aggregate-or-root-only' | 'no-coverage-ledger-cells' | 'no-target-scoped-cells';
+  status: 'skipped' | 'written';
+  targetScopedCells: number;
+  usableCells: number;
+  writtenCells: number;
+}
+
+function buildCoverageLedgerSeed(
+  cells: readonly CoverageLedgerRecord[]
+): CoverageLedgerSeedSummary {
+  const writtenCells = cells.length;
+  const aggregateOrRootModuleIds = uniqueSortedStrings(
+    cells.map((cell) => cell.moduleId).filter(isAggregateOrRootModuleId)
+  );
+  const usableCells = cells.filter((cell) => isTargetScopedCoverageCell(cell));
+  const measuredCells = usableCells.filter(isMeasuredCoverageCell);
+  const dimensionIds = uniqueSortedStrings(usableCells.map((cell) => cell.dimensionId));
+  const moduleIds = uniqueSortedStrings(usableCells.map((cell) => cell.moduleId));
+  const coveredPathCount = uniqueSortedStrings(
+    usableCells.flatMap((cell) =>
+      Array.isArray(cell.coveredSourceRefs) ? cell.coveredSourceRefs : []
+    )
+  ).length;
+  const targetScopedCells = usableCells.length;
+  const reason =
+    targetScopedCells > 0
+      ? undefined
+      : writtenCells === 0
+        ? 'no-coverage-ledger-cells'
+        : aggregateOrRootModuleIds.length === writtenCells
+          ? 'aggregate-or-root-only'
+          : 'no-target-scoped-cells';
+
+  return {
+    aggregateOrRootModuleIds,
+    coveredPathCount,
+    dimensionIds,
+    measuredCells: measuredCells.length,
+    moduleCount: moduleIds.length,
+    ...(reason ? { reason } : {}),
+    status: targetScopedCells > 0 ? 'written' : 'skipped',
+    targetScopedCells,
+    usableCells: targetScopedCells,
+    writtenCells,
+  };
+}
+
+function recordCoverageLedgerSeedEvent(input: {
+  coverageLedgerSeed: CoverageLedgerSeedSummary;
+  options: RunDaemonJobOptions;
+}): void {
+  recordJobProcessEvent(getJobProcessEventRecorder(input.options.container), {
+    content: {
+      mimeType: 'application/json',
+      role: 'assistant',
+      text: JSON.stringify({ coverageLedgerSeed: input.coverageLedgerSeed }, null, 2),
+    },
+    jobId: input.options.jobId,
+    kind: 'summary',
+    metadata: {
+      coverageLedgerSeed: input.coverageLedgerSeed,
+      source: input.options.source || 'system',
+    },
+    phase: 'deep-mining',
+    severity: input.coverageLedgerSeed.status === 'written' ? 'success' : 'warning',
+    summary:
+      input.coverageLedgerSeed.status === 'written'
+        ? `coverageLedgerSeed retained with ${input.coverageLedgerSeed.usableCells} usable target-scoped cell(s) and ${input.coverageLedgerSeed.measuredCells} measured cell(s).`
+        : `coverageLedgerSeed skipped: ${input.coverageLedgerSeed.reason ?? 'unusable coverage ledger'}.`,
+    title: 'DeepMining coverage ledger seed retained',
+  });
+}
+
+function isTargetScopedCoverageCell(cell: CoverageLedgerRecord): boolean {
+  return isTargetScopedModuleId(cell.moduleId) && !isAggregateOrRootModuleId(cell.moduleId);
+}
+
+function isTargetScopedModuleId(moduleId: string): boolean {
+  const normalized = moduleId.trim();
+  if (!normalized.startsWith('target:')) {
+    return false;
+  }
+  const [, targetName, ...pathParts] = normalized.split(':');
+  const modulePath = pathParts.join(':').trim();
+  return Boolean(targetName?.trim() && modulePath && modulePath !== '.' && modulePath !== '/');
+}
+
+function isAggregateOrRootModuleId(moduleId: string): boolean {
+  const normalized = moduleId.trim();
+  if (!normalized) {
+    return true;
+  }
+  const lowered = normalized.toLowerCase();
+  if (
+    lowered === '.' ||
+    lowered === '/' ||
+    lowered === '*' ||
+    lowered === 'all' ||
+    lowered === 'aggregate' ||
+    lowered === 'project' ||
+    lowered === 'project-root' ||
+    lowered === 'root' ||
+    lowered === 'workspace-root' ||
+    lowered.startsWith('aggregate:') ||
+    lowered.startsWith('root:')
+  ) {
+    return true;
+  }
+  if (normalized.startsWith('target:')) {
+    const [, , ...pathParts] = normalized.split(':');
+    const modulePath = pathParts.join(':').trim();
+    return !modulePath || modulePath === '.' || modulePath === '/';
+  }
+  return false;
+}
+
+function isMeasuredCoverageCell(cell: CoverageLedgerRecord): boolean {
+  const coveredSourceRefs = Array.isArray(cell.coveredSourceRefs) ? cell.coveredSourceRefs : [];
+  return (
+    cell.coveredCount > 0 ||
+    coveredSourceRefs.length > 0 ||
+    cell.grade === 'covered' ||
+    cell.grade === 'partial'
+  );
+}
+
+function uniqueSortedStrings(values: readonly string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort((left, right) =>
+    left.localeCompare(right)
+  );
 }
 
 function buildPlanPerDimensionTargets(selection: PlanSelection): Record<string, number> {
