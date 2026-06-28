@@ -85,27 +85,41 @@ export async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise
       triggerActor: 'daemon-job-runner',
     });
 
-    const raw = await runProjectIndexWorkflow(
-      { container: options.container, logger: options.logger },
-      buildDaemonRescanWorkflowArgs({
-        args: {
-          ...options.args,
-          contentMaxLines: planGate.projection.budget.contentMaxLines,
-          dimensions: planGate.projection.executionDimensions,
-          generationStage: 'deepMining',
-          internalExecution: { runAsyncFillInline: true },
-          maxFiles: planGate.projection.budget.maxFiles,
-          miningMode: 'deepMining',
-          moduleDimensionTargets: planContext.moduleDimensionTargets,
-          moduleScope: planGate.projection.moduleScope,
-          perDimensionTargets: planContext.perDimensionTargets,
-          reason: `${options.source || 'daemon'}-deepMining-round-${roundIndex}`,
-          roundIndex,
-        },
-        source: options.source,
-      }),
-      { mode: 'incremental' }
-    );
+    let raw: unknown;
+    try {
+      raw = await runProjectIndexWorkflow(
+        { container: options.container, logger: options.logger },
+        buildDaemonRescanWorkflowArgs({
+          args: {
+            ...options.args,
+            contentMaxLines: planGate.projection.budget.contentMaxLines,
+            dimensions: planGate.projection.executionDimensions,
+            generationStage: 'deepMining',
+            internalExecution: { runAsyncFillInline: true },
+            maxFiles: planGate.projection.budget.maxFiles,
+            miningMode: 'deepMining',
+            moduleDimensionTargets: planContext.moduleDimensionTargets,
+            moduleScope: planGate.projection.moduleScope,
+            perDimensionTargets: planContext.perDimensionTargets,
+            reason: `${options.source || 'daemon'}-deepMining-round-${roundIndex}`,
+            roundIndex,
+          },
+          source: options.source,
+        }),
+        { mode: 'incremental' }
+      );
+    } catch (err: unknown) {
+      failCloseDeepMiningRound({
+        error: err,
+        options,
+        projectRoot,
+        repository: coverageLedgerRepository,
+        rescanId,
+        roundIndex,
+        startedAt,
+      });
+      throw err;
+    }
     const result = unwrapEnvelope(raw);
     const newRecipesThisRound = extractNewRecipesThisRound(result);
     latestRound = coverageLedgerRepository.upsertRound({
@@ -254,6 +268,67 @@ function ensureCoverageLedgerCells(input: {
       totalCandidateCount: target.targetRecipes,
     });
   }
+}
+
+function failCloseDeepMiningRound(input: {
+  error: unknown;
+  options: RunDaemonJobOptions;
+  projectRoot: string;
+  repository: EvolutionCoverageLedgerRepository;
+  rescanId: string;
+  roundIndex: number;
+  startedAt: number;
+}): void {
+  const message = input.error instanceof Error ? input.error.message : String(input.error);
+  const completedAt = Date.now();
+  try {
+    input.repository.upsertRound({
+      completedAt,
+      newRecipesThisRound: 0,
+      projectRoot: input.projectRoot,
+      rescanId: input.rescanId,
+      roundIndex: input.roundIndex,
+      startedAt: input.startedAt,
+      triggerActor: 'daemon-job-runner',
+    });
+  } catch (closeErr: unknown) {
+    input.options.logger.error('DeepMining round failed and fail-closed persistence failed', {
+      closeError: closeErr instanceof Error ? closeErr.message : String(closeErr),
+      error: message,
+      jobId: input.options.jobId,
+      rescanId: input.rescanId,
+      roundIndex: input.roundIndex,
+      stage: 'deep-mining-round-fail-close',
+    });
+    return;
+  }
+
+  input.options.logger.warn('DeepMining round failed after opening; marked round closed', {
+    error: message,
+    jobId: input.options.jobId,
+    rescanId: input.rescanId,
+    roundIndex: input.roundIndex,
+    stage: 'deep-mining-round-fail-closed',
+  });
+  recordJobProcessEvent(getJobProcessEventRecorder(input.options.container), {
+    content: {
+      mimeType: 'text/plain',
+      role: 'assistant',
+      text: message,
+    },
+    jobId: input.options.jobId,
+    kind: 'error',
+    metadata: {
+      completedAt,
+      rescanId: input.rescanId,
+      roundIndex: input.roundIndex,
+      source: input.options.source || 'system',
+    },
+    phase: 'deep-mining',
+    severity: 'error',
+    summary: `deepMining round ${input.roundIndex} failed after opening; row was closed with 0 new recipe(s): ${message}`,
+    title: 'DeepMining round failed closed',
+  });
 }
 
 function latestDeepMiningRound(

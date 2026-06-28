@@ -766,6 +766,215 @@ describe('DaemonJobRunner deepMining plan gate', () => {
     expect(inlineCoverageWriteOrder).toBeLessThan(roundCloseOrder);
   });
 
+  test('fail-closes an opened deepMining round when incremental workflow throws', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const coverageLedgerRepository = makeCoverageLedgerRepository();
+    const recorder = new JobProcessEventRecorder();
+    const container = makeContainer(store, { coverageLedgerRepository, recorder });
+    const projectRoot = (
+      container as unknown as {
+        singletons: { _workspaceResolver: { projectRoot: string } };
+      }
+    ).singletons._workspaceResolver.projectRoot;
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: {
+        contentMaxLines: 40,
+        dimensions: ['architecture'],
+        generationStage: 'deepMining',
+        maxFiles: 4,
+        scaleCap: 1,
+      },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockResolvedValueOnce({
+      dimensions: ['architecture', 'coding-standards'],
+      generationStage: 'deepMining',
+      moduleBindings: [
+        {
+          dimensions: ['architecture', 'coding-standards'],
+          moduleId: 'lib-api',
+          modulePath: 'lib/api',
+          priority: 1,
+          targetRecipes: 1,
+        },
+      ],
+      scale: { totalRecipeBudget: 2 },
+    });
+    vi.mocked(runProjectIndexWorkflow).mockRejectedValueOnce(
+      new Error('bootstrap lease already active')
+    );
+
+    await expect(
+      runDaemonJob({
+        args: {
+          contentMaxLines: 40,
+          dimensions: ['architecture'],
+          generationStage: 'deepMining',
+          maxFiles: 4,
+          scaleCap: 1,
+        },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).rejects.toThrow('bootstrap lease already active');
+
+    expect(coverageLedgerRepository.upsertRound).toHaveBeenCalledWith(
+      expect.objectContaining({
+        completedAt: expect.any(Number),
+        newRecipesThisRound: 0,
+        rescanId: `${job.id}:deepMining:1`,
+        roundIndex: 1,
+      })
+    );
+    expect(coverageLedgerRepository.listRoundsByProjectRoot(projectRoot)).toEqual([
+      expect.objectContaining({
+        completedAt: expect.any(Number),
+        newRecipesThisRound: 0,
+        rescanId: `${job.id}:deepMining:1`,
+        roundIndex: 1,
+      }),
+    ]);
+    expect(recorder.list(job.id).events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          phase: 'deep-mining',
+          severity: 'error',
+          summary: expect.stringContaining('row was closed with 0 new recipe'),
+          title: 'DeepMining round failed closed',
+        }),
+      ])
+    );
+    expect(store.get(job.id)).toMatchObject({
+      error: { message: 'bootstrap lease already active' },
+      status: 'failed',
+    });
+  });
+
+  test('applies explicit deepMining parity seed to plan projection and rescan args', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const coverageLedgerRepository = makeCoverageLedgerRepository();
+    const recorder = new JobProcessEventRecorder();
+    const container = makeContainer(store, { coverageLedgerRepository, recorder });
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: {
+        contentMaxLines: 40,
+        dimensions: ['architecture'],
+        generationStage: 'deepMining',
+        maxFiles: 4,
+        maxRounds: 1,
+        minNewRecipes: 1,
+        scaleCap: 1,
+      },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockResolvedValueOnce({
+      dimensions: ['architecture', 'coding-standards', 'error-resilience'],
+      generationStage: 'deepMining',
+      moduleBindings: [
+        {
+          dimensions: ['architecture', 'coding-standards'],
+          moduleId: 'lib-api',
+          modulePath: 'lib/api',
+          priority: 1,
+          targetRecipes: 8,
+        },
+        {
+          dimensions: ['architecture', 'error-resilience'],
+          moduleId: 'lib-core',
+          modulePath: 'lib/core',
+          priority: 2,
+          targetRecipes: 3,
+        },
+      ],
+      scale: { contentMaxLines: 120, maxFiles: 500, totalRecipeBudget: 9 },
+    });
+    vi.mocked(runProjectIndexWorkflow).mockResolvedValueOnce({
+      data: { newRecipesThisRound: 0 },
+    });
+
+    await expect(
+      runDaemonJob({
+        args: {
+          contentMaxLines: 40,
+          dimensions: ['architecture'],
+          generationStage: 'deepMining',
+          maxFiles: 4,
+          maxRounds: 1,
+          minNewRecipes: 1,
+          scaleCap: 1,
+        },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).resolves.toMatchObject({
+      job: { status: 'completed' },
+      result: {
+        deepMining: {
+          advisor: {
+            k: 1,
+            maxRounds: 1,
+          },
+          rounds: [expect.objectContaining({ newRecipesThisRound: 0, roundIndex: 1 })],
+          stopReason: 'diminishing-returns',
+        },
+        planSelectionProjection: {
+          budget: { contentMaxLines: 40, maxFiles: 4, totalRecipeBudget: 1 },
+          executionDimensions: ['architecture'],
+          moduleScope: ['lib/api'],
+        },
+      },
+    });
+
+    expect(runProjectIndexWorkflow).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(runProjectIndexWorkflow).mock.calls[0]?.[1]).toMatchObject({
+      contentMaxLines: 40,
+      dimensions: ['architecture'],
+      maxFiles: 4,
+      miningMode: 'deepMining',
+      moduleDimensionTargets: [
+        {
+          dimensionId: 'architecture',
+          moduleId: 'lib-api',
+          moduleName: 'api',
+          targetRecipes: 8,
+        },
+      ],
+      moduleScope: ['lib/api'],
+      perDimensionTargets: { architecture: 8 },
+      roundIndex: 1,
+    });
+    expect(recorder.list(job.id).events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            requestConstraints: expect.objectContaining({
+              contentMaxLines: 40,
+              dimensions: ['architecture'],
+              maxFiles: 4,
+              maxRounds: 1,
+              minNewRecipes: 1,
+              scaleCap: 1,
+            }),
+          }),
+          phase: 'plan-gate',
+          severity: 'success',
+        }),
+      ])
+    );
+  });
+
   test('aborts before the next rescan when a later deepMining round plan gate fails', async () => {
     const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
     const coverageLedgerRepository = makeCoverageLedgerRepository();
