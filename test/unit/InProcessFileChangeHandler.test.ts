@@ -1,6 +1,7 @@
 import type { FileChangeEvent, ImpactLevel } from '@alembic/core/types';
 import { vi } from 'vitest';
-import { FileChangeHandler } from '../../lib/service/evolution/FileChangeHandler.js';
+import { FileChangeHandler as CompatFileChangeHandler } from '../../lib/service/evolution/FileChangeHandler.js';
+import { InProcessFileChangeHandler } from '../../lib/service/evolution/InProcessFileChangeHandler.js';
 
 /* ════════════════════════════════════════════
  *  Mock ContentImpactAnalyzer — 控制 diff 返回
@@ -93,7 +94,7 @@ function createHandler(overrides: Record<string, unknown> = {}) {
   const signalBus = (overrides.signalBus as ReturnType<typeof mockSignalBus>) ?? mockSignalBus();
   const gateway = (overrides.gateway as ReturnType<typeof mockGateway>) ?? mockGateway();
 
-  const handler = new FileChangeHandler(
+  const handler = new InProcessFileChangeHandler(
     sourceRefRepo as never,
     knowledgeRepo as never,
     contentPatcher as never,
@@ -110,7 +111,7 @@ function createHandler(overrides: Record<string, unknown> = {}) {
  *  Tests
  * ════════════════════════════════════════════ */
 
-describe('FileChangeHandler', () => {
+describe('InProcessFileChangeHandler', () => {
   beforeEach(() => {
     mockAssessFileImpact.mockReset();
     mockExtractRecipeTokens.mockReset();
@@ -142,7 +143,7 @@ describe('FileChangeHandler', () => {
       // 但信号仍然发射
       expect(signalBus.send).toHaveBeenCalledWith(
         'quality',
-        'FileChangeHandler',
+        'InProcessFileChangeHandler',
         expect.any(Number),
         expect.objectContaining({ target: 'r1' })
       );
@@ -254,7 +255,7 @@ describe('FileChangeHandler', () => {
 
       expect(signalBus.send).toHaveBeenCalledWith(
         'quality',
-        'FileChangeHandler',
+        'InProcessFileChangeHandler',
         0.3, // reference weight
         expect.objectContaining({
           target: 'r1',
@@ -487,7 +488,7 @@ describe('FileChangeHandler', () => {
       expect(report.details[0].reason).toContain('fetchPopular');
       expect(signalBus.send).toHaveBeenCalledWith(
         'quality',
-        'FileChangeHandler',
+        'InProcessFileChangeHandler',
         expect.any(Number),
         expect.objectContaining({
           target: 'r1',
@@ -569,13 +570,19 @@ describe('FileChangeHandler', () => {
 
       expect(signalBus.send).toHaveBeenCalledWith(
         'quality',
-        'FileChangeHandler',
+        'InProcessFileChangeHandler',
         expect.any(Number),
         expect.objectContaining({
           target: 'r1',
           metadata: expect.objectContaining({ reason: 'source_modified' }),
         })
       );
+    });
+  });
+
+  describe('R1 compatibility alias', () => {
+    test('keeps FileChangeHandler named imports wired to the in-process handler', () => {
+      expect(CompatFileChangeHandler).toBe(InProcessFileChangeHandler);
     });
   });
 });

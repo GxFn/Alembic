@@ -29,7 +29,7 @@ vi.mock('../../lib/injection/ServiceContainer.js', () => ({
 
 import fileChangesRouter from '../../lib/http/routes/file-changes.js';
 import { DaemonFileChangeCollector } from '../../lib/service/evolution/DaemonFileChangeCollector.js';
-import { FileChangeHandler } from '../../lib/service/evolution/FileChangeHandler.js';
+import { InProcessFileChangeHandler } from '../../lib/service/evolution/InProcessFileChangeHandler.js';
 import { FileChangeDispatcher } from '../../lib/service/FileChangeDispatcher.js';
 
 const tempDirs: string[] = [];
@@ -68,7 +68,7 @@ describe('file-changes route', () => {
 
     const dispatcher = new FileChangeDispatcher();
     dispatcher.register(
-      new FileChangeHandler(
+      new InProcessFileChangeHandler(
         sourceRefRepo as never,
         knowledgeRepo as never,
         contentPatcher as never,
@@ -197,7 +197,7 @@ describe('file-changes route', () => {
 
     const dispatcher = new FileChangeDispatcher();
     dispatcher.register(
-      new FileChangeHandler(
+      new InProcessFileChangeHandler(
         sourceRefRepo as never,
         knowledgeRepo as never,
         contentPatcher as never,

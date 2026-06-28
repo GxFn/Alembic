@@ -48,7 +48,7 @@ import {
   normalizeProjectScopeSourceRefsForRuntime,
   resolveProjectScopeSourceIdentitiesFromContainer,
 } from '../../project-scope/ProjectScopeAnalysis.js';
-import { FileChangeHandler } from '../../service/evolution/FileChangeHandler.js';
+import { InProcessFileChangeHandler } from '../../service/evolution/InProcessFileChangeHandler.js';
 import { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 import { getCoreRepositoryBundle } from './InfraModule.js';
@@ -356,7 +356,7 @@ export function register(c: ServiceContainer) {
     const gateway = ct.get('evolutionGateway') as EvolutionGateway;
     const dataRoot = resolveDataRoot(ct) as string;
     const projectRoot = resolveProjectRoot(ct);
-    return new FileChangeHandler(sourceRefRepo, knowledgeRepo, contentPatcher, {
+    return new InProcessFileChangeHandler(sourceRefRepo, knowledgeRepo, contentPatcher, {
       signalBus:
         (ct.singletons.signalBus as import('@alembic/core/events').SignalBus | undefined) ||
         undefined,
@@ -368,7 +368,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('fileChangeDispatcher', (ct: ServiceContainer) => {
     const dispatcher = new FileChangeDispatcher();
-    const handler = ct.get('fileChangeHandler') as FileChangeHandler;
+    const handler = ct.get('fileChangeHandler') as InProcessFileChangeHandler;
     dispatcher.register(handler);
     return dispatcher;
   });

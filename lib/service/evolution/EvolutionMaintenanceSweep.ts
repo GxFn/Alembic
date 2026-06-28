@@ -72,7 +72,7 @@ export interface EvolutionMaintenanceSweepResult {
  *
  * The sweep only drives Core lifecycle/evolution services on a bounded cadence.
  * It does not alter Core judgments, transition guards, proposal policies, or
- * schema. Reactive file-change handling remains owned by FileChangeHandler.
+ * schema. Reactive file-change handling remains owned by InProcessFileChangeHandler.
  */
 export class EvolutionMaintenanceSweep {
   readonly #cap: number;

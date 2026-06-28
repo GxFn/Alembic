@@ -127,7 +127,7 @@ router.post('/', validate(FileChangesBody), async (req: Request, res: Response) 
     const container = getServiceContainer();
     const dispatcher = container.get('fileChangeDispatcher') as FileChangeDispatcher;
 
-    // 同步分发 — FileChangeHandler 是纯代码路径毫秒级（文档 §5.1 备注）
+    // 同步分发 — InProcessFileChangeHandler 是纯代码路径毫秒级（文档 §5.1 备注）
     let report: ReactiveEvolutionReport;
     try {
       report = await dispatcher.dispatch(validEvents);
