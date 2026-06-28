@@ -404,6 +404,40 @@ export function releaseProjectContextWorkflowSession(input: {
   return released;
 }
 
+export function releaseProjectContextWorkflowSessionByProjectRoot(input: {
+  container: ProjectContextContainer;
+  logger: ProjectContextLogger;
+  projectRoot: string;
+  reason: string;
+}): {
+  released: boolean;
+  workflowSessionId: string | null;
+} {
+  const sessionManager = getOrCreateSessionManager(input.container);
+  const existing = sessionManager.getAnySession(undefined, {
+    projectRoot: input.projectRoot,
+  });
+  if (!existing) {
+    input.logger.info('[ProjectContextWorkflowFacts] Workflow session release skipped', {
+      projectRoot: input.projectRoot,
+      reason: input.reason,
+      workflowSessionId: null,
+    });
+    return { released: false, workflowSessionId: null };
+  }
+
+  sessionManager.releaseProjectLease(input.projectRoot);
+  const released =
+    sessionManager.getAnySession(existing.id, { projectRoot: input.projectRoot }) === null;
+  input.logger.info('[ProjectContextWorkflowFacts] Workflow session lease released', {
+    projectRoot: input.projectRoot,
+    reason: input.reason,
+    released,
+    workflowSessionId: existing.id,
+  });
+  return { released, workflowSessionId: existing.id };
+}
+
 export function registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion(input: {
   bootstrapSessionId: string | null | undefined;
   container: ProjectContextContainer;

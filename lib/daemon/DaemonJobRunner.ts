@@ -1,8 +1,16 @@
 import type { DaemonJobRecord, DaemonJobStatus, JobStore } from '@alembic/core/daemon';
+import type {
+  DeepMiningRoundRecord,
+  EvolutionCoverageLedgerRepository,
+} from '@alembic/core/repositories';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
-import { resolveProjectScopeSourceIdentitiesFromContainer } from '../project-scope/ProjectScopeAnalysis.js';
+import {
+  resolveProjectScopeAnalysisContext,
+  resolveProjectScopeSourceIdentitiesFromContainer,
+} from '../project-scope/ProjectScopeAnalysis.js';
 import type { BootstrapProcessEventDraft } from '../service/bootstrap/bootstrap-event-types.js';
+import { releaseProjectContextWorkflowSessionByProjectRoot } from '../workflows/project-context/ProjectContextWorkflowFacts.js';
 import {
   getJobDisplaySnapshotStore,
   getJobProcessEventRecorder,
@@ -378,6 +386,12 @@ export function cancelDaemonJob(options: {
   }
   const cancelled = store.cancel(options.jobId, reason);
   if (cancelled) {
+    cleanupCancelledRescanJob({
+      container: options.container,
+      job,
+      reason,
+      recorder,
+    });
     recordJobProcessEvent(recorder, {
       jobId: options.jobId,
       kind: 'summary',
@@ -395,6 +409,169 @@ export function cancelDaemonJob(options: {
     });
   }
   return cancelled;
+}
+
+function cleanupCancelledRescanJob(options: {
+  container: ServiceContainer;
+  job: DaemonJobRecord;
+  reason: string;
+  recorder: JobProcessEventRecorder;
+}): void {
+  if (options.job.kind !== 'rescan') {
+    return;
+  }
+
+  const logger = getCancellationCleanupLogger(options.container);
+  let projectRoot: string;
+  try {
+    projectRoot = resolveProjectScopeAnalysisContext(options.container).projectRoot;
+  } catch (err: unknown) {
+    projectRoot = options.job.projectRoot;
+    logger.warn('Rescan cancellation cleanup fell back to job projectRoot', {
+      error: err instanceof Error ? err.message : String(err),
+      jobId: options.job.id,
+      projectRoot,
+      stage: 'rescan-cancel-cleanup-project-root',
+    });
+  }
+
+  const sessionRelease = releaseProjectContextWorkflowSessionByProjectRoot({
+    container: options.container,
+    logger,
+    projectRoot,
+    reason: 'rescan:bootstrap-session-cancelled',
+  });
+  if (sessionRelease.released) {
+    recordJobProcessEvent(options.recorder, {
+      jobId: options.job.id,
+      kind: 'summary',
+      metadata: {
+        projectRoot,
+        reason: options.reason,
+        workflowSessionId: sessionRelease.workflowSessionId,
+      },
+      phase: 'cancelled',
+      severity: 'warning',
+      summary: 'Rescan cancellation released the ProjectContext workflow session lease.',
+      title: 'Rescan workflow session released',
+    });
+  }
+
+  closeCancelledDeepMiningRounds({
+    ...options,
+    logger,
+    projectRoot,
+  });
+}
+
+function closeCancelledDeepMiningRounds(options: {
+  container: ServiceContainer;
+  job: DaemonJobRecord;
+  logger: LoggerLike;
+  projectRoot: string;
+  reason: string;
+  recorder: JobProcessEventRecorder;
+}): void {
+  const repository = getOptionalService<EvolutionCoverageLedgerRepository>(
+    options.container,
+    'coverageLedgerRepository'
+  );
+  if (!repository || typeof repository.listRoundsByProjectRoot !== 'function') {
+    return;
+  }
+
+  const openRounds = repository
+    .listRoundsByProjectRoot(options.projectRoot)
+    .filter((round) => isOpenRoundForJob(round, options.job.id));
+  if (openRounds.length === 0) {
+    return;
+  }
+
+  for (const round of openRounds) {
+    const completedAt = Date.now();
+    try {
+      repository.upsertRound({
+        completedAt,
+        newRecipesThisRound: round.newRecipesThisRound ?? 0,
+        projectRoot: options.projectRoot,
+        rescanId: round.rescanId,
+        roundIndex: round.roundIndex,
+        startedAt: round.startedAt,
+        triggerActor: round.triggerActor ?? 'daemon-job-runner',
+      });
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err.message : String(err);
+      options.logger.error('Rescan cancellation could not close open deepMining round', {
+        error,
+        jobId: options.job.id,
+        projectRoot: options.projectRoot,
+        rescanId: round.rescanId,
+        roundIndex: round.roundIndex,
+        stage: 'deep-mining-round-cancel-close',
+      });
+      recordJobProcessEvent(options.recorder, {
+        content: {
+          mimeType: 'text/plain',
+          role: 'assistant',
+          text: error,
+        },
+        jobId: options.job.id,
+        kind: 'error',
+        metadata: {
+          projectRoot: options.projectRoot,
+          rescanId: round.rescanId,
+          roundIndex: round.roundIndex,
+        },
+        phase: 'deep-mining',
+        severity: 'error',
+        summary: `deepMining round ${round.roundIndex} cancellation cleanup failed: ${error}`,
+        title: 'DeepMining round cancellation cleanup failed',
+      });
+      continue;
+    }
+
+    options.logger.warn('DeepMining round cancelled; marked round closed', {
+      completedAt,
+      jobId: options.job.id,
+      projectRoot: options.projectRoot,
+      reason: options.reason,
+      rescanId: round.rescanId,
+      roundIndex: round.roundIndex,
+      stage: 'deep-mining-round-cancel-closed',
+    });
+    recordJobProcessEvent(options.recorder, {
+      jobId: options.job.id,
+      kind: 'summary',
+      metadata: {
+        completedAt,
+        projectRoot: options.projectRoot,
+        rescanId: round.rescanId,
+        roundIndex: round.roundIndex,
+      },
+      phase: 'deep-mining',
+      severity: 'warning',
+      summary: `deepMining round ${round.roundIndex} was cancelled; row was closed with 0 new recipe(s).`,
+      title: 'DeepMining round cancelled closed',
+    });
+  }
+}
+
+function isOpenRoundForJob(round: DeepMiningRoundRecord, jobId: string): boolean {
+  return (
+    round.completedAt === null &&
+    typeof round.rescanId === 'string' &&
+    round.rescanId.startsWith(`${jobId}:deepMining:`)
+  );
+}
+
+function getCancellationCleanupLogger(container: ServiceContainer): LoggerLike {
+  return (
+    getOptionalService<LoggerLike>(container, 'logger') ?? {
+      error: () => {},
+      info: () => {},
+      warn: () => {},
+    }
+  );
 }
 
 export function markInterruptedDaemonJobs(options: {

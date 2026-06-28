@@ -19,6 +19,7 @@ import {
   createProjectContextWorkflowSession,
   type ProjectContextWorkflowFacts,
   registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion,
+  releaseProjectContextWorkflowSessionByProjectRoot,
 } from '../../lib/workflows/project-context/ProjectContextWorkflowFacts.js';
 import {
   buildProjectMapModules,
@@ -220,6 +221,44 @@ describe('ProjectContextWorkflowFacts', () => {
         reason: 'cold-start:bootstrap-session-cancelled',
         released: true,
         workflowSessionId: coldStartSession.id,
+      })
+    );
+  });
+
+  test('releases rescan workflow leases by project root during daemon cancellation cleanup', () => {
+    const projectRoot = '/tmp/alembic-rescan-session-cancelled-project';
+    const manager = new BootstrapSessionManager();
+    const eventBus = new EventEmitter();
+    const container = createSessionContainer(manager, eventBus);
+    const logger = createSessionLogger();
+    const dimensions = createWorkflowDimensions();
+    const facts = createWorkflowFacts(projectRoot);
+
+    const rescanSession = createProjectContextWorkflowSession({
+      container,
+      dimensions,
+      facts,
+      projectRoot,
+    });
+
+    const released = releaseProjectContextWorkflowSessionByProjectRoot({
+      container,
+      logger,
+      projectRoot,
+      reason: 'rescan:bootstrap-session-cancelled',
+    });
+
+    expect(released).toEqual({
+      released: true,
+      workflowSessionId: rescanSession.id,
+    });
+    expect(manager.getAnySession(rescanSession.id, { projectRoot })).toBeNull();
+    expect(logger.info).toHaveBeenCalledWith(
+      '[ProjectContextWorkflowFacts] Workflow session lease released',
+      expect.objectContaining({
+        reason: 'rescan:bootstrap-session-cancelled',
+        released: true,
+        workflowSessionId: rescanSession.id,
       })
     );
   });

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { JobStore, validateJobDisplaySnapshot } from '@alembic/core/daemon';
+import { BootstrapSessionManager } from '@alembic/core/host-agent-workflows';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   attachBootstrapProcessEventBridge,
@@ -50,6 +51,29 @@ function makeLogger() {
     error: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
+  };
+}
+
+function makeCoverageLedgerRepository(initialRounds: Array<Record<string, unknown>> = []) {
+  const rounds = new Map<string, Record<string, unknown>>();
+  for (const round of initialRounds) {
+    rounds.set(String(round.rescanId ?? round.roundIndex), round);
+  }
+  return {
+    listRoundsByProjectRoot: vi.fn((projectRoot: string) =>
+      [...rounds.values()].filter((round) => round.projectRoot === projectRoot)
+    ),
+    upsertRound: vi.fn((input: Record<string, unknown>) => {
+      const key = String(input.rescanId ?? input.roundIndex);
+      const saved = {
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        ...rounds.get(key),
+        ...input,
+      };
+      rounds.set(key, saved);
+      return saved;
+    }),
   };
 }
 
@@ -218,6 +242,107 @@ describe('cancelDaemonJob', () => {
         path.join(process.cwd(), '.asd', 'job-display-snapshots', created.id, 'snapshot.json')
       )
     ).toBe(false);
+  });
+
+  test('releases rescan workflow sessions and closes open deepMining rounds when cancelled', () => {
+    useTempAlembicHome();
+    const projectRoot = makeProjectRoot();
+    const store = new JobStore({ projectRoot });
+    const created = store.create({
+      kind: 'rescan',
+      request: {
+        generationStage: 'deepMining',
+        miningMode: 'deepMining',
+      },
+      source: 'dashboard',
+    });
+    store.markRunning(created.id);
+
+    const bootstrapSessionManager = new BootstrapSessionManager();
+    const workflowSession = bootstrapSessionManager.createSession({
+      dimensions: [{ id: 'architecture', label: 'Architecture' }],
+      projectContext: {
+        fileCount: 4,
+        modules: 1,
+        primaryLang: 'swift',
+        projectName: 'BiliDili',
+      },
+      projectRoot,
+    });
+    const coverageLedgerRepository = makeCoverageLedgerRepository([
+      {
+        completedAt: null,
+        createdAt: 1,
+        newRecipesThisRound: 0,
+        projectRoot,
+        rescanId: `${created.id}:deepMining:1`,
+        roundIndex: 1,
+        startedAt: 1,
+        triggerActor: 'daemon-job-runner',
+        updatedAt: 1,
+      },
+    ]);
+    const recorder = new JobProcessEventRecorder();
+    const logger = makeLogger();
+
+    const cancelled = cancelDaemonJob({
+      container: makeContainer(
+        store,
+        {
+          bootstrapSessionManager,
+          coverageLedgerRepository,
+          jobProcessEventRecorder: recorder,
+          logger,
+        },
+        {
+          _workspaceResolver: {
+            currentFolderId: null,
+            dataRoot: projectRoot,
+            projectRoot,
+            projectScope: null,
+          },
+        }
+      ),
+      jobId: created.id,
+      reason: 'bounded rescan probe exceeded its window',
+    });
+
+    expect(cancelled).toMatchObject({
+      error: { message: 'bounded rescan probe exceeded its window' },
+      status: 'cancelled',
+    });
+    expect(bootstrapSessionManager.getAnySession(workflowSession.id, { projectRoot })).toBeNull();
+    expect(coverageLedgerRepository.upsertRound).toHaveBeenCalledWith(
+      expect.objectContaining({
+        completedAt: expect.any(Number),
+        newRecipesThisRound: 0,
+        projectRoot,
+        rescanId: `${created.id}:deepMining:1`,
+        roundIndex: 1,
+        startedAt: 1,
+        triggerActor: 'daemon-job-runner',
+      })
+    );
+    expect(coverageLedgerRepository.listRoundsByProjectRoot(projectRoot)).toEqual([
+      expect.objectContaining({
+        completedAt: expect.any(Number),
+        rescanId: `${created.id}:deepMining:1`,
+      }),
+    ]);
+    expect(recorder.list(created.id).events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          phase: 'cancelled',
+          summary: 'Rescan cancellation released the ProjectContext workflow session lease.',
+          title: 'Rescan workflow session released',
+        }),
+        expect.objectContaining({
+          phase: 'deep-mining',
+          summary: expect.stringContaining('row was closed with 0 new recipe'),
+          title: 'DeepMining round cancelled closed',
+        }),
+      ])
+    );
   });
 });
 
