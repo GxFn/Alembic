@@ -1,6 +1,4 @@
 import type { AgentService } from '@alembic/agent/service';
-import type { PlanModuleBinding, PlanSelectionProjection } from '@alembic/core/plans';
-import type { ProjectContextWorkflowFacts } from '../workflows/project-context/ProjectContextWorkflowFacts.js';
 import { getJobProcessEventRecorder } from './DaemonJobServices.js';
 import {
   asRecord,
@@ -9,16 +7,15 @@ import {
   positiveIntegerArg,
   recordJobProcessEvent,
   stringValue,
-  uniqueStrings,
 } from './DaemonJobWorkflowHelpers.js';
 import type {
   ModuleMiningKnowledgeRepositoryLike,
-  ModuleMiningModule,
   ModuleMiningPersistedOutputDelta,
   ModuleMiningPersistenceSnapshot,
   ModuleMiningSourceRefRepositoryLike,
   RunDaemonJobOptions,
 } from './DaemonJobWorkflowTypes.js';
+import { selectProjectIndexModuleMiningModules } from './ModuleMiningSelection.js';
 import { runPlanSelectionGate } from './PlanSelectionGate.js';
 
 export async function runModuleMiningWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
@@ -27,10 +24,11 @@ export async function runModuleMiningWorkflow(options: RunDaemonJobOptions): Pro
     label: 'ModuleMining',
     source: 'alembic-main-rescan',
   });
-  const modules = selectModuleMiningModules({
+  const modules = selectProjectIndexModuleMiningModules({
+    bindings: planGate.selection.moduleBindings,
+    executionDimensions: planGate.projection.executionDimensions,
     facts: planGate.projectContextFacts,
-    projection: planGate.projection,
-    selection: planGate.selection,
+    moduleScope: planGate.projection.moduleScope,
   });
   if (modules.length === 0) {
     throw new Error('moduleMining requires at least one ProjectMap module.');
@@ -98,80 +96,6 @@ export async function runModuleMiningWorkflow(options: RunDaemonJobOptions): Pro
     },
     planSelectionProjection: planGate.projection,
   };
-}
-
-function selectModuleMiningModules(input: {
-  facts: ProjectContextWorkflowFacts;
-  projection: PlanSelectionProjection;
-  selection: { moduleBindings: readonly PlanModuleBinding[] };
-}): ModuleMiningModule[] {
-  const bindings = input.selection.moduleBindings;
-  const bindingDimensions = new Map<string, Set<string>>();
-  const moduleBindingKeys = new Set<string>();
-  const executionDimensions = new Set(input.projection.executionDimensions);
-
-  for (const binding of bindings) {
-    const keys = moduleBindingCandidateKeys(binding);
-    for (const key of keys) {
-      moduleBindingKeys.add(key);
-      const dimensions = bindingDimensions.get(key) ?? new Set<string>();
-      for (const dimension of binding.dimensions) {
-        if (executionDimensions.has(dimension)) {
-          dimensions.add(dimension);
-        }
-      }
-      bindingDimensions.set(key, dimensions);
-    }
-  }
-
-  const scopedModules = new Set(input.projection.moduleScope);
-  return input.facts.projectMapModules
-    .filter((module) => {
-      const moduleKeys = projectMapModuleCandidateKeys(module);
-      const matchesModuleBinding =
-        moduleBindingKeys.size === 0 || moduleKeys.some((key) => moduleBindingKeys.has(key));
-      const matchesModuleScope =
-        scopedModules.size === 0 || moduleKeys.some((key) => scopedModules.has(key));
-      return matchesModuleBinding && matchesModuleScope;
-    })
-    .map((module): ModuleMiningModule => {
-      const moduleKeys = projectMapModuleCandidateKeys(module);
-      const plannedDimensions = uniqueStrings(
-        moduleKeys.flatMap((key) => [...(bindingDimensions.get(key) ?? [])])
-      );
-      return {
-        dimensions:
-          plannedDimensions.length > 0 ? plannedDimensions : input.projection.executionDimensions,
-        moduleId: module.moduleId,
-        moduleName: module.moduleName,
-        modulePath: module.modulePath,
-        ownedFiles: module.ownedFiles,
-        role: module.role,
-      };
-    })
-    .filter((module) => module.moduleName.trim().length > 0);
-}
-
-function moduleBindingCandidateKeys(binding: PlanModuleBinding): string[] {
-  return uniqueStrings([
-    binding.moduleId ?? '',
-    binding.modulePath,
-    moduleNameFromBinding(binding),
-  ]);
-}
-
-function moduleNameFromBinding(binding: PlanModuleBinding): string {
-  return (
-    binding.modulePath.split('/').filter(Boolean).at(-1) || binding.moduleId || binding.modulePath
-  );
-}
-
-function projectMapModuleCandidateKeys(module: {
-  moduleId: string;
-  moduleName: string;
-  modulePath?: string;
-}): string[] {
-  return uniqueStrings([module.moduleId, module.moduleName, module.modulePath ?? '']);
 }
 
 async function readModuleMiningPersistenceSnapshot(

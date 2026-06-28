@@ -1701,9 +1701,24 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
       expect.objectContaining({
         budget: { contentMaxLines: 120, maxFiles: 500, totalRecipeBudget: 3 },
         modules: [
-          expect.objectContaining({ moduleName: 'module-1' }),
-          expect.objectContaining({ moduleName: 'module-2' }),
-          expect.objectContaining({ moduleName: 'module-3' }),
+          expect.objectContaining({
+            dimensions: ['architecture'],
+            dimensionIds: ['architecture'],
+            moduleName: 'module-1',
+            plannedDimensions: ['architecture'],
+          }),
+          expect.objectContaining({
+            dimensions: ['architecture'],
+            dimensionIds: ['architecture'],
+            moduleName: 'module-2',
+            plannedDimensions: ['architecture'],
+          }),
+          expect.objectContaining({
+            dimensions: ['architecture'],
+            dimensionIds: ['architecture'],
+            moduleName: 'module-3',
+            plannedDimensions: ['architecture'],
+          }),
         ],
         scaleCap: 3,
       })

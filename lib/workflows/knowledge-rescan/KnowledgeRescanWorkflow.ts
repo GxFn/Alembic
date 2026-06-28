@@ -51,6 +51,7 @@ import type { EvolutionCoverageLedgerRepository } from '@alembic/core/repositori
 import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type { DimensionDef, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
+import { selectProjectIndexModuleMiningModules } from '../../daemon/ModuleMiningSelection.js';
 import {
   attachProjectScopeSourceIdentitiesToView,
   buildProjectScopeAnalysisLogMeta,
@@ -667,10 +668,12 @@ async function runKnowledgeRescanProjectIndexWorkflow(
     !controllerProduceSessionRequest.enabled &&
     !intent.internalExecution?.skipAsyncFill
   ) {
-    const modules = selectKnowledgeRescanModuleMiningModules(
-      projectContextFacts,
-      miningPlanOptions.moduleScope
-    );
+    const modules = selectProjectIndexModuleMiningModules({
+      bindings: miningPlanOptions.moduleMiningBindings,
+      executionDimensions: executionDimensions.map((dimension) => dimension.id),
+      facts: projectContextFacts,
+      moduleScope: miningPlanOptions.moduleScope,
+    });
     if (modules.length === 0) {
       throw new Error('KnowledgeRescanWorkflow moduleMining requires ProjectMap modules.');
     }
@@ -1008,7 +1011,7 @@ function buildKnowledgeRescanMiningPlanOptions(input: {
 }) {
   const moduleScope = normalizeStringArray(input.args.moduleScope);
   if (!input.miningMode) {
-    return { moduleScope, planOptions: {} };
+    return { moduleMiningBindings: [], moduleScope, planOptions: {} };
   }
 
   const coverageLedgerRepository = getCoverageLedgerRepository(input.ctx.container);
@@ -1033,6 +1036,11 @@ function buildKnowledgeRescanMiningPlanOptions(input: {
   });
 
   return {
+    moduleMiningBindings: moduleDimensionTargets.map((target) => ({
+      dimensions: [target.dimensionId],
+      moduleId: target.moduleId,
+      moduleName: target.moduleName,
+    })),
     moduleScope,
     planOptions: {
       ledgerCoverageByDimension: coverageLedgerRepository
@@ -1055,29 +1063,6 @@ function buildLedgerCoverageByDimension(
     coverage[cell.dimensionId] = (coverage[cell.dimensionId] ?? 0) + cell.coveredCount;
   }
   return coverage;
-}
-
-function selectKnowledgeRescanModuleMiningModules(
-  facts: ProjectContextWorkflowFacts,
-  moduleScope: readonly string[]
-) {
-  const scoped = new Set(moduleScope);
-  return facts.projectMapModules
-    .filter((module) => {
-      if (scoped.size === 0) {
-        return true;
-      }
-      return [module.moduleId, module.moduleName, module.modulePath ?? ''].some((key) =>
-        scoped.has(key)
-      );
-    })
-    .map((module) => ({
-      moduleId: module.moduleId,
-      moduleName: module.moduleName,
-      modulePath: module.modulePath,
-      ownedFiles: module.ownedFiles,
-      role: module.role,
-    }));
 }
 
 function getCoverageLedgerRepository(container: {

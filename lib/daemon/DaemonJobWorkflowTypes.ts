@@ -65,10 +65,13 @@ export interface DeepMiningRoundPlanContext {
 
 export interface ModuleMiningModule {
   [key: string]: unknown;
+  dimensionIds?: string[];
+  dimensions?: string[];
   moduleId: string;
   moduleName: string;
   modulePath?: string;
   ownedFiles?: string[];
+  plannedDimensions?: string[];
 }
 
 export interface ModuleMiningKnowledgeRepositoryLike {
