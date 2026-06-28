@@ -679,6 +679,8 @@ let package = Package(
     });
 
     expect(artifacts.briefing.meta).toMatchObject({ profile: 'rescan-host-agent' });
+    expect(artifacts.hostAgentPacket.profile).toBe('rescan');
+    expect(artifacts.ideAgentPacket).toBe(artifacts.hostAgentPacket);
     expect(artifacts.briefing.evidenceHints).toMatchObject({
       rescanMode: true,
       evolutionPrescreen: {

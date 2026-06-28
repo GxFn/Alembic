@@ -1,10 +1,11 @@
 import { basename, dirname } from 'node:path';
 import {
   baseDimensions,
-  buildIDEAgentAnalysisPacketFromProjectContext,
+  buildHostAgentAnalysisPacketFromProjectContext,
   buildProjectContextMissionBriefing,
   type DimensionDef,
   getOrCreateSessionManager,
+  type HostAgentAnalysisPacket,
   type KnowledgeRescanExecutionDecision,
 } from '@alembic/core/host-agent-workflows';
 import {
@@ -112,7 +113,9 @@ export type ProjectContextDimensionResultHook = (
 
 export interface ProjectContextMissionArtifacts {
   briefing: { meta?: unknown; [key: string]: unknown };
-  ideAgentPacket: { profile?: unknown; [key: string]: unknown };
+  hostAgentPacket: HostAgentAnalysisPacket;
+  // R1 compatibility alias for report/runtime consumers still reading the old field.
+  ideAgentPacket: HostAgentAnalysisPacket;
 }
 
 type ProjectContextWorkflowSession = ReturnType<
@@ -544,7 +547,7 @@ export function buildProjectContextMissionArtifacts(input: {
     rescan: input.profile === 'rescan' ? input.rescan : undefined,
     session: input.session,
   });
-  const ideAgentPacket = buildIDEAgentAnalysisPacketFromProjectContext({
+  const hostAgentPacket = buildHostAgentAnalysisPacketFromProjectContext({
     dimensions: input.dimensions,
     options: {
       profile: input.profile,
@@ -554,7 +557,8 @@ export function buildProjectContextMissionArtifacts(input: {
   });
   return {
     briefing: briefing as ProjectContextMissionArtifacts['briefing'],
-    ideAgentPacket: ideAgentPacket as unknown as ProjectContextMissionArtifacts['ideAgentPacket'],
+    hostAgentPacket,
+    ideAgentPacket: hostAgentPacket,
   };
 }
 

@@ -612,7 +612,8 @@ async function runKnowledgeRescanProjectIndexWorkflow(
     });
     projectContextFacts.report.projectContextMissionBriefing = {
       briefingMeta: projectContextArtifacts.briefing.meta,
-      ideAgentProfile: projectContextArtifacts.ideAgentPacket.profile,
+      hostAgentProfile: projectContextArtifacts.hostAgentPacket.profile,
+      ideAgentProfile: projectContextArtifacts.hostAgentPacket.profile,
     };
   }
   const produceSession = buildProduceSessionProjection({
