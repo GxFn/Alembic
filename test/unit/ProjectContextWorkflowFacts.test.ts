@@ -165,6 +165,37 @@ describe('ProjectContextWorkflowFacts', () => {
     );
   });
 
+  test('replaces stale workflow leases only when destructive rebuild explicitly requests it', () => {
+    const projectRoot = '/tmp/alembic-session-rebuild-project';
+    const manager = new BootstrapSessionManager();
+    const eventBus = new EventEmitter();
+    const container = createSessionContainer(manager, eventBus);
+    const dimensions = createWorkflowDimensions();
+    const facts = createWorkflowFacts(projectRoot);
+
+    const staleSession = createProjectContextWorkflowSession({
+      container,
+      dimensions,
+      facts,
+      projectRoot,
+    });
+    expect(() =>
+      createProjectContextWorkflowSession({ container, dimensions, facts, projectRoot })
+    ).toThrow(BootstrapSessionLeaseError);
+
+    const rebuildSession = createProjectContextWorkflowSession({
+      container,
+      dimensions,
+      facts,
+      projectRoot,
+      replaceExisting: true,
+    });
+
+    expect(rebuildSession.id).not.toBe(staleSession.id);
+    expect(manager.getAnySession(staleSession.id, { projectRoot })).toBeNull();
+    expect(manager.getAnySession(rebuildSession.id, { projectRoot })?.id).toBe(rebuildSession.id);
+  });
+
   test('executes direct ProjectContext facts for built-in Agent workflow output', async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), 'alembic-pci4-project-context-'));
     fixtures.push(projectRoot);

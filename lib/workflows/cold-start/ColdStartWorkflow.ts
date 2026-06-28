@@ -212,6 +212,12 @@ async function runColdStartProjectIndexWorkflow(
     dimensions,
     facts: projectContextFacts,
     projectRoot,
+    replaceExisting: true,
+  });
+  ctx.logger.info('[ColdStartWorkflow] ProjectContext workflow session opened after fullReset', {
+    projectRoot,
+    replaceExistingLease: true,
+    workflowSessionId: workflowSession.id,
   });
   const cachedSessionId = workflowSession.id;
   const projectContextArtifacts = buildProjectContextMissionArtifacts({

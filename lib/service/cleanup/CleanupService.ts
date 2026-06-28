@@ -148,6 +148,8 @@ const ALL_DATA_TABLES = [
   'project_context_file_snapshots',
 ];
 
+const TASK_DATA_TABLES = ['task_events', 'task_dependencies', 'tasks'];
+
 /** rescanClean 时清除的 DB 表（保留知识/进化/增量证据相关表） */
 const RESCAN_CLEAN_TABLES = [
   'code_entities',
@@ -256,30 +258,18 @@ export class CleanupService {
 
     // 4. 清空 DB 所有数据表
     if (this.#db) {
-      for (const table of ALL_DATA_TABLES) {
-        try {
-          this.#db.exec(`DELETE FROM ${table}`);
-          result.clearedTables.push(table);
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (!msg.includes('no such table')) {
-            result.errors.push(`Failed to clear ${table}: ${msg}`);
-            this.#logger.warn(`[CleanupService] DELETE FROM ${table} failed: ${msg}`);
-          }
-        }
-      }
+      const clearedData = this.#clearTablesForFullReset(ALL_DATA_TABLES);
+      result.clearedTables.push(...clearedData.clearedTables);
+      result.errors.push(...clearedData.errors);
       // tasks 相关表（来自 migration 002，需先删子表）
-      for (const table of ['task_events', 'task_dependencies', 'tasks']) {
-        try {
-          this.#db.exec(`DELETE FROM ${table}`);
-          result.clearedTables.push(table);
-        } catch {
-          /* table may not exist */
-        }
-      }
+      const clearedTasks = this.#clearTablesForFullReset(TASK_DATA_TABLES);
+      result.clearedTables.push(...clearedTasks.clearedTables);
+      result.errors.push(...clearedTasks.errors);
+      this.#assertFullResetDatabaseClean(result.errors);
     } else {
       this.#logger.warn('[CleanupService] No database reference — DB tables NOT cleared!');
       result.errors.push('DB reference is null, database tables were not cleared');
+      this.#assertFullResetDatabaseClean(result.errors);
     }
 
     for (const { src } of dirsToTrash) {
@@ -319,6 +309,48 @@ export class CleanupService {
     });
 
     return result;
+  }
+
+  #clearTablesForFullReset(tables: readonly string[]): {
+    clearedTables: string[];
+    errors: string[];
+  } {
+    const clearedTables: string[] = [];
+    const errors: string[] = [];
+    if (!this.#db) {
+      return { clearedTables, errors };
+    }
+
+    for (const table of tables) {
+      try {
+        this.#db.exec(`DELETE FROM ${table}`);
+        clearedTables.push(table);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!isMissingTableError(msg)) {
+          const error = `Failed to clear ${table}: ${msg}`;
+          errors.push(error);
+          this.#logger.warn(`[CleanupService] ${error}`);
+        }
+      }
+    }
+
+    return { clearedTables, errors };
+  }
+
+  #assertFullResetDatabaseClean(errors: readonly string[]): void {
+    if (errors.length === 0) {
+      return;
+    }
+    const message =
+      '[CleanupService] fullReset aborted: destructive rebuild could not clear critical database tables. ' +
+      'The host must stop before Recipe generation because stale knowledge_entries, coverage_ledger, ' +
+      `or deep_mining_rounds rows may survive reset. Errors: ${errors.join(' | ')}`;
+    this.#logger.warn(message, {
+      errorCount: errors.length,
+      resetMode: 'fail-closed',
+    });
+    throw new Error(message);
   }
 
   // ─── 需求 B：Rescan 清理（保留 Recipe） ───────────────
@@ -850,3 +882,7 @@ export class CleanupService {
 }
 
 const resolveSqliteDb = unwrapSqliteDatabase;
+
+function isMissingTableError(message: string): boolean {
+  return message.includes('no such table');
+}

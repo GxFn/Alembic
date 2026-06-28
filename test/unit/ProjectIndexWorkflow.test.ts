@@ -88,6 +88,12 @@ describe('ProjectIndexWorkflow compatibility', () => {
       'registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion',
       'dispatchAiDimensionRuns({'
     );
+    expectOrdered(
+      coldBody,
+      'const cleanupResult = await runFullResetPolicy',
+      'replaceExisting: true',
+      'const { taskDefs, bootstrapSession } = startAiDimensionSession'
+    );
 
     const rescanBody = rescanSource.slice(
       rescanSource.indexOf('async function runKnowledgeRescanProjectIndexWorkflow')

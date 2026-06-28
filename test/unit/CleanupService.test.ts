@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { CleanupService } from '../../lib/service/cleanup/CleanupService.js';
 
 let tmpDir: string | null = null;
@@ -55,6 +55,83 @@ describe('CleanupService', () => {
       expect(executedSql).toContain(`DELETE FROM ${table}`);
       expect(result.clearedTables).toContain(table);
     }
+  });
+
+  test('fullReset fail-closes when corrupt knowledge_entries cannot be cleared', async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-cleanup-'));
+    const logger = { info: vi.fn(), warn: vi.fn() };
+    const db = {
+      exec(sql: string) {
+        if (sql === 'DELETE FROM knowledge_entries') {
+          throw new Error('database disk image is malformed');
+        }
+      },
+      prepare() {
+        return {
+          run() {},
+          all() {
+            return [];
+          },
+          get() {
+            return undefined;
+          },
+        };
+      },
+      close() {},
+    };
+
+    const service = new CleanupService({ projectRoot: '/project', dataRoot: tmpDir, db, logger });
+
+    await expect(service.fullReset()).rejects.toThrow(
+      /fullReset aborted:[\s\S]*database disk image is malformed/u
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('reset'),
+      expect.objectContaining({ resetMode: 'fail-closed' })
+    );
+    expect(logger.info).not.toHaveBeenCalledWith(
+      '[CleanupService] fullReset complete (trash-bin mode)',
+      expect.anything()
+    );
+  });
+
+  test('fullReset fail-closes when no database reference is available', async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-cleanup-'));
+    const logger = { info: vi.fn(), warn: vi.fn() };
+    const service = new CleanupService({ projectRoot: '/project', dataRoot: tmpDir, logger });
+
+    await expect(service.fullReset()).rejects.toThrow('DB reference is null');
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('fullReset aborted'),
+      expect.objectContaining({ resetMode: 'fail-closed' })
+    );
+  });
+
+  test('fullReset includes task-table errors in fail-closed diagnostics', async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-cleanup-'));
+    const db = {
+      exec(sql: string) {
+        if (sql === 'DELETE FROM task_events') {
+          throw new Error('database disk image is malformed');
+        }
+      },
+      prepare() {
+        return {
+          run() {},
+          all() {
+            return [];
+          },
+          get() {
+            return undefined;
+          },
+        };
+      },
+      close() {},
+    };
+
+    const service = new CleanupService({ projectRoot: '/project', dataRoot: tmpDir, db });
+
+    await expect(service.fullReset()).rejects.toThrow('Failed to clear task_events');
   });
 
   test('rescanClean preserves incremental evidence tables', async () => {

@@ -339,9 +339,12 @@ export function createProjectContextWorkflowSession(input: {
   dimensions: DimensionDef[];
   facts: ProjectContextWorkflowFacts;
   projectRoot: string;
+  replaceExisting?: boolean;
 }): ProjectContextWorkflowSession {
   const sessionManager = getOrCreateSessionManager(input.container);
-  return sessionManager.createSession(buildProjectContextWorkflowSessionOptions(input));
+  return sessionManager.createSession(buildProjectContextWorkflowSessionOptions(input), {
+    replace: input.replaceExisting === true,
+  });
 }
 
 export function openOrReturnProjectContextWorkflowSession(input: {
