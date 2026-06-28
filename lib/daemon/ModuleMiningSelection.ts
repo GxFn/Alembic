@@ -23,7 +23,6 @@ export function selectProjectIndexModuleMiningModules(
   const bindingDimensions = new Map<string, Set<string>>();
   const bindingTargets = new Map<string, Map<string, number>>();
   const moduleBindingKeys = new Set<string>();
-  const executionDimensions = new Set(input.executionDimensions);
 
   for (const binding of input.bindings) {
     const keys = moduleBindingCandidateKeys(binding);
@@ -31,14 +30,13 @@ export function selectProjectIndexModuleMiningModules(
       moduleBindingKeys.add(key);
       const dimensions = bindingDimensions.get(key) ?? new Set<string>();
       for (const dimension of binding.dimensions) {
-        if (executionDimensions.has(dimension)) {
-          dimensions.add(dimension);
-          const targetRecipes = nonNegativeNumber(binding.targetRecipes);
-          if (targetRecipes !== null) {
-            const targets = bindingTargets.get(key) ?? new Map<string, number>();
-            targets.set(dimension, Math.max(targets.get(dimension) ?? 0, targetRecipes));
-            bindingTargets.set(key, targets);
-          }
+        // moduleDimensionTargets 是显式 per-module 计划；即使全局 gap 已判定 fully-covered，也不能被执行维度过滤掉。
+        dimensions.add(dimension);
+        const targetRecipes = nonNegativeNumber(binding.targetRecipes);
+        if (targetRecipes !== null) {
+          const targets = bindingTargets.get(key) ?? new Map<string, number>();
+          targets.set(dimension, Math.max(targets.get(dimension) ?? 0, targetRecipes));
+          bindingTargets.set(key, targets);
         }
       }
       bindingDimensions.set(key, dimensions);

@@ -90,4 +90,32 @@ describe('selectProjectIndexModuleMiningModules', () => {
     ]);
     expect(modules[0]?.dimensions).not.toEqual(['architecture', 'coding-standards']);
   });
+
+  test('keeps Entry B explicit module targets when gap analysis marks them fully covered', () => {
+    const modules = selectProjectIndexModuleMiningModules({
+      bindings: [
+        {
+          dimensions: ['architecture'],
+          moduleId: 'mod-2',
+          moduleName: 'module-2',
+          targetRecipes: 1,
+        },
+      ],
+      executionDimensions: [],
+      facts: makeFacts(),
+      moduleScope: ['module-2'],
+    });
+
+    expect(modules).toEqual([
+      expect.objectContaining({
+        dimensions: ['architecture'],
+        dimensionIds: ['architecture'],
+        moduleId: 'mod-2',
+        moduleName: 'module-2',
+        plannedDimensionTargets: { architecture: 1 },
+        plannedDimensions: ['architecture'],
+        targetRecipes: 1,
+      }),
+    ]);
+  });
 });

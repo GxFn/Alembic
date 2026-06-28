@@ -1,5 +1,7 @@
 import type { EvolutionCoverageLedgerRepository } from '@alembic/core/repositories';
 import { describe, expect, test, vi } from 'vitest';
+import { selectProjectIndexModuleMiningModules } from '../../lib/daemon/ModuleMiningSelection.js';
+import { writeModuleMiningCoverageLedger } from '../../lib/shared/ModuleMiningEvidence.js';
 import {
   type KnowledgeRescanCoverageLedgerWriteInput,
   writeKnowledgeRescanCoverageLedgerForDimension,
@@ -203,6 +205,59 @@ describe('knowledge rescan coverage ledger write', () => {
       )
     ).toEqual({ skipped: true, reason: 'no-source-refs' });
     expect(upserts).toEqual([]);
+    expect(upsertRound).not.toHaveBeenCalled();
+  });
+
+  test('moduleMining explicit targets can write coverage when gap execution dimensions are empty', () => {
+    const { repository, upserts, upsertRound } = createFakeCoverageLedgerRepository();
+    const selectedModules = selectProjectIndexModuleMiningModules({
+      bindings: [
+        {
+          dimensions: ['architecture'],
+          moduleId: 'mod-2',
+          moduleName: 'module-2',
+          targetRecipes: 1,
+        },
+      ],
+      executionDimensions: [],
+      facts: {
+        projectMapModules: [
+          {
+            moduleId: 'mod-2',
+            moduleName: 'module-2',
+            modulePath: 'src/module-2',
+            ownedFiles: ['src/module-2/index.ts'],
+          },
+        ],
+      } as never,
+      moduleScope: ['module-2'],
+    });
+
+    const result = writeModuleMiningCoverageLedger({
+      container: {
+        get: (name: string) => (name === 'coverageLedgerRepository' ? repository : undefined),
+      },
+      logger: { info: vi.fn() },
+      projectRoot: '/proj',
+      selectedModules,
+      sourceRefPaths: ['src/module-2/index.ts:12'],
+    });
+
+    expect(result).toMatchObject({
+      dimensionIds: ['architecture'],
+      measuredCells: 1,
+      status: 'written',
+      writtenCells: 1,
+    });
+    expect(upserts).toEqual([
+      expect.objectContaining({
+        coveredSourceRefs: ['src/module-2/index.ts'],
+        dimensionId: 'architecture',
+        grade: 'covered',
+        moduleId: 'mod-2',
+        totalCandidateCount: 1,
+      }),
+    ]);
     expect(upsertRound).not.toHaveBeenCalled();
   });
 });
