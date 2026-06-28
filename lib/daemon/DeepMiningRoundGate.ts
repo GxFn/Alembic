@@ -33,8 +33,8 @@ export async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise
     throw new Error('Coverage ledger repository is required for deepMining.');
   }
 
-  const { runKnowledgeRescanWorkflow: rescanKnowledge } = await import(
-    '../workflows/knowledge-rescan/KnowledgeRescanWorkflow.js'
+  const { runProjectIndexWorkflow } = await import(
+    '../workflows/project-index/ProjectIndexWorkflow.js'
   );
   const analysisScope = resolveProjectScopeAnalysisContext(options.container);
   const projectRoot = analysisScope.projectRoot;
@@ -85,7 +85,7 @@ export async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise
       triggerActor: 'daemon-job-runner',
     });
 
-    const raw = await rescanKnowledge(
+    const raw = await runProjectIndexWorkflow(
       { container: options.container, logger: options.logger },
       buildDaemonRescanWorkflowArgs({
         args: {
@@ -103,7 +103,8 @@ export async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise
           roundIndex,
         },
         source: options.source,
-      })
+      }),
+      { mode: 'incremental' }
     );
     const result = unwrapEnvelope(raw);
     const newRecipesThisRound = extractNewRecipesThisRound(result);

@@ -694,10 +694,10 @@ export function attachBootstrapProcessEventBridge(options: {
 async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
   if (options.kind === 'bootstrap') {
     const planGate = await runBootstrapPlanGate(options);
-    const { runColdStartWorkflow: bootstrapKnowledge } = await import(
-      '../workflows/cold-start/ColdStartWorkflow.js'
+    const { runProjectIndexWorkflow } = await import(
+      '../workflows/project-index/ProjectIndexWorkflow.js'
     );
-    const raw = await bootstrapKnowledge(
+    const raw = await runProjectIndexWorkflow(
       { container: options.container, logger: options.logger },
       {
         maxFiles: planGate.projection.budget.maxFiles,
@@ -707,7 +707,8 @@ async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unkno
         loadSkills: true,
         planSelectionProjection: planGate.projection,
         projectContextFacts: planGate.projectContextFacts,
-      }
+      },
+      { mode: 'full' }
     );
     const result = unwrapEnvelope(raw);
     return { ...asRecord(result), asyncFill: true };
@@ -721,12 +722,13 @@ async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unkno
     return runModuleMiningWorkflow(options);
   }
 
-  const { runKnowledgeRescanWorkflow: rescanKnowledge } = await import(
-    '../workflows/knowledge-rescan/KnowledgeRescanWorkflow.js'
+  const { runProjectIndexWorkflow } = await import(
+    '../workflows/project-index/ProjectIndexWorkflow.js'
   );
-  const raw = await rescanKnowledge(
+  const raw = await runProjectIndexWorkflow(
     { container: options.container, logger: options.logger },
-    buildDaemonRescanWorkflowArgs({ args: options.args, source: options.source })
+    buildDaemonRescanWorkflowArgs({ args: options.args, source: options.source }),
+    { mode: 'incremental' }
   );
   const result = unwrapEnvelope(raw);
   return { ...asRecord(result), asyncFill: true };

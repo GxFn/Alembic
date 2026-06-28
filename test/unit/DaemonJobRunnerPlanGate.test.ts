@@ -7,12 +7,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { runDaemonJob } from '../../lib/daemon/DaemonJobRunner.js';
 import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
-import { runColdStartWorkflow } from '../../lib/workflows/cold-start/ColdStartWorkflow.js';
-import { runKnowledgeRescanWorkflow } from '../../lib/workflows/knowledge-rescan/KnowledgeRescanWorkflow.js';
 import {
   buildProjectContextWorkflowFacts,
   type ProjectContextWorkflowFacts,
 } from '../../lib/workflows/project-context/ProjectContextWorkflowFacts.js';
+import { runProjectIndexWorkflow } from '../../lib/workflows/project-index/ProjectIndexWorkflow.js';
 
 vi.mock('@alembic/agent/service', () => ({
   runModuleMining: vi.fn(),
@@ -23,12 +22,8 @@ vi.mock('../../lib/workflows/project-context/ProjectContextWorkflowFacts.js', ()
   buildProjectContextWorkflowFacts: vi.fn(),
 }));
 
-vi.mock('../../lib/workflows/cold-start/ColdStartWorkflow.js', () => ({
-  runColdStartWorkflow: vi.fn(),
-}));
-
-vi.mock('../../lib/workflows/knowledge-rescan/KnowledgeRescanWorkflow.js', () => ({
-  runKnowledgeRescanWorkflow: vi.fn(),
+vi.mock('../../lib/workflows/project-index/ProjectIndexWorkflow.js', () => ({
+  runProjectIndexWorkflow: vi.fn(),
 }));
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
@@ -233,8 +228,7 @@ function makeContainer(
 beforeEach(() => {
   process.env.ALEMBIC_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-plan-gate-home-'));
   vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(makeFacts());
-  vi.mocked(runColdStartWorkflow).mockResolvedValue({ data: { ok: true } });
-  vi.mocked(runKnowledgeRescanWorkflow).mockResolvedValue({ data: { ok: true } });
+  vi.mocked(runProjectIndexWorkflow).mockResolvedValue({ data: { ok: true } });
   vi.mocked(runModuleMining).mockResolvedValue({
     phases: { moduleResults: { core: { recipes: [{ id: 'r1' }] } } },
     status: 'success',
@@ -270,7 +264,7 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
       })
     ).rejects.toThrow('Bootstrap plan gate failed: provider unavailable');
 
-    expect(runColdStartWorkflow).not.toHaveBeenCalled();
+    expect(runProjectIndexWorkflow).not.toHaveBeenCalled();
     expect(store.get(job.id)).toMatchObject({
       status: 'failed',
       error: { message: 'Bootstrap plan gate failed: provider unavailable' },
@@ -313,7 +307,7 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
       })
     ).rejects.toThrow('Invalid PlanSelection: dimensions must be non-empty');
 
-    expect(runColdStartWorkflow).not.toHaveBeenCalled();
+    expect(runProjectIndexWorkflow).not.toHaveBeenCalled();
     expect(store.get(job.id)?.status).toBe('failed');
   });
 
@@ -343,7 +337,7 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
       'Bootstrap plan gate failed: Invalid PlanSelection stage requirements: generationStage must be coldStart'
     );
 
-    expect(runColdStartWorkflow).not.toHaveBeenCalled();
+    expect(runProjectIndexWorkflow).not.toHaveBeenCalled();
     expect(store.get(job.id)).toMatchObject({
       status: 'failed',
       error: {
@@ -397,7 +391,7 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
       })
     ).resolves.toMatchObject({ job: { status: 'completed' } });
 
-    expect(runColdStartWorkflow).toHaveBeenCalledWith(
+    expect(runProjectIndexWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({ container }),
       expect.objectContaining({
         dimensions: ['architecture'],
@@ -407,7 +401,8 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
           moduleScope: [],
         },
         projectContextFacts,
-      })
+      }),
+      { mode: 'full' }
     );
   });
 
@@ -447,7 +442,7 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
         projectContextFacts,
       })
     );
-    expect(runColdStartWorkflow).toHaveBeenCalledWith(
+    expect(runProjectIndexWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({ container }),
       expect.objectContaining({
         contentMaxLines: 60,
@@ -459,7 +454,8 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
           moduleScope: ['lib/api'],
         },
         projectContextFacts,
-      })
+      }),
+      { mode: 'full' }
     );
   });
 });
@@ -490,7 +486,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       })
     ).rejects.toThrow('DeepMining plan gate failed: provider unavailable');
 
-    expect(runKnowledgeRescanWorkflow).not.toHaveBeenCalled();
+    expect(runProjectIndexWorkflow).not.toHaveBeenCalled();
     expect(store.get(job.id)).toMatchObject({
       status: 'failed',
       error: { message: 'DeepMining plan gate failed: provider unavailable' },
@@ -529,7 +525,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       'DeepMining plan gate failed: Invalid PlanSelection stage requirements: deepMining requires moduleBindings with module×dimension targets'
     );
 
-    expect(runKnowledgeRescanWorkflow).not.toHaveBeenCalled();
+    expect(runProjectIndexWorkflow).not.toHaveBeenCalled();
     expect(coverageLedgerRepository.upsertRound).not.toHaveBeenCalled();
     expect(store.get(job.id)).toMatchObject({
       status: 'failed',
@@ -591,7 +587,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
         ],
         scale: { contentMaxLines: 90, maxFiles: 300, totalRecipeBudget: 3 },
       });
-    vi.mocked(runKnowledgeRescanWorkflow)
+    vi.mocked(runProjectIndexWorkflow)
       .mockResolvedValueOnce({ data: { newRecipesThisRound: 2 } })
       .mockResolvedValueOnce({ data: { newRecipesThisRound: 0 } });
 
@@ -618,8 +614,11 @@ describe('DaemonJobRunner deepMining plan gate', () => {
     });
 
     expect(runPlanAgent).toHaveBeenCalledTimes(2);
-    expect(runKnowledgeRescanWorkflow).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(runKnowledgeRescanWorkflow).mock.calls[0]?.[1]).toMatchObject({
+    expect(runProjectIndexWorkflow).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(runProjectIndexWorkflow).mock.calls[0]?.[2]).toEqual({
+      mode: 'incremental',
+    });
+    expect(vi.mocked(runProjectIndexWorkflow).mock.calls[0]?.[1]).toMatchObject({
       contentMaxLines: 80,
       dimensions: ['architecture'],
       maxFiles: 240,
@@ -636,7 +635,10 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       perDimensionTargets: { architecture: 8 },
       roundIndex: 1,
     });
-    expect(vi.mocked(runKnowledgeRescanWorkflow).mock.calls[1]?.[1]).toMatchObject({
+    expect(vi.mocked(runProjectIndexWorkflow).mock.calls[1]?.[2]).toEqual({
+      mode: 'incremental',
+    });
+    expect(vi.mocked(runProjectIndexWorkflow).mock.calls[1]?.[1]).toMatchObject({
       contentMaxLines: 90,
       dimensions: ['coding-standards'],
       maxFiles: 300,
@@ -691,7 +693,8 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       ],
       scale: { k: 1, maxRounds: 1, totalRecipeBudget: 1 },
     });
-    vi.mocked(runKnowledgeRescanWorkflow).mockImplementationOnce(async (_ctx, args) => {
+    vi.mocked(runProjectIndexWorkflow).mockImplementationOnce(async (_ctx, args, options) => {
+      expect(options).toEqual({ mode: 'incremental' });
       expect(args).toMatchObject({
         internalExecution: { runAsyncFillInline: true },
         miningMode: 'deepMining',
@@ -791,7 +794,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
         scale: { totalRecipeBudget: 8 },
       })
       .mockRejectedValueOnce(new Error('provider unavailable in round 2'));
-    vi.mocked(runKnowledgeRescanWorkflow).mockResolvedValueOnce({
+    vi.mocked(runProjectIndexWorkflow).mockResolvedValueOnce({
       data: { newRecipesThisRound: 2 },
     });
 
@@ -807,7 +810,10 @@ describe('DaemonJobRunner deepMining plan gate', () => {
     ).rejects.toThrow('DeepMining plan gate failed: provider unavailable in round 2');
 
     expect(runPlanAgent).toHaveBeenCalledTimes(2);
-    expect(runKnowledgeRescanWorkflow).toHaveBeenCalledTimes(1);
+    expect(runProjectIndexWorkflow).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(runProjectIndexWorkflow).mock.calls[0]?.[2]).toEqual({
+      mode: 'incremental',
+    });
     expect(recorder.list(job.id).events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -851,7 +857,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       ],
       scale: scaleWithAdvisorOverrides,
     });
-    vi.mocked(runKnowledgeRescanWorkflow).mockResolvedValueOnce({
+    vi.mocked(runProjectIndexWorkflow).mockResolvedValueOnce({
       data: { newRecipesThisRound: 5 },
     });
 
@@ -877,7 +883,10 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       },
     });
 
-    expect(runKnowledgeRescanWorkflow).toHaveBeenCalledTimes(1);
+    expect(runProjectIndexWorkflow).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(runProjectIndexWorkflow).mock.calls[0]?.[2]).toEqual({
+      mode: 'incremental',
+    });
   });
 });
 

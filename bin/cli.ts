@@ -695,12 +695,12 @@ program
       const ora = (await import('ora')).default;
       const spinner = ora('Phase 1-4: 收集文件、AST 分析、SPM 依赖、Guard 审计...').start();
 
-      // 直接调用 cold-start workflow（统一编排管线；MCP 归一 Plugin 后不再经 resident 镜像）
-      const { runColdStartWorkflow: bootstrapKnowledge } = await import(
-        '../lib/workflows/cold-start/ColdStartWorkflow.js'
+      // 直接调用 project-index workflow（统一编排管线；MCP 归一 Plugin 后不再经 resident 镜像）
+      const { runProjectIndexWorkflow } = await import(
+        '../lib/workflows/project-index/ProjectIndexWorkflow.js'
       );
       const logger = container.get('logger');
-      const raw = await bootstrapKnowledge(
+      const raw = await runProjectIndexWorkflow(
         { container, logger },
         {
           maxFiles: parseInt(opts.maxFiles, 10),
@@ -710,7 +710,8 @@ program
           skipAsyncFill: !opts.wait,
           skipTargetDelivery: opts.delivery === false,
           dimensions: opts.dims,
-        }
+        },
+        { mode: 'full' }
       );
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       const result = parsed?.data || parsed;
@@ -880,19 +881,20 @@ program
       const ora = (await import('ora')).default;
       const spinner = ora('Rescan: 快照 Recipe → 清理缓存 → Phase 1-4 + 证据审计...').start();
 
-      // 直接调用 knowledge-rescan workflow（统一编排管线；MCP 归一 Plugin 后不再经 resident 镜像）
-      const { runKnowledgeRescanWorkflow: rescanKnowledge } = await import(
-        '../lib/workflows/knowledge-rescan/KnowledgeRescanWorkflow.js'
+      // 直接调用 project-index workflow（统一编排管线；MCP 归一 Plugin 后不再经 resident 镜像）
+      const { runProjectIndexWorkflow } = await import(
+        '../lib/workflows/project-index/ProjectIndexWorkflow.js'
       );
       const logger = container.get('logger');
-      const raw = await rescanKnowledge(
+      const raw = await runProjectIndexWorkflow(
         { container, logger },
         {
           reason: opts.reason || 'cli-rescan',
           dimensions: opts.dims,
           force: opts.force ?? false,
           skipAsyncFill: !opts.wait,
-        }
+        },
+        { mode: 'incremental' }
       );
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       const result = parsed?.data || parsed;

@@ -35,7 +35,6 @@
  *
  */
 
-import type { WorkflowMcpContext } from '@alembic/core/host-agent-workflows';
 import {
   buildColdStartWorkflowPlan,
   type InternalColdStartArgs as ColdStartArgs,
@@ -44,12 +43,7 @@ import {
 } from '@alembic/core/host-agent-workflows';
 import type { PlanSelectionProjection } from '@alembic/core/plans';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
-import type {
-  DimensionDef,
-  McpContext,
-  WorkflowDatabaseLike,
-  WorkflowSkillHooks,
-} from '@alembic/core/types';
+import type { DimensionDef, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
   attachProjectScopeSourceIdentitiesToView,
@@ -74,8 +68,13 @@ import {
   registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion,
   selectProjectContextWorkflowDimensions,
 } from '../project-context/ProjectContextWorkflowFacts.js';
+import {
+  type ProjectIndexMcpContext,
+  registerProjectIndexWorkflowImplementation,
+  runProjectIndexWorkflow,
+} from '../project-index/ProjectIndexWorkflow.js';
 
-type BootstrapMcpContext = WorkflowMcpContext & McpContext;
+type BootstrapMcpContext = ProjectIndexMcpContext;
 type ColdStartDimensionSelectionSource = 'base' | 'explicit' | 'plan';
 type AlembicMainColdStartArgs = ColdStartArgs & {
   planSelectionProjection?: PlanSelectionProjection;
@@ -98,6 +97,13 @@ type AlembicMainColdStartArgs = ColdStartArgs & {
  * @param [args.incremental] 冷启动忽略文件快照增量；需要历史复用时应走 knowledge-rescan
  */
 export async function runColdStartWorkflow(
+  ctx: BootstrapMcpContext,
+  args: AlembicMainColdStartArgs
+) {
+  return runProjectIndexWorkflow(ctx, args, { mode: 'full' });
+}
+
+async function runColdStartProjectIndexWorkflow(
   ctx: BootstrapMcpContext,
   args: AlembicMainColdStartArgs
 ) {
@@ -304,6 +310,8 @@ export async function runColdStartWorkflow(
     responseTimeMs: Date.now() - t0,
   });
 }
+
+registerProjectIndexWorkflowImplementation('full', runColdStartProjectIndexWorkflow);
 
 // bootstrapRefine → 已迁至 service/bootstrap/BootstrapRefine.js (RIC-3)
 

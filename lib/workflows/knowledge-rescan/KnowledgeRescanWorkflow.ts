@@ -24,7 +24,6 @@ import {
   submitRescanImpactDecisions,
   toEvolutionAuditRecipe,
 } from '@alembic/core/evolution';
-import type { WorkflowMcpContext } from '@alembic/core/host-agent-workflows';
 import {
   auditRecipesForRescan,
   buildCoverageLedgerModuleAxisFromSummaries,
@@ -50,12 +49,7 @@ import {
 import { SourceRefReconciler } from '@alembic/core/knowledge';
 import type { EvolutionCoverageLedgerRepository } from '@alembic/core/repositories';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
-import type {
-  DimensionDef,
-  McpContext,
-  WorkflowDatabaseLike,
-  WorkflowSkillHooks,
-} from '@alembic/core/types';
+import type { DimensionDef, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
   attachProjectScopeSourceIdentitiesToView,
@@ -82,6 +76,11 @@ import {
   saveProjectContextFileSnapshot,
 } from '../project-context/ProjectContextWorkflowFacts.js';
 import {
+  type ProjectIndexMcpContext,
+  registerProjectIndexWorkflowImplementation,
+  runProjectIndexWorkflow,
+} from '../project-index/ProjectIndexWorkflow.js';
+import {
   buildProduceSessionProjection,
   buildProduceSessionRoutePlan,
   readControllerProduceSessionRequest,
@@ -92,7 +91,7 @@ type EvolutionAuditResult = Awaited<ReturnType<typeof runEvolutionAudit>>;
 type RescanCleanPolicyResult = Awaited<ReturnType<typeof runForceRescanCleanPolicy>>;
 type SourceRefReconcileReport = Awaited<ReturnType<SourceRefReconciler['reconcile']>>;
 
-type RescanMcpContext = WorkflowMcpContext & McpContext;
+type RescanMcpContext = ProjectIndexMcpContext;
 
 interface KnowledgeRescanInlineFillSummary {
   coverageSkippedDimensions: number;
@@ -183,6 +182,13 @@ function countImpactImmediateDeprecations(result: RescanImpactSubmissionResult |
  * 后台通过 AI dimension execution 对 gap 维度执行 AI 补齐。
  */
 export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: KnowledgeRescanArgs) {
+  return runProjectIndexWorkflow(ctx, args, { mode: 'incremental' });
+}
+
+async function runKnowledgeRescanProjectIndexWorkflow(
+  ctx: RescanMcpContext,
+  args: KnowledgeRescanArgs
+) {
   const t0 = Date.now();
   const analysisScope = resolveProjectScopeAnalysisContext(ctx.container);
   const { dataRoot, projectRoot } = analysisScope;
@@ -828,6 +834,8 @@ export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: Kn
     responseTimeMs: Date.now() - t0,
   });
 }
+
+registerProjectIndexWorkflowImplementation('incremental', runKnowledgeRescanProjectIndexWorkflow);
 
 type KnowledgeRescanMiningMode = 'deepMining' | 'moduleMining' | 'per-module';
 
