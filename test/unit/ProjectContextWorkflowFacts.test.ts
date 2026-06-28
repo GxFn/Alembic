@@ -165,6 +165,65 @@ describe('ProjectContextWorkflowFacts', () => {
     );
   });
 
+  test('releases cancelled coldStart workflow leases so retries are not blocked', () => {
+    const projectRoot = '/tmp/alembic-session-cancelled-project';
+    const manager = new BootstrapSessionManager();
+    const eventBus = new EventEmitter();
+    const container = createSessionContainer(manager, eventBus);
+    const logger = createSessionLogger();
+    const dimensions = createWorkflowDimensions();
+    const facts = createWorkflowFacts(projectRoot);
+
+    const coldStartSession = createProjectContextWorkflowSession({
+      container,
+      dimensions,
+      facts,
+      projectRoot,
+    });
+    registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion({
+      bootstrapSessionId: 'bootstrap-session-cancelled',
+      container,
+      logger,
+      projectRoot,
+      workflow: 'cold-start',
+      workflowSessionId: coldStartSession.id,
+    });
+
+    eventBus.emit('bootstrap:all-completed', {
+      sessionId: 'bootstrap-session-cancelled',
+      status: 'aborted',
+      summary: {
+        aborted: true,
+        reason: 'bounded host probe exceeded its window',
+      },
+      tasks: [
+        {
+          id: 'architecture',
+          status: 'cancelled',
+          error: 'bounded host probe exceeded its window',
+        },
+      ],
+      userCancelled: true,
+    });
+
+    const retrySession = createProjectContextWorkflowSession({
+      container,
+      dimensions,
+      facts,
+      projectRoot,
+    });
+    expect(retrySession.id).not.toBe(coldStartSession.id);
+    expect(manager.getAnySession(coldStartSession.id, { projectRoot })).toBeNull();
+    expect(logger.info).toHaveBeenCalledWith(
+      '[ProjectContextWorkflowFacts] Workflow session lease released',
+      expect.objectContaining({
+        reason: 'cold-start:bootstrap-session-cancelled',
+        released: true,
+        workflowSessionId: coldStartSession.id,
+      })
+    );
+  });
+
   test('replaces stale workflow leases only when destructive rebuild explicitly requests it', () => {
     const projectRoot = '/tmp/alembic-session-rebuild-project';
     const manager = new BootstrapSessionManager();

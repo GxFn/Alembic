@@ -439,10 +439,11 @@ export function registerProjectContextWorkflowSessionReleaseOnBootstrapCompletio
     }
 
     eventBus.off?.('bootstrap:all-completed', listener);
-    if (!isReleasableBootstrapCompletionEvent(event)) {
+    const releaseDecision = classifyBootstrapCompletionRelease(event, input.workflow);
+    if (!releaseDecision.release) {
       input.logger.warn('[ProjectContextWorkflowFacts] Workflow session lease retained', {
         bootstrapSessionId: input.bootstrapSessionId,
-        reason: 'bootstrap-session-not-clean-complete',
+        reason: releaseDecision.reason,
         status: stringValue(event.status) ?? null,
         workflow: input.workflow,
         workflowSessionId: input.workflowSessionId,
@@ -454,7 +455,7 @@ export function registerProjectContextWorkflowSessionReleaseOnBootstrapCompletio
       container: input.container,
       logger: input.logger,
       projectRoot: input.projectRoot,
-      reason: `${input.workflow}:bootstrap-session-completed`,
+      reason: releaseDecision.reason,
       workflowSessionId: input.workflowSessionId,
     });
   };
@@ -534,7 +535,47 @@ function resolveProjectContextWorkflowEventBus(
   }
 }
 
-function isReleasableBootstrapCompletionEvent(event: Record<string, unknown>): boolean {
+function classifyBootstrapCompletionRelease(
+  event: Record<string, unknown>,
+  workflow: 'cold-start' | 'rescan'
+): {
+  reason: string;
+  release: boolean;
+} {
+  if (isCancelledBootstrapCompletionEvent(event)) {
+    return {
+      reason: `${workflow}:bootstrap-session-cancelled`,
+      release: true,
+    };
+  }
+
+  if (isCleanBootstrapCompletionEvent(event)) {
+    return {
+      reason: `${workflow}:bootstrap-session-completed`,
+      release: true,
+    };
+  }
+
+  return {
+    reason: 'bootstrap-session-not-clean-complete',
+    release: false,
+  };
+}
+
+function isCancelledBootstrapCompletionEvent(event: Record<string, unknown>): boolean {
+  const status = stringValue(event.status);
+  if (status === 'aborted' || status === 'cancelled' || event.userCancelled === true) {
+    return true;
+  }
+  const summary = asRecord(event.summary);
+  if (summary.aborted === true || summary.userCancelled === true) {
+    return true;
+  }
+  const tasks = Array.isArray(event.tasks) ? event.tasks.filter(isRecord) : [];
+  return tasks.some((task) => stringValue(task.status) === 'cancelled');
+}
+
+function isCleanBootstrapCompletionEvent(event: Record<string, unknown>): boolean {
   if (stringValue(event.status) !== 'completed') {
     return false;
   }
