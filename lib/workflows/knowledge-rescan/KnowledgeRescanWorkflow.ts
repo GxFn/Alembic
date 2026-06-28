@@ -59,6 +59,12 @@ import {
   resolveProjectScopeAnalysisContext,
 } from '../../project-scope/ProjectScopeAnalysis.js';
 import {
+  readModuleMiningSourceRefDelta,
+  readModuleMiningSourceRefSnapshot,
+  toModuleMiningSelectedModulePayloads,
+  writeModuleMiningCoverageLedger,
+} from '../../shared/ModuleMiningEvidence.js';
+import {
   dispatchAiDimensionRuns,
   startAiDimensionSession,
 } from '../ai-execution/AiDimensionDispatcher.js';
@@ -678,17 +684,37 @@ async function runKnowledgeRescanProjectIndexWorkflow(
       throw new Error('KnowledgeRescanWorkflow moduleMining requires ProjectMap modules.');
     }
     const scaleCap = positiveInteger(args.scaleCap) ?? modules.length;
+    const selectedModules = modules.slice(0, scaleCap);
+    const selectedModulePayloads = toModuleMiningSelectedModulePayloads(selectedModules);
+    const sourceRefSnapshotBefore = readModuleMiningSourceRefSnapshot(ctx.container);
     const result = await runModuleMining({
       agentService: ctx.container.get('agentService') as Pick<AgentService, 'run'>,
       budget: {
         contentMaxLines: intent.projectAnalysis.contentMaxLines,
         maxFiles: intent.projectAnalysis.maxFiles,
       },
-      modules: modules.slice(0, scaleCap),
+      modules: selectedModules,
       projectFacts: projectContextFacts,
       scaleCap,
     });
-    moduleMiningResult = result as unknown as Record<string, unknown>;
+    const sourceRefDelta = readModuleMiningSourceRefDelta(ctx.container, sourceRefSnapshotBefore);
+    const coverageLedger = writeModuleMiningCoverageLedger({
+      container: ctx.container,
+      logger: ctx.logger,
+      projectRoot,
+      selectedModules,
+      sourceRefPaths: sourceRefDelta.sourceRefPaths,
+    });
+    moduleMiningResult = {
+      ...(isRecord(result) ? result : { value: result }),
+      coverageLedger,
+      selectedModules: selectedModulePayloads,
+      sourceRefDelta,
+    };
+    ctx.logger.info('[KnowledgeRescanWorkflow] ModuleMining selected module payload recorded', {
+      coverageLedger,
+      selectedModules: selectedModulePayloads,
+    });
     if (workflowSession) {
       releaseProjectContextWorkflowSession({
         container: ctx.container,

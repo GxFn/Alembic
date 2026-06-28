@@ -146,18 +146,20 @@ function constrainPlanSelectionForGate(input: {
   projectRoot: string;
   selection: PlanSelection;
 }): { requestConstraints: Record<string, unknown> | null; selection: PlanSelection } {
-  if (input.gateStage !== 'deepMining') {
+  if (input.gateStage !== 'deepMining' && input.gateStage !== 'moduleMining') {
     return { requestConstraints: null, selection: input.selection };
   }
 
   const constraints = readPlanSelectionRequestConstraints(input.args);
-  if (!hasDeepMiningRequestConstraint(constraints)) {
+  if (!hasMiningRequestConstraint(constraints)) {
     return { requestConstraints: null, selection: input.selection };
   }
+  const gateLabel = input.gateStage === 'moduleMining' ? 'ModuleMining' : 'DeepMining';
 
   return {
     requestConstraints: serializePlanSelectionRequestConstraints(constraints),
-    selection: applyDeepMiningRequestConstraints(input.selection, constraints, {
+    selection: applyMiningRequestConstraints(input.selection, constraints, {
+      gateLabel,
       projectRoot: input.projectRoot,
     }),
   };
@@ -177,7 +179,7 @@ function readPlanSelectionRequestConstraints(
   };
 }
 
-function hasDeepMiningRequestConstraint(constraints: PlanSelectionRequestConstraints): boolean {
+function hasMiningRequestConstraint(constraints: PlanSelectionRequestConstraints): boolean {
   return (
     constraints.dimensionIds.length > 0 ||
     constraints.moduleScope.length > 0 ||
@@ -187,7 +189,7 @@ function hasDeepMiningRequestConstraint(constraints: PlanSelectionRequestConstra
   );
 }
 
-function applyDeepMiningRequestConstraints(
+function applyMiningRequestConstraints(
   selection: PlanSelection,
   constraints: PlanSelectionRequestConstraints,
   context: PlanSelectionConstraintContext
@@ -205,7 +207,7 @@ function applyDeepMiningRequestConstraints(
     );
     if (missingDimensions.length > 0) {
       throw new Error(
-        `DeepMining plan gate did not select requested dimension(s): ${missingDimensions.join(', ')}`
+        `${context.gateLabel} plan gate did not select requested dimension(s): ${missingDimensions.join(', ')}`
       );
     }
     moduleBindings = moduleBindings.filter((binding) => binding.dimensions.length > 0);
@@ -234,7 +236,9 @@ function applyDeepMiningRequestConstraints(
   }
 
   if (moduleBindings.length === 0) {
-    throw new Error('DeepMining request constraints removed all module×dimension targets.');
+    throw new Error(
+      `${context.gateLabel} request constraints removed all module×dimension targets.`
+    );
   }
 
   const constrainedDimensions =
@@ -244,7 +248,7 @@ function applyDeepMiningRequestConstraints(
       ? uniqueStrings(moduleBindings.flatMap((binding) => [...binding.dimensions]))
       : uniqueStrings(selection.dimensions);
   if (constrainedDimensions.length === 0) {
-    throw new Error('DeepMining request constraints removed all executable dimensions.');
+    throw new Error(`${context.gateLabel} request constraints removed all executable dimensions.`);
   }
 
   const scale = { ...selection.scale } as PlanSelection['scale'] & Record<string, unknown>;
@@ -277,6 +281,7 @@ function applyDeepMiningRequestConstraints(
 }
 
 interface PlanSelectionConstraintContext {
+  gateLabel: 'DeepMining' | 'ModuleMining';
   projectRoot: string;
 }
 
@@ -308,7 +313,7 @@ function formatModuleScopeConstraintMiss(
     ...moduleBindings.flatMap((binding) => moduleBindingScopeAliases(binding, context)),
   ]).slice(0, 20);
   return [
-    'DeepMining request constraints removed all module×dimension targets',
+    `${context.gateLabel} request constraints removed all module×dimension targets`,
     `moduleScope=${requested.length > 0 ? requested.join(', ') : '(empty)'}`,
     `availableModuleAliases=${availableAliases.length > 0 ? availableAliases.join(', ') : '(none)'}`,
   ].join('; ');

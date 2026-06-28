@@ -29,11 +29,13 @@ describe('selectProjectIndexModuleMiningModules', () => {
           dimensions: ['architecture', 'coding-standards'],
           moduleId: 'mod-1',
           modulePath: 'src/module-1',
+          targetRecipes: 3,
         },
         {
           dimensions: ['error-resilience'],
           moduleId: 'mod-2',
           modulePath: 'src/module-2',
+          targetRecipes: 1,
         },
       ],
       executionDimensions: ['architecture', 'coding-standards', 'error-resilience'],
@@ -46,13 +48,17 @@ describe('selectProjectIndexModuleMiningModules', () => {
         dimensions: ['architecture', 'coding-standards'],
         dimensionIds: ['architecture', 'coding-standards'],
         moduleName: 'module-1',
+        plannedDimensionTargets: { architecture: 3, 'coding-standards': 3 },
         plannedDimensions: ['architecture', 'coding-standards'],
+        targetRecipes: 3,
       }),
       expect.objectContaining({
         dimensions: ['error-resilience'],
         dimensionIds: ['error-resilience'],
         moduleName: 'module-2',
+        plannedDimensionTargets: { 'error-resilience': 1 },
         plannedDimensions: ['error-resilience'],
+        targetRecipes: 1,
       }),
     ]);
   });
@@ -63,6 +69,7 @@ describe('selectProjectIndexModuleMiningModules', () => {
         {
           dimensions: ['architecture'],
           moduleName: 'module-2',
+          targetRecipes: 2,
         },
       ],
       executionDimensions: ['architecture', 'coding-standards'],
@@ -76,7 +83,9 @@ describe('selectProjectIndexModuleMiningModules', () => {
         dimensionIds: ['architecture'],
         moduleId: 'mod-2',
         moduleName: 'module-2',
+        plannedDimensionTargets: { architecture: 2 },
         plannedDimensions: ['architecture'],
+        targetRecipes: 2,
       }),
     ]);
     expect(modules[0]?.dimensions).not.toEqual(['architecture', 'coding-standards']);

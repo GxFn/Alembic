@@ -71,7 +71,9 @@ export interface ModuleMiningModule {
   moduleName: string;
   modulePath?: string;
   ownedFiles?: string[];
+  plannedDimensionTargets?: Record<string, number>;
   plannedDimensions?: string[];
+  targetRecipes?: number;
 }
 
 export interface ModuleMiningKnowledgeRepositoryLike {

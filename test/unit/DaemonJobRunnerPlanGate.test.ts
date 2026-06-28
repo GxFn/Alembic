@@ -1681,6 +1681,26 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
           moduleCount: 3,
           newRecipes: 3,
           scaleCap: 3,
+          selectedModules: [
+            expect.objectContaining({
+              dimensions: ['architecture'],
+              dimensionIds: ['architecture'],
+              moduleName: 'module-1',
+              plannedDimensions: ['architecture'],
+            }),
+            expect.objectContaining({
+              dimensions: ['architecture'],
+              dimensionIds: ['architecture'],
+              moduleName: 'module-2',
+              plannedDimensions: ['architecture'],
+            }),
+            expect.objectContaining({
+              dimensions: ['architecture'],
+              dimensionIds: ['architecture'],
+              moduleName: 'module-3',
+              plannedDimensions: ['architecture'],
+            }),
+          ],
         },
         planSelectionProjection: {
           moduleScope: [
@@ -1725,6 +1745,134 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
     );
     expect(JSON.stringify(vi.mocked(runModuleMining).mock.calls[0]?.[0].modules)).not.toContain(
       'seed-only'
+    );
+  });
+
+  test('applies Entry A moduleMining request constraints to plan gate and selected payload', async () => {
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const facts = makeProjectMapFacts(2);
+    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(facts);
+    const recorder = new JobProcessEventRecorder();
+    const container = makeContainer(store, { recorder });
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: {
+        dimensions: ['architecture'],
+        generationStage: 'moduleMining',
+        moduleScope: ['src/module-2'],
+        scaleCap: 1,
+      },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockResolvedValue({
+      dimensions: ['architecture', 'api-design'],
+      generationStage: 'moduleMining',
+      moduleBindings: [
+        {
+          dimensions: ['api-design'],
+          moduleId: 'mod-1',
+          modulePath: 'src/module-1',
+          priority: 1,
+          targetRecipes: 2,
+        },
+        {
+          dimensions: ['architecture', 'api-design'],
+          moduleId: 'mod-2',
+          modulePath: 'src/module-2',
+          priority: 2,
+          targetRecipes: 4,
+        },
+      ],
+      scale: { contentMaxLines: 120, maxFiles: 500, totalRecipeBudget: 8 },
+    });
+    vi.mocked(runModuleMining).mockResolvedValueOnce({
+      phases: { moduleResults: { 'mod-2': { recipes: [{ id: 'r1' }] } } },
+      status: 'success',
+    });
+
+    await expect(
+      runDaemonJob({
+        args: {
+          dimensions: ['architecture'],
+          generationStage: 'moduleMining',
+          moduleScope: ['src/module-2'],
+          scaleCap: 1,
+        },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).resolves.toMatchObject({
+      job: { status: 'completed' },
+      result: {
+        moduleMining: {
+          moduleCount: 1,
+          scaleCap: 1,
+          selectedModules: [
+            expect.objectContaining({
+              dimensions: ['architecture'],
+              dimensionIds: ['architecture'],
+              moduleId: 'mod-2',
+              moduleName: 'module-2',
+              plannedDimensionTargets: { architecture: 4 },
+              plannedDimensions: ['architecture'],
+              targetRecipes: 4,
+            }),
+          ],
+        },
+        planSelectionProjection: {
+          executionDimensions: ['architecture'],
+          moduleScope: ['src/module-2'],
+        },
+      },
+    });
+
+    expect(runModuleMining).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modules: [
+          expect.objectContaining({
+            dimensions: ['architecture'],
+            moduleId: 'mod-2',
+            plannedDimensions: ['architecture'],
+          }),
+        ],
+        scaleCap: 1,
+      })
+    );
+    expect(recorder.list(job.id).events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            requestConstraints: expect.objectContaining({
+              dimensions: ['architecture'],
+              moduleScope: ['src/module-2'],
+              scaleCap: 1,
+            }),
+          }),
+          phase: 'plan-gate',
+          severity: 'success',
+        }),
+        expect.objectContaining({
+          content: expect.objectContaining({
+            mimeType: 'application/json',
+            text: expect.stringContaining('selectedModules'),
+          }),
+          metadata: expect.objectContaining({
+            selectedModules: [
+              expect.objectContaining({
+                dimensionIds: ['architecture'],
+                moduleName: 'module-2',
+                plannedDimensions: ['architecture'],
+              }),
+            ],
+          }),
+          phase: 'module-mining',
+        }),
+      ])
     );
   });
 
@@ -1823,6 +1971,7 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
   test('counts source-ref-backed persisted moduleMining recipes when the agent result projection reports zero', async () => {
     const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
     const facts = makeProjectMapFacts(2);
+    const coverageLedgerRepository = makeCoverageLedgerRepository();
     const persistence = makeModuleMiningPersistenceRepositories();
     persistence.addEntry({ id: 'existing-recipe', lifecycle: 'staging' });
     persistence.addSourceRef({
@@ -1832,6 +1981,7 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
     });
     vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(facts);
     const container = makeContainer(store, {
+      coverageLedgerRepository,
       knowledgeRepository: persistence.knowledgeRepository,
       recipeSourceRefRepository: persistence.recipeSourceRefRepository,
     });
@@ -1859,12 +2009,12 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
       persistence.addEntry({ id: 'accepted-2', lifecycle: 'staging' });
       persistence.addSourceRef({
         recipeId: 'accepted-1',
-        sourcePath: 'src/module-1/index.ts',
+        sourcePath: 'src/module-1/index.ts:12',
         status: 'active',
       });
       persistence.addSourceRef({
         recipeId: 'accepted-2',
-        sourcePath: 'src/module-2/index.ts',
+        sourcePath: 'src/module-2/index.ts#L4-L8',
         status: 'active',
       });
       return { phases: { moduleResults: {} }, status: 'success' };
@@ -1883,14 +2033,50 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
       job: { status: 'completed' },
       result: {
         moduleMining: {
+          coverageLedger: expect.objectContaining({
+            measuredCells: 2,
+            status: 'written',
+            writtenCells: 2,
+          }),
           newRecipes: 2,
           persistedNewRecipes: 2,
           persistedSourceRefCount: 2,
           reportedNewRecipes: 0,
+          selectedModules: [
+            expect.objectContaining({
+              dimensions: ['architecture'],
+              moduleId: 'mod-1',
+              plannedDimensions: ['architecture'],
+            }),
+            expect.objectContaining({
+              dimensions: ['architecture'],
+              moduleId: 'mod-2',
+              plannedDimensions: ['architecture'],
+            }),
+          ],
+          sourceRefPaths: ['src/module-1/index.ts', 'src/module-2/index.ts'],
         },
       },
     });
     expect(store.get(job.id)).toMatchObject({ status: 'completed' });
+    expect(coverageLedgerRepository.listByProjectRoot(facts.projectRoot)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          coveredCount: 1,
+          coveredSourceRefs: ['src/module-1/index.ts'],
+          dimensionId: 'architecture',
+          grade: 'partial',
+          moduleId: 'mod-1',
+        }),
+        expect.objectContaining({
+          coveredCount: 1,
+          coveredSourceRefs: ['src/module-2/index.ts'],
+          dimensionId: 'architecture',
+          grade: 'partial',
+          moduleId: 'mod-2',
+        }),
+      ])
+    );
   });
 
   test('still fails true zero-output moduleMining when no new source-ref-backed recipes are persisted', async () => {

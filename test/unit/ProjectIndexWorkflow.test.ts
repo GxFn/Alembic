@@ -107,6 +107,30 @@ describe('ProjectIndexWorkflow compatibility', () => {
     expect(rescanBody).toContain('runAsyncFillInline');
     expect(`${coldBody}\n${rescanBody}`).toContain('skipAsyncFill');
   });
+
+  test('keeps KnowledgeRescan moduleMining result reviewable for selected modules and coverage', async () => {
+    const rescanSource = await readFile(
+      join(process.cwd(), 'lib/workflows/knowledge-rescan/KnowledgeRescanWorkflow.ts'),
+      'utf8'
+    );
+    const moduleMiningBranch = rescanSource.slice(rescanSource.indexOf('perModuleMining &&'));
+
+    expectOrdered(
+      moduleMiningBranch,
+      'const selectedModules = modules.slice(0, scaleCap);',
+      'const sourceRefSnapshotBefore = readModuleMiningSourceRefSnapshot',
+      'const result = await runModuleMining({'
+    );
+    expectOrdered(
+      moduleMiningBranch,
+      'const sourceRefDelta = readModuleMiningSourceRefDelta',
+      'const coverageLedger = writeModuleMiningCoverageLedger',
+      'moduleMiningResult = {'
+    );
+    expect(moduleMiningBranch).toContain('selectedModules: selectedModulePayloads');
+    expect(moduleMiningBranch).toContain('sourceRefDelta');
+    expect(moduleMiningBranch).toContain('coverageLedger');
+  });
 });
 
 function expectOrdered(source: string, first: string, second: string, third: string): void {

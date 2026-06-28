@@ -7,6 +7,7 @@ export interface ModuleMiningSelectionBinding {
   moduleId?: string;
   moduleName?: string;
   modulePath?: string;
+  targetRecipes?: number;
 }
 
 export interface SelectProjectIndexModuleMiningModulesInput {
@@ -20,6 +21,7 @@ export function selectProjectIndexModuleMiningModules(
   input: SelectProjectIndexModuleMiningModulesInput
 ): ModuleMiningModule[] {
   const bindingDimensions = new Map<string, Set<string>>();
+  const bindingTargets = new Map<string, Map<string, number>>();
   const moduleBindingKeys = new Set<string>();
   const executionDimensions = new Set(input.executionDimensions);
 
@@ -31,6 +33,12 @@ export function selectProjectIndexModuleMiningModules(
       for (const dimension of binding.dimensions) {
         if (executionDimensions.has(dimension)) {
           dimensions.add(dimension);
+          const targetRecipes = nonNegativeNumber(binding.targetRecipes);
+          if (targetRecipes !== null) {
+            const targets = bindingTargets.get(key) ?? new Map<string, number>();
+            targets.set(dimension, Math.max(targets.get(dimension) ?? 0, targetRecipes));
+            bindingTargets.set(key, targets);
+          }
         }
       }
       bindingDimensions.set(key, dimensions);
@@ -54,6 +62,12 @@ export function selectProjectIndexModuleMiningModules(
       );
       const dimensions =
         plannedDimensions.length > 0 ? plannedDimensions : [...input.executionDimensions];
+      const plannedDimensionTargets = buildPlannedDimensionTargets(
+        moduleKeys,
+        dimensions,
+        bindingTargets
+      );
+      const targetRecipes = Math.max(0, ...Object.values(plannedDimensionTargets));
       return {
         dimensions,
         dimensionIds: dimensions,
@@ -61,11 +75,30 @@ export function selectProjectIndexModuleMiningModules(
         moduleName: module.moduleName,
         modulePath: module.modulePath,
         ownedFiles: module.ownedFiles,
+        ...(Object.keys(plannedDimensionTargets).length > 0 ? { plannedDimensionTargets } : {}),
         plannedDimensions: dimensions,
         role: module.role,
+        ...(targetRecipes > 0 ? { targetRecipes } : {}),
       };
     })
     .filter((module) => module.moduleName.trim().length > 0);
+}
+
+function buildPlannedDimensionTargets(
+  moduleKeys: readonly string[],
+  dimensions: readonly string[],
+  bindingTargets: ReadonlyMap<string, ReadonlyMap<string, number>>
+): Record<string, number> {
+  const targets: Record<string, number> = {};
+  for (const dimension of dimensions) {
+    for (const key of moduleKeys) {
+      const targetRecipes = bindingTargets.get(key)?.get(dimension);
+      if (targetRecipes !== undefined) {
+        targets[dimension] = Math.max(targets[dimension] ?? 0, targetRecipes);
+      }
+    }
+  }
+  return targets;
 }
 
 function moduleBindingCandidateKeys(binding: ModuleMiningSelectionBinding): string[] {
@@ -92,4 +125,8 @@ function projectMapModuleCandidateKeys(module: {
   modulePath?: string;
 }): string[] {
   return uniqueStrings([module.moduleId, module.moduleName, module.modulePath ?? '']);
+}
+
+function nonNegativeNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }
