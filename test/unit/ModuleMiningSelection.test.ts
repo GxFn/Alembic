@@ -61,6 +61,10 @@ describe('selectProjectIndexModuleMiningModules', () => {
         targetRecipes: 1,
       }),
     ]);
+    expect(modules.map((module) => module.moduleId)).toEqual([
+      'target:module-1:src/module-1',
+      'target:module-2:src/module-2',
+    ]);
   });
 
   test('changes Entry B scope-only selection into planned per-module targeting', () => {
@@ -81,7 +85,7 @@ describe('selectProjectIndexModuleMiningModules', () => {
       expect.objectContaining({
         dimensions: ['architecture'],
         dimensionIds: ['architecture'],
-        moduleId: 'mod-2',
+        moduleId: 'target:module-2:src/module-2',
         moduleName: 'module-2',
         plannedDimensionTargets: { architecture: 2 },
         plannedDimensions: ['architecture'],
@@ -110,11 +114,74 @@ describe('selectProjectIndexModuleMiningModules', () => {
       expect.objectContaining({
         dimensions: ['architecture'],
         dimensionIds: ['architecture'],
-        moduleId: 'mod-2',
+        moduleId: 'target:module-2:src/module-2',
         moduleName: 'module-2',
         plannedDimensionTargets: { architecture: 1 },
         plannedDimensions: ['architecture'],
         targetRecipes: 1,
+      }),
+    ]);
+  });
+
+  test('keeps target-scoped ProjectMap module ids stable', () => {
+    const modules = selectProjectIndexModuleMiningModules({
+      bindings: [
+        {
+          dimensions: ['architecture'],
+          moduleId: 'target:module-2:src/module-2',
+          targetRecipes: 1,
+        },
+      ],
+      executionDimensions: [],
+      facts: {
+        ...makeFacts(),
+        projectMapModules: [
+          {
+            moduleId: 'target:module-2:src/module-2',
+            moduleName: 'module-2',
+            modulePath: 'src/module-2',
+            ownedFiles: ['src/module-2/index.ts'],
+          },
+        ],
+      },
+      moduleScope: ['target:module-2:src/module-2'],
+    });
+
+    expect(modules).toEqual([
+      expect.objectContaining({
+        moduleId: 'target:module-2:src/module-2',
+        moduleName: 'module-2',
+      }),
+    ]);
+  });
+
+  test('keeps no-path ProjectMap module ids as selection fallback', () => {
+    const modules = selectProjectIndexModuleMiningModules({
+      bindings: [
+        {
+          dimensions: ['architecture'],
+          moduleId: 'legacy-module',
+          targetRecipes: 1,
+        },
+      ],
+      executionDimensions: [],
+      facts: {
+        ...makeFacts(),
+        projectMapModules: [
+          {
+            moduleId: 'legacy-module',
+            moduleName: 'legacy-module',
+            ownedFiles: ['legacy/index.ts'],
+          },
+        ],
+      },
+      moduleScope: ['legacy-module'],
+    });
+
+    expect(modules).toEqual([
+      expect.objectContaining({
+        moduleId: 'legacy-module',
+        moduleName: 'legacy-module',
       }),
     ]);
   });

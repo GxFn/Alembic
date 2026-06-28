@@ -1,3 +1,4 @@
+import { buildCanonicalCoverageLedgerModuleId } from '@alembic/core/host-agent-workflows';
 import type { ProjectContextWorkflowFacts } from '../workflows/project-context/ProjectContextWorkflowFacts.js';
 import { uniqueStrings } from './DaemonJobWorkflowHelpers.js';
 import type { ModuleMiningModule } from './DaemonJobWorkflowTypes.js';
@@ -53,8 +54,12 @@ export function selectProjectIndexModuleMiningModules(
         scopedModules.size === 0 || moduleKeys.some((key) => scopedModules.has(key));
       return matchesModuleBinding && matchesModuleScope;
     })
-    .map((module): ModuleMiningModule => {
+    .flatMap((module): ModuleMiningModule[] => {
       const moduleKeys = projectMapModuleCandidateKeys(module);
+      const moduleId = canonicalProjectMapModuleId(module, input.facts.projectRoot);
+      if (!moduleId) {
+        return [];
+      }
       const plannedDimensions = uniqueStrings(
         moduleKeys.flatMap((key) => [...(bindingDimensions.get(key) ?? [])])
       );
@@ -66,18 +71,20 @@ export function selectProjectIndexModuleMiningModules(
         bindingTargets
       );
       const targetRecipes = Math.max(0, ...Object.values(plannedDimensionTargets));
-      return {
-        dimensions,
-        dimensionIds: dimensions,
-        moduleId: module.moduleId,
-        moduleName: module.moduleName,
-        modulePath: module.modulePath,
-        ownedFiles: module.ownedFiles,
-        ...(Object.keys(plannedDimensionTargets).length > 0 ? { plannedDimensionTargets } : {}),
-        plannedDimensions: dimensions,
-        role: module.role,
-        ...(targetRecipes > 0 ? { targetRecipes } : {}),
-      };
+      return [
+        {
+          dimensions,
+          dimensionIds: dimensions,
+          moduleId,
+          moduleName: module.moduleName,
+          modulePath: module.modulePath,
+          ownedFiles: module.ownedFiles,
+          ...(Object.keys(plannedDimensionTargets).length > 0 ? { plannedDimensionTargets } : {}),
+          plannedDimensions: dimensions,
+          role: module.role,
+          ...(targetRecipes > 0 ? { targetRecipes } : {}),
+        },
+      ];
     })
     .filter((module) => module.moduleName.trim().length > 0);
 }
@@ -122,9 +129,30 @@ function projectMapModuleCandidateKeys(module: {
   moduleName: string;
   modulePath?: string;
 }): string[] {
-  return uniqueStrings([module.moduleId, module.moduleName, module.modulePath ?? '']);
+  return uniqueStrings([
+    module.moduleId,
+    module.moduleName,
+    module.modulePath ?? '',
+    canonicalProjectMapModuleId(module) ?? '',
+  ]);
 }
 
 function nonNegativeNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function canonicalProjectMapModuleId(
+  module: {
+    moduleId: string;
+    moduleName: string;
+    modulePath?: string;
+  },
+  projectRoot?: string
+): string | undefined {
+  return buildCanonicalCoverageLedgerModuleId({
+    moduleId: module.moduleId,
+    moduleName: module.moduleName,
+    modulePath: module.modulePath,
+    projectRoot,
+  });
 }

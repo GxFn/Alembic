@@ -921,7 +921,10 @@ export function writeKnowledgeRescanCoverageLedgerForDimension(
     return { skipped: true, reason: 'repository-unavailable' };
   }
 
-  const modules = buildKnowledgeRescanCoverageLedgerModules(input.projectContextFacts);
+  const modules = buildKnowledgeRescanCoverageLedgerModules(
+    input.projectContextFacts,
+    input.projectRoot
+  );
   if (modules.length === 0) {
     input.ctx.logger.debug?.(
       '[KnowledgeRescanWorkflow] coverage ledger write skipped: no ProjectMap modules'
@@ -965,22 +968,24 @@ export function writeKnowledgeRescanCoverageLedgerForDimension(
 }
 
 function buildKnowledgeRescanCoverageLedgerModules(
-  facts: Pick<ProjectContextWorkflowFacts, 'projectMapModules'>
+  facts: Pick<ProjectContextWorkflowFacts, 'projectMapModules'>,
+  projectRoot: string
 ): CoverageLedgerModuleAxis[] {
   return buildCoverageLedgerModuleAxisFromSummaries({
     modules: facts.projectMapModules
       .filter((module) => {
         const ownedFiles = uniqueStrings(module.ownedFiles ?? []);
-        return (
-          module.moduleId.trim().length > 0 &&
-          (ownedFiles.length > 0 || Boolean(module.modulePath?.trim()))
-        );
+        const hasModuleAxis =
+          module.moduleId.trim().length > 0 ||
+          (module.moduleName.trim().length > 0 && Boolean(module.modulePath?.trim()));
+        return hasModuleAxis && (ownedFiles.length > 0 || Boolean(module.modulePath?.trim()));
       })
       .map((module) => ({
         moduleId: module.moduleId,
         moduleName: module.moduleName || module.moduleId,
         modulePath: module.modulePath,
         ownedFiles: module.ownedFiles,
+        projectRoot,
       })),
   });
 }

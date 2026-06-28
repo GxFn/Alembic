@@ -92,15 +92,15 @@ describe('knowledge rescan coverage ledger write', () => {
     );
 
     expect(result).toMatchObject({ skipped: false, writtenCells: 2 });
-    const authCell = upserts.find((upsert) => upsert.moduleId === 'auth');
-    const billingCell = upserts.find((upsert) => upsert.moduleId === 'billing');
+    const authCell = upserts.find((upsert) => upsert.moduleId === 'target:Auth:src/auth');
+    const billingCell = upserts.find((upsert) => upsert.moduleId === 'target:Billing:src/billing');
     expect(authCell).toMatchObject({
       coveredSourceRefs: ['src/auth/login.ts'],
       deferred: false,
       dimensionId: 'api',
       grade: 'partial',
       lastRound: 7,
-      moduleId: 'auth',
+      moduleId: 'target:Auth:src/auth',
     });
     expect(authCell?.coveredCount).toBeGreaterThan(0);
     expect(billingCell).toMatchObject({
@@ -108,7 +108,7 @@ describe('knowledge rescan coverage ledger write', () => {
       deferred: false,
       dimensionId: 'api',
       grade: 'thin',
-      moduleId: 'billing',
+      moduleId: 'target:Billing:src/billing',
     });
     expect(upsertRound).not.toHaveBeenCalled();
   });
@@ -146,6 +146,7 @@ describe('knowledge rescan coverage ledger write', () => {
       coveredSourceRefs: ownedFiles,
       grade: 'covered',
       lastRound: 8,
+      moduleId: 'target:Auth:src/auth',
     });
     expect(upserts[0]?.coveredCount).toBeGreaterThanOrEqual(5);
   });
@@ -167,11 +168,11 @@ describe('knowledge rescan coverage ledger write', () => {
     );
 
     expect(result).toMatchObject({ skipped: false, writtenCells: 2 });
-    const authCell = upserts.find((upsert) => upsert.moduleId === 'auth');
+    const authCell = upserts.find((upsert) => upsert.moduleId === 'target:Auth:src/auth');
     expect(authCell).toMatchObject({
       coveredSourceRefs: ['src/auth/login.ts'],
       grade: 'partial',
-      moduleId: 'auth',
+      moduleId: 'target:Auth:src/auth',
     });
     expect(authCell?.coveredCount).toBeGreaterThan(0);
   });
@@ -206,6 +207,39 @@ describe('knowledge rescan coverage ledger write', () => {
     ).toEqual({ skipped: true, reason: 'no-source-refs' });
     expect(upserts).toEqual([]);
     expect(upsertRound).not.toHaveBeenCalled();
+  });
+
+  test('keeps no-path ProjectMap module ids as explicit coverage ledger fallback', () => {
+    const { repository, upserts } = createFakeCoverageLedgerRepository();
+
+    const result = writeKnowledgeRescanCoverageLedgerForDimension(
+      makeInput({
+        ctx: {
+          container: {
+            get: (name: string) => (name === 'coverageLedgerRepository' ? repository : undefined),
+          },
+          logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+        },
+        projectContextFacts: {
+          projectMapModules: [
+            {
+              moduleId: 'legacy-auth',
+              moduleName: 'LegacyAuth',
+              ownedFiles: ['legacy/auth.ts'],
+            },
+          ],
+        },
+        referencedFiles: ['legacy/auth.ts:1'],
+      })
+    );
+
+    expect(result).toMatchObject({ skipped: false, writtenCells: 1 });
+    expect(upserts).toEqual([
+      expect.objectContaining({
+        coveredSourceRefs: ['legacy/auth.ts'],
+        moduleId: 'legacy-auth',
+      }),
+    ]);
   });
 
   test('moduleMining explicit targets can write coverage when gap execution dimensions are empty', () => {
@@ -254,7 +288,7 @@ describe('knowledge rescan coverage ledger write', () => {
         coveredSourceRefs: ['src/module-2/index.ts'],
         dimensionId: 'architecture',
         grade: 'covered',
-        moduleId: 'mod-2',
+        moduleId: 'target:module-2:src/module-2',
         totalCandidateCount: 1,
       }),
     ]);

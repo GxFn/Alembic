@@ -464,7 +464,7 @@ let package = Package(
     );
   });
 
-  test('builds ProjectMap modules from fixed map input without changing shape', () => {
+  test('builds canonical ProjectMap module ids from fixed map input', () => {
     const projectRoot = '/tmp/alembic-project-map-module-input';
     const moduleRef = makeProjectContextRef(projectRoot, 'path:repo:lib/project-context', {
       filePath: 'lib/project-context',
@@ -472,25 +472,28 @@ let package = Package(
       label: 'project-context',
     });
 
-    const modules = buildProjectMapModules({
-      dependencySummary: [],
-      majorFlows: [],
-      modules: [
-        {
-          id: 'module:project-context',
-          kind: 'source-root',
-          name: 'project-context',
-          ownedFileCount: 2,
-          ref: moduleRef,
-          role: 'workflow-facts',
-        },
-      ],
-    } as never);
+    const modules = buildProjectMapModules(
+      {
+        dependencySummary: [],
+        majorFlows: [],
+        modules: [
+          {
+            id: 'module:project-context',
+            kind: 'source-root',
+            name: 'project-context',
+            ownedFileCount: 2,
+            ref: moduleRef,
+            role: 'workflow-facts',
+          },
+        ],
+      } as never,
+      { projectRoot }
+    );
 
     expect(modules).toEqual([
       {
         kind: 'source-root',
-        moduleId: 'module:project-context',
+        moduleId: 'target:project-context:lib/project-context',
         moduleName: 'project-context',
         modulePath: 'lib/project-context',
         ownedFileCount: 2,
@@ -499,6 +502,58 @@ let package = Package(
         role: 'workflow-facts',
       },
     ]);
+  });
+
+  test('keeps explicit ProjectMap module id fallback when the module path is unavailable', () => {
+    const modules = buildProjectMapModules({
+      dependencySummary: [],
+      majorFlows: [],
+      modules: [
+        {
+          id: 'module:legacy',
+          kind: 'logical',
+          name: 'legacy',
+          ownedFileCount: 0,
+          role: 'fallback',
+        },
+      ],
+    } as never);
+
+    expect(modules).toEqual([
+      expect.objectContaining({
+        moduleId: 'module:legacy',
+        moduleName: 'legacy',
+      }),
+    ]);
+  });
+
+  test('filters aggregate ProjectMap root axes before coverage ledger fan-out', () => {
+    const projectRoot = '/tmp/BiliDili';
+    const rootRef = makeProjectContextRef(projectRoot, 'path:repo:BiliDili', {
+      filePath: 'BiliDili',
+      kind: 'path',
+      label: 'BiliDili',
+    });
+
+    const modules = buildProjectMapModules(
+      {
+        dependencySummary: [],
+        majorFlows: [],
+        modules: [
+          {
+            id: 'module:root',
+            kind: 'source-root',
+            name: 'BiliDili',
+            ownedFileCount: 1,
+            ref: rootRef,
+            role: 'root',
+          },
+        ],
+      } as never,
+      { projectRoot }
+    );
+
+    expect(modules).toEqual([]);
   });
 
   test('builds ProjectMap modules from fixed target input without changing shape', async () => {
@@ -729,9 +784,7 @@ let package = Package(
     );
 
     expect(source).toContain('for (const seed of moduleSeeds.slice(0, maxModuleDetails)) {');
-    expect(source).toContain(
-      'const projectMapModules = buildProjectMapModules(presenterInput.map);'
-    );
+    expect(source).toContain('const projectMapModules = buildProjectMapModules(presenterInput.map');
     expect(source).toContain('projectMapModules,');
     expect(source).not.toContain('function buildProjectMapModules(map');
     expect(source).not.toContain('function presentProjectContextColdStartResponse');

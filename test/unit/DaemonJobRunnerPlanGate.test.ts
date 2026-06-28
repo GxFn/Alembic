@@ -1928,7 +1928,7 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
             expect.objectContaining({
               dimensions: ['architecture'],
               dimensionIds: ['architecture'],
-              moduleId: 'mod-2',
+              moduleId: 'target:module-2:src/module-2',
               moduleName: 'module-2',
               plannedDimensionTargets: { architecture: 4 },
               plannedDimensions: ['architecture'],
@@ -1948,7 +1948,7 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
         modules: [
           expect.objectContaining({
             dimensions: ['architecture'],
-            moduleId: 'mod-2',
+            moduleId: 'target:module-2:src/module-2',
             plannedDimensions: ['architecture'],
           }),
         ],
@@ -2157,12 +2157,12 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
           selectedModules: [
             expect.objectContaining({
               dimensions: ['architecture'],
-              moduleId: 'mod-1',
+              moduleId: 'target:module-1:src/module-1',
               plannedDimensions: ['architecture'],
             }),
             expect.objectContaining({
               dimensions: ['architecture'],
-              moduleId: 'mod-2',
+              moduleId: 'target:module-2:src/module-2',
               plannedDimensions: ['architecture'],
             }),
           ],
@@ -2178,14 +2178,14 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
           coveredSourceRefs: ['src/module-1/index.ts'],
           dimensionId: 'architecture',
           grade: 'partial',
-          moduleId: 'mod-1',
+          moduleId: 'target:module-1:src/module-1',
         }),
         expect.objectContaining({
           coveredCount: 1,
           coveredSourceRefs: ['src/module-2/index.ts'],
           dimensionId: 'architecture',
           grade: 'partial',
-          moduleId: 'mod-2',
+          moduleId: 'target:module-2:src/module-2',
         }),
       ])
     );

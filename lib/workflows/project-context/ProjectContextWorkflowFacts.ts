@@ -266,7 +266,9 @@ export async function buildProjectContextWorkflowFacts(
   const allFiles = buildWorkflowFiles(presenterInput);
   const allTargets = buildWorkflowTargets(presenterInput);
   const filesByTarget = buildProjectContextTargetFileMap(allFiles);
-  const projectMapModules = buildProjectMapModules(presenterInput.map);
+  const projectMapModules = buildProjectMapModules(presenterInput.map, {
+    projectRoot: input.projectRoot,
+  });
   if (projectMapModules.length === 0) {
     projectMapModules.push(
       ...(await buildProjectMapModulesFromTargets({

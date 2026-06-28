@@ -1,3 +1,5 @@
+import { buildCanonicalCoverageLedgerModuleId } from '@alembic/core/host-agent-workflows';
+
 export interface ModuleMiningSelectedModulePayload {
   dimensionIds: string[];
   dimensions: string[];
@@ -95,17 +97,27 @@ interface ModuleMiningCoverageLedgerRepositoryLike {
 }
 
 export function toModuleMiningSelectedModulePayloads(
-  modules: readonly ModuleMiningModuleLike[]
+  modules: readonly ModuleMiningModuleLike[],
+  options: { projectRoot?: string } = {}
 ): ModuleMiningSelectedModulePayload[] {
-  return modules.map((module) => {
+  return modules.flatMap((module): ModuleMiningSelectedModulePayload[] => {
     const record = module as Record<string, unknown>;
+    const moduleId = buildCanonicalCoverageLedgerModuleId({
+      moduleId: module.moduleId,
+      moduleName: module.moduleName,
+      modulePath: module.modulePath,
+      projectRoot: options.projectRoot,
+    });
+    if (!moduleId) {
+      return [];
+    }
     const plannedDimensions = moduleDimensionIds(record.plannedDimensions, module);
     const dimensions = moduleDimensionIds(record.dimensions, module, plannedDimensions);
     const dimensionIds = moduleDimensionIds(record.dimensionIds, module, dimensions);
     const payload: ModuleMiningSelectedModulePayload = {
       dimensionIds,
       dimensions,
-      moduleId: module.moduleId,
+      moduleId,
       moduleName: module.moduleName,
       plannedDimensions,
     };
@@ -124,7 +136,7 @@ export function toModuleMiningSelectedModulePayloads(
     if (targetRecipes !== null) {
       payload.targetRecipes = targetRecipes;
     }
-    return payload;
+    return [payload];
   });
 }
 
@@ -175,7 +187,9 @@ export function writeModuleMiningCoverageLedger(input: {
   selectedModules: readonly ModuleMiningModuleLike[];
   sourceRefPaths: readonly string[];
 }): ModuleMiningCoverageLedgerSummary {
-  const selectedModules = toModuleMiningSelectedModulePayloads(input.selectedModules);
+  const selectedModules = toModuleMiningSelectedModulePayloads(input.selectedModules, {
+    projectRoot: input.projectRoot,
+  });
   const sourceRefPaths = uniqueStrings(input.sourceRefPaths.map(stripSourceRefLineAnchor)).sort();
   const skippedBase = {
     cells: [],

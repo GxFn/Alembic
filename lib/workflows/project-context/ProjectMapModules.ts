@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { buildCanonicalCoverageLedgerModuleId } from '@alembic/core/host-agent-workflows';
 import type {
   ProjectContextPresenterInput,
   ProjectContextRef,
@@ -8,13 +9,29 @@ import type {
 import type { BootstrapFileEntry } from '../ai-execution/AgentRunInputBuilders.js';
 import type { ProjectContextModule } from './ProjectContextWorkflowFacts.js';
 
-export function buildProjectMapModules(map: ProjectMap | undefined): ProjectContextModule[] {
+export interface BuildProjectMapModulesOptions {
+  projectRoot?: string;
+}
+
+export function buildProjectMapModules(
+  map: ProjectMap | undefined,
+  options: BuildProjectMapModulesOptions = {}
+): ProjectContextModule[] {
   return (map?.modules ?? [])
-    .map((module) => {
+    .flatMap((module) => {
       const modulePath = normalizeModulePath(module.ref?.scope.filePath);
+      const moduleId = buildCanonicalCoverageLedgerModuleId({
+        moduleId: module.id,
+        moduleName: module.name,
+        modulePath,
+        projectRoot: options.projectRoot,
+      });
+      if (!moduleId) {
+        return [];
+      }
       const moduleEntry: ProjectContextModule = {
         kind: module.kind,
-        moduleId: module.id,
+        moduleId,
         moduleName: module.name,
         ownedFileCount: module.ownedFileCount,
         ref: module.ref,
@@ -24,7 +41,7 @@ export function buildProjectMapModules(map: ProjectMap | undefined): ProjectCont
         moduleEntry.modulePath = modulePath;
         moduleEntry.ownedFiles = [modulePath];
       }
-      return moduleEntry;
+      return [moduleEntry];
     })
     .filter((module) => module.moduleId.length > 0 && module.moduleName.length > 0);
 }
@@ -55,10 +72,18 @@ export async function buildProjectMapModulesFromTargets(input: {
     if (!modulePath || ownedFiles.length === 0) {
       continue;
     }
+    const moduleId = buildCanonicalCoverageLedgerModuleId({
+      moduleName,
+      modulePath,
+      projectRoot: input.projectRoot,
+    });
+    if (!moduleId) {
+      continue;
+    }
 
     modules.push({
       kind: target.kind,
-      moduleId: `target:${moduleName}:${modulePath}`,
+      moduleId,
       moduleName,
       modulePath,
       ownedFileCount: ownedFiles.length,
