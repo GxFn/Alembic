@@ -62,13 +62,15 @@ import {
   startAiDimensionSession,
 } from '../ai-execution/AiDimensionDispatcher.js';
 import {
+  presentProjectContextColdStartEmptyProject,
+  presentProjectContextColdStartResponse,
+} from '../project-context/ProjectContextPresenters.js';
+import {
   buildProjectContextFillView,
   buildProjectContextMissionArtifacts,
   buildProjectContextWorkflowFacts,
   createProjectContextWorkflowSession,
   type ProjectContextWorkflowFacts,
-  presentProjectContextColdStartEmptyProject,
-  presentProjectContextColdStartResponse,
   registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion,
   selectProjectContextWorkflowDimensions,
 } from '../project-context/ProjectContextWorkflowFacts.js';

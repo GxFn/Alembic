@@ -9,12 +9,21 @@ import {
 } from '@alembic/core/host-agent-workflows';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
+  presentProjectContextColdStartEmptyProject,
+  presentProjectContextColdStartResponse,
+  presentProjectContextRescanResponse,
+} from '../../lib/workflows/project-context/ProjectContextPresenters.js';
+import {
   buildProjectContextMissionArtifacts,
   buildProjectContextWorkflowFacts,
   createProjectContextWorkflowSession,
   type ProjectContextWorkflowFacts,
   registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion,
 } from '../../lib/workflows/project-context/ProjectContextWorkflowFacts.js';
+import {
+  buildProjectMapModules,
+  buildProjectMapModulesFromTargets,
+} from '../../lib/workflows/project-context/ProjectMapModules.js';
 
 const fixtures: string[] = [];
 const projectContextCapabilitiesMock = vi.hoisted(() => ({
@@ -326,6 +335,185 @@ let package = Package(
     );
   });
 
+  test('builds ProjectMap modules from fixed map input without changing shape', () => {
+    const projectRoot = '/tmp/alembic-project-map-module-input';
+    const moduleRef = makeProjectContextRef(projectRoot, 'path:repo:lib/project-context', {
+      filePath: 'lib/project-context',
+      kind: 'path',
+      label: 'project-context',
+    });
+
+    const modules = buildProjectMapModules({
+      dependencySummary: [],
+      majorFlows: [],
+      modules: [
+        {
+          id: 'module:project-context',
+          kind: 'source-root',
+          name: 'project-context',
+          ownedFileCount: 2,
+          ref: moduleRef,
+          role: 'workflow-facts',
+        },
+      ],
+    } as never);
+
+    expect(modules).toEqual([
+      {
+        kind: 'source-root',
+        moduleId: 'module:project-context',
+        moduleName: 'project-context',
+        modulePath: 'lib/project-context',
+        ownedFileCount: 2,
+        ownedFiles: ['lib/project-context'],
+        ref: moduleRef,
+        role: 'workflow-facts',
+      },
+    ]);
+  });
+
+  test('builds ProjectMap modules from fixed target input without changing shape', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'alembic-target-module-input-'));
+    fixtures.push(projectRoot);
+    await import('node:fs/promises').then(async (fs) => {
+      await fs.mkdir(join(projectRoot, 'Sources/Home'), { recursive: true });
+      await fs.writeFile(
+        join(projectRoot, 'Sources/Home/HomeViewController.swift'),
+        'public struct HomeViewController {}\n'
+      );
+    });
+    const targetRef = makeProjectContextRef(projectRoot, 'path:repo:Sources/Home', {
+      filePath: 'Sources/Home',
+      kind: 'path',
+      label: 'Home',
+    });
+
+    const modules = await buildProjectMapModulesFromTargets({
+      allFiles: [
+        {
+          content: '',
+          name: 'HomeViewController.swift',
+          path: 'Sources/Home/HomeViewController.swift',
+          relativePath: 'Sources/Home/HomeViewController.swift',
+          targetName: 'Home',
+        },
+      ],
+      input: {
+        repo: {
+          localPackages: [],
+          targets: [{ kind: 'target', name: 'Home', refs: [targetRef] }],
+        },
+      } as never,
+      projectRoot,
+    });
+
+    expect(modules).toEqual([
+      {
+        kind: 'target',
+        moduleId: 'target:Home:Sources/Home',
+        moduleName: 'Home',
+        modulePath: 'Sources/Home',
+        ownedFileCount: 1,
+        ownedFiles: ['Sources/Home/HomeViewController.swift'],
+        ref: targetRef,
+        role: 'target',
+      },
+    ]);
+  });
+
+  test('keeps ProjectContext presenter response envelopes stable', () => {
+    const projectRoot = '/tmp/alembic-project-context-presenter';
+    const facts = createPresenterFacts(projectRoot);
+    const dimension = { id: 'architecture', label: 'Architecture' };
+    const bootstrapSession = { toJSON: () => ({ id: 'bootstrap-session-1' }) };
+
+    const coldStart = presentProjectContextColdStartResponse({
+      bootstrapSession: bootstrapSession as never,
+      cachedSessionId: 'cached-session-1',
+      cleanupResult: { clearedTables: ['knowledge'] },
+      dimensions: [dimension],
+      facts,
+      responseTimeMs: 12,
+      selectionSummary: { stage: 'coldStart' },
+      taskCount: 1,
+    });
+
+    expect(coldStart).toMatchObject({
+      data: {
+        bootstrapSession: { id: 'bootstrap-session-1' },
+        dimensionSelection: { stage: 'coldStart' },
+        files: 1,
+        primaryLanguage: 'typescript',
+        projectContext: { source: 'project-context' },
+        sessionId: 'cached-session-1',
+        taskCount: 1,
+      },
+      meta: { responseTimeMs: 12, tool: 'alembic_bootstrap' },
+      success: true,
+    });
+
+    const emptyProject = presentProjectContextColdStartEmptyProject({
+      facts,
+      responseTimeMs: 3,
+    });
+    expect(emptyProject).toMatchObject({
+      data: {
+        message: 'No source files found, nothing to bootstrap',
+        projectContext: { source: 'project-context' },
+      },
+      meta: { responseTimeMs: 3, tool: 'alembic_bootstrap' },
+      success: true,
+    });
+
+    const rescan = presentProjectContextRescanResponse({
+      auditSummary: { recipes: 2 },
+      bootstrapSession: bootstrapSession as never,
+      cleanResult: { clearedTables: ['project_context_cache'], deletedFiles: 4 },
+      facts,
+      gapPlan: {
+        executionDimensions: [dimension],
+        gapDimensions: [dimension],
+        produceDimensions: [dimension],
+        requestedDimensions: [dimension],
+        skippedDimensions: [],
+        targetPerDimension: 1,
+      },
+      inlineFill: {
+        coverageSkippedDimensions: 0,
+        coverageWrittenCells: 1,
+        newRecipesThisRound: 2,
+      },
+      miningMode: 'deepMining',
+      recipeSnapshot: { count: 2 },
+      responseTimeMs: 19,
+      sessionId: 'rescan-session-1',
+    });
+
+    expect(rescan).toMatchObject({
+      data: {
+        asyncFill: false,
+        bootstrapSession: { id: 'bootstrap-session-1' },
+        coverageLedger: { skippedDimensions: 0, writtenCells: 1 },
+        gapAnalysis: {
+          executionDimensions: 1,
+          gapDimensions: 1,
+          produceDimensions: 1,
+          targetPerDimension: 1,
+          totalDimensions: 1,
+        },
+        miningMode: 'deepMining',
+        newRecipesThisRound: 2,
+        primaryLanguage: 'typescript',
+        projectContext: { source: 'project-context' },
+        rescan: { cleanedFiles: 4, cleanedTables: 1, preservedRecipes: 2 },
+        sessionId: 'rescan-session-1',
+        status: 'complete',
+      },
+      meta: { responseTimeMs: 19, tool: 'alembic_rescan' },
+      success: true,
+    });
+  });
+
   test('passes rescan evidence into ProjectContext mission briefing artifacts', async () => {
     const projectRoot = '/tmp/alembic-swift-target-project';
     mockSwiftTargetProjectContext(projectRoot);
@@ -400,12 +588,26 @@ let package = Package(
       join(process.cwd(), 'lib/workflows/project-context/ProjectContextWorkflowFacts.ts'),
       'utf8'
     );
+    const mapModulesSource = await readFile(
+      join(process.cwd(), 'lib/workflows/project-context/ProjectMapModules.ts'),
+      'utf8'
+    );
+    const presentersSource = await readFile(
+      join(process.cwd(), 'lib/workflows/project-context/ProjectContextPresenters.ts'),
+      'utf8'
+    );
 
     expect(source).toContain('for (const seed of moduleSeeds.slice(0, maxModuleDetails)) {');
     expect(source).toContain(
       'const projectMapModules = buildProjectMapModules(presenterInput.map);'
     );
     expect(source).toContain('projectMapModules,');
+    expect(source).not.toContain('function buildProjectMapModules(map');
+    expect(source).not.toContain('function presentProjectContextColdStartResponse');
+    expect(mapModulesSource).toContain('export function buildProjectMapModules');
+    expect(mapModulesSource).toContain('export async function buildProjectMapModulesFromTargets');
+    expect(presentersSource).toContain('export function presentProjectContextColdStartResponse');
+    expect(presentersSource).toContain('export function presentProjectContextRescanResponse');
   });
 });
 
@@ -748,6 +950,25 @@ function createWorkflowFacts(projectRoot: string): ProjectContextWorkflowFacts {
     primaryLang: 'typescript',
     projectRoot,
   } as ProjectContextWorkflowFacts;
+}
+
+function createPresenterFacts(projectRoot: string): ProjectContextWorkflowFacts {
+  return {
+    allTargets: [{ fileCount: 1, name: 'project', type: 'target' }],
+    fileCount: 1,
+    filesByTarget: {
+      project: [{ name: 'index.ts', path: 'lib/index.ts', relativePath: 'lib/index.ts' }],
+    },
+    languageStats: { typescript: 1 },
+    moduleCount: 1,
+    primaryLang: 'typescript',
+    projectContextSummary: { source: 'project-context' },
+    projectRoot,
+    report: { projectInformationSource: 'project-context' },
+    secondaryLanguages: [],
+    targetCount: 1,
+    warnings: [],
+  } as unknown as ProjectContextWorkflowFacts;
 }
 
 function completedBootstrapTask() {

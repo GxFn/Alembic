@@ -67,6 +67,7 @@ import {
   startAiDimensionSession,
 } from '../ai-execution/AiDimensionDispatcher.js';
 import { runAiDimensionPipelineForResult } from '../ai-execution/AiDimensionPipeline.js';
+import { presentProjectContextRescanResponse } from '../project-context/ProjectContextPresenters.js';
 import {
   buildProjectContextFillView,
   buildProjectContextMissionArtifacts,
@@ -75,7 +76,6 @@ import {
   openOrReturnProjectContextWorkflowSession,
   type ProjectContextDimensionResultHookInput,
   type ProjectContextWorkflowFacts,
-  presentProjectContextRescanResponse,
   registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion,
   releaseProjectContextWorkflowSession,
   saveProjectContextFileSnapshot,
