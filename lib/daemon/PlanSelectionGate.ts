@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { AgentService } from '@alembic/agent/service';
 import {
   applyPlanSelection,
@@ -59,6 +60,7 @@ export async function runPlanSelectionGate(
     const { requestConstraints, selection } = constrainPlanSelectionForGate({
       args: options.args,
       gateStage: gate.generationStage,
+      projectRoot: analysisScope.projectRoot,
       selection: rawSelection,
     });
 
@@ -141,6 +143,7 @@ interface PlanSelectionRequestConstraints {
 function constrainPlanSelectionForGate(input: {
   args?: Record<string, unknown>;
   gateStage: PlanStageId;
+  projectRoot: string;
   selection: PlanSelection;
 }): { requestConstraints: Record<string, unknown> | null; selection: PlanSelection } {
   if (input.gateStage !== 'deepMining') {
@@ -154,7 +157,9 @@ function constrainPlanSelectionForGate(input: {
 
   return {
     requestConstraints: serializePlanSelectionRequestConstraints(constraints),
-    selection: applyDeepMiningRequestConstraints(input.selection, constraints),
+    selection: applyDeepMiningRequestConstraints(input.selection, constraints, {
+      projectRoot: input.projectRoot,
+    }),
   };
 }
 
@@ -184,7 +189,8 @@ function hasDeepMiningRequestConstraint(constraints: PlanSelectionRequestConstra
 
 function applyDeepMiningRequestConstraints(
   selection: PlanSelection,
-  constraints: PlanSelectionRequestConstraints
+  constraints: PlanSelectionRequestConstraints,
+  context: PlanSelectionConstraintContext
 ): PlanSelection {
   const requestedDimensions = new Set(constraints.dimensionIds);
   let moduleBindings = selection.moduleBindings.map((binding) =>
@@ -206,9 +212,19 @@ function applyDeepMiningRequestConstraints(
   }
 
   if (constraints.moduleScope.length > 0) {
+    const candidatesBeforeModuleScope = moduleBindings;
     moduleBindings = moduleBindings.filter((binding) =>
-      planModuleBindingMatchesScope(binding, constraints.moduleScope)
+      planModuleBindingMatchesScope(binding, constraints.moduleScope, context)
     );
+    if (moduleBindings.length === 0) {
+      throw new Error(
+        formatModuleScopeConstraintMiss(
+          constraints.moduleScope,
+          candidatesBeforeModuleScope,
+          context
+        )
+      );
+    }
   }
 
   if (constraints.scaleCap !== undefined) {
@@ -258,14 +274,144 @@ function applyDeepMiningRequestConstraints(
   };
 }
 
+interface PlanSelectionConstraintContext {
+  projectRoot: string;
+}
+
 function planModuleBindingMatchesScope(
   binding: PlanModuleBinding,
-  moduleScope: readonly string[]
+  moduleScope: readonly string[],
+  context: PlanSelectionConstraintContext
 ): boolean {
-  const scope = new Set(moduleScope);
-  return [binding.modulePath, binding.moduleId].some(
-    (value) => typeof value === 'string' && scope.has(value)
-  );
+  const requestedScope = new Set(normalizeScopeValues(moduleScope));
+  return moduleBindingScopeAliases(binding, context).some((alias) => requestedScope.has(alias));
+}
+
+function formatModuleScopeConstraintMiss(
+  moduleScope: readonly string[],
+  moduleBindings: readonly PlanModuleBinding[],
+  context: PlanSelectionConstraintContext
+): string {
+  const requested = normalizeScopeValues(moduleScope);
+  const availableAliases = uniqueStrings(
+    moduleBindings.flatMap((binding) => moduleBindingScopeAliases(binding, context))
+  ).slice(0, 20);
+  return [
+    'DeepMining request constraints removed all module×dimension targets',
+    `moduleScope=${requested.length > 0 ? requested.join(', ') : '(empty)'}`,
+    `availableModuleAliases=${availableAliases.length > 0 ? availableAliases.join(', ') : '(none)'}`,
+  ].join('; ');
+}
+
+function normalizeScopeValues(values: readonly string[]): string[] {
+  return uniqueStrings(values.flatMap((value) => scopeValueAliases(value)));
+}
+
+function moduleBindingScopeAliases(
+  binding: PlanModuleBinding,
+  context: PlanSelectionConstraintContext
+): string[] {
+  const record = binding as unknown as Record<string, unknown>;
+  const aliases = [
+    ...scopeValueAliases(binding.modulePath, context),
+    ...scopeValueAliases(binding.moduleId, context),
+    ...scopeValueAliases(record.moduleName, context),
+  ];
+  if (moduleBindingRepresentsProjectRoot(binding, context)) {
+    aliases.push(...projectRootScopeAliases(context.projectRoot));
+  }
+  return uniqueStrings(aliases);
+}
+
+function moduleBindingRepresentsProjectRoot(
+  binding: PlanModuleBinding,
+  context: PlanSelectionConstraintContext
+): boolean {
+  const rootPath = normalizePathLike(context.projectRoot);
+  const rootBasename = rootPath ? path.posix.basename(rootPath) : null;
+  return [binding.modulePath, binding.moduleId].some((value) => {
+    if (typeof value !== 'string') {
+      return false;
+    }
+    const normalized = normalizePathLike(value);
+    return (
+      normalized === '.' ||
+      normalized === '/' ||
+      (rootPath !== null && normalized === rootPath) ||
+      (rootBasename !== null && normalized === rootBasename)
+    );
+  });
+}
+
+function projectRootScopeAliases(projectRoot: string): string[] {
+  const normalizedRoot = normalizePathLike(projectRoot);
+  if (!normalizedRoot) {
+    return [];
+  }
+  return uniqueStrings([projectRoot, normalizedRoot, path.posix.basename(normalizedRoot)]);
+}
+
+function scopeValueAliases(value: unknown, context?: PlanSelectionConstraintContext): string[] {
+  if (typeof value !== 'string') {
+    return [];
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const aliases = [trimmed];
+  const normalized = normalizePathLike(trimmed);
+  if (normalized) {
+    aliases.push(normalized);
+    const relativeToProjectRoot = relativeProjectRootPath(normalized, context?.projectRoot);
+    if (relativeToProjectRoot) {
+      aliases.push(relativeToProjectRoot);
+    }
+    const basename = path.posix.basename(relativeToProjectRoot ?? normalized);
+    if (basename && basename !== '.') {
+      aliases.push(basename);
+    }
+  }
+
+  const structuredAlias = terminalStructuredAlias(trimmed);
+  if (structuredAlias) {
+    aliases.push(structuredAlias);
+  }
+
+  return uniqueStrings(aliases);
+}
+
+function normalizePathLike(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const normalized = path.posix.normalize(trimmed.replace(/\\/g, '/'));
+  if (!normalized || normalized === '.') {
+    return trimmed === '.' || trimmed === './' ? '.' : null;
+  }
+  return normalized.replace(/\/+$/u, '') || '/';
+}
+
+function relativeProjectRootPath(value: string, projectRoot: string | undefined): string | null {
+  const rootPath = projectRoot ? normalizePathLike(projectRoot) : null;
+  if (!rootPath || !path.posix.isAbsolute(value)) {
+    return null;
+  }
+  if (value === rootPath) {
+    return '.';
+  }
+  const rootPrefix = `${rootPath}/`;
+  return value.startsWith(rootPrefix) ? value.slice(rootPrefix.length) : null;
+}
+
+function terminalStructuredAlias(value: string): string | null {
+  const parts = value
+    .split(/[/:\\]/u)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0 && part !== '.');
+  return parts.length > 1 ? (parts.at(-1) ?? null) : null;
 }
 
 function serializePlanSelectionRequestConstraints(
