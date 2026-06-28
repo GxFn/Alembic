@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import { adviseCoverageLedger } from '@alembic/core/host-agent-workflows';
 import type { PlanModuleBinding, PlanSelection } from '@alembic/core/plans';
 import type {
@@ -169,7 +170,8 @@ export async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise
   }
 
   const coverageLedgerSeed = buildCoverageLedgerSeed(
-    coverageLedgerRepository.listByProjectRoot(projectRoot)
+    coverageLedgerRepository.listByProjectRoot(projectRoot),
+    { projectRoot }
   );
   recordCoverageLedgerSeedEvent({ coverageLedgerSeed, options });
   options.logger.info('DeepMining coverage ledger seed retained', {
@@ -207,13 +209,16 @@ interface CoverageLedgerSeedSummary {
 }
 
 function buildCoverageLedgerSeed(
-  cells: readonly CoverageLedgerRecord[]
+  cells: readonly CoverageLedgerRecord[],
+  options: { projectRoot: string }
 ): CoverageLedgerSeedSummary {
   const writtenCells = cells.length;
   const aggregateOrRootModuleIds = uniqueSortedStrings(
-    cells.map((cell) => cell.moduleId).filter(isAggregateOrRootModuleId)
+    cells
+      .map((cell) => cell.moduleId)
+      .filter((moduleId) => isAggregateOrRootModuleId(moduleId, options))
   );
-  const usableCells = cells.filter((cell) => isTargetScopedCoverageCell(cell));
+  const usableCells = cells.filter((cell) => isTargetScopedCoverageCell(cell, options));
   const measuredCells = usableCells.filter(isMeasuredCoverageCell);
   const dimensionIds = uniqueSortedStrings(usableCells.map((cell) => cell.dimensionId));
   const moduleIds = uniqueSortedStrings(usableCells.map((cell) => cell.moduleId));
@@ -272,21 +277,35 @@ function recordCoverageLedgerSeedEvent(input: {
   });
 }
 
-function isTargetScopedCoverageCell(cell: CoverageLedgerRecord): boolean {
-  return isTargetScopedModuleId(cell.moduleId) && !isAggregateOrRootModuleId(cell.moduleId);
+function isTargetScopedCoverageCell(
+  cell: CoverageLedgerRecord,
+  options: { projectRoot: string }
+): boolean {
+  return (
+    isTargetScopedModuleId(cell.moduleId, options) &&
+    !isAggregateOrRootModuleId(cell.moduleId, options)
+  );
 }
 
-function isTargetScopedModuleId(moduleId: string): boolean {
+function isTargetScopedModuleId(moduleId: string, options: { projectRoot: string }): boolean {
   const normalized = moduleId.trim();
   if (!normalized.startsWith('target:')) {
     return false;
   }
   const [, targetName, ...pathParts] = normalized.split(':');
   const modulePath = pathParts.join(':').trim();
-  return Boolean(targetName?.trim() && modulePath && modulePath !== '.' && modulePath !== '/');
+  if (!targetName?.trim()) {
+    return false;
+  }
+  if (modulePath && modulePath !== '.' && modulePath !== '/') {
+    return true;
+  }
+  // BiliDili exposes real package targets such as target:Account:. at the package root.
+  // Only the project-root target itself is an aggregate/root cell.
+  return !isProjectRootTargetName(targetName, options.projectRoot);
 }
 
-function isAggregateOrRootModuleId(moduleId: string): boolean {
+function isAggregateOrRootModuleId(moduleId: string, options: { projectRoot: string }): boolean {
   const normalized = moduleId.trim();
   if (!normalized) {
     return true;
@@ -308,11 +327,23 @@ function isAggregateOrRootModuleId(moduleId: string): boolean {
     return true;
   }
   if (normalized.startsWith('target:')) {
-    const [, , ...pathParts] = normalized.split(':');
+    const [, targetName, ...pathParts] = normalized.split(':');
     const modulePath = pathParts.join(':').trim();
-    return !modulePath || modulePath === '.' || modulePath === '/';
+    if (modulePath && modulePath !== '.' && modulePath !== '/') {
+      return false;
+    }
+    return isProjectRootTargetName(targetName, options.projectRoot);
   }
   return false;
+}
+
+function isProjectRootTargetName(targetName: string | undefined, projectRoot: string): boolean {
+  const normalizedTargetName = targetName?.trim();
+  if (!normalizedTargetName) {
+    return true;
+  }
+  const projectRootName = basename(projectRoot).trim();
+  return Boolean(projectRootName && normalizedTargetName === projectRootName);
 }
 
 function isMeasuredCoverageCell(cell: CoverageLedgerRecord): boolean {

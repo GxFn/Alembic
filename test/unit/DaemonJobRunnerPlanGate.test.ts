@@ -878,6 +878,118 @@ describe('DaemonJobRunner deepMining plan gate', () => {
     );
   });
 
+  test('keeps package-root targets in the coverageLedgerSeed when they are not the project root', async () => {
+    const dataRoot = makeNamedDataRoot('BiliDili');
+    const store = new JobStore({ projectRoot: dataRoot });
+    const coverageLedgerRepository = makeCoverageLedgerRepository();
+    const recorder = new JobProcessEventRecorder();
+    const container = makeContainer(store, { coverageLedgerRepository, dataRoot, recorder });
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: { generationStage: 'deepMining', maxRounds: 1 },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue({
+      ...makeFacts(),
+      moduleCount: 1,
+      projectMapModules: [
+        {
+          moduleId: 'target:Account:.',
+          moduleName: 'Account',
+          modulePath: '.',
+          ownedFiles: [
+            'Sources/Infrastructure/Account/LoginService.swift',
+            'Sources/Infrastructure/Account/UserSession.swift',
+          ],
+        },
+      ],
+      projectRoot: dataRoot,
+    } as ProjectContextWorkflowFacts);
+    vi.mocked(runPlanAgent).mockResolvedValueOnce({
+      dimensions: ['architecture'],
+      generationStage: 'deepMining',
+      moduleBindings: [
+        {
+          dimensions: ['architecture'],
+          moduleId: 'target:Account:.',
+          modulePath: '.',
+          priority: 1,
+          targetRecipes: 2,
+        },
+      ],
+      scale: { k: 1, maxRounds: 1, totalRecipeBudget: 2 },
+    });
+    vi.mocked(runProjectIndexWorkflow).mockImplementationOnce(async (_ctx, args) => {
+      coverageLedgerRepository.upsertCell({
+        coveredCount: 2,
+        coveredSourceRefs: [
+          'Sources/Infrastructure/Account/LoginService.swift',
+          'Sources/Infrastructure/Account/UserSession.swift',
+        ],
+        dimensionId: 'architecture',
+        grade: 'covered',
+        lastRound: args.roundIndex,
+        moduleId: 'target:Account:.',
+        projectRoot: dataRoot,
+        totalCandidateCount: 2,
+      });
+      return {
+        data: {
+          coverageLedger: { writtenCells: 1 },
+          newRecipesThisRound: 2,
+        },
+      };
+    });
+
+    const result = await runDaemonJob({
+      args: { generationStage: 'deepMining', maxRounds: 1 },
+      container,
+      jobId: job.id,
+      kind: 'rescan',
+      logger,
+      source: 'dashboard',
+    });
+
+    const expectedSeed = {
+      aggregateOrRootModuleIds: [],
+      coveredPathCount: 2,
+      dimensionIds: ['architecture'],
+      measuredCells: 1,
+      moduleCount: 1,
+      status: 'written',
+      targetScopedCells: 1,
+      usableCells: 1,
+      writtenCells: 1,
+    };
+    expect(result).toMatchObject({
+      job: {
+        result: {
+          coverageLedgerSeed: expectedSeed,
+          deepMining: { coverageLedgerSeed: expectedSeed },
+        },
+        status: 'completed',
+      },
+      result: {
+        coverageLedgerSeed: expectedSeed,
+        deepMining: { coverageLedgerSeed: expectedSeed },
+      },
+    });
+    expect(recorder.list(job.id).events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            coverageLedgerSeed: expectedSeed,
+          }),
+          phase: 'deep-mining',
+          severity: 'success',
+          title: 'DeepMining coverage ledger seed retained',
+        }),
+      ])
+    );
+  });
+
   test('does not mark aggregate root coverage rows as a written coverageLedgerSeed', async () => {
     const dataRoot = makeNamedDataRoot('BiliDili');
     const store = new JobStore({ projectRoot: dataRoot });
