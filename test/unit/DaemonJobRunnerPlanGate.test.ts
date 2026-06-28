@@ -1105,6 +1105,135 @@ describe('DaemonJobRunner deepMining plan gate', () => {
     );
   });
 
+  test('keeps real nested deepMining module targets when moduleScope names the project root', async () => {
+    const dataRoot = makeNamedDataRoot('BiliDili');
+    const store = new JobStore({ projectRoot: dataRoot });
+    const coverageLedgerRepository = makeCoverageLedgerRepository();
+    const recorder = new JobProcessEventRecorder();
+    const container = makeContainer(store, { coverageLedgerRepository, dataRoot, recorder });
+    const projectContextFacts = {
+      ...makeFacts(),
+      moduleCount: 2,
+      projectMapModules: [
+        {
+          moduleId: 'target:Account:Sources/Infrastructure/Account',
+          moduleName: 'Account',
+          modulePath: 'Sources/Infrastructure/Account',
+          ownedFiles: ['Sources/Infrastructure/Account/Account.swift'],
+        },
+        {
+          moduleId: 'target:Home:Sources/Features/Home',
+          moduleName: 'Home',
+          modulePath: 'Sources/Features/Home',
+          ownedFiles: ['Sources/Features/Home/Home.swift'],
+        },
+      ],
+      projectRoot: dataRoot,
+    } as ProjectContextWorkflowFacts;
+    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(projectContextFacts);
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: {
+        contentMaxLines: 40,
+        dimensions: ['architecture'],
+        generationStage: 'deepMining',
+        maxFiles: 4,
+        maxRounds: 1,
+        minNewRecipes: 1,
+        moduleScope: ['BiliDili'],
+        scaleCap: 1,
+      },
+      source: 'dashboard',
+    });
+    store.markRunning(job.id);
+    vi.mocked(runPlanAgent).mockResolvedValueOnce({
+      dimensions: ['architecture', 'coding-standards'],
+      generationStage: 'deepMining',
+      moduleBindings: [
+        {
+          dimensions: ['architecture', 'coding-standards'],
+          moduleId: 'target:Account:Sources/Infrastructure/Account',
+          modulePath: 'Sources/Infrastructure/Account',
+          priority: 1,
+          targetRecipes: 8,
+        },
+        {
+          dimensions: ['architecture'],
+          moduleId: 'target:Home:Sources/Features/Home',
+          modulePath: 'Sources/Features/Home',
+          priority: 2,
+          targetRecipes: 3,
+        },
+      ],
+      scale: { contentMaxLines: 120, maxFiles: 500, totalRecipeBudget: 9 },
+    });
+    vi.mocked(runProjectIndexWorkflow).mockResolvedValueOnce({
+      data: { newRecipesThisRound: 0 },
+    });
+
+    await expect(
+      runDaemonJob({
+        args: {
+          contentMaxLines: 40,
+          dimensions: ['architecture'],
+          generationStage: 'deepMining',
+          maxFiles: 4,
+          maxRounds: 1,
+          minNewRecipes: 1,
+          moduleScope: ['BiliDili'],
+          scaleCap: 1,
+        },
+        container,
+        jobId: job.id,
+        kind: 'rescan',
+        logger,
+        source: 'dashboard',
+      })
+    ).resolves.toMatchObject({
+      job: { status: 'completed' },
+      result: {
+        planSelectionProjection: {
+          budget: { contentMaxLines: 40, maxFiles: 4, totalRecipeBudget: 1 },
+          executionDimensions: ['architecture'],
+          moduleScope: ['Sources/Infrastructure/Account'],
+        },
+      },
+    });
+
+    expect(runProjectIndexWorkflow).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(runProjectIndexWorkflow).mock.calls[0]?.[1]).toMatchObject({
+      contentMaxLines: 40,
+      dimensions: ['architecture'],
+      maxFiles: 4,
+      miningMode: 'deepMining',
+      moduleDimensionTargets: [
+        {
+          dimensionId: 'architecture',
+          moduleId: 'target:Account:Sources/Infrastructure/Account',
+          moduleName: 'Account',
+          targetRecipes: 8,
+        },
+      ],
+      moduleScope: ['Sources/Infrastructure/Account'],
+      perDimensionTargets: { architecture: 8 },
+      roundIndex: 1,
+    });
+    expect(recorder.list(job.id).events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            requestConstraints: expect.objectContaining({
+              moduleScope: ['BiliDili'],
+            }),
+          }),
+          phase: 'plan-gate',
+          severity: 'success',
+        }),
+      ])
+    );
+  });
+
   test('fails true deepMining moduleScope misses before opening a round', async () => {
     const dataRoot = makeNamedDataRoot('BiliDili');
     const store = new JobStore({ projectRoot: dataRoot });
@@ -1156,7 +1285,8 @@ describe('DaemonJobRunner deepMining plan gate', () => {
 
     expect(runProjectIndexWorkflow).not.toHaveBeenCalled();
     expect(coverageLedgerRepository.upsertRound).not.toHaveBeenCalled();
-    expect(recorder.list(job.id).events).toEqual(
+    const recordedEvents = recorder.list(job.id).events;
+    expect(recordedEvents).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           phase: 'plan-gate',
@@ -1166,6 +1296,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
         }),
       ])
     );
+    expect(JSON.stringify(recordedEvents)).toContain('BiliDili');
   });
 
   test('aborts before the next rescan when a later deepMining round plan gate fails', async () => {

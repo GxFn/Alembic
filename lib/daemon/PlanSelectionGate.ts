@@ -213,9 +213,11 @@ function applyDeepMiningRequestConstraints(
 
   if (constraints.moduleScope.length > 0) {
     const candidatesBeforeModuleScope = moduleBindings;
-    moduleBindings = moduleBindings.filter((binding) =>
-      planModuleBindingMatchesScope(binding, constraints.moduleScope, context)
-    );
+    if (!moduleScopeMatchesProjectRoot(constraints.moduleScope, context)) {
+      moduleBindings = moduleBindings.filter((binding) =>
+        planModuleBindingMatchesScope(binding, constraints.moduleScope, context)
+      );
+    }
     if (moduleBindings.length === 0) {
       throw new Error(
         formatModuleScopeConstraintMiss(
@@ -287,15 +289,24 @@ function planModuleBindingMatchesScope(
   return moduleBindingScopeAliases(binding, context).some((alias) => requestedScope.has(alias));
 }
 
+function moduleScopeMatchesProjectRoot(
+  moduleScope: readonly string[],
+  context: PlanSelectionConstraintContext
+): boolean {
+  const requestedScope = new Set(normalizeScopeValues(moduleScope));
+  return projectRootScopeAliases(context.projectRoot).some((alias) => requestedScope.has(alias));
+}
+
 function formatModuleScopeConstraintMiss(
   moduleScope: readonly string[],
   moduleBindings: readonly PlanModuleBinding[],
   context: PlanSelectionConstraintContext
 ): string {
   const requested = normalizeScopeValues(moduleScope);
-  const availableAliases = uniqueStrings(
-    moduleBindings.flatMap((binding) => moduleBindingScopeAliases(binding, context))
-  ).slice(0, 20);
+  const availableAliases = uniqueStrings([
+    ...projectRootScopeAliases(context.projectRoot),
+    ...moduleBindings.flatMap((binding) => moduleBindingScopeAliases(binding, context)),
+  ]).slice(0, 20);
   return [
     'DeepMining request constraints removed all module×dimension targets',
     `moduleScope=${requested.length > 0 ? requested.join(', ') : '(empty)'}`,
@@ -348,7 +359,7 @@ function projectRootScopeAliases(projectRoot: string): string[] {
   if (!normalizedRoot) {
     return [];
   }
-  return uniqueStrings([projectRoot, normalizedRoot, path.posix.basename(normalizedRoot)]);
+  return uniqueStrings([projectRoot, normalizedRoot, path.posix.basename(normalizedRoot), '.']);
 }
 
 function scopeValueAliases(value: unknown, context?: PlanSelectionConstraintContext): string[] {
