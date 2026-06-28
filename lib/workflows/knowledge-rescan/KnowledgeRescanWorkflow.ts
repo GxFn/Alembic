@@ -27,6 +27,7 @@ import {
 import type { WorkflowMcpContext } from '@alembic/core/host-agent-workflows';
 import {
   auditRecipesForRescan,
+  buildCoverageLedgerModuleAxisFromSummaries,
   buildKnowledgeRescanPlan,
   buildKnowledgeRescanWorkflowPlan,
   buildRescanPrescreen,
@@ -928,24 +929,21 @@ export function writeKnowledgeRescanCoverageLedgerForDimension(
 function buildKnowledgeRescanCoverageLedgerModules(
   facts: Pick<ProjectContextWorkflowFacts, 'projectMapModules'>
 ): CoverageLedgerModuleAxis[] {
-  return facts.projectMapModules.flatMap((module) => {
-    const ownedFiles = uniqueStrings(module.ownedFiles ?? []);
-    const ownedPaths =
-      ownedFiles.length > 0
-        ? ownedFiles
-        : module.modulePath && module.modulePath.trim().length > 0
-          ? [module.modulePath.trim()]
-          : [];
-    if (module.moduleId.trim().length === 0 || ownedPaths.length === 0) {
-      return [];
-    }
-    return [
-      {
+  return buildCoverageLedgerModuleAxisFromSummaries({
+    modules: facts.projectMapModules
+      .filter((module) => {
+        const ownedFiles = uniqueStrings(module.ownedFiles ?? []);
+        return (
+          module.moduleId.trim().length > 0 &&
+          (ownedFiles.length > 0 || Boolean(module.modulePath?.trim()))
+        );
+      })
+      .map((module) => ({
         moduleId: module.moduleId,
         moduleName: module.moduleName || module.moduleId,
-        ownedPaths,
-      },
-    ];
+        modulePath: module.modulePath,
+        ownedFiles: module.ownedFiles,
+      })),
   });
 }
 
