@@ -14,7 +14,10 @@ import type {
   AgentRunMessage,
   AgentRunPresentationOptions,
 } from '@alembic/agent/service';
-import type { ProjectScopeSourceIdentityMap } from '../../project-scope/ProjectScopeAnalysis.js';
+import type {
+  ProjectScopeSourceIdentity,
+  ProjectScopeSourceIdentityMap,
+} from '../../project-scope/ProjectScopeAnalysis.js';
 import { buildBootstrapPcvStageNodeContext } from './PcvNodeEvidence.js';
 
 // ── Dimension input builder ──────────────────────────────
@@ -24,6 +27,7 @@ export interface BootstrapFileEntry {
   path: string;
   relativePath: string;
   content: string;
+  sourceIdentity?: ProjectScopeSourceIdentity;
   targetName?: string;
 }
 

@@ -1,4 +1,4 @@
-import { basename, dirname } from 'node:path';
+import path, { basename, dirname } from 'node:path';
 import {
   baseDimensions,
   buildHostAgentAnalysisPacketFromProjectContext,
@@ -22,12 +22,16 @@ import {
   type SpaceContext,
 } from '@alembic/core/project-context';
 import { ProjectContextCapabilities } from '@alembic/core/project-context-capabilities';
+import { createCanonicalSourceIdentity } from '@alembic/core/shared';
 import type { BootstrapSessionShape, FileDiffPlan } from '@alembic/core/types';
 import {
   readLatestProjectContextFileSnapshotRow,
   saveProjectContextFileSnapshotRow,
 } from '../../infrastructure/database/SqliteDatabaseAccess.js';
-import type { ProjectScopeAnalysisContext } from '../../project-scope/ProjectScopeAnalysis.js';
+import type {
+  ProjectScopeAnalysisContext,
+  ProjectScopeSourceIdentity,
+} from '../../project-scope/ProjectScopeAnalysis.js';
 import type { BootstrapFileEntry } from '../ai-execution/AgentRunInputBuilders.js';
 import { buildProjectMapModules, buildProjectMapModulesFromTargets } from './ProjectMapModules.js';
 
@@ -159,6 +163,21 @@ export interface ProjectContextModule {
   role?: string;
 }
 
+interface ProjectContextScopePropagation {
+  currentFolderId: string | null;
+  identityFolders: ProjectContextSourceIdentityFolder[];
+  sourceFolders?: string[];
+}
+
+interface ProjectContextSourceIdentityFolder {
+  controlRoot: string;
+  displayName: string | null;
+  folderId: string | null;
+  folderPath: string;
+  projectScopeId: string | null;
+  relativeRoot: string;
+}
+
 export async function buildProjectContextWorkflowFacts(
   input: BuildProjectContextWorkflowFactsInput
 ): Promise<ProjectContextWorkflowFacts> {
@@ -170,6 +189,8 @@ export async function buildProjectContextWorkflowFacts(
   const basePayload = {
     ...(maxFiles !== undefined ? { maxFiles } : {}),
   };
+  const scopePropagation = buildProjectContextScopePropagation(input.analysisScope);
+  const sourceFolders = scopePropagation.sourceFolders;
 
   const spaceEnvelope = await executeProjectContextRequest(
     'space',
@@ -177,7 +198,8 @@ export async function buildProjectContextWorkflowFacts(
     input.source,
     {
       includeProjectTree: true,
-    }
+    },
+    sourceFolders
   );
   const firstRepoEnvelope = await executeProjectContextRequest(
     'repo',
@@ -186,76 +208,125 @@ export async function buildProjectContextWorkflowFacts(
     {
       ...basePayload,
       includeMapSummary: false,
-    }
+    },
+    sourceFolders
   );
   const repoData = isRepoContext(firstRepoEnvelope.data) ? firstRepoEnvelope.data : undefined;
   const moduleSeeds = selectProjectContextModuleSeeds(repoData, maxModuleSeeds);
   const repoEnvelope =
     moduleSeeds.length > 0
-      ? await executeProjectContextRequest('repo', input.projectRoot, input.source, {
-          ...basePayload,
-          includeMapSummary: true,
-          moduleSeeds,
-        })
+      ? await executeProjectContextRequest(
+          'repo',
+          input.projectRoot,
+          input.source,
+          {
+            ...basePayload,
+            includeMapSummary: true,
+            moduleSeeds,
+          },
+          sourceFolders
+        )
       : firstRepoEnvelope;
   const envelopes: ProjectContextEnvelope<ProjectContextResult>[] = [spaceEnvelope, repoEnvelope];
 
   if (moduleSeeds.length > 0) {
     envelopes.push(
-      await executeProjectContextRequest('map', input.projectRoot, input.source, {
-        moduleSeeds,
-        repoName: repoData?.repo.name,
-      })
+      await executeProjectContextRequest(
+        'map',
+        input.projectRoot,
+        input.source,
+        {
+          moduleSeeds,
+          repoName: repoData?.repo.name,
+        },
+        sourceFolders
+      )
     );
   }
 
   for (const seed of moduleSeeds.slice(0, maxModuleDetails)) {
     envelopes.push(
-      await executeProjectContextRequest('module', input.projectRoot, input.source, {
-        ...seed,
-        includeDependencies: true,
-        includePublicSurfaces: true,
-      })
+      await executeProjectContextRequest(
+        'module',
+        input.projectRoot,
+        input.source,
+        {
+          ...seed,
+          includeDependencies: true,
+          includePublicSurfaces: true,
+        },
+        sourceFolders
+      )
     );
     envelopes.push(
-      await executeProjectContextRequest('module-layers', input.projectRoot, input.source, {
-        ...seed,
-        includeBoundaryCrossings: true,
-      })
+      await executeProjectContextRequest(
+        'module-layers',
+        input.projectRoot,
+        input.source,
+        {
+          ...seed,
+          includeBoundaryCrossings: true,
+        },
+        sourceFolders
+      )
     );
   }
 
   const detailFiles = selectProjectContextDetailFiles(envelopes, maxFileDetails);
   for (const filePath of detailFiles) {
     envelopes.push(
-      await executeProjectContextRequest('file-flow', input.projectRoot, input.source, {
-        filePath,
-      })
+      await executeProjectContextRequest(
+        'file-flow',
+        input.projectRoot,
+        input.source,
+        {
+          filePath,
+        },
+        sourceFolders
+      )
     );
     envelopes.push(
-      await executeProjectContextRequest('file-symbols', input.projectRoot, input.source, {
-        filePath,
-      })
+      await executeProjectContextRequest(
+        'file-symbols',
+        input.projectRoot,
+        input.source,
+        {
+          filePath,
+        },
+        sourceFolders
+      )
     );
     envelopes.push(
-      await executeProjectContextRequest('source-slice', input.projectRoot, input.source, {
-        endLine: contentMaxLines,
-        filePath,
-        includeText: true,
-        startLine: 1,
-      })
+      await executeProjectContextRequest(
+        'source-slice',
+        input.projectRoot,
+        input.source,
+        {
+          endLine: contentMaxLines,
+          filePath,
+          includeText: true,
+          startLine: 1,
+        },
+        sourceFolders
+      )
     );
     envelopes.push(
-      await executeProjectContextRequest('anchor-range', input.projectRoot, input.source, {
-        afterLines: Math.min(8, contentMaxLines),
-        beforeLines: 0,
-        filePath,
-        includeRelations: false,
-        includeSourceSlices: true,
-        includeSymbols: true,
-        line: 1,
-        relationHops: 0,
-      })
+      await executeProjectContextRequest(
+        'anchor-range',
+        input.projectRoot,
+        input.source,
+        {
+          afterLines: Math.min(8, contentMaxLines),
+          beforeLines: 0,
+          filePath,
+          includeRelations: false,
+          includeSourceSlices: true,
+          includeSymbols: true,
+          line: 1,
+          relationHops: 0,
+        },
+        sourceFolders
+      )
     );
   }
 
@@ -263,7 +334,7 @@ export async function buildProjectContextWorkflowFacts(
   const primaryLang = inferProjectContextPrimaryLanguage(presenterInput);
   const secondaryLanguages = inferProjectContextSecondaryLanguages(presenterInput, primaryLang);
   const dimensions: DimensionDef[] = [...baseDimensions];
-  const allFiles = buildWorkflowFiles(presenterInput);
+  const allFiles = buildWorkflowFiles(presenterInput, scopePropagation);
   const allTargets = buildWorkflowTargets(presenterInput);
   const filesByTarget = buildProjectContextTargetFileMap(allFiles);
   const projectMapModules = buildProjectMapModules(presenterInput.map, {
@@ -715,11 +786,16 @@ async function executeProjectContextRequest(
   kind: ProjectContextRequestKind,
   projectRoot: string,
   source: ProjectContextWorkflowSource,
-  payload?: Record<string, unknown>
+  payload?: Record<string, unknown>,
+  sourceFolders?: readonly string[]
 ): Promise<ProjectContextEnvelope<ProjectContextResult>> {
+  const requestPayload = {
+    ...(payload ?? {}),
+    ...(sourceFolders?.length ? { sourceFolders: [...sourceFolders] } : {}),
+  };
   return ProjectContextCapabilities.execute({
     kind,
-    payload,
+    payload: Object.keys(requestPayload).length > 0 ? requestPayload : undefined,
     project: {
       displayName: basename(projectRoot),
       projectRoot,
@@ -729,6 +805,45 @@ async function executeProjectContextRequest(
       projectRoot,
     },
   });
+}
+
+function buildProjectContextScopePropagation(
+  analysisScope: ProjectScopeAnalysisContext | undefined
+): ProjectContextScopePropagation {
+  const projectScope = analysisScope?.projectScope;
+  const controlRoot = analysisScope?.controlRoot ?? projectScope?.controlRoot.path ?? null;
+  if (!projectScope || !controlRoot || projectScope.folders.length === 0) {
+    return {
+      currentFolderId: analysisScope?.currentFolderId ?? null,
+      identityFolders: [],
+    };
+  }
+
+  const sourceFolders: string[] = [];
+  const identityFolders: ProjectContextSourceIdentityFolder[] = [];
+  const seen = new Set<string>();
+  for (const folder of projectScope.folders) {
+    const relativeRoot = normalizeProjectContextSourcePath(path.relative(controlRoot, folder.path));
+    if (!relativeRoot || seen.has(relativeRoot)) {
+      continue;
+    }
+    seen.add(relativeRoot);
+    sourceFolders.push(relativeRoot);
+    identityFolders.push({
+      controlRoot,
+      displayName: folder.displayName || null,
+      folderId: folder.id || null,
+      folderPath: folder.path,
+      projectScopeId: projectScope.projectScopeId ?? null,
+      relativeRoot,
+    });
+  }
+
+  return {
+    currentFolderId: analysisScope?.currentFolderId ?? projectScope.currentFolderId ?? null,
+    identityFolders,
+    sourceFolders: sourceFolders.length > 0 ? sourceFolders : undefined,
+  };
 }
 
 function buildProjectContextFileDiffPlan(input: {
@@ -805,20 +920,85 @@ function loadLatestProjectContextFileSnapshot(
   }
 }
 
-function buildWorkflowFiles(input: ProjectContextPresenterInput): BootstrapFileEntry[] {
+function buildWorkflowFiles(
+  input: ProjectContextPresenterInput,
+  scopePropagation: ProjectContextScopePropagation
+): BootstrapFileEntry[] {
   const sourceTextByFile = new Map(
     input.sourceSlices.map((slice) => [slice.file.filePath, sourceSliceText(slice)])
   );
   return input.files.map((file) => {
     const relativePath = file.filePath;
+    const sourceIdentity = resolveWorkflowFileSourceIdentity(scopePropagation, relativePath);
     return {
       content: sourceTextByFile.get(file.filePath) ?? '',
       name: basename(file.filePath),
       path: file.filePath,
       relativePath,
+      ...(sourceIdentity ? { sourceIdentity } : {}),
       targetName: targetNameForFile(input, file.filePath),
     };
   });
+}
+
+function resolveWorkflowFileSourceIdentity(
+  scopePropagation: ProjectContextScopePropagation,
+  filePath: string
+): ProjectScopeSourceIdentity | null {
+  const normalizedFilePath = normalizeProjectContextSourcePath(filePath);
+  if (!normalizedFilePath || scopePropagation.identityFolders.length === 0) {
+    return null;
+  }
+  const folders = [...scopePropagation.identityFolders].sort(
+    (left, right) => right.relativeRoot.length - left.relativeRoot.length
+  );
+  for (const folder of folders) {
+    const folderScopedPath = pathWithinSourceFolder(normalizedFilePath, folder.relativeRoot);
+    if (folderScopedPath) {
+      return createCanonicalSourceIdentity({
+        folderDisplayName: folder.displayName,
+        folderId: folder.folderId,
+        folderPath: folder.folderPath,
+        projectRoot: folder.controlRoot,
+        projectScopeId: folder.projectScopeId,
+        sourcePath: folderScopedPath,
+      });
+    }
+  }
+  const currentFolder = folders.find(
+    (folder) => folder.folderId && folder.folderId === scopePropagation.currentFolderId
+  );
+  if (!currentFolder) {
+    return null;
+  }
+  return createCanonicalSourceIdentity({
+    folderDisplayName: currentFolder.displayName,
+    folderId: currentFolder.folderId,
+    folderPath: currentFolder.folderPath,
+    projectRoot: currentFolder.controlRoot,
+    projectScopeId: currentFolder.projectScopeId,
+    sourcePath: normalizedFilePath,
+  });
+}
+
+function pathWithinSourceFolder(filePath: string, folderRoot: string): string | null {
+  if (filePath === folderRoot) {
+    return null;
+  }
+  const prefix = `${folderRoot}/`;
+  return filePath.startsWith(prefix) ? filePath.slice(prefix.length) : null;
+}
+
+function normalizeProjectContextSourcePath(value: string): string | null {
+  const trimmed = value.trim().replace(/\\/g, '/');
+  if (!trimmed || trimmed.startsWith('/') || path.isAbsolute(trimmed)) {
+    return null;
+  }
+  const normalized = path.posix.normalize(trimmed);
+  if (normalized === '.' || normalized === '..' || normalized.startsWith('../')) {
+    return null;
+  }
+  return normalized;
 }
 
 function buildWorkflowTargets(input: ProjectContextPresenterInput): Array<Record<string, unknown>> {

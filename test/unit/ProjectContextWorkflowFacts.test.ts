@@ -7,6 +7,7 @@ import {
   BootstrapSessionManager,
   type DimensionDef,
 } from '@alembic/core/host-agent-workflows';
+import { createProjectDescriptor } from '@alembic/core/shared';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   presentProjectContextColdStartEmptyProject,
@@ -28,8 +29,16 @@ import {
 
 const fixtures: string[] = [];
 const projectContextCapabilitiesMock = vi.hoisted(() => ({
-  executeOverride: null as null | ((request: { kind: string }) => Promise<unknown>),
+  executeOverride: null as null | ((request: ProjectContextRequestMock) => Promise<unknown>),
 }));
+
+interface ProjectContextRequestMock {
+  kind: string;
+  payload?: Record<string, unknown>;
+  scope?: {
+    projectRoot?: string;
+  };
+}
 
 vi.mock('@alembic/core/project-context-capabilities', async (importOriginal) => {
   const actual =
@@ -345,6 +354,134 @@ describe('ProjectContextWorkflowFacts', () => {
       })
     );
     expect(facts.moduleCount).toBeGreaterThan(0);
+  });
+
+  test('threads ProjectScope member folders into ProjectContext requests and stamps source identities', async () => {
+    const controlRoot = await mkdtemp(join(tmpdir(), 'alembic-project-scope-context-'));
+    fixtures.push(controlRoot);
+    const alembicRoot = join(controlRoot, 'Alembic');
+    const coreRoot = join(controlRoot, 'AlembicCore');
+    await import('node:fs/promises').then(async (fs) => {
+      await fs.mkdir(join(alembicRoot, 'lib'), { recursive: true });
+      await fs.mkdir(join(coreRoot, 'lib'), { recursive: true });
+      await fs.writeFile(join(coreRoot, 'lib/index.ts'), 'export const core = true;\n');
+    });
+    const projectScope = createProjectDescriptor({
+      controlRoot,
+      dataRoot: join(controlRoot, '.ghost-data'),
+      displayName: 'AlembicWorkspace',
+      folders: [
+        { displayName: 'Alembic', path: alembicRoot, role: 'primary-source' },
+        { displayName: 'AlembicCore', path: coreRoot, role: 'source' },
+      ],
+    });
+    const sourceFolders = ['Alembic', 'AlembicCore'];
+    const requests: ProjectContextRequestMock[] = [];
+    const repoRef = makeProjectContextRef(controlRoot, 'repo:alembic-core', {
+      kind: 'repo',
+      label: 'AlembicCore',
+    });
+    const fileRef = makeProjectContextRef(controlRoot, 'file:core:AlembicCore/lib/index.ts', {
+      filePath: 'AlembicCore/lib/index.ts',
+      kind: 'file',
+      label: 'index.ts',
+    });
+
+    projectContextCapabilitiesMock.executeOverride = async (request) => {
+      requests.push(request);
+      switch (request.kind) {
+        case 'space':
+          return projectContextEnvelope(controlRoot, 'space', {
+            boundaries: [],
+            nextRefs: [repoRef, fileRef],
+            repos: [],
+            sourceFolders: [],
+            space: { id: 'space', ref: repoRef },
+            structuralHotspots: [],
+          });
+        case 'repo':
+          return projectContextEnvelope(
+            controlRoot,
+            'repo',
+            {
+              buildSystems: [],
+              commands: [],
+              configFiles: [],
+              entrypoints: [],
+              languages: [{ fileCount: 1, language: 'typescript' }],
+              localPackages: [],
+              nextRefs: [fileRef],
+              packageSystems: [],
+              repo: { name: 'AlembicWorkspace', ref: repoRef },
+              sourceRoots: [],
+              targets: [],
+              topAreas: [],
+            },
+            [repoRef, fileRef]
+          );
+        case 'source-slice':
+          return projectContextEnvelope(
+            controlRoot,
+            'source-slice',
+            {
+              file: {
+                filePath: 'AlembicCore/lib/index.ts',
+                language: 'typescript',
+                lineCount: 1,
+                ref: fileRef,
+                repoId: 'alembic-core',
+              },
+              nextRefs: [],
+              range: { endLine: 1, startLine: 1 },
+              text: 'export const core = true;',
+            },
+            [fileRef]
+          );
+        default:
+          return projectContextEnvelope(controlRoot, request.kind, {
+            available: false,
+            kind: request.kind,
+            nextRefs: [fileRef],
+            reason: 'fixture unavailable',
+          });
+      }
+    };
+
+    const facts = await buildProjectContextWorkflowFacts({
+      analysisScope: {
+        controlRoot,
+        currentFolderId: projectScope.folders[0].id,
+        dataRoot: projectScope.dataRoot,
+        folderCount: projectScope.folders.length,
+        projectRoot: alembicRoot,
+        projectScope,
+        projectScopeId: projectScope.projectScopeId,
+      },
+      contentMaxLines: 8,
+      ctx: { container: { get: () => null }, logger: console },
+      projectRoot: alembicRoot,
+      source: 'alembic-main-bootstrap',
+    });
+
+    expect(requests.find((request) => request.kind === 'space')?.payload).toMatchObject({
+      includeProjectTree: true,
+      sourceFolders,
+    });
+    expect(requests.every((request) => request.payload?.sourceFolders === undefined)).toBe(false);
+    expect(facts.allFiles).toContainEqual(
+      expect.objectContaining({
+        relativePath: 'AlembicCore/lib/index.ts',
+        sourceIdentity: expect.objectContaining({
+          folderDisplayName: 'AlembicCore',
+          folderId: projectScope.folders[1].id,
+          folderPath: coreRoot,
+          folderRelativeRoot: 'AlembicCore',
+          projectScopeId: projectScope.projectScopeId,
+          qualifiedPath: 'AlembicCore/lib/index.ts',
+          relativePath: 'lib/index.ts',
+        }),
+      })
+    );
   });
 
   test('derives BiliDili-style SwiftPM modules from root target refs and filesystem-owned files', async () => {
