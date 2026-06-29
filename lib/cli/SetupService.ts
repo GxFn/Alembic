@@ -62,10 +62,20 @@ import {
   type WorkspaceMode,
   WorkspaceResolver,
 } from '@alembic/core/workspace';
+import { resolveAlembicWorkspace } from '../project-scope/ProjectScopeRegistry.js';
 import { PACKAGE_ROOT } from '../shared/package-assets.js';
 
 /** Alembic 源码仓库根目录（定位 templates/ 等资源） */
 const REPO_ROOT = PACKAGE_ROOT;
+const MULTI_REPO_CHILD_MARKERS = [
+  '.git',
+  'package.json',
+  'pyproject.toml',
+  'Cargo.toml',
+  'go.mod',
+  'Package.swift',
+] as const;
+const MULTI_REPO_SCAN_IGNORES = new Set(['.asd', '.git', 'dist', 'node_modules', 'vendor']);
 
 // ─────────────────────────────────────────────────────
 
@@ -116,6 +126,22 @@ export class SetupService {
     this.quiet = options.quiet || false;
     this.subRepoDir = options.subRepoDir || DEFAULT_SUB_REPO_DIR;
     this.subRepoUrl = options.subRepoUrl;
+
+    const projectScopeResolver = resolveAlembicWorkspace(this.projectRoot);
+    if (projectScopeResolver.projectScope) {
+      this.ghost = projectScopeResolver.ghost;
+      this.resolver = projectScopeResolver;
+      this.runtimeDir = projectScopeResolver.runtimeDir;
+      this.dbPath = projectScopeResolver.databasePath;
+      this.coreDir = projectScopeResolver.knowledgeDir;
+      this.recipesDir = projectScopeResolver.recipesDir;
+      this.candidatesDir = projectScopeResolver.candidatesDir;
+      this.skillsDir = projectScopeResolver.skillsDir;
+      this.subRepoPath = join(projectScopeResolver.dataRoot, this.subRepoDir);
+      return;
+    }
+
+    assertNativeScopeBeforeMultiRepoInit(this.projectRoot);
 
     // Ghost 模式：普通 setup attach 既有模式；显式开关才允许切换模式
     const existingEntry = ProjectRegistry.get(this.projectRoot);
@@ -253,18 +279,11 @@ export class SetupService {
         projectName: this.projectName,
         database: '.asd/alembic.db',
         core: {
-          dir: DEFAULT_KNOWLEDGE_BASE_DIR,
-          constitution: `${DEFAULT_KNOWLEDGE_BASE_DIR}/constitution.yaml`,
           subRepoDir: this.subRepoDir,
           ...(this.subRepoUrl ? { subRepoUrl: this.subRepoUrl } : {}),
         },
         ai: { provider: process.env.ALEMBIC_AI_PROVIDER || 'auto' },
         guard: { enabled: true },
-        watch: {
-          enabled: false,
-          paths: ['Sources', 'src'],
-          extensions: ['.swift', '.m', '.h'],
-        },
       };
       writeFileSync(configPath, JSON.stringify(config, null, 2));
     }
@@ -772,3 +791,40 @@ export class SetupService {
 }
 
 export default SetupService;
+
+function assertNativeScopeBeforeMultiRepoInit(projectRoot: string): void {
+  if (!looksLikeMultiRepoCheckout(projectRoot)) {
+    return;
+  }
+  throw new Error(
+    `[SetupService] No native project scope for ${projectRoot}. ` +
+      'Run `alembic project-scope add <folder>` for each member, then re-run init. ' +
+      'Refusing to initialize a multi-repo checkout without ProjectScope so setup cannot ' +
+      'fall back to a single root or /tmp/alembic-dev.'
+  );
+}
+
+function looksLikeMultiRepoCheckout(projectRoot: string): boolean {
+  let memberLikeChildren = 0;
+  try {
+    for (const entry of readdirSync(projectRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || MULTI_REPO_SCAN_IGNORES.has(entry.name)) {
+        continue;
+      }
+      const childRoot = join(projectRoot, entry.name);
+      if (hasRepositoryMarker(childRoot)) {
+        memberLikeChildren += 1;
+      }
+      if (memberLikeChildren >= 2) {
+        return true;
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+function hasRepositoryMarker(childRoot: string): boolean {
+  return MULTI_REPO_CHILD_MARKERS.some((marker) => existsSync(join(childRoot, marker)));
+}
