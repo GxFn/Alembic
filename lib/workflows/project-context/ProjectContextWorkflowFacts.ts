@@ -1,6 +1,9 @@
+import type { Dirent } from 'node:fs';
+import { readdir } from 'node:fs/promises';
 import path, { basename, dirname } from 'node:path';
 import {
   baseDimensions,
+  buildCanonicalCoverageLedgerModuleId,
   buildHostAgentAnalysisPacketFromProjectContext,
   buildProjectContextMissionBriefing,
   type DimensionDef,
@@ -164,9 +167,11 @@ export interface ProjectContextModule {
 }
 
 interface ProjectContextScopePropagation {
+  allowCurrentFolderRelativeIdentity: boolean;
   currentFolderId: string | null;
   identityFolders: ProjectContextSourceIdentityFolder[];
   sourceFolders?: string[];
+  sourceFolderPayloads?: ProjectContextSourceFolderPayload[];
 }
 
 interface ProjectContextSourceIdentityFolder {
@@ -176,7 +181,59 @@ interface ProjectContextSourceIdentityFolder {
   folderPath: string;
   projectScopeId: string | null;
   relativeRoot: string;
+  role: string | null;
 }
+
+interface ProjectContextSourceFolderPayload {
+  displayName?: string;
+  folderId?: string;
+  id?: string;
+  path: string;
+  repoId?: string;
+  repositoryId?: string;
+  role?: string;
+}
+
+interface ProjectContextWorkflowFileCandidate {
+  content?: string;
+  language?: string;
+  relativePath: string;
+}
+
+const PROJECT_SCOPE_SOURCE_SCAN_DEFAULT_MAX_FILES = 2000;
+
+const PROJECT_SCOPE_SOURCE_SCAN_EXCLUDE_DIRS = new Set([
+  '.asd',
+  '.git',
+  '.next',
+  '.turbo',
+  'coverage',
+  'dist',
+  'node_modules',
+]);
+
+const PROJECT_SCOPE_LANGUAGE_BY_EXTENSION = new Map<string, string>([
+  ['.c', 'c'],
+  ['.cc', 'cpp'],
+  ['.cpp', 'cpp'],
+  ['.cs', 'csharp'],
+  ['.cxx', 'cpp'],
+  ['.go', 'go'],
+  ['.h', 'c'],
+  ['.hpp', 'cpp'],
+  ['.java', 'java'],
+  ['.js', 'javascript'],
+  ['.jsx', 'javascript'],
+  ['.kt', 'kotlin'],
+  ['.m', 'objective-c'],
+  ['.mm', 'objective-cpp'],
+  ['.mjs', 'javascript'],
+  ['.py', 'python'],
+  ['.rs', 'rust'],
+  ['.swift', 'swift'],
+  ['.ts', 'typescript'],
+  ['.tsx', 'typescript'],
+]);
 
 export async function buildProjectContextWorkflowFacts(
   input: BuildProjectContextWorkflowFactsInput
@@ -189,8 +246,14 @@ export async function buildProjectContextWorkflowFacts(
   const basePayload = {
     ...(maxFiles !== undefined ? { maxFiles } : {}),
   };
-  const scopePropagation = buildProjectContextScopePropagation(input.analysisScope);
-  const sourceFolders = scopePropagation.sourceFolders;
+  const scopePropagation = buildProjectContextScopePropagation(
+    input.analysisScope,
+    input.projectRoot
+  );
+  const scopedSourceFiles = await collectProjectScopeWorkflowFileCandidates(
+    scopePropagation,
+    maxFiles
+  );
 
   const spaceEnvelope = await executeProjectContextRequest(
     'space',
@@ -199,7 +262,7 @@ export async function buildProjectContextWorkflowFacts(
     {
       includeProjectTree: true,
     },
-    sourceFolders
+    scopePropagation
   );
   const firstRepoEnvelope = await executeProjectContextRequest(
     'repo',
@@ -209,10 +272,13 @@ export async function buildProjectContextWorkflowFacts(
       ...basePayload,
       includeMapSummary: false,
     },
-    sourceFolders
+    scopePropagation
   );
   const repoData = isRepoContext(firstRepoEnvelope.data) ? firstRepoEnvelope.data : undefined;
-  const moduleSeeds = selectProjectContextModuleSeeds(repoData, maxModuleSeeds);
+  const moduleSeeds = dedupeModuleSeeds([
+    ...createProjectScopeModuleSeeds(scopePropagation, scopedSourceFiles),
+    ...selectProjectContextModuleSeeds(repoData, maxModuleSeeds),
+  ]).slice(0, maxModuleSeeds);
   const repoEnvelope =
     moduleSeeds.length > 0
       ? await executeProjectContextRequest(
@@ -224,7 +290,7 @@ export async function buildProjectContextWorkflowFacts(
             includeMapSummary: true,
             moduleSeeds,
           },
-          sourceFolders
+          scopePropagation
         )
       : firstRepoEnvelope;
   const envelopes: ProjectContextEnvelope<ProjectContextResult>[] = [spaceEnvelope, repoEnvelope];
@@ -239,7 +305,7 @@ export async function buildProjectContextWorkflowFacts(
           moduleSeeds,
           repoName: repoData?.repo.name,
         },
-        sourceFolders
+        scopePropagation
       )
     );
   }
@@ -255,7 +321,7 @@ export async function buildProjectContextWorkflowFacts(
           includeDependencies: true,
           includePublicSurfaces: true,
         },
-        sourceFolders
+        scopePropagation
       )
     );
     envelopes.push(
@@ -267,7 +333,7 @@ export async function buildProjectContextWorkflowFacts(
           ...seed,
           includeBoundaryCrossings: true,
         },
-        sourceFolders
+        scopePropagation
       )
     );
   }
@@ -282,7 +348,7 @@ export async function buildProjectContextWorkflowFacts(
         {
           filePath,
         },
-        sourceFolders
+        scopePropagation
       )
     );
     envelopes.push(
@@ -293,7 +359,7 @@ export async function buildProjectContextWorkflowFacts(
         {
           filePath,
         },
-        sourceFolders
+        scopePropagation
       )
     );
     envelopes.push(
@@ -307,7 +373,7 @@ export async function buildProjectContextWorkflowFacts(
           includeText: true,
           startLine: 1,
         },
-        sourceFolders
+        scopePropagation
       )
     );
     envelopes.push(
@@ -325,20 +391,24 @@ export async function buildProjectContextWorkflowFacts(
           line: 1,
           relationHops: 0,
         },
-        sourceFolders
+        scopePropagation
       )
     );
   }
 
   const presenterInput = buildProjectContextPresenterInput(envelopes);
-  const primaryLang = inferProjectContextPrimaryLanguage(presenterInput);
-  const secondaryLanguages = inferProjectContextSecondaryLanguages(presenterInput, primaryLang);
   const dimensions: DimensionDef[] = [...baseDimensions];
-  const allFiles = buildWorkflowFiles(presenterInput, scopePropagation);
+  const allFiles = buildWorkflowFiles(presenterInput, scopePropagation, scopedSourceFiles);
+  const languageStats = buildLanguageStats(presenterInput, allFiles, scopePropagation);
+  const primaryLang = inferProjectContextPrimaryLanguage(languageStats);
+  const secondaryLanguages = inferProjectContextSecondaryLanguages(languageStats, primaryLang);
   const allTargets = buildWorkflowTargets(presenterInput);
   const filesByTarget = buildProjectContextTargetFileMap(allFiles);
-  const projectMapModules = buildProjectMapModules(presenterInput.map, {
+  const projectMapModules = buildScopedProjectMapModules({
+    allFiles,
+    input: presenterInput,
     projectRoot: input.projectRoot,
+    scopePropagation,
   });
   if (projectMapModules.length === 0) {
     projectMapModules.push(
@@ -384,7 +454,7 @@ export async function buildProjectContextWorkflowFacts(
     incrementalPlan,
     isEmpty: allFiles.length === 0 && presenterInput.refs.length === 0,
     isMultiLang: secondaryLanguages.length > 0,
-    languageStats: buildLanguageStats(presenterInput),
+    languageStats,
     moduleCount,
     projectMapModules,
     moduleSeeds,
@@ -787,11 +857,16 @@ async function executeProjectContextRequest(
   projectRoot: string,
   source: ProjectContextWorkflowSource,
   payload?: Record<string, unknown>,
-  sourceFolders?: readonly string[]
+  scopePropagation?: ProjectContextScopePropagation
 ): Promise<ProjectContextEnvelope<ProjectContextResult>> {
+  const sourceFolderPayloads = scopePropagation?.sourceFolderPayloads;
+  const primarySourceFolder = scopePropagation?.sourceFolders?.[0];
   const requestPayload = {
     ...(payload ?? {}),
-    ...(sourceFolders?.length ? { sourceFolders: [...sourceFolders] } : {}),
+    ...(kind === 'space' && sourceFolderPayloads?.length
+      ? { sourceFolders: sourceFolderPayloads.map((folder) => ({ ...folder })) }
+      : {}),
+    ...(kind === 'repo' && primarySourceFolder ? { repoRoot: primarySourceFolder } : {}),
   };
   return ProjectContextCapabilities.execute({
     kind,
@@ -808,18 +883,21 @@ async function executeProjectContextRequest(
 }
 
 function buildProjectContextScopePropagation(
-  analysisScope: ProjectScopeAnalysisContext | undefined
+  analysisScope: ProjectScopeAnalysisContext | undefined,
+  requestProjectRoot: string
 ): ProjectContextScopePropagation {
   const projectScope = analysisScope?.projectScope;
   const controlRoot = analysisScope?.controlRoot ?? projectScope?.controlRoot.path ?? null;
   if (!projectScope || !controlRoot || projectScope.folders.length === 0) {
     return {
+      allowCurrentFolderRelativeIdentity: false,
       currentFolderId: analysisScope?.currentFolderId ?? null,
       identityFolders: [],
     };
   }
 
   const sourceFolders: string[] = [];
+  const sourceFolderPayloads: ProjectContextSourceFolderPayload[] = [];
   const identityFolders: ProjectContextSourceIdentityFolder[] = [];
   const seen = new Set<string>();
   for (const folder of projectScope.folders) {
@@ -829,20 +907,33 @@ function buildProjectContextScopePropagation(
     }
     seen.add(relativeRoot);
     sourceFolders.push(relativeRoot);
+    const displayName = folder.displayName || basename(folder.path);
+    sourceFolderPayloads.push({
+      displayName,
+      ...(folder.id ? { folderId: folder.id, id: folder.id } : {}),
+      path: relativeRoot,
+      repoId: displayName,
+      repositoryId: displayName,
+      ...(folder.role ? { role: folder.role } : {}),
+    });
     identityFolders.push({
       controlRoot,
-      displayName: folder.displayName || null,
+      displayName,
       folderId: folder.id || null,
       folderPath: folder.path,
       projectScopeId: projectScope.projectScopeId ?? null,
       relativeRoot,
+      role: folder.role || null,
     });
   }
 
   return {
+    allowCurrentFolderRelativeIdentity:
+      path.resolve(requestProjectRoot) !== path.resolve(controlRoot),
     currentFolderId: analysisScope?.currentFolderId ?? projectScope.currentFolderId ?? null,
     identityFolders,
     sourceFolders: sourceFolders.length > 0 ? sourceFolders : undefined,
+    sourceFolderPayloads: sourceFolderPayloads.length > 0 ? sourceFolderPayloads : undefined,
   };
 }
 
@@ -920,25 +1011,270 @@ function loadLatestProjectContextFileSnapshot(
   }
 }
 
+async function collectProjectScopeWorkflowFileCandidates(
+  scopePropagation: ProjectContextScopePropagation,
+  maxFiles: number | undefined
+): Promise<ProjectContextWorkflowFileCandidate[]> {
+  if (scopePropagation.identityFolders.length === 0) {
+    return [];
+  }
+  const maxTotal = maxFiles ?? PROJECT_SCOPE_SOURCE_SCAN_DEFAULT_MAX_FILES;
+  if (maxTotal <= 0) {
+    return [];
+  }
+  const perFolderBase = Math.max(1, Math.floor(maxTotal / scopePropagation.identityFolders.length));
+  const remainder = maxTotal % scopePropagation.identityFolders.length;
+  const candidates: ProjectContextWorkflowFileCandidate[] = [];
+  for (const [index, folder] of scopePropagation.identityFolders.entries()) {
+    const limit = perFolderBase + (index < remainder ? 1 : 0);
+    candidates.push(...(await collectProjectScopeFolderFileCandidates(folder, limit)));
+  }
+  return dedupeFileCandidates(candidates).slice(0, maxTotal);
+}
+
+async function collectProjectScopeFolderFileCandidates(
+  folder: ProjectContextSourceIdentityFolder,
+  limit: number
+): Promise<ProjectContextWorkflowFileCandidate[]> {
+  const candidates: ProjectContextWorkflowFileCandidate[] = [];
+  const pendingDirs = [''];
+  while (pendingDirs.length > 0 && candidates.length < limit) {
+    const relativeDir = pendingDirs.shift() ?? '';
+    let entries: Dirent[];
+    try {
+      entries = await readdir(path.join(folder.folderPath, relativeDir), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries.sort(compareProjectScopeScanEntries)) {
+      const entryRelativePath = normalizeProjectContextSourcePath(
+        path.posix.join(relativeDir, entry.name)
+      );
+      if (!entryRelativePath) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        if (!PROJECT_SCOPE_SOURCE_SCAN_EXCLUDE_DIRS.has(entry.name)) {
+          pendingDirs.push(entryRelativePath);
+        }
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+      const language = languageFromProjectScopeFilePath(entryRelativePath);
+      if (!language) {
+        continue;
+      }
+      const qualifiedPath = normalizeProjectContextSourcePath(
+        path.posix.join(folder.relativeRoot, entryRelativePath)
+      );
+      if (!qualifiedPath) {
+        continue;
+      }
+      candidates.push({
+        language,
+        relativePath: qualifiedPath,
+      });
+      if (candidates.length >= limit) {
+        break;
+      }
+    }
+  }
+  return candidates;
+}
+
+function compareProjectScopeScanEntries(left: Dirent, right: Dirent): number {
+  const leftScore = projectScopeScanEntryScore(left.name, left.isDirectory());
+  const rightScore = projectScopeScanEntryScore(right.name, right.isDirectory());
+  return leftScore - rightScore || left.name.localeCompare(right.name);
+}
+
+function projectScopeScanEntryScore(name: string, isDirectory: boolean): number {
+  if (!isDirectory) {
+    return 50;
+  }
+  if (name === 'src' || name === 'lib') {
+    return 0;
+  }
+  if (name === 'bin' || name === 'scripts' || name === 'test' || name === 'tests') {
+    return 10;
+  }
+  if (name.startsWith('.')) {
+    return 80;
+  }
+  return 40;
+}
+
+function languageFromProjectScopeFilePath(filePath: string): string | null {
+  return PROJECT_SCOPE_LANGUAGE_BY_EXTENSION.get(path.extname(filePath).toLowerCase()) ?? null;
+}
+
+function dedupeFileCandidates(
+  files: readonly ProjectContextWorkflowFileCandidate[]
+): ProjectContextWorkflowFileCandidate[] {
+  const byPath = new Map<string, ProjectContextWorkflowFileCandidate>();
+  for (const file of files) {
+    if (!byPath.has(file.relativePath)) {
+      byPath.set(file.relativePath, file);
+    }
+  }
+  return [...byPath.values()].sort((left, right) =>
+    left.relativePath.localeCompare(right.relativePath)
+  );
+}
+
+function createProjectScopeModuleSeeds(
+  scopePropagation: ProjectContextScopePropagation,
+  files: readonly ProjectContextWorkflowFileCandidate[]
+): ProjectContextModuleSeed[] {
+  if (scopePropagation.identityFolders.length === 0) {
+    return [];
+  }
+  return scopePropagation.identityFolders.map((folder) => {
+    const ownedFiles = files
+      .map((file) => file.relativePath)
+      .filter((filePath) => pathWithinSourceFolder(filePath, folder.relativeRoot));
+    return {
+      kind: 'project-scope-folder',
+      moduleName: folder.displayName ?? folder.relativeRoot,
+      modulePath: folder.relativeRoot,
+      ownedFiles: ownedFiles.slice(0, 12),
+      role: folder.role ?? 'source',
+    };
+  });
+}
+
+function buildScopedProjectMapModules(input: {
+  allFiles: readonly BootstrapFileEntry[];
+  input: ProjectContextPresenterInput;
+  projectRoot: string;
+  scopePropagation: ProjectContextScopePropagation;
+}): ProjectContextModule[] {
+  const mapModules = buildProjectMapModules(input.input.map, {
+    projectRoot: input.projectRoot,
+  });
+  if (input.scopePropagation.identityFolders.length === 0) {
+    return mapModules;
+  }
+  return dedupeProjectContextModules([
+    ...mapModules.filter((module) => moduleBelongsToProjectScope(module, input.scopePropagation)),
+    ...buildProjectScopeFolderModules(input.scopePropagation, input.allFiles, input.projectRoot),
+  ]);
+}
+
+function moduleBelongsToProjectScope(
+  module: ProjectContextModule,
+  scopePropagation: ProjectContextScopePropagation
+): boolean {
+  const paths = [module.modulePath, ...(module.ownedFiles ?? [])]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => normalizeProjectContextSourcePath(value))
+    .filter((value): value is string => Boolean(value));
+  return paths.some((filePath) =>
+    scopePropagation.identityFolders.some(
+      (folder) =>
+        filePath === folder.relativeRoot ||
+        Boolean(pathWithinSourceFolder(filePath, folder.relativeRoot))
+    )
+  );
+}
+
+function buildProjectScopeFolderModules(
+  scopePropagation: ProjectContextScopePropagation,
+  allFiles: readonly BootstrapFileEntry[],
+  projectRoot: string
+): ProjectContextModule[] {
+  return scopePropagation.identityFolders.flatMap((folder) => {
+    const ownedFiles = allFiles
+      .map((file) => file.relativePath)
+      .filter((filePath) => pathWithinSourceFolder(filePath, folder.relativeRoot));
+    if (ownedFiles.length === 0) {
+      return [];
+    }
+    const moduleName = folder.displayName ?? folder.relativeRoot;
+    const moduleId = buildCanonicalCoverageLedgerModuleId({
+      moduleName,
+      modulePath: folder.relativeRoot,
+      projectRoot,
+    });
+    if (!moduleId) {
+      return [];
+    }
+    return [
+      {
+        kind: 'project-scope-folder',
+        moduleId,
+        moduleName,
+        modulePath: folder.relativeRoot,
+        ownedFileCount: ownedFiles.length,
+        ownedFiles,
+        role: folder.role ?? 'source',
+      },
+    ];
+  });
+}
+
+function dedupeProjectContextModules(
+  modules: readonly ProjectContextModule[]
+): ProjectContextModule[] {
+  const byId = new Map<string, ProjectContextModule>();
+  for (const module of modules) {
+    if (!byId.has(module.moduleId)) {
+      byId.set(module.moduleId, module);
+    }
+  }
+  return [...byId.values()].sort((left, right) => left.moduleId.localeCompare(right.moduleId));
+}
+
 function buildWorkflowFiles(
   input: ProjectContextPresenterInput,
-  scopePropagation: ProjectContextScopePropagation
+  scopePropagation: ProjectContextScopePropagation,
+  fallbackFiles: readonly ProjectContextWorkflowFileCandidate[] = []
 ): BootstrapFileEntry[] {
   const sourceTextByFile = new Map(
     input.sourceSlices.map((slice) => [slice.file.filePath, sourceSliceText(slice)])
   );
-  return input.files.map((file) => {
+  const filesByPath = new Map<string, BootstrapFileEntry>();
+
+  for (const file of input.files) {
     const relativePath = file.filePath;
     const sourceIdentity = resolveWorkflowFileSourceIdentity(scopePropagation, relativePath);
-    return {
+    if (scopePropagation.identityFolders.length > 0 && !sourceIdentity) {
+      continue;
+    }
+    filesByPath.set(relativePath, {
       content: sourceTextByFile.get(file.filePath) ?? '',
       name: basename(file.filePath),
       path: file.filePath,
       relativePath,
       ...(sourceIdentity ? { sourceIdentity } : {}),
       targetName: targetNameForFile(input, file.filePath),
-    };
-  });
+    });
+  }
+
+  for (const file of fallbackFiles) {
+    const relativePath = file.relativePath;
+    if (filesByPath.has(relativePath)) {
+      continue;
+    }
+    const sourceIdentity = resolveWorkflowFileSourceIdentity(scopePropagation, relativePath);
+    if (scopePropagation.identityFolders.length > 0 && !sourceIdentity) {
+      continue;
+    }
+    filesByPath.set(relativePath, {
+      content: file.content ?? '',
+      name: basename(relativePath),
+      path: relativePath,
+      relativePath,
+      ...(sourceIdentity ? { sourceIdentity } : {}),
+      targetName: dirname(relativePath) || 'project',
+    });
+  }
+
+  return [...filesByPath.values()].sort((left, right) =>
+    left.relativePath.localeCompare(right.relativePath)
+  );
 }
 
 function resolveWorkflowFileSourceIdentity(
@@ -965,9 +1301,11 @@ function resolveWorkflowFileSourceIdentity(
       });
     }
   }
-  const currentFolder = folders.find(
-    (folder) => folder.folderId && folder.folderId === scopePropagation.currentFolderId
-  );
+  const currentFolder = scopePropagation.allowCurrentFolderRelativeIdentity
+    ? folders.find(
+        (folder) => folder.folderId && folder.folderId === scopePropagation.currentFolderId
+      )
+    : null;
   if (!currentFolder) {
     return null;
   }
@@ -1202,33 +1540,48 @@ function selectProjectContextDetailFiles(
     .slice(0, limit);
 }
 
-function buildLanguageStats(input: ProjectContextPresenterInput): Record<string, number> {
+function buildLanguageStats(
+  input: ProjectContextPresenterInput,
+  allFiles: readonly BootstrapFileEntry[],
+  scopePropagation: ProjectContextScopePropagation
+): Record<string, number> {
   const stats: Record<string, number> = {};
-  for (const language of input.repo?.languages ?? []) {
-    stats[language.language] = language.fileCount ?? 0;
+  const preferScopedFiles =
+    scopePropagation.identityFolders.length > 0 &&
+    allFiles.some((file) => Boolean(file.sourceIdentity));
+  if (!preferScopedFiles) {
+    for (const language of input.repo?.languages ?? []) {
+      stats[language.language] = language.fileCount ?? 0;
+    }
   }
   for (const file of input.files) {
     if (file.language && stats[file.language] === undefined) {
       stats[file.language] = (stats[file.language] ?? 0) + 1;
     }
   }
+  for (const file of allFiles) {
+    const language = languageFromProjectScopeFilePath(file.relativePath);
+    if (language) {
+      stats[language] = (stats[language] ?? 0) + 1;
+    }
+  }
   return stats;
 }
 
-function inferProjectContextPrimaryLanguage(input: ProjectContextPresenterInput): string {
-  const languages = input.repo?.languages ?? [];
+function inferProjectContextPrimaryLanguage(languageStats: Record<string, number>): string {
   return (
-    [...languages].sort((left, right) => (right.fileCount ?? 0) - (left.fileCount ?? 0))[0]
-      ?.language ?? 'unknown'
+    Object.entries(languageStats).sort(
+      ([leftLanguage, leftCount], [rightLanguage, rightCount]) =>
+        rightCount - leftCount || leftLanguage.localeCompare(rightLanguage)
+    )[0]?.[0] ?? 'unknown'
   );
 }
 
 function inferProjectContextSecondaryLanguages(
-  input: ProjectContextPresenterInput,
+  languageStats: Record<string, number>,
   primaryLang: string
 ): string[] {
-  return (input.repo?.languages ?? [])
-    .map((language) => language.language)
+  return Object.keys(languageStats)
     .filter((language) => language !== primaryLang)
     .sort();
 }

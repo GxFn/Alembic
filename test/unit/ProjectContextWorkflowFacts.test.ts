@@ -465,9 +465,14 @@ describe('ProjectContextWorkflowFacts', () => {
 
     expect(requests.find((request) => request.kind === 'space')?.payload).toMatchObject({
       includeProjectTree: true,
-      sourceFolders,
+      sourceFolders: [
+        expect.objectContaining({ displayName: 'Alembic', path: sourceFolders[0] }),
+        expect.objectContaining({ displayName: 'AlembicCore', path: sourceFolders[1] }),
+      ],
     });
-    expect(requests.every((request) => request.payload?.sourceFolders === undefined)).toBe(false);
+    expect(requests.find((request) => request.kind === 'repo')?.payload).toMatchObject({
+      repoRoot: 'Alembic',
+    });
     expect(facts.allFiles).toContainEqual(
       expect.objectContaining({
         relativePath: 'AlembicCore/lib/index.ts',
@@ -481,6 +486,182 @@ describe('ProjectContextWorkflowFacts', () => {
           relativePath: 'lib/index.ts',
         }),
       })
+    );
+  });
+
+  test('keeps in-process production facts scoped when presenter output contains stale workspace map data', async () => {
+    const controlRoot = await mkdtemp(join(tmpdir(), 'alembic-production-scope-facts-'));
+    fixtures.push(controlRoot);
+    const alembicRoot = join(controlRoot, 'Alembic');
+    const coreRoot = join(controlRoot, 'AlembicCore');
+    const pluginRoot = join(controlRoot, 'AlembicPlugin');
+    const dashboardRoot = join(controlRoot, 'AlembicDashboard');
+    const agentRoot = join(controlRoot, 'AlembicAgent');
+    const staleRoot = join(controlRoot, 'BiliDili');
+    await import('node:fs/promises').then(async (fs) => {
+      await fs.mkdir(join(alembicRoot, 'lib'), { recursive: true });
+      await fs.mkdir(join(coreRoot, 'src'), { recursive: true });
+      await fs.mkdir(join(pluginRoot, 'lib'), { recursive: true });
+      await fs.mkdir(join(dashboardRoot, 'src'), { recursive: true });
+      await fs.mkdir(join(agentRoot, 'src'), { recursive: true });
+      await fs.mkdir(join(staleRoot, 'Sources/Home'), { recursive: true });
+      await fs.writeFile(join(alembicRoot, 'lib/index.ts'), 'export const main = true;\n');
+      await fs.writeFile(join(coreRoot, 'src/index.ts'), 'export const core = true;\n');
+      await fs.writeFile(join(pluginRoot, 'lib/index.ts'), 'export const plugin = true;\n');
+      await fs.writeFile(
+        join(dashboardRoot, 'src/index.tsx'),
+        'export const Dashboard = () => null;\n'
+      );
+      await fs.writeFile(join(agentRoot, 'src/index.ts'), 'export const agent = true;\n');
+      await fs.writeFile(join(staleRoot, 'Sources/Home/Home.swift'), 'public struct Home {}\n');
+    });
+
+    const projectScope = createProjectDescriptor({
+      controlRoot,
+      dataRoot: join(controlRoot, '.ghost-data'),
+      displayName: 'AlembicWorkspace',
+      folders: [
+        { displayName: 'Alembic', path: alembicRoot, role: 'primary-source' },
+        { displayName: 'AlembicCore', path: coreRoot, role: 'source' },
+        { displayName: 'AlembicPlugin', path: pluginRoot, role: 'source' },
+        { displayName: 'AlembicDashboard', path: dashboardRoot, role: 'source' },
+        { displayName: 'AlembicAgent', path: agentRoot, role: 'source' },
+      ],
+    });
+    const repoRef = makeProjectContextRef(controlRoot, 'repo:workspace', {
+      kind: 'repo',
+      label: 'AlembicWorkspace',
+    });
+    const alembicModuleRef = makeProjectContextRef(controlRoot, 'path:repo:Alembic', {
+      filePath: 'Alembic',
+      kind: 'path',
+      label: 'Alembic',
+    });
+    const staleModuleRef = makeProjectContextRef(controlRoot, 'path:repo:BiliDili', {
+      filePath: 'BiliDili',
+      kind: 'path',
+      label: 'BiliDili',
+    });
+    const requests: ProjectContextRequestMock[] = [];
+    projectContextCapabilitiesMock.executeOverride = async (request) => {
+      requests.push(request);
+      switch (request.kind) {
+        case 'space':
+          return projectContextEnvelope(controlRoot, 'space', {
+            boundaries: [],
+            nextRefs: [repoRef],
+            repos: [],
+            sourceFolders: request.payload?.sourceFolders ?? [],
+            space: { id: 'space', ref: repoRef },
+            structuralHotspots: [],
+          });
+        case 'repo':
+          return projectContextEnvelope(
+            controlRoot,
+            'repo',
+            {
+              buildSystems: [],
+              commands: [],
+              configFiles: [],
+              entrypoints: [],
+              languages: [{ fileCount: 100, language: 'swift' }],
+              localPackages: [],
+              nextRefs: [repoRef],
+              packageSystems: [],
+              repo: { name: 'AlembicWorkspace', ref: repoRef },
+              sourceRoots: [],
+              targets: [],
+              topAreas: [],
+            },
+            [repoRef]
+          );
+        case 'map':
+          return projectContextEnvelope(controlRoot, 'map', {
+            cycles: [],
+            dependencySummary: [],
+            externalDependencyHotspots: [],
+            hotspots: [],
+            layers: [],
+            majorFlows: [],
+            modules: [
+              {
+                id: 'target:Home:BiliDili',
+                kind: 'target',
+                name: 'Home',
+                ownedFileCount: 1,
+                ref: staleModuleRef,
+                role: 'target',
+              },
+              {
+                id: 'target:Alembic:Alembic',
+                kind: 'project-scope-folder',
+                name: 'Alembic',
+                ownedFileCount: 1,
+                ref: alembicModuleRef,
+                role: 'source',
+              },
+            ],
+            nextRefs: [],
+            repo: { name: 'AlembicWorkspace', ref: repoRef },
+          });
+        default:
+          return projectContextEnvelope(controlRoot, request.kind, {
+            available: false,
+            kind: request.kind,
+            nextRefs: [],
+            reason: 'fixture unavailable',
+          });
+      }
+    };
+
+    const facts = await buildProjectContextWorkflowFacts({
+      analysisScope: {
+        controlRoot,
+        currentFolderId: projectScope.folders[0].id,
+        dataRoot: projectScope.dataRoot,
+        folderCount: projectScope.folders.length,
+        projectRoot: alembicRoot,
+        projectScope,
+        projectScopeId: projectScope.projectScopeId,
+      },
+      contentMaxLines: 8,
+      ctx: { container: { get: () => null }, logger: console },
+      maxFileDetails: 0,
+      maxFiles: 10,
+      maxModuleDetails: 0,
+      maxModuleSeeds: 8,
+      projectRoot: controlRoot,
+      source: 'alembic-main-bootstrap',
+    });
+
+    expect(requests.find((request) => request.kind === 'space')?.payload).toMatchObject({
+      sourceFolders: [
+        expect.objectContaining({ path: 'Alembic' }),
+        expect.objectContaining({ path: 'AlembicCore' }),
+        expect.objectContaining({ path: 'AlembicPlugin' }),
+        expect.objectContaining({ path: 'AlembicDashboard' }),
+        expect.objectContaining({ path: 'AlembicAgent' }),
+      ],
+    });
+    expect(requests.find((request) => request.kind === 'repo')?.payload).toMatchObject({
+      repoRoot: 'Alembic',
+    });
+    expect(facts.primaryLang).toBe('typescript');
+    expect(facts.allFiles.length).toBeGreaterThan(0);
+    expect(facts.allFiles.every((file) => !file.relativePath.includes('BiliDili'))).toBe(true);
+    expect(facts.allFiles.filter((file) => file.sourceIdentity).length).toBe(facts.allFiles.length);
+    expect(JSON.stringify(facts.projectMapModules)).not.toContain('BiliDili');
+    expect(facts.projectMapModules).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ moduleName: 'Alembic', modulePath: 'Alembic' }),
+        expect.objectContaining({ moduleName: 'AlembicCore', modulePath: 'AlembicCore' }),
+        expect.objectContaining({ moduleName: 'AlembicPlugin', modulePath: 'AlembicPlugin' }),
+        expect.objectContaining({
+          moduleName: 'AlembicDashboard',
+          modulePath: 'AlembicDashboard',
+        }),
+        expect.objectContaining({ moduleName: 'AlembicAgent', modulePath: 'AlembicAgent' }),
+      ])
     );
   });
 
@@ -921,7 +1102,7 @@ let package = Package(
     );
 
     expect(source).toContain('for (const seed of moduleSeeds.slice(0, maxModuleDetails)) {');
-    expect(source).toContain('const projectMapModules = buildProjectMapModules(presenterInput.map');
+    expect(source).toContain('const projectMapModules = buildScopedProjectMapModules({');
     expect(source).toContain('projectMapModules,');
     expect(source).not.toContain('function buildProjectMapModules(map');
     expect(source).not.toContain('function presentProjectContextColdStartResponse');
