@@ -205,19 +205,28 @@ describe('V2 Router', () => {
         action: 'submit',
         params: {
           title: 'Network Error Pattern',
-          description: 'Documents a network error handling pattern.',
+          description:
+            'Documents a network error handling pattern for ToolRouter knowledge submissions.',
           content: {
-            markdown: 'A'.repeat(220),
-            rationale: 'This rationale explains why the pattern is useful for maintainers.',
+            markdown: [
+              '## Network Error Pattern',
+              'The ToolRouter knowledge submit path records a complete, source-backed pattern for maintainers.',
+              'This candidate cites the repository package metadata as a real source reference (来源: package.json:1).',
+              '✅ Record low-level failures as a user-facing error before display.',
+              '❌ Do not leak transport-specific failures directly into feature views.',
+            ].join('\n'),
+            rationale:
+              'This rationale explains why the source-backed pattern is useful for maintainers reviewing ToolRouter knowledge submissions.',
           },
-          kind: 'rule',
-          trigger: '@network-error-pattern',
+          kind: 'pattern',
+          trigger: 'Network error pattern',
           whenClause: 'When handling network errors in feature view models.',
-          doClause: 'Map low-level failures to a user-facing error before display.',
+          doClause: 'Record low-level failures as a user-facing error before display.',
+          dontClause: 'Do not leak transport-specific failures directly into feature views.',
           reasoning: {
             whyStandard: 'Evidence comes from the implementation.',
             confidence: 0.8,
-            sources: ['Sources/Features/Home/HomeViewModel.swift:42'],
+            sources: ['package.json:1-3'],
           },
         },
       },
@@ -247,10 +256,10 @@ describe('V2 Router', () => {
           language: 'markdown',
           headers: [],
           usageGuide: expect.stringContaining('### When'),
-          sourceRefs: ['Sources/Features/Home/HomeViewModel.swift:42'],
+          sourceRefs: ['package.json:1-3'],
           reasoning: expect.objectContaining({
             whyStandard: 'Evidence comes from the implementation.',
-            sources: ['Sources/Features/Home/HomeViewModel.swift:42'],
+            sources: ['package.json:1-3'],
           }),
         }),
       ],
