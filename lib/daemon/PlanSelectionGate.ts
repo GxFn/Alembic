@@ -7,6 +7,10 @@ import {
   type PlanSelection,
   type PlanStageId,
 } from '@alembic/core/plans';
+import {
+  buildPlanFactsProjection,
+  collectPlanProjectContext,
+} from '@alembic/core/service/planFacts';
 import { resolveProjectScopeAnalysisContext } from '../project-scope/ProjectScopeAnalysis.js';
 import { buildProjectContextWorkflowFacts } from '../workflows/project-context/ProjectContextWorkflowFacts.js';
 import { getJobProcessEventRecorder } from './DaemonJobServices.js';
@@ -17,6 +21,10 @@ import {
   stringArrayArg,
 } from './DaemonJobWorkflowHelpers.js';
 import type { BootstrapPlanGateResult, RunDaemonJobOptions } from './DaemonJobWorkflowTypes.js';
+
+// U3：主体 in-process plan gate 喂 plan-selection AI 的精简投影预算，与 host-agent（MCP alembic_plan）
+// 的 12KB 口径一致；完整 facts 仍另建并留给下游生成，不受此预算影响。
+const PLAN_FACTS_BUDGET_BYTES = 12 * 1024;
 
 export async function runBootstrapPlanGate(
   options: RunDaemonJobOptions
@@ -51,11 +59,24 @@ export async function runPlanSelectionGate(
       projectRoot: analysisScope.projectRoot,
       source: gate.source,
     });
+    // U3：只给 plan-selection AI 喂 Core 统一「精简投影」，替代此前把完整 facts（含逐文件源码）
+    // JSON.stringify 进 prompt 的 ~21M 爆炸路径（会在发 API 前被本地预算门拦掉）。collectPlanProjectContext
+    // 用有限 requestKinds 且 honor 原生 ProjectScope；buildPlanFactsProjection 产 ≤12KB projectInfoTree
+    // 金字塔 + candidateDimensions + projectProfile，与 host-agent（MCP alembic_plan）同一 Core 入口。
+    // 上方完整 projectContextFacts 保持原样，仍返回给下游生成链使用。
+    const planSelectionAnalysis = await collectPlanProjectContext(
+      analysisScope.projectRoot,
+      undefined
+    );
+    const planSelectionFacts = await buildPlanFactsProjection(planSelectionAnalysis, {
+      budgetBytes: PLAN_FACTS_BUDGET_BYTES,
+      scope: { projectRoot: analysisScope.projectRoot },
+    });
     const { runPlanAgent } = await import('@alembic/agent/service');
     const rawSelection = await runPlanAgent({
       agentService: options.container.get('agentService') as Pick<AgentService, 'run'>,
       generationStage: gate.generationStage,
-      projectContextFacts,
+      projectContextFacts: planSelectionFacts,
     });
     const { requestConstraints, selection } = constrainPlanSelectionForGate({
       args: options.args,

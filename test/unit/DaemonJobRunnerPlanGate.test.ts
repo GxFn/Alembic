@@ -3,6 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { runModuleMining, runPlanAgent } from '@alembic/agent/service';
 import { JobStore } from '@alembic/core/daemon';
+import {
+  buildPlanFactsProjection,
+  collectPlanProjectContext,
+} from '@alembic/core/service/planFacts';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { runDaemonJob } from '../../lib/daemon/DaemonJobRunner.js';
 import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
@@ -25,6 +29,19 @@ vi.mock('../../lib/workflows/project-context/ProjectContextWorkflowFacts.js', ()
 vi.mock('../../lib/workflows/project-index/ProjectIndexWorkflow.js', () => ({
   runProjectIndexWorkflow: vi.fn(),
 }));
+
+// U3：主体 plan gate 现另走 Core 精简投影喂 plan-selection AI；mock 掉以保单测确定性（不真跑收集）。
+vi.mock('@alembic/core/service/planFacts', () => ({
+  collectPlanProjectContext: vi.fn(),
+  buildPlanFactsProjection: vi.fn(),
+}));
+
+// U3：plan gate 喂 AI 的精简投影 fixture（buildPlanFactsProjection mock 输出）；断言 runPlanAgent 收到它。
+const PLAN_SELECTION_FACTS = {
+  candidateDimensions: [],
+  projectInfoTree: { children: [] },
+  projectProfile: {},
+};
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
 
@@ -235,6 +252,8 @@ function makeNamedDataRoot(name: string): string {
 beforeEach(() => {
   process.env.ALEMBIC_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-plan-gate-home-'));
   vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(makeFacts());
+  vi.mocked(collectPlanProjectContext).mockResolvedValue({} as never);
+  vi.mocked(buildPlanFactsProjection).mockResolvedValue(PLAN_SELECTION_FACTS as never);
   vi.mocked(runProjectIndexWorkflow).mockResolvedValue({ data: { ok: true } });
   vi.mocked(runModuleMining).mockResolvedValue({
     phases: { moduleResults: { core: { recipes: [{ id: 'r1' }] } } },
@@ -446,7 +465,8 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
     expect(runPlanAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         generationStage: 'coldStart',
-        projectContextFacts,
+        // U3：plan-selection AI 现收到 Core 精简投影，而非完整 projectContextFacts（后者仍返回给下游生成）。
+        projectContextFacts: PLAN_SELECTION_FACTS,
       })
     );
     expect(runProjectIndexWorkflow).toHaveBeenCalledWith(
