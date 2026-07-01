@@ -145,6 +145,7 @@ export function createBootstrapDimensionRuntimeInput({
   memoryCoordinator,
   systemRunContextFactory,
   projectInfo,
+  projectRoot,
   primaryLang,
   dimContext,
   sessionStore,
@@ -171,6 +172,8 @@ export function createBootstrapDimensionRuntimeInput({
   memoryCoordinator: MemoryCoordinator;
   systemRunContextFactory: SystemRunContextFactory;
   projectInfo: { lang?: string | null; fileCount?: number | null; [key: string]: unknown };
+  /** R1: 项目根（锚点补齐的只读边界）；可选以兼容旧调用方，缺失时补齐不启用 */
+  projectRoot?: string | null;
   primaryLang?: string | null;
   dimContext: unknown;
   sessionStore: unknown;
@@ -212,6 +215,9 @@ export function createBootstrapDimensionRuntimeInput({
     needsCandidates,
     dimConfig,
     projectInfo,
+    // R1 锚点补齐：insightGateEvaluator 用 projectRoot 把 findings 引用的 path:line 锚点
+    // 从磁盘补成可照抄的精确片段（只读、根内限定）；缺失时 Agent 侧保持旧行为。
+    ...(projectRoot ? { projectRoot } : {}),
     dimContext,
     sessionStore,
     semanticMemory,

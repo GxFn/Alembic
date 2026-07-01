@@ -115,6 +115,8 @@ export async function runAiDimensionSession({
       memoryCoordinator: runtime.memoryCoordinator,
       systemRunContextFactory: services.systemRunContextFactory,
       projectInfo: runtime.projectInfo,
+      // R1: 锚点补齐的只读根边界（insightGate 用它把 findings 的 path:line 补成精确片段）
+      projectRoot: preparation.projectRoot,
       primaryLang: preparation.primaryLang,
       dimContext: runtime.dimContext,
       sessionStore: runtime.sessionStore,
