@@ -23,9 +23,11 @@ import {
 } from '@alembic/core/evolution';
 import {
   ConfidenceRouter,
+  createFsSourceRefResolver,
   KnowledgeGraphService,
   KnowledgeService,
   RecipeProductionGateway,
+  resolveGroundedSourcePaths,
   SourceRefReconciler,
 } from '@alembic/core/knowledge';
 import type {
@@ -81,6 +83,13 @@ export function register(c: ServiceContainer) {
           eventBus: ct.services.eventBus ? ct.get('eventBus') : null,
           edgeRepo: ct.get('knowledgeEdgeRepository'),
           proposalRepo: ct.get('proposalRepository'),
+          // P5/C8: 注入深度接地 port，激活主体 in-process AI 的深度加权评分(未注入时退化为 legacy)。
+          // 与 AlembicPlugin 共用 Core createFsSourceRefResolver 保证双宿主接地判定 parity(P6 门)。
+          groundedSourcePaths: (item: Record<string, unknown>) =>
+            resolveGroundedSourcePaths(item, {
+              sourceRefResolver: createFsSourceRefResolver(),
+              projectRoot: resolveProjectRoot(ct),
+            }),
         } as ConstructorParameters<typeof KnowledgeService>[4]
       )
   );
