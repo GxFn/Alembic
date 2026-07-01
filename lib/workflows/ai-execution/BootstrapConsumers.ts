@@ -825,14 +825,16 @@ function extractSubmitParams(tc: ToolCallRecord): Record<string, unknown> {
 
 function isSuccessfulToolCall(tc: ToolCallRecord): boolean {
   const res = tc.result;
+  // 核心修正:失败的 submit 经 fail(...) → data:null 折叠成 null 结果；非结构化结果同样不是成功。
+  // 旧逻辑把这两种都 return true(误记为 accepted，掩盖了真库 0 行)。null/非结构化判为失败;其余保持原判据。
   if (!res) {
-    return true;
+    return false;
   }
   if (typeof res === 'string') {
     return !res.includes('rejected') && !res.includes('error');
   }
   if (!isRecord(res)) {
-    return true;
+    return false;
   }
   if (res.error || res.submitted === false) {
     return false;

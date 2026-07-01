@@ -391,17 +391,18 @@ export function projectBootstrapDimensionAgentOutput({
   });
   const successCount = submitCalls.filter((tc: ToolCallRecord) => {
     const res = tc?.result;
+    // 核心修正:提交失败时 handleSubmit 走 fail(...)，其 data:null 经信封折叠成 structuredContent:null，
+    // 记录到 tc.result 就是 null/undefined。旧逻辑 `if(!res) return true` 把失败当成 accepted，导致
+    // 「submitted=N, accepted=N, rejected=0」而真库 0 行。null/非结构化结果一律判为失败;其余保持原判据
+    // (显式 rejected/error/error 字段/submitted:false 才算失败，其余非空结果算成功)。
     if (!res) {
-      return true;
+      return false;
     }
     if (typeof res === 'string') {
       return !res.includes('rejected') && !res.includes('error');
     }
     const resObj = res as Record<string, unknown>;
-    if (resObj.error) {
-      return false;
-    }
-    if (resObj.submitted === false) {
+    if (resObj.error || resObj.submitted === false) {
       return false;
     }
     return resObj.status !== 'rejected' && resObj.status !== 'error';

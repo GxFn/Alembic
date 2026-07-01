@@ -726,14 +726,16 @@ function isKnowledgeSubmitToolCall(call: ToolCallRecord): boolean {
 
 function isSuccessfulToolCall(call: ToolCallRecord): boolean {
   const result = call.result;
+  // 核心修正:失败的 submit 经 fail(...) → data:null 折叠成 null 结果；非结构化结果同样不是成功。
+  // 旧逻辑把这两种都 return true(误记为成功，掩盖真库 0 行)。null/非结构化判为失败;其余保持原判据。
   if (!result) {
-    return true;
+    return false;
   }
   if (typeof result === 'string') {
     return !result.includes('rejected') && !result.includes('error');
   }
   if (!isRecord(result)) {
-    return true;
+    return false;
   }
   if (result.error || result.submitted === false) {
     return false;
