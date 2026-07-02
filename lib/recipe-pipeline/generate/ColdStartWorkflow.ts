@@ -197,7 +197,7 @@ async function runColdStartProjectIndexWorkflow(
   // 如果调用方指定了维度子集，只保留匹配的维度；否则按 plan projection 执行。
   if (selectionSummary.source !== 'base') {
     ctx.logger.info(
-      `[Bootstrap] Dimension filter (${selectionSummary.source}): selected=${dimensions.map((d) => d.id).join(', ') || 'none'}, ` +
+      `[Generate] Dimension filter (${selectionSummary.source}): selected=${dimensions.map((d) => d.id).join(', ') || 'none'}, ` +
         `unknown=${selectionSummary.unknownRequestedDimensionIds.join(', ') || 'none'}, ` +
         `duplicateCollapsed=${selectionSummary.duplicateCollapsedCount}`
     );
@@ -281,7 +281,7 @@ async function runColdStartProjectIndexWorkflow(
       logPrefix: 'Bootstrap',
     });
   } else {
-    ctx.logger.info(`[Bootstrap] Async fill skipped (skipAsyncFill=true)`);
+    ctx.logger.info(`[Generate] Async fill skipped (skipAsyncFill=true)`);
   }
 
   // ── SkillHooks: onBootstrapStarted (fire-and-forget) ──
