@@ -79,6 +79,22 @@ export async function runAiDimensionSession({
   const dimensionCandidates: Record<string, DimensionCandidateData> = {};
   const dimensionStats: Record<string, DimensionStat> = {};
 
+  // G2(用户决策)：候选数量目标由 plan 按项目规模产出（totalRecipeBudget = f(scale)），折算为
+  // per-dimension 建议区间注入 Producer——是引导而非硬限，最终条数由模型按实际发现自判（宁深勿多）。
+  // 无 plan 投影（如 rescan 直跑）时不注入，Producer 走原有 findings 数目标。
+  const planRecipeBudget = (
+    preparation.view?.projectContextFacts?.report?.planSelectionProjection as
+      | { budget?: { totalRecipeBudget?: number } }
+      | undefined
+  )?.budget?.totalRecipeBudget;
+  const suggestedCandidateRange =
+    typeof planRecipeBudget === 'number' && planRecipeBudget > 0 && activeDimIds.length > 0
+      ? {
+          min: Math.max(2, Math.floor((planRecipeBudget / activeDimIds.length) * 0.6)),
+          max: Math.max(3, Math.ceil(planRecipeBudget / activeDimIds.length)),
+        }
+      : null;
+
   const admissions = await resolveBootstrapDimensionAdmissions({
     dataRoot: preparation.dataRoot,
     activeDimIds,
@@ -117,6 +133,8 @@ export async function runAiDimensionSession({
       projectInfo: runtime.projectInfo,
       // R1: 锚点补齐的只读根边界（insightGate 用它把 findings 的 path:line 补成精确片段）
       projectRoot: preparation.projectRoot,
+      // G2: plan 折算的本维度候选数量建议（引导非硬限）
+      suggestedCandidateRange,
       primaryLang: preparation.primaryLang,
       dimContext: runtime.dimContext,
       sessionStore: runtime.sessionStore,

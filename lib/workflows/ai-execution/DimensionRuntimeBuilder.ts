@@ -146,6 +146,7 @@ export function createBootstrapDimensionRuntimeInput({
   systemRunContextFactory,
   projectInfo,
   projectRoot,
+  suggestedCandidateRange,
   primaryLang,
   dimContext,
   sessionStore,
@@ -174,6 +175,8 @@ export function createBootstrapDimensionRuntimeInput({
   projectInfo: { lang?: string | null; fileCount?: number | null; [key: string]: unknown };
   /** R1: 项目根（锚点补齐的只读边界）；可选以兼容旧调用方，缺失时补齐不启用 */
   projectRoot?: string | null;
+  /** G2: plan 折算的本维度候选数量建议（引导非硬限）；无 plan 投影时为 null */
+  suggestedCandidateRange?: { min: number; max: number } | null;
   primaryLang?: string | null;
   dimContext: unknown;
   sessionStore: unknown;
@@ -213,7 +216,9 @@ export function createBootstrapDimensionRuntimeInput({
   );
   const bootstrapStrategyFields = {
     needsCandidates,
-    dimConfig,
+    // G2：数量建议挂到 dimConfig 浅拷贝（Producer prompt 经 strategyContext.dimConfig 渲染），
+    // 不污染 plan 原对象。
+    dimConfig: suggestedCandidateRange ? { ...dimConfig, suggestedCandidateRange } : dimConfig,
     projectInfo,
     // R1 锚点补齐：insightGateEvaluator 用 projectRoot 把 findings 引用的 path:line 锚点
     // 从磁盘补成可照抄的精确片段（只读、根内限定）；缺失时 Agent 侧保持旧行为。
