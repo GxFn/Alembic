@@ -94,6 +94,10 @@ export async function runAiDimensionSession({
           max: Math.max(3, Math.ceil(planRecipeBudget / activeDimIds.length)),
         }
       : null;
+  // H4：建议区间注入可观测——数量问题排查时首先要能看到 plan 建议是否到位、数值多少。
+  logger.info(
+    `[Insight-v3] plan candidate suggestion: totalRecipeBudget=${planRecipeBudget ?? 'n/a'}, dims=${activeDimIds.length}, perDimRange=${suggestedCandidateRange ? `${suggestedCandidateRange.min}-${suggestedCandidateRange.max}` : 'none'}`
+  );
 
   const admissions = await resolveBootstrapDimensionAdmissions({
     dataRoot: preparation.dataRoot,
