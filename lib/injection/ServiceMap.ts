@@ -48,16 +48,16 @@ import type Logger from '@alembic/core/logging';
 import type { MemoryRepositoryImpl } from '@alembic/core/memory';
 // ── Repository Types ──
 import type {
-  EvolutionCoverageLedgerRepository,
-  EvolutionProposalRepository,
-  EvolutionWarningRepository,
+  CoverageLedgerRepository,
   GenerateRepository,
   GuardViolationRepository,
   KnowledgeEdgeRepository,
   KnowledgeRepository,
+  ProposalRepository,
   SessionRepository,
   SourceRefRepository,
   TokenUsageStore,
+  WarningRepository,
 } from '@alembic/core/repositories';
 import type { HybridRetriever, SearchEngine } from '@alembic/core/search';
 // ── Shared Types ──
@@ -106,9 +106,9 @@ export interface ServiceMap {
   auditRepository: AuditRepositoryImpl;
   memoryRepository: MemoryRepositoryImpl;
   sessionRepository: SessionRepository;
-  proposalRepository: EvolutionProposalRepository;
-  warningRepository: EvolutionWarningRepository;
-  coverageLedgerRepository: EvolutionCoverageLedgerRepository;
+  proposalRepository: ProposalRepository;
+  warningRepository: WarningRepository;
+  coverageLedgerRepository: CoverageLedgerRepository;
   recipeSourceRefRepository: SourceRefRepository;
   knowledgeFileWriter: KnowledgeFileWriter;
   knowledgeSyncService: KnowledgeSyncService;

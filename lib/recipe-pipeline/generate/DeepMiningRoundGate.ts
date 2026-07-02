@@ -3,8 +3,8 @@ import { adviseCoverageLedger } from '@alembic/core/host-agent-workflows';
 import type { PlanModuleBinding, PlanSelection } from '@alembic/core/plans';
 import type {
   CoverageLedgerRecord,
+  CoverageLedgerRepository,
   DeepMiningRoundRecord,
-  EvolutionCoverageLedgerRepository,
 } from '@alembic/core/repositories';
 import { getJobProcessEventRecorder } from '../../daemon/DaemonJobServices.js';
 import {
@@ -27,7 +27,7 @@ import { resolveProjectScopeAnalysisContext } from '../../project-scope/ProjectS
 import { runPlanSelectionGate } from '../plan/PlanSelectionGate.js';
 
 export async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise<unknown> {
-  const coverageLedgerRepository = getOptionalService<EvolutionCoverageLedgerRepository>(
+  const coverageLedgerRepository = getOptionalService<CoverageLedgerRepository>(
     options.container,
     'coverageLedgerRepository'
   );
@@ -423,7 +423,7 @@ function moduleNameFromBinding(binding: PlanModuleBinding): string {
 
 function ensureCoverageLedgerCells(input: {
   projectRoot: string;
-  repository: EvolutionCoverageLedgerRepository;
+  repository: CoverageLedgerRepository;
   targets: readonly ModuleDimensionTarget[];
 }): void {
   for (const target of input.targets) {
@@ -454,7 +454,7 @@ function failCloseDeepMiningRound(input: {
   error: unknown;
   options: RunDaemonJobOptions;
   projectRoot: string;
-  repository: EvolutionCoverageLedgerRepository;
+  repository: CoverageLedgerRepository;
   rescanId: string;
   roundIndex: number;
   startedAt: number;

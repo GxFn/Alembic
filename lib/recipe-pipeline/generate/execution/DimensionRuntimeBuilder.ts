@@ -23,7 +23,7 @@ import type {
 } from '@alembic/core/types';
 import type { ProjectScopeSourceIdentityMap } from '../../../project-scope/ProjectScopeAnalysis.js';
 import { buildGenerateDimensionRunInput, type GenerateFileEntry } from './AgentRunInputBuilders.js';
-import { buildGeneratePcvStageNodeContext } from './PcvNodeEvidence.js';
+import { buildGeneratePcvStageNodeContext } from './PcvStageNodeMap.js';
 import {
   type GenerateExistingRecipe,
   type GenerateRescanContext,

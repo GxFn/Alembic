@@ -18,7 +18,7 @@ import type {
   ProjectScopeSourceIdentity,
   ProjectScopeSourceIdentityMap,
 } from '../../../project-scope/ProjectScopeAnalysis.js';
-import { buildGeneratePcvStageNodeContext } from './PcvNodeEvidence.js';
+import { buildGeneratePcvStageNodeContext } from './PcvStageNodeMap.js';
 
 // ── Dimension input builder ──────────────────────────────
 

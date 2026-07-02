@@ -48,7 +48,7 @@ import {
   writeCoverageLedgerForCompletion,
 } from '@alembic/core/host-agent-workflows';
 import { SourceRefReconciler } from '@alembic/core/knowledge';
-import type { EvolutionCoverageLedgerRepository } from '@alembic/core/repositories';
+import type { CoverageLedgerRepository } from '@alembic/core/repositories';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type { DimensionDef, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
@@ -1008,7 +1008,7 @@ function buildKnowledgeRescanCoverageLedgerCandidates({
 }
 
 function latestCoverageLedgerRoundIndex(
-  repository: EvolutionCoverageLedgerRepository,
+  repository: CoverageLedgerRepository,
   projectRoot: string
 ): number | null {
   return repository.listRoundsByProjectRoot(projectRoot).reduce<number | null>((latest, round) => {
@@ -1093,7 +1093,7 @@ function buildLedgerCoverageByDimension(
 
 function getCoverageLedgerRepository(container: {
   get(name: string): unknown;
-}): EvolutionCoverageLedgerRepository | null {
+}): CoverageLedgerRepository | null {
   try {
     const repository = container.get('coverageLedgerRepository');
     if (
@@ -1104,7 +1104,7 @@ function getCoverageLedgerRepository(container: {
         'function' &&
       typeof (repository as { upsertCell?: unknown }).upsertCell === 'function'
     ) {
-      return repository as EvolutionCoverageLedgerRepository;
+      return repository as CoverageLedgerRepository;
     }
   } catch {
     return null;

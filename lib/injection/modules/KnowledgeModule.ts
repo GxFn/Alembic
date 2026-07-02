@@ -31,10 +31,10 @@ import {
   SourceRefReconciler,
 } from '@alembic/core/knowledge';
 import type {
-  EvolutionLifecycleEventRepository,
-  EvolutionProposalRepository,
   KnowledgeEdgeRepository,
   KnowledgeRepository,
+  LifecycleEventRepository,
+  ProposalRepository,
   SourceRefRepository,
 } from '@alembic/core/repositories';
 import { HybridRetriever, SearchEngine } from '@alembic/core/search';
@@ -288,19 +288,17 @@ export function register(c: ServiceContainer) {
 
   c.singleton('lifecycleStateMachine', (ct: ServiceContainer) => {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
-    const lifecycleEventRepo = ct.get(
-      'lifecycleEventRepository'
-    ) as EvolutionLifecycleEventRepository;
+    const lifecycleEventRepo = ct.get('lifecycleEventRepository') as LifecycleEventRepository;
     const signalBus = ct.get('signalBus') as unknown as ConstructorParameters<
       typeof LifecycleStateMachine
     >[2];
-    const proposalRepo = ct.get('proposalRepository') as EvolutionProposalRepository;
+    const proposalRepo = ct.get('proposalRepository') as ProposalRepository;
     return new LifecycleStateMachine(knowledgeRepo, lifecycleEventRepo, signalBus, proposalRepo);
   });
 
   c.singleton('proposalExecutor', (ct: ServiceContainer) => {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
-    const proposalRepo = ct.get('proposalRepository') as EvolutionProposalRepository;
+    const proposalRepo = ct.get('proposalRepository') as ProposalRepository;
     const lifecycle = ct.get('lifecycleStateMachine') as LifecycleStateMachine;
     const contentPatcher = ct.get('contentPatcher') as ContentPatcher;
     const edgeRepo = ct.get('knowledgeEdgeRepository') as KnowledgeEdgeRepository;
@@ -313,7 +311,7 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('proposalGateway', (ct: ServiceContainer) => {
-    const proposalRepo = ct.get('proposalRepository') as EvolutionProposalRepository;
+    const proposalRepo = ct.get('proposalRepository') as ProposalRepository;
     const lifecycle = ct.get('lifecycleStateMachine') as LifecycleStateMachine;
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new ProposalGateway(proposalRepo, lifecycle, knowledgeRepo);

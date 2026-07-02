@@ -12,7 +12,7 @@ import type {
 } from './AgentRunProjections.js';
 import { parseDimensionDigest } from './DimensionContext.js';
 import type { GenerateDimensionPlan } from './DimensionRuntimeBuilder.js';
-import { buildPcvN8StageFactoryEvidence } from './PcvNodeEvidence.js';
+import { buildPcvN8StageFactoryEvidence } from './PcvStageNodeMap.js';
 
 const MAX_TEXT_CHARS = 6000;
 const MAX_JSON_TEXT_CHARS = 12000;

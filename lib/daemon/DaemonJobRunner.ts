@@ -1,8 +1,5 @@
 import type { DaemonJobRecord, DaemonJobStatus, JobStore } from '@alembic/core/daemon';
-import type {
-  DeepMiningRoundRecord,
-  EvolutionCoverageLedgerRepository,
-} from '@alembic/core/repositories';
+import type { CoverageLedgerRepository, DeepMiningRoundRecord } from '@alembic/core/repositories';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
 import {
@@ -472,7 +469,7 @@ function closeCancelledDeepMiningRounds(options: {
   reason: string;
   recorder: JobProcessEventRecorder;
 }): void {
-  const repository = getOptionalService<EvolutionCoverageLedgerRepository>(
+  const repository = getOptionalService<CoverageLedgerRepository>(
     options.container,
     'coverageLedgerRepository'
   );

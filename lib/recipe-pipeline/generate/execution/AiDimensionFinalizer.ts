@@ -27,7 +27,7 @@ import {
   PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION,
   PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT,
   PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT_VERSION,
-} from './PcvNodeEvidence.js';
+} from './PcvStageNodeMap.js';
 import type { initializeGenerateRuntime } from './RuntimeInitializer.js';
 
 type AiDimensionRuntime = Awaited<ReturnType<typeof initializeGenerateRuntime>>;

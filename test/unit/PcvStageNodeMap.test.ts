@@ -3,7 +3,7 @@ import type { AgentResultLike } from '../../lib/recipe-pipeline/generate/executi
 import {
   buildPcvAnalyzeGroundingLedgerSummary,
   buildPcvN8StageFactoryEvidence,
-} from '../../lib/recipe-pipeline/generate/execution/PcvNodeEvidence.js';
+} from '../../lib/recipe-pipeline/generate/execution/PcvStageNodeMap.js';
 
 const envBackup = { ...process.env };
 

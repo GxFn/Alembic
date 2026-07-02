@@ -1,4 +1,4 @@
-import type { EvolutionCoverageLedgerRepository } from '@alembic/core/repositories';
+import type { CoverageLedgerRepository } from '@alembic/core/repositories';
 import { describe, expect, test, vi } from 'vitest';
 import { selectScopedModuleMiningModules } from '../../lib/recipe-pipeline/generate/ModuleMiningSelection.js';
 import {
@@ -33,7 +33,7 @@ function createFakeCoverageLedgerRepository(roundIndex = 3) {
       };
     }),
     upsertRound,
-  } as unknown as EvolutionCoverageLedgerRepository & { upsertRound: ReturnType<typeof vi.fn> };
+  } as unknown as CoverageLedgerRepository & { upsertRound: ReturnType<typeof vi.fn> };
   return { repository, upserts, upsertRound };
 }
 
