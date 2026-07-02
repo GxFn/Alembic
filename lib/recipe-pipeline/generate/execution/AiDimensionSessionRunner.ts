@@ -285,7 +285,7 @@ export async function runAiDimensionSession({
     });
   }
 
-  const { input: bootstrapSessionInput } = buildGenerateSessionExecutionInput({
+  const { input: generateSessionInput } = buildGenerateSessionExecutionInput({
     sessionId: preparation.sessionId,
     activeDimIds,
     skippedDimIds: admissions.skippedDimIds,
@@ -316,7 +316,7 @@ export async function runAiDimensionSession({
   });
   let parentRunResult: AgentRunResult;
   try {
-    parentRunResult = await services.agentService.run(bootstrapSessionInput);
+    parentRunResult = await services.agentService.run(generateSessionInput);
     logger.info('[generate] Bootstrap agent session run complete', {
       sessionId: preparation.sessionId,
       durationMs: Date.now() - startedAtMs,

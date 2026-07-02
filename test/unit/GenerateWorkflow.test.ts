@@ -90,7 +90,7 @@ describe('ProjectIndexWorkflow compatibility', () => {
       coldBody,
       'const cleanupResult = await runFullResetPolicy',
       'replaceExisting: true',
-      'const { taskDefs, bootstrapSession } = startAiDimensionSession'
+      'const { taskDefs, generateSession } = startAiDimensionSession'
     );
 
     const rescanBody = rescanSource.slice(

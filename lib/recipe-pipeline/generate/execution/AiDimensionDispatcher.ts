@@ -14,7 +14,7 @@ export type DimensionExecutionSession = ReturnType<typeof startTaskManagerSessio
 
 export interface AiDimensionSessionPlan {
   taskDefs: DimensionExecutionTaskDefs;
-  bootstrapSession: DimensionExecutionSession;
+  generateSession: DimensionExecutionSession;
 }
 
 export function buildAiDimensionTaskDefs(dimensions: DimensionDef[]): DimensionExecutionTaskDefs {
@@ -28,13 +28,13 @@ export function startAiDimensionSession(opts: {
   logPrefix: string;
 }): AiDimensionSessionPlan {
   const taskDefs = buildAiDimensionTaskDefs(opts.dimensions);
-  const bootstrapSession = startTaskManagerSession(
+  const generateSession = startTaskManagerSession(
     opts.container,
     taskDefs,
     opts.logger,
     opts.logPrefix
   );
-  return { taskDefs, bootstrapSession };
+  return { taskDefs, generateSession };
 }
 
 export function dispatchAiDimensionRuns(opts: {

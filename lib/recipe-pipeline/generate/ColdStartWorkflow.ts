@@ -242,7 +242,7 @@ async function runColdStartProjectIndexWorkflow(
   // ═══════════════════════════════════════════════════════════
 
   // 构建任务定义列表
-  const { taskDefs, bootstrapSession } = startAiDimensionSession({
+  const { taskDefs, generateSession } = startAiDimensionSession({
     container: ctx.container,
     dimensions,
     logger: ctx.logger,
@@ -250,7 +250,7 @@ async function runColdStartProjectIndexWorkflow(
   });
   if (!intent.internalExecution?.skipAsyncFill) {
     registerProjectContextWorkflowSessionReleaseOnGenerateCompletion({
-      bootstrapSessionId: bootstrapSession?.id,
+      bootstrapSessionId: generateSession?.id,
       container: ctx.container,
       logger: ctx.logger,
       projectRoot,
@@ -266,7 +266,7 @@ async function runColdStartProjectIndexWorkflow(
       view: attachProjectScopeSourceIdentitiesToView(
         {
           ...buildProjectContextFillView({
-            bootstrapSession,
+            bootstrapSession: generateSession,
             ctx: ctx as Record<string, unknown>,
             facts: projectContextFacts,
             mode: 'bootstrap',
@@ -313,7 +313,7 @@ async function runColdStartProjectIndexWorkflow(
     cachedSessionId,
     selectionSummary,
     taskCount: taskDefs.length,
-    bootstrapSession,
+    bootstrapSession: generateSession,
     responseTimeMs: Date.now() - t0,
   });
 }

@@ -641,7 +641,7 @@ async function runKnowledgeRescanProjectIndexWorkflow(
   // 任务定义由统一 Rescan plan 决定：coverage gap、recipe decay、file diff 都可触发。
   const perModuleMining = miningMode === 'moduleMining' || miningMode === 'per-module';
   let moduleMiningResult: Record<string, unknown> | null = null;
-  const bootstrapSession = controllerProduceSessionRequest.enabled
+  const generateSession = controllerProduceSessionRequest.enabled
     ? null
     : perModuleMining
       ? null
@@ -650,15 +650,15 @@ async function runKnowledgeRescanProjectIndexWorkflow(
           dimensions: executionDimensions,
           logger: ctx.logger,
           logPrefix: 'KnowledgeRescanWorkflow',
-        }).bootstrapSession;
+        }).generateSession;
   const willRunInternalRescanFill =
     !controllerProduceSessionRequest.enabled &&
     !perModuleMining &&
     executionDimensions.length > 0 &&
     !intent.internalExecution?.skipAsyncFill;
-  if (willRunInternalRescanFill && workflowSession && bootstrapSession) {
+  if (willRunInternalRescanFill && workflowSession && generateSession) {
     registerProjectContextWorkflowSessionReleaseOnGenerateCompletion({
-      bootstrapSessionId: bootstrapSession.id,
+      bootstrapSessionId: generateSession.id,
       container: ctx.container,
       logger: ctx.logger,
       projectRoot,
@@ -740,7 +740,7 @@ async function runKnowledgeRescanProjectIndexWorkflow(
     const fillView = attachProjectScopeSourceIdentitiesToView(
       {
         ...buildProjectContextFillView({
-          bootstrapSession,
+          bootstrapSession: generateSession,
           ctx: ctx as Record<string, unknown>,
           existingRecipes: allExistingRecipes,
           evolutionPrescreen: prescreen,
@@ -798,7 +798,7 @@ async function runKnowledgeRescanProjectIndexWorkflow(
       const snapshotId = saveProjectContextFileSnapshot({
         ctx,
         projectRoot,
-        sessionId: bootstrapSession?.id ?? sessionId ?? `rescan-${Date.now()}`,
+        sessionId: generateSession?.id ?? sessionId ?? `rescan-${Date.now()}`,
         allFiles,
         primaryLang,
         plan: _incrementalPlan,
@@ -854,7 +854,7 @@ async function runKnowledgeRescanProjectIndexWorkflow(
     auditSummary,
     gapPlan,
     facts: projectContextFacts,
-    bootstrapSession,
+    bootstrapSession: generateSession,
     produceSession: produceSession as unknown as Record<string, unknown>,
     sessionId,
     evolutionAudit: evolutionAuditResult as unknown as Record<string, unknown> | null,
