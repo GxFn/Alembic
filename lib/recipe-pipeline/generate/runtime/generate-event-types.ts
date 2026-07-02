@@ -16,64 +16,40 @@ import type { AgentEfficiencySummary } from './GenerateEfficiency.js';
 
 // ── DimensionComplete payload variants ───────────────────────
 
-export interface DimensionSkippedPayload {
-  type: 'skipped';
-  reason: string;
-}
+// W2(2026-07-02 全空间统一):基础 payload 骨架收编 Core 单源;本文件保留
+// 主体收窄(efficiency/deliveryReceipt 具体类型)与 daemon 专属 process-event 类型。
+export type {
+  DimensionCheckpointRestoredPayload,
+  DimensionErrorPayload,
+  DimensionHostCompletePayload,
+  DimensionRestoredPayload,
+  DimensionSkippedPayload,
+  ProgressPayload,
+} from '@alembic/core/knowledge';
 
-export interface DimensionRestoredPayload {
-  type: 'incremental-restored';
-  reason: string;
-}
+import type {
+  DimensionPipelineCompletePayload as CoreDimensionPipelineCompletePayload,
+  DimensionSkillPayload as CoreDimensionSkillPayload,
+  DimensionCheckpointRestoredPayload,
+  DimensionErrorPayload,
+  DimensionHostCompletePayload,
+  DimensionRestoredPayload,
+  DimensionSkippedPayload,
+  ProgressPayload,
+} from '@alembic/core/knowledge';
 
-export interface DimensionCheckpointRestoredPayload {
-  type: 'checkpoint-restored';
-  [key: string]: unknown;
-}
-
-export interface DimensionErrorPayload {
-  type: 'error';
-  reason: string;
-  status?: string;
-  diagnostics?: unknown;
+/** 主体收窄:efficiency 是 daemon 观测的具体类型(Core 基础契约为 unknown)。 */
+export interface DimensionPipelineCompletePayload extends CoreDimensionPipelineCompletePayload {
   efficiency?: AgentEfficiencySummary | null;
 }
 
-export interface DimensionPipelineCompletePayload {
-  type: 'candidate' | 'skill';
-  extracted: number;
-  created: number;
-  status: string;
-  reason?: string;
-  degraded: boolean;
-  durationMs: number;
-  diagnostics?: unknown;
-  toolCallCount: number;
-  tokenUsage?: { input: number; output: number };
-  efficiency?: AgentEfficiencySummary | null;
-  source: string;
-}
-
-export interface DimensionSkillPayload {
-  type: 'skill';
+/** 主体收窄:skill 交付回执具体类型。 */
+export interface DimensionSkillPayload extends CoreDimensionSkillPayload {
   deliveryReceipt?: ProjectSkillDeliveryReceipt;
-  deliveryReceiptSummary?: string;
   deliveryReceiptValidation?: ProjectSkillDeliveryValidationResult;
-  skillName: string;
-  sourceCount: number;
 }
 
-export interface DimensionHostCompletePayload {
-  type: 'skill' | 'candidate';
-  extracted: number;
-  skillCreated: boolean;
-  recipesBound: number;
-  progress: string;
-  isBootstrapComplete: boolean;
-  source: string;
-}
-
-/** Discriminated union — 通过 `type` 字段区分 */
+/** Discriminated union — 主体版(收窄成员替换基础成员)。 */
 export type DimensionCompletePayload =
   | DimensionSkippedPayload
   | DimensionRestoredPayload
@@ -82,14 +58,6 @@ export type DimensionCompletePayload =
   | DimensionPipelineCompletePayload
   | DimensionSkillPayload
   | DimensionHostCompletePayload;
-
-// ── Other event payloads ─────────────────────────────────────
-
-export interface ProgressPayload {
-  [key: string]: unknown;
-}
-
-// ── Job process event bridge payloads ───────────────────────
 
 export type GenerateProcessEventDraft = Omit<
   CreateJobProcessEventInput,
