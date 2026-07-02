@@ -26,6 +26,7 @@ import {
 import { collectAiEnvOverrides, isAiEnvReady, WorkspaceSettingsStore } from '@alembic/core/shared';
 import {
   getProjectRegistryDir,
+  getProjectRuntimeControlStatePath,
   type ProjectEntry,
   ProjectRegistry,
   type WorkspaceFacts,
@@ -116,9 +117,8 @@ export interface ProjectRuntimeControlActionResult {
   targetProject: ProjectRuntimeScopeSummary | null;
 }
 
-export function getProjectRuntimeControlStatePath(): string {
-  return join(getProjectRegistryDir(), 'runtime-control.json');
-}
+// W2(2026-07-02):路径拼装收编 Core 单源(此前与 Plugin HostProjectAlignment 双实现)。
+export { getProjectRuntimeControlStatePath };
 
 export class ProjectRuntimeControl {
   readonly statePath: string;
