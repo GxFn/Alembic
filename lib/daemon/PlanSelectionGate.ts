@@ -6,10 +6,12 @@ import {
   type PlanModuleBinding,
   type PlanSelection,
   type PlanStageId,
+  planSelectionRequiresModuleTargets,
 } from '@alembic/core/plans';
 import {
   buildPlanFactsProjection,
   collectPlanProjectContext,
+  PLAN_FACTS_PROJECTION_BUDGET_BYTES,
 } from '@alembic/core/service/planFacts';
 import { resolveProjectScopeAnalysisContext } from '../project-scope/ProjectScopeAnalysis.js';
 import { buildProjectContextWorkflowFacts } from '../workflows/project-context/ProjectContextWorkflowFacts.js';
@@ -22,9 +24,8 @@ import {
 } from './DaemonJobWorkflowHelpers.js';
 import type { BootstrapPlanGateResult, RunDaemonJobOptions } from './DaemonJobWorkflowTypes.js';
 
-// U3：主体 in-process plan gate 喂 plan-selection AI 的精简投影预算，与 host-agent（MCP alembic_plan）
-// 的 12KB 口径一致；完整 facts 仍另建并留给下游生成，不受此预算影响。
-const PLAN_FACTS_BUDGET_BYTES = 12 * 1024;
+// C-1(2026-07-02 统一重构)：投影预算改由 Core 单源常量提供，与 host-agent 同一定义。
+const PLAN_FACTS_BUDGET_BYTES = PLAN_FACTS_PROJECTION_BUDGET_BYTES;
 
 export async function runBootstrapPlanGate(
   options: RunDaemonJobOptions
@@ -167,7 +168,8 @@ function constrainPlanSelectionForGate(input: {
   projectRoot: string;
   selection: PlanSelection;
 }): { requestConstraints: Record<string, unknown> | null; selection: PlanSelection } {
-  if (input.gateStage !== 'deepMining' && input.gateStage !== 'moduleMining') {
+  // C-2(2026-07-02 统一重构)：mining 阶段判断复用 Core 权威谓词，替代本地字符串比对。
+  if (!planSelectionRequiresModuleTargets(input.gateStage)) {
     return { requestConstraints: null, selection: input.selection };
   }
 
