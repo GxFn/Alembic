@@ -51,7 +51,7 @@ import type { EvolutionCoverageLedgerRepository } from '@alembic/core/repositori
 import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type { DimensionDef, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
-import { selectProjectIndexModuleMiningModules } from '../../daemon/ModuleMiningSelection.js';
+import { selectScopedModuleMiningModules } from '../../daemon/ModuleMiningSelection.js';
 import {
   attachProjectScopeSourceIdentitiesToView,
   buildProjectScopeAnalysisLogMeta,
@@ -83,10 +83,10 @@ import {
   saveProjectContextFileSnapshot,
 } from '../project-context/ProjectContextWorkflowFacts.js';
 import {
-  type ProjectIndexMcpContext,
-  registerProjectIndexWorkflowImplementation,
-  runProjectIndexWorkflow,
-} from '../project-index/ProjectIndexWorkflow.js';
+  type GenerateWorkflowMcpContext,
+  registerGenerateWorkflowImplementation,
+  runGenerateWorkflow,
+} from '../project-index/GenerateWorkflow.js';
 import {
   buildProduceSessionProjection,
   buildProduceSessionRoutePlan,
@@ -98,7 +98,7 @@ type EvolutionAuditResult = Awaited<ReturnType<typeof runEvolutionAudit>>;
 type RescanCleanPolicyResult = Awaited<ReturnType<typeof runForceRescanCleanPolicy>>;
 type SourceRefReconcileReport = Awaited<ReturnType<SourceRefReconciler['reconcile']>>;
 
-type RescanMcpContext = ProjectIndexMcpContext;
+type RescanMcpContext = GenerateWorkflowMcpContext;
 
 interface KnowledgeRescanInlineFillSummary {
   coverageSkippedDimensions: number;
@@ -189,7 +189,7 @@ function countImpactImmediateDeprecations(result: RescanImpactSubmissionResult |
  * 后台通过 AI dimension execution 对 gap 维度执行 AI 补齐。
  */
 export async function runKnowledgeRescanWorkflow(ctx: RescanMcpContext, args: KnowledgeRescanArgs) {
-  return runProjectIndexWorkflow(ctx, args, { mode: 'incremental' });
+  return runGenerateWorkflow(ctx, args, { mode: 'incremental' });
 }
 
 async function runKnowledgeRescanProjectIndexWorkflow(
@@ -675,7 +675,7 @@ async function runKnowledgeRescanProjectIndexWorkflow(
     !controllerProduceSessionRequest.enabled &&
     !intent.internalExecution?.skipAsyncFill
   ) {
-    const modules = selectProjectIndexModuleMiningModules({
+    const modules = selectScopedModuleMiningModules({
       bindings: miningPlanOptions.moduleMiningBindings,
       executionDimensions: executionDimensions.map((dimension) => dimension.id),
       facts: projectContextFacts,
@@ -865,7 +865,7 @@ async function runKnowledgeRescanProjectIndexWorkflow(
   });
 }
 
-registerProjectIndexWorkflowImplementation('incremental', runKnowledgeRescanProjectIndexWorkflow);
+registerGenerateWorkflowImplementation('incremental', runKnowledgeRescanProjectIndexWorkflow);
 
 type KnowledgeRescanMiningMode = 'deepMining' | 'moduleMining' | 'per-module';
 

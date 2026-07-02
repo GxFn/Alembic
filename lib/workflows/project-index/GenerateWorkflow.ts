@@ -7,22 +7,22 @@ import type { PlanSelectionProjection } from '@alembic/core/plans';
 import type { McpContext } from '@alembic/core/types';
 import type { ProjectContextWorkflowFacts } from '../project-context/ProjectContextWorkflowFacts.js';
 
-export type ProjectIndexWorkflowMode = 'full' | 'incremental';
-export type ProjectIndexMcpContext = WorkflowMcpContext & McpContext;
+export type GenerateWorkflowMode = 'full' | 'incremental';
+export type GenerateWorkflowMcpContext = WorkflowMcpContext & McpContext;
 
-export type ProjectIndexFullArgs = InternalColdStartArgs & {
+export type GenerateFullArgs = InternalColdStartArgs & {
   planSelectionProjection?: PlanSelectionProjection;
   projectContextFacts?: ProjectContextWorkflowFacts;
 };
-export type ProjectIndexIncrementalArgs = InternalKnowledgeRescanArgs;
+export type GenerateIncrementalArgs = InternalKnowledgeRescanArgs;
 
 type ProjectIndexFullWorkflowRunner = (
-  ctx: ProjectIndexMcpContext,
-  args: ProjectIndexFullArgs
+  ctx: GenerateWorkflowMcpContext,
+  args: GenerateFullArgs
 ) => Promise<unknown>;
 type ProjectIndexIncrementalWorkflowRunner = (
-  ctx: ProjectIndexMcpContext,
-  args: ProjectIndexIncrementalArgs
+  ctx: GenerateWorkflowMcpContext,
+  args: GenerateIncrementalArgs
 ) => Promise<unknown>;
 
 const implementations: {
@@ -30,16 +30,16 @@ const implementations: {
   incremental?: ProjectIndexIncrementalWorkflowRunner;
 } = {};
 
-export function registerProjectIndexWorkflowImplementation(
+export function registerGenerateWorkflowImplementation(
   mode: 'full',
   runner: ProjectIndexFullWorkflowRunner
 ): void;
-export function registerProjectIndexWorkflowImplementation(
+export function registerGenerateWorkflowImplementation(
   mode: 'incremental',
   runner: ProjectIndexIncrementalWorkflowRunner
 ): void;
-export function registerProjectIndexWorkflowImplementation(
-  mode: ProjectIndexWorkflowMode,
+export function registerGenerateWorkflowImplementation(
+  mode: GenerateWorkflowMode,
   runner: ProjectIndexFullWorkflowRunner | ProjectIndexIncrementalWorkflowRunner
 ): void {
   if (mode === 'full') {
@@ -49,40 +49,40 @@ export function registerProjectIndexWorkflowImplementation(
   implementations.incremental = runner as ProjectIndexIncrementalWorkflowRunner;
 }
 
-export async function runProjectIndexWorkflow(
-  ctx: ProjectIndexMcpContext,
-  args: ProjectIndexFullArgs,
+export async function runGenerateWorkflow(
+  ctx: GenerateWorkflowMcpContext,
+  args: GenerateFullArgs,
   options: { mode: 'full' }
 ): Promise<unknown>;
-export async function runProjectIndexWorkflow(
-  ctx: ProjectIndexMcpContext,
-  args: ProjectIndexIncrementalArgs,
+export async function runGenerateWorkflow(
+  ctx: GenerateWorkflowMcpContext,
+  args: GenerateIncrementalArgs,
   options: { mode: 'incremental' }
 ): Promise<unknown>;
-export async function runProjectIndexWorkflow(
-  ctx: ProjectIndexMcpContext,
-  args: ProjectIndexFullArgs | ProjectIndexIncrementalArgs,
-  options: { mode: ProjectIndexWorkflowMode }
+export async function runGenerateWorkflow(
+  ctx: GenerateWorkflowMcpContext,
+  args: GenerateFullArgs | GenerateIncrementalArgs,
+  options: { mode: GenerateWorkflowMode }
 ): Promise<unknown> {
-  ctx.logger.info('[ProjectIndexWorkflow] Dispatching project-index workflow', {
+  ctx.logger.info('[GenerateWorkflow] Dispatching generate workflow', {
     mode: options.mode,
   });
   if (options.mode === 'full') {
-    const runner = await loadProjectIndexWorkflowImplementation('full');
-    return runner(ctx, args as ProjectIndexFullArgs);
+    const runner = await loadGenerateWorkflowImplementation('full');
+    return runner(ctx, args as GenerateFullArgs);
   }
-  const runner = await loadProjectIndexWorkflowImplementation('incremental');
-  return runner(ctx, args as ProjectIndexIncrementalArgs);
+  const runner = await loadGenerateWorkflowImplementation('incremental');
+  return runner(ctx, args as GenerateIncrementalArgs);
 }
 
-async function loadProjectIndexWorkflowImplementation(
+async function loadGenerateWorkflowImplementation(
   mode: 'full'
 ): Promise<ProjectIndexFullWorkflowRunner>;
-async function loadProjectIndexWorkflowImplementation(
+async function loadGenerateWorkflowImplementation(
   mode: 'incremental'
 ): Promise<ProjectIndexIncrementalWorkflowRunner>;
-async function loadProjectIndexWorkflowImplementation(
-  mode: ProjectIndexWorkflowMode
+async function loadGenerateWorkflowImplementation(
+  mode: GenerateWorkflowMode
 ): Promise<ProjectIndexFullWorkflowRunner | ProjectIndexIncrementalWorkflowRunner> {
   const existing = implementations[mode];
   if (existing) {

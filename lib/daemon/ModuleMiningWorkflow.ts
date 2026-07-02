@@ -13,7 +13,7 @@ import {
   recordJobProcessEvent,
 } from './DaemonJobWorkflowHelpers.js';
 import type { RunDaemonJobOptions } from './DaemonJobWorkflowTypes.js';
-import { selectProjectIndexModuleMiningModules } from './ModuleMiningSelection.js';
+import { selectScopedModuleMiningModules } from './ModuleMiningSelection.js';
 import { runPlanSelectionGate } from './PlanSelectionGate.js';
 
 export async function runModuleMiningWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
@@ -22,7 +22,7 @@ export async function runModuleMiningWorkflow(options: RunDaemonJobOptions): Pro
     label: 'ModuleMining',
     source: 'alembic-main-rescan',
   });
-  const modules = selectProjectIndexModuleMiningModules({
+  const modules = selectScopedModuleMiningModules({
     bindings: planGate.selection.moduleBindings,
     executionDimensions: planGate.projection.executionDimensions,
     facts: planGate.projectContextFacts,

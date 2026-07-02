@@ -696,11 +696,11 @@ program
       const spinner = ora('Phase 1-4: 收集文件、AST 分析、SPM 依赖、Guard 审计...').start();
 
       // 直接调用 project-index workflow（统一编排管线；MCP 归一 Plugin 后不再经 resident 镜像）
-      const { runProjectIndexWorkflow } = await import(
-        '../lib/workflows/project-index/ProjectIndexWorkflow.js'
+      const { runGenerateWorkflow } = await import(
+        '../lib/workflows/project-index/GenerateWorkflow.js'
       );
       const logger = container.get('logger');
-      const raw = await runProjectIndexWorkflow(
+      const raw = await runGenerateWorkflow(
         { container, logger },
         {
           maxFiles: parseInt(opts.maxFiles, 10),
@@ -882,11 +882,11 @@ program
       const spinner = ora('Rescan: 快照 Recipe → 清理缓存 → Phase 1-4 + 证据审计...').start();
 
       // 直接调用 project-index workflow（统一编排管线；MCP 归一 Plugin 后不再经 resident 镜像）
-      const { runProjectIndexWorkflow } = await import(
-        '../lib/workflows/project-index/ProjectIndexWorkflow.js'
+      const { runGenerateWorkflow } = await import(
+        '../lib/workflows/project-index/GenerateWorkflow.js'
       );
       const logger = container.get('logger');
-      const raw = await runProjectIndexWorkflow(
+      const raw = await runGenerateWorkflow(
         { container, logger },
         {
           reason: opts.reason || 'cli-rescan',

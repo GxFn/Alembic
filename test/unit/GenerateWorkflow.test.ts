@@ -3,19 +3,19 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const projectIndexMock = vi.hoisted(() => ({
-  registerProjectIndexWorkflowImplementation: vi.fn(),
-  runProjectIndexWorkflow: vi.fn(),
+  registerGenerateWorkflowImplementation: vi.fn(),
+  runGenerateWorkflow: vi.fn(),
 }));
 
-vi.mock('../../lib/workflows/project-index/ProjectIndexWorkflow.js', () => projectIndexMock);
+vi.mock('../../lib/workflows/project-index/GenerateWorkflow.js', () => projectIndexMock);
 
 import { runColdStartWorkflow } from '../../lib/workflows/cold-start/ColdStartWorkflow.js';
 import { runKnowledgeRescanWorkflow } from '../../lib/workflows/knowledge-rescan/KnowledgeRescanWorkflow.js';
-import { runProjectIndexWorkflow } from '../../lib/workflows/project-index/ProjectIndexWorkflow.js';
+import { runGenerateWorkflow } from '../../lib/workflows/project-index/GenerateWorkflow.js';
 
 describe('ProjectIndexWorkflow compatibility', () => {
   beforeEach(() => {
-    projectIndexMock.runProjectIndexWorkflow.mockReset();
+    projectIndexMock.runGenerateWorkflow.mockReset();
   });
 
   test('keeps legacy public workflow names as mode wrappers', async () => {
@@ -25,24 +25,24 @@ describe('ProjectIndexWorkflow compatibility', () => {
     } as never;
     const coldStartArgs = { maxFiles: 10 } as never;
     const rescanArgs = { reason: 'test-rescan' } as never;
-    vi.mocked(runProjectIndexWorkflow)
+    vi.mocked(runGenerateWorkflow)
       .mockResolvedValueOnce({ data: { mode: 'full' } })
       .mockResolvedValueOnce({ data: { mode: 'incremental' } });
 
     await runColdStartWorkflow(ctx, coldStartArgs);
     await runKnowledgeRescanWorkflow(ctx, rescanArgs);
 
-    expect(runProjectIndexWorkflow).toHaveBeenNthCalledWith(1, ctx, coldStartArgs, {
+    expect(runGenerateWorkflow).toHaveBeenNthCalledWith(1, ctx, coldStartArgs, {
       mode: 'full',
     });
-    expect(runProjectIndexWorkflow).toHaveBeenNthCalledWith(2, ctx, rescanArgs, {
+    expect(runGenerateWorkflow).toHaveBeenNthCalledWith(2, ctx, rescanArgs, {
       mode: 'incremental',
     });
-    expect(projectIndexMock.registerProjectIndexWorkflowImplementation).toHaveBeenCalledWith(
+    expect(projectIndexMock.registerGenerateWorkflowImplementation).toHaveBeenCalledWith(
       'full',
       expect.any(Function)
     );
-    expect(projectIndexMock.registerProjectIndexWorkflowImplementation).toHaveBeenCalledWith(
+    expect(projectIndexMock.registerGenerateWorkflowImplementation).toHaveBeenCalledWith(
       'incremental',
       expect.any(Function)
     );
@@ -60,7 +60,7 @@ describe('ProjectIndexWorkflow compatibility', () => {
     );
     const combinedConsumers = `${cliSource}\n${daemonSource}\n${deepMiningSource}`;
 
-    expect(combinedConsumers).toContain('runProjectIndexWorkflow');
+    expect(combinedConsumers).toContain('runGenerateWorkflow');
     expect(combinedConsumers).toContain("{ mode: 'full' }");
     expect(combinedConsumers).toContain("{ mode: 'incremental' }");
     expect(combinedConsumers).not.toContain("workflows/cold-start/ColdStartWorkflow.js'");

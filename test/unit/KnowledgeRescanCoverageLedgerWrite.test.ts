@@ -1,6 +1,6 @@
 import type { EvolutionCoverageLedgerRepository } from '@alembic/core/repositories';
 import { describe, expect, test, vi } from 'vitest';
-import { selectProjectIndexModuleMiningModules } from '../../lib/daemon/ModuleMiningSelection.js';
+import { selectScopedModuleMiningModules } from '../../lib/daemon/ModuleMiningSelection.js';
 import { writeModuleMiningCoverageLedger } from '../../lib/shared/ModuleMiningEvidence.js';
 import {
   type KnowledgeRescanCoverageLedgerWriteInput,
@@ -244,7 +244,7 @@ describe('knowledge rescan coverage ledger write', () => {
 
   test('moduleMining explicit targets can write coverage when gap execution dimensions are empty', () => {
     const { repository, upserts, upsertRound } = createFakeCoverageLedgerRepository();
-    const selectedModules = selectProjectIndexModuleMiningModules({
+    const selectedModules = selectScopedModuleMiningModules({
       bindings: [
         {
           dimensions: ['architecture'],

@@ -11,15 +11,15 @@ export interface ModuleMiningSelectionBinding {
   targetRecipes?: number;
 }
 
-export interface SelectProjectIndexModuleMiningModulesInput {
+export interface SelectScopedModuleMiningModulesInput {
   bindings: readonly ModuleMiningSelectionBinding[];
   executionDimensions: readonly string[];
   facts: ProjectContextWorkflowFacts;
   moduleScope?: readonly string[];
 }
 
-export function selectProjectIndexModuleMiningModules(
-  input: SelectProjectIndexModuleMiningModulesInput
+export function selectScopedModuleMiningModules(
+  input: SelectScopedModuleMiningModulesInput
 ): ModuleMiningModule[] {
   const bindingDimensions = new Map<string, Set<string>>();
   const bindingTargets = new Map<string, Map<string, number>>();

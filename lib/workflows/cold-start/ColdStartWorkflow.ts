@@ -69,12 +69,12 @@ import {
   selectProjectContextWorkflowDimensions,
 } from '../project-context/ProjectContextWorkflowFacts.js';
 import {
-  type ProjectIndexMcpContext,
-  registerProjectIndexWorkflowImplementation,
-  runProjectIndexWorkflow,
-} from '../project-index/ProjectIndexWorkflow.js';
+  type GenerateWorkflowMcpContext,
+  registerGenerateWorkflowImplementation,
+  runGenerateWorkflow,
+} from '../project-index/GenerateWorkflow.js';
 
-type BootstrapMcpContext = ProjectIndexMcpContext;
+type BootstrapMcpContext = GenerateWorkflowMcpContext;
 type ColdStartDimensionSelectionSource = 'base' | 'explicit' | 'plan';
 type AlembicMainColdStartArgs = ColdStartArgs & {
   planSelectionProjection?: PlanSelectionProjection;
@@ -100,7 +100,7 @@ export async function runColdStartWorkflow(
   ctx: BootstrapMcpContext,
   args: AlembicMainColdStartArgs
 ) {
-  return runProjectIndexWorkflow(ctx, args, { mode: 'full' });
+  return runGenerateWorkflow(ctx, args, { mode: 'full' });
 }
 
 async function runColdStartProjectIndexWorkflow(
@@ -318,7 +318,7 @@ async function runColdStartProjectIndexWorkflow(
   });
 }
 
-registerProjectIndexWorkflowImplementation('full', runColdStartProjectIndexWorkflow);
+registerGenerateWorkflowImplementation('full', runColdStartProjectIndexWorkflow);
 
 // generateRefine → 已迁至 service/generate/GenerateRefine.js (RIC-3)
 

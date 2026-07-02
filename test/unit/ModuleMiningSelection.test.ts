@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { selectProjectIndexModuleMiningModules } from '../../lib/daemon/ModuleMiningSelection.js';
+import { selectScopedModuleMiningModules } from '../../lib/daemon/ModuleMiningSelection.js';
 import type { ProjectContextWorkflowFacts } from '../../lib/workflows/project-context/ProjectContextWorkflowFacts.js';
 
 function makeFacts(): ProjectContextWorkflowFacts {
@@ -21,9 +21,9 @@ function makeFacts(): ProjectContextWorkflowFacts {
   } as unknown as ProjectContextWorkflowFacts;
 }
 
-describe('selectProjectIndexModuleMiningModules', () => {
+describe('selectScopedModuleMiningModules', () => {
   test('keeps Entry A binding-rich module mining dimensions explicit', () => {
-    const modules = selectProjectIndexModuleMiningModules({
+    const modules = selectScopedModuleMiningModules({
       bindings: [
         {
           dimensions: ['architecture', 'coding-standards'],
@@ -68,7 +68,7 @@ describe('selectProjectIndexModuleMiningModules', () => {
   });
 
   test('changes Entry B scope-only selection into planned per-module targeting', () => {
-    const modules = selectProjectIndexModuleMiningModules({
+    const modules = selectScopedModuleMiningModules({
       bindings: [
         {
           dimensions: ['architecture'],
@@ -96,7 +96,7 @@ describe('selectProjectIndexModuleMiningModules', () => {
   });
 
   test('keeps Entry B explicit module targets when gap analysis marks them fully covered', () => {
-    const modules = selectProjectIndexModuleMiningModules({
+    const modules = selectScopedModuleMiningModules({
       bindings: [
         {
           dimensions: ['architecture'],
@@ -124,7 +124,7 @@ describe('selectProjectIndexModuleMiningModules', () => {
   });
 
   test('keeps target-scoped ProjectMap module ids stable', () => {
-    const modules = selectProjectIndexModuleMiningModules({
+    const modules = selectScopedModuleMiningModules({
       bindings: [
         {
           dimensions: ['architecture'],
@@ -156,7 +156,7 @@ describe('selectProjectIndexModuleMiningModules', () => {
   });
 
   test('keeps no-path ProjectMap module ids as selection fallback', () => {
-    const modules = selectProjectIndexModuleMiningModules({
+    const modules = selectScopedModuleMiningModules({
       bindings: [
         {
           dimensions: ['architecture'],

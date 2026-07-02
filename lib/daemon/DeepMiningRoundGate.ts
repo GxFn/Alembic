@@ -35,9 +35,7 @@ export async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise
     throw new Error('Coverage ledger repository is required for deepMining.');
   }
 
-  const { runProjectIndexWorkflow } = await import(
-    '../workflows/project-index/ProjectIndexWorkflow.js'
-  );
+  const { runGenerateWorkflow } = await import('../workflows/project-index/GenerateWorkflow.js');
   const analysisScope = resolveProjectScopeAnalysisContext(options.container);
   const projectRoot = analysisScope.projectRoot;
 
@@ -89,7 +87,7 @@ export async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise
 
     let raw: unknown;
     try {
-      raw = await runProjectIndexWorkflow(
+      raw = await runGenerateWorkflow(
         { container: options.container, logger: options.logger },
         buildDaemonRescanWorkflowArgs({
           args: {

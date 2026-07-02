@@ -871,10 +871,8 @@ export function attachGenerateProcessEventBridge(options: {
 async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
   if (options.kind === 'bootstrap') {
     const planGate = await runGeneratePlanGate(options);
-    const { runProjectIndexWorkflow } = await import(
-      '../workflows/project-index/ProjectIndexWorkflow.js'
-    );
-    const raw = await runProjectIndexWorkflow(
+    const { runGenerateWorkflow } = await import('../workflows/project-index/GenerateWorkflow.js');
+    const raw = await runGenerateWorkflow(
       { container: options.container, logger: options.logger },
       {
         maxFiles: planGate.projection.budget.maxFiles,
@@ -899,10 +897,8 @@ async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unkno
     return runModuleMiningWorkflow(options);
   }
 
-  const { runProjectIndexWorkflow } = await import(
-    '../workflows/project-index/ProjectIndexWorkflow.js'
-  );
-  const raw = await runProjectIndexWorkflow(
+  const { runGenerateWorkflow } = await import('../workflows/project-index/GenerateWorkflow.js');
+  const raw = await runGenerateWorkflow(
     { container: options.container, logger: options.logger },
     buildDaemonRescanWorkflowArgs({ args: options.args, source: options.source }),
     { mode: 'incremental' }
