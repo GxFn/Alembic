@@ -34,6 +34,8 @@ vi.mock('../../lib/workflows/project-index/ProjectIndexWorkflow.js', () => ({
 vi.mock('@alembic/core/service/planFacts', () => ({
   collectPlanProjectContext: vi.fn(),
   buildPlanFactsProjection: vi.fn(),
+  // C-1(S1 契约单源)：gate 现从 Core 导入统一投影预算常量。
+  PLAN_FACTS_PROJECTION_BUDGET_BYTES: 12 * 1024,
 }));
 
 // U3：plan gate 喂 AI 的精简投影 fixture（buildPlanFactsProjection mock 输出）；断言 runPlanAgent 收到它。
@@ -422,7 +424,8 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
       expect.objectContaining({
         dimensions: ['architecture'],
         planSelectionProjection: {
-          budget: { contentMaxLines: 70, maxFiles: 180, totalRecipeBudget: 2 },
+          // P-4 下限语义:plan 给出的 budget 低于 dimensions×3 时被 applyPlanSelection 抬升。
+          budget: { contentMaxLines: 70, maxFiles: 180, totalRecipeBudget: 3 },
           executionDimensions: ['architecture'],
           moduleScope: [],
         },
@@ -1275,7 +1278,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
           stopReason: 'diminishing-returns',
         },
         planSelectionProjection: {
-          budget: { contentMaxLines: 40, maxFiles: 4, totalRecipeBudget: 1 },
+          budget: { contentMaxLines: 40, maxFiles: 4, totalRecipeBudget: 3 },
           executionDimensions: ['architecture'],
           moduleScope: ['lib/api'],
         },
@@ -1403,7 +1406,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       job: { status: 'completed' },
       result: {
         planSelectionProjection: {
-          budget: { contentMaxLines: 40, maxFiles: 4, totalRecipeBudget: 1 },
+          budget: { contentMaxLines: 40, maxFiles: 4, totalRecipeBudget: 3 },
           executionDimensions: ['architecture'],
           moduleScope: ['.'],
         },
@@ -1532,7 +1535,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       job: { status: 'completed' },
       result: {
         planSelectionProjection: {
-          budget: { contentMaxLines: 40, maxFiles: 4, totalRecipeBudget: 1 },
+          budget: { contentMaxLines: 40, maxFiles: 4, totalRecipeBudget: 3 },
           executionDimensions: ['architecture'],
           moduleScope: ['Sources/Infrastructure/Account'],
         },
