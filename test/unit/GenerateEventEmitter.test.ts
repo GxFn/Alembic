@@ -1,14 +1,14 @@
 import { describe, expect, test, vi } from 'vitest';
-import { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
+import { GenerateEventEmitter } from '../../lib/service/generate/GenerateEventEmitter.js';
 
-describe('BootstrapEventEmitter task routing', () => {
+describe('GenerateEventEmitter task routing', () => {
   test('routes non-normal dimension completion payloads to failed task tracking', () => {
     const markTaskCompleted = vi.fn();
     const markTaskFailed = vi.fn();
     const emit = vi.fn();
-    const emitter = new BootstrapEventEmitter({
+    const emitter = new GenerateEventEmitter({
       get(name: string) {
-        if (name === 'bootstrapTaskManager') {
+        if (name === 'generateTaskManager') {
           return { markTaskCompleted, markTaskFailed };
         }
         if (name === 'eventBus') {
@@ -51,9 +51,9 @@ describe('BootstrapEventEmitter task routing', () => {
   test('routes process event drafts through task manager once when available', () => {
     const emitProgress = vi.fn();
     const emit = vi.fn();
-    const emitter = new BootstrapEventEmitter({
+    const emitter = new GenerateEventEmitter({
       get(name: string) {
-        if (name === 'bootstrapTaskManager') {
+        if (name === 'generateTaskManager') {
           return { emitProgress };
         }
         if (name === 'eventBus') {

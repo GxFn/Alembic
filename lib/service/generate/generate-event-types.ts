@@ -1,7 +1,7 @@
 /**
  * Bootstrap Event Types — 事件 payload 类型化
  *
- * 替代 BootstrapEventEmitter 中所有 `Record<string, unknown>` payload，
+ * 替代 GenerateEventEmitter 中所有 `Record<string, unknown>` payload，
  * 通过 discriminated union（`type` 字段）实现编译期事件校验。
  *
  * @module service/bootstrap/bootstrap-event-types
@@ -12,7 +12,7 @@ import type {
   ProjectSkillDeliveryReceipt,
   ProjectSkillDeliveryValidationResult,
 } from '@alembic/core/host-agent-workflows';
-import type { AgentEfficiencySummary } from './BootstrapEfficiency.js';
+import type { AgentEfficiencySummary } from './GenerateEfficiency.js';
 
 // ── DimensionComplete payload variants ───────────────────────
 
@@ -91,17 +91,17 @@ export interface ProgressPayload {
 
 // ── Job process event bridge payloads ───────────────────────
 
-export type BootstrapProcessEventDraft = Omit<
+export type GenerateProcessEventDraft = Omit<
   CreateJobProcessEventInput,
   'createdAt' | 'id' | 'jobId' | 'sequence'
 > & {
-  textArtifactCandidate?: BootstrapProcessEventTextArtifactCandidate;
+  textArtifactCandidate?: GenerateProcessEventTextArtifactCandidate;
   createdAt?: string;
   id?: string;
   sequence?: number;
 };
 
-export interface BootstrapProcessEventTextArtifactCandidate {
+export interface GenerateProcessEventTextArtifactCandidate {
   kind: string;
   label: string | null;
   mimeType: string | null;
@@ -110,9 +110,9 @@ export interface BootstrapProcessEventTextArtifactCandidate {
   text: string;
 }
 
-export interface BootstrapProcessEventsPayload extends ProgressPayload {
+export interface GenerateProcessEventsPayload extends ProgressPayload {
   dimensionId?: string;
-  events: BootstrapProcessEventDraft[];
+  events: GenerateProcessEventDraft[];
   sessionId: string;
   source?: string;
   targetName?: string;

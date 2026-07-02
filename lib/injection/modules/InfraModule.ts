@@ -3,7 +3,7 @@
  *
  * 负责注册:
  *   - database, logger, auditStore, auditLogger
- *   - gateway, eventBus, bootstrapTaskManager
+ *   - gateway, eventBus, generateTaskManager
  *   - knowledgeRepository, knowledgeFileWriter, knowledgeSyncService
  */
 
@@ -29,7 +29,7 @@ import AuditStore from '../../infrastructure/audit/AuditStore.js';
 import { getRealtimeService as _getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
 import { AuditRepositoryImpl } from '../../repository/AuditRepository.js';
-import { BootstrapTaskManager } from '../../service/bootstrap/BootstrapTaskManager.js';
+import { GenerateTaskManager } from '../../service/generate/GenerateTaskManager.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function getCoreRepositoryBundle(ct: ServiceContainer): AlembicRepositoryBundle {
@@ -74,7 +74,7 @@ export function register(c: ServiceContainer) {
   c.singleton('gateway', () => new Gateway());
   c.singleton('eventBus', () => new EventBus({ maxListeners: 30 }));
 
-  c.singleton('bootstrapTaskManager', (ct: ServiceContainer) => {
+  c.singleton('generateTaskManager', (ct: ServiceContainer) => {
     const eventBus = ct.get('eventBus');
     const getRS = () => {
       try {
@@ -83,10 +83,10 @@ export function register(c: ServiceContainer) {
         return null;
       }
     };
-    return new BootstrapTaskManager({
+    return new GenerateTaskManager({
       eventBus,
       getRealtimeService: getRS,
-    } as ConstructorParameters<typeof BootstrapTaskManager>[0]);
+    } as ConstructorParameters<typeof GenerateTaskManager>[0]);
   });
 
   c.singleton('jobStore', (ct: ServiceContainer) => {
@@ -136,8 +136,8 @@ export function register(c: ServiceContainer) {
   );
 
   c.singleton(
-    'bootstrapRepository',
-    (ct: ServiceContainer) => getCoreRepositoryBundle(ct).bootstrapRepository
+    'generateRepository',
+    (ct: ServiceContainer) => getCoreRepositoryBundle(ct).generateRepository
   );
 
   c.singleton(

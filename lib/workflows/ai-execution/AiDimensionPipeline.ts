@@ -11,10 +11,10 @@ import {
   runAiDimensionSession,
 } from './AiDimensionSessionRunner.js';
 import type {
-  BootstrapWorkflowContainer as AiDimensionContainer,
-  BootstrapWorkflowContext as AiDimensionContext,
+  GenerateWorkflowContainer as AiDimensionContainer,
+  GenerateWorkflowContext as AiDimensionContext,
 } from './AiDimensionTypes.js';
-import { initializeBootstrapRuntime } from './RuntimeInitializer.js';
+import { initializeGenerateRuntime } from './RuntimeInitializer.js';
 
 export type { AiDimensionContainer, AiDimensionContext };
 
@@ -38,7 +38,7 @@ export async function runAiDimensionPipelineForResult(
     return { sessionResult: null, skippedReason: 'ai-unavailable' };
   }
 
-  const runtime = await initializeBootstrapRuntime({
+  const runtime = await initializeGenerateRuntime({
     container: preparation.ctx.container,
     projectRoot: preparation.projectRoot,
     dataRoot: preparation.dataRoot,

@@ -1,26 +1,26 @@
 /**
- * BootstrapEventEmitter.js — 统一的 Bootstrap 进度事件推送
+ * GenerateEventEmitter.js — 统一的 Bootstrap 进度事件推送
  *
  * 两端（内部 Agent / 外部 Agent）使用相同的事件名和数据格式，
- * 同时兼容 EventBus 和 BootstrapTaskManager。
+ * 同时兼容 EventBus 和 GenerateTaskManager。
  *
- * @module shared/BootstrapEventEmitter
+ * @module shared/GenerateEventEmitter
  */
 
 // C-5(2026-07-02 统一重构)：事件名改用 Core wire 常量单源——发射端漂移自此编译期可见;
 // 消费端(Dashboard/TaskManager 字符串监听)随 S4 词族批次切换。
 import { RECIPE_PIPELINE_EVENTS } from '@alembic/core/knowledge';
 import type {
-  BootstrapProcessEventsPayload,
   DimensionCompletePayload,
+  GenerateProcessEventsPayload,
   ProgressPayload,
-} from './bootstrap-event-types.js';
+} from './generate-event-types.js';
 
-export class BootstrapEventEmitter {
+export class GenerateEventEmitter {
   /** EventBus 实例 */
   #eventBus: Record<string, (...args: unknown[]) => void> | null;
 
-  /** BootstrapTaskManager 实例 */
+  /** GenerateTaskManager 实例 */
   #taskManager: Record<string, (...args: unknown[]) => void> | null;
 
   /** @param container DI Container */
@@ -38,7 +38,7 @@ export class BootstrapEventEmitter {
     }
 
     try {
-      this.#taskManager = (container.get?.('bootstrapTaskManager') ?? null) as Record<
+      this.#taskManager = (container.get?.('generateTaskManager') ?? null) as Record<
         string,
         (...args: unknown[]) => void
       > | null;
@@ -162,7 +162,7 @@ export class BootstrapEventEmitter {
    * DaemonJobRunner 会把这些草稿绑定到当前 daemon job，再交给
    * JobProcessEventRecorder 做 Core contract normalization / retention / broadcast。
    */
-  emitProcessEvents(data: BootstrapProcessEventsPayload) {
+  emitProcessEvents(data: GenerateProcessEventsPayload) {
     let emittedByTaskManager = false;
     try {
       if (this.#taskManager?.emitProgress) {
@@ -212,4 +212,4 @@ function extractDimensionFailureReason(data: DimensionCompletePayload): string {
   return data.type === 'error' ? 'dimension-error' : 'non-normal-dimension-status';
 }
 
-export default BootstrapEventEmitter;
+export default GenerateEventEmitter;

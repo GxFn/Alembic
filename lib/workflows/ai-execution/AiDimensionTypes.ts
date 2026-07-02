@@ -1,5 +1,5 @@
 import type { AgentService, SystemRunContextFactory } from '@alembic/agent/service';
-import type { BootstrapFileEntry } from './AgentRunInputBuilders.js';
+import type { GenerateFileEntry } from './AgentRunInputBuilders.js';
 
 interface BootstrapWorkflowSingletons {
   aiProvider?: {
@@ -9,7 +9,7 @@ interface BootstrapWorkflowSingletons {
     [key: string]: unknown;
   } | null;
   _embedProvider?: { embed?: (text: string) => Promise<number[]>; [key: string]: unknown } | null;
-  _fileCache?: BootstrapFileEntry[] | null;
+  _fileCache?: GenerateFileEntry[] | null;
   _projectRoot?: string;
   _config?: Record<string, unknown>;
   _lang?: string | null;
@@ -19,23 +19,23 @@ interface BootstrapWorkflowSingletons {
 interface BootstrapWorkflowServiceKeys {
   agentService: AgentService;
   systemRunContextFactory: SystemRunContextFactory;
-  bootstrapTaskManager: BootstrapTaskManagerLike;
+  generateTaskManager: GenerateTaskManagerLike;
   database: unknown;
 }
 
-export interface BootstrapWorkflowContainer {
+export interface GenerateWorkflowContainer {
   get<K extends keyof BootstrapWorkflowServiceKeys>(name: K): BootstrapWorkflowServiceKeys[K];
   get(name: string): unknown;
   singletons: BootstrapWorkflowSingletons;
   [key: string]: unknown;
 }
 
-export interface BootstrapWorkflowContext {
-  container: BootstrapWorkflowContainer;
+export interface GenerateWorkflowContext {
+  container: GenerateWorkflowContainer;
   [key: string]: unknown;
 }
 
-export interface BootstrapTaskManagerLike {
+export interface GenerateTaskManagerLike {
   isSessionValid(sessionId: string): boolean;
   isUserCancelled?(sessionId: string): boolean;
   getSessionAbortSignal?(): AbortSignal | null;

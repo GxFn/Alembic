@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { BootstrapTaskManager } from '../../lib/service/bootstrap/BootstrapTaskManager.js';
+import { GenerateTaskManager } from '../../lib/service/generate/GenerateTaskManager.js';
 
 interface BootstrapTaskManagerStatus {
   efficiency?: {
@@ -39,13 +39,13 @@ interface BootstrapTaskManagerStatus {
   userCancelled: boolean;
 }
 
-function getStatus(manager: BootstrapTaskManager): BootstrapTaskManagerStatus {
+function getStatus(manager: GenerateTaskManager): BootstrapTaskManagerStatus {
   return manager.getSessionStatus() as BootstrapTaskManagerStatus;
 }
 
-describe('BootstrapTaskManager cancellation semantics', () => {
+describe('GenerateTaskManager cancellation semantics', () => {
   test('ignores late task transitions after a user cancellation', () => {
-    const manager = new BootstrapTaskManager();
+    const manager = new GenerateTaskManager();
     manager.startSession([
       { id: 'dim:overview', meta: { dimId: 'overview', label: 'Overview' } },
       { id: 'dim:architecture', meta: { dimId: 'architecture', label: 'Architecture' } },
@@ -86,7 +86,7 @@ describe('BootstrapTaskManager cancellation semantics', () => {
   });
 
   test('aggregates task efficiency into running and final session status', () => {
-    const manager = new BootstrapTaskManager();
+    const manager = new GenerateTaskManager();
     manager.startSession([
       { id: 'dim:overview', meta: { dimId: 'overview', label: 'Overview' } },
       { id: 'dim:architecture', meta: { dimId: 'architecture', label: 'Architecture' } },
@@ -153,7 +153,7 @@ describe('BootstrapTaskManager cancellation semantics', () => {
   });
 
   test('preserves failed task payloads for progress and efficiency summary', () => {
-    const manager = new BootstrapTaskManager();
+    const manager = new GenerateTaskManager();
     manager.startSession([{ id: 'dim:api', meta: { dimId: 'api', label: 'API' } }]);
 
     manager.markTaskFilling('dim:api');

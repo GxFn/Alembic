@@ -1,17 +1,17 @@
 import type { AgentRunInput } from '@alembic/agent/service';
 import { describe, expect, test } from 'vitest';
 import {
-  type BootstrapSessionChildRunPlan,
-  buildBootstrapSessionRunInput,
+  buildGenerateSessionRunInput,
+  type GenerateSessionChildRunPlan,
 } from '../../lib/workflows/ai-execution/AgentRunInputBuilders.js';
 
-function makeChild(id: string, tier: number): BootstrapSessionChildRunPlan {
+function makeChild(id: string, tier: number): GenerateSessionChildRunPlan {
   return {
     id,
     label: id.toUpperCase(),
     tier,
     input: {
-      profile: { id: 'bootstrap-dimension' },
+      profile: { id: 'generate-dimension' },
       params: {
         dimId: id,
         needsCandidates: tier === 0,
@@ -37,10 +37,10 @@ function makeChild(id: string, tier: number): BootstrapSessionChildRunPlan {
   };
 }
 
-describe('buildBootstrapSessionRunInput', () => {
+describe('buildGenerateSessionRunInput', () => {
   test('builds a pure parent input from prepared child run inputs', () => {
     const lazyInputFactory = ({ plannedInput }: { plannedInput: AgentRunInput }) => plannedInput;
-    const input = buildBootstrapSessionRunInput({
+    const input = buildGenerateSessionRunInput({
       sessionId: 'session-1',
       children: [{ ...makeChild('overview', 0), lazyInputFactory }, makeChild('api', 1)],
       message: { content: 'Run bootstrap session' },
@@ -50,11 +50,12 @@ describe('buildBootstrapSessionRunInput', () => {
     });
 
     expect(input).toMatchObject({
-      profile: { id: 'bootstrap-session' },
+      profile: { id: 'generate-session' },
       message: {
         role: 'internal',
         content: 'Run bootstrap session',
         sessionId: 'session-1',
+        // wire:metadata.phase 是 process-event 持久化值(与 profile id 同拼写不同义),期望旧串
         metadata: { sessionId: 'session-1', phase: 'bootstrap-session' },
       },
       context: {

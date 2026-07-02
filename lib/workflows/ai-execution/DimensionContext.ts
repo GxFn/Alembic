@@ -1,7 +1,7 @@
 /**
  * DimensionContext — 内部 Agent 跨维度上下文容器
  *
- * 内部 Agent 专用。外部 Agent 的跨维度上下文由 BootstrapSession + EpisodicMemory 管理。
+ * 内部 Agent 专用。外部 Agent 的跨维度上下文由 GenerateSession + EpisodicMemory 管理。
  *
  * 按维度分批执行时，维护跨维度的累积上下文:
  *   - 项目基础信息 (不变)

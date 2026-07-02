@@ -226,7 +226,7 @@ export const SimilarityBody = z.object({
 
 // ═══ Candidates ══════════════════════════════════
 
-export const BootstrapRefineBody = z.object({
+export const GenerateRefineBody = z.object({
   candidateIds: z.array(z.string().min(1)).optional(),
   userPrompt: z.string().optional(),
   dryRun: z.boolean().default(false),
@@ -306,7 +306,7 @@ export const ScanProjectBody = z.object({
   options: MetadataRecord.optional(),
 });
 
-export const ModuleBootstrapBody = z.object({
+export const ModuleGenerateBody = z.object({
   maxFiles: z.number().int().min(1).max(10000).default(500),
   skipGuard: z.boolean().default(false),
   contentMaxLines: z.number().int().min(1).max(10000).default(120),

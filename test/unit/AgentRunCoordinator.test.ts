@@ -1,4 +1,3 @@
-import { describe, expect, test, vi } from 'vitest';
 import {
   AgentProfileCompiler,
   AgentProfileRegistry,
@@ -6,6 +5,7 @@ import {
   type AgentRunInput,
   AgentStageFactoryRegistry,
 } from '@alembic/agent/service';
+import { describe, expect, test, vi } from 'vitest';
 
 function createCompiler() {
   return new AgentProfileCompiler({
@@ -16,7 +16,7 @@ function createCompiler() {
 
 function makeBootstrapSessionInput(): AgentRunInput {
   return {
-    profile: { id: 'bootstrap-session' },
+    profile: { id: 'generate-session' },
     params: {
       sharedParam: 'kept',
       dimensions: [
@@ -62,7 +62,7 @@ function makeBootstrapSessionInput(): AgentRunInput {
 describe('AgentRunCoordinator', () => {
   test('partitions bootstrap-session into isolated bootstrap-dimension child runs', async () => {
     const coordinator = new AgentRunCoordinator();
-    const profile = createCompiler().compile({ id: 'bootstrap-session' });
+    const profile = createCompiler().compile({ id: 'generate-session' });
     const runChild = vi.fn(async (input: AgentRunInput) => ({
       runId: `${input.params?.dimId}:run`,
       profileId: input.profile.id || 'unknown',
@@ -78,7 +78,7 @@ describe('AgentRunCoordinator', () => {
 
     expect(runChild).toHaveBeenCalledTimes(2);
     expect(runChild.mock.calls[0][0]).toMatchObject({
-      profile: { id: 'bootstrap-dimension' },
+      profile: { id: 'generate-dimension' },
       params: {
         sharedParam: 'kept',
         dimId: 'overview',
@@ -97,7 +97,7 @@ describe('AgentRunCoordinator', () => {
       },
     });
     expect(result).toMatchObject({
-      profileId: 'bootstrap-session',
+      profileId: 'generate-session',
       reply: 'overview\n\napi',
       status: 'success',
       usage: { inputTokens: 2, outputTokens: 4, iterations: 6, durationMs: 8 },
@@ -112,7 +112,7 @@ describe('AgentRunCoordinator', () => {
 
   test('runs bootstrap-session children tier by tier', async () => {
     const coordinator = new AgentRunCoordinator();
-    const profile = createCompiler().compile({ id: 'bootstrap-session' });
+    const profile = createCompiler().compile({ id: 'generate-session' });
     const active: string[] = [];
     const completed: string[] = [];
     const runChild = vi.fn(async (input: AgentRunInput) => {
@@ -124,7 +124,7 @@ describe('AgentRunCoordinator', () => {
       completed.push(dimId);
       return {
         runId: `${dimId}:run`,
-        profileId: 'bootstrap-dimension',
+        profileId: 'generate-dimension',
         reply: dimId,
         status: 'success' as const,
         toolCalls: [],
@@ -140,7 +140,7 @@ describe('AgentRunCoordinator', () => {
 
   test('calls runtime coordination hooks after child and tier completion', async () => {
     const coordinator = new AgentRunCoordinator();
-    const profile = createCompiler().compile({ id: 'bootstrap-session' });
+    const profile = createCompiler().compile({ id: 'generate-session' });
     const events: string[] = [];
     const input = makeBootstrapSessionInput();
     input.context.coordination = {
@@ -155,7 +155,7 @@ describe('AgentRunCoordinator', () => {
       const dimId = String(childInput.params?.dimId);
       return {
         runId: `${dimId}:run`,
-        profileId: 'bootstrap-dimension',
+        profileId: 'generate-dimension',
         reply: dimId,
         status: 'success' as const,
         toolCalls: [],
@@ -176,7 +176,7 @@ describe('AgentRunCoordinator', () => {
 
   test('resolves lazy child input factory only when the child executes', async () => {
     const coordinator = new AgentRunCoordinator();
-    const profile = createCompiler().compile({ id: 'bootstrap-session' });
+    const profile = createCompiler().compile({ id: 'generate-session' });
     const input = makeBootstrapSessionInput();
     const factory = vi.fn(({ plannedInput }: { plannedInput: AgentRunInput }) => ({
       ...plannedInput,
@@ -191,7 +191,7 @@ describe('AgentRunCoordinator', () => {
     input.context.childInputFactories = { overview: factory };
     const runChild = vi.fn(async (childInput: AgentRunInput) => ({
       runId: `${childInput.params?.dimId}:run`,
-      profileId: 'bootstrap-dimension',
+      profileId: 'generate-dimension',
       reply: String(childInput.context.promptContext?.createdLazily || false),
       status: 'success' as const,
       toolCalls: [],
@@ -212,7 +212,7 @@ describe('AgentRunCoordinator', () => {
 
   test('stops before the next tier when execution shouldAbort becomes true', async () => {
     const coordinator = new AgentRunCoordinator();
-    const profile = createCompiler().compile({ id: 'bootstrap-session' });
+    const profile = createCompiler().compile({ id: 'generate-session' });
     const input = makeBootstrapSessionInput();
     let stopAfterFirstTier = false;
     input.execution = {
@@ -225,7 +225,7 @@ describe('AgentRunCoordinator', () => {
     };
     const runChild = vi.fn(async (childInput: AgentRunInput) => ({
       runId: `${childInput.params?.dimId}:run`,
-      profileId: 'bootstrap-dimension',
+      profileId: 'generate-dimension',
       reply: String(childInput.params?.dimId),
       status: 'success' as const,
       toolCalls: [],
@@ -246,7 +246,7 @@ describe('AgentRunCoordinator', () => {
 
   test('stops after lazy child input resolution when execution shouldAbort becomes true', async () => {
     const coordinator = new AgentRunCoordinator();
-    const profile = createCompiler().compile({ id: 'bootstrap-session' });
+    const profile = createCompiler().compile({ id: 'generate-session' });
     const input = makeBootstrapSessionInput();
     let lazyResolved = false;
     input.params = {
@@ -270,7 +270,7 @@ describe('AgentRunCoordinator', () => {
     };
     const runChild = vi.fn(async (childInput: AgentRunInput) => ({
       runId: `${childInput.params?.dimId}:run`,
-      profileId: 'bootstrap-dimension',
+      profileId: 'generate-dimension',
       reply: String(childInput.params?.dimId),
       status: 'success' as const,
       toolCalls: [],
@@ -290,7 +290,7 @@ describe('AgentRunCoordinator', () => {
 
   test('converts child input factory errors into child error results', async () => {
     const coordinator = new AgentRunCoordinator();
-    const profile = createCompiler().compile({ id: 'bootstrap-session' });
+    const profile = createCompiler().compile({ id: 'generate-session' });
     const input = makeBootstrapSessionInput();
     const events: string[] = [];
     input.params = {

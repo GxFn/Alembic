@@ -5,16 +5,16 @@ import {
   AgentStageFactoryRegistry,
 } from '@alembic/agent/service';
 import {
-  buildBootstrapTerminalPolicyHints,
-  getBootstrapStageTerminalTools,
-  resolveBootstrapTerminalToolset,
+  buildGenerateTerminalPolicyHints,
+  getGenerateStageTerminalTools,
+  resolveGenerateTerminalToolset,
 } from '@alembic/core/host-agent-workflows';
 import type {
   AgentResultLike,
-  BootstrapDimensionProjection,
+  GenerateDimensionProjection,
   ToolCallRecord,
 } from './AgentRunProjections.js';
-import type { BootstrapDimensionPlan } from './DimensionRuntimeBuilder.js';
+import type { GenerateDimensionPlan } from './DimensionRuntimeBuilder.js';
 
 export const PCV_COLD_START_NODE_LOCAL_CONTRACT = 'PCVColdStartNodeLocalBaseline';
 export const PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION = 1;
@@ -23,23 +23,23 @@ export const PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT_VERSION = 1;
 export const PCV_N8_NODE_ID = 'N8-stage-factory-tool-policy';
 export const PCV_ANALYZE_GROUNDING_NODE_ID = 'analyze-evidence-grounding-ledger';
 export const PCV_N12_NODE_ID = 'N12-consumers-persistence';
-export const PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT = 'PCVBootstrapStageNodeMap';
-export const PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT_VERSION = 1;
+export const PCV_GENERATE_STAGE_NODE_MAP_CONTRACT = 'PCVBootstrapStageNodeMap';
+export const PCV_GENERATE_STAGE_NODE_MAP_CONTRACT_VERSION = 1;
 
-export type PcvBootstrapStageKey = 'analyze' | 'quality_gate' | 'record_repair';
+export type PcvGenerateStageKey = 'analyze' | 'quality_gate' | 'record_repair';
 
-export interface PcvBootstrapStageNodeIdentity {
+export interface PcvGenerateStageNodeIdentity {
   pcvNodeId: string;
   chainNodeId: string;
 }
 
-export type PcvBootstrapStageNodeMap = Record<PcvBootstrapStageKey, PcvBootstrapStageNodeIdentity>;
+export type PcvGenerateStageNodeMap = Record<PcvGenerateStageKey, PcvGenerateStageNodeIdentity>;
 
-export interface PcvBootstrapStageNodeContext {
-  contract: typeof PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT;
-  contractVersion: typeof PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT_VERSION;
-  pcvStageNodeMap: PcvBootstrapStageNodeMap;
-  pcvChainNodes: PcvBootstrapStageNodeMap;
+export interface PcvGenerateStageNodeContext {
+  contract: typeof PCV_GENERATE_STAGE_NODE_MAP_CONTRACT;
+  contractVersion: typeof PCV_GENERATE_STAGE_NODE_MAP_CONTRACT_VERSION;
+  pcvStageNodeMap: PcvGenerateStageNodeMap;
+  pcvChainNodes: PcvGenerateStageNodeMap;
 }
 
 export type PcvNodeLocalStatus =
@@ -77,7 +77,7 @@ export interface PcvN8StageFactoryEvidence extends PcvNodeLocalEvidenceBase {
   };
   stageOrder: string[];
   stageToolPolicies: PcvN8StagePolicy[];
-  terminalCapabilityHints: ReturnType<typeof buildBootstrapTerminalPolicyHints>;
+  terminalCapabilityHints: ReturnType<typeof buildGenerateTerminalPolicyHints>;
 }
 
 export type PcvAnalyzeGroundingClassification =
@@ -109,7 +109,7 @@ export interface PcvAnalyzeGroundingLedgerSummary extends PcvNodeLocalEvidenceBa
 }
 
 export type PcvN9StageProjectionKey = Extract<
-  PcvBootstrapStageKey,
+  PcvGenerateStageKey,
   'quality_gate' | 'record_repair'
 >;
 
@@ -132,7 +132,7 @@ export interface PcvN12ConsumerPersistenceEvidence extends PcvNodeLocalEvidenceB
   sessionStoreSnapshotAvailable: boolean;
 }
 
-export interface BootstrapPcvNodeEvidenceSet {
+export interface GeneratePcvNodeEvidenceSet {
   n8?: PcvN8StageFactoryEvidence;
   groundingLedger?: PcvAnalyzeGroundingLedgerSummary;
   n9QualityGate?: PcvN9StageProjectionEvidence;
@@ -144,7 +144,7 @@ export interface PcvNodeEvidenceEnvelope {
   contract: typeof PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT;
   contractVersion: typeof PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT_VERSION;
   dimensionId: string;
-  evidence: BootstrapPcvNodeEvidenceSet;
+  evidence: GeneratePcvNodeEvidenceSet;
   evidenceScope:
     | 'fixture'
     | 'unit'
@@ -158,7 +158,7 @@ export interface PcvNodeEvidenceEnvelope {
     | 'bootstrap-session-builder';
 }
 
-const BOOTSTRAP_STAGE_NODE_MAP: PcvBootstrapStageNodeMap = {
+const BOOTSTRAP_STAGE_NODE_MAP: PcvGenerateStageNodeMap = {
   analyze: {
     chainNodeId: 'pcvm:cold-start:n9',
     pcvNodeId: 'pcvm:n9:analyze',
@@ -175,21 +175,21 @@ const BOOTSTRAP_STAGE_NODE_MAP: PcvBootstrapStageNodeMap = {
 
 const TERMINAL_TOOL_IDS = new Set(['terminal']);
 
-export function buildBootstrapPcvStageNodeMap(): PcvBootstrapStageNodeMap {
+export function buildGeneratePcvStageNodeMap(): PcvGenerateStageNodeMap {
   return cloneBootstrapStageNodeMap(BOOTSTRAP_STAGE_NODE_MAP);
 }
 
-export function buildBootstrapPcvStageNodeContext(): PcvBootstrapStageNodeContext {
-  const pcvStageNodeMap = buildBootstrapPcvStageNodeMap();
+export function buildGeneratePcvStageNodeContext(): PcvGenerateStageNodeContext {
+  const pcvStageNodeMap = buildGeneratePcvStageNodeMap();
   return {
-    contract: PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT,
-    contractVersion: PCV_BOOTSTRAP_STAGE_NODE_MAP_CONTRACT_VERSION,
+    contract: PCV_GENERATE_STAGE_NODE_MAP_CONTRACT,
+    contractVersion: PCV_GENERATE_STAGE_NODE_MAP_CONTRACT_VERSION,
     pcvStageNodeMap,
     pcvChainNodes: cloneBootstrapStageNodeMap(pcvStageNodeMap),
   };
 }
 
-function cloneBootstrapStageNodeMap(map: PcvBootstrapStageNodeMap): PcvBootstrapStageNodeMap {
+function cloneBootstrapStageNodeMap(map: PcvGenerateStageNodeMap): PcvGenerateStageNodeMap {
   return {
     analyze: { ...map.analyze },
     quality_gate: { ...map.quality_gate },
@@ -205,11 +205,11 @@ export function buildPcvN8StageFactoryEvidence({
 }: {
   dimId: string;
   label?: string | null;
-  plan: BootstrapDimensionPlan;
+  plan: GenerateDimensionPlan;
   runInput: AgentRunInput;
 }): PcvN8StageFactoryEvidence {
-  const terminalCapability = resolveBootstrapTerminalToolset();
-  const terminalCapabilityHints = buildBootstrapTerminalPolicyHints(terminalCapability);
+  const terminalCapability = resolveGenerateTerminalToolset();
+  const terminalCapabilityHints = buildGenerateTerminalPolicyHints(terminalCapability);
   const compiledPolicies = compileBootstrapDimensionStagePolicies(runInput);
   const stageToolPolicies =
     compiledPolicies.length > 0
@@ -273,7 +273,7 @@ export function buildPcvAnalyzeGroundingLedgerSummary({
     return null;
   }
 
-  const analyzeNodeIdentity = buildBootstrapPcvStageNodeMap().analyze;
+  const analyzeNodeIdentity = buildGeneratePcvStageNodeMap().analyze;
   const classifications = emptyGroundingClassifications();
   let toolSchemasVisibleCount = 0;
   let deepseekV4NoForcedToolChoiceCount = 0;
@@ -371,7 +371,7 @@ export function buildPcvN9StageProjectionEvidence({
     return null;
   }
 
-  const identity = buildBootstrapPcvStageNodeMap()[stage];
+  const identity = buildGeneratePcvStageNodeMap()[stage];
   const pass = typeof phase.pass === 'boolean' ? phase.pass : null;
   const timedOut = phase.timedOut === true;
   const action =
@@ -408,7 +408,7 @@ export function buildPcvN9RecordRepairStageMapEvidence({
   dimId: string;
   label?: string | null;
 }): PcvN9StageProjectionEvidence {
-  const identity = buildBootstrapPcvStageNodeMap().record_repair;
+  const identity = buildGeneratePcvStageNodeMap().record_repair;
   return {
     action: 'stage-map-available',
     chainNodeId: identity.chainNodeId,
@@ -508,14 +508,14 @@ export function buildPcvN12ErrorEvidence({
   });
 }
 
-export function mergeBootstrapPcvNodeEvidence(
+export function mergeGeneratePcvNodeEvidence(
   existing: unknown,
-  next: BootstrapPcvNodeEvidenceSet
-): BootstrapPcvNodeEvidenceSet {
+  next: GeneratePcvNodeEvidenceSet
+): GeneratePcvNodeEvidenceSet {
   return {
     ...(isRecord(existing) ? existing : {}),
     ...next,
-  } as BootstrapPcvNodeEvidenceSet;
+  } as GeneratePcvNodeEvidenceSet;
 }
 
 export function buildPcvNodeEvidenceEnvelope({
@@ -525,7 +525,7 @@ export function buildPcvNodeEvidenceEnvelope({
   source,
 }: {
   dimId: string;
-  evidence: BootstrapPcvNodeEvidenceSet;
+  evidence: GeneratePcvNodeEvidenceSet;
   evidenceScope?: PcvNodeEvidenceEnvelope['evidenceScope'];
   source: PcvNodeEvidenceEnvelope['source'];
 }): PcvNodeEvidenceEnvelope {
@@ -540,7 +540,7 @@ export function buildPcvNodeEvidenceEnvelope({
 }
 
 export function resolveProducerToolCalls(
-  projection: BootstrapDimensionProjection
+  projection: GenerateDimensionProjection
 ): ToolCallRecord[] {
   if (Array.isArray(projection.produceResult?.toolCalls)) {
     return projection.produceResult.toolCalls;
@@ -549,7 +549,7 @@ export function resolveProducerToolCalls(
 }
 
 export function successfulProducerSubmitCalls(
-  projection: BootstrapDimensionProjection
+  projection: GenerateDimensionProjection
 ): ToolCallRecord[] {
   return resolveProducerToolCalls(projection).filter(
     (call) => isKnowledgeSubmitToolCall(call) && isSuccessfulToolCall(call)
@@ -695,7 +695,7 @@ function fallbackBootstrapDimensionStagePolicies({
   hasExistingRecipes: boolean;
   needsCandidates: boolean;
   prescreenDone: boolean;
-  terminalCapability: ReturnType<typeof resolveBootstrapTerminalToolset>;
+  terminalCapability: ReturnType<typeof resolveGenerateTerminalToolset>;
 }): PcvN8StagePolicy[] {
   const stageOrder = !needsCandidates
     ? ['analyze']
@@ -703,7 +703,7 @@ function fallbackBootstrapDimensionStagePolicies({
       ? ['evolve', 'evolution_gate', 'analyze', 'quality_gate', 'produce', 'rejection_gate']
       : ['analyze', 'quality_gate', 'produce', 'rejection_gate'];
   return stageOrder.map((stage) => {
-    const additionalTools = getBootstrapStageTerminalTools(stage, terminalCapability);
+    const additionalTools = getGenerateStageTerminalTools(stage, terminalCapability);
     return {
       additionalTools,
       stage,
@@ -713,7 +713,7 @@ function fallbackBootstrapDimensionStagePolicies({
   });
 }
 
-function resolveProducerGapLimit(plan: BootstrapDimensionPlan): number | null {
+function resolveProducerGapLimit(plan: GenerateDimensionPlan): number | null {
   const createBudget = plan.rescanExecutionDecision?.createBudget;
   return typeof createBudget === 'number' && Number.isFinite(createBudget)
     ? Math.max(0, Math.floor(createBudget))

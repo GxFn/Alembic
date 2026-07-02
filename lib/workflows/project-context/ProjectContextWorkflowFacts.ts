@@ -26,7 +26,7 @@ import {
 } from '@alembic/core/project-context';
 import { ProjectContextCapabilities } from '@alembic/core/project-context-capabilities';
 import { createCanonicalSourceIdentity } from '@alembic/core/shared';
-import type { BootstrapSessionShape, FileDiffPlan } from '@alembic/core/types';
+import type { FileDiffPlan, GenerateSessionShape } from '@alembic/core/types';
 import {
   readLatestProjectContextFileSnapshotRow,
   saveProjectContextFileSnapshotRow,
@@ -35,7 +35,7 @@ import type {
   ProjectScopeAnalysisContext,
   ProjectScopeSourceIdentity,
 } from '../../project-scope/ProjectScopeAnalysis.js';
-import type { BootstrapFileEntry } from '../ai-execution/AgentRunInputBuilders.js';
+import type { GenerateFileEntry } from '../ai-execution/AgentRunInputBuilders.js';
 import { buildProjectMapModules, buildProjectMapModulesFromTargets } from './ProjectMapModules.js';
 
 export {
@@ -67,7 +67,7 @@ export interface ProjectContextWorkflowContext {
 }
 
 export interface ProjectContextWorkflowFacts {
-  allFiles: BootstrapFileEntry[];
+  allFiles: GenerateFileEntry[];
   allTargets: Array<Record<string, unknown>>;
   dimensions: DimensionDef[];
   envelopes: ProjectContextEnvelope<ProjectContextResult>[];
@@ -93,7 +93,7 @@ export interface ProjectContextWorkflowFacts {
 }
 
 export interface ProjectContextFillView {
-  readonly bootstrapSession: BootstrapSessionShape | null;
+  readonly bootstrapSession: GenerateSessionShape | null;
   readonly ctx: Record<string, unknown>;
   readonly existingRecipes?: unknown;
   readonly evolutionPrescreen?: unknown;
@@ -584,7 +584,7 @@ export function releaseProjectContextWorkflowSessionByProjectRoot(input: {
   return { released, workflowSessionId: existing.id };
 }
 
-export function registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion(input: {
+export function registerProjectContextWorkflowSessionReleaseOnGenerateCompletion(input: {
   bootstrapSessionId: string | null | undefined;
   container: ProjectContextContainer;
   logger: ProjectContextLogger;
@@ -789,7 +789,7 @@ function isCleanBootstrapCompletionEvent(event: Record<string, unknown>): boolea
 }
 
 export function buildProjectContextFillView(input: {
-  bootstrapSession: BootstrapSessionShape | null;
+  bootstrapSession: GenerateSessionShape | null;
   ctx: Record<string, unknown>;
   existingRecipes?: unknown;
   evolutionPrescreen?: unknown;
@@ -816,7 +816,7 @@ export function buildProjectContextFillView(input: {
 }
 
 export function saveProjectContextFileSnapshot(input: {
-  allFiles: BootstrapFileEntry[];
+  allFiles: GenerateFileEntry[];
   ctx: ProjectContextWorkflowContext;
   plan: FileDiffPlan | null;
   primaryLang: string;
@@ -939,7 +939,7 @@ function buildProjectContextScopePropagation(
 
 function buildProjectContextFileDiffPlan(input: {
   allDimensionIds: string[];
-  allFiles: BootstrapFileEntry[];
+  allFiles: GenerateFileEntry[];
   ctx: ProjectContextWorkflowContext;
   projectRoot: string;
 }): FileDiffPlan {
@@ -1146,7 +1146,7 @@ function createProjectScopeModuleSeeds(
 }
 
 function buildScopedProjectMapModules(input: {
-  allFiles: readonly BootstrapFileEntry[];
+  allFiles: readonly GenerateFileEntry[];
   input: ProjectContextPresenterInput;
   projectRoot: string;
   scopePropagation: ProjectContextScopePropagation;
@@ -1182,7 +1182,7 @@ function moduleBelongsToProjectScope(
 
 function buildProjectScopeFolderModules(
   scopePropagation: ProjectContextScopePropagation,
-  allFiles: readonly BootstrapFileEntry[],
+  allFiles: readonly GenerateFileEntry[],
   projectRoot: string
 ): ProjectContextModule[] {
   return scopePropagation.identityFolders.flatMap((folder) => {
@@ -1231,11 +1231,11 @@ function buildWorkflowFiles(
   input: ProjectContextPresenterInput,
   scopePropagation: ProjectContextScopePropagation,
   fallbackFiles: readonly ProjectContextWorkflowFileCandidate[] = []
-): BootstrapFileEntry[] {
+): GenerateFileEntry[] {
   const sourceTextByFile = new Map(
     input.sourceSlices.map((slice) => [slice.file.filePath, sourceSliceText(slice)])
   );
-  const filesByPath = new Map<string, BootstrapFileEntry>();
+  const filesByPath = new Map<string, GenerateFileEntry>();
 
   for (const file of input.files) {
     const relativePath = file.filePath;
@@ -1356,7 +1356,7 @@ function buildWorkflowTargets(input: ProjectContextPresenterInput): Array<Record
 }
 
 function buildProjectContextTargetFileMap(
-  files: readonly BootstrapFileEntry[]
+  files: readonly GenerateFileEntry[]
 ): Record<string, Array<Record<string, unknown>>> {
   const byTarget: Record<string, Array<Record<string, unknown>>> = {};
   for (const file of files) {
@@ -1373,7 +1373,7 @@ function buildProjectContextTargetFileMap(
 }
 
 function buildProjectContextWorkflowReport(input: {
-  allFiles: readonly BootstrapFileEntry[];
+  allFiles: readonly GenerateFileEntry[];
   allTargets: readonly Record<string, unknown>[];
   contentMaxLines: number;
   dimensions: readonly DimensionDef[];
@@ -1542,7 +1542,7 @@ function selectProjectContextDetailFiles(
 
 function buildLanguageStats(
   input: ProjectContextPresenterInput,
-  allFiles: readonly BootstrapFileEntry[],
+  allFiles: readonly GenerateFileEntry[],
   scopePropagation: ProjectContextScopePropagation
 ): Record<string, number> {
   const stats: Record<string, number> = {};

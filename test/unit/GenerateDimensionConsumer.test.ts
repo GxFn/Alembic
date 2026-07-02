@@ -1,23 +1,23 @@
 import type { MemoryCoordinator, SessionStore } from '@alembic/agent/memory';
 import { describe, expect, test, vi } from 'vitest';
-import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
-import type { BootstrapDimensionProjection } from '../../lib/workflows/ai-execution/AgentRunProjections.js';
+import type { GenerateEventEmitter } from '../../lib/service/generate/GenerateEventEmitter.js';
+import type { GenerateDimensionProjection } from '../../lib/workflows/ai-execution/AgentRunProjections.js';
+import type { DimensionContext } from '../../lib/workflows/ai-execution/DimensionContext.js';
 import {
-  applyBootstrapDimensionCandidateAccounting,
-  buildBootstrapDimensionCompleteEventPayload,
-  buildBootstrapDimensionPcvEvidenceEnvelope,
+  applyGenerateDimensionCandidateAccounting,
+  buildGenerateDimensionCompleteEventPayload,
+  buildGenerateDimensionPcvEvidenceEnvelope,
   type CandidateResults,
-  consumeBootstrapDimensionError,
-  consumeBootstrapDimensionResult,
+  consumeGenerateDimensionError,
+  consumeGenerateDimensionResult,
   type DimensionCandidateData,
   type DimensionStat,
-  decideBootstrapDimensionCheckpoint,
-  recordBootstrapDimensionTokenUsage,
-  resolveBootstrapDimensionConsumerRunIssue,
-} from '../../lib/workflows/ai-execution/BootstrapConsumers.js';
-import type { DimensionContext } from '../../lib/workflows/ai-execution/DimensionContext.js';
+  decideGenerateDimensionCheckpoint,
+  recordGenerateDimensionTokenUsage,
+  resolveGenerateDimensionConsumerRunIssue,
+} from '../../lib/workflows/ai-execution/GenerateConsumers.js';
 
-function makeProjection(): BootstrapDimensionProjection {
+function makeProjection(): GenerateDimensionProjection {
   const successfulSubmit = {
     tool: 'knowledge',
     args: {
@@ -100,7 +100,7 @@ describe('bootstrap dimension consumer', () => {
     const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
     const dimensionCandidates: Record<string, DimensionCandidateData> = {};
 
-    const runIssueState = resolveBootstrapDimensionConsumerRunIssue({
+    const runIssueState = resolveGenerateDimensionConsumerRunIssue({
       needsCandidates: true,
       projection,
       runResult: {
@@ -120,7 +120,7 @@ describe('bootstrap dimension consumer', () => {
       },
     });
 
-    const accounting = applyBootstrapDimensionCandidateAccounting({
+    const accounting = applyGenerateDimensionCandidateAccounting({
       candidateResults,
       dimId: 'api',
       dimensionCandidates,
@@ -144,12 +144,12 @@ describe('bootstrap dimension consumer', () => {
 
   test('builds event payload and checkpoint decision through explicit helpers', () => {
     const projection = makeProjection();
-    const runIssueState = resolveBootstrapDimensionConsumerRunIssue({
+    const runIssueState = resolveGenerateDimensionConsumerRunIssue({
       needsCandidates: true,
       projection,
       runResult: { degraded: false },
     });
-    const accounting = applyBootstrapDimensionCandidateAccounting({
+    const accounting = applyGenerateDimensionCandidateAccounting({
       candidateResults: { created: 0, failed: 0, errors: [] },
       dimId: 'api',
       dimensionCandidates: {},
@@ -158,7 +158,7 @@ describe('bootstrap dimension consumer', () => {
     });
 
     expect(
-      buildBootstrapDimensionCompleteEventPayload({
+      buildGenerateDimensionCompleteEventPayload({
         candidateAccounting: accounting,
         combinedTokenUsage: projection.combinedTokenUsage,
         dimStartTime: Date.now(),
@@ -175,11 +175,11 @@ describe('bootstrap dimension consumer', () => {
       tokenUsage: { input: 3, output: 5 },
       type: 'candidate',
     });
-    expect(decideBootstrapDimensionCheckpoint({ analysisText: 'x'.repeat(50) })).toEqual({
+    expect(decideGenerateDimensionCheckpoint({ analysisText: 'x'.repeat(50) })).toEqual({
       reason: null,
       shouldSave: true,
     });
-    expect(decideBootstrapDimensionCheckpoint({ analysisText: 'x'.repeat(49) })).toEqual({
+    expect(decideGenerateDimensionCheckpoint({ analysisText: 'x'.repeat(49) })).toEqual({
       reason: 'analysisText 过短 (49 chars)',
       shouldSave: false,
     });
@@ -199,7 +199,7 @@ describe('bootstrap dimension consumer', () => {
     );
 
     expect(() =>
-      recordBootstrapDimensionTokenUsage({
+      recordGenerateDimensionTokenUsage({
         combinedTokenUsage: { input: 1, output: 2 },
         ctx: {
           container: {
@@ -220,7 +220,7 @@ describe('bootstrap dimension consumer', () => {
     expect(broadcastTokenUsageUpdated).toHaveBeenCalled();
 
     expect(() =>
-      recordBootstrapDimensionTokenUsage({
+      recordGenerateDimensionTokenUsage({
         combinedTokenUsage: { input: 1, output: 2 },
         ctx: {
           container: {
@@ -242,13 +242,13 @@ describe('bootstrap dimension consumer', () => {
 
   test('builds PCV evidence envelope in an isolated helper', () => {
     const projection = makeProjection();
-    const runIssueState = resolveBootstrapDimensionConsumerRunIssue({
+    const runIssueState = resolveGenerateDimensionConsumerRunIssue({
       needsCandidates: true,
       projection,
       runResult: { degraded: false },
     });
 
-    const result = buildBootstrapDimensionPcvEvidenceEnvelope({
+    const result = buildGenerateDimensionPcvEvidenceEnvelope({
       dimConfig: { label: 'API' },
       dimId: 'api',
       needsCandidates: true,
@@ -285,7 +285,7 @@ describe('bootstrap dimension consumer', () => {
     const emitDimensionComplete = vi.fn();
     const onDimensionResult = vi.fn();
 
-    const result = await consumeBootstrapDimensionResult({
+    const result = await consumeGenerateDimensionResult({
       ctx: {},
       dimId: 'api',
       dimConfig: { label: 'API' },
@@ -316,7 +316,7 @@ describe('bootstrap dimension consumer', () => {
       candidateResults,
       dimensionCandidates,
       dimensionStats,
-      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+      emitter: { emitDimensionComplete } as unknown as GenerateEventEmitter,
       dataRoot: '/tmp',
       sessionId: 'session-1',
       onDimensionResult,
@@ -386,7 +386,7 @@ describe('bootstrap dimension consumer', () => {
     const dimensionCandidates: Record<string, DimensionCandidateData> = {};
     const dimensionStats: Record<string, DimensionStat> = {};
 
-    await consumeBootstrapDimensionResult({
+    await consumeGenerateDimensionResult({
       ctx: {},
       dimId: 'api',
       dimConfig: { label: 'API' },
@@ -442,7 +442,7 @@ describe('bootstrap dimension consumer', () => {
       candidateResults,
       dimensionCandidates,
       dimensionStats,
-      emitter: { emitDimensionComplete: vi.fn() } as unknown as BootstrapEventEmitter,
+      emitter: { emitDimensionComplete: vi.fn() } as unknown as GenerateEventEmitter,
       dataRoot: '/tmp',
       sessionId: 'session-1',
     });
@@ -467,12 +467,12 @@ describe('bootstrap dimension consumer', () => {
     const dimensionStats: Record<string, DimensionStat> = {};
     const emitDimensionComplete = vi.fn();
 
-    const result = consumeBootstrapDimensionError({
+    const result = consumeGenerateDimensionError({
       dimId: 'api',
       err: new Error('boom'),
       candidateResults,
       dimensionStats,
-      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+      emitter: { emitDimensionComplete } as unknown as GenerateEventEmitter,
     });
 
     expect(candidateResults.errors).toEqual([{ dimId: 'api', error: 'boom' }]);
@@ -524,7 +524,7 @@ describe('bootstrap dimension consumer', () => {
     projection.producerResult.candidateCount = 1;
     projection.successCount = 1;
 
-    await consumeBootstrapDimensionResult({
+    await consumeGenerateDimensionResult({
       ctx: {},
       dimId: 'api',
       dimConfig: { label: 'API' },
@@ -564,7 +564,7 @@ describe('bootstrap dimension consumer', () => {
       candidateResults,
       dimensionCandidates,
       dimensionStats,
-      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+      emitter: { emitDimensionComplete } as unknown as GenerateEventEmitter,
       dataRoot: '/tmp',
       sessionId: 'session-1',
     });
@@ -617,7 +617,7 @@ describe('bootstrap dimension consumer', () => {
       ],
     };
 
-    await consumeBootstrapDimensionResult({
+    await consumeGenerateDimensionResult({
       ctx: {},
       dimId: 'api',
       dimConfig: { label: 'API' },
@@ -653,7 +653,7 @@ describe('bootstrap dimension consumer', () => {
       candidateResults,
       dimensionCandidates,
       dimensionStats,
-      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+      emitter: { emitDimensionComplete } as unknown as GenerateEventEmitter,
       dataRoot: '/tmp',
       sessionId: 'session-1',
     });
@@ -706,7 +706,7 @@ describe('bootstrap dimension consumer', () => {
       toolCalls: projection.runtimeToolCalls,
     };
 
-    await consumeBootstrapDimensionResult({
+    await consumeGenerateDimensionResult({
       ctx: {},
       dimId: 'api',
       dimConfig: { label: 'API' },
@@ -748,7 +748,7 @@ describe('bootstrap dimension consumer', () => {
       candidateResults,
       dimensionCandidates,
       dimensionStats,
-      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+      emitter: { emitDimensionComplete } as unknown as GenerateEventEmitter,
       dataRoot: '/tmp',
       sessionId: 'session-1',
     });

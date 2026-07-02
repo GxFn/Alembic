@@ -78,7 +78,7 @@ import {
   openOrReturnProjectContextWorkflowSession,
   type ProjectContextDimensionResultHookInput,
   type ProjectContextWorkflowFacts,
-  registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion,
+  registerProjectContextWorkflowSessionReleaseOnGenerateCompletion,
   releaseProjectContextWorkflowSession,
   saveProjectContextFileSnapshot,
 } from '../project-context/ProjectContextWorkflowFacts.js';
@@ -574,7 +574,7 @@ async function runKnowledgeRescanProjectIndexWorkflow(
   });
 
   // ═══════════════════════════════════════════════════════════
-  // Step 5.5: BootstrapSessionManager — 缓存 Phase 结果供复用
+  // Step 5.5: GenerateSessionManager — 缓存 Phase 结果供复用
   // （与 cold-start Phase 4.6 对齐）
   // ═══════════════════════════════════════════════════════════
 
@@ -656,7 +656,7 @@ async function runKnowledgeRescanProjectIndexWorkflow(
     executionDimensions.length > 0 &&
     !intent.internalExecution?.skipAsyncFill;
   if (willRunInternalRescanFill && workflowSession && bootstrapSession) {
-    registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion({
+    registerProjectContextWorkflowSessionReleaseOnGenerateCompletion({
       bootstrapSessionId: bootstrapSession.id,
       container: ctx.container,
       logger: ctx.logger,

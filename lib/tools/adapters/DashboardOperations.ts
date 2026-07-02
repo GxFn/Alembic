@@ -232,7 +232,7 @@ async function cancelBootstrap(request: ToolExecutionRequest) {
     abortSession(reason: string): void;
     markCancelled(): void;
     getSessionStatus(): Record<string, unknown>;
-  }>(container, 'bootstrapTaskManager');
+  }>(container, 'generateTaskManager');
 
   if (!taskManager) {
     return { message: 'No bootstrap task manager initialized' };

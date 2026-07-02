@@ -1,13 +1,13 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { IncrementalPlan } from '../../lib/service/handler-runtime/types.js';
 import {
-  type BootstrapRuntimeContainer,
-  initializeBootstrapRuntime,
+  type GenerateRuntimeContainer,
+  initializeGenerateRuntime,
 } from '../../lib/workflows/ai-execution/RuntimeInitializer.js';
 
 function makeContainer(
-  overrides: Partial<BootstrapRuntimeContainer> = {}
-): BootstrapRuntimeContainer {
+  overrides: Partial<GenerateRuntimeContainer> = {}
+): GenerateRuntimeContainer {
   return {
     get: vi.fn(() => null),
     singletons: {},
@@ -30,16 +30,16 @@ function makeIncrementalPlan(
   };
 }
 
-describe('initializeBootstrapRuntime', () => {
+describe('initializeGenerateRuntime', () => {
   test('initializes project info, runtime stores and memory coordinator without legacy graph', async () => {
     const legacyGraphBuilder = vi.fn(async () => ({
       getOverview: vi.fn(() => ({ totalClasses: 2, totalProtocols: 1, buildTimeMs: 10 })),
     }));
     const container = makeContainer();
-    (container as BootstrapRuntimeContainer & { buildProjectGraph?: unknown }).buildProjectGraph =
+    (container as GenerateRuntimeContainer & { buildProjectGraph?: unknown }).buildProjectGraph =
       legacyGraphBuilder;
 
-    const runtime = await initializeBootstrapRuntime({
+    const runtime = await initializeGenerateRuntime({
       container,
       projectRoot: '/repo/Alembic',
       dataRoot: '/data',
@@ -93,7 +93,7 @@ describe('initializeBootstrapRuntime', () => {
       }),
     };
 
-    const runtime = await initializeBootstrapRuntime({
+    const runtime = await initializeGenerateRuntime({
       container: makeContainer(),
       projectRoot: '/repo/Alembic',
       dataRoot: '/data',
@@ -116,9 +116,9 @@ describe('initializeBootstrapRuntime', () => {
       throw new Error('graph failed');
     });
     const container = makeContainer();
-    (container as BootstrapRuntimeContainer & { buildProjectGraph?: unknown }).buildProjectGraph =
+    (container as GenerateRuntimeContainer & { buildProjectGraph?: unknown }).buildProjectGraph =
       legacyGraphBuilder;
-    const runtime = await initializeBootstrapRuntime({
+    const runtime = await initializeGenerateRuntime({
       container,
       projectRoot: '/repo/Alembic',
       dataRoot: '/data',

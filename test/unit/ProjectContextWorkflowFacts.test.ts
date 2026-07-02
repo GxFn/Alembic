@@ -3,9 +3,9 @@ import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  BootstrapSessionLeaseError,
-  BootstrapSessionManager,
   type DimensionDef,
+  GenerateSessionLeaseError,
+  GenerateSessionManager,
 } from '@alembic/core/host-agent-workflows';
 import { createProjectDescriptor } from '@alembic/core/shared';
 import { afterEach, describe, expect, test, vi } from 'vitest';
@@ -19,7 +19,7 @@ import {
   buildProjectContextWorkflowFacts,
   createProjectContextWorkflowSession,
   type ProjectContextWorkflowFacts,
-  registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion,
+  registerProjectContextWorkflowSessionReleaseOnGenerateCompletion,
   releaseProjectContextWorkflowSessionByProjectRoot,
 } from '../../lib/workflows/project-context/ProjectContextWorkflowFacts.js';
 import {
@@ -65,7 +65,7 @@ afterEach(async () => {
 describe('ProjectContextWorkflowFacts', () => {
   test('releases completed coldStart ProjectContext workflow leases for subsequent rescan sessions', () => {
     const projectRoot = '/tmp/alembic-session-release-project';
-    const manager = new BootstrapSessionManager();
+    const manager = new GenerateSessionManager();
     const eventBus = new EventEmitter();
     const container = createSessionContainer(manager, eventBus);
     const logger = createSessionLogger();
@@ -78,7 +78,7 @@ describe('ProjectContextWorkflowFacts', () => {
       facts,
       projectRoot,
     });
-    registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion({
+    registerProjectContextWorkflowSessionReleaseOnGenerateCompletion({
       bootstrapSessionId: 'bootstrap-session-complete',
       container,
       logger,
@@ -89,7 +89,7 @@ describe('ProjectContextWorkflowFacts', () => {
 
     expect(() =>
       createProjectContextWorkflowSession({ container, dimensions, facts, projectRoot })
-    ).toThrow(BootstrapSessionLeaseError);
+    ).toThrow(GenerateSessionLeaseError);
 
     eventBus.emit('bootstrap:all-completed', {
       sessionId: 'bootstrap-session-other',
@@ -98,7 +98,7 @@ describe('ProjectContextWorkflowFacts', () => {
     });
     expect(() =>
       createProjectContextWorkflowSession({ container, dimensions, facts, projectRoot })
-    ).toThrow(BootstrapSessionLeaseError);
+    ).toThrow(GenerateSessionLeaseError);
 
     eventBus.emit('bootstrap:all-completed', {
       sessionId: 'bootstrap-session-complete',
@@ -125,7 +125,7 @@ describe('ProjectContextWorkflowFacts', () => {
 
   test('retains partial coldStart workflow leases instead of silently deleting evidence', () => {
     const projectRoot = '/tmp/alembic-session-partial-project';
-    const manager = new BootstrapSessionManager();
+    const manager = new GenerateSessionManager();
     const eventBus = new EventEmitter();
     const container = createSessionContainer(manager, eventBus);
     const logger = createSessionLogger();
@@ -138,7 +138,7 @@ describe('ProjectContextWorkflowFacts', () => {
       facts,
       projectRoot,
     });
-    registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion({
+    registerProjectContextWorkflowSessionReleaseOnGenerateCompletion({
       bootstrapSessionId: 'bootstrap-session-partial',
       container,
       logger,
@@ -164,7 +164,7 @@ describe('ProjectContextWorkflowFacts', () => {
     );
     expect(() =>
       createProjectContextWorkflowSession({ container, dimensions, facts, projectRoot })
-    ).toThrow(BootstrapSessionLeaseError);
+    ).toThrow(GenerateSessionLeaseError);
     expect(logger.warn).toHaveBeenCalledWith(
       '[ProjectContextWorkflowFacts] Workflow session lease retained',
       expect.objectContaining({
@@ -177,7 +177,7 @@ describe('ProjectContextWorkflowFacts', () => {
 
   test('releases cancelled coldStart workflow leases so retries are not blocked', () => {
     const projectRoot = '/tmp/alembic-session-cancelled-project';
-    const manager = new BootstrapSessionManager();
+    const manager = new GenerateSessionManager();
     const eventBus = new EventEmitter();
     const container = createSessionContainer(manager, eventBus);
     const logger = createSessionLogger();
@@ -190,7 +190,7 @@ describe('ProjectContextWorkflowFacts', () => {
       facts,
       projectRoot,
     });
-    registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion({
+    registerProjectContextWorkflowSessionReleaseOnGenerateCompletion({
       bootstrapSessionId: 'bootstrap-session-cancelled',
       container,
       logger,
@@ -236,7 +236,7 @@ describe('ProjectContextWorkflowFacts', () => {
 
   test('releases rescan workflow leases by project root during daemon cancellation cleanup', () => {
     const projectRoot = '/tmp/alembic-rescan-session-cancelled-project';
-    const manager = new BootstrapSessionManager();
+    const manager = new GenerateSessionManager();
     const eventBus = new EventEmitter();
     const container = createSessionContainer(manager, eventBus);
     const logger = createSessionLogger();
@@ -274,7 +274,7 @@ describe('ProjectContextWorkflowFacts', () => {
 
   test('replaces stale workflow leases only when destructive rebuild explicitly requests it', () => {
     const projectRoot = '/tmp/alembic-session-rebuild-project';
-    const manager = new BootstrapSessionManager();
+    const manager = new GenerateSessionManager();
     const eventBus = new EventEmitter();
     const container = createSessionContainer(manager, eventBus);
     const dimensions = createWorkflowDimensions();
@@ -288,7 +288,7 @@ describe('ProjectContextWorkflowFacts', () => {
     });
     expect(() =>
       createProjectContextWorkflowSession({ container, dimensions, facts, projectRoot })
-    ).toThrow(BootstrapSessionLeaseError);
+    ).toThrow(GenerateSessionLeaseError);
 
     const rebuildSession = createProjectContextWorkflowSession({
       container,
@@ -1420,10 +1420,10 @@ function makeProjectContextRef(
   };
 }
 
-function createSessionContainer(manager: BootstrapSessionManager, eventBus: EventEmitter) {
+function createSessionContainer(manager: GenerateSessionManager, eventBus: EventEmitter) {
   return {
     get(name: string) {
-      if (name === 'bootstrapSessionManager') {
+      if (name === 'generateSessionManager') {
         return manager;
       }
       if (name === 'eventBus') {

@@ -65,7 +65,7 @@ import {
   buildProjectContextWorkflowFacts,
   createProjectContextWorkflowSession,
   type ProjectContextWorkflowFacts,
-  registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion,
+  registerProjectContextWorkflowSessionReleaseOnGenerateCompletion,
   selectProjectContextWorkflowDimensions,
 } from '../project-context/ProjectContextWorkflowFacts.js';
 import {
@@ -204,7 +204,7 @@ async function runColdStartProjectIndexWorkflow(
   }
 
   // ═══════════════════════════════════════════════════════════
-  // Phase 4.6: BootstrapSessionManager — 缓存 Phase 结果供 wiki_plan 复用
+  // Phase 4.6: GenerateSessionManager — 缓存 Phase 结果供 wiki_plan 复用
   // （与本地初始化保持一致）
   // ═══════════════════════════════════════════════════════════
   const workflowSession = createProjectContextWorkflowSession({
@@ -249,7 +249,7 @@ async function runColdStartProjectIndexWorkflow(
     logPrefix: 'Bootstrap',
   });
   if (!intent.internalExecution?.skipAsyncFill) {
-    registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion({
+    registerProjectContextWorkflowSessionReleaseOnGenerateCompletion({
       bootstrapSessionId: bootstrapSession?.id,
       container: ctx.container,
       logger: ctx.logger,
@@ -290,7 +290,7 @@ async function runColdStartProjectIndexWorkflow(
     const database = ctx.container.get('database') as WorkflowDatabaseLike | null | undefined;
     skillHooks
       .run(
-        'onBootstrapComplete',
+        'onGenerateComplete',
         {
           filesScanned: projectContextFacts.fileCount,
           targetsFound: projectContextFacts.targetCount,
@@ -320,7 +320,7 @@ async function runColdStartProjectIndexWorkflow(
 
 registerProjectIndexWorkflowImplementation('full', runColdStartProjectIndexWorkflow);
 
-// bootstrapRefine → 已迁至 service/bootstrap/BootstrapRefine.js (RIC-3)
+// generateRefine → 已迁至 service/generate/GenerateRefine.js (RIC-3)
 
 function buildProjectContextDimensionSelectionSummary(input: {
   requestedDimensionIds?: readonly string[];

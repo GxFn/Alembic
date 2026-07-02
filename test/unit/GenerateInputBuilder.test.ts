@@ -2,8 +2,8 @@ import type { MemoryCoordinator } from '@alembic/agent/memory';
 import type { SystemRunContext } from '@alembic/agent/runtime';
 import { describe, expect, test } from 'vitest';
 import {
-  type BootstrapFileEntry,
-  buildBootstrapDimensionRunInput,
+  buildGenerateDimensionRunInput,
+  type GenerateFileEntry,
 } from '../../lib/workflows/ai-execution/AgentRunInputBuilders.js';
 
 function makeSystemRunContext(): SystemRunContext {
@@ -28,14 +28,14 @@ function makeSystemRunContext(): SystemRunContext {
   };
 }
 
-describe('buildBootstrapDimensionRunInput', () => {
+describe('buildGenerateDimensionRunInput', () => {
   test('builds a bootstrap-dimension AgentRunInput from runtime context', () => {
     const systemRunContext = makeSystemRunContext();
-    const files: BootstrapFileEntry[] = [
+    const files: GenerateFileEntry[] = [
       { name: 'a.ts', path: '/repo/a.ts', relativePath: 'a.ts', content: 'export const a = 1;' },
     ];
     const abortController = new AbortController();
-    const input = buildBootstrapDimensionRunInput({
+    const input = buildGenerateDimensionRunInput({
       dimId: 'overview',
       dimConfig: { label: 'Overview' },
       needsCandidates: true,
@@ -52,7 +52,7 @@ describe('buildBootstrapDimensionRunInput', () => {
     });
 
     expect(input).toMatchObject({
-      profile: { id: 'bootstrap-dimension' },
+      profile: { id: 'generate-dimension' },
       params: {
         dimId: 'overview',
         needsCandidates: true,

@@ -2,15 +2,15 @@ import type { SessionStore } from '@alembic/agent/memory';
 import type { AgentRunResult } from '@alembic/agent/service';
 import { describe, expect, test, vi } from 'vitest';
 import {
-  consumeBootstrapSessionResult,
-  consumeMissingBootstrapDimensions,
+  consumeGenerateSessionResult,
+  consumeMissingGenerateDimensions,
   type DimensionStat,
-} from '../../lib/workflows/ai-execution/BootstrapConsumers.js';
+} from '../../lib/workflows/ai-execution/GenerateConsumers.js';
 
 function makeRunResult(partial: Partial<AgentRunResult>): AgentRunResult {
   return {
     runId: 'run-1',
-    profileId: 'bootstrap-session',
+    profileId: 'generate-session',
     reply: '',
     status: 'success',
     phases: {},
@@ -28,12 +28,12 @@ describe('bootstrap session consumer', () => {
       restored: { candidateCount: 0, durationMs: 0, restoredFromCheckpoint: true },
     };
 
-    const projection = consumeBootstrapSessionResult({
+    const projection = consumeGenerateSessionResult({
       parentRunResult: makeRunResult({
         status: 'success',
         phases: {
           dimensionResults: {
-            api: makeRunResult({ runId: 'api:run', profileId: 'bootstrap-dimension' }),
+            api: makeRunResult({ runId: 'api:run', profileId: 'generate-dimension' }),
           },
         },
       }),
@@ -61,7 +61,7 @@ describe('bootstrap session consumer', () => {
 
   test('does not report missing dimensions that already have stats', () => {
     const consumeMissingDimension = vi.fn();
-    consumeMissingBootstrapDimensions({
+    consumeMissingGenerateDimensions({
       missingDimensionIds: ['api', 'ui'],
       dimensionStats: {
         api: { candidateCount: 0, durationMs: 0, error: 'already recorded' },

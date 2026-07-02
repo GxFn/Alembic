@@ -85,7 +85,7 @@ describe('ProjectIndexWorkflow compatibility', () => {
     expectOrdered(
       coldBody,
       'const workflowSession = createProjectContextWorkflowSession',
-      'registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion',
+      'registerProjectContextWorkflowSessionReleaseOnGenerateCompletion',
       'dispatchAiDimensionRuns({'
     );
     expectOrdered(
@@ -101,7 +101,7 @@ describe('ProjectIndexWorkflow compatibility', () => {
     expectOrdered(
       rescanBody,
       'const workflowSessionState =',
-      'registerProjectContextWorkflowSessionReleaseOnBootstrapCompletion',
+      'registerProjectContextWorkflowSessionReleaseOnGenerateCompletion',
       'dispatchAiDimensionRuns({'
     );
     expect(rescanBody).toContain('runAsyncFillInline');

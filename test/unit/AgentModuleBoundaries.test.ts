@@ -19,7 +19,7 @@ describe('agent module boundaries', () => {
   test('does not restore retired compatibility entry files', () => {
     const retiredFiles = [
       'lib/external/mcp/handlers/bootstrap/MissionBriefingBuilder.ts',
-      'lib/external/mcp/handlers/bootstrap/BootstrapSession.ts',
+      'lib/external/mcp/handlers/bootstrap/GenerateSession.ts',
       legacyBootstrapPath(`${legacySubmissionTrackerStem}.ts`),
       'lib/external/mcp/handlers/bootstrap/base-dimensions.ts',
       'lib/external/mcp/handlers/bootstrap/shared/bootstrap-phases.ts',
@@ -354,7 +354,7 @@ function resolveCoreSourceRoot() {
 function isRetiredImportSpecifier(specifier: string, relFile: string) {
   const retiredSegments = [
     'lib/external/mcp/handlers/bootstrap/MissionBriefingBuilder',
-    'lib/external/mcp/handlers/bootstrap/BootstrapSession',
+    'lib/external/mcp/handlers/bootstrap/GenerateSession',
     legacyBootstrapPath(legacySubmissionTrackerStem),
     'lib/external/mcp/handlers/bootstrap/base-dimensions',
     'lib/external/mcp/handlers/bootstrap/shared/bootstrap-phases',

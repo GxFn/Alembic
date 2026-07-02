@@ -19,7 +19,7 @@ import { z } from 'zod';
 import {
   mergeAgentEfficiencySummaries,
   normalizeAgentEfficiencySummary,
-} from '#service/bootstrap/BootstrapEfficiency.js';
+} from '#service/generate/GenerateEfficiency.js';
 import {
   cancelDaemonJob,
   enqueueDaemonJob,
@@ -471,7 +471,7 @@ function omitHeavyJobPayload(job: DaemonJobRecord): Omit<DaemonJobRecord, 'resul
 
 function getLiveBootstrapSession(container: { get(name: string): unknown }) {
   try {
-    const taskManager = container.get('bootstrapTaskManager') as
+    const taskManager = container.get('generateTaskManager') as
       | { getSessionStatus?: () => unknown }
       | undefined;
     const status = taskManager?.getSessionStatus?.();

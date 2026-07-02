@@ -1,5 +1,5 @@
 import type { JobProcessEventArtifactRef } from '@alembic/core/daemon';
-import type { BootstrapProcessEventDraft } from '#service/bootstrap/bootstrap-event-types.js';
+import type { GenerateProcessEventDraft } from '#service/generate/generate-event-types.js';
 import {
   normalizeProjectScopeSourceRefsForRuntime,
   type ProjectScopeSourceIdentity,
@@ -57,7 +57,7 @@ export function attachPcvN9ObservabilityCarry({
   sourceIdentities = [],
 }: {
   artifactRefs: JobProcessEventArtifactRef[];
-  draft: BootstrapProcessEventDraft;
+  draft: GenerateProcessEventDraft;
   jobId: string;
   metadata: Record<string, unknown>;
   sourceIdentities?: ProjectScopeSourceIdentity[];
@@ -142,7 +142,7 @@ function resolvePcvN9NodeIdentity({
   metadata,
   traceEnvelope,
 }: {
-  draft: BootstrapProcessEventDraft;
+  draft: GenerateProcessEventDraft;
   metadata: Record<string, unknown>;
   traceEnvelope: Record<string, unknown> | null;
 }): {

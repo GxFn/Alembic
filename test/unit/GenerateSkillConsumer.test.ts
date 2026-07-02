@@ -1,13 +1,13 @@
 import type { SessionStore } from '@alembic/agent/memory';
 import { createAlembicProjectSkillDeliveryReceipt } from '@alembic/core/host-agent-workflows';
 import { describe, expect, test, vi } from 'vitest';
-import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
+import type { GenerateEventEmitter } from '../../lib/service/generate/GenerateEventEmitter.js';
 import {
   buildEffectiveSkillAnalysisText,
-  consumeBootstrapSkills,
+  consumeGenerateSkills,
   type DimensionCandidateData,
   extractSkillKeyFindings,
-} from '../../lib/workflows/ai-execution/BootstrapConsumers.js';
+} from '../../lib/workflows/ai-execution/GenerateConsumers.js';
 
 function makeCandidate(analysisText: string): DimensionCandidateData {
   return {
@@ -49,7 +49,7 @@ describe('bootstrap skill consumer', () => {
     const generateSkillFn = vi.fn(async () => ({ success: true, skillName: 'project-api' }));
     const emitDimensionComplete = vi.fn();
 
-    const results = await consumeBootstrapSkills({
+    const results = await consumeGenerateSkills({
       ctx: { container: { get: vi.fn() } } as never,
       dimensions: [{ id: 'api', label: 'API', skillWorthy: true }],
       dimensionCandidates: { api: makeCandidate('short') },
@@ -59,7 +59,7 @@ describe('bootstrap skill consumer', () => {
           workingMemoryDistilled: { toolCallSummary: ['read_file src/api.ts'] },
         }),
       } as unknown as SessionStore,
-      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+      emitter: { emitDimensionComplete } as unknown as GenerateEventEmitter,
       generateSkillFn: generateSkillFn as never,
     });
 
@@ -131,7 +131,7 @@ describe('bootstrap skill consumer', () => {
     const emitDimensionComplete = vi.fn();
     const emitProcessEvents = vi.fn();
 
-    const results = await consumeBootstrapSkills({
+    const results = await consumeGenerateSkills({
       ctx: { container: { get: vi.fn() } } as never,
       dimensions: [{ id: 'api', label: 'API', skillWorthy: true }],
       dimensionCandidates: { api: makeCandidate('short') },
@@ -141,7 +141,7 @@ describe('bootstrap skill consumer', () => {
           workingMemoryDistilled: { toolCallSummary: ['read_file src/api.ts'] },
         }),
       } as unknown as SessionStore,
-      emitter: { emitDimensionComplete, emitProcessEvents } as unknown as BootstrapEventEmitter,
+      emitter: { emitDimensionComplete, emitProcessEvents } as unknown as GenerateEventEmitter,
       sessionId: 'bs_receipt',
       generateSkillFn: generateSkillFn as never,
     });
@@ -185,7 +185,7 @@ describe('bootstrap skill consumer', () => {
     }));
     const emitDimensionFailed = vi.fn();
 
-    const results = await consumeBootstrapSkills({
+    const results = await consumeGenerateSkills({
       ctx: { container: { get: vi.fn() } } as never,
       dimensions: [
         { id: 'api', skillWorthy: true },
@@ -196,7 +196,7 @@ describe('bootstrap skill consumer', () => {
         ui: makeCandidate('valid analysis '.repeat(20)),
       },
       sessionStore: { getDimensionReport: () => ({ findings: [] }) } as unknown as SessionStore,
-      emitter: { emitDimensionFailed } as unknown as BootstrapEventEmitter,
+      emitter: { emitDimensionFailed } as unknown as GenerateEventEmitter,
       shouldAbort: vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true),
       generateSkillFn: generateSkillFn as never,
     });

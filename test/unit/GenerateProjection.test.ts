@@ -12,19 +12,19 @@ import {
 import type { AgentRunResult } from '@alembic/agent/service';
 import { describe, expect, test } from 'vitest';
 import {
-  type BootstrapDimensionRunIssueStatus,
+  type GenerateDimensionRunIssueStatus,
   isRecoverableProducerTimeoutIssue,
   normalizeDimensionFindings,
   projectAgentRunResult,
-  projectBootstrapDimensionAgentOutput,
-  projectBootstrapSessionResult,
-  resolveBootstrapDimensionRunIssue,
+  projectGenerateDimensionAgentOutput,
+  projectGenerateSessionResult,
+  resolveGenerateDimensionRunIssue,
 } from '../../lib/workflows/ai-execution/AgentRunProjections.js';
 
 function makeRunResult(partial: Partial<AgentRunResult>): AgentRunResult {
   return {
     runId: 'run-1',
-    profileId: 'bootstrap-dimension',
+    profileId: 'generate-dimension',
     reply: '',
     status: 'success',
     phases: {},
@@ -43,14 +43,14 @@ type D24ReplayFailureOwner =
 
 type D24ReplayExpectation = {
   agentRunStatus: AgentRunResult['status'];
-  issueStatus: BootstrapDimensionRunIssueStatus | null;
+  issueStatus: GenerateDimensionRunIssueStatus | null;
   toolEnvelopeReplay: boolean;
 };
 
 type D24ReplayResult = {
   branch: AgentInterfaceContractBranch;
   failureOwner: D24ReplayFailureOwner;
-  issueStatus: BootstrapDimensionRunIssueStatus | null;
+  issueStatus: GenerateDimensionRunIssueStatus | null;
   reason: string;
   toolStatus: ToolResultStatus | null;
 };
@@ -129,9 +129,9 @@ function replayAgentBranchFixture(
     toolCalls: fixture.toolStatus ? [toolCallForBranch(fixture, fixture.toolStatus)] : [],
   });
   const projectedRun = projectAgentRunResult(runResult);
-  const issue = resolveBootstrapDimensionRunIssue(projectedRun);
+  const issue = resolveGenerateDimensionRunIssue(projectedRun);
   const issueStatus = issue?.status ?? null;
-  const dimensionProjection = projectBootstrapDimensionAgentOutput({
+  const dimensionProjection = projectGenerateDimensionAgentOutput({
     dimId: `d24-${fixture.branch}`,
     needsCandidates: false,
     runResult: projectedRun,
@@ -366,7 +366,7 @@ describe('bootstrap projections', () => {
   });
 
   test('projects dimension agent output into analysis and producer summaries', () => {
-    const projection = projectBootstrapDimensionAgentOutput({
+    const projection = projectGenerateDimensionAgentOutput({
       dimId: 'overview',
       needsCandidates: true,
       runResult: {
@@ -522,7 +522,7 @@ describe('bootstrap projections', () => {
   });
 
   test('recovers only producer timeout after a successful candidate submit', () => {
-    const issue = resolveBootstrapDimensionRunIssue(
+    const issue = resolveGenerateDimensionRunIssue(
       makeRunResult({
         status: 'success',
         reply: '[run stopped: stage_timeout]',
@@ -574,7 +574,7 @@ describe('bootstrap projections', () => {
 
   test('classifies retry budget exhaustion as a failed dimension issue', () => {
     expect(
-      resolveBootstrapDimensionRunIssue(
+      resolveGenerateDimensionRunIssue(
         makeRunResult({
           status: 'success',
           diagnostics: {
@@ -604,7 +604,7 @@ describe('bootstrap projections', () => {
 
   test('classifies unresolved quality gate without producer as a failed dimension issue', () => {
     expect(
-      resolveBootstrapDimensionRunIssue(
+      resolveGenerateDimensionRunIssue(
         makeRunResult({
           status: 'success',
           phases: {
@@ -627,9 +627,9 @@ describe('bootstrap projections', () => {
   });
 
   test('projects bootstrap session parent result coverage', () => {
-    const projection = projectBootstrapSessionResult({
+    const projection = projectGenerateSessionResult({
       parentRunResult: makeRunResult({
-        profileId: 'bootstrap-session',
+        profileId: 'generate-session',
         status: 'aborted',
         phases: {
           dimensionResults: {

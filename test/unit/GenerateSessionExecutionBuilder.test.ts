@@ -1,24 +1,24 @@
 import type { AgentRunInput, AgentRunResult } from '@alembic/agent/service';
 import { describe, expect, test, vi } from 'vitest';
-import type { BootstrapDimensionPlan } from '../../lib/workflows/ai-execution/DimensionRuntimeBuilder.js';
+import type { GenerateDimensionPlan } from '../../lib/workflows/ai-execution/DimensionRuntimeBuilder.js';
 import {
-  attachBootstrapAgentProgressBridge,
-  buildBootstrapSessionExecutionInput,
-  getBootstrapChildDimensionId,
-  resolveBootstrapDimensionTier,
+  attachGenerateAgentProgressBridge,
+  buildGenerateSessionExecutionInput,
+  getGenerateChildDimensionId,
+  resolveGenerateDimensionTier,
 } from '../../lib/workflows/ai-execution/SessionExecutionBuilder.js';
 
 function createPlan(
   id: string,
-  overrides: Partial<BootstrapDimensionPlan> = {}
-): BootstrapDimensionPlan {
+  overrides: Partial<GenerateDimensionPlan> = {}
+): GenerateDimensionPlan {
   return {
     dim: {
       id,
       label: `${id} Label`,
       guide: '',
       tierHint: id === 'tiered' ? 2 : undefined,
-    } as BootstrapDimensionPlan['dim'],
+    } as GenerateDimensionPlan['dim'],
     dimConfig: {
       id,
       label: `${id} Config`,
@@ -53,7 +53,7 @@ describe('bootstrap session execution builder', () => {
     const createDimensionRunInput = vi.fn((dimId: string) => ({
       analystScopeId: `${dimId}:analyst`,
       runInput: {
-        profile: { id: 'bootstrap-dimension' },
+        profile: { id: 'generate-dimension' },
         params: { dimId, runtime: true },
         message: { role: 'internal', content: dimId },
         context: { source: 'bootstrap', runtimeSource: 'system' },
@@ -62,10 +62,10 @@ describe('bootstrap session execution builder', () => {
     const emitDimensionStart = vi.fn();
     const consumeDimensionResult = vi.fn();
     const dimensionStats: Parameters<
-      typeof buildBootstrapSessionExecutionInput
+      typeof buildGenerateSessionExecutionInput
     >[0]['dimensionStats'] = {};
 
-    const { input, childExecutionState } = buildBootstrapSessionExecutionInput({
+    const { input, childExecutionState } = buildGenerateSessionExecutionInput({
       sessionId: 'session-1',
       activeDimIds: ['a', 'b', 'skipped'],
       skippedDimIds: ['skipped'],
@@ -82,7 +82,7 @@ describe('bootstrap session execution builder', () => {
       consumeTierResult: vi.fn(),
     });
 
-    expect(input.profile.id).toBe('bootstrap-session');
+    expect(input.profile.id).toBe('generate-session');
     expect(input.params?.concurrency).toBe(2);
     expect(
       (input.params?.dimensions as Array<{ id: string; tier: number }>).map((dim) => dim.id)
@@ -172,7 +172,7 @@ describe('bootstrap session execution builder', () => {
     const plan = createPlan('a');
     const emitProcessEvents = vi.fn();
     const previousOnProgress = vi.fn();
-    const { input } = buildBootstrapSessionExecutionInput({
+    const { input } = buildGenerateSessionExecutionInput({
       sessionId: 'session-1',
       activeDimIds: ['a'],
       skippedDimIds: [],
@@ -183,7 +183,7 @@ describe('bootstrap session execution builder', () => {
       createDimensionRunInput: (dimId) => ({
         analystScopeId: `${dimId}:analyst`,
         runInput: {
-          profile: { id: 'bootstrap-dimension' },
+          profile: { id: 'generate-dimension' },
           params: { dimId },
           message: { role: 'internal', content: dimId },
           context: { source: 'bootstrap', runtimeSource: 'system' },
@@ -247,13 +247,13 @@ describe('bootstrap session execution builder', () => {
 
   test('agent progress bridge is a no-op when process event emission is unavailable', () => {
     const runInput = {
-      profile: { id: 'bootstrap-dimension' },
+      profile: { id: 'generate-dimension' },
       message: { role: 'internal', content: 'a' },
       context: { source: 'bootstrap', runtimeSource: 'system' },
     } as AgentRunInput;
 
     expect(
-      attachBootstrapAgentProgressBridge({
+      attachGenerateAgentProgressBridge({
         dimId: 'a',
         runInput,
         sessionId: 'session-1',
@@ -268,8 +268,8 @@ describe('bootstrap session execution builder', () => {
     const consumeTierResult = vi.fn();
     const dimensionStats = {
       a: { status: 'completed', candidates: 1 } as unknown,
-    } as Parameters<typeof buildBootstrapSessionExecutionInput>[0]['dimensionStats'];
-    const { input } = buildBootstrapSessionExecutionInput({
+    } as Parameters<typeof buildGenerateSessionExecutionInput>[0]['dimensionStats'];
+    const { input } = buildGenerateSessionExecutionInput({
       sessionId: 'session-1',
       activeDimIds: ['a'],
       skippedDimIds: [],
@@ -280,7 +280,7 @@ describe('bootstrap session execution builder', () => {
       createDimensionRunInput: (dimId) => ({
         analystScopeId: `${dimId}:analyst`,
         runInput: {
-          profile: { id: 'bootstrap-dimension' },
+          profile: { id: 'generate-dimension' },
           params: { dimId },
           message: { role: 'internal', content: dimId },
           context: { source: 'bootstrap', runtimeSource: 'system' },
@@ -296,7 +296,7 @@ describe('bootstrap session execution builder', () => {
     await factory({ plannedInput: {}, parentInput: input });
     const childInput = (input.context.childContexts as Record<string, AgentRunInput['context']>).a;
     const plannedChildInput = {
-      profile: { id: 'bootstrap-dimension' },
+      profile: { id: 'generate-dimension' },
       params: { dimId: 'a' },
       message: { role: 'internal', content: 'a' },
       context: childInput,
@@ -378,20 +378,20 @@ describe('bootstrap session execution builder', () => {
   });
 
   test('resolves child dimension ids, tier hints, and session abort checks', () => {
-    expect(getBootstrapChildDimensionId({ params: { dimId: 'a' } } as AgentRunInput)).toBe('a');
+    expect(getGenerateChildDimensionId({ params: { dimId: 'a' } } as AgentRunInput)).toBe('a');
     expect(
-      getBootstrapChildDimensionId({ params: { dimId: 1 } } as unknown as AgentRunInput)
+      getGenerateChildDimensionId({ params: { dimId: 1 } } as unknown as AgentRunInput)
     ).toBeNull();
     expect(
-      resolveBootstrapDimensionTier('tiered', createPlan('tiered').dim, { getTierIndex: () => 5 })
+      resolveGenerateDimensionTier('tiered', createPlan('tiered').dim, { getTierIndex: () => 5 })
     ).toBe(1);
     expect(
-      resolveBootstrapDimensionTier('fallback', createPlan('fallback').dim, {
+      resolveGenerateDimensionTier('fallback', createPlan('fallback').dim, {
         getTierIndex: () => -1,
       })
     ).toBe(0);
 
-    const { input } = buildBootstrapSessionExecutionInput({
+    const { input } = buildGenerateSessionExecutionInput({
       sessionId: 'session-1',
       activeDimIds: [],
       skippedDimIds: [],
@@ -413,7 +413,7 @@ describe('bootstrap session execution builder', () => {
     const plan = createPlan('a');
     const createDimensionRunInput = vi.fn();
     const emitDimensionStart = vi.fn();
-    const { input } = buildBootstrapSessionExecutionInput({
+    const { input } = buildGenerateSessionExecutionInput({
       sessionId: 'session-1',
       activeDimIds: ['a'],
       skippedDimIds: [],
@@ -441,22 +441,18 @@ describe('bootstrap session execution builder', () => {
     expect(createDimensionRunInput).not.toHaveBeenCalled();
   });
 
-  test('resolveBootstrapDimensionTier maps tierHint to 0-based tier index', () => {
+  test('resolveGenerateDimensionTier maps tierHint to 0-based tier index', () => {
     const makeTestDim = (tierHint?: number) =>
-      ({ id: 'test', label: 'Test', tierHint }) as BootstrapDimensionPlan['dim'];
+      ({ id: 'test', label: 'Test', tierHint }) as GenerateDimensionPlan['dim'];
 
-    expect(resolveBootstrapDimensionTier('arch', makeTestDim(1), { getTierIndex: () => 0 })).toBe(
-      0
-    );
-    expect(resolveBootstrapDimensionTier('code', makeTestDim(2), { getTierIndex: () => 0 })).toBe(
-      1
-    );
-    expect(resolveBootstrapDimensionTier('err', makeTestDim(3), { getTierIndex: () => 0 })).toBe(2);
+    expect(resolveGenerateDimensionTier('arch', makeTestDim(1), { getTierIndex: () => 0 })).toBe(0);
+    expect(resolveGenerateDimensionTier('code', makeTestDim(2), { getTierIndex: () => 0 })).toBe(1);
+    expect(resolveGenerateDimensionTier('err', makeTestDim(3), { getTierIndex: () => 0 })).toBe(2);
     expect(
-      resolveBootstrapDimensionTier('no-hint', makeTestDim(undefined), { getTierIndex: () => 2 })
+      resolveGenerateDimensionTier('no-hint', makeTestDim(undefined), { getTierIndex: () => 2 })
     ).toBe(2);
     expect(
-      resolveBootstrapDimensionTier('neg', makeTestDim(undefined), { getTierIndex: () => -1 })
+      resolveGenerateDimensionTier('neg', makeTestDim(undefined), { getTierIndex: () => -1 })
     ).toBe(0);
   });
 
@@ -472,7 +468,7 @@ describe('bootstrap session execution builder', () => {
       createDimensionRunInput: (dimId: string) => ({
         analystScopeId: `${dimId}:analyst`,
         runInput: {
-          profile: { id: 'bootstrap-dimension' },
+          profile: { id: 'generate-dimension' },
           params: { dimId },
           message: { role: 'internal', content: dimId },
           context: { source: 'bootstrap', runtimeSource: 'system' },
@@ -485,7 +481,7 @@ describe('bootstrap session execution builder', () => {
     });
 
     // opt-in 设置 → session execution 携带 guard（经 coordinator 均匀传播全子维度 → AgentRuntime → grounding guard）。
-    const guarded = buildBootstrapSessionExecutionInput({
+    const guarded = buildGenerateSessionExecutionInput({
       ...makeOpts(),
       groundingEnforcement: 'guard',
     });
@@ -494,7 +490,7 @@ describe('bootstrap session execution builder', () => {
     expect(typeof guarded.input.execution?.shouldAbort).toBe('function');
 
     // 未设 → 不附加，session execution 无 groundingEnforcement（子运行回退默认 observe-only，零行为变更）。
-    const defaulted = buildBootstrapSessionExecutionInput(makeOpts());
+    const defaulted = buildGenerateSessionExecutionInput(makeOpts());
     expect(defaulted.input.execution?.groundingEnforcement).toBeUndefined();
     expect(typeof defaulted.input.execution?.shouldAbort).toBe('function');
   });

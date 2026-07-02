@@ -3,10 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { JobStore, validateJobDisplaySnapshot } from '@alembic/core/daemon';
-import { BootstrapSessionManager } from '@alembic/core/host-agent-workflows';
+import { GenerateSessionManager } from '@alembic/core/host-agent-workflows';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
-  attachBootstrapProcessEventBridge,
+  attachGenerateProcessEventBridge,
   buildDaemonRescanWorkflowArgs,
   cancelDaemonJob,
   markInterruptedDaemonJobs,
@@ -210,7 +210,7 @@ describe('cancelDaemonJob', () => {
     };
 
     const cancelled = cancelDaemonJob({
-      container: makeContainer(store, { bootstrapTaskManager: taskManager }),
+      container: makeContainer(store, { generateTaskManager: taskManager }),
       jobId: created.id,
       reason: 'Cancelled by Dashboard Jobs view',
     });
@@ -258,8 +258,8 @@ describe('cancelDaemonJob', () => {
     });
     store.markRunning(created.id);
 
-    const bootstrapSessionManager = new BootstrapSessionManager();
-    const workflowSession = bootstrapSessionManager.createSession({
+    const generateSessionManager = new GenerateSessionManager();
+    const workflowSession = generateSessionManager.createSession({
       dimensions: [{ id: 'architecture', label: 'Architecture' }],
       projectContext: {
         fileCount: 4,
@@ -289,7 +289,7 @@ describe('cancelDaemonJob', () => {
       container: makeContainer(
         store,
         {
-          bootstrapSessionManager,
+          generateSessionManager,
           coverageLedgerRepository,
           jobProcessEventRecorder: recorder,
           logger,
@@ -311,7 +311,7 @@ describe('cancelDaemonJob', () => {
       error: { message: 'bounded rescan probe exceeded its window' },
       status: 'cancelled',
     });
-    expect(bootstrapSessionManager.getAnySession(workflowSession.id, { projectRoot })).toBeNull();
+    expect(generateSessionManager.getAnySession(workflowSession.id, { projectRoot })).toBeNull();
     expect(coverageLedgerRepository.upsertRound).toHaveBeenCalledWith(
       expect.objectContaining({
         completedAt: expect.any(Number),
@@ -423,11 +423,11 @@ describe('buildDaemonRescanWorkflowArgs', () => {
   });
 });
 
-describe('attachBootstrapProcessEventBridge', () => {
+describe('attachGenerateProcessEventBridge', () => {
   test('records explicit bootstrap process event payloads for the active daemon job', () => {
     const eventBus = new EventEmitter();
     const recorder = new JobProcessEventRecorder();
-    const cleanup = attachBootstrapProcessEventBridge({
+    const cleanup = attachGenerateProcessEventBridge({
       container: makeContainer(new JobStore({ projectRoot: makeProjectRoot() }), { eventBus }),
       jobId: 'job_process_bridge',
       logger: makeLogger(),
@@ -468,7 +468,7 @@ describe('attachBootstrapProcessEventBridge', () => {
     const eventBus = new EventEmitter();
     const recorder = new JobProcessEventRecorder();
     const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-runner-data-'));
-    const cleanup = attachBootstrapProcessEventBridge({
+    const cleanup = attachGenerateProcessEventBridge({
       container: makeContainer(
         new JobStore({ projectRoot: dataRoot }),
         { eventBus },
@@ -561,7 +561,7 @@ describe('attachBootstrapProcessEventBridge', () => {
     const job = store.create({ kind: 'bootstrap', source: 'dashboard' });
     store.markRunning(job.id);
     const snapshotStore = new JobDisplaySnapshotStore({ dataRoot });
-    const cleanup = attachBootstrapProcessEventBridge({
+    const cleanup = attachGenerateProcessEventBridge({
       container: makeContainer(
         store,
         { eventBus, jobDisplaySnapshotStore: snapshotStore },
@@ -642,7 +642,7 @@ describe('attachBootstrapProcessEventBridge', () => {
     const eventBus = new EventEmitter();
     const recorder = new JobProcessEventRecorder();
     const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-runner-data-'));
-    const cleanup = attachBootstrapProcessEventBridge({
+    const cleanup = attachGenerateProcessEventBridge({
       container: makeContainer(
         new JobStore({ projectRoot: dataRoot }),
         { eventBus },
@@ -743,7 +743,7 @@ describe('attachBootstrapProcessEventBridge', () => {
     const eventBus = new EventEmitter();
     const recorder = new JobProcessEventRecorder();
     const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-runner-data-'));
-    const cleanup = attachBootstrapProcessEventBridge({
+    const cleanup = attachGenerateProcessEventBridge({
       container: makeContainer(
         new JobStore({ projectRoot: dataRoot }),
         { eventBus },
@@ -833,7 +833,7 @@ describe('attachBootstrapProcessEventBridge', () => {
     const eventBus = new EventEmitter();
     const recorder = new JobProcessEventRecorder();
     const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-runner-data-'));
-    const cleanup = attachBootstrapProcessEventBridge({
+    const cleanup = attachGenerateProcessEventBridge({
       container: makeContainer(
         new JobStore({ projectRoot: dataRoot }),
         { eventBus },
@@ -928,7 +928,7 @@ describe('attachBootstrapProcessEventBridge', () => {
   test('preserves canonical PCV N9 record repair evidence in job process events', () => {
     const eventBus = new EventEmitter();
     const recorder = new JobProcessEventRecorder();
-    const cleanup = attachBootstrapProcessEventBridge({
+    const cleanup = attachGenerateProcessEventBridge({
       container: makeContainer(new JobStore({ projectRoot: makeProjectRoot() }), { eventBus }),
       jobId: 'job_pcv_n9_record_repair',
       logger: makeLogger(),
@@ -993,7 +993,7 @@ describe('attachBootstrapProcessEventBridge', () => {
   test('reports precise PCV N9 missing-link reasons when Agent evidence is incomplete', () => {
     const eventBus = new EventEmitter();
     const recorder = new JobProcessEventRecorder();
-    const cleanup = attachBootstrapProcessEventBridge({
+    const cleanup = attachGenerateProcessEventBridge({
       container: makeContainer(new JobStore({ projectRoot: makeProjectRoot() }), { eventBus }),
       jobId: 'job_pcv_n9_gap',
       logger: makeLogger(),
@@ -1068,7 +1068,7 @@ describe('attachBootstrapProcessEventBridge', () => {
   test('records process event drafts carried by completed task results', () => {
     const eventBus = new EventEmitter();
     const recorder = new JobProcessEventRecorder();
-    const cleanup = attachBootstrapProcessEventBridge({
+    const cleanup = attachGenerateProcessEventBridge({
       container: makeContainer(new JobStore({ projectRoot: makeProjectRoot() }), { eventBus }),
       jobId: 'job_task_result_bridge',
       logger: makeLogger(),

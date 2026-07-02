@@ -1,10 +1,10 @@
-import { describe, expect, test } from 'vitest';
 import { BudgetPolicy } from '@alembic/agent/agent';
 import {
   AgentProfileCompiler,
   AgentProfileRegistry,
   AgentStageFactoryRegistry,
 } from '@alembic/agent/service';
+import { describe, expect, test } from 'vitest';
 
 function createCompiler() {
   return new AgentProfileCompiler({
@@ -119,15 +119,15 @@ describe('AgentProfileCompiler', () => {
     const compiler = createCompiler();
 
     const candidateProfile = compiler.compile(
-      { id: 'bootstrap-dimension' },
+      { id: 'generate-dimension' },
       { params: { needsCandidates: true, hasExistingRecipes: false, prescreenDone: false } }
     );
     const evolutionProfile = compiler.compile(
-      { id: 'bootstrap-dimension' },
+      { id: 'generate-dimension' },
       { params: { needsCandidates: true, hasExistingRecipes: true, prescreenDone: false } }
     );
     const skillOnlyProfile = compiler.compile(
-      { id: 'bootstrap-dimension' },
+      { id: 'generate-dimension' },
       { params: { needsCandidates: false, hasExistingRecipes: false, prescreenDone: false } }
     );
 
@@ -150,17 +150,17 @@ describe('AgentProfileCompiler', () => {
   test('compiles bootstrap-session as a pure parent coordination profile', () => {
     const compiler = createCompiler();
 
-    const profile = compiler.compile({ id: 'bootstrap-session' }, { params: { concurrency: 4 } });
+    const profile = compiler.compile({ id: 'generate-session' }, { params: { concurrency: 4 } });
 
     expect(profile).toMatchObject({
-      id: 'bootstrap-session',
+      id: 'generate-session',
       basePreset: 'insight',
       actionSpace: { mode: 'none' },
       concurrency: {
         mode: 'tiered',
-        partitioner: 'bootstrapSessionDimensions',
-        childProfile: 'bootstrap-dimension',
-        merge: 'bootstrapSessionResults',
+        partitioner: 'generateSessionDimensions',
+        childProfile: 'generate-dimension',
+        merge: 'generateSessionResults',
         concurrency: 4,
       },
     });

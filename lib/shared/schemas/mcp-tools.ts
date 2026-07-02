@@ -430,8 +430,8 @@ export type SkillInput = z.infer<typeof SkillInput>;
 //  11. alembic_bootstrap — 无参数
 // ══════════════════════════════════════════════════════
 
-export const BootstrapInput = z.object({});
-export type BootstrapInput = z.infer<typeof BootstrapInput>;
+export const GenerateInput = z.object({});
+export type GenerateInput = z.infer<typeof GenerateInput>;
 
 // ══════════════════════════════════════════════════════
 //  11a. alembic_rescan — 增量知识更新
@@ -603,7 +603,7 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   alembic_guard: GuardInput,
   alembic_submit_knowledge: SubmitKnowledgeInput,
   alembic_skill: SkillInput,
-  alembic_bootstrap: BootstrapInput,
+  alembic_bootstrap: GenerateInput,
   alembic_rescan: RescanInput,
   alembic_dimension_complete: DimensionCompleteInput,
   alembic_knowledge_lifecycle: KnowledgeLifecycleInput,

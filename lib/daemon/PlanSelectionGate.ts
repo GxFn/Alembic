@@ -22,14 +22,14 @@ import {
   recordJobProcessEvent,
   stringArrayArg,
 } from './DaemonJobWorkflowHelpers.js';
-import type { BootstrapPlanGateResult, RunDaemonJobOptions } from './DaemonJobWorkflowTypes.js';
+import type { GeneratePlanGateResult, RunDaemonJobOptions } from './DaemonJobWorkflowTypes.js';
 
 // C-1(2026-07-02 统一重构)：投影预算改由 Core 单源常量提供，与 host-agent 同一定义。
 const PLAN_FACTS_BUDGET_BYTES = PLAN_FACTS_PROJECTION_BUDGET_BYTES;
 
-export async function runBootstrapPlanGate(
+export async function runGeneratePlanGate(
   options: RunDaemonJobOptions
-): Promise<BootstrapPlanGateResult> {
+): Promise<GeneratePlanGateResult> {
   return runPlanSelectionGate(options, {
     generationStage: 'coldStart',
     label: 'Bootstrap',
@@ -44,7 +44,7 @@ export async function runPlanSelectionGate(
     label: string;
     source: 'alembic-main-bootstrap' | 'alembic-main-rescan';
   }
-): Promise<BootstrapPlanGateResult> {
+): Promise<GeneratePlanGateResult> {
   const recorder = getJobProcessEventRecorder(options.container);
   const maxFiles = numberArg(options.args?.maxFiles, 500);
   const contentMaxLines = numberArg(options.args?.contentMaxLines, 120);

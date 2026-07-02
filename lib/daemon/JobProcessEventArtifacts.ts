@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { JobProcessEventArtifactRef } from '@alembic/core/daemon';
-import type { BootstrapProcessEventTextArtifactCandidate } from '../service/bootstrap/bootstrap-event-types.js';
+import type { GenerateProcessEventTextArtifactCandidate } from '../service/generate/generate-event-types.js';
 
 const JOB_ARTIFACT_ROOT = 'job-artifacts';
 const ARTIFACT_FILE_MODE = 0o600;
@@ -26,7 +26,7 @@ export function materializeJobProcessEventTextArtifact({
   jobId,
   iteration,
 }: {
-  candidate: BootstrapProcessEventTextArtifactCandidate;
+  candidate: GenerateProcessEventTextArtifactCandidate;
   dataRoot: string;
   dimensionId?: string | null;
   jobId: string;
@@ -104,7 +104,7 @@ function buildArtifactId({
   iteration,
   jobId,
 }: {
-  candidate: BootstrapProcessEventTextArtifactCandidate;
+  candidate: GenerateProcessEventTextArtifactCandidate;
   dimensionId?: string | null;
   iteration?: unknown;
   jobId: string;

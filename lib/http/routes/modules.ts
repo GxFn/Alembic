@@ -11,7 +11,7 @@ import Logger from '@alembic/core/logging';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
 import {
-  ModuleBootstrapBody,
+  ModuleGenerateBody,
   ModuleRescanBody,
   ScanFolderBody,
   ScanProjectBody,
@@ -523,7 +523,7 @@ router.get('/project-info', async (req: Request, res: Response): Promise<void> =
  */
 router.post(
   '/bootstrap',
-  validate(ModuleBootstrapBody),
+  validate(ModuleGenerateBody),
   async (req: Request, res: Response): Promise<void> => {
     const { maxFiles, skipGuard, contentMaxLines } = req.body || {};
 
@@ -616,7 +616,7 @@ router.get('/bootstrap/status', async (req: Request, res: Response): Promise<voi
 
   let taskManager: { getSessionStatus(): Record<string, unknown> } | null = null;
   try {
-    taskManager = container.get('bootstrapTaskManager');
+    taskManager = container.get('generateTaskManager');
   } catch {
     /* not registered */
   }

@@ -1,9 +1,9 @@
 import type { SessionStore } from '@alembic/agent/memory';
 import { describe, expect, test, vi } from 'vitest';
 import {
-  consumeBootstrapTierReflection,
+  consumeGenerateTierReflection,
   type DimensionStat,
-} from '../../lib/workflows/ai-execution/BootstrapConsumers.js';
+} from '../../lib/workflows/ai-execution/GenerateConsumers.js';
 
 describe('bootstrap tier reflection consumer', () => {
   test('builds and stores tier reflection from completed dimension stats', () => {
@@ -13,7 +13,7 @@ describe('bootstrap tier reflection consumer', () => {
       ['ui', { candidateCount: 1, durationMs: 20 }],
     ]);
 
-    const reflection = consumeBootstrapTierReflection({
+    const reflection = consumeGenerateTierReflection({
       tierIndex: 0,
       tierResults,
       sessionStore: {

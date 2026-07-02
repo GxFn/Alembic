@@ -18,11 +18,11 @@ import type {
   ProjectScopeSourceIdentity,
   ProjectScopeSourceIdentityMap,
 } from '../../project-scope/ProjectScopeAnalysis.js';
-import { buildBootstrapPcvStageNodeContext } from './PcvNodeEvidence.js';
+import { buildGeneratePcvStageNodeContext } from './PcvNodeEvidence.js';
 
 // ── Dimension input builder ──────────────────────────────
 
-export interface BootstrapFileEntry {
+export interface GenerateFileEntry {
   name: string;
   path: string;
   relativePath: string;
@@ -31,7 +31,7 @@ export interface BootstrapFileEntry {
   targetName?: string;
 }
 
-export interface BuildBootstrapDimensionRunInputOptions {
+export interface BuildGenerateDimensionRunInputOptions {
   dimId: string;
   dimConfig: { label?: string };
   needsCandidates: boolean;
@@ -40,7 +40,7 @@ export interface BuildBootstrapDimensionRunInputOptions {
   sessionId: string;
   primaryLang?: string | null;
   projectLang?: string | null;
-  allFiles: BootstrapFileEntry[] | null;
+  allFiles: GenerateFileEntry[] | null;
   systemRunContext: SystemRunContext;
   strategyContext: Record<string, unknown>;
   memoryCoordinator: MemoryCoordinator;
@@ -48,7 +48,7 @@ export interface BuildBootstrapDimensionRunInputOptions {
   sessionAbortSignal?: AbortSignal | null;
 }
 
-export function buildBootstrapDimensionRunInput({
+export function buildGenerateDimensionRunInput({
   dimId,
   dimConfig,
   needsCandidates,
@@ -63,9 +63,9 @@ export function buildBootstrapDimensionRunInput({
   memoryCoordinator,
   projectScopeSourceIdentityMap,
   sessionAbortSignal,
-}: BuildBootstrapDimensionRunInputOptions): AgentRunInput {
+}: BuildGenerateDimensionRunInputOptions): AgentRunInput {
   const analystScopeId = systemRunContext.scopeId || `${dimId}:analyst`;
-  const pcvStageNodeContext = buildBootstrapPcvStageNodeContext();
+  const pcvStageNodeContext = buildGeneratePcvStageNodeContext();
   const compactSystemRunContext = compactBootstrapSystemRunContext(systemRunContext);
   const sharedState = {
     ...asRecord(compactSystemRunContext.sharedState),
@@ -98,7 +98,7 @@ export function buildBootstrapDimensionRunInput({
     },
   };
   return {
-    profile: { id: 'bootstrap-dimension' },
+    profile: { id: 'generate-dimension' },
     params: {
       dimId,
       needsCandidates,
@@ -182,7 +182,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 // ── Session input builder ────────────────────────────────
 
-export interface BootstrapSessionChildRunPlan {
+export interface GenerateSessionChildRunPlan {
   id: string;
   label?: string;
   tier?: number;
@@ -193,9 +193,9 @@ export interface BootstrapSessionChildRunPlan {
   }) => AgentRunInput | Promise<AgentRunInput>;
 }
 
-export interface BuildBootstrapSessionRunInputOptions {
+export interface BuildGenerateSessionRunInputOptions {
   sessionId: string;
-  children: BootstrapSessionChildRunPlan[];
+  children: GenerateSessionChildRunPlan[];
   params?: Record<string, unknown>;
   message?: Partial<AgentRunMessage>;
   context?: Partial<AgentRunContext>;
@@ -203,7 +203,7 @@ export interface BuildBootstrapSessionRunInputOptions {
   presentation?: AgentRunPresentationOptions;
 }
 
-export function buildBootstrapSessionRunInput({
+export function buildGenerateSessionRunInput({
   sessionId,
   children,
   params,
@@ -211,9 +211,9 @@ export function buildBootstrapSessionRunInput({
   context,
   execution,
   presentation,
-}: BuildBootstrapSessionRunInputOptions): AgentRunInput {
+}: BuildGenerateSessionRunInputOptions): AgentRunInput {
   return {
-    profile: { id: 'bootstrap-session' },
+    profile: { id: 'generate-session' },
     params: {
       ...(params || {}),
       dimensions: children.map((child) => ({
@@ -232,6 +232,7 @@ export function buildBootstrapSessionRunInput({
       history: message?.history,
       metadata: {
         sessionId,
+        // wire:process-event metadata.phase 持久化值,与 profile id 同拼写不同义,冻结(wire-contract)
         phase: 'bootstrap-session',
         ...(message?.metadata || {}),
       },
@@ -261,7 +262,7 @@ export function buildBootstrapSessionRunInput({
   };
 }
 
-function firstChildLang(children: BootstrapSessionChildRunPlan[]) {
+function firstChildLang(children: GenerateSessionChildRunPlan[]) {
   return (
     children.find((child) => child.input.context.lang !== undefined)?.input.context.lang || null
   );

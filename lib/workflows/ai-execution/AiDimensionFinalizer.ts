@@ -11,7 +11,7 @@ import Logger from '@alembic/core/logging';
 import {
   mergeAgentEfficiencySummaries,
   normalizeAgentEfficiencySummary,
-} from '#service/bootstrap/BootstrapEfficiency.js';
+} from '#service/generate/GenerateEfficiency.js';
 import {
   runWorkflowCompletionFinalizer,
   type WorkflowCompletionFinalizerResult,
@@ -20,17 +20,17 @@ import {
 } from '../completion/CompletionFinalizer.js';
 import type { AiDimensionPreparation } from './AiDimensionPreparation.js';
 import type { AiDimensionSessionResult } from './AiDimensionSessionRunner.js';
-import { consumeBootstrapSkills, type SkillResults } from './BootstrapConsumers.js';
+import { consumeGenerateSkills, type SkillResults } from './GenerateConsumers.js';
 import {
-  type BootstrapPcvNodeEvidenceSet,
+  type GeneratePcvNodeEvidenceSet,
   PCV_COLD_START_NODE_LOCAL_CONTRACT,
   PCV_COLD_START_NODE_LOCAL_CONTRACT_VERSION,
   PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT,
   PCV_NODE_EVIDENCE_ENVELOPE_CONTRACT_VERSION,
 } from './PcvNodeEvidence.js';
-import type { initializeBootstrapRuntime } from './RuntimeInitializer.js';
+import type { initializeGenerateRuntime } from './RuntimeInitializer.js';
 
-type AiDimensionRuntime = Awaited<ReturnType<typeof initializeBootstrapRuntime>>;
+type AiDimensionRuntime = Awaited<ReturnType<typeof initializeGenerateRuntime>>;
 
 interface PcvAnalyzeGroundingProcessMetric {
   burnCount: number;
@@ -206,7 +206,7 @@ export async function consumeAiDimensionSkillsStep({
   sessionResult: AiDimensionSessionResult;
   shouldAbort: () => boolean;
 }): Promise<SkillResults> {
-  return consumeBootstrapSkills({
+  return consumeGenerateSkills({
     ctx: preparation.ctx,
     dimensions: preparation.dimensions,
     dimensionCandidates: sessionResult.dimensionCandidates,
@@ -493,7 +493,7 @@ export function augmentWorkflowReportWithPcvNodeLocalBaseline(
           ] as const
       )
       .filter(([, evidence]) => Boolean(evidence))
-  ) as Record<string, BootstrapPcvNodeEvidenceSet>;
+  ) as Record<string, GeneratePcvNodeEvidenceSet>;
   const dimensionIds = Object.keys(dimensionEvidence);
   if (dimensionIds.length === 0) {
     return false;
@@ -554,7 +554,7 @@ export function augmentWorkflowReportWithPcvNodeLocalBaseline(
   return true;
 }
 
-function normalizePcvNodeEvidenceEnvelope(value: unknown): BootstrapPcvNodeEvidenceSet | null {
+function normalizePcvNodeEvidenceEnvelope(value: unknown): GeneratePcvNodeEvidenceSet | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -567,36 +567,36 @@ function normalizePcvNodeEvidenceEnvelope(value: unknown): BootstrapPcvNodeEvide
   return normalizePcvNodeEvidenceSet(value.evidence);
 }
 
-function normalizePcvNodeEvidenceSet(value: unknown): BootstrapPcvNodeEvidenceSet | null {
+function normalizePcvNodeEvidenceSet(value: unknown): GeneratePcvNodeEvidenceSet | null {
   if (!isRecord(value)) {
     return null;
   }
-  const evidence: BootstrapPcvNodeEvidenceSet = {};
+  const evidence: GeneratePcvNodeEvidenceSet = {};
   if (isRecord(value.n8)) {
-    evidence.n8 = value.n8 as unknown as NonNullable<BootstrapPcvNodeEvidenceSet['n8']>;
+    evidence.n8 = value.n8 as unknown as NonNullable<GeneratePcvNodeEvidenceSet['n8']>;
   }
   if (isRecord(value.groundingLedger)) {
     evidence.groundingLedger = value.groundingLedger as unknown as NonNullable<
-      BootstrapPcvNodeEvidenceSet['groundingLedger']
+      GeneratePcvNodeEvidenceSet['groundingLedger']
     >;
   }
   if (isRecord(value.n9QualityGate)) {
     evidence.n9QualityGate = value.n9QualityGate as unknown as NonNullable<
-      BootstrapPcvNodeEvidenceSet['n9QualityGate']
+      GeneratePcvNodeEvidenceSet['n9QualityGate']
     >;
   }
   if (isRecord(value.n9RecordRepair)) {
     evidence.n9RecordRepair = value.n9RecordRepair as unknown as NonNullable<
-      BootstrapPcvNodeEvidenceSet['n9RecordRepair']
+      GeneratePcvNodeEvidenceSet['n9RecordRepair']
     >;
   }
   if (isRecord(value.n12)) {
-    evidence.n12 = value.n12 as unknown as NonNullable<BootstrapPcvNodeEvidenceSet['n12']>;
+    evidence.n12 = value.n12 as unknown as NonNullable<GeneratePcvNodeEvidenceSet['n12']>;
   }
   return Object.keys(evidence).length > 0 ? evidence : null;
 }
 
-function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcvNodeEvidenceSet>) {
+function summarizePcvNodeEvidence(dimensionEvidence: Record<string, GeneratePcvNodeEvidenceSet>) {
   const nodes: Record<string, Record<string, unknown>> = {};
   let linkedNodes = 0;
   let blockedNodes = 0;
@@ -652,7 +652,7 @@ function summarizePcvNodeEvidence(dimensionEvidence: Record<string, BootstrapPcv
 }
 
 function summarizePcvAnalyzeGrounding(
-  dimensionEvidence: Record<string, BootstrapPcvNodeEvidenceSet>
+  dimensionEvidence: Record<string, GeneratePcvNodeEvidenceSet>
 ): PcvProcessMetrics | null {
   let dimensionsWithEvidence = 0;
   let burnCount = 0;

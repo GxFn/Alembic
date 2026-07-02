@@ -17,8 +17,8 @@ import {
   saveDimensionCheckpoint,
 } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
-import type { AgentEfficiencySummary } from '#service/bootstrap/BootstrapEfficiency.js';
-import type { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
+import type { AgentEfficiencySummary } from '#service/generate/GenerateEfficiency.js';
+import type { GenerateEventEmitter } from '#service/generate/GenerateEventEmitter.js';
 import type { ProjectContextDimensionResultHook } from '../project-context/ProjectContextWorkflowFacts.js';
 import {
   generateSkill,
@@ -26,27 +26,27 @@ import {
 } from '../skill-delivery/SkillCompletionCapability.js';
 import {
   type AgentResultLike,
-  type BootstrapDimensionAnalysisReport,
-  type BootstrapDimensionProducerResult,
-  type BootstrapDimensionProjection,
-  type BootstrapDimensionRunIssue,
-  type BootstrapSessionProjection,
   type DimensionFinding,
+  type GenerateDimensionAnalysisReport,
+  type GenerateDimensionProducerResult,
+  type GenerateDimensionProjection,
+  type GenerateDimensionRunIssue,
+  type GenerateSessionProjection,
   isRecoverableProducerTimeoutIssue,
   normalizeDimensionFindings,
-  projectBootstrapSessionResult,
-  resolveBootstrapDimensionRunIssue,
+  projectGenerateSessionResult,
+  resolveGenerateDimensionRunIssue,
   type ToolCallRecord,
 } from './AgentRunProjections.js';
 import { type DimensionContext, parseDimensionDigest } from './DimensionContext.js';
 import {
-  type BootstrapPcvNodeEvidenceSet,
   buildPcvAnalyzeGroundingLedgerSummary,
   buildPcvN9StageProjectionEvidence,
   buildPcvN12ConsumerPersistenceEvidence,
   buildPcvN12ErrorEvidence,
   buildPcvNodeEvidenceEnvelope,
-  mergeBootstrapPcvNodeEvidence,
+  type GeneratePcvNodeEvidenceSet,
+  mergeGeneratePcvNodeEvidence,
   type PcvNodeEvidenceEnvelope,
   successfulProducerSubmitCalls,
 } from './PcvNodeEvidence.js';
@@ -83,8 +83,8 @@ export interface CandidateResults {
 }
 
 export interface DimensionCandidateData {
-  analysisReport: BootstrapDimensionAnalysisReport;
-  producerResult: BootstrapDimensionProducerResult;
+  analysisReport: GenerateDimensionAnalysisReport;
+  producerResult: GenerateDimensionProducerResult;
 }
 
 interface BootstrapDimensionConsumerContext {
@@ -108,15 +108,15 @@ interface RealtimeServiceLike {
 }
 
 type BootstrapDimensionCompleteEventPayload = Parameters<
-  BootstrapEventEmitter['emitDimensionComplete']
+  GenerateEventEmitter['emitDimensionComplete']
 >[1];
 
-export interface ConsumeBootstrapDimensionResultOptions {
+export interface ConsumeGenerateDimensionResultOptions {
   ctx: BootstrapDimensionConsumerContext;
   dimId: string;
   dimConfig: { label?: string };
   needsCandidates: boolean;
-  projection: BootstrapDimensionProjection;
+  projection: GenerateDimensionProjection;
   runResult: AgentResultLike;
   dimStartTime: number;
   analystScopeId: string;
@@ -126,21 +126,21 @@ export interface ConsumeBootstrapDimensionResultOptions {
   candidateResults: CandidateResults;
   dimensionCandidates: Record<string, DimensionCandidateData>;
   dimensionStats: Record<string, DimensionStat>;
-  emitter: BootstrapEventEmitter;
+  emitter: GenerateEventEmitter;
   dataRoot: string;
   sessionId: string;
   onDimensionResult?: ProjectContextDimensionResultHook;
 }
 
-export interface BootstrapDimensionRunIssueState {
+export interface GenerateDimensionRunIssueState {
   effectiveCandidateCount: number;
   isNormalCompletion: boolean;
-  rawRunIssue: BootstrapDimensionRunIssue | null;
+  rawRunIssue: GenerateDimensionRunIssue | null;
   recoveredProducerTimeout: boolean;
-  runIssue: BootstrapDimensionRunIssue | null;
+  runIssue: GenerateDimensionRunIssue | null;
 }
 
-export interface BootstrapDimensionCandidateAccountingResult {
+export interface GenerateDimensionCandidateAccountingResult {
   acceptedSubmitCalls: ToolCallRecord[];
   acceptedSourceRefs: string[];
   effectiveCandidateCount: number;
@@ -152,26 +152,26 @@ export interface BootstrapDimensionCandidateAccountingResult {
   }>;
 }
 
-export interface BootstrapDimensionCheckpointDecision {
+export interface GenerateDimensionCheckpointDecision {
   reason: string | null;
   shouldSave: boolean;
 }
 
-export interface BootstrapDimensionPcvEvidenceResult {
-  pcvNodeEvidence: BootstrapPcvNodeEvidenceSet;
+export interface GenerateDimensionPcvEvidenceResult {
+  pcvNodeEvidence: GeneratePcvNodeEvidenceSet;
   pcvNodeEvidenceEnvelope: PcvNodeEvidenceEnvelope;
 }
 
-export function resolveBootstrapDimensionConsumerRunIssue({
+export function resolveGenerateDimensionConsumerRunIssue({
   needsCandidates,
   projection,
   runResult,
 }: {
   needsCandidates: boolean;
-  projection: BootstrapDimensionProjection;
+  projection: GenerateDimensionProjection;
   runResult: AgentResultLike;
-}): BootstrapDimensionRunIssueState {
-  const rawRunIssue = resolveBootstrapDimensionRunIssue(runResult);
+}): GenerateDimensionRunIssueState {
+  const rawRunIssue = resolveGenerateDimensionRunIssue(runResult);
   const recoveredProducerTimeout = isRecoverableProducerTimeoutIssue({
     issue: rawRunIssue,
     needsCandidates,
@@ -189,7 +189,7 @@ export function resolveBootstrapDimensionConsumerRunIssue({
   };
 }
 
-export function applyBootstrapDimensionCandidateAccounting({
+export function applyGenerateDimensionCandidateAccounting({
   candidateResults,
   dimId,
   dimensionCandidates,
@@ -199,9 +199,9 @@ export function applyBootstrapDimensionCandidateAccounting({
   candidateResults: CandidateResults;
   dimId: string;
   dimensionCandidates: Record<string, DimensionCandidateData>;
-  projection: BootstrapDimensionProjection;
-  runIssueState: BootstrapDimensionRunIssueState;
-}): BootstrapDimensionCandidateAccountingResult {
+  projection: GenerateDimensionProjection;
+  runIssueState: GenerateDimensionRunIssueState;
+}): GenerateDimensionCandidateAccountingResult {
   candidateResults.created += runIssueState.effectiveCandidateCount;
   dimensionCandidates[dimId] = {
     analysisReport: projection.analysisReport,
@@ -231,7 +231,7 @@ function writeBootstrapDimensionReport({
   memoryCoordinator,
   sessionStore,
 }: {
-  analysisReport: BootstrapDimensionAnalysisReport;
+  analysisReport: GenerateDimensionAnalysisReport;
   analystScopeId: string;
   dimId: string;
   memoryCoordinator: MemoryCoordinator;
@@ -262,11 +262,11 @@ function writeBootstrapDimensionDigestAndCandidates({
   producerResult,
   sessionStore,
 }: {
-  analysisReport: BootstrapDimensionAnalysisReport;
-  candidateAccounting: BootstrapDimensionCandidateAccountingResult;
+  analysisReport: GenerateDimensionAnalysisReport;
+  candidateAccounting: GenerateDimensionCandidateAccountingResult;
   dimContext: DimensionContext;
   dimId: string;
-  producerResult: BootstrapDimensionProducerResult;
+  producerResult: GenerateDimensionProducerResult;
   sessionStore: SessionStore;
 }) {
   const digest = parseDimensionDigest(producerResult.reply) || {
@@ -298,7 +298,7 @@ function writeBootstrapDimensionDigestAndCandidates({
   return digest;
 }
 
-export function buildBootstrapDimensionCompleteEventPayload({
+export function buildGenerateDimensionCompleteEventPayload({
   candidateAccounting,
   combinedTokenUsage,
   dimStartTime,
@@ -308,12 +308,12 @@ export function buildBootstrapDimensionCompleteEventPayload({
   runResult,
   runtimeToolCalls,
 }: {
-  candidateAccounting: BootstrapDimensionCandidateAccountingResult;
+  candidateAccounting: GenerateDimensionCandidateAccountingResult;
   combinedTokenUsage: { input: number; output: number };
   dimStartTime: number;
   efficiency: AgentEfficiencySummary | null | undefined;
   needsCandidates: boolean;
-  runIssueState: BootstrapDimensionRunIssueState;
+  runIssueState: GenerateDimensionRunIssueState;
   runResult: AgentResultLike;
   runtimeToolCalls: ToolCallRecord[];
 }): BootstrapDimensionCompleteEventPayload {
@@ -332,7 +332,7 @@ export function buildBootstrapDimensionCompleteEventPayload({
   } as BootstrapDimensionCompleteEventPayload;
 }
 
-export function buildBootstrapDimensionPcvEvidenceEnvelope({
+export function buildGenerateDimensionPcvEvidenceEnvelope({
   dimConfig,
   dimId,
   existingEvidence,
@@ -346,11 +346,11 @@ export function buildBootstrapDimensionPcvEvidenceEnvelope({
   dimId: string;
   existingEvidence?: unknown;
   needsCandidates: boolean;
-  projection: BootstrapDimensionProjection;
-  runIssueState: BootstrapDimensionRunIssueState;
+  projection: GenerateDimensionProjection;
+  runIssueState: GenerateDimensionRunIssueState;
   runResult: AgentResultLike;
   sessionStore: SessionStore;
-}): BootstrapDimensionPcvEvidenceResult {
+}): GenerateDimensionPcvEvidenceResult {
   const groundingLedger = buildPcvAnalyzeGroundingLedgerSummary({
     dimId,
     label: dimConfig.label,
@@ -368,7 +368,7 @@ export function buildBootstrapDimensionPcvEvidenceEnvelope({
     runResult,
     stage: 'record_repair',
   });
-  const pcvNodeEvidence = mergeBootstrapPcvNodeEvidence(existingEvidence, {
+  const pcvNodeEvidence = mergeGeneratePcvNodeEvidence(existingEvidence, {
     ...(groundingLedger ? { groundingLedger } : {}),
     ...(n9QualityGate ? { n9QualityGate } : {}),
     ...(n9RecordRepair ? { n9RecordRepair } : {}),
@@ -391,11 +391,11 @@ export function buildBootstrapDimensionPcvEvidenceEnvelope({
   };
 }
 
-export function decideBootstrapDimensionCheckpoint({
+export function decideGenerateDimensionCheckpoint({
   analysisText,
 }: {
   analysisText: string;
-}): BootstrapDimensionCheckpointDecision {
+}): GenerateDimensionCheckpointDecision {
   if (analysisText.length >= 50) {
     return { reason: null, shouldSave: true };
   }
@@ -405,7 +405,7 @@ export function decideBootstrapDimensionCheckpoint({
   };
 }
 
-export function recordBootstrapDimensionTokenUsage({
+export function recordGenerateDimensionTokenUsage({
   combinedTokenUsage,
   ctx,
   dimId,
@@ -475,20 +475,20 @@ export function recordBootstrapDimensionTokenUsage({
   }
 }
 
-export function applyBootstrapDimensionErrorAccounting({
+export function applyGenerateDimensionErrorAccounting({
   candidateResults,
   dimId,
   issue,
 }: {
   candidateResults: CandidateResults;
   dimId: string;
-  issue: BootstrapDimensionRunIssue;
+  issue: GenerateDimensionRunIssue;
 }): void {
   candidateResults.errors.push({ dimId, error: issue.reason });
 }
 
-export function buildBootstrapDimensionErrorEventPayload(
-  issue: BootstrapDimensionRunIssue
+export function buildGenerateDimensionErrorEventPayload(
+  issue: GenerateDimensionRunIssue
 ): BootstrapDimensionCompleteEventPayload {
   return {
     type: 'error',
@@ -497,7 +497,7 @@ export function buildBootstrapDimensionErrorEventPayload(
   } as BootstrapDimensionCompleteEventPayload;
 }
 
-export function buildBootstrapDimensionErrorPcvEvidenceEnvelope({
+export function buildGenerateDimensionErrorPcvEvidenceEnvelope({
   dimId,
   error,
   existingEvidence,
@@ -505,8 +505,8 @@ export function buildBootstrapDimensionErrorPcvEvidenceEnvelope({
   dimId: string;
   error: string;
   existingEvidence?: unknown;
-}): BootstrapDimensionPcvEvidenceResult {
-  const pcvNodeEvidence = mergeBootstrapPcvNodeEvidence(existingEvidence, {
+}): GenerateDimensionPcvEvidenceResult {
+  const pcvNodeEvidence = mergeGeneratePcvNodeEvidence(existingEvidence, {
     n12: buildPcvN12ErrorEvidence({ dimId, error }),
   });
   return {
@@ -519,7 +519,7 @@ export function buildBootstrapDimensionErrorPcvEvidenceEnvelope({
   };
 }
 
-export async function consumeBootstrapDimensionResult({
+export async function consumeGenerateDimensionResult({
   ctx,
   dimId,
   dimConfig,
@@ -538,7 +538,7 @@ export async function consumeBootstrapDimensionResult({
   dataRoot,
   sessionId,
   onDimensionResult,
-}: ConsumeBootstrapDimensionResultOptions): Promise<DimensionStat> {
+}: ConsumeGenerateDimensionResultOptions): Promise<DimensionStat> {
   const {
     gateResult,
     produceResult,
@@ -553,7 +553,7 @@ export async function consumeBootstrapDimensionResult({
     successCount,
     rejectedCount,
   } = projection;
-  const runIssueState = resolveBootstrapDimensionConsumerRunIssue({
+  const runIssueState = resolveGenerateDimensionConsumerRunIssue({
     needsCandidates,
     projection,
     runResult,
@@ -563,7 +563,7 @@ export async function consumeBootstrapDimensionResult({
       `[Producer] "${dimId}": producer summary timed out after ${successCount} successful candidate submit(s); preserving produced candidates as dimension output.`
     );
   }
-  const candidateAccounting = applyBootstrapDimensionCandidateAccounting({
+  const candidateAccounting = applyGenerateDimensionCandidateAccounting({
     candidateResults,
     dimId,
     dimensionCandidates,
@@ -629,7 +629,7 @@ export async function consumeBootstrapDimensionResult({
       `toolCalls=${runtimeToolCalls.length}, degraded=${runResult?.degraded || false} (${Date.now() - dimStartTime}ms)`
   );
 
-  recordBootstrapDimensionTokenUsage({
+  recordGenerateDimensionTokenUsage({
     combinedTokenUsage,
     ctx,
     dimId,
@@ -682,7 +682,7 @@ export async function consumeBootstrapDimensionResult({
 
   emitter.emitDimensionComplete(
     dimId,
-    buildBootstrapDimensionCompleteEventPayload({
+    buildGenerateDimensionCompleteEventPayload({
       candidateAccounting,
       combinedTokenUsage,
       dimStartTime,
@@ -697,7 +697,7 @@ export async function consumeBootstrapDimensionResult({
   const qualityScores = (artifact as Record<string, unknown>).qualityReport as
     | { scores: Record<string, number>; totalScore: number; suggestions: string[] }
     | undefined;
-  const { pcvNodeEvidence, pcvNodeEvidenceEnvelope } = buildBootstrapDimensionPcvEvidenceEnvelope({
+  const { pcvNodeEvidence, pcvNodeEvidenceEnvelope } = buildGenerateDimensionPcvEvidenceEnvelope({
     dimConfig,
     dimId,
     existingEvidence: dimensionStats[dimId]?.pcvNodeEvidence,
@@ -709,7 +709,7 @@ export async function consumeBootstrapDimensionResult({
   });
   const status = runIssueState.runIssue?.status || 'v3-pipeline-complete';
   const error = runIssueState.runIssue?.reason;
-  const checkpointDecision = decideBootstrapDimensionCheckpoint({
+  const checkpointDecision = decideGenerateDimensionCheckpoint({
     analysisText: analysisReport.analysisText,
   });
   const dimResult = {
@@ -888,7 +888,7 @@ function summarizeDimensionStages(runResult: AgentResultLike) {
   );
 }
 
-export function consumeBootstrapDimensionError({
+export function consumeGenerateDimensionError({
   dimId,
   err,
   candidateResults,
@@ -899,15 +899,15 @@ export function consumeBootstrapDimensionError({
   err: unknown;
   candidateResults: CandidateResults;
   dimensionStats: Record<string, DimensionStat>;
-  emitter: BootstrapEventEmitter;
+  emitter: GenerateEventEmitter;
 }) {
   const issue = normalizeBootstrapDimensionError(err);
   const errMsg = issue.reason;
   logger.error(`[Insight-v3] Dimension "${dimId}" failed: ${errMsg}`);
-  applyBootstrapDimensionErrorAccounting({ candidateResults, dimId, issue });
-  emitter.emitDimensionComplete(dimId, buildBootstrapDimensionErrorEventPayload(issue));
+  applyGenerateDimensionErrorAccounting({ candidateResults, dimId, issue });
+  emitter.emitDimensionComplete(dimId, buildGenerateDimensionErrorEventPayload(issue));
   const { pcvNodeEvidence, pcvNodeEvidenceEnvelope } =
-    buildBootstrapDimensionErrorPcvEvidenceEnvelope({
+    buildGenerateDimensionErrorPcvEvidenceEnvelope({
       dimId,
       error: errMsg,
       existingEvidence: dimensionStats[dimId]?.pcvNodeEvidence,
@@ -925,7 +925,7 @@ export function consumeBootstrapDimensionError({
   return dimResult;
 }
 
-function normalizeBootstrapDimensionError(err: unknown): BootstrapDimensionRunIssue {
+function normalizeBootstrapDimensionError(err: unknown): GenerateDimensionRunIssue {
   if (isBootstrapDimensionRunIssue(err)) {
     return err;
   }
@@ -935,7 +935,7 @@ function normalizeBootstrapDimensionError(err: unknown): BootstrapDimensionRunIs
   };
 }
 
-function isBootstrapDimensionRunIssue(value: unknown): value is BootstrapDimensionRunIssue {
+function isBootstrapDimensionRunIssue(value: unknown): value is GenerateDimensionRunIssue {
   return (
     isRecord(value) &&
     typeof value.status === 'string' &&
@@ -957,7 +957,7 @@ function isBootstrapDimensionRunIssue(value: unknown): value is BootstrapDimensi
 // Session consumer
 // ---------------------------------------------------------------------------
 
-export interface ConsumeBootstrapSessionResultOptions {
+export interface ConsumeGenerateSessionResultOptions {
   parentRunResult: AgentRunResult;
   activeDimIds: string[];
   skippedDimIds: string[];
@@ -967,7 +967,7 @@ export interface ConsumeBootstrapSessionResultOptions {
   consumeMissingDimension: (dimId: string) => void;
 }
 
-export function consumeBootstrapSessionResult({
+export function consumeGenerateSessionResult({
   parentRunResult,
   activeDimIds,
   skippedDimIds,
@@ -975,13 +975,13 @@ export function consumeBootstrapSessionResult({
   sessionStore,
   dimensionStats,
   consumeMissingDimension,
-}: ConsumeBootstrapSessionResultOptions): BootstrapSessionProjection {
-  const projection = projectBootstrapSessionResult({
+}: ConsumeGenerateSessionResultOptions): GenerateSessionProjection {
+  const projection = projectGenerateSessionResult({
     parentRunResult,
     activeDimIds,
     skippedDimIds,
   });
-  consumeMissingBootstrapDimensions({
+  consumeMissingGenerateDimensions({
     missingDimensionIds: projection.missingDimensionIds,
     dimensionStats,
     consumeMissingDimension,
@@ -1019,7 +1019,7 @@ export function consumeBootstrapSessionResult({
   return projection;
 }
 
-export function consumeMissingBootstrapDimensions({
+export function consumeMissingGenerateDimensions({
   missingDimensionIds,
   dimensionStats,
   consumeMissingDimension,
@@ -1050,7 +1050,7 @@ export interface SkillResults {
   errors: Array<{ dimId: string; error: string }>;
 }
 
-export interface BootstrapSkillDimension {
+export interface GenerateSkillDimension {
   id: string;
   label?: string;
   skillWorthy?: boolean;
@@ -1059,18 +1059,18 @@ export interface BootstrapSkillDimension {
 
 type GenerateSkillFn = typeof generateSkill;
 
-export interface ConsumeBootstrapSkillsOptions {
+export interface ConsumeGenerateSkillsOptions {
   ctx: Parameters<GenerateSkillFn>[0];
-  dimensions: BootstrapSkillDimension[];
+  dimensions: GenerateSkillDimension[];
   dimensionCandidates: Record<string, DimensionCandidateData>;
   sessionStore: SessionStore;
-  emitter: BootstrapEventEmitter;
+  emitter: GenerateEventEmitter;
   sessionId?: string;
   shouldAbort?: () => boolean;
   generateSkillFn?: GenerateSkillFn;
 }
 
-export async function consumeBootstrapSkills({
+export async function consumeGenerateSkills({
   ctx,
   dimensions,
   dimensionCandidates,
@@ -1079,7 +1079,7 @@ export async function consumeBootstrapSkills({
   sessionId,
   shouldAbort,
   generateSkillFn = generateSkill,
-}: ConsumeBootstrapSkillsOptions): Promise<SkillResults> {
+}: ConsumeGenerateSkillsOptions): Promise<SkillResults> {
   const skillResults: SkillResults = {
     created: 0,
     deliveryReceiptSummaries: [],
@@ -1134,10 +1134,10 @@ async function consumeSingleBootstrapSkill({
   generateSkillFn,
 }: {
   ctx: Parameters<GenerateSkillFn>[0];
-  dim: BootstrapSkillDimension;
+  dim: GenerateSkillDimension;
   dimData: DimensionCandidateData;
   sessionStore: SessionStore;
-  emitter: BootstrapEventEmitter;
+  emitter: GenerateEventEmitter;
   sessionId?: string;
   skillResults: SkillResults;
   generateSkillFn: GenerateSkillFn;
@@ -1202,8 +1202,8 @@ function recordSkillDeliveryReceipt({
   sessionId,
   skillResults,
 }: {
-  dim: BootstrapSkillDimension;
-  emitter: BootstrapEventEmitter;
+  dim: GenerateSkillDimension;
+  emitter: GenerateEventEmitter;
   result: WorkflowSkillGenerationResult;
   sessionId?: string;
   skillResults: SkillResults;
@@ -1229,7 +1229,7 @@ function recordSkillDeliveryReceipt({
   }
 
   const emitProcessEvents = (
-    emitter as { emitProcessEvents?: BootstrapEventEmitter['emitProcessEvents'] }
+    emitter as { emitProcessEvents?: GenerateEventEmitter['emitProcessEvents'] }
   ).emitProcessEvents;
   emitProcessEvents?.call(emitter, {
     dimensionId: dim.id,
@@ -1296,7 +1296,7 @@ export function buildEffectiveSkillAnalysisText({
   keyFindings,
   distilled,
 }: {
-  dim: BootstrapSkillDimension;
+  dim: GenerateSkillDimension;
   analysisText: string;
   keyFindings: string[];
   distilled?: { toolCallSummary?: Array<string | { tool?: string; summary?: string }> } | null;
@@ -1339,13 +1339,13 @@ function formatToolCallSummary(summary: string | { tool?: string; summary?: stri
 // Tier reflection consumer
 // ---------------------------------------------------------------------------
 
-export interface ConsumeBootstrapTierReflectionOptions {
+export interface ConsumeGenerateTierReflectionOptions {
   tierIndex: number;
   tierResults: Map<string, DimensionStat>;
   sessionStore: SessionStore;
 }
 
-export interface BootstrapTierReflection {
+export interface GenerateTierReflection {
   tierIndex: number;
   completedDimensions: string[];
   topFindings: Array<Record<string, unknown>>;
@@ -1353,11 +1353,11 @@ export interface BootstrapTierReflection {
   suggestionsForNextTier: string[];
 }
 
-export function consumeBootstrapTierReflection({
+export function consumeGenerateTierReflection({
   tierIndex,
   tierResults,
   sessionStore,
-}: ConsumeBootstrapTierReflectionOptions): BootstrapTierReflection | null {
+}: ConsumeGenerateTierReflectionOptions): GenerateTierReflection | null {
   const tierStats = [...tierResults.values()];
   const totalCandidates = tierStats.reduce((s, r) => s + (r.candidateCount || 0), 0);
   logger.info(
@@ -1380,7 +1380,7 @@ export function consumeBootstrapTierReflection({
         `${reflection.topFindings.length} top findings, ` +
         `${reflection.crossDimensionPatterns.length} patterns`
     );
-    return reflection as BootstrapTierReflection;
+    return reflection as GenerateTierReflection;
   } catch (refErr: unknown) {
     logger.warn(
       `[Insight-v3] Tier ${tierIndex + 1} reflection failed: ${refErr instanceof Error ? refErr.message : String(refErr)}`

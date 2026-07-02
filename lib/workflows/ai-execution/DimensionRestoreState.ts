@@ -5,13 +5,13 @@ import {
 } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
 import type { IncrementalPlan } from '@alembic/core/types';
-import type { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
+import type { GenerateEventEmitter } from '#service/generate/GenerateEventEmitter.js';
+import type { DimensionContext } from './DimensionContext.js';
 import type {
   CandidateResults,
   DimensionCandidateData,
   DimensionStat,
-} from './BootstrapConsumers.js';
-import type { DimensionContext } from './DimensionContext.js';
+} from './GenerateConsumers.js';
 
 export type { DimensionCheckpoint };
 
@@ -52,7 +52,7 @@ export function resolveIncrementalSkippedDimensions({
   incrementalPlan?: IncrementalPlan | null;
   activeDimIds: string[];
   forceExecuteDimIds?: string[];
-  emitter: BootstrapEventEmitter;
+  emitter: GenerateEventEmitter;
 }) {
   const incrementalSkippedDims: string[] = [];
   if (!isIncremental || !incrementalPlan) {
@@ -93,7 +93,7 @@ export async function restoreCheckpointDimensions({
   activeDimIds: string[];
   dimContext: DimensionContext;
   sessionStore: SessionStore;
-  emitter: BootstrapEventEmitter;
+  emitter: GenerateEventEmitter;
 }) {
   const completedCheckpoints = await loadDimensionCheckpoints(dataRoot);
   const skippedDims: string[] = [];

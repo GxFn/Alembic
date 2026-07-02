@@ -3,40 +3,40 @@ import { TierScheduler } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/types';
 import {
-  buildBootstrapDimensionResultProcessEvents,
-  buildBootstrapTierReflectionProcessEvents,
+  buildGenerateDimensionResultProcessEvents,
+  buildGenerateTierReflectionProcessEvents,
 } from './AgentRunProcessEvents.js';
 import {
   projectAgentRunResult,
-  projectBootstrapDimensionAgentOutput,
+  projectGenerateDimensionAgentOutput,
 } from './AgentRunProjections.js';
 import type { AiDimensionPreparation } from './AiDimensionPreparation.js';
 import {
-  type CandidateResults,
-  consumeBootstrapDimensionError as consumeBootstrapDimensionErrorSideEffects,
-  consumeBootstrapDimensionResult,
-  consumeBootstrapSessionResult as consumeBootstrapSessionResultSideEffects,
-  consumeBootstrapTierReflection,
-  type DimensionCandidateData,
-  type DimensionStat,
-} from './BootstrapConsumers.js';
-import {
-  applyBootstrapDimensionAdmissions,
-  type BootstrapDimensionAdmissionResult,
-  resolveBootstrapDimensionAdmissions,
+  applyGenerateDimensionAdmissions,
+  type GenerateDimensionAdmissionResult,
+  resolveGenerateDimensionAdmissions,
 } from './DimensionAdmission.js';
 import {
-  type BootstrapDimensionPlan,
-  createBootstrapDimensionRuntimeInput,
-  resolveBootstrapDimensionPlan as resolveBootstrapDimensionPlanData,
+  createGenerateDimensionRuntimeInput,
+  type GenerateDimensionPlan,
+  resolveGenerateDimensionPlan as resolveBootstrapDimensionPlanData,
 } from './DimensionRuntimeBuilder.js';
-import { prepareBootstrapRescanState } from './RescanContext.js';
-import type { initializeBootstrapRuntime } from './RuntimeInitializer.js';
-import { buildBootstrapSessionExecutionInput } from './SessionExecutionBuilder.js';
+import {
+  type CandidateResults,
+  consumeGenerateDimensionError as consumeBootstrapDimensionErrorSideEffects,
+  consumeGenerateSessionResult as consumeBootstrapSessionResultSideEffects,
+  consumeGenerateDimensionResult,
+  consumeGenerateTierReflection,
+  type DimensionCandidateData,
+  type DimensionStat,
+} from './GenerateConsumers.js';
+import { prepareGenerateRescanState } from './RescanContext.js';
+import type { initializeGenerateRuntime } from './RuntimeInitializer.js';
+import { buildGenerateSessionExecutionInput } from './SessionExecutionBuilder.js';
 
 const logger = Logger.getInstance();
 
-type AiDimensionRuntime = Awaited<ReturnType<typeof initializeBootstrapRuntime>>;
+type AiDimensionRuntime = Awaited<ReturnType<typeof initializeGenerateRuntime>>;
 
 export interface AiDimensionSessionResult {
   activeDimIds: string[];
@@ -46,7 +46,7 @@ export interface AiDimensionSessionResult {
   dimensionCandidates: Record<string, DimensionCandidateData>;
   dimensionStats: Record<string, DimensionStat>;
   bootstrapDedup: { count: number; clear(): void };
-  admissions: BootstrapDimensionAdmissionResult;
+  admissions: GenerateDimensionAdmissionResult;
   enableParallel: boolean;
   concurrency: number;
 }
@@ -61,7 +61,7 @@ export async function runAiDimensionSession({
   const services = resolveAiDimensionServices(preparation);
 
   const { enableParallel, concurrency } = resolveAiDimensionConcurrency();
-  const groundingEnforcement = resolveBootstrapGroundingEnforcement();
+  const groundingEnforcement = resolveGenerateGroundingEnforcement();
   const scheduler = new TierScheduler();
   const activeDimIds = preparation.dimensions.map((dimension: DimensionDef) => dimension.id);
   const {
@@ -70,7 +70,7 @@ export async function runAiDimensionSession({
     globalSubmittedTriggers,
     bootstrapDedup,
     rescanContext,
-  } = prepareBootstrapRescanState({
+  } = prepareGenerateRescanState({
     existingRecipes: preparation.existingRecipes,
     evolutionPrescreen: preparation.evolutionPrescreen,
     executionDecisions: preparation.rescanExecutionDecisions,
@@ -111,7 +111,7 @@ export async function runAiDimensionSession({
     `[Insight-v3] plan candidate suggestion: totalRecipeBudget=${planRecipeBudget ?? 'n/a'}, dims=${activeDimIds.length}, dimensionBudgets=${planDimensionBudgets ? JSON.stringify(planDimensionBudgets) : 'none'}`
   );
 
-  const admissions = await resolveBootstrapDimensionAdmissions({
+  const admissions = await resolveGenerateDimensionAdmissions({
     dataRoot: preparation.dataRoot,
     activeDimIds,
     isIncremental: preparation.isIncremental,
@@ -124,7 +124,7 @@ export async function runAiDimensionSession({
   logger.info(
     `[Insight-v3] Active dimensions: [${activeDimIds.join(', ')}], concurrency=${enableParallel ? concurrency : 1}${preparation.isIncremental ? `, incremental skip: [${admissions.incrementalSkippedDims.join(', ')}]` : ''}`
   );
-  applyBootstrapDimensionAdmissions({
+  applyGenerateDimensionAdmissions({
     admissions,
     sessionStore: runtime.sessionStore,
     dimensionStats,
@@ -132,7 +132,7 @@ export async function runAiDimensionSession({
     dimensionCandidates,
   });
 
-  function resolveBootstrapDimensionPlan(dimId: string) {
+  function resolveGenerateDimensionPlan(dimId: string) {
     return resolveBootstrapDimensionPlanData({
       dimId,
       dimensions: preparation.dimensions,
@@ -140,8 +140,8 @@ export async function runAiDimensionSession({
     });
   }
 
-  function createBootstrapDimensionRunInput(dimId: string, plan: BootstrapDimensionPlan) {
-    return createBootstrapDimensionRuntimeInput({
+  function createBootstrapDimensionRunInput(dimId: string, plan: GenerateDimensionPlan) {
+    return createGenerateDimensionRuntimeInput({
       dimId,
       plan,
       memoryCoordinator: runtime.memoryCoordinator,
@@ -182,19 +182,19 @@ export async function runAiDimensionSession({
     analystScopeId,
   }: {
     dimId: string;
-    plan: NonNullable<ReturnType<typeof resolveBootstrapDimensionPlan>>;
+    plan: NonNullable<ReturnType<typeof resolveGenerateDimensionPlan>>;
     agentRunResult: AgentRunResult;
     dimStartTime: number;
     analystScopeId: string;
   }) {
     const runResult = projectAgentRunResult(agentRunResult);
-    const projection = projectBootstrapDimensionAgentOutput({
+    const projection = projectGenerateDimensionAgentOutput({
       dimId,
       needsCandidates: plan.needsCandidates,
       runResult,
       projectScopeSourceIdentities: runtime.projectScopeSourceIdentities,
     });
-    const processEvents = buildBootstrapDimensionResultProcessEvents({
+    const processEvents = buildGenerateDimensionResultProcessEvents({
       dimId,
       label: plan.dimConfig.label || plan.dim.label || dimId,
       projection,
@@ -211,7 +211,7 @@ export async function runAiDimensionSession({
         taskId: dimId,
       });
     }
-    return consumeBootstrapDimensionResult({
+    return consumeGenerateDimensionResult({
       ctx: preparation.ctx,
       dimId,
       dimConfig: plan.dimConfig,
@@ -233,7 +233,7 @@ export async function runAiDimensionSession({
     });
   }
 
-  function consumeBootstrapDimensionError({ dimId, err }: { dimId: string; err: unknown }) {
+  function consumeGenerateDimensionError({ dimId, err }: { dimId: string; err: unknown }) {
     return consumeBootstrapDimensionErrorSideEffects({
       dimId,
       err,
@@ -247,14 +247,14 @@ export async function runAiDimensionSession({
     tierIndex: number,
     tierResults: Map<string, DimensionStat>
   ) {
-    const reflection = consumeBootstrapTierReflection({
+    const reflection = consumeGenerateTierReflection({
       tierIndex,
       tierResults,
       sessionStore: runtime.sessionStore,
     });
     if (reflection) {
       preparation.emitter.emitProcessEvents({
-        events: buildBootstrapTierReflectionProcessEvents({
+        events: buildGenerateTierReflectionProcessEvents({
           reflection,
           sessionId: preparation.sessionId,
         }),
@@ -266,7 +266,7 @@ export async function runAiDimensionSession({
     return reflection;
   }
 
-  function consumeBootstrapSessionResult({
+  function consumeGenerateSessionResult({
     parentRunResult,
     durationMs,
   }: {
@@ -281,11 +281,11 @@ export async function runAiDimensionSession({
       sessionStore: runtime.sessionStore,
       dimensionStats,
       consumeMissingDimension: (dimId) =>
-        consumeBootstrapDimensionError({ dimId, err: 'missing child result' }),
+        consumeGenerateDimensionError({ dimId, err: 'missing child result' }),
     });
   }
 
-  const { input: bootstrapSessionInput } = buildBootstrapSessionExecutionInput({
+  const { input: bootstrapSessionInput } = buildGenerateSessionExecutionInput({
     sessionId: preparation.sessionId,
     activeDimIds,
     skippedDimIds: admissions.skippedDimIds,
@@ -297,11 +297,11 @@ export async function runAiDimensionSession({
     taskManager: preparation.taskManager,
     scheduler,
     dimensionStats,
-    resolvePlan: resolveBootstrapDimensionPlan,
+    resolvePlan: resolveGenerateDimensionPlan,
     createDimensionRunInput: createBootstrapDimensionRunInput,
     emitDimensionStart: (dimId) => preparation.emitter.emitDimensionStart(dimId),
     consumeDimensionResult: consumeBootstrapDimensionAgentResult,
-    consumeDimensionError: consumeBootstrapDimensionError,
+    consumeDimensionError: consumeGenerateDimensionError,
     consumeTierResult: consumeBootstrapSessionTierResult,
     emitProcessEvents: (payload) => preparation.emitter.emitProcessEvents(payload),
   });
@@ -336,11 +336,11 @@ export async function runAiDimensionSession({
     });
     throw err;
   }
-  consumeBootstrapSessionResult({ parentRunResult, durationMs: Date.now() - startedAtMs });
+  consumeGenerateSessionResult({ parentRunResult, durationMs: Date.now() - startedAtMs });
 
   if (bootstrapDedup.count > 0) {
     logger.info(
-      `[Insight-v3] BootstrapDedup: ${bootstrapDedup.count} entries registered during session`
+      `[Insight-v3] GenerateDedup: ${bootstrapDedup.count} entries registered during session`
     );
   }
 
@@ -375,7 +375,7 @@ export function resolveAiDimensionConcurrency(env: NodeJS.ProcessEnv = process.e
 // per-invocation 粒度）。读 env ALEMBIC_GROUNDING_ENFORCEMENT：'guard'=恢复 analyze grounding 阻断+nudge+rollback；
 // 'off'=显式 observe-only。未设或非法值 → undefined → 不覆盖、子运行回退 runtime 全局默认（observe-only），
 // 普通 bootstrap/rescan/增量运行零可见行为变更。供 PCVM/Test 质量验证链路在发起 bootstrap 前设置该 env。
-export function resolveBootstrapGroundingEnforcement(
+export function resolveGenerateGroundingEnforcement(
   env: NodeJS.ProcessEnv = process.env
 ): 'off' | 'guard' | undefined {
   const raw = env.ALEMBIC_GROUNDING_ENFORCEMENT;

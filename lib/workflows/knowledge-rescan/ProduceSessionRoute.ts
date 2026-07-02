@@ -189,7 +189,7 @@ export function buildProduceSessionProjection(input: {
 
   if (!input.session) {
     return buildNoProduceProjection({
-      blockerReason: 'No BootstrapSessionManager session is available for the produce route.',
+      blockerReason: 'No GenerateSessionManager session is available for the produce route.',
       constraints,
       input,
       mode,

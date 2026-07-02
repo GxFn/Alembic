@@ -136,7 +136,7 @@ async function main() {
     statePath,
   });
 
-  import('../lib/service/bootstrap/UiStartupTasks.js')
+  import('../lib/service/generate/UiStartupTasks.js')
     .then(({ runUiStartupTasks }) => runUiStartupTasks({ projectRoot, container }))
     .then((report) => {
       if (report.errors.length > 0) {

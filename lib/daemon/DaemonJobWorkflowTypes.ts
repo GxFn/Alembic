@@ -49,7 +49,7 @@ export interface DaemonRescanWorkflowArgs {
   roundIndex?: number;
 }
 
-export interface BootstrapPlanGateResult {
+export interface GeneratePlanGateResult {
   projectContextFacts: ProjectContextWorkflowFacts;
   projection: PlanSelectionProjection;
   selection: PlanSelection;

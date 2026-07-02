@@ -3,7 +3,7 @@ import {
   type DimensionDef,
   type KnowledgeRescanExecutionDecision,
 } from '@alembic/core/host-agent-workflows';
-import type { BootstrapSessionShape } from '@alembic/core/types';
+import type { GenerateSessionShape } from '@alembic/core/types';
 import type { ProjectContextWorkflowFacts } from './ProjectContextWorkflowFacts.js';
 
 export function presentProjectContextColdStartEmptyProject(input: {
@@ -21,7 +21,7 @@ export function presentProjectContextColdStartEmptyProject(input: {
 }
 
 export function presentProjectContextColdStartResponse(input: {
-  bootstrapSession: BootstrapSessionShape | null;
+  bootstrapSession: GenerateSessionShape | null;
   cachedSessionId: string | null;
   cleanupResult: unknown;
   dimensions: DimensionDef[];
@@ -58,7 +58,7 @@ export function presentProjectContextColdStartResponse(input: {
 
 export function presentProjectContextRescanResponse(input: {
   auditSummary: unknown;
-  bootstrapSession: BootstrapSessionShape | null;
+  bootstrapSession: GenerateSessionShape | null;
   cleanResult: Record<string, unknown>;
   evolutionAudit?: Record<string, unknown> | null;
   facts: ProjectContextWorkflowFacts;

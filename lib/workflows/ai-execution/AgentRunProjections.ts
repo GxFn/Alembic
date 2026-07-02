@@ -10,7 +10,7 @@ import type { AgentRunResult } from '@alembic/agent/service';
 import {
   extractEfficiencyFromDiagnostics,
   normalizeAgentEfficiencySummary,
-} from '#service/bootstrap/BootstrapEfficiency.js';
+} from '#service/generate/GenerateEfficiency.js';
 import {
   normalizeProjectScopeSourceRefsForRuntime,
   type ProjectScopeSourceIdentity,
@@ -46,7 +46,7 @@ export interface DimensionFinding {
   source?: string;
 }
 
-export interface BootstrapDimensionAnalysisReport {
+export interface GenerateDimensionAnalysisReport {
   dimensionId?: string;
   analysisText: string;
   findings: Array<DimensionFinding | string>;
@@ -56,7 +56,7 @@ export interface BootstrapDimensionAnalysisReport {
   metadata?: Record<string, unknown>;
 }
 
-export interface BootstrapDimensionProducerResult {
+export interface GenerateDimensionProducerResult {
   candidateCount: number;
   rejectedCount?: number;
   toolCalls: ToolCallRecord[];
@@ -65,7 +65,7 @@ export interface BootstrapDimensionProducerResult {
   efficiency?: AgentEfficiencySummary | null;
 }
 
-export interface BootstrapDimensionProjection {
+export interface GenerateDimensionProjection {
   analyzeResult?: { reply?: string; [key: string]: unknown };
   gateResult?: { action?: string; artifact?: Record<string, any>; [key: string]: unknown };
   produceResult?: { reply?: string; toolCalls?: ToolCallRecord[]; [key: string]: unknown };
@@ -74,14 +74,14 @@ export interface BootstrapDimensionProjection {
   runtimeToolCalls: ToolCallRecord[];
   combinedTokenUsage: { input: number; output: number };
   efficiency: AgentEfficiencySummary | null;
-  analysisReport: BootstrapDimensionAnalysisReport;
-  producerResult: BootstrapDimensionProducerResult;
+  analysisReport: GenerateDimensionAnalysisReport;
+  producerResult: GenerateDimensionProducerResult;
   submitCalls: ToolCallRecord[];
   successCount: number;
   rejectedCount: number;
 }
 
-export type BootstrapDimensionRunIssueStatus =
+export type GenerateDimensionRunIssueStatus =
   | 'timeout'
   | 'blocked'
   | 'aborted'
@@ -92,8 +92,8 @@ export type BootstrapDimensionRunIssueStatus =
   | 'quality_gate_failed'
   | 'l4_compaction_failed_budget_exhausted';
 
-export interface BootstrapDimensionRunIssue {
-  status: BootstrapDimensionRunIssueStatus;
+export interface GenerateDimensionRunIssue {
+  status: GenerateDimensionRunIssueStatus;
   reason: string;
   diagnostics?: AgentDiagnostics | null;
 }
@@ -104,7 +104,7 @@ export function isRecoverableProducerTimeoutIssue({
   produceResult,
   successCount,
 }: {
-  issue: BootstrapDimensionRunIssue | null;
+  issue: GenerateDimensionRunIssue | null;
   needsCandidates: boolean;
   produceResult?: { reply?: string; toolCalls?: ToolCallRecord[]; [key: string]: unknown };
   successCount: number;
@@ -144,10 +144,10 @@ export function projectAgentRunResult(result: AgentRunResult): AgentResultLike {
   };
 }
 
-export function resolveBootstrapDimensionRunIssue(
+export function resolveGenerateDimensionRunIssue(
   result: AgentResultLike | AgentRunResult | null | undefined,
   options: { includeDegraded?: boolean } = {}
-): BootstrapDimensionRunIssue | null {
+): GenerateDimensionRunIssue | null {
   if (!result) {
     return null;
   }
@@ -270,7 +270,7 @@ export function resolveBootstrapDimensionRunIssue(
 function resolveUnresolvedQualityGateIssue(
   result: AgentResultLike | AgentRunResult,
   diagnostics: AgentDiagnostics | null
-): BootstrapDimensionRunIssue | null {
+): GenerateDimensionRunIssue | null {
   const phases = result.phases || {};
   const gate = phases.quality_gate as
     | {
@@ -295,7 +295,7 @@ function resolveUnresolvedQualityGateIssue(
   };
 }
 
-export function projectBootstrapDimensionAgentOutput({
+export function projectGenerateDimensionAgentOutput({
   dimId,
   needsCandidates,
   runResult,
@@ -305,7 +305,7 @@ export function projectBootstrapDimensionAgentOutput({
   needsCandidates: boolean;
   runResult: AgentResultLike;
   projectScopeSourceIdentities?: ProjectScopeSourceIdentity[];
-}): BootstrapDimensionProjection {
+}): GenerateDimensionProjection {
   const analyzeResult = runResult?.phases?.analyze;
   const gateResult = runResult?.phases?.quality_gate;
   const produceResult = runResult?.phases?.produce;
@@ -451,7 +451,7 @@ export function normalizeDimensionFindings(
 // Session projection
 // ---------------------------------------------------------------------------
 
-export interface BootstrapSessionProjection {
+export interface GenerateSessionProjection {
   dimensionResults: Record<string, AgentRunResult>;
   completedDimensions: number;
   failedDimensionIds: string[];
@@ -460,7 +460,7 @@ export interface BootstrapSessionProjection {
   parentStatus: AgentRunResult['status'];
 }
 
-export function projectBootstrapSessionResult({
+export function projectGenerateSessionResult({
   parentRunResult,
   activeDimIds,
   skippedDimIds,
@@ -468,15 +468,15 @@ export function projectBootstrapSessionResult({
   parentRunResult: AgentRunResult;
   activeDimIds: string[];
   skippedDimIds: string[];
-}): BootstrapSessionProjection {
-  const dimensionResults = toBootstrapSessionDimensionResults(parentRunResult);
+}): GenerateSessionProjection {
+  const dimensionResults = toGenerateSessionDimensionResults(parentRunResult);
   const skipped = new Set(skippedDimIds);
   const runnableDimIds = activeDimIds.filter((dimId) => !skipped.has(dimId));
   const failedDimensionIds = Object.entries(dimensionResults)
     .filter(([, result]) => {
-      const issue = resolveBootstrapDimensionRunIssue(result);
+      const issue = resolveGenerateDimensionRunIssue(result);
       if (issue?.status === 'timeout') {
-        const projection = projectBootstrapDimensionAgentOutput({
+        const projection = projectGenerateDimensionAgentOutput({
           dimId: '',
           needsCandidates: true,
           runResult: projectAgentRunResult(result),
@@ -514,7 +514,7 @@ export function projectBootstrapSessionResult({
   };
 }
 
-export function toBootstrapSessionDimensionResults(parentRunResult: AgentRunResult) {
+export function toGenerateSessionDimensionResults(parentRunResult: AgentRunResult) {
   const dimensionResults = parentRunResult.phases?.dimensionResults;
   if (
     !dimensionResults ||

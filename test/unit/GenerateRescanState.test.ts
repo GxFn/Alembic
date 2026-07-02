@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'vitest';
 import {
-  type BootstrapExistingRecipe,
-  getBootstrapDimensionExistingRecipes,
-  prepareBootstrapRescanState,
-  projectBootstrapDimensionRescanContext,
-  projectBootstrapExistingRecipesForPrompt,
+  type GenerateExistingRecipe,
+  getGenerateDimensionExistingRecipes,
+  prepareGenerateRescanState,
+  projectGenerateDimensionRescanContext,
+  projectGenerateExistingRecipesForPrompt,
 } from '../../lib/workflows/ai-execution/RescanContext.js';
 
-const recipes: BootstrapExistingRecipe[] = [
+const recipes: GenerateExistingRecipe[] = [
   {
     id: 'healthy-api',
     title: 'API Contract',
@@ -36,7 +36,7 @@ const recipes: BootstrapExistingRecipe[] = [
 
 describe('bootstrap rescan state', () => {
   test('prepares dedup sets and rescan context from existing recipes', () => {
-    const state = prepareBootstrapRescanState({
+    const state = prepareGenerateRescanState({
       existingRecipes: recipes,
       evolutionPrescreen: { done: true },
     });
@@ -58,15 +58,15 @@ describe('bootstrap rescan state', () => {
   });
 
   test('projects dimension rescan context and existing recipes', () => {
-    const { rescanContext } = prepareBootstrapRescanState({
+    const { rescanContext } = prepareGenerateRescanState({
       existingRecipes: recipes,
       evolutionPrescreen: null,
     });
 
     expect(
-      getBootstrapDimensionExistingRecipes({ rescanContext, dimId: 'api' }).map((r) => r.id)
+      getGenerateDimensionExistingRecipes({ rescanContext, dimId: 'api' }).map((r) => r.id)
     ).toEqual(['healthy-api', 'decaying-api']);
-    expect(projectBootstrapDimensionRescanContext({ rescanContext, dimId: 'api' })).toMatchObject({
+    expect(projectGenerateDimensionRescanContext({ rescanContext, dimId: 'api' })).toMatchObject({
       existingRecipes: [expect.objectContaining({ id: 'healthy-api' })],
       decayingRecipes: [expect.objectContaining({ id: 'decaying-api' })],
       occupiedTriggers: ['api_change', 'old_api', 'ui_change'],
@@ -76,7 +76,7 @@ describe('bootstrap rescan state', () => {
   });
 
   test('projects existing recipes for prompt audit hints', () => {
-    expect(projectBootstrapExistingRecipesForPrompt(recipes.slice(0, 2))).toEqual([
+    expect(projectGenerateExistingRecipesForPrompt(recipes.slice(0, 2))).toEqual([
       expect.objectContaining({
         id: 'healthy-api',
         auditHint: {
@@ -94,11 +94,9 @@ describe('bootstrap rescan state', () => {
   });
 
   test('handles missing existing recipes', () => {
-    const state = prepareBootstrapRescanState({ existingRecipes: null, evolutionPrescreen: null });
+    const state = prepareGenerateRescanState({ existingRecipes: null, evolutionPrescreen: null });
     expect(state.existingRecipesList).toBeNull();
     expect(state.rescanContext).toBeNull();
-    expect(
-      projectBootstrapDimensionRescanContext({ rescanContext: null, dimId: 'api' })
-    ).toBeNull();
+    expect(projectGenerateDimensionRescanContext({ rescanContext: null, dimId: 'api' })).toBeNull();
   });
 });

@@ -7,7 +7,7 @@ import Logger from '@alembic/core/logging';
 import { ValidationError } from '@alembic/core/shared';
 import express, { type Request, type Response } from 'express';
 import {
-  BootstrapRefineBody,
+  GenerateRefineBody,
   RefineApplyBody,
   RefinePreviewBody,
 } from '#shared/schemas/http-requests.js';
@@ -33,7 +33,7 @@ const logger = Logger.getInstance();
  */
 router.post(
   '/bootstrap-refine',
-  validate(BootstrapRefineBody),
+  validate(GenerateRefineBody),
   async (req: Request, res: Response) => {
     const { candidateIds, userPrompt, dryRun } = req.body;
     if (!dryRun && !rejectUnlessConfirmed(req, res, 'candidate bootstrap-refine apply')) {
@@ -42,10 +42,10 @@ router.post(
 
     const container = getServiceContainer();
 
-    // bootstrapRefine 逻辑（RIC-3：从已删的 resident MCP-mirror 迁入 service/bootstrap）
-    const { bootstrapRefine } = await import('../../service/bootstrap/BootstrapRefine.js');
+    // generateRefine 逻辑（RIC-3：从已删的 resident MCP-mirror 迁入 service/bootstrap）
+    const { generateRefine } = await import('../../service/generate/GenerateRefine.js');
     const ctx = { container, logger };
-    const result = await bootstrapRefine(ctx, { candidateIds, userPrompt, dryRun });
+    const result = await generateRefine(ctx, { candidateIds, userPrompt, dryRun });
 
     // envelope 返回 { success, data, meta, ... }，直接取 data
     const data = result?.data ?? { refined: 0, total: 0, errors: [], results: [] };

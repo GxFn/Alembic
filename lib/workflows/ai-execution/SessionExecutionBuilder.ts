@@ -2,43 +2,43 @@ import type { ProgressEvent } from '@alembic/agent/runtime';
 import type { AgentRunInput, AgentRunResult } from '@alembic/agent/service';
 import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/types';
-import type { BootstrapProcessEventsPayload } from '#service/bootstrap/bootstrap-event-types.js';
+import type { GenerateProcessEventsPayload } from '#service/generate/generate-event-types.js';
 import {
-  type BootstrapSessionChildRunPlan,
-  buildBootstrapSessionRunInput,
+  buildGenerateSessionRunInput,
+  type GenerateSessionChildRunPlan,
 } from './AgentRunInputBuilders.js';
 import {
-  buildBootstrapAgentProgressProcessEvents,
-  buildBootstrapDimensionInputProcessEvents,
+  buildGenerateAgentProgressProcessEvents,
+  buildGenerateDimensionInputProcessEvents,
 } from './AgentRunProcessEvents.js';
 import {
   isRecoverableProducerTimeoutIssue,
   projectAgentRunResult,
-  projectBootstrapDimensionAgentOutput,
-  resolveBootstrapDimensionRunIssue,
+  projectGenerateDimensionAgentOutput,
+  resolveGenerateDimensionRunIssue,
 } from './AgentRunProjections.js';
-import type { DimensionStat } from './BootstrapConsumers.js';
-import type { BootstrapDimensionPlan } from './DimensionRuntimeBuilder.js';
+import type { GenerateDimensionPlan } from './DimensionRuntimeBuilder.js';
+import type { DimensionStat } from './GenerateConsumers.js';
 import {
-  buildBootstrapPcvStageNodeContext,
+  buildGeneratePcvStageNodeContext,
   buildPcvN8StageFactoryEvidence,
   buildPcvN9RecordRepairStageMapEvidence,
-  mergeBootstrapPcvNodeEvidence,
+  mergeGeneratePcvNodeEvidence,
 } from './PcvNodeEvidence.js';
 
 const logger = Logger.getInstance();
 
-export interface BootstrapDimensionExecutionState {
+export interface GenerateDimensionExecutionState {
   dimStartTime: number;
   analystScopeId: string;
 }
 
-export interface BootstrapTaskManagerLike {
+export interface GenerateTaskManagerLike {
   isSessionValid(sessionId: string): boolean;
   isUserCancelled?(sessionId: string): boolean;
 }
 
-export interface BuildBootstrapSessionExecutionInputOptions {
+export interface BuildGenerateSessionExecutionInputOptions {
   sessionId: string;
   activeDimIds: string[];
   skippedDimIds: string[];
@@ -48,28 +48,28 @@ export interface BuildBootstrapSessionExecutionInputOptions {
   sessionAbortSignal?: AbortSignal | null;
   // AP-7：质量验证会话（PCVM/Test）per-invocation 显式开 guard 的 opt-in；未设→不覆盖→默认 observe-only（零行为变更）。
   groundingEnforcement?: 'off' | 'guard';
-  taskManager?: BootstrapTaskManagerLike | null;
+  taskManager?: GenerateTaskManagerLike | null;
   scheduler: { getTierIndex(dimId: string): number };
   dimensionStats: Record<string, DimensionStat>;
-  resolvePlan(dimId: string): BootstrapDimensionPlan | null;
+  resolvePlan(dimId: string): GenerateDimensionPlan | null;
   createDimensionRunInput(
     dimId: string,
-    plan: BootstrapDimensionPlan
+    plan: GenerateDimensionPlan
   ): { analystScopeId: string; runInput: AgentRunInput };
   emitDimensionStart(dimId: string): void;
   consumeDimensionResult(args: {
     dimId: string;
-    plan: BootstrapDimensionPlan;
+    plan: GenerateDimensionPlan;
     agentRunResult: AgentRunResult;
     dimStartTime: number;
     analystScopeId: string;
   }): Promise<unknown> | unknown;
   consumeDimensionError(args: { dimId: string; err: unknown }): unknown;
   consumeTierResult(tierIndex: number, tierResults: Map<string, DimensionStat>): unknown;
-  emitProcessEvents?(payload: BootstrapProcessEventsPayload): void;
+  emitProcessEvents?(payload: GenerateProcessEventsPayload): void;
 }
 
-export function buildBootstrapSessionExecutionInput({
+export function buildGenerateSessionExecutionInput({
   sessionId,
   activeDimIds,
   skippedDimIds,
@@ -88,8 +88,8 @@ export function buildBootstrapSessionExecutionInput({
   consumeDimensionError,
   consumeTierResult,
   emitProcessEvents,
-}: BuildBootstrapSessionExecutionInputOptions) {
-  const childExecutionState = new Map<string, BootstrapDimensionExecutionState>();
+}: BuildGenerateSessionExecutionInputOptions) {
+  const childExecutionState = new Map<string, GenerateDimensionExecutionState>();
   const children = activeDimIds
     .filter((dimId) => !skippedDimIds.includes(dimId))
     .map((dimId) =>
@@ -109,9 +109,9 @@ export function buildBootstrapSessionExecutionInput({
         childExecutionState,
       })
     )
-    .filter((plan): plan is BootstrapSessionChildRunPlan => !!plan);
+    .filter((plan): plan is GenerateSessionChildRunPlan => !!plan);
 
-  const input = buildBootstrapSessionRunInput({
+  const input = buildGenerateSessionRunInput({
     sessionId,
     children,
     params: {
@@ -131,11 +131,11 @@ export function buildBootstrapSessionExecutionInput({
           childInput: AgentRunInput;
           result: AgentRunResult;
         }) => {
-          const dimId = getBootstrapChildDimensionId(childInput);
+          const dimId = getGenerateChildDimensionId(childInput);
           if (!dimId) {
             return;
           }
-          const runIssue = resolveBootstrapDimensionRunIssue(result, { includeDegraded: false });
+          const runIssue = resolveGenerateDimensionRunIssue(result, { includeDegraded: false });
           logger.info('[Insight-v3] Dimension child result received', {
             sessionId,
             dimension: dimId,
@@ -164,7 +164,7 @@ export function buildBootstrapSessionExecutionInput({
           }
           if (runIssue) {
             const projectedRun = projectAgentRunResult(result);
-            const projection = projectBootstrapDimensionAgentOutput({
+            const projection = projectGenerateDimensionAgentOutput({
               dimId,
               needsCandidates: plan.needsCandidates,
               runResult: projectedRun,
@@ -209,11 +209,11 @@ export function buildBootstrapSessionExecutionInput({
           logger.info('[Insight-v3] Bootstrap tier complete', {
             sessionId,
             tierIndex,
-            dimensions: childInputs.map((childInput) => getBootstrapChildDimensionId(childInput)),
+            dimensions: childInputs.map((childInput) => getGenerateChildDimensionId(childInput)),
           });
           const tierResults = new Map<string, DimensionStat>();
           for (const childInput of childInputs) {
-            const dimId = getBootstrapChildDimensionId(childInput);
+            const dimId = getGenerateChildDimensionId(childInput);
             if (!dimId || !dimensionStats[dimId]) {
               continue;
             }
@@ -268,18 +268,18 @@ function buildBootstrapDimensionChildPlan({
   primaryLang?: string | null;
   projectLang?: string | null;
   sessionAbortSignal?: AbortSignal | null;
-  taskManager?: BootstrapTaskManagerLike | null;
+  taskManager?: GenerateTaskManagerLike | null;
   scheduler: { getTierIndex(dimId: string): number };
-  resolvePlan(dimId: string): BootstrapDimensionPlan | null;
+  resolvePlan(dimId: string): GenerateDimensionPlan | null;
   createDimensionRunInput(
     dimId: string,
-    plan: BootstrapDimensionPlan
+    plan: GenerateDimensionPlan
   ): { analystScopeId: string; runInput: AgentRunInput };
   emitDimensionStart(dimId: string): void;
-  emitProcessEvents?(payload: BootstrapProcessEventsPayload): void;
+  emitProcessEvents?(payload: GenerateProcessEventsPayload): void;
   dimensionStats: Record<string, DimensionStat>;
-  childExecutionState: Map<string, BootstrapDimensionExecutionState>;
-}): BootstrapSessionChildRunPlan | null {
+  childExecutionState: Map<string, GenerateDimensionExecutionState>;
+}): GenerateSessionChildRunPlan | null {
   const plan = resolvePlan(dimId);
   if (!plan) {
     return null;
@@ -287,7 +287,7 @@ function buildBootstrapDimensionChildPlan({
   return {
     id: dimId,
     label: plan.dimConfig.label || plan.dim.label || dimId,
-    tier: resolveBootstrapDimensionTier(dimId, plan.dim, scheduler),
+    tier: resolveGenerateDimensionTier(dimId, plan.dim, scheduler),
     input: buildBootstrapDimensionPlannedInput({
       dimId,
       plan,
@@ -309,7 +309,7 @@ function buildBootstrapDimensionChildPlan({
         sessionId,
       });
       const { analystScopeId, runInput } = createDimensionRunInput(dimId, plan);
-      const bridgedRunInput = attachBootstrapAgentProgressBridge({
+      const bridgedRunInput = attachGenerateAgentProgressBridge({
         dimId,
         emitProcessEvents,
         label: plan.dimConfig.label || plan.dim.label || dimId,
@@ -331,7 +331,7 @@ function buildBootstrapDimensionChildPlan({
           candidateCount: 0,
           durationMs: 0,
         }),
-        pcvNodeEvidence: mergeBootstrapPcvNodeEvidence(dimensionStats[dimId]?.pcvNodeEvidence, {
+        pcvNodeEvidence: mergeGeneratePcvNodeEvidence(dimensionStats[dimId]?.pcvNodeEvidence, {
           n8: pcvN8Evidence,
           n9RecordRepair: pcvN9RecordRepairMapEvidence,
         }),
@@ -339,7 +339,7 @@ function buildBootstrapDimensionChildPlan({
       childExecutionState.set(dimId, { dimStartTime, analystScopeId });
       emitProcessEvents?.({
         dimensionId: dimId,
-        events: buildBootstrapDimensionInputProcessEvents({
+        events: buildGenerateDimensionInputProcessEvents({
           dimId,
           label: plan.dimConfig.label || plan.dim.label || dimId,
           plan,
@@ -356,7 +356,7 @@ function buildBootstrapDimensionChildPlan({
   };
 }
 
-export function attachBootstrapAgentProgressBridge({
+export function attachGenerateAgentProgressBridge({
   dimId,
   emitProcessEvents,
   label,
@@ -364,7 +364,7 @@ export function attachBootstrapAgentProgressBridge({
   sessionId,
 }: {
   dimId: string;
-  emitProcessEvents?(payload: BootstrapProcessEventsPayload): void;
+  emitProcessEvents?(payload: GenerateProcessEventsPayload): void;
   label?: string | null;
   runInput: AgentRunInput;
   sessionId: string;
@@ -383,7 +383,7 @@ export function attachBootstrapAgentProgressBridge({
         } catch {
           /* progress observers are non-blocking */
         }
-        const events = buildBootstrapAgentProgressProcessEvents({
+        const events = buildGenerateAgentProgressProcessEvents({
           dimId,
           event,
           label,
@@ -412,7 +412,7 @@ function assertBootstrapSessionStillActive({
 }: {
   sessionAbortSignal?: AbortSignal | null;
   sessionId: string;
-  taskManager?: BootstrapTaskManagerLike | null;
+  taskManager?: GenerateTaskManagerLike | null;
 }) {
   if (sessionAbortSignal?.aborted) {
     const reason = typeof sessionAbortSignal.reason === 'string' ? sessionAbortSignal.reason : null;
@@ -435,13 +435,13 @@ function buildBootstrapDimensionPlannedInput({
   sessionAbortSignal,
 }: {
   dimId: string;
-  plan: BootstrapDimensionPlan;
+  plan: GenerateDimensionPlan;
   sessionId: string;
   primaryLang?: string | null;
   projectLang?: string | null;
   sessionAbortSignal?: AbortSignal | null;
 }): AgentRunInput {
-  const pcvStageNodeContext = buildBootstrapPcvStageNodeContext();
+  const pcvStageNodeContext = buildGeneratePcvStageNodeContext();
   const sharedState = {
     _pcvStageNodeMap: pcvStageNodeContext.pcvStageNodeMap,
     _pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
@@ -449,7 +449,7 @@ function buildBootstrapDimensionPlannedInput({
     pcvChainNodes: pcvStageNodeContext.pcvChainNodes,
   };
   return {
-    profile: { id: 'bootstrap-dimension' },
+    profile: { id: 'generate-dimension' },
     params: {
       dimId,
       needsCandidates: plan.needsCandidates,
@@ -501,7 +501,7 @@ function buildBootstrapDimensionPlannedInput({
 }
 
 function injectBootstrapPcvStageNodeContext(runInput: AgentRunInput): AgentRunInput {
-  const pcvStageNodeContext = buildBootstrapPcvStageNodeContext();
+  const pcvStageNodeContext = buildGeneratePcvStageNodeContext();
   const context = runInput.context || {};
   const messageMetadata = asRecord(runInput.message.metadata);
   const sharedState = {
@@ -552,7 +552,7 @@ function injectBootstrapPcvStageNodeContext(runInput: AgentRunInput): AgentRunIn
   };
 }
 
-export function resolveBootstrapDimensionTier(
+export function resolveGenerateDimensionTier(
   dimId: string,
   dim: DimensionDef,
   scheduler: { getTierIndex(dimId: string): number }
@@ -585,7 +585,7 @@ function beginBootstrapDimensionExecution({
   return Date.now();
 }
 
-export function getBootstrapChildDimensionId(childInput: AgentRunInput) {
+export function getGenerateChildDimensionId(childInput: AgentRunInput) {
   return typeof childInput.params?.dimId === 'string' ? childInput.params.dimId : null;
 }
 

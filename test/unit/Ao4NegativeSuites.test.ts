@@ -99,7 +99,7 @@ describe('AO4 negative suites', () => {
     };
 
     const cancelled = cancelDaemonJob({
-      container: makeContainer(store, { bootstrapTaskManager: taskManager }),
+      container: makeContainer(store, { generateTaskManager: taskManager }),
       jobId: job.id,
       reason: 'AO4 cancellation negative suite',
     });

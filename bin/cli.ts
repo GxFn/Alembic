@@ -779,7 +779,7 @@ program
         cli.blank();
       }
 
-      // 等待模式: 轮询 BootstrapTaskManager 直到所有维度完成
+      // 等待模式: 轮询 GenerateTaskManager 直到所有维度完成
       if (opts.wait && result.bootstrapSession) {
         const ora2 = (await import('ora')).default;
         const waitSpinner = ora2('Phase 5: AI 正在逐维度填充知识...').start();
@@ -792,7 +792,7 @@ program
           attempts++;
 
           try {
-            const taskManager = container.get('bootstrapTaskManager');
+            const taskManager = container.get('generateTaskManager');
             const sessionStatus = taskManager.getSessionStatus();
 
             if (!sessionStatus || !('tasks' in sessionStatus)) {
@@ -834,7 +834,7 @@ program
               break;
             }
           } catch {
-            // bootstrapTaskManager 可能还没就绪
+            // generateTaskManager 可能还没就绪
           }
         }
       } else if (!opts.json) {
@@ -932,7 +932,7 @@ program
         }
       }
 
-      // --wait 模式: 轮询 BootstrapTaskManager
+      // --wait 模式: 轮询 GenerateTaskManager
       if (opts.wait && result.asyncFill) {
         const ora2 = (await import('ora')).default;
         const waitSpinner = ora2('AI 正在逐维度填充知识...').start();
@@ -945,7 +945,7 @@ program
           attempts++;
 
           try {
-            const taskManager = container.get('bootstrapTaskManager');
+            const taskManager = container.get('generateTaskManager');
             const sessionStatus = taskManager.getSessionStatus();
 
             if (!sessionStatus || !('tasks' in sessionStatus)) {
@@ -983,7 +983,7 @@ program
               break;
             }
           } catch {
-            /* bootstrapTaskManager 可能还没就绪 */
+            /* generateTaskManager 可能还没就绪 */
           }
         }
       }
@@ -2394,7 +2394,7 @@ async function runDirectStartDevServer(opts: {
     await httpServer.start();
 
     // 后台异步刷新，不阻塞 Dashboard 首屏。
-    import('../lib/service/bootstrap/UiStartupTasks.js')
+    import('../lib/service/generate/UiStartupTasks.js')
       .then(({ runUiStartupTasks }) => runUiStartupTasks({ projectRoot, container }))
       .then((report) => {
         if (report.errors.length > 0) {

@@ -48,10 +48,10 @@ import type Logger from '@alembic/core/logging';
 import type { MemoryRepositoryImpl } from '@alembic/core/memory';
 // ── Repository Types ──
 import type {
-  BootstrapRepository,
   EvolutionCoverageLedgerRepository,
   EvolutionProposalRepository,
   EvolutionWarningRepository,
+  GenerateRepository,
   GuardViolationRepository,
   KnowledgeEdgeRepository,
   KnowledgeRepository,
@@ -74,7 +74,7 @@ import type AuditLogger from '../infrastructure/audit/AuditLogger.js';
 import type AuditStore from '../infrastructure/audit/AuditStore.js';
 import type { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
 import type { AuditRepositoryImpl } from '../repository/AuditRepository.js';
-import type { BootstrapTaskManager } from '../service/bootstrap/BootstrapTaskManager.js';
+import type { GenerateTaskManager } from '../service/generate/GenerateTaskManager.js';
 import type { ModuleService } from '../service/module/ModuleService.js';
 import type { SkillHooks } from '../service/skills/SkillHooks.js';
 // ── Vector Service Types ──
@@ -95,13 +95,13 @@ export interface ServiceMap {
   auditLogger: AuditLogger;
   gateway: Gateway;
   eventBus: EventBus;
-  bootstrapTaskManager: BootstrapTaskManager;
+  generateTaskManager: GenerateTaskManager;
   jobDisplaySnapshotStore: JobDisplaySnapshotStore;
   jobProcessEventRecorder: JobProcessEventRecorder;
   jobStore: JobStore;
   knowledgeRepository: KnowledgeRepository;
   knowledgeEdgeRepository: KnowledgeEdgeRepository;
-  bootstrapRepository: BootstrapRepository;
+  generateRepository: GenerateRepository;
   guardViolationRepository: GuardViolationRepository;
   auditRepository: AuditRepositoryImpl;
   memoryRepository: MemoryRepositoryImpl;

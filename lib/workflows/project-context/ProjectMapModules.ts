@@ -6,7 +6,7 @@ import type {
   ProjectContextRef,
   ProjectMap,
 } from '@alembic/core/project-context';
-import type { BootstrapFileEntry } from '../ai-execution/AgentRunInputBuilders.js';
+import type { GenerateFileEntry } from '../ai-execution/AgentRunInputBuilders.js';
 import type { ProjectContextModule } from './ProjectContextWorkflowFacts.js';
 
 export interface BuildProjectMapModulesOptions {
@@ -47,7 +47,7 @@ export function buildProjectMapModules(
 }
 
 export async function buildProjectMapModulesFromTargets(input: {
-  allFiles: readonly BootstrapFileEntry[];
+  allFiles: readonly GenerateFileEntry[];
   input: ProjectContextPresenterInput;
   projectRoot: string;
 }): Promise<ProjectContextModule[]> {
@@ -98,7 +98,7 @@ export async function buildProjectMapModulesFromTargets(input: {
 function inferTargetModulePath(
   input: ProjectContextPresenterInput,
   target: NonNullable<ProjectContextPresenterInput['repo']>['targets'][number],
-  allFiles: readonly BootstrapFileEntry[],
+  allFiles: readonly GenerateFileEntry[],
   swiftTargetPaths: ReadonlyMap<string, string>
 ): string | undefined {
   const fromRef = target.refs
@@ -144,7 +144,7 @@ function normalizeRefModulePath(ref: ProjectContextRef): string | undefined {
 }
 
 async function inferTargetOwnedFiles(input: {
-  allFiles: readonly BootstrapFileEntry[];
+  allFiles: readonly GenerateFileEntry[];
   input: ProjectContextPresenterInput;
   modulePath: string | undefined;
   projectRoot: string;
@@ -175,7 +175,7 @@ function inferSampledTargetOwnedFiles(
   input: ProjectContextPresenterInput,
   targetName: string,
   modulePath: string | undefined,
-  allFiles: readonly BootstrapFileEntry[],
+  allFiles: readonly GenerateFileEntry[],
   swiftTargetPaths: ReadonlyMap<string, string>
 ): string[] {
   const prefixes = buildTargetPathPrefixes(input, targetName, modulePath, swiftTargetPaths);

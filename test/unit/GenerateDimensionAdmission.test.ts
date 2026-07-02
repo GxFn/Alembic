@@ -3,14 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 import type { SessionStore } from '@alembic/agent/memory';
 import { describe, expect, test, vi } from 'vitest';
-import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
+import type { GenerateEventEmitter } from '../../lib/service/generate/GenerateEventEmitter.js';
 import type { IncrementalPlan } from '../../lib/service/handler-runtime/types.js';
 import {
-  buildBootstrapDimensionAdmissionDecisions,
-  resolveBootstrapDimensionAdmissions,
+  buildGenerateDimensionAdmissionDecisions,
+  resolveGenerateDimensionAdmissions,
 } from '../../lib/workflows/ai-execution/DimensionAdmission.js';
 import type { DimensionContext } from '../../lib/workflows/ai-execution/DimensionContext.js';
-import type { BootstrapRescanContext } from '../../lib/workflows/ai-execution/RescanContext.js';
+import type { GenerateRescanContext } from '../../lib/workflows/ai-execution/RescanContext.js';
 
 function makeIncrementalPlan(partial: Partial<IncrementalPlan> = {}): IncrementalPlan {
   return {
@@ -28,7 +28,7 @@ function makeIncrementalPlan(partial: Partial<IncrementalPlan> = {}): Incrementa
 
 describe('BootstrapDimensionAdmission', () => {
   test('builds one admission decision per active dimension', () => {
-    const decisions = buildBootstrapDimensionAdmissionDecisions({
+    const decisions = buildGenerateDimensionAdmissionDecisions({
       activeDimIds: ['api', 'ui', 'security'],
       incrementalSkippedDims: ['ui'],
       checkpointSkippedDims: ['api'],
@@ -73,9 +73,9 @@ describe('BootstrapDimensionAdmission', () => {
           shouldExecute: true,
         },
       },
-    } as unknown as BootstrapRescanContext;
+    } as unknown as GenerateRescanContext;
 
-    const admissions = await resolveBootstrapDimensionAdmissions({
+    const admissions = await resolveGenerateDimensionAdmissions({
       dataRoot,
       activeDimIds: ['api', 'ui'],
       isIncremental: true,
@@ -86,7 +86,7 @@ describe('BootstrapDimensionAdmission', () => {
       rescanContext,
       dimContext: {} as DimensionContext,
       sessionStore: {} as SessionStore,
-      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+      emitter: { emitDimensionComplete } as unknown as GenerateEventEmitter,
     });
 
     expect(admissions.decisions.api).toMatchObject({

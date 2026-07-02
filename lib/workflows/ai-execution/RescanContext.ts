@@ -4,11 +4,11 @@ import type {
   RescanExecutionMode,
 } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
-import { BootstrapDedup } from '@alembic/core/service/bootstrap';
+import { GenerateDedup } from '@alembic/core/service/bootstrap';
 
 const logger = Logger.getInstance();
 
-export interface BootstrapExistingRecipe {
+export interface GenerateExistingRecipe {
   id: string;
   title: string;
   trigger: string;
@@ -23,25 +23,25 @@ export interface BootstrapExistingRecipe {
   auditEvidence?: Record<string, unknown>;
 }
 
-export interface BootstrapRescanContext {
-  existingRecipes: BootstrapExistingRecipe[];
-  decayingRecipes: BootstrapExistingRecipe[];
+export interface GenerateRescanContext {
+  existingRecipes: GenerateExistingRecipe[];
+  decayingRecipes: GenerateExistingRecipe[];
   occupiedTriggers: string[];
   coverageByDim: Record<string, number>;
   executionDecisions: Record<string, KnowledgeRescanExecutionDecision>;
   evolutionPrescreen?: unknown;
 }
 
-export interface BootstrapDedupState {
+export interface GenerateDedupState {
   globalSubmittedTitles: Set<string>;
   globalSubmittedPatterns: Set<string>;
   globalSubmittedTriggers: Set<string>;
-  bootstrapDedup: BootstrapDedup;
-  existingRecipesList: BootstrapExistingRecipe[] | null;
-  rescanContext: BootstrapRescanContext | null;
+  bootstrapDedup: GenerateDedup;
+  existingRecipesList: GenerateExistingRecipe[] | null;
+  rescanContext: GenerateRescanContext | null;
 }
 
-export function prepareBootstrapRescanState({
+export function prepareGenerateRescanState({
   existingRecipes,
   evolutionPrescreen,
   executionDecisions,
@@ -49,13 +49,13 @@ export function prepareBootstrapRescanState({
   existingRecipes: unknown;
   evolutionPrescreen: unknown;
   executionDecisions?: readonly KnowledgeRescanExecutionDecision[];
-}): BootstrapDedupState {
+}): GenerateDedupState {
   const globalSubmittedTitles = new Set<string>();
   const globalSubmittedPatterns = new Set<string>();
   const globalSubmittedTriggers = new Set<string>();
-  const bootstrapDedup = new BootstrapDedup();
+  const bootstrapDedup = new GenerateDedup();
   const existingRecipesList = Array.isArray(existingRecipes)
-    ? (existingRecipes as BootstrapExistingRecipe[])
+    ? (existingRecipes as GenerateExistingRecipe[])
     : null;
 
   if (existingRecipesList && existingRecipesList.length > 0) {
@@ -91,10 +91,10 @@ function buildBootstrapRescanContext({
   evolutionPrescreen,
   executionDecisions,
 }: {
-  existingRecipesList: BootstrapExistingRecipe[] | null;
+  existingRecipesList: GenerateExistingRecipe[] | null;
   evolutionPrescreen: unknown;
   executionDecisions?: readonly KnowledgeRescanExecutionDecision[];
-}): BootstrapRescanContext | null {
+}): GenerateRescanContext | null {
   if (!existingRecipesList) {
     return null;
   }
@@ -119,11 +119,11 @@ function buildBootstrapRescanContext({
   };
 }
 
-export function getBootstrapDimensionExistingRecipes({
+export function getGenerateDimensionExistingRecipes({
   rescanContext,
   dimId,
 }: {
-  rescanContext: BootstrapRescanContext | null;
+  rescanContext: GenerateRescanContext | null;
   dimId: string;
 }) {
   return [
@@ -134,11 +134,11 @@ export function getBootstrapDimensionExistingRecipes({
   ];
 }
 
-export function projectBootstrapDimensionRescanContext({
+export function projectGenerateDimensionRescanContext({
   rescanContext,
   dimId,
 }: {
-  rescanContext: BootstrapRescanContext | null;
+  rescanContext: GenerateRescanContext | null;
   dimId: string;
 }) {
   if (!rescanContext) {
@@ -165,7 +165,7 @@ export function projectBootstrapDimensionRescanContext({
   };
 }
 
-function recipeDimensionKey(recipe: BootstrapExistingRecipe): string {
+function recipeDimensionKey(recipe: GenerateExistingRecipe): string {
   return (
     resolveRecipeDimensionId(recipe) ||
     recipe.dimensionId ||
@@ -175,7 +175,7 @@ function recipeDimensionKey(recipe: BootstrapExistingRecipe): string {
   );
 }
 
-export function projectBootstrapExistingRecipesForPrompt(recipes: BootstrapExistingRecipe[]) {
+export function projectGenerateExistingRecipesForPrompt(recipes: GenerateExistingRecipe[]) {
   return recipes.map((recipe) => ({
     id: recipe.id,
     title: recipe.title,

@@ -86,7 +86,7 @@ describe('AgentService', () => {
     const service = new AgentService({ runtimeBuilder: { build } });
 
     const result = await service.run({
-      profile: { id: 'bootstrap-session' },
+      profile: { id: 'generate-session' },
       params: {
         dimensions: [
           {
@@ -107,16 +107,16 @@ describe('AgentService', () => {
 
     expect(build).toHaveBeenCalledTimes(2);
     expect(build).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'bootstrap-dimension' }),
+      expect.objectContaining({ id: 'generate-dimension' }),
       expect.any(Object)
     );
     expect(result).toMatchObject({
-      profileId: 'bootstrap-session',
+      profileId: 'generate-session',
       reply: 'child-ok\n\nchild-ok',
       phases: {
         dimensionResults: {
-          overview: { profileId: 'bootstrap-dimension' },
-          api: { profileId: 'bootstrap-dimension' },
+          overview: { profileId: 'generate-dimension' },
+          api: { profileId: 'generate-dimension' },
         },
       },
     });

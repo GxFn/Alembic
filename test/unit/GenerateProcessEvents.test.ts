@@ -1,22 +1,22 @@
 import type { AgentRunInput } from '@alembic/agent/service';
 import { describe, expect, test } from 'vitest';
 import {
-  buildBootstrapAgentProgressProcessEvents,
-  buildBootstrapDimensionInputProcessEvents,
-  buildBootstrapDimensionResultProcessEvents,
-  buildBootstrapTierReflectionProcessEvents,
+  buildGenerateAgentProgressProcessEvents,
+  buildGenerateDimensionInputProcessEvents,
+  buildGenerateDimensionResultProcessEvents,
+  buildGenerateTierReflectionProcessEvents,
 } from '../../lib/workflows/ai-execution/AgentRunProcessEvents.js';
-import type { BootstrapDimensionProjection } from '../../lib/workflows/ai-execution/AgentRunProjections.js';
-import type { BootstrapDimensionPlan } from '../../lib/workflows/ai-execution/DimensionRuntimeBuilder.js';
+import type { GenerateDimensionProjection } from '../../lib/workflows/ai-execution/AgentRunProjections.js';
+import type { GenerateDimensionPlan } from '../../lib/workflows/ai-execution/DimensionRuntimeBuilder.js';
 
 describe('BootstrapProcessEvents', () => {
   test('projects safe bootstrap dimension input without file content or secrets', () => {
-    const events = buildBootstrapDimensionInputProcessEvents({
+    const events = buildGenerateDimensionInputProcessEvents({
       dimId: 'architecture',
       label: 'Architecture',
       plan: makePlan(),
       runInput: {
-        profile: { id: 'bootstrap-dimension' },
+        profile: { id: 'generate-dimension' },
         params: { dimId: 'architecture', apiKey: 'sk-proj-abcdefghijklmnopqrstuvwxyz' },
         message: {
           role: 'internal',
@@ -111,7 +111,7 @@ describe('BootstrapProcessEvents', () => {
   });
 
   test('maps developer-safe Agent progress process events and keeps host-owned fields out', () => {
-    const events = buildBootstrapAgentProgressProcessEvents({
+    const events = buildGenerateAgentProgressProcessEvents({
       dimId: 'architecture',
       label: 'Architecture',
       sessionId: 'bs_1',
@@ -168,7 +168,7 @@ describe('BootstrapProcessEvents', () => {
   test('keeps short Agent LLM output metadata without marking Alembic truncation', () => {
     const visibleText = 'Received 394 visible character(s) from the provider.';
 
-    const events = buildBootstrapAgentProgressProcessEvents({
+    const events = buildGenerateAgentProgressProcessEvents({
       dimId: 'architecture',
       label: 'Architecture',
       sessionId: 'bs_1',
@@ -220,7 +220,7 @@ describe('BootstrapProcessEvents', () => {
   test('marks long Agent LLM output truncation with machine-readable fields', () => {
     const longText = 'x'.repeat(6105);
 
-    const events = buildBootstrapAgentProgressProcessEvents({
+    const events = buildGenerateAgentProgressProcessEvents({
       dimId: 'architecture',
       sessionId: 'bs_1',
       event: {
@@ -306,14 +306,14 @@ describe('BootstrapProcessEvents', () => {
     } as const;
 
     expect(
-      buildBootstrapAgentProgressProcessEvents({
+      buildGenerateAgentProgressProcessEvents({
         dimId: 'architecture',
         event: baseEvent,
         sessionId: 'bs_1',
       })
     ).toEqual([]);
     expect(
-      buildBootstrapAgentProgressProcessEvents({
+      buildGenerateAgentProgressProcessEvents({
         dimId: 'architecture',
         event: {
           ...baseEvent,
@@ -328,7 +328,7 @@ describe('BootstrapProcessEvents', () => {
     ).toEqual([]);
     for (const sourceClass of ['raw-provider', 'secret'] as const) {
       expect(
-        buildBootstrapAgentProgressProcessEvents({
+        buildGenerateAgentProgressProcessEvents({
           dimId: 'architecture',
           event: {
             ...baseEvent,
@@ -344,7 +344,7 @@ describe('BootstrapProcessEvents', () => {
   });
 
   test('projects visible output, tool calls, and self-check events from AgentRunResult', () => {
-    const events = buildBootstrapDimensionResultProcessEvents({
+    const events = buildGenerateDimensionResultProcessEvents({
       dimId: 'code-patterns',
       label: 'Code Patterns',
       projection: {
@@ -386,7 +386,7 @@ describe('BootstrapProcessEvents', () => {
           totalCompactedItems: 0,
           forcedSummary: false,
         },
-      } as unknown as BootstrapDimensionProjection,
+      } as unknown as GenerateDimensionProjection,
       runResult: {
         reply: 'Final visible output',
         status: 'success',
@@ -405,13 +405,13 @@ describe('BootstrapProcessEvents', () => {
   test('marks truncated dimension visible output by section', () => {
     const longAnalyzeOutput = 'A'.repeat(6012);
     const finalOutput = 'Final short';
-    const events = buildBootstrapDimensionResultProcessEvents({
+    const events = buildGenerateDimensionResultProcessEvents({
       dimId: 'architecture',
       label: 'Architecture',
       projection: {
         analyzeResult: { reply: longAnalyzeOutput },
         runtimeToolCalls: [],
-      } as unknown as BootstrapDimensionProjection,
+      } as unknown as GenerateDimensionProjection,
       runResult: {
         reply: finalOutput,
         status: 'success',
@@ -451,7 +451,7 @@ describe('BootstrapProcessEvents', () => {
   });
 
   test('projects key findings digest from dimension digest and analysis report', () => {
-    const events = buildBootstrapDimensionResultProcessEvents({
+    const events = buildGenerateDimensionResultProcessEvents({
       dimId: 'architecture',
       label: 'Architecture',
       projection: {
@@ -479,7 +479,7 @@ describe('BootstrapProcessEvents', () => {
         },
         runtimeToolCalls: [],
         submitCalls: [],
-      } as unknown as BootstrapDimensionProjection,
+      } as unknown as GenerateDimensionProjection,
       runResult: {
         reply: 'final',
         status: 'success',
@@ -507,7 +507,7 @@ describe('BootstrapProcessEvents', () => {
   });
 
   test('projects tier reflection as a developer-safe reflection event', () => {
-    const events = buildBootstrapTierReflectionProcessEvents({
+    const events = buildGenerateTierReflectionProcessEvents({
       reflection: {
         tierIndex: 1,
         completedDimensions: ['architecture', 'code-patterns'],
@@ -535,7 +535,7 @@ describe('BootstrapProcessEvents', () => {
   });
 });
 
-function makePlan(): BootstrapDimensionPlan {
+function makePlan(): GenerateDimensionPlan {
   return {
     dim: { id: 'architecture', label: 'Architecture' },
     dimConfig: { id: 'architecture', label: 'Architecture' },
@@ -543,5 +543,5 @@ function makePlan(): BootstrapDimensionPlan {
     hasExistingRecipes: false,
     needsCandidates: true,
     prescreenDone: false,
-  } as unknown as BootstrapDimensionPlan;
+  } as unknown as GenerateDimensionPlan;
 }

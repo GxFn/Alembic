@@ -22,17 +22,14 @@ import type {
   DependencyGraph as SnapshotDependencyGraph,
 } from '@alembic/core/types';
 import type { ProjectScopeSourceIdentityMap } from '../../project-scope/ProjectScopeAnalysis.js';
+import { buildGenerateDimensionRunInput, type GenerateFileEntry } from './AgentRunInputBuilders.js';
+import { buildGeneratePcvStageNodeContext } from './PcvNodeEvidence.js';
 import {
-  type BootstrapFileEntry,
-  buildBootstrapDimensionRunInput,
-} from './AgentRunInputBuilders.js';
-import { buildBootstrapPcvStageNodeContext } from './PcvNodeEvidence.js';
-import {
-  type BootstrapExistingRecipe,
-  type BootstrapRescanContext,
-  getBootstrapDimensionExistingRecipes,
-  projectBootstrapDimensionRescanContext,
-  projectBootstrapExistingRecipesForPrompt,
+  type GenerateExistingRecipe,
+  type GenerateRescanContext,
+  getGenerateDimensionExistingRecipes,
+  projectGenerateDimensionRescanContext,
+  projectGenerateExistingRecipesForPrompt,
 } from './RescanContext.js';
 
 interface DimConfigV3Entry {
@@ -42,7 +39,7 @@ interface DimConfigV3Entry {
 
 type CreateSystemRunContextOptions = Parameters<typeof createSystemRunContext>[0];
 
-export interface BootstrapDimensionConfig extends Record<string, unknown> {
+export interface GenerateDimensionConfig extends Record<string, unknown> {
   id: string;
   label?: string;
   guide?: string;
@@ -55,36 +52,36 @@ export interface BootstrapDimensionConfig extends Record<string, unknown> {
   knowledgeTypes?: string[];
 }
 
-export interface BootstrapDimensionPlan {
+export interface GenerateDimensionPlan {
   dim: DimensionDef;
-  dimConfig: BootstrapDimensionConfig;
+  dimConfig: GenerateDimensionConfig;
   needsCandidates: boolean;
-  dimExistingRecipes: BootstrapExistingRecipe[];
+  dimExistingRecipes: GenerateExistingRecipe[];
   hasExistingRecipes: boolean;
   prescreenDone: boolean;
   rescanExecutionDecision?: KnowledgeRescanExecutionDecision;
 }
 
-export interface BootstrapDimensionRuntimeBuildResult {
+export interface GenerateDimensionRuntimeBuildResult {
   analystScopeId: string;
   runInput: AgentRunInput;
 }
 
-export function resolveBootstrapDimensionPlan({
+export function resolveGenerateDimensionPlan({
   dimId,
   dimensions,
   rescanContext,
 }: {
   dimId: string;
   dimensions: DimensionDef[];
-  rescanContext: BootstrapRescanContext | null;
-}): BootstrapDimensionPlan | null {
+  rescanContext: GenerateRescanContext | null;
+}): GenerateDimensionPlan | null {
   const dim = dimensions.find((candidate) => candidate.id === dimId);
   if (!dim) {
     return null;
   }
 
-  const fullConfig = getFullDimensionConfig(dimId) as BootstrapDimensionConfig | null;
+  const fullConfig = getFullDimensionConfig(dimId) as GenerateDimensionConfig | null;
   const v3Config = (DIMENSION_CONFIGS_V3 as Record<string, DimConfigV3Entry | undefined>)[dimId];
   const dimConfig = fullConfig
     ? {
@@ -102,7 +99,7 @@ export function resolveBootstrapDimensionPlan({
           dualOutput: dim.dualOutput,
           skillMeta: dim.skillMeta,
           knowledgeTypes: dim.knowledgeTypes || v3Config.allowedKnowledgeTypes,
-        } satisfies BootstrapDimensionConfig)
+        } satisfies GenerateDimensionConfig)
       : {
           id: dimId,
           label: dim.label,
@@ -120,7 +117,7 @@ export function resolveBootstrapDimensionPlan({
   const baseNeedsCandidates = Boolean(
     v3OutputType ? v3OutputType !== 'skill' : !dimConfig.skillWorthy || dimConfig.dualOutput
   );
-  const dimExistingRecipes = getBootstrapDimensionExistingRecipes({ rescanContext, dimId });
+  const dimExistingRecipes = getGenerateDimensionExistingRecipes({ rescanContext, dimId });
   const rescanExecutionDecision = rescanContext?.executionDecisions[dimId];
   const needsCandidates = rescanExecutionDecision
     ? baseNeedsCandidates &&
@@ -139,7 +136,7 @@ export function resolveBootstrapDimensionPlan({
   };
 }
 
-export function createBootstrapDimensionRuntimeInput({
+export function createGenerateDimensionRuntimeInput({
   dimId,
   plan,
   memoryCoordinator,
@@ -169,7 +166,7 @@ export function createBootstrapDimensionRuntimeInput({
   sessionAbortSignal,
 }: {
   dimId: string;
-  plan: BootstrapDimensionPlan;
+  plan: GenerateDimensionPlan;
   memoryCoordinator: MemoryCoordinator;
   systemRunContextFactory: SystemRunContextFactory;
   projectInfo: { lang?: string | null; fileCount?: number | null; [key: string]: unknown };
@@ -187,17 +184,17 @@ export function createBootstrapDimensionRuntimeInput({
   guardAudit?: GuardAudit | null;
   depGraphData?: SnapshotDependencyGraph | null;
   callGraphResult?: SnapshotCallGraphResult | null;
-  rescanContext: BootstrapRescanContext | null;
+  rescanContext: GenerateRescanContext | null;
   targetFileMap?: Record<string, unknown> | null;
   globalSubmittedTitles: Set<string>;
   globalSubmittedPatterns: Set<string>;
   globalSubmittedTriggers: Set<string>;
   bootstrapDedup: unknown;
   sessionId: string;
-  allFiles: BootstrapFileEntry[] | null;
+  allFiles: GenerateFileEntry[] | null;
   projectScopeSourceIdentityMap?: ProjectScopeSourceIdentityMap | null;
   sessionAbortSignal?: AbortSignal | null;
-}): BootstrapDimensionRuntimeBuildResult {
+}): GenerateDimensionRuntimeBuildResult {
   const { dimConfig, needsCandidates, dimExistingRecipes, hasExistingRecipes, prescreenDone } =
     plan;
   const analystScopeId = `${dimId}:analyst`;
@@ -208,7 +205,7 @@ export function createBootstrapDimensionRuntimeInput({
     outputType: effectiveOutputType,
     allowedKnowledgeTypes: dimConfig.allowedKnowledgeTypes || [],
   };
-  const pcvStageNodeContext = buildBootstrapPcvStageNodeContext();
+  const pcvStageNodeContext = buildGeneratePcvStageNodeContext();
   const contextWindow = systemRunContextFactory.createContextWindow({ isSystem: true });
   const computedBudget = computeAnalystBudget(
     projectInfo.fileCount || 0,
@@ -235,8 +232,8 @@ export function createBootstrapDimensionRuntimeInput({
       callGraphResult,
       panoramaResult,
     }),
-    rescanContext: projectBootstrapDimensionRescanContext({ rescanContext, dimId }),
-    existingRecipes: projectBootstrapExistingRecipesForPrompt(dimExistingRecipes),
+    rescanContext: projectGenerateDimensionRescanContext({ rescanContext, dimId }),
+    existingRecipes: projectGenerateExistingRecipesForPrompt(dimExistingRecipes),
     projectOverview: {
       primaryLang: primaryLang || projectInfo.lang || 'unknown',
       fileCount: projectInfo.fileCount || 0,
@@ -296,7 +293,7 @@ export function createBootstrapDimensionRuntimeInput({
   };
   return {
     analystScopeId,
-    runInput: buildBootstrapDimensionRunInput({
+    runInput: buildGenerateDimensionRunInput({
       dimId,
       dimConfig,
       needsCandidates,

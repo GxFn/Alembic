@@ -1,5 +1,5 @@
 /**
- * bootstrapRefine — Phase 6 AI 润色
+ * generateRefine — Phase 6 AI 润色
  *
  * 对 Bootstrap Phase 5 产出的知识条目进行 AI 二次精炼：
  * - 改善模板化描述 → 更自然精准
@@ -48,7 +48,7 @@ export function formatPublishedTitles(
     .join(', ')}`;
 }
 
-export async function bootstrapRefine(ctx: McpContext, args: BootstrapRefineArgs) {
+export async function generateRefine(ctx: McpContext, args: BootstrapRefineArgs) {
   const t0 = Date.now();
   const knowledgeService = ctx.container.get('knowledgeService');
   const aiProvider = ctx.container.get('aiProvider');
@@ -70,10 +70,10 @@ export async function bootstrapRefine(ctx: McpContext, args: BootstrapRefineArgs
     });
   }
 
-  // 接入 BootstrapTaskManager 双通道推送 refine:* 事件
+  // 接入 GenerateTaskManager 双通道推送 refine:* 事件
   let onProgress: ((eventName: string, data: Record<string, unknown>) => void) | null = null;
   try {
-    const taskManager = ctx.container.get('bootstrapTaskManager');
+    const taskManager = ctx.container.get('generateTaskManager');
     onProgress = (eventName: string, data: Record<string, unknown>) =>
       taskManager.emitProgress(eventName, data);
   } catch {

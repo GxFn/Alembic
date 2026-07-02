@@ -3,21 +3,21 @@ import Logger from '@alembic/core/logging';
 import type { DimensionDef, IncrementalPlan } from '@alembic/core/types';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import { getAiRuntimeStatus } from '#inject/AiRuntimeStatus.js';
-import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
+import { GenerateEventEmitter } from '#service/generate/GenerateEventEmitter.js';
 import {
   type ProjectScopeSourceIdentity,
   resolveProjectScopeSourceIdentitiesFromCarrier,
 } from '../../project-scope/ProjectScopeAnalysis.js';
 import type { ProjectContextFillView } from '../project-context/ProjectContextWorkflowFacts.js';
-import type { BootstrapFileEntry } from './AgentRunInputBuilders.js';
-import type { BootstrapTaskManagerLike, BootstrapWorkflowContext } from './AiDimensionTypes.js';
+import type { GenerateFileEntry } from './AgentRunInputBuilders.js';
+import type { GenerateTaskManagerLike, GenerateWorkflowContext } from './AiDimensionTypes.js';
 
 const logger = Logger.getInstance();
 
 export interface AiDimensionPreparation {
   view: ProjectContextFillView;
   dimensions: DimensionDef[];
-  ctx: BootstrapWorkflowContext;
+  ctx: GenerateWorkflowContext;
   projectRoot: string;
   dataRoot: string;
   depGraphData: null;
@@ -31,12 +31,12 @@ export interface AiDimensionPreparation {
   evolutionPrescreen: unknown;
   rescanExecutionDecisions: ProjectContextFillView['rescanExecutionDecisions'];
   targetFileMap: ProjectContextFillView['targetFileMap'];
-  taskManager: BootstrapTaskManagerLike | null;
+  taskManager: GenerateTaskManagerLike | null;
   sessionId: string;
   sessionAbortSignal: AbortSignal | null;
   isIncremental: boolean;
-  emitter: BootstrapEventEmitter;
-  allFiles: BootstrapFileEntry[] | null;
+  emitter: GenerateEventEmitter;
+  allFiles: GenerateFileEntry[] | null;
   projectScopeSourceIdentities: ProjectScopeSourceIdentity[];
   onDimensionResult: ProjectContextFillView['onDimensionResult'];
   agentService: AgentService | null;
@@ -50,18 +50,18 @@ export function prepareAiDimensionPipeline(
   dimensions: DimensionDef[]
 ): AiDimensionPreparation {
   const { projectContextFacts, projectRoot } = view;
-  const ctx = view.ctx as BootstrapWorkflowContext;
+  const ctx = view.ctx as GenerateWorkflowContext;
   const projectScopeSourceIdentities = resolveProjectScopeSourceIdentitiesFromCarrier(view);
   const dataRoot =
     resolveDataRoot(ctx.container as { singletons?: Record<string, unknown> }) || projectRoot;
   const incrementalPlan = projectContextFacts.incrementalPlan;
   const isIncremental =
     incrementalPlan?.canIncremental === true && incrementalPlan.mode === 'incremental';
-  const emitter = new BootstrapEventEmitter(ctx.container);
+  const emitter = new GenerateEventEmitter(ctx.container);
 
-  let taskManager: BootstrapTaskManagerLike | null = null;
+  let taskManager: GenerateTaskManagerLike | null = null;
   try {
-    taskManager = ctx.container.get('bootstrapTaskManager') as BootstrapTaskManagerLike;
+    taskManager = ctx.container.get('generateTaskManager') as GenerateTaskManagerLike;
   } catch {
     /* not available */
   }
@@ -102,7 +102,7 @@ export function prepareAiDimensionPipeline(
     sessionAbortSignal: taskManager?.getSessionAbortSignal?.() ?? null,
     isIncremental,
     emitter,
-    allFiles: projectContextFacts.allFiles as BootstrapFileEntry[] | null,
+    allFiles: projectContextFacts.allFiles as GenerateFileEntry[] | null,
     projectScopeSourceIdentities,
     onDimensionResult: view.onDimensionResult,
     agentService,

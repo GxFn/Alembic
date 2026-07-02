@@ -9,7 +9,7 @@ import {
   resolveProjectScopeAnalysisContext,
   resolveProjectScopeSourceIdentitiesFromContainer,
 } from '../project-scope/ProjectScopeAnalysis.js';
-import type { BootstrapProcessEventDraft } from '../service/bootstrap/bootstrap-event-types.js';
+import type { GenerateProcessEventDraft } from '../service/generate/generate-event-types.js';
 import { releaseProjectContextWorkflowSessionByProjectRoot } from '../workflows/project-context/ProjectContextWorkflowFacts.js';
 import {
   getJobDisplaySnapshotStore,
@@ -40,7 +40,7 @@ import { materializeJobProcessEventTextArtifact } from './JobProcessEventArtifac
 import type { JobProcessEventRecorder } from './JobProcessEventRecorder.js';
 import { runModuleMiningWorkflow } from './ModuleMiningWorkflow.js';
 import { attachPcvN9ObservabilityCarry } from './PcvObservabilityLinkage.js';
-import { runBootstrapPlanGate } from './PlanSelectionGate.js';
+import { runGeneratePlanGate } from './PlanSelectionGate.js';
 
 export {
   getJobDisplaySnapshotStore,
@@ -131,7 +131,7 @@ export async function runDaemonJob(options: RunDaemonJobOptions): Promise<RunDae
   const recorder = getJobProcessEventRecorder(options.container);
   const bootstrapBridge =
     options.kind === 'bootstrap'
-      ? attachBootstrapProcessEventBridge({
+      ? attachGenerateProcessEventBridge({
           container: options.container,
           jobId: options.jobId,
           logger: options.logger,
@@ -360,7 +360,7 @@ export function cancelDaemonJob(options: {
     getSessionStatus(): Record<string, unknown>;
     isRunning: boolean;
     markCancelled(): void;
-  }>(options.container, 'bootstrapTaskManager');
+  }>(options.container, 'generateTaskManager');
   const status = taskManager?.getSessionStatus();
   if (taskManager && bootstrapSessionId && status?.id === bootstrapSessionId) {
     if (taskManager.isRunning) {
@@ -621,7 +621,7 @@ function refreshJobDisplaySnapshot(options: {
   }
 }
 
-export function attachBootstrapProcessEventBridge(options: {
+export function attachGenerateProcessEventBridge(options: {
   container: ServiceContainer;
   jobId: string;
   logger: LoggerLike;
@@ -870,7 +870,7 @@ export function attachBootstrapProcessEventBridge(options: {
 
 async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
   if (options.kind === 'bootstrap') {
-    const planGate = await runBootstrapPlanGate(options);
+    const planGate = await runGeneratePlanGate(options);
     const { runProjectIndexWorkflow } = await import(
       '../workflows/project-index/ProjectIndexWorkflow.js'
     );
@@ -948,7 +948,7 @@ function linkBootstrapSessionCompletion(options: {
 
   const taskManager = getOptionalService<{ getSessionStatus(): Record<string, unknown> }>(
     options.container,
-    'bootstrapTaskManager'
+    'generateTaskManager'
   );
   const currentStatus = taskManager?.getSessionStatus();
   if (currentStatus?.id === options.bootstrapSessionId && currentStatus.status !== 'running') {
@@ -1119,7 +1119,7 @@ function isBootstrapSessionRunning(result: unknown, container: ServiceContainer)
   }
   const taskManager = getOptionalService<{ getSessionStatus(): Record<string, unknown> }>(
     container,
-    'bootstrapTaskManager'
+    'generateTaskManager'
   );
   const status = taskManager?.getSessionStatus();
   if (status?.id === bootstrapSessionId) {
@@ -1215,7 +1215,7 @@ function attachTraceEnvelopeJobId({
   metadata,
   sessionId,
 }: {
-  draft: BootstrapProcessEventDraft;
+  draft: GenerateProcessEventDraft;
   jobId: string;
   metadata: Record<string, unknown>;
   sessionId: string | null;
@@ -1245,11 +1245,11 @@ function attachTraceEnvelopeJobId({
   };
 }
 
-function isLlmEventDraft(draft: BootstrapProcessEventDraft): boolean {
+function isLlmEventDraft(draft: GenerateProcessEventDraft): boolean {
   return draft.kind === 'llm.input' || draft.kind === 'llm.output';
 }
 
-function normalizeBootstrapProcessEventDrafts(payload: unknown): BootstrapProcessEventDraft[] {
+function normalizeBootstrapProcessEventDrafts(payload: unknown): GenerateProcessEventDraft[] {
   let rawDrafts: unknown[] = [];
   if (Array.isArray(payload)) {
     rawDrafts = payload;
@@ -1259,7 +1259,7 @@ function normalizeBootstrapProcessEventDrafts(payload: unknown): BootstrapProces
   return rawDrafts.filter(isBootstrapProcessEventDraft);
 }
 
-function isBootstrapProcessEventDraft(value: unknown): value is BootstrapProcessEventDraft {
+function isBootstrapProcessEventDraft(value: unknown): value is GenerateProcessEventDraft {
   if (!isRecord(value)) {
     return false;
   }

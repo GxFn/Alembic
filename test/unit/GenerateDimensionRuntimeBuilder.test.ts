@@ -3,13 +3,13 @@ import type { SystemRunContextFactory } from '@alembic/agent/service';
 import type { KnowledgeRescanExecutionDecision } from '@alembic/core/host-agent-workflows';
 import { describe, expect, test, vi } from 'vitest';
 import { buildProjectScopeSourceIdentityMap } from '../../lib/project-scope/ProjectScopeAnalysis.js';
-import { buildBootstrapDimensionRunInput } from '../../lib/workflows/ai-execution/AgentRunInputBuilders.js';
+import { buildGenerateDimensionRunInput } from '../../lib/workflows/ai-execution/AgentRunInputBuilders.js';
 import {
   buildPanoramaContext,
-  createBootstrapDimensionRuntimeInput,
-  resolveBootstrapDimensionPlan,
+  createGenerateDimensionRuntimeInput,
+  resolveGenerateDimensionPlan,
 } from '../../lib/workflows/ai-execution/DimensionRuntimeBuilder.js';
-import { prepareBootstrapRescanState } from '../../lib/workflows/ai-execution/RescanContext.js';
+import { prepareGenerateRescanState } from '../../lib/workflows/ai-execution/RescanContext.js';
 
 const dimensions = [
   {
@@ -41,12 +41,12 @@ function createContextFactory() {
 
 describe('bootstrap dimension runtime builder', () => {
   test('resolves fallback dimension config and candidate requirements', () => {
-    const skillPlan = resolveBootstrapDimensionPlan({
+    const skillPlan = resolveGenerateDimensionPlan({
       dimId: 'custom-skill-dim',
       dimensions,
       rescanContext: null,
     });
-    const dualPlan = resolveBootstrapDimensionPlan({
+    const dualPlan = resolveGenerateDimensionPlan({
       dimId: 'custom-dual-dim',
       dimensions,
       rescanContext: null,
@@ -57,7 +57,7 @@ describe('bootstrap dimension runtime builder', () => {
     expect(dualPlan?.dimConfig.outputType).toBe('dual');
     expect(dualPlan?.needsCandidates).toBe(true);
     expect(
-      resolveBootstrapDimensionPlan({ dimId: 'missing', dimensions, rescanContext: null })
+      resolveGenerateDimensionPlan({ dimId: 'missing', dimensions, rescanContext: null })
     ).toBeNull();
   });
 
@@ -67,7 +67,7 @@ describe('bootstrap dimension runtime builder', () => {
       globalSubmittedTitles,
       globalSubmittedPatterns,
       globalSubmittedTriggers,
-    } = prepareBootstrapRescanState({
+    } = prepareGenerateRescanState({
       existingRecipes: [
         {
           id: 'recipe-1',
@@ -87,7 +87,7 @@ describe('bootstrap dimension runtime builder', () => {
       ],
       evolutionPrescreen: { done: true },
     });
-    const plan = resolveBootstrapDimensionPlan({
+    const plan = resolveGenerateDimensionPlan({
       dimId: 'custom-dual-dim',
       dimensions,
       rescanContext,
@@ -112,7 +112,7 @@ describe('bootstrap dimension runtime builder', () => {
         relativePath: 'lib/index.ts',
       },
     ]);
-    const result = createBootstrapDimensionRuntimeInput({
+    const result = createGenerateDimensionRuntimeInput({
       dimId: 'custom-dual-dim',
       plan,
       memoryCoordinator,
@@ -235,7 +235,7 @@ describe('bootstrap dimension runtime builder', () => {
       },
     ]);
 
-    const runInput = buildBootstrapDimensionRunInput({
+    const runInput = buildGenerateDimensionRunInput({
       dimId: 'custom-dual-dim',
       dimConfig: { label: 'Custom Dual' },
       needsCandidates: true,
@@ -290,7 +290,7 @@ describe('bootstrap dimension runtime builder', () => {
       globalSubmittedTitles,
       globalSubmittedPatterns,
       globalSubmittedTriggers,
-    } = prepareBootstrapRescanState({
+    } = prepareGenerateRescanState({
       existingRecipes: [
         {
           id: 'recipe-1',
@@ -302,7 +302,7 @@ describe('bootstrap dimension runtime builder', () => {
       evolutionPrescreen: { done: true },
       executionDecisions: [decision],
     });
-    const plan = resolveBootstrapDimensionPlan({
+    const plan = resolveGenerateDimensionPlan({
       dimId: 'custom-dual-dim',
       dimensions,
       rescanContext,
@@ -315,7 +315,7 @@ describe('bootstrap dimension runtime builder', () => {
     expect(plan.rescanExecutionDecision).toBe(decision);
 
     const memoryCoordinator = new MemoryCoordinator({ mode: 'bootstrap' });
-    const result = createBootstrapDimensionRuntimeInput({
+    const result = createGenerateDimensionRuntimeInput({
       dimId: 'custom-dual-dim',
       plan,
       memoryCoordinator,

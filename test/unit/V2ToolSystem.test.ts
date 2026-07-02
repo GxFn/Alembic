@@ -8,7 +8,7 @@
  *   4. Capability 权限拦截
  */
 
-import { BootstrapAnalyze } from '@alembic/agent';
+import { GenerateAnalyze } from '@alembic/agent';
 import {
   DeltaCache,
   OutputCompressor,
@@ -634,8 +634,8 @@ describe('RuntimeCapabilityCatalog', () => {
 // ─────────────────────────────────────────────────
 
 describe('RuntimeCapability', () => {
-  test('BootstrapAnalyze returns V2 tool names', () => {
-    const cap = new BootstrapAnalyze();
+  test('GenerateAnalyze returns V2 tool names', () => {
+    const cap = new GenerateAnalyze();
     expect(cap.name).toBe('code_analysis');
     expect(cap.tools).toContain('code');
     expect(cap.tools).toContain('terminal');
@@ -646,7 +646,7 @@ describe('RuntimeCapability', () => {
   });
 
   test('promptFragment includes action descriptions', () => {
-    const cap = new BootstrapAnalyze();
+    const cap = new GenerateAnalyze();
     const prompt = cap.promptFragment;
     expect(prompt).toContain('code');
     expect(prompt).toContain('search');
@@ -654,7 +654,7 @@ describe('RuntimeCapability', () => {
   });
 
   test('toDef produces valid CapabilityDef', () => {
-    const cap = new BootstrapAnalyze();
+    const cap = new GenerateAnalyze();
     const def = cap.toDef();
     expect(def.name).toBe('code_analysis');
     expect(def.allowedTools.code).toContain('search');

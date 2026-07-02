@@ -16,7 +16,7 @@ import { syncRestoredSessionStoreDigests } from './DimensionRestoreState.js';
 
 const logger = Logger.getInstance();
 
-export interface BootstrapRuntimeContainer {
+export interface GenerateRuntimeContainer {
   get(name: string): unknown;
   singletons: {
     aiProvider?: Record<string, unknown> | null;
@@ -25,8 +25,8 @@ export interface BootstrapRuntimeContainer {
   };
 }
 
-export interface InitializeBootstrapRuntimeOptions {
-  container: BootstrapRuntimeContainer;
+export interface InitializeGenerateRuntimeOptions {
+  container: GenerateRuntimeContainer;
   projectRoot: string;
   dataRoot: string;
   primaryLang?: string | null;
@@ -40,7 +40,7 @@ export interface InitializeBootstrapRuntimeOptions {
   projectScopeSourceIdentities?: ProjectScopeSourceIdentity[];
 }
 
-export async function initializeBootstrapRuntime({
+export async function initializeGenerateRuntime({
   container,
   projectRoot,
   dataRoot,
@@ -53,7 +53,7 @@ export async function initializeBootstrapRuntime({
   isIncremental,
   incrementalPlan,
   projectScopeSourceIdentities = [],
-}: InitializeBootstrapRuntimeOptions) {
+}: InitializeGenerateRuntimeOptions) {
   const projectGraph = null;
   logger.info(
     '[Insight-v7] Using unified AgentRuntime pipeline (no legacy Analyst/Producer wrappers)'
@@ -163,7 +163,7 @@ function createBootstrapSemanticMemory({
   container,
   dataRoot,
 }: {
-  container: BootstrapRuntimeContainer;
+  container: GenerateRuntimeContainer;
   dataRoot: string;
 }) {
   try {

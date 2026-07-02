@@ -1,17 +1,17 @@
 import type { AgentProgressProcessEvent, ProgressEvent } from '@alembic/agent/runtime';
 import type { AgentRunInput } from '@alembic/agent/service';
 import type {
-  BootstrapProcessEventDraft,
-  BootstrapProcessEventTextArtifactCandidate,
-} from '#service/bootstrap/bootstrap-event-types.js';
+  GenerateProcessEventDraft,
+  GenerateProcessEventTextArtifactCandidate,
+} from '#service/generate/generate-event-types.js';
 import type {
   AgentResultLike,
-  BootstrapDimensionProjection,
   DimensionFinding,
+  GenerateDimensionProjection,
   ToolCallRecord,
 } from './AgentRunProjections.js';
 import { parseDimensionDigest } from './DimensionContext.js';
-import type { BootstrapDimensionPlan } from './DimensionRuntimeBuilder.js';
+import type { GenerateDimensionPlan } from './DimensionRuntimeBuilder.js';
 import { buildPcvN8StageFactoryEvidence } from './PcvNodeEvidence.js';
 
 const MAX_TEXT_CHARS = 6000;
@@ -38,7 +38,7 @@ const PROCESS_EVENT_RETENTION_POLICIES = [
 const PROCESS_EVENT_SEVERITIES = ['info', 'success', 'warning', 'error'] as const;
 const PROCESS_EVENT_CONTENT_ROLES = ['system', 'developer', 'user', 'assistant', 'tool'] as const;
 
-export function buildBootstrapDimensionInputProcessEvents({
+export function buildGenerateDimensionInputProcessEvents({
   dimId,
   label,
   plan,
@@ -47,10 +47,10 @@ export function buildBootstrapDimensionInputProcessEvents({
 }: {
   dimId: string;
   label?: string | null;
-  plan: BootstrapDimensionPlan;
+  plan: GenerateDimensionPlan;
   runInput: AgentRunInput;
   sessionId: string;
-}): BootstrapProcessEventDraft[] {
+}): GenerateProcessEventDraft[] {
   const title = `Bootstrap ${label || dimId} input prepared`;
   const inputProjection = projectAgentRunInput(runInput);
   const pcvN8Evidence = buildPcvN8StageFactoryEvidence({ dimId, label, plan, runInput });
@@ -92,7 +92,7 @@ export function buildBootstrapDimensionInputProcessEvents({
   ];
 }
 
-export function buildBootstrapDimensionResultProcessEvents({
+export function buildGenerateDimensionResultProcessEvents({
   dimId,
   label,
   projection,
@@ -101,11 +101,11 @@ export function buildBootstrapDimensionResultProcessEvents({
 }: {
   dimId: string;
   label?: string | null;
-  projection: BootstrapDimensionProjection;
+  projection: GenerateDimensionProjection;
   runResult: AgentResultLike;
   sessionId: string;
-}): BootstrapProcessEventDraft[] {
-  const events: BootstrapProcessEventDraft[] = [];
+}): GenerateProcessEventDraft[] {
+  const events: GenerateProcessEventDraft[] = [];
   const toolEvent = buildToolEvent({ dimId, label, projection, sessionId });
   if (toolEvent) {
     events.push(toolEvent);
@@ -137,7 +137,7 @@ export function buildBootstrapDimensionResultProcessEvents({
   return events;
 }
 
-export function buildBootstrapAgentProgressProcessEvents({
+export function buildGenerateAgentProgressProcessEvents({
   dimId,
   event,
   label,
@@ -147,7 +147,7 @@ export function buildBootstrapAgentProgressProcessEvents({
   event: ProgressEvent;
   label?: string | null;
   sessionId: string;
-}): BootstrapProcessEventDraft[] {
+}): GenerateProcessEventDraft[] {
   if (event.type !== 'agent_process_event') {
     return [];
   }
@@ -223,7 +223,7 @@ export function buildBootstrapAgentProgressProcessEvents({
   ];
 }
 
-export function buildBootstrapTierReflectionProcessEvents({
+export function buildGenerateTierReflectionProcessEvents({
   reflection,
   sessionId,
 }: {
@@ -235,9 +235,9 @@ export function buildBootstrapTierReflectionProcessEvents({
     topFindings?: unknown[];
   };
   sessionId: string;
-}): BootstrapProcessEventDraft[] {
+}): GenerateProcessEventDraft[] {
   const tierNumber = reflection.tierIndex + 1;
-  const reflectionEvent: BootstrapProcessEventDraft = {
+  const reflectionEvent: GenerateProcessEventDraft = {
     content: {
       language: 'json',
       mimeType: 'application/json',
@@ -291,8 +291,8 @@ interface NormalizedFindingItem {
 }
 
 interface NormalizedProcessEventContent {
-  artifactCandidate?: BootstrapProcessEventTextArtifactCandidate;
-  content: BootstrapProcessEventDraft['content'];
+  artifactCandidate?: GenerateProcessEventTextArtifactCandidate;
+  content: GenerateProcessEventDraft['content'];
   metadata: Record<string, unknown>;
   projection: TextProjection;
 }
@@ -320,10 +320,10 @@ function buildFindingsDigestEvent({
 }: {
   dimId: string;
   label?: string | null;
-  projection: BootstrapDimensionProjection;
+  projection: GenerateDimensionProjection;
   runResult: AgentResultLike;
   sessionId: string;
-}): BootstrapProcessEventDraft | null {
+}): GenerateProcessEventDraft | null {
   const digest = parseDimensionDigest(projection.producerResult?.reply || runResult.reply);
   const digestFindings = normalizeFindingItems(digest?.keyFindings || [], 'dimension-digest');
   const reportFindings = normalizeFindingItems(
@@ -370,7 +370,7 @@ function buildFindingsSummaryEvent({
   sessionId: string;
   targetName: string;
   title: string;
-}): BootstrapProcessEventDraft {
+}): GenerateProcessEventDraft {
   const lines = ['## 关键发现 / Findings digest', ''];
   for (const [index, finding] of findings.entries()) {
     const importance = typeof finding.importance === 'number' ? ` [${finding.importance}/10]` : '';
@@ -406,9 +406,9 @@ function buildToolEvent({
 }: {
   dimId: string;
   label?: string | null;
-  projection: BootstrapDimensionProjection;
+  projection: GenerateDimensionProjection;
   sessionId: string;
-}): BootstrapProcessEventDraft | null {
+}): GenerateProcessEventDraft | null {
   const toolCalls = projection.runtimeToolCalls || [];
   if (toolCalls.length === 0) {
     return null;
@@ -452,10 +452,10 @@ function buildVisibleOutputEvent({
 }: {
   dimId: string;
   label?: string | null;
-  projection: BootstrapDimensionProjection;
+  projection: GenerateDimensionProjection;
   runResult: AgentResultLike;
   sessionId: string;
-}): BootstrapProcessEventDraft | null {
+}): GenerateProcessEventDraft | null {
   const sections = dedupeSections([
     ['Analyze', projection.analyzeResult?.reply],
     ['Produce', projection.produceResult?.reply],
@@ -491,7 +491,7 @@ function buildVisibleOutputEvent({
             originalChars: fullText.length,
             redactionState: 'developer-visible-redacted',
             text: fullText,
-          } satisfies BootstrapProcessEventTextArtifactCandidate,
+          } satisfies GenerateProcessEventTextArtifactCandidate,
         }
       : {}),
     content: text
@@ -542,10 +542,10 @@ function buildReflectionEvent({
 }: {
   dimId: string;
   label?: string | null;
-  projection: BootstrapDimensionProjection;
+  projection: GenerateDimensionProjection;
   runResult: AgentResultLike;
   sessionId: string;
-}): BootstrapProcessEventDraft | null {
+}): GenerateProcessEventDraft | null {
   const qualityGate = projectQualityGate(projection);
   const diagnostics = summarizeDiagnostics(runResult.diagnostics);
   const efficiency = summarizeEfficiency(projection.efficiency || runResult.efficiency || null);
@@ -694,7 +694,7 @@ function summarizeToolResult(result: unknown): unknown {
 }
 
 function projectQualityGate(
-  projection: BootstrapDimensionProjection
+  projection: GenerateDimensionProjection
 ): Record<string, unknown> | null {
   const gate = projection.gateResult;
   const artifact = asRecord(gate?.artifact);
@@ -801,7 +801,7 @@ function buildProcessTextArtifactCandidate({
   content: NonNullable<AgentProgressProcessEvent['content']>;
   fullRedactedText?: string;
   kind: (typeof AGENT_PROGRESS_PROCESS_EVENT_KINDS)[number];
-}): BootstrapProcessEventTextArtifactCandidate | undefined {
+}): GenerateProcessEventTextArtifactCandidate | undefined {
   if (!fullRedactedText || (kind !== 'llm.input' && kind !== 'llm.output')) {
     return undefined;
   }

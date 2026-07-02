@@ -46,9 +46,12 @@ const HOOK_REGISTRY: HookDefinition[] = [
   { name: 'onSearch', mode: 'waterfall', description: '搜索结果后处理（可修改排序）' },
   { name: 'onSearchMiss', mode: 'parallel', description: '搜索无结果时' },
 
-  // ── Bootstrap ──
-  { name: 'onBootstrapStart', mode: 'series', description: '冷启动开始前' },
-  { name: 'onBootstrapComplete', mode: 'parallel', description: '冷启动完成后' },
+  // ── Generate(生成) ──
+  { name: 'onGenerateStart', mode: 'series', description: '生成(冷启动)开始前' },
+  { name: 'onGenerateComplete', mode: 'parallel', description: '生成(冷启动)完成后' },
+  // S4 批3:旧 hook 名保留一个版本——用户 Skill 文件按名实现 hook,属对外表面
+  { name: 'onBootstrapStart', mode: 'series', description: '(compat) 同 onGenerateStart' },
+  { name: 'onBootstrapComplete', mode: 'parallel', description: '(compat) 同 onGenerateComplete' },
 
   // ── 向后兼容 (旧名映射) ──
   { name: 'onCandidateSubmit', mode: 'bail', description: '(compat) 同 onKnowledgeSubmit' },

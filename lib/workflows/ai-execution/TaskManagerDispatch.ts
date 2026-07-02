@@ -1,4 +1,4 @@
-import type { BootstrapSessionShape, DimensionDef } from '@alembic/core/types';
+import type { DimensionDef, GenerateSessionShape } from '@alembic/core/types';
 import type { ProjectContextFillView } from '../project-context/ProjectContextWorkflowFacts.js';
 
 interface TaskDef {
@@ -38,15 +38,15 @@ export function startTaskManagerSession(
   taskDefs: TaskDef[],
   logger: TaskManagerLogger,
   logPrefix: string
-): BootstrapSessionShape | null {
+): GenerateSessionShape | null {
   try {
-    const taskManager = container.get('bootstrapTaskManager') as {
-      startSession(taskDefs: TaskDef[]): BootstrapSessionShape;
+    const taskManager = container.get('generateTaskManager') as {
+      startSession(taskDefs: TaskDef[]): GenerateSessionShape;
     };
     return taskManager.startSession(taskDefs);
   } catch (err: unknown) {
     logger.warn(
-      `[${logPrefix}] BootstrapTaskManager init failed (graceful degradation): ${err instanceof Error ? err.message : String(err)}`
+      `[${logPrefix}] GenerateTaskManager init failed (graceful degradation): ${err instanceof Error ? err.message : String(err)}`
     );
     return null;
   }

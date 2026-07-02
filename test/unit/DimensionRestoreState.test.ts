@@ -3,13 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import type { SessionStore } from '@alembic/agent/memory';
 import { describe, expect, test, vi } from 'vitest';
-import type { BootstrapEventEmitter } from '../../lib/service/bootstrap/BootstrapEventEmitter.js';
+import type { GenerateEventEmitter } from '../../lib/service/generate/GenerateEventEmitter.js';
 import type { IncrementalPlan } from '../../lib/service/handler-runtime/types.js';
-import type {
-  CandidateResults,
-  DimensionCandidateData,
-  DimensionStat,
-} from '../../lib/workflows/ai-execution/BootstrapConsumers.js';
 import type { DimensionContext } from '../../lib/workflows/ai-execution/DimensionContext.js';
 import {
   applyRestoredDimensionState,
@@ -18,6 +13,11 @@ import {
   restoreCheckpointDimensions,
   syncRestoredSessionStoreDigests,
 } from '../../lib/workflows/ai-execution/DimensionRestoreState.js';
+import type {
+  CandidateResults,
+  DimensionCandidateData,
+  DimensionStat,
+} from '../../lib/workflows/ai-execution/GenerateConsumers.js';
 
 function makePlan(partial: Partial<IncrementalPlan>): IncrementalPlan {
   return {
@@ -59,7 +59,7 @@ describe('DimensionRestoreState', () => {
         skippedDimensions: ['ui', 'data'],
       }),
       activeDimIds: ['api', 'ui', 'security'],
-      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+      emitter: { emitDimensionComplete } as unknown as GenerateEventEmitter,
     });
 
     expect(skipped).toEqual(['ui']);
@@ -80,7 +80,7 @@ describe('DimensionRestoreState', () => {
       }),
       activeDimIds: ['agent-guidelines', 'ui'],
       forceExecuteDimIds: ['agent-guidelines'],
-      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+      emitter: { emitDimensionComplete } as unknown as GenerateEventEmitter,
     });
 
     expect(skipped).toEqual(['ui']);
@@ -112,7 +112,7 @@ describe('DimensionRestoreState', () => {
       activeDimIds: ['api'],
       dimContext: { addDimensionDigest } as unknown as DimensionContext,
       sessionStore: { addDimensionDigest } as unknown as SessionStore,
-      emitter: { emitDimensionComplete } as unknown as BootstrapEventEmitter,
+      emitter: { emitDimensionComplete } as unknown as GenerateEventEmitter,
     });
 
     expect(skippedDims).toEqual(['api']);

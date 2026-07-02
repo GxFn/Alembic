@@ -1,5 +1,5 @@
 /**
- * BootstrapTaskManager — 冷启动异步任务管理器
+ * GenerateTaskManager — 冷启动异步任务管理器
  *
  * 核心职责：
  *   1. 管理 bootstrap 异步任务的生命周期（skeleton → filling → completed）
@@ -21,7 +21,7 @@
 import type { EventBus, SignalBus } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
 import { getTestModeConfig } from '@alembic/core/shared';
-import { mergeAgentEfficiencySummaries } from './BootstrapEfficiency.js';
+import { mergeAgentEfficiencySummaries } from './GenerateEfficiency.js';
 
 interface TaskMeta {
   type?: string;
@@ -64,7 +64,7 @@ export const TaskStatus = Object.freeze({
 });
 
 /** 单个 Bootstrap 会话（一次冷启动的全部上下文） */
-class BootstrapSession {
+class GenerateSession {
   completedAt: number | null;
   id: string;
   updatedAt: number;
@@ -225,8 +225,8 @@ class BootstrapSession {
   }
 }
 
-export class BootstrapTaskManager {
-  #currentSession: BootstrapSession | null = null;
+export class GenerateTaskManager {
+  #currentSession: GenerateSession | null = null;
 
   #eventBus: EventBus | null = null;
 
@@ -266,7 +266,7 @@ export class BootstrapTaskManager {
     }
 
     const sessionId = `bs_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    this.#currentSession = new BootstrapSession(sessionId);
+    this.#currentSession = new GenerateSession(sessionId);
     this.#sessionAbortController = new AbortController();
 
     for (const { id, meta } of taskDefs) {

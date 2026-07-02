@@ -19,8 +19,8 @@ import {
   unwrapEnvelope,
 } from './DaemonJobWorkflowHelpers.js';
 import type {
-  BootstrapPlanGateResult,
   DeepMiningRoundPlanContext,
+  GeneratePlanGateResult,
   ModuleDimensionTarget,
   RunDaemonJobOptions,
 } from './DaemonJobWorkflowTypes.js';
@@ -46,7 +46,7 @@ export async function runDeepMiningRounds(options: RunDaemonJobOptions): Promise
     coverageLedgerRepository.listRoundsByProjectRoot(projectRoot)
   );
   let advisor: ReturnType<typeof adviseCoverageLedger> | null = null;
-  let latestPlanGate: BootstrapPlanGateResult | null = null;
+  let latestPlanGate: GeneratePlanGateResult | null = null;
   let latestModuleCount = 1;
 
   while (true) {
@@ -392,7 +392,7 @@ function buildPlanModuleDimensionTargets(selection: PlanSelection): ModuleDimens
 }
 
 function buildDeepMiningRoundPlanContext(
-  planGate: BootstrapPlanGateResult
+  planGate: GeneratePlanGateResult
 ): DeepMiningRoundPlanContext {
   const moduleDimensionTargets = buildPlanModuleDimensionTargets(planGate.selection);
   if (moduleDimensionTargets.length === 0) {

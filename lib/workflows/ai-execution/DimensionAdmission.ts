@@ -1,12 +1,7 @@
 import type { SessionStore } from '@alembic/agent/memory';
 import Logger from '@alembic/core/logging';
 import type { IncrementalPlan } from '@alembic/core/types';
-import type { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
-import type {
-  CandidateResults,
-  DimensionCandidateData,
-  DimensionStat,
-} from './BootstrapConsumers.js';
+import type { GenerateEventEmitter } from '#service/generate/GenerateEventEmitter.js';
 import type { DimensionContext } from './DimensionContext.js';
 import {
   applyRestoredDimensionState,
@@ -14,24 +9,29 @@ import {
   resolveIncrementalSkippedDimensions,
   restoreCheckpointDimensions,
 } from './DimensionRestoreState.js';
-import type { BootstrapRescanContext } from './RescanContext.js';
+import type {
+  CandidateResults,
+  DimensionCandidateData,
+  DimensionStat,
+} from './GenerateConsumers.js';
+import type { GenerateRescanContext } from './RescanContext.js';
 
 const logger = Logger.getInstance();
 
-export type BootstrapDimensionAdmissionStatus =
+export type GenerateDimensionAdmissionStatus =
   | 'run'
   | 'incremental-restored'
   | 'checkpoint-restored';
 
-export interface BootstrapDimensionAdmissionDecision {
+export interface GenerateDimensionAdmissionDecision {
   dimId: string;
-  status: BootstrapDimensionAdmissionStatus;
+  status: GenerateDimensionAdmissionStatus;
   reason: string;
   forcedByRescan?: boolean;
 }
 
-export interface BootstrapDimensionAdmissionResult {
-  decisions: Record<string, BootstrapDimensionAdmissionDecision>;
+export interface GenerateDimensionAdmissionResult {
+  decisions: Record<string, GenerateDimensionAdmissionDecision>;
   skippedDimIds: string[];
   incrementalSkippedDims: string[];
   checkpointSkippedDims: string[];
@@ -39,7 +39,7 @@ export interface BootstrapDimensionAdmissionResult {
   completedCheckpoints: Map<string, DimensionCheckpoint>;
 }
 
-export async function resolveBootstrapDimensionAdmissions({
+export async function resolveGenerateDimensionAdmissions({
   dataRoot,
   activeDimIds,
   isIncremental,
@@ -53,11 +53,11 @@ export async function resolveBootstrapDimensionAdmissions({
   activeDimIds: string[];
   isIncremental?: boolean | null;
   incrementalPlan?: IncrementalPlan | null;
-  rescanContext: BootstrapRescanContext | null;
+  rescanContext: GenerateRescanContext | null;
   dimContext: DimensionContext;
   sessionStore: SessionStore;
-  emitter: BootstrapEventEmitter;
-}): Promise<BootstrapDimensionAdmissionResult> {
+  emitter: GenerateEventEmitter;
+}): Promise<GenerateDimensionAdmissionResult> {
   const rescanForceExecuteDimIds = activeDimIds.filter(
     (dimId) => rescanContext?.executionDecisions?.[dimId]?.shouldExecute === true
   );
@@ -84,7 +84,7 @@ export async function resolveBootstrapDimensionAdmissions({
       emitter,
     });
 
-  const decisions = buildBootstrapDimensionAdmissionDecisions({
+  const decisions = buildGenerateDimensionAdmissionDecisions({
     activeDimIds,
     incrementalSkippedDims,
     checkpointSkippedDims,
@@ -103,7 +103,7 @@ export async function resolveBootstrapDimensionAdmissions({
   };
 }
 
-export function buildBootstrapDimensionAdmissionDecisions({
+export function buildGenerateDimensionAdmissionDecisions({
   activeDimIds,
   incrementalSkippedDims,
   checkpointSkippedDims,
@@ -117,7 +117,7 @@ export function buildBootstrapDimensionAdmissionDecisions({
   const incremental = new Set(incrementalSkippedDims);
   const checkpoint = new Set(checkpointSkippedDims);
   const forced = new Set(rescanForceExecuteDimIds);
-  const decisions: Record<string, BootstrapDimensionAdmissionDecision> = {};
+  const decisions: Record<string, GenerateDimensionAdmissionDecision> = {};
   for (const dimId of activeDimIds) {
     if (incremental.has(dimId)) {
       decisions[dimId] = {
@@ -145,7 +145,7 @@ export function buildBootstrapDimensionAdmissionDecisions({
   return decisions;
 }
 
-export function applyBootstrapDimensionAdmissions({
+export function applyGenerateDimensionAdmissions({
   admissions,
   sessionStore,
   dimensionStats,
@@ -153,7 +153,7 @@ export function applyBootstrapDimensionAdmissions({
   dimensionCandidates,
 }: {
   admissions: Pick<
-    BootstrapDimensionAdmissionResult,
+    GenerateDimensionAdmissionResult,
     'incrementalSkippedDims' | 'checkpointSkippedDims' | 'completedCheckpoints'
   >;
   sessionStore: SessionStore;
