@@ -7,6 +7,9 @@
  * @module shared/BootstrapEventEmitter
  */
 
+// C-5(2026-07-02 统一重构)：事件名改用 Core wire 常量单源——发射端漂移自此编译期可见;
+// 消费端(Dashboard/TaskManager 字符串监听)随 S4 词族批次切换。
+import { RECIPE_PIPELINE_EVENTS } from '@alembic/core/knowledge';
 import type {
   BootstrapProcessEventsPayload,
   DimensionCompletePayload,
@@ -69,7 +72,7 @@ export class BootstrapEventEmitter {
 
     // EventBus 推送
     try {
-      this.#eventBus?.emit?.('bootstrap:task-completed', {
+      this.#eventBus?.emit?.(RECIPE_PIPELINE_EVENTS.taskCompleted, {
         dimensionId: dimId,
         ...data,
       });
@@ -87,7 +90,7 @@ export class BootstrapEventEmitter {
    */
   emitAllComplete(sessionId: string, totalDimensions: number, source = 'unknown') {
     try {
-      this.#eventBus?.emit?.('bootstrap:all-completed', {
+      this.#eventBus?.emit?.(RECIPE_PIPELINE_EVENTS.allCompleted, {
         sessionId,
         totalDimensions,
         source,
@@ -124,7 +127,7 @@ export class BootstrapEventEmitter {
     }
 
     try {
-      this.#eventBus?.emit?.('bootstrap:task-failed', {
+      this.#eventBus?.emit?.(RECIPE_PIPELINE_EVENTS.taskFailed, {
         dimensionId: dimId,
         error: typeof error === 'string' ? error : error?.message,
       });
@@ -163,7 +166,7 @@ export class BootstrapEventEmitter {
     let emittedByTaskManager = false;
     try {
       if (this.#taskManager?.emitProgress) {
-        this.#taskManager.emitProgress('bootstrap:process-events', data);
+        this.#taskManager.emitProgress(RECIPE_PIPELINE_EVENTS.processEvents, data);
         emittedByTaskManager = true;
       }
     } catch {
@@ -175,7 +178,7 @@ export class BootstrapEventEmitter {
     }
 
     try {
-      this.#eventBus?.emit?.('bootstrap:process-events', data);
+      this.#eventBus?.emit?.(RECIPE_PIPELINE_EVENTS.processEvents, data);
     } catch {
       /* non-blocking */
     }
