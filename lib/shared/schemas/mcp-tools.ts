@@ -127,7 +127,6 @@ interface SubmitKnowledgeInputValue {
   target_name?: string;
   source?: string;
   skipConsolidation: boolean;
-  skipDuplicateCheck: boolean;
   client_id?: string;
   dimensionId?: string;
   sessionId?: string;
@@ -384,7 +383,6 @@ export const SubmitKnowledgeInput = z.object({
     .boolean()
     .default(false)
     .describe('跳过融合分析（当确认需要独立新建时设为 true）'),
-  skipDuplicateCheck: z.boolean().default(false),
   client_id: z.string().optional(),
   dimensionId: z.string().optional().describe('冷启动/增量扫描关联维度 ID'),
   sessionId: z
