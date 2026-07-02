@@ -27,6 +27,7 @@ const SIDE_EFFECT_IMPORT_RE = /\bimport\s+['"]([.#][^'"]+)['"]/g;
 
 // '#alias/*' → lib/<area>/* per package.json imports (alembic-dev condition).
 const ALIAS_TO_AREA = {
+  '#recipe-pipeline': 'recipe-pipeline',
   '#shared': 'shared',
   '#infra': 'infrastructure',
   '#service': 'service',

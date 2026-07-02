@@ -19,9 +19,10 @@
     "infrastructure",
     "injection",
     "platform",
+    "project-context",
     "project-scope",
+    "recipe-pipeline",
     "repository",
-    "resident",
     "root",
     "sandbox",
     "service",
@@ -31,8 +32,21 @@
     "workflows"
   ],
   "allowedRuntimeImports": {
-    "cli": ["infrastructure", "injection", "root", "service", "shared"],
-    "daemon": ["project-scope", "resident", "shared"],
+    "cli": [
+      "infrastructure",
+      "injection",
+      "project-scope",
+      "recipe-pipeline",
+      "root",
+      "service",
+      "shared"
+    ],
+    "daemon": [
+      "project-scope",
+      "recipe-pipeline",
+      "shared",
+      "workflows"
+    ],
     "generated": [],
     "governance": [],
     "http": [
@@ -41,33 +55,70 @@
       "infrastructure",
       "injection",
       "project-scope",
-      "resident",
+      "recipe-pipeline",
       "service",
       "shared",
       "tools"
     ],
-    "infrastructure": ["shared"],
+    "infrastructure": [
+      "shared"
+    ],
     "injection": [
       "daemon",
       "governance",
       "infrastructure",
       "project-scope",
+      "recipe-pipeline",
       "repository",
       "service",
       "shared",
       "tools"
     ],
-    "platform": ["shared"],
+    "platform": [
+      "shared"
+    ],
     "project-scope": [],
     "repository": [],
-    "resident": ["infrastructure", "injection", "service", "shared", "workflows"],
-    "root": ["*"],
+    "root": [
+      "*",
+      "governance",
+      "infrastructure",
+      "project-scope",
+      "recipe-pipeline",
+      "service",
+      "shared"
+    ],
     "sandbox": [],
-    "service": ["daemon", "infrastructure", "shared"],
+    "service": [
+      "daemon",
+      "infrastructure",
+      "project-context",
+      "shared"
+    ],
     "shared": [],
-    "tools": ["daemon", "sandbox", "shared"],
+    "tools": [
+      "daemon",
+      "sandbox",
+      "shared"
+    ],
     "types": [],
-    "workflows": ["injection", "project-scope", "service", "shared"]
+    "workflows": [
+      "infrastructure",
+      "injection",
+      "project-scope",
+      "service",
+      "shared"
+    ],
+    "recipe-pipeline": [
+      "daemon",
+      "infrastructure",
+      "injection",
+      "project-scope",
+      "service",
+      "shared",
+      "workflows"
+    ],
+    "project-context": []
   },
   "blessedImports": [],
   "cycleFindings": [
@@ -88,6 +139,7 @@
       "majority": "injection -> tools (10 edges: DI composition)",
       "minority": "tools -> injection (0 edges — remediated; type-only bridges remain, exempt)",
       "status": "RESOLVED 2026-06-12 (AD4 ta10): DashboardOperations handlers are built by createDashboardOperationHandlers(deps) with the AI-status helpers injected; the tools -> injection runtime edge and its blessed exception are gone"
-    }
+    },
+    "W0 2026-07-02 回写:S4 四环搬迁(19732a0)后契约对齐现实。已声明但待 W5 收紧:daemon->workflows(DaemonJobRunner 抓 project-context 事实层,project-facts 合并后消)、recipe-pipeline->workflows(7 边同上)、recipe-pipeline->injection(service-locator reach-through 2 边,AD4 续)、workflows->infrastructure(ProjectContextWorkflowFacts 直连 sqlite)。"
   ]
 }
