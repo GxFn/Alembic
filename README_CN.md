@@ -2,10 +2,10 @@
 
 # Alembic
 
-将代码库中的模式提取为知识库，供 IDE 中的 AI 编码助手查询——让生成的代码真正符合你们团队的规范。
+把你的代码库蒸馏成知识库，供 AI 编码智能体在工作时随手查询——让生成的代码真正符合你们团队的规范。
 
-[![npm version](https://img.shields.io/npm/v/alembic.svg?style=flat-square)](https://www.npmjs.com/package/alembic)
-[![License](https://img.shields.io/npm/l/alembic.svg?style=flat-square)](https://github.com/GxFn/Alembic/blob/main/LICENSE)
+[![npm version](https://img.shields.io/npm/v/alembic-ai.svg?style=flat-square)](https://www.npmjs.com/package/alembic-ai)
+[![License](https://img.shields.io/npm/l/alembic-ai.svg?style=flat-square)](https://github.com/GxFn/Alembic/blob/main/LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen?style=flat-square)](https://nodejs.org)
 
 [English](README.md)
@@ -14,325 +14,316 @@
 
 ---
 
-- [为什么需要它](#为什么需要它) · [开始使用](#开始使用) · [Codex 插件](#codex-插件) · [在 IDE 中使用](#在-ide-中使用) · [进化架构](#进化架构) · [工程能力](#工程能力) · [IDE 支持](#ide-支持) · [深入了解](#深入了解)
+- [为什么需要它](#为什么需要它) · [安装](#安装) · [使用](#使用) · [Recipe 是什么](#recipe-是什么) · [知识生命体](#知识生命体) · [一个产品，五个仓库](#一个产品五个仓库) · [工程能力](#工程能力) · [Dashboard](#dashboard) · [项目结构](#项目结构) · [环境要求](#环境要求) · [深入了解](#深入了解)
 
 ## 为什么需要它
 
-Copilot 和 Cursor 不知道你们团队怎么写代码。它们生成的东西能跑，但不像你们写的——命名不对、模式不对、抽象层次不对。最后要么你重写 AI 的输出，要么在每次 Code Review 里反复解释同样的规范。
+Codex 和 Claude Code 不知道你们团队怎么写代码。它们生成的东西能跑，但不像你们写的——命名不对、模式不对、抽象层次不对。最后要么你重写 AI 的输出，要么在每次 Code Review 里反复解释同样的规范。
 
-Alembic 建立一层**本地化的项目记忆**。它扫描你的代码库，提取有价值的模式（需要你批准），然后通过 [MCP](https://modelcontextprotocol.io/) 让所有 AI 工具都能查到。这些知识持久化在本地，不会占用 LLM 的上下文窗口，而是在 AI 需要时按需注入——项目知识积累得越多，生成的代码越符合你们的规范。
+Alembic 建立一层**本地化的项目记忆**。它把你的代码库蒸馏成经过审核、锚定源码的 **Recipe**，在编码智能体需要时通过 [MCP](https://modelcontextprotocol.io/) 按需回喂。知识以 Markdown 持久化在本地，不占用 LLM 上下文窗口；每条 Recipe 都带 `sourceRefs`——锚定真实文件的证据——智能体可以直接信任、无需自证。知识积累得越多，生成的代码越符合你们的规范。
 
 ```
-你的代码  →  AI 提取模式  →  你来审核  →  知识库
-                                           ↓
-                             Cursor / Copilot / VS Code / Xcode
-                                           ↓
-                                   AI 按你的模式生成
+你的代码  →  AI 挖掘模式  →  你来审核  →  Recipe 知识库
+                                              ↓
+                              Codex / Claude Code 按需查询
+                                              ↓
+                                      AI 按你的模式生成
 ```
 
-## 开始使用
+**插件是入口，本身就是完整体验**：在 Codex / Claude Code 里初始化、查结构、生成并使用 Recipe——不需要 API Key。**完整版 Alembic 是可选增强**：配置 DeepSeek 等 provider，由专门的挖掘智能体把知识库生成得更深更好——再配一个 Dashboard 审核。两者共享同一套确定性知识契约——两个宿主，一个单源。
+
+## 安装
+
+### 插件——Codex / Claude Code（入口）
+
+```bash
+# Codex
+codex plugin marketplace add GxFn/AlembicCodex --ref main
+
+# Claude Code
+claude plugin marketplace add GxFn/AlembicClaudeCode
+claude plugin install alembic@gxfn
+```
+
+插件本身就是一份完整体验：结构问答开箱即用（`alembic_graph`——不需要知识库，也不需要 AI），冷启动、日常检索与规范体检全部在对话里完成。默认 Ghost 模式，仓库零文件，不需要 API Key。
+
+### 完整版 Alembic——可选，为了更好的知识库
 
 ```bash
 npm install -g alembic-ai
 
 cd your-project
-alembic setup --ghost   # 初始化工作空间、数据目录和 MCP 配置
-alembic start           # 启动 Alembic：runtime、daemon、API 和 Dashboard
+alembic setup --ghost
+alembic start
 ```
 
-## Codex 插件
+完整版解锁专门的挖掘智能体 **AlembicAgent**：配置任意一家 provider——DeepSeek / OpenAI / Claude / Gemini / Ollama——它就在 daemon 任务里自主挖掘：冷启动、增量 rescan、深挖轮次、AI 扫描、演化检查。不占用你的编码智能体，挖得更深。另有 Dashboard 审核界面与 Guard pre-commit / CI 门。
 
-Alembic 也可以配合 `AlembicPlugin` 仓库维护的 Codex 插件使用。它面向点击安装流程：Codex 先启动一个轻量 MCP shim，在不启动服务的情况下检查 diagnostics 和 workspace status；默认用 Ghost mode 初始化，然后只在 Dashboard、Guard、bootstrap、rescan 或项目知识工具真正需要时唤醒 Alembic daemon。
+## 使用
 
-在 Codex 里推荐的首次流程：
+装好后，对智能体说一句：
 
-1. `alembic_codex_diagnostics`
-2. `alembic_codex_status`
-3. 如果工作区未初始化，调用 `alembic_codex_init`
-4. 首次建立项目知识用 `alembic_codex_bootstrap`，开始写代码前用 `alembic_task` 的 `operation=prime`
+> 💬 *「冷启动——构建项目知识库」*
 
-发布前验证：
+插件会从真实项目事实起草挖掘计划，引导你的智能体逐维度蒸馏。装了完整版，也可以把同一件事交给专门的挖掘智能体，从 Dashboard 启动。
 
-```bash
-npm run build:check
-npm run release:check
-```
-
-Codex 插件发布和 marketplace 验证由 `AlembicPlugin` 仓库负责。
-
-## 在 IDE 中使用
-
-`alembic setup` 配置好了一切。打开 IDE 的 **Agent Mode**（Cursor Composer / VS Code Copilot Chat / Trae），跟 Agent 对话就行。
-
-> **首次使用：** 需在 IDE 的 MCP 设置中手动开启 `alembic` 服务。
-
-> **提示：** IDE Agent 使用的模型越强，效果越好。推荐在 Cursor / Copilot 中选择 Claude Opus 4.6 / Sonnet 4.6、GPT-5.4 或 Gemini 3.1 Pro，产出更准确的模式和更少的误报。
-
-### 冷启动：建立项目知识库
-
-> 💬 *"帮我冷启动，生成项目知识库"*
-
-Agent 扫描整个项目，提取出团队的编码模式、架构约定、调用习惯，同时生成项目 Wiki。冷启动只做一次，之后就进入日常使用。
-
-### 日常：说一句话就行
+日常使用是对话，不是命令：
 
 | 你说 | 你得到 |
 |------|--------|
-| ① *"项目里 API 接口怎么写"* | 直接拿到符合你们项目风格的代码，而不是通用示例 |
-| ② *"帮我写一个用户注册接口"* | 生成的代码自动遵循刚才查到的 API 规范 |
-| ③ *"检查这个文件符不符合项目规范"* | 提交前过一遍规范检查，减少 Code Review 里的反复沟通 |
-| ④ *"把这段错误处理保存为项目规范"* | 一次沉淀，以后所有人的 AI 都会学会这个写法 |
+| ① *「这个项目的 API 端点怎么写？」* | 项目的真实规范，附源码证据 |
+| ② *「写一个用户注册端点」* | 遵循刚检索到的规范生成——写前先预热 |
+| ③ *「检查这个文件是否符合规范」* | 一次规范体检：违规、诚实的不确定项、修复建议 |
+| ④ *「把这个错误处理模式存为项目规范」* | 一条接地的候选，全团队的 AI 都会学到 |
 
-Agent 写完代码后，Guard 合规引擎会自动检查 diff——发现违规即自我修复，不需要你手动介入。
+这些对话背后是四个动词——写前**预热**、随时**搜索**、收尾**体检**、值得的**沉淀**。结构问题（「谁依赖这个模块？」）也在同一场对话里，答案来自项目地图而不是猜测。维护不需要调度器：知识代谢搭在日常调用上自动进行——没有 cron，没有后台 daemon。
 
 ### 越用越好
 
-候选在 Dashboard（`alembic start`）中审核并批准 → 变成 **Recipe** → AI 生成代码时自动参照 → 你发现新的好写法 → 继续沉淀 → AI 越来越像团队的人。这些知识是本地 Markdown 文件，跟 git 走，不会随对话消失，也不占上下文窗口——知识库再大也不会拖慢 AI。
+在 Dashboard（`alembic start`）里审核候选 → 它们成为 **Recipe** → 智能体生成时引用 → 你发现新的好模式 → 继续沉淀。知识是本地 Markdown，随 git 走，不会随会话消失，也不占上下文窗口——知识库再大也不会拖慢 AI。
 
 ---
 
-## 进化架构
+## Recipe 是什么
 
-Alembic 不是静态知识工具，而是一个**知识有机体**。Recipe 是它的细胞——IDE Agent 是外部驱动力，每一次交互都会触发有机体内不同器官的协同响应。
+Recipe 是 Alembic 的知识单元——项目基础信息、设计模式、架构约定与团队 SOP 的**整合抽象**。每条 Recipe 把三层东西装订在一起：
+
+| 层 | 里面是什么 |
+|----|-----------|
+| **模式与约定文本** | 语言描述的规范——什么时候适用、该怎么做、别怎么做。人和 AI 都读得懂 |
+| **代码范式与真实指向** | 范式代码片段，加 `sourceRefs` 指向仓库里的真实文件——证据可回查，逐字探针保证片段与源码一致 |
+| **运维数据** | 生命周期状态、置信与权威度、使用与新鲜度记录——随代码演化而更新、衰亡、弃用 |
+
+所以 Recipe 不是文档摘抄，不是代码注释，也不是静态的百科条目。它是一个**活的知识单元**——可检索、可注入、可被规范体检引用、随时间新陈代谢——以 Markdown 存放，随 git 走。
+
+---
+
+## 知识生命体
+
+Alembic 不是一个静态知识工具，而是一个**知识生命体**。Recipe 是它的细胞；编码智能体是外部驱动力；每次交互都会触发体内器官的协同响应。
 
 ```
-                IDE Agent (Cursor / Copilot / Trae)
-                   │
-                   │ 沉淀 · 编写 · 搜索 · 偏移 · 完成 · 边界
-                   │
-  ═════════════════▼══════════════════════════════════════
-  ║              Alembic 知识有机体                    ║
-  ║                                                       ║
-  ║  ┌─ Panorama (骨骼) ────────── 项目结构全貌 ──────┐   ║
-  ║  │                                                │   ║
-  ║  │    Signal (神经)  ◄────►  Governance (消化)     │   ║
-  ║  │        ↕                        ↕              │   ║
-  ║  │              ┌──────────┐                      │   ║
-  ║  │              │  Recipe  │                      │   ║
-  ║  │              │ 知识生命体│                      │   ║
-  ║  │              └──────────┘                      │   ║
-  ║  │        ↕                        ↕              │   ║
-  ║  │    Guard (免疫)    ◄────►  Tool Forge (造物)    │   ║
-  ║  │                                                │   ║
-  ║  └────────────────────────────────────────────────┘   ║
-  ║                                                       ║
-  ═════════════════════════════════════════════════════════
+        AI 编码智能体 (Codex / Claude Code)             Dashboard（你）
+                  │                                        │
+                  │  捕获 · 写码 · 搜索 ·                  │  审核 · 批准
+                  │  收尾 · 演化                           │  演化 · 弃用
+                  │                                        │
+  ════════════════▼════════════════════════════════════════▼══════════
+  ║                     Alembic 知识生命体                           ║
+  ║                                                                  ║
+  ║  ┌─ Panorama（骨骼）──── ProjectContext ──────────────────────┐  ║
+  ║  │                                                            │  ║
+  ║  │     Signal（神经）   ◄────►   Governance（消化）           │  ║
+  ║  │         ↕                          ↕                       │  ║
+  ║  │              ┌────────────────────────┐                    │  ║
+  ║  │              │      Recipe 细胞       │                    │  ║
+  ║  │              │  由 sourceRefs 接地    │                    │  ║
+  ║  │              └────────────────────────┘                    │  ║
+  ║  │         ↕                          ↕                       │  ║
+  ║  │     Guard（免疫）    ◄────►   Agent Runtime（双手）        │  ║
+  ║  │                                                            │  ║
+  ║  └────────────────────────────────────────────────────────────┘  ║
+  ══════════════════════════════════════════════════════════════════
 ```
 
-### Agent 行为 × 有机体响应
+### 智能体动作 × 生命体响应
 
-IDE Agent 的每个行为，都会触发有机体内不同器官的协同响应：
+| 智能体动作 | 生命体响应 | 涉及器官 |
+|-----------|-----------|----------|
+| **捕获知识**——提交一个模式 | 提交门禁校验结构与证据 → 置信路由 → staging 观察 → 演化或衰亡。你保留完全干预权 | 消化 |
+| **写代码**——编码前预热 | 注入带源码证据的信任标注 Recipe，智能体在已验证的地基上构建 | 神经 → Recipe |
+| **搜索知识**——提出问题 | 混合检索、融合排序、按场景加权 | 神经 → Recipe |
+| **完成任务**——规范体检 | 免疫系统用已发布 Recipe 检查 diff；违规连同修复所需的 Recipe 一起返回 | 免疫 → Recipe |
+| **决策演化**——发现漂移 | 按 Recipe 批量决策：提议演化、确认弃用、或刷新验证 | 消化 → 免疫 |
+| **自主挖掘**——进程内任务 | 内嵌智能体在预算与安全策略约束下、在沙箱里执行选定维度 | 双手 |
 
-| Agent 行为 | 有机体响应 | 参与器官 |
-|-----------|---------|---------|
-| **沉淀知识** — 提取模式并提交 | 消化系统内部消化：置信度路由 → staging 观察 → 进化或衰退，开发者保留全程干预权 | 消化 → 神经 |
-| **编写代码** — 开始写代码 | 神经系统分析意图，自动注入相关 Recipe，附带 sourceRefs 源码证据提升可信度 | 神经 → Recipe |
-| **搜索知识** — 主动搜索 | 基于当前意图 + 文件上下文精准检索，多路融合排序，按场景动态调整权重 | 神经 → Recipe |
-| **偏移意图** — 改变方向 | 神经系统记录偏移信号，感知问题，免疫系统反向检查 Recipe 是否仍然有效 | 神经 → 免疫 |
-| **完成任务** — 写完代码 | 免疫系统触发 Guard Review，挂载相关 Recipe 给 Agent 修复违规 | 免疫 → Recipe |
-| **能力边界** — 遇到无法处理的问题 | 造物系统调用 LLM 自建临时工具，vm 沙箱隔离执行，到期自动回收 | 造物 |
+### 五个器官
 
-### 五大器官
+**骨骼——Panorama（ProjectContext）**
 
-**骨骼 — Panorama**
+生命体的结构感知。11 个内置 tree-sitter 语法的多语言 AST、五段调用图流水线、Tarjan SCC 耦合检测、依赖深度分层、架构风格推断——以 空间 → 仓库 → 模块 → 文件 的查询阶梯暴露，带新鲜度标注。所有器官、两种宿主，共享这一张地图。
 
-有机体的结构感知。AST + 调用图推断模块角色与分层（四信号融合，13 种角色类型），Tarjan SCC 计算耦合度，Kahn 拓扑排序推断分层，DimensionAnalyzer 生成 11 维健康雷达，输出覆盖率热力图和能力缺口报告。所有器官共享这份项目全貌。
+**消化——Governance（生命周期）**
 
-**消化 — Governance**
+新知识的代谢引擎。每次提交先过提交门禁，然后 ConfidenceRouter 数值路由——高置信自动进入快车道 staging 并带观察窗，低置信直接拒绝。六态生命周期——`pending → staging → active → evolving/decaying → deprecated`——由唯一的状态机守护；DecayDetector 从新鲜度、使用、质量、权威四个维度给衰亡打分；RedundancyAnalyzer 标记冗余；提案最终收敛为*更新*或*弃用*两种。代谢是**访问即扫描**：有上限的清扫搭在日常调用里，不需要任何调度器。
 
-新知识进入有机体后的代谢引擎。ContradictionDetector 检测矛盾，RedundancyAnalyzer 分析冗余，DecayDetector 评估衰退（6 策略 + 4 维评分），ConfidenceRouter 数值路由（≥ 0.85 自动发布，< 0.2 拒绝）。ProposalExecutor 到期自动执行进化提案（7 种类型，差异化观察窗口）。六态生命周期：`pending → staging → active → evolving/decaying → deprecated`。
+**神经——Signal**
 
-**神经 — Signal + Intent**
+感知层。统一的 SignalBus 承载十二个信号族——guard、search、usage、lifecycle、quality、exploration、panorama、decay 等——喂给生命周期与排序决策。检索用七个信号排序（相关度、权威、新近度、热度、难度、上下文匹配、向量），并按场景动态加权：改错、生成、搜索、学习。
 
-感知 Agent 的所有行为。IntentExtractor 提取术语、推断语言和模块、中英文同义词展开，识别 4 种场景。SignalBus 统一 12 种信号类型（guard / search / usage / lifecycle / quality / exploration / panorama / decay / forge / intent / anomaly / guard_blind_spot），HitRecorder 批量采集使用事件。当 Agent 偏移意图时，神经系统记录漂移信号，协调免疫系统反向检查。
+**免疫——Guard**
 
-**免疫 — Guard**
+规范免疫系统。四层检测——正则 → 代码级 → tree-sitter AST → 跨文件——内置十种语言的规则，同时报告违规*和*诚实的不确定项。学习器跟踪查准查全用于调优；排除管理器吸收误报。新鲜度免疫走反方向：源引用校对会验证 Recipe 引用的代码是否仍然存在，失效引用直接喂给衰亡。
 
-双向免疫系统。正向：四层检测（正则 → 代码级多行 → tree-sitter AST → 跨文件），内置 8 语言规则，三态输出（pass / violation / uncertain）。反向：ReverseGuard 验证 Recipe 引用的 API 符号是否仍存在（5 种漂移类型）。Agent 完成任务时自动触发 Review，将违规连同相关 Recipe 一起交给 Agent 修复。RuleLearner 追踪 P/R/F1 自动调优。
+**双手——Agent Runtime**
 
-**造物 — Tool Forge**
-
-能力边界处的创造力。三种模式渐进——复用（0ms）→ 组合（10ms，原子工具拼装）→ 生成（~5s，LLM 写代码 → vm 沙箱验证：5s 超时 + 18 条安全规则）。临时工具 30min TTL，到期自动回收。LLM 只在锻造时参与，执行过程完全确定性。
+运动系统：一个 ReAct（思考 → 行动 → 观察）内核，配 profile 预设、编排策略，以及预算、安全、质量三类硬性策略。工具覆盖代码、终端、知识、图谱与记忆；终端执行位于只读白名单 + macOS Seatbelt 沙箱之后、降级必留审计，写文件有先读后写的新鲜度门。三层记忆与分级上下文压缩保证长任务的忠实。
 
 ### 设计哲学
 
-1. **AI 编译期 + 工程运行期** — LLM 产出确定性执行物，运行期纯工程逻辑
-2. **确定性标记 + 概率性消解** — 每层做确定的事，不确定结构化上抛给 AI
-3. **正交组合 > 特化子类** — Capability × Strategy × Policy 替代 N 个子类
-4. **信号驱动 > 时间驱动** — 信号饱和触发，而非定时扫描
-5. **纵深防御** — Constitution → Gateway → Permission → SafetyPolicy → PathGuard → ConfidenceRouter
+1. **AI 编译期 + 工程运行时**——LLM 只在生成时思考，运行的是确定性工件
+2. **确定性标记 + 概率性消解**——每一层做确定的事，把不确定结构化地上抛给 AI
+3. **概率内核 + 确定外壳**——智能体自由思考，护栏由工程铸就；失败从不裸抛，降级为结构化结果
+4. **接地或拒绝**——每条知识都锚定真实源码；证据之外，皆是传闻
+5. **四个入口，四个时机**——写前预热、途中搜索、按处映射、收尾体检；知识只在对的时刻到场，从不塞满上下文
+6. **文件即真源**——Markdown 是唯一的真相，数据库只是它的影子
+7. **访问即代谢**——不靠时钟，不靠后台；每一次使用都是一次新陈代谢
+8. **纵深防御**——从提交到常驻要过五道门；信任是挣来的，而且随时可以收回
 
-> 器官实现细节、工程数据、防御链详解见 [技术解构 Book](https://docs.gaoxuefeng.com/visual-tour)
+---
+
+## 一个产品，五个仓库
+
+Alembic 以五个仓库开发，依赖脊柱单向——底部是确定性内核，边缘是宿主体验。
+
+```
+                       ┌─────────────────────────────┐
+                       │       @alembic/core         │  确定性内核
+                       │ lifecycle · guard · search  │
+                       │ AST/graph · plan · coverage │
+                       └─────────────▲───────────────┘
+             ┌───────────────────────┼───────────────────────┐
+  ┌──────────┴──────────┐  ┌─────────┴─────────┐  ┌──────────┴──────────┐
+  │   @alembic/agent    │  │    alembic-ai     │  │    AlembicPlugin    │
+  │  ReAct 运行时       │◄─┤    （主仓库）     │  │  Codex + Claude     │
+  │  provider 栈        │  │ CLI · daemon      │  │  Code 插件          │
+  │  工具系统           │  │ HTTP · Dashboard  │  │  同一套 MCP 工具面  │
+  │  记忆 · 策略        │  │ sandbox · DI      │  │  无 daemon          │
+  └─────────────────────┘  └─────────▲─────────┘  └─────────────────────┘
+                                     │ 托管 dashboard/dist
+                           ┌─────────┴─────────┐
+                           │ alembic-dashboard │  React SPA
+                           │  审核 · 实时      │
+                           └───────────────────┘
+```
+
+| 仓库 | 包名 | 职责 |
+|------|------|------|
+| **Alembic**（主仓库） | `alembic-ai` | 用户可运行的宿主：CLI、带挖掘任务与文件监控的 per-project daemon、带实时交付的 HTTP API、Dashboard 托管、依赖注入、macOS Seatbelt 沙箱、工作空间与 Ghost 管理 |
+| **AlembicCore** | `@alembic/core` | 共享确定性内核：知识生命周期、Guard 引擎、混合搜索与向量、项目智能、plan facts、覆盖账本、文件优先持久化。不含智能体、UI、provider——由边界测试强制 |
+| **AlembicAgent** | `@alembic/agent` | 内嵌智能：一个 ReAct 执行引擎、覆盖五家厂商的 AI provider 栈（含可靠性控制）、契约先行的工具系统、分层记忆 |
+| **AlembicDashboard** | `alembic-dashboard` | 审核界面：React SPA，九个视图，命令面板，中英双语，实时进度——构建后随 `alembic-ai` 一起发布 |
+| **AlembicPlugin** | `@gxfn/alembic-runtime` | 面向智能体的交付：Codex 与 Claude Code 的点击安装插件壳，双宿主完全一致的 MCP 工具面，内置技能，Ghost 优先，无 daemon |
+
+知识存储是**文件优先**的：Markdown Recipe 是唯一真源，SQLite 是可重建的读缓存（`alembic sync`），两者分歧会以带修复路径的类型化错误暴露。
 
 ---
 
 ## 工程能力
 
-上面是有机体本身。下面是它对外提供的工程集成能力。
-
 ### Guard CLI
 
 ```bash
-alembic guard src/             # 检查目录
-alembic guard:staged           # pre-commit 只查暂存文件
-alembic guard:ci --min-score 90   # CI 质量门禁
+alembic guard src/file.ts        # 用已发布 Recipe 检查文件
+alembic guard:staged             # pre-commit：仅检查暂存文件
+alembic guard:ci --min-score 90  # CI 质量门
 ```
 
-### 多语言 AST
+### 多语言项目智能
 
-11 种语言 tree-sitter：Go · Python · Java · Kotlin · Swift · JS · TS · Rust · ObjC · Dart · C#。5 阶段 CallGraph，增量分析，8 种项目类型自动检测。
+十一个内置 tree-sitter 语法：TypeScript · TSX · JavaScript · Swift · Objective-C · Kotlin · Java · Dart · Python · Go · Rust。五段增量调用图分析、耦合检测、依赖分层、架构风格推断——智能体可直接查询，不消耗一条 Recipe。
 
-### 6 通道 IDE 交付
+### 计划驱动的挖掘与覆盖
 
-知识变更自动交付到 IDE 可消费的格式：
+二十五个挖掘维度——十三个通用（架构、编码规范、设计模式、错误韧性、并发、数据流、网络、UI、测试、安全、性能、可观测性、智能体守则），加上语言与框架专属维度。规划只收集有界的项目事实，由智能体确认选择——无状态、从不持久化。每模块 × 每维度的**覆盖账本**记录已挖内容；收敛顾问建议是否值得再挖一轮——仅供参考，绝不作门禁。
 
-| 通道 | 路径 | 内容 |
-|------|------|------|
-| **A** | `.cursor/rules/alembic-project-rules.mdc` | alwaysApply 一行式规则 |
-| **B** | `.cursor/rules/alembic-patterns-{topic}.mdc` | When/Do/Don't 主题规则 |
-| **C · D** | `.cursor/skills/` | Project Skills + 开发文档 |
-| **F** | `AGENTS.md` / `CLAUDE.md` / `.github/copilot-instructions.md` | Agent 指令 |
-| **Mirror** | `.qoder/` / `.trae/` | IDE 镜像 |
+### 混合搜索
 
-### 更多
+向量索引 + 字段加权关键词，融合后按场景加权信号排序。语义层可选：没有 embedding 模型时，搜索优雅降级到关键词基线。
 
-- **Bootstrap 冷启动** — 6 阶段 · 10 维分析，一次性建立知识库
-- **知识图谱** — 14 种关联关系，查询影响路径和依赖深度
-- **语义搜索** — HNSW 向量索引 + 加权字段匹配混合检索，RRF 融合 + 7 路信号排序
-- **sourceRefs** — Recipe 携带源码证据，Agent 无需自行验证
-- **飞书远程** — 手机发消息，意图识别分流到 Bot 或 IDE
-- **远程仓库** — Recipe 目录转 git 子仓库，多项目共享
+### 接地的知识
 
-> AI 驱动功能需 LLM API Key。支持 Google / OpenAI / Claude / DeepSeek / Ollama，自动 fallback。
+Recipe 携带 `sourceRefs`——智能体无需自证即可信任的锚定证据。单源的提交规范同时驱动校验与智能体看到的指引：要求多个不同文件的证据门、逐字 snippet 探针、可执行性动词白名单，以及进入生产前的确定性深度与接地裁判。
 
-AI 配置可以通过这些方式完成：
+### 项目 Skill
+
+完成一个维度会合成**项目 Skill**——智能体按需加载的指令文件。插件把它们投影进智能体的技能目录；Dashboard 可管理它们，包括从一句提示词 AI 生成。
+
+### 沙箱执行
+
+智能体终端工具位于只读命令白名单之后；macOS 上再套一层 Seatbelt profile，带网络代理与违规解析。降级绝不静默——未沙箱的执行会被标注并审计。
+
+### AI Provider
+
+进程内挖掘支持 **Google Gemini / OpenAI / Claude / DeepSeek / Ollama**，自动降级、配置热更新、参数守护。插件路径完全不需要这些——你的编码智能体自己的模型就是算力。
 
 ```bash
-# Dashboard
-alembic start
-
-# CLI：把 provider/model 和 Key 写入工作区 settings/secrets
+alembic start                    # 在 Dashboard 里配置，或：
 printf %s "$OPENAI_API_KEY" | alembic ai configure --provider openai --model gpt-5.5 --key-stdin
-
-# Agent 安全配置 DeepSeek：只复制纯 key，再让 agent 从 stdin 读取
-pbpaste | alembic ai configure --provider deepseek --model deepseek-v4-pro --key-stdin \
-  --embed-provider ollama --embed-model qwen3-embedding:0.6b
-
-# CLI：把当前 shell 中显式导出的 ALEMBIC_* 变量持久化到工作区 settings/secrets
-ALEMBIC_AI_PROVIDER=google ALEMBIC_GOOGLE_API_KEY=... alembic ai import-env
-
-# 查看当前有效配置
-alembic ai status
+alembic ai status                # 查看生效配置
 ```
 
-显式进程环境变量仍可用于一次性运行，并且会覆盖工作区配置，但不会被自动持久化。
-
-把 API Key 交给 agent 时，只提供纯 key。不要包含 `apiKey:`、`apikey`、
-`ALEMBIC_DEEPSEEK_API_KEY=`、JSON 包装或 Markdown 代码块。
+显式环境变量对一次性运行仍然有效，且覆盖工作空间设置而不落盘。把 API key 交给智能体时只给裸 key——不加标签、不加包裹。
 
 ---
+
+## Dashboard
+
+`alembic start` 启动审核界面——覆盖运行时的九个视图：
+
+| 视图 | 你在这里做什么 |
+|------|----------------|
+| **Recipes** | 按权威度浏览、编辑、逐条审阅演化提案 |
+| **Candidates** | 审核并晋升提交；启动冷启动或 rescan；实时观看维度进度与三轮 AI 评审 |
+| **Knowledge** | 跨六态生命周期批量管理知识条目 |
+| **Module Explorer** | 发现的目标与自定义文件夹；对目标、文件夹或整个项目做 AI 扫描 |
+| **Project Pyramid** | 逐层查看模块依赖图 |
+| **Guard** | 规则、违规与写操作审计轨迹 |
+| **Skills** | 查看、编辑、创建——或从提示词 AI 生成 |
+| **Jobs** | daemon 队列：实时过程事件与完整 LLM 输入输出快照 |
+| **Help** | 快速上手、工具参考、token 用量 |
+
+另有 ⌘K 命令面板、中英界面、明暗主题、可选登录门。
 
 ## 项目结构
 
-`alembic setup` 之后，你的项目里会多出这些：
+`alembic setup`（标准模式）之后，你的项目会获得：
 
 ```
 your-project/
-├── Alembic/           # 知识数据（git 跟踪）
-│   ├── recipes/           # 已审核的模式（Markdown）
-│   ├── candidates/        # 待审核
-│   ├── skills/            # 项目特定的 Agent 指令
-│   └── wiki/              # 项目 Wiki
-├── .asd/          # 运行时缓存（gitignored）
-│   ├── alembic.db     # SQLite（WAL 模式）
-│   └── context/           # 向量索引（HNSW）
-├── .cursor/
-│   ├── mcp.json           # Cursor MCP 配置
-│   ├── rules/             # Channel A + B 规则
-│   └── skills/            # Channel C + D Skills
-├── .vscode/mcp.json       # VS Code MCP 配置
-├── .github/copilot-instructions.md
-├── AGENTS.md
-└── CLAUDE.md
+├── Alembic/                # 知识数据（git 跟踪；`alembic remote <url>` 可拆为共享仓库）
+│   ├── constitution.yaml   # 入口安全策略
+│   ├── recipes/            # 已审核模式（Markdown——唯一真源）
+│   ├── candidates/         # 待审核
+│   └── skills/             # 项目 Skill
+└── .asd/                   # 运行时缓存（gitignore）
+    ├── alembic.db          # SQLite——读缓存；`alembic sync` 可重建
+    └── context/            # 向量索引
 ```
 
-Recipe 是 Markdown 文件，SQLite 只是读缓存。数据库坏了 `alembic sync` 一下就行。
+使用 `--ghost`（或插件，Ghost 是其默认值）时，**以上全部**改放在 `~/.asd/workspaces/<projectId>/`——你的仓库里零 Alembic 文件。
 
----
+## 环境要求
 
-## IDE 支持
+- Node.js ≥ 22
+- 推荐 macOS（智能体终端工具的 Seatbelt 沙箱仅 macOS；其余能力跨平台）
+- better-sqlite3（内置）
 
-| IDE | 集成方式 | 接入说明 |
-|-----|---------|----------|
-| **VS Code** | 扩展 + MCP | Agent Mode 中 `#alembic` 引用工具；搜索、指令、CodeLens、Guard 诊断波浪线、灯泡修复 |
-| **Cursor** | MCP + Rules | `.cursor/mcp.json` + `.cursor/rules/` + `.cursor/skills/` |
-| **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP 工具；支持 hooks |
+### 推荐：本地 Embedding 解锁语义搜索
 
-### VS Code 扩展
+混合搜索开箱即用（加权关键词）。本地 embedding 模型可解锁语义层——概念级匹配，即使关键词不精确也能找到相关 Recipe：
 
-- **Comment Directives**：`// as:s <query>` 搜索插入、`// as:c` 从选区创建候选、`// as:a` 审计当前文件
-- **CodeLens**：指令上方可点击操作
-- **Guard 诊断**：违规显示为波浪线 + 灯泡快速修复
-- **Status Bar**：实时 API Server 连接状态
+```bash
+brew install ollama && ollama serve
+ollama pull qwen3-embedding:0.6b
 
-所有配置由 `alembic setup` 生成。
+alembic ai configure --embed-provider ollama --embed-model qwen3-embedding:0.6b
+alembic embed
+```
 
----
+本地推理，无 API 调用，数据不出机器。
 
 ## 深入了解
 
-> **[图解速览 — 5 分钟看懂整个系统](https://docs.gaoxuefeng.com/visual-tour)** · 25 张手绘架构图，从工作流到 Agent 循环一目了然
+> **[Visual Tour——5 分钟看懂整个系统](https://docs.gaoxuefeng.com/visual-tour)** · 从工作流到智能体循环的手绘架构图
 
-| 章节 | 内容 |
-|------|------|
-| [Alembic 介绍](https://docs.gaoxuefeng.com/part1/ch01-introduction) | 问题定义、方案概述、使用速览 |
-| [SOUL 原则](https://docs.gaoxuefeng.com/part1/ch02-soul) | 3 条硬约束 + 5 项设计哲学 |
-| [架构全景](https://docs.gaoxuefeng.com/part2/ch03-architecture) | 7 层 DDD 分层与模块拓扑 |
-| [安全管线](https://docs.gaoxuefeng.com/part2/ch04-security) | 六层纵深防御链路 |
-| [代码理解](https://docs.gaoxuefeng.com/part2/ch05-ast) | 10 语言 Tree-sitter AST 分析 |
-| [知识领域](https://docs.gaoxuefeng.com/part3/ch06-knowledge-entry) | 统一实体、生命周期、质量评分 |
-| [核心服务](https://docs.gaoxuefeng.com/part4/ch09-bootstrap) | 冷启动、Guard、搜索、代谢 |
-| [Agent 智能层](https://docs.gaoxuefeng.com/part5/ch13-agent-runtime) | ReAct 循环、正交组合、61+ 工具 |
-| [平台与交付](https://docs.gaoxuefeng.com/part6/ch16-infrastructure) | 数据基础设施、MCP、四端接入 |
-| [BiliDili 冷启动全记录](https://docs.gaoxuefeng.com/part7/ch19-bilidili-coldstart) | 真实数据：840 万 Token、101 候选 |
+每个仓库都有自己的架构 README：`AlembicCore`（内核分层、API 边界、质量门禁）、`AlembicAgent`（ReAct 运行时、provider 栈、工具安全）、`AlembicPlugin` 插件壳（[Codex](https://github.com/GxFn/AlembicCodex)、[Claude Code](https://github.com/GxFn/AlembicClaudeCode)）以及 `AlembicDashboard`。
 
----
+## 参与贡献
 
-## 系统要求
+1. 提交前运行 `npm test`
+2. 遵循现有代码模式（ESM、领域驱动结构）；`npm run check` 运行完整门禁链
 
-- Node.js ≥ 22
-- macOS 推荐（Xcode 功能需要；其他功能跨平台可用）
-- better-sqlite3（已内置）
-
-### 推荐：安装本地 Embedding 模型提升语义搜索
-
-Alembic 内置了混合搜索引擎（关键词 + 向量语义）。安装本地 Embedding 模型可以解锁语义搜索——即使关键词不完全匹配，也能通过概念级理解找到相关 Recipe。
-
-```bash
-# 安装 Ollama（https://ollama.com）
-brew install ollama && ollama serve
-
-# 拉取推荐模型（约 639MB，原生支持中文 + 英文 + 代码）
-ollama pull qwen3-embedding:0.6b
-```
-
-然后在 Dashboard（`alembic start`）→ 设置 → Embedding 模型中配置，或使用 CLI：
-
-```bash
-alembic ai configure --embed-provider ollama --embed-model qwen3-embedding:0.6b
-```
-
-Alembic 会把配置写入项目工作区 settings；Ghost 模式下位于仓库外部。
-
-配置完成后运行 `alembic embed` 构建向量索引。语义搜索每次查询约增加 200–400ms 延迟（本地推理，无需 API 调用，数据不出本机）。
-
-> **不装也能用**——搜索默认走字段加权关键词匹配，对精确术语搜索已经很快很准。语义搜索是额外升级，善于处理概念性查询，比如 *「数据竞争怎么避免」*、*「Cookie 怎么持久化」* 这类用自然语言描述的问题。
-
-## 贡献
-
-1. 提交前跑 `npm test`
-2. 遵循现有代码模式（ESM、领域驱动结构）
-
-## License
+## 许可证
 
 [MIT](LICENSE) © gaoxuefeng

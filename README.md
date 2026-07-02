@@ -2,10 +2,10 @@
 
 # Alembic
 
-Extract patterns from your codebase into a knowledge base that AI coding assistants can query in your IDE — so generated code actually follows your team's conventions.
+Distill your codebase into a knowledge base that AI coding agents query while they work — so generated code actually follows your team's conventions.
 
-[![npm version](https://img.shields.io/npm/v/alembic.svg?style=flat-square)](https://www.npmjs.com/package/alembic)
-[![License](https://img.shields.io/npm/l/alembic.svg?style=flat-square)](https://github.com/GxFn/Alembic/blob/main/LICENSE)
+[![npm version](https://img.shields.io/npm/v/alembic-ai.svg?style=flat-square)](https://www.npmjs.com/package/alembic-ai)
+[![License](https://img.shields.io/npm/l/alembic-ai.svg?style=flat-square)](https://github.com/GxFn/Alembic/blob/main/LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen?style=flat-square)](https://nodejs.org)
 
 [中文](README_CN.md)
@@ -14,325 +14,315 @@ Extract patterns from your codebase into a knowledge base that AI coding assista
 
 ---
 
-- [Why](#why) · [Getting Started](#getting-started) · [Codex Plugin](#codex-plugin) · [Using in IDE](#using-in-ide) · [Evolution Architecture](#evolution-architecture) · [Engineering Capabilities](#engineering-capabilities) · [IDE Support](#ide-support) · [Deep Dive](#deep-dive)
+- [Why](#why) · [Installation](#installation) · [Usage](#usage) · [What Is a Recipe](#what-is-a-recipe) · [The Knowledge Organism](#the-knowledge-organism) · [One Product, Five Repositories](#one-product-five-repositories) · [Engineering Capabilities](#engineering-capabilities) · [Dashboard](#dashboard) · [Project Layout](#project-layout) · [Requirements](#requirements) · [Deep Dive](#deep-dive)
 
 ## Why
 
-Copilot and Cursor don't know how your team writes code. What they generate works, but doesn't look like yours — wrong naming, wrong patterns, wrong abstractions. You end up rewriting AI output or explaining the same conventions in every Code Review.
+Codex and Claude Code don't know how your team writes code. What they generate works, but doesn't look like yours — wrong naming, wrong patterns, wrong abstractions. You end up rewriting AI output or explaining the same conventions in every Code Review.
 
-Alembic builds a layer of **localized project memory**. It scans your codebase, extracts valuable patterns (with your approval), and makes them searchable by all AI tools via [MCP](https://modelcontextprotocol.io/). Knowledge persists locally, never consuming the LLM context window — it's injected on-demand when the AI needs it. The more knowledge accumulates, the more the generated code matches your conventions.
+Alembic builds a layer of **localized project memory**. It distills your codebase into reviewed, source-anchored **Recipes** and serves them back to your coding agent on demand over [MCP](https://modelcontextprotocol.io/). Knowledge persists locally as Markdown, never consuming the LLM context window; every Recipe carries `sourceRefs` — evidence anchored to real files — so agents trust it without re-verifying. The more knowledge accumulates, the more generated code matches your conventions.
 
 ```
-Your code  →  AI extracts patterns  →  You review  →  Knowledge base
+Your code  →  AI mines patterns  →  You review  →  Recipe knowledge base
                                                         ↓
-                                        Cursor / Copilot / VS Code / Xcode
+                                       Codex / Claude Code, on demand
                                                         ↓
                                               AI generates your way
 ```
 
-## Getting Started
+The **plugin is the entry point — and a complete experience on its own**: initialize, query structure, generate and use Recipes right inside Codex or Claude Code, no API key needed. **Full Alembic is an optional upgrade**: configure a provider such as DeepSeek, and a dedicated mining agent builds you a deeper, better knowledge base — with a Dashboard to review it. Both share the same deterministic knowledge contracts — two hosts, one source.
+
+## Installation
+
+### The plugin — Codex / Claude Code (the entry point)
+
+```bash
+# Codex
+codex plugin marketplace add GxFn/AlembicCodex --ref main
+
+# Claude Code
+claude plugin marketplace add GxFn/AlembicClaudeCode
+claude plugin install alembic@gxfn
+```
+
+The plugin alone is a complete experience: structure queries work out of the box (`alembic_graph` — no knowledge base, no AI required), and cold start, daily retrieval, and convention checks all happen in conversation. Ghost mode by default, zero files in your repository, no API key.
+
+### Full Alembic — optional, for a better knowledge base
 
 ```bash
 npm install -g alembic-ai
 
 cd your-project
-alembic setup --ghost   # Initialize workspace, data root, and MCP config
-alembic start           # Start Alembic: runtime, daemon, API, and Dashboard
+alembic setup --ghost
+alembic start
 ```
 
-## Codex Plugin
+The full install unlocks the dedicated mining agent, **AlembicAgent**: configure any provider — DeepSeek / OpenAI / Claude / Gemini / Ollama — and it mines autonomously in daemon jobs, through cold start, incremental rescan, deep-mining rounds, AI scans, and evolution checks. It doesn't occupy your coding agent, and it digs deeper. You also get the Dashboard for review and Guard for pre-commit / CI.
 
-Alembic also works with the Codex plugin maintained in `AlembicPlugin`. It is designed for a click-install flow: Codex starts a lightweight MCP shim first, checks diagnostics and workspace status without starting services, initializes in Ghost mode by default, then wakes the Alembic daemon only for Dashboard, Guard, bootstrap, rescan, or project-knowledge tools.
+## Usage
 
-Recommended first run inside Codex:
+Once installed, tell your agent:
 
-1. `alembic_codex_diagnostics`
-2. `alembic_codex_status`
-3. `alembic_codex_init` if the workspace is not initialized
-4. `alembic_codex_bootstrap` for first project knowledge, or `alembic_task` with `operation=prime` before coding
+> 💬 *"Cold start — build the project knowledge base."*
 
-For release validation:
+The plugin drafts a mining plan from real project facts and walks your agent through dimension-by-dimension distillation. With the full install, you can hand the same job to the dedicated mining agent from the Dashboard instead.
 
-```bash
-npm run build:check
-npm run release:check
-```
-
-Codex plugin release and marketplace validation are handled by the `AlembicPlugin` repository.
-
-## Using in IDE
-
-`alembic setup` configures everything. Open your IDE's **Agent Mode** (Cursor Composer / VS Code Copilot Chat / Trae) and start chatting.
-
-> **First time:** Manually enable the `alembic` service in your IDE's MCP settings.
-
-> **Tip:** Stronger models work better. We recommend Claude Opus 4.6 / Sonnet 4.6, GPT-5.4, or Gemini 3.1 Pro in Cursor / Copilot for more accurate patterns and fewer false positives.
-
-### Cold Start: Build Your Knowledge Base
-
-> 💬 *"Cold start — build the project knowledge base"*
-
-The Agent scans your entire project, extracting coding patterns, architecture conventions, and call habits, while generating a project Wiki. Cold start runs once; after that, it's daily use.
-
-### Daily Use: Just Ask
+Daily use is conversation, not commands:
 
 | You say | You get |
 |---------|---------|
-| ① *"How do we write API endpoints in this project?"* | Code following your project's actual style, not generic examples |
-| ② *"Write a user registration endpoint"* | Generated code automatically follows the API conventions just retrieved |
-| ③ *"Check if this file follows our conventions"* | Pre-commit convention check — fewer back-and-forths in Code Review |
-| ④ *"Save this error handling pattern as a project convention"* | One-time capture — every team member's AI learns this pattern |
+| ① *"How do we write API endpoints in this project?"* | Your project's actual conventions, with source evidence attached |
+| ② *"Write a user registration endpoint"* | Code that follows the conventions just retrieved — primed before generation |
+| ③ *"Check this file against our standards"* | A convention health-check: violations, honest uncertainties, fix suggestions |
+| ④ *"Save this error-handling pattern as a convention"* | A grounded candidate that every teammate's AI will learn |
 
-After the Agent finishes writing code, the Guard compliance engine auto-checks the diff — violations trigger self-repair, no manual intervention needed.
+Behind these sentences sit four verbs — **prime** before writing, **search** on demand, **guard** at the finish, **capture** what's worth keeping. Structure questions ("what depends on this module?") ride the same conversation, answered from the project map instead of guesswork. And maintenance needs no scheduler: knowledge metabolism ticks on ordinary access — no cron, no background daemon.
 
 ### Gets Better Over Time
 
-Review and approve candidates in Dashboard (`alembic start`) → they become **Recipes** → AI references them when generating code → you spot new good patterns → keep capturing → AI increasingly writes like a team member. Knowledge is local Markdown files, travels with git, never disappears with conversations, and doesn't consume context window — no matter how large the knowledge base grows, it won't slow down AI.
+Review candidates in the Dashboard (`alembic start`) → they become **Recipes** → agents reference them when generating → you spot new good patterns → keep capturing. Knowledge is local Markdown, travels with git, never disappears with conversations, and doesn't consume context window — no matter how large the base grows.
 
 ---
 
-## Evolution Architecture
+## What Is a Recipe
 
-Alembic isn't a static knowledge tool — it's a **knowledge organism**. Recipes are its cells — the IDE Agent is the external driving force, and each interaction triggers coordinated responses from different organs inside the organism.
+A Recipe is Alembic's unit of knowledge — the **integrated abstraction** of project fundamentals, design patterns, architecture conventions, and team SOPs. Each Recipe binds three layers together:
+
+| Layer | What's inside |
+|-------|---------------|
+| **Pattern & convention text** | The rule in natural language — when it applies, what to do, what to avoid. Readable by humans and AI alike |
+| **Code paradigm & real pointers** | An exemplar snippet plus `sourceRefs` pointing at real files in your repo — evidence you can re-check, with verbatim probes keeping snippet and source in sync |
+| **Operational data** | Lifecycle state, confidence and authority, usage and freshness records — updated, decayed, or deprecated as the code evolves |
+
+So a Recipe is not a doc excerpt, not a code comment, not a static encyclopedia entry. It is a **living unit of knowledge** — retrievable, injectable, cited by convention checks, metabolized over time — stored as Markdown, traveling with git.
+
+---
+
+## The Knowledge Organism
+
+Alembic isn't a static knowledge tool — it's a **knowledge organism**. Recipes are its cells; the coding agent is the external driving force; each interaction triggers coordinated responses from the organs inside.
 
 ```
-                IDE Agent (Cursor / Copilot / Trae)
-                   │
-                   │ Capture · Write · Search · Shift · Complete · Boundary
-                   │
-  ═════════════════▼══════════════════════════════════════
-  ║              Alembic Knowledge Organism             ║
-  ║                                                        ║
-  ║  ┌─ Panorama (Skeleton) ──── Project Structure ───┐   ║
-  ║  │                                                │   ║
-  ║  │    Signal (Nerves)  ◄────►  Governance (Digest) │   ║
-  ║  │        ↕                         ↕             │   ║
-  ║  │              ┌──────────┐                      │   ║
-  ║  │              │  Recipe  │                      │   ║
-  ║  │              │  Living  │                      │   ║
-  ║  │              │Knowledge │                      │   ║
-  ║  │              └──────────┘                      │   ║
-  ║  │        ↕                         ↕             │   ║
-  ║  │    Guard (Immunity) ◄────►  Tool Forge (Create) │   ║
-  ║  │                                                │   ║
-  ║  └────────────────────────────────────────────────┘   ║
-  ║                                                        ║
-  ══════════════════════════════════════════════════════════
+        AI Coding Agent (Codex / Claude Code)          Dashboard (you)
+                  │                                        │
+                  │  Capture · Write · Search ·            │  review · approve
+                  │  Finish · Evolve                       │  evolve · deprecate
+                  │                                        │
+  ════════════════▼════════════════════════════════════════▼══════════
+  ║                   Alembic Knowledge Organism                     ║
+  ║                                                                  ║
+  ║  ┌─ Panorama (Skeleton) ──── ProjectContext ─────────────────┐  ║
+  ║  │                                                            │  ║
+  ║  │     Signal (Nerves)   ◄────►   Governance (Digest)         │  ║
+  ║  │         ↕                          ↕                       │  ║
+  ║  │              ┌────────────────────────┐                    │  ║
+  ║  │              │      Recipe cells      │                    │  ║
+  ║  │              │ grounded by sourceRefs │                    │  ║
+  ║  │              └────────────────────────┘                    │  ║
+  ║  │         ↕                          ↕                       │  ║
+  ║  │     Guard (Immunity)  ◄────►   Agent Runtime (Hands)       │  ║
+  ║  │                                                            │  ║
+  ║  └────────────────────────────────────────────────────────────┘  ║
+  ══════════════════════════════════════════════════════════════════
 ```
 
 ### Agent Actions × Organism Responses
 
-Each IDE Agent action triggers coordinated responses from different organs:
-
 | Agent Action | Organism Response | Organs Involved |
 |-------------|------------------|-----------------|
-| **Capture knowledge** — extract and submit patterns | Digestive system metabolizes internally: confidence routing → staging observation → evolves or decays. Developer retains full intervention rights | Digest → Nerves |
-| **Write code** — start coding | Nervous system analyzes intent, auto-injects relevant Recipes with sourceRefs source evidence for higher trust | Nerves → Recipe |
-| **Search knowledge** — active search | Precise retrieval based on current intent + file context, multi-path fusion ranking, dynamic weight adjustment per scenario | Nerves → Recipe |
-| **Shift intent** — change direction | Nervous system records drift signals, senses problems; immune system reverse-checks whether Recipes are still valid | Nerves → Immunity |
-| **Complete task** — finish writing code | Immune system triggers Guard Review, attaches relevant Recipes for Agent to fix violations | Immunity → Recipe |
-| **Capability boundary** — hit an unsolvable problem | Creation system calls LLM to forge temporary tools, vm-sandboxed execution, auto-reclaimed on expiry | Create |
+| **Capture knowledge** — submit a pattern | Authoring gates validate structure and evidence → confidence routing → staging observation → evolves or decays. You retain full intervention rights | Digest |
+| **Write code** — prime before coding | Trust-labeled Recipes injected with source evidence, so the agent builds on verified ground | Nerves → Recipe |
+| **Search knowledge** — ask a question | Hybrid retrieval, fusion ranking, scenario-weighted signals | Nerves → Recipe |
+| **Finish a task** — convention check | The immune system checks the diff against published Recipes; violations return together with the Recipes needed to fix them | Immunity → Recipe |
+| **Decide evolution** — drift discovered | Batch per-Recipe decisions: propose evolution, confirm deprecation, or refresh verification | Digest → Immunity |
+| **Mine autonomously** — in-process jobs | The embedded agent runs plan-selected dimensions under budget and safety policies, inside a sandbox | Hands |
 
 ### Five Organs
 
-**Skeleton — Panorama**
+**Skeleton — Panorama (ProjectContext)**
 
-The organism's structural awareness. AST + call graphs infer module roles & layers (four-signal fusion, 13 role types), Tarjan SCC computes coupling, Kahn topological sort infers layering, DimensionAnalyzer generates 11-dimension health radar, outputting coverage heatmaps and gap reports. All organs share this project overview.
+The organism's structural awareness. Multi-language AST over 11 bundled tree-sitter grammars, a five-stage call-graph pipeline, Tarjan SCC coupling detection, dependency-depth layering, architecture-style inference — exposed as a space → repo → module → file query ladder with freshness annotations. All organs, and both hosts, share this one map.
 
-**Digest — Governance**
+**Digest — Governance (Lifecycle)**
 
-The metabolic engine for new knowledge entering the organism. ContradictionDetector finds conflicts, RedundancyAnalyzer flags duplication, DecayDetector scores decay (6 strategies + 4-dimension scoring), ConfidenceRouter numerically routes (≥ 0.85 auto-publishes, < 0.2 rejects). ProposalExecutor auto-executes evolution proposals on expiry (7 types, differentiated observation windows). Six-state lifecycle: `pending → staging → active → evolving/decaying → deprecated`.
+The metabolic engine for new knowledge. Every submission passes authoring gates, then ConfidenceRouter routes numerically — high confidence auto-approves into fast-track staging with grace windows, low confidence is rejected outright. A six-state lifecycle — `pending → staging → active → evolving/decaying → deprecated` — is guarded by a single state machine; DecayDetector scores decay across freshness, usage, quality, and authority; RedundancyAnalyzer flags duplication; proposals distill into *update* or *deprecate*. Metabolism is **tick-on-access**: capped sweeps ride inside ordinary calls, no scheduler required.
 
-**Nerves — Signal + Intent**
+**Nerves — Signal**
 
-Senses all Agent behavior. IntentExtractor extracts terms, infers language and module, cross-language synonym expansion, identifies 4 scenarios. SignalBus unifies 12 signal types (guard / search / usage / lifecycle / quality / exploration / panorama / decay / forge / intent / anomaly / guard_blind_spot), HitRecorder batches usage events. When the Agent shifts intent, nerves record drift signals and coordinate the immune system for reverse checking.
+The sensing layer. A unified SignalBus carries twelve signal families — guard, search, usage, lifecycle, quality, exploration, panorama, decay and more — feeding lifecycle and ranking decisions. Retrieval ranks with seven signals (relevance, authority, recency, popularity, difficulty, context-match, vector), re-weighted per scenario: linting, generating, searching, learning.
 
 **Immunity — Guard**
 
-Bidirectional immune system. Forward: four-layer detection (regex → code-level multi-line → tree-sitter AST → cross-file), built-in 8-language rules, three-state output (pass / violation / uncertain). Backward: ReverseGuard verifies Recipe-referenced API symbols still exist (5 drift types). Auto-triggers Review when Agent completes a task, handing violations along with relevant Recipes to the Agent for fixing. RuleLearner tracks P/R/F1 for auto-tuning.
+The convention immune system. Four detection layers — regex → code-level → tree-sitter AST → cross-file — with built-in rules for ten languages, reporting violations *and* honest uncertainties. A learner tracks precision and recall for tuning; an exclusion manager absorbs false positives. Freshness immunity runs the other direction: source-reference reconciliation verifies that Recipe-cited code still exists, feeding stale references straight into decay.
 
-**Create — Tool Forge**
+**Hands — Agent Runtime**
 
-Creativity at capability boundaries. Three progressive modes — Reuse (0ms) → Compose (10ms, atomic tool assembly) → Generate (~5s, LLM writes code → vm sandbox validation: 5s timeout + 18 security rules). Temporary tools have 30min TTL, auto-reclaimed on expiry. LLM participates only during forging; execution is fully deterministic.
+The motor system: one ReAct (Thought → Action → Observation) kernel with profile presets, orchestration strategies, and hard policies for budget, safety, and quality. Its tools cover code, terminal, knowledge, graph, and memory; terminal execution sits behind a read-only allowlist plus a macOS Seatbelt sandbox with audited degradation, and writes are gated by read-before-write freshness. Three-tier memory and staged context compression keep long runs honest.
 
 ### Design Philosophy
 
-1. **AI Compile-Time + Engineering Runtime** — LLM produces deterministic artifacts; runtime is pure engineering logic
-2. **Deterministic Marking + Probabilistic Resolution** — Each layer does its deterministic part; uncertainty escalates to AI
-3. **Orthogonal Composition > Specialized Subclasses** — Capability × Strategy × Policy replaces N subclasses
-4. **Signal-Driven > Time-Driven** — Trigger on signal saturation, not scheduled scans
-5. **Defense in Depth** — Constitution → Gateway → Permission → SafetyPolicy → PathGuard → ConfidenceRouter
+1. **AI at compile time, engineering at runtime** — the LLM thinks only at generation; what runs is a deterministic artifact
+2. **Deterministic marking + probabilistic resolution** — every layer does what it can decide, and hands structured uncertainty up to AI
+3. **Probabilistic core, deterministic shell** — the agent thinks freely inside guardrails cast in engineering; failure never throws, it degrades into a structured result
+4. **Grounded or rejected** — every piece of knowledge anchors to real source; beyond evidence, everything is hearsay
+5. **Four doors, four moments** — prime before writing, search along the way, map by place, guard at the finish; knowledge arrives on time, never floods the context
+6. **Files are the truth** — Markdown is the single truth; the database is merely its shadow
+7. **Access is metabolism** — no clock, no background job; every use is an act of metabolism
+8. **Defense in depth** — five gates stand between submission and residency; trust is earned, and it can be revoked
 
-> Organ implementation details, engineering metrics, and defense chain breakdown in [Technical Book](https://docs.gaoxuefeng.com/visual-tour)
+---
+
+## One Product, Five Repositories
+
+Alembic is developed as five repositories with a one-way dependency spine — a deterministic kernel at the bottom, host experiences at the edge.
+
+```
+                       ┌─────────────────────────────┐
+                       │       @alembic/core         │  deterministic kernel
+                       │ lifecycle · guard · search  │
+                       │ AST/graph · plan · coverage │
+                       └─────────────▲───────────────┘
+             ┌───────────────────────┼───────────────────────┐
+  ┌──────────┴──────────┐  ┌─────────┴─────────┐  ┌──────────┴──────────┐
+  │   @alembic/agent    │  │    alembic-ai     │  │    AlembicPlugin    │
+  │  ReAct runtime      │◄─┤    (main body)    │  │  Codex + Claude     │
+  │  provider stack     │  │ CLI · daemon      │  │  Code plugins       │
+  │  tool system        │  │ HTTP · Dashboard  │  │  one MCP surface    │
+  │  memory · policies  │  │ sandbox · DI      │  │  daemon-less        │
+  └─────────────────────┘  └─────────▲─────────┘  └─────────────────────┘
+                                     │ serves dashboard/dist
+                           ┌─────────┴─────────┐
+                           │ alembic-dashboard │  React SPA
+                           │  review · realtime │
+                           └───────────────────┘
+```
+
+| Repository | Package | Role |
+|-----------|---------|------|
+| **Alembic** (main body) | `alembic-ai` | The user-runnable host: CLI, per-project daemon with mining jobs and file monitoring, HTTP API with realtime delivery, Dashboard hosting, dependency injection, the macOS Seatbelt sandbox, workspace and Ghost management |
+| **AlembicCore** | `@alembic/core` | The shared deterministic kernel: knowledge lifecycle, Guard engine, hybrid search and vectors, project intelligence, plan facts, coverage ledger, file-first persistence. No agent, no UI, no provider — enforced by boundary tests |
+| **AlembicAgent** | `@alembic/agent` | The embedded intelligence: one ReAct execution engine, an AI provider stack for five vendors with reliability control, a contract-first tool system, layered memory |
+| **AlembicDashboard** | `alembic-dashboard` | The review surface: a React SPA with nine views, command palette, bilingual UI, realtime progress — built and shipped inside `alembic-ai` |
+| **AlembicPlugin** | `@gxfn/alembic-runtime` | The agent-native delivery: click-install plugin shells for Codex and Claude Code, one identical MCP tool surface on both hosts, built-in skills, Ghost-first, daemon-less |
+
+The knowledge store is **file-first**: Markdown Recipes are the source of truth, SQLite is a rebuildable read cache (`alembic sync`), and divergence surfaces as a typed error with a documented reconcile path.
 
 ---
 
 ## Engineering Capabilities
 
-The above is the organism itself. Below are the engineering integration capabilities it exposes.
-
 ### Guard CLI
 
 ```bash
-alembic guard src/             # Check directory
-alembic guard:staged           # pre-commit: staged files only
-alembic guard:ci --min-score 90   # CI quality gate
+alembic guard src/file.ts        # Check a file against published Recipes
+alembic guard:staged             # pre-commit: staged files only
+alembic guard:ci --min-score 90  # CI quality gate
 ```
 
-### Multi-Language AST
+### Multi-Language Project Intelligence
 
-11-language tree-sitter: Go · Python · Java · Kotlin · Swift · JS · TS · Rust · ObjC · Dart · C#. 5-stage CallGraph, incremental analysis, 8 project types auto-detected.
+Eleven bundled tree-sitter grammars: TypeScript · TSX · JavaScript · Swift · Objective-C · Kotlin · Java · Dart · Python · Go · Rust. Five-stage incremental call-graph analysis, coupling detection, dependency layering, architecture-style inference — queryable by agents directly, without consuming a single Recipe.
 
-### 6-Channel IDE Delivery
+### Plan-Driven Mining & Coverage
 
-Knowledge changes auto-deliver to IDE-consumable formats:
+Twenty-five mining dimensions — thirteen universal (architecture, coding standards, design patterns, error resilience, concurrency, data flow, networking, UI, testing, security, performance, observability, agent guidelines), plus language- and framework-specific ones. Planning collects bounded project facts and lets the agent confirm a selection — stateless, never persisted. A per-module × per-dimension **coverage ledger** records what's been mined; a convergence advisor recommends when another round is worth it — advisory, never a gate.
 
-| Channel | Path | Content |
-|---------|------|---------|
-| **A** | `.cursor/rules/alembic-project-rules.mdc` | alwaysApply one-liner rules |
-| **B** | `.cursor/rules/alembic-patterns-{topic}.mdc` | When/Do/Don't themed rules |
-| **C · D** | `.cursor/skills/` | Project Skills + development docs |
-| **F** | `AGENTS.md` / `CLAUDE.md` / `.github/copilot-instructions.md` | Agent instructions |
-| **Mirror** | `.qoder/` / `.trae/` | IDE mirrors |
+### Hybrid Search
 
-### More
+Vector index plus field-weighted keywords, fused and ranked by scenario-weighted signals. The semantic layer is optional: without an embedding model, search degrades gracefully to keyword baseline.
 
-- **Bootstrap Cold Start** — 6-phase · 10-dimension analysis, one-time knowledge base build
-- **Knowledge Graph** — 14 relationship types, query impact paths and dependency depth
-- **Semantic Search** — HNSW vector index + field-weighted scoring hybrid, RRF fusion + 7-signal ranking
-- **sourceRefs** — Recipes carry source evidence, Agent trusts without self-verification
-- **Lark Remote** — Message from phone, intent routes to Bot or IDE
-- **Remote Repository** — Recipe directory as git sub-repo, shared across projects
+### Grounded Knowledge
 
-> AI-driven features require an LLM API Key. Supports Google / OpenAI / Claude / DeepSeek / Ollama with automatic fallback.
+Recipes carry `sourceRefs` — anchored evidence agents trust without re-verification. A single-source authoring spec drives both validation and the guidance agents see: evidence gates requiring multiple distinct files, verbatim snippet probes, an actionability whitelist, and a deterministic depth-and-grounding judge before anything reaches production.
 
-Configure AI in any of these ways:
+### Project Skills
+
+Completing a dimension synthesizes **project Skills** — instruction files agents load on demand. Plugins project them into the agent's skill directory; the Dashboard manages them, including AI-generating one from a prompt.
+
+### Sandboxed Execution
+
+Agent terminal tools run behind a read-only command allowlist and, on macOS, a Seatbelt profile with a network proxy and violation parsing. Degradation is never silent — unsandboxed runs are annotated and audited.
+
+### AI Providers
+
+In-process mining supports **Google Gemini / OpenAI / Claude / DeepSeek / Ollama** with automatic fallback, hot-reload on config change, and parameter guarding. The plugin path needs none of this — your coding agent's own model does the work.
 
 ```bash
-# Dashboard
-alembic start
-
-# CLI: save provider/model and a key into workspace settings/secrets
+alembic start                    # configure in the Dashboard, or:
 printf %s "$OPENAI_API_KEY" | alembic ai configure --provider openai --model gpt-5.5 --key-stdin
-
-# Agent-safe DeepSeek setup: copy only the raw key, then let the agent read it from stdin
-pbpaste | alembic ai configure --provider deepseek --model deepseek-v4-pro --key-stdin \
-  --embed-provider ollama --embed-model qwen3-embedding:0.6b
-
-# CLI: persist explicitly exported ALEMBIC_* variables into workspace settings/secrets
-ALEMBIC_AI_PROVIDER=google ALEMBIC_GOOGLE_API_KEY=... alembic ai import-env
-
-# Inspect the effective configuration
-alembic ai status
+alembic ai status                # inspect the effective configuration
 ```
 
-Explicit process environment variables still work for one-off runs and override workspace settings without being persisted.
-
-When handing an API key to an agent, provide the raw key only. Avoid labels such as
-`apiKey:`, `apikey`, `ALEMBIC_DEEPSEEK_API_KEY=`, JSON wrappers, or Markdown code fences.
+Explicit environment variables still work for one-off runs and override workspace settings without being persisted. When handing an API key to an agent, provide the raw key only — no labels, no wrappers.
 
 ---
 
-## Project Structure
+## Dashboard
 
-After `alembic setup`, your project gains these:
+`alembic start` serves the review surface — nine views over the live runtime:
+
+| View | What you do there |
+|------|-------------------|
+| **Recipes** | Browse by authority, edit, review evolution proposals per Recipe |
+| **Candidates** | Audit and promote submissions; launch cold start or rescan; watch dimension progress and the three-round AI review live |
+| **Knowledge** | Batch-manage entries across the six lifecycle states |
+| **Module Explorer** | Discovered targets and custom folders; AI-scan a target, a folder, or the whole project |
+| **Project Pyramid** | The module dependency graph, level by level |
+| **Guard** | Rules, violations, and a write-action audit trail |
+| **Skills** | View, edit, create — or AI-generate a skill from a prompt |
+| **Jobs** | The daemon queue with live process events and full LLM I/O snapshots |
+| **Help** | Quick start, tool reference, token usage |
+
+Plus a ⌘K command palette, bilingual interface, dark/light themes, and an optional login gate.
+
+## Project Layout
+
+After `alembic setup` (standard mode), your project gains:
 
 ```
 your-project/
-├── Alembic/           # Knowledge data (git-tracked)
-│   ├── recipes/           # Reviewed patterns (Markdown)
-│   ├── candidates/        # Pending review
-│   ├── skills/            # Project-specific Agent instructions
-│   └── wiki/              # Project Wiki
-├── .asd/          # Runtime cache (gitignored)
-│   ├── alembic.db     # SQLite (WAL mode)
-│   └── context/           # Vector index (HNSW)
-├── .cursor/
-│   ├── mcp.json           # Cursor MCP config
-│   ├── rules/             # Channel A + B rules
-│   └── skills/            # Channel C + D Skills
-├── .vscode/mcp.json       # VS Code MCP config
-├── .github/copilot-instructions.md
-├── AGENTS.md
-└── CLAUDE.md
+├── Alembic/                # Knowledge data (git-tracked; `alembic remote <url>` can split it into a shared repo)
+│   ├── constitution.yaml   # Entry safety policy
+│   ├── recipes/            # Reviewed patterns (Markdown — the source of truth)
+│   ├── candidates/         # Pending review
+│   └── skills/             # Project skills
+└── .asd/                   # Runtime cache (gitignored)
+    ├── alembic.db          # SQLite — read cache; `alembic sync` rebuilds it
+    └── context/            # Vector index
 ```
 
-Recipes are Markdown files. SQLite is just a read cache. If the database breaks, `alembic sync` rebuilds it.
-
----
-
-## IDE Support
-
-| IDE | Integration | Details |
-|-----|------------|---------|
-| **VS Code** | Extension + MCP | `#alembic` tool references in Agent Mode; search, directives, CodeLens, Guard diagnostic squiggles, light-bulb fixes |
-| **Cursor** | MCP + Rules | `.cursor/mcp.json` + `.cursor/rules/` + `.cursor/skills/` |
-| **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP tools; supports hooks |
-
-### VS Code Extension
-
-- **Comment Directives**: `// as:s <query>` search & insert, `// as:c` create candidate from selection, `// as:a` audit current file
-- **CodeLens**: Clickable actions above directives
-- **Guard Diagnostics**: Violations shown as squiggles + light-bulb quick fixes
-- **Status Bar**: Live API Server connection status
-
-All configuration is generated by `alembic setup`.
-
----
-
-## Deep Dive
-
-> **[Visual Tour — Understand the entire system in 5 minutes](https://docs.gaoxuefeng.com/visual-tour)** · 25 hand-drawn architecture diagrams from workflow to Agent loop
-
-| Chapter | Content |
-|---------|--------|
-| [Introduction](https://docs.gaoxuefeng.com/part1/ch01-introduction) | Problem definition, solution overview, quick start |
-| [SOUL Principles](https://docs.gaoxuefeng.com/part1/ch02-soul) | 3 hard constraints + 5 design philosophies |
-| [Architecture](https://docs.gaoxuefeng.com/part2/ch03-architecture) | 7-layer DDD with module topology |
-| [Security Pipeline](https://docs.gaoxuefeng.com/part2/ch04-security) | Six-layer defense in depth |
-| [Code Understanding](https://docs.gaoxuefeng.com/part2/ch05-ast) | 10-language Tree-sitter AST analysis |
-| [Knowledge Domain](https://docs.gaoxuefeng.com/part3/ch06-knowledge-entry) | Unified entity, lifecycle, quality scoring |
-| [Core Services](https://docs.gaoxuefeng.com/part4/ch09-bootstrap) | Bootstrap, Guard, Search, Metabolism |
-| [Agent Intelligence](https://docs.gaoxuefeng.com/part5/ch13-agent-runtime) | ReAct loop, orthogonal composition, 61+ tools |
-| [Platform & Delivery](https://docs.gaoxuefeng.com/part6/ch16-infrastructure) | Data infrastructure, MCP, four-interface access |
-| [BiliDili Cold Start](https://docs.gaoxuefeng.com/part7/ch19-bilidili-coldstart) | Real data: 8.4M tokens, 101 candidates |
-
----
+With `--ghost` (or the plugin, where Ghost is the default), **all of the above** lives in `~/.asd/workspaces/<projectId>/` instead — zero Alembic files inside your repository.
 
 ## Requirements
 
-- Node.js ≥ 22; Node 22 LTS is the recommended local development runtime.
-- macOS recommended (Xcode features require it; other features are cross-platform)
+- Node.js ≥ 22
+- macOS recommended (the Seatbelt sandbox for agent terminal tools is macOS-only; everything else is cross-platform)
 - better-sqlite3 (bundled)
 
 ### Recommended: Local Embedding for Semantic Search
 
-Alembic has a built-in hybrid search engine (keyword + vector semantic). Install a local embedding model to unlock semantic search — concept-level matching that finds relevant recipes even when exact keywords don't match.
+Hybrid search works out of the box on weighted keywords. A local embedding model unlocks the semantic layer — concept-level matching that finds relevant Recipes even when exact keywords don't:
 
 ```bash
-# Install Ollama (https://ollama.com)
 brew install ollama && ollama serve
-
-# Pull the recommended model (~639MB, supports Chinese + English + code)
 ollama pull qwen3-embedding:0.6b
-```
 
-Then configure it in Dashboard (`alembic start`) → Settings → Embedding Model, or via CLI:
-
-```bash
 alembic ai configure --embed-provider ollama --embed-model qwen3-embedding:0.6b
+alembic embed
 ```
 
-Alembic stores this in project workspace settings outside the repository in Ghost mode.
+Local inference, no API calls, no data leaves your machine.
 
-After configuring, run `alembic embed` to build the vector index. Semantic search adds ~200–400ms per query (local inference, no API calls, no data leaves your machine).
+## Deep Dive
 
-> **Without a local model**, search still works — it uses field-weighted keyword matching, which is fast and accurate for exact terms. Semantic search is a bonus layer for concept-level queries like *"how to avoid data races"* or *"cookie persistence"*.
+> **[Visual Tour — understand the entire system in 5 minutes](https://docs.gaoxuefeng.com/visual-tour)** · hand-drawn architecture diagrams from workflow to agent loop
+
+Each repository ships its own architecture README: `AlembicCore` (kernel layers, API boundary, quality gates), `AlembicAgent` (ReAct runtime, provider stack, tool safety), the `AlembicPlugin` shells ([Codex](https://github.com/GxFn/AlembicCodex), [Claude Code](https://github.com/GxFn/AlembicClaudeCode)), and `AlembicDashboard`.
 
 ## Contributing
 
 1. Run `npm test` before submitting
-2. Follow existing code patterns (ESM, domain-driven structure)
+2. Follow existing code patterns (ESM, domain-driven structure); `npm run check` runs the full gate chain
 
 ## License
 
