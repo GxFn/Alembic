@@ -4,7 +4,7 @@
  * Native filesystem watching is the primary Alembic daemon path. Git worktree
  * polling remains as a degraded fallback when the platform watcher cannot be
  * started. Both paths dispatch into the same FileChangeDispatcher so downstream
- * InProcessFileChangeHandler / EvolutionGateway behavior stays unchanged.
+ * InProcessFileChangeHandler / ProposalGateway behavior stays unchanged.
  */
 
 import { execFile } from 'node:child_process';

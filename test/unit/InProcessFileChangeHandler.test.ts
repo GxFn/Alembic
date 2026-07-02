@@ -100,7 +100,7 @@ function createHandler(overrides: Record<string, unknown> = {}) {
     contentPatcher as never,
     {
       signalBus: signalBus as never,
-      evolutionGateway: gateway as never,
+      proposalGateway: gateway as never,
     }
   );
 

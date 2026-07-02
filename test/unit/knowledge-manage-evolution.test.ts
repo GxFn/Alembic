@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 const handle = TOOL_REGISTRY.knowledge.actions.manage.handler;
 
-function makeContext(evolutionGateway: unknown): ToolContext {
+function makeContext(proposalGateway: unknown): ToolContext {
   return {
     projectRoot: '/project',
     tokenBudget: 1000,
-    evolutionGateway,
+    proposalGateway,
     runtime: {
       sharedState: {
         evolutionProposalSource: 'rescan-evolution',
@@ -17,7 +17,7 @@ function makeContext(evolutionGateway: unknown): ToolContext {
 }
 
 describe('knowledge.manage evolution operations', () => {
-  it('routes evolve decisions through EvolutionGateway with canonical id', async () => {
+  it('routes evolve decisions through ProposalGateway with canonical id', async () => {
     const gateway = {
       submit: vi.fn(async () => ({
         recipeId: 'recipe-1',
@@ -101,7 +101,7 @@ describe('knowledge.manage evolution operations', () => {
     );
   });
 
-  it('requires EvolutionGateway for evolution decisions', async () => {
+  it('requires ProposalGateway for evolution decisions', async () => {
     const result = await handle(
       {
         operation: 'evolve',

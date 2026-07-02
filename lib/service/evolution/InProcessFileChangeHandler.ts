@@ -19,8 +19,8 @@ import type { SignalBus } from '@alembic/core/events';
 import {
   assessFileImpact,
   type ContentPatcher,
-  type EvolutionGateway,
   extractRecipeTokens,
+  type ProposalGateway,
 } from '@alembic/core/evolution';
 import { isConsumable, isDegraded } from '@alembic/core/knowledge';
 import Logger from '@alembic/core/logging';
@@ -50,7 +50,7 @@ export class InProcessFileChangeHandler implements FileChangeSubscriber {
   readonly #sourceRefRepo: SourceRefRepository;
   readonly #knowledgeRepo: KnowledgeRepository;
   readonly #signalBus: SignalBus | null;
-  readonly #gateway: EvolutionGateway;
+  readonly #gateway: ProposalGateway;
   readonly #projectRoot: string;
   readonly #logger = Logger.getInstance();
 
@@ -60,7 +60,7 @@ export class InProcessFileChangeHandler implements FileChangeSubscriber {
     _contentPatcher: ContentPatcher,
     options: {
       signalBus?: SignalBus;
-      evolutionGateway: EvolutionGateway;
+      proposalGateway: ProposalGateway;
       dataRoot?: string;
       projectRoot?: string;
     }
@@ -68,7 +68,7 @@ export class InProcessFileChangeHandler implements FileChangeSubscriber {
     this.#sourceRefRepo = sourceRefRepo;
     this.#knowledgeRepo = knowledgeRepo;
     this.#signalBus = options.signalBus ?? null;
-    this.#gateway = options.evolutionGateway;
+    this.#gateway = options.proposalGateway;
     this.#projectRoot = options.projectRoot ?? process.cwd();
   }
 

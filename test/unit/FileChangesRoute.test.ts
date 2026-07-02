@@ -73,7 +73,7 @@ describe('file-changes route', () => {
         knowledgeRepo as never,
         contentPatcher as never,
         {
-          evolutionGateway: gateway as never,
+          proposalGateway: gateway as never,
           projectRoot: '/tmp/alembic-route-probe',
           signalBus: signalBus as never,
         }
@@ -202,7 +202,7 @@ describe('file-changes route', () => {
         knowledgeRepo as never,
         contentPatcher as never,
         {
-          evolutionGateway: gateway as never,
+          proposalGateway: gateway as never,
           projectRoot,
           signalBus: signalBus as never,
         }

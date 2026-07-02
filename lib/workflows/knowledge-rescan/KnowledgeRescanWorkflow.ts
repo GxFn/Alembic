@@ -368,7 +368,7 @@ async function runKnowledgeRescanProjectIndexWorkflow(
   let evolutionAuditResult: EvolutionAuditResult | null = null;
   if (candidatePlan && candidatePlan.candidates.length > 0) {
     try {
-      const gateway = ctx.container.get('evolutionGateway') as Parameters<
+      const gateway = ctx.container.get('proposalGateway') as Parameters<
         typeof submitRescanImpactDecisions
       >[1];
       if (gateway) {

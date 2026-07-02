@@ -15,9 +15,9 @@ import {
   ContentPatcher,
   DecayDetector,
   EnhancementSuggester,
-  EvolutionGateway,
   LifecycleStateMachine,
   ProposalExecutor,
+  ProposalGateway,
   RedundancyAnalyzer,
   StagingManager,
 } from '@alembic/core/evolution';
@@ -312,11 +312,11 @@ export function register(c: ServiceContainer) {
     return new ConsolidationAdvisor(knowledgeRepo);
   });
 
-  c.singleton('evolutionGateway', (ct: ServiceContainer) => {
+  c.singleton('proposalGateway', (ct: ServiceContainer) => {
     const proposalRepo = ct.get('proposalRepository') as EvolutionProposalRepository;
     const lifecycle = ct.get('lifecycleStateMachine') as LifecycleStateMachine;
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
-    return new EvolutionGateway(proposalRepo, lifecycle, knowledgeRepo);
+    return new ProposalGateway(proposalRepo, lifecycle, knowledgeRepo);
   });
 
   c.singleton('recipeProductionGateway', (ct: ServiceContainer) => {
@@ -324,7 +324,7 @@ export function register(c: ServiceContainer) {
     const dataRoot = resolveDataRoot(ct) as string;
     let consolidationAdvisor = null;
     let proposalRepository = null;
-    let evolutionGateway = null;
+    let proposalGateway = null;
     try {
       consolidationAdvisor = ct.get('consolidationAdvisor');
     } catch {
@@ -336,7 +336,7 @@ export function register(c: ServiceContainer) {
       /* optional */
     }
     try {
-      evolutionGateway = ct.get('evolutionGateway');
+      proposalGateway = ct.get('proposalGateway');
     } catch {
       /* optional */
     }
@@ -351,9 +351,9 @@ export function register(c: ServiceContainer) {
       proposalRepository: proposalRepository as unknown as ConstructorParameters<
         typeof RecipeProductionGateway
       >[0]['proposalRepository'],
-      evolutionGateway: evolutionGateway as unknown as ConstructorParameters<
+      proposalGateway: proposalGateway as unknown as ConstructorParameters<
         typeof RecipeProductionGateway
-      >[0]['evolutionGateway'],
+      >[0]['proposalGateway'],
       findSimilarRecipes,
     });
   });
@@ -362,14 +362,14 @@ export function register(c: ServiceContainer) {
     const sourceRefRepo = ct.get('recipeSourceRefRepository') as SourceRefRepository;
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     const contentPatcher = ct.get('contentPatcher') as ContentPatcher;
-    const gateway = ct.get('evolutionGateway') as EvolutionGateway;
+    const gateway = ct.get('proposalGateway') as ProposalGateway;
     const dataRoot = resolveDataRoot(ct) as string;
     const projectRoot = resolveProjectRoot(ct);
     return new InProcessFileChangeHandler(sourceRefRepo, knowledgeRepo, contentPatcher, {
       signalBus:
         (ct.singletons.signalBus as import('@alembic/core/events').SignalBus | undefined) ||
         undefined,
-      evolutionGateway: gateway,
+      proposalGateway: gateway,
       dataRoot,
       projectRoot,
     });

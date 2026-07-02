@@ -1,12 +1,12 @@
 /**
- * EvolutionGateway.test.ts — 进化决策网关单元测试
+ * ProposalGateway.test.ts — 进化决策网关单元测试
  *
  * 重点覆盖：
  *   - Dedup 时 evidence 升级（Bug #1 修复）
  *   - 基本 submit 路由（update / deprecate / valid）
  */
 
-import { EvolutionGateway } from '@alembic/core/evolution';
+import { ProposalGateway } from '@alembic/core/evolution';
 import { HOST_AGENT_SOURCE } from '@alembic/core/shared';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -83,7 +83,7 @@ function createGateway(
   const lifecycle = overrides.lifecycle ?? createMockLifecycle();
   const knowledgeRepo = overrides.knowledgeRepo ?? createMockKnowledgeRepo();
 
-  const gateway = new EvolutionGateway(
+  const gateway = new ProposalGateway(
     proposalRepo as never,
     lifecycle as never,
     knowledgeRepo as never
@@ -94,7 +94,7 @@ function createGateway(
 
 /* ── Tests ── */
 
-describe('EvolutionGateway', () => {
+describe('ProposalGateway', () => {
   describe('submit — basic routing', () => {
     it('valid → updates lastVerifiedAt', async () => {
       const { gateway, knowledgeRepo } = createGateway();
