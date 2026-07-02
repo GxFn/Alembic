@@ -7,7 +7,10 @@
     "defaultPath": "../AlembicPlugin",
     "sanityPath": "skills"
   },
-  "selfCheckFiles": ["config/shared-asset-manifest.json", "scripts/check-shared-asset-drift.mjs"],
+  "selfCheckFiles": [
+    "config/shared-asset-manifest.json",
+    "scripts/check-shared-asset-drift.mjs"
+  ],
   "assets": [
     {
       "id": "skill-alembic-create",
@@ -28,16 +31,22 @@
       "path": "skills/alembic-recipes/SKILL.md",
       "mode": "skill-shared-sections",
       "authority": "shared sections: main; host sections: each host",
-      "perHostSections": ["intro-and-overview", "use-context-tail"],
-      "notes": "DH-4b per-host: intro-and-overview / use-context-tail carry host-divergent tool surfaces (main/codex alembic_knowledge / confirm_usage \u2194 plugin/cc alembic_search(operation=search|get|expand)); declared per-host so cross-host coherence skips them while title / find-recipes-tail / use-context-head stay coherence-checked. Plugin-only alembic_prime / alembic_codex_* guidance stays as plugin host overlay between shared regions."
+      "perHostSections": [
+        "intro-and-overview",
+        "use-context-tail"
+      ],
+      "notes": "DH-4b per-host: intro-and-overview / use-context-tail carry host-divergent tool surfaces (main/codex alembic_knowledge / confirm_usage ↔ plugin/cc alembic_search(operation=search|get|expand)); declared per-host so cross-host coherence skips them while title / find-recipes-tail / use-context-head stay coherence-checked. Plugin-only alembic_prime / alembic_codex_* guidance stays as plugin host overlay between shared regions."
     },
     {
       "id": "skill-alembic-structure",
       "path": "skills/alembic-structure/SKILL.md",
       "mode": "skill-shared-sections",
       "authority": "shared sections: main; host sections: each host",
-      "perHostSections": ["title-intro", "tools-and-graph"],
-      "notes": "DH-4b per-host: both shared sections are host-divergent tool surfaces (main/codex alembic_structure(targets|files|metadata) + knowledge-graph \u2194 plugin/cc alembic_project_matrix + project-graph); declared per-host so cross-host coherence skips them (each side is its own per-host authority). Plugin-only source-graph guidance (alembic_source_graph_status / alembic_code_explore / alembic_symbol_search) stays as plugin host overlay between shared regions."
+      "perHostSections": [
+        "title-intro",
+        "tools-and-graph"
+      ],
+      "notes": "DH-4b per-host: both shared sections are host-divergent tool surfaces (main/codex alembic_structure(targets|files|metadata) + knowledge-graph ↔ plugin/cc alembic_project_matrix + project-graph); declared per-host so cross-host coherence skips them (each side is its own per-host authority). Plugin-only source-graph guidance (alembic_source_graph_status / alembic_code_explore / alembic_symbol_search) stays as plugin host overlay between shared regions."
     },
     {
       "id": "skill-alembic-devdocs",
@@ -65,7 +74,9 @@
       "path": "config/default.json",
       "mode": "json-exclude-paths",
       "authority": "per-host",
-      "excludePaths": ["ai"],
+      "excludePaths": [
+        "ai"
+      ],
       "notes": "Plugin-as-guest design: the host injects provider config, so the top-level ai block exists only in main. Everything else must deep-equal."
     },
     {
@@ -99,7 +110,49 @@
           }
         ]
       },
-      "notes": "README + _template.md per-host: _template.md heading variant (RC5 p1) plus three README tool-table rows that are host-divergent tool surfaces (main/codex alembic_search mode-routing + alembic_knowledge(confirm_usage|insights) \u2194 plugin/cc compact alembic_search operation routing + Dashboard Candidates + alembic_project_matrix/alembic_graph). All other files must match exactly."
+      "notes": "README + _template.md per-host: _template.md heading variant (RC5 p1) plus three README tool-table rows that are host-divergent tool surfaces (main/codex alembic_search mode-routing + alembic_knowledge(confirm_usage|insights) ↔ plugin/cc compact alembic_search operation routing + Dashboard Candidates + alembic_project_matrix/alembic_graph). All other files must match exactly."
+    },
+    {
+      "id": "w2-shell-cacheservice",
+      "path": "lib/infrastructure/cache/CacheService.ts",
+      "mode": "exact",
+      "authority": "core (re-export shell; implementation lives in @alembic/core)",
+      "notes": "W2 2026-07-02: dual-host duplicate consolidated into Core; both hosts keep byte-identical re-export shells. Fork registry: AlembicCore/docs/fork-registry.md."
+    },
+    {
+      "id": "w2-shell-unifiedcacheadapter",
+      "path": "lib/infrastructure/cache/UnifiedCacheAdapter.ts",
+      "mode": "exact",
+      "authority": "core (re-export shell; implementation lives in @alembic/core)",
+      "notes": "W2 2026-07-02: dual-host duplicate consolidated into Core; both hosts keep byte-identical re-export shells. Fork registry: AlembicCore/docs/fork-registry.md."
+    },
+    {
+      "id": "w2-shell-graphcache",
+      "path": "lib/infrastructure/cache/GraphCache.ts",
+      "mode": "exact",
+      "authority": "core (re-export shell; implementation lives in @alembic/core)",
+      "notes": "W2 2026-07-02: dual-host duplicate consolidated into Core; both hosts keep byte-identical re-export shells. Fork registry: AlembicCore/docs/fork-registry.md."
+    },
+    {
+      "id": "w2-shell-graph-shared",
+      "path": "lib/types/graph-shared.ts",
+      "mode": "exact",
+      "authority": "core (re-export shell; implementation lives in @alembic/core)",
+      "notes": "W2 2026-07-02: dual-host duplicate consolidated into Core; both hosts keep byte-identical re-export shells. Fork registry: AlembicCore/docs/fork-registry.md."
+    },
+    {
+      "id": "w2-shell-search-wire",
+      "path": "lib/types/search-wire.ts",
+      "mode": "exact",
+      "authority": "core (re-export shell; implementation lives in @alembic/core)",
+      "notes": "W2 2026-07-02: dual-host duplicate consolidated into Core; both hosts keep byte-identical re-export shells. Fork registry: AlembicCore/docs/fork-registry.md."
+    },
+    {
+      "id": "w2-shell-shutdown",
+      "path": "lib/shared/shutdown.ts",
+      "mode": "exact",
+      "authority": "core (re-export shell; implementation lives in @alembic/core)",
+      "notes": "W2 2026-07-02: dual-host duplicate consolidated into Core; both hosts keep byte-identical re-export shells. Fork registry: AlembicCore/docs/fork-registry.md."
     }
   ]
 }
