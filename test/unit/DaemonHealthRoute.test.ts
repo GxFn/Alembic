@@ -38,6 +38,8 @@ vi.mock('../../lib/project-scope/ProjectScopeRegistry.js', () => ({
 }));
 
 vi.mock('@alembic/core/workspace', () => ({
+  // W2:runtime-control 路径单源后 ProjectRuntimeControl 从 workspace 入口取该函数
+  getProjectRuntimeControlStatePath: () => '/tmp/alembic-registry/runtime-control.json',
   DEFAULT_FOLDER_NAMES: {
     package: {
       config: 'config',
