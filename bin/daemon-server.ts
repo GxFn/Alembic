@@ -22,12 +22,12 @@ import HttpServer from '../lib/http/HttpServer.js';
 import { readLatestSchemaMigrationVersion } from '../lib/infrastructure/database/SqliteDatabaseAccess.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
 import { resolveAlembicDaemonPaths } from '../lib/project-scope/ProjectScopeRegistry.js';
-import { DaemonFileChangeCollector } from '../lib/service/evolution/DaemonFileChangeCollector.js';
+import { DaemonFileChangeCollector } from '../lib/recipe-pipeline/sustain/evolution/DaemonFileChangeCollector.js';
 import {
   EvolutionMaintenanceSweep,
   resolveEvolutionMaintenanceSweepCap,
   resolveEvolutionMaintenanceSweepIntervalMs,
-} from '../lib/service/evolution/EvolutionMaintenanceSweep.js';
+} from '../lib/recipe-pipeline/sustain/evolution/EvolutionMaintenanceSweep.js';
 import { DASHBOARD_DIR } from '../lib/shared/package-assets.js';
 import { shutdown } from '../lib/shared/shutdown.js';
 
@@ -136,7 +136,7 @@ async function main() {
     statePath,
   });
 
-  import('../lib/service/generate/UiStartupTasks.js')
+  import('../lib/recipe-pipeline/generate/runtime/UiStartupTasks.js')
     .then(({ runUiStartupTasks }) => runUiStartupTasks({ projectRoot, container }))
     .then((report) => {
       if (report.errors.length > 0) {

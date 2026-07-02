@@ -27,6 +27,7 @@ import {
 import { ProjectContextCapabilities } from '@alembic/core/project-context-capabilities';
 import { createCanonicalSourceIdentity } from '@alembic/core/shared';
 import type { FileDiffPlan, GenerateSessionShape } from '@alembic/core/types';
+import type { GenerateFileEntry } from '#recipe-pipeline/generate/execution/AgentRunInputBuilders.js';
 import {
   readLatestProjectContextFileSnapshotRow,
   saveProjectContextFileSnapshotRow,
@@ -35,7 +36,6 @@ import type {
   ProjectScopeAnalysisContext,
   ProjectScopeSourceIdentity,
 } from '../../project-scope/ProjectScopeAnalysis.js';
-import type { GenerateFileEntry } from '../ai-execution/AgentRunInputBuilders.js';
 import { buildProjectMapModules, buildProjectMapModulesFromTargets } from './ProjectMapModules.js';
 
 export {

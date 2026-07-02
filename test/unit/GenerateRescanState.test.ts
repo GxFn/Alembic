@@ -5,7 +5,7 @@ import {
   prepareGenerateRescanState,
   projectGenerateDimensionRescanContext,
   projectGenerateExistingRecipesForPrompt,
-} from '../../lib/workflows/ai-execution/RescanContext.js';
+} from '../../lib/recipe-pipeline/generate/execution/RescanContext.js';
 
 const recipes: GenerateExistingRecipe[] = [
   {

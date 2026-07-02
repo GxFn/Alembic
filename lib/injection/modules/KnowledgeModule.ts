@@ -50,7 +50,7 @@ import {
   normalizeProjectScopeSourceRefsForRuntime,
   resolveProjectScopeSourceIdentitiesFromContainer,
 } from '../../project-scope/ProjectScopeAnalysis.js';
-import { InProcessFileChangeHandler } from '../../service/evolution/InProcessFileChangeHandler.js';
+import { InProcessFileChangeHandler } from '../../recipe-pipeline/sustain/evolution/InProcessFileChangeHandler.js';
 import { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 import { getCoreRepositoryBundle } from './InfraModule.js';

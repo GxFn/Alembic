@@ -19,7 +19,7 @@ import {
   projectGenerateDimensionAgentOutput,
   projectGenerateSessionResult,
   resolveGenerateDimensionRunIssue,
-} from '../../lib/workflows/ai-execution/AgentRunProjections.js';
+} from '../../lib/recipe-pipeline/generate/execution/AgentRunProjections.js';
 
 function makeRunResult(partial: Partial<AgentRunResult>): AgentRunResult {
   return {

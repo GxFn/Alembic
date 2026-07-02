@@ -1,13 +1,13 @@
 import type { SessionStore } from '@alembic/agent/memory';
 import { createAlembicProjectSkillDeliveryReceipt } from '@alembic/core/host-agent-workflows';
 import { describe, expect, test, vi } from 'vitest';
-import type { GenerateEventEmitter } from '../../lib/service/generate/GenerateEventEmitter.js';
 import {
   buildEffectiveSkillAnalysisText,
   consumeGenerateSkills,
   type DimensionCandidateData,
   extractSkillKeyFindings,
-} from '../../lib/workflows/ai-execution/GenerateConsumers.js';
+} from '../../lib/recipe-pipeline/generate/execution/GenerateConsumers.js';
+import type { GenerateEventEmitter } from '../../lib/recipe-pipeline/generate/runtime/GenerateEventEmitter.js';
 
 function makeCandidate(analysisText: string): DimensionCandidateData {
   return {

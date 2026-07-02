@@ -5,7 +5,7 @@ import {
   EvolutionMaintenanceSweep,
   resolveEvolutionMaintenanceSweepCap,
   resolveEvolutionMaintenanceSweepIntervalMs,
-} from '../../lib/service/evolution/EvolutionMaintenanceSweep.js';
+} from '../../lib/recipe-pipeline/sustain/evolution/EvolutionMaintenanceSweep.js';
 
 describe('EvolutionMaintenanceSweep', () => {
   const dayMs = 24 * 60 * 60 * 1000;

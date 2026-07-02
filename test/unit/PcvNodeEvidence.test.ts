@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from 'vitest';
-import type { AgentResultLike } from '../../lib/workflows/ai-execution/AgentRunProjections.js';
+import type { AgentResultLike } from '../../lib/recipe-pipeline/generate/execution/AgentRunProjections.js';
 import {
   buildPcvAnalyzeGroundingLedgerSummary,
   buildPcvN8StageFactoryEvidence,
-} from '../../lib/workflows/ai-execution/PcvNodeEvidence.js';
+} from '../../lib/recipe-pipeline/generate/execution/PcvNodeEvidence.js';
 
 const envBackup = { ...process.env };
 

@@ -28,8 +28,8 @@ vi.mock('../../lib/injection/ServiceContainer.js', () => ({
 }));
 
 import fileChangesRouter from '../../lib/http/routes/file-changes.js';
-import { DaemonFileChangeCollector } from '../../lib/service/evolution/DaemonFileChangeCollector.js';
-import { InProcessFileChangeHandler } from '../../lib/service/evolution/InProcessFileChangeHandler.js';
+import { DaemonFileChangeCollector } from '../../lib/recipe-pipeline/sustain/evolution/DaemonFileChangeCollector.js';
+import { InProcessFileChangeHandler } from '../../lib/recipe-pipeline/sustain/evolution/InProcessFileChangeHandler.js';
 import { FileChangeDispatcher } from '../../lib/service/FileChangeDispatcher.js';
 
 const tempDirs: string[] = [];

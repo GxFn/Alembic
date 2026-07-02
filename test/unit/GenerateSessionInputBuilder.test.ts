@@ -3,7 +3,7 @@ import { describe, expect, test } from 'vitest';
 import {
   buildGenerateSessionRunInput,
   type GenerateSessionChildRunPlan,
-} from '../../lib/workflows/ai-execution/AgentRunInputBuilders.js';
+} from '../../lib/recipe-pipeline/generate/execution/AgentRunInputBuilders.js';
 
 function makeChild(id: string, tier: number): GenerateSessionChildRunPlan {
   return {

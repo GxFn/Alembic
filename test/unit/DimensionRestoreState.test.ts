@@ -3,21 +3,21 @@ import os from 'node:os';
 import path from 'node:path';
 import type { SessionStore } from '@alembic/agent/memory';
 import { describe, expect, test, vi } from 'vitest';
-import type { GenerateEventEmitter } from '../../lib/service/generate/GenerateEventEmitter.js';
-import type { IncrementalPlan } from '../../lib/service/handler-runtime/types.js';
-import type { DimensionContext } from '../../lib/workflows/ai-execution/DimensionContext.js';
+import type { DimensionContext } from '../../lib/recipe-pipeline/generate/execution/DimensionContext.js';
 import {
   applyRestoredDimensionState,
   type DimensionCheckpoint,
   resolveIncrementalSkippedDimensions,
   restoreCheckpointDimensions,
   syncRestoredSessionStoreDigests,
-} from '../../lib/workflows/ai-execution/DimensionRestoreState.js';
+} from '../../lib/recipe-pipeline/generate/execution/DimensionRestoreState.js';
 import type {
   CandidateResults,
   DimensionCandidateData,
   DimensionStat,
-} from '../../lib/workflows/ai-execution/GenerateConsumers.js';
+} from '../../lib/recipe-pipeline/generate/execution/GenerateConsumers.js';
+import type { GenerateEventEmitter } from '../../lib/recipe-pipeline/generate/runtime/GenerateEventEmitter.js';
+import type { IncrementalPlan } from '../../lib/service/handler-runtime/types.js';
 
 function makePlan(partial: Partial<IncrementalPlan>): IncrementalPlan {
   return {

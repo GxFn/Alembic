@@ -73,8 +73,8 @@ import type Gateway from '../governance/gateway/Gateway.js';
 import type AuditLogger from '../infrastructure/audit/AuditLogger.js';
 import type AuditStore from '../infrastructure/audit/AuditStore.js';
 import type { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
+import type { GenerateTaskManager } from '../recipe-pipeline/generate/runtime/GenerateTaskManager.js';
 import type { AuditRepositoryImpl } from '../repository/AuditRepository.js';
-import type { GenerateTaskManager } from '../service/generate/GenerateTaskManager.js';
 import type { ModuleService } from '../service/module/ModuleService.js';
 import type { SkillHooks } from '../service/skills/SkillHooks.js';
 // ── Vector Service Types ──

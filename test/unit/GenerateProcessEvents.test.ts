@@ -5,9 +5,9 @@ import {
   buildGenerateDimensionInputProcessEvents,
   buildGenerateDimensionResultProcessEvents,
   buildGenerateTierReflectionProcessEvents,
-} from '../../lib/workflows/ai-execution/AgentRunProcessEvents.js';
-import type { GenerateDimensionProjection } from '../../lib/workflows/ai-execution/AgentRunProjections.js';
-import type { GenerateDimensionPlan } from '../../lib/workflows/ai-execution/DimensionRuntimeBuilder.js';
+} from '../../lib/recipe-pipeline/generate/execution/AgentRunProcessEvents.js';
+import type { GenerateDimensionProjection } from '../../lib/recipe-pipeline/generate/execution/AgentRunProjections.js';
+import type { GenerateDimensionPlan } from '../../lib/recipe-pipeline/generate/execution/DimensionRuntimeBuilder.js';
 
 describe('BootstrapProcessEvents', () => {
   test('projects safe bootstrap dimension input without file content or secrets', () => {

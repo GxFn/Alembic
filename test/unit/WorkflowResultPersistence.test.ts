@@ -12,7 +12,7 @@ import { describe, expect, test, vi } from 'vitest';
 import type {
   CandidateResults,
   SkillResults,
-} from '../../lib/workflows/ai-execution/GenerateConsumers.js';
+} from '../../lib/recipe-pipeline/generate/execution/GenerateConsumers.js';
 
 const candidateResults: CandidateResults = { created: 2, failed: 0, errors: [] };
 const skillResults: SkillResults = { created: 1, failed: 0, skills: ['project-api'], errors: [] };

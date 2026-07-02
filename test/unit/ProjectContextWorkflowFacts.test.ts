@@ -1071,11 +1071,11 @@ let package = Package(
     ).rejects.toThrow();
 
     const coldStart = await readFile(
-      join(process.cwd(), 'lib/workflows/cold-start/ColdStartWorkflow.ts'),
+      join(process.cwd(), 'lib/recipe-pipeline/generate/ColdStartWorkflow.ts'),
       'utf8'
     );
     const rescan = await readFile(
-      join(process.cwd(), 'lib/workflows/knowledge-rescan/KnowledgeRescanWorkflow.ts'),
+      join(process.cwd(), 'lib/recipe-pipeline/sustain/KnowledgeRescanWorkflow.ts'),
       'utf8'
     );
     const combined = `${coldStart}\n${rescan}`;

@@ -1,7 +1,7 @@
 import type { FileChangeEvent, ImpactLevel } from '@alembic/core/types';
 import { vi } from 'vitest';
-import { FileChangeHandler as CompatFileChangeHandler } from '../../lib/service/evolution/FileChangeHandler.js';
-import { InProcessFileChangeHandler } from '../../lib/service/evolution/InProcessFileChangeHandler.js';
+import { FileChangeHandler as CompatFileChangeHandler } from '../../lib/recipe-pipeline/sustain/evolution/FileChangeHandler.js';
+import { InProcessFileChangeHandler } from '../../lib/recipe-pipeline/sustain/evolution/InProcessFileChangeHandler.js';
 
 /* ════════════════════════════════════════════
  *  Mock ContentImpactAnalyzer — 控制 diff 返回

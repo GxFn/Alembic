@@ -17,7 +17,7 @@ import {
   DaemonFileChangeCollector,
   dedupeFileChangeEvents,
   type NativeWatcherFactory,
-} from '../../lib/service/evolution/DaemonFileChangeCollector.js';
+} from '../../lib/recipe-pipeline/sustain/evolution/DaemonFileChangeCollector.js';
 import type { FileChangeDispatcher } from '../../lib/service/FileChangeDispatcher.js';
 
 const tempDirs: string[] = [];

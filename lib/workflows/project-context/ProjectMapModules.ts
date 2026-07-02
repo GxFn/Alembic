@@ -6,7 +6,7 @@ import type {
   ProjectContextRef,
   ProjectMap,
 } from '@alembic/core/project-context';
-import type { GenerateFileEntry } from '../ai-execution/AgentRunInputBuilders.js';
+import type { GenerateFileEntry } from '#recipe-pipeline/generate/execution/AgentRunInputBuilders.js';
 import type { ProjectContextModule } from './ProjectContextWorkflowFacts.js';
 
 export interface BuildProjectMapModulesOptions {

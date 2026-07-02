@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { selectScopedModuleMiningModules } from '../../lib/daemon/ModuleMiningSelection.js';
+import { selectScopedModuleMiningModules } from '../../lib/recipe-pipeline/generate/ModuleMiningSelection.js';
 import type { ProjectContextWorkflowFacts } from '../../lib/workflows/project-context/ProjectContextWorkflowFacts.js';
 
 function makeFacts(): ProjectContextWorkflowFacts {

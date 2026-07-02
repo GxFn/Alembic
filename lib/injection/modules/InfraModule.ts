@@ -28,8 +28,8 @@ import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../infrastructure/audit/AuditStore.js';
 import { getRealtimeService as _getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
+import { GenerateTaskManager } from '../../recipe-pipeline/generate/runtime/GenerateTaskManager.js';
 import { AuditRepositoryImpl } from '../../repository/AuditRepository.js';
-import { GenerateTaskManager } from '../../service/generate/GenerateTaskManager.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function getCoreRepositoryBundle(ct: ServiceContainer): AlembicRepositoryBundle {

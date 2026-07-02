@@ -232,7 +232,7 @@ describe('agent module boundaries', () => {
     const retiredSpecifiers = new Set([
       ...retiredPersistenceSpecifiers,
       '../../lib/workflows/common-capabilities/delivery/BootstrapDeliveryConsumer.js',
-      '../../lib/workflows/ai-execution/consumers/BootstrapSemanticMemoryConsumer.js',
+      '../../lib/recipe-pipeline/generate/execution/consumers/BootstrapSemanticMemoryConsumer.js',
       '#external/mcp/handlers/bootstrap/shared/async-fill-helpers.js',
       '#external/mcp/handlers/bootstrap/shared/audit-helpers.js',
       '#external/mcp/handlers/bootstrap/shared/handler-types.js',

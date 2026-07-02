@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { GenerateTaskManager } from '../../lib/service/generate/GenerateTaskManager.js';
+import { GenerateTaskManager } from '../../lib/recipe-pipeline/generate/runtime/GenerateTaskManager.js';
 
 interface BootstrapTaskManagerStatus {
   efficiency?: {

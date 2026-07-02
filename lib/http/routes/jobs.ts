@@ -19,7 +19,7 @@ import { z } from 'zod';
 import {
   mergeAgentEfficiencySummaries,
   normalizeAgentEfficiencySummary,
-} from '#service/generate/GenerateEfficiency.js';
+} from '#recipe-pipeline/generate/runtime/GenerateEfficiency.js';
 import {
   cancelDaemonJob,
   enqueueDaemonJob,

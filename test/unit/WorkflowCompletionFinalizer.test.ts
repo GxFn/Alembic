@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { buildAiDimensionCompletionSummary } from '../../lib/workflows/ai-execution/AiDimensionFinalizer.js';
+import { buildAiDimensionCompletionSummary } from '../../lib/recipe-pipeline/generate/execution/AiDimensionFinalizer.js';
 import { runWorkflowCompletionFinalizer } from '../../lib/workflows/completion/CompletionFinalizer.js';
 
 const tmpDirs: string[] = [];
@@ -107,7 +107,7 @@ describe('WorkflowCompletionFinalizer', () => {
 
   test('internal finalizer delegates completion side effects to workflow finalizer', () => {
     const source = readFileSync(
-      join(process.cwd(), 'lib/workflows/ai-execution/AiDimensionFinalizer.ts'),
+      join(process.cwd(), 'lib/recipe-pipeline/generate/execution/AiDimensionFinalizer.ts'),
       'utf8'
     );
 

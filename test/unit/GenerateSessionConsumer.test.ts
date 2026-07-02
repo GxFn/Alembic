@@ -5,7 +5,7 @@ import {
   consumeGenerateSessionResult,
   consumeMissingGenerateDimensions,
   type DimensionStat,
-} from '../../lib/workflows/ai-execution/GenerateConsumers.js';
+} from '../../lib/recipe-pipeline/generate/execution/GenerateConsumers.js';
 
 function makeRunResult(partial: Partial<AgentRunResult>): AgentRunResult {
   return {

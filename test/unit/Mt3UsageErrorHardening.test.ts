@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatPublishedTitles,
   PUBLISHED_TITLES_PROMPT_CAP,
-} from '../../lib/service/generate/GenerateRefine.js';
+} from '../../lib/recipe-pipeline/generate/runtime/GenerateRefine.js';
 import { GraphInputChecked } from '../../lib/shared/schemas/mcp-tools.js';
 
 describe('MT3 usage-error hardening', () => {

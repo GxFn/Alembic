@@ -33,8 +33,8 @@ describe('resident service HTTP boundary', () => {
     const oldBootstrapPath = 'external' + '/mcp/handlers/cold-start.js';
     const oldRescanPath = 'external' + '/mcp/handlers/knowledge-rescan.js';
     const residentHandlerPath = 'resident' + '/tool-handlers/';
-    const projectIndexPath = 'workflows' + '/project-index/GenerateWorkflow.js';
-    const bootstrapRefinePath = 'service' + '/generate/GenerateRefine.js';
+    const projectIndexPath = 'recipe-pipeline' + '/generate/GenerateWorkflow.js';
+    const bootstrapRefinePath = 'recipe-pipeline' + '/generate/runtime/GenerateRefine.js';
 
     // Legacy external MCP bridge handler paths stay gone.
     expect(cliSource).not.toContain(oldBootstrapPath);

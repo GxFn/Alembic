@@ -14,9 +14,9 @@ import {
   clearAiDimensionSessionDedupCache,
   createAiDimensionAbortGuard,
   runAiDimensionCompletionStep,
-} from '../../lib/workflows/ai-execution/AiDimensionFinalizer.js';
-import type { AiDimensionPreparation } from '../../lib/workflows/ai-execution/AiDimensionPreparation.js';
-import type { AiDimensionSessionResult } from '../../lib/workflows/ai-execution/AiDimensionSessionRunner.js';
+} from '../../lib/recipe-pipeline/generate/execution/AiDimensionFinalizer.js';
+import type { AiDimensionPreparation } from '../../lib/recipe-pipeline/generate/execution/AiDimensionPreparation.js';
+import type { AiDimensionSessionResult } from '../../lib/recipe-pipeline/generate/execution/AiDimensionSessionRunner.js';
 
 describe('AI dimension finalizer efficiency report augmentation', () => {
   test('exposes explicit finalizer step map for side-effect attribution', () => {

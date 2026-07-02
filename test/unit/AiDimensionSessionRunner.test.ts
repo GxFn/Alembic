@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   resolveAiDimensionConcurrency,
   resolveGenerateGroundingEnforcement,
-} from '../../lib/workflows/ai-execution/AiDimensionSessionRunner.js';
+} from '../../lib/recipe-pipeline/generate/execution/AiDimensionSessionRunner.js';
 
 describe('AI dimension session runner settings', () => {
   test('uses sanitized workflow concurrency settings', () => {

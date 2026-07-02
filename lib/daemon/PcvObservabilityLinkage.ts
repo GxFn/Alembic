@@ -1,5 +1,5 @@
 import type { JobProcessEventArtifactRef } from '@alembic/core/daemon';
-import type { GenerateProcessEventDraft } from '#service/generate/generate-event-types.js';
+import type { GenerateProcessEventDraft } from '#recipe-pipeline/generate/runtime/generate-event-types.js';
 import {
   normalizeProjectScopeSourceRefsForRuntime,
   type ProjectScopeSourceIdentity,

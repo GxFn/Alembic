@@ -55,6 +55,10 @@
     "#sandbox/*": {
       "alembic-dev": "./lib/sandbox/*",
       "default": "./dist/lib/sandbox/*"
+    },
+    "#recipe-pipeline/*": {
+      "alembic-dev": "./lib/recipe-pipeline/*",
+      "default": "./dist/lib/recipe-pipeline/*"
     }
   },
   "scripts": {

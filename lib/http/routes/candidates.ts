@@ -43,7 +43,9 @@ router.post(
     const container = getServiceContainer();
 
     // generateRefine 逻辑（RIC-3：从已删的 resident MCP-mirror 迁入 service/bootstrap）
-    const { generateRefine } = await import('../../service/generate/GenerateRefine.js');
+    const { generateRefine } = await import(
+      '../../recipe-pipeline/generate/runtime/GenerateRefine.js'
+    );
     const ctx = { container, logger };
     const result = await generateRefine(ctx, { candidateIds, userPrompt, dryRun });
 

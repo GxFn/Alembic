@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { PlanSelectionProjection } from '@alembic/core/plans';
 import type { DimensionDef } from '@alembic/core/types';
 import { describe, expect, test } from 'vitest';
-import { resolveColdStartWorkflowDimensionSelection } from '../../lib/workflows/cold-start/ColdStartWorkflow.js';
+import { resolveColdStartWorkflowDimensionSelection } from '../../lib/recipe-pipeline/generate/ColdStartWorkflow.js';
 
 const dimensions: DimensionDef[] = [
   { id: 'architecture', label: 'Architecture' },
@@ -79,11 +79,11 @@ describe('coldStart plan-driven dimension selection', () => {
 
   test('keeps analyst token budget computation separate from plan scale metadata', async () => {
     const runtimeBuilderSource = await readFile(
-      join(process.cwd(), 'lib/workflows/ai-execution/DimensionRuntimeBuilder.ts'),
+      join(process.cwd(), 'lib/recipe-pipeline/generate/execution/DimensionRuntimeBuilder.ts'),
       'utf8'
     );
     const coldStartSource = await readFile(
-      join(process.cwd(), 'lib/workflows/cold-start/ColdStartWorkflow.ts'),
+      join(process.cwd(), 'lib/recipe-pipeline/generate/ColdStartWorkflow.ts'),
       'utf8'
     );
 

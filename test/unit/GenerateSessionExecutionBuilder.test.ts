@@ -1,12 +1,12 @@
 import type { AgentRunInput, AgentRunResult } from '@alembic/agent/service';
 import { describe, expect, test, vi } from 'vitest';
-import type { GenerateDimensionPlan } from '../../lib/workflows/ai-execution/DimensionRuntimeBuilder.js';
+import type { GenerateDimensionPlan } from '../../lib/recipe-pipeline/generate/execution/DimensionRuntimeBuilder.js';
 import {
   attachGenerateAgentProgressBridge,
   buildGenerateSessionExecutionInput,
   getGenerateChildDimensionId,
   resolveGenerateDimensionTier,
-} from '../../lib/workflows/ai-execution/SessionExecutionBuilder.js';
+} from '../../lib/recipe-pipeline/generate/execution/SessionExecutionBuilder.js';
 
 function createPlan(
   id: string,

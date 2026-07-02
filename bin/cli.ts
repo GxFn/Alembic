@@ -697,7 +697,7 @@ program
 
       // 直接调用 project-index workflow（统一编排管线；MCP 归一 Plugin 后不再经 resident 镜像）
       const { runGenerateWorkflow } = await import(
-        '../lib/workflows/project-index/GenerateWorkflow.js'
+        '../lib/recipe-pipeline/generate/GenerateWorkflow.js'
       );
       const logger = container.get('logger');
       const raw = await runGenerateWorkflow(
@@ -883,7 +883,7 @@ program
 
       // 直接调用 project-index workflow（统一编排管线；MCP 归一 Plugin 后不再经 resident 镜像）
       const { runGenerateWorkflow } = await import(
-        '../lib/workflows/project-index/GenerateWorkflow.js'
+        '../lib/recipe-pipeline/generate/GenerateWorkflow.js'
       );
       const logger = container.get('logger');
       const raw = await runGenerateWorkflow(
@@ -2394,7 +2394,7 @@ async function runDirectStartDevServer(opts: {
     await httpServer.start();
 
     // 后台异步刷新，不阻塞 Dashboard 首屏。
-    import('../lib/service/generate/UiStartupTasks.js')
+    import('../lib/recipe-pipeline/generate/runtime/UiStartupTasks.js')
       .then(({ runUiStartupTasks }) => runUiStartupTasks({ projectRoot, container }))
       .then((report) => {
         if (report.errors.length > 0) {

@@ -9,7 +9,10 @@ import {
   resolveProjectScopeAnalysisContext,
   resolveProjectScopeSourceIdentitiesFromContainer,
 } from '../project-scope/ProjectScopeAnalysis.js';
-import type { GenerateProcessEventDraft } from '../service/generate/generate-event-types.js';
+import { runDeepMiningRounds } from '../recipe-pipeline/generate/DeepMiningRoundGate.js';
+import { runModuleMiningWorkflow } from '../recipe-pipeline/generate/ModuleMiningWorkflow.js';
+import type { GenerateProcessEventDraft } from '../recipe-pipeline/generate/runtime/generate-event-types.js';
+import { runGeneratePlanGate } from '../recipe-pipeline/plan/PlanSelectionGate.js';
 import { releaseProjectContextWorkflowSessionByProjectRoot } from '../workflows/project-context/ProjectContextWorkflowFacts.js';
 import {
   getJobDisplaySnapshotStore,
@@ -35,12 +38,9 @@ import type {
   RunDaemonJobOptions,
   RunDaemonJobResult,
 } from './DaemonJobWorkflowTypes.js';
-import { runDeepMiningRounds } from './DeepMiningRoundGate.js';
 import { materializeJobProcessEventTextArtifact } from './JobProcessEventArtifacts.js';
 import type { JobProcessEventRecorder } from './JobProcessEventRecorder.js';
-import { runModuleMiningWorkflow } from './ModuleMiningWorkflow.js';
 import { attachPcvN9ObservabilityCarry } from './PcvObservabilityLinkage.js';
-import { runGeneratePlanGate } from './PlanSelectionGate.js';
 
 export {
   getJobDisplaySnapshotStore,
@@ -871,7 +871,7 @@ export function attachGenerateProcessEventBridge(options: {
 async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
   if (options.kind === 'bootstrap') {
     const planGate = await runGeneratePlanGate(options);
-    const { runGenerateWorkflow } = await import('../workflows/project-index/GenerateWorkflow.js');
+    const { runGenerateWorkflow } = await import('../recipe-pipeline/generate/GenerateWorkflow.js');
     const raw = await runGenerateWorkflow(
       { container: options.container, logger: options.logger },
       {
@@ -897,7 +897,7 @@ async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unkno
     return runModuleMiningWorkflow(options);
   }
 
-  const { runGenerateWorkflow } = await import('../workflows/project-index/GenerateWorkflow.js');
+  const { runGenerateWorkflow } = await import('../recipe-pipeline/generate/GenerateWorkflow.js');
   const raw = await runGenerateWorkflow(
     { container: options.container, logger: options.logger },
     buildDaemonRescanWorkflowArgs({ args: options.args, source: options.source }),

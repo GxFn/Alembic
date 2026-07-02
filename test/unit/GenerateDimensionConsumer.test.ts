@@ -1,8 +1,7 @@
 import type { MemoryCoordinator, SessionStore } from '@alembic/agent/memory';
 import { describe, expect, test, vi } from 'vitest';
-import type { GenerateEventEmitter } from '../../lib/service/generate/GenerateEventEmitter.js';
-import type { GenerateDimensionProjection } from '../../lib/workflows/ai-execution/AgentRunProjections.js';
-import type { DimensionContext } from '../../lib/workflows/ai-execution/DimensionContext.js';
+import type { GenerateDimensionProjection } from '../../lib/recipe-pipeline/generate/execution/AgentRunProjections.js';
+import type { DimensionContext } from '../../lib/recipe-pipeline/generate/execution/DimensionContext.js';
 import {
   applyGenerateDimensionCandidateAccounting,
   buildGenerateDimensionCompleteEventPayload,
@@ -15,7 +14,8 @@ import {
   decideGenerateDimensionCheckpoint,
   recordGenerateDimensionTokenUsage,
   resolveGenerateDimensionConsumerRunIssue,
-} from '../../lib/workflows/ai-execution/GenerateConsumers.js';
+} from '../../lib/recipe-pipeline/generate/execution/GenerateConsumers.js';
+import type { GenerateEventEmitter } from '../../lib/recipe-pipeline/generate/runtime/GenerateEventEmitter.js';
 
 function makeProjection(): GenerateDimensionProjection {
   const successfulSubmit = {

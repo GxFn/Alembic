@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { GenerateEventEmitter } from '../../lib/service/generate/GenerateEventEmitter.js';
+import { GenerateEventEmitter } from '../../lib/recipe-pipeline/generate/runtime/GenerateEventEmitter.js';
 
 describe('GenerateEventEmitter task routing', () => {
   test('routes non-normal dimension completion payloads to failed task tracking', () => {

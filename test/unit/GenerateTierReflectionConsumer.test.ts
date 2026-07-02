@@ -3,7 +3,7 @@ import { describe, expect, test, vi } from 'vitest';
 import {
   consumeGenerateTierReflection,
   type DimensionStat,
-} from '../../lib/workflows/ai-execution/GenerateConsumers.js';
+} from '../../lib/recipe-pipeline/generate/execution/GenerateConsumers.js';
 
 describe('bootstrap tier reflection consumer', () => {
   test('builds and stores tier reflection from completed dimension stats', () => {

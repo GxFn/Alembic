@@ -128,7 +128,7 @@ describe('L6: Bootstrap go-module-scan dimension', () => {
   it('bootstrap module should load without error', async () => {
     // Just verify the bootstrap module loads without errors
     // (verifies go-module-scan dimension definition is valid)
-    const mod = await import('../../lib/workflows/cold-start/ColdStartWorkflow.js');
+    const mod = await import('../../lib/recipe-pipeline/generate/ColdStartWorkflow.js');
     expect(mod).toBeDefined();
   });
 });

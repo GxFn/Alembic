@@ -7,11 +7,11 @@ const projectIndexMock = vi.hoisted(() => ({
   runGenerateWorkflow: vi.fn(),
 }));
 
-vi.mock('../../lib/workflows/project-index/GenerateWorkflow.js', () => projectIndexMock);
+vi.mock('../../lib/recipe-pipeline/generate/GenerateWorkflow.js', () => projectIndexMock);
 
-import { runColdStartWorkflow } from '../../lib/workflows/cold-start/ColdStartWorkflow.js';
-import { runKnowledgeRescanWorkflow } from '../../lib/workflows/knowledge-rescan/KnowledgeRescanWorkflow.js';
-import { runGenerateWorkflow } from '../../lib/workflows/project-index/GenerateWorkflow.js';
+import { runColdStartWorkflow } from '../../lib/recipe-pipeline/generate/ColdStartWorkflow.js';
+import { runGenerateWorkflow } from '../../lib/recipe-pipeline/generate/GenerateWorkflow.js';
+import { runKnowledgeRescanWorkflow } from '../../lib/recipe-pipeline/sustain/KnowledgeRescanWorkflow.js';
 
 describe('ProjectIndexWorkflow compatibility', () => {
   beforeEach(() => {
@@ -55,7 +55,7 @@ describe('ProjectIndexWorkflow compatibility', () => {
       'utf8'
     );
     const deepMiningSource = await readFile(
-      join(process.cwd(), 'lib/daemon/DeepMiningRoundGate.ts'),
+      join(process.cwd(), 'lib/recipe-pipeline/generate/DeepMiningRoundGate.ts'),
       'utf8'
     );
     const combinedConsumers = `${cliSource}\n${daemonSource}\n${deepMiningSource}`;
@@ -63,19 +63,17 @@ describe('ProjectIndexWorkflow compatibility', () => {
     expect(combinedConsumers).toContain('runGenerateWorkflow');
     expect(combinedConsumers).toContain("{ mode: 'full' }");
     expect(combinedConsumers).toContain("{ mode: 'incremental' }");
-    expect(combinedConsumers).not.toContain("workflows/cold-start/ColdStartWorkflow.js'");
-    expect(combinedConsumers).not.toContain(
-      "workflows/knowledge-rescan/KnowledgeRescanWorkflow.js'"
-    );
+    expect(combinedConsumers).not.toContain("recipe-pipeline/generate/ColdStartWorkflow.js'");
+    expect(combinedConsumers).not.toContain("recipe-pipeline/sustain/KnowledgeRescanWorkflow.js'");
   });
 
   test('keeps workflow session release registration before async dispatch', async () => {
     const coldStartSource = await readFile(
-      join(process.cwd(), 'lib/workflows/cold-start/ColdStartWorkflow.ts'),
+      join(process.cwd(), 'lib/recipe-pipeline/generate/ColdStartWorkflow.ts'),
       'utf8'
     );
     const rescanSource = await readFile(
-      join(process.cwd(), 'lib/workflows/knowledge-rescan/KnowledgeRescanWorkflow.ts'),
+      join(process.cwd(), 'lib/recipe-pipeline/sustain/KnowledgeRescanWorkflow.ts'),
       'utf8'
     );
 
@@ -110,7 +108,7 @@ describe('ProjectIndexWorkflow compatibility', () => {
 
   test('keeps KnowledgeRescan moduleMining result reviewable for selected modules and coverage', async () => {
     const rescanSource = await readFile(
-      join(process.cwd(), 'lib/workflows/knowledge-rescan/KnowledgeRescanWorkflow.ts'),
+      join(process.cwd(), 'lib/recipe-pipeline/sustain/KnowledgeRescanWorkflow.ts'),
       'utf8'
     );
     const moduleMiningBranch = rescanSource.slice(rescanSource.indexOf('perModuleMining &&'));

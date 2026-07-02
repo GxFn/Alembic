@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest';
 import {
   buildGenerateDimensionRunInput,
   type GenerateFileEntry,
-} from '../../lib/workflows/ai-execution/AgentRunInputBuilders.js';
+} from '../../lib/recipe-pipeline/generate/execution/AgentRunInputBuilders.js';
 
 function makeSystemRunContext(): SystemRunContext {
   const memoryCoordinator = { marker: 'memory' } as unknown as MemoryCoordinator;

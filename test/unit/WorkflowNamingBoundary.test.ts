@@ -24,7 +24,7 @@ describe('workflow naming boundary', () => {
   test('keeps retired workflow nesting absent from the working tree', () => {
     expect(existsSync(join(repoRoot, 'lib/workflows/capabilities'))).toBe(false);
     expect(existsSync(join(repoRoot, 'lib/workflows/cold-start/internal'))).toBe(false);
-    expect(existsSync(join(repoRoot, 'lib/workflows/knowledge-rescan/internal'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'lib/recipe-pipeline/sustain/internal'))).toBe(false);
   });
 
   test('keeps active API AI runtime contract free of retired producer names', () => {
