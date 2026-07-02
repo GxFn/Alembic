@@ -48,7 +48,7 @@ import {
   AiTranslateBody,
 } from '../../shared/schemas/http-requests.js';
 import { validate } from '../middleware/validate.js';
-import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
+import { createStreamSession, getStreamSession } from '../utils/sse-connections.js';
 import { sendToolEnvelopeResponse } from '../utils/tool-envelope-response.js';
 
 export {

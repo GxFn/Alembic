@@ -615,7 +615,7 @@ export async function consumeGenerateDimensionResult({
     sessionStore,
   });
   if (runIssueState.runIssue) {
-    logger.warn(`[Insight-v3] Dimension "${dimId}" completed with non-normal status`, {
+    logger.warn(`[generate] Dimension "${dimId}" completed with non-normal status`, {
       dimension: dimId,
       status: runIssueState.runIssue.status,
       reason: runIssueState.runIssue.reason,
@@ -624,7 +624,7 @@ export async function consumeGenerateDimensionResult({
   }
 
   logger.info(
-    `[Insight-v3] Dimension "${dimId}": analysis=${analysisReport.analysisText.length} chars, ` +
+    `[generate] Dimension "${dimId}": analysis=${analysisReport.analysisText.length} chars, ` +
       `files=${analysisReport.referencedFiles.length}, findings=${(analysisReport.findings || distilled.keyFindings).length}, ` +
       `toolCalls=${runtimeToolCalls.length}, degraded=${runResult?.degraded || false} (${Date.now() - dimStartTime}ms)`
   );
@@ -665,7 +665,7 @@ export async function consumeGenerateDimensionResult({
       const originalLen = analysisReport.analysisText.length;
       analysisReport.analysisText = synthesized.join('\n');
       logger.info(
-        `[Insight-v3] analysisText 补强 "${dimId}": ${originalLen} → ${analysisReport.analysisText.length} chars ` +
+        `[generate] analysisText 补强 "${dimId}": ${originalLen} → ${analysisReport.analysisText.length} chars ` +
           `(from ${findings.length} findings)`
       );
     }
@@ -754,7 +754,7 @@ export async function consumeGenerateDimensionResult({
       digest as unknown as Parameters<typeof saveDimensionCheckpoint>[4]
     );
   } else {
-    logger.warn(`[Insight-v3] ⚠ 跳过 checkpoint 保存: "${dimId}" ${checkpointDecision.reason}`);
+    logger.warn(`[generate] ⚠ 跳过 checkpoint 保存: "${dimId}" ${checkpointDecision.reason}`);
   }
 
   return dimResult;
@@ -787,7 +787,7 @@ async function notifyProjectContextDimensionResult({
       rejectedCount,
     });
   } catch (err: unknown) {
-    logger.warn('[Insight-v3] Dimension result hook failed', {
+    logger.warn('[generate] Dimension result hook failed', {
       dimension: dimensionId,
       error: err instanceof Error ? err.message : String(err),
     });
@@ -903,7 +903,7 @@ export function consumeGenerateDimensionError({
 }) {
   const issue = normalizeBootstrapDimensionError(err);
   const errMsg = issue.reason;
-  logger.error(`[Insight-v3] Dimension "${dimId}" failed: ${errMsg}`);
+  logger.error(`[generate] Dimension "${dimId}" failed: ${errMsg}`);
   applyGenerateDimensionErrorAccounting({ candidateResults, dimId, issue });
   emitter.emitDimensionComplete(dimId, buildGenerateDimensionErrorEventPayload(issue));
   const { pcvNodeEvidence, pcvNodeEvidenceEnvelope } =
@@ -987,7 +987,7 @@ export function consumeGenerateSessionResult({
     consumeMissingDimension,
   });
   logger.info(
-    `[Insight-v3] All tiers complete: ${projection.completedDimensions} dimensions in ${durationMs}ms`
+    `[generate] All tiers complete: ${projection.completedDimensions} dimensions in ${durationMs}ms`
   );
   if (
     projection.parentStatus !== 'success' ||
@@ -995,24 +995,24 @@ export function consumeGenerateSessionResult({
     projection.abortedDimensionIds.length > 0
   ) {
     logger.warn(
-      `[Insight-v3] Bootstrap session completed with ${projection.failedDimensionIds.length} failed, ${projection.abortedDimensionIds.length} aborted dimensions (status=${projection.parentStatus})`
+      `[generate] Bootstrap session completed with ${projection.failedDimensionIds.length} failed, ${projection.abortedDimensionIds.length} aborted dimensions (status=${projection.parentStatus})`
     );
   }
   if (projection.missingDimensionIds.length > 0) {
     logger.warn(
-      `[Insight-v3] Bootstrap session missing dimension results: [${projection.missingDimensionIds.join(', ')}]`
+      `[generate] Bootstrap session missing dimension results: [${projection.missingDimensionIds.join(', ')}]`
     );
   }
 
   const emStats = sessionStore.getStats();
   logger.info(
-    `[Insight-v3] Memory stats: ${emStats.completedDimensions} dims, ` +
+    `[generate] Memory stats: ${emStats.completedDimensions} dims, ` +
       `${emStats.totalFindings} findings, ${emStats.referencedFiles} files, ` +
       `${emStats.crossReferences} cross-refs, ${emStats.tierReflections} reflections`
   );
   if (emStats.cache) {
     logger.info(
-      `[Insight-v3] Cache stats: ${emStats.cache.hitRate} hit rate, ` +
+      `[generate] Cache stats: ${emStats.cache.hitRate} hit rate, ` +
         `${emStats.cache.searchCacheSize} searches, ${emStats.cache.fileCacheSize} files`
     );
   }
@@ -1116,7 +1116,7 @@ export async function consumeGenerateSkills({
     }
   } catch (e: unknown) {
     logger.warn(
-      `[Insight-v3] Skill generation module import failed: ${e instanceof Error ? e.message : String(e)}`
+      `[generate] Skill generation module import failed: ${e instanceof Error ? e.message : String(e)}`
     );
   }
 
@@ -1188,7 +1188,7 @@ async function consumeSingleBootstrapSkill({
     }
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    logger.warn(`[Insight-v3] Skill generation failed for "${dim.id}": ${errMsg}`);
+    logger.warn(`[generate] Skill generation failed for "${dim.id}": ${errMsg}`);
     skillResults.failed++;
     skillResults.errors.push({ dimId: dim.id, error: errMsg });
     emitter.emitDimensionFailed(dim.id, err instanceof Error ? err : new Error(errMsg));
@@ -1322,7 +1322,7 @@ export function buildEffectiveSkillAnalysisText({
   }
   const effectiveText = synthesized.join('\n');
   logger.info(
-    `[Insight-v3] Skill "${dim.id}": analysisText too short (${analysisText.trim().length} chars), ` +
+    `[generate] Skill "${dim.id}": analysisText too short (${analysisText.trim().length} chars), ` +
       `synthesized from ${keyFindings.length} findings → ${effectiveText.length} chars`
   );
   return effectiveText;
@@ -1361,7 +1361,7 @@ export function consumeGenerateTierReflection({
   const tierStats = [...tierResults.values()];
   const totalCandidates = tierStats.reduce((s, r) => s + (r.candidateCount || 0), 0);
   logger.info(
-    `[Insight-v3] Tier ${tierIndex + 1} complete: ${tierResults.size} dimensions, ${totalCandidates} candidates`
+    `[generate] Tier ${tierIndex + 1} complete: ${tierResults.size} dimensions, ${totalCandidates} candidates`
   );
 
   try {
@@ -1376,14 +1376,14 @@ export function consumeGenerateTierReflection({
       reflection as Parameters<typeof sessionStore.addTierReflection>[1]
     );
     logger.info(
-      `[Insight-v3] Tier ${tierIndex + 1} reflection: ` +
+      `[generate] Tier ${tierIndex + 1} reflection: ` +
         `${reflection.topFindings.length} top findings, ` +
         `${reflection.crossDimensionPatterns.length} patterns`
     );
     return reflection as GenerateTierReflection;
   } catch (refErr: unknown) {
     logger.warn(
-      `[Insight-v3] Tier ${tierIndex + 1} reflection failed: ${refErr instanceof Error ? refErr.message : String(refErr)}`
+      `[generate] Tier ${tierIndex + 1} reflection failed: ${refErr instanceof Error ? refErr.message : String(refErr)}`
     );
     return null;
   }

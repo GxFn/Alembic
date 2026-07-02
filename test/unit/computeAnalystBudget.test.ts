@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import { ANALYST_BUDGET, computeAnalystBudget } from '@alembic/agent/prompts';
+import { describe, expect, it } from 'vitest';
 
 describe('computeAnalystBudget', () => {
   it('returns baseline budget for ≤40 files', () => {

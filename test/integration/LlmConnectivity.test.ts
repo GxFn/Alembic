@@ -7,14 +7,14 @@
  * 运行: ALEMBIC_OPENAI_API_KEY=... ALEMBIC_DEEPSEEK_API_KEY=... npx vitest run test/integration/LlmConnectivity.test.ts
  */
 
-import { describe, expect, test } from 'vitest';
 import {
   DeepSeekProvider,
-  getModelRegistry,
   GoogleGeminiProvider,
+  getModelRegistry,
   OpenAiProvider,
   ParameterGuard,
 } from '@alembic/agent/ai';
+import { describe, expect, test } from 'vitest';
 
 const OPENAI_KEY = process.env.ALEMBIC_OPENAI_API_KEY || '';
 const DEEPSEEK_KEY = process.env.ALEMBIC_DEEPSEEK_API_KEY || '';

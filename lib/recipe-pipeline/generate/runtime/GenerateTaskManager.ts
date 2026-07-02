@@ -64,7 +64,7 @@ export const TaskStatus = Object.freeze({
 });
 
 /** 单个 Bootstrap 会话（一次冷启动的全部上下文） */
-class GenerateSession {
+class GenerateTaskSession {
   completedAt: number | null;
   id: string;
   updatedAt: number;
@@ -226,7 +226,7 @@ class GenerateSession {
 }
 
 export class GenerateTaskManager {
-  #currentSession: GenerateSession | null = null;
+  #currentSession: GenerateTaskSession | null = null;
 
   #eventBus: EventBus | null = null;
 
@@ -266,7 +266,7 @@ export class GenerateTaskManager {
     }
 
     const sessionId = `bs_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    this.#currentSession = new GenerateSession(sessionId);
+    this.#currentSession = new GenerateTaskSession(sessionId);
     this.#sessionAbortController = new AbortController();
 
     for (const { id, meta } of taskDefs) {

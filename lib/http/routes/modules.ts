@@ -25,7 +25,7 @@ import {
   executeDashboardOperation,
   sendDashboardOperationResponse,
 } from '../utils/dashboard-operation.js';
-import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
+import { createStreamSession, getStreamSession } from '../utils/sse-connections.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();

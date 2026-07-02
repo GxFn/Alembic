@@ -26,12 +26,11 @@ export interface RunDaemonJobResult {
   result: unknown;
 }
 
-export interface ModuleDimensionTarget {
-  dimensionId: string;
-  moduleId?: string;
-  moduleName?: string;
-  targetRecipes: number;
-}
+// W3(2026-07-02 词族统一):三重定义收敛——Core KnowledgeRescanIntent 是单源
+// (Plugin knowledge-rescan.ts 已用同款先例),本地定义删除。
+export type { ModuleDimensionTarget } from '@alembic/core/host-agent-workflows';
+
+import type { ModuleDimensionTarget } from '@alembic/core/host-agent-workflows';
 
 export interface DaemonRescanWorkflowArgs {
   [key: string]: unknown;

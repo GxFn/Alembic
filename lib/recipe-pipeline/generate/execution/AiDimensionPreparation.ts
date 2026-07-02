@@ -113,7 +113,7 @@ export function prepareAiDimensionPipeline(
 }
 
 export function emitAiDimensionAiUnavailable(preparation: AiDimensionPreparation): void {
-  logger.error('[Insight-v3] AI Provider not available — bootstrap requires AI');
+  logger.error('[generate] AI Provider not available — bootstrap requires AI');
   preparation.emitter.emitProgress('bootstrap:ai-unavailable', {
     message:
       'AI Provider 不可用，Bootstrap 需要 AI 才能运行。请先配置 AI Provider（如 OpenAI、Anthropic 等）后重试。',

@@ -195,14 +195,14 @@ function createBootstrapSemanticMemory({
     const smStats = semanticMemory.getStats();
     if (smStats.total > 0) {
       logger.info(
-        `[Insight-v3] Loaded ${smStats.total} semantic memories from previous bootstrap ` +
+        `[generate] Loaded ${smStats.total} semantic memories from previous bootstrap ` +
           `(fact: ${smStats.byType.fact || 0}, insight: ${smStats.byType.insight || 0}, preference: ${smStats.byType.preference || 0})`
       );
     }
     return semanticMemory;
   } catch (smErr: unknown) {
     logger.warn(
-      `[Insight-v3] SemanticMemory init failed (non-blocking): ${smErr instanceof Error ? smErr.message : String(smErr)}`
+      `[generate] SemanticMemory init failed (non-blocking): ${smErr instanceof Error ? smErr.message : String(smErr)}`
     );
     return null;
   }

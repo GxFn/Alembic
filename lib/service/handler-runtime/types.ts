@@ -60,7 +60,7 @@ export interface DriftEvent {
 // ─── Resident Tool Handler Context ───────────────────────
 
 /** MCP session tracking */
-export interface McpSession {
+export interface McpConnection {
   id: string;
   startedAt: number;
   toolCallCount: number;
@@ -72,7 +72,7 @@ export interface McpSession {
 export interface McpContext {
   container: McpServiceContainer;
   startedAt?: number;
-  session?: McpSession;
+  connection?: McpConnection;
   [key: string]: unknown;
 }
 

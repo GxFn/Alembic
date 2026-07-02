@@ -68,7 +68,7 @@ export function prepareGenerateRescanState({
       }
     }
     logger.info(
-      `[Insight-v3] Rescan mode: seeded ${globalSubmittedTitles.size} titles + ${globalSubmittedTriggers.size} triggers into dedup set`
+      `[generate] Rescan mode: seeded ${globalSubmittedTitles.size} titles + ${globalSubmittedTriggers.size} triggers into dedup set`
     );
   }
 

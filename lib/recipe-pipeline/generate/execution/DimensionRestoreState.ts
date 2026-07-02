@@ -26,7 +26,7 @@ export function syncRestoredSessionStoreDigests({
 }) {
   const restoredDims = sessionStore.getCompletedDimensions();
   logger.info(
-    `[Insight-v3] Restored SessionStore: ${restoredDims.length} dims [${restoredDims.join(', ')}]`
+    `[generate] Restored SessionStore: ${restoredDims.length} dims [${restoredDims.join(', ')}]`
   );
 
   for (const dimId of restoredDims) {
@@ -75,7 +75,7 @@ export function resolveIncrementalSkippedDimensions({
   }
   if (incrementalSkippedDims.length > 0) {
     logger.info(
-      `[Insight-v3] ⏩ Incremental skip: [${incrementalSkippedDims.join(', ')}] ` +
+      `[generate] ⏩ Incremental skip: [${incrementalSkippedDims.join(', ')}] ` +
         `(using historical results)`
     );
   }
@@ -116,7 +116,7 @@ export async function restoreCheckpointDimensions({
       ...checkpoint,
     });
     skippedDims.push(dimId);
-    logger.info(`[Insight-v3] ⏩ 跳过已完成维度 (checkpoint): "${dimId}"`);
+    logger.info(`[generate] ⏩ 跳过已完成维度 (checkpoint): "${dimId}"`);
   }
   return { completedCheckpoints, skippedDims };
 }
@@ -178,7 +178,7 @@ function restoreIncrementalSkippedDimension({
     restoredFromIncremental: true,
   };
   dimensionStats[dimId] = dimResult;
-  logger.info(`[Insight-v3] ⏩ "${dimId}" — incremental skip (historical result)`);
+  logger.info(`[generate] ⏩ "${dimId}" — incremental skip (historical result)`);
 }
 
 function restoreCheckpointDimension({
@@ -229,7 +229,7 @@ function restoreCheckpointDimension({
       candidatesSummary: [],
     });
     logger.info(
-      `[Insight-v3] ✅ Checkpoint "${dimId}": analysisText restored (${cp.analysisText.length} chars) — Skill generation enabled`
+      `[generate] ✅ Checkpoint "${dimId}": analysisText restored (${cp.analysisText.length} chars) — Skill generation enabled`
     );
   }
 }

@@ -72,7 +72,7 @@ export async function resolveGenerateDimensionAdmissions({
   const checkpointRestoreDimIds = rescanContext ? [] : activeDimIds;
   if (rescanContext && activeDimIds.length > 0) {
     logger.info(
-      `[Insight-v3] Rescan mode: checkpoint restore disabled for active dimensions [${activeDimIds.join(', ')}]`
+      `[generate] Rescan mode: checkpoint restore disabled for active dimensions [${activeDimIds.join(', ')}]`
     );
   }
   const { completedCheckpoints, skippedDims: checkpointSkippedDims } =

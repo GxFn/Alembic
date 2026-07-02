@@ -36,8 +36,8 @@ vi.mock('../../lib/injection/ServiceContainer.js', () => ({
 import modulesRouter from '../../lib/http/routes/modules.js';
 import {
   getStreamSession,
-  resetDefaultSseSessionRegistry,
-} from '../../lib/http/utils/sse-sessions.js';
+  resetDefaultSseConnectionRegistry,
+} from '../../lib/http/utils/sse-connections.js';
 import { invokeRouter } from '../helpers/express.js';
 
 async function flushStream() {
@@ -49,7 +49,7 @@ async function flushStream() {
 describe('POST /modules/scan-folder/stream SSE session contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resetDefaultSseSessionRegistry();
+    resetDefaultSseConnectionRegistry();
   });
 
   test('events flow via send() and the session completes via end() (stream:done)', async () => {

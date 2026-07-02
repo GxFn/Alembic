@@ -24,6 +24,7 @@ import {
   submitRescanImpactDecisions,
   toEvolutionAuditRecipe,
 } from '@alembic/core/evolution';
+import type { ModuleDimensionTarget } from '@alembic/core/host-agent-workflows';
 import {
   auditRecipesForRescan,
   buildCoverageLedgerModuleAxisFromSummaries,
@@ -868,13 +869,6 @@ async function runKnowledgeRescanProjectIndexWorkflow(
 registerGenerateWorkflowImplementation('incremental', runKnowledgeRescanProjectIndexWorkflow);
 
 type KnowledgeRescanMiningMode = 'deepMining' | 'moduleMining' | 'per-module';
-
-interface ModuleDimensionTarget {
-  dimensionId: string;
-  moduleId?: string;
-  moduleName?: string;
-  targetRecipes: number;
-}
 
 interface CoverageLedgerRepositoryLike {
   getCell(scope: { dimensionId: string; moduleId: string; projectRoot: string }): {

@@ -29,8 +29,8 @@ const COMPLETED_KEEP = 60 * 1000;
  * listener disposal stays at the route level (unsubscribe on stream:done /
  * stream:error and on res 'close' — verified in ai/candidates/modules).
  */
-export class SseSessionRegistry {
-  #sessions = new Map<string, ReturnType<SseSessionRegistry['create']>>();
+export class SseConnectionRegistry {
+  #sessions = new Map<string, ReturnType<SseConnectionRegistry['create']>>();
   #timers = new Set<NodeJS.Timeout>();
 
   get size() {
@@ -134,16 +134,16 @@ export class SseSessionRegistry {
   }
 }
 
-let _defaultRegistry: SseSessionRegistry | null = null;
+let _defaultRegistry: SseConnectionRegistry | null = null;
 
 /** Lazily-created process default — managed lifecycle, disposable. */
-export function getDefaultSseSessionRegistry(): SseSessionRegistry {
-  _defaultRegistry ??= new SseSessionRegistry();
+export function getDefaultSseConnectionRegistry(): SseConnectionRegistry {
+  _defaultRegistry ??= new SseConnectionRegistry();
   return _defaultRegistry;
 }
 
 /** 重置默认注册表（测试/关停用） */
-export function resetDefaultSseSessionRegistry() {
+export function resetDefaultSseConnectionRegistry() {
   _defaultRegistry?.clear();
 }
 
@@ -153,10 +153,10 @@ export function resetDefaultSseSessionRegistry() {
  * @param scene 场景标识
  */
 export function createStreamSession(scene: string) {
-  return getDefaultSseSessionRegistry().create(scene);
+  return getDefaultSseConnectionRegistry().create(scene);
 }
 
 /** 获取已有的 session */
 export function getStreamSession(sessionId: string) {
-  return getDefaultSseSessionRegistry().get(sessionId);
+  return getDefaultSseConnectionRegistry().get(sessionId);
 }

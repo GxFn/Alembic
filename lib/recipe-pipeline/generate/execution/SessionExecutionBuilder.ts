@@ -136,7 +136,7 @@ export function buildGenerateSessionExecutionInput({
             return;
           }
           const runIssue = resolveGenerateDimensionRunIssue(result, { includeDegraded: false });
-          logger.info('[Insight-v3] Dimension child result received', {
+          logger.info('[generate] Dimension child result received', {
             sessionId,
             dimension: dimId,
             status: result.status,
@@ -151,7 +151,7 @@ export function buildGenerateSessionExecutionInput({
           const state = childExecutionState.get(dimId);
           if (!plan || !state) {
             if (runIssue) {
-              logger.warn('[Insight-v3] Dimension child result missing local plan/state', {
+              logger.warn('[generate] Dimension child result missing local plan/state', {
                 sessionId,
                 dimension: dimId,
                 runIssue,
@@ -176,7 +176,7 @@ export function buildGenerateSessionExecutionInput({
               successCount: projection.successCount,
             });
             if (!recoveredProducerTimeout) {
-              logger.warn('[Insight-v3] Dimension child result failed', {
+              logger.warn('[generate] Dimension child result failed', {
                 sessionId,
                 dimension: dimId,
                 runIssue,
@@ -188,7 +188,7 @@ export function buildGenerateSessionExecutionInput({
               return;
             }
             logger.warn(
-              `[Insight-v3] Dimension "${dimId}" producer summary timed out after successful candidate submit(s); continuing to consume produced candidates.`
+              `[generate] Dimension "${dimId}" producer summary timed out after successful candidate submit(s); continuing to consume produced candidates.`
             );
           }
           await consumeDimensionResult({
@@ -206,7 +206,7 @@ export function buildGenerateSessionExecutionInput({
           tierIndex: number;
           childInputs: AgentRunInput[];
         }) => {
-          logger.info('[Insight-v3] Bootstrap tier complete', {
+          logger.info('[generate] Bootstrap tier complete', {
             sessionId,
             tierIndex,
             dimensions: childInputs.map((childInput) => getGenerateChildDimensionId(childInput)),
@@ -237,7 +237,7 @@ export function buildGenerateSessionExecutionInput({
     presentation: { responseShape: 'system-task-result' },
   });
 
-  logger.info('[Insight-v3] Prepared bootstrap-session parent input', {
+  logger.info('[generate] Prepared bootstrap-session parent input', {
     sessionId,
     childRunCount: (input.params?.dimensions as unknown[] | undefined)?.length || 0,
     concurrency,
@@ -576,7 +576,7 @@ function beginBootstrapDimensionExecution({
   sessionId: string;
 }) {
   emitDimensionStart(dimId);
-  logger.info(`[Insight-v3] Dimension "${dimId}" started`, {
+  logger.info(`[generate] Dimension "${dimId}" started`, {
     sessionId,
     dimension: dimId,
     label: dimConfig.label || null,

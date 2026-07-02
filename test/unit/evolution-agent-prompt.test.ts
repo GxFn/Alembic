@@ -9,7 +9,6 @@
  *   - 边界: 空 existingRecipes
  */
 
-import { describe, expect, it } from 'vitest';
 import {
   buildEvolverPrompt,
   EVOLVER_BUDGET,
@@ -17,6 +16,7 @@ import {
   EVOLVER_TOOLS,
   type EvolutionContext,
 } from '@alembic/agent/prompts';
+import { describe, expect, it } from 'vitest';
 
 // ── Fixtures ─────────────────────────────────────────────
 

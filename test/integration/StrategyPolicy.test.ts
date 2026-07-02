@@ -10,18 +10,19 @@
  *   - PolicyEngine 组合多策略
  */
 
-import { vi } from 'vitest';
-import { MemoryCoordinator } from '@alembic/agent/memory';
 import {
   BudgetPolicy,
+  PipelineStrategy,
   Policy,
   PolicyEngine,
   QualityGatePolicy,
   SafetyPolicy,
+  SingleStrategy,
+  Strategy,
 } from '@alembic/agent/agent';
+import { MemoryCoordinator } from '@alembic/agent/memory';
 import { createSystemRunContext } from '@alembic/agent/runtime';
-import { SingleStrategy, Strategy } from '@alembic/agent/agent';
-import { PipelineStrategy } from '@alembic/agent/agent';
+import { vi } from 'vitest';
 
 describe('Integration: Agent Strategies', () => {
   describe('SingleStrategy', () => {

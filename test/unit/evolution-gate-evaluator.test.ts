@@ -10,8 +10,8 @@
  *   - 跨 tool 同一 id 去重
  */
 
-import { describe, expect, it } from 'vitest';
 import { evolutionGateEvaluator } from '@alembic/agent/prompts';
+import { describe, expect, it } from 'vitest';
 
 // ── Helpers ──────────────────────────────────────────────
 

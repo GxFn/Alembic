@@ -15,7 +15,7 @@ import { getAiRuntimeStatus, getAiUnavailableMessage } from '../../injection/AiR
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { operationContext, rejectUnlessConfirmed } from '../entrypoint-safety.js';
 import { validate } from '../middleware/validate.js';
-import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
+import { createStreamSession, getStreamSession } from '../utils/sse-connections.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();

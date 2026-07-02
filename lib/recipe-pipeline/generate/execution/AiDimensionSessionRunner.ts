@@ -108,7 +108,7 @@ export async function runAiDimensionSession({
   };
   // H4：建议区间注入可观测——数量问题排查时首先要能看到 plan 建议是否到位、数值多少。
   logger.info(
-    `[Insight-v3] plan candidate suggestion: totalRecipeBudget=${planRecipeBudget ?? 'n/a'}, dims=${activeDimIds.length}, dimensionBudgets=${planDimensionBudgets ? JSON.stringify(planDimensionBudgets) : 'none'}`
+    `[generate] plan candidate suggestion: totalRecipeBudget=${planRecipeBudget ?? 'n/a'}, dims=${activeDimIds.length}, dimensionBudgets=${planDimensionBudgets ? JSON.stringify(planDimensionBudgets) : 'none'}`
   );
 
   const admissions = await resolveGenerateDimensionAdmissions({
@@ -122,7 +122,7 @@ export async function runAiDimensionSession({
     emitter: preparation.emitter,
   });
   logger.info(
-    `[Insight-v3] Active dimensions: [${activeDimIds.join(', ')}], concurrency=${enableParallel ? concurrency : 1}${preparation.isIncremental ? `, incremental skip: [${admissions.incrementalSkippedDims.join(', ')}]` : ''}`
+    `[generate] Active dimensions: [${activeDimIds.join(', ')}], concurrency=${enableParallel ? concurrency : 1}${preparation.isIncremental ? `, incremental skip: [${admissions.incrementalSkippedDims.join(', ')}]` : ''}`
   );
   applyGenerateDimensionAdmissions({
     admissions,
@@ -307,7 +307,7 @@ export async function runAiDimensionSession({
   });
 
   const startedAtMs = Date.now();
-  logger.info('[Insight-v3] Bootstrap agent session run start', {
+  logger.info('[generate] Bootstrap agent session run start', {
     sessionId: preparation.sessionId,
     activeDimIds,
     skippedDimIds: admissions.skippedDimIds,
@@ -317,7 +317,7 @@ export async function runAiDimensionSession({
   let parentRunResult: AgentRunResult;
   try {
     parentRunResult = await services.agentService.run(bootstrapSessionInput);
-    logger.info('[Insight-v3] Bootstrap agent session run complete', {
+    logger.info('[generate] Bootstrap agent session run complete', {
       sessionId: preparation.sessionId,
       durationMs: Date.now() - startedAtMs,
       status: parentRunResult.status,
@@ -329,7 +329,7 @@ export async function runAiDimensionSession({
       usage: parentRunResult.usage,
     });
   } catch (err: unknown) {
-    logger.warn('[Insight-v3] Bootstrap agent session run failed', {
+    logger.warn('[generate] Bootstrap agent session run failed', {
       sessionId: preparation.sessionId,
       durationMs: Date.now() - startedAtMs,
       error: err instanceof Error ? err.message : String(err),
@@ -340,7 +340,7 @@ export async function runAiDimensionSession({
 
   if (bootstrapDedup.count > 0) {
     logger.info(
-      `[Insight-v3] GenerateDedup: ${bootstrapDedup.count} entries registered during session`
+      `[generate] GenerateDedup: ${bootstrapDedup.count} entries registered during session`
     );
   }
 
