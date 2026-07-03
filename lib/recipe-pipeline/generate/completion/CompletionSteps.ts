@@ -31,20 +31,18 @@ export async function generateWiki({
 }): Promise<void> {
   try {
     const container = await getServiceContainer();
-    const { WikiGenerator } = await import('../../service/wiki/WikiGenerator.js');
+    const { WikiGenerator } = await import('../wiki/WikiGenerator.js');
     const moduleService = container.get?.('moduleService');
     const knowledgeService = container.get?.('knowledgeService');
     if (!moduleService || !knowledgeService) {
       return;
     }
 
-    const wikiDeps: import('../../service/wiki/WikiGenerator.js').WikiDeps = {
+    const wikiDeps: import('../wiki/WikiGenerator.js').WikiDeps = {
       projectRoot,
       dataRoot,
-      moduleService:
-        moduleService as import('../../service/wiki/WikiGenerator.js').WikiModuleService,
-      knowledgeService:
-        knowledgeService as import('../../service/wiki/WikiGenerator.js').WikiKnowledgeService,
+      moduleService: moduleService as import('../wiki/WikiGenerator.js').WikiModuleService,
+      knowledgeService: knowledgeService as import('../wiki/WikiGenerator.js').WikiKnowledgeService,
       options: { mode: 'bootstrap' },
     };
     const wikiGenerator: WikiGeneratorLike = new WikiGenerator(wikiDeps);

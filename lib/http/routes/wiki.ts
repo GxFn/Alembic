@@ -19,13 +19,13 @@ import Logger from '@alembic/core/logging';
 import { DEFAULT_KNOWLEDGE_BASE_DIR, resolveDataRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
 import { z } from 'zod';
-import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import {
   type WikiAiProvider,
   WikiGenerator,
   type WikiKnowledgeService,
   type WikiModuleService,
-} from '../../service/wiki/WikiGenerator.js';
+} from '#recipe-pipeline/generate/wiki/WikiGenerator.js';
+import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate, validateParams } from '../middleware/validate.js';
 
 const router = express.Router();

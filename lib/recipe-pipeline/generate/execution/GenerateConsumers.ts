@@ -23,7 +23,7 @@ import type { ProjectContextDimensionResultHook } from '../../../project-facts/P
 import {
   generateSkill,
   type WorkflowSkillGenerationResult,
-} from '../../../workflows/skill-delivery/SkillCompletionCapability.js';
+} from '../skill-delivery/SkillCompletionCapability.js';
 import {
   type AgentResultLike,
   type DimensionFinding,

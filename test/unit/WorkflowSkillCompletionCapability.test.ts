@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { WriteZone } from '@alembic/core/io';
 import { describe, expect, test, vi } from 'vitest';
-import { generateSkill } from '../../lib/workflows/skill-delivery/SkillCompletionCapability.js';
+import { generateSkill } from '../../lib/recipe-pipeline/generate/skill-delivery/SkillCompletionCapability.js';
 
 describe('WorkflowSkillCompletionCapability', () => {
   test('rejects skill generation when analysis text is below quality threshold', async () => {

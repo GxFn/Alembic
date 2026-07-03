@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import { runWorkflowCompletionFinalizer } from '../../lib/recipe-pipeline/generate/completion/CompletionFinalizer.js';
 import { buildAiDimensionCompletionSummary } from '../../lib/recipe-pipeline/generate/execution/AiDimensionFinalizer.js';
-import { runWorkflowCompletionFinalizer } from '../../lib/workflows/completion/CompletionFinalizer.js';
 
 const tmpDirs: string[] = [];
 
@@ -174,7 +174,7 @@ describe('WorkflowCompletionFinalizer', () => {
 
   test('keeps completion side effects in dedicated step modules', () => {
     const source = readFileSync(
-      join(process.cwd(), 'lib/workflows/completion/CompletionFinalizer.ts'),
+      join(process.cwd(), 'lib/recipe-pipeline/generate/completion/CompletionFinalizer.ts'),
       'utf8'
     );
 

@@ -15,7 +15,7 @@ import {
   type WikiKnowledgeService,
   type WikiModuleService,
   type WikiProjectGraph,
-} from '../../lib/service/wiki/WikiGenerator.js';
+} from '../../lib/recipe-pipeline/generate/wiki/WikiGenerator.js';
 
 /* ══════════════════════════════════════════════════════
  *  Mock Factories

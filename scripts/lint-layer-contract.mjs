@@ -36,7 +36,6 @@ const ALIAS_TO_AREA = {
   '#platform': 'platform',
   '#types': 'types',
   '#http': 'http',
-  '#workflows': 'workflows',
   '#tools': 'tools',
   '#sandbox': 'sandbox',
 };

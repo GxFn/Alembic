@@ -17,7 +17,7 @@ import {
   type WorkflowCompletionFinalizerResult,
   type WorkflowCompletionSummary,
   type WorkflowSemanticMemoryConsolidationResult,
-} from '../../../workflows/completion/CompletionFinalizer.js';
+} from '../completion/CompletionFinalizer.js';
 import type { AiDimensionPreparation } from './AiDimensionPreparation.js';
 import type { AiDimensionSessionResult } from './AiDimensionSessionRunner.js';
 import { consumeGenerateSkills, type SkillResults } from './GenerateConsumers.js';
