@@ -11,6 +11,7 @@ import {
   type HostAgentAnalysisPacket,
   type KnowledgeRescanExecutionDecision,
 } from '@alembic/core/host-agent-workflows';
+import { RECIPE_PIPELINE_EVENTS } from '@alembic/core/knowledge';
 import {
   buildProjectContextPresenterInput,
   type ModuleContext,
@@ -618,7 +619,7 @@ export function registerProjectContextWorkflowSessionReleaseOnGenerateCompletion
       return;
     }
 
-    eventBus.off?.('bootstrap:all-completed', listener);
+    eventBus.off?.(RECIPE_PIPELINE_EVENTS.allCompleted, listener);
     const releaseDecision = classifyBootstrapCompletionRelease(event, input.workflow);
     if (!releaseDecision.release) {
       input.logger.warn('[ProjectContextWorkflowFacts] Workflow session lease retained', {
@@ -640,8 +641,8 @@ export function registerProjectContextWorkflowSessionReleaseOnGenerateCompletion
     });
   };
 
-  eventBus.on('bootstrap:all-completed', listener);
-  return () => eventBus.off?.('bootstrap:all-completed', listener);
+  eventBus.on(RECIPE_PIPELINE_EVENTS.allCompleted, listener);
+  return () => eventBus.off?.(RECIPE_PIPELINE_EVENTS.allCompleted, listener);
 }
 
 function buildProjectContextWorkflowSessionOptions(input: {

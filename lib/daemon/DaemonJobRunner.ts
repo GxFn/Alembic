@@ -1,4 +1,5 @@
 import type { DaemonJobRecord, DaemonJobStatus, JobStore } from '@alembic/core/daemon';
+import { RECIPE_PIPELINE_EVENTS } from '@alembic/core/knowledge';
 import type { CoverageLedgerRepository, DeepMiningRoundRecord } from '@alembic/core/repositories';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
@@ -7,10 +8,8 @@ import {
   resolveProjectScopeAnalysisContext,
   resolveProjectScopeSourceIdentitiesFromContainer,
 } from '../project-scope/ProjectScopeAnalysis.js';
-import { runDeepMiningRounds } from '../recipe-pipeline/generate/DeepMiningRoundGate.js';
-import { runModuleMiningWorkflow } from '../recipe-pipeline/generate/ModuleMiningWorkflow.js';
 import type { GenerateProcessEventDraft } from '../recipe-pipeline/generate/runtime/generate-event-types.js';
-import { runGeneratePlanGate } from '../recipe-pipeline/plan/PlanSelectionGate.js';
+import { executeRecipePipelineJob } from '../recipe-pipeline/RecipePipelineFacade.js';
 import {
   getJobDisplaySnapshotStore,
   getJobProcessEventRecorder,
@@ -53,13 +52,15 @@ export type {
   RunDaemonJobResult,
 } from './DaemonJobWorkflowTypes.js';
 
+// W5-B4:事件名从裸串切 Core 单源常量(wire 值恒为 bootstrap:*,消费端切换是
+// wire-contract.md 预定动作);daemon 不订阅 aiUnavailable。
 type BootstrapProcessEventName =
-  | 'bootstrap:all-completed'
-  | 'bootstrap:process-events'
-  | 'bootstrap:started'
-  | 'bootstrap:task-completed'
-  | 'bootstrap:task-failed'
-  | 'bootstrap:task-started';
+  | typeof RECIPE_PIPELINE_EVENTS.allCompleted
+  | typeof RECIPE_PIPELINE_EVENTS.processEvents
+  | typeof RECIPE_PIPELINE_EVENTS.started
+  | typeof RECIPE_PIPELINE_EVENTS.taskCompleted
+  | typeof RECIPE_PIPELINE_EVENTS.taskFailed
+  | typeof RECIPE_PIPELINE_EVENTS.taskStarted;
 
 export function createDaemonJob(options: DaemonJobOptions): DaemonJobRecord {
   const store = getJobStore(options.container);
@@ -167,7 +168,7 @@ export async function runDaemonJob(options: RunDaemonJobOptions): Promise<RunDae
   });
 
   try {
-    const result = await executeApiAiWorkflow(options);
+    const result = await executeRecipePipelineJob(options);
     const bootstrapSessionId = extractBootstrapSessionId(result);
 
     if (bootstrapSessionId && isBootstrapSessionRunning(result, options.container)) {
@@ -678,7 +679,7 @@ export function attachGenerateProcessEventBridge(options: {
     });
   };
 
-  subscribe('bootstrap:started', (payload: unknown) => {
+  subscribe(RECIPE_PIPELINE_EVENTS.started, (payload: unknown) => {
     const event = asRecord(payload);
     if (!shouldAccept(event)) {
       return;
@@ -698,7 +699,7 @@ export function attachGenerateProcessEventBridge(options: {
     refreshSnapshot();
   });
 
-  subscribe('bootstrap:task-started', (payload: unknown) => {
+  subscribe(RECIPE_PIPELINE_EVENTS.taskStarted, (payload: unknown) => {
     const event = asRecord(payload);
     if (!shouldAccept(event)) {
       return;
@@ -722,7 +723,7 @@ export function attachGenerateProcessEventBridge(options: {
     refreshSnapshot();
   });
 
-  subscribe('bootstrap:task-completed', (payload: unknown) => {
+  subscribe(RECIPE_PIPELINE_EVENTS.taskCompleted, (payload: unknown) => {
     const event = asRecord(payload);
     if (!shouldAccept(event)) {
       return;
@@ -774,7 +775,7 @@ export function attachGenerateProcessEventBridge(options: {
     refreshSnapshot();
   });
 
-  subscribe('bootstrap:process-events', (payload: unknown) => {
+  subscribe(RECIPE_PIPELINE_EVENTS.processEvents, (payload: unknown) => {
     const event = asRecord(payload);
     if (!shouldAccept(event)) {
       return;
@@ -795,7 +796,7 @@ export function attachGenerateProcessEventBridge(options: {
     refreshSnapshot();
   });
 
-  subscribe('bootstrap:task-failed', (payload: unknown) => {
+  subscribe(RECIPE_PIPELINE_EVENTS.taskFailed, (payload: unknown) => {
     const event = asRecord(payload);
     if (!shouldAccept(event)) {
       return;
@@ -825,7 +826,7 @@ export function attachGenerateProcessEventBridge(options: {
     refreshSnapshot();
   });
 
-  subscribe('bootstrap:all-completed', (payload: unknown) => {
+  subscribe(RECIPE_PIPELINE_EVENTS.allCompleted, (payload: unknown) => {
     const event = asRecord(payload);
     if (!shouldAccept(event)) {
       return;
@@ -863,45 +864,6 @@ export function attachGenerateProcessEventBridge(options: {
     jobId: options.jobId,
   });
   return cleanup;
-}
-
-async function executeApiAiWorkflow(options: RunDaemonJobOptions): Promise<unknown> {
-  if (options.kind === 'bootstrap') {
-    const planGate = await runGeneratePlanGate(options);
-    const { runGenerateWorkflow } = await import('../recipe-pipeline/generate/GenerateWorkflow.js');
-    const raw = await runGenerateWorkflow(
-      { container: options.container, logger: options.logger },
-      {
-        maxFiles: planGate.projection.budget.maxFiles,
-        skipGuard: Boolean(options.args?.skipGuard || false),
-        contentMaxLines: planGate.projection.budget.contentMaxLines,
-        dimensions: stringArrayArg(options.args?.dimensions),
-        loadSkills: true,
-        planSelectionProjection: planGate.projection,
-        projectContextFacts: planGate.projectContextFacts,
-      },
-      { mode: 'full' }
-    );
-    const result = unwrapEnvelope(raw);
-    return { ...asRecord(result), asyncFill: true };
-  }
-
-  const generationStage = generationStageArg(options.args?.generationStage);
-  if (generationStage === 'deepMining') {
-    return runDeepMiningRounds(options);
-  }
-  if (generationStage === 'moduleMining') {
-    return runModuleMiningWorkflow(options);
-  }
-
-  const { runGenerateWorkflow } = await import('../recipe-pipeline/generate/GenerateWorkflow.js');
-  const raw = await runGenerateWorkflow(
-    { container: options.container, logger: options.logger },
-    buildDaemonRescanWorkflowArgs({ args: options.args, source: options.source }),
-    { mode: 'incremental' }
-  );
-  const result = unwrapEnvelope(raw);
-  return { ...asRecord(result), asyncFill: true };
 }
 
 function linkBootstrapSessionCompletion(options: {
@@ -966,10 +928,10 @@ function linkBootstrapSessionCompletion(options: {
     if (session.sessionId !== options.bootstrapSessionId) {
       return;
     }
-    eventBus.off('bootstrap:all-completed', listener);
+    eventBus.off(RECIPE_PIPELINE_EVENTS.allCompleted, listener);
     completeFromSession(session);
   };
-  eventBus.on('bootstrap:all-completed', listener);
+  eventBus.on(RECIPE_PIPELINE_EVENTS.allCompleted, listener);
 }
 
 function finalizeBootstrapJobFromSession(options: {
