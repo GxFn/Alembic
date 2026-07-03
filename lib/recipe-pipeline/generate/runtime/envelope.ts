@@ -15,7 +15,27 @@ export interface EnvelopeMeta {
   [key: string]: unknown;
 }
 
-import type { ToolUsageProblem } from './problem.js';
+import type { CORE_FAILURE_TAXONOMY_VERSION, CoreFieldFailureKind } from '@alembic/core/shared';
+
+// W5-B3:原 handler-runtime/problem.ts 解散——buildToolUsageProblem 运行时函数 0 消费删除,
+// envelope problem 字段的类型形状(MT3/D25 taxonomy 投影)内联至此(唯一消费者)。
+export interface ToolFieldProblem {
+  readonly field: string;
+  readonly error: string;
+}
+
+export interface ToolUsageProblem {
+  readonly code: string;
+  readonly reasonCode: CoreFieldFailureKind;
+  readonly failureId: string;
+  readonly problemClass: string;
+  readonly failingStep: string;
+  readonly nextAction: string;
+  readonly retryable: boolean;
+  readonly retryPolicy: string;
+  readonly taxonomyVersion: typeof CORE_FAILURE_TAXONOMY_VERSION;
+  readonly fieldProblems?: readonly ToolFieldProblem[];
+}
 
 export interface EnvelopeOptions<T = unknown> {
   success: boolean;

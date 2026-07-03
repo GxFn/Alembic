@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { SessionStore } from '@alembic/agent/memory';
 import { describe, expect, test, vi } from 'vitest';
+import type { IncrementalPlan } from '../../#types/handler-runtime.js';
 import {
   buildGenerateDimensionAdmissionDecisions,
   resolveGenerateDimensionAdmissions,
@@ -10,7 +11,6 @@ import {
 import type { DimensionContext } from '../../lib/recipe-pipeline/generate/execution/DimensionContext.js';
 import type { GenerateRescanContext } from '../../lib/recipe-pipeline/generate/execution/RescanContext.js';
 import type { GenerateEventEmitter } from '../../lib/recipe-pipeline/generate/runtime/GenerateEventEmitter.js';
-import type { IncrementalPlan } from '../../lib/service/handler-runtime/types.js';
 
 function makeIncrementalPlan(partial: Partial<IncrementalPlan> = {}): IncrementalPlan {
   return {

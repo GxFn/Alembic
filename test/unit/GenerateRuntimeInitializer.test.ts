@@ -1,9 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
+import type { IncrementalPlan } from '../../#types/handler-runtime.js';
 import {
   type GenerateRuntimeContainer,
   initializeGenerateRuntime,
 } from '../../lib/recipe-pipeline/generate/execution/RuntimeInitializer.js';
-import type { IncrementalPlan } from '../../lib/service/handler-runtime/types.js';
 
 function makeContainer(
   overrides: Partial<GenerateRuntimeContainer> = {}

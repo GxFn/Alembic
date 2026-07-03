@@ -16,8 +16,8 @@ import { getProjectSkillsPath } from '@alembic/core/config';
 import type { WriteZone } from '@alembic/core/io';
 import { pathGuard } from '@alembic/core/io';
 import { resolveDataRoot } from '@alembic/core/workspace';
+import type { McpContext } from '#types/handler-runtime.js';
 import { PACKAGE_SKILLS_DIR } from '../../shared/package-assets.js';
-import type { McpContext } from '../handler-runtime/types.js';
 
 function _getWriteZone(ctx?: McpContext | null): WriteZone | undefined {
   return ctx?.container?.singletons?.writeZone as WriteZone | undefined;
