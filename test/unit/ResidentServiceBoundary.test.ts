@@ -51,8 +51,16 @@ describe('resident service HTTP boundary', () => {
 
     // CLI and daemon bootstrap/rescan now use the unified ProjectIndex workflow entry.
     // Legacy cold-start/rescan workflow wrappers stay internal compatibility surfaces.
+    // W5-B4: daemon reaches the workflow through RecipePipelineFacade (O-3) — assert the
+    // full chain: runner -> facade -> GenerateWorkflow, keeping the RIC-3 guard semantics.
+    const facadePath = 'recipe-pipeline' + '/RecipePipelineFacade.js';
+    const facadeSource = readFileSync(
+      join(repoRoot, 'lib/recipe-pipeline/RecipePipelineFacade.ts'),
+      'utf8'
+    );
     expect(cliSource).toContain(projectIndexPath);
-    expect(daemonRunnerSource).toContain(projectIndexPath);
+    expect(daemonRunnerSource).toContain(facadePath);
+    expect(facadeSource).toContain('./generate/GenerateWorkflow.js');
     expect(candidatesRouteSource).toContain(bootstrapRefinePath);
   });
 
