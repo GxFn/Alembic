@@ -4,8 +4,8 @@ import {
   createDisabledFileMonitorStatus,
   createGitFallbackFileMonitorStatus,
   createNativeFileMonitorStatus,
-} from '../../lib/daemon/FileMonitorStatus.js';
-import { buildAlembicRuntimeBoundary } from '../../lib/daemon/RuntimeBoundary.js';
+} from '../../lib/daemon/runtime/FileMonitorStatus.js';
+import { buildAlembicRuntimeBoundary } from '../../lib/daemon/runtime/RuntimeBoundary.js';
 import {
   buildDaemonCapabilities,
   buildDaemonProjectIdentity,

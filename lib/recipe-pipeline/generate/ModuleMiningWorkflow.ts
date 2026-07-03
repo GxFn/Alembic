@@ -1,12 +1,12 @@
 import type { AgentService } from '@alembic/agent/service';
-import { getJobProcessEventRecorder } from '../../daemon/DaemonJobServices.js';
+import { getJobProcessEventRecorder } from '../../daemon/jobs/DaemonJobServices.js';
 import {
   asRecord,
   extractNewRecipesThisRound,
   positiveIntegerArg,
   recordJobProcessEvent,
-} from '../../daemon/DaemonJobWorkflowHelpers.js';
-import type { RunDaemonJobOptions } from '../../daemon/DaemonJobWorkflowTypes.js';
+} from '../../daemon/jobs/DaemonJobWorkflowHelpers.js';
+import type { RunDaemonJobOptions } from '../../daemon/jobs/DaemonJobWorkflowTypes.js';
 import {
   readModuleMiningSourceRefDelta,
   readModuleMiningSourceRefSnapshot,

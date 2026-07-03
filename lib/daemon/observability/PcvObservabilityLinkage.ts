@@ -4,7 +4,7 @@ import {
   normalizeProjectScopeSourceRefsForRuntime,
   type ProjectScopeSourceIdentity,
   type ProjectScopeSourceRefNormalizationResult,
-} from '../project-scope/ProjectScopeAnalysis.js';
+} from '../../project-scope/ProjectScopeAnalysis.js';
 
 export const PCV_N9_NODE_ID = 'N9-agent-analyze-quality';
 export const PCV_N9_OBSERVABILITY_CONTRACT_VERSION = 1;

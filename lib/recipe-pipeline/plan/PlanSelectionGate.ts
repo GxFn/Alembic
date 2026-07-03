@@ -13,17 +13,17 @@ import {
   collectPlanProjectContext,
   PLAN_FACTS_PROJECTION_BUDGET_BYTES,
 } from '@alembic/core/service/planFacts';
-import { getJobProcessEventRecorder } from '../../daemon/DaemonJobServices.js';
+import { getJobProcessEventRecorder } from '../../daemon/jobs/DaemonJobServices.js';
 import {
   numberArg,
   positiveIntegerArg,
   recordJobProcessEvent,
   stringArrayArg,
-} from '../../daemon/DaemonJobWorkflowHelpers.js';
+} from '../../daemon/jobs/DaemonJobWorkflowHelpers.js';
 import type {
   GeneratePlanGateResult,
   RunDaemonJobOptions,
-} from '../../daemon/DaemonJobWorkflowTypes.js';
+} from '../../daemon/jobs/DaemonJobWorkflowTypes.js';
 import { buildProjectContextWorkflowFacts } from '../../project-facts/ProjectContextWorkflowFacts.js';
 import { resolveProjectScopeAnalysisContext } from '../../project-scope/ProjectScopeAnalysis.js';
 

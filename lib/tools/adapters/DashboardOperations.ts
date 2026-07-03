@@ -207,7 +207,7 @@ async function scanProject(request: ToolExecutionRequest) {
 
 async function bootstrapProject(request: ToolExecutionRequest) {
   const container = getContainer(request);
-  const { createDaemonJob, runDaemonJob } = await import('../../daemon/DaemonJobRunner.js');
+  const { createDaemonJob, runDaemonJob } = await import('../../daemon/jobs/DaemonJobRunner.js');
   const args = {
     maxFiles: numberArg(request.args.maxFiles, 500),
     skipGuard: Boolean(request.args.skipGuard || false),
@@ -250,7 +250,7 @@ async function cancelBootstrap(request: ToolExecutionRequest) {
 
 async function rescanProject(request: ToolExecutionRequest) {
   const container = getContainer(request);
-  const { createDaemonJob, runDaemonJob } = await import('../../daemon/DaemonJobRunner.js');
+  const { createDaemonJob, runDaemonJob } = await import('../../daemon/jobs/DaemonJobRunner.js');
   const args: Record<string, unknown> = {
     reason: (request.args.reason as string | undefined) || 'dashboard-rescan',
     dimensions: Array.isArray(request.args.dimensions)

@@ -29,7 +29,7 @@ import {
   createStartingFileMonitorStatus,
   createUnsupportedFileMonitorStatus,
   type DaemonFileMonitorRuntimeStatus,
-} from '../../../daemon/FileMonitorStatus.js';
+} from '../../../daemon/runtime/FileMonitorStatus.js';
 import type { FileChangeDispatcher } from '../../../service/FileChangeDispatcher.js';
 
 const DEFAULT_INTERVAL_MS = 60_000;

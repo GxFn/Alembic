@@ -16,8 +16,8 @@ import {
 import { timerRegistry } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
 import AppRuntime from '../lib/Bootstrap.js';
-import { markInterruptedDaemonJobs } from '../lib/daemon/DaemonJobRunner.js';
-import { createDisabledFileMonitorStatus } from '../lib/daemon/FileMonitorStatus.js';
+import { markInterruptedDaemonJobs } from '../lib/daemon/jobs/DaemonJobRunner.js';
+import { createDisabledFileMonitorStatus } from '../lib/daemon/runtime/FileMonitorStatus.js';
 import HttpServer from '../lib/http/HttpServer.js';
 import { readLatestSchemaMigrationVersion } from '../lib/infrastructure/database/SqliteDatabaseAccess.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';

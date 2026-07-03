@@ -23,10 +23,10 @@ import {
   type DaemonFileMonitorRuntimeState,
   type DaemonFileMonitorRuntimeStatus,
   isFileMonitorRuntimeAvailable,
-} from '../../daemon/FileMonitorStatus.js';
-import { ProjectRuntimeControl } from '../../daemon/ProjectRuntimeControl.js';
-import { buildDaemonProjectRuntimeSourceOfTruth } from '../../daemon/ProjectRuntimeSourceOfTruth.js';
-import { buildAlembicRuntimeBoundary } from '../../daemon/RuntimeBoundary.js';
+} from '../../daemon/runtime/FileMonitorStatus.js';
+import { ProjectRuntimeControl } from '../../daemon/runtime/ProjectRuntimeControl.js';
+import { buildDaemonProjectRuntimeSourceOfTruth } from '../../daemon/runtime/ProjectRuntimeSourceOfTruth.js';
+import { buildAlembicRuntimeBoundary } from '../../daemon/runtime/RuntimeBoundary.js';
 import { readLatestSchemaMigrationVersion } from '../../infrastructure/database/SqliteDatabaseAccess.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';

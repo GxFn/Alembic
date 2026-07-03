@@ -35,7 +35,7 @@ import {
   ProjectScopeRegistryStore,
   resolveAlembicDaemonPaths,
   resolveAlembicWorkspace,
-} from '../project-scope/ProjectScopeRegistry.js';
+} from '../../project-scope/ProjectScopeRegistry.js';
 import { type DaemonStatus, DaemonSupervisor } from './DaemonSupervisor.js';
 import {
   buildProjectRuntimeControlSourceOfTruth,

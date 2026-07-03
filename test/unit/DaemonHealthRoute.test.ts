@@ -73,7 +73,7 @@ vi.mock('@alembic/core/shared', () => ({
 import {
   createGitFallbackFileMonitorStatus,
   createNativeFileMonitorStatus,
-} from '../../lib/daemon/FileMonitorStatus.js';
+} from '../../lib/daemon/runtime/FileMonitorStatus.js';
 import daemonRouter from '../../lib/http/routes/daemon.js';
 
 describe('daemon health resident service contract', () => {

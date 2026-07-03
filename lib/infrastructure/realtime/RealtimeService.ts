@@ -5,7 +5,7 @@
 
 import Logger from '@alembic/core/logging';
 import { Server as SocketIOServer } from 'socket.io';
-import type { JobProcessEventBroadcastPayload } from '../../daemon/JobProcessEventRecorder.js';
+import type { JobProcessEventBroadcastPayload } from '../../daemon/observability/JobProcessEventRecorder.js';
 
 export class RealtimeService {
   io: SocketIOServer;

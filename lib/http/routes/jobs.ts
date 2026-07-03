@@ -26,13 +26,13 @@ import {
   getJobDisplaySnapshotStore,
   getJobProcessEventRecorder,
   getJobStore,
-} from '../../daemon/DaemonJobRunner.js';
+} from '../../daemon/jobs/DaemonJobRunner.js';
 import {
   buildJobDisplaySnapshotApiRef,
   type JobDisplaySnapshotStore,
   summarizeJobDisplaySnapshotForApi,
-} from '../../daemon/JobDisplaySnapshotStore.js';
-import { readJobProcessEventArtifact } from '../../daemon/JobProcessEventArtifacts.js';
+} from '../../daemon/observability/JobDisplaySnapshotStore.js';
+import { readJobProcessEventArtifact } from '../../daemon/observability/JobProcessEventArtifacts.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';
 

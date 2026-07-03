@@ -1,10 +1,10 @@
 import type { PlanStageId } from '@alembic/core/plans';
-import type { ServiceContainer } from '../injection/ServiceContainer.js';
-import type { DaemonRescanWorkflowArgs, ModuleDimensionTarget } from './DaemonJobWorkflowTypes.js';
+import type { ServiceContainer } from '../../injection/ServiceContainer.js';
 import type {
   JobProcessEventRecorder,
   JobProcessEventRecordInput,
-} from './JobProcessEventRecorder.js';
+} from '../observability/JobProcessEventRecorder.js';
+import type { DaemonRescanWorkflowArgs, ModuleDimensionTarget } from './DaemonJobWorkflowTypes.js';
 
 export function buildDaemonRescanWorkflowArgs(options: {
   args?: Record<string, unknown>;

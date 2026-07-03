@@ -4,8 +4,8 @@ import path from 'node:path';
 import type { DaemonJobRecord } from '@alembic/core/daemon';
 import type { Request } from 'express';
 import { describe, expect, test } from 'vitest';
-import { JobDisplaySnapshotStore } from '../../lib/daemon/JobDisplaySnapshotStore.js';
-import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
+import { JobDisplaySnapshotStore } from '../../lib/daemon/observability/JobDisplaySnapshotStore.js';
+import { JobProcessEventRecorder } from '../../lib/daemon/observability/JobProcessEventRecorder.js';
 import {
   buildJobDisplaySnapshotResponse,
   buildJobDisplaySnapshotUrl,

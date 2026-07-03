@@ -18,8 +18,8 @@ import {
   readDaemonState,
   removeDaemonState,
 } from '@alembic/core/daemon';
-import { resolveAlembicDaemonPaths } from '../project-scope/ProjectScopeRegistry.js';
-import { PACKAGE_ROOT } from '../shared/package-assets.js';
+import { resolveAlembicDaemonPaths } from '../../project-scope/ProjectScopeRegistry.js';
+import { PACKAGE_ROOT } from '../../shared/package-assets.js';
 
 export type DaemonStatusKind = 'ready' | 'starting' | 'stopped' | 'stale' | 'failed';
 

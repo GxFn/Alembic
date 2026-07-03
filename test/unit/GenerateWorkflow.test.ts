@@ -51,7 +51,7 @@ describe('ProjectIndexWorkflow compatibility', () => {
   test('keeps CLI and daemon project-index consumers explicit by mode', async () => {
     const cliSource = await readFile(join(process.cwd(), 'bin/cli.ts'), 'utf8');
     const daemonSource = await readFile(
-      join(process.cwd(), 'lib/daemon/DaemonJobRunner.ts'),
+      join(process.cwd(), 'lib/daemon/jobs/DaemonJobRunner.ts'),
       'utf8'
     );
     const deepMiningSource = await readFile(

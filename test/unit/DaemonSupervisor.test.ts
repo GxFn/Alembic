@@ -14,7 +14,10 @@ import {
 } from '@alembic/core/daemon';
 import { getGhostWorkspaceDir, ProjectRegistry } from '@alembic/core/workspace';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { computeDaemonLockBackoffMs, DaemonSupervisor } from '../../lib/daemon/DaemonSupervisor.js';
+import {
+  computeDaemonLockBackoffMs,
+  DaemonSupervisor,
+} from '../../lib/daemon/runtime/DaemonSupervisor.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
 

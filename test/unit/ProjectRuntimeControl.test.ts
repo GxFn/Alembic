@@ -14,11 +14,11 @@ import {
 } from '@alembic/core/daemon';
 import { getProjectRegistryDir, ProjectRegistry, WorkspaceResolver } from '@alembic/core/workspace';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import type { DaemonStatus, DaemonSupervisor } from '../../lib/daemon/DaemonSupervisor.js';
+import type { DaemonStatus, DaemonSupervisor } from '../../lib/daemon/runtime/DaemonSupervisor.js';
 import {
   getProjectRuntimeControlStatePath,
   ProjectRuntimeControl,
-} from '../../lib/daemon/ProjectRuntimeControl.js';
+} from '../../lib/daemon/runtime/ProjectRuntimeControl.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
 const ORIGINAL_ALEMBIC_DAEMON_MODE = process.env.ALEMBIC_DAEMON_MODE;

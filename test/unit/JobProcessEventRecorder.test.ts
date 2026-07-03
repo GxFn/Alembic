@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
+import { JobProcessEventRecorder } from '../../lib/daemon/observability/JobProcessEventRecorder.js';
 
 describe('JobProcessEventRecorder', () => {
   test('records Core job process events and broadcasts developer views', () => {

@@ -65,8 +65,8 @@ import type { FeedbackCollector, QualityScorer } from '@alembic/core/service/qua
 import type { RecipeCandidateValidator, RecipeParser } from '@alembic/core/service/recipe';
 import type { LanguageService } from '@alembic/core/shared';
 import type { IndexingPipeline, VectorService, VectorStore } from '@alembic/core/vector';
-import type { JobDisplaySnapshotStore } from '../daemon/JobDisplaySnapshotStore.js';
-import type { JobProcessEventRecorder } from '../daemon/JobProcessEventRecorder.js';
+import type { JobDisplaySnapshotStore } from '../daemon/observability/JobDisplaySnapshotStore.js';
+import type { JobProcessEventRecorder } from '../daemon/observability/JobProcessEventRecorder.js';
 // ── Core Types ──
 import type Gateway from '../governance/gateway/Gateway.js';
 // ── InfraModule Types ──

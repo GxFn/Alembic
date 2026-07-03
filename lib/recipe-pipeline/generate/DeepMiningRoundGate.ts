@@ -6,7 +6,7 @@ import type {
   CoverageLedgerRepository,
   DeepMiningRoundRecord,
 } from '@alembic/core/repositories';
-import { getJobProcessEventRecorder } from '../../daemon/DaemonJobServices.js';
+import { getJobProcessEventRecorder } from '../../daemon/jobs/DaemonJobServices.js';
 import {
   buildDaemonRescanWorkflowArgs,
   extractNewRecipesThisRound,
@@ -16,13 +16,13 @@ import {
   positiveIntegerArg,
   recordJobProcessEvent,
   unwrapEnvelope,
-} from '../../daemon/DaemonJobWorkflowHelpers.js';
+} from '../../daemon/jobs/DaemonJobWorkflowHelpers.js';
 import type {
   DeepMiningRoundPlanContext,
   GeneratePlanGateResult,
   ModuleDimensionTarget,
   RunDaemonJobOptions,
-} from '../../daemon/DaemonJobWorkflowTypes.js';
+} from '../../daemon/jobs/DaemonJobWorkflowTypes.js';
 import { resolveProjectScopeAnalysisContext } from '../../project-scope/ProjectScopeAnalysis.js';
 import { runPlanSelectionGate } from '../plan/PlanSelectionGate.js';
 

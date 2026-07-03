@@ -23,7 +23,7 @@ describe('resident service HTTP boundary', () => {
   test('routes Alembic-owned bootstrap/rescan/refine consumers to project-index/service paths (RIC-3: off resident)', () => {
     const cliSource = readFileSync(join(repoRoot, 'bin/cli.ts'), 'utf8');
     const daemonRunnerSource = readFileSync(
-      join(repoRoot, 'lib/daemon/DaemonJobRunner.ts'),
+      join(repoRoot, 'lib/daemon/jobs/DaemonJobRunner.ts'),
       'utf8'
     );
     const candidatesRouteSource = readFileSync(

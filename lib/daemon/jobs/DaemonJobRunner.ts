@@ -2,14 +2,17 @@ import type { DaemonJobRecord, DaemonJobStatus, JobStore } from '@alembic/core/d
 import { RECIPE_PIPELINE_EVENTS } from '@alembic/core/knowledge';
 import type { CoverageLedgerRepository, DeepMiningRoundRecord } from '@alembic/core/repositories';
 import { resolveDataRoot } from '@alembic/core/workspace';
-import type { ServiceContainer } from '../injection/ServiceContainer.js';
-import { releaseProjectContextWorkflowSessionByProjectRoot } from '../project-facts/ProjectContextWorkflowFacts.js';
+import type { ServiceContainer } from '../../injection/ServiceContainer.js';
+import { releaseProjectContextWorkflowSessionByProjectRoot } from '../../project-facts/ProjectContextWorkflowFacts.js';
 import {
   resolveProjectScopeAnalysisContext,
   resolveProjectScopeSourceIdentitiesFromContainer,
-} from '../project-scope/ProjectScopeAnalysis.js';
-import type { GenerateProcessEventDraft } from '../recipe-pipeline/generate/runtime/generate-event-types.js';
-import { executeRecipePipelineJob } from '../recipe-pipeline/RecipePipelineFacade.js';
+} from '../../project-scope/ProjectScopeAnalysis.js';
+import type { GenerateProcessEventDraft } from '../../recipe-pipeline/generate/runtime/generate-event-types.js';
+import { executeRecipePipelineJob } from '../../recipe-pipeline/RecipePipelineFacade.js';
+import { materializeJobProcessEventTextArtifact } from '../observability/JobProcessEventArtifacts.js';
+import type { JobProcessEventRecorder } from '../observability/JobProcessEventRecorder.js';
+import { attachPcvN9ObservabilityCarry } from '../observability/PcvObservabilityLinkage.js';
 import {
   getJobDisplaySnapshotStore,
   getJobProcessEventRecorder,
@@ -34,9 +37,6 @@ import type {
   RunDaemonJobOptions,
   RunDaemonJobResult,
 } from './DaemonJobWorkflowTypes.js';
-import { materializeJobProcessEventTextArtifact } from './JobProcessEventArtifacts.js';
-import type { JobProcessEventRecorder } from './JobProcessEventRecorder.js';
-import { attachPcvN9ObservabilityCarry } from './PcvObservabilityLinkage.js';
 
 export {
   getJobDisplaySnapshotStore,

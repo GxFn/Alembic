@@ -40,7 +40,7 @@ import type {
   ProjectRuntimeControlSnapshot,
   ProjectRuntimeScopeSummary,
   ProjectRuntimeTarget,
-} from '../lib/daemon/ProjectRuntimeControl.js';
+} from '../lib/daemon/runtime/ProjectRuntimeControl.js';
 import { resolveAlembicWorkspace } from '../lib/project-scope/ProjectScopeRegistry.js';
 import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-assets.js';
 import { shutdown } from '../lib/shared/shutdown.js';
@@ -103,7 +103,9 @@ program
       return;
     }
 
-    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const { ProjectRuntimeControl } = await import(
+      '../lib/daemon/runtime/ProjectRuntimeControl.js'
+    );
     const result = await new ProjectRuntimeControl().openDashboard(
       projectTargetFromCli(target, opts),
       {
@@ -241,7 +243,7 @@ daemon
   .option('--no-open', '不打开 Dashboard（P3 默认不会自动打开）')
   .option('--json', 'JSON 格式输出')
   .action(async (opts) => {
-    const { DaemonSupervisor } = await import('../lib/daemon/DaemonSupervisor.js');
+    const { DaemonSupervisor } = await import('../lib/daemon/runtime/DaemonSupervisor.js');
     const supervisor = new DaemonSupervisor();
     const result = await supervisor.start({
       projectRoot: resolve(opts.dir),
@@ -267,7 +269,7 @@ daemon
   .option('-d, --dir <path>', '项目目录', '.')
   .option('--json', 'JSON 格式输出')
   .action(async (opts) => {
-    const { DaemonSupervisor } = await import('../lib/daemon/DaemonSupervisor.js');
+    const { DaemonSupervisor } = await import('../lib/daemon/runtime/DaemonSupervisor.js');
     const supervisor = new DaemonSupervisor();
     const result = await supervisor.status(resolve(opts.dir));
     if (opts.json) {
@@ -284,7 +286,7 @@ daemon
   .option('--wait <ms>', '等待停止的毫秒数', '5000')
   .option('--json', 'JSON 格式输出')
   .action(async (opts) => {
-    const { DaemonSupervisor } = await import('../lib/daemon/DaemonSupervisor.js');
+    const { DaemonSupervisor } = await import('../lib/daemon/runtime/DaemonSupervisor.js');
     const supervisor = new DaemonSupervisor();
     const result = await supervisor.stop({
       projectRoot: resolve(opts.dir),
@@ -309,7 +311,9 @@ projects
   .description('列出 registry 中的 Alembic 项目及 runtime scope summary')
   .option('--json', 'JSON 格式输出')
   .action(async (opts) => {
-    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const { ProjectRuntimeControl } = await import(
+      '../lib/daemon/runtime/ProjectRuntimeControl.js'
+    );
     const snapshot = await new ProjectRuntimeControl().snapshot();
     if (opts.json) {
       cli.json(snapshot);
@@ -323,7 +327,9 @@ projects
   .description('显示所有项目 status-all 与 selected / active runtime 状态')
   .option('--json', 'JSON 格式输出')
   .action(async (opts) => {
-    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const { ProjectRuntimeControl } = await import(
+      '../lib/daemon/runtime/ProjectRuntimeControl.js'
+    );
     const snapshot = await new ProjectRuntimeControl().snapshot();
     if (opts.json) {
       cli.json(snapshot);
@@ -339,7 +345,9 @@ projects
   .option('--project-root <path>', '项目目录（等价于 --dir，便于脚本化）')
   .option('--json', 'JSON 格式输出')
   .action(async (target: string | undefined, opts) => {
-    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const { ProjectRuntimeControl } = await import(
+      '../lib/daemon/runtime/ProjectRuntimeControl.js'
+    );
     const project = await new ProjectRuntimeControl().inspectProject(
       projectTargetFromCli(target, opts)
     );
@@ -355,7 +363,9 @@ projects
   .description('显示当前 selected project 与 active runtime project')
   .option('--json', 'JSON 格式输出')
   .action(async (opts) => {
-    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const { ProjectRuntimeControl } = await import(
+      '../lib/daemon/runtime/ProjectRuntimeControl.js'
+    );
     const snapshot = await new ProjectRuntimeControl().snapshot();
     const current = {
       activeRuntimeProject: snapshot.activeRuntimeProject,
@@ -379,7 +389,9 @@ projects
   .option('--project-root <path>', '项目目录（等价于 --dir，便于脚本化）')
   .option('--json', 'JSON 格式输出')
   .action(async (target: string | undefined, opts) => {
-    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const { ProjectRuntimeControl } = await import(
+      '../lib/daemon/runtime/ProjectRuntimeControl.js'
+    );
     const snapshot = await new ProjectRuntimeControl().selectProject(
       projectTargetFromCli(target, opts)
     );
@@ -400,7 +412,9 @@ projects
   .option('--stop-wait <ms>', '停止当前 active runtime 的等待毫秒数', '5000')
   .option('--json', 'JSON 格式输出')
   .action(async (target: string | undefined, opts) => {
-    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const { ProjectRuntimeControl } = await import(
+      '../lib/daemon/runtime/ProjectRuntimeControl.js'
+    );
     const result = await new ProjectRuntimeControl().startProject(
       projectTargetFromCli(target, opts),
       {
@@ -420,7 +434,9 @@ projects
   .option('--wait <ms>', '等待停止的毫秒数', '5000')
   .option('--json', 'JSON 格式输出')
   .action(async (target: string | undefined, opts) => {
-    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const { ProjectRuntimeControl } = await import(
+      '../lib/daemon/runtime/ProjectRuntimeControl.js'
+    );
     const result = await new ProjectRuntimeControl().stopProject(
       projectTargetFromCli(target, opts),
       {
@@ -440,7 +456,9 @@ projects
   .option('--stop-wait <ms>', '停止当前 active runtime 的等待毫秒数', '5000')
   .option('--json', 'JSON 格式输出')
   .action(async (target: string | undefined, opts) => {
-    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const { ProjectRuntimeControl } = await import(
+      '../lib/daemon/runtime/ProjectRuntimeControl.js'
+    );
     const result = await new ProjectRuntimeControl().openDashboard(
       optionalProjectTargetFromCli(target, opts),
       {
@@ -462,7 +480,9 @@ projects
   .option('--stop-wait <ms>', '停止当前 active runtime 的等待毫秒数', '5000')
   .option('--json', 'JSON 格式输出')
   .action(async (target: string | undefined, opts) => {
-    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const { ProjectRuntimeControl } = await import(
+      '../lib/daemon/runtime/ProjectRuntimeControl.js'
+    );
     const result = await new ProjectRuntimeControl().switchProject(
       projectTargetFromCli(target, opts),
       {
@@ -479,7 +499,9 @@ projects
   .description('清除 selected project；不删除 registry 或任一项目 dataRoot')
   .option('--json', 'JSON 格式输出')
   .action(async (opts) => {
-    const { ProjectRuntimeControl } = await import('../lib/daemon/ProjectRuntimeControl.js');
+    const { ProjectRuntimeControl } = await import(
+      '../lib/daemon/runtime/ProjectRuntimeControl.js'
+    );
     const snapshot = await new ProjectRuntimeControl().clearSelection();
     if (opts.json) {
       cli.json(snapshot);

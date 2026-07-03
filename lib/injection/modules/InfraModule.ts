@@ -21,8 +21,8 @@ import {
   createAlembicRepositories,
 } from '@alembic/core/repositories';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
-import { JobDisplaySnapshotStore } from '../../daemon/JobDisplaySnapshotStore.js';
-import { JobProcessEventRecorder } from '../../daemon/JobProcessEventRecorder.js';
+import { JobDisplaySnapshotStore } from '../../daemon/observability/JobDisplaySnapshotStore.js';
+import { JobProcessEventRecorder } from '../../daemon/observability/JobProcessEventRecorder.js';
 import Gateway from '../../governance/gateway/Gateway.js';
 import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../infrastructure/audit/AuditStore.js';

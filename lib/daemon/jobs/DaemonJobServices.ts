@@ -1,9 +1,9 @@
 import { JobStore } from '@alembic/core/daemon';
 import { resolveProjectRoot } from '@alembic/core/workspace';
-import type { ServiceContainer } from '../injection/ServiceContainer.js';
-import { resolveAlembicWorkspace } from '../project-scope/ProjectScopeRegistry.js';
-import { JobDisplaySnapshotStore } from './JobDisplaySnapshotStore.js';
-import { JobProcessEventRecorder } from './JobProcessEventRecorder.js';
+import type { ServiceContainer } from '../../injection/ServiceContainer.js';
+import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
+import { JobDisplaySnapshotStore } from '../observability/JobDisplaySnapshotStore.js';
+import { JobProcessEventRecorder } from '../observability/JobProcessEventRecorder.js';
 
 /**
  * AD4 managed lifecycle: daemon-job fallbacks (used when a container lacks

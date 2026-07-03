@@ -1,7 +1,7 @@
 import { isProjectRuntimeTarget } from '@alembic/core/daemon';
 import express, { type Request, type Response } from 'express';
 import { z } from 'zod';
-import { DaemonSupervisor } from '../../daemon/DaemonSupervisor.js';
+import { DaemonSupervisor } from '../../daemon/runtime/DaemonSupervisor.js';
 import {
   ProjectRuntimeControl,
   type ProjectRuntimeControlActionResult,
@@ -10,7 +10,7 @@ import {
   type ProjectRuntimeHandoff,
   type ProjectRuntimeScopeSummary,
   type ProjectRuntimeTarget,
-} from '../../daemon/ProjectRuntimeControl.js';
+} from '../../daemon/runtime/ProjectRuntimeControl.js';
 import { validate, validateParams } from '../middleware/validate.js';
 import {
   type AlembicHttpProblem,

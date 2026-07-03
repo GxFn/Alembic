@@ -14,8 +14,8 @@ import {
   generationStageArg,
   stringArrayArg,
   unwrapEnvelope,
-} from '../daemon/DaemonJobWorkflowHelpers.js';
-import type { RunDaemonJobOptions } from '../daemon/DaemonJobWorkflowTypes.js';
+} from '../daemon/jobs/DaemonJobWorkflowHelpers.js';
+import type { RunDaemonJobOptions } from '../daemon/jobs/DaemonJobWorkflowTypes.js';
 import { runDeepMiningRounds } from './generate/DeepMiningRoundGate.js';
 import { runModuleMiningWorkflow } from './generate/ModuleMiningWorkflow.js';
 import { runGeneratePlanGate } from './plan/PlanSelectionGate.js';

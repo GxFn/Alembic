@@ -9,7 +9,7 @@ import {
 } from '@alembic/core/workspace';
 import { afterEach, describe, expect, test } from 'vitest';
 import { SetupService } from '../../lib/cli/SetupService.js';
-import { ProjectRuntimeControl } from '../../lib/daemon/ProjectRuntimeControl.js';
+import { ProjectRuntimeControl } from '../../lib/daemon/runtime/ProjectRuntimeControl.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
 

@@ -11,10 +11,10 @@ import {
   cancelDaemonJob,
   markInterruptedDaemonJobs,
   recordDaemonJobAsyncFailure,
-} from '../../lib/daemon/DaemonJobRunner.js';
-import { JobDisplaySnapshotStore } from '../../lib/daemon/JobDisplaySnapshotStore.js';
-import { readJobProcessEventArtifact } from '../../lib/daemon/JobProcessEventArtifacts.js';
-import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
+} from '../../lib/daemon/jobs/DaemonJobRunner.js';
+import { JobDisplaySnapshotStore } from '../../lib/daemon/observability/JobDisplaySnapshotStore.js';
+import { readJobProcessEventArtifact } from '../../lib/daemon/observability/JobProcessEventArtifacts.js';
+import { JobProcessEventRecorder } from '../../lib/daemon/observability/JobProcessEventRecorder.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;

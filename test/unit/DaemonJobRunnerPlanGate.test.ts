@@ -8,8 +8,8 @@ import {
   collectPlanProjectContext,
 } from '@alembic/core/service/planFacts';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { runDaemonJob } from '../../lib/daemon/DaemonJobRunner.js';
-import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
+import { runDaemonJob } from '../../lib/daemon/jobs/DaemonJobRunner.js';
+import { JobProcessEventRecorder } from '../../lib/daemon/observability/JobProcessEventRecorder.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
 import {
   buildProjectContextWorkflowFacts,

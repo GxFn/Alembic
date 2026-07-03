@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { JobStore } from '@alembic/core/daemon';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { cancelDaemonJob } from '../../lib/daemon/DaemonJobRunner.js';
+import { cancelDaemonJob } from '../../lib/daemon/jobs/DaemonJobRunner.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
 import { invokeRouter } from '../helpers/express.js';
 

@@ -20,7 +20,7 @@ import type {
 } from '@alembic/core/types';
 import express, { type Request, type Response } from 'express';
 import { z } from 'zod';
-import { DAEMON_FILE_CHANGE_EVENT_SOURCES } from '../../daemon/RuntimeBoundary.js';
+import { DAEMON_FILE_CHANGE_EVENT_SOURCES } from '../../daemon/runtime/RuntimeBoundary.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import type { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 import { validate } from '../middleware/validate.js';

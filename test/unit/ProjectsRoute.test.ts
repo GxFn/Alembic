@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ProjectRegistry } from '@alembic/core/workspace';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { ProjectRuntimeControl } from '../../lib/daemon/ProjectRuntimeControl.js';
+import { ProjectRuntimeControl } from '../../lib/daemon/runtime/ProjectRuntimeControl.js';
 import projectsRouter from '../../lib/http/routes/projects.js';
 import { getRouter, invokeRouter } from '../helpers/express.js';
 
