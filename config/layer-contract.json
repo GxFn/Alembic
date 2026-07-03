@@ -135,6 +135,7 @@
       "minority": "tools -> injection (0 edges — remediated; type-only bridges remain, exempt)",
       "status": "RESOLVED 2026-06-12 (AD4 ta10): DashboardOperations handlers are built by createDashboardOperationHandlers(deps) with the AI-status helpers injected; the tools -> injection runtime edge and its blessed exception are gone"
     },
-    "W0 2026-07-02 回写:S4 四环搬迁(19732a0)后契约对齐现实。已声明但待 W5 收紧:daemon->workflows(DaemonJobRunner 抓 project-context 事实层,project-facts 合并后消)、recipe-pipeline->workflows(7 边同上)、recipe-pipeline->injection(service-locator reach-through 2 边,AD4 续)、workflows->infrastructure(ProjectContextWorkflowFacts 直连 sqlite)。"
+    "W0 2026-07-02 回写:S4 四环搬迁(19732a0)后契约对齐现实。已声明但待 W5 收紧:daemon->workflows(DaemonJobRunner 抓 project-context 事实层,project-facts 合并后消)、recipe-pipeline->workflows(7 边同上)、recipe-pipeline->injection(service-locator reach-through 2 边,AD4 续)、workflows->infrastructure(ProjectContextWorkflowFacts 直连 sqlite)。",
+    "W5 2026-07-03 回写:W0 注记四项收口——daemon->workflows 与 recipe-pipeline->workflows 全消(B1 project-facts 合并+B2 workflows 目录清算,workflows 区已删除);workflows->infrastructure 随区消失(ProjectContextWorkflowFacts 直连 sqlite 现为 project-facts->infrastructure 1 边,合法声明);recipe-pipeline->injection 保留 (CompletionFinalizer #inject 动态 reach-through 随迁入 generate/completion 计入本区,AD4 服务定位收敛另行立项)。B4 落 RecipePipelineFacade:daemon 调 pipeline 收拢单入口,事件订阅切 RECIPE_PIPELINE_EVENTS 常量。"
   ]
 }

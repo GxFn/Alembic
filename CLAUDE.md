@@ -165,30 +165,32 @@ Before returning a `TargetResultEnvelope` or handoff, this child window must sel
 
 ```text
 lib/
-├── bootstrap.ts
+├── Bootstrap.ts
 ├── cli
-├── daemon
+├── daemon            # W5 三群:jobs/ observability/ runtime/
+├── generated
 ├── governance
 ├── http
 ├── infrastructure
 ├── injection
 ├── platform
+├── project-facts     # W5:原 workflows/project-context+lib/project-context 合并的共用事实层
 ├── project-scope
+├── recipe-pipeline   # 四环:plan/ generate/ curate/ sustain/ + RecipePipelineFacade
 ├── repository
-├── resident
 ├── sandbox
 ├── service
 ├── shared
 ├── tools
-├── types
-└── workflows
+└── types
 ```
+(2026-07-03 W5 校准;`lib/workflows/`、`lib/resident/` 已随迁移移除)
 
 ## 技术与代码规则
 
 - 语言：TypeScript (ES2024, NodeNext)，Node.js >= 22。
 - 模块系统：ESM (`"type": "module"`)，import 路径必须带 `.js` 后缀。
-- 路径别名定义在 `package.json` imports 字段，包括 `#shared/*`、`#infra/*`、`#service/*`、`#inject/*`、`#governance/*`、`#platform/*`、`#types/*`、`#http/*`、`#workflows/*`、`#tools/*`、`#sandbox/*`。
+- 路径别名定义在 `package.json` imports 字段，包括 `#shared/*`、`#infra/*`、`#service/*`、`#inject/*`、`#governance/*`、`#platform/*`、`#types/*`、`#http/*`、`#tools/*`、`#sandbox/*`、`#recipe-pipeline/*`(`#workflows/*` 已随 lib/workflows 消亡删除)。
 - Lint / Format：Biome 2.x，不使用 Prettier/ESLint。
 - 测试框架：Vitest。
 - Dashboard：React + Vite。
