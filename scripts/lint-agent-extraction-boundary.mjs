@@ -615,7 +615,8 @@ function isLocalCommonToolSpecifier(specifier, importerRelFile) {
   if (specifier.startsWith('#tools/workflow/')) {
     return true;
   }
-  if (specifier.startsWith('#tools/v2/')) {
+  // W5-B0 tools/v2 收平:host DI 桥单文件收平至 lib/tools/,前缀识别改精确文件
+  if (specifier === '#tools/ToolContextFactory.js') {
     return true;
   }
   if (!specifier.startsWith('.')) {
@@ -632,7 +633,7 @@ function isCommonToolPath(rel) {
     rel.startsWith('lib/tools/core/') ||
     rel.startsWith('lib/tools/catalog/') ||
     rel.startsWith('lib/tools/workflow/') ||
-    rel.startsWith('lib/tools/v2/')
+    rel === 'lib/tools/ToolContextFactory'
   );
 }
 
