@@ -19,6 +19,7 @@
  */
 
 import type { EventBus, SignalBus } from '@alembic/core/events';
+import { RECIPE_PIPELINE_EVENTS } from '@alembic/core/knowledge';
 import Logger from '@alembic/core/logging';
 import { getTestModeConfig } from '@alembic/core/shared';
 import { mergeAgentEfficiencySummaries } from './GenerateEfficiency.js';
@@ -292,7 +293,7 @@ export class GenerateTaskManager {
         testMode: Boolean(testModePayload),
       }
     );
-    this.#emit('bootstrap:started', {
+    this.#emit(RECIPE_PIPELINE_EVENTS.started, {
       sessionId,
       tasks: taskDefs.map((t: TaskDef) => ({ id: t.id, ...t.meta })),
       total: taskDefs.length,
@@ -351,7 +352,7 @@ export class GenerateTaskManager {
       filling: session.fillingTasks,
       skeleton: session.skeletonTasks,
     });
-    this.#emit('bootstrap:all-completed', {
+    this.#emit(RECIPE_PIPELINE_EVENTS.allCompleted, {
       sessionId: session.id,
       status: session.status,
       summary: session.summary,
@@ -457,7 +458,7 @@ export class GenerateTaskManager {
       filling: session.fillingTasks,
       skeleton: session.skeletonTasks,
     });
-    this.#emit('bootstrap:task-started', {
+    this.#emit(RECIPE_PIPELINE_EVENTS.taskStarted, {
       sessionId: session.id,
       taskId,
       meta: task.meta,
@@ -505,7 +506,7 @@ export class GenerateTaskManager {
         degraded: result.degraded === true,
       }
     );
-    this.#emit('bootstrap:task-completed', {
+    this.#emit(RECIPE_PIPELINE_EVENTS.taskCompleted, {
       sessionId: session.id,
       taskId,
       meta: task.meta,
@@ -559,7 +560,7 @@ export class GenerateTaskManager {
       reason: result.reason || task.error,
       diagnostics: result.diagnostics || null,
     });
-    this.#emit('bootstrap:task-failed', {
+    this.#emit(RECIPE_PIPELINE_EVENTS.taskFailed, {
       sessionId: session.id,
       taskId,
       meta: task.meta,
@@ -635,7 +636,7 @@ export class GenerateTaskManager {
       }
     );
 
-    this.#emit('bootstrap:all-completed', {
+    this.#emit(RECIPE_PIPELINE_EVENTS.allCompleted, {
       sessionId: session.id,
       status: session.status,
       summary: session.summary,
