@@ -24,12 +24,14 @@ from the runtime long ago, and the stale `.env.example` was retired on
 | `ALEMBIC_AI_REASONING_EFFORT` | Reasoning effort passthrough (`low` / `medium` / `high`) |
 | `ALEMBIC_GOOGLE_API_KEY` / `ALEMBIC_OPENAI_API_KEY` / `ALEMBIC_CLAUDE_API_KEY` / `ALEMBIC_DEEPSEEK_API_KEY` | Provider API keys; written to `secrets.json` when configured through the CLI |
 
-## Embedding settings (process env only)
+## Embedding settings (persisted by `alembic ai configure --embed-*`)
 
 `ALEMBIC_EMBED_PROVIDER`, `ALEMBIC_EMBED_MODEL`, `ALEMBIC_EMBED_BASE_URL`, and
 `ALEMBIC_EMBED_API_KEY` select the dedicated embedding provider (consumed by
-the AI injection module). They take effect as process environment variables;
-the workspace settings store does not persist embedding fields.
+the AI injection module). They persist exactly like the main AI settings —
+non-secret fields in `settings.json`, the embedding API key in `secrets.json`
+(mode 600) — and are applied to the process environment at startup. An
+explicitly set process variable still wins over the persisted value.
 
 ## Runtime overrides (process env only)
 
