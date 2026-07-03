@@ -293,13 +293,21 @@ describe('agent module boundaries', () => {
     ).toBe(false);
     const coreSourceRoot = resolveCoreSourceRoot();
     expect(
-      existsSync(join(coreSourceRoot, 'src/workflows/capabilities/persistence/FileDiffPlanner.ts'))
+      existsSync(join(coreSourceRoot, 'src/workflows/surfaces/persistence/FileDiffPlanner.ts'))
     ).toBe(true);
+    expect(
+      existsSync(
+        join(coreSourceRoot, 'src/workflows/surfaces/persistence/FileDiffSnapshotStore.ts')
+      )
+    ).toBe(true);
+    expect(
+      existsSync(join(coreSourceRoot, 'src/workflows/capabilities/persistence/FileDiffPlanner.ts'))
+    ).toBe(false);
     expect(
       existsSync(
         join(coreSourceRoot, 'src/workflows/capabilities/persistence/FileDiffSnapshotStore.ts')
       )
-    ).toBe(true);
+    ).toBe(false);
     expect(
       existsSync(
         join(coreSourceRoot, 'src/workflows/capabilities/project-intelligence/FileDiffPlanner.ts')
@@ -342,13 +350,12 @@ function extractImportSpecifiers(source: string): string[] {
 }
 
 function resolveCoreSourceRoot() {
-  const vendorRoot = join(repoRoot, 'vendor', 'AlembicCore');
   const siblingRoot = join(repoRoot, '..', 'AlembicCore');
-  const sourceFile = 'src/workflows/capabilities/persistence/FileDiffPlanner.ts';
-  if (existsSync(join(vendorRoot, sourceFile))) {
-    return vendorRoot;
+  if (existsSync(join(siblingRoot, 'package.json'))) {
+    return siblingRoot;
   }
-  return siblingRoot;
+  const vendorRoot = join(repoRoot, 'vendor', 'AlembicCore');
+  return vendorRoot;
 }
 
 function isRetiredImportSpecifier(specifier: string, relFile: string) {
