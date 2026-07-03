@@ -30,10 +30,10 @@
         "lib/tools/adapters/SkillCapabilities.ts",
         "lib/tools/adapters/TerminalAdapter.ts",
         "lib/tools/adapters/WorkflowAdapter.ts",
-        "lib/tools/v2/adapter/**",
-        "lib/tools/v2/cache/**",
-        "lib/tools/v2/compressor/OutputCompressor.ts",
-        "lib/tools/v2/handlers/**"
+        "lib/tools/adapter/**",
+        "lib/tools/cache/**",
+        "lib/tools/compressor/OutputCompressor.ts",
+        "lib/tools/handlers/**"
       ],
       "validation": [
         "npm run lint:agent-extraction-boundary: passed; product #agent call sites 21, @alembic/agent/ai consumer files 16, local AI provider consumers 0, @alembic/agent/tools consumer files 50, local common tool consumers 0, deferred local tool import files 4, classified lib/tools files 79.",
@@ -124,7 +124,7 @@
         "Boundary lint now reports @alembic/agent/tools/v2 consumer files and classifies ToolContextFactory as host-owned instead of generic Agent Tool V2."
       ],
       "preservedPaths": [
-        "lib/tools/v2/ToolContextFactory.ts",
+        "lib/tools/ToolContextFactory.ts",
         "lib/tools/adapters/DashboardOperationAdapter.ts",
         "lib/tools/adapters/DashboardOperations.ts",
         "lib/tools/adapters/MacSystemAdapter.ts",
@@ -164,8 +164,8 @@
       ],
       "preservedPaths": [
         "lib/agent/**",
-        "lib/tools/v2/**",
-        "lib/tools/v2/ToolContextFactory.ts",
+        "lib/tools/**",
+        "lib/tools/ToolContextFactory.ts",
         "lib/tools/adapters/**"
       ],
       "validation": [
@@ -181,7 +181,7 @@
       ],
       "risks": [
         "Local lib/agent/** remains present as a deletion candidate and may still be referenced by tests or preserved local implementation internals.",
-        "Local lib/tools/v2/** remains present as a Wave 4 deletion or quarantine candidate; ToolContextFactory stays host-owned.",
+        "Local lib/tools/** remains present as a Wave 4 deletion or quarantine candidate; ToolContextFactory stays host-owned.",
         "The remaining #agent import lives under local Tool V2 generic deletion candidates and should be resolved by Wave 4 rather than by expanding Alembic production dependencies."
       ],
       "wave4EntryConditions": [
@@ -200,7 +200,7 @@
       "completedScope": [
         "Deleted Alembic local lib/agent duplicate implementation tree after Wave 3 cutover completed production consumers.",
         "Deleted local generic Tool V2 implementation files and local tool core/catalog/workflow duplicate files.",
-        "Preserved lib/tools/v2/ToolContextFactory.ts and host adapters as Alembic-owned DI/repository/search/gateway/project-root/data-root/sandbox bridge code.",
+        "Preserved lib/tools/ToolContextFactory.ts and host adapters as Alembic-owned DI/repository/search/gateway/project-root/data-root/sandbox bridge code.",
         "Removed package imports alias for #agent/* and cleared configured #agent allowed call sites.",
         "Updated boundary lint to hard gate Wave 4 deletion state: local Agent files 0, production #agent imports 0, package #agent alias absent, generic Tool V2 duplicate files 0."
       ],
@@ -209,20 +209,20 @@
         "lib/tools/core/**",
         "lib/tools/catalog/**",
         "lib/tools/workflow/**",
-        "lib/tools/v2/adapter/V2CapabilityCatalog.ts",
-        "lib/tools/v2/adapter/V2ToolRouterAdapter.ts",
-        "lib/tools/v2/adapter/index.ts",
-        "lib/tools/v2/cache/**",
-        "lib/tools/v2/capabilities/**",
-        "lib/tools/v2/compressor/**",
-        "lib/tools/v2/handlers/**",
-        "lib/tools/v2/index.ts",
-        "lib/tools/v2/registry.ts",
-        "lib/tools/v2/router.ts",
-        "lib/tools/v2/types.ts"
+        "lib/tools/adapter/V2CapabilityCatalog.ts",
+        "lib/tools/adapter/V2ToolRouterAdapter.ts",
+        "lib/tools/adapter/index.ts",
+        "lib/tools/cache/**",
+        "lib/tools/capabilities/**",
+        "lib/tools/compressor/**",
+        "lib/tools/handlers/**",
+        "lib/tools/index.ts",
+        "lib/tools/registry.ts",
+        "lib/tools/router.ts",
+        "lib/tools/types.ts"
       ],
       "preservedPaths": [
-        "lib/tools/v2/ToolContextFactory.ts",
+        "lib/tools/ToolContextFactory.ts",
         "lib/tools/adapters/**",
         "CLI/daemon/HTTP/API/Dashboard/native host/product shell wiring"
       ],
@@ -236,7 +236,7 @@
         "node dist/bin/cli.js status --json: passed; workspace detected, database not found in current test environment.",
         "rg -n \"#agent/|../agent/|../../agent/|lib/agent/\" lib bin scripts test --glob '*.ts' --glob '*.js' --glob '*.mjs': passed with no matches.",
         "find lib/agent -type f | sort: passed as deletion evidence; lib/agent no longer exists.",
-        "find lib/tools/v2 -type f | sort: passed; only lib/tools/v2/ToolContextFactory.ts remains.",
+        "find lib/tools/v2 -type f | sort: passed; only lib/tools/ToolContextFactory.ts remains.",
         "npm run test:unit: attempted; blocked by local sandbox environment, with SandboxNetworkProxy.listen EPERM on 127.0.0.1 and TerminalAdapter sandbox-exec sandbox_apply Operation not permitted; targeted Wave 4 suites passed."
       ],
       "risks": [
@@ -322,23 +322,23 @@
     "publicEntrypoint": "@alembic/agent",
     "publicV2Entrypoint": "@alembic/agent/tools/v2",
     "localDeletionCandidates": [],
-    "hostOwnedToolV2Paths": ["lib/tools/v2/ToolContextFactory.ts", "lib/tools/adapters/**"],
+    "hostOwnedToolV2Paths": ["lib/tools/ToolContextFactory.ts", "lib/tools/adapters/**"],
     "scanRoots": ["lib", "bin", "scripts", "test"],
     "ignoredPathPrefixes": [],
     "deferredLocalImports": [
       {
         "path": "lib/injection/modules/AgentModule.ts",
-        "expectedSpecifiers": ["#tools/v2/ToolContextFactory.js"],
+        "expectedSpecifiers": ["#tools/ToolContextFactory.js"],
         "reason": "Alembic consumes Agent V2 catalog/router contracts from @alembic/agent/tools/v2 but keeps concrete ToolContextFactory as the host DI/repository/search/data-root bridge."
       },
       {
         "path": "test/unit/V2ToolSystem.test.ts",
-        "expectedSpecifiers": ["#tools/v2/ToolContextFactory.js"],
+        "expectedSpecifiers": ["#tools/ToolContextFactory.js"],
         "reason": "The representative V2 suite now exercises Agent generic contracts and imports only the Alembic host-owned ToolContextFactory for context bridge coverage."
       },
       {
         "path": "test/unit/ToolContextFactory.test.ts",
-        "expectedSpecifiers": ["../../lib/tools/v2/ToolContextFactory.js"],
+        "expectedSpecifiers": ["../../lib/tools/ToolContextFactory.js"],
         "reason": "ToolContextFactory has a dedicated host bridge test because it owns Alembic DI, audit sink, project-root, and sandbox executor wiring around the Agent V2 router."
       }
     ],
@@ -351,16 +351,16 @@
       "lib/tools/core/**",
       "lib/tools/catalog/**",
       "lib/tools/workflow/**",
-      "lib/tools/v2/adapter/V2CapabilityCatalog.ts",
-      "lib/tools/v2/adapter/V2ToolRouterAdapter.ts",
-      "lib/tools/v2/cache/**",
-      "lib/tools/v2/capabilities/**",
-      "lib/tools/v2/compressor/**",
-      "lib/tools/v2/handlers/**",
-      "lib/tools/v2/index.ts",
-      "lib/tools/v2/registry.ts",
-      "lib/tools/v2/router.ts",
-      "lib/tools/v2/types.ts"
+      "lib/tools/adapter/V2CapabilityCatalog.ts",
+      "lib/tools/adapter/V2ToolRouterAdapter.ts",
+      "lib/tools/cache/**",
+      "lib/tools/capabilities/**",
+      "lib/tools/compressor/**",
+      "lib/tools/handlers/**",
+      "lib/tools/index.ts",
+      "lib/tools/registry.ts",
+      "lib/tools/router.ts",
+      "lib/tools/types.ts"
     ]
   },
   "memoryContextImportRules": {
@@ -436,7 +436,7 @@
   },
   "toolBoundaryRules": [
     {
-      "path": "lib/tools/v2/ToolContextFactory.ts",
+      "path": "lib/tools/ToolContextFactory.ts",
       "classification": "alembic-main-tool-v2-context-factory",
       "switchAfter": "do-not-migrate-by-default",
       "reason": "ToolContextFactory composes Alembic-owned DI container services, repositories, search/gateway wiring, data-root/project-root context, and sandbox bridge for the Agent V2 generic router."

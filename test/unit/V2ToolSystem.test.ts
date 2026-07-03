@@ -545,7 +545,7 @@ describe('meta.tools', () => {
 
 describe('ToolRouterAdapter', () => {
   test('execute returns ToolResultEnvelope', async () => {
-    const { ToolContextFactory } = await import('#tools/v2/ToolContextFactory.js');
+    const { ToolContextFactory } = await import('#tools/ToolContextFactory.js');
     const factory = new ToolContextFactory({
       container: { get: () => undefined },
       projectRoot: PROJECT_ROOT,
@@ -572,7 +572,7 @@ describe('ToolRouterAdapter', () => {
   });
 
   test('returns error envelope for unknown tool', async () => {
-    const { ToolContextFactory } = await import('#tools/v2/ToolContextFactory.js');
+    const { ToolContextFactory } = await import('#tools/ToolContextFactory.js');
     const factory = new ToolContextFactory({
       container: { get: () => undefined },
       projectRoot: PROJECT_ROOT,

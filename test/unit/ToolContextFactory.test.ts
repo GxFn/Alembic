@@ -1,7 +1,7 @@
 import type { ToolCallRequest } from '@alembic/agent';
 import { ToolRouterAdapter } from '@alembic/agent/tools/runtime';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { ToolContextFactory } from '../../lib/tools/v2/ToolContextFactory.js';
+import { ToolContextFactory } from '../../lib/tools/ToolContextFactory.js';
 
 const sandboxExecMock = vi.hoisted(() => vi.fn());
 

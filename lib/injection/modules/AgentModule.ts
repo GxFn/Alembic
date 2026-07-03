@@ -19,7 +19,7 @@ import { RuntimeCapabilityCatalog, ToolRouterAdapter } from '@alembic/agent/tool
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { DASHBOARD_OPERATION_MANIFESTS } from '#tools/adapters/DashboardOperations.js';
 import { SKILL_CAPABILITY_MANIFESTS } from '#tools/adapters/SkillCapabilities.js';
-import { ToolContextFactory } from '#tools/v2/ToolContextFactory.js';
+import { ToolContextFactory } from '#tools/ToolContextFactory.js';
 import { SkillHooks } from '../../service/skills/SkillHooks.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
