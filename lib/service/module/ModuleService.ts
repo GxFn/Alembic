@@ -30,7 +30,7 @@ import {
   projectContextFilesForTarget,
   projectContextProjectInfo,
   projectContextTargets,
-} from '../../project-context/ProjectContextConsumerFacts.js';
+} from '../../project-facts/ProjectContextConsumerFacts.js';
 
 // Mirrors getAiRuntimeStatus(null): constructions without an aiStatus
 // provider (guard handler, CLI scan) previously passed no container and got

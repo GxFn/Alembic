@@ -19,7 +19,7 @@
     "infrastructure",
     "injection",
     "platform",
-    "project-context",
+    "project-facts",
     "project-scope",
     "recipe-pipeline",
     "repository",
@@ -41,12 +41,7 @@
       "service",
       "shared"
     ],
-    "daemon": [
-      "project-scope",
-      "recipe-pipeline",
-      "shared",
-      "workflows"
-    ],
+    "daemon": ["project-scope", "recipe-pipeline", "shared", "project-facts"],
     "generated": [],
     "governance": [],
     "http": [
@@ -60,9 +55,7 @@
       "shared",
       "tools"
     ],
-    "infrastructure": [
-      "shared"
-    ],
+    "infrastructure": ["shared"],
     "injection": [
       "daemon",
       "governance",
@@ -74,9 +67,7 @@
       "shared",
       "tools"
     ],
-    "platform": [
-      "shared"
-    ],
+    "platform": ["shared"],
     "project-scope": [],
     "repository": [],
     "root": [
@@ -89,26 +80,11 @@
       "shared"
     ],
     "sandbox": [],
-    "service": [
-      "daemon",
-      "infrastructure",
-      "project-context",
-      "shared"
-    ],
+    "service": ["daemon", "infrastructure", "project-facts", "shared"],
     "shared": [],
-    "tools": [
-      "daemon",
-      "sandbox",
-      "shared"
-    ],
+    "tools": ["daemon", "sandbox", "shared"],
     "types": [],
-    "workflows": [
-      "infrastructure",
-      "injection",
-      "project-scope",
-      "service",
-      "shared"
-    ],
+    "workflows": ["infrastructure", "injection", "project-scope", "service", "shared"],
     "recipe-pipeline": [
       "daemon",
       "infrastructure",
@@ -116,9 +92,10 @@
       "project-scope",
       "service",
       "shared",
-      "workflows"
+      "workflows",
+      "project-facts"
     ],
-    "project-context": []
+    "project-facts": ["infrastructure", "project-scope"]
   },
   "blessedImports": [],
   "cycleFindings": [

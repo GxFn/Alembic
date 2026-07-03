@@ -1,6 +1,6 @@
 import type { DimensionDef } from '@alembic/core/types';
 import { clearProjectContextFileSnapshots } from '../../../infrastructure/database/SqliteDatabaseAccess.js';
-import type { ProjectContextFillView } from '../../../workflows/project-context/ProjectContextWorkflowFacts.js';
+import type { ProjectContextFillView } from '../../../project-facts/ProjectContextWorkflowFacts.js';
 import { finalizeAiDimensionPipeline as finalizeAiDimension } from './AiDimensionFinalizer.js';
 import {
   emitAiDimensionAiUnavailable,

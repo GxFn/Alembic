@@ -52,6 +52,19 @@ import type { CoverageLedgerRepository } from '@alembic/core/repositories';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type { DimensionDef, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
+import { presentProjectContextRescanResponse } from '../../project-facts/ProjectContextPresenters.js';
+import {
+  buildProjectContextFillView,
+  buildProjectContextMissionArtifacts,
+  buildProjectContextWorkflowFacts,
+  createProjectContextWorkflowSession,
+  openOrReturnProjectContextWorkflowSession,
+  type ProjectContextDimensionResultHookInput,
+  type ProjectContextWorkflowFacts,
+  registerProjectContextWorkflowSessionReleaseOnGenerateCompletion,
+  releaseProjectContextWorkflowSession,
+  saveProjectContextFileSnapshot,
+} from '../../project-facts/ProjectContextWorkflowFacts.js';
 import {
   attachProjectScopeSourceIdentitiesToView,
   buildProjectScopeAnalysisLogMeta,
@@ -64,19 +77,6 @@ import {
   toModuleMiningSelectedModulePayloads,
   writeModuleMiningCoverageLedger,
 } from '../../shared/ModuleMiningEvidence.js';
-import { presentProjectContextRescanResponse } from '../../workflows/project-context/ProjectContextPresenters.js';
-import {
-  buildProjectContextFillView,
-  buildProjectContextMissionArtifacts,
-  buildProjectContextWorkflowFacts,
-  createProjectContextWorkflowSession,
-  openOrReturnProjectContextWorkflowSession,
-  type ProjectContextDimensionResultHookInput,
-  type ProjectContextWorkflowFacts,
-  registerProjectContextWorkflowSessionReleaseOnGenerateCompletion,
-  releaseProjectContextWorkflowSession,
-  saveProjectContextFileSnapshot,
-} from '../../workflows/project-context/ProjectContextWorkflowFacts.js';
 import {
   dispatchAiDimensionRuns,
   startAiDimensionSession,

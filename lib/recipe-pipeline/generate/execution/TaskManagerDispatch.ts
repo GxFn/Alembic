@@ -1,5 +1,5 @@
 import type { DimensionDef, GenerateSessionShape } from '@alembic/core/types';
-import type { ProjectContextFillView } from '../../../workflows/project-context/ProjectContextWorkflowFacts.js';
+import type { ProjectContextFillView } from '../../../project-facts/ProjectContextWorkflowFacts.js';
 
 interface TaskDef {
   id: string;

@@ -24,8 +24,8 @@ import type {
   GeneratePlanGateResult,
   RunDaemonJobOptions,
 } from '../../daemon/DaemonJobWorkflowTypes.js';
+import { buildProjectContextWorkflowFacts } from '../../project-facts/ProjectContextWorkflowFacts.js';
 import { resolveProjectScopeAnalysisContext } from '../../project-scope/ProjectScopeAnalysis.js';
-import { buildProjectContextWorkflowFacts } from '../../workflows/project-context/ProjectContextWorkflowFacts.js';
 
 // C-1(2026-07-02 统一重构)：投影预算改由 Core 单源常量提供，与 host-agent 同一定义。
 const PLAN_FACTS_BUDGET_BYTES = PLAN_FACTS_PROJECTION_BUDGET_BYTES;

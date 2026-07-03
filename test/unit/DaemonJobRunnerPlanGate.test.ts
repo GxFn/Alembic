@@ -11,18 +11,18 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { runDaemonJob } from '../../lib/daemon/DaemonJobRunner.js';
 import { JobProcessEventRecorder } from '../../lib/daemon/JobProcessEventRecorder.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
-import { runGenerateWorkflow } from '../../lib/recipe-pipeline/generate/GenerateWorkflow.js';
 import {
   buildProjectContextWorkflowFacts,
   type ProjectContextWorkflowFacts,
-} from '../../lib/workflows/project-context/ProjectContextWorkflowFacts.js';
+} from '../../lib/project-facts/ProjectContextWorkflowFacts.js';
+import { runGenerateWorkflow } from '../../lib/recipe-pipeline/generate/GenerateWorkflow.js';
 
 vi.mock('@alembic/agent/service', () => ({
   runModuleMining: vi.fn(),
   runPlanAgent: vi.fn(),
 }));
 
-vi.mock('../../lib/workflows/project-context/ProjectContextWorkflowFacts.js', () => ({
+vi.mock('../../lib/project-facts/ProjectContextWorkflowFacts.js', () => ({
   buildProjectContextWorkflowFacts: vi.fn(),
 }));
 

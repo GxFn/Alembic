@@ -1,7 +1,7 @@
 import type { DaemonJobKind, DaemonJobRecord, DaemonJobSource } from '@alembic/core/daemon';
 import type { PlanSelection, PlanSelectionProjection } from '@alembic/core/plans';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
-import type { ProjectContextWorkflowFacts } from '../workflows/project-context/ProjectContextWorkflowFacts.js';
+import type { ProjectContextWorkflowFacts } from '../project-facts/ProjectContextWorkflowFacts.js';
 
 export interface LoggerLike {
   error(message: string, meta?: Record<string, unknown>): void;

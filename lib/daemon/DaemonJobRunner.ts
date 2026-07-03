@@ -2,6 +2,7 @@ import type { DaemonJobRecord, DaemonJobStatus, JobStore } from '@alembic/core/d
 import type { CoverageLedgerRepository, DeepMiningRoundRecord } from '@alembic/core/repositories';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import type { ServiceContainer } from '../injection/ServiceContainer.js';
+import { releaseProjectContextWorkflowSessionByProjectRoot } from '../project-facts/ProjectContextWorkflowFacts.js';
 import {
   resolveProjectScopeAnalysisContext,
   resolveProjectScopeSourceIdentitiesFromContainer,
@@ -10,7 +11,6 @@ import { runDeepMiningRounds } from '../recipe-pipeline/generate/DeepMiningRound
 import { runModuleMiningWorkflow } from '../recipe-pipeline/generate/ModuleMiningWorkflow.js';
 import type { GenerateProcessEventDraft } from '../recipe-pipeline/generate/runtime/generate-event-types.js';
 import { runGeneratePlanGate } from '../recipe-pipeline/plan/PlanSelectionGate.js';
-import { releaseProjectContextWorkflowSessionByProjectRoot } from '../workflows/project-context/ProjectContextWorkflowFacts.js';
 import {
   getJobDisplaySnapshotStore,
   getJobProcessEventRecorder,

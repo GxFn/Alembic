@@ -13,7 +13,7 @@ import {
   presentProjectContextColdStartEmptyProject,
   presentProjectContextColdStartResponse,
   presentProjectContextRescanResponse,
-} from '../../lib/workflows/project-context/ProjectContextPresenters.js';
+} from '../../lib/project-facts/ProjectContextPresenters.js';
 import {
   buildProjectContextMissionArtifacts,
   buildProjectContextWorkflowFacts,
@@ -21,11 +21,11 @@ import {
   type ProjectContextWorkflowFacts,
   registerProjectContextWorkflowSessionReleaseOnGenerateCompletion,
   releaseProjectContextWorkflowSessionByProjectRoot,
-} from '../../lib/workflows/project-context/ProjectContextWorkflowFacts.js';
+} from '../../lib/project-facts/ProjectContextWorkflowFacts.js';
 import {
   buildProjectMapModules,
   buildProjectMapModulesFromTargets,
-} from '../../lib/workflows/project-context/ProjectMapModules.js';
+} from '../../lib/project-facts/ProjectMapModules.js';
 
 const fixtures: string[] = [];
 const projectContextCapabilitiesMock = vi.hoisted(() => ({
@@ -1089,15 +1089,15 @@ let package = Package(
 
   test('keeps the moduleSeeds detail loop separate from ProjectMap module fan-out facts', async () => {
     const source = await readFile(
-      join(process.cwd(), 'lib/workflows/project-context/ProjectContextWorkflowFacts.ts'),
+      join(process.cwd(), 'lib/project-facts/ProjectContextWorkflowFacts.ts'),
       'utf8'
     );
     const mapModulesSource = await readFile(
-      join(process.cwd(), 'lib/workflows/project-context/ProjectMapModules.ts'),
+      join(process.cwd(), 'lib/project-facts/ProjectMapModules.ts'),
       'utf8'
     );
     const presentersSource = await readFile(
-      join(process.cwd(), 'lib/workflows/project-context/ProjectContextPresenters.ts'),
+      join(process.cwd(), 'lib/project-facts/ProjectContextPresenters.ts'),
       'utf8'
     );
 

@@ -10,7 +10,7 @@ Recipe 的完整生命周期按四环组织,目录即功能边界(S4 批4,2026-0
 | Sustain(维护) | `sustain/` | 差距重扫+decay/proposal/evolution 编排 | `KnowledgeRescanWorkflow.ts` |
 
 共用事实层(不属于任一环,保持原位):
-- `../workflows/project-context/` — Phase1-4 项目情报采集,Plan 与 Generate 共同消费
+- `../project-facts/` — Phase1-4 项目情报采集,Plan 与 Generate 共同消费
 - Core 共享内核经 `@alembic/core`:planFacts 投影 / planIntent 契约 / RecipeAuthoringSpec 门禁 / DIMENSION_COMPLETION_FLOOR / RECIPE_PIPELINE_EVENTS
 
 Wire 契约(改名冻结名单):`AlembicCore/docs/wire-contract.md`。

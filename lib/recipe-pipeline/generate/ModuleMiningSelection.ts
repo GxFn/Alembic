@@ -1,7 +1,7 @@
 import { buildCanonicalCoverageLedgerModuleId } from '@alembic/core/host-agent-workflows';
 import { uniqueStrings } from '../../daemon/DaemonJobWorkflowHelpers.js';
 import type { ModuleMiningModule } from '../../daemon/DaemonJobWorkflowTypes.js';
-import type { ProjectContextWorkflowFacts } from '../../workflows/project-context/ProjectContextWorkflowFacts.js';
+import type { ProjectContextWorkflowFacts } from '../../project-facts/ProjectContextWorkflowFacts.js';
 
 export interface ModuleMiningSelectionBinding {
   dimensions: readonly string[];

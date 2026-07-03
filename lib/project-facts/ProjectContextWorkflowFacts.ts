@@ -31,11 +31,11 @@ import type { GenerateFileEntry } from '#recipe-pipeline/generate/execution/Agen
 import {
   readLatestProjectContextFileSnapshotRow,
   saveProjectContextFileSnapshotRow,
-} from '../../infrastructure/database/SqliteDatabaseAccess.js';
+} from '../infrastructure/database/SqliteDatabaseAccess.js';
 import type {
   ProjectScopeAnalysisContext,
   ProjectScopeSourceIdentity,
-} from '../../project-scope/ProjectScopeAnalysis.js';
+} from '../project-scope/ProjectScopeAnalysis.js';
 import { buildProjectMapModules, buildProjectMapModulesFromTargets } from './ProjectMapModules.js';
 
 export {

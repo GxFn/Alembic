@@ -5,7 +5,7 @@ import type {
 } from '@alembic/core/host-agent-workflows';
 import type { PlanSelectionProjection } from '@alembic/core/plans';
 import type { McpContext } from '@alembic/core/types';
-import type { ProjectContextWorkflowFacts } from '../../workflows/project-context/ProjectContextWorkflowFacts.js';
+import type { ProjectContextWorkflowFacts } from '../../project-facts/ProjectContextWorkflowFacts.js';
 
 export type GenerateWorkflowMode = 'full' | 'incremental';
 export type GenerateWorkflowMcpContext = WorkflowMcpContext & McpContext;

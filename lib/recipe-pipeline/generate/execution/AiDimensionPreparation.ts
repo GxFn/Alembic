@@ -4,11 +4,11 @@ import type { DimensionDef, IncrementalPlan } from '@alembic/core/types';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import { getAiRuntimeStatus } from '#inject/AiRuntimeStatus.js';
 import { GenerateEventEmitter } from '#recipe-pipeline/generate/runtime/GenerateEventEmitter.js';
+import type { ProjectContextFillView } from '../../../project-facts/ProjectContextWorkflowFacts.js';
 import {
   type ProjectScopeSourceIdentity,
   resolveProjectScopeSourceIdentitiesFromCarrier,
 } from '../../../project-scope/ProjectScopeAnalysis.js';
-import type { ProjectContextFillView } from '../../../workflows/project-context/ProjectContextWorkflowFacts.js';
 import type { GenerateFileEntry } from './AgentRunInputBuilders.js';
 import type { GenerateTaskManagerLike, GenerateWorkflowContext } from './AiDimensionTypes.js';
 

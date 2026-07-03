@@ -46,15 +46,9 @@ import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type { DimensionDef, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
 import {
-  attachProjectScopeSourceIdentitiesToView,
-  buildProjectScopeAnalysisLogMeta,
-  collectProjectScopeSourceIdentities,
-  resolveProjectScopeAnalysisContext,
-} from '../../project-scope/ProjectScopeAnalysis.js';
-import {
   presentProjectContextColdStartEmptyProject,
   presentProjectContextColdStartResponse,
-} from '../../workflows/project-context/ProjectContextPresenters.js';
+} from '../../project-facts/ProjectContextPresenters.js';
 import {
   buildProjectContextFillView,
   buildProjectContextMissionArtifacts,
@@ -63,7 +57,13 @@ import {
   type ProjectContextWorkflowFacts,
   registerProjectContextWorkflowSessionReleaseOnGenerateCompletion,
   selectProjectContextWorkflowDimensions,
-} from '../../workflows/project-context/ProjectContextWorkflowFacts.js';
+} from '../../project-facts/ProjectContextWorkflowFacts.js';
+import {
+  attachProjectScopeSourceIdentitiesToView,
+  buildProjectScopeAnalysisLogMeta,
+  collectProjectScopeSourceIdentities,
+  resolveProjectScopeAnalysisContext,
+} from '../../project-scope/ProjectScopeAnalysis.js';
 import {
   dispatchAiDimensionRuns,
   startAiDimensionSession,

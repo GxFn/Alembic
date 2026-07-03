@@ -19,7 +19,7 @@ import {
 import Logger from '@alembic/core/logging';
 import type { AgentEfficiencySummary } from '#recipe-pipeline/generate/runtime/GenerateEfficiency.js';
 import type { GenerateEventEmitter } from '#recipe-pipeline/generate/runtime/GenerateEventEmitter.js';
-import type { ProjectContextDimensionResultHook } from '../../../workflows/project-context/ProjectContextWorkflowFacts.js';
+import type { ProjectContextDimensionResultHook } from '../../../project-facts/ProjectContextWorkflowFacts.js';
 import {
   generateSkill,
   type WorkflowSkillGenerationResult,
