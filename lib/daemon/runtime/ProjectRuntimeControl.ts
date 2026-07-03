@@ -25,7 +25,6 @@ import {
 } from '@alembic/core/daemon';
 import { collectAiEnvOverrides, isAiEnvReady, WorkspaceSettingsStore } from '@alembic/core/shared';
 import {
-  getProjectRegistryDir,
   getProjectRuntimeControlStatePath,
   type ProjectEntry,
   ProjectRegistry,
