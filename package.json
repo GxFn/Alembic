@@ -97,9 +97,10 @@
     "check:shared-asset-drift": "node scripts/check-shared-asset-drift.mjs",
     "format": "biome format --write lib/ bin/ config/ scripts/",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run lint && npm run lint:repo-boundary && npm run check:space-edges && npm run lint:layer-contract && npm run lint:doctrine && npm run lint:naming && npm run lint:agent-extraction-boundary && npm run lint:core-import-boundary && npm run lint:consumer-core-imports && npm run test:unit && npm run test:integration && npm run test:coverage && npm run check:shared-asset-drift && npm run lint:retired-symbols",
+    "check": "npm run typecheck && npm run lint && npm run lint:repo-boundary && npm run check:space-edges && npm run lint:layer-contract && npm run lint:doctrine && npm run lint:naming && npm run lint:agent-extraction-boundary && npm run lint:core-import-boundary && npm run lint:consumer-core-imports && npm run test:unit && npm run test:integration && npm run test:coverage && npm run check:shared-asset-drift && npm run lint:retired-symbols && npm run lint:ring-direction",
     "prepare": "husky",
-    "lint:retired-symbols": "node ../AlembicCore/scripts/lint-retired-symbols.mjs . --dirs=lib,bin,test"
+    "lint:retired-symbols": "node ../AlembicCore/scripts/lint-retired-symbols.mjs . --dirs=lib,bin,test",
+    "lint:ring-direction": "node ../AlembicCore/scripts/lint-ring-direction.mjs ."
   },
   "author": "gaoxuefeng",
   "license": "MIT",
