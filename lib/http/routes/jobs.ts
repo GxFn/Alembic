@@ -43,6 +43,9 @@ const BootstrapJobBody = z.object({
   maxFiles: z.number().int().min(1).max(10000).default(500),
   skipGuard: z.boolean().default(false),
   contentMaxLines: z.number().int().min(1).max(10000).default(120),
+  // 限定维度冷启动（与 rescan 同型）：下游 executeRecipePipelineJob 早已消费 args.dimensions，
+  // 此前仅 HTTP schema 未放行——用于范围可控的验收/补跑，缺省仍全维度。
+  dimensions: z.array(z.string()).optional(),
 });
 
 const RescanJobBody = z
