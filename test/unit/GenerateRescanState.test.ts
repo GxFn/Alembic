@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'vitest';
+// W1（结构清洗）：查重播种迁 dedup 单源模块
+import { prepareGenerateRescanState } from '../../lib/recipe-pipeline/generate/dedup/GenerateDedupSeeder.js';
 import {
   type GenerateExistingRecipe,
   getGenerateDimensionExistingRecipes,
-  prepareGenerateRescanState,
   projectGenerateDimensionRescanContext,
   projectGenerateExistingRecipesForPrompt,
 } from '../../lib/recipe-pipeline/generate/execution/RescanContext.js';

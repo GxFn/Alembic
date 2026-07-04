@@ -291,9 +291,15 @@ describe('V2 Router', () => {
       makeCtx()
     );
     expect(result.ok).toBe(true);
-    const text = result.data as string;
-    expect(text).toMatch(/\d+ matches/);
-    expect(text).toContain('TOOL_REGISTRY');
+    // M2/P1a（挖掘产出升级）：search 结构化返回 {total,shown,matches}——采集端 per-file 分组的数据源
+    const data = result.data as {
+      total: number;
+      shown: number;
+      matches: Array<{ file: string; line: number; content: string }>;
+    };
+    expect(data.total).toBeGreaterThan(0);
+    expect(data.matches.length).toBeGreaterThan(0);
+    expect(data.matches.some((m) => m.content.includes('TOOL_REGISTRY'))).toBe(true);
   }, 15000);
 
   test('code.read on README.md', async () => {

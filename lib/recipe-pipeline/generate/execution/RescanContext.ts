@@ -3,11 +3,6 @@ import type {
   KnowledgeRescanExecutionDecision,
   RescanExecutionMode,
 } from '@alembic/core/host-agent-workflows';
-import Logger from '@alembic/core/logging';
-import { GenerateDedup } from '@alembic/core/service/bootstrap';
-
-const logger = Logger.getInstance();
-
 export interface GenerateExistingRecipe {
   id: string;
   title: string;
@@ -32,61 +27,8 @@ export interface GenerateRescanContext {
   evolutionPrescreen?: unknown;
 }
 
-export interface GenerateDedupState {
-  globalSubmittedTitles: Set<string>;
-  globalSubmittedPatterns: Set<string>;
-  globalSubmittedTriggers: Set<string>;
-  bootstrapDedup: GenerateDedup;
-  existingRecipesList: GenerateExistingRecipe[] | null;
-  rescanContext: GenerateRescanContext | null;
-}
-
-export function prepareGenerateRescanState({
-  existingRecipes,
-  evolutionPrescreen,
-  executionDecisions,
-}: {
-  existingRecipes: unknown;
-  evolutionPrescreen: unknown;
-  executionDecisions?: readonly KnowledgeRescanExecutionDecision[];
-}): GenerateDedupState {
-  const globalSubmittedTitles = new Set<string>();
-  const globalSubmittedPatterns = new Set<string>();
-  const globalSubmittedTriggers = new Set<string>();
-  const bootstrapDedup = new GenerateDedup();
-  const existingRecipesList = Array.isArray(existingRecipes)
-    ? (existingRecipes as GenerateExistingRecipe[])
-    : null;
-
-  if (existingRecipesList && existingRecipesList.length > 0) {
-    for (const recipe of existingRecipesList) {
-      if (recipe.title && recipe.status !== 'decaying') {
-        globalSubmittedTitles.add(recipe.title.toLowerCase().trim());
-      }
-      if (recipe.trigger) {
-        globalSubmittedTriggers.add(recipe.trigger.toLowerCase().trim());
-      }
-    }
-    logger.info(
-      `[generate] Rescan mode: seeded ${globalSubmittedTitles.size} titles + ${globalSubmittedTriggers.size} triggers into dedup set`
-    );
-  }
-
-  return {
-    globalSubmittedTitles,
-    globalSubmittedPatterns,
-    globalSubmittedTriggers,
-    bootstrapDedup,
-    existingRecipesList,
-    rescanContext: buildBootstrapRescanContext({
-      existingRecipesList,
-      evolutionPrescreen,
-      executionDecisions,
-    }),
-  };
-}
-
-function buildBootstrapRescanContext({
+/** rescan 上下文构造（W1 起由 dedup/GenerateDedupSeeder 的 prepareGenerateRescanState 消费） */
+export function buildBootstrapRescanContext({
   existingRecipesList,
   evolutionPrescreen,
   executionDecisions,

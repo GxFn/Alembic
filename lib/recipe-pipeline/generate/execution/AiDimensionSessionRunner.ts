@@ -3,6 +3,11 @@ import { TierScheduler } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
 import type { DimensionDef } from '@alembic/core/types';
 import {
+  prepareGenerateRescanState,
+  projectGenerateDimensionSeedTitles,
+  seedGenerateDedupFromKnowledgeBase,
+} from '../dedup/GenerateDedupSeeder.js';
+import {
   buildGenerateDimensionResultProcessEvents,
   buildGenerateTierReflectionProcessEvents,
 } from './AgentRunProcessEvents.js';
@@ -30,7 +35,6 @@ import {
   type DimensionCandidateData,
   type DimensionStat,
 } from './GenerateConsumers.js';
-import { prepareGenerateRescanState } from './RescanContext.js';
 import type { initializeGenerateRuntime } from './RuntimeInitializer.js';
 import { buildGenerateSessionExecutionInput } from './SessionExecutionBuilder.js';
 
@@ -75,67 +79,14 @@ export async function runAiDimensionSession({
     evolutionPrescreen: preparation.evolutionPrescreen,
     executionDecisions: preparation.rescanExecutionDecisions,
   });
-  // M1b（挖掘产出升级 P5a）：bootstrap（无 rescan 上下文）时从知识库播种查重视野——
-  // ①gateway 级 dedup 预装（globalSubmittedTitles/Triggers，此前仅 rescan 播种，bootstrap
-  // 在饱和库上盲写→gateway 静默拒重烧整回合）；②per-dim 标题注入 producer 提示（§9c）。
-  // 不合成 rescanContext——避免把 bootstrap 隐式转成 rescan 预算/准入语义。查询失败静默
-  // 降级（冷启动首跑库空/表未建是正常路径）。
-  let dedupSeedByDim: Map<string, Array<{ id: string; title: string; trigger?: string }>> | null =
-    null;
-  if (!rescanContext) {
-    try {
-      const container = (
-        preparation.ctx as unknown as { container?: { get(name: string): unknown } }
-      ).container;
-      const knowledgeRepo = container?.get('knowledgeRepository') as
-        | {
-            findAllByLifecycles(
-              lifecycles: readonly string[],
-              limit?: number
-            ): Promise<
-              Array<{ id: string; title?: string; trigger?: string; dimensionId?: string }>
-            >;
-          }
-        | undefined;
-      const existing = knowledgeRepo
-        ? await knowledgeRepo.findAllByLifecycles(['active', 'staging', 'pending', 'evolving'])
-        : [];
-      if (!knowledgeRepo) {
-        // run-10 静默复盘：undefined-repo 此前走无日志空路径——留痕以区分"容器无键"与"库空"
-        logger.info(
-          '[generate] bootstrap dedup seed: knowledgeRepository unavailable in workflow container'
-        );
-      } else if (existing.length === 0) {
-        logger.info(
-          '[generate] bootstrap dedup seed: knowledge base empty, no visibility to inject'
-        );
-      }
-      if (existing.length > 0) {
-        dedupSeedByDim = new Map();
-        for (const entry of existing) {
-          if (entry.title) {
-            globalSubmittedTitles.add(entry.title.toLowerCase().trim());
-          }
-          if (entry.trigger) {
-            globalSubmittedTriggers.add(entry.trigger.toLowerCase().trim());
-          }
-          if (entry.title) {
-            const dim = entry.dimensionId || 'unknown';
-            const bucket = dedupSeedByDim.get(dim) ?? [];
-            bucket.push({ id: entry.id, title: entry.title, trigger: entry.trigger });
-            dedupSeedByDim.set(dim, bucket);
-          }
-        }
-        logger.info(
-          `[generate] bootstrap dedup seed: ${globalSubmittedTitles.size} titles / ${globalSubmittedTriggers.size} triggers from knowledge base (${existing.length} entries)`
-        );
-      }
-    } catch (err: unknown) {
-      logger.warn(
-        `[generate] bootstrap dedup seed unavailable (continuing without KB visibility): ${err instanceof Error ? err.message : String(err)}`
+  // W1（结构清洗）：查重播种单源化——bootstrap 无 rescan 上下文时从知识库播种，
+  // 逻辑与三态留痕在 dedup/GenerateDedupSeeder（M1b 语义不变，rescan 在场即跳过）。
+  const dedupSeedByDim = rescanContext
+    ? null
+    : await seedGenerateDedupFromKnowledgeBase(
+        { globalSubmittedTitles, globalSubmittedTriggers },
+        (preparation.ctx as unknown as { container?: { get(name: string): unknown } }).container
       );
-    }
-  }
   const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
   const dimensionCandidates: Record<string, DimensionCandidateData> = {};
   const dimensionStats: Record<string, DimensionStat> = {};
@@ -233,7 +184,7 @@ export async function runAiDimensionSession({
       projectScopeSourceIdentityMap: runtime.projectScopeSourceIdentityMap,
       sessionAbortSignal: preparation.sessionAbortSignal,
       // M1b：本维度已入库标题（bootstrap 播种；rescan 模式 §9a 已带同类信息，此处为 null）
-      existingDimensionTitles: dedupSeedByDim?.get(dimId)?.slice(0, 15) ?? null,
+      existingDimensionTitles: projectGenerateDimensionSeedTitles(dedupSeedByDim, dimId),
     });
   }
 

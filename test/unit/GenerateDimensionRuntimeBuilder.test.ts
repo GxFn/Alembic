@@ -3,13 +3,13 @@ import type { SystemRunContextFactory } from '@alembic/agent/service';
 import type { KnowledgeRescanExecutionDecision } from '@alembic/core/host-agent-workflows';
 import { describe, expect, test, vi } from 'vitest';
 import { buildProjectScopeSourceIdentityMap } from '../../lib/project-scope/ProjectScopeAnalysis.js';
+import { prepareGenerateRescanState } from '../../lib/recipe-pipeline/generate/dedup/GenerateDedupSeeder.js';
 import { buildGenerateDimensionRunInput } from '../../lib/recipe-pipeline/generate/execution/AgentRunInputBuilders.js';
 import {
   buildPanoramaContext,
   createGenerateDimensionRuntimeInput,
   resolveGenerateDimensionPlan,
 } from '../../lib/recipe-pipeline/generate/execution/DimensionRuntimeBuilder.js';
-import { prepareGenerateRescanState } from '../../lib/recipe-pipeline/generate/execution/RescanContext.js';
 
 const dimensions = [
   {
