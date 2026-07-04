@@ -75,6 +75,57 @@ export async function runAiDimensionSession({
     evolutionPrescreen: preparation.evolutionPrescreen,
     executionDecisions: preparation.rescanExecutionDecisions,
   });
+  // M1b（挖掘产出升级 P5a）：bootstrap（无 rescan 上下文）时从知识库播种查重视野——
+  // ①gateway 级 dedup 预装（globalSubmittedTitles/Triggers，此前仅 rescan 播种，bootstrap
+  // 在饱和库上盲写→gateway 静默拒重烧整回合）；②per-dim 标题注入 producer 提示（§9c）。
+  // 不合成 rescanContext——避免把 bootstrap 隐式转成 rescan 预算/准入语义。查询失败静默
+  // 降级（冷启动首跑库空/表未建是正常路径）。
+  let dedupSeedByDim: Map<string, Array<{ id: string; title: string; trigger?: string }>> | null =
+    null;
+  if (!rescanContext) {
+    try {
+      const container = (
+        preparation.ctx as unknown as { container?: { get(name: string): unknown } }
+      ).container;
+      const knowledgeRepo = container?.get('knowledgeRepository') as
+        | {
+            findAllByLifecycles(
+              lifecycles: readonly string[],
+              limit?: number
+            ): Promise<
+              Array<{ id: string; title?: string; trigger?: string; dimensionId?: string }>
+            >;
+          }
+        | undefined;
+      const existing = knowledgeRepo
+        ? await knowledgeRepo.findAllByLifecycles(['active', 'staging', 'pending', 'evolving'])
+        : [];
+      if (existing.length > 0) {
+        dedupSeedByDim = new Map();
+        for (const entry of existing) {
+          if (entry.title) {
+            globalSubmittedTitles.add(entry.title.toLowerCase().trim());
+          }
+          if (entry.trigger) {
+            globalSubmittedTriggers.add(entry.trigger.toLowerCase().trim());
+          }
+          if (entry.title) {
+            const dim = entry.dimensionId || 'unknown';
+            const bucket = dedupSeedByDim.get(dim) ?? [];
+            bucket.push({ id: entry.id, title: entry.title, trigger: entry.trigger });
+            dedupSeedByDim.set(dim, bucket);
+          }
+        }
+        logger.info(
+          `[generate] bootstrap dedup seed: ${globalSubmittedTitles.size} titles / ${globalSubmittedTriggers.size} triggers from knowledge base (${existing.length} entries)`
+        );
+      }
+    } catch (err: unknown) {
+      logger.warn(
+        `[generate] bootstrap dedup seed unavailable (continuing without KB visibility): ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
   const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
   const dimensionCandidates: Record<string, DimensionCandidateData> = {};
   const dimensionStats: Record<string, DimensionStat> = {};
@@ -171,6 +222,8 @@ export async function runAiDimensionSession({
       allFiles: preparation.allFiles,
       projectScopeSourceIdentityMap: runtime.projectScopeSourceIdentityMap,
       sessionAbortSignal: preparation.sessionAbortSignal,
+      // M1b：本维度已入库标题（bootstrap 播种；rescan 模式 §9a 已带同类信息，此处为 null）
+      existingDimensionTitles: dedupSeedByDim?.get(dimId)?.slice(0, 15) ?? null,
     });
   }
 

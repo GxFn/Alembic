@@ -164,6 +164,7 @@ export function createGenerateDimensionRuntimeInput({
   allFiles,
   projectScopeSourceIdentityMap,
   sessionAbortSignal,
+  existingDimensionTitles,
 }: {
   dimId: string;
   plan: GenerateDimensionPlan;
@@ -185,6 +186,8 @@ export function createGenerateDimensionRuntimeInput({
   depGraphData?: SnapshotDependencyGraph | null;
   callGraphResult?: SnapshotCallGraphResult | null;
   rescanContext: GenerateRescanContext | null;
+  /** M1b（挖掘产出升级 P5a）：bootstrap 播种的本维度已入库标题——producer §9c 查重视野 */
+  existingDimensionTitles?: Array<{ id: string; title: string; trigger?: string }> | null;
   targetFileMap?: Record<string, unknown> | null;
   globalSubmittedTitles: Set<string>;
   globalSubmittedPatterns: Set<string>;
@@ -234,6 +237,10 @@ export function createGenerateDimensionRuntimeInput({
     }),
     rescanContext: projectGenerateDimensionRescanContext({ rescanContext, dimId }),
     existingRecipes: projectGenerateExistingRecipesForPrompt(dimExistingRecipes),
+    // M1b：查重视野（bootstrap 播种；rescan 模式该字段为 null，§9a 承担同类信息）
+    ...(existingDimensionTitles && existingDimensionTitles.length > 0
+      ? { existingDimensionTitles }
+      : {}),
     projectOverview: {
       primaryLang: primaryLang || projectInfo.lang || 'unknown',
       fileCount: projectInfo.fileCount || 0,

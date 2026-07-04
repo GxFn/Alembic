@@ -592,8 +592,21 @@ export async function consumeGenerateDimensionResult({
       .map(([k, v]) => `${k}=${v}`)
       .join(', ');
 
+    // M1d（挖掘产出升级）：唯一候选双口径——attempt 口径把"被拒后自救成功"记 1 拒+1 收，
+    // 掩盖真实链路健康度；uniqueAttempted 按标题去重（同题重试合并），uniqueRate 才是
+    // 接受率的真话（accepted 标题天然互异：同题二收会被查重挡）。
+    const uniqueAttempted = new Set(
+      submitCalls
+        .map((tc: ToolCallRecord) => {
+          const params = (tc.args?.params ?? tc.params ?? tc.args ?? {}) as Record<string, unknown>;
+          return typeof params.title === 'string' ? params.title.trim().toLowerCase() : '';
+        })
+        .filter((title: string) => title.length > 0)
+    ).size;
+    const uniqueRate = uniqueAttempted > 0 ? Math.round((successCount / uniqueAttempted) * 100) : 0;
     logger.info(
       `[Producer] "${dimId}": submitted=${submitCalls.length}, accepted=${successCount}, rejected=${rejectedCount}, ` +
+        `unique=${successCount}/${uniqueAttempted || submitCalls.length} (${uniqueRate}%), ` +
         `producerToolCalls=${producerToolCalls.length} (${breakdownStr || 'none'}), ` +
         `analysisInput=${analysisText.length} chars`
     );

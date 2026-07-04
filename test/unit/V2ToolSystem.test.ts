@@ -48,9 +48,10 @@ function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
 // ─────────────────────────────────────────────────
 
 describe('V2 Registry', () => {
-  test('has exactly 6 tools', () => {
+  test('has exactly 7 tools', () => {
     const tools = Object.keys(TOOL_REGISTRY);
-    expect(tools).toEqual(['code', 'terminal', 'knowledge', 'graph', 'memory', 'meta']);
+    // Wave A E4（2026-07-04）：Agent 增 evidence 工具（台账只读取回）
+    expect(tools).toEqual(['code', 'terminal', 'knowledge', 'graph', 'memory', 'meta', 'evidence']);
   });
 
   test('each tool has at least one action', () => {
@@ -61,13 +62,13 @@ describe('V2 Registry', () => {
     }
   });
 
-  test('total 19 actions', () => {
+  test('total 21 actions', () => {
     let count = 0;
     for (const spec of Object.values(TOOL_REGISTRY)) {
       count += Object.keys(spec.actions).length;
     }
-    // code:5 + terminal:1 + knowledge:4 + graph:2 + memory:4 + meta:3 = 19
-    expect(count).toBe(19);
+    // code:5 + terminal:1 + knowledge:4 + graph:2 + memory:4 + meta:3 + evidence:2 = 21
+    expect(count).toBe(21);
   });
 
   test('every action has required fields', () => {
@@ -419,7 +420,8 @@ describe('memory (save + recall)', () => {
       {
         tool: 'memory',
         action: 'note_finding',
-        params: { finding: 'Uses MVVM pattern', evidence: 'src/App.swift:12', importance: 8 },
+        // E3（证据保真硬切）：引用契约=evidenceRefs；无台账 ctx 时降级 unverified 标注直存
+        params: { finding: 'Uses MVVM pattern', evidenceRefs: ['E-1'], importance: 8 },
       },
       ctx
     );
@@ -430,7 +432,8 @@ describe('memory (save + recall)', () => {
     expect(data.importance).toBe(8);
     expect(findings).toHaveLength(1);
     expect(findings[0].finding).toBe('Uses MVVM pattern');
-    expect(findings[0].evidence).toBe('src/App.swift:12');
+    expect(findings[0].evidence).toContain('E-1');
+    expect(findings[0].evidence).toContain('unverified');
   });
 
   test('note_finding requires MemoryCoordinator instead of falling back to sessionStore', async () => {
@@ -450,7 +453,7 @@ describe('memory (save + recall)', () => {
       {
         tool: 'memory',
         action: 'note_finding',
-        params: { finding: 'Fallback test' },
+        params: { finding: 'Fallback test', evidenceRefs: ['E-1'] },
       },
       ctx
     );
@@ -600,9 +603,9 @@ describe('ToolRouterAdapter', () => {
 describe('RuntimeCapabilityCatalog', () => {
   const catalog = new RuntimeCapabilityCatalog();
 
-  test('toToolSchemas returns all 6 tools by default', () => {
+  test('toToolSchemas returns all 7 tools by default', () => {
     const schemas = catalog.toToolSchemas();
-    expect(schemas.length).toBe(6);
+    expect(schemas.length).toBe(7);
     const names = schemas.map((s) => s.name);
     expect(names).toContain('code');
     expect(names).toContain('terminal');

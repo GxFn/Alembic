@@ -10,7 +10,16 @@ import {
 } from '@alembic/agent/tools/runtime';
 import { describe, expect, test, vi } from 'vitest';
 
-const ALL_TOOL_NAMES = ['code', 'terminal', 'knowledge', 'graph', 'memory', 'meta'] as const;
+// Wave A E4（2026-07-04）：Agent 增 evidence 工具（台账只读取回）——6→7 工具、19→21 动作
+const ALL_TOOL_NAMES = [
+  'code',
+  'terminal',
+  'knowledge',
+  'graph',
+  'memory',
+  'meta',
+  'evidence',
+] as const;
 
 const EXPECTED_ACTIONS: Record<string, string[]> = {
   code: ['search', 'read', 'outline', 'structure', 'write'],
@@ -19,6 +28,7 @@ const EXPECTED_ACTIONS: Record<string, string[]> = {
   graph: ['overview', 'query'],
   memory: ['save', 'recall', 'note_finding', 'get_previous_evidence'],
   meta: ['tools', 'plan', 'review'],
+  evidence: ['get', 'search'],
 };
 
 const TOTAL_ACTIONS = Object.values(EXPECTED_ACTIONS).reduce((s, a) => s + a.length, 0);
@@ -32,7 +42,7 @@ function stubCtx(overrides: Partial<ToolContext> = {}): ToolContext {
 /* ================================================================ */
 
 describe('TOOL_REGISTRY structural integrity', () => {
-  test('registers all 6 tools', () => {
+  test('registers all 7 tools', () => {
     expect(getToolNames().sort()).toEqual([...ALL_TOOL_NAMES].sort());
   });
 
@@ -42,10 +52,10 @@ describe('TOOL_REGISTRY structural integrity', () => {
     }
   });
 
-  test('total action count is 19', () => {
+  test('total action count is 21', () => {
     const count = getToolNames().reduce((s, t) => s + getActionNames(t).length, 0);
-    expect(count).toBe(19);
-    expect(TOTAL_ACTIONS).toBe(19);
+    expect(count).toBe(21);
+    expect(TOTAL_ACTIONS).toBe(21);
   });
 
   test('every action has handler, params schema, and summary', () => {
@@ -72,9 +82,9 @@ describe('TOOL_REGISTRY structural integrity', () => {
 /* ================================================================ */
 
 describe('generateLightweightSchemas', () => {
-  test('returns 6 schemas when unfiltered', () => {
+  test('returns 7 schemas when unfiltered', () => {
     const schemas = generateLightweightSchemas();
-    expect(schemas).toHaveLength(6);
+    expect(schemas).toHaveLength(7);
   });
 
   test('filters by allowedTools', () => {
@@ -330,7 +340,7 @@ describe('ToolRouter', () => {
     test('returns all schemas when no capability is set', () => {
       const router = new ToolRouter();
       const schemas = router.getSchemas();
-      expect(schemas).toHaveLength(6);
+      expect(schemas).toHaveLength(7);
     });
 
     test('filters schemas by capability allowedTools', () => {
