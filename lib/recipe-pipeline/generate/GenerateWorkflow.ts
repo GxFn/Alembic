@@ -92,7 +92,9 @@ async function loadGenerateWorkflowImplementation(
   if (mode === 'full') {
     await import('./ColdStartWorkflow.js');
   } else {
-    await import('../sustain/KnowledgeRescanWorkflow.js');
+    // W3 增量归位：mode='incremental' 实现迁至 generate/incremental/，
+    // 懒加载该模块以触发其底部的 registerGenerateWorkflowImplementation 注册副作用。
+    await import('./incremental/IncrementalRescanWorkflow.js');
   }
 
   const loaded = implementations[mode];

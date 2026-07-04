@@ -1,10 +1,10 @@
 import type { CoverageLedgerRepository } from '@alembic/core/repositories';
 import { describe, expect, test, vi } from 'vitest';
-import { selectScopedModuleMiningModules } from '../../lib/recipe-pipeline/generate/ModuleMiningSelection.js';
 import {
   type KnowledgeRescanCoverageLedgerWriteInput,
   writeKnowledgeRescanCoverageLedgerForDimension,
-} from '../../lib/recipe-pipeline/sustain/KnowledgeRescanWorkflow.js';
+} from '../../lib/recipe-pipeline/generate/incremental/RescanCoverageLedgerWriter.js';
+import { selectScopedModuleMiningModules } from '../../lib/recipe-pipeline/generate/ModuleMiningSelection.js';
 import { writeModuleMiningCoverageLedger } from '../../lib/shared/ModuleMiningEvidence.js';
 
 function createFakeCoverageLedgerRepository(roundIndex = 3) {

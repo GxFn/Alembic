@@ -1,3 +1,4 @@
+// 结构清洗 W3 名实修正——文件实为 gap-fill 投影/计划构建器非路由（更名自 ProduceSessionRoute.ts，内容未改）。
 import type { DimensionDef } from '@alembic/core/types';
 
 const DEFAULT_CREATE_BUDGET = 1;

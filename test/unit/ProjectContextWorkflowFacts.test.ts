@@ -1075,7 +1075,7 @@ let package = Package(
       'utf8'
     );
     const rescan = await readFile(
-      join(process.cwd(), 'lib/recipe-pipeline/sustain/KnowledgeRescanWorkflow.ts'),
+      join(process.cwd(), 'lib/recipe-pipeline/generate/incremental/IncrementalRescanWorkflow.ts'),
       'utf8'
     );
     const combined = `${coldStart}\n${rescan}`;

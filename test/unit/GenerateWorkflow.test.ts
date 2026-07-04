@@ -11,7 +11,7 @@ vi.mock('../../lib/recipe-pipeline/generate/GenerateWorkflow.js', () => projectI
 
 import { runColdStartWorkflow } from '../../lib/recipe-pipeline/generate/ColdStartWorkflow.js';
 import { runGenerateWorkflow } from '../../lib/recipe-pipeline/generate/GenerateWorkflow.js';
-import { runKnowledgeRescanWorkflow } from '../../lib/recipe-pipeline/sustain/KnowledgeRescanWorkflow.js';
+import { runKnowledgeRescanWorkflow } from '../../lib/recipe-pipeline/generate/incremental/IncrementalRescanWorkflow.js';
 
 describe('ProjectIndexWorkflow compatibility', () => {
   beforeEach(() => {
@@ -64,6 +64,10 @@ describe('ProjectIndexWorkflow compatibility', () => {
     expect(combinedConsumers).toContain("{ mode: 'full' }");
     expect(combinedConsumers).toContain("{ mode: 'incremental' }");
     expect(combinedConsumers).not.toContain("recipe-pipeline/generate/ColdStartWorkflow.js'");
+    // W3 迁移后本体与兼容壳两个路径都不允许被消费者深度导入。
+    expect(combinedConsumers).not.toContain(
+      "recipe-pipeline/generate/incremental/IncrementalRescanWorkflow.js'"
+    );
     expect(combinedConsumers).not.toContain("recipe-pipeline/sustain/KnowledgeRescanWorkflow.js'");
   });
 
@@ -73,7 +77,7 @@ describe('ProjectIndexWorkflow compatibility', () => {
       'utf8'
     );
     const rescanSource = await readFile(
-      join(process.cwd(), 'lib/recipe-pipeline/sustain/KnowledgeRescanWorkflow.ts'),
+      join(process.cwd(), 'lib/recipe-pipeline/generate/incremental/IncrementalRescanWorkflow.ts'),
       'utf8'
     );
 
@@ -94,7 +98,7 @@ describe('ProjectIndexWorkflow compatibility', () => {
     );
 
     const rescanBody = rescanSource.slice(
-      rescanSource.indexOf('async function runKnowledgeRescanProjectIndexWorkflow')
+      rescanSource.indexOf('async function runIncrementalRescanWorkflow')
     );
     expectOrdered(
       rescanBody,
@@ -102,13 +106,20 @@ describe('ProjectIndexWorkflow compatibility', () => {
       'registerProjectContextWorkflowSessionReleaseOnGenerateCompletion',
       'dispatchAiDimensionRuns({'
     );
-    expect(rescanBody).toContain('runAsyncFillInline');
+    // W3 拆分后 runAsyncFillInline 字面量随 shouldRunInternalRescanFillInline
+    // 迁至 RescanMiningPlanArgs.ts；编排器经 shouldRunInternalRescanFillInline 消费同一开关。
+    const rescanArgsSource = await readFile(
+      join(process.cwd(), 'lib/recipe-pipeline/generate/incremental/RescanMiningPlanArgs.ts'),
+      'utf8'
+    );
+    expect(rescanBody).toContain('shouldRunInternalRescanFillInline');
+    expect(`${rescanBody}\n${rescanArgsSource}`).toContain('runAsyncFillInline');
     expect(`${coldBody}\n${rescanBody}`).toContain('skipAsyncFill');
   });
 
   test('keeps KnowledgeRescan moduleMining result reviewable for selected modules and coverage', async () => {
     const rescanSource = await readFile(
-      join(process.cwd(), 'lib/recipe-pipeline/sustain/KnowledgeRescanWorkflow.ts'),
+      join(process.cwd(), 'lib/recipe-pipeline/generate/incremental/IncrementalRescanWorkflow.ts'),
       'utf8'
     );
     const moduleMiningBranch = rescanSource.slice(rescanSource.indexOf('perModuleMining &&'));

@@ -4,7 +4,7 @@ import {
   buildProduceSessionProjection,
   buildProduceSessionRoutePlan,
   readControllerProduceSessionRequest,
-} from '../../lib/recipe-pipeline/sustain/ProduceSessionRoute.js';
+} from '../../lib/recipe-pipeline/sustain/ProduceSessionPlan.js';
 
 const asqDimension = {
   id: 'asq-publication',

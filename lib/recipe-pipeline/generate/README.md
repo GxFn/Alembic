@@ -6,6 +6,10 @@
 | deepMining | `DeepMiningRoundGate.ts`(coverage-ledger 差距驱动多轮)→`GenerateWorkflow.ts`(mode=incremental) | 边际收敛的增量深挖 |
 | moduleMining | `ModuleMiningWorkflow.ts`+`ModuleMiningSelection.ts` | plan moduleBindings 定向的模块挖掘 |
 
+- `incremental/` — mode='incremental' 的实现(W3 自 sustain/ 迁入):
+  IncrementalRescanWorkflow(编排器+模块底部注册副作用,GenerateWorkflow 懒加载它)
+  /RescanCoverageLedgerWriter(每维度 coverage ledger 写入)/RescanMiningPlanArgs
+  (挖掘计划选项构建与入参规整)。
 - `execution/` — 维度执行核心:AiDimensionSessionRunner(并发调度)→DimensionRuntimeBuilder
   (预算/建议数量注入)→AlembicAgent generate-dimension pipeline(analyze→QualityGate→produce)
   →GenerateConsumers(候选落库/checkpoint/Skill)。PCV 证据与 process events 也在此。
