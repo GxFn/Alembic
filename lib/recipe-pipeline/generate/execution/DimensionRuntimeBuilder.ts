@@ -272,6 +272,9 @@ export function createGenerateDimensionRuntimeInput({
       submittedPatterns: globalSubmittedPatterns,
       submittedTriggers: globalSubmittedTriggers,
       _bootstrapDedup: bootstrapDedup,
+      // M4 前置（挖掘产出升级）：同一 bootstrap 会话的所有维度共享证据台账目录键——
+      // 此前 Agent 每维度 runtime 实例各自 fallback run-<ts>，跨维综合 pass 找不到兄弟台账。
+      _bootstrapSessionId: sessionId,
       ...(projectScopeSourceIdentityMap
         ? { _projectScopeSourceIdentityMap: projectScopeSourceIdentityMap }
         : {}),
