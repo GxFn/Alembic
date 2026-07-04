@@ -16,3 +16,9 @@
 - `runtime/` — 生成会话运行时:GenerateTaskManager(bs_ 会话)/GenerateEventEmitter
   (RECIPE_PIPELINE_EVENTS wire 事件)/GenerateRefine/GenerateEfficiency/UiStartupTasks。
 - 完成阈值:Core DIMENSION_COMPLETION_FLOOR 单源(与宿主 dimension_complete 同数)。
+
+## wiki/ 归属注记（结构清洗 W5，2026-07-04）
+
+`wiki/`（~4,200 行）是维度结果的 completion 副产物渲染器，不在生成主链上——
+由 completion/CompletionSteps 调度，与 execution/ 无相互 import。评估结论：
+保留在 generate/ 下（它只消费本环产物），若未来出现第二个消费方再评估上提。

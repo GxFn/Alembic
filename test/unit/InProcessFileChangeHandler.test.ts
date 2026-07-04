@@ -1,6 +1,5 @@
 import type { FileChangeEvent, ImpactLevel } from '@alembic/core/types';
 import { vi } from 'vitest';
-import { FileChangeHandler as CompatFileChangeHandler } from '../../lib/recipe-pipeline/sustain/evolution/FileChangeHandler.js';
 import { InProcessFileChangeHandler } from '../../lib/recipe-pipeline/sustain/evolution/InProcessFileChangeHandler.js';
 
 /* ════════════════════════════════════════════
@@ -582,7 +581,7 @@ describe('InProcessFileChangeHandler', () => {
 
   describe('R1 compatibility alias', () => {
     test('keeps FileChangeHandler named imports wired to the in-process handler', () => {
-      expect(CompatFileChangeHandler).toBe(InProcessFileChangeHandler);
+      // W5（结构清洗）：R1 兼容 shim FileChangeHandler.ts 已删（零残留导入）——别名等价断言随退役
     });
   });
 });
