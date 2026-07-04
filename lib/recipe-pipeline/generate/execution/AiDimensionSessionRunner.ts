@@ -100,6 +100,16 @@ export async function runAiDimensionSession({
       const existing = knowledgeRepo
         ? await knowledgeRepo.findAllByLifecycles(['active', 'staging', 'pending', 'evolving'])
         : [];
+      if (!knowledgeRepo) {
+        // run-10 静默复盘：undefined-repo 此前走无日志空路径——留痕以区分"容器无键"与"库空"
+        logger.info(
+          '[generate] bootstrap dedup seed: knowledgeRepository unavailable in workflow container'
+        );
+      } else if (existing.length === 0) {
+        logger.info(
+          '[generate] bootstrap dedup seed: knowledge base empty, no visibility to inject'
+        );
+      }
       if (existing.length > 0) {
         dedupSeedByDim = new Map();
         for (const entry of existing) {
