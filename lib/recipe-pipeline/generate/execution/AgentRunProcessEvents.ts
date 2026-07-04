@@ -14,6 +14,8 @@ import { parseDimensionDigest } from './DimensionContext.js';
 import type { GenerateDimensionPlan } from './DimensionRuntimeBuilder.js';
 import { buildPcvN8StageFactoryEvidence } from './PcvStageNodeMap.js';
 
+// ─── 脱敏与常量 ───
+
 const MAX_TEXT_CHARS = 6000;
 const MAX_JSON_TEXT_CHARS = 12000;
 const MAX_TOOL_CALLS = 20;
@@ -37,6 +39,8 @@ const PROCESS_EVENT_RETENTION_POLICIES = [
 ] as const;
 const PROCESS_EVENT_SEVERITIES = ['info', 'success', 'warning', 'error'] as const;
 const PROCESS_EVENT_CONTENT_ROLES = ['system', 'developer', 'user', 'assistant', 'tool'] as const;
+
+// ─── 维度输入事件 ───
 
 export function buildGenerateDimensionInputProcessEvents({
   dimId,
@@ -92,6 +96,8 @@ export function buildGenerateDimensionInputProcessEvents({
   ];
 }
 
+// ─── 维度结果事件 ───
+
 export function buildGenerateDimensionResultProcessEvents({
   dimId,
   label,
@@ -136,6 +142,8 @@ export function buildGenerateDimensionResultProcessEvents({
   }
   return events;
 }
+
+// ─── Agent 进度事件 ───
 
 export function buildGenerateAgentProgressProcessEvents({
   dimId,
@@ -223,6 +231,8 @@ export function buildGenerateAgentProgressProcessEvents({
   ];
 }
 
+// ─── Tier 反思事件 ───
+
 export function buildGenerateTierReflectionProcessEvents({
   reflection,
   sessionId,
@@ -282,6 +292,9 @@ export function buildGenerateTierReflectionProcessEvents({
       : null;
   return [reflectionEvent, ...(findingsEvent ? [findingsEvent] : [])];
 }
+
+// ─── 规范化器 ───
+// 共享投影类型与私有助手：事件子构建、输入/工具/质量门投影、内容规范化、脱敏截断，服务上方四类公开事件构建器。
 
 interface NormalizedFindingItem {
   evidence?: string;
