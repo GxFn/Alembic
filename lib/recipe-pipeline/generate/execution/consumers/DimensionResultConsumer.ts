@@ -752,10 +752,21 @@ function normalizeBootstrapDimensionError(err: unknown): GenerateDimensionRunIss
   if (isBootstrapDimensionRunIssue(err)) {
     return err;
   }
-  return {
-    status: 'error',
-    reason: err instanceof Error ? err.message : String(err),
-  };
+  // 全量 run 复盘：普通对象经 String() 输出 [object Object]——维度失败全链不可归因。
+  // 安全序列化：Error 取 message；字符串直取；对象 JSON 截断（循环引用回退 String）。
+  let reason: string;
+  if (err instanceof Error) {
+    reason = err.message;
+  } else if (typeof err === 'string') {
+    reason = err;
+  } else {
+    try {
+      reason = JSON.stringify(err)?.slice(0, 300) ?? String(err);
+    } catch {
+      reason = String(err);
+    }
+  }
+  return { status: 'error', reason };
 }
 
 function isBootstrapDimensionRunIssue(value: unknown): value is GenerateDimensionRunIssue {

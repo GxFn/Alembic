@@ -156,7 +156,17 @@ export function resolveGenerateDimensionRunIssue(
   const efficiency =
     extractEfficiencyFromDiagnostics(diagnostics) ||
     normalizeAgentEfficiencySummary('efficiency' in result ? result.efficiency : null);
-  const reply = result.reply || '';
+  // 全量 run 复盘（agent-guidelines 失败打成 "[object Object]"）：status=error 时 reply 可能是
+  // 错误对象——模板进 reason 后全链不可归因。安全收窄：字符串直取；对象取 message 或 JSON 截断。
+  const rawReply = result.reply as unknown;
+  const reply =
+    typeof rawReply === 'string'
+      ? rawReply
+      : rawReply && typeof rawReply === 'object'
+        ? String(
+            (rawReply as { message?: unknown }).message ?? JSON.stringify(rawReply).slice(0, 300)
+          )
+        : '';
   if (
     status === 'timeout' ||
     efficiency?.cancelReason === 'stage_timeout' ||
@@ -239,7 +249,17 @@ export function resolveGenerateDimensionRunIssue(
   }
   const resultDegraded = 'degraded' in result ? result.degraded : false;
   if (diagnostics?.degraded || resultDegraded) {
-    const reply = result.reply || '';
+    // 全量 run 复盘（agent-guidelines 失败打成 "[object Object]"）：status=error 时 reply 可能是
+    // 错误对象——模板进 reason 后全链不可归因。安全收窄：字符串直取；对象取 message 或 JSON 截断。
+    const rawReply = result.reply as unknown;
+    const reply =
+      typeof rawReply === 'string'
+        ? rawReply
+        : rawReply && typeof rawReply === 'object'
+          ? String(
+              (rawReply as { message?: unknown }).message ?? JSON.stringify(rawReply).slice(0, 300)
+            )
+          : '';
     if (reply.includes('record_repair_incomplete')) {
       return {
         status: 'record_repair_incomplete',
