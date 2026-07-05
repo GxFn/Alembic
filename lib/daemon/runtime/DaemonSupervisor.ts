@@ -100,6 +100,22 @@ export class DaemonSupervisor {
       return this.#statusResult(paths, 'ready', true, state, true, health);
     }
 
+    // 假 stale 修复（2026-07-05 Dashboard 轮转"过期"复盘）：health 取数失败（1s 超时/网络抖动）
+    // 与"身份真不匹配"是两回事——此前统一判 stale，多项目概要并发打同一 daemon 时总有一个
+    // 超时→每次恰好一个项目被误标且刷新轮转。null=瞬态不可达→'starting'（pid 活着，非告警态）；
+    // 只有 health 真返回且字段失配才是 stale（需重启的语义不变）。
+    if (health === null) {
+      return this.#statusResult(
+        paths,
+        'starting',
+        false,
+        state,
+        true,
+        null,
+        'daemon process is alive but health endpoint did not respond in time'
+      );
+    }
+
     return this.#statusResult(
       paths,
       'stale',
@@ -351,7 +367,33 @@ function isDaemonRuntimeOlderThanCurrentBuild(state: DaemonState): boolean {
   }
 }
 
+/** health 单飞+微 TTL：多项目概要并发探测同一 daemon 时共享一次真实请求（自致超时的放大器） */
+const HEALTH_COALESCE_TTL_MS = 2000;
+const healthInFlight = new Map<
+  string,
+  { at: number; promise: Promise<Record<string, unknown> | null> }
+>();
+
+/** 仅供测试：清空 health 合并缓存（微 TTL 会让同 url 的连续断言互相污染） */
+export function __clearDaemonHealthCoalesceForTests(): void {
+  healthInFlight.clear();
+}
+
 async function fetchDaemonHealth(state: DaemonState): Promise<Record<string, unknown> | null> {
+  const key = state.url ?? '';
+  const cached = healthInFlight.get(key);
+  const now = Date.now();
+  if (cached && now - cached.at < HEALTH_COALESCE_TTL_MS) {
+    return cached.promise;
+  }
+  const promise = fetchDaemonHealthUncached(state);
+  healthInFlight.set(key, { at: now, promise });
+  return promise;
+}
+
+async function fetchDaemonHealthUncached(
+  state: DaemonState
+): Promise<Record<string, unknown> | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 1000);
   try {

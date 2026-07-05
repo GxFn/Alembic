@@ -15,6 +15,7 @@ import {
 import { getGhostWorkspaceDir, ProjectRegistry } from '@alembic/core/workspace';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
+  __clearDaemonHealthCoalesceForTests,
   computeDaemonLockBackoffMs,
   DaemonSupervisor,
 } from '../../lib/daemon/runtime/DaemonSupervisor.js';
@@ -182,12 +183,56 @@ describe('DaemonSupervisor', () => {
     fetchMock.mockImplementation(async () =>
       healthResponse(state, { schemaMigrationVersion: 'schema-mismatch' })
     );
+    // health 合并缓存微 TTL 内会复用上一次 ready 结果——清空以断言真实失配路径
+    __clearDaemonHealthCoalesceForTests();
 
     const stale = await new DaemonSupervisor().status(projectRoot);
 
     expect(stale.ready).toBe(false);
     expect(stale.status).toBe('stale');
     expect(stale.message).toBe('daemon process is alive but health identity did not match');
+  });
+
+  test('假 stale 修复：health 超时/不可达 → starting 而非 stale（身份未证伪）', async () => {
+    useTempAlembicHome();
+    const projectRoot = makeProjectRoot();
+    const paths = resolveDaemonPaths(projectRoot);
+    ensureDaemonDirs(paths);
+    writeDaemonState(paths.statePath, makeState(paths));
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      throw new Error('timeout');
+    });
+    __clearDaemonHealthCoalesceForTests();
+
+    const status = await new DaemonSupervisor().status(projectRoot);
+
+    expect(status.status).toBe('starting');
+    expect(status.message).toBe(
+      'daemon process is alive but health endpoint did not respond in time'
+    );
+  });
+
+  test('health 合并：并发/连续探测同一 daemon 在微 TTL 内共享一次 fetch', async () => {
+    useTempAlembicHome();
+    const projectRoot = makeProjectRoot();
+    const paths = resolveDaemonPaths(projectRoot);
+    ensureDaemonDirs(paths);
+    const state = makeState(paths);
+    writeDaemonState(paths.statePath, state);
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => healthResponse(state));
+    __clearDaemonHealthCoalesceForTests();
+
+    const supervisor = new DaemonSupervisor();
+    const [a, b] = await Promise.all([
+      supervisor.status(projectRoot),
+      supervisor.status(projectRoot),
+    ]);
+
+    expect(a.status).toBe('ready');
+    expect(b.status).toBe('ready');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   test('reports stale when an alive daemon predates the current built runtime', async () => {
