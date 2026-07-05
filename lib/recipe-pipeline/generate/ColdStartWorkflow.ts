@@ -68,6 +68,7 @@ import {
   dispatchAiDimensionRuns,
   startAiDimensionSession,
 } from './execution/AiDimensionDispatcher.js';
+import { registerSourceRefSyncOnGenerateCompletion } from './execution/consumers/SourceRefSyncConsumer.js';
 import {
   type GenerateWorkflowMcpContext,
   registerGenerateWorkflowImplementation,
@@ -256,6 +257,14 @@ async function runColdStartProjectIndexWorkflow(
       projectRoot,
       workflow: 'cold-start',
       workflowSessionId: cachedSessionId,
+    });
+    // 问题 A 修复：bootstrap 建库不写 recipe_source_refs（此前仅 rescan Step 1.5 填），
+    // 收尾后跑一次 SourceRefReconciler.reconcile 初次填充（只写 refs 表，幂等）。
+    registerSourceRefSyncOnGenerateCompletion({
+      bootstrapSessionId: generateSession?.id,
+      container: ctx.container,
+      logger: ctx.logger,
+      logPrefix: 'Bootstrap',
     });
   }
 
