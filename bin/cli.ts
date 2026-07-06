@@ -299,6 +299,43 @@ daemon
     printDaemonStatus(result);
   });
 
+daemon
+  .command('autostart')
+  .description('管理登录自启（macOS launchd LaunchAgent；默认查看状态）')
+  .option('-d, --dir <path>', '项目目录', '.')
+  .option('--install', '安装登录自启（写 plist 并 launchctl load -w）')
+  .option('--uninstall', '移除登录自启')
+  .option('--json', 'JSON 格式输出')
+  .action(async (opts) => {
+    const { installAutostart, uninstallAutostart, autostartStatus } = await import(
+      '../lib/daemon/runtime/LaunchdAutostart.js'
+    );
+    if (opts.install && opts.uninstall) {
+      cli.error('--install 与 --uninstall 不能同时使用');
+      process.exitCode = 1;
+      return;
+    }
+    const input = { projectRoot: resolve(opts.dir) };
+    const result = opts.install
+      ? await installAutostart(input)
+      : opts.uninstall
+        ? await uninstallAutostart(input)
+        : await autostartStatus(input);
+    if (opts.json) {
+      cli.json(result);
+    } else {
+      cli.info(result.message ?? result.label);
+      cli.info(`plist: ${result.plistPath}${result.plistExists ? '' : '（不存在）'}`);
+      if (result.loaded !== null) {
+        cli.info(`launchctl 登记: ${result.loaded ? '是' : '否'}`);
+      }
+      cli.info(`日志: ${result.logPath}`);
+    }
+    if (!result.supported) {
+      process.exitCode = 1;
+    }
+  });
+
 // ─────────────────────────────────────────────────────
 // projects 命令 — 多项目 runtime control foundation
 // ─────────────────────────────────────────────────────
