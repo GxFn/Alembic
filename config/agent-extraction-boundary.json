@@ -22,14 +22,10 @@
         "Four deferred local V2 tool implementation import files remain classified until AlembicAgent completes A6-2."
       ],
       "preservedPaths": [
-        "lib/tools/adapters/DashboardOperationAdapter.ts",
         "lib/tools/adapters/DashboardOperations.ts",
         "lib/tools/adapters/MacSystemAdapter.ts",
-        "lib/tools/adapters/MacSystemCapabilities.ts",
-        "lib/tools/adapters/SkillAdapter.ts",
         "lib/tools/adapters/SkillCapabilities.ts",
         "lib/tools/adapters/TerminalAdapter.ts",
-        "lib/tools/adapters/WorkflowAdapter.ts",
         "lib/tools/adapter/**",
         "lib/tools/cache/**",
         "lib/tools/compressor/OutputCompressor.ts",
@@ -125,14 +121,10 @@
       ],
       "preservedPaths": [
         "lib/tools/ToolContextFactory.ts",
-        "lib/tools/adapters/DashboardOperationAdapter.ts",
         "lib/tools/adapters/DashboardOperations.ts",
         "lib/tools/adapters/MacSystemAdapter.ts",
-        "lib/tools/adapters/MacSystemCapabilities.ts",
-        "lib/tools/adapters/SkillAdapter.ts",
         "lib/tools/adapters/SkillCapabilities.ts",
         "lib/tools/adapters/TerminalAdapter.ts",
-        "lib/tools/adapters/WorkflowAdapter.ts",
         "lib/tools/adapters/terminal-adapter/**",
         "lib/tools/adapters/terminal-policy/**"
       ],
@@ -307,7 +299,12 @@
     "packageRange": "file:../AlembicAgent",
     "publicEntrypoint": "@alembic/agent/ai",
     "retiredNegativeGuard": "lib/external/ai/**",
-    "scanRoots": ["lib", "bin", "scripts", "test"],
+    "scanRoots": [
+      "lib",
+      "bin",
+      "scripts",
+      "test"
+    ],
     "ignoredPathPrefixes": [],
     "notes": [
       "Provider execution, transports, model registry, parameter guard, and LLM gateway are consumed from @alembic/agent/ai.",
@@ -322,23 +319,37 @@
     "publicEntrypoint": "@alembic/agent",
     "publicV2Entrypoint": "@alembic/agent/tools/v2",
     "localDeletionCandidates": [],
-    "hostOwnedToolV2Paths": ["lib/tools/ToolContextFactory.ts", "lib/tools/adapters/**"],
-    "scanRoots": ["lib", "bin", "scripts", "test"],
+    "hostOwnedToolV2Paths": [
+      "lib/tools/ToolContextFactory.ts",
+      "lib/tools/adapters/**"
+    ],
+    "scanRoots": [
+      "lib",
+      "bin",
+      "scripts",
+      "test"
+    ],
     "ignoredPathPrefixes": [],
     "deferredLocalImports": [
       {
         "path": "lib/injection/modules/AgentModule.ts",
-        "expectedSpecifiers": ["#tools/ToolContextFactory.js"],
+        "expectedSpecifiers": [
+          "#tools/ToolContextFactory.js"
+        ],
         "reason": "Alembic consumes Agent V2 catalog/router contracts from @alembic/agent/tools/v2 but keeps concrete ToolContextFactory as the host DI/repository/search/data-root bridge."
       },
       {
         "path": "test/unit/V2ToolSystem.test.ts",
-        "expectedSpecifiers": ["#tools/ToolContextFactory.js"],
+        "expectedSpecifiers": [
+          "#tools/ToolContextFactory.js"
+        ],
         "reason": "The representative V2 suite now exercises Agent generic contracts and imports only the Alembic host-owned ToolContextFactory for context bridge coverage."
       },
       {
         "path": "test/unit/ToolContextFactory.test.ts",
-        "expectedSpecifiers": ["../../lib/tools/ToolContextFactory.js"],
+        "expectedSpecifiers": [
+          "../../lib/tools/ToolContextFactory.js"
+        ],
         "reason": "ToolContextFactory has a dedicated host bridge test because it owns Alembic DI, audit sink, project-root, and sandbox executor wiring around the Agent V2 router."
       }
     ],
@@ -369,7 +380,11 @@
     "packageRange": "file:../AlembicAgent",
     "publicMemoryEntrypoint": "@alembic/agent/memory",
     "publicContextEntrypoint": "@alembic/agent/context",
-    "scanRoots": ["lib", "bin", "scripts"],
+    "scanRoots": [
+      "lib",
+      "bin",
+      "scripts"
+    ],
     "ignoredPathPrefixes": [],
     "consumedAgentExports": [
       "@alembic/agent/service",
@@ -381,7 +396,10 @@
       "Agent-owned memory/context consumers use @alembic/agent/memory and @alembic/agent/context.",
       "Wave 4 deleted local lib/agent memory/context duplicate files from Alembic."
     ],
-    "completedDeletionPaths": ["lib/agent/memory/**", "lib/agent/context/**"]
+    "completedDeletionPaths": [
+      "lib/agent/memory/**",
+      "lib/agent/context/**"
+    ]
   },
   "hostContractSurfaceImportRules": {
     "status": "local-host-contract-surface-duplicates-deleted",
@@ -393,7 +411,11 @@
       "prompts": "@alembic/agent/prompts",
       "domain": "@alembic/agent/domain"
     },
-    "scanRoots": ["lib", "bin", "scripts"],
+    "scanRoots": [
+      "lib",
+      "bin",
+      "scripts"
+    ],
     "ignoredPathPrefixes": [],
     "notes": [
       "Alembic production consumers import Agent-owned service, runtime, prompt, and domain contracts from @alembic/agent public subpaths.",
@@ -421,7 +443,12 @@
     }
   ],
   "agentImportRules": {
-    "scanRoots": ["lib", "bin", "scripts", "test"],
+    "scanRoots": [
+      "lib",
+      "bin",
+      "scripts",
+      "test"
+    ],
     "ignoredPathPrefixes": [],
     "relativeLocalAgentImportPolicy": {
       "status": "blocked-after-wave-4-deletion",
@@ -442,34 +469,10 @@
       "reason": "ToolContextFactory composes Alembic-owned DI container services, repositories, search/gateway wiring, data-root/project-root context, and sandbox bridge for the Agent V2 generic router."
     },
     {
-      "path": "lib/tools/adapters/WorkflowAdapter.ts",
-      "classification": "agent-common-workflow-tool-adapter",
-      "switchAfter": "phase-4-with-host-workflow-registry",
-      "reason": "WorkflowAdapter is generic but must keep its handler registry injectable from the Alembic host."
-    },
-    {
-      "path": "lib/tools/adapters/DashboardOperationAdapter.ts",
-      "classification": "alembic-main-dashboard-bridge",
-      "switchAfter": "do-not-migrate-by-default",
-      "reason": "Dashboard operation execution is an Alembic product-shell bridge, not a portable Agent tool runtime."
-    },
-    {
       "path": "lib/tools/adapters/DashboardOperations.ts",
       "classification": "alembic-main-dashboard-bridge",
       "switchAfter": "do-not-migrate-by-default",
       "reason": "Dashboard operation manifests and handlers address Alembic Dashboard state and should stay host-owned."
-    },
-    {
-      "path": "lib/tools/adapters/MacSystemCapabilities.ts",
-      "classification": "alembic-main-platform-capabilities",
-      "switchAfter": "do-not-migrate-by-default",
-      "reason": "macOS capability manifests expose host-specific platform permissions and native screenshot behavior."
-    },
-    {
-      "path": "lib/tools/adapters/SkillAdapter.ts",
-      "classification": "alembic-main-skill-asset-adapter",
-      "switchAfter": "do-not-migrate-by-default",
-      "reason": "Skill loading reads Alembic package skills and project skills from host paths."
     },
     {
       "path": "lib/tools/adapters/SkillCapabilities.ts",
@@ -484,7 +487,12 @@
     "packageName": "@alembic/agent",
     "packageRange": "file:../AlembicAgent",
     "publicEntrypoint": "@alembic/agent/tools/terminal",
-    "scanRoots": ["lib", "bin", "scripts", "test"],
+    "scanRoots": [
+      "lib",
+      "bin",
+      "scripts",
+      "test"
+    ],
     "completedDeletionPaths": [
       "lib/tools/adapters/terminal-capabilities/**",
       "lib/tools/adapters/terminal-policy/**",
@@ -506,7 +514,9 @@
       "lib/tools/adapters/terminal-adapter/TerminalSessionExecutor.ts",
       "lib/tools/adapters/terminal-adapter/TerminalShellExecutor.ts"
     ],
-    "hostOwnedPaths": ["lib/sandbox/**"],
+    "hostOwnedPaths": [
+      "lib/sandbox/**"
+    ],
     "notes": [
       "E-3 branch A removes Alembic Main consumption of @alembic/agent/tools/terminal and the dead host terminal adapter stack.",
       "Live terminal execution is now the Agent runtime terminal.exec path wired through ToolContextFactory and the v2 ToolRouterAdapter.",
