@@ -485,6 +485,48 @@ router.post('/:id/usage', validate(KnowledgeUsageBody), async (req: Request, res
 });
 
 /**
+ * POST /api/v1/knowledge/:id/staging-review
+ * staging 复核结论提交（2026-07-06 复核期通道）：AI/人工把"断言 vs 源码"复核
+ * 结论写回 StagingManager——fail=到期回滚 pending 不晋级；pass/缺失=现状晋级。
+ * Dashboard 与程序化复核者共用本端点；主体 in-process agent 走 knowledge.manage(review)。
+ */
+router.post('/:id/staging-review', async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const outcome = req.body?.outcome;
+  if (outcome !== 'pass' && outcome !== 'fail') {
+    res.status(400).json({
+      success: false,
+      error: {
+        message: "staging-review requires body.outcome: 'pass' | 'fail'",
+        code: 'VALIDATION_ERROR',
+      },
+    });
+    return;
+  }
+  const context = getContext(req);
+  const container = getServiceContainer();
+  const stagingManager = container.get('stagingManager') as {
+    recordReview(
+      entryId: string,
+      review: { outcome: 'pass' | 'fail'; reviewer?: string; notes?: string }
+    ): Promise<boolean>;
+  };
+  const recorded = await stagingManager.recordReview(id, {
+    outcome,
+    reviewer: typeof req.body?.reviewer === 'string' ? req.body.reviewer : context.userId,
+    ...(typeof req.body?.notes === 'string' && req.body.notes ? { notes: req.body.notes } : {}),
+  });
+  if (!recorded) {
+    res.status(409).json({
+      success: false,
+      error: { message: `entry ${id} is not in staging`, code: 'NOT_IN_STAGING' },
+    });
+    return;
+  }
+  res.json({ success: true, data: { id, outcome, recorded: true } });
+});
+
+/**
  * PATCH /api/v1/knowledge/:id/quality
  * 重新计算质量评分
  */

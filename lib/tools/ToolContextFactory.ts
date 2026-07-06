@@ -149,6 +149,8 @@ export class ToolContextFactory {
       searchEngine: tryGet(c, 'searchEngine'),
       recipeGateway: tryGet(c, 'recipeProductionGateway'),
       knowledgeRepo: tryGet(c, 'knowledgeRepository'),
+      // staging 复核通道（2026-07-06）：knowledge.manage review 经此提交复核结论。
+      stagingManager: tryGet(c, 'stagingManager'),
       proposalGateway: tryGet(c, 'proposalGateway'),
       astAnalyzer: tryGet(c, 'astAnalyzer'),
       safetyPolicy: request.runtime?.safetyPolicy ?? undefined,
