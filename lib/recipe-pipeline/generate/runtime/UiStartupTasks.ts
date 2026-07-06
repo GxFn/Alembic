@@ -144,6 +144,72 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
     logger.warn(`[UiStartupTasks] ${msg}`);
   }
 
+  // ── Stage 3.5: Recipe semantic-region 向量同步（resident 语义检索的主道数据） ──
+  // 2026-07-06 修复：resident/prime 语义检索按 type=recipe-semantic-region 过滤，只认
+  // region 向量；region 此前仅由插件建库流程生成（MCP 侧 embed 缺席时 skipped），daemon
+  // 生态没有任何再生/对账机制——entry 向量补齐后语义道仍全灭的根因。此阶段在启动时
+  // 全量同步 region 向量（分批防单次 embed 数组过大；removeStale 逐批只删本批 recipe
+  // 的过时 region，安全幂等）。
+  try {
+    if (ctx.container.services.vectorService && ctx.container.services.knowledgeService) {
+      const vectorService = ctx.container.get('vectorService') as {
+        syncRecipeSemanticRegions?: (
+          entries: Array<Record<string, unknown>>,
+          opts?: Record<string, unknown>
+        ) => Promise<{
+          status: string;
+          generated: number;
+          upserted: number;
+          removed: number;
+          errors: string[];
+          degradedReason?: string;
+        }>;
+      };
+      const knowledgeService = ctx.container.get('knowledgeService') as {
+        list(
+          filter: Record<string, unknown>,
+          pagination: { page: number; pageSize: number }
+        ): Promise<{ data?: Array<{ toJSON(): unknown }> }>;
+      };
+      if (typeof vectorService.syncRecipeSemanticRegions === 'function') {
+        const listed = await knowledgeService.list({}, { page: 1, pageSize: 500 });
+        const entries = (listed?.data ?? []).map(
+          (entry) => entry.toJSON() as Record<string, unknown>
+        );
+        if (entries.length > 0) {
+          const BATCH = 40;
+          let upserted = 0;
+          let removed = 0;
+          let degraded: string | null = null;
+          for (let i = 0; i < entries.length; i += BATCH) {
+            const result = await vectorService.syncRecipeSemanticRegions(
+              entries.slice(i, i + BATCH)
+            );
+            upserted += result.upserted;
+            removed += result.removed;
+            if (result.status !== 'completed') {
+              degraded = result.degradedReason || result.errors[0] || result.status;
+              break;
+            }
+          }
+          if (degraded) {
+            logger.warn('[UiStartupTasks] Stage 3.5: region vector sync degraded', { degraded });
+          } else {
+            logger.info('[UiStartupTasks] Stage 3.5: region vector sync complete', {
+              entries: entries.length,
+              upserted,
+              removed,
+            });
+          }
+        }
+      }
+    }
+  } catch (err: unknown) {
+    const msg = `region vector sync failed: ${(err as Error).message}`;
+    report.errors.push(msg);
+    logger.warn(`[UiStartupTasks] ${msg}`);
+  }
+
   // ── Stage 4: BM25 index refresh ──
   try {
     if (ctx.container.services.searchEngine) {
