@@ -134,6 +134,35 @@ router.get('/lifecycle', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/v1/knowledge/staging-review-queue
+ * staging 复核队列（Option A：宿主 LLM 按需复核的只读读面）。返回 staging 中「尚无 pass/fail
+ * 结论」的条目及其「断言 vs 源码」所需内容（断言四要素 + reasoning.sources 引用位置）；宿主据此
+ * 读源码、对比断言，再经 POST /:id/staging-review（或 in-process knowledge.manage review）写回结论。
+ * 可选 ?limit=N（最旧优先）。必须置于 GET /:id 之前，否则被字面路由遮蔽。Dashboard 与复核者共用。
+ */
+router.get('/staging-review-queue', async (req: Request, res: Response) => {
+  const container = getServiceContainer();
+  const stagingManager = container.get('stagingManager') as {
+    listReviewQueue(limit?: number): Promise<
+      Array<{
+        id: string;
+        title: string;
+        whenClause: string;
+        doClause: string;
+        dontClause: string;
+        coreCode: string;
+        sources: string[];
+        stagingDeadline: number;
+      }>
+    >;
+  };
+  const limitRaw = Number(req.query?.limit);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : undefined;
+  const queue = await stagingManager.listReviewQueue(limit);
+  res.json({ success: true, data: { queue, count: queue.length } });
+});
+
+/**
  * POST /api/v1/knowledge/quality/refresh-all
  * 批量重新计算所有条目的质量评分
  */
