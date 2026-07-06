@@ -109,23 +109,33 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
   }
 
   // ── Stage 3: Vector reconcile (best-effort) ──
+  // 2026-07-06 修复：此前访问 vectorService.syncCoordinator（Core 私有字段 #syncCoordinator）
+  // 永远 undefined，Stage 3 从未运行——改走 Core 新公开的 reconcileIndex()。
   try {
     if (ctx.container.services.vectorService) {
       const vectorService = ctx.container.get('vectorService') as {
-        syncCoordinator?: {
-          reconcile(): Promise<{ orphansRemoved: number; missingQueued: number }>;
-        };
+        reconcileIndex?: () => Promise<{
+          orphansRemoved: number;
+          missingSynced: number;
+          errors: string[];
+        } | null>;
       };
-      if (
-        vectorService.syncCoordinator &&
-        typeof vectorService.syncCoordinator.reconcile === 'function'
-      ) {
-        const result = await vectorService.syncCoordinator.reconcile();
-        report.vectorReconcile = {
-          orphans: result.orphansRemoved,
-          missing: result.missingQueued,
-        };
-        logger.info('[UiStartupTasks] Stage 3: vector reconcile complete', report.vectorReconcile);
+      if (typeof vectorService.reconcileIndex === 'function') {
+        const result = await vectorService.reconcileIndex();
+        if (result) {
+          report.vectorReconcile = {
+            orphans: result.orphansRemoved,
+            missing: result.missingSynced,
+          };
+          logger.info(
+            '[UiStartupTasks] Stage 3: vector reconcile complete',
+            report.vectorReconcile
+          );
+        } else {
+          logger.info(
+            '[UiStartupTasks] Stage 3: vector reconcile skipped (coordinator unavailable)'
+          );
+        }
       }
     }
   } catch (err: unknown) {
