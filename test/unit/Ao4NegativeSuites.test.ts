@@ -133,3 +133,86 @@ function makeContainer(store: JobStore, services: Record<string, unknown> = {}):
     singletons: {},
   } as unknown as ServiceContainer;
 }
+
+// ── validate 中间件工厂三分支直测（AO4 覆盖地板配套，2026-07-06） ──
+// W5 期间 validate.ts 增加了 query/params 变体与 Express 5 defineProperty 路径，
+// 覆盖地板跌破阈值——此段对 validate/validateQuery/validateParams 的成功与
+// 失败分支做直测（fake req/res/next），把地板拉回而不改被测行为。
+
+import { z } from 'zod';
+import { validate, validateParams, validateQuery } from '../../lib/http/middleware/validate.js';
+
+interface FakeRes {
+  statusCode: number | null;
+  body: unknown;
+  status(code: number): FakeRes;
+  json(payload: unknown): FakeRes;
+}
+
+function makeRes(): FakeRes {
+  return {
+    statusCode: null,
+    body: null,
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload: unknown) {
+      this.body = payload;
+      return this;
+    },
+  };
+}
+
+describe('validate middleware factories (AO4 floor)', () => {
+  const schema = z.object({ name: z.string().min(1), count: z.coerce.number().default(1) });
+
+  test('validate: invalid body → 400 VALIDATION_ERROR; valid body → parsed + next', () => {
+    const mw = validate(schema);
+    const bad = { body: { name: '' } } as never;
+    const badRes = makeRes();
+    const badNext = vi.fn();
+    mw(bad, badRes as never, badNext);
+    expect(badRes.statusCode).toBe(400);
+    expect((badRes.body as { error: { code: string } }).error.code).toBe('VALIDATION_ERROR');
+    expect(badNext).not.toHaveBeenCalled();
+
+    const good = { body: { name: 'ok' } } as { body: { name: string; count?: number } };
+    const goodRes = makeRes();
+    const goodNext = vi.fn();
+    mw(good as never, goodRes as never, goodNext);
+    expect(goodNext).toHaveBeenCalledOnce();
+    expect(good.body.count).toBe(1); // default 回填证明 body 已被 parsed 数据替换
+  });
+
+  test('validateQuery: invalid query → 400; valid query → defineProperty 覆写 + next', () => {
+    const mw = validateQuery(schema);
+    const badRes = makeRes();
+    const badNext = vi.fn();
+    mw({ query: { name: '' } } as never, badRes as never, badNext);
+    expect(badRes.statusCode).toBe(400);
+    expect(badNext).not.toHaveBeenCalled();
+
+    const goodReq = { query: { name: 'ok', count: '5' } } as { query: Record<string, unknown> };
+    const goodRes = makeRes();
+    const goodNext = vi.fn();
+    mw(goodReq as never, goodRes as never, goodNext);
+    expect(goodNext).toHaveBeenCalledOnce();
+    expect(goodReq.query.count).toBe(5); // coerce 证明 query 已被覆写为 parsed 数据
+  });
+
+  test('validateParams: invalid params → 400; valid params → 覆写 + next', () => {
+    const mw = validateParams(z.object({ id: z.string().uuid() }));
+    const badRes = makeRes();
+    const badNext = vi.fn();
+    mw({ params: { id: 'not-a-uuid' } } as never, badRes as never, badNext);
+    expect(badRes.statusCode).toBe(400);
+    expect(badNext).not.toHaveBeenCalled();
+
+    const goodReq = { params: { id: '123e4567-e89b-42d3-a456-426614174000' } };
+    const goodRes = makeRes();
+    const goodNext = vi.fn();
+    mw(goodReq as never, goodRes as never, goodNext);
+    expect(goodNext).toHaveBeenCalledOnce();
+  });
+});
