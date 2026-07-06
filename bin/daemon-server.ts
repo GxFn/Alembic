@@ -7,10 +7,11 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, rmSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { createServer } from 'node:net';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import {
   DAEMON_STATE_SCHEMA_VERSION,
   getPackageVersion,
+  writeDaemonEntrypointRegistry,
   writeDaemonState,
 } from '@alembic/core/daemon';
 import { timerRegistry } from '@alembic/core/events';
@@ -269,6 +270,24 @@ function writeReadyDaemonState(options: {
     entrypoint: process.argv[1] ? resolve(process.argv[1]) : null,
     execPath: process.execPath,
   });
+  // 入口注册表与运行状态分离：daemon.json 会随优雅退出被清理（自注册字段一起丢失），
+  // daemon-entrypoint.json 只在启动时覆盖写、退出不清理——graceful kill 后自启仍有入口可用。
+  if (process.argv[1]) {
+    try {
+      writeDaemonEntrypointRegistry(dirname(options.statePath), {
+        entrypoint: resolve(process.argv[1]),
+        execPath: process.execPath,
+        registeredAt: now,
+        version: getPackageVersion(),
+      });
+    } catch (err: unknown) {
+      // 注册表写失败只降级留痕：不影响 daemon 启动，自启将退回 env/运行态入口解析。
+      Logger.getInstance().warn(
+        'Daemon entrypoint registry write failed (autostart fallback degraded)',
+        { error: err instanceof Error ? err.message : String(err) }
+      );
+    }
+  }
 }
 
 async function startHttpServer(port: number, host: string): Promise<HttpServer> {
