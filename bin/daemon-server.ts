@@ -265,6 +265,9 @@ function writeReadyDaemonState(options: {
     lastReadyAt: now,
     databasePath: options.resolver?.databasePath || '',
     schemaMigrationVersion: options.schemaMigrationVersion,
+    // 自注册入口：供插件 MCP 的 ensure-on-use 自启在 daemon 退出后按同款入口+同款 Node 重新拉起。
+    entrypoint: process.argv[1] ? resolve(process.argv[1]) : null,
+    execPath: process.execPath,
   });
 }
 
