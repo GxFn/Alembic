@@ -299,12 +299,7 @@
     "packageRange": "file:../AlembicAgent",
     "publicEntrypoint": "@alembic/agent/ai",
     "retiredNegativeGuard": "lib/external/ai/**",
-    "scanRoots": [
-      "lib",
-      "bin",
-      "scripts",
-      "test"
-    ],
+    "scanRoots": ["lib", "bin", "scripts", "test"],
     "ignoredPathPrefixes": [],
     "notes": [
       "Provider execution, transports, model registry, parameter guard, and LLM gateway are consumed from @alembic/agent/ai.",
@@ -319,37 +314,23 @@
     "publicEntrypoint": "@alembic/agent",
     "publicV2Entrypoint": "@alembic/agent/tools/v2",
     "localDeletionCandidates": [],
-    "hostOwnedToolV2Paths": [
-      "lib/tools/ToolContextFactory.ts",
-      "lib/tools/adapters/**"
-    ],
-    "scanRoots": [
-      "lib",
-      "bin",
-      "scripts",
-      "test"
-    ],
+    "hostOwnedToolV2Paths": ["lib/tools/ToolContextFactory.ts", "lib/tools/adapters/**"],
+    "scanRoots": ["lib", "bin", "scripts", "test"],
     "ignoredPathPrefixes": [],
     "deferredLocalImports": [
       {
         "path": "lib/injection/modules/AgentModule.ts",
-        "expectedSpecifiers": [
-          "#tools/ToolContextFactory.js"
-        ],
+        "expectedSpecifiers": ["#tools/ToolContextFactory.js"],
         "reason": "Alembic consumes Agent V2 catalog/router contracts from @alembic/agent/tools/v2 but keeps concrete ToolContextFactory as the host DI/repository/search/data-root bridge."
       },
       {
         "path": "test/unit/V2ToolSystem.test.ts",
-        "expectedSpecifiers": [
-          "#tools/ToolContextFactory.js"
-        ],
+        "expectedSpecifiers": ["#tools/ToolContextFactory.js"],
         "reason": "The representative V2 suite now exercises Agent generic contracts and imports only the Alembic host-owned ToolContextFactory for context bridge coverage."
       },
       {
         "path": "test/unit/ToolContextFactory.test.ts",
-        "expectedSpecifiers": [
-          "../../lib/tools/ToolContextFactory.js"
-        ],
+        "expectedSpecifiers": ["../../lib/tools/ToolContextFactory.js"],
         "reason": "ToolContextFactory has a dedicated host bridge test because it owns Alembic DI, audit sink, project-root, and sandbox executor wiring around the Agent V2 router."
       }
     ],
@@ -380,11 +361,7 @@
     "packageRange": "file:../AlembicAgent",
     "publicMemoryEntrypoint": "@alembic/agent/memory",
     "publicContextEntrypoint": "@alembic/agent/context",
-    "scanRoots": [
-      "lib",
-      "bin",
-      "scripts"
-    ],
+    "scanRoots": ["lib", "bin", "scripts"],
     "ignoredPathPrefixes": [],
     "consumedAgentExports": [
       "@alembic/agent/service",
@@ -396,10 +373,7 @@
       "Agent-owned memory/context consumers use @alembic/agent/memory and @alembic/agent/context.",
       "Wave 4 deleted local lib/agent memory/context duplicate files from Alembic."
     ],
-    "completedDeletionPaths": [
-      "lib/agent/memory/**",
-      "lib/agent/context/**"
-    ]
+    "completedDeletionPaths": ["lib/agent/memory/**", "lib/agent/context/**"]
   },
   "hostContractSurfaceImportRules": {
     "status": "local-host-contract-surface-duplicates-deleted",
@@ -411,11 +385,7 @@
       "prompts": "@alembic/agent/prompts",
       "domain": "@alembic/agent/domain"
     },
-    "scanRoots": [
-      "lib",
-      "bin",
-      "scripts"
-    ],
+    "scanRoots": ["lib", "bin", "scripts"],
     "ignoredPathPrefixes": [],
     "notes": [
       "Alembic production consumers import Agent-owned service, runtime, prompt, and domain contracts from @alembic/agent public subpaths.",
@@ -443,12 +413,7 @@
     }
   ],
   "agentImportRules": {
-    "scanRoots": [
-      "lib",
-      "bin",
-      "scripts",
-      "test"
-    ],
+    "scanRoots": ["lib", "bin", "scripts", "test"],
     "ignoredPathPrefixes": [],
     "relativeLocalAgentImportPolicy": {
       "status": "blocked-after-wave-4-deletion",
@@ -487,12 +452,7 @@
     "packageName": "@alembic/agent",
     "packageRange": "file:../AlembicAgent",
     "publicEntrypoint": "@alembic/agent/tools/terminal",
-    "scanRoots": [
-      "lib",
-      "bin",
-      "scripts",
-      "test"
-    ],
+    "scanRoots": ["lib", "bin", "scripts", "test"],
     "completedDeletionPaths": [
       "lib/tools/adapters/terminal-capabilities/**",
       "lib/tools/adapters/terminal-policy/**",
@@ -514,9 +474,7 @@
       "lib/tools/adapters/terminal-adapter/TerminalSessionExecutor.ts",
       "lib/tools/adapters/terminal-adapter/TerminalShellExecutor.ts"
     ],
-    "hostOwnedPaths": [
-      "lib/sandbox/**"
-    ],
+    "hostOwnedPaths": ["lib/sandbox/**"],
     "notes": [
       "E-3 branch A removes Alembic Main consumption of @alembic/agent/tools/terminal and the dead host terminal adapter stack.",
       "Live terminal execution is now the Agent runtime terminal.exec path wired through ToolContextFactory and the v2 ToolRouterAdapter.",
