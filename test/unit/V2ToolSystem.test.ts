@@ -62,13 +62,13 @@ describe('V2 Registry', () => {
     }
   });
 
-  test('total 21 actions', () => {
+  test('total 22 actions', () => {
     let count = 0;
     for (const spec of Object.values(TOOL_REGISTRY)) {
       count += Object.keys(spec.actions).length;
     }
-    // code:5 + terminal:1 + knowledge:4 + graph:2 + memory:4 + meta:3 + evidence:2 = 21
-    expect(count).toBe(21);
+    // code:5 + terminal:1 + knowledge:5 + graph:2 + memory:4 + meta:3 + evidence:2 = 22
+    expect(count).toBe(22);
   });
 
   test('every action has required fields', () => {

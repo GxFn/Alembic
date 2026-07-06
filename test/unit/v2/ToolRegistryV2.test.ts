@@ -10,7 +10,7 @@ import {
 } from '@alembic/agent/tools/runtime';
 import { describe, expect, test, vi } from 'vitest';
 
-// Wave A E4（2026-07-04）：Agent 增 evidence 工具（台账只读取回）——6→7 工具、19→21 动作
+// Wave A E4（2026-07-04）：Agent 增 evidence 工具；knowledge.prime 接入后共 22 个动作。
 const ALL_TOOL_NAMES = [
   'code',
   'terminal',
@@ -24,7 +24,7 @@ const ALL_TOOL_NAMES = [
 const EXPECTED_ACTIONS: Record<string, string[]> = {
   code: ['search', 'read', 'outline', 'structure', 'write'],
   terminal: ['exec'],
-  knowledge: ['search', 'submit', 'detail', 'manage'],
+  knowledge: ['search', 'submit', 'detail', 'manage', 'prime'],
   graph: ['overview', 'query'],
   memory: ['save', 'recall', 'note_finding', 'get_previous_evidence'],
   meta: ['tools', 'plan', 'review'],
@@ -52,10 +52,10 @@ describe('TOOL_REGISTRY structural integrity', () => {
     }
   });
 
-  test('total action count is 21', () => {
+  test('total action count is 22', () => {
     const count = getToolNames().reduce((s, t) => s + getActionNames(t).length, 0);
-    expect(count).toBe(21);
-    expect(TOTAL_ACTIONS).toBe(21);
+    expect(count).toBe(22);
+    expect(TOTAL_ACTIONS).toBe(22);
   });
 
   test('every action has handler, params schema, and summary', () => {
