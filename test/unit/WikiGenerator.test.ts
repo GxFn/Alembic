@@ -14,7 +14,6 @@ import {
   WikiGenerator,
   type WikiKnowledgeService,
   type WikiModuleService,
-  type WikiProjectGraph,
 } from '../../lib/recipe-pipeline/generate/wiki/WikiGenerator.js';
 
 /* ══════════════════════════════════════════════════════
@@ -95,23 +94,6 @@ function mockKnowledgeService(overrides: Partial<WikiKnowledgeService> = {}): Wi
   };
 }
 
-function mockProjectGraph(overrides: Partial<WikiProjectGraph> = {}): WikiProjectGraph {
-  return {
-    getOverview: vi.fn().mockReturnValue({
-      totalClasses: 15,
-      totalProtocols: 5,
-      totalMethods: 42,
-      topLevelModules: ['CoreModule', 'NetworkModule'],
-      classesPerModule: { CoreModule: 8, NetworkModule: 7 },
-    }),
-    getAllClassNames: vi.fn().mockReturnValue(['AppDelegate', 'NetworkManager', 'DataStore']),
-    getAllProtocolNames: vi.fn().mockReturnValue(['Serializable', 'Injectable']),
-    getClassInfo: vi.fn().mockReturnValue({ filePath: 'Sources/Core/AppDelegate.ts' }),
-    getProtocolInfo: vi.fn().mockReturnValue({ filePath: 'Sources/Core/Serializable.ts' }),
-    ...overrides,
-  };
-}
-
 function createProjectFiles(projectRoot: string) {
   // Create basic project structure for scanning
   const srcDir = path.join(projectRoot, 'src');
@@ -138,7 +120,6 @@ function makeDeps(overrides: Partial<WikiDeps> = {}): WikiDeps {
     projectRoot,
     moduleService: mockModuleService(),
     knowledgeService: mockKnowledgeService(),
-    projectGraph: mockProjectGraph(),
     aiProvider: mockAiProvider(),
     onProgress: vi.fn(),
     ...overrides,
@@ -189,7 +170,6 @@ describe('WikiGenerator', () => {
         makeDeps({
           moduleService: null,
           knowledgeService: null,
-          projectGraph: null,
           aiProvider: null,
         })
       );
@@ -384,7 +364,6 @@ describe('WikiGenerator', () => {
         makeDeps({
           moduleService: null,
           knowledgeService: null,
-          projectGraph: null,
           aiProvider: null,
         })
       );

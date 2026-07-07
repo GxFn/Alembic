@@ -1,11 +1,15 @@
 /**
- * Test Fixture Factory — 自动生成测试数据
+ * Test Fixture Factory — 测试数据工厂
  *
  * 提供：
  *   - createTestBootstrap()      — 轻量化 Bootstrap（内存 DB、静默日志）
  *   - createTempGitRepo()        — 临时 git 仓库（用于 CapabilityProbe 测试）
- *   - mockCandidate / mockRecipe — 填充完整的实体数据
- *   - createTestToken()          — 签发用于 Auth 测试的 token
+ *   - createTestToken() / createExpiredToken() — 签发用于 Auth 测试的 token
+ *   - getTestPort()              — 分配隔离的测试端口
+ *
+ * 历史上还导出过 mockCandidate / mockRecipe / mockGuardRule / mockGatewayRequest /
+ * onCleanup / runCleanups，均为零消费方的死 fixture（gateway 请求形状已在
+ * FullFlow/GatewayChain 测试内联，candidate/recipe/guard mock 无任何调用方），已清理。
  */
 
 import { execSync } from 'node:child_process';
@@ -14,16 +18,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const __dirname = import.meta.dirname;
-const _PROJECT_ROOT = path.resolve(__dirname, '../..');
-
 // ═══════════════════════════════════════════════════════
 //  Bootstrap Helper
 // ═══════════════════════════════════════════════════════
 
 /**
  * 创建测试用 Bootstrap 实例（内存 SQLite、静默日志）
- * @returns >}
  */
 export async function createTestBootstrap() {
   // 动态 import 避免顶层加载问题
@@ -84,104 +84,6 @@ export function createTempGitRepo(options = {}) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  Mock Entity Factories
-// ═══════════════════════════════════════════════════════
-
-let _counter = 0;
-function uid() {
-  return `test-${Date.now()}-${++_counter}`;
-}
-
-/** 生成完整的 Candidate 数据 */
-export function mockCandidate(overrides = {}) {
-  return {
-    id: uid(),
-    title: 'Test Candidate',
-    code: 'function testHelper() { return true; }',
-    language: 'javascript',
-    category: 'utility',
-    status: 'pending',
-    source: { type: 'manual', actor: 'manual-source' },
-    metadata: {
-      capturedAt: new Date().toISOString(),
-      context: 'test',
-    },
-    reasoning: {
-      whyStandard: 'Commonly used utility pattern',
-      sources: ['code-review', 'best-practices'],
-      qualitySignals: { clarity: 0.9, reusability: 0.85 },
-      alternatives: ['inline approach'],
-      confidence: 0.88,
-    },
-    ...overrides,
-  };
-}
-
-/** 生成完整的 Recipe 数据 */
-export function mockRecipe(overrides = {}) {
-  return {
-    id: uid(),
-    name: 'Test Recipe',
-    description: 'A test recipe for integration testing',
-    kind: 'pattern',
-    language: 'javascript',
-    category: 'utility',
-    status: 'draft',
-    content: {
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional template pattern syntax
-      pattern: 'function ${name}() { ${body} }',
-      variables: ['name', 'body'],
-    },
-    tags: ['test', 'utility'],
-    metadata: {
-      version: '1.0.0',
-      createdAt: new Date().toISOString(),
-    },
-    ...overrides,
-  };
-}
-
-/** 生成完整的 GuardRule 数据 */
-export function mockGuardRule(overrides = {}) {
-  return {
-    id: uid(),
-    name: 'Test Guard Rule',
-    description: 'Test rule for integration tests',
-    type: 'forbidden-pattern',
-    severity: 'warning',
-    enabled: true,
-    pattern: 'eval\\(',
-    language: 'javascript',
-    metadata: {
-      createdAt: new Date().toISOString(),
-      author: 'test',
-    },
-    ...overrides,
-  };
-}
-
-/** 生成带 reasoning 的完整 Gateway 请求数据 */
-export function mockGatewayRequest(overrides = {}) {
-  return {
-    actor: 'http-request',
-    action: 'test_action',
-    resource: '/test',
-    data: {
-      code: 'function example() {}',
-      reasoning: {
-        whyStandard: 'Test reasoning',
-        sources: ['test'],
-        qualitySignals: { clarity: 0.9 },
-        alternatives: [],
-        confidence: 0.85,
-      },
-      ...overrides.data,
-    },
-    ...overrides,
-  };
-}
-
-// ═══════════════════════════════════════════════════════
 //  Auth Token Helpers
 // ═══════════════════════════════════════════════════════
 
@@ -225,39 +127,10 @@ export function getTestPort() {
   return _portBase++;
 }
 
-// ═══════════════════════════════════════════════════════
-//  Cleanup Helpers
-// ═══════════════════════════════════════════════════════
-
-const _cleanups = [];
-
-/** 注册清理回调（测试 afterAll 中调用 runCleanups） */
-export function onCleanup(fn) {
-  _cleanups.push(fn);
-}
-
-/** 执行所有注册的清理回调 */
-export async function runCleanups() {
-  while (_cleanups.length) {
-    const fn = _cleanups.pop();
-    try {
-      await fn();
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
 export default {
   createTestBootstrap,
   createTempGitRepo,
-  mockCandidate,
-  mockRecipe,
-  mockGuardRule,
-  mockGatewayRequest,
   createTestToken,
   createExpiredToken,
   getTestPort,
-  onCleanup,
-  runCleanups,
 };
