@@ -1,5 +1,5 @@
 import { existsSync, statSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type {
   ProjectContextEnvelope,
   ProjectContextRef,
@@ -8,7 +8,9 @@ import type {
   RepoContext,
 } from '@alembic/core/project-context';
 import { ProjectContextCapabilities } from '@alembic/core/project-context-capabilities';
+import type { ProjectFolderDescriptor } from '@alembic/core/shared';
 import { LanguageService } from '@alembic/core/shared';
+import { ProjectScopeRegistryStore } from '../project-scope/ProjectScopeRegistry.js';
 
 const PROJECT_CONTEXT_SOURCE = 'alembic-main-consumer';
 
@@ -57,6 +59,11 @@ interface ProjectContextTargetSummaryLike {
 }
 
 export async function loadProjectContextRepo(projectRoot: string): Promise<RepoContext> {
+  const projectScopeRepo = loadProjectScopeControlRootRepo(projectRoot);
+  if (projectScopeRepo) {
+    return projectScopeRepo;
+  }
+
   const envelope = await executeProjectContextRequest('repo', projectRoot, {
     includeMapSummary: true,
   });
@@ -152,6 +159,27 @@ export async function projectContextDependencyGraph(
   repo?: RepoContext
 ): Promise<ProjectContextDependencyGraph> {
   const resolvedRepo = repo ?? (await loadProjectContextRepo(projectRoot));
+  if (isProjectScopeControlRootRepo(resolvedRepo)) {
+    const targets = projectContextTargets(resolvedRepo, projectRoot);
+    return {
+      nodes: targets.map((target) => ({
+        id: `project-scope:${target.name}`,
+        label: target.name,
+        packageDir: target.path,
+        projectInformationSource: 'project-scope',
+        role: target.type,
+        type: 'project-scope-folder',
+      })),
+      edges: [],
+      projectRoot,
+      generatedAt: new Date().toISOString(),
+      dependencySummary: {
+        edgeCount: 0,
+        notes: ['ProjectScope control root graph is bounded to registered member folders.'],
+      },
+      projectInformationSource: 'project-context',
+    };
+  }
   const map = await loadProjectContextMap(projectRoot, resolvedRepo);
   const targets = projectContextTargets(resolvedRepo, projectRoot);
   const nodes =
@@ -227,12 +255,123 @@ function executeProjectContextRequest(
   });
 }
 
+function loadProjectScopeControlRootRepo(projectRootInput: string): RepoContext | null {
+  const projectRoot = resolve(projectRootInput);
+  const resolved = new ProjectScopeRegistryStore().resolveFolder(projectRoot);
+  const projectScope = resolved?.projectScope ?? null;
+  if (!projectScope || !pathsEquivalent(projectScope.controlRoot.path, projectRoot)) {
+    return null;
+  }
+
+  const folders = [...projectScope.folders].sort((left, right) =>
+    left.displayName.localeCompare(right.displayName)
+  );
+  if (folders.length === 0) {
+    return null;
+  }
+
+  const repoRef = createProjectScopeRef({
+    id: `project-scope:${projectScope.projectScopeId}:repo`,
+    kind: 'repo',
+    label: projectScope.displayName,
+    projectRoot,
+  });
+  const targetRefs = folders.map((folder) => createProjectScopeFolderRef(projectRoot, folder));
+
+  return {
+    repo: {
+      id: projectScope.projectScopeId,
+      name: projectScope.displayName || basename(projectRoot),
+      root: projectRoot,
+      ref: repoRef,
+    },
+    languages: [],
+    buildSystems: [],
+    packageSystems: [],
+    targets: folders.map((folder, index) => ({
+      name: folder.displayName || basename(folder.path),
+      kind: folder.role ?? 'source',
+      refs: [targetRefs[index] as ProjectContextRef],
+    })),
+    localPackages: [],
+    sourceRoots: folders.map((folder, index) => ({
+      path: folder.path,
+      role: folder.role ?? 'source',
+      exists: existsSync(folder.path),
+      ref: targetRefs[index],
+    })),
+    entrypoints: [],
+    commands: [],
+    topAreas: [],
+    configFiles: [],
+    mapSummary: {
+      moduleCount: folders.length,
+      layerCount: 1,
+      dependencyEdgeCount: 0,
+      cycleCount: 0,
+      hotspotCount: 0,
+      nextRefs: targetRefs,
+    },
+    nextRefs: targetRefs,
+  };
+}
+
+function isProjectScopeControlRootRepo(repo: RepoContext): boolean {
+  return repo.repo.ref?.metadata?.producer === 'alembic-project-scope-control-root';
+}
+
+function createProjectScopeFolderRef(
+  projectRoot: string,
+  folder: ProjectFolderDescriptor
+): ProjectContextRef {
+  return createProjectScopeRef({
+    id: `project-scope:${folder.id}`,
+    kind: 'path',
+    label: folder.displayName || basename(folder.path),
+    projectRoot,
+    filePath: folder.path,
+    metadata: {
+      folderId: folder.id,
+      folderPath: folder.path,
+      pathKind: 'directory',
+      producer: 'alembic-project-scope-control-root',
+      role: folder.role ?? 'source',
+    },
+  });
+}
+
+function createProjectScopeRef(input: {
+  filePath?: string;
+  id: string;
+  kind: ProjectContextRef['kind'];
+  label: string;
+  metadata?: ProjectContextRef['metadata'];
+  projectRoot: string;
+}): ProjectContextRef {
+  return {
+    id: input.id,
+    kind: input.kind,
+    label: input.label,
+    scope: {
+      projectRoot: input.projectRoot,
+      ...(input.filePath ? { filePath: input.filePath } : {}),
+    },
+    metadata: {
+      producer: 'alembic-project-scope-control-root',
+      ...(input.metadata ?? {}),
+    },
+  };
+}
+
 function targetPathFromRefs(refs: readonly ProjectContextRef[], projectRoot: string): string {
   const filePath = refs.find((ref) => ref.scope.filePath)?.scope.filePath;
   if (!filePath) {
     return projectRoot;
   }
   const absoluteFile = resolveProjectFilePath(filePath, projectRoot);
+  if (isExistingDirectory(absoluteFile)) {
+    return absoluteFile;
+  }
   return dirname(absoluteFile);
 }
 
@@ -272,6 +411,21 @@ function safeFileSize(filePath: string): number {
   } catch {
     return 0;
   }
+}
+
+function isExistingDirectory(filePath: string): boolean {
+  try {
+    return existsSync(filePath) && statSync(filePath).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function pathsEquivalent(left: string | null | undefined, right: string | null | undefined) {
+  if (!left || !right) {
+    return false;
+  }
+  return resolve(left) === resolve(right);
 }
 
 function inferTargetLanguage(refs: readonly ProjectContextRef[]): string {

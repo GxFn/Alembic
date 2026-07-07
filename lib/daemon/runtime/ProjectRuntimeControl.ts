@@ -96,6 +96,12 @@ export interface ProjectRuntimeControlOptions {
   waitUntilReadyMs?: number;
 }
 
+export interface ProjectRuntimeControlConstructorOptions {
+  currentProjectRoot?: string | null;
+  statePath?: string;
+  supervisor?: DaemonSupervisor;
+}
+
 export interface ProjectRuntimeHandoff {
   apiBaseUrl: string | null;
   dashboardUrl: string | null;
@@ -122,10 +128,13 @@ export { getProjectRuntimeControlStatePath };
 export class ProjectRuntimeControl {
   readonly statePath: string;
 
+  readonly #currentProjectRoot: string | null;
+
   #supervisor: DaemonSupervisor;
 
-  constructor(options: { statePath?: string; supervisor?: DaemonSupervisor } = {}) {
+  constructor(options: ProjectRuntimeControlConstructorOptions = {}) {
     this.statePath = options.statePath ?? getProjectRuntimeControlStatePath();
+    this.#currentProjectRoot = normalizeCurrentProjectRoot(options.currentProjectRoot);
     this.#supervisor = options.supervisor ?? new DaemonSupervisor();
   }
 
@@ -189,25 +198,21 @@ export class ProjectRuntimeControl {
       prepared.stateCleanup.activeState.cleaned === true
         ? await this.listProjectsForState(prepared.state)
         : prepared.initialProjects;
-    const state = this.withActiveProject(prepared.state, projects);
-    const selectedProject =
-      projects.find((project) => sameProjectRoot(project.projectRoot, state.selectedProjectRoot)) ??
-      null;
-    const activeRuntimeProject =
-      selectedProject?.daemon.ready === true && selectedProject.flags.activeRuntime
-        ? selectedProject
-        : null;
+    const bound = this.bindCurrentDaemonRuntimeSnapshot(prepared.state, projects);
+    const state = bound.state;
+    const selectedProject = bound.selectedProject;
+    const activeRuntimeProject = bound.activeRuntimeProject;
 
     return {
       activeRuntimeProject,
       diagnostics: prepared.diagnostics,
       generatedAt: new Date().toISOString(),
-      projects,
+      projects: bound.projects,
       selectedProject,
       sourceOfTruth: buildProjectRuntimeControlSourceOfTruth({
         activeRuntimeProject,
         diagnostics: prepared.diagnostics,
-        projects,
+        projects: bound.projects,
         selectedProject,
         state,
         stateCleanup: prepared.stateCleanup,
@@ -413,13 +418,11 @@ export class ProjectRuntimeControl {
       projectRoot: resolved.projectRoot,
       selectedProjectRoot: targetBefore.projectRoot,
     });
-    const daemonError = startError
-      ? `Failed to start target runtime ${targetBefore.projectRoot}: ${startError}`
-      : startStatus && !startStatus.ready
-        ? (startStatus.message ?? `Target daemon did not become ready; see ${startStatus.logPath}`)
-        : targetAfterStart.daemon.ready
-          ? null
-          : (targetAfterStart.daemon.message ?? 'Target daemon did not become ready');
+    const daemonError = classifyTargetDaemonStartError({
+      startError,
+      startStatus,
+      targetProject: targetAfterStart,
+    });
 
     if (daemonError && shouldDeferCurrentStop) {
       return this.actionResult({
@@ -615,6 +618,73 @@ export class ProjectRuntimeControl {
       activeProjectId: activeProject?.projectId ?? null,
       activeProjectRoot: activeProject?.projectRoot ?? null,
     };
+  }
+
+  private bindCurrentDaemonRuntimeSnapshot(
+    persistedState: ProjectRuntimeControlState,
+    projects: ProjectRuntimeScopeSummary[]
+  ): {
+    activeRuntimeProject: ProjectRuntimeScopeSummary | null;
+    projects: ProjectRuntimeScopeSummary[];
+    selectedProject: ProjectRuntimeScopeSummary | null;
+    state: ProjectRuntimeControlState;
+  } {
+    const state = this.withActiveProject(persistedState, projects);
+    const persistedSelectedProject =
+      projects.find((project) => sameProjectRoot(project.projectRoot, state.selectedProjectRoot)) ??
+      null;
+    const persistedActiveProject =
+      persistedSelectedProject?.daemon.ready === true &&
+      persistedSelectedProject.flags.activeRuntime
+        ? persistedSelectedProject
+        : null;
+    const currentDaemonProject = this.currentDaemonProject(projects);
+    const currentDaemonShouldBind =
+      !persistedActiveProject &&
+      currentDaemonProject !== null &&
+      !sameProjectRoot(persistedSelectedProject?.projectRoot, currentDaemonProject.projectRoot);
+    const selectedProject = currentDaemonShouldBind
+      ? currentDaemonProject
+      : persistedSelectedProject;
+    const activeRuntimeProject = currentDaemonShouldBind
+      ? currentDaemonProject.daemon.ready
+        ? currentDaemonProject
+        : null
+      : persistedActiveProject;
+    const snapshotProjects = projectRuntimeSnapshotProjects(projects, {
+      activeRuntimeProject,
+      selectedProject,
+    });
+    const snapshotSelectedProject =
+      snapshotProjects.find((project) =>
+        sameProjectRoot(project.projectRoot, selectedProject?.projectRoot)
+      ) ?? null;
+    const snapshotActiveRuntimeProject =
+      snapshotProjects.find((project) =>
+        sameProjectRoot(project.projectRoot, activeRuntimeProject?.projectRoot)
+      ) ?? null;
+
+    return {
+      activeRuntimeProject: snapshotActiveRuntimeProject,
+      projects: snapshotProjects,
+      selectedProject: snapshotSelectedProject,
+      state,
+    };
+  }
+
+  private currentDaemonProject(
+    projects: ProjectRuntimeScopeSummary[]
+  ): ProjectRuntimeScopeSummary | null {
+    const currentProjectRoot = this.#currentProjectRoot ?? processCurrentDaemonProjectRoot();
+    if (!currentProjectRoot) {
+      return null;
+    }
+    const currentProject =
+      projects.find((project) => sameProjectRoot(project.projectRoot, currentProjectRoot)) ?? null;
+    if (!currentProject || !isCurrentProcessDaemon(currentProject)) {
+      return null;
+    }
+    return currentProject;
   }
 
   prepareRuntimeControlState(
@@ -1043,6 +1113,26 @@ function handoffFromProject(project: ProjectRuntimeScopeSummary): ProjectRuntime
   };
 }
 
+function classifyTargetDaemonStartError(options: {
+  startError: string | null;
+  startStatus: DaemonStatus | null;
+  targetProject: ProjectRuntimeScopeSummary;
+}): string | null {
+  if (options.startError) {
+    return `Failed to start target runtime ${options.targetProject.projectRoot}: ${options.startError}`;
+  }
+  if (options.startStatus && !options.startStatus.ready) {
+    return (
+      options.startStatus.message ??
+      `Target daemon did not become ready; see ${options.startStatus.logPath}`
+    );
+  }
+  if (options.targetProject.daemon.ready) {
+    return null;
+  }
+  return options.targetProject.daemon.message ?? 'Target daemon did not become ready';
+}
+
 function firstProjectRuntimeTarget(
   ...targets: Array<Partial<ProjectRuntimeTarget>>
 ): ProjectRuntimeTarget | null {
@@ -1052,6 +1142,46 @@ function firstProjectRuntimeTarget(
     }
   }
   return null;
+}
+
+function projectRuntimeSnapshotProjects(
+  projects: ProjectRuntimeScopeSummary[],
+  options: {
+    activeRuntimeProject: ProjectRuntimeScopeSummary | null;
+    selectedProject: ProjectRuntimeScopeSummary | null;
+  }
+): ProjectRuntimeScopeSummary[] {
+  return projects.map((project) => {
+    const selected = sameProjectRoot(project.projectRoot, options.selectedProject?.projectRoot);
+    const activeRuntime = sameProjectRoot(
+      project.projectRoot,
+      options.activeRuntimeProject?.projectRoot
+    );
+    if (project.flags.selected === selected && project.flags.activeRuntime === activeRuntime) {
+      return project;
+    }
+    return {
+      ...project,
+      flags: {
+        ...project.flags,
+        activeRuntime,
+        selected,
+      },
+    };
+  });
+}
+
+function normalizeCurrentProjectRoot(projectRoot: string | null | undefined): string | null {
+  return typeof projectRoot === 'string' && projectRoot.trim().length > 0
+    ? resolve(projectRoot)
+    : null;
+}
+
+function processCurrentDaemonProjectRoot(): string | null {
+  if (process.env.ALEMBIC_DAEMON_MODE !== '1') {
+    return null;
+  }
+  return normalizeCurrentProjectRoot(process.env.ALEMBIC_PROJECT_DIR);
 }
 
 function isCurrentProcessDaemon(project: ProjectRuntimeScopeSummary): boolean {

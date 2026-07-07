@@ -514,6 +514,53 @@ describe('ProjectRuntimeControl', () => {
     });
   });
 
+  test('binds read snapshots to the current daemon project without mutating stale selection', async () => {
+    useTempAlembicHome();
+    const selectedRoot = makeProjectRoot('alembic-stale-selected-');
+    const currentRoot = makeProjectRoot('alembic-current-daemon-');
+    const selectedEntry = ProjectRegistry.register(selectedRoot, true);
+    const currentEntry = ProjectRegistry.register(currentRoot, true);
+    const selectedProjectRoot = ProjectRegistry.inspect(selectedRoot).projectRealpath;
+    const currentProjectRoot = ProjectRegistry.inspect(currentRoot).projectRealpath;
+    const fake = new FakeSupervisor();
+    fake.setReady(currentProjectRoot);
+    const control = new ProjectRuntimeControl({
+      supervisor: fake as unknown as DaemonSupervisor,
+    });
+    control.writeState(
+      createProjectRuntimeControlState({
+        activeProjectId: null,
+        activeProjectRoot: null,
+        selectedAt: '2026-07-07T01:02:03.000Z',
+        selectedProjectId: selectedEntry.id,
+        selectedProjectRoot,
+        updatedAt: '2026-07-07T01:02:03.000Z',
+      })
+    );
+    markSelfDaemon(currentProjectRoot);
+
+    const snapshot = await control.snapshot();
+
+    expect(snapshot.selectedProject).toMatchObject({
+      flags: { activeRuntime: true, selected: true },
+      projectId: currentEntry.id,
+      projectRoot: currentProjectRoot,
+      status: 'ready',
+    });
+    expect(snapshot.activeRuntimeProject).toMatchObject({
+      projectId: currentEntry.id,
+      projectRoot: currentProjectRoot,
+    });
+    expect(
+      snapshot.projects.find((project) => project.projectId === selectedEntry.id)?.flags.selected
+    ).toBe(false);
+    expect(control.readState()).toMatchObject({
+      activeProjectId: null,
+      selectedProjectId: selectedEntry.id,
+      selectedProjectRoot,
+    });
+  });
+
   test('clears stale active state when the persisted daemon state is missing', async () => {
     useTempAlembicHome();
     const projectRoot = makeProjectRoot();
