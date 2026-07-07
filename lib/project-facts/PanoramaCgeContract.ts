@@ -73,10 +73,10 @@ export function buildPanoramaModuleRecipeCountContract(
 ): PanoramaModuleRecipeCountContract {
   const scope = normalizeScopeBoundary(input.projectRoot, input.scope);
   const scopedModules = input.projectMapModules.filter((module) =>
-    isScopedProjectRoot(module.projectRoot, scope.memberRoots)
+    isScopedProjectRoot(module.projectRoot, scope)
   );
   const scopedCells = input.coverageLedgerCells.filter((cell) =>
-    isScopedProjectRoot(cell.projectRoot, scope.memberRoots)
+    isScopedProjectRoot(cell.projectRoot, scope)
   );
   const totalRecipes = nonNegativeInteger(input.totalRecipes);
   const scopeBoundary: PanoramaRecipeCountScopeBoundary = {
@@ -150,12 +150,17 @@ function normalizeScopeBoundary(
   };
 }
 
-function isScopedProjectRoot(projectRoot: string | undefined, memberRoots: readonly string[]) {
+function isScopedProjectRoot(
+  projectRoot: string | undefined,
+  scope: { memberRoots: readonly string[]; mode: 'members-only' | 'project-root' }
+) {
   if (!projectRoot) {
-    return true;
+    return scope.mode === 'project-root';
   }
   const resolvedProjectRoot = resolve(projectRoot);
-  return memberRoots.some((memberRoot) => isPathWithinOrEqual(resolvedProjectRoot, memberRoot));
+  return scope.memberRoots.some((memberRoot) =>
+    isPathWithinOrEqual(resolvedProjectRoot, memberRoot)
+  );
 }
 
 function isPathWithinOrEqual(candidate: string, root: string): boolean {

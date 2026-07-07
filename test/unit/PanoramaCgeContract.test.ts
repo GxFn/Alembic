@@ -141,6 +141,17 @@ describe('Panorama CG-E recipe count contract', () => {
           modulePath: 'src',
           projectRoot: '/workspace/BiliDili',
         },
+        {
+          moduleId: 'module:core:orphan:src',
+          moduleName: 'orphan',
+          modulePath: 'src',
+        },
+        {
+          moduleId: 'module:core:unknown:src',
+          moduleName: 'unknown',
+          modulePath: 'src',
+          projectRoot: '/workspace/UnknownRepo',
+        },
       ],
       projectRoot: '/workspace',
       scope: {
@@ -152,10 +163,12 @@ describe('Panorama CG-E recipe count contract', () => {
 
     expect(contract.scopeBoundary).toMatchObject({
       excludedCoverageCellCount: 1,
-      excludedModuleCount: 1,
+      excludedModuleCount: 3,
       mode: 'members-only',
     });
     expect(contract.moduleRecipeCounts.map((module) => module.moduleName)).toEqual(['api', 'host']);
     expect(contract.moduleRecipeCounts.map((module) => module.moduleName)).not.toContain('bili');
+    expect(contract.moduleRecipeCounts.map((module) => module.moduleName)).not.toContain('orphan');
+    expect(contract.moduleRecipeCounts.map((module) => module.moduleName)).not.toContain('unknown');
   });
 });
