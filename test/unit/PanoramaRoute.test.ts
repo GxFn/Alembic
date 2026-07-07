@@ -29,22 +29,23 @@ vi.mock('../../lib/project-scope/ProjectScopeAnalysis.js', async (importOriginal
   };
 });
 
-vi.mock('../../lib/project-facts/ProjectContextWorkflowFacts.js', async (importOriginal) => {
+vi.mock('../../lib/project-facts/PanoramaEndpointFacts.js', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../lib/project-facts/ProjectContextWorkflowFacts.js')>();
+    await importOriginal<typeof import('../../lib/project-facts/PanoramaEndpointFacts.js')>();
   return {
     ...actual,
-    buildProjectContextWorkflowFacts: vi.fn(() => Promise.resolve(mocks.facts)),
+    buildPanoramaEndpointFacts: vi.fn(() => Promise.resolve(mocks.facts)),
   };
 });
 
-import panoramaRouter from '../../lib/http/routes/panorama.js';
-import { buildProjectContextWorkflowFacts } from '../../lib/project-facts/ProjectContextWorkflowFacts.js';
+import panoramaRouter, { clearPanoramaViewCacheForTests } from '../../lib/http/routes/panorama.js';
+import { buildPanoramaEndpointFacts } from '../../lib/project-facts/PanoramaEndpointFacts.js';
 import type { ProjectScopeAnalysisContext } from '../../lib/project-scope/ProjectScopeAnalysis.js';
 
 describe('panorama HTTP routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearPanoramaViewCacheForTests();
     mocks.analysisScope = projectScopeAnalysis('/tmp/AlembicWorkspace', ['Alembic']);
     mocks.facts = {
       fileCount: 12,
@@ -113,18 +114,61 @@ describe('panorama HTTP routes', () => {
         ],
       }),
     ]);
-    expect(buildProjectContextWorkflowFacts).toHaveBeenCalledWith(
+    expect(buildPanoramaEndpointFacts).toHaveBeenCalledWith(
       expect.objectContaining({
         analysisScope: mocks.analysisScope,
-        maxFileDetails: 0,
-        maxModuleDetails: 0,
-        projectRoot: '/tmp/AlembicWorkspace',
-        source: 'alembic-main-bootstrap',
+        maxFiles: expect.any(Number),
       })
     );
     expect(mocks.coverageLedgerRepository.listByProjectRoot).toHaveBeenCalledWith(
       '/tmp/AlembicWorkspace/Alembic'
     );
+  });
+
+  test('shares one bounded panorama view build across the three endpoint shapes', async () => {
+    const overview = await getRouter(panoramaRouter, '/api/v1/panorama', {
+      mountPath: '/api/v1/panorama',
+    });
+    const health = await getRouter(panoramaRouter, '/api/v1/panorama/health', {
+      mountPath: '/api/v1/panorama',
+    });
+    const gaps = await getRouter(panoramaRouter, '/api/v1/panorama/gaps', {
+      mountPath: '/api/v1/panorama',
+    });
+
+    expect(overview.status).toBe(200);
+    expect(health.status).toBe(200);
+    expect(gaps.status).toBe(200);
+    expect(buildPanoramaEndpointFacts).toHaveBeenCalledTimes(1);
+    expect(mocks.coverageLedgerRepository.listByProjectRoot).toHaveBeenCalledTimes(1);
+    expect(mocks.knowledgeRepository.countByLifecycles).toHaveBeenCalledTimes(1);
+  });
+
+  test('coalesces concurrent overview health and gaps requests into one build', async () => {
+    let resolveFacts!: (facts: typeof mocks.facts) => void;
+    vi.mocked(buildPanoramaEndpointFacts).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFacts = resolve;
+        }) as ReturnType<typeof buildPanoramaEndpointFacts>
+    );
+
+    const responses = Promise.all([
+      getRouter(panoramaRouter, '/api/v1/panorama', { mountPath: '/api/v1/panorama' }),
+      getRouter(panoramaRouter, '/api/v1/panorama/health', {
+        mountPath: '/api/v1/panorama',
+      }),
+      getRouter(panoramaRouter, '/api/v1/panorama/gaps', {
+        mountPath: '/api/v1/panorama',
+      }),
+    ]);
+
+    await vi.waitFor(() => expect(buildPanoramaEndpointFacts).toHaveBeenCalledTimes(1));
+    resolveFacts(mocks.facts);
+
+    expect((await responses).map((response) => response.status)).toEqual([200, 200, 200]);
+    expect(mocks.coverageLedgerRepository.listByProjectRoot).toHaveBeenCalledTimes(1);
+    expect(mocks.knowledgeRepository.countByLifecycles).toHaveBeenCalledTimes(1);
   });
 
   test('GET /panorama/health returns derived health fields', async () => {

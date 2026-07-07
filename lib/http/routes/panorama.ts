@@ -4,12 +4,16 @@ import type { CoverageLedgerRecord } from '@alembic/core/repositories';
 import express, { type Request, type Response } from 'express';
 import { z } from 'zod';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { buildPanoramaEndpointFacts } from '../../project-facts/PanoramaEndpointFacts.js';
 import {
   buildPanoramaEndpointView,
+  type PanoramaEndpointView,
   resolvePanoramaCoverageProjectRoots,
 } from '../../project-facts/PanoramaEndpointView.js';
-import { buildProjectContextWorkflowFacts } from '../../project-facts/ProjectContextWorkflowFacts.js';
-import { resolveProjectScopeAnalysisContext } from '../../project-scope/ProjectScopeAnalysis.js';
+import {
+  type ProjectScopeAnalysisContext,
+  resolveProjectScopeAnalysisContext,
+} from '../../project-scope/ProjectScopeAnalysis.js';
 import { validateQuery } from '../middleware/validate.js';
 
 const router = express.Router();
@@ -32,6 +36,23 @@ interface CoverageLedgerRepositoryLike {
 interface KnowledgeRepositoryLike {
   countByLifecycles(lifecycles: readonly string[]): number | Promise<number>;
 }
+
+interface PanoramaViewCacheEntry {
+  expiresAt: number;
+  key: string;
+  view: PanoramaEndpointView;
+}
+
+interface PanoramaViewInflightEntry {
+  key: string;
+  promise: Promise<PanoramaEndpointView>;
+}
+
+const PANORAMA_VIEW_CACHE_TTL_MS = 15_000;
+const PANORAMA_ENDPOINT_MAX_FILES = 800;
+
+let panoramaViewCache: PanoramaViewCacheEntry | null = null;
+let panoramaViewInflight: PanoramaViewInflightEntry | null = null;
 
 router.get(
   '/',
@@ -67,47 +88,73 @@ async function loadPanoramaView(refresh: boolean) {
     const projectRoot = analysisScope.projectScope
       ? (analysisScope.controlRoot ?? analysisScope.projectRoot)
       : analysisScope.projectRoot;
+    const cacheKey = buildPanoramaViewCacheKey(analysisScope);
+    const now = Date.now();
+    if (!refresh && panoramaViewCache?.key === cacheKey && panoramaViewCache.expiresAt > now) {
+      return panoramaViewCache.view;
+    }
+    if (!refresh && panoramaViewInflight?.key === cacheKey) {
+      return await panoramaViewInflight.promise;
+    }
     if (refresh) {
       logger.info('[panorama] refresh query accepted; rebuilding endpoint projection', {
         projectRoot,
         projectScopeId: analysisScope.projectScopeId,
       });
     }
-    const facts = await buildProjectContextWorkflowFacts({
-      analysisScope,
-      ctx: { container, logger },
-      maxFileDetails: 0,
-      maxFiles: 2000,
-      maxModuleDetails: 0,
-      maxModuleSeeds: 12,
-      projectRoot,
-      source: 'alembic-main-bootstrap',
-    });
-    const coverageLedgerCells = loadCoverageLedgerCells(
-      container,
-      resolvePanoramaCoverageProjectRoots(analysisScope)
-    );
-    const totalRecipes = await countTotalRecipes(container);
-    const view = buildPanoramaEndpointView({
-      analysisScope,
-      coverageLedgerCells,
-      facts,
-      totalRecipes,
-    });
-    if (!view.diagnostics.directModuleIdAligned) {
-      logger.info('[panorama] module recipe counts degraded to project total', {
-        projectRoot,
-        projectScopeId: analysisScope.projectScopeId,
-        recipeCountReason: view.diagnostics.recipeCountReason,
-      });
+    const promise = buildPanoramaView({ analysisScope, container, projectRoot });
+    panoramaViewInflight = { key: cacheKey, promise };
+    try {
+      const view = await promise;
+      panoramaViewCache = {
+        expiresAt: Date.now() + PANORAMA_VIEW_CACHE_TTL_MS,
+        key: cacheKey,
+        view,
+      };
+      return view;
+    } finally {
+      if (panoramaViewInflight?.promise === promise) {
+        panoramaViewInflight = null;
+      }
     }
-    return view;
   } catch (error: unknown) {
     logger.error('[panorama] failed to build endpoint view', {
       error: error instanceof Error ? error.message : String(error),
     });
     throw error;
   }
+}
+
+async function buildPanoramaView(input: {
+  analysisScope: ProjectScopeAnalysisContext;
+  container: ContainerLike;
+  projectRoot: string;
+}): Promise<PanoramaEndpointView> {
+  const coverageLedgerCells = loadCoverageLedgerCells(
+    input.container,
+    resolvePanoramaCoverageProjectRoots(input.analysisScope)
+  );
+  const [facts, totalRecipes] = await Promise.all([
+    buildPanoramaEndpointFacts({
+      analysisScope: input.analysisScope,
+      maxFiles: PANORAMA_ENDPOINT_MAX_FILES,
+    }),
+    countTotalRecipes(input.container),
+  ]);
+  const view = buildPanoramaEndpointView({
+    analysisScope: input.analysisScope,
+    coverageLedgerCells,
+    facts,
+    totalRecipes,
+  });
+  if (!view.diagnostics.directModuleIdAligned) {
+    logger.info('[panorama] module recipe counts degraded to project total', {
+      projectRoot: input.projectRoot,
+      projectScopeId: input.analysisScope.projectScopeId,
+      recipeCountReason: view.diagnostics.recipeCountReason,
+    });
+  }
+  return view;
 }
 
 function loadCoverageLedgerCells(
@@ -178,6 +225,21 @@ function safeGet(container: ContainerLike, name: string): unknown {
 
 function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function buildPanoramaViewCacheKey(analysisScope: ProjectScopeAnalysisContext): string {
+  const memberRoots = resolvePanoramaCoverageProjectRoots(analysisScope).sort();
+  return JSON.stringify({
+    controlRoot: analysisScope.controlRoot,
+    members: memberRoots,
+    projectRoot: analysisScope.projectRoot,
+    projectScopeId: analysisScope.projectScopeId,
+  });
+}
+
+export function clearPanoramaViewCacheForTests(): void {
+  panoramaViewCache = null;
+  panoramaViewInflight = null;
 }
 
 export default router;
