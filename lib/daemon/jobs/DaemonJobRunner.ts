@@ -124,7 +124,7 @@ export async function runDaemonJob(options: RunDaemonJobOptions): Promise<RunDae
   const store = getJobStore(options.container);
   const recorder = getJobProcessEventRecorder(options.container);
   const bootstrapBridge =
-    options.kind === 'bootstrap'
+    options.kind === 'bootstrap' || options.kind === 'rescan'
       ? attachGenerateProcessEventBridge({
           container: options.container,
           jobId: options.jobId,
@@ -921,7 +921,8 @@ function linkBootstrapSessionCompletion(options: {
 
   const listener = (payload: unknown) => {
     const session = asRecord(payload);
-    if (session.sessionId !== options.bootstrapSessionId) {
+    const payloadSessionId = stringValue(session.sessionId) || stringValue(session.id);
+    if (payloadSessionId !== options.bootstrapSessionId) {
       return;
     }
     eventBus.off(RECIPE_PIPELINE_EVENTS.allCompleted, listener);

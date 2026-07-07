@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -199,6 +200,7 @@ function makeContainer(
     agentService?: unknown;
     coverageLedgerRepository?: unknown;
     dataRoot?: string;
+    eventBus?: EventEmitter;
     knowledgeRepository?: unknown;
     recorder?: JobProcessEventRecorder;
     recipeSourceRefRepository?: unknown;
@@ -232,6 +234,9 @@ function makeContainer(
       }
       if (name === 'jobStore') {
         return store;
+      }
+      if (name === 'eventBus' && options.eventBus) {
+        return options.eventBus;
       }
       if (name === 'knowledgeRepository' && options.knowledgeRepository) {
         return options.knowledgeRepository;
@@ -273,6 +278,136 @@ afterEach(() => {
 });
 
 describe('DaemonJobRunner bootstrap plan gate', () => {
+  test('keeps rescan live bootstrap sessions visible through job process evidence and terminal status', async () => {
+    const eventBus = new EventEmitter();
+    const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
+    const recorder = new JobProcessEventRecorder();
+    const container = makeContainer(store, { eventBus, recorder });
+    const logger = makeLogger();
+    const job = store.create({
+      kind: 'rescan',
+      request: {
+        dimensions: ['architecture'],
+        maxFiles: 4,
+        minNewRecipes: 1,
+      },
+      source: 'dashboard',
+    });
+
+    vi.mocked(runGenerateWorkflow).mockImplementationOnce(async () => {
+      eventBus.emit('bootstrap:started', {
+        sessionId: 'bs_rescan_live',
+        total: 1,
+      });
+      eventBus.emit('bootstrap:process-events', {
+        sessionId: 'bs_rescan_live',
+        taskId: 'architecture',
+        targetName: 'Architecture',
+        events: [
+          {
+            kind: 'tool',
+            title: 'Rescan tool call observed',
+            content: {
+              language: 'json',
+              mimeType: 'application/json',
+              role: 'tool',
+              text: '{"tool":"code"}',
+            },
+            metadata: {
+              totalToolCalls: 1,
+            },
+            phase: 'analyze',
+          },
+        ],
+      });
+      return {
+        data: {
+          bootstrapSession: {
+            id: 'bs_rescan_live',
+            status: 'running',
+          },
+        },
+      };
+    });
+
+    const running = await runDaemonJob({
+      args: {
+        dimensions: ['architecture'],
+        maxFiles: 4,
+        minNewRecipes: 1,
+      },
+      container,
+      jobId: job.id,
+      kind: 'rescan',
+      logger,
+      source: 'dashboard',
+    });
+
+    expect(running.job).toMatchObject({
+      bootstrapSessionId: 'bs_rescan_live',
+      status: 'running',
+    });
+    expect(recorder.list(job.id).developerViews).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'tool',
+          phase: 'analyze',
+          targetName: 'Architecture',
+          title: 'Rescan tool call observed',
+        }),
+      ])
+    );
+
+    eventBus.emit('bootstrap:all-completed', {
+      sessionId: 'bs_rescan_live',
+      status: 'completed',
+      summary: {
+        completed: 1,
+        duration: 4200,
+        failed: 0,
+        totalTasks: 1,
+      },
+      tasks: [
+        {
+          id: 'architecture',
+          meta: { label: 'Architecture' },
+          result: {
+            created: 0,
+            efficiency: {
+              toolCalls: 1,
+            },
+            status: 'v3-pipeline-complete',
+          },
+          status: 'completed',
+        },
+      ],
+    });
+
+    expect(store.get(job.id)).toMatchObject({
+      bootstrapSessionId: 'bs_rescan_live',
+      result: {
+        finalSession: {
+          summary: {
+            completed: 1,
+            failed: 0,
+            totalTasks: 1,
+          },
+        },
+      },
+      status: 'completed',
+    });
+    expect(recorder.list(job.id).developerViews).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'summary',
+          phase: 'session',
+          summary: 'Bootstrap session completed.',
+          title: 'Bootstrap session completed',
+        }),
+      ])
+    );
+  });
+
   test('fails the daemon job before coldStart when the plan agent fails', async () => {
     const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
     const recorder = new JobProcessEventRecorder();
