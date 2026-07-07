@@ -35,6 +35,7 @@ import jobsRouter from './routes/jobs.js';
 import knowledgeRouter from './routes/knowledge.js';
 import logsRouter from './routes/logs.js';
 import modulesRouter from './routes/modules.js';
+import panoramaRouter from './routes/panorama.js';
 import projectScopeRouter from './routes/project-scope.js';
 import projectsRouter from './routes/projects.js';
 import recipesRouter from './routes/recipes.js';
@@ -299,6 +300,9 @@ export class HttpServer {
 
     // Modules 路由（v3.2 统一多语言模块扫描）
     this.app.use(`${apiPrefix}/modules`, modulesRouter);
+
+    // Panorama 空间视图（ProjectScope 成员聚合 + coverage_ledger rollup）
+    this.app.use(`${apiPrefix}/panorama`, panoramaRouter);
 
     // 违规记录路由
     this.app.use(`${apiPrefix}/violations`, violationsRouter);

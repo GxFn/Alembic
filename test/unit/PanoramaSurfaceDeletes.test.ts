@@ -9,21 +9,26 @@ import { TOOL_SCHEMAS } from '../../lib/shared/schemas/mcp-tools.js';
 
 const repoRoot = process.cwd();
 
-describe('Panorama surface deletes (P5)', () => {
-  test('route and provider-contract surfaces do not expose Panorama', () => {
-    expect(existsSync(join(repoRoot, 'lib/http/routes/panorama.ts'))).toBe(false);
+describe('Panorama surface boundary', () => {
+  test('HTTP route and provider contracts expose only the restored endpoint family', () => {
+    expect(existsSync(join(repoRoot, 'lib/http/routes/panorama.ts'))).toBe(true);
     expect(
-      ALEMBIC_PROVIDER_ROUTE_CONTRACTS.some((contract) =>
+      ALEMBIC_PROVIDER_ROUTE_CONTRACTS.filter((contract) =>
         String(contract.path).includes('panorama')
-      )
-    ).toBe(false);
+      ).map((contract) => `${contract.method} ${contract.path}`)
+    ).toEqual(['get /panorama', 'get /panorama/health', 'get /panorama/gaps']);
     expect(
-      ALEMBIC_PROVIDER_ROUTE_MOUNTS.some((mount) => String(mount.fullPath).includes('panorama'))
-    ).toBe(false);
+      ALEMBIC_PROVIDER_ROUTE_MOUNTS.filter((mount) =>
+        String(mount.fullPath).includes('panorama')
+      ).map((mount) => mount.fullPath)
+    ).toEqual(['/api/v1/panorama']);
   });
 
-  test('tool schema and legacy direct tests do not keep the retired surface alive', () => {
+  test('tool schema, legacy engines, and legacy direct tests stay retired', () => {
     expect(TOOL_SCHEMAS.alembic_panorama).toBeUndefined();
+    expect(existsSync(join(repoRoot, 'lib/service/panorama'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'lib/project-facts/PanoramaService.ts'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'lib/project-facts/PanoramaAggregator.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'test/helpers/panorama-mocks.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'test/integration/PanoramaIntegration.test.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'test/unit/CouplingAnalyzer.test.ts'))).toBe(false);

@@ -545,7 +545,7 @@ export const DASHBOARD_JOB_KINDS: readonly DashboardJobKind[] = [
 ];
 
 // ════════════════════════════════════════════════════════════════════
-// HTTP route contract table (28 routes, contract version 1)
+// HTTP route contract table (31 routes, contract version 1)
 // ════════════════════════════════════════════════════════════════════
 
 export const DASHBOARD_API_CONTRACT_VERSION = 1;
@@ -1987,6 +1987,216 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
     ],
     "tags": [
       "Knowledge"
+    ],
+    "responseSchemas": {
+      "200": "schema-1",
+      "206": "schema-2",
+      "400": "schema-2",
+      "404": "schema-2",
+      "424": "schema-2",
+      "500": "schema-2",
+      "501": "schema-2",
+      "502": "schema-2",
+      "503": "schema-2",
+      "504": "schema-2"
+    }
+  },
+  {
+    "artifactPolicy": "Workflow and resident search summaries inline; reports/snapshots by artifactRef and degraded resident search state by canonical degraded telemetry.",
+    "capabilityDiscovery": [
+      "/api/v1/knowledge",
+      "/api/v1/modules",
+      "/api/v1/candidates"
+    ],
+    "contractId": "I22.getPanoramaOverview",
+    "errorKinds": [
+      "invalid-input",
+      "unavailable",
+      "timeout",
+      "not-found",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "exposureClasses": [
+      "public",
+      "consumer-needed",
+      "diagnostic"
+    ],
+    "fixtureIds": [
+      "knowledge.success",
+      "search.success",
+      "search.degraded",
+      "workflow.unavailable",
+      "workflow.degraded",
+      "workflow.partial",
+      "workflow.capability-mismatch",
+      "workflow.provider-error",
+      "workflow.host-failure",
+      "workflow.internal-error"
+    ],
+    "functionClass": "rest-command",
+    "method": "get",
+    "operationId": "getPanoramaOverview",
+    "path": "/panorama",
+    "registryRowId": "I22",
+    "summary": "Panorama overview route family",
+    "supportedScenarios": [
+      "success",
+      "unavailable-runtime",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "tags": [
+      "Knowledge",
+      "Panorama"
+    ],
+    "responseSchemas": {
+      "200": "schema-1",
+      "206": "schema-2",
+      "400": "schema-2",
+      "404": "schema-2",
+      "424": "schema-2",
+      "500": "schema-2",
+      "501": "schema-2",
+      "502": "schema-2",
+      "503": "schema-2",
+      "504": "schema-2"
+    }
+  },
+  {
+    "artifactPolicy": "Workflow and resident search summaries inline; reports/snapshots by artifactRef and degraded resident search state by canonical degraded telemetry.",
+    "capabilityDiscovery": [
+      "/api/v1/knowledge",
+      "/api/v1/modules",
+      "/api/v1/candidates"
+    ],
+    "contractId": "I22.getPanoramaHealth",
+    "errorKinds": [
+      "invalid-input",
+      "unavailable",
+      "timeout",
+      "not-found",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "exposureClasses": [
+      "public",
+      "consumer-needed",
+      "diagnostic"
+    ],
+    "fixtureIds": [
+      "knowledge.success",
+      "search.success",
+      "search.degraded",
+      "workflow.unavailable",
+      "workflow.degraded",
+      "workflow.partial",
+      "workflow.capability-mismatch",
+      "workflow.provider-error",
+      "workflow.host-failure",
+      "workflow.internal-error"
+    ],
+    "functionClass": "rest-command",
+    "method": "get",
+    "operationId": "getPanoramaHealth",
+    "path": "/panorama/health",
+    "registryRowId": "I22",
+    "summary": "Panorama health route family",
+    "supportedScenarios": [
+      "success",
+      "unavailable-runtime",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "tags": [
+      "Knowledge",
+      "Panorama"
+    ],
+    "responseSchemas": {
+      "200": "schema-1",
+      "206": "schema-2",
+      "400": "schema-2",
+      "404": "schema-2",
+      "424": "schema-2",
+      "500": "schema-2",
+      "501": "schema-2",
+      "502": "schema-2",
+      "503": "schema-2",
+      "504": "schema-2"
+    }
+  },
+  {
+    "artifactPolicy": "Workflow and resident search summaries inline; reports/snapshots by artifactRef and degraded resident search state by canonical degraded telemetry.",
+    "capabilityDiscovery": [
+      "/api/v1/knowledge",
+      "/api/v1/modules",
+      "/api/v1/candidates"
+    ],
+    "contractId": "I22.getPanoramaGaps",
+    "errorKinds": [
+      "invalid-input",
+      "unavailable",
+      "timeout",
+      "not-found",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "exposureClasses": [
+      "public",
+      "consumer-needed",
+      "diagnostic"
+    ],
+    "fixtureIds": [
+      "knowledge.success",
+      "search.success",
+      "search.degraded",
+      "workflow.unavailable",
+      "workflow.degraded",
+      "workflow.partial",
+      "workflow.capability-mismatch",
+      "workflow.provider-error",
+      "workflow.host-failure",
+      "workflow.internal-error"
+    ],
+    "functionClass": "rest-command",
+    "method": "get",
+    "operationId": "getPanoramaGaps",
+    "path": "/panorama/gaps",
+    "registryRowId": "I22",
+    "summary": "Panorama gaps route family",
+    "supportedScenarios": [
+      "success",
+      "unavailable-runtime",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "tags": [
+      "Knowledge",
+      "Panorama"
     ],
     "responseSchemas": {
       "200": "schema-1",
