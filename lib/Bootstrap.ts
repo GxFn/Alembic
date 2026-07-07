@@ -1,9 +1,10 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { DatabaseConnection } from '@alembic/core/database';
 import { pathGuard } from '@alembic/core/io';
 import Logger from '@alembic/core/logging';
 import { unwrapRawDb } from '@alembic/core/search';
 import { WorkspaceSettingsStore } from '@alembic/core/shared';
-import type { WorkspaceResolver } from '@alembic/core/workspace';
+import { WorkspaceResolver } from '@alembic/core/workspace';
 import Gateway, { type GatewayConfig } from './governance/gateway/Gateway.js';
 import AuditLogger from './infrastructure/audit/AuditLogger.js';
 import AuditStore from './infrastructure/audit/AuditStore.js';
@@ -133,6 +134,7 @@ export class AppRuntime {
     try {
       const projectRoot = process.env.ALEMBIC_PROJECT_DIR || process.cwd();
       WorkspaceSettingsStore.fromProject(projectRoot).applyToProcessEnv({ override: false });
+      applyLocalEmbeddingConfigToProcessEnv(projectRoot);
     } catch {
       /* settings unreadable — keep explicit process env only */
     }
@@ -255,6 +257,56 @@ export class AppRuntime {
   getAllComponents() {
     return this.components;
   }
+}
+
+function applyLocalEmbeddingConfigToProcessEnv(projectRoot: string): void {
+  if (process.env.ALEMBIC_EMBED_PROVIDER !== undefined) {
+    return;
+  }
+  const env = readLocalEmbeddingConfigEnv(projectRoot);
+  if (!env.ALEMBIC_EMBED_PROVIDER) {
+    return;
+  }
+  for (const [key, value] of Object.entries(env)) {
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
+
+function readLocalEmbeddingConfigEnv(projectRoot: string): Record<string, string> {
+  const resolver = WorkspaceResolver.fromProject(projectRoot);
+  if (!existsSync(resolver.configPath)) {
+    return {};
+  }
+  const config = asRecord(JSON.parse(readFileSync(resolver.configPath, 'utf8')));
+  const localEmbedding = asRecord(asRecord(config.vector).localEmbedding);
+  if (localEmbedding.enabled !== true) {
+    return {};
+  }
+
+  const env: Record<string, string> = {
+    ALEMBIC_EMBED_PROVIDER: 'ollama',
+  };
+  const model = stringValue(localEmbedding.model);
+  const endpoint = stringValue(localEmbedding.endpoint);
+  if (model) {
+    env.ALEMBIC_EMBED_MODEL = model;
+  }
+  if (endpoint) {
+    env.ALEMBIC_EMBED_BASE_URL = endpoint;
+  }
+  return env;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
 export { AppRuntime as Bootstrap };
