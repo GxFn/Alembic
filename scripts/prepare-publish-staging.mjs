@@ -43,6 +43,7 @@ prepareOutputDirectory(outputDir);
 const stagingPackage = createStagingPackageJson(rootPackage, dependencyReplacements);
 copyPackagePayload(stagingPackage.files ?? [], outputDir);
 copyOptionalRootFiles(outputDir);
+bundlePrivateDependencies(outputDir);
 
 const sourceMetadata = createSourceMetadata(stagingPackage);
 writeJson(join(outputDir, 'package.json'), stagingPackage);
@@ -125,6 +126,12 @@ function createStagingPackageJson(packageJson, replacements) {
     : [];
   staged.files = Array.from(new Set([...existingFiles, 'alembic-release-source.json']));
 
+  // Path B（自足 npm 包）：私有 @alembic/core + @alembic/agent 不发布到 registry，
+  // 而是 vendored 进 node_modules/@alembic/* 并随 tarball 一起发布（bundledDependencies）。
+  // 安装时 npm 直接用 bundle 的副本，不去 registry 拉 @alembic/*；其余依赖是公共 npm 包。
+  // 依赖仍保留为版本号（verifyStagingManifest 的版本一致性检查照常通过）。
+  staged.bundledDependencies = ['@alembic/core', '@alembic/agent'];
+
   return staged;
 }
 
@@ -155,6 +162,53 @@ function copyOptionalRootFiles(targetDir) {
       cpSync(source, join(targetDir, basename(fileName)));
     }
   }
+}
+
+// Path B：把私有 @alembic/core + @alembic/agent（各自 npm pack 的已发布形态）vendored
+// 进 staging node_modules，随 bundledDependencies 一起进 tarball。两者都放在顶层：
+// @alembic/agent 依赖 @alembic/core，安装后 Agent 的 Core import 解析到同级 bundle 的 Core。
+// Core/Agent 的公共依赖（better-sqlite3 等）已在 alembic-ai 的 dependencies 里，正常解析。
+function bundlePrivateDependencies(targetDir) {
+  const nodeModulesDir = join(targetDir, 'node_modules');
+  const privatePackages = [
+    { name: '@alembic/core', sourcePath: join(repoRoot, '..', 'AlembicCore') },
+    { name: '@alembic/agent', sourcePath: join(repoRoot, '..', 'AlembicAgent') },
+  ];
+  const packDir = join(repoRoot, '.release', '.bundle-pack');
+  rmSync(packDir, { recursive: true, force: true });
+  mkdirSync(packDir, { recursive: true });
+  for (const { name, sourcePath } of privatePackages) {
+    if (!existsSync(join(sourcePath, 'dist'))) {
+      throw new Error(
+        `Cannot bundle ${name}: ${join(sourcePath, 'dist')} is missing. Build the sibling package first.`
+      );
+    }
+    // --ignore-scripts：只取被 vendor 包的文件，不运行其 prepack/prepare lifecycle
+    // （例如 @alembic/agent 的 prepack 是独立发布边界守卫，bundle 时不适用）。
+    const packOutput = execFileSync(
+      'npm',
+      ['pack', sourcePath, '--pack-destination', packDir, '--silent', '--ignore-scripts'],
+      { cwd: repoRoot, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }
+    );
+    const tarball = packOutput.trim().split('\n').pop().trim();
+    const extractDir = join(packDir, 'extract');
+    rmSync(extractDir, { recursive: true, force: true });
+    mkdirSync(extractDir, { recursive: true });
+    // npm tarballs 顶层是 `package/`。
+    execFileSync('tar', ['-xzf', join(packDir, tarball), '-C', extractDir]);
+    const destination = join(nodeModulesDir, ...name.split('/'));
+    rmSync(destination, { recursive: true, force: true });
+    mkdirSync(dirname(destination), { recursive: true });
+    cpSync(join(extractDir, 'package'), destination, { recursive: true, force: true });
+    const bundled = readJson(join(destination, 'package.json'));
+    if (bundled.version !== dependencyReplacements[name]) {
+      throw new Error(
+        `Bundled ${name} version ${bundled.version} does not match staged ${dependencyReplacements[name]}.`
+      );
+    }
+    writeLine(`- bundled ${name}@${bundled.version} into node_modules`);
+  }
+  rmSync(packDir, { recursive: true, force: true });
 }
 
 function createSourceMetadata(stagingPackage) {
