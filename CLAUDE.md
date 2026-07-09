@@ -1,13 +1,15 @@
+# Alembic Agent Instructions
+
 <!-- wakeflow:scope:start -->
 ## Workspace Access Card
 
-This section is maintained by the Wakeflow runtime installer. It records this window access coordinates and the minimum automation gate. Hard rules come from the parent CLAUDE.md and this file; do not duplicate repository-specific rules here.
+This section is maintained by the Wakeflow runtime installer. It records this window access coordinates and the minimum automation gate. Hard rules come from the parent AGENTS and this file; do not duplicate repository-specific rules here.
 
 ### Coordinates
 
 - Wakeflow runtime: `..`
 - Window name: `Alembic`
-- Parent workspace CLAUDE: `../CLAUDE.md`
+- Parent workspace AGENTS: `../CLAUDE.md`
 - Active workspace index: `../.wakeflow-active/index.md`
 - Active workspace status: `../.wakeflow-active/current/workspace-current-status.md`
 - Current plan directory: `../.wakeflow-active/current`
@@ -34,6 +36,7 @@ This section is maintained by the Wakeflow runtime installer. It records this wi
 ### Skill Assistance
 
 - Claude Code subagents (the Task/Agent tool) are recommended for bounded parallel assistance such as code search, log triage, test localization, and evidence summarization. Treat subagent output as evidence or advice only; it must not accept work, dispatch another window, write controller state, or expand repository boundaries.
+- Development work uses the plugin execution-craft skill `wakeflow-target-craft` (test-first, systematic debugging, self-review by severity, scope discipline, verify-before-done) so it earns the machine-checkable evidence the controller acceptance gate requires. It loads via the Wakeflow plugin alongside `wakeflow-target`; this window does NOT use the Design or Test windows' built-in skills.
 
 ### Functional Completeness Self-Check
 
@@ -49,8 +52,6 @@ Before returning a `TargetResultEnvelope` or handoff, this child window must sel
 
 - Long-term cross-repository collaboration docs, plans, acceptance records, scans, and boundary records go to `../wakeflow-ledger/Alembic`. This repository `docs/` is only for product, release, or user docs maintained with the source.
 <!-- wakeflow:scope:end -->
-
-# Alembic Agent Instructions
 
 ## 本窗口最高停止卡
 

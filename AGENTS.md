@@ -36,6 +36,7 @@ This section is maintained by the Wakeflow runtime installer. It records this wi
 ### Skill Assistance
 
 - Codex subagents are recommended for bounded parallel assistance such as code search, log triage, test localization, and evidence summarization. Treat subagent output as evidence or advice only; it must not accept work, dispatch another window, write controller state, or expand repository boundaries.
+- Development work uses the plugin execution-craft skill `wakeflow-target-craft` (test-first, systematic debugging, self-review by severity, scope discipline, verify-before-done) so it earns the machine-checkable evidence the controller acceptance gate requires. It loads via the Wakeflow plugin alongside `wakeflow-target`; this window does NOT use the Design or Test windows' built-in skills.
 
 ### Functional Completeness Self-Check
 
