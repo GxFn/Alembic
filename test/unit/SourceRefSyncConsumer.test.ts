@@ -78,8 +78,15 @@ describe('registerSourceRefSyncOnGenerateCompletion', () => {
       sessionId: 'bs_match',
       status: 'completed',
     });
-    expect(reconcile).toHaveBeenCalledTimes(1);
-    expect(reconcile).toHaveBeenCalledWith({ force: true });
+    // P-C(2026-07-11):reconcile 前先异步解析 drift 基线(checkpoint),调用变为
+    // 微任务后发生;fixture 容器无 checkpoint 仓 → 基线 null → 仍是 {force:true}。
+    await vi.waitFor(
+      () => {
+        expect(reconcile).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 8000 }
+    );
+    expect(reconcile).toHaveBeenCalledWith(expect.objectContaining({ force: true }));
     // 命中后一次性解除，重复完成事件不再触发。
     expect(eventBus.count(RECIPE_PIPELINE_EVENTS.allCompleted)).toBe(0);
 
@@ -91,7 +98,7 @@ describe('registerSourceRefSyncOnGenerateCompletion', () => {
     });
   });
 
-  test('completed_with_errors still triggers reconcile (partial entries need refs)', () => {
+  test('completed_with_errors still triggers reconcile (partial entries need refs)', async () => {
     const eventBus = makeEventBus();
     const reconcile = vi.fn().mockResolvedValue(REPORT);
     registerSourceRefSyncOnGenerateCompletion({
@@ -104,7 +111,12 @@ describe('registerSourceRefSyncOnGenerateCompletion', () => {
       sessionId: 'bs_partial',
       status: 'completed_with_errors',
     });
-    expect(reconcile).toHaveBeenCalledWith({ force: true });
+    await vi.waitFor(
+      () => {
+        expect(reconcile).toHaveBeenCalledWith(expect.objectContaining({ force: true }));
+      },
+      { timeout: 8000 }
+    );
   });
 
   test('missing session id / event bus skips with warn and returns null', () => {

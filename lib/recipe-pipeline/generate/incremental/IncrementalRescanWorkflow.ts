@@ -71,6 +71,10 @@ import {
   writeModuleMiningCoverageLedger,
 } from '../../../shared/ModuleMiningEvidence.js';
 import {
+  createMainDriftGitReader,
+  resolveMainDriftBaselineCommit,
+} from '../../sustain/driftBaseline.js';
+import {
   buildProduceSessionProjection,
   buildProduceSessionRoutePlan,
   readControllerProduceSessionRequest,
@@ -317,8 +321,12 @@ export async function runIncrementalRescanWorkflow(
       type SourceRefReconcilerOptions = NonNullable<
         ConstructorParameters<typeof SourceRefReconciler>[3]
       >;
+      // P-C(2026-07-11 parity):注入 gitReader+统一演化 checkpoint 基线,drifted
+      // 可细分 line-shift/content-change(Plugin knowledge-index-rebuild 链已接;
+      // 基线读不到 → 退回无精判的 drifted 标记,行为与旧版一致)。
       const sourceRefReconcilerOptions: SourceRefReconcilerOptions = {
         signalBus,
+        gitReader: createMainDriftGitReader(projectRoot),
       };
       const reconciler = new SourceRefReconciler(
         projectRoot,
@@ -326,7 +334,22 @@ export async function runIncrementalRescanWorkflow(
         repos.knowledgeRepo,
         sourceRefReconcilerOptions
       );
-      reconcileReport = await reconciler.reconcile({ force: true });
+      let baselineCommit: string | null = null;
+      try {
+        const { getCoreRepositoryBundle } = await import('#inject/modules/InfraModule.js');
+        baselineCommit = resolveMainDriftBaselineCommit(
+          getCoreRepositoryBundle(
+            ctx.container as unknown as Parameters<typeof getCoreRepositoryBundle>[0]
+          ),
+          projectRoot
+        );
+      } catch {
+        /* 基线缺席不阻断 reconcile */
+      }
+      reconcileReport = await reconciler.reconcile({
+        force: true,
+        ...(baselineCommit ? { baselineCommit } : {}),
+      });
       await reconciler.repairRenames();
       await reconciler.applyRepairs();
       ctx.logger.info('[KnowledgeRescanWorkflow] SourceRef reconcile complete', {

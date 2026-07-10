@@ -43,7 +43,7 @@ interface ReconcileReportLike {
 }
 
 interface SourceRefReconcilerLike {
-  reconcile(opts?: { force?: boolean }): Promise<ReconcileReportLike>;
+  reconcile(opts?: { force?: boolean; baselineCommit?: string }): Promise<ReconcileReportLike>;
 }
 
 interface EventBusLike {
@@ -118,8 +118,31 @@ export function registerSourceRefSyncOnGenerateCompletion(input: {
 
     // EventBus 监听是同步调用面 —— 异步 reconcile 用 fire-and-forget + 全量捕获，
     // 失败只降级留痕（refs 可由下次 rescan Step 1.5 补齐），绝不影响完成事件链。
-    void reconciler
-      .reconcile({ force: true })
+    // P-C:带统一演化 checkpoint 作 P3 精判基线;读不到 → 退回无精判的 drifted 标记。
+    void (async () => {
+      let baselineCommit: string | null = null;
+      try {
+        const { resolveMainDriftBaselineCommit } = await import(
+          '../../../sustain/driftBaseline.js'
+        );
+        const { getCoreRepositoryBundle } = await import(
+          '../../../../injection/modules/InfraModule.js'
+        );
+        const { resolveProjectRoot } = await import('@alembic/core/workspace');
+        baselineCommit = resolveMainDriftBaselineCommit(
+          getCoreRepositoryBundle(
+            input.container as unknown as Parameters<typeof getCoreRepositoryBundle>[0]
+          ),
+          resolveProjectRoot()
+        );
+      } catch {
+        /* 基线缺席不阻断 reconcile */
+      }
+      return reconciler.reconcile({
+        force: true,
+        ...(baselineCommit ? { baselineCommit } : {}),
+      });
+    })()
       .then((report) => {
         input.logger.info(`[${logPrefix}] SourceRef sync complete after bootstrap`, {
           active: report.active,

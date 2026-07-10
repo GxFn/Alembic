@@ -8,6 +8,8 @@
  *   - aiProvider
  */
 
+import fsp from 'node:fs/promises';
+import path from 'node:path';
 import { DimensionCopy } from '@alembic/core/dimensions';
 import { getFrameworkEnhancements } from '@alembic/core/enhancement';
 import {
@@ -23,12 +25,15 @@ import {
 } from '@alembic/core/evolution';
 import {
   ConfidenceRouter,
+  computeSourceRegionFingerprint,
   createFsSourceRefResolver,
   KnowledgeGraphService,
   KnowledgeService,
+  parseSourceLineRange,
   RecipeProductionGateway,
   resolveGroundedSourcePaths,
   SourceRefReconciler,
+  stripSourceRangeSuffix,
 } from '@alembic/core/knowledge';
 import type {
   KnowledgeEdgeRepository,
@@ -50,6 +55,7 @@ import {
   normalizeProjectScopeSourceRefsForRuntime,
   resolveProjectScopeSourceIdentitiesFromContainer,
 } from '../../project-scope/ProjectScopeAnalysis.js';
+import { createMainDriftGitReader } from '../../recipe-pipeline/sustain/driftBaseline.js';
 import { InProcessFileChangeHandler } from '../../recipe-pipeline/sustain/evolution/InProcessFileChangeHandler.js';
 import { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
@@ -222,8 +228,11 @@ export function register(c: ServiceContainer) {
     const projectRoot = resolveProjectRoot();
     const sourceRefRepo = ct.get('recipeSourceRefRepository') as SourceRefRepository;
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
+    // P-C:注入 gitReader,配合调用方传 baselineCommit 后 drifted 可细分
+    // line-shift/content-change(与 Plugin KnowledgeModule 同款,parity)。
     return new SourceRefReconciler(projectRoot, sourceRefRepo, knowledgeRepo, {
       signalBus: ct.singletons.signalBus || undefined,
+      gitReader: createMainDriftGitReader(projectRoot),
     } as ConstructorParameters<typeof SourceRefReconciler>[3]);
   });
 
@@ -279,7 +288,10 @@ export function register(c: ServiceContainer) {
   c.singleton('contentPatcher', (ct: ServiceContainer) => {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     const sourceRefRepo = ct.get('recipeSourceRefRepository') as SourceRefRepository;
-    return new ContentPatcher(knowledgeRepo, sourceRefRepo);
+    // P-B:注入 projectRoot,update 提案执行后 refs 立即带 region 指纹落锚。
+    return new ContentPatcher(knowledgeRepo, sourceRefRepo, {
+      projectRoot: resolveProjectRoot(ct),
+    });
   });
 
   c.singleton('lifecycleEventRepository', (ct: ServiceContainer) => {
@@ -469,13 +481,30 @@ async function _populateSourceRefsForEntry(c: ServiceContainer, entryId: string)
     }
 
     const now = Date.now();
+    // P-B(2026-07-11 落锚 parity):主体挖掘链新建 refs 此前无 contentFp,
+    // 漂移检测对新知识失明直到下次 reconcile(BiliDili 真机 16 条 NULL 实证)。
+    // 插入时同步算 region 指纹(512KB 护栏);失败留空由 reconcile 兜底,不阻断。
+    const projectRoot = resolveProjectRoot(c);
     for (const sourcePath of sources) {
+      let contentFp: string | undefined;
+      try {
+        const relFile = stripSourceRangeSuffix(sourcePath);
+        const absolute = path.isAbsolute(relFile) ? relFile : path.join(projectRoot, relFile);
+        const stat = await fsp.stat(absolute);
+        if (stat.isFile() && stat.size <= 512 * 1024) {
+          const content = await fsp.readFile(absolute, 'utf8');
+          contentFp = computeSourceRegionFingerprint(content, parseSourceLineRange(sourcePath));
+        }
+      } catch {
+        /* 文件不可读——留空,reconcile 兜底补锚 */
+      }
       try {
         sourceRefRepo.upsert({
           recipeId: entryId,
           sourcePath,
           status: 'active',
           verifiedAt: now,
+          ...(contentFp ? { contentFp } : {}),
         });
       } catch {
         /* table may not exist yet */
