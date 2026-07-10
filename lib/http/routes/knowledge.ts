@@ -27,6 +27,59 @@ import {
 
 const router = express.Router();
 
+/**
+ * P-A(2026-07-10 消费面审计 F1):HTTP knowledge 面补漂移标注。Dashboard 是人审
+ * drifted→update 提案的主界面,此前 list/detail 无 sourceStatus/sourceRefs——
+ * 审批者看不到"该知识源头已漂移/漂在哪几段"。词表与 P1 search/prime 链对齐:
+ * sourceStatus='drifted'|'active',driftedSourceRefs=漂移段路径。失败静默跳过
+ * (标注缺席不阻断知识面本体)。
+ */
+async function attachSourceRefStatus(
+  container: ReturnType<typeof getServiceContainer>,
+  entries: Array<Record<string, unknown>>,
+  options: { includeRefs?: boolean } = {}
+): Promise<void> {
+  const ids = entries.map((entry) => String(entry.id ?? '')).filter(Boolean);
+  if (ids.length === 0) {
+    return;
+  }
+  try {
+    const refRepo = container.get('recipeSourceRefRepository') as {
+      findActiveByRecipeIds(ids: string[]): Array<{
+        recipeId: string;
+        sourcePath: string;
+        status: string;
+        newPath: string | null;
+      }>;
+    };
+    const byRecipe = new Map<
+      string,
+      Array<{ sourcePath: string; status: string; newPath: string | null }>
+    >();
+    for (const ref of refRepo.findActiveByRecipeIds(ids)) {
+      const bucket = byRecipe.get(ref.recipeId) ?? [];
+      bucket.push({ newPath: ref.newPath, sourcePath: ref.sourcePath, status: ref.status });
+      byRecipe.set(ref.recipeId, bucket);
+    }
+    for (const entry of entries) {
+      const refs = byRecipe.get(String(entry.id)) ?? [];
+      if (refs.length === 0) {
+        continue;
+      }
+      const drifted = refs.filter((ref) => ref.status === 'drifted').map((ref) => ref.sourcePath);
+      entry.sourceStatus = drifted.length > 0 ? 'drifted' : 'active';
+      if (drifted.length > 0) {
+        entry.driftedSourceRefs = drifted;
+      }
+      if (options.includeRefs) {
+        entry.sourceRefs = refs;
+      }
+    }
+  } catch {
+    /* refs 仓不可用——标注缺席,不阻断 */
+  }
+}
+
 /* ═══ 查询 ═══════════════════════════════════════════════ */
 
 /**
@@ -44,12 +97,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 
   if (keyword) {
     const result = await knowledgeService.search(String(keyword), { page, pageSize });
-    return void res.json({
-      success: true,
-      data: sanitizePaginatedForAPI(
-        result as unknown as Parameters<typeof sanitizePaginatedForAPI>[0]
-      ),
-    });
+    const sanitized = sanitizePaginatedForAPI(
+      result as unknown as Parameters<typeof sanitizePaginatedForAPI>[0]
+    );
+    await attachSourceRefStatus(container, (sanitized as { data: Record<string, unknown>[] }).data);
+    return void res.json({ success: true, data: sanitized });
   }
 
   const filters: Record<string, unknown> = {};
@@ -79,12 +131,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 
   const result = await knowledgeService.list(filters, { page, pageSize });
-  res.json({
-    success: true,
-    data: sanitizePaginatedForAPI(
-      result as unknown as Parameters<typeof sanitizePaginatedForAPI>[0]
-    ),
-  });
+  const sanitized = sanitizePaginatedForAPI(
+    result as unknown as Parameters<typeof sanitizePaginatedForAPI>[0]
+  );
+  await attachSourceRefStatus(container, (sanitized as { data: Record<string, unknown>[] }).data);
+  res.json({ success: true, data: sanitized });
 });
 
 /**
@@ -196,7 +247,10 @@ router.get('/:id', async (req: Request, res: Response) => {
   const container = getServiceContainer();
   const knowledgeService = container.get('knowledgeService');
   const entry = await knowledgeService.get(id);
-  res.json({ success: true, data: sanitizeForAPI(entry) });
+  const sanitized = sanitizeForAPI(entry) as Record<string, unknown>;
+  // 详情带全量 sourceRefs(path/status/newPath),供提案审批界面直读漂移明细。
+  await attachSourceRefStatus(container, [sanitized], { includeRefs: true });
+  res.json({ success: true, data: sanitized });
 });
 
 /* ═══ CRUD ═══════════════════════════════════════════════ */
