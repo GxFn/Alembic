@@ -44,6 +44,9 @@ export interface ProjectContextFileEntry {
 }
 
 export interface ProjectContextDependencyGraph {
+  // 索引签名与本文件其余 Entry 同风格;也让本图可直接赋给 Core 快照的
+  // DependencyGraph(briefing depGraphData 槽位,2026-07-10 接线)。
+  [key: string]: unknown;
   nodes: Array<Record<string, unknown>>;
   edges: Array<{ from: string; to: string; type: string; source: string }>;
   projectRoot: string;

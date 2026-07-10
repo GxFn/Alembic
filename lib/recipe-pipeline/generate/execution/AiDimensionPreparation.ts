@@ -4,6 +4,10 @@ import type { DimensionDef, IncrementalPlan } from '@alembic/core/types';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import { getAiRuntimeStatus } from '#inject/AiRuntimeStatus.js';
 import { GenerateEventEmitter } from '#recipe-pipeline/generate/runtime/GenerateEventEmitter.js';
+import {
+  type ProjectContextDependencyGraph,
+  projectContextDependencyGraph,
+} from '../../../project-facts/ProjectContextConsumerFacts.js';
 import type { ProjectContextFillView } from '../../../project-facts/ProjectContextWorkflowFacts.js';
 import {
   type ProjectScopeSourceIdentity,
@@ -20,7 +24,12 @@ export interface AiDimensionPreparation {
   ctx: GenerateWorkflowContext;
   projectRoot: string;
   dataRoot: string;
-  depGraphData: null;
+  /**
+   * 声明式模块依赖图(2026-07-10 接线):来自 Discoverer 清单解析(SPM target deps/
+   * easybox boxspec dependency),经快照 normalizeDepGraph 进 briefing,让维度挖掘
+   * 看到模块结构的权威声明。获取失败降级 null(与历史行为一致,不阻断挖掘)。
+   */
+  depGraphData: ProjectContextDependencyGraph | null;
   guardAudit: null;
   primaryLang: string;
   astProjectSummary: null;
@@ -45,10 +54,10 @@ export interface AiDimensionPreparation {
   skipTargetDelivery: boolean;
 }
 
-export function prepareAiDimensionPipeline(
+export async function prepareAiDimensionPipeline(
   view: ProjectContextFillView,
   dimensions: DimensionDef[]
-): AiDimensionPreparation {
+): Promise<AiDimensionPreparation> {
   const { projectContextFacts, projectRoot } = view;
   const ctx = view.ctx as GenerateWorkflowContext;
   const projectScopeSourceIdentities = resolveProjectScopeSourceIdentitiesFromCarrier(view);
@@ -80,13 +89,27 @@ export function prepareAiDimensionPipeline(
 
   logger.info(`[AiDimension] ═══ entered — ${isIncremental ? 'INCREMENTAL' : 'FULL'} pipeline`);
 
+  // 声明式依赖图接线(2026-07-10):此前恒 null,briefing 的 dependencyGraph 槽位
+  // 从未被填过。失败降级 null 并打日志(不阻断挖掘,行为回落与历史一致)。
+  let depGraphData: ProjectContextDependencyGraph | null = null;
+  try {
+    depGraphData = await projectContextDependencyGraph(projectRoot);
+    logger.info(
+      `[AiDimension] dependency graph loaded: nodes=${depGraphData.nodes.length} edges=${depGraphData.edges.length} source=${String(depGraphData.dependencySummary?.declaredEdgeSource ?? 'project-context')}`
+    );
+  } catch (err: unknown) {
+    logger.warn(
+      `[AiDimension] dependency graph unavailable — briefing proceeds without it: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
   return {
     view,
     dimensions,
     ctx,
     projectRoot,
     dataRoot,
-    depGraphData: null,
+    depGraphData,
     guardAudit: null,
     primaryLang: projectContextFacts.primaryLang ?? 'unknown',
     astProjectSummary: null,

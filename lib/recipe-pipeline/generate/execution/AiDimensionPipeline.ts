@@ -27,7 +27,7 @@ export async function runAiDimensionPipelineForResult(
   view: ProjectContextFillView,
   dimensions: DimensionDef[]
 ): Promise<AiDimensionPipelineResult> {
-  const preparation = prepareAiDimensionRun(view, dimensions);
+  const preparation = await prepareAiDimensionRun(view, dimensions);
 
   if (
     preparation.aiUnavailable ||
