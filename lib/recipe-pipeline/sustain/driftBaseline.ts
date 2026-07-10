@@ -6,11 +6,12 @@
  * 此前主体 reconcile 不带 gitReader/baselineCommit → drifted 无 line-shift/
  * content-change 细分(Plugin knowledge-index-rebuild 链已接)。
  *
- * scope 口径与 Plugin buildPluginGitDiffCheckpointScope 完全一致:
- * folderId=trim(currentFolderId)||'root',scopeId=trim(projectScopeId)||'single-folder'。
- * 登记后续:该口径下沉 Core 单源,两宿主转消费(现为声明一致的双实现)。
+ * scope 归一走 Core 单源 buildGitDiffCheckpointScope(2026-07-11 下沉完成):
+ * folderId=trim(currentFolderId)||'root',scopeId=trim(projectScopeId)||'single-folder',
+ * 与 Plugin(knowledge-index-rebuild/guard 推进/posture 读取)读写同键。
  */
 import { readFileAtCommit } from '@alembic/core';
+import { buildGitDiffCheckpointScope } from '@alembic/core/evolution';
 
 export interface DriftBaselineDeps {
   gitDiffCheckpointRepository: {
@@ -26,9 +27,13 @@ export function resolveMainDriftBaselineCommit(
   scope: { currentFolderId?: string | null; projectScopeId?: string | null } = {}
 ): string | null {
   try {
-    const folderId = scope.currentFolderId?.trim() || 'root';
-    const scopeId = scope.projectScopeId?.trim() || 'single-folder';
-    const row = deps.gitDiffCheckpointRepository.get({ folderId, projectRoot, scopeId });
+    const row = deps.gitDiffCheckpointRepository.get(
+      buildGitDiffCheckpointScope({
+        currentFolderId: scope.currentFolderId ?? null,
+        projectRoot,
+        projectScopeId: scope.projectScopeId ?? null,
+      })
+    );
     const commit = row?.checkpointCommit ?? null;
     return typeof commit === 'string' && commit.length > 0 ? commit : null;
   } catch {
