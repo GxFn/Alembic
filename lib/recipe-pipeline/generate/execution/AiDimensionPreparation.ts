@@ -1,4 +1,5 @@
 import type { AgentService, SystemRunContextFactory } from '@alembic/agent/service';
+import { type SourceGraphLifecycleResult, SourceGraphLifecycleService } from '@alembic/core';
 import Logger from '@alembic/core/logging';
 import type { DimensionDef, IncrementalPlan } from '@alembic/core/types';
 import { resolveDataRoot } from '@alembic/core/workspace';
@@ -30,6 +31,13 @@ export interface AiDimensionPreparation {
    * 看到模块结构的权威声明。获取失败降级 null(与历史行为一致,不阻断挖掘)。
    */
   depGraphData: ProjectContextDependencyGraph | null;
+  /**
+   * Track2(2026-07-10)source-graph 激活:catchUpOnStartup 幂等编排(无快照全量/
+   * stale 增量/fresh noop),files 全语言入库+JS 系实体/边。observe-first:本期只
+   * 建库+日志,不进维度 prompt/briefing(Swift 实体解析与 prompt 消费登记后续)。
+   * 失败降级 null,不阻断挖掘。
+   */
+  sourceGraphResult: SourceGraphLifecycleResult | null;
   guardAudit: null;
   primaryLang: string;
   astProjectSummary: null;
@@ -103,6 +111,36 @@ export async function prepareAiDimensionPipeline(
     );
   }
 
+  // Track2 source-graph 激活:catchUpOnStartup 幂等(全量/增量/noop),
+  // durableTables 计数即观测面。失败降级 null,不阻断挖掘。
+  let sourceGraphResult: SourceGraphLifecycleResult | null = null;
+  try {
+    const { getCoreRepositoryBundle } = await import('../../../injection/modules/InfraModule.js');
+    // GenerateWorkflowContainer 是 ServiceContainer 的窄化视图,运行时同一实例;
+    // repository bundle 缓存挂在 singletons,经 unknown 桥接取全量容器形态。
+    const repositories = getCoreRepositoryBundle(
+      ctx.container as unknown as Parameters<typeof getCoreRepositoryBundle>[0]
+    );
+    const lifecycle = new SourceGraphLifecycleService(
+      repositories.sourceGraphRepository as ConstructorParameters<
+        typeof SourceGraphLifecycleService
+      >[0]
+    );
+    const startedAtMs = Date.now();
+    sourceGraphResult = await lifecycle.catchUpOnStartup({ projectRoot });
+    logger.info(
+      `[AiDimension] source graph ${sourceGraphResult.action} (${sourceGraphResult.reason}): ` +
+        `files=${sourceGraphResult.durableTables.source_graph_files} ` +
+        `symbols=${sourceGraphResult.durableTables.source_graph_symbols} ` +
+        `edges=${sourceGraphResult.durableTables.source_graph_edges} ` +
+        `durationMs=${Date.now() - startedAtMs}`
+    );
+  } catch (err: unknown) {
+    logger.warn(
+      `[AiDimension] source graph catch-up unavailable — mining proceeds without it: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
   return {
     view,
     dimensions,
@@ -110,6 +148,7 @@ export async function prepareAiDimensionPipeline(
     projectRoot,
     dataRoot,
     depGraphData,
+    sourceGraphResult,
     guardAudit: null,
     primaryLang: projectContextFacts.primaryLang ?? 'unknown',
     astProjectSummary: null,
