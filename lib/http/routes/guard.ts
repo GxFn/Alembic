@@ -225,15 +225,27 @@ async function _getEngine(
   }
 
   // 注入 Enhancement Pack Guard 规则
-  // RIC-4 (§A=a): consume enhancement Guard rules through the high-level
-  // @alembic/core/guard facade instead of the low-level core/enhancement registry.
-  // resolveEnhancementGuardRules() (no options) == registry.all().flatMap(getGuardRules)
-  // — behavior-identical; it returns [] gracefully when the registry is unavailable.
+  // 2026-07-10 链路验通审计:此前无条件注入全部包规则(registry.all()),而 14 个包
+  // 全部带框架条件——纯 TS 无 React 项目也会装载 react 规则(评估期语言门只按语言
+  // 过滤,不看框架)。改走 Core 项目级精确 resolve:从真实依赖清单推导框架集合,
+  // 只注入匹配包;失败降级为不注入(与 Plugin 宿主同一入口,双端对称)。
   if (!engine.isEpInjected()) {
     try {
-      const { resolveEnhancementGuardRules } = await import('@alembic/core/guard');
-      const guardRules = resolveEnhancementGuardRules();
-      engine.injectExternalRules(guardRules);
+      const { resolveEnhancementGuardRulesForProject } = await import('@alembic/core/guard');
+      const { resolveProjectRoot } = await import('@alembic/core/workspace');
+      const projectRoot = resolveProjectRoot(
+        container as unknown as Parameters<typeof resolveProjectRoot>[0]
+      );
+      const { rules, packIds, detection } =
+        await resolveEnhancementGuardRulesForProject(projectRoot);
+      engine.injectExternalRules(rules);
+      const logger = (container.get('logger') ?? console) as {
+        info: (...args: unknown[]) => void;
+      };
+      logger.info(
+        `[guard] enhancement rules resolved: packs=[${packIds.join(',')}] rules=${rules.length} ` +
+          `languages=[${detection.languages.join(',')}] frameworks=[${detection.frameworks.join(',')}]`
+      );
       engine.markEpInjected();
     } catch {
       /* EP not available */
