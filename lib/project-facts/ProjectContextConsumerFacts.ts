@@ -182,7 +182,7 @@ export async function projectContextDependencyGraph(
   }
   const map = await loadProjectContextMap(projectRoot, resolvedRepo);
   const targets = projectContextTargets(resolvedRepo, projectRoot);
-  const nodes =
+  const nodes: Array<Record<string, unknown>> =
     map?.modules.map((module) => ({
       id: module.id,
       label: module.name,
@@ -199,17 +199,66 @@ export async function projectContextDependencyGraph(
       projectInformationSource: 'project-context',
     }));
 
+  // 2026-07-10 链路验通:此前 edges 硬编码 []——各 Discoverer 的 getDependencyGraph
+  // (SPM target deps/easybox boxspec dependency/层级)一直有真实现但零消费。Core repo
+  // 上下文现携带声明式依赖图(RepoContext.dependencyGraph),这里消费其真边;图缺席
+  // (Discoverer 未实现/解析失败)时回落空边,行为与旧版一致。
+  const declaredGraph = (
+    resolvedRepo as {
+      dependencyGraph?: {
+        source?: string;
+        nodes?: Array<Record<string, unknown>>;
+        edges?: Array<{ from?: unknown; to?: unknown; type?: unknown }>;
+      };
+    }
+  ).dependencyGraph;
+  const graphSource = declaredGraph?.source ?? 'project-context';
+  const edges: ProjectContextDependencyGraph['edges'] = [];
+  if (declaredGraph?.edges?.length) {
+    const knownNodeIds = new Set(nodes.map((node) => String(node.id)));
+    for (const edge of declaredGraph.edges) {
+      if (typeof edge.from !== 'string' || typeof edge.to !== 'string') {
+        continue;
+      }
+      edges.push({
+        from: edge.from,
+        to: edge.to,
+        type: typeof edge.type === 'string' ? edge.type : 'depends_on',
+        source: graphSource,
+      });
+    }
+    // 声明图里的额外节点(外部依赖/宿主 App)补进节点表,保证边的两端可解析。
+    for (const graphNode of declaredGraph.nodes ?? []) {
+      const id = typeof graphNode.id === 'string' ? graphNode.id : undefined;
+      if (!id || knownNodeIds.has(id)) {
+        continue;
+      }
+      knownNodeIds.add(id);
+      nodes.push({
+        id,
+        label: typeof graphNode.label === 'string' ? graphNode.label : id,
+        type: typeof graphNode.type === 'string' ? graphNode.type : 'external',
+        layer: typeof graphNode.layer === 'string' ? graphNode.layer : undefined,
+        projectInformationSource: 'project-context',
+      });
+    }
+  }
+
   return {
     nodes,
-    edges: [],
+    edges,
     projectRoot,
     generatedAt: new Date().toISOString(),
     dependencySummary: map?.dependencySummary
       ? {
           edgeCount: map.dependencySummary.edgeCount,
           notes: map.dependencySummary.notes,
+          declaredEdgeCount: edges.length,
+          declaredEdgeSource: edges.length > 0 ? graphSource : undefined,
         }
-      : undefined,
+      : edges.length > 0
+        ? { declaredEdgeCount: edges.length, declaredEdgeSource: graphSource }
+        : undefined,
     projectInformationSource: 'project-context',
   };
 }
