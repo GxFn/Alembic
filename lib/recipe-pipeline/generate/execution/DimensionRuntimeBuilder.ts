@@ -7,6 +7,7 @@ import {
   type SystemRunContext,
 } from '@alembic/agent/runtime';
 import type { AgentRunInput, SystemRunContextFactory } from '@alembic/agent/service';
+import type { SourceGraphLifecycleResult } from '@alembic/core';
 import { getDimensionFocusKeywords } from '@alembic/core/dimensions';
 import type { KnowledgeRescanExecutionDecision } from '@alembic/core/host-agent-workflows';
 import {
@@ -154,6 +155,7 @@ export function createGenerateDimensionRuntimeInput({
   guardAudit,
   depGraphData,
   callGraphResult,
+  sourceGraphResult,
   rescanContext,
   targetFileMap,
   globalSubmittedTitles,
@@ -185,6 +187,12 @@ export function createGenerateDimensionRuntimeInput({
   guardAudit?: GuardAudit | null;
   depGraphData?: SnapshotDependencyGraph | null;
   callGraphResult?: SnapshotCallGraphResult | null;
+  /**
+   * 决策④(2026-07-11):source_graph 实体索引结果(files/symbols/edges 计数)。
+   * 仅当 eval 开关 ALEMBIC_SOURCE_GRAPH_EVIDENCE=1 时由 runner 传入;
+   * 默认 undefined/null=不进 evidence starters,生产 prompt 零变化。
+   */
+  sourceGraphResult?: SourceGraphLifecycleResult | null;
   rescanContext: GenerateRescanContext | null;
   /** M1b（挖掘产出升级 P5a）：bootstrap 播种的本维度已入库标题——producer §9c 查重视野 */
   existingDimensionTitles?: Array<{ id: string; title: string; trigger?: string }> | null;
@@ -234,6 +242,10 @@ export function createGenerateDimensionRuntimeInput({
       depGraphData,
       callGraphResult,
       panoramaResult,
+      // 决策④(2026-07-11):source_graph 证据槽位。开关判定(ALEMBIC_SOURCE_GRAPH_EVIDENCE)
+      // 由调用方(AiDimensionSessionRunner)单点完成并打日志;这里只做纯透传,
+      // 未传/传 null 时 Core 侧不产 starter,生产 prompt 零变化。
+      ...(sourceGraphResult ? { sourceGraphResult } : {}),
     }),
     rescanContext: projectGenerateDimensionRescanContext({ rescanContext, dimId }),
     existingRecipes: projectGenerateExistingRecipesForPrompt(dimExistingRecipes),

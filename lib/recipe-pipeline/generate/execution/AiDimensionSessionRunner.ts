@@ -152,6 +152,19 @@ export async function runAiDimensionSession({
     });
   }
 
+  // 决策④(2026-07-11):source_graph 证据进 AI prompt 的唯一分叉点。
+  // 默认关(未设 ALEMBIC_SOURCE_GRAPH_EVIDENCE=1 → 传 null,生产 prompt 零变化);
+  // eval A/B 对照(同维度两轮 rescan 开关对照)确认收益后再决定常开。
+  const sourceGraphEvidenceEnabled = process.env.ALEMBIC_SOURCE_GRAPH_EVIDENCE === '1';
+  if (sourceGraphEvidenceEnabled) {
+    const durable = preparation.sourceGraphResult?.durableTables;
+    logger.info(
+      `[generate] source-graph evidence starters ENABLED (ALEMBIC_SOURCE_GRAPH_EVIDENCE=1): ` +
+        `result=${preparation.sourceGraphResult ? preparation.sourceGraphResult.action : 'null(降级不注入)'} ` +
+        `symbols=${durable?.source_graph_symbols ?? 0} edges=${durable?.source_graph_edges ?? 0}`
+    );
+  }
+
   function createBootstrapDimensionRunInput(dimId: string, plan: GenerateDimensionPlan) {
     return createGenerateDimensionRuntimeInput({
       dimId,
@@ -173,6 +186,8 @@ export async function runAiDimensionSession({
       guardAudit: preparation.guardAudit,
       depGraphData: preparation.depGraphData,
       callGraphResult: preparation.callGraphResult,
+      // 决策④:开关关闭时恒 null(evidence starters 不感知 source_graph 的存在)。
+      sourceGraphResult: sourceGraphEvidenceEnabled ? preparation.sourceGraphResult : null,
       rescanContext,
       targetFileMap: preparation.targetFileMap,
       globalSubmittedTitles,
