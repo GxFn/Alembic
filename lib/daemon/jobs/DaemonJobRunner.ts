@@ -13,6 +13,7 @@ import { executeRecipePipelineJob } from '../../recipe-pipeline/RecipePipelineFa
 import { materializeJobProcessEventTextArtifact } from '../observability/JobProcessEventArtifacts.js';
 import type { JobProcessEventRecorder } from '../observability/JobProcessEventRecorder.js';
 import { attachPcvN9ObservabilityCarry } from '../observability/PcvObservabilityLinkage.js';
+import { classifyBootstrapErrorStatus } from './bootstrapStatusClassification.js';
 import {
   getJobDisplaySnapshotStore,
   getJobProcessEventRecorder,
@@ -1040,8 +1041,13 @@ function classifyBootstrapSessionForJob(session: Record<string, unknown>): Daemo
   if (status === 'aborted' || summary.aborted === true || session.userCancelled === true) {
     return 'cancelled';
   }
-  if (status === 'failed' || status === 'completed_with_errors') {
-    return 'failed';
+  // 部分成功不再拖垮整个 job:completed_with_errors 且确有成功任务 → completed。
+  const errorClass = classifyBootstrapErrorStatus({
+    rawStatus: status,
+    completedTasks: numberValue(summary.completed),
+  });
+  if (errorClass) {
+    return errorClass;
   }
   return 'completed';
 }

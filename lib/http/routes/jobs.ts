@@ -20,6 +20,7 @@ import {
   mergeAgentEfficiencySummaries,
   normalizeAgentEfficiencySummary,
 } from '#recipe-pipeline/generate/runtime/GenerateEfficiency.js';
+import { classifyBootstrapErrorStatus } from '../../daemon/jobs/bootstrapStatusClassification.js';
 import {
   cancelDaemonJob,
   enqueueDaemonJob,
@@ -619,8 +620,14 @@ function normalizeJobStatus(
   if (fallback === 'failed') {
     return 'failed';
   }
-  if (rawStatus === 'failed' || rawStatus === 'completed_with_errors') {
-    return 'failed';
+  // 部分成功不拖垮整个 job(单源分类,同 DaemonJobRunner):completed_with_errors 且确有
+  // 成功任务 → completed,失败维度留在 warnings/维度卡片,job 不报红。
+  const errorClass = classifyBootstrapErrorStatus({
+    rawStatus,
+    completedTasks: summary ? numberField(summary, 'completed') : undefined,
+  });
+  if (errorClass) {
+    return errorClass;
   }
   if (fallback === 'completed' && (rawStatus === 'queued' || rawStatus === 'running')) {
     return 'completed';
