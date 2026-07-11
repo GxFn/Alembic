@@ -23,7 +23,8 @@ function makeProposal(overrides: Partial<ProposalRecord> = {}): ProposalRecord {
     description: 'test proposal',
     evidence: [],
     status: 'observing',
-    proposedAt: Date.now() - 72 * 60 * 60 * 1000,
+    // checkAndExecute 只评估已走完观察窗的 proposal；deprecate 固定为 high risk（7 天）。
+    proposedAt: Date.now() - 8 * 24 * 60 * 60 * 1000,
     expiresAt: Date.now() - 1000, // expired
     resolvedAt: null,
     resolvedBy: null,
