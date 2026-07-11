@@ -6,10 +6,8 @@
  *   - resident tool alembic_wiki
  *   - HTTP route POST /candidates/enrich (provider contract row I22)
  *
- * These negatives keep the deletes regression-proof: a reintroduced schema
- * binding, contract row, or route layer fails this suite. (The unbound
- * resident MCP tool registry these once also checked was deleted in GD2/B1;
- * the live served surface is the TOOL_SCHEMAS schema map.)
+ * These negatives keep the Alembic-owned HTTP deletes regression-proof. Codex
+ * MCP schema ownership lives in AlembicPlugin and is not asserted in this repo.
  */
 
 import { existsSync } from 'node:fs';
@@ -20,18 +18,10 @@ import {
   ALEMBIC_PROVIDER_ROUTE_MOUNTS,
 } from '../../lib/http/provider-contracts.js';
 import candidatesRouter from '../../lib/http/routes/candidates.js';
-import { TOOL_SCHEMAS } from '../../lib/shared/schemas/mcp-tools.js';
 
 const repoRoot = process.cwd();
-const DELETED_TOOLS = ['alembic_enrich_candidates', 'alembic_wiki'];
 
 describe('DCR surface deletes (Train B)', () => {
-  test('schema-map negative: deleted tools have no schema binding', () => {
-    for (const deleted of DELETED_TOOLS) {
-      expect(TOOL_SCHEMAS[deleted]).toBeUndefined();
-    }
-  });
-
   test('route-negative: POST /candidates/enrich is gone from contracts and mounts', () => {
     const contractHit = ALEMBIC_PROVIDER_ROUTE_CONTRACTS.find(
       (contract) => contract.path === '/candidates/enrich'

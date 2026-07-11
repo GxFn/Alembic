@@ -5,7 +5,6 @@ import {
   ALEMBIC_PROVIDER_ROUTE_CONTRACTS,
   ALEMBIC_PROVIDER_ROUTE_MOUNTS,
 } from '../../lib/http/provider-contracts.js';
-import { TOOL_SCHEMAS } from '../../lib/shared/schemas/mcp-tools.js';
 
 const repoRoot = process.cwd();
 
@@ -24,8 +23,7 @@ describe('Panorama surface boundary', () => {
     ).toEqual(['/api/v1/panorama']);
   });
 
-  test('tool schema, legacy engines, and legacy direct tests stay retired', () => {
-    expect(TOOL_SCHEMAS.alembic_panorama).toBeUndefined();
+  test('legacy engines and legacy direct tests stay retired', () => {
     expect(existsSync(join(repoRoot, 'lib/service/panorama'))).toBe(false);
     expect(existsSync(join(repoRoot, 'lib/project-facts/PanoramaService.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'lib/project-facts/PanoramaAggregator.ts'))).toBe(false);

@@ -235,33 +235,4 @@ describe('Consolidated Proposal creation logic', () => {
       expect(result?.status).toBe('observing');
     });
   });
-
-  describe('SubmitKnowledgeInput supersedes schema', () => {
-    it('SubmitKnowledgeInput schema accepts supersedes field', async () => {
-      const { SubmitKnowledgeInput } = await import('../../lib/shared/schemas/mcp-tools.js');
-
-      const result = SubmitKnowledgeInput.safeParse({
-        items: [{ title: 'test' }],
-        supersedes: 'r-old-001',
-      });
-
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.supersedes).toBe('r-old-001');
-      }
-    });
-
-    it('SubmitKnowledgeInput schema allows omitting supersedes', async () => {
-      const { SubmitKnowledgeInput } = await import('../../lib/shared/schemas/mcp-tools.js');
-
-      const result = SubmitKnowledgeInput.safeParse({
-        items: [{ title: 'test' }],
-      });
-
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.supersedes).toBeUndefined();
-      }
-    });
-  });
 });

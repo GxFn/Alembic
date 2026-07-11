@@ -1,12 +1,10 @@
 /**
- * 集成测试：Zod Schemas — MCP/HTTP/Config 运行时校验
+ * 集成测试：Zod Schemas — HTTP/Config 运行时校验
  *
  * 覆盖范围:
  *   - common.ts 基础 schema（PaginationSchema, ContentSchema, ReasoningSchema 等）
- *   - mcp-tools.ts MCP 工具输入 schema（SearchInput, KnowledgeInput 等）
  *   - http-requests.ts HTTP 路由 schema（CRUD + 批量 + 搜索）
  *   - config.ts 配置文件 schema（AppConfigSchema）
- *   - TOOL_SCHEMAS 映射表完整性
  */
 
 // ── common schemas ──────────────────────────────────
@@ -25,8 +23,6 @@ import {
   StrictKindEnum,
   TitleField,
 } from '@alembic/core/shared';
-import { z } from 'zod';
-
 // ── HTTP request schemas ────────────────────────────
 import {
   BatchPublishBody,
@@ -36,19 +32,6 @@ import {
   SearchQuery,
   UpdateKnowledgeBody,
 } from '../../lib/shared/schemas/http-requests.js';
-// ── MCP tools schemas ───────────────────────────────
-import {
-  GraphInput,
-  GuardInput,
-  HealthInput,
-  KnowledgeInput,
-  RescanInput,
-  SearchInput,
-  SkillInput,
-  StructureInput,
-  SubmitKnowledgeInput,
-  TOOL_SCHEMAS,
-} from '../../lib/shared/schemas/mcp-tools.js';
 
 describe('Integration: Zod Schemas — common.ts', () => {
   describe('PaginationSchema', () => {
@@ -190,209 +173,6 @@ describe('Integration: Zod Schemas — common.ts', () => {
 
     test('LanguageField should reject empty string', () => {
       expect(() => LanguageField.parse('')).toThrow();
-    });
-  });
-});
-
-describe('Integration: Zod Schemas — mcp-tools.ts', () => {
-  describe('HealthInput', () => {
-    test('should accept empty object', () => {
-      expect(HealthInput.parse({})).toEqual({});
-    });
-  });
-
-  describe('SearchInput', () => {
-    test('should apply defaults', () => {
-      const result = SearchInput.parse({ query: 'auth' });
-      expect(result.query).toBe('auth');
-      expect(result.mode).toBe('auto');
-      expect(result.kind).toBe('all');
-      expect(result.limit).toBe(10);
-    });
-
-    test('should reject empty query', () => {
-      expect(() => SearchInput.parse({ query: '' })).toThrow();
-    });
-
-    test('should reject invalid mode', () => {
-      expect(() => SearchInput.parse({ query: 'x', mode: 'invalid' })).toThrow();
-    });
-
-    test('should accept explicit metadata filter fields', () => {
-      const result = SearchInput.parse({
-        dimensionId: 'dim-1',
-        filters: { scope: 'project-specific' },
-        knowledgeType: 'code-pattern',
-        language: 'typescript',
-        query: 'test',
-        tags: ['search', 'telemetry'],
-      });
-      expect(result.dimensionId).toBe('dim-1');
-      expect(result.filters).toEqual({ scope: 'project-specific' });
-      expect(result.knowledgeType).toBe('code-pattern');
-      expect(result.language).toBe('typescript');
-      expect(result.tags).toEqual(['search', 'telemetry']);
-    });
-
-    test('should reject retired public search modes', () => {
-      expect(() => SearchInput.parse({ query: 'x', mode: 'bm25' })).toThrow();
-      expect(() => SearchInput.parse({ query: 'x', mode: 'context' })).toThrow();
-    });
-  });
-
-  describe('KnowledgeInput', () => {
-    test('should default to list operation', () => {
-      const result = KnowledgeInput.parse({});
-      expect(result.operation).toBe('list');
-    });
-
-    test('should require id for get operation', () => {
-      expect(() => KnowledgeInput.parse({ operation: 'get' })).toThrow();
-    });
-
-    test('should accept get with id', () => {
-      const result = KnowledgeInput.parse({ operation: 'get', id: 'k-1' });
-      expect(result.id).toBe('k-1');
-    });
-  });
-
-  describe('StructureInput', () => {
-    test('should apply defaults', () => {
-      const result = StructureInput.parse({});
-      expect(result.operation).toBe('targets');
-      expect(result.includeSummary).toBe(true);
-      expect(result.includeContent).toBe(false);
-    });
-  });
-
-  describe('GraphInput', () => {
-    test('should require operation', () => {
-      expect(() => GraphInput.parse({})).toThrow();
-    });
-
-    test('should accept valid operation', () => {
-      const result = GraphInput.parse({ operation: 'stats' });
-      expect(result.direction).toBe('both');
-      expect(result.maxDepth).toBe(3);
-    });
-  });
-
-  describe('GuardInput', () => {
-    test('should accept empty input', () => {
-      const result = GuardInput.parse({});
-      expect(result).toBeDefined();
-    });
-
-    test('should accept code + language', () => {
-      const result = GuardInput.parse({ code: 'console.log("x")', language: 'js' });
-      expect(result.code).toBe('console.log("x")');
-    });
-  });
-
-  describe('SubmitKnowledgeInput', () => {
-    test('accepts source-backed production metadata and session references', () => {
-      const result = SubmitKnowledgeInput.parse({
-        bootstrapSessionRef: 'bootstrap-session:bs-asq',
-        items: [
-          {
-            graphRefs: ['sourceGraph:search-handler'],
-            headerPaths: ['lib/resident/tool-handlers/consolidated.ts'],
-            includeHeaders: true,
-            moduleName: 'resident-tools',
-            relations: { related: [{ target: 'knowledge:k-asq' }] },
-            sourceCandidateId: 'cand-asq',
-            sourceFile: 'lib/resident/tool-handlers/consolidated.ts',
-            sourceGraph: { ref: 'sourceGraph:search-handler' },
-            sourceGraphRefs: ['sourceGraph:search-handler'],
-            sourceRefs: ['lib/resident/tool-handlers/consolidated.ts:220'],
-            title: 'ASQ source-backed publication route',
-          },
-        ],
-        requireProductionSession: true,
-        sessionId: 'bs-asq',
-      });
-
-      expect(result.sessionId).toBe('bs-asq');
-      expect(result.bootstrapSessionRef).toBe('bootstrap-session:bs-asq');
-      expect(result.requireProductionSession).toBe(true);
-      expect(result.items[0]).toMatchObject({
-        graphRefs: ['sourceGraph:search-handler'],
-        moduleName: 'resident-tools',
-        sourceCandidateId: 'cand-asq',
-        sourceFile: 'lib/resident/tool-handlers/consolidated.ts',
-        sourceGraphRefs: ['sourceGraph:search-handler'],
-      });
-    });
-  });
-
-  describe('RescanInput', () => {
-    test('accepts controller-authorized produce session route input', () => {
-      const result = RescanInput.parse({
-        produceSession: {
-          controllerAuthorized: true,
-          gaps: [
-            {
-              createBudget: 2,
-              dimensionId: 'asq-publication',
-              gapId: 'asq4b1b-knowledge-pack',
-              triggerPrefix: 'asq4b1b',
-            },
-          ],
-          source: 'asq-controller',
-        },
-        reason: 'asq-produce-session-route',
-      });
-
-      expect(result.produceSession?.gaps?.[0]).toMatchObject({
-        createBudget: 2,
-        dimensionId: 'asq-publication',
-        gapId: 'asq4b1b-knowledge-pack',
-      });
-    });
-  });
-
-  describe('SkillInput', () => {
-    test('should require operation', () => {
-      expect(() => SkillInput.parse({})).toThrow();
-    });
-
-    test('should accept valid operation', () => {
-      const result = SkillInput.parse({ operation: 'list' });
-      expect(result.operation).toBe('list');
-      expect(result.overwrite).toBe(false);
-    });
-  });
-
-  describe('TOOL_SCHEMAS mapping', () => {
-    test('should have schema for every MCP tool', () => {
-      const expectedTools = [
-        'alembic_health',
-        'alembic_search',
-        'alembic_knowledge',
-        'alembic_structure',
-        'alembic_graph',
-        'alembic_call_context',
-        'alembic_guard',
-        'alembic_submit_knowledge',
-        'alembic_skill',
-        'alembic_bootstrap',
-        'alembic_dimension_complete',
-        'alembic_knowledge_lifecycle',
-      ];
-      for (const tool of expectedTools) {
-        expect(TOOL_SCHEMAS[tool]).toBeDefined();
-        expect(TOOL_SCHEMAS[tool]).toBeInstanceOf(z.ZodType);
-      }
-    });
-
-    test('DCR-deleted tools stay absent from the schema map', () => {
-      // Train B DCR wave: P0 all-delete verdicts with zero external consumers.
-      expect(TOOL_SCHEMAS.alembic_wiki).toBeUndefined();
-      expect(TOOL_SCHEMAS.alembic_enrich_candidates).toBeUndefined();
-    });
-
-    test('should have at least 13 entries', () => {
-      expect(Object.keys(TOOL_SCHEMAS).length).toBeGreaterThanOrEqual(13);
     });
   });
 });
