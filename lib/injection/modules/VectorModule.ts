@@ -56,6 +56,8 @@ export function register(c: ServiceContainer) {
         embedProvider: embedProvider as ConstructorParameters<
           typeof VectorService
         >[0]['embedProvider'],
+        recipeGenerationManager: ct.get('recipeVectorGenerationManager'),
+        recipeVectorTruthRemover: ct.get('recipeVectorGenerationStorage'),
         contextualEnricher: ct.services.contextualEnricher
           ? (ct.get('contextualEnricher') as InstanceType<typeof ContextualEnricher> | null)
           : null,

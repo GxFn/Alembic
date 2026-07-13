@@ -64,7 +64,12 @@ import type { HybridRetriever, SearchEngine } from '@alembic/core/search';
 import type { FeedbackCollector, QualityScorer } from '@alembic/core/service/quality';
 import type { RecipeCandidateValidator, RecipeParser } from '@alembic/core/service/recipe';
 import type { LanguageService } from '@alembic/core/shared';
-import type { IndexingPipeline, VectorService, VectorStore } from '@alembic/core/vector';
+import type {
+  IndexingPipeline,
+  RecipeVectorGenerationManager,
+  VectorService,
+  VectorStore,
+} from '@alembic/core/vector';
 import type { JobDisplaySnapshotStore } from '../daemon/observability/JobDisplaySnapshotStore.js';
 import type { JobProcessEventRecorder } from '../daemon/observability/JobProcessEventRecorder.js';
 // ── Core Types ──
@@ -79,6 +84,10 @@ import type { ModuleService } from '../service/module/ModuleService.js';
 import type { SkillHooks } from '../service/skills/SkillHooks.js';
 // ── Vector Service Types ──
 import type { ContextualEnricher } from '../service/vector/ContextualEnricher.js';
+import type {
+  FileRecipeVectorGenerationStorage,
+  RecipeVectorGenerationRuntime,
+} from '../service/vector/RecipeVectorGenerationRuntime.js';
 
 /**
  * 类型安全的服务映射表
@@ -128,7 +137,11 @@ export interface ServiceMap {
   recipeProductionGateway: RecipeProductionGateway;
   knowledgeGraphService: KnowledgeGraphService;
   searchEngine: SearchEngine;
+  baseVectorStore: VectorStore;
   vectorStore: VectorStore;
+  recipeVectorGenerationStorage: FileRecipeVectorGenerationStorage;
+  recipeVectorGenerationManager: RecipeVectorGenerationManager;
+  recipeVectorGenerationRuntime: RecipeVectorGenerationRuntime;
   indexingPipeline: IndexingPipeline;
   hybridRetriever: HybridRetriever;
   enhancementRegistry: unknown; // dynamic registry, type varies

@@ -6,6 +6,7 @@
  *   创建 → 查询 → 更新 → 发布 → 弃用 → 重新激活 → 删除
  */
 
+import { createHash } from 'node:crypto';
 import { KnowledgeEntry, KnowledgeService, Lifecycle } from '@alembic/core/knowledge';
 import { KnowledgeRepositoryImpl } from '@alembic/core/repositories';
 import { createTestBootstrap } from '../fixtures/factory.js';
@@ -15,20 +16,123 @@ describe('Integration: KnowledgeService CRUD + Lifecycle', () => {
 
   /** 创建 wire format 测试数据 */
   function makeWireData(overrides = {}) {
-    return {
+    const data = {
       title: 'URLSession 网络请求指南',
       description: '使用 URLSession 进行 HTTP 请求的最佳实践',
       trigger: 'urlsession',
       language: 'swift',
       category: 'networking',
       knowledgeType: 'best-practice',
+      kind:
+        overrides.kind ?? (overrides.knowledgeType === 'boundary-constraint' ? 'rule' : 'pattern'),
+      whenClause: '当 Swift 客户端需要发送 HTTP 请求时',
+      doClause: '使用 URLSession.shared.dataTask 创建并管理请求任务',
+      dontClause: '不要把底层传输错误直接暴露给功能界面',
       content: {
         pattern: 'let task = URLSession.shared.dataTask(with: url) { data, response, error in }',
         rationale: '使用 Foundation 原生网络 API，无需第三方库依赖',
       },
+      reasoning: {
+        whyStandard: '测试源码中的调用模式提供了可核对的实现证据',
+        sources: ['test/integration/KnowledgeCRUD.test.ts:15-55'],
+        confidence: 0.95,
+      },
       tags: ['networking', 'swift', 'ios'],
       ...overrides,
     };
+    return {
+      ...data,
+      retrievalProfile: {
+        schemaVersion: '1',
+        primaryLanguage: 'zh-CN',
+        summary: {
+          primary: String(data.description),
+          technicalEnglish:
+            'Use URLSession.shared.dataTask to create and manage an HTTP request task.',
+        },
+        concepts: [
+          {
+            term: 'URLSession.shared.dataTask',
+            language: 'en',
+            provenanceRefs: ['field:content.pattern'],
+          },
+        ],
+        scenarios: [
+          {
+            text: String(data.whenClause),
+            language: 'zh-CN',
+            provenanceRefs: ['field:whenClause'],
+          },
+        ],
+        exclusions: [
+          {
+            text: String(data.dontClause),
+            language: 'zh-CN',
+            provenanceRefs: ['field:dontClause'],
+          },
+        ],
+        provenance: {
+          evidenceRefs: ['test/integration/KnowledgeCRUD.test.ts:15-55'],
+          sourceFieldRefs: [
+            'field:title',
+            'field:description',
+            'field:whenClause',
+            'field:doClause',
+            'field:dontClause',
+            'field:content.pattern',
+            'field:content.rationale',
+          ],
+          sourceContentHash: computeRecipeSourceContentHash(data),
+          generator: 'knowledge-crud-integration-fixture',
+        },
+      },
+    };
+  }
+
+  function computeRecipeSourceContentHash(source) {
+    const content = source.content ?? {};
+    const reasoning = source.reasoning ?? {};
+    const identity = {
+      category: source.category ?? '',
+      content: {
+        markdown: content.markdown ?? '',
+        pattern: content.pattern ?? '',
+        rationale: content.rationale ?? '',
+      },
+      coreCode: source.coreCode ?? '',
+      description: source.description ?? '',
+      dimensionId: source.dimensionId ?? '',
+      doClause: source.doClause ?? '',
+      dontClause: source.dontClause ?? '',
+      kind: source.kind ?? '',
+      knowledgeType: source.knowledgeType ?? '',
+      language: source.language ?? '',
+      moduleName: source.moduleName ?? '',
+      reasoning: {
+        sources: reasoning.sources ?? [],
+        whyStandard: reasoning.whyStandard ?? '',
+      },
+      tags: source.tags ?? [],
+      title: source.title ?? '',
+      topicHint: source.topicHint ?? '',
+      trigger: source.trigger ?? '',
+      usageGuide: source.usageGuide ?? '',
+      whenClause: source.whenClause ?? '',
+    };
+    return createHash('sha256').update(stableStringify(identity)).digest('hex');
+  }
+
+  function stableStringify(value) {
+    if (Array.isArray(value)) {
+      return `[${value.map(stableStringify).join(',')}]`;
+    }
+    if (value && typeof value === 'object') {
+      return `{${Object.keys(value)
+        .sort()
+        .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+        .join(',')}}`;
+    }
+    return JSON.stringify(value);
   }
 
   const ctx = { userId: 'http-request' };

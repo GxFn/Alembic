@@ -55,7 +55,7 @@ afterEach(() => {
 });
 
 describe('AO4 negative suites', () => {
-  test('HTTP knowledge create no longer calls the old permission boundary', async () => {
+  test('HTTP knowledge create is retired before any truth-service call', async () => {
     const response = await invokeRouter(knowledgeRouter, {
       body: {
         content: 'writes use entrypoint validation',
@@ -66,8 +66,9 @@ describe('AO4 negative suites', () => {
       path: '/api/v1/knowledge',
     });
 
-    expect(response.status).toBe(201);
-    expect(mocks.knowledgeService.create).toHaveBeenCalled();
+    expect(response.status).toBe(410);
+    expect(response.body.error).toMatchObject({ code: 'RECIPE_CREATE_RETIRED' });
+    expect(mocks.knowledgeService.create).not.toHaveBeenCalled();
   });
 
   test('job cancellation persists the final cancelled state', () => {

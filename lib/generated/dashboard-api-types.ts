@@ -26,6 +26,36 @@
  */
 export type KnowledgeLifecycle = 'pending' | 'staging' | 'active' | 'evolving' | 'decaying' | 'deprecated';
 export type KnowledgeKind = 'rule' | 'pattern' | 'fact';
+/** Recipe 内嵌的可追溯检索事实；它是知识真相的一部分，不是派生索引状态。 */
+export interface RecipeRetrievalFactWire {
+    term?: string;
+    text?: string;
+    language: string;
+    provenanceRefs: string[];
+}
+export interface RecipeRetrievalProfileWire {
+    schemaVersion: string;
+    primaryLanguage: string;
+    summary: {
+        primary: string;
+        technicalEnglish: string;
+    };
+    concepts: Array<RecipeRetrievalFactWire & {
+        term: string;
+    }>;
+    scenarios: Array<RecipeRetrievalFactWire & {
+        text: string;
+    }>;
+    exclusions: Array<RecipeRetrievalFactWire & {
+        text: string;
+    }>;
+    provenance: {
+        evidenceRefs: string[];
+        sourceFieldRefs: string[];
+        sourceContentHash: string;
+        generator: string;
+    };
+}
 export interface KnowledgeContentWire {
     pattern: string;
     markdown: string;
@@ -127,6 +157,7 @@ export interface KnowledgeEntryWire {
     dontClause: string;
     coreCode: string;
     usageGuide: string;
+    retrievalProfile: RecipeRetrievalProfileWire | null;
     content: KnowledgeContentWire;
     relations: KnowledgeRelationsWire;
     constraints: KnowledgeConstraintsWire;
@@ -545,7 +576,7 @@ export const DASHBOARD_JOB_KINDS: readonly DashboardJobKind[] = [
 ];
 
 // ════════════════════════════════════════════════════════════════════
-// HTTP route contract table (31 routes, contract version 1)
+// HTTP route contract table (35 routes, contract version 1)
 // ════════════════════════════════════════════════════════════════════
 
 export const DASHBOARD_API_CONTRACT_VERSION = 1;
@@ -1987,6 +2018,286 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
     ],
     "tags": [
       "Knowledge"
+    ],
+    "responseSchemas": {
+      "200": "schema-1",
+      "206": "schema-2",
+      "400": "schema-2",
+      "404": "schema-2",
+      "424": "schema-2",
+      "500": "schema-2",
+      "501": "schema-2",
+      "502": "schema-2",
+      "503": "schema-2",
+      "504": "schema-2"
+    }
+  },
+  {
+    "artifactPolicy": "Workflow and resident search summaries inline; reports/snapshots by artifactRef and degraded resident search state by canonical degraded telemetry.",
+    "capabilityDiscovery": [
+      "/api/v1/knowledge",
+      "/api/v1/modules",
+      "/api/v1/candidates"
+    ],
+    "contractId": "I22.getRecipeIndexGeneration",
+    "errorKinds": [
+      "invalid-input",
+      "unavailable",
+      "timeout",
+      "not-found",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "exposureClasses": [
+      "public",
+      "consumer-needed",
+      "diagnostic"
+    ],
+    "fixtureIds": [
+      "knowledge.success",
+      "search.success",
+      "search.degraded",
+      "workflow.unavailable",
+      "workflow.degraded",
+      "workflow.partial",
+      "workflow.capability-mismatch",
+      "workflow.provider-error",
+      "workflow.host-failure",
+      "workflow.internal-error"
+    ],
+    "functionClass": "rest-command",
+    "method": "get",
+    "operationId": "getRecipeIndexGeneration",
+    "path": "/commands/recipe-index-generation",
+    "registryRowId": "I22",
+    "summary": "Recipe vector generation status",
+    "supportedScenarios": [
+      "success",
+      "unavailable-runtime",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "tags": [
+      "Knowledge",
+      "Commands"
+    ],
+    "responseSchemas": {
+      "200": "schema-1",
+      "206": "schema-2",
+      "400": "schema-2",
+      "404": "schema-2",
+      "424": "schema-2",
+      "500": "schema-2",
+      "501": "schema-2",
+      "502": "schema-2",
+      "503": "schema-2",
+      "504": "schema-2"
+    }
+  },
+  {
+    "artifactPolicy": "Workflow and resident search summaries inline; reports/snapshots by artifactRef and degraded resident search state by canonical degraded telemetry.",
+    "capabilityDiscovery": [
+      "/api/v1/knowledge",
+      "/api/v1/modules",
+      "/api/v1/candidates"
+    ],
+    "contractId": "I22.previewRecipeIndexGeneration",
+    "errorKinds": [
+      "invalid-input",
+      "unavailable",
+      "timeout",
+      "not-found",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "exposureClasses": [
+      "public",
+      "consumer-needed",
+      "diagnostic"
+    ],
+    "fixtureIds": [
+      "knowledge.success",
+      "search.success",
+      "search.degraded",
+      "workflow.unavailable",
+      "workflow.degraded",
+      "workflow.partial",
+      "workflow.capability-mismatch",
+      "workflow.provider-error",
+      "workflow.host-failure",
+      "workflow.internal-error"
+    ],
+    "functionClass": "rest-command",
+    "method": "post",
+    "operationId": "previewRecipeIndexGeneration",
+    "path": "/commands/recipe-index-generation/dry-run",
+    "registryRowId": "I22",
+    "summary": "Preview Recipe vector generation without writes",
+    "supportedScenarios": [
+      "success",
+      "unavailable-runtime",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "tags": [
+      "Knowledge",
+      "Commands"
+    ],
+    "responseSchemas": {
+      "200": "schema-1",
+      "206": "schema-2",
+      "400": "schema-2",
+      "404": "schema-2",
+      "424": "schema-2",
+      "500": "schema-2",
+      "501": "schema-2",
+      "502": "schema-2",
+      "503": "schema-2",
+      "504": "schema-2"
+    }
+  },
+  {
+    "artifactPolicy": "Workflow and resident search summaries inline; reports/snapshots by artifactRef and degraded resident search state by canonical degraded telemetry.",
+    "capabilityDiscovery": [
+      "/api/v1/knowledge",
+      "/api/v1/modules",
+      "/api/v1/candidates"
+    ],
+    "contractId": "I22.rebuildRecipeIndexGeneration",
+    "errorKinds": [
+      "invalid-input",
+      "unavailable",
+      "timeout",
+      "not-found",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "exposureClasses": [
+      "public",
+      "consumer-needed",
+      "diagnostic"
+    ],
+    "fixtureIds": [
+      "knowledge.success",
+      "search.success",
+      "search.degraded",
+      "workflow.unavailable",
+      "workflow.degraded",
+      "workflow.partial",
+      "workflow.capability-mismatch",
+      "workflow.provider-error",
+      "workflow.host-failure",
+      "workflow.internal-error"
+    ],
+    "functionClass": "rest-command",
+    "method": "post",
+    "operationId": "rebuildRecipeIndexGeneration",
+    "path": "/commands/recipe-index-generation/rebuild",
+    "registryRowId": "I22",
+    "summary": "Build, verify, and atomically activate a Recipe vector generation",
+    "supportedScenarios": [
+      "success",
+      "unavailable-runtime",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "tags": [
+      "Knowledge",
+      "Commands"
+    ],
+    "responseSchemas": {
+      "200": "schema-1",
+      "206": "schema-2",
+      "400": "schema-2",
+      "404": "schema-2",
+      "424": "schema-2",
+      "500": "schema-2",
+      "501": "schema-2",
+      "502": "schema-2",
+      "503": "schema-2",
+      "504": "schema-2"
+    }
+  },
+  {
+    "artifactPolicy": "Workflow and resident search summaries inline; reports/snapshots by artifactRef and degraded resident search state by canonical degraded telemetry.",
+    "capabilityDiscovery": [
+      "/api/v1/knowledge",
+      "/api/v1/modules",
+      "/api/v1/candidates"
+    ],
+    "contractId": "I22.rollbackRecipeIndexGeneration",
+    "errorKinds": [
+      "invalid-input",
+      "unavailable",
+      "timeout",
+      "not-found",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "exposureClasses": [
+      "public",
+      "consumer-needed",
+      "diagnostic"
+    ],
+    "fixtureIds": [
+      "knowledge.success",
+      "search.success",
+      "search.degraded",
+      "workflow.unavailable",
+      "workflow.degraded",
+      "workflow.partial",
+      "workflow.capability-mismatch",
+      "workflow.provider-error",
+      "workflow.host-failure",
+      "workflow.internal-error"
+    ],
+    "functionClass": "rest-command",
+    "method": "post",
+    "operationId": "rollbackRecipeIndexGeneration",
+    "path": "/commands/recipe-index-generation/rollback",
+    "registryRowId": "I22",
+    "summary": "Roll back active Recipe vector generation",
+    "supportedScenarios": [
+      "success",
+      "unavailable-runtime",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "tags": [
+      "Knowledge",
+      "Commands"
     ],
     "responseSchemas": {
       "200": "schema-1",

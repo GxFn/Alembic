@@ -1,8 +1,9 @@
 /**
  * AiScanService — `alembic ais [Target]` 的核心逻辑
  *
- * 按文件粒度扫描 Target 源码，通过 AgentService.run(scan-extract) 提取 Recipe，
- * 创建后自动发布（PENDING → ACTIVE），无需 Dashboard 人工审核。
+ * 按文件粒度扫描 Target 源码，通过 AgentService.run(scan-extract) 提取 Recipe。
+ * Agent 的 knowledge.submit 已经通过 Core RecipeProductionGateway 创建 pending/staging，
+ * 本服务只观察并汇总返回的真实 ID，不再执行第二次 create/publish。
  *
  * Agent(LLM) 直接分析代码 + 使用 AST 工具，输出 Recipe 结构化 JSON。
  * 本服务可脱离 MCP 独立在 CLI 运行。
@@ -11,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  type AgentRunInput,
   type AgentService,
   runScanAgentTask,
   type SystemRunContextFactory,
@@ -50,14 +52,21 @@ export class AiScanService {
   }
 
   /**
-   * 扫描指定 Target（或全部 Target）的源文件并提取 Recipe，创建后直接发布
+   * 扫描指定 Target（或全部 Target）的源文件并提取 Recipe
    * @param targetName Target 名称；null 时扫描全部
    * @param opts { maxFiles, dryRun, concurrency }
    * @returns >}
    */
   async scan(targetName: string | null, opts: { maxFiles?: number; dryRun?: boolean } = {}) {
     const { maxFiles = 200, dryRun = false } = opts;
-    const report = { published: 0, files: 0, errors: [] as string[], skipped: 0 };
+    const report = {
+      created: 0,
+      previewed: 0,
+      entries: [] as Array<{ id: string; lifecycle: string; title?: string }>,
+      files: 0,
+      errors: [] as string[],
+      skipped: 0,
+    };
 
     // 1. 初始化 AgentService (统一 AgentRuntime 入口)
     try {
@@ -86,14 +95,6 @@ export class AiScanService {
     }
 
     report.files = files.length;
-    const knowledgeService = this.container.get('knowledgeService') as {
-      create: (
-        data: Record<string, unknown>,
-        opts: Record<string, unknown>
-      ) => Promise<{ id: string }>;
-      publish: (id: string, opts: Record<string, unknown>) => Promise<void>;
-    };
-
     // 3. 按文件调用 AI 提取 (通过 Agent 统一管道)
     for (const file of files) {
       try {
@@ -118,8 +119,28 @@ export class AiScanService {
         if (!agentService || !systemRunContextFactory) {
           throw new Error('AI scan requires initialized AgentService and SystemRunContextFactory');
         }
+        const createdEntries: Array<{ id: string; lifecycle: string; title?: string }> = [];
+        const observingAgentService = {
+          run: async (input: AgentRunInput) => {
+            const priorHook = input.execution?.onToolCall;
+            return agentService.run({
+              ...input,
+              execution: {
+                ...input.execution,
+                ...(dryRun ? { toolChoiceOverride: 'none' as const } : {}),
+                onToolCall: (name, args, result, iteration) => {
+                  priorHook?.(name, args, result, iteration);
+                  const created = projectCreatedRecipe(name, args, result);
+                  if (created) {
+                    createdEntries.push(created);
+                  }
+                },
+              },
+            });
+          },
+        } as AgentService;
         const extractResult = await runScanAgentTask({
-          agentService,
+          agentService: observingAgentService,
           systemRunContextFactory,
           label: file.targetName,
           files: [{ name: file.name, relativePath: file.relativePath, content: truncated }],
@@ -127,45 +148,25 @@ export class AiScanService {
         });
         const recipes = extractResult.recipes || [];
 
-        if (!Array.isArray(recipes) || recipes.length === 0) {
-          report.skipped++;
+        if (dryRun) {
+          const previewable = Array.isArray(recipes)
+            ? recipes.filter(
+                (recipe) => recipe?.content?.pattern && String(recipe.content.pattern).length >= 20
+              ).length
+            : 0;
+          report.previewed += previewable;
+          if (previewable === 0) {
+            report.skipped++;
+          }
           continue;
         }
 
-        // 4. 创建并发布 Recipe
-        // Agent 已完成: 代码分析 + Recipe JSON 输出
-        // 此处仅补充 AiScanService 专属元数据
-        for (const recipe of recipes) {
-          if (!recipe.content?.pattern || recipe.content.pattern.length < 20) {
-            continue;
-          }
-
-          if (dryRun) {
-            report.published++;
-            continue;
-          }
-
-          try {
-            // AiScanService 专属标记
-            recipe.source = 'ai-scan';
-            recipe.tags = [...new Set([...(recipe.tags || []), 'ai-scan', file.targetName])];
-            recipe.moduleName = file.targetName;
-            // 注意：不设置 sourceFile，由 KnowledgeFileWriter 持久化时自动设置为 md 文件路径
-
-            if (!recipe.aiInsight && recipe.description) {
-              recipe.aiInsight = recipe.description;
-            }
-
-            const saved = await knowledgeService.create(recipe, { userId: 'ai-scan' });
-
-            // 直接发布：PENDING → ACTIVE
-            await knowledgeService.publish(saved.id, { userId: 'ai-scan' });
-
-            report.published++;
-          } catch (err: unknown) {
-            report.errors.push(`${file.name}: recipe publish failed — ${(err as Error).message}`);
-          }
+        if (createdEntries.length === 0) {
+          report.skipped++;
+          continue;
         }
+        report.entries.push(...createdEntries);
+        report.created += createdEntries.length;
       } catch (err: unknown) {
         report.errors.push(`${file.name}: ${(err as Error).message}`);
       }
@@ -297,6 +298,29 @@ export class AiScanService {
   _inferLanguage(filename: string) {
     return LanguageService.inferLang(filename);
   }
+}
+
+function projectCreatedRecipe(
+  name: string,
+  args: Record<string, unknown>,
+  result: unknown
+): { id: string; lifecycle: string; title?: string } | null {
+  if (name !== 'knowledge' || args.action !== 'submit' || !result || typeof result !== 'object') {
+    return null;
+  }
+  const envelope = result as { ok?: boolean; data?: unknown };
+  if (!envelope.ok || !envelope.data || typeof envelope.data !== 'object') {
+    return null;
+  }
+  const data = envelope.data as Record<string, unknown>;
+  if (data.status !== 'created' || typeof data.id !== 'string') {
+    return null;
+  }
+  return {
+    id: data.id,
+    lifecycle: typeof data.lifecycle === 'string' ? data.lifecycle : 'pending',
+    ...(typeof data.title === 'string' ? { title: data.title } : {}),
+  };
 }
 
 export default AiScanService;

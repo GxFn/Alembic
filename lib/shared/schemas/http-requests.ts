@@ -39,20 +39,6 @@ const PaginationQuery = z.object({
 
 // ═══ Knowledge ═══════════════════════════════════
 
-export const CreateKnowledgeBody = z.object({
-  title: z.string().min(1, 'title is required'),
-  content: z.union([z.string().min(1), MetadataRecord]),
-  description: z.string().optional(),
-  kind: z.enum(['rule', 'pattern', 'fact']).nullish(),
-  language: z.string().optional(),
-  category: z.string().optional(),
-  knowledgeType: z.string().optional(),
-  complexity: z.string().nullish(),
-  metadata: MetadataRecord.optional(),
-  scope: z.string().nullish(),
-  tags: z.array(z.string()).optional(),
-});
-
 export const UpdateKnowledgeBody = z
   .object({
     title: z.string().min(1).optional(),

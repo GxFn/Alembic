@@ -1249,10 +1249,10 @@ program
 // ─────────────────────────────────────────────────────
 program
   .command('ais [target]')
-  .description('AI 扫描 Target 源码 → 提取并发布 Recipes（需配置 AI Provider）')
+  .description('AI 扫描 Target 源码 → 通过 production gateway 创建 Recipes（需配置 AI Provider）')
   .option('-d, --dir <path>', '项目目录', '.')
   .option('-m, --max-files <n>', '最大扫描文件数', '200')
-  .option('--dry-run', '仅预览，不发布 Recipe')
+  .option('--dry-run', '仅预览，禁用 Recipe 写入工具')
   .option('--json', '以 JSON 格式输出')
   .action(async (target, opts) => {
     const projectRoot = resolve(opts.dir);
@@ -1260,7 +1260,7 @@ program
       cli.log(`Target: ${target}`);
     }
     if (opts.dryRun) {
-      cli.log('ℹ️  Dry-run mode: no Recipes will be published');
+      cli.log('ℹ️  Dry-run mode: Recipe write tools are disabled');
     }
 
     try {
@@ -1284,7 +1284,8 @@ program
       } else {
         cli.log(`\n📝 AI Scan Report`);
         cli.log(`  Files scanned: ${report.files}`);
-        cli.log(`  Published:     ${report.published}`);
+        cli.log(`  Created:       ${report.created}`);
+        cli.log(`  Previewed:     ${report.previewed}`);
         cli.log(`  Skipped:       ${report.skipped || 0}`);
         if (report.errors.length > 0) {
           cli.log(`  Errors:        ${report.errors.length}`);
@@ -1295,8 +1296,8 @@ program
             cli.log(`    ... and ${report.errors.length - 10} more`);
           }
         }
-        if (!opts.dryRun && report.published > 0) {
-          cli.log(`\n  ✅ ${report.published} Recipes published successfully.`);
+        if (!opts.dryRun && report.created > 0) {
+          cli.log(`\n  ✅ ${report.created} Recipes created as pending/staging candidates.`);
         }
         cli.blank();
       }

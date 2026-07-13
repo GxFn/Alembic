@@ -6,7 +6,9 @@
 import express, { type Request, type Response } from 'express';
 import { DASHBOARD_OPERATION_IDS } from '#tools/adapters/DashboardOperations.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import type { RecipeVectorGenerationRuntime } from '../../service/vector/RecipeVectorGenerationRuntime.js';
 import { FileReadQuery, FileSaveBody } from '../../shared/schemas/http-requests.js';
+import { rejectUnlessConfirmed } from '../entrypoint-safety.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 import { buildAlembicHttpProblem } from '../problem-taxonomy.js';
 import {
@@ -44,6 +46,59 @@ router.post('/embed', async (req: Request, res: Response) => {
     req.body || {}
   );
   sendDashboardOperationResponse(res, envelope);
+});
+
+/** GET /api/v1/commands/recipe-index-generation — 当前 active generation。 */
+router.get('/recipe-index-generation', async (_req: Request, res: Response) => {
+  const runtime = recipeGenerationRuntime();
+  res.json({ success: true, data: await runtime.status() });
+});
+
+/** POST /api/v1/commands/recipe-index-generation/dry-run — 只读迁移清单。 */
+router.post('/recipe-index-generation/dry-run', async (_req: Request, res: Response) => {
+  try {
+    const result = await recipeGenerationRuntime().dryRun('migration');
+    res.json({ success: true, data: result });
+  } catch (error: unknown) {
+    sendRecipeGenerationFailure(res, error);
+  }
+});
+
+/** POST /api/v1/commands/recipe-index-generation/rebuild — shadow 验证后原子切换。 */
+router.post('/recipe-index-generation/rebuild', async (req: Request, res: Response) => {
+  if (!rejectUnlessConfirmed(req, res, 'Recipe vector generation rebuild')) {
+    return;
+  }
+  try {
+    const result = await recipeGenerationRuntime().rebuild('migration');
+    res.status(result.status === 'failed' ? 500 : 200).json({
+      success: result.status !== 'failed',
+      data: result,
+    });
+  } catch (error: unknown) {
+    sendRecipeGenerationFailure(res, error);
+  }
+});
+
+/** POST /api/v1/commands/recipe-index-generation/rollback — CAS 回滚到 ready generation。 */
+router.post('/recipe-index-generation/rollback', async (req: Request, res: Response) => {
+  if (!rejectUnlessConfirmed(req, res, 'Recipe vector generation rollback')) {
+    return;
+  }
+  const generationId = typeof req.body?.generationId === 'string' ? req.body.generationId : '';
+  if (!generationId.trim()) {
+    res.status(400).json({
+      success: false,
+      error: { code: 'GENERATION_ID_REQUIRED', message: 'generationId is required' },
+    });
+    return;
+  }
+  try {
+    const result = await recipeGenerationRuntime().rollback(generationId);
+    res.json({ success: true, data: result });
+  } catch (error: unknown) {
+    sendRecipeGenerationFailure(res, error);
+  }
 });
 
 /**
@@ -289,4 +344,20 @@ function sendFilePathProblem(res: Response, message: string): void {
     retryable: false,
   });
   res.status(problem.status).json({ success: false, error: problem });
+}
+
+function recipeGenerationRuntime(): RecipeVectorGenerationRuntime {
+  return getServiceContainer().get('recipeVectorGenerationRuntime');
+}
+
+function sendRecipeGenerationFailure(res: Response, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  const unavailable = message.includes('embedding provider');
+  res.status(unavailable ? 503 : 500).json({
+    success: false,
+    error: {
+      code: unavailable ? 'RECIPE_EMBEDDING_UNAVAILABLE' : 'RECIPE_GENERATION_FAILED',
+      message,
+    },
+  });
 }

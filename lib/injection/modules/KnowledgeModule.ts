@@ -45,7 +45,13 @@ import type {
 import { HybridRetriever, SearchEngine } from '@alembic/core/search';
 import { findSimilarRecipes } from '@alembic/core/service/candidate';
 import { LanguageService } from '@alembic/core/shared';
-import { HnswVectorAdapter, IndexingPipeline, JsonVectorAdapter } from '@alembic/core/vector';
+import {
+  HnswVectorAdapter,
+  IndexingPipeline,
+  JsonVectorAdapter,
+  RecipeVectorGenerationManager,
+  type VectorStore,
+} from '@alembic/core/vector';
 import {
   resolveDataRoot,
   resolveKnowledgeScanDirs,
@@ -58,6 +64,11 @@ import {
 import { createMainDriftGitReader } from '../../recipe-pipeline/sustain/driftBaseline.js';
 import { InProcessFileChangeHandler } from '../../recipe-pipeline/sustain/evolution/InProcessFileChangeHandler.js';
 import { FileChangeDispatcher } from '../../service/FileChangeDispatcher.js';
+import {
+  FileRecipeVectorGenerationStorage,
+  GenerationRoutingVectorStore,
+  RecipeVectorGenerationRuntime,
+} from '../../service/vector/RecipeVectorGenerationRuntime.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 import { getCoreRepositoryBundle } from './InfraModule.js';
 
@@ -133,58 +144,57 @@ export function register(c: ServiceContainer) {
     { aiDependent: true }
   );
 
-  c.singleton('vectorStore', (ct: ServiceContainer) => {
+  c.singleton('baseVectorStore', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
     const wz = ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;
     const config =
       ((ct.singletons._config as Record<string, unknown> | undefined)?.vector as
         | Record<string, unknown>
         | undefined) || {};
-    const adapter = (config.adapter as string) || 'auto';
+    return createConfiguredVectorStore(dataRoot as string, config, wz, ct);
+  });
 
-    // 根据配置选择适配器
-    if (adapter === 'json') {
-      const store = new JsonVectorAdapter(dataRoot as string, { writeZone: wz });
-      store.initSync();
-      return store;
-    }
+  c.singleton('recipeVectorGenerationStorage', (ct: ServiceContainer) => {
+    const dataRoot = resolveDataRoot(ct) as string;
+    const wz = ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;
+    const config =
+      ((ct.singletons._config as Record<string, unknown> | undefined)?.vector as
+        | Record<string, unknown>
+        | undefined) || {};
+    return new FileRecipeVectorGenerationStorage({
+      baseStore: ct.get('baseVectorStore'),
+      dataRoot,
+      createStore: (storeRoot) => createConfiguredVectorStore(storeRoot, config, wz, ct),
+    });
+  });
 
-    if (adapter === 'hnsw' || adapter === 'auto') {
-      try {
-        const hnsw = (config.hnsw as Record<string, unknown> | undefined) || {};
-        const persistence = (config.persistence as Record<string, unknown> | undefined) || {};
-        const store = new HnswVectorAdapter(dataRoot as string, {
-          M: hnsw.M as number | undefined,
-          efConstruct: hnsw.efConstruct as number | undefined,
-          efSearch: hnsw.efSearch as number | undefined,
-          quantize: config.quantize as string | undefined,
-          quantizeThreshold: config.quantizeThreshold as number | undefined,
-          flushIntervalMs: persistence.flushIntervalMs as number | undefined,
-          flushBatchSize: persistence.flushBatchSize as number | undefined,
-          writeZone: wz,
-        });
-        store.initSync();
-        return store;
-      } catch (err: unknown) {
-        // HNSW 初始化失败, 降级到 JSON — 记录警告便于排查
-        const logger = ct.singletons.logger || console;
-        (logger as { warn?: (...args: unknown[]) => void }).warn?.(
-          '[vectorStore] HNSW init failed, falling back to JsonVectorAdapter',
-          {
-            error: (err as Error).message,
-            adapter,
-          }
-        );
-        const store = new JsonVectorAdapter(dataRoot as string, { writeZone: wz });
-        store.initSync();
-        return store;
-      }
-    }
+  c.singleton('recipeVectorGenerationManager', (ct: ServiceContainer) => {
+    const storage = ct.get('recipeVectorGenerationStorage');
+    return new RecipeVectorGenerationManager(storage, storage);
+  });
 
-    // 未知适配器, 默认 JSON
-    const store = new JsonVectorAdapter(dataRoot as string, { writeZone: wz });
-    store.initSync();
-    return store;
+  c.singleton(
+    'recipeVectorGenerationRuntime',
+    (ct: ServiceContainer) => {
+      const aiProvider = ct.singletons.aiProvider || null;
+      const embedProvider = ct.singletons._embedProvider || aiProvider;
+      return new RecipeVectorGenerationRuntime({
+        embedProvider: embedProvider as ConstructorParameters<
+          typeof RecipeVectorGenerationRuntime
+        >[0]['embedProvider'],
+        generationManager: ct.get('recipeVectorGenerationManager'),
+        knowledgeService: ct.get('knowledgeService'),
+        storage: ct.get('recipeVectorGenerationStorage'),
+      });
+    },
+    { aiDependent: true }
+  );
+
+  c.singleton('vectorStore', (ct: ServiceContainer) => {
+    return new GenerationRoutingVectorStore(
+      ct.get('baseVectorStore'),
+      ct.get('recipeVectorGenerationStorage')
+    );
   });
 
   c.singleton(
@@ -391,6 +401,49 @@ export function register(c: ServiceContainer) {
     dispatcher.register(handler);
     return dispatcher;
   });
+}
+
+function createConfiguredVectorStore(
+  dataRoot: string,
+  config: Record<string, unknown>,
+  writeZone: import('@alembic/core/io').WriteZone | undefined,
+  container: ServiceContainer
+): VectorStore {
+  const adapter = (config.adapter as string) || 'auto';
+  if (adapter === 'json') {
+    const store = new JsonVectorAdapter(dataRoot, { writeZone });
+    store.initSync();
+    return store;
+  }
+
+  if (adapter === 'hnsw' || adapter === 'auto') {
+    try {
+      const hnsw = (config.hnsw as Record<string, unknown> | undefined) || {};
+      const persistence = (config.persistence as Record<string, unknown> | undefined) || {};
+      const store = new HnswVectorAdapter(dataRoot, {
+        M: hnsw.M as number | undefined,
+        efConstruct: hnsw.efConstruct as number | undefined,
+        efSearch: hnsw.efSearch as number | undefined,
+        quantize: config.quantize as string | undefined,
+        quantizeThreshold: config.quantizeThreshold as number | undefined,
+        flushIntervalMs: persistence.flushIntervalMs as number | undefined,
+        flushBatchSize: persistence.flushBatchSize as number | undefined,
+        writeZone,
+      });
+      store.initSync();
+      return store;
+    } catch (err: unknown) {
+      const logger = container.singletons.logger || console;
+      (logger as { warn?: (...args: unknown[]) => void }).warn?.(
+        '[vectorStore] HNSW init failed, falling back to JsonVectorAdapter',
+        { adapter, error: (err as Error).message }
+      );
+    }
+  }
+
+  const store = new JsonVectorAdapter(dataRoot, { writeZone });
+  store.initSync();
+  return store;
 }
 
 /**

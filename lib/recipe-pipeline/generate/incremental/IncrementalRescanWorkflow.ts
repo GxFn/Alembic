@@ -85,6 +85,10 @@ import {
 } from '../execution/AiDimensionDispatcher.js';
 import { runAiDimensionPipelineForResult } from '../execution/AiDimensionPipeline.js';
 import {
+  maintainRecipeVectorGeneration,
+  registerRecipeVectorGenerationOnGenerateCompletion,
+} from '../execution/consumers/RecipeVectorGenerationConsumer.js';
+import {
   type GenerateWorkflowMcpContext,
   registerGenerateWorkflowImplementation,
   runGenerateWorkflow,
@@ -694,6 +698,13 @@ export async function runIncrementalRescanWorkflow(
       workflow: 'rescan',
       workflowSessionId: workflowSession.id,
     });
+    registerRecipeVectorGenerationOnGenerateCompletion({
+      bootstrapSessionId: generateSession.id,
+      container: ctx.container,
+      createdFrom: 'incremental',
+      logger: ctx.logger,
+      logPrefix: 'KnowledgeRescanWorkflow',
+    });
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -875,6 +886,15 @@ export async function runIncrementalRescanWorkflow(
       .catch(() => {}); // fire-and-forget
   } catch {
     /* skillHooks not available */
+  }
+
+  if (!willRunInternalRescanFill) {
+    await maintainRecipeVectorGeneration({
+      container: ctx.container,
+      createdFrom: 'incremental',
+      logger: ctx.logger,
+      logPrefix: 'KnowledgeRescanWorkflow',
+    });
   }
 
   return presentProjectContextRescanResponse({

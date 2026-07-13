@@ -10,7 +10,6 @@ import {
   BatchDeleteBody,
   BatchDeprecateBody,
   BatchPublishBody,
-  CreateKnowledgeBody,
   DeprecateKnowledgeBody,
   KnowledgeUsageBody,
   UpdateKnowledgeBody,
@@ -257,19 +256,18 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/knowledge
- * 创建知识条目（wire format 直通）
+ * 旧版直接创建入口已退役。
+ * Recipe 创建必须经 Agent/Plugin/Core RecipeProductionGateway，保留此端点只为返回稳定迁移错误。
  */
-router.post('/', validate(CreateKnowledgeBody), async (req: Request, res: Response) => {
-  const data = req.body;
-
-  const container = getServiceContainer();
-  const knowledgeService = container.get('knowledgeService');
-  const context = getContext(req);
-
-  const entry = await knowledgeService.create(data, context);
-  res.status(201).json({
-    success: true,
-    data: sanitizeForAPI(entry),
+router.post('/', (_req: Request, res: Response) => {
+  res.status(410).json({
+    success: false,
+    error: {
+      code: 'RECIPE_CREATE_RETIRED',
+      message:
+        'Direct Recipe creation is retired. Use an Agent/Plugin production surface backed by RecipeProductionGateway.',
+      alternatives: ['cold-start', 'incremental-rescan', 'module-scan', 'knowledge-submit'],
+    },
   });
 });
 
@@ -316,15 +314,15 @@ router.patch('/:id/publish', async (req: Request, res: Response) => {
   }
   const id = String(req.params.id);
   const container = getServiceContainer();
-  const knowledgeService = container.get('knowledgeService');
+  const recipeProductionGateway = container.get('recipeProductionGateway');
   const context = getContext(req);
 
-  const entry = await knowledgeService.publish(id, context);
+  const entry = await recipeProductionGateway.publish(id, context);
   const searchFreshness = await refreshKnowledgeSearchSurface(container, 'knowledge publish');
   res.json({
     success: true,
     data: {
-      ...(sanitizeForAPI(entry) as Record<string, unknown>),
+      ...(sanitizeForAPI(entry as unknown as Record<string, unknown>) as Record<string, unknown>),
       publication: {
         route: 'admin/controller',
         confirmed: true,
@@ -439,11 +437,11 @@ router.post('/batch-publish', validate(BatchPublishBody), async (req: Request, r
   const { ids } = req.body;
 
   const container = getServiceContainer();
-  const knowledgeService = container.get('knowledgeService');
+  const recipeProductionGateway = container.get('recipeProductionGateway');
   const context = getContext(req);
 
   const results = await Promise.allSettled(
-    ids.map((id: string) => ioLimit(() => knowledgeService.publish(id, context)))
+    ids.map((id: string) => ioLimit(() => recipeProductionGateway.publish(id, context)))
   );
 
   const published = results

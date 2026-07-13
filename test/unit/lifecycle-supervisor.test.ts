@@ -336,7 +336,15 @@ describe('LifecycleStateMachine', () => {
         mockRepo as never,
         mockLifecycleEventRepo as never,
         signalBus as never,
-        mockProposalRepo as never
+        mockProposalRepo as never,
+        () => ({
+          ready: true,
+          schemaVersion: 'recipe-retrieval-readiness-v1',
+          profileHash: 'profile-hash',
+          documentSetHash: 'document-set-hash',
+          violations: [],
+          warnings: [],
+        })
       );
 
       const result = await supervisor.checkTimeouts();

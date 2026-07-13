@@ -43,6 +43,17 @@ function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
   };
 }
 
+function readinessReady() {
+  return {
+    ready: true,
+    schemaVersion: 'recipe-retrieval-readiness-v1',
+    profileHash: 'profile-hash',
+    documentSetHash: 'document-set-hash',
+    violations: [],
+    warnings: [],
+  };
+}
+
 // ─────────────────────────────────────────────────
 //  §1 Registry
 // ─────────────────────────────────────────────────
@@ -183,13 +194,16 @@ describe('V2 Router', () => {
       },
       makeCtx({
         recipeGateway: {
-          create: async () => ({
+          createOrStage: async () => ({
             created: [],
             rejected: [],
             duplicates: [],
             merged: [],
             blocked: [],
+            supersedeProposal: null,
+            production: { capability: 'knowledge-submit', source: 'alembic-agent' },
           }),
+          evaluateReadiness: async () => readinessReady(),
         },
       })
     );
@@ -233,16 +247,27 @@ describe('V2 Router', () => {
       },
       makeCtx({
         recipeGateway: {
-          create: async (request: unknown) => {
+          createOrStage: async (request: unknown) => {
             createRequest = request;
             return {
-              created: [{ id: 'recipe-1', title: 'Network Error Pattern' }],
+              created: [
+                {
+                  id: 'recipe-1',
+                  title: 'Network Error Pattern',
+                  lifecycle: 'pending',
+                  raw: {},
+                  index: 0,
+                },
+              ],
               rejected: [],
               duplicates: [],
               merged: [],
               blocked: [],
+              supersedeProposal: null,
+              production: { capability: 'knowledge-submit', source: 'alembic-agent' },
             };
           },
+          evaluateReadiness: async () => readinessReady(),
         },
       })
     );

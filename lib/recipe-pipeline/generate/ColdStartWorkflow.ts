@@ -68,6 +68,10 @@ import {
   dispatchAiDimensionRuns,
   startAiDimensionSession,
 } from './execution/AiDimensionDispatcher.js';
+import {
+  maintainRecipeVectorGeneration,
+  registerRecipeVectorGenerationOnGenerateCompletion,
+} from './execution/consumers/RecipeVectorGenerationConsumer.js';
 import { registerSourceRefSyncOnGenerateCompletion } from './execution/consumers/SourceRefSyncConsumer.js';
 import {
   type GenerateWorkflowMcpContext,
@@ -266,6 +270,13 @@ async function runColdStartProjectIndexWorkflow(
       logger: ctx.logger,
       logPrefix: 'Bootstrap',
     });
+    registerRecipeVectorGenerationOnGenerateCompletion({
+      bootstrapSessionId: generateSession?.id,
+      container: ctx.container,
+      createdFrom: 'full-build',
+      logger: ctx.logger,
+      logPrefix: 'Bootstrap',
+    });
   }
 
   // ── 异步后台填充（fire-and-forget）──
@@ -291,6 +302,12 @@ async function runColdStartProjectIndexWorkflow(
     });
   } else {
     ctx.logger.info(`[Generate] Async fill skipped (skipAsyncFill=true)`);
+    await maintainRecipeVectorGeneration({
+      container: ctx.container,
+      createdFrom: 'full-build',
+      logger: ctx.logger,
+      logPrefix: 'Bootstrap',
+    });
   }
 
   // ── SkillHooks: onBootstrapStarted (fire-and-forget) ──

@@ -27,7 +27,6 @@ import {
 import {
   BatchPublishBody,
   CreateGuardRuleBody,
-  CreateKnowledgeBody,
   ResidentSearchBody,
   SearchQuery,
   UpdateKnowledgeBody,
@@ -178,44 +177,6 @@ describe('Integration: Zod Schemas — common.ts', () => {
 });
 
 describe('Integration: Zod Schemas — http-requests.ts', () => {
-  describe('CreateKnowledgeBody', () => {
-    test('should accept minimal valid input', () => {
-      const result = CreateKnowledgeBody.parse({
-        title: 'My Pattern',
-        content: 'Some content',
-      });
-      expect(result.title).toBe('My Pattern');
-    });
-
-    test('should accept object content', () => {
-      const result = CreateKnowledgeBody.parse({
-        title: 'Test',
-        content: { pattern: 'x', markdown: 'y' },
-      });
-      expect(result.content).toEqual({ pattern: 'x', markdown: 'y' });
-    });
-
-    test('keeps caller metadata but strips unnamed public extras', () => {
-      const result = CreateKnowledgeBody.parse({
-        title: 'Test',
-        content: 'Some content',
-        metadata: { owner: 'client' },
-        accidentalBackendField: 'not-public',
-      });
-      const record = result as Record<string, unknown>;
-      expect(record.metadata).toEqual({ owner: 'client' });
-      expect(record.accidentalBackendField).toBeUndefined();
-    });
-
-    test('should reject empty title', () => {
-      expect(() => CreateKnowledgeBody.parse({ title: '', content: 'x' })).toThrow();
-    });
-
-    test('should reject empty string content', () => {
-      expect(() => CreateKnowledgeBody.parse({ title: 'x', content: '' })).toThrow();
-    });
-  });
-
   describe('UpdateKnowledgeBody', () => {
     test('should accept partial updates', () => {
       const result = UpdateKnowledgeBody.parse({ title: 'New Title' });

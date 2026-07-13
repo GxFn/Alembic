@@ -433,6 +433,38 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
   // POST /candidates/enrich (I22) deleted in the Train B DCR wave (P0 all-delete
   // verdict, zero external consumers).
   route('I22', 'post', '/modules/scan', 'scanModules', 'Module scan command', ['Knowledge']),
+  route(
+    'I22',
+    'get',
+    '/commands/recipe-index-generation',
+    'getRecipeIndexGeneration',
+    'Recipe vector generation status',
+    ['Knowledge', 'Commands']
+  ),
+  route(
+    'I22',
+    'post',
+    '/commands/recipe-index-generation/dry-run',
+    'previewRecipeIndexGeneration',
+    'Preview Recipe vector generation without writes',
+    ['Knowledge', 'Commands']
+  ),
+  route(
+    'I22',
+    'post',
+    '/commands/recipe-index-generation/rebuild',
+    'rebuildRecipeIndexGeneration',
+    'Build, verify, and atomically activate a Recipe vector generation',
+    ['Knowledge', 'Commands']
+  ),
+  route(
+    'I22',
+    'post',
+    '/commands/recipe-index-generation/rollback',
+    'rollbackRecipeIndexGeneration',
+    'Roll back active Recipe vector generation',
+    ['Knowledge', 'Commands']
+  ),
   route('I22', 'get', '/panorama', 'getPanoramaOverview', 'Panorama overview route family', [
     'Knowledge',
     'Panorama',

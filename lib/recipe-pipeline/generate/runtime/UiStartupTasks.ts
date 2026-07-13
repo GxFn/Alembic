@@ -28,6 +28,7 @@ export interface UiStartupReport {
   reconcile?: { inserted: number; active: number; stale: number };
   staging?: { promoted: number };
   vectorReconcile?: { orphans: number; missing: number };
+  recipeGeneration?: { status: string; activeGenerationId: string | null };
   indexRefresh?: boolean;
   proposalCheck?: { executed: number; rejected: number; expired: number };
   signalSubscription?: boolean;
@@ -113,28 +114,40 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
   // 永远 undefined，Stage 3 从未运行——改走 Core 新公开的 reconcileIndex()。
   try {
     if (ctx.container.services.vectorService) {
-      const vectorService = ctx.container.get('vectorService') as {
-        reconcileIndex?: () => Promise<{
-          orphansRemoved: number;
-          missingSynced: number;
-          errors: string[];
-        } | null>;
-      };
-      if (typeof vectorService.reconcileIndex === 'function') {
-        const result = await vectorService.reconcileIndex();
-        if (result) {
-          report.vectorReconcile = {
-            orphans: result.orphansRemoved,
-            missing: result.missingSynced,
-          };
-          logger.info(
-            '[UiStartupTasks] Stage 3: vector reconcile complete',
-            report.vectorReconcile
-          );
-        } else {
-          logger.info(
-            '[UiStartupTasks] Stage 3: vector reconcile skipped (coordinator unavailable)'
-          );
+      const generationStorage = ctx.container.services.recipeVectorGenerationStorage
+        ? (ctx.container.get('recipeVectorGenerationStorage') as {
+            readActive(): Promise<{ generationId: string } | null>;
+          })
+        : null;
+      const activeGeneration = generationStorage ? await generationStorage.readActive() : null;
+      if (generationStorage && !activeGeneration) {
+        logger.info(
+          '[UiStartupTasks] Stage 3: vector reconcile skipped until explicit Recipe generation migration'
+        );
+      } else {
+        const vectorService = ctx.container.get('vectorService') as {
+          reconcileIndex?: () => Promise<{
+            orphansRemoved: number;
+            missingSynced: number;
+            errors: string[];
+          } | null>;
+        };
+        if (typeof vectorService.reconcileIndex === 'function') {
+          const result = await vectorService.reconcileIndex();
+          if (result) {
+            report.vectorReconcile = {
+              orphans: result.orphansRemoved,
+              missing: result.missingSynced,
+            };
+            logger.info(
+              '[UiStartupTasks] Stage 3: vector reconcile complete',
+              report.vectorReconcile
+            );
+          } else {
+            logger.info(
+              '[UiStartupTasks] Stage 3: vector reconcile skipped (coordinator unavailable)'
+            );
+          }
         }
       }
     }
@@ -144,68 +157,28 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
     logger.warn(`[UiStartupTasks] ${msg}`);
   }
 
-  // ── Stage 3.5: Recipe semantic-region 向量同步（resident 语义检索的主道数据） ──
-  // 2026-07-06 修复：resident/prime 语义检索按 type=recipe-semantic-region 过滤，只认
-  // region 向量；region 此前仅由插件建库流程生成（MCP 侧 embed 缺席时 skipped），daemon
-  // 生态没有任何再生/对账机制——entry 向量补齐后语义道仍全灭的根因。此阶段在启动时
-  // 全量同步 region 向量（分批防单次 embed 数组过大；removeStale 逐批只删本批 recipe
-  // 的过时 region，安全幂等）。
+  // ── Stage 3.5: Recipe generation maintenance ──
+  // 首次迁移前仅计算 plan；已有 active generation 时才执行 shadow→verify→CAS。
   try {
-    if (ctx.container.services.vectorService && ctx.container.services.knowledgeService) {
-      const vectorService = ctx.container.get('vectorService') as {
-        syncRecipeSemanticRegions?: (
-          entries: Array<Record<string, unknown>>,
-          opts?: Record<string, unknown>
-        ) => Promise<{
+    if (ctx.container.services.recipeVectorGenerationRuntime) {
+      const runtime = ctx.container.get('recipeVectorGenerationRuntime') as {
+        maintain(source: 'full-build'): Promise<{
           status: string;
-          generated: number;
-          upserted: number;
-          removed: number;
-          errors: string[];
-          degradedReason?: string;
+          active?: { generationId: string } | null;
         }>;
       };
-      const knowledgeService = ctx.container.get('knowledgeService') as {
-        list(
-          filter: Record<string, unknown>,
-          pagination: { page: number; pageSize: number }
-        ): Promise<{ data?: Array<{ toJSON(): unknown }> }>;
+      const result = await runtime.maintain('full-build');
+      report.recipeGeneration = {
+        status: result.status,
+        activeGenerationId: result.active?.generationId ?? null,
       };
-      if (typeof vectorService.syncRecipeSemanticRegions === 'function') {
-        const listed = await knowledgeService.list({}, { page: 1, pageSize: 500 });
-        const entries = (listed?.data ?? []).map(
-          (entry) => entry.toJSON() as Record<string, unknown>
-        );
-        if (entries.length > 0) {
-          const BATCH = 40;
-          let upserted = 0;
-          let removed = 0;
-          let degraded: string | null = null;
-          for (let i = 0; i < entries.length; i += BATCH) {
-            const result = await vectorService.syncRecipeSemanticRegions(
-              entries.slice(i, i + BATCH)
-            );
-            upserted += result.upserted;
-            removed += result.removed;
-            if (result.status !== 'completed') {
-              degraded = result.degradedReason || result.errors[0] || result.status;
-              break;
-            }
-          }
-          if (degraded) {
-            logger.warn('[UiStartupTasks] Stage 3.5: region vector sync degraded', { degraded });
-          } else {
-            logger.info('[UiStartupTasks] Stage 3.5: region vector sync complete', {
-              entries: entries.length,
-              upserted,
-              removed,
-            });
-          }
-        }
-      }
+      logger.info(
+        '[UiStartupTasks] Stage 3.5: Recipe generation maintenance complete',
+        report.recipeGeneration
+      );
     }
   } catch (err: unknown) {
-    const msg = `region vector sync failed: ${(err as Error).message}`;
+    const msg = `Recipe generation maintenance failed: ${(err as Error).message}`;
     report.errors.push(msg);
     logger.warn(`[UiStartupTasks] ${msg}`);
   }

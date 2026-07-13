@@ -3,7 +3,12 @@ import { invokeRouter } from '../helpers/express.js';
 
 const mocks = vi.hoisted(() => ({
   knowledgeService: {
+    create: vi.fn(),
     delete: vi.fn(),
+    publish: vi.fn(),
+  },
+  recipeProductionGateway: {
+    createOrStage: vi.fn(),
     publish: vi.fn(),
   },
   searchEngine: {
@@ -46,6 +51,14 @@ describe('knowledge route entrypoint safety boundary', () => {
         return { id: 'k-1', title: 'Knowledge One', lifecycle: 'active' };
       },
     });
+    mocks.recipeProductionGateway.publish.mockResolvedValue({
+      id: 'k-1',
+      title: 'Knowledge One',
+      lifecycle: 'active',
+      toJSON() {
+        return { id: 'k-1', title: 'Knowledge One', lifecycle: 'active' };
+      },
+    });
     mocks.searchEngine.refreshIndex.mockResolvedValue(undefined);
     mocks.vectorService.syncCoordinator.reconcile.mockResolvedValue({
       missingQueued: 1,
@@ -55,6 +68,9 @@ describe('knowledge route entrypoint safety boundary', () => {
       if (name === 'knowledgeService') {
         return mocks.knowledgeService;
       }
+      if (name === 'recipeProductionGateway') {
+        return mocks.recipeProductionGateway;
+      }
       if (name === 'searchEngine') {
         return mocks.searchEngine;
       }
@@ -63,6 +79,28 @@ describe('knowledge route entrypoint safety boundary', () => {
       }
       throw new Error(`Unexpected service requested: ${name}`);
     });
+  });
+
+  test('retires direct knowledge creation as a typed zero-write endpoint', async () => {
+    const response = await invokeRouter(knowledgeRouter, {
+      body: {
+        title: 'Legacy direct create',
+        content: { pattern: 'This payload must never reach a write service.' },
+      },
+      method: 'POST',
+      mountPath: '/api/v1/knowledge',
+      path: '/api/v1/knowledge',
+    });
+
+    expect(response.status).toBe(410);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: {
+        code: 'RECIPE_CREATE_RETIRED',
+      },
+    });
+    expect(mocks.knowledgeService.create).not.toHaveBeenCalled();
+    expect(mocks.recipeProductionGateway.createOrStage).not.toHaveBeenCalled();
   });
 
   test('rejects destructive knowledge delete before service call when confirmation is missing', async () => {
@@ -92,7 +130,7 @@ describe('knowledge route entrypoint safety boundary', () => {
     expect(response.body.error).toMatchObject({
       code: 'OPERATION_CONFIRMATION_REQUIRED',
     });
-    expect(mocks.knowledgeService.publish).not.toHaveBeenCalled();
+    expect(mocks.recipeProductionGateway.publish).not.toHaveBeenCalled();
     expect(mocks.searchEngine.refreshIndex).not.toHaveBeenCalled();
   });
 
@@ -104,7 +142,7 @@ describe('knowledge route entrypoint safety boundary', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mocks.knowledgeService.publish).toHaveBeenCalledWith('k-1', {
+    expect(mocks.recipeProductionGateway.publish).toHaveBeenCalledWith('k-1', {
       ip: '',
       userAgent: '',
       userId: 'http-request',
@@ -123,6 +161,21 @@ describe('knowledge route entrypoint safety boundary', () => {
     });
   });
 
+  test('propagates Core retrieval-readiness rejection without falling back to KnowledgeService', async () => {
+    mocks.recipeProductionGateway.publish.mockRejectedValueOnce(
+      new Error('RETRIEVAL_READINESS_BLOCKED')
+    );
+
+    await expect(
+      invokeRouter(knowledgeRouter, {
+        method: 'PATCH',
+        mountPath: '/api/v1/knowledge',
+        path: '/api/v1/knowledge/k-1/publish?confirmed=true',
+      })
+    ).rejects.toThrow('RETRIEVAL_READINESS_BLOCKED');
+    expect(mocks.knowledgeService.publish).not.toHaveBeenCalled();
+  });
+
   test('batch publish keeps confirmation gate and reports one freshness refresh', async () => {
     const response = await invokeRouter(knowledgeRouter, {
       body: { ids: ['k-1', 'k-2'], confirmed: true },
@@ -132,7 +185,7 @@ describe('knowledge route entrypoint safety boundary', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mocks.knowledgeService.publish).toHaveBeenCalledTimes(2);
+    expect(mocks.recipeProductionGateway.publish).toHaveBeenCalledTimes(2);
     expect(mocks.searchEngine.refreshIndex).toHaveBeenCalledTimes(1);
     expect(response.body.data).toMatchObject({
       successCount: 2,

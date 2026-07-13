@@ -63,6 +63,15 @@ describe('Alembic provider contracts', () => {
     });
   });
 
+  test('does not advertise the retired direct Recipe create surface', () => {
+    expect(
+      ALEMBIC_PROVIDER_ROUTE_CONTRACTS.find(
+        (route) => route.method === 'post' && route.path === '/knowledge'
+      )
+    ).toBeUndefined();
+    expect(JSON.stringify(buildAlembicProviderOpenApiSpec())).not.toContain('createKnowledge');
+  });
+
   test('declares resident search provider routes and scopes degraded search as canonical telemetry', () => {
     expect(ALEMBIC_PROVIDER_ROUTE_CONTRACTS).toEqual(
       expect.arrayContaining([
