@@ -77,7 +77,7 @@ describe('AiScanService Recipe production boundary', () => {
     expect(container.get).not.toHaveBeenCalledWith('knowledgeService');
   });
 
-  test('dry-run disables Agent tools and previews without any write-capable service lookup', async () => {
+  test('dry-run disables Agent tools and rejects unpersisted provider output', async () => {
     state.run.mockImplementation(async (input) => {
       expect(input.execution?.toolChoiceOverride).toBe('none');
       expect(input.execution?.onToolCall).toBeTypeOf('function');
@@ -97,7 +97,7 @@ describe('AiScanService Recipe production boundary', () => {
 
     const report = await service.scan('App', { dryRun: true });
 
-    expect(report).toMatchObject({ created: 0, files: 1, previewed: 1 });
+    expect(report).toMatchObject({ created: 0, files: 1, previewed: 0 });
     expect(report.entries).toEqual([]);
     expect(container.get).not.toHaveBeenCalledWith('knowledgeService');
   });
