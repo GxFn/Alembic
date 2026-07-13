@@ -73,7 +73,6 @@ describe('module scan existing Recipe ID closure', () => {
       ],
     });
     expect((data.recipes as Record<string, unknown>[])[0]).not.toHaveProperty('quality');
-    expect(harness.qualityScore).not.toHaveBeenCalled();
     expect(harness.create).not.toHaveBeenCalled();
     expect(harness.publish).not.toHaveBeenCalled();
   });
@@ -213,6 +212,7 @@ describe('module scan existing Recipe ID closure', () => {
       expect.objectContaining({
         code: 'MODULE_SCAN_BATCH_TIMEOUT',
         batch: 'project-batch-2',
+        operationMayContinue: true,
       }),
     ]);
     expect(harness.create).not.toHaveBeenCalled();
@@ -223,14 +223,12 @@ describe('module scan existing Recipe ID closure', () => {
 function createHarness(projectRoot: string, run: ReturnType<typeof vi.fn>) {
   const create = vi.fn();
   const publish = vi.fn();
-  const qualityScore = vi.fn(() => ({ score: 99, grade: 'A' }));
   const moduleService = new ModuleService(projectRoot, {
     agentService: { run } as unknown as AgentService,
     systemRunContextFactory: {
       createSystemContext: () => ({ scopeId: 'module-scan-test', systemRunContext: {} }),
     } as unknown as SystemRunContextFactory,
     aiStatus: () => ({ ready: true, reason: null, providerName: 'test', model: 'test' }),
-    qualityScorer: { score: qualityScore },
   });
   const knowledgeService = { create, publish };
   const container = {
@@ -247,7 +245,7 @@ function createHarness(projectRoot: string, run: ReturnType<typeof vi.fn>) {
     singletons: {},
   };
   state.container = container;
-  return { container, create, moduleService, publish, qualityScore };
+  return { container, create, moduleService, publish };
 }
 
 async function scanProjectOverHttp(options: Record<string, unknown>) {

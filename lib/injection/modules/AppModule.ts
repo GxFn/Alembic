@@ -58,7 +58,6 @@ export function register(c: ServiceContainer) {
         // AD4 constructed injection: status projector instead of handing the
         // container into the service area (former layer-contract exception).
         aiStatus: () => getAiRuntimeStatus(ct),
-        qualityScorer: ct.get('qualityScorer'),
         recipeExtractor: ct.singletons._recipeExtractor || null,
         guardCheckEngine: ct.get('guardCheckEngine'),
         violationsStore: ct.get('violationsStore'),

@@ -5,6 +5,7 @@ import Logger from '@alembic/core/logging';
 // AI-status helpers now arrive via createDashboardOperationHandlers deps.
 import type { AiRuntimeStatus } from '../../injection/AiRuntimeStatus.js';
 import type { ServiceContainer } from '../../injection/ServiceContainer.js';
+import type { ModuleScanProjectResult } from '../../service/module/ModuleService.js';
 
 export type DashboardOperationHandler = (request: ToolExecutionRequest) => Promise<unknown>;
 
@@ -196,7 +197,7 @@ async function scanProject(request: ToolExecutionRequest) {
   const container = getContainer(request);
   const moduleService = container.get('moduleService') as {
     load(): Promise<void>;
-    scanProject(options: Record<string, unknown>): Promise<unknown>;
+    scanProject(options: Record<string, unknown>): Promise<ModuleScanProjectResult>;
   };
   await moduleService.load();
   logger.info('Full project scan started via dashboard router');

@@ -42,6 +42,76 @@ const AI_STATUS_NOT_CONFIGURED: AiRuntimeStatus = Object.freeze({
   model: null,
 });
 
+const PERSISTED_RECIPE_PROJECTION_AUTHORITY = 'persisted-knowledge-submit-results-only' as const;
+
+export interface ModuleScanRecipe extends Record<string, unknown> {
+  id: string;
+  candidateId: string;
+  status: 'created';
+  lifecycle: 'pending' | 'staging';
+}
+
+export interface ModuleScanError {
+  code:
+    | 'MODULE_SCAN_AGENT_ERROR'
+    | 'MODULE_SCAN_BATCH_ERROR'
+    | 'MODULE_SCAN_BATCH_TIMEOUT'
+    | 'MODULE_SCAN_TOTAL_TIMEOUT';
+  message: string;
+  batch?: string;
+  operationMayContinue?: boolean;
+}
+
+export interface ModuleScanBatchOutcome {
+  batch: string;
+  fileCount: number;
+  recipeCount: number;
+  persistenceOutcome: string;
+  diagnostics: Record<string, unknown> | null;
+  error: ModuleScanError | null;
+}
+
+export interface ModuleScanProjectResult {
+  targets: string[];
+  recipes: ModuleScanRecipe[];
+  guardAudit: Record<string, unknown> | null;
+  scannedFiles: Record<string, unknown>[];
+  partial: boolean;
+  errors: ModuleScanError[];
+  outcome: {
+    status: 'completed' | 'empty' | 'failed' | 'partial' | 'skipped';
+    recipeCount: number;
+    projectionAuthority: typeof PERSISTED_RECIPE_PROJECTION_AUTHORITY;
+    batches: ModuleScanBatchOutcome[];
+    reason?: string;
+  };
+  message?: string;
+}
+
+interface ScanBatchProjection {
+  recipes: ModuleScanRecipe[];
+  diagnostics: Record<string, unknown> | null;
+  rejectedRecipeCount: number;
+  error: ModuleScanError | null;
+}
+
+interface ProjectScanFile extends Record<string, unknown> {
+  name: string;
+  path: string;
+  relativePath: string;
+  content: string;
+  targetName?: string;
+}
+
+interface ProjectScanExtractionResult {
+  recipes: ModuleScanRecipe[];
+  batches: ModuleScanBatchOutcome[];
+  errors: ModuleScanError[];
+  timedOut: boolean;
+}
+
+class ModuleScanBatchTimeoutError extends Error {}
+
 /** 全局排除目录 */
 const SCAN_EXCLUDE_DIRS = new Set([
   'node_modules',
@@ -111,7 +181,6 @@ export class ModuleService {
   #agentService;
   #systemRunContextFactory;
   #aiStatus;
-  #qualityScorer;
   #recipeExtractor;
   #guardCheckEngine;
   #violationsStore;
@@ -123,7 +192,6 @@ export class ModuleService {
       systemRunContextFactory?: SystemRunContextFactory | null;
       /** Constructed injection (AD4): AI runtime status provider; absent = not-configured. */
       aiStatus?: (() => AiRuntimeStatus) | null;
-      qualityScorer?: Record<string, unknown> | null;
       recipeExtractor?: Record<string, unknown> | null;
       guardCheckEngine?: Record<string, unknown> | null;
       violationsStore?: Record<string, unknown> | null;
@@ -134,7 +202,6 @@ export class ModuleService {
     this.#agentService = options.agentService || null;
     this.#systemRunContextFactory = options.systemRunContextFactory || null;
     this.#aiStatus = options.aiStatus || null;
-    this.#qualityScorer = options.qualityScorer || null;
     this.#recipeExtractor = options.recipeExtractor || null;
     this.#guardCheckEngine = options.guardCheckEngine || null;
     this.#violationsStore = options.violationsStore || null;
@@ -335,22 +402,20 @@ export class ModuleService {
     }
 
     onProgress?.({ type: 'scan:ai-extracting', fileCount: files.length, targetName });
-    let recipes = await this.#aiExtractRecipes(targetName, files as Record<string, unknown>[]);
-
-    if (!Array.isArray(recipes)) {
-      recipes = [];
-    }
+    const extraction = await this.#aiExtractRecipes(targetName, files as Record<string, unknown>[]);
+    const recipes = extraction.recipes.map((recipe) => ({ ...recipe }));
 
     // 3.5 moduleName 注入
     for (const recipe of recipes) {
       recipe.moduleName = targetName;
     }
 
-    // 4. 工具增强
-    onProgress?.({ type: 'scan:enriching', recipeCount: recipes.length });
-    this.#enrichRecipes(recipes);
-
-    const result: Record<string, unknown> = { recipes, scannedFiles };
+    const result: Record<string, unknown> = {
+      recipes,
+      scannedFiles,
+      diagnostics: extraction.diagnostics,
+      error: extraction.error,
+    };
     if (recipes.length === 0) {
       result.message = `AI 提取完成，但未发现可复用的代码模式（${targetName}, ${files.length} 个文件）`;
     }
@@ -370,65 +435,15 @@ export class ModuleService {
       batchTimeout?: number;
       totalTimeout?: number;
     } = {}
-  ) {
+  ): Promise<ModuleScanProjectResult> {
     await this.#ensureLoaded();
     this.#logger.info('[ModuleService] scanProject: starting full-project scan');
 
-    // 1. 列出所有 target
     const allTargets = await this.listTargets();
-
-    // 2. 收集所有源文件（去重）
-    const seenPaths = new Set<string>();
-    const allFiles: Record<string, unknown>[] = [];
-    const MAX_FILES = options.maxFiles || 200;
-
-    if (allTargets && allTargets.length > 0) {
-      for (const t of allTargets) {
-        try {
-          const fileList = await this.getTargetFiles(t);
-          for (const f of fileList) {
-            const fp = (typeof f === 'string' ? f : f.path) as string;
-            if (seenPaths.has(fp)) {
-              continue;
-            }
-            seenPaths.add(fp);
-            try {
-              const content = readFileSync(fp, 'utf8');
-              allFiles.push({
-                name: _pathBasename(fp),
-                path: fp,
-                relativePath: (f as Record<string, unknown>).relativePath || _pathBasename(fp),
-                content,
-                targetName: t.name,
-              });
-            } catch {
-              /* unreadable */
-            }
-            if (allFiles.length >= MAX_FILES) {
-              break;
-            }
-          }
-        } catch (e: unknown) {
-          this.#logger.warn(
-            `[ModuleService] scanProject: skipping module ${t.name}: ${(e as Error).message}`
-          );
-        }
-        if (allFiles.length >= MAX_FILES) {
-          break;
-        }
-      }
-    }
-
-    // 如果没有 target 收集到文件，回退到目录扫描
-    if (allFiles.length === 0) {
-      this.#logger.info(
-        '[ModuleService] scanProject: No module targets, falling back to directory scan'
-      );
-      this.#walkProjectForFiles(allFiles, seenPaths, MAX_FILES);
-    }
+    const allFiles = await this.#collectProjectScanFiles(allTargets, options.maxFiles || 200);
 
     this.#logger.info(
-      `[ModuleService] scanProject: ${allFiles.length} unique files from ${allTargets?.length || 0} modules`
+      `[ModuleService] scanProject: ${allFiles.length} unique files from ${allTargets.length} modules`
     );
 
     if (allFiles.length === 0) {
@@ -437,6 +452,15 @@ export class ModuleService {
         recipes: [],
         guardAudit: null,
         scannedFiles: [],
+        partial: false,
+        errors: [],
+        outcome: {
+          status: 'empty',
+          recipeCount: 0,
+          projectionAuthority: PERSISTED_RECIPE_PROJECTION_AUTHORITY,
+          batches: [],
+          reason: 'no-readable-source-files',
+        },
         message: 'No readable source files',
       };
     }
@@ -447,96 +471,211 @@ export class ModuleService {
       targetName: f.targetName,
     }));
 
-    // 3. AI 提取 Recipes — 无真实 Provider 时跳过
-    const allRecipes: Record<string, unknown>[] = [];
-    const PER_BATCH_TIMEOUT = options.batchTimeout || 90000;
-    const startTime = Date.now();
-    const TOTAL_TIMEOUT = options.totalTimeout || 540000;
-    let timedOut = false;
     const scanAiStatus = this.#aiStatus?.() ?? AI_STATUS_NOT_CONFIGURED;
-
-    if (this.#agentService && this.#systemRunContextFactory && scanAiStatus.ready) {
-      const BATCH_SIZE = options.batchSize || 20;
-
-      for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
-        if (Date.now() - startTime > TOTAL_TIMEOUT) {
-          this.#logger.warn(
-            `[ModuleService] scanProject: total timeout reached after ${Math.floor((Date.now() - startTime) / 1000)}s`
-          );
-          timedOut = true;
-          break;
-        }
-        const batch = allFiles.slice(i, i + BATCH_SIZE);
-        const batchLabel = `project-batch-${Math.floor(i / BATCH_SIZE) + 1}`;
-        try {
-          const recipes = await Promise.race([
-            this.#aiExtractRecipes(batchLabel, batch),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('batch timeout')), PER_BATCH_TIMEOUT)
-            ),
-          ]);
-          if (Array.isArray(recipes)) {
-            allRecipes.push(...recipes);
-          }
-        } catch (err: unknown) {
-          this.#logger.warn(
-            `[ModuleService] scanProject batch ${batchLabel} failed: ${(err as Error).message}`
-          );
-        }
-      }
-
-      this.#enrichRecipes(allRecipes);
-    }
-
-    // 4. Guard 审计
-    let guardAudit: Record<string, unknown> | null = null;
-    if (this.#guardCheckEngine) {
-      try {
-        const guardFiles = allFiles.map((f) => ({
-          path: f.path as string,
-          content: f.content as string,
-        }));
-        const engine = this.#guardCheckEngine as {
-          auditFiles(
-            files: { path: string; content: string }[],
-            opts: Record<string, unknown>
-          ): Record<string, unknown>;
-        };
-        guardAudit = engine.auditFiles(guardFiles, { scope: 'project' });
-
-        if (this.#violationsStore && guardAudit && guardAudit.files) {
-          const auditFileResults = guardAudit.files as Array<{
-            filePath: string;
-            violations: unknown[];
-            summary: { errors: number; warnings: number };
-          }>;
-          const store = this.#violationsStore as { appendRun(data: Record<string, unknown>): void };
-          for (const fileResult of auditFileResults) {
-            if (fileResult.violations.length > 0) {
-              store.appendRun({
-                filePath: fileResult.filePath,
-                violations: fileResult.violations,
-                summary: `Project scan: ${fileResult.summary.errors} errors, ${fileResult.summary.warnings} warnings`,
-              });
-            }
-          }
-        }
-      } catch (e: unknown) {
-        this.#logger.warn(`[ModuleService] Guard audit failed: ${(e as Error).message}`);
-      }
-    }
-
-    this.#logger.info(
-      `[ModuleService] scanProject complete: ${allRecipes.length} recipes, ${(guardAudit?.summary as Record<string, unknown> | undefined)?.totalViolations || 0} violations${timedOut ? ' (partial — timed out)' : ''}`
+    const extraction = await this.#extractProjectScanRecipes(allFiles, scanAiStatus, options);
+    const guardAudit = this.#auditProjectScanFiles(allFiles);
+    const partial =
+      extraction.timedOut || (extraction.errors.length > 0 && extraction.recipes.length > 0);
+    const outcomeStatus = moduleScanOutcomeStatus(
+      extraction,
+      Boolean(this.#agentService && this.#systemRunContextFactory && scanAiStatus.ready)
     );
+    this.#logger.info('[ModuleService] scanProject complete', {
+      recipes: extraction.recipes.length,
+      violations:
+        (guardAudit?.summary as Record<string, unknown> | undefined)?.totalViolations || 0,
+      outcome: outcomeStatus,
+      partial,
+      errorCount: extraction.errors.length,
+      projectionAuthority: PERSISTED_RECIPE_PROJECTION_AUTHORITY,
+    });
 
     return {
       targets: allTargets.map((t) => t.name),
-      recipes: allRecipes,
+      recipes: extraction.recipes,
       guardAudit,
       scannedFiles,
-      partial: timedOut,
+      partial,
+      errors: extraction.errors,
+      outcome: {
+        status: outcomeStatus,
+        recipeCount: extraction.recipes.length,
+        projectionAuthority: PERSISTED_RECIPE_PROJECTION_AUTHORITY,
+        batches: extraction.batches,
+        ...(outcomeStatus === 'skipped' ? { reason: 'ai-unavailable' } : {}),
+      },
     };
+  }
+
+  async #collectProjectScanFiles(
+    targets: ProjectContextTargetEntry[],
+    maxFiles: number
+  ): Promise<ProjectScanFile[]> {
+    const seenPaths = new Set<string>();
+    const files: ProjectScanFile[] = [];
+    for (const target of targets) {
+      try {
+        const targetFiles = await this.getTargetFiles(target);
+        for (const file of targetFiles) {
+          const path = (typeof file === 'string' ? file : file.path) as string;
+          if (seenPaths.has(path)) {
+            continue;
+          }
+          seenPaths.add(path);
+          try {
+            files.push({
+              name: _pathBasename(path),
+              path,
+              relativePath:
+                (file as Record<string, unknown>).relativePath?.toString() || _pathBasename(path),
+              content: readFileSync(path, 'utf8'),
+              targetName: target.name,
+            });
+          } catch {
+            /* unreadable */
+          }
+          if (files.length >= maxFiles) {
+            return files;
+          }
+        }
+      } catch (error: unknown) {
+        this.#logger.warn(
+          `[ModuleService] scanProject: skipping module ${target.name}: ${(error as Error).message}`
+        );
+      }
+    }
+    if (files.length === 0) {
+      this.#logger.info(
+        '[ModuleService] scanProject: No module targets, falling back to directory scan'
+      );
+      this.#walkProjectForFiles(files, seenPaths, maxFiles);
+    }
+    return files;
+  }
+
+  async #extractProjectScanRecipes(
+    files: ProjectScanFile[],
+    aiStatus: AiRuntimeStatus,
+    options: { batchSize?: number; batchTimeout?: number; totalTimeout?: number }
+  ): Promise<ProjectScanExtractionResult> {
+    const result: ProjectScanExtractionResult = {
+      recipes: [],
+      batches: [],
+      errors: [],
+      timedOut: false,
+    };
+    if (!this.#agentService || !this.#systemRunContextFactory || !aiStatus.ready) {
+      return result;
+    }
+    const batchSize = options.batchSize || 20;
+    const batchTimeout = options.batchTimeout || 90000;
+    const totalTimeout = options.totalTimeout || 540000;
+    const startTime = Date.now();
+    for (let index = 0; index < files.length; index += batchSize) {
+      if (Date.now() - startTime > totalTimeout) {
+        const message = `total timeout reached after ${Math.floor((Date.now() - startTime) / 1000)}s`;
+        this.#logger.warn(`[ModuleService] scanProject: ${message}`);
+        result.errors.push({ code: 'MODULE_SCAN_TOTAL_TIMEOUT', message });
+        result.timedOut = true;
+        break;
+      }
+      await this.#extractProjectScanBatch(
+        files.slice(index, index + batchSize),
+        `project-batch-${Math.floor(index / batchSize) + 1}`,
+        batchTimeout,
+        result
+      );
+    }
+    return result;
+  }
+
+  async #extractProjectScanBatch(
+    batch: ProjectScanFile[],
+    batchLabel: string,
+    timeout: number,
+    result: ProjectScanExtractionResult
+  ): Promise<void> {
+    try {
+      const projection = await withModuleScanTimeout(
+        this.#aiExtractRecipes(batchLabel, batch),
+        timeout,
+        batchLabel
+      );
+      result.recipes.push(...projection.recipes);
+      const projectionError = projection.error ? { ...projection.error, batch: batchLabel } : null;
+      if (projectionError) {
+        result.errors.push(projectionError);
+      }
+      result.batches.push({
+        batch: batchLabel,
+        fileCount: batch.length,
+        recipeCount: projection.recipes.length,
+        persistenceOutcome: persistenceOutcomeFor(projection),
+        diagnostics: projection.diagnostics,
+        error: projectionError,
+      });
+    } catch (error: unknown) {
+      const scanError = moduleScanBatchError(error, batchLabel);
+      result.errors.push(scanError);
+      result.batches.push({
+        batch: batchLabel,
+        fileCount: batch.length,
+        recipeCount: 0,
+        persistenceOutcome:
+          scanError.code === 'MODULE_SCAN_BATCH_TIMEOUT' ? 'batch-timeout' : 'batch-error',
+        diagnostics: null,
+        error: scanError,
+      });
+      this.#logger.warn(
+        `[ModuleService] scanProject batch ${batchLabel} failed: ${scanError.message}`,
+        { code: scanError.code, batch: batchLabel, fileCount: batch.length }
+      );
+      result.timedOut = result.timedOut || scanError.code === 'MODULE_SCAN_BATCH_TIMEOUT';
+    }
+  }
+
+  #auditProjectScanFiles(files: ProjectScanFile[]): Record<string, unknown> | null {
+    if (!this.#guardCheckEngine) {
+      return null;
+    }
+    try {
+      const engine = this.#guardCheckEngine as {
+        auditFiles(
+          files: { path: string; content: string }[],
+          opts: Record<string, unknown>
+        ): Record<string, unknown>;
+      };
+      const audit = engine.auditFiles(
+        files.map((file) => ({ path: file.path, content: file.content })),
+        { scope: 'project' }
+      );
+      this.#storeProjectScanViolations(audit);
+      return audit;
+    } catch (error: unknown) {
+      this.#logger.warn(`[ModuleService] Guard audit failed: ${(error as Error).message}`);
+      return null;
+    }
+  }
+
+  #storeProjectScanViolations(audit: Record<string, unknown>): void {
+    if (!this.#violationsStore || !audit.files) {
+      return;
+    }
+    const store = this.#violationsStore as { appendRun(data: Record<string, unknown>): void };
+    const fileResults = audit.files as Array<{
+      filePath: string;
+      violations: unknown[];
+      summary: { errors: number; warnings: number };
+    }>;
+    for (const fileResult of fileResults) {
+      if (fileResult.violations.length > 0) {
+        store.appendRun({
+          filePath: fileResult.filePath,
+          violations: fileResult.violations,
+          summary: `Project scan: ${fileResult.summary.errors} errors, ${fileResult.summary.warnings} warnings`,
+        });
+      }
+    }
   }
 
   /** 刷新模块映射（替代 updateDependencyMap） */
@@ -641,9 +780,17 @@ export class ModuleService {
    *
    * Agent(LLM) 直接分析代码 + 使用 AST 工具，输出 Recipe JSON。
    */
-  async #aiExtractRecipes(targetName: string, files: Record<string, unknown>[]) {
+  async #aiExtractRecipes(
+    targetName: string,
+    files: Record<string, unknown>[]
+  ): Promise<ScanBatchProjection> {
     if (!this.#agentService || !this.#systemRunContextFactory) {
-      return [];
+      return {
+        recipes: [],
+        diagnostics: null,
+        rejectedRecipeCount: 0,
+        error: null,
+      };
     }
 
     try {
@@ -658,49 +805,59 @@ export class ModuleService {
         })),
         task: 'extract',
       });
-      const recipes = (result.recipes || []) as Record<string, unknown>[];
+      const rawRecipes = Array.isArray(result.recipes) ? result.recipes : [];
+      // 上游 Agent 的 ScanRunProjection 是唯一 Recipe 身份权威；这里仅做 fail-closed
+      // 边界校验，不从 provider 文本补 ID、candidateId 或 lifecycle。
+      const recipes = rawRecipes.filter(isPersistedModuleScanRecipe);
+      const rejectedRecipeCount = rawRecipes.length - recipes.length;
+      const diagnostics = isRecord(result.diagnostics) ? result.diagnostics : null;
 
       if (recipes.length === 0) {
-        this.#logger.info(
-          `[ModuleService] Agent 未产出 recipe (${targetName}, ${files.length} files)`
-        );
+        this.#logger.info(`[ModuleService] Agent 未产出 persisted recipe`, {
+          targetName,
+          fileCount: files.length,
+          persistenceOutcome: diagnostics?.persistenceOutcome || 'unknown',
+          rejectedRecipeCount,
+        });
       } else {
-        this.#logger.info(`[ModuleService] Agent 提取 ${recipes.length} recipes (${targetName})`);
+        this.#logger.info('[ModuleService] Agent persisted Recipe projection accepted', {
+          targetName,
+          fileCount: files.length,
+          recipeCount: recipes.length,
+          rejectedRecipeCount,
+        });
       }
-      return recipes;
+      if (rejectedRecipeCount > 0) {
+        this.#logger.warn('[ModuleService] rejected malformed Agent Recipe projection', {
+          targetName,
+          rejectedRecipeCount,
+          requiredStatus: 'created',
+          allowedLifecycle: ['pending', 'staging'],
+        });
+      }
+      return { recipes, diagnostics, rejectedRecipeCount, error: null };
     } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       if (
-        (err as Record<string, unknown>).code === 'API_KEY_MISSING' ||
-        /API_KEY_MISSING|API.Key.未配置|unregistered callers/i.test((err as Error).message)
+        (isRecord(err) && err.code === 'API_KEY_MISSING') ||
+        /API_KEY_MISSING|API.Key.未配置|unregistered callers/i.test(message)
       ) {
-        this.#logger.info(`[ModuleService] AI 未启用（未配置 API Key），跳过 AI 提取。`);
+        this.#logger.info('[ModuleService] AI 未启用（未配置 API Key），跳过 AI 提取。', {
+          targetName,
+          error: message,
+        });
       } else {
-        this.#logger.warn(`[ModuleService] AI extraction failed: ${(err as Error).message}`);
+        this.#logger.warn('[ModuleService] AI extraction failed', {
+          targetName,
+          error: message,
+        });
       }
-      return [];
-    }
-  }
-
-  /** 质量评分 enrichment */
-  #enrichRecipes(recipes: Record<string, unknown>[]) {
-    for (const recipe of recipes) {
-      if (!recipe.quality && this.#qualityScorer) {
-        try {
-          const scorer = this.#qualityScorer as {
-            score(r: Record<string, unknown>): Record<string, unknown>;
-          };
-          const scoreResult = scorer.score(recipe);
-          recipe.quality = {
-            completeness: 0,
-            adaptation: 0,
-            documentation: 0,
-            overall: scoreResult.score ?? 0,
-            grade: scoreResult.grade || '',
-          };
-        } catch (e: unknown) {
-          this.#logger.debug(`[ModuleService] QualityScorer failed: ${(e as Error).message}`);
-        }
-      }
+      return {
+        recipes: [],
+        diagnostics: null,
+        rejectedRecipeCount: 0,
+        error: { code: 'MODULE_SCAN_AGENT_ERROR', message },
+      };
     }
   }
 
@@ -944,6 +1101,90 @@ export class ModuleService {
 
     if (allFiles.length === 0) {
       walkDir(this.#projectRoot, 'root');
+    }
+  }
+}
+
+function isPersistedModuleScanRecipe(value: unknown): value is ModuleScanRecipe {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const id = typeof value.id === 'string' ? value.id.trim() : '';
+  const candidateId = typeof value.candidateId === 'string' ? value.candidateId.trim() : '';
+  return (
+    value.status === 'created' &&
+    (value.lifecycle === 'pending' || value.lifecycle === 'staging') &&
+    id.length > 0 &&
+    candidateId.length > 0 &&
+    id === candidateId &&
+    value.id === id &&
+    value.candidateId === candidateId
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function persistenceOutcomeFor(projection: ScanBatchProjection): string {
+  if (projection.error) {
+    return 'agent-error';
+  }
+  if (projection.rejectedRecipeCount > 0 && projection.recipes.length === 0) {
+    return 'invalid-persisted-projection';
+  }
+  const outcome = projection.diagnostics?.persistenceOutcome;
+  if (typeof outcome === 'string' && outcome.trim()) {
+    return outcome;
+  }
+  return projection.recipes.length > 0 ? 'created' : 'unknown';
+}
+
+function moduleScanBatchError(error: unknown, batch: string): ModuleScanError {
+  const isTimeout = error instanceof ModuleScanBatchTimeoutError;
+  return {
+    code: isTimeout ? 'MODULE_SCAN_BATCH_TIMEOUT' : 'MODULE_SCAN_BATCH_ERROR',
+    message: error instanceof Error ? error.message : String(error),
+    batch,
+    ...(isTimeout ? { operationMayContinue: true } : {}),
+  };
+}
+
+function moduleScanOutcomeStatus(
+  extraction: ProjectScanExtractionResult,
+  aiAvailable: boolean
+): ModuleScanProjectResult['outcome']['status'] {
+  if (extraction.timedOut || (extraction.errors.length > 0 && extraction.recipes.length > 0)) {
+    return 'partial';
+  }
+  if (extraction.errors.length > 0) {
+    return 'failed';
+  }
+  if (extraction.recipes.length > 0) {
+    return 'completed';
+  }
+  return aiAvailable ? 'empty' : 'skipped';
+}
+
+async function withModuleScanTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  batch: string
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new ModuleScanBatchTimeoutError(`${batch} timed out after ${timeoutMs}ms`)),
+          timeoutMs
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
     }
   }
 }
