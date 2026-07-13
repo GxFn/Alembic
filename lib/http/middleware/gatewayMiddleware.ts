@@ -28,7 +28,7 @@ export function gatewayMiddleware() {
   return (req: Request, _res: Response, next: NextFunction) => {
     /**
      * Gateway 快捷执行方法
-     * @param action 操作标识 (如 'candidate:create')
+     * @param action 操作标识 (如 'guard_rule:create')
      * @param resource 资源类型 (如 'candidates')
      * @param data 请求数据
      * @returns >}

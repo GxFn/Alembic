@@ -49,6 +49,9 @@ export const UpdateKnowledgeBody = z
     category: z.string().optional(),
     metadata: MetadataRecord.optional(),
     tags: z.array(z.string()).optional(),
+    // HTTP 只确认 profile 是 object/null；schemaVersion 与嵌套结构由 Core update 在
+    // file/SQLite/audit/event 之前统一校验。z.record 保留尚未认识的扩展字段。
+    retrievalProfile: MetadataRecord.nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'At least one field must be provided for update',

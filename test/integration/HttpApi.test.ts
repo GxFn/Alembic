@@ -16,6 +16,9 @@
  *   ✓ 请求来源 header 兼容（x-user-id header）
  */
 
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { resolveDataRoot } from '@alembic/core/workspace';
 import AppRuntime from '../../lib/Bootstrap.js';
 import { HttpServer } from '../../lib/http/HttpServer.js';
 import { getServiceContainer } from '../../lib/injection/ServiceContainer.js';
@@ -25,8 +28,8 @@ const PORT = getTestPort();
 const BASE = `http://localhost:${PORT}/api/v1`;
 
 describe('Integration: HTTP API Endpoints', () => {
-  let appRuntime;
-  let httpServer;
+  let appRuntime: AppRuntime | undefined;
+  let httpServer: HttpServer | undefined;
 
   beforeAll(async () => {
     // 1. 初始化 Bootstrap（DB + Gateway + audit 等）
@@ -142,6 +145,106 @@ describe('Integration: HTTP API Endpoints', () => {
       const body = await res.json();
       expect(typeof body.success).toBe('boolean');
     });
+
+    test('PATCH retrievalProfile round-trips through Core, Markdown, SQLite and GET', async () => {
+      const container = getServiceContainer();
+      const knowledgeService = container.get('knowledgeService');
+      const created = await knowledgeService.create(
+        {
+          title: 'HTTP retrieval profile round-trip',
+          description: 'Original description remains unless a mixed patch changes it.',
+          trigger: 'http-retrieval-profile-roundtrip',
+          language: 'typescript',
+          category: 'testing',
+          knowledgeType: 'best-practice',
+          kind: 'pattern',
+          whenClause: 'When a reviewer edits retrieval facts over HTTP',
+          doClause: 'Persist the complete profile through the Core update contract',
+          dontClause: 'Do not create or publish a replacement Recipe',
+          content: { pattern: 'await patchExistingRecipeProfile();' },
+          retrievalProfile: retrievalProfile('original'),
+        },
+        { userId: 'http-test-seed' }
+      );
+      const lifecycleBefore = created.lifecycle;
+      const profileOnly = retrievalProfile('profile-only');
+
+      const profileOnlyResponse = await fetch(`${BASE}/knowledge/${created.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ retrievalProfile: profileOnly }),
+      });
+      const profileOnlyBody = await profileOnlyResponse.json();
+      expect(profileOnlyResponse.status, JSON.stringify(profileOnlyBody)).toBe(200);
+      expect(profileOnlyBody.data.retrievalProfile).toEqual(profileOnly);
+
+      const mixedProfile = retrievalProfile('mixed');
+      const mixedResponse = await fetch(`${BASE}/knowledge/${created.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: 'Description updated with the profile.',
+          retrievalProfile: mixedProfile,
+        }),
+      });
+      expect(mixedResponse.status).toBe(200);
+
+      const getResponse = await fetch(`${BASE}/knowledge/${created.id}`);
+      const getBody = await getResponse.json();
+      expect(getBody.data).toMatchObject({
+        description: 'Description updated with the profile.',
+        lifecycle: lifecycleBefore,
+        retrievalProfile: mixedProfile,
+      });
+
+      const database = container.get('database').getDb();
+      const sqliteRow = database
+        .prepare('SELECT retrievalProfile, lifecycle FROM knowledge_entries WHERE id = ?')
+        .get(created.id);
+      expect(JSON.parse(String(sqliteRow.retrievalProfile))).toEqual(mixedProfile);
+      expect(sqliteRow.lifecycle).toBe(lifecycleBefore);
+
+      const markdownPath = path.join(resolveDataRoot(container), String(created.sourceFile));
+      const markdownBeforeInvalid = await fs.readFile(markdownPath, 'utf8');
+      expect(markdownBeforeInvalid).toContain(`_retrievalProfile: ${JSON.stringify(mixedProfile)}`);
+      const sqliteBeforeInvalid = String(sqliteRow.retrievalProfile);
+      const auditCountBefore = database
+        .prepare('SELECT COUNT(*) AS count FROM audit_logs')
+        .get().count;
+      const eventBus = container.get('eventBus');
+      const invalidUpdateEvents: unknown[] = [];
+      const captureInvalidUpdate = (event: unknown) => invalidUpdateEvents.push(event);
+      eventBus.on('knowledge:changed', captureInvalidUpdate);
+
+      try {
+        const invalidResponse = await fetch(`${BASE}/knowledge/${created.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            retrievalProfile: { ...mixedProfile, schemaVersion: 'unsupported-v999' },
+          }),
+        });
+        const invalidBody = await invalidResponse.json();
+        expect(invalidResponse.status).toBe(400);
+        expect(invalidBody).toMatchObject({
+          success: false,
+          error: { code: 'VALIDATION_ERROR' },
+        });
+      } finally {
+        eventBus.off('knowledge:changed', captureInvalidUpdate);
+      }
+      expect(
+        database
+          .prepare('SELECT retrievalProfile FROM knowledge_entries WHERE id = ?')
+          .get(created.id).retrievalProfile
+      ).toBe(sqliteBeforeInvalid);
+      expect(await fs.readFile(markdownPath, 'utf8')).toBe(markdownBeforeInvalid);
+      expect(database.prepare('SELECT COUNT(*) AS count FROM audit_logs').get().count).toBe(
+        auditCountBefore
+      );
+      expect(invalidUpdateEvents).toEqual([]);
+      expect((await knowledgeService.get(created.id)).lifecycle).toBe(lifecycleBefore);
+    });
   });
 
   // ═══════════════════════════════════════════════════════
@@ -251,3 +354,45 @@ describe('Integration: HTTP API Endpoints', () => {
     });
   });
 });
+
+function retrievalProfile(label: string) {
+  return {
+    schemaVersion: '1',
+    primaryLanguage: 'zh-CN',
+    summary: {
+      primary: `检索摘要 ${label}`,
+      technicalEnglish: `Retrieval summary ${label}`,
+      futureSummaryField: `preserved-${label}`,
+    },
+    concepts: [
+      {
+        term: `profile-${label}`,
+        language: 'en',
+        provenanceRefs: ['field:content.pattern'],
+        futureConceptField: `preserved-${label}`,
+      },
+    ],
+    scenarios: [
+      {
+        text: 'When an existing Recipe retrieval profile is reviewed',
+        language: 'en',
+        provenanceRefs: ['field:whenClause'],
+      },
+    ],
+    exclusions: [
+      {
+        text: 'Do not auto-publish after profile editing',
+        language: 'en',
+        provenanceRefs: ['field:dontClause'],
+      },
+    ],
+    provenance: {
+      evidenceRefs: ['test/integration/HttpApi.test.ts'],
+      sourceFieldRefs: ['field:content.pattern', 'field:whenClause', 'field:dontClause'],
+      sourceContentHash: `source-hash-${label}`,
+      generator: 'http-api-integration-test',
+      futureProvenanceField: `preserved-${label}`,
+    },
+    futureProfileField: { label },
+  };
+}

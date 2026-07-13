@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import Logger from '@alembic/core/logging';
 import {
   asEmbeddingPort,
   buildRecipeVectorGenerationManifest,
@@ -14,6 +16,18 @@ import {
   removeRecipeVectorsByTruth,
   VectorStore,
 } from '@alembic/core/vector';
+
+const logger = Logger.getInstance();
+const ACTIVATION_LOCK_VERSION = 1;
+const DEAD_OWNER_GRACE_MS = 1_000;
+const UNKNOWN_LOCK_STALE_MS = 30_000;
+
+interface ActivationLockRecord {
+  version: typeof ACTIVATION_LOCK_VERSION;
+  ownerPid: number;
+  ownerToken: string;
+  acquiredAt: number;
+}
 
 type VectorItem = {
   id: string;
@@ -234,18 +248,25 @@ export class FileRecipeVectorGenerationStorage
     expectedPreviousGenerationId: string | null
   ): Promise<boolean> {
     await fs.mkdir(path.dirname(this.#activePath), { recursive: true });
+    const owner: ActivationLockRecord = {
+      version: ACTIVATION_LOCK_VERSION,
+      ownerPid: process.pid,
+      ownerToken: randomUUID(),
+      acquiredAt: Date.now(),
+    };
     let lock: Awaited<ReturnType<typeof fs.open>> | null = null;
     try {
-      try {
-        lock = await fs.open(this.#lockPath, 'wx');
-      } catch (error: unknown) {
-        if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-          return false;
-        }
-        throw error;
+      lock = await this.#acquireActivationLock(owner);
+      if (!lock) {
+        return false;
       }
       const current = await this.readActive();
       if ((current?.generationId ?? null) !== expectedPreviousGenerationId) {
+        logger.warn('Recipe vector generation activation CAS rejected', {
+          actualPreviousGenerationId: current?.generationId ?? null,
+          expectedPreviousGenerationId,
+          nextGenerationId: next.generationId,
+        });
         return false;
       }
       await writeJsonAtomic(this.#activePath, next);
@@ -253,7 +274,7 @@ export class FileRecipeVectorGenerationStorage
     } finally {
       await lock?.close();
       if (lock) {
-        await fs.rm(this.#lockPath, { force: true });
+        await this.#releaseActivationLock(owner);
       }
     }
   }
@@ -312,6 +333,121 @@ export class FileRecipeVectorGenerationStorage
     this.#stores.set(generationId, created);
     return created;
   }
+
+  async #acquireActivationLock(owner: ActivationLockRecord) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const lock = await fs.open(this.#lockPath, 'wx');
+        try {
+          await lock.writeFile(`${JSON.stringify(owner)}\n`, 'utf8');
+          await lock.sync();
+          return lock;
+        } catch (error: unknown) {
+          await lock.close();
+          await fs.rm(this.#lockPath, { force: true });
+          throw error;
+        }
+      } catch (error: unknown) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+          throw error;
+        }
+        if (!(await this.#reclaimStaleActivationLock())) {
+          return null;
+        }
+      }
+    }
+    return null;
+  }
+
+  async #reclaimStaleActivationLock(): Promise<boolean> {
+    let raw: string;
+    let stat: Awaited<ReturnType<typeof fs.stat>>;
+    try {
+      [raw, stat] = await Promise.all([
+        fs.readFile(this.#lockPath, 'utf8'),
+        fs.stat(this.#lockPath),
+      ]);
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return true;
+      }
+      throw error;
+    }
+
+    const record = parseActivationLock(raw);
+    const now = Date.now();
+    let staleReason: string | null = null;
+    if (record) {
+      const ageMs = Math.max(0, now - record.acquiredAt);
+      if (!isProcessAlive(record.ownerPid) && ageMs >= DEAD_OWNER_GRACE_MS) {
+        staleReason = 'owner-process-not-alive';
+      } else {
+        logger.warn('Recipe vector activation is held by a live foreign owner', {
+          ageMs,
+          ownerPid: record.ownerPid,
+        });
+        return false;
+      }
+    } else {
+      const ageMs = Math.max(0, now - stat.mtimeMs);
+      if (ageMs >= UNKNOWN_LOCK_STALE_MS) {
+        staleReason = 'legacy-or-malformed-lock-timed-out';
+      } else {
+        logger.warn(
+          'Recipe vector activation lock is unreadable but still within its grace period',
+          {
+            ageMs,
+          }
+        );
+        return false;
+      }
+    }
+
+    // 删除前再次比对 inode、内容和 mtime，避免把检查后刚换入的 foreign lock 当成 stale。
+    try {
+      const [latestRaw, latestStat] = await Promise.all([
+        fs.readFile(this.#lockPath, 'utf8'),
+        fs.stat(this.#lockPath),
+      ]);
+      if (latestRaw !== raw || latestStat.ino !== stat.ino || latestStat.mtimeMs !== stat.mtimeMs) {
+        logger.warn(
+          'Recipe vector activation lock changed during stale recovery; recovery aborted',
+          {
+            staleReason,
+          }
+        );
+        return false;
+      }
+      await fs.rm(this.#lockPath);
+      logger.warn('Recovered stale Recipe vector activation lock', {
+        ownerPid: record?.ownerPid ?? null,
+        staleReason,
+      });
+      return true;
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return true;
+      }
+      throw error;
+    }
+  }
+
+  async #releaseActivationLock(owner: ActivationLockRecord): Promise<void> {
+    try {
+      const current = parseActivationLock(await fs.readFile(this.#lockPath, 'utf8'));
+      if (current?.ownerToken !== owner.ownerToken) {
+        logger.warn('Recipe vector activation lock ownership changed; foreign lock was preserved', {
+          ownerPid: current?.ownerPid ?? null,
+        });
+        return;
+      }
+      await fs.rm(this.#lockPath);
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
 }
 
 /**
@@ -321,6 +457,7 @@ export class FileRecipeVectorGenerationStorage
 export class GenerationRoutingVectorStore extends VectorStore {
   readonly #base: VectorStore;
   readonly #storage: FileRecipeVectorGenerationStorage;
+  #invalidActiveSignature: string | null = null;
 
   constructor(base: VectorStore, storage: FileRecipeVectorGenerationStorage) {
     super();
@@ -344,7 +481,7 @@ export class GenerationRoutingVectorStore extends VectorStore {
       await this.#base.batchUpsert(baseItems);
     }
     if (recipeItems.length > 0) {
-      const active = await this.#activeStore();
+      const active = await this.#verifiedActiveStore();
       if (!active) {
         throw new Error('recipe-vector-generation-not-active');
       }
@@ -354,7 +491,7 @@ export class GenerationRoutingVectorStore extends VectorStore {
 
   async remove(id: string): Promise<void> {
     if (id.startsWith('recipe_region_')) {
-      const active = await this.#activeStore();
+      const active = await this.#verifiedActiveStore();
       if (active) {
         await active.remove(id);
       }
@@ -363,9 +500,12 @@ export class GenerationRoutingVectorStore extends VectorStore {
   }
 
   async getById(id: string): Promise<Record<string, unknown> | null> {
+    const active = await this.#verifiedActiveStore();
     if (id.startsWith('recipe_region_')) {
-      const active = await this.#activeStore();
       return (await active?.getById(id)) ?? null;
+    }
+    if (active && isRecipeVectorId(id)) {
+      return null;
     }
     return this.#base.getById(id);
   }
@@ -374,26 +514,30 @@ export class GenerationRoutingVectorStore extends VectorStore {
     queryVector: number[],
     options?: Record<string, unknown>
   ): Promise<VectorSearchResult[]> {
-    const active = await this.#activeStore();
-    const baseResults = (await this.#base.searchVector(queryVector, options)).filter(
-      (result) => !isRecipeSearchValue(result)
+    const active = await this.#verifiedActiveStore();
+    const baseResults = filterBaseResults(
+      await this.#base.searchVector(queryVector, options),
+      Boolean(active)
     );
     const activeResults = active ? await active.searchVector(queryVector, options) : [];
     return mergeRanked([...baseResults, ...activeResults], Number(options?.topK ?? 10));
   }
 
   async searchByFilter(filter: Record<string, unknown>): Promise<Record<string, unknown>[]> {
-    const active = await this.#activeStore();
-    const baseResults = (await this.#base.searchByFilter(filter)).filter(
-      (item) => !isRecipeSearchValue(item)
-    );
+    const active = await this.#verifiedActiveStore();
+    const baseResults = filterBaseResults(await this.#base.searchByFilter(filter), Boolean(active));
     const activeResults = active ? await active.searchByFilter(filter) : [];
     return uniqueItems([...baseResults, ...activeResults]);
   }
 
   async listIds(): Promise<string[]> {
-    const stores = await this.#readStores();
-    return [...new Set((await Promise.all(stores.map((store) => store.listIds()))).flat())];
+    const active = await this.#verifiedActiveStore();
+    const baseIds = await this.#base.listIds();
+    if (!active) {
+      return baseIds;
+    }
+    const genericBaseIds = baseIds.filter((id) => !isRecipeVectorId(id));
+    return [...new Set([...genericBaseIds, ...(await active.listIds())])];
   }
 
   async clear(): Promise<void> {
@@ -402,18 +546,23 @@ export class GenerationRoutingVectorStore extends VectorStore {
   }
 
   async getStats() {
-    const stores = await this.#readStores();
-    const stats = await Promise.all(stores.map((store) => store.getStats()));
+    const active = await this.#verifiedActiveStore();
+    const stores = active ? [this.#base, active] : [this.#base];
+    const [stats, visibleIds] = await Promise.all([
+      Promise.all(stores.map((store) => store.getStats())),
+      this.listIds(),
+    ]);
     return {
-      count: stats.reduce((sum, item) => sum + item.count, 0),
+      count: visibleIds.length,
       indexSize: stats.reduce((sum, item) => sum + item.indexSize, 0),
     };
   }
 
   async query(queryVector: number[], topK = 10) {
-    const active = await this.#activeStore();
-    const baseResults = (await queryStore(this.#base, queryVector, topK)).filter(
-      (item) => !isRecipeSearchValue(item)
+    const active = await this.#verifiedActiveStore();
+    const baseResults = filterBaseResults(
+      await queryStore(this.#base, queryVector, topK),
+      Boolean(active)
     );
     const activeResults = active ? await queryStore(active, queryVector, topK) : [];
     return mergeGenericRanked([...baseResults, ...activeResults], topK);
@@ -424,10 +573,11 @@ export class GenerationRoutingVectorStore extends VectorStore {
     queryText: string,
     options: Record<string, unknown> = {}
   ) {
-    const active = await this.#activeStore();
-    const baseResults = (
-      await hybridSearchStore(this.#base, queryVector, queryText, options)
-    ).filter((item) => !isRecipeSearchValue(item));
+    const active = await this.#verifiedActiveStore();
+    const baseResults = filterBaseResults(
+      await hybridSearchStore(this.#base, queryVector, queryText, options),
+      Boolean(active)
+    );
     const activeResults = active
       ? await hybridSearchStore(active, queryVector, queryText, options)
       : [];
@@ -438,25 +588,60 @@ export class GenerationRoutingVectorStore extends VectorStore {
     this.#base.destroy();
   }
 
-  async #activeStore() {
+  async #verifiedActiveStore() {
     const active = await this.#storage.readActive();
-    return active ? this.#storage.open(active.generationId) : null;
-  }
-
-  async #readStores() {
-    const active = await this.#activeStore();
-    return active ? [this.#base, active] : [this.#base];
+    if (!active) {
+      this.#invalidActiveSignature = null;
+      return null;
+    }
+    const manifest = await this.#storage.readManifest(active.generationId);
+    if (manifest?.status !== 'ready' || manifest.manifestHash !== active.manifestHash) {
+      this.#logInvalidActive(active, manifest, 'manifest-not-verified');
+      return null;
+    }
+    try {
+      const store = await this.#storage.open(active.generationId);
+      this.#invalidActiveSignature = null;
+      return store;
+    } catch (error: unknown) {
+      this.#logInvalidActive(active, manifest, 'generation-store-unavailable', error);
+      return null;
+    }
   }
 
   async #writeStore(item: VectorItem) {
     if (!isRecipeVectorItem(item)) {
       return this.#base;
     }
-    const active = await this.#activeStore();
+    const active = await this.#verifiedActiveStore();
     if (!active) {
       throw new Error('recipe-vector-generation-not-active');
     }
     return active;
+  }
+
+  #logInvalidActive(
+    active: RecipeVectorGenerationRoute,
+    manifest: RecipeVectorGenerationManifest | null,
+    reason: string,
+    error?: unknown
+  ) {
+    const signature = `${active.generationId}:${active.manifestHash}:${manifest?.status ?? 'missing'}:${manifest?.manifestHash ?? 'missing'}:${reason}`;
+    if (this.#invalidActiveSignature === signature) {
+      return;
+    }
+    this.#invalidActiveSignature = signature;
+    logger.warn(
+      'Recipe vector active generation is not verified; legacy base reads remain enabled',
+      {
+        generationId: active.generationId,
+        pointerManifestHash: active.manifestHash,
+        manifestHash: manifest?.manifestHash ?? null,
+        manifestStatus: manifest?.status ?? 'missing',
+        reason,
+        error: error instanceof Error ? error.message : error ? String(error) : undefined,
+      }
+    );
   }
 }
 
@@ -489,6 +674,36 @@ function safeGenerationId(generationId: string) {
   return generationId;
 }
 
+function parseActivationLock(raw: string): ActivationLockRecord | null {
+  try {
+    const value = JSON.parse(raw) as Partial<ActivationLockRecord>;
+    if (
+      value.version !== ACTIVATION_LOCK_VERSION ||
+      !Number.isInteger(value.ownerPid) ||
+      Number(value.ownerPid) <= 0 ||
+      typeof value.ownerToken !== 'string' ||
+      value.ownerToken.length === 0 ||
+      typeof value.acquiredAt !== 'number' ||
+      !Number.isFinite(value.acquiredAt)
+    ) {
+      return null;
+    }
+    return value as ActivationLockRecord;
+  } catch {
+    return null;
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error: unknown) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === 'EPERM';
+  }
+}
+
 function isRecipeVectorItem(item: VectorItem) {
   return item.id.startsWith('recipe_region_') || item.metadata?.type === 'recipe-semantic-region';
 }
@@ -511,6 +726,14 @@ function isRecipeSearchValue(value: unknown) {
     String(item.id ?? '').startsWith('recipe_region_') ||
     metadata.type === 'recipe-semantic-region'
   );
+}
+
+function isRecipeVectorId(id: string) {
+  return id.startsWith('entry_') || id.startsWith('recipe_region_');
+}
+
+function filterBaseResults<T>(items: T[], hasVerifiedActive: boolean): T[] {
+  return hasVerifiedActive ? items.filter((item) => !isRecipeSearchValue(item)) : items;
 }
 
 async function queryStore(store: VectorStore, queryVector: number[], topK: number) {

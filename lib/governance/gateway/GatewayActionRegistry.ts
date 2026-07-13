@@ -21,16 +21,9 @@ interface GatewayServiceContainer {
 export function registerGatewayActions(gateway: Gateway, container: GatewayServiceContainer) {
   // ========== Knowledge Actions (V3: replaces Candidate + Recipe) ==========
 
-  gateway.register('candidate:create', async (ctx: GatewayContext) => {
-    const service = container.get('knowledgeService');
-    return service.create(ctx.data, {
-      userId: ctx.actor,
-    });
-  });
-
   gateway.register('candidate:approve', async (ctx: GatewayContext) => {
-    const service = container.get('knowledgeService');
-    return service.approve(ctx.data.candidateId, {
+    const service = container.get('recipeProductionGateway');
+    return service.publish(ctx.data.candidateId, {
       userId: ctx.actor,
     });
   });
@@ -43,7 +36,7 @@ export function registerGatewayActions(gateway: Gateway, container: GatewayServi
   });
 
   gateway.register('candidate:apply_to_recipe', async (ctx: GatewayContext) => {
-    const service = container.get('knowledgeService');
+    const service = container.get('recipeProductionGateway');
     return service.publish(ctx.data.candidateId, { userId: ctx.actor });
   });
 
@@ -72,17 +65,10 @@ export function registerGatewayActions(gateway: Gateway, container: GatewayServi
     return service.delete(ctx.data.candidateId, { userId: ctx.actor });
   });
 
-  // ========== Recipe Actions (V3: routed to knowledgeService) ==========
-
-  gateway.register('recipe:create', async (ctx: GatewayContext) => {
-    const service = container.get('knowledgeService');
-    return service.create(ctx.data, {
-      userId: ctx.actor,
-    });
-  });
+  // ========== Recipe Actions (V3: review/lifecycle surfaces) ==========
 
   gateway.register('recipe:publish', async (ctx: GatewayContext) => {
-    const service = container.get('knowledgeService');
+    const service = container.get('recipeProductionGateway');
     return service.publish(ctx.data.recipeId, {
       userId: ctx.actor,
     });

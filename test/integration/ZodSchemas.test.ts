@@ -183,6 +183,14 @@ describe('Integration: Zod Schemas — http-requests.ts', () => {
       expect(result.title).toBe('New Title');
     });
 
+    test('should accept profile-only updates without stripping extension fields', () => {
+      const retrievalProfile = {
+        schemaVersion: '1',
+        futureProfileField: { review: 'keep' },
+      };
+      expect(UpdateKnowledgeBody.parse({ retrievalProfile })).toEqual({ retrievalProfile });
+    });
+
     test('should reject empty object', () => {
       expect(() => UpdateKnowledgeBody.parse({})).toThrow();
     });
