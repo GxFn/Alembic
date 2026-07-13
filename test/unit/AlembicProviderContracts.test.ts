@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   CORE_D25_REQUIRED_FAILURE_KINDS,
@@ -72,6 +72,51 @@ describe('Alembic provider contracts', () => {
     expect(JSON.stringify(buildAlembicProviderOpenApiSpec())).not.toContain('createKnowledge');
   });
 
+  test('publishes a closed retrieval readiness report contract for Dashboard review', () => {
+    const route = ALEMBIC_PROVIDER_ROUTE_CONTRACTS.find(
+      (candidate) => candidate.operationId === 'getKnowledgeRetrievalReadiness'
+    );
+
+    expect(route).toMatchObject({
+      method: 'get',
+      path: '/knowledge/{knowledgeId}/retrieval-readiness',
+      registryRowId: 'I22',
+    });
+    expect(route?.fixtureIds).toEqual(
+      expect.arrayContaining([
+        'knowledge-readiness.native',
+        'knowledge-readiness.compatibility',
+        'knowledge-readiness.blocked',
+        'knowledge-readiness.not-found',
+      ])
+    );
+
+    const successSchema = route?.responseSchemas[200] as Record<string, unknown>;
+    const envelopeProperties = successSchema?.properties as Record<string, unknown>;
+    const reportSchema = envelopeProperties?.data as Record<string, unknown>;
+    expect(reportSchema).toMatchObject({
+      type: 'object',
+      additionalProperties: false,
+      required: [
+        'ready',
+        'schemaVersion',
+        'profileHash',
+        'documentSetHash',
+        'violations',
+        'warnings',
+      ],
+    });
+    expect(Object.keys(reportSchema.properties as Record<string, unknown>)).toEqual([
+      'ready',
+      'schemaVersion',
+      'profileHash',
+      'documentSetHash',
+      'violations',
+      'warnings',
+    ]);
+    expect(route?.responseSchemas[404]).toBeDefined();
+  });
+
   test('declares resident search provider routes and scopes degraded search as canonical telemetry', () => {
     expect(ALEMBIC_PROVIDER_ROUTE_CONTRACTS).toEqual(
       expect.arrayContaining([
@@ -123,8 +168,8 @@ describe('Alembic provider contracts', () => {
     expect(JSON.stringify(searchFixtures)).not.toContain('legacyDecisionRegisterItems');
   });
 
-  test('keeps HttpServer mounted API routes aligned with the provider mount manifest', () => {
-    const source = readFileSync(path.join(process.cwd(), 'lib/http/HttpServer.ts'), 'utf8');
+  test('keeps HttpServer mounted API routes aligned with the provider mount manifest', async () => {
+    const source = await readFile(path.join(process.cwd(), 'lib/http/HttpServer.ts'), 'utf8');
     const mounted = extractMountedProviderPaths(source);
     const expected = ALEMBIC_PROVIDER_ROUTE_MOUNTS.map((mount) => mount.fullPath).sort();
     expect(mounted).toEqual(expected);

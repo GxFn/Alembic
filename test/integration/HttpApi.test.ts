@@ -16,8 +16,10 @@
  *   ✓ 请求来源 header 兼容（x-user-id header）
  */
 
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { computeRecipeSourceContentHash } from '@alembic/core';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import AppRuntime from '../../lib/Bootstrap.js';
 import { HttpServer } from '../../lib/http/HttpServer.js';
@@ -126,7 +128,7 @@ describe('Integration: HTTP API Endpoints', () => {
       expect(body.success).toBe(false);
     });
 
-    test('POST /knowledge — valid body reaches create entrypoint', async () => {
+    test('POST /knowledge — retired create surface stays typed and zero-write', async () => {
       const res = await fetch(`${BASE}/knowledge`, {
         method: 'POST',
         headers: {
@@ -141,9 +143,138 @@ describe('Integration: HTTP API Endpoints', () => {
         }),
       });
 
-      expect(res.status).toBeLessThan(600);
+      expect(res.status).toBe(410);
       const body = await res.json();
-      expect(typeof body.success).toBe('boolean');
+      expect(body).toMatchObject({
+        success: false,
+        error: { code: 'RECIPE_CREATE_RETIRED' },
+      });
+    });
+
+    test('GET retrieval readiness returns native/compatibility reports and changes no truth or index state', async () => {
+      const container = getServiceContainer();
+      const knowledgeService = container.get('knowledgeService');
+      const nativeSource = retrievalReadySource('native');
+      const native = await knowledgeService.create(
+        { ...nativeSource, retrievalProfile: retrievalReadyProfile(nativeSource) },
+        { userId: 'http-readiness-seed' }
+      );
+      const compatibility = await knowledgeService.create(retrievalReadySource('compatibility'), {
+        userId: 'http-readiness-seed',
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      const database = container.get('database').getDb();
+      const dataRoot = resolveDataRoot(container);
+      const markdownPaths = [native, compatibility].map((entry) =>
+        path.join(dataRoot, String(entry.sourceFile))
+      );
+      const markdownBefore = await Promise.all(markdownPaths.map((file) => fs.readFile(file)));
+      const sqliteBefore = [native.id, compatibility.id].map((id) =>
+        database.prepare('SELECT * FROM knowledge_entries WHERE id = ?').get(id)
+      );
+      const auditCountBefore = database
+        .prepare('SELECT COUNT(*) AS count FROM audit_logs')
+        .get().count;
+      const lifecycleCountBefore = database
+        .prepare('SELECT COUNT(*) AS count FROM lifecycle_transition_events')
+        .get().count;
+      const vectorGenerationBefore = await snapshotVectorGenerationState(dataRoot);
+      const emittedEvents: unknown[] = [];
+      const captureEvent = (event: unknown) => emittedEvents.push(event);
+      const eventBus = container.get('eventBus');
+      eventBus.on('knowledge:changed', captureEvent);
+      eventBus.on('lifecycle:transition', captureEvent);
+
+      let nativeResponse: Response;
+      let compatibilityResponse: Response;
+      let missingResponse: Response;
+      try {
+        [nativeResponse, compatibilityResponse, missingResponse] = await Promise.all([
+          fetch(`${BASE}/knowledge/${native.id}/retrieval-readiness`),
+          fetch(`${BASE}/knowledge/${compatibility.id}/retrieval-readiness`),
+          fetch(`${BASE}/knowledge/missing-readiness-id/retrieval-readiness`),
+        ]);
+      } finally {
+        eventBus.off('knowledge:changed', captureEvent);
+        eventBus.off('lifecycle:transition', captureEvent);
+      }
+
+      const nativeBody = await nativeResponse.json();
+      const compatibilityBody = await compatibilityResponse.json();
+      const missingBody = await missingResponse.json();
+      expect(nativeResponse.status, JSON.stringify(nativeBody)).toBe(200);
+      expect(nativeBody.data).toMatchObject({
+        ready: true,
+        schemaVersion: '1',
+        profileHash: expect.any(String),
+        documentSetHash: expect.any(String),
+        violations: [],
+        warnings: expect.any(Array),
+      });
+      expect(Object.keys(nativeBody.data).sort()).toEqual(
+        [
+          'ready',
+          'schemaVersion',
+          'profileHash',
+          'documentSetHash',
+          'violations',
+          'warnings',
+        ].sort()
+      );
+      expect(compatibilityResponse.status, JSON.stringify(compatibilityBody)).toBe(200);
+      expect(compatibilityBody.data).toMatchObject({
+        ready: false,
+        schemaVersion: '1',
+        profileHash: null,
+        documentSetHash: null,
+        violations: expect.arrayContaining([
+          expect.objectContaining({ code: 'retrieval.profile.missing' }),
+        ]),
+        warnings: expect.any(Array),
+      });
+      expect(Object.keys(compatibilityBody.data).sort()).toEqual(
+        [
+          'ready',
+          'schemaVersion',
+          'profileHash',
+          'documentSetHash',
+          'violations',
+          'warnings',
+        ].sort()
+      );
+      expect(missingResponse.status).toBe(404);
+      expect(missingBody).toMatchObject({ success: false, error: { code: 'NOT_FOUND' } });
+
+      expect(
+        [native.id, compatibility.id].map((id) =>
+          database.prepare('SELECT * FROM knowledge_entries WHERE id = ?').get(id)
+        )
+      ).toEqual(sqliteBefore);
+      expect(await Promise.all(markdownPaths.map((file) => fs.readFile(file)))).toEqual(
+        markdownBefore
+      );
+      expect(database.prepare('SELECT COUNT(*) AS count FROM audit_logs').get().count).toBe(
+        auditCountBefore
+      );
+      expect(
+        database.prepare('SELECT COUNT(*) AS count FROM lifecycle_transition_events').get().count
+      ).toBe(lifecycleCountBefore);
+      expect(emittedEvents).toEqual([]);
+      expect(await snapshotVectorGenerationState(dataRoot)).toEqual(vectorGenerationBefore);
+
+      const blockedLifecycle = compatibility.lifecycle;
+      const publishResponse = await fetch(
+        `${BASE}/knowledge/${compatibility.id}/publish?confirmed=true`,
+        { method: 'PATCH' }
+      );
+      const publishBody = await publishResponse.json();
+      expect(publishResponse.status).toBe(400);
+      expect(publishBody).toMatchObject({
+        success: false,
+        error: { code: 'VALIDATION_ERROR' },
+      });
+      expect((await knowledgeService.get(compatibility.id)).lifecycle).toBe(blockedLifecycle);
     });
 
     test('PATCH retrievalProfile round-trips through Core, Markdown, SQLite and GET', async () => {
@@ -395,4 +526,121 @@ function retrievalProfile(label: string) {
     },
     futureProfileField: { label },
   };
+}
+
+function retrievalReadySource(label: string) {
+  return {
+    id: `http-readiness-${label}`,
+    title: `HTTP readiness ${label} Recipe`,
+    description: 'Dashboard reviewers inspect Core readiness before legal publication.',
+    trigger: `http-readiness-${label}`,
+    language: 'typescript',
+    category: 'architecture',
+    knowledgeType: 'best-practice',
+    kind: 'pattern',
+    whenClause: 'When a Dashboard reviewer needs deterministic pre-publish evidence.',
+    doClause: 'Read the shared Core readiness report without mutating Recipe truth.',
+    dontClause: 'Do not derive readiness from provider, vector, generation, or rank state.',
+    content: {
+      pattern: 'const report = await recipeProductionPort.evaluateReadiness(recipeId);',
+      markdown: 'The Alembic HTTP route exposes the shared Core readiness report read-only.',
+      rationale: 'One evaluator keeps review and publish decisions aligned.',
+    },
+    reasoning: {
+      whyStandard:
+        'The production port and publish path share the same KnowledgeService evaluator.',
+      sources: ['lib/http/routes/knowledge.ts:220-280'],
+    },
+    tags: ['retrieval-readiness', 'recipe-production'],
+  };
+}
+
+function retrievalReadyProfile(source: ReturnType<typeof retrievalReadySource>) {
+  return {
+    schemaVersion: '1',
+    primaryLanguage: 'en',
+    summary: {
+      primary: 'Review deterministic Recipe retrieval readiness before publication.',
+      technicalEnglish:
+        'Expose the shared Core readiness report without consulting provider or vector state.',
+    },
+    concepts: [
+      {
+        term: 'retrieval readiness',
+        language: 'en',
+        provenanceRefs: ['field:description', 'lib/http/routes/knowledge.ts:220-280'],
+      },
+    ],
+    scenarios: [
+      {
+        text: source.whenClause,
+        language: 'en',
+        provenanceRefs: ['field:whenClause'],
+      },
+    ],
+    exclusions: [
+      {
+        text: source.dontClause,
+        language: 'en',
+        provenanceRefs: ['field:dontClause'],
+      },
+    ],
+    provenance: {
+      evidenceRefs: ['lib/http/routes/knowledge.ts:220-280'],
+      sourceFieldRefs: [
+        'field:title',
+        'field:description',
+        'field:whenClause',
+        'field:doClause',
+        'field:dontClause',
+        'field:content.pattern',
+        'field:content.markdown',
+        'field:content.rationale',
+      ],
+      sourceContentHash: computeRecipeSourceContentHash(source),
+      generator: 'http-api-integration-test',
+    },
+  };
+}
+
+async function snapshotVectorGenerationState(dataRoot: string) {
+  const entries: Array<[string, string]> = [];
+  for (const relativePath of [
+    path.join('.asd', 'context', 'index'),
+    path.join('.asd', 'context', 'recipe-vector-active.json'),
+    path.join('.asd', 'context', 'recipe-vector-generations'),
+  ]) {
+    await appendFileTreeSnapshot(dataRoot, relativePath, entries);
+  }
+  return entries.sort(([left], [right]) => left.localeCompare(right));
+}
+
+async function appendFileTreeSnapshot(
+  dataRoot: string,
+  relativePath: string,
+  entries: Array<[string, string]>
+): Promise<void> {
+  const absolutePath = path.join(dataRoot, relativePath);
+  let stats: Awaited<ReturnType<typeof fs.lstat>>;
+  try {
+    stats = await fs.lstat(absolutePath);
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      entries.push([relativePath, 'missing']);
+      return;
+    }
+    throw error;
+  }
+  if (stats.isDirectory()) {
+    const children = await fs.readdir(absolutePath);
+    if (children.length === 0) {
+      entries.push([relativePath, 'directory:empty']);
+    }
+    for (const child of children.sort()) {
+      await appendFileTreeSnapshot(dataRoot, path.join(relativePath, child), entries);
+    }
+    return;
+  }
+  const content = await fs.readFile(absolutePath);
+  entries.push([relativePath, createHash('sha256').update(content).digest('hex')]);
 }

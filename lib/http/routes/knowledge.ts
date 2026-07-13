@@ -213,6 +213,18 @@ router.get('/staging-review-queue', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/v1/knowledge/:id/retrieval-readiness
+ * 返回与发布链同源的 Core RetrievalReadinessReport；该读面不补写 profile、向量或 generation。
+ */
+router.get('/:id/retrieval-readiness', async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const container = getServiceContainer();
+  const recipeProductionGateway = container.get('recipeProductionGateway');
+  const report = await recipeProductionGateway.evaluateReadiness(id);
+  res.json({ success: true, data: report });
+});
+
+/**
  * POST /api/v1/knowledge/quality/refresh-all
  * 批量重新计算所有条目的质量评分
  */

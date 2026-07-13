@@ -576,12 +576,12 @@ export const DASHBOARD_JOB_KINDS: readonly DashboardJobKind[] = [
 ];
 
 // ════════════════════════════════════════════════════════════════════
-// HTTP route contract table (35 routes, contract version 1)
+// HTTP route contract table (36 routes, contract version 1)
 // ════════════════════════════════════════════════════════════════════
 
 export const DASHBOARD_API_CONTRACT_VERSION = 1;
 
-export type DashboardApiSchemaId = 'schema-1' | 'schema-2';
+export type DashboardApiSchemaId = 'schema-1' | 'schema-2' | 'schema-3';
 
 export const DASHBOARD_API_RESPONSE_SCHEMAS: Readonly<Record<DashboardApiSchemaId, Record<string, unknown>>> = {
   "schema-1": {
@@ -940,6 +940,106 @@ export const DASHBOARD_API_RESPONSE_SCHEMAS: Readonly<Record<DashboardApiSchemaI
           },
           "taxonomyVersion": {
             "const": 1
+          }
+        }
+      }
+    }
+  },
+  "schema-3": {
+    "type": "object",
+    "required": [
+      "success",
+      "data"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "data": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ready",
+          "schemaVersion",
+          "profileHash",
+          "documentSetHash",
+          "violations",
+          "warnings"
+        ],
+        "properties": {
+          "ready": {
+            "type": "boolean"
+          },
+          "schemaVersion": {
+            "type": "string"
+          },
+          "profileHash": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "documentSetHash": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "violations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "code",
+                "message"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "field": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "provenanceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "code",
+                "message"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -1745,6 +1845,70 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
     ],
     "responseSchemas": {
       "200": "schema-1",
+      "206": "schema-2",
+      "400": "schema-2",
+      "404": "schema-2",
+      "424": "schema-2",
+      "500": "schema-2",
+      "501": "schema-2",
+      "502": "schema-2",
+      "503": "schema-2",
+      "504": "schema-2"
+    }
+  },
+  {
+    "artifactPolicy": "Workflow and resident search summaries inline; reports/snapshots by artifactRef and degraded resident search state by canonical degraded telemetry.",
+    "capabilityDiscovery": [
+      "/api/v1/knowledge",
+      "/api/v1/modules",
+      "/api/v1/candidates"
+    ],
+    "contractId": "I22.getKnowledgeRetrievalReadiness",
+    "errorKinds": [
+      "invalid-input",
+      "unavailable",
+      "timeout",
+      "not-found",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "exposureClasses": [
+      "public",
+      "consumer-needed",
+      "diagnostic"
+    ],
+    "fixtureIds": [
+      "knowledge-readiness.native",
+      "knowledge-readiness.compatibility",
+      "knowledge-readiness.blocked",
+      "knowledge-readiness.runtime-warnings",
+      "knowledge-readiness.not-found"
+    ],
+    "functionClass": "rest-query",
+    "method": "get",
+    "operationId": "getKnowledgeRetrievalReadiness",
+    "path": "/knowledge/{knowledgeId}/retrieval-readiness",
+    "registryRowId": "I22",
+    "summary": "Read-only Core Recipe retrieval readiness report",
+    "supportedScenarios": [
+      "success",
+      "unavailable-runtime",
+      "degraded",
+      "partial",
+      "capability-mismatch",
+      "provider-error",
+      "host-failure",
+      "internal-error"
+    ],
+    "tags": [
+      "Knowledge"
+    ],
+    "responseSchemas": {
+      "200": "schema-3",
       "206": "schema-2",
       "400": "schema-2",
       "404": "schema-2",

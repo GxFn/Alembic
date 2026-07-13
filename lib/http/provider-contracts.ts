@@ -220,6 +220,42 @@ function dataEnvelope(dataSchema: JsonSchema): JsonSchema {
   };
 }
 
+const retrievalReadinessDiagnosticSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['code', 'message'],
+  properties: {
+    code: { type: 'string' },
+    field: { type: 'string' },
+    message: { type: 'string' },
+    provenanceRefs: refArraySchema,
+  },
+} as const satisfies JsonSchema;
+
+const retrievalReadinessWarningSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['code', 'message'],
+  properties: {
+    code: { type: 'string' },
+    message: { type: 'string' },
+  },
+} as const satisfies JsonSchema;
+
+const retrievalReadinessReportSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['ready', 'schemaVersion', 'profileHash', 'documentSetHash', 'violations', 'warnings'],
+  properties: {
+    ready: { type: 'boolean' },
+    schemaVersion: { type: 'string' },
+    profileHash: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    documentSetHash: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    violations: { type: 'array', items: retrievalReadinessDiagnosticSchema },
+    warnings: { type: 'array', items: retrievalReadinessWarningSchema },
+  },
+} as const satisfies JsonSchema;
+
 function arrayDataEnvelope(itemSchema: JsonSchema): JsonSchema {
   return dataEnvelope({
     type: 'object',
@@ -425,6 +461,25 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
   route('I21', 'get', '/rules', 'listGuardRules', 'Guard rules route family', ['Guard']),
   route('I21', 'get', '/violations', 'listViolations', 'Violations route family', ['Guard']),
   route('I22', 'get', '/knowledge', 'listKnowledge', 'Knowledge route family', ['Knowledge']),
+  route(
+    'I22',
+    'get',
+    '/knowledge/{knowledgeId}/retrieval-readiness',
+    'getKnowledgeRetrievalReadiness',
+    'Read-only Core Recipe retrieval readiness report',
+    ['Knowledge'],
+    {
+      dataSchema: retrievalReadinessReportSchema,
+      fixtureIds: [
+        'knowledge-readiness.native',
+        'knowledge-readiness.compatibility',
+        'knowledge-readiness.blocked',
+        'knowledge-readiness.runtime-warnings',
+        'knowledge-readiness.not-found',
+      ],
+      functionClass: 'rest-query',
+    }
+  ),
   route('I22', 'get', '/search', 'searchKnowledge', 'Resident search query', ['Knowledge']),
   route('I22', 'post', '/search', 'searchKnowledgeWithHostIntent', 'Resident search command', [
     'Knowledge',
@@ -725,6 +780,103 @@ export const ALEMBIC_PROVIDER_FIXTURES = [
     success: true,
     data: { items: [{ id: 'knowledge-alpha', title: 'Boundary rule' }], total: 1 },
   }),
+  fixture('I22', 'I22.getKnowledgeRetrievalReadiness', 'knowledge-readiness.native', 'success', {
+    success: true,
+    data: {
+      ready: true,
+      schemaVersion: '1',
+      profileHash: 'profile-hash-native',
+      documentSetHash: 'document-set-hash-native',
+      violations: [],
+      warnings: [],
+    },
+  }),
+  fixture(
+    'I22',
+    'I22.getKnowledgeRetrievalReadiness',
+    'knowledge-readiness.compatibility',
+    'success',
+    {
+      success: true,
+      data: {
+        ready: false,
+        schemaVersion: '1',
+        profileHash: null,
+        documentSetHash: null,
+        violations: [
+          {
+            code: 'retrieval.profile.missing',
+            field: 'retrievalProfile',
+            message: 'A native retrieval profile is required before active publish.',
+          },
+        ],
+        warnings: [],
+      },
+    }
+  ),
+  fixture('I22', 'I22.getKnowledgeRetrievalReadiness', 'knowledge-readiness.blocked', 'success', {
+    success: true,
+    data: {
+      ready: false,
+      schemaVersion: '1',
+      profileHash: 'profile-hash-incomplete',
+      documentSetHash: 'document-set-hash-incomplete',
+      violations: [
+        {
+          code: 'retrieval.profile.primary-summary-missing',
+          field: 'retrievalProfile.summary.primary',
+          message: 'Primary-language retrieval summary is required.',
+        },
+      ],
+      warnings: [],
+    },
+  }),
+  fixture(
+    'I22',
+    'I22.getKnowledgeRetrievalReadiness',
+    'knowledge-readiness.runtime-warnings',
+    'success',
+    {
+      success: true,
+      data: {
+        ready: true,
+        schemaVersion: '1',
+        profileHash: 'profile-hash-native',
+        documentSetHash: 'document-set-hash-native',
+        violations: [],
+        warnings: [
+          {
+            code: 'retrieval.provider.unavailable',
+            message: 'Embedding provider is unavailable; truth readiness is unchanged.',
+          },
+          {
+            code: 'retrieval.vector-store.unavailable',
+            message: 'Vector storage is unavailable; truth readiness is unchanged.',
+          },
+          {
+            code: 'retrieval.index.pending',
+            message: 'Vector generation is pending; publish readiness is unchanged.',
+          },
+          {
+            code: 'retrieval.ranking.metrics-missing',
+            message: 'Ranking metrics are unavailable; truth readiness is unchanged.',
+          },
+        ],
+      },
+    }
+  ),
+  fixture(
+    'I22',
+    'I22.getKnowledgeRetrievalReadiness',
+    'knowledge-readiness.not-found',
+    'not-found',
+    {
+      success: false,
+      error: providerProblem('NOT_FOUND', 'Knowledge entry not found', 'not-found', {
+        status: 404,
+      }),
+    }
+  ),
   fixture('I22', 'I22.search.get', 'search.success', 'success', {
     success: true,
     data: {
@@ -940,7 +1092,12 @@ function route(
   path: string,
   operationId: string,
   summary: string,
-  tags: readonly string[]
+  tags: readonly string[],
+  options: {
+    dataSchema?: JsonSchema;
+    fixtureIds?: readonly string[];
+    functionClass?: CoreContractFunctionClass | 'rest-command';
+  } = {}
 ): AlembicProviderRouteContract {
   const row = routeRows[registryRowId];
   return {
@@ -949,13 +1106,16 @@ function route(
     contractId: `${registryRowId}.${operationId}`,
     errorKinds: row.errorKinds,
     exposureClasses: row.exposureClasses,
-    fixtureIds: row.fixtureIds,
-    functionClass: functionClassFor(registryRowId),
+    fixtureIds: options.fixtureIds ?? row.fixtureIds,
+    functionClass: options.functionClass ?? functionClassFor(registryRowId),
     method,
     operationId,
     path,
     registryRowId,
-    responseSchemas: responseSchemasFor(row.errorKinds, row.scenarios),
+    responseSchemas: {
+      ...responseSchemasFor(row.errorKinds, row.scenarios),
+      ...(options.dataSchema ? { 200: dataEnvelope(options.dataSchema) } : {}),
+    },
     summary,
     supportedScenarios: row.scenarios,
     tags,
