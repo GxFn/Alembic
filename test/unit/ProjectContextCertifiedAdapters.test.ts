@@ -1,26 +1,28 @@
-import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { GenerateSessionManager } from '@alembic/core/host-agent-workflows';
 import {
+  type CertifiedProjectFactsArtifactV1,
+  FileCertifiedProjectFactsStore,
   hashCanonicalJson,
-  type ProjectContextConsumerProjectionReceiptV2,
 } from '@alembic/core/project-context-foundation';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
   assertMainCertifiedProjectFactsCarrier,
   buildStrictProjectContextWorkflowFacts,
   captureMainCertifiedProjectFacts,
+  MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS,
   type MainCertifiedProjectFactsCarrier,
-  type MainCertifiedProjectionPayload,
+  projectMainCertifiedConsumerPayload,
+  qualifyMainCertifiedPath,
   readMainCertifiedCarrierFromProjectContext,
+  reopenMainCertifiedProjectFactsConsumer,
   serializeMainCertifiedProjectFactsCarrier,
+  summarizeMainCertifiedInstrumentation,
 } from '../../lib/project-facts/CertifiedProjectFactsRuntime.js';
 import { ModuleService } from '../../lib/service/module/ModuleService.js';
 
-const execFileAsync = promisify(execFile);
 const temporaryRoots: string[] = [];
 
 afterEach(async () => {
@@ -30,288 +32,516 @@ afterEach(async () => {
 });
 
 describe('Alembic Main strict-v2 ProjectContext adapters', () => {
-  test('captures once, persists, reopens and projects the four loaded Main consumers', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'alembic-main-certified-'));
-    temporaryRoots.push(root);
-    const projectRoot = path.join(root, 'project');
-    const dataRoot = path.join(root, 'data');
-    await mkdir(path.join(projectRoot, 'src'), { recursive: true });
-    await mkdir(dataRoot, { recursive: true });
-    await writeFile(path.join(projectRoot, 'src/index.ts'), 'export const value = 1;\n');
-    await writeFile(path.join(projectRoot, 'src/extra.ts'), 'export const extra = value + 1;\n');
-    await execFileAsync('git', ['-C', projectRoot, 'init', '--quiet']);
-    await execFileAsync('git', ['-C', projectRoot, 'config', 'user.email', 'pcf@example.invalid']);
-    await execFileAsync('git', ['-C', projectRoot, 'config', 'user.name', 'PCF Test']);
-    await execFileAsync('git', ['-C', projectRoot, 'add', '.']);
-    await execFileAsync('git', ['-C', projectRoot, 'commit', '--quiet', '-m', 'fixture']);
+  test('keeps the persisted session carrier bounded after real >12-file projection', async () => {
+    const fixture = await captureSingleRepository(13);
+    for (const consumer of Object.keys(MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS) as Array<
+      keyof typeof MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS
+    >) {
+      await reopenMainCertifiedProjectFactsConsumer({
+        carrier: fixture.certified,
+        consumer,
+        dataRoot: fixture.dataRoot,
+        entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS[consumer],
+      });
+    }
+    const serialized = JSON.stringify(serializeMainCertifiedProjectFactsCarrier(fixture.certified));
 
-    const certified = await captureMainCertifiedProjectFacts({
+    expect(serialized).not.toContain('contentBase64');
+    expect(serialized).not.toContain('projections');
+    expect(Buffer.byteLength(serialized)).toBeLessThan(32 * 1024);
+  }, 60_000);
+
+  test('records distinct canonical receipts at the four actual production entrypoints', async () => {
+    const fixture = await captureSingleRepository(2);
+    for (const consumer of Object.keys(MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS) as Array<
+      keyof typeof MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS
+    >) {
+      const before = fixture.certified.receipts[consumer];
+      expect(before).toBeUndefined();
+      await reopenMainCertifiedProjectFactsConsumer({
+        carrier: fixture.certified,
+        consumer,
+        dataRoot: fixture.dataRoot,
+        entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS[consumer],
+        runId: `test-${consumer}`,
+      });
+    }
+
+    const receipts = Object.values(fixture.certified.receipts);
+    expect(
+      Object.fromEntries(receipts.map((receipt) => [receipt?.consumer, receipt?.entrypoint]))
+    ).toEqual(MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS);
+    expect(new Set(receipts.map((receipt) => receipt?.receiptHash))).toHaveLength(4);
+    for (const receipt of receipts) {
+      expect(receipt).toMatchObject({
+        artifactId: fixture.certified.artifactId,
+        certificationBindingHash: fixture.certified.certificationBindingHash,
+        factsContentHash: fixture.certified.factsContentHash,
+        sourceVectorHash: fixture.certified.sourceVectorHash,
+      });
+    }
+    expect(
+      fixture.certified.instrumentation
+        .filter((event) => event.kind === 'consumer-reopen')
+        .map((event) => [event.consumer, event.entrypoint])
+    ).toEqual(
+      Object.entries(MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS).sort(([left], [right]) =>
+        left.localeCompare(right)
+      )
+    );
+    expect(fixture.certified.instrumentation.some((event) => event.kind === 'legacy-route')).toBe(
+      false
+    );
+    expect(fixture.certified.counters).toEqual({
+      cappedModuleProjectionCount: 0,
+      directProjectContextCallCount: 0,
+      rawFilesystemFallbackCount: 0,
+      synthesizedProjectScopeFactCount: 0,
+    });
+  }, 60_000);
+
+  test('rebinds ModuleService from legacy to certified and rejects certified-to-legacy drift', async () => {
+    const fixture = await captureSingleRepository(2);
+    let current: MainCertifiedProjectFactsCarrier | null = null;
+    const service = new ModuleService(fixture.projectRoot, {
+      certifiedFactsProvider: () => current,
+      controlRoot: fixture.projectRoot,
+      dataRoot: fixture.dataRoot,
+    });
+
+    await service.listTargets();
+    current = fixture.certified;
+    const certifiedTargets = await service.listTargets();
+    expect(certifiedTargets[0]).toMatchObject({
+      info: { artifactId: fixture.certified.artifactId },
+      type: 'certified-module',
+    });
+
+    const addedFile = path.join(fixture.projectRoot, 'src', 'added.ts');
+    await writeFile(addedFile, 'export const added = true;\n');
+    const changed = await captureMainCertifiedProjectFacts({
       analysisScope: {
         controlRoot: null,
         currentFolderId: null,
-        dataRoot,
+        dataRoot: fixture.dataRoot,
         folderCount: 0,
-        projectRoot,
+        projectRoot: fixture.projectRoot,
         projectScope: null,
         projectScopeId: null,
       },
-      dimensions: [{ id: 'architecture', label: 'Architecture' }],
-      projectRoot,
+      dimensions: dimensions(),
+      projectRoot: fixture.projectRoot,
       source: 'alembic-main-bootstrap',
     });
-
-    expect(certified.baseReadbackUnchanged).toBe(true);
-    expect(Object.keys(certified.receipts).sort()).toEqual([
-      'dependency-graph',
-      'module-coverage',
-      'plan',
-      'recipe-generation',
-    ]);
-    for (const receipt of Object.values(certified.receipts)) {
-      expect(receipt).toMatchObject({
-        artifactId: certified.artifactId,
-        certificationBindingHash: certified.certificationBindingHash,
-        factsContentHash: certified.factsContentHash,
-        sourceVectorHash: certified.sourceVectorHash,
-      });
-    }
-    expect(certified.projections['recipe-generation']?.files).toHaveLength(2);
-    expect(certified.projections['recipe-generation']?.files[0]?.contentBase64).toBeTruthy();
-    expect(certified.counters).toEqual({
-      cappedModuleProjectionCount: 0,
-      directProjectContextCallCount: 0,
-      rawFilesystemFallbackCount: 0,
-      synthesizedProjectScopeFactCount: 0,
-    });
-
-    const workflowFacts = buildStrictProjectContextWorkflowFacts({
-      certified,
-      dimensions: [{ id: 'architecture', label: 'Architecture' }],
-      projectRoot,
-      source: 'alembic-main-bootstrap',
-    });
-    expect(workflowFacts.allFiles).toHaveLength(2);
-    expect(workflowFacts.report).toMatchObject({
-      projectInformationSource: 'certified-project-facts',
-    });
-
-    const firstManager = new GenerateSessionManager({ dataRoot });
-    const session = firstManager.createSession({
-      dimensions: workflowFacts.dimensions,
-      projectContext: {
-        certifiedProjectFacts: serializeMainCertifiedProjectFactsCarrier(certified),
-      },
-      projectRoot,
-    });
-    const freshManager = new GenerateSessionManager({ dataRoot });
-    const reopenedSession = freshManager.getAnySession(session.id, { projectRoot });
-    const reopenedCarrier = readMainCertifiedCarrierFromProjectContext(
-      reopenedSession?.toSnapshot().projectContext
+    current = changed;
+    expect(await service.listTargets()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          info: expect.objectContaining({ artifactId: changed.artifactId }),
+        }),
+      ])
     );
-    expect(reopenedCarrier).toMatchObject({
-      artifactId: certified.artifactId,
-      certificationBindingHash: certified.certificationBindingHash,
-      factsContentHash: certified.factsContentHash,
-      sourceVectorHash: certified.sourceVectorHash,
-    });
 
-    await rm(projectRoot, { force: true, recursive: true });
-    const moduleService = new ModuleService(projectRoot, {
-      certifiedFactsProvider: () => reopenedCarrier,
+    current = null;
+    await expect(service.listTargets()).rejects.toThrow(/forbidden raw-filesystem route/i);
+    expect(changed.counters.rawFilesystemFallbackCount).toBe(1);
+  }, 60_000);
+
+  test('uses ProjectScope relativeRoot when projecting real source paths', async () => {
+    const root = await makeTemporaryRoot('alembic-main-relative-root-');
+    const controlRoot = path.join(root, 'control');
+    const projectRoot = path.join(controlRoot, 'Packages', 'Member');
+    const dataRoot = path.join(root, 'data');
+    const sourceFile = path.join(projectRoot, 'Sources', 'Member', 'Feature.swift');
+    await mkdir(path.dirname(sourceFile), { recursive: true });
+    await mkdir(dataRoot, { recursive: true });
+    await writeFile(sourceFile, 'public struct Feature {}\n');
+    const folder = projectScopeFolder('member-folder', 'opaque-member-id', projectRoot);
+    const certified = await captureMainCertifiedProjectFacts({
+      analysisScope: analysisScope(controlRoot, dataRoot, projectRoot, [folder]),
+      dimensions: dimensions(),
+      projectRoot,
+      source: 'alembic-main-bootstrap',
     });
-    const targets = await moduleService.listTargets();
-    expect(targets.length).toBeGreaterThan(0);
-    const firstTarget = targets[0];
-    if (!firstTarget) {
-      throw new Error('Expected certified module coverage target.');
-    }
-    const moduleFiles = await moduleService.getTargetFiles(firstTarget);
-    expect(moduleFiles).toHaveLength(2);
-    expect(moduleFiles[0]).toMatchObject({ content: expect.any(String) });
-    await expect(moduleService.getDependencyGraph()).resolves.toMatchObject({
+    const recipe = await reopenMainCertifiedProjectFactsConsumer({
+      carrier: certified,
+      consumer: 'recipe-generation',
+      dataRoot,
+      entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['recipe-generation'],
+    });
+    const facts = buildStrictProjectContextWorkflowFacts({
+      certified,
+      controlRoot,
+      dimensions: dimensions(),
+      projection: recipe.projection,
+      projectRoot,
+      source: 'alembic-main-bootstrap',
+    });
+    const projected = facts.allFiles.find((file) => file.name === 'Feature.swift');
+
+    expect(projected?.relativePath).toBe('Packages/Member/Sources/Member/Feature.swift');
+    expect(projected?.path).toBe(sourceFile);
+    await expect(readFile(projected?.path ?? '', 'utf8')).resolves.toContain('Feature');
+  }, 60_000);
+
+  test('fresh session reload reopens frozen module files after the live source tree is deleted', async () => {
+    const fixture = await captureSingleRepository(2);
+    const recipe = await reopenMainCertifiedProjectFactsConsumer({
+      carrier: fixture.certified,
+      consumer: 'recipe-generation',
+      dataRoot: fixture.dataRoot,
+      entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['recipe-generation'],
+    });
+    const facts = buildStrictProjectContextWorkflowFacts({
+      certified: fixture.certified,
+      controlRoot: fixture.projectRoot,
+      dimensions: dimensions(),
+      projection: recipe.projection,
+      projectRoot: fixture.projectRoot,
+      source: 'alembic-main-bootstrap',
+    });
+    const firstManager = new GenerateSessionManager({ dataRoot: fixture.dataRoot });
+    const session = firstManager.createSession({
+      dimensions: facts.dimensions,
+      projectContext: {
+        certifiedProjectFacts: serializeMainCertifiedProjectFactsCarrier(fixture.certified),
+      },
+      projectRoot: fixture.projectRoot,
+    });
+    const freshManager = new GenerateSessionManager({ dataRoot: fixture.dataRoot });
+    const reopenedCarrier = readMainCertifiedCarrierFromProjectContext(
+      freshManager.getAnySession(session.id, { projectRoot: fixture.projectRoot })?.toSnapshot()
+        .projectContext
+    );
+    expect(reopenedCarrier).not.toBeNull();
+
+    await rm(fixture.projectRoot, { force: true, recursive: true });
+    const service = new ModuleService(fixture.projectRoot, {
+      certifiedFactsProvider: () => reopenedCarrier,
+      controlRoot: fixture.projectRoot,
+      dataRoot: fixture.dataRoot,
+    });
+    const targets = await service.listTargets();
+    expect(targets).not.toHaveLength(0);
+    await expect(
+      service.getTargetFiles(targets[0] as Record<string, unknown>)
+    ).resolves.toHaveLength(2);
+    await expect(service.getDependencyGraph()).resolves.toMatchObject({
       edges: expect.any(Array),
       nodes: expect.any(Array),
     });
-  }, 30_000);
-
-  test('conserves more than 12 files and 80 modules without completeness caps', () => {
-    const carrier = makeCarrier(13, 85);
-    expect(() => assertMainCertifiedProjectFactsCarrier(carrier)).not.toThrow();
-    expect(carrier.projections['recipe-generation']?.files).toHaveLength(13);
-    expect(carrier.projections['module-coverage']?.modules).toHaveLength(85);
-    expect(carrier.counters.cappedModuleProjectionCount).toBe(0);
-  });
-
-  test('conserves a ProjectScope control root plus four member repositories', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'alembic-main-mr5-'));
-    temporaryRoots.push(root);
-    const controlRoot = path.join(root, 'control');
-    const dataRoot = path.join(root, 'data');
-    await mkdir(controlRoot, { recursive: true });
-    await mkdir(dataRoot, { recursive: true });
-    const folders = [];
-    for (let index = 0; index < 5; index += 1) {
-      const folderPath = path.join(controlRoot, `repo-${index + 1}`);
-      await mkdir(path.join(folderPath, 'src'), { recursive: true });
-      await writeFile(
-        path.join(folderPath, 'src/index.ts'),
-        `export const repo${index + 1} = ${index + 1};\n`
-      );
-      folders.push({
-        addedAt: null,
-        displayName: `Repo ${index + 1}`,
-        id: `folder-${index + 1}`,
-        metadata: {},
-        path: folderPath,
-        realpath: folderPath,
-        repositoryId: `repo-${index + 1}`,
-        role: 'source',
-        state: 'active',
-      });
-    }
-    const firstFolder = folders[0];
-    if (!firstFolder) {
-      throw new Error('Expected MR5 fixture folders.');
-    }
-
-    const certified = await captureMainCertifiedProjectFacts({
-      analysisScope: {
-        controlRoot,
-        currentFolderId: 'folder-1',
-        dataRoot,
-        folderCount: folders.length,
-        projectRoot: firstFolder.path,
-        projectScope: {
-          controlRoot: { path: controlRoot },
-          folders,
-          projectId: 'mr5-fixture',
-          projectScopeId: 'mr5-scope',
-        } as never,
-        projectScopeId: 'mr5-scope',
-      },
-      dimensions: [{ id: 'architecture', label: 'Architecture' }],
-      projectRoot: firstFolder.path,
-      source: 'alembic-main-bootstrap',
-    });
-
-    expect(
-      new Set(certified.projections['recipe-generation']?.files.map((file) => file.repoId))
-    ).toEqual(new Set(['repo-1', 'repo-2', 'repo-3', 'repo-4', 'repo-5']));
-    expect(certified.projections['recipe-generation']?.files).toHaveLength(5);
-    expect(Object.values(certified.receipts)).toHaveLength(4);
   }, 60_000);
 
-  test.each([
-    ['partial', (carrier: MainCertifiedProjectFactsCarrier) => delete carrier.receipts.plan],
-    [
-      'scope',
-      (carrier: MainCertifiedProjectFactsCarrier) =>
-        (carrier.canonicalScopeHash = hashCanonicalJson({ scope: 'other' })),
-    ],
-    [
-      'vector',
-      (carrier: MainCertifiedProjectFactsCarrier) =>
-        (carrier.sourceVectorHash = hashCanonicalJson({ vector: 'other' })),
-    ],
-    [
-      'payload-hash',
-      (carrier: MainCertifiedProjectFactsCarrier) => {
-        const projection = carrier.projections.plan;
-        const firstFile = projection?.files[0];
-        if (!projection || !firstFile) {
-          throw new Error('Expected plan fixture projection.');
-        }
-        projection.files.push(firstFile);
-      },
-    ],
-    [
-      'stale-binding',
-      (carrier: MainCertifiedProjectFactsCarrier) =>
-        (carrier.certificationBindingHash = hashCanonicalJson({ binding: 'stale' })),
-    ],
-  ])('rejects %s mutation before consumer use', (_name, mutate) => {
-    const carrier = structuredClone(makeCarrier(13, 85));
-    mutate(carrier);
-    expect(() => assertMainCertifiedProjectFactsCarrier(carrier)).toThrow(/certified/i);
+  test('conserves 81 real owned modules without empty or capped projections', async () => {
+    const fixture = await captureSingleRepository(81, true);
+    const moduleCoverage = await reopenMainCertifiedProjectFactsConsumer({
+      carrier: fixture.certified,
+      consumer: 'module-coverage',
+      dataRoot: fixture.dataRoot,
+      entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['module-coverage'],
+    });
+    const { files, modules } = moduleCoverage.projection;
+    const ownedUnion = new Set(modules.flatMap((module) => module.ownedFiles));
+    const inventory = new Set(files.map(qualifyMainCertifiedPath));
+
+    expect(files).toHaveLength(81);
+    expect(modules).toHaveLength(81);
+    expect(modules.every((module) => module.ownedFiles.length > 0)).toBe(true);
+    expect(ownedUnion).toEqual(inventory);
+    expect([...modules.flatMap((module) => module.ownedFiles)]).toHaveLength(81);
+    expect(fixture.certified.counters.cappedModuleProjectionCount).toBe(0);
+  }, 120_000);
+
+  test('conserves the ProjectScope control root itself plus four member repositories', async () => {
+    const root = await makeTemporaryRoot('alembic-main-mr5-');
+    const controlRoot = path.join(root, 'control');
+    const dataRoot = path.join(root, 'data');
+    await mkdir(path.join(controlRoot, 'Sources', 'Root'), { recursive: true });
+    await mkdir(dataRoot, { recursive: true });
+    await writeFile(path.join(controlRoot, 'Sources', 'Root', 'Root.swift'), 'struct Root {}\n');
+    const folders = [projectScopeFolder('root-folder', 'opaque-root', controlRoot)];
+    for (let index = 1; index <= 4; index += 1) {
+      const memberRoot = path.join(controlRoot, 'Packages', `Member${index}`);
+      await mkdir(path.join(memberRoot, 'Sources', `Member${index}`), { recursive: true });
+      await writeFile(
+        path.join(memberRoot, 'Sources', `Member${index}`, `Feature${index}.swift`),
+        `public struct Feature${index} {}\n`
+      );
+      folders.push(projectScopeFolder(`member-${index}`, `opaque-member-${index}`, memberRoot));
+    }
+    const certified = await captureMainCertifiedProjectFacts({
+      analysisScope: analysisScope(controlRoot, dataRoot, controlRoot, folders),
+      dimensions: dimensions(),
+      projectRoot: controlRoot,
+      source: 'alembic-main-bootstrap',
+    });
+    const recipe = await reopenMainCertifiedProjectFactsConsumer({
+      carrier: certified,
+      consumer: 'recipe-generation',
+      dataRoot,
+      entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['recipe-generation'],
+    });
+    const artifact = await openArtifact(dataRoot, certified);
+    const expectedRepos = new Set([
+      'opaque-root',
+      ...Array.from({ length: 4 }, (_, i) => `opaque-member-${i + 1}`),
+    ]);
+
+    expect(new Set(recipe.projection.files.map((file) => file.repoId))).toEqual(expectedRepos);
+    expect(recipe.projection.files).toHaveLength(5);
+    expect(
+      new Set(artifact.manifest.projectScopeManifest?.repositories.map((row) => row.repoId))
+    ).toEqual(expectedRepos);
+    expect(
+      new Set(artifact.manifest.sourceRevisionVector.entries.map((row) => row.repoId))
+    ).toEqual(expectedRepos);
+    expect(artifact.manifest.projectScopeManifest?.canonicalScopeHash).toBe(
+      certified.canonicalScopeHash
+    );
+    for (const file of recipe.projection.files) {
+      await expect(
+        readFile(path.join(controlRoot, qualifyMainCertifiedPath(file)), 'utf8')
+      ).resolves.toBeTruthy();
+    }
+  }, 120_000);
+
+  test('rejects malformed presenter and missing graph authority instead of synthesizing empties', async () => {
+    const fixture = await captureSingleRepository(2);
+    const artifact = structuredClone(await openArtifact(fixture.dataRoot, fixture.certified));
+    const malformed = artifact.facts.requestOutcomes.find(
+      (row) => row.applicability === 'applicable' && row.terminalStatus === 'completed'
+    );
+    if (!malformed) {
+      throw new Error('Expected a completed ProjectContext outcome.');
+    }
+    malformed.output = { data: {}, queryLevel: 'repo', refs: null } as never;
+    expect(() => projectMainCertifiedConsumerPayload(artifact, 'plan')).toThrow();
+
+    const withoutMap = structuredClone(await openArtifact(fixture.dataRoot, fixture.certified));
+    withoutMap.facts.requestOutcomes = withoutMap.facts.requestOutcomes.filter(
+      (row) => row.kind !== 'map'
+    );
+    expect(() => projectMainCertifiedConsumerPayload(withoutMap, 'dependency-graph')).toThrow(
+      /map authority/i
+    );
+
+    const malformedGraph = structuredClone(await openArtifact(fixture.dataRoot, fixture.certified));
+    const mapOutcome = malformedGraph.facts.requestOutcomes.find(
+      (row) =>
+        row.kind === 'map' &&
+        row.applicability === 'applicable' &&
+        row.terminalStatus === 'completed'
+    );
+    if (!mapOutcome) {
+      throw new Error('Expected a completed map outcome.');
+    }
+    mapOutcome.output = {
+      data: { edges: [{ from: 42, to: 'module:target' }] },
+      queryLevel: 'map',
+      refs: [],
+    } as never;
+    expect(() => projectMainCertifiedConsumerPayload(malformedGraph, 'dependency-graph')).toThrow(
+      /malformed declared edge/i
+    );
+  }, 60_000);
+
+  test('derives strict counters from route observations rather than constants', () => {
+    expect(
+      summarizeMainCertifiedInstrumentation([
+        { emittedModuleCount: 80, expectedOwnerModuleCount: 83, kind: 'module-projection' },
+        {
+          entrypoint: 'probe/direct',
+          kind: 'legacy-route',
+          route: 'direct-project-context',
+        },
+        { entrypoint: 'probe/raw', kind: 'legacy-route', route: 'raw-filesystem' },
+        {
+          entrypoint: 'probe/scope',
+          kind: 'legacy-route',
+          route: 'synthesized-project-scope',
+        },
+      ])
+    ).toEqual({
+      cappedModuleProjectionCount: 3,
+      directProjectContextCallCount: 1,
+      rawFilesystemFallbackCount: 1,
+      synthesizedProjectScopeFactCount: 1,
+    });
   });
+
+  test('fails closed for partial, hash, vector, scope and stale carrier mutations', async () => {
+    const fixture = await captureSingleRepository(2);
+    const mutations: Array<(carrier: MainCertifiedProjectFactsCarrier) => void> = [
+      (carrier) => delete (carrier as unknown as Record<string, unknown>).factsContentHash,
+      (carrier) => (carrier.factsContentHash = hashCanonicalJson({ facts: 'other' })),
+      (carrier) => (carrier.sourceVectorHash = hashCanonicalJson({ vector: 'other' })),
+      (carrier) => (carrier.canonicalScopeHash = hashCanonicalJson({ scope: 'other' })),
+      (carrier) => (carrier.certificationBindingHash = hashCanonicalJson({ binding: 'stale' })),
+    ];
+    for (const mutate of mutations) {
+      const carrier = structuredClone(fixture.certified);
+      mutate(carrier);
+      await expect(
+        reopenMainCertifiedProjectFactsConsumer({
+          carrier,
+          consumer: 'recipe-generation',
+          dataRoot: fixture.dataRoot,
+          entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['recipe-generation'],
+        })
+      ).rejects.toThrow(/certified|artifact/i);
+    }
+  }, 60_000);
+
+  test('fails closed when the stored artifact is deleted or its payload is mutated', async () => {
+    const deleted = await captureSingleRepository(1);
+    await rm(artifactDirectory(deleted.dataRoot, deleted.certified.artifactId), {
+      force: true,
+      recursive: true,
+    });
+    await expect(
+      reopenMainCertifiedProjectFactsConsumer({
+        carrier: deleted.certified,
+        consumer: 'recipe-generation',
+        dataRoot: deleted.dataRoot,
+        entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['recipe-generation'],
+      })
+    ).rejects.toThrow();
+
+    const mutated = await captureSingleRepository(1);
+    const artifactPath = path.join(
+      artifactDirectory(mutated.dataRoot, mutated.certified.artifactId),
+      'artifact.json'
+    );
+    const stored = JSON.parse(
+      await readFile(artifactPath, 'utf8')
+    ) as CertifiedProjectFactsArtifactV1;
+    const firstStoredFile = stored.facts.inventory.files[0];
+    if (!firstStoredFile) {
+      throw new Error('Expected a stored inventory file.');
+    }
+    firstStoredFile.sizeBytes += 1;
+    await writeFile(artifactPath, `${JSON.stringify(stored)}\n`);
+    await expect(
+      reopenMainCertifiedProjectFactsConsumer({
+        carrier: mutated.certified,
+        consumer: 'module-coverage',
+        dataRoot: mutated.dataRoot,
+        entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['module-coverage'],
+      })
+    ).rejects.toThrow();
+  }, 60_000);
 });
 
-function makeCarrier(fileCount: number, moduleCount: number): MainCertifiedProjectFactsCarrier {
-  const artifactId = `cpf-v1:${'a'.repeat(64)}`;
-  const canonicalScopeHash = hashCanonicalJson({ scope: 'fixture' });
-  const certificationBindingHash = hashCanonicalJson({ binding: 'fixture' });
-  const factsContentHash = hashCanonicalJson({ facts: 'fixture' });
-  const sourceVectorHash = hashCanonicalJson({ vector: 'fixture' });
-  const runId = 'main-fixture';
-  const files = Array.from({ length: fileCount }, (_, index) => ({
-    blobHash: hashCanonicalJson({ file: index }),
-    byteLength: 1,
-    contentBase64: 'eA==',
-    language: 'typescript',
-    moduleIds: [`module:${index % moduleCount}`],
-    relativePath: `src/file-${index}.ts`,
-    repoId: 'fixture',
-  }));
-  const modules = Array.from({ length: moduleCount }, (_, index) => ({
-    moduleId: `module:${index}`,
-    moduleName: `module-${index}`,
-    ownedFiles: index < fileCount ? [`fixture/src/file-${index}.ts`] : [],
-    repoId: 'fixture',
-  }));
-  const consumers = ['plan', 'recipe-generation', 'dependency-graph', 'module-coverage'] as const;
-  const projections = {} as Record<string, MainCertifiedProjectionPayload>;
-  const receipts = {} as Record<string, ProjectContextConsumerProjectionReceiptV2>;
-  for (const consumer of consumers) {
-    const projection: MainCertifiedProjectionPayload = {
-      canonicalScopeHash,
-      consumer,
-      envelopes: [],
-      files,
-      modules,
-      requestKinds: ['repo', 'map'],
-      ...(consumer === 'dependency-graph'
-        ? {
-            dependencyGraph: {
-              edges: [],
-              nodes: modules.map((module) => ({ id: module.moduleId })),
-              projectInformationSource: 'project-context' as const,
-            },
-          }
-        : {}),
-    };
-    projections[consumer] = projection;
-    const semantic = {
-      adapterVersion: 'fixture-v1',
-      artifactId,
-      certificationBindingHash,
-      consumer,
-      entrypoint: 'test/actual-adapters/main-fixture.ts',
-      factsContentHash,
-      kind: 'ProjectContextConsumerProjectionReceiptV2' as const,
-      loadEvidenceHash: hashCanonicalJson({ loaded: true }),
-      payloadSchemaHash: hashCanonicalJson({ consumer, schema: 1 }),
-      projectionContentHash: hashCanonicalJson(projection),
-      runId,
-      sourceVectorHash,
-      version: 2 as const,
-    };
-    receipts[consumer] = { ...semantic, receiptHash: hashCanonicalJson(semantic) };
+async function captureSingleRepository(fileCount: number, splitModules = false) {
+  const root = await makeTemporaryRoot('alembic-main-certified-');
+  const projectRoot = path.join(root, 'project');
+  const dataRoot = path.join(root, 'data');
+  await mkdir(dataRoot, { recursive: true });
+  for (let index = 0; index < fileCount; index += 1) {
+    const relativePath = splitModules
+      ? path.join('Sources', 'Core', `module-${String(index).padStart(3, '0')}`, 'file.swift')
+      : path.join('src', `file-${index}.ts`);
+    const absolutePath = path.join(projectRoot, relativePath);
+    await mkdir(path.dirname(absolutePath), { recursive: true });
+    await writeFile(absolutePath, `export const value${index} = ${index};\n`);
   }
+  const certified = await captureMainCertifiedProjectFacts({
+    analysisScope: {
+      controlRoot: null,
+      currentFolderId: null,
+      dataRoot,
+      folderCount: 0,
+      projectRoot,
+      projectScope: null,
+      projectScopeId: null,
+    },
+    dimensions: dimensions(),
+    projectRoot,
+    source: 'alembic-main-bootstrap',
+  });
+  return { certified, dataRoot, projectRoot, root };
+}
+
+async function makeTemporaryRoot(prefix: string) {
+  const root = await mkdtemp(path.join(os.tmpdir(), prefix));
+  temporaryRoots.push(root);
+  return root;
+}
+
+function dimensions() {
+  return [{ id: 'architecture', label: 'Architecture' }];
+}
+
+function projectScopeFolder(id: string, repositoryId: string, folderPath: string) {
   return {
-    artifactId,
-    canonicalScopeHash,
-    certificationBindingHash,
+    addedAt: null,
+    displayName: id,
+    id,
+    metadata: {},
+    path: folderPath,
+    realpath: folderPath,
+    repositoryId,
+    role: 'source',
+    state: 'active',
+  };
+}
+
+function analysisScope(
+  controlRoot: string,
+  dataRoot: string,
+  projectRoot: string,
+  folders: ReturnType<typeof projectScopeFolder>[]
+) {
+  return {
+    controlRoot,
+    currentFolderId: folders[0]?.id ?? null,
+    dataRoot,
+    folderCount: folders.length,
+    projectRoot,
+    projectScope: {
+      controlRoot: { path: controlRoot },
+      folders,
+      projectId: 'fixture-project',
+      projectScopeId: 'fixture-scope',
+    } as never,
+    projectScopeId: 'fixture-scope',
+  };
+}
+
+function storeRoot(dataRoot: string) {
+  return path.join(dataRoot, 'context', 'certified-project-facts', 'v2');
+}
+
+function artifactDirectory(dataRoot: string, artifactId: string) {
+  return path.join(storeRoot(dataRoot), 'artifacts', artifactId.replace(/^cpf-v1:/, ''));
+}
+
+async function openArtifact(
+  dataRoot: string,
+  carrier: MainCertifiedProjectFactsCarrier
+): Promise<CertifiedProjectFactsArtifactV1> {
+  return new FileCertifiedProjectFactsStore(storeRoot(dataRoot)).open(
+    carrier.artifactId,
+    carrier.certificationBindingHash
+  );
+}
+
+test('synthetic carrier assertion still rejects an unobserved nonzero counter', () => {
+  const carrier: MainCertifiedProjectFactsCarrier = {
+    artifactId: `cpf-v1:${'a'.repeat(64)}`,
+    baseReadbackUnchanged: true,
+    canonicalScopeHash: hashCanonicalJson({ scope: 'fixture' }),
+    certificationBindingHash: hashCanonicalJson({ binding: 'fixture' }),
     counters: {
       cappedModuleProjectionCount: 0,
-      directProjectContextCallCount: 0,
+      directProjectContextCallCount: 1,
       rawFilesystemFallbackCount: 0,
       synthesizedProjectScopeFactCount: 0,
     },
-    factsContentHash,
-    preparationId: 'prep-v1:fixture',
-    projections,
-    receipts,
-    runId,
-    sourceVectorHash,
+    factsContentHash: hashCanonicalJson({ facts: 'fixture' }),
+    instrumentation: [],
+    receipts: {},
+    sourceVectorHash: hashCanonicalJson({ vector: 'fixture' }),
   };
-}
+  expect(() => assertMainCertifiedProjectFactsCarrier(carrier)).toThrow(/observed routes/i);
+});

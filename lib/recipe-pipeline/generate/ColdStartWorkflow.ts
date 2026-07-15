@@ -36,6 +36,7 @@
  */
 
 import {
+  baseDimensions,
   buildColdStartWorkflowPlan,
   type InternalColdStartArgs as ColdStartArgs,
   createInternalColdStartIntent as createColdStartIntent,
@@ -45,6 +46,12 @@ import type { PlanSelectionProjection } from '@alembic/core/plans';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type { DimensionDef, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
+import {
+  buildStrictProjectContextWorkflowFacts,
+  captureMainCertifiedProjectFacts,
+  MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS,
+  reopenMainCertifiedProjectFactsConsumer,
+} from '../../project-facts/CertifiedProjectFactsRuntime.js';
 import {
   presentProjectContextColdStartEmptyProject,
   presentProjectContextColdStartResponse,
@@ -155,17 +162,47 @@ async function runColdStartProjectIndexWorkflow(
   // ═══════════════════════════════════════════════════════════
   // Phase 1-4: 共享管线（文件收集→AST→依赖→Guard→维度解析）
   // ═══════════════════════════════════════════════════════════
-  const projectContextFacts =
-    args.projectContextFacts ??
-    (await buildProjectContextWorkflowFacts({
+  let projectContextFacts = args.projectContextFacts;
+  if (!projectContextFacts || projectContextFacts.certifiedProjectFacts) {
+    const certified =
+      projectContextFacts?.certifiedProjectFacts ??
+      (await captureMainCertifiedProjectFacts({
+        analysisScope,
+        dimensions: [...baseDimensions],
+        projectRoot: plan.projectAnalysis.projectRoot,
+        source: 'alembic-main-bootstrap',
+      }));
+    const recipeConsumer = await reopenMainCertifiedProjectFactsConsumer({
+      carrier: certified,
+      consumer: 'recipe-generation',
+      dataRoot,
+      entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['recipe-generation'],
+      runId: 'main-coldstart-recipe-generation',
+    });
+    projectContextFacts = buildStrictProjectContextWorkflowFacts({
+      certified,
+      controlRoot: analysisScope.controlRoot ?? projectRoot,
+      dimensions: [...baseDimensions],
+      projection: recipeConsumer.projection,
+      projectRoot: plan.projectAnalysis.projectRoot,
+      source: 'alembic-main-bootstrap',
+    });
+    ctx.logger.info('[ColdStartWorkflow] certified strict-v2 recipe facts reopened', {
+      artifactId: certified.artifactId,
+      fileCount: recipeConsumer.projection.files.length,
+      moduleCount: recipeConsumer.projection.modules.length,
+    });
+  }
+  if (!projectContextFacts) {
+    projectContextFacts = await buildProjectContextWorkflowFacts({
       analysisScope,
       projectRoot: plan.projectAnalysis.projectRoot,
       contentMaxLines: intent.projectAnalysis.contentMaxLines,
       ctx,
       maxFiles: intent.projectAnalysis.maxFiles,
       source: 'alembic-main-bootstrap',
-      strictCertifiedFacts: true,
-    }));
+    });
+  }
   const sourceIdentities = collectProjectScopeSourceIdentities(projectContextFacts);
 
   if (projectContextFacts.isEmpty) {

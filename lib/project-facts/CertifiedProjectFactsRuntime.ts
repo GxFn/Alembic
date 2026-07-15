@@ -35,8 +35,6 @@ import type {
   ProjectContextWorkflowFacts,
 } from './ProjectContextWorkflowFacts.js';
 
-export const MAIN_CERTIFIED_PROJECT_FACTS_ADAPTER_ENTRYPOINT =
-  'lib/project-facts/CertifiedProjectFactsRuntime.js';
 export const MAIN_CERTIFIED_PROJECT_FACTS_ADAPTER_VERSION = 'alembic-main-pcf-adapters-v1';
 
 const MAIN_CERTIFIED_CONSUMERS = [
@@ -45,6 +43,13 @@ const MAIN_CERTIFIED_CONSUMERS = [
   'dependency-graph',
   'module-coverage',
 ] as const satisfies readonly CertifiedProjectFactsConsumer[];
+
+export const MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS = {
+  'dependency-graph': 'lib/recipe-pipeline/generate/execution/AiDimensionPreparation.js',
+  'module-coverage': 'lib/service/module/ModuleService.js',
+  plan: 'lib/recipe-pipeline/plan/PlanSelectionGate.js',
+  'recipe-generation': 'lib/recipe-pipeline/generate/ColdStartWorkflow.js',
+} as const satisfies Record<(typeof MAIN_CERTIFIED_CONSUMERS)[number], string>;
 
 const SOURCE_EXTENSIONS = [
   '.c',
@@ -114,6 +119,7 @@ export interface MainCertifiedSourceFile {
   language: string;
   moduleIds: string[];
   relativePath: string;
+  repositoryRelativeRoot: string;
   repoId: string;
 }
 
@@ -131,23 +137,45 @@ export interface MainCertifiedProjectFactsCounters {
   synthesizedProjectScopeFactCount: number;
 }
 
+export type MainCertifiedProjectFactsInstrumentationEvent =
+  | {
+      consumer: (typeof MAIN_CERTIFIED_CONSUMERS)[number];
+      entrypoint: string;
+      kind: 'consumer-reopen';
+      receiptHash: string;
+    }
+  | {
+      emittedModuleCount: number;
+      expectedOwnerModuleCount: number;
+      kind: 'module-projection';
+    }
+  | {
+      entrypoint: string;
+      kind: 'legacy-route';
+      route: 'direct-project-context' | 'raw-filesystem' | 'synthesized-project-scope';
+    };
+
 export interface MainCertifiedProjectFactsCarrier {
-  artifactId: string;
-  canonicalScopeHash: string;
-  certificationBindingHash: string;
+  artifactId: CertifiedProjectFactsArtifactV1['artifactId'];
+  baseReadbackUnchanged: true;
+  canonicalScopeHash: CertifiedProjectFactsArtifactV1['certificationBindingHash'];
+  certificationBindingHash: CertifiedProjectFactsArtifactV1['certificationBindingHash'];
   counters: MainCertifiedProjectFactsCounters;
-  factsContentHash: string;
-  preparationId: string;
-  projections: Record<string, MainCertifiedProjectionPayload>;
-  receipts: Record<string, ProjectContextConsumerProjectionReceiptV2>;
-  runId: string;
-  sourceVectorHash: string;
+  factsContentHash: CertifiedProjectFactsArtifactV1['factsContentHash'];
+  instrumentation: MainCertifiedProjectFactsInstrumentationEvent[];
+  receipts: Partial<
+    Record<(typeof MAIN_CERTIFIED_CONSUMERS)[number], ProjectContextConsumerProjectionReceiptV2>
+  >;
+  sourceVectorHash: CertifiedProjectFactsArtifactV1['sourceVectorHash'];
 }
 
 export interface MainCertifiedProjectFactsState extends MainCertifiedProjectFactsCarrier {
-  baseReadbackUnchanged: true;
-  preparationReceiptHash: string;
   storeReceiptHash: string;
+}
+
+export interface MainCertifiedProjectFactsConsumerResult {
+  projection: MainCertifiedProjectionPayload;
+  receipt: ProjectContextConsumerProjectionReceiptV2;
 }
 
 interface CaptureMainCertifiedProjectFactsInput {
@@ -161,6 +189,7 @@ export async function captureMainCertifiedProjectFacts(
   input: CaptureMainCertifiedProjectFactsInput
 ): Promise<MainCertifiedProjectFactsState> {
   const scope = createMainScopeBinding(input);
+  const inventoryPolicy = inventoryPolicyForScope(scope.manifest.repositories);
   const ports = new NodeProjectContextFoundationHostPorts(undefined, {
     portableRoots: scope.repositories.map((repository) => ({
       portableId: repository.repoId,
@@ -174,7 +203,7 @@ export async function captureMainCertifiedProjectFacts(
   for (const repository of scope.repositories) {
     inventoryRows.push({
       files: await ports.enumerateEligibleFiles({
-        policy: INVENTORY_POLICY,
+        policy: inventoryPolicy,
         repository,
       }),
       repository,
@@ -194,7 +223,7 @@ export async function captureMainCertifiedProjectFacts(
   const artifact = await captureCertifiedProjectFactsV2(
     {
       certification: {
-        acceptedConfigHash: hashCanonicalJson({ inventoryPolicy: INVENTORY_POLICY }),
+        acceptedConfigHash: hashCanonicalJson({ inventoryPolicy }),
         acceptedRuntimeHash: hashCanonicalJson({
           adapterVersion: MAIN_CERTIFIED_PROJECT_FACTS_ADAPTER_VERSION,
           runtime: 'alembic-main',
@@ -212,8 +241,8 @@ export async function captureMainCertifiedProjectFacts(
         maxSelectedFiles: Math.max(1, selectedFiles.length),
         selectedFiles,
       },
-      inventoryPolicy: INVENTORY_POLICY,
-      legacyEntries: mainStrictLegacyEntryInventory(input.source),
+      inventoryPolicy,
+      legacyEntries: mainStrictLegacyEntryInventory(input.source, []),
       projectMode: scope.manifest.projectMode,
       projectScope: scope,
       projections: emptyCompatibilityProjections(),
@@ -224,41 +253,12 @@ export async function captureMainCertifiedProjectFacts(
     ports
   );
 
-  const storeRoot = path.join(
-    input.analysisScope?.dataRoot ?? input.projectRoot,
-    'context',
-    'certified-project-facts',
-    'v2'
-  );
+  const storeRoot = mainCertifiedStoreRoot(input.analysisScope?.dataRoot ?? input.projectRoot);
   const store = new FileCertifiedProjectFactsStore(storeRoot);
   const storeReceipt = await store.put(artifact);
   const reopenedStore = new FileCertifiedProjectFactsStore(storeRoot);
   const reopened = await reopenedStore.open(artifact.artifactId, artifact.certificationBindingHash);
   assertSameCertifiedBase(artifact, reopened);
-  const preparation = await reopenedStore.createPreparation(
-    reopened.artifactId,
-    reopened.certificationBindingHash
-  );
-  const runId = `main-${input.source === 'alembic-main-bootstrap' ? 'coldstart' : 'rescan'}`;
-  const consumerPort = new CertifiedProjectFactsConsumerPort(reopenedStore);
-  const projections = {} as Record<string, MainCertifiedProjectionPayload>;
-  const receipts = {} as Record<string, ProjectContextConsumerProjectionReceiptV2>;
-  for (const consumer of MAIN_CERTIFIED_CONSUMERS) {
-    const projected = await consumerPort.reopenWithAdapter({
-      adapter: mainConsumerAdapter(consumer),
-      consumer,
-      expectedCertificationBindingHash: reopened.certificationBindingHash,
-      preparationId: preparation.preparationId,
-      runId,
-    });
-    projections[consumer] = projected.payload as unknown as MainCertifiedProjectionPayload;
-    receipts[consumer] = projected.receipt;
-  }
-  await reopenedStore.completeRunLease({
-    expectedCertificationBindingHash: reopened.certificationBindingHash,
-    preparationId: preparation.preparationId,
-    runId,
-  });
   const finalReadback = await reopenedStore.open(
     artifact.artifactId,
     artifact.certificationBindingHash
@@ -270,13 +270,10 @@ export async function captureMainCertifiedProjectFacts(
     baseReadbackUnchanged: true,
     canonicalScopeHash: scope.manifest.canonicalScopeHash,
     certificationBindingHash: artifact.certificationBindingHash,
-    counters: zeroMainCertifiedCounters(),
+    counters: summarizeMainCertifiedInstrumentation([]),
     factsContentHash: artifact.factsContentHash,
-    preparationId: preparation.preparationId,
-    preparationReceiptHash: preparation.receiptHash,
-    projections,
-    receipts,
-    runId,
+    instrumentation: [],
+    receipts: {},
     sourceVectorHash: artifact.sourceVectorHash,
     storeReceiptHash: storeReceipt.receiptHash,
   };
@@ -284,19 +281,85 @@ export async function captureMainCertifiedProjectFacts(
   return state;
 }
 
+export async function reopenMainCertifiedProjectFactsConsumer(input: {
+  carrier: MainCertifiedProjectFactsCarrier;
+  consumer: (typeof MAIN_CERTIFIED_CONSUMERS)[number];
+  dataRoot: string;
+  entrypoint: string;
+  runId?: string;
+}): Promise<MainCertifiedProjectFactsConsumerResult> {
+  assertMainCertifiedProjectFactsCarrier(input.carrier);
+  if (input.entrypoint !== MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS[input.consumer]) {
+    throw new TypeError(
+      `Certified ${input.consumer} adapter must reopen at its actual production entrypoint.`
+    );
+  }
+  const store = new FileCertifiedProjectFactsStore(mainCertifiedStoreRoot(input.dataRoot));
+  const artifact = await store.open(
+    input.carrier.artifactId,
+    input.carrier.certificationBindingHash
+  );
+  assertSameCertifiedCarrierBase(input.carrier, artifact);
+  const preparation = await store.createPreparation(
+    artifact.artifactId,
+    artifact.certificationBindingHash
+  );
+  const runId = input.runId ?? `main-${input.consumer}`;
+  const projected = await new CertifiedProjectFactsConsumerPort(store).reopenWithAdapter({
+    adapter: mainConsumerAdapter(input.consumer, input.entrypoint),
+    consumer: input.consumer,
+    expectedCertificationBindingHash: artifact.certificationBindingHash,
+    preparationId: preparation.preparationId,
+    runId,
+  });
+  const projection = projected.payload as unknown as MainCertifiedProjectionPayload;
+  assertMainCertifiedProjection(input.carrier, input.consumer, projection, projected.receipt);
+  await store.completeRunLease({
+    expectedCertificationBindingHash: artifact.certificationBindingHash,
+    preparationId: preparation.preparationId,
+    runId,
+  });
+  input.carrier.receipts[input.consumer] = projected.receipt;
+  input.carrier.instrumentation = input.carrier.instrumentation.filter(
+    (event) =>
+      !(event.kind === 'consumer-reopen' && event.consumer === input.consumer) &&
+      event.kind !== 'module-projection'
+  );
+  input.carrier.instrumentation.push(
+    {
+      consumer: input.consumer,
+      entrypoint: input.entrypoint,
+      kind: 'consumer-reopen',
+      receiptHash: projected.receipt.receiptHash,
+    },
+    {
+      emittedModuleCount: projection.modules.length,
+      expectedOwnerModuleCount: expectedOwnerModuleCount(projection.files),
+      kind: 'module-projection',
+    }
+  );
+  input.carrier.counters = summarizeMainCertifiedInstrumentation(input.carrier.instrumentation);
+  assertMainCertifiedProjectFactsCarrier(input.carrier);
+  return { projection, receipt: projected.receipt };
+}
+
 export function buildStrictProjectContextWorkflowFacts(input: {
-  certified: MainCertifiedProjectFactsState;
+  certified: MainCertifiedProjectFactsCarrier;
+  controlRoot: string;
   dimensions: DimensionDef[];
+  projection: MainCertifiedProjectionPayload;
   projectRoot: string;
   source: 'alembic-main-bootstrap' | 'alembic-main-rescan';
 }): ProjectContextWorkflowFacts {
   assertMainCertifiedProjectFactsCarrier(input.certified);
-  const recipe = requireProjection(input.certified, 'recipe-generation');
-  const modulesProjection = requireProjection(input.certified, 'module-coverage');
+  const recipe = input.projection;
+  if (recipe.consumer !== 'recipe-generation' && recipe.consumer !== 'plan') {
+    throw new TypeError('Strict workflow facts require a recipe-generation or plan projection.');
+  }
   const allFiles = recipe.files.map((file) =>
-    certifiedFileToGenerateEntry(file, input.projectRoot)
+    certifiedFileToGenerateEntry(file, input.controlRoot)
   );
-  const modules = modulesProjection.modules.map(certifiedModuleToWorkflowModule);
+  const modules = recipe.modules.map(certifiedModuleToWorkflowModule);
   const presenterInput = presenterInputFromProjection(recipe);
   const languageStats = countLanguages(recipe.files);
   const primaryLang = primaryLanguage(languageStats);
@@ -384,10 +447,13 @@ export function buildStrictProjectContextWorkflowFacts(input: {
 }
 
 export function buildPlanAnalysisFromCertifiedFacts(
-  facts: ProjectContextWorkflowFacts
+  facts: ProjectContextWorkflowFacts,
+  plan: MainCertifiedProjectionPayload
 ): PlanProjectContextAnalysis {
-  const certified = requireCertifiedState(facts);
-  const plan = requireProjection(certified, 'plan');
+  requireCertifiedState(facts);
+  if (plan.consumer !== 'plan') {
+    throw new TypeError('Plan analysis requires the plan certified projection.');
+  }
   return {
     contextStatus: 'complete',
     dimensions: facts.dimensions,
@@ -410,7 +476,7 @@ export function buildPlanAnalysisFromCertifiedFacts(
       .filter((language) => language !== primaryLanguage(countLanguages(plan.files)))
       .sort(),
     sourceFileFacts: plan.files.map((file) => ({
-      filePath: qualifyCertifiedPath(file),
+      filePath: qualifyMainCertifiedPath(file),
       language: file.language,
       sizeBytes: file.byteLength,
     })),
@@ -419,10 +485,13 @@ export function buildPlanAnalysisFromCertifiedFacts(
 }
 
 export function dependencyGraphFromCertifiedFacts(
-  facts: ProjectContextWorkflowFacts
+  facts: ProjectContextWorkflowFacts,
+  projection: MainCertifiedProjectionPayload
 ): ProjectContextDependencyGraph {
-  const certified = requireCertifiedState(facts);
-  const projection = requireProjection(certified, 'dependency-graph');
+  requireCertifiedState(facts);
+  if (projection.consumer !== 'dependency-graph') {
+    throw new TypeError('Dependency graph analysis requires its certified projection.');
+  }
   if (!projection.dependencyGraph) {
     throw new TypeError('Certified dependency-graph projection is missing its graph payload.');
   }
@@ -437,19 +506,18 @@ export function dependencyGraphFromCertifiedFacts(
 }
 
 export function serializeMainCertifiedProjectFactsCarrier(
-  state: MainCertifiedProjectFactsState
+  state: MainCertifiedProjectFactsCarrier
 ): MainCertifiedProjectFactsCarrier {
   assertMainCertifiedProjectFactsCarrier(state);
   return {
     artifactId: state.artifactId,
+    baseReadbackUnchanged: true,
     canonicalScopeHash: state.canonicalScopeHash,
     certificationBindingHash: state.certificationBindingHash,
     counters: { ...state.counters },
     factsContentHash: state.factsContentHash,
-    preparationId: state.preparationId,
-    projections: structuredClone(state.projections),
+    instrumentation: structuredClone(state.instrumentation),
     receipts: structuredClone(state.receipts),
-    runId: state.runId,
     sourceVectorHash: state.sourceVectorHash,
   };
 }
@@ -461,6 +529,9 @@ export function assertMainCertifiedProjectFactsCarrier(
   if (!carrier || typeof carrier !== 'object') {
     throw new TypeError('Certified project facts carrier is missing.');
   }
+  if (carrier.baseReadbackUnchanged !== true) {
+    throw new TypeError('Certified project facts carrier is missing its base readback proof.');
+  }
   const identities = [
     carrier.artifactId,
     carrier.sourceVectorHash,
@@ -470,11 +541,12 @@ export function assertMainCertifiedProjectFactsCarrier(
   if (identities.some((identity) => typeof identity !== 'string' || !identity)) {
     throw new TypeError('Certified project facts carrier has a partial binding.');
   }
-  for (const consumer of MAIN_CERTIFIED_CONSUMERS) {
-    const receipt = carrier.receipts?.[consumer];
-    const projection = carrier.projections?.[consumer];
-    if (!receipt || !projection || receipt.consumer !== consumer) {
-      throw new TypeError(`Certified project facts carrier is missing ${consumer}.`);
+  if (!carrier.receipts || typeof carrier.receipts !== 'object') {
+    throw new TypeError('Certified project facts carrier receipt ledger is missing.');
+  }
+  for (const [consumer, receipt] of Object.entries(carrier.receipts)) {
+    if (!MAIN_CERTIFIED_CONSUMERS.includes(consumer as never) || !receipt) {
+      throw new TypeError(`Certified project facts carrier has an unknown ${consumer} receipt.`);
     }
     verifyProjectContextConsumerProjectionReceiptV2(receipt);
     if (
@@ -482,10 +554,11 @@ export function assertMainCertifiedProjectFactsCarrier(
       receipt.sourceVectorHash !== carrier.sourceVectorHash ||
       receipt.factsContentHash !== carrier.factsContentHash ||
       receipt.certificationBindingHash !== carrier.certificationBindingHash ||
-      receipt.runId !== carrier.runId ||
-      projection.canonicalScopeHash !== carrier.canonicalScopeHash ||
-      projection.consumer !== consumer ||
-      receipt.projectionContentHash !== hashCanonicalJson(projection)
+      receipt.consumer !== consumer ||
+      receipt.entrypoint !==
+        MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS[
+          consumer as (typeof MAIN_CERTIFIED_CONSUMERS)[number]
+        ]
     ) {
       throw new TypeError(`Certified project facts carrier has a stale ${consumer} binding.`);
     }
@@ -493,9 +566,83 @@ export function assertMainCertifiedProjectFactsCarrier(
   if (!/^sha256:[a-f0-9]{64}$/.test(carrier.canonicalScopeHash)) {
     throw new TypeError('Certified project facts carrier has a scope binding mismatch.');
   }
-  if (!carrier.counters || Object.values(carrier.counters).some((count) => count !== 0)) {
+  if (!Array.isArray(carrier.instrumentation)) {
+    throw new TypeError('Certified project facts carrier instrumentation is missing.');
+  }
+  const observedCounters = summarizeMainCertifiedInstrumentation(carrier.instrumentation);
+  if (
+    !carrier.counters ||
+    Object.entries(observedCounters).some(
+      ([key, count]) => carrier.counters[key as keyof MainCertifiedProjectFactsCounters] !== count
+    )
+  ) {
+    throw new TypeError('Strict certified consumer counters do not match observed routes.');
+  }
+  if (Object.values(observedCounters).some((count) => count !== 0)) {
     throw new TypeError('Strict certified consumer counters must remain zero.');
   }
+}
+
+export function recordMainCertifiedLegacyRoute(
+  carrier: MainCertifiedProjectFactsCarrier,
+  event: Extract<MainCertifiedProjectFactsInstrumentationEvent, { kind: 'legacy-route' }>
+): never {
+  carrier.instrumentation = carrier.instrumentation.filter(
+    (candidate) =>
+      !(
+        candidate.kind === 'legacy-route' &&
+        candidate.route === event.route &&
+        candidate.entrypoint === event.entrypoint
+      )
+  );
+  carrier.instrumentation.push(event);
+  carrier.counters = summarizeMainCertifiedInstrumentation(carrier.instrumentation);
+  throw new TypeError(
+    `Strict certified consumer attempted forbidden ${event.route} route at ${event.entrypoint}.`
+  );
+}
+
+export function summarizeMainCertifiedInstrumentation(
+  events: readonly MainCertifiedProjectFactsInstrumentationEvent[]
+): MainCertifiedProjectFactsCounters {
+  const counters: MainCertifiedProjectFactsCounters = {
+    cappedModuleProjectionCount: 0,
+    directProjectContextCallCount: 0,
+    rawFilesystemFallbackCount: 0,
+    synthesizedProjectScopeFactCount: 0,
+  };
+  for (const event of events) {
+    if (!event || typeof event !== 'object' || typeof event.kind !== 'string') {
+      throw new TypeError('Certified project facts instrumentation event is malformed.');
+    }
+    if (event.kind === 'module-projection') {
+      counters.cappedModuleProjectionCount += Math.max(
+        0,
+        event.expectedOwnerModuleCount - event.emittedModuleCount
+      );
+    } else if (event.kind === 'legacy-route') {
+      if (event.route === 'direct-project-context') {
+        counters.directProjectContextCallCount += 1;
+      } else if (event.route === 'raw-filesystem') {
+        counters.rawFilesystemFallbackCount += 1;
+      } else if (event.route === 'synthesized-project-scope') {
+        counters.synthesizedProjectScopeFactCount += 1;
+      } else {
+        throw new TypeError('Certified project facts instrumentation route is unknown.');
+      }
+    } else if (event.kind === 'consumer-reopen') {
+      if (
+        !MAIN_CERTIFIED_CONSUMERS.includes(event.consumer) ||
+        event.entrypoint !== MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS[event.consumer] ||
+        typeof event.receiptHash !== 'string'
+      ) {
+        throw new TypeError('Certified project facts consumer instrumentation is malformed.');
+      }
+    } else {
+      throw new TypeError('Certified project facts instrumentation kind is unknown.');
+    }
+  }
+  return counters;
 }
 
 export function readMainCertifiedCarrierFromProjectContext(
@@ -547,25 +694,35 @@ function createMainScopeBinding(input: CaptureMainCertifiedProjectFactsInput) {
   });
 }
 
-function mainConsumerAdapter(consumer: (typeof MAIN_CERTIFIED_CONSUMERS)[number]) {
+function mainConsumerAdapter(
+  consumer: (typeof MAIN_CERTIFIED_CONSUMERS)[number],
+  entrypoint: string
+) {
   return {
     adapterVersion: MAIN_CERTIFIED_PROJECT_FACTS_ADAPTER_VERSION,
-    entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ADAPTER_ENTRYPOINT,
+    entrypoint,
     loadEvidenceHash: hashCanonicalJson({
-      entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ADAPTER_ENTRYPOINT,
+      entrypoint,
       implementation: MAIN_CERTIFIED_PROJECT_FACTS_ADAPTER_VERSION,
       loaded: true,
     }),
     payloadSchemaHash: hashCanonicalJson({ consumer, schema: 1 }),
     project: (artifact: Readonly<CertifiedProjectFactsArtifactV1>) =>
-      projectMainConsumerPayload(artifact as CertifiedProjectFactsArtifactV1, consumer),
+      projectMainCertifiedConsumerPayload(artifact as CertifiedProjectFactsArtifactV1, consumer),
   };
 }
 
-function projectMainConsumerPayload(
+export function projectMainCertifiedConsumerPayload(
   artifact: CertifiedProjectFactsArtifactV1,
   consumer: (typeof MAIN_CERTIFIED_CONSUMERS)[number]
 ): MainCertifiedProjectionPayload {
+  const scopeManifest = artifact.manifest.projectScopeManifest;
+  if (!scopeManifest) {
+    throw new TypeError('Certified projection is missing its ProjectScope manifest.');
+  }
+  const relativeRoots = new Map(
+    scopeManifest.repositories.map((repository) => [repository.repoId, repository.relativeRoot])
+  );
   const files = artifact.facts.inventory.files.map((file) => ({
     blobHash: file.blobSha256,
     byteLength: file.sizeBytes,
@@ -573,6 +730,7 @@ function projectMainConsumerPayload(
     language: file.language,
     moduleIds: [...file.ownerModuleIds].sort(),
     relativePath: file.relativePath,
+    repositoryRelativeRoot: requireRepositoryRelativeRoot(relativeRoots, file.repoId),
     repoId: file.repoId,
   }));
   const modules = buildCertifiedModules(files);
@@ -580,8 +738,12 @@ function projectMainConsumerPayload(
     .filter(
       (outcome) => outcome.applicability === 'applicable' && outcome.terminalStatus === 'completed'
     )
-    .map((outcome) => outcome.output)
-    .filter(isProjectContextEnvelope) as unknown as ProjectContextEnvelope<ProjectContextResult>[];
+    .map((outcome) => {
+      if (!isProjectContextEnvelope(outcome.output)) {
+        throw new TypeError(`Certified ${outcome.kind} outcome is not a ProjectContext envelope.`);
+      }
+      return outcome.output as unknown as ProjectContextEnvelope<ProjectContextResult>;
+    });
   const requestKinds = [...new Set(artifact.facts.requestOutcomes.map((row) => row.kind))].sort();
   const payload: MainCertifiedProjectionPayload = {
     canonicalScopeHash:
@@ -593,7 +755,10 @@ function projectMainConsumerPayload(
     modules,
     requestKinds,
   };
-  if (consumer === 'dependency-graph') {
+  if (consumer === 'plan' || consumer === 'recipe-generation') {
+    buildProjectContextPresenterInput(envelopes);
+  }
+  if (consumer === 'dependency-graph' || consumer === 'module-coverage') {
     payload.dependencyGraph = buildCertifiedDependencyGraph(artifact, modules);
   }
   return payload;
@@ -603,9 +768,16 @@ function buildCertifiedDependencyGraph(
   artifact: CertifiedProjectFactsArtifactV1,
   modules: MainCertifiedModule[]
 ): MainCertifiedProjectionPayload['dependencyGraph'] {
-  const declaredEdges = artifact.facts.requestOutcomes.flatMap((outcome) =>
-    collectDeclaredEdges(outcome.output)
+  const graphOutcomes = artifact.facts.requestOutcomes.filter(
+    (outcome) =>
+      outcome.kind === 'map' &&
+      outcome.applicability === 'applicable' &&
+      outcome.terminalStatus === 'completed'
   );
+  if (graphOutcomes.length === 0) {
+    throw new TypeError('Certified dependency graph has no completed map authority.');
+  }
+  const declaredEdges = graphOutcomes.flatMap((outcome) => collectDeclaredEdges(outcome.output));
   return {
     dependencySummary: {
       declaredEdgeSource: 'certified-project-facts',
@@ -636,11 +808,15 @@ function collectDeclaredEdges(value: unknown): ProjectContextDependencyGraph['ed
       return;
     }
     const record = candidate as Record<string, unknown>;
-    if (
-      typeof record.from === 'string' &&
-      typeof record.to === 'string' &&
-      (typeof record.type === 'string' || record.type === undefined)
-    ) {
+    const declaresEdge = 'from' in record || 'to' in record;
+    if (declaresEdge) {
+      if (
+        typeof record.from !== 'string' ||
+        typeof record.to !== 'string' ||
+        (typeof record.type !== 'string' && record.type !== undefined)
+      ) {
+        throw new TypeError('Certified dependency graph contains a malformed declared edge.');
+      }
       edges.push({
         from: record.from,
         source: 'certified-project-facts',
@@ -674,7 +850,7 @@ function buildCertifiedModules(files: MainCertifiedSourceFile[]): MainCertifiedM
     const moduleIds = file.moduleIds.length ? file.moduleIds : [`repo:${file.repoId}`];
     for (const moduleId of moduleIds) {
       const row = owned.get(moduleId) ?? { files: new Set<string>(), repoId: file.repoId };
-      row.files.add(qualifyCertifiedPath(file));
+      row.files.add(qualifyMainCertifiedPath(file));
       owned.set(moduleId, row);
     }
   }
@@ -692,11 +868,13 @@ function certifiedFileToGenerateEntry(
   file: MainCertifiedSourceFile,
   projectRoot: string
 ): GenerateFileEntry {
-  const relativePath = qualifyCertifiedPath(file);
+  const relativePath = qualifyMainCertifiedPath(file);
+  const absolutePath = path.resolve(projectRoot, relativePath);
+  assertContainedCertifiedPath(projectRoot, absolutePath);
   return {
     content: Buffer.from(file.contentBase64, 'base64').toString('utf8'),
     name: path.posix.basename(file.relativePath),
-    path: path.resolve(projectRoot, relativePath),
+    path: absolutePath,
     relativePath,
     targetName: file.moduleIds[0]?.replace(/^module:/, '') ?? file.repoId,
   };
@@ -717,11 +895,7 @@ function certifiedModuleToWorkflowModule(module: MainCertifiedModule): ProjectCo
 function presenterInputFromProjection(
   projection: MainCertifiedProjectionPayload
 ): ProjectContextPresenterInput {
-  try {
-    return buildProjectContextPresenterInput(projection.envelopes);
-  } catch {
-    return buildProjectContextPresenterInput([]);
-  }
+  return buildProjectContextPresenterInput(projection.envelopes);
 }
 
 function isProjectContextEnvelope(value: unknown): boolean {
@@ -732,24 +906,15 @@ function isProjectContextEnvelope(value: unknown): boolean {
   return typeof record.queryLevel === 'string' && 'data' in record;
 }
 
-function requireCertifiedState(facts: ProjectContextWorkflowFacts): MainCertifiedProjectFactsState {
+function requireCertifiedState(
+  facts: ProjectContextWorkflowFacts
+): MainCertifiedProjectFactsCarrier {
   const state = facts.certifiedProjectFacts;
   if (!state) {
     throw new TypeError('Strict workflow facts are missing their certified binding.');
   }
   assertMainCertifiedProjectFactsCarrier(state);
   return state;
-}
-
-function requireProjection(
-  carrier: MainCertifiedProjectFactsCarrier,
-  consumer: (typeof MAIN_CERTIFIED_CONSUMERS)[number]
-): MainCertifiedProjectionPayload {
-  const projection = carrier.projections[consumer];
-  if (!projection) {
-    throw new TypeError(`Certified projection is unavailable: ${consumer}.`);
-  }
-  return projection;
 }
 
 function countLanguages(files: readonly MainCertifiedSourceFile[]): Record<string, number> {
@@ -769,8 +934,12 @@ function primaryLanguage(counts: Record<string, number>): string {
   );
 }
 
-function qualifyCertifiedPath(file: Pick<MainCertifiedSourceFile, 'repoId' | 'relativePath'>) {
-  return `${file.repoId}/${file.relativePath}`;
+export function qualifyMainCertifiedPath(
+  file: Pick<MainCertifiedSourceFile, 'relativePath' | 'repositoryRelativeRoot'>
+) {
+  return file.repositoryRelativeRoot === '.'
+    ? file.relativePath
+    : path.posix.join(file.repositoryRelativeRoot, file.relativePath);
 }
 
 function emptyCompatibilityProjections() {
@@ -785,26 +954,26 @@ function emptyCompatibilityProjections() {
   ) as Record<CertifiedProjectFactsConsumer, unknown>;
 }
 
-function zeroMainCertifiedCounters(): MainCertifiedProjectFactsCounters {
-  return {
-    cappedModuleProjectionCount: 0,
-    directProjectContextCallCount: 0,
-    rawFilesystemFallbackCount: 0,
-    synthesizedProjectScopeFactCount: 0,
-  };
-}
-
 function mainStrictLegacyEntryInventory(
-  source: CaptureMainCertifiedProjectFactsInput['source']
+  source: CaptureMainCertifiedProjectFactsInput['source'],
+  instrumentation: readonly MainCertifiedProjectFactsInstrumentationEvent[]
 ): ProjectContextLegacyEntryAuditRowV1[] {
+  const counters = summarizeMainCertifiedInstrumentation(instrumentation);
+  if (
+    counters.directProjectContextCallCount !== 0 ||
+    counters.rawFilesystemFallbackCount !== 0 ||
+    counters.synthesizedProjectScopeFactCount !== 0
+  ) {
+    throw new TypeError('Strict capture observed a reachable legacy ProjectContext route.');
+  }
   const unreachable = (entryId: string, entrypoint: string, typedReason: string) => ({
-    directProjectContextCallCount: 0,
+    directProjectContextCallCount: counters.directProjectContextCallCount,
     entryId,
     entrypoint,
-    rawFilesystemFallbackCount: 0,
+    rawFilesystemFallbackCount: counters.rawFilesystemFallbackCount,
     reachability: 'unreachable' as const,
-    synthesizedProjectScopeFactCount: 0,
-    typedReason,
+    synthesizedProjectScopeFactCount: counters.synthesizedProjectScopeFactCount,
+    typedReason: `${typedReason};instrumentation-events=${instrumentation.length}`,
   });
   return [
     unreachable(
@@ -845,13 +1014,15 @@ function mainStrictLegacyEntryInventory(
         : 'strict-plan-gate-does-not-enter-the-separate-incremental-rescan-workflow'
     ),
     {
-      directProjectContextCallCount: 0,
+      directProjectContextCallCount: counters.directProjectContextCallCount,
       entryId: 'main-certified-production-adapters',
-      entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ADAPTER_ENTRYPOINT,
-      rawFilesystemFallbackCount: 0,
+      entrypoint: Object.values(MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS).join(','),
+      rawFilesystemFallbackCount: counters.rawFilesystemFallbackCount,
       reachability: 'artifact-only-adapter',
-      synthesizedProjectScopeFactCount: 0,
-      typedReason: 'four-main-consumers-reopen-one-persisted-certified-artifact',
+      synthesizedProjectScopeFactCount: counters.synthesizedProjectScopeFactCount,
+      typedReason:
+        'four-actual-main-entrypoints-independently-reopen-one-persisted-artifact;' +
+        `instrumentation-events=${instrumentation.length}`,
     },
   ];
 }
@@ -867,6 +1038,90 @@ function assertSameCertifiedBase(
     expected.certificationBindingHash !== actual.certificationBindingHash
   ) {
     throw new TypeError('Certified artifact base changed after persisted readback.');
+  }
+}
+
+function assertSameCertifiedCarrierBase(
+  carrier: MainCertifiedProjectFactsCarrier,
+  artifact: CertifiedProjectFactsArtifactV1
+) {
+  if (
+    carrier.artifactId !== artifact.artifactId ||
+    carrier.sourceVectorHash !== artifact.sourceVectorHash ||
+    carrier.factsContentHash !== artifact.factsContentHash ||
+    carrier.certificationBindingHash !== artifact.certificationBindingHash ||
+    carrier.canonicalScopeHash !==
+      (artifact.manifest.projectScopeManifest?.canonicalScopeHash ??
+        artifact.certification.scopeIdentityHash)
+  ) {
+    throw new TypeError('Certified artifact does not match its persisted carrier binding.');
+  }
+}
+
+function assertMainCertifiedProjection(
+  carrier: MainCertifiedProjectFactsCarrier,
+  consumer: (typeof MAIN_CERTIFIED_CONSUMERS)[number],
+  projection: MainCertifiedProjectionPayload,
+  receipt: ProjectContextConsumerProjectionReceiptV2
+) {
+  verifyProjectContextConsumerProjectionReceiptV2(receipt);
+  if (
+    projection.consumer !== consumer ||
+    projection.canonicalScopeHash !== carrier.canonicalScopeHash ||
+    receipt.consumer !== consumer ||
+    receipt.artifactId !== carrier.artifactId ||
+    receipt.sourceVectorHash !== carrier.sourceVectorHash ||
+    receipt.factsContentHash !== carrier.factsContentHash ||
+    receipt.certificationBindingHash !== carrier.certificationBindingHash ||
+    receipt.projectionContentHash !== hashCanonicalJson(projection)
+  ) {
+    throw new TypeError(`Certified ${consumer} projection has a stale persisted binding.`);
+  }
+}
+
+function expectedOwnerModuleCount(files: readonly MainCertifiedSourceFile[]): number {
+  return new Set(
+    files.flatMap((file) => (file.moduleIds.length ? file.moduleIds : [`repo:${file.repoId}`]))
+  ).size;
+}
+
+function requireRepositoryRelativeRoot(
+  relativeRoots: ReadonlyMap<string, string>,
+  repoId: string
+): string {
+  const relativeRoot = relativeRoots.get(repoId);
+  if (relativeRoot === undefined) {
+    throw new TypeError(`Certified inventory repository is absent from ProjectScope: ${repoId}.`);
+  }
+  return portableRelativeRoot(relativeRoot);
+}
+
+function mainCertifiedStoreRoot(dataRoot: string): string {
+  return path.join(dataRoot, 'context', 'certified-project-facts', 'v2');
+}
+
+function inventoryPolicyForScope(
+  repositories: readonly { relativeRoot: string }[]
+): ProjectContextInventoryPolicyV1 {
+  const nestedRoots = repositories
+    .map((repository) => repository.relativeRoot)
+    .filter((relativeRoot) => relativeRoot !== '.')
+    .sort();
+  return {
+    ...INVENTORY_POLICY,
+    excludeDirectories: [...INVENTORY_POLICY.excludeDirectories],
+    includeExtensions: [...INVENTORY_POLICY.includeExtensions],
+    ...(repositories.some((repository) => repository.relativeRoot === '.') && nestedRoots.length
+      ? { excludeRelativePaths: nestedRoots }
+      : {}),
+  };
+}
+
+function assertContainedCertifiedPath(controlRoot: string, candidate: string) {
+  const root = path.resolve(controlRoot);
+  const absolute = path.resolve(candidate);
+  if (absolute !== root && !absolute.startsWith(`${root}${path.sep}`)) {
+    throw new TypeError('Certified projected source path escapes its accepted control root.');
   }
 }
 

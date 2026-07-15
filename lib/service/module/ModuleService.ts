@@ -25,8 +25,13 @@ import Logger from '@alembic/core/logging';
 import type { AiRuntimeStatus } from '../../injection/AiRuntimeStatus.js';
 import {
   assertMainCertifiedProjectFactsCarrier,
+  MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS,
   type MainCertifiedProjectFactsCarrier,
+  type MainCertifiedProjectionPayload,
   type MainCertifiedSourceFile,
+  qualifyMainCertifiedPath,
+  recordMainCertifiedLegacyRoute,
+  reopenMainCertifiedProjectFactsConsumer,
 } from '../../project-facts/CertifiedProjectFactsRuntime.js';
 import {
   loadProjectContextRepo,
@@ -174,6 +179,10 @@ const SOURCE_CODE_EXTS = new Set([
 export class ModuleService {
   #projectRoot;
 
+  #controlRoot;
+
+  #dataRoot;
+
   #repoContext: Awaited<ReturnType<typeof loadProjectContextRepo>> | null = null;
 
   #targets: ProjectContextTargetEntry[] = [];
@@ -181,6 +190,8 @@ export class ModuleService {
   #loaded = false;
 
   #certifiedFacts: MainCertifiedProjectFactsCarrier | null = null;
+
+  #certifiedProjection: MainCertifiedProjectionPayload | null = null;
 
   #certifiedFactsProvider;
 
@@ -205,9 +216,13 @@ export class ModuleService {
       guardCheckEngine?: Record<string, unknown> | null;
       violationsStore?: Record<string, unknown> | null;
       certifiedFactsProvider?: (() => MainCertifiedProjectFactsCarrier | null) | null;
+      controlRoot?: string;
+      dataRoot?: string;
     } = {}
   ) {
     this.#projectRoot = projectRoot;
+    this.#controlRoot = options.controlRoot ?? projectRoot;
+    this.#dataRoot = options.dataRoot ?? projectRoot;
     this.#logger = Logger.getInstance();
     this.#agentService = options.agentService || null;
     this.#systemRunContextFactory = options.systemRunContextFactory || null;
@@ -224,15 +239,26 @@ export class ModuleService {
 
   /** 加载 ProjectContext repo facts 并缓存目标列表 */
   async load() {
-    if (this.#loaded) {
-      return;
-    }
-
     const certified = this.#certifiedFactsProvider?.() ?? null;
     if (certified) {
       assertMainCertifiedProjectFactsCarrier(certified);
+      if (
+        this.#loaded &&
+        this.#certifiedFacts &&
+        this.#certifiedProjection &&
+        sameCertifiedBinding(this.#certifiedFacts, certified)
+      ) {
+        return;
+      }
+      const reopened = await reopenMainCertifiedProjectFactsConsumer({
+        carrier: certified,
+        consumer: 'module-coverage',
+        dataRoot: this.#dataRoot,
+        entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['module-coverage'],
+      });
       this.#certifiedFacts = certified;
-      const projection = certified.projections['module-coverage'];
+      this.#certifiedProjection = reopened.projection;
+      const projection = reopened.projection;
       this.#targets = projection.modules.map((module) => ({
         discovererId: 'project-context',
         discovererName: 'ProjectContext',
@@ -258,7 +284,19 @@ export class ModuleService {
       return;
     }
 
+    if (this.#certifiedFacts) {
+      recordMainCertifiedLegacyRoute(this.#certifiedFacts, {
+        entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['module-coverage'],
+        kind: 'legacy-route',
+        route: 'raw-filesystem',
+      });
+    }
+    if (this.#loaded) {
+      return;
+    }
+
     this.#certifiedFacts = null;
+    this.#certifiedProjection = null;
     try {
       this.#repoContext = await loadProjectContextRepo(this.#projectRoot);
       this.#targets = projectContextTargets(this.#repoContext, this.#projectRoot);
@@ -282,15 +320,13 @@ export class ModuleService {
     this.#loaded = false;
     this.#repoContext = null;
     this.#targets = [];
-    this.#certifiedFacts = null;
+    this.#certifiedProjection = null;
     await this.load();
   }
 
   /** 确保已加载 */
   async #ensureLoaded() {
-    if (!this.#loaded) {
-      await this.load();
-    }
+    await this.load();
   }
 
   // ═══════════════════════════════════════════════════════
@@ -308,8 +344,8 @@ export class ModuleService {
     await this.#ensureLoaded();
 
     const targetObj = typeof target === 'string' ? { name: target } : target;
-    if (this.#certifiedFacts) {
-      const projection = this.#certifiedFacts.projections['module-coverage'];
+    if (this.#certifiedFacts && this.#certifiedProjection) {
+      const projection = this.#certifiedProjection;
       const module = projection.modules.find(
         (candidate) =>
           candidate.moduleName === targetObj.name ||
@@ -321,8 +357,8 @@ export class ModuleService {
       }
       const owned = new Set(module.ownedFiles);
       return projection.files
-        .filter((file) => owned.has(`${file.repoId}/${file.relativePath}`))
-        .map((file) => certifiedModuleFileEntry(file, module.moduleName, this.#projectRoot));
+        .filter((file) => owned.has(qualifyMainCertifiedPath(file)))
+        .map((file) => certifiedModuleFileEntry(file, module.moduleName, this.#controlRoot));
     }
     const discovererId = targetObj.discovererId;
 
@@ -361,8 +397,8 @@ export class ModuleService {
     import('../../project-facts/ProjectContextConsumerFacts.js').ProjectContextDependencyGraph
   > {
     await this.#ensureLoaded();
-    if (this.#certifiedFacts) {
-      const graph = this.#certifiedFacts.projections['dependency-graph'].dependencyGraph;
+    if (this.#certifiedFacts && this.#certifiedProjection) {
+      const graph = this.#certifiedProjection.dependencyGraph;
       if (!graph) {
         throw new TypeError('Certified dependency graph payload is missing.');
       }
@@ -393,8 +429,9 @@ export class ModuleService {
 
   /** 项目信息摘要 */
   getProjectInfo() {
-    if (this.#certifiedFacts) {
-      const files = this.#certifiedFacts.projections['module-coverage'].files;
+    this.#assertSynchronousCertifiedBindingStable();
+    if (this.#certifiedFacts && this.#certifiedProjection) {
+      const files = this.#certifiedProjection.files;
       const languages = [...new Set(files.map((file) => file.language))].sort();
       return {
         discoverers: ['certified-project-facts'],
@@ -417,6 +454,28 @@ export class ModuleService {
           hasSpm: false,
           projectInformationSource: 'project-context',
         };
+  }
+
+  #assertSynchronousCertifiedBindingStable() {
+    const current = this.#certifiedFactsProvider?.() ?? null;
+    if (current) {
+      assertMainCertifiedProjectFactsCarrier(current);
+      if (
+        !this.#certifiedFacts ||
+        !this.#certifiedProjection ||
+        !sameCertifiedBinding(this.#certifiedFacts, current)
+      ) {
+        throw new TypeError(
+          'Certified module binding changed; await ModuleService.load() before synchronous reads.'
+        );
+      }
+    } else if (this.#certifiedFacts) {
+      recordMainCertifiedLegacyRoute(this.#certifiedFacts, {
+        entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['module-coverage'],
+        kind: 'legacy-route',
+        route: 'raw-filesystem',
+      });
+    }
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1207,14 +1266,14 @@ export class ModuleService {
 function certifiedModuleFileEntry(
   file: MainCertifiedSourceFile,
   targetName: string,
-  projectRoot: string
+  controlRoot: string
 ): Record<string, unknown> {
-  const relativePath = `${file.repoId}/${file.relativePath}`;
+  const relativePath = qualifyMainCertifiedPath(file);
   return {
     content: Buffer.from(file.contentBase64, 'base64').toString('utf8'),
     language: file.language,
     name: _pathBasename(file.relativePath),
-    path: _pathJoin(projectRoot, relativePath),
+    path: _pathJoin(controlRoot, relativePath),
     projectInformationSource: 'certified-project-facts',
     relativePath,
     size: file.byteLength,
@@ -1228,7 +1287,20 @@ function inferCertifiedModuleLanguage(
 ): string {
   const owned = new Set(ownedFiles);
   return primaryCertifiedLanguage(
-    files.filter((file) => owned.has(`${file.repoId}/${file.relativePath}`))
+    files.filter((file) => owned.has(qualifyMainCertifiedPath(file)))
+  );
+}
+
+function sameCertifiedBinding(
+  left: MainCertifiedProjectFactsCarrier,
+  right: MainCertifiedProjectFactsCarrier
+): boolean {
+  return (
+    left.artifactId === right.artifactId &&
+    left.sourceVectorHash === right.sourceVectorHash &&
+    left.factsContentHash === right.factsContentHash &&
+    left.certificationBindingHash === right.certificationBindingHash &&
+    left.canonicalScopeHash === right.canonicalScopeHash
   );
 }
 

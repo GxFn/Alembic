@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { AgentService } from '@alembic/agent/service';
+import { baseDimensions } from '@alembic/core/host-agent-workflows';
 import {
   applyPlanSelection,
   assertPlanSelectionStageRequirements,
@@ -14,7 +15,6 @@ import {
 } from '@alembic/core/service/planFacts';
 import { getJobProcessEventRecorder } from '../../daemon/jobs/DaemonJobServices.js';
 import {
-  numberArg,
   positiveIntegerArg,
   recordJobProcessEvent,
   stringArrayArg,
@@ -23,8 +23,13 @@ import type {
   GeneratePlanGateResult,
   RunDaemonJobOptions,
 } from '../../daemon/jobs/DaemonJobWorkflowTypes.js';
-import { buildPlanAnalysisFromCertifiedFacts } from '../../project-facts/CertifiedProjectFactsRuntime.js';
-import { buildProjectContextWorkflowFacts } from '../../project-facts/ProjectContextWorkflowFacts.js';
+import {
+  buildPlanAnalysisFromCertifiedFacts,
+  buildStrictProjectContextWorkflowFacts,
+  captureMainCertifiedProjectFacts,
+  MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS,
+  reopenMainCertifiedProjectFactsConsumer,
+} from '../../project-facts/CertifiedProjectFactsRuntime.js';
 import { resolveProjectScopeAnalysisContext } from '../../project-scope/ProjectScopeAnalysis.js';
 
 // C-1(2026-07-02 统一重构)：投影预算改由 Core 单源常量提供，与 host-agent 同一定义。
@@ -49,26 +54,45 @@ export async function runPlanSelectionGate(
   }
 ): Promise<GeneratePlanGateResult> {
   const recorder = getJobProcessEventRecorder(options.container);
-  const maxFiles = numberArg(options.args?.maxFiles, 500);
-  const contentMaxLines = numberArg(options.args?.contentMaxLines, 120);
   const eventTitlePrefix = `${gate.label} plan gate`;
 
   try {
     const analysisScope = resolveProjectScopeAnalysisContext(options.container);
-    const projectContextFacts = await buildProjectContextWorkflowFacts({
+    const dimensions = [...baseDimensions];
+    const certified = await captureMainCertifiedProjectFacts({
       analysisScope,
-      contentMaxLines,
-      ctx: { container: options.container, logger: options.logger },
-      maxFiles,
+      projectRoot: analysisScope.projectRoot,
+      dimensions,
+      source: gate.source,
+    });
+    const planConsumer = await reopenMainCertifiedProjectFactsConsumer({
+      carrier: certified,
+      consumer: 'plan',
+      dataRoot: analysisScope.dataRoot,
+      entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS.plan,
+      runId: `main-plan-${options.jobId}`,
+    });
+    const projectContextFacts = buildStrictProjectContextWorkflowFacts({
+      certified,
+      controlRoot: analysisScope.controlRoot ?? analysisScope.projectRoot,
+      dimensions,
+      projection: planConsumer.projection,
       projectRoot: analysisScope.projectRoot,
       source: gate.source,
-      strictCertifiedFacts: true,
+    });
+    options.logger.info('[PlanSelectionGate] certified strict-v2 plan facts reopened', {
+      artifactId: certified.artifactId,
+      fileCount: planConsumer.projection.files.length,
+      moduleCount: planConsumer.projection.modules.length,
     });
     // U3：只给 plan-selection AI 喂 Core 统一「精简投影」，替代此前把完整 facts（含逐文件源码）
     // JSON.stringify 进 prompt 的 ~21M 爆炸路径（会在发 API 前被本地预算门拦掉）。
     // Plan analysis 只从上方同一 certified artifact 的命名投影构造；Core 随后产 ≤12KB
     // projectInfoTree 金字塔 + candidateDimensions + projectProfile。完整 workflow facts 仍返回下游。
-    const planSelectionAnalysis = buildPlanAnalysisFromCertifiedFacts(projectContextFacts);
+    const planSelectionAnalysis = buildPlanAnalysisFromCertifiedFacts(
+      projectContextFacts,
+      planConsumer.projection
+    );
     const planSelectionFacts = await buildPlanFactsProjection(planSelectionAnalysis, {
       budgetBytes: PLAN_FACTS_BUDGET_BYTES,
       scope: { projectRoot: analysisScope.projectRoot },

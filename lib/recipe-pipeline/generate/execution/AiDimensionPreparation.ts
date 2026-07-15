@@ -5,7 +5,11 @@ import type { DimensionDef, IncrementalPlan } from '@alembic/core/types';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import { getAiRuntimeStatus } from '#inject/AiRuntimeStatus.js';
 import { GenerateEventEmitter } from '#recipe-pipeline/generate/runtime/GenerateEventEmitter.js';
-import { dependencyGraphFromCertifiedFacts } from '../../../project-facts/CertifiedProjectFactsRuntime.js';
+import {
+  dependencyGraphFromCertifiedFacts,
+  MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS,
+  reopenMainCertifiedProjectFactsConsumer,
+} from '../../../project-facts/CertifiedProjectFactsRuntime.js';
 import {
   type ProjectContextDependencyGraph,
   projectContextDependencyGraph,
@@ -102,7 +106,16 @@ export async function prepareAiDimensionPipeline(
   // 直接失败；仅未迁移的 legacy/rescan carrier 保留历史 ProjectContext 降级路径。
   let depGraphData: ProjectContextDependencyGraph | null = null;
   if (projectContextFacts.certifiedProjectFacts) {
-    depGraphData = dependencyGraphFromCertifiedFacts(projectContextFacts);
+    const dependencyConsumer = await reopenMainCertifiedProjectFactsConsumer({
+      carrier: projectContextFacts.certifiedProjectFacts,
+      consumer: 'dependency-graph',
+      dataRoot,
+      entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['dependency-graph'],
+    });
+    depGraphData = dependencyGraphFromCertifiedFacts(
+      projectContextFacts,
+      dependencyConsumer.projection
+    );
     logger.info(
       `[AiDimension] certified dependency graph loaded: nodes=${depGraphData.nodes.length} edges=${depGraphData.edges.length} source=${String(depGraphData.dependencySummary?.declaredEdgeSource ?? 'certified-project-facts')}`
     );

@@ -12,7 +12,12 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { runDaemonJob } from '../../lib/daemon/jobs/DaemonJobRunner.js';
 import { JobProcessEventRecorder } from '../../lib/daemon/observability/JobProcessEventRecorder.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
-import { buildPlanAnalysisFromCertifiedFacts } from '../../lib/project-facts/CertifiedProjectFactsRuntime.js';
+import {
+  buildPlanAnalysisFromCertifiedFacts,
+  buildStrictProjectContextWorkflowFacts,
+  captureMainCertifiedProjectFacts,
+  reopenMainCertifiedProjectFactsConsumer,
+} from '../../lib/project-facts/CertifiedProjectFactsRuntime.js';
 import {
   buildProjectContextWorkflowFacts,
   type ProjectContextWorkflowFacts,
@@ -30,6 +35,12 @@ vi.mock('../../lib/project-facts/ProjectContextWorkflowFacts.js', () => ({
 
 vi.mock('../../lib/project-facts/CertifiedProjectFactsRuntime.js', () => ({
   buildPlanAnalysisFromCertifiedFacts: vi.fn(),
+  buildStrictProjectContextWorkflowFacts: vi.fn(),
+  captureMainCertifiedProjectFacts: vi.fn(),
+  MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS: {
+    plan: 'lib/recipe-pipeline/plan/PlanSelectionGate.js',
+  },
+  reopenMainCertifiedProjectFactsConsumer: vi.fn(),
 }));
 
 vi.mock('../../lib/recipe-pipeline/generate/GenerateWorkflow.js', () => ({
@@ -264,6 +275,12 @@ function makeNamedDataRoot(name: string): string {
 beforeEach(() => {
   process.env.ALEMBIC_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-plan-gate-home-'));
   vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(makeFacts());
+  vi.mocked(captureMainCertifiedProjectFacts).mockResolvedValue({ artifactId: 'fixture' } as never);
+  vi.mocked(reopenMainCertifiedProjectFactsConsumer).mockResolvedValue({
+    projection: { files: [], modules: [] },
+    receipt: {},
+  } as never);
+  vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue(makeFacts());
   vi.mocked(buildPlanAnalysisFromCertifiedFacts).mockReturnValue({} as never);
   vi.mocked(collectPlanProjectContext).mockResolvedValue({} as never);
   vi.mocked(buildPlanFactsProjection).mockResolvedValue(PLAN_SELECTION_FACTS as never);
@@ -533,7 +550,7 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
   test('allows coldStart plans without module bindings', async () => {
     const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
     const projectContextFacts = makeFacts();
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(projectContextFacts);
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue(projectContextFacts);
     const container = makeContainer(store);
     const logger = makeLogger();
     const job = store.create({
@@ -560,6 +577,12 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
       })
     ).resolves.toMatchObject({ job: { status: 'completed' } });
 
+    expect(reopenMainCertifiedProjectFactsConsumer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        consumer: 'plan',
+        entrypoint: 'lib/recipe-pipeline/plan/PlanSelectionGate.js',
+      })
+    );
     expect(runGenerateWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({ container }),
       expect.objectContaining({
@@ -579,7 +602,7 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
   test('passes legal narrow plan projection and scale budget into coldStart', async () => {
     const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
     const projectContextFacts = makeFacts();
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(projectContextFacts);
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue(projectContextFacts);
     const container = makeContainer(store);
     const logger = makeLogger();
     const job = store.create({
@@ -850,7 +873,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       source: 'dashboard',
     });
     store.markRunning(job.id);
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(makeProjectMapFacts(1));
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue(makeProjectMapFacts(1));
     vi.mocked(runPlanAgent).mockResolvedValueOnce({
       dimensions: ['architecture'],
       generationStage: 'deepMining',
@@ -955,7 +978,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       source: 'dashboard',
     });
     store.markRunning(job.id);
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(makeProjectMapFacts(1));
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue(makeProjectMapFacts(1));
     vi.mocked(runPlanAgent).mockResolvedValueOnce({
       dimensions: ['architecture'],
       generationStage: 'deepMining',
@@ -1056,7 +1079,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       source: 'dashboard',
     });
     store.markRunning(job.id);
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue({
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue({
       ...makeFacts(),
       moduleCount: 1,
       projectMapModules: [
@@ -1168,7 +1191,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       source: 'dashboard',
     });
     store.markRunning(job.id);
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue({
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue({
       ...makeFacts(),
       moduleCount: 1,
       projectMapModules: [
@@ -1484,7 +1507,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       ],
       projectRoot: dataRoot,
     } as ProjectContextWorkflowFacts;
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(projectContextFacts);
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue(projectContextFacts);
     const logger = makeLogger();
     const job = store.create({
       kind: 'rescan',
@@ -1613,7 +1636,7 @@ describe('DaemonJobRunner deepMining plan gate', () => {
       ],
       projectRoot: dataRoot,
     } as ProjectContextWorkflowFacts;
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(projectContextFacts);
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue(projectContextFacts);
     const logger = makeLogger();
     const job = store.create({
       kind: 'rescan',
@@ -1910,7 +1933,7 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
   test('fans out from ProjectMap modules instead of moduleSeeds and applies scaleCap as module cap', async () => {
     const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
     const facts = makeProjectMapFacts(8);
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(facts);
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue(facts);
     const container = makeContainer(store);
     const logger = makeLogger();
     const job = store.create({
@@ -2028,7 +2051,7 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
   test('applies Entry A moduleMining request constraints to plan gate and selected payload', async () => {
     const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
     const facts = makeProjectMapFacts(2);
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(facts);
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue(facts);
     const recorder = new JobProcessEventRecorder();
     const container = makeContainer(store, { recorder });
     const logger = makeLogger();
@@ -2155,7 +2178,7 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
 
   test('rejects moduleMining plans without module bindings before module mining starts', async () => {
     const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(makeProjectMapFacts(2));
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue(makeProjectMapFacts(2));
     const recorder = new JobProcessEventRecorder();
     const container = makeContainer(store, { recorder });
     const logger = makeLogger();
@@ -2208,7 +2231,7 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
 
   test('fails moduleMining when ProjectMap modules are empty', async () => {
     const store = new JobStore({ projectRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'job-')) });
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(makeProjectMapFacts(0));
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue(makeProjectMapFacts(0));
     const container = makeContainer(store);
     const logger = makeLogger();
     const job = store.create({
@@ -2256,7 +2279,7 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
       sourcePath: 'src/module-1/existing.ts',
       status: 'active',
     });
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(facts);
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue(facts);
     const container = makeContainer(store, {
       coverageLedgerRepository,
       knowledgeRepository: persistence.knowledgeRepository,
@@ -2366,7 +2389,7 @@ describe('DaemonJobRunner moduleMining plan gate', () => {
       sourcePath: 'src/module-1/existing.ts',
       status: 'active',
     });
-    vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(facts);
+    vi.mocked(buildStrictProjectContextWorkflowFacts).mockReturnValue(facts);
     const container = makeContainer(store, {
       knowledgeRepository: persistence.knowledgeRepository,
       recipeSourceRefRepository: persistence.recipeSourceRefRepository,

@@ -13,7 +13,7 @@ import { TokenUsageStore } from '@alembic/core/repositories';
 import { unwrapRawDb } from '@alembic/core/search';
 import { FeedbackCollector, QualityScorer } from '@alembic/core/service/quality';
 import { RecipeCandidateValidator, RecipeParser } from '@alembic/core/service/recipe';
-import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
+import { resolveDataRoot, resolveProjectRoot, resolveWorkspace } from '@alembic/core/workspace';
 import { RecipeSaveRateLimiter } from '../../infrastructure/rate-limit/RecipeSaveRateLimiter.js';
 import { ModuleService } from '../../service/module/ModuleService.js';
 import { getAiRuntimeStatus } from '../AiRuntimeStatus.js';
@@ -51,6 +51,8 @@ export function register(c: ServiceContainer) {
 
   c.singleton('moduleService', (ct: ServiceContainer) => {
     const projectRoot = resolveProjectRoot(ct);
+    const dataRoot = resolveDataRoot(ct);
+    const controlRoot = resolveWorkspace(ct)?.projectScope?.controlRoot.path ?? projectRoot;
     return new ModuleService(
       projectRoot as ConstructorParameters<typeof ModuleService>[0],
       {
@@ -59,6 +61,8 @@ export function register(c: ServiceContainer) {
         // AD4 constructed injection: status projector instead of handing the
         // container into the service area (former layer-contract exception).
         aiStatus: () => getAiRuntimeStatus(ct),
+        controlRoot,
+        dataRoot,
         certifiedFactsProvider: () => {
           const session = getOrCreateSessionManager(ct).getAnySession(undefined, { projectRoot });
           return session?.toSnapshot().projectContext.certifiedProjectFacts ?? null;
