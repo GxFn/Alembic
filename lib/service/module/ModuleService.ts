@@ -27,9 +27,12 @@ import {
   assertMainCertifiedProjectFactsCarrier,
   MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS,
   type MainCertifiedProjectFactsCarrier,
+  type MainCertifiedProjectFactsSessionPort,
   type MainCertifiedProjectionPayload,
   type MainCertifiedSourceFile,
+  persistMainCertifiedProjectFactsCarrier,
   qualifyMainCertifiedPath,
+  readMainCertifiedCarrierFromProjectContext,
   recordMainCertifiedLegacyRoute,
   reopenMainCertifiedProjectFactsConsumer,
 } from '../../project-facts/CertifiedProjectFactsRuntime.js';
@@ -53,6 +56,31 @@ const AI_STATUS_NOT_CONFIGURED: AiRuntimeStatus = Object.freeze({
 });
 
 const PERSISTED_RECIPE_PROJECTION_AUTHORITY = 'persisted-knowledge-submit-results-only' as const;
+
+export function createModuleCertifiedFactsSessionBoundary(input: {
+  projectRoot: string;
+  sessionProvider: () => MainCertifiedProjectFactsSessionPort | null | undefined;
+}) {
+  return {
+    certifiedFactsPersister: (carrier: MainCertifiedProjectFactsCarrier) => {
+      const session = input.sessionProvider();
+      if (!session) {
+        throw new TypeError(
+          'Certified module coverage cannot persist without its Generate session.'
+        );
+      }
+      persistMainCertifiedProjectFactsCarrier({
+        carrier,
+        projectRoot: input.projectRoot,
+        session,
+      });
+    },
+    certifiedFactsProvider: () => {
+      const session = input.sessionProvider();
+      return readMainCertifiedCarrierFromProjectContext(session?.toSnapshot().projectContext);
+    },
+  };
+}
 
 export interface ModuleScanRecipe extends Record<string, unknown> {
   id: string;
@@ -195,6 +223,8 @@ export class ModuleService {
 
   #certifiedFactsProvider;
 
+  #certifiedFactsPersister;
+
   #logger;
 
   // AI pipeline deps
@@ -216,6 +246,7 @@ export class ModuleService {
       guardCheckEngine?: Record<string, unknown> | null;
       violationsStore?: Record<string, unknown> | null;
       certifiedFactsProvider?: (() => MainCertifiedProjectFactsCarrier | null) | null;
+      certifiedFactsPersister?: ((carrier: MainCertifiedProjectFactsCarrier) => void) | null;
       controlRoot?: string;
       dataRoot?: string;
     } = {}
@@ -231,6 +262,7 @@ export class ModuleService {
     this.#guardCheckEngine = options.guardCheckEngine || null;
     this.#violationsStore = options.violationsStore || null;
     this.#certifiedFactsProvider = options.certifiedFactsProvider || null;
+    this.#certifiedFactsPersister = options.certifiedFactsPersister || null;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -242,6 +274,11 @@ export class ModuleService {
     const certified = this.#certifiedFactsProvider?.() ?? null;
     if (certified) {
       assertMainCertifiedProjectFactsCarrier(certified);
+      if (!this.#certifiedFactsPersister) {
+        throw new TypeError(
+          'Certified module coverage requires a Generate session persistence boundary.'
+        );
+      }
       if (
         this.#loaded &&
         this.#certifiedFacts &&
@@ -256,6 +293,7 @@ export class ModuleService {
         dataRoot: this.#dataRoot,
         entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['module-coverage'],
       });
+      this.#certifiedFactsPersister(certified);
       this.#certifiedFacts = certified;
       this.#certifiedProjection = reopened.projection;
       const projection = reopened.projection;
@@ -1300,7 +1338,8 @@ function sameCertifiedBinding(
     left.sourceVectorHash === right.sourceVectorHash &&
     left.factsContentHash === right.factsContentHash &&
     left.certificationBindingHash === right.certificationBindingHash &&
-    left.canonicalScopeHash === right.canonicalScopeHash
+    left.canonicalScopeHash === right.canonicalScopeHash &&
+    left.receipts['module-coverage']?.receiptHash === right.receipts['module-coverage']?.receiptHash
   );
 }
 

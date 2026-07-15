@@ -178,6 +178,13 @@ export interface MainCertifiedProjectFactsConsumerResult {
   receipt: ProjectContextConsumerProjectionReceiptV2;
 }
 
+export interface MainCertifiedProjectFactsSessionPort {
+  id: string;
+  projectRoot: string;
+  replaceProjectContext(projectContext: Record<string, unknown>): void;
+  toSnapshot(): { projectContext: Record<string, unknown> };
+}
+
 interface CaptureMainCertifiedProjectFactsInput {
   analysisScope?: ProjectScopeAnalysisContext;
   dimensions: DimensionDef[];
@@ -522,6 +529,66 @@ export function serializeMainCertifiedProjectFactsCarrier(
   };
 }
 
+export function sameMainCertifiedProjectFactsBinding(
+  left: MainCertifiedProjectFactsCarrier,
+  right: MainCertifiedProjectFactsCarrier
+): boolean {
+  return (
+    left.artifactId === right.artifactId &&
+    left.sourceVectorHash === right.sourceVectorHash &&
+    left.factsContentHash === right.factsContentHash &&
+    left.certificationBindingHash === right.certificationBindingHash &&
+    left.canonicalScopeHash === right.canonicalScopeHash
+  );
+}
+
+/**
+ * 把实际 consumer 刚产生的 receipt 同步写回原 Generate session。
+ * Core 的 replaceProjectContext() 在返回前完成持久化；这里再读当前实例，防止
+ * 调用方误把 toSnapshot() 的副本当作活动会话或覆盖掉更早的 receipt。
+ */
+export function persistMainCertifiedProjectFactsCarrier(input: {
+  carrier: MainCertifiedProjectFactsCarrier;
+  projectRoot: string;
+  session: MainCertifiedProjectFactsSessionPort;
+}): string {
+  assertMainCertifiedProjectFactsCarrier(input.carrier);
+  if (path.resolve(input.session.projectRoot) !== path.resolve(input.projectRoot)) {
+    throw new TypeError(
+      'Certified project facts cannot move to a different Generate session root.'
+    );
+  }
+  const snapshot = input.session.toSnapshot();
+  const previous = readMainCertifiedCarrierFromProjectContext(snapshot.projectContext);
+  if (!previous || !sameMainCertifiedProjectFactsBinding(previous, input.carrier)) {
+    throw new TypeError('Generate session has a stale certified project facts binding.');
+  }
+  for (const [consumer, receipt] of Object.entries(previous.receipts)) {
+    if (
+      input.carrier.receipts[consumer as keyof typeof input.carrier.receipts]?.receiptHash !==
+      receipt?.receiptHash
+    ) {
+      throw new TypeError(`Generate session would lose its existing ${consumer} receipt.`);
+    }
+  }
+
+  input.session.replaceProjectContext({
+    ...snapshot.projectContext,
+    certifiedProjectFacts: serializeMainCertifiedProjectFactsCarrier(input.carrier),
+  });
+  const persisted = readMainCertifiedCarrierFromProjectContext(
+    input.session.toSnapshot().projectContext
+  );
+  if (
+    !persisted ||
+    hashCanonicalJson(serializeMainCertifiedProjectFactsCarrier(persisted)) !==
+      hashCanonicalJson(serializeMainCertifiedProjectFactsCarrier(input.carrier))
+  ) {
+    throw new TypeError('Generate session did not persist the certified project facts update.');
+  }
+  return input.session.id;
+}
+
 export function assertMainCertifiedProjectFactsCarrier(
   value: unknown
 ): asserts value is MainCertifiedProjectFactsCarrier {
@@ -847,8 +914,7 @@ function collectDeclaredEdges(value: unknown): ProjectContextDependencyGraph['ed
 function buildCertifiedModules(files: MainCertifiedSourceFile[]): MainCertifiedModule[] {
   const owned = new Map<string, { files: Set<string>; repoId: string }>();
   for (const file of files) {
-    const moduleIds = file.moduleIds.length ? file.moduleIds : [`repo:${file.repoId}`];
-    for (const moduleId of moduleIds) {
+    for (const moduleId of requireCertifiedModuleOwners(file)) {
       const row = owned.get(moduleId) ?? { files: new Set<string>(), repoId: file.repoId };
       row.files.add(qualifyMainCertifiedPath(file));
       owned.set(moduleId, row);
@@ -1080,9 +1146,16 @@ function assertMainCertifiedProjection(
 }
 
 function expectedOwnerModuleCount(files: readonly MainCertifiedSourceFile[]): number {
-  return new Set(
-    files.flatMap((file) => (file.moduleIds.length ? file.moduleIds : [`repo:${file.repoId}`]))
-  ).size;
+  return new Set(files.flatMap((file) => [...requireCertifiedModuleOwners(file)])).size;
+}
+
+function requireCertifiedModuleOwners(file: MainCertifiedSourceFile): readonly string[] {
+  if (file.moduleIds.length === 0) {
+    throw new TypeError(
+      `Certified eligible source ${file.repoId}/${file.relativePath} has no module owner.`
+    );
+  }
+  return file.moduleIds;
 }
 
 function requireRepositoryRelativeRoot(

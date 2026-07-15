@@ -15,7 +15,10 @@ import { FeedbackCollector, QualityScorer } from '@alembic/core/service/quality'
 import { RecipeCandidateValidator, RecipeParser } from '@alembic/core/service/recipe';
 import { resolveDataRoot, resolveProjectRoot, resolveWorkspace } from '@alembic/core/workspace';
 import { RecipeSaveRateLimiter } from '../../infrastructure/rate-limit/RecipeSaveRateLimiter.js';
-import { ModuleService } from '../../service/module/ModuleService.js';
+import {
+  createModuleCertifiedFactsSessionBoundary,
+  ModuleService,
+} from '../../service/module/ModuleService.js';
 import { getAiRuntimeStatus } from '../AiRuntimeStatus.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
@@ -53,6 +56,11 @@ export function register(c: ServiceContainer) {
     const projectRoot = resolveProjectRoot(ct);
     const dataRoot = resolveDataRoot(ct);
     const controlRoot = resolveWorkspace(ct)?.projectScope?.controlRoot.path ?? projectRoot;
+    const certifiedFactsSessionBoundary = createModuleCertifiedFactsSessionBoundary({
+      projectRoot,
+      sessionProvider: () =>
+        getOrCreateSessionManager(ct).getAnySession(undefined, { projectRoot }),
+    });
     return new ModuleService(
       projectRoot as ConstructorParameters<typeof ModuleService>[0],
       {
@@ -63,10 +71,7 @@ export function register(c: ServiceContainer) {
         aiStatus: () => getAiRuntimeStatus(ct),
         controlRoot,
         dataRoot,
-        certifiedFactsProvider: () => {
-          const session = getOrCreateSessionManager(ct).getAnySession(undefined, { projectRoot });
-          return session?.toSnapshot().projectContext.certifiedProjectFacts ?? null;
-        },
+        ...certifiedFactsSessionBoundary,
         recipeExtractor: ct.singletons._recipeExtractor || null,
         guardCheckEngine: ct.get('guardCheckEngine'),
         violationsStore: ct.get('violationsStore'),

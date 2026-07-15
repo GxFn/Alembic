@@ -21,7 +21,11 @@ import {
   serializeMainCertifiedProjectFactsCarrier,
   summarizeMainCertifiedInstrumentation,
 } from '../../lib/project-facts/CertifiedProjectFactsRuntime.js';
-import { ModuleService } from '../../lib/service/module/ModuleService.js';
+import { prepareAiDimensionPipeline } from '../../lib/recipe-pipeline/generate/execution/AiDimensionPreparation.js';
+import {
+  createModuleCertifiedFactsSessionBoundary,
+  ModuleService,
+} from '../../lib/service/module/ModuleService.js';
 
 const temporaryRoots: string[] = [];
 
@@ -104,6 +108,9 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
     const fixture = await captureSingleRepository(2);
     let current: MainCertifiedProjectFactsCarrier | null = null;
     const service = new ModuleService(fixture.projectRoot, {
+      certifiedFactsPersister: (carrier) => {
+        current = serializeMainCertifiedProjectFactsCarrier(carrier);
+      },
       certifiedFactsProvider: () => current,
       controlRoot: fixture.projectRoot,
       dataRoot: fixture.dataRoot,
@@ -217,6 +224,18 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
 
     await rm(fixture.projectRoot, { force: true, recursive: true });
     const service = new ModuleService(fixture.projectRoot, {
+      certifiedFactsPersister: (carrier) => {
+        const current = freshManager.getAnySession(session.id, {
+          projectRoot: fixture.projectRoot,
+        });
+        if (!current) {
+          throw new Error('Expected the fresh Generate session during module persistence.');
+        }
+        current.replaceProjectContext({
+          ...current.toSnapshot().projectContext,
+          certifiedProjectFacts: serializeMainCertifiedProjectFactsCarrier(carrier),
+        });
+      },
       certifiedFactsProvider: () => reopenedCarrier,
       controlRoot: fixture.projectRoot,
       dataRoot: fixture.dataRoot,
@@ -230,6 +249,122 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
       edges: expect.any(Array),
       nodes: expect.any(Array),
     });
+  }, 60_000);
+
+  test('persists four actual-entrypoint receipts through one session and fresh reloads', async () => {
+    const fixture = await captureSingleRepository(2);
+    await reopenMainCertifiedProjectFactsConsumer({
+      carrier: fixture.certified,
+      consumer: 'plan',
+      dataRoot: fixture.dataRoot,
+      entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS.plan,
+    });
+    const recipe = await reopenMainCertifiedProjectFactsConsumer({
+      carrier: fixture.certified,
+      consumer: 'recipe-generation',
+      dataRoot: fixture.dataRoot,
+      entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['recipe-generation'],
+    });
+    const facts = buildStrictProjectContextWorkflowFacts({
+      certified: fixture.certified,
+      controlRoot: fixture.projectRoot,
+      dimensions: dimensions(),
+      projection: recipe.projection,
+      projectRoot: fixture.projectRoot,
+      source: 'alembic-main-bootstrap',
+    });
+    const sessionManager = new GenerateSessionManager({ dataRoot: fixture.dataRoot });
+    const session = sessionManager.createSession({
+      dimensions: facts.dimensions,
+      projectContext: {
+        certifiedProjectFacts: serializeMainCertifiedProjectFactsCarrier(fixture.certified),
+      },
+      projectRoot: fixture.projectRoot,
+    });
+
+    const afterRecipeManager = new GenerateSessionManager({ dataRoot: fixture.dataRoot });
+    expect(
+      receiptConsumers(readSessionCarrier(afterRecipeManager, session.id, fixture.projectRoot))
+    ).toEqual(['plan', 'recipe-generation']);
+
+    const container = {
+      singletons: {
+        _workspaceResolver: {
+          currentFolderId: null,
+          dataRoot: fixture.dataRoot,
+          projectRoot: fixture.projectRoot,
+          projectScope: null,
+        },
+      },
+      get(name: string) {
+        if (name === 'generateSessionManager') {
+          return afterRecipeManager;
+        }
+        throw new Error(`missing test service: ${name}`);
+      },
+    };
+    await prepareAiDimensionPipeline(
+      {
+        bootstrapSession: null,
+        ctx: { container },
+        projectContextFacts: facts,
+        projectRoot: fixture.projectRoot,
+        targetFileMap: facts.filesByTarget,
+      } as never,
+      facts.dimensions
+    );
+
+    const afterDependencyManager = new GenerateSessionManager({ dataRoot: fixture.dataRoot });
+    expect(
+      receiptConsumers(readSessionCarrier(afterDependencyManager, session.id, fixture.projectRoot))
+    ).toEqual(['dependency-graph', 'plan', 'recipe-generation']);
+
+    const moduleService = new ModuleService(fixture.projectRoot, {
+      ...createModuleCertifiedFactsSessionBoundary({
+        projectRoot: fixture.projectRoot,
+        sessionProvider: () =>
+          afterDependencyManager.getAnySession(session.id, {
+            projectRoot: fixture.projectRoot,
+          }),
+      }),
+      controlRoot: fixture.projectRoot,
+      dataRoot: fixture.dataRoot,
+    });
+    await moduleService.listTargets();
+
+    const afterModuleManager = new GenerateSessionManager({ dataRoot: fixture.dataRoot });
+    const completed = readSessionCarrier(afterModuleManager, session.id, fixture.projectRoot);
+    expect(receiptConsumers(completed)).toEqual([
+      'dependency-graph',
+      'module-coverage',
+      'plan',
+      'recipe-generation',
+    ]);
+    expect(completed).toMatchObject({
+      artifactId: fixture.certified.artifactId,
+      canonicalScopeHash: fixture.certified.canonicalScopeHash,
+      certificationBindingHash: fixture.certified.certificationBindingHash,
+      counters: {
+        cappedModuleProjectionCount: 0,
+        directProjectContextCallCount: 0,
+        rawFilesystemFallbackCount: 0,
+        synthesizedProjectScopeFactCount: 0,
+      },
+      factsContentHash: fixture.certified.factsContentHash,
+      sourceVectorHash: fixture.certified.sourceVectorHash,
+    });
+    expect(
+      completed.instrumentation
+        .filter((event) => event.kind === 'consumer-reopen')
+        .map((event) => event.consumer)
+        .sort()
+    ).toEqual(['dependency-graph', 'module-coverage', 'plan', 'recipe-generation']);
+    expect(
+      completed.instrumentation.filter((event) => event.kind === 'module-projection')
+    ).toHaveLength(1);
+    const serialized = JSON.stringify(completed);
+    expect(serialized).not.toContain('contentBase64');
+    expect(Buffer.byteLength(serialized)).toBeLessThan(32 * 1024);
   }, 60_000);
 
   test('conserves 81 real owned modules without empty or capped projections', async () => {
@@ -251,6 +386,48 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
     expect([...modules.flatMap((module) => module.ownedFiles)]).toHaveLength(81);
     expect(fixture.certified.counters.cappedModuleProjectionCount).toBe(0);
   }, 120_000);
+
+  test('rejects an eligible source that has no certified module owner', async () => {
+    const root = await makeTemporaryRoot('alembic-main-unowned-source-');
+    const projectRoot = path.join(root, 'project');
+    const dataRoot = path.join(root, 'data');
+    await mkdir(path.join(projectRoot, 'src'), { recursive: true });
+    await mkdir(dataRoot, { recursive: true });
+    await writeFile(path.join(projectRoot, 'src', 'owned.ts'), 'export const owned = true;\n');
+    await writeFile(path.join(projectRoot, 'loose.ts'), 'export const loose = true;\n');
+    const certified = await captureMainCertifiedProjectFacts({
+      analysisScope: {
+        controlRoot: null,
+        currentFolderId: null,
+        dataRoot,
+        folderCount: 0,
+        projectRoot,
+        projectScope: null,
+        projectScopeId: null,
+      },
+      dimensions: dimensions(),
+      projectRoot,
+      source: 'alembic-main-bootstrap',
+    });
+    const artifact = await openArtifact(dataRoot, certified);
+    expect(
+      artifact.facts.inventory.files.find((file) => file.relativePath === 'src/owned.ts')
+    ).toMatchObject({ ownerModuleIds: ['module:src'] });
+    expect(
+      artifact.facts.inventory.files.find((file) => file.relativePath === 'loose.ts')
+        ?.ownerModuleIds
+    ).toEqual([]);
+
+    await expect(
+      reopenMainCertifiedProjectFactsConsumer({
+        carrier: certified,
+        consumer: 'module-coverage',
+        dataRoot,
+        entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['module-coverage'],
+      })
+    ).rejects.toThrow(/eligible source.*owner/i);
+    expect(certified.receipts['module-coverage']).toBeUndefined();
+  }, 60_000);
 
   test('conserves the ProjectScope control root itself plus four member repositories', async () => {
     const root = await makeTemporaryRoot('alembic-main-mr5-');
@@ -470,6 +647,24 @@ async function makeTemporaryRoot(prefix: string) {
 
 function dimensions() {
   return [{ id: 'architecture', label: 'Architecture' }];
+}
+
+function readSessionCarrier(
+  manager: GenerateSessionManager,
+  sessionId: string,
+  projectRoot: string
+): MainCertifiedProjectFactsCarrier {
+  const carrier = readMainCertifiedCarrierFromProjectContext(
+    manager.getAnySession(sessionId, { projectRoot })?.toSnapshot().projectContext
+  );
+  if (!carrier) {
+    throw new Error(`Expected certified facts in Generate session ${sessionId}.`);
+  }
+  return carrier;
+}
+
+function receiptConsumers(carrier: MainCertifiedProjectFactsCarrier): string[] {
+  return Object.keys(carrier.receipts).sort();
 }
 
 function projectScopeFolder(id: string, repositoryId: string, folderPath: string) {

@@ -1,5 +1,6 @@
 import type { AgentService, SystemRunContextFactory } from '@alembic/agent/service';
 import { type SourceGraphLifecycleResult, SourceGraphLifecycleService } from '@alembic/core';
+import { getOrCreateSessionManager } from '@alembic/core/host-agent-workflows';
 import Logger from '@alembic/core/logging';
 import type { DimensionDef, IncrementalPlan } from '@alembic/core/types';
 import { resolveDataRoot } from '@alembic/core/workspace';
@@ -8,7 +9,10 @@ import { GenerateEventEmitter } from '#recipe-pipeline/generate/runtime/Generate
 import {
   dependencyGraphFromCertifiedFacts,
   MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS,
+  persistMainCertifiedProjectFactsCarrier,
+  readMainCertifiedCarrierFromProjectContext,
   reopenMainCertifiedProjectFactsConsumer,
+  sameMainCertifiedProjectFactsBinding,
 } from '../../../project-facts/CertifiedProjectFactsRuntime.js';
 import {
   type ProjectContextDependencyGraph,
@@ -106,18 +110,42 @@ export async function prepareAiDimensionPipeline(
   // 直接失败；仅未迁移的 legacy/rescan carrier 保留历史 ProjectContext 降级路径。
   let depGraphData: ProjectContextDependencyGraph | null = null;
   if (projectContextFacts.certifiedProjectFacts) {
+    const workflowSession = getOrCreateSessionManager(ctx.container).getAnySession(undefined, {
+      projectRoot,
+    });
+    const sessionCarrier = readMainCertifiedCarrierFromProjectContext(
+      workflowSession?.toSnapshot().projectContext
+    );
+    if (
+      !workflowSession ||
+      !sessionCarrier ||
+      !sameMainCertifiedProjectFactsBinding(
+        sessionCarrier,
+        projectContextFacts.certifiedProjectFacts
+      )
+    ) {
+      throw new TypeError(
+        'Certified dependency graph requires the same persisted Generate session binding.'
+      );
+    }
     const dependencyConsumer = await reopenMainCertifiedProjectFactsConsumer({
-      carrier: projectContextFacts.certifiedProjectFacts,
+      carrier: sessionCarrier,
       consumer: 'dependency-graph',
       dataRoot,
       entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['dependency-graph'],
     });
+    const workflowSessionId = persistMainCertifiedProjectFactsCarrier({
+      carrier: sessionCarrier,
+      projectRoot,
+      session: workflowSession,
+    });
+    projectContextFacts.certifiedProjectFacts = sessionCarrier;
     depGraphData = dependencyGraphFromCertifiedFacts(
       projectContextFacts,
       dependencyConsumer.projection
     );
     logger.info(
-      `[AiDimension] certified dependency graph loaded: nodes=${depGraphData.nodes.length} edges=${depGraphData.edges.length} source=${String(depGraphData.dependencySummary?.declaredEdgeSource ?? 'certified-project-facts')}`
+      `[AiDimension] certified dependency graph loaded: nodes=${depGraphData.nodes.length} edges=${depGraphData.edges.length} source=${String(depGraphData.dependencySummary?.declaredEdgeSource ?? 'certified-project-facts')} workflowSessionId=${workflowSessionId}`
     );
   } else {
     try {
