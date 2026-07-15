@@ -7,6 +7,7 @@
  *   - moduleService
  */
 
+import { getOrCreateSessionManager } from '@alembic/core/host-agent-workflows';
 import { RecipeExtractor } from '@alembic/core/knowledge';
 import { TokenUsageStore } from '@alembic/core/repositories';
 import { unwrapRawDb } from '@alembic/core/search';
@@ -58,6 +59,10 @@ export function register(c: ServiceContainer) {
         // AD4 constructed injection: status projector instead of handing the
         // container into the service area (former layer-contract exception).
         aiStatus: () => getAiRuntimeStatus(ct),
+        certifiedFactsProvider: () => {
+          const session = getOrCreateSessionManager(ct).getAnySession(undefined, { projectRoot });
+          return session?.toSnapshot().projectContext.certifiedProjectFacts ?? null;
+        },
         recipeExtractor: ct.singletons._recipeExtractor || null,
         guardCheckEngine: ct.get('guardCheckEngine'),
         violationsStore: ct.get('violationsStore'),

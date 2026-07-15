@@ -10,7 +10,6 @@ import {
 } from '@alembic/core/plans';
 import {
   buildPlanFactsProjection,
-  collectPlanProjectContext,
   PLAN_FACTS_PROJECTION_BUDGET_BYTES,
 } from '@alembic/core/service/planFacts';
 import { getJobProcessEventRecorder } from '../../daemon/jobs/DaemonJobServices.js';
@@ -24,6 +23,7 @@ import type {
   GeneratePlanGateResult,
   RunDaemonJobOptions,
 } from '../../daemon/jobs/DaemonJobWorkflowTypes.js';
+import { buildPlanAnalysisFromCertifiedFacts } from '../../project-facts/CertifiedProjectFactsRuntime.js';
 import { buildProjectContextWorkflowFacts } from '../../project-facts/ProjectContextWorkflowFacts.js';
 import { resolveProjectScopeAnalysisContext } from '../../project-scope/ProjectScopeAnalysis.js';
 
@@ -62,16 +62,13 @@ export async function runPlanSelectionGate(
       maxFiles,
       projectRoot: analysisScope.projectRoot,
       source: gate.source,
+      strictCertifiedFacts: true,
     });
     // U3：只给 plan-selection AI 喂 Core 统一「精简投影」，替代此前把完整 facts（含逐文件源码）
-    // JSON.stringify 进 prompt 的 ~21M 爆炸路径（会在发 API 前被本地预算门拦掉）。collectPlanProjectContext
-    // 用有限 requestKinds 且 honor 原生 ProjectScope；buildPlanFactsProjection 产 ≤12KB projectInfoTree
-    // 金字塔 + candidateDimensions + projectProfile，与 host-agent（MCP alembic_plan）同一 Core 入口。
-    // 上方完整 projectContextFacts 保持原样，仍返回给下游生成链使用。
-    const planSelectionAnalysis = await collectPlanProjectContext(
-      analysisScope.projectRoot,
-      undefined
-    );
+    // JSON.stringify 进 prompt 的 ~21M 爆炸路径（会在发 API 前被本地预算门拦掉）。
+    // Plan analysis 只从上方同一 certified artifact 的命名投影构造；Core 随后产 ≤12KB
+    // projectInfoTree 金字塔 + candidateDimensions + projectProfile。完整 workflow facts 仍返回下游。
+    const planSelectionAnalysis = buildPlanAnalysisFromCertifiedFacts(projectContextFacts);
     const planSelectionFacts = await buildPlanFactsProjection(planSelectionAnalysis, {
       budgetBytes: PLAN_FACTS_BUDGET_BYTES,
       scope: { projectRoot: analysisScope.projectRoot },

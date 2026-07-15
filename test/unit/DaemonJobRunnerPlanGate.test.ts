@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { runDaemonJob } from '../../lib/daemon/jobs/DaemonJobRunner.js';
 import { JobProcessEventRecorder } from '../../lib/daemon/observability/JobProcessEventRecorder.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
+import { buildPlanAnalysisFromCertifiedFacts } from '../../lib/project-facts/CertifiedProjectFactsRuntime.js';
 import {
   buildProjectContextWorkflowFacts,
   type ProjectContextWorkflowFacts,
@@ -25,6 +26,10 @@ vi.mock('@alembic/agent/service', () => ({
 
 vi.mock('../../lib/project-facts/ProjectContextWorkflowFacts.js', () => ({
   buildProjectContextWorkflowFacts: vi.fn(),
+}));
+
+vi.mock('../../lib/project-facts/CertifiedProjectFactsRuntime.js', () => ({
+  buildPlanAnalysisFromCertifiedFacts: vi.fn(),
 }));
 
 vi.mock('../../lib/recipe-pipeline/generate/GenerateWorkflow.js', () => ({
@@ -259,6 +264,7 @@ function makeNamedDataRoot(name: string): string {
 beforeEach(() => {
   process.env.ALEMBIC_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-plan-gate-home-'));
   vi.mocked(buildProjectContextWorkflowFacts).mockResolvedValue(makeFacts());
+  vi.mocked(buildPlanAnalysisFromCertifiedFacts).mockReturnValue({} as never);
   vi.mocked(collectPlanProjectContext).mockResolvedValue({} as never);
   vi.mocked(buildPlanFactsProjection).mockResolvedValue(PLAN_SELECTION_FACTS as never);
   vi.mocked(runGenerateWorkflow).mockResolvedValue({ data: { ok: true } });
@@ -607,6 +613,7 @@ describe('DaemonJobRunner bootstrap plan gate', () => {
         projectContextFacts: PLAN_SELECTION_FACTS,
       })
     );
+    expect(collectPlanProjectContext).not.toHaveBeenCalled();
     expect(runGenerateWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({ container }),
       expect.objectContaining({

@@ -37,6 +37,12 @@ import type {
   ProjectScopeAnalysisContext,
   ProjectScopeSourceIdentity,
 } from '../project-scope/ProjectScopeAnalysis.js';
+import {
+  buildStrictProjectContextWorkflowFacts,
+  captureMainCertifiedProjectFacts,
+  type MainCertifiedProjectFactsState,
+  serializeMainCertifiedProjectFactsCarrier,
+} from './CertifiedProjectFactsRuntime.js';
 import { buildProjectMapModules, buildProjectMapModulesFromTargets } from './ProjectMapModules.js';
 
 export {
@@ -91,6 +97,7 @@ export interface ProjectContextWorkflowFacts {
   secondaryLanguages: string[];
   targetCount: number;
   warnings: string[];
+  certifiedProjectFacts?: MainCertifiedProjectFactsState;
 }
 
 export interface ProjectContextFillView {
@@ -134,7 +141,7 @@ type ProjectContextMissionRescanInput = NonNullable<
   Parameters<typeof buildProjectContextMissionBriefing>[0]['rescan']
 >;
 
-interface BuildProjectContextWorkflowFactsInput {
+export interface BuildProjectContextWorkflowFactsInput {
   analysisScope?: ProjectScopeAnalysisContext;
   contentMaxLines?: number;
   ctx: ProjectContextWorkflowContext;
@@ -144,6 +151,7 @@ interface BuildProjectContextWorkflowFactsInput {
   maxFileDetails?: number;
   projectRoot: string;
   source: ProjectContextWorkflowSource;
+  strictCertifiedFacts?: boolean;
 }
 
 interface ProjectContextModuleSeed {
@@ -239,6 +247,27 @@ const PROJECT_SCOPE_LANGUAGE_BY_EXTENSION = new Map<string, string>([
 export async function buildProjectContextWorkflowFacts(
   input: BuildProjectContextWorkflowFactsInput
 ): Promise<ProjectContextWorkflowFacts> {
+  if (input.strictCertifiedFacts === true) {
+    const dimensions: DimensionDef[] = [...baseDimensions];
+    const certified = await captureMainCertifiedProjectFacts({
+      analysisScope: input.analysisScope,
+      dimensions,
+      projectRoot: input.projectRoot,
+      source: input.source,
+    });
+    input.ctx.logger.info('[ProjectContextWorkflowFacts] certified strict-v2 facts ready', {
+      artifactId: certified.artifactId,
+      fileCount: certified.projections['recipe-generation']?.files.length ?? 0,
+      moduleCount: certified.projections['module-coverage']?.modules.length ?? 0,
+      source: input.source,
+    });
+    return buildStrictProjectContextWorkflowFacts({
+      certified,
+      dimensions,
+      projectRoot: input.projectRoot,
+      source: input.source,
+    });
+  }
   const maxFiles = readPositiveInteger(input.maxFiles);
   const maxModuleSeeds = input.maxModuleSeeds ?? 6;
   const maxModuleDetails = input.maxModuleDetails ?? 3;
@@ -656,6 +685,13 @@ function buildProjectContextWorkflowSessionOptions(input: {
       skillMeta: dimension.skillMeta ?? undefined,
     })),
     projectContext: {
+      ...(input.facts.certifiedProjectFacts
+        ? {
+            certifiedProjectFacts: serializeMainCertifiedProjectFactsCarrier(
+              input.facts.certifiedProjectFacts
+            ),
+          }
+        : {}),
       fileCount: input.facts.fileCount,
       modules: input.facts.moduleCount,
       primaryLang: input.facts.primaryLang,

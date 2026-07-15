@@ -164,6 +164,7 @@ async function runColdStartProjectIndexWorkflow(
       ctx,
       maxFiles: intent.projectAnalysis.maxFiles,
       source: 'alembic-main-bootstrap',
+      strictCertifiedFacts: true,
     }));
   const sourceIdentities = collectProjectScopeSourceIdentities(projectContextFacts);
 

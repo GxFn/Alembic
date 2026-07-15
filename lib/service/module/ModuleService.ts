@@ -24,6 +24,11 @@ import Logger from '@alembic/core/logging';
 // status now arrives via constructed injection (aiStatus option).
 import type { AiRuntimeStatus } from '../../injection/AiRuntimeStatus.js';
 import {
+  assertMainCertifiedProjectFactsCarrier,
+  type MainCertifiedProjectFactsCarrier,
+  type MainCertifiedSourceFile,
+} from '../../project-facts/CertifiedProjectFactsRuntime.js';
+import {
   loadProjectContextRepo,
   type ProjectContextTargetEntry,
   projectContextDependencyGraph,
@@ -175,6 +180,10 @@ export class ModuleService {
 
   #loaded = false;
 
+  #certifiedFacts: MainCertifiedProjectFactsCarrier | null = null;
+
+  #certifiedFactsProvider;
+
   #logger;
 
   // AI pipeline deps
@@ -195,6 +204,7 @@ export class ModuleService {
       recipeExtractor?: Record<string, unknown> | null;
       guardCheckEngine?: Record<string, unknown> | null;
       violationsStore?: Record<string, unknown> | null;
+      certifiedFactsProvider?: (() => MainCertifiedProjectFactsCarrier | null) | null;
     } = {}
   ) {
     this.#projectRoot = projectRoot;
@@ -205,6 +215,7 @@ export class ModuleService {
     this.#recipeExtractor = options.recipeExtractor || null;
     this.#guardCheckEngine = options.guardCheckEngine || null;
     this.#violationsStore = options.violationsStore || null;
+    this.#certifiedFactsProvider = options.certifiedFactsProvider || null;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -217,6 +228,37 @@ export class ModuleService {
       return;
     }
 
+    const certified = this.#certifiedFactsProvider?.() ?? null;
+    if (certified) {
+      assertMainCertifiedProjectFactsCarrier(certified);
+      this.#certifiedFacts = certified;
+      const projection = certified.projections['module-coverage'];
+      this.#targets = projection.modules.map((module) => ({
+        discovererId: 'project-context',
+        discovererName: 'ProjectContext',
+        fileCount: module.ownedFiles.length,
+        info: { artifactId: certified.artifactId, fileCount: module.ownedFiles.length },
+        language: inferCertifiedModuleLanguage(projection.files, module.ownedFiles),
+        metadata: { moduleId: module.moduleId, repoId: module.repoId },
+        name: module.moduleName,
+        packageName: module.moduleName,
+        packagePath: this.#projectRoot,
+        path: this.#projectRoot,
+        projectInformationSource: 'project-context',
+        refs: [],
+        targetDir: this.#projectRoot,
+        type: 'certified-module',
+      }));
+      this.#repoContext = null;
+      this.#loaded = true;
+      this.#logger.info('[ModuleService] certified module coverage loaded', {
+        artifactId: certified.artifactId,
+        targets: this.#targets.length,
+      });
+      return;
+    }
+
+    this.#certifiedFacts = null;
     try {
       this.#repoContext = await loadProjectContextRepo(this.#projectRoot);
       this.#targets = projectContextTargets(this.#repoContext, this.#projectRoot);
@@ -240,6 +282,7 @@ export class ModuleService {
     this.#loaded = false;
     this.#repoContext = null;
     this.#targets = [];
+    this.#certifiedFacts = null;
     await this.load();
   }
 
@@ -265,6 +308,22 @@ export class ModuleService {
     await this.#ensureLoaded();
 
     const targetObj = typeof target === 'string' ? { name: target } : target;
+    if (this.#certifiedFacts) {
+      const projection = this.#certifiedFacts.projections['module-coverage'];
+      const module = projection.modules.find(
+        (candidate) =>
+          candidate.moduleName === targetObj.name ||
+          candidate.moduleId ===
+            (targetObj.metadata as Record<string, unknown> | undefined)?.moduleId
+      );
+      if (!module) {
+        return [];
+      }
+      const owned = new Set(module.ownedFiles);
+      return projection.files
+        .filter((file) => owned.has(`${file.repoId}/${file.relativePath}`))
+        .map((file) => certifiedModuleFileEntry(file, module.moduleName, this.#projectRoot));
+    }
     const discovererId = targetObj.discovererId;
 
     // 虚拟目录扫描 — 直接收集文件（无需 discoverer）
@@ -296,8 +355,29 @@ export class ModuleService {
    * @param [options]
    * @returns [] }>}
    */
-  async getDependencyGraph(options: { level?: 'package' | 'target' } = {}) {
+  async getDependencyGraph(
+    options: { level?: 'package' | 'target' } = {}
+  ): Promise<
+    import('../../project-facts/ProjectContextConsumerFacts.js').ProjectContextDependencyGraph
+  > {
     await this.#ensureLoaded();
+    if (this.#certifiedFacts) {
+      const graph = this.#certifiedFacts.projections['dependency-graph'].dependencyGraph;
+      if (!graph) {
+        throw new TypeError('Certified dependency graph payload is missing.');
+      }
+      return {
+        dependencySummary: graph.dependencySummary,
+        edges: graph.edges,
+        generatedAt: 'certified-artifact',
+        projectInformationSource: graph.projectInformationSource,
+        projectRoot: this.#projectRoot,
+        nodes: graph.nodes.map((node) => ({
+          ...node,
+          type: node.type || options.level || 'module',
+        })),
+      };
+    }
     const graph = await projectContextDependencyGraph(
       this.#projectRoot,
       this.#repoContext ?? undefined
@@ -313,6 +393,19 @@ export class ModuleService {
 
   /** 项目信息摘要 */
   getProjectInfo() {
+    if (this.#certifiedFacts) {
+      const files = this.#certifiedFacts.projections['module-coverage'].files;
+      const languages = [...new Set(files.map((file) => file.language))].sort();
+      return {
+        discoverers: ['certified-project-facts'],
+        hasSpm: false,
+        languages,
+        primaryLanguage: primaryCertifiedLanguage(files),
+        projectInformationSource: 'project-context',
+        projectName: _pathBasename(this.#projectRoot) || '',
+        projectRoot: this.#projectRoot,
+      };
+    }
     return this.#repoContext
       ? projectContextProjectInfo(this.#repoContext, this.#projectRoot)
       : {
@@ -371,7 +464,10 @@ export class ModuleService {
             path: filePath,
             relativePath:
               ((f as Record<string, unknown>).relativePath as string) || _pathBasename(filePath),
-            content: readFileSync(filePath, 'utf8'),
+            content:
+              typeof (f as Record<string, unknown>).content === 'string'
+                ? ((f as Record<string, unknown>).content as string)
+                : readFileSync(filePath, 'utf8'),
           };
         } catch (err: unknown) {
           this.#logger.warn(
@@ -528,7 +624,10 @@ export class ModuleService {
               path,
               relativePath:
                 (file as Record<string, unknown>).relativePath?.toString() || _pathBasename(path),
-              content: readFileSync(path, 'utf8'),
+              content:
+                typeof (file as Record<string, unknown>).content === 'string'
+                  ? ((file as Record<string, unknown>).content as string)
+                  : readFileSync(path, 'utf8'),
               targetName: target.name,
             });
           } catch {
@@ -544,7 +643,7 @@ export class ModuleService {
         );
       }
     }
-    if (files.length === 0) {
+    if (files.length === 0 && !this.#certifiedFacts) {
       this.#logger.info(
         '[ModuleService] scanProject: No module targets, falling back to directory scan'
       );
@@ -1103,6 +1202,47 @@ export class ModuleService {
       walkDir(this.#projectRoot, 'root');
     }
   }
+}
+
+function certifiedModuleFileEntry(
+  file: MainCertifiedSourceFile,
+  targetName: string,
+  projectRoot: string
+): Record<string, unknown> {
+  const relativePath = `${file.repoId}/${file.relativePath}`;
+  return {
+    content: Buffer.from(file.contentBase64, 'base64').toString('utf8'),
+    language: file.language,
+    name: _pathBasename(file.relativePath),
+    path: _pathJoin(projectRoot, relativePath),
+    projectInformationSource: 'certified-project-facts',
+    relativePath,
+    size: file.byteLength,
+    targetName,
+  };
+}
+
+function inferCertifiedModuleLanguage(
+  files: readonly MainCertifiedSourceFile[],
+  ownedFiles: readonly string[]
+): string {
+  const owned = new Set(ownedFiles);
+  return primaryCertifiedLanguage(
+    files.filter((file) => owned.has(`${file.repoId}/${file.relativePath}`))
+  );
+}
+
+function primaryCertifiedLanguage(files: readonly MainCertifiedSourceFile[]): string {
+  const counts = new Map<string, number>();
+  for (const file of files) {
+    counts.set(file.language, (counts.get(file.language) ?? 0) + 1);
+  }
+  return (
+    [...counts.entries()].sort(
+      ([leftName, leftCount], [rightName, rightCount]) =>
+        rightCount - leftCount || leftName.localeCompare(rightName)
+    )[0]?.[0] ?? 'unknown'
+  );
 }
 
 function isPersistedModuleScanRecipe(value: unknown): value is ModuleScanRecipe {

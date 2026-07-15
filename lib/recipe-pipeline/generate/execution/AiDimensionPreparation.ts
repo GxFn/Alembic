@@ -5,6 +5,7 @@ import type { DimensionDef, IncrementalPlan } from '@alembic/core/types';
 import { resolveDataRoot } from '@alembic/core/workspace';
 import { getAiRuntimeStatus } from '#inject/AiRuntimeStatus.js';
 import { GenerateEventEmitter } from '#recipe-pipeline/generate/runtime/GenerateEventEmitter.js';
+import { dependencyGraphFromCertifiedFacts } from '../../../project-facts/CertifiedProjectFactsRuntime.js';
 import {
   type ProjectContextDependencyGraph,
   projectContextDependencyGraph,
@@ -97,18 +98,25 @@ export async function prepareAiDimensionPipeline(
 
   logger.info(`[AiDimension] ═══ entered — ${isIncremental ? 'INCREMENTAL' : 'FULL'} pipeline`);
 
-  // 声明式依赖图接线(2026-07-10):此前恒 null,briefing 的 dependencyGraph 槽位
-  // 从未被填过。失败降级 null 并打日志(不阻断挖掘,行为回落与历史一致)。
+  // strict-v2 必须从同一 reopened artifact 的命名 projection 取图，缺失或绑定漂移
+  // 直接失败；仅未迁移的 legacy/rescan carrier 保留历史 ProjectContext 降级路径。
   let depGraphData: ProjectContextDependencyGraph | null = null;
-  try {
-    depGraphData = await projectContextDependencyGraph(projectRoot);
+  if (projectContextFacts.certifiedProjectFacts) {
+    depGraphData = dependencyGraphFromCertifiedFacts(projectContextFacts);
     logger.info(
-      `[AiDimension] dependency graph loaded: nodes=${depGraphData.nodes.length} edges=${depGraphData.edges.length} source=${String(depGraphData.dependencySummary?.declaredEdgeSource ?? 'project-context')}`
+      `[AiDimension] certified dependency graph loaded: nodes=${depGraphData.nodes.length} edges=${depGraphData.edges.length} source=${String(depGraphData.dependencySummary?.declaredEdgeSource ?? 'certified-project-facts')}`
     );
-  } catch (err: unknown) {
-    logger.warn(
-      `[AiDimension] dependency graph unavailable — briefing proceeds without it: ${err instanceof Error ? err.message : String(err)}`
-    );
+  } else {
+    try {
+      depGraphData = await projectContextDependencyGraph(projectRoot);
+      logger.info(
+        `[AiDimension] dependency graph loaded: nodes=${depGraphData.nodes.length} edges=${depGraphData.edges.length} source=${String(depGraphData.dependencySummary?.declaredEdgeSource ?? 'project-context')}`
+      );
+    } catch (err: unknown) {
+      logger.warn(
+        `[AiDimension] dependency graph unavailable — briefing proceeds without it: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
 
   // Track2 source-graph 激活:catchUpOnStartup 幂等(全量/增量/noop),
