@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -23,6 +24,7 @@ import {
 import { resolveAlembicDaemonPaths } from '../../lib/project-scope/ProjectScopeRegistry.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
+const ORIGINAL_STRICT_SETUP_ACTION_PATH = process.env.ALEMBIC_STRICT_SETUP_ACTION_PATH;
 const ORIGINAL_STRICT_SETUP_AUTHORITY_PATH = process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH;
 
 function useTempAlembicHome(): string {
@@ -35,7 +37,9 @@ function makeProjectRoot(prefix = 'alembic-daemon-project-'): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
-function makeStrictSupervisorFixture() {
+function makeStrictSupervisorFixture(
+  options: { action?: 'execute' | 'recover' | 'complete'; existingTarget?: boolean } = {}
+) {
   useTempAlembicHome();
   const projectRoot = makeProjectRoot('alembic-daemon-strict-project-');
   ProjectRegistry.register(projectRoot, true);
@@ -43,8 +47,57 @@ function makeStrictSupervisorFixture() {
   const authorityRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-strict-authority-'));
   const authorityPath = path.join(authorityRoot, 'strict-setup-authority.json');
   fs.writeFileSync(authorityPath, '{}\n');
+  const actionPath = path.join(authorityRoot, 'strict-setup-action.json');
+  fs.writeFileSync(actionPath, `${JSON.stringify({ action: options.action ?? 'execute' })}\n`);
+  if (options.existingTarget) {
+    fs.mkdirSync(path.join(paths.dataRoot, 'sentinel-dir'), { recursive: true });
+    fs.writeFileSync(path.join(paths.dataRoot, 'sentinel.txt'), 'pre-authority-bytes\n');
+    fs.writeFileSync(
+      path.join(paths.dataRoot, 'sentinel-dir', 'nested.bin'),
+      Buffer.from([0, 1, 2, 255])
+    );
+  }
+  process.env.ALEMBIC_STRICT_SETUP_ACTION_PATH = actionPath;
   process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH = authorityPath;
-  return { authorityRoot, paths, projectRoot };
+  return { actionPath, authorityRoot, paths, projectRoot };
+}
+
+function collectTreeInventory(root: string): Array<{
+  contentHash?: string;
+  kind: 'directory' | 'file';
+  relativePath: string;
+}> {
+  if (!fs.existsSync(root)) {
+    return [];
+  }
+  const inventory: Array<{
+    contentHash?: string;
+    kind: 'directory' | 'file';
+    relativePath: string;
+  }> = [];
+  const visit = (current: string, relativePath: string): void => {
+    for (const entry of fs
+      .readdirSync(current, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name))) {
+      const absolutePath = path.join(current, entry.name);
+      const childRelativePath = relativePath ? path.join(relativePath, entry.name) : entry.name;
+      if (entry.isDirectory()) {
+        inventory.push({ kind: 'directory', relativePath: childRelativePath });
+        visit(absolutePath, childRelativePath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        throw new Error(`Unexpected inventory entry: ${absolutePath}`);
+      }
+      inventory.push({
+        contentHash: createHash('sha256').update(fs.readFileSync(absolutePath)).digest('hex'),
+        kind: 'file',
+        relativePath: childRelativePath,
+      });
+    }
+  };
+  visit(root, '');
+  return inventory;
 }
 
 function makeState(paths: DaemonPaths, overrides: Partial<DaemonState> = {}): DaemonState {
@@ -99,6 +152,11 @@ afterEach(() => {
     delete process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH;
   } else {
     process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH = ORIGINAL_STRICT_SETUP_AUTHORITY_PATH;
+  }
+  if (ORIGINAL_STRICT_SETUP_ACTION_PATH === undefined) {
+    delete process.env.ALEMBIC_STRICT_SETUP_ACTION_PATH;
+  } else {
+    process.env.ALEMBIC_STRICT_SETUP_ACTION_PATH = ORIGINAL_STRICT_SETUP_ACTION_PATH;
   }
   __clearDaemonHealthCoalesceForTests();
   vi.restoreAllMocks();
@@ -244,6 +302,69 @@ describe('DaemonSupervisor', () => {
     expect(status.status).toBe('stopped');
     expect(status.message).toBe('strict external setup action completed');
     expect(fs.existsSync(paths.dataRoot)).toBe(false);
+  });
+
+  test.each([
+    'execute',
+    'recover',
+    'complete',
+  ] as const)('strict %s rebuild preserves the complete target inventory until child authority is established', async (action) => {
+    const { authorityRoot, paths, projectRoot } = makeStrictSupervisorFixture({
+      action,
+      existingTarget: true,
+    });
+    const beforeAuthority = collectTreeInventory(paths.dataRoot);
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null,
+      pid: process.pid,
+      signalCode: null as NodeJS.Signals | null,
+      unref: vi.fn(),
+    });
+    let state: DaemonState | null = null;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      if (!state) {
+        throw new Error('child state is not ready');
+      }
+      return healthResponse(state);
+    });
+    const spawnDaemon = vi.fn(() => {
+      expect(collectTreeInventory(paths.dataRoot)).toEqual(beforeAuthority);
+      queueMicrotask(() => {
+        const operationLockRoot = path.join(authorityRoot, 'operation-lock');
+        const journalRoot = path.join(authorityRoot, 'evidence', 'strict-run-journal', 'run');
+        const snapshotRoot = path.join(authorityRoot, 'snapshot', 'whole-root');
+        fs.mkdirSync(operationLockRoot);
+        fs.mkdirSync(journalRoot, { recursive: true });
+        fs.mkdirSync(snapshotRoot, { recursive: true });
+        fs.writeFileSync(path.join(operationLockRoot, 'strict-production.operation.lock'), '{}\n');
+        fs.writeFileSync(path.join(journalRoot, 'strict-production.journal.jsonl'), '{}\n');
+        fs.writeFileSync(path.join(snapshotRoot, 'authority-established.json'), '{}\n');
+        expect(collectTreeInventory(paths.dataRoot)).toEqual(beforeAuthority);
+
+        if (action === 'execute') {
+          ensureDaemonDirs(paths);
+          state = makeState(paths, {
+            lastReadyAt: new Date(Date.now() + 60_000).toISOString(),
+            pid: process.pid,
+            startedAt: new Date(Date.now() + 60_000).toISOString(),
+          });
+          writeDaemonState(paths.statePath, state);
+          return;
+        }
+        child.exitCode = 0;
+        child.emit('exit', 0, null);
+      });
+      return child;
+    });
+    const supervisor = new DaemonSupervisor({
+      daemonEntryPath: process.execPath,
+      spawnDaemon,
+    });
+
+    const status = await supervisor.start({ projectRoot, waitUntilReadyMs: 1_000 });
+
+    expect(status.status).toBe(action === 'execute' ? 'ready' : 'stopped');
+    expect(spawnDaemon).toHaveBeenCalledOnce();
   });
 
   test('uses bounded increasing lock retry backoff', () => {

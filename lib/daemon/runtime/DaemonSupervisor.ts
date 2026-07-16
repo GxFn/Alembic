@@ -149,7 +149,6 @@ export class DaemonSupervisor {
     }
 
     const strictExternalLaunch = Boolean(process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH?.trim());
-    const preservePristineTarget = strictExternalLaunch && !existsSync(paths.dataRoot);
     const entry = this.#daemonEntryPath ?? getDaemonServerEntryPath();
     if (!existsSync(entry)) {
       throw new Error(`Daemon server entry not found: ${entry}. Run npm run build first.`);
@@ -274,7 +273,11 @@ export class DaemonSupervisor {
       return ready;
     };
 
-    if (preservePristineTarget) {
+    // strict external authority owns the first mutation boundary for both pristine and rebuild.
+    // The supervisor may inspect existing state and stop a prior process, but target-local
+    // dirs/lock/log/pid/state are created only after the child has acquired the external lease,
+    // fsynced its journal header, and established snapshot authority.
+    if (strictExternalLaunch) {
       return startChild(existing, false);
     }
 

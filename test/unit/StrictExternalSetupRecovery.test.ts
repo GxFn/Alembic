@@ -1,12 +1,16 @@
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { readAlembicMigrationBundleManifest } from '@alembic/core/database';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
+import { createProjectDescriptor, createProjectScopeRegistryDocument } from '@alembic/core/shared';
+import { getProjectRegistryDir } from '@alembic/core/workspace';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import AppRuntime from '../../lib/Bootstrap.js';
+import type AppRuntime from '../../lib/Bootstrap.js';
 import { initializeServerRuntime } from '../../lib/daemon/runtime/ServerStartupBoundary.js';
 import { loadStrictProductionAuthorization } from '../../lib/recipe-pipeline/generate/strict/StrictAuthorization.js';
 import {
@@ -26,11 +30,16 @@ import {
 } from '../../lib/recipe-pipeline/generate/strict/StrictProductionJournal.js';
 
 const roots: string[] = [];
+const execFileAsync = promisify(execFile);
+const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
 const ORIGINAL_AUTHORITY_PATH = process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH;
 const ORIGINAL_ACTION_PATH = process.env.ALEMBIC_STRICT_SETUP_ACTION_PATH;
+const ORIGINAL_DAEMON_STATE_PATH = process.env.ALEMBIC_DAEMON_STATE_PATH;
+const ORIGINAL_PROJECT_DIR = process.env.ALEMBIC_PROJECT_DIR;
 const ORIGINAL_RUNTIME_MANIFEST_PATH = process.env.ALEMBIC_RUNTIME_ARTIFACT_MANIFEST_PATH;
 
 afterEach(async () => {
+  restoreEnvironment('ALEMBIC_HOME', ORIGINAL_ALEMBIC_HOME);
   if (ORIGINAL_AUTHORITY_PATH === undefined) {
     delete process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH;
   } else {
@@ -46,6 +55,8 @@ afterEach(async () => {
   } else {
     process.env.ALEMBIC_STRICT_SETUP_ACTION_PATH = ORIGINAL_ACTION_PATH;
   }
+  restoreEnvironment('ALEMBIC_DAEMON_STATE_PATH', ORIGINAL_DAEMON_STATE_PATH);
+  restoreEnvironment('ALEMBIC_PROJECT_DIR', ORIGINAL_PROJECT_DIR);
   await releaseStrictExternalSetupSession();
   await Promise.all(roots.splice(0).map((root) => fsp.rm(root, { force: true, recursive: true })));
 });
@@ -316,9 +327,17 @@ describe('strict external setup and recovery authority', () => {
       runId: fixture.runId,
     });
 
-    const startup = await initializeServerRuntime(createFreshStrictRuntime(fixture));
+    const daemonStatePath = path.join(fixture.authorityRoot, 'daemon-state.json');
+    const child = await runBuiltServerEntrypoint({
+      entry: 'daemon-server.js',
+      fixture,
+      extraEnvironment: {
+        ALEMBIC_DAEMON_STATE_PATH: daemonStatePath,
+      },
+    });
 
-    expect(startup).toBeNull();
+    expect(child.stderr).not.toContain('Failed to start Alembic daemon');
+    await expect(fsp.stat(daemonStatePath)).rejects.toMatchObject({ code: 'ENOENT' });
     expect(await fsp.readFile(path.join(fixture.dataRoot, '.asd/config.json'), 'utf8')).toBe(
       '{"reader":"legacy"}\n'
     );
@@ -361,9 +380,13 @@ describe('strict external setup and recovery authority', () => {
       runId: fixture.runId,
     });
 
-    const startup = await initializeServerRuntime(createFreshStrictRuntime(fixture));
+    const child = await runBuiltServerEntrypoint({
+      entry: 'api-server.js',
+      fixture,
+      extraEnvironment: { PORT: '0' },
+    });
 
-    expect(startup).toBeNull();
+    expect(child.stderr).not.toContain('Failed to start HTTP API Server');
     await expect(
       fsp.stat(
         path.join(
@@ -496,20 +519,6 @@ describe('strict external setup and recovery authority', () => {
   });
 });
 
-function createFreshStrictRuntime(fixture: { dataRoot: string; projectRoot: string }) {
-  const appRuntime = new AppRuntime();
-  appRuntime.components.workspaceResolver = {
-    dataRoot: fixture.dataRoot,
-    projectRoot: fixture.projectRoot,
-  } as AppRuntime['components']['workspaceResolver'];
-  return {
-    async initialize() {
-      await appRuntime.initializeStrictExternalSetup();
-      return appRuntime.components;
-    },
-  };
-}
-
 async function pristineAuthorityFixture() {
   const root = await fsp.realpath(
     await fsp.mkdtemp(path.join(os.tmpdir(), 'alembic-strict-external-pristine-'))
@@ -601,6 +610,7 @@ async function pristineAuthorityFixture() {
     },
   };
   return {
+    authorityRoot,
     authorityHash,
     authorityPath,
     dataRoot,
@@ -756,6 +766,61 @@ async function rebuildAuthorityFixture(options: { snapshotRelativePath?: string 
     runId: semantic.runId,
     snapshotRoot,
   };
+}
+
+async function runBuiltServerEntrypoint(input: {
+  entry: 'api-server.js' | 'daemon-server.js';
+  extraEnvironment?: NodeJS.ProcessEnv;
+  fixture: {
+    authorityRoot: string;
+    dataRoot: string;
+    projectRoot: string;
+  };
+}): Promise<{ stderr: string; stdout: string }> {
+  const alembicHome = path.join(input.fixture.authorityRoot, 'fresh-process-home');
+  await fsp.mkdir(alembicHome, { recursive: true });
+  process.env.ALEMBIC_HOME = alembicHome;
+  const projectScope = createProjectDescriptor({
+    controlRoot: path.dirname(input.fixture.projectRoot),
+    dataRoot: input.fixture.dataRoot,
+    displayName: 'strict server entry fixture',
+    folders: [{ path: input.fixture.projectRoot, role: 'primary-source' }],
+    projectId: 'strict-server-entry-fixture',
+    projectScopeId: 'strict-server-entry-fixture-scope',
+  });
+  const registryPath = path.join(getProjectRegistryDir(), 'project-scopes.json');
+  await fsp.mkdir(path.dirname(registryPath), { recursive: true });
+  await fsp.writeFile(
+    registryPath,
+    `${JSON.stringify(createProjectScopeRegistryDocument([projectScope]), null, 2)}\n`
+  );
+
+  const result = await execFileAsync(
+    process.execPath,
+    [path.join(process.cwd(), 'dist', 'bin', input.entry)],
+    {
+      env: {
+        ...process.env,
+        ALEMBIC_DAEMON_FILE_CHANGES: '0',
+        ALEMBIC_EVOLUTION_MAINTENANCE_SWEEP: '0',
+        ALEMBIC_HOME: alembicHome,
+        ALEMBIC_PROJECT_DIR: input.fixture.projectRoot,
+        ALEMBIC_QUIET: '1',
+        NODE_ENV: 'test',
+        ...input.extraEnvironment,
+      },
+      timeout: 10_000,
+    }
+  );
+  return { stderr: result.stderr, stdout: result.stdout };
+}
+
+function restoreEnvironment(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+  } else {
+    process.env[key] = value;
+  }
 }
 
 async function writeLease(
