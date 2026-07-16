@@ -42,7 +42,7 @@ const RUNTIME_REPORT_FILE = 'strict-production.runtime-report.json';
 const REVISION_INIT_FILE = 'strict-private-revision-init-receipt.json';
 
 interface StrictProductionCheckpointV1 {
-  schemaVersion: 1;
+  schemaVersion: 2;
   facts?: {
     carrier: MainCertifiedProjectFactsState;
     projection: MainCertifiedProjectionPayload;
@@ -158,15 +158,25 @@ async function prepareAuthorizedBlankState(context: StrictExecutionContext): Pro
   });
   await advance(journal, 'AUTHORIZED', { authorizationHash: authorization.authorizationHash });
   const observedPublicRoute = await inspectPublicRoute(publicRoutePath);
-  const recoverablePreparedRouteHash = checkpoint.finalization
-    ? hashCanonicalJson(checkpoint.finalization.preparedPublicRoute.route)
-    : null;
+  const preparedRoute = checkpoint.finalization?.preparedPublicRoute;
+  const exactPreparedRouteObserved = Boolean(
+    observedPublicRoute &&
+      preparedRoute &&
+      observedPublicRoute.hash === hashCanonicalJson(preparedRoute.route) &&
+      observedPublicRoute.bytes === preparedRoute.canonicalBytes
+  );
+  if (before(journal.resumePoint, 'PUBLIC_CAS_PREPARED') && observedPublicRoute !== null) {
+    throw new Error('STRICT_AUTHORIZATION_OBSERVED_POINTER_MISMATCH');
+  }
   if (
-    (observedPublicRoute?.hash ?? null) !== authorization.expectedPublicRouteHash &&
-    (before(journal.resumePoint, 'SERVING_MANIFEST_READY') ||
-      observedPublicRoute?.hash !== recoverablePreparedRouteHash)
+    !before(journal.resumePoint, 'PUBLIC_CAS_PREPARED') &&
+    observedPublicRoute !== null &&
+    !exactPreparedRouteObserved
   ) {
     throw new Error('STRICT_AUTHORIZATION_OBSERVED_POINTER_MISMATCH');
+  }
+  if (!before(journal.resumePoint, 'PUBLIC_CAS_COMMITTED') && !exactPreparedRouteObserved) {
+    throw new Error('STRICT_PUBLIC_ROUTE_COMMIT_READBACK_MISSING');
   }
   await advance(journal, 'JOURNAL_OPEN', {
     observedPointersHash: hashCanonicalJson({
@@ -432,6 +442,22 @@ async function finalizeAndPublish(
     });
     context.checkpoint.finalization = finalization;
     await writeCheckpoint(context.operationRoot, context.checkpoint);
+  } else {
+    const reconstructed = finalizeStrictCandidate({
+      analysis,
+      candidateCoverage,
+      certifiedProjectFactsHash: facts.carrier.certificationBindingHash,
+      committedAt: finalization.preparedPublicRoute.route.committedAt,
+      compiledPlan: planning.compiledPlan,
+      expressionSets: analysis.expressionSets,
+      planCognitionHash: planning.planCognitionHash,
+      privateCorpus,
+      runId: context.input.request.runId,
+    });
+    if (hashCanonicalJson(reconstructed) !== hashCanonicalJson(finalization)) {
+      throw new Error('STRICT_FINALIZATION_CHECKPOINT_DIVERGENCE');
+    }
+    finalization = reconstructed;
   }
   await advance(context.journal, 'G4_READY', { g4ReceiptHash: finalization.g4ReceiptHash });
   await advance(context.journal, 'SERVING_RECONCILED', {
@@ -440,14 +466,19 @@ async function finalizeAndPublish(
   await advance(context.journal, 'FINAL_COVERAGE_BOUND', {
     finalCoverageBindingHash: finalization.finalCoverage.receiptHash,
   });
-  await advance(context.journal, 'CANDIDATE_ORACLE_PASSED', {
-    candidateOracleHash: finalization.candidateOracleHash,
+  await advance(context.journal, 'SERVING_SNAPSHOT_VALIDATED', {
+    servingSnapshotValidationHash: finalization.servingSnapshotValidation.receiptHash,
   });
   await advance(context.journal, 'SERVING_MANIFEST_READY', {
     servingSnapshotManifestHash: finalization.servingManifest.manifestHash,
   });
+  await advance(context.journal, 'PUBLIC_CAS_PREPARED', {
+    preparedRouteHash: hashCanonicalJson(finalization.preparedPublicRoute.route),
+    routeBytesHash: finalization.preparedPublicRoute.routeBytesHash,
+    semanticHash: finalization.preparedPublicRoute.semanticHash,
+  });
   const route = await commitPreparedPublicRoute({
-    expectedCurrentHash: context.authorization.expectedPublicRouteHash,
+    expectedCurrentHash: null,
     prepared: {
       bytes: finalization.preparedPublicRoute.canonicalBytes,
       hash: hashCanonicalJson(finalization.preparedPublicRoute.route),
@@ -494,14 +525,12 @@ function buildRuntimeReport(
       snapshotId: finalization.servingManifest.snapshotId,
       servingSnapshotManifestHash: finalization.servingManifest.manifestHash,
     },
-    candidateHandle: {
-      revisionId: privateCorpus.revisionId,
-      candidateDataManifestHash: finalization.candidateDataManifestHash,
+    privateCorpusEvidence: {
+      servingSnapshotValidationHash: finalization.servingSnapshotValidation.receiptHash,
+      sealedCorpusVerificationHash: privateCorpus.sealedCorpusVerification.verificationHash,
       finalCoverageBindingHash: finalization.finalCoverage.receiptHash,
-      vectorGenerationId: privateCorpus.vectorGenerationId,
       activeRecipeCount: privateCorpus.activeRecipeIds.length,
       g1ReceiptCount: privateCorpus.g1Receipts.length,
-      candidateOracleHash: privateCorpus.candidateOracle.oracleHash,
     },
     analysisHandle: {
       factCount: analysis.facts.length,
@@ -566,11 +595,18 @@ function before(
 }
 
 async function readCheckpoint(operationRoot: string): Promise<StrictProductionCheckpointV1> {
-  return (
-    ((await readOptionalJson(
-      path.join(operationRoot, CHECKPOINT_FILE)
-    )) as StrictProductionCheckpointV1 | null) ?? { schemaVersion: 1 }
-  );
+  const value = await readOptionalJson(path.join(operationRoot, CHECKPOINT_FILE));
+  if (value === null) {
+    return { schemaVersion: 2 };
+  }
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    (value as { schemaVersion?: unknown }).schemaVersion !== 2
+  ) {
+    throw new Error('STRICT_CHECKPOINT_PUBLICATION_CONTRACT_MISMATCH');
+  }
+  return value as StrictProductionCheckpointV1;
 }
 
 async function writeCheckpoint(

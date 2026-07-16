@@ -14,6 +14,7 @@ import {
   KnowledgeFileWriter,
   KnowledgeGraphService,
   KnowledgeService,
+  parseKnowledgeMarkdown,
   prepareRecipePersistenceV1,
   type RecipeProductionBindingV1,
   RecipeProductionGateway,
@@ -25,10 +26,11 @@ import {
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { createAlembicRepositories } from '@alembic/core/repositories';
 import {
-  asEmbeddingPort,
   createLocalVectorStore,
   createLocalVectorStoreSync,
+  type RecipeVectorGenerationInspection,
   RecipeVectorGenerationManager,
+  type RecipeVectorGenerationManifest,
 } from '@alembic/core/vector';
 import {
   initializePrivateCorpusRevisionV1,
@@ -54,17 +56,47 @@ export interface StrictPrivateCorpusContentResultV1 {
     readonly terminalFate: 'content-ready' | 'reviewed-merge' | 'reviewed-duplicate';
     readonly terminalReceiptId: string;
   }[];
-  readonly activeRecipes: readonly { readonly id: string; readonly title: string }[];
+  readonly activeRecipes: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly lifecycle: 'active';
+  }[];
+  readonly readyMembers: readonly StrictReadyMemberProofV1[];
 }
 
-export interface StrictCandidateOracleV1 {
+export interface StrictReadyMemberProofV1 {
   readonly schemaVersion: 1;
-  readonly checks: readonly {
-    readonly tool: 'get-by-id' | 'get-by-title' | 'list-active' | 'search-sparse' | 'search-vector';
-    readonly pass: true;
-    readonly evidenceHash: string;
-  }[];
-  readonly oracleHash: string;
+  readonly recipeId: string;
+  readonly title: string;
+  readonly runId: string;
+  readonly privateCorpusRevision: string;
+  readonly analysisFixpointHash: string;
+  readonly authoredFingerprint: string;
+  readonly bindingHash: string;
+  readonly persistenceReceiptHash: string;
+  readonly databaseRowHash: string;
+  readonly databaseReadbackHash: string;
+  readonly fileHash: string;
+  readonly fileReadbackHash: string;
+  readonly refReconciliationReceiptHash: string;
+  readonly refReadbackHash: string;
+  readonly lifecycle: 'active';
+  readonly proofHash: string;
+}
+
+export interface StrictSealedCorpusVerificationV1 {
+  readonly schemaVersion: 1;
+  readonly activeRecipeIds: readonly string[];
+  readonly readyMemberSetHash: string;
+  readonly durableReadbackHash: string;
+  readonly refReadbackHash: string;
+  readonly sparseEvidenceHash: string;
+  readonly vectorGenerationId: string;
+  readonly vectorManifestHash: string;
+  readonly vectorInspectionHash: string;
+  readonly verdict: 'pass';
+  readonly failedPredicate: null;
+  readonly verificationHash: string;
 }
 
 export interface StrictPrivateCorpusResultV1 extends StrictPrivateCorpusContentResultV1 {
@@ -72,7 +104,7 @@ export interface StrictPrivateCorpusResultV1 extends StrictPrivateCorpusContentR
   readonly activeRecipeIds: readonly string[];
   readonly vectorGenerationId: string;
   readonly vectorManifestHash: string;
-  readonly candidateOracle: StrictCandidateOracleV1;
+  readonly sealedCorpusVerification: StrictSealedCorpusVerificationV1;
 }
 
 interface StrictPreparedRowCheckpointV1 {
@@ -116,6 +148,7 @@ interface StrictPersistenceContext {
   readonly revisionId: string;
   readonly repositories: StrictRepositories;
   readonly gateway: RecipeProductionGateway;
+  readonly fileWriter: KnowledgeFileWriter;
   readonly reviewedById: Map<string, StrictReviewedProjection>;
   readonly expectedById: Map<string, { dbHash: string; fileHash: string }>;
   readonly reviews: ReadonlyMap<string, IndependentReviewDecisionV1>;
@@ -125,7 +158,14 @@ interface StrictPersistenceAccumulators {
   readonly g1Receipts: StrictG1ReceiptV1[];
   readonly bindings: RecipeProductionBindingV1[];
   readonly expressionTerminalRows: StrictPrivateCorpusResultV1['expressionTerminalRows'][number][];
-  readonly activeRecipes: Array<{ id: string; title: string }>;
+  readonly activeRecipes: Array<{ id: string; title: string; lifecycle: 'active' }>;
+  readonly readyMembers: StrictReadyMemberProofV1[];
+}
+
+interface StrictResolvedPreparedBinding {
+  readonly persistence: StrictPersistenceReceiptV1;
+  readonly refs: RefReconciliationReceiptV1;
+  readonly binding: RecipeProductionBindingV1;
 }
 
 interface StrictDraftPreparation {
@@ -140,6 +180,11 @@ interface StrictDraftPreparation {
   readonly rowCheckpoint: StrictPreparedRowCheckpointV1 | null;
   readonly moduleId: string;
 }
+
+type StrictKnowledgeRepository = ReturnType<
+  typeof createAlembicRepositories
+>['knowledgeRepository'];
+type StrictKnowledgeEntry = NonNullable<Awaited<ReturnType<StrictKnowledgeRepository['findById']>>>;
 
 export async function persistStrictPrivateCorpusContent(
   input: StrictPrivateCorpusPersistenceInput
@@ -163,14 +208,11 @@ export async function persistStrictPrivateCorpusContent(
     initialized.handle.resolver.dataRoot,
     new WriteZone(initialized.handle.resolver)
   );
-  const knowledgeService = new KnowledgeService(
-    repositories.knowledgeRepository as unknown as ConstructorParameters<
-      typeof KnowledgeService
-    >[0],
-    { async log() {} },
-    null,
-    graph,
-    { fileWriter }
+  const knowledgeService = createKnowledgeService(
+    initialized.handle.resolver,
+    repositories,
+    fileWriter,
+    graph
   );
   const reviewedById = new Map<
     string,
@@ -227,7 +269,8 @@ export async function persistStrictPrivateCorpusContent(
   const bindings: RecipeProductionBindingV1[] = [];
   const expressionTerminalRows: StrictPrivateCorpusResultV1['expressionTerminalRows'][number][] =
     [];
-  const activeRecipes: Array<{ id: string; title: string }> = [];
+  const activeRecipes: Array<{ id: string; title: string; lifecycle: 'active' }> = [];
+  const readyMembers: StrictReadyMemberProofV1[] = [];
   const reviews = new Map(
     input.independentReviews.map((review) => [review.admissionReceiptId, review])
   );
@@ -237,17 +280,19 @@ export async function persistStrictPrivateCorpusContent(
       revisionId,
       repositories,
       gateway,
+      fileWriter,
       reviewedById,
       expectedById,
       reviews,
     },
-    { g1Receipts, bindings, expressionTerminalRows, activeRecipes }
+    { g1Receipts, bindings, expressionTerminalRows, activeRecipes, readyMembers }
   );
   const rootManifestHash = hashCanonicalJson({
     analysisFixpointHash: input.analysisFixpointHash,
     bindings: bindings.map((binding) => binding.bindingHash),
     expressionTerminalRows,
     revisionId,
+    readyMemberProofs: readyMembers.map((member) => member.proofHash),
   });
   initialized.runtime.close();
   return Object.freeze({
@@ -258,6 +303,9 @@ export async function persistStrictPrivateCorpusContent(
     bindings,
     expressionTerminalRows,
     activeRecipes: [...activeRecipes].sort((left, right) => left.id.localeCompare(right.id)),
+    readyMembers: [...readyMembers].sort((left, right) =>
+      left.recipeId.localeCompare(right.recipeId)
+    ),
   });
 }
 
@@ -311,7 +359,7 @@ async function persistStrictExpressionSets(
         }
       );
       const sourcePaths = reconcileStrictSourceRefs(context, proposal, persisted);
-      const binding = await resolveStrictPreparedBinding(
+      const resolved = await resolveStrictPreparedBinding(
         context,
         draft,
         persisted,
@@ -319,7 +367,7 @@ async function persistStrictExpressionSets(
         review.decisionHash,
         sourcePaths
       );
-      accumulators.bindings.push(binding);
+      accumulators.bindings.push(resolved.binding);
       const active =
         persisted.recipe.lifecycle === 'active'
           ? persisted.recipe
@@ -327,12 +375,24 @@ async function persistStrictExpressionSets(
       if (active.lifecycle !== 'active') {
         throw new Error('STRICT_PRIVATE_CORPUS_G3_ACTIVE_FAILED');
       }
-      accumulators.activeRecipes.push({ id: active.id, title: active.title });
+      const readyMember = await createStrictReadyMemberProof({
+        active,
+        binding: resolved.binding,
+        fileWriter: context.fileWriter,
+        persistence: resolved.persistence,
+        refRepository: context.repositories.recipeSourceRefRepository,
+        refs: resolved.refs,
+        repository: context.repositories.knowledgeRepository,
+        reviewed: draft.reviewed,
+        sourcePaths,
+      });
+      accumulators.activeRecipes.push({ id: active.id, title: active.title, lifecycle: 'active' });
+      accumulators.readyMembers.push(readyMember);
       accumulators.expressionTerminalRows.push({
         expressionId: proposal.expressionId,
         recipeId: persisted.recipe.id,
         terminalFate: 'content-ready',
-        terminalReceiptId: binding.bindingHash,
+        terminalReceiptId: resolved.binding.bindingHash,
       });
     }
   }
@@ -436,7 +496,7 @@ async function resolveStrictPreparedBinding(
   admissionReceiptId: string,
   g2ReceiptHash: string,
   sourcePaths: readonly string[]
-): Promise<RecipeProductionBindingV1> {
+): Promise<StrictResolvedPreparedBinding> {
   if (draft.rowCheckpoint) {
     if (
       draft.rowCheckpoint.g1ReceiptHash !== draft.g1.receiptHash ||
@@ -445,7 +505,11 @@ async function resolveStrictPreparedBinding(
     ) {
       throw new Error('STRICT_PREPARED_ROW_CHECKPOINT_DIVERGENCE');
     }
-    return draft.rowCheckpoint.binding;
+    return {
+      persistence: draft.rowCheckpoint.persistence,
+      refs: draft.rowCheckpoint.refs,
+      binding: draft.rowCheckpoint.binding,
+    };
   }
   if (persisted.recipe.lifecycle !== 'pending' && persisted.recipe.lifecycle !== 'staging') {
     throw new Error('STRICT_PREPARED_ROW_CHECKPOINT_MISSING');
@@ -487,7 +551,168 @@ async function resolveStrictPreparedBinding(
     refs,
     binding,
   });
-  return binding;
+  return { persistence, refs, binding };
+}
+
+async function createStrictReadyMemberProof(input: {
+  readonly active: Awaited<ReturnType<RecipeProductionGateway['publish']>>;
+  readonly binding: RecipeProductionBindingV1;
+  readonly fileWriter: KnowledgeFileWriter;
+  readonly persistence: StrictPersistenceReceiptV1;
+  readonly refRepository: ReturnType<typeof createAlembicRepositories>['recipeSourceRefRepository'];
+  readonly refs: RefReconciliationReceiptV1;
+  readonly repository: ReturnType<typeof createAlembicRepositories>['knowledgeRepository'];
+  readonly reviewed: StrictReviewedProjection;
+  readonly sourcePaths: readonly string[];
+}): Promise<StrictReadyMemberProofV1> {
+  if (input.active.lifecycle !== 'active') {
+    throw new Error('STRICT_READY_MEMBER_LIFECYCLE_INVALID');
+  }
+  const readback = await readStrictReadyDatabase(input);
+  assertStrictDatabaseProjection(input);
+  const databaseReadbackHash = hashCanonicalJson({
+    recipeId: readback.id,
+    lifecycle: readback.lifecycle,
+    reviewed: input.reviewed,
+  });
+  const fileReadbackHash = await readStrictReadyFile(input, readback);
+  const refReadbackHash = readStrictReadyRefs(input, readback.id);
+  const semantic = buildStrictReadyMemberSemantic(
+    input,
+    readback,
+    databaseReadbackHash,
+    fileReadbackHash,
+    refReadbackHash
+  );
+  return freezeDeep({ ...semantic, proofHash: hashCanonicalJson(semantic) });
+}
+
+async function readStrictReadyDatabase(input: {
+  readonly active: { readonly id: string };
+  readonly repository: StrictKnowledgeRepository;
+  readonly reviewed: StrictReviewedProjection;
+}): Promise<StrictKnowledgeEntry> {
+  const readback = await input.repository.findById(input.active.id);
+  const json = readback?.toJSON() as Record<string, unknown> | undefined;
+  if (
+    !readback ||
+    !json ||
+    readback.lifecycle !== 'active' ||
+    json.title !== input.reviewed.title ||
+    json.kind !== input.reviewed.kind ||
+    json.doClause !== input.reviewed.doText ||
+    json.dontClause !== input.reviewed.dontText ||
+    !sameMarkdown(json.content, input.reviewed.markdown) ||
+    hashCanonicalJson(json.retrievalProfile) !== hashCanonicalJson(input.reviewed.retrievalProfile)
+  ) {
+    throw new Error('STRICT_READY_MEMBER_DATABASE_READBACK_FAILED');
+  }
+  return readback;
+}
+
+function assertStrictDatabaseProjection(input: {
+  readonly binding: RecipeProductionBindingV1;
+  readonly persistence: StrictPersistenceReceiptV1;
+  readonly reviewed: StrictReviewedProjection;
+}): void {
+  const expected = hashCanonicalJson({
+    kind: 'strict-db-row-projection-v1',
+    revisionId: input.binding.privateCorpusRevision,
+    reviewed: input.reviewed,
+  });
+  if (input.persistence.databaseRowHash !== expected) {
+    throw new Error('STRICT_READY_MEMBER_DATABASE_READBACK_FAILED');
+  }
+}
+
+async function readStrictReadyFile(
+  input: {
+    readonly fileWriter: KnowledgeFileWriter;
+    readonly persistence: StrictPersistenceReceiptV1;
+    readonly reviewed: StrictReviewedProjection;
+  },
+  readback: StrictKnowledgeEntry
+): Promise<string> {
+  const resolvedFile = input.fileWriter._resolveFilePath(readback);
+  const fileBytes = await fsp.readFile(path.join(resolvedFile.dir, resolvedFile.filename), 'utf8');
+  const fileReadback = parseKnowledgeMarkdown(fileBytes);
+  const expectedProjectionHash = hashCanonicalJson({
+    kind: 'strict-recipe-file-projection-v1',
+    markdown: input.reviewed.markdown,
+    retrievalProfile: input.reviewed.retrievalProfile,
+  });
+  if (
+    fileReadback.id !== readback.id ||
+    fileReadback.title !== input.reviewed.title ||
+    fileReadback.lifecycle !== 'active' ||
+    fileReadback.kind !== input.reviewed.kind ||
+    fileReadback.doClause !== input.reviewed.doText ||
+    fileReadback.dontClause !== input.reviewed.dontText ||
+    !sameMarkdown(fileReadback.content, input.reviewed.markdown) ||
+    hashCanonicalJson(fileReadback.retrievalProfile) !==
+      hashCanonicalJson(input.reviewed.retrievalProfile) ||
+    input.persistence.fileHash !== expectedProjectionHash
+  ) {
+    throw new Error('STRICT_READY_MEMBER_FILE_READBACK_FAILED');
+  }
+  return hashCanonicalJson({ recipeId: readback.id, fileBytes });
+}
+
+function readStrictReadyRefs(
+  input: {
+    readonly refRepository: ReturnType<
+      typeof createAlembicRepositories
+    >['recipeSourceRefRepository'];
+    readonly refs: RefReconciliationReceiptV1;
+    readonly sourcePaths: readonly string[];
+  },
+  recipeId: string
+): string {
+  const actualRefIds = input.refRepository
+    .findByRecipeId(recipeId)
+    .map((row) => row.sourcePath)
+    .sort();
+  if (
+    JSON.stringify([...input.sourcePaths].sort()) !== JSON.stringify(actualRefIds) ||
+    JSON.stringify([...input.refs.sourceRefIds].sort()) !== JSON.stringify([...actualRefIds].sort())
+  ) {
+    throw new Error('STRICT_READY_MEMBER_REF_READBACK_FAILED');
+  }
+  return hashCanonicalJson({
+    recipeId,
+    sourceRefIds: [...actualRefIds].sort(),
+  });
+}
+
+function buildStrictReadyMemberSemantic(
+  input: {
+    readonly binding: RecipeProductionBindingV1;
+    readonly persistence: StrictPersistenceReceiptV1;
+    readonly refs: RefReconciliationReceiptV1;
+  },
+  readback: StrictKnowledgeEntry,
+  databaseReadbackHash: string,
+  fileReadbackHash: string,
+  refReadbackHash: string
+): Omit<StrictReadyMemberProofV1, 'proofHash'> {
+  return {
+    schemaVersion: 1 as const,
+    recipeId: readback.id,
+    title: readback.title,
+    runId: input.binding.runId,
+    privateCorpusRevision: input.binding.privateCorpusRevision,
+    analysisFixpointHash: input.binding.analysisFixpointHash,
+    authoredFingerprint: input.binding.authoredFingerprint,
+    bindingHash: input.binding.bindingHash,
+    persistenceReceiptHash: input.persistence.receiptHash,
+    databaseRowHash: input.persistence.databaseRowHash,
+    databaseReadbackHash,
+    fileHash: input.persistence.fileHash,
+    fileReadbackHash,
+    refReconciliationReceiptHash: input.refs.receiptHash,
+    refReadbackHash,
+    lifecycle: 'active' as const,
+  };
 }
 
 function evaluateStrictG1Axes(input: {
@@ -568,9 +793,9 @@ export async function indexSealAndVerifyStrictPrivateCorpus(input: {
     input.baseResolver,
     input.content.revisionInitReceipt
   );
-  let candidateOracle: StrictCandidateOracleV1;
-  let vectorGenerationId: string;
-  let vectorManifestHash: string;
+  let vectorGenerationId: string | null = null;
+  let vectorManifest: RecipeVectorGenerationManifest | null = null;
+  let vectorInspection: RecipeVectorGenerationInspection | null = null;
   try {
     const repositories = createAlembicRepositories(rehydrated.runtime.connection);
     const knowledgeService = createKnowledgeService(rehydrated.handle.resolver, repositories);
@@ -592,27 +817,18 @@ export async function indexSealAndVerifyStrictPrivateCorpus(input: {
       knowledgeService,
       storage: vectorStorage,
     });
-    const dryRun = await vectorRuntime.dryRun('full-build');
-    const existingVector = await vectorRuntime.status();
-    const recoveredManifest =
-      existingVector.active &&
-      existingVector.manifest?.status === 'ready' &&
-      sameVectorCorpus(existingVector.manifest, dryRun.manifest)
-        ? existingVector.manifest
-        : null;
-    const vectorManifest =
-      recoveredManifest ?? (await vectorRuntime.rebuild('full-build')).manifest;
-    if (!vectorManifest || vectorManifest.status !== 'ready') {
+    const vectorBuild = await vectorRuntime.rebuild('full-build');
+    if (
+      (vectorBuild.status !== 'activated' && vectorBuild.status !== 'already-active') ||
+      !vectorBuild.generationId ||
+      vectorBuild.manifest?.status !== 'ready' ||
+      vectorBuild.inspection?.healthy !== true
+    ) {
       throw new Error('STRICT_PRIVATE_CORPUS_VECTOR_NOT_READY');
     }
-    candidateOracle = await runCandidateFiveToolOracle({
-      activeRecipes: input.content.activeRecipes,
-      embedProvider: input.embedProvider,
-      repository: repositories.knowledgeRepository,
-      vectorStore: await vectorStorage.open(vectorManifest.generationId),
-    });
-    vectorGenerationId = vectorManifest.generationId;
-    vectorManifestHash = vectorManifest.manifestHash;
+    vectorGenerationId = vectorBuild.generationId;
+    vectorManifest = vectorBuild.manifest;
+    vectorInspection = vectorBuild.inspection;
     rehydrated.handle.seal(input.content.rootManifestHash);
   } finally {
     rehydrated.runtime.close();
@@ -622,6 +838,9 @@ export async function indexSealAndVerifyStrictPrivateCorpus(input: {
     input.content.revisionInitReceipt
   );
   try {
+    if (!vectorGenerationId || !vectorManifest || !vectorInspection) {
+      throw new Error('STRICT_PRIVATE_CORPUS_VECTOR_NOT_READY');
+    }
     const repositories = createAlembicRepositories(freshProcess.runtime.connection);
     const active = await repositories.knowledgeRepository.findByLifecycle('active', {
       page: 1,
@@ -632,6 +851,33 @@ export async function indexSealAndVerifyStrictPrivateCorpus(input: {
     if (JSON.stringify(freshActiveIds) !== JSON.stringify(expectedActiveIds)) {
       throw new Error('STRICT_PRIVATE_CORPUS_FRESH_REHYDRATE_DIVERGENCE');
     }
+    const durableReadbackHash = hashCanonicalJson(
+      input.content.readyMembers.map((member) => ({
+        recipeId: member.recipeId,
+        persistenceReceiptHash: member.persistenceReceiptHash,
+        databaseRowHash: member.databaseRowHash,
+        databaseReadbackHash: member.databaseReadbackHash,
+        fileHash: member.fileHash,
+        fileReadbackHash: member.fileReadbackHash,
+      }))
+    );
+    const refReadbackHash = hashCanonicalJson(
+      input.content.readyMembers.map((member) => ({
+        recipeId: member.recipeId,
+        refReconciliationReceiptHash: member.refReconciliationReceiptHash,
+        refReadbackHash: member.refReadbackHash,
+      }))
+    );
+    const sealedCorpusVerification = await verifyStrictSealedCorpus({
+      activeRecipes: input.content.activeRecipes,
+      readyMembers: input.content.readyMembers,
+      repository: repositories.knowledgeRepository,
+      durableReadbackHash,
+      refReadbackHash,
+      vectorGenerationId,
+      vectorManifest,
+      vectorInspection,
+    });
     freshProcess.handle.seal(input.content.rootManifestHash);
     const freshProcessRehydrateHash = hashCanonicalJson({
       activeRecipeIds: freshActiveIds,
@@ -640,42 +886,28 @@ export async function indexSealAndVerifyStrictPrivateCorpus(input: {
       revisionId: freshProcess.handle.initReceipt.revisionId,
       rootManifestHash: input.content.rootManifestHash,
       vectorGenerationId,
-      vectorManifestHash,
+      vectorManifestHash: vectorManifest.manifestHash,
+      sealedCorpusVerificationHash: sealedCorpusVerification.verificationHash,
     });
     return Object.freeze({
       ...input.content,
       activeRecipeIds: expectedActiveIds,
-      candidateOracle,
       freshProcessRehydrateHash,
+      sealedCorpusVerification,
       vectorGenerationId,
-      vectorManifestHash,
+      vectorManifestHash: vectorManifest.manifestHash,
     });
   } finally {
     freshProcess.runtime.close();
   }
 }
 
-function sameVectorCorpus(
-  left: Awaited<ReturnType<RecipeVectorGenerationRuntime['status']>>['manifest'],
-  right: Awaited<ReturnType<RecipeVectorGenerationRuntime['dryRun']>>['manifest']
-): boolean {
-  return Boolean(
-    left &&
-      left.corpusFingerprint === right.corpusFingerprint &&
-      left.provider === right.provider &&
-      left.model === right.model &&
-      left.dimension === right.dimension &&
-      left.documentCount === right.documentCount &&
-      left.recipeCount === right.recipeCount
-  );
-}
-
 function createKnowledgeService(
   resolver: WorkspaceResolver,
-  repositories: ReturnType<typeof createAlembicRepositories>
+  repositories: ReturnType<typeof createAlembicRepositories>,
+  fileWriter = new KnowledgeFileWriter(resolver.dataRoot, new WriteZone(resolver)),
+  graph = new KnowledgeGraphService(repositories.knowledgeEdgeRepository)
 ): KnowledgeService {
-  const graph = new KnowledgeGraphService(repositories.knowledgeEdgeRepository);
-  const fileWriter = new KnowledgeFileWriter(resolver.dataRoot, new WriteZone(resolver));
   return new KnowledgeService(
     repositories.knowledgeRepository as unknown as ConstructorParameters<
       typeof KnowledgeService
@@ -687,18 +919,98 @@ function createKnowledgeService(
   );
 }
 
-export async function runCandidateFiveToolOracle(input: {
+interface StrictSealedCorpusVerificationInput {
   readonly activeRecipes: StrictPrivateCorpusContentResultV1['activeRecipes'];
-  readonly embedProvider: ConstructorParameters<
-    typeof RecipeVectorGenerationRuntime
-  >[0]['embedProvider'];
-  readonly repository: ReturnType<typeof createAlembicRepositories>['knowledgeRepository'];
-  readonly vectorStore: Awaited<ReturnType<FileRecipeVectorGenerationStorage['open']>>;
-}): Promise<StrictCandidateOracleV1> {
-  if (!input.embedProvider || input.activeRecipes.length === 0) {
-    throw new Error('STRICT_CANDIDATE_ORACLE_INPUT_MISSING');
-  }
+  readonly readyMembers: readonly StrictReadyMemberProofV1[];
+  readonly repository: StrictKnowledgeRepository;
+  readonly durableReadbackHash: string;
+  readonly refReadbackHash: string;
+  readonly vectorGenerationId: string;
+  readonly vectorManifest: Pick<
+    RecipeVectorGenerationManifest,
+    | 'generationId'
+    | 'manifestHash'
+    | 'status'
+    | 'recipeCount'
+    | 'expectedIds'
+    | 'expectedIdsByRecipe'
+  >;
+  readonly vectorInspection: RecipeVectorGenerationInspection;
+}
+
+interface StrictSparseEvidenceV1 {
+  readonly recipeId: string | undefined;
+  readonly resultIds: readonly string[];
+}
+
+export async function verifyStrictSealedCorpus(
+  input: StrictSealedCorpusVerificationInput
+): Promise<StrictSealedCorpusVerificationV1> {
   const expectedIds = input.activeRecipes.map((recipe) => recipe.id).sort();
+  const readyMembers = [...input.readyMembers].sort((left, right) =>
+    left.recipeId.localeCompare(right.recipeId)
+  );
+  assertSealedReadyMembers(expectedIds, readyMembers);
+  assertSealedDurableMembers(input, readyMembers);
+  await assertSealedActiveLifecycle(input, expectedIds);
+  const sparseEvidence = await verifySealedSparseMembers(input);
+  const manifestExpectedIds = assertSealedVectorGeneration(input, expectedIds);
+  const semantic = buildSealedCorpusVerificationSemantic(
+    input,
+    expectedIds,
+    readyMembers,
+    sparseEvidence,
+    manifestExpectedIds
+  );
+  return freezeDeep({ ...semantic, verificationHash: hashCanonicalJson(semantic) });
+}
+
+function assertSealedReadyMembers(
+  expectedIds: readonly string[],
+  readyMembers: readonly StrictReadyMemberProofV1[]
+): void {
+  if (
+    new Set(expectedIds).size !== expectedIds.length ||
+    JSON.stringify(readyMembers.map((member) => member.recipeId)) !== JSON.stringify(expectedIds) ||
+    readyMembers.some((member) => member.lifecycle !== 'active' || !validReadyMemberProof(member))
+  ) {
+    failSealedCorpus('ready-member-conservation');
+  }
+}
+
+function assertSealedDurableMembers(
+  input: StrictSealedCorpusVerificationInput,
+  readyMembers: readonly StrictReadyMemberProofV1[]
+): void {
+  const expectedDurableReadbackHash = hashCanonicalJson(
+    readyMembers.map((member) => ({
+      recipeId: member.recipeId,
+      persistenceReceiptHash: member.persistenceReceiptHash,
+      databaseRowHash: member.databaseRowHash,
+      databaseReadbackHash: member.databaseReadbackHash,
+      fileHash: member.fileHash,
+      fileReadbackHash: member.fileReadbackHash,
+    }))
+  );
+  const expectedRefReadbackHash = hashCanonicalJson(
+    readyMembers.map((member) => ({
+      recipeId: member.recipeId,
+      refReconciliationReceiptHash: member.refReconciliationReceiptHash,
+      refReadbackHash: member.refReadbackHash,
+    }))
+  );
+  if (
+    input.durableReadbackHash !== expectedDurableReadbackHash ||
+    input.refReadbackHash !== expectedRefReadbackHash
+  ) {
+    failSealedCorpus('durable-member-conservation');
+  }
+}
+
+async function assertSealedActiveLifecycle(
+  input: StrictSealedCorpusVerificationInput,
+  expectedIds: readonly string[]
+): Promise<void> {
   const byId = await Promise.all(expectedIds.map((id) => input.repository.findById(id)));
   const byTitle = await Promise.all(
     input.activeRecipes.map((recipe) => input.repository.findByTitle(recipe.title))
@@ -711,74 +1023,144 @@ export async function runCandidateFiveToolOracle(input: {
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
     .map((entry) => entry.id)
     .sort();
+  if (
+    byId.some(
+      (entry, index) => !entry || entry.id !== expectedIds[index] || entry.lifecycle !== 'active'
+    ) ||
+    byTitle.some(
+      (entry, index) =>
+        !entry || entry.id !== input.activeRecipes[index]?.id || entry.lifecycle !== 'active'
+    ) ||
+    JSON.stringify(listedIds) !== JSON.stringify(expectedIds)
+  ) {
+    failSealedCorpus('active-lifecycle-conservation');
+  }
+}
+
+async function verifySealedSparseMembers(
+  input: StrictSealedCorpusVerificationInput
+): Promise<StrictSparseEvidenceV1[]> {
   const sparse = await Promise.all(
     input.activeRecipes.map((recipe) =>
       input.repository.search(recipe.title, { page: 1, pageSize: 10 })
     )
   );
-  const queryVector = await asEmbeddingPort(
-    input.embedProvider as Parameters<typeof asEmbeddingPort>[0]
-  ).embedQuery(input.activeRecipes[0]?.title ?? '');
-  const vector = await input.vectorStore.searchVector(queryVector, {
-    topK: Math.max(5, expectedIds.length),
-  });
-  const vectorRecipeIds = [
-    ...new Set(
-      vector
-        .map((hit) => {
-          const metadata = hit.item.metadata;
-          return metadata && typeof metadata === 'object' && 'recipeId' in metadata
-            ? String(metadata.recipeId)
-            : '';
-        })
-        .filter(Boolean)
-    ),
-  ].sort();
-  const checks = [
-    oracleCheck(
-      'get-by-id',
-      byId.every((entry, index) => entry?.id === expectedIds[index]),
-      byId
-    ),
-    oracleCheck(
-      'get-by-title',
-      byTitle.every((entry, index) => entry?.id === input.activeRecipes[index]?.id),
-      byTitle
-    ),
-    oracleCheck(
-      'list-active',
-      JSON.stringify(listedIds) === JSON.stringify(expectedIds),
-      listedIds
-    ),
-    oracleCheck(
-      'search-sparse',
-      sparse.every((page, index) =>
-        page.data.some((entry) => entry?.id === input.activeRecipes[index]?.id)
-      ),
-      sparse.map((page) => page.data.flatMap((entry) => (entry ? [entry.id] : [])))
-    ),
-    oracleCheck(
-      'search-vector',
-      vectorRecipeIds.some((id) => expectedIds.includes(id)),
-      vectorRecipeIds
-    ),
-  ] as const;
-  return Object.freeze({
-    schemaVersion: 1,
-    checks,
-    oracleHash: hashCanonicalJson({ schemaVersion: 1, checks }),
-  });
+  const sparseEvidence = sparse.map((page, index) => ({
+    recipeId: input.activeRecipes[index]?.id,
+    resultIds: page.data.flatMap((entry) => (entry ? [entry.id] : [])).sort(),
+  }));
+  if (
+    sparseEvidence.some(
+      (evidence) => !evidence.recipeId || !evidence.resultIds.includes(evidence.recipeId)
+    )
+  ) {
+    failSealedCorpus('sparse-member-conservation');
+  }
+  return sparseEvidence;
 }
 
-function oracleCheck(
-  tool: StrictCandidateOracleV1['checks'][number]['tool'],
-  pass: boolean,
-  evidence: unknown
-): StrictCandidateOracleV1['checks'][number] {
-  if (!pass) {
-    throw new Error(`STRICT_CANDIDATE_ORACLE_FAILED:${tool}`);
+function assertSealedVectorGeneration(
+  input: StrictSealedCorpusVerificationInput,
+  expectedIds: readonly string[]
+): string[] {
+  const issueLists = [
+    input.vectorInspection.missingIds,
+    input.vectorInspection.orphanIds,
+    input.vectorInspection.staleIds,
+    input.vectorInspection.staleGenerationIds,
+    input.vectorInspection.duplicateIds,
+    input.vectorInspection.partialIds,
+    input.vectorInspection.hashMismatchIds,
+    input.vectorInspection.dimensionMismatchIds,
+  ];
+  const manifestExpectedIds = [...input.vectorManifest.expectedIds].sort();
+  const expectedIdsByRecipe = Object.values(input.vectorManifest.expectedIdsByRecipe).flat().sort();
+  if (
+    input.vectorManifest.status !== 'ready' ||
+    !input.vectorGenerationId ||
+    input.vectorGenerationId.trim() !== input.vectorGenerationId ||
+    !isCanonicalDigest(input.vectorManifest.manifestHash) ||
+    input.vectorGenerationId !== input.vectorManifest.generationId ||
+    input.vectorManifest.recipeCount !== expectedIds.length ||
+    JSON.stringify(Object.keys(input.vectorManifest.expectedIdsByRecipe).sort()) !==
+      JSON.stringify(expectedIds) ||
+    new Set(manifestExpectedIds).size !== manifestExpectedIds.length ||
+    JSON.stringify(manifestExpectedIds) !== JSON.stringify(expectedIdsByRecipe) ||
+    input.vectorInspection.healthy !== true ||
+    input.vectorInspection.expectedCount !== input.vectorInspection.presentCount ||
+    input.vectorInspection.expectedCount !== manifestExpectedIds.length ||
+    issueLists.some((list) => list.length > 0)
+  ) {
+    failSealedCorpus('vector-generation-conservation');
   }
-  return Object.freeze({ tool, pass: true, evidenceHash: hashCanonicalJson(evidence) });
+  return manifestExpectedIds;
+}
+
+function buildSealedCorpusVerificationSemantic(
+  input: StrictSealedCorpusVerificationInput,
+  expectedIds: readonly string[],
+  readyMembers: readonly StrictReadyMemberProofV1[],
+  sparseEvidence: readonly StrictSparseEvidenceV1[],
+  manifestExpectedIds: readonly string[]
+): Omit<StrictSealedCorpusVerificationV1, 'verificationHash'> {
+  return {
+    schemaVersion: 1 as const,
+    activeRecipeIds: expectedIds,
+    readyMemberSetHash: hashCanonicalJson(readyMembers.map((member) => member.proofHash)),
+    durableReadbackHash: input.durableReadbackHash,
+    refReadbackHash: input.refReadbackHash,
+    sparseEvidenceHash: hashCanonicalJson(sparseEvidence),
+    vectorGenerationId: input.vectorGenerationId,
+    vectorManifestHash: input.vectorManifest.manifestHash,
+    vectorInspectionHash: hashCanonicalJson({
+      expectedVectorIds: manifestExpectedIds,
+      inspection: input.vectorInspection,
+    }),
+    verdict: 'pass' as const,
+    failedPredicate: null,
+  };
+}
+
+function validReadyMemberProof(member: StrictReadyMemberProofV1): boolean {
+  const { proofHash, ...semantic } = member;
+  return (
+    Object.values(semantic).every((value) => typeof value !== 'string' || value.length > 0) &&
+    [
+      member.authoredFingerprint,
+      member.bindingHash,
+      member.persistenceReceiptHash,
+      member.databaseRowHash,
+      member.databaseReadbackHash,
+      member.fileHash,
+      member.fileReadbackHash,
+      member.refReconciliationReceiptHash,
+      member.refReadbackHash,
+      member.proofHash,
+    ].every(isCanonicalSha) &&
+    proofHash === hashCanonicalJson(semantic)
+  );
+}
+
+function failSealedCorpus(predicate: string): never {
+  throw new Error(`STRICT_SEALED_CORPUS_VERIFICATION_FAILED:${predicate}`);
+}
+
+function isCanonicalSha(value: unknown): value is string {
+  return typeof value === 'string' && /^sha256:[a-f0-9]{64}$/u.test(value);
+}
+
+function isCanonicalDigest(value: unknown): value is string {
+  return typeof value === 'string' && /^(?:sha256:)?[a-f0-9]{64}$/u.test(value);
+}
+
+function freezeDeep<T>(value: T): T {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value as Record<string, unknown>)) {
+      freezeDeep(child);
+    }
+  }
+  return value;
 }
 
 function toRecipeItem(

@@ -96,6 +96,30 @@ describe('strict production authorization', () => {
       })
     ).rejects.toThrow('STRICT_AUTHORIZATION_SYMLINK_FORBIDDEN');
   });
+
+  it('requires an absent public route as the strict post-blank CAS expectation', async () => {
+    const fixture = await authorizationFixture();
+    const receipt = buildReceipt(fixture.projectRoot, fixture.dataRoot, {
+      expectedPublicRouteHash: sha('pre-reset-route'),
+    });
+    await fsp.writeFile(
+      path.join(fixture.dataRoot, fixture.receiptPath),
+      `${JSON.stringify(receipt)}\n`
+    );
+    await expect(
+      loadStrictProductionAuthorization({
+        dataRoot: fixture.dataRoot,
+        projectRoot: fixture.projectRoot,
+        request: {
+          schemaVersion: 1,
+          authorizationReceiptHash: receipt.authorizationHash,
+          authorizationReceiptPath: fixture.receiptPath,
+          ownerId: 'daemon-job:one',
+          runId: 'run-a',
+        },
+      })
+    ).rejects.toThrow('STRICT_PUBLIC_ROUTE_EXPECTED_ABSENT');
+  });
 });
 
 async function authorizationFixture() {
@@ -113,7 +137,7 @@ async function authorizationFixture() {
 function buildReceipt(
   projectRoot: string,
   dataRoot: string,
-  options: { resetPaths?: string[] } = {}
+  options: { resetPaths?: string[]; expectedPublicRouteHash?: string | null } = {}
 ) {
   const semantic = {
     schemaVersion: 1 as const,
@@ -122,7 +146,7 @@ function buildReceipt(
     dataRoot,
     operationRoot: 'strict-production/operations/run-a',
     publicRoutePath: 'public/active.json',
-    expectedPublicRouteHash: null,
+    expectedPublicRouteHash: options.expectedPublicRouteHash ?? null,
     pcfBaselineReceiptHash: sha('pcf'),
     reset: { relativePaths: options.resetPaths ?? ['cache/candidates'], tables: ['recipes'] },
     planning: {

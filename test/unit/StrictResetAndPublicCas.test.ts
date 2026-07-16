@@ -152,6 +152,25 @@ describe('strict reset and public route CAS', () => {
       })
     ).rejects.toThrow('STRICT_PUBLIC_ROUTE_CAS_CONFLICT');
   });
+
+  it('permits exactly one compare-null winner under concurrent publication', async () => {
+    const root = await temporaryRoot();
+    const routePath = path.join(root, 'public-route.json');
+    const routes = ['generation-a', 'generation-b'].map((generationId) => {
+      const value = { schemaVersion: 1, generationId };
+      return { bytes: `${JSON.stringify(value)}\n`, hash: hashCanonicalJson(value) };
+    });
+
+    const attempts = await Promise.allSettled(
+      routes.map((prepared) =>
+        commitPreparedPublicRoute({ expectedCurrentHash: null, prepared, routePath })
+      )
+    );
+    expect(attempts.filter((attempt) => attempt.status === 'fulfilled')).toHaveLength(1);
+    expect(attempts.filter((attempt) => attempt.status === 'rejected')).toHaveLength(1);
+    const stored = await inspectPublicRoute(routePath);
+    expect(routes.some((route) => route.hash === stored?.hash)).toBe(true);
+  });
 });
 
 function databasePort(initial: Record<string, number>): StrictResetDatabasePortV1 {

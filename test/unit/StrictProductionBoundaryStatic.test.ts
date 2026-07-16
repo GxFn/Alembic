@@ -61,6 +61,33 @@ describe('strict production main-chain boundary', () => {
     expect(combined).not.toContain('setImmediate');
     expect(combined).not.toContain('skipAsyncFill');
   });
+
+  it('keeps Plugin ownership, candidate readers, and retired oracle semantics out of Main', async () => {
+    const strictRoot = path.join(ROOT, 'lib/recipe-pipeline/generate/strict');
+    const files = (await fsp.readdir(strictRoot)).filter((file) => file.endsWith('.ts'));
+    const combined = (
+      await Promise.all(files.map((file) => fsp.readFile(path.join(strictRoot, file), 'utf8')))
+    ).join('\n');
+
+    for (const forbidden of [
+      ['@alembic', 'plugin'].join('/'),
+      'AlembicPlugin',
+      'EmbeddedToolExecutor',
+      'ToolExecutionContext',
+      'CandidatePublicationHandle',
+      'candidateReader',
+      'privateSnapshotResolver',
+      'rootOverride',
+      'pathOverride',
+      'StrictCandidateOracleV1',
+      'runCandidateFiveToolOracle',
+      'candidateOracleHash',
+      'CANDIDATE_ORACLE_PASSED',
+      'candidateHandle',
+    ]) {
+      expect(combined).not.toContain(forbidden);
+    }
+  });
 });
 
 function source(relativePath: string): Promise<string> {

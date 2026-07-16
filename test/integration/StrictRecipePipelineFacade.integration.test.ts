@@ -54,27 +54,78 @@ describe('RecipePipelineFacade strict production integration', () => {
           privateHooks: 'not-installed',
         },
       });
+      expect(report).not.toHaveProperty('candidateHandle');
+      expect(report).toHaveProperty('privateCorpusEvidence.servingSnapshotValidationHash');
       const journal = (
         await fsp.readFile(path.join(operationRoot, 'strict-production.journal.jsonl'), 'utf8')
       )
         .trim()
         .split('\n')
         .map((row) => (JSON.parse(row) as { state: string }).state);
+      expect(journal.slice(-8)).toEqual([
+        'G4_READY',
+        'SERVING_RECONCILED',
+        'FINAL_COVERAGE_BOUND',
+        'SERVING_SNAPSHOT_VALIDATED',
+        'SERVING_MANIFEST_READY',
+        'PUBLIC_CAS_PREPARED',
+        'PUBLIC_CAS_COMMITTED',
+        'FINALIZED',
+      ]);
+      expect(journal).not.toContain('CANDIDATE_ORACLE_PASSED');
       expect(journal).toEqual(
         STRICT_PRODUCTION_STATES_V1.filter((state) => state !== 'PRISTINE_ABSENT')
       );
+      const checkpoint = JSON.parse(
+        await fsp.readFile(path.join(operationRoot, 'strict-production.checkpoint.json'), 'utf8')
+      ) as {
+        schemaVersion?: number;
+        finalization?: {
+          servingSnapshotValidation?: { receiptHash?: string };
+          servingManifest?: { servingSnapshotValidationHash?: string };
+        };
+      };
+      expect(checkpoint.schemaVersion).toBe(2);
+      expect(checkpoint.finalization?.servingManifest?.servingSnapshotValidationHash).toBe(
+        checkpoint.finalization?.servingSnapshotValidation?.receiptHash
+      );
       const publicRoute = JSON.parse(
         await fsp.readFile(path.join(fixture.dataRoot, 'public/active.json'), 'utf8')
-      ) as { snapshotId?: string };
+      ) as { snapshotId?: string; servingSnapshotValidationHash?: unknown };
       expect(publicRoute.snapshotId).toMatch(/^snapshot:/u);
+      expect(publicRoute).not.toHaveProperty('servingSnapshotValidationHash');
+      for (const serialized of [JSON.stringify(checkpoint), JSON.stringify(report)]) {
+        expect(serialized).not.toContain('candidateOracle');
+        expect(serialized).not.toContain('candidateHandle');
+      }
       expect(fixture.agentService.networkRequestCount).toBe(0);
+      const journalPath = path.join(operationRoot, 'strict-production.journal.jsonl');
+      const durableRows = (await fsp.readFile(journalPath, 'utf8'))
+        .trim()
+        .split('\n')
+        .map((row) => JSON.parse(row) as { state: string; payload?: Record<string, unknown> });
+      const preparedIndex = durableRows.findIndex((row) => row.state === 'PUBLIC_CAS_PREPARED');
+      expect(preparedIndex).toBeGreaterThan(0);
+      await fsp.writeFile(
+        journalPath,
+        `${durableRows
+          .slice(0, preparedIndex + 1)
+          .map((row) => JSON.stringify(row))
+          .join('\n')}\n`
+      );
+      await fsp.rm(path.join(operationRoot, 'strict-production.runtime-report.json'));
+      const recovered = await executeFixture(fixture);
+      expect(recovered).toMatchObject({ mode: 'strict-production', status: 'FINALIZED' });
+      const recoveredRows = (await fsp.readFile(journalPath, 'utf8'))
+        .trim()
+        .split('\n')
+        .map((row) => JSON.parse(row) as { state: string; payload?: Record<string, unknown> });
+      expect(
+        recoveredRows.find((row) => row.state === 'PUBLIC_CAS_COMMITTED')?.payload?.status
+      ).toBe('recovered');
       const replay = await executeFixture(fixture);
       expect(replay).toMatchObject({ mode: 'strict-production', status: 'FINALIZED' });
-      const replayJournal = (
-        await fsp.readFile(path.join(operationRoot, 'strict-production.journal.jsonl'), 'utf8')
-      )
-        .trim()
-        .split('\n');
+      const replayJournal = (await fsp.readFile(journalPath, 'utf8')).trim().split('\n');
       expect(replayJournal).toHaveLength(journal.length);
       await persistRequestedEvidence(operationRoot, fixture.dataRoot);
     } finally {
@@ -252,129 +303,141 @@ class DeterministicStrictAgentService {
   async run(input: Record<string, unknown>) {
     const metadata = readRecord(readRecord(input.message).metadata);
     if (metadata.task === 'strict-plan-cognition') {
-      const strictContext = readRecord(
-        readRecord(readRecord(input.context).promptContext).strictPlanContext
-      );
-      return agentResult(JSON.stringify(planIntent(strictContext)), 'plan-selection');
+      return this.runPlanCognition(input);
     }
     if (metadata.task === 'strict-independent-value-review') {
-      const prompt = String(readRecord(input.message).content ?? '');
-      const slice = /--- (E-\d+) (.+?):(\d+)-(\d+) blob=/u.exec(prompt);
-      if (!slice) {
-        throw new Error('fixture reviewer source slice missing');
-      }
-      return agentResult(
-        JSON.stringify({
-          axes: [
-            'entailment',
-            'contradiction-free',
-            'project-specificity',
-            'actionability',
-            'scope-correctness',
-            'retrieval-fitness',
-          ].map((axis) => ({
-            axis,
-            verdict: 'pass',
-            score: 2,
-            reasonCode: 'frozen-source-entails-projection',
-            evidenceEntryIds: [slice[1]],
-          })),
-          noveltyDecision: 'novel-project-specific',
-          duplicateDecision: 'no-match',
-          citedLines: [`${slice[2]}:${slice[3]}`],
-        }),
-        'plan-selection'
-      );
+      return this.runIndependentValueReview(input);
     }
     if (metadata.task === 'strict-production') {
-      const port = readRecord(readRecord(input.context).strategyContext)
-        .strictProduction as StrictRuntimeFixturePort;
-      const population = port.populations[0];
-      if (!population) {
-        throw new Error('fixture strict population missing');
-      }
-      const observations = population.observations;
-      const first = observations[0];
-      if (!first) {
-        throw new Error('fixture strict observation missing');
-      }
-      const clusters = new Map<string, Array<(typeof observations)[number]>>();
-      for (const observation of observations) {
-        const rows = clusters.get(observation.mechanismKey) ?? [];
-        rows.push(observation);
-        clusters.set(observation.mechanismKey, rows);
-      }
-      port.validateAnalystResult({
-        epoch: {
-          population,
-          clusterInputs: [...clusters.entries()].map(([mechanismKey, rows]) => ({
-            mechanismKey,
-            observationIds: rows.map((observation) => observation.observationId),
-            anatomyLensIds: ['error-recovery-concurrency'],
-          })),
-          nonClusteredDispositions: [],
-          inductionInputs: [...clusters.entries()].map(([mechanismKey, rows], index) => ({
-            mechanismKey,
-            mode: rows.length === 1 ? 'bounded-singleton' : 'recurring',
-            hypotheses:
-              index === 0
-                ? [
-                    {
-                      hypothesisId: 'hypothesis-strict-main',
-                      statement: 'The project preserves a typed result boundary.',
-                      premiseFactIds: [first.factIds[0]],
-                    },
-                  ]
-                : [],
-            ...(index === 0
-              ? {}
-              : {
-                  zeroHypothesisReason: 'insufficient-evidence',
-                  zeroHypothesisReviewReceiptId: `zero-review-${index}`,
-                }),
-          })),
-          falsificationInputs: [
-            {
-              hypothesisId: 'hypothesis-strict-main',
-              enrolledCounterqueryIds: [],
-              executions: [],
-              counterqueryApplicability: {
-                status: 'not-required',
-                reasonCode: 'bounded-project-contract',
-                reviewerReceiptId: 'counterquery-review',
-              },
-            },
-          ],
-          hypothesisDispositions: [
-            {
-              hypothesisId: 'hypothesis-strict-main',
-              status: 'survived',
-              reviewerReceiptId: 'hypothesis-review',
-            },
-          ],
-        },
-      });
-      const producer = port.buildProducerInput();
-      const evidenceEntryId = producer.evidence.entries[0]?.evidenceEntryId;
-      if (!evidenceEntryId) {
-        throw new Error('fixture producer evidence missing');
-      }
-      await port.reviewProducerResult({
-        expressionSets: [
-          {
-            hypothesisId: 'hypothesis-strict-main',
-            proposals: port.eligibleCells.map((cell) => ({
-              expressionId: `expression-${cell.moduleId}-${cell.dimensionId}`,
-              kind: 'draft',
-              authored: authoredProjection(cell.moduleId, cell.dimensionId, evidenceEntryId),
-            })),
-            zeroDisposition: null,
-          },
-        ],
-      });
-      return agentResult('{"strictProduction":"completed"}', 'generate-dimension');
+      return this.runStrictProduction(input);
     }
     throw new Error(`fixture unexpected Agent task:${String(metadata.task)}`);
+  }
+
+  private runPlanCognition(input: Record<string, unknown>) {
+    const strictContext = readRecord(
+      readRecord(readRecord(input.context).promptContext).strictPlanContext
+    );
+    return agentResult(JSON.stringify(planIntent(strictContext)), 'plan-selection');
+  }
+
+  private runIndependentValueReview(input: Record<string, unknown>) {
+    const prompt = String(readRecord(input.message).content ?? '');
+    const slice = /--- (E-\d+) (.+?):(\d+)-(\d+) blob=/u.exec(prompt);
+    if (!slice) {
+      throw new Error('fixture reviewer source slice missing');
+    }
+    return agentResult(
+      JSON.stringify({
+        axes: [
+          'entailment',
+          'contradiction-free',
+          'project-specificity',
+          'actionability',
+          'scope-correctness',
+          'retrieval-fitness',
+        ].map((axis) => ({
+          axis,
+          verdict: 'pass',
+          score: 2,
+          reasonCode: 'frozen-source-entails-projection',
+          evidenceEntryIds: [slice[1]],
+        })),
+        noveltyDecision: 'novel-project-specific',
+        duplicateDecision: 'no-match',
+        citedLines: [`${slice[2]}:${slice[3]}`],
+      }),
+      'plan-selection'
+    );
+  }
+
+  private async runStrictProduction(input: Record<string, unknown>) {
+    const port = readRecord(readRecord(input.context).strategyContext)
+      .strictProduction as StrictRuntimeFixturePort;
+    const population = port.populations[0];
+    if (!population) {
+      throw new Error('fixture strict population missing');
+    }
+    const observations = population.observations;
+    const first = observations[0];
+    if (!first) {
+      throw new Error('fixture strict observation missing');
+    }
+    const clusters = new Map<string, Array<(typeof observations)[number]>>();
+    for (const observation of observations) {
+      const rows = clusters.get(observation.mechanismKey) ?? [];
+      rows.push(observation);
+      clusters.set(observation.mechanismKey, rows);
+    }
+    port.validateAnalystResult({
+      epoch: {
+        population,
+        clusterInputs: [...clusters.entries()].map(([mechanismKey, rows]) => ({
+          mechanismKey,
+          observationIds: rows.map((observation) => observation.observationId),
+          anatomyLensIds: ['error-recovery-concurrency'],
+        })),
+        nonClusteredDispositions: [],
+        inductionInputs: [...clusters.entries()].map(([mechanismKey, rows], index) => ({
+          mechanismKey,
+          mode: rows.length === 1 ? 'bounded-singleton' : 'recurring',
+          hypotheses:
+            index === 0
+              ? [
+                  {
+                    hypothesisId: 'hypothesis-strict-main',
+                    statement: 'The project preserves a typed result boundary.',
+                    premiseFactIds: [first.factIds[0]],
+                  },
+                ]
+              : [],
+          ...(index === 0
+            ? {}
+            : {
+                zeroHypothesisReason: 'insufficient-evidence',
+                zeroHypothesisReviewReceiptId: `zero-review-${index}`,
+              }),
+        })),
+        falsificationInputs: [
+          {
+            hypothesisId: 'hypothesis-strict-main',
+            enrolledCounterqueryIds: [],
+            executions: [],
+            counterqueryApplicability: {
+              status: 'not-required',
+              reasonCode: 'bounded-project-contract',
+              reviewerReceiptId: 'counterquery-review',
+            },
+          },
+        ],
+        hypothesisDispositions: [
+          {
+            hypothesisId: 'hypothesis-strict-main',
+            status: 'survived',
+            reviewerReceiptId: 'hypothesis-review',
+          },
+        ],
+      },
+    });
+    const producer = port.buildProducerInput();
+    const evidenceEntryId = producer.evidence.entries[0]?.evidenceEntryId;
+    if (!evidenceEntryId) {
+      throw new Error('fixture producer evidence missing');
+    }
+    await port.reviewProducerResult({
+      expressionSets: [
+        {
+          hypothesisId: 'hypothesis-strict-main',
+          proposals: port.eligibleCells.map((cell) => ({
+            expressionId: `expression-${cell.moduleId}-${cell.dimensionId}`,
+            kind: 'draft',
+            authored: authoredProjection(cell.moduleId, cell.dimensionId, evidenceEntryId),
+          })),
+          zeroDisposition: null,
+        },
+      ],
+    });
+    return agentResult('{"strictProduction":"completed"}', 'generate-dimension');
   }
 }
 

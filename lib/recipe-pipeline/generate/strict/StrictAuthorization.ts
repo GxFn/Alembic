@@ -75,6 +75,9 @@ export async function loadStrictProductionAuthorization(input: {
   }
   assertReceiptShape(value);
   const receipt = value as unknown as StrictProductionAuthorizationReceiptV1;
+  if (receipt.expectedPublicRouteHash !== null) {
+    throw new Error('STRICT_PUBLIC_ROUTE_EXPECTED_ABSENT');
+  }
   const operationRoot = confinedPath(input.dataRoot, receipt.operationRoot);
   const publicRoutePath = confinedPath(input.dataRoot, receipt.publicRoutePath);
   const resetPaths = receipt.reset.relativePaths.map((relativePath) =>

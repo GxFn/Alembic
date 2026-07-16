@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  STRICT_PRODUCTION_STATES_V1,
   StrictProductionJournal,
   type StrictProductionStateV1,
 } from '../../lib/recipe-pipeline/generate/strict/StrictProductionJournal.js';
@@ -14,6 +15,20 @@ afterEach(async () => {
 });
 
 describe('StrictProductionJournal', () => {
+  it('orders validation, prepared CAS evidence, commit, and finalization literally', () => {
+    expect(STRICT_PRODUCTION_STATES_V1.slice(-8)).toEqual([
+      'G4_READY',
+      'SERVING_RECONCILED',
+      'FINAL_COVERAGE_BOUND',
+      'SERVING_SNAPSHOT_VALIDATED',
+      'SERVING_MANIFEST_READY',
+      'PUBLIC_CAS_PREPARED',
+      'PUBLIC_CAS_COMMITTED',
+      'FINALIZED',
+    ]);
+    expect(STRICT_PRODUCTION_STATES_V1).not.toContain('CANDIDATE_ORACLE_PASSED');
+  });
+
   it('rehydrates the exact durable substate with a verified append-only hash chain', async () => {
     const root = await temporaryRoot();
     const created = await StrictProductionJournal.open({
