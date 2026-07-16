@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
 import fsp from 'node:fs/promises';
+import { findPackageJSON } from 'node:module';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { PACKAGE_ROOT } from '../../../shared/package-assets.js';
@@ -42,6 +43,8 @@ export interface RuntimeArtifactLoadReceiptV1 {
     readonly packageVersion?: string;
     readonly loadedPathSymbol?: string;
     readonly entrypointHash?: string;
+    readonly distContentHash?: string;
+    readonly distFileCount?: number;
     readonly schemasHash: string;
   }[];
   readonly pcfLineage: {
@@ -56,6 +59,7 @@ export interface RuntimeArtifactLoadReceiptV1 {
   };
   readonly dependencyResolution: {
     readonly singleCoreCopy: true;
+    readonly agentCoreResolutionHash: string;
     readonly loadedPackageSetHash: string;
     readonly compatibilityMatrixHash: string;
   };
@@ -91,6 +95,8 @@ interface LoadedPackageRecord {
   readonly packageVersion: string;
   readonly entrypoint: string;
   readonly entrypointHash: string;
+  readonly distContentHash: string;
+  readonly distFileCount: number;
 }
 
 interface VerifiedArtifactRecord {
@@ -101,6 +107,23 @@ interface VerifiedArtifactRecord {
   readonly packageName?: string;
   readonly packageVersion?: string;
   readonly entrypointHash?: string;
+  readonly distContentHash?: string;
+  readonly distFileCount?: number;
+}
+
+interface VerifiedPackageArtifactRecord extends VerifiedArtifactRecord {
+  readonly archiveFiles: ReadonlyMap<string, Buffer>;
+  readonly entrypoint: string;
+  readonly packageName: string;
+  readonly packageVersion: string;
+  readonly entrypointHash: string;
+  readonly distContentHash: string;
+  readonly distFileCount: number;
+}
+
+interface DistContentDigest {
+  readonly contentHash: string;
+  readonly fileCount: number;
 }
 
 /**
@@ -150,8 +173,8 @@ export async function verifyRuntimeArtifactManifestV1(input: {
     packageArtifacts.map((artifact) => [artifact.packageName, artifact] as const)
   );
   const loadedPackages = await verifyLoadedPackages(roots, packageRowsByName);
-  await assertSingleCoreResolution(roots);
-  assertPackageDependencyContracts(rowsById);
+  const agentCoreResolutionHash = await assertSingleCoreResolution(loadedPackages);
+  assertPackageDependencyContracts(rowsById, packageArtifacts);
 
   const contentSetManifest = await verifyContentSetManifest(manifest.contentSetManifest, stateRoot);
   const contentArtifacts = CONTENT_ARTIFACT_IDS.map((artifactId) =>
@@ -178,6 +201,12 @@ export async function verifyRuntimeArtifactManifestV1(input: {
                   ? 'archive-only:plugin-mcp-package-server'
                   : `loaded:${artifact.packageName}`,
               entrypointHash: loaded?.entrypointHash ?? artifact.entrypointHash,
+              ...(loaded
+                ? {
+                    distContentHash: loaded.distContentHash,
+                    distFileCount: loaded.distFileCount,
+                  }
+                : {}),
             }
           : {}),
         schemasHash: artifact.schemasHash,
@@ -202,12 +231,17 @@ export async function verifyRuntimeArtifactManifestV1(input: {
   });
   const dependencyResolution = Object.freeze({
     singleCoreCopy: true as const,
+    agentCoreResolutionHash,
     loadedPackageSetHash: hashCanonicalJson(
-      loadedPackages.map(({ packageName, packageVersion, entrypointHash }) => ({
-        entrypointHash,
-        packageName,
-        packageVersion,
-      }))
+      loadedPackages.map(
+        ({ packageName, packageVersion, entrypointHash, distContentHash, distFileCount }) => ({
+          distContentHash,
+          distFileCount,
+          entrypointHash,
+          packageName,
+          packageVersion,
+        })
+      )
     ),
     compatibilityMatrixHash,
   });
@@ -316,7 +350,7 @@ async function verifyPackageArtifact(input: {
   artifactId: string;
   row: Record<string, unknown>;
   stateRoot: string;
-}) {
+}): Promise<VerifiedPackageArtifactRecord> {
   const { artifactId, row, stateRoot } = input;
   const packageName = requiredText(row.packageName);
   const packageVersion = requiredText(row.packageVersion);
@@ -339,12 +373,20 @@ async function verifyPackageArtifact(input: {
   const tar = readTarFiles(archive);
   const packageJson = parsePackageJson(tar.get('package/package.json'));
   const entryBytes = tar.get(`package/${entrypoint}`);
+  const dist = hashTarDirectory(tar, 'package/dist/');
   if (
     packageJson.name !== packageName ||
     packageJson.version !== packageVersion ||
     (packageJson.main !== entrypoint && !packageJson.bin.includes(entrypoint)) ||
     !entryBytes ||
     hashBytes(entryBytes) !== stripShaPrefix(requiredText(row.entrypointSha256))
+  ) {
+    throw new Error('STRICT_RUNTIME_ARTIFACT_PACKAGE_MISMATCH');
+  }
+  if (
+    artifactId !== 'plugin-mcp-package-server' &&
+    row.distContentHash !== undefined &&
+    asSha(requiredText(row.distContentHash)) !== dist.contentHash
   ) {
     throw new Error('STRICT_RUNTIME_ARTIFACT_PACKAGE_MISMATCH');
   }
@@ -356,13 +398,16 @@ async function verifyPackageArtifact(input: {
     packageVersion,
     entrypoint,
     entrypointHash: asSha(requiredText(row.entrypointSha256)),
+    distContentHash: dist.contentHash,
+    distFileCount: dist.fileCount,
     schemasHash: hashCanonicalJson(row.schemas),
+    archiveFiles: tar,
   });
 }
 
 async function verifyLoadedPackages(
   roots: Readonly<Record<LoadedPackageKey, string>>,
-  packageRows: ReadonlyMap<string, Awaited<ReturnType<typeof verifyPackageArtifact>>>
+  packageRows: ReadonlyMap<string, VerifiedPackageArtifactRecord>
 ): Promise<LoadedPackageRecord[]> {
   const expected: Readonly<Record<LoadedPackageKey, string>> = {
     agent: '@alembic/agent',
@@ -390,7 +435,8 @@ async function verifyLoadedPackages(
       const entrypointHash = asSha(
         hashBytes(await readRegularFile(path.join(root, entrypoint), root))
       );
-      if (entrypointHash !== row.entrypointHash) {
+      const dist = await hashLoadedDirectory(path.join(root, 'dist'), root);
+      if (entrypointHash !== row.entrypointHash || dist.contentHash !== row.distContentHash) {
         throw new Error('STRICT_RUNTIME_ARTIFACT_STALE_DIST');
       }
       return Object.freeze({
@@ -400,6 +446,8 @@ async function verifyLoadedPackages(
         packageVersion: row.packageVersion,
         entrypoint,
         entrypointHash,
+        distContentHash: dist.contentHash,
+        distFileCount: dist.fileCount,
       });
     })
   );
@@ -407,16 +455,35 @@ async function verifyLoadedPackages(
 }
 
 async function assertSingleCoreResolution(
-  roots: Readonly<Record<LoadedPackageKey, string>>
-): Promise<void> {
-  const coreRoot = await fsp.realpath(roots.core);
-  const agentCore = path.join(roots.agent, 'node_modules/@alembic/core');
-  if (existsSync(agentCore) && (await fsp.realpath(agentCore)) !== coreRoot) {
+  loadedPackages: readonly LoadedPackageRecord[]
+): Promise<string> {
+  const byKey = new Map(loadedPackages.map((record) => [record.key, record] as const));
+  const main = byKey.get('main');
+  const agent = byKey.get('agent');
+  const core = byKey.get('core');
+  if (!main || !agent || !core) {
+    throw new Error('STRICT_RUNTIME_ARTIFACT_LOADED_PACKAGE_MISMATCH');
+  }
+  const [mainCoreRoot, mainAgentRoot, agentCoreRoot] = await Promise.all([
+    resolvePackageRootFromEntry(main, '@alembic/core'),
+    resolvePackageRootFromEntry(main, '@alembic/agent'),
+    resolvePackageRootFromEntry(agent, '@alembic/core'),
+  ]);
+  if (mainCoreRoot !== core.root || agentCoreRoot !== core.root || mainAgentRoot !== agent.root) {
     throw new Error('STRICT_RUNTIME_ARTIFACT_SECOND_COPY');
   }
+  return hashCanonicalJson({
+    agent: 'loaded:@alembic/agent',
+    core: 'loaded:@alembic/core',
+    main: 'loaded:alembic-ai',
+    result: 'same-physical-core-root',
+  });
 }
 
-function assertPackageDependencyContracts(rows: Map<string, Record<string, unknown>>): void {
+function assertPackageDependencyContracts(
+  rows: Map<string, Record<string, unknown>>,
+  packageArtifacts: readonly VerifiedPackageArtifactRecord[]
+): void {
   const core = requiredRow(rows, 'core-package-dist');
   const agent = requiredRow(rows, 'agent-package-dist');
   const main = requiredRow(rows, 'alembic-runtime-release');
@@ -424,6 +491,13 @@ function assertPackageDependencyContracts(rows: Map<string, Record<string, unkno
   const coreVersion = requiredText(core.packageVersion);
   const agentVersion = requiredText(agent.packageVersion);
   const dependency = readRecord(agent.dependencyContract);
+  const artifactsById = new Map(
+    packageArtifacts.map((artifact) => [artifact.artifactId, artifact] as const)
+  );
+  const coreArtifact = requiredPackageArtifact(artifactsById, 'core-package-dist');
+  const agentArtifact = requiredPackageArtifact(artifactsById, 'agent-package-dist');
+  const mainArtifact = requiredPackageArtifact(artifactsById, 'alembic-runtime-release');
+  const pluginArtifact = requiredPackageArtifact(artifactsById, 'plugin-mcp-package-server');
   if (
     agent.dependencyContract !== undefined &&
     (dependency.package !== '@alembic/core' || dependency.version !== coreVersion)
@@ -442,23 +516,126 @@ function assertPackageDependencyContracts(rows: Map<string, Record<string, unkno
     }
   }
   if (
-    main.embeddedCoreDistContentHash !== undefined &&
-    main.embeddedCoreDistContentHash !== core.distContentHash
+    asSha(requiredText(core.distContentHash)) !== coreArtifact.distContentHash ||
+    asSha(requiredText(agent.distContentHash)) !== agentArtifact.distContentHash
   ) {
     throw new Error('STRICT_RUNTIME_ARTIFACT_DEPENDENCY_MISMATCH');
   }
   if (
-    main.embeddedAgentDistContentHash !== undefined &&
-    main.embeddedAgentDistContentHash !== agent.distContentHash
+    main.embeddedCoreDistContentHash !== coreArtifact.distContentHash ||
+    main.embeddedAgentDistContentHash !== agentArtifact.distContentHash ||
+    hashTarDirectory(mainArtifact.archiveFiles, 'package/node_modules/@alembic/core/dist/')
+      .contentHash !== coreArtifact.distContentHash ||
+    hashTarDirectory(mainArtifact.archiveFiles, 'package/node_modules/@alembic/agent/dist/')
+      .contentHash !== agentArtifact.distContentHash
   ) {
     throw new Error('STRICT_RUNTIME_ARTIFACT_DEPENDENCY_MISMATCH');
   }
   if (
-    plugin.embeddedCoreDistContentHash !== undefined &&
-    plugin.embeddedCoreDistContentHash !== core.distContentHash
+    plugin.embeddedCoreDistContentHash !== coreArtifact.distContentHash ||
+    hashTarDirectory(pluginArtifact.archiveFiles, 'package/node_modules/@alembic/core/dist/')
+      .contentHash !== coreArtifact.distContentHash
   ) {
     throw new Error('STRICT_RUNTIME_ARTIFACT_DEPENDENCY_MISMATCH');
   }
+}
+
+function requiredPackageArtifact(
+  rows: ReadonlyMap<string, VerifiedPackageArtifactRecord>,
+  artifactId: string
+): VerifiedPackageArtifactRecord {
+  const row = rows.get(artifactId);
+  if (!row) {
+    throw new Error('STRICT_RUNTIME_ARTIFACT_SET_MISMATCH');
+  }
+  return row;
+}
+
+async function resolvePackageRootFromEntry(
+  source: LoadedPackageRecord,
+  packageName: '@alembic/agent' | '@alembic/core'
+): Promise<string> {
+  let packageJsonPath: string | undefined;
+  try {
+    packageJsonPath = findPackageJSON(
+      packageName,
+      pathToFileURL(path.join(source.root, source.entrypoint))
+    );
+  } catch {
+    throw new Error('STRICT_RUNTIME_ARTIFACT_SECOND_COPY');
+  }
+  if (!packageJsonPath) {
+    throw new Error('STRICT_RUNTIME_ARTIFACT_SECOND_COPY');
+  }
+  return fsp.realpath(path.dirname(packageJsonPath));
+}
+
+function hashTarDirectory(files: ReadonlyMap<string, Buffer>, prefix: string): DistContentDigest {
+  const entries: Array<readonly [string, Buffer]> = [];
+  for (const [fileName, bytes] of files) {
+    if (fileName.startsWith(prefix)) {
+      entries.push([fileName.slice(prefix.length), bytes]);
+    }
+  }
+  return hashDistEntries(entries);
+}
+
+async function hashLoadedDirectory(
+  directory: string,
+  allowedRoot: string
+): Promise<DistContentDigest> {
+  const entries: Array<readonly [string, Buffer]> = [];
+  const rootStat = await fsp.lstat(directory);
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    throw new Error('STRICT_RUNTIME_ARTIFACT_REFERENCE_INVALID');
+  }
+  async function visit(current: string, relativeRoot: string): Promise<void> {
+    const children = await fsp.readdir(current, { withFileTypes: true });
+    children.sort((left, right) => left.name.localeCompare(right.name));
+    for (const child of children) {
+      const filePath = path.join(current, child.name);
+      const relativePath = relativeRoot ? `${relativeRoot}/${child.name}` : child.name;
+      if (child.isSymbolicLink()) {
+        throw new Error('STRICT_RUNTIME_ARTIFACT_REFERENCE_INVALID');
+      }
+      if (child.isDirectory()) {
+        await visit(filePath, relativePath);
+      } else if (child.isFile()) {
+        entries.push([relativePath, await readRegularFile(filePath, allowedRoot)]);
+      } else {
+        throw new Error('STRICT_RUNTIME_ARTIFACT_REFERENCE_INVALID');
+      }
+    }
+  }
+  await visit(directory, '');
+  return hashDistEntries(entries);
+}
+
+function hashDistEntries(entries: readonly (readonly [string, Buffer])[]): DistContentDigest {
+  if (entries.length === 0) {
+    throw new Error('STRICT_RUNTIME_ARTIFACT_PACKAGE_MISMATCH');
+  }
+  const rows = entries.map(([relativePath, bytes]) => {
+    if (!safeDistRelativePath(relativePath)) {
+      throw new Error('STRICT_RUNTIME_ARTIFACT_REFERENCE_INVALID');
+    }
+    return `${relativePath} ${hashBytes(bytes)}\n`;
+  });
+  rows.sort((left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right)));
+  return Object.freeze({
+    contentHash: asSha(hashBytes(Buffer.from(rows.join('')))),
+    fileCount: rows.length,
+  });
+}
+
+function safeDistRelativePath(value: string): boolean {
+  return (
+    safeRelativePath(value) &&
+    !value.includes('\\') &&
+    !value.includes('\0') &&
+    !value.includes('\n') &&
+    !value.includes('\r')
+  );
 }
 
 async function verifyContentSetManifest(
@@ -680,12 +857,34 @@ function readTarFiles(archive: Buffer): Map<string, Buffer> {
     if (contentEnd > tar.byteLength) {
       throw new Error('STRICT_RUNTIME_ARTIFACT_PACKAGE_MISMATCH');
     }
-    if (header[156] === 0x30 || header[156] === 0) {
+    const type = header[156];
+    if (!safeTarPath(fileName)) {
+      throw new Error('STRICT_RUNTIME_ARTIFACT_REFERENCE_INVALID');
+    }
+    if (type === 0x30 || type === 0) {
+      if (files.has(fileName)) {
+        throw new Error('STRICT_RUNTIME_ARTIFACT_PACKAGE_MISMATCH');
+      }
       files.set(fileName, Buffer.from(tar.subarray(contentStart, contentEnd)));
+    } else if (type !== 0x35) {
+      // Runtime artifacts are self-contained npm archives. Links, devices, PAX/GNU
+      // indirection, and other special records make the byte set ambiguous and are
+      // rejected rather than followed or normalized.
+      throw new Error('STRICT_RUNTIME_ARTIFACT_PACKAGE_MISMATCH');
     }
     offset = contentStart + Math.ceil(size / 512) * 512;
   }
   return files;
+}
+
+function safeTarPath(value: string): boolean {
+  return (
+    safeRelativePath(value) &&
+    !value.includes('\\') &&
+    !value.includes('\0') &&
+    !value.includes('\n') &&
+    !value.includes('\r')
+  );
 }
 
 function nullTerminated(value: Buffer): string {
@@ -732,7 +931,10 @@ function safeRelativePath(value: unknown): value is string {
     typeof value === 'string' &&
     value.length > 0 &&
     !path.isAbsolute(value) &&
-    !value.split(/[\\/]/u).some((segment) => segment === '' || segment === '..')
+    !value.includes('\0') &&
+    !value.includes('\n') &&
+    !value.includes('\r') &&
+    !value.split(/[\\/]/u).some((segment) => segment === '' || segment === '.' || segment === '..')
   );
 }
 

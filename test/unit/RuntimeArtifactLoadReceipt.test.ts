@@ -25,8 +25,36 @@ describe('RuntimeArtifactLoadReceiptV1', () => {
       kind: 'RuntimeArtifactLoadReceiptV1',
       manifestHash: fixture.manifest.manifestHash,
       dashboard: { status: 'not-applicable', startupDecision: 'forbidden' },
-      dependencyResolution: { singleCoreCopy: true },
+      dependencyResolution: {
+        singleCoreCopy: true,
+        agentCoreResolutionHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+      },
     });
+    expect(
+      result.receipt.artifacts
+        .filter((row) => row.loadedPathSymbol?.startsWith('loaded:'))
+        .map((row) => ({
+          distContentHash: row.distContentHash,
+          distFileCount: row.distFileCount,
+          packageName: row.packageName,
+        }))
+    ).toEqual([
+      {
+        distContentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        distFileCount: 2,
+        packageName: '@alembic/agent',
+      },
+      {
+        distContentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        distFileCount: 2,
+        packageName: 'alembic-ai',
+      },
+      {
+        distContentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        distFileCount: 2,
+        packageName: '@alembic/core',
+      },
+    ]);
     expect(result.receipt.artifacts.map((row) => row.artifactId)).toEqual([
       'agent-package-dist',
       'alembic-runtime-release',
@@ -56,6 +84,91 @@ describe('RuntimeArtifactLoadReceiptV1', () => {
     ).rejects.toThrow('STRICT_RUNTIME_ARTIFACT_HASH_MISMATCH');
   });
 
+  it('fails closed when the accepted Main archive predates the complete loaded dist', async () => {
+    const fixture = await createFixture();
+    const currentOnlyFile = path.join(
+      fixture.loadedPackageRoots.main,
+      'dist/internal/current-only.js'
+    );
+    await fs.writeFile(currentOnlyFile, 'current-only\n');
+
+    await expect(
+      verifyRuntimeArtifactManifestV1({
+        expectedManifestContentHash: fixture.manifestContentHash,
+        expectedManifestHash: fixture.manifest.manifestHash,
+        loadedPackageRoots: fixture.loadedPackageRoots,
+        manifestPath: fixture.manifestPath,
+        manifestSymbol: 'controller:runtime-artifact-manifest',
+      })
+    ).rejects.toThrow('STRICT_RUNTIME_ARTIFACT_STALE_DIST');
+  });
+
+  it('fails closed when a non-entry dist file drifts while the entrypoint stays unchanged', async () => {
+    const fixture = await createFixture();
+    await fs.writeFile(
+      path.join(fixture.loadedPackageRoots.core, 'dist/internal/secondary.js'),
+      'tampered-non-entry\n'
+    );
+
+    await expect(
+      verifyRuntimeArtifactManifestV1({
+        expectedManifestContentHash: fixture.manifestContentHash,
+        expectedManifestHash: fixture.manifest.manifestHash,
+        loadedPackageRoots: fixture.loadedPackageRoots,
+        manifestPath: fixture.manifestPath,
+        manifestSymbol: 'controller:runtime-artifact-manifest',
+      })
+    ).rejects.toThrow('STRICT_RUNTIME_ARTIFACT_STALE_DIST');
+  });
+
+  it('fails closed when a loaded dist file is missing while the entrypoint stays unchanged', async () => {
+    const fixture = await createFixture();
+    await fs.rm(path.join(fixture.loadedPackageRoots.agent, 'dist/internal/secondary.js'));
+
+    await expect(
+      verifyRuntimeArtifactManifestV1({
+        expectedManifestContentHash: fixture.manifestContentHash,
+        expectedManifestHash: fixture.manifest.manifestHash,
+        loadedPackageRoots: fixture.loadedPackageRoots,
+        manifestPath: fixture.manifestPath,
+        manifestSymbol: 'controller:runtime-artifact-manifest',
+      })
+    ).rejects.toThrow('STRICT_RUNTIME_ARTIFACT_STALE_DIST');
+  });
+
+  it('recomputes embedded Main dependencies instead of trusting declared hashes', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'runtime-artifact-embedded-'));
+    const main = path.join(root, 'runtime');
+    const core = path.join(main, 'node_modules/@alembic/core');
+    const agent = path.join(main, 'node_modules/@alembic/agent');
+    const rogueCore = path.join(root, 'rogue-core');
+    await materializeLoadedPackageFixture(
+      main,
+      'alembic-ai',
+      'main-entry',
+      'dist/lib/Bootstrap.js'
+    );
+    await materializeLoadedPackageFixture(core, '@alembic/core', 'core-entry');
+    await materializeLoadedPackageFixture(agent, '@alembic/agent', 'agent-entry');
+    await materializeLoadedPackageFixture(rogueCore, '@alembic/core', 'core-entry');
+    await fs.writeFile(path.join(rogueCore, 'dist/internal/secondary.js'), 'rogue-embedded-core\n');
+    const fixture = await createRuntimeArtifactManifestFixture({
+      root,
+      loadedPackageRoots: { agent, core, main },
+      embeddedPackageRoots: { mainCore: rogueCore },
+    });
+
+    await expect(
+      verifyRuntimeArtifactManifestV1({
+        expectedManifestContentHash: fixture.manifestContentHash,
+        expectedManifestHash: fixture.manifest.manifestHash,
+        loadedPackageRoots: fixture.loadedPackageRoots,
+        manifestPath: fixture.manifestPath,
+        manifestSymbol: 'controller:runtime-artifact-manifest',
+      })
+    ).rejects.toThrow('STRICT_RUNTIME_ARTIFACT_DEPENDENCY_MISMATCH');
+  });
+
   it('fails closed when manifest bytes drift while the declared manifest hash is retained', async () => {
     const fixture = await createFixture();
     await fs.appendFile(fixture.manifestPath, ' ');
@@ -75,6 +188,37 @@ describe('RuntimeArtifactLoadReceiptV1', () => {
     const fixture = await createFixture();
     const duplicateRoot = path.join(fixture.loadedPackageRoots.agent, 'node_modules/@alembic/core');
     await materializeLoadedPackageFixture(duplicateRoot, '@alembic/core', 'core-entry');
+
+    await expect(
+      verifyRuntimeArtifactManifestV1({
+        expectedManifestContentHash: fixture.manifestContentHash,
+        expectedManifestHash: fixture.manifest.manifestHash,
+        loadedPackageRoots: fixture.loadedPackageRoots,
+        manifestPath: fixture.manifestPath,
+        manifestSymbol: 'controller:runtime-artifact-manifest',
+      })
+    ).rejects.toThrow('STRICT_RUNTIME_ARTIFACT_SECOND_COPY');
+  });
+
+  it('fails closed when Node resolves an identical Core at a different physical root', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'runtime-artifact-resolution-'));
+    const main = path.join(root, 'runtime');
+    const resolvedCore = path.join(main, 'node_modules/@alembic/core');
+    const agent = path.join(main, 'node_modules/@alembic/agent');
+    const declaredCore = path.join(root, 'declared-core');
+    await materializeLoadedPackageFixture(
+      main,
+      'alembic-ai',
+      'main-entry',
+      'dist/lib/Bootstrap.js'
+    );
+    await materializeLoadedPackageFixture(resolvedCore, '@alembic/core', 'core-entry');
+    await materializeLoadedPackageFixture(declaredCore, '@alembic/core', 'core-entry');
+    await materializeLoadedPackageFixture(agent, '@alembic/agent', 'agent-entry');
+    const fixture = await createRuntimeArtifactManifestFixture({
+      root,
+      loadedPackageRoots: { agent, core: declaredCore, main },
+    });
 
     await expect(
       verifyRuntimeArtifactManifestV1({

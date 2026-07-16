@@ -18,8 +18,11 @@ interface RuntimeArtifactFixtureManifest extends Record<string, unknown> {
 export async function createRuntimeArtifactManifestFixture(input: {
   readonly root: string;
   readonly loadedPackageRoots: LoadedPackageRoots;
+  readonly embeddedPackageRoots?: Readonly<
+    Partial<Record<'mainAgent' | 'mainCore' | 'pluginCore', string>>
+  >;
 }) {
-  const { loadedPackageRoots, root } = input;
+  const { embeddedPackageRoots = {}, loadedPackageRoots, root } = input;
   const stateRoot = path.join(root, '.wakeflow-active/current/demand');
   const evidenceRoot = path.join(stateRoot, 'evidence/controller-runtime-artifact-manifest');
   const artifactsRoot = path.join(evidenceRoot, 'artifacts');
@@ -42,11 +45,24 @@ export async function createRuntimeArtifactManifestFixture(input: {
           version: pkg.version,
           entrypoint: pkg.main,
           entry: await fs.readFile(path.join(packageRoot, pkg.main)),
+          distFiles: await readRegularTree(path.join(packageRoot, 'dist')),
         };
       }
     )
   );
   const byKey = new Map(loaded.map((row) => [row.key, row] as const));
+  const embeddedDistFiles = new Map(
+    await Promise.all(
+      (
+        Object.entries(embeddedPackageRoots) as Array<
+          ['mainAgent' | 'mainCore' | 'pluginCore', string]
+        >
+      ).map(
+        async ([key, packageRoot]) =>
+          [key, await readRegularTree(path.join(packageRoot, 'dist'))] as const
+      )
+    )
+  );
   const packageRows: Array<Record<string, unknown>> = [];
   let coreArtifactPath = '';
   for (const spec of [
@@ -59,7 +75,26 @@ export async function createRuntimeArtifactManifestFixture(input: {
     if (!source) {
       throw new Error(`missing loaded package fixture:${key}`);
     }
-    const bytes = createPackageTgz(source.name, source.version, source.entry, source.entrypoint);
+    const embedded =
+      key === 'main'
+        ? [
+            ...prefixedFiles(
+              'node_modules/@alembic/core',
+              embeddedDistFiles.get('mainCore') ?? byKey.get('core')?.distFiles ?? new Map()
+            ),
+            ...prefixedFiles(
+              'node_modules/@alembic/agent',
+              embeddedDistFiles.get('mainAgent') ?? byKey.get('agent')?.distFiles ?? new Map()
+            ),
+          ]
+        : [];
+    const bytes = createPackageTgz(
+      source.name,
+      source.version,
+      source.entrypoint,
+      source.distFiles,
+      embedded
+    );
     const artifactPath = path.join(artifactsRoot, file);
     await fs.writeFile(artifactPath, bytes);
     if (artifactId === 'core-package-dist') {
@@ -75,15 +110,39 @@ export async function createRuntimeArtifactManifestFixture(input: {
       byteSize: bytes.byteLength,
       entrypoint: source.entrypoint,
       entrypointSha256: hashBytes(source.entry),
-      distContentHash: hashCanonicalJson({ artifactId, entrypointHash: hashBytes(source.entry) }),
+      distContentHash: hashDistContent(source.distFiles),
+      ...(artifactId === 'agent-package-dist'
+        ? {
+            dependencyContract: {
+              package: '@alembic/core',
+              version: byKey.get('core')?.version,
+            },
+          }
+        : {}),
+      ...(artifactId === 'alembic-runtime-release'
+        ? {
+            bundledDependencies: ['@alembic/core@0.3.0', '@alembic/agent@0.3.0'],
+            embeddedCoreDistContentHash: hashDistContent(byKey.get('core')?.distFiles ?? new Map()),
+            embeddedAgentDistContentHash: hashDistContent(
+              byKey.get('agent')?.distFiles ?? new Map()
+            ),
+          }
+        : {}),
       schemas: { package: source.version },
     });
   }
+  const pluginDistFiles = new Map([['index.js', Buffer.from('plugin-entry')]]);
   const pluginBytes = createPackageTgz(
     'alembic-runtime',
     '0.3.0',
-    Buffer.from('plugin-entry'),
-    'dist/index.js'
+    'dist/index.js',
+    pluginDistFiles,
+    [
+      ...prefixedFiles(
+        'node_modules/@alembic/core',
+        embeddedDistFiles.get('pluginCore') ?? byKey.get('core')?.distFiles ?? new Map()
+      ),
+    ]
   );
   const pluginPath = path.join(artifactsRoot, 'alembic-runtime-0.3.0.tgz');
   await fs.writeFile(pluginPath, pluginBytes);
@@ -98,6 +157,9 @@ export async function createRuntimeArtifactManifestFixture(input: {
     byteSize: pluginBytes.byteLength,
     entrypoint: 'dist/index.js',
     entrypointSha256: hashBytes(Buffer.from('plugin-entry')),
+    distContentHash: hashDistContent(pluginDistFiles),
+    bundledDependencies: ['@alembic/core@0.3.0'],
+    embeddedCoreDistContentHash: hashDistContent(byKey.get('core')?.distFiles ?? new Map()),
     schemas: { package: '0.3.0' },
   });
 
@@ -242,6 +304,9 @@ export async function materializeLoadedPackageFixture(
     `${JSON.stringify({ name, version: '0.3.0', main: entrypoint })}\n`
   );
   await fs.writeFile(path.join(root, entrypoint), entry);
+  const secondaryPath = path.join(root, 'dist/internal/secondary.js');
+  await fs.mkdir(path.dirname(secondaryPath), { recursive: true });
+  await fs.writeFile(secondaryPath, `${name}-secondary\n`);
 }
 
 export function semanticHash(value: Record<string, unknown>, key: string): string {
@@ -252,14 +317,19 @@ export function semanticHash(value: Record<string, unknown>, key: string): strin
 function createPackageTgz(
   name: string,
   version: string,
-  entry: Buffer,
-  entrypoint: string
+  entrypoint: string,
+  distFiles: ReadonlyMap<string, Buffer>,
+  additionalFiles: readonly (readonly [string, Buffer])[] = []
 ): Buffer {
   const packageJson = Buffer.from(`${JSON.stringify({ name, version, main: entrypoint })}\n`);
-  const files = [
+  const files: Array<readonly [string, Buffer]> = [
     ['package/package.json', packageJson],
-    [`package/${entrypoint}`, entry],
-  ] as const;
+    ...[...distFiles.entries()].map(
+      ([relativePath, bytes]) => [`package/dist/${relativePath}`, bytes] as const
+    ),
+    ...additionalFiles.map(([relativePath, bytes]) => [`package/${relativePath}`, bytes] as const),
+  ];
+  files.sort(([left], [right]) => left.localeCompare(right));
   return gzipSync(
     Buffer.concat([...files.map(([file, bytes]) => tarEntry(file, bytes)), Buffer.alloc(1024)])
   );
@@ -267,7 +337,8 @@ function createPackageTgz(
 
 function tarEntry(name: string, bytes: Buffer): Buffer {
   const header = Buffer.alloc(512);
-  header.write(name, 0, 100, 'utf8');
+  const { entryName, prefix } = splitTarPath(name);
+  header.write(entryName, 0, 100, 'utf8');
   header.write('0000644\0', 100, 8, 'ascii');
   header.write('0000000\0', 108, 8, 'ascii');
   header.write('0000000\0', 116, 8, 'ascii');
@@ -277,9 +348,62 @@ function tarEntry(name: string, bytes: Buffer): Buffer {
   header.write('0', 156, 1, 'ascii');
   header.write('ustar\0', 257, 6, 'ascii');
   header.write('00', 263, 2, 'ascii');
+  header.write(prefix, 345, 155, 'utf8');
   const checksum = [...header].reduce((sum, byte) => sum + byte, 0);
   header.write(`${checksum.toString(8).padStart(6, '0')}\0 `, 148, 8, 'ascii');
   return Buffer.concat([header, bytes, Buffer.alloc((512 - (bytes.byteLength % 512)) % 512)]);
+}
+
+async function readRegularTree(root: string): Promise<Map<string, Buffer>> {
+  const result = new Map<string, Buffer>();
+  async function visit(directory: string, relativeRoot: string): Promise<void> {
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    entries.sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      const filePath = path.join(directory, entry.name);
+      const relativePath = relativeRoot ? `${relativeRoot}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        await visit(filePath, relativePath);
+      } else if (entry.isFile()) {
+        result.set(relativePath, await fs.readFile(filePath));
+      } else {
+        throw new Error(`unsupported loaded package fixture entry:${relativePath}`);
+      }
+    }
+  }
+  await visit(root, '');
+  return result;
+}
+
+function prefixedFiles(
+  prefix: string,
+  files: ReadonlyMap<string, Buffer>
+): Array<readonly [string, Buffer]> {
+  return [...files.entries()].map(
+    ([relativePath, bytes]) => [`${prefix}/dist/${relativePath}`, bytes] as const
+  );
+}
+
+function hashDistContent(files: ReadonlyMap<string, Buffer>): string {
+  const rows = [...files.entries()].map(
+    ([relativePath, bytes]) => `${relativePath} ${hashBytes(bytes)}\n`
+  );
+  rows.sort((left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right)));
+  return `sha256:${hashBytes(Buffer.from(rows.join('')))}`;
+}
+
+function splitTarPath(value: string): { entryName: string; prefix: string } {
+  if (Buffer.byteLength(value, 'utf8') <= 100) {
+    return { entryName: value, prefix: '' };
+  }
+  for (let index = value.lastIndexOf('/'); index > 0; index = value.lastIndexOf('/', index - 1)) {
+    const prefix = value.slice(0, index);
+    const entryName = value.slice(index + 1);
+    if (Buffer.byteLength(prefix, 'utf8') <= 155 && Buffer.byteLength(entryName, 'utf8') <= 100) {
+      return { entryName, prefix };
+    }
+  }
+  throw new Error(`fixture tar path is too long:${value}`);
 }
 
 function selfHashed<T extends Record<string, unknown>, K extends string>(

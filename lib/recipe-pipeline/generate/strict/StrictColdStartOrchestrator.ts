@@ -171,7 +171,7 @@ export async function runStrictColdStartProduction(
       });
       const checkpoint = await readCheckpoint(operationRoot);
       if (journal.resumePoint === 'FINALIZED') {
-        return verifyFinalizedReplay({
+        return await verifyFinalizedReplay({
           authorization,
           checkpoint,
           dataRoot,

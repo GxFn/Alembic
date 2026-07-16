@@ -8,11 +8,14 @@ import { ANATOMY_LENS_IDS, type FactQueryFamilyV1 } from '@alembic/core/plans';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { WorkspaceResolver } from '@alembic/core/workspace';
 import Database from 'better-sqlite3';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
 import { resolveMainCertifiedProjectScopeHash } from '../../lib/project-facts/CertifiedProjectFactsRuntime.js';
 import { resolveProjectScopeAnalysisContext } from '../../lib/project-scope/ProjectScopeAnalysis.js';
-import { STRICT_PRODUCTION_STATES_V1 } from '../../lib/recipe-pipeline/generate/strict/StrictProductionJournal.js';
+import {
+  STRICT_PRODUCTION_STATES_V1,
+  StrictProductionJournal,
+} from '../../lib/recipe-pipeline/generate/strict/StrictProductionJournal.js';
 import { executeRecipePipelineJob } from '../../lib/recipe-pipeline/RecipePipelineFacade.js';
 import { PACKAGE_ROOT } from '../../lib/shared/package-assets.js';
 import { createRuntimeArtifactManifestFixture } from '../helpers/RuntimeArtifactManifestFixture.js';
@@ -334,9 +337,26 @@ describe('RecipePipelineFacade strict production integration', () => {
       const activePath = path.join(publicationRoot, 'active.json');
       const canonicalRouteBytes = await fsp.readFile(activePath, 'utf8');
       await fsp.writeFile(activePath, `${JSON.stringify(publicRoute, null, 2)}\n`);
-      await expect(executeFixture(fixture)).rejects.toThrow(
-        'STRICT_FINALIZED_PUBLIC_ROUTE_DIVERGENCE'
-      );
+      const unhandledRejections: unknown[] = [];
+      const onUnhandledRejection = (reason: unknown) => unhandledRejections.push(reason);
+      const originalClose = StrictProductionJournal.prototype.close;
+      const closeSpy = vi
+        .spyOn(StrictProductionJournal.prototype, 'close')
+        .mockImplementation(async function (this: StrictProductionJournal) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 20));
+          return originalClose.call(this);
+        });
+      process.prependListener('unhandledRejection', onUnhandledRejection);
+      try {
+        await expect(executeFixture(fixture)).rejects.toThrow(
+          'STRICT_FINALIZED_PUBLIC_ROUTE_DIVERGENCE'
+        );
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(unhandledRejections).toEqual([]);
+      } finally {
+        process.removeListener('unhandledRejection', onUnhandledRejection);
+        closeSpy.mockRestore();
+      }
       await fsp.writeFile(activePath, canonicalRouteBytes);
       await persistRequestedEvidence(operationRoot, fixture.dataRoot);
       await fsp.rm(operationRoot, { recursive: true });
