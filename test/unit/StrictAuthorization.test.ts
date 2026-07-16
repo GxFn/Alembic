@@ -202,6 +202,11 @@ function buildReceipt(
     publicRoutePath: options.publicRoutePath ?? 'public/active.json',
     expectedPublicRouteHash: options.expectedPublicRouteHash ?? null,
     pcfBaselineReceiptHash: sha('pcf'),
+    runtimeArtifacts: {
+      manifestContentHash: sha('runtime-artifact-manifest-content'),
+      manifestHash: sha('runtime-artifact-manifest'),
+      manifestSymbol: 'controller:runtime-artifact-manifest' as const,
+    },
     reset: { relativePaths: options.resetPaths ?? ['cache/candidates'], tables: ['recipes'] },
     planning: {
       factQueryFamilies: [

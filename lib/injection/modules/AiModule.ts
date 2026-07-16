@@ -14,6 +14,7 @@
  */
 
 import { AiProviderManager, type ManagedAiProvider } from '@alembic/agent/ai';
+import { alignDeepSeekReasoningEffort } from '../../infrastructure/config/RuntimeConfigLoadReceipt.js';
 import { getAiRuntimeStatus } from '../AiRuntimeStatus.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
@@ -27,6 +28,11 @@ import type { ServiceContainer } from '../ServiceContainer.js';
  */
 export async function initialize(c: ServiceContainer) {
   const logger = c.logger;
+
+  // WorkspaceSettingsStore persists the provider-neutral key while DeepSeekProvider consumes
+  // its provider-specific env contract. Reconcile once, before any provider is constructed;
+  // an explicit provider-specific override always wins.
+  alignDeepSeekReasoningEffort(process.env);
 
   // AiFactory 模块引用
   try {

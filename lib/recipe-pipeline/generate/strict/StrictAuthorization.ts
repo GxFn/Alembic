@@ -22,6 +22,11 @@ export interface StrictProductionAuthorizationReceiptV1 {
   readonly publicRoutePath?: string;
   readonly expectedPublicRouteHash: string | null;
   readonly pcfBaselineReceiptHash: string;
+  readonly runtimeArtifacts: {
+    readonly manifestHash: string;
+    readonly manifestContentHash: string;
+    readonly manifestSymbol: 'controller:runtime-artifact-manifest';
+  };
   readonly reset: {
     readonly relativePaths: readonly string[];
     readonly tables: readonly string[];
@@ -158,10 +163,14 @@ function assertReceiptShape(value: Record<string, unknown>): void {
   const reset = readRecord(value.reset);
   const planning = readRecord(value.planning);
   const privateCorpus = readRecord(value.privateCorpus);
+  const runtimeArtifacts = readRecord(value.runtimeArtifacts);
   if (
     !readText(value.operationRoot) ||
     (value.expectedPublicRouteHash !== null && !isSha(value.expectedPublicRouteHash)) ||
     !isSha(value.pcfBaselineReceiptHash) ||
+    !isSha(runtimeArtifacts.manifestHash) ||
+    !isSha(runtimeArtifacts.manifestContentHash) ||
+    runtimeArtifacts.manifestSymbol !== 'controller:runtime-artifact-manifest' ||
     !hasValidResetShape(reset) ||
     !hasValidPlanningShape(planning) ||
     !hasValidPrivateCorpusShape(privateCorpus)

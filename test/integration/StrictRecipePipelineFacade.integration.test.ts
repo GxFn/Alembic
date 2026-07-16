@@ -14,6 +14,8 @@ import { resolveMainCertifiedProjectScopeHash } from '../../lib/project-facts/Ce
 import { resolveProjectScopeAnalysisContext } from '../../lib/project-scope/ProjectScopeAnalysis.js';
 import { STRICT_PRODUCTION_STATES_V1 } from '../../lib/recipe-pipeline/generate/strict/StrictProductionJournal.js';
 import { executeRecipePipelineJob } from '../../lib/recipe-pipeline/RecipePipelineFacade.js';
+import { PACKAGE_ROOT } from '../../lib/shared/package-assets.js';
+import { createRuntimeArtifactManifestFixture } from '../helpers/RuntimeArtifactManifestFixture.js';
 
 const roots: string[] = [];
 
@@ -56,6 +58,17 @@ describe('RecipePipelineFacade strict production integration', () => {
       expect(result).toMatchObject({
         mode: 'strict-production',
         status: 'FINALIZED',
+        runtimeLoad: {
+          artifactReceipt: {
+            kind: 'RuntimeArtifactLoadReceiptV1',
+            manifestHash: fixture.runtimeArtifactManifestHash,
+            receiptHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+          },
+          configReceipt: {
+            kind: 'RuntimeConfigLoadReceiptV1',
+            receiptHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+          },
+        },
         asyncFill: false,
       });
       const operationRoot = path.join(
@@ -85,12 +98,23 @@ describe('RecipePipelineFacade strict production integration', () => {
       });
       expect(report).not.toHaveProperty('candidateHandle');
       expect(report).toHaveProperty('privateCorpusEvidence.servingSnapshotValidationHash');
-      const journal = (
-        await fsp.readFile(path.join(operationRoot, 'strict-production.journal.jsonl'), 'utf8')
-      )
+      expect(JSON.stringify(report)).not.toContain(fixture.runtimeArtifactManifestPath);
+      const journalBytes = await fsp.readFile(
+        path.join(operationRoot, 'strict-production.journal.jsonl'),
+        'utf8'
+      );
+      expect(journalBytes).not.toContain(fixture.runtimeArtifactManifestPath);
+      const journalEntries = journalBytes
         .trim()
         .split('\n')
-        .map((row) => (JSON.parse(row) as { state: string }).state);
+        .map(
+          (row) =>
+            JSON.parse(row) as {
+              state: string;
+              payload: Record<string, unknown>;
+            }
+        );
+      const journal = journalEntries.map((entry) => entry.state);
       expect(journal.slice(-8)).toEqual([
         'G4_READY',
         'SERVING_RECONCILED',
@@ -105,6 +129,20 @@ describe('RecipePipelineFacade strict production integration', () => {
       expect(journal).toEqual(
         STRICT_PRODUCTION_STATES_V1.filter((state) => state !== 'PRISTINE_ABSENT')
       );
+      const runtimeLoad = report.runtimeLoad as {
+        artifactReceipt: { receiptHash: string };
+        configReceipt: { configHash: string; receiptHash: string };
+      };
+      expect(
+        journalEntries.find((entry) => entry.state === 'PC_F_ACCEPTED')?.payload
+      ).toMatchObject({
+        runtimeArtifactManifestHash: fixture.runtimeArtifactManifestHash,
+        runtimeArtifactReceiptHash: runtimeLoad.artifactReceipt.receiptHash,
+      });
+      expect(journalEntries.find((entry) => entry.state === 'AUTHORIZED')?.payload).toMatchObject({
+        runtimeConfigHash: runtimeLoad.configReceipt.configHash,
+        runtimeConfigReceiptHash: runtimeLoad.configReceipt.receiptHash,
+      });
       const checkpoint = JSON.parse(
         await fsp.readFile(path.join(operationRoot, 'strict-production.checkpoint.json'), 'utf8')
       ) as {
@@ -459,6 +497,42 @@ describe('RecipePipelineFacade strict production integration', () => {
       fixture.database.close();
     }
   });
+
+  it('fails on artifact drift before creating an operation root or touching the reset target', async () => {
+    const fixture = await createFixture();
+    const sentinel = path.join(fixture.dataRoot, 'candidate-cache/sentinel.json');
+    const operationRoot = path.join(
+      fixture.dataRoot,
+      'strict-production/operations/strict-integration-run'
+    );
+    try {
+      await fsp.mkdir(path.dirname(sentinel), { recursive: true });
+      await fsp.writeFile(sentinel, '{}\n');
+      await fsp.appendFile(fixture.runtimeArtifactCorePath, Buffer.from('tamper'));
+
+      await expect(executeFixture(fixture)).rejects.toThrow(
+        'STRICT_RUNTIME_ARTIFACT_HASH_MISMATCH'
+      );
+      await expect(fsp.readFile(sentinel, 'utf8')).resolves.toBe('{}\n');
+      await expect(fsp.stat(operationRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      fixture.database.close();
+    }
+  });
+
+  it('rejects a changed sanitized config receipt on persisted finalized replay', async () => {
+    const fixture = await createFixture();
+    try {
+      await executeFixture(fixture);
+      process.env.ALEMBIC_AI_PROXY = 'http://runtime-proxy.invalid';
+      await expect(executeFixture(fixture)).rejects.toThrow(
+        'STRICT_RUNTIME_LOAD_RECEIPT_RESUME_MISMATCH'
+      );
+    } finally {
+      delete process.env.ALEMBIC_AI_PROXY;
+      fixture.database.close();
+    }
+  });
 });
 
 async function readJson(filePath: string): Promise<Record<string, unknown>> {
@@ -470,22 +544,40 @@ function withoutKey(value: Record<string, unknown>, key: string): Record<string,
   return rest;
 }
 
-function executeFixture(fixture: Awaited<ReturnType<typeof createFixture>>) {
-  return executeRecipePipelineJob({
-    args: {
-      strictProduction: {
-        schemaVersion: 1,
-        authorizationReceiptHash: fixture.authorizationHash,
-        authorizationReceiptPath: fixture.authorizationReceiptPath,
-        runId: fixture.runId,
+async function executeFixture(fixture: Awaited<ReturnType<typeof createFixture>>) {
+  const previous = {
+    ALEMBIC_AI_MODEL: process.env.ALEMBIC_AI_MODEL,
+    ALEMBIC_AI_PROVIDER: process.env.ALEMBIC_AI_PROVIDER,
+    ALEMBIC_RUNTIME_ARTIFACT_MANIFEST_PATH: process.env.ALEMBIC_RUNTIME_ARTIFACT_MANIFEST_PATH,
+  };
+  process.env.ALEMBIC_AI_PROVIDER = 'fixture';
+  process.env.ALEMBIC_AI_MODEL = 'fixture-reviewer';
+  process.env.ALEMBIC_RUNTIME_ARTIFACT_MANIFEST_PATH = fixture.runtimeArtifactManifestPath;
+  try {
+    return await executeRecipePipelineJob({
+      args: {
+        strictProduction: {
+          schemaVersion: 1,
+          authorizationReceiptHash: fixture.authorizationHash,
+          authorizationReceiptPath: fixture.authorizationReceiptPath,
+          runId: fixture.runId,
+        },
       },
-    },
-    container: fixture.container,
-    jobId: 'strict-integration-job',
-    kind: 'bootstrap',
-    logger: fixture.logger,
-    source: 'api',
-  });
+      container: fixture.container,
+      jobId: 'strict-integration-job',
+      kind: 'bootstrap',
+      logger: fixture.logger,
+      source: 'api',
+    });
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
 }
 
 async function persistRequestedEvidence(operationRoot: string, dataRoot: string): Promise<void> {
@@ -611,6 +703,14 @@ async function createFixture(options: { authorizationProjectIdentityHash?: strin
     projectScope,
     currentFolderId: folderId,
   });
+  const runtimeArtifactFixture = await createRuntimeArtifactManifestFixture({
+    root,
+    loadedPackageRoots: {
+      main: await fsp.realpath(PACKAGE_ROOT),
+      core: await fsp.realpath(path.join(PACKAGE_ROOT, 'node_modules/@alembic/core')),
+      agent: await fsp.realpath(path.join(PACKAGE_ROOT, 'node_modules/@alembic/agent')),
+    },
+  });
   const database = new Database(path.join(dataRoot, 'main.sqlite'));
   const agentService = new DeterministicStrictAgentService();
   const embedProvider = createFixtureEmbedProvider();
@@ -623,6 +723,7 @@ async function createFixture(options: { authorizationProjectIdentityHash?: strin
       _projectRoot: projectRoot,
       _workspaceResolver: resolver,
       _embedProvider: embedProvider,
+      aiProvider: { name: 'fixture', model: 'fixture-reviewer' },
     },
     get(name: string) {
       if (!services.has(name)) {
@@ -646,6 +747,11 @@ async function createFixture(options: { authorizationProjectIdentityHash?: strin
     publicRoutePath: 'public/active.json',
     expectedPublicRouteHash: null,
     pcfBaselineReceiptHash: sha('pcf-baseline'),
+    runtimeArtifacts: {
+      manifestContentHash: runtimeArtifactFixture.manifestContentHash,
+      manifestHash: runtimeArtifactFixture.manifest.manifestHash,
+      manifestSymbol: 'controller:runtime-artifact-manifest' as const,
+    },
     reset: { relativePaths: ['candidate-cache'], tables: [] },
     planning: {
       factQueryFamilies: factFamilies(),
@@ -681,6 +787,9 @@ async function createFixture(options: { authorizationProjectIdentityHash?: strin
     logger: { info() {}, warn() {}, error() {} },
     projectIdentityHash,
     runId,
+    runtimeArtifactCorePath: runtimeArtifactFixture.coreArtifactPath,
+    runtimeArtifactManifestHash: runtimeArtifactFixture.manifest.manifestHash,
+    runtimeArtifactManifestPath: runtimeArtifactFixture.manifestPath,
     sourceConfigBytes,
   };
 }

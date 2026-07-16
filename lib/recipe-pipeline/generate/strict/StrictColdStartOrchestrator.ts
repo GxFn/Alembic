@@ -8,6 +8,10 @@ import type {
   PrivateCorpusRevisionInitReceiptV1,
   WorkspaceResolver,
 } from '@alembic/core/workspace';
+import {
+  createRuntimeConfigLoadReceiptV1,
+  type RuntimeConfigLoadReceiptV1,
+} from '../../../infrastructure/config/RuntimeConfigLoadReceipt.js';
 import type { ServiceContainer } from '../../../injection/ServiceContainer.js';
 import {
   captureMainCertifiedProjectFacts,
@@ -48,6 +52,10 @@ import {
   executeExactStrictReset,
   verifyStrictResetSnapshotAndRestoreProbe,
 } from './StrictResetProtocol.js';
+import {
+  type RuntimeArtifactLoadReceiptV1,
+  verifyRuntimeArtifactManifestV1,
+} from './StrictRuntimeArtifacts.js';
 
 const CHECKPOINT_FILE = 'strict-production.checkpoint.json';
 const RUNTIME_REPORT_FILE = 'strict-production.runtime-report.json';
@@ -100,6 +108,8 @@ interface StrictExecutionContext {
   readonly operationRoot: string;
   readonly publicRoutePath: string;
   readonly journal: StrictProductionJournal;
+  readonly runtimeArtifactReceipt: RuntimeArtifactLoadReceiptV1;
+  readonly runtimeConfigReceipt: RuntimeConfigLoadReceiptV1;
 }
 
 export async function runStrictColdStartProduction(
@@ -110,6 +120,26 @@ export async function runStrictColdStartProduction(
     dataRoot,
     projectRoot,
     request: input.request,
+  });
+  const runtimeArtifacts = await verifyRuntimeArtifactManifestV1({
+    expectedManifestContentHash: authorization.runtimeArtifacts.manifestContentHash,
+    expectedManifestHash: authorization.runtimeArtifacts.manifestHash,
+    manifestPath: requireRuntimeArtifactManifestPath(),
+    manifestSymbol: authorization.runtimeArtifacts.manifestSymbol,
+  });
+  const workspaceResolver = input.container.singletons._workspaceResolver as
+    | WorkspaceResolver
+    | undefined;
+  if (!workspaceResolver || workspaceResolver.projectRoot !== path.resolve(projectRoot)) {
+    throw new Error('STRICT_RUNTIME_CONFIG_WORKSPACE_RESOLVER_MISMATCH');
+  }
+  const runtimeConfigReceipt = createRuntimeConfigLoadReceiptV1({
+    projectRoot,
+    workspaceResolver,
+    planning: authorization.planning,
+    artifactBindings: runtimeArtifacts.artifactBindings,
+    actualProvider: input.container.singletons.aiProvider,
+    actualEmbeddingProvider: input.container.singletons._embedProvider,
   });
   const operationRoot = confinedPath(dataRoot, authorization.operationRoot);
   const publicRoutePath = strictPublicationPaths(dataRoot).activePath;
@@ -133,6 +163,12 @@ export async function runStrictColdStartProduction(
       runId: input.request.runId,
     });
     try {
+      assertRuntimeLoadResumeBindings({
+        authorizationHash: authorization.authorizationHash,
+        journal,
+        runtimeArtifactReceipt: runtimeArtifacts.receipt,
+        runtimeConfigReceipt,
+      });
       const checkpoint = await readCheckpoint(operationRoot);
       if (journal.resumePoint === 'FINALIZED') {
         return verifyFinalizedReplay({
@@ -141,6 +177,8 @@ export async function runStrictColdStartProduction(
           dataRoot,
           operationRoot,
           publicRoutePath,
+          runtimeArtifactReceipt: runtimeArtifacts.receipt,
+          runtimeConfigReceipt,
         });
       }
       const context: StrictExecutionContext = {
@@ -152,6 +190,8 @@ export async function runStrictColdStartProduction(
         operationRoot,
         publicRoutePath,
         journal,
+        runtimeArtifactReceipt: runtimeArtifacts.receipt,
+        runtimeConfigReceipt,
       };
       await prepareAuthorizedBlankState(context);
       const { facts, planning } = await ensureFactsAndPlanning(context);
@@ -184,8 +224,18 @@ async function verifyFinalizedReplay(input: {
   readonly dataRoot: string;
   readonly operationRoot: string;
   readonly publicRoutePath: string;
+  readonly runtimeArtifactReceipt: RuntimeArtifactLoadReceiptV1;
+  readonly runtimeConfigReceipt: RuntimeConfigLoadReceiptV1;
 }): Promise<unknown> {
-  const { authorization, checkpoint, dataRoot, operationRoot, publicRoutePath } = input;
+  const {
+    authorization,
+    checkpoint,
+    dataRoot,
+    operationRoot,
+    publicRoutePath,
+    runtimeArtifactReceipt,
+    runtimeConfigReceipt,
+  } = input;
   if (
     !checkpoint.publicServingData ||
     !checkpoint.finalization ||
@@ -208,7 +258,17 @@ async function verifyFinalizedReplay(input: {
   });
   const report = (await readJson(path.join(operationRoot, RUNTIME_REPORT_FILE))) as {
     publicHandle?: { routeHash?: unknown };
+    runtimeLoad?: {
+      artifactReceipt?: { receiptHash?: unknown };
+      configReceipt?: { receiptHash?: unknown };
+    };
   };
+  if (
+    report.runtimeLoad?.artifactReceipt?.receiptHash !== runtimeArtifactReceipt.receiptHash ||
+    report.runtimeLoad?.configReceipt?.receiptHash !== runtimeConfigReceipt.receiptHash
+  ) {
+    throw new Error('STRICT_RUNTIME_LOAD_RECEIPT_RESUME_MISMATCH');
+  }
   const currentRoute = await inspectPublicRoute(publicRoutePath);
   if (
     !currentRoute ||
@@ -225,8 +285,14 @@ async function prepareAuthorizedBlankState(context: StrictExecutionContext): Pro
   const database = context.input.container.get('database');
   await advance(journal, 'PC_F_ACCEPTED', {
     pcfBaselineReceiptHash: authorization.pcfBaselineReceiptHash,
+    runtimeArtifactManifestHash: context.runtimeArtifactReceipt.manifestHash,
+    runtimeArtifactReceiptHash: context.runtimeArtifactReceipt.receiptHash,
   });
-  await advance(journal, 'AUTHORIZED', { authorizationHash: authorization.authorizationHash });
+  await advance(journal, 'AUTHORIZED', {
+    authorizationHash: authorization.authorizationHash,
+    runtimeConfigHash: context.runtimeConfigReceipt.configHash,
+    runtimeConfigReceiptHash: context.runtimeConfigReceipt.receiptHash,
+  });
   const markerInput = {
     dataRoot,
     projectIdentityHash: authorization.privateCorpus.projectIdentityHash,
@@ -258,6 +324,8 @@ async function prepareAuthorizedBlankState(context: StrictExecutionContext): Pro
     throw new Error('STRICT_PUBLIC_ROUTE_COMMIT_READBACK_MISSING');
   }
   await advance(journal, 'JOURNAL_OPEN', {
+    runtimeArtifactReceiptHash: context.runtimeArtifactReceipt.receiptHash,
+    runtimeConfigReceiptHash: context.runtimeConfigReceipt.receiptHash,
     observedPointersHash: hashCanonicalJson({
       publicRouteHash: observedPublicRoute?.hash ?? null,
       resetPaths: authorization.reset.relativePaths,
@@ -585,6 +653,8 @@ async function finalizeAndPublish(
   await advance(context.journal, 'FINALIZED', {
     runtimeReportHash: hashCanonicalJson(report),
     publicRouteHash: route.routeHash,
+    runtimeArtifactReceiptHash: context.runtimeArtifactReceipt.receiptHash,
+    runtimeConfigReceiptHash: context.runtimeConfigReceipt.receiptHash,
   });
   return report;
 }
@@ -679,6 +749,49 @@ async function resolveStrictFinalization(
   return reconstructed;
 }
 
+function requireRuntimeArtifactManifestPath(): string {
+  const manifestPath = process.env.ALEMBIC_RUNTIME_ARTIFACT_MANIFEST_PATH?.trim();
+  if (!manifestPath || !path.isAbsolute(manifestPath)) {
+    throw new Error('STRICT_RUNTIME_ARTIFACT_MANIFEST_PATH_REQUIRED');
+  }
+  return path.resolve(manifestPath);
+}
+
+function assertRuntimeLoadResumeBindings(input: {
+  readonly authorizationHash: string;
+  readonly journal: StrictProductionJournal;
+  readonly runtimeArtifactReceipt: RuntimeArtifactLoadReceiptV1;
+  readonly runtimeConfigReceipt: RuntimeConfigLoadReceiptV1;
+}): void {
+  const expectedByState: Partial<
+    Record<(typeof STRICT_PRODUCTION_STATES_V1)[number], Readonly<Record<string, unknown>>>
+  > = {
+    PC_F_ACCEPTED: {
+      runtimeArtifactManifestHash: input.runtimeArtifactReceipt.manifestHash,
+      runtimeArtifactReceiptHash: input.runtimeArtifactReceipt.receiptHash,
+    },
+    AUTHORIZED: {
+      authorizationHash: input.authorizationHash,
+      runtimeConfigHash: input.runtimeConfigReceipt.configHash,
+      runtimeConfigReceiptHash: input.runtimeConfigReceipt.receiptHash,
+    },
+    JOURNAL_OPEN: {
+      runtimeArtifactReceiptHash: input.runtimeArtifactReceipt.receiptHash,
+      runtimeConfigReceiptHash: input.runtimeConfigReceipt.receiptHash,
+    },
+    FINALIZED: {
+      runtimeArtifactReceiptHash: input.runtimeArtifactReceipt.receiptHash,
+      runtimeConfigReceiptHash: input.runtimeConfigReceipt.receiptHash,
+    },
+  };
+  for (const entry of input.journal.entries) {
+    const expected = expectedByState[entry.state];
+    if (expected && Object.entries(expected).some(([key, value]) => entry.payload[key] !== value)) {
+      throw new Error('STRICT_RUNTIME_LOAD_RECEIPT_RESUME_MISMATCH');
+    }
+  }
+}
+
 async function resolvePublicServingBundle(
   context: StrictExecutionContext,
   candidateCoverage: StrictCandidateCoverageStage,
@@ -769,6 +882,10 @@ function buildRuntimeReport(
     mode: 'strict-production',
     status: 'FINALIZED',
     runId: context.input.request.runId,
+    runtimeLoad: {
+      artifactReceipt: context.runtimeArtifactReceipt,
+      configReceipt: context.runtimeConfigReceipt,
+    },
     publicHandle: {
       routeHash,
       snapshotId: finalization.servingManifest.snapshotId,
