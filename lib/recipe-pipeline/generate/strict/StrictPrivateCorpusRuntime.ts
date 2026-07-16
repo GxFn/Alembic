@@ -570,11 +570,7 @@ async function createStrictReadyMemberProof(input: {
   }
   const readback = await readStrictReadyDatabase(input);
   assertStrictDatabaseProjection(input);
-  const databaseReadbackHash = hashCanonicalJson({
-    recipeId: readback.id,
-    lifecycle: readback.lifecycle,
-    reviewed: input.reviewed,
-  });
+  const databaseReadbackHash = hashStrictReadyDatabaseReadback(readback);
   const fileReadbackHash = await readStrictReadyFile(input, readback);
   const refReadbackHash = readStrictReadyRefs(input, readback.id);
   const semantic = buildStrictReadyMemberSemantic(
@@ -634,8 +630,8 @@ async function readStrictReadyFile(
   readback: StrictKnowledgeEntry
 ): Promise<string> {
   const resolvedFile = input.fileWriter._resolveFilePath(readback);
-  const fileBytes = await fsp.readFile(path.join(resolvedFile.dir, resolvedFile.filename), 'utf8');
-  const fileReadback = parseKnowledgeMarkdown(fileBytes);
+  const fileBytes = await fsp.readFile(path.join(resolvedFile.dir, resolvedFile.filename));
+  const fileReadback = parseKnowledgeMarkdown(fileBytes.toString('utf8'));
   const expectedProjectionHash = hashCanonicalJson({
     kind: 'strict-recipe-file-projection-v1',
     markdown: input.reviewed.markdown,
@@ -655,7 +651,7 @@ async function readStrictReadyFile(
   ) {
     throw new Error('STRICT_READY_MEMBER_FILE_READBACK_FAILED');
   }
-  return hashCanonicalJson({ recipeId: readback.id, fileBytes });
+  return hashStrictReadyFileReadback(readback.id, fileBytes);
 }
 
 function readStrictReadyRefs(
@@ -668,19 +664,53 @@ function readStrictReadyRefs(
   },
   recipeId: string
 ): string {
-  const actualRefIds = input.refRepository
-    .findByRecipeId(recipeId)
-    .map((row) => row.sourcePath)
-    .sort();
+  const rows = input.refRepository.findByRecipeId(recipeId);
+  const actualRefIds = rows.map((row) => row.sourcePath).sort();
   if (
     JSON.stringify([...input.sourcePaths].sort()) !== JSON.stringify(actualRefIds) ||
     JSON.stringify([...input.refs.sourceRefIds].sort()) !== JSON.stringify([...actualRefIds].sort())
   ) {
     throw new Error('STRICT_READY_MEMBER_REF_READBACK_FAILED');
   }
+  return hashStrictReadyRefReadback(recipeId, rows);
+}
+
+function hashStrictReadyDatabaseReadback(entry: StrictKnowledgeEntry): string {
   return hashCanonicalJson({
+    kind: 'strict-ready-database-readback-v1',
+    recipeId: entry.id,
+    row: entry.toJSON(),
+  });
+}
+
+function hashStrictReadyFileReadback(recipeId: string, fileBytes: Buffer): string {
+  return hashCanonicalJson({
+    kind: 'strict-ready-file-readback-v1',
     recipeId,
-    sourceRefIds: [...actualRefIds].sort(),
+    fileBytesBase64: fileBytes.toString('base64'),
+  });
+}
+
+function hashStrictReadyRefReadback(
+  recipeId: string,
+  rows: ReturnType<
+    ReturnType<typeof createAlembicRepositories>['recipeSourceRefRepository']['findByRecipeId']
+  >
+): string {
+  const canonicalRows = rows
+    .map((row) => ({
+      recipeId: row.recipeId,
+      sourcePath: row.sourcePath,
+      status: row.status,
+      newPath: row.newPath,
+      verifiedAt: row.verifiedAt,
+      contentFp: row.contentFp,
+    }))
+    .sort((left, right) => left.sourcePath.localeCompare(right.sourcePath));
+  return hashCanonicalJson({
+    kind: 'strict-ready-ref-readback-v1',
+    recipeId,
+    rows: canonicalRows,
   });
 }
 
@@ -851,29 +881,16 @@ export async function indexSealAndVerifyStrictPrivateCorpus(input: {
     if (JSON.stringify(freshActiveIds) !== JSON.stringify(expectedActiveIds)) {
       throw new Error('STRICT_PRIVATE_CORPUS_FRESH_REHYDRATE_DIVERGENCE');
     }
-    const durableReadbackHash = hashCanonicalJson(
-      input.content.readyMembers.map((member) => ({
-        recipeId: member.recipeId,
-        persistenceReceiptHash: member.persistenceReceiptHash,
-        databaseRowHash: member.databaseRowHash,
-        databaseReadbackHash: member.databaseReadbackHash,
-        fileHash: member.fileHash,
-        fileReadbackHash: member.fileReadbackHash,
-      }))
-    );
-    const refReadbackHash = hashCanonicalJson(
-      input.content.readyMembers.map((member) => ({
-        recipeId: member.recipeId,
-        refReconciliationReceiptHash: member.refReconciliationReceiptHash,
-        refReadbackHash: member.refReadbackHash,
-      }))
+    const fileWriter = new KnowledgeFileWriter(
+      freshProcess.handle.resolver.dataRoot,
+      new WriteZone(freshProcess.handle.resolver)
     );
     const sealedCorpusVerification = await verifyStrictSealedCorpus({
       activeRecipes: input.content.activeRecipes,
       readyMembers: input.content.readyMembers,
       repository: repositories.knowledgeRepository,
-      durableReadbackHash,
-      refReadbackHash,
+      fileWriter,
+      refRepository: repositories.recipeSourceRefRepository,
       vectorGenerationId,
       vectorManifest,
       vectorInspection,
@@ -923,8 +940,11 @@ interface StrictSealedCorpusVerificationInput {
   readonly activeRecipes: StrictPrivateCorpusContentResultV1['activeRecipes'];
   readonly readyMembers: readonly StrictReadyMemberProofV1[];
   readonly repository: StrictKnowledgeRepository;
-  readonly durableReadbackHash: string;
-  readonly refReadbackHash: string;
+  readonly fileWriter: Pick<KnowledgeFileWriter, '_resolveFilePath'>;
+  readonly refRepository: Pick<
+    ReturnType<typeof createAlembicRepositories>['recipeSourceRefRepository'],
+    'findByRecipeId'
+  >;
   readonly vectorGenerationId: string;
   readonly vectorManifest: Pick<
     RecipeVectorGenerationManifest,
@@ -943,6 +963,11 @@ interface StrictSparseEvidenceV1 {
   readonly resultIds: readonly string[];
 }
 
+interface StrictSealedStoreReadbacksV1 {
+  readonly durableReadbackHash: string;
+  readonly refReadbackHash: string;
+}
+
 export async function verifyStrictSealedCorpus(
   input: StrictSealedCorpusVerificationInput
 ): Promise<StrictSealedCorpusVerificationV1> {
@@ -951,7 +976,7 @@ export async function verifyStrictSealedCorpus(
     left.recipeId.localeCompare(right.recipeId)
   );
   assertSealedReadyMembers(expectedIds, readyMembers);
-  assertSealedDurableMembers(input, readyMembers);
+  const storeReadbacks = await readSealedStoreMembers(input, readyMembers);
   await assertSealedActiveLifecycle(input, expectedIds);
   const sparseEvidence = await verifySealedSparseMembers(input);
   const manifestExpectedIds = assertSealedVectorGeneration(input, expectedIds);
@@ -959,6 +984,7 @@ export async function verifyStrictSealedCorpus(
     input,
     expectedIds,
     readyMembers,
+    storeReadbacks,
     sparseEvidence,
     manifestExpectedIds
   );
@@ -978,33 +1004,69 @@ function assertSealedReadyMembers(
   }
 }
 
-function assertSealedDurableMembers(
+async function readSealedStoreMembers(
   input: StrictSealedCorpusVerificationInput,
   readyMembers: readonly StrictReadyMemberProofV1[]
-): void {
-  const expectedDurableReadbackHash = hashCanonicalJson(
-    readyMembers.map((member) => ({
-      recipeId: member.recipeId,
-      persistenceReceiptHash: member.persistenceReceiptHash,
-      databaseRowHash: member.databaseRowHash,
-      databaseReadbackHash: member.databaseReadbackHash,
-      fileHash: member.fileHash,
-      fileReadbackHash: member.fileReadbackHash,
-    }))
+): Promise<StrictSealedStoreReadbacksV1> {
+  const actualMembers = await Promise.all(
+    readyMembers.map(async (member) => {
+      let entry: StrictKnowledgeEntry | null;
+      let databaseReadbackHash: string;
+      try {
+        entry = await input.repository.findById(member.recipeId);
+        databaseReadbackHash = entry ? hashStrictReadyDatabaseReadback(entry) : '';
+      } catch {
+        failSealedCorpus('database-readback-conservation');
+      }
+      if (!entry || databaseReadbackHash !== member.databaseReadbackHash) {
+        failSealedCorpus('database-readback-conservation');
+      }
+
+      let fileReadbackHash: string;
+      try {
+        const resolvedFile = input.fileWriter._resolveFilePath(entry);
+        const fileBytes = await fsp.readFile(path.join(resolvedFile.dir, resolvedFile.filename));
+        fileReadbackHash = hashStrictReadyFileReadback(member.recipeId, fileBytes);
+      } catch {
+        failSealedCorpus('file-readback-conservation');
+      }
+      if (fileReadbackHash !== member.fileReadbackHash) {
+        failSealedCorpus('file-readback-conservation');
+      }
+
+      let refReadbackHash: string;
+      try {
+        refReadbackHash = hashStrictReadyRefReadback(
+          member.recipeId,
+          input.refRepository.findByRecipeId(member.recipeId)
+        );
+      } catch {
+        failSealedCorpus('ref-readback-conservation');
+      }
+      if (refReadbackHash !== member.refReadbackHash) {
+        failSealedCorpus('ref-readback-conservation');
+      }
+
+      return {
+        durable: {
+          recipeId: member.recipeId,
+          persistenceReceiptHash: member.persistenceReceiptHash,
+          databaseRowHash: member.databaseRowHash,
+          databaseReadbackHash,
+          fileHash: member.fileHash,
+          fileReadbackHash,
+        },
+        refs: {
+          recipeId: member.recipeId,
+          refReconciliationReceiptHash: member.refReconciliationReceiptHash,
+          refReadbackHash,
+        },
+      };
+    })
   );
-  const expectedRefReadbackHash = hashCanonicalJson(
-    readyMembers.map((member) => ({
-      recipeId: member.recipeId,
-      refReconciliationReceiptHash: member.refReconciliationReceiptHash,
-      refReadbackHash: member.refReadbackHash,
-    }))
-  );
-  if (
-    input.durableReadbackHash !== expectedDurableReadbackHash ||
-    input.refReadbackHash !== expectedRefReadbackHash
-  ) {
-    failSealedCorpus('durable-member-conservation');
-  }
+  const durableReadbackHash = hashCanonicalJson(actualMembers.map((member) => member.durable));
+  const refReadbackHash = hashCanonicalJson(actualMembers.map((member) => member.refs));
+  return { durableReadbackHash, refReadbackHash };
 }
 
 async function assertSealedActiveLifecycle(
@@ -1100,6 +1162,7 @@ function buildSealedCorpusVerificationSemantic(
   input: StrictSealedCorpusVerificationInput,
   expectedIds: readonly string[],
   readyMembers: readonly StrictReadyMemberProofV1[],
+  storeReadbacks: StrictSealedStoreReadbacksV1,
   sparseEvidence: readonly StrictSparseEvidenceV1[],
   manifestExpectedIds: readonly string[]
 ): Omit<StrictSealedCorpusVerificationV1, 'verificationHash'> {
@@ -1107,8 +1170,8 @@ function buildSealedCorpusVerificationSemantic(
     schemaVersion: 1 as const,
     activeRecipeIds: expectedIds,
     readyMemberSetHash: hashCanonicalJson(readyMembers.map((member) => member.proofHash)),
-    durableReadbackHash: input.durableReadbackHash,
-    refReadbackHash: input.refReadbackHash,
+    durableReadbackHash: storeReadbacks.durableReadbackHash,
+    refReadbackHash: storeReadbacks.refReadbackHash,
     sparseEvidenceHash: hashCanonicalJson(sparseEvidence),
     vectorGenerationId: input.vectorGenerationId,
     vectorManifestHash: input.vectorManifest.manifestHash,
