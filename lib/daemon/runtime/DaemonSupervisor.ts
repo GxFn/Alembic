@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
 import {
   closeSync,
   existsSync,
@@ -52,7 +52,20 @@ export interface StopDaemonOptions {
   waitMs?: number;
 }
 
+export interface DaemonSupervisorOptions {
+  daemonEntryPath?: string;
+  spawnDaemon?: typeof spawn;
+}
+
 export class DaemonSupervisor {
+  readonly #daemonEntryPath?: string;
+  readonly #spawnDaemon: typeof spawn;
+
+  constructor(options: DaemonSupervisorOptions = {}) {
+    this.#daemonEntryPath = options.daemonEntryPath;
+    this.#spawnDaemon = options.spawnDaemon ?? spawn;
+  }
+
   async status(projectRootInput: string): Promise<DaemonStatus> {
     const projectRoot = resolve(projectRootInput);
     const paths = resolveAlembicDaemonPaths(projectRoot);
@@ -130,58 +143,109 @@ export class DaemonSupervisor {
   async start(options: StartDaemonOptions): Promise<DaemonStatus> {
     const projectRoot = resolve(options.projectRoot);
     const paths = resolveAlembicDaemonPaths(projectRoot);
-    ensureDaemonDirs(paths);
-
     const existing = await this.status(projectRoot);
     if (existing.ready && !options.restart) {
       return existing;
     }
 
-    return this.#withLock(paths, options.waitUntilReadyMs ?? 10_000, async () => {
-      const afterLock = await this.status(projectRoot);
-      if (afterLock.ready && !options.restart) {
-        return afterLock;
-      }
+    const strictExternalLaunch = Boolean(process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH?.trim());
+    const preservePristineTarget = strictExternalLaunch && !existsSync(paths.dataRoot);
+    const entry = this.#daemonEntryPath ?? getDaemonServerEntryPath();
+    if (!existsSync(entry)) {
+      throw new Error(`Daemon server entry not found: ${entry}. Run npm run build first.`);
+    }
 
-      if (afterLock.state?.pid && afterLock.pidAlive) {
-        await this.#terminateProcess(afterLock.state.pid, 5000);
+    const startChild = async (
+      current: DaemonStatus,
+      manageTargetControlFiles: boolean
+    ): Promise<DaemonStatus> => {
+      if (current.state?.pid && current.pidAlive) {
+        await this.#terminateProcess(current.state.pid, 5000);
       }
-      removeDaemonState(paths, { includeLock: false });
+      if (manageTargetControlFiles) {
+        removeDaemonState(paths, { includeLock: false });
+      }
 
       const port = options.port ?? 0;
       const host = options.host || '127.0.0.1';
-      const entry = getDaemonServerEntryPath();
-      if (!existsSync(entry)) {
-        throw new Error(`Daemon server entry not found: ${entry}. Run npm run build first.`);
+      const logFd = manageTargetControlFiles ? openSync(paths.logPath, 'a') : null;
+      let child: ChildProcess;
+      try {
+        child = this.#spawnDaemon(process.execPath, [entry], {
+          cwd: projectRoot,
+          detached: true,
+          env: {
+            ...process.env,
+            ALEMBIC_API_SERVER: '1',
+            ALEMBIC_DAEMON_MODE: '1',
+            ALEMBIC_DAEMON_HOST: host,
+            ALEMBIC_DAEMON_PORT: String(port),
+            ALEMBIC_DAEMON_STATE_PATH: paths.statePath,
+            ALEMBIC_PROJECT_DIR: projectRoot,
+            ALEMBIC_QUIET: process.env.ALEMBIC_QUIET || '1',
+          },
+          stdio: manageTargetControlFiles
+            ? ['ignore', logFd as number, logFd as number]
+            : ['ignore', 'ignore', 'ignore'],
+        });
+      } finally {
+        if (logFd !== null) {
+          closeSync(logFd);
+        }
       }
-
-      const logFd = openSync(paths.logPath, 'a');
-      const child = spawn(process.execPath, [entry], {
-        cwd: projectRoot,
-        detached: true,
-        env: {
-          ...process.env,
-          ALEMBIC_API_SERVER: '1',
-          ALEMBIC_DAEMON_MODE: '1',
-          ALEMBIC_DAEMON_HOST: host,
-          ALEMBIC_DAEMON_PORT: String(port),
-          ALEMBIC_DAEMON_STATE_PATH: paths.statePath,
-          ALEMBIC_PROJECT_DIR: projectRoot,
-          ALEMBIC_QUIET: process.env.ALEMBIC_QUIET || '1',
-        },
-        stdio: ['ignore', logFd, logFd],
-      });
-      closeSync(logFd);
       child.unref();
 
       const childPid = child.pid ?? null;
-      writeFileSync(paths.pidPath, `${childPid ?? ''}\n`, { mode: 0o600 });
+      if (manageTargetControlFiles) {
+        writeFileSync(paths.pidPath, `${childPid ?? ''}\n`, { mode: 0o600 });
+      }
 
-      const ready = await waitForReady(paths, options.waitUntilReadyMs ?? 10_000);
+      const startup = await waitForReadyOrChildExit(
+        paths,
+        child,
+        options.waitUntilReadyMs ?? 10_000
+      );
+      if (startup.kind === 'exited') {
+        if (strictExternalLaunch && startup.exitCode === 0) {
+          if (manageTargetControlFiles) {
+            removeDaemonState(paths, { includeLock: false });
+          }
+          return this.#statusResult(
+            paths,
+            'stopped',
+            false,
+            null,
+            false,
+            null,
+            'strict external setup action completed'
+          );
+        }
+        if (manageTargetControlFiles) {
+          removeDaemonState(paths, { includeLock: false });
+        }
+        const exitDetail = startup.signalCode
+          ? `signal ${startup.signalCode}`
+          : `exit code ${startup.exitCode ?? 'unknown'}`;
+        return this.#statusResult(
+          paths,
+          'failed',
+          false,
+          null,
+          false,
+          null,
+          manageTargetControlFiles
+            ? `daemon exited with ${exitDetail}; see ${paths.logPath}`
+            : `strict setup daemon exited with ${exitDetail} before target initialization`
+        );
+      }
+
+      const ready = startup.status;
       if (!ready.ready) {
         const childAlive = childPid ? isProcessAlive(childPid) : false;
         if (!childAlive) {
-          removeDaemonState(paths, { includeLock: false });
+          if (manageTargetControlFiles) {
+            removeDaemonState(paths, { includeLock: false });
+          }
           return this.#statusResult(
             paths,
             'failed',
@@ -189,7 +253,9 @@ export class DaemonSupervisor {
             null,
             false,
             null,
-            `daemon failed to become ready; see ${paths.logPath}`
+            manageTargetControlFiles
+              ? `daemon failed to become ready; see ${paths.logPath}`
+              : 'strict setup daemon failed before target initialization'
           );
         }
         return this.#statusResult(
@@ -199,10 +265,27 @@ export class DaemonSupervisor {
           null,
           true,
           null,
-          ready.message || `daemon is still starting; see ${paths.logPath}`
+          ready.message ||
+            (manageTargetControlFiles
+              ? `daemon is still starting; see ${paths.logPath}`
+              : 'strict setup daemon is still starting')
         );
       }
       return ready;
+    };
+
+    if (preservePristineTarget) {
+      return startChild(existing, false);
+    }
+
+    ensureDaemonDirs(paths);
+
+    return this.#withLock(paths, options.waitUntilReadyMs ?? 10_000, async () => {
+      const afterLock = await this.status(projectRoot);
+      if (afterLock.ready && !options.restart) {
+        return afterLock;
+      }
+      return startChild(afterLock, true);
     });
   }
 
@@ -313,17 +396,46 @@ export class DaemonSupervisor {
   }
 }
 
-async function waitForReady(paths: DaemonPaths, waitMs: number): Promise<DaemonStatus> {
+type DaemonStartupWaitResult =
+  | { kind: 'ready-or-timeout'; status: DaemonStatus }
+  | {
+      exitCode: number | null;
+      kind: 'exited';
+      signalCode: NodeJS.Signals | null;
+    };
+
+async function waitForReadyOrChildExit(
+  paths: DaemonPaths,
+  child: Pick<ChildProcess, 'exitCode' | 'signalCode'>,
+  waitMs: number
+): Promise<DaemonStartupWaitResult> {
   const supervisor = new DaemonSupervisor();
   const startedAt = Date.now();
   while (Date.now() - startedAt < waitMs) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return {
+        exitCode: child.exitCode,
+        kind: 'exited',
+        signalCode: child.signalCode,
+      };
+    }
     const status = await supervisor.status(paths.projectRoot);
     if (status.ready) {
-      return status;
+      return { kind: 'ready-or-timeout', status };
     }
     await sleep(200);
   }
-  return supervisor.status(paths.projectRoot);
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return {
+      exitCode: child.exitCode,
+      kind: 'exited',
+      signalCode: child.signalCode,
+    };
+  }
+  return {
+    kind: 'ready-or-timeout',
+    status: await supervisor.status(paths.projectRoot),
+  };
 }
 
 export function computeDaemonLockBackoffMs(attempt: number): number {

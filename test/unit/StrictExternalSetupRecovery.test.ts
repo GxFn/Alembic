@@ -6,6 +6,8 @@ import { readAlembicMigrationBundleManifest } from '@alembic/core/database';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
+import AppRuntime from '../../lib/Bootstrap.js';
+import { initializeServerRuntime } from '../../lib/daemon/runtime/ServerStartupBoundary.js';
 import { loadStrictProductionAuthorization } from '../../lib/recipe-pipeline/generate/strict/StrictAuthorization.js';
 import {
   createStrictPlannedAbsentPathReceipt,
@@ -49,6 +51,18 @@ afterEach(async () => {
 });
 
 describe('strict external setup and recovery authority', () => {
+  it('server startup boundary passes only a fully initialized runtime', async () => {
+    const ready = { startupDisposition: 'runtime-ready' } as AppRuntime['components'];
+
+    await expect(initializeServerRuntime({ initialize: async () => ready })).resolves.toBe(ready);
+    await expect(
+      initializeServerRuntime({
+        initialize: async () =>
+          ({ startupDisposition: 'initializing' }) as AppRuntime['components'],
+      })
+    ).rejects.toThrow('SERVER_STARTUP_RUNTIME_NOT_READY:initializing');
+  });
+
   it('durably opens the external lease and journal header while pristine target remains absent', async () => {
     const fixture = await pristineAuthorityFixture();
 
@@ -302,16 +316,9 @@ describe('strict external setup and recovery authority', () => {
       runId: fixture.runId,
     });
 
-    const recoveredSession = await prepareStrictExternalSetupFromEnvironment({
-      dataRoot: fixture.dataRoot,
-      projectRoot: fixture.projectRoot,
-    });
-    if (!recoveredSession) {
-      throw new Error('fixture recovery session missing');
-    }
-    const startup = await dispatchStrictExternalSetupStartup(recoveredSession);
+    const startup = await initializeServerRuntime(createFreshStrictRuntime(fixture));
 
-    expect(startup.startRuntime).toBe(false);
+    expect(startup).toBeNull();
     expect(await fsp.readFile(path.join(fixture.dataRoot, '.asd/config.json'), 'utf8')).toBe(
       '{"reader":"legacy"}\n'
     );
@@ -323,6 +330,50 @@ describe('strict external setup and recovery authority', () => {
     ).rejects.toMatchObject({
       code: 'ENOENT',
     });
+  });
+
+  it('fresh-process completion terminates the server startup boundary successfully', async () => {
+    const fixture = await pristineAuthorityFixture();
+    const session = await prepareStrictExternalSetupFromEnvironment({
+      dataRoot: fixture.dataRoot,
+      projectRoot: fixture.projectRoot,
+    });
+    if (!session) {
+      throw new Error('fixture session missing');
+    }
+    await initializeStrictExternalSetupTarget(session);
+    const journal = await StrictProductionJournal.open({
+      expectedHeaderHash: session.journalHeaderHash,
+      operationRoot: session.operationRoot,
+      ownerId: 'daemon:complete-launcher',
+      runId: fixture.runId,
+    });
+    for (const state of STRICT_PRODUCTION_STATES_V1.filter(
+      (candidate) => candidate !== 'SNAPSHOT_VERIFIED'
+    )) {
+      await journal.append(state, {});
+    }
+    await journal.close();
+    await releaseStrictExternalSetupSession();
+    await configureActionReceipt(path.dirname(fixture.authorityPath), {
+      action: 'complete',
+      authorityHash: fixture.authorityHash,
+      runId: fixture.runId,
+    });
+
+    const startup = await initializeServerRuntime(createFreshStrictRuntime(fixture));
+
+    expect(startup).toBeNull();
+    await expect(
+      fsp.stat(
+        path.join(
+          fixture.evidenceRoot,
+          'strict-run-journal',
+          fixture.runId,
+          'strict-completion-receipt.json'
+        )
+      )
+    ).resolves.toBeDefined();
   });
 
   it('rejects malformed controller observation and finalized recovery without post-CAS authority', async () => {
@@ -444,6 +495,20 @@ describe('strict external setup and recovery authority', () => {
     expect(resumed?.authority.authorityHash).toBe(dead.authorityHash);
   });
 });
+
+function createFreshStrictRuntime(fixture: { dataRoot: string; projectRoot: string }) {
+  const appRuntime = new AppRuntime();
+  appRuntime.components.workspaceResolver = {
+    dataRoot: fixture.dataRoot,
+    projectRoot: fixture.projectRoot,
+  } as AppRuntime['components']['workspaceResolver'];
+  return {
+    async initialize() {
+      await appRuntime.initializeStrictExternalSetup();
+      return appRuntime.components;
+    },
+  };
+}
 
 async function pristineAuthorityFixture() {
   const root = await fsp.realpath(

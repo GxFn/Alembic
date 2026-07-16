@@ -10,6 +10,7 @@ process.env.ALEMBIC_API_SERVER = '1';
 import { timerRegistry } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
 import AppRuntime from '../lib/Bootstrap.js';
+import { initializeServerRuntime } from '../lib/daemon/runtime/ServerStartupBoundary.js';
 import HttpServer from '../lib/http/HttpServer.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
 import { shutdown } from '../lib/shared/shutdown.js';
@@ -57,7 +58,10 @@ async function main() {
 
     // 初始化应用程序引导
     const appRuntime = new AppRuntime({ env: process.env.NODE_ENV || 'development' });
-    const components = await appRuntime.initialize();
+    const components = await initializeServerRuntime(appRuntime);
+    if (!components) {
+      return;
+    }
     logger.info('Bootstrap initialized successfully');
 
     // 初始化 DI 容器，注入 Bootstrap 组件

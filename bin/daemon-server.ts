@@ -19,6 +19,7 @@ import Logger from '@alembic/core/logging';
 import AppRuntime from '../lib/Bootstrap.js';
 import { markInterruptedDaemonJobs } from '../lib/daemon/jobs/DaemonJobRunner.js';
 import { createDisabledFileMonitorStatus } from '../lib/daemon/runtime/FileMonitorStatus.js';
+import { initializeServerRuntime } from '../lib/daemon/runtime/ServerStartupBoundary.js';
 import HttpServer from '../lib/http/HttpServer.js';
 import { readLatestSchemaMigrationVersion } from '../lib/infrastructure/database/SqliteDatabaseAccess.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
@@ -72,7 +73,10 @@ async function main() {
   AppRuntime.configurePathGuard(projectRoot);
 
   const appRuntime = new AppRuntime({ env: process.env.NODE_ENV || 'development' });
-  const components = await appRuntime.initialize();
+  const components = await initializeServerRuntime(appRuntime);
+  if (!components) {
+    return;
+  }
   const container = getServiceContainer();
   await container.initialize({
     db: components.db,

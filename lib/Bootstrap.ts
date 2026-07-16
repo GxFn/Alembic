@@ -31,7 +31,14 @@ interface AppRuntimeOptions {
 }
 
 /** AppRuntime 管理的组件集合 */
-interface AppRuntimeComponents {
+export type AppRuntimeStartupDisposition =
+  | 'initializing'
+  | 'runtime-ready'
+  | 'startup-action-completed';
+
+export interface AppRuntimeComponents {
+  startupDisposition: AppRuntimeStartupDisposition;
+  strictExternalStartupAction?: 'recover' | 'complete';
   config?: typeof ConfigLoader;
   logger?: ReturnType<typeof Logger.getInstance>;
   db?: InstanceType<typeof DatabaseConnection>;
@@ -49,7 +56,7 @@ export class AppRuntime {
   options: AppRuntimeOptions;
   constructor(options: AppRuntimeOptions = {}) {
     this.options = options;
-    this.components = {};
+    this.components = { startupDisposition: 'initializing' };
   }
 
   #requireComponent<K extends keyof AppRuntimeComponents>(
@@ -136,6 +143,7 @@ export class AppRuntime {
       const duration = Date.now() - startTime;
       logger.info(`Alembic initialized successfully (${duration}ms)`);
 
+      this.components.startupDisposition = 'runtime-ready';
       return this.components;
     } catch (error: unknown) {
       console.error('Failed to initialize Alembic:', error);
@@ -270,7 +278,12 @@ export class AppRuntime {
     const startup = await dispatchStrictExternalSetupStartup(session);
     this.components.strictExternalBootstrapReceipt = startup.receipt;
     if (!startup.startRuntime) {
+      if (session.action === 'execute') {
+        throw new Error('STRICT_SETUP_EXECUTE_STARTUP_DISPOSITION_INVALID');
+      }
       delete this.components.strictExternalSetup;
+      this.components.strictExternalStartupAction = session.action;
+      this.components.startupDisposition = 'startup-action-completed';
     }
     return startup.startRuntime;
   }

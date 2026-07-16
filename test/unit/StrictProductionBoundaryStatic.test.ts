@@ -5,6 +5,16 @@ import { describe, expect, it } from 'vitest';
 const ROOT = process.cwd();
 
 describe('strict production main-chain boundary', () => {
+  it('wires both supported server launchers through the executable startup-action boundary', async () => {
+    const [daemonServer, apiServer] = await Promise.all([
+      source('bin/daemon-server.ts'),
+      source('bin/api-server.ts'),
+    ]);
+
+    expect(daemonServer).toContain('initializeServerRuntime(appRuntime)');
+    expect(apiServer).toContain('initializeServerRuntime(appRuntime)');
+  });
+
   it('branches before legacy Plan/fullReset and remains under the existing Facade/ColdStart entry', async () => {
     const facade = await source('lib/recipe-pipeline/RecipePipelineFacade.ts');
     const coldStart = await source('lib/recipe-pipeline/generate/ColdStartWorkflow.ts');

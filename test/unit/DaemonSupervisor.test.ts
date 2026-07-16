@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -19,8 +20,10 @@ import {
   computeDaemonLockBackoffMs,
   DaemonSupervisor,
 } from '../../lib/daemon/runtime/DaemonSupervisor.js';
+import { resolveAlembicDaemonPaths } from '../../lib/project-scope/ProjectScopeRegistry.js';
 
 const ORIGINAL_ALEMBIC_HOME = process.env.ALEMBIC_HOME;
+const ORIGINAL_STRICT_SETUP_AUTHORITY_PATH = process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH;
 
 function useTempAlembicHome(): string {
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-daemon-home-'));
@@ -30,6 +33,18 @@ function useTempAlembicHome(): string {
 
 function makeProjectRoot(prefix = 'alembic-daemon-project-'): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+function makeStrictSupervisorFixture() {
+  useTempAlembicHome();
+  const projectRoot = makeProjectRoot('alembic-daemon-strict-project-');
+  ProjectRegistry.register(projectRoot, true);
+  const paths = resolveAlembicDaemonPaths(projectRoot);
+  const authorityRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alembic-strict-authority-'));
+  const authorityPath = path.join(authorityRoot, 'strict-setup-authority.json');
+  fs.writeFileSync(authorityPath, '{}\n');
+  process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH = authorityPath;
+  return { authorityRoot, paths, projectRoot };
 }
 
 function makeState(paths: DaemonPaths, overrides: Partial<DaemonState> = {}): DaemonState {
@@ -80,6 +95,12 @@ afterEach(() => {
   } else {
     process.env.ALEMBIC_HOME = ORIGINAL_ALEMBIC_HOME;
   }
+  if (ORIGINAL_STRICT_SETUP_AUTHORITY_PATH === undefined) {
+    delete process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH;
+  } else {
+    process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH = ORIGINAL_STRICT_SETUP_AUTHORITY_PATH;
+  }
+  __clearDaemonHealthCoalesceForTests();
   vi.restoreAllMocks();
 });
 
@@ -142,6 +163,89 @@ describe('DaemonState', () => {
 });
 
 describe('DaemonSupervisor', () => {
+  test('strict pristine start preserves absence through external header and lease before ready state', async () => {
+    const { authorityRoot, paths, projectRoot } = makeStrictSupervisorFixture();
+    expect(fs.existsSync(paths.dataRoot)).toBe(false);
+
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null,
+      pid: process.pid,
+      signalCode: null as NodeJS.Signals | null,
+      unref: vi.fn(),
+    });
+    let state: DaemonState | null = null;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      if (!state) {
+        throw new Error('child state is not ready');
+      }
+      return healthResponse(state);
+    });
+    const spawnDaemon = vi.fn(() => {
+      expect(fs.existsSync(paths.dataRoot)).toBe(false);
+      expect(fs.existsSync(paths.runtimeDir)).toBe(false);
+      expect(fs.existsSync(paths.jobsDir)).toBe(false);
+      expect(fs.existsSync(paths.lockDir)).toBe(false);
+      expect(fs.existsSync(paths.logPath)).toBe(false);
+      expect(fs.existsSync(paths.pidPath)).toBe(false);
+      expect(fs.existsSync(paths.statePath)).toBe(false);
+      queueMicrotask(() => {
+        const operationLockRoot = path.join(authorityRoot, 'operation-lock');
+        const journalRoot = path.join(authorityRoot, 'evidence', 'strict-run-journal', 'run');
+        fs.mkdirSync(operationLockRoot);
+        fs.mkdirSync(journalRoot, { recursive: true });
+        fs.writeFileSync(path.join(operationLockRoot, 'strict-production.operation.lock'), '{}\n');
+        fs.writeFileSync(path.join(journalRoot, 'strict-production.journal.jsonl'), '{}\n');
+        expect(fs.existsSync(paths.dataRoot)).toBe(false);
+        ensureDaemonDirs(paths);
+        state = makeState(paths, {
+          lastReadyAt: new Date(Date.now() + 60_000).toISOString(),
+          pid: process.pid,
+          startedAt: new Date(Date.now() + 60_000).toISOString(),
+        });
+        writeDaemonState(paths.statePath, state);
+      });
+      return child;
+    });
+    const supervisor = new DaemonSupervisor({
+      daemonEntryPath: process.execPath,
+      spawnDaemon,
+    });
+
+    const status = await supervisor.start({ projectRoot, waitUntilReadyMs: 1_000 });
+
+    expect(status.status).toBe('ready');
+    expect(status.ready).toBe(true);
+    expect(spawnDaemon).toHaveBeenCalledOnce();
+    expect(fs.existsSync(paths.dataRoot)).toBe(true);
+  });
+
+  test('strict startup-only child exit is reported as a successful terminal action', async () => {
+    const { paths, projectRoot } = makeStrictSupervisorFixture();
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null,
+      pid: 48271,
+      signalCode: null as NodeJS.Signals | null,
+      unref: vi.fn(),
+    });
+    const supervisor = new DaemonSupervisor({
+      daemonEntryPath: process.execPath,
+      spawnDaemon: vi.fn(() => {
+        expect(fs.existsSync(paths.dataRoot)).toBe(false);
+        queueMicrotask(() => {
+          child.exitCode = 0;
+          child.emit('exit', 0, null);
+        });
+        return child;
+      }),
+    });
+
+    const status = await supervisor.start({ projectRoot, waitUntilReadyMs: 500 });
+
+    expect(status.status).toBe('stopped');
+    expect(status.message).toBe('strict external setup action completed');
+    expect(fs.existsSync(paths.dataRoot)).toBe(false);
+  });
+
   test('uses bounded increasing lock retry backoff', () => {
     expect([0, 1, 2, 3, 4, 5].map(computeDaemonLockBackoffMs)).toEqual([
       100, 200, 400, 800, 1000, 1000,
