@@ -46,6 +46,7 @@ import type { PlanSelectionProjection } from '@alembic/core/plans';
 import { applyTestDimensionFilter } from '@alembic/core/shared';
 import type { DimensionDef, WorkflowDatabaseLike, WorkflowSkillHooks } from '@alembic/core/types';
 import { CleanupService } from '#service/cleanup/CleanupService.js';
+import type { ServiceContainer } from '../../injection/ServiceContainer.js';
 import {
   buildStrictProjectContextWorkflowFacts,
   captureMainCertifiedProjectFacts,
@@ -85,12 +86,15 @@ import {
   registerGenerateWorkflowImplementation,
   runGenerateWorkflow,
 } from './GenerateWorkflow.js';
+import { runStrictColdStartProduction } from './strict/StrictColdStartOrchestrator.js';
+import type { StrictProductionRuntimeRequestV1 } from './strict/StrictProductionContracts.js';
 
 type BootstrapMcpContext = GenerateWorkflowMcpContext;
 type ColdStartDimensionSelectionSource = 'base' | 'explicit' | 'plan';
 type AlembicMainColdStartArgs = ColdStartArgs & {
   planSelectionProjection?: PlanSelectionProjection;
   projectContextFacts?: ProjectContextWorkflowFacts;
+  strictProduction?: StrictProductionRuntimeRequestV1;
 };
 
 /**
@@ -122,6 +126,17 @@ async function runColdStartProjectIndexWorkflow(
   const t0 = Date.now();
   const analysisScope = resolveProjectScopeAnalysisContext(ctx.container);
   const { dataRoot, projectRoot } = analysisScope;
+  if (args.strictProduction) {
+    ctx.logger.info('[ColdStartWorkflow] strict production path authorized', {
+      runId: args.strictProduction.runId,
+    });
+    return runStrictColdStartProduction({
+      analysisScope,
+      container: ctx.container as ServiceContainer,
+      logger: ctx.logger,
+      request: args.strictProduction,
+    });
+  }
   const intent = createColdStartIntent(args);
   const plan = buildColdStartWorkflowPlan({ intent, projectRoot, dataRoot });
   ctx.logger.info(

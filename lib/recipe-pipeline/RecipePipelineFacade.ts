@@ -18,6 +18,7 @@ import {
 import type { RunDaemonJobOptions } from '../daemon/jobs/DaemonJobWorkflowTypes.js';
 import { runDeepMiningRounds } from './generate/DeepMiningRoundGate.js';
 import { runModuleMiningWorkflow } from './generate/ModuleMiningWorkflow.js';
+import { parseStrictProductionRequest } from './generate/strict/StrictProductionContracts.js';
 import { runGeneratePlanGate } from './plan/PlanSelectionGate.js';
 
 /**
@@ -26,6 +27,30 @@ import { runGeneratePlanGate } from './plan/PlanSelectionGate.js';
  */
 export async function executeRecipePipelineJob(options: RunDaemonJobOptions): Promise<unknown> {
   if (options.kind === 'bootstrap') {
+    const strictProduction = parseStrictProductionRequest(options.args?.strictProduction);
+    if (strictProduction) {
+      const { runGenerateWorkflow } = await import('./generate/GenerateWorkflow.js');
+      const raw = await runGenerateWorkflow(
+        { container: options.container, logger: options.logger },
+        {
+          maxFiles: typeof options.args?.maxFiles === 'number' ? options.args.maxFiles : undefined,
+          skipGuard: Boolean(options.args?.skipGuard || false),
+          contentMaxLines:
+            typeof options.args?.contentMaxLines === 'number'
+              ? options.args.contentMaxLines
+              : undefined,
+          dimensions: stringArrayArg(options.args?.dimensions),
+          loadSkills: true,
+          strictProduction: {
+            ...strictProduction,
+            ownerId: `daemon-job:${options.jobId}`,
+          },
+        },
+        { mode: 'full' }
+      );
+      const result = unwrapEnvelope(raw);
+      return { ...asRecord(result), asyncFill: false };
+    }
     const planGate = await runGeneratePlanGate(options);
     const { runGenerateWorkflow } = await import('./generate/GenerateWorkflow.js');
     const raw = await runGenerateWorkflow(

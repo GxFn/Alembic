@@ -6,6 +6,7 @@ import type {
 import type { PlanSelectionProjection } from '@alembic/core/plans';
 import type { McpContext } from '@alembic/core/types';
 import type { ProjectContextWorkflowFacts } from '../../project-facts/ProjectContextWorkflowFacts.js';
+import type { StrictProductionRuntimeRequestV1 } from './strict/StrictProductionContracts.js';
 
 export type GenerateWorkflowMode = 'full' | 'incremental';
 export type GenerateWorkflowMcpContext = WorkflowMcpContext & McpContext;
@@ -13,6 +14,7 @@ export type GenerateWorkflowMcpContext = WorkflowMcpContext & McpContext;
 export type GenerateFullArgs = InternalColdStartArgs & {
   planSelectionProjection?: PlanSelectionProjection;
   projectContextFacts?: ProjectContextWorkflowFacts;
+  strictProduction?: StrictProductionRuntimeRequestV1;
 };
 export type GenerateIncrementalArgs = InternalKnowledgeRescanArgs;
 

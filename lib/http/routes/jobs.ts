@@ -47,6 +47,19 @@ const BootstrapJobBody = z.object({
   // 限定维度冷启动（与 rescan 同型）：下游 executeRecipePipelineJob 早已消费 args.dimensions，
   // 此前仅 HTTP schema 未放行——用于范围可控的验收/补跑，缺省仍全维度。
   dimensions: z.array(z.string()).optional(),
+  strictProduction: z
+    .object({
+      schemaVersion: z.literal(1),
+      authorizationReceiptHash: z.string().regex(/^sha256:[a-f0-9]{64}$/u),
+      authorizationReceiptPath: z.string().min(1),
+      runId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,255}$/u),
+      resumeOwnerId: z
+        .string()
+        .regex(/^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,255}$/u)
+        .optional(),
+    })
+    .strict()
+    .optional(),
 });
 
 const RescanJobBody = z
