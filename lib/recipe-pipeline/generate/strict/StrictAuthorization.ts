@@ -1,5 +1,6 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
+import { readAlembicMigrationBundleManifest } from '@alembic/core/database';
 import type {
   FactQueryFamilyV1,
   StrictColdStartConfigProjectionInputV1,
@@ -7,13 +8,18 @@ import type {
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import type { StrictProductionRuntimeRequestV1 } from './StrictProductionContracts.js';
 
+export const STRICT_PUBLICATION_ROOT_RELATIVE_PATH = '.asd/context/recipe-publications';
+export const STRICT_PUBLICATION_MARKER_FILE = 'marker.json';
+export const STRICT_PUBLICATION_ACTIVE_FILE = 'active.json';
+
 export interface StrictProductionAuthorizationReceiptV1 {
   readonly schemaVersion: 1;
   readonly runId: string;
   readonly projectRoot: string;
   readonly dataRoot: string;
   readonly operationRoot: string;
-  readonly publicRoutePath: string;
+  /** Legacy receipt input retained only for hash/read compatibility; it has no path authority. */
+  readonly publicRoutePath?: string;
   readonly expectedPublicRouteHash: string | null;
   readonly pcfBaselineReceiptHash: string;
   readonly reset: {
@@ -35,6 +41,7 @@ export interface StrictProductionAuthorizationReceiptV1 {
     };
   };
   readonly privateCorpus: {
+    readonly projectIdentityHash: string;
     readonly acceptedMigrationBundleSemanticHash: string;
     readonly credentialLocationSymbol: string;
   };
@@ -75,38 +82,41 @@ export async function loadStrictProductionAuthorization(input: {
   }
   assertReceiptShape(value);
   const receipt = value as unknown as StrictProductionAuthorizationReceiptV1;
+  if (
+    receipt.privateCorpus.acceptedMigrationBundleSemanticHash !==
+    hashCanonicalJson(readAlembicMigrationBundleManifest())
+  ) {
+    throw new Error('STRICT_AUTHORIZATION_MIGRATION_BUNDLE_MISMATCH');
+  }
   if (receipt.expectedPublicRouteHash !== null) {
     throw new Error('STRICT_PUBLIC_ROUTE_EXPECTED_ABSENT');
   }
   const operationRoot = confinedPath(input.dataRoot, receipt.operationRoot);
-  const publicRoutePath = confinedPath(input.dataRoot, receipt.publicRoutePath);
+  const publicationRoot = confinedPath(input.dataRoot, STRICT_PUBLICATION_ROOT_RELATIVE_PATH);
   const resetPaths = receipt.reset.relativePaths.map((relativePath) =>
     confinedPath(input.dataRoot, relativePath)
   );
   await Promise.all(
-    [operationRoot, publicRoutePath, ...resetPaths].map((target) =>
+    [operationRoot, publicationRoot, ...resetPaths].map((target) =>
       assertNoSymlinkTraversal(input.dataRoot, target)
     )
   );
   if (
     resetPaths.some(
       (resetPath) =>
-        operationRoot === resetPath ||
-        operationRoot.startsWith(`${resetPath}${path.sep}`) ||
-        publicRoutePath === resetPath ||
-        publicRoutePath.startsWith(`${resetPath}${path.sep}`) ||
+        pathsOverlap(operationRoot, resetPath) ||
+        pathsOverlap(publicationRoot, resetPath) ||
         receiptPath === resetPath ||
         receiptPath.startsWith(`${resetPath}${path.sep}`)
     ) ||
-    publicRoutePath === operationRoot ||
-    publicRoutePath.startsWith(`${operationRoot}${path.sep}`)
+    pathsOverlap(publicationRoot, operationRoot)
   ) {
     throw new Error('STRICT_AUTHORIZATION_ROOT_OVERLAP');
   }
   return Object.freeze(receipt);
 }
 
-async function assertNoSymlinkTraversal(dataRoot: string, target: string): Promise<void> {
+export async function assertNoSymlinkTraversal(dataRoot: string, target: string): Promise<void> {
   const root = path.resolve(dataRoot);
   const rootStat = await fsp.lstat(root);
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
@@ -150,7 +160,6 @@ function assertReceiptShape(value: Record<string, unknown>): void {
   const privateCorpus = readRecord(value.privateCorpus);
   if (
     !readText(value.operationRoot) ||
-    !readText(value.publicRoutePath) ||
     (value.expectedPublicRouteHash !== null && !isSha(value.expectedPublicRouteHash)) ||
     !isSha(value.pcfBaselineReceiptHash) ||
     !hasValidResetShape(reset) ||
@@ -188,8 +197,17 @@ function hasValidPlanningShape(planning: Record<string, unknown>): boolean {
 
 function hasValidPrivateCorpusShape(privateCorpus: Record<string, unknown>): boolean {
   return (
+    isSha(privateCorpus.projectIdentityHash) &&
     isSha(privateCorpus.acceptedMigrationBundleSemanticHash) &&
     Boolean(readText(privateCorpus.credentialLocationSymbol))
+  );
+}
+
+function pathsOverlap(left: string, right: string): boolean {
+  return (
+    left === right ||
+    left.startsWith(`${right}${path.sep}`) ||
+    right.startsWith(`${left}${path.sep}`)
   );
 }
 

@@ -14,7 +14,7 @@ describe('strict serving snapshot validation receipt', () => {
       schemaVersion: 1,
       runId: 'run-a',
       sessionId: 'run-a',
-      snapshotId: expect.stringMatching(/^snapshot:/u),
+      snapshotId: expect.stringMatching(/^snapshot-[a-f0-9]{64}$/u),
       servingRecipeIds: ['recipe-a'],
       servingRecipeFingerprints: [sha('fingerprint-a')],
       coreManifestSchemaVersion: 1,
@@ -189,7 +189,7 @@ function fixture() {
   return {
     runId: 'run-a',
     sessionId: 'run-a',
-    snapshotId: `snapshot:${sha('candidate-data').slice(-32)}`,
+    snapshotId: `snapshot-${sha('candidate-data').slice('sha256:'.length)}`,
     candidateDataManifestHash,
     candidateCoverage,
     g4ReceiptHash,

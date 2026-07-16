@@ -15,14 +15,26 @@ import {
   type MainCertifiedProjectFactsState,
   type MainCertifiedProjectionPayload,
   reopenMainCertifiedProjectFactsConsumer,
+  resolveMainCertifiedProjectScopeHash,
 } from '../../../project-facts/CertifiedProjectFactsRuntime.js';
 import type { ProjectScopeAnalysisContext } from '../../../project-scope/ProjectScopeAnalysis.js';
 import { commitPreparedPublicRoute, inspectPublicRoute } from './PublicRouteCas.js';
 import { executeStrictAnalysisAndProduction } from './StrictAnalysisRuntime.js';
 import { confinedPath, loadStrictProductionAuthorization } from './StrictAuthorization.js';
 import {
+  acquireStrictPublicationOperationLock,
   buildStrictCandidateCoverage,
   finalizeStrictCandidate,
+  installAndVerifyStrictPublicationMarker,
+  materializeStrictPublicServingData,
+  persistAndVerifyStrictPublicServingBundle,
+  preflightStrictPublicationMarker,
+  type StrictPublicServingBundleReceiptV1,
+  type StrictPublicServingDataReceiptV1,
+  strictPublicationPaths,
+  verifyStrictPublicationMarker,
+  verifyStrictPublicServingBundle,
+  verifyStrictPublicServingData,
 } from './StrictFinalizationRuntime.js';
 import { compileStrictColdStartPlanning } from './StrictPlanningRuntime.js';
 import {
@@ -52,7 +64,10 @@ interface StrictProductionCheckpointV1 {
   privateCorpusContent?: Awaited<ReturnType<typeof persistStrictPrivateCorpusContent>>;
   candidateCoverage?: ReturnType<typeof buildStrictCandidateCoverage>;
   privateCorpus?: Awaited<ReturnType<typeof indexSealAndVerifyStrictPrivateCorpus>>;
+  publicServingData?: StrictPublicServingDataReceiptV1;
   finalization?: ReturnType<typeof finalizeStrictCandidate>;
+  publicServingBundle?: StrictPublicServingBundleReceiptV1;
+  rejectedPublicSnapshotIds?: string[];
 }
 
 interface StrictColdStartProductionInput {
@@ -70,6 +85,11 @@ type StrictPlanningStage = NonNullable<StrictProductionCheckpointV1['planning']>
 type StrictAnalysisStage = NonNullable<StrictProductionCheckpointV1['analysis']>;
 type StrictCandidateCoverageStage = NonNullable<StrictProductionCheckpointV1['candidateCoverage']>;
 type StrictPrivateCorpusStage = NonNullable<StrictProductionCheckpointV1['privateCorpus']>;
+type StrictPublicServingDataStage = NonNullable<StrictProductionCheckpointV1['publicServingData']>;
+type StrictFinalizationStage = NonNullable<StrictProductionCheckpointV1['finalization']>;
+type StrictPublicServingBundleStage = NonNullable<
+  StrictProductionCheckpointV1['publicServingBundle']
+>;
 
 interface StrictExecutionContext {
   readonly input: StrictColdStartProductionInput;
@@ -92,59 +112,109 @@ export async function runStrictColdStartProduction(
     request: input.request,
   });
   const operationRoot = confinedPath(dataRoot, authorization.operationRoot);
-  const publicRoutePath = confinedPath(dataRoot, authorization.publicRoutePath);
-  const journal = await StrictProductionJournal.open({
-    operationRoot,
+  const publicRoutePath = strictPublicationPaths(dataRoot).activePath;
+  const actualProjectIdentityHash = resolveMainCertifiedProjectScopeHash({
+    analysisScope: input.analysisScope,
+    projectRoot,
+  });
+  if (actualProjectIdentityHash !== authorization.privateCorpus.projectIdentityHash) {
+    throw new Error('STRICT_AUTHORIZATION_PROJECT_IDENTITY_MISMATCH');
+  }
+  const publicationLock = await acquireStrictPublicationOperationLock({
+    dataRoot,
     ownerId: input.request.ownerId,
-    resumeOwnerId: input.request.resumeOwnerId,
     runId: input.request.runId,
   });
   try {
-    if (journal.resumePoint === 'FINALIZED') {
-      return verifyFinalizedReplay(operationRoot, publicRoutePath);
-    }
-    const checkpoint = await readCheckpoint(operationRoot);
-    const context: StrictExecutionContext = {
-      input,
-      authorization,
-      checkpoint,
-      dataRoot,
-      projectRoot,
+    const journal = await StrictProductionJournal.open({
       operationRoot,
-      publicRoutePath,
-      journal,
-    };
-    await prepareAuthorizedBlankState(context);
-    const { facts, planning } = await ensureFactsAndPlanning(context);
-    const analysis = await ensureAnalysis(context, facts, planning);
-    const { candidateCoverage, privateCorpus } = await ensurePrivateCorpus(
-      context,
-      facts,
-      planning,
-      analysis
-    );
-    return await finalizeAndPublish(
-      context,
-      facts,
-      planning,
-      analysis,
-      candidateCoverage,
-      privateCorpus
-    );
+      ownerId: input.request.ownerId,
+      resumeOwnerId: input.request.resumeOwnerId,
+      runId: input.request.runId,
+    });
+    try {
+      const checkpoint = await readCheckpoint(operationRoot);
+      if (journal.resumePoint === 'FINALIZED') {
+        return verifyFinalizedReplay({
+          authorization,
+          checkpoint,
+          dataRoot,
+          operationRoot,
+          publicRoutePath,
+        });
+      }
+      const context: StrictExecutionContext = {
+        input,
+        authorization,
+        checkpoint,
+        dataRoot,
+        projectRoot,
+        operationRoot,
+        publicRoutePath,
+        journal,
+      };
+      await prepareAuthorizedBlankState(context);
+      const { facts, planning } = await ensureFactsAndPlanning(context);
+      const analysis = await ensureAnalysis(context, facts, planning);
+      const { candidateCoverage, privateCorpus } = await ensurePrivateCorpus(
+        context,
+        facts,
+        planning,
+        analysis
+      );
+      return await finalizeAndPublish(
+        context,
+        facts,
+        planning,
+        analysis,
+        candidateCoverage,
+        privateCorpus
+      );
+    } finally {
+      await journal.close();
+    }
   } finally {
-    await journal.close();
+    await publicationLock.close();
   }
 }
 
-async function verifyFinalizedReplay(
-  operationRoot: string,
-  publicRoutePath: string
-): Promise<unknown> {
+async function verifyFinalizedReplay(input: {
+  readonly authorization: Awaited<ReturnType<typeof loadStrictProductionAuthorization>>;
+  readonly checkpoint: StrictProductionCheckpointV1;
+  readonly dataRoot: string;
+  readonly operationRoot: string;
+  readonly publicRoutePath: string;
+}): Promise<unknown> {
+  const { authorization, checkpoint, dataRoot, operationRoot, publicRoutePath } = input;
+  if (
+    !checkpoint.publicServingData ||
+    !checkpoint.finalization ||
+    !checkpoint.privateCorpus ||
+    !checkpoint.publicServingBundle
+  ) {
+    throw new Error('STRICT_FINALIZED_PUBLIC_BUNDLE_CHECKPOINT_MISSING');
+  }
+  await verifyStrictPublicationMarker({
+    dataRoot,
+    projectIdentityHash: authorization.privateCorpus.projectIdentityHash,
+    migrationBundleHash: authorization.privateCorpus.acceptedMigrationBundleSemanticHash,
+  });
+  await verifyStrictPublicServingBundle({
+    dataRoot,
+    dataReceipt: checkpoint.publicServingData,
+    finalization: checkpoint.finalization,
+    privateCorpus: checkpoint.privateCorpus,
+    receipt: checkpoint.publicServingBundle,
+  });
   const report = (await readJson(path.join(operationRoot, RUNTIME_REPORT_FILE))) as {
     publicHandle?: { routeHash?: unknown };
   };
   const currentRoute = await inspectPublicRoute(publicRoutePath);
-  if (!currentRoute || currentRoute.hash !== report.publicHandle?.routeHash) {
+  if (
+    !currentRoute ||
+    currentRoute.hash !== report.publicHandle?.routeHash ||
+    currentRoute.bytes !== checkpoint.finalization.preparedPublicRoute.canonicalBytes
+  ) {
     throw new Error('STRICT_FINALIZED_PUBLIC_ROUTE_DIVERGENCE');
   }
   return report;
@@ -157,6 +227,15 @@ async function prepareAuthorizedBlankState(context: StrictExecutionContext): Pro
     pcfBaselineReceiptHash: authorization.pcfBaselineReceiptHash,
   });
   await advance(journal, 'AUTHORIZED', { authorizationHash: authorization.authorizationHash });
+  const markerInput = {
+    dataRoot,
+    projectIdentityHash: authorization.privateCorpus.projectIdentityHash,
+    migrationBundleHash: authorization.privateCorpus.acceptedMigrationBundleSemanticHash,
+  };
+  await preflightStrictPublicationMarker({
+    ...markerInput,
+    allowMissingForPristineOperation: before(journal.resumePoint, 'BLANK'),
+  });
   const observedPublicRoute = await inspectPublicRoute(publicRoutePath);
   const preparedRoute = checkpoint.finalization?.preparedPublicRoute;
   const exactPreparedRouteObserved = Boolean(
@@ -205,7 +284,12 @@ async function prepareAuthorizedBlankState(context: StrictExecutionContext): Pro
       dataRoot,
       database: createMainStrictResetDatabasePort(database),
     });
-    await advance(journal, 'BLANK', { resetReceiptHash: reset.receiptHash, blank: true });
+    const marker = await installAndVerifyStrictPublicationMarker(markerInput);
+    await advance(journal, 'BLANK', {
+      resetReceiptHash: reset.receiptHash,
+      markerHash: marker.markerHash,
+      blank: true,
+    });
   }
 }
 
@@ -233,6 +317,11 @@ async function ensureFactsAndPlanning(
     await writeCheckpoint(operationRoot, checkpoint);
   }
   assertSingleCaptureFacts(facts.carrier);
+  if (
+    facts.carrier.canonicalScopeHash !== context.authorization.privateCorpus.projectIdentityHash
+  ) {
+    throw new Error('STRICT_CERTIFIED_PROJECT_IDENTITY_MISMATCH');
+  }
   await advance(journal, 'PROJECT_FACTS_READY', {
     artifactId: facts.carrier.artifactId,
     factsContentHash: facts.carrier.factsContentHash,
@@ -425,52 +514,46 @@ async function finalizeAndPublish(
   planning: StrictPlanningStage,
   analysis: StrictAnalysisStage,
   candidateCoverage: StrictCandidateCoverageStage,
-  privateCorpus: StrictPrivateCorpusStage
+  privateCorpus: StrictPrivateCorpusStage,
+  excludedSnapshotId?: string
 ): Promise<unknown> {
-  let finalization = context.checkpoint.finalization;
-  if (!finalization) {
-    finalization = finalizeStrictCandidate({
-      analysis,
-      candidateCoverage,
-      certifiedProjectFactsHash: facts.carrier.certificationBindingHash,
-      committedAt: new Date().toISOString(),
-      compiledPlan: planning.compiledPlan,
-      expressionSets: analysis.expressionSets,
-      planCognitionHash: planning.planCognitionHash,
-      privateCorpus,
-      runId: context.input.request.runId,
-    });
-    context.checkpoint.finalization = finalization;
-    await writeCheckpoint(context.operationRoot, context.checkpoint);
-  } else {
-    const reconstructed = finalizeStrictCandidate({
-      analysis,
-      candidateCoverage,
-      certifiedProjectFactsHash: facts.carrier.certificationBindingHash,
-      committedAt: finalization.preparedPublicRoute.route.committedAt,
-      compiledPlan: planning.compiledPlan,
-      expressionSets: analysis.expressionSets,
-      planCognitionHash: planning.planCognitionHash,
-      privateCorpus,
-      runId: context.input.request.runId,
-    });
-    if (hashCanonicalJson(reconstructed) !== hashCanonicalJson(finalization)) {
-      throw new Error('STRICT_FINALIZATION_CHECKPOINT_DIVERGENCE');
-    }
-    finalization = reconstructed;
-  }
-  await advance(context.journal, 'G4_READY', { g4ReceiptHash: finalization.g4ReceiptHash });
-  await advance(context.journal, 'SERVING_RECONCILED', {
-    candidateDataManifestHash: finalization.candidateDataManifestHash,
+  const resolver = requirePublicBundleResolver(context);
+  const publicServingData = await resolvePublicServingData(
+    context,
+    resolver,
+    planning,
+    candidateCoverage,
+    privateCorpus,
+    excludedSnapshotId ?? context.checkpoint.rejectedPublicSnapshotIds?.at(-1)
+  );
+  const finalization = await resolveStrictFinalization(
+    context,
+    facts,
+    planning,
+    analysis,
+    candidateCoverage,
+    privateCorpus,
+    publicServingData
+  );
+  const publicServingBundle = await resolvePublicServingBundle(
+    context,
+    candidateCoverage,
+    privateCorpus,
+    publicServingData,
+    finalization
+  );
+  await advanceStrictFinalizationJournal(context, finalization);
+  await verifyStrictPublicationMarker({
+    dataRoot: context.dataRoot,
+    projectIdentityHash: context.authorization.privateCorpus.projectIdentityHash,
+    migrationBundleHash: context.authorization.privateCorpus.acceptedMigrationBundleSemanticHash,
   });
-  await advance(context.journal, 'FINAL_COVERAGE_BOUND', {
-    finalCoverageBindingHash: finalization.finalCoverage.receiptHash,
-  });
-  await advance(context.journal, 'SERVING_SNAPSHOT_VALIDATED', {
-    servingSnapshotValidationHash: finalization.servingSnapshotValidation.receiptHash,
-  });
-  await advance(context.journal, 'SERVING_MANIFEST_READY', {
-    servingSnapshotManifestHash: finalization.servingManifest.manifestHash,
+  await verifyStrictPublicServingBundle({
+    dataRoot: context.dataRoot,
+    dataReceipt: publicServingData,
+    finalization,
+    privateCorpus,
+    receipt: publicServingBundle,
   });
   await advance(context.journal, 'PUBLIC_CAS_PREPARED', {
     preparedRouteHash: hashCanonicalJson(finalization.preparedPublicRoute.route),
@@ -504,6 +587,172 @@ async function finalizeAndPublish(
     publicRouteHash: route.routeHash,
   });
   return report;
+}
+
+function requirePublicBundleResolver(context: StrictExecutionContext): WorkspaceResolver {
+  const resolver = context.input.container.singletons._workspaceResolver as
+    | WorkspaceResolver
+    | undefined;
+  if (!resolver || resolver.projectRoot !== path.resolve(context.projectRoot)) {
+    throw new Error('STRICT_PUBLIC_BUNDLE_WORKSPACE_RESOLVER_MISMATCH');
+  }
+  return resolver;
+}
+
+async function resolvePublicServingData(
+  context: StrictExecutionContext,
+  resolver: WorkspaceResolver,
+  planning: StrictPlanningStage,
+  candidateCoverage: StrictCandidateCoverageStage,
+  privateCorpus: StrictPrivateCorpusStage,
+  excludedSnapshotId?: string
+): Promise<StrictPublicServingDataStage> {
+  const existing = context.checkpoint.publicServingData;
+  if (existing) {
+    try {
+      await verifyStrictPublicServingData({
+        candidateCoverage,
+        dataRoot: context.dataRoot,
+        privateCorpus,
+        receipt: existing,
+      });
+      return existing;
+    } catch (error) {
+      if (!(await canRepairPublicSnapshot(context))) {
+        throw error;
+      }
+      await invalidatePublicSnapshotCheckpoint(context, existing.snapshotId);
+      throw new Error('STRICT_PUBLIC_SNAPSHOT_INVALIDATED', { cause: error });
+    }
+  }
+  const created = await materializeStrictPublicServingData({
+    baseResolver: resolver,
+    candidateCoverage,
+    dataRoot: context.dataRoot,
+    ...(excludedSnapshotId ? { excludedSnapshotId } : {}),
+    privateCorpus,
+    revisionInitReceipt: privateCorpus.revisionInitReceipt,
+    projectIdentityHash: context.authorization.privateCorpus.projectIdentityHash,
+    migrationBundleHash: context.authorization.privateCorpus.acceptedMigrationBundleSemanticHash,
+    servingConfig: {
+      loadHash: planning.configReceipt.loadHash,
+      sourceArtifactHash: planning.configReceipt.sourceArtifactHash,
+      strictColdStart: planning.configReceipt.strictColdStart,
+    },
+  });
+  context.checkpoint.publicServingData = created;
+  await writeCheckpoint(context.operationRoot, context.checkpoint);
+  return created;
+}
+
+async function resolveStrictFinalization(
+  context: StrictExecutionContext,
+  facts: StrictFactsStage,
+  planning: StrictPlanningStage,
+  analysis: StrictAnalysisStage,
+  candidateCoverage: StrictCandidateCoverageStage,
+  privateCorpus: StrictPrivateCorpusStage,
+  publicServingData: StrictPublicServingDataStage
+): Promise<StrictFinalizationStage> {
+  const existing = context.checkpoint.finalization;
+  const reconstructed = finalizeStrictCandidate({
+    analysis,
+    candidateCoverage,
+    candidateDataManifestHash: publicServingData.candidateDataManifestHash,
+    certifiedProjectFactsHash: facts.carrier.certificationBindingHash,
+    committedAt: existing?.preparedPublicRoute.route.committedAt ?? new Date().toISOString(),
+    compiledPlan: planning.compiledPlan,
+    expressionSets: analysis.expressionSets,
+    planCognitionHash: planning.planCognitionHash,
+    privateCorpus,
+    runId: context.input.request.runId,
+    snapshotId: publicServingData.snapshotId,
+  });
+  if (existing) {
+    if (hashCanonicalJson(reconstructed) !== hashCanonicalJson(existing)) {
+      throw new Error('STRICT_FINALIZATION_CHECKPOINT_DIVERGENCE');
+    }
+    return reconstructed;
+  }
+  context.checkpoint.finalization = reconstructed;
+  await writeCheckpoint(context.operationRoot, context.checkpoint);
+  return reconstructed;
+}
+
+async function resolvePublicServingBundle(
+  context: StrictExecutionContext,
+  candidateCoverage: StrictCandidateCoverageStage,
+  privateCorpus: StrictPrivateCorpusStage,
+  publicServingData: StrictPublicServingDataStage,
+  finalization: StrictFinalizationStage
+): Promise<StrictPublicServingBundleStage> {
+  const existing = context.checkpoint.publicServingBundle;
+  if (!existing) {
+    const created = await persistAndVerifyStrictPublicServingBundle({
+      dataRoot: context.dataRoot,
+      dataReceipt: publicServingData,
+      finalization,
+      privateCorpus,
+    });
+    context.checkpoint.publicServingBundle = created;
+    await writeCheckpoint(context.operationRoot, context.checkpoint);
+    return created;
+  }
+  try {
+    await verifyStrictPublicServingBundle({
+      dataRoot: context.dataRoot,
+      dataReceipt: publicServingData,
+      finalization,
+      privateCorpus,
+      receipt: existing,
+    });
+    return existing;
+  } catch (error) {
+    if (!(await canRepairPublicSnapshot(context))) {
+      throw error;
+    }
+    await invalidatePublicSnapshotCheckpoint(context, publicServingData.snapshotId);
+    throw new Error('STRICT_PUBLIC_SNAPSHOT_INVALIDATED', { cause: error });
+  }
+}
+
+async function advanceStrictFinalizationJournal(
+  context: StrictExecutionContext,
+  finalization: StrictFinalizationStage
+): Promise<void> {
+  await advance(context.journal, 'G4_READY', { g4ReceiptHash: finalization.g4ReceiptHash });
+  await advance(context.journal, 'SERVING_RECONCILED', {
+    candidateDataManifestHash: finalization.candidateDataManifestHash,
+  });
+  await advance(context.journal, 'FINAL_COVERAGE_BOUND', {
+    finalCoverageBindingHash: finalization.finalCoverage.receiptHash,
+  });
+  await advance(context.journal, 'SERVING_SNAPSHOT_VALIDATED', {
+    servingSnapshotValidationHash: finalization.servingSnapshotValidation.receiptHash,
+  });
+  await advance(context.journal, 'SERVING_MANIFEST_READY', {
+    servingSnapshotManifestHash: finalization.servingManifest.manifestHash,
+  });
+}
+
+async function canRepairPublicSnapshot(context: StrictExecutionContext): Promise<boolean> {
+  return (
+    before(context.journal.resumePoint, 'PUBLIC_CAS_PREPARED') &&
+    (await inspectPublicRoute(context.publicRoutePath)) === null
+  );
+}
+
+async function invalidatePublicSnapshotCheckpoint(
+  context: StrictExecutionContext,
+  snapshotId: string
+): Promise<void> {
+  context.checkpoint.rejectedPublicSnapshotIds = [
+    ...new Set([...(context.checkpoint.rejectedPublicSnapshotIds ?? []), snapshotId]),
+  ];
+  delete context.checkpoint.publicServingData;
+  delete context.checkpoint.finalization;
+  delete context.checkpoint.publicServingBundle;
+  await writeCheckpoint(context.operationRoot, context.checkpoint);
 }
 
 function buildRuntimeReport(

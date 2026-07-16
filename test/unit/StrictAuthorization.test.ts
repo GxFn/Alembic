@@ -1,6 +1,7 @@
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { readAlembicMigrationBundleManifest } from '@alembic/core/database';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadStrictProductionAuthorization } from '../../lib/recipe-pipeline/generate/strict/StrictAuthorization.js';
@@ -12,7 +13,7 @@ afterEach(async () => {
 });
 
 describe('strict production authorization', () => {
-  it('binds run/project/data/hash and keeps journal, receipt, and public route outside reset', async () => {
+  it('binds run/project/data/hash and keeps journal, receipt, and fixed publication root outside reset', async () => {
     const fixture = await authorizationFixture();
     const loaded = await loadStrictProductionAuthorization({
       dataRoot: fixture.dataRoot,
@@ -28,6 +29,30 @@ describe('strict production authorization', () => {
 
     expect(loaded.authorizationHash).toBe(fixture.receipt.authorizationHash);
     expect(loaded.runId).toBe('run-a');
+  });
+
+  it('retains a legacy caller route only as hashed input and grants it no path authority', async () => {
+    const fixture = await authorizationFixture();
+    const receipt = buildReceipt(fixture.projectRoot, fixture.dataRoot, {
+      publicRoutePath: '../caller-selected/active.json',
+    });
+    await fsp.writeFile(
+      path.join(fixture.dataRoot, fixture.receiptPath),
+      `${JSON.stringify(receipt)}\n`
+    );
+    await expect(
+      loadStrictProductionAuthorization({
+        dataRoot: fixture.dataRoot,
+        projectRoot: fixture.projectRoot,
+        request: {
+          schemaVersion: 1,
+          authorizationReceiptHash: receipt.authorizationHash,
+          authorizationReceiptPath: fixture.receiptPath,
+          ownerId: 'daemon-job:one',
+          runId: 'run-a',
+        },
+      })
+    ).resolves.toMatchObject({ publicRoutePath: '../caller-selected/active.json' });
   });
 
   it('fails closed for tamper and reset overlap with durable/public authority', async () => {
@@ -120,6 +145,30 @@ describe('strict production authorization', () => {
       })
     ).rejects.toThrow('STRICT_PUBLIC_ROUTE_EXPECTED_ABSENT');
   });
+
+  it('rejects an accepted migration hash that is not the actually loaded Core bundle', async () => {
+    const fixture = await authorizationFixture();
+    const receipt = buildReceipt(fixture.projectRoot, fixture.dataRoot, {
+      migrationBundleHash: sha('not-the-loaded-bundle'),
+    });
+    await fsp.writeFile(
+      path.join(fixture.dataRoot, fixture.receiptPath),
+      `${JSON.stringify(receipt)}\n`
+    );
+    await expect(
+      loadStrictProductionAuthorization({
+        dataRoot: fixture.dataRoot,
+        projectRoot: fixture.projectRoot,
+        request: {
+          schemaVersion: 1,
+          authorizationReceiptHash: receipt.authorizationHash,
+          authorizationReceiptPath: fixture.receiptPath,
+          ownerId: 'daemon-job:one',
+          runId: 'run-a',
+        },
+      })
+    ).rejects.toThrow('STRICT_AUTHORIZATION_MIGRATION_BUNDLE_MISMATCH');
+  });
 });
 
 async function authorizationFixture() {
@@ -137,7 +186,12 @@ async function authorizationFixture() {
 function buildReceipt(
   projectRoot: string,
   dataRoot: string,
-  options: { resetPaths?: string[]; expectedPublicRouteHash?: string | null } = {}
+  options: {
+    resetPaths?: string[];
+    expectedPublicRouteHash?: string | null;
+    migrationBundleHash?: string;
+    publicRoutePath?: string;
+  } = {}
 ) {
   const semantic = {
     schemaVersion: 1 as const,
@@ -145,7 +199,7 @@ function buildReceipt(
     projectRoot,
     dataRoot,
     operationRoot: 'strict-production/operations/run-a',
-    publicRoutePath: 'public/active.json',
+    publicRoutePath: options.publicRoutePath ?? 'public/active.json',
     expectedPublicRouteHash: options.expectedPublicRouteHash ?? null,
     pcfBaselineReceiptHash: sha('pcf'),
     reset: { relativePaths: options.resetPaths ?? ['cache/candidates'], tables: ['recipes'] },
@@ -172,7 +226,9 @@ function buildReceipt(
       },
     },
     privateCorpus: {
-      acceptedMigrationBundleSemanticHash: sha('migration'),
+      projectIdentityHash: sha('project-identity'),
+      acceptedMigrationBundleSemanticHash:
+        options.migrationBundleHash ?? hashCanonicalJson(readAlembicMigrationBundleManifest()),
       credentialLocationSymbol: 'env:TEST_ONLY',
     },
   };

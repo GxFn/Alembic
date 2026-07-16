@@ -36,6 +36,67 @@ export function createMainStrictResetDatabasePort(database: unknown): StrictRese
   };
 }
 
+export async function copyAndCheckpointStrictPublicDatabase(input: {
+  readonly sourcePath: string;
+  readonly targetPath: string;
+}): Promise<void> {
+  const source = new Database(input.sourcePath, { readonly: true, fileMustExist: true });
+  try {
+    await source.backup(input.targetPath);
+  } finally {
+    source.close();
+  }
+  const checkpoint = new Database(input.targetPath, { fileMustExist: true });
+  try {
+    checkpoint.pragma('journal_mode = DELETE');
+    if (
+      checkpoint.pragma('integrity_check', { simple: true }) !== 'ok' ||
+      (checkpoint.pragma('foreign_key_check') as unknown[]).length !== 0
+    ) {
+      throw new Error('STRICT_PUBLIC_DATABASE_VALIDATION_FAILED');
+    }
+  } finally {
+    checkpoint.close();
+  }
+}
+
+export function verifyStrictPublicDatabaseServingSet(input: {
+  readonly activeRecipeIds: readonly string[];
+  readonly databasePath: string;
+}): void {
+  const expectedRecipeIds = [...input.activeRecipeIds].sort();
+  const database = new Database(input.databasePath, { readonly: true, fileMustExist: true });
+  try {
+    if (
+      database.pragma('integrity_check', { simple: true }) !== 'ok' ||
+      (database.pragma('foreign_key_check') as unknown[]).length !== 0
+    ) {
+      throw new Error('STRICT_PUBLIC_DATABASE_VALIDATION_FAILED');
+    }
+    const rows = database
+      .prepare('SELECT id, lifecycle FROM knowledge_entries ORDER BY id')
+      .all() as Array<{ id: unknown; lifecycle: unknown }>;
+    if (
+      JSON.stringify(rows.map((row) => String(row.id))) !== JSON.stringify(expectedRecipeIds) ||
+      rows.some((row) => row.lifecycle !== 'active')
+    ) {
+      throw new Error('STRICT_PUBLIC_DATABASE_SERVING_SET_MISMATCH');
+    }
+    const refs = database
+      .prepare('SELECT recipe_id, status FROM recipe_source_refs ORDER BY recipe_id, source_path')
+      .all() as Array<{ recipe_id: unknown; status: unknown }>;
+    const refRecipeIds = [...new Set(refs.map((row) => String(row.recipe_id)))].sort();
+    if (
+      JSON.stringify(refRecipeIds) !== JSON.stringify(expectedRecipeIds) ||
+      refs.some((row) => row.status !== 'active')
+    ) {
+      throw new Error('STRICT_PUBLIC_DATABASE_REF_SET_MISMATCH');
+    }
+  } finally {
+    database.close();
+  }
+}
+
 export async function snapshotStrictResetDatabase(input: {
   readonly database: unknown;
   readonly snapshotPath: string;

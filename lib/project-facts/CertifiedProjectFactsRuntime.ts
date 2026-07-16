@@ -185,11 +185,20 @@ export interface MainCertifiedProjectFactsSessionPort {
   toSnapshot(): { projectContext: Record<string, unknown> };
 }
 
-interface CaptureMainCertifiedProjectFactsInput {
+interface MainCertifiedProjectScopeInput {
   analysisScope?: ProjectScopeAnalysisContext;
-  dimensions: DimensionDef[];
   projectRoot: string;
+}
+
+interface CaptureMainCertifiedProjectFactsInput extends MainCertifiedProjectScopeInput {
+  dimensions: DimensionDef[];
   source: 'alembic-main-bootstrap' | 'alembic-main-rescan';
+}
+
+export function resolveMainCertifiedProjectScopeHash(
+  input: MainCertifiedProjectScopeInput
+): string {
+  return createMainScopeBinding(input).manifest.canonicalScopeHash;
 }
 
 export async function captureMainCertifiedProjectFacts(
@@ -608,6 +617,14 @@ export function assertMainCertifiedProjectFactsCarrier(
   if (identities.some((identity) => typeof identity !== 'string' || !identity)) {
     throw new TypeError('Certified project facts carrier has a partial binding.');
   }
+  assertMainCertifiedReceipts(carrier);
+  if (!/^sha256:[a-f0-9]{64}$/.test(carrier.canonicalScopeHash)) {
+    throw new TypeError('Certified project facts carrier has a scope binding mismatch.');
+  }
+  assertMainCertifiedInstrumentation(carrier);
+}
+
+function assertMainCertifiedReceipts(carrier: MainCertifiedProjectFactsCarrier): void {
   if (!carrier.receipts || typeof carrier.receipts !== 'object') {
     throw new TypeError('Certified project facts carrier receipt ledger is missing.');
   }
@@ -630,9 +647,9 @@ export function assertMainCertifiedProjectFactsCarrier(
       throw new TypeError(`Certified project facts carrier has a stale ${consumer} binding.`);
     }
   }
-  if (!/^sha256:[a-f0-9]{64}$/.test(carrier.canonicalScopeHash)) {
-    throw new TypeError('Certified project facts carrier has a scope binding mismatch.');
-  }
+}
+
+function assertMainCertifiedInstrumentation(carrier: MainCertifiedProjectFactsCarrier): void {
   if (!Array.isArray(carrier.instrumentation)) {
     throw new TypeError('Certified project facts carrier instrumentation is missing.');
   }
@@ -726,7 +743,7 @@ export function readMainCertifiedCarrierFromProjectContext(
   return carrier;
 }
 
-function createMainScopeBinding(input: CaptureMainCertifiedProjectFactsInput) {
+function createMainScopeBinding(input: MainCertifiedProjectScopeInput) {
   const declared = input.analysisScope?.projectScope;
   if (declared?.folders.length && input.analysisScope?.controlRoot) {
     const controlRoot = path.resolve(input.analysisScope.controlRoot);

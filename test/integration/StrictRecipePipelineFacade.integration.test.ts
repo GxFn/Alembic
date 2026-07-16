@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,14 +10,42 @@ import { WorkspaceResolver } from '@alembic/core/workspace';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
+import { resolveMainCertifiedProjectScopeHash } from '../../lib/project-facts/CertifiedProjectFactsRuntime.js';
+import { resolveProjectScopeAnalysisContext } from '../../lib/project-scope/ProjectScopeAnalysis.js';
 import { STRICT_PRODUCTION_STATES_V1 } from '../../lib/recipe-pipeline/generate/strict/StrictProductionJournal.js';
 import { executeRecipePipelineJob } from '../../lib/recipe-pipeline/RecipePipelineFacade.js';
 
 const roots: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => fsp.rm(root, { force: true, recursive: true })));
+  await Promise.all(
+    roots.splice(0).map(async (root) => {
+      await makeTreeWritable(root);
+      await fsp.rm(root, { force: true, recursive: true });
+    })
+  );
 });
+
+async function makeTreeWritable(root: string): Promise<void> {
+  let stat: Awaited<ReturnType<typeof fsp.lstat>>;
+  try {
+    stat = await fsp.lstat(root);
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    return;
+  }
+  await fsp.chmod(root, 0o700);
+  for (const entry of await fsp.readdir(root, { withFileTypes: true })) {
+    if (entry.isDirectory() && !entry.isSymbolicLink()) {
+      await makeTreeWritable(path.join(root, entry.name));
+    }
+  }
+}
 
 describe('RecipePipelineFacade strict production integration', () => {
   it('runs the real Facade/Generate/ColdStart chain through one public CAS without network access', async () => {
@@ -89,11 +118,148 @@ describe('RecipePipelineFacade strict production integration', () => {
       expect(checkpoint.finalization?.servingManifest?.servingSnapshotValidationHash).toBe(
         checkpoint.finalization?.servingSnapshotValidation?.receiptHash
       );
+      const publicationRoot = path.join(fixture.dataRoot, '.asd/context/recipe-publications');
+      await expect(fsp.stat(path.join(publicationRoot, 'marker.json'))).resolves.toMatchObject({
+        isFile: expect.any(Function),
+      });
+      const marker = JSON.parse(
+        await fsp.readFile(path.join(publicationRoot, 'marker.json'), 'utf8')
+      ) as Record<string, unknown>;
+      expect(marker).toMatchObject({
+        schemaVersion: 1,
+        mode: 'strict-v1',
+        routeSchemaVersion: 1,
+        projectIdentityHash: fixture.projectIdentityHash,
+        migrationBundleHash: hashCanonicalJson(readAlembicMigrationBundleManifest()),
+      });
       const publicRoute = JSON.parse(
-        await fsp.readFile(path.join(fixture.dataRoot, 'public/active.json'), 'utf8')
-      ) as { snapshotId?: string; servingSnapshotValidationHash?: unknown };
-      expect(publicRoute.snapshotId).toMatch(/^snapshot:/u);
+        await fsp.readFile(path.join(publicationRoot, 'active.json'), 'utf8')
+      ) as {
+        snapshotId: string;
+        servingSnapshotManifestHash: string;
+        vectorGenerationId: string;
+        vectorManifestHash: string;
+        servingSnapshotValidationHash?: unknown;
+      };
+      expect(publicRoute.snapshotId).toMatch(/^snapshot-[a-f0-9]{64}(?:-[a-f0-9-]{36})?$/u);
+      await expect(
+        fsp.stat(path.join(fixture.dataRoot, 'public/active.json'))
+      ).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
       expect(publicRoute).not.toHaveProperty('servingSnapshotValidationHash');
+      expect(publicRoute).not.toHaveProperty('path');
+      expect(publicRoute).not.toHaveProperty('dataRoot');
+      expect(publicRoute).not.toHaveProperty('privateCorpusRevision');
+      const snapshotRoot = path.join(publicationRoot, 'snapshots', publicRoute.snapshotId);
+      const servingManifest = await readJson(path.join(snapshotRoot, 'manifest.json'));
+      expect(servingManifest.manifestHash).toBe(publicRoute.servingSnapshotManifestHash);
+      expect(hashCanonicalJson(withoutKey(servingManifest, 'manifestHash'))).toBe(
+        servingManifest.manifestHash
+      );
+      const dataManifest = await readJson(
+        path.join(snapshotRoot, 'data/candidate-data-manifest.json')
+      );
+      expect(hashCanonicalJson(withoutKey(dataManifest, 'manifestHash'))).toBe(
+        dataManifest.manifestHash
+      );
+      expect(servingManifest.candidateDataManifestHash).toBe(dataManifest.manifestHash);
+      const physicalFiles = (dataManifest.files as Array<{ relativePath: string }>).map(
+        (row) => row.relativePath
+      );
+      expect(physicalFiles).toEqual(
+        expect.arrayContaining([
+          '.asd/alembic.db',
+          '.asd/config.json',
+          '.asd/context/recipe-vector-active.json',
+          'serving-coverage.json',
+          `.asd/context/recipe-vector-generations/${publicRoute.vectorGenerationId}/manifest.json`,
+        ])
+      );
+      expect(physicalFiles.some((file) => file.startsWith('Alembic/recipes/'))).toBe(true);
+      expect(
+        physicalFiles.some((file) =>
+          file.startsWith(
+            `.asd/context/recipe-vector-generations/${publicRoute.vectorGenerationId}/store/`
+          )
+        )
+      ).toBe(true);
+      const publicVectorActive = await readJson(
+        path.join(snapshotRoot, 'data/.asd/context/recipe-vector-active.json')
+      );
+      expect(publicVectorActive).toMatchObject({
+        generationId: publicRoute.vectorGenerationId,
+        manifestHash: publicRoute.vectorManifestHash,
+      });
+      const publicVectorManifest = await readJson(
+        path.join(
+          snapshotRoot,
+          'data/.asd/context/recipe-vector-generations',
+          publicRoute.vectorGenerationId,
+          'manifest.json'
+        )
+      );
+      expect(publicVectorManifest).toMatchObject({
+        generationId: publicRoute.vectorGenerationId,
+        manifestHash: publicRoute.vectorManifestHash,
+        status: 'ready',
+      });
+      for (const fileName of [
+        'candidate-coverage.json',
+        'g4-receipt.json',
+        'final-coverage.json',
+        'serving-snapshot-validation.json',
+        'lineage.json',
+      ]) {
+        await expect(fsp.stat(path.join(snapshotRoot, fileName))).resolves.toBeDefined();
+      }
+      const finalCoverage = await readJson(path.join(snapshotRoot, 'final-coverage.json'));
+      const candidateCoverage = await readJson(path.join(snapshotRoot, 'candidate-coverage.json'));
+      const servingCoverage = await readJson(path.join(snapshotRoot, 'data/serving-coverage.json'));
+      const servingValidation = await readJson(
+        path.join(snapshotRoot, 'serving-snapshot-validation.json')
+      );
+      expect(servingManifest.finalCoverageBindingHash).toBe(finalCoverage.receiptHash);
+      expect(servingCoverage).toEqual(candidateCoverage);
+      expect(dataManifest.candidateCoverageReceiptHash).toBe(candidateCoverage.receiptHash);
+      expect(finalCoverage.candidateCoverageReceiptHash).toBe(candidateCoverage.receiptHash);
+      expect(servingManifest.servingSnapshotValidationHash).toBe(servingValidation.receiptHash);
+      expect(servingValidation).toMatchObject({
+        snapshotId: publicRoute.snapshotId,
+        candidateDataManifestHash: dataManifest.manifestHash,
+        vectorGenerationId: publicRoute.vectorGenerationId,
+        vectorManifestHash: publicRoute.vectorManifestHash,
+        verdict: 'pass',
+      });
+      const publicDatabasePath = path.join(snapshotRoot, 'data/.asd/alembic.db');
+      const publicDatabase = new Database(publicDatabasePath, {
+        readonly: true,
+        fileMustExist: true,
+      });
+      try {
+        expect(publicDatabase.pragma('integrity_check', { simple: true })).toBe('ok');
+        expect((publicDatabase.pragma('foreign_key_check') as unknown[]).length).toBe(0);
+        const activeRecipeIds = publicDatabase
+          .prepare("SELECT id FROM knowledge_entries WHERE lifecycle = 'active' ORDER BY id")
+          .all()
+          .map((row) => String((row as { id: unknown }).id));
+        expect(activeRecipeIds).toEqual(dataManifest.activeRecipeIds);
+        const refRecipeIds = publicDatabase
+          .prepare('SELECT DISTINCT recipe_id FROM recipe_source_refs ORDER BY recipe_id')
+          .all()
+          .map((row) => String((row as { recipe_id: unknown }).recipe_id));
+        expect(refRecipeIds).toEqual(activeRecipeIds);
+      } finally {
+        publicDatabase.close();
+      }
+      await expect(fsp.stat(`${publicDatabasePath}-wal`)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(fsp.stat(`${publicDatabasePath}-shm`)).rejects.toMatchObject({ code: 'ENOENT' });
+      const servingConfig = await readJson(path.join(snapshotRoot, 'data/.asd/config.json'));
+      expect(servingConfig).toMatchObject({ kind: 'strict-public-serving-config' });
+      expect(JSON.stringify(servingConfig)).not.toContain('credentialLocationSymbol');
+      expect(await fsp.readFile(path.join(fixture.dataRoot, '.asd/config.json'), 'utf8')).toBe(
+        fixture.sourceConfigBytes
+      );
       for (const serialized of [JSON.stringify(checkpoint), JSON.stringify(report)]) {
         expect(serialized).not.toContain('candidateOracle');
         expect(serialized).not.toContain('candidateHandle');
@@ -127,12 +293,182 @@ describe('RecipePipelineFacade strict production integration', () => {
       expect(replay).toMatchObject({ mode: 'strict-production', status: 'FINALIZED' });
       const replayJournal = (await fsp.readFile(journalPath, 'utf8')).trim().split('\n');
       expect(replayJournal).toHaveLength(journal.length);
+      const activePath = path.join(publicationRoot, 'active.json');
+      const canonicalRouteBytes = await fsp.readFile(activePath, 'utf8');
+      await fsp.writeFile(activePath, `${JSON.stringify(publicRoute, null, 2)}\n`);
+      await expect(executeFixture(fixture)).rejects.toThrow(
+        'STRICT_FINALIZED_PUBLIC_ROUTE_DIVERGENCE'
+      );
+      await fsp.writeFile(activePath, canonicalRouteBytes);
       await persistRequestedEvidence(operationRoot, fixture.dataRoot);
+      await fsp.rm(operationRoot, { recursive: true });
+      await fsp.rm(path.join(fixture.dataRoot, '.asd/context/recipe-runs'), { recursive: true });
+      const detachedPublicationRoot = path.join(
+        fixture.dataRoot,
+        '.asd/context/recipe-publications'
+      );
+      const detachedMarker = await readJson(path.join(detachedPublicationRoot, 'marker.json'));
+      const detachedRoute = await readJson(path.join(detachedPublicationRoot, 'active.json'));
+      const detachedSnapshotRoot = path.join(
+        detachedPublicationRoot,
+        'snapshots',
+        String(detachedRoute.snapshotId)
+      );
+      const detachedDataManifest = await readJson(
+        path.join(detachedSnapshotRoot, 'data/candidate-data-manifest.json')
+      );
+      expect(detachedMarker.projectIdentityHash).toBe(fixture.projectIdentityHash);
+      expect(detachedDataManifest.manifestHash).toBe(servingManifest.candidateDataManifestHash);
+      for (const row of detachedDataManifest.files as Array<{
+        relativePath: string;
+        byteHash: string;
+      }>) {
+        expect(
+          `sha256:${createHash('sha256')
+            .update(await fsp.readFile(path.join(detachedSnapshotRoot, 'data', row.relativePath)))
+            .digest('hex')}`
+        ).toBe(row.byteHash);
+      }
+      const detachedDatabase = new Database(
+        path.join(detachedSnapshotRoot, 'data/.asd/alembic.db'),
+        {
+          readonly: true,
+          fileMustExist: true,
+        }
+      );
+      try {
+        expect(detachedDatabase.pragma('integrity_check', { simple: true })).toBe('ok');
+        expect(await readJson(path.join(detachedSnapshotRoot, 'manifest.json'))).toMatchObject({
+          manifestHash: detachedRoute.servingSnapshotManifestHash,
+        });
+        expect(
+          await readJson(path.join(detachedSnapshotRoot, 'data/serving-coverage.json'))
+        ).toEqual(await readJson(path.join(detachedSnapshotRoot, 'candidate-coverage.json')));
+        expect(
+          await readJson(
+            path.join(detachedSnapshotRoot, 'data/.asd/context/recipe-vector-active.json')
+          )
+        ).toMatchObject({ generationId: detachedRoute.vectorGenerationId });
+      } finally {
+        detachedDatabase.close();
+      }
     } finally {
       fixture.database.close();
     }
   }, 30_000);
+
+  it('keeps route null across sealed bundle tamper classes and allocates a new snapshot', async () => {
+    const fixture = await createFixture();
+    try {
+      await executeFixture(fixture);
+      const publicationRoot = path.join(fixture.dataRoot, '.asd/context/recipe-publications');
+      const activePath = path.join(publicationRoot, 'active.json');
+      const originalRoute = await readJson(activePath);
+      const originalSnapshotId = String(originalRoute.snapshotId);
+      const originalSnapshotRoot = path.join(publicationRoot, 'snapshots', originalSnapshotId);
+      const candidateManifestPath = path.join(
+        originalSnapshotRoot,
+        'data/candidate-data-manifest.json'
+      );
+      const candidateManifest = await readJson(candidateManifestPath);
+      const recipeFile = (candidateManifest.files as Array<{ relativePath: string }>).find((row) =>
+        row.relativePath.startsWith('Alembic/recipes/')
+      )?.relativePath;
+      const vectorFile = (candidateManifest.files as Array<{ relativePath: string }>).find(
+        (row) =>
+          row.relativePath.includes('/recipe-vector-generations/') &&
+          row.relativePath.includes('/store/')
+      )?.relativePath;
+      if (!recipeFile || !vectorFile) {
+        throw new Error('fixture public Recipe/vector file missing');
+      }
+      await makeTreeWritable(originalSnapshotRoot);
+      const operationRoot = path.join(
+        fixture.dataRoot,
+        'strict-production/operations/strict-integration-run'
+      );
+      const checkpointPath = path.join(operationRoot, 'strict-production.checkpoint.json');
+      const checkpointBytes = await fsp.readFile(checkpointPath);
+      const journalPath = path.join(operationRoot, 'strict-production.journal.jsonl');
+      const rows = (await fsp.readFile(journalPath, 'utf8'))
+        .trim()
+        .split('\n')
+        .map((row) => JSON.parse(row) as { state: string });
+      const sealedIndex = rows.findIndex((row) => row.state === 'CANDIDATE_DATA_SEALED');
+      expect(sealedIndex).toBeGreaterThan(0);
+      await fsp.writeFile(
+        journalPath,
+        `${rows
+          .slice(0, sealedIndex + 1)
+          .map((row) => JSON.stringify(row))
+          .join('\n')}\n`
+      );
+      const tamperPaths = [
+        path.join(originalSnapshotRoot, 'data', recipeFile),
+        candidateManifestPath,
+        path.join(originalSnapshotRoot, 'final-coverage.json'),
+        path.join(originalSnapshotRoot, 'serving-snapshot-validation.json'),
+        path.join(originalSnapshotRoot, 'data', vectorFile),
+      ];
+      const originalBytes = new Map(
+        await Promise.all(
+          tamperPaths.map(async (filePath) => [filePath, await fsp.readFile(filePath)] as const)
+        )
+      );
+      for (const tamperPath of tamperPaths) {
+        await fsp.writeFile(checkpointPath, checkpointBytes);
+        for (const [filePath, bytes] of originalBytes) {
+          await fsp.chmod(filePath, 0o600);
+          await fsp.writeFile(filePath, bytes);
+        }
+        await fsp.rm(activePath, { force: true });
+        await fsp.appendFile(tamperPath, '\nTAMPERED\n');
+        await expect(executeFixture(fixture), tamperPath).rejects.toThrow(
+          'STRICT_PUBLIC_SNAPSHOT_INVALIDATED'
+        );
+        await expect(fsp.stat(activePath)).rejects.toMatchObject({ code: 'ENOENT' });
+      }
+
+      const repaired = await executeFixture(fixture);
+      expect(repaired).toMatchObject({ status: 'FINALIZED' });
+      const repairedRoute = await readJson(activePath);
+      expect(repairedRoute.snapshotId).not.toBe(originalSnapshotId);
+      expect(repairedRoute.snapshotId).toMatch(/^snapshot-[a-f0-9]{64}-[a-f0-9-]{36}$/u);
+      await expect(
+        fsp.stat(path.join(publicationRoot, 'snapshots', originalSnapshotId))
+      ).resolves.toBeDefined();
+    } finally {
+      fixture.database.close();
+    }
+  }, 30_000);
+
+  it('rejects a wrong project binding before marker installation or destructive reset', async () => {
+    const fixture = await createFixture({ authorizationProjectIdentityHash: sha('wrong-project') });
+    try {
+      const resetSentinel = path.join(fixture.dataRoot, 'candidate-cache/sentinel.json');
+      await fsp.mkdir(path.dirname(resetSentinel), { recursive: true });
+      await fsp.writeFile(resetSentinel, '{}\n');
+      await expect(executeFixture(fixture)).rejects.toThrow(
+        'STRICT_AUTHORIZATION_PROJECT_IDENTITY_MISMATCH'
+      );
+      await expect(fsp.stat(resetSentinel)).resolves.toBeDefined();
+      await expect(
+        fsp.stat(path.join(fixture.dataRoot, '.asd/context/recipe-publications/marker.json'))
+      ).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      fixture.database.close();
+    }
+  });
 });
+
+async function readJson(filePath: string): Promise<Record<string, unknown>> {
+  return JSON.parse(await fsp.readFile(filePath, 'utf8')) as Record<string, unknown>;
+}
+
+function withoutKey(value: Record<string, unknown>, key: string): Record<string, unknown> {
+  const { [key]: _omitted, ...rest } = value;
+  return rest;
+}
 
 function executeFixture(fixture: Awaited<ReturnType<typeof createFixture>>) {
   return executeRecipePipelineJob({
@@ -157,7 +493,14 @@ async function persistRequestedEvidence(operationRoot: string, dataRoot: string)
   if (!evidenceRoot) {
     return;
   }
+  await removeEvidenceRoot(evidenceRoot);
   await fsp.mkdir(evidenceRoot, { recursive: true });
+  const publicationRoot = path.join(dataRoot, '.asd/context/recipe-publications');
+  const route = await readJson(path.join(publicationRoot, 'active.json'));
+  const snapshotRoot = path.join(publicationRoot, 'snapshots', String(route.snapshotId));
+  const candidateDataManifest = await readJson(
+    path.join(snapshotRoot, 'data/candidate-data-manifest.json')
+  );
   await Promise.all([
     fsp.copyFile(
       path.join(operationRoot, 'strict-production.runtime-report.json'),
@@ -172,19 +515,79 @@ async function persistRequestedEvidence(operationRoot: string, dataRoot: string)
       path.join(evidenceRoot, 'checkpoint.json')
     ),
     fsp.copyFile(
-      path.join(dataRoot, 'public/active.json'),
+      path.join(publicationRoot, 'active.json'),
       path.join(evidenceRoot, 'public-route.json')
     ),
+    fsp.copyFile(path.join(publicationRoot, 'marker.json'), path.join(evidenceRoot, 'marker.json')),
+    fsp.cp(publicationRoot, path.join(evidenceRoot, 'recipe-publications'), { recursive: true }),
   ]);
+  const metadataFiles = [
+    'candidate-coverage.json',
+    'g4-receipt.json',
+    'final-coverage.json',
+    'serving-snapshot-validation.json',
+    'lineage.json',
+    'manifest.json',
+  ];
+  const probe = {
+    schemaVersion: 1,
+    snapshotId: route.snapshotId,
+    routeHash: hashCanonicalJson(route),
+    candidateDataManifestHash: candidateDataManifest.manifestHash,
+    dataFiles: candidateDataManifest.files,
+    metadataFiles: await Promise.all(
+      metadataFiles.map(async (relativePath) => ({
+        relativePath,
+        byteHash: `sha256:${createHash('sha256')
+          .update(await fsp.readFile(path.join(snapshotRoot, relativePath)))
+          .digest('hex')}`,
+      }))
+    ),
+  };
+  await fsp.writeFile(
+    path.join(evidenceRoot, 'public-bundle-probe.json'),
+    `${JSON.stringify(probe, null, 2)}\n`
+  );
 }
 
-async function createFixture() {
+async function removeEvidenceRoot(evidenceRoot: string): Promise<void> {
+  const pendingDirectories = [evidenceRoot];
+  while (pendingDirectories.length > 0) {
+    const currentDirectory = pendingDirectories.pop();
+    if (!currentDirectory) {
+      continue;
+    }
+    try {
+      await fsp.chmod(currentDirectory, 0o755);
+      const entries = await fsp.readdir(currentDirectory, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          pendingDirectories.push(path.join(currentDirectory, entry.name));
+        }
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        continue;
+      }
+      throw error;
+    }
+  }
+  await fsp.rm(evidenceRoot, { force: true, recursive: true });
+}
+
+async function createFixture(options: { authorizationProjectIdentityHash?: string } = {}) {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'alembic-strict-facade-'));
   roots.push(root);
   const projectRoot = path.join(root, 'project');
   const dataRoot = path.join(root, 'data');
   await fsp.mkdir(path.join(projectRoot, 'src'), { recursive: true });
-  await fsp.mkdir(dataRoot, { recursive: true });
+  await fsp.mkdir(path.join(dataRoot, '.asd'), { recursive: true });
+  const sourceConfigBytes = `${JSON.stringify({
+    provider: 'fixture',
+    model: 'fixture-embedding-v1',
+    credentialLocationSymbol: 'env:STRICT_FIXTURE_ONLY',
+  })}\n`;
+  await fsp.writeFile(path.join(dataRoot, '.asd/config.json'), sourceConfigBytes);
   await fsp.writeFile(
     path.join(projectRoot, 'src/index.ts'),
     [
@@ -210,29 +613,7 @@ async function createFixture() {
   });
   const database = new Database(path.join(dataRoot, 'main.sqlite'));
   const agentService = new DeterministicStrictAgentService();
-  const embedProvider = {
-    describeCapabilities() {
-      return {
-        provider: 'fixture',
-        model: 'fixture-embedding-v1',
-        dimension: 3,
-        inputKinds: ['query', 'document'] as const,
-        batchSupported: true,
-        normalization: 'not-normalized' as const,
-        formatProfile: 'symmetric' as const,
-      };
-    },
-    async embedQuery(value: string) {
-      return [Math.max(1, value.length), 1, 0];
-    },
-    async embedDocuments(values: readonly string[]) {
-      return values.map((value) => [Math.max(1, value.length), 1, 0]);
-    },
-    async embed(value: string | string[]) {
-      const vector = (text: string) => [Math.max(1, text.length), 1, 0];
-      return Array.isArray(value) ? value.map(vector) : vector(value);
-    },
-  };
+  const embedProvider = createFixtureEmbedProvider();
   const services = new Map<string, unknown>([
     ['database', database],
     ['agentService', agentService],
@@ -252,6 +633,10 @@ async function createFixture() {
   } as unknown as ServiceContainer;
   const runId = 'strict-integration-run';
   const authorizationReceiptPath = `strict-production/authorizations/${runId}.json`;
+  const projectIdentityHash = resolveMainCertifiedProjectScopeHash({
+    analysisScope: resolveProjectScopeAnalysisContext(container),
+    projectRoot,
+  });
   const semantic = {
     schemaVersion: 1 as const,
     runId,
@@ -273,6 +658,7 @@ async function createFixture() {
       },
     },
     privateCorpus: {
+      projectIdentityHash: options.authorizationProjectIdentityHash ?? projectIdentityHash,
       acceptedMigrationBundleSemanticHash: hashCanonicalJson(readAlembicMigrationBundleManifest()),
       credentialLocationSymbol: 'env:STRICT_FIXTURE_ONLY',
     },
@@ -293,7 +679,35 @@ async function createFixture() {
     dataRoot,
     database,
     logger: { info() {}, warn() {}, error() {} },
+    projectIdentityHash,
     runId,
+    sourceConfigBytes,
+  };
+}
+
+function createFixtureEmbedProvider() {
+  return {
+    describeCapabilities() {
+      return {
+        provider: 'fixture',
+        model: 'fixture-embedding-v1',
+        dimension: 3,
+        inputKinds: ['query', 'document'] as const,
+        batchSupported: true,
+        normalization: 'not-normalized' as const,
+        formatProfile: 'symmetric' as const,
+      };
+    },
+    async embedQuery(value: string) {
+      return [Math.max(1, value.length), 1, 0];
+    },
+    async embedDocuments(values: readonly string[]) {
+      return values.map((value) => [Math.max(1, value.length), 1, 0]);
+    },
+    async embed(value: string | string[]) {
+      const vector = (text: string) => [Math.max(1, text.length), 1, 0];
+      return Array.isArray(value) ? value.map(vector) : vector(value);
+    },
   };
 }
 
