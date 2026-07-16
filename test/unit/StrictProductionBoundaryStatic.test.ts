@@ -21,6 +21,35 @@ describe('strict production main-chain boundary', () => {
     expect(facade).toContain('asyncFill: false');
   });
 
+  it('engages the external setup authority before config/logger/database writes on every AppRuntime entry', async () => {
+    const bootstrap = await source('lib/Bootstrap.ts');
+    const initializeBody = bootstrap.slice(
+      bootstrap.indexOf('async initialize()'),
+      bootstrap.indexOf('/** 加载工作区设置')
+    );
+    const databaseBody = bootstrap.slice(
+      bootstrap.indexOf('async initializeDatabase()'),
+      bootstrap.indexOf('/** 初始化核心组件')
+    );
+
+    expect(initializeBody.indexOf('this.initializeWorkspaceResolver()')).toBeLessThan(
+      initializeBody.indexOf('await this.initializeStrictExternalSetup()')
+    );
+    expect(initializeBody.indexOf('await this.initializeStrictExternalSetup()')).toBeLessThan(
+      initializeBody.indexOf('await this.loadConfig()')
+    );
+    expect(initializeBody).toContain('if (!(await this.initializeStrictExternalSetup()))');
+    expect(initializeBody.indexOf('return this.components')).toBeLessThan(
+      initializeBody.indexOf('await this.loadConfig()')
+    );
+    expect(databaseBody.indexOf('await db.connect()')).toBeLessThan(
+      databaseBody.indexOf('await executeStrictExternalSetupReset')
+    );
+    expect(databaseBody.indexOf('await executeStrictExternalSetupReset')).toBeLessThan(
+      databaseBody.indexOf('await db.runMigrations()')
+    );
+  });
+
   it('uses only public Core/Agent facades and wires the required production receipts', async () => {
     const strictRoot = path.join(ROOT, 'lib/recipe-pipeline/generate/strict');
     const files = (await fsp.readdir(strictRoot)).filter((file) => file.endsWith('.ts'));

@@ -26,6 +26,12 @@ import { commitPreparedPublicRoute, inspectPublicRoute } from './PublicRouteCas.
 import { executeStrictAnalysisAndProduction } from './StrictAnalysisRuntime.js';
 import { confinedPath, loadStrictProductionAuthorization } from './StrictAuthorization.js';
 import {
+  getStrictExternalSetupSession,
+  readStrictExternalSetupState,
+  recoverStrictExternalSetup,
+  releaseStrictExternalSetupSession,
+} from './StrictExternalSetupRecovery.js';
+import {
   acquireStrictPublicationOperationLock,
   buildStrictCandidateCoverage,
   finalizeStrictCandidate,
@@ -46,7 +52,11 @@ import {
   persistStrictPrivateCorpusContent,
 } from './StrictPrivateCorpusRuntime.js';
 import type { StrictProductionRuntimeRequestV1 } from './StrictProductionContracts.js';
-import { STRICT_PRODUCTION_STATES_V1, StrictProductionJournal } from './StrictProductionJournal.js';
+import {
+  readStrictProductionResumePoint,
+  STRICT_PRODUCTION_STATES_V1,
+  StrictProductionJournal,
+} from './StrictProductionJournal.js';
 import {
   createMainStrictResetDatabasePort,
   executeExactStrictReset,
@@ -65,7 +75,7 @@ interface StrictProductionCheckpointV1 {
   schemaVersion: 2;
   facts?: {
     carrier: MainCertifiedProjectFactsState;
-    projection: MainCertifiedProjectionPayload;
+    projection?: MainCertifiedProjectionPayload;
   };
   planning?: Awaited<ReturnType<typeof compileStrictColdStartPlanning>>;
   analysis?: Awaited<ReturnType<typeof executeStrictAnalysisAndProduction>>;
@@ -88,7 +98,9 @@ interface StrictColdStartProductionInput {
   readonly request: StrictProductionRuntimeRequestV1;
 }
 
-type StrictFactsStage = NonNullable<StrictProductionCheckpointV1['facts']>;
+type StrictFactsStage = NonNullable<StrictProductionCheckpointV1['facts']> & {
+  projection: MainCertifiedProjectionPayload;
+};
 type StrictPlanningStage = NonNullable<StrictProductionCheckpointV1['planning']>;
 type StrictAnalysisStage = NonNullable<StrictProductionCheckpointV1['analysis']>;
 type StrictCandidateCoverageStage = NonNullable<StrictProductionCheckpointV1['candidateCoverage']>;
@@ -115,12 +127,53 @@ interface StrictExecutionContext {
 export async function runStrictColdStartProduction(
   input: StrictColdStartProductionInput
 ): Promise<unknown> {
+  try {
+    return await runStrictColdStartProductionInternal(input);
+  } catch (error: unknown) {
+    const session = getStrictExternalSetupSession();
+    const resumePoint = session
+      ? await readStrictProductionResumePoint({
+          expectedHeaderHash: session.journalHeaderHash,
+          operationRoot: session.operationRoot,
+          runId: input.request.runId,
+        })
+      : null;
+    if (
+      session &&
+      input.request.setupAuthority?.action === 'execute' &&
+      !isAtOrAfterPublicCasCommit(resumePoint)
+    ) {
+      closeDatabaseForRecovery(input.container.get('database'));
+      try {
+        await recoverStrictExternalSetup(session);
+        await releaseStrictExternalSetupSession();
+      } catch (recoveryError: unknown) {
+        throw new AggregateError(
+          [error, recoveryError],
+          'STRICT_PRODUCTION_PRE_CAS_RECOVERY_FAILED'
+        );
+      }
+    }
+    throw error;
+  }
+}
+
+async function runStrictColdStartProductionInternal(
+  input: StrictColdStartProductionInput
+): Promise<unknown> {
   const { dataRoot, projectRoot } = input.analysisScope;
   const authorization = await loadStrictProductionAuthorization({
     dataRoot,
     projectRoot,
     request: input.request,
   });
+  const externalSession = input.request.setupAuthority ? getStrictExternalSetupSession() : null;
+  if (input.request.setupAuthority && !externalSession) {
+    throw new Error('STRICT_SETUP_SESSION_MISSING');
+  }
+  if (externalSession && input.request.setupAuthority?.action !== 'execute') {
+    throw new Error('STRICT_SETUP_NON_EXECUTE_ACTION_REQUIRES_STARTUP_PORT');
+  }
   const runtimeArtifacts = await verifyRuntimeArtifactManifestV1({
     expectedManifestContentHash: authorization.runtimeArtifacts.manifestContentHash,
     expectedManifestHash: authorization.runtimeArtifacts.manifestHash,
@@ -141,7 +194,9 @@ export async function runStrictColdStartProduction(
     actualProvider: input.container.singletons.aiProvider,
     actualEmbeddingProvider: input.container.singletons._embedProvider,
   });
-  const operationRoot = confinedPath(dataRoot, authorization.operationRoot);
+  const operationRoot = externalSession
+    ? externalSession.operationRoot
+    : confinedPath(dataRoot, authorization.operationRoot);
   const publicRoutePath = strictPublicationPaths(dataRoot).activePath;
   const actualProjectIdentityHash = resolveMainCertifiedProjectScopeHash({
     analysisScope: input.analysisScope,
@@ -157,6 +212,7 @@ export async function runStrictColdStartProduction(
   });
   try {
     const journal = await StrictProductionJournal.open({
+      ...(externalSession ? { expectedHeaderHash: externalSession.journalHeaderHash } : {}),
       operationRoot,
       ownerId: input.request.ownerId,
       resumeOwnerId: input.request.resumeOwnerId,
@@ -310,19 +366,14 @@ async function prepareAuthorizedBlankState(context: StrictExecutionContext): Pro
       observedPublicRoute.hash === hashCanonicalJson(preparedRoute.route) &&
       observedPublicRoute.bytes === preparedRoute.canonicalBytes
   );
-  if (before(journal.resumePoint, 'PUBLIC_CAS_PREPARED') && observedPublicRoute !== null) {
-    throw new Error('STRICT_AUTHORIZATION_OBSERVED_POINTER_MISMATCH');
-  }
-  if (
-    !before(journal.resumePoint, 'PUBLIC_CAS_PREPARED') &&
-    observedPublicRoute !== null &&
-    !exactPreparedRouteObserved
-  ) {
-    throw new Error('STRICT_AUTHORIZATION_OBSERVED_POINTER_MISMATCH');
-  }
-  if (!before(journal.resumePoint, 'PUBLIC_CAS_COMMITTED') && !exactPreparedRouteObserved) {
-    throw new Error('STRICT_PUBLIC_ROUTE_COMMIT_READBACK_MISSING');
-  }
+  const exactExpectedRouteObserved =
+    observedPublicRoute?.hash === authorization.expectedPublicRouteHash ||
+    (observedPublicRoute === null && authorization.expectedPublicRouteHash === null);
+  assertStrictPublicRouteResumeCompatibility({
+    exactExpectedRouteObserved,
+    exactPreparedRouteObserved,
+    resumePoint: journal.resumePoint,
+  });
   await advance(journal, 'JOURNAL_OPEN', {
     runtimeArtifactReceiptHash: context.runtimeArtifactReceipt.receiptHash,
     runtimeConfigReceiptHash: context.runtimeConfigReceipt.receiptHash,
@@ -332,6 +383,44 @@ async function prepareAuthorizedBlankState(context: StrictExecutionContext): Pro
       resetTables: authorization.reset.tables,
     }),
   });
+  const externalSession = context.input.request.setupAuthority
+    ? getStrictExternalSetupSession()
+    : null;
+  if (externalSession) {
+    const setupState = await readStrictExternalSetupState(externalSession);
+    if (externalSession.scenario === 'pristine') {
+      await advance(journal, 'PRISTINE_ABSENT', {
+        plannedAbsentPathReceiptHash: externalSession.authority.plannedAbsentPathReceiptHash,
+        snapshot: 'NOT_APPLICABLE_PHYSICAL_ABSENCE',
+      });
+    } else {
+      if (!setupState.snapshotTreeHash || !setupState.restoreProbeTreeHash) {
+        throw new Error('STRICT_SETUP_REBUILD_SNAPSHOT_RECEIPT_MISSING');
+      }
+      await advance(journal, 'SNAPSHOT_VERIFIED', {
+        preResetProtectedHash: setupState.preResetProtectedHash,
+        restoreProbeTreeHash: setupState.restoreProbeTreeHash,
+        snapshotTreeHash: setupState.snapshotTreeHash,
+        sourceTreeHash: setupState.sourceTreeHash,
+      });
+    }
+    if (before(journal.resumePoint, 'BLANK')) {
+      if (externalSession.scenario === 'rebuild' && !setupState.resetReceipt) {
+        throw new Error('STRICT_SETUP_RESET_RECEIPT_MISSING');
+      }
+      const marker = await installAndVerifyStrictPublicationMarker(markerInput);
+      await advance(journal, 'BLANK', {
+        blank: true,
+        markerHash: marker.markerHash,
+        resetReceiptHash: setupState.resetReceipt?.receiptHash ?? null,
+        resetScenario:
+          externalSession.scenario === 'pristine'
+            ? 'NOT_APPLICABLE_PHYSICAL_ABSENCE'
+            : 'EXACT_REBUILD_RESET',
+      });
+    }
+    return;
+  }
   if (before(journal.resumePoint, 'SNAPSHOT_VERIFIED')) {
     const snapshot = await verifyStrictResetSnapshotAndRestoreProbe({
       allowedRelativePaths: authorization.reset.relativePaths,
@@ -383,6 +472,20 @@ async function ensureFactsAndPlanning(
     facts = { carrier, projection: reopened.projection };
     checkpoint.facts = facts;
     await writeCheckpoint(operationRoot, checkpoint);
+  } else if (!facts.projection) {
+    const reopened = await reopenMainCertifiedProjectFactsConsumer({
+      carrier: facts.carrier,
+      consumer: 'recipe-generation',
+      dataRoot,
+      entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['recipe-generation'],
+      runId: `${context.input.request.runId}:recipe-generation`,
+    });
+    facts = { carrier: facts.carrier, projection: reopened.projection };
+    checkpoint.facts = facts;
+  }
+  const projection = facts.projection;
+  if (!projection) {
+    throw new Error('STRICT_CERTIFIED_PROJECT_PROJECTION_MISSING');
   }
   assertSingleCaptureFacts(facts.carrier);
   if (
@@ -402,13 +505,13 @@ async function ensureFactsAndPlanning(
       agentService: context.input.container.get('agentService') as Pick<AgentService, 'run'>,
       authorization: context.authorization.planning,
       carrier: facts.carrier,
-      projection: facts.projection,
+      projection,
     });
     checkpoint.planning = planning;
     await writeCheckpoint(operationRoot, checkpoint);
   }
   await advancePlanningJournal(journal, planning);
-  return { facts, planning };
+  return { facts: { carrier: facts.carrier, projection }, planning };
 }
 
 async function advancePlanningJournal(
@@ -629,7 +732,7 @@ async function finalizeAndPublish(
     semanticHash: finalization.preparedPublicRoute.semanticHash,
   });
   const route = await commitPreparedPublicRoute({
-    expectedCurrentHash: null,
+    expectedCurrentHash: context.authorization.expectedPublicRouteHash,
     prepared: {
       bytes: finalization.preparedPublicRoute.canonicalBytes,
       hash: hashCanonicalJson(finalization.preparedPublicRoute.route),
@@ -960,6 +1063,44 @@ function before(
   );
 }
 
+export function assertStrictPublicRouteResumeCompatibility(input: {
+  readonly exactExpectedRouteObserved: boolean;
+  readonly exactPreparedRouteObserved: boolean;
+  readonly resumePoint: (typeof STRICT_PRODUCTION_STATES_V1)[number] | null;
+}): void {
+  if (before(input.resumePoint, 'PUBLIC_CAS_PREPARED') && !input.exactExpectedRouteObserved) {
+    throw new Error('STRICT_AUTHORIZATION_OBSERVED_POINTER_MISMATCH');
+  }
+  if (
+    !before(input.resumePoint, 'PUBLIC_CAS_PREPARED') &&
+    before(input.resumePoint, 'PUBLIC_CAS_COMMITTED') &&
+    !input.exactExpectedRouteObserved &&
+    !input.exactPreparedRouteObserved
+  ) {
+    throw new Error('STRICT_AUTHORIZATION_OBSERVED_POINTER_MISMATCH');
+  }
+  if (!before(input.resumePoint, 'PUBLIC_CAS_COMMITTED') && !input.exactPreparedRouteObserved) {
+    throw new Error('STRICT_PUBLIC_ROUTE_COMMIT_READBACK_MISSING');
+  }
+}
+
+function isAtOrAfterPublicCasCommit(
+  current: (typeof STRICT_PRODUCTION_STATES_V1)[number] | null
+): boolean {
+  return !before(current, 'PUBLIC_CAS_COMMITTED');
+}
+
+function closeDatabaseForRecovery(database: unknown): void {
+  if (
+    database &&
+    typeof database === 'object' &&
+    'close' in database &&
+    typeof database.close === 'function'
+  ) {
+    database.close();
+  }
+}
+
 async function readCheckpoint(operationRoot: string): Promise<StrictProductionCheckpointV1> {
   const value = await readOptionalJson(path.join(operationRoot, CHECKPOINT_FILE));
   if (value === null) {
@@ -979,7 +1120,11 @@ async function writeCheckpoint(
   operationRoot: string,
   checkpoint: StrictProductionCheckpointV1
 ): Promise<void> {
-  await writeJsonAtomic(path.join(operationRoot, CHECKPOINT_FILE), checkpoint);
+  const durable: StrictProductionCheckpointV1 = structuredClone(checkpoint);
+  if (durable.facts) {
+    durable.facts = { carrier: durable.facts.carrier };
+  }
+  await writeJsonAtomic(path.join(operationRoot, CHECKPOINT_FILE), durable);
 }
 
 async function readJson(filePath: string): Promise<unknown> {
@@ -998,6 +1143,7 @@ async function readOptionalJson(filePath: string): Promise<unknown | null> {
 }
 
 async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> {
+  assertExternalDurableValueIsPortable(filePath, value);
   await fsp.mkdir(path.dirname(filePath), { recursive: true });
   const tempPath = `${filePath}.tmp-${randomUUID()}`;
   const handle = await fsp.open(tempPath, 'wx', 0o600);
@@ -1013,5 +1159,18 @@ async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> 
     await directory.sync();
   } finally {
     await directory.close();
+  }
+}
+
+function assertExternalDurableValueIsPortable(filePath: string, value: unknown): void {
+  const session = getStrictExternalSetupSession();
+  if (!session || !path.resolve(filePath).startsWith(`${session.operationRoot}${path.sep}`)) {
+    return;
+  }
+  const serialized = JSON.stringify(value);
+  for (const forbidden of [session.projectRoot, session.dataRoot, session.authorityPath]) {
+    if (serialized.includes(forbidden)) {
+      throw new Error('STRICT_EXTERNAL_EVIDENCE_ABSOLUTE_PATH_FORBIDDEN');
+    }
   }
 }

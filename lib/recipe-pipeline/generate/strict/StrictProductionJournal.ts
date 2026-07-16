@@ -51,6 +51,7 @@ export interface StrictProductionJournalEntryV1 {
 }
 
 interface OpenStrictProductionJournalInput {
+  readonly expectedHeaderHash?: string;
   readonly operationRoot: string;
   readonly ownerId: string;
   readonly resumeOwnerId?: string;
@@ -120,7 +121,11 @@ export class StrictProductionJournal {
       };
       await lock.writeFile(`${JSON.stringify(ownerLock)}\n`, 'utf8');
       await lock.sync();
-      const entries = await readAndVerifyJournal(journalPath, input.runId);
+      const entries = await readAndVerifyJournal(
+        journalPath,
+        input.runId,
+        input.expectedHeaderHash
+      );
       const lastOwnerId = entries.at(-1)?.ownerId;
       if (lastOwnerId && lastOwnerId !== input.ownerId && input.resumeOwnerId !== lastOwnerId) {
         throw new Error('STRICT_JOURNAL_RESUME_OWNER_REQUIRED');
@@ -186,6 +191,19 @@ export class StrictProductionJournal {
     await this.#lock.close();
     await fsp.rm(this.#lockPath, { force: true });
   }
+}
+
+export async function readStrictProductionResumePoint(input: {
+  readonly expectedHeaderHash?: string;
+  readonly operationRoot: string;
+  readonly runId: string;
+}): Promise<StrictProductionStateV1 | null> {
+  const entries = await readAndVerifyJournal(
+    path.join(input.operationRoot, JOURNAL_FILE),
+    input.runId,
+    input.expectedHeaderHash
+  );
+  return entries.at(-1)?.state ?? null;
 }
 
 async function acquireOwnerLock(lockPath: string): Promise<FileHandle> {
@@ -265,19 +283,42 @@ function isProcessAlive(pid: number): boolean {
 
 async function readAndVerifyJournal(
   journalPath: string,
-  runId: string
+  runId: string,
+  expectedHeaderHash?: string
 ): Promise<StrictProductionJournalEntryV1[]> {
   let content: string;
   try {
     content = await fsp.readFile(journalPath, 'utf8');
   } catch (error: unknown) {
     if (readCode(error) === 'ENOENT') {
+      if (expectedHeaderHash) {
+        throw new Error('STRICT_JOURNAL_HEADER_MISMATCH');
+      }
       return [];
     }
     throw error;
   }
+  const rows = content.split('\n').filter(Boolean);
+  const first = parseJsonRecord(rows[0]);
+  const hasHeader = first?.kind === 'StrictRunJournalHeaderV1';
+  if (expectedHeaderHash) {
+    if (
+      !hasHeader ||
+      first?.schemaVersion !== 1 ||
+      first.runId !== runId ||
+      first.headerHash !== expectedHeaderHash
+    ) {
+      throw new Error('STRICT_JOURNAL_HEADER_MISMATCH');
+    }
+    const { headerHash, ...semantic } = first;
+    if (headerHash !== hashCanonicalJson(semantic)) {
+      throw new Error('STRICT_JOURNAL_HEADER_MISMATCH');
+    }
+  } else if (hasHeader) {
+    throw new Error('STRICT_JOURNAL_HEADER_UNAUTHORIZED');
+  }
   const entries: StrictProductionJournalEntryV1[] = [];
-  for (const [index, row] of content.split('\n').filter(Boolean).entries()) {
+  for (const [index, row] of rows.slice(hasHeader ? 1 : 0).entries()) {
     let parsed: StrictProductionJournalEntryV1;
     try {
       parsed = JSON.parse(row) as StrictProductionJournalEntryV1;
@@ -299,6 +340,20 @@ async function readAndVerifyJournal(
     entries.push(Object.freeze(parsed));
   }
   return entries;
+}
+
+function parseJsonRecord(row: string | undefined): Record<string, unknown> | null {
+  if (!row) {
+    return null;
+  }
+  try {
+    const value: unknown = JSON.parse(row);
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function assertStateTransition(

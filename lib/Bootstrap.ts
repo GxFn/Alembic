@@ -10,6 +10,14 @@ import AuditLogger from './infrastructure/audit/AuditLogger.js';
 import AuditStore from './infrastructure/audit/AuditStore.js';
 import ConfigLoader from './infrastructure/config/AppConfigLoader.js';
 import { resolveAlembicWorkspace } from './project-scope/ProjectScopeRegistry.js';
+import {
+  dispatchStrictExternalSetupStartup,
+  executeStrictExternalSetupReset,
+  prepareStrictExternalSetupFromEnvironment,
+  recoverStrictExternalSetup,
+  releaseStrictExternalSetupSession,
+  type StrictExternalSetupSession,
+} from './recipe-pipeline/generate/strict/StrictExternalSetupRecovery.js';
 import { SkillHooks } from './service/skills/SkillHooks.js';
 import { PACKAGE_ROOT } from './shared/package-assets.js';
 
@@ -32,6 +40,7 @@ interface AppRuntimeComponents {
   gateway?: InstanceType<typeof Gateway>;
   skillHooks?: InstanceType<typeof SkillHooks>;
   workspaceResolver?: WorkspaceResolver;
+  strictExternalSetup?: StrictExternalSetupSession;
   [key: string]: unknown;
 }
 
@@ -98,6 +107,11 @@ export class AppRuntime {
       // 0.8 创建 WorkspaceResolver（Ghost 模式感知的路径解析器）
       this.initializeWorkspaceResolver();
 
+      // 0.9 严格生产的外部 setup authority 必须先于任何目标根日志/数据库写入。
+      if (!(await this.initializeStrictExternalSetup())) {
+        return this.components;
+      }
+
       // 1. 加载配置
       await this.loadConfig();
 
@@ -125,6 +139,13 @@ export class AppRuntime {
       return this.components;
     } catch (error: unknown) {
       console.error('Failed to initialize Alembic:', error);
+      const recoveryFailure = await this.recoverStrictExternalSetupAfterFailure();
+      if (recoveryFailure) {
+        throw new AggregateError(
+          [error, recoveryFailure],
+          'STRICT_SETUP_INITIALIZATION_RECOVERY_FAILED'
+        );
+      }
       throw error;
     }
   }
@@ -168,8 +189,14 @@ export class AppRuntime {
     >[0];
     const db = new DatabaseConnection(dbConfig, this.components.workspaceResolver);
     await db.connect();
-    await db.runMigrations();
     this.components.db = db;
+    if (this.components.strictExternalSetup) {
+      await executeStrictExternalSetupReset({
+        database: db,
+        session: this.components.strictExternalSetup,
+      });
+    }
+    await db.runMigrations();
     this.#requireComponent('logger').info('Database connected and migrated');
   }
 
@@ -227,6 +254,46 @@ export class AppRuntime {
     }
   }
 
+  async initializeStrictExternalSetup() {
+    const resolver = this.components.workspaceResolver;
+    if (!resolver) {
+      return true;
+    }
+    const session = await prepareStrictExternalSetupFromEnvironment({
+      dataRoot: resolver.dataRoot,
+      projectRoot: resolver.projectRoot,
+    });
+    if (!session) {
+      return true;
+    }
+    this.components.strictExternalSetup = session;
+    const startup = await dispatchStrictExternalSetupStartup(session);
+    this.components.strictExternalBootstrapReceipt = startup.receipt;
+    if (!startup.startRuntime) {
+      delete this.components.strictExternalSetup;
+    }
+    return startup.startRuntime;
+  }
+
+  async recoverStrictExternalSetupAfterFailure(): Promise<unknown | null> {
+    const session = this.components.strictExternalSetup;
+    if (!session || session.action !== 'execute') {
+      return null;
+    }
+    try {
+      this.components.db?.close();
+    } catch {
+      // Recovery readback below remains authoritative.
+    }
+    try {
+      await recoverStrictExternalSetup(session);
+      await releaseStrictExternalSetupSession();
+      return null;
+    } catch (error: unknown) {
+      return error;
+    }
+  }
+
   /** 关闭应用程序 */
   async shutdown() {
     this.components.logger?.info('Alembic - Shutting down...');
@@ -244,6 +311,8 @@ export class AppRuntime {
       }
       this.components.db.close();
     }
+
+    await releaseStrictExternalSetupSession();
 
     this.components.logger?.info('Alembic - Shutdown complete');
   }

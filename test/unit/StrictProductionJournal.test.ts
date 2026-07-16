@@ -1,7 +1,9 @@
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { afterEach, describe, expect, it } from 'vitest';
+import { assertStrictPublicRouteResumeCompatibility } from '../../lib/recipe-pipeline/generate/strict/StrictColdStartOrchestrator.js';
 import {
   STRICT_PRODUCTION_STATES_V1,
   StrictProductionJournal,
@@ -27,6 +29,30 @@ describe('StrictProductionJournal', () => {
       'FINALIZED',
     ]);
     expect(STRICT_PRODUCTION_STATES_V1).not.toContain('CANDIDATE_ORACLE_PASSED');
+  });
+
+  it('accepts either the old expected route or prepared bytes only in the PREPARED crash window', () => {
+    expect(() =>
+      assertStrictPublicRouteResumeCompatibility({
+        exactExpectedRouteObserved: true,
+        exactPreparedRouteObserved: false,
+        resumePoint: 'PUBLIC_CAS_PREPARED',
+      })
+    ).not.toThrow();
+    expect(() =>
+      assertStrictPublicRouteResumeCompatibility({
+        exactExpectedRouteObserved: false,
+        exactPreparedRouteObserved: true,
+        resumePoint: 'PUBLIC_CAS_PREPARED',
+      })
+    ).not.toThrow();
+    expect(() =>
+      assertStrictPublicRouteResumeCompatibility({
+        exactExpectedRouteObserved: true,
+        exactPreparedRouteObserved: false,
+        resumePoint: 'PUBLIC_CAS_COMMITTED',
+      })
+    ).toThrow('STRICT_PUBLIC_ROUTE_COMMIT_READBACK_MISSING');
   });
 
   it('rehydrates the exact durable substate with a verified append-only hash chain', async () => {
@@ -157,6 +183,51 @@ describe('StrictProductionJournal', () => {
         runId: 'run-d',
       })
     ).rejects.toThrow('STRICT_JOURNAL_OWNER_ACTIVE');
+  });
+
+  it('binds an external run header without counting it as a state row', async () => {
+    const root = await temporaryRoot();
+    const semantic = {
+      schemaVersion: 1,
+      kind: 'StrictRunJournalHeaderV1',
+      runId: 'run-external',
+      scenario: 'pristine',
+      setupAuthorityHash: sha('authority'),
+    };
+    const headerHash = hashCanonicalJson(semantic);
+    await fsp.writeFile(
+      path.join(root, 'strict-production.journal.jsonl'),
+      `${JSON.stringify({ ...semantic, headerHash })}\n`
+    );
+
+    const journal = await StrictProductionJournal.open({
+      expectedHeaderHash: headerHash,
+      operationRoot: root,
+      ownerId: 'daemon:external',
+      runId: 'run-external',
+    });
+    expect(journal.entries).toHaveLength(0);
+    await journal.append('PC_F_ACCEPTED', { receiptHash: sha('pcf') });
+    await journal.close();
+
+    await expect(
+      StrictProductionJournal.open({
+        expectedHeaderHash: sha('wrong-header'),
+        operationRoot: root,
+        ownerId: 'daemon:external',
+        runId: 'run-external',
+      })
+    ).rejects.toThrow('STRICT_JOURNAL_HEADER_MISMATCH');
+
+    await fsp.rm(path.join(root, 'strict-production.journal.jsonl'));
+    await expect(
+      StrictProductionJournal.open({
+        expectedHeaderHash: headerHash,
+        operationRoot: root,
+        ownerId: 'daemon:external',
+        runId: 'run-external',
+      })
+    ).rejects.toThrow('STRICT_JOURNAL_HEADER_MISMATCH');
   });
 });
 

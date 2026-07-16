@@ -57,6 +57,21 @@ const BootstrapJobBody = z.object({
         .string()
         .regex(/^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,255}$/u)
         .optional(),
+      setupAuthority: z
+        .object({
+          schemaVersion: z.literal(1),
+          action: z.enum(['execute', 'recover', 'complete']),
+          scenario: z.enum(['pristine', 'rebuild']),
+          snapshotRootRef: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9:._/-]{0,511}$/u),
+          operationLockRootRef: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9:._/-]{0,511}$/u),
+          evidenceRootRef: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9:._/-]{0,511}$/u),
+          plannedAbsentPathReceiptHash: z.string().regex(/^sha256:[a-f0-9]{64}$/u),
+          preResetObservationRef: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9:._/-]{0,511}$/u),
+          restorePolicyRef: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9:._/-]{0,511}$/u),
+          pathPlanHash: z.string().regex(/^sha256:[a-f0-9]{64}$/u),
+        })
+        .strict()
+        .optional(),
     })
     .strict()
     .optional(),

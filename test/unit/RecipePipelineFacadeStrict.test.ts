@@ -63,6 +63,85 @@ describe('RecipePipelineFacade strict cold start', () => {
     expect(runGeneratePlanGate).not.toHaveBeenCalled();
     expect(runGenerateWorkflow).not.toHaveBeenCalled();
   });
+
+  it('passes one versioned external setup authority through the real facade boundary', async () => {
+    vi.mocked(runGenerateWorkflow).mockResolvedValue({
+      data: { mode: 'strict-production-recovery', status: 'RECOVERED' },
+    });
+    const setupAuthority = {
+      schemaVersion: 1 as const,
+      action: 'recover' as const,
+      scenario: 'rebuild' as const,
+      snapshotRootRef: 'ENV.TEST_MR_ALEMBIC_REBUILD.snapshotRootRef',
+      operationLockRootRef: 'ENV.TEST_MR_ALEMBIC_REBUILD.operationLockRootRef',
+      evidenceRootRef: 'ENV.TEST_MR_ALEMBIC_REBUILD.evidenceRootRef',
+      plannedAbsentPathReceiptHash: sha('planned-paths'),
+      preResetObservationRef: 'OBSERVED_MR_PRE_RESET',
+      restorePolicyRef: 'AUTH_MR_REBUILD_PRE_RESET',
+      pathPlanHash: sha('path-plan'),
+    };
+
+    await executeRecipePipelineJob({
+      args: {
+        strictProduction: {
+          schemaVersion: 1,
+          authorizationReceiptHash: sha('authorization'),
+          authorizationReceiptPath: 'strict-setup-authority.json',
+          runId: 'run-a',
+          setupAuthority,
+        },
+      },
+      container: {} as never,
+      jobId: 'job-recovery',
+      kind: 'bootstrap',
+      logger: logger(),
+      source: 'api',
+    });
+
+    expect(runGenerateWorkflow).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        strictProduction: expect.objectContaining({
+          ownerId: 'daemon-job:job-recovery',
+          setupAuthority,
+        }),
+      }),
+      { mode: 'full' }
+    );
+  });
+
+  it('rejects raw path overrides and unknown setup authority keys', async () => {
+    await expect(
+      executeRecipePipelineJob({
+        args: {
+          strictProduction: {
+            schemaVersion: 1,
+            authorizationReceiptHash: sha('authorization'),
+            authorizationReceiptPath: 'strict-setup-authority.json',
+            runId: 'run-a',
+            setupAuthority: {
+              schemaVersion: 1,
+              action: 'execute',
+              scenario: 'pristine',
+              snapshotRootRef: 'NOT_APPLICABLE_PHYSICAL_ABSENCE',
+              operationLockRootRef: 'ENV.TEST_MR_ALEMBIC_PRISTINE.operationLockRootRef',
+              evidenceRootRef: 'ENV.TEST_MR_ALEMBIC_PRISTINE.evidenceRootRef',
+              plannedAbsentPathReceiptHash: sha('planned-paths'),
+              preResetObservationRef: 'NOT_APPLICABLE_PHYSICAL_ABSENCE',
+              restorePolicyRef: 'AUTH_MR_PRISTINE_ALLOCATION',
+              pathPlanHash: sha('path-plan'),
+              dataRoot: '/caller/override/is/forbidden',
+            },
+          },
+        },
+        container: {} as never,
+        jobId: 'job-invalid',
+        kind: 'bootstrap',
+        logger: logger(),
+        source: 'api',
+      })
+    ).rejects.toThrow('STRICT_PRODUCTION_REQUEST_INVALID');
+  });
 });
 
 function logger() {

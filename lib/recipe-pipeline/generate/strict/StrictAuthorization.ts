@@ -6,6 +6,12 @@ import type {
   StrictColdStartConfigProjectionInputV1,
 } from '@alembic/core/plans';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
+import {
+  assertStrictSetupRequestBinding,
+  getStrictExternalSetupSession,
+  persistStrictExternalAuthorizationLoadReceipt,
+  prepareStrictExternalSetupFromEnvironment,
+} from './StrictExternalSetupRecovery.js';
 import type { StrictProductionRuntimeRequestV1 } from './StrictProductionContracts.js';
 
 export const STRICT_PUBLICATION_ROOT_RELATIVE_PATH = '.asd/context/recipe-publications';
@@ -58,6 +64,9 @@ export async function loadStrictProductionAuthorization(input: {
   readonly projectRoot: string;
   readonly request: StrictProductionRuntimeRequestV1;
 }): Promise<StrictProductionAuthorizationReceiptV1> {
+  if (input.request.setupAuthority) {
+    return await loadExternalStrictProductionAuthorization(input);
+  }
   const receiptPath = confinedPath(input.dataRoot, input.request.authorizationReceiptPath);
   await assertNoSymlinkTraversal(input.dataRoot, receiptPath);
   const stat = await fsp.lstat(receiptPath);
@@ -119,6 +128,44 @@ export async function loadStrictProductionAuthorization(input: {
     throw new Error('STRICT_AUTHORIZATION_ROOT_OVERLAP');
   }
   return Object.freeze(receipt);
+}
+
+async function loadExternalStrictProductionAuthorization(input: {
+  readonly dataRoot: string;
+  readonly projectRoot: string;
+  readonly request: StrictProductionRuntimeRequestV1;
+}): Promise<StrictProductionAuthorizationReceiptV1> {
+  const session =
+    getStrictExternalSetupSession() ??
+    (await prepareStrictExternalSetupFromEnvironment({
+      dataRoot: input.dataRoot,
+      projectRoot: input.projectRoot,
+    }));
+  if (!session) {
+    throw new Error('STRICT_SETUP_AUTHORITY_REQUIRED');
+  }
+  assertStrictSetupRequestBinding({ request: input.request, session });
+  const authorization = Object.freeze({
+    ...session.authority.authorization,
+    schemaVersion: 1 as const,
+    runId: input.request.runId,
+    projectRoot: path.resolve(input.projectRoot),
+    dataRoot: path.resolve(input.dataRoot),
+    operationRoot: session.operationRoot,
+    authorizationHash: input.request.authorizationReceiptHash,
+  }) as StrictProductionAuthorizationReceiptV1;
+  assertReceiptShape(authorization as unknown as Record<string, unknown>);
+  if (
+    authorization.privateCorpus.acceptedMigrationBundleSemanticHash !==
+    hashCanonicalJson(readAlembicMigrationBundleManifest())
+  ) {
+    throw new Error('STRICT_AUTHORIZATION_MIGRATION_BUNDLE_MISMATCH');
+  }
+  await persistStrictExternalAuthorizationLoadReceipt({
+    authorizationHash: input.request.authorizationReceiptHash,
+    session,
+  });
+  return authorization;
 }
 
 export async function assertNoSymlinkTraversal(dataRoot: string, target: string): Promise<void> {
