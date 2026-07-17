@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { readAlembicMigrationBundleManifest } from '@alembic/core/database';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
@@ -26,6 +27,7 @@ import {
   releaseStrictExternalSetupSession,
 } from '../../lib/recipe-pipeline/generate/strict/StrictExternalSetupRecovery.js';
 import {
+  appendStrictSetupJournalEvent,
   STRICT_PRODUCTION_STATES_V1,
   StrictProductionJournal,
 } from '../../lib/recipe-pipeline/generate/strict/StrictProductionJournal.js';
@@ -38,6 +40,60 @@ const ORIGINAL_ACTION_PATH = process.env.ALEMBIC_STRICT_SETUP_ACTION_PATH;
 const ORIGINAL_DAEMON_STATE_PATH = process.env.ALEMBIC_DAEMON_STATE_PATH;
 const ORIGINAL_PROJECT_DIR = process.env.ALEMBIC_PROJECT_DIR;
 const ORIGINAL_RUNTIME_MANIFEST_PATH = process.env.ALEMBIC_RUNTIME_ARTIFACT_MANIFEST_PATH;
+const BUILT_STRICT_STAGE_SCRIPT = `
+import fsp from 'node:fs/promises';
+import Database from 'better-sqlite3';
+const runtime = await import(process.env.ALEMBIC_TEST_STRICT_MODULE_URL);
+const input = JSON.parse(process.env.ALEMBIC_TEST_STRICT_STAGE_INPUT);
+const originalFetch = globalThis.fetch;
+if (input.fetchGate === 'before-request') {
+  globalThis.fetch = async () => {
+    await fsp.writeFile(input.gatePath, 'before-request');
+    await new Promise(() => {});
+  };
+} else if (input.fetchGate === 'after-response') {
+  globalThis.fetch = async (...args) => {
+    const response = await originalFetch(...args);
+    process.kill(input.pausePid, 'SIGSTOP');
+    await fsp.writeFile(input.gatePath, 'after-response');
+    while (true) {
+      try {
+        await fsp.stat(input.releasePath);
+        break;
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    return response;
+  };
+}
+const session = await runtime.prepareStrictExternalSetupFromEnvironment({
+  dataRoot: input.dataRoot,
+  projectRoot: input.projectRoot,
+});
+if (!session) throw new Error('STRICT_STAGE_SESSION_MISSING');
+try {
+  let result;
+  if (input.operation === 'reset') {
+    const initialized = await runtime.initializeStrictExternalSetupTarget(session);
+    const database = new Database(':memory:');
+    try {
+      result = await runtime.executeStrictExternalSetupReset({ database, session });
+    } finally {
+      database.close();
+    }
+    result = { initialized, result };
+  } else if (input.operation === 'recover') {
+    result = await runtime.recoverStrictExternalSetup(session);
+  } else {
+    result = await runtime.initializeStrictExternalSetupTarget(session);
+  }
+  process.stdout.write(JSON.stringify(result));
+} finally {
+  await runtime.releaseStrictExternalSetupSession();
+}
+`;
 
 afterEach(async () => {
   restoreEnvironment('ALEMBIC_HOME', ORIGINAL_ALEMBIC_HOME);
@@ -113,6 +169,34 @@ describe('strict external setup and recovery authority', () => {
     });
     expect(journalRows[0]).not.toHaveProperty('planHash');
     expect(journalRows[0]).not.toHaveProperty('manifestHash');
+  });
+
+  it('fresh-process stage matrix reclaims a dead pre-header lease before target mutation', async () => {
+    const fixture = await rebuildAuthorityFixture();
+    await fsp.mkdir(fixture.operationLockRoot, { recursive: true });
+    await writeLease(fixture, 2_147_483_647);
+    await expect(
+      fsp.stat(path.join(fixture.operationRoot, 'strict-production.journal.jsonl'))
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+
+    const result = await runBuiltStrictStage({ fixture });
+    const journalRows = (
+      await fsp.readFile(
+        path.join(fixture.operationRoot, 'strict-production.journal.jsonl'),
+        'utf8'
+      )
+    )
+      .trim()
+      .split('\n')
+      .map((row) => JSON.parse(row) as Record<string, unknown>);
+
+    expect(journalRows.filter((row) => row.kind === 'StrictRunJournalHeaderV2')).toHaveLength(1);
+    expect(journalRows[0]).toMatchObject({
+      kind: 'StrictRunJournalHeaderV2',
+      runId: fixture.runId,
+      setupAuthorityHash: fixture.authorityHash,
+    });
+    expect(result.sourceTreeHash).toBe(result.snapshotTreeHash);
   });
 
   it('loads only the hash-bound external authorization through the exact request contract', async () => {
@@ -286,6 +370,258 @@ describe('strict external setup and recovery authority', () => {
     ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('fresh-process resume backfills QUIESCED_OBSERVED from the durable receipt before snapshot', async () => {
+    const fixture = await rebuildAuthorityFixture();
+    const first = await prepareStrictExternalSetupFromEnvironment({
+      dataRoot: fixture.dataRoot,
+      projectRoot: fixture.projectRoot,
+    });
+    if (!first) {
+      throw new Error('fixture session missing');
+    }
+    await initializeStrictExternalSetupTarget(first);
+    await releaseStrictExternalSetupSession();
+
+    await truncateStrictSetupJournalBeforeState(fixture.operationRoot, 'QUIESCED_OBSERVED');
+    await Promise.all([
+      fsp.rm(path.join(fixture.operationRoot, 'strict-external-setup-state.json'), {
+        force: true,
+      }),
+      fsp.rm(fixture.snapshotRoot, { force: true, recursive: true }),
+    ]);
+
+    const setup = await runBuiltStrictStage({ fixture });
+    const states = await readStrictSetupJournalStates(fixture.operationRoot);
+
+    expect(states).toEqual([
+      'PRE_QUIESCE_INVENTORY_VERIFIED',
+      'QUIESCE_NOT_RUNNING',
+      'QUIESCED_OBSERVED',
+      'SNAPSHOT_COPY_STARTED',
+      'SNAPSHOT_VERIFIED',
+    ]);
+    expect(setup.sourceTreeHash).toBe(setup.snapshotTreeHash);
+  });
+
+  it('fresh-process resume completes exact stale control removal persisted after not-running progress', async () => {
+    const fixture = await rebuildAuthorityFixture();
+    const statePath = path.join(fixture.dataRoot, '.asd/daemon.json');
+    const pidPath = path.join(fixture.dataRoot, '.asd/daemon.pid');
+    const staleState = '{"token":"stale-control-must-not-enter-snapshot"}\n';
+    const stalePid = '2147483647\n';
+    await Promise.all([fsp.writeFile(statePath, staleState), fsp.writeFile(pidPath, stalePid)]);
+
+    const first = await prepareStrictExternalSetupFromEnvironment({
+      dataRoot: fixture.dataRoot,
+      projectRoot: fixture.projectRoot,
+    });
+    if (!first) {
+      throw new Error('fixture session missing');
+    }
+    await initializeStrictExternalSetupTarget(first);
+    await releaseStrictExternalSetupSession();
+
+    await truncateStrictSetupJournalBeforeState(
+      fixture.operationRoot,
+      'PRE_QUIESCE_INVENTORY_VERIFIED'
+    );
+    await Promise.all([
+      fsp.rm(path.join(fixture.operationRoot, 'quiesced-pre-reset-observation-receipt.json'), {
+        force: true,
+      }),
+      fsp.rm(path.join(fixture.operationRoot, 'strict-external-setup-state.json'), {
+        force: true,
+      }),
+      fsp.rm(fixture.snapshotRoot, { force: true, recursive: true }),
+    ]);
+    await Promise.all([fsp.writeFile(statePath, staleState), fsp.writeFile(pidPath, stalePid)]);
+
+    await runBuiltStrictStage({ fixture });
+
+    await expect(fsp.stat(statePath)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(fsp.stat(pidPath)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      fsp.stat(path.join(fixture.snapshotRoot, 'whole-root/.asd/daemon.json'))
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      fsp.stat(path.join(fixture.snapshotRoot, 'whole-root/.asd/daemon.pid'))
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('fresh-process resume still fails closed on an unknown post-progress root delta', async () => {
+    const fixture = await rebuildAuthorityFixture();
+    const statePath = path.join(fixture.dataRoot, '.asd/daemon.json');
+    const pidPath = path.join(fixture.dataRoot, '.asd/daemon.pid');
+    const staleState = '{"token":"stale-control"}\n';
+    const stalePid = '2147483647\n';
+    await Promise.all([fsp.writeFile(statePath, staleState), fsp.writeFile(pidPath, stalePid)]);
+    const first = await prepareStrictExternalSetupFromEnvironment({
+      dataRoot: fixture.dataRoot,
+      projectRoot: fixture.projectRoot,
+    });
+    if (!first) {
+      throw new Error('fixture session missing');
+    }
+    await initializeStrictExternalSetupTarget(first);
+    await releaseStrictExternalSetupSession();
+
+    await truncateStrictSetupJournalBeforeState(
+      fixture.operationRoot,
+      'PRE_QUIESCE_INVENTORY_VERIFIED'
+    );
+    await Promise.all([
+      fsp.rm(path.join(fixture.operationRoot, 'quiesced-pre-reset-observation-receipt.json'), {
+        force: true,
+      }),
+      fsp.rm(path.join(fixture.operationRoot, 'strict-external-setup-state.json'), {
+        force: true,
+      }),
+      fsp.rm(fixture.snapshotRoot, { force: true, recursive: true }),
+    ]);
+    await Promise.all([
+      fsp.writeFile(statePath, staleState),
+      fsp.writeFile(pidPath, stalePid),
+      fsp.writeFile(path.join(fixture.dataRoot, 'unknown-after-progress.txt'), 'unauthorized'),
+    ]);
+
+    await expect(runBuiltStrictStage({ fixture })).rejects.toThrow(
+      'STRICT_QUIESCE_UNKNOWN_ROOT_DELTA:unknown-after-progress.txt'
+    );
+    await expect(
+      fsp.stat(path.join(fixture.operationRoot, 'quiesced-pre-reset-observation-receipt.json'))
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(fsp.stat(path.join(fixture.snapshotRoot, 'whole-root'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it.each([
+    'observed-before-copy',
+    'snapshot-before-probe',
+    'probe-before-verified-event',
+    'verified-event-before-state',
+  ] as const)('fresh-process stage matrix resumes snapshot/probe prefix: %s', async (stage) => {
+    const fixture = await rebuildAuthorityFixture();
+    const first = await prepareStrictExternalSetupFromEnvironment({
+      dataRoot: fixture.dataRoot,
+      projectRoot: fixture.projectRoot,
+    });
+    if (!first) {
+      throw new Error('fixture session missing');
+    }
+    const expected = await initializeStrictExternalSetupTarget(first);
+    await releaseStrictExternalSetupSession();
+    await fsp.rm(path.join(fixture.operationRoot, 'strict-external-setup-state.json'), {
+      force: true,
+    });
+
+    if (stage === 'observed-before-copy') {
+      await truncateStrictSetupJournalBeforeState(fixture.operationRoot, 'SNAPSHOT_COPY_STARTED');
+      await fsp.rm(fixture.snapshotRoot, { force: true, recursive: true });
+    } else if (stage === 'snapshot-before-probe') {
+      await truncateStrictSetupJournalBeforeState(fixture.operationRoot, 'SNAPSHOT_VERIFIED');
+      await fsp.rm(path.join(fixture.snapshotRoot, 'restore-probe'), {
+        force: true,
+        recursive: true,
+      });
+    } else if (stage === 'probe-before-verified-event') {
+      await truncateStrictSetupJournalBeforeState(fixture.operationRoot, 'SNAPSHOT_VERIFIED');
+    }
+
+    const resumed = await runBuiltStrictStage({ fixture });
+    const states = await readStrictSetupJournalStates(fixture.operationRoot);
+    expect(resumed).toMatchObject({
+      sourceTreeHash: expected.sourceTreeHash,
+      snapshotTreeHash: expected.snapshotTreeHash,
+      restoreProbeTreeHash: expected.restoreProbeTreeHash,
+    });
+    for (const state of ['QUIESCED_OBSERVED', 'SNAPSHOT_COPY_STARTED', 'SNAPSHOT_VERIFIED']) {
+      expect(states.filter((candidate) => candidate === state)).toHaveLength(1);
+    }
+  });
+
+  it.each([
+    'initialized-before-reset',
+    'reset-started-before-mutation',
+    'reset-mutation-before-receipt',
+    'reset-receipt-before-blank-event',
+  ] as const)('fresh-process stage matrix resumes reset prefix: %s', async (stage) => {
+    const fixture = await rebuildAuthorityFixture();
+    const first = await prepareStrictExternalSetupFromEnvironment({
+      dataRoot: fixture.dataRoot,
+      projectRoot: fixture.projectRoot,
+    });
+    if (!first) {
+      throw new Error('fixture session missing');
+    }
+    const initialized = await initializeStrictExternalSetupTarget(first);
+    const statePath = path.join(fixture.operationRoot, 'strict-external-setup-state.json');
+    const initializedState = await fsp.readFile(statePath);
+
+    if (stage === 'reset-started-before-mutation') {
+      await appendStrictSetupJournalEvent({
+        expectedHeaderHash: first.journalHeaderHash,
+        operationRoot: first.operationRoot,
+        payload: { preResetProtectedHash: initialized.preResetProtectedHash },
+        runId: fixture.runId,
+        state: 'RESET_STARTED',
+      });
+    } else if (
+      stage === 'reset-mutation-before-receipt' ||
+      stage === 'reset-receipt-before-blank-event'
+    ) {
+      const database = new Database(':memory:');
+      try {
+        await executeStrictExternalSetupReset({ database, session: first });
+      } finally {
+        database.close();
+      }
+      await truncateStrictSetupJournalBeforeState(fixture.operationRoot, 'BLANK');
+      if (stage === 'reset-mutation-before-receipt') {
+        await fsp.writeFile(statePath, initializedState);
+      }
+    }
+    await releaseStrictExternalSetupSession();
+
+    const childResult = await runBuiltStrictStage({ fixture, operation: 'reset' });
+    const resetResult = childResult.result as Record<string, unknown>;
+    const resetReceipt = resetResult.resetReceipt as Record<string, unknown>;
+    const states = await readStrictSetupJournalStates(fixture.operationRoot);
+    expect(resetReceipt).toMatchObject({ blank: true, clearedPaths: ['candidate-cache'] });
+    expect(states.filter((candidate) => candidate === 'RESET_STARTED')).toHaveLength(1);
+    expect(states.filter((candidate) => candidate === 'BLANK')).toHaveLength(1);
+    await expect(fsp.stat(path.join(fixture.dataRoot, 'candidate-cache'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it('fresh-process reset resume rejects a non-authorized phase delta', async () => {
+    const fixture = await rebuildAuthorityFixture();
+    const first = await prepareStrictExternalSetupFromEnvironment({
+      dataRoot: fixture.dataRoot,
+      projectRoot: fixture.projectRoot,
+    });
+    if (!first) {
+      throw new Error('fixture session missing');
+    }
+    const initialized = await initializeStrictExternalSetupTarget(first);
+    await appendStrictSetupJournalEvent({
+      expectedHeaderHash: first.journalHeaderHash,
+      operationRoot: first.operationRoot,
+      payload: { preResetProtectedHash: initialized.preResetProtectedHash },
+      runId: fixture.runId,
+      state: 'RESET_STARTED',
+    });
+    await fsp.writeFile(path.join(fixture.dataRoot, 'unknown-reset-delta.txt'), 'unauthorized');
+    await releaseStrictExternalSetupSession();
+
+    await expect(runBuiltStrictStage({ fixture, operation: 'reset' })).rejects.toThrow(
+      'STRICT_SETUP_TARGET_PHASE_MISMATCH:unknown-reset-delta.txt'
+    );
+    const states = await readStrictSetupJournalStates(fixture.operationRoot);
+    expect(states).not.toContain('BLANK');
+  });
+
   it('fails before reset when frozen config or reader state drifts after the snapshot', async () => {
     const fixture = await rebuildAuthorityFixture();
     const session = await prepareStrictExternalSetupFromEnvironment({
@@ -397,6 +733,36 @@ describe('strict external setup and recovery authority', () => {
     });
   });
 
+  it('fresh-process stage matrix completes setup-state cleanup after a durable recovery receipt', async () => {
+    const fixture = await rebuildAuthorityFixture();
+    const first = await prepareStrictExternalSetupFromEnvironment({
+      dataRoot: fixture.dataRoot,
+      projectRoot: fixture.projectRoot,
+    });
+    if (!first) {
+      throw new Error('fixture session missing');
+    }
+    await initializeStrictExternalSetupTarget(first);
+    const statePath = path.join(fixture.operationRoot, 'strict-external-setup-state.json');
+    const stateBytes = await fsp.readFile(statePath);
+    const originalReceipt = await recoverStrictExternalSetup(first);
+    await fsp.writeFile(statePath, stateBytes);
+    await releaseStrictExternalSetupSession();
+    await configureActionReceipt(fixture.authorityRoot, {
+      action: 'recover',
+      authorityHash: fixture.authorityHash,
+      runId: fixture.runId,
+    });
+
+    const resumedReceipt = await runBuiltStrictStage({ fixture, operation: 'recover' });
+
+    expect(resumedReceipt.receiptHash).toBe(originalReceipt.receiptHash);
+    await expect(fsp.stat(statePath)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      fsp.stat(path.join(fixture.operationRoot, 'strict-external-recovery-transaction.json'))
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('fresh-process completion terminates the server startup boundary successfully', async () => {
     const fixture = await pristineAuthorityFixture();
     const session = await prepareStrictExternalSetupFromEnvironment({
@@ -444,6 +810,94 @@ describe('strict external setup and recovery authority', () => {
       )
     ).resolves.toBeDefined();
   });
+
+  it('fresh-process stage matrix replays the same request-unaccepted hash to the live daemon', async () => {
+    const fixture = await rebuildAuthorityFixture();
+    const oldDaemon = await startBuiltOldDaemon(fixture, 'request-unaccepted');
+    const gatePath = path.join(fixture.authorityRoot, 'request-unaccepted.gate');
+    const progressPath = path.join(fixture.operationRoot, 'strict-quiesce-progress.json');
+    const interrupted = spawnBuiltStrictStage({
+      fixture,
+      fetchGate: 'before-request',
+      gatePath,
+      extraEnvironment: {
+        ALEMBIC_STRICT_QUIESCE_STDIO_EVIDENCE: oldDaemon.stdioEvidence,
+      },
+    });
+    try {
+      await waitForPath(gatePath);
+      const before = await waitForJsonStage(progressPath, 'request-unaccepted');
+      const requestHash = (before.request as Record<string, unknown>).requestHash;
+      interrupted.kill('SIGKILL');
+      await waitForChildExit(interrupted);
+      expect(isPidAlive(oldDaemon.state.pid)).toBe(true);
+
+      await runBuiltStrictStage({ fixture });
+      await waitForProcessExit(oldDaemon.state.pid, 10_000);
+      const after = JSON.parse(await fsp.readFile(progressPath, 'utf8')) as Record<string, unknown>;
+      const receipt = JSON.parse(
+        await fsp.readFile(
+          path.join(fixture.operationRoot, 'quiesced-pre-reset-observation-receipt.json'),
+          'utf8'
+        )
+      ) as Record<string, unknown>;
+      expect((after.request as Record<string, unknown>).requestHash).toBe(requestHash);
+      expect(receipt.quiesceRequestHash).toBe(requestHash);
+      expect(after.stage).toBe('old-pid-exited-checkpoint-complete');
+    } finally {
+      interrupted.kill('SIGKILL');
+      await stopBuiltOldDaemon(oldDaemon.child);
+    }
+  }, 30_000);
+
+  it('fresh-process stage matrix resumes accepted-draining after the old daemon exits', async () => {
+    const fixture = await rebuildAuthorityFixture();
+    const oldDaemon = await startBuiltOldDaemon(fixture, 'accepted-draining');
+    const gatePath = path.join(fixture.authorityRoot, 'accepted-draining.gate');
+    const releasePath = path.join(fixture.authorityRoot, 'accepted-draining.release');
+    const progressPath = path.join(fixture.operationRoot, 'strict-quiesce-progress.json');
+    const interrupted = spawnBuiltStrictStage({
+      fixture,
+      fetchGate: 'after-response',
+      gatePath,
+      pausePid: oldDaemon.state.pid,
+      releasePath,
+      extraEnvironment: {
+        ALEMBIC_STRICT_QUIESCE_STDIO_EVIDENCE: oldDaemon.stdioEvidence,
+      },
+    });
+    let oldDaemonStopped = false;
+    try {
+      await waitForPath(gatePath);
+      oldDaemonStopped = true;
+      await fsp.writeFile(releasePath, 'continue');
+      const before = await waitForJsonStage(progressPath, 'accepted-draining');
+      const ackHash = (before.ack as Record<string, unknown>).ackHash;
+      interrupted.kill('SIGKILL');
+      await waitForChildExit(interrupted);
+      process.kill(oldDaemon.state.pid, 'SIGCONT');
+      oldDaemonStopped = false;
+      await waitForProcessExit(oldDaemon.state.pid, 10_000);
+
+      await runBuiltStrictStage({ fixture });
+      const after = JSON.parse(await fsp.readFile(progressPath, 'utf8')) as Record<string, unknown>;
+      const receipt = JSON.parse(
+        await fsp.readFile(
+          path.join(fixture.operationRoot, 'quiesced-pre-reset-observation-receipt.json'),
+          'utf8'
+        )
+      ) as Record<string, unknown>;
+      expect((after.ack as Record<string, unknown>).ackHash).toBe(ackHash);
+      expect(receipt.quiesceAcceptedAckHash).toBe(ackHash);
+      expect(after.stage).toBe('old-pid-exited-checkpoint-complete');
+    } finally {
+      interrupted.kill('SIGKILL');
+      if (oldDaemonStopped && isPidAlive(oldDaemon.state.pid)) {
+        process.kill(oldDaemon.state.pid, 'SIGCONT');
+      }
+      await stopBuiltOldDaemon(oldDaemon.child);
+    }
+  }, 30_000);
 
   it('built strict replacement quiesces a live writer and publishes a fresh daemon identity', async () => {
     const fixture = await rebuildAuthorityFixture();
@@ -984,6 +1438,7 @@ async function rebuildAuthorityFixture(options: { snapshotRelativePath?: string 
     authorityPath,
     dataRoot,
     evidenceRoot,
+    operationLockRoot,
     operationRoot: path.join(evidenceRoot, 'strict-run-journal', semantic.runId),
     projectRoot,
     runId: semantic.runId,
@@ -1022,6 +1477,122 @@ async function runBuiltServerEntrypoint(input: {
   return { stderr: result.stderr, stdout: result.stdout };
 }
 
+function builtStrictStageEnvironment(input: {
+  fixture: { dataRoot: string; projectRoot: string };
+  operation?: 'initialize' | 'recover' | 'reset';
+  fetchGate?: 'after-response' | 'before-request';
+  gatePath?: string;
+  pausePid?: number;
+  releasePath?: string;
+  extraEnvironment?: NodeJS.ProcessEnv;
+}): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    ...input.extraEnvironment,
+    ALEMBIC_TEST_STRICT_MODULE_URL: pathToFileURL(
+      path.join(
+        process.cwd(),
+        'dist/lib/recipe-pipeline/generate/strict/StrictExternalSetupRecovery.js'
+      )
+    ).href,
+    ALEMBIC_TEST_STRICT_STAGE_INPUT: JSON.stringify({
+      dataRoot: input.fixture.dataRoot,
+      projectRoot: input.fixture.projectRoot,
+      operation: input.operation ?? 'initialize',
+      fetchGate: input.fetchGate ?? null,
+      gatePath: input.gatePath ?? null,
+      pausePid: input.pausePid ?? null,
+      releasePath: input.releasePath ?? null,
+    }),
+    NODE_ENV: 'test',
+  };
+}
+
+async function runBuiltStrictStage(input: {
+  fixture: { dataRoot: string; projectRoot: string };
+  operation?: 'initialize' | 'recover' | 'reset';
+  extraEnvironment?: NodeJS.ProcessEnv;
+}): Promise<Record<string, unknown>> {
+  const result = await execFileAsync(
+    process.execPath,
+    ['--input-type=module', '--eval', BUILT_STRICT_STAGE_SCRIPT],
+    {
+      cwd: process.cwd(),
+      env: builtStrictStageEnvironment(input),
+      timeout: 15_000,
+    }
+  );
+  return JSON.parse(result.stdout) as Record<string, unknown>;
+}
+
+function spawnBuiltStrictStage(input: {
+  fixture: { dataRoot: string; projectRoot: string };
+  fetchGate?: 'after-response' | 'before-request';
+  gatePath?: string;
+  pausePid?: number;
+  releasePath?: string;
+  extraEnvironment?: NodeJS.ProcessEnv;
+}) {
+  return spawn(process.execPath, ['--input-type=module', '--eval', BUILT_STRICT_STAGE_SCRIPT], {
+    cwd: process.cwd(),
+    env: builtStrictStageEnvironment(input),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+async function waitForJsonStage(
+  filePath: string,
+  stage: string,
+  timeoutMs = 10_000
+): Promise<Record<string, unknown>> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const value = JSON.parse(await fsp.readFile(filePath, 'utf8')) as Record<string, unknown>;
+      if (value.stage === stage) {
+        return value;
+      }
+    } catch {
+      // Durable stage files appear atomically; absence is expected while the child advances.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error(`Timed out waiting for stage ${stage}: ${filePath}`);
+}
+
+async function waitForPath(filePath: string, timeoutMs = 10_000): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      await fsp.stat(filePath);
+      return;
+    } catch {
+      // The gate is created by the independent child at the requested fault boundary.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error(`Timed out waiting for path: ${filePath}`);
+}
+
+async function waitForChildExit(
+  child: ReturnType<typeof spawn>,
+  timeoutMs = 10_000
+): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error('Timed out waiting for child exit')),
+      timeoutMs
+    );
+    child.once('exit', () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+}
+
 async function configureBuiltProjectScope(
   fixture: {
     authorityRoot: string;
@@ -1046,6 +1617,73 @@ async function configureBuiltProjectScope(
     registryPath,
     `${JSON.stringify(createProjectScopeRegistryDocument([projectScope]), null, 2)}\n`
   );
+}
+
+async function startBuiltOldDaemon(
+  fixture: { authorityRoot: string; dataRoot: string; projectRoot: string },
+  label: string
+): Promise<{
+  child: ReturnType<typeof spawn>;
+  state: { databasePath: string; pid: number; token: string };
+  stdioEvidence: string;
+}> {
+  const alembicHome = path.join(fixture.authorityRoot, `${label}-daemon-home`);
+  await configureBuiltProjectScope(fixture, alembicHome);
+  const logPath = path.join(fixture.dataRoot, '.asd/daemon.log');
+  await fsp.mkdir(path.dirname(logPath), { recursive: true });
+  const logHandle = await fsp.open(logPath, 'a');
+  const child = spawn(process.execPath, [path.join(process.cwd(), 'dist/bin/daemon-server.js')], {
+    cwd: fixture.projectRoot,
+    env: {
+      ...process.env,
+      ALEMBIC_DAEMON_FILE_CHANGES: '0',
+      ALEMBIC_EVOLUTION_MAINTENANCE_SWEEP: '0',
+      ALEMBIC_HOME: alembicHome,
+      ALEMBIC_PROJECT_DIR: fixture.projectRoot,
+      ALEMBIC_QUIET: '1',
+      ALEMBIC_STRICT_SETUP_ACTION_PATH: '',
+      ALEMBIC_STRICT_SETUP_AUTHORITY_PATH: '',
+      NODE_ENV: 'test',
+    },
+    stdio: ['ignore', logHandle.fd, logHandle.fd],
+  });
+  await logHandle.close();
+  const state = await waitForDaemonState(
+    path.join(fixture.dataRoot, '.asd/daemon.json'),
+    child.pid ?? -1
+  );
+  await fsp.writeFile(path.join(fixture.dataRoot, '.asd/daemon.pid'), `${state.pid}\n`, {
+    mode: 0o600,
+  });
+  const stat = await fsp.stat(logPath);
+  const semantic = {
+    schemaVersion: 1 as const,
+    ownerPid: state.pid,
+    relativePathHash: sha256Text('.asd/daemon.log'),
+    inode: String(stat.ino),
+    initialSize: stat.size,
+  };
+  return {
+    child,
+    state,
+    stdioEvidence: JSON.stringify({
+      ...semantic,
+      evidenceHash: sha256Text(JSON.stringify(semantic)),
+    }),
+  };
+}
+
+async function stopBuiltOldDaemon(child: ReturnType<typeof spawn>): Promise<void> {
+  if (!child.pid || !isPidAlive(child.pid)) {
+    return;
+  }
+  child.kill('SIGTERM');
+  try {
+    await waitForProcessExit(child.pid, 5_000);
+  } catch {
+    child.kill('SIGKILL');
+    await waitForProcessExit(child.pid, 5_000);
+  }
 }
 
 async function waitForDaemonState(
@@ -1127,6 +1765,10 @@ function hashPath(value: string): string {
   return `sha256:${createHash('sha256').update(path.resolve(value)).digest('hex')}`;
 }
 
+function sha256Text(value: string): string {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`;
+}
+
 async function configureRuntimeArtifactManifest(root: string): Promise<void> {
   const manifestPath = path.join(root, 'runtime-artifact-manifest.json');
   await fsp.writeFile(manifestPath, '{}\n');
@@ -1154,6 +1796,34 @@ async function configureActionReceipt(
     `${JSON.stringify({ ...semantic, actionHash: hashCanonicalJson(semantic) })}\n`
   );
   process.env.ALEMBIC_STRICT_SETUP_ACTION_PATH = actionPath;
+}
+
+async function truncateStrictSetupJournalBeforeState(
+  operationRoot: string,
+  state: string
+): Promise<void> {
+  const journalPath = path.join(operationRoot, 'strict-production.journal.jsonl');
+  const rows = (await fsp.readFile(journalPath, 'utf8')).trim().split('\n');
+  const boundary = rows.findIndex((row) => {
+    const parsed = JSON.parse(row) as { state?: unknown };
+    return parsed.state === state;
+  });
+  if (boundary < 0) {
+    throw new Error(`fixture journal state missing: ${state}`);
+  }
+  await fsp.writeFile(journalPath, `${rows.slice(0, boundary).join('\n')}\n`);
+}
+
+async function readStrictSetupJournalStates(operationRoot: string): Promise<string[]> {
+  const rows = (
+    await fsp.readFile(path.join(operationRoot, 'strict-production.journal.jsonl'), 'utf8')
+  )
+    .trim()
+    .split('\n');
+  return rows
+    .map((row) => JSON.parse(row) as { state?: unknown; track?: unknown })
+    .filter((row) => row.track === 'setup' && typeof row.state === 'string')
+    .map((row) => String(row.state));
 }
 
 function sha(value: string): string {

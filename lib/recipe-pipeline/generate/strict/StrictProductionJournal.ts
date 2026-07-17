@@ -265,6 +265,19 @@ export async function readStrictProductionResumePoint(input: {
   return verified.entries.at(-1)?.state ?? null;
 }
 
+export async function readStrictSetupResumePoint(input: {
+  readonly expectedHeaderHash: string;
+  readonly operationRoot: string;
+  readonly runId: string;
+}): Promise<StrictSetupStateV2 | null> {
+  const verified = await readAndVerifyJournal(
+    path.join(input.operationRoot, JOURNAL_FILE),
+    input.runId,
+    input.expectedHeaderHash
+  );
+  return verified.setupEvents.at(-1)?.state ?? null;
+}
+
 export async function appendStrictSetupJournalEvent(input: {
   readonly expectedHeaderHash: string;
   readonly operationRoot: string;

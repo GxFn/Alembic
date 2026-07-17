@@ -16,6 +16,7 @@ import {
   appendStrictRecoveryJournalEvent,
   appendStrictSetupJournalEvent,
   readStrictProductionResumePoint,
+  readStrictSetupResumePoint,
   type StrictRecoveryStateV2,
   type StrictSetupStateV2,
 } from './StrictProductionJournal.js';
@@ -473,6 +474,9 @@ export async function ensureStrictQuiescedObservation(
   const existing = await readQuiescedObservationReceipt(session, true);
   if (existing) {
     await verifyQuiescedObservationCurrentRoot(session, existing);
+    // receipt 与 journal 是两个独立 fsync 边界；崩溃恢复必须先按原 receipt 补齐事件，
+    // 否则后续 snapshot 会越过 QUIESCED_OBSERVED 状态。
+    await recordQuiescedObservationEvent(session, existing);
     return existing;
   }
   if (!(await exists(session.dataRoot))) {
@@ -537,9 +541,16 @@ export async function ensureStrictQuiescedObservation(
         ack: null,
         stdioLogEvidence: null,
       });
-      await Promise.all([fsp.rm(statePath, { force: true }), fsp.rm(pidPath, { force: true })]);
-      await syncDirectory(path.dirname(statePath));
     }
+  }
+
+  if (
+    progress.stage === 'old-pid-exited-checkpoint-complete' &&
+    progress.disposition === 'not-running'
+  ) {
+    // progress 先于控制文件删除持久化；无论首次执行还是 fresh-process resume，
+    // 都必须按 pre-inventory 绑定幂等完成删除、目录 fsync 与缺失复验。
+    await completeNotRunningControlRemoval(session, progress, { pidPath, statePath });
   }
 
   await recordSetupEvent(session, 'PRE_QUIESCE_INVENTORY_VERIFIED', {
@@ -608,7 +619,7 @@ export async function ensureStrictQuiescedObservation(
       throw new Error('STRICT_QUIESCE_ACK_INVALID');
     }
     progress = await writeStrictQuiesceProgress(session, {
-      ...progress,
+      ...withoutQuiesceProgressHash(progress),
       stage: 'accepted-draining',
       ack,
     });
@@ -624,7 +635,7 @@ export async function ensureStrictQuiescedObservation(
       throw new Error('STRICT_QUIESCE_CHECKPOINT_OR_CLOSE_FAILED');
     }
     progress = await writeStrictQuiesceProgress(session, {
-      ...progress,
+      ...withoutQuiesceProgressHash(progress),
       stage: 'old-pid-exited-checkpoint-complete',
     });
     await recordSetupEvent(session, 'QUIESCE_DRAINED', {
@@ -653,7 +664,12 @@ export async function initializeStrictExternalSetupTarget(
 ): Promise<StrictExternalSetupStateV1> {
   const existing = await readSetupState(session);
   if (existing) {
-    await verifySetupState(session, existing, true);
+    const setupResumePoint = await readStrictSetupResumePoint({
+      expectedHeaderHash: session.journalHeaderHash,
+      operationRoot: session.operationRoot,
+      runId: session.authority.runId,
+    });
+    await verifySetupState(session, existing, true, setupResumePoint === 'RESET_STARTED');
     if (session.scenario === 'pristine') {
       await recordSetupEvent(session, 'BLANK', {
         setupStateHash: existing.stateHash,
@@ -809,6 +825,7 @@ export async function recoverStrictExternalSetup(
   const existingReceipt = await readExistingRecoveryReceipt(session);
   if (existingReceipt) {
     await verifyExistingRecoveryOutcome(session, existingReceipt, quiescedObservation);
+    await removeSetupStateAfterRecoveryReceipt(session);
     return existingReceipt;
   }
   await assertRecoveryPolicy(session);
@@ -879,8 +896,19 @@ export async function recoverStrictExternalSetup(
     receiptHash: hashCanonicalJson(semantic),
   });
   await writeDurableJson(path.join(session.operationRoot, 'strict-recovery-receipt.json'), receipt);
-  await fsp.rm(path.join(session.operationRoot, SETUP_STATE_FILE), { force: true });
+  await removeSetupStateAfterRecoveryReceipt(session);
   return receipt;
+}
+
+async function removeSetupStateAfterRecoveryReceipt(
+  session: StrictExternalSetupSession
+): Promise<void> {
+  const statePath = path.join(session.operationRoot, SETUP_STATE_FILE);
+  await fsp.rm(statePath, { force: true });
+  await syncDirectory(session.operationRoot);
+  if (await exists(statePath)) {
+    throw new Error('STRICT_SETUP_RECOVERY_STATE_CLEANUP_FAILED');
+  }
 }
 
 export async function dispatchStrictExternalSetupStartup(
@@ -1393,7 +1421,8 @@ async function readSetupState(
 async function verifySetupState(
   session: StrictExternalSetupSession,
   state: StrictExternalSetupStateV1,
-  requireTarget = false
+  requireTarget = false,
+  allowResetStartedMutation = false
 ): Promise<void> {
   if (requireTarget) {
     await assertExistingDirectoryWithoutSymlink(session.dataRoot);
@@ -1425,8 +1454,48 @@ async function verifySetupState(
         throw new Error('STRICT_SETUP_PRE_RESET_PROTECTED_DRIFT');
       }
       if (!state.resetReceipt && (await hashWholeRoot(session.dataRoot)) !== state.sourceTreeHash) {
-        throw new Error('STRICT_SETUP_TARGET_PHASE_MISMATCH');
+        if (!allowResetStartedMutation) {
+          throw new Error('STRICT_SETUP_TARGET_PHASE_MISMATCH');
+        }
+        await verifyResetStartedTargetPhase(session);
       }
+    }
+  }
+}
+
+async function verifyResetStartedTargetPhase(session: StrictExternalSetupSession): Promise<void> {
+  if (!session.snapshotRoot) {
+    throw new Error('STRICT_SETUP_TARGET_PHASE_MISMATCH');
+  }
+  const [expectedRows, currentRows, progress] = await Promise.all([
+    collectWholeRootInventory(path.join(session.snapshotRoot, 'whole-root')),
+    collectWholeRootInventory(session.dataRoot),
+    readStrictQuiesceProgress(session),
+  ]);
+  const expected = new Map(expectedRows.map((row) => [row.relativePath, row]));
+  const current = new Map(currentRows.map((row) => [row.relativePath, row]));
+  const allowedPrefixes = session.authority.authorization.reset.relativePaths;
+  const databasePaths = new Set(
+    progress?.databaseRelativePath
+      ? [
+          progress.databaseRelativePath,
+          `${progress.databaseRelativePath}-wal`,
+          `${progress.databaseRelativePath}-shm`,
+        ]
+      : []
+  );
+  for (const relativePath of [...new Set([...expected.keys(), ...current.keys()])]) {
+    if (
+      hashCanonicalJson(expected.get(relativePath) ?? null) ===
+      hashCanonicalJson(current.get(relativePath) ?? null)
+    ) {
+      continue;
+    }
+    const resetPathAllowed = allowedPrefixes.some(
+      (prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}${path.sep}`)
+    );
+    if (!resetPathAllowed && !databasePaths.has(relativePath)) {
+      throw new Error(`STRICT_SETUP_TARGET_PHASE_MISMATCH:${relativePath}`);
     }
   }
 }
@@ -2055,17 +2124,24 @@ async function sealQuiescedObservation(
   };
   const receipt = Object.freeze({ ...semantic, receiptHash: hashCanonicalJson(semantic) });
   await writeDurableJson(path.join(session.operationRoot, QUIESCED_OBSERVATION_FILE), receipt);
-  if (input.disposition === 'pristine-absent') {
+  await recordQuiescedObservationEvent(session, receipt);
+  return receipt;
+}
+
+async function recordQuiescedObservationEvent(
+  session: StrictExternalSetupSession,
+  receipt: QuiescedPreResetObservationReceiptV1
+): Promise<void> {
+  if (receipt.disposition === 'pristine-absent') {
     await recordSetupEvent(session, 'PRISTINE_ABSENT', {
       receiptHash: receipt.receiptHash,
     });
-  } else {
-    await recordSetupEvent(session, 'QUIESCED_OBSERVED', {
-      receiptHash: receipt.receiptHash,
-      rootTreeHash: receipt.rootTreeHash,
-    });
+    return;
   }
-  return receipt;
+  await recordSetupEvent(session, 'QUIESCED_OBSERVED', {
+    receiptHash: receipt.receiptHash,
+    rootTreeHash: receipt.rootTreeHash,
+  });
 }
 
 async function recordSetupEvent(
@@ -2236,6 +2312,77 @@ async function writeStrictQuiesceProgress(
   return progress;
 }
 
+function withoutQuiesceProgressHash(
+  progress: StrictQuiesceProgressV1
+): Omit<StrictQuiesceProgressV1, 'progressHash'> {
+  const { progressHash: _progressHash, ...semantic } = progress;
+  return semantic;
+}
+
+async function completeNotRunningControlRemoval(
+  session: StrictExternalSetupSession,
+  progress: StrictQuiesceProgressV1,
+  paths: { readonly pidPath: string; readonly statePath: string }
+): Promise<void> {
+  const expectedByPath = new Map(progress.preInventory.map((row) => [row.relativePath, row]));
+  for (const [relativePath, controlPath] of [
+    ['.asd/daemon.json', paths.statePath],
+    ['.asd/daemon.pid', paths.pidPath],
+  ] as const) {
+    const current = await readRootInventoryFile(session.dataRoot, relativePath);
+    const expected = expectedByPath.get(relativePath) ?? null;
+    if (current && hashCanonicalJson(current) !== hashCanonicalJson(expected)) {
+      throw new Error('STRICT_QUIESCE_CONTROL_IDENTITY_CHANGED');
+    }
+    if (current && path.resolve(controlPath) !== path.join(session.dataRoot, relativePath)) {
+      throw new Error('STRICT_QUIESCE_CONTROL_IDENTITY_CHANGED');
+    }
+  }
+  const daemonState = readDaemonState(paths.statePath);
+  const controlPid = await readPidFile(paths.pidPath);
+  if (
+    (daemonState?.pid && isProcessAlive(daemonState.pid)) ||
+    (controlPid && isProcessAlive(controlPid))
+  ) {
+    throw new Error('STRICT_QUIESCE_CONTROL_IDENTITY_ACTIVE');
+  }
+  await Promise.all([
+    fsp.rm(paths.statePath, { force: true }),
+    fsp.rm(paths.pidPath, { force: true }),
+  ]);
+  await syncDirectory(path.dirname(paths.statePath));
+  if ((await exists(paths.statePath)) || (await exists(paths.pidPath))) {
+    throw new Error('STRICT_QUIESCE_CONTROL_IDENTITY_RETAINED');
+  }
+}
+
+async function readRootInventoryFile(
+  dataRoot: string,
+  relativePath: string
+): Promise<StrictRootInventoryRowV1 | null> {
+  const absolute = path.join(dataRoot, relativePath);
+  try {
+    const stat = await fsp.lstat(absolute);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error('STRICT_QUIESCE_CONTROL_IDENTITY_CHANGED');
+    }
+    return {
+      hash: `sha256:${createHash('sha256')
+        .update(await fsp.readFile(absolute))
+        .digest('hex')}`,
+      mode: stat.mode & 0o777,
+      relativePath,
+      size: stat.size,
+      type: 'file',
+    };
+  } catch (error: unknown) {
+    if (readCode(error) === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
 async function verifyMinimalQuiesceDelta(
   session: StrictExternalSetupSession,
   progress: StrictQuiesceProgressV1,
@@ -2243,6 +2390,9 @@ async function verifyMinimalQuiesceDelta(
 ): Promise<QuiescedPreResetObservationReceiptV1['volatileDelta']> {
   const before = new Map(progress.preInventory.map((row) => [row.relativePath, row]));
   const after = new Map(postInventory.map((row) => [row.relativePath, row]));
+  if (after.has('.asd/daemon.json') || after.has('.asd/daemon.pid')) {
+    throw new Error('STRICT_QUIESCE_CONTROL_IDENTITY_RETAINED');
+  }
   const databaseRelativePath = progress.databaseRelativePath;
   const sqlitePaths = new Set(
     databaseRelativePath
