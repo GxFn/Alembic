@@ -221,6 +221,38 @@ describe('DaemonState', () => {
 });
 
 describe('DaemonSupervisor', () => {
+  test('strict execute never accepts an already-ready old daemon instead of spawning the exact child', async () => {
+    const { paths, projectRoot } = makeStrictSupervisorFixture({
+      action: 'execute',
+      existingTarget: true,
+    });
+    ensureDaemonDirs(paths);
+    const oldState = makeState(paths, { pid: process.pid });
+    writeDaemonState(paths.statePath, oldState);
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => healthResponse(oldState));
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null,
+      pid: 2_147_483_646,
+      signalCode: null as NodeJS.Signals | null,
+      unref: vi.fn(),
+    });
+    const spawnDaemon = vi.fn(() => child);
+    const supervisor = new DaemonSupervisor({
+      daemonEntryPath: process.execPath,
+      spawnDaemon,
+    });
+
+    const status = await supervisor.start({ projectRoot, waitUntilReadyMs: 25 });
+
+    expect(spawnDaemon).toHaveBeenCalledOnce();
+    expect(status.ready).toBe(false);
+    expect(collectTreeInventory(paths.dataRoot)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'file', relativePath: 'sentinel.txt' }),
+      ])
+    );
+  });
+
   test('strict pristine start preserves absence through external header and lease before ready state', async () => {
     const { authorityRoot, paths, projectRoot } = makeStrictSupervisorFixture();
     expect(fs.existsSync(paths.dataRoot)).toBe(false);

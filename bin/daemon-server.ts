@@ -3,8 +3,8 @@
 process.env.ALEMBIC_API_SERVER = '1';
 process.env.ALEMBIC_DAEMON_MODE = '1';
 
-import { randomBytes } from 'node:crypto';
-import { existsSync, rmSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, fsyncSync, rmSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
@@ -16,11 +16,13 @@ import {
 } from '@alembic/core/daemon';
 import { timerRegistry } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
+import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import AppRuntime from '../lib/Bootstrap.js';
 import { markInterruptedDaemonJobs } from '../lib/daemon/jobs/DaemonJobRunner.js';
 import { createDisabledFileMonitorStatus } from '../lib/daemon/runtime/FileMonitorStatus.js';
 import { initializeServerRuntime } from '../lib/daemon/runtime/ServerStartupBoundary.js';
 import HttpServer from '../lib/http/HttpServer.js';
+import { configureStrictDaemonQuiesce } from '../lib/http/routes/daemon.js';
 import { readLatestSchemaMigrationVersion } from '../lib/infrastructure/database/SqliteDatabaseAccess.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
 import { resolveAlembicDaemonPaths } from '../lib/project-scope/ProjectScopeRegistry.js';
@@ -122,6 +124,92 @@ async function main() {
 
   const resolver = components.workspaceResolver;
   const schemaMigrationVersion = getSchemaMigrationVersion(components.db);
+  let strictQuiesceAccepted = false;
+  let strictShutdownFailed = false;
+  const strictAwareHook = (hook: () => Promise<void> | void) => async () => {
+    try {
+      await hook();
+    } catch (error: unknown) {
+      if (strictQuiesceAccepted) {
+        strictShutdownFailed = true;
+      }
+      throw error;
+    }
+  };
+  const projectRootHash = hashPathIdentity(projectRoot);
+  const dataRootHash = hashPathIdentity(resolver?.dataRoot || projectRoot);
+  configureStrictDaemonQuiesce({
+    daemonToken: token,
+    dataRootHash,
+    daemonIdentityHash: hashCanonicalJson({ pid: process.pid, projectRootHash, dataRootHash }),
+    projectRootHash,
+    triggerShutdown: (ack) => {
+      strictQuiesceAccepted = true;
+      try {
+        process.stderr.write(`[strict-quiesce-accepted] ${JSON.stringify(ack)}\n`);
+        fsyncSync(2);
+        // The strict post-observation permits only the proven daemon stdio append. Silence the
+        // shared Winston instance before shutdown hooks so combined/error/audit logs cannot
+        // become an unbound target-root delta. Keeping its transports installed also prevents
+        // Winston's no-transport diagnostic from leaking another stderr append.
+        Logger.getInstance().silent = true;
+      } catch (error: unknown) {
+        strictShutdownFailed = true;
+        logger.error('Strict quiesce acceptance could not be made durable', {
+          message: error instanceof Error ? error.message : String(error),
+        });
+        return;
+      }
+      const timer = setTimeout(() => {
+        void shutdown.execute('STRICT_QUIESCE');
+      }, 10);
+      timer.unref();
+    },
+  });
+
+  shutdown.register(async () => {
+    if (strictQuiesceAccepted && strictShutdownFailed) {
+      return;
+    }
+    rmSync(statePath, { force: true });
+    rmSync(paths.pidPath, { force: true });
+  }, 'daemon-state');
+  shutdown.register(
+    strictAwareHook(() => appRuntime.shutdown({ failClosedCheckpoint: strictQuiesceAccepted })),
+    'bootstrap'
+  );
+  shutdown.register(
+    strictAwareHook(() => httpServer.stop({ silent: strictQuiesceAccepted })),
+    'http-server'
+  );
+  shutdown.register(
+    strictAwareHook(() => timerRegistry.dispose()),
+    'timer-registry'
+  );
+  shutdown.register(
+    strictAwareHook(() => {
+      fileChangeCollector?.stop();
+    }),
+    'daemon-file-change-collector'
+  );
+  shutdown.register(
+    strictAwareHook(() => {
+      evolutionMaintenanceSweep?.stop();
+    }),
+    'evolution-maintenance-sweep'
+  );
+  shutdown.register(
+    strictAwareHook(() => {
+      markInterruptedDaemonJobs({
+        code: 'DAEMON_SHUTDOWN',
+        container,
+        logger,
+        reason: 'Alembic daemon shut down before this job completed. Start a new job to retry.',
+      });
+    }),
+    'daemon-jobs'
+  );
+
   writeReadyDaemonState({
     statePath,
     projectRoot,
@@ -151,34 +239,10 @@ async function main() {
     .catch((error: unknown) => {
       logger.debug(`UiStartupTasks failed: ${(error as Error).message}`);
     });
+}
 
-  shutdown.register(async () => {
-    rmSync(statePath, { force: true });
-    rmSync(paths.pidPath, { force: true });
-  }, 'daemon-state');
-  shutdown.register(async () => {
-    await appRuntime.shutdown();
-  }, 'bootstrap');
-  shutdown.register(async () => {
-    await httpServer.stop();
-  }, 'http-server');
-  shutdown.register(async () => {
-    await timerRegistry.dispose();
-  }, 'timer-registry');
-  shutdown.register(() => {
-    fileChangeCollector?.stop();
-  }, 'daemon-file-change-collector');
-  shutdown.register(() => {
-    evolutionMaintenanceSweep?.stop();
-  }, 'evolution-maintenance-sweep');
-  shutdown.register(() => {
-    markInterruptedDaemonJobs({
-      code: 'DAEMON_SHUTDOWN',
-      container,
-      logger,
-      reason: 'Alembic daemon shut down before this job completed. Start a new job to retry.',
-    });
-  }, 'daemon-jobs');
+function hashPathIdentity(value: string): string {
+  return `sha256:${createHash('sha256').update(resolve(value)).digest('hex')}`;
 }
 
 function startDaemonFileChangeCollector(options: {

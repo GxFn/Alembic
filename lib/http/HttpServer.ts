@@ -498,42 +498,50 @@ export class HttpServer {
   }
 
   /** 停止服务器 */
-  async stop() {
+  async stop(options: { silent?: boolean } = {}) {
     const { promise, resolve, reject } = Promise.withResolvers<void>();
     if (!this.server) {
       return resolve(undefined);
     }
     this.stopping = true;
     this.closeActiveStreamingResponses();
-    this.logger.info('HTTP Server stopping', {
-      activeRequests: this.activeRequestCount,
-      activeStreams: this.activeStreamingResponses.size,
-      timestamp: new Date().toISOString(),
-    });
+    if (!options.silent) {
+      this.logger.info('HTTP Server stopping', {
+        activeRequests: this.activeRequestCount,
+        activeStreams: this.activeStreamingResponses.size,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     // 关闭 WebSocket 连接
     if (this.realtimeService && typeof this.realtimeService.shutdown === 'function') {
       try {
         this.realtimeService.shutdown();
       } catch (err: unknown) {
-        this.logger.warn('Error shutting down realtime service', {
-          error: (err as Error).message,
-        });
+        if (!options.silent) {
+          this.logger.warn('Error shutting down realtime service', {
+            error: (err as Error).message,
+          });
+        }
       }
     }
 
     this.server.close((error) => {
       if (error) {
-        this.logger.error('Error stopping HTTP Server', {
-          error: error.message,
-          timestamp: new Date().toISOString(),
-        });
+        if (!options.silent) {
+          this.logger.error('Error stopping HTTP Server', {
+            error: error.message,
+            timestamp: new Date().toISOString(),
+          });
+        }
         return reject(error);
       }
 
-      this.logger.info('HTTP Server stopped', {
-        timestamp: new Date().toISOString(),
-      });
+      if (!options.silent) {
+        this.logger.info('HTTP Server stopped', {
+          timestamp: new Date().toISOString(),
+        });
+      }
       resolve(undefined);
     });
     return promise;

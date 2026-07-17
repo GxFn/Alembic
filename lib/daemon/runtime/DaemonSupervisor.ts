@@ -1,4 +1,5 @@
 import { type ChildProcess, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   closeSync,
   existsSync,
@@ -143,12 +144,12 @@ export class DaemonSupervisor {
   async start(options: StartDaemonOptions): Promise<DaemonStatus> {
     const projectRoot = resolve(options.projectRoot);
     const paths = resolveAlembicDaemonPaths(projectRoot);
+    const strictExternalLaunch = Boolean(process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH?.trim());
     const existing = await this.status(projectRoot);
-    if (existing.ready && !options.restart) {
+    if (!strictExternalLaunch && existing.ready && !options.restart) {
       return existing;
     }
 
-    const strictExternalLaunch = Boolean(process.env.ALEMBIC_STRICT_SETUP_AUTHORITY_PATH?.trim());
     const entry = this.#daemonEntryPath ?? getDaemonServerEntryPath();
     if (!existsSync(entry)) {
       throw new Error(`Daemon server entry not found: ${entry}. Run npm run build first.`);
@@ -158,7 +159,7 @@ export class DaemonSupervisor {
       current: DaemonStatus,
       manageTargetControlFiles: boolean
     ): Promise<DaemonStatus> => {
-      if (current.state?.pid && current.pidAlive) {
+      if (manageTargetControlFiles && current.state?.pid && current.pidAlive) {
         await this.#terminateProcess(current.state.pid, 5000);
       }
       if (manageTargetControlFiles) {
@@ -167,6 +168,10 @@ export class DaemonSupervisor {
 
       const port = options.port ?? 0;
       const host = options.host || '127.0.0.1';
+      const strictStdioEvidence =
+        !manageTargetControlFiles && current.state?.pid && current.pidAlive
+          ? createStrictStdioLogEvidence(paths.logPath, current.state.pid)
+          : null;
       const logFd = manageTargetControlFiles ? openSync(paths.logPath, 'a') : null;
       let child: ChildProcess;
       try {
@@ -182,6 +187,9 @@ export class DaemonSupervisor {
             ALEMBIC_DAEMON_STATE_PATH: paths.statePath,
             ALEMBIC_PROJECT_DIR: projectRoot,
             ALEMBIC_QUIET: process.env.ALEMBIC_QUIET || '1',
+            ...(strictStdioEvidence
+              ? { ALEMBIC_STRICT_QUIESCE_STDIO_EVIDENCE: JSON.stringify(strictStdioEvidence) }
+              : {}),
           },
           stdio: manageTargetControlFiles
             ? ['ignore', logFd as number, logFd as number]
@@ -202,7 +210,8 @@ export class DaemonSupervisor {
       const startup = await waitForReadyOrChildExit(
         paths,
         child,
-        options.waitUntilReadyMs ?? 10_000
+        options.waitUntilReadyMs ?? 10_000,
+        strictExternalLaunch ? childPid : null
       );
       if (startup.kind === 'exited') {
         if (strictExternalLaunch && startup.exitCode === 0) {
@@ -399,6 +408,32 @@ export class DaemonSupervisor {
   }
 }
 
+function createStrictStdioLogEvidence(
+  logPath: string,
+  ownerPid: number
+): Record<string, unknown> | null {
+  try {
+    const stat = statSync(logPath);
+    if (!stat.isFile()) {
+      return null;
+    }
+    const semantic = {
+      schemaVersion: 1 as const,
+      ownerPid,
+      relativePathHash: `sha256:${createHash('sha256').update('.asd/daemon.log').digest('hex')}`,
+      inode: String(stat.ino),
+      initialSize: stat.size,
+    };
+    return { ...semantic, evidenceHash: hashJson(semantic) };
+  } catch {
+    return null;
+  }
+}
+
+function hashJson(value: unknown): string {
+  return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
+}
+
 type DaemonStartupWaitResult =
   | { kind: 'ready-or-timeout'; status: DaemonStatus }
   | {
@@ -410,7 +445,8 @@ type DaemonStartupWaitResult =
 async function waitForReadyOrChildExit(
   paths: DaemonPaths,
   child: Pick<ChildProcess, 'exitCode' | 'signalCode'>,
-  waitMs: number
+  waitMs: number,
+  requiredReadyPid: number | null
 ): Promise<DaemonStartupWaitResult> {
   const supervisor = new DaemonSupervisor();
   const startedAt = Date.now();
@@ -423,7 +459,7 @@ async function waitForReadyOrChildExit(
       };
     }
     const status = await supervisor.status(paths.projectRoot);
-    if (status.ready) {
+    if (status.ready && (requiredReadyPid === null || status.state?.pid === requiredReadyPid)) {
       return { kind: 'ready-or-timeout', status };
     }
     await sleep(200);
@@ -435,10 +471,23 @@ async function waitForReadyOrChildExit(
       signalCode: child.signalCode,
     };
   }
-  return {
-    kind: 'ready-or-timeout',
-    status: await supervisor.status(paths.projectRoot),
-  };
+  const finalStatus = await supervisor.status(paths.projectRoot);
+  if (
+    requiredReadyPid !== null &&
+    finalStatus.ready &&
+    finalStatus.state?.pid !== requiredReadyPid
+  ) {
+    return {
+      kind: 'ready-or-timeout',
+      status: {
+        ...finalStatus,
+        status: 'starting',
+        ready: false,
+        message: 'strict setup child has not published its exact ready identity',
+      },
+    };
+  }
+  return { kind: 'ready-or-timeout', status: finalStatus };
 }
 
 export function computeDaemonLockBackoffMs(attempt: number): number {

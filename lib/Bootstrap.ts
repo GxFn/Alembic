@@ -54,6 +54,7 @@ export interface AppRuntimeComponents {
 export class AppRuntime {
   components: AppRuntimeComponents;
   options: AppRuntimeOptions;
+  #strictDeferredLoggerConfig: Parameters<typeof Logger.getInstance>[0] | null = null;
   constructor(options: AppRuntimeOptions = {}) {
     this.options = options;
     this.components = { startupDisposition: 'initializing' };
@@ -185,7 +186,16 @@ export class AppRuntime {
     if (resolver?.ghost && config?.file) {
       config.file.path = resolver.logsDir;
     }
-    const logger = Logger.getInstance(config);
+    const logger = this.components.strictExternalSetup
+      ? Logger.getInstance({
+          ...config,
+          console: false,
+          file: config?.file ? { ...config.file, enabled: false } : undefined,
+        })
+      : Logger.getInstance(config);
+    if (this.components.strictExternalSetup) {
+      this.#strictDeferredLoggerConfig = config;
+    }
     this.components.logger = logger;
   }
 
@@ -205,6 +215,10 @@ export class AppRuntime {
       });
     }
     await db.runMigrations();
+    if (this.#strictDeferredLoggerConfig) {
+      this.components.logger = Logger.getInstance(this.#strictDeferredLoggerConfig);
+      this.#strictDeferredLoggerConfig = null;
+    }
     this.#requireComponent('logger').info('Database connected and migrated');
   }
 
@@ -308,26 +322,52 @@ export class AppRuntime {
   }
 
   /** 关闭应用程序 */
-  async shutdown() {
-    this.components.logger?.info('Alembic - Shutting down...');
+  async shutdown(options: { failClosedCheckpoint?: boolean } = {}) {
+    if (!options.failClosedCheckpoint) {
+      this.components.logger?.info('Alembic - Shutting down...');
+    }
 
     // 关闭数据库连接（WAL checkpoint → close）
     if (this.components.db) {
+      let strictCheckpointFailure: unknown = null;
       try {
         // 刷盘 WAL — 确保所有待写入数据持久化后再关闭
         const rawDb = unwrapRawDb(this.components.db as unknown) as InstanceType<
           typeof DatabaseConnection
-        > & { pragma: (cmd: string) => void };
-        rawDb.pragma('wal_checkpoint(TRUNCATE)');
-      } catch {
-        // WAL checkpoint 失败不阻断 shutdown
+        > & { pragma: (cmd: string) => unknown };
+        const checkpoint = rawDb.pragma('wal_checkpoint(TRUNCATE)');
+        if (options.failClosedCheckpoint && !isTerminalWalCheckpoint(checkpoint)) {
+          throw new Error('STRICT_QUIESCE_CHECKPOINT_NONTERMINAL');
+        }
+      } catch (error: unknown) {
+        if (options.failClosedCheckpoint) {
+          strictCheckpointFailure = error;
+        }
+        // Ordinary shutdown preserves the existing best-effort checkpoint behavior.
       }
-      this.components.db.close();
+      try {
+        this.components.db.close();
+      } catch (error: unknown) {
+        if (strictCheckpointFailure) {
+          throw new AggregateError(
+            [strictCheckpointFailure, error],
+            'STRICT_QUIESCE_CHECKPOINT_AND_CLOSE_FAILED'
+          );
+        }
+        throw error;
+      }
+      if (strictCheckpointFailure) {
+        throw new Error('STRICT_QUIESCE_CHECKPOINT_FAILED', {
+          cause: strictCheckpointFailure,
+        });
+      }
     }
 
     await releaseStrictExternalSetupSession();
 
-    this.components.logger?.info('Alembic - Shutdown complete');
+    if (!options.failClosedCheckpoint) {
+      this.components.logger?.info('Alembic - Shutdown complete');
+    }
   }
 
   /** 获取组件 */
@@ -339,6 +379,20 @@ export class AppRuntime {
   getAllComponents() {
     return this.components;
   }
+}
+
+function isTerminalWalCheckpoint(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length !== 1) {
+    return false;
+  }
+  const row = value[0];
+  return (
+    typeof row === 'object' &&
+    row !== null &&
+    Number((row as { busy?: unknown }).busy) === 0 &&
+    Number((row as { log?: unknown }).log) === 0 &&
+    Number((row as { checkpointed?: unknown }).checkpointed) === 0
+  );
 }
 
 function applyLocalEmbeddingConfigToProcessEnv(projectRoot: string): void {

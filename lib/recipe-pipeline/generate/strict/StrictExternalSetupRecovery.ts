@@ -1,9 +1,24 @@
 import { createHash, randomUUID } from 'node:crypto';
 import fsp, { type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { readDaemonState } from '@alembic/core/daemon';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
+import Database from 'better-sqlite3';
+import {
+  createStrictQuiesceRequest,
+  readStrictQuiesceAcceptedAck,
+  type StrictQuiesceAcceptedAckV1,
+  type StrictQuiesceRequestV1,
+} from '../../../daemon/runtime/StrictDaemonQuiesce.js';
 import type { StrictProductionAuthorizationReceiptV1 } from './StrictAuthorization.js';
-import { readStrictProductionResumePoint } from './StrictProductionJournal.js';
+import {
+  appendStrictRecoveryJournalEvent,
+  appendStrictSetupJournalEvent,
+  readStrictProductionResumePoint,
+  type StrictRecoveryStateV2,
+  type StrictSetupStateV2,
+} from './StrictProductionJournal.js';
 import {
   createMainStrictResetDatabasePort,
   executeExactStrictReset,
@@ -18,6 +33,8 @@ const OPERATION_LOCK_FILE = 'strict-production.operation.lock';
 const JOURNAL_FILE = 'strict-production.journal.jsonl';
 const SETUP_STATE_FILE = 'strict-external-setup-state.json';
 const RECOVERY_TRANSACTION_FILE = 'strict-external-recovery-transaction.json';
+const QUIESCE_PROGRESS_FILE = 'strict-quiesce-progress.json';
+const QUIESCED_OBSERVATION_FILE = 'quiesced-pre-reset-observation-receipt.json';
 
 export interface StrictPlannedAbsentPathReceiptV1 {
   readonly schemaVersion: 1;
@@ -101,6 +118,7 @@ export interface StrictExternalSetupSession {
   readonly actionHash: string;
   readonly dataRoot: string;
   readonly evidenceRoot: string;
+  readonly externalLeaseHash: string;
   readonly operationLockRoot: string;
   readonly operationRoot: string;
   readonly projectRoot: string;
@@ -110,6 +128,81 @@ export interface StrictExternalSetupSession {
   readonly snapshotRoot: string | null;
   readonly journalHeaderHash: string;
   close(): Promise<void>;
+}
+
+interface StrictRootInventoryRowV1 {
+  readonly hash?: string;
+  readonly mode: number;
+  readonly relativePath: string;
+  readonly size?: number;
+  readonly type: 'directory' | 'file';
+}
+
+export interface QuiescedPreResetObservationReceiptV1 {
+  readonly schemaVersion: 1;
+  readonly kind: 'QuiescedPreResetObservationReceiptV1';
+  readonly runId: string;
+  readonly scenario: 'pristine' | 'rebuild';
+  readonly disposition: 'live-graceful' | 'not-running' | 'pristine-absent';
+  readonly setupAuthorityHash: string;
+  readonly journalHeaderHash: string;
+  readonly externalLeaseHash: string;
+  readonly rootIdentityHash: string;
+  readonly preResetObservationHash: string | null;
+  readonly preQuiesceInventoryHash: string | null;
+  readonly quiesceRequestHash: string | null;
+  readonly quiesceAcceptedAckHash: string | null;
+  readonly rootTreeHash: string | null;
+  readonly databaseProof: {
+    readonly databasePathHash: string | null;
+    readonly databaseHash: string | null;
+    readonly walHash: string | null;
+    readonly walSize: number | null;
+    readonly shmHash: string | null;
+    readonly shmSize: number | null;
+    readonly integrityCheck: 'ok' | 'not-applicable';
+    readonly checkpointTerminal: boolean;
+  };
+  readonly protectedBindingsHash: string | null;
+  readonly volatileDelta: {
+    readonly changes: readonly {
+      readonly relativePathHash: string;
+      readonly beforeStateHash: string;
+      readonly afterStateHash: string;
+      readonly reason: 'control-removal' | 'sqlite-checkpoint' | 'stdio-log-append';
+    }[];
+    readonly unknownChangedEntryCount: 0;
+    readonly deltaHash: string;
+  };
+  readonly receiptHash: string;
+}
+
+interface StrictQuiesceProgressV1 {
+  readonly schemaVersion: 1;
+  readonly kind: 'StrictQuiesceProgressV1';
+  readonly runId: string;
+  readonly setupAuthorityHash: string;
+  readonly journalHeaderHash: string;
+  readonly externalLeaseHash: string;
+  readonly stage: 'request-unaccepted' | 'accepted-draining' | 'old-pid-exited-checkpoint-complete';
+  readonly disposition: 'live-graceful' | 'not-running';
+  readonly oldPid: number | null;
+  readonly databaseRelativePath: string | null;
+  readonly preInventory: readonly StrictRootInventoryRowV1[];
+  readonly preInventoryHash: string;
+  readonly request: StrictQuiesceRequestV1 | null;
+  readonly ack: StrictQuiesceAcceptedAckV1 | null;
+  readonly stdioLogEvidence: StrictStdioLogEvidenceV1 | null;
+  readonly progressHash: string;
+}
+
+interface StrictStdioLogEvidenceV1 {
+  readonly schemaVersion: 1;
+  readonly ownerPid: number;
+  readonly relativePathHash: string;
+  readonly inode: string;
+  readonly initialSize: number;
+  readonly evidenceHash: string;
 }
 
 export interface StrictExternalSetupStateV1 {
@@ -129,6 +222,7 @@ export interface StrictExternalRecoveryReceiptV1 {
   readonly schemaVersion: 1;
   readonly scenario: 'pristine' | 'rebuild';
   readonly setupAuthorityHash: string;
+  readonly quiescedObservationHash: string;
   readonly restoredTreeHash: string | null;
   readonly preResetObservationHash: string | null;
   readonly targetAbsent: boolean;
@@ -316,8 +410,10 @@ export async function prepareStrictExternalSetupFromEnvironment(input: {
   const lock = await acquireOperationLock(lockPath, authority);
   try {
     await fsp.mkdir(evidenceRoot, { recursive: true, mode: 0o700 });
+    const externalLeaseHash = createExternalLeaseIdentityHash(authority, operationLockRoot);
     const journalHeaderHash = await initializeExternalJournalHeader({
       authority,
+      externalLeaseHash,
       operationRoot,
       runtimeArtifactManifestPathHash,
     });
@@ -334,6 +430,7 @@ export async function prepareStrictExternalSetupFromEnvironment(input: {
       actionHash: actionReceipt.actionHash,
       dataRoot,
       evidenceRoot,
+      externalLeaseHash,
       lock,
       lockPath,
       operationLockRoot,
@@ -370,6 +467,182 @@ export async function releaseStrictExternalSetupSession(): Promise<void> {
   await closeOperationLock(session);
 }
 
+export async function ensureStrictQuiescedObservation(
+  session: StrictExternalSetupSession
+): Promise<QuiescedPreResetObservationReceiptV1> {
+  const existing = await readQuiescedObservationReceipt(session, true);
+  if (existing) {
+    await verifyQuiescedObservationCurrentRoot(session, existing);
+    return existing;
+  }
+  if (!(await exists(session.dataRoot))) {
+    if (session.scenario !== 'pristine') {
+      throw new Error('STRICT_SETUP_REBUILD_TARGET_MISSING');
+    }
+    return await sealQuiescedObservation(session, {
+      disposition: 'pristine-absent',
+      progress: null,
+      postInventory: null,
+    });
+  }
+
+  await assertExistingDirectoryWithoutSymlink(session.dataRoot);
+  let progress = await readStrictQuiesceProgress(session);
+  const statePath = path.join(session.dataRoot, '.asd/daemon.json');
+  const pidPath = path.join(session.dataRoot, '.asd/daemon.pid');
+  if (!progress) {
+    const preInventory = await collectWholeRootInventory(session.dataRoot);
+    const preInventoryHash = hashCanonicalJson(preInventory);
+    const daemonState = readDaemonState(statePath);
+    if (daemonState?.pid && isProcessAlive(daemonState.pid)) {
+      assertDaemonStateBinding(session, daemonState);
+      const databaseRelativePath = relativeTargetPath(session.dataRoot, daemonState.databasePath);
+      const request = createStrictQuiesceRequest({
+        runId: session.authority.runId,
+        setupAuthorityHash: session.authority.authorityHash,
+        journalHeaderHash: session.journalHeaderHash,
+        externalLeaseHash: session.externalLeaseHash,
+        projectRootHash: session.authority.projectRootHash,
+        dataRootHash: session.authority.roots.dataRoot.pathHash,
+        daemonIdentityHash: hashCanonicalJson({
+          pid: daemonState.pid,
+          projectRootHash: session.authority.projectRootHash,
+          dataRootHash: session.authority.roots.dataRoot.pathHash,
+        }),
+      });
+      progress = await writeStrictQuiesceProgress(session, {
+        stage: 'request-unaccepted',
+        disposition: 'live-graceful',
+        oldPid: daemonState.pid,
+        databaseRelativePath,
+        preInventory,
+        preInventoryHash,
+        request,
+        ack: null,
+        stdioLogEvidence: readStrictStdioLogEvidence(daemonState.pid),
+      });
+    } else {
+      const stalePid = await readPidFile(pidPath);
+      if (stalePid && isProcessAlive(stalePid)) {
+        throw new Error('STRICT_QUIESCE_DAEMON_STATE_INVALID');
+      }
+      progress = await writeStrictQuiesceProgress(session, {
+        stage: 'old-pid-exited-checkpoint-complete',
+        disposition: 'not-running',
+        oldPid: stalePid,
+        databaseRelativePath: await resolveExistingDatabaseRelativePath(session.dataRoot),
+        preInventory,
+        preInventoryHash,
+        request: null,
+        ack: null,
+        stdioLogEvidence: null,
+      });
+      await Promise.all([fsp.rm(statePath, { force: true }), fsp.rm(pidPath, { force: true })]);
+      await syncDirectory(path.dirname(statePath));
+    }
+  }
+
+  await recordSetupEvent(session, 'PRE_QUIESCE_INVENTORY_VERIFIED', {
+    preInventoryHash: progress.preInventoryHash,
+  });
+  if (progress.disposition === 'live-graceful') {
+    if (!progress.request) {
+      throw new Error('STRICT_QUIESCE_PROGRESS_INVALID');
+    }
+    await recordSetupEvent(session, 'QUIESCE_REQUESTED', {
+      requestHash: progress.request.requestHash,
+    });
+  } else {
+    await recordSetupEvent(session, 'QUIESCE_NOT_RUNNING', {
+      preInventoryHash: progress.preInventoryHash,
+    });
+  }
+  if (progress.stage !== 'request-unaccepted' && progress.disposition === 'live-graceful') {
+    if (!progress.ack) {
+      throw new Error('STRICT_QUIESCE_PROGRESS_INVALID');
+    }
+    await recordSetupEvent(session, 'QUIESCE_ACCEPTED', { ackHash: progress.ack.ackHash });
+  }
+  if (progress.stage === 'old-pid-exited-checkpoint-complete' && progress.ack) {
+    await recordSetupEvent(session, 'QUIESCE_DRAINED', { ackHash: progress.ack.ackHash });
+  }
+
+  if (progress.stage === 'request-unaccepted') {
+    if (!progress.request || !progress.oldPid) {
+      throw new Error('STRICT_QUIESCE_PROGRESS_INVALID');
+    }
+    const daemonState = readDaemonState(statePath);
+    let ack: StrictQuiesceAcceptedAckV1;
+    if (daemonState && daemonState.pid === progress.oldPid && isProcessAlive(progress.oldPid)) {
+      assertDaemonStateBinding(session, daemonState);
+      const response = await fetch(`${daemonState.url}/api/v1/daemon/strict-quiesce`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'X-Alembic-Daemon-Token': daemonState.token,
+        },
+        body: JSON.stringify(progress.request),
+        signal: AbortSignal.timeout(5_000),
+      });
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        throw new Error('STRICT_QUIESCE_ACK_INVALID');
+      }
+      if (response.status !== 202) {
+        throw new Error('STRICT_QUIESCE_ACK_REJECTED');
+      }
+      ack = readStrictQuiesceAcceptedAck(
+        isRecord(payload) && isRecord(payload.data) ? payload.data : null
+      );
+    } else {
+      ack = await recoverAcceptedAckFromStdioLog(session, progress);
+    }
+    if (
+      ack.requestHash !== progress.request.requestHash ||
+      ack.setupAuthorityHash !== session.authority.authorityHash ||
+      ack.journalHeaderHash !== session.journalHeaderHash ||
+      ack.externalLeaseHash !== session.externalLeaseHash
+    ) {
+      throw new Error('STRICT_QUIESCE_ACK_INVALID');
+    }
+    progress = await writeStrictQuiesceProgress(session, {
+      ...progress,
+      stage: 'accepted-draining',
+      ack,
+    });
+    await recordSetupEvent(session, 'QUIESCE_ACCEPTED', { ackHash: ack.ackHash });
+  }
+
+  if (progress.stage === 'accepted-draining') {
+    if (!progress.oldPid || !progress.ack) {
+      throw new Error('STRICT_QUIESCE_PROGRESS_INVALID');
+    }
+    await waitForOldDaemonExit(progress.oldPid, 15_000);
+    if ((await exists(statePath)) || (await exists(pidPath))) {
+      throw new Error('STRICT_QUIESCE_CHECKPOINT_OR_CLOSE_FAILED');
+    }
+    progress = await writeStrictQuiesceProgress(session, {
+      ...progress,
+      stage: 'old-pid-exited-checkpoint-complete',
+    });
+    await recordSetupEvent(session, 'QUIESCE_DRAINED', {
+      ackHash: progress.ack?.ackHash ?? null,
+    });
+  }
+
+  if (progress.stage !== 'old-pid-exited-checkpoint-complete') {
+    throw new Error('STRICT_QUIESCE_PROGRESS_INVALID');
+  }
+  const postInventory = await waitForStableRootInventory(session.dataRoot);
+  return await sealQuiescedObservation(session, {
+    disposition: progress.disposition,
+    progress,
+    postInventory,
+  });
+}
+
 /**
  * Runs before ordinary Alembic logging/database initialization. Rebuild snapshots cover the
  * complete target root and are verified through a disposable restore probe; pristine creates the
@@ -381,8 +654,14 @@ export async function initializeStrictExternalSetupTarget(
   const existing = await readSetupState(session);
   if (existing) {
     await verifySetupState(session, existing, true);
+    if (session.scenario === 'pristine') {
+      await recordSetupEvent(session, 'BLANK', {
+        setupStateHash: existing.stateHash,
+      });
+    }
     return existing;
   }
+  const quiescedObservation = await ensureStrictQuiescedObservation(session);
   let sourceTreeHash: string | null = null;
   let snapshotTreeHash: string | null = null;
   let restoreProbeTreeHash: string | null = null;
@@ -397,6 +676,9 @@ export async function initializeStrictExternalSetupTarget(
       }
       await assertExistingDirectoryWithoutSymlink(session.dataRoot);
     } else {
+      await recordSetupEvent(session, 'RESET_STARTED', {
+        resetKind: 'pristine-root-initialization',
+      });
       await fsp.mkdir(session.dataRoot, { recursive: false, mode: 0o700 });
       await syncDirectory(path.dirname(session.dataRoot));
     }
@@ -411,23 +693,25 @@ export async function initializeStrictExternalSetupTarget(
     await assertExpectedPublicRouteBinding(session);
     preResetProtectedHash = await hashPreResetProtectedBindings(session.dataRoot);
     sourceTreeHash = await hashWholeRoot(session.dataRoot);
-    const expectedObservation = session.authority.preResetObservation;
-    if (!expectedObservation) {
-      throw new Error('STRICT_SETUP_PRE_RESET_OBSERVATION_INVALID');
+    if (!quiescedObservation.rootTreeHash) {
+      throw new Error('STRICT_SETUP_QUIESCED_OBSERVATION_INVALID');
     }
-    const observed = await createStrictPreResetObservation({
-      dataRoot: session.dataRoot,
-      ref: expectedObservation.ref,
-    });
-    if (hashCanonicalJson(observed) !== hashCanonicalJson(expectedObservation)) {
-      throw new Error('STRICT_SETUP_PRE_RESET_OBSERVATION_MISMATCH');
+    if (sourceTreeHash !== quiescedObservation.rootTreeHash) {
+      throw new Error('STRICT_SETUP_QUIESCED_ROOT_DRIFT');
     }
     const snapshot = path.join(session.snapshotRoot, 'whole-root');
     const probe = path.join(session.snapshotRoot, 'restore-probe');
+    await recordSetupEvent(session, 'SNAPSHOT_COPY_STARTED', {
+      sourceTreeHash,
+    });
     if (!(await exists(snapshot))) {
       await fsp.mkdir(session.snapshotRoot, { recursive: true, mode: 0o700 });
       await copyWholeRoot(session.dataRoot, snapshot);
       await syncTree(snapshot);
+    } else if ((await hashWholeRoot(snapshot)) !== sourceTreeHash) {
+      throw new Error('STRICT_SETUP_SNAPSHOT_HASH_MISMATCH');
+    }
+    if (!(await exists(probe))) {
       await copyWholeRoot(snapshot, probe);
       await syncTree(probe);
     }
@@ -436,14 +720,23 @@ export async function initializeStrictExternalSetupTarget(
     if (snapshotTreeHash !== sourceTreeHash || restoreProbeTreeHash !== sourceTreeHash) {
       throw new Error('STRICT_SETUP_RESTORE_PROBE_DIVERGENCE');
     }
+    await recordSetupEvent(session, 'SNAPSHOT_VERIFIED', {
+      restoreProbeTreeHash,
+      snapshotTreeHash,
+      sourceTreeHash,
+    });
   }
-  return await persistSetupState(session, {
+  const state = await persistSetupState(session, {
     sourceTreeHash,
     snapshotTreeHash,
     restoreProbeTreeHash,
     preResetProtectedHash,
     resetReceipt: null,
   });
+  if (session.scenario === 'pristine') {
+    await recordSetupEvent(session, 'BLANK', { setupStateHash: state.stateHash });
+  }
+  return state;
 }
 
 /** Runs after the existing database connection is open and before migrations or strict work. */
@@ -451,8 +744,17 @@ export async function executeStrictExternalSetupReset(input: {
   readonly database: unknown;
   readonly session: StrictExternalSetupSession;
 }): Promise<StrictExternalSetupStateV1> {
-  const current = await initializeStrictExternalSetupTarget(input.session);
-  if (current.resetReceipt || input.session.scenario === 'pristine') {
+  const current =
+    (await readSetupState(input.session)) ??
+    (await initializeStrictExternalSetupTarget(input.session));
+  await verifySetupState(input.session, current, false);
+  if (current.resetReceipt) {
+    await recordSetupEvent(input.session, 'BLANK', {
+      resetReceiptHash: current.resetReceipt.receiptHash,
+    });
+    return current;
+  }
+  if (input.session.scenario === 'pristine') {
     return current;
   }
   if (
@@ -461,6 +763,9 @@ export async function executeStrictExternalSetupReset(input: {
   ) {
     throw new Error('STRICT_SETUP_PRE_RESET_PROTECTED_DRIFT');
   }
+  await recordSetupEvent(input.session, 'RESET_STARTED', {
+    preResetProtectedHash: current.preResetProtectedHash,
+  });
   const resetReceipt = await executeExactStrictReset({
     allowedRelativePaths: input.session.authority.authorization.reset.relativePaths,
     allowedTables: input.session.authority.authorization.reset.tables,
@@ -472,13 +777,17 @@ export async function executeStrictExternalSetupReset(input: {
   ) {
     throw new Error('STRICT_SETUP_RESET_TOUCHED_PROTECTED_STATE');
   }
-  return await persistSetupState(input.session, {
+  const state = await persistSetupState(input.session, {
     sourceTreeHash: current.sourceTreeHash,
     snapshotTreeHash: current.snapshotTreeHash,
     restoreProbeTreeHash: current.restoreProbeTreeHash,
     preResetProtectedHash: current.preResetProtectedHash,
     resetReceipt,
   });
+  await recordSetupEvent(input.session, 'BLANK', {
+    resetReceiptHash: resetReceipt.receiptHash,
+  });
+  return state;
 }
 
 export async function readStrictExternalSetupState(
@@ -496,19 +805,28 @@ export async function readStrictExternalSetupState(
 export async function recoverStrictExternalSetup(
   session: StrictExternalSetupSession
 ): Promise<StrictExternalRecoveryReceiptV1> {
+  const quiescedObservation = await readQuiescedObservationReceipt(session);
   const existingReceipt = await readExistingRecoveryReceipt(session);
   if (existingReceipt) {
+    await verifyExistingRecoveryOutcome(session, existingReceipt, quiescedObservation);
     return existingReceipt;
   }
   await assertRecoveryPolicy(session);
   let restoredTreeHash: string | null = null;
   let preResetObservationHash: string | null = null;
   if (session.scenario === 'pristine') {
+    await recordRecoveryEvent(session, 'RECOVERY_PREPARED', {
+      recoveryKind: 'pristine-discard',
+    });
     await fsp.rm(session.dataRoot, { force: true, recursive: true });
     await syncDirectory(path.dirname(session.dataRoot));
     if (await exists(session.dataRoot)) {
       throw new Error('STRICT_SETUP_PRISTINE_DISCARD_FAILED');
     }
+    await recordRecoveryEvent(session, 'RECOVERY_VERIFIED', {
+      recoveryKind: 'pristine-discard',
+      targetAbsent: true,
+    });
   } else {
     if (!session.snapshotRoot) {
       throw new Error('STRICT_SETUP_REBUILD_SNAPSHOT_REQUIRED');
@@ -529,23 +847,29 @@ export async function recoverStrictExternalSetup(
     if ((await hashWholeRoot(session.dataRoot)) !== restoredTreeHash) {
       throw new Error('STRICT_SETUP_RESTORE_READBACK_MISMATCH');
     }
-    const expectedObservation = session.authority.preResetObservation;
-    if (!expectedObservation) {
-      throw new Error('STRICT_SETUP_PRE_RESET_OBSERVATION_INVALID');
-    }
-    const observed = await createStrictPreResetObservation({
-      dataRoot: session.dataRoot,
-      ref: expectedObservation.ref,
-    });
-    if (hashCanonicalJson(observed) !== hashCanonicalJson(expectedObservation)) {
+    const quiescedObservation = await readQuiescedObservationReceipt(session);
+    if (
+      !quiescedObservation.rootTreeHash ||
+      restoredTreeHash !== quiescedObservation.rootTreeHash
+    ) {
       throw new Error('STRICT_SETUP_RESTORE_RESELECTION_MISMATCH');
     }
-    preResetObservationHash = observed.observationHash;
+    if (
+      (await hashPostQuiesceProtectedBindings(session.dataRoot)) !==
+      quiescedObservation.protectedBindingsHash
+    ) {
+      throw new Error('STRICT_SETUP_RESTORE_RESELECTION_MISMATCH');
+    }
+    preResetObservationHash = quiescedObservation.receiptHash;
+    await recordRecoveryEvent(session, 'RECOVERY_VERIFIED', {
+      restoredTreeHash,
+    });
   }
   const semantic = {
     schemaVersion: 1 as const,
     scenario: session.scenario,
     setupAuthorityHash: session.authority.authorityHash,
+    quiescedObservationHash: quiescedObservation.receiptHash,
     restoredTreeHash,
     preResetObservationHash,
     targetAbsent: session.scenario === 'pristine',
@@ -554,10 +878,8 @@ export async function recoverStrictExternalSetup(
     ...semantic,
     receiptHash: hashCanonicalJson(semantic),
   });
-  await fsp.rm(path.join(session.operationRoot, SETUP_STATE_FILE), {
-    force: true,
-  });
   await writeDurableJson(path.join(session.operationRoot, 'strict-recovery-receipt.json'), receipt);
+  await fsp.rm(path.join(session.operationRoot, SETUP_STATE_FILE), { force: true });
   return receipt;
 }
 
@@ -651,6 +973,7 @@ async function readExistingRecoveryReceipt(
       'schemaVersion',
       'scenario',
       'setupAuthorityHash',
+      'quiescedObservationHash',
       'restoredTreeHash',
       'preResetObservationHash',
       'targetAbsent',
@@ -659,6 +982,7 @@ async function readExistingRecoveryReceipt(
     value.schemaVersion !== 1 ||
     value.scenario !== session.scenario ||
     value.setupAuthorityHash !== session.authority.authorityHash ||
+    !isSha(value.quiescedObservationHash) ||
     receiptHash !== hashCanonicalJson(semantic)
   ) {
     throw new Error('STRICT_SETUP_RECOVERY_RECEIPT_INVALID');
@@ -696,6 +1020,11 @@ async function restoreWholeRootCrashSafely(input: {
       phase: 'prepared',
     });
   }
+  await recordRecoveryEvent(input.session, 'RECOVERY_PREPARED', {
+    expectedTreeHash: input.expectedTreeHash,
+    quarantineLeafHash: hashCanonicalJson(quarantineLeaf),
+    restoreLeafHash: hashCanonicalJson(restoreLeaf),
+  });
   assertRecoveryTransactionBinding(transaction, input.session, input.expectedTreeHash);
 
   const targetExists = await exists(input.session.dataRoot);
@@ -709,6 +1038,23 @@ async function restoreWholeRootCrashSafely(input: {
       phase: 'target-quarantined',
     });
   }
+  if (
+    transaction.phase === 'prepared' &&
+    !(await exists(input.session.dataRoot)) &&
+    (await exists(restoreRoot)) &&
+    (await exists(quarantineRoot))
+  ) {
+    transaction = await writeRecoveryTransaction(input.session.operationRoot, {
+      ...transaction,
+      phase: 'target-quarantined',
+    });
+  }
+  if (transaction.phase === 'target-quarantined' || transaction.phase === 'installed') {
+    await recordRecoveryEvent(input.session, 'RECOVERY_TARGET_QUARANTINED', {
+      expectedTreeHash: input.expectedTreeHash,
+      quarantineLeafHash: hashCanonicalJson(quarantineLeaf),
+    });
+  }
   if (!(await exists(input.session.dataRoot)) && (await exists(restoreRoot))) {
     if (!(await exists(quarantineRoot))) {
       throw new Error('STRICT_SETUP_RECOVERY_TRANSACTION_DIVERGENCE');
@@ -718,6 +1064,12 @@ async function restoreWholeRootCrashSafely(input: {
     transaction = await writeRecoveryTransaction(input.session.operationRoot, {
       ...withoutTransactionHash(transaction),
       phase: 'installed',
+    });
+  }
+  if (transaction.phase === 'installed') {
+    await recordRecoveryEvent(input.session, 'RECOVERY_INSTALLED', {
+      expectedTreeHash: input.expectedTreeHash,
+      restoreLeafHash: hashCanonicalJson(restoreLeaf),
     });
   }
   if (
@@ -1217,6 +1569,7 @@ async function readSetupActionReceipt(
 
 async function initializeExternalJournalHeader(input: {
   readonly authority: StrictSetupAuthorityReceiptV1;
+  readonly externalLeaseHash: string;
   readonly operationRoot: string;
   readonly runtimeArtifactManifestPathHash: string;
 }): Promise<string> {
@@ -1224,11 +1577,22 @@ async function initializeExternalJournalHeader(input: {
   const journalPath = path.join(input.operationRoot, JOURNAL_FILE);
   const authorization = input.authority.authorization;
   const semantic = {
-    schemaVersion: 1 as const,
-    kind: 'StrictRunJournalHeaderV1' as const,
+    schemaVersion: 2 as const,
+    kind: 'StrictRunJournalHeaderV2' as const,
     runId: input.authority.runId,
     scenario: input.authority.scenario,
     setupAuthorityHash: input.authority.authorityHash,
+    externalLeaseHash: input.externalLeaseHash,
+    rootIdentityHash: hashCanonicalJson({
+      projectRootHash: input.authority.projectRootHash,
+      dataRootHash: input.authority.roots.dataRoot.pathHash,
+    }),
+    quiesceContractHash: hashCanonicalJson({
+      requestKind: 'StrictQuiesceRequestV1',
+      ackKind: 'StrictQuiesceAcceptedAckV1',
+      receiptKind: 'QuiescedPreResetObservationReceiptV1',
+      volatilePolicy: ['.asd/daemon.json', '.asd/daemon.pid', 'verified-stdio-log-append'],
+    }),
     pathPlanHash: input.authority.pathPlanHash,
     plannedAbsentPathReceiptHash: input.authority.plannedAbsentPathReceiptHash,
     preResetObservationHash:
@@ -1280,6 +1644,7 @@ async function acquireOperationLock(
         kind: 'StrictExternalOperationLeaseV1',
         runId: authority.runId,
         setupAuthorityHash: authority.authorityHash,
+        leaseIdentityHash: createExternalLeaseIdentityHash(authority, path.dirname(lockPath)),
         ownerPid: process.pid,
         nonce: randomUUID(),
         heartbeatAt: Date.now(),
@@ -1428,8 +1793,8 @@ async function hasMatchingExternalHeader(
     }
     const { headerHash, ...semantic } = value;
     return (
-      value.schemaVersion === 1 &&
-      value.kind === 'StrictRunJournalHeaderV1' &&
+      value.schemaVersion === 2 &&
+      value.kind === 'StrictRunJournalHeaderV2' &&
       value.runId === authority.runId &&
       value.scenario === authority.scenario &&
       value.setupAuthorityHash === authority.authorityHash &&
@@ -1595,6 +1960,10 @@ async function copyWholeRoot(source: string, destination: string): Promise<void>
 }
 
 async function hashWholeRoot(root: string): Promise<string> {
+  return hashCanonicalJson(await collectWholeRootInventory(root));
+}
+
+async function collectWholeRootInventory(root: string): Promise<StrictRootInventoryRowV1[]> {
   await assertExistingDirectoryWithoutSymlink(root);
   const rows: Array<{
     readonly hash?: string;
@@ -1632,7 +2001,577 @@ async function hashWholeRoot(root: string): Promise<string> {
     }
   };
   await visit(root);
-  return hashCanonicalJson(rows);
+  return rows;
+}
+
+async function sealQuiescedObservation(
+  session: StrictExternalSetupSession,
+  input: {
+    readonly disposition: QuiescedPreResetObservationReceiptV1['disposition'];
+    readonly progress: StrictQuiesceProgressV1 | null;
+    readonly postInventory: readonly StrictRootInventoryRowV1[] | null;
+  }
+): Promise<QuiescedPreResetObservationReceiptV1> {
+  const databaseProof = await createDatabaseTerminalProof(
+    session,
+    input.progress?.databaseRelativePath ?? null
+  );
+  // The read-only SQLite integrity probe may transiently open sidecars. Re-observe after it closes
+  // so the sealed whole-root hash describes the terminal filesystem, not the probe window.
+  const postInventory = input.postInventory
+    ? await waitForStableRootInventory(session.dataRoot)
+    : null;
+  const rootTreeHash = postInventory ? hashCanonicalJson(postInventory) : null;
+  const protectedBindingsHash = postInventory
+    ? await hashPostQuiesceProtectedBindings(session.dataRoot)
+    : null;
+  const volatileDelta =
+    input.progress && postInventory
+      ? await verifyMinimalQuiesceDelta(session, input.progress, postInventory)
+      : createEmptyVolatileDelta();
+  const semantic = {
+    schemaVersion: 1 as const,
+    kind: 'QuiescedPreResetObservationReceiptV1' as const,
+    runId: session.authority.runId,
+    scenario: session.scenario,
+    disposition: input.disposition,
+    setupAuthorityHash: session.authority.authorityHash,
+    journalHeaderHash: session.journalHeaderHash,
+    externalLeaseHash: session.externalLeaseHash,
+    rootIdentityHash: hashCanonicalJson({
+      projectRootHash: session.authority.projectRootHash,
+      dataRootHash: session.authority.roots.dataRoot.pathHash,
+    }),
+    preResetObservationHash: session.authority.preResetObservation
+      ? hashCanonicalJson(session.authority.preResetObservation)
+      : null,
+    preQuiesceInventoryHash: input.progress?.preInventoryHash ?? null,
+    quiesceRequestHash: input.progress?.request?.requestHash ?? null,
+    quiesceAcceptedAckHash: input.progress?.ack?.ackHash ?? null,
+    rootTreeHash,
+    databaseProof,
+    protectedBindingsHash,
+    volatileDelta,
+  };
+  const receipt = Object.freeze({ ...semantic, receiptHash: hashCanonicalJson(semantic) });
+  await writeDurableJson(path.join(session.operationRoot, QUIESCED_OBSERVATION_FILE), receipt);
+  if (input.disposition === 'pristine-absent') {
+    await recordSetupEvent(session, 'PRISTINE_ABSENT', {
+      receiptHash: receipt.receiptHash,
+    });
+  } else {
+    await recordSetupEvent(session, 'QUIESCED_OBSERVED', {
+      receiptHash: receipt.receiptHash,
+      rootTreeHash: receipt.rootTreeHash,
+    });
+  }
+  return receipt;
+}
+
+async function recordSetupEvent(
+  session: StrictExternalSetupSession,
+  state: StrictSetupStateV2,
+  payload: Readonly<Record<string, unknown>>
+): Promise<void> {
+  await appendStrictSetupJournalEvent({
+    expectedHeaderHash: session.journalHeaderHash,
+    operationRoot: session.operationRoot,
+    payload,
+    runId: session.authority.runId,
+    state,
+  });
+}
+
+async function recordRecoveryEvent(
+  session: StrictExternalSetupSession,
+  state: StrictRecoveryStateV2,
+  payload: Readonly<Record<string, unknown>>
+): Promise<void> {
+  await appendStrictRecoveryJournalEvent({
+    expectedHeaderHash: session.journalHeaderHash,
+    operationRoot: session.operationRoot,
+    payload,
+    runId: session.authority.runId,
+    state,
+  });
+}
+
+async function verifyExistingRecoveryOutcome(
+  session: StrictExternalSetupSession,
+  receipt: StrictExternalRecoveryReceiptV1,
+  quiescedObservation: QuiescedPreResetObservationReceiptV1
+): Promise<void> {
+  if (receipt.quiescedObservationHash !== quiescedObservation.receiptHash) {
+    throw new Error('STRICT_SETUP_RECOVERY_RECEIPT_INVALID');
+  }
+  if (session.scenario === 'pristine') {
+    if (!receipt.targetAbsent || (await exists(session.dataRoot))) {
+      throw new Error('STRICT_SETUP_RECOVERY_REPLAY_DIVERGENCE');
+    }
+    return;
+  }
+  if (
+    !receipt.restoredTreeHash ||
+    receipt.restoredTreeHash !== quiescedObservation.rootTreeHash ||
+    (await hashWholeRoot(session.dataRoot)) !== receipt.restoredTreeHash ||
+    (await hashPostQuiesceProtectedBindings(session.dataRoot)) !==
+      quiescedObservation.protectedBindingsHash
+  ) {
+    throw new Error('STRICT_SETUP_RECOVERY_REPLAY_DIVERGENCE');
+  }
+}
+
+async function readQuiescedObservationReceipt(
+  session: StrictExternalSetupSession
+): Promise<QuiescedPreResetObservationReceiptV1>;
+async function readQuiescedObservationReceipt(
+  session: StrictExternalSetupSession,
+  allowMissing: true
+): Promise<QuiescedPreResetObservationReceiptV1 | null>;
+async function readQuiescedObservationReceipt(
+  session: StrictExternalSetupSession,
+  allowMissing = false
+): Promise<QuiescedPreResetObservationReceiptV1 | null> {
+  let value: unknown;
+  try {
+    value = JSON.parse(
+      await fsp.readFile(path.join(session.operationRoot, QUIESCED_OBSERVATION_FILE), 'utf8')
+    );
+  } catch (error: unknown) {
+    if (allowMissing && readCode(error) === 'ENOENT') {
+      return null;
+    }
+    throw new Error('STRICT_SETUP_QUIESCED_OBSERVATION_INVALID');
+  }
+  if (!isRecord(value)) {
+    throw new Error('STRICT_SETUP_QUIESCED_OBSERVATION_INVALID');
+  }
+  const { receiptHash, ...semantic } = value;
+  if (
+    value.schemaVersion !== 1 ||
+    value.kind !== 'QuiescedPreResetObservationReceiptV1' ||
+    value.runId !== session.authority.runId ||
+    value.scenario !== session.scenario ||
+    value.setupAuthorityHash !== session.authority.authorityHash ||
+    value.journalHeaderHash !== session.journalHeaderHash ||
+    value.externalLeaseHash !== session.externalLeaseHash ||
+    receiptHash !== hashCanonicalJson(semantic)
+  ) {
+    throw new Error('STRICT_SETUP_QUIESCED_OBSERVATION_INVALID');
+  }
+  return Object.freeze(value as unknown as QuiescedPreResetObservationReceiptV1);
+}
+
+async function verifyQuiescedObservationCurrentRoot(
+  session: StrictExternalSetupSession,
+  receipt: QuiescedPreResetObservationReceiptV1
+): Promise<void> {
+  if (receipt.disposition === 'pristine-absent') {
+    if (await exists(session.dataRoot)) {
+      throw new Error('STRICT_SETUP_PRISTINE_TARGET_NOT_ABSENT');
+    }
+    return;
+  }
+  if (!receipt.rootTreeHash || (await hashWholeRoot(session.dataRoot)) !== receipt.rootTreeHash) {
+    throw new Error('STRICT_SETUP_QUIESCED_ROOT_DRIFT');
+  }
+}
+
+async function readStrictQuiesceProgress(
+  session: StrictExternalSetupSession
+): Promise<StrictQuiesceProgressV1 | null> {
+  let value: unknown;
+  try {
+    value = JSON.parse(
+      await fsp.readFile(path.join(session.operationRoot, QUIESCE_PROGRESS_FILE), 'utf8')
+    );
+  } catch (error: unknown) {
+    if (readCode(error) === 'ENOENT') {
+      return null;
+    }
+    throw new Error('STRICT_QUIESCE_PROGRESS_INVALID');
+  }
+  if (!isRecord(value)) {
+    throw new Error('STRICT_QUIESCE_PROGRESS_INVALID');
+  }
+  const { progressHash, ...semantic } = value;
+  if (
+    value.schemaVersion !== 1 ||
+    value.kind !== 'StrictQuiesceProgressV1' ||
+    value.runId !== session.authority.runId ||
+    value.setupAuthorityHash !== session.authority.authorityHash ||
+    value.journalHeaderHash !== session.journalHeaderHash ||
+    value.externalLeaseHash !== session.externalLeaseHash ||
+    progressHash !== hashCanonicalJson(semantic)
+  ) {
+    throw new Error('STRICT_QUIESCE_PROGRESS_INVALID');
+  }
+  return Object.freeze(value as unknown as StrictQuiesceProgressV1);
+}
+
+async function writeStrictQuiesceProgress(
+  session: StrictExternalSetupSession,
+  value: Omit<
+    StrictQuiesceProgressV1,
+    | 'schemaVersion'
+    | 'kind'
+    | 'runId'
+    | 'setupAuthorityHash'
+    | 'journalHeaderHash'
+    | 'externalLeaseHash'
+    | 'progressHash'
+  >
+): Promise<StrictQuiesceProgressV1> {
+  const semantic = {
+    schemaVersion: 1 as const,
+    kind: 'StrictQuiesceProgressV1' as const,
+    runId: session.authority.runId,
+    setupAuthorityHash: session.authority.authorityHash,
+    journalHeaderHash: session.journalHeaderHash,
+    externalLeaseHash: session.externalLeaseHash,
+    ...value,
+  };
+  const progress = Object.freeze({ ...semantic, progressHash: hashCanonicalJson(semantic) });
+  await writeDurableJson(path.join(session.operationRoot, QUIESCE_PROGRESS_FILE), progress);
+  return progress;
+}
+
+async function verifyMinimalQuiesceDelta(
+  session: StrictExternalSetupSession,
+  progress: StrictQuiesceProgressV1,
+  postInventory: readonly StrictRootInventoryRowV1[]
+): Promise<QuiescedPreResetObservationReceiptV1['volatileDelta']> {
+  const before = new Map(progress.preInventory.map((row) => [row.relativePath, row]));
+  const after = new Map(postInventory.map((row) => [row.relativePath, row]));
+  const databaseRelativePath = progress.databaseRelativePath;
+  const sqlitePaths = new Set(
+    databaseRelativePath
+      ? [databaseRelativePath, `${databaseRelativePath}-wal`, `${databaseRelativePath}-shm`]
+      : []
+  );
+  const changes: Array<{
+    relativePathHash: string;
+    beforeStateHash: string;
+    afterStateHash: string;
+    reason: 'control-removal' | 'sqlite-checkpoint' | 'stdio-log-append';
+  }> = [];
+  for (const relativePath of [...new Set([...before.keys(), ...after.keys()])].sort()) {
+    const previous = before.get(relativePath) ?? null;
+    const current = after.get(relativePath) ?? null;
+    if (hashCanonicalJson(previous) === hashCanonicalJson(current)) {
+      continue;
+    }
+    let reason: 'control-removal' | 'sqlite-checkpoint' | 'stdio-log-append';
+    if (relativePath === '.asd/daemon.json' || relativePath === '.asd/daemon.pid') {
+      if (current !== null) {
+        throw new Error('STRICT_QUIESCE_CONTROL_IDENTITY_RETAINED');
+      }
+      reason = 'control-removal';
+    } else if (sqlitePaths.has(relativePath)) {
+      reason = 'sqlite-checkpoint';
+    } else if (relativePath === '.asd/daemon.log') {
+      await verifyExactStdioLogAppend(session, progress, previous, current);
+      reason = 'stdio-log-append';
+    } else {
+      throw new Error(`STRICT_QUIESCE_UNKNOWN_ROOT_DELTA:${relativePath}`);
+    }
+    changes.push({
+      relativePathHash: hashCanonicalJson(relativePath),
+      beforeStateHash: hashCanonicalJson(previous),
+      afterStateHash: hashCanonicalJson(current),
+      reason,
+    });
+  }
+  const semantic = { changes, unknownChangedEntryCount: 0 as const };
+  return Object.freeze({ ...semantic, deltaHash: hashCanonicalJson(semantic) });
+}
+
+function createEmptyVolatileDelta(): QuiescedPreResetObservationReceiptV1['volatileDelta'] {
+  const semantic = { changes: [], unknownChangedEntryCount: 0 as const };
+  return Object.freeze({ ...semantic, deltaHash: hashCanonicalJson(semantic) });
+}
+
+async function verifyExactStdioLogAppend(
+  session: StrictExternalSetupSession,
+  progress: StrictQuiesceProgressV1,
+  previous: StrictRootInventoryRowV1 | null,
+  current: StrictRootInventoryRowV1 | null
+): Promise<void> {
+  const evidence = progress.stdioLogEvidence;
+  if (
+    !evidence ||
+    !progress.ack ||
+    !previous?.hash ||
+    previous.type !== 'file' ||
+    current?.type !== 'file' ||
+    previous.size !== evidence.initialSize ||
+    current.size === undefined ||
+    current.size < evidence.initialSize ||
+    evidence.relativePathHash !== hashPathSymbol('.asd/daemon.log')
+  ) {
+    throw new Error('STRICT_QUIESCE_STDIO_LOG_DELTA_UNAUTHORIZED');
+  }
+  const logPath = path.join(session.dataRoot, '.asd/daemon.log');
+  const stat = await fsp.stat(logPath);
+  if (String(stat.ino) !== evidence.inode) {
+    throw new Error('STRICT_QUIESCE_STDIO_LOG_DELTA_UNAUTHORIZED');
+  }
+  const handle = await fsp.open(logPath, 'r');
+  try {
+    const bytes = Buffer.alloc(current.size);
+    const { bytesRead } = await handle.read(bytes, 0, current.size, 0);
+    if (bytesRead !== current.size) {
+      throw new Error('STRICT_QUIESCE_STDIO_LOG_DELTA_UNAUTHORIZED');
+    }
+    const prefix = bytes.subarray(0, evidence.initialSize);
+    const prefixHash = `sha256:${createHash('sha256').update(prefix).digest('hex')}`;
+    if (prefixHash !== previous.hash) {
+      throw new Error('STRICT_QUIESCE_STDIO_LOG_DELTA_UNAUTHORIZED');
+    }
+    const expectedShutdownTranscript =
+      '[shutdown] STRICT_QUIESCE received, draining…\n' +
+      '[shutdown] ✓ daemon-jobs\n' +
+      '[shutdown] ✓ evolution-maintenance-sweep\n' +
+      '[shutdown] ✓ daemon-file-change-collector\n' +
+      '[shutdown] ✓ timer-registry\n' +
+      '[shutdown] ✓ http-server\n' +
+      '[shutdown] ✓ bootstrap\n' +
+      '[shutdown] ✓ daemon-state\n' +
+      '[shutdown] Complete, exiting (code=0)\n';
+    const expectedSuffix = Buffer.from(
+      `[strict-quiesce-accepted] ${JSON.stringify(progress.ack)}\n${expectedShutdownTranscript}`,
+      'utf8'
+    );
+    const suffix = bytes.subarray(evidence.initialSize);
+    if (!suffix.equals(expectedSuffix)) {
+      throw new Error('STRICT_QUIESCE_STDIO_LOG_DELTA_UNAUTHORIZED');
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
+async function recoverAcceptedAckFromStdioLog(
+  session: StrictExternalSetupSession,
+  progress: StrictQuiesceProgressV1
+): Promise<StrictQuiesceAcceptedAckV1> {
+  const evidence = progress.stdioLogEvidence;
+  if (!evidence || !progress.request) {
+    throw new Error('STRICT_QUIESCE_ACK_OUTCOME_UNKNOWN');
+  }
+  const logPath = path.join(session.dataRoot, '.asd/daemon.log');
+  let suffix: string;
+  try {
+    const bytes = await fsp.readFile(logPath);
+    if (bytes.byteLength < evidence.initialSize) {
+      throw new Error('STRICT_QUIESCE_ACK_OUTCOME_UNKNOWN');
+    }
+    suffix = bytes.subarray(evidence.initialSize).toString('utf8');
+  } catch {
+    throw new Error('STRICT_QUIESCE_ACK_OUTCOME_UNKNOWN');
+  }
+  for (const line of suffix.split('\n')) {
+    const marker = '[strict-quiesce-accepted] ';
+    const index = line.indexOf(marker);
+    if (index < 0) {
+      continue;
+    }
+    try {
+      const ack = readStrictQuiesceAcceptedAck(JSON.parse(line.slice(index + marker.length)));
+      if (ack.requestHash === progress.request.requestHash) {
+        return ack;
+      }
+    } catch {}
+  }
+  throw new Error('STRICT_QUIESCE_ACK_OUTCOME_UNKNOWN');
+}
+
+async function createDatabaseTerminalProof(
+  session: StrictExternalSetupSession,
+  databaseRelativePath: string | null
+): Promise<QuiescedPreResetObservationReceiptV1['databaseProof']> {
+  if (!databaseRelativePath) {
+    return {
+      databasePathHash: null,
+      databaseHash: null,
+      walHash: null,
+      walSize: null,
+      shmHash: null,
+      shmSize: null,
+      integrityCheck: 'not-applicable',
+      checkpointTerminal: true,
+    };
+  }
+  const databasePath = path.join(session.dataRoot, databaseRelativePath);
+  const database = await fileTerminalState(databasePath, true);
+  const wal = await fileTerminalState(`${databasePath}-wal`, false);
+  const shm = await fileTerminalState(`${databasePath}-shm`, false);
+  if ((wal.size ?? 0) !== 0 || (shm.size ?? 0) !== 0) {
+    throw new Error('STRICT_QUIESCE_SQLITE_SIDECAR_NONTERMINAL');
+  }
+  let integrity: unknown;
+  const probe = new Database(databasePath, { fileMustExist: true, readonly: true });
+  try {
+    integrity = probe.pragma('integrity_check', { simple: true });
+  } finally {
+    probe.close();
+  }
+  if (integrity !== 'ok') {
+    throw new Error('STRICT_QUIESCE_SQLITE_INTEGRITY_FAILED');
+  }
+  return {
+    databasePathHash: hashPath(databasePath),
+    databaseHash: database.hash,
+    walHash: wal.hash,
+    walSize: wal.size,
+    shmHash: shm.hash,
+    shmSize: shm.size,
+    integrityCheck: 'ok',
+    checkpointTerminal: true,
+  };
+}
+
+async function fileTerminalState(
+  filePath: string,
+  required: boolean
+): Promise<{ hash: string | null; size: number | null }> {
+  try {
+    const stat = await fsp.lstat(filePath);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error('STRICT_QUIESCE_SQLITE_FILE_INVALID');
+    }
+    return {
+      hash: `sha256:${createHash('sha256')
+        .update(await fsp.readFile(filePath))
+        .digest('hex')}`,
+      size: stat.size,
+    };
+  } catch (error: unknown) {
+    if (!required && readCode(error) === 'ENOENT') {
+      return { hash: null, size: null };
+    }
+    throw error;
+  }
+}
+
+async function hashPostQuiesceProtectedBindings(dataRoot: string): Promise<string> {
+  return hashCanonicalJson({
+    configHash: await hashOptionalFile(path.join(dataRoot, '.asd/config.json')),
+    readerStateHash: await hashOptionalTree(
+      path.join(dataRoot, '.asd/context/recipe-publications')
+    ),
+    markerHash: await hashOptionalJson(
+      path.join(dataRoot, '.asd/context/recipe-publications/marker.json')
+    ),
+    publicRouteHash: await hashOptionalJson(
+      path.join(dataRoot, '.asd/context/recipe-publications/active.json')
+    ),
+    daemonEntrypointHash: await hashOptionalJson(
+      path.join(dataRoot, '.asd/daemon-entrypoint.json')
+    ),
+  });
+}
+
+async function waitForStableRootInventory(
+  dataRoot: string
+): Promise<readonly StrictRootInventoryRowV1[]> {
+  let previous = await collectWholeRootInventory(dataRoot);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await sleep(100);
+    const current = await collectWholeRootInventory(dataRoot);
+    if (hashCanonicalJson(current) === hashCanonicalJson(previous)) {
+      return current;
+    }
+    previous = current;
+  }
+  throw new Error('STRICT_QUIESCE_POST_EXIT_ROOT_UNSTABLE');
+}
+
+async function waitForOldDaemonExit(pid: number, timeoutMs: number): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (!isProcessAlive(pid)) {
+      return;
+    }
+    await sleep(100);
+  }
+  throw new Error('STRICT_QUIESCE_OLD_WRITER_TIMEOUT');
+}
+
+function assertDaemonStateBinding(
+  session: StrictExternalSetupSession,
+  state: NonNullable<ReturnType<typeof readDaemonState>>
+): void {
+  if (
+    path.resolve(state.projectRoot) !== session.projectRoot ||
+    path.resolve(state.dataRoot) !== session.dataRoot ||
+    !state.token ||
+    !/^http:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/u.test(state.url)
+  ) {
+    throw new Error('STRICT_QUIESCE_DAEMON_IDENTITY_MISMATCH');
+  }
+  relativeTargetPath(session.dataRoot, state.databasePath);
+}
+
+function relativeTargetPath(dataRoot: string, target: string): string {
+  const relative = path.relative(dataRoot, path.resolve(target));
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('STRICT_QUIESCE_DAEMON_IDENTITY_MISMATCH');
+  }
+  return relative;
+}
+
+async function resolveExistingDatabaseRelativePath(dataRoot: string): Promise<string | null> {
+  const relative = path.join('.asd', 'alembic.db');
+  return (await exists(path.join(dataRoot, relative))) ? relative : null;
+}
+
+async function readPidFile(pidPath: string): Promise<number | null> {
+  try {
+    const pid = Number.parseInt((await fsp.readFile(pidPath, 'utf8')).trim(), 10);
+    return Number.isSafeInteger(pid) && pid > 0 ? pid : null;
+  } catch (error: unknown) {
+    if (readCode(error) === 'ENOENT') {
+      return null;
+    }
+    return null;
+  }
+}
+
+function readStrictStdioLogEvidence(ownerPid: number): StrictStdioLogEvidenceV1 | null {
+  const raw = process.env.ALEMBIC_STRICT_QUIESCE_STDIO_EVIDENCE;
+  if (!raw) {
+    return null;
+  }
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!isRecord(value)) {
+      return null;
+    }
+    const { evidenceHash, ...semantic } = value;
+    if (
+      value.schemaVersion !== 1 ||
+      value.ownerPid !== ownerPid ||
+      value.relativePathHash !== hashPathSymbol('.asd/daemon.log') ||
+      typeof value.inode !== 'string' ||
+      !Number.isSafeInteger(value.initialSize) ||
+      Number(value.initialSize) < 0 ||
+      evidenceHash !== hashJsonInsertionOrder(semantic)
+    ) {
+      return null;
+    }
+    return Object.freeze(value as unknown as StrictStdioLogEvidenceV1);
+  } catch {
+    return null;
+  }
+}
+
+function hashPathSymbol(value: string): string {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`;
+}
+
+function hashJsonInsertionOrder(value: unknown): string {
+  return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
 }
 
 async function hashPreResetProtectedBindings(dataRoot: string): Promise<string> {
@@ -1775,6 +2714,20 @@ function pathsOverlap(left: string, right: string): boolean {
 
 function hashPath(value: string): string {
   return `sha256:${createHash('sha256').update(path.resolve(value)).digest('hex')}`;
+}
+
+function createExternalLeaseIdentityHash(
+  authority: StrictSetupAuthorityReceiptV1,
+  operationLockRoot: string
+): string {
+  return hashCanonicalJson({
+    schemaVersion: 1,
+    kind: 'StrictExternalOperationLeaseIdentityV1',
+    runId: authority.runId,
+    setupAuthorityHash: authority.authorityHash,
+    operationLockRootHash: hashPath(operationLockRoot),
+    ordering: 'authority-root-identity-before-lease-before-header',
+  });
 }
 
 function isRootBinding(value: unknown, relativeRequired: boolean): boolean {

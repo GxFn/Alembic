@@ -5,6 +5,8 @@ import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { afterEach, describe, expect, it } from 'vitest';
 import { assertStrictPublicRouteResumeCompatibility } from '../../lib/recipe-pipeline/generate/strict/StrictColdStartOrchestrator.js';
 import {
+  appendStrictRecoveryJournalEvent,
+  appendStrictSetupJournalEvent,
   STRICT_PRODUCTION_STATES_V1,
   StrictProductionJournal,
   type StrictProductionStateV1,
@@ -188,8 +190,8 @@ describe('StrictProductionJournal', () => {
   it('binds an external run header without counting it as a state row', async () => {
     const root = await temporaryRoot();
     const semantic = {
-      schemaVersion: 1,
-      kind: 'StrictRunJournalHeaderV1',
+      schemaVersion: 2,
+      kind: 'StrictRunJournalHeaderV2',
       runId: 'run-external',
       scenario: 'pristine',
       setupAuthorityHash: sha('authority'),
@@ -228,6 +230,81 @@ describe('StrictProductionJournal', () => {
         runId: 'run-external',
       })
     ).rejects.toThrow('STRICT_JOURNAL_HEADER_MISMATCH');
+  });
+
+  it('keeps setup, production, and recovery on one global V2 hash chain with separate projections', async () => {
+    const root = await temporaryRoot();
+    const semantic = {
+      schemaVersion: 2,
+      kind: 'StrictRunJournalHeaderV2',
+      runId: 'run-tracked',
+      scenario: 'rebuild',
+      setupAuthorityHash: sha('authority'),
+    };
+    const headerHash = hashCanonicalJson(semantic);
+    await fsp.writeFile(
+      path.join(root, 'strict-production.journal.jsonl'),
+      `${JSON.stringify({ ...semantic, headerHash })}\n`
+    );
+    const setup = async (state: Parameters<typeof appendStrictSetupJournalEvent>[0]['state']) =>
+      appendStrictSetupJournalEvent({
+        expectedHeaderHash: headerHash,
+        operationRoot: root,
+        payload: { bindingHash: sha(state) },
+        runId: 'run-tracked',
+        state,
+      });
+    for (const state of [
+      'PRE_QUIESCE_INVENTORY_VERIFIED',
+      'QUIESCE_NOT_RUNNING',
+      'QUIESCED_OBSERVED',
+      'SNAPSHOT_COPY_STARTED',
+      'SNAPSHOT_VERIFIED',
+      'RESET_STARTED',
+      'BLANK',
+    ] as const) {
+      await setup(state);
+    }
+    await setup('BLANK');
+
+    const production = await StrictProductionJournal.open({
+      expectedHeaderHash: headerHash,
+      operationRoot: root,
+      ownerId: 'daemon:tracked',
+      runId: 'run-tracked',
+    });
+    const firstProduction = await production.append('PC_F_ACCEPTED', {
+      receiptHash: sha('pcf'),
+    });
+    expect(firstProduction.sequence).toBe(8);
+    expect(firstProduction.previousEntryHash).toMatch(/^sha256:/u);
+    await production.close();
+
+    for (const state of [
+      'RECOVERY_PREPARED',
+      'RECOVERY_TARGET_QUARANTINED',
+      'RECOVERY_INSTALLED',
+      'RECOVERY_VERIFIED',
+    ] as const) {
+      await appendStrictRecoveryJournalEvent({
+        expectedHeaderHash: headerHash,
+        operationRoot: root,
+        payload: { bindingHash: sha(state) },
+        runId: 'run-tracked',
+        state,
+      });
+    }
+
+    const resumed = await StrictProductionJournal.open({
+      expectedHeaderHash: headerHash,
+      operationRoot: root,
+      ownerId: 'daemon:resumed',
+      resumeOwnerId: 'daemon:tracked',
+      runId: 'run-tracked',
+    });
+    expect(resumed.resumePoint).toBe('PC_F_ACCEPTED');
+    expect(resumed.entries).toHaveLength(1);
+    await resumed.close();
   });
 });
 

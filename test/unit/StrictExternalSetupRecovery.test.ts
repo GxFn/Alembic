@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
@@ -11,6 +11,7 @@ import { getProjectRegistryDir } from '@alembic/core/workspace';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import type AppRuntime from '../../lib/Bootstrap.js';
+import { DaemonSupervisor } from '../../lib/daemon/runtime/DaemonSupervisor.js';
 import { initializeServerRuntime } from '../../lib/daemon/runtime/ServerStartupBoundary.js';
 import { loadStrictProductionAuthorization } from '../../lib/recipe-pipeline/generate/strict/StrictAuthorization.js';
 import {
@@ -106,7 +107,7 @@ describe('strict external setup and recovery authority', () => {
       .map((row) => JSON.parse(row) as Record<string, unknown>);
     expect(journalRows).toHaveLength(1);
     expect(journalRows[0]).toMatchObject({
-      kind: 'StrictRunJournalHeaderV1',
+      kind: 'StrictRunJournalHeaderV2',
       runId: fixture.runId,
       scenario: 'pristine',
     });
@@ -238,6 +239,51 @@ describe('strict external setup and recovery authority', () => {
     await expect(readStrictExternalSetupState(session)).rejects.toThrow(
       'STRICT_SETUP_STATE_MISSING'
     );
+  });
+
+  it('seals post-quiesce state and snapshots it even when stale control removal changes the V1 root', async () => {
+    const fixture = await rebuildAuthorityFixture();
+    await Promise.all([
+      fsp.writeFile(
+        path.join(fixture.dataRoot, '.asd/daemon.json'),
+        '{"token":"must-not-enter-snapshot"}\n'
+      ),
+      fsp.writeFile(path.join(fixture.dataRoot, '.asd/daemon.pid'), '2147483647\n'),
+    ]);
+    const authority = JSON.parse(await fsp.readFile(fixture.authorityPath, 'utf8')) as {
+      preResetObservation: { rootTreeHash: string };
+    };
+    const session = await prepareStrictExternalSetupFromEnvironment({
+      dataRoot: fixture.dataRoot,
+      projectRoot: fixture.projectRoot,
+    });
+    if (!session) {
+      throw new Error('fixture session missing');
+    }
+
+    const setup = await initializeStrictExternalSetupTarget(session);
+    const receipt = JSON.parse(
+      await fsp.readFile(
+        path.join(fixture.operationRoot, 'quiesced-pre-reset-observation-receipt.json'),
+        'utf8'
+      )
+    ) as Record<string, unknown>;
+
+    expect(receipt).toMatchObject({
+      kind: 'QuiescedPreResetObservationReceiptV1',
+      disposition: 'not-running',
+      rootTreeHash: setup.sourceTreeHash,
+      quiesceRequestHash: null,
+      quiesceAcceptedAckHash: null,
+    });
+    expect(receipt.preQuiesceInventoryHash).not.toBe(authority.preResetObservation.rootTreeHash);
+    expect(receipt.rootTreeHash).toBe(authority.preResetObservation.rootTreeHash);
+    await expect(
+      fsp.stat(path.join(fixture.snapshotRoot, 'whole-root/.asd/daemon.json'))
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      fsp.stat(path.join(fixture.snapshotRoot, 'whole-root/.asd/daemon.pid'))
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('fails before reset when frozen config or reader state drifts after the snapshot', async () => {
@@ -398,6 +444,183 @@ describe('strict external setup and recovery authority', () => {
       )
     ).resolves.toBeDefined();
   });
+
+  it('built strict replacement quiesces a live writer and publishes a fresh daemon identity', async () => {
+    const fixture = await rebuildAuthorityFixture();
+    const alembicHome = path.join(fixture.authorityRoot, 'live-daemon-home');
+    await configureBuiltProjectScope(fixture, alembicHome);
+    const logPath = path.join(fixture.dataRoot, '.asd/daemon.log');
+    await fsp.mkdir(path.dirname(logPath), { recursive: true });
+    const logHandle = await fsp.open(logPath, 'a');
+    const oldDaemon = spawn(
+      process.execPath,
+      [path.join(process.cwd(), 'dist/bin/daemon-server.js')],
+      {
+        cwd: fixture.projectRoot,
+        env: {
+          ...process.env,
+          ALEMBIC_DAEMON_FILE_CHANGES: '0',
+          ALEMBIC_EVOLUTION_MAINTENANCE_SWEEP: '0',
+          ALEMBIC_HOME: alembicHome,
+          ALEMBIC_PROJECT_DIR: fixture.projectRoot,
+          ALEMBIC_QUIET: '1',
+          ALEMBIC_STRICT_SETUP_ACTION_PATH: '',
+          ALEMBIC_STRICT_SETUP_AUTHORITY_PATH: '',
+          NODE_ENV: 'test',
+        },
+        stdio: ['ignore', logHandle.fd, logHandle.fd],
+      }
+    );
+    await logHandle.close();
+    const statePath = path.join(fixture.dataRoot, '.asd/daemon.json');
+    const oldState = await waitForDaemonState(statePath, oldDaemon.pid ?? -1);
+    await fsp.writeFile(path.join(fixture.dataRoot, '.asd/daemon.pid'), `${oldState.pid}\n`, {
+      mode: 0o600,
+    });
+    const strictChildLog = await fsp.open(
+      path.join(fixture.authorityRoot, 'strict-child.log'),
+      'a'
+    );
+    const supervisor = new DaemonSupervisor({
+      daemonEntryPath: path.join(process.cwd(), 'dist/bin/daemon-server.js'),
+      spawnDaemon: (command, args, options) =>
+        spawn(command, args, {
+          ...options,
+          stdio: ['ignore', strictChildLog.fd, strictChildLog.fd],
+        }),
+    });
+
+    try {
+      const replacement = await supervisor.start({
+        projectRoot: fixture.projectRoot,
+        waitUntilReadyMs: 20_000,
+      });
+      await strictChildLog.close();
+      if (!replacement.ready) {
+        throw new Error(
+          `${replacement.message ?? 'strict replacement failed'}\n${await fsp.readFile(
+            path.join(fixture.authorityRoot, 'strict-child.log'),
+            'utf8'
+          )}`
+        );
+      }
+      expect(replacement).toMatchObject({ ready: true, status: 'ready' });
+      expect(replacement.state?.pid).not.toBe(oldState.pid);
+      expect(replacement.state?.token).not.toBe(oldState.token);
+      await waitForProcessExit(oldState.pid, 10_000);
+
+      const receipt = JSON.parse(
+        await fsp.readFile(
+          path.join(fixture.operationRoot, 'quiesced-pre-reset-observation-receipt.json'),
+          'utf8'
+        )
+      ) as Record<string, unknown>;
+      expect(receipt).toMatchObject({
+        kind: 'QuiescedPreResetObservationReceiptV1',
+        disposition: 'live-graceful',
+        databaseProof: {
+          checkpointTerminal: true,
+          integrityCheck: 'ok',
+          walSize: null,
+          shmSize: null,
+        },
+      });
+      expect(receipt.quiesceRequestHash).toMatch(/^sha256:[0-9a-f]{64}$/u);
+      expect(receipt.quiesceAcceptedAckHash).toMatch(/^sha256:[0-9a-f]{64}$/u);
+      await expect(
+        fsp.stat(path.join(fixture.snapshotRoot, 'whole-root/.asd/daemon.json'))
+      ).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(
+        fsp.stat(path.join(fixture.snapshotRoot, 'whole-root/.asd/daemon.pid'))
+      ).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await strictChildLog.close().catch(() => {});
+      await supervisor.stop({ projectRoot: fixture.projectRoot, waitMs: 10_000 }).catch(() => {});
+      if (oldDaemon.pid && isPidAlive(oldDaemon.pid)) {
+        oldDaemon.kill('SIGKILL');
+      }
+    }
+  }, 35_000);
+
+  it('built strict replacement fails closed when a live reader prevents terminal checkpoint', async () => {
+    const fixture = await rebuildAuthorityFixture();
+    const alembicHome = path.join(fixture.authorityRoot, 'busy-daemon-home');
+    await configureBuiltProjectScope(fixture, alembicHome);
+    const logPath = path.join(fixture.dataRoot, '.asd/daemon.log');
+    await fsp.mkdir(path.dirname(logPath), { recursive: true });
+    const logHandle = await fsp.open(logPath, 'a');
+    const oldDaemon = spawn(
+      process.execPath,
+      [path.join(process.cwd(), 'dist/bin/daemon-server.js')],
+      {
+        cwd: fixture.projectRoot,
+        env: {
+          ...process.env,
+          ALEMBIC_DAEMON_FILE_CHANGES: '0',
+          ALEMBIC_EVOLUTION_MAINTENANCE_SWEEP: '0',
+          ALEMBIC_HOME: alembicHome,
+          ALEMBIC_PROJECT_DIR: fixture.projectRoot,
+          ALEMBIC_QUIET: '1',
+          ALEMBIC_STRICT_SETUP_ACTION_PATH: '',
+          ALEMBIC_STRICT_SETUP_AUTHORITY_PATH: '',
+          NODE_ENV: 'test',
+        },
+        stdio: ['ignore', logHandle.fd, logHandle.fd],
+      }
+    );
+    await logHandle.close();
+    const statePath = path.join(fixture.dataRoot, '.asd/daemon.json');
+    const oldState = await waitForDaemonState(statePath, oldDaemon.pid ?? -1);
+    await fsp.writeFile(path.join(fixture.dataRoot, '.asd/daemon.pid'), `${oldState.pid}\n`, {
+      mode: 0o600,
+    });
+    const writer = new Database(oldState.databasePath);
+    writer.exec(
+      "CREATE TABLE IF NOT EXISTS strict_checkpoint_probe (id INTEGER PRIMARY KEY, value TEXT); DELETE FROM strict_checkpoint_probe; INSERT INTO strict_checkpoint_probe(value) VALUES ('before-reader')"
+    );
+    const reader = new Database(oldState.databasePath, { readonly: true });
+    reader.exec('BEGIN');
+    reader.prepare('SELECT * FROM strict_checkpoint_probe').all();
+    writer.exec("INSERT INTO strict_checkpoint_probe(value) VALUES ('after-reader')");
+    writer.close();
+    const strictChildLog = await fsp.open(
+      path.join(fixture.authorityRoot, 'strict-busy-child.log'),
+      'a'
+    );
+    const supervisor = new DaemonSupervisor({
+      daemonEntryPath: path.join(process.cwd(), 'dist/bin/daemon-server.js'),
+      spawnDaemon: (command, args, options) =>
+        spawn(command, args, {
+          ...options,
+          stdio: ['ignore', strictChildLog.fd, strictChildLog.fd],
+        }),
+    });
+
+    try {
+      const replacement = await supervisor.start({
+        projectRoot: fixture.projectRoot,
+        waitUntilReadyMs: 20_000,
+      });
+      await strictChildLog.close();
+      expect(replacement).toMatchObject({ ready: false, status: 'failed' });
+      await waitForProcessExit(oldState.pid, 10_000);
+      await expect(fsp.stat(statePath)).resolves.toBeDefined();
+      await expect(fsp.stat(path.join(fixture.dataRoot, '.asd/daemon.pid'))).resolves.toBeDefined();
+      await expect(
+        fsp.stat(path.join(fixture.operationRoot, 'quiesced-pre-reset-observation-receipt.json'))
+      ).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(fsp.stat(path.join(fixture.snapshotRoot, 'whole-root'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    } finally {
+      reader.close();
+      await strictChildLog.close().catch(() => {});
+      await supervisor.stop({ projectRoot: fixture.projectRoot, waitMs: 10_000 }).catch(() => {});
+      if (oldDaemon.pid && isPidAlive(oldDaemon.pid)) {
+        oldDaemon.kill('SIGKILL');
+      }
+    }
+  }, 35_000);
 
   it('rejects malformed controller observation and finalized recovery without post-CAS authority', async () => {
     const malformed = await rebuildAuthorityFixture();
@@ -778,23 +1001,7 @@ async function runBuiltServerEntrypoint(input: {
   };
 }): Promise<{ stderr: string; stdout: string }> {
   const alembicHome = path.join(input.fixture.authorityRoot, 'fresh-process-home');
-  await fsp.mkdir(alembicHome, { recursive: true });
-  process.env.ALEMBIC_HOME = alembicHome;
-  const projectScope = createProjectDescriptor({
-    controlRoot: path.dirname(input.fixture.projectRoot),
-    dataRoot: input.fixture.dataRoot,
-    displayName: 'strict server entry fixture',
-    folders: [{ path: input.fixture.projectRoot, role: 'primary-source' }],
-    projectId: 'strict-server-entry-fixture',
-    projectScopeId: 'strict-server-entry-fixture-scope',
-  });
-  const registryPath = path.join(getProjectRegistryDir(), 'project-scopes.json');
-  await fsp.mkdir(path.dirname(registryPath), { recursive: true });
-  await fsp.writeFile(
-    registryPath,
-    `${JSON.stringify(createProjectScopeRegistryDocument([projectScope]), null, 2)}\n`
-  );
-
+  await configureBuiltProjectScope(input.fixture, alembicHome);
   const result = await execFileAsync(
     process.execPath,
     [path.join(process.cwd(), 'dist', 'bin', input.entry)],
@@ -813,6 +1020,81 @@ async function runBuiltServerEntrypoint(input: {
     }
   );
   return { stderr: result.stderr, stdout: result.stdout };
+}
+
+async function configureBuiltProjectScope(
+  fixture: {
+    authorityRoot: string;
+    dataRoot: string;
+    projectRoot: string;
+  },
+  alembicHome: string
+): Promise<void> {
+  await fsp.mkdir(alembicHome, { recursive: true });
+  process.env.ALEMBIC_HOME = alembicHome;
+  const projectScope = createProjectDescriptor({
+    controlRoot: path.dirname(fixture.projectRoot),
+    dataRoot: fixture.dataRoot,
+    displayName: 'strict server entry fixture',
+    folders: [{ path: fixture.projectRoot, role: 'primary-source' }],
+    projectId: 'strict-server-entry-fixture',
+    projectScopeId: 'strict-server-entry-fixture-scope',
+  });
+  const registryPath = path.join(getProjectRegistryDir(), 'project-scopes.json');
+  await fsp.mkdir(path.dirname(registryPath), { recursive: true });
+  await fsp.writeFile(
+    registryPath,
+    `${JSON.stringify(createProjectScopeRegistryDocument([projectScope]), null, 2)}\n`
+  );
+}
+
+async function waitForDaemonState(
+  statePath: string,
+  expectedPid: number,
+  timeoutMs = 15_000
+): Promise<{ databasePath: string; pid: number; token: string }> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const state = JSON.parse(await fsp.readFile(statePath, 'utf8')) as {
+        databasePath?: unknown;
+        pid?: unknown;
+        token?: unknown;
+      };
+      if (
+        state.pid === expectedPid &&
+        typeof state.token === 'string' &&
+        state.token &&
+        typeof state.databasePath === 'string'
+      ) {
+        return { pid: expectedPid, token: state.token, databasePath: state.databasePath };
+      }
+    } catch {
+      // The daemon writes state only after its health endpoint is ready.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for daemon state: ${statePath}`);
+}
+
+async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (!isPidAlive(pid)) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for pid ${pid} to exit`);
+}
+
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function restoreEnvironment(key: string, value: string | undefined): void {

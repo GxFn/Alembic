@@ -27,12 +27,42 @@ import {
 import { ProjectRuntimeControl } from '../../daemon/runtime/ProjectRuntimeControl.js';
 import { buildDaemonProjectRuntimeSourceOfTruth } from '../../daemon/runtime/ProjectRuntimeSourceOfTruth.js';
 import { buildAlembicRuntimeBoundary } from '../../daemon/runtime/RuntimeBoundary.js';
+import {
+  StrictDaemonQuiesceController,
+  type StrictQuiesceAcceptedAckV1,
+} from '../../daemon/runtime/StrictDaemonQuiesce.js';
 import { readLatestSchemaMigrationVersion } from '../../infrastructure/database/SqliteDatabaseAccess.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { resolveAlembicWorkspace } from '../../project-scope/ProjectScopeRegistry.js';
 
 const router = express.Router();
 const API_PREFIX = '/api/v1';
+let strictQuiesceController: StrictDaemonQuiesceController | null = null;
+
+export function configureStrictDaemonQuiesce(options: {
+  readonly daemonToken: string;
+  readonly dataRootHash: string;
+  readonly daemonIdentityHash: string;
+  readonly projectRootHash: string;
+  readonly triggerShutdown: (ack: StrictQuiesceAcceptedAckV1) => void;
+}): void {
+  strictQuiesceController = new StrictDaemonQuiesceController(options);
+}
+
+// Strict quiesce is deliberately narrower than the ordinary daemon API: mandatory daemon token,
+// exact hashes-only body, one run-bound accepted request, and no caller-provided paths.
+router.post('/strict-quiesce', (req, res) => {
+  if (!strictQuiesceController) {
+    res.status(503).json({ success: false, code: 'STRICT_QUIESCE_NOT_READY' });
+    return;
+  }
+  const result = strictQuiesceController.accept(req.body, req.get('X-Alembic-Daemon-Token'));
+  if (result.status === 202) {
+    res.status(202).json({ success: true, data: result.ack });
+    return;
+  }
+  res.status(result.status).json({ success: false, code: result.code });
+});
 
 export interface ResidentSearchCapability {
   available: boolean;
